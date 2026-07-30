@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TEACHER??? — Configuração de Chaves</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #0d1117;
+      color: #e6edf3;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .container {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 16px;
+      padding: 40px;
+      max-width: 560px;
+      width: 100%;
+    }
+    h1 { font-size: 22px; font-weight: 700; margin-bottom: 8px; color: #f0f6fc; }
+    .subtitle { font-size: 13px; color: #8b949e; margin-bottom: 28px; line-height: 1.5; }
+    .field { margin-bottom: 18px; }
+    label { display: block; font-size: 12px; font-weight: 600; color: #8b949e; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
+    input {
+      width: 100%; padding: 10px 14px;
+      background: #0d1117; border: 1px solid #30363d;
+      border-radius: 8px; color: #e6edf3;
+      font-size: 13px; font-family: monospace;
+      outline: none; transition: border-color 0.2s;
+    }
+    input:focus { border-color: #388bfd; }
+    input.has-value { border-color: #3fb950; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 10px; font-weight: 700; margin-left: 8px; vertical-align: middle; }
+    .badge.free { background: rgba(63,185,80,0.15); color: #3fb950; }
+    .badge.paid { background: rgba(249,117,131,0.15); color: #f97316; }
+    .badge.cloud { background: rgba(56,139,253,0.15); color: #388bfd; }
+    .divider { height: 1px; background: #30363d; margin: 24px 0; }
+    button {
+      width: 100%; padding: 12px;
+      background: linear-gradient(135deg, #238636, #2ea043);
+      border: none; border-radius: 8px;
+      color: #fff; font-size: 15px; font-weight: 700;
+      cursor: pointer; transition: opacity 0.2s;
+    }
+    button:hover { opacity: 0.9; }
+    .success {
+      display: none; margin-top: 16px; padding: 12px 16px;
+      background: rgba(63,185,80,0.1); border: 1px solid #3fb950;
+      border-radius: 8px; font-size: 13px; color: #3fb950; font-weight: 600;
+    }
+    .warning {
+      font-size: 11px; color: #8b949e; margin-top: 20px;
+      padding: 12px; background: rgba(249,117,131,0.08);
+      border: 1px solid rgba(249,117,131,0.3);
+      border-radius: 8px; line-height: 1.6;
+    }
+    .warning strong { color: #f97316; }
+    .logo { font-size: 28px; margin-bottom: 12px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo">🎓</div>
+    <h1>TEACHER??? — Setup de Chaves</h1>
+    <p class="subtitle">Configure suas chaves de API e Supabase para o aplicativo. As chaves ficam salvas localmente no seu navegador e nunca são enviadas a terceiros.</p>
+
+    <!-- APIs -->
+    <div class="field">
+      <label>Groq API Key <span class="badge free">GRÁTIS</span></label>
+      <input id="groq" type="password" placeholder="gsk_..." />
+    </div>
+    <div class="field">
+      <label>Google Gemini API Key <span class="badge free">GRÁTIS</span></label>
+      <input id="gemini" type="password" placeholder="AQ.Ab..." />
+    </div>
+    <div class="field">
+      <label>OpenAI API Key <span class="badge paid">PAGO</span></label>
+      <input id="openai" type="password" placeholder="sk-proj-..." />
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- Supabase -->
+    <div class="field">
+      <label>Supabase URL <span class="badge cloud">CLOUD</span></label>
+      <input id="sb_url" type="text" placeholder="https://xxxxx.supabase.co" />
+    </div>
+    <div class="field">
+      <label>Supabase Anon Key <span class="badge cloud">JWT</span></label>
+      <input id="sb_anon" type="password" placeholder="eyJhbGci..." />
+    </div>
+    <div class="field">
+      <label>Supabase Service Role Key <span class="badge cloud">SECRET</span></label>
+      <input id="sb_service" type="password" placeholder="eyJhbGci..." />
+    </div>
+
+    <div class="divider"></div>
+
+    <button onclick="saveAll()">✅ Salvar e Abrir o Aplicativo</button>
+    <div class="success" id="success">✅ Configuração salva! Abrindo o app...</div>
+
+    <div class="warning">
+      <strong>⚠️ Segurança:</strong> Esta página não envia nenhuma chave para a internet. As chaves ficam armazenadas apenas no localStorage do seu navegador neste computador. Mantenha este arquivo em um local seguro e nunca compartilhe as chaves publicamente.
+    </div>
+  </div>
+
+  <script>
+    // Monitora inputs para mostrar feedback visual
+    document.querySelectorAll('input').forEach(input => {
+      input.addEventListener('input', () => {
+        input.classList.toggle('has-value', input.value.length > 0)
+      })
+    })
+
+    function saveAll() {
+      const groq    = document.getElementById('groq').value.trim()
+      const gemini  = document.getElementById('gemini').value.trim()
+      const openai  = document.getElementById('openai').value.trim()
+      const sbUrl   = document.getElementById('sb_url').value.trim()
+      const sbAnon  = document.getElementById('sb_anon').value.trim()
+      const sbSvc   = document.getElementById('sb_service').value.trim()
+
+      // Monta estrutura de APIs
+      const defaultApis = [
+        { id: 'manual',     name: 'Manual Copy',                   provider: 'manual',      key: '',     model: '',                        active: true  },
+        { id: 'groq',       name: 'Groq Llama-3 (Rápido)',         provider: 'groq',        key: groq,   model: 'llama-3.3-70b-versatile', active: !!groq },
+        { id: 'gemini',     name: 'Google Gemini Flash',           provider: 'gemini',      key: gemini, model: 'gemini-2.0-flash',        active: !!gemini },
+        { id: 'gpt',        name: 'OpenAI GPT-4o',                provider: 'openai',      key: openai, model: 'gpt-4o',                  active: !!openai },
+        { id: 'claude',     name: 'Anthropic Claude',              provider: 'anthropic',   key: '',     model: 'claude-opus-4-5',         active: false },
+        { id: 'elevenlabs', name: 'ElevenLabs (Voz Ultra-Natural)',provider: 'elevenlabs',  key: '',     model: 'eleven_multilingual_v2',  active: false, voiceId: 'MF3mGyEYCl7XYWbV9V6O' },
+      ]
+
+      localStorage.setItem('teacher_apis', JSON.stringify(defaultApis))
+      localStorage.setItem('teacher_api_seed_v2', 'done')
+
+      if (sbUrl || sbAnon || sbSvc) {
+        const sbCfg = { url: sbUrl, anonKey: sbAnon, serviceKey: sbSvc }
+        localStorage.setItem('teacher_supabase_config', JSON.stringify(sbCfg))
+      }
+
+      document.getElementById('success').style.display = 'block'
+      setTimeout(() => { window.location.href = 'http://localhost:3001' }, 1500)
+    }
+  </script>
+</body>
+</html>
