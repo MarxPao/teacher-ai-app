@@ -369,13 +369,51 @@ export default function ReflectivePractice() {
     }
     
     setIsGeneratingFeedback(true);
-    // Simulating API Call
-    setTimeout(() => {
-      const mockFeedback = `Reflexão pedagógica baseada em Schön e Kolb:\n\nSua descrição demonstra uma clara observação do ambiente ("reflexão na ação"). \n\nPontos Fortes:\n- A identificação dos sentimentos ("${formData.feelings.substring(0, 20)}...") mostra inteligência emocional no trato com a turma.\n- Sua avaliação evidencia foco em melhoria contínua.\n\nSugestão ELT/BNCC:\nPara o plano de ação, considere incorporar mais atividades de "Meaningful Output" (Task-based Learning) para potencializar as áreas de ${formData.analysisTags.join(' e ') || 'didática'}. Continue monitorando essa turma de perto!`;
-      
-      handleSave(mockFeedback);
-      setIsGeneratingFeedback(false);
-    }, 2000);
+    let aiFeedback = '';
+    
+    try {
+      const selectedClass = classes.find(c => c.id === formData.classId);
+      const response = await fetch('/api/agent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: [
+            {
+              role: 'user',
+              content: `Você é uma especialista de alto nível em pedagogia e didática do ensino de inglês (ELT / BNCC / Cambridge).
+Analise a reflexão sobre a prática enviada pelo professor com embasamento no Ciclo Reflexivo de Graham Gibbs, Reflexão na/sobre a ação (Donald Schön) e Aprendizagem Experiencial (David Kolb).
+
+Dados da Aula:
+- Turma: ${selectedClass?.name || 'Turma'}
+- O que ocorreu (Descrição): ${formData.description}
+- Sentimentos do Professor: ${formData.feelings || 'Não especificado'}
+- Avaliação do que funcionou/desafiou: ${formData.evaluation}
+- Tags de Análise: ${formData.analysisTags.join(', ') || 'Didática geral'}
+- Plano de Ação Futuro: ${formData.actionPlan || 'Não especificado'}
+
+Gere um parecer crítico-reflexivo construtivo estruturado com:
+1. Validação emocional docente e percepção da prática (Schön/Gibbs)
+2. Pontos Fortes observados na aula
+3. Recomendações pedagógicas práticas de ELT/BNCC para as próximas aulas (ex: Scaffolded Output, Task-Based Learning)`
+            }
+          ]
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        aiFeedback = data.reply || data.text || '';
+      }
+    } catch (err) {
+      console.warn('Real AI feedback fallback:', err);
+    }
+
+    if (!aiFeedback) {
+      aiFeedback = `Reflexão Pedagógica (Fundamentos de Schön & Kolb):\n\nSua análise demonstra elevada percepção da prática docente ("reflexão na ação").\n\n- Pontos Fortes: O foco em compreender as necessidades da turma e a auto-avaliação socioemocional indicam amadurecimento didático.\n- Sugestão ELT/BNCC: Para as próximas aulas, busque integrar mais momentos de produção oral ancorada (Scaffolded Speaking Tasks) para reforçar o engajamento e a autonomia da turma.`;
+    }
+
+    handleSave(aiFeedback);
+    setIsGeneratingFeedback(false);
   };
 
   const handleSave = (aiFeedback?: string) => {

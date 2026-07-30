@@ -71,7 +71,7 @@ export default function AutoReport() {
     setTimeout(() => setToastMessage(null), 3000);
   };
 
-  const handleGenerateReport = () => {
+  const handleGenerateReport = async () => {
     if (!selectedClassId) {
       showToast('Por favor, selecione uma turma primeiro.');
       return;
@@ -91,27 +91,63 @@ export default function AutoReport() {
     const highlightStudents = classStudents.filter(s => (s.attendance || 0) > 90);
     const attentionStudents = classStudents.filter(s => (s.attendance || 0) < 75);
 
-    // Simulando delay de IA
-    setTimeout(() => {
-      const generatedText = `PARECER PEDAGÓGICO MENSAL - REFERÊNCIA: ${selectedMonth}\n\n` +
+    try {
+      const response = await fetch('/api/agent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: [
+            {
+              role: 'user',
+              content: `Você é uma coordenadora e professora de inglês de elite.
+Elabore um Parecer Pedagógico Mensal formal da turma para entrega à Coordenação da Escola.
+
+Dados da Turma:
+- Nome da Turma: ${selectedClass?.name || 'Turma'} (Nível: ${selectedClass?.level || 'N/A'})
+- Mês de Referência: ${selectedMonth}
+- Frequência Média: ${avgAttendance.toFixed(1)}%
+- Alunos em Destaque: ${highlightStudents.map(s => s.name).join(', ') || 'Sem destaques isolados'}
+- Alunos Necessitando Acompanhamento: ${attentionStudents.map(s => s.name).join(', ') || 'Nenhum'}
+
+Estruture com o cabeçalho formal, 1. Desempenho Geral e Frequência, 2. Conteúdos Lecionados e Objetivos BNCC/ELT, 3. Destaques e Acompanhamento Individualizado, 4. Plano de Ação para o Próximo Mês, e assinatura.`
+            }
+          ]
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const generated = data.reply || data.text;
+        if (generated) {
+          setReportContent(generated);
+          setIsGenerating(false);
+          showToast('Parecer gerado com sucesso com Rafinha IA!');
+          return;
+        }
+      }
+    } catch (err) {
+      console.warn('Real AI report fallback:', err);
+    }
+
+    // Fallback inteligente
+    const generatedText = `PARECER PEDAGÓGICO MENSAL - REFERÊNCIA: ${selectedMonth}\n\n` +
       `TURMA: ${selectedClass?.name} | NÍVEL: ${selectedClass?.level || 'N/A'}\n\n` +
       `1. DESEMPENHO GERAL DA TURMA\n` +
       `Durante o mês de referência, a turma demonstrou um bom engajamento nas atividades propostas. A taxa média de frequência foi de ${avgAttendance.toFixed(1)}%, indicando um nível satisfatório de assiduidade. A participação oral e a compreensão auditiva foram os pontos fortes trabalhados neste período.\n\n` +
-      `2. CONTEÚDOS LECIONADOS\n` +
-      `- Revisão de tempos verbais (Present Perfect vs. Simple Past)\n` +
-      `- Vocabulário avançado voltado para o ambiente de trabalho\n` +
-      `- Dinâmicas de conversação e role-play focados em situações cotidianas\n\n` +
-      `3. DESTAQUES E OBSERVAÇÕES\n` +
-      `Alunos com excelente desempenho e participação ativa: ${highlightStudents.map(s => s.name).join(', ') || 'Nenhum destaque específico'}.\n` +
+      `2. CONTEÚDOS LECIONADOS E OBJETIVOS BNCC/ELT\n` +
+      `- Prática intensiva de estruturas gramaticais em contexto significativo\n` +
+      `- Expansão lexical e consolidação da pronúncia e entonação\n` +
+      `- Dinâmicas de conversação e dramatização voltadas à fluência oral\n\n` +
+      `3. DESTAQUES E ACOMPANHAMENTO INDIVIDUALIZADO\n` +
+      `Alunos com excelente desempenho e participação ativa: ${highlightStudents.map(s => s.name).join(', ') || 'Turma homogênea com boa participação geral'}.\n` +
       `Alunos que requerem maior acompanhamento pedagógico devido a faltas ou dificuldades: ${attentionStudents.map(s => s.name).join(', ') || 'Nenhum'}.\n\n` +
       `4. PLANO DE AÇÃO PARA O PRÓXIMO MÊS\n` +
       `Focaremos em aprimorar a produção escrita e continuaremos com os simulados de fluência, buscando elevar a confiança dos alunos nas apresentações individuais.\n\n` +
       `Assinado,\n[Nome do Professor]\nProfessor(a) de Inglês`;
       
-      setReportContent(generatedText);
-      setIsGenerating(false);
-      showToast('Parecer gerado com sucesso!');
-    }, 2000);
+    setReportContent(generatedText);
+    setIsGenerating(false);
+    showToast('Parecer gerado com sucesso!');
   };
 
   const handlePrint = () => {
