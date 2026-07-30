@@ -34,11 +34,16 @@ import Extensions from '@/components/modules/Extensions'
 import PortalMirrorModule from '@/components/modules/PortalMirrorModule'
 import VoiceOrb from '@/components/VoiceOrb'
 import WisprFlowOverlay from '@/components/WisprFlowOverlay'
+import ClassroomMode from '@/components/modules/ClassroomMode'
+import FlashcardMode from '@/components/modules/FlashcardMode'
+import Wellbeing from '@/components/modules/Wellbeing'
+import AudioPronunciation from '@/components/modules/AudioPronunciation'
 
 export type ModuleKey = 'dashboard' | 'quick' | 'exam' | 'lessonstudio' | 'plan' | 'rubric' |
   'gradebook' | 'students' | 'classes' | 'analytics' | 'calendar' | 'comms' | 'repo' |
   'wellbeing' | 'settings' | 'api' | 'qbank' | 'mindmap' | 'editor' |
-  'communications' | 'portfolio' | 'extensions' | 'portalmirror' | 'omnigrader' | 'maestro' | 'classlog' | 'didacticsequence' | 'livequiz' | 'parentcomms'
+  'communications' | 'portfolio' | 'extensions' | 'portalmirror' | 'omnigrader' | 'maestro' | 'classlog' | 'didacticsequence' | 'livequiz' | 'parentcomms' |
+  'classroommode' | 'flashcardmode' | 'audiopronunciation'
 
 const MODULES: Record<ModuleKey, React.ComponentType> = {
   dashboard:        Dashboard,
@@ -60,16 +65,19 @@ const MODULES: Record<ModuleKey, React.ComponentType> = {
   editor:           Editor,
   communications:   Communications,
   portfolio:        Portfolio,
-  wellbeing:        ComingSoon,
-  settings:         Settings,
-  api:              ApiManager,
-  extensions:       Extensions,
-  portalmirror:     PortalMirrorModule,
-  maestro:          Maestro,
-  classlog:         ClassLog,
-  didacticsequence: DidacticSequence,
-  livequiz:         LiveQuizModule,
-  parentcomms:      ParentCommunicator,
+  wellbeing:           Wellbeing,
+  settings:            Settings,
+  api:                 ApiManager,
+  extensions:          Extensions,
+  portalmirror:        PortalMirrorModule,
+  maestro:             Maestro,
+  classlog:            ClassLog,
+  didacticsequence:    DidacticSequence,
+  livequiz:            LiveQuizModule,
+  parentcomms:         ParentCommunicator,
+  classroommode:       ClassroomMode,
+  flashcardmode:       FlashcardMode,
+  audiopronunciation:  AudioPronunciation,
 }
 
 export default function Home() {
