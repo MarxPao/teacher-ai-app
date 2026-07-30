@@ -38,12 +38,19 @@ import ClassroomMode from '@/components/modules/ClassroomMode'
 import FlashcardMode from '@/components/modules/FlashcardMode'
 import Wellbeing from '@/components/modules/Wellbeing'
 import AudioPronunciation from '@/components/modules/AudioPronunciation'
+import ReflectivePractice from '@/components/modules/ReflectivePractice'
+import MeetingClassRecorder from '@/components/modules/MeetingClassRecorder'
+import WeeklyAgenda from '@/components/modules/WeeklyAgenda'
+import BatchGrader from '@/components/modules/BatchGrader'
+import ProgressTracker from '@/components/modules/ProgressTracker'
+import AutoReport from '@/components/modules/AutoReport'
 
 export type ModuleKey = 'dashboard' | 'quick' | 'exam' | 'lessonstudio' | 'plan' | 'rubric' |
   'gradebook' | 'students' | 'classes' | 'analytics' | 'calendar' | 'comms' | 'repo' |
   'wellbeing' | 'settings' | 'api' | 'qbank' | 'mindmap' | 'editor' |
   'communications' | 'portfolio' | 'extensions' | 'portalmirror' | 'omnigrader' | 'maestro' | 'classlog' | 'didacticsequence' | 'livequiz' | 'parentcomms' |
-  'classroommode' | 'flashcardmode' | 'audiopronunciation'
+  'classroommode' | 'flashcardmode' | 'audiopronunciation' |
+  'reflectivepractice' | 'meetingclassrecorder' | 'weeklyagenda' | 'batchgrader' | 'progresstracker' | 'autoreport'
 
 const MODULES: Record<ModuleKey, React.ComponentType> = {
   dashboard:        Dashboard,
@@ -78,6 +85,12 @@ const MODULES: Record<ModuleKey, React.ComponentType> = {
   classroommode:       ClassroomMode,
   flashcardmode:       FlashcardMode,
   audiopronunciation:  AudioPronunciation,
+  reflectivepractice:  ReflectivePractice,
+  meetingclassrecorder:MeetingClassRecorder,
+  weeklyagenda:        WeeklyAgenda,
+  batchgrader:         BatchGrader,
+  progresstracker:     ProgressTracker,
+  autoreport:          AutoReport,
 }
 
 export default function Home() {

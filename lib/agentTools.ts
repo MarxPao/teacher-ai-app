@@ -31,7 +31,7 @@ export const AGENT_TOOLS: ToolDefinition[] = [
       properties: {
         module: {
           type: 'string',
-          enum: ['dashboard', 'quick', 'exam', 'lessonstudio', 'plan', 'rubric', 'gradebook', 'omnigrader', 'students', 'classes', 'analytics', 'calendar', 'communications', 'repo', 'qbank', 'mindmap', 'editor', 'portfolio', 'extensions', 'settings', 'api', 'maestro', 'classlog', 'didacticsequence', 'livequiz', 'parentcomms', 'classroommode', 'flashcardmode', 'audiopronunciation', 'wellbeing'],
+          enum: ['dashboard', 'quick', 'exam', 'lessonstudio', 'plan', 'rubric', 'gradebook', 'omnigrader', 'students', 'classes', 'analytics', 'calendar', 'communications', 'repo', 'qbank', 'mindmap', 'editor', 'portfolio', 'extensions', 'settings', 'api', 'maestro', 'classlog', 'didacticsequence', 'livequiz', 'parentcomms', 'classroommode', 'flashcardmode', 'audiopronunciation', 'wellbeing', 'reflectivepractice', 'meetingclassrecorder', 'weeklyagenda', 'batchgrader', 'progresstracker', 'autoreport'],
           description: 'Módulo para navegar'
         }
       },
