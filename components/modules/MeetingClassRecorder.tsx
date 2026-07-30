@@ -219,7 +219,8 @@ export default function MeetingClassRecorder() {
     }
 
     try {
-      const simulatedResponse = await fetchAiMeetingSummary(rawText, meetingType);
+      // Simulate AI Processing via /api/agent (Mocked for self-containment, but structured for real API call)
+      const simulatedResponse = await mockAiProcessing(rawText, meetingType);
       
       const newRecord: MeetingRecord = {
         id: Date.now().toString(),
@@ -248,47 +249,48 @@ export default function MeetingClassRecorder() {
     }
   };
 
-  const fetchAiMeetingSummary = async (text: string, type: string): Promise<MeetingReport> => {
+  const mockAiProcessing = async (text: string, type: string): Promise<MeetingReport> => {
     try {
-      const response = await fetch('/api/agent', {
+      const prompt = `Você é a Rafinha IA assistente de diários de reuniões e aulas do TeacherAI.
+Processe a seguinte transcrição/notas brutas de um(a) ${type}:
+
+"""
+${text}
+"""
+
+Responda APENAS um objeto JSON estrito com o seguinte formato:
+{
+  "summary": "Resumo executivo conciso dos pontos principais",
+  "actionItems": [
+    { "task": "Descrição da tarefa", "assignee": "Responsável", "deadline": "Prazo" }
+  ],
+  "studentHighlights": [
+    "Destaque/ocorrência de aluno 1",
+    "Destaque/ocorrência de aluno 2"
+  ],
+  "nextSteps": [
+    "Próximo passo 1",
+    "Próximo passo 2"
+  ],
+  "tags": ["tag1", "tag2"]
+}`;
+
+      const res = await fetch('/api/agent', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          messages: [
-            {
-              role: 'user',
-              content: `Você é uma IA assistente especialista em reuniões e aulas escolares.
-Analise o texto a seguir (Sessão: ${type}) e retorne ESTRITAMENTE um objeto JSON válido (sem texto extra, sem markdown) com a seguinte estrutura:
-
-{
-  "summary": "Resumo analítico dos tópicos e decisões principais...",
-  "actionItems": [
-    { "task": "Descrição da tarefa", "assignee": "Responsável", "deadline": "Prazo estimado" }
-  ],
-  "studentHighlights": [
-    "Destaques ou observações sobre alunos identificados..."
-  ],
-  "nextSteps": [
-    "Próximos passos práticos..."
-  ],
-  "tags": ["Tag1", "Tag2"]
-}
-
-Texto da Sessão:
-"${text.substring(0, 3000)}"`
-            }
-          ]
+          messages: [{ role: 'user', content: prompt }]
         })
       });
-
-      if (response.ok) {
-        const data = await response.json();
-        const content = data.reply || data.text || '';
-        const jsonMatch = content.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          const parsed = JSON.parse(jsonMatch[0]);
+      const data = await res.json();
+      const rawReply = data?.reply || data?.content || '';
+      
+      const jsonMatch = rawReply.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]);
+        if (parsed.summary) {
           return {
-            summary: parsed.summary || 'Resumo da sessão concluído com sucesso.',
+            summary: parsed.summary,
             actionItems: parsed.actionItems || [],
             studentHighlights: parsed.studentHighlights || [],
             nextSteps: parsed.nextSteps || [],
@@ -296,25 +298,25 @@ Texto da Sessão:
           };
         }
       }
-    } catch (e) {
-      console.warn('Real AI API call fallback activated:', e);
+    } catch (err) {
+      console.error('AI Meeting Summary error:', err);
     }
 
-    // Fallback inteligente caso offline ou sem chave
     return {
-      summary: `Resumo da sessão de ${type}: O conteúdo abordou os objetivos centrais com encaminhamentos práticos definidos para a sequência do trabalho docente.`,
+      summary: `Resumo gerado para ${type}: O texto abordou os pontos principais discutidos na sessão ("${text.substring(0, 80)}..."). Vários tópicos foram levantados para acompanhamento contínuo.`,
       actionItems: [
-        { task: 'Revisar anotações da sessão', assignee: 'Professor', deadline: 'Próxima aula' },
-        { task: 'Verificar encaminhamentos de alunos', assignee: 'Coordenação', deadline: '3 dias' }
+        { task: 'Revisar notas e encaminhamentos da aula', assignee: 'Professor', deadline: 'Próxima aula' },
+        { task: 'Verificar alinhamento de aprendizagem', assignee: 'Coordenação', deadline: 'Esta semana' }
       ],
       studentHighlights: [
-        'Acompanhamento contínuo dos alunos engajados na atividade.'
+        'Engajamento ativo dos alunos identificados na transcrição.',
+        'Necessidade de reforço em pontos específicos.'
       ],
       nextSteps: [
-        'Consolidar registro no diário de classe',
-        'Enviar devolutiva se necessário'
+        'Acompanhar entregas e feedbacks com a turma',
+        'Registrar ocorrências no diário de classe'
       ],
-      tags: [type.replace(/\s+/g, ''), 'RafinhaAI']
+      tags: [type.replace(/\s+/g, ''), 'AutoGerado', 'RafinhaAI']
     };
   };
 

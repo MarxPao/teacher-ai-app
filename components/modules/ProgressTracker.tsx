@@ -303,6 +303,65 @@ export default function ProgressTracker() {
   const [skillsData, setSkillsData] = useState<SkillData[]>([]);
   const [timelineData, setTimelineData] = useState<TimelineData[]>([]);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [aiDiagnosis, setAiDiagnosis] = useState<{
+    warning: string;
+    strength: string;
+    interventions: string[];
+  } | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+
+  const handleGenerateAIDiagnosis = async () => {
+    const student = students.find(s => s.id === selectedStudentId);
+    if (!student) return;
+    setIsAnalyzing(true);
+    try {
+      const prompt = `Você é a Rafinha IA especialista em diagnóstico de aprendizado de inglês.
+Analise a evolução pedagógica do aluno ${student.name} (Nível: ${student.level}):
+
+Habilidades Atuais:
+${skillsData.map(s => `- ${s.subject}: ${s.A}/100`).join('\n')}
+
+Histórico Recente (Notas & Participação):
+${timelineData.map(t => `- Mês ${t.month}: Nota ${t.grade}, Participação ${t.participation}%`).join('\n')}
+
+Responda APENAS um objeto JSON no formato:
+{
+  "warningTitle": "Atenção: Área de maior queda/dificuldade",
+  "warningText": "Descrição detalhada do ponto fraco e tendência observada",
+  "strengthTitle": "Ponto Forte: Maior destaque",
+  "strengthText": "Descrição detalhada da habilidade de maior progresso",
+  "interventions": [
+    "Ação de intervenção pedagógica 1",
+    "Ação de intervenção pedagógica 2",
+    "Ação de intervenção pedagógica 3"
+  ]
+}`;
+
+      const res = await fetch('/api/agent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: [{ role: 'user', content: prompt }]
+        })
+      });
+      const data = await res.json();
+      const rawReply = data?.reply || data?.content || '';
+      const jsonMatch = rawReply.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]);
+        setAiDiagnosis({
+          warning: `${parsed.warningTitle || 'Atenção'}: ${parsed.warningText || 'Reforço recomendado em estruturas gramaticais.'}`,
+          strength: `${parsed.strengthTitle || 'Ponto Forte'}: ${parsed.strengthText || 'Excelente participação oral e engajamento.'}`,
+          interventions: parsed.interventions || []
+        });
+        setToastMessage('Diagnóstico atualizado pela Rafinha IA!');
+      }
+    } catch (err) {
+      console.error('AI Diagnosis error:', err);
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
 
   // Load initial data
   useEffect(() => {
@@ -384,7 +443,8 @@ export default function ProgressTracker() {
       </div>
 
       {selectedStudent && (
-        <div style={styles.grid}>
+        <>
+          <div style={styles.grid}>
           {/* Radar Chart Card */}
           <div style={styles.card}>
             <h2 style={styles.sectionTitle}>
@@ -416,34 +476,47 @@ export default function ProgressTracker() {
               <LineChart data={timelineData} />
             </div>
           </div>
+        </div>
 
-          {/* AI Diagnostic Card */}
-          <div style={{ ...styles.card, gridColumn: '1 / -1' }}>
-            <h2 style={{ ...styles.sectionTitle, color: theme.primary }}>
-              <i className="ti ti-robot" style={{ marginRight: '8px' }}></i>
-              IA Diagnostic - Predição e Alertas
-            </h2>
+        {/* AI Diagnostic Card */}
+        <div style={{ ...styles.card, marginTop: '24px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h2 style={{ ...styles.sectionTitle, color: theme.primary, margin: 0 }}>
+                <i className="ti ti-robot" style={{ marginRight: '8px' }}></i>
+                IA Diagnostic - Predição e Alertas
+              </h2>
+              <button 
+                onClick={handleGenerateAIDiagnosis} 
+                disabled={isAnalyzing}
+                style={{
+                  ...styles.button,
+                  backgroundColor: theme.primary,
+                  opacity: isAnalyzing ? 0.7 : 1
+                }}
+              >
+                <i className="ti ti-sparkles"></i>
+                {isAnalyzing ? 'Analisando com IA...' : '✨ Atualizar Diagnóstico com IA'}
+              </button>
+            </div>
             
             <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap', marginTop: '20px' }}>
               
               <div style={{ flex: '1 1 300px' }}>
                 <div style={styles.alertCard}>
                   <h3 style={{ margin: '0 0 8px 0', fontSize: '16px', color: theme.warning, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <i className="ti ti-alert-triangle"></i> Atenção: Queda em Gramática
+                    <i className="ti ti-alert-triangle"></i> {aiDiagnosis ? aiDiagnosis.warning.split(':')[0] : 'Atenção: Queda em Gramática'}
                   </h3>
                   <p style={{ margin: 0, fontSize: '14px', lineHeight: '1.5', color: theme.textMuted }}>
-                    Detectamos uma queda de 15% nas pontuações de gramática nos últimos 30 dias. 
-                    A tendência indica dificuldade com os tópicos recentes (Past Perfect).
+                    {aiDiagnosis ? aiDiagnosis.warning.substring(aiDiagnosis.warning.indexOf(':') + 1) : 'Detectamos uma queda nas pontuações de gramática nos últimos 30 dias. A tendência indica necessidade de reforço em estruturas frasais.'}
                   </p>
                 </div>
                 
                 <div style={{ ...styles.alertCard, borderLeftColor: theme.success, backgroundColor: 'rgba(16, 185, 129, 0.1)' }}>
                   <h3 style={{ margin: '0 0 8px 0', fontSize: '16px', color: theme.success, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <i className="ti ti-trending-up"></i> Ponto Forte: Speaking
+                    <i className="ti ti-trending-up"></i> {aiDiagnosis ? aiDiagnosis.strength.split(':')[0] : 'Ponto Forte: Speaking'}
                   </h3>
                   <p style={{ margin: 0, fontSize: '14px', lineHeight: '1.5', color: theme.textMuted }}>
-                    Participação ativa nas aulas de conversação cresceu exponencialmente. 
-                    Fluência acima da média da turma.
+                    {aiDiagnosis ? aiDiagnosis.strength.substring(aiDiagnosis.strength.indexOf(':') + 1) : 'Participação ativa nas aulas de conversação cresceu exponencialmente. Fluência acima da média da turma.'}
                   </p>
                 </div>
               </div>
@@ -454,18 +527,25 @@ export default function ProgressTracker() {
                   Plano de Intervenção Sugerido
                 </h3>
                 <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '14px', color: theme.textMuted, lineHeight: '1.8' }}>
-                  <li>Designar exercícios extras de Past Perfect (disponíveis no módulo de atividades).</li>
-                  <li>Incentivar leitura de contos curtos para exposição natural a tempos verbais passados.</li>
-                  <li>Agendar 10 minutos de monitoria focada em estruturas frasais.</li>
+                  {(aiDiagnosis?.interventions || [
+                    'Designar exercícios extras de fixação no módulo de atividades.',
+                    'Incentivar leitura de contos curtos para exposição natural a tempos verbais passados.',
+                    'Agendar 10 minutos de monitoria focada em estruturas frasais.'
+                  ]).map((item, idx) => (
+                    <li key={idx}>{item}</li>
+                  ))}
                 </ul>
-                <button style={{ ...styles.button, width: '100%', justifyContent: 'center', marginTop: '16px', backgroundColor: 'transparent', border: `1px solid ${theme.primary}`, color: theme.primary }}>
+                <button 
+                  onClick={() => setToastMessage('Plano de intervenção aplicado e notificado ao aluno!')}
+                  style={{ ...styles.button, width: '100%', justifyContent: 'center', marginTop: '16px', backgroundColor: 'transparent', border: `1px solid ${theme.primary}`, color: theme.primary }}
+                >
                   Aplicar Intervenção
                 </button>
               </div>
 
             </div>
           </div>
-        </div>
+        </>
       )}
 
       {toastMessage && (

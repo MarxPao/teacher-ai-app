@@ -369,51 +369,37 @@ export default function ReflectivePractice() {
     }
     
     setIsGeneratingFeedback(true);
-    let aiFeedback = '';
-    
     try {
       const selectedClass = classes.find(c => c.id === formData.classId);
-      const response = await fetch('/api/agent', {
+      const prompt = `Analise a reflexão pedagógica deste professor de inglês (Turma: ${selectedClass?.name || 'Geral'}).
+Descrição da aula: ${formData.description}
+Sentimentos do professor: ${formData.feelings}
+Avaliação do resultado: ${formData.evaluation}
+Tags de análise: ${formData.analysisTags.join(', ')}
+Plano de Ação: ${formData.actionPlan}
+
+Forneça um parecer crítico-reflexivo construtivo fundamentado na teoria de Donald Schön (Reflexão na/sobre a ação), Ciclo de Gibbs e diretrizes da BNCC/ELT. Dê dicas práticas de didática e engajamento em português.`;
+
+      const res = await fetch('/api/agent', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          messages: [
-            {
-              role: 'user',
-              content: `Você é uma especialista de alto nível em pedagogia e didática do ensino de inglês (ELT / BNCC / Cambridge).
-Analise a reflexão sobre a prática enviada pelo professor com embasamento no Ciclo Reflexivo de Graham Gibbs, Reflexão na/sobre a ação (Donald Schön) e Aprendizagem Experiencial (David Kolb).
-
-Dados da Aula:
-- Turma: ${selectedClass?.name || 'Turma'}
-- O que ocorreu (Descrição): ${formData.description}
-- Sentimentos do Professor: ${formData.feelings || 'Não especificado'}
-- Avaliação do que funcionou/desafiou: ${formData.evaluation}
-- Tags de Análise: ${formData.analysisTags.join(', ') || 'Didática geral'}
-- Plano de Ação Futuro: ${formData.actionPlan || 'Não especificado'}
-
-Gere um parecer crítico-reflexivo construtivo estruturado com:
-1. Validação emocional docente e percepção da prática (Schön/Gibbs)
-2. Pontos Fortes observados na aula
-3. Recomendações pedagógicas práticas de ELT/BNCC para as próximas aulas (ex: Scaffolded Output, Task-Based Learning)`
-            }
-          ]
+          messages: [{ role: 'user', content: prompt }]
         })
       });
-
-      if (response.ok) {
-        const data = await response.json();
-        aiFeedback = data.reply || data.text || '';
+      const data = await res.json();
+      let feedback = data?.reply || data?.content || '';
+      if (!feedback) {
+        feedback = `Reflexão pedagógica baseada em Schön e Kolb:\n\nSua descrição demonstra uma clara observação do ambiente ("reflexão na ação").\n\nPontos Fortes:\n- Inteligência emocional ao registrar os sentimentos em sala.\n- Foco na melhoria contínua da prática de ensino.\n\nSugestão ELT/BNCC:\nPara o plano de ação, considere incorporar atividades de Task-based Learning para potencializar as áreas de ${formData.analysisTags.join(' e ') || 'didática'}.`;
       }
+      handleSave(feedback);
     } catch (err) {
-      console.warn('Real AI feedback fallback:', err);
+      console.error('AI Request Error:', err);
+      const fallbackFeedback = `Reflexão pedagógica baseada em Schön e Kolb:\n\nSua descrição demonstra observação ativa do ambiente docente.\n\nPontos Fortes:\n- Inteligência emocional ao registrar os sentimentos em sala.\n- Foco na melhoria contínua da prática de ensino.\n\nSugestão ELT:\nIncorpore atividades de Task-Based Learning para fortalecer a área de ${formData.analysisTags.join(' e ') || 'didática'}.`;
+      handleSave(fallbackFeedback);
+    } finally {
+      setIsGeneratingFeedback(false);
     }
-
-    if (!aiFeedback) {
-      aiFeedback = `Reflexão Pedagógica (Fundamentos de Schön & Kolb):\n\nSua análise demonstra elevada percepção da prática docente ("reflexão na ação").\n\n- Pontos Fortes: O foco em compreender as necessidades da turma e a auto-avaliação socioemocional indicam amadurecimento didático.\n- Sugestão ELT/BNCC: Para as próximas aulas, busque integrar mais momentos de produção oral ancorada (Scaffolded Speaking Tasks) para reforçar o engajamento e a autonomia da turma.`;
-    }
-
-    handleSave(aiFeedback);
-    setIsGeneratingFeedback(false);
   };
 
   const handleSave = (aiFeedback?: string) => {
