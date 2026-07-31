@@ -12,17 +12,16 @@ const NAV: Section[] = [
   { label: 'Criar', items: [
     { key: 'lessonstudio',      label: 'Criar Aula 🎓',      icon: 'ti-chalkboard' },
     { key: 'quick',             label: 'Quick Generate',      icon: 'ti-sparkles' },
-    { key: 'livequiz',          label: 'Live Quiz 🎮',        icon: 'ti-device-gamepad-2' },
     { key: 'exam',              label: 'Exam Builder',        icon: 'ti-file-text' },
     { key: 'plan',              label: 'Lesson Planner',      icon: 'ti-calendar-event' },
     { key: 'rubric',            label: 'Rubric & Key',        icon: 'ti-list-check' },
     { key: 'qbank',             label: 'Banco Questões',      icon: 'ti-archive' },
-    { key: 'mindmap',           label: 'Mapa Mental',         icon: 'ti-atom-2' },
     { key: 'audiopronunciation',label: 'Pronúncia & Áudio 🔊',icon: 'ti-microphone' },
   ]},
   { label: '🏫 Em Sala', items: [
     { key: 'classroommode', label: 'Cockpit de Sala 🚀',   icon: 'ti-layout-dashboard' },
     { key: 'flashcardmode', label: 'Flashcards 🃏',         icon: 'ti-cards' },
+    { key: 'livequiz',      label: 'Live Quiz 🎮',        icon: 'ti-device-gamepad-2' },
   ]},
   { label: 'Alunos', items: [
     { key: 'gradebook',      label: 'Gradebook',          icon: 'ti-chart-bar' },
@@ -43,6 +42,7 @@ const NAV: Section[] = [
     { key: 'reflectivepractice',  label: 'Reflexão da Prática 🧠', icon: 'ti-bulb-spark' },
     { key: 'meetingclassrecorder',label: 'Diário de Aulas/Reuniões 🎙️', icon: 'ti-microphone-2' },
     { key: 'weeklyagenda',        label: 'Agenda Semanal 📅',     icon: 'ti-calendar-time' },
+    { key: 'mindmap',             label: 'Mapa Mental 🗺️',        icon: 'ti-atom-2' },
     { key: 'classlog',            label: 'Dia de Aula 📖',        icon: 'ti-book' },
     { key: 'didacticsequence',    label: 'Sequência Didática 🗺️', icon: 'ti-route-2' },
     { key: 'maestro',             label: 'Maestro 🎯',            icon: 'ti-subtask' },
