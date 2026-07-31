@@ -128,7 +128,7 @@ export default function Home() {
   }, [])
 
   return (
-    <div className="flex w-full h-screen overflow-hidden" style={{ background: '#fdf6e3' }}>
+    <div className="flex w-full h-screen overflow-hidden" style={{ background: '#fdf8f2' }}>
       <Sidebar active={active} onNavigate={setActive} />
       <main className="flex-1 min-w-0 overflow-hidden flex flex-col">
         <div key={active} className="animate-fade-up flex-1 min-h-0 min-w-0 h-full overflow-y-auto overflow-x-hidden">
