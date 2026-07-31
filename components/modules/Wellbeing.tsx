@@ -21,11 +21,11 @@ interface PositiveMoment {
 
 // --- CONSTANTS & DATA ---
 const MOODS: { value: MoodValue; emoji: string; label: string; color: string }[] = [
-  { value: 1, emoji: '😔', label: 'Esgotado', color: '#ff6b6b' },
-  { value: 2, emoji: '😕', label: 'Cansado', color: '#ffa94d' },
-  { value: 3, emoji: '😐', label: 'Neutro', color: '#fcc419' },
-  { value: 4, emoji: '😊', label: 'Bem', color: '#69db7c' },
-  { value: 5, emoji: '🤩', label: 'Excelente', color: '#4dabf7' },
+  { value: 1, emoji: '😔', label: 'Esgotado', color: '#a83232' },
+  { value: 2, emoji: '😕', label: 'Cansado', color: '#c87a1e' },
+  { value: 3, emoji: '😐', label: 'Neutro', color: '#a08060' },
+  { value: 4, emoji: '😊', label: 'Bem', color: '#8b5e3c' },
+  { value: 5, emoji: '🤩', label: 'Excelente', color: '#3d7a4e' },
 ];
 
 const WELLBEING_TIPS = [
@@ -44,11 +44,11 @@ const WELLBEING_TIPS = [
 // --- STYLES ---
 const styles: Record<string, CSSProperties> = {
   container: {
-    padding: '24px',
-    backgroundColor: '#0f1117',
-    color: '#e2e8f0',
+    padding: '36px 40px',
+    backgroundColor: '#fdf8f2',
+    color: '#2c1a0e',
     minHeight: '100vh',
-    fontFamily: "'Inter', -apple-system, sans-serif",
+    fontFamily: "'Inter', system-ui, sans-serif",
     display: 'flex',
     flexDirection: 'column',
     gap: '24px',
@@ -59,13 +59,14 @@ const styles: Record<string, CSSProperties> = {
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: '8px',
+    paddingBottom: '20px',
+    borderBottom: '1px solid rgba(139,115,85,0.12)',
   },
   title: {
-    fontSize: '28px',
+    fontSize: '1.8rem',
     fontWeight: 700,
-    background: 'linear-gradient(135deg, #b19cd9, #8e44ad)',
-    WebkitBackgroundClip: 'text',
-    WebkitTextFillColor: 'transparent',
+    fontFamily: "'Playfair Display', Georgia, serif",
+    color: '#2c1a0e',
     margin: 0,
   },
   grid: {
@@ -74,24 +75,25 @@ const styles: Record<string, CSSProperties> = {
     gap: '24px',
   },
   card: {
-    backgroundColor: '#1a1d2e',
+    backgroundColor: '#fffcf8',
     borderRadius: '16px',
     padding: '24px',
-    boxShadow: '0 4px 20px rgba(0, 0, 0, 0.2)',
-    border: '1px solid rgba(255, 255, 255, 0.05)',
+    boxShadow: '0 2px 8px rgba(44,26,14,0.06)',
+    border: '1px solid rgba(139,115,85,0.12)',
     display: 'flex',
     flexDirection: 'column',
     gap: '16px',
     transition: 'transform 0.2s',
   },
   cardTitle: {
-    fontSize: '18px',
+    fontSize: '1.2rem',
     fontWeight: 600,
     margin: 0,
     display: 'flex',
     alignItems: 'center',
     gap: '8px',
-    color: '#b19cd9',
+    color: '#2c1a0e',
+    fontFamily: "'Playfair Display', Georgia, serif",
   },
   moodContainer: {
     display: 'flex',
@@ -100,8 +102,8 @@ const styles: Record<string, CSSProperties> = {
     marginTop: '12px',
   },
   moodBtn: {
-    background: 'rgba(255,255,255,0.03)',
-    border: '1px solid rgba(255,255,255,0.1)',
+    background: '#f5efe6',
+    border: '1px solid rgba(139,115,85,0.16)',
     borderRadius: '12px',
     padding: '12px 8px',
     cursor: 'pointer',
@@ -113,8 +115,8 @@ const styles: Record<string, CSSProperties> = {
     transition: 'all 0.2s',
   },
   moodBtnActive: {
-    background: 'rgba(177, 156, 217, 0.1)',
-    borderColor: '#b19cd9',
+    background: 'rgba(139,94,60,0.1)',
+    borderColor: '#8b5e3c',
     transform: 'scale(1.05)',
   },
   moodEmoji: {
@@ -123,50 +125,54 @@ const styles: Record<string, CSSProperties> = {
   },
   moodLabel: {
     fontSize: '12px',
-    color: '#a0aec0',
+    color: '#7a5c42',
+    fontWeight: 500,
   },
   input: {
-    backgroundColor: 'rgba(0, 0, 0, 0.2)',
-    border: '1px solid rgba(255, 255, 255, 0.1)',
-    borderRadius: '8px',
+    backgroundColor: '#fffcf8',
+    border: '1px solid rgba(139,115,85,0.18)',
+    borderRadius: '9px',
     padding: '12px',
-    color: '#fff',
-    fontSize: '14px',
+    color: '#2c1a0e',
+    fontSize: '13.5px',
     width: '100%',
     boxSizing: 'border-box',
-    fontFamily: 'inherit',
+    fontFamily: "'Inter', system-ui, sans-serif",
     resize: 'vertical',
     minHeight: '80px',
+    outline: 'none',
   },
   button: {
-    backgroundColor: '#8e44ad',
-    color: '#fff',
+    backgroundColor: '#8b5e3c',
+    color: '#fffcf8',
     border: 'none',
-    borderRadius: '8px',
-    padding: '12px 16px',
-    fontSize: '14px',
+    borderRadius: '9px',
+    padding: '10px 20px',
+    fontSize: '13.5px',
     fontWeight: 600,
+    fontFamily: "'Inter', system-ui, sans-serif",
     cursor: 'pointer',
-    transition: 'background 0.2s',
+    transition: 'all 0.18s ease',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     gap: '8px',
+    boxShadow: '0 2px 8px rgba(139,94,60,0.3)',
   },
   buttonDisabled: {
-    backgroundColor: '#4a5568',
+    backgroundColor: '#c4a882',
     cursor: 'not-allowed',
-    opacity: 0.7,
+    boxShadow: 'none',
   },
   burnoutBanner: {
-    backgroundColor: 'rgba(255, 107, 107, 0.1)',
-    border: '1px solid rgba(255, 107, 107, 0.3)',
+    backgroundColor: 'rgba(200,122,30,0.1)',
+    border: '1px solid rgba(200,122,30,0.3)',
     borderRadius: '12px',
     padding: '16px',
     display: 'flex',
     alignItems: 'flex-start',
     gap: '16px',
-    color: '#ff6b6b',
+    color: '#c87a1e',
     animation: 'pulse 2s infinite',
   },
   achievementItem: {
@@ -174,12 +180,13 @@ const styles: Record<string, CSSProperties> = {
     alignItems: 'center',
     gap: '12px',
     padding: '12px',
-    background: 'rgba(255, 255, 255, 0.03)',
-    borderRadius: '8px',
+    background: '#f5efe6',
+    border: '1px solid rgba(139,115,85,0.14)',
+    borderRadius: '12px',
     marginBottom: '8px',
   },
   momentItem: {
-    borderLeft: '2px solid #b19cd9',
+    borderLeft: '2px solid #8b5e3c',
     paddingLeft: '16px',
     position: 'relative',
     marginBottom: '16px',
@@ -191,16 +198,16 @@ const styles: Record<string, CSSProperties> = {
     width: '8px',
     height: '8px',
     borderRadius: '50%',
-    backgroundColor: '#b19cd9',
+    backgroundColor: '#8b5e3c',
   },
   momentDate: {
     fontSize: '12px',
-    color: '#a0aec0',
+    color: '#a08060',
     marginBottom: '4px',
   },
   momentText: {
     fontSize: '14px',
-    color: '#e2e8f0',
+    color: '#2c1a0e',
     lineHeight: 1.5,
   },
   chartContainer: {
@@ -226,11 +233,11 @@ const styles: Record<string, CSSProperties> = {
     left: '50%',
     transform: 'translateX(-50%)',
     fontSize: '10px',
-    color: '#a0aec0',
+    color: '#a08060',
   },
   tipCard: {
-    background: 'linear-gradient(135deg, rgba(142, 68, 173, 0.2), rgba(177, 156, 217, 0.1))',
-    border: '1px solid rgba(177, 156, 217, 0.3)',
+    background: '#f5efe6',
+    border: '1px solid rgba(139,115,85,0.16)',
     borderRadius: '16px',
     padding: '24px',
     display: 'flex',
@@ -243,12 +250,12 @@ const styles: Record<string, CSSProperties> = {
     position: 'fixed',
     bottom: '24px',
     right: '24px',
-    backgroundColor: '#69db7c',
-    color: '#000',
+    backgroundColor: 'rgba(61,122,78,0.95)',
+    color: '#fffcf8',
     padding: '12px 24px',
-    borderRadius: '8px',
+    borderRadius: '9px',
     fontWeight: 600,
-    boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+    boxShadow: '0 4px 12px rgba(44,26,14,0.15)',
     zIndex: 1000,
     animation: 'slideUp 0.3s ease-out',
   },
@@ -436,7 +443,7 @@ export default function Wellbeing() {
       return {
         date: date.substring(5), // MM-DD
         mood: checkin ? checkin.mood : 0,
-        color: checkin ? MOODS.find(m => m.value === checkin.mood)?.color || '#333' : '#2d3748'
+        color: checkin ? MOODS.find(m => m.value === checkin.mood)?.color || '#333' : '#e2e8f0'
       };
     });
   };
@@ -481,9 +488,9 @@ export default function Wellbeing() {
           </h2>
           
           {hasCheckedInToday ? (
-            <div style={{ textAlign: 'center', padding: '24px', color: '#69db7c' }}>
+            <div style={{ textAlign: 'center', padding: '24px', color: '#3d7a4e' }}>
               <i className="ti ti-check" style={{ fontSize: '32px', marginBottom: '8px' }}></i>
-              <p style={{ margin: 0 }}>Check-in realizado hoje! Obrigado por cuidar de você.</p>
+              <p style={{ margin: 0, fontWeight: 500 }}>Check-in realizado hoje! Obrigado por cuidar de você.</p>
             </div>
           ) : (
             <>
@@ -540,22 +547,22 @@ export default function Wellbeing() {
                   }}
                   title={`Humor: ${d.mood}/5`}
                 />
-                <span style={{ fontSize: '10px', color: '#a0aec0', marginTop: '8px' }}>{d.date}</span>
+                <span style={{ fontSize: '10px', color: '#a08060', marginTop: '8px' }}>{d.date}</span>
               </div>
             ))}
           </div>
-          <p style={{ fontSize: '12px', color: '#a0aec0', textAlign: 'center', margin: '8px 0 0 0' }}>
+          <p style={{ fontSize: '12px', color: '#7a5c42', textAlign: 'center', margin: '8px 0 0 0' }}>
             {checkins.filter(c => c.mood >= 4).length} dias positivos nos últimos registros.
           </p>
         </div>
 
         {/* DAILY TIP */}
         <div style={styles.tipCard}>
-          <div style={{ backgroundColor: 'rgba(142, 68, 173, 0.3)', padding: '12px', borderRadius: '50%' }}>
-            <i className="ti ti-bulb" style={{ fontSize: '24px', color: '#b19cd9' }}></i>
+          <div style={{ backgroundColor: 'rgba(139,94,60,0.1)', padding: '12px', borderRadius: '50%' }}>
+            <i className="ti ti-bulb" style={{ fontSize: '24px', color: '#8b5e3c' }}></i>
           </div>
-          <h3 style={{ margin: 0, fontSize: '16px', color: '#e2e8f0' }}>Dica do Dia</h3>
-          <p style={{ margin: 0, fontSize: '14px', lineHeight: 1.6, color: '#d5d6d9' }}>
+          <h3 style={{ margin: 0, fontSize: '16px', color: '#2c1a0e', fontFamily: "'Playfair Display', Georgia, serif" }}>Dica do Dia</h3>
+          <p style={{ margin: 0, fontSize: '14px', lineHeight: 1.6, color: '#5c3d20' }}>
             "{currentTip}"
           </p>
         </div>
@@ -583,7 +590,7 @@ export default function Wellbeing() {
 
           <div style={{ flex: 1, overflowY: 'auto', paddingRight: '8px' }}>
             {positiveMoments.length === 0 ? (
-              <p style={{ color: '#a0aec0', fontSize: '14px', textAlign: 'center', marginTop: '24px' }}>
+              <p style={{ color: '#7a5c42', fontSize: '14px', textAlign: 'center', marginTop: '24px' }}>
                 Nenhum momento registrado ainda. Celebre suas pequenas vitórias!
               </p>
             ) : (
@@ -608,11 +615,11 @@ export default function Wellbeing() {
           </h2>
           
           <div style={{ display: 'flex', alignItems: 'flex-end', gap: '16px', marginBottom: '16px' }}>
-            <div style={{ fontSize: '48px', fontWeight: 700, color: planningHours > 10 ? '#ff6b6b' : '#69db7c', lineHeight: 1 }}>
+            <div style={{ fontSize: '48px', fontWeight: 700, color: planningHours > 10 ? '#a83232' : '#3d7a4e', lineHeight: 1 }}>
               {planningHours}h
             </div>
             <div style={{ flex: 1 }}>
-              <p style={{ margin: '0 0 8px 0', fontSize: '12px', color: '#a0aec0' }}>Adicionar horas hoje:</p>
+              <p style={{ margin: '0 0 8px 0', fontSize: '12px', color: '#a08060' }}>Adicionar horas hoje:</p>
               <div style={{ display: 'flex', gap: '8px' }}>
                 <input
                   type="number"
@@ -627,7 +634,7 @@ export default function Wellbeing() {
           </div>
 
           {planningHours > 10 && (
-            <div style={{ backgroundColor: 'rgba(255, 169, 77, 0.1)', padding: '12px', borderRadius: '8px', border: '1px solid rgba(255, 169, 77, 0.3)', color: '#ffa94d', fontSize: '13px', lineHeight: 1.5 }}>
+            <div style={{ backgroundColor: 'rgba(200,122,30,0.1)', padding: '12px', borderRadius: '8px', border: '1px solid rgba(200,122,30,0.3)', color: '#c87a1e', fontSize: '13px', lineHeight: 1.5 }}>
               <strong>Atenção:</strong> Você já passou de 10h extras esta semana. Que tal delegar a criação de atividades para a Rafinha (Assistente AI) e descansar?
             </div>
           )}
@@ -642,7 +649,7 @@ export default function Wellbeing() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {achievements.map((ach, idx) => (
               <div key={idx} style={styles.achievementItem}>
-                <span style={{ fontSize: '14px', color: '#e2e8f0' }}>{ach}</span>
+                <span style={{ fontSize: '14px', color: '#2c1a0e' }}>{ach}</span>
               </div>
             ))}
           </div>

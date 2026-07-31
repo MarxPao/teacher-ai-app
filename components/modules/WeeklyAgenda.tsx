@@ -164,17 +164,17 @@ export default function WeeklyAgenda() {
   const prepPercentage = totalClasses === 0 ? 0 : Math.round((preppedClasses / totalClasses) * 100);
   const uniqueClassesAttended = new Set(schedule.map(s => s.classId)).size;
 
-  if (!isLoaded) return <div style={{ color: '#fff', padding: '2rem' }}>Carregando Agenda...</div>;
+  if (!isLoaded) return <div style={{ color: '#2c1a0e', padding: '2rem', fontFamily: "'Inter', system-ui, sans-serif" }}>Carregando Agenda...</div>;
 
   // --- Render Helpers ---
   const renderStatusBadge = (status: PrepStatus) => {
     switch (status) {
       case 'unplanned':
-        return <span style={{ ...styles.badge, backgroundColor: 'rgba(239, 68, 68, 0.15)', color: '#ef4444', border: '1px solid rgba(239, 68, 68, 0.3)' }} title="Não Planejada"><i className="ti ti-circle-x" style={{ marginRight: '4px' }}></i>🔴 Não Planejado</span>;
+        return <span style={{ ...styles.badge, backgroundColor: 'rgba(168,50,50,0.12)', color: '#a83232' }} title="Não Planejada"><i className="ti ti-circle-x" style={{ marginRight: '4px' }}></i>Não Planejado</span>;
       case 'draft':
-        return <span style={{ ...styles.badge, backgroundColor: 'rgba(245, 158, 11, 0.15)', color: '#fcd34d', border: '1px solid rgba(245, 158, 11, 0.3)' }} title="Em Rascunho"><i className="ti ti-pencil" style={{ marginRight: '4px' }}></i>🟡 Rascunho</span>;
+        return <span style={{ ...styles.badge, backgroundColor: 'rgba(200,122,30,0.12)', color: '#c87a1e' }} title="Em Rascunho"><i className="ti ti-pencil" style={{ marginRight: '4px' }}></i>Rascunho</span>;
       case 'ready':
-        return <span style={{ ...styles.badge, backgroundColor: 'rgba(16, 185, 129, 0.15)', color: '#34d399', border: '1px solid rgba(16, 185, 129, 0.3)' }} title="Pronta!"><i className="ti ti-check" style={{ marginRight: '4px' }}></i>🟢 Pronta!</span>;
+        return <span style={{ ...styles.badge, backgroundColor: 'rgba(61,122,78,0.12)', color: '#3d7a4e' }} title="Pronta!"><i className="ti ti-check" style={{ marginRight: '4px' }}></i>Pronta!</span>;
     }
   };
 
@@ -196,21 +196,21 @@ export default function WeeklyAgenda() {
 
         <div style={styles.summaryContainer}>
           <div style={styles.summaryCard}>
-            <div style={styles.summaryIconWrapper}><i className="ti ti-books" style={{ color: '#3b82f6', fontSize: '1.5rem' }}></i></div>
+            <div style={styles.summaryIconWrapper}><i className="ti ti-books" style={{ color: '#8b5e3c', fontSize: '1.5rem' }}></i></div>
             <div style={styles.summaryContent}>
               <span style={styles.summaryValue}>{totalClasses}</span>
               <span style={styles.summaryLabel}>Total de Aulas</span>
             </div>
           </div>
           <div style={styles.summaryCard}>
-            <div style={styles.summaryIconWrapper}><i className="ti ti-chart-pie" style={{ color: '#10b981', fontSize: '1.5rem' }}></i></div>
+            <div style={styles.summaryIconWrapper}><i className="ti ti-chart-pie" style={{ color: '#3d7a4e', fontSize: '1.5rem' }}></i></div>
             <div style={styles.summaryContent}>
               <span style={styles.summaryValue}>{prepPercentage}%</span>
               <span style={styles.summaryLabel}>Aulas Preparadas</span>
             </div>
           </div>
           <div style={styles.summaryCard}>
-            <div style={styles.summaryIconWrapper}><i className="ti ti-users" style={{ color: '#8b5cf6', fontSize: '1.5rem' }}></i></div>
+            <div style={styles.summaryIconWrapper}><i className="ti ti-users" style={{ color: '#2a6080', fontSize: '1.5rem' }}></i></div>
             <div style={styles.summaryContent}>
               <span style={styles.summaryValue}>{uniqueClassesAttended}</span>
               <span style={styles.summaryLabel}>Turmas Atendidas</span>
@@ -241,7 +241,7 @@ export default function WeeklyAgenda() {
                     ) : (
                       daySchedule.map(item => {
                         const cls = classes.find(c => c.id === item.classId);
-                        const cardColor = cls?.color || '#3b82f6';
+                        const cardColor = cls?.color || '#8b5e3c';
                         
                         return (
                           <div key={item.id} style={{ ...styles.lessonCard, borderLeftColor: cardColor }}>
@@ -275,11 +275,11 @@ export default function WeeklyAgenda() {
         <div style={styles.sidebar}>
           <div style={styles.checklistCard}>
             <div style={styles.checklistHeader}>
-              <h2 style={styles.checklistTitle}><i className="ti ti-list-check" style={{ marginRight: '8px' }}></i>Checklist Semanal</h2>
+              <h2 style={styles.checklistTitle}><i className="ti ti-list-check" style={{ marginRight: '8px', color: '#8b5e3c' }}></i>Checklist Semanal</h2>
             </div>
             
             <div style={styles.checklistInputContainer}>
-              <i className="ti ti-plus" style={{ position: 'absolute', left: '12px', top: '10px', color: '#94a3b8' }}></i>
+              <i className="ti ti-plus" style={{ position: 'absolute', left: '12px', top: '10px', color: '#a08060' }}></i>
               <input 
                 type="text" 
                 placeholder="Adicionar nova tarefa... (Enter)" 
@@ -290,21 +290,21 @@ export default function WeeklyAgenda() {
 
             <div style={styles.checklistItems}>
               {checklist.length === 0 ? (
-                <p style={{ color: '#64748b', fontSize: '0.9rem', textAlign: 'center', marginTop: '1rem' }}>Nenhuma tarefa pendente.</p>
+                <p style={{ color: '#a08060', fontSize: '0.9rem', textAlign: 'center', marginTop: '1rem' }}>Nenhuma tarefa pendente.</p>
               ) : (
                 checklist.map(item => (
                   <div key={item.id} style={styles.checklistItem} onClick={() => toggleChecklist(item.id)}>
                     <div style={{
                       ...styles.checkbox,
-                      backgroundColor: item.completed ? '#10b981' : 'transparent',
-                      borderColor: item.completed ? '#10b981' : '#475569'
+                      backgroundColor: item.completed ? '#8b5e3c' : 'transparent',
+                      borderColor: item.completed ? '#8b5e3c' : '#c4a882'
                     }}>
-                      {item.completed && <i className="ti ti-check" style={{ color: '#fff', fontSize: '0.8rem' }}></i>}
+                      {item.completed && <i className="ti ti-check" style={{ color: '#fffcf8', fontSize: '0.8rem' }}></i>}
                     </div>
                     <span style={{
                       ...styles.checklistText,
                       textDecoration: item.completed ? 'line-through' : 'none',
-                      color: item.completed ? '#64748b' : '#e2e8f0'
+                      color: item.completed ? '#a08060' : '#2c1a0e'
                     }}>{item.text}</span>
                   </div>
                 ))
@@ -320,28 +320,29 @@ export default function WeeklyAgenda() {
 // --- Inline Styles ---
 const styles: Record<string, CSSProperties> = {
   container: {
-    backgroundColor: '#0f1117',
-    color: '#e2e8f0',
+    backgroundColor: '#fdf8f2',
+    color: '#2c1a0e',
     minHeight: '100%',
     padding: '24px',
-    fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
+    fontFamily: "'Inter', system-ui, sans-serif",
     position: 'relative'
   },
   toast: {
     position: 'fixed',
     bottom: '24px',
     right: '24px',
-    backgroundColor: '#3b82f6',
-    color: '#fff',
+    backgroundColor: '#8b5e3c',
+    color: '#fffcf8',
     padding: '12px 20px',
     borderRadius: '8px',
-    boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.5)',
+    boxShadow: '0 4px 12px rgba(44,26,14,0.15)',
     display: 'flex',
     alignItems: 'center',
     gap: '8px',
     zIndex: 1000,
-    fontWeight: 500,
-    animation: 'fadeIn 0.3s ease-out'
+    fontWeight: 600,
+    animation: 'fadeIn 0.3s ease-out',
+    fontFamily: "'Inter', system-ui, sans-serif"
   },
   header: {
     display: 'flex',
@@ -350,7 +351,7 @@ const styles: Record<string, CSSProperties> = {
     flexWrap: 'wrap',
     gap: '20px',
     marginBottom: '32px',
-    borderBottom: '1px solid #1e2235',
+    borderBottom: '1px solid rgba(139,115,85,0.12)',
     paddingBottom: '24px'
   },
   titleSection: {
@@ -360,16 +361,14 @@ const styles: Record<string, CSSProperties> = {
     fontSize: '2rem',
     fontWeight: 700,
     margin: '0 0 8px 0',
-    color: '#ffffff',
-    background: 'linear-gradient(to right, #ffffff, #94a3b8)',
-    WebkitBackgroundClip: 'text',
-    WebkitTextFillColor: 'transparent',
+    color: '#2c1a0e',
+    fontFamily: "'Playfair Display', Georgia, serif",
     display: 'flex',
     alignItems: 'center'
   },
   subtitle: {
     margin: 0,
-    color: '#94a3b8',
+    color: '#7a5c42',
     fontSize: '1rem'
   },
   summaryContainer: {
@@ -378,24 +377,25 @@ const styles: Record<string, CSSProperties> = {
     flexWrap: 'wrap'
   },
   summaryCard: {
-    backgroundColor: '#1a1d2e',
-    border: '1px solid #2a2f45',
+    backgroundColor: '#fffcf8',
+    border: '1px solid rgba(139,115,85,0.12)',
     borderRadius: '12px',
     padding: '16px 20px',
     display: 'flex',
     alignItems: 'center',
     gap: '16px',
-    minWidth: '160px'
+    minWidth: '160px',
+    boxShadow: '0 2px 8px rgba(44,26,14,0.04)'
   },
   summaryIconWrapper: {
     width: '48px',
     height: '48px',
     borderRadius: '12px',
-    backgroundColor: '#0f1117',
+    backgroundColor: '#f5efe6',
     display: 'flex',
     justifyContent: 'center',
     alignItems: 'center',
-    border: '1px solid #2a2f45'
+    border: '1px solid rgba(139,115,85,0.08)'
   },
   summaryContent: {
     display: 'flex',
@@ -404,14 +404,15 @@ const styles: Record<string, CSSProperties> = {
   summaryValue: {
     fontSize: '1.5rem',
     fontWeight: 700,
-    color: '#ffffff',
+    color: '#2c1a0e',
     lineHeight: 1.2
   },
   summaryLabel: {
     fontSize: '0.8rem',
-    color: '#94a3b8',
+    color: '#a08060',
     textTransform: 'uppercase',
-    letterSpacing: '0.5px'
+    letterSpacing: '0.5px',
+    fontWeight: 600
   },
   layout: {
     display: 'flex',
@@ -422,27 +423,28 @@ const styles: Record<string, CSSProperties> = {
   mainContent: {
     flex: '1 1 0%',
     minWidth: 0,
-    backgroundColor: '#1a1d2e',
+    backgroundColor: '#fffcf8',
     borderRadius: '16px',
-    border: '1px solid #2a2f45',
+    border: '1px solid rgba(139,115,85,0.12)',
+    boxShadow: '0 2px 8px rgba(44,26,14,0.06)',
     overflow: 'hidden'
   },
   gridContainer: {
     display: 'grid',
     gridTemplateColumns: 'repeat(6, 1fr)',
     gap: '1px',
-    backgroundColor: '#2a2f45', // creates the grid line color
+    backgroundColor: 'rgba(139,115,85,0.12)', // grid lines
   },
   dayColumn: {
-    backgroundColor: '#1a1d2e',
+    backgroundColor: '#fffcf8',
     display: 'flex',
     flexDirection: 'column',
     minHeight: '400px'
   },
   dayHeader: {
     padding: '16px 12px',
-    backgroundColor: '#1e2235',
-    borderBottom: '1px solid #2a2f45',
+    backgroundColor: '#f5efe6',
+    borderBottom: '1px solid rgba(139,115,85,0.12)',
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
@@ -450,16 +452,17 @@ const styles: Record<string, CSSProperties> = {
   },
   dayTitle: {
     fontWeight: 600,
-    color: '#e2e8f0',
-    fontSize: '0.9rem',
-    marginBottom: '4px'
+    color: '#2c1a0e',
+    fontSize: '0.95rem',
+    marginBottom: '6px'
   },
   dayCount: {
     fontSize: '0.75rem',
-    color: '#64748b',
-    backgroundColor: '#0f1117',
+    color: '#7a5c42',
+    backgroundColor: '#fffcf8',
     padding: '2px 8px',
-    borderRadius: '12px'
+    borderRadius: '12px',
+    border: '1px solid rgba(139,115,85,0.08)'
   },
   dayContent: {
     padding: '12px',
@@ -470,14 +473,14 @@ const styles: Record<string, CSSProperties> = {
   },
   emptyDay: {
     textAlign: 'center',
-    color: '#475569',
+    color: '#a08060',
     fontSize: '0.9rem',
     marginTop: '20px',
     fontStyle: 'italic'
   },
   lessonCard: {
-    backgroundColor: '#0f1117',
-    border: '1px solid #2a2f45',
+    backgroundColor: '#f5efe6',
+    border: '1px solid rgba(139,115,85,0.16)',
     borderLeftWidth: '4px',
     borderLeftStyle: 'solid',
     borderRadius: '8px',
@@ -496,13 +499,13 @@ const styles: Record<string, CSSProperties> = {
   },
   lessonTime: {
     fontSize: '0.75rem',
-    color: '#94a3b8',
+    color: '#7a5c42',
     fontWeight: 600
   },
   badge: {
     fontSize: '0.65rem',
-    padding: '2px 6px',
-    borderRadius: '4px',
+    padding: '3px 8px',
+    borderRadius: '99px',
     fontWeight: 700,
     textTransform: 'uppercase',
     letterSpacing: '0.5px',
@@ -522,8 +525,8 @@ const styles: Record<string, CSSProperties> = {
   },
   lessonTopic: {
     margin: 0,
-    fontSize: '0.8rem',
-    color: '#cbd5e1',
+    fontSize: '0.85rem',
+    color: '#5c3d20',
     whiteSpace: 'nowrap',
     overflow: 'hidden',
     textOverflow: 'ellipsis'
@@ -531,13 +534,13 @@ const styles: Record<string, CSSProperties> = {
   lessonFooter: {
     marginTop: '8px',
     paddingTop: '8px',
-    borderTop: '1px dashed #2a2f45',
+    borderTop: '1px dashed rgba(139,115,85,0.2)',
     display: 'flex',
     justifyContent: 'flex-start'
   },
   planLink: {
-    fontSize: '0.75rem',
-    color: '#3b82f6',
+    fontSize: '0.8rem',
+    color: '#8b5e3c',
     fontWeight: 600,
     display: 'flex',
     alignItems: 'center',
@@ -548,38 +551,42 @@ const styles: Record<string, CSSProperties> = {
     flexShrink: 0
   },
   checklistCard: {
-    backgroundColor: '#1a1d2e',
+    backgroundColor: '#fffcf8',
     borderRadius: '16px',
-    border: '1px solid #2a2f45',
-    padding: '20px',
+    border: '1px solid rgba(139,115,85,0.12)',
+    boxShadow: '0 2px 8px rgba(44,26,14,0.06)',
+    padding: '24px',
     display: 'flex',
     flexDirection: 'column',
     height: '100%'
   },
   checklistHeader: {
-    marginBottom: '16px'
+    marginBottom: '20px'
   },
   checklistTitle: {
     margin: 0,
     fontSize: '1.25rem',
-    color: '#e2e8f0',
+    color: '#2c1a0e',
     display: 'flex',
-    alignItems: 'center'
+    alignItems: 'center',
+    fontFamily: "'Playfair Display', Georgia, serif",
+    fontWeight: 700
   },
   checklistInputContainer: {
     position: 'relative',
-    marginBottom: '16px'
+    marginBottom: '20px'
   },
   checklistInput: {
     width: '100%',
-    backgroundColor: '#0f1117',
-    border: '1px solid #2a2f45',
+    backgroundColor: '#f5efe6',
+    border: '1px solid rgba(139,115,85,0.18)',
     borderRadius: '8px',
     padding: '10px 12px 10px 36px',
-    color: '#e2e8f0',
+    color: '#2c1a0e',
     fontSize: '0.9rem',
     outline: 'none',
-    boxSizing: 'border-box'
+    boxSizing: 'border-box',
+    fontFamily: "'Inter', system-ui, sans-serif"
   },
   checklistItems: {
     display: 'flex',
@@ -591,11 +598,12 @@ const styles: Record<string, CSSProperties> = {
     alignItems: 'center',
     gap: '12px',
     padding: '10px 12px',
-    backgroundColor: '#0f1117',
+    backgroundColor: '#fffcf8',
     borderRadius: '8px',
     border: '1px solid transparent',
     cursor: 'pointer',
-    transition: 'background-color 0.2s'
+    transition: 'all 0.2s',
+    boxShadow: '0 1px 3px rgba(44,26,14,0.04)'
   },
   checkbox: {
     width: '18px',

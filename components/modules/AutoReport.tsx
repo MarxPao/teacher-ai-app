@@ -161,19 +161,19 @@ Utilize tom formal, embasado e respeitoso em português.`;
 
   return (
     <div style={{
-      minHeight: '100%',
-      backgroundColor: '#0f1117',
-      color: '#e2e8f0',
-      padding: '24px',
-      fontFamily: 'system-ui, -apple-system, sans-serif'
+      minHeight: '100vh',
+      backgroundColor: '#fdf8f2',
+      color: '#2c1a0e',
+      padding: '36px 40px',
+      fontFamily: "'Inter', system-ui, sans-serif"
     }}>
       {/* Header */}
-      <div style={{ marginBottom: '32px' }}>
-        <h1 style={{ margin: '0 0 8px 0', fontSize: '28px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <i className="ti ti-report" style={{ color: '#8b5cf6', fontSize: '32px' }}></i>
+      <div style={{ marginBottom: '32px', paddingBottom: '20px', borderBottom: '1px solid rgba(139,115,85,0.12)' }}>
+        <h1 style={{ margin: '0 0 8px 0', fontSize: '1.8rem', fontWeight: '700', fontFamily: "'Playfair Display', Georgia, serif", display: 'flex', alignItems: 'center', gap: '12px', color: '#2c1a0e' }}>
+          <i className="ti ti-report" style={{ color: '#8b5e3c', fontSize: '32px' }}></i>
           Relatório Mensal da Turma
         </h1>
-        <p style={{ margin: 0, color: '#94a3b8' }}>
+        <p style={{ margin: 0, color: '#a08060', fontSize: '14px', marginTop: '6px' }}>
           Gere pareceres pedagógicos formais automaticamente para a coordenação.
         </p>
       </div>
@@ -183,30 +183,32 @@ Utilize tom formal, embasado e respeitoso em português.`;
         {/* Painel de Controle */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           <div style={{
-            backgroundColor: '#1a1d2e',
+            backgroundColor: '#fffcf8',
             borderRadius: '16px',
-            padding: '24px',
-            border: '1px solid #2e334a'
+            padding: '28px',
+            border: '1px solid rgba(139,115,85,0.12)',
+            boxShadow: '0 2px 8px rgba(44,26,14,0.06)'
           }}>
-            <h2 style={{ margin: '0 0 20px 0', fontSize: '18px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <i className="ti ti-adjustments-horizontal" style={{ color: '#3b82f6' }}></i>
+            <h2 style={{ margin: '0 0 20px 0', fontSize: '1.2rem', fontFamily: "'Playfair Display', Georgia, serif", display: 'flex', alignItems: 'center', gap: '8px', color: '#2c1a0e' }}>
+              <i className="ti ti-adjustments-horizontal" style={{ color: '#8b5e3c' }}></i>
               Configurações
             </h2>
 
             <div style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', color: '#cbd5e1' }}>Turma</label>
+              <label style={{ display: 'block', marginBottom: '8px', fontSize: '13.5px', color: '#7a5c42', fontWeight: 500 }}>Turma</label>
               <select
                 value={selectedClassId}
                 onChange={(e) => setSelectedClassId(e.target.value)}
                 style={{
                   width: '100%',
-                  padding: '12px',
-                  backgroundColor: '#0f1117',
-                  border: '1px solid #334155',
-                  borderRadius: '8px',
-                  color: '#f8fafc',
+                  padding: '10px 14px',
+                  backgroundColor: '#fffcf8',
+                  border: '1px solid rgba(139,115,85,0.18)',
+                  borderRadius: '9px',
+                  color: '#2c1a0e',
                   outline: 'none',
-                  fontSize: '14px'
+                  fontSize: '13.5px',
+                  fontFamily: "'Inter', system-ui, sans-serif"
                 }}
               >
                 <option value="">Selecione uma turma...</option>
@@ -217,21 +219,22 @@ Utilize tom formal, embasado e respeitoso em português.`;
             </div>
 
             <div style={{ marginBottom: '24px' }}>
-              <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', color: '#cbd5e1' }}>Mês de Referência</label>
+              <label style={{ display: 'block', marginBottom: '8px', fontSize: '13.5px', color: '#7a5c42', fontWeight: 500 }}>Mês de Referência</label>
               <input
                 type="month"
                 value={selectedMonth}
                 onChange={(e) => setSelectedMonth(e.target.value)}
                 style={{
                   width: '100%',
-                  padding: '12px',
-                  backgroundColor: '#0f1117',
-                  border: '1px solid #334155',
-                  borderRadius: '8px',
-                  color: '#f8fafc',
+                  padding: '10px 14px',
+                  backgroundColor: '#fffcf8',
+                  border: '1px solid rgba(139,115,85,0.18)',
+                  borderRadius: '9px',
+                  color: '#2c1a0e',
                   outline: 'none',
-                  fontSize: '14px',
-                  boxSizing: 'border-box'
+                  fontSize: '13.5px',
+                  boxSizing: 'border-box',
+                  fontFamily: "'Inter', system-ui, sans-serif"
                 }}
               />
             </div>
@@ -241,20 +244,22 @@ Utilize tom formal, embasado e respeitoso em português.`;
               disabled={isGenerating}
               style={{
                 width: '100%',
-                padding: '14px',
-                background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
-                color: 'white',
+                padding: '12px 20px',
+                background: '#8b5e3c',
+                color: '#fffcf8',
                 border: 'none',
-                borderRadius: '8px',
-                fontSize: '15px',
+                borderRadius: '9px',
+                fontSize: '13.5px',
                 fontWeight: '600',
                 cursor: isGenerating ? 'not-allowed' : 'pointer',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 gap: '8px',
-                transition: 'opacity 0.2s',
-                opacity: isGenerating ? 0.7 : 1
+                transition: 'all 0.18s ease',
+                opacity: isGenerating ? 0.7 : 1,
+                boxShadow: '0 2px 8px rgba(139,94,60,0.3)',
+                fontFamily: "'Inter', system-ui, sans-serif"
               }}
             >
               {isGenerating ? (
@@ -262,7 +267,7 @@ Utilize tom formal, embasado e respeitoso em português.`;
               ) : (
                 <i className="ti ti-sparkles"></i>
               )}
-              {isGenerating ? 'Analisando Dados...' : 'Gerar Parecer Pedagógico Completo'}
+              {isGenerating ? 'Analisando Dados...' : 'Gerar Parecer Pedagógico'}
             </button>
             <style>{`
               @keyframes spin { 100% { transform: rotate(360deg); } }
@@ -270,30 +275,32 @@ Utilize tom formal, embasado e respeitoso em português.`;
           </div>
 
           <div style={{
-            backgroundColor: '#1a1d2e',
-            borderRadius: '16px',
-            padding: '24px',
-            border: '1px solid #2e334a'
+            backgroundColor: '#f5efe6',
+            borderRadius: '12px',
+            padding: '20px',
+            border: '1px solid rgba(139,115,85,0.14)'
           }}>
-             <h2 style={{ margin: '0 0 16px 0', fontSize: '16px', color: '#94a3b8' }}>Ações de Documento</h2>
+             <h2 style={{ margin: '0 0 16px 0', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1.4px', color: '#c4a882' }}>Ações de Documento</h2>
              <button
               onClick={handlePrint}
               disabled={!reportContent}
               style={{
                 width: '100%',
-                padding: '12px',
-                backgroundColor: 'transparent',
-                color: reportContent ? '#38bdf8' : '#475569',
-                border: `1px solid ${reportContent ? '#38bdf8' : '#334155'}`,
-                borderRadius: '8px',
-                fontSize: '14px',
+                padding: '9px 18px',
+                backgroundColor: reportContent ? '#fffcf8' : 'transparent',
+                color: reportContent ? '#2c1a0e' : '#a08060',
+                border: `1px solid ${reportContent ? 'rgba(139,115,85,0.3)' : 'rgba(139,115,85,0.18)'}`,
+                borderRadius: '9px',
+                fontSize: '13.5px',
                 fontWeight: '500',
                 cursor: reportContent ? 'pointer' : 'not-allowed',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 gap: '8px',
-                transition: 'all 0.2s'
+                transition: 'all 0.15s ease',
+                fontFamily: "'Inter', system-ui, sans-serif",
+                boxShadow: reportContent ? '0 1px 4px rgba(44,26,14,0.05)' : 'none'
               }}
             >
               <i className="ti ti-printer"></i>
@@ -304,15 +311,16 @@ Utilize tom formal, embasado e respeitoso em português.`;
 
         {/* Pré-visualização do Documento */}
         <div style={{
-          backgroundColor: '#1a1d2e',
+          backgroundColor: '#fffcf8',
           borderRadius: '16px',
-          padding: '24px',
-          border: '1px solid #2e334a',
+          padding: '28px',
+          border: '1px solid rgba(139,115,85,0.12)',
+          boxShadow: '0 2px 8px rgba(44,26,14,0.06)',
           display: 'flex',
           flexDirection: 'column'
         }}>
-           <h2 style={{ margin: '0 0 20px 0', fontSize: '18px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <i className="ti ti-file-text" style={{ color: '#10b981' }}></i>
+           <h2 style={{ margin: '0 0 20px 0', fontSize: '1.2rem', fontFamily: "'Playfair Display', Georgia, serif", display: 'flex', alignItems: 'center', gap: '8px', color: '#2c1a0e' }}>
+              <i className="ti ti-file-text" style={{ color: '#3d7a4e' }}></i>
               Pré-visualização do Documento
             </h2>
             
@@ -320,24 +328,25 @@ Utilize tom formal, embasado e respeitoso em português.`;
               flex: 1,
               backgroundColor: '#ffffff',
               borderRadius: '8px',
+              border: '1px solid rgba(139,115,85,0.2)',
               padding: '40px',
-              color: '#000000',
+              color: '#2c1a0e',
               overflowY: 'auto',
               maxHeight: '600px',
-              boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
+              boxShadow: '0 8px 30px rgba(44,26,14,0.1)'
             }}>
               {reportContent ? (
                 <div style={{ whiteSpace: 'pre-wrap', lineHeight: '1.6', fontSize: '14px', fontFamily: '"Times New Roman", Times, serif' }}>
                   {/* Fake Header Escolar */}
-                  <div style={{ textAlign: 'center', borderBottom: '2px solid #000', paddingBottom: '16px', marginBottom: '24px' }}>
-                    <h3 style={{ margin: '0 0 4px 0', fontSize: '18px', textTransform: 'uppercase' }}>Escola de Idiomas TeacherAI</h3>
-                    <p style={{ margin: '0', fontSize: '12px', color: '#444' }}>Coordenação Pedagógica - Relatório Oficial</p>
+                  <div style={{ textAlign: 'center', borderBottom: '2px solid #2c1a0e', paddingBottom: '16px', marginBottom: '24px' }}>
+                    <h3 style={{ margin: '0 0 4px 0', fontSize: '18px', textTransform: 'uppercase', fontFamily: "'Playfair Display', Georgia, serif" }}>Escola de Idiomas TeacherAI</h3>
+                    <p style={{ margin: '0', fontSize: '12px', color: '#5c3d20', fontFamily: "'Inter', system-ui, sans-serif" }}>Coordenação Pedagógica - Relatório Oficial</p>
                   </div>
                   {reportContent}
                 </div>
               ) : (
-                <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', gap: '16px' }}>
-                  <i className="ti ti-file-dashed" style={{ fontSize: '48px', color: '#cbd5e1' }}></i>
+                <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#a08060', gap: '16px' }}>
+                  <i className="ti ti-file-dashed" style={{ fontSize: '48px', color: '#c4a882' }}></i>
                   <p style={{ margin: 0 }}>O relatório gerado aparecerá aqui.</p>
                 </div>
               )}
@@ -352,18 +361,20 @@ Utilize tom formal, embasado e respeitoso em português.`;
           position: 'fixed',
           bottom: '24px',
           right: '24px',
-          backgroundColor: '#3b82f6',
-          color: 'white',
+          backgroundColor: '#2c1a0e',
+          color: '#fdf8f2',
           padding: '12px 24px',
-          borderRadius: '8px',
-          boxShadow: '0 4px 6px rgba(0,0,0,0.2)',
+          borderRadius: '9px',
+          boxShadow: '0 4px 12px rgba(44,26,14,0.2)',
           display: 'flex',
           alignItems: 'center',
           gap: '8px',
           zIndex: 1000,
+          fontFamily: "'Inter', system-ui, sans-serif",
+          fontSize: '13.5px',
           animation: 'slideIn 0.3s ease-out'
         }}>
-          <i className="ti ti-info-circle"></i>
+          <i className="ti ti-info-circle" style={{ color: '#c4a882' }}></i>
           {toastMessage}
           <style>{`
             @keyframes slideIn {

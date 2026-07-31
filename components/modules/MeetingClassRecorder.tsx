@@ -339,36 +339,41 @@ Responda APENAS um objeto JSON estrito com o seguinte formato:
     return [h, m, s].map(v => v < 10 ? "0" + v : v).filter((v,i) => v !== "00" || i > 0).join(":");
   };
 
-  // --- Styles ---
+  // --- Styles (Paper & Ink) ---
   const theme = {
-    bg: '#0a0d1a',
-    card: '#16192b',
-    cardHover: '#1c1f33',
-    primary: '#10b981', // Emerald
-    secondary: '#8b5cf6', // Violet
-    text: '#f8fafc',
-    textMuted: '#94a3b8',
-    border: '#2e334d',
-    danger: '#ef4444',
-    warning: '#f59e0b'
+    bg: '#fdf8f2',
+    card: '#fffcf8',
+    cardHover: '#f5efe6',
+    primary: '#8b5e3c',
+    secondary: '#5c3d20',
+    text: '#2c1a0e',
+    textMuted: '#7a5c42',
+    textLight: '#a08060',
+    border: 'rgba(139,115,85,0.16)',
+    danger: '#a83232',
+    warning: '#c87a1e',
+    success: '#3d7a4e'
   };
 
   const getTabBtnStyle = (active: boolean): CSSProperties => ({
-    padding: '0.5rem 1rem',
-    borderRadius: '6px',
+    padding: '8px 18px',
+    borderRadius: '9px',
     border: 'none',
-    background: active ? theme.border : 'transparent',
+    background: active ? theme.card : 'transparent',
     color: active ? theme.text : theme.textMuted,
     cursor: 'pointer',
-    fontWeight: 600,
-    transition: 'all 0.2s',
+    fontWeight: active ? 600 : 400,
+    fontSize: '13.5px',
+    boxShadow: active ? '0 1px 4px rgba(44,26,14,0.1)' : 'none',
+    transition: 'all 0.15s ease',
+    fontFamily: "'Inter', system-ui, sans-serif"
   });
 
   const getHistoryItemStyle = (isSelected: boolean): CSSProperties => ({
     background: isSelected ? theme.cardHover : theme.card,
-    border: `1px solid ${isSelected ? theme.secondary : theme.border}`,
+    border: `1px solid ${isSelected ? theme.primary : theme.border}`,
     padding: '1rem',
-    borderRadius: '8px',
+    borderRadius: '12px',
     cursor: 'pointer',
     transition: 'all 0.2s',
   });
@@ -377,9 +382,9 @@ Responda APENAS um objeto JSON estrito com o seguinte formato:
     container: {
       backgroundColor: theme.bg,
       color: theme.text,
-      minHeight: '100%',
-      padding: '2rem',
-      fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+      minHeight: '100vh',
+      padding: '36px 40px',
+      fontFamily: "'Inter', system-ui, sans-serif",
       display: 'flex',
       flexDirection: 'column',
       gap: '2rem',
@@ -388,8 +393,9 @@ Responda APENAS um objeto JSON estrito com o seguinte formato:
       display: 'flex',
       justifyContent: 'space-between',
       alignItems: 'center',
-      borderBottom: `1px solid ${theme.border}`,
-      paddingBottom: '1rem',
+      borderBottom: `1px solid rgba(139,115,85,0.12)`,
+      paddingBottom: '20px',
+      marginBottom: '12px',
     },
     titleBox: {
       display: 'flex',
@@ -398,19 +404,18 @@ Responda APENAS um objeto JSON estrito com o seguinte formato:
     },
     title: {
       margin: 0,
-      fontSize: '1.75rem',
+      fontSize: '1.8rem',
       fontWeight: 700,
-      background: `linear-gradient(45deg, ${theme.primary}, ${theme.secondary})`,
-      WebkitBackgroundClip: 'text',
-      WebkitTextFillColor: 'transparent',
+      fontFamily: "'Playfair Display', Georgia, serif",
+      color: theme.text,
     },
     tabs: {
       display: 'flex',
-      gap: '1rem',
-      background: theme.card,
-      padding: '0.5rem',
-      borderRadius: '8px',
-      border: `1px solid ${theme.border}`,
+      gap: '4px',
+      background: theme.cardHover,
+      padding: '4px',
+      borderRadius: '12px',
+      border: `1px solid rgba(139,115,85,0.12)`,
     },
     content: {
       display: 'flex',
@@ -426,9 +431,10 @@ Responda APENAS um objeto JSON estrito com o seguinte formato:
     sidePanel: {
       flex: 1,
       background: theme.card,
-      borderRadius: '12px',
-      padding: '1.5rem',
-      border: `1px solid ${theme.border}`,
+      borderRadius: '16px',
+      padding: '28px',
+      border: `1px solid rgba(139,115,85,0.1)`,
+      boxShadow: '0 2px 8px rgba(44,26,14,0.06)',
       display: 'flex',
       flexDirection: 'column',
       gap: '1rem',
@@ -436,9 +442,16 @@ Responda APENAS um objeto JSON estrito com o seguinte formato:
     },
     card: {
       background: theme.card,
-      borderRadius: '12px',
-      padding: '1.5rem',
+      borderRadius: '16px',
+      padding: '28px',
+      border: `1px solid rgba(139,115,85,0.1)`,
+      boxShadow: '0 2px 8px rgba(44,26,14,0.06)',
+    },
+    subCard: {
+      background: theme.cardHover,
       border: `1px solid ${theme.border}`,
+      borderRadius: '12px',
+      padding: '20px',
     },
     inputGroup: {
       display: 'flex',
@@ -447,44 +460,49 @@ Responda APENAS um objeto JSON estrito com o seguinte formato:
       marginBottom: '1rem',
     },
     label: {
-      fontSize: '0.875rem',
-      color: theme.textMuted,
-      fontWeight: 500,
+      fontSize: '11px',
+      fontWeight: 700,
+      textTransform: 'uppercase',
+      letterSpacing: '1.4px',
+      color: theme.textLight,
+      marginBottom: '4px',
     },
     input: {
-      background: 'rgba(0,0,0,0.2)',
-      border: `1px solid ${theme.border}`,
+      background: theme.card,
+      border: `1px solid rgba(139,115,85,0.18)`,
       color: theme.text,
-      padding: '0.75rem 1rem',
-      borderRadius: '8px',
-      fontSize: '1rem',
+      padding: '10px 14px',
+      borderRadius: '9px',
+      fontSize: '13.5px',
+      fontFamily: "'Inter', system-ui, sans-serif",
       outline: 'none',
       width: '100%',
       boxSizing: 'border-box' as const,
     },
     select: {
-      background: 'rgba(0,0,0,0.2)',
-      border: `1px solid ${theme.border}`,
+      background: theme.card,
+      border: `1px solid rgba(139,115,85,0.18)`,
       color: theme.text,
-      padding: '0.75rem 1rem',
-      borderRadius: '8px',
-      fontSize: '1rem',
+      padding: '10px 14px',
+      borderRadius: '9px',
+      fontSize: '13.5px',
+      fontFamily: "'Inter', system-ui, sans-serif",
       outline: 'none',
       width: '100%',
-      appearance: 'none',
+      boxSizing: 'border-box' as const,
     },
     textarea: {
-      background: 'rgba(0,0,0,0.2)',
-      border: `1px solid ${theme.border}`,
+      background: theme.card,
+      border: `1px solid rgba(139,115,85,0.18)`,
       color: theme.text,
-      padding: '0.75rem 1rem',
-      borderRadius: '8px',
-      fontSize: '1rem',
+      padding: '10px 14px',
+      borderRadius: '9px',
+      fontSize: '13.5px',
+      fontFamily: "'Inter', system-ui, sans-serif",
       outline: 'none',
       width: '100%',
       minHeight: '200px',
       resize: 'vertical',
-      fontFamily: 'inherit',
       boxSizing: 'border-box' as const,
     },
     recorderBox: {
@@ -492,110 +510,123 @@ Responda APENAS um objeto JSON estrito com o seguinte formato:
       flexDirection: 'column',
       alignItems: 'center',
       gap: '1.5rem',
-      padding: '2rem',
-      background: `linear-gradient(180deg, ${theme.card} 0%, rgba(16,185,129,0.05) 100%)`,
-      borderRadius: '12px',
-      border: `1px solid ${isRecording ? theme.primary : theme.border}`,
-      boxShadow: isRecording ? `0 0 20px rgba(16,185,129,0.1)` : 'none',
+      padding: '32px',
+      background: isRecording ? 'rgba(168,50,50,0.03)' : theme.cardHover,
+      borderRadius: '16px',
+      border: `1px solid ${isRecording ? 'rgba(168,50,50,0.2)' : theme.border}`,
+      boxShadow: isRecording ? `0 4px 16px rgba(168,50,50,0.08)` : 'none',
       transition: 'all 0.3s ease',
     },
     timer: {
       fontSize: '3.5rem',
-      fontWeight: 800,
+      fontWeight: 700,
+      fontFamily: "'Playfair Display', Georgia, serif",
       fontVariantNumeric: 'tabular-nums',
-      color: isRecording ? theme.primary : theme.text,
-      textShadow: isRecording ? `0 0 20px rgba(16,185,129,0.5)` : 'none',
+      color: isRecording ? theme.danger : theme.text,
     },
     controls: {
       display: 'flex',
-      gap: '1rem',
+      gap: '12px',
     },
     btnPrimary: {
-      background: theme.primary,
-      color: '#fff',
-      border: 'none',
-      padding: '0.75rem 1.5rem',
-      borderRadius: '8px',
-      fontWeight: 600,
-      cursor: 'pointer',
       display: 'flex',
       alignItems: 'center',
-      gap: '0.5rem',
-      fontSize: '1rem',
-      transition: 'background 0.2s',
+      gap: '8px',
+      padding: '10px 20px',
+      background: theme.primary,
+      color: '#fffcf8',
+      border: 'none',
+      borderRadius: '9px',
+      fontSize: '13.5px',
+      fontWeight: 600,
+      fontFamily: "'Inter', system-ui, sans-serif",
+      cursor: 'pointer',
+      boxShadow: '0 2px 8px rgba(139,94,60,0.3)',
+      transition: 'all 0.18s ease',
     },
     btnDanger: {
-      background: theme.danger,
-      color: '#fff',
-      border: 'none',
-      padding: '0.75rem 1.5rem',
-      borderRadius: '8px',
-      fontWeight: 600,
-      cursor: 'pointer',
       display: 'flex',
       alignItems: 'center',
-      gap: '0.5rem',
-      fontSize: '1rem',
+      gap: '8px',
+      padding: '10px 20px',
+      background: theme.danger,
+      color: '#fffcf8',
+      border: 'none',
+      borderRadius: '9px',
+      fontSize: '13.5px',
+      fontWeight: 600,
+      fontFamily: "'Inter', system-ui, sans-serif",
+      cursor: 'pointer',
+      boxShadow: '0 2px 8px rgba(168,50,50,0.3)',
+      transition: 'all 0.18s ease',
     },
     btnWarning: {
-      background: theme.warning,
-      color: '#fff',
-      border: 'none',
-      padding: '0.75rem 1.5rem',
-      borderRadius: '8px',
-      fontWeight: 600,
-      cursor: 'pointer',
       display: 'flex',
       alignItems: 'center',
-      gap: '0.5rem',
-      fontSize: '1rem',
+      gap: '8px',
+      padding: '10px 20px',
+      background: theme.warning,
+      color: '#fffcf8',
+      border: 'none',
+      borderRadius: '9px',
+      fontSize: '13.5px',
+      fontWeight: 600,
+      fontFamily: "'Inter', system-ui, sans-serif",
+      cursor: 'pointer',
+      boxShadow: '0 2px 8px rgba(200,122,30,0.3)',
+      transition: 'all 0.18s ease',
     },
     btnSecondary: {
-      background: 'transparent',
-      color: theme.text,
-      border: `1px solid ${theme.border}`,
-      padding: '0.75rem 1.5rem',
-      borderRadius: '8px',
-      fontWeight: 600,
-      cursor: 'pointer',
       display: 'flex',
       alignItems: 'center',
-      gap: '0.5rem',
-      fontSize: '1rem',
+      gap: '8px',
+      padding: '9px 18px',
+      background: theme.cardHover,
+      color: theme.textMuted,
+      border: `1px solid rgba(139,115,85,0.18)`,
+      borderRadius: '9px',
+      fontSize: '13.5px',
+      fontWeight: 500,
+      fontFamily: "'Inter', system-ui, sans-serif",
+      cursor: 'pointer',
+      transition: 'all 0.15s ease',
     },
     btnProcess: {
-      background: `linear-gradient(90deg, ${theme.secondary}, ${theme.primary})`,
-      color: '#fff',
+      background: theme.primary,
+      color: '#fffcf8',
       border: 'none',
-      padding: '1rem',
-      borderRadius: '8px',
-      fontWeight: 700,
+      padding: '12px 20px',
+      borderRadius: '9px',
+      fontWeight: 600,
+      fontFamily: "'Inter', system-ui, sans-serif",
       cursor: 'pointer',
       width: '100%',
       display: 'flex',
       justifyContent: 'center',
       alignItems: 'center',
-      gap: '0.5rem',
-      fontSize: '1.1rem',
-      marginTop: '1rem',
+      gap: '8px',
+      fontSize: '14px',
+      marginTop: '16px',
+      boxShadow: '0 2px 8px rgba(139,94,60,0.3)',
     },
     transcriptBox: {
-      background: '#000',
-      borderRadius: '8px',
-      padding: '1rem',
+      background: theme.cardHover,
+      borderRadius: '12px',
+      padding: '20px',
       maxHeight: '300px',
       overflowY: 'auto',
-      border: `1px solid ${theme.border}`,
-      fontFamily: 'monospace',
+      border: `1px solid rgba(139,115,85,0.14)`,
+      fontFamily: "'Fira Code', 'Courier New', monospace",
+      fontSize: '13px',
+      color: theme.text,
     },
     segment: {
-      marginBottom: '0.5rem',
+      marginBottom: '8px',
       lineHeight: 1.5,
     },
     timestamp: {
-      color: theme.textMuted,
-      marginRight: '0.5rem',
-      fontSize: '0.8rem',
+      color: theme.textLight,
+      marginRight: '8px',
     },
     interim: {
       color: theme.primary,
@@ -603,52 +634,59 @@ Responda APENAS um objeto JSON estrito com o seguinte formato:
     },
     modeSwitch: {
       display: 'flex',
-      gap: '1rem',
-      marginBottom: '1.5rem',
+      gap: '4px',
+      background: theme.cardHover,
+      borderRadius: '12px',
+      padding: '4px',
+      marginBottom: '24px',
+      border: '1px solid rgba(139,115,85,0.12)',
+      width: 'fit-content',
     },
     historyList: {
       display: 'flex',
       flexDirection: 'column',
-      gap: '1rem',
+      gap: '12px',
     },
     tag: {
-      background: 'rgba(139, 92, 246, 0.2)',
-      color: theme.secondary,
-      padding: '0.2rem 0.5rem',
-      borderRadius: '4px',
-      fontSize: '0.75rem',
+      background: 'rgba(139,94,60,0.1)',
+      color: theme.primary,
+      padding: '3px 10px',
+      borderRadius: '99px',
+      fontSize: '11px',
       fontWeight: 600,
       display: 'inline-block',
-      marginRight: '0.5rem',
-      marginBottom: '0.5rem',
+      marginRight: '6px',
+      marginBottom: '6px',
     },
     reportSection: {
-      marginBottom: '1.5rem',
-      paddingBottom: '1.5rem',
+      marginBottom: '24px',
+      paddingBottom: '24px',
       borderBottom: `1px dashed ${theme.border}`,
     },
     reportTitle: {
       display: 'flex',
       alignItems: 'center',
-      gap: '0.5rem',
-      fontSize: '1.2rem',
-      color: theme.primary,
-      marginBottom: '1rem',
+      gap: '8px',
+      fontSize: '16px',
+      fontFamily: "'Playfair Display', Georgia, serif",
+      fontWeight: 700,
+      color: theme.text,
+      marginBottom: '12px',
     },
     list: {
       margin: 0,
-      paddingLeft: '1.5rem',
+      paddingLeft: '24px',
       color: theme.text,
       lineHeight: 1.6,
     },
     exportBar: {
       display: 'flex',
-      gap: '1rem',
-      padding: '1rem',
-      background: theme.card,
-      borderRadius: '8px',
+      gap: '12px',
+      padding: '16px',
+      background: theme.cardHover,
+      borderRadius: '12px',
       border: `1px solid ${theme.border}`,
-      marginTop: '1rem',
+      marginTop: '16px',
     }
   };
 
@@ -671,8 +709,8 @@ Responda APENAS um objeto JSON estrito com o seguinte formato:
           </button>
         </div>
 
-        <div style={{ display: 'flex', gap: '1rem' }}>
-          <div style={{ ...styles.inputGroup, flex: 2 }}>
+        <div style={{ display: 'flex', gap: '16px', marginBottom: '16px' }}>
+          <div style={{ ...styles.inputGroup, flex: 2, marginBottom: 0 }}>
             <label style={styles.label}>Título da Sessão</label>
             <input 
               style={styles.input} 
@@ -682,7 +720,7 @@ Responda APENAS um objeto JSON estrito com o seguinte formato:
               disabled={isRecording}
             />
           </div>
-          <div style={{ ...styles.inputGroup, flex: 1 }}>
+          <div style={{ ...styles.inputGroup, flex: 1, marginBottom: 0 }}>
             <label style={styles.label}>Tipo</label>
             <select 
               style={styles.select}
@@ -728,8 +766,8 @@ Responda APENAS um objeto JSON estrito com o seguinte formato:
               </div>
             </div>
 
-            <div style={{ marginTop: '1.5rem' }}>
-              <label style={styles.label}>Transcrição em Tempo Real</label>
+            <div style={{ marginTop: '24px' }}>
+              <div style={styles.label}>Transcrição em Tempo Real</div>
               <div style={styles.transcriptBox}>
                 {currentTranscription.map((seg, idx) => (
                   <div key={seg.id + idx} style={styles.segment}>
@@ -744,7 +782,7 @@ Responda APENAS um objeto JSON estrito com o seguinte formato:
                 )}
                 <div ref={transcriptEndRef} />
                 {currentTranscription.length === 0 && !interimText && (
-                  <div style={{ color: theme.textMuted, textAlign: 'center', padding: '2rem' }}>
+                  <div style={{ color: theme.textLight, textAlign: 'center', padding: '2rem', fontFamily: "'Inter', system-ui, sans-serif" }}>
                     A transcrição aparecerá aqui...
                   </div>
                 )}
@@ -753,7 +791,7 @@ Responda APENAS um objeto JSON estrito com o seguinte formato:
           </>
         ) : (
           <div>
-            <label style={styles.label}>Cole a transcrição ou anotações brutas</label>
+            <div style={styles.label}>Cole a transcrição ou anotações brutas</div>
             <textarea 
               style={styles.textarea}
               value={manualInput}
@@ -776,25 +814,25 @@ Responda APENAS um objeto JSON estrito com o seguinte formato:
       </div>
 
       {isProcessing && inputMode === 'mic' && (
-        <div style={{...styles.card, textAlign: 'center', padding: '3rem'}}>
-          <i className="ti ti-brain ti-spin" style={{ fontSize: '3rem', color: theme.secondary, marginBottom: '1rem' }}></i>
-          <h3>Rafinha AI está analisando a gravação...</h3>
-          <p style={{color: theme.textMuted}}>Extraindo pontos-chave, ações e formatando o diário.</p>
+        <div style={{...styles.card, textAlign: 'center', padding: '48px'}}>
+          <i className="ti ti-brain ti-spin" style={{ fontSize: '3rem', color: theme.primary, marginBottom: '16px' }}></i>
+          <h3 style={{fontFamily: "'Playfair Display', Georgia, serif", margin: '0 0 8px 0'}}>Rafinha AI está analisando a gravação...</h3>
+          <p style={{color: theme.textMuted, margin: 0}}>Extraindo pontos-chave, ações e formatando o diário.</p>
         </div>
       )}
     </div>
   );
 
   const renderReport = (record: MeetingRecord) => {
-    if (!record.report) return <div>Relatório não gerado.</div>;
+    if (!record.report) return <div style={styles.card}>Relatório não gerado.</div>;
     const rep = record.report;
 
     return (
       <div style={styles.card}>
-        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '2rem'}}>
+        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '32px'}}>
           <div>
-            <h2 style={{margin: '0 0 0.5rem 0'}}>{record.title}</h2>
-            <div style={{color: theme.textMuted, display: 'flex', gap: '1rem', fontSize: '0.9rem'}}>
+            <h2 style={{margin: '0 0 8px 0', fontFamily: "'Playfair Display', Georgia, serif", fontSize: '1.5rem'}}>{record.title}</h2>
+            <div style={{color: theme.textMuted, display: 'flex', gap: '16px', fontSize: '13.5px'}}>
               <span><i className="ti ti-calendar"></i> {new Date(record.date).toLocaleString()}</span>
               <span><i className="ti ti-tag"></i> {record.type}</span>
             </div>
@@ -806,20 +844,20 @@ Responda APENAS um objeto JSON estrito com o seguinte formato:
 
         <div style={styles.reportSection}>
           <div style={styles.reportTitle}>
-            <i className="ti ti-file-description"></i> Resumo Executivo
+            <i className="ti ti-file-description" style={{color: theme.primary}}></i> Resumo Executivo
           </div>
-          <p style={{color: theme.text, lineHeight: 1.6}}>{rep.summary}</p>
+          <p style={{color: theme.text, lineHeight: 1.6, margin: 0}}>{rep.summary}</p>
         </div>
 
         <div style={styles.reportSection}>
           <div style={styles.reportTitle}>
-            <i className="ti ti-checkbox"></i> Ações & Encaminhamentos
+            <i className="ti ti-checkbox" style={{color: theme.primary}}></i> Ações & Encaminhamentos
           </div>
           <ul style={styles.list}>
             {rep.actionItems.map((item, idx) => (
-              <li key={idx} style={{marginBottom: '0.5rem'}}>
+              <li key={idx} style={{marginBottom: '8px'}}>
                 <strong>{item.task}</strong> <br/>
-                <span style={{color: theme.textMuted, fontSize: '0.85rem'}}>
+                <span style={{color: theme.textMuted, fontSize: '12px'}}>
                   👤 Responsável: {item.assignee} | ⏰ Prazo: {item.deadline}
                 </span>
               </li>
@@ -829,12 +867,12 @@ Responda APENAS um objeto JSON estrito com o seguinte formato:
 
         {rep.studentHighlights.length > 0 && (
           <div style={styles.reportSection}>
-            <div style={{...styles.reportTitle, color: theme.secondary}}>
-              <i className="ti ti-bulb"></i> Destaques / Incidentes
+            <div style={{...styles.reportTitle}}>
+              <i className="ti ti-bulb" style={{color: theme.primary}}></i> Destaques / Incidentes
             </div>
             <ul style={styles.list}>
               {rep.studentHighlights.map((h, idx) => (
-                <li key={idx} style={{marginBottom: '0.5rem'}}>{h}</li>
+                <li key={idx} style={{marginBottom: '8px'}}>{h}</li>
               ))}
             </ul>
           </div>
@@ -842,11 +880,11 @@ Responda APENAS um objeto JSON estrito com o seguinte formato:
 
         <div style={styles.reportSection}>
           <div style={styles.reportTitle}>
-            <i className="ti ti-calendar-forward"></i> Próximos Passos
+            <i className="ti ti-calendar-forward" style={{color: theme.primary}}></i> Próximos Passos
           </div>
           <ul style={styles.list}>
             {rep.nextSteps.map((step, idx) => (
-              <li key={idx}>{step}</li>
+              <li key={idx} style={{marginBottom: '4px'}}>{step}</li>
             ))}
           </ul>
         </div>
@@ -870,15 +908,15 @@ Responda APENAS um objeto JSON estrito com o seguinte formato:
     <div style={styles.mainPanel}>
       {selectedRecord ? (
         <div>
-          <button style={{...styles.btnSecondary, marginBottom: '1rem', border: 'none', padding: '0'}} onClick={() => setSelectedRecord(null)}>
+          <button style={{...styles.btnSecondary, marginBottom: '16px', background: 'transparent', border: 'none', padding: '8px 0', boxShadow: 'none'}} onClick={() => setSelectedRecord(null)}>
             <i className="ti ti-arrow-left"></i> Voltar para lista
           </button>
           {renderReport(selectedRecord)}
         </div>
       ) : (
         <div style={styles.card}>
-          <h2 style={{marginTop: 0}}>Atas & Gravações</h2>
-          <div style={{display: 'flex', gap: '1rem', marginBottom: '1.5rem'}}>
+          <h2 style={{marginTop: 0, fontFamily: "'Playfair Display', Georgia, serif", fontSize: '1.5rem', marginBottom: '20px'}}>Atas & Gravações</h2>
+          <div style={{display: 'flex', gap: '16px', marginBottom: '24px'}}>
             <input 
               style={{...styles.input, flex: 2}} 
               placeholder="Buscar por título ou conteúdo..."
@@ -903,20 +941,20 @@ Responda APENAS um objeto JSON estrito com o seguinte formato:
                 <div key={record.id} style={getHistoryItemStyle(false)} onClick={() => setSelectedRecord(record)}>
                   <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
                     <div>
-                      <h4 style={{margin: '0 0 0.25rem 0'}}>{record.title}</h4>
-                      <div style={{color: theme.textMuted, fontSize: '0.85rem'}}>
+                      <h4 style={{margin: '0 0 4px 0', fontSize: '15px'}}>{record.title}</h4>
+                      <div style={{color: theme.textMuted, fontSize: '12px'}}>
                         {new Date(record.date).toLocaleDateString()} • {record.type}
                       </div>
                     </div>
                     <div>
                       {record.report?.tags.slice(0,2).map(t => <span key={t} style={styles.tag}>#{t}</span>)}
-                      <i className="ti ti-chevron-right" style={{color: theme.textMuted}}></i>
+                      <i className="ti ti-chevron-right" style={{color: theme.textLight}}></i>
                     </div>
                   </div>
                 </div>
             ))}
             {records.length === 0 && (
-              <div style={{textAlign: 'center', padding: '2rem', color: theme.textMuted}}>
+              <div style={{textAlign: 'center', padding: '32px', color: theme.textLight}}>
                 Nenhum registro encontrado. Comece a gravar!
               </div>
             )}
@@ -930,8 +968,11 @@ Responda APENAS um objeto JSON estrito com o seguinte formato:
     <div style={styles.container}>
       <header style={styles.header}>
         <div style={styles.titleBox}>
-          <i className="ti ti-microphone-2" style={{ fontSize: '2rem', color: theme.primary }}></i>
-          <h1 style={styles.title}>Diário Inteligente & Gravador</h1>
+          <i className="ti ti-microphone-2" style={{ fontSize: '24px', color: theme.primary }}></i>
+          <div>
+            <h1 style={styles.title}>Diário Inteligente & Gravador</h1>
+            <p style={{ fontSize: '14px', color: theme.textLight, margin: '6px 0 0 0' }}>Capture atas e resumos de aulas automaticamente</p>
+          </div>
         </div>
         
         <div style={styles.tabs}>
@@ -948,44 +989,44 @@ Responda APENAS um objeto JSON estrito com o seguinte formato:
         {activeTab === 'record' ? renderRecordView() : renderHistoryView()}
         
         <div style={styles.sidePanel}>
-          <h3 style={{margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem'}}>
-            <i className="ti ti-sparkles" style={{color: theme.secondary}}></i> Como Funciona?
+          <h3 style={{margin: '0 0 16px 0', display: 'flex', alignItems: 'center', gap: '8px', fontFamily: "'Playfair Display', Georgia, serif", fontSize: '18px'}}>
+            <i className="ti ti-sparkles" style={{color: theme.primary}}></i> Como Funciona?
           </h3>
-          <p style={{color: theme.textMuted, fontSize: '0.9rem', lineHeight: 1.5, margin: 0}}>
-            O <strong>Diário Inteligente</strong> escuta suas aulas e reuniões em tempo real ou analisa textos colados.
+          <p style={{color: theme.textMuted, fontSize: '13.5px', lineHeight: 1.5, margin: 0}}>
+            O <strong>Diário Inteligente</strong> escuta suas aulas e reuniões em tempo real ou analisa textos colados para criar atas estruturadas.
           </p>
-          <div style={{display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '1rem'}}>
-            <div style={{display: 'flex', gap: '0.75rem'}}>
-              <div style={{background: 'rgba(16,185,129,0.1)', color: theme.primary, padding: '0.5rem', borderRadius: '8px', height: 'fit-content'}}>
-                <i className="ti ti-ear"></i>
+          <div style={{display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '24px'}}>
+            <div style={{display: 'flex', gap: '12px'}}>
+              <div style={{background: 'rgba(139,94,60,0.1)', color: theme.primary, padding: '8px', borderRadius: '8px', height: 'fit-content'}}>
+                <i className="ti ti-ear" style={{fontSize: '18px'}}></i>
               </div>
               <div>
-                <strong style={{fontSize: '0.9rem'}}>1. Captura</strong>
-                <div style={{color: theme.textMuted, fontSize: '0.8rem'}}>Grave o áudio ou digite/cole as anotações.</div>
+                <strong style={{fontSize: '13.5px'}}>1. Captura</strong>
+                <div style={{color: theme.textMuted, fontSize: '12px', marginTop: '2px'}}>Grave o áudio ou digite/cole as anotações brutas.</div>
               </div>
             </div>
-            <div style={{display: 'flex', gap: '0.75rem'}}>
-              <div style={{background: 'rgba(139,92,246,0.1)', color: theme.secondary, padding: '0.5rem', borderRadius: '8px', height: 'fit-content'}}>
-                <i className="ti ti-brain"></i>
+            <div style={{display: 'flex', gap: '12px'}}>
+              <div style={{background: 'rgba(139,94,60,0.1)', color: theme.primary, padding: '8px', borderRadius: '8px', height: 'fit-content'}}>
+                <i className="ti ti-brain" style={{fontSize: '18px'}}></i>
               </div>
               <div>
-                <strong style={{fontSize: '0.9rem'}}>2. Processamento IA</strong>
-                <div style={{color: theme.textMuted, fontSize: '0.8rem'}}>Extração automática de ações, destaques e resumo.</div>
+                <strong style={{fontSize: '13.5px'}}>2. Processamento IA</strong>
+                <div style={{color: theme.textMuted, fontSize: '12px', marginTop: '2px'}}>Extração automática de ações, destaques e geração de resumo.</div>
               </div>
             </div>
-            <div style={{display: 'flex', gap: '0.75rem'}}>
-              <div style={{background: 'rgba(245,158,11,0.1)', color: theme.warning, padding: '0.5rem', borderRadius: '8px', height: 'fit-content'}}>
-                <i className="ti ti-share"></i>
+            <div style={{display: 'flex', gap: '12px'}}>
+              <div style={{background: 'rgba(139,94,60,0.1)', color: theme.primary, padding: '8px', borderRadius: '8px', height: 'fit-content'}}>
+                <i className="ti ti-share" style={{fontSize: '18px'}}></i>
               </div>
               <div>
-                <strong style={{fontSize: '0.9rem'}}>3. Compartilhamento</strong>
-                <div style={{color: theme.textMuted, fontSize: '0.8rem'}}>Exporte para WhatsApp ou PDF num clique.</div>
+                <strong style={{fontSize: '13.5px'}}>3. Compartilhamento</strong>
+                <div style={{color: theme.textMuted, fontSize: '12px', marginTop: '2px'}}>Exporte rapidamente para o WhatsApp ou em PDF.</div>
               </div>
             </div>
           </div>
           
-          <div style={{marginTop: 'auto', padding: '1rem', background: 'rgba(0,0,0,0.2)', borderRadius: '8px', fontSize: '0.85rem', color: theme.textMuted}}>
-            <i className="ti ti-info-circle"></i> O áudio não é salvo em nuvem, garantindo a privacidade. Apenas a transcrição é armazenada no seu dispositivo.
+          <div style={{marginTop: 'auto', padding: '16px', background: theme.cardHover, borderRadius: '12px', fontSize: '12px', color: theme.textMuted, border: `1px solid ${theme.border}`, lineHeight: 1.5}}>
+            <i className="ti ti-info-circle" style={{marginRight: '4px'}}></i> O áudio não é salvo em nuvem, garantindo a privacidade. Apenas a transcrição textual é armazenada no seu dispositivo.
           </div>
         </div>
       </div>

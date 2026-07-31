@@ -32,83 +32,76 @@ type Competencies = {
 };
 
 // --- Styles ---
-const theme = {
-  bgApp: '#0f1117',
-  bgCard: '#1a1d2e',
-  bgCardHover: '#23273e',
-  textMain: '#f8fafc',
-  textMuted: '#94a3b8',
-  border: '#2e334d',
-  accentGold: '#d97706', // Amber/Gold
-  accentGoldLight: '#fbbf24',
-  accentBlue: '#3b82f6', // Royal blue-ish
-  accentBlueLight: '#60a5fa',
-  danger: '#ef4444',
-  success: '#10b981',
-};
-
 const styles: Record<string, CSSProperties> = {
   container: {
-    backgroundColor: theme.bgApp,
-    color: theme.textMain,
+    backgroundColor: '#fdf8f2',
+    color: '#2c1a0e',
     minHeight: '100vh',
-    fontFamily: '"Inter", "Segoe UI", sans-serif',
-    padding: '2rem',
+    fontFamily: '"Inter", system-ui, sans-serif',
+    padding: '36px 40px',
     boxSizing: 'border-box',
   },
   header: {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: '2rem',
-    borderBottom: `1px solid ${theme.border}`,
-    paddingBottom: '1rem',
+    marginBottom: 32,
+    borderBottom: '1px solid rgba(139,115,85,0.12)',
+    paddingBottom: 20,
   },
   title: {
-    fontSize: '2rem',
-    fontWeight: '700',
+    fontFamily: '"Playfair Display", Georgia, serif',
+    fontSize: '1.8rem',
+    fontWeight: 700,
+    color: '#2c1a0e',
     margin: 0,
-    background: `linear-gradient(90deg, ${theme.accentGoldLight}, ${theme.accentGold})`,
-    WebkitBackgroundClip: 'text',
-    WebkitTextFillColor: 'transparent',
     display: 'flex',
     alignItems: 'center',
     gap: '0.75rem',
   },
   subtitle: {
-    fontSize: '1rem',
-    color: theme.textMuted,
-    margin: '0.5rem 0 0 0',
+    fontSize: 14,
+    color: '#a08060',
+    marginTop: 6,
   },
   tabsContainer: {
     display: 'flex',
-    gap: '1rem',
-    marginBottom: '2rem',
+    gap: 4,
+    background: '#f5efe6',
+    borderRadius: 12,
+    padding: 4,
+    marginBottom: 24,
+    border: '1px solid rgba(139,115,85,0.12)',
+    width: 'fit-content',
   },
   tab: {
-    padding: '0.75rem 1.5rem',
-    backgroundColor: theme.bgCard,
-    color: theme.textMuted,
-    border: `1px solid ${theme.border}`,
-    borderRadius: '8px',
+    padding: '8px 18px',
+    borderRadius: 9,
+    border: 'none',
+    background: 'transparent',
+    color: '#a08060',
+    fontWeight: 400,
+    fontSize: 13.5,
     cursor: 'pointer',
-    fontWeight: '600',
+    boxShadow: 'none',
+    transition: 'all 0.15s ease',
+    fontFamily: '"Inter", system-ui, sans-serif',
     display: 'flex',
     alignItems: 'center',
     gap: '0.5rem',
-    transition: 'all 0.2s',
   },
   activeTab: {
-    backgroundColor: 'rgba(217, 119, 6, 0.1)',
-    color: theme.accentGoldLight,
-    border: `1px solid ${theme.accentGold}`,
+    background: '#fffcf8',
+    color: '#2c1a0e',
+    fontWeight: 600,
+    boxShadow: '0 1px 4px rgba(44,26,14,0.1)',
   },
   card: {
-    backgroundColor: theme.bgCard,
-    border: `1px solid ${theme.border}`,
-    borderRadius: '12px',
-    padding: '2rem',
-    boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.5)',
+    backgroundColor: '#fffcf8',
+    border: '1px solid rgba(139,115,85,0.12)',
+    borderRadius: 16,
+    padding: 28,
+    boxShadow: '0 2px 8px rgba(44,26,14,0.06)',
   },
   formGroup: {
     marginBottom: '1.5rem',
@@ -116,40 +109,42 @@ const styles: Record<string, CSSProperties> = {
   label: {
     display: 'block',
     marginBottom: '0.5rem',
-    fontWeight: '600',
-    color: theme.textMain,
+    fontWeight: 600,
+    color: '#2c1a0e',
     fontSize: '0.95rem',
   },
   pedagogicalTip: {
     display: 'block',
     fontSize: '0.8rem',
-    color: theme.accentBlueLight,
+    color: '#7a5c42',
     marginBottom: '0.5rem',
     fontStyle: 'italic',
   },
   input: {
     width: '100%',
-    padding: '0.75rem',
-    backgroundColor: theme.bgApp,
-    border: `1px solid ${theme.border}`,
-    borderRadius: '8px',
-    color: theme.textMain,
-    fontSize: '1rem',
+    padding: '10px 14px',
+    backgroundColor: '#fffcf8',
+    border: '1px solid rgba(139,115,85,0.18)',
+    borderRadius: 9,
+    color: '#2c1a0e',
+    fontSize: 13.5,
     boxSizing: 'border-box',
     outline: 'none',
+    fontFamily: '"Inter", system-ui, sans-serif',
   },
   textarea: {
     width: '100%',
-    padding: '0.75rem',
-    backgroundColor: theme.bgApp,
-    border: `1px solid ${theme.border}`,
-    borderRadius: '8px',
-    color: theme.textMain,
-    fontSize: '1rem',
+    padding: '10px 14px',
+    backgroundColor: '#fffcf8',
+    border: '1px solid rgba(139,115,85,0.18)',
+    borderRadius: 9,
+    color: '#2c1a0e',
+    fontSize: 13.5,
     minHeight: '100px',
     boxSizing: 'border-box',
     resize: 'vertical',
     outline: 'none',
+    fontFamily: '"Inter", system-ui, sans-serif',
   },
   tagContainer: {
     display: 'flex',
@@ -157,53 +152,59 @@ const styles: Record<string, CSSProperties> = {
     gap: '0.5rem',
   },
   tag: {
-    padding: '0.4rem 0.8rem',
-    borderRadius: '20px',
+    padding: '4px 12px',
+    borderRadius: 99,
     fontSize: '0.85rem',
-    fontWeight: '500',
+    fontWeight: 500,
     cursor: 'pointer',
-    border: `1px solid ${theme.border}`,
+    border: '1px solid rgba(139,115,85,0.18)',
+    backgroundColor: '#f5efe6',
+    color: '#7a5c42',
     transition: 'all 0.2s',
   },
   activeTag: {
-    backgroundColor: 'rgba(59, 130, 246, 0.2)',
-    borderColor: theme.accentBlue,
-    color: theme.accentBlueLight,
+    backgroundColor: 'rgba(139,94,60,0.1)',
+    borderColor: 'rgba(139,94,60,0.3)',
+    color: '#8b5e3c',
   },
   buttonPrimary: {
-    padding: '0.75rem 1.5rem',
-    backgroundColor: theme.accentGold,
-    color: '#fff',
+    padding: '10px 20px',
+    backgroundColor: '#8b5e3c',
+    color: '#fffcf8',
     border: 'none',
-    borderRadius: '8px',
+    borderRadius: 9,
     cursor: 'pointer',
-    fontWeight: '600',
-    fontSize: '1rem',
+    fontWeight: 600,
+    fontSize: 13.5,
     display: 'flex',
     alignItems: 'center',
-    gap: '0.5rem',
-    transition: 'all 0.2s',
+    gap: 8,
+    transition: 'all 0.18s ease',
+    boxShadow: '0 2px 8px rgba(139,94,60,0.3)',
+    fontFamily: '"Inter", system-ui, sans-serif',
   },
   buttonSecondary: {
-    padding: '0.75rem 1.5rem',
-    backgroundColor: 'transparent',
-    color: theme.accentBlueLight,
-    border: `1px solid ${theme.accentBlue}`,
-    borderRadius: '8px',
+    padding: '9px 18px',
+    backgroundColor: '#f5efe6',
+    color: '#7a5c42',
+    border: '1px solid rgba(139,115,85,0.2)',
+    borderRadius: 9,
     cursor: 'pointer',
-    fontWeight: '600',
-    fontSize: '1rem',
+    fontWeight: 500,
+    fontSize: 13.5,
     display: 'flex',
     alignItems: 'center',
-    gap: '0.5rem',
-    transition: 'all 0.2s',
+    gap: 8,
+    transition: 'all 0.15s ease',
+    fontFamily: '"Inter", system-ui, sans-serif',
   },
   timelineCard: {
-    backgroundColor: theme.bgCardHover,
-    borderRadius: '8px',
-    padding: '1.5rem',
+    backgroundColor: '#f5efe6',
+    borderRadius: 12,
+    padding: 20,
     marginBottom: '1rem',
-    borderLeft: `4px solid ${theme.accentGold}`,
+    border: '1px solid rgba(139,115,85,0.14)',
+    borderLeft: '4px solid #8b5e3c',
   },
   timelineHeader: {
     display: 'flex',
@@ -211,25 +212,26 @@ const styles: Record<string, CSSProperties> = {
     alignItems: 'center',
     marginBottom: '1rem',
     fontSize: '0.9rem',
-    color: theme.textMuted,
+    color: '#7a5c42',
   },
   timelineTitle: {
     fontSize: '1.25rem',
-    fontWeight: '700',
-    color: theme.textMain,
+    fontWeight: 700,
+    color: '#2c1a0e',
     margin: '0 0 0.5rem 0',
+    fontFamily: '"Playfair Display", Georgia, serif',
   },
   aiFeedbackBox: {
     marginTop: '1rem',
     padding: '1rem',
-    backgroundColor: 'rgba(59, 130, 246, 0.1)',
-    border: `1px solid ${theme.accentBlue}`,
-    borderRadius: '8px',
-    borderLeft: `4px solid ${theme.accentBlue}`,
+    backgroundColor: 'rgba(139,94,60,0.05)',
+    border: '1px solid rgba(139,94,60,0.2)',
+    borderRadius: 8,
+    borderLeft: '4px solid #8b5e3c',
   },
   aiFeedbackHeader: {
-    color: theme.accentBlueLight,
-    fontWeight: '700',
+    color: '#8b5e3c',
+    fontWeight: 700,
     marginBottom: '0.5rem',
     display: 'flex',
     alignItems: 'center',
@@ -241,11 +243,11 @@ const styles: Record<string, CSSProperties> = {
     cursor: 'pointer',
   },
   star: {
-    color: theme.textMuted,
+    color: '#c4a882',
     fontSize: '1.5rem',
   },
   starActive: {
-    color: theme.accentGoldLight,
+    color: '#8b5e3c',
     fontSize: '1.5rem',
   },
   competenceRow: {
@@ -253,27 +255,28 @@ const styles: Record<string, CSSProperties> = {
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: '1rem 0',
-    borderBottom: `1px solid ${theme.border}`,
+    borderBottom: '1px solid rgba(139,115,85,0.12)',
   },
   statBox: {
-    backgroundColor: theme.bgCardHover,
+    backgroundColor: '#f5efe6',
     padding: '1rem',
-    borderRadius: '8px',
+    borderRadius: 12,
     textAlign: 'center',
     flex: '1',
-    border: `1px solid ${theme.border}`,
+    border: '1px solid rgba(139,115,85,0.16)',
   },
   statNumber: {
     fontSize: '2rem',
-    fontWeight: '700',
-    color: theme.accentGoldLight,
+    fontWeight: 700,
+    color: '#8b5e3c',
   },
   statLabel: {
     fontSize: '0.85rem',
-    color: theme.textMuted,
+    color: '#c4a882',
     textTransform: 'uppercase',
     letterSpacing: '0.05em',
     marginTop: '0.25rem',
+    fontWeight: 700,
   }
 };
 
@@ -390,12 +393,30 @@ Forneça um parecer crítico-reflexivo construtivo fundamentado na teoria de Don
       const data = await res.json();
       let feedback = data?.reply || data?.content || '';
       if (!feedback) {
-        feedback = `Reflexão pedagógica baseada em Schön e Kolb:\n\nSua descrição demonstra uma clara observação do ambiente ("reflexão na ação").\n\nPontos Fortes:\n- Inteligência emocional ao registrar os sentimentos em sala.\n- Foco na melhoria contínua da prática de ensino.\n\nSugestão ELT/BNCC:\nPara o plano de ação, considere incorporar atividades de Task-based Learning para potencializar as áreas de ${formData.analysisTags.join(' e ') || 'didática'}.`;
+        feedback = `Reflexão pedagógica baseada em Schön e Kolb:
+
+Sua descrição demonstra uma clara observação do ambiente ("reflexão na ação").
+
+Pontos Fortes:
+- Inteligência emocional ao registrar os sentimentos em sala.
+- Foco na melhoria contínua da prática de ensino.
+
+Sugestão ELT/BNCC:
+Para o plano de ação, considere incorporar atividades de Task-based Learning para potencializar as áreas de ${formData.analysisTags.join(' e ') || 'didática'}.`;
       }
       handleSave(feedback);
     } catch (err) {
       console.error('AI Request Error:', err);
-      const fallbackFeedback = `Reflexão pedagógica baseada em Schön e Kolb:\n\nSua descrição demonstra observação ativa do ambiente docente.\n\nPontos Fortes:\n- Inteligência emocional ao registrar os sentimentos em sala.\n- Foco na melhoria contínua da prática de ensino.\n\nSugestão ELT:\nIncorpore atividades de Task-Based Learning para fortalecer a área de ${formData.analysisTags.join(' e ') || 'didática'}.`;
+      const fallbackFeedback = `Reflexão pedagógica baseada em Schön e Kolb:
+
+Sua descrição demonstra observação ativa do ambiente docente.
+
+Pontos Fortes:
+- Inteligência emocional ao registrar os sentimentos em sala.
+- Foco na melhoria contínua da prática de ensino.
+
+Sugestão ELT:
+Incorpore atividades de Task-Based Learning para fortalecer a área de ${formData.analysisTags.join(' e ') || 'didática'}.`;
       handleSave(fallbackFeedback);
     } finally {
       setIsGeneratingFeedback(false);
@@ -452,7 +473,7 @@ Forneça um parecer crítico-reflexivo construtivo fundamentado na teoria de Don
         {[1, 2, 3, 4, 5].map((star) => (
           <i 
             key={star}
-            className={`ti ti-star-filled`}
+            className="ti ti-star-filled"
             style={star <= competencies[comp] ? styles.starActive : styles.star}
             onClick={() => handleStarClick(comp, star)}
           />
@@ -476,11 +497,12 @@ Forneça um parecer crítico-reflexivo construtivo fundamentado na teoria de Don
       {toast && (
         <div style={{
           position: 'fixed', top: '20px', right: '20px', zIndex: 9999,
-          backgroundColor: toast.type === 'error' ? theme.danger : toast.type === 'success' ? theme.success : theme.accentBlue,
-          color: '#fff', padding: '1rem 2rem', borderRadius: '8px',
-          boxShadow: '0 4px 6px rgba(0,0,0,0.3)',
+          backgroundColor: toast.type === 'error' ? '#a83232' : toast.type === 'success' ? '#3d7a4e' : '#2a6080',
+          color: '#fffcf8', padding: '1rem 2rem', borderRadius: 12,
+          boxShadow: '0 4px 12px rgba(44,26,14,0.15)',
           display: 'flex', alignItems: 'center', gap: '0.5rem',
-          animation: 'fadeIn 0.3s'
+          animation: 'fadeIn 0.3s',
+          fontFamily: '"Inter", system-ui, sans-serif'
         }}>
           <i className={`ti ${toast.type === 'error' ? 'ti-alert-circle' : toast.type === 'success' ? 'ti-check' : 'ti-info-circle'}`} />
           {toast.message}
@@ -490,7 +512,7 @@ Forneça um parecer crítico-reflexivo construtivo fundamentado na teoria de Don
       <div style={styles.header}>
         <div>
           <h1 style={styles.title}>
-            <i className="ti ti-book-2" />
+            <i className="ti ti-book-2" style={{ color: '#8b5e3c' }} />
             Diário Reflexivo Docente
           </h1>
           <p style={styles.subtitle}>Prática pedagógica consciente inspirada em Gibbs, Schön e Kolb.</p>
@@ -531,8 +553,8 @@ Forneça um parecer crítico-reflexivo construtivo fundamentado na teoria de Don
       {/* NEW REFLECTION TAB */}
       {activeTab === 'new' && (
         <div style={styles.card}>
-          <h2 style={{ color: theme.accentGoldLight, display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: 0 }}>
-            <i className="ti ti-notebook" /> Ciclo Reflexivo de Gibbs
+          <h2 style={{ color: '#2c1a0e', fontFamily: '"Playfair Display", Georgia, serif', display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: 0 }}>
+            <i className="ti ti-notebook" style={{ color: '#8b5e3c' }} /> Ciclo Reflexivo de Gibbs
           </h2>
           
           <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem' }}>
@@ -614,7 +636,7 @@ Forneça um parecer crítico-reflexivo construtivo fundamentado na teoria de Don
             <label style={styles.label}>5. Conclusão & Plano de Ação (O que farei diferente?)</label>
             <span style={styles.pedagogicalTip}>Aprendizagem Experiencial (Kolb: Experimentação Ativa).</span>
             <textarea 
-              style={{...styles.textarea, borderColor: theme.accentGoldLight}}
+              style={{...styles.textarea, borderColor: 'rgba(139,115,85,0.4)'}}
               placeholder="Na próxima aula com esta turma, planejo..."
               value={formData.actionPlan}
               onChange={(e) => setFormData({...formData, actionPlan: e.target.value})}
@@ -646,10 +668,10 @@ Forneça um parecer crítico-reflexivo construtivo fundamentado na teoria de Don
       {/* HISTORY TAB */}
       {activeTab === 'history' && (
         <div style={styles.card}>
-          <h2 style={{ color: theme.accentBlueLight, marginTop: 0 }}>Histórico de Reflexões</h2>
+          <h2 style={{ color: '#2c1a0e', fontFamily: '"Playfair Display", Georgia, serif', marginTop: 0 }}>Histórico de Reflexões</h2>
           
           {journal.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '3rem', color: theme.textMuted }}>
+            <div style={{ textAlign: 'center', padding: '3rem', color: '#a08060' }}>
               <i className="ti ti-notes" style={{ fontSize: '3rem', marginBottom: '1rem', opacity: 0.5 }} />
               <p>Nenhuma reflexão registrada ainda. Comece seu diário pedagógico!</p>
             </div>
@@ -660,11 +682,11 @@ Forneça um parecer crítico-reflexivo construtivo fundamentado na teoria de Don
                   <div style={styles.timelineHeader}>
                     <div>
                       <i className="ti ti-calendar" /> {new Date(entry.date).toLocaleDateString()} &bull; 
-                      <strong style={{ color: theme.accentGoldLight, marginLeft: '0.5rem' }}>{entry.className}</strong>
+                      <strong style={{ color: '#8b5e3c', marginLeft: '0.5rem' }}>{entry.className}</strong>
                     </div>
                     <div style={{ display: 'flex', gap: '0.5rem' }}>
                       {entry.analysisTags.map(t => (
-                        <span key={t} style={{ fontSize: '0.75rem', background: 'rgba(255,255,255,0.1)', padding: '2px 8px', borderRadius: '12px'}}>
+                        <span key={t} style={{ fontSize: '0.75rem', background: 'rgba(139,115,85,0.1)', color: '#7a5c42', padding: '2px 8px', borderRadius: '12px'}}>
                           {t}
                         </span>
                       ))}
@@ -672,16 +694,16 @@ Forneça um parecer crítico-reflexivo construtivo fundamentado na teoria de Don
                   </div>
                   
                   <h3 style={styles.timelineTitle}>Descrição do Evento</h3>
-                  <p style={{ color: theme.textMuted, fontSize: '0.95rem' }}>{entry.description}</p>
+                  <p style={{ color: '#5c3d20', fontSize: '0.95rem' }}>{entry.description}</p>
                   
-                  <div style={{ display: 'flex', gap: '2rem', marginTop: '1rem', borderTop: `1px solid ${theme.border}`, paddingTop: '1rem' }}>
+                  <div style={{ display: 'flex', gap: '2rem', marginTop: '1rem', borderTop: '1px solid rgba(139,115,85,0.12)', paddingTop: '1rem' }}>
                     <div style={{ flex: 1 }}>
-                      <strong style={{ color: theme.textMain, display: 'block', marginBottom: '0.25rem' }}>Sentimentos:</strong>
-                      <span style={{ color: theme.textMuted, fontSize: '0.9rem' }}>{entry.feelings}</span>
+                      <strong style={{ color: '#2c1a0e', display: 'block', marginBottom: '0.25rem' }}>Sentimentos:</strong>
+                      <span style={{ color: '#5c3d20', fontSize: '0.9rem' }}>{entry.feelings}</span>
                     </div>
                     <div style={{ flex: 1 }}>
-                      <strong style={{ color: theme.textMain, display: 'block', marginBottom: '0.25rem' }}>Plano de Ação:</strong>
-                      <span style={{ color: theme.textMuted, fontSize: '0.9rem' }}>{entry.actionPlan}</span>
+                      <strong style={{ color: '#2c1a0e', display: 'block', marginBottom: '0.25rem' }}>Plano de Ação:</strong>
+                      <span style={{ color: '#5c3d20', fontSize: '0.9rem' }}>{entry.actionPlan}</span>
                     </div>
                   </div>
 
@@ -690,7 +712,7 @@ Forneça um parecer crítico-reflexivo construtivo fundamentado na teoria de Don
                       <div style={styles.aiFeedbackHeader}>
                         <i className="ti ti-sparkles" /> Parecer Pedagógico - Rafinha IA
                       </div>
-                      <div style={{ whiteSpace: 'pre-line', fontSize: '0.9rem', color: theme.textMain }}>
+                      <div style={{ whiteSpace: 'pre-line', fontSize: '0.9rem', color: '#2c1a0e' }}>
                         {entry.aiFeedback}
                       </div>
                     </div>
@@ -705,50 +727,50 @@ Forneça um parecer crítico-reflexivo construtivo fundamentado na teoria de Don
       {/* COMPETENCIES TAB */}
       {activeTab === 'competencies' && (
         <div style={styles.card}>
-          <h2 style={{ color: theme.accentGold, marginTop: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <i className="ti ti-target" /> Matriz de Auto-avaliação Docente
+          <h2 style={{ color: '#2c1a0e', fontFamily: '"Playfair Display", Georgia, serif', marginTop: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <i className="ti ti-target" style={{ color: '#8b5e3c' }} /> Matriz de Auto-avaliação Docente
           </h2>
-          <p style={{ color: theme.textMuted, marginBottom: '2rem' }}>
+          <p style={{ color: '#7a5c42', marginBottom: '2rem' }}>
             Avalie continuamente o desenvolvimento das suas competências de ensino (1 a 5 estrelas).
           </p>
 
           <div style={{ maxWidth: '600px' }}>
             <div style={styles.competenceRow}>
               <div>
-                <strong style={{ color: theme.textMain, display: 'block' }}>Gestão de Sala (Classroom Management)</strong>
-                <span style={{ color: theme.textMuted, fontSize: '0.85rem' }}>Organização, ritmo, transições e disciplina.</span>
+                <strong style={{ color: '#2c1a0e', display: 'block' }}>Gestão de Sala (Classroom Management)</strong>
+                <span style={{ color: '#7a5c42', fontSize: '0.85rem' }}>Organização, ritmo, transições e disciplina.</span>
               </div>
               {renderStars('classroomManagement')}
             </div>
             
             <div style={styles.competenceRow}>
               <div>
-                <strong style={{ color: theme.textMain, display: 'block' }}>Didática do Inglês (ELT Didactics)</strong>
-                <span style={{ color: theme.textMuted, fontSize: '0.85rem' }}>Clareza na instrução, uso de L2, scaffolding.</span>
+                <strong style={{ color: '#2c1a0e', display: 'block' }}>Didática do Inglês (ELT Didactics)</strong>
+                <span style={{ color: '#7a5c42', fontSize: '0.85rem' }}>Clareza na instrução, uso de L2, scaffolding.</span>
               </div>
               {renderStars('eltDidactics')}
             </div>
 
             <div style={styles.competenceRow}>
               <div>
-                <strong style={{ color: theme.textMain, display: 'block' }}>Empatia e Relacionamento</strong>
-                <span style={{ color: theme.textMuted, fontSize: '0.85rem' }}>Conexão com os alunos, escuta ativa.</span>
+                <strong style={{ color: '#2c1a0e', display: 'block' }}>Empatia e Relacionamento</strong>
+                <span style={{ color: '#7a5c42', fontSize: '0.85rem' }}>Conexão com os alunos, escuta ativa.</span>
               </div>
               {renderStars('empathy')}
             </div>
 
             <div style={styles.competenceRow}>
               <div>
-                <strong style={{ color: theme.textMain, display: 'block' }}>Uso de Tecnologia Educacional</strong>
-                <span style={{ color: theme.textMuted, fontSize: '0.85rem' }}>Integração significativa de ferramentas digitais.</span>
+                <strong style={{ color: '#2c1a0e', display: 'block' }}>Uso de Tecnologia Educacional</strong>
+                <span style={{ color: '#7a5c42', fontSize: '0.85rem' }}>Integração significativa de ferramentas digitais.</span>
               </div>
               {renderStars('techUsage')}
             </div>
 
             <div style={styles.competenceRow}>
               <div>
-                <strong style={{ color: theme.textMain, display: 'block' }}>Avaliação Formativa</strong>
-                <span style={{ color: theme.textMuted, fontSize: '0.85rem' }}>Feedback constante, checagem de entendimento.</span>
+                <strong style={{ color: '#2c1a0e', display: 'block' }}>Avaliação Formativa</strong>
+                <span style={{ color: '#7a5c42', fontSize: '0.85rem' }}>Feedback constante, checagem de entendimento.</span>
               </div>
               {renderStars('formativeAssessment')}
             </div>

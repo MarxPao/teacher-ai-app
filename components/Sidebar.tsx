@@ -50,7 +50,7 @@ const NAV: Section[] = [
     { key: 'calendar',            label: 'Calendário',              icon: 'ti-calendar' },
     { key: 'editor',              label: 'Editor de Documentos',    icon: 'ti-file-pencil' },
     { key: 'repo',                label: 'Repositório',             icon: 'ti-folder-open' },
-    { key: 'wellbeing',           label: 'Bem-Estar Docente',       icon: 'ti-heart' },
+    { key: 'wellbeing',           label: 'Bem-Estar',               icon: 'ti-heart' },
   ]},
   { label: 'Configurações', items: [
     { key: 'settings',   label: 'Preferências',         icon: 'ti-settings' },
@@ -63,7 +63,9 @@ interface Props { active: ModuleKey; onNavigate: (k: ModuleKey) => void }
 
 export default function Sidebar({ active, onNavigate }: Props) {
   return (
-    <nav style={{
+    <nav
+      className="sidebar-scrollbar"
+      style={{
       width: 275,
       flexShrink: 0,
       height: '100vh',

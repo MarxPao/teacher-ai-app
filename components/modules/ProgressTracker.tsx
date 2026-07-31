@@ -49,24 +49,24 @@ const generateMockTimeline = (): TimelineData[] => {
 
 // --- Styles ---
 const theme = {
-  bg: '#0f1117',
-  card: '#1a1d2e',
-  text: '#ffffff',
-  textMuted: '#94a3b8',
-  primary: '#6366f1',
-  primaryHover: '#4f46e5',
-  success: '#10b981',
-  warning: '#f59e0b',
-  danger: '#ef4444',
-  border: '#2e334a',
+  bg: '#fdf8f2',
+  card: '#fffcf8',
+  text: '#2c1a0e',
+  textMuted: '#7a5c42',
+  primary: '#8b5e3c',
+  primaryHover: '#b5805a',
+  success: '#3d7a4e',
+  warning: '#c87a1e',
+  danger: '#a83232',
+  border: 'rgba(139,115,85,0.12)',
 };
 
 const styles: Record<string, CSSProperties> = {
   container: {
     backgroundColor: theme.bg,
     color: theme.text,
-    fontFamily: 'system-ui, -apple-system, sans-serif',
-    padding: '24px',
+    fontFamily: "'Inter', system-ui, sans-serif",
+    padding: '36px 40px',
     minHeight: '100vh',
     boxSizing: 'border-box',
   },
@@ -74,31 +74,36 @@ const styles: Record<string, CSSProperties> = {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: '24px',
+    marginBottom: '32px',
+    paddingBottom: '20px',
+    borderBottom: `1px solid ${theme.border}`,
   },
   title: {
     margin: 0,
-    fontSize: '24px',
-    fontWeight: 600,
+    fontSize: '1.8rem',
+    fontWeight: 700,
+    fontFamily: "'Playfair Display', Georgia, serif",
+    color: theme.text,
     display: 'flex',
     alignItems: 'center',
     gap: '8px',
   },
   card: {
     backgroundColor: theme.card,
-    borderRadius: '12px',
-    padding: '24px',
+    borderRadius: '16px',
+    padding: '28px',
     border: `1px solid ${theme.border}`,
-    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+    boxShadow: '0 2px 8px rgba(44,26,14,0.06)',
     marginBottom: '24px',
   },
   select: {
-    padding: '10px 16px',
-    backgroundColor: theme.bg,
+    padding: '10px 14px',
+    backgroundColor: theme.card,
     color: theme.text,
-    border: `1px solid ${theme.border}`,
-    borderRadius: '8px',
-    fontSize: '15px',
+    border: '1px solid rgba(139,115,85,0.18)',
+    borderRadius: '9px',
+    fontSize: '13.5px',
+    fontFamily: "'Inter', system-ui, sans-serif",
     outline: 'none',
     width: '300px',
     cursor: 'pointer',
@@ -111,35 +116,38 @@ const styles: Record<string, CSSProperties> = {
   sectionTitle: {
     marginTop: 0,
     marginBottom: '16px',
-    fontSize: '18px',
-    fontWeight: 500,
+    fontSize: '1.4rem',
+    fontWeight: 700,
+    fontFamily: "'Playfair Display', Georgia, serif",
     color: theme.text,
   },
   badge: {
-    padding: '4px 8px',
-    borderRadius: '4px',
-    fontSize: '12px',
+    padding: '3px 10px',
+    borderRadius: '99px',
+    fontSize: '11px',
     fontWeight: 600,
   },
   button: {
     padding: '10px 20px',
     backgroundColor: theme.primary,
-    color: 'white',
+    color: '#fffcf8',
     border: 'none',
-    borderRadius: '8px',
-    fontSize: '14px',
-    fontWeight: 500,
+    borderRadius: '9px',
+    fontSize: '13.5px',
+    fontWeight: 600,
+    fontFamily: "'Inter', system-ui, sans-serif",
     cursor: 'pointer',
     display: 'flex',
     alignItems: 'center',
     gap: '8px',
-    transition: 'background-color 0.2s',
+    boxShadow: '0 2px 8px rgba(139,94,60,0.3)',
+    transition: 'all 0.18s ease',
   },
   alertCard: {
-    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+    backgroundColor: 'rgba(200, 122, 30, 0.1)',
     borderLeft: `4px solid ${theme.warning}`,
     padding: '16px',
-    borderRadius: '0 8px 8px 0',
+    borderRadius: '0 12px 12px 0',
     marginBottom: '16px',
   },
   toast: {
@@ -147,15 +155,16 @@ const styles: Record<string, CSSProperties> = {
     bottom: '24px',
     right: '24px',
     backgroundColor: theme.success,
-    color: 'white',
+    color: '#fffcf8',
     padding: '12px 24px',
-    borderRadius: '8px',
-    boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+    borderRadius: '9px',
+    boxShadow: '0 4px 12px rgba(44,26,14,0.15)',
     display: 'flex',
     alignItems: 'center',
     gap: '12px',
     zIndex: 1000,
     animation: 'slideIn 0.3s ease-out',
+    fontFamily: "'Inter', system-ui, sans-serif",
   },
 };
 
@@ -215,6 +224,7 @@ const RadarChart = ({ data }: { data: SkillData[] }) => {
               fontSize="12"
               textAnchor="middle"
               dominantBaseline="middle"
+              fontFamily="'Inter', system-ui, sans-serif"
             >
               {d.subject}
             </text>
@@ -225,7 +235,7 @@ const RadarChart = ({ data }: { data: SkillData[] }) => {
       {/* Data Polygon */}
       <polygon
         points={points}
-        fill="rgba(99, 102, 241, 0.2)"
+        fill="rgba(139, 94, 60, 0.15)"
         stroke={theme.primary}
         strokeWidth="2"
       />
@@ -239,7 +249,7 @@ const RadarChart = ({ data }: { data: SkillData[] }) => {
             cx={p.x}
             cy={p.y}
             r="4"
-            fill={theme.primary}
+            fill={theme.success}
           />
         );
       })}
@@ -267,26 +277,26 @@ const LineChart = ({ data }: { data: TimelineData[] }) => {
       {/* Grid */}
       {[50, 75, 100].map(val => (
         <g key={val}>
-          <text x="0" y={getY(val)} fill={theme.textMuted} fontSize="10" dominantBaseline="middle">{val}</text>
+          <text x="0" y={getY(val)} fill="#a08060" fontSize="10" dominantBaseline="middle" fontFamily="'Inter', system-ui, sans-serif">{val}</text>
           <line x1={padding} y1={getY(val)} x2={width} y2={getY(val)} stroke={theme.border} strokeDasharray="4 4" />
         </g>
       ))}
 
       {/* X Axis Labels */}
       {data.map((d, i) => (
-        <text key={i} x={getX(i)} y={height - 10} fill={theme.textMuted} fontSize="10" textAnchor="middle">
+        <text key={i} x={getX(i)} y={height - 10} fill={theme.textMuted} fontSize="10" textAnchor="middle" fontFamily="'Inter', system-ui, sans-serif">
           {d.month}
         </text>
       ))}
 
       {/* Paths */}
       <path d={gradePath} fill="none" stroke={theme.primary} strokeWidth="3" />
-      <path d={partPath} fill="none" stroke={theme.success} strokeWidth="3" strokeDasharray="4 4" />
+      <path d={partPath} fill="none" stroke="#5c3d20" strokeWidth="3" strokeDasharray="4 4" />
       
       {/* Points */}
       {data.map((d, i) => (
         <g key={i}>
-          <circle cx={getX(i)} cy={getY(d.grade)} r="4" fill={theme.primary} />
+          <circle cx={getX(i)} cy={getY(d.grade)} r="4" fill={theme.success} />
           <circle cx={getX(i)} cy={getY(d.participation)} r="4" fill={theme.success} />
         </g>
       ))}
@@ -448,7 +458,7 @@ Responda APENAS um objeto JSON no formato:
           {/* Radar Chart Card */}
           <div style={styles.card}>
             <h2 style={styles.sectionTitle}>
-              <i className="ti ti-chart-arcs" style={{ marginRight: '8px' }}></i>
+              <i className="ti ti-chart-arcs" style={{ marginRight: '8px', color: theme.primary }}></i>
               Habilidades
             </h2>
             <div style={{ display: 'flex', justifyContent: 'center', marginTop: '24px' }}>
@@ -459,7 +469,7 @@ Responda APENAS um objeto JSON no formato:
           {/* Timeline Chart Card */}
           <div style={styles.card}>
             <h2 style={styles.sectionTitle}>
-              <i className="ti ti-chart-line" style={{ marginRight: '8px' }}></i>
+              <i className="ti ti-chart-line" style={{ marginRight: '8px', color: theme.primary }}></i>
               Evolução Temporal
             </h2>
             <div style={{ marginBottom: '16px', display: 'flex', gap: '16px' }}>
@@ -468,7 +478,7 @@ Responda APENAS um objeto JSON no formato:
                 Notas
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '14px', color: theme.textMuted }}>
-                <span style={{ width: '12px', height: '3px', borderTop: `2px dashed ${theme.success}` }}></span>
+                <span style={{ width: '12px', height: '3px', borderTop: '2px dashed #5c3d20' }}></span>
                 Participação
               </div>
             </div>
@@ -503,7 +513,7 @@ Responda APENAS um objeto JSON no formato:
               
               <div style={{ flex: '1 1 300px' }}>
                 <div style={styles.alertCard}>
-                  <h3 style={{ margin: '0 0 8px 0', fontSize: '16px', color: theme.warning, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <h3 style={{ margin: '0 0 8px 0', fontSize: '16px', color: theme.warning, display: 'flex', alignItems: 'center', gap: '6px', fontFamily: "'Inter', system-ui, sans-serif" }}>
                     <i className="ti ti-alert-triangle"></i> {aiDiagnosis ? aiDiagnosis.warning.split(':')[0] : 'Atenção: Queda em Gramática'}
                   </h3>
                   <p style={{ margin: 0, fontSize: '14px', lineHeight: '1.5', color: theme.textMuted }}>
@@ -511,8 +521,8 @@ Responda APENAS um objeto JSON no formato:
                   </p>
                 </div>
                 
-                <div style={{ ...styles.alertCard, borderLeftColor: theme.success, backgroundColor: 'rgba(16, 185, 129, 0.1)' }}>
-                  <h3 style={{ margin: '0 0 8px 0', fontSize: '16px', color: theme.success, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <div style={{ ...styles.alertCard, borderLeftColor: theme.success, backgroundColor: 'rgba(61, 122, 78, 0.1)' }}>
+                  <h3 style={{ margin: '0 0 8px 0', fontSize: '16px', color: theme.success, display: 'flex', alignItems: 'center', gap: '6px', fontFamily: "'Inter', system-ui, sans-serif" }}>
                     <i className="ti ti-trending-up"></i> {aiDiagnosis ? aiDiagnosis.strength.split(':')[0] : 'Ponto Forte: Speaking'}
                   </h3>
                   <p style={{ margin: 0, fontSize: '14px', lineHeight: '1.5', color: theme.textMuted }}>
@@ -521,8 +531,8 @@ Responda APENAS um objeto JSON no formato:
                 </div>
               </div>
 
-              <div style={{ flex: '1 1 300px', backgroundColor: 'rgba(255,255,255,0.02)', padding: '20px', borderRadius: '8px', border: `1px solid ${theme.border}` }}>
-                <h3 style={{ margin: '0 0 16px 0', fontSize: '16px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <div style={{ flex: '1 1 300px', backgroundColor: '#f5efe6', padding: '20px', borderRadius: '12px', border: '1px solid rgba(139,115,85,0.14)' }}>
+                <h3 style={{ margin: '0 0 16px 0', fontSize: '16px', display: 'flex', alignItems: 'center', gap: '6px', fontFamily: "'Inter', system-ui, sans-serif", color: '#2c1a0e' }}>
                   <i className="ti ti-bulb" style={{ color: theme.primary }}></i>
                   Plano de Intervenção Sugerido
                 </h3>
@@ -537,7 +547,7 @@ Responda APENAS um objeto JSON no formato:
                 </ul>
                 <button 
                   onClick={() => setToastMessage('Plano de intervenção aplicado e notificado ao aluno!')}
-                  style={{ ...styles.button, width: '100%', justifyContent: 'center', marginTop: '16px', backgroundColor: 'transparent', border: `1px solid ${theme.primary}`, color: theme.primary }}
+                  style={{ ...styles.button, width: '100%', justifyContent: 'center', marginTop: '16px', backgroundColor: '#fffcf8', border: `1px solid rgba(139,115,85,0.18)`, color: theme.primary, boxShadow: 'none' }}
                 >
                   Aplicar Intervenção
                 </button>
