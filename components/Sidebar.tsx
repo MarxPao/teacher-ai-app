@@ -64,47 +64,59 @@ interface Props { active: ModuleKey; onNavigate: (k: ModuleKey) => void }
 export default function Sidebar({ active, onNavigate }: Props) {
   return (
     <nav style={{
-      width: 260,
+      width: 275,
       flexShrink: 0,
       height: '100vh',
       overflowY: 'auto',
-      // Marrom escuro sofisticado — como couro envelhecido
-      background: 'linear-gradient(180deg, #3d2510 0%, #2c1a0e 60%, #1c110a 100%)',
-      borderRight: 'none',
+      background: 'linear-gradient(180deg, #3d2510 0%, #2c1a0e 65%, #190f09 100%)',
+      boxShadow: '4px 0 24px rgba(28,17,10,0.18)',
       display: 'flex',
       flexDirection: 'column',
-      padding: '0 10px 24px',
+      padding: '0 12px 24px',
       gap: 0,
+      zIndex: 20,
     }}>
 
       {/* Brand */}
       <div style={{
         padding: '24px 14px 20px',
         borderBottom: '1px solid rgba(255,220,170,0.1)',
-        marginBottom: 14,
+        marginBottom: 16,
         position: 'sticky',
         top: 0,
-        background: 'linear-gradient(180deg, #3d2510 0%, #3d2510 100%)',
+        background: 'linear-gradient(180deg, #3d2510 0%, #3d2510 90%, rgba(61,37,16,0.95) 100%)',
+        backdropFilter: 'blur(8px)',
         zIndex: 10,
       }}>
         <div style={{
-          fontFamily: "'Playfair Display', Georgia, serif",
-          fontSize: 22,
+          fontFamily: "'Fraunces', 'Playfair Display', Georgia, serif",
+          fontSize: 23,
           fontWeight: 700,
           color: '#fdf8f2',
-          letterSpacing: '-0.3px',
+          letterSpacing: '-0.4px',
           lineHeight: 1.1,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
         }}>
-          Teacher<span style={{ color: '#d4944a' }}>AI</span>
+          <span>Teacher</span>
+          <span style={{
+            color: '#e2a355',
+            background: 'rgba(226,163,85,0.18)',
+            padding: '2px 8px',
+            borderRadius: 6,
+            fontSize: 18,
+            border: '1px solid rgba(226,163,85,0.3)',
+          }}>AI</span>
         </div>
         <div style={{
           fontSize: 10,
-          color: 'rgba(212,180,140,0.55)',
-          marginTop: 5,
-          fontWeight: 500,
+          color: 'rgba(212,180,140,0.6)',
+          marginTop: 6,
+          fontWeight: 600,
           letterSpacing: '1.8px',
           textTransform: 'uppercase',
-          fontFamily: "'Inter', system-ui, sans-serif",
+          fontFamily: "'Plus Jakarta Sans', system-ui, sans-serif",
         }}>
           Assistente Pedagógico
         </div>
@@ -113,16 +125,16 @@ export default function Sidebar({ active, onNavigate }: Props) {
       {/* Nav sections */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 0 }}>
         {NAV.map((section) => (
-          <div key={section.label} style={{ marginBottom: section.label ? 4 : 0 }}>
+          <div key={section.label} style={{ marginBottom: section.label ? 6 : 0 }}>
             {section.label && (
               <div style={{
-                fontSize: 9,
+                fontSize: 9.5,
                 fontWeight: 700,
                 textTransform: 'uppercase',
-                letterSpacing: '2px',
-                color: 'rgba(212,180,140,0.4)',
-                padding: '14px 14px 5px',
-                fontFamily: "'Inter', system-ui, sans-serif",
+                letterSpacing: '2.2px',
+                color: 'rgba(212,180,140,0.45)',
+                padding: '14px 14px 6px',
+                fontFamily: "'Plus Jakarta Sans', system-ui, sans-serif",
               }}>
                 {section.label}
               </div>
@@ -144,15 +156,16 @@ export default function Sidebar({ active, onNavigate }: Props) {
 
       {/* Footer */}
       <div style={{
-        marginTop: 16,
+        marginTop: 20,
         padding: '14px 14px 0',
         borderTop: '1px solid rgba(255,220,170,0.08)',
       }}>
         <div style={{
-          fontSize: 9.5,
-          color: 'rgba(212,180,140,0.35)',
+          fontSize: 10,
+          color: 'rgba(212,180,140,0.4)',
           letterSpacing: '0.5px',
-          fontFamily: "'Inter', system-ui, sans-serif",
+          fontFamily: "'Plus Jakarta Sans', system-ui, sans-serif",
+          fontWeight: 500,
         }}>
           TeacherAI v2.0 · Enterprise
         </div>
@@ -166,59 +179,72 @@ function SidebarItem({ item, isActive, onNavigate }: {
   isActive: boolean
   onNavigate: (k: ModuleKey) => void
 }) {
-  // Item ativo: cartão claro sobre o fundo marrom escuro — contraste elegante
-  // Item inativo: transparente, texto em âmbar claro suave
   return (
     <button
       onClick={() => onNavigate(item.key)}
       style={{
         display: 'flex',
         alignItems: 'center',
-        gap: 10,
+        gap: 12,
         width: '100%',
-        padding: '8px 14px',
-        borderRadius: 9,
+        padding: '9.5px 14px',
+        borderRadius: 10,
         border: 'none',
         background: isActive
-          ? 'rgba(253,248,242,0.13)'    // card claro translúcido sobre fundo escuro
+          ? 'linear-gradient(135deg, rgba(253,248,242,0.16) 0%, rgba(253,248,242,0.08) 100%)'
           : 'transparent',
-        color: isActive ? '#fdf8f2' : 'rgba(212,180,140,0.65)',
-        fontSize: 13,
-        fontWeight: isActive ? 600 : 400,
+        color: isActive ? '#ffffff' : 'rgba(212,180,140,0.72)',
+        fontSize: 13.5,
+        fontWeight: isActive ? 600 : 500,
         cursor: 'pointer',
         textAlign: 'left',
-        transition: 'all 0.15s ease',
+        transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
         boxShadow: isActive
-          ? 'inset 0 0 0 1px rgba(253,248,242,0.12)'
+          ? '0 4px 14px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.15), inset 0 0 0 1px rgba(253,248,242,0.18)'
           : 'none',
-        marginBottom: 1,
-        // Linha lateral âmbar dourada no item ativo — elegante
-        borderLeft: isActive ? '2px solid #d4944a' : '2px solid transparent',
-        lineHeight: 1.2,
-        fontFamily: "'Inter', system-ui, sans-serif",
+        marginBottom: 2,
+        borderLeft: isActive ? '3px solid #e2a355' : '3px solid transparent',
+        lineHeight: 1.25,
+        fontFamily: "'Plus Jakarta Sans', system-ui, sans-serif",
       }}
       onMouseEnter={(e) => {
         if (!isActive) {
-          (e.currentTarget as HTMLElement).style.background = 'rgba(253,248,242,0.07)'
-          ;(e.currentTarget as HTMLElement).style.color = 'rgba(212,180,140,0.9)'
+          (e.currentTarget as HTMLElement).style.background = 'rgba(253,248,242,0.08)';
+          (e.currentTarget as HTMLElement).style.color = '#ffffff';
+          (e.currentTarget as HTMLElement).style.transform = 'translateX(2px)';
         }
       }}
       onMouseLeave={(e) => {
         if (!isActive) {
-          (e.currentTarget as HTMLElement).style.background = 'transparent'
-          ;(e.currentTarget as HTMLElement).style.color = 'rgba(212,180,140,0.65)'
+          (e.currentTarget as HTMLElement).style.background = 'transparent';
+          (e.currentTarget as HTMLElement).style.color = 'rgba(212,180,140,0.72)';
+          (e.currentTarget as HTMLElement).style.transform = 'translateX(0px)';
         }
       }}
     >
-      <i
-        className={`ti ${item.icon}`}
-        style={{
-          fontSize: 15,
-          color: isActive ? '#d4944a' : 'rgba(212,148,74,0.5)',
-          flexShrink: 0,
-          lineHeight: 1,
-        }}
-      />
+      {/* Icon Wrapper com tamanho expandido (20px) e presenca marcante */}
+      <div style={{
+        width: 26,
+        height: 26,
+        borderRadius: 7,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: isActive ? 'rgba(226,163,85,0.22)' : 'transparent',
+        transition: 'all 0.2s ease',
+        flexShrink: 0,
+      }}>
+        <i
+          className={`ti ${item.icon}`}
+          style={{
+            fontSize: 20, // Aumentado significativamente de 15px para 20px
+            color: isActive ? '#e2a355' : 'rgba(226,163,85,0.65)',
+            flexShrink: 0,
+            lineHeight: 1,
+          }}
+        />
+      </div>
+
       <span style={{
         flex: 1,
         whiteSpace: 'nowrap',
@@ -227,14 +253,15 @@ function SidebarItem({ item, isActive, onNavigate }: {
       }}>
         {item.label}
       </span>
+
       {isActive && (
         <span style={{
-          width: 5,
-          height: 5,
+          width: 6,
+          height: 6,
           borderRadius: '50%',
-          background: '#d4944a',
+          background: '#e2a355',
+          boxShadow: '0 0 8px rgba(226,163,85,0.8)',
           flexShrink: 0,
-          opacity: 0.8,
         }} />
       )}
     </button>
