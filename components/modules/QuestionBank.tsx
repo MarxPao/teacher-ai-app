@@ -40,12 +40,12 @@ const YEARS  = ['2023','2024','2025','2026']
 const OPTION_LETTERS = ['A','B','C','D']
 
 const S: Record<string, React.CSSProperties> = {
-  page:  { padding: '32px 48px', minHeight: '100%', boxSizing: 'border-box', background: '#fdf6e3' },
-  card:  { background: '#fff', border: '1px solid #ede8dc', borderRadius: 16, padding: '20px 24px', boxShadow: '0 2px 8px rgba(0,43,54,0.06)' },
-  badge: { display: 'inline-flex', alignItems: 'center', padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600 },
-  btn:   { display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 10, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600 },
-  input: { width: '100%', padding: '9px 12px', borderRadius: 10, border: '1px solid #ddd', background: '#fdf6e3', fontSize: 13, outline: 'none', boxSizing: 'border-box' },
-  label: { display: 'block', fontSize: 11, fontWeight: 700, color: '#586e75', textTransform: 'uppercase' as const, letterSpacing: '0.8px', marginBottom: 5 },
+  page:  { padding: '36px 42px', minHeight: '100%', boxSizing: 'border-box', background: '#fdf8f2', fontFamily: "'Plus Jakarta Sans', system-ui, sans-serif" },
+  card:  { background: '#fffcf8', border: '1px solid rgba(139,115,85,0.14)', borderRadius: 16, padding: '20px 24px', boxShadow: '0 2px 8px rgba(44,26,14,0.06)' },
+  badge: { display: 'inline-flex', alignItems: 'center', padding: '4px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600 },
+  btn:   { display: 'inline-flex', alignItems: 'center', gap: 6, padding: '10px 18px', borderRadius: 10, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600, fontFamily: "'Plus Jakarta Sans', system-ui, sans-serif" },
+  input: { width: '100%', padding: '10px 14px', borderRadius: 10, border: '1px solid rgba(139,115,85,0.18)', background: '#fffcf8', color: '#2c1a0e', fontSize: 13, outline: 'none', boxSizing: 'border-box' },
+  label: { display: 'block', fontSize: 11, fontWeight: 700, color: '#a08060', textTransform: 'uppercase' as const, letterSpacing: '1px', marginBottom: 6 },
 }
 
 function getActiveApi() {
@@ -219,21 +219,21 @@ Para questões dissertativas ou V/F, omita "options". Para V/F, o "answer" deve 
   return (
     <div style={S.page}>
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 24 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 24, paddingBottom: 20, borderBottom: '1px solid rgba(139,115,85,0.12)' }}>
         <div>
-          <h1 style={{ fontFamily: 'Georgia, serif', fontSize: 30, fontWeight: 600, color: '#073642', fontStyle: 'italic', margin: 0 }}>
-            Banco de Questões
+          <h1 style={{ fontFamily: "'Fraunces', 'Playfair Display', Georgia, serif", fontSize: 32, fontWeight: 700, color: '#2c1a0e', margin: 0 }}>
+            Banco de Atividades
           </h1>
-          <p style={{ color: '#586e75', fontSize: 13, marginTop: 4 }}>
-            {questions.length} questões · memória pedagógica por escola e ano
+          <p style={{ color: '#a08060', fontSize: 14, marginTop: 4 }}>
+            {questions.length} atividades salvas · acervo central de aulas, listas, provas e gabaritos
           </p>
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
-          <button onClick={() => setModal('ai')} style={{ ...S.btn, background: '#b58900', color: '#fff' }}>
-            <i className="ti ti-sparkles" /> Gerar com IA
+          <button onClick={() => setModal('ai')} style={{ ...S.btn, background: '#d4944a', color: '#fffcf8' }}>
+            <i className="ti ti-sparkles" /> Gerar Atividade com IA
           </button>
-          <button onClick={() => setModal('add')} style={{ ...S.btn, background: '#073642', color: '#fff' }}>
-            <i className="ti ti-plus" /> Adicionar Questão
+          <button onClick={() => setModal('add')} style={{ ...S.btn, background: '#8b5e3c', color: '#fffcf8' }}>
+            <i className="ti ti-plus" /> Adicionar Atividade
           </button>
         </div>
       </div>

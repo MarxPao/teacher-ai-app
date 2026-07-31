@@ -263,8 +263,8 @@ export default function Repository() {
 
   return (
     <ModuleShell 
-      title="Repository & Book Library (RAG Engine)"
-      subtitle="Onde seus livros (Student's, Workbook, Reference, CLIL) ficam salvos. A IA lê estes textos em tempo real para criar provas."
+      title="Biblioteca Digital & Livros (RAG Engine)"
+      subtitle="Sua biblioteca de livros didáticos (Student's, Workbook, Reference, CLIL). A IA consulta estes materiais para gerar aulas e provas."
       isFullHeight
       maxWidth="100%"
       actions={

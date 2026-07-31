@@ -15,7 +15,7 @@ const NAV: Section[] = [
     { key: 'exam',              label: 'Gerar Prova',           icon: 'ti-file-text' },
     { key: 'plan',              label: 'Plano de Aula',         icon: 'ti-calendar-event' },
     { key: 'rubric',            label: 'Rubrica & Gabarito',    icon: 'ti-list-check' },
-    { key: 'qbank',             label: 'Banco de Questões',     icon: 'ti-archive' },
+    { key: 'qbank',             label: 'Banco de Atividades',   icon: 'ti-archive' },
     { key: 'audiopronunciation',label: 'Pronúncia & Áudio',     icon: 'ti-microphone' },
   ]},
   { label: 'Em Sala de Aula', items: [
@@ -49,7 +49,7 @@ const NAV: Section[] = [
     { key: 'portalmirror',        label: 'Portal Conectado',        icon: 'ti-plug-connected' },
     { key: 'calendar',            label: 'Calendário',              icon: 'ti-calendar' },
     { key: 'editor',              label: 'Editor de Documentos',    icon: 'ti-file-pencil' },
-    { key: 'repo',                label: 'Repositório',             icon: 'ti-folder-open' },
+    { key: 'repo',                label: 'Biblioteca',              icon: 'ti-books' },
     { key: 'wellbeing',           label: 'Bem-Estar',               icon: 'ti-heart' },
   ]},
   { label: 'Configurações', items: [
