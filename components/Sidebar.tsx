@@ -39,7 +39,7 @@ const NAV: Section[] = [
     { key: 'portfolio',      label: 'Portfólio',           icon: 'ti-award' },
   ]},
   { label: 'Área do Professor', items: [
-    { key: 'reflectivepractice',  label: 'Reflexão da Prática',     icon: 'ti-bulb-spark' },
+    { key: 'reflectivepractice',  label: 'Reflexão da Prática',     icon: 'ti-bulb' },
     { key: 'meetingclassrecorder',label: 'Diário de Aulas',         icon: 'ti-notebook' },
     { key: 'weeklyagenda',        label: 'Agenda Semanal',          icon: 'ti-calendar-time' },
     { key: 'mindmap',             label: 'Mapa Mental',             icon: 'ti-hierarchy-2' },
