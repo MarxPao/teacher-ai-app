@@ -32,30 +32,26 @@ interface Student {
 type ViewMode = 'list' | 'deck_details' | 'study' | 'game' | 'matching';
 
 // --- Theme Colors ---
-const colors = {
-  bg: '#0f1117',
-  cardBg: '#1a1d2e',
-  primary: '#6C5CE7',
-  primaryHover: '#5B4BC4',
-  secondary: '#FF7675',
-  accent: '#00CEC9',
-  success: '#00B894',
-  warning: '#FDCB6E',
-  danger: '#D63031',
-  text: '#DFE6E9',
-  textMuted: '#B2BEC3',
-  border: '#2D3436'
-};
-
-const getCategoryColor = (category: string) => {
-  switch (category.toLowerCase()) {
-    case 'vocabulary': return colors.primary;
-    case 'grammar': return colors.secondary;
-    case 'phrasal verbs': return colors.accent;
-    case 'idioms': return colors.warning;
-    case 'collocations': return colors.success;
-    default: return colors.primary;
-  }
+const paperTheme = {
+  bg: '#fdf8f2',
+  cardMain: '#fffcf8',
+  cardSub: '#f5efe6',
+  textMain: '#2c1a0e',
+  textWarm: '#7a5c42',
+  textMuted: '#a08060',
+  label: '#c4a882',
+  accent: '#8b5e3c',
+  accentHover: '#b5805a',
+  borderSoft: 'rgba(139,115,85,0.1)',
+  borderMed: 'rgba(139,115,85,0.14)',
+  borderHard: 'rgba(139,115,85,0.18)',
+  success: '#3d7a4e',
+  successBg: 'rgba(61,122,78,0.1)',
+  warning: '#c87a1e',
+  warningBg: 'rgba(200,122,30,0.1)',
+  danger: '#a83232',
+  dangerBg: 'rgba(168,50,50,0.1)',
+  projectorBg: '#1c110a'
 };
 
 // --- Main Component ---
@@ -118,23 +114,23 @@ export default function FlashcardMode() {
 
   return (
     <div style={{
-      backgroundColor: colors.bg,
-      color: colors.text,
+      backgroundColor: paperTheme.bg,
+      color: paperTheme.textMain,
       minHeight: '100vh',
-      fontFamily: 'system-ui, -apple-system, sans-serif',
+      fontFamily: "'Inter', system-ui, sans-serif",
       display: 'flex',
       flexDirection: 'column',
-      padding: '24px',
+      padding: '36px 40px',
       boxSizing: 'border-box'
     }}>
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px', paddingBottom: '20px', borderBottom: `1px solid ${paperTheme.borderSoft}` }}>
         <div>
-          <h1 style={{ margin: '0 0 8px 0', fontSize: '28px', background: `linear-gradient(45deg, ${colors.primary}, ${colors.accent})`, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-            <i className="ti ti-cards" style={{ marginRight: '12px' }}></i>
+          <h1 style={{ margin: '0', fontSize: '1.8rem', fontFamily: "'Playfair Display', Georgia, serif", fontWeight: 700, color: paperTheme.textMain }}>
+            <i className="ti ti-cards" style={{ marginRight: '12px', color: paperTheme.accent }}></i>
             Flashcards Live
           </h1>
-          <p style={{ margin: 0, color: colors.textMuted, fontSize: '14px' }}>Create, study, and play vocabulary games.</p>
+          <p style={{ margin: '6px 0 0 0', color: paperTheme.textMuted, fontSize: '14px' }}>Create, study, and play vocabulary games.</p>
         </div>
         <div style={{ display: 'flex', gap: '12px' }}>
           {view !== 'list' && (
@@ -192,13 +188,15 @@ export default function FlashcardMode() {
       {toastMessage && (
         <div style={{
           position: 'fixed', bottom: '24px', right: '24px',
-          backgroundColor: colors.success, color: '#fff',
+          backgroundColor: paperTheme.accent, color: paperTheme.cardMain,
           padding: '12px 24px', borderRadius: '8px',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+          boxShadow: `0 4px 12px ${paperTheme.borderSoft}`,
           zIndex: 1000,
-          animation: 'fadeIn 0.3s ease-out'
+          fontFamily: "'Inter', system-ui, sans-serif",
+          animation: 'fadeIn 0.3s ease-out',
+          display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 500
         }}>
-          <i className="ti ti-check" style={{ marginRight: '8px' }}></i>
+          <i className="ti ti-check"></i>
           {toastMessage}
         </div>
       )}
@@ -266,7 +264,7 @@ function DeckListView({ decks, setDecks, onOpenDeck, onDelete, showToast }: any)
           placeholder="New Deck Name..." 
           value={newDeckName} 
           onChange={e => setNewDeckName(e.target.value)}
-          style={inputStyle}
+          style={{ ...inputStyle, width: '250px' }}
           onKeyDown={e => e.key === 'Enter' && handleCreate()}
         />
         <button onClick={handleCreate} style={btnStyle('primary')}>
@@ -283,32 +281,32 @@ function DeckListView({ decks, setDecks, onOpenDeck, onDelete, showToast }: any)
       </div>
 
       {decks.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '64px', color: colors.textMuted, backgroundColor: colors.cardBg, borderRadius: '12px' }}>
-          <i className="ti ti-box" style={{ fontSize: '48px', marginBottom: '16px', opacity: 0.5 }}></i>
-          <h3>No decks found</h3>
+        <div style={{ textAlign: 'center', padding: '64px', color: paperTheme.textMuted, backgroundColor: paperTheme.cardMain, borderRadius: '16px', border: `1px solid ${paperTheme.borderSoft}`, boxShadow: `0 2px 8px rgba(44,26,14,0.06)` }}>
+          <i className="ti ti-box" style={{ fontSize: '48px', marginBottom: '16px', opacity: 0.5, color: paperTheme.label }}></i>
+          <h3 style={{ fontFamily: "'Playfair Display', Georgia, serif", color: paperTheme.textMain }}>No decks found</h3>
           <p>Create your first deck above to get started.</p>
         </div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '20px' }}>
           {decks.map((deck: FlashcardDeck) => (
             <div key={deck.id} style={{
-              backgroundColor: colors.cardBg, borderRadius: '12px', padding: '20px',
-              border: `1px solid ${colors.border}`, display: 'flex', flexDirection: 'column',
+              backgroundColor: paperTheme.cardSub, borderRadius: '10px', padding: '20px',
+              border: `1px solid ${paperTheme.borderMed}`, display: 'flex', flexDirection: 'column',
               transition: 'transform 0.2s', cursor: 'pointer'
             }}
             onClick={() => onOpenDeck(deck)}
             onMouseEnter={e => (e.currentTarget.style.transform = 'translateY(-4px)')}
             onMouseLeave={e => (e.currentTarget.style.transform = 'translateY(0)')}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                 <h3 style={{ margin: '0 0 8px 0', fontSize: '20px' }}>{deck.name}</h3>
-                 <button onClick={(e) => { e.stopPropagation(); onDelete(deck.id); }} style={{ background: 'none', border: 'none', color: colors.danger, cursor: 'pointer', padding: '4px' }}>
+                 <h3 style={{ margin: '0 0 8px 0', fontSize: '18px', fontFamily: "'Playfair Display', Georgia, serif", color: paperTheme.textMain }}>{deck.name}</h3>
+                 <button onClick={(e) => { e.stopPropagation(); onDelete(deck.id); }} style={{ background: 'none', border: 'none', color: paperTheme.danger, cursor: 'pointer', padding: '4px' }}>
                     <i className="ti ti-trash"></i>
                  </button>
               </div>
-              <p style={{ margin: '0 0 16px 0', color: colors.textMuted, fontSize: '14px', flex: 1 }}>{deck.description}</p>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: `1px solid ${colors.border}`, paddingTop: '16px' }}>
-                <span style={{ fontSize: '14px', color: colors.accent }}>{deck.cards.length} cards</span>
-                <span style={{ fontSize: '12px', color: colors.textMuted }}>{new Date(deck.createdAt).toLocaleDateString()}</span>
+              <p style={{ margin: '0 0 16px 0', color: paperTheme.textWarm, fontSize: '14px', flex: 1 }}>{deck.description}</p>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: `1px solid ${paperTheme.borderSoft}`, paddingTop: '16px' }}>
+                <span style={{ fontSize: '13px', color: paperTheme.accent, fontWeight: 600 }}>{deck.cards.length} cards</span>
+                <span style={{ fontSize: '12px', color: paperTheme.textMuted }}>{new Date(deck.createdAt).toLocaleDateString()}</span>
               </div>
             </div>
           ))}
@@ -322,7 +320,6 @@ function DeckDetailsView({ deck, updateDeck, onStudy, onGame, onMatching, showTo
   const [quickAddText, setQuickAddText] = useState('');
   const [aiPrompt, setAiPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
-  const [editingCardId, setEditingCardId] = useState<string|null>(null);
 
   const handleQuickAdd = () => {
     if (!quickAddText.trim()) return;
@@ -396,18 +393,19 @@ function DeckDetailsView({ deck, updateDeck, onStudy, onGame, onMatching, showTo
     <div style={{ display: 'flex', gap: '24px' }}>
       {/* Sidebar Controls */}
       <div style={{ width: '300px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
-        <div style={{ backgroundColor: colors.cardBg, padding: '20px', borderRadius: '12px', border: `1px solid ${colors.border}` }}>
-           <h2 style={{ margin: '0 0 16px 0', fontSize: '20px' }}>{deck.name}</h2>
-           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-             <button onClick={onStudy} disabled={deck.cards.length === 0} style={btnStyle('primary')}><i className="ti ti-book"></i> Study Mode</button>
-             <button onClick={onGame} disabled={deck.cards.length === 0} style={btnStyle('accent')}><i className="ti ti-device-desktop"></i> Live Game (Projector)</button>
-             <button onClick={onMatching} disabled={deck.cards.length < 4} style={btnStyle('warning')}><i className="ti ti-components"></i> Matching Game</button>
+        <div style={{ backgroundColor: paperTheme.cardMain, padding: '28px', borderRadius: '16px', border: `1px solid ${paperTheme.borderSoft}`, boxShadow: `0 2px 8px rgba(44,26,14,0.06)` }}>
+           <h2 style={{ margin: '0 0 20px 0', fontSize: '22px', fontFamily: "'Playfair Display', Georgia, serif" }}>{deck.name}</h2>
+           
+           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', background: paperTheme.cardSub, borderRadius: '12px', padding: '8px', border: `1px solid ${paperTheme.borderMed}` }}>
+             <button onClick={onStudy} disabled={deck.cards.length === 0} style={{ ...btnStyle('secondary'), background: paperTheme.cardMain, border: 'none', boxShadow: '0 1px 4px rgba(44,26,14,0.1)', fontWeight: 600, color: paperTheme.textMain, justifyContent: 'flex-start' }}><i className="ti ti-book" style={{ color: paperTheme.accent }}></i> Study Mode</button>
+             <button onClick={onGame} disabled={deck.cards.length === 0} style={{ ...btnStyle('secondary'), border: 'none', justifyContent: 'flex-start' }}><i className="ti ti-device-desktop"></i> Live Game (Projector)</button>
+             <button onClick={onMatching} disabled={deck.cards.length < 4} style={{ ...btnStyle('secondary'), border: 'none', justifyContent: 'flex-start' }}><i className="ti ti-components"></i> Matching Game</button>
            </div>
         </div>
 
-        <div style={{ backgroundColor: colors.cardBg, padding: '20px', borderRadius: '12px', border: `1px solid ${colors.border}` }}>
-           <h3 style={{ margin: '0 0 12px 0', fontSize: '16px' }}>Quick Add</h3>
-           <p style={{ fontSize: '12px', color: colors.textMuted, margin: '0 0 8px 0' }}>Format: Word - Translation ; Word - Translation</p>
+        <div style={{ backgroundColor: paperTheme.cardSub, padding: '20px', borderRadius: '12px', border: `1px solid ${paperTheme.borderMed}` }}>
+           <div style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1.4px', color: paperTheme.label, marginBottom: '8px' }}>QUICK ADD</div>
+           <p style={{ fontSize: '12px', color: paperTheme.textWarm, margin: '0 0 12px 0' }}>Format: Word - Translation ; Word - Translation</p>
            <textarea 
              value={quickAddText} 
              onChange={e => setQuickAddText(e.target.value)}
@@ -417,10 +415,10 @@ function DeckDetailsView({ deck, updateDeck, onStudy, onGame, onMatching, showTo
            <button onClick={handleQuickAdd} style={{...btnStyle('secondary'), width: '100%'}}><i className="ti ti-plus"></i> Add Cards</button>
         </div>
 
-        <div style={{ backgroundColor: colors.cardBg, padding: '20px', borderRadius: '12px', border: `1px solid ${colors.primary}40` }}>
-           <h3 style={{ margin: '0 0 12px 0', fontSize: '16px', display: 'flex', alignItems:'center', gap:'8px' }}>
-               <i className="ti ti-sparkles" style={{ color: colors.primary }}></i> AI Generator
-           </h3>
+        <div style={{ backgroundColor: paperTheme.cardSub, padding: '20px', borderRadius: '12px', border: `1px solid ${paperTheme.borderMed}` }}>
+           <div style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1.4px', color: paperTheme.label, marginBottom: '12px', display: 'flex', alignItems:'center', gap:'8px' }}>
+               <i className="ti ti-sparkles" style={{ color: paperTheme.accent, fontSize: '14px' }}></i> AI GENERATOR
+           </div>
            <input 
              type="text" 
              value={aiPrompt} 
@@ -435,21 +433,21 @@ function DeckDetailsView({ deck, updateDeck, onStudy, onGame, onMatching, showTo
       </div>
 
       {/* Cards List */}
-      <div style={{ flex: 1, backgroundColor: colors.cardBg, padding: '24px', borderRadius: '12px', border: `1px solid ${colors.border}` }}>
-         <h3 style={{ margin: '0 0 20px 0', fontSize: '20px' }}>Cards ({deck.cards.length})</h3>
+      <div style={{ flex: 1, backgroundColor: paperTheme.cardMain, padding: '28px', borderRadius: '16px', border: `1px solid ${paperTheme.borderSoft}`, boxShadow: `0 2px 8px rgba(44,26,14,0.06)` }}>
+         <h3 style={{ margin: '0 0 20px 0', fontSize: '20px', fontFamily: "'Playfair Display', Georgia, serif" }}>Cards ({deck.cards.length})</h3>
          {deck.cards.length === 0 ? (
-             <p style={{ color: colors.textMuted }}>No cards yet. Add some from the sidebar.</p>
+             <p style={{ color: paperTheme.textMuted }}>No cards yet. Add some from the sidebar.</p>
          ) : (
              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', maxHeight: '70vh', overflowY: 'auto', paddingRight: '8px' }}>
                  {deck.cards.map((card: Flashcard, index: number) => (
-                     <div key={card.id} style={{ display: 'flex', backgroundColor: colors.bg, padding: '16px', borderRadius: '8px', borderLeft: `4px solid ${getCategoryColor(card.category)}`, alignItems: 'center' }}>
-                         <div style={{ width: '40px', color: colors.textMuted }}>#{index + 1}</div>
-                         <div style={{ flex: 1, fontWeight: 'bold', fontSize: '18px' }}>{card.front}</div>
-                         <div style={{ flex: 1, color: colors.textMuted }}>{card.back}</div>
+                     <div key={card.id} style={{ display: 'flex', backgroundColor: paperTheme.cardSub, padding: '16px', borderRadius: '12px', border: `1px solid ${paperTheme.borderMed}`, alignItems: 'center' }}>
+                         <div style={{ width: '40px', color: paperTheme.label, fontSize: '14px' }}>#{index + 1}</div>
+                         <div style={{ flex: 1, fontWeight: 'bold', fontSize: '16px', color: paperTheme.textMain }}>{card.front}</div>
+                         <div style={{ flex: 1, color: paperTheme.textWarm }}>{card.back}</div>
                          <div style={{ width: '120px', display: 'flex', gap: '8px' }}>
-                             <span style={{ fontSize: '12px', padding: '4px 8px', borderRadius: '4px', backgroundColor: '#ffffff10' }}>{card.category}</span>
+                             <span style={{ fontSize: '11px', fontWeight: 600, padding: '3px 10px', borderRadius: '99px', backgroundColor: 'rgba(139,94,60,0.1)', color: paperTheme.accent }}>{card.category}</span>
                          </div>
-                         <button onClick={() => removeCard(card.id)} style={{ background: 'none', border: 'none', color: colors.danger, cursor: 'pointer', padding: '8px' }}>
+                         <button onClick={() => removeCard(card.id)} style={{ background: 'none', border: 'none', color: paperTheme.textMuted, cursor: 'pointer', padding: '8px' }}>
                              <i className="ti ti-x"></i>
                          </button>
                      </div>
@@ -496,10 +494,18 @@ function StudyMode({ deck, updateDeck, onComplete }: any) {
 
   if (!currentCard) return null;
 
+  const progressPercent = ((currentIndex + 1) / queue.length) * 100;
+
   return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1 }}>
-          <div style={{ marginBottom: '24px', color: colors.textMuted }}>
-             Card {currentIndex + 1} of {queue.length}
+          <div style={{ marginBottom: '24px', width: '400px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', color: paperTheme.textMuted, fontSize: '13px', marginBottom: '8px' }}>
+              <span>Card {currentIndex + 1} of {queue.length}</span>
+              <span>{Math.round(progressPercent)}%</span>
+            </div>
+            <div style={{ width: '100%', height: '6px', backgroundColor: 'rgba(139,115,85,0.12)', borderRadius: '3px', overflow: 'hidden' }}>
+               <div style={{ height: '100%', width: `${progressPercent}%`, backgroundColor: paperTheme.accent, transition: 'width 0.3s ease' }}></div>
+            </div>
           </div>
           
           <Flashcard3D 
@@ -513,15 +519,15 @@ function StudyMode({ deck, updateDeck, onComplete }: any) {
           <div style={{ marginTop: '40px', display: 'flex', gap: '16px', height: '60px' }}>
               {isFlipped ? (
                   <>
-                      <button onClick={() => handleRate(1)} style={{ ...btnStyle('danger'), width: '120px', fontSize: '18px' }}><i className="ti ti-x"></i> Don't Know</button>
-                      <button onClick={() => handleRate(2)} style={{ ...btnStyle('warning'), width: '120px', fontSize: '18px' }}><i className="ti ti-minus"></i> Almost</button>
-                      <button onClick={() => handleRate(3)} style={{ ...btnStyle('success'), width: '120px', fontSize: '18px' }}><i className="ti ti-check"></i> Know</button>
+                      <button onClick={() => handleRate(1)} style={{ ...btnStyle('danger'), width: '130px', fontSize: '14px', borderRadius: '9px' }}><i className="ti ti-x"></i> Não sei</button>
+                      <button onClick={() => handleRate(2)} style={{ ...btnStyle('warning'), width: '130px', fontSize: '14px', borderRadius: '9px' }}><i className="ti ti-minus"></i> Quase</button>
+                      <button onClick={() => handleRate(3)} style={{ ...btnStyle('success'), width: '130px', fontSize: '14px', borderRadius: '9px' }}><i className="ti ti-check"></i> Sei</button>
                   </>
               ) : (
-                  <button onClick={() => setIsFlipped(true)} style={{ ...btnStyle('primary'), width: '200px', fontSize: '18px' }}>Show Answer</button>
+                  <button onClick={() => setIsFlipped(true)} style={{ ...btnStyle('primary'), width: '220px', fontSize: '14.5px', padding: '12px 24px', borderRadius: '9px' }}>Show Answer</button>
               )}
           </div>
-          <button onClick={onComplete} style={{ marginTop: '40px', background: 'none', border: 'none', color: colors.textMuted, cursor: 'pointer' }}>Exit Study Mode</button>
+          <button onClick={onComplete} style={{ marginTop: '40px', background: 'none', border: 'none', color: paperTheme.textMuted, cursor: 'pointer', fontFamily: "'Inter', system-ui, sans-serif", fontSize: '14px' }}>Exit Study Mode</button>
       </div>
   );
 }
@@ -595,14 +601,14 @@ function GameMode({ deck, students, onExit }: any) {
     if (!currentCard) return null;
 
     return (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.bg, zIndex: 9999, display: 'flex', flexDirection: 'column' }}>
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: paperTheme.projectorBg, color: paperTheme.cardMain, zIndex: 9999, display: 'flex', flexDirection: 'column', fontFamily: "'Inter', system-ui, sans-serif" }}>
             {/* Top Bar */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '24px', backgroundColor: '#00000080' }}>
-                <button onClick={onExit} style={btnStyle('secondary')}><i className="ti ti-x"></i> Close Projector</button>
-                <div style={{ fontSize: '24px', fontWeight: 'bold' }}>{currentIndex + 1} / {cards.length}</div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '24px', backgroundColor: 'rgba(0,0,0,0.3)', borderBottom: `1px solid rgba(196,168,130,0.15)` }}>
+                <button onClick={onExit} style={{ ...btnStyle('secondary'), color: paperTheme.cardMain, border: `1px solid rgba(196,168,130,0.3)` }}><i className="ti ti-x"></i> Close Projector</button>
+                <div style={{ fontSize: '24px', fontWeight: 'bold', color: paperTheme.label, fontFamily: "'Playfair Display', Georgia, serif" }}>{currentIndex + 1} / {cards.length}</div>
                 <div style={{ display: 'flex', gap: '16px' }}>
-                    <button onClick={prevCard} disabled={currentIndex === 0} style={btnStyle('secondary')}><i className="ti ti-arrow-left"></i> Prev</button>
-                    <button onClick={nextCard} disabled={currentIndex === cards.length - 1} style={btnStyle('secondary')}>Next <i className="ti ti-arrow-right"></i></button>
+                    <button onClick={prevCard} disabled={currentIndex === 0} style={{ ...btnStyle('secondary'), color: paperTheme.cardMain, border: `1px solid rgba(196,168,130,0.3)` }}><i className="ti ti-arrow-left"></i> Prev</button>
+                    <button onClick={nextCard} disabled={currentIndex === cards.length - 1} style={{ ...btnStyle('secondary'), color: paperTheme.cardMain, border: `1px solid rgba(196,168,130,0.3)` }}>Next <i className="ti ti-arrow-right"></i></button>
                 </div>
             </div>
 
@@ -620,22 +626,22 @@ function GameMode({ deck, students, onExit }: any) {
                 
                 {/* Timer Overlay */}
                 {timerActive && (
-                    <div style={{ position: 'absolute', top: '40px', right: '40px', width: '100px', height: '100px', borderRadius: '50%', border: `8px solid ${timeLeft <= 5 ? colors.danger : colors.accent}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '32px', fontWeight: 'bold', color: timeLeft <= 5 ? colors.danger : colors.text }}>
+                    <div style={{ position: 'absolute', top: '40px', right: '40px', width: '100px', height: '100px', borderRadius: '50%', border: `8px solid ${timeLeft <= 5 ? paperTheme.danger : paperTheme.label}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '32px', fontWeight: 'bold', color: timeLeft <= 5 ? paperTheme.danger : paperTheme.cardMain }}>
                         {timeLeft}
                     </div>
                 )}
             </div>
 
             {/* Bottom Bar: Student Controls */}
-            <div style={{ height: '120px', backgroundColor: colors.cardBg, borderTop: `1px solid ${colors.border}`, display: 'flex', alignItems: 'center', padding: '0 40px', gap: '40px' }}>
-                <button onClick={pickRandomStudent} style={{ ...btnStyle('accent'), fontSize: '20px', padding: '16px 32px' }}>
+            <div style={{ height: '120px', backgroundColor: 'rgba(28,17,10,0.8)', borderTop: `1px solid rgba(196,168,130,0.15)`, display: 'flex', alignItems: 'center', padding: '0 40px', gap: '40px' }}>
+                <button onClick={pickRandomStudent} style={{ ...btnStyle('primary'), fontSize: '18px', padding: '16px 32px' }}>
                     <i className="ti ti-dice"></i> Pick Student
                 </button>
                 
                 <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '24px' }}>
                     {selectedStudent ? (
                         <>
-                            <div style={{ fontSize: '32px', fontWeight: 'bold', color: colors.warning }}>
+                            <div style={{ fontSize: '32px', fontWeight: 'bold', color: paperTheme.label, fontFamily: "'Playfair Display', Georgia, serif" }}>
                                 🎯 {selectedStudent.name}
                             </div>
                             <div style={{ display: 'flex', gap: '12px' }}>
@@ -644,7 +650,7 @@ function GameMode({ deck, students, onExit }: any) {
                             </div>
                         </>
                     ) : (
-                        <div style={{ color: colors.textMuted, fontSize: '20px', fontStyle: 'italic' }}>
+                        <div style={{ color: paperTheme.textMuted, fontSize: '18px', fontStyle: 'italic' }}>
                             Click "Pick Student" to select randomly...
                         </div>
                     )}
@@ -656,7 +662,7 @@ function GameMode({ deck, students, onExit }: any) {
                         const student = students.find((s:any) => s.id === id);
                         if(!student) return null;
                         return (
-                            <div key={id} style={{ backgroundColor: colors.bg, padding: '8px 16px', borderRadius: '8px', border: `1px solid ${colors.border}`, whiteSpace: 'nowrap' }}>
+                            <div key={id} style={{ backgroundColor: 'rgba(255,252,248,0.05)', padding: '8px 16px', borderRadius: '8px', border: `1px solid rgba(196,168,130,0.2)`, whiteSpace: 'nowrap', color: paperTheme.cardMain }}>
                                 <strong>{student.name}</strong>: {score}
                             </div>
                         );
@@ -732,16 +738,16 @@ function MatchingMode({ deck, onExit }: any) {
     return (
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
             <div style={{ marginBottom: '24px', display: 'flex', justifyContent: 'space-between', width: '800px', alignItems: 'center' }}>
-                <h2 style={{ margin: 0 }}>Matching Game</h2>
-                <div style={{ fontSize: '24px', fontFamily: 'monospace', color: colors.accent }}>⏱ {timeElapsed}s</div>
+                <h2 style={{ margin: 0, fontFamily: "'Playfair Display', Georgia, serif", color: paperTheme.textMain, fontSize: '28px' }}>Matching Game</h2>
+                <div style={{ fontSize: '20px', fontFamily: "'Fira Code', 'Courier New', monospace", color: paperTheme.accent, fontWeight: 600 }}>⏱ {timeElapsed}s</div>
                 <button onClick={onExit} style={btnStyle('secondary')}>Exit</button>
             </div>
 
             {isComplete ? (
-                <div style={{ textAlign: 'center', backgroundColor: colors.cardBg, padding: '48px', borderRadius: '16px', border: `2px solid ${colors.success}` }}>
-                    <h1 style={{ color: colors.success, fontSize: '48px', margin: '0 0 16px 0' }}>🎉 You Won!</h1>
-                    <p style={{ fontSize: '24px' }}>Time: <strong>{timeElapsed}</strong> seconds</p>
-                    <button onClick={onExit} style={{ ...btnStyle('primary'), marginTop: '24px', fontSize: '20px' }}>Back to Deck</button>
+                <div style={{ textAlign: 'center', backgroundColor: paperTheme.cardMain, padding: '48px', borderRadius: '16px', border: `1px solid ${paperTheme.borderSoft}`, boxShadow: `0 4px 16px ${paperTheme.borderSoft}` }}>
+                    <h1 style={{ color: paperTheme.success, fontSize: '48px', margin: '0 0 16px 0', fontFamily: "'Playfair Display', Georgia, serif" }}>🎉 You Won!</h1>
+                    <p style={{ fontSize: '20px', color: paperTheme.textMain }}>Time: <strong style={{ color: paperTheme.accent }}>{timeElapsed}</strong> seconds</p>
+                    <button onClick={onExit} style={{ ...btnStyle('primary'), marginTop: '24px', fontSize: '16px', padding: '12px 24px' }}>Back to Deck</button>
                 </div>
             ) : (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', width: '800px' }}>
@@ -749,15 +755,21 @@ function MatchingMode({ deck, onExit }: any) {
                         const isSelected = selectedIndexes.includes(index);
                         const isMatched = matchedIds.includes(item.id);
                         
-                        let bgColor = colors.cardBg;
-                        let borderColor = colors.border;
+                        let bgColor = paperTheme.cardSub;
+                        let borderColor = paperTheme.borderMed;
+                        let textColor = paperTheme.textMain;
                         
                         if (isSelected) {
-                            bgColor = colors.primary;
-                            borderColor = colors.primaryHover;
+                            bgColor = paperTheme.cardMain;
+                            borderColor = paperTheme.accent;
                         } else if (isMatched) {
-                            bgColor = colors.success + '40'; // transparent success
-                            borderColor = colors.success;
+                            bgColor = paperTheme.successBg;
+                            borderColor = paperTheme.success;
+                            textColor = paperTheme.success;
+                        } else if (selectedIndexes.length === 2 && !isMatched && isSelected) {
+                            bgColor = paperTheme.dangerBg;
+                            borderColor = paperTheme.danger;
+                            textColor = paperTheme.danger;
                         }
 
                         return (
@@ -774,13 +786,15 @@ function MatchingMode({ deck, onExit }: any) {
                                     justifyContent: 'center',
                                     padding: '16px',
                                     textAlign: 'center',
-                                    fontSize: '18px',
-                                    fontWeight: 'bold',
+                                    fontSize: '16px',
+                                    fontWeight: 600,
+                                    color: textColor,
                                     cursor: isMatched ? 'default' : 'pointer',
-                                    opacity: isMatched ? 0.5 : 1,
-                                    transition: 'all 0.2s',
-                                    transform: isSelected ? 'scale(1.05)' : 'scale(1)',
-                                    userSelect: 'none'
+                                    opacity: isMatched ? 0.6 : 1,
+                                    transition: 'all 0.2s ease',
+                                    transform: isSelected && !isMatched ? 'scale(1.05)' : 'scale(1)',
+                                    userSelect: 'none',
+                                    boxShadow: isSelected && !isMatched ? '0 4px 12px rgba(44,26,14,0.1)' : 'none'
                                 }}
                             >
                                 {item.text}
@@ -796,8 +810,6 @@ function MatchingMode({ deck, onExit }: any) {
 // --- Generic 3D Flashcard Component ---
 
 function Flashcard3D({ front, back, isFlipped, onClick, category }: any) {
-    const cardColor = getCategoryColor(category);
-    
     return (
         <div 
             onClick={onClick}
@@ -822,10 +834,9 @@ function Flashcard3D({ front, back, isFlipped, onClick, category }: any) {
                     width: '100%',
                     height: '100%',
                     backfaceVisibility: 'hidden',
-                    backgroundColor: colors.cardBg,
+                    backgroundColor: paperTheme.cardMain,
                     borderRadius: '20px',
-                    border: `2px solid ${cardColor}80`,
-                    boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
+                    boxShadow: '0 8px 32px rgba(44,26,14,0.12)',
                     display: 'flex',
                     flexDirection: 'column',
                     alignItems: 'center',
@@ -833,11 +844,11 @@ function Flashcard3D({ front, back, isFlipped, onClick, category }: any) {
                     padding: '32px',
                     boxSizing: 'border-box'
                 }}>
-                    <div style={{ position: 'absolute', top: '16px', right: '16px', fontSize: '12px', color: cardColor, textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 'bold' }}>
+                    <div style={{ position: 'absolute', top: '24px', fontSize: '13px', color: paperTheme.textMuted, fontWeight: 600, letterSpacing: '0.5px' }}>
                         {category}
                     </div>
-                    <h2 style={{ margin: 0, fontSize: '36px', textAlign: 'center' }}>{front}</h2>
-                    <p style={{ position: 'absolute', bottom: '16px', color: colors.textMuted, fontSize: '12px' }}>Click to flip or press Space</p>
+                    <h2 style={{ margin: 0, fontSize: '42px', textAlign: 'center', fontFamily: "'Playfair Display', Georgia, serif", color: paperTheme.textMain }}>{front}</h2>
+                    <p style={{ position: 'absolute', bottom: '24px', color: paperTheme.textMuted, fontSize: '12px' }}>Click to flip or press Space</p>
                 </div>
 
                 {/* Back */}
@@ -846,19 +857,17 @@ function Flashcard3D({ front, back, isFlipped, onClick, category }: any) {
                     width: '100%',
                     height: '100%',
                     backfaceVisibility: 'hidden',
-                    backgroundColor: colors.cardBg,
+                    backgroundColor: paperTheme.accent,
                     borderRadius: '20px',
-                    border: `2px solid ${colors.border}`,
-                    boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
+                    boxShadow: '0 8px 32px rgba(44,26,14,0.12)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     padding: '32px',
                     boxSizing: 'border-box',
-                    transform: 'rotateY(180deg)',
-                    background: `linear-gradient(135deg, ${colors.cardBg} 0%, #1e2235 100%)`
+                    transform: 'rotateY(180deg)'
                 }}>
-                    <h2 style={{ margin: 0, fontSize: '32px', textAlign: 'center', color: colors.accent }}>{back}</h2>
+                    <h2 style={{ margin: 0, fontSize: '32px', textAlign: 'center', color: paperTheme.cardMain, fontWeight: 600 }}>{back}</h2>
                 </div>
             </div>
         </div>
@@ -868,40 +877,45 @@ function Flashcard3D({ front, back, isFlipped, onClick, category }: any) {
 // --- Styles Helpers ---
 
 const inputStyle: CSSProperties = {
-    backgroundColor: '#0f1117',
-    border: `1px solid ${colors.border}`,
-    color: colors.text,
-    padding: '10px 16px',
-    borderRadius: '8px',
-    fontSize: '14px',
+    backgroundColor: paperTheme.cardMain,
+    border: `1px solid ${paperTheme.borderHard}`,
+    color: paperTheme.textMain,
+    padding: '10px 14px',
+    borderRadius: '9px',
+    fontSize: '13.5px',
+    fontFamily: "'Inter', system-ui, sans-serif",
     outline: 'none',
-    boxSizing: 'border-box'
+    boxSizing: 'border-box',
+    transition: 'border-color 0.15s ease'
 };
 
 const btnStyle = (variant: 'primary'|'secondary'|'danger'|'success'|'warning'|'accent'): CSSProperties => {
-    let bg = colors.primary;
-    let hover = colors.primaryHover;
-    let color = '#fff';
+    let bg = paperTheme.accent;
+    let color = paperTheme.cardMain;
+    let border = 'none';
+    let boxShadow = '0 2px 8px rgba(139,94,60,0.3)';
     
-    if (variant === 'secondary') { bg = 'transparent'; hover = '#ffffff10'; color = colors.text; }
-    if (variant === 'danger') { bg = colors.danger; hover = '#b72a2a'; }
-    if (variant === 'success') { bg = colors.success; hover = '#009e7f'; }
-    if (variant === 'warning') { bg = colors.warning; hover = '#dca74f'; color = '#000'; }
-    if (variant === 'accent') { bg = colors.accent; hover = '#00b5b1'; color = '#000'; }
+    if (variant === 'secondary') { bg = paperTheme.cardSub; color = paperTheme.textWarm; border = `1px solid ${paperTheme.borderHard}`; boxShadow = 'none'; }
+    if (variant === 'danger') { bg = paperTheme.danger; boxShadow = '0 2px 8px rgba(168,50,50,0.3)'; }
+    if (variant === 'success') { bg = paperTheme.success; boxShadow = '0 2px 8px rgba(61,122,78,0.3)'; }
+    if (variant === 'warning') { bg = paperTheme.warning; boxShadow = '0 2px 8px rgba(200,122,30,0.3)'; }
+    if (variant === 'accent') { bg = paperTheme.accent; color = paperTheme.cardMain; } // redundant but clear
 
     return {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        padding: variant === 'secondary' ? '9px 18px' : '10px 20px',
         backgroundColor: bg,
         color: color,
-        border: variant === 'secondary' ? `1px solid ${colors.border}` : 'none',
-        padding: '10px 20px',
-        borderRadius: '8px',
-        fontSize: '14px',
-        fontWeight: 'bold',
+        border: border,
+        borderRadius: '9px',
+        fontSize: '13.5px',
+        fontWeight: variant === 'secondary' ? 500 : 600,
+        fontFamily: "'Inter', system-ui, sans-serif",
         cursor: 'pointer',
-        display: 'inline-flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: '8px',
-        transition: 'all 0.2s'
+        boxShadow: boxShadow,
+        transition: 'all 0.18s ease',
+        justifyContent: 'center'
     };
 };

@@ -29,95 +29,80 @@ interface ParticipationRecord {
 }
 
 // --- Styles ---
-const colors = {
-  bg: '#0a0d1a',
-  cardBg: '#1a1d2e',
-  text: '#ffffff',
-  textMuted: '#94a3b8',
-  primary: '#3b82f6',
-  success: '#10b981',
-  warning: '#f59e0b',
-  danger: '#ef4444',
-  border: '#2d3748',
-  accentNeon: 'linear-gradient(135deg, #00f2fe 0%, #4facfe 100%)',
-  successNeon: 'linear-gradient(135deg, #0ba360 0%, #3cba92 100%)',
-  warningNeon: 'linear-gradient(135deg, #f6d365 0%, #fda085 100%)',
-  dangerNeon: 'linear-gradient(135deg, #ff0844 0%, #ffb199 100%)',
-};
-
 const styles: Record<string, CSSProperties> = {
   container: {
     display: 'flex',
     flexDirection: 'column',
     height: '100%',
-    width: '100%',
-    backgroundColor: colors.bg,
-    color: colors.text,
-    fontFamily: 'system-ui, -apple-system, sans-serif',
-    padding: '20px',
+    background: '#fdf8f2',
+    color: '#2c1a0e',
+    fontFamily: "'Inter', system-ui, sans-serif",
+    padding: '28px 32px',
     boxSizing: 'border-box',
-    gap: '20px',
+    gap: 20,
     overflowY: 'auto',
   },
   header: {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: '15px 20px',
-    backgroundColor: colors.cardBg,
-    borderRadius: '12px',
-    border: `1px solid ${colors.border}`,
+    padding: '18px 24px',
+    background: '#fffcf8',
+    borderRadius: 14,
+    border: '1px solid rgba(139,115,85,0.1)',
+    boxShadow: '0 2px 8px rgba(44,26,14,0.06)',
+    marginBottom: 4,
   },
   title: {
-    margin: 0,
-    fontSize: '24px',
+    fontFamily: "'Playfair Display', Georgia, serif",
+    fontSize: '1.5rem',
     fontWeight: 700,
-    background: colors.accentNeon,
-    WebkitBackgroundClip: 'text',
-    WebkitTextFillColor: 'transparent',
+    color: '#2c1a0e',
+    margin: 0,
   },
   select: {
-    padding: '10px 15px',
-    borderRadius: '8px',
-    backgroundColor: '#0f1117',
-    color: colors.text,
-    border: `1px solid ${colors.border}`,
-    fontSize: '16px',
+    padding: '9px 14px',
+    borderRadius: 9,
+    background: '#f5efe6',
+    color: '#2c1a0e',
+    border: '1px solid rgba(139,115,85,0.18)',
+    fontSize: 14,
     outline: 'none',
     cursor: 'pointer',
-    minWidth: '200px',
+    minWidth: 200,
+    fontFamily: "'Inter', system-ui, sans-serif",
   },
   grid: {
     display: 'grid',
     gridTemplateColumns: '300px 1fr 300px',
-    gap: '20px',
+    gap: 20,
     flex: 1,
   },
   card: {
-    backgroundColor: colors.cardBg,
-    borderRadius: '12px',
-    padding: '20px',
-    border: `1px solid ${colors.border}`,
+    background: '#fffcf8',
+    borderRadius: 14,
+    padding: 20,
+    border: '1px solid rgba(139,115,85,0.1)',
     display: 'flex',
     flexDirection: 'column',
-    gap: '15px',
-    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+    gap: 14,
+    boxShadow: '0 2px 8px rgba(44,26,14,0.06)',
   },
   cardTitle: {
-    margin: '0 0 10px 0',
-    fontSize: '18px',
+    fontFamily: "'Playfair Display', Georgia, serif",
+    margin: '0 0 8px 0',
+    fontSize: '1rem',
     fontWeight: 600,
+    color: '#7a5c42',
     display: 'flex',
     alignItems: 'center',
-    gap: '8px',
-    color: colors.textMuted,
+    gap: 8,
   },
   timerDisplay: {
     fontSize: '80px',
     fontWeight: 800,
     textAlign: 'center',
     fontVariantNumeric: 'tabular-nums',
-    textShadow: '0 0 20px rgba(0,242,254,0.3)',
     margin: '20px 0',
   },
   timerControls: {
@@ -127,21 +112,24 @@ const styles: Record<string, CSSProperties> = {
   },
   btnBase: {
     padding: '10px 20px',
-    borderRadius: '8px',
+    borderRadius: 9,
     border: 'none',
-    color: 'white',
     cursor: 'pointer',
     fontWeight: 600,
     display: 'flex',
     alignItems: 'center',
-    gap: '8px',
+    gap: 8,
     transition: 'opacity 0.2s, transform 0.1s',
   },
-  btnPrimary: { background: colors.accentNeon },
-  btnSuccess: { background: colors.successNeon },
-  btnWarning: { background: colors.warningNeon },
-  btnDanger: { background: colors.dangerNeon },
-  btnGhost: { backgroundColor: 'transparent', border: `1px solid ${colors.border}`, color: colors.text },
+  btnPrimary: {
+    background: '#8b5e3c',
+    color: '#fffcf8',
+  },
+  btnSecondary: {
+    background: '#f5efe6',
+    color: '#7a5c42',
+    border: '1px solid rgba(139,115,85,0.18)',
+  },
   btnIcon: {
     width: '40px',
     height: '40px',
@@ -156,7 +144,7 @@ const styles: Record<string, CSSProperties> = {
   progressBar: {
     width: '100%',
     height: '10px',
-    backgroundColor: '#0f1117',
+    background: 'rgba(139,115,85,0.12)',
     borderRadius: '5px',
     overflow: 'hidden',
     display: 'flex',
@@ -176,10 +164,10 @@ const styles: Record<string, CSSProperties> = {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: '12px',
-    backgroundColor: '#0f1117',
-    borderRadius: '8px',
-    border: `1px solid ${colors.border}`,
+    padding: '10px 14px',
+    background: '#f5efe6',
+    borderRadius: 10,
+    border: '1px solid rgba(139,115,85,0.1)',
   },
   attendanceBtns: {
     display: 'flex',
@@ -203,10 +191,10 @@ const styles: Record<string, CSSProperties> = {
     overflowY: 'auto',
   },
   participationCard: {
-    backgroundColor: '#0f1117',
-    padding: '15px',
-    borderRadius: '8px',
-    border: `1px solid ${colors.border}`,
+    background: '#f5efe6',
+    padding: 14,
+    borderRadius: 10,
+    border: '1px solid rgba(139,115,85,0.1)',
     display: 'flex',
     flexDirection: 'column',
     gap: '10px',
@@ -219,30 +207,30 @@ const styles: Record<string, CSSProperties> = {
   actionBtn: {
     flex: 1,
     padding: '8px 0',
-    borderRadius: '6px',
+    borderRadius: 8,
     border: 'none',
     cursor: 'pointer',
-    fontSize: '14px',
+    fontSize: 13,
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
-    gap: '4px',
-    backgroundColor: colors.cardBg,
-    color: colors.textMuted,
+    gap: 3,
+    background: '#fffcf8',
+    color: '#7a5c42',
     transition: 'background 0.2s',
   },
   rouletteBox: {
-    height: '100px',
+    height: 100,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#0f1117',
-    borderRadius: '8px',
-    fontSize: '24px',
-    fontWeight: 'bold',
-    color: colors.primary,
-    border: `2px dashed ${colors.border}`,
-    marginBottom: '10px',
+    background: '#f5efe6',
+    borderRadius: 10,
+    fontSize: 22,
+    fontWeight: 700,
+    color: '#8b5e3c',
+    border: '2px dashed rgba(139,115,85,0.25)',
+    marginBottom: 10,
     overflow: 'hidden',
     position: 'relative',
   },
@@ -251,7 +239,7 @@ const styles: Record<string, CSSProperties> = {
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: '10px',
-    backgroundColor: '#0f1117',
+    background: '#f5efe6',
     borderRadius: '8px',
   },
   energyBtn: {
@@ -268,19 +256,20 @@ const styles: Record<string, CSSProperties> = {
   },
   input: {
     padding: '8px 12px',
-    borderRadius: '6px',
-    border: `1px solid ${colors.border}`,
-    backgroundColor: '#0f1117',
-    color: colors.text,
-    width: '80px',
+    borderRadius: 8,
+    border: '1px solid rgba(139,115,85,0.18)',
+    background: '#f5efe6',
+    color: '#2c1a0e',
+    width: 80,
+    fontFamily: "'Inter', system-ui, sans-serif",
   },
   toast: {
     position: 'fixed',
     bottom: '20px',
     right: '20px',
     padding: '12px 24px',
-    backgroundColor: colors.success,
-    color: '#fff',
+    background: '#8b5e3c',
+    color: '#fffcf8',
     borderRadius: '8px',
     boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
     zIndex: 1000,
@@ -292,7 +281,7 @@ const styles: Record<string, CSSProperties> = {
     alignItems: 'center',
     justifyContent: 'center',
     height: '100%',
-    color: colors.textMuted,
+    color: '#a08060',
     gap: '15px',
     gridColumn: '1 / -1',
   }
@@ -507,7 +496,7 @@ export default function ClassroomMode() {
   };
 
   const presentCount = Object.values(attendance).filter(v => v === 'present' || v === 'late').length;
-  const timerColor = currentPhase === 'warmup' ? colors.success : currentPhase === 'main' ? colors.primary : colors.danger;
+  const timerColor = currentPhase === 'warmup' ? '#3d7a4e' : currentPhase === 'main' ? '#8b5e3c' : '#a83232';
 
   return (
     <div style={styles.container}>
@@ -541,28 +530,46 @@ export default function ClassroomMode() {
                 <i className="ti ti-users"></i> Chamada Rápida ({presentCount}/{classStudents.length})
               </h2>
               <div style={styles.studentList}>
-                {classStudents.map(student => (
-                  <div key={student.id} style={styles.studentItem}>
-                    <span style={{ fontSize: '14px', fontWeight: 500 }}>{student.name}</span>
-                    <div style={styles.attendanceBtns}>
-                      <button 
-                        style={{ ...styles.attendanceBtn, backgroundColor: attendance[student.id] === 'present' ? colors.success : '#1e293b' }}
-                        onClick={() => handleAttendance(student.id, 'present')}
-                        title="Presente"
-                      ><i className="ti ti-check" style={{ color: attendance[student.id] === 'present' ? 'white' : colors.textMuted }}></i></button>
-                      <button 
-                        style={{ ...styles.attendanceBtn, backgroundColor: attendance[student.id] === 'late' ? colors.warning : '#1e293b' }}
-                        onClick={() => handleAttendance(student.id, 'late')}
-                        title="Atrasado"
-                      ><i className="ti ti-clock" style={{ color: attendance[student.id] === 'late' ? 'white' : colors.textMuted }}></i></button>
-                      <button 
-                        style={{ ...styles.attendanceBtn, backgroundColor: attendance[student.id] === 'absent' ? colors.danger : '#1e293b' }}
-                        onClick={() => handleAttendance(student.id, 'absent')}
-                        title="Ausente"
-                      ><i className="ti ti-x" style={{ color: attendance[student.id] === 'absent' ? 'white' : colors.textMuted }}></i></button>
+                {classStudents.map(student => {
+                  const isPresent = attendance[student.id] === 'present';
+                  const isLate = attendance[student.id] === 'late';
+                  const isAbsent = attendance[student.id] === 'absent';
+                  
+                  return (
+                    <div key={student.id} style={styles.studentItem}>
+                      <span style={{ fontSize: '14px', fontWeight: 500 }}>{student.name}</span>
+                      <div style={styles.attendanceBtns}>
+                        <button 
+                          style={{ 
+                            ...styles.attendanceBtn, 
+                            backgroundColor: isPresent ? '#3d7a4e' : 'rgba(139,115,85,0.08)',
+                            color: isPresent ? '#fff' : '#a08060'
+                          }}
+                          onClick={() => handleAttendance(student.id, 'present')}
+                          title="Presente"
+                        ><i className="ti ti-check"></i></button>
+                        <button 
+                          style={{ 
+                            ...styles.attendanceBtn, 
+                            backgroundColor: isLate ? '#c87a1e' : 'rgba(139,115,85,0.08)',
+                            color: isLate ? '#fff' : '#a08060'
+                          }}
+                          onClick={() => handleAttendance(student.id, 'late')}
+                          title="Atrasado"
+                        ><i className="ti ti-clock"></i></button>
+                        <button 
+                          style={{ 
+                            ...styles.attendanceBtn, 
+                            backgroundColor: isAbsent ? '#a83232' : 'rgba(139,115,85,0.08)',
+                            color: isAbsent ? '#fff' : '#a08060'
+                          }}
+                          onClick={() => handleAttendance(student.id, 'absent')}
+                          title="Ausente"
+                        ><i className="ti ti-x"></i></button>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
               <button style={{ ...styles.btnBase, ...styles.btnPrimary, justifyContent: 'center' }} onClick={saveAttendance}>
                 <i className="ti ti-device-floppy"></i> Salvar Aula
@@ -609,9 +616,9 @@ export default function ClassroomMode() {
               </div>
 
               <div style={styles.progressBar}>
-                <div style={{ ...styles.progressSegment, backgroundColor: colors.success, width: '15%' }} title="Warm-up (15%)"></div>
-                <div style={{ ...styles.progressSegment, backgroundColor: colors.primary, width: '70%' }} title="Main Activity (70%)"></div>
-                <div style={{ ...styles.progressSegment, backgroundColor: colors.danger, width: '15%' }} title="Wrap-up (15%)"></div>
+                <div style={{ ...styles.progressSegment, backgroundColor: '#3d7a4e', width: '15%' }} title="Warm-up (15%)"></div>
+                <div style={{ ...styles.progressSegment, backgroundColor: '#8b5e3c', width: '70%' }} title="Main Activity (70%)"></div>
+                <div style={{ ...styles.progressSegment, backgroundColor: '#a83232', width: '15%' }} title="Wrap-up (15%)"></div>
               </div>
               
               {/* Progress Indicator */}
@@ -622,24 +629,24 @@ export default function ClassroomMode() {
                    left: `${100 - (timeLeft / (totalMinutes * 60)) * 100}%`,
                    width: '2px',
                    height: '10px',
-                   backgroundColor: 'white',
-                   boxShadow: '0 0 5px white',
+                   backgroundColor: '#f5efe6',
+                   boxShadow: '0 0 5px rgba(245,239,230,0.8)',
                    transition: 'left 1s linear'
                  }}></div>
               </div>
 
               <div style={styles.timerControls}>
                 <button 
-                  style={{ ...styles.btnIcon, background: timerActive ? colors.warningNeon : colors.successNeon }} 
+                  style={{ ...styles.btnIcon, background: timerActive ? '#c87a1e' : '#3d7a4e' }} 
                   onClick={() => setTimerActive(!timerActive)}
                 >
                   <i className={timerActive ? "ti ti-player-pause" : "ti ti-player-play"} style={{ fontSize: '24px' }}></i>
                 </button>
-                <button style={{ ...styles.btnIcon, backgroundColor: '#334155' }} onClick={resetTimer}>
+                <button style={{ ...styles.btnIcon, backgroundColor: '#a08060' }} onClick={resetTimer}>
                   <i className="ti ti-refresh" style={{ fontSize: '24px' }}></i>
                 </button>
               </div>
-              <div style={{ fontSize: '12px', color: colors.textMuted, textTransform: 'uppercase', letterSpacing: '1px' }}>
+              <div style={{ fontSize: '12px', color: '#a08060', textTransform: 'uppercase', letterSpacing: '1px' }}>
                 Fase Atual: <span style={{ color: timerColor, fontWeight: 'bold' }}>{currentPhase}</span>
               </div>
             </div>
@@ -650,33 +657,33 @@ export default function ClassroomMode() {
                 {classStudents.filter(s => attendance[s.id] === 'present' || attendance[s.id] === 'late').map(student => (
                   <div key={student.id} style={styles.participationCard}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <strong style={{ fontSize: '14px' }}>{student.name}</strong>
-                      <span style={{ fontSize: '12px', background: colors.primary, padding: '2px 6px', borderRadius: '10px' }}>
+                      <strong style={{ fontSize: '14px', color: '#2c1a0e' }}>{student.name}</strong>
+                      <span style={{ fontSize: '12px', background: '#8b5e3c', color: '#fffcf8', padding: '2px 6px', borderRadius: '10px' }}>
                         {participation[student.id]?.participated || 0}
                       </span>
                     </div>
                     <div style={styles.participationActions}>
                       <button style={{ ...styles.actionBtn }} onClick={() => handleParticipation(student.id, 'participated')}>
-                        <i className="ti ti-hand-stop" style={{ color: colors.primary, fontSize: '18px' }}></i>
+                        <i className="ti ti-hand-stop" style={{ color: '#8b5e3c', fontSize: '18px' }}></i>
                         <span style={{ fontSize: '10px' }}>Part.</span>
                       </button>
                       <button style={{ ...styles.actionBtn }} onClick={() => handleParticipation(student.id, 'correct')}>
-                        <i className="ti ti-check" style={{ color: colors.success, fontSize: '18px' }}></i>
+                        <i className="ti ti-check" style={{ color: '#3d7a4e', fontSize: '18px' }}></i>
                         <span style={{ fontSize: '10px' }}>Acerto</span>
                       </button>
                       <button style={{ ...styles.actionBtn }} onClick={() => handleParticipation(student.id, 'incorrect')}>
-                        <i className="ti ti-x" style={{ color: colors.danger, fontSize: '18px' }}></i>
+                        <i className="ti ti-x" style={{ color: '#a83232', fontSize: '18px' }}></i>
                         <span style={{ fontSize: '10px' }}>Erro</span>
                       </button>
                       <button style={{ ...styles.actionBtn }} onClick={() => handleParticipation(student.id, 'help')}>
-                        <i className="ti ti-help" style={{ color: colors.warning, fontSize: '18px' }}></i>
+                        <i className="ti ti-help" style={{ color: '#c87a1e', fontSize: '18px' }}></i>
                         <span style={{ fontSize: '10px' }}>Ajuda</span>
                       </button>
                     </div>
                   </div>
                 ))}
                 {classStudents.filter(s => attendance[s.id] === 'present' || attendance[s.id] === 'late').length === 0 && (
-                  <div style={{ color: colors.textMuted, fontSize: '14px', gridColumn: '1/-1', textAlign: 'center', padding: '20px' }}>
+                  <div style={{ color: '#a08060', fontSize: '14px', gridColumn: '1/-1', textAlign: 'center', padding: '20px' }}>
                     Marque alunos como presentes na chamada para habilitar a participação.
                   </div>
                 )}
@@ -697,7 +704,7 @@ export default function ClassroomMode() {
                 )}
               </div>
               
-              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', color: colors.textMuted, cursor: 'pointer' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', color: '#a08060', cursor: 'pointer' }}>
                 <input 
                   type="checkbox" 
                   checked={prioritizeZero} 
@@ -717,16 +724,16 @@ export default function ClassroomMode() {
             
             <div style={{ ...styles.card, flex: 1 }}>
                <h2 style={styles.cardTitle}><i className="ti ti-chart-bar"></i> Visão Geral da Aula</h2>
-               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '14px', color: colors.textMuted }}>
+               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '14px', color: '#a08060' }}>
                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                   <span>Total de Alunos:</span> <strong style={{ color: 'white' }}>{classStudents.length}</strong>
+                   <span>Total de Alunos:</span> <strong style={{ color: '#2c1a0e' }}>{classStudents.length}</strong>
                  </div>
                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                   <span>Presentes:</span> <strong style={{ color: colors.success }}>{presentCount}</strong>
+                   <span>Presentes:</span> <strong style={{ color: '#3d7a4e' }}>{presentCount}</strong>
                  </div>
                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                    <span>Total Interações:</span> 
-                   <strong style={{ color: colors.primary }}>
+                   <strong style={{ color: '#8b5e3c' }}>
                      {Object.values(participation).reduce((acc, curr) => acc + curr.participated + curr.correct + curr.incorrect + curr.help, 0)}
                    </strong>
                  </div>
