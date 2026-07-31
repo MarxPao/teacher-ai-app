@@ -6,10 +6,20 @@ import { ELT_TAXONOMY, getSubcategoriesForCategory } from '@/lib/englishTaxonomy
 interface School  { id: string; name: string; color: string }
 interface ClassRecord { id: string; name: string; schoolId: string; subject?: string; year?: string }
 
+export type ActivityKind = 'lesson' | 'exercise' | 'exam' | 'question'
+
+export const KIND_LABELS: Record<ActivityKind, { label: string; icon: string; color: string; bg: string }> = {
+  lesson:   { label: 'Aula Criada',        icon: 'ti-chalkboard', color: '#8b5e3c', bg: 'rgba(139,94,60,0.12)' },
+  exercise: { label: 'Lista de Exercícios', icon: 'ti-sparkles',   color: '#2a6080', bg: 'rgba(42,96,128,0.12)' },
+  exam:     { label: 'Prova & Gabarito',   icon: 'ti-file-text',  color: '#c87a1e', bg: 'rgba(200,122,30,0.12)' },
+  question: { label: 'Questão Isolada',   icon: 'ti-help-circle',color: '#3d7a4e', bg: 'rgba(61,122,78,0.12)' },
+}
+
 interface Question {
   id:          string
   statement:   string           // Enunciado
   type:        QuestionType
+  activityKind?: ActivityKind   // Tipo de atividade (aula, exercício, prova, questão)
   options?:    string[]          // Alternativas A-D (MC)
   answer?:     string            // Gabarito
   explanation?: string          // Comentário/resolução
@@ -64,6 +74,7 @@ export default function QuestionBank() {
   const [isGen,     setIsGen]     = useState(false)
 
   /* Filtros */
+  const [fKind,    setFKind]    = useState<'all' | ActivityKind>('all')
   const [fSchool,  setFSchool]  = useState('all')
   const [fYear,    setFYear]    = useState('all')
   const [fSubject, setFSubject] = useState('all')
@@ -72,6 +83,7 @@ export default function QuestionBank() {
   const [fText,    setFText]    = useState('')
 
   /* Form novo */
+  const [fKind2,        setFKind2]        = useState<ActivityKind>('exercise')
   const [fStatement,    setFStatement]    = useState('')
   const [fType2,        setFType2]        = useState<QuestionType>('mc')
   const [fOptions,      setFOptions]      = useState<string[]>(['', '', '', ''])
@@ -89,6 +101,7 @@ export default function QuestionBank() {
   const [fTags,         setFTags]         = useState('')
 
   /* Form geração IA */
+  const [aiKind,       setAiKind]       = useState<ActivityKind>('exercise')
   const [aiTopic,      setAiTopic]      = useState('')
   const [aiSubject,    setAiSubject]    = useState('Inglês')
   const [aiEltCat,     setAiEltCat]     = useState('grammar')
@@ -124,6 +137,8 @@ export default function QuestionBank() {
   const subjects = useMemo(() => [...new Set(questions.map(q => q.subject))], [questions])
   const filtered = useMemo(() => {
     return questions.filter(q => {
+      const qKind = q.activityKind || 'question'
+      if (fKind    !== 'all' && qKind !== fKind)        return false
       if (fSchool  !== 'all' && q.schoolId !== fSchool)  return false
       if (fYear    !== 'all' && q.year     !== fYear)    return false
       if (fSubject !== 'all' && q.subject  !== fSubject) return false
@@ -132,13 +147,14 @@ export default function QuestionBank() {
       if (fText && !q.statement.toLowerCase().includes(fText.toLowerCase()) && !q.topic.toLowerCase().includes(fText.toLowerCase())) return false
       return true
     }).sort((a, b) => b.createdAt - a.createdAt)
-  }, [questions, fSchool, fYear, fSubject, fType, fLevel, fText])
+  }, [questions, fKind, fSchool, fYear, fSubject, fType, fLevel, fText])
 
   /* ─── Adicionar manualmente ──────────────────────────────────────────────── */
   function addManual() {
     if (!fStatement.trim()) return
     const newQ: Question = {
       id: `q_${Date.now()}`, statement: fStatement, type: fType2,
+      activityKind: fKind2,
       options: fType2 === 'mc' ? fOptions : undefined,
       answer: fAnswer, explanation: fExplanation,
       subject: fSubject2, topic: fTopic,
@@ -154,7 +170,7 @@ export default function QuestionBank() {
   }
 
   function resetForm() {
-    setFStatement(''); setFType2('mc'); setFOptions(['', '', '', ''])
+    setFStatement(''); setFType2('mc'); setFKind2('exercise'); setFOptions(['', '', '', ''])
     setFAnswer(''); setFExplanation(''); setFSubject2('Inglês'); setFTopic('')
     setFLevel2('B1'); setFYear2('2025'); setFSchool2(''); setFClass2(''); setFTags('')
   }
@@ -165,12 +181,12 @@ export default function QuestionBank() {
     if (!api) { alert('Configure uma API ativa em APIs & Modelos.'); return }
     setIsGen(true)
     try {
-      const prompt = `Gere ${aiCount} questões de ${aiType === 'mc' ? 'múltipla escolha' : aiType === 'essay' ? 'dissertativa' : aiType === 'tf' ? 'verdadeiro ou falso' : 'preencher lacuna'} sobre "${aiTopic}" para a disciplina ${aiSubject}, nível ${aiLevel}, ano letivo ${aiYear}.
+      const prompt = `Gere ${aiCount} itens de ${KIND_LABELS[aiKind].label} (${aiType === 'mc' ? 'múltipla escolha' : aiType === 'essay' ? 'dissertativa' : aiType === 'tf' ? 'verdadeiro ou falso' : 'preencher lacuna'}) sobre "${aiTopic}" para a disciplina ${aiSubject}, nível ${aiLevel}, ano letivo ${aiYear}.
 
 Responda SOMENTE com JSON válido no formato:
 [
   {
-    "statement": "Enunciado aqui",
+    "statement": "Enunciado ou Tópico da atividade aqui",
     "options": ["A) opção", "B) opção", "C) opção", "D) opção"],
     "answer": "A",
     "explanation": "Porque..."
@@ -194,6 +210,7 @@ Para questões dissertativas ou V/F, omita "options". Para V/F, o "answer" deve 
 
       const newQs: Question[] = parsed.map((item, i) => ({
         id: `q_ai_${Date.now()}_${i}`, statement: item.statement, type: aiType,
+        activityKind: aiKind,
         options: item.options, answer: item.answer, explanation: item.explanation,
         subject: aiSubject, topic: aiTopic, level: aiLevel, year: aiYear,
         schoolId: aiSchool || '', classRef: '', tags: [aiTopic.toLowerCase()],
@@ -238,6 +255,43 @@ Para questões dissertativas ou V/F, omita "options". Para V/F, o "answer" deve 
         </div>
       </div>
 
+      {/* Sub-abas de Categoria de Atividade (Aulas, Exercícios, Provas, Questões) */}
+      <div style={{ display: 'flex', gap: 10, marginBottom: 20, flexWrap: 'wrap' }}>
+        {[
+          { key: 'all',      label: '🎒 Todas as Atividades', count: questions.length },
+          { key: 'lesson',   label: '📚 Aulas Criadas',       count: questions.filter(q => q.activityKind === 'lesson').length },
+          { key: 'exercise', label: '📝 Exercícios Salvos',  count: questions.filter(q => (q.activityKind || 'exercise') === 'exercise').length },
+          { key: 'exam',     label: '📄 Provas & Gabaritos', count: questions.filter(q => q.activityKind === 'exam').length },
+          { key: 'question', label: '❓ Questões Isoladas',   count: questions.filter(q => q.activityKind === 'question').length },
+        ].map(tab => {
+          const isActive = fKind === tab.key
+          return (
+            <button
+              key={tab.key}
+              onClick={() => setFKind(tab.key as any)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                padding: '10px 18px', borderRadius: 12, border: 'none',
+                background: isActive ? '#8b5e3c' : '#f5efe6',
+                color: isActive ? '#fffcf8' : '#7a5c42',
+                fontWeight: isActive ? 700 : 500,
+                fontSize: 13, cursor: 'pointer',
+                boxShadow: isActive ? '0 2px 8px rgba(139,94,60,0.25)' : 'none',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              {tab.label}
+              <span style={{
+                background: isActive ? 'rgba(255,255,255,0.25)' : 'rgba(139,115,85,0.15)',
+                padding: '2px 8px', borderRadius: 10, fontSize: 11
+              }}>
+                {tab.count}
+              </span>
+            </button>
+          )
+        })}
+      </div>
+
       {/* Stats rápidos */}
       <div style={{ display: 'flex', gap: 12, marginBottom: 24, flexWrap: 'wrap' }}>
         {Object.entries(TYPE_LABELS).map(([type, label]) => {
@@ -245,29 +299,29 @@ Para questões dissertativas ou V/F, omita "options". Para V/F, o "answer" deve 
           return (
             <div key={type} style={{ ...S.card, flex: 1, minWidth: 120, padding: '14px 18px' }}>
               <div style={{ fontSize: 24, fontWeight: 800, color: typeColor[type as QuestionType] }}>{count}</div>
-              <div style={{ fontSize: 12, color: '#93a1a1' }}>{label}</div>
+              <div style={{ fontSize: 12, color: '#a08060' }}>{label}</div>
             </div>
           )
         })}
         <div style={{ ...S.card, flex: 1, minWidth: 120, padding: '14px 18px' }}>
-          <div style={{ fontSize: 24, fontWeight: 800, color: '#2aa198' }}>{questions.filter(q => q.source === 'ai').length}</div>
-          <div style={{ fontSize: 12, color: '#93a1a1' }}>Geradas por IA</div>
+          <div style={{ fontSize: 24, fontWeight: 800, color: '#3d7a4e' }}>{questions.filter(q => q.source === 'ai').length}</div>
+          <div style={{ fontSize: 12, color: '#a08060' }}>Geradas por IA</div>
         </div>
       </div>
 
       {/* Filtros */}
       <div style={{ display: 'flex', gap: 10, marginBottom: 20, flexWrap: 'wrap' }}>
         <div style={{ position: 'relative', flex: 2, minWidth: 200 }}>
-          <i className="ti ti-search" style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#93a1a1' }} />
-          <input value={fText} onChange={e => setFText(e.target.value)} placeholder="Buscar no enunciado ou tópico..."
+          <i className="ti ti-search" style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#a08060' }} />
+          <input value={fText} onChange={e => setFText(e.target.value)} placeholder="Buscar no enunciado, aula ou tópico..."
             style={{ ...S.input, paddingLeft: 36 }} />
         </div>
         {([
           ['fSchool',  fSchool,  setFSchool,  'Escola',     [['all','Todas escolas'], ...schools.map(s => [s.id, s.name])]],
           ['fYear',    fYear,    setFYear,    'Ano',        [['all','Todos anos'], ...YEARS.map(y => [y, y])]],
           ['fSubject', fSubject, setFSubject, 'Disciplina', [['all','Todas'], ...subjects.map(s => [s, s])]],
-          ['fType',    fType,    setFType,    'Tipo',       [['all','Todos tipos'], ...Object.entries(TYPE_LABELS)]],
-          ['fLevel',   fLevel,   setFLevel,   'Nível',      [['all','Todos'], ...LEVELS.map(l => [l, l])]],
+          ['fType',    fType,    setFType,    'Formato',    [['all','Todos formatos'], ...Object.entries(TYPE_LABELS)]],
+          ['fLevel',   fLevel,   setFLevel,   'Nível',      [['all','Todos níveis'], ...LEVELS.map(l => [l, l])]],
         ] as [string, string, (v: string) => void, string, [string, string][]][]).map(([key, val, setter, placeholder, opts]) => (
           <select key={key} value={val} onChange={e => setter(e.target.value)}
             style={{ ...S.input, width: 'auto', minWidth: 130 }}>
@@ -282,45 +336,52 @@ Para questões dissertativas ou V/F, omita "options". Para V/F, o "answer" deve 
         <div style={{ flex: 1 }}>
           {filtered.length === 0 ? (
             <div style={{ ...S.card, textAlign: 'center', padding: '60px 40px' }}>
-              <i className="ti ti-archive" style={{ fontSize: 48, color: '#ddd', display: 'block', marginBottom: 12 }} />
-              <p style={{ color: '#93a1a1', margin: 0 }}>Nenhuma questão encontrada. Adicione ou gere com IA!</p>
+              <i className="ti ti-archive" style={{ fontSize: 48, color: '#c4a882', display: 'block', marginBottom: 12 }} />
+              <p style={{ color: '#7a5c42', margin: 0 }}>Nenhuma atividade encontrada nesta categoria. Adicione ou gere com IA!</p>
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {filtered.map(q => {
                 const sc = schoolOf(q.schoolId)
                 const isActive = selectedQ?.id === q.id
+                const kindInfo = KIND_LABELS[q.activityKind || 'question']
                 return (
                   <div key={q.id} onClick={() => setSelectedQ(isActive ? null : q)} style={{
                     ...S.card, cursor: 'pointer', padding: '14px 18px',
-                    borderColor: isActive ? '#073642' : '#ede8dc',
-                    background: isActive ? '#f0f6fa' : '#fff',
+                    borderColor: isActive ? '#8b5e3c' : 'rgba(139,115,85,0.14)',
+                    background: isActive ? '#f5efe6' : '#fffcf8',
                     transition: 'all 0.15s',
                   }}>
                     <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-                      <span style={{ ...S.badge, background: typeColor[q.type] + '20', color: typeColor[q.type], flexShrink: 0 }}>
-                        {TYPE_LABELS[q.type]}
-                      </span>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flexShrink: 0 }}>
+                        <span style={{ ...S.badge, background: kindInfo.bg, color: kindInfo.color, fontWeight: 700 }}>
+                          <i className={`ti ${kindInfo.icon}`} style={{ marginRight: 4 }} />
+                          {kindInfo.label}
+                        </span>
+                        <span style={{ ...S.badge, background: typeColor[q.type] + '18', color: typeColor[q.type], fontSize: 10 }}>
+                          {TYPE_LABELS[q.type]}
+                        </span>
+                      </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <p style={{ margin: 0, fontSize: 13.5, color: '#073642', fontWeight: 500, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+                        <p style={{ margin: 0, fontSize: 14, color: '#2c1a0e', fontWeight: 600, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
                           {q.statement}
                         </p>
                         <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
                           {q.eltCategory && (
-                            <span style={{ ...S.badge, background: '#e0e7ff', color: '#3730a3', fontWeight: 700 }}>
+                            <span style={{ ...S.badge, background: '#f5efe6', color: '#7a5c42', fontWeight: 700 }}>
                               🇬🇧 {ELT_TAXONOMY.find(c=>c.id===q.eltCategory)?.name.split(' ')[0] || q.eltCategory} {q.eltSubcategory ? `· ${q.eltSubcategory}` : ''}
                             </span>
                           )}
                           {q.bnccCode && <span style={{ ...S.badge, background: '#e0f2fe', color: '#0369a1' }}>🇧🇷 BNCC: {q.bnccCode}</span>}
-                          {sc && <span style={{ ...S.badge, background: '#eee8d5', color: '#586e75' }}>{sc.name}</span>}
-                          <span style={{ ...S.badge, background: '#eee8d5', color: '#586e75' }}>{q.year}</span>
-                          <span style={{ ...S.badge, background: '#eee8d5', color: '#586e75' }}>{q.subject}</span>
-                          <span style={{ ...S.badge, background: '#eee8d5', color: '#586e75' }}>{q.level}</span>
-                          {q.source === 'ai' && <span style={{ ...S.badge, background: '#ffe4b5', color: '#854d00' }}>✨ IA</span>}
+                          {sc && <span style={{ ...S.badge, background: '#f5efe6', color: '#7a5c42' }}>{sc.name}</span>}
+                          <span style={{ ...S.badge, background: '#f5efe6', color: '#7a5c42' }}>{q.year}</span>
+                          <span style={{ ...S.badge, background: '#f5efe6', color: '#7a5c42' }}>{q.subject}</span>
+                          <span style={{ ...S.badge, background: '#f5efe6', color: '#7a5c42' }}>{q.level}</span>
+                          {q.source === 'ai' && <span style={{ ...S.badge, background: 'rgba(212,148,74,0.18)', color: '#8b5e3c' }}>✨ IA</span>}
                         </div>
                       </div>
                       <button onClick={e => { e.stopPropagation(); deleteQ(q.id) }}
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#dc322f', fontSize: 16, flexShrink: 0 }}>
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#a83232', fontSize: 16, flexShrink: 0 }}>
                         <i className="ti ti-trash" />
                       </button>
                     </div>
@@ -378,19 +439,28 @@ Para questões dissertativas ou V/F, omita "options". Para V/F, o "answer" deve 
 
       {/* ─── Modal: Adicionar Manualmente ──────────────────────────────────── */}
       {modal === 'add' && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,43,54,0.45)', zIndex: 9998, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', paddingTop: 40, overflowY: 'auto' }}>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(44,26,14,0.45)', zIndex: 9998, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', paddingTop: 40, overflowY: 'auto' }}>
           <div style={{ ...S.card, width: 580, maxWidth: '95vw', marginBottom: 40 }}>
-            <h2 style={{ fontSize: 18, fontWeight: 700, color: '#073642', margin: '0 0 20px' }}>Nova Questão</h2>
+            <h2 style={{ fontFamily: "'Fraunces', 'Playfair Display', Georgia, serif", fontSize: 20, fontWeight: 700, color: '#2c1a0e', margin: '0 0 20px' }}>Nova Atividade Pedagógica</h2>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div>
-                <label style={S.label}>Enunciado *</label>
+                <label style={S.label}>Tipo de Atividade *</label>
+                <select style={S.input} value={fKind2} onChange={e => setFKind2(e.target.value as ActivityKind)}>
+                  <option value="exercise">📝 Lista de Exercícios / Treino</option>
+                  <option value="lesson">📚 Aula Criada (Plano de Aula / Exposição)</option>
+                  <option value="exam">📄 Prova & Gabarito Oficial</option>
+                  <option value="question">❓ Questão Isolada</option>
+                </select>
+              </div>
+              <div>
+                <label style={S.label}>Título / Enunciado *</label>
                 <textarea value={fStatement} onChange={e => setFStatement(e.target.value)}
-                  placeholder="Digite o enunciado completo da questão..."
+                  placeholder="Digite o título da aula, enunciado do exercício ou instrução da prova..."
                   style={{ ...S.input, resize: 'vertical', minHeight: 90 } as React.CSSProperties} />
               </div>
               <div style={{ display: 'flex', gap: 12 }}>
                 <div style={{ flex: 1 }}>
-                  <label style={S.label}>Tipo</label>
+                  <label style={S.label}>Formato de Resposta</label>
                   <select style={S.input} value={fType2} onChange={e => setFType2(e.target.value as QuestionType)}>
                     {Object.entries(TYPE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                   </select>
@@ -464,14 +534,23 @@ Para questões dissertativas ou V/F, omita "options". Para V/F, o "answer" deve 
 
       {/* ─── Modal: Gerar com IA ─────────────────────────────────────────── */}
       {modal === 'ai' && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,43,54,0.45)', zIndex: 9998, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(44,26,14,0.45)', zIndex: 9998, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <div style={{ ...S.card, width: 480, maxWidth: '95vw' }}>
-            <h2 style={{ fontSize: 18, fontWeight: 700, color: '#073642', margin: '0 0 6px' }}>✨ Gerar Questões com IA</h2>
-            <p style={{ color: '#586e75', fontSize: 13, marginBottom: 20 }}>A IA gera questões e salva automaticamente no banco.</p>
+            <h2 style={{ fontFamily: "'Fraunces', 'Playfair Display', Georgia, serif", fontSize: 20, fontWeight: 700, color: '#2c1a0e', margin: '0 0 6px' }}>✨ Gerar Atividades com IA</h2>
+            <p style={{ color: '#a08060', fontSize: 13, marginBottom: 20 }}>A IA gera o material pedagógico e armazena automaticamente no seu banco.</p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div>
+                <label style={S.label}>Tipo de Atividade a Criar</label>
+                <select style={S.input} value={aiKind} onChange={e => setAiKind(e.target.value as ActivityKind)}>
+                  <option value="exercise">📝 Lista de Exercícios / Treino</option>
+                  <option value="lesson">📚 Aula Criada (Plano de Aula / Exposição)</option>
+                  <option value="exam">📄 Prova & Gabarito Oficial</option>
+                  <option value="question">❓ Questões Isoladas</option>
+                </select>
+              </div>
+              <div>
                 <label style={S.label}>Tópico / Assunto *</label>
-                <input style={S.input} value={aiTopic} onChange={e => setAiTopic(e.target.value)} placeholder="Ex: Present Perfect, Frações, Segunda Guerra..." />
+                <input style={S.input} value={aiTopic} onChange={e => setAiTopic(e.target.value)} placeholder="Ex: Present Perfect vs Past Simple, Phrasal Verbs..." />
               </div>
               <div style={{ display: 'flex', gap: 12 }}>
                 <div style={{ flex: 1 }}>
@@ -487,13 +566,13 @@ Para questões dissertativas ou V/F, omita "options". Para V/F, o "answer" deve 
               </div>
               <div style={{ display: 'flex', gap: 12 }}>
                 <div style={{ flex: 1 }}>
-                  <label style={S.label}>Tipo de Questão</label>
+                  <label style={S.label}>Formato de Resposta</label>
                   <select style={S.input} value={aiType} onChange={e => setAiType(e.target.value as QuestionType)}>
                     {Object.entries(TYPE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                   </select>
                 </div>
                 <div style={{ width: 80 }}>
-                  <label style={S.label}>Quantidade</label>
+                  <label style={S.label}>Qtd</label>
                   <input type="number" style={S.input} min={1} max={20} value={aiCount} onChange={e => setAiCount(Number(e.target.value))} />
                 </div>
                 <div style={{ width: 100 }}>
@@ -512,9 +591,9 @@ Para questões dissertativas ou V/F, omita "options". Para V/F, o "answer" deve 
               </div>
             </div>
             <div style={{ display: 'flex', gap: 10, marginTop: 20, justifyContent: 'flex-end' }}>
-              <button onClick={() => setModal(null)} style={{ ...S.btn, background: '#eee8d5', color: '#586e75' }}>Cancelar</button>
-              <button onClick={generateWithAI} disabled={isGen || !aiTopic.trim()} style={{ ...S.btn, background: '#b58900', color: '#fff', opacity: isGen || !aiTopic.trim() ? 0.6 : 1 }}>
-                {isGen ? <><i className="ti ti-loader-2" style={{ animation: 'spin 1s linear infinite' }} /> Gerando...</> : <><i className="ti ti-sparkles" /> Gerar {aiCount} Questões</>}
+              <button onClick={() => setModal(null)} style={{ ...S.btn, background: '#f5efe6', color: '#7a5c42' }}>Cancelar</button>
+              <button onClick={generateWithAI} disabled={isGen || !aiTopic.trim()} style={{ ...S.btn, background: '#d4944a', color: '#fffcf8', opacity: isGen || !aiTopic.trim() ? 0.6 : 1 }}>
+                {isGen ? <><i className="ti ti-loader-2" style={{ animation: 'spin 1s linear infinite' }} /> Criando...</> : <><i className="ti ti-sparkles" /> Gerar {aiCount} Itens</>}
               </button>
             </div>
           </div>
