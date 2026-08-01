@@ -69,10 +69,14 @@ export function useVoiceCommand(options: VoiceCommandOptions): VoiceCommandRetur
   const spaceHeldRef = useRef(false)
   const isStartingRef = useRef(false)
 
-  // ── Meter de Áudio ──────────────────────────────────────────────────────────
+  // ── Singleton global do AudioContext — A3: evita múltiplos contextos em simultâneo
   const startAudioMeter = useCallback(async () => {
+    // Se já há um contexto ativo, reutiliza sem abrir novo stream
     if (audioCtxRef.current) return
+    // A2: Mutex global — não abre microfone se já há outro stream ativo
+    if ((window as any).__globalMicActive) return
     try {
+      ;(window as any).__globalMicActive = true
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
       streamRef.current = stream
       const ctx = new (window.AudioContext || (window as any).webkitAudioContext)()
@@ -95,6 +99,7 @@ export function useVoiceCommand(options: VoiceCommandOptions): VoiceCommandRetur
       }
       rafRef.current = requestAnimationFrame(tick)
     } catch {
+      ;(window as any).__globalMicActive = false
       setError('Permissão de microfone negada.')
     }
   }, [])
@@ -104,6 +109,7 @@ export function useVoiceCommand(options: VoiceCommandOptions): VoiceCommandRetur
     if (audioCtxRef.current) { audioCtxRef.current.close(); audioCtxRef.current = null }
     if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); streamRef.current = null }
     analyserRef.current = null
+    ;(window as any).__globalMicActive = false
     setVolume(0)
   }, [])
 

@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 interface LessonCard {
@@ -53,6 +53,88 @@ export default function LessonPlanner() {
   const [activeBoardId, setActiveBoardId] = useState<string>('default')
   
   const [panX, setPanX] = useState(40); const [panY, setPanY] = useState(40)
+  const [viewMode, setViewMode] = useState<'calendar' | 'canvas'>('calendar')
+  const [calDate, setCalDate] = useState<Date>(new Date())
+
+  const calYear = calDate.getFullYear()
+  const calMonth = calDate.getMonth()
+
+  const monthNames = [
+    'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+    'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+  ]
+
+  const calendarDays = useMemo(() => {
+    const firstDay = new Date(calYear, calMonth, 1)
+    const lastDay = new Date(calYear, calMonth + 1, 0)
+    const startDay = firstDay.getDay()
+    const totalDays = lastDay.getDate()
+
+    const list: { dateStr: string; dayNum: number; isCurrentMonth: boolean }[] = []
+
+    for (let i = startDay - 1; i >= 0; i--) {
+      const d = new Date(calYear, calMonth, -i)
+      const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+      list.push({ dateStr, dayNum: d.getDate(), isCurrentMonth: false })
+    }
+
+    for (let i = 1; i <= totalDays; i++) {
+      const dateStr = `${calYear}-${String(calMonth + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`
+      list.push({ dateStr, dayNum: i, isCurrentMonth: true })
+    }
+
+    const rem = (35 - list.length > 0) ? 35 - list.length : (42 - list.length > 0 ? 42 - list.length : 0)
+    for (let i = 1; i <= rem; i++) {
+      const d = new Date(calYear, calMonth + 1, i)
+      const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+      list.push({ dateStr, dayNum: d.getDate(), isCurrentMonth: false })
+    }
+
+    return list
+  }, [calYear, calMonth])
+
+  const [userSchools, setUserSchools] = useState<Array<{ id: string; name: string }>>([])
+  const [userClasses, setUserClasses] = useState<Array<{ id: string; name: string; schoolId?: string }>>([])
+  const [showManageModal, setShowManageModal] = useState(false)
+  const [newSchoolName, setNewSchoolName] = useState('')
+  const [newClassName, setNewClassName] = useState('')
+  const [newClassSchoolId, setNewClassSchoolId] = useState('')
+
+  const reloadUserEntities = useCallback(() => {
+    try {
+      const s = localStorage.getItem('teacher_schools')
+      if (s) setUserSchools(JSON.parse(s))
+      const c = localStorage.getItem('teacher_classes')
+      if (c) setUserClasses(JSON.parse(c))
+    } catch { /* ignore */ }
+  }, [])
+
+  useEffect(() => {
+    reloadUserEntities()
+    window.addEventListener('storage', reloadUserEntities)
+    return () => window.removeEventListener('storage', reloadUserEntities)
+  }, [reloadUserEntities])
+
+  function handleCreateSchool() {
+    if (!newSchoolName.trim()) return
+    const newSchool = { id: 'sch_' + Date.now(), name: newSchoolName.trim() }
+    const updated = [...userSchools, newSchool]
+    setUserSchools(updated)
+    localStorage.setItem('teacher_schools', JSON.stringify(updated))
+    window.dispatchEvent(new Event('storage'))
+    setNewSchoolName('')
+  }
+
+  function handleCreateClass() {
+    if (!newClassName.trim()) return
+    const newCls = { id: 'cls_' + Date.now(), name: newClassName.trim(), schoolId: newClassSchoolId || undefined }
+    const updated = [...userClasses, newCls]
+    setUserClasses(updated)
+    localStorage.setItem('teacher_classes', JSON.stringify(updated))
+    window.dispatchEvent(new Event('storage'))
+    setNewClassName('')
+  }
+
   const [zoom, setZoom] = useState(1)
   const [selected, setSelected] = useState<string|null>(null)
   const [editCard, setEditCard] = useState<LessonCard|null>(null)
@@ -104,9 +186,43 @@ export default function LessonPlanner() {
     setBoards(next); saveBoards(next)
   }
 
-  // Derived lists
-  const schools = ['Todas', ...Array.from(new Set(cards.map(c=>c.school)))]
-  const classes = ['Todas', ...Array.from(new Set(cards.map(c=>c.className)))]
+  function addCardForDate(targetDateStr: string) {
+    const schoolToUse = filterSchool !== 'Todas' ? filterSchool : (userSchools[0]?.name || addSchool)
+    const classToUse = filterClass !== 'Todas' ? filterClass : (userClasses[0]?.name || addClass)
+    const card = newCard(schoolToUse, classToUse)
+    card.date = targetDateStr
+    updateActiveCards([...cards, card])
+    setSelected(card.id)
+    setEditCard(card)
+  }
+
+  // Listas Dinâmicas derivadas de Escolas e Turmas do Usuário + Cards Existentes
+  const schools = useMemo(() => {
+    const names = new Set<string>()
+    userSchools.forEach(s => names.add(s.name))
+    cards.forEach(c => { if (c.school) names.add(c.school) })
+    return ['Todas', ...Array.from(names)]
+  }, [userSchools, cards])
+
+  const classes = useMemo(() => {
+    const names = new Set<string>()
+    userClasses.forEach(c => {
+      if (filterSchool === 'Todas') {
+        names.add(c.name)
+      } else {
+        const schObj = userSchools.find(s => s.name === filterSchool)
+        if (!schObj || !c.schoolId || c.schoolId === schObj.id) {
+          names.add(c.name)
+        }
+      }
+    })
+    cards.forEach(c => {
+      if (filterSchool === 'Todas' || c.school === filterSchool) {
+        if (c.className) names.add(c.className)
+      }
+    })
+    return ['Todas', ...Array.from(names)]
+  }, [userClasses, userSchools, filterSchool, cards])
 
   const visible = cards.filter(c => {
     if (filterSchool !== 'Todas' && c.school !== filterSchool) return false
@@ -188,30 +304,59 @@ export default function LessonPlanner() {
   return (
     <div style={{display:'flex', flexDirection:'column', height:'100%', background:'#fdf6e3'}}>
       
-      {/* ── Tabs / Workspaces ── */}
-      <div style={{display:'flex', gap:6, padding:'10px 16px', background:'#ede8dc', overflowX:'auto', flexShrink:0, alignItems:'center'}}>
-        {boards.map(b => (
-          <div key={b.id} onClick={()=>setActiveBoardId(b.id)} style={{
-            display:'flex', alignItems:'center', gap:8, padding:'6px 14px', borderRadius:8, cursor:'pointer', fontSize:13, fontWeight:600,
-            background: activeBoardId === b.id ? '#073642' : 'rgba(255,255,255,0.6)',
-            color: activeBoardId === b.id ? '#fff' : '#586e75',
-            boxShadow: activeBoardId === b.id ? '0 2px 8px rgba(0,0,0,0.1)' : 'none'
-          }}>
-            <i className="ti ti-folder" />
-            <input 
-              value={b.title} 
-              onChange={e=>renameBoard(b.id, e.target.value)}
-              onClick={e=>e.stopPropagation()}
-              style={{background:'transparent', border:'none', color:'inherit', fontSize:'inherit', fontWeight:'inherit', outline:'none', width:Math.max(60, b.title.length * 8)}}
-            />
-            {boards.length > 1 && (
-              <i className="ti ti-x" onClick={(e)=>{e.stopPropagation(); deleteBoard(b.id)}} style={{fontSize:12, opacity:0.6, padding:4}} />
-            )}
-          </div>
-        ))}
-        <button onClick={addBoard} style={{padding:'6px 12px', background:'transparent', border:'1px dashed #93a1a1', borderRadius:8, cursor:'pointer', color:'#586e75', display:'flex', alignItems:'center', gap:4, fontSize:12, fontWeight:600}}>
-          <i className="ti ti-plus" /> Novo Workspace
-        </button>
+      {/* ── Tabs / Workspaces & Mode Switcher ── */}
+      <div style={{display:'flex', justifyContent:'space-between', gap:12, padding:'10px 16px', background:'#ede8dc', overflowX:'auto', flexShrink:0, alignItems:'center'}}>
+        <div style={{display:'flex', gap:6, alignItems:'center'}}>
+          {boards.map(b => (
+            <div key={b.id} onClick={()=>setActiveBoardId(b.id)} style={{
+              display:'flex', alignItems:'center', gap:8, padding:'6px 14px', borderRadius:8, cursor:'pointer', fontSize:13, fontWeight:600,
+              background: activeBoardId === b.id ? '#073642' : 'rgba(255,255,255,0.6)',
+              color: activeBoardId === b.id ? '#fff' : '#586e75',
+              boxShadow: activeBoardId === b.id ? '0 2px 8px rgba(0,0,0,0.1)' : 'none'
+            }}>
+              <i className="ti ti-folder" />
+              <input 
+                value={b.title} 
+                onChange={e=>renameBoard(b.id, e.target.value)}
+                onClick={e=>e.stopPropagation()}
+                style={{background:'transparent', border:'none', color:'inherit', fontSize:'inherit', fontWeight:'inherit', outline:'none', width:Math.max(60, b.title.length * 8)}}
+              />
+              {boards.length > 1 && (
+                <i className="ti ti-x" onClick={(e)=>{e.stopPropagation(); deleteBoard(b.id)}} style={{fontSize:12, opacity:0.6, padding:4}} />
+              )}
+            </div>
+          ))}
+          <button onClick={addBoard} style={{padding:'6px 12px', background:'transparent', border:'1px dashed #93a1a1', borderRadius:8, cursor:'pointer', color:'#586e75', display:'flex', alignItems:'center', gap:4, fontSize:12, fontWeight:600}}>
+            <i className="ti ti-plus" /> Novo Workspace
+          </button>
+        </div>
+
+        {/* ── Seletor de Modo: Calendário vs Canvas ── */}
+        <div style={{display:'flex', background:'rgba(255,255,255,0.7)', padding:3, borderRadius:10, border:'1px solid #d5cfc0'}}>
+          <button
+            onClick={() => setViewMode('calendar')}
+            style={{
+              padding:'6px 14px', borderRadius:8, border:'none', cursor:'pointer', fontSize:12.5, fontWeight:700,
+              background: viewMode === 'calendar' ? '#8b5e3c' : 'transparent',
+              color: viewMode === 'calendar' ? '#fff' : '#586e75',
+              display:'flex', alignItems:'center', gap:6, transition:'all 0.15s'
+            }}
+          >
+            <i className="ti ti-calendar" /> 📅 Calendário de Planejamento
+          </button>
+
+          <button
+            onClick={() => setViewMode('canvas')}
+            style={{
+              padding:'6px 14px', borderRadius:8, border:'none', cursor:'pointer', fontSize:12.5, fontWeight:700,
+              background: viewMode === 'canvas' ? '#073642' : 'transparent',
+              color: viewMode === 'canvas' ? '#fff' : '#586e75',
+              display:'flex', alignItems:'center', gap:6, transition:'all 0.15s'
+            }}
+          >
+            <i className="ti ti-layout-board" /> 🎨 Canvas & Cards
+          </button>
+        </div>
       </div>
 
       <div style={{display:'flex', flex:1, overflow:'hidden'}}>
@@ -284,77 +429,217 @@ export default function LessonPlanner() {
           </div>
         </div>
 
-        {/* ── Canvas ── */}
-        <div
-          ref={canvasRef}
-          onMouseDown={onCanvasDown} onMouseMove={onCanvasMove} onMouseUp={onCanvasUp} onMouseLeave={onCanvasUp}
-          onWheel={onWheel}
-          style={{flex:1, position:'relative', overflow:'hidden', cursor: isPanning.current?'grabbing':'grab',
-            backgroundImage:'radial-gradient(circle, #c5bfb0 1px, transparent 1px)',
-            backgroundSize:`${30*zoom}px ${30*zoom}px`,
-            backgroundPosition:`${panX}px ${panY}px`}}
-        >
-          {/* Empty state */}
-          {cards.length === 0 && (
-            <div style={{position:'absolute', top:'50%', left:'50%', transform:'translate(-50%,-50%)', textAlign:'center', color:'#93a1a1', pointerEvents:'none'}}>
-              <i className="ti ti-layout-board" style={{fontSize:56, display:'block', marginBottom:16, opacity:0.3}} />
-              <p style={{fontSize:16, fontWeight:300}}>Adicione um plano de aula na barra lateral</p>
-              <p style={{fontSize:13}}>Arraste os cards, aproxime com o scroll</p>
-            </div>
-          )}
+        {/* ── CONTEÚDO DO MODO CALENDÁRIO VS CANVAS ── */}
+        {viewMode === 'calendar' ? (
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: '#fffcf8', overflowY: 'auto', padding: 24 }}>
+            {/* Header de Navegação de Mês */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexShrink: 0 }}>
+              <div>
+                <h2 style={{ fontFamily: 'Georgia, serif', fontSize: 22, fontWeight: 700, color: '#073642', margin: 0, display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <i className="ti ti-calendar-event" style={{ color: '#8b5e3c' }} />
+                  {monthNames[calMonth]} {calYear}
+                </h2>
+                <span style={{ fontSize: 13, color: '#586e75' }}>
+                  {cards.length} planejamentos de aula · Clique em um dia para agendar nova aula
+                </span>
+              </div>
 
-          {/* Cards */}
-          <div style={{position:'absolute', top:0, left:0, transform:`translate(${panX}px,${panY}px) scale(${zoom})`, transformOrigin:'0 0', userSelect:'none'}}>
-            {visible.map(card => {
-              const isSel = selected === card.id
-              return (
-                <div key={card.id} data-card="1"
-                  onMouseDown={e => onCardDown(e, card)}
-                  onDoubleClick={e => { e.stopPropagation(); setEditCard({...card}) }}
-                  style={{
-                    position:'absolute', left:card.x, top:card.y, width:CARD_W, height:CARD_H,
-                    background:'#fff', borderRadius:14,
-                    border: isSel ? `2px solid ${card.color}` : '1px solid #e8e0d0',
-                    boxShadow: isSel ? `0 8px 32px ${card.color}33` : '0 2px 12px rgba(0,43,54,0.08)',
-                    cursor:'grab', overflow:'hidden', display:'flex', flexDirection:'column',
-                    transition:'box-shadow 0.15s'
-                  }}
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <button
+                  onClick={() => setCalDate(new Date(calYear, calMonth - 1, 1))}
+                  style={{ padding: '8px 14px', background: '#f5efe6', border: '1px solid #e8e0d0', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: 600, color: '#073642' }}
                 >
-                  {/* Card header */}
-                  <div style={{background:card.color, padding:'10px 14px', display:'flex', justifyContent:'space-between', alignItems:'center'}}>
-                    <div>
-                      <div style={{color:'#fff', fontSize:13, fontWeight:700, overflow:'hidden', whiteSpace:'nowrap', textOverflow:'ellipsis', maxWidth:180}}>{card.title}</div>
-                      <div style={{color:'rgba(255,255,255,0.75)', fontSize:10, marginTop:1}}>{card.school} · {card.className}</div>
-                    </div>
-                    <button onMouseDown={e=>e.stopPropagation()} onClick={()=>deleteCard(card.id)}
-                      style={{background:'rgba(255,255,255,0.15)', border:'none', borderRadius:6, width:22, height:22, cursor:'pointer', color:'#fff', fontSize:12, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0}}>
-                      <i className="ti ti-x" />
-                    </button>
-                  </div>
-                  {/* Card body */}
-                  <div style={{flex:1, padding:'10px 14px', display:'flex', flexDirection:'column', gap:4}}>
-                    <div style={{display:'flex', gap:6, flexWrap:'wrap'}}>
-                      <span style={{padding:'2px 8px', borderRadius:20, background:`${card.color}18`, color:card.color, fontSize:10, fontWeight:700}}>{card.date}</span>
-                      <span style={{padding:'2px 8px', borderRadius:20, background:'#f5f0e8', color:'#586e75', fontSize:10}}>{card.duration}min</span>
-                      <span style={{padding:'2px 8px', borderRadius:20, background:'#f5f0e8', color:'#586e75', fontSize:10}}>{card.period}</span>
-                    </div>
-                    {card.subject && <div style={{fontSize:12, color:'#073642', fontWeight:600, marginTop:4}}>{card.subject}</div>}
-                    {card.objectives && <div style={{fontSize:11, color:'#93a1a1', flex:1, overflow:'hidden', display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical'}}>{card.objectives}</div>}
-                    <button onMouseDown={e=>e.stopPropagation()} onClick={()=>setEditCard({...card})}
-                      style={{marginTop:'auto', padding:'5px', background:'#f5f0e8', border:'1px solid #e8e0d0', borderRadius:7, cursor:'pointer', fontSize:11, color:'#586e75', fontWeight:600}}>
-                      ✏️ Editar
-                    </button>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
+                  ← Mês Anterior
+                </button>
+                <button
+                  onClick={() => setCalDate(new Date())}
+                  style={{ padding: '8px 14px', background: '#073642', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: 700 }}
+                >
+                  Hoje
+                </button>
+                <button
+                  onClick={() => setCalDate(new Date(calYear, calMonth + 1, 1))}
+                  style={{ padding: '8px 14px', background: '#f5efe6', border: '1px solid #e8e0d0', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: 600, color: '#073642' }}
+                >
+                  Mês Seguinte →
+                </button>
+              </div>
+            </div>
 
-          {/* Zoom hint */}
-          <div style={{position:'absolute', bottom:12, right:12, background:'rgba(7,54,66,0.7)', color:'#fff', fontSize:10, padding:'4px 10px', borderRadius:20, pointerEvents:'none'}}>
-            Scroll = zoom · Arrastar fundo = mover · Duplo clique = editar
+            {/* ── BARRA DE SELEÇÃO DE CALENDÁRIO POR ESCOLA E TURMA ── */}
+            <div style={{ display: 'flex', gap: 16, alignItems: 'center', background: '#f5efe6', padding: '12px 18px', borderRadius: 14, marginBottom: 20, border: '1px solid #e8e0d0', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <i className="ti ti-building-community" style={{ color: '#8b5e3c', fontSize: 18 }} />
+                <span style={{ fontSize: 13, fontWeight: 700, color: '#073642' }}>Escola:</span>
+                <select
+                  value={filterSchool}
+                  onChange={e => { setFilterSchool(e.target.value); setFilterClass('Todas') }}
+                  style={{ padding: '7px 12px', background: '#fff', border: '1px solid #d5cfc0', borderRadius: 8, fontSize: 13, fontWeight: 600, color: '#073642', outline: 'none', cursor: 'pointer' }}
+                >
+                  {schools.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <i className="ti ti-users" style={{ color: '#8b5e3c', fontSize: 18 }} />
+                <span style={{ fontSize: 13, fontWeight: 700, color: '#073642' }}>Turma:</span>
+                <select
+                  value={filterClass}
+                  onChange={e => setFilterClass(e.target.value)}
+                  style={{ padding: '7px 12px', background: '#fff', border: '1px solid #d5cfc0', borderRadius: 8, fontSize: 13, fontWeight: 600, color: '#073642', outline: 'none', cursor: 'pointer' }}
+                >
+                  {classes.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+
+              <div style={{ fontSize: 12, color: '#8b5e3c', fontWeight: 600, marginLeft: 6 }}>
+                {filterSchool !== 'Todas' || filterClass !== 'Todas' ? `🔍 Calendário Filtrado: ${filterSchool} · ${filterClass}` : 'Exibindo Calendário Geral de todas as escolas e turmas'}
+              </div>
+
+              <button
+                onClick={() => setShowManageModal(true)}
+                style={{ marginLeft: 'auto', padding: '7px 14px', background: '#8b5e3c', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12.5, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+              >
+                <i className="ti ti-settings" /> Cadastrar Minhas Escolas & Turmas
+              </button>
+            </div>
+
+            {/* Cabeçalho dos Dias da Semana */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 8, marginBottom: 8, textAlign: 'center', fontWeight: 800, fontSize: 12, color: '#a08060', textTransform: 'uppercase', letterSpacing: '1px' }}>
+              <div>DOM</div><div>SEG</div><div>TER</div><div>QUA</div><div>QUI</div><div>SEX</div><div>SÁB</div>
+            </div>
+
+            {/* Grid do Calendário */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 8, flex: 1, minHeight: 600 }}>
+              {calendarDays.map((day, idx) => {
+                const dayCards = visible.filter(c => c.date === day.dateStr)
+                const isToday = day.dateStr === new Date().toISOString().slice(0, 10)
+
+                return (
+                  <div
+                    key={idx}
+                    onClick={() => addCardForDate(day.dateStr)}
+                    style={{
+                      background: day.isCurrentMonth ? '#fff' : '#fcfaf6',
+                      border: isToday ? '2px solid #8b5e3c' : '1px solid #ede8dc',
+                      borderRadius: 12, padding: 8, display: 'flex', flexDirection: 'column', gap: 6,
+                      minHeight: 110, opacity: day.isCurrentMonth ? 1 : 0.45,
+                      cursor: 'pointer', position: 'relative', transition: 'all 0.15s ease',
+                      boxShadow: isToday ? '0 4px 12px rgba(139,94,60,0.15)' : 'none'
+                    }}
+                  >
+                    {/* Número do Dia */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
+                      <span style={{
+                        fontSize: 12, fontWeight: isToday ? 800 : 700,
+                        color: isToday ? '#8b5e3c' : '#073642',
+                        background: isToday ? 'rgba(139,94,60,0.15)' : 'transparent',
+                        padding: '2px 6px', borderRadius: 6
+                      }}>
+                        {day.dayNum}
+                      </span>
+                      <i className="ti ti-plus" style={{ fontSize: 11, color: '#a08060', opacity: 0.6 }} title="Criar plano neste dia" />
+                    </div>
+
+                    {/* Cards do Dia */}
+                    <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      {dayCards.map(card => (
+                        <div
+                          key={card.id}
+                          onClick={e => {
+                            e.stopPropagation()
+                            setSelected(card.id)
+                            setEditCard({ ...card })
+                          }}
+                          style={{
+                            background: card.color || '#073642',
+                            color: '#fff', padding: '5px 8px', borderRadius: 6,
+                            fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                            display: 'flex', flexDirection: 'column', gap: 2,
+                            boxShadow: '0 2px 4px rgba(0,0,0,0.12)'
+                          }}
+                        >
+                          <div style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {card.title}
+                          </div>
+                          <div style={{ fontSize: 9.5, opacity: 0.85, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {card.school || 'Escola'} · {card.className || 'Turma'} ({card.duration}m)
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
           </div>
-        </div>
+        ) : (
+          /* Modo Canvas Original */
+          <div
+            ref={canvasRef}
+            onMouseDown={onCanvasDown} onMouseMove={onCanvasMove} onMouseUp={onCanvasUp} onMouseLeave={onCanvasUp}
+            onWheel={onWheel}
+            style={{flex:1, position:'relative', overflow:'hidden', cursor: isPanning.current?'grabbing':'grab',
+              backgroundImage:'radial-gradient(circle, #c5bfb0 1px, transparent 1px)',
+              backgroundSize:`${30*zoom}px ${30*zoom}px`,
+              backgroundPosition:`${panX}px ${panY}px` }}
+          >
+            {/* Empty state */}
+            {cards.length === 0 && (
+              <div style={{position:'absolute', top:'50%', left:'50%', transform:'translate(-50%,-50%)', textAlign:'center', color:'#93a1a1', pointerEvents:'none'}}>
+                <i className="ti ti-layout-board" style={{fontSize:56, display:'block', marginBottom:16, opacity:0.3}} />
+                <p style={{fontSize:16, fontWeight:300}}>Adicione um plano de aula na barra lateral</p>
+                <p style={{fontSize:13}}>Arraste os cards, aproxime com o scroll</p>
+              </div>
+            )}
+
+            {/* Cards */}
+            <div style={{position:'absolute', top:0, left:0, transform:`translate(${panX}px,${panY}px) scale(${zoom})`, transformOrigin:'0 0', userSelect:'none'}}>
+              {visible.map(card => {
+                const isSel = selected === card.id
+                return (
+                  <div key={card.id} data-card="1"
+                    onMouseDown={e => onCardDown(e, card)}
+                    onDoubleClick={e => { e.stopPropagation(); setEditCard({...card}) }}
+                    style={{
+                      position:'absolute', left:card.x, top:card.y, width:CARD_W, height:CARD_H,
+                      background:'#fff', borderRadius:14,
+                      border: isSel ? `2px solid ${card.color}` : '1px solid #e8e0d0',
+                      boxShadow: isSel ? `0 8px 32px ${card.color}33` : '0 2px 12px rgba(0,43,54,0.08)',
+                      cursor:'grab', overflow:'hidden', display:'flex', flexDirection:'column',
+                      transition:'box-shadow 0.15s'
+                    }}
+                  >
+                    {/* Card header */}
+                    <div style={{background:card.color, padding:'10px 14px', display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                      <div style={{fontSize:11, fontWeight:700, color:'rgba(255,255,255,0.9)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>
+                        {card.school} · {card.className}
+                      </div>
+                      <i className="ti ti-x" onClick={e=>{e.stopPropagation(); deleteCard(card.id)}} style={{fontSize:12, color:'#fff', opacity:0.7, cursor:'pointer'}} />
+                    </div>
+                    {/* Card body */}
+                    <div style={{padding:'10px 14px', flex:1, display:'flex', flexDirection:'column', gap:4}}>
+                      <div style={{fontSize:13, fontWeight:700, color:'#073642', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>
+                        {card.title}
+                      </div>
+                      {card.subject && <div style={{fontSize:12, color:'#073642', fontWeight:600, marginTop:4}}>{card.subject}</div>}
+                      {card.objectives && <div style={{fontSize:11, color:'#93a1a1', flex:1, overflow:'hidden', display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical'}}>{card.objectives}</div>}
+                      <button onMouseDown={e=>e.stopPropagation()} onClick={()=>setEditCard({...card})}
+                        style={{marginTop:'auto', padding:'5px', background:'#f5f0e8', border:'1px solid #e8e0d0', borderRadius:7, cursor:'pointer', fontSize:11, color:'#586e75', fontWeight:600}}>
+                        ✏️ Editar
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* Zoom hint */}
+            <div style={{position:'absolute', bottom:12, right:12, background:'rgba(7,54,66,0.7)', color:'#fff', fontSize:10, padding:'4px 10px', borderRadius:20, pointerEvents:'none'}}>
+              Scroll = zoom · Arrastar fundo = mover · Duplo clique = editar
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ── Edit Modal ── */}
@@ -436,6 +721,68 @@ export default function LessonPlanner() {
             <pre style={{flex:1, overflowY:'auto', background:'#f5f0e8', borderRadius:12, padding:20, fontSize:13, lineHeight:1.7, whiteSpace:'pre-wrap', fontFamily:'inherit', color:'#073642'}}>
               {compiledText}
             </pre>
+          </div>
+        </div>
+      )}
+      {/* ── Modal de Gerenciar Escolas & Turmas do Usuário ── */}
+      {showManageModal && (
+        <div style={{position:'fixed', inset:0, background:'rgba(44,26,14,0.45)', zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center', padding:20}} onMouseDown={()=>setShowManageModal(false)}>
+          <div onMouseDown={e=>e.stopPropagation()} style={{background:'#fffcf8', border:'1px solid rgba(139,115,85,0.2)', borderRadius:20, padding:28, width:540, maxWidth:'95vw', boxShadow:'0 20px 60px rgba(44,26,14,0.15)'}}>
+            <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20}}>
+              <h2 style={{fontFamily:"'Fraunces', 'Playfair Display', Georgia, serif", fontSize:22, fontWeight:700, color:'#2c1a0e', margin:0}}>
+                🏫 Cadastrar Minhas Escolas & Turmas
+              </h2>
+              <button onClick={()=>setShowManageModal(false)} style={{background:'none', border:'none', fontSize:22, cursor:'pointer', color:'#a08060'}}>×</button>
+            </div>
+
+            <div style={{display:'flex', flexDirection:'column', gap:20}}>
+              {/* Seção 1: Nova Escola */}
+              <div style={{background:'#fdf8f2', padding:16, borderRadius:14, border:'1px solid rgba(139,115,85,0.12)'}}>
+                <h4 style={{fontSize:14, fontWeight:700, color:'#8b5e3c', margin:'0 0 10px 0'}}>1. Cadastrar Nova Escola</h4>
+                <div style={{display:'flex', gap:10}}>
+                  <input
+                    value={newSchoolName}
+                    onChange={e=>setNewSchoolName(e.target.value)}
+                    placeholder="Nome da Escola (ex: Colégio São Paulo)"
+                    style={{flex:1, padding:'8px 12px', background:'#fff', border:'1px solid #d5cfc0', borderRadius:8, fontSize:13, outline:'none'}}
+                  />
+                  <button onClick={handleCreateSchool} style={{padding:'8px 16px', background:'#8b5e3c', color:'#fff', border:'none', borderRadius:8, fontWeight:700, fontSize:13, cursor:'pointer'}}>
+                    + Criar
+                  </button>
+                </div>
+              </div>
+
+              {/* Seção 2: Nova Turma */}
+              <div style={{background:'#fdf8f2', padding:16, borderRadius:14, border:'1px solid rgba(139,115,85,0.12)'}}>
+                <h4 style={{fontSize:14, fontWeight:700, color:'#8b5e3c', margin:'0 0 10px 0'}}>2. Cadastrar Nova Turma</h4>
+                <div style={{display:'flex', flexDirection:'column', gap:10}}>
+                  <input
+                    value={newClassName}
+                    onChange={e=>setNewClassName(e.target.value)}
+                    placeholder="Nome da Turma (ex: 9º Ano A, 3º EM B)"
+                    style={{padding:'8px 12px', background:'#fff', border:'1px solid #d5cfc0', borderRadius:8, fontSize:13, outline:'none'}}
+                  />
+                  <div style={{display:'flex', gap:10}}>
+                    <select
+                      value={newClassSchoolId}
+                      onChange={e=>setNewClassSchoolId(e.target.value)}
+                      style={{flex:1, padding:'8px 12px', background:'#fff', border:'1px solid #d5cfc0', borderRadius:8, fontSize:13, outline:'none'}}
+                    >
+                      <option value="">Vincular à Escola (Opcional)...</option>
+                      {userSchools.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                    </select>
+                    <button onClick={handleCreateClass} style={{padding:'8px 16px', background:'#8b5e3c', color:'#fff', border:'none', borderRadius:8, fontWeight:700, fontSize:13, cursor:'pointer'}}>
+                      + Criar Turma
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Lista Atual */}
+              <div style={{fontSize:12, color:'#8c7561'}}>
+                💡 <strong>Cadastrados atualmente:</strong> {userSchools.length} escolas · {userClasses.length} turmas no seu aplicativo.
+              </div>
+            </div>
           </div>
         </div>
       )}

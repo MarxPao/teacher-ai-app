@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { seedApiKeysIfNeeded } from '@/lib/seedApiKeys'
+import { loadFromSupabase, syncToSupabase } from '@/lib/supabaseClient'
 import Sidebar from '@/components/Sidebar'
 import Dashboard from '@/components/modules/Dashboard'
 import QuickGenerate from '@/components/modules/QuickGenerate'
@@ -45,6 +46,9 @@ import BatchGrader from '@/components/modules/BatchGrader'
 import ProgressTracker from '@/components/modules/ProgressTracker'
 import AutoReport from '@/components/modules/AutoReport'
 
+import CommandPalette from '@/components/CommandPalette'
+import LanguageSelector from '@/components/LanguageSelector'
+
 export type ModuleKey = 'dashboard' | 'quick' | 'exam' | 'lessonstudio' | 'plan' | 'rubric' |
   'gradebook' | 'students' | 'classes' | 'analytics' | 'calendar' | 'comms' | 'repo' |
   'wellbeing' | 'settings' | 'api' | 'qbank' | 'mindmap' | 'editor' |
@@ -65,7 +69,7 @@ const MODULES: Record<ModuleKey, React.ComponentType> = {
   classes:          Classes,
   analytics:        Analytics,
   calendar:         Planner,
-  comms:            ComingSoon,
+  comms:            Communications,
   repo:             Repository,
   qbank:            QuestionBank,
   mindmap:          MindMap,
@@ -95,10 +99,10 @@ const MODULES: Record<ModuleKey, React.ComponentType> = {
 
 export default function Home() {
   const [active, setActive] = useState<ModuleKey>('dashboard')
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false)
   const Module = MODULES[active]
 
   // Bridge: VoiceOrb sends commands → RafinhaChat processes them
-  // We use a ref-callback pattern so the orb can trigger chat sends
   const rafinhaCommandRef = useRef<((text: string) => void) | null>(null)
 
   // ─── Auto-seed: configura APIs e Supabase no 1º carregamento ─────────────────
@@ -110,12 +114,10 @@ export default function Home() {
       openai_key:     process.env.NEXT_PUBLIC_OPENAI_KEY || '',
     })
 
-    // Ativa o Modo AUTO por padrão se ainda não estiver definido
     if (localStorage.getItem('teacher_auto_mode') === null) {
       localStorage.setItem('teacher_auto_mode', 'true')
     }
 
-    // Configura o Supabase automaticamente se ainda não estiver configurado
     const sbCfg = localStorage.getItem('teacher_supabase_config')
     if (!sbCfg || sbCfg === '{}' || !sbCfg.includes('parxakvjvuvsmvbvrshk')) {
       const defaultSb = {
@@ -125,24 +127,85 @@ export default function Home() {
       }
       localStorage.setItem('teacher_supabase_config', JSON.stringify(defaultSb))
     }
+
+    if (localStorage.getItem('teacher_supabase_config')) {
+      loadFromSupabase().catch(() => {})
+    }
+
+    const handler = (e: Event) => setActive((e as CustomEvent).detail as ModuleKey)
+    const togglePaletteHandler = () => setIsCommandPaletteOpen(prev => !prev)
+
+    window.addEventListener('teacher:navigate', handler)
+    window.addEventListener('teacher:toggle_command_palette', togglePaletteHandler)
+    return () => {
+      window.removeEventListener('teacher:navigate', handler)
+      window.removeEventListener('teacher:toggle_command_palette', togglePaletteHandler)
+    }
+  }, [])
+
+  // ─── Auto-Sync: sincroniza dados em background ao detectar mudanças ──────────
+  useEffect(() => {
+    let timer: NodeJS.Timeout
+    const handleDataChange = () => {
+      clearTimeout(timer)
+      timer = setTimeout(() => {
+        syncToSupabase().catch(() => {})
+      }, 2500)
+    }
+    window.addEventListener('storage', handleDataChange)
+    window.addEventListener('teacher:data_changed', handleDataChange)
+    return () => {
+      clearTimeout(timer)
+      window.removeEventListener('storage', handleDataChange)
+      window.removeEventListener('teacher:data_changed', handleDataChange)
+    }
   }, [])
 
   return (
     <div className="flex w-full h-screen overflow-hidden" style={{ background: '#fdf8f2' }}>
       <Sidebar active={active} onNavigate={setActive} />
-      <main className="flex-1 min-w-0 overflow-hidden flex flex-col">
+      <main className="flex-1 min-w-0 overflow-hidden flex flex-col relative">
+
+        {/* Floating Top Header bar with Command Palette trigger & LanguageSelector */}
+        <div style={{
+          position: 'absolute', top: 14, right: 24, zIndex: 40,
+          display: 'flex', alignItems: 'center', gap: 10
+        }}>
+          <button
+            onClick={() => setIsCommandPaletteOpen(true)}
+            style={{
+              background: '#fff', border: '1px solid #ede8dc', borderRadius: 20,
+              padding: '5px 14px', fontSize: 12, fontWeight: 700, color: '#586e75',
+              cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
+              boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
+            }}
+          >
+            <i className="ti ti-search" style={{ color: '#b58900' }} />
+            <span>Busca Rápida</span>
+            <kbd style={{ background: '#f5f0e8', padding: '2px 6px', borderRadius: 4, fontSize: 10 }}>Ctrl+K</kbd>
+          </button>
+          <LanguageSelector />
+        </div>
+
         <div key={active} className="animate-fade-up flex-1 min-h-0 min-w-0 h-full overflow-y-auto overflow-x-hidden">
           <Module />
         </div>
       </main>
 
-      {/* VoiceOrb — UI visual pura, sem microfone próprio */}
+      {/* Command Palette Modal (Ctrl+K) */}
+      <CommandPalette
+        isOpen={isCommandPaletteOpen}
+        onClose={() => setIsCommandPaletteOpen(false)}
+        onNavigate={setActive}
+      />
+
+      {/* VoiceOrb — UI visual pura */}
       <VoiceOrb />
 
-      {/* Barra Flutuante Global de Ditado Estilo Wispr Flow (Alt+Shift+V) */}
+      {/* WisprFlow Overlay (Alt+Shift+V) */}
       <WisprFlowOverlay />
 
-      {/* RafinhaChat — motor central de voz + agente */}
+      {/* RafinhaChat */}
       <RafinhaChat
         onNavigate={setActive}
         onCommandReady={(fn) => { rafinhaCommandRef.current = fn }}

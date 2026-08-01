@@ -55,7 +55,7 @@ export async function extractContentFromImage(base64: string, api: ApiConfig): P
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${api.key}` },
         body: JSON.stringify({
-          model: 'gpt-4o',
+          model: api.model || 'gpt-4o',
           messages: [{
             role: 'user',
             content: [
@@ -69,7 +69,8 @@ export async function extractContentFromImage(base64: string, api: ApiConfig): P
       if (d.error) throw new Error(d.error.message)
       raw = d.choices?.[0]?.message?.content || '{}'
     } else if (api.provider === 'gemini') {
-      const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${api.key}`, {
+      const modelName = api.model || 'gemini-2.0-flash'
+      const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${api.key}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -88,8 +89,36 @@ export async function extractContentFromImage(base64: string, api: ApiConfig): P
       throw new Error('OCR requer GPT-4o (OpenAI) ou Gemini. Configure uma dessas APIs.')
     }
 
-    raw = raw.replace(/```json|```/g, '').trim()
-    return JSON.parse(raw)
+    // F2: robust JSON extraction — handles conversational text, markdown fences
+    raw = raw
+      .replace(/^```json\s*/gi, '')
+      .replace(/^```\s*/gi, '')
+      .replace(/\s*```$/gi, '')
+      .trim()
+
+    // Try direct parse first
+    try {
+      return JSON.parse(raw) as OcrResult
+    } catch {
+      // Extract JSON object from conversational text
+      const start = raw.indexOf('{')
+      const end   = raw.lastIndexOf('}')
+      if (start !== -1 && end > start) {
+        const candidate = raw.slice(start, end + 1)
+        try {
+          return JSON.parse(candidate) as OcrResult
+        } catch {
+          // Try cleaning trailing commas
+          const sanitized = candidate.replace(/,\s*([\]}])/g, '$1')
+          try {
+            return JSON.parse(sanitized) as OcrResult
+          } catch {
+            throw new Error('A IA retornou um JSON malformado no OCR. Tente novamente.')
+          }
+        }
+      }
+      throw new Error('A IA não retornou o JSON esperado para o OCR.')
+    }
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e)
     throw new Error(`Falha no OCR: ${msg}`)

@@ -104,6 +104,12 @@ export default function Classes() {
   function deleteClass(id: string) {
     if (!confirm('Excluir esta turma? Os alunos vinculados perderão a referência de turma.')) return
     saveClasses(classes.filter(c => c.id !== id))
+    
+    const updatedStudents = students.map(s => s.classId === id ? { ...s, classId: 'Sem Turma' } : s)
+    setStudents(updatedStudents)
+    localStorage.setItem('teacher_students', JSON.stringify(updatedStudents))
+    window.dispatchEvent(new Event('storage'))
+
     if (detailId === id) setDetailId(null)
   }
 

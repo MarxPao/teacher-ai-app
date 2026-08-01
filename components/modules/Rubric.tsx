@@ -136,15 +136,45 @@ Style the table with professional Cambridge Assessment styling (border-collapse:
 
   const evalStu = students.find(s => s.id === evalStudentId)
 
+  async function handleSaveRubricToDatabase() {
+    if (!result) { alert('Gere uma matriz de rubrica primeiro.'); return }
+    const { saveRubricToSupabase } = await import('@/lib/supabaseClient')
+    await saveRubricToSupabase({
+      title: `Matriz de Rubrica Cambridge — ${preset.toUpperCase()} (${level})`,
+      type: 'rubric',
+      grade: level,
+      criteria: activeCriteria,
+      content: result
+    })
+    alert('✅ Rubrica salva com sucesso no Banco de Dados!')
+  }
+
   return (
-    <div style={{ padding: '36px 48px', height: '100%', display: 'flex', flexDirection: 'column', maxWidth: 1500, margin: '0 auto', boxSizing: 'border-box', width: '100%' }}>
-      <div style={{ marginBottom: 28 }}>
-        <h1 style={{ fontFamily: 'Georgia, serif', fontSize: 34, fontWeight: 600, color: '#073642', fontStyle: 'italic', letterSpacing: '-0.5px', margin: 0 }}>
-          Cambridge Standard Rubrics & Assessment
-        </h1>
-        <p style={{ color: '#586e75', fontSize: 15, marginTop: 6 }}>
-          Matrizes de avaliação padronizadas para Writing e Speaking (CEFR A1-C2) com calculadora de notas.
-        </p>
+    <div style={{ padding: '32px 44px', height: '100%', display: 'flex', flexDirection: 'column', maxWidth: 1600, margin: '0 auto', boxSizing: 'border-box', width: '100%' }}>
+
+      {/* ── Header ── */}
+      <div style={{ marginBottom: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div>
+          <h1 style={{ fontFamily: 'Georgia, serif', fontSize: 32, fontWeight: 600, color: '#073642', fontStyle: 'italic', letterSpacing: '-0.5px', margin: 0 }}>
+            Rubricas Pedagógicas (Cambridge Assessment)
+          </h1>
+          <p style={{ color: '#586e75', fontSize: 14, marginTop: 4, margin: 0 }}>
+            Matrizes analíticas de avaliação Cambridge B1-C2 com descritores de desempenho.
+          </p>
+        </div>
+        {result && (
+          <button
+            onClick={handleSaveRubricToDatabase}
+            style={{
+              padding: '9px 16px', borderRadius: 12, border: '1px solid #8b5e3c',
+              background: '#8b5e3c', color: '#fff', fontSize: 13,
+              fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
+              boxShadow: '0 2px 8px rgba(139,94,60,0.2)'
+            }}
+          >
+            <i className="ti ti-database" /> Salvar no Banco de Dados
+          </button>
+        )}
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(340px, 420px) 1fr', gap: 32, flex: 1, minHeight: 0 }}>

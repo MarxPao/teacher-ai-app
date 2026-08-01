@@ -24,16 +24,17 @@ export default function Dashboard() {
     let classesCount = 0
     let topStudents: any[] = []
 
-    const gbDataStr = localStorage.getItem('teacher_gbData')
-    if (gbDataStr) {
-      const gb = JSON.parse(gbDataStr)
-      const students = gb.students || []
+    const studentsStr = localStorage.getItem('teacher_students')
+    const configStr = localStorage.getItem('teacher_gbConfig')
+    if (studentsStr && configStr) {
+      const students = JSON.parse(studentsStr)
+      const config = JSON.parse(configStr)
       studentsCount = students.length
       classesCount = new Set(students.map((s: any) => s.class)).size
 
       // Calcular médias
       const avgs = students.map((s: any) => {
-        const vals = gb.cols.map((c: string) => parseFloat(s.grades[c]?.replace(',', '.'))).filter((n: number) => !isNaN(n))
+        const vals = Object.values(s.grades || {}).map((v: any) => parseFloat(String(v).replace(',', '.'))).filter((n: number) => !isNaN(n))
         return {
           name: s.name,
           avg: vals.length ? vals.reduce((a: number, b: number) => a + b, 0) / vals.length : null,

@@ -33,7 +33,8 @@ export function getDaysUntil(dueDateStr: string): number {
   const diffTime = targetDate.getTime() - today.getTime()
   
   // Convert to days
-  return Math.round(diffTime / (1000 * 60 * 60 * 24))
+  const days = Math.round(diffTime / (1000 * 60 * 60 * 24))
+  return isNaN(days) ? 0 : days
 }
 
 /**
@@ -182,6 +183,10 @@ export function getExactTimeRemaining(dueDateStr: string): TimeRemaining {
   const minutes = Math.floor((totalMs / 1000 / 60) % 60)
   const hours = Math.floor((totalMs / (1000 * 60 * 60)) % 24)
   const days = Math.floor(totalMs / (1000 * 60 * 60 * 24))
+  
+  if (isNaN(days) || isNaN(hours) || isNaN(minutes) || isNaN(seconds)) {
+    return { days: 0, hours: 0, minutes: 0, seconds: 0, totalMs: 0 }
+  }
   
   return { days, hours, minutes, seconds, totalMs }
 }

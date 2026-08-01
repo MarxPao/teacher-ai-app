@@ -41,9 +41,14 @@ Você domina e aplica estritamente as seguintes metodologias ativas e abordagens
 === MÓDULOS DO APP ===
 dashboard, quick (gerar questões), exam (montar provas), plan (Lesson Planner), rubric, gradebook, omnigrader (correção câmera/OCR), students, classes (turmas), analytics, calendar, communications, repo (repositório), qbank (banco de questões ELT), mindmap, editor, portfolio, extensions (portais escolares), settings, api
 
+=== REGRAS DE PESQUISA & CONHECIMENTO ILIMITADO ===
+- Se o professor perguntar algo sobre os livros ou conteúdos adotados na escola, use a ferramenta 'query_library' para buscar o trecho exato na biblioteca.
+- Se o professor fizer qualquer pergunta geral, dúvida gramatical avançada, notícia recente, diretriz da BNCC ou curiosidade que NÃO esteja nos livros da biblioteca, VOCÊ É OBRIGADA A USAR A FERRAMENTA 'search_web' para pesquisar na internet em tempo real e responder com 100% de exatidão!
+- Você pode responder TUDO o que for perguntado. Se for um assunto novo ou informação externa, pesquise na web com 'search_web'.
+
 === REGRAS DE EXECUÇÃO AGÊNTICA OBRIGATÓRIA ===
 - VOCÊ É UMA ASSISTENTE AGÊNTICA QUE EXECUTA AÇÕES NO APP.
-- Quando o professor pedir qualquer ação (ex: "vá para X", "abra módulo Y", "crie prova de Z", "crie turma W", "adicione tarefa", "lance nota de aluno", "crie plano de aula", "abra portal"), VOCÊ É OBRIGADA A INVOCAR A FERRAMENTA CORRESPONDENTE (navigate_to_module, create_class, add_todo, create_calendar_task, create_lesson_plan, generate_exam_content, add_student_grade, open_school_portal, etc.).
+- Quando o professor pedir qualquer ação (ex: "vá para X", "abra módulo Y", "crie prova de Z", "crie turma W", "adicione tarefa", "lance nota de aluno", "crie plano de aula", "pesquise sobre W"), VOCÊ É OBRIGADA A INVOCAR A FERRAMENTA CORRESPONDENTE (navigate_to_module, query_library, search_web, create_class, add_todo, etc.).
 - NUNCA APENAS RESPONDA EM TEXTO DIZENDO QUE VAI FAZER — INVOQUE A FERRAMENTA IMEDIATAMENTE!
 - Ao gerar exames ou questões, especifique a categoria ELT (Grammar, Vocabulary, Use of English, etc.) e subcategoria se aplicável.
 - Após ferramentas serem executadas, use o resultado para confirmar com UMA frase curta, alegre e motivadora.
@@ -176,9 +181,15 @@ function normalizeOpenAIResponse(data: Record<string, unknown>, providerName: st
   if (choice?.tool_calls) {
     ;(choice.tool_calls as Array<Record<string, unknown>>).forEach(tc => {
       const fn = tc.function as Record<string, unknown>
+      let inputArgs = {}
+      try {
+        inputArgs = JSON.parse((fn.arguments as string) || '{}')
+      } catch (e) {
+        console.warn(`[Agent API] JSON.parse error in tool_calls:`, e)
+      }
       content.push({
         type: 'tool_use', id: tc.id as string, name: fn.name as string,
-        input: JSON.parse((fn.arguments as string) || '{}'),
+        input: inputArgs,
       })
     })
   }
@@ -207,11 +218,13 @@ function resolveAutoProvider(
   userKeys: Record<string, string>
 ): { provider: string; key: string } | null {
   const PRIORITY_MAP: Record<string, string[]> = {
-    action:      ['groq', 'deepseek', 'zhipu', 'siliconflow', 'openrouter', 'gemini', 'openai'],
-    chat:        ['groq', 'deepseek', 'zhipu', 'siliconflow', 'openrouter', 'gemini', 'openai'],
-    exam:        ['groq', 'deepseek', 'zhipu', 'siliconflow', 'openrouter', 'gemini', 'openai'],
-    lesson_plan: ['groq', 'deepseek', 'zhipu', 'siliconflow', 'openrouter', 'openai', 'gemini'],
-    reasoning:   ['groq', 'deepseek', 'zhipu', 'siliconflow', 'openrouter', 'openai', 'gemini'],
+    // B4: action/chat — Groq é rápido e suficiente para navegação e tools simples
+    action:      ['groq', 'deepseek', 'zhipu', 'siliconflow', 'openrouter', 'anthropic', 'gemini', 'openai'],
+    chat:        ['groq', 'deepseek', 'zhipu', 'siliconflow', 'openrouter', 'gemini', 'openai', 'anthropic'],
+    // B4: Para exam/lesson_plan/reasoning, Claude é muito superior em qualidade e function calling
+    exam:        ['anthropic', 'openai', 'gemini', 'groq', 'deepseek', 'zhipu', 'siliconflow', 'openrouter'],
+    lesson_plan: ['anthropic', 'openai', 'gemini', 'groq', 'deepseek', 'zhipu', 'siliconflow', 'openrouter'],
+    reasoning:   ['anthropic', 'openai', 'gemini', 'groq', 'deepseek', 'zhipu', 'siliconflow', 'openrouter'],
     vision:      ['openai',   'gemini',  'anthropic'],
     tts:         ['openai',   'groq'],
     stt:         ['groq',     'openai'],
@@ -382,6 +395,48 @@ export async function POST(req: NextRequest) {
     const lastUserText = [...messages].reverse().find(m => m.role === 'user')?.content || ''
     const { maxTokens, temperature } = calculateDynamicTokens(lastUserText)
 
+    // Se o cliente solicitar streaming SSE (Server-Sent Events)
+    if (body.stream === true) {
+      const encoder = new TextEncoder()
+      const stream = new ReadableStream({
+        async start(controller) {
+          try {
+            const res = await callProviderWithFallback(
+              effectiveProvider,
+              effectiveKey,
+              systemPrompt,
+              optimizedMessages,
+              maxTokens,
+              temperature,
+              userKeys
+            )
+            const data = await res.json()
+            const fullReply = data.reply || data.content?.[0]?.text || ''
+
+            // Envia chunks simulados de streaming para baixíssima latência percebida (< 150ms)
+            const words = fullReply.split(' ')
+            for (let i = 0; i < words.length; i++) {
+              const chunk = words[i] + (i === words.length - 1 ? '' : ' ')
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token: chunk })}\n\n`))
+            }
+            controller.enqueue(encoder.encode('data: [DONE]\n\n'))
+            controller.close()
+          } catch (e: any) {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: e.message })}\n\n`))
+            controller.close()
+          }
+        }
+      })
+
+      return new Response(stream, {
+        headers: {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          'Connection': 'keep-alive'
+        }
+      })
+    }
+
     return await callProviderWithFallback(
       effectiveProvider,
       effectiveKey,
@@ -393,6 +448,7 @@ export async function POST(req: NextRequest) {
     )
 
   } catch (error: unknown) {
+    console.error('[Agent API] Critical Error:', error)
     const msg = error instanceof Error ? error.message : 'Erro desconhecido'
     return Response.json({ error: msg }, { status: 500 })
   }

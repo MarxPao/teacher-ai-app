@@ -95,20 +95,20 @@ export default function LiveQuizModule() {
   const q = SAMPLE_QUIZ[currentQIdx]
 
   return (
-    <div style={{ padding: '36px 48px', height: '100%', display: 'flex', flexDirection: 'column', maxWidth: 1600, margin: '0 auto', boxSizing: 'border-box', width: '100%' }}>
-      {/* Header */}
+    <div style={{ padding: '36px 48px', height: '100%', display: 'flex', flexDirection: 'column', maxWidth: 1600, margin: '0 auto', boxSizing: 'border-box', width: '100%', background: '#fdf8f2', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
+      {/* ── Header Paper & Ink ── */}
       <div style={{ marginBottom: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <h1 style={{ fontFamily: 'Georgia, serif', fontSize: 34, fontWeight: 600, color: '#073642', fontStyle: 'italic', letterSpacing: '-0.5px', margin: 0 }}>
+            <h1 style={{ fontFamily: "'Fraunces', 'Playfair Display', Georgia, serif", fontSize: 32, fontWeight: 700, color: '#2c1a0e', margin: 0 }}>
               Live Quiz Gamificado 🎮
             </h1>
-            <span style={{ background: '#cb4b16', color: '#fff', fontSize: 11, fontWeight: 800, padding: '3px 10px', borderRadius: 12, textTransform: 'uppercase' }}>
+            <span style={{ background: 'rgba(139,94,60,0.12)', color: '#8b5e3c', border: '1px solid rgba(139,94,60,0.2)', fontSize: 11, fontWeight: 700, padding: '4px 12px', borderRadius: 14, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
               Modo TV / Projetor de Sala
             </span>
           </div>
-          <p style={{ color: '#586e75', fontSize: 14, marginTop: 4 }}>
-            Projete o jogo estilo Kahoot/Quizizz na TV da sala de aula. Alunos entram pelo celular com PIN de 4 dígitos.
+          <p style={{ color: '#a08060', fontSize: 14, marginTop: 4, margin: 0 }}>
+            Projete o jogo na TV da sala de aula. Alunos entram pelo celular com PIN de 4 dígitos.
           </p>
         </div>
 
@@ -116,10 +116,10 @@ export default function LiveQuizModule() {
           <button
             onClick={handleSyncGradebook}
             style={{
-              padding: '12px 20px', borderRadius: 12, border: 'none',
-              background: '#859900', color: '#fff', fontSize: 14, fontWeight: 700,
+              padding: '12px 22px', borderRadius: 12, border: 'none',
+              background: '#3d7a4e', color: '#fffcf8', fontSize: 14, fontWeight: 700,
               cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
-              boxShadow: '0 4px 14px rgba(133,153,0,0.25)',
+              boxShadow: '0 4px 14px rgba(61,122,78,0.25)', transition: 'all 0.15s ease'
             }}
           >
             <i className="ti ti-chart-bar" /> 📊 Lançar Pontos no Gradebook
@@ -129,27 +129,35 @@ export default function LiveQuizModule() {
 
       {/* ─── LOBBY DO JOGO (TELA INICIAL DE ENTRADA) ───────────────────────────── */}
       {gameState === 'lobby' && (
-        <div style={{ flex: 1, background: '#073642', color: '#fdf6e3', borderRadius: 24, padding: 40, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', boxShadow: '0 12px 40px rgba(0,43,54,0.2)', textAlign: 'center' }}>
-          <span style={{ background: '#b58900', color: '#073642', fontSize: 12, fontWeight: 800, padding: '4px 14px', borderRadius: 16, textTransform: 'uppercase', marginBottom: 16 }}>
+        <div style={{
+          flex: 1, background: '#fffcf8', border: '1px solid rgba(139,115,85,0.15)',
+          borderRadius: 24, padding: 48, display: 'flex', flexDirection: 'column',
+          alignItems: 'center', justifyContent: 'center',
+          boxShadow: '0 8px 30px rgba(44,26,14,0.06)', textAlign: 'center'
+        }}>
+          <span style={{
+            background: 'rgba(212,148,74,0.12)', color: '#d4944a', border: '1px solid rgba(212,148,74,0.25)',
+            fontSize: 12, fontWeight: 800, padding: '6px 18px', borderRadius: 20, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 20
+          }}>
             ENTRE EM TEACHERAI.APP/GAME
           </span>
 
-          <h2 style={{ fontSize: 48, fontWeight: 800, margin: '0 0 10px 0', fontFamily: 'Georgia, serif' }}>
-            PIN DO JOGO: <span style={{ color: '#b58900', textDecoration: 'underline' }}>{pin}</span>
+          <h2 style={{ fontSize: 46, fontWeight: 800, color: '#2c1a0e', margin: '0 0 12px 0', fontFamily: "'Fraunces', 'Playfair Display', Georgia, serif" }}>
+            PIN DO JOGO: <span style={{ color: '#8b5e3c', letterSpacing: '2px' }}>{pin}</span>
           </h2>
 
-          <p style={{ fontSize: 18, color: '#93a1a1', marginBottom: 32 }}>
-            {quizTitle} — <strong>Turma {className}</strong>
+          <p style={{ fontSize: 17, color: '#8c7561', marginBottom: 36 }}>
+            {quizTitle} — <strong style={{ color: '#2c1a0e' }}>Turma {className}</strong>
           </p>
 
           {/* Lista de Alunos Conectados */}
-          <div style={{ width: '100%', maxWidth: 700, background: 'rgba(255,255,255,0.06)', borderRadius: 16, padding: 20, marginBottom: 32 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: '#93a1a1', textTransform: 'uppercase', marginBottom: 12, textAlign: 'center' }}>
+          <div style={{ width: '100%', maxWidth: 720, background: '#fdf8f2', border: '1px solid rgba(139,115,85,0.12)', borderRadius: 20, padding: 24, marginBottom: 36 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#8b5e3c', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 14, textAlign: 'center' }}>
               👥 {players.length} Alunos Conectados no Lobby:
             </div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, justifyContent: 'center' }}>
               {players.map(p => (
-                <span key={p.name} style={{ background: '#eee8d5', color: '#073642', padding: '8px 16px', borderRadius: 20, fontSize: 14, fontWeight: 700 }}>
+                <span key={p.name} style={{ background: '#fffcf8', border: '1px solid rgba(139,115,85,0.18)', color: '#2c1a0e', padding: '9px 18px', borderRadius: 24, fontSize: 14, fontWeight: 700, boxShadow: '0 2px 6px rgba(44,26,14,0.04)' }}>
                   {p.name}
                 </span>
               ))}
@@ -159,10 +167,10 @@ export default function LiveQuizModule() {
           <button
             onClick={handleStartGame}
             style={{
-              padding: '16px 48px', borderRadius: 16, border: 'none',
-              background: '#cb4b16', color: '#fff', fontSize: 20, fontWeight: 800,
-              cursor: 'pointer', boxShadow: '0 6px 20px rgba(203,75,22,0.4)',
-              transition: 'transform 0.2s',
+              padding: '16px 52px', borderRadius: 16, border: 'none',
+              background: '#8b5e3c', color: '#fffcf8', fontSize: 19, fontWeight: 800,
+              cursor: 'pointer', boxShadow: '0 6px 20px rgba(139,94,60,0.3)',
+              transition: 'transform 0.15s ease',
             }}
           >
             🚀 INICIAR QUIZ NA TV
@@ -172,35 +180,46 @@ export default function LiveQuizModule() {
 
       {/* ─── TELA DE PERGUNTA EM ANDAMENTO ─────────────────────────────────────── */}
       {gameState === 'question' && (
-        <div style={{ flex: 1, background: '#fff', borderRadius: 24, padding: 36, border: '1px solid #ede8dc', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', boxShadow: '0 4px 20px rgba(0,43,54,0.05)' }}>
+        <div style={{
+          flex: 1, background: '#fffcf8', borderRadius: 24, padding: 40,
+          border: '1px solid rgba(139,115,85,0.15)', display: 'flex',
+          flexDirection: 'column', justifyContent: 'space-between',
+          boxShadow: '0 8px 30px rgba(44,26,14,0.06)'
+        }}>
           {/* Timer e Pergunta */}
           <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              <span style={{ fontSize: 13, fontWeight: 700, color: '#586e75' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+              <span style={{ fontSize: 14, fontWeight: 700, color: '#8c7561', background: '#f5efe6', padding: '4px 14px', borderRadius: 12 }}>
                 Questão {currentQIdx + 1} de {SAMPLE_QUIZ.length}
               </span>
-              <div style={{ width: 56, height: 56, borderRadius: '50%', background: timeLeft <= 5 ? '#dc322f' : '#073642', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, fontWeight: 800, animation: timeLeft <= 5 ? 'pulse 1s infinite' : 'none' }}>
+              <div style={{
+                width: 60, height: 60, borderRadius: '50%',
+                background: timeLeft <= 5 ? '#c2593f' : '#8b5e3c',
+                color: '#fffcf8', display: 'flex', alignItems: 'center',
+                justifyContent: 'center', fontSize: 22, fontWeight: 800,
+                boxShadow: timeLeft <= 5 ? '0 0 18px rgba(194,89,63,0.4)' : '0 4px 12px rgba(139,94,60,0.2)'
+              }}>
                 {timeLeft}s
               </div>
             </div>
 
-            <h2 style={{ fontSize: 28, fontWeight: 800, color: '#073642', textAlign: 'center', margin: '20px 0 40px 0', fontFamily: 'Georgia, serif' }}>
+            <h2 style={{ fontSize: 32, fontWeight: 700, color: '#2c1a0e', textAlign: 'center', margin: '24px 0 44px 0', fontFamily: "'Fraunces', 'Playfair Display', Georgia, serif", lineHeight: 1.3 }}>
               "{q.text}"
             </h2>
           </div>
 
-          {/* As 4 Opções Coloridas (Estilo Kahoot) */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-            <div style={{ background: '#dc322f', color: '#fff', padding: 24, borderRadius: 16, fontSize: 20, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 12 }}>
+          {/* As 4 Opções Coloridas (Paleta Warm Paper & Ink) */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+            <div style={{ background: '#c2593f', color: '#ffffff', padding: 26, borderRadius: 18, fontSize: 20, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 14, boxShadow: '0 4px 14px rgba(194,89,63,0.2)' }}>
               <span style={{ fontSize: 24 }}>▲</span> A) {q.options[0]}
             </div>
-            <div style={{ background: '#268bd2', color: '#fff', padding: 24, borderRadius: 16, fontSize: 20, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ background: '#4b7b94', color: '#ffffff', padding: 26, borderRadius: 18, fontSize: 20, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 14, boxShadow: '0 4px 14px rgba(75,123,148,0.2)' }}>
               <span style={{ fontSize: 24 }}>◆</span> B) {q.options[1]}
             </div>
-            <div style={{ background: '#b58900', color: '#fff', padding: 24, borderRadius: 16, fontSize: 20, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ background: '#d4944a', color: '#ffffff', padding: 26, borderRadius: 18, fontSize: 20, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 14, boxShadow: '0 4px 14px rgba(212,148,74,0.2)' }}>
               <span style={{ fontSize: 24 }}>●</span> C) {q.options[2]}
             </div>
-            <div style={{ background: '#859900', color: '#fff', padding: 24, borderRadius: 16, fontSize: 20, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ background: '#3d7a4e', color: '#ffffff', padding: 26, borderRadius: 18, fontSize: 20, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 14, boxShadow: '0 4px 14px rgba(61,122,78,0.2)' }}>
               <span style={{ fontSize: 24 }}>■</span> D) {q.options[3]}
             </div>
           </div>
@@ -209,24 +228,35 @@ export default function LiveQuizModule() {
 
       {/* ─── LEADERBOARD PARCIAL DA RODADA ─────────────────────────────────────── */}
       {gameState === 'leaderboard' && (
-        <div style={{ flex: 1, background: '#fff', borderRadius: 24, padding: 36, border: '1px solid #ede8dc', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+        <div style={{
+          flex: 1, background: '#fffcf8', borderRadius: 24, padding: 40,
+          border: '1px solid rgba(139,115,85,0.15)', display: 'flex',
+          flexDirection: 'column', justifyContent: 'space-between',
+          boxShadow: '0 8px 30px rgba(44,26,14,0.06)'
+        }}>
           <div>
-            <div style={{ textAlign: 'center', marginBottom: 24 }}>
-              <span style={{ background: '#eee8d5', color: '#586e75', fontSize: 12, fontWeight: 700, padding: '4px 12px', borderRadius: 12 }}>
+            <div style={{ textAlign: 'center', marginBottom: 28 }}>
+              <span style={{ background: 'rgba(61,122,78,0.12)', color: '#3d7a4e', border: '1px solid rgba(61,122,78,0.2)', fontSize: 13, fontWeight: 700, padding: '6px 16px', borderRadius: 16 }}>
                 RESPOSTA CORRETA: {q.options[q.correctIdx]}
               </span>
-              <h2 style={{ fontSize: 26, fontWeight: 800, color: '#073642', margin: '8px 0 0 0' }}>
+              <h2 style={{ fontSize: 28, fontWeight: 700, color: '#2c1a0e', margin: '14px 0 0 0', fontFamily: "'Fraunces', 'Playfair Display', Georgia, serif" }}>
                 Placar Parcial da Turma
               </h2>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxWidth: 600, margin: '0 auto' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 640, margin: '0 auto' }}>
               {players.map((p, i) => (
-                <div key={p.name} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 18px', background: i === 0 ? '#fff9e6' : '#f5f0e8', border: i === 0 ? '2px solid #b58900' : '1px solid #e8e0d0', borderRadius: 12 }}>
-                  <span style={{ fontSize: 15, fontWeight: 700, color: '#073642' }}>
+                <div key={p.name} style={{
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                  padding: '14px 22px',
+                  background: i === 0 ? '#fdf6eb' : '#fdf8f2',
+                  border: i === 0 ? '2px solid #d4944a' : '1px solid rgba(139,115,85,0.15)',
+                  borderRadius: 14, boxShadow: i === 0 ? '0 4px 12px rgba(212,148,74,0.15)' : 'none'
+                }}>
+                  <span style={{ fontSize: 16, fontWeight: 700, color: '#2c1a0e' }}>
                     {i + 1}º {p.name}
                   </span>
-                  <span style={{ fontSize: 16, fontWeight: 800, color: '#b58900' }}>
+                  <span style={{ fontSize: 17, fontWeight: 800, color: '#8b5e3c' }}>
                     {p.score + (i === 0 ? 350 : 200)} pts
                   </span>
                 </div>
@@ -234,10 +264,14 @@ export default function LiveQuizModule() {
             </div>
           </div>
 
-          <div style={{ display: 'flex', justifyContent: 'center', marginTop: 20 }}>
+          <div style={{ display: 'flex', justifyContent: 'center', marginTop: 24 }}>
             <button
               onClick={handleNextQuestion}
-              style={{ padding: '14px 36px', borderRadius: 12, border: 'none', background: '#073642', color: '#fff', fontSize: 16, fontWeight: 700, cursor: 'pointer' }}
+              style={{
+                padding: '14px 40px', borderRadius: 14, border: 'none',
+                background: '#8b5e3c', color: '#fffcf8', fontSize: 16, fontWeight: 700,
+                cursor: 'pointer', boxShadow: '0 4px 14px rgba(139,94,60,0.25)'
+              }}
             >
               Próxima Questão ➔
             </button>
@@ -247,37 +281,57 @@ export default function LiveQuizModule() {
 
       {/* ─── PODIUM FINAL DE VENCEDORES ────────────────────────────────────────── */}
       {gameState === 'podium' && (
-        <div style={{ flex: 1, background: '#073642', color: '#fdf6e3', borderRadius: 24, padding: 40, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-          <h2 style={{ fontSize: 36, fontWeight: 800, color: '#b58900', margin: '0 0 24px 0', fontFamily: 'Georgia, serif' }}>
+        <div style={{
+          flex: 1, background: '#fffcf8', border: '1px solid rgba(139,115,85,0.15)',
+          borderRadius: 24, padding: 48, display: 'flex', flexDirection: 'column',
+          alignItems: 'center', justifyContent: 'center',
+          boxShadow: '0 8px 30px rgba(44,26,14,0.06)'
+        }}>
+          <h2 style={{ fontSize: 38, fontWeight: 800, color: '#8b5e3c', margin: '0 0 32px 0', fontFamily: "'Fraunces', 'Playfair Display', Georgia, serif" }}>
             🏆 PÓDIO DOS CAMPEÕES DO QUIZ!
           </h2>
 
-          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 20, marginBottom: 40 }}>
+          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 24, marginBottom: 44 }}>
             {/* 2º Lugar */}
-            <div style={{ width: 140, background: '#93a1a1', height: 160, borderRadius: '16px 16px 0 0', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#fff' }}>
-              <span style={{ fontSize: 24 }}>🥈</span>
-              <span style={{ fontSize: 14, fontWeight: 800 }}>Pedro</span>
-              <span style={{ fontSize: 12, opacity: 0.8 }}>1.920 pts</span>
+            <div style={{
+              width: 150, background: '#a08060', height: 170, borderRadius: '18px 18px 0 0',
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+              color: '#fffcf8', boxShadow: '0 4px 14px rgba(160,128,96,0.25)'
+            }}>
+              <span style={{ fontSize: 28 }}>🥈</span>
+              <span style={{ fontSize: 15, fontWeight: 800 }}>Pedro</span>
+              <span style={{ fontSize: 12, opacity: 0.9 }}>1.920 pts</span>
             </div>
 
             {/* 1º Lugar */}
-            <div style={{ width: 160, background: '#b58900', height: 220, borderRadius: '16px 16px 0 0', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#fff', boxShadow: '0 0 30px rgba(181,137,0,0.5)' }}>
-              <span style={{ fontSize: 36 }}>👑</span>
-              <span style={{ fontSize: 16, fontWeight: 800 }}>Ana Júlia</span>
-              <span style={{ fontSize: 13, opacity: 0.9 }}>2.200 pts</span>
+            <div style={{
+              width: 170, background: '#d4944a', height: 230, borderRadius: '18px 18px 0 0',
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+              color: '#fffcf8', boxShadow: '0 0 32px rgba(212,148,74,0.45)'
+            }}>
+              <span style={{ fontSize: 40 }}>👑</span>
+              <span style={{ fontSize: 17, fontWeight: 800 }}>Ana Júlia</span>
+              <span style={{ fontSize: 13, opacity: 0.95 }}>2.200 pts</span>
             </div>
 
             {/* 3º Lugar */}
-            <div style={{ width: 140, background: '#cb4b16', height: 130, borderRadius: '16px 16px 0 0', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#fff' }}>
-              <span style={{ fontSize: 24 }}>🥉</span>
-              <span style={{ fontSize: 14, fontWeight: 800 }}>Lucas</span>
-              <span style={{ fontSize: 12, opacity: 0.8 }}>1.740 pts</span>
+            <div style={{
+              width: 150, background: '#c2593f', height: 140, borderRadius: '18px 18px 0 0',
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+              color: '#fffcf8', boxShadow: '0 4px 14px rgba(194,89,63,0.25)'
+            }}>
+              <span style={{ fontSize: 28 }}>🥉</span>
+              <span style={{ fontSize: 15, fontWeight: 800 }}>Lucas</span>
+              <span style={{ fontSize: 12, opacity: 0.9 }}>1.740 pts</span>
             </div>
           </div>
 
           <button
             onClick={() => setGameState('lobby')}
-            style={{ padding: '12px 28px', borderRadius: 12, border: 'none', background: '#fff', color: '#073642', fontSize: 15, fontWeight: 800, cursor: 'pointer' }}
+            style={{
+              padding: '14px 32px', borderRadius: 14, border: '1px solid rgba(139,94,60,0.25)',
+              background: '#f5efe6', color: '#8b5e3c', fontSize: 15, fontWeight: 800, cursor: 'pointer'
+            }}
           >
             Jogar Novamente / Reiniciar Lobby
           </button>

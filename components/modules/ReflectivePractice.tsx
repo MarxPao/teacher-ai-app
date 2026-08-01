@@ -493,21 +493,23 @@ Incorpore atividades de Task-Based Learning para fortalecer a área de ${formDat
       {/* Include Tabler Icons */}
       <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css" />
 
-      {/* Toast Notification */}
-      {toast && (
-        <div style={{
-          position: 'fixed', top: '20px', right: '20px', zIndex: 9999,
-          backgroundColor: toast.type === 'error' ? '#a83232' : toast.type === 'success' ? '#3d7a4e' : '#2a6080',
-          color: '#fffcf8', padding: '1rem 2rem', borderRadius: 12,
-          boxShadow: '0 4px 12px rgba(44,26,14,0.15)',
-          display: 'flex', alignItems: 'center', gap: '0.5rem',
-          animation: 'fadeIn 0.3s',
-          fontFamily: '"Inter", system-ui, sans-serif'
-        }}>
-          <i className={`ti ${toast.type === 'error' ? 'ti-alert-circle' : toast.type === 'success' ? 'ti-check' : 'ti-info-circle'}`} />
-          {toast.message}
-        </div>
-      )}
+        {toast && (() => {
+          const toastIcon = toast.type === 'error' ? 'ti-alert-circle' : toast.type === 'success' ? 'ti-check' : 'ti-info-circle'
+          return (
+            <div style={{
+              position: 'fixed', top: '20px', right: '20px', zIndex: 9999,
+              backgroundColor: toast.type === 'error' ? '#a83232' : toast.type === 'success' ? '#3d7a4e' : '#2a6080',
+              color: '#fffcf8', padding: '1rem 2rem', borderRadius: 12,
+              boxShadow: '0 4px 12px rgba(44,26,14,0.15)',
+              display: 'flex', alignItems: 'center', gap: '0.5rem',
+              animation: 'fadeIn 0.3s',
+              fontFamily: '"Inter", system-ui, sans-serif'
+            }}>
+              <i className={`ti ${toastIcon}`} />
+              {toast.message}
+            </div>
+          )
+        })()}
 
       <div style={styles.header}>
         <div>

@@ -139,7 +139,7 @@ export default function WeeklyAgenda() {
 
   const handleLessonPlanClick = (item: ScheduleItem, cls?: ClassItem) => {
     showToast(`Abrindo plano de aula para ${cls?.name || 'Turma'} (${item.timeStart})...`);
-    // Em um app real, abriria um modal ou navegaria
+    window.dispatchEvent(new CustomEvent('teacher:navigate', { detail: 'plan' }))
   };
 
   const toggleChecklist = (id: string) => {

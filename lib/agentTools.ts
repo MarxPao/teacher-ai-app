@@ -248,9 +248,51 @@ export const AGENT_TOOLS: ToolDefinition[] = [
       properties: {
         name:     { type: 'string', description: 'Nome completo do aluno' },
         classRef: { type: 'string', description: 'Turma do aluno, ex: 9A, Nono B' },
-        email:    { type: 'string', description: 'E-mail do responsável' }
+        email:    { type: 'string', description: 'Email do aluno (opcional)' }
       },
-      required: ['name']
+      required: ['name', 'classRef']
+    }
+  },
+
+  // 14. CONSULTA À BIBLIOTECA RAG [NOVO]
+  {
+    name: 'query_library',
+    description: 'Pesquisa nos livros didáticos, apostilas e documentos da biblioteca escolar para obter textos, diálogos, regras gramaticais ou listas de vocabulário autênticos.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        query:    { type: 'string', description: 'Termo de busca, tópico de aula ou conceito gramatical' },
+        textbook: { type: 'string', description: 'Nome do livro didático (opcional)' },
+        type:     { type: 'string', description: 'Tipo do livro (Student\'s Book, Workbook, CLIL, etc)' }
+      },
+      required: ['query']
+    }
+  },
+
+  // 15. BUSCA EM TEMPO REAL NA INTERNET [NOVO]
+  {
+    name: 'search_web',
+    description: 'Pesquisa na internet por informações em tempo real, notícias, curiosidades, diretrizes da BNCC, fatos atualizados ou qualquer assunto que não esteja presente nos livros da biblioteca.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Pergunta ou termo de pesquisa na internet' }
+      },
+      required: ['query']
+    }
+  },
+
+  // 16. GRAVAÇÃO DE MEMÓRIA DE LONGO PRAZO [NOVO]
+  {
+    name: 'remember_fact',
+    description: 'Grava um fato, preferência do professor, hábito ou regra pedagógica importante na memória de longo prazo para aprendizado contínuo.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        fact:     { type: 'string', description: 'O fato ou regra a ser gravado na memória de longo prazo' },
+        category: { type: 'string', enum: ['teacher_preference', 'class_insight', 'pedagogical_rule', 'student_fact', 'school_context'] }
+      },
+      required: ['fact']
     }
   },
 

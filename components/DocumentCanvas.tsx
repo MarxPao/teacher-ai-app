@@ -242,8 +242,18 @@ export default function DocumentCanvas({ content, onContentChange, headerData, o
           <button onClick={exportDocx} style={{ ...ExportBtn, background: '#268bd2' }}>
             <i className="ti ti-file-word" /> .DOCX (Word)
           </button>
-          <button onClick={() => window.print()} style={ExportBtn}>
-            <i className="ti ti-printer" /> Exportar PDF
+          <button 
+            onClick={async () => {
+              try {
+                const { exportElementToPdf } = await import('@/lib/exportUtils')
+                await exportElementToPdf('exam-document-page', (headerData?.title || 'prova').replace(/\s+/g, '_'))
+              } catch {
+                window.print()
+              }
+            }} 
+            style={{ ...ExportBtn, background: '#cb4b16' }}
+          >
+            <i className="ti ti-file-type-pdf" /> Exportar PDF
           </button>
         </div>
       </div>
@@ -262,7 +272,7 @@ export default function DocumentCanvas({ content, onContentChange, headerData, o
         )}
 
         {/* Paper Document */}
-        <div style={{ background: '#fff', width: '100%', maxWidth: 780, minHeight: 1100, borderRadius: 4, boxShadow: '0 4px 32px rgba(0,0,0,0.10)', padding: '60px 70px', boxSizing: 'border-box' }}>
+        <div id="exam-document-page" style={{ background: '#fff', width: '100%', maxWidth: 780, minHeight: 1100, borderRadius: 4, boxShadow: '0 4px 32px rgba(0,0,0,0.10)', padding: '60px 70px', boxSizing: 'border-box' }}>
           
           {!hideHeader && (
             <div style={{ borderBottom: '2px solid #073642', paddingBottom: 20, marginBottom: 40 }}>

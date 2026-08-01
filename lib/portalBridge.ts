@@ -64,7 +64,7 @@ export function fillPortal(payload: PortalFillPayload): Promise<{ success: boole
     }
 
     // Canal 1: postMessage para extensão injectada na página atual
-    window.postMessage(message, '*')
+    window.postMessage(message, window.location.origin)
 
     // Canal 2: BroadcastChannel para side panel da extensão
     try {
@@ -85,12 +85,18 @@ export function fillPortal(payload: PortalFillPayload): Promise<{ success: boole
     } catch (e) { /* ignore */ }
 
     // Aguarda resposta de confirmação por 3s
+    // F11: retorna false após timeout (extensão não instalada ou não responsiva)
     const timeout = setTimeout(() => {
-      resolve({ success: true }) // Assume sucesso — a extensão exibe feedback visualmente no portal
+      window.removeEventListener('message', handler)
+      resolve({
+        success: false,
+        error: 'Extensão do TEACHER??? não respondeu. Verifique se está instalada e ativa no Chrome.'
+      })
     }, 3000)
 
     // Ouve confirmação da extensão
     const handler = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return
       if (event.data?.action === 'FILL_RESULT' && event.data?.platform === payload.platform) {
         clearTimeout(timeout)
         window.removeEventListener('message', handler)
@@ -160,6 +166,7 @@ export function logPortalFill(payload: PortalFillPayload): void {
  */
 export function onExtensionMessage(handler: (msg: BridgeMessage) => void): () => void {
   const listener = (event: MessageEvent) => {
+    if (event.origin !== window.location.origin) return
     if (event.data && typeof event.data === 'object' && event.data.action) {
       handler(event.data as BridgeMessage)
     }

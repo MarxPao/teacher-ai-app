@@ -62,6 +62,7 @@ export default function Maestro() {
   const [newClass, setNewClass] = useState('9º Ano B')
   const [newType, setNewType] = useState<ActivityItem['type']>('Homework')
   const [newDueDate, setNewDueDate] = useState('2026-08-01')
+  const [classesListFromStorage, setClassesListFromStorage] = useState<string[]>(['9º Ano B', '8º Ano A', '3º Médio A', '1º Médio B'])
 
   useEffect(() => {
     const raw = localStorage.getItem('teacher_maestro_activities')
@@ -74,6 +75,17 @@ export default function Maestro() {
     } else {
       setActivities(INITIAL_ACTIVITIES)
       localStorage.setItem('teacher_maestro_activities', JSON.stringify(INITIAL_ACTIVITIES))
+    }
+
+    const clsRaw = localStorage.getItem('teacher_classes')
+    if (clsRaw) {
+      try {
+        const clsParsed = JSON.parse(clsRaw)
+        if (Array.isArray(clsParsed) && clsParsed.length > 0) {
+          setClassesListFromStorage(clsParsed.map(c => c.name || c))
+          setNewClass(clsParsed[0].name || clsParsed[0])
+        }
+      } catch {}
     }
   }, [])
 
@@ -108,12 +120,18 @@ export default function Maestro() {
 
   const handleCreateActivity = () => {
     if (!newTitle.trim()) return
+    
+    const students = JSON.parse(localStorage.getItem('teacher_students') || '[]')
+    let totalSt = students.filter((s: any) => s.class === newClass).length
+    if (totalSt === 0) totalSt = students.length
+    if (totalSt === 0) totalSt = 30
+    
     const newItem: ActivityItem = {
       id: `act_${Date.now()}`,
       title: newTitle.trim(),
       classRef: newClass,
       dueDate: newDueDate,
-      totalStudents: 30,
+      totalStudents: totalSt,
       submittedCount: 0,
       type: newType,
       portalSynced: false,
@@ -320,10 +338,7 @@ export default function Maestro() {
               <div>
                 <label style={{ fontSize: 12, fontWeight: 600, color: '#586e75', display: 'block', marginBottom: 4 }}>Turma</label>
                 <select value={newClass} onChange={e => setNewClass(e.target.value)} style={{ width: '100%', padding: '8px', borderRadius: 8, border: '1px solid #e8e0d0', fontSize: 13 }}>
-                  <option>9º Ano B</option>
-                  <option>8º Ano A</option>
-                  <option>3º Médio A</option>
-                  <option>1º Médio B</option>
+                  {classesListFromStorage.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
 

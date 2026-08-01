@@ -42,9 +42,11 @@ export async function POST(req: NextRequest) {
     // Se o cliente passou uma chave customizada no header
     const customGroqKey   = req.headers.get('x-groq-key')   || ''
     const customOpenAIKey = req.headers.get('x-openai-key') || ''
+    const customGeminiKey = req.headers.get('x-gemini-key') || ''
 
     const activeGroqKey   = customGroqKey   || groqKey
     const activeOpenAIKey = customOpenAIKey || openaiKey
+    const activeGeminiKey = customGeminiKey || geminiKey
 
     const contextTerms = (formData.get('contextTerms') as string) || ''
     const defaultPrompt = 'Transcrição pedagógica escolar precisa em português do Brasil sem marcas de gagueira.'
@@ -109,13 +111,13 @@ export async function POST(req: NextRequest) {
     }
 
     // 3. Fallback: Gemini 2.0 Flash Audio (se chave Gemini disponível) 💎
-    if (!rawText && geminiKey) {
+    if (!rawText && activeGeminiKey) {
       try {
         const arrayBuffer = await file.arrayBuffer()
         const base64Audio = Buffer.from(arrayBuffer).toString('base64')
         const mimeType    = file.type || 'audio/webm'
 
-        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`, {
+        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${activeGeminiKey}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -156,6 +158,7 @@ export async function POST(req: NextRequest) {
     })
 
   } catch (error) {
+    console.error('[Transcribe API] Critical Error:', error)
     const msg = error instanceof Error ? error.message : 'Erro interno na transcrição'
     return NextResponse.json({ error: msg }, { status: 500 })
   }

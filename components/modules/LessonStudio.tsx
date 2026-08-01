@@ -198,15 +198,31 @@ export default function LessonStudio() {
   useEffect(() => {
     updateSavedCount()
     window.addEventListener('storage', updateSavedCount)
-    const raw = localStorage.getItem('teacher_apis')
-    if (raw) {
-      const parsed: ApiConfig[] = JSON.parse(raw)
-      const active = parsed.filter(a => a.active)
-      setApis(active)
-      if (active.length > 0) setSelectedApiId(active[0].id)
-    }
+    try {
+      const { getAvailableApisForSelect } = require('@/lib/autoApiSelector')
+      const allApis = getAvailableApisForSelect()
+      setApis(allApis)
+      if (allApis.length > 0) setSelectedApiId(allApis[0].id)
+    } catch {}
+
+    // F8: Lê prefill enviado pela Rafinha (tool create_full_lesson)
+    try {
+      const prefillRaw = localStorage.getItem('teacher_lessonstudio_prefill')
+      if (prefillRaw) {
+        const prefill = JSON.parse(prefillRaw)
+        if (prefill.generatedAt && Date.now() - prefill.generatedAt < 10000) {
+          if (prefill.topic)    setTopic(prefill.topic)
+          if (prefill.grade)    setGrade(prefill.grade)
+          if (prefill.cefr)     setCefr(prefill.cefr)
+          if (prefill.duration) setDuration(prefill.duration)
+          localStorage.removeItem('teacher_lessonstudio_prefill')
+        }
+      }
+    } catch { /* ignore */ }
+
     return () => window.removeEventListener('storage', updateSavedCount)
   }, [])
+
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -256,21 +272,7 @@ No final da resposta, se um tópico for claro, inclua uma linha isolada no forma
       const api = apis.find(a => a.id === selectedApiId)
       let replyText = ''
 
-      if (!api || api.provider === 'manual') {
-        const r = await fetch('/api/agent', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            messages: [
-              { role: 'system', content: systemPrompt },
-              ...creativeMessages.map(m => ({ role: m.sender === 'user' ? 'user' : 'assistant', content: m.text })),
-              { role: 'user', content: userText }
-            ]
-          })
-        })
-        const d = await r.json()
-        replyText = d.response || d.text || 'Que ideia fantástica! Vamos pensar em como transformar isso em uma experiência inesquecível para os alunos.'
-      } else if (api.provider === 'openai' || api.provider === 'deepseek') {
+      if (api && (api.provider === 'openai' || api.provider === 'deepseek')) {
         const baseUrl = api.provider === 'deepseek' ? 'https://api.deepseek.com/v1/chat/completions' : 'https://api.openai.com/v1/chat/completions'
         const r = await fetch(baseUrl, {
           method: 'POST',
@@ -286,6 +288,24 @@ No final da resposta, se um tópico for claro, inclua uma linha isolada no forma
         })
         const d = await r.json()
         replyText = d.choices?.[0]?.message?.content || ''
+      } else {
+        const r = await fetch('/api/agent', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            messages: [
+              { role: 'system', content: systemPrompt },
+              ...creativeMessages.map(m => ({ role: m.sender === 'user' ? 'user' : 'assistant', content: m.text })),
+              { role: 'user', content: userText }
+            ],
+            context: 'lessonstudio',
+            provider: api?.provider || 'manual',
+            userKey: api?.key || '',
+            model: api?.model || ''
+          })
+        })
+        const d = await r.json()
+        replyText = d.response || d.text || 'Que ideia fantástica! Vamos pensar em como transformar isso em uma experiência inesquecível para os alunos.'
       }
 
       // Extrai tópico sugerido se houver
@@ -416,27 +436,9 @@ ESTRUTURA OBRIGATÓRIA DA RESPOSTA (GERE EM HTML LIMPO PARA EXIBIÇÃO EM CANVAS
 Gere o HTML completo agora:`
 
     try {
-      const api = apis.find(a => a.id === selectedApiId)
-      let text = ''
-      if (!api || api.provider === 'manual') {
-        const r = await fetch('/api/agent', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ messages: [{ role: 'user', content: prompt }] })
-        })
-        const d = await r.json()
-        text = d.response || d.text || ''
-      } else if (api.provider === 'openai' || api.provider === 'deepseek') {
-        const baseUrl = api.provider === 'deepseek' ? 'https://api.deepseek.com/v1/chat/completions' : 'https://api.openai.com/v1/chat/completions'
-        const r = await fetch(baseUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${api.key}` },
-          body: JSON.stringify({ model: api.model, messages: [{ role: 'user', content: prompt }] })
-        })
-        const d = await r.json()
-        if (d.error) throw new Error(d.error.message)
-        text = d.choices?.[0]?.message?.content || ''
-      }
+      const api = apis.find(a => a.id === selectedApiId) || apis[0] || null
+      const { executeUnifiedAiCall } = await import('@/lib/autoApiSelector')
+      const text = await executeUnifiedAiCall(api, prompt)
 
       const cleanHtml = text.replace(/^```html\n?/, '').replace(/```$/, '').trim()
       setResultHtml(cleanHtml)

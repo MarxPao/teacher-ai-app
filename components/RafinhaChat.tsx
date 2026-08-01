@@ -53,6 +53,8 @@ const TOOL_LABELS: Record<string, string> = {
   add_portfolio_item:         '📁 Adicionando ao Portfólio',
   save_repo_material:         '💾 Salvando no Repositório',
   generate_quick_questions:   '⚡ Questões Rápidas',
+  query_library:              '📚 Pesquisando na Biblioteca',
+  search_web:                 '🌐 Pesquisando na Internet',
 }
 
 const TOOL_EST_SECONDS: Record<string, number> = {
@@ -132,22 +134,33 @@ function undoLastAction(): boolean {
 // ─── App context (enriquecido com memória de alunos) ─────────────────────────────────
 function getAppContext(): string {
   try {
-    const students = JSON.parse(localStorage.getItem('teacher_students') || '[]')
-    const classes  = JSON.parse(localStorage.getItem('teacher_classes')  || '[]')
-    const tasks    = JSON.parse(localStorage.getItem('teacher_calendar_tasks') || '[]')
-    const boards   = JSON.parse(localStorage.getItem('teacher_lessonplanner_boards') || '[]')
-    const todos    = JSON.parse(localStorage.getItem('teacher_dashboard_todos') || '[]')
-    const comms    = JSON.parse(localStorage.getItem('teacher_communications') || '[]')
-    const pending  = tasks.filter((t: { done: boolean }) => !t.done)
-    const upcoming = pending.slice(0, 5).map((t: { title: string; date: string; type: string }) => `${t.title} (${t.date})`).join(', ')
+    const students  = JSON.parse(localStorage.getItem('teacher_students')  || '[]')
+    const classes   = JSON.parse(localStorage.getItem('teacher_classes')   || '[]')
+    const tasks     = JSON.parse(localStorage.getItem('teacher_calendar_tasks') || '[]')
+    const boards    = JSON.parse(localStorage.getItem('teacher_lessonplanner_boards') || '[]')
+    const todos     = JSON.parse(localStorage.getItem('teacher_dashboard_todos') || '[]')
+    const comms     = JSON.parse(localStorage.getItem('teacher_communications') || '[]')
+    const repo      = JSON.parse(localStorage.getItem('teacher_repository') || '[]')
+    const pending   = tasks.filter((t: { done: boolean }) => !t.done)
+    const upcoming  = pending.slice(0, 15).map((t: { title: string; date: string; type: string }) => `${t.title} (${t.date})`).join(', ')
     const cardCount = boards.reduce((a: number, b: { cards: unknown[] }) => a + b.cards.length, 0)
+    const repoSummary = repo.slice(0, 5).map((r: { title: string }) => r.title.replace(/^[^\w]*/, '')).join(', ')
+
     const base = [
-      `Alunos (${students.length}): ${students.slice(0, 15).map((s: { name: string }) => s.name).join(', ') || 'nenhum'}`,
+      `Alunos (${students.length}): ${students.slice(0, 40).map((s: { name: string }) => s.name).join(', ') || 'nenhum'}`,
       `Turmas: ${classes.map((c: { name: string }) => c.name).join(', ') || 'nenhuma'}`,
+      `Biblioteca RAG (${repo.length} livros): ${repoSummary || 'nenhum'}`,
       `Eventos pendentes (${pending.length}): ${upcoming || 'nenhum'}`,
       `Planos: ${cardCount} | Checklist: ${todos.filter((t: { done: boolean }) => !t.done).length} | Comunicados: ${comms.length}`,
     ].join(' | ')
-    return base + buildMemoryContext()
+
+    let longTermCtx = ''
+    try {
+      const { buildLongTermMemoryContext } = require('@/lib/longTermMemory')
+      longTermCtx = buildLongTermMemoryContext()
+    } catch {}
+
+    return base + buildMemoryContext() + longTermCtx
   } catch { return 'Dados indisponíveis' }
 }
 
@@ -203,8 +216,17 @@ async function executeTool(
     }
     case 'create_full_lesson': {
       takeSnapshot()
+      // F8: salva prefill para que o LessonStudio pré-preencha o formulário
+      localStorage.setItem('teacher_lessonstudio_prefill', JSON.stringify({
+        topic:    input.topic,
+        grade:    input.grade    || '',
+        cefr:     input.cefr     || '',
+        duration: input.duration || '',
+        generatedAt: Date.now(),
+      }))
+      window.dispatchEvent(new CustomEvent('teacher:lessonstudio_prefill'))
       if (onNavigate) onNavigate('lessonstudio')
-      return `Abrindo módulo Criar Aula... gerando plano completo e roteiro timed sobre "${input.topic}" no padrão Cambridge TKT!`
+      return `Abrindo Criar Aula com o tópico "${input.topic}" pré-carregado! Clique em Gerar Aula Completa para criar o plano no padrão Cambridge TKT.`
     }
     case 'create_communication': {
       takeSnapshot()
@@ -221,9 +243,22 @@ async function executeTool(
     case 'record_student_observation': {
       // Encontra o studentId real
       const students = JSON.parse(localStorage.getItem('teacher_students') || '[]')
-      const found = students.find((s: { name: string; id: string }) =>
-        s.name.toLowerCase().includes((input.studentName as string).toLowerCase()))
-      if (!found) return `Aluno "${input.studentName}" não encontrado`
+      const exactMatch = students.findIndex((s: { name: string; id: string }) =>
+        s.name.toLowerCase() === (input.studentName as string).toLowerCase()
+      )
+      const partialMatches = students.filter((s: { name: string; id: string }) =>
+        s.name.toLowerCase().includes((input.studentName as string).toLowerCase())
+      )
+      let found;
+      if (exactMatch !== -1) {
+        found = students[exactMatch]
+      } else if (partialMatches.length === 1) {
+        found = partialMatches[0]
+      } else if (partialMatches.length > 1) {
+        return `Encontrei ${partialMatches.length} alunos com esse nome: ${partialMatches.map((s: { name: string }) => s.name).join(', ')}. Por favor, especifique o nome completo.`
+      } else {
+        return `Aluno "${input.studentName}" não encontrado`
+      }
       addObservation(
         found.id,
         found.name,
@@ -296,7 +331,8 @@ async function executeTool(
       }))
       window.dispatchEvent(new CustomEvent('teacher:mindmap_prefill'))
       if (onNavigate) onNavigate('mindmap')
-      return `Mapa Mental sobre "${input.topic}" gerado!`
+      const branches = (input.branches as string[]) || []
+      return `Mapa Mental sobre "${input.topic}" criado com ${branches.length} ramos! A IA está expandindo os sub-tópicos automaticamente no módulo...`
     }
     case 'create_document': {
       localStorage.setItem('teacher_editor_prefill', JSON.stringify({
@@ -374,9 +410,22 @@ async function executeTool(
       takeSnapshot()
       const students = JSON.parse(localStorage.getItem('teacher_students') || '[]')
       const gbConfig = JSON.parse(localStorage.getItem('teacher_gbConfig') || '{"cols":[]}')
-      const idx = students.findIndex((s: { name: string }) =>
-        s.name.toLowerCase().includes((input.studentName as string).toLowerCase()))
-      if (idx === -1) return `Aluno "${input.studentName}" não encontrado`
+      const exactMatch = students.findIndex((s: { name: string }) =>
+        s.name.toLowerCase() === (input.studentName as string).toLowerCase()
+      )
+      const partialMatches = students.filter((s: { name: string }) =>
+        s.name.toLowerCase().includes((input.studentName as string).toLowerCase())
+      )
+      let idx = -1;
+      if (exactMatch !== -1) {
+        idx = exactMatch
+      } else if (partialMatches.length === 1) {
+        idx = students.findIndex((s: { name: string }) => s.name === partialMatches[0].name)
+      } else if (partialMatches.length > 1) {
+        return `Encontrei ${partialMatches.length} alunos com esse nome: ${partialMatches.map((s: { name: string }) => s.name).join(', ')}. Por favor, especifique o nome completo.`
+      } else {
+        return `Aluno "${input.studentName}" não encontrado`
+      }
       students[idx].grades = { ...(students[idx].grades || {}), [input.column as string]: String(input.grade) }
       localStorage.setItem('teacher_students', JSON.stringify(students))
       if (!gbConfig.cols.includes(input.column)) {
@@ -399,7 +448,10 @@ async function executeTool(
     }
     case 'fill_school_portal': {
       takeSnapshot()
-      await fillPortal({ platform: input.platform as never, title: input.title as string, date: input.date as string || '', classRef: input.classRef as string || '', description: input.description as string || '' })
+      const result = await fillPortal({ platform: input.platform as never, title: input.title as string, date: input.date as string || '', classRef: input.classRef as string || '', description: input.description as string || '' }) as any
+      if (result && result.success === false) {
+        return `Portal ${PORTAL_NAMES[input.platform as string] || input.platform} não respondeu. Verifique se a extensão Chrome está instalada e o portal está aberto.`
+      }
       logPortalFill({ platform: input.platform as never, title: input.title as string, date: input.date as string || '', classRef: input.classRef as string || '' })
       window.dispatchEvent(new Event('storage'))
       return `Preenchido no ${PORTAL_NAMES[input.platform as string] || input.platform}`
@@ -432,9 +484,22 @@ async function executeTool(
       const metricKey   = input.metricKey as string
       const score       = Number(input.score)
       const students    = JSON.parse(localStorage.getItem('teacher_students') || '[]')
-      const idx         = students.findIndex((s: { name: string }) =>
-        s.name.toLowerCase().includes(studentName.toLowerCase()))
-      if (idx === -1) return `Aluno "${studentName}" não encontrado`
+      const exactMatch = students.findIndex((s: { name: string }) =>
+        s.name.toLowerCase() === studentName.toLowerCase()
+      )
+      const partialMatches = students.filter((s: { name: string }) =>
+        s.name.toLowerCase().includes(studentName.toLowerCase())
+      )
+      let idx = -1;
+      if (exactMatch !== -1) {
+        idx = exactMatch
+      } else if (partialMatches.length === 1) {
+        idx = students.findIndex((s: { name: string }) => s.name === partialMatches[0].name)
+      } else if (partialMatches.length > 1) {
+        return `Encontrei ${partialMatches.length} alunos com esse nome: ${partialMatches.map((s: { name: string }) => s.name).join(', ')}. Por favor, especifique o nome completo.`
+      } else {
+        return `Aluno "${studentName}" não encontrado`
+      }
       const studentId  = students[idx].id
       const allMetrics = JSON.parse(localStorage.getItem('teacher_student_metrics') || '[]')
       const upd        = allMetrics.filter((m: { studentId: string }) => m.studentId !== studentId)
@@ -442,6 +507,32 @@ async function executeTool(
       localStorage.setItem('teacher_student_metrics', JSON.stringify([...upd, { studentId, scores: { ...old, [metricKey]: score } }]))
       window.dispatchEvent(new Event('storage'))
       return `Métrica "${metricKey}" de ${students[idx].name} → ${score}/10`
+    }
+    case 'query_library': {
+      const { searchLibraryContext } = await import('@/lib/ragEngine')
+      const chunks = searchLibraryContext(input.query as string, {
+        textbook: input.textbook as string,
+        type: input.type as string,
+        limit: 3
+      })
+      if (!chunks || chunks.length === 0) {
+        return `Nenhum trecho relevante encontrado na biblioteca para "${input.query}".`
+      }
+      return `Encontrados ${chunks.length} trechos na biblioteca RAG:\n` + chunks.map(c => `📚 **${c.docTitle}** (${c.unitTitle}): ${c.content.slice(0, 180)}...`).join('\n\n')
+    }
+    case 'search_web': {
+      const { searchWeb } = await import('@/lib/webSearch')
+      const webResults = await searchWeb(input.query as string)
+      if (!webResults || webResults.length === 0) {
+        return `Não foram encontrados resultados relevantes na internet para "${input.query}".`
+      }
+      return `Encontrados ${webResults.length} resultados na internet para "${input.query}":\n` +
+        webResults.map(r => `🌐 **${r.title}**: ${r.snippet}`).join('\n\n')
+    }
+    case 'remember_fact': {
+      const { saveLearnedFact } = await import('@/lib/longTermMemory')
+      saveLearnedFact(input.fact as string, (input.category as any) || 'teacher_preference', 'rafinha_tool')
+      return `Fato gravado na memória de longo prazo: "${input.fact}"`
     }
     default:
       return `${name} executado`
@@ -647,25 +738,36 @@ export default function RafinhaChat({ onNavigate, onCommandReady }: RafinhaChatP
   // ─── TTS ──────────────────────────────────────────────────────────────────────
   const speak = useCallback(async (text: string) => {
     if (!voiceOut || !text.trim()) return
+
+    // A5: Cancelar TODOS os canais de áudio antes de qualquer nova reprodução
     if (window.speechSynthesis) window.speechSynthesis.cancel()
-    if (audioRef.current) { audioRef.current.pause(); audioRef.current = null }
+    if (audioRef.current) {
+      audioRef.current.onended = null
+      audioRef.current.onerror = null
+      audioRef.current.pause()
+      audioRef.current = null
+    }
 
     const cleanText = text.replace(/[*_#`\[\]]/g, '').replace(/\n/g, ' ').slice(0, 400)
     setIsSpeaking(true)
     isSpeakingRef.current = true
     ;(window as any).rafinhaIsBusy = true
-    voiceStop() // Para a escuta do microfone enquanto a Rafinha fala
+
+    // A4: Para o microfone e aguarda encerramento antes de tocar áudio (evita eco e metalização)
+    voiceStop()
+    await new Promise(r => setTimeout(r, 300))
 
     const onDone = () => {
       setIsSpeaking(false)
       isSpeakingRef.current = false
       ;(window as any).rafinhaIsBusy = false
-      // Re-abre o microfone automaticamente após a resposta da Rafinha para conversa fluida mãos-livres!
+      audioRef.current = null
+      // A2: delay maior (800ms) para garantir que o áudio terminou COMPLETAMENTE antes de reabrir mic
       setTimeout(() => {
         if (!isSpeakingRef.current && !isLoadingRef.current) {
           voiceStart()
         }
-      }, 400)
+      }, 800)
     }
 
     try {
@@ -680,15 +782,18 @@ export default function RafinhaChat({ onNavigate, onCommandReady }: RafinhaChatP
           headers: { 'xi-api-key': elevenApi.key, 'Content-Type': 'application/json', 'Accept': 'audio/mpeg' },
           body: JSON.stringify({
             text: cleanText, model_id: 'eleven_multilingual_v2',
-            voice_settings: { stability: 0.55, similarity_boost: 0.8 }
+            voice_settings: { stability: 0.6, similarity_boost: 0.75, style: 0.0, use_speaker_boost: false }
           })
         })
         if (res.ok) {
           setIsHDVoice(true)
           const blob = await res.blob()
-          const audio = new Audio(URL.createObjectURL(blob))
+          const url  = URL.createObjectURL(blob)
+          const audio = new Audio(url)
+          audio.onended = () => { URL.revokeObjectURL(url); onDone() }
+          audio.onerror = () => { URL.revokeObjectURL(url); onDone() }
           audioRef.current = audio
-          audio.onended = onDone; audio.onerror = onDone; audio.play()
+          audio.play().catch(onDone)
           return
         }
       }
@@ -701,19 +806,22 @@ export default function RafinhaChat({ onNavigate, onCommandReady }: RafinhaChatP
       if (res.ok) {
         setIsHDVoice(true)
         const blob = await res.blob()
-        const audio = new Audio(URL.createObjectURL(blob))
+        const url  = URL.createObjectURL(blob)
+        const audio = new Audio(url)
+        audio.onended = () => { URL.revokeObjectURL(url); onDone() }
+        audio.onerror = () => { URL.revokeObjectURL(url); onDone() }
         audioRef.current = audio
-        audio.onended = onDone; audio.onerror = onDone; audio.play()
+        audio.play().catch(onDone)
         return
       }
-    } catch { /* fallback */ }
+    } catch { /* fallback para SpeechSynthesis */ }
 
     setIsHDVoice(false)
     if (!window.speechSynthesis) { onDone(); return }
     const u = new SpeechSynthesisUtterance(cleanText)
-    u.lang = 'pt-BR'; u.rate = 0.98; u.pitch = 1.0
+    u.lang = 'pt-BR'; u.rate = 0.95; u.pitch = 1.0
     const voices = window.speechSynthesis.getVoices()
-    const bestVoice = voices.find(v => v.lang.startsWith('pt') && (v.name.includes('natural') || v.name.includes('neural') || v.name.includes('Google')))
+    const bestVoice = voices.find(v => v.lang.startsWith('pt') && (v.name.toLowerCase().includes('natural') || v.name.toLowerCase().includes('neural') || v.name.toLowerCase().includes('google')))
       || voices.find(v => v.lang.startsWith('pt'))
     if (bestVoice) u.voice = bestVoice
     u.onend = onDone; u.onerror = onDone
@@ -866,21 +974,17 @@ export default function RafinhaChat({ onNavigate, onCommandReady }: RafinhaChatP
       // Placeholder da resposta da assistente (sem toolCalls visíveis no chat)
       setMessages(prev => [...prev, { role: 'assistant', content: '' }])
 
-      // ── Thinking em voz alta — Rafinha pensa junto com o professor ─────────────
-      const THINKING_PHRASES = [
-        'Deixa eu ver...', 'Um momento...', 'Verificando o contexto...',
-        'Processando...', 'Analisando...', 'Pronto, já sei o que fazer!',
-      ]
-      const actionWords = /vá|vá|abra|abrir|crie|criar|lance|adicione|gere|mont|plan|comunic/i
-      const thinkingLine = actionWords.test(trimmed)
-        ? 'Executando agora...' : THINKING_PHRASES[Math.floor(Math.random() * THINKING_PHRASES.length)]
-      // Fala apenas se o texto for curto e voz estiver ativa
-      if (voiceOut && trimmed.length < 120) {
-        speak(thinkingLine)
-      }
+      // A1: Removido speak(thinkingLine) — causava duplicação de áudio (thinkingLine + resposta final)
+      // O indicador visual de loading já comunica que a Rafinha está pensando
 
       try {
-        for (let iteration = 0; iteration < 5; iteration++) {
+        // B1: Limitar iterations por tipo de task — evita loop agêntico em tasks simples
+        const taskLower = trimmed.toLowerCase()
+        const isActionTask = /vá|va |abra|abrir|naveg|adicione|crie turma|crie aluno|lance|lançar|registre/i.test(taskLower)
+        const isGenerationTask = /prova|exercício|plano de aula|questão|atividade|sequência didática/i.test(taskLower)
+        const maxIterations = isActionTask ? 2 : isGenerationTask ? 4 : 3
+
+        for (let iteration = 0; iteration < maxIterations; iteration++) {
           const res = await fetch('/api/agent', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -980,6 +1084,12 @@ export default function RafinhaChat({ onNavigate, onCommandReady }: RafinhaChatP
           const last = { ...prev[prev.length - 1], content: finalText }
           return [...prev.slice(0, -1), last]
         })
+
+        // Motor de Aprendizado & Memória de Longo Prazo Contínua
+        try {
+          const { autoReflectAndLearn } = await import('@/lib/longTermMemory')
+          autoReflectAndLearn(trimmed, finalText)
+        } catch {}
 
         // Pequena pausa natural antes de falar (0.4s)
         await new Promise(r => setTimeout(r, 400))

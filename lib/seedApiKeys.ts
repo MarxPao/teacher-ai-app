@@ -25,7 +25,9 @@ export function seedApiKeysIfNeeded(userProvidedKeys: Record<string, string>) {
 
   // Só roda uma vez por versão de seed
   if (typeof window === 'undefined') return
-  if (localStorage.getItem(SEED_VERSION_KEY) === 'done') return
+  const currentStatus = localStorage.getItem(SEED_VERSION_KEY)
+  if (currentStatus === 'done' || currentStatus === 'pending') return
+  localStorage.setItem(SEED_VERSION_KEY, 'pending')
 
   const existing: ApiSeed[] = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]')
 

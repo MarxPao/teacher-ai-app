@@ -282,17 +282,25 @@ Utilize tom formal, embasado e respeitoso em português.`;
           }}>
              <h2 style={{ margin: '0 0 16px 0', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1.4px', color: '#c4a882' }}>Ações de Documento</h2>
              <button
-              onClick={handlePrint}
+              onClick={async () => {
+                if (!reportContent) return
+                try {
+                  const { exportElementToPdf } = await import('@/lib/exportUtils')
+                  await exportElementToPdf('auto-report-paper', `parecer_${selectedClassId || 'turma'}`)
+                } catch {
+                  window.print()
+                }
+              }}
               disabled={!reportContent}
               style={{
                 width: '100%',
-                padding: '9px 18px',
-                backgroundColor: reportContent ? '#fffcf8' : 'transparent',
-                color: reportContent ? '#2c1a0e' : '#a08060',
-                border: `1px solid ${reportContent ? 'rgba(139,115,85,0.3)' : 'rgba(139,115,85,0.18)'}`,
+                padding: '10px 14px',
+                backgroundColor: reportContent ? '#cb4b16' : 'transparent',
+                color: reportContent ? '#ffffff' : '#a08060',
+                border: 'none',
                 borderRadius: '9px',
                 fontSize: '13.5px',
-                fontWeight: '500',
+                fontWeight: '600',
                 cursor: reportContent ? 'pointer' : 'not-allowed',
                 display: 'flex',
                 alignItems: 'center',
@@ -300,11 +308,41 @@ Utilize tom formal, embasado e respeitoso em português.`;
                 gap: '8px',
                 transition: 'all 0.15s ease',
                 fontFamily: "'Inter', system-ui, sans-serif",
-                boxShadow: reportContent ? '0 1px 4px rgba(44,26,14,0.05)' : 'none'
+                boxShadow: reportContent ? '0 2px 6px rgba(203,75,22,0.25)' : 'none'
               }}
             >
-              <i className="ti ti-printer"></i>
-              Imprimir / Salvar PDF
+              <i className="ti ti-file-type-pdf"></i>
+              Exportar PDF HD
+            </button>
+
+            <button
+              onClick={async () => {
+                if (!reportContent) return
+                const { exportToWord } = await import('@/lib/exportUtils')
+                exportToWord('Parecer Pedagógico', `<div style="font-family: Arial">${reportContent.replace(/\n/g, '<br/>')}</div>`, `parecer_${selectedClassId || 'turma'}.docx`)
+              }}
+              disabled={!reportContent}
+              style={{
+                width: '100%',
+                padding: '10px 14px',
+                backgroundColor: reportContent ? '#268bd2' : 'transparent',
+                color: reportContent ? '#ffffff' : '#a08060',
+                border: 'none',
+                borderRadius: '9px',
+                fontSize: '13.5px',
+                fontWeight: '600',
+                cursor: reportContent ? 'pointer' : 'not-allowed',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                transition: 'all 0.15s ease',
+                fontFamily: "'Inter', system-ui, sans-serif",
+                boxShadow: reportContent ? '0 2px 6px rgba(38,139,210,0.25)' : 'none'
+              }}
+            >
+              <i className="ti ti-file-word"></i>
+              Baixar em Word (.docx)
             </button>
           </div>
         </div>
@@ -324,7 +362,7 @@ Utilize tom formal, embasado e respeitoso em português.`;
               Pré-visualização do Documento
             </h2>
             
-            <div style={{
+            <div id="auto-report-paper" style={{
               flex: 1,
               backgroundColor: '#ffffff',
               borderRadius: '8px',

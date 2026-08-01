@@ -23,7 +23,8 @@ export async function POST(req: NextRequest) {
     // 1. Prioridade Máxima: ElevenLabs (Voz Ultra-Natural Realista)
     const effectiveElevenKey = elevenKey || process.env.ELEVENLABS_API_KEY || ''
     if (effectiveElevenKey) {
-      const selectedVoiceId = voiceId || (voice.length > 15 ? voice : 'EXAVITQu4vr4xnSDxMaL') // Bella como padrão PT-BR
+    // B5: MF3mGyEYCl7XYWbV9V6O = voz PT-BR configurada no app; EXAVITQu4vr4xnSDxMaL era inglês (Sarah)
+    const selectedVoiceId = voiceId || (voice && voice.length > 15 ? voice : 'MF3mGyEYCl7XYWbV9V6O')
       const elevenRes = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${selectedVoiceId}`, {
         method: 'POST',
         headers: {
@@ -80,6 +81,7 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: 'Nenhuma chave de síntese de voz disponível' }, { status: 500 })
 
   } catch (error: unknown) {
+    console.error('[TTS API] Critical Error:', error)
     const msg = error instanceof Error ? error.message : 'Erro na síntese de voz'
     return Response.json({ error: msg }, { status: 500 })
   }

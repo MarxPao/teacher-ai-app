@@ -108,6 +108,107 @@ const AUTO_PRIORITY: Record<TaskType, string[]> = {
   stt:         ['groq',       'openai'],
 }
 
+function TokenProgressBar({ provider }: { provider: string }) {
+  const [usage, setUsage] = useState<any>(null)
+  const [isHovered, setIsHovered] = useState(false)
+
+  const reload = () => {
+    try {
+      const { getProviderUsage } = require('@/lib/tokenTracker')
+      setUsage(getProviderUsage(provider))
+    } catch {}
+  }
+
+  useEffect(() => {
+    reload()
+    window.addEventListener('storage', reload)
+    return () => window.removeEventListener('storage', reload)
+  }, [provider])
+
+  if (!usage) return null
+
+  const softLimit = usage.softLimitTokens || 500000
+  const exactPct = (usage.totalTokens / softLimit) * 100
+  const pct = Math.min(Math.round(exactPct), 100)
+  const formattedPct = exactPct > 0 && exactPct < 1 ? exactPct.toFixed(1) : pct.toString()
+  const barColor = pct > 85 ? '#dc322f' : pct > 60 ? '#b58900' : '#2d9d5d'
+
+  const handleReset = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    try {
+      const { resetProviderUsage } = require('@/lib/tokenTracker')
+      resetProviderUsage(provider)
+      reload()
+    } catch {}
+  }
+
+  const tooltipText = `${formattedPct}% do limite utilizado (${usage.totalTokens.toLocaleString('pt-BR')} / ${softLimit.toLocaleString('pt-BR')} Tokens)`
+
+  return (
+    <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px dashed rgba(88,110,117,0.15)' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: '#073642' }}>
+          <i className="ti ti-chart-bar" style={{ color: barColor }} />
+          <span>Consumo de Tokens: <strong>{usage.totalTokens.toLocaleString('pt-BR')}</strong> / {softLimit.toLocaleString('pt-BR')} ({formattedPct}%)</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 11, fontWeight: 700, color: usage.estimatedCostUsd > 0 ? '#b58900' : '#859900' }}>
+            {usage.estimatedCostUsd > 0 ? `~$${usage.estimatedCostUsd.toFixed(4)} USD` : 'Grátis'}
+          </span>
+          <button onClick={handleReset} style={{ fontSize: 10, padding: '2px 8px', borderRadius: 4, border: '1px solid rgba(88,110,117,0.2)', background: '#fdf6e3', color: '#586e75', cursor: 'pointer' }} title="Zerar consumo de tokens">
+            Zerar
+          </button>
+        </div>
+      </div>
+
+      {/* Container com Hover & Tooltip Flutuante */}
+      <div
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+        title={tooltipText}
+        style={{ position: 'relative', padding: '4px 0', cursor: 'pointer' }}
+      >
+        {/* Tooltip flutuante no Hover */}
+        {isHovered && (
+          <div style={{
+            position: 'absolute',
+            bottom: '100%',
+            left: '50%',
+            transform: 'translateX(-50%) translateY(-6px)',
+            background: '#073642',
+            color: '#fdf6e3',
+            padding: '5px 12px',
+            borderRadius: 6,
+            fontSize: 11,
+            fontWeight: 700,
+            whiteSpace: 'nowrap',
+            boxShadow: '0 4px 14px rgba(0,43,54,0.25)',
+            zIndex: 50,
+            pointerEvents: 'none',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            animation: 'fadeIn 0.15s ease'
+          }}>
+            <span style={{ width: 8, height: 8, borderRadius: '50%', background: barColor }} />
+            <span><strong>{formattedPct}%</strong> Usado ({usage.totalTokens.toLocaleString('pt-BR')} / {softLimit.toLocaleString('pt-BR')} Tokens)</span>
+          </div>
+        )}
+
+        {/* Barra de Progresso Visual */}
+        <div style={{ width: '100%', height: 10, background: '#ede8dc', borderRadius: 5, overflow: 'hidden', position: 'relative', border: isHovered ? `1px solid ${barColor}` : '1px solid transparent', transition: 'all 0.2s' }}>
+          <div style={{ width: `${Math.max(pct, usage.totalTokens > 0 ? 2 : 0)}%`, background: barColor, height: '100%', borderRadius: 5, transition: 'width 0.4s ease' }} />
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#93a1a1', marginTop: 4 }}>
+        <span>Entrada: {usage.promptTokens.toLocaleString('pt-BR')}t | Saída: {usage.completionTokens.toLocaleString('pt-BR')}t</span>
+        <span>{usage.requestsCount} requisições {usage.lastUsedAt !== 'Nunca' ? `· Último: ${usage.lastUsedAt}` : ''}</span>
+      </div>
+    </div>
+  )
+}
+
 /* ─── Componente ─────────────────────────────────────────────────────────────── */
 export default function ApiManager() {
   const [apis,        setApis]        = useState<ApiConfig[]>([])
@@ -340,6 +441,33 @@ export default function ApiManager() {
             </p>
           </div>
 
+          {/* 📊 Painel de Consumo Real de Tokens por Modelo (Com Hover %) */}
+          <div style={{ background: '#fff', padding: 22, borderRadius: 16, border: '1px solid #ede8dc', boxShadow: '0 2px 10px rgba(0,43,54,0.04)' }}>
+            <h3 style={{ fontSize: 15, fontWeight: 700, color: '#073642', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <i className="ti ti-activity" style={{ color: '#2d9d5d', fontSize: 20 }} />
+              Monitor de Consumo em Tempo Real (Passe o mouse na barra para ver a % exata)
+            </h3>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
+              {[
+                { provider: 'groq', label: '⚡ Groq Llama-3.3 70B' },
+                { provider: 'gemini', label: '✨ Google Gemini 2.0 Flash' },
+                { provider: 'zhipu', label: '🚀 Zhipu AI GLM-4-Flash' },
+                { provider: 'siliconflow', label: '🔷 SiliconFlow Qwen2.5' },
+                { provider: 'openrouter', label: '🌐 OpenRouter (Rota Grátis)' },
+                { provider: 'deepseek', label: '🐋 DeepSeek V3 / R1' },
+                { provider: 'openai', label: '🟢 OpenAI GPT-4o' },
+                { provider: 'anthropic', label: '🟣 Anthropic Claude 3.5' },
+              ].map(item => (
+                <div key={item.provider} style={{ background: '#fcfbf9', border: '1px solid #ede8dc', borderRadius: 12, padding: '14px 16px' }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: '#073642', marginBottom: 4, display: 'flex', justifyContent: 'space-between' }}>
+                    <span>{item.label}</span>
+                  </div>
+                  <TokenProgressBar provider={item.provider} />
+                </div>
+              ))}
+            </div>
+          </div>
+
           {/* Gráfico da Pirâmide de Hierarquia de Capacidade */}
           <div style={{ background: '#fff', padding: 24, borderRadius: 16, border: '1px solid #ede8dc', boxShadow: '0 2px 10px rgba(0,43,54,0.04)' }}>
             <h3 style={{ fontSize: 15, fontWeight: 700, color: '#073642', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -568,6 +696,13 @@ export default function ApiManager() {
                   </div>
                 </div>
               )}
+              {/* Barra de Progresso de Tokens */}
+              {api.active && api.provider !== 'manual' && (
+                <div style={{ padding: '0 22px 18px' }}>
+                  <TokenProgressBar provider={api.provider} />
+                </div>
+              )}
+
               {api.provider === 'manual' && api.active && (
                 <div style={{ fontSize: 13, color: '#586e75', margin: '0 22px 16px', padding: '12px 16px', borderTop: '1px dashed rgba(88,110,117,0.1)', background: '#f5f0e8', borderRadius: 8 }}>
                   Modo sem conexão automática. Gera o <strong>Prompt Estruturado</strong> para copiar e colar no ChatGPT/Claude/Gemini gratuito.

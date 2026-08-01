@@ -100,6 +100,17 @@ export default function MindMap() {
           const updated = [...maps, newMap]
           saveMaps(updated)
           setActiveMapId(newMap.id)
+          setAiTopic(pre.topic)
+          
+          const apis = localStorage.getItem('teacher_apis')
+          if (apis) {
+            try {
+              const parsedApis = JSON.parse(apis)
+              if (parsedApis.some((a: any) => a.active && a.key)) {
+                setTimeout(() => handleGenerateAiMindMap(pre.topic), 500)
+              }
+            } catch (e) {}
+          }
         }
       } catch {}
     }
@@ -107,14 +118,15 @@ export default function MindMap() {
     return () => window.removeEventListener('teacher:mindmap_prefill', handleMindmapPrefill)
   }, [maps])
 
-  async function handleGenerateAiMindMap() {
-    if (!aiTopic.trim() && !customPrompt.trim()) {
+  async function handleGenerateAiMindMap(overrideTopic?: string | React.MouseEvent) {
+    const topic = typeof overrideTopic === 'string' ? overrideTopic : aiTopic
+    if (!topic.trim() && !customPrompt.trim()) {
       alert('Digite um tema ou um prompt para a IA.')
       return
     }
     setAiLoading(true)
     const prompt = `Crie a estrutura de um mapa mental pedagógico.
-Tema Principal: "${aiTopic || 'Conteúdo Escolar'}"
+Tema Principal: "${topic || 'Conteúdo Escolar'}"
 ${customPrompt ? `Instruções adicionais do professor (Prompt): "${customPrompt}"` : ''}
 
 Retorne estritamente um JSON no formato:
@@ -135,7 +147,7 @@ Retorne estritamente um JSON no formato:
       if (match) {
         const parsed = JSON.parse(match[0])
         const rootId = `root_${Date.now()}`
-        const rootNode: MindNode = { id: rootId, text: parsed.topic || aiTopic, x: 560, y: 320, color: '#073642', parentId: null }
+        const rootNode: MindNode = { id: rootId, text: parsed.topic || topic, x: 560, y: 320, color: '#073642', parentId: null }
         const branches: string[] = parsed.branches || ['Conceitos', 'Exemplos', 'Exercícios']
         const childNodes: MindNode[] = branches.map((b, idx) => {
           const angle = (idx / branches.length) * 2 * Math.PI
@@ -147,7 +159,7 @@ Retorne estritamente um JSON no formato:
             color: PALETTE[(idx + 1) % PALETTE.length], parentId: rootId,
           }
         })
-        const newMap: MindMapData = { id: Date.now().toString(), title: `Mapa: ${parsed.topic || aiTopic}`, nodes: [rootNode, ...childNodes] }
+        const newMap: MindMapData = { id: Date.now().toString(), title: `Mapa: ${parsed.topic || topic}`, nodes: [rootNode, ...childNodes] }
         const updated = [...maps, newMap]
         saveMaps(updated)
         setActiveMapId(newMap.id)

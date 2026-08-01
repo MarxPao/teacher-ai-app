@@ -112,6 +112,49 @@ export default function QuestionBank() {
   const [aiType,    setAiType]    = useState<QuestionType>('mc')
   const [aiSchool,  setAiSchool]  = useState('')
 
+  /* ─── Rubricas & Gabaritos State (Auto-Sync) ───────────────────────────── */
+  const [rubrics, setRubrics] = useState<any[]>([])
+  const [previewRubric, setPreviewRubric] = useState<any | null>(null)
+
+  const autoSyncRubrics = async () => {
+    try {
+      const local = JSON.parse(localStorage.getItem('teacher_rubrics') || '[]')
+      const { fetchSupabaseActivitiesAndRubrics } = await import('@/lib/supabaseClient')
+      const cloud = await fetchSupabaseActivitiesAndRubrics()
+      const cloudRubrics = cloud.filter(c => c.sourceTable === 'rubrics_and_answer_keys' || c.type === 'rubric' || c.type === 'answer_key')
+
+      const map = new Map<string, any>()
+      for (const item of [...local, ...cloudRubrics]) {
+        if (item.id) map.set(item.id, item)
+      }
+      setRubrics(Array.from(map.values()))
+    } catch {
+      try {
+        const local = JSON.parse(localStorage.getItem('teacher_rubrics') || '[]')
+        setRubrics(local)
+      } catch {}
+    }
+  }
+
+  useEffect(() => {
+    autoSyncRubrics()
+    window.addEventListener('storage', autoSyncRubrics)
+    return () => window.removeEventListener('storage', autoSyncRubrics)
+  }, [])
+
+  const handleDeleteRubric = async (item: any) => {
+    if (!confirm(`Deseja excluir a rubrica/gabarito "${item.title}"?`)) return
+    try {
+      const { deleteSupabaseActivity } = await import('@/lib/supabaseClient')
+      await deleteSupabaseActivity(item.id, 'rubrics_and_answer_keys')
+    } catch {}
+
+    const updated = rubrics.filter(r => r.id !== item.id)
+    setRubrics(updated)
+    localStorage.setItem('teacher_rubrics', JSON.stringify(updated))
+    window.dispatchEvent(new Event('storage'))
+  }
+
   /* ─── Carregar dados ─────────────────────────────────────────────────────── */
   useEffect(() => {
     const load = () => {
@@ -175,47 +218,169 @@ export default function QuestionBank() {
     setFLevel2('B1'); setFYear2('2025'); setFSchool2(''); setFClass2(''); setFTags('')
   }
 
+async function callApiDirect(api: { provider: string; key?: string; model?: string }, prompt: string): Promise<string> {
+  if (!api.key) throw new Error(`Chave de API não configurada para ${api.provider}.`)
+  if (api.provider === 'anthropic') {
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': api.key, 'anthropic-version': '2023-06-01', 'anthropic-dangerously-allow-browser': 'true' },
+      body: JSON.stringify({ model: api.model || 'claude-3-5-sonnet-20241022', max_tokens: 4096, messages: [{ role: 'user', content: prompt }] })
+    })
+    const d = await r.json()
+    if (d.error) throw new Error(d.error.message || JSON.stringify(d.error))
+    return d.content?.map((c: { text: string }) => c.text).join('\n') || ''
+  }
+  if (api.provider === 'openai' || api.provider === 'deepseek') {
+    const baseUrl = api.provider === 'deepseek' ? 'https://api.deepseek.com/v1/chat/completions' : 'https://api.openai.com/v1/chat/completions'
+    const r = await fetch(baseUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${api.key}` },
+      body: JSON.stringify({ model: api.model || (api.provider === 'deepseek' ? 'deepseek-chat' : 'gpt-4o-mini'), messages: [{ role: 'user', content: prompt }], max_tokens: 4096 })
+    })
+    const d = await r.json()
+    if (d.error) throw new Error(d.error.message || JSON.stringify(d.error))
+    return d.choices?.[0]?.message?.content || ''
+  }
+  if (api.provider === 'gemini') {
+    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${api.model || 'gemini-1.5-flash'}:generateContent?key=${api.key}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+    })
+    const d = await r.json()
+    if (d.error) throw new Error(d.error.message || JSON.stringify(d.error))
+    return d.candidates?.[0]?.content?.parts?.[0]?.text || ''
+  }
+  throw new Error('Provedor não suportado para chamada direta.')
+}
+
+function parseJsonFromAI(text: string): Array<{ statement: string; options?: string[]; answer?: string; explanation?: string }> {
+  if (!text || !text.trim()) {
+    throw new Error('A IA não retornou nenhuma resposta.')
+  }
+
+  let cleaned = text.trim()
+    .replace(/^```json\s*/gi, '')
+    .replace(/^```\s*/gi, '')
+    .replace(/\s*```$/gi, '')
+    .trim()
+
+  try {
+    const parsed = JSON.parse(cleaned)
+    return Array.isArray(parsed) ? parsed : [parsed]
+  } catch {
+    // Continue to substring extraction
+  }
+
+  const startIdx = cleaned.indexOf('[')
+  const endIdx = cleaned.lastIndexOf(']')
+
+  if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+    const candidate = cleaned.slice(startIdx, endIdx + 1)
+    try {
+      const parsed = JSON.parse(candidate)
+      return Array.isArray(parsed) ? parsed : [parsed]
+    } catch {
+      try {
+        const sanitized = candidate
+          .replace(/,\s*([\]}])/g, '$1')
+          .replace(/[\u0000-\u001F\u007F-\u009F]/g, ' ')
+        const parsed = JSON.parse(sanitized)
+        return Array.isArray(parsed) ? parsed : [parsed]
+      } catch {
+        throw new Error('A resposta da IA não pôde ser convertida em formato JSON.')
+      }
+    }
+  }
+
+  const objStart = cleaned.indexOf('{')
+  const objEnd = cleaned.lastIndexOf('}')
+
+  if (objStart !== -1 && objEnd !== -1 && objEnd > objStart) {
+    const candidate = cleaned.slice(objStart, objEnd + 1)
+    try {
+      const parsed = JSON.parse(candidate)
+      return [parsed]
+    } catch {
+      throw new Error('A resposta da IA continha um objeto malformado.')
+    }
+  }
+
+  throw new Error('IA não retornou um formato JSON válido. Tente novamente.')
+}
+
   /* ─── Gerar com IA ───────────────────────────────────────────────────────── */
   async function generateWithAI() {
     const api = getActiveApi()
     if (!api) { alert('Configure uma API ativa em APIs & Modelos.'); return }
+    if (!aiTopic.trim()) { alert('Informe o tópico ou assunto.'); return }
+
     setIsGen(true)
     try {
-      const prompt = `Gere ${aiCount} itens de ${KIND_LABELS[aiKind].label} (${aiType === 'mc' ? 'múltipla escolha' : aiType === 'essay' ? 'dissertativa' : aiType === 'tf' ? 'verdadeiro ou falso' : 'preencher lacuna'}) sobre "${aiTopic}" para a disciplina ${aiSubject}, nível ${aiLevel}, ano letivo ${aiYear}.
+      const prompt = `Você é um gerador automatizado de atividades e questões pedagógicas. Sua resposta DEVE ser EXCLUSIVAMENTE um JSON VÁLIDO sem markdown, sem cumprimentos e sem explicações fora do JSON.
 
-Responda SOMENTE com JSON válido no formato:
+Gere exatamente ${aiCount} itens de ${KIND_LABELS[aiKind].label} (${aiType === 'mc' ? 'múltipla escolha' : aiType === 'essay' ? 'dissertativa' : aiType === 'tf' ? 'verdadeiro ou falso' : 'preencher lacuna'}) sobre "${aiTopic}" para a disciplina ${aiSubject}, nível ${aiLevel}, ano letivo ${aiYear}.
+
+FORMATO OBRIGATÓRIO (retorne SOMENTE este array JSON):
 [
   {
-    "statement": "Enunciado ou Tópico da atividade aqui",
-    "options": ["A) opção", "B) opção", "C) opção", "D) opção"],
+    "statement": "Enunciado ou texto da atividade",
+    "options": ["A) opção 1", "B) opção 2", "C) opção 3", "D) opção 4"],
     "answer": "A",
-    "explanation": "Porque..."
+    "explanation": "Comentário pedagógico ou resolução"
   }
 ]
-Para questões dissertativas ou V/F, omita "options". Para V/F, o "answer" deve ser "Verdadeiro" ou "Falso".`
 
-      const res = await fetch('/api/agent', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messages: [{ role: 'user', content: prompt }],
-          context: '', provider: api.provider, userKey: api.key, model: api.model,
-        }),
-      })
-      const data = await res.json()
-      const text = data.content?.find((c: { type: string }) => c.type === 'text')?.text || ''
-      const jsonMatch = text.match(/\[[\s\S]*\]/)
-      if (!jsonMatch) throw new Error('IA não retornou JSON válido')
-      const parsed: Array<{ statement: string; options?: string[]; answer?: string; explanation?: string }> = JSON.parse(jsonMatch[0])
+Para questões dissertativas ou V/F, omita "options". Para V/F, o "answer" deve ser "Verdadeiro" ou "Falso". Retorne APENAS o JSON puro.`
+
+      let rawText = ''
+
+      if (api.key && api.provider !== 'manual') {
+        try {
+          rawText = await callApiDirect(api, prompt)
+        } catch (err) {
+          console.warn('Chamada direta de API falhou, tentando /api/agent:', err)
+        }
+      }
+
+      if (!rawText) {
+        const res = await fetch('/api/agent', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            messages: [{ role: 'user', content: prompt }],
+            context: '', provider: api.provider, userKey: api.key, model: api.model,
+          }),
+        })
+        const data = await res.json()
+        if (data.error) throw new Error(data.error)
+        rawText = data.content?.find((c: { type: string; text?: string }) => c.type === 'text')?.text || ''
+        if (!rawText && Array.isArray(data.content) && data.content[0]?.text) {
+          rawText = data.content[0].text
+        }
+      }
+
+      const parsed = parseJsonFromAI(rawText)
 
       const newQs: Question[] = parsed.map((item, i) => ({
-        id: `q_ai_${Date.now()}_${i}`, statement: item.statement, type: aiType,
+        id: `q_ai_${Date.now()}_${i}`,
+        statement: item.statement || `Questão ${i + 1} sobre ${aiTopic}`,
+        type: aiType,
         activityKind: aiKind,
-        options: item.options, answer: item.answer, explanation: item.explanation,
-        subject: aiSubject, topic: aiTopic, level: aiLevel, year: aiYear,
-        schoolId: aiSchool || '', classRef: '', tags: [aiTopic.toLowerCase()],
-        createdAt: Date.now(), source: 'ai',
+        options: item.options,
+        answer: item.answer,
+        explanation: item.explanation,
+        subject: aiSubject,
+        topic: aiTopic,
+        level: aiLevel,
+        year: aiYear,
+        schoolId: aiSchool || '',
+        classRef: '',
+        tags: [aiTopic.toLowerCase()],
+        createdAt: Date.now() + i,
+        source: 'ai',
       }))
+
       saveQs([...newQs, ...questions])
       setModal(null)
     } catch (e) {
@@ -241,8 +406,8 @@ Para questões dissertativas ou V/F, omita "options". Para V/F, o "answer" deve 
           <h1 style={{ fontFamily: "'Fraunces', 'Playfair Display', Georgia, serif", fontSize: 32, fontWeight: 700, color: '#2c1a0e', margin: 0 }}>
             Banco de Atividades
           </h1>
-          <p style={{ color: '#a08060', fontSize: 14, marginTop: 4 }}>
-            {questions.length} atividades salvas · acervo central de aulas, listas, provas e gabaritos
+          <p style={{ color: '#a08060', fontSize: 14, marginTop: 4, margin: 0 }}>
+            Acervo central de aulas, provas, exercícios, rubricas e gabaritos integrados e auto-sincronizados.
           </p>
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
@@ -255,16 +420,17 @@ Para questões dissertativas ou V/F, omita "options". Para V/F, o "answer" deve 
         </div>
       </div>
 
-      {/* Sub-abas de Categoria de Atividade (Aulas, Exercícios, Provas, Questões) */}
-      <div style={{ display: 'flex', gap: 10, marginBottom: 20, flexWrap: 'wrap' }}>
+      {/* ─── ABAS DE CATEGORIA DE ATIVIDADE (MESMA PALETA DE CORES PAPER & INK) ─── */}
+      <div style={{ display: 'flex', gap: 10, marginBottom: 24, flexWrap: 'wrap' }}>
         {[
-          { key: 'all',      label: '🎒 Todas as Atividades', count: questions.length },
-          { key: 'lesson',   label: '📚 Aulas Criadas',       count: questions.filter(q => q.activityKind === 'lesson').length },
-          { key: 'exercise', label: '📝 Exercícios Salvos',  count: questions.filter(q => (q.activityKind || 'exercise') === 'exercise').length },
-          { key: 'exam',     label: '📄 Provas & Gabaritos', count: questions.filter(q => q.activityKind === 'exam').length },
-          { key: 'question', label: '❓ Questões Isoladas',   count: questions.filter(q => q.activityKind === 'question').length },
+          { key: 'all',        label: '🎒 Todas as Atividades', count: questions.length + rubrics.length },
+          { key: 'lesson',     label: '📚 Aulas Criadas',       count: questions.filter(q => q.activityKind === 'lesson').length },
+          { key: 'exercise',   label: '📝 Exercícios Salvos',  count: questions.filter(q => (q.activityKind || 'exercise') === 'exercise').length },
+          { key: 'exam',       label: '📄 Provas Salvas',       count: questions.filter(q => q.activityKind === 'exam').length },
+          { key: 'question',   label: '❓ Questões Isoladas',   count: questions.filter(q => q.activityKind === 'question').length },
+          { key: 'rubric_key', label: '📊 Rubricas & Gabaritos', count: rubrics.length },
         ].map(tab => {
-          const isActive = fKind === tab.key
+          const isActive = fKind === (tab.key as any)
           return (
             <button
               key={tab.key}
@@ -291,6 +457,109 @@ Para questões dissertativas ou V/F, omita "options". Para V/F, o "answer" deve 
           )
         })}
       </div>
+
+      {/* ─── EXIBIÇÃO DA ABA EXCLUSIVA DE RUBRICAS & GABARITOS ─── */}
+      {fKind === ('rubric_key' as any) ? (
+        <div>
+          {rubrics.length === 0 ? (
+            <div style={{ ...S.card, padding: 40, textAlign: 'center' }}>
+              <i className="ti ti-table" style={{ fontSize: 48, color: '#a08060', opacity: 0.5, marginBottom: 12 }} />
+              <h3 style={{ margin: 0, color: '#2c1a0e', fontSize: 16 }}>Nenhuma Rubrica ou Gabarito Salvo</h3>
+              <p style={{ color: '#a08060', fontSize: 13, marginTop: 4 }}>
+                Gere uma Rubrica Pedagógica no módulo de Rubricas e clique em <strong>"Salvar Rubrica no Supabase"</strong> para armazená-la no seu acervo.
+              </p>
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 16 }}>
+              {rubrics.map(item => (
+                <div key={item.id} style={{ ...S.card, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                      <span style={{ padding: '4px 10px', borderRadius: 12, fontSize: 11, fontWeight: 700, textTransform: 'uppercase', background: 'rgba(139,94,60,0.12)', color: '#8b5e3c' }}>
+                        {item.type === 'answer_key' ? '🔑 Gabarito Comentado' : '📊 Rubrica Pedagógica'}
+                      </span>
+                      <span style={{ fontSize: 11, color: '#a08060' }}>
+                        {item.created_at ? new Date(item.created_at).toLocaleDateString('pt-BR') : 'Auto-Sync'}
+                      </span>
+                    </div>
+
+                    <h4 style={{ fontSize: 15, fontWeight: 700, color: '#2c1a0e', margin: '0 0 8px 0', lineHeight: 1.3 }}>
+                      {item.title}
+                    </h4>
+
+                    <div style={{ fontSize: 12, color: '#7a5c42', marginBottom: 14 }}>
+                      Nível / Ano: <strong>{item.grade || 'CEFR'}</strong>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: 8, borderTop: '1px solid rgba(139,115,85,0.12)', paddingTop: 12 }}>
+                    <button
+                      onClick={() => setPreviewRubric(item)}
+                      style={{ ...S.btn, flex: 1, background: '#8b5e3c', color: '#fff', justifyContent: 'center', fontSize: 12 }}
+                    >
+                      <i className="ti ti-eye" /> Visualizar
+                    </button>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(item.content)
+                        alert('📋 Rubrica copiada para a área de transferência!')
+                      }}
+                      style={{ ...S.btn, background: '#f5efe6', color: '#7a5c42', padding: '8px 12px' }}
+                      title="Copiar texto"
+                    >
+                      <i className="ti ti-copy" />
+                    </button>
+                    <button
+                      onClick={() => handleDeleteRubric(item)}
+                      style={{ ...S.btn, background: 'rgba(220,50,47,0.1)', color: '#dc322f', padding: '8px 12px' }}
+                      title="Excluir"
+                    >
+                      <i className="ti ti-trash" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Modal de Pré-visualização da Rubrica / Gabarito */}
+          {previewRubric && (
+            <div style={{ position: 'fixed', inset: 0, background: 'rgba(44,26,14,0.5)', backdropFilter: 'blur(4px)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+              <div style={{ ...S.card, width: '100%', maxWidth: 840, maxHeight: '90vh', padding: 24, display: 'flex', flexDirection: 'column' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                  <div>
+                    <h3 style={{ fontSize: 18, fontWeight: 800, color: '#2c1a0e', margin: 0 }}>{previewRubric.title}</h3>
+                    <div style={{ fontSize: 12, color: '#a08060', marginTop: 4 }}>
+                      Rubrica Pedagógica Sincronizada com Supabase
+                    </div>
+                  </div>
+                  <button onClick={() => setPreviewRubric(null)} style={{ background: '#f5efe6', border: 'none', borderRadius: '50%', width: 36, height: 36, cursor: 'pointer', fontSize: 18, color: '#2c1a0e' }}>×</button>
+                </div>
+
+                <div style={{ flex: 1, overflowY: 'auto', background: '#fff', border: '1px solid rgba(139,115,85,0.18)', borderRadius: 12, padding: 20, fontSize: 14, color: '#2c1a0e', lineHeight: 1.6 }}
+                  dangerouslySetInnerHTML={{ __html: previewRubric.content }}
+                />
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 16 }}>
+                  <button onClick={() => setPreviewRubric(null)} style={{ ...S.btn, background: '#f5efe6', color: '#7a5c42' }}>
+                    Fechar
+                  </button>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(previewRubric.content)
+                      alert('📋 Conteúdo copiado!')
+                    }}
+                    style={{ ...S.btn, background: '#8b5e3c', color: '#fff' }}
+                  >
+                    <i className="ti ti-copy" /> Copiar Conteúdo
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      ) : (
+        <>
 
       {/* Stats rápidos */}
       <div style={{ display: 'flex', gap: 12, marginBottom: 24, flexWrap: 'wrap' }}>
@@ -436,6 +705,8 @@ Para questões dissertativas ou V/F, omita "options". Para V/F, o "answer" deve 
           </div>
         )}
       </div>
+        </>
+      )}
 
       {/* ─── Modal: Adicionar Manualmente ──────────────────────────────────── */}
       {modal === 'add' && (

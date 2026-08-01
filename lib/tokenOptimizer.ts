@@ -51,9 +51,9 @@ export function calculateDynamicTokens(lastUserMessage: string): { maxTokens: nu
     return { maxTokens: 768, temperature: 0.3 }
   }
 
-  // Geração de provas, planos de aula ou exercícios ELT
+  // Geração de provas, planos de aula ou exercícios ELT — F6: 4096 para não cortar resposta
   if (/crie|gere|monte|prova|exame|plano de aula|exercício|rubrica|questão/.test(lower)) {
-    return { maxTokens: 2560, temperature: 0.7 }
+    return { maxTokens: 4096, temperature: 0.7 }
   }
 
   // Chat padrão / respostas do dia a dia

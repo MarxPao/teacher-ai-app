@@ -190,9 +190,13 @@ export default function Repository() {
     setViewItem(currentItems[0] || null)
   }, [])
 
-  function save(newItems: RepositoryItem[]) {
+  async function save(newItems: RepositoryItem[]) {
     setItems(newItems)
     localStorage.setItem('teacher_repo', JSON.stringify(newItems))
+    try {
+      const { indexAllLibraryItems } = await import('@/lib/ragEngine')
+      indexAllLibraryItems()
+    } catch { /* ignora */ }
   }
 
   function addItem() {
@@ -209,29 +213,43 @@ export default function Repository() {
     setNewTitle(''); setNewContent(''); setAdding(false); setViewItem(item)
   }
 
-  // Upload de arquivo nativo (TXT, MD, CSV, PDF Text)
-  function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+  // Upload de arquivo nativo (TXT, MD, CSV, PDF Text com PDF.js)
+  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
 
-    const reader = new FileReader()
-    reader.onload = (ev) => {
-      const text = ev.target?.result as string
-      if (!text) return
+    try {
+      let text = ''
+      if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
+        const { extractTextFromPdf } = await import('@/lib/pdfExtractor')
+        text = await extractTextFromPdf(file)
+      } else {
+        text = await new Promise<string>((resolve) => {
+          const reader = new FileReader()
+          reader.onload = (ev) => resolve((ev.target?.result as string) || '')
+          reader.readAsText(file)
+        })
+      }
+
+      if (!text) {
+        alert('Não foi possível extrair conteúdo do arquivo selecionado.')
+        return
+      }
 
       const item: RepositoryItem = {
         id: Date.now(),
         title: file.name.replace(/\.[^/.]+$/, ""),
         content: text,
         type: newType,
-        category: 'Arquivo Carregado',
+        category: file.name.endsWith('.pdf') ? 'Livro / PDF Extraído' : 'Arquivo Carregado',
         date: new Date().toLocaleDateString('pt-BR'),
       }
       save([item, ...items])
       setViewItem(item)
-      alert(`✅ Arquivo "${file.name}" importado e lido com sucesso pela IA!`)
+      alert(`✅ Livro/PDF "${file.name}" importado e lido com sucesso pela IA!`)
+    } catch (err: unknown) {
+      alert(`Erro ao ler arquivo: ${err instanceof Error ? err.message : 'Falha na leitura'}`)
     }
-    reader.readAsText(file)
   }
 
   function reimportAllG4Presets() {
@@ -269,7 +287,7 @@ export default function Repository() {
       maxWidth="100%"
       actions={
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-          <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept=".txt,.md,.json,.csv" style={{ display: 'none' }} />
+          <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept=".txt,.md,.json,.csv,.pdf" style={{ display: 'none' }} />
 
           <button 
             onClick={() => fileInputRef.current?.click()}

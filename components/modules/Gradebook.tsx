@@ -49,12 +49,24 @@ export default function Gradebook() {
 
   const renameCol = (idx: number, newName: string) => {
     const oldName = cols[idx]
+    if (oldName === newName) return
+
     const newCols = [...cols]
     newCols[idx] = newName
     setCols(newCols)
     localStorage.setItem('teacher_gbConfig', JSON.stringify({ cols: newCols }))
     
-    // Migrate grades key if needed? Maybe only on blur to avoid mass updates on every key
+    const updatedStudents = students.map(s => {
+      if (s.grades[oldName] !== undefined) {
+        const newGrades = { ...s.grades, [newName]: s.grades[oldName] }
+        delete newGrades[oldName]
+        return { ...s, grades: newGrades }
+      }
+      return s
+    })
+    
+    setStudents(updatedStudents)
+    localStorage.setItem('teacher_students', JSON.stringify(updatedStudents))
   }
 
   const addCol = () => {

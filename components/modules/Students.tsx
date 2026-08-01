@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react'
 /* ─── Tipos ─────────────────────────────────────────────────────────────────── */
 interface School    { id: string; name: string; color: string }
 interface ClassRecord { id: string; name: string; schoolId: string; description: string; subject?: string; year?: string }
-interface StudentRecord { id: string; name: string; classId: string; schoolId: string; notes: string; level: string; grades?: Record<string, string> }
+interface StudentRecord { id: string; name: string; classId: string; schoolId: string; notes: string; level: string; grades?: Record<string, string>; email?: string }
 
 interface MetricDef {
   key: string; label: string; icon: string; desc: string; auto: boolean; weight: number
@@ -114,6 +114,10 @@ export default function Students() {
 
   /* Perfil do aluno */
   const [selectedId,  setSelectedId]  = useState<string | null>(null)
+  const [editingStudent, setEditingStudent] = useState<string | null>(null)
+  const [editName, setEditName] = useState('')
+  const [editClassId, setEditClassId] = useState('')
+  const [editEmail, setEditEmail] = useState('')
   /* Modal adicionar */
   const [addModal,    setAddModal]    = useState(false)
   const [stuName,     setStuName]     = useState('')
@@ -179,7 +183,26 @@ export default function Students() {
   function removeStudent(id: string) {
     if (!confirm('Excluir este aluno?')) return
     saveStudents(students.filter(s => s.id !== id))
+    saveMetrics(allMetrics.filter(m => m.studentId !== id))
     if (selectedId === id) setSelectedId(null)
+  }
+
+  function saveEdit() {
+    if (!editingStudent) return
+    const upd = students.map(s => {
+      if (s.id === editingStudent) {
+        return {
+          ...s,
+          name: editName,
+          classId: editClassId,
+          schoolId: classes.find(c => c.id === editClassId)?.schoolId || s.schoolId,
+          email: editEmail
+        }
+      }
+      return s
+    })
+    saveStudents(upd)
+    setEditingStudent(null)
   }
 
   /* ─── Score de métricas ───────────────────────────────────────────────────── */
@@ -307,6 +330,15 @@ export default function Students() {
                       <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                         {avg && <span style={{ ...S.badge, background: Number(avg) >= 7 ? '#d0f0c0' : '#fef9c3', color: '#333' }}>Notas: {avg}</span>}
                         {mScore > 0 && <span style={{ ...S.badge, background: '#e8f4fd', color: '#0369a1' }}>PED: {mScore.toFixed(1)}</span>}
+                        <button onClick={e => {
+                          e.stopPropagation()
+                          setEditName(stu.name)
+                          setEditClassId(stu.classId)
+                          setEditEmail(stu.email || '')
+                          setEditingStudent(stu.id)
+                        }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#93a1a1', fontSize: 16 }}>
+                          <i className="ti ti-pencil" />
+                        </button>
                         <button onClick={e => { e.stopPropagation(); removeStudent(stu.id) }}
                           style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#dc322f', fontSize: 16 }}>
                           <i className="ti ti-trash" />
@@ -661,6 +693,36 @@ export default function Students() {
           </div>
         </div>
       )}
+      {/* ─── Modal Editar Aluno ─────────────────────────────────────────── */}
+      {editingStudent && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,43,54,0.4)', zIndex: 9998, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ ...S.card, width: 440, maxWidth: '95vw', animation: 'modalIn 0.2s ease' }}>
+            <h2 style={{ fontSize: 18, fontWeight: 700, color: '#073642', margin: '0 0 20px' }}>Editar Aluno</h2>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div>
+                <label style={S.label}>Nome completo</label>
+                <input style={S.input} value={editName} onChange={e => setEditName(e.target.value)} />
+              </div>
+              <div>
+                <label style={S.label}>E-mail</label>
+                <input style={S.input} value={editEmail} onChange={e => setEditEmail(e.target.value)} />
+              </div>
+              <div>
+                <label style={S.label}>Turma</label>
+                <select style={S.input} value={editClassId} onChange={e => setEditClassId(e.target.value)}>
+                  <option value="">Sem turma</option>
+                  {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 10, marginTop: 20, justifyContent: 'flex-end' }}>
+              <button onClick={() => setEditingStudent(null)} style={{ ...S.btn, background: '#eee8d5', color: '#586e75' }}>Cancelar</button>
+              <button onClick={saveEdit} style={{ ...S.btn, background: '#073642', color: '#fff' }}>Salvar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ─── Modal Relatório Pedagógico Individual (Formato A4 para Impressão) ─── */}
       {reportStudentId && (() => {
         const stu = students.find(s => s.id === reportStudentId)

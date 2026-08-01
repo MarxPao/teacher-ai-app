@@ -296,7 +296,14 @@ const styles: Record<string, CSSProperties> = {
 export default function BatchGrader() {
   const [students, setStudents] = useState<Student[]>([]);
   const [classes, setClasses] = useState<ClassData[]>([]);
-  const [submissions, setSubmissions] = useState<Submission[]>([]);
+  const [submissions, setSubmissionsState] = useState<Submission[]>([]);
+  const setSubmissions = (val: React.SetStateAction<Submission[]>) => {
+    setSubmissionsState((prev) => {
+      const next = typeof val === 'function' ? val(prev) : val;
+      localStorage.setItem('teacher_batch_submissions', JSON.stringify(next));
+      return next;
+    });
+  };
   const [isGrading, setIsGrading] = useState(false);
   const [maxGrade, setMaxGrade] = useState<number>(100);
   const [rubric, setRubric] = useState<Rubric>({
@@ -312,6 +319,9 @@ export default function BatchGrader() {
   // --- Initial Load ---
   useEffect(() => {
     try {
+      const storedSubmissions = localStorage.getItem('teacher_batch_submissions');
+      if (storedSubmissions) setSubmissionsState(JSON.parse(storedSubmissions));
+
       const storedStudents = localStorage.getItem('teacher_students');
       const storedClasses = localStorage.getItem('teacher_classes');
       
@@ -356,26 +366,44 @@ export default function BatchGrader() {
     if (!e.target.files || e.target.files.length === 0) return;
     
     const files = Array.from(e.target.files);
+    let processedCount = 0;
+    const totalFiles = files.length;
     
-    // Simulating mapping files to students randomly for demonstration if no exact match
-    const newSubmissions: Submission[] = files.map((file) => {
+    files.forEach((file) => {
       const randomStudent = students.length > 0 
         ? students[Math.floor(Math.random() * students.length)] 
         : { id: 'unknown', name: 'Aluno Desconhecido' };
-      
-      return {
-        id: Math.random().toString(36).substr(2, 9),
-        studentId: randomStudent.id,
-        studentName: randomStudent.name,
-        fileName: file.name,
-        content: `Conteúdo extraído do arquivo ${file.name}...`, // Mock text extraction
-        status: 'pending',
-      };
-    });
 
-    setSubmissions((prev) => [...prev, ...newSubmissions]);
-    showToast(`${files.length} arquivo(s) carregado(s) com sucesso.`, 'success');
-    if (fileInputRef.current) fileInputRef.current.value = '';
+      const addSubmission = (content: string) => {
+        setSubmissions(prev => [...prev, {
+          id: Math.random().toString(36).substr(2, 9),
+          studentId: randomStudent.id,
+          studentName: randomStudent.name,
+          fileName: file.name,
+          content,
+          status: 'pending' as const,
+        }]);
+        processedCount++;
+        if (processedCount === totalFiles) {
+          showToast(`${totalFiles} arquivo(s) processado(s).`, 'success');
+          if (fileInputRef.current) fileInputRef.current.value = '';
+        }
+      };
+
+      if (file.type.startsWith('text/') || file.name.match(/\.(txt|md|json|csv)$/i)) {
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+          const content = evt.target?.result as string;
+          addSubmission(content.slice(0, 3000));
+        };
+        reader.readAsText(file);
+      } else if (file.name.match(/\.(pdf|doc|docx)$/i)) {
+        alert(`Arquivos ${file.name.split('.').pop()?.toUpperCase()} não são extraídos automaticamente. Cole o texto do aluno no campo de conteúdo manualmente.`);
+        addSubmission('');
+      } else {
+        addSubmission(`Conteúdo extraído de ${file.name} (não suportado nativamente)`);
+      }
+    });
   };
 
   const addManualSubmission = () => {

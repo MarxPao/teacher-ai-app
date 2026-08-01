@@ -111,13 +111,24 @@ export default function DidacticSequence() {
   const [aiReport, setAiReport] = useState<string | null>(null)
 
   useEffect(() => {
+    let currentUnits = INITIAL_UNITS
     const rawUnits = localStorage.getItem('teacher_didactic_sequence_units')
     if (rawUnits) {
-      try { setUnits(JSON.parse(rawUnits)) } catch { setUnits(INITIAL_UNITS) }
-    } else {
-      setUnits(INITIAL_UNITS)
-      localStorage.setItem('teacher_didactic_sequence_units', JSON.stringify(INITIAL_UNITS))
+      try { currentUnits = JSON.parse(rawUnits) } catch {}
     }
+    
+    const rawMastery = localStorage.getItem('teacher_didactic_mastery')
+    if (rawMastery) {
+      try {
+        const masteryMap = JSON.parse(rawMastery)
+        currentUnits = currentUnits.map(u => 
+          masteryMap[u.id] !== undefined ? { ...u, masteryPercentage: masteryMap[u.id] } : u
+        )
+      } catch {}
+    }
+    
+    setUnits(currentUnits)
+    localStorage.setItem('teacher_didactic_sequence_units', JSON.stringify(currentUnits))
   }, [])
 
   const saveUnits = (updated: SequenceUnit[]) => {
@@ -414,6 +425,36 @@ Gere um diagnóstico direto e 3 recomendações práticas para o professor decid
               <div><strong>Índice de Domínio:</strong> {selectedUnit.masteryPercentage}%</div>
               <div style={{ background: '#f5f0e8', padding: 12, borderRadius: 10, color: '#073642' }}>
                 <strong>Recomendação Pedagógica:</strong><br />{selectedUnit.suggestedAction}
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10 }}>
+              <label style={{ fontSize: 13, fontWeight: 700, color: '#073642' }}>Atualizar Domínio da Turma (%):</label>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <input 
+                  type="number" 
+                  min="0" max="100" 
+                  value={selectedUnit.masteryPercentage} 
+                  onChange={(e) => {
+                    const val = Math.min(100, Math.max(0, Number(e.target.value)));
+                    setSelectedUnit({ ...selectedUnit, masteryPercentage: val });
+                  }}
+                  style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #e8e0d0', width: 80, outline: 'none' }} 
+                />
+                <button 
+                  onClick={() => {
+                    const updated = units.map(u => u.id === selectedUnit.id ? { ...u, masteryPercentage: selectedUnit.masteryPercentage } : u);
+                    saveUnits(updated);
+                    const rawMastery = localStorage.getItem('teacher_didactic_mastery') || '{}';
+                    const masteryMap = JSON.parse(rawMastery);
+                    masteryMap[selectedUnit.id] = selectedUnit.masteryPercentage;
+                    localStorage.setItem('teacher_didactic_mastery', JSON.stringify(masteryMap));
+                    alert('Domínio atualizado com sucesso!');
+                  }}
+                  style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: '#859900', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
+                >
+                  Atualizar
+                </button>
               </div>
             </div>
 

@@ -21,9 +21,15 @@ export function useGlobalWakeWord(enabled = true) {
 
     function build() {
       if (activeRef.current) return
-      // Não roda se a Rafinha estiver ocupada (falando/processando)
+      // A2: Não roda se a Rafinha estiver ocupada (falando/processando)
       if ((window as any).rafinhaIsBusy) {
         setTimeout(build, 800)
+        return
+      }
+      // A2: Mutex global — não inicia SpeechRecognition se useVoiceCommand já está ativo
+      // Evita três streams de microfone simultâneos (wake + voiceCommand + whisper = eco + metalização)
+      if ((window as any).__globalMicActive) {
+        setTimeout(build, 600)
         return
       }
 

@@ -94,7 +94,18 @@ export async function generateListeningAudio({ text, accent = 'US', mode = 'mono
     }
   }
 
-  // 3. Fallback para o backend /api/tts
+  // 3. Fallback para o backend /api/tts — envia chaves do usuário para o servidor
+  // F3: sem isso, /api/tts só usa process.env e falha se as vars estiverem expiradas
+  let userOpenAiKey = ''
+  let userElevenKey = ''
+  try {
+    const allApis = JSON.parse(localStorage.getItem('teacher_apis') || '[]')
+    const oai = allApis.find((a: { provider: string; key: string }) => a.provider === 'openai' && a.key)
+    const el  = allApis.find((a: { provider: string; key: string }) => a.provider === 'elevenlabs' && a.key)
+    userOpenAiKey = oai?.key || ''
+    userElevenKey = el?.key  || ''
+  } catch { /* ignore */ }
+
   const resApi = await fetch('/api/tts', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -102,6 +113,8 @@ export async function generateListeningAudio({ text, accent = 'US', mode = 'mono
       text: cleanText,
       voice: voice,
       model: 'tts-1-hd',
+      userKey:    userOpenAiKey,
+      elevenKey:  userElevenKey,
     })
   })
 
@@ -110,5 +123,6 @@ export async function generateListeningAudio({ text, accent = 'US', mode = 'mono
     return { audioUrl: URL.createObjectURL(blob), blob }
   }
 
-  throw new Error('Sem provedor de síntese de voz configurado.')
+  const errData = await resApi.json().catch(() => ({}))
+  throw new Error(errData.error || 'Sem provedor de síntese de voz configurado. Configure ElevenLabs ou OpenAI em "APIs & Modelos".')
 }

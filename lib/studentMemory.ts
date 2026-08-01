@@ -105,7 +105,7 @@ export function buildMemoryContext(): string {
 
   const lines = all
     .filter(m => m.observations.length > 0)
-    .slice(0, 10) // top 10 alunos com memória
+    .slice(0, 30) // top 30 alunos com memória
     .map(m => {
       const difficulties = m.observations
         .filter(o => o.category)
@@ -124,6 +124,7 @@ export function buildMemoryContext(): string {
  * Retorna texto para a Rafinha falar proativamente, ou null se não há padrão
  */
 export function diagnoseClassPerformance(classRef: string): string | null {
+  if (!classRef) return null
   try {
     const students = JSON.parse(localStorage.getItem('teacher_students') || '[]')
       .filter((s: { class?: string; classRef?: string }) =>
