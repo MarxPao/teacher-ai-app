@@ -130,10 +130,26 @@ export default function Settings() {
     }
   }
 
+  /* Exclusão Efetiva de Dados (Direito ao Esquecimento LGPD) */
+  function eraseAllDataLGPD() {
+    const confirmation = prompt('⚠️ ATENÇÃO LGPD - DIREITO AO ESQUECIMENTO:\nEsta ação apagará EFETIVAMENTE e IRREVERSIVELMENTE todos os seus dados pessoais, escolas, turmas, alunos, cadernetas e provas salvas neste dispositivo.\n\nPara confirmar a exclusão definitiva, digite EXCLUIR:')
+    if (confirmation === 'EXCLUIR') {
+      STORAGE_KEYS.forEach(key => localStorage.removeItem(key))
+      localStorage.removeItem('teacher_cfg')
+      localStorage.removeItem('teacher_private_students')
+      localStorage.removeItem('teacher_saved_exams')
+      localStorage.removeItem('teacher_saved_lessons')
+
+      window.dispatchEvent(new Event('storage'))
+      alert('🔒 Seus dados pessoais e registros foram excluídos com sucesso em conformidade com a LGPD. A aplicação será reiniciada.')
+      window.location.reload()
+    }
+  }
+
   return (
     <ModuleShell 
       title="Settings & Cloud Sync"
-      subtitle="Configurações gerais, backup completo em JSON e sincronização cloud."
+      subtitle="Configurações gerais, privacidade LGPD, backup completo em JSON e sincronização cloud."
       maxWidth={780}
     >
       {/* Idioma do Aplicativo */}
@@ -186,6 +202,21 @@ export default function Settings() {
         </div>
       </ModuleCard>
 
+      {/* Privacidade & Direitos do Titular LGPD */}
+      <ModuleCard title="Privacidade & Direitos do Titular (LGPD)" icon="ti-shield-lock" style={{ marginBottom: 20 }}>
+        <p style={{ fontSize: 13, color: '#586e75', margin: '0 0 14px', lineHeight: 1.5 }}>
+          Conforme a Lei Geral de Proteção de Dados (Lei 13.709/2018), você tem controle total sobre a portabilidade e eliminação dos seus dados pessoais e de seus alunos.
+        </p>
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+          <button onClick={exportBackup} style={{ padding: '9px 16px', borderRadius: 9, borderWidth: '1px', borderStyle: 'solid', borderColor: '#2b6cb0', background: '#ebf8ff', color: '#2b6cb0', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <i className="ti ti-file-export" /> Portabilidade LGPD (Exportar JSON)
+          </button>
+          <button onClick={eraseAllDataLGPD} style={{ padding: '9px 16px', borderRadius: 9, borderWidth: '1px', borderStyle: 'solid', borderColor: '#e53e3e', background: '#fff5f5', color: '#e53e3e', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <i className="ti ti-trash" /> Excluir Todos os Dados (Esquecimento LGPD)
+          </button>
+        </div>
+      </ModuleCard>
+
       {/* Cloud Sync Opcional */}
       <ModuleCard title="Sincronização Cloud (Opcional)" icon="ti-cloud-upload" style={{ marginBottom: 24 }}>
         <p style={{ fontSize: 13, color: '#586e75', margin: '0 0 12px' }}>
@@ -204,6 +235,7 @@ export default function Settings() {
         </div>
         {syncStatus && <div style={{ fontSize: 12, fontWeight: 600, marginTop: 8, color: '#073642' }}>{syncStatus}</div>}
       </ModuleCard>
+
 
       {/* Salvar */}
       <button
