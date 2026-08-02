@@ -506,11 +506,13 @@ export default function Repository() {
     fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6
   }
   const btnSecondary: React.CSSProperties = {
-    padding: '10px 18px', borderRadius: 10, border: '1px solid rgba(139,115,85,0.35)', background: '#fffcf8',
-    color: '#586e75', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6
+    padding: '10px 18px', borderRadius: 10,
+    borderWidth: '1px', borderStyle: 'solid', borderColor: 'rgba(139,115,85,0.35)',
+    background: '#fffcf8', color: '#586e75', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6
   }
   const inputStyle: React.CSSProperties = {
-    width: '100%', padding: '10px 14px', borderRadius: 10, border: '1px solid rgba(139,115,85,0.25)',
+    width: '100%', padding: '10px 14px', borderRadius: 10,
+    borderWidth: '1px', borderStyle: 'solid', borderColor: 'rgba(139,115,85,0.25)',
     fontSize: 13, outline: 'none', background: '#fffcf8', color: '#2c1a0e', boxSizing: 'border-box'
   }
 
@@ -523,7 +525,7 @@ export default function Repository() {
       actions={
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           {uploadingStatus && (
-            <div style={{ background: '#fdf3e7', border: '1px solid #8b5e3c', color: '#8b5e3c', padding: '6px 14px', borderRadius: 10, fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ background: '#fdf3e7', borderWidth: '1px', borderStyle: 'solid', borderColor: '#8b5e3c', color: '#8b5e3c', padding: '6px 14px', borderRadius: 10, fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
               <i className="ti ti-loader text-spin" /> {uploadingStatus}
             </div>
           )}
