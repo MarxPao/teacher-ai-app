@@ -64,6 +64,19 @@ const PLATFORMS: PlatformConfig[] = [
     status: 'active'
   },
   {
+    id: 'canva',
+    name: 'Canva Studio & Canva Connect',
+    url: 'https://www.canva.com/',
+    description: 'Integração oficial para importação de pastas, projetos, estúdio embutido e modelos visuais de eventos escolares.',
+    type: 'extension',
+    icon: 'ti-palette',
+    color: '#00c4cc',
+    bg: '#e6fffa',
+    border: '#99f6e4',
+    fieldsMapped: ['Importador de Pastas/Projetos', 'Estúdio Canva Embutido (Iframe)', 'Modelos de Eventos Escolares', 'Exportação de Artes'],
+    status: 'active'
+  },
+  {
     id: 'cambridge',
     name: 'Cambridge One',
     url: 'https://www.cambridgeone.org/',

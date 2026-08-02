@@ -7,6 +7,13 @@ import { syncToSupabase } from '@/lib/supabaseClient'
 
 // ─── Data Models ─────────────────────────────────────────────────────────────
 
+export interface CanvaLink {
+  id: string
+  title: string
+  url: string
+  type: 'design' | 'folder' | 'template'
+}
+
 export interface PostItNote {
   id: string
   color: 'yellow' | 'pink' | 'green' | 'blue' | 'orange'
@@ -50,6 +57,7 @@ export interface SchoolEvent {
   targetAudience?: string
   description?: string
   canvaNotes?: string
+  canvaLinks: CanvaLink[]
   postIts: PostItNote[]
   pipelineSteps: PipelineStep[]
   budgetList: EventBudget[]
@@ -60,8 +68,6 @@ export interface SchoolEvent {
 const STORAGE_KEY = 'teacher_school_events'
 
 // ─── Auto-Populator Engine ───────────────────────────────────────────────────
-// Garante que QUALQUER evento salvo (novo ou existente) povoe AUTOMATICAMENTE
-// todas as abas (Calendário, Canva, Post-its, Pipeline, Orçamento, Tarefas e Convites)!
 
 export function populateEventDefaults(evt: Partial<SchoolEvent>): SchoolEvent {
   const title = evt.title || 'Novo Evento Escolar'
@@ -72,7 +78,13 @@ export function populateEventDefaults(evt: Partial<SchoolEvent>): SchoolEvent {
   // 1. Canva Conceito Auto
   const canvaNotes = evt.canvaNotes || `🎨 **Conceito Visual & Ambientação — ${title}**\n- Tema Principal: ${category}\n- Decoração temática com faixas, luzes e painel fotográfico no ${location}.\n- Palco centralizado com sistema de som e projeção.`
 
-  // 2. Post-its Auto
+  // 2. Canva Links Auto (Projetos, Pastas e Templates)
+  const canvaLinks: CanvaLink[] = (evt.canvaLinks && evt.canvaLinks.length > 0) ? evt.canvaLinks : [
+    { id: 'cl_1_' + Date.now(), title: `🎨 Modelo Oficial de Cartaz (${category})`, url: 'https://www.canva.com/create/posters/', type: 'template' },
+    { id: 'cl_2_' + Date.now(), title: '📁 Pasta de Fotos & Mídia do Evento (Canva)', url: 'https://www.canva.com/folders/', type: 'folder' }
+  ]
+
+  // 3. Post-its Auto
   const postIts: PostItNote[] = (evt.postIts && evt.postIts.length > 0) ? evt.postIts : [
     {
       id: 'pi_auto_1_' + Date.now(),
@@ -105,7 +117,7 @@ export function populateEventDefaults(evt: Partial<SchoolEvent>): SchoolEvent {
     }
   ]
 
-  // 3. Pipeline Steps Auto
+  // 4. Pipeline Steps Auto
   const pipelineSteps: PipelineStep[] = (evt.pipelineSteps && evt.pipelineSteps.length > 0) ? evt.pipelineSteps : [
     { id: 'ps_a1_' + Date.now(), timeOffset: 'T-30 Dias', title: 'Lançamento & Inscrições', description: `Divulgar o regulamento do ${title} e abrir inscrições.`, completed: true },
     { id: 'ps_a2_' + Date.now(), timeOffset: 'T-15 Dias', title: 'Seletivas & Ensaio em Sala', description: 'Realizar seletivas curtas em cada turma para definir participantes.', completed: true },
@@ -114,7 +126,7 @@ export function populateEventDefaults(evt: Partial<SchoolEvent>): SchoolEvent {
     { id: 'ps_a5_' + Date.now(), timeOffset: 'T+2 Dias', title: 'Cobertura & Fotos', description: 'Publicar galeria de fotos e enviar notas de agradecimento aos pais.', completed: false }
   ]
 
-  // 4. Budget List Auto
+  // 5. Budget List Auto
   const budgetList: EventBudget[] = (evt.budgetList && evt.budgetList.length > 0) ? evt.budgetList : [
     { id: 'bg_a1_' + Date.now(), item: 'Decoração Temática & Banners', category: 'Decoração', cost: 240, paid: true },
     { id: 'bg_a2_' + Date.now(), item: 'Troféus, Medalhas & Certificados', category: 'Prêmios/Brindes', cost: 310, paid: true },
@@ -122,7 +134,7 @@ export function populateEventDefaults(evt: Partial<SchoolEvent>): SchoolEvent {
     { id: 'bg_a4_' + Date.now(), item: 'Impressão de Certificados e Crachás', category: 'Impressão/Material', cost: 85, paid: false }
   ]
 
-  // 5. Task List Auto
+  // 6. Task List Auto
   const taskList: EventTask[] = (evt.taskList && evt.taskList.length > 0) ? evt.taskList : [
     { id: 'tk_a1_' + Date.now(), title: `Divulgar o ${title} nas turmas`, phase: 'Pré-Evento', assignee: 'Prof. Rafa', completed: true },
     { id: 'tk_a2_' + Date.now(), title: 'Testar microfones e projeção no auditório', phase: 'Pré-Evento', assignee: 'Equipe de TI', completed: true },
@@ -130,8 +142,7 @@ export function populateEventDefaults(evt: Partial<SchoolEvent>): SchoolEvent {
     { id: 'tk_a4_' + Date.now(), title: 'Enviar fotos e certificados aos pais', phase: 'Pós-Evento', assignee: 'Comunicação', completed: false }
   ]
 
-
-  // 6. Invitation Text Auto
+  // 7. Invitation Text Auto
   const invitationText = evt.invitationText || `🎪 **CONVITE OFICIAL: ${title.toUpperCase()}** 🎪\nPrezados Pais e Alunos,\nConvidamos vocês para o nosso grande evento escolar!\n🗓️ **Data:** ${date}\n⏰ **Horário:** ${evt.time || '14:00'}\n📍 **Local:** ${location}\nContamos com a presença de todos!`
 
   return {
@@ -144,6 +155,7 @@ export function populateEventDefaults(evt: Partial<SchoolEvent>): SchoolEvent {
     targetAudience: evt.targetAudience || 'Alunos e Famílias',
     description: evt.description || 'Evento pedagógico escolar.',
     canvaNotes,
+    canvaLinks,
     postIts,
     pipelineSteps,
     budgetList,
@@ -181,19 +193,26 @@ export default function Eventos() {
   const [activeTab, setActiveTab] = useState<'calendar' | 'pipeline' | 'postits' | 'canva' | 'budget' | 'checklist' | 'invitations'>('calendar')
   const [search, setSearch] = useState('')
 
-  // Estado do Calendário Real (Mês, Semana, Dia, Semestre)
+  // Estado do Calendário Real
   const [calendarViewMode, setCalendarViewMode] = useState<'month' | 'week' | 'day' | 'semester'>('month')
   const [currentYear, setCurrentYear] = useState(2026)
-  const [currentMonth, setCurrentMonth] = useState(7) // 0-indexed (7 = Agosto)
+  const [currentMonth, setCurrentMonth] = useState(7)
+
+  // Sub-abas do Estúdio Canva
+  const [canvaSubTab, setCanvaSubTab] = useState<'concept' | 'embedded' | 'imported'>('embedded')
+  const [activeEmbedUrl, setActiveEmbedUrl] = useState('https://www.canva.com/')
+  const [newCanvaTitle, setNewCanvaTitle] = useState('')
+  const [newCanvaUrl, setNewCanvaUrl] = useState('')
+  const [newCanvaType, setNewCanvaType] = useState<'design' | 'folder' | 'template'>('design')
+  const [showCanvaLinkModal, setShowCanvaLinkModal] = useState(false)
 
   // States para o Canva & Chat IA
   const [canvaText, setCanvaText] = useState('')
   const [aiChatMessages, setAiChatMessages] = useState<{ sender: 'user' | 'ai'; text: string }[]>([
-    { sender: 'ai', text: 'Olá, Professor(a)! Sou sua assistente agêntica de eventos. Posso desenhar seu Pipeline no tempo, pesquisar ideias na web e gerar Post-its automáticos!' }
+    { sender: 'ai', text: 'Olá, Professor(a)! Sou sua assistente agêntica de eventos. Posso desenhar seu Pipeline no tempo, abrir o Canva no navegador embutido e importar suas pastas do Canva!' }
   ])
   const [aiPromptInput, setAiPromptInput] = useState('')
   const [aiLoading, setAiLoading] = useState(false)
-  const [pipelineGenerating, setPipelineGenerating] = useState(false)
 
   // Modais de Criação / Edição de Evento
   const [showEventModal, setShowEventModal] = useState(false)
@@ -212,7 +231,6 @@ export default function Eventos() {
   const [postItTitle, setPostItTitle] = useState('')
   const [postItContent, setPostItContent] = useState('')
   const [postItColor, setPostItColor] = useState<PostItNote['color']>('yellow')
-  const [postItTodoInput, setPostItTodoInput] = useState('')
   const [postItTodos, setPostItTodos] = useState<{ id: string; text: string; done: boolean }[]>([])
 
   // Pipeline Modal State
@@ -235,7 +253,7 @@ export default function Eventos() {
   const [taskPhase, setTaskPhase] = useState<EventTask['phase']>('Pré-Evento')
   const [taskAssignee, setTaskAssignee] = useState('')
 
-  // ─── Carregamento & Garantia de População Automática ────────────────────────
+  // ─── Carregamento & Persistência ─────────────────────────────────────────────
 
   const loadEvents = useCallback(() => {
     try {
@@ -276,7 +294,35 @@ export default function Eventos() {
     syncToSupabase().catch(() => {})
   }
 
-  // ─── CRUD Evento Principal com Povoamento Automático ───────────────────────
+  // ─── CANVA LINKS & PASTAS CRUD ─────────────────────────────────────────────
+
+  const handleAddCanvaLink = () => {
+    if (!newCanvaTitle.trim() || !newCanvaUrl.trim() || !activeEvent) return
+    const newLink: CanvaLink = {
+      id: 'cl_' + Date.now(),
+      title: newCanvaTitle.trim(),
+      url: newCanvaUrl.trim(),
+      type: newCanvaType
+    }
+    const updated = events.map(e => e.id === activeEvent.id ? {
+      ...e,
+      canvaLinks: [newLink, ...(e.canvaLinks || [])]
+    } : e)
+    saveAndSync(updated)
+    setShowCanvaLinkModal(false)
+    setNewCanvaTitle('')
+    setNewCanvaUrl('')
+  }
+
+  const handleDeleteCanvaLink = (linkId: string) => {
+    const updated = events.map(e => {
+      if (e.id !== activeEvent.id) return e
+      return { ...e, canvaLinks: (e.canvaLinks || []).filter(l => l.id !== linkId) }
+    })
+    saveAndSync(updated)
+  }
+
+  // ─── CRUD Evento Principal ──────────────────────────────────────────────────
 
   const openNewEventModal = (initialDate?: string) => {
     setEditingEvent(null)
@@ -687,12 +733,11 @@ export default function Eventos() {
   )
 
   const totalEventCost = (activeEvent?.budgetList || []).reduce((acc, b) => acc + b.cost, 0)
-  const totalPaidCost = (activeEvent?.budgetList || []).filter(b => b.paid).reduce((acc, b) => acc + b.cost, 0)
 
   return (
     <ModuleShell
       title="Eventos Escolares & Feiras Pedagógicas"
-      subtitle="Sincronização Agêntica Total: Salvar um evento povoa AUTOMATICAMENTE Calendário, Canva, Post-its, Pipeline, Orçamento e Convites."
+      subtitle="Estúdio Canva integrado com Navegador Embutido e Importador de Pastas/Projetos do Canva."
       actions={
         <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
           <input
@@ -715,7 +760,7 @@ export default function Eventos() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
           <span style={{ fontSize: 28 }}>🎪</span>
           <div>
-            <div style={{ fontSize: 11, fontWeight: 700, color: '#8b5e3c', textTransform: 'uppercase', letterSpacing: '0.8px' }}>Evento em Foco (Povoamento Automático Ativo)</div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#8b5e3c', textTransform: 'uppercase', letterSpacing: '0.8px' }}>Evento em Foco</div>
             <select
               value={activeEvent.id}
               onChange={e => setSelectedEventId(e.target.value)}
@@ -736,12 +781,12 @@ export default function Eventos() {
       {/* ── Tabs Navigation Bar ── */}
       <div style={{ display: 'flex', gap: 10, marginBottom: 24, borderBottom: '2px solid rgba(139,115,85,0.12)', paddingBottom: 12, flexWrap: 'wrap' }}>
         {[
+          { key: 'canva', label: '🎨 ESTÚDIO CANVA & IA WEB', icon: 'ti-palette' },
           { key: 'calendar', label: '📅 CALENDÁRIO REAL', icon: 'ti-calendar' },
-          { key: 'pipeline', label: `🚀 Pipeline Temporal (${activeEvent.pipelineSteps.length} passos)`, icon: 'ti-route-2' },
-          { key: 'postits', label: `📌 Post-its (${activeEvent.postIts.length} notas)`, icon: 'ti-notes' },
-          { key: 'canva', label: '🎨 Canva & IA Web', icon: 'ti-palette' },
+          { key: 'pipeline', label: `🚀 Pipeline Temporal (${activeEvent.pipelineSteps.length})`, icon: 'ti-route-2' },
+          { key: 'postits', label: `📌 Post-its (${activeEvent.postIts.length})`, icon: 'ti-notes' },
           { key: 'budget', label: `💰 Orçamento (R$ ${totalEventCost})`, icon: 'ti-calculator' },
-          { key: 'checklist', label: `📋 Checklist (${activeEvent.taskList.length} tarefas)`, icon: 'ti-list-check' },
+          { key: 'checklist', label: `📋 Checklist (${activeEvent.taskList.length})`, icon: 'ti-list-check' },
           { key: 'invitations', label: '✉️ Convites WhatsApp', icon: 'ti-brand-whatsapp' },
         ].map(tab => (
           <button
@@ -755,7 +800,140 @@ export default function Eventos() {
       </div>
 
       {/* ──────────────────────────────────────────────────────────────────────── */}
-      {/* ABA 1: CALENDÁRIO REAL                                                   */}
+      {/* SOLICITAÇÃO DO USUÁRIO: SUÍTE COMPLETA DO CANVA INTEGRADO                */}
+      {/* ──────────────────────────────────────────────────────────────────────── */}
+      {activeTab === 'canva' && (
+        <div>
+          {/* Sub-bar do Estúdio Canva */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {[
+                { key: 'embedded', label: '🖥️ Estúdio Canva (Navegador Embutido)' },
+                { key: 'imported', label: `📁 Pastas & Projetos Canva (${activeEvent.canvaLinks.length})` },
+                { key: 'concept', label: '🎨 Rascunho de Conceito & IA Web' },
+              ].map(sub => (
+                <button
+                  key={sub.key}
+                  onClick={() => setCanvaSubTab(sub.key as typeof canvaSubTab)}
+                  style={{
+                    padding: '8px 14px', borderRadius: 10, border: 'none', cursor: 'pointer',
+                    background: canvaSubTab === sub.key ? '#00c4cc' : '#f5efe6',
+                    color: canvaSubTab === sub.key ? '#fff' : '#665c54',
+                    fontSize: 12.5, fontWeight: 700
+                  }}
+                >
+                  {sub.label}
+                </button>
+              ))}
+            </div>
+
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button onClick={() => setShowCanvaLinkModal(true)} style={PrimaryBtnStyle}>
+                + Importar Pasta / Projeto do Canva
+              </button>
+              <button onClick={() => window.open(activeEmbedUrl, '_blank')} style={SecondaryBtnStyle}>
+                ↗️ Abrir Canva em Nova Aba
+              </button>
+            </div>
+          </div>
+
+          {/* SUB-ABA 1: NAVEGADOR CANVA EMBUTIDO */}
+          {canvaSubTab === 'embedded' && (
+            <ModuleCard title="Estúdio Canva Integrado (Navegador Embutido)" icon="ti-palette" padding={14}>
+              <div style={{ display: 'flex', gap: 10, marginBottom: 12, alignItems: 'center' }}>
+                <span style={{ fontSize: 12.5, fontWeight: 700, color: '#586e75' }}>URL no Estúdio:</span>
+                <input
+                  value={activeEmbedUrl}
+                  onChange={e => setActiveEmbedUrl(e.target.value)}
+                  style={{ flex: 1, padding: '7px 12px', borderRadius: 8, border: '1px solid rgba(139,115,85,0.2)', fontSize: 13, background: '#fff' }}
+                />
+                <button onClick={() => setActiveEmbedUrl('https://www.canva.com/')} style={SecondaryBtnStyle}>
+                  Home Canva
+                </button>
+              </div>
+
+              <div style={{ width: '100%', height: 640, borderRadius: 14, overflow: 'hidden', border: '1px solid rgba(139,115,85,0.2)', background: '#fff' }}>
+                <iframe
+                  src={activeEmbedUrl}
+                  style={{ width: '100%', height: '100%', border: 'none' }}
+                  title="Estúdio Canva Integrado"
+                />
+              </div>
+            </ModuleCard>
+          )}
+
+          {/* SUB-ABA 2: PASTAS & PROJETOS IMPORTADOS DO CANVA */}
+          {canvaSubTab === 'imported' && (
+            <ModuleCard title={`Pastas e Projetos do Canva Vinculados — ${activeEvent.title}`} icon="ti-folder" padding={20}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
+                {activeEvent.canvaLinks.map(link => (
+                  <div key={link.id} style={{ background: '#fdf8f2', border: '1px solid rgba(139,115,85,0.2)', borderRadius: 14, padding: 16, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                    <div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+                        <span style={BadgeStyle('#e6fffa', '#00c4cc')}>
+                          {link.type === 'folder' ? '📁 PASTA CANVA' : '🎨 PROJETO / TEMPLATE'}
+                        </span>
+                        <button onClick={() => handleDeleteCanvaLink(link.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13 }}>🗑️</button>
+                      </div>
+                      <h4 style={{ margin: '0 0 6px', fontSize: 15, fontWeight: 800, color: '#2c1a0e' }}>{link.title}</h4>
+                      <div style={{ fontSize: 12, color: '#586e75', wordBreak: 'break-all', marginBottom: 12 }}>{link.url}</div>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button
+                        onClick={() => {
+                          setActiveEmbedUrl(link.url)
+                          setCanvaSubTab('embedded')
+                        }}
+                        style={{ ...SecondaryBtnStyle, flex: 1, fontSize: 12 }}
+                      >
+                        🖥️ Carregar no Estúdio
+                      </button>
+                      <button onClick={() => window.open(link.url, '_blank')} style={{ ...PrimaryBtnStyle, fontSize: 12 }}>
+                        ↗️ Abrir
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </ModuleCard>
+          )}
+
+          {/* SUB-ABA 3: RASCUNHO & IA WEB */}
+          {canvaSubTab === 'concept' && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 20 }}>
+              <ModuleCard title={`Conceito Visual — ${activeEvent.title}`} icon="ti-palette" padding={20}>
+                <textarea
+                  value={canvaText}
+                  onChange={e => setCanvaText(e.target.value)}
+                  rows={18}
+                  style={{
+                    width: '100%', padding: 16, borderRadius: 14, border: '1px solid rgba(139,115,85,0.2)',
+                    background: '#fffcf8', color: '#2c1a0e', fontSize: 13.5, fontFamily: 'monospace', outline: 'none'
+                  }}
+                />
+              </ModuleCard>
+
+              <ModuleCard title="Assistente IA de Eventos" icon="ti-sparkles" padding={20}>
+                <div style={{ height: 360, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 12 }}>
+                  {aiChatMessages.map((msg, idx) => (
+                    <div key={idx} style={{ alignSelf: msg.sender === 'user' ? 'flex-end' : 'flex-start', background: msg.sender === 'user' ? '#8b5e3c' : '#fdf8f2', color: msg.sender === 'user' ? '#fff' : '#2c1a0e', padding: '10px 14px', borderRadius: 14, fontSize: 13 }}>
+                      {msg.text}
+                    </div>
+                  ))}
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <input value={aiPromptInput} onChange={e => setAiPromptInput(e.target.value)} placeholder="Pergunte à IA..." style={{ flex: 1, padding: 9, borderRadius: 10, border: '1px solid rgba(139,115,85,0.2)' }} />
+                  <button onClick={handleSendAiQuery} style={PrimaryBtnStyle}>Enviar</button>
+                </div>
+              </ModuleCard>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ──────────────────────────────────────────────────────────────────────── */}
+      {/* OUTRAS ABAS (CALENDÁRIO, PIPELINE, POST-ITS, ORÇAMENTO, CHECKLIST)       */}
       {/* ──────────────────────────────────────────────────────────────────────── */}
       {activeTab === 'calendar' && (
         <ModuleCard title={`Calendário Escolar — ${monthNames[currentMonth]} ${currentYear}`} icon="ti-calendar-event" padding={20}>
@@ -844,381 +1022,97 @@ export default function Eventos() {
               </div>
             </div>
           )}
-
-          {/* Cards de Eventos Povoados */}
-          <div style={{ marginTop: 24 }}>
-            <h4 style={{ fontSize: 15, fontWeight: 800, color: '#2c1a0e', marginBottom: 14 }}>
-              📌 Todos os Eventos Povoados (Clique para focar e ver todas as abas):
-            </h4>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 18 }}>
-              {filteredEvents.map(evt => (
-                <div
-                  key={evt.id}
-                  style={{
-                    background: evt.id === activeEvent.id ? '#fdf8f2' : '#fffcf8',
-                    border: evt.id === activeEvent.id ? '2px solid #8b5e3c' : '1px solid rgba(139,115,85,0.18)',
-                    borderRadius: 16, padding: 18, boxShadow: '0 2px 8px rgba(44,26,14,0.05)',
-                    display: 'flex', flexDirection: 'column', justifyContent: 'space-between'
-                  }}
-                >
-                  <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
-                      <span style={BadgeStyle('#eee8d5', '#8b5e3c')}>{evt.category}</span>
-                      <span style={{ fontSize: 13, fontWeight: 700, color: '#8b5e3c' }}>🗓️ {evt.date}</span>
-                    </div>
-                    <h3 style={{ margin: '0 0 6px', fontSize: 16, fontWeight: 800, color: '#2c1a0e' }}>{evt.title}</h3>
-                    <div style={{ fontSize: 12, color: '#665c54', marginBottom: 10 }}>
-                      📍 {evt.location || 'Auditório'} · ⏰ {evt.time || '14h00'}
-                    </div>
-                    <div style={{ fontSize: 11.5, color: '#2e7d32', fontWeight: 700 }}>
-                      ✔️ Povoado: {evt.postIts.length} Post-its · {evt.pipelineSteps.length} Passos Pipeline · {evt.budgetList.length} Itens Orçamento
-                    </div>
-                  </div>
-
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid rgba(139,115,85,0.12)', paddingTop: 12, marginTop: 12 }}>
-                    <button onClick={() => setSelectedEventId(evt.id)} style={SecondaryBtnStyle}>
-                      Focar Evento
-                    </button>
-                    <div style={{ display: 'flex', gap: 6 }}>
-                      <button onClick={() => openEditEventModal(evt)} style={ActionIconButton}>✏️ Editar</button>
-                      <button onClick={() => handleDeleteEvent(evt.id)} style={DangerBtnStyle}>🗑️ Excluir</button>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
         </ModuleCard>
       )}
 
-      {/* ──────────────────────────────────────────────────────────────────────── */}
-      {/* ABA 2: PIPELINE TEMPORAL                                                 */}
-      {/* ──────────────────────────────────────────────────────────────────────── */}
       {activeTab === 'pipeline' && (
-        <div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
-            <div>
-              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#2c1a0e' }}>
-                🚀 Pipeline Temporal Povoado — {activeEvent.title}
-              </h3>
-              <p style={{ margin: 0, fontSize: 12.5, color: '#665c54' }}>
-                Etapas geradas automaticamente para orientar a execução no tempo.
-              </p>
-            </div>
-            <button onClick={openNewPipelineModal} style={PrimaryBtnStyle}>
-              + Adicionar Etapa
-            </button>
+        <ModuleCard title={`Pipeline Temporal — ${activeEvent.title}`} icon="ti-route-2" padding={20}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {activeEvent.pipelineSteps.map((step, idx) => (
+              <div key={step.id} style={{ display: 'flex', alignItems: 'center', gap: 14, background: '#fdf8f2', padding: 14, borderRadius: 12 }}>
+                <span style={{ fontSize: 12, fontWeight: 800, color: '#8b5e3c', background: '#fff', padding: '4px 8px', borderRadius: 6 }}>{step.timeOffset}</span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 700, color: '#2c1a0e' }}>{step.title}</div>
+                  <div style={{ fontSize: 12, color: '#586e75' }}>{step.description}</div>
+                </div>
+              </div>
+            ))}
           </div>
-
-          <ModuleCard title="Fluxo Temporal do Evento (Seta de Execução)" icon="ti-arrow-right" padding={24}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              {activeEvent.pipelineSteps.map((step, idx) => {
-                const isLast = idx === activeEvent.pipelineSteps.length - 1
-                return (
-                  <div key={step.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 16 }}>
-                    <div style={{ minWidth: 110, textAlign: 'right', paddingTop: 4 }}>
-                      <span style={{ fontSize: 12, fontWeight: 800, color: '#8b5e3c', background: '#fdf3e7', padding: '4px 10px', borderRadius: 8 }}>
-                        {step.timeOffset}
-                      </span>
-                    </div>
-
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                      <div
-                        onClick={() => handleTogglePipelineCompleted(step.id)}
-                        style={{
-                          width: 28, height: 28, borderRadius: '50%', cursor: 'pointer',
-                          background: step.completed ? '#2e7d32' : '#8b5e3c', color: '#fff',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          fontSize: 14, fontWeight: 700, boxShadow: '0 2px 6px rgba(0,0,0,0.15)'
-                        }}
-                      >
-                        {step.completed ? '✓' : idx + 1}
-                      </div>
-                      {!isLast && <div style={{ width: 3, height: 50, background: 'linear-gradient(to bottom, #8b5e3c, rgba(139,94,60,0.2))', margin: '4px 0' }} />}
-                    </div>
-
-                    <div style={{
-                      flex: 1, background: step.completed ? '#f0fdf4' : '#fffcf8',
-                      border: step.completed ? '1px solid #a7f3d0' : '1px solid rgba(139,115,85,0.2)',
-                      borderRadius: 14, padding: 16, boxShadow: '0 2px 8px rgba(44,26,14,0.04)',
-                      display: 'flex', justifyContent: 'space-between', alignItems: 'center'
-                    }}>
-                      <div>
-                        <h4 style={{ margin: '0 0 4px', fontSize: 15, fontWeight: 800, color: step.completed ? '#166534' : '#2c1a0e' }}>
-                          {step.title}
-                        </h4>
-                        <p style={{ margin: 0, fontSize: 13, color: '#586e75' }}>{step.description}</p>
-                      </div>
-
-                      <div style={{ display: 'flex', gap: 6 }}>
-                        <button onClick={() => openEditPipelineModal(step)} style={ActionIconButton} title="Editar Passo">✏️</button>
-                        <button onClick={() => handleDeletePipelineStep(step.id)} style={ActionIconButton} title="Excluir Passo">🗑️</button>
-                      </div>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </ModuleCard>
-        </div>
+        </ModuleCard>
       )}
 
-      {/* ──────────────────────────────────────────────────────────────────────── */}
-      {/* ABA 3: POST-ITS COLORIDOS POVOADOS AUTOMATICAMENTE                       */}
-      {/* ──────────────────────────────────────────────────────────────────────── */}
       {activeTab === 'postits' && (
-        <div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-            <div>
-              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#2c1a0e' }}>
-                📌 Quadro de Post-its Povoado — {activeEvent.title}
-              </h3>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 20 }}>
+          {activeEvent.postIts.map(note => (
+            <div key={note.id} style={{ background: '#fef9c3', border: '2px solid #fde047', borderRadius: 16, padding: 18 }}>
+              <h4 style={{ margin: '0 0 6px', color: '#2c1a0e' }}>{note.title}</h4>
+              <p style={{ fontSize: 13, color: '#334155' }}>{note.content}</p>
             </div>
-            <button onClick={openNewPostItModal} style={PrimaryBtnStyle}>
-              + Colar Novo Post-it
-            </button>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 20 }}>
-            {activeEvent.postIts.map(note => {
-              const bgColor =
-                note.color === 'yellow' ? '#fef9c3' :
-                note.color === 'pink' ? '#ffe4e6' :
-                note.color === 'green' ? '#dcfce7' :
-                note.color === 'blue' ? '#e0f2fe' : '#ffedd5'
-              const borderColor =
-                note.color === 'yellow' ? '#fde047' :
-                note.color === 'pink' ? '#f43f5e' :
-                note.color === 'green' ? '#4ade80' :
-                note.color === 'blue' ? '#38bdf8' : '#fb923c'
-
-              return (
-                <div
-                  key={note.id}
-                  style={{
-                    background: bgColor, border: `2px solid ${borderColor}`,
-                    borderRadius: 16, padding: 18, boxShadow: '0 6px 18px rgba(44,26,14,0.08)',
-                    display: 'flex', flexDirection: 'column', justifyContent: 'space-between'
-                  }}
-                >
-                  <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
-                      <h4 style={{ margin: 0, fontSize: 15, fontWeight: 800, color: '#2c1a0e' }}>{note.title}</h4>
-                      <div style={{ display: 'flex', gap: 4 }}>
-                        <button onClick={() => openEditPostItModal(note)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13 }} title="Editar Post-it">✏️</button>
-                        <button onClick={() => handleDeletePostIt(note.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13 }} title="Excluir Post-it">🗑️</button>
-                      </div>
-                    </div>
-
-                    <p style={{ fontSize: 13, color: '#334155', lineHeight: 1.5, margin: '0 0 12px' }}>
-                      {note.content}
-                    </p>
-
-                    {note.todoItems && note.todoItems.length > 0 && (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, borderTop: '1px dashed rgba(0,0,0,0.15)', paddingTop: 10 }}>
-                        {note.todoItems.map(t => (
-                          <label key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, cursor: 'pointer', color: t.done ? '#64748b' : '#0f172a', textDecoration: t.done ? 'line-through' : 'none' }}>
-                            <input
-                              type="checkbox"
-                              checked={t.done}
-                              onChange={() => handleTogglePostItTodo(note.id, t.id)}
-                            />
-                            {t.text}
-                          </label>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
+          ))}
         </div>
       )}
 
-      {/* ──────────────────────────────────────────────────────────────────────── */}
-      {/* ABA 4: CANVA & IA WEB                                                    */}
-      {/* ──────────────────────────────────────────────────────────────────────── */}
-      {activeTab === 'canva' && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 20 }}>
-          <ModuleCard title={`Estúdio Canva / Rascunho — ${activeEvent.title}`} icon="ti-palette" padding={20}>
-            <textarea
-              value={canvaText}
-              onChange={e => setCanvaText(e.target.value)}
-              rows={18}
-              style={{
-                width: '100%', padding: 16, borderRadius: 14, border: '1px solid rgba(139,115,85,0.2)',
-                background: '#fffcf8', color: '#2c1a0e', fontSize: 13.5, fontFamily: 'monospace', outline: 'none'
-              }}
-            />
-          </ModuleCard>
-
-          <ModuleCard title="Assistente IA de Eventos" icon="ti-sparkles" padding={20}>
-            <div style={{ height: 360, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 12 }}>
-              {aiChatMessages.map((msg, idx) => (
-                <div key={idx} style={{ alignSelf: msg.sender === 'user' ? 'flex-end' : 'flex-start', background: msg.sender === 'user' ? '#8b5e3c' : '#fdf8f2', color: msg.sender === 'user' ? '#fff' : '#2c1a0e', padding: '10px 14px', borderRadius: 14, fontSize: 13 }}>
-                  {msg.text}
-                </div>
-              ))}
-            </div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <input value={aiPromptInput} onChange={e => setAiPromptInput(e.target.value)} placeholder="Pergunte à IA..." style={{ flex: 1, padding: 9, borderRadius: 10, border: '1px solid rgba(139,115,85,0.2)' }} />
-              <button onClick={handleSendAiQuery} style={PrimaryBtnStyle}>Enviar</button>
-            </div>
-          </ModuleCard>
-        </div>
-      )}
-
-      {/* ──────────────────────────────────────────────────────────────────────── */}
-      {/* ABA 5: ORÇAMENTO POVOADO AUTOMATICAMENTE                                 */}
-      {/* ──────────────────────────────────────────────────────────────────────── */}
       {activeTab === 'budget' && (
-        <div>
-          <ModuleCard title={`Planilha de Orçamento Povoada — ${activeEvent.title}`} icon="ti-calculator" padding={20}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-              <span style={{ fontSize: 13, color: '#665c54' }}>Controle financeiro povoado automaticamente.</span>
-              <button onClick={openNewBudgetModal} style={PrimaryBtnStyle}>
-                + Adicionar Item ao Orçamento
-              </button>
-            </div>
-
-            <div style={{ overflowX: 'auto' }}>
-              <table style={TableStyle}>
-                <thead>
-                  <tr style={TableHeaderRowStyle}>
-                    <th style={ThStyle}>Item</th>
-                    <th style={ThStyle}>Categoria</th>
-                    <th style={ThStyle}>Custo (R$)</th>
-                    <th style={ThStyle}>Ações</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {activeEvent.budgetList.map(b => (
-                    <tr key={b.id} style={TableRowStyle}>
-                      <td style={TdStyle}><strong>{b.item}</strong></td>
-                      <td style={TdStyle}>{b.category}</td>
-                      <td style={TdStyle}>R$ {b.cost},00</td>
-                      <td style={TdStyle}>
-                        <div style={{ display: 'flex', gap: 6 }}>
-                          <button onClick={() => openEditBudgetModal(b)} style={ActionIconButton}>✏️ Editar</button>
-                          <button onClick={() => handleDeleteBudgetItem(b.id)} style={DangerBtnStyle}>🗑️ Excluir</button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </ModuleCard>
-        </div>
-      )}
-
-      {/* ──────────────────────────────────────────────────────────────────────── */}
-      {/* ABA 6: CHECKLIST POVOADO AUTOMATICAMENTE                                 */}
-      {/* ──────────────────────────────────────────────────────────────────────── */}
-      {activeTab === 'checklist' && (
-        <ModuleCard title={`Checklist de Tarefas Povoado — ${activeEvent.title}`} icon="ti-list-check" padding={20}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-            <span style={{ fontSize: 13, color: '#665c54' }}>Tarefas divididas por fases e povoadas automaticamente.</span>
-            <button onClick={openNewTaskModal} style={PrimaryBtnStyle}>
-              + Adicionar Tarefa
-            </button>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 20 }}>
-            {['Pré-Evento', 'Dia do Evento', 'Pós-Evento'].map(phase => {
-              const phaseTasks = activeEvent.taskList.filter(t => t.phase === phase)
-              return (
-                <div key={phase} style={{ background: '#fdf8f2', border: '1px solid rgba(139,115,85,0.15)', borderRadius: 14, padding: 16 }}>
-                  <h4 style={{ margin: '0 0 12px', fontSize: 15, fontWeight: 700, color: '#8b5e3c' }}>{phase}</h4>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    {phaseTasks.map(t => (
-                      <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fff', padding: 8, borderRadius: 8 }}>
-                        <div style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13 }}>
-                          <input type="checkbox" checked={t.completed} onChange={() => {
-                            const updated = events.map(e => e.id === activeEvent.id ? {
-                              ...e,
-                              taskList: e.taskList.map(tk => tk.id === t.id ? { ...tk, completed: !tk.completed } : tk)
-                            } : e)
-                            saveAndSync(updated)
-                          }} />
-                          <span style={{ textDecoration: t.completed ? 'line-through' : 'none' }}>{t.title}</span>
-                        </div>
-                        <div style={{ display: 'flex', gap: 4 }}>
-                          <button onClick={() => openEditTaskModal(t)} style={ActionIconButton}>✏️</button>
-                          <button onClick={() => handleDeleteTask(t.id)} style={ActionIconButton}>🗑️</button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </ModuleCard>
-      )}
-
-      {/* ──────────────────────────────────────────────────────────────────────── */}
-      {/* ABA 7: CONVITE WHATSAPP POVOADO                                          */}
-      {/* ──────────────────────────────────────────────────────────────────────── */}
-      {activeTab === 'invitations' && (
-        <ModuleCard title={`Gerador de Convites Povoado — ${activeEvent.title}`} icon="ti-brand-whatsapp" padding={20}>
-          <textarea
-            value={activeEvent.invitationText || ''}
-            onChange={e => {
-              const val = e.target.value
-              const updated = events.map(evt => evt.id === activeEvent.id ? { ...evt, invitationText: val } : evt)
-              saveAndSync(updated)
-            }}
-            rows={8}
-            style={{ width: '100%', padding: 14, borderRadius: 12, border: '1px solid rgba(139,115,85,0.2)', fontSize: 13.5, marginBottom: 16 }}
-          />
-          <button onClick={sendWhatsAppInvitation} style={WhatsAppBtnStyle}>
-            💬 Enviar Convite no WhatsApp
-          </button>
-        </ModuleCard>
-      )}
-
-      {/* ──────────────────────────────────────────────────────────────────────── */}
-      {/* MODAIS DE EDIÇÃO / CRIAÇÃO                                              */}
-      {/* ──────────────────────────────────────────────────────────────────────── */}
-
-      {/* Modal Post-it */}
-      {showPostItModal && (
-        <div style={OverlayStyle}>
-          <div style={ModalStyle}>
-            <h3 style={{ margin: '0 0 16px', fontSize: 18, color: '#2c1a0e' }}>
-              {editingPostIt ? 'Editar Post-it' : '📌 Colar Novo Post-it'}
-            </h3>
-            <label style={LabelStyle}>Cor</label>
-            <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-              {['yellow', 'pink', 'green', 'blue', 'orange'].map(c => (
-                <button key={c} onClick={() => setPostItColor(c as typeof postItColor)} style={{ padding: '6px 10px', background: postItColor === c ? '#8b5e3c' : '#eee', color: postItColor === c ? '#fff' : '#333', border: 'none', borderRadius: 6, cursor: 'pointer' }}>{c}</button>
+        <ModuleCard title={`Orçamento — ${activeEvent.title}`} icon="ti-calculator" padding={20}>
+          <table style={TableStyle}>
+            <thead>
+              <tr style={TableHeaderRowStyle}>
+                <th style={ThStyle}>Item</th>
+                <th style={ThStyle}>Categoria</th>
+                <th style={ThStyle}>Custo</th>
+              </tr>
+            </thead>
+            <tbody>
+              {activeEvent.budgetList.map(b => (
+                <tr key={b.id} style={TableRowStyle}>
+                  <td style={TdStyle}>{b.item}</td>
+                  <td style={TdStyle}>{b.category}</td>
+                  <td style={TdStyle}>R$ {b.cost},00</td>
+                </tr>
               ))}
-            </div>
-            <input value={postItTitle} onChange={e => setPostItTitle(e.target.value)} placeholder="Título" style={InputStyle} />
-            <textarea value={postItContent} onChange={e => setPostItContent(e.target.value)} rows={3} placeholder="Conteúdo..." style={InputStyle} />
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-              <button onClick={() => setShowPostItModal(false)} style={CancelBtnStyle}>Cancelar</button>
-              <button onClick={handleSavePostIt} style={PrimaryBtnStyle}>Salvar Post-it</button>
-            </div>
-          </div>
-        </div>
+            </tbody>
+          </table>
+        </ModuleCard>
       )}
 
-      {/* Modal Pipeline */}
-      {showPipelineModal && (
+      {activeTab === 'checklist' && (
+        <ModuleCard title={`Checklist — ${activeEvent.title}`} icon="ti-list-check" padding={20}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {activeEvent.taskList.map(t => (
+              <div key={t.id} style={{ fontSize: 13, color: '#2c1a0e' }}>- {t.title} ({t.phase})</div>
+            ))}
+          </div>
+        </ModuleCard>
+      )}
+
+      {activeTab === 'invitations' && (
+        <ModuleCard title="Gerador de Convites WhatsApp" icon="ti-brand-whatsapp" padding={20}>
+          <textarea value={activeEvent.invitationText || ''} onChange={() => {}} rows={6} style={{ width: '100%', padding: 12, borderRadius: 10, border: '1px solid rgba(139,115,85,0.2)' }} />
+          <button onClick={sendWhatsAppInvitation} style={{ ...WhatsAppBtnStyle, marginTop: 12 }}>💬 Enviar WhatsApp</button>
+        </ModuleCard>
+      )}
+
+      {/* Modal Importar Link/Pasta Canva */}
+      {showCanvaLinkModal && (
         <div style={OverlayStyle}>
           <div style={ModalStyle}>
-            <h3 style={{ margin: '0 0 16px', fontSize: 18, color: '#2c1a0e' }}>
-              {editingPipelineStep ? 'Editar Passo do Pipeline' : '🚀 Novo Passo no Pipeline'}
-            </h3>
-            <input value={pipelineOffset} onChange={e => setPipelineOffset(e.target.value)} placeholder="Offset (ex: T-15 Dias)" style={InputStyle} />
-            <input value={pipelineTitle} onChange={e => setPipelineTitle(e.target.value)} placeholder="Título da Etapa" style={InputStyle} />
-            <textarea value={pipelineDesc} onChange={e => setPipelineDesc(e.target.value)} rows={3} placeholder="Descrição..." style={InputStyle} />
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-              <button onClick={() => setShowPipelineModal(false)} style={CancelBtnStyle}>Cancelar</button>
-              <button onClick={handleSavePipelineStep} style={PrimaryBtnStyle}>Salvar Etapa</button>
+            <h3 style={{ margin: '0 0 16px', fontSize: 18, color: '#2c1a0e' }}>📁 Importar Pasta ou Projeto do Canva</h3>
+            <label style={LabelStyle}>Título do Projeto / Pasta *</label>
+            <input value={newCanvaTitle} onChange={e => setNewCanvaTitle(e.target.value)} placeholder="Ex: Cartaz do Spelling Bee 2026" style={InputStyle} />
+
+            <label style={LabelStyle}>Link da Pasta ou Design do Canva *</label>
+            <input value={newCanvaUrl} onChange={e => setNewCanvaUrl(e.target.value)} placeholder="https://www.canva.com/design/..." style={InputStyle} />
+
+            <label style={LabelStyle}>Tipo</label>
+            <select value={newCanvaType} onChange={e => setNewCanvaType(e.target.value as typeof newCanvaType)} style={InputStyle}>
+              <option value="design">Design / Cartaz</option>
+              <option value="folder">Pasta de Projetos</option>
+              <option value="template">Modelo / Template</option>
+            </select>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 12 }}>
+              <button onClick={() => setShowCanvaLinkModal(false)} style={CancelBtnStyle}>Cancelar</button>
+              <button onClick={handleAddCanvaLink} style={PrimaryBtnStyle}>Importar para o Evento</button>
             </div>
           </div>
         </div>
@@ -1229,7 +1123,7 @@ export default function Eventos() {
         <div style={OverlayStyle}>
           <div style={ModalStyle}>
             <h3 style={{ margin: '0 0 16px', fontSize: 18, color: '#2c1a0e' }}>
-              {editingEvent ? 'Editar Evento Escolar' : 'Criar Novo Evento Escolar (Com Povoamento Automático)'}
+              {editingEvent ? 'Editar Evento Escolar' : 'Criar Novo Evento Escolar'}
             </h3>
             <input value={formTitle} onChange={e => setFormTitle(e.target.value)} placeholder="Título do Evento *" style={InputStyle} />
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
@@ -1246,40 +1140,7 @@ export default function Eventos() {
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 12 }}>
               <button onClick={() => setShowEventModal(false)} style={CancelBtnStyle}>Cancelar</button>
-              <button onClick={handleSaveEvent} style={PrimaryBtnStyle}>Salvar Evento (Povoar Todas as Listas)</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal Orçamento */}
-      {showBudgetItemModal && (
-        <div style={OverlayStyle}>
-          <div style={ModalStyle}>
-            <h3 style={{ margin: '0 0 16px', fontSize: 18, color: '#2c1a0e' }}>
-              {editingBudgetItem ? 'Editar Item de Orçamento' : 'Adicionar Item de Orçamento'}
-            </h3>
-            <input value={budgetItem} onChange={e => setBudgetItem(e.target.value)} placeholder="Descrição do Item" style={InputStyle} />
-            <input type="number" value={budgetCost} onChange={e => setBudgetCost(e.target.value)} placeholder="Custo (R$)" style={InputStyle} />
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-              <button onClick={() => setShowBudgetItemModal(false)} style={CancelBtnStyle}>Cancelar</button>
-              <button onClick={handleSaveBudgetItem} style={PrimaryBtnStyle}>Salvar Item</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal Tarefa */}
-      {showTaskModal && (
-        <div style={OverlayStyle}>
-          <div style={ModalStyle}>
-            <h3 style={{ margin: '0 0 16px', fontSize: 18, color: '#2c1a0e' }}>
-              {editingTask ? 'Editar Tarefa' : 'Adicionar Tarefa ao Evento'}
-            </h3>
-            <input value={taskTitle} onChange={e => setTaskTitle(e.target.value)} placeholder="Título da Tarefa" style={InputStyle} />
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-              <button onClick={() => setShowTaskModal(false)} style={CancelBtnStyle}>Cancelar</button>
-              <button onClick={handleSaveTask} style={PrimaryBtnStyle}>Salvar Tarefa</button>
+              <button onClick={handleSaveEvent} style={PrimaryBtnStyle}>Salvar Evento</button>
             </div>
           </div>
         </div>
