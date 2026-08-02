@@ -252,12 +252,19 @@ export default function Repository() {
     setViewItem(current[0] || null)
   }, [])
 
-  // ── Persist ───────────────────────────────────────────────────────────────
+  // ── Persist & Re-Index RAG ──────────────────────────────────────────────
   const save = useCallback((updated: RepositoryItem[]) => {
     setItems(updated)
-    localStorage.setItem(LS_KEY, JSON.stringify(updated))
-    // Invalida o cache RAG para reindexar
+    const jsonStr = JSON.stringify(updated)
+    localStorage.setItem(LS_KEY, jsonStr)
+    localStorage.setItem('teacher_repository', jsonStr)
+    localStorage.setItem('teacher_repo_materials', jsonStr)
     localStorage.removeItem(LS_RAG_KEY)
+
+    // Re-indexa o motor RAG imediatamente
+    try {
+      import('@/lib/ragEngine').then(({ indexAllLibraryItems }) => indexAllLibraryItems())
+    } catch { /* ignora */ }
   }, [])
 
   // ── Add item ──────────────────────────────────────────────────────────────
@@ -326,7 +333,7 @@ export default function Repository() {
     setMode('view')
   }
 
-  // ── Upload de arquivo ─────────────────────────────────────────────────────
+  // ── Upload de arquivo (PDF, DOCX, TXT, MD, CSV, JSON) ────────────────────
   async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
@@ -334,39 +341,48 @@ export default function Repository() {
 
     try {
       let text = ''
-      if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
+      const fileNameLower = file.name.toLowerCase()
+
+      if (fileNameLower.endsWith('.docx') || fileNameLower.endsWith('.doc')) {
+        const { extractTextFromDocx } = await import('@/lib/pdfExtractor')
+        text = await extractTextFromDocx(file)
+      } else if (file.type === 'application/pdf' || fileNameLower.endsWith('.pdf')) {
         const { extractTextFromPdf } = await import('@/lib/pdfExtractor')
         text = await extractTextFromPdf(file)
       } else {
-        text = await new Promise<string>((resolve) => {
+        text = await new Promise<string>((resolve, reject) => {
           const reader = new FileReader()
           reader.onload = (ev) => resolve((ev.target?.result as string) || '')
+          reader.onerror = () => reject(new Error('Erro na leitura do arquivo.'))
           reader.readAsText(file)
         })
       }
 
-      if (!text || text.trim().length < 20) {
-        alert('Não foi possível extrair conteúdo legível do arquivo selecionado.')
+      if (!text || text.trim().length < 15) {
+        alert('O arquivo selecionado não contém texto legível ou está vazio.')
         return
       }
+
+      const wCount = countWords(text)
+      const cCount = countChunks(text)
 
       const item: RepositoryItem = {
         id: Date.now(),
         title: file.name.replace(/\.[^/.]+$/, ''),
         content: text,
-        type: "Student's Book",
-        category: file.name.endsWith('.pdf') ? 'PDF Importado' : 'Arquivo Importado',
+        type: fileNameLower.includes('workbook') ? 'Workbook' : fileNameLower.includes('clil') ? 'CLIL Book' : "Student's Book",
+        category: fileNameLower.endsWith('.pdf') ? 'PDF Importado' : fileNameLower.endsWith('.docx') ? 'Word (DOCX) Importado' : 'Arquivo de Texto',
         date: new Date().toLocaleDateString('pt-BR'),
-        wordCount: countWords(text),
-        chunkCount: countChunks(text),
+        wordCount: wCount,
+        chunkCount: cCount,
       }
       const updated = [item, ...items]
       save(updated)
       setViewItem(item)
       setMode('view')
-      alert(`✅ "${file.name}" importado! ${item.wordCount?.toLocaleString()} palavras · ${item.chunkCount} seções indexadas.`)
+      alert(`🎉 Livro "${file.name}" importado e indexado no RAG com sucesso!\n\n📊 Estatísticas: ${wCount.toLocaleString()} palavras · ${cCount} seções.\n\nA IA (ExamBuilder, LessonStudio e Rafinha) usará este material como base de conhecimento real.`)
     } catch (err: unknown) {
-      alert(`Erro ao ler arquivo: ${err instanceof Error ? err.message : 'Falha na leitura'}`)
+      alert(`⚠️ Falha na importação: ${err instanceof Error ? err.message : 'Não foi possível extrair o texto do arquivo.'}`)
     }
   }
 
@@ -486,10 +502,10 @@ export default function Repository() {
       maxWidth="100%"
       actions={
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-          <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept=".txt,.md,.json,.csv,.pdf" style={{ display: 'none' }} />
+          <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept=".txt,.md,.json,.csv,.pdf,.docx,.doc" style={{ display: 'none' }} />
 
           <button onClick={() => fileInputRef.current?.click()} style={btnSecondary}>
-            <i className="ti ti-upload" /> Importar PDF / Arquivo
+            <i className="ti ti-upload" /> Importar PDF / Word / Arquivo
           </button>
 
           <button onClick={reimportG4} style={{ ...btnSecondary, borderColor: '#27ae60', color: '#27ae60' }}>

@@ -106,10 +106,14 @@ export function indexAllLibraryItems(): DocumentChunk[] {
   if (typeof window === 'undefined') return []
 
   try {
-    const rawItems = localStorage.getItem('teacher_repository')
+    const rawItems = localStorage.getItem('teacher_repo') 
+      || localStorage.getItem('teacher_repository') 
+      || localStorage.getItem('teacher_repo_materials')
     if (!rawItems) return []
 
     const items = JSON.parse(rawItems)
+    localStorage.setItem('teacher_repo', rawItems)
+    localStorage.setItem('teacher_repository', rawItems)
     let allChunks: DocumentChunk[] = []
 
     for (const item of items) {
