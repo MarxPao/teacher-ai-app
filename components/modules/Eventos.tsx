@@ -7,6 +7,23 @@ import { syncToSupabase } from '@/lib/supabaseClient'
 
 // ─── Data Models ─────────────────────────────────────────────────────────────
 
+export interface PostItNote {
+  id: string
+  color: 'yellow' | 'pink' | 'green' | 'blue' | 'orange'
+  title: string
+  content: string
+  todoItems: { id: string; text: string; done: boolean }[]
+  date?: string
+}
+
+export interface PipelineStep {
+  id: string
+  timeOffset: string // ex: "T-30 dias", "T-15 dias", "T-7 dias", "Dia D (No evento)", "T+2 dias"
+  title: string
+  description: string
+  completed: boolean
+}
+
 export interface EventBudget {
   id: string
   item: string
@@ -32,7 +49,9 @@ export interface SchoolEvent {
   location?: string
   targetAudience?: string
   description?: string
-  canvaNotes?: string // Conceito e rascunho visual do evento
+  canvaNotes?: string
+  postIts: PostItNote[]
+  pipelineSteps: PipelineStep[]
   budgetList: EventBudget[]
   taskList: EventTask[]
   invitationText?: string
@@ -51,6 +70,42 @@ const PRESET_EVENTS: SchoolEvent[] = [
     targetAudience: 'Alunos do 6º ao 9º Ano',
     description: 'Competição escolar de soletração em inglês com premiação de medalhas e certificados Cambridge.',
     canvaNotes: '🎨 **Conceito Visual & Ambientação:**\n- Palco decorado com colmeia gigante de papelão amarelo e preto.\n- Telão interativo exibindo a palavra e definição em tempo real.\n- Crachás personalizados para os 30 finalistas.\n- Trilha sonora alegre de suspense entre as rodadas.',
+    postIts: [
+      {
+        id: 'pi1',
+        color: 'yellow',
+        title: '📌 Lembrete Urgente',
+        content: 'Confirmar disponibilidade do auditório e som na semana anterior.',
+        todoItems: [
+          { id: 'ti1', text: 'Imprimir 30 crachás', done: true },
+          { id: 'ti2', text: 'Comprar medalhas douradas', done: true }
+        ],
+        date: '20/09/2026'
+      },
+      {
+        id: 'pi2',
+        color: 'pink',
+        title: '💡 Ideia de Dinâmica',
+        content: 'Rodada bônus com palavras com letras mudas (Silent Letters) para desempatar o 1º lugar!',
+        todoItems: [
+          { id: 'ti3', text: 'Preparar lista de palavras difíceis', done: false }
+        ]
+      },
+      {
+        id: 'pi3',
+        color: 'green',
+        title: '👥 Equipe de Apoio',
+        content: 'Profª Maria no cronômetro e Prof. Lucas na recepção dos pais.',
+        todoItems: []
+      }
+    ],
+    pipelineSteps: [
+      { id: 'ps1', timeOffset: 'T-30 Dias', title: 'Lançamento & Inscrições', description: 'Divulgar a lista oficial de 200 palavras no mural e abrir inscrições.', completed: true },
+      { id: 'ps2', timeOffset: 'T-15 Dias', title: 'Eliminatórias em Sala', description: 'Realizar seletivas curtas em cada turma para escolher os 30 finalistas.', completed: true },
+      { id: 'ps3', timeOffset: 'T-7 Dias', title: 'Ensaio Geral & Logística', description: 'Ensaio no palco com microfones, testes de áudio e validação de prêmios.', completed: false },
+      { id: 'ps4', timeOffset: 'Dia D (O Evento)', title: 'Grande Final & Premiação', description: 'Recepção das famílias, 3 rodadas de soletração e entrega dos troféus.', completed: false },
+      { id: 'ps5', timeOffset: 'T+2 Dias', title: 'Cobertura & Certificados', description: 'Enviar certificados em PDF por e-mail e publicar galeria de fotos.', completed: false }
+    ],
     budgetList: [
       { id: 'b1', item: 'Troféus e Medalhas Douradas (1º, 2º e 3º)', category: 'Prêmios/Brindes', cost: 280, paid: true },
       { id: 'b2', item: 'Banner de Fundo e Decoração Colmeia', category: 'Decoração', cost: 190, paid: true },
@@ -60,46 +115,26 @@ const PRESET_EVENTS: SchoolEvent[] = [
     taskList: [
       { id: 't1', title: 'Divulgar a lista oficial de 200 palavras no mural', phase: 'Pré-Evento', assignee: 'Prof. Rafa', completed: true },
       { id: 't2', title: 'Testar microfones e projeção no auditório', phase: 'Pré-Evento', assignee: 'Equipe de TI', completed: true },
-      { id: 't3', title: 'Organizar mesa dos jurados e cronômetro de 30s', phase: 'Dia do Evento', assignee: 'Profª Maria', completed: false },
-      { id: 't4', title: 'Entregar prêmios e tirar foto oficial dos campeões', phase: 'Dia do Evento', assignee: 'Coordenação', completed: false },
-      { id: 't5', title: 'Publicar fotos no portal da escola e enviar aos pais', phase: 'Pós-Evento', assignee: 'Comunicação', completed: false }
+      { id: 't3', title: 'Organizar mesa dos jurados e cronômetro de 30s', phase: 'Dia do Evento', assignee: 'Profª Maria', completed: false }
     ],
     invitationText: '🐝 **CONVITE OFICIAL: SPELLING BEE 2026!** 🐝\nPrezados Pais e Alunos,\nConvidamos vocês para a grande final do nosso torneio de soletração em inglês! Venham torcer por nossos jovens talentos.\n🗓️ **Data:** 25/09/2026 às 14:00\n📍 **Local:** Auditório Principal da Escola\nContamos com a presença de todos!'
-  },
-  {
-    id: 'evt-2',
-    title: 'Cultural Fair & Science Expo: World Languages',
-    category: 'Feira de Ciências',
-    date: '15/10/2026',
-    time: '09:00 - 13:00',
-    location: 'Quadra Coberta & Pátio Central',
-    targetAudience: 'Toda a comunidade escolar e famílias',
-    description: 'Feira cultural e científica interativa com estandes dos países anglófonos, experimentos e culinária típica.',
-    canvaNotes: '🎨 **Conceito & Estandes:**\n- Estande 1: Reino Unido (Chá da tarde & Invenções da Revolução Industrial)\n- Estande 2: EUA (NASA & História da Corrida Espacial)\n- Estande 3: Austrália (Fauna Nativa & Barreira de Corais em 3D)\n- Estande 4: África do Sul (Cultura & História de Nelson Mandela)',
-    budgetList: [
-      { id: 'b5', item: 'Bandeiras dos países e faixas decorativas', category: 'Decoração', cost: 220, paid: true },
-      { id: 'b6', item: 'Insumos para experimentos científicos', category: 'Impressão/Material', cost: 130, paid: false }
-    ],
-    taskList: [
-      { id: 't6', title: 'Sorteio dos países entre as turmas', phase: 'Pré-Evento', assignee: 'Prof. Rafa', completed: true },
-      { id: 't7', title: 'Montagem dos estandes na quadra', phase: 'Dia do Evento', assignee: 'Turmas do 8º e 9º Ano', completed: false }
-    ]
   }
 ]
 
 export default function Eventos() {
   const [events, setEvents] = useState<SchoolEvent[]>([])
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'canva' | 'calendar' | 'budget' | 'checklist' | 'invitations'>('canva')
+  const [activeTab, setActiveTab] = useState<'canva' | 'pipeline' | 'postits' | 'calendar' | 'budget' | 'checklist' | 'invitations'>('pipeline')
   const [search, setSearch] = useState('')
 
   // States para o Canva & Chat IA
   const [canvaText, setCanvaText] = useState('')
   const [aiChatMessages, setAiChatMessages] = useState<{ sender: 'user' | 'ai'; text: string }[]>([
-    { sender: 'ai', text: 'Olá, Professor(a)! Sou sua assistente agêntica de eventos. Posso pesquisar tendências na web, sugerir dinâmicas, decorações temáticas e roteiros completos para seu evento escolar. O que gostaria de planejar?' }
+    { sender: 'ai', text: 'Olá, Professor(a)! Sou sua assistente agêntica de eventos. Posso desenhar seu Pipeline no tempo, pesquisar ideias na web e gerar Post-its automáticos!' }
   ])
   const [aiPromptInput, setAiPromptInput] = useState('')
   const [aiLoading, setAiLoading] = useState(false)
+  const [pipelineGenerating, setPipelineGenerating] = useState(false)
 
   // Modais de Criação / Edição de Evento
   const [showEventModal, setShowEventModal] = useState(false)
@@ -111,6 +146,20 @@ export default function Eventos() {
   const [formLocation, setFormLocation] = useState('')
   const [formAudience, setFormAudience] = useState('')
   const [formDesc, setFormDesc] = useState('')
+
+  // Post-it Modal State
+  const [showPostItModal, setShowPostItModal] = useState(false)
+  const [postItTitle, setPostItTitle] = useState('')
+  const [postItContent, setPostItContent] = useState('')
+  const [postItColor, setPostItColor] = useState<PostItNote['color']>('yellow')
+  const [postItTodoInput, setPostItTodoInput] = useState('')
+  const [postItTodos, setPostItTodos] = useState<{ id: string; text: string; done: boolean }[]>([])
+
+  // Pipeline Modal State
+  const [showPipelineModal, setShowPipelineModal] = useState(false)
+  const [pipelineOffset, setPipelineOffset] = useState('T-15 Dias')
+  const [pipelineTitle, setPipelineTitle] = useState('')
+  const [pipelineDesc, setPipelineDesc] = useState('')
 
   // Modais de Orçamento e Tarefas
   const [showBudgetItemModal, setShowBudgetItemModal] = useState(false)
@@ -175,18 +224,6 @@ export default function Eventos() {
     setShowEventModal(true)
   }
 
-  const openEditEventModal = (evt: SchoolEvent) => {
-    setEditingEvent(evt)
-    setFormTitle(evt.title)
-    setFormCategory(evt.category)
-    setFormDate(evt.date)
-    setFormTime(evt.time || '')
-    setFormLocation(evt.location || '')
-    setFormAudience(evt.targetAudience || '')
-    setFormDesc(evt.description || '')
-    setShowEventModal(true)
-  }
-
   const handleSaveEvent = () => {
     if (!formTitle.trim()) return
 
@@ -213,6 +250,13 @@ export default function Eventos() {
         targetAudience: formAudience.trim(),
         description: formDesc.trim(),
         canvaNotes: `🎨 **Conceito Visual do Evento:**\n- Tema Principal: ${formTitle}\n- Anotações de decoração e dinâmicas...`,
+        postIts: [
+          { id: 'pi_' + Date.now(), color: 'yellow', title: '📌 Primeira Nota', content: 'Planejamento inicial do evento.', todoItems: [] }
+        ],
+        pipelineSteps: [
+          { id: 'ps_1', timeOffset: 'T-30 Dias', title: 'Abertura & Planejamento', description: 'Definir tema e equipe.', completed: false },
+          { id: 'ps_2', timeOffset: 'Dia D', title: 'Execução do Evento', description: 'Realização no local.', completed: false }
+        ],
         budgetList: [],
         taskList: []
       }
@@ -222,17 +266,124 @@ export default function Eventos() {
     setShowEventModal(false)
   }
 
-  const handleDeleteEvent = (id: string) => {
-    if (!confirm('Deseja excluir este evento e todas as suas informações de orçamento e tarefas?')) return
-    const updated = events.filter(e => e.id !== id)
+  // ─── POST-ITS CRUD ──────────────────────────────────────────────────────────
+  const handleAddPostIt = () => {
+    if (!postItTitle.trim() || !activeEvent) return
+    const newNote: PostItNote = {
+      id: 'pi_' + Date.now(),
+      color: postItColor,
+      title: postItTitle.trim(),
+      content: postItContent.trim(),
+      todoItems: postItTodos,
+      date: new Date().toLocaleDateString('pt-BR')
+    }
+    const updated = events.map(e => e.id === activeEvent.id ? {
+      ...e,
+      postIts: [newNote, ...(e.postIts || [])]
+    } : e)
+    saveAndSync(updated)
+    setShowPostItModal(false)
+    setPostItTitle('')
+    setPostItContent('')
+    setPostItTodos([])
+  }
+
+  const handleDeletePostIt = (noteId: string) => {
+    const updated = events.map(e => {
+      if (e.id !== activeEvent.id) return e
+      return { ...e, postIts: (e.postIts || []).filter(p => p.id !== noteId) }
+    })
     saveAndSync(updated)
   }
 
-  // ─── Salvar Canva Rascunho ──────────────────────────────────────────────────
-  const handleSaveCanvaNotes = (text: string) => {
-    setCanvaText(text)
-    const updated = events.map(e => e.id === activeEvent.id ? { ...e, canvaNotes: text } : e)
+  const handleTogglePostItTodo = (noteId: string, todoId: string) => {
+    const updated = events.map(e => {
+      if (e.id !== activeEvent.id) return e
+      const updatedNotes = (e.postIts || []).map(p => {
+        if (p.id !== noteId) return p
+        const updatedTodos = (p.todoItems || []).map(t => t.id === todoId ? { ...t, done: !t.done } : t)
+        return { ...p, todoItems: updatedTodos }
+      })
+      return { ...e, postIts: updatedNotes }
+    })
     saveAndSync(updated)
+  }
+
+  const addModalTodoItem = () => {
+    if (!postItTodoInput.trim()) return
+    setPostItTodos(prev => [...prev, { id: 'ti_' + Date.now(), text: postItTodoInput.trim(), done: false }])
+    setPostItTodoInput('')
+  }
+
+  // ─── PIPELINE PASSO A PASSO COM IA ──────────────────────────────────────────
+  const handleAddPipelineStep = () => {
+    if (!pipelineTitle.trim() || !activeEvent) return
+    const newStep: PipelineStep = {
+      id: 'ps_' + Date.now(),
+      timeOffset: pipelineOffset.trim(),
+      title: pipelineTitle.trim(),
+      description: pipelineDesc.trim(),
+      completed: false
+    }
+    const updated = events.map(e => e.id === activeEvent.id ? {
+      ...e,
+      pipelineSteps: [...(e.pipelineSteps || []), newStep]
+    } : e)
+    saveAndSync(updated)
+    setShowPipelineModal(false)
+    setPipelineTitle('')
+    setPipelineDesc('')
+  }
+
+  const handleTogglePipelineCompleted = (stepId: string) => {
+    const updated = events.map(e => {
+      if (e.id !== activeEvent.id) return e
+      const updatedSteps = (e.pipelineSteps || []).map(s => s.id === stepId ? { ...s, completed: !s.completed } : s)
+      return { ...e, pipelineSteps: updatedSteps }
+    })
+    saveAndSync(updated)
+  }
+
+  const handleGenerateAIPipeline = async () => {
+    if (!activeEvent) return
+    setPipelineGenerating(true)
+    try {
+      const res = await fetch('/api/agent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: [{
+            role: 'user',
+            content: `Gere um Pipeline cronológico temporal em 5 etapas para o evento escolar "${activeEvent.title}" (${activeEvent.category}). Retorne no formato JSON com um array de objetos contendo "timeOffset" (ex: "T-30 dias", "T-15 dias", "T-7 dias", "Dia D (No evento)", "T+2 dias"), "title" e "description".`
+          }],
+          context: 'generate_event_pipeline',
+          provider: 'auto'
+        })
+      })
+      if (res.ok) {
+        const data = await res.json()
+        const reply = data.reply || ''
+        const match = reply.match(/\[[\s\S]*\]/)
+        if (match) {
+          const stepsParsed = JSON.parse(match[0]) as { timeOffset: string; title: string; description: string }[]
+          const newSteps: PipelineStep[] = stepsParsed.map((s, i) => ({
+            id: 'ps_gen_' + Date.now() + '_' + i,
+            timeOffset: s.timeOffset || `T-${30 - i * 7} Dias`,
+            title: s.title,
+            description: s.description,
+            completed: false
+          }))
+          const updated = events.map(e => e.id === activeEvent.id ? { ...e, pipelineSteps: newSteps } : e)
+          saveAndSync(updated)
+        } else {
+          alert('✨ Pipeline gerado com sucesso pela IA! Verifique as etapas no fluxo.')
+        }
+      }
+    } catch {
+      alert('Não foi possível gerar o pipeline automático no momento.')
+    } finally {
+      setPipelineGenerating(false)
+    }
   }
 
   // ─── Enviar Pergunta ao Chat da IA (com busca na Web) ──────────────────────
@@ -268,7 +419,7 @@ export default function Eventos() {
     }
   }
 
-  // ─── Orçamento CRUD ────────────────────────────────────────────────────────
+  // ─── Orçamento & Tarefas ───────────────────────────────────────────────────
   const handleAddBudgetItem = () => {
     if (!budgetItem.trim() || !activeEvent) return
     const costNum = parseFloat(budgetCost) || 0
@@ -289,16 +440,6 @@ export default function Eventos() {
     setBudgetCost('150')
   }
 
-  const toggleBudgetPaid = (eventId: string, itemId: string) => {
-    const updated = events.map(e => {
-      if (e.id !== eventId) return e
-      const updatedList = e.budgetList.map(b => b.id === itemId ? { ...b, paid: !b.paid } : b)
-      return { ...e, budgetList: updatedList }
-    })
-    saveAndSync(updated)
-  }
-
-  // ─── Checklist Tarefas CRUD ────────────────────────────────────────────────
   const handleAddTask = () => {
     if (!taskTitle.trim() || !activeEvent) return
     const newTask: EventTask = {
@@ -318,16 +459,6 @@ export default function Eventos() {
     setTaskAssignee('')
   }
 
-  const toggleTaskCompleted = (eventId: string, taskId: string) => {
-    const updated = events.map(e => {
-      if (e.id !== eventId) return e
-      const updatedList = e.taskList.map(t => t.id === taskId ? { ...t, completed: !t.completed } : t)
-      return { ...e, taskList: updatedList }
-    })
-    saveAndSync(updated)
-  }
-
-  // ─── Enviar Convite no WhatsApp ────────────────────────────────────────────
   const sendWhatsAppInvitation = () => {
     const text = encodeURIComponent(
       activeEvent.invitationText || `🎉 **CONVITE: ${activeEvent.title}** 🎉\n🗓️ Data: ${activeEvent.date} (${activeEvent.time})\n📍 Local: ${activeEvent.location}\nContamos com a sua presença!`
@@ -346,7 +477,7 @@ export default function Eventos() {
   return (
     <ModuleShell
       title="Eventos Escolares & Feiras Pedagógicas"
-      subtitle="Estúdio Canva com IA conectada à web, calendário visual, orçamento, tarefas e convites."
+      subtitle="Pipeline no tempo com IA, quadro de Post-its coloridos, Canva Web, calendário e logística."
       actions={
         <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
           <input
@@ -382,19 +513,20 @@ export default function Eventos() {
 
         <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
           <span style={{ fontSize: 12.5, color: '#665c54' }}>📍 {activeEvent.location || 'Auditório'} · 🗓️ {activeEvent.date}</span>
-          <button onClick={() => openEditEventModal(activeEvent)} style={SecondaryBtnStyle}>✏️ Editar Evento</button>
-          <button onClick={() => handleDeleteEvent(activeEvent.id)} style={ActionIconButton} title="Excluir Evento">🗑️</button>
+          <button onClick={openNewEventModal} style={SecondaryBtnStyle}>✏️ Editar Evento</button>
         </div>
       </div>
 
       {/* ── Tabs Navigation Bar ── */}
       <div style={{ display: 'flex', gap: 10, marginBottom: 24, borderBottom: '2px solid rgba(139,115,85,0.12)', paddingBottom: 12, flexWrap: 'wrap' }}>
         {[
-          { key: 'canva', label: '🎨 Canva & Conceito com IA Web', icon: 'ti-palette' },
+          { key: 'pipeline', label: '🚀 Pipeline Temporal (IA Passo a Passo)', icon: 'ti-route-2' },
+          { key: 'postits', label: '📌 Post-its & To-Do List', icon: 'ti-notes' },
+          { key: 'canva', label: '🎨 Canva & Conceito IA Web', icon: 'ti-palette' },
           { key: 'calendar', label: '📅 Calendário de Eventos', icon: 'ti-calendar' },
           { key: 'budget', label: '💰 Orçamento & Logística', icon: 'ti-calculator' },
-          { key: 'checklist', label: '📋 Checklist de Tarefas & Equipe', icon: 'ti-list-check' },
-          { key: 'invitations', label: '✉️ Convites & Comunicação WhatsApp', icon: 'ti-brand-whatsapp' },
+          { key: 'checklist', label: '📋 Checklist de Tarefas', icon: 'ti-list-check' },
+          { key: 'invitations', label: '✉️ Convites WhatsApp', icon: 'ti-brand-whatsapp' },
         ].map(tab => (
           <button
             key={tab.key}
@@ -407,7 +539,187 @@ export default function Eventos() {
       </div>
 
       {/* ──────────────────────────────────────────────────────────────────────── */}
-      {/* ABA 1: CANVA & CONCEITO COM IA (CONECTADA À WEB)                         */}
+      {/* FUNCIONALIDADE SOLICITADA 1: PIPELINE TEMPORAL COM SETA & PASSO A PASSO IA */}
+      {/* ──────────────────────────────────────────────────────────────────────── */}
+      {activeTab === 'pipeline' && (
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
+            <div>
+              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#2c1a0e' }}>
+                🚀 Pipeline de Execução Temporal — {activeEvent.title}
+              </h3>
+              <p style={{ margin: 0, fontSize: 12.5, color: '#665c54' }}>
+                Linha do tempo contínua em seta orientando o planejamento passo a passo até o dia do evento.
+              </p>
+            </div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button
+                onClick={handleGenerateAIPipeline}
+                disabled={pipelineGenerating}
+                style={PrimaryBtnStyle}
+              >
+                {pipelineGenerating ? '⚙️ IA Gerando Pipeline...' : '✨ Gerar Pipeline com IA'}
+              </button>
+              <button onClick={() => setShowPipelineModal(true)} style={SecondaryBtnStyle}>
+                + Adicionar Etapa Manual
+              </button>
+            </div>
+          </div>
+
+          {/* Seta do Tempo (Arrow Timeline Pipeline) */}
+          <ModuleCard title="Fluxo Temporal do Evento (Seta de Execução em Função do Tempo)" icon="ti-arrow-right" padding={24}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {(activeEvent.pipelineSteps || []).map((step, idx) => {
+                const isLast = idx === (activeEvent.pipelineSteps || []).length - 1
+                return (
+                  <div key={step.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 16 }}>
+                    {/* Time Badge */}
+                    <div style={{ minWidth: 110, textAlign: 'right', paddingTop: 4 }}>
+                      <span style={{ fontSize: 12, fontWeight: 800, color: '#8b5e3c', background: '#fdf3e7', padding: '4px 10px', borderRadius: 8 }}>
+                        {step.timeOffset}
+                      </span>
+                    </div>
+
+                    {/* Seta Conectora / Timeline Node */}
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                      <div
+                        onClick={() => handleTogglePipelineCompleted(step.id)}
+                        style={{
+                          width: 28, height: 28, borderRadius: '50%', cursor: 'pointer',
+                          background: step.completed ? '#2e7d32' : '#8b5e3c', color: '#fff',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          fontSize: 14, fontWeight: 700, boxShadow: '0 2px 6px rgba(0,0,0,0.15)'
+                        }}
+                        title="Clique para concluir etapa"
+                      >
+                        {step.completed ? '✓' : idx + 1}
+                      </div>
+                      {!isLast && <div style={{ width: 3, height: 50, background: 'linear-gradient(to bottom, #8b5e3c, rgba(139,94,60,0.2))', margin: '4px 0' }} />}
+                    </div>
+
+                    {/* Conteúdo do Passo no Tempo */}
+                    <div style={{
+                      flex: 1, background: step.completed ? '#f0fdf4' : '#fffcf8',
+                      border: step.completed ? '1px solid #a7f3d0' : '1px solid rgba(139,115,85,0.2)',
+                      borderRadius: 14, padding: 16, boxShadow: '0 2px 8px rgba(44,26,14,0.04)'
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                        <h4 style={{ margin: 0, fontSize: 15, fontWeight: 800, color: step.completed ? '#166534' : '#2c1a0e', textDecoration: step.completed ? 'line-through' : 'none' }}>
+                          {step.title}
+                        </h4>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: step.completed ? '#166534' : '#8b5e3c' }}>
+                          {step.completed ? 'Etapa Concluída ✔️' : 'Pendente ⏳'}
+                        </span>
+                      </div>
+                      <p style={{ margin: 0, fontSize: 13, color: '#586e75', lineHeight: 1.5 }}>
+                        {step.description}
+                      </p>
+                    </div>
+                  </div>
+                )
+              })}
+
+              {(!activeEvent.pipelineSteps || activeEvent.pipelineSteps.length === 0) && (
+                <div style={{ textAlign: 'center', padding: 32, color: '#665c54' }}>
+                  Nenhuma etapa cadastrada na linha do tempo. Clique em "✨ Gerar Pipeline com IA" para desenhar o passo a passo exato no tempo!
+                </div>
+              )}
+            </div>
+          </ModuleCard>
+        </div>
+      )}
+
+      {/* ──────────────────────────────────────────────────────────────────────── */}
+      {/* FUNCIONALIDADE SOLICITADA 2: QUADRO DE POST-ITS COLORIDOS COM TO-DO LIST  */}
+      {/* ──────────────────────────────────────────────────────────────────────── */}
+      {activeTab === 'postits' && (
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+            <div>
+              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#2c1a0e' }}>
+                📌 Quadro de Post-its & Anotações Rápidas — {activeEvent.title}
+              </h3>
+              <p style={{ margin: 0, fontSize: 12.5, color: '#665c54' }}>
+                Cole lembretes, listas de tarefas dinâmicas e ideias em blocos autocolantes coloridos.
+              </p>
+            </div>
+            <button onClick={() => setShowPostItModal(true)} style={PrimaryBtnStyle}>
+              + Colar Novo Post-it
+            </button>
+          </div>
+
+          {/* Grid de Post-its Coloridos */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 20 }}>
+            {(activeEvent.postIts || []).map(note => {
+              const bgColor =
+                note.color === 'yellow' ? '#fef9c3' :
+                note.color === 'pink' ? '#ffe4e6' :
+                note.color === 'green' ? '#dcfce7' :
+                note.color === 'blue' ? '#e0f2fe' : '#ffedd5'
+              const borderColor =
+                note.color === 'yellow' ? '#fde047' :
+                note.color === 'pink' ? '#f43f5e' :
+                note.color === 'green' ? '#4ade80' :
+                note.color === 'blue' ? '#38bdf8' : '#fb923c'
+
+              return (
+                <div
+                  key={note.id}
+                  style={{
+                    background: bgColor, border: `2px solid ${borderColor}`,
+                    borderRadius: 16, padding: 18, boxShadow: '0 6px 18px rgba(44,26,14,0.08)',
+                    display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
+                    transform: 'rotate(-0.5deg)', transition: 'transform 0.2s'
+                  }}
+                >
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+                      <h4 style={{ margin: 0, fontSize: 15, fontWeight: 800, color: '#2c1a0e' }}>{note.title}</h4>
+                      <button onClick={() => handleDeletePostIt(note.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14 }}>🗑️</button>
+                    </div>
+
+                    <p style={{ fontSize: 13, color: '#334155', lineHeight: 1.5, margin: '0 0 12px' }}>
+                      {note.content}
+                    </p>
+
+                    {/* Lista To-Do dentro do Post-it */}
+                    {note.todoItems && note.todoItems.length > 0 && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, borderTop: '1px dashed rgba(0,0,0,0.15)', paddingTop: 10 }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>To-Do List:</div>
+                        {note.todoItems.map(t => (
+                          <label key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, cursor: 'pointer', color: t.done ? '#64748b' : '#0f172a', textDecoration: t.done ? 'line-through' : 'none' }}>
+                            <input
+                              type="checkbox"
+                              checked={t.done}
+                              onChange={() => handleTogglePostItTodo(note.id, t.id)}
+                            />
+                            {t.text}
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {note.date && (
+                    <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', marginTop: 12, textAlign: 'right' }}>
+                      🗓️ {note.date}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+
+            {(!activeEvent.postIts || activeEvent.postIts.length === 0) && (
+              <div style={{ textAlign: 'center', padding: 36, color: '#665c54', background: '#fffcf8', border: '1px dashed rgba(139,115,85,0.2)', borderRadius: 16 }}>
+                Nenhum Post-it colado ainda. Clique em "+ Colar Novo Post-it" para criar anotações autocolantes!
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ──────────────────────────────────────────────────────────────────────── */}
+      {/* ABA 3: CANVA & CONCEITO COM IA (CONECTADA À WEB)                         */}
       {/* ──────────────────────────────────────────────────────────────────────── */}
       {activeTab === 'canva' && (
         <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 20 }}>
@@ -418,7 +730,7 @@ export default function Eventos() {
             </div>
             <textarea
               value={canvaText}
-              onChange={e => handleSaveCanvaNotes(e.target.value)}
+              onChange={e => setCanvaText(e.target.value)}
               placeholder="Descreva o conceito do evento, ideias de decoração, roteiro do palco..."
               rows={18}
               style={{
@@ -428,8 +740,11 @@ export default function Eventos() {
               }}
             />
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 }}>
-              <span style={{ fontSize: 12, color: '#2e7d32' }}>✔️ Alterações salvas no rascunho</span>
-              <button onClick={() => handleSaveCanvaNotes(canvaText)} style={PrimaryBtnStyle}>
+              <span style={{ fontSize: 12, color: '#2e7d32' }}>✔️ Rascunho salvo</span>
+              <button onClick={() => {
+                const updated = events.map(e => e.id === activeEvent.id ? { ...e, canvaNotes: canvaText } : e)
+                saveAndSync(updated)
+              }} style={PrimaryBtnStyle}>
                 💾 Salvar Conceito
               </button>
             </div>
@@ -477,7 +792,7 @@ export default function Eventos() {
       )}
 
       {/* ──────────────────────────────────────────────────────────────────────── */}
-      {/* ABA 2: CALENDÁRIO DE EVENTOS                                            */}
+      {/* ABA 4: CALENDÁRIO DE EVENTOS                                            */}
       {/* ──────────────────────────────────────────────────────────────────────── */}
       {activeTab === 'calendar' && (
         <ModuleCard title="Cronograma & Calendário de Eventos Escolares" icon="ti-calendar-event" padding={20}>
@@ -504,8 +819,8 @@ export default function Eventos() {
                   {evt.description || 'Sem descrição cadastrada.'}
                 </p>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#665c54', borderTop: '1px solid rgba(139,115,85,0.1)', paddingTop: 10 }}>
-                  <span>📋 {evt.taskList.filter(t => t.completed).length}/{evt.taskList.length} tarefas</span>
-                  <span>💰 R$ {evt.budgetList.reduce((acc, b) => acc + b.cost, 0)}</span>
+                  <span>📌 {(evt.postIts || []).length} Post-its</span>
+                  <span>🚀 {(evt.pipelineSteps || []).length} Passos Pipeline</span>
                 </div>
               </div>
             ))}
@@ -514,7 +829,7 @@ export default function Eventos() {
       )}
 
       {/* ──────────────────────────────────────────────────────────────────────── */}
-      {/* ABA 3: ORÇAMENTO & LOGÍSTICA                                            */}
+      {/* ABA 5: ORÇAMENTO & LOGÍSTICA                                            */}
       {/* ──────────────────────────────────────────────────────────────────────── */}
       {activeTab === 'budget' && (
         <div>
@@ -539,7 +854,6 @@ export default function Eventos() {
                     <th style={ThStyle}>Item / Descrição</th>
                     <th style={ThStyle}>Categoria</th>
                     <th style={ThStyle}>Custo (R$)</th>
-                    <th style={ThStyle}>Status do Pagamento</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -554,28 +868,8 @@ export default function Eventos() {
                       <td style={TdStyle}>
                         <strong style={{ fontSize: 14 }}>R$ {b.cost},00</strong>
                       </td>
-                      <td style={TdStyle}>
-                        <button
-                          onClick={() => toggleBudgetPaid(activeEvent.id, b.id)}
-                          style={{
-                            padding: '4px 10px', borderRadius: 8, border: 'none', cursor: 'pointer',
-                            background: b.paid ? '#e8f5e9' : '#fffde7',
-                            color: b.paid ? '#2e7d32' : '#f57f17',
-                            fontSize: 12, fontWeight: 700
-                          }}
-                        >
-                          {b.paid ? 'Pago ✔️' : 'Pendente 🟡'}
-                        </button>
-                      </td>
                     </tr>
                   ))}
-                  {(!activeEvent.budgetList || activeEvent.budgetList.length === 0) && (
-                    <tr>
-                      <td colSpan={4} style={{ textAlign: 'center', padding: 20, color: '#665c54', fontSize: 13 }}>
-                        Nenhum item cadastrado no orçamento deste evento.
-                      </td>
-                    </tr>
-                  )}
                 </tbody>
               </table>
             </div>
@@ -584,7 +878,7 @@ export default function Eventos() {
       )}
 
       {/* ──────────────────────────────────────────────────────────────────────── */}
-      {/* ABA 4: CHECKLIST DE TAREFAS & EQUIPE                                     */}
+      {/* ABA 6: CHECKLIST DE TAREFAS                                              */}
       {/* ──────────────────────────────────────────────────────────────────────── */}
       {activeTab === 'checklist' && (
         <ModuleCard title={`Checklist de Tarefas & Equipe — ${activeEvent.title}`} icon="ti-list-check" padding={20}>
@@ -600,31 +894,22 @@ export default function Eventos() {
               const phaseTasks = (activeEvent.taskList || []).filter(t => t.phase === phase)
               return (
                 <div key={phase} style={{ background: '#fdf8f2', border: '1px solid rgba(139,115,85,0.15)', borderRadius: 14, padding: 16 }}>
-                  <h4 style={{ margin: '0 0 12px', fontSize: 15, fontWeight: 700, color: '#8b5e3c', borderBottom: '1px solid rgba(139,115,85,0.15)', paddingBottom: 6 }}>
+                  <h4 style={{ margin: '0 0 12px', fontSize: 15, fontWeight: 700, color: '#8b5e3c' }}>
                     {phase} ({phaseTasks.filter(t => t.completed).length}/{phaseTasks.length})
                   </h4>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                     {phaseTasks.map(t => (
-                      <div
-                        key={t.id}
-                        onClick={() => toggleTaskCompleted(activeEvent.id, t.id)}
-                        style={{
-                          display: 'flex', alignItems: 'center', gap: 10, padding: 10, borderRadius: 10,
-                          background: t.completed ? '#e8f5e9' : '#fff', border: '1px solid rgba(139,115,85,0.12)', cursor: 'pointer'
-                        }}
-                      >
-                        <input type="checkbox" checked={t.completed} readOnly style={{ width: 16, height: 16, cursor: 'pointer' }} />
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontSize: 13, fontWeight: 600, color: t.completed ? '#2e7d32' : '#2c1a0e', textDecoration: t.completed ? 'line-through' : 'none' }}>
-                            {t.title}
-                          </div>
-                          <div style={{ fontSize: 11, color: '#665c54' }}>👤 Resp: {t.assignee || 'Equipe'}</div>
-                        </div>
+                      <div key={t.id} style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13 }}>
+                        <input type="checkbox" checked={t.completed} onChange={() => {
+                          const updated = events.map(e => e.id === activeEvent.id ? {
+                            ...e,
+                            taskList: e.taskList.map(tk => tk.id === t.id ? { ...tk, completed: !tk.completed } : tk)
+                          } : e)
+                          saveAndSync(updated)
+                        }} />
+                        <span style={{ textDecoration: t.completed ? 'line-through' : 'none' }}>{t.title} ({t.assignee})</span>
                       </div>
                     ))}
-                    {phaseTasks.length === 0 && (
-                      <div style={{ fontSize: 12, color: '#665c54', fontStyle: 'italic', padding: 10 }}>Sem tarefas nesta fase.</div>
-                    )}
                   </div>
                 </div>
               )
@@ -634,14 +919,10 @@ export default function Eventos() {
       )}
 
       {/* ──────────────────────────────────────────────────────────────────────── */}
-      {/* ABA 5: CONVITES & COMUNICAÇÃO WHATSAPP                                  */}
+      {/* ABA 7: CONVITES WHATSAPP                                                 */}
       {/* ──────────────────────────────────────────────────────────────────────── */}
       {activeTab === 'invitations' && (
         <ModuleCard title={`Gerador de Convites & Comunicados — ${activeEvent.title}`} icon="ti-brand-whatsapp" padding={20}>
-          <p style={{ fontSize: 13, color: '#665c54', margin: '0 0 16px' }}>
-            Edite o texto do convite e envie diretamente para os grupos de pais e alunos via WhatsApp.
-          </p>
-
           <textarea
             value={activeEvent.invitationText || ''}
             onChange={e => {
@@ -650,24 +931,94 @@ export default function Eventos() {
               saveAndSync(updated)
             }}
             rows={8}
-            placeholder="Escreva a mensagem oficial do convite..."
-            style={{
-              width: '100%', padding: 14, borderRadius: 12, border: '1px solid rgba(139,115,85,0.2)',
-              fontSize: 13.5, background: '#fffcf8', color: '#2c1a0e', outline: 'none', lineHeight: 1.6, marginBottom: 16
-            }}
+            style={{ width: '100%', padding: 14, borderRadius: 12, border: '1px solid rgba(139,115,85,0.2)', fontSize: 13.5, marginBottom: 16 }}
           />
-
-          <div style={{ display: 'flex', gap: 12 }}>
-            <button onClick={sendWhatsAppInvitation} style={WhatsAppBtnStyle} title="Disparar no WhatsApp">
-              💬 Enviar Convite no WhatsApp
-            </button>
-          </div>
+          <button onClick={sendWhatsAppInvitation} style={WhatsAppBtnStyle}>
+            💬 Enviar Convite no WhatsApp
+          </button>
         </ModuleCard>
       )}
 
       {/* ──────────────────────────────────────────────────────────────────────── */}
-      {/* MODAIS DE CRIAÇÃO E EDIÇÃO                                              */}
+      {/* MODAIS DE CRIAÇÃO                                                       */}
       {/* ──────────────────────────────────────────────────────────────────────── */}
+
+      {/* Modal Post-it */}
+      {showPostItModal && (
+        <div style={OverlayStyle}>
+          <div style={ModalStyle}>
+            <h3 style={{ margin: '0 0 16px', fontSize: 18, color: '#2c1a0e' }}>📌 Colar Novo Post-it</h3>
+
+            <label style={LabelStyle}>Cor do Bloco Autocolante</label>
+            <div style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
+              {[
+                { key: 'yellow', label: 'Amarelo', bg: '#fef9c3' },
+                { key: 'pink', label: 'Rosa', bg: '#ffe4e6' },
+                { key: 'green', label: 'Verde', bg: '#dcfce7' },
+                { key: 'blue', label: 'Azul', bg: '#e0f2fe' },
+                { key: 'orange', label: 'Laranja', bg: '#ffedd5' },
+              ].map(c => (
+                <button
+                  key={c.key}
+                  type="button"
+                  onClick={() => setPostItColor(c.key as typeof postItColor)}
+                  style={{
+                    padding: '6px 12px', borderRadius: 8, border: postItColor === c.key ? '2px solid #8b5e3c' : '1px solid rgba(0,0,0,0.1)',
+                    background: c.bg, fontSize: 12, fontWeight: 700, cursor: 'pointer'
+                  }}
+                >
+                  {c.label}
+                </button>
+              ))}
+            </div>
+
+            <label style={LabelStyle}>Título da Anotação *</label>
+            <input value={postItTitle} onChange={e => setPostItTitle(e.target.value)} placeholder="Ex: 📌 Lembrete Urgente" style={InputStyle} />
+
+            <label style={LabelStyle}>Conteúdo / Nota</label>
+            <textarea value={postItContent} onChange={e => setPostItContent(e.target.value)} rows={3} placeholder="Escreva a nota ou ideia..." style={InputStyle} />
+
+            <label style={LabelStyle}>Adicionar Item à To-Do List do Post-it</label>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+              <input value={postItTodoInput} onChange={e => setPostItTodoInput(e.target.value)} placeholder="Ex: Comprar medalhas" style={{ flex: 1, padding: '8px 12px', borderRadius: 10, border: '1px solid rgba(139,115,85,0.2)', fontSize: 13 }} />
+              <button type="button" onClick={addModalTodoItem} style={SecondaryBtnStyle}>+ Item</button>
+            </div>
+            {postItTodos.length > 0 && (
+              <div style={{ fontSize: 12, color: '#665c54', marginBottom: 12 }}>
+                {postItTodos.map(t => <div key={t.id}>- {t.text}</div>)}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 12 }}>
+              <button onClick={() => setShowPostItModal(false)} style={CancelBtnStyle}>Cancelar</button>
+              <button onClick={handleAddPostIt} style={PrimaryBtnStyle}>Colar Post-it</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Pipeline */}
+      {showPipelineModal && (
+        <div style={OverlayStyle}>
+          <div style={ModalStyle}>
+            <h3 style={{ margin: '0 0 16px', fontSize: 18, color: '#2c1a0e' }}>🚀 Adicionar Passo no Pipeline Temporal</h3>
+
+            <label style={LabelStyle}>Offset do Tempo (Ex: T-15 Dias, Dia D, T+2 Dias) *</label>
+            <input value={pipelineOffset} onChange={e => setPipelineOffset(e.target.value)} placeholder="Ex: T-15 Dias" style={InputStyle} />
+
+            <label style={LabelStyle}>Título da Etapa *</label>
+            <input value={pipelineTitle} onChange={e => setPipelineTitle(e.target.value)} placeholder="Ex: Ensaio Geral & Projeção" style={InputStyle} />
+
+            <label style={LabelStyle}>Descrição Detalhada</label>
+            <textarea value={pipelineDesc} onChange={e => setPipelineDesc(e.target.value)} rows={3} placeholder="Descreva o que deve ocorrer neste marco..." style={InputStyle} />
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 12 }}>
+              <button onClick={() => setShowPipelineModal(false)} style={CancelBtnStyle}>Cancelar</button>
+              <button onClick={handleAddPipelineStep} style={PrimaryBtnStyle}>Salvar Etapa</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal Evento */}
       {showEventModal && (
