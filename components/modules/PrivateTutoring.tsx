@@ -1,7 +1,19 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import ModuleShell from '@/components/ModuleShell'
+import ModuleCard from '@/components/ModuleCard'
+import { syncToSupabase } from '@/lib/supabaseClient'
+
+// ─── Interfaces Data Model ───────────────────────────────────────────────────
+
+export interface RoadmapMilestone {
+  id: string
+  title: string
+  status: 'concluido' | 'em_andamento' | 'planejado'
+  targetDate?: string
+  progress: number // 0-100%
+}
 
 export interface PrivateStudentLesson {
   id: string
@@ -29,11 +41,14 @@ export interface PrivateStudent {
   email?: string
   monthlyFee: number // Valor da mensalidade em R$
   dueDay: number // Dia do vencimento (1-31)
+  paymentMethod?: 'PIX' | 'Cartão' | 'Boleto' | 'Dinheiro'
+  lastPaymentDate?: string
   modality: 'Presencial' | 'Online' | 'Híbrido'
   scheduleInfo: string // ex: "Terças e Quintas às 14:00"
   paymentStatus: 'pago' | 'em_dia' | 'pendente' | 'atrasado'
   masteryPercentage: number // 0-100%
   goals?: string // Objetivos do aluno
+  roadmap: RoadmapMilestone[]
   lessonsHistory: PrivateStudentLesson[]
   gradesHistory: PrivateStudentGrade[]
   aiDiagnostic?: string
@@ -51,11 +66,19 @@ const PRESET_STUDENTS: PrivateStudent[] = [
     email: 'clara.mendes@email.com',
     monthlyFee: 480,
     dueDay: 5,
+    paymentMethod: 'PIX',
+    lastPaymentDate: '05/07/2026',
     modality: 'Online',
     scheduleInfo: 'Terças e Quintas · 14h00 às 15h00',
     paymentStatus: 'pago',
     masteryPercentage: 85,
     goals: 'Preparação para Exame de Proficiência B2 (FCE)',
+    roadmap: [
+      { id: 'rm1', title: 'Módulo 1: Business Phrasal Verbs', status: 'concluido', progress: 100, targetDate: '15/06/2026' },
+      { id: 'rm2', title: 'Módulo 2: Present Perfect vs Past Simple', status: 'concluido', progress: 100, targetDate: '30/06/2026' },
+      { id: 'rm3', title: 'Módulo 3: FCE Essay & Formal Writing', status: 'em_andamento', progress: 65, targetDate: '15/08/2026' },
+      { id: 'rm4', title: 'Módulo 4: Advanced Listening Cloze', status: 'planejado', progress: 0, targetDate: '30/09/2026' },
+    ],
     lessonsHistory: [
       { id: 'l1', date: '28/07/2026', topic: 'Phrasal Verbs em Contexto de Negócios', homework: 'Página 42 a 45 do Workbook', performanceRating: 'Excelente' },
       { id: 'l2', date: '21/07/2026', topic: 'Present Perfect vs Past Simple', homework: 'Gravar áudio de 1 min sobre as férias', performanceRating: 'Bom' }
@@ -75,11 +98,18 @@ const PRESET_STUDENTS: PrivateStudent[] = [
     email: 'roberto.lima@email.com',
     monthlyFee: 550,
     dueDay: 10,
+    paymentMethod: 'Boleto',
+    lastPaymentDate: '10/06/2026',
     modality: 'Presencial',
     scheduleInfo: 'Quartas-feiras · 16h00 às 18h00',
     paymentStatus: 'pendente',
     masteryPercentage: 72,
     goals: 'Aprovação em Medicina via ENEM',
+    roadmap: [
+      { id: 'rm5', title: 'Funções Quadráticas & Problemas de Máximo', status: 'concluido', progress: 100, targetDate: '10/07/2026' },
+      { id: 'rm6', title: 'Geometria Espacial & Prismas', status: 'em_andamento', progress: 45, targetDate: '20/08/2026' },
+      { id: 'rm7', title: 'Cinemática & Leis de Newton', status: 'planejado', progress: 0, targetDate: '15/09/2026' }
+    ],
     lessonsHistory: [
       { id: 'l3', date: '29/07/2026', topic: 'Funções Quadráticas & Problemas de Máximo/Mínimo', homework: 'Lista de 15 exercícios ENEM', performanceRating: 'Bom' }
     ],
@@ -96,887 +126,920 @@ const PRESET_STUDENTS: PrivateStudent[] = [
     email: 'gabriel.souza@email.com',
     monthlyFee: 400,
     dueDay: 15,
+    paymentMethod: 'PIX',
+    lastPaymentDate: '15/07/2026',
     modality: 'Online',
     scheduleInfo: 'Sábados · 10h00 às 11h30',
-    paymentStatus: 'atrasado',
-    masteryPercentage: 60,
-    goals: 'Superar recuperação do 2º Trimestre',
-    lessonsHistory: [],
-    gradesHistory: []
+    paymentStatus: 'em_dia',
+    masteryPercentage: 90,
+    goals: 'Reforço Escolar do 3º Ano do Ensino Médio',
+    roadmap: [
+      { id: 'rm8', title: 'Estequiometria & Soluções', status: 'concluido', progress: 100, targetDate: '05/07/2026' },
+      { id: 'rm9', title: 'Genética Mendeliana & Biologia Celular', status: 'concluido', progress: 100, targetDate: '25/07/2026' }
+    ],
+    lessonsHistory: [
+      { id: 'l4', date: '25/07/2026', topic: 'Estequiometria & Rendimento de Reações', homework: 'Resolver lista de fixação', performanceRating: 'Excelente' }
+    ],
+    gradesHistory: [
+      { id: 'g4', date: '18/07/2026', title: 'Prova de Química Orgânica', score: 9.5, maxScore: 10 }
+    ]
   }
 ]
 
 export default function PrivateTutoring() {
   const [students, setStudents] = useState<PrivateStudent[]>([])
-  const [selectedStudent, setSelectedStudent] = useState<PrivateStudent | null>(null)
-  const [activeTab, setActiveTab] = useState<'list' | 'finance' | 'detail'>('list')
-  const [detailSubTab, setDetailSubTab] = useState<'profile' | 'lessons' | 'grades' | 'diagnostic'>('profile')
-  const [showAddModal, setShowAddModal] = useState(false)
-  const [showLessonModal, setShowLessonModal] = useState(false)
-  const [showGradeModal, setShowGradeModal] = useState(false)
+  const [activeSubModule, setActiveSubModule] = useState<'finance' | 'stats' | 'profiles' | 'roadmap' | 'teaching'>('finance')
+  const [search, setSearch] = useState('')
+  const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null)
 
-  // Form de Novo Aluno Particular
+  // Modals & Forms
+  const [showStudentModal, setShowStudentModal] = useState(false)
+  const [editingStudent, setEditingStudent] = useState<PrivateStudent | null>(null)
   const [formName, setFormName] = useState('')
   const [formSubject, setFormSubject] = useState('')
   const [formGuardian, setFormGuardian] = useState('')
   const [formPhone, setFormPhone] = useState('')
   const [formEmail, setFormEmail] = useState('')
-  const [formFee, setFormFee] = useState<number>(450)
-  const [formDueDay, setFormDueDay] = useState<number>(5)
+  const [formFee, setFormFee] = useState('450')
+  const [formDueDay, setFormDueDay] = useState('10')
   const [formModality, setFormModality] = useState<'Presencial' | 'Online' | 'Híbrido'>('Online')
   const [formSchedule, setFormSchedule] = useState('')
   const [formGoals, setFormGoals] = useState('')
 
-  // Form de Nova Aula Registrada
-  const [lessonDate, setLessonDate] = useState(new Date().toLocaleDateString('pt-BR'))
+  // Lesson & Grade Modals
+  const [showLessonModal, setShowLessonModal] = useState(false)
   const [lessonTopic, setLessonTopic] = useState('')
   const [lessonHomework, setLessonHomework] = useState('')
-  const [lessonRating, setLessonRating] = useState<'Excelente' | 'Bom' | 'Regular' | 'Precisa de Atenção'>('Excelente')
+  const [lessonRating, setLessonRating] = useState<'Excelente' | 'Bom' | 'Regular' | 'Precisa de Atenção'>('Bom')
+  const [lessonNotes, setLessonNotes] = useState('')
 
-  // Form de Nova Nota
-  const [gradeDate, setGradeDate] = useState(new Date().toLocaleDateString('pt-BR'))
+  const [showGradeModal, setShowGradeModal] = useState(false)
   const [gradeTitle, setGradeTitle] = useState('')
-  const [gradeScore, setGradeScore] = useState<number>(8.5)
+  const [gradeScore, setGradeScore] = useState('8.5')
 
-  // IA State
-  const [isGeneratingAi, setIsGeneratingAi] = useState(false)
-  const [filterSubject, setFilterSubject] = useState<string>('all')
-  const [searchQuery, setSearchQuery] = useState('')
+  const [showRoadmapModal, setShowRoadmapModal] = useState(false)
+  const [roadmapTitle, setRoadmapTitle] = useState('')
+  const [roadmapTargetDate, setRoadmapTargetDate] = useState('')
+  const [roadmapProgress, setRoadmapProgress] = useState('50')
+  const [roadmapStatus, setRoadmapStatus] = useState<'concluido' | 'em_andamento' | 'planejado'>('em_andamento')
 
-  // Load Initial
-  useEffect(() => {
-    const s = localStorage.getItem(STORAGE_KEY)
-    if (s) {
-      try {
-        const parsed = JSON.parse(s)
+  const [aiDiagnosticLoading, setAiDiagnosticLoading] = useState(false)
+
+  // ─── Carregamento & Persistência ─────────────────────────────────────────────
+
+  const loadStudents = useCallback(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY)
+      if (raw) {
+        const parsed = JSON.parse(raw) as PrivateStudent[]
         setStudents(parsed)
-      } catch {
+      } else {
         setStudents(PRESET_STUDENTS)
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(PRESET_STUDENTS))
       }
-    } else {
+    } catch (e) {
+      console.error('Erro ao carregar alunos particulares:', e)
       setStudents(PRESET_STUDENTS)
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(PRESET_STUDENTS))
     }
   }, [])
 
-  function saveStudents(updated: PrivateStudent[]) {
+  useEffect(() => {
+    loadStudents()
+    window.addEventListener('storage', loadStudents)
+    return () => window.removeEventListener('storage', loadStudents)
+  }, [loadStudents])
+
+  const saveAndSync = (updated: PrivateStudent[]) => {
     setStudents(updated)
     localStorage.setItem(STORAGE_KEY, JSON.stringify(updated))
     window.dispatchEvent(new Event('storage'))
+    window.dispatchEvent(new CustomEvent('teacher:data_changed'))
+    syncToSupabase().catch(() => {})
   }
 
-  // Estatísticas Financeiras & Acadêmicas
-  const totalRevenueExpected = students.reduce((acc, s) => acc + s.monthlyFee, 0)
-  const totalRevenueReceived = students.filter(s => s.paymentStatus === 'pago').reduce((acc, s) => acc + s.monthlyFee, 0)
-  const pendingCount = students.filter(s => s.paymentStatus === 'pendente' || s.paymentStatus === 'atrasado').length
-  const averageMastery = students.length ? Math.round(students.reduce((acc, s) => acc + s.masteryPercentage, 0) / students.length) : 0
+  // ─── Aluno Selecionado Padrão ────────────────────────────────────────────────
+  const activeStudent = students.find(s => s.id === selectedStudentId) || students[0] || PRESET_STUDENTS[0]
 
-  // Filtros
-  const uniqueSubjects = Array.from(new Set(students.map(s => s.subject)))
-  const filteredStudents = students.filter(s => {
-    const matchesSearch = s.name.toLowerCase().includes(searchQuery.toLowerCase()) || s.subject.toLowerCase().includes(searchQuery.toLowerCase())
-    const matchesSubject = filterSubject === 'all' || s.subject === filterSubject
-    return matchesSearch && matchesSubject
-  })
+  // ─── Filtro de Pesquisa ──────────────────────────────────────────────────────
+  const filteredStudents = students.filter(s =>
+    s.name.toLowerCase().includes(search.toLowerCase()) ||
+    s.subject.toLowerCase().includes(search.toLowerCase()) ||
+    (s.guardianName || '').toLowerCase().includes(search.toLowerCase())
+  )
 
-  // Criar Aluno Particular
-  function handleCreateStudent(e: React.FormEvent) {
-    e.preventDefault()
-    if (!formName.trim() || !formSubject.trim()) {
-      alert('Por favor informe o Nome do Aluno e a Matéria/Disciplina.')
-      return
-    }
+  // ─── KPIs Financeiros ────────────────────────────────────────────────────────
+  const totalExpectedRevenue = students.reduce((acc, s) => acc + (s.monthlyFee || 0), 0)
+  const totalPaidRevenue = students
+    .filter(s => s.paymentStatus === 'pago' || s.paymentStatus === 'em_dia')
+    .reduce((acc, s) => acc + (s.monthlyFee || 0), 0)
+  const totalPendingRevenue = students
+    .filter(s => s.paymentStatus === 'pendente' || s.paymentStatus === 'atrasado')
+    .reduce((acc, s) => acc + (s.monthlyFee || 0), 0)
 
-    const newStudent: PrivateStudent = {
-      id: 'ps-' + Date.now(),
-      name: formName.trim(),
-      subject: formSubject.trim(),
-      guardianName: formGuardian.trim() || formName.trim(),
-      phone: formPhone.trim(),
-      email: formEmail.trim(),
-      monthlyFee: Number(formFee) || 0,
-      dueDay: Number(formDueDay) || 5,
-      modality: formModality,
-      scheduleInfo: formSchedule.trim() || 'A combinar',
-      paymentStatus: 'em_dia',
-      masteryPercentage: 70,
-      goals: formGoals.trim(),
-      lessonsHistory: [],
-      gradesHistory: []
-    }
-
-    const updated = [newStudent, ...students]
-    saveStudents(updated)
-    setShowAddModal(false)
-    resetAddForm()
-    setSelectedStudent(newStudent)
-    setActiveTab('detail')
-  }
-
-  function resetAddForm() {
+  // ─── CRUD Aluno Particular ─────────────────────────────────────────────────
+  const openNewStudentModal = () => {
+    setEditingStudent(null)
     setFormName('')
-    setFormSubject('')
+    setFormSubject('Inglês Particular & Conversação')
     setFormGuardian('')
     setFormPhone('')
     setFormEmail('')
-    setFormFee(450)
-    setFormDueDay(5)
+    setFormFee('450')
+    setFormDueDay('10')
     setFormModality('Online')
-    setFormSchedule('')
-    setFormGoals('')
+    setFormSchedule('Terças e Quintas · 15h00 às 16h00')
+    setFormGoals('Desenvolvimento de fluência e gramática')
+    setShowStudentModal(true)
   }
 
-  // Deletar Aluno
-  function handleDeleteStudent(id: string) {
-    if (confirm('Tem certeza que deseja excluir o cadastro deste aluno particular?')) {
-      const updated = students.filter(s => s.id !== id)
-      saveStudents(updated)
-      if (selectedStudent?.id === id) {
-        setSelectedStudent(null)
-        setActiveTab('list')
+  const openEditStudentModal = (st: PrivateStudent) => {
+    setEditingStudent(st)
+    setFormName(st.name)
+    setFormSubject(st.subject)
+    setFormGuardian(st.guardianName || '')
+    setFormPhone(st.phone || '')
+    setFormEmail(st.email || '')
+    setFormFee(String(st.monthlyFee))
+    setFormDueDay(String(st.dueDay))
+    setFormModality(st.modality)
+    setFormSchedule(st.scheduleInfo)
+    setFormGoals(st.goals || '')
+    setShowStudentModal(true)
+  }
+
+  const handleSaveStudent = () => {
+    if (!formName.trim()) return
+    const feeNum = parseFloat(formFee) || 0
+    const dueDayNum = parseInt(formDueDay, 10) || 10
+
+    if (editingStudent) {
+      const updated = students.map(s => s.id === editingStudent.id ? {
+        ...s,
+        name: formName.trim(),
+        subject: formSubject.trim(),
+        guardianName: formGuardian.trim(),
+        phone: formPhone.trim(),
+        email: formEmail.trim(),
+        monthlyFee: feeNum,
+        dueDay: dueDayNum,
+        modality: formModality,
+        scheduleInfo: formSchedule.trim(),
+        goals: formGoals.trim()
+      } : s)
+      saveAndSync(updated)
+    } else {
+      const newStudent: PrivateStudent = {
+        id: 'ps_' + Date.now(),
+        name: formName.trim(),
+        subject: formSubject.trim(),
+        guardianName: formGuardian.trim(),
+        phone: formPhone.trim(),
+        email: formEmail.trim(),
+        monthlyFee: feeNum,
+        dueDay: dueDayNum,
+        paymentMethod: 'PIX',
+        modality: formModality,
+        scheduleInfo: formSchedule.trim(),
+        paymentStatus: 'em_dia',
+        masteryPercentage: 75,
+        goals: formGoals.trim(),
+        roadmap: [
+          { id: 'rm_' + Date.now(), title: 'Diagnóstico & Alinhamento de Metas', status: 'concluido', progress: 100 }
+        ],
+        lessonsHistory: [],
+        gradesHistory: []
       }
+      saveAndSync([...students, newStudent])
+      setSelectedStudentId(newStudent.id)
     }
+    setShowStudentModal(false)
   }
 
-  // Alternar Status de Pagamento
-  function togglePaymentStatus(studentId: string, newStatus: PrivateStudent['paymentStatus']) {
-    const updated = students.map(s => s.id === studentId ? { ...s, paymentStatus: newStatus } : s)
-    saveStudents(updated)
-    if (selectedStudent?.id === studentId) {
-      setSelectedStudent(prev => prev ? { ...prev, paymentStatus: newStatus } : null)
-    }
+  const handleDeleteStudent = (id: string) => {
+    if (!confirm('Deseja realmente remover este aluno particular e todo o seu histórico?')) return
+    const updated = students.filter(s => s.id !== id)
+    saveAndSync(updated)
   }
 
-  // Registrar Aula Ministrada
-  function handleAddLesson(e: React.FormEvent) {
-    e.preventDefault()
-    if (!selectedStudent || !lessonTopic.trim()) return
+  // ─── Ações Financeiras ─────────────────────────────────────────────────────
+  const togglePaymentStatus = (studentId: string) => {
+    const updated = students.map(s => {
+      if (s.id !== studentId) return s
+      const nextStatus: PrivateStudent['paymentStatus'] =
+        s.paymentStatus === 'pago' ? 'pendente' :
+        s.paymentStatus === 'pendente' ? 'atrasado' :
+        s.paymentStatus === 'atrasado' ? 'em_dia' : 'pago'
+      return {
+        ...s,
+        paymentStatus: nextStatus,
+        lastPaymentDate: nextStatus === 'pago' ? new Date().toLocaleDateString('pt-BR') : s.lastPaymentDate
+      }
+    })
+    saveAndSync(updated)
+  }
 
+  const generateWhatsAppReminder = (st: PrivateStudent) => {
+    const text = encodeURIComponent(
+      `Olá, ${st.guardianName || st.name}! 👋 Passando para lembrar do vencimento da mensalidade de ${st.subject} do(a) ${st.name} (Dia ${st.dueDay} · R$ ${st.monthlyFee},00). Qualquer dúvida estou à disposição! 📚✨`
+    )
+    const cleanPhone = (st.phone || '').replace(/\D/g, '')
+    const url = cleanPhone ? `https://wa.me/55${cleanPhone}?text=${text}` : `https://wa.me/?text=${text}`
+    window.open(url, '_blank')
+  }
+
+  // ─── Ações de Ensino & Prática ─────────────────────────────────────────────
+  const handleAddLesson = () => {
+    if (!activeStudent || !lessonTopic.trim()) return
     const newLesson: PrivateStudentLesson = {
-      id: 'l-' + Date.now(),
-      date: lessonDate,
+      id: 'les_' + Date.now(),
+      date: new Date().toLocaleDateString('pt-BR'),
       topic: lessonTopic.trim(),
       homework: lessonHomework.trim(),
-      performanceRating: lessonRating
+      performanceRating: lessonRating,
+      notes: lessonNotes.trim()
     }
-
-    const updatedLessons = [newLesson, ...selectedStudent.lessonsHistory]
-    const updatedStudent = { ...selectedStudent, lessonsHistory: updatedLessons }
-    const updatedList = students.map(s => s.id === selectedStudent.id ? updatedStudent : s)
-
-    saveStudents(updatedList)
-    setSelectedStudent(updatedStudent)
+    const updated = students.map(s => s.id === activeStudent.id ? {
+      ...s,
+      lessonsHistory: [newLesson, ...s.lessonsHistory]
+    } : s)
+    saveAndSync(updated)
     setShowLessonModal(false)
     setLessonTopic('')
     setLessonHomework('')
+    setLessonNotes('')
   }
 
-  // Registrar Nota/Avaliação
-  function handleAddGrade(e: React.FormEvent) {
-    e.preventDefault()
-    if (!selectedStudent || !gradeTitle.trim()) return
-
+  const handleAddGrade = () => {
+    if (!activeStudent || !gradeTitle.trim()) return
+    const scoreNum = parseFloat(gradeScore) || 0
     const newGrade: PrivateStudentGrade = {
-      id: 'g-' + Date.now(),
-      date: gradeDate,
+      id: 'grd_' + Date.now(),
+      date: new Date().toLocaleDateString('pt-BR'),
       title: gradeTitle.trim(),
-      score: Number(gradeScore) || 0,
+      score: scoreNum,
       maxScore: 10
     }
+    const updatedGrades = [newGrade, ...activeStudent.gradesHistory]
+    const avgScore = updatedGrades.reduce((acc, g) => acc + (g.score / g.maxScore), 0) / updatedGrades.length
+    const newMastery = Math.round(avgScore * 100)
 
-    const updatedGrades = [newGrade, ...selectedStudent.gradesHistory]
-    // Recalcula % de domínio
-    const avgScore = updatedGrades.reduce((acc, g) => acc + g.score, 0) / updatedGrades.length
-    const newMastery = Math.min(100, Math.max(0, Math.round(avgScore * 10)))
-
-    const updatedStudent = { ...selectedStudent, gradesHistory: updatedGrades, masteryPercentage: newMastery }
-    const updatedList = students.map(s => s.id === selectedStudent.id ? updatedStudent : s)
-
-    saveStudents(updatedList)
-    setSelectedStudent(updatedStudent)
+    const updated = students.map(s => s.id === activeStudent.id ? {
+      ...s,
+      gradesHistory: updatedGrades,
+      masteryPercentage: newMastery
+    } : s)
+    saveAndSync(updated)
     setShowGradeModal(false)
     setGradeTitle('')
+    setGradeScore('8.5')
   }
 
-  // Gerar Diagnóstico com IA Visão/RAG
-  async function generateAiDiagnostic() {
-    if (!selectedStudent) return
-    setIsGeneratingAi(true)
+  // ─── Ações de Roadmap ──────────────────────────────────────────────────────
+  const handleAddRoadmapMilestone = () => {
+    if (!activeStudent || !roadmapTitle.trim()) return
+    const newMilestone: RoadmapMilestone = {
+      id: 'rm_' + Date.now(),
+      title: roadmapTitle.trim(),
+      targetDate: roadmapTargetDate.trim() || undefined,
+      progress: Math.min(100, Math.max(0, parseInt(roadmapProgress, 10) || 0)),
+      status: roadmapStatus
+    }
+    const updatedRoadmap = [...(activeStudent.roadmap || []), newMilestone]
+    const updated = students.map(s => s.id === activeStudent.id ? {
+      ...s,
+      roadmap: updatedRoadmap
+    } : s)
+    saveAndSync(updated)
+    setShowRoadmapModal(false)
+    setRoadmapTitle('')
+    setRoadmapTargetDate('')
+  }
 
+  const handleToggleRoadmapStatus = (studentId: string, milestoneId: string) => {
+    const updated = students.map(s => {
+      if (s.id !== studentId) return s
+      const updatedRoadmap = (s.roadmap || []).map(m => {
+        if (m.id !== milestoneId) return m
+        const nextStatus: RoadmapMilestone['status'] =
+          m.status === 'planejado' ? 'em_andamento' :
+          m.status === 'em_andamento' ? 'concluido' : 'planejado'
+        return {
+          ...m,
+          status: nextStatus,
+          progress: nextStatus === 'concluido' ? 100 : nextStatus === 'planejado' ? 0 : 50
+        }
+      })
+      return { ...s, roadmap: updatedRoadmap }
+    })
+    saveAndSync(updated)
+  }
+
+  // ─── Diagnóstico IA ────────────────────────────────────────────────────────
+  const generateAIDiagnostic = async (st: PrivateStudent) => {
+    setAiDiagnosticLoading(true)
     try {
-      const apisRaw = localStorage.getItem('teacher_apis')
-      let apiConfig = null
-      if (apisRaw) {
-        const parsed = JSON.parse(apisRaw)
-        apiConfig = parsed.find((a: any) => a.key && a.provider !== 'manual')
-      }
-
-      const prompt = `Gere um diagnóstico pedagógico profissional e personalizado para o aluno particular:
-- Nome: ${selectedStudent.name}
-- Matéria: ${selectedStudent.subject}
-- Objetivos: ${selectedStudent.goals || 'Desenvolvimento geral'}
-- Domínio Atual: ${selectedStudent.masteryPercentage}%
-- Últimas Aulas: ${selectedStudent.lessonsHistory.map(l => `${l.date}: ${l.topic} (Avaliação: ${l.performanceRating || 'Bom'})`).join('; ') || 'Nenhuma aula gravada'}
-- Notas: ${selectedStudent.gradesHistory.map(g => `${g.title}: ${g.score}/10`).join('; ') || 'Nenhuma avaliação registrada'}
-
-Estruture a resposta em 3 seções curtas com marcadores:
-1. 🎯 Diagnóstico Atual de Desempenho
-2. 💪 Pontos Fortes e Habilidades Consolidadas
-3. 🚀 Plano de Ação & Sugestões para as Próximas Aulas`
-
-      let diagnosticText = ''
-
-      if (apiConfig && apiConfig.provider === 'openai') {
-        const r = await fetch('https://api.openai.com/v1/chat/completions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiConfig.key}` },
-          body: JSON.stringify({
-            model: apiConfig.model || 'gpt-4o',
-            messages: [{ role: 'user', content: prompt }]
-          })
+      const res = await fetch('/api/agent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: [{
+            role: 'user',
+            content: `Gere um diagnóstico pedagógico sintético (máximo 4 frases) para o aluno particular ${st.name}, matéria "${st.subject}", domínio atual ${st.masteryPercentage}%, com histórico de aulas: ${st.lessonsHistory.map(l => l.topic).join(', ') || 'Sem aulas recentes'}. Destaque pontos fortes e plano de ação curto.`
+          }],
+          context: 'privatetutoring_diagnostic',
+          provider: 'auto'
         })
-        const d = await r.json()
-        diagnosticText = d.choices?.[0]?.message?.content || ''
-      } else if (apiConfig && apiConfig.provider === 'gemini') {
-        const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${apiConfig.model || 'gemini-2.0-flash'}:generateContent?key=${apiConfig.key}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
-        })
-        const d = await r.json()
-        diagnosticText = d.candidates?.[0]?.content?.parts?.[0]?.text || ''
-      } else {
-        // Fallback via /api/agent
-        const r = await fetch('/api/agent', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            messages: [{ role: 'user', content: prompt }],
-            context: 'private_student_diagnostic'
-          })
-        })
-        const d = await r.json()
-        diagnosticText = d.content?.find((c: any) => c.type === 'text')?.text || d.text || ''
+      })
+      if (res.ok) {
+        const data = await res.json()
+        const diagnosticText = data.reply || 'Aluno em boa evolução pedagógica. Manter frequência das aulas e reforço prático.'
+        const updated = students.map(s => s.id === st.id ? { ...s, aiDiagnostic: diagnosticText } : s)
+        saveAndSync(updated)
       }
-
-      if (diagnosticText) {
-        const updatedStudent = { ...selectedStudent, aiDiagnostic: diagnosticText }
-        const updatedList = students.map(s => s.id === selectedStudent.id ? updatedStudent : s)
-        saveStudents(updatedList)
-        setSelectedStudent(updatedStudent)
-      } else {
-        alert('Não foi possível obter resposta da IA. Verifique sua chave de API.')
-      }
-    } catch (err: any) {
-      alert(`Erro ao gerar diagnóstico: ${err.message}`)
+    } catch {
+      alert('Não foi possível gerar o diagnóstico no momento.')
     } finally {
-      setIsGeneratingAi(false)
-    }
-  }
-
-  // Enviar Lembrete via WhatsApp
-  function sendWhatsAppReminder(student: PrivateStudent) {
-    const message = encodeURIComponent(
-      `Olá ${student.guardianName || student.name}, tudo bem?\n\nPassando para lembrar que a mensalidade de *${student.subject}* (Valor: R$ ${student.monthlyFee.toFixed(2)}) referente ao vencimento dia *${student.dueDay}* está em aberto.\n\nQualquer dúvida ou confirmação de PIX fico à disposição! Muito obrigado(a).`
-    )
-    const cleanPhone = (student.phone || '').replace(/\D/g, '')
-    if (cleanPhone) {
-      window.open(`https://wa.me/55${cleanPhone}?text=${message}`, '_blank')
-    } else {
-      window.open(`https://wa.me/?text=${message}`, '_blank')
-    }
-  }
-
-  const badgePaymentStyle = (status: PrivateStudent['paymentStatus']) => {
-    switch (status) {
-      case 'pago': return { bg: '#e8f8f0', color: '#27ae60', border: '#27ae60', label: 'Pago ✔️' }
-      case 'em_dia': return { bg: '#eef9ff', color: '#2980b9', border: '#2980b9', label: 'Em Dia 🟢' }
-      case 'pendente': return { bg: '#fef9e7', color: '#d35400', border: '#f39c12', label: 'Pendente 🟡' }
-      case 'atrasado': return { bg: '#fde8e8', color: '#c0392b', border: '#e74c3c', label: 'Atrasado 🔴' }
+      setAiDiagnosticLoading(false)
     }
   }
 
   return (
     <ModuleShell
-      title="👤 Alunos Particulares"
-      subtitle="Gerencie matrículas, matérias próprias, controle financeiro de mensalidades, diário de aulas e diagnósticos pedagógicos de alunos particulares."
-      isFullHeight
-      maxWidth="100%"
+      title="Alunos Particulares — Gestão Completa & Ensino"
+      subtitle="Módulos dedicados de Financeiro, Estatísticas, Perfil, Roadmap e Ensino Pedagógico."
       actions={
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-          <button
-            onClick={() => { setActiveTab('list'); setSelectedStudent(null) }}
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+          <input
+            placeholder="🔍 Buscar aluno, matéria..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
             style={{
-              padding: '8px 14px', borderRadius: 10, borderWidth: '1px', borderStyle: 'solid',
-              borderColor: activeTab === 'list' ? '#8b5e3c' : 'rgba(139,115,85,0.3)',
-              background: activeTab === 'list' ? '#8b5e3c' : '#fffcf8',
-              color: activeTab === 'list' ? '#fff' : '#586e75',
-              fontSize: 12.5, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6
+              padding: '8px 14px', borderRadius: 12, border: '1px solid rgba(139,115,85,0.2)',
+              fontSize: 13, outline: 'none', background: '#fff', width: 220
             }}
-          >
-            <i className="ti ti-users" /> Lista de Alunos ({students.length})
-          </button>
-
-          <button
-            onClick={() => setActiveTab('finance')}
-            style={{
-              padding: '8px 14px', borderRadius: 10, borderWidth: '1px', borderStyle: 'solid',
-              borderColor: activeTab === 'finance' ? '#27ae60' : 'rgba(139,115,85,0.3)',
-              background: activeTab === 'finance' ? '#27ae60' : '#fffcf8',
-              color: activeTab === 'finance' ? '#fff' : '#586e75',
-              fontSize: 12.5, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6
-            }}
-          >
-            <i className="ti ti-cash" /> Gestão Financeira
-          </button>
-
-          <button
-            onClick={() => setShowAddModal(true)}
-            style={{
-              padding: '8px 16px', borderRadius: 10, borderWidth: '0px', borderStyle: 'none', borderColor: 'transparent',
-              background: '#8b5e3c', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6
-            }}
-          >
-            <i className="ti ti-user-plus" /> Novo Aluno Particular
+          />
+          <button onClick={openNewStudentModal} style={PrimaryBtnStyle}>
+            + Novo Aluno Particular
           </button>
         </div>
       }
     >
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 20, height: '100%', overflowY: 'auto' }}>
+      {/* ── Sub-Módulos Bar Navigation ── */}
+      <div style={{ display: 'flex', gap: 10, marginBottom: 24, borderBottom: '2px solid rgba(139,115,85,0.12)', paddingBottom: 12, flexWrap: 'wrap' }}>
+        {[
+          { key: 'finance', label: '💵 Financeiro & Cobrança', icon: 'ti-currency-real' },
+          { key: 'stats', label: '📊 Estatísticas & Desempenho', icon: 'ti-chart-bar' },
+          { key: 'profiles', label: '👤 Perfil do Aluno', icon: 'ti-user-check' },
+          { key: 'roadmap', label: '🗺️ Roadmap & Trilhas', icon: 'ti-map-2' },
+          { key: 'teaching', label: '📖 Ensino & Prática Pedagógica', icon: 'ti-notebook' },
+        ].map(mod => (
+          <button
+            key={mod.key}
+            onClick={() => setActiveSubModule(mod.key as typeof activeSubModule)}
+            style={activeSubModule === mod.key ? ActiveTabStyle : InactiveTabStyle}
+          >
+            {mod.label}
+          </button>
+        ))}
+      </div>
 
-        {/* ── BARRA DE ESTATÍSTICAS FINANCEIRAS & ACADÊMICAS ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>
-          <div style={{ background: '#fff', borderRadius: 16, padding: '16px 20px', border: '1px solid rgba(139,115,85,0.12)', boxShadow: '0 2px 10px rgba(44,26,14,0.03)' }}>
-            <div style={{ fontSize: 11.5, color: '#a08060', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5 }}>Receita Mensal Prevista</div>
-            <div style={{ fontSize: 24, fontWeight: 800, color: '#2c1a0e', marginTop: 4 }}>R$ {totalRevenueExpected.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
-            <div style={{ fontSize: 11, color: '#665c54', marginTop: 2 }}>{students.length} alunos cadastrados</div>
+      {/* ──────────────────────────────────────────────────────────────────────── */}
+      {/* MÓDULO 1: FINANCEIRO & COBRANÇA                                          */}
+      {/* ──────────────────────────────────────────────────────────────────────── */}
+      {activeSubModule === 'finance' && (
+        <div>
+          {/* KPIs Financeiros */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16, marginBottom: 24 }}>
+            <KPIBox title="Faturamento Mensal Previsto" value={`R$ ${totalExpectedRevenue.toLocaleString('pt-BR')}`} icon="💰" color="#8b5e3c" />
+            <KPIBox title="Recebido no Mês" value={`R$ ${totalPaidRevenue.toLocaleString('pt-BR')}`} icon="✅" color="#2e7d32" />
+            <KPIBox title="A Receber / Pendente" value={`R$ ${totalPendingRevenue.toLocaleString('pt-BR')}`} icon="⏳" color="#d84315" />
+            <KPIBox title="Alunos Ativos" value={`${students.length} alunos`} icon="🎓" color="#1565c0" />
           </div>
 
-          <div style={{ background: '#fff', borderRadius: 16, padding: '16px 20px', border: '1px solid rgba(139,115,85,0.12)', boxShadow: '0 2px 10px rgba(44,26,14,0.03)' }}>
-            <div style={{ fontSize: 11.5, color: '#27ae60', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5 }}>Recebido no Mês</div>
-            <div style={{ fontSize: 24, fontWeight: 800, color: '#27ae60', marginTop: 4 }}>R$ {totalRevenueReceived.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
-            <div style={{ fontSize: 11, color: '#a08060', marginTop: 2 }}>{students.filter(s => s.paymentStatus === 'pago').length} de {students.length} mensalidades quitadas</div>
-          </div>
-
-          <div style={{ background: '#fff', borderRadius: 16, padding: '16px 20px', border: '1px solid rgba(139,115,85,0.12)', boxShadow: '0 2px 10px rgba(44,26,14,0.03)' }}>
-            <div style={{ fontSize: 11.5, color: '#d35400', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5 }}>A Receber / Pendentes</div>
-            <div style={{ fontSize: 24, fontWeight: 800, color: '#d35400', marginTop: 4 }}>R$ {(totalRevenueExpected - totalRevenueReceived).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
-            <div style={{ fontSize: 11, color: '#c0392b', marginTop: 2 }}>{pendingCount} mensalidade(s) pendente(s)</div>
-          </div>
-
-          <div style={{ background: '#fff', borderRadius: 16, padding: '16px 20px', border: '1px solid rgba(139,115,85,0.12)', boxShadow: '0 2px 10px rgba(44,26,14,0.03)' }}>
-            <div style={{ fontSize: 11.5, color: '#8b5e3c', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5 }}>Domínio Geral Médio</div>
-            <div style={{ fontSize: 24, fontWeight: 800, color: '#8b5e3c', marginTop: 4 }}>{averageMastery}%</div>
-            <div style={{ fontSize: 11, color: '#665c54', marginTop: 2 }}>Média de desempenho acadêmico</div>
-          </div>
-        </div>
-
-        {/* ── ABA 1: LISTA DE ALUNOS PARTICULARES ── */}
-        {activeTab === 'list' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            {/* Filtros e Busca */}
-            <div style={{ background: '#fff', borderRadius: 16, padding: '12px 16px', border: '1px solid rgba(139,115,85,0.12)', display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 220, background: '#fffcf8', border: '1px solid rgba(139,115,85,0.25)', borderRadius: 10, padding: '6px 12px' }}>
-                <i className="ti ti-search" style={{ color: '#8b5e3c' }} />
-                <input
-                  type="text"
-                  placeholder="Buscar aluno ou matéria própria..."
-                  value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
-                  style={{ border: 'none', background: 'transparent', outline: 'none', width: '100%', fontSize: 13, color: '#2c1a0e' }}
-                />
-              </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ fontSize: 12, color: '#a08060', fontWeight: 700 }}>Matéria:</span>
-                <select
-                  value={filterSubject}
-                  onChange={e => setFilterSubject(e.target.value)}
-                  style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid rgba(139,115,85,0.25)', fontSize: 12, background: '#fffcf8', color: '#2c1a0e', outline: 'none' }}
-                >
-                  <option value="all">Todas as Matérias</option>
-                  {uniqueSubjects.map(sub => (
-                    <option key={sub} value={sub}>{sub}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            {/* Grid de Cards dos Alunos Particulares */}
-            {filteredStudents.length === 0 ? (
-              <div style={{ background: '#fff', borderRadius: 20, padding: 40, textAlign: 'center', color: '#a08060', border: '1px solid rgba(139,115,85,0.12)' }}>
-                <i className="ti ti-user-x" style={{ fontSize: 40, opacity: 0.4, display: 'block', marginBottom: 10 }} />
-                Nenhum aluno particular encontrado.<br />
-                <button onClick={() => setShowAddModal(true)} style={{ marginTop: 14, padding: '8px 16px', borderRadius: 10, background: '#8b5e3c', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 12 }}>
-                  ➕ Cadastrar Primeiro Aluno Particular
-                </button>
-              </div>
-            ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 16 }}>
-                {filteredStudents.map(st => {
-                  const payBadge = badgePaymentStyle(st.paymentStatus)
-                  return (
-                    <div
-                      key={st.id}
-                      style={{
-                        background: '#fff', borderRadius: 18, border: '1px solid rgba(139,115,85,0.14)', padding: 18,
-                        boxShadow: '0 4px 16px rgba(44,26,14,0.04)', display: 'flex', flexDirection: 'column', gap: 12,
-                        position: 'relative', transition: 'all 0.2s ease'
-                      }}
-                    >
-                      {/* Header do Card */}
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
-                        <div>
-                          <h3 style={{ fontSize: 16, fontWeight: 800, color: '#2c1a0e', margin: 0 }}>{st.name}</h3>
-                          <div style={{ fontSize: 12, fontWeight: 700, color: '#8b5e3c', marginTop: 2 }}>
-                            📘 {st.subject}
-                          </div>
-                        </div>
-
-                        <span style={{ background: payBadge.bg, color: payBadge.color, border: `1px solid ${payBadge.border}`, padding: '4px 10px', borderRadius: 8, fontSize: 11, fontWeight: 800 }}>
-                          {payBadge.label}
-                        </span>
-                      </div>
-
-                      {/* Informações Práticas */}
-                      <div style={{ background: '#fdf8f2', borderRadius: 12, padding: 12, fontSize: 12, display: 'flex', flexDirection: 'column', gap: 6, color: '#586e75' }}>
-                        <div><strong>👤 Responsável:</strong> {st.guardianName || st.name}</div>
-                        <div><strong>💵 Mensalidade:</strong> R$ {st.monthlyFee.toFixed(2)} (Vencimento: dia {st.dueDay})</div>
-                        <div><strong>🕒 Horário:</strong> {st.scheduleInfo || 'A combinar'} ({st.modality})</div>
-                        {st.goals && <div><strong>🎯 Foco:</strong> {st.goals}</div>}
-                      </div>
-
-                      {/* Barra de Domínio Pedagógico */}
-                      <div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, fontWeight: 700, color: '#a08060', marginBottom: 4 }}>
-                          <span>Domínio da Matéria</span>
-                          <span>{st.masteryPercentage}%</span>
-                        </div>
-                        <div style={{ height: 6, background: '#eee3cb', borderRadius: 4, overflow: 'hidden' }}>
-                          <div style={{ height: '100%', width: `${st.masteryPercentage}%`, background: st.masteryPercentage >= 80 ? '#27ae60' : st.masteryPercentage >= 65 ? '#f39c12' : '#e74c3c', borderRadius: 4 }} />
-                        </div>
-                      </div>
-
-                      {/* Ações Rápidas */}
-                      <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
-                        <button
-                          onClick={() => { setSelectedStudent(st); setActiveTab('detail') }}
-                          style={{ flex: 1, padding: '8px', borderRadius: 8, background: '#8b5e3c', color: '#fff', border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}
-                        >
-                          <i className="ti ti-eye" /> Abrir Ficha
-                        </button>
-
-                        <button
-                          onClick={() => sendWhatsAppReminder(st)}
-                          style={{ padding: '8px 12px', borderRadius: 8, background: '#25d366', color: '#fff', border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
-                          title="Enviar lembrete amigável no WhatsApp do responsável"
-                        >
-                          <i className="ti ti-brand-whatsapp" />
-                        </button>
-
-                        <button
-                          onClick={() => handleDeleteStudent(st.id)}
-                          style={{ padding: '8px 10px', borderRadius: 8, background: 'rgba(220,50,47,0.1)', color: '#dc322f', border: 'none', fontSize: 12, cursor: 'pointer' }}
-                          title="Excluir aluno particular"
-                        >
-                          <i className="ti ti-trash" />
-                        </button>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ── ABA 2: GESTÃO FINANCEIRA DE PARTICULARES ── */}
-        {activeTab === 'finance' && (
-          <div style={{ background: '#fff', borderRadius: 20, padding: 20, border: '1px solid rgba(139,115,85,0.14)', display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <h3 style={{ fontSize: 16, fontWeight: 800, color: '#2c1a0e', margin: 0 }}>📊 Tabela de Cobrança e Mensalidades</h3>
-
+          {/* Tabela de Mensalidades & Cobrança */}
+          <ModuleCard title="Tabela Financeira de Alunos Particulares" icon="ti-table" padding={20}>
             <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, textAlign: 'left' }}>
+              <table style={TableStyle}>
                 <thead>
-                  <tr style={{ background: '#fdf8f2', borderBottom: '2px solid rgba(139,115,85,0.12)' }}>
-                    <th style={{ padding: '12px 14px', color: '#8b5e3c' }}>Aluno</th>
-                    <th style={{ padding: '12px 14px', color: '#8b5e3c' }}>Matéria Própria</th>
-                    <th style={{ padding: '12px 14px', color: '#8b5e3c' }}>Mensalidade</th>
-                    <th style={{ padding: '12px 14px', color: '#8b5e3c' }}>Vencimento</th>
-                    <th style={{ padding: '12px 14px', color: '#8b5e3c' }}>Status</th>
-                    <th style={{ padding: '12px 14px', color: '#8b5e3c', textAlign: 'right' }}>Ações de Cobrança</th>
+                  <tr style={TableHeaderRowStyle}>
+                    <th style={ThStyle}>Aluno & Matéria</th>
+                    <th style={ThStyle}>Valor Mensal</th>
+                    <th style={ThStyle}>Vencimento</th>
+                    <th style={ThStyle}>Pagamento</th>
+                    <th style={ThStyle}>Status</th>
+                    <th style={ThStyle}>Ações de Cobrança</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {students.map(st => {
-                    const payBadge = badgePaymentStyle(st.paymentStatus)
-                    return (
-                      <tr key={st.id} style={{ borderBottom: '1px solid rgba(139,115,85,0.08)' }}>
-                        <td style={{ padding: '12px 14px', fontWeight: 700, color: '#2c1a0e' }}>{st.name}</td>
-                        <td style={{ padding: '12px 14px', color: '#586e75' }}>{st.subject}</td>
-                        <td style={{ padding: '12px 14px', fontWeight: 800, color: '#2c1a0e' }}>R$ {st.monthlyFee.toFixed(2)}</td>
-                        <td style={{ padding: '12px 14px', color: '#586e75' }}>Todo dia {st.dueDay}</td>
-                        <td style={{ padding: '12px 14px' }}>
-                          <span style={{ background: payBadge.bg, color: payBadge.color, padding: '4px 8px', borderRadius: 6, fontSize: 11, fontWeight: 800 }}>
-                            {payBadge.label}
-                          </span>
-                        </td>
-                        <td style={{ padding: '12px 14px', textAlign: 'right' }}>
-                          <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-                            <button
-                              onClick={() => togglePaymentStatus(st.id, st.paymentStatus === 'pago' ? 'pendente' : 'pago')}
-                              style={{ padding: '4px 10px', borderRadius: 6, background: st.paymentStatus === 'pago' ? '#f5efe6' : '#27ae60', color: st.paymentStatus === 'pago' ? '#586e75' : '#fff', border: 'none', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
-                            >
-                              {st.paymentStatus === 'pago' ? 'Desfazer Pago' : 'Marcar Pago ✔️'}
-                            </button>
-
-                            <button
-                              onClick={() => sendWhatsAppReminder(st)}
-                              style={{ padding: '4px 10px', borderRadius: 6, background: '#25d366', color: '#fff', border: 'none', fontSize: 11, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
-                            >
-                              <i className="ti ti-brand-whatsapp" /> Lembrete
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    )
-                  })}
+                  {filteredStudents.map(st => (
+                    <tr key={st.id} style={TableRowStyle}>
+                      <td style={TdStyle}>
+                        <div style={{ fontWeight: 700, color: '#2c1a0e', fontSize: 14 }}>{st.name}</div>
+                        <div style={{ fontSize: 12, color: '#8b5e3c' }}>{st.subject}</div>
+                      </td>
+                      <td style={TdStyle}>
+                        <strong style={{ fontSize: 14, color: '#2c1a0e' }}>R$ {st.monthlyFee},00</strong>
+                      </td>
+                      <td style={TdStyle}>
+                        <span style={{ fontSize: 13 }}>Dia <strong>{st.dueDay}</strong></span>
+                      </td>
+                      <td style={TdStyle}>
+                        <span style={BadgeStyle('#eee8d5', '#586e75')}>
+                          {st.paymentMethod || 'PIX'}
+                        </span>
+                      </td>
+                      <td style={TdStyle}>
+                        <button
+                          onClick={() => togglePaymentStatus(st.id)}
+                          style={StatusBadgeStyle(st.paymentStatus)}
+                          title="Clique para alterar status"
+                        >
+                          {st.paymentStatus === 'pago' ? 'Pago ✔️' :
+                           st.paymentStatus === 'em_dia' ? 'Em Dia 🟢' :
+                           st.paymentStatus === 'pendente' ? 'Pendente 🟡' : 'Atrasado 🔴'}
+                        </button>
+                      </td>
+                      <td style={TdStyle}>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <button
+                            onClick={() => generateWhatsAppReminder(st)}
+                            style={WhatsAppBtnStyle}
+                            title="Enviar lembrete de cobrança no WhatsApp"
+                          >
+                            💬 Lembrete WA
+                          </button>
+                          <button
+                            onClick={() => openEditStudentModal(st)}
+                            style={ActionIconButton}
+                            title="Editar contrato"
+                          >
+                            ✏️
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
-          </div>
-        )}
-
-        {/* ── ABA 3: FICHA DETALHADA DO ALUNO PARTICULAR ── */}
-        {activeTab === 'detail' && selectedStudent && (
-          <div style={{ background: '#fff', borderRadius: 20, padding: 22, border: '1px solid rgba(139,115,85,0.14)', display: 'flex', flexDirection: 'column', gap: 20 }}>
-            {/* Header da Ficha */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(139,115,85,0.12)', paddingBottom: 16, flexWrap: 'wrap', gap: 12 }}>
-              <div>
-                <button onClick={() => setActiveTab('list')} style={{ background: 'transparent', border: 'none', color: '#8b5e3c', fontSize: 12, fontWeight: 700, cursor: 'pointer', marginBottom: 4 }}>
-                  ← Voltar para Lista de Alunos
-                </button>
-                <h2 style={{ fontSize: 22, fontWeight: 800, color: '#2c1a0e', margin: 0 }}>👤 {selectedStudent.name}</h2>
-                <div style={{ fontSize: 13, color: '#8b5e3c', fontWeight: 700, marginTop: 2 }}>
-                  Matéria: {selectedStudent.subject} · {selectedStudent.modality}
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <button
-                  onClick={() => sendWhatsAppReminder(selectedStudent)}
-                  style={{ padding: '8px 14px', borderRadius: 10, background: '#25d366', color: '#fff', border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
-                >
-                  <i className="ti ti-brand-whatsapp" /> WhatsApp Responsável
-                </button>
-                <button
-                  onClick={() => setShowLessonModal(true)}
-                  style={{ padding: '8px 14px', borderRadius: 10, background: '#8b5e3c', color: '#fff', border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
-                >
-                  ➕ Nova Aula Dada
-                </button>
-                <button
-                  onClick={() => setShowGradeModal(true)}
-                  style={{ padding: '8px 14px', borderRadius: 10, background: '#d4944a', color: '#fff', border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
-                >
-                  ➕ Nova Nota/Teste
-                </button>
-              </div>
-            </div>
-
-            {/* Sub-Navegação da Ficha */}
-            <div style={{ display: 'flex', gap: 8, borderBottom: '1px solid rgba(139,115,85,0.1)' }}>
-              {[
-                { id: 'profile', label: '📋 Perfil & Contrato', icon: 'ti-id' },
-                { id: 'lessons', label: `📖 Diário de Aulas (${selectedStudent.lessonsHistory.length})`, icon: 'ti-book' },
-                { id: 'grades', label: `📊 Notas & Testes (${selectedStudent.gradesHistory.length})`, icon: 'ti-chart-bar' },
-                { id: 'diagnostic', label: '✨ Diagnóstico IA', icon: 'ti-sparkles' }
-              ].map(tab => (
-                <button
-                  key={tab.id}
-                  onClick={() => setDetailSubTab(tab.id as any)}
-                  style={{
-                    padding: '10px 16px', background: 'transparent', border: 'none',
-                    borderBottom: detailSubTab === tab.id ? '3px solid #8b5e3c' : '3px solid transparent',
-                    color: detailSubTab === tab.id ? '#8b5e3c' : '#586e75',
-                    fontSize: 13, fontWeight: detailSubTab === tab.id ? 800 : 600, cursor: 'pointer'
-                  }}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </div>
-
-            {/* SUB-ABA 1: PERFIL */}
-            {detailSubTab === 'profile' && (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
-                <div style={{ background: '#fdf8f2', borderRadius: 14, padding: 16, fontSize: 13, display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  <h4 style={{ margin: 0, color: '#8b5e3c', fontSize: 14, fontWeight: 800 }}>📌 Dados de Contato</h4>
-                  <div><strong>Responsável:</strong> {selectedStudent.guardianName || 'Próprio'}</div>
-                  <div><strong>Telefone:</strong> {selectedStudent.phone || 'Não informado'}</div>
-                  <div><strong>E-mail:</strong> {selectedStudent.email || 'Não informado'}</div>
-                  <div><strong>Modalidade:</strong> {selectedStudent.modality}</div>
-                </div>
-
-                <div style={{ background: '#fdf8f2', borderRadius: 14, padding: 16, fontSize: 13, display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  <h4 style={{ margin: 0, color: '#8b5e3c', fontSize: 14, fontWeight: 800 }}>💰 Dados de Mensalidade</h4>
-                  <div><strong>Valor da Mensalidade:</strong> R$ {selectedStudent.monthlyFee.toFixed(2)}</div>
-                  <div><strong>Dia do Vencimento:</strong> Todo dia {selectedStudent.dueDay}</div>
-                  <div>
-                    <strong>Status Atual:</strong>{' '}
-                    <span style={{ fontWeight: 800 }}>{badgePaymentStyle(selectedStudent.paymentStatus).label}</span>
-                  </div>
-                  <div><strong>Horário das Aulas:</strong> {selectedStudent.scheduleInfo || 'A combinar'}</div>
-                </div>
-
-                <div style={{ background: '#fdf8f2', borderRadius: 14, padding: 16, fontSize: 13, display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  <h4 style={{ margin: 0, color: '#8b5e3c', fontSize: 14, fontWeight: 800 }}>🎯 Objetivos Pedagógicos</h4>
-                  <p style={{ margin: 0, color: '#586e75', lineHeight: 1.5 }}>
-                    {selectedStudent.goals || 'Nenhum objetivo pedagógico cadastrado para este aluno.'}
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {/* SUB-ABA 2: DIÁRIO DE AULAS */}
-            {detailSubTab === 'lessons' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                {selectedStudent.lessonsHistory.length === 0 ? (
-                  <div style={{ padding: 30, textAlign: 'center', color: '#a08060', fontSize: 13 }}>
-                    Nenhuma aula registrada ainda para este aluno particular.<br />
-                    <button onClick={() => setShowLessonModal(true)} style={{ marginTop: 10, padding: '6px 14px', borderRadius: 8, background: '#8b5e3c', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 12 }}>
-                      ➕ Registrar Primeira Aula
-                    </button>
-                  </div>
-                ) : (
-                  selectedStudent.lessonsHistory.map(l => (
-                    <div key={l.id} style={{ background: '#fdf8f2', borderRadius: 14, padding: 14, border: '1px solid rgba(139,115,85,0.1)', display: 'flex', flexDirection: 'column', gap: 6 }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span style={{ fontSize: 12, fontWeight: 800, color: '#8b5e3c' }}>📅 {l.date}</span>
-                        <span style={{ fontSize: 11, background: '#fff', padding: '2px 8px', borderRadius: 6, border: '1px solid rgba(139,115,85,0.2)', fontWeight: 700, color: '#586e75' }}>
-                          Avaliação: {l.performanceRating || 'Bom'}
-                        </span>
-                      </div>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: '#2c1a0e' }}>{l.topic}</div>
-                      {l.homework && <div style={{ fontSize: 12, color: '#586e75' }}><strong>Homework / Tarefa:</strong> {l.homework}</div>}
-                    </div>
-                  ))
-                )}
-              </div>
-            )}
-
-            {/* SUB-ABA 3: NOTAS E TESTES */}
-            {detailSubTab === 'grades' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                {selectedStudent.gradesHistory.length === 0 ? (
-                  <div style={{ padding: 30, textAlign: 'center', color: '#a08060', fontSize: 13 }}>
-                    Nenhuma avaliação registrada para este aluno particular.<br />
-                    <button onClick={() => setShowGradeModal(true)} style={{ marginTop: 10, padding: '6px 14px', borderRadius: 8, background: '#d4944a', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 12 }}>
-                      ➕ Lançar Nota/Simulado
-                    </button>
-                  </div>
-                ) : (
-                  selectedStudent.gradesHistory.map(g => (
-                    <div key={g.id} style={{ background: '#fdf8f2', borderRadius: 14, padding: 14, border: '1px solid rgba(139,115,85,0.1)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <div>
-                        <div style={{ fontSize: 13, fontWeight: 800, color: '#2c1a0e' }}>{g.title}</div>
-                        <div style={{ fontSize: 11, color: '#a08060', marginTop: 2 }}>Data: {g.date}</div>
-                      </div>
-                      <div style={{ fontSize: 18, fontWeight: 800, color: g.score >= 7 ? '#27ae60' : '#e74c3c' }}>
-                        {g.score.toFixed(1)} / 10
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            )}
-
-            {/* SUB-ABA 4: DIAGNÓSTICO COM IA */}
-            {detailSubTab === 'diagnostic' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <h4 style={{ margin: 0, color: '#2c1a0e', fontSize: 15, fontWeight: 800 }}>✨ Diagnóstico Pedagógico por IA</h4>
-                  <button
-                    onClick={generateAiDiagnostic}
-                    disabled={isGeneratingAi}
-                    style={{ padding: '8px 16px', borderRadius: 10, background: '#8b5e3c', color: '#fff', border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
-                  >
-                    <i className={isGeneratingAi ? 'ti ti-loader text-spin' : 'ti ti-wand'} />
-                    {isGeneratingAi ? 'Analisando Aluno...' : 'Gerar Novo Diagnóstico com IA'}
-                  </button>
-                </div>
-
-                {selectedStudent.aiDiagnostic ? (
-                  <div style={{ background: '#fdf8f2', border: '1px solid rgba(139,115,85,0.2)', borderRadius: 14, padding: 20, fontSize: 13.5, color: '#2c1a0e', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
-                    {selectedStudent.aiDiagnostic}
-                  </div>
-                ) : (
-                  <div style={{ padding: 40, textAlign: 'center', background: '#fdf8f2', borderRadius: 14, color: '#a08060', fontSize: 13 }}>
-                    <i className="ti ti-sparkles" style={{ fontSize: 36, display: 'block', marginBottom: 8, opacity: 0.5 }} />
-                    Clique no botão acima para a IA sintetizar o histórico de aulas, notas e sugerir o plano de ação personalizado.
-                  </div>
-                )}
-              </div>
-            )}
-
-          </div>
-        )}
-
-      </div>
-
-      {/* ── MODAL: CADASTRAR NOVO ALUNO PARTICULAR ── */}
-      {showAddModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-          <div style={{ background: '#fff', borderRadius: 20, width: '100%', maxWidth: 540, padding: 24, boxShadow: '0 10px 40px rgba(0,0,0,0.2)', display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(139,115,85,0.12)', paddingBottom: 12 }}>
-              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#2c1a0e' }}>👤 Cadastrar Aluno Particular</h3>
-              <button onClick={() => setShowAddModal(false)} style={{ background: 'transparent', border: 'none', fontSize: 20, cursor: 'pointer', color: '#a08060' }}>✕</button>
-            </div>
-
-            <form onSubmit={handleCreateStudent} style={{ display: 'flex', flexDirection: 'column', gap: 12, maxHeight: '70vh', overflowY: 'auto' }}>
-              <div>
-                <label style={{ fontSize: 12, fontWeight: 700, color: '#8b5e3c', display: 'block', marginBottom: 4 }}>Nome do Aluno *</label>
-                <input type="text" required placeholder="Ex: Lucas Mendes" value={formName} onChange={e => setFormName(e.target.value)} style={inputStyle} />
-              </div>
-
-              <div>
-                <label style={{ fontSize: 12, fontWeight: 700, color: '#8b5e3c', display: 'block', marginBottom: 4 }}>Matéria / Disciplina Própria *</label>
-                <input type="text" required placeholder="Ex: Inglês Instrumental, Matemática ENEM, Física Avançada" value={formSubject} onChange={e => setFormSubject(e.target.value)} style={inputStyle} />
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                <div>
-                  <label style={{ fontSize: 12, fontWeight: 700, color: '#8b5e3c', display: 'block', marginBottom: 4 }}>Valor Mensalidade (R$)</label>
-                  <input type="number" step="10" value={formFee} onChange={e => setFormFee(Number(e.target.value))} style={inputStyle} />
-                </div>
-
-                <div>
-                  <label style={{ fontSize: 12, fontWeight: 700, color: '#8b5e3c', display: 'block', marginBottom: 4 }}>Dia do Vencimento</label>
-                  <select value={formDueDay} onChange={e => setFormDueDay(Number(e.target.value))} style={inputStyle}>
-                    {[1, 5, 10, 15, 20, 25, 30].map(d => (
-                      <option key={d} value={d}>Dia {d}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                <div>
-                  <label style={{ fontSize: 12, fontWeight: 700, color: '#8b5e3c', display: 'block', marginBottom: 4 }}>Responsável / Contato</label>
-                  <input type="text" placeholder="Ex: Maria Mendes (Mãe)" value={formGuardian} onChange={e => setFormGuardian(e.target.value)} style={inputStyle} />
-                </div>
-
-                <div>
-                  <label style={{ fontSize: 12, fontWeight: 700, color: '#8b5e3c', display: 'block', marginBottom: 4 }}>WhatsApp (com DDD)</label>
-                  <input type="text" placeholder="Ex: 11999887766" value={formPhone} onChange={e => setFormPhone(e.target.value)} style={inputStyle} />
-                </div>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                <div>
-                  <label style={{ fontSize: 12, fontWeight: 700, color: '#8b5e3c', display: 'block', marginBottom: 4 }}>Modalidade</label>
-                  <select value={formModality} onChange={e => setFormModality(e.target.value as any)} style={inputStyle}>
-                    <option value="Online">Online</option>
-                    <option value="Presencial">Presencial</option>
-                    <option value="Híbrido">Híbrido</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label style={{ fontSize: 12, fontWeight: 700, color: '#8b5e3c', display: 'block', marginBottom: 4 }}>Horário Semanal</label>
-                  <input type="text" placeholder="Ex: Terças e Quintas 14h" value={formSchedule} onChange={e => setFormSchedule(e.target.value)} style={inputStyle} />
-                </div>
-              </div>
-
-              <div>
-                <label style={{ fontSize: 12, fontWeight: 700, color: '#8b5e3c', display: 'block', marginBottom: 4 }}>Objetivo / Metas Pedagógicas</label>
-                <textarea rows={2} placeholder="Ex: Aprovação na Fuvest 2026 ou Fluência B2" value={formGoals} onChange={e => setFormGoals(e.target.value)} style={{ ...inputStyle, resize: 'vertical' }} />
-              </div>
-
-              <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 10 }}>
-                <button type="button" onClick={() => setShowAddModal(false)} style={{ padding: '10px 18px', borderRadius: 10, background: '#f5efe6', color: '#586e75', border: 'none', cursor: 'pointer', fontWeight: 700 }}>
-                  Cancelar
-                </button>
-                <button type="submit" style={{ padding: '10px 20px', borderRadius: 10, background: '#8b5e3c', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700 }}>
-                  Salvar Cadastro
-                </button>
-              </div>
-            </form>
-          </div>
+          </ModuleCard>
         </div>
       )}
 
-      {/* ── MODAL: REGISTRAR AULA DADA ── */}
-      {showLessonModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-          <div style={{ background: '#fff', borderRadius: 20, width: '100%', maxWidth: 460, padding: 24, boxShadow: '0 10px 40px rgba(0,0,0,0.2)', display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#2c1a0e' }}>📖 Registrar Aula Dada</h3>
-
-            <form onSubmit={handleAddLesson} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <div>
-                <label style={{ fontSize: 12, fontWeight: 700, color: '#8b5e3c', display: 'block', marginBottom: 4 }}>Data da Aula</label>
-                <input type="text" value={lessonDate} onChange={e => setLessonDate(e.target.value)} style={inputStyle} />
+      {/* ──────────────────────────────────────────────────────────────────────── */}
+      {/* MÓDULO 2: ESTATÍSTICAS & DESEMPENHO                                      */}
+      {/* ──────────────────────────────────────────────────────────────────────── */}
+      {activeSubModule === 'stats' && (
+        <div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 24 }}>
+            {/* Tabela de Desempenho */}
+            <ModuleCard title="Estatísticas Globais por Aluno" icon="ti-chart-line" padding={20}>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={TableStyle}>
+                  <thead>
+                    <tr style={TableHeaderRowStyle}>
+                      <th style={ThStyle}>Aluno</th>
+                      <th style={ThStyle}>Domínio (%)</th>
+                      <th style={ThStyle}>Média Provas</th>
+                      <th style={ThStyle}>Aulas</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredStudents.map(st => {
+                      const avgGrade = st.gradesHistory.length > 0
+                        ? (st.gradesHistory.reduce((acc, g) => acc + g.score, 0) / st.gradesHistory.length).toFixed(1)
+                        : '—'
+                      return (
+                        <tr key={st.id} style={TableRowStyle}>
+                          <td style={TdStyle}>
+                            <div style={{ fontWeight: 700, fontSize: 13, color: '#2c1a0e' }}>{st.name}</div>
+                            <div style={{ fontSize: 11, color: '#665c54' }}>{st.subject}</div>
+                          </td>
+                          <td style={TdStyle}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <ProgressBar value={st.masteryPercentage} color="#8b5e3c" width={60} />
+                              <strong style={{ fontSize: 13 }}>{st.masteryPercentage}%</strong>
+                            </div>
+                          </td>
+                          <td style={TdStyle}>
+                            <strong style={{ color: Number(avgGrade) >= 8 ? '#2e7d32' : '#2c1a0e' }}>{avgGrade}</strong>
+                          </td>
+                          <td style={TdStyle}>{st.lessonsHistory.length} aulas</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
               </div>
+            </ModuleCard>
 
-              <div>
-                <label style={{ fontSize: 12, fontWeight: 700, color: '#8b5e3c', display: 'block', marginBottom: 4 }}>Conteúdo / Tema Tratar *</label>
-                <input type="text" required placeholder="Ex: Phrasal Verbs ou Equações de 2º Grau" value={lessonTopic} onChange={e => setLessonTopic(e.target.value)} style={inputStyle} />
-              </div>
-
-              <div>
-                <label style={{ fontSize: 12, fontWeight: 700, color: '#8b5e3c', display: 'block', marginBottom: 4 }}>Tarefa de Casa / Homework</label>
-                <input type="text" placeholder="Ex: Exercícios 1 a 10 pág 45" value={lessonHomework} onChange={e => setLessonHomework(e.target.value)} style={inputStyle} />
-              </div>
-
-              <div>
-                <label style={{ fontSize: 12, fontWeight: 700, color: '#8b5e3c', display: 'block', marginBottom: 4 }}>Avaliação do Aluno na Aula</label>
-                <select value={lessonRating} onChange={e => setLessonRating(e.target.value as any)} style={inputStyle}>
-                  <option value="Excelente">Excelente</option>
-                  <option value="Bom">Bom</option>
-                  <option value="Regular">Regular</option>
-                  <option value="Precisa de Atenção">Precisa de Atenção</option>
+            {/* Painel de Diagnóstico por IA */}
+            <ModuleCard title="Sintetizador de Diagnóstico IA" icon="ti-brain" padding={20}>
+              <div style={{ marginBottom: 14 }}>
+                <label style={LabelStyle}>Selecione o Aluno para Diagnóstico:</label>
+                <select
+                  value={activeStudent.id}
+                  onChange={e => setSelectedStudentId(e.target.value)}
+                  style={InputStyle}
+                >
+                  {students.map(s => <option key={s.id} value={s.id}>{s.name} ({s.subject})</option>)}
                 </select>
               </div>
 
-              <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 10 }}>
-                <button type="button" onClick={() => setShowLessonModal(false)} style={{ padding: '8px 14px', borderRadius: 8, background: '#f5efe6', border: 'none', cursor: 'pointer' }}>
-                  Cancelar
-                </button>
-                <button type="submit" style={{ padding: '8px 16px', borderRadius: 8, background: '#8b5e3c', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700 }}>
-                  Gravar Aula
-                </button>
+              <div style={{ background: '#fdf8f2', border: '1px solid rgba(139,115,85,0.2)', borderRadius: 12, padding: 16, marginBottom: 16 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#8b5e3c', marginBottom: 6 }}>
+                  ✨ Diagnóstico Pedagógico Agêntico
+                </div>
+                <p style={{ fontSize: 13, color: '#2c1a0e', lineHeight: 1.6, margin: 0 }}>
+                  {activeStudent.aiDiagnostic || 'Nenhum diagnóstico gerado para este aluno ainda. Clique no botão abaixo para analisar o desempenho.'}
+                </p>
               </div>
-            </form>
+
+              <button
+                onClick={() => generateAIDiagnostic(activeStudent)}
+                disabled={aiDiagnosticLoading}
+                style={PrimaryBtnStyle}
+              >
+                {aiDiagnosticLoading ? '⚙️ Analisando Desempenho...' : '✨ Gerar Novo Diagnóstico por IA'}
+              </button>
+            </ModuleCard>
           </div>
         </div>
       )}
 
-      {/* ── MODAL: LANÇAR NOTA DE TESTE ── */}
+      {/* ──────────────────────────────────────────────────────────────────────── */}
+      {/* MÓDULO 3: PERFIL DO ALUNO                                                */}
+      {/* ──────────────────────────────────────────────────────────────────────── */}
+      {activeSubModule === 'profiles' && (
+        <div>
+          <ModuleCard title="Tabela de Cadastros de Alunos Particulares" icon="ti-users" padding={20}>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={TableStyle}>
+                <thead>
+                  <tr style={TableHeaderRowStyle}>
+                    <th style={ThStyle}>Aluno & Contato</th>
+                    <th style={ThStyle}>Matéria Própria</th>
+                    <th style={ThStyle}>Responsável</th>
+                    <th style={ThStyle}>Modalidade</th>
+                    <th style={ThStyle}>Horário / Agenda</th>
+                    <th style={ThStyle}>Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredStudents.map(st => (
+                    <tr key={st.id} style={TableRowStyle}>
+                      <td style={TdStyle}>
+                        <div style={{ fontWeight: 700, color: '#2c1a0e', fontSize: 14 }}>{st.name}</div>
+                        <div style={{ fontSize: 12, color: '#586e75' }}>{st.email || st.phone || 'Sem contato'}</div>
+                      </td>
+                      <td style={TdStyle}>
+                        <span style={BadgeStyle('#fdf3e7', '#8b5e3c')}>{st.subject}</span>
+                      </td>
+                      <td style={TdStyle}>
+                        <span style={{ fontSize: 13 }}>{st.guardianName || 'Próprio'}</span>
+                      </td>
+                      <td style={TdStyle}>
+                        <span style={BadgeStyle('#e0f2fe', '#0284c7')}>{st.modality}</span>
+                      </td>
+                      <td style={TdStyle}>
+                        <span style={{ fontSize: 12, color: '#665c54' }}>{st.scheduleInfo}</span>
+                      </td>
+                      <td style={TdStyle}>
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          <button onClick={() => openEditStudentModal(st)} style={ActionIconButton} title="Editar Perfil">✏️</button>
+                          <button onClick={() => handleDeleteStudent(st.id)} style={ActionIconButton} title="Excluir">🗑️</button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </ModuleCard>
+        </div>
+      )}
+
+      {/* ──────────────────────────────────────────────────────────────────────── */}
+      {/* MÓDULO 4: ROADMAP & TRILHAS                                              */}
+      {/* ──────────────────────────────────────────────────────────────────────── */}
+      {activeSubModule === 'roadmap' && (
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <label style={{ fontSize: 13, fontWeight: 700, color: '#586e75' }}>Selecione o Aluno:</label>
+              <select
+                value={activeStudent.id}
+                onChange={e => setSelectedStudentId(e.target.value)}
+                style={{ padding: '8px 12px', borderRadius: 10, border: '1px solid rgba(139,115,85,0.2)', fontSize: 13, background: '#fff' }}
+              >
+                {students.map(s => <option key={s.id} value={s.id}>{s.name} — {s.subject}</option>)}
+              </select>
+            </div>
+            <button onClick={() => setShowRoadmapModal(true)} style={PrimaryBtnStyle}>
+              + Novo Marco no Roadmap
+            </button>
+          </div>
+
+          <ModuleCard title={`Trilha de Aprendizagem & Milestones — ${activeStudent.name}`} icon="ti-map-pin" padding={20}>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={TableStyle}>
+                <thead>
+                  <tr style={TableHeaderRowStyle}>
+                    <th style={ThStyle}>Módulo / Marco</th>
+                    <th style={ThStyle}>Previsão / Data</th>
+                    <th style={ThStyle}>Progresso (%)</th>
+                    <th style={ThStyle}>Status</th>
+                    <th style={ThStyle}>Ação</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(activeStudent.roadmap || []).map(m => (
+                    <tr key={m.id} style={TableRowStyle}>
+                      <td style={TdStyle}>
+                        <strong style={{ fontSize: 14, color: '#2c1a0e' }}>{m.title}</strong>
+                      </td>
+                      <td style={TdStyle}>
+                        <span style={{ fontSize: 13, color: '#665c54' }}>{m.targetDate || '—'}</span>
+                      </td>
+                      <td style={TdStyle}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <ProgressBar value={m.progress} color={m.status === 'concluido' ? '#2e7d32' : '#8b5e3c'} width={80} />
+                          <span style={{ fontSize: 13 }}>{m.progress}%</span>
+                        </div>
+                      </td>
+                      <td style={TdStyle}>
+                        <span style={MilestoneStatusBadge(m.status)}>
+                          {m.status === 'concluido' ? 'Concluído ✔️' :
+                           m.status === 'em_andamento' ? 'Em Andamento 🔄' : 'Planejado 📅'}
+                        </span>
+                      </td>
+                      <td style={TdStyle}>
+                        <button
+                          onClick={() => handleToggleRoadmapStatus(activeStudent.id, m.id)}
+                          style={ActionIconButton}
+                          title="Avançar status"
+                        >
+                          🔄 Alternar
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                  {(!activeStudent.roadmap || activeStudent.roadmap.length === 0) && (
+                    <tr>
+                      <td colSpan={5} style={{ textAlign: 'center', padding: 24, color: '#665c54', fontSize: 13 }}>
+                        Nenhum marco cadastrado no roadmap deste aluno. Clique em "+ Novo Marco no Roadmap".
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </ModuleCard>
+        </div>
+      )}
+
+      {/* ──────────────────────────────────────────────────────────────────────── */}
+      {/* MÓDULO 5: ENSINO & PRÁTICA PEDAGÓGICA                                    */}
+      {/* ──────────────────────────────────────────────────────────────────────── */}
+      {activeSubModule === 'teaching' && (
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <label style={{ fontSize: 13, fontWeight: 700, color: '#586e75' }}>Aluno em Foco:</label>
+              <select
+                value={activeStudent.id}
+                onChange={e => setSelectedStudentId(e.target.value)}
+                style={{ padding: '8px 12px', borderRadius: 10, border: '1px solid rgba(139,115,85,0.2)', fontSize: 13, background: '#fff' }}
+              >
+                {students.map(s => <option key={s.id} value={s.id}>{s.name} — {s.subject}</option>)}
+              </select>
+            </div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button onClick={() => setShowLessonModal(true)} style={PrimaryBtnStyle}>
+                + Registrar Aula Ministrada
+              </button>
+              <button onClick={() => setShowGradeModal(true)} style={SecondaryBtnStyle}>
+                + Registrar Nota de Simulado
+              </button>
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+            {/* Tabela de Diário de Aulas */}
+            <ModuleCard title={`Diário de Aulas Ministradas — ${activeStudent.name}`} icon="ti-book" padding={20}>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={TableStyle}>
+                  <thead>
+                    <tr style={TableHeaderRowStyle}>
+                      <th style={ThStyle}>Data</th>
+                      <th style={ThStyle}>Conteúdo / Tema</th>
+                      <th style={ThStyle}>Tarefa (Homework)</th>
+                      <th style={ThStyle}>Avaliação</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {activeStudent.lessonsHistory.map(l => (
+                      <tr key={l.id} style={TableRowStyle}>
+                        <td style={TdStyle}>
+                          <span style={{ fontSize: 12, fontWeight: 700 }}>{l.date}</span>
+                        </td>
+                        <td style={TdStyle}>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: '#2c1a0e' }}>{l.topic}</div>
+                        </td>
+                        <td style={TdStyle}>
+                          <span style={{ fontSize: 12, color: '#665c54' }}>{l.homework || '—'}</span>
+                        </td>
+                        <td style={TdStyle}>
+                          <span style={RatingBadge(l.performanceRating)}>
+                            {l.performanceRating || 'Bom'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                    {activeStudent.lessonsHistory.length === 0 && (
+                      <tr>
+                        <td colSpan={4} style={{ textAlign: 'center', padding: 20, color: '#665c54', fontSize: 13 }}>
+                          Nenhuma aula registrada ainda.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </ModuleCard>
+
+            {/* Tabela de Notas e Testes */}
+            <ModuleCard title={`Histórico de Provas e Simulados — ${activeStudent.name}`} icon="ti-notes" padding={20}>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={TableStyle}>
+                  <thead>
+                    <tr style={TableHeaderRowStyle}>
+                      <th style={ThStyle}>Data</th>
+                      <th style={ThStyle}>Avaliação / Teste</th>
+                      <th style={ThStyle}>Nota Obtida</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {activeStudent.gradesHistory.map(g => (
+                      <tr key={g.id} style={TableRowStyle}>
+                        <td style={TdStyle}>
+                          <span style={{ fontSize: 12, fontWeight: 700 }}>{g.date}</span>
+                        </td>
+                        <td style={TdStyle}>
+                          <strong style={{ fontSize: 13, color: '#2c1a0e' }}>{g.title}</strong>
+                        </td>
+                        <td style={TdStyle}>
+                          <span style={{ fontSize: 14, fontWeight: 700, color: g.score >= 8 ? '#2e7d32' : '#8b5e3c' }}>
+                            {g.score} / {g.maxScore}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                    {activeStudent.gradesHistory.length === 0 && (
+                      <tr>
+                        <td colSpan={3} style={{ textAlign: 'center', padding: 20, color: '#665c54', fontSize: 13 }}>
+                          Nenhuma nota registrada ainda.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </ModuleCard>
+          </div>
+        </div>
+      )}
+
+      {/* ──────────────────────────────────────────────────────────────────────── */}
+      {/* MODAIS DE CADASTRO E EDIÇÃO                                              */}
+      {/* ──────────────────────────────────────────────────────────────────────── */}
+
+      {/* Modal Aluno Particular */}
+      {showStudentModal && (
+        <div style={OverlayStyle}>
+          <div style={ModalStyle}>
+            <h3 style={{ margin: '0 0 16px', fontSize: 18, color: '#2c1a0e' }}>
+              {editingStudent ? 'Editar Aluno Particular' : 'Novo Aluno Particular'}
+            </h3>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div>
+                <label style={LabelStyle}>Nome Completo do Aluno *</label>
+                <input value={formName} onChange={e => setFormName(e.target.value)} placeholder="Ex: Lucas Mendes" style={InputStyle} />
+              </div>
+              <div>
+                <label style={LabelStyle}>Matéria Própria *</label>
+                <input value={formSubject} onChange={e => setFormSubject(e.target.value)} placeholder="Ex: Inglês Instrumental" style={InputStyle} />
+              </div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div>
+                <label style={LabelStyle}>Nome do Responsável (se houver)</label>
+                <input value={formGuardian} onChange={e => setFormGuardian(e.target.value)} placeholder="Ex: Clara Mendes (Mãe)" style={InputStyle} />
+              </div>
+              <div>
+                <label style={LabelStyle}>WhatsApp / Celular</label>
+                <input value={formPhone} onChange={e => setFormPhone(e.target.value)} placeholder="11999998888" style={InputStyle} />
+              </div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+              <div>
+                <label style={LabelStyle}>Mensalidade (R$) *</label>
+                <input type="number" value={formFee} onChange={e => setFormFee(e.target.value)} style={InputStyle} />
+              </div>
+              <div>
+                <label style={LabelStyle}>Dia de Vencimento *</label>
+                <input type="number" min="1" max="31" value={formDueDay} onChange={e => setFormDueDay(e.target.value)} style={InputStyle} />
+              </div>
+              <div>
+                <label style={LabelStyle}>Modalidade</label>
+                <select value={formModality} onChange={e => setFormModality(e.target.value as typeof formModality)} style={InputStyle}>
+                  <option value="Online">Online</option>
+                  <option value="Presencial">Presencial</option>
+                  <option value="Híbrido">Híbrido</option>
+                </select>
+              </div>
+            </div>
+            <div>
+              <label style={LabelStyle}>Horários & Agenda de Aulas</label>
+              <input value={formSchedule} onChange={e => setFormSchedule(e.target.value)} placeholder="Ex: Terças e Quintas às 14:00" style={InputStyle} />
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 12 }}>
+              <button onClick={() => setShowStudentModal(false)} style={CancelBtnStyle}>Cancelar</button>
+              <button onClick={handleSaveStudent} style={PrimaryBtnStyle}>Salvar Aluno</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Aula */}
+      {showLessonModal && (
+        <div style={OverlayStyle}>
+          <div style={ModalStyle}>
+            <h3 style={{ margin: '0 0 16px', fontSize: 18, color: '#2c1a0e' }}>Registrar Aula Ministrada</h3>
+            <label style={LabelStyle}>Conteúdo / Tema Principal *</label>
+            <input value={lessonTopic} onChange={e => setLessonTopic(e.target.value)} placeholder="Ex: Present Perfect vs Past Simple" style={InputStyle} />
+
+            <label style={LabelStyle}>Tarefa de Casa (Homework)</label>
+            <input value={lessonHomework} onChange={e => setLessonHomework(e.target.value)} placeholder="Ex: Workbook página 45" style={InputStyle} />
+
+            <label style={LabelStyle}>Avaliação do Desempenho na Aula</label>
+            <select value={lessonRating} onChange={e => setLessonRating(e.target.value as typeof lessonRating)} style={InputStyle}>
+              <option value="Excelente">Excelente</option>
+              <option value="Bom">Bom</option>
+              <option value="Regular">Regular</option>
+              <option value="Precisa de Atenção">Precisa de Atenção</option>
+            </select>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 12 }}>
+              <button onClick={() => setShowLessonModal(false)} style={CancelBtnStyle}>Cancelar</button>
+              <button onClick={handleAddLesson} style={PrimaryBtnStyle}>Salvar Aula</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Nota */}
       {showGradeModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-          <div style={{ background: '#fff', borderRadius: 20, width: '100%', maxWidth: 420, padding: 24, boxShadow: '0 10px 40px rgba(0,0,0,0.2)', display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#2c1a0e' }}>📊 Registrar Nota ou Simulado</h3>
+        <div style={OverlayStyle}>
+          <div style={ModalStyle}>
+            <h3 style={{ margin: '0 0 16px', fontSize: 18, color: '#2c1a0e' }}>Registrar Nota de Simulado</h3>
+            <label style={LabelStyle}>Título do Simulado / Teste *</label>
+            <input value={gradeTitle} onChange={e => setGradeTitle(e.target.value)} placeholder="Ex: Simulado FCE - Listening & Reading" style={InputStyle} />
 
-            <form onSubmit={handleAddGrade} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <label style={LabelStyle}>Nota Obtida (0 a 10) *</label>
+            <input type="number" step="0.1" min="0" max="10" value={gradeScore} onChange={e => setGradeScore(e.target.value)} style={InputStyle} />
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 12 }}>
+              <button onClick={() => setShowGradeModal(false)} style={CancelBtnStyle}>Cancelar</button>
+              <button onClick={handleAddGrade} style={PrimaryBtnStyle}>Salvar Nota</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Roadmap */}
+      {showRoadmapModal && (
+        <div style={OverlayStyle}>
+          <div style={ModalStyle}>
+            <h3 style={{ margin: '0 0 16px', fontSize: 18, color: '#2c1a0e' }}>Adicionar Marco no Roadmap</h3>
+            <label style={LabelStyle}>Título do Módulo / Marco *</label>
+            <input value={roadmapTitle} onChange={e => setRoadmapTitle(e.target.value)} placeholder="Ex: Módulo 3: FCE Essay Writing" style={InputStyle} />
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               <div>
-                <label style={{ fontSize: 12, fontWeight: 700, color: '#8b5e3c', display: 'block', marginBottom: 4 }}>Título da Avaliação *</label>
-                <input type="text" required placeholder="Ex: Simulado ENEM Bloco I ou Teste de Gramática" value={gradeTitle} onChange={e => setGradeTitle(e.target.value)} style={inputStyle} />
+                <label style={LabelStyle}>Data Alvo / Previsão</label>
+                <input value={roadmapTargetDate} onChange={e => setRoadmapTargetDate(e.target.value)} placeholder="DD/MM/AAAA" style={InputStyle} />
               </div>
-
               <div>
-                <label style={{ fontSize: 12, fontWeight: 700, color: '#8b5e3c', display: 'block', marginBottom: 4 }}>Nota Obtida (0 a 10)</label>
-                <input type="number" step="0.1" min="0" max="10" value={gradeScore} onChange={e => setGradeScore(Number(e.target.value))} style={inputStyle} />
+                <label style={LabelStyle}>Progresso (%)</label>
+                <input type="number" min="0" max="100" value={roadmapProgress} onChange={e => setRoadmapProgress(e.target.value)} style={InputStyle} />
               </div>
+            </div>
 
-              <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 10 }}>
-                <button type="button" onClick={() => setShowGradeModal(false)} style={{ padding: '8px 14px', borderRadius: 8, background: '#f5efe6', border: 'none', cursor: 'pointer' }}>
-                  Cancelar
-                </button>
-                <button type="submit" style={{ padding: '8px 16px', borderRadius: 8, background: '#d4944a', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700 }}>
-                  Salvar Nota
-                </button>
-              </div>
-            </form>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 12 }}>
+              <button onClick={() => setShowRoadmapModal(false)} style={CancelBtnStyle}>Cancelar</button>
+              <button onClick={handleAddRoadmapMilestone} style={PrimaryBtnStyle}>Salvar Marco</button>
+            </div>
           </div>
         </div>
       )}
@@ -984,16 +1047,106 @@ Estruture a resposta em 3 seções curtas com marcadores:
   )
 }
 
-const inputStyle: React.CSSProperties = {
-  width: '100%',
-  padding: '10px 14px',
-  borderRadius: 10,
-  borderWidth: '1px',
-  borderStyle: 'solid',
-  borderColor: 'rgba(139,115,85,0.25)',
-  fontSize: 13,
-  outline: 'none',
-  background: '#fffcf8',
-  color: '#2c1a0e',
-  boxSizing: 'border-box'
+// ─── Componentes Auxiliares ──────────────────────────────────────────────────
+
+function KPIBox({ title, value, icon, color }: { title: string; value: string; icon: string; color: string }) {
+  return (
+    <div style={{ background: '#fffcf8', border: '1px solid rgba(139,115,85,0.18)', borderRadius: 16, padding: 18, boxShadow: '0 2px 8px rgba(44,26,14,0.05)' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+        <span style={{ fontSize: 12, fontWeight: 700, color: '#665c54', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{title}</span>
+        <span style={{ fontSize: 20 }}>{icon}</span>
+      </div>
+      <div style={{ fontSize: 22, fontWeight: 800, color }}>{value}</div>
+    </div>
+  )
+}
+
+function ProgressBar({ value, color, width = 80 }: { value: number; color: string; width?: number }) {
+  return (
+    <div style={{ width, height: 8, background: 'rgba(139,115,85,0.15)', borderRadius: 4, overflow: 'hidden' }}>
+      <div style={{ width: `${Math.min(100, Math.max(0, value))}%`, height: '100%', background: color, borderRadius: 4, transition: 'width 0.3s' }} />
+    </div>
+  )
+}
+
+// ─── Badges e Estilos ────────────────────────────────────────────────────────
+
+function BadgeStyle(bg: string, fg: string): React.CSSProperties {
+  return { padding: '4px 10px', borderRadius: 8, background: bg, color: fg, fontSize: 12, fontWeight: 700, display: 'inline-block' }
+}
+
+function StatusBadgeStyle(status: PrivateStudent['paymentStatus']): React.CSSProperties {
+  const isPaid = status === 'pago' || status === 'em_dia'
+  const isPending = status === 'pendente'
+  return {
+    padding: '6px 12px', borderRadius: 10, border: 'none', cursor: 'pointer',
+    background: isPaid ? '#e8f5e9' : isPending ? '#fffde7' : '#ffebee',
+    color: isPaid ? '#2e7d32' : isPending ? '#f57f17' : '#c62828',
+    fontSize: 12, fontWeight: 700
+  }
+}
+
+function MilestoneStatusBadge(status: RoadmapMilestone['status']): React.CSSProperties {
+  const isDone = status === 'concluido'
+  const isInProgress = status === 'em_andamento'
+  return {
+    padding: '4px 10px', borderRadius: 8, fontSize: 12, fontWeight: 700,
+    background: isDone ? '#e8f5e9' : isInProgress ? '#e0f2fe' : '#f5efe6',
+    color: isDone ? '#2e7d32' : isInProgress ? '#0284c7' : '#665c54'
+  }
+}
+
+function RatingBadge(rating?: PrivateStudentLesson['performanceRating']): React.CSSProperties {
+  const isExc = rating === 'Excelente'
+  const isGood = rating === 'Bom'
+  return {
+    padding: '4px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700,
+    background: isExc ? '#e8f5e9' : isGood ? '#fdf3e7' : '#ffebee',
+    color: isExc ? '#2e7d32' : isGood ? '#8b5e3c' : '#c62828'
+  }
+}
+
+const TableStyle: React.CSSProperties = { width: '100%', borderCollapse: 'collapse', fontSize: 13 }
+const TableHeaderRowStyle: React.CSSProperties = { background: '#fcf8f2', borderBottom: '2px solid rgba(139,115,85,0.15)' }
+const TableRowStyle: React.CSSProperties = { borderBottom: '1px solid rgba(139,115,85,0.08)' }
+const ThStyle: React.CSSProperties = { padding: '10px 14px', textAlign: 'left', fontWeight: 700, color: '#665c54', fontSize: 12 }
+const TdStyle: React.CSSProperties = { padding: '12px 14px', verticalAlign: 'middle' }
+
+const PrimaryBtnStyle: React.CSSProperties = {
+  padding: '9px 18px', background: '#8b5e3c', color: '#fff', border: 'none', borderRadius: 10,
+  fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6
+}
+const SecondaryBtnStyle: React.CSSProperties = {
+  padding: '9px 18px', background: '#f5efe6', color: '#8b5e3c', border: '1px solid rgba(139,115,85,0.3)', borderRadius: 10,
+  fontSize: 13, fontWeight: 700, cursor: 'pointer'
+}
+const WhatsAppBtnStyle: React.CSSProperties = {
+  padding: '6px 12px', background: '#e8f5e9', color: '#2e7d32', border: '1px solid #a5d6a7', borderRadius: 8,
+  fontSize: 12, fontWeight: 700, cursor: 'pointer'
+}
+const ActiveTabStyle: React.CSSProperties = {
+  padding: '8px 16px', borderRadius: 10, border: 'none', background: '#8b5e3c', color: '#fff',
+  fontSize: 13, fontWeight: 700, cursor: 'pointer'
+}
+const InactiveTabStyle: React.CSSProperties = {
+  padding: '8px 16px', borderRadius: 10, border: 'none', background: '#fdf8f2', color: '#665c54',
+  fontSize: 13, fontWeight: 600, cursor: 'pointer'
+}
+const ActionIconButton: React.CSSProperties = { background: 'none', border: 'none', cursor: 'pointer', fontSize: 14 }
+const LabelStyle: React.CSSProperties = { fontSize: 12, fontWeight: 700, color: '#586e75', display: 'block', marginBottom: 4 }
+const InputStyle: React.CSSProperties = {
+  width: '100%', padding: '9px 12px', borderRadius: 10, border: '1px solid rgba(139,115,85,0.2)',
+  background: '#fff', outline: 'none', fontSize: 13, color: '#2c1a0e', marginBottom: 12
+}
+const CancelBtnStyle: React.CSSProperties = {
+  padding: '9px 16px', background: '#f5efe6', border: '1px solid rgba(139,115,85,0.2)', borderRadius: 10,
+  fontSize: 13, cursor: 'pointer', color: '#586e75'
+}
+const OverlayStyle: React.CSSProperties = {
+  position: 'fixed', inset: 0, background: 'rgba(44,26,14,0.45)', zIndex: 9999,
+  display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20
+}
+const ModalStyle: React.CSSProperties = {
+  background: '#fffcf8', border: '1px solid rgba(139,115,85,0.2)', borderRadius: 20,
+  padding: 24, width: 520, maxWidth: '95vw', boxShadow: '0 20px 60px rgba(44,26,14,0.15)'
 }
