@@ -148,7 +148,7 @@ const PRESET_STUDENTS: PrivateStudent[] = [
 
 export default function PrivateTutoring() {
   const [students, setStudents] = useState<PrivateStudent[]>([])
-  const [activeSubModule, setActiveSubModule] = useState<'finance' | 'stats' | 'profiles' | 'roadmap' | 'teaching'>('finance')
+  const [activeSubModule, setActiveSubModule] = useState<'overview' | 'finance' | 'stats' | 'profiles' | 'roadmap' | 'teaching'>('overview')
   const [search, setSearch] = useState('')
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null)
 
@@ -227,7 +227,7 @@ export default function PrivateTutoring() {
     (s.guardianName || '').toLowerCase().includes(search.toLowerCase())
   )
 
-  // ─── KPIs Financeiros ────────────────────────────────────────────────────────
+  // ─── KPIs Financeiros & Estatísticos Globais ────────────────────────────────
   const totalExpectedRevenue = students.reduce((acc, s) => acc + (s.monthlyFee || 0), 0)
   const totalPaidRevenue = students
     .filter(s => s.paymentStatus === 'pago' || s.paymentStatus === 'em_dia')
@@ -235,6 +235,10 @@ export default function PrivateTutoring() {
   const totalPendingRevenue = students
     .filter(s => s.paymentStatus === 'pendente' || s.paymentStatus === 'atrasado')
     .reduce((acc, s) => acc + (s.monthlyFee || 0), 0)
+  const globalMasteryAverage = students.length > 0
+    ? Math.round(students.reduce((acc, s) => acc + (s.masteryPercentage || 0), 0) / students.length)
+    : 0
+  const pendingPaymentsCount = students.filter(s => s.paymentStatus === 'pendente' || s.paymentStatus === 'atrasado').length
 
   // ─── CRUD Aluno Particular ─────────────────────────────────────────────────
   const openNewStudentModal = () => {
@@ -465,8 +469,8 @@ export default function PrivateTutoring() {
 
   return (
     <ModuleShell
-      title="Alunos Particulares — Gestão Completa & Ensino"
-      subtitle="Módulos dedicados de Financeiro, Estatísticas, Perfil, Roadmap e Ensino Pedagógico."
+      title="Alunos Particulares — Gestão & Ensino"
+      subtitle="Painel Geral unificado e 5 sub-módulos especializados com tabelas independentes."
       actions={
         <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
           <input
@@ -487,6 +491,7 @@ export default function PrivateTutoring() {
       {/* ── Sub-Módulos Bar Navigation ── */}
       <div style={{ display: 'flex', gap: 10, marginBottom: 24, borderBottom: '2px solid rgba(139,115,85,0.12)', paddingBottom: 12, flexWrap: 'wrap' }}>
         {[
+          { key: 'overview', label: '📌 PAINEL GERAL', icon: 'ti-dashboard' },
           { key: 'finance', label: '💵 Financeiro & Cobrança', icon: 'ti-currency-real' },
           { key: 'stats', label: '📊 Estatísticas & Desempenho', icon: 'ti-chart-bar' },
           { key: 'profiles', label: '👤 Perfil do Aluno', icon: 'ti-user-check' },
@@ -502,6 +507,183 @@ export default function PrivateTutoring() {
           </button>
         ))}
       </div>
+
+      {/* ──────────────────────────────────────────────────────────────────────── */}
+      {/* MÓDULO 0: PAINEL GERAL (VISÃO GERAL / OVERVIEW DASHBOARD)                */}
+      {/* ──────────────────────────────────────────────────────────────────────── */}
+      {activeSubModule === 'overview' && (
+        <div>
+          {/* Header Banner */}
+          <div style={{ background: 'linear-gradient(135deg, #fffcf8 0%, #fdf8f2 100%)', border: '1px solid rgba(139,115,85,0.2)', borderRadius: 20, padding: 24, marginBottom: 24, boxShadow: '0 4px 15px rgba(44,26,14,0.06)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
+              <div>
+                <h2 style={{ margin: '0 0 6px', fontSize: 22, fontWeight: 800, color: '#2c1a0e', fontFamily: 'Georgia, serif' }}>
+                  📌 Painel Geral — Visão 360° dos Alunos Particulares
+                </h2>
+                <p style={{ margin: 0, fontSize: 13.5, color: '#665c54', lineHeight: 1.5 }}>
+                  Resumo executivo em tempo real de mensalidades, aulas ministradas, provas e evolução da trilha pedagógica.
+                </p>
+              </div>
+              <button onClick={openNewStudentModal} style={PrimaryBtnStyle}>
+                + Adicionar Aluno Particular
+              </button>
+            </div>
+          </div>
+
+          {/* 4 KPIs Executivos */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16, marginBottom: 24 }}>
+            <KPIBox title="Receita Mensal Prevista" value={`R$ ${totalExpectedRevenue.toLocaleString('pt-BR')}`} icon="💰" color="#8b5e3c" />
+            <KPIBox title="Total Recebido no Mês" value={`R$ ${totalPaidRevenue.toLocaleString('pt-BR')}`} icon="✅" color="#2e7d32" />
+            <KPIBox title="Média Geral de Domínio" value={`${globalMasteryAverage}%`} icon="📈" color="#1565c0" />
+            <KPIBox title="Mensalidades Pendentes" value={`${pendingPaymentsCount} aluno(s)`} icon="⏳" color="#d84315" />
+          </div>
+
+          {/* Visão Rápida do Aluno Selecionado */}
+          {activeStudent && (
+            <ModuleCard title={`Resumo em Foco: ${activeStudent.name}`} icon="ti-user" padding={20} style={{ marginBottom: 24 }}>
+              <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 16, flexWrap: 'wrap' }}>
+                <label style={{ fontSize: 13, fontWeight: 700, color: '#586e75' }}>Trocar Aluno em Foco:</label>
+                <select
+                  value={activeStudent.id}
+                  onChange={e => setSelectedStudentId(e.target.value)}
+                  style={{ padding: '8px 14px', borderRadius: 10, border: '1px solid rgba(139,115,85,0.2)', fontSize: 13, background: '#fff', fontWeight: 700 }}
+                >
+                  {students.map(s => <option key={s.id} value={s.id}>{s.name} — {s.subject}</option>)}
+                </select>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 16 }}>
+                {/* Perfil & Contrato */}
+                <div style={{ background: '#fdf8f2', border: '1px solid rgba(139,115,85,0.15)', borderRadius: 14, padding: 16 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: '#8b5e3c', textTransform: 'uppercase', marginBottom: 8 }}>📋 Perfil & Contrato</div>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: '#2c1a0e' }}>{activeStudent.name}</div>
+                  <div style={{ fontSize: 12.5, color: '#586e75', marginBottom: 6 }}>{activeStudent.subject}</div>
+                  <div style={{ fontSize: 12, color: '#665c54' }}><strong>Mensalidade:</strong> R$ {activeStudent.monthlyFee},00 (Dia {activeStudent.dueDay})</div>
+                  <div style={{ fontSize: 12, color: '#665c54' }}><strong>Agenda:</strong> {activeStudent.scheduleInfo}</div>
+                  <div style={{ marginTop: 8 }}>
+                    <span style={StatusBadgeStyle(activeStudent.paymentStatus)}>
+                      {activeStudent.paymentStatus.toUpperCase()}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Última Aula Ministrada */}
+                <div style={{ background: '#fdf8f2', border: '1px solid rgba(139,115,85,0.15)', borderRadius: 14, padding: 16 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: '#8b5e3c', textTransform: 'uppercase', marginBottom: 8 }}>📖 Última Aula Ministrada</div>
+                  {activeStudent.lessonsHistory[0] ? (
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: '#665c54' }}>{activeStudent.lessonsHistory[0].date}</div>
+                      <div style={{ fontSize: 13.5, fontWeight: 700, color: '#2c1a0e', margin: '4px 0' }}>{activeStudent.lessonsHistory[0].topic}</div>
+                      <div style={{ fontSize: 12, color: '#586e75' }}><strong>Homework:</strong> {activeStudent.lessonsHistory[0].homework || 'Nenhum'}</div>
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: 12.5, color: '#665c54' }}>Nenhuma aula registrada ainda.</div>
+                  )}
+                </div>
+
+                {/* Próximo Marco no Roadmap */}
+                <div style={{ background: '#fdf8f2', border: '1px solid rgba(139,115,85,0.15)', borderRadius: 14, padding: 16 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: '#8b5e3c', textTransform: 'uppercase', marginBottom: 8 }}>🗺️ Próximo Marco na Trilha</div>
+                  {activeStudent.roadmap[0] ? (
+                    <div>
+                      <div style={{ fontSize: 13.5, fontWeight: 700, color: '#2c1a0e', marginBottom: 6 }}>{activeStudent.roadmap[0].title}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <ProgressBar value={activeStudent.roadmap[0].progress} color="#8b5e3c" width={70} />
+                        <span style={{ fontSize: 12, fontWeight: 700 }}>{activeStudent.roadmap[0].progress}%</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: 12.5, color: '#665c54' }}>Nenhum marco cadastrado.</div>
+                  )}
+                </div>
+
+                {/* Diagnóstico IA */}
+                <div style={{ background: '#fdf8f2', border: '1px solid rgba(139,115,85,0.15)', borderRadius: 14, padding: 16 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: '#8b5e3c', textTransform: 'uppercase', marginBottom: 8 }}>✨ Diagnóstico IA</div>
+                  <div style={{ fontSize: 12, color: '#2c1a0e', lineHeight: 1.5 }}>
+                    {activeStudent.aiDiagnostic ? activeStudent.aiDiagnostic.slice(0, 110) + '...' : 'Sem diagnóstico recente. Acesse a aba Estatísticas.'}
+                  </div>
+                </div>
+              </div>
+            </ModuleCard>
+          )}
+
+          {/* Tabela de Visão Geral Consolidada */}
+          <ModuleCard title="Tabela Consolidada de Todos os Alunos Particulares" icon="ti-table" padding={20}>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={TableStyle}>
+                <thead>
+                  <tr style={TableHeaderRowStyle}>
+                    <th style={ThStyle}>Aluno Particular</th>
+                    <th style={ThStyle}>Matéria Própria</th>
+                    <th style={ThStyle}>Modalidade</th>
+                    <th style={ThStyle}>Domínio (%)</th>
+                    <th style={ThStyle}>Mensalidade</th>
+                    <th style={ThStyle}>Status Pagamento</th>
+                    <th style={ThStyle}>Ação Rápida</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredStudents.map(st => (
+                    <tr key={st.id} style={TableRowStyle}>
+                      <td style={TdStyle}>
+                        <div style={{ fontWeight: 700, color: '#2c1a0e', fontSize: 14 }}>{st.name}</div>
+                        <div style={{ fontSize: 12, color: '#665c54' }}>{st.guardianName || st.phone || 'Sem contato'}</div>
+                      </td>
+                      <td style={TdStyle}>
+                        <span style={BadgeStyle('#fdf3e7', '#8b5e3c')}>{st.subject}</span>
+                      </td>
+                      <td style={TdStyle}>
+                        <span style={{ fontSize: 13 }}>{st.modality}</span>
+                      </td>
+                      <td style={TdStyle}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <ProgressBar value={st.masteryPercentage} color="#8b5e3c" width={60} />
+                          <strong style={{ fontSize: 13 }}>{st.masteryPercentage}%</strong>
+                        </div>
+                      </td>
+                      <td style={TdStyle}>
+                        <strong style={{ fontSize: 13.5, color: '#2c1a0e' }}>R$ {st.monthlyFee},00</strong>
+                        <div style={{ fontSize: 11, color: '#665c54' }}>Dia {st.dueDay}</div>
+                      </td>
+                      <td style={TdStyle}>
+                        <button
+                          onClick={() => togglePaymentStatus(st.id)}
+                          style={StatusBadgeStyle(st.paymentStatus)}
+                          title="Clique para alterar status"
+                        >
+                          {st.paymentStatus.toUpperCase()}
+                        </button>
+                      </td>
+                      <td style={TdStyle}>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <button
+                            onClick={() => generateWhatsAppReminder(st)}
+                            style={WhatsAppBtnStyle}
+                            title="Enviar lembrete WA"
+                          >
+                            💬 WA
+                          </button>
+                          <button
+                            onClick={() => {
+                              setSelectedStudentId(st.id)
+                              setActiveSubModule('teaching')
+                            }}
+                            style={SecondaryBtnStyle}
+                            title="Abrir Ficha de Aulas"
+                          >
+                            📖 Aulas
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </ModuleCard>
+        </div>
+      )}
 
       {/* ──────────────────────────────────────────────────────────────────────── */}
       {/* MÓDULO 1: FINANCEIRO & COBRANÇA                                          */}
