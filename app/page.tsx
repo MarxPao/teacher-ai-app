@@ -46,12 +46,13 @@ import BatchGrader from '@/components/modules/BatchGrader'
 import ProgressTracker from '@/components/modules/ProgressTracker'
 import AutoReport from '@/components/modules/AutoReport'
 import Organization from '@/components/modules/Organization'
+import PrivateTutoring from '@/components/modules/PrivateTutoring'
 
 import CommandPalette from '@/components/CommandPalette'
 import LanguageSelector from '@/components/LanguageSelector'
 
 export type ModuleKey = 'dashboard' | 'quick' | 'exam' | 'lessonstudio' | 'plan' | 'rubric' |
-  'gradebook' | 'students' | 'classes' | 'organization' | 'analytics' | 'calendar' | 'comms' | 'repo' |
+  'gradebook' | 'students' | 'classes' | 'organization' | 'privatetutoring' | 'analytics' | 'calendar' | 'comms' | 'repo' |
   'wellbeing' | 'settings' | 'api' | 'qbank' | 'mindmap' | 'editor' |
   'communications' | 'portfolio' | 'extensions' | 'portalmirror' | 'omnigrader' | 'maestro' | 'classlog' | 'didacticsequence' | 'livequiz' | 'parentcomms' |
   'classroommode' | 'flashcardmode' | 'audiopronunciation' |
@@ -69,6 +70,7 @@ const MODULES: Record<ModuleKey, React.ComponentType> = {
   students:         Students,
   classes:          Classes,
   organization:     Organization,
+  privatetutoring:  PrivateTutoring,
   analytics:        Analytics,
   calendar:         Planner,
   comms:            Communications,

@@ -27,6 +27,7 @@ const NAV: Section[] = [
     { key: 'organization',   label: 'Escolas',               icon: 'ti-building-school' },
     { key: 'classes',        label: 'Turmas',                icon: 'ti-school' },
     { key: 'students',       label: 'Alunos',                icon: 'ti-user-circle' },
+    { key: 'privatetutoring',label: 'Alunos Particulares',   icon: 'ti-user-dollar' },
   ]},
   { label: 'Alunos & Avaliação', items: [
     { key: 'gradebook',      label: 'Caderneta de Notas',  icon: 'ti-chart-bar' },
