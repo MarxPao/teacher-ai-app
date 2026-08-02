@@ -622,16 +622,44 @@ export default function LessonPlanner() {
                           }}
                           style={{
                             background: card.color || '#073642',
-                            color: '#fff', padding: '5px 8px', borderRadius: 6,
+                            color: '#fff', padding: '6px 8px', borderRadius: 8,
                             fontSize: 11, fontWeight: 700, cursor: 'grab',
-                            display: 'flex', flexDirection: 'column', gap: 2,
-                            boxShadow: '0 2px 4px rgba(0,0,0,0.12)'
+                            display: 'flex', flexDirection: 'column', gap: 3,
+                            boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
+                            position: 'relative'
                           }}
+                          title="Segure e arraste (Grab & Push) para mover de dia"
                         >
-                          <div style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            ✋ {card.title}
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 4 }}>
+                            <div style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1, display: 'flex', alignItems: 'center', gap: 4 }}>
+                              <span style={{ fontSize: 10, opacity: 0.8 }}>✋</span>
+                              <span>{card.title}</span>
+                            </div>
+                            <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexShrink: 0 }}>
+                              <button
+                                onClick={e => {
+                                  e.stopPropagation()
+                                  setSelected(card.id)
+                                  setEditCard({ ...card })
+                                }}
+                                title="Editar Aula"
+                                style={{ background: 'rgba(255,255,255,0.25)', border: 'none', color: '#fff', borderRadius: 4, padding: '2px 4px', fontSize: 10, cursor: 'pointer' }}
+                              >
+                                ✏️
+                              </button>
+                              <button
+                                onClick={e => {
+                                  e.stopPropagation()
+                                  deleteCard(card.id)
+                                }}
+                                title="Excluir Aula"
+                                style={{ background: 'rgba(255,255,255,0.25)', border: 'none', color: '#fff', borderRadius: 4, padding: '2px 4px', fontSize: 10, cursor: 'pointer' }}
+                              >
+                                🗑️
+                              </button>
+                            </div>
                           </div>
-                          <div style={{ fontSize: 9.5, opacity: 0.85, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          <div style={{ fontSize: 9.5, opacity: 0.9, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                             {card.school || 'Escola'} · {card.className || 'Turma'} ({card.duration}m)
                           </div>
                         </div>

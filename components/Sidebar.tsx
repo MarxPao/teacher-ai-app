@@ -24,7 +24,7 @@ const NAV: Section[] = [
     { key: 'livequiz',      label: 'Quiz ao Vivo',         icon: 'ti-device-gamepad-2' },
   ]},
   { label: 'Organização', items: [
-    { key: 'organization',   label: 'Central de Organização', icon: 'ti-building-community' },
+    { key: 'organization',   label: 'Escolas',               icon: 'ti-building-school' },
     { key: 'classes',        label: 'Turmas',                icon: 'ti-school' },
     { key: 'students',       label: 'Alunos',                icon: 'ti-user-circle' },
   ]},

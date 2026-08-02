@@ -241,7 +241,7 @@ export default function Organization() {
 
   return (
     <ModuleShell
-      title="Central de Organização"
+      title="Escolas"
       subtitle="Gerencie suas Escolas, Turmas e Alunos com sincronização em tempo real."
       actions={
         <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
