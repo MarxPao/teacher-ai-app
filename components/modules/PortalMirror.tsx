@@ -15,14 +15,16 @@ interface PortalTab {
 }
 
 const PRESET_PORTALS: PortalTab[] = [
-  { id: 'plural',        name: 'Plurall (SOMOS)',            url: 'https://www.plural.net/',                                  icon: 'ti-books',          color: '#cb4b16' },
-  { id: 'google_class',  name: 'Google Classroom',          url: 'https://classroom.google.com/',                             icon: 'ti-brand-google',   color: '#859900' },
-  { id: 'canvas',        name: 'Canvas LMS',                url: 'https://canvas.instructure.com/',                           icon: 'ti-palette',        color: '#dc322f' },
-  { id: 'edusync',       name: 'Edusync / Painel do Aluno', url: 'https://machadosobrinho.paineldoaluno.com.br/professor_painel', icon: 'ti-school',         color: '#268bd2' },
-  { id: 'santacatarina', name: 'Rede Santa Catarina',       url: 'https://portaleducacao.redesantacatarina.org.br/',          icon: 'ti-building-church',color: '#b58900' },
-  { id: 'cambridge',     name: 'Cambridge One',             url: 'https://www.cambridgeone.org/',                             icon: 'ti-certificate',    color: '#6c71c4' },
-  { id: 'teams',         name: 'Microsoft Teams',           url: 'https://teams.microsoft.com/',                              icon: 'ti-brand-teams',    color: '#268bd2' },
+  { id: 'canva',        name: 'Canva Studio & Pastas',     url: 'https://www.canva.com/projects',                           icon: 'ti-palette',        color: '#00c4cc' },
+  { id: 'plural',       name: 'Plurall (SOMOS)',            url: 'https://www.plural.net/',                                  icon: 'ti-books',          color: '#cb4b16' },
+  { id: 'google_class', name: 'Google Classroom',          url: 'https://classroom.google.com/',                             icon: 'ti-brand-google',   color: '#859900' },
+  { id: 'canvas',       name: 'Canvas LMS',                url: 'https://canvas.instructure.com/',                           icon: 'ti-palette',        color: '#dc322f' },
+  { id: 'edusync',      name: 'Edusync / Painel do Aluno', url: 'https://machadosobrinho.paineldoaluno.com.br/professor_painel', icon: 'ti-school',         color: '#268bd2' },
+  { id: 'santacatarina',name: 'Rede Santa Catarina',       url: 'https://portaleducacao.redesantacatarina.org.br/',          icon: 'ti-building-church',color: '#b58900' },
+  { id: 'cambridge',    name: 'Cambridge One',             url: 'https://www.cambridgeone.org/',                             icon: 'ti-certificate',    color: '#6c71c4' },
+  { id: 'teams',        name: 'Microsoft Teams',           url: 'https://teams.microsoft.com/',                              icon: 'ti-brand-teams',    color: '#268bd2' },
 ]
+
 
 export default function PortalMirror() {
   const [activePortal, setActivePortal] = useState<PortalTab>(PRESET_PORTALS[0])

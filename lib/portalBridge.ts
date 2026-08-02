@@ -4,7 +4,7 @@
  */
 
 export interface PortalFillPayload {
-  platform: 'machado' | 'santacatarina' | 'plural' | 'cambridge' | 'teams'
+  platform: 'machado' | 'santacatarina' | 'plural' | 'cambridge' | 'teams' | 'canva'
   title: string
   date?: string
   classRef?: string
@@ -35,6 +35,7 @@ const PORTAL_NAMES: Record<string, string> = {
   plural:        'Plural (SOMOS)',
   cambridge:     'Cambridge One',
   teams:         'Microsoft Teams',
+  canva:         'Canva Studio & Connect',
 }
 
 const PORTAL_URLS: Record<string, string> = {
@@ -43,7 +44,9 @@ const PORTAL_URLS: Record<string, string> = {
   plural:        'https://www.plural.net/',
   cambridge:     'https://www.cambridgeone.org/',
   teams:         'https://teams.microsoft.com/',
+  canva:         'https://www.canva.com/projects',
 }
+
 
 /**
  * Envia um preenchimento para o portal via extensão Chrome
