@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import ModuleShell from '@/components/ModuleShell'
 
 export interface RepositoryItem {
@@ -11,10 +11,12 @@ export interface RepositoryItem {
   type: 'Student\'s Book' | 'Workbook' | 'Reference Book' | 'CLIL Book' | 'Syllabus' | 'Text'
   category?: string
   textbook?: string
+  wordCount?: number
+  chunkCount?: number
 }
 
-// ─── Preset 1: Student's Book ────────────────────────────────────────────────
-const G4_STUDENT_BOOK: Omit<RepositoryItem, 'id' | 'date'> = {
+// ─── Presets Globalizers 4 ────────────────────────────────────────────────────
+const G4_STUDENT_BOOK: Omit<RepositoryItem, 'id' | 'date' | 'wordCount' | 'chunkCount'> = {
   title: '📘 Globalizers 4 — Student\'s Book (Units 1-8 Main Texts & Dialogues)',
   type: 'Student\'s Book',
   category: 'Macmillan Education',
@@ -27,7 +29,7 @@ Reading Text: "The rise of the digital nomad generation has redefined what it me
 
 Dialogue Model (Listening Task 1.2):
 A: Have you been living in England for long?
-B: Actually, I’ve been living in London since 2022, but I’ve traveled to six different countries this year alone.
+B: Actually, I've been living in London since 2022, but I've traveled to six different countries this year alone.
 A: How do you handle language barriers?
 B: I usually use English as a lingua franca, but learning basic local phrases always helps.
 
@@ -58,8 +60,7 @@ Reading Text: "Restorative justice focuses on rehabilitation through reconciliat
 Reading Text: "Seldom have humans faced a frontier as challenging as interplanetary expansion. Space agencies are testing closed-loop ecological life support systems."`
 }
 
-// ─── Preset 2: Workbook ──────────────────────────────────────────────────────
-const G4_WORKBOOK: Omit<RepositoryItem, 'id' | 'date'> = {
+const G4_WORKBOOK: Omit<RepositoryItem, 'id' | 'date' | 'wordCount' | 'chunkCount'> = {
   title: '📙 Globalizers 4 — Workbook (Practice Exercises & Answer Key)',
   type: 'Workbook',
   category: 'Macmillan Education',
@@ -94,8 +95,7 @@ MACMILLAN EDUCATION — GLOBALIZERS 4: WORKBOOK
       -> Not only __________ the trophy, but we also set a record. [Answer: did we win]`
 }
 
-// ─── Preset 3: Reference Book ────────────────────────────────────────────────
-const G4_REFERENCE_BOOK: Omit<RepositoryItem, 'id' | 'date'> = {
+const G4_REFERENCE_BOOK: Omit<RepositoryItem, 'id' | 'date' | 'wordCount' | 'chunkCount'> = {
   title: '📗 Globalizers 4 — Reference Book (Grammar Rules & Vocabulary Lists)',
   type: 'Reference Book',
   category: 'Macmillan Education',
@@ -128,8 +128,7 @@ VOCABULARY REFERENCE LIST (CEFR B2/C1):
 • False Friends: actually (de fato/na verdade), currently (atualmente), pretend (fingir), intend (pretender), push (empurrar), pull (puxar).`
 }
 
-// ─── Preset 4: CLIL Book ─────────────────────────────────────────────────────
-const G4_CLIL_BOOK: Omit<RepositoryItem, 'id' | 'date'> = {
+const G4_CLIL_BOOK: Omit<RepositoryItem, 'id' | 'date' | 'wordCount' | 'chunkCount'> = {
   title: '🟨 Globalizers 4 — CLIL Book (Cross-Curricular Science, History & Art)',
   type: 'CLIL Book',
   category: 'Macmillan Education',
@@ -160,63 +159,178 @@ Key Terms: Tessellation, decagonal geometry, artisan, quasicrystalline.`
 
 const ALL_G4_PRESETS = [G4_STUDENT_BOOK, G4_WORKBOOK, G4_REFERENCE_BOOK, G4_CLIL_BOOK]
 
-export default function Repository() {
-  const [items, setItems]               = useState<RepositoryItem[]>([])
-  const [adding, setAdding]             = useState(false)
-  const [newTitle, setNewTitle]         = useState('')
-  const [newContent, setNewContent]     = useState('')
-  const [newType, setNewType]           = useState<RepositoryItem['type']>('Student\'s Book')
-  const [viewItem, setViewItem]         = useState<RepositoryItem | null>(null)
-  const [activeFilter, setActiveFilter] = useState<string>('all')
-  const fileInputRef                    = useRef<HTMLInputElement | null>(null)
+const LS_KEY = 'teacher_repo'
+const LS_RAG_KEY = 'teacher_rag_chunks'
 
+function countWords(text: string) {
+  return text.trim().split(/\s+/).filter(Boolean).length
+}
+
+function countChunks(text: string) {
+  const byUnit = text.match(/\[(?:UNIT|CLIL|EXERCISE)[^\]]*\]/gi)
+  if (byUnit && byUnit.length > 1) return byUnit.length
+  const byPara = text.split(/\n\s*\n/).filter(b => b.trim().length > 30)
+  return Math.max(byPara.length, 1)
+}
+
+function typeIcon(type: string) {
+  if (type === "Student's Book") return '📘'
+  if (type === 'Workbook') return '📙'
+  if (type === 'Reference Book') return '📗'
+  if (type === 'CLIL Book') return '🟨'
+  if (type === 'Syllabus') return '📋'
+  return '📄'
+}
+
+function typeColor(type: string) {
+  if (type === "Student's Book") return '#1a73e8'
+  if (type === 'Workbook') return '#e67e22'
+  if (type === 'Reference Book') return '#27ae60'
+  if (type === 'CLIL Book') return '#8b5cf6'
+  if (type === 'Syllabus') return '#c0392b'
+  return '#586e75'
+}
+
+// ─── RAG inlining (sem depender da lib) ─────────────────────────────────────
+function ragSearch(query: string, items: RepositoryItem[], docId?: number): string[] {
+  const results: { text: string; score: number }[] = []
+  const terms = query.toLowerCase().split(/\s+/).filter(t => t.length > 2)
+  const searchItems = docId ? items.filter(i => i.id === docId) : items
+
+  for (const item of searchItems) {
+    const paragraphs = item.content.split(/\n\s*\n/).filter(p => p.trim().length > 30)
+    for (const para of paragraphs) {
+      let score = 0
+      const lower = para.toLowerCase()
+      if (lower.includes(query.toLowerCase())) score += 15
+      for (const term of terms) if (lower.includes(term)) score += 3
+      if (score > 0) results.push({ text: `[${item.title}]\n${para.trim()}`, score })
+    }
+  }
+
+  return results.sort((a, b) => b.score - a.score).slice(0, 4).map(r => r.text)
+}
+
+export default function Repository() {
+  const [items, setItems]             = useState<RepositoryItem[]>([])
+  const [viewItem, setViewItem]       = useState<RepositoryItem | null>(null)
+  const [activeFilter, setActiveFilter] = useState<string>('all')
+  const [searchText, setSearchText]   = useState('')
+  const [mode, setMode]               = useState<'view' | 'add' | 'edit' | 'rag'>('view')
+
+  // Add / Edit form
+  const [editTitle, setEditTitle]     = useState('')
+  const [editContent, setEditContent] = useState('')
+  const [editType, setEditType]       = useState<RepositoryItem['type']>("Student's Book")
+  const [editCategory, setEditCategory] = useState('Macmillan Education')
+  const [editTextbook, setEditTextbook] = useState('')
+
+  // RAG test
+  const [ragQuery, setRagQuery]       = useState('')
+  const [ragResults, setRagResults]   = useState<string[]>([])
+  const [ragScope, setRagScope]       = useState<'all' | 'doc'>('all')
+
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
+
+  // ── Load ──────────────────────────────────────────────────────────────────
   useEffect(() => {
-    const s = localStorage.getItem('teacher_repo')
-    let currentItems: RepositoryItem[] = s ? JSON.parse(s) : []
-    
-    // Auto-carrega todos os 4 componentes do Globalizers 4 se o repositório estiver vazio ou sem eles
-    const hasGlobalizers = currentItems.some(i => i.title.includes('Globalizers 4'))
-    if (!hasGlobalizers) {
-      const presetItems: RepositoryItem[] = ALL_G4_PRESETS.map((p, idx) => ({
+    const s = localStorage.getItem(LS_KEY)
+    let current: RepositoryItem[] = s ? JSON.parse(s) : []
+    const hasG4 = current.some(i => i.title.includes('Globalizers 4'))
+    if (!hasG4) {
+      const presets: RepositoryItem[] = ALL_G4_PRESETS.map((p, idx) => ({
         id: Date.now() + idx,
         ...p,
         date: new Date().toLocaleDateString('pt-BR'),
+        wordCount: countWords(p.content),
+        chunkCount: countChunks(p.content),
       }))
-      currentItems = [...presetItems, ...currentItems]
-      localStorage.setItem('teacher_repo', JSON.stringify(currentItems))
+      current = [...presets, ...current]
+      localStorage.setItem(LS_KEY, JSON.stringify(current))
     }
-    
-    setItems(currentItems)
-    setViewItem(currentItems[0] || null)
+    setItems(current)
+    setViewItem(current[0] || null)
   }, [])
 
-  async function save(newItems: RepositoryItem[]) {
-    setItems(newItems)
-    localStorage.setItem('teacher_repo', JSON.stringify(newItems))
-    try {
-      const { indexAllLibraryItems } = await import('@/lib/ragEngine')
-      indexAllLibraryItems()
-    } catch { /* ignora */ }
-  }
+  // ── Persist ───────────────────────────────────────────────────────────────
+  const save = useCallback((updated: RepositoryItem[]) => {
+    setItems(updated)
+    localStorage.setItem(LS_KEY, JSON.stringify(updated))
+    // Invalida o cache RAG para reindexar
+    localStorage.removeItem(LS_RAG_KEY)
+  }, [])
 
+  // ── Add item ──────────────────────────────────────────────────────────────
   function addItem() {
-    if (!newTitle.trim() || !newContent.trim()) return
+    if (!editTitle.trim() || !editContent.trim()) {
+      alert('Preencha o título e o conteúdo para continuar.')
+      return
+    }
     const item: RepositoryItem = {
       id: Date.now(),
-      title: newTitle.trim(),
-      content: newContent.trim(),
-      type: newType,
-      category: 'Macmillan / Custom',
+      title: editTitle.trim(),
+      content: editContent.trim(),
+      type: editType,
+      category: editCategory || 'Custom',
+      textbook: editTextbook || undefined,
       date: new Date().toLocaleDateString('pt-BR'),
+      wordCount: countWords(editContent),
+      chunkCount: countChunks(editContent),
     }
-    save([item, ...items])
-    setNewTitle(''); setNewContent(''); setAdding(false); setViewItem(item)
+    const updated = [item, ...items]
+    save(updated)
+    setViewItem(item)
+    setMode('view')
+    clearForm()
   }
 
-  // Upload de arquivo nativo (TXT, MD, CSV, PDF Text com PDF.js)
+  // ── Save edits ────────────────────────────────────────────────────────────
+  function saveEdit() {
+    if (!viewItem) return
+    const updated = items.map(i => i.id === viewItem.id ? {
+      ...i,
+      title: editTitle.trim() || i.title,
+      content: editContent.trim() || i.content,
+      type: editType,
+      category: editCategory,
+      textbook: editTextbook || undefined,
+      wordCount: countWords(editContent),
+      chunkCount: countChunks(editContent),
+    } : i)
+    save(updated)
+    const saved = updated.find(i => i.id === viewItem.id)!
+    setViewItem(saved)
+    setMode('view')
+  }
+
+  function startEdit(item: RepositoryItem) {
+    setEditTitle(item.title)
+    setEditContent(item.content)
+    setEditType(item.type)
+    setEditCategory(item.category || '')
+    setEditTextbook(item.textbook || '')
+    setViewItem(item)
+    setMode('edit')
+  }
+
+  function clearForm() {
+    setEditTitle(''); setEditContent(''); setEditType("Student's Book"); setEditCategory('Macmillan Education'); setEditTextbook('')
+  }
+
+  // ── Delete ────────────────────────────────────────────────────────────────
+  function deleteItem(id: number) {
+    if (!confirm('Deseja remover este documento da Biblioteca?')) return
+    const upd = items.filter(i => i.id !== id)
+    save(upd)
+    setViewItem(upd[0] || null)
+    setMode('view')
+  }
+
+  // ── Upload de arquivo ─────────────────────────────────────────────────────
   async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
+    if (fileInputRef.current) fileInputRef.current.value = ''
 
     try {
       let text = ''
@@ -231,206 +345,432 @@ export default function Repository() {
         })
       }
 
-      if (!text) {
-        alert('Não foi possível extrair conteúdo do arquivo selecionado.')
+      if (!text || text.trim().length < 20) {
+        alert('Não foi possível extrair conteúdo legível do arquivo selecionado.')
         return
       }
 
       const item: RepositoryItem = {
         id: Date.now(),
-        title: file.name.replace(/\.[^/.]+$/, ""),
+        title: file.name.replace(/\.[^/.]+$/, ''),
         content: text,
-        type: newType,
-        category: file.name.endsWith('.pdf') ? 'Livro / PDF Extraído' : 'Arquivo Carregado',
+        type: "Student's Book",
+        category: file.name.endsWith('.pdf') ? 'PDF Importado' : 'Arquivo Importado',
         date: new Date().toLocaleDateString('pt-BR'),
+        wordCount: countWords(text),
+        chunkCount: countChunks(text),
       }
-      save([item, ...items])
+      const updated = [item, ...items]
+      save(updated)
       setViewItem(item)
-      alert(`✅ Livro/PDF "${file.name}" importado e lido com sucesso pela IA!`)
+      setMode('view')
+      alert(`✅ "${file.name}" importado! ${item.wordCount?.toLocaleString()} palavras · ${item.chunkCount} seções indexadas.`)
     } catch (err: unknown) {
       alert(`Erro ao ler arquivo: ${err instanceof Error ? err.message : 'Falha na leitura'}`)
     }
   }
 
-  function reimportAllG4Presets() {
-    const presetItems: RepositoryItem[] = ALL_G4_PRESETS.map((p, idx) => ({
+  // ── Reimport Globalizers 4 ────────────────────────────────────────────────
+  function reimportG4() {
+    const presets: RepositoryItem[] = ALL_G4_PRESETS.map((p, idx) => ({
       id: Date.now() + idx,
       ...p,
       date: new Date().toLocaleDateString('pt-BR'),
+      wordCount: countWords(p.content),
+      chunkCount: countChunks(p.content),
     }))
-
     const filtered = items.filter(i => !i.title.includes('Globalizers 4'))
-    const updated = [...presetItems, ...filtered]
+    const updated = [...presets, ...filtered]
     save(updated)
-    setViewItem(presetItems[0])
-    alert('✅ Todos os 4 componentes do Globalizers 4 (Student\'s, Workbook, Reference e CLIL) foram restaurados com sucesso!')
+    setViewItem(presets[0])
+    setMode('view')
+    alert('✅ Todos os 4 componentes do Globalizers 4 restaurados e reindexados!')
   }
 
-  function deleteItem(id: number) {
-    if (confirm('Deletar este item do repositório?')) {
-      const upd = items.filter(i => i.id !== id)
-      save(upd)
-      if (viewItem?.id === id) setViewItem(upd[0] || null)
-    }
+  // ── RAG Search ────────────────────────────────────────────────────────────
+  function runRagSearch() {
+    if (!ragQuery.trim()) return
+    const docId = ragScope === 'doc' && viewItem ? viewItem.id : undefined
+    const results = ragSearch(ragQuery, items, docId)
+    setRagResults(results.length > 0 ? results : ['Nenhum trecho relevante encontrado para esta consulta.'])
   }
 
-  const filteredItems = items.filter(i => {
-    if (activeFilter === 'all') return true
-    return i.type === activeFilter
+  // ── Filtragem e busca ─────────────────────────────────────────────────────
+  const filtered = items.filter(i => {
+    const matchType = activeFilter === 'all' || i.type === activeFilter
+    const matchSearch = !searchText || i.title.toLowerCase().includes(searchText.toLowerCase()) || i.content.toLowerCase().includes(searchText.toLowerCase())
+    return matchType && matchSearch
   })
 
+  // ── Formatação do conteúdo para exibição ──────────────────────────────────
+  function formatContent(raw: string): React.ReactElement[] {
+    const lines = raw.split('\n')
+    const elements: React.ReactElement[] = []
+
+    lines.forEach((line, i) => {
+      const trimmed = line.trim()
+      if (!trimmed) {
+        elements.push(<div key={i} style={{ height: 8 }} />)
+      } else if (/^={5,}/.test(trimmed)) {
+        elements.push(<hr key={i} style={{ border: 'none', borderTop: '2px solid rgba(139,115,85,0.3)', margin: '12px 0' }} />)
+      } else if (/^-{5,}/.test(trimmed)) {
+        elements.push(<hr key={i} style={{ border: 'none', borderTop: '1px dashed rgba(139,115,85,0.25)', margin: '8px 0' }} />)
+      } else if (/^\[.*\]$/.test(trimmed)) {
+        elements.push(
+          <div key={i} style={{ background: 'linear-gradient(135deg, #8b5e3c, #a0785a)', color: '#fff', padding: '8px 14px', borderRadius: 10, fontSize: 13, fontWeight: 700, margin: '14px 0 6px', letterSpacing: 0.5 }}>
+            {trimmed}
+          </div>
+        )
+      } else if (/^[A-Z][A-Z\s&]+:$/.test(trimmed) || /^[A-Z\s\d.]+:$/.test(trimmed)) {
+        elements.push(
+          <div key={i} style={{ fontSize: 13, fontWeight: 800, color: '#8b5e3c', textTransform: 'uppercase', letterSpacing: 1, margin: '10px 0 4px' }}>
+            {trimmed}
+          </div>
+        )
+      } else if (/^\d+\.\s/.test(trimmed)) {
+        elements.push(
+          <div key={i} style={{ fontSize: 13, color: '#2c1a0e', padding: '3px 0 3px 12px', borderLeft: '3px solid rgba(139,94,60,0.35)', margin: '3px 0' }}>
+            {trimmed}
+          </div>
+        )
+      } else if (/^[•\-\*]\s/.test(trimmed)) {
+        elements.push(
+          <div key={i} style={{ fontSize: 13, color: '#444', padding: '2px 0 2px 16px', display: 'flex', gap: 6 }}>
+            <span style={{ color: '#8b5e3c', flexShrink: 0 }}>•</span>
+            {trimmed.replace(/^[•\-\*]\s/, '')}
+          </div>
+        )
+      } else if (/^[A-Z]:/.test(trimmed) || /^Teacher:|^Student:|^Dialogue/.test(trimmed)) {
+        const [speaker, ...rest] = trimmed.split(':')
+        elements.push(
+          <div key={i} style={{ background: 'rgba(139,94,60,0.07)', padding: '6px 12px', borderRadius: 8, margin: '4px 0', fontSize: 13 }}>
+            <strong style={{ color: '#8b5e3c' }}>{speaker}:</strong>
+            <span style={{ color: '#2c1a0e' }}>{rest.join(':')}</span>
+          </div>
+        )
+      } else if (/Answer:/i.test(trimmed)) {
+        elements.push(
+          <div key={i} style={{ fontSize: 12.5, color: '#27ae60', padding: '2px 0 2px 16px', fontStyle: 'italic' }}>
+            {trimmed}
+          </div>
+        )
+      } else {
+        elements.push(
+          <div key={i} style={{ fontSize: 13.5, color: '#2c1a0e', lineHeight: 1.7, margin: '2px 0' }}>
+            {trimmed}
+          </div>
+        )
+      }
+    })
+    return elements
+  }
+
+  const btnPrimary: React.CSSProperties = {
+    padding: '10px 18px', borderRadius: 10, border: 'none', background: '#8b5e3c', color: '#fff',
+    fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6
+  }
+  const btnSecondary: React.CSSProperties = {
+    padding: '10px 18px', borderRadius: 10, border: '1px solid rgba(139,115,85,0.35)', background: '#fffcf8',
+    color: '#586e75', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6
+  }
+  const inputStyle: React.CSSProperties = {
+    width: '100%', padding: '10px 14px', borderRadius: 10, border: '1px solid rgba(139,115,85,0.25)',
+    fontSize: 13, outline: 'none', background: '#fffcf8', color: '#2c1a0e', boxSizing: 'border-box'
+  }
+
   return (
-    <ModuleShell 
-      title="Biblioteca Digital & Livros (RAG Engine)"
-      subtitle="Sua biblioteca de livros didáticos (Student's, Workbook, Reference, CLIL). A IA consulta estes materiais para gerar aulas e provas."
+    <ModuleShell
+      title="📚 Biblioteca Digital"
+      subtitle="Gerencie seus livros didáticos e documentos. A IA (Rafinha, ExamBuilder, LessonStudio) usa estes materiais como base de contexto RAG."
       isFullHeight
       maxWidth="100%"
       actions={
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept=".txt,.md,.json,.csv,.pdf" style={{ display: 'none' }} />
 
-          <button 
-            onClick={() => fileInputRef.current?.click()}
-            style={{ padding: '10px 16px', borderRadius: 10, border: '1px solid #073642', background: '#eee8d5', color: '#073642', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
-          >
-            <i className="ti ti-upload" /> 📄 Upload PDF / Arquivo
+          <button onClick={() => fileInputRef.current?.click()} style={btnSecondary}>
+            <i className="ti ti-upload" /> Importar PDF / Arquivo
           </button>
 
-          <button 
-            onClick={reimportAllG4Presets}
-            style={{ padding: '10px 16px', borderRadius: 10, border: 'none', background: '#859900', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
-          >
-            <i className="ti ti-book" /> 📚 Restaurar os 4 Livros Globalizers 4
+          <button onClick={reimportG4} style={{ ...btnSecondary, borderColor: '#27ae60', color: '#27ae60' }}>
+            <i className="ti ti-book" /> Restaurar Globalizers 4
           </button>
 
-          <button 
-            onClick={() => setAdding(true)}
-            style={{ padding: '10px 16px', borderRadius: 10, border: 'none', background: '#073642', color: '#fdf6e3', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
-          >
-            <i className="ti ti-plus" /> Adicionar Livro Manual
+          <button onClick={() => { clearForm(); setMode('add') }} style={btnPrimary}>
+            <i className="ti ti-plus" /> Adicionar Material
           </button>
         </div>
       }
     >
-      <div style={{ display: 'grid', gridTemplateColumns: '380px 1fr', gap: 32, flex: 1, minHeight: 0, height: '100%' }}>
-        {/* Lista Lateral com Filtro por Tipo de Livro */}
-        <div style={{ background: '#fff', borderRadius: 24, border: '1px solid rgba(88,110,117,0.06)', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 4px 20px rgba(0,43,54,0.03)' }}>
-          <div style={{ padding: '20px', borderBottom: '1px dashed rgba(88,110,117,0.1)' }}>
-            <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', color: '#93a1a1', marginBottom: 10 }}>
-              Filtro de Componentes
+      <div style={{ display: 'grid', gridTemplateColumns: '360px 1fr', gap: 24, flex: 1, minHeight: 0, height: '100%' }}>
+
+        {/* ── Coluna Esquerda: Lista + Busca ── */}
+        <div style={{ background: '#fff', borderRadius: 20, border: '1px solid rgba(139,115,85,0.12)', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 4px 20px rgba(44,26,14,0.04)' }}>
+
+          {/* Busca */}
+          <div style={{ padding: '16px 16px 12px', borderBottom: '1px solid rgba(139,115,85,0.1)' }}>
+            <div style={{ position: 'relative', marginBottom: 12 }}>
+              <i className="ti ti-search" style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#a08060', fontSize: 14 }} />
+              <input
+                placeholder="Buscar por título ou conteúdo..."
+                value={searchText}
+                onChange={e => setSearchText(e.target.value)}
+                style={{ ...inputStyle, paddingLeft: 36 }}
+              />
             </div>
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              {['all', 'Student\'s Book', 'Workbook', 'Reference Book', 'CLIL Book'].map(f => (
+            {/* Filtros de tipo */}
+            <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+              {['all', "Student's Book", 'Workbook', 'Reference Book', 'CLIL Book', 'Syllabus', 'Text'].map(f => (
                 <button key={f} onClick={() => setActiveFilter(f)} style={{
-                  padding: '5px 10px', borderRadius: 8, border: 'none', fontSize: 11, fontWeight: 700, cursor: 'pointer',
-                  background: activeFilter === f ? '#073642' : '#fdf6e3',
-                  color: activeFilter === f ? '#fff' : '#586e75',
+                  padding: '4px 9px', borderRadius: 7, border: 'none', fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                  background: activeFilter === f ? '#8b5e3c' : '#f5efe6',
+                  color: activeFilter === f ? '#fff' : '#665c54',
                 }}>
-                  {f === 'all' ? 'Todos os Livros' : f.replace(' Book', '')}
+                  {f === 'all' ? 'Todos' : f.replace(' Book', '')}
                 </button>
               ))}
             </div>
           </div>
 
-          <div style={{ flex: 1, overflowY: 'auto', padding: '12px' }}>
-            {filteredItems.length === 0 ? (
-              <div style={{ padding: 40, textAlign: 'center', color: '#93a1a1', fontSize: 13 }}>
-                Nenhum livro ou documento nesta categoria.
+          {/* Contagem */}
+          <div style={{ padding: '8px 16px', fontSize: 11, color: '#a08060', fontWeight: 600, borderBottom: '1px solid rgba(139,115,85,0.06)' }}>
+            {filtered.length} documento{filtered.length !== 1 ? 's' : ''} encontrado{filtered.length !== 1 ? 's' : ''}
+            {searchText && <span style={{ marginLeft: 6, color: '#8b5e3c' }}>· filtro ativo: "{searchText}"</span>}
+          </div>
+
+          {/* Lista de itens */}
+          <div style={{ flex: 1, overflowY: 'auto', padding: '10px 10px' }}>
+            {filtered.length === 0 ? (
+              <div style={{ padding: '40px 20px', textAlign: 'center', color: '#a08060', fontSize: 13 }}>
+                <i className="ti ti-books-off" style={{ fontSize: 36, display: 'block', marginBottom: 8, opacity: 0.4 }} />
+                Nenhum documento encontrado.<br />
+                <span style={{ fontSize: 11 }}>Tente outro filtro ou clique em "Adicionar Material".</span>
               </div>
-            ) : filteredItems.map(item => (
-              <div 
-                key={item.id} 
-                onClick={() => { setViewItem(item); setAdding(false); }}
-                style={{ 
-                  padding: '14px 16px', borderRadius: 14, cursor: 'pointer', marginBottom: 8,
-                  background: viewItem?.id === item.id ? '#fdf6e3' : 'transparent',
-                  border: viewItem?.id === item.id ? '1px solid rgba(181,137,0,0.3)' : '1px solid transparent',
-                  boxShadow: viewItem?.id === item.id ? '0 4px 12px rgba(181,137,0,0.05)' : 'none',
-                  transition: 'all 0.2s'
+            ) : filtered.map(item => (
+              <div
+                key={item.id}
+                onClick={() => { setViewItem(item); setMode('view') }}
+                style={{
+                  padding: '12px 14px', borderRadius: 12, cursor: 'pointer', marginBottom: 6,
+                  background: viewItem?.id === item.id ? '#fdf3e7' : 'transparent',
+                  border: viewItem?.id === item.id ? `1.5px solid ${typeColor(item.type)}40` : '1.5px solid transparent',
+                  transition: 'all 0.15s'
                 }}
               >
-                <div style={{ fontSize: 13, fontWeight: 700, color: viewItem?.id === item.id ? '#073642' : '#586e75', marginBottom: 6 }}>
-                  {item.type === 'Student\'s Book' && '📘 '}
-                  {item.type === 'Workbook' && '📙 '}
-                  {item.type === 'Reference Book' && '📗 '}
-                  {item.type === 'CLIL Book' && '🟨 '}
-                  {item.title}
-                </div>
-                <div style={{ fontSize: 11, color: '#93a1a1', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span><i className="ti ti-calendar" /> {item.date}</span>
-                  <span style={{ background: '#eee8d5', padding: '2px 8px', borderRadius: 6, color: '#073642', fontWeight: 600 }}>{item.type}</span>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                  <span style={{ fontSize: 20, flexShrink: 0, marginTop: 2 }}>{typeIcon(item.type)}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 12.5, fontWeight: 700, color: viewItem?.id === item.id ? '#2c1a0e' : '#586e75', lineHeight: 1.35, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {item.title.replace(/^(📘|📙|📗|🟨|📋|📄)\s/, '')}
+                    </div>
+                    <div style={{ display: 'flex', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: 10, background: typeColor(item.type) + '20', color: typeColor(item.type), padding: '2px 6px', borderRadius: 5, fontWeight: 700 }}>
+                        {item.type}
+                      </span>
+                      {item.wordCount && (
+                        <span style={{ fontSize: 10, color: '#a08060' }}>
+                          {item.wordCount.toLocaleString()} palavras · {item.chunkCount} seções
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ fontSize: 10, color: '#c0a882', marginTop: 3 }}>
+                      {item.category} · {item.date}
+                    </div>
+                  </div>
                 </div>
               </div>
             ))}
           </div>
         </div>
 
-        {/* Área de Visualização / Adição */}
-        <div className="animate-fade-up" style={{ background: '#fff', borderRadius: 24, border: '1px solid rgba(88,110,117,0.06)', overflow: 'hidden', display: 'flex', flexDirection: 'column', boxShadow: '0 4px 20px rgba(0,43,54,0.03)' }}>
-          {adding ? (
-            <div style={{ padding: 40, display: 'flex', flexDirection: 'column', height: '100%' }}>
-              <h2 style={{ fontSize: 24, color: '#073642', fontWeight: 700, marginBottom: 24, fontFamily: "'Playfair Display', serif", fontStyle: 'italic' }}>Adicionar Componente do Livro</h2>
-              
-              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 16, marginBottom: 20 }}>
+        {/* ── Coluna Direita: Visualizador / Editor / RAG ── */}
+        <div style={{ background: '#fff', borderRadius: 20, border: '1px solid rgba(139,115,85,0.12)', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 4px 20px rgba(44,26,14,0.04)' }}>
+
+          {/* ── MODO ADD / EDIT ── */}
+          {(mode === 'add' || mode === 'edit') ? (
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: 28, gap: 16, overflowY: 'auto' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h2 style={{ fontSize: 20, fontFamily: 'Georgia, serif', fontStyle: 'italic', color: '#2c1a0e', margin: 0 }}>
+                  {mode === 'add' ? '➕ Adicionar Material à Biblioteca' : '✏️ Editar Material'}
+                </h2>
+                <button onClick={() => setMode('view')} style={{ ...btnSecondary, padding: '7px 12px', fontSize: 12 }}>
+                  <i className="ti ti-x" /> Cancelar
+                </button>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 14 }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', color: '#93a1a1', marginBottom: 8 }}>Título do Livro / Componente</label>
-                  <input 
-                    placeholder="Ex: Globalizers 4 — Workbook Unit 3"
-                    value={newTitle} onChange={e => setNewTitle(e.target.value)}
-                    style={{ width: '100%', border: '1px solid rgba(88,110,117,0.15)', borderRadius: 12, padding: '14px 16px', fontSize: 15, fontWeight: 600, background: '#fdf6e3', color: '#073642', outline: 'none' }}
-                  />
+                  <label style={{ fontSize: 11, fontWeight: 700, color: '#a08060', textTransform: 'uppercase', display: 'block', marginBottom: 5 }}>Título do Documento *</label>
+                  <input value={editTitle} onChange={e => setEditTitle(e.target.value)} placeholder="Ex: Globalizers 4 — Workbook Unit 3" style={inputStyle} />
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', color: '#93a1a1', marginBottom: 8 }}>Tipo de Componente</label>
-                  <select value={newType} onChange={e => setNewType(e.target.value as any)} style={{ width: '100%', border: '1px solid rgba(88,110,117,0.15)', borderRadius: 12, padding: '14px 16px', fontSize: 14, fontWeight: 600, background: '#fdf6e3', color: '#073642', outline: 'none' }}>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: '#a08060', textTransform: 'uppercase', display: 'block', marginBottom: 5 }}>Tipo de Componente *</label>
+                  <select value={editType} onChange={e => setEditType(e.target.value as RepositoryItem['type'])} style={{ ...inputStyle }}>
                     <option value="Student's Book">Student's Book</option>
                     <option value="Workbook">Workbook</option>
                     <option value="Reference Book">Reference Book</option>
                     <option value="CLIL Book">CLIL Book</option>
+                    <option value="Syllabus">Syllabus</option>
+                    <option value="Text">Texto / Documento Livre</option>
                   </select>
                 </div>
               </div>
 
-              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', marginBottom: 24 }}>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', color: '#93a1a1', marginBottom: 8 }}>Conteúdo / Texto do Livro</label>
-                <textarea 
-                  placeholder="Cole aqui os textos, transcrições, gramática ou exercícios do livro..."
-                  value={newContent} onChange={e => setNewContent(e.target.value)}
-                  style={{ width: '100%', flex: 1, border: '1px solid rgba(88,110,117,0.15)', borderRadius: 12, padding: '20px', fontSize: 14, background: '#fdf6e3', color: '#073642', outline: 'none', resize: 'none', fontFamily: 'Outfit, sans-serif', lineHeight: 1.6 }}
-                />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: '#a08060', textTransform: 'uppercase', display: 'block', marginBottom: 5 }}>Editora / Categoria</label>
+                  <input value={editCategory} onChange={e => setEditCategory(e.target.value)} placeholder="Ex: Macmillan Education" style={inputStyle} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: '#a08060', textTransform: 'uppercase', display: 'block', marginBottom: 5 }}>Livro Didático (opcional)</label>
+                  <input value={editTextbook} onChange={e => setEditTextbook(e.target.value)} placeholder="Ex: Globalizers 4" style={inputStyle} />
+                </div>
               </div>
 
-              <div style={{ display: 'flex', gap: 16 }}>
-                <button onClick={addItem} style={{ padding: '16px 32px', borderRadius: 12, border: 'none', background: '#073642', color: '#fdf6e3', fontSize: 15, fontWeight: 600, cursor: 'pointer', transition: 'background 0.2s' }}>Salvar no Repositório</button>
-                <button onClick={() => setAdding(false)} style={{ padding: '16px 32px', borderRadius: 12, border: '1px solid rgba(88,110,117,0.2)', background: 'transparent', color: '#586e75', fontSize: 15, fontWeight: 600, cursor: 'pointer', transition: 'background 0.2s' }}>Cancelar</button>
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                <label style={{ fontSize: 11, fontWeight: 700, color: '#a08060', textTransform: 'uppercase', display: 'block', marginBottom: 5 }}>
+                  Conteúdo do Material * <span style={{ fontSize: 10, fontWeight: 400, color: '#c0a882' }}>— Cole textos, gramática, exercícios, transcrições, etc.</span>
+                </label>
+                <textarea
+                  value={editContent}
+                  onChange={e => setEditContent(e.target.value)}
+                  placeholder={`Cole aqui o conteúdo do livro...\n\nDicas de formatação:\n- [UNIT 1 — TEMA] para criar seções que a IA indexa\n- Exercícios numerados (1., 2., 3.)\n- Gabarito: [Answer: ...]`}
+                  style={{ ...inputStyle, flex: 1, minHeight: 300, resize: 'none', lineHeight: 1.6, fontFamily: 'monospace', fontSize: 13 }}
+                />
+                {editContent && (
+                  <div style={{ marginTop: 6, fontSize: 11, color: '#a08060' }}>
+                    📊 {countWords(editContent).toLocaleString()} palavras · {countChunks(editContent)} seções detectadas
+                  </div>
+                )}
+              </div>
+
+              <div style={{ display: 'flex', gap: 12 }}>
+                <button onClick={mode === 'add' ? addItem : saveEdit} style={{ ...btnPrimary, padding: '12px 28px', fontSize: 14 }}>
+                  <i className="ti ti-device-floppy" /> {mode === 'add' ? 'Salvar na Biblioteca' : 'Salvar Alterações'}
+                </button>
+                <button onClick={() => setMode('view')} style={{ ...btnSecondary, padding: '12px 20px' }}>
+                  Cancelar
+                </button>
               </div>
             </div>
-          ) : viewItem ? (
-            <div className="animate-fade-up" style={{ padding: 40, display: 'flex', flexDirection: 'column', height: '100%' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
-                    <span style={{ background: '#073642', color: '#fff', fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 12 }}>{viewItem.type}</span>
-                    <span style={{ fontSize: 12, color: '#93a1a1' }}>Adicionado em {viewItem.date}</span>
-                  </div>
-                  <h2 style={{ fontSize: 22, color: '#073642', fontWeight: 700, margin: 0, letterSpacing: '-0.5px' }}>{viewItem.title}</h2>
-                </div>
 
-                <button onClick={() => deleteItem(viewItem.id)} style={{ padding: '10px 16px', borderRadius: 12, border: 'none', background: 'rgba(220,50,47,0.08)', color: '#dc322f', fontSize: 13, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <i className="ti ti-trash" /> Excluir Componente
+          /* ── MODO RAG TEST ── */
+          ) : mode === 'rag' ? (
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: 28, gap: 16, overflowY: 'auto' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h2 style={{ fontSize: 20, fontFamily: 'Georgia, serif', fontStyle: 'italic', color: '#2c1a0e', margin: 0 }}>
+                  🔍 Testar Busca RAG
+                </h2>
+                <button onClick={() => setMode('view')} style={{ ...btnSecondary, padding: '7px 12px', fontSize: 12 }}>
+                  <i className="ti ti-x" /> Fechar
                 </button>
               </div>
 
-              <div style={{ flex: 1, overflowY: 'auto', background: '#fdf6e3', padding: 28, borderRadius: 20, border: '1px solid rgba(88,110,117,0.1)', fontSize: 13.5, lineHeight: 1.8, color: '#073642', fontFamily: 'monospace', whiteSpace: 'pre-wrap', boxShadow: 'inset 0 2px 10px rgba(0,0,0,0.02)' }}>
-                {viewItem.content}
+              <div style={{ background: '#fdf3e7', border: '1px solid rgba(139,115,85,0.2)', borderRadius: 14, padding: 16, fontSize: 13, color: '#665c54', lineHeight: 1.6 }}>
+                <strong>O que é isso?</strong> Aqui você pode testar exatamente o que a IA recupera da sua biblioteca quando você pede para ela gerar uma prova, aula ou atividade. Se a busca retornar bons trechos, a IA terá um bom contexto para trabalhar.
+              </div>
+
+              <div style={{ display: 'flex', gap: 10 }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: '#a08060', textTransform: 'uppercase', display: 'block', marginBottom: 5 }}>Consulta de Busca</label>
+                  <input
+                    value={ragQuery}
+                    onChange={e => setRagQuery(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && runRagSearch()}
+                    placeholder="Ex: present perfect continuous, Unit 3 conditionals, kinetic energy..."
+                    style={inputStyle}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: '#a08060', textTransform: 'uppercase', display: 'block', marginBottom: 5 }}>Escopo</label>
+                  <select value={ragScope} onChange={e => setRagScope(e.target.value as 'all' | 'doc')} style={{ ...inputStyle, width: 180 }}>
+                    <option value="all">Toda a Biblioteca</option>
+                    <option value="doc">Apenas: {viewItem?.title?.slice(0, 25)}...</option>
+                  </select>
+                </div>
+              </div>
+
+              <button onClick={runRagSearch} style={btnPrimary}>
+                <i className="ti ti-search" /> Executar Busca RAG
+              </button>
+
+              {ragResults.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: '#27ae60' }}>
+                    ✅ {ragResults.length} trecho(s) recuperado(s) — Este é o contexto que a IA recebe:
+                  </div>
+                  {ragResults.map((r, i) => (
+                    <div key={i} style={{ background: '#f8fff5', border: '1px solid rgba(39,174,96,0.2)', borderRadius: 12, padding: 16, fontSize: 12.5, lineHeight: 1.7, color: '#2c1a0e', fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: '#27ae60', marginBottom: 6 }}>📄 RESULTADO #{i + 1}</div>
+                      {r}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+          /* ── MODO VIEW ── */
+          ) : viewItem ? (
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+
+              {/* Header do documento */}
+              <div style={{ padding: '22px 28px 16px', borderBottom: '1px solid rgba(139,115,85,0.1)', background: '#fffcf8' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16 }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+                      <span style={{ background: typeColor(viewItem.type), color: '#fff', fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 10 }}>
+                        {viewItem.type}
+                      </span>
+                      {viewItem.category && <span style={{ fontSize: 11, color: '#a08060' }}>{viewItem.category}</span>}
+                      <span style={{ fontSize: 11, color: '#c0a882' }}>· {viewItem.date}</span>
+                    </div>
+                    <h2 style={{ fontSize: 18, color: '#2c1a0e', fontWeight: 700, margin: '0 0 6px', lineHeight: 1.3 }}>
+                      {typeIcon(viewItem.type)} {viewItem.title.replace(/^(📘|📙|📗|🟨|📋|📄)\s/, '')}
+                    </h2>
+                    <div style={{ display: 'flex', gap: 16, fontSize: 12, color: '#a08060' }}>
+                      {viewItem.wordCount && (
+                        <>
+                          <span><i className="ti ti-text-size" /> {viewItem.wordCount.toLocaleString()} palavras</span>
+                          <span><i className="ti ti-sections" /> {viewItem.chunkCount} seções indexadas</span>
+                        </>
+                      )}
+                      {!viewItem.wordCount && (
+                        <span style={{ color: '#c0a882' }}>
+                          ⚠️ {countWords(viewItem.content).toLocaleString()} palavras · {countChunks(viewItem.content)} seções
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Ações */}
+                  <div style={{ display: 'flex', gap: 8, flexShrink: 0, flexWrap: 'wrap' }}>
+                    <button onClick={() => setMode('rag')} style={{ ...btnSecondary, fontSize: 12, padding: '8px 12px', borderColor: '#27ae60', color: '#27ae60' }}>
+                      <i className="ti ti-search" /> Testar RAG
+                    </button>
+                    <button onClick={() => startEdit(viewItem)} style={{ ...btnSecondary, fontSize: 12, padding: '8px 12px' }}>
+                      <i className="ti ti-pencil" /> Editar
+                    </button>
+                    <button onClick={() => deleteItem(viewItem.id)} style={{ ...btnSecondary, fontSize: 12, padding: '8px 12px', borderColor: '#dc322f', color: '#dc322f' }}>
+                      <i className="ti ti-trash" /> Excluir
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Conteúdo formatado */}
+              <div style={{ flex: 1, overflowY: 'auto', padding: '24px 28px', background: '#fffcf8' }}>
+                <div style={{ background: '#fff', borderRadius: 16, padding: '24px 28px', border: '1px solid rgba(139,115,85,0.1)', boxShadow: '0 4px 16px rgba(44,26,14,0.04)' }}>
+                  {formatContent(viewItem.content)}
+                </div>
               </div>
             </div>
+
           ) : (
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#93a1a1', gap: 16 }}>
-              <div style={{ width: 80, height: 80, borderRadius: 24, background: '#fdf6e3', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <i className="ti ti-book text-4xl text-sol-base1 opacity-50" />
-              </div>
-              <p style={{ fontSize: 16, fontWeight: 500, color: '#586e75' }}>Selecione um componente para visualizar o texto lido pela IA.</p>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#a08060', gap: 16 }}>
+              <i className="ti ti-books" style={{ fontSize: 56, opacity: 0.25 }} />
+              <p style={{ fontSize: 16, fontWeight: 500, color: '#665c54', textAlign: 'center', maxWidth: 360 }}>
+                Selecione um documento na lista ao lado para visualizá-lo, ou clique em <strong>"Adicionar Material"</strong> para criar um novo.
+              </p>
             </div>
           )}
         </div>
