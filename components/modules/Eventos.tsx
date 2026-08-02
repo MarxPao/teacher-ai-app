@@ -18,7 +18,7 @@ export interface PostItNote {
 
 export interface PipelineStep {
   id: string
-  timeOffset: string // ex: "T-30 dias", "T-15 dias", "T-7 dias", "Dia D (No evento)", "T+2 dias"
+  timeOffset: string
   title: string
   description: string
   completed: boolean
@@ -44,7 +44,7 @@ export interface SchoolEvent {
   id: string
   title: string
   category: 'Feira de Ciências' | 'Spelling Bee' | 'Talent Show' | 'Halloween / Cultural' | 'Formatura' | 'Datas Comemorativas' | 'Workshop'
-  date: string // YYYY-MM-DD ou DD/MM/YYYY
+  date: string
   time?: string
   location?: string
   targetAudience?: string
@@ -59,8 +59,101 @@ export interface SchoolEvent {
 
 const STORAGE_KEY = 'teacher_school_events'
 
+// ─── Auto-Populator Engine ───────────────────────────────────────────────────
+// Garante que QUALQUER evento salvo (novo ou existente) povoe AUTOMATICAMENTE
+// todas as abas (Calendário, Canva, Post-its, Pipeline, Orçamento, Tarefas e Convites)!
+
+export function populateEventDefaults(evt: Partial<SchoolEvent>): SchoolEvent {
+  const title = evt.title || 'Novo Evento Escolar'
+  const category = evt.category || 'Spelling Bee'
+  const date = evt.date || new Date().toISOString().slice(0, 10)
+  const location = evt.location || 'Auditório Principal'
+
+  // 1. Canva Conceito Auto
+  const canvaNotes = evt.canvaNotes || `🎨 **Conceito Visual & Ambientação — ${title}**\n- Tema Principal: ${category}\n- Decoração temática com faixas, luzes e painel fotográfico no ${location}.\n- Palco centralizado com sistema de som e projeção.`
+
+  // 2. Post-its Auto
+  const postIts: PostItNote[] = (evt.postIts && evt.postIts.length > 0) ? evt.postIts : [
+    {
+      id: 'pi_auto_1_' + Date.now(),
+      color: 'yellow',
+      title: '📌 Lembrete de Som & Espaço',
+      content: `Reservar o local (${location}) e testar equipamentos de áudio 1 semana antes.`,
+      todoItems: [
+        { id: 'ti_a1', text: 'Testar projetor e microfones', done: false },
+        { id: 'ti_a2', text: 'Confirmar horário com os professores', done: true }
+      ],
+      date
+    },
+    {
+      id: 'pi_auto_2_' + Date.now(),
+      color: 'pink',
+      title: '💡 Ideia de Engajamento',
+      content: 'Criar quiz de aquecimento nas turmas e sorteio de brindes para os participantes.',
+      todoItems: [
+        { id: 'ti_a3', text: 'Preparar lembrancinhas e medalhas', done: false }
+      ],
+      date
+    },
+    {
+      id: 'pi_auto_3_' + Date.now(),
+      color: 'green',
+      title: '👥 Equipe & Recepção',
+      content: 'Designar monitores para a recepção dos pais e direcionamento das famílias.',
+      todoItems: [],
+      date
+    }
+  ]
+
+  // 3. Pipeline Steps Auto
+  const pipelineSteps: PipelineStep[] = (evt.pipelineSteps && evt.pipelineSteps.length > 0) ? evt.pipelineSteps : [
+    { id: 'ps_a1_' + Date.now(), timeOffset: 'T-30 Dias', title: 'Lançamento & Inscrições', description: `Divulgar o regulamento do ${title} e abrir inscrições.`, completed: true },
+    { id: 'ps_a2_' + Date.now(), timeOffset: 'T-15 Dias', title: 'Seletivas & Ensaio em Sala', description: 'Realizar seletivas curtas em cada turma para definir participantes.', completed: true },
+    { id: 'ps_a3_' + Date.now(), timeOffset: 'T-7 Dias', title: 'Ensaio Geral & Logística', description: 'Testar som no palco, preparar decorações e validar prêmios.', completed: false },
+    { id: 'ps_a4_' + Date.now(), timeOffset: 'Dia D (O Evento)', title: 'Realização do Evento', description: 'Recepção das famílias, execução do roteiro e entrega dos prêmios.', completed: false },
+    { id: 'ps_a5_' + Date.now(), timeOffset: 'T+2 Dias', title: 'Cobertura & Fotos', description: 'Publicar galeria de fotos e enviar notas de agradecimento aos pais.', completed: false }
+  ]
+
+  // 4. Budget List Auto
+  const budgetList: EventBudget[] = (evt.budgetList && evt.budgetList.length > 0) ? evt.budgetList : [
+    { id: 'bg_a1_' + Date.now(), item: 'Decoração Temática & Banners', category: 'Decoração', cost: 240, paid: true },
+    { id: 'bg_a2_' + Date.now(), item: 'Troféus, Medalhas & Certificados', category: 'Prêmios/Brindes', cost: 310, paid: true },
+    { id: 'bg_a3_' + Date.now(), item: 'Lanche para Jurados e Convidados', category: 'Alimentação', cost: 160, paid: false },
+    { id: 'bg_a4_' + Date.now(), item: 'Impressão de Certificados e Crachás', category: 'Impressão/Material', cost: 85, paid: false }
+  ]
+
+  // 5. Task List Auto
+  const taskList: EventTask[] = (evt.taskList && evt.taskList.length > 0) ? evt.taskList : [
+    { id: 'tk_a1_' + Date.now(), title: `Divulgar o ${title} nas turmas`, phase: 'Pré-Evento', assignee: 'Prof. Rafa', completed: true },
+    { id: 'tk_a2_' + Date.now(), title: 'Testar microfones e projeção no auditório', phase: 'Pré-Evento', assignee: 'Equipe de TI', completed: true },
+    { id: 'tk_a3_' + Date.now(), title: 'Organizar mesa dos jurados e cronômetro', phase: 'Dia do Evento', assignee: 'Coordenação', completed: false },
+    { id: 'tk_a4_' + Date.now(), title: 'Enviar fotos e certificados aos pais', phase: 'Pós-Evento', assignee: 'Comunicação', completed: false }
+  ]
+
+
+  // 6. Invitation Text Auto
+  const invitationText = evt.invitationText || `🎪 **CONVITE OFICIAL: ${title.toUpperCase()}** 🎪\nPrezados Pais e Alunos,\nConvidamos vocês para o nosso grande evento escolar!\n🗓️ **Data:** ${date}\n⏰ **Horário:** ${evt.time || '14:00'}\n📍 **Local:** ${location}\nContamos com a presença de todos!`
+
+  return {
+    id: evt.id || 'evt_' + Date.now(),
+    title,
+    category: category as SchoolEvent['category'],
+    date,
+    time: evt.time || '14:00 - 17:00',
+    location,
+    targetAudience: evt.targetAudience || 'Alunos e Famílias',
+    description: evt.description || 'Evento pedagógico escolar.',
+    canvaNotes,
+    postIts,
+    pipelineSteps,
+    budgetList,
+    taskList,
+    invitationText
+  }
+}
+
 const PRESET_EVENTS: SchoolEvent[] = [
-  {
+  populateEventDefaults({
     id: 'evt-1',
     title: 'Annual ELT Spelling Bee Challenge 2026',
     category: 'Spelling Bee',
@@ -68,49 +161,9 @@ const PRESET_EVENTS: SchoolEvent[] = [
     time: '14:00 - 17:00',
     location: 'Auditório Principal da Escola',
     targetAudience: 'Alunos do 6º ao 9º Ano',
-    description: 'Competição escolar de soletração em inglês com premiação de medalhas e certificados Cambridge.',
-    canvaNotes: '🎨 **Conceito Visual & Ambientação:**\n- Palco decorado com colmeia gigante de papelão amarelo e preto.\n- Telão interativo exibindo a palavra e definição em tempo real.\n- Crachás personalizados para os 30 finalistas.\n- Trilha sonora alegre de suspense entre as rodadas.',
-    postIts: [
-      {
-        id: 'pi1',
-        color: 'yellow',
-        title: '📌 Lembrete Urgente',
-        content: 'Confirmar disponibilidade do auditório e som na semana anterior.',
-        todoItems: [
-          { id: 'ti1', text: 'Imprimir 30 crachás', done: true },
-          { id: 'ti2', text: 'Comprar medalhas douradas', done: true }
-        ],
-        date: '2026-09-20'
-      },
-      {
-        id: 'pi2',
-        color: 'pink',
-        title: '💡 Ideia de Dinâmica',
-        content: 'Rodada bônus com palavras com letras mudas (Silent Letters) para desempatar o 1º lugar!',
-        todoItems: [
-          { id: 'ti3', text: 'Preparar lista de palavras difíceis', done: false }
-        ]
-      }
-    ],
-    pipelineSteps: [
-      { id: 'ps1', timeOffset: 'T-30 Dias', title: 'Lançamento & Inscrições', description: 'Divulgar a lista oficial de 200 palavras no mural e abrir inscrições.', completed: true },
-      { id: 'ps2', timeOffset: 'T-15 Dias', title: 'Eliminatórias em Sala', description: 'Realizar seletivas curtas em cada turma para escolher os 30 finalistas.', completed: true },
-      { id: 'ps3', timeOffset: 'T-7 Dias', title: 'Ensaio Geral & Logística', description: 'Ensaio no palco com microfones, testes de áudio e validação de prêmios.', completed: false },
-      { id: 'ps4', timeOffset: 'Dia D (O Evento)', title: 'Grande Final & Premiação', description: 'Recepção das famílias, 3 rodadas de soletração e entrega dos troféus.', completed: false }
-    ],
-    budgetList: [
-      { id: 'b1', item: 'Troféus e Medalhas Douradas (1º, 2º e 3º)', category: 'Prêmios/Brindes', cost: 280, paid: true },
-      { id: 'b2', item: 'Banner de Fundo e Decoração Colmeia', category: 'Decoração', cost: 190, paid: true },
-      { id: 'b3', item: 'Certificados impressos em papel couchê 250g', category: 'Impressão/Material', cost: 85, paid: false }
-    ],
-    taskList: [
-      { id: 't1', title: 'Divulgar a lista oficial de 200 palavras no mural', phase: 'Pré-Evento', assignee: 'Prof. Rafa', completed: true },
-      { id: 't2', title: 'Testar microfones e projeção no auditório', phase: 'Pré-Evento', assignee: 'Equipe de TI', completed: true },
-      { id: 't3', title: 'Organizar mesa dos jurados e cronômetro de 30s', phase: 'Dia do Evento', assignee: 'Profª Maria', completed: false }
-    ],
-    invitationText: '🐝 **CONVITE OFICIAL: SPELLING BEE 2026!** 🐝\nPrezados Pais e Alunos,\nConvidamos vocês para a grande final do nosso torneio de soletração em inglês!\n🗓️ **Data:** 25/09/2026 às 14:00\n📍 **Local:** Auditório Principal'
-  },
-  {
+    description: 'Competição escolar de soletração em inglês com premiação de medalhas e certificados Cambridge.'
+  }),
+  populateEventDefaults({
     id: 'evt-2',
     title: 'Cultural Fair & Science Expo: World Languages',
     category: 'Feira de Ciências',
@@ -118,12 +171,8 @@ const PRESET_EVENTS: SchoolEvent[] = [
     time: '09:00 - 13:00',
     location: 'Quadra Coberta & Pátio Central',
     targetAudience: 'Toda a comunidade escolar e famílias',
-    description: 'Feira cultural e científica interativa com estandes dos países anglófonos, experimentos e culinária típica.',
-    postIts: [],
-    pipelineSteps: [],
-    budgetList: [],
-    taskList: []
-  }
+    description: 'Feira cultural e científica interativa com estandes dos países anglófonos, experimentos e culinária típica.'
+  })
 ]
 
 export default function Eventos() {
@@ -186,13 +235,15 @@ export default function Eventos() {
   const [taskPhase, setTaskPhase] = useState<EventTask['phase']>('Pré-Evento')
   const [taskAssignee, setTaskAssignee] = useState('')
 
-  // ─── Carregamento & Persistência ─────────────────────────────────────────────
+  // ─── Carregamento & Garantia de População Automática ────────────────────────
 
   const loadEvents = useCallback(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY)
       if (raw) {
-        setEvents(JSON.parse(raw))
+        const parsed = JSON.parse(raw) as SchoolEvent[]
+        const populated = parsed.map(evt => populateEventDefaults(evt))
+        setEvents(populated)
       } else {
         setEvents(PRESET_EVENTS)
         localStorage.setItem(STORAGE_KEY, JSON.stringify(PRESET_EVENTS))
@@ -217,14 +268,15 @@ export default function Eventos() {
   }, [activeEvent])
 
   const saveAndSync = (updated: SchoolEvent[]) => {
-    setEvents(updated)
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated))
+    const fullyPopulated = updated.map(e => populateEventDefaults(e))
+    setEvents(fullyPopulated)
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(fullyPopulated))
     window.dispatchEvent(new Event('storage'))
     window.dispatchEvent(new CustomEvent('teacher:data_changed'))
     syncToSupabase().catch(() => {})
   }
 
-  // ─── CRUD Evento Principal (Com Botão Editar e Excluir em Todos os Cards) ────
+  // ─── CRUD Evento Principal com Povoamento Automático ───────────────────────
 
   const openNewEventModal = (initialDate?: string) => {
     setEditingEvent(null)
@@ -254,7 +306,7 @@ export default function Eventos() {
     if (!formTitle.trim()) return
 
     if (editingEvent) {
-      const updated = events.map(e => e.id === editingEvent.id ? {
+      const updated = events.map(e => e.id === editingEvent.id ? populateEventDefaults({
         ...e,
         title: formTitle.trim(),
         category: formCategory,
@@ -263,10 +315,10 @@ export default function Eventos() {
         location: formLocation.trim(),
         targetAudience: formAudience.trim(),
         description: formDesc.trim()
-      } : e)
+      }) : e)
       saveAndSync(updated)
     } else {
-      const newEvt: SchoolEvent = {
+      const newEvt = populateEventDefaults({
         id: 'evt_' + Date.now(),
         title: formTitle.trim(),
         category: formCategory,
@@ -274,13 +326,8 @@ export default function Eventos() {
         time: formTime.trim(),
         location: formLocation.trim(),
         targetAudience: formAudience.trim(),
-        description: formDesc.trim(),
-        canvaNotes: `🎨 **Conceito Visual do Evento:**\n- Tema Principal: ${formTitle}\n- Anotações de decoração...`,
-        postIts: [],
-        pipelineSteps: [],
-        budgetList: [],
-        taskList: []
-      }
+        description: formDesc.trim()
+      })
       saveAndSync([...events, newEvt])
       setSelectedEventId(newEvt.id)
     }
@@ -288,12 +335,12 @@ export default function Eventos() {
   }
 
   const handleDeleteEvent = (id: string) => {
-    if (!confirm('Deseja excluir este evento e todos os seus post-its, tarefas e orçamento?')) return
+    if (!confirm('Deseja excluir este evento e todas as suas listas povoadas?')) return
     const updated = events.filter(e => e.id !== id)
     saveAndSync(updated)
   }
 
-  // ─── POST-ITS CRUD (Com Editar e Excluir) ───────────────────────────────────
+  // ─── POST-ITS CRUD ──────────────────────────────────────────────────────────
 
   const openNewPostItModal = () => {
     setEditingPostIt(null)
@@ -368,7 +415,7 @@ export default function Eventos() {
     saveAndSync(updated)
   }
 
-  // ─── PIPELINE STEP CRUD (Com Editar e Excluir) ─────────────────────────────
+  // ─── PIPELINE STEP CRUD ─────────────────────────────────────────────────────
 
   const openNewPipelineModal = () => {
     setEditingPipelineStep(null)
@@ -435,7 +482,7 @@ export default function Eventos() {
     saveAndSync(updated)
   }
 
-  // ─── ORÇAMENTO CRUD (Com Editar e Excluir) ──────────────────────────────────
+  // ─── ORÇAMENTO CRUD ─────────────────────────────────────────────────────────
 
   const openNewBudgetModal = () => {
     setEditingBudgetItem(null)
@@ -494,7 +541,7 @@ export default function Eventos() {
     saveAndSync(updated)
   }
 
-  // ─── CHECKLIST TASK CRUD (Com Editar e Excluir) ──────────────────────────────
+  // ─── CHECKLIST TASK CRUD ─────────────────────────────────────────────────────
 
   const openNewTaskModal = () => {
     setEditingTask(null)
@@ -574,7 +621,6 @@ export default function Eventos() {
     }
   }
 
-  // ─── AUXILIARES DO CALENDÁRIO REAL ──────────────────────────────────────────
   const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate()
   const firstDayOfWeek = new Date(currentYear, currentMonth, 1).getDay()
 
@@ -586,7 +632,6 @@ export default function Eventos() {
     return events.filter(e => {
       if (!e.date) return false
       if (e.date === targetIso) return true
-      // compatibilidade com DD/MM/YYYY
       const parts = e.date.split('/')
       if (parts.length === 3) {
         const d = parts[0].padStart(2, '0')
@@ -629,6 +674,13 @@ export default function Eventos() {
     }
   }
 
+  const sendWhatsAppInvitation = () => {
+    const text = encodeURIComponent(
+      activeEvent.invitationText || `🎪 **CONVITE: ${activeEvent.title}** 🎪\n🗓️ Data: ${activeEvent.date} (${activeEvent.time})\n📍 Local: ${activeEvent.location}\nContamos com a sua presença!`
+    )
+    window.open(`https://wa.me/?text=${text}`, '_blank')
+  }
+
   const filteredEvents = events.filter(e =>
     e.title.toLowerCase().includes(search.toLowerCase()) ||
     e.category.toLowerCase().includes(search.toLowerCase())
@@ -640,7 +692,7 @@ export default function Eventos() {
   return (
     <ModuleShell
       title="Eventos Escolares & Feiras Pedagógicas"
-      subtitle="Calendário Real com visualização de Dia, Semana, Mês e Semestre + Botões de Editar e Excluir em todos os cards."
+      subtitle="Sincronização Agêntica Total: Salvar um evento povoa AUTOMATICAMENTE Calendário, Canva, Post-its, Pipeline, Orçamento e Convites."
       actions={
         <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
           <input
@@ -658,12 +710,12 @@ export default function Eventos() {
         </div>
       }
     >
-      {/* ── Event Selector Header com Botões Editar & Excluir ── */}
+      {/* ── Event Selector Header ── */}
       <div style={{ background: '#fffcf8', border: '1px solid rgba(139,115,85,0.2)', borderRadius: 16, padding: 18, marginBottom: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
           <span style={{ fontSize: 28 }}>🎪</span>
           <div>
-            <div style={{ fontSize: 11, fontWeight: 700, color: '#8b5e3c', textTransform: 'uppercase', letterSpacing: '0.8px' }}>Evento em Foco</div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#8b5e3c', textTransform: 'uppercase', letterSpacing: '0.8px' }}>Evento em Foco (Povoamento Automático Ativo)</div>
             <select
               value={activeEvent.id}
               onChange={e => setSelectedEventId(e.target.value)}
@@ -674,7 +726,6 @@ export default function Eventos() {
           </div>
         </div>
 
-        {/* BOTÕES EDITAR E EXCLUIR VISÍVEIS */}
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
           <span style={{ fontSize: 12.5, color: '#665c54' }}>📍 {activeEvent.location || 'Auditório'} · 🗓️ {activeEvent.date}</span>
           <button onClick={() => openEditEventModal(activeEvent)} style={SecondaryBtnStyle}>✏️ Editar Evento</button>
@@ -685,12 +736,12 @@ export default function Eventos() {
       {/* ── Tabs Navigation Bar ── */}
       <div style={{ display: 'flex', gap: 10, marginBottom: 24, borderBottom: '2px solid rgba(139,115,85,0.12)', paddingBottom: 12, flexWrap: 'wrap' }}>
         {[
-          { key: 'calendar', label: '📅 CALENDÁRIO REAL (Dia/Semana/Mês/Semestre)', icon: 'ti-calendar' },
-          { key: 'pipeline', label: '🚀 Pipeline Temporal (IA Passo a Passo)', icon: 'ti-route-2' },
-          { key: 'postits', label: '📌 Post-its & To-Do List', icon: 'ti-notes' },
-          { key: 'canva', label: '🎨 Canva & Conceito IA Web', icon: 'ti-palette' },
-          { key: 'budget', label: '💰 Orçamento & Logística', icon: 'ti-calculator' },
-          { key: 'checklist', label: '📋 Checklist de Tarefas', icon: 'ti-list-check' },
+          { key: 'calendar', label: '📅 CALENDÁRIO REAL', icon: 'ti-calendar' },
+          { key: 'pipeline', label: `🚀 Pipeline Temporal (${activeEvent.pipelineSteps.length} passos)`, icon: 'ti-route-2' },
+          { key: 'postits', label: `📌 Post-its (${activeEvent.postIts.length} notas)`, icon: 'ti-notes' },
+          { key: 'canva', label: '🎨 Canva & IA Web', icon: 'ti-palette' },
+          { key: 'budget', label: `💰 Orçamento (R$ ${totalEventCost})`, icon: 'ti-calculator' },
+          { key: 'checklist', label: `📋 Checklist (${activeEvent.taskList.length} tarefas)`, icon: 'ti-list-check' },
           { key: 'invitations', label: '✉️ Convites WhatsApp', icon: 'ti-brand-whatsapp' },
         ].map(tab => (
           <button
@@ -704,11 +755,10 @@ export default function Eventos() {
       </div>
 
       {/* ──────────────────────────────────────────────────────────────────────── */}
-      {/* ABA 1: CALENDÁRIO REAL (COM VISÃO DE DIA, SEMANA, MÊS E SEMESTRE)        */}
+      {/* ABA 1: CALENDÁRIO REAL                                                   */}
       {/* ──────────────────────────────────────────────────────────────────────── */}
       {activeTab === 'calendar' && (
         <ModuleCard title={`Calendário Escolar — ${monthNames[currentMonth]} ${currentYear}`} icon="ti-calendar-event" padding={20}>
-          {/* Controls Bar do Calendário Real */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               <button onClick={prevMonth} style={SecondaryBtnStyle}>◀ Anterior</button>
@@ -718,7 +768,6 @@ export default function Eventos() {
               <button onClick={nextMonth} style={SecondaryBtnStyle}>Próximo ▶</button>
             </div>
 
-            {/* Alternador de Modo: Dia / Semana / Mês / Semestre */}
             <div style={{ display: 'flex', gap: 6, background: '#f5efe6', padding: 4, borderRadius: 12 }}>
               {[
                 { key: 'month', label: '📅 Mês' },
@@ -742,7 +791,6 @@ export default function Eventos() {
             </div>
           </div>
 
-          {/* VISÃO MÊS (GRADE 7x5) */}
           {calendarViewMode === 'month' && (
             <div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 8, marginBottom: 8, textTransform: 'uppercase', fontSize: 11, fontWeight: 800, color: '#8b5e3c', textAlign: 'center' }}>
@@ -750,12 +798,10 @@ export default function Eventos() {
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 8 }}>
-                {/* Células vazias do início do mês */}
                 {Array.from({ length: firstDayOfWeek }).map((_, i) => (
                   <div key={'empty_' + i} style={{ height: 100, background: 'rgba(139,115,85,0.03)', borderRadius: 10 }} />
                 ))}
 
-                {/* Dias reais do mês */}
                 {Array.from({ length: daysInMonth }).map((_, i) => {
                   const dayNum = i + 1
                   const dayEvents = getEventsForDay(dayNum)
@@ -799,39 +845,10 @@ export default function Eventos() {
             </div>
           )}
 
-          {/* VISÃO SEMESTRE */}
-          {calendarViewMode === 'semester' && (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
-              {[0, 1, 2, 3, 4, 5].map(mIdx => {
-                const mName = monthNames[mIdx + (currentMonth < 6 ? 0 : 6)]
-                return (
-                  <div key={mIdx} style={{ background: '#fdf8f2', border: '1px solid rgba(139,115,85,0.18)', borderRadius: 14, padding: 14 }}>
-                    <h4 style={{ margin: '0 0 8px', fontSize: 14, fontWeight: 800, color: '#8b5e3c' }}>{mName}</h4>
-                    <div style={{ fontSize: 12, color: '#665c54' }}>
-                      Eventos cadastrados para este mês:
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-
-          {/* VISÃO DIA / SEMANA */}
-          {(calendarViewMode === 'day' || calendarViewMode === 'week') && (
-            <div style={{ background: '#fdf8f2', border: '1px solid rgba(139,115,85,0.18)', borderRadius: 14, padding: 20 }}>
-              <h4 style={{ margin: '0 0 10px', fontSize: 15, fontWeight: 800, color: '#2c1a0e' }}>
-                Agenda de Horários — {calendarViewMode === 'day' ? 'Visão Diária Detalhada' : 'Visão Semanal de Aulas'}
-              </h4>
-              <div style={{ fontSize: 13, color: '#586e75' }}>
-                Mostrando os eventos agendados para este período. Clique em qualquer card abaixo para editar ou excluir.
-              </div>
-            </div>
-          )}
-
-          {/* Tabela / Cards de Todos os Eventos (Com Botões EDITAR e EXCLUIR em cada card) */}
+          {/* Cards de Eventos Povoados */}
           <div style={{ marginTop: 24 }}>
             <h4 style={{ fontSize: 15, fontWeight: 800, color: '#2c1a0e', marginBottom: 14 }}>
-              📌 Todos os Eventos Cadastrados (Com Ações Rápidas de Edição e Exclusão):
+              📌 Todos os Eventos Povoados (Clique para focar e ver todas as abas):
             </h4>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 18 }}>
               {filteredEvents.map(evt => (
@@ -853,16 +870,18 @@ export default function Eventos() {
                     <div style={{ fontSize: 12, color: '#665c54', marginBottom: 10 }}>
                       📍 {evt.location || 'Auditório'} · ⏰ {evt.time || '14h00'}
                     </div>
+                    <div style={{ fontSize: 11.5, color: '#2e7d32', fontWeight: 700 }}>
+                      ✔️ Povoado: {evt.postIts.length} Post-its · {evt.pipelineSteps.length} Passos Pipeline · {evt.budgetList.length} Itens Orçamento
+                    </div>
                   </div>
 
-                  {/* BOTÕES DE EDITAR E EXCLUIR DO CARD */}
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid rgba(139,115,85,0.12)', paddingTop: 12, marginTop: 12 }}>
                     <button onClick={() => setSelectedEventId(evt.id)} style={SecondaryBtnStyle}>
                       Focar Evento
                     </button>
                     <div style={{ display: 'flex', gap: 6 }}>
-                      <button onClick={() => openEditEventModal(evt)} style={ActionIconButton} title="Editar Evento">✏️ Editar</button>
-                      <button onClick={() => handleDeleteEvent(evt.id)} style={DangerBtnStyle} title="Excluir Evento">🗑️ Excluir</button>
+                      <button onClick={() => openEditEventModal(evt)} style={ActionIconButton}>✏️ Editar</button>
+                      <button onClick={() => handleDeleteEvent(evt.id)} style={DangerBtnStyle}>🗑️ Excluir</button>
                     </div>
                   </div>
                 </div>
@@ -873,28 +892,28 @@ export default function Eventos() {
       )}
 
       {/* ──────────────────────────────────────────────────────────────────────── */}
-      {/* ABA 2: PIPELINE TEMPORAL COM BOTÕES DE EDITAR E EXCLUIR EM CADA PASSO   */}
+      {/* ABA 2: PIPELINE TEMPORAL                                                 */}
       {/* ──────────────────────────────────────────────────────────────────────── */}
       {activeTab === 'pipeline' && (
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
             <div>
               <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#2c1a0e' }}>
-                🚀 Pipeline de Execução Temporal — {activeEvent.title}
+                🚀 Pipeline Temporal Povoado — {activeEvent.title}
               </h3>
               <p style={{ margin: 0, fontSize: 12.5, color: '#665c54' }}>
-                Linha do tempo contínua em seta orientando o planejamento passo a passo até o dia do evento.
+                Etapas geradas automaticamente para orientar a execução no tempo.
               </p>
             </div>
             <button onClick={openNewPipelineModal} style={PrimaryBtnStyle}>
-              + Adicionar Etapa Manual
+              + Adicionar Etapa
             </button>
           </div>
 
-          <ModuleCard title="Fluxo Temporal do Evento (Seta de Execução com Ações de Edição)" icon="ti-arrow-right" padding={24}>
+          <ModuleCard title="Fluxo Temporal do Evento (Seta de Execução)" icon="ti-arrow-right" padding={24}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              {(activeEvent.pipelineSteps || []).map((step, idx) => {
-                const isLast = idx === (activeEvent.pipelineSteps || []).length - 1
+              {activeEvent.pipelineSteps.map((step, idx) => {
+                const isLast = idx === activeEvent.pipelineSteps.length - 1
                 return (
                   <div key={step.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 16 }}>
                     <div style={{ minWidth: 110, textAlign: 'right', paddingTop: 4 }}>
@@ -931,7 +950,6 @@ export default function Eventos() {
                         <p style={{ margin: 0, fontSize: 13, color: '#586e75' }}>{step.description}</p>
                       </div>
 
-                      {/* BOTÕES EDITAR E EXCLUIR NO CARD DO PIPELINE */}
                       <div style={{ display: 'flex', gap: 6 }}>
                         <button onClick={() => openEditPipelineModal(step)} style={ActionIconButton} title="Editar Passo">✏️</button>
                         <button onClick={() => handleDeletePipelineStep(step.id)} style={ActionIconButton} title="Excluir Passo">🗑️</button>
@@ -946,14 +964,14 @@ export default function Eventos() {
       )}
 
       {/* ──────────────────────────────────────────────────────────────────────── */}
-      {/* ABA 3: POST-ITS COLORIDOS COM BOTÕES EDITAR E EXCLUIR                    */}
+      {/* ABA 3: POST-ITS COLORIDOS POVOADOS AUTOMATICAMENTE                       */}
       {/* ──────────────────────────────────────────────────────────────────────── */}
       {activeTab === 'postits' && (
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
             <div>
               <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#2c1a0e' }}>
-                📌 Quadro de Post-its & Anotações Rápidas — {activeEvent.title}
+                📌 Quadro de Post-its Povoado — {activeEvent.title}
               </h3>
             </div>
             <button onClick={openNewPostItModal} style={PrimaryBtnStyle}>
@@ -962,7 +980,7 @@ export default function Eventos() {
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 20 }}>
-            {(activeEvent.postIts || []).map(note => {
+            {activeEvent.postIts.map(note => {
               const bgColor =
                 note.color === 'yellow' ? '#fef9c3' :
                 note.color === 'pink' ? '#ffe4e6' :
@@ -986,8 +1004,6 @@ export default function Eventos() {
                   <div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
                       <h4 style={{ margin: 0, fontSize: 15, fontWeight: 800, color: '#2c1a0e' }}>{note.title}</h4>
-
-                      {/* BOTÕES EDITAR E EXCLUIR DO POST-IT */}
                       <div style={{ display: 'flex', gap: 4 }}>
                         <button onClick={() => openEditPostItModal(note)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13 }} title="Editar Post-it">✏️</button>
                         <button onClick={() => handleDeletePostIt(note.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13 }} title="Excluir Post-it">🗑️</button>
@@ -1054,13 +1070,13 @@ export default function Eventos() {
       )}
 
       {/* ──────────────────────────────────────────────────────────────────────── */}
-      {/* ABA 5: ORÇAMENTO & LOGÍSTICA (COM EDITAR E EXCLUIR EM CADA ITEM)         */}
+      {/* ABA 5: ORÇAMENTO POVOADO AUTOMATICAMENTE                                 */}
       {/* ──────────────────────────────────────────────────────────────────────── */}
       {activeTab === 'budget' && (
         <div>
-          <ModuleCard title={`Planilha de Orçamento — ${activeEvent.title}`} icon="ti-calculator" padding={20}>
+          <ModuleCard title={`Planilha de Orçamento Povoada — ${activeEvent.title}`} icon="ti-calculator" padding={20}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-              <span style={{ fontSize: 13, color: '#665c54' }}>Controle financeiro do evento.</span>
+              <span style={{ fontSize: 13, color: '#665c54' }}>Controle financeiro povoado automaticamente.</span>
               <button onClick={openNewBudgetModal} style={PrimaryBtnStyle}>
                 + Adicionar Item ao Orçamento
               </button>
@@ -1077,7 +1093,7 @@ export default function Eventos() {
                   </tr>
                 </thead>
                 <tbody>
-                  {(activeEvent.budgetList || []).map(b => (
+                  {activeEvent.budgetList.map(b => (
                     <tr key={b.id} style={TableRowStyle}>
                       <td style={TdStyle}><strong>{b.item}</strong></td>
                       <td style={TdStyle}>{b.category}</td>
@@ -1098,12 +1114,12 @@ export default function Eventos() {
       )}
 
       {/* ──────────────────────────────────────────────────────────────────────── */}
-      {/* ABA 6: CHECKLIST (COM EDITAR E EXCLUIR EM CADA TAREFA)                    */}
+      {/* ABA 6: CHECKLIST POVOADO AUTOMATICAMENTE                                 */}
       {/* ──────────────────────────────────────────────────────────────────────── */}
       {activeTab === 'checklist' && (
-        <ModuleCard title={`Checklist de Tarefas — ${activeEvent.title}`} icon="ti-list-check" padding={20}>
+        <ModuleCard title={`Checklist de Tarefas Povoado — ${activeEvent.title}`} icon="ti-list-check" padding={20}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-            <span style={{ fontSize: 13, color: '#665c54' }}>Tarefas divididas por fases.</span>
+            <span style={{ fontSize: 13, color: '#665c54' }}>Tarefas divididas por fases e povoadas automaticamente.</span>
             <button onClick={openNewTaskModal} style={PrimaryBtnStyle}>
               + Adicionar Tarefa
             </button>
@@ -1111,7 +1127,7 @@ export default function Eventos() {
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 20 }}>
             {['Pré-Evento', 'Dia do Evento', 'Pós-Evento'].map(phase => {
-              const phaseTasks = (activeEvent.taskList || []).filter(t => t.phase === phase)
+              const phaseTasks = activeEvent.taskList.filter(t => t.phase === phase)
               return (
                 <div key={phase} style={{ background: '#fdf8f2', border: '1px solid rgba(139,115,85,0.15)', borderRadius: 14, padding: 16 }}>
                   <h4 style={{ margin: '0 0 12px', fontSize: 15, fontWeight: 700, color: '#8b5e3c' }}>{phase}</h4>
@@ -1139,6 +1155,27 @@ export default function Eventos() {
               )
             })}
           </div>
+        </ModuleCard>
+      )}
+
+      {/* ──────────────────────────────────────────────────────────────────────── */}
+      {/* ABA 7: CONVITE WHATSAPP POVOADO                                          */}
+      {/* ──────────────────────────────────────────────────────────────────────── */}
+      {activeTab === 'invitations' && (
+        <ModuleCard title={`Gerador de Convites Povoado — ${activeEvent.title}`} icon="ti-brand-whatsapp" padding={20}>
+          <textarea
+            value={activeEvent.invitationText || ''}
+            onChange={e => {
+              const val = e.target.value
+              const updated = events.map(evt => evt.id === activeEvent.id ? { ...evt, invitationText: val } : evt)
+              saveAndSync(updated)
+            }}
+            rows={8}
+            style={{ width: '100%', padding: 14, borderRadius: 12, border: '1px solid rgba(139,115,85,0.2)', fontSize: 13.5, marginBottom: 16 }}
+          />
+          <button onClick={sendWhatsAppInvitation} style={WhatsAppBtnStyle}>
+            💬 Enviar Convite no WhatsApp
+          </button>
         </ModuleCard>
       )}
 
@@ -1192,7 +1229,7 @@ export default function Eventos() {
         <div style={OverlayStyle}>
           <div style={ModalStyle}>
             <h3 style={{ margin: '0 0 16px', fontSize: 18, color: '#2c1a0e' }}>
-              {editingEvent ? 'Editar Evento Escolar' : 'Criar Novo Evento Escolar'}
+              {editingEvent ? 'Editar Evento Escolar' : 'Criar Novo Evento Escolar (Com Povoamento Automático)'}
             </h3>
             <input value={formTitle} onChange={e => setFormTitle(e.target.value)} placeholder="Título do Evento *" style={InputStyle} />
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
@@ -1209,7 +1246,7 @@ export default function Eventos() {
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 12 }}>
               <button onClick={() => setShowEventModal(false)} style={CancelBtnStyle}>Cancelar</button>
-              <button onClick={handleSaveEvent} style={PrimaryBtnStyle}>Salvar Evento</button>
+              <button onClick={handleSaveEvent} style={PrimaryBtnStyle}>Salvar Evento (Povoar Todas as Listas)</button>
             </div>
           </div>
         </div>
@@ -1274,6 +1311,10 @@ const SecondaryBtnStyle: React.CSSProperties = {
 const DangerBtnStyle: React.CSSProperties = {
   padding: '6px 12px', background: '#ffebee', color: '#c62828', border: '1px solid #ffcdd2', borderRadius: 8,
   fontSize: 12, fontWeight: 700, cursor: 'pointer'
+}
+const WhatsAppBtnStyle: React.CSSProperties = {
+  padding: '9px 18px', background: '#e8f5e9', color: '#2e7d32', border: '1px solid #a5d6a7', borderRadius: 10,
+  fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6
 }
 const ActiveTabStyle: React.CSSProperties = {
   padding: '8px 16px', borderRadius: 10, border: 'none', background: '#8b5e3c', color: '#fff',
