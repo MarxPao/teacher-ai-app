@@ -30,8 +30,10 @@ interface Student {
   grades?: Record<string, string>
 }
 
+import PrivateTutoring from '@/components/modules/PrivateTutoring'
+
 export default function Organization() {
-  const [activeTab, setActiveTab] = useState<'schools' | 'classes' | 'students'>('schools')
+  const [activeTab, setActiveTab] = useState<'schools' | 'classes' | 'students' | 'privatetutoring'>('schools')
 
   const [schools, setSchools] = useState<School[]>([])
   const [classes, setClasses] = useState<ClassRecord[]>([])
@@ -287,6 +289,12 @@ export default function Organization() {
         >
           🎓 Meus Alunos ({students.length})
         </button>
+        <button
+          onClick={() => setActiveTab('privatetutoring')}
+          style={activeTab === 'privatetutoring' ? ActiveTabS : InactiveTabS}
+        >
+          💰 Alunos Particulares
+        </button>
       </div>
 
       {/* ── ABA 1: ESCOLAS ── */}
@@ -470,6 +478,11 @@ export default function Organization() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* ── ABA 4: ALUNOS PARTICULARES ── */}
+      {activeTab === 'privatetutoring' && (
+        <PrivateTutoring />
       )}
     </ModuleShell>
   )
