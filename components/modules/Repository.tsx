@@ -502,7 +502,9 @@ export default function Repository() {
   }
 
   const btnPrimary: React.CSSProperties = {
-    padding: '10px 18px', borderRadius: 10, border: 'none', background: '#8b5e3c', color: '#fff',
+    padding: '10px 18px', borderRadius: 10,
+    borderWidth: '0px', borderStyle: 'none', borderColor: 'transparent',
+    background: '#8b5e3c', color: '#fff',
     fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6
   }
   const btnSecondary: React.CSSProperties = {
@@ -566,7 +568,7 @@ export default function Repository() {
             <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
               {['all', "Student's Book", 'Workbook', 'Reference Book', 'CLIL Book', 'Syllabus', 'Text'].map(f => (
                 <button key={f} onClick={() => setActiveFilter(f)} style={{
-                  padding: '4px 9px', borderRadius: 7, border: 'none', fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                  padding: '4px 9px', borderRadius: 7, borderWidth: '0px', borderStyle: 'none', borderColor: 'transparent', fontSize: 11, fontWeight: 700, cursor: 'pointer',
                   background: activeFilter === f ? '#8b5e3c' : '#f5efe6',
                   color: activeFilter === f ? '#fff' : '#665c54',
                 }}>
@@ -789,7 +791,7 @@ export default function Repository() {
                         localStorage.setItem('teacher_lessonstudio_prefill', JSON.stringify({ topic: viewItem.title, text: viewItem.content.slice(0, 2000) }))
                         window.dispatchEvent(new CustomEvent('teacher:navigate', { detail: 'lessonstudio' }))
                       }}
-                      style={{ padding: '7px 12px', borderRadius: 8, border: 'none', background: '#8b5e3c', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}
+                      style={{ padding: '7px 12px', borderRadius: 8, borderWidth: '0px', borderStyle: 'none', borderColor: 'transparent', background: '#8b5e3c', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}
                       title="Gerar plano de aula no Lesson Studio usando este livro"
                     >
                       <i className="ti ti-chalkboard" /> 📝 Criar Aula
@@ -800,7 +802,7 @@ export default function Repository() {
                         localStorage.setItem('teacher_exam_prefill', JSON.stringify({ topic: viewItem.title, libraryId: viewItem.id }))
                         window.dispatchEvent(new CustomEvent('teacher:navigate', { detail: 'exam' }))
                       }}
-                      style={{ padding: '7px 12px', borderRadius: 8, border: 'none', background: '#d4944a', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}
+                      style={{ padding: '7px 12px', borderRadius: 8, borderWidth: '0px', borderStyle: 'none', borderColor: 'transparent', background: '#d4944a', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}
                       title="Gerar prova no ExamBuilder usando este livro"
                     >
                       <i className="ti ti-file-text" /> ✍️ Criar Prova
@@ -845,15 +847,15 @@ export default function Repository() {
                     {/* Temas */}
                     <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
                       <span style={{ fontSize: 11, opacity: 0.7, fontWeight: 700, textTransform: 'uppercase' }}>Tema:</span>
-                      <button onClick={() => setReaderTheme('paper')} style={{ padding: '3px 8px', borderRadius: 6, border: '1px solid #d5cfc0', background: '#fff', color: '#2c1a0e', fontSize: 11, cursor: 'pointer', fontWeight: readerTheme === 'paper' ? 700 : 400 }}>☀️ Papel</button>
-                      <button onClick={() => setReaderTheme('sepia')} style={{ padding: '3px 8px', borderRadius: 6, border: '1px solid #c8ba9d', background: '#f4ecd8', color: '#433422', fontSize: 11, cursor: 'pointer', fontWeight: readerTheme === 'sepia' ? 700 : 400 }}>📜 Sépia</button>
-                      <button onClick={() => setReaderTheme('dark')} style={{ padding: '3px 8px', borderRadius: 6, border: '1px solid #444', background: '#1c1b18', color: '#e2d5c3', fontSize: 11, cursor: 'pointer', fontWeight: readerTheme === 'dark' ? 700 : 400 }}>🌙 Noche</button>
+                      <button onClick={() => setReaderTheme('paper')} style={{ padding: '3px 8px', borderRadius: 6, borderWidth: '1px', borderStyle: 'solid', borderColor: '#d5cfc0', background: '#fff', color: '#2c1a0e', fontSize: 11, cursor: 'pointer', fontWeight: readerTheme === 'paper' ? 700 : 400 }}>☀️ Papel</button>
+                      <button onClick={() => setReaderTheme('sepia')} style={{ padding: '3px 8px', borderRadius: 6, borderWidth: '1px', borderStyle: 'solid', borderColor: '#c8ba9d', background: '#f4ecd8', color: '#433422', fontSize: 11, cursor: 'pointer', fontWeight: readerTheme === 'sepia' ? 700 : 400 }}>📜 Sépia</button>
+                      <button onClick={() => setReaderTheme('dark')} style={{ padding: '3px 8px', borderRadius: 6, borderWidth: '1px', borderStyle: 'solid', borderColor: '#444', background: '#1c1b18', color: '#e2d5c3', fontSize: 11, cursor: 'pointer', fontWeight: readerTheme === 'dark' ? 700 : 400 }}>🌙 Noche</button>
                     </div>
 
                     {/* Fonte */}
                     <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
                       <span style={{ fontSize: 11, opacity: 0.7, fontWeight: 700, textTransform: 'uppercase' }}>Fonte:</span>
-                      <select value={readerFontFamily} onChange={e => setReaderFontFamily(e.target.value as any)} style={{ padding: '3px 8px', borderRadius: 6, border: '1px solid rgba(139,115,85,0.2)', fontSize: 11, background: 'transparent', color: 'inherit', outline: 'none', cursor: 'pointer' }}>
+                      <select value={readerFontFamily} onChange={e => setReaderFontFamily(e.target.value as any)} style={{ padding: '3px 8px', borderRadius: 6, borderWidth: '1px', borderStyle: 'solid', borderColor: 'rgba(139,115,85,0.2)', fontSize: 11, background: 'transparent', color: 'inherit', outline: 'none', cursor: 'pointer' }}>
                         <option value="Georgia, serif">Georgia (Serif)</option>
                         <option value="'Plus Jakarta Sans', sans-serif">Sans (Moderna)</option>
                         <option value="monospace">Monospace</option>
@@ -863,22 +865,23 @@ export default function Repository() {
                     {/* Tamanho */}
                     <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
                       <span style={{ fontSize: 11, opacity: 0.7, fontWeight: 700, textTransform: 'uppercase' }}>Tamanho:</span>
-                      <button onClick={() => setReaderFontSize(s => s === '19px' ? '17px' : s === '17px' ? '15px' : '13px')} style={{ padding: '3px 8px', borderRadius: 6, border: '1px solid rgba(139,115,85,0.2)', background: 'transparent', color: 'inherit', fontSize: 11, cursor: 'pointer' }}>A-</button>
+                      <button onClick={() => setReaderFontSize(s => s === '19px' ? '17px' : s === '17px' ? '15px' : '13px')} style={{ padding: '3px 8px', borderRadius: 6, borderWidth: '1px', borderStyle: 'solid', borderColor: 'rgba(139,115,85,0.2)', background: 'transparent', color: 'inherit', fontSize: 11, cursor: 'pointer' }}>A-</button>
                       <span style={{ fontSize: 11, fontWeight: 700 }}>{readerFontSize}</span>
-                      <button onClick={() => setReaderFontSize(s => s === '13px' ? '15px' : s === '15px' ? '17px' : '19px')} style={{ padding: '3px 8px', borderRadius: 6, border: '1px solid rgba(139,115,85,0.2)', background: 'transparent', color: 'inherit', fontSize: 11, cursor: 'pointer' }}>A+</button>
+                      <button onClick={() => setReaderFontSize(s => s === '13px' ? '15px' : s === '15px' ? '17px' : '19px')} style={{ padding: '3px 8px', borderRadius: 6, borderWidth: '1px', borderStyle: 'solid', borderColor: 'rgba(139,115,85,0.2)', background: 'transparent', color: 'inherit', fontSize: 11, cursor: 'pointer' }}>A+</button>
                     </div>
                   </div>
 
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <button onClick={() => setShowToc(v => !v)} style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid rgba(139,115,85,0.2)', background: 'transparent', color: 'inherit', fontSize: 11, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <button onClick={() => setShowToc(v => !v)} style={{ padding: '4px 10px', borderRadius: 6, borderWidth: '1px', borderStyle: 'solid', borderColor: 'rgba(139,115,85,0.2)', background: 'transparent', color: 'inherit', fontSize: 11, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
                       <i className="ti ti-list" /> {showToc ? 'Ocultar Índice' : '📋 Índice'}
                     </button>
-                    <button onClick={() => setReaderFullscreen(v => !v)} style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid rgba(139,115,85,0.2)', background: 'transparent', color: 'inherit', fontSize: 11, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <button onClick={() => setReaderFullscreen(v => !v)} style={{ padding: '4px 10px', borderRadius: 6, borderWidth: '1px', borderStyle: 'solid', borderColor: 'rgba(139,115,85,0.2)', background: 'transparent', color: 'inherit', fontSize: 11, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
                       <i className={readerFullscreen ? 'ti ti-minimize' : 'ti ti-maximize'} /> {readerFullscreen ? 'Sair da Tela Cheia' : '📖 Modo Imersivo'}
                     </button>
                   </div>
                 </div>
               </div>
+
 
               {/* Corpo do Leitor Profissional com Painel de Índice (TOC) */}
               <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
