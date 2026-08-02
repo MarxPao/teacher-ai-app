@@ -788,6 +788,27 @@ export default function Repository() {
                     <button onClick={() => setMode('rag')} style={{ ...btnSecondary, fontSize: 12, padding: '7px 12px', borderColor: '#27ae60', color: '#27ae60' }}>
                       <i className="ti ti-search" /> Testar RAG
                     </button>
+
+                    <button
+                      onClick={async () => {
+                        const { normalizeAndReconstructText } = await import('@/lib/pdfExtractor')
+                        const cleaned = normalizeAndReconstructText(viewItem.content)
+                        const updated = items.map(i => i.id === viewItem.id ? {
+                          ...i,
+                          content: cleaned,
+                          wordCount: countWords(cleaned),
+                          chunkCount: countChunks(cleaned)
+                        } : i)
+                        save(updated)
+                        const saved = updated.find(i => i.id === viewItem.id)!
+                        setViewItem(saved)
+                        alert(`✨ Texto normalizado com sucesso!\n\nLinhas picadas foram unificadas em parágrafos contínuos (${countWords(cleaned).toLocaleString()} palavras em ${countChunks(cleaned)} seções).`)
+                      }}
+                      style={{ ...btnSecondary, fontSize: 12, padding: '7px 12px', borderColor: '#8b5e3c', color: '#8b5e3c' }}
+                      title="Recompor frases quebradas e unificar parágrafos do texto picado"
+                    >
+                      <i className="ti ti-wand" /> 🧹 Unificar Texto Picado
+                    </button>
                     <button onClick={() => startEdit(viewItem)} style={{ ...btnSecondary, fontSize: 12, padding: '7px 12px' }}>
                       <i className="ti ti-pencil" /> Editar
                     </button>
