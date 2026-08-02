@@ -100,6 +100,7 @@ const MODULES: Record<ModuleKey, React.ComponentType> = {
 export default function Home() {
   const [active, setActive] = useState<ModuleKey>('dashboard')
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false)
+  const [showLangMenu, setShowLangMenu] = useState(false)
   const Module = MODULES[active]
 
   // Bridge: VoiceOrb sends commands → RafinhaChat processes them
@@ -165,32 +166,62 @@ export default function Home() {
     <div className="flex w-full h-screen overflow-hidden" style={{ background: '#fdf8f2' }}>
       <Sidebar active={active} onNavigate={setActive} />
       <main className="flex-1 min-w-0 overflow-hidden flex flex-col relative">
-
-        {/* Floating Top Header bar with Command Palette trigger & LanguageSelector */}
-        <div style={{
-          position: 'absolute', top: 14, right: 24, zIndex: 40,
-          display: 'flex', alignItems: 'center', gap: 10
-        }}>
-          <button
-            onClick={() => setIsCommandPaletteOpen(true)}
-            style={{
-              background: '#fff', border: '1px solid #ede8dc', borderRadius: 20,
-              padding: '5px 14px', fontSize: 12, fontWeight: 700, color: '#586e75',
-              cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
-              boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
-            }}
-          >
-            <i className="ti ti-search" style={{ color: '#b58900' }} />
-            <span>Busca Rápida</span>
-            <kbd style={{ background: '#f5f0e8', padding: '2px 6px', borderRadius: 4, fontSize: 10 }}>Ctrl+K</kbd>
-          </button>
-          <LanguageSelector />
-        </div>
-
         <div key={active} className="animate-fade-up flex-1 min-h-0 min-w-0 h-full overflow-y-auto overflow-x-hidden">
           <Module />
         </div>
       </main>
+
+      {/* ─── DOCK FLUTUANTE DE AÇÕES EMBUTIDAS NO CANTO INFERIOR DIREITO ─── */}
+      <div style={{
+        position: 'fixed', bottom: 24, right: 94, zIndex: 9995,
+        display: 'flex', alignItems: 'center', gap: 10
+      }}>
+        {/* Botão de Seleção de Idioma no Canto Inferior Direito */}
+        <div style={{ position: 'relative' }}>
+          {showLangMenu && (
+            <div style={{
+              position: 'absolute', bottom: 50, right: 0,
+              background: '#fffcf8', border: '1px solid rgba(139,115,85,0.2)',
+              borderRadius: 16, padding: 10, boxShadow: '0 12px 36px rgba(44,26,14,0.18)',
+              display: 'flex', flexDirection: 'column', gap: 6, minWidth: 140,
+            }}>
+              <div style={{ fontSize: 10.5, fontWeight: 800, color: '#8b5e3c', textTransform: 'uppercase', padding: '2px 6px', letterSpacing: '0.5px' }}>
+                🌐 Idioma / Language
+              </div>
+              <LanguageSelector />
+            </div>
+          )}
+          <button
+            onClick={() => setShowLangMenu(!showLangMenu)}
+            title="Selecionar Idioma"
+            style={{
+              padding: '9px 16px', borderRadius: 24, border: '1px solid rgba(139,115,85,0.22)',
+              background: '#fffcf8', color: '#2c1a0e', fontSize: 12.5, fontWeight: 700,
+              cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
+              boxShadow: '0 4px 16px rgba(44,26,14,0.08)', transition: 'all 0.15s ease'
+            }}
+          >
+            <i className="ti ti-world" style={{ color: '#8b5e3c', fontSize: 16 }} />
+            <span>Idioma</span>
+          </button>
+        </div>
+
+        {/* Botão de Busca Rápida no Canto Inferior Direito */}
+        <button
+          onClick={() => setIsCommandPaletteOpen(true)}
+          title="Abrir Busca Rápida (Ctrl+K)"
+          style={{
+            padding: '9px 16px', borderRadius: 24, border: '1px solid rgba(139,115,85,0.22)',
+            background: '#fffcf8', color: '#2c1a0e', fontSize: 12.5, fontWeight: 700,
+            cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
+            boxShadow: '0 4px 16px rgba(44,26,14,0.08)', transition: 'all 0.15s ease'
+          }}
+        >
+          <i className="ti ti-search" style={{ color: '#8b5e3c', fontSize: 16 }} />
+          <span>Busca Rápida</span>
+          <kbd style={{ background: '#f5efe6', color: '#8b5e3c', padding: '2px 6px', borderRadius: 6, fontSize: 10, fontWeight: 700 }}>Ctrl+K</kbd>
+        </button>
+      </div>
 
       {/* Command Palette Modal (Ctrl+K) */}
       <CommandPalette
@@ -213,3 +244,4 @@ export default function Home() {
     </div>
   )
 }
+
