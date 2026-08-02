@@ -845,40 +845,48 @@ export default function Eventos() {
       </div>
 
       {/* ──────────────────────────────────────────────────────────────────────── */}
-      {/* EXATAMENTE IGUAL AO PORTALMIRROR: NAVEGADOR CANVA EMBUTIDO COMPLETO      */}
+      {/* NAVEGADOR CANVA MIRROR + ESTÚDIO GRÁFICO VIVO INTERATIVO IN-APP           */}
       {/* ──────────────────────────────────────────────────────────────────────── */}
       {activeTab === 'canva' && (
         <div>
-          <ModuleCard title="Navegador Canva Mirror — Espelhamento & Ateliê Integrado" icon="ti-world" padding={0}>
+          <ModuleCard title="Navegador & Estúdio Canva Integrado — Feira & Eventos" icon="ti-palette" padding={0}>
             {/* 1. Barra Superior de Abas do Navegador Canva */}
-            <div style={{ display: 'flex', background: '#2c1a0e', padding: '8px 12px 0 12px', gap: 6, borderTopLeftRadius: 16, borderTopRightRadius: 16, overflowX: 'auto' }}>
-              {PRESET_CANVA_TABS.map(tab => (
-                <button
-                  key={tab.id}
-                  onClick={() => handleSelectCanvaTab(tab.id, tab.url)}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px',
-                    borderRadius: '10px 10px 0 0', border: 'none', cursor: 'pointer',
-                    background: activeCanvaBrowserTab === tab.id ? '#fffcf8' : 'rgba(255,255,255,0.1)',
-                    color: activeCanvaBrowserTab === tab.id ? '#2c1a0e' : '#f5efe6',
-                    fontSize: 12.5, fontWeight: activeCanvaBrowserTab === tab.id ? 800 : 600
-                  }}
-                >
-                  <span>{tab.icon}</span>
-                  <span>{tab.title}</span>
-                </button>
-              ))}
+            <div style={{ display: 'flex', background: '#2c1a0e', padding: '8px 12px 0 12px', gap: 6, borderTopLeftRadius: 16, borderTopRightRadius: 16, overflowX: 'auto', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', gap: 6 }}>
+                {PRESET_CANVA_TABS.map(tab => (
+                  <button
+                    key={tab.id}
+                    onClick={() => handleSelectCanvaTab(tab.id, tab.url)}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px',
+                      borderRadius: '10px 10px 0 0', border: 'none', cursor: 'pointer',
+                      background: activeCanvaBrowserTab === tab.id ? '#fffcf8' : 'rgba(255,255,255,0.1)',
+                      color: activeCanvaBrowserTab === tab.id ? '#2c1a0e' : '#f5efe6',
+                      fontSize: 12.5, fontWeight: activeCanvaBrowserTab === tab.id ? 800 : 600
+                    }}
+                  >
+                    <span>{tab.icon}</span>
+                    <span>{tab.title}</span>
+                  </button>
+                ))}
+              </div>
+
+              <div style={{ paddingRight: 10, display: 'flex', gap: 8 }}>
+                <span style={{ fontSize: 11.5, fontWeight: 800, color: '#99f6e4', background: 'rgba(0,196,204,0.2)', padding: '4px 10px', borderRadius: 8 }}>
+                  ⚡ Canva Connect Live
+                </span>
+              </div>
             </div>
 
             {/* 2. Omnibox / Barra de Endereço do Navegador estilo PortalMirror */}
-            <div style={{ background: '#f5efe6', borderBottom: '1px solid rgba(139,115,85,0.2)', padding: '10px 16px', display: 'flex', gap: 10, alignItems: 'center' }}>
+            <div style={{ background: '#f5efe6', borderBottom: '1px solid rgba(139,115,85,0.2)', padding: '10px 16px', display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
               <div style={{ display: 'flex', gap: 4 }}>
                 <button onClick={() => setCanvaBrowserUrl('https://www.canva.com/')} style={ActionIconButton} title="Voltar a Home">◀</button>
                 <button onClick={() => setCanvaBrowserUrl(canvaBrowserUrl)} style={ActionIconButton} title="Recarregar">🔄</button>
               </div>
 
               {/* Omnibox Form */}
-              <form onSubmit={handleNavigateCanvaOmnibox} style={{ flex: 1, display: 'flex', gap: 8 }}>
+              <form onSubmit={handleNavigateCanvaOmnibox} style={{ flex: 1, display: 'flex', gap: 8, minWidth: 260 }}>
                 <div style={{ flex: 1, display: 'flex', alignItems: 'center', background: '#fff', borderRadius: 10, border: '1px solid rgba(139,115,85,0.25)', padding: '0 12px' }}>
                   <span style={{ fontSize: 13, marginRight: 6 }}>🎨</span>
                   <input
@@ -892,7 +900,7 @@ export default function Eventos() {
               </form>
 
               {/* Ações Agênticas no Navegador */}
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                 <button
                   onClick={() => {
                     setNewCanvaTitle(`Pasta Canva — ${activeEvent.title}`)
@@ -909,40 +917,71 @@ export default function Eventos() {
                   {inspecting ? '🔍 Lendo Tela...' : '🔍 Inspecionar Projetos'}
                 </button>
                 <button
-                  onClick={() => window.open(canvaBrowserUrl, 'CanvaStudioMirror', 'width=1280,height=800,scrollbars=yes,resizable=yes')}
+                  onClick={() => window.open(canvaBrowserUrl || 'https://www.canva.com/', 'CanvaStudioWindow', 'width=1280,height=800,scrollbars=yes,resizable=yes')}
                   style={{ ...PrimaryBtnStyle, background: '#00c4cc' }}
                 >
-                  🚀 Abrir Canva Web Studio
+                  🚀 Lançar Canva Studio (1280x800)
                 </button>
               </div>
             </div>
 
             {/* 3. Split-Screen Layout (Esquerda: Tela do Navegador Canva / Direita: Controles Agênticos) */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 360px', minHeight: 650 }}>
-              {/* Esquerda: Tela do Navegador Canva */}
+              {/* Esquerda: Tela do Navegador / Estúdio Vivo Canva */}
               <div style={{ borderRight: '1px solid rgba(139,115,85,0.15)', background: '#fff', display: 'flex', flexDirection: 'column' }}>
-                {canvaBrowserUrl.includes('/design/') || canvaBrowserUrl.includes('/folder/') || canvaBrowserUrl.includes('/view') ? (
-                  <iframe
-                    src={canvaBrowserUrl.includes('/design/') && !canvaBrowserUrl.includes('/view') ? `${canvaBrowserUrl}/view?embed` : canvaBrowserUrl}
-                    style={{ width: '100%', height: '100%', border: 'none', flex: 1, minHeight: 600 }}
-                    title="Navegador Canva Mirror"
-                    allowFullScreen
-                  />
+                {canvaBrowserUrl.includes('/design/') ? (
+                  <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
+                    <iframe
+                      src={canvaBrowserUrl.includes('/view') ? (canvaBrowserUrl.endsWith('?embed') ? canvaBrowserUrl : `${canvaBrowserUrl}?embed`) : `${canvaBrowserUrl}/view?embed`}
+                      style={{ width: '100%', height: 600, border: 'none', flex: 1 }}
+                      title="Navegador Canva Mirror Embed"
+                      allowFullScreen
+                    />
+                  </div>
                 ) : (
                   <div style={{ padding: 24, height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                     <div>
+                      {/* Banner do Estúdio Vivo */}
                       <div style={{ background: 'linear-gradient(135deg, #e6fffa 0%, #ccfbf1 100%)', border: '1px solid #99f6e4', borderRadius: 16, padding: 20, marginBottom: 20 }}>
                         <div style={{ fontSize: 16, fontWeight: 800, color: '#0f766e', marginBottom: 6 }}>
-                          🖥️ Navegador Canva Web & Gestor de Pastas Integrado
+                          🎨 Estúdio Canva & Central de Banners para: "{activeEvent.title}"
                         </div>
                         <div style={{ fontSize: 13, color: '#115e59', lineHeight: 1.6 }}>
-                          Abra suas pastas do Canva, crie cartazes pedagógicos e conecte os arquivos diretamente ao evento <strong>"{activeEvent.title}"</strong>. Cole o link da sua pasta do Canva na barra acima ou clique em <strong>📌 Vincular esta Pasta ao Evento</strong>.
+                          Cole o link da sua pasta do Canva (`https://www.canva.com/folder/...`) na barra acima ou clique em <strong>📌 Vincular esta Pasta ao Evento</strong>. O sistema sincroniza todos os seus cartazes e artes visuais com este evento!
+                        </div>
+                      </div>
+
+                      {/* Criador de Cartazes Vivo In-App */}
+                      <div style={{ background: '#fffcf8', border: '1.5px dashed #00c4cc', borderRadius: 16, padding: 20, marginBottom: 20 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                          <h4 style={{ margin: 0, fontSize: 15, fontWeight: 800, color: '#2c1a0e' }}>
+                            🖼️ Pré-Visualização do Cartaz Oficial do Evento
+                          </h4>
+                          <span style={BadgeStyle('#e6fffa', '#00c4cc')}>FORMATO A3 / DIGITAL</span>
+                        </div>
+
+                        {/* Visual Poster Frame */}
+                        <div style={{ background: 'linear-gradient(135deg, #8b5e3c 0%, #2c1a0e 100%)', color: '#fff', borderRadius: 14, padding: 24, boxShadow: '0 10px 30px rgba(44,26,14,0.2)', textAlign: 'center' }}>
+                          <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: 2, textTransform: 'uppercase', color: '#fde047', marginBottom: 8 }}>
+                            {activeEvent.category} · EDIÇÃO 2026
+                          </div>
+                          <h2 style={{ margin: '0 0 10px', fontSize: 24, fontWeight: 900, fontFamily: 'serif' }}>
+                            {activeEvent.title}
+                          </h2>
+                          <p style={{ margin: '0 0 16px', fontSize: 13, color: '#f5efe6', maxWidth: 460, marginInline: 'auto' }}>
+                            {activeEvent.description || 'Venha participar do nosso grande evento escolar pedagógico!'}
+                          </p>
+                          <div style={{ display: 'flex', justifyContent: 'center', gap: 16, fontSize: 12, fontWeight: 700, background: 'rgba(255,255,255,0.12)', padding: '10px 16px', borderRadius: 10 }}>
+                            <span>🗓️ Data: {activeEvent.date}</span>
+                            <span>⏰ Horário: {activeEvent.time || '14:00'}</span>
+                            <span>📍 Local: {activeEvent.location || 'Auditório'}</span>
+                          </div>
                         </div>
                       </div>
 
                       {/* Grade de Atalhos de Ateliês e Pastas */}
                       <h4 style={{ margin: '0 0 12px', fontSize: 14, fontWeight: 800, color: '#2c1a0e' }}>
-                        Ateliês e Pastas Rápidas do Canva:
+                        Ateliês e Pastas Rápidas no Canva:
                       </h4>
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
                         {[
@@ -970,9 +1009,9 @@ export default function Eventos() {
                       </div>
                     </div>
 
-                    <div style={{ display: 'flex', justifyContent: 'center' }}>
+                    <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
                       <button
-                        onClick={() => window.open(canvaBrowserUrl, 'CanvaStudioMirror', 'width=1280,height=800,scrollbars=yes,resizable=yes')}
+                        onClick={() => window.open(canvaBrowserUrl || 'https://www.canva.com/', 'CanvaStudioMirror', 'width=1280,height=800,scrollbars=yes,resizable=yes')}
                         style={{ padding: '12px 28px', background: '#00c4cc', color: '#fff', border: 'none', borderRadius: 12, fontSize: 14, fontWeight: 800, cursor: 'pointer', boxShadow: '0 4px 15px rgba(0,196,204,0.35)' }}
                       >
                         🚀 Lançar Canva em Janela de Aplicativo (1280x800)
