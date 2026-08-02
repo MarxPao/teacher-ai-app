@@ -23,12 +23,15 @@ const NAV: Section[] = [
     { key: 'flashcardmode', label: 'Flashcards',           icon: 'ti-cards' },
     { key: 'livequiz',      label: 'Quiz ao Vivo',         icon: 'ti-device-gamepad-2' },
   ]},
-  { label: 'Alunos', items: [
+  { label: 'Organização', items: [
+    { key: 'organization',   label: 'Central de Organização', icon: 'ti-building-community' },
+    { key: 'classes',        label: 'Turmas',                icon: 'ti-school' },
+    { key: 'students',       label: 'Alunos',                icon: 'ti-user-circle' },
+  ]},
+  { label: 'Alunos & Avaliação', items: [
     { key: 'gradebook',      label: 'Caderneta de Notas',  icon: 'ti-chart-bar' },
     { key: 'omnigrader',     label: 'OmniCorretor',        icon: 'ti-camera' },
     { key: 'batchgrader',    label: 'Correção em Lote',    icon: 'ti-files' },
-    { key: 'classes',        label: 'Turmas',              icon: 'ti-school' },
-    { key: 'students',       label: 'Alunos',              icon: 'ti-user-circle' },
     { key: 'progresstracker',label: 'Evolução do Aluno',   icon: 'ti-trending-up' },
     { key: 'analytics',      label: 'Desempenho',          icon: 'ti-chart-line' },
   ]},

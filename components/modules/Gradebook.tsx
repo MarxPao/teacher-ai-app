@@ -15,6 +15,7 @@ export default function Gradebook() {
   const [cols, setCols] = useState<string[]>([])
   
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null)
+  const [filterSchool, setFilterSchool] = useState<string>('all')
   const [filterClass, setFilterClass] = useState<string>('all')
   const [searchTerm, setSearchTerm] = useState('')
   const [viewMode, setViewMode] = useState<'table' | 'cards'>('table')
@@ -69,6 +70,23 @@ export default function Gradebook() {
     localStorage.setItem('teacher_students', JSON.stringify(updatedStudents))
   }
 
+  const deleteCol = (idx: number) => {
+    const colName = cols[idx]
+    if (!confirm(`Deseja excluir a coluna "${colName}"? As notas desta coluna serão removidas.`)) return
+
+    const newCols = cols.filter((_, i) => i !== idx)
+    setCols(newCols)
+    localStorage.setItem('teacher_gbConfig', JSON.stringify({ cols: newCols }))
+
+    const updatedStudents = students.map(s => {
+      const newGrades = { ...s.grades }
+      delete newGrades[colName]
+      return { ...s, grades: newGrades }
+    })
+    setStudents(updatedStudents)
+    localStorage.setItem('teacher_students', JSON.stringify(updatedStudents))
+  }
+
   const addCol = () => {
     const newCols = [...cols, `Nova Coluna ${cols.length + 1}`]
     setCols(newCols)
@@ -89,17 +107,18 @@ export default function Gradebook() {
   }
 
   const filtered = students.filter(s => {
+    const matchSchool = filterSchool === 'all' || s.schoolId === filterSchool || (classes.find(c => c.id === s.classId)?.schoolId === filterSchool)
     const matchClass = filterClass === 'all' || s.classId === filterClass
     const matchSearch = s.name.toLowerCase().includes(searchTerm.toLowerCase())
-    return matchClass && matchSearch
+    return matchSchool && matchClass && matchSearch
   })
 
   return (
     <div style={{ display: 'flex', height: '100%', overflow: 'hidden', background: '#fdf6e3' }}>
       <div style={{ flex: 1, height: '100%', overflowY: 'auto' }}>
         <ModuleShell 
-          title="Gradebook Editável"
-          subtitle="Clique em qualquer caixa para editar nomes, colunas ou notas diretamente."
+          title="Caderneta de Notas Editável"
+          subtitle="Organizada por Escola e Turma. Clique em qualquer caixa para editar notas ou nomes."
           maxWidth="100%"
           actions={
             <div style={{ display: 'flex', gap: 12 }}>
@@ -111,12 +130,33 @@ export default function Gradebook() {
             </div>
           }
         >
-          {/* Tabs */}
-          <div style={{ display: 'flex', gap: 8, marginBottom: 24, overflowX: 'auto', padding: '4px 0' }}>
-            <button onClick={() => setFilterClass('all')} style={{ ...TabS, background: filterClass === 'all' ? '#073642' : '#fff', color: filterClass === 'all' ? '#fff' : '#586e75' }}>Tudo</button>
-            {classes.map(c => (
-              <button key={c.id} onClick={() => setFilterClass(c.id)} style={{ ...TabS, background: filterClass === c.id ? '#073642' : '#fff', color: filterClass === c.id ? '#fff' : '#586e75', borderLeft: `4px solid ${schools.find(s => s.id === c.schoolId)?.color}` }}>{c.name}</button>
-            ))}
+          {/* Filtros por Escola & Turma */}
+          <div style={{ display: 'flex', gap: 16, marginBottom: 20, alignItems: 'center', flexWrap: 'wrap', background: '#fffcf8', padding: '12px 16px', borderRadius: 16, border: '1px solid rgba(139,115,85,0.15)' }}>
+            <div>
+              <span style={{ fontSize: 12, fontWeight: 700, color: '#8b5e3c', marginRight: 8 }}>🏫 Escola:</span>
+              <select
+                value={filterSchool}
+                onChange={e => { setFilterSchool(e.target.value); setFilterClass('all') }}
+                style={{ padding: '7px 12px', borderRadius: 10, border: '1px solid rgba(139,115,85,0.2)', background: '#fff', fontSize: 13, color: '#2c1a0e', outline: 'none', fontWeight: 600 }}
+              >
+                <option value="all">Todas as Escolas</option>
+                {schools.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            </div>
+
+            <div>
+              <span style={{ fontSize: 12, fontWeight: 700, color: '#8b5e3c', marginRight: 8 }}>👥 Turma:</span>
+              <select
+                value={filterClass}
+                onChange={e => setFilterClass(e.target.value)}
+                style={{ padding: '7px 12px', borderRadius: 10, border: '1px solid rgba(139,115,85,0.2)', background: '#fff', fontSize: 13, color: '#2c1a0e', outline: 'none', fontWeight: 600 }}
+              >
+                <option value="all">Todas as Turmas</option>
+                {classes.filter(c => filterSchool === 'all' || c.schoolId === filterSchool).map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
           </div>
 
           {viewMode === 'table' ? (
@@ -127,11 +167,20 @@ export default function Gradebook() {
                     <th style={{...ThS, width: 250}}>Nome do Aluno</th>
                     {cols.map((c, idx) => (
                       <th key={idx} style={{...ThS, textAlign: 'center', padding: '8px 4px'}}>
-                        <input 
-                          value={c} 
-                          onChange={e => renameCol(idx, e.target.value)} 
-                          style={{ background: 'rgba(181, 137, 0, 0.05)', border: 'none', textAlign: 'center', fontWeight: 800, color: '#b58900', width: '100%', outline: 'none', padding: '8px 4px', borderRadius: 6 }} 
-                        />
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                          <input 
+                            value={c} 
+                            onChange={e => renameCol(idx, e.target.value)} 
+                            style={{ background: 'rgba(181, 137, 0, 0.05)', border: 'none', textAlign: 'center', fontWeight: 800, color: '#b58900', width: '80%', outline: 'none', padding: '6px 4px', borderRadius: 6 }} 
+                          />
+                          <button 
+                            onClick={() => deleteCol(idx)} 
+                            title="Excluir Coluna"
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, padding: '2px 4px' }}
+                          >
+                            🗑️
+                          </button>
+                        </div>
                       </th>
                     ))}
                     <th style={{...ThS, textAlign: 'right', width: 100}}>Média</th>

@@ -53,8 +53,19 @@ export default function LessonPlanner() {
   const [activeBoardId, setActiveBoardId] = useState<string>('default')
   
   const [panX, setPanX] = useState(40); const [panY, setPanY] = useState(40)
-  const [viewMode, setViewMode] = useState<'calendar' | 'canvas'>('calendar')
+  const [viewMode, setViewMode] = useState<'calendar' | 'studio' | 'folders' | 'canvas'>('calendar')
   const [calDate, setCalDate] = useState<Date>(new Date())
+
+  // Studio State
+  const [studioTitle, setStudioTitle] = useState('')
+  const [studioSchool, setStudioSchool] = useState('')
+  const [studioClass, setStudioClass] = useState('')
+  const [studioDate, setStudioDate] = useState(new Date().toISOString().slice(0, 10))
+  const [studioDuration, setStudioDuration] = useState('50')
+  const [studioText, setStudioText] = useState('')
+
+  // Selected Folder State
+  const [selectedFolder, setSelectedFolder] = useState<{ school: string; className: string } | null>(null)
 
   const calYear = calDate.getFullYear()
   const calMonth = calDate.getMonth()
@@ -294,6 +305,26 @@ export default function LessonPlanner() {
     setCompiledText(`# Compilação — ${compilePeriod}\n**Escola:** ${filterSchool} | **Turma:** ${filterClass}\n\n${txt}`)
     setShowCompile(true)
   }
+  function scheduleStudioLesson() {
+    if (!studioTitle.trim()) {
+      alert('Por favor, informe o título da aula.')
+      return
+    }
+    const schoolToUse = studioSchool || (userSchools[0]?.name || addSchool)
+    const classToUse = studioClass || (userClasses[0]?.name || addClass)
+    const card = newCard(schoolToUse, classToUse)
+    card.title = studioTitle
+    card.objectives = studioText
+    card.duration = studioDuration
+    card.date = studioDate
+
+    updateActiveCards([...cards, card])
+    alert(`🎉 Aula "${card.title}" agendada no Calendário para ${card.date}!`)
+    setStudioTitle('')
+    setStudioText('')
+    setViewMode('calendar')
+  }
+
   function resetView() { setPanX(40); setPanY(40); setZoom(1) }
 
   const SS = { width:'100%', padding:'8px 10px', background:'#f5f0e8', border:'1px solid #e8e0d0', borderRadius:8, outline:'none', color:'#073642', fontSize:13, fontFamily:'inherit' }
@@ -331,30 +362,54 @@ export default function LessonPlanner() {
           </button>
         </div>
 
-        {/* ── Seletor de Modo: Calendário vs Canvas ── */}
-        <div style={{display:'flex', background:'rgba(255,255,255,0.7)', padding:3, borderRadius:10, border:'1px solid #d5cfc0'}}>
+        {/* ── Seletor de Modo: Calendário vs Estúdio vs Pastas vs Canvas ── */}
+        <div style={{display:'flex', background:'rgba(255,255,255,0.7)', padding:3, borderRadius:10, border:'1px solid #d5cfc0', gap:2}}>
           <button
             onClick={() => setViewMode('calendar')}
             style={{
-              padding:'6px 14px', borderRadius:8, border:'none', cursor:'pointer', fontSize:12.5, fontWeight:700,
+              padding:'6px 12px', borderRadius:8, border:'none', cursor:'pointer', fontSize:12, fontWeight:700,
               background: viewMode === 'calendar' ? '#8b5e3c' : 'transparent',
               color: viewMode === 'calendar' ? '#fff' : '#586e75',
-              display:'flex', alignItems:'center', gap:6, transition:'all 0.15s'
+              display:'flex', alignItems:'center', gap:5, transition:'all 0.15s'
             }}
           >
-            <i className="ti ti-calendar" /> 📅 Calendário de Planejamento
+            <i className="ti ti-calendar" /> 📅 Calendário
+          </button>
+
+          <button
+            onClick={() => setViewMode('studio')}
+            style={{
+              padding:'6px 12px', borderRadius:8, border:'none', cursor:'pointer', fontSize:12, fontWeight:700,
+              background: viewMode === 'studio' ? '#8b5e3c' : 'transparent',
+              color: viewMode === 'studio' ? '#fff' : '#586e75',
+              display:'flex', alignItems:'center', gap:5, transition:'all 0.15s'
+            }}
+          >
+            <i className="ti ti-pencil" /> ✍️ Estúdio de Criação
+          </button>
+
+          <button
+            onClick={() => setViewMode('folders')}
+            style={{
+              padding:'6px 12px', borderRadius:8, border:'none', cursor:'pointer', fontSize:12, fontWeight:700,
+              background: viewMode === 'folders' ? '#8b5e3c' : 'transparent',
+              color: viewMode === 'folders' ? '#fff' : '#586e75',
+              display:'flex', alignItems:'center', gap:5, transition:'all 0.15s'
+            }}
+          >
+            <i className="ti ti-folder-open" /> 📁 Visão por Pastas
           </button>
 
           <button
             onClick={() => setViewMode('canvas')}
             style={{
-              padding:'6px 14px', borderRadius:8, border:'none', cursor:'pointer', fontSize:12.5, fontWeight:700,
+              padding:'6px 12px', borderRadius:8, border:'none', cursor:'pointer', fontSize:12, fontWeight:700,
               background: viewMode === 'canvas' ? '#073642' : 'transparent',
               color: viewMode === 'canvas' ? '#fff' : '#586e75',
-              display:'flex', alignItems:'center', gap:6, transition:'all 0.15s'
+              display:'flex', alignItems:'center', gap:5, transition:'all 0.15s'
             }}
           >
-            <i className="ti ti-layout-board" /> 🎨 Canvas & Cards
+            <i className="ti ti-layout-board" /> 🎨 Canvas
           </button>
         </div>
       </div>
@@ -519,6 +574,15 @@ export default function LessonPlanner() {
                   <div
                     key={idx}
                     onClick={() => addCardForDate(day.dateStr)}
+                    onDragOver={e => e.preventDefault()}
+                    onDrop={e => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      const cardId = e.dataTransfer.getData('text/plain')
+                      if (cardId) {
+                        updateActiveCards(cards.map(c => c.id === cardId ? { ...c, date: day.dateStr } : c))
+                      }
+                    }}
                     style={{
                       background: day.isCurrentMonth ? '#fff' : '#fcfaf6',
                       border: isToday ? '2px solid #8b5e3c' : '1px solid #ede8dc',
@@ -538,7 +602,7 @@ export default function LessonPlanner() {
                       }}>
                         {day.dayNum}
                       </span>
-                      <i className="ti ti-plus" style={{ fontSize: 11, color: '#a08060', opacity: 0.6 }} title="Criar plano neste dia" />
+                      <i className="ti ti-hand-grab" style={{ fontSize: 11, color: '#a08060', opacity: 0.6 }} title="Arraste e solte cards aqui (Grab & Push)" />
                     </div>
 
                     {/* Cards do Dia */}
@@ -546,6 +610,11 @@ export default function LessonPlanner() {
                       {dayCards.map(card => (
                         <div
                           key={card.id}
+                          draggable
+                          onDragStart={e => {
+                            e.stopPropagation()
+                            e.dataTransfer.setData('text/plain', card.id)
+                          }}
                           onClick={e => {
                             e.stopPropagation()
                             setSelected(card.id)
@@ -554,13 +623,13 @@ export default function LessonPlanner() {
                           style={{
                             background: card.color || '#073642',
                             color: '#fff', padding: '5px 8px', borderRadius: 6,
-                            fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                            fontSize: 11, fontWeight: 700, cursor: 'grab',
                             display: 'flex', flexDirection: 'column', gap: 2,
                             boxShadow: '0 2px 4px rgba(0,0,0,0.12)'
                           }}
                         >
                           <div style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            {card.title}
+                            ✋ {card.title}
                           </div>
                           <div style={{ fontSize: 9.5, opacity: 0.85, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                             {card.school || 'Escola'} · {card.className || 'Turma'} ({card.duration}m)
@@ -570,6 +639,153 @@ export default function LessonPlanner() {
                     </div>
                   </div>
                 )
+              })}
+            </div>
+          </div>
+        ) : viewMode === 'studio' ? (
+          /* ── MODO ESTÚDIO DE CRIAÇÃO (COM PERGUNTAS & FERRAMENTAS PEDAGÓGICAS) ── */
+          <div style={{ flex: 1, display: 'flex', gap: 20, padding: 24, background: '#fdf8f2', overflowY: 'auto' }}>
+            {/* Área Principal de Escrita */}
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 16, background: '#fff', padding: 24, borderRadius: 20, border: '1px solid rgba(139,115,85,0.15)', boxShadow: '0 8px 30px rgba(44,26,14,0.06)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h2 style={{ fontFamily: 'Georgia, serif', fontSize: 20, fontStyle: 'italic', color: '#2c1a0e', margin: 0 }}>
+                  ✍️ Estúdio de Escrita de Aula
+                </h2>
+                <button
+                  onClick={scheduleStudioLesson}
+                  style={{ padding: '10px 20px', background: '#8b5e3c', color: '#fff', border: 'none', borderRadius: 12, fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}
+                >
+                  <i className="ti ti-calendar-event" /> 📅 Agendar no Calendário
+                </button>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: '#586e75', textTransform: 'uppercase' }}>Título da Aula</label>
+                  <input
+                    value={studioTitle}
+                    onChange={e => setStudioTitle(e.target.value)}
+                    placeholder="Ex: Present Perfect vs Past Simple — Practice & Roleplay"
+                    style={{ width: '100%', padding: '9px 12px', borderRadius: 10, border: '1px solid rgba(139,115,85,0.2)', fontSize: 13, outline: 'none', background: '#fcfaf6' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: '#586e75', textTransform: 'uppercase' }}>Data de Aplicação</label>
+                  <input
+                    type="date"
+                    value={studioDate}
+                    onChange={e => setStudioDate(e.target.value)}
+                    style={{ width: '100%', padding: '9px 12px', borderRadius: 10, border: '1px solid rgba(139,115,85,0.2)', fontSize: 13, outline: 'none', background: '#fcfaf6' }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: '#586e75', textTransform: 'uppercase' }}>Escola</label>
+                  <select value={studioSchool} onChange={e => setStudioSchool(e.target.value)} style={{ width: '100%', padding: '9px 12px', borderRadius: 10, border: '1px solid rgba(139,115,85,0.2)', fontSize: 13, outline: 'none', background: '#fcfaf6' }}>
+                    <option value="">Selecione...</option>
+                    {userSchools.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: '#586e75', textTransform: 'uppercase' }}>Turma</label>
+                  <select value={studioClass} onChange={e => setStudioClass(e.target.value)} style={{ width: '100%', padding: '9px 12px', borderRadius: 10, border: '1px solid rgba(139,115,85,0.2)', fontSize: 13, outline: 'none', background: '#fcfaf6' }}>
+                    <option value="">Selecione...</option>
+                    {userClasses.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: '#586e75', textTransform: 'uppercase' }}>Duração (min)</label>
+                  <input value={studioDuration} onChange={e => setStudioDuration(e.target.value)} placeholder="50" style={{ width: '100%', padding: '9px 12px', borderRadius: 10, border: '1px solid rgba(139,115,85,0.2)', fontSize: 13, outline: 'none', background: '#fcfaf6' }} />
+                </div>
+              </div>
+
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                <label style={{ fontSize: 11, fontWeight: 700, color: '#586e75', textTransform: 'uppercase', marginBottom: 6 }}>Desenvolvimento do Plano de Aula (Escrita Livre)</label>
+                <textarea
+                  value={studioText}
+                  onChange={e => setStudioText(e.target.value)}
+                  placeholder="Escreva livremente os passos da sua aula, introdução, atividade prática, exercícios e fechamento..."
+                  style={{ flex: 1, minHeight: 300, padding: 16, borderRadius: 12, border: '1px solid rgba(139,115,85,0.2)', fontSize: 14, lineHeight: 1.6, background: '#fffcf8', color: '#2c1a0e', outline: 'none', resize: 'none', fontFamily: 'inherit' }}
+                />
+              </div>
+            </div>
+
+            {/* Painel Lateral: Perguntas & Ferramentas Pedagógicas */}
+            <div style={{ width: 340, display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div style={{ background: '#fffcf8', border: '1px solid rgba(139,115,85,0.2)', borderRadius: 20, padding: 20, boxShadow: '0 4px 16px rgba(44,26,14,0.06)' }}>
+                <h3 style={{ fontSize: 15, fontWeight: 700, color: '#8b5e3c', margin: '0 0 12px', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  💡 Perguntas Guia de Planejamento
+                </h3>
+                <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12.5, color: '#586e75', lineHeight: 1.6 }}>
+                  <li><strong>Warm-up:</strong> Qual é o gancho inicial para despertar interesse?</li>
+                  <li><strong>Evidência:</strong> Como saber se o aluno aprendeu ao final da aula?</li>
+                  <li><strong>Diferenciação:</strong> Como apoiar alunos com dificuldades de compreensão?</li>
+                  <li><strong>Encerramento:</strong> Qual é o wrap-up / síntese dos conceitos?</li>
+                </ul>
+              </div>
+
+              <div style={{ background: '#fffcf8', border: '1px solid rgba(139,115,85,0.2)', borderRadius: 20, padding: 20, boxShadow: '0 4px 16px rgba(44,26,14,0.06)' }}>
+                <h3 style={{ fontSize: 15, fontWeight: 700, color: '#8b5e3c', margin: '0 0 12px', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  🛠️ Ferramentas & Metodologias
+                </h3>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 12 }}>
+                  <button onClick={() => setStudioText(prev => prev + '\n\n**Metodologia PPP (Presentation - Practice - Production)**\n1. Presentation (10m)\n2. Practice (20m)\n3. Production (20m)')} style={{ padding: '8px 12px', background: '#f5efe6', border: '1px solid rgba(139,115,85,0.2)', borderRadius: 10, cursor: 'pointer', textAlign: 'left', fontWeight: 600, color: '#2c1a0e' }}>
+                    + Inserir Estrutura PPP
+                  </button>
+                  <button onClick={() => setStudioText(prev => prev + '\n\n**Competência BNCC (EF06LI01)**\nInteragir em situações de intercâmbio oral, demonstrando iniciativa para utilizar a língua inglesa.')} style={{ padding: '8px 12px', background: '#f5efe6', border: '1px solid rgba(139,115,85,0.2)', borderRadius: 10, cursor: 'pointer', textAlign: 'left', fontWeight: 600, color: '#2c1a0e' }}>
+                    + Inserir Competência BNCC
+                  </button>
+                  <button onClick={() => setStudioText(prev => prev + '\n\n**Avaliação Formativa:**\n- Checagem rápida por sinalização de mãos\n- Mini quiz de fechamento')} style={{ padding: '8px 12px', background: '#f5efe6', border: '1px solid rgba(139,115,85,0.2)', borderRadius: 10, cursor: 'pointer', textAlign: 'left', fontWeight: 600, color: '#2c1a0e' }}>
+                    + Inserir Avaliação Formativa
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : viewMode === 'folders' ? (
+          /* ── MODO VISÃO POR PASTAS DE ESCOLA & TURMA ── */
+          <div style={{ flex: 1, padding: 24, background: '#fffcf8', overflowY: 'auto' }}>
+            <h2 style={{ fontFamily: 'Georgia, serif', fontSize: 22, fontWeight: 700, color: '#073642', margin: '0 0 16px', display: 'flex', alignItems: 'center', gap: 10 }}>
+              📁 Organização Visual de Aulas por Pastas
+            </h2>
+            <p style={{ fontSize: 13, color: '#586e75', margin: '0 0 24px' }}>
+              Selecione uma pasta de Escola e Turma para visualizar os planejamentos associados.
+            </p>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 20 }}>
+              {userSchools.map(sch => {
+                const schClasses = userClasses.filter(c => !c.schoolId || c.schoolId === sch.id)
+                return schClasses.map(cls => {
+                  const folderCards = cards.filter(c => c.school === sch.name && c.className === cls.name)
+                  return (
+                    <div
+                      key={sch.id + '_' + cls.id}
+                      onClick={() => {
+                        setFilterSchool(sch.name)
+                        setFilterClass(cls.name)
+                        setViewMode('calendar')
+                      }}
+                      style={{
+                        background: '#fff', border: '1px solid rgba(139,115,85,0.2)', borderRadius: 16,
+                        padding: 20, cursor: 'pointer', boxShadow: '0 4px 16px rgba(44,26,14,0.06)',
+                        transition: 'transform 0.15s ease', display: 'flex', flexDirection: 'column', gap: 8
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <span style={{ fontSize: 32 }}>📁</span>
+                        <div>
+                          <h4 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#2c1a0e' }}>{cls.name}</h4>
+                          <span style={{ fontSize: 12, color: '#8b5e3c', fontWeight: 600 }}>{sch.name}</span>
+                        </div>
+                      </div>
+                      <div style={{ fontSize: 12, color: '#665c54', marginTop: 6 }}>
+                        <strong>{folderCards.length}</strong> aulas agendadas
+                      </div>
+                    </div>
+                  )
+                })
               })}
             </div>
           </div>

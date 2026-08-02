@@ -45,12 +45,13 @@ import WeeklyAgenda from '@/components/modules/WeeklyAgenda'
 import BatchGrader from '@/components/modules/BatchGrader'
 import ProgressTracker from '@/components/modules/ProgressTracker'
 import AutoReport from '@/components/modules/AutoReport'
+import Organization from '@/components/modules/Organization'
 
 import CommandPalette from '@/components/CommandPalette'
 import LanguageSelector from '@/components/LanguageSelector'
 
 export type ModuleKey = 'dashboard' | 'quick' | 'exam' | 'lessonstudio' | 'plan' | 'rubric' |
-  'gradebook' | 'students' | 'classes' | 'analytics' | 'calendar' | 'comms' | 'repo' |
+  'gradebook' | 'students' | 'classes' | 'organization' | 'analytics' | 'calendar' | 'comms' | 'repo' |
   'wellbeing' | 'settings' | 'api' | 'qbank' | 'mindmap' | 'editor' |
   'communications' | 'portfolio' | 'extensions' | 'portalmirror' | 'omnigrader' | 'maestro' | 'classlog' | 'didacticsequence' | 'livequiz' | 'parentcomms' |
   'classroommode' | 'flashcardmode' | 'audiopronunciation' |
@@ -67,6 +68,7 @@ const MODULES: Record<ModuleKey, React.ComponentType> = {
   omnigrader:       OmniGrader,
   students:         Students,
   classes:          Classes,
+  organization:     Organization,
   analytics:        Analytics,
   calendar:         Planner,
   comms:            Communications,
@@ -176,36 +178,6 @@ export default function Home() {
         position: 'fixed', bottom: 24, right: 94, zIndex: 9995,
         display: 'flex', alignItems: 'center', gap: 10
       }}>
-        {/* Botão de Seleção de Idioma no Canto Inferior Direito */}
-        <div style={{ position: 'relative' }}>
-          {showLangMenu && (
-            <div style={{
-              position: 'absolute', bottom: 50, right: 0,
-              background: '#fffcf8', border: '1px solid rgba(139,115,85,0.2)',
-              borderRadius: 16, padding: 10, boxShadow: '0 12px 36px rgba(44,26,14,0.18)',
-              display: 'flex', flexDirection: 'column', gap: 6, minWidth: 140,
-            }}>
-              <div style={{ fontSize: 10.5, fontWeight: 800, color: '#8b5e3c', textTransform: 'uppercase', padding: '2px 6px', letterSpacing: '0.5px' }}>
-                🌐 Idioma / Language
-              </div>
-              <LanguageSelector />
-            </div>
-          )}
-          <button
-            onClick={() => setShowLangMenu(!showLangMenu)}
-            title="Selecionar Idioma"
-            style={{
-              padding: '9px 16px', borderRadius: 24, border: '1px solid rgba(139,115,85,0.22)',
-              background: '#fffcf8', color: '#2c1a0e', fontSize: 12.5, fontWeight: 700,
-              cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
-              boxShadow: '0 4px 16px rgba(44,26,14,0.08)', transition: 'all 0.15s ease'
-            }}
-          >
-            <i className="ti ti-world" style={{ color: '#8b5e3c', fontSize: 16 }} />
-            <span>Idioma</span>
-          </button>
-        </div>
-
         {/* Botão de Busca Rápida no Canto Inferior Direito */}
         <button
           onClick={() => setIsCommandPaletteOpen(true)}

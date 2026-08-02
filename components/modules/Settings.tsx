@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react'
 import ModuleShell from '@/components/ModuleShell'
 import ModuleCard from '@/components/ModuleCard'
 
+import LanguageSelector from '@/components/LanguageSelector'
+
 interface Config { school: string; teacher: string; apikey: string; instructions: string; cloudSyncUrl?: string }
 
 const STORAGE_KEYS = [
@@ -134,6 +136,14 @@ export default function Settings() {
       subtitle="Configurações gerais, backup completo em JSON e sincronização cloud."
       maxWidth={780}
     >
+      {/* Idioma do Aplicativo */}
+      <ModuleCard title="Idioma do Aplicativo / Language" icon="ti-world" style={{ marginBottom: 20 }}>
+        <p style={{ fontSize: 13, color: '#586e75', margin: '0 0 12px' }}>
+          Escolha o idioma de preferência para a interface do Teacher AI.
+        </p>
+        <LanguageSelector />
+      </ModuleCard>
+
       {/* Identidade */}
       <ModuleCard title="Identidade" icon="ti-building-school" style={{ marginBottom: 20 }}>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
