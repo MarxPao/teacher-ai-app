@@ -358,9 +358,20 @@ async function callProviderWithFallback(
   throw new Error(`Nenhum provedor de IA conseguiu responder. Último erro: ${lastError}`)
 }
 
+import { checkRateLimit } from '@/lib/rateLimit'
+
 // ─── Handler principal ────────────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
   try {
+    const clientIp = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || '127.0.0.1'
+    const rl = checkRateLimit(clientIp, 40, 60000)
+    if (!rl.success) {
+      return Response.json(
+        { error: 'Muitas requisições enviadas em um curto período. Por favor aguarde alguns segundos antes de tentar novamente.' },
+        { status: 429, headers: { 'Retry-After': String(Math.ceil(rl.resetInMs / 1000)) } }
+      )
+    }
+
     const body = await req.json()
     const { messages, context, provider, userKey, autoMode, userKeys = {} } = body as {
       messages: CanonicalMessage[]
