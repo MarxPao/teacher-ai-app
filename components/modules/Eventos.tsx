@@ -880,11 +880,11 @@ export default function Eventos() {
               {/* Omnibox Form */}
               <form onSubmit={handleNavigateCanvaOmnibox} style={{ flex: 1, display: 'flex', gap: 8 }}>
                 <div style={{ flex: 1, display: 'flex', alignItems: 'center', background: '#fff', borderRadius: 10, border: '1px solid rgba(139,115,85,0.25)', padding: '0 12px' }}>
-                  <span style={{ fontSize: 13, marginRight: 6 }}>🔒</span>
+                  <span style={{ fontSize: 13, marginRight: 6 }}>🎨</span>
                   <input
                     value={canvaOmniboxInput}
                     onChange={e => setCanvaOmniboxInput(e.target.value)}
-                    placeholder="https://www.canva.com/..."
+                    placeholder="Cole a URL da sua pasta do Canva (ex: https://www.canva.com/folder/... ou design)"
                     style={{ width: '100%', border: 'none', outline: 'none', padding: '8px 0', fontSize: 13, color: '#2c1a0e' }}
                   />
                 </div>
@@ -893,9 +893,18 @@ export default function Eventos() {
 
               {/* Ações Agênticas no Navegador */}
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <span style={{ fontSize: 11.5, fontWeight: 700, color: '#2e7d32', background: '#e8f5e9', padding: '4px 8px', borderRadius: 6 }}>
-                  🟢 Canva Mirror Conectado
-                </span>
+                <button
+                  onClick={() => {
+                    setNewCanvaTitle(`Pasta Canva — ${activeEvent.title}`)
+                    setNewCanvaUrl(canvaOmniboxInput)
+                    setNewCanvaType('folder')
+                    setShowCanvaLinkModal(true)
+                  }}
+                  style={{ ...PrimaryBtnStyle, background: '#2e7d32' }}
+                  title="Salva e vincula a URL da pasta do Canva ao evento atual"
+                >
+                  📌 Vincular esta Pasta ao Evento
+                </button>
                 <button onClick={handleInspectCanvaPage} disabled={inspecting} style={PrimaryBtnStyle}>
                   {inspecting ? '🔍 Lendo Tela...' : '🔍 Inspecionar Projetos'}
                 </button>
@@ -903,19 +912,19 @@ export default function Eventos() {
                   onClick={() => window.open(canvaBrowserUrl, 'CanvaStudioMirror', 'width=1280,height=800,scrollbars=yes,resizable=yes')}
                   style={{ ...PrimaryBtnStyle, background: '#00c4cc' }}
                 >
-                  🚀 Pop-up Studio (1280x800)
+                  🚀 Abrir Canva Web Studio
                 </button>
               </div>
             </div>
 
-            {/* 3. Split-Screen Layout (Esquerda: Tela do Navegador / Direita: Controles Agênticos) */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', minHeight: 620 }}>
+            {/* 3. Split-Screen Layout (Esquerda: Tela do Navegador Canva / Direita: Controles Agênticos) */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 360px', minHeight: 650 }}>
               {/* Esquerda: Tela do Navegador Canva */}
               <div style={{ borderRight: '1px solid rgba(139,115,85,0.15)', background: '#fff', display: 'flex', flexDirection: 'column' }}>
-                {canvaBrowserUrl.includes('/design/') && canvaBrowserUrl.includes('/view') ? (
+                {canvaBrowserUrl.includes('/design/') || canvaBrowserUrl.includes('/folder/') || canvaBrowserUrl.includes('/view') ? (
                   <iframe
-                    src={canvaBrowserUrl.endsWith('?embed') ? canvaBrowserUrl : `${canvaBrowserUrl}?embed`}
-                    style={{ width: '100%', height: '100%', border: 'none', flex: 1 }}
+                    src={canvaBrowserUrl.includes('/design/') && !canvaBrowserUrl.includes('/view') ? `${canvaBrowserUrl}/view?embed` : canvaBrowserUrl}
+                    style={{ width: '100%', height: '100%', border: 'none', flex: 1, minHeight: 600 }}
                     title="Navegador Canva Mirror"
                     allowFullScreen
                   />
@@ -924,23 +933,23 @@ export default function Eventos() {
                     <div>
                       <div style={{ background: 'linear-gradient(135deg, #e6fffa 0%, #ccfbf1 100%)', border: '1px solid #99f6e4', borderRadius: 16, padding: 20, marginBottom: 20 }}>
                         <div style={{ fontSize: 16, fontWeight: 800, color: '#0f766e', marginBottom: 6 }}>
-                          🖥️ Navegador Canva Mirror Ativo
+                          🖥️ Navegador Canva Web & Gestor de Pastas Integrado
                         </div>
                         <div style={{ fontSize: 13, color: '#115e59', lineHeight: 1.6 }}>
-                          Assim como no <strong>Portal Mirror</strong>, este navegador permite que a Rafinha leia seus cartazes do evento <strong>"{activeEvent.title}"</strong> e sugira elementos gráficos em tempo real.
+                          Abra suas pastas do Canva, crie cartazes pedagógicos e conecte os arquivos diretamente ao evento <strong>"{activeEvent.title}"</strong>. Cole o link da sua pasta do Canva na barra acima ou clique em <strong>📌 Vincular esta Pasta ao Evento</strong>.
                         </div>
                       </div>
 
-                      {/* Grade de Atalhos de Ateliês */}
+                      {/* Grade de Atalhos de Ateliês e Pastas */}
                       <h4 style={{ margin: '0 0 12px', fontSize: 14, fontWeight: 800, color: '#2c1a0e' }}>
-                        Ateliês Prontos de Eventos Escolares:
+                        Ateliês e Pastas Rápidas do Canva:
                       </h4>
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
                         {[
                           { title: '🎨 Cartazes do Evento', desc: 'Flyers A3/A4 para murais', url: 'https://www.canva.com/create/posters/' },
                           { title: '📜 Certificados em PDF', desc: 'Certificados para alunos', url: 'https://www.canva.com/create/certificates/' },
                           { title: '📽️ Apresentações Slides', desc: 'Banners para o auditório', url: 'https://www.canva.com/create/presentations/' },
-                          { title: '📁 Pastas de Mídia', desc: 'Minhas pastas no Canva', url: 'https://www.canva.com/folders/' }
+                          { title: '📁 Minhas Pastas no Canva', desc: 'Sua conta e pastas no Canva', url: 'https://www.canva.com/folders/' }
                         ].map((card, i) => (
                           <div
                             key={i}
