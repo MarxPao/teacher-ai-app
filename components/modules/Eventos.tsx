@@ -837,27 +837,100 @@ export default function Eventos() {
             </div>
           </div>
 
-          {/* SUB-ABA 1: NAVEGADOR CANVA EMBUTIDO */}
+          {/* SUB-ABA 1: NAVEGADOR CANVA EMBUTIDO & LAUNCHPAD POP-UP */}
           {canvaSubTab === 'embedded' && (
-            <ModuleCard title="Estúdio Canva Integrado (Navegador Embutido)" icon="ti-palette" padding={14}>
-              <div style={{ display: 'flex', gap: 10, marginBottom: 12, alignItems: 'center' }}>
+            <ModuleCard title="Estúdio & Ponte Canva Connect Integrado" icon="ti-palette" padding={16}>
+              {/* Banner de Ajuda e Acesso Rápido */}
+              <div style={{ background: 'linear-gradient(135deg, #e6fffa 0%, #ccfbf1 100%)', border: '1px solid #99f6e4', borderRadius: 14, padding: 16, marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 14 }}>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: '#0f766e', marginBottom: 4 }}>
+                    🎨 Estúdio Canva em Janela Integrada (Pop-up) ou Embed Oficial
+                  </div>
+                  <div style={{ fontSize: 12.5, color: '#115e59', lineHeight: 1.5 }}>
+                    Para criar e editar cartazes do evento sem restrições do navegador, abra o Canva em janela de aplicativo de 1 clique ou cole uma URL de design do Canva (`/view?embed`).
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <button
+                    onClick={() => window.open(activeEmbedUrl || 'https://www.canva.com/', 'CanvaStudioWindow', 'width=1280,height=800,scrollbars=yes,resizable=yes')}
+                    style={{ padding: '10px 18px', background: '#00c4cc', color: '#fff', border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, boxShadow: '0 4px 12px rgba(0,196,204,0.3)' }}
+                  >
+                    🚀 Abrir Canva Studio (Janela Integrada 1280x800)
+                  </button>
+                  <button
+                    onClick={() => window.open(activeEmbedUrl || 'https://www.canva.com/', '_blank')}
+                    style={{ ...SecondaryBtnStyle, background: '#fff' }}
+                  >
+                    ↗️ Nova Aba
+                  </button>
+                </div>
+              </div>
+
+              {/* Barra de Navegação URL */}
+              <div style={{ display: 'flex', gap: 10, marginBottom: 14, alignItems: 'center' }}>
                 <span style={{ fontSize: 12.5, fontWeight: 700, color: '#586e75' }}>URL no Estúdio:</span>
                 <input
                   value={activeEmbedUrl}
                   onChange={e => setActiveEmbedUrl(e.target.value)}
-                  style={{ flex: 1, padding: '7px 12px', borderRadius: 8, border: '1px solid rgba(139,115,85,0.2)', fontSize: 13, background: '#fff' }}
+                  placeholder="https://www.canva.com/design/... ou https://www.canva.com/"
+                  style={{ flex: 1, padding: '8px 12px', borderRadius: 8, border: '1px solid rgba(139,115,85,0.2)', fontSize: 13, background: '#fff' }}
                 />
                 <button onClick={() => setActiveEmbedUrl('https://www.canva.com/')} style={SecondaryBtnStyle}>
                   Home Canva
                 </button>
               </div>
 
-              <div style={{ width: '100%', height: 640, borderRadius: 14, overflow: 'hidden', border: '1px solid rgba(139,115,85,0.2)', background: '#fff' }}>
-                <iframe
-                  src={activeEmbedUrl}
-                  style={{ width: '100%', height: '100%', border: 'none' }}
-                  title="Estúdio Canva Integrado"
-                />
+              {/* Hub de Templates de Eventos Rápidos */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10, marginBottom: 16 }}>
+                {[
+                  { title: '🎨 Cartazes de Eventos', url: 'https://www.canva.com/create/posters/' },
+                  { title: '📜 Certificados de Participação', url: 'https://www.canva.com/create/certificates/' },
+                  { title: '📽️ Apresentações de Eventos', url: 'https://www.canva.com/create/presentations/' },
+                  { title: '📁 Minhas Pastas no Canva', url: 'https://www.canva.com/folders/' },
+                ].map((tpl, i) => (
+                  <button
+                    key={i}
+                    onClick={() => {
+                      setActiveEmbedUrl(tpl.url)
+                      window.open(tpl.url, 'CanvaStudioWindow', 'width=1280,height=800,scrollbars=yes,resizable=yes')
+                    }}
+                    style={{
+                      padding: '10px 12px', background: '#fffcf8', border: '1px solid rgba(139,115,85,0.2)',
+                      borderRadius: 10, fontSize: 12.5, fontWeight: 700, color: '#8b5e3c', cursor: 'pointer', textAlign: 'left'
+                    }}
+                  >
+                    {tpl.title} ↗️
+                  </button>
+                ))}
+              </div>
+
+              {/* Frame Guard / Embed Container */}
+              <div style={{ width: '100%', height: 540, borderRadius: 14, overflow: 'hidden', border: '1px solid rgba(139,115,85,0.2)', background: '#fdf8f2', display: 'flex', flexDirection: 'column' }}>
+                {activeEmbedUrl.includes('/design/') && activeEmbedUrl.includes('/view') ? (
+                  <iframe
+                    src={activeEmbedUrl.endsWith('?embed') ? activeEmbedUrl : `${activeEmbedUrl}?embed`}
+                    style={{ width: '100%', height: '100%', border: 'none' }}
+                    title="Estúdio Canva Embed Oficial"
+                    allowFullScreen
+                  />
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', padding: 30, textAlign: 'center' }}>
+                    <span style={{ fontSize: 42, marginBottom: 12 }}>🎨</span>
+                    <h3 style={{ margin: '0 0 8px', fontSize: 18, color: '#2c1a0e', fontWeight: 800 }}>
+                      Estúdio Canva Pronto para Uso
+                    </h3>
+                    <p style={{ margin: '0 0 16px', fontSize: 13, color: '#665c54', maxWidth: 500, lineHeight: 1.5 }}>
+                      O Canva requer que telas de login/edição geral sejam abertas em janela de aplicativo integrada ou via URLs de visualização oficial (`/view?embed`).
+                    </p>
+                    <button
+                      onClick={() => window.open(activeEmbedUrl || 'https://www.canva.com/', 'CanvaStudioWindow', 'width=1280,height=800,scrollbars=yes,resizable=yes')}
+                      style={{ padding: '12px 24px', background: '#00c4cc', color: '#fff', border: 'none', borderRadius: 12, fontSize: 14, fontWeight: 800, cursor: 'pointer', boxShadow: '0 4px 15px rgba(0,196,204,0.4)' }}
+                    >
+                      🚀 Lançar Estúdio Canva (Janela Integrada 1280x800)
+                    </button>
+                  </div>
+                )}
               </div>
             </ModuleCard>
           )}
