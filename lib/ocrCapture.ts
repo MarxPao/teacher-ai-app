@@ -124,3 +124,42 @@ export async function extractContentFromImage(base64: string, api: ApiConfig): P
     throw new Error(`Falha no OCR: ${msg}`)
   }
 }
+
+export async function extractTextFromImageAuto(base64: string): Promise<string> {
+  try {
+    const apisRaw = typeof window !== 'undefined' ? localStorage.getItem('teacher_apis') : null
+    let api: ApiConfig | null = null
+    if (apisRaw) {
+      const parsed: ApiConfig[] = JSON.parse(apisRaw)
+      api = parsed.find(a => (a.provider === 'gemini' || a.provider === 'openai') && a.key) || parsed[0] || null
+    }
+
+    if (api && api.key && api.provider !== 'manual') {
+      const res = await extractContentFromImage(base64, api)
+      return res.rawText || ''
+    }
+
+    // Fallback: faz chamada via /api/agent com Vision
+    const r = await fetch('/api/agent', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        messages: [{
+          role: 'user',
+          content: 'Extraia todo o texto didático, diálogos e exercícios visíveis nesta imagem de página de livro. Retorne o texto limpo e organizado.',
+          image: base64
+        }],
+        context: 'ocr_capture'
+      })
+    })
+
+    const d = await r.json()
+    if (d.error) throw new Error(d.error)
+    const extracted = d.content?.find((c: any) => c.type === 'text')?.text || d.text || ''
+    return extracted.trim()
+  } catch (err: unknown) {
+    console.error('[OCR Auto Error]:', err)
+    throw new Error(err instanceof Error ? err.message : 'Falha na leitura visual da imagem.')
+  }
+}
+

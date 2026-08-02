@@ -241,6 +241,7 @@ export default function Repository() {
   const [uploadingStatus, setUploadingStatus] = useState<string>('')
 
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const imageInputRef = useRef<HTMLInputElement | null>(null)
 
   // ── Load ──────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -405,6 +406,138 @@ export default function Repository() {
     }
   }
 
+  // ── Upload de Imagens / Prints da Tela (OCR Visão IA) ─────────────────────
+  async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files || [])
+    if (files.length === 0) return
+    if (imageInputRef.current) imageInputRef.current.value = ''
+
+    setUploadingStatus(`📷 Lendo ${files.length} foto(s)/print(s) de página via Visão IA (OCR)...`)
+
+    try {
+      const { extractTextFromImageAuto } = await import('@/lib/ocrCapture')
+      let compiledText = ''
+      let processedCount = 0
+
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i]
+        setUploadingStatus(`📷 Processando foto/print ${i + 1} de ${files.length} (${file.name})...`)
+
+        const base64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader()
+          reader.onload = (ev) => resolve(ev.target?.result as string)
+          reader.onerror = () => reject(new Error(`Erro ao ler imagem ${file.name}`))
+          reader.readAsDataURL(file)
+        })
+
+        const extracted = await extractTextFromImageAuto(base64)
+        if (extracted) {
+          compiledText += `--- Página / Print ${i + 1} (${file.name}) ---\n${extracted}\n\n`
+          processedCount++
+        }
+      }
+
+      if (!compiledText.trim()) {
+        setUploadingStatus('')
+        alert('Não foi possível extrair texto legível das fotos/prints selecionados.')
+        return
+      }
+
+      const { normalizeAndReconstructText } = await import('@/lib/pdfExtractor')
+      const cleaned = normalizeAndReconstructText(compiledText)
+      const wCount = countWords(cleaned)
+      const cCount = countChunks(cleaned)
+      const bookTitle = files.length === 1 ? files[0].name.replace(/\.[^/.]+$/, '') : `Captura de Material (${files.length} páginas)`
+
+      const item: RepositoryItem = {
+        id: Date.now(),
+        title: bookTitle,
+        content: cleaned,
+        type: "Student's Book",
+        category: 'Captura Visual (Prints/Fotos)',
+        date: new Date().toLocaleDateString('pt-BR'),
+        wordCount: wCount,
+        chunkCount: cCount,
+      }
+
+      const updated = [item, ...items]
+      save(updated)
+      setViewItem(item)
+      setMode('view')
+      setUploadingStatus('')
+      alert(`🎉 Material compilado com sucesso por Visão IA (OCR)!\n\n📊 Total: ${processedCount} página(s) lida(s) · ${wCount.toLocaleString()} palavras em ${cCount} seções.\n\nTodo o texto extraído da tela/foto já alimentou a biblioteca e a IA (ExamBuilder, LessonStudio e Rafinha).`)
+    } catch (err: unknown) {
+      setUploadingStatus('')
+      alert(`⚠️ Falha no OCR Visual: ${err instanceof Error ? err.message : 'Não foi possível extrair texto das imagens.'}`)
+    }
+  }
+
+  // ── Captura de Tela da Plataforma ao Vivo (Screen Share Frame Grab) ─────────
+  async function captureScreenLive() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+      alert('Seu navegador não suporta a captura de tela direta. Por favor tire prints da tela e use o botão "📷 Importar Prints / Fotos (OCR)".')
+      return
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getDisplayMedia({ video: { displaySurface: 'browser' } as any })
+      const video = document.createElement('video')
+      video.srcObject = stream
+      await video.play()
+
+      // Aguarda 1s para o vídeo estabilizar
+      await new Promise(r => setTimeout(r, 1000))
+
+      const canvas = document.createElement('canvas')
+      canvas.width = video.videoWidth || 1280
+      canvas.height = video.videoHeight || 720
+      const ctx = canvas.getContext('2d')
+      ctx?.drawImage(video, 0, 0, canvas.width, canvas.height)
+
+      // Para a gravação da tela
+      stream.getTracks().forEach(track => track.stop())
+
+      const base64 = canvas.toDataURL('image/png')
+      setUploadingStatus('📸 Analisando captura da plataforma via IA Visão...')
+
+      const { extractTextFromImageAuto } = await import('@/lib/ocrCapture')
+      const extractedText = await extractTextFromImageAuto(base64)
+
+      if (!extractedText || extractedText.trim().length < 15) {
+        setUploadingStatus('')
+        alert('Não foi possível identificar texto legível na tela capturada.')
+        return
+      }
+
+      const { normalizeAndReconstructText } = await import('@/lib/pdfExtractor')
+      const cleaned = normalizeAndReconstructText(extractedText)
+      const wCount = countWords(cleaned)
+      const cCount = countChunks(cleaned)
+
+      const item: RepositoryItem = {
+        id: Date.now(),
+        title: `Captura de Tela - ${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`,
+        content: cleaned,
+        type: "Student's Book",
+        category: 'Captura de Tela ao Vivo',
+        date: new Date().toLocaleDateString('pt-BR'),
+        wordCount: wCount,
+        chunkCount: cCount,
+      }
+
+      const updated = [item, ...items]
+      save(updated)
+      setViewItem(item)
+      setMode('view')
+      setUploadingStatus('')
+      alert(`🎉 Tela da plataforma lida e gravada com sucesso!\n\n📊 Estatísticas: ${wCount.toLocaleString()} palavras extraídas.\n\nO conteúdo capturado já está alimentando a biblioteca e o RAG da IA.`)
+    } catch (err: unknown) {
+      setUploadingStatus('')
+      if (err instanceof Error && err.name === 'NotAllowedError') return
+      alert(`⚠️ Falha na captura de tela: ${err instanceof Error ? err.message : String(err)}`)
+    }
+  }
+
 
   // ── Reimport Globalizers 4 ────────────────────────────────────────────────
   function reimportG4() {
@@ -533,9 +666,18 @@ export default function Repository() {
           )}
 
           <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept=".txt,.md,.json,.csv,.pdf,.docx,.doc" style={{ display: 'none' }} />
+          <input type="file" ref={imageInputRef} onChange={handleImageUpload} accept="image/*" multiple style={{ display: 'none' }} />
 
           <button onClick={() => fileInputRef.current?.click()} style={btnSecondary}>
             <i className="ti ti-upload" /> Importar PDF / Word / Arquivo
+          </button>
+
+          <button onClick={() => imageInputRef.current?.click()} style={{ ...btnSecondary, borderColor: '#8b5e3c', color: '#8b5e3c' }} title="Faça upload de fotos ou prints das páginas da plataforma para extrair 100% do texto com Visão IA (OCR)">
+            <i className="ti ti-camera" /> 📷 Prints / Fotos (OCR)
+          </button>
+
+          <button onClick={captureScreenLive} style={{ ...btnSecondary, borderColor: '#d4944a', color: '#d4944a' }} title="Capture a tela ou aba da plataforma educacional ao vivo para ler o material">
+            <i className="ti ti-device-desktop" /> 📸 Capturar Tela da Plataforma
           </button>
 
           <button onClick={reimportG4} style={{ ...btnSecondary, borderColor: '#27ae60', color: '#27ae60' }}>
@@ -545,6 +687,7 @@ export default function Repository() {
           <button onClick={() => { clearForm(); setMode('add') }} style={btnPrimary}>
             <i className="ti ti-plus" /> Adicionar Material
           </button>
+
         </div>
       }
     >
