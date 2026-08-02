@@ -237,6 +237,9 @@ export default function Repository() {
   const [readerFullscreen, setReaderFullscreen] = useState(false)
   const [showToc, setShowToc] = useState(false)
 
+  // Upload Progress State
+  const [uploadingStatus, setUploadingStatus] = useState<string>('')
+
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   // ── Load ──────────────────────────────────────────────────────────────────
@@ -346,17 +349,23 @@ export default function Repository() {
     if (!file) return
     if (fileInputRef.current) fileInputRef.current.value = ''
 
+    setUploadingStatus(`⏳ Preparando para compilar "${file.name}"...`)
+
     try {
       let text = ''
       const fileNameLower = file.name.toLowerCase()
 
       if (fileNameLower.endsWith('.docx') || fileNameLower.endsWith('.doc')) {
+        setUploadingStatus(`📄 Lendo arquivo Word "${file.name}"...`)
         const { extractTextFromDocx } = await import('@/lib/pdfExtractor')
         text = await extractTextFromDocx(file)
       } else if (file.type === 'application/pdf' || fileNameLower.endsWith('.pdf')) {
         const { extractTextFromPdf } = await import('@/lib/pdfExtractor')
-        text = await extractTextFromPdf(file)
+        text = await extractTextFromPdf(file, (current, total) => {
+          setUploadingStatus(`📄 Lendo e compilando livro: Página ${current} de ${total} (${Math.round((current / total) * 100)}%)...`)
+        })
       } else {
+        setUploadingStatus(`📄 Lendo arquivo de texto "${file.name}"...`)
         text = await new Promise<string>((resolve, reject) => {
           const reader = new FileReader()
           reader.onload = (ev) => resolve((ev.target?.result as string) || '')
@@ -366,6 +375,7 @@ export default function Repository() {
       }
 
       if (!text || text.trim().length < 15) {
+        setUploadingStatus('')
         alert('O arquivo selecionado não contém texto legível ou está vazio.')
         return
       }
@@ -387,11 +397,14 @@ export default function Repository() {
       save(updated)
       setViewItem(item)
       setMode('view')
-      alert(`🎉 Livro "${file.name}" importado e indexado no RAG com sucesso!\n\n📊 Estatísticas: ${wCount.toLocaleString()} palavras · ${cCount} seções.\n\nA IA (ExamBuilder, LessonStudio e Rafinha) usará este material como base de conhecimento real.`)
+      setUploadingStatus('')
+      alert(`🎉 Livro "${file.name}" compilado de ponta a ponta e indexado no RAG com sucesso!\n\n📊 Compilação: 100% do livro lido (${wCount.toLocaleString()} palavras em ${cCount} seções).\n\nA IA usará todo o conteúdo deste livro para gerar aulas e provas.`)
     } catch (err: unknown) {
+      setUploadingStatus('')
       alert(`⚠️ Falha na importação: ${err instanceof Error ? err.message : 'Não foi possível extrair o texto do arquivo.'}`)
     }
   }
+
 
   // ── Reimport Globalizers 4 ────────────────────────────────────────────────
   function reimportG4() {
@@ -509,6 +522,12 @@ export default function Repository() {
       maxWidth="100%"
       actions={
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          {uploadingStatus && (
+            <div style={{ background: '#fdf3e7', border: '1px solid #8b5e3c', color: '#8b5e3c', padding: '6px 14px', borderRadius: 10, fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <i className="ti ti-loader text-spin" /> {uploadingStatus}
+            </div>
+          )}
+
           <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept=".txt,.md,.json,.csv,.pdf,.docx,.doc" style={{ display: 'none' }} />
 
           <button onClick={() => fileInputRef.current?.click()} style={btnSecondary}>
