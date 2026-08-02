@@ -230,6 +230,13 @@ export default function Repository() {
   const [ragResults, setRagResults]   = useState<string[]>([])
   const [ragScope, setRagScope]       = useState<'all' | 'doc'>('all')
 
+  // Leitor Profissional State
+  const [readerFontSize, setReaderFontSize] = useState<'13px' | '15px' | '17px' | '19px'>('15px')
+  const [readerFontFamily, setReaderFontFamily] = useState<'Georgia, serif' | "'Plus Jakarta Sans', sans-serif" | 'monospace'>('Georgia, serif')
+  const [readerTheme, setReaderTheme] = useState<'paper' | 'sepia' | 'dark'>('sepia')
+  const [readerFullscreen, setReaderFullscreen] = useState(false)
+  const [showToc, setShowToc] = useState(false)
+
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   // ── Load ──────────────────────────────────────────────────────────────────
@@ -725,58 +732,136 @@ export default function Repository() {
               )}
             </div>
 
-          /* ── MODO VIEW ── */
+          /* ── MODO VIEW (LEITOR PROFISSIONAL) ── */
           ) : viewItem ? (
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            <div style={{
+              flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden',
+              position: readerFullscreen ? 'fixed' : 'relative',
+              top: readerFullscreen ? 0 : 'auto', left: readerFullscreen ? 0 : 'auto',
+              right: readerFullscreen ? 0 : 'auto', bottom: readerFullscreen ? 0 : 'auto',
+              zIndex: readerFullscreen ? 9999 : 'auto',
+              background: readerTheme === 'dark' ? '#1c1b18' : readerTheme === 'sepia' ? '#f4ecd8' : '#fffcf8',
+              color: readerTheme === 'dark' ? '#e2d5c3' : '#2c1a0e',
+              transition: 'all 0.2s ease'
+            }}>
 
-              {/* Header do documento */}
-              <div style={{ padding: '22px 28px 16px', borderBottom: '1px solid rgba(139,115,85,0.1)', background: '#fffcf8' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16 }}>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
-                      <span style={{ background: typeColor(viewItem.type), color: '#fff', fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 10 }}>
-                        {viewItem.type}
-                      </span>
-                      {viewItem.category && <span style={{ fontSize: 11, color: '#a08060' }}>{viewItem.category}</span>}
-                      <span style={{ fontSize: 11, color: '#c0a882' }}>· {viewItem.date}</span>
-                    </div>
-                    <h2 style={{ fontSize: 18, color: '#2c1a0e', fontWeight: 700, margin: '0 0 6px', lineHeight: 1.3 }}>
+              {/* Header do Leitor Profissional */}
+              <div style={{
+                padding: '16px 24px', borderBottom: readerTheme === 'dark' ? '1px solid rgba(255,255,255,0.1)' : '1px solid rgba(139,115,85,0.12)',
+                background: readerTheme === 'dark' ? '#151412' : readerTheme === 'sepia' ? '#eee3cb' : '#fff',
+                display: 'flex', flexDirection: 'column', gap: 12
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
+                    <span style={{ background: typeColor(viewItem.type), color: '#fff', fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 8, flexShrink: 0 }}>
+                      {viewItem.type}
+                    </span>
+                    <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'Georgia, serif' }}>
                       {typeIcon(viewItem.type)} {viewItem.title.replace(/^(📘|📙|📗|🟨|📋|📄)\s/, '')}
                     </h2>
-                    <div style={{ display: 'flex', gap: 16, fontSize: 12, color: '#a08060' }}>
-                      {viewItem.wordCount && (
-                        <>
-                          <span><i className="ti ti-text-size" /> {viewItem.wordCount.toLocaleString()} palavras</span>
-                          <span><i className="ti ti-sections" /> {viewItem.chunkCount} seções indexadas</span>
-                        </>
-                      )}
-                      {!viewItem.wordCount && (
-                        <span style={{ color: '#c0a882' }}>
-                          ⚠️ {countWords(viewItem.content).toLocaleString()} palavras · {countChunks(viewItem.content)} seções
-                        </span>
-                      )}
+                  </div>
+
+                  {/* Ações de Povoamento no App */}
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <button
+                      onClick={() => {
+                        localStorage.setItem('teacher_lessonstudio_prefill', JSON.stringify({ topic: viewItem.title, text: viewItem.content.slice(0, 2000) }))
+                        window.dispatchEvent(new CustomEvent('teacher:navigate', { detail: 'lessonstudio' }))
+                      }}
+                      style={{ padding: '7px 12px', borderRadius: 8, border: 'none', background: '#8b5e3c', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}
+                      title="Gerar plano de aula no Lesson Studio usando este livro"
+                    >
+                      <i className="ti ti-chalkboard" /> 📝 Criar Aula
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        localStorage.setItem('teacher_exam_prefill', JSON.stringify({ topic: viewItem.title, libraryId: viewItem.id }))
+                        window.dispatchEvent(new CustomEvent('teacher:navigate', { detail: 'exam' }))
+                      }}
+                      style={{ padding: '7px 12px', borderRadius: 8, border: 'none', background: '#d4944a', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}
+                      title="Gerar prova no ExamBuilder usando este livro"
+                    >
+                      <i className="ti ti-file-text" /> ✍️ Criar Prova
+                    </button>
+
+                    <button onClick={() => setMode('rag')} style={{ ...btnSecondary, fontSize: 12, padding: '7px 12px', borderColor: '#27ae60', color: '#27ae60' }}>
+                      <i className="ti ti-search" /> Testar RAG
+                    </button>
+                    <button onClick={() => startEdit(viewItem)} style={{ ...btnSecondary, fontSize: 12, padding: '7px 12px' }}>
+                      <i className="ti ti-pencil" /> Editar
+                    </button>
+                    <button onClick={() => deleteItem(viewItem.id)} style={{ ...btnSecondary, fontSize: 12, padding: '7px 12px', borderColor: '#dc322f', color: '#dc322f' }}>
+                      <i className="ti ti-trash" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Controles de Tipografia & Tema do Leitor */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: readerTheme === 'dark' ? '#252320' : 'rgba(139,115,85,0.06)', padding: '6px 12px', borderRadius: 10, flexWrap: 'wrap', gap: 10 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 12 }}>
+                    {/* Temas */}
+                    <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                      <span style={{ fontSize: 11, opacity: 0.7, fontWeight: 700, textTransform: 'uppercase' }}>Tema:</span>
+                      <button onClick={() => setReaderTheme('paper')} style={{ padding: '3px 8px', borderRadius: 6, border: '1px solid #d5cfc0', background: '#fff', color: '#2c1a0e', fontSize: 11, cursor: 'pointer', fontWeight: readerTheme === 'paper' ? 700 : 400 }}>☀️ Papel</button>
+                      <button onClick={() => setReaderTheme('sepia')} style={{ padding: '3px 8px', borderRadius: 6, border: '1px solid #c8ba9d', background: '#f4ecd8', color: '#433422', fontSize: 11, cursor: 'pointer', fontWeight: readerTheme === 'sepia' ? 700 : 400 }}>📜 Sépia</button>
+                      <button onClick={() => setReaderTheme('dark')} style={{ padding: '3px 8px', borderRadius: 6, border: '1px solid #444', background: '#1c1b18', color: '#e2d5c3', fontSize: 11, cursor: 'pointer', fontWeight: readerTheme === 'dark' ? 700 : 400 }}>🌙 Noche</button>
+                    </div>
+
+                    {/* Fonte */}
+                    <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                      <span style={{ fontSize: 11, opacity: 0.7, fontWeight: 700, textTransform: 'uppercase' }}>Fonte:</span>
+                      <select value={readerFontFamily} onChange={e => setReaderFontFamily(e.target.value as any)} style={{ padding: '3px 8px', borderRadius: 6, border: '1px solid rgba(139,115,85,0.2)', fontSize: 11, background: 'transparent', color: 'inherit', outline: 'none', cursor: 'pointer' }}>
+                        <option value="Georgia, serif">Georgia (Serif)</option>
+                        <option value="'Plus Jakarta Sans', sans-serif">Sans (Moderna)</option>
+                        <option value="monospace">Monospace</option>
+                      </select>
+                    </div>
+
+                    {/* Tamanho */}
+                    <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                      <span style={{ fontSize: 11, opacity: 0.7, fontWeight: 700, textTransform: 'uppercase' }}>Tamanho:</span>
+                      <button onClick={() => setReaderFontSize(s => s === '19px' ? '17px' : s === '17px' ? '15px' : '13px')} style={{ padding: '3px 8px', borderRadius: 6, border: '1px solid rgba(139,115,85,0.2)', background: 'transparent', color: 'inherit', fontSize: 11, cursor: 'pointer' }}>A-</button>
+                      <span style={{ fontSize: 11, fontWeight: 700 }}>{readerFontSize}</span>
+                      <button onClick={() => setReaderFontSize(s => s === '13px' ? '15px' : s === '15px' ? '17px' : '19px')} style={{ padding: '3px 8px', borderRadius: 6, border: '1px solid rgba(139,115,85,0.2)', background: 'transparent', color: 'inherit', fontSize: 11, cursor: 'pointer' }}>A+</button>
                     </div>
                   </div>
 
-                  {/* Ações */}
-                  <div style={{ display: 'flex', gap: 8, flexShrink: 0, flexWrap: 'wrap' }}>
-                    <button onClick={() => setMode('rag')} style={{ ...btnSecondary, fontSize: 12, padding: '8px 12px', borderColor: '#27ae60', color: '#27ae60' }}>
-                      <i className="ti ti-search" /> Testar RAG
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <button onClick={() => setShowToc(v => !v)} style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid rgba(139,115,85,0.2)', background: 'transparent', color: 'inherit', fontSize: 11, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <i className="ti ti-list" /> {showToc ? 'Ocultar Índice' : '📋 Índice'}
                     </button>
-                    <button onClick={() => startEdit(viewItem)} style={{ ...btnSecondary, fontSize: 12, padding: '8px 12px' }}>
-                      <i className="ti ti-pencil" /> Editar
-                    </button>
-                    <button onClick={() => deleteItem(viewItem.id)} style={{ ...btnSecondary, fontSize: 12, padding: '8px 12px', borderColor: '#dc322f', color: '#dc322f' }}>
-                      <i className="ti ti-trash" /> Excluir
+                    <button onClick={() => setReaderFullscreen(v => !v)} style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid rgba(139,115,85,0.2)', background: 'transparent', color: 'inherit', fontSize: 11, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <i className={readerFullscreen ? 'ti ti-minimize' : 'ti ti-maximize'} /> {readerFullscreen ? 'Sair da Tela Cheia' : '📖 Modo Imersivo'}
                     </button>
                   </div>
                 </div>
               </div>
 
-              {/* Conteúdo formatado */}
-              <div style={{ flex: 1, overflowY: 'auto', padding: '24px 28px', background: '#fffcf8' }}>
-                <div style={{ background: '#fff', borderRadius: 16, padding: '24px 28px', border: '1px solid rgba(139,115,85,0.1)', boxShadow: '0 4px 16px rgba(44,26,14,0.04)' }}>
-                  {formatContent(viewItem.content)}
+              {/* Corpo do Leitor Profissional com Painel de Índice (TOC) */}
+              <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+                {showToc && (
+                  <div style={{ width: 260, borderRight: readerTheme === 'dark' ? '1px solid rgba(255,255,255,0.1)' : '1px solid rgba(139,115,85,0.12)', padding: 16, overflowY: 'auto', background: readerTheme === 'dark' ? '#181714' : readerTheme === 'sepia' ? '#ebdcb9' : '#fcfaf6', fontSize: 12 }}>
+                    <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12, opacity: 0.7 }}>📋 Índice das Seções</div>
+                    {viewItem.content.split('\n').filter(l => /^\[.*\]$/.test(l.trim())).map((sec, idx) => (
+                      <div key={idx} style={{ padding: '6px 8px', borderRadius: 6, marginBottom: 4, cursor: 'pointer', fontWeight: 600, background: 'rgba(139,115,85,0.1)' }}>
+                        {sec.trim().replace(/^\[|\]$/g, '')}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div style={{ flex: 1, overflowY: 'auto', padding: '28px 36px' }}>
+                  <div style={{
+                    maxWidth: 800, margin: '0 auto',
+                    background: readerTheme === 'dark' ? '#252320' : readerTheme === 'sepia' ? '#fdf8ec' : '#ffffff',
+                    borderRadius: 16, padding: '32px 40px',
+                    border: readerTheme === 'dark' ? '1px solid rgba(255,255,255,0.06)' : '1px solid rgba(139,115,85,0.15)',
+                    boxShadow: '0 8px 30px rgba(0,0,0,0.06)',
+                    fontSize: readerFontSize, fontFamily: readerFontFamily, lineHeight: 1.8
+                  }}>
+                    {formatContent(viewItem.content)}
+                  </div>
                 </div>
               </div>
             </div>

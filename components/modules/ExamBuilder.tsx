@@ -68,7 +68,13 @@ function loadConfig(): { school: string; teacher: string } {
 }
 
 function loadLibrary(): RepositoryItem[] {
-  try { return JSON.parse(localStorage.getItem('teacher_library') || '[]') } catch { return [] }
+  try { 
+    const raw = localStorage.getItem('teacher_repo') 
+      || localStorage.getItem('teacher_repository') 
+      || localStorage.getItem('teacher_library') 
+      || '[]'
+    return JSON.parse(raw) 
+  } catch { return [] }
 }
 
 function cleanHtml(raw: string): string {

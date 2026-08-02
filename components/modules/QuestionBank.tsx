@@ -388,6 +388,56 @@ Para questões dissertativas ou V/F, omita "options". Para V/F, o "answer" deve 
     } finally { setIsGen(false) }
   }
 
+  function importFromLibrary() {
+    try {
+      const raw = localStorage.getItem('teacher_repo') || localStorage.getItem('teacher_repository') || '[]'
+      const items = JSON.parse(raw)
+      if (!items.length) {
+        alert('Nenhum livro encontrado na Biblioteca. Acesse o módulo "Biblioteca Digital" e adicione seus materiais.')
+        return
+      }
+
+      let extractedCount = 0
+      const newQs: Question[] = []
+
+      for (const item of items) {
+        const text: string = item.content || ''
+        const exMatches = text.match(/\d+\.\s+[^\n]+(?:\n\s*[a-d]\)[^\n]+)*/gi)
+        if (exMatches) {
+          exMatches.forEach((exText, idx) => {
+            newQs.push({
+              id: `lib_q_${Date.now()}_${idx}_${Math.random().toString(36).substring(2, 5)}`,
+              statement: exText.trim(),
+              type: exText.includes('Answer:') || exText.includes('a)') ? 'mc' : 'fill',
+              activityKind: 'exercise',
+              subject: 'Inglês',
+              topic: item.title.replace(/^[^\w]*/, '').slice(0, 35),
+              level: 'B1/B2',
+              year: '2025',
+              schoolId: schools[0]?.id || '',
+              classRef: '',
+              tags: ['Livro Didático', 'Biblioteca RAG', item.type || "Student's Book"],
+              createdAt: Date.now() + idx,
+              source: 'ai'
+            })
+            extractedCount++
+          })
+        }
+      }
+
+      if (extractedCount === 0) {
+        alert('Nenhum exercício formatado foi detectado nos livros da biblioteca. Você pode adicionar materiais com exercícios numerados (ex: 1. Complete with...).')
+        return
+      }
+
+      const updated = [...newQs, ...questions]
+      saveQs(updated)
+      alert(`🎉 ${extractedCount} exercício(s) extraído(s) da Biblioteca e adicionado(s) ao Banco de Questões com sucesso!`)
+    } catch {
+      alert('Erro ao importar da biblioteca.')
+    }
+  }
+
   function deleteQ(id: string) {
     if (!confirm('Excluir esta questão?')) return
     saveQs(questions.filter(q => q.id !== id))
@@ -410,9 +460,12 @@ Para questões dissertativas ou V/F, omita "options". Para V/F, o "answer" deve 
             Acervo central de aulas, provas, exercícios, rubricas e gabaritos integrados e auto-sincronizados.
           </p>
         </div>
-        <div style={{ display: 'flex', gap: 10 }}>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <button onClick={importFromLibrary} style={{ ...S.btn, background: '#27ae60', color: '#fffcf8' }}>
+            <i className="ti ti-book" /> 📚 Extrair da Biblioteca
+          </button>
           <button onClick={() => setModal('ai')} style={{ ...S.btn, background: '#d4944a', color: '#fffcf8' }}>
-            <i className="ti ti-sparkles" /> Gerar Atividade com IA
+            <i className="ti ti-sparkles" /> Gerar com IA
           </button>
           <button onClick={() => setModal('add')} style={{ ...S.btn, background: '#8b5e3c', color: '#fffcf8' }}>
             <i className="ti ti-plus" /> Adicionar Atividade
