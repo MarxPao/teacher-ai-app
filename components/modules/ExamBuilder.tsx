@@ -453,7 +453,26 @@ export default function ExamBuilder() {
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(320px, 420px) 1fr', gap: 32, flex: 1, minHeight: 0 }}>
 
         {/* ══ LEFT ══ */}
-        <div style={{ overflowY: 'auto', paddingRight: 8, paddingBottom: 32, display: 'flex', flexDirection: 'column', gap: 20 }}>
+        <div style={{ overflowY: 'auto', paddingRight: 8, paddingBottom: 32, display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+          {/* Botão de Destaque Superior de Geração */}
+          <button
+            onClick={generate}
+            disabled={loading || !hasApi}
+            style={{
+              padding: '14px 20px', borderRadius: 14,
+              background: loading ? '#93a1a1' : !hasApi ? '#e8e0d0' : 'linear-gradient(135deg, #8b5e3c, #5c3a21)',
+              color: !hasApi ? '#93a1a1' : '#fff',
+              fontSize: 15, fontWeight: 800, border: 'none',
+              cursor: loading || !hasApi ? 'not-allowed' : 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+              boxShadow: hasApi && !loading ? '0 4px 18px rgba(139,94,60,0.35)' : 'none',
+              fontFamily: 'inherit', transition: 'all 0.2s',
+            }}
+          >
+            <i className={loading ? 'ti ti-loader' : 'ti ti-file-certificate'} style={{ fontSize: 20, animation: loading ? 'spin 0.8s linear infinite' : 'none' }} />
+            {loading ? 'Construindo Prova...' : !hasApi ? 'Configure uma API para gerar' : '✨ Gerar Prova Completa'}
+          </button>
 
           {/* API */}
           {apis.length > 0 && (
@@ -469,6 +488,7 @@ export default function ExamBuilder() {
               )}
             </div>
           )}
+
           {apis.length === 0 && (
             <div style={{ ...CARD, background: 'rgba(181,137,0,0.06)', border: '1px solid rgba(181,137,0,0.25)' }}>
               <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
@@ -728,25 +748,36 @@ export default function ExamBuilder() {
             </div>
           </div>
 
-          {/* ── Generate Button ── */}
+          {/* ── Generate Button Sticky na Base ── */}
           <button
             id="exam-generate-btn"
             onClick={generate}
             disabled={loading || !hasApi}
             style={{
-              padding: 14, borderRadius: 14,
-              background: loading ? '#93a1a1' : !hasApi ? '#e8e0d0' : '#073642',
+              position: 'sticky',
+              bottom: 0,
+              zIndex: 10,
+              padding: 16,
+              borderRadius: 14,
+              background: loading ? '#93a1a1' : !hasApi ? '#e8e0d0' : 'linear-gradient(135deg, #8b5e3c 0%, #5c3a21 100%)',
               color: !hasApi ? '#93a1a1' : '#fff',
-              fontSize: 15, fontWeight: 700, border: 'none',
+              fontSize: 15,
+              fontWeight: 800,
+              border: 'none',
               cursor: loading || !hasApi ? 'not-allowed' : 'pointer',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
-              boxShadow: hasApi && !loading ? '0 4px 16px rgba(7,54,66,0.2)' : 'none',
-              fontFamily: 'inherit', transition: 'all 0.2s',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 10,
+              boxShadow: hasApi && !loading ? '0 -2px 18px rgba(44,26,14,0.25), 0 4px 14px rgba(139,94,60,0.4)' : 'none',
+              fontFamily: 'inherit',
+              transition: 'all 0.2s',
             }}
           >
-            <i className={loading ? 'ti ti-loader' : 'ti ti-file-certificate'} style={{ fontSize: 18, animation: loading ? 'spin 0.8s linear infinite' : 'none' }} />
-            {loading ? 'Construindo Prova...' : !hasApi ? 'Configure uma API para gerar' : '✨ Gerar Prova Completa'}
+            <i className={loading ? 'ti ti-loader' : 'ti ti-file-certificate'} style={{ fontSize: 20, animation: loading ? 'spin 0.8s linear infinite' : 'none' }} />
+            {loading ? 'Construindo Prova Completa...' : !hasApi ? 'Configure uma API para gerar' : '✨ Gerar Prova Completa'}
           </button>
+
         </div>
 
         {/* ══ RIGHT ══ */}
