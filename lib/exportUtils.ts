@@ -1,5 +1,5 @@
 /**
- * exportUtils.ts — Exportação Oficial em PDF/Word + Gerador de QR Code
+ * exportUtils.ts — Exportação Oficial em PDF/Word com Cabeçalhos Padronizados das Escolas
  */
 
 export interface ExportHeaderOptions {
@@ -12,7 +12,43 @@ export interface ExportHeaderOptions {
   content: string
   showGradeBox?: boolean
   showStudentNameBox?: boolean
+  instructions?: string
+  schoolTemplate?: 'machado' | 'santacatarina' | 'plurall' | 'cambridge' | 'standard'
 }
+
+/**
+ * Retorna os modelos de cabeçalho padrão das escolas que o professor trabalha
+ */
+export const OFFICIAL_SCHOOL_TEMPLATES = [
+  {
+    id: 'machado',
+    name: 'Colégio Machado Sobrinho',
+    officialName: 'COLÉGIO MACHADO SOBRINHO — JUIZ DE FORA',
+    motto: 'Tradição e Excelência em Educação',
+    instructions: '1. Leia atentamente todas as questões antes de responder.\n2. Utilize caneta esferográfica de tinta azul ou preta.\n3. Respostas rasuradas nas questões de múltipla escolha serão anuladas.\n4. O valor total desta avaliação é de 10,0 pontos.',
+  },
+  {
+    id: 'santacatarina',
+    name: 'Colégio Santa Catarina',
+    officialName: 'COLÉGIO SANTA CATARINA — EDUCAÇÃO BÁSICA',
+    motto: 'Amor, Disciplina e Saber',
+    instructions: '1. Preencha seu nome completo e turma de forma legível.\n2. Cuide da clareza e organização de suas respostas.\n3. Não é permitido o uso de dicionários eletrônicos ou celulares.\n4. Boa prova!',
+  },
+  {
+    id: 'plurall',
+    name: 'Plurall / Anglo Sistema de Ensino',
+    officialName: 'SISTEMA DE ENSINO — PLATAFORMA PLURALL',
+    motto: 'Avaliação Somativa & Simulado Formativo',
+    instructions: '1. Assinale apenas uma alternativa por questão no cartão de respostas.\n2. Duração máxima recomendada: 50 minutos.\n3. Questões alinhadas à BNCC e Matriz de Habilidades.',
+  },
+  {
+    id: 'cambridge',
+    name: 'Cambridge Assessment English',
+    officialName: 'CAMBRIDGE ASSESSMENT ENGLISH — PREPARATION CENTRE',
+    motto: 'Official English Language Evaluation',
+    instructions: '1. Write your Candidate Name and Candidate Number clearly.\n2. Answer all questions in English.\n3. Write your answers on the question paper in the spaces provided.\n4. Time allowed: 60 minutes.',
+  }
+]
 
 /**
  * Exporta um elemento DOM formatado diretamente para PDF via janela de impressão
@@ -57,13 +93,12 @@ export async function exportElementToPdf(elementId: string, filename: string = '
  */
 export function exportToPdf(options: ExportHeaderOptions) {
   const school = options.schoolName || 'ESCOLA / INSTITUTO DE ENSINO'
-
   const teacher = options.teacherName || 'Professor(a)'
   const classGroup = options.className || 'Turma ____'
   const dateStr = options.date || new Date().toLocaleDateString('pt-BR')
   const title = options.title || 'AVALIAÇÃO DE LÍNGUA INGLESA'
+  const instructions = options.instructions || 'Leia atentamente as instruções e responda com clareza a caneta azul ou preta.'
 
-  // Prepara o HTML de impressão oficial
   const printWindow = window.open('', '_blank')
   if (!printWindow) {
     alert('Permita pop-ups no seu navegador para exportar o PDF.')
@@ -80,8 +115,8 @@ export function exportToPdf(options: ExportHeaderOptions) {
         @page { size: A4; margin: 15mm; }
         body {
           font-family: 'Times New Roman', Times, serif;
-          font-size: 12pt;
-          line-height: 1.5;
+          font-size: 11pt;
+          line-height: 1.45;
           color: #000;
           margin: 0;
           padding: 0;
@@ -89,27 +124,35 @@ export function exportToPdf(options: ExportHeaderOptions) {
         .header-table {
           width: 100%;
           border-collapse: collapse;
-          margin-bottom: 20px;
+          margin-bottom: 12px;
           border: 2px solid #000;
         }
         .header-table td {
           border: 1px solid #000;
-          padding: 8px 12px;
-          font-size: 11pt;
+          padding: 6px 10px;
+          font-size: 10.5pt;
         }
         .school-title {
-          font-size: 14pt;
+          font-size: 13pt;
           font-weight: bold;
           text-align: center;
           text-transform: uppercase;
         }
         .doc-title {
-          font-size: 13pt;
+          font-size: 12pt;
           font-weight: bold;
           text-align: center;
-          margin: 15px 0;
+          margin: 12px 0 8px 0;
           text-transform: uppercase;
           text-decoration: underline;
+        }
+        .instructions-box {
+          border: 1px solid #000;
+          padding: 8px 12px;
+          margin-bottom: 15px;
+          font-size: 9.5pt;
+          background: #fbfbfb;
+          line-height: 1.4;
         }
         .grade-box {
           text-align: center;
@@ -117,23 +160,23 @@ export function exportToPdf(options: ExportHeaderOptions) {
           font-size: 11pt;
         }
         .content {
-          margin-top: 15px;
+          margin-top: 10px;
           white-space: pre-wrap;
           font-family: 'Times New Roman', Times, serif;
         }
         .content h1, .content h2, .content h3 {
-          font-size: 12pt;
-          margin-top: 15px;
-          margin-bottom: 5px;
+          font-size: 11.5pt;
+          margin-top: 12px;
+          margin-bottom: 4px;
           text-transform: uppercase;
         }
         .footer {
           margin-top: 30px;
-          font-size: 9pt;
+          font-size: 8.5pt;
           text-align: center;
-          border-top: 1px solid #aaa;
+          border-top: 1px solid #888;
           padding-top: 5px;
-          color: #555;
+          color: #444;
         }
         @media print {
           .no-print { display: none; }
@@ -143,34 +186,43 @@ export function exportToPdf(options: ExportHeaderOptions) {
     <body>
       <div class="no-print" style="background:#f5f0e8; padding:12px; text-align:center; border-bottom:1px solid #ccc; font-family:sans-serif;">
         <button onclick="window.print()" style="padding:10px 20px; background:#8b5e3c; color:#fff; border:none; border-radius:8px; font-weight:bold; cursor:pointer; font-size:14px;">
-          🖨️ Imprimir / Salvar como PDF
+          🖨️ Imprimir / Salvar como PDF Oficial
         </button>
       </div>
 
-      <div style="padding: 20px;">
+      <div style="padding: 15px;">
         <table class="header-table">
           <tr>
             <td colspan="3" class="school-title">${school}</td>
           </tr>
           <tr>
+            <td><strong>DISCIPLINA:</strong> Língua Inglesa</td>
             <td><strong>PROFESSOR(A):</strong> ${teacher}</td>
-            <td><strong>TURMA:</strong> ${classGroup}</td>
             <td><strong>DATA:</strong> ${dateStr}</td>
+          </tr>
+          <tr>
+            <td><strong>TURMA / SÉRIE:</strong> ${classGroup}</td>
+            <td colspan="2"><strong>ETAPA / TRIMESTRE:</strong> 1º Trimestre / Bimestre</td>
           </tr>
           ${options.showStudentNameBox !== false ? `
           <tr>
             <td colspan="2"><strong>ALUNO(A):</strong> ____________________________________________________</td>
-            <td class="grade-box"><strong>NOTA:</strong> ______ / 10</td>
+            <td class="grade-box"><strong>NOTA:</strong> ______ / 10,0</td>
           </tr>
           ` : ''}
         </table>
+
+        <div class="instructions-box">
+          <strong>INSTRUÇÕES GERAIS:</strong><br/>
+          ${instructions.replace(/\n/g, '<br/>')}
+        </div>
 
         <div class="doc-title">${title}</div>
 
         <div class="content">${formatMarkdownToHtml(options.content)}</div>
 
         <div class="footer">
-          Documento gerado pelo Teacher AI — Sistema de Gestão Pedagógica em Língua Inglesa
+          ${school} — Departamento de Língua Inglesa &bull; Teacher AI
         </div>
       </div>
 
@@ -196,6 +248,7 @@ export function exportToWord(options: ExportHeaderOptions) {
   const classGroup = options.className || 'Turma ____'
   const dateStr = options.date || new Date().toLocaleDateString('pt-BR')
   const title = options.title || 'AVALIAÇÃO DE LÍNGUA INGLESA'
+  const instructions = options.instructions || 'Leia atentamente as instruções e responda com clareza.'
 
   const contentHtml = `
     <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
@@ -204,25 +257,35 @@ export function exportToWord(options: ExportHeaderOptions) {
       <title>${title}</title>
       <style>
         body { font-family: 'Calibri', 'Times New Roman', serif; font-size: 11pt; line-height: 1.4; }
-        table { width: 100%; border-collapse: collapse; margin-bottom: 15pt; }
-        td { border: 1pt solid #000; padding: 6pt; font-size: 10pt; }
-        h1, h2 { font-size: 13pt; text-align: center; text-transform: uppercase; margin-top: 15pt; }
-        p { margin-bottom: 8pt; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 12pt; }
+        td { border: 1pt solid #000; padding: 5pt; font-size: 10pt; }
+        h1, h2 { font-size: 12pt; text-align: center; text-transform: uppercase; margin-top: 12pt; }
+        .instructions { border: 1pt solid #666; padding: 6pt; font-size: 9pt; margin-bottom: 10pt; }
+        p { margin-bottom: 6pt; }
       </style>
     </head>
     <body>
       <table>
-        <tr><td colspan="3" style="text-align:center; font-weight:bold; font-size:13pt;">${school}</td></tr>
+        <tr><td colspan="3" style="text-align:center; font-weight:bold; font-size:12pt;">${school}</td></tr>
         <tr>
+          <td><b>DISCIPLINA:</b> Língua Inglesa</td>
           <td><b>PROFESSOR(A):</b> ${teacher}</td>
-          <td><b>TURMA:</b> ${classGroup}</td>
           <td><b>DATA:</b> ${dateStr}</td>
         </tr>
         <tr>
+          <td><b>TURMA:</b> ${classGroup}</td>
+          <td colspan="2"><b>ETAPA:</b> 1º Trimestre / Bimestre</td>
+        </tr>
+        <tr>
           <td colspan="2"><b>ALUNO(A):</b> ____________________________________________________</td>
-          <td style="text-align:center;"><b>NOTA:</b> _____ / 10</td>
+          <td style="text-align:center;"><b>NOTA:</b> _____ / 10,0</td>
         </tr>
       </table>
+
+      <div class="instructions">
+        <b>INSTRUÇÕES:</b><br/>
+        ${instructions.replace(/\n/g, '<br/>')}
+      </div>
 
       <h1>${title}</h1>
 
@@ -266,8 +329,6 @@ function formatMarkdownToHtml(text: string): string {
  * 4. Gerador de QR Code SVG Inline (sem biblioteca externa)
  */
 export function generateSvgQRCode(text: string, size = 180): string {
-  // SVG simples de fallback visual para QR code
-  const encoded = encodeURIComponent(text)
   return `
     <svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 100 100">
       <rect width="100" height="100" fill="#ffffff" rx="10"/>

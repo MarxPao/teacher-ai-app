@@ -8,6 +8,8 @@ import { runFactCheck, FactCheckResult } from '@/lib/factCheck'
 import SavedItemsDrawer, { saveItemToStorage, SavedItem } from '@/components/SavedItemsDrawer'
 import { PEDAGOGICAL_METHODOLOGIES, buildMethodologyInstructions } from '@/lib/pedagogicalMethodologies'
 import PresetSelector from '@/components/PresetSelector'
+import { exportToPdf, exportToWord, OFFICIAL_SCHOOL_TEMPLATES } from '@/lib/exportUtils'
+
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -106,6 +108,8 @@ function buildPrompt(opts: {
   topic: string
   qtCount: string
   neeProfile: string
+  stemLanguage?: 'pt' | 'en'
+  optionLanguage?: 'en' | 'pt'
   customPrompt?: string
   libraryContext?: string
   header: HeaderState
@@ -124,6 +128,14 @@ function buildPrompt(opts: {
     ? `\n=== CONTEXTO DA BIBLIOTECA — USE COMO FONTE PRINCIPAL ===\n${opts.libraryContext.slice(0, 4000)}\n=== FIM DO CONTEXTO ===\nIMPORTANTE: Baseie as questões DIRETAMENTE nos textos, diálogos e exemplos acima. Cite trechos reais do material quando pertinente.\n`
     : ''
 
+  const stemInstruction = opts.stemLanguage === 'pt'
+    ? 'IDIOMA DOS ENUNCIADOS: Escreva as instruções, orientações e enunciados de TODAS as questões estritamente em PORTUGUÊS.'
+    : 'IDIOMA DOS ENUNCIADOS: Write all instructions and question stems strictly in ENGLISH.'
+
+  const optionInstruction = opts.optionLanguage === 'pt'
+    ? 'IDIOMA DAS ALTERNATIVAS: As opções e respostas devem ser formuladas em PORTUGUÊS.'
+    : 'IDIOMA DAS ALTERNATIVAS: As opções (A, B, C, D) e respostas devem ser estritamente em INGLÊS.'
+
   return `Você é um professor especialista em ELT (English Language Teaching) e pedagogia. Sua tarefa é gerar um EXERCÍCIO COMPLETO formatado em HTML, pronto para uso em sala de aula.
 ${librarySection}
 ESPECIFICAÇÕES DO EXERCÍCIO:
@@ -137,6 +149,8 @@ ESPECIFICAÇÕES DO EXERCÍCIO:
 - Metodologias: ${opts.methodology.join(', ')}
 - Quantidade: ${opts.qtCount} questões
 - Tema/Tópico: ${opts.topic || 'tema relevante para o nível'}
+- ${stemInstruction}
+- ${optionInstruction}
 ${opts.customPrompt ? `\nDIRETRIZES DO PROFESSOR:\n"${opts.customPrompt}"\n` : ''}
 ${opts.neeProfile ? `\nADAPTAÇÃO ESPECIAL: ${neeInstructions[opts.neeProfile] || ''}` : ''}
 ${methodologyInstructions}
@@ -162,12 +176,16 @@ export default function QuickGenerate() {
   const [cefr, setCefr]         = useState('B1')
   const [grade, setGrade]       = useState('9º Fund.')
   const [skill, setSkill]       = useState('Reading')
+  const [stemLanguage, setStemLanguage] = useState<'pt' | 'en'>('pt')
+  const [optionLanguage, setOptionLanguage] = useState<'en' | 'pt'>('en')
   const [methodology, setMethodology] = useState<string[]>(['Cambridge'])
   const [topic, setTopic]       = useState('')
   const [customPrompt, setCustomPrompt] = useState('')
   const [qtCount, setQtCount]   = useState('10')
   const [neeProfile, setNeeProfile] = useState('')
   const [showNeePanel, setShowNeePanel] = useState(false)
+  const [selectedSchoolTemplate, setSelectedSchoolTemplate] = useState<string>('')
+
 
   // Header
   const [header, setHeader] = useState<HeaderState>({ school: '', teacher: '', classGroup: '', title: '' })
@@ -261,9 +279,11 @@ export default function QuickGenerate() {
     try {
       const prompt = buildPrompt({
         types, cefr, grade, skill, methodology, topic, qtCount, neeProfile, customPrompt,
+        stemLanguage, optionLanguage,
         header: { ...header, title: header.title || effectiveTitle },
         libraryContext: selectedLibItem?.content,
       })
+
       const raw  = await callApi(selectedApi, prompt)
       const html = cleanHtml(raw)
       setResult(html)
@@ -433,16 +453,116 @@ export default function QuickGenerate() {
             )}
           </div>
 
-          {/* ── Cabeçalho do Documento ── */}
+          {/* ── Idioma dos Enunciados e das Alternativas ── */}
+          <div style={{ ...CARD, display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <label style={{ ...SL, marginBottom: 2 }}>
+              <i className="ti ti-language" style={{ marginRight: 6, color: '#cb4b16' }} />
+              Configuração de Idioma das Questões & Opções
+            </label>
+            
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <div>
+                <label style={{ ...SL, fontSize: 11.5 }}>Enunciados / Instruções</label>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button
+                    type="button"
+                    onClick={() => setStemLanguage('pt')}
+                    style={{
+                      flex: 1, padding: '8px 10px', borderRadius: 8, fontSize: 12, fontWeight: 700,
+                      border: stemLanguage === 'pt' ? '1.5px solid #cb4b16' : '1px solid #e8e0d0',
+                      background: stemLanguage === 'pt' ? '#fdf8f2' : '#fff',
+                      color: stemLanguage === 'pt' ? '#cb4b16' : '#586e75', cursor: 'pointer'
+                    }}
+                  >
+                    🇧🇷 Português
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setStemLanguage('en')}
+                    style={{
+                      flex: 1, padding: '8px 10px', borderRadius: 8, fontSize: 12, fontWeight: 700,
+                      border: stemLanguage === 'en' ? '1.5px solid #268bd2' : '1px solid #e8e0d0',
+                      background: stemLanguage === 'en' ? '#f0f8ff' : '#fff',
+                      color: stemLanguage === 'en' ? '#268bd2' : '#586e75', cursor: 'pointer'
+                    }}
+                  >
+                    🇬🇧 Inglês
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label style={{ ...SL, fontSize: 11.5 }}>Alternativas (A, B, C, D)</label>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button
+                    type="button"
+                    onClick={() => setOptionLanguage('en')}
+                    style={{
+                      flex: 1, padding: '8px 10px', borderRadius: 8, fontSize: 12, fontWeight: 700,
+                      border: optionLanguage === 'en' ? '1.5px solid #268bd2' : '1px solid #e8e0d0',
+                      background: optionLanguage === 'en' ? '#f0f8ff' : '#fff',
+                      color: optionLanguage === 'en' ? '#268bd2' : '#586e75', cursor: 'pointer'
+                    }}
+                  >
+                    🇬🇧 Inglês
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setOptionLanguage('pt')}
+                    style={{
+                      flex: 1, padding: '8px 10px', borderRadius: 8, fontSize: 12, fontWeight: 700,
+                      border: optionLanguage === 'pt' ? '1.5px solid #cb4b16' : '1px solid #e8e0d0',
+                      background: optionLanguage === 'pt' ? '#fdf8f2' : '#fff',
+                      color: optionLanguage === 'pt' ? '#cb4b16' : '#586e75', cursor: 'pointer'
+                    }}
+                  >
+                    🇧🇷 Português
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* ── Cabeçalho Oficial da Escola ── */}
           <div style={CARD}>
             <label style={{ ...SL, marginBottom: 2 }}>
               <i className="ti ti-id-badge" style={{ marginRight: 6, color: '#268bd2' }} />
-              Cabeçalho do Documento
+              Cabeçalho Oficial da Escola
             </label>
+
+            {/* Modelos de Cabeçalho Pré-Configurados */}
             <div>
-              <label style={{ ...SL, fontSize: 12 }}>Nome da Escola</label>
+              <label style={{ ...SL, fontSize: 11.5 }}>Importar Modelo de Escola Cadastrada:</label>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                {OFFICIAL_SCHOOL_TEMPLATES.map(tpl => (
+                  <button
+                    key={tpl.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedSchoolTemplate(tpl.id)
+                      setHeader(h => ({
+                        ...h,
+                        school: tpl.officialName,
+                        title: tpl.id === 'cambridge' ? `Cambridge Practice Tasks — ${cefr}` : `Atividade de Fixação — Língua Inglesa`
+                      }))
+                    }}
+                    style={{
+                      padding: '7px 10px', borderRadius: 8, fontSize: 11.5, fontWeight: 700, textAlign: 'left',
+                      border: selectedSchoolTemplate === tpl.id ? '1.5px solid #8b5e3c' : '1px solid #e8e0d0',
+                      background: selectedSchoolTemplate === tpl.id ? '#fdf8f2' : '#faf8f5',
+                      color: selectedSchoolTemplate === tpl.id ? '#8b5e3c' : '#2c1a0e', cursor: 'pointer'
+                    }}
+                  >
+                    🏛️ {tpl.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label style={{ ...SL, fontSize: 12 }}>Nome Oficial da Escola</label>
               <input value={header.school} onChange={e => setHeader(h => ({ ...h, school: e.target.value }))}
-                placeholder="Ex: Colégio São Paulo" style={SI} />
+                placeholder="Ex: Colégio Machado Sobrinho" style={SI} />
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
               <div>
@@ -462,6 +582,7 @@ export default function QuickGenerate() {
                 placeholder="Ex: Exercício — Present Perfect" style={SI} />
             </div>
           </div>
+
 
           {/* ── Tópico & Prompt ── */}
           <div style={CARD}>
@@ -671,9 +792,59 @@ export default function QuickGenerate() {
             </div>
           )}
 
+          {/* Export Toolbar */}
+          {result && (
+            <div style={{
+              background: '#fdf8f2', padding: '10px 16px', borderRadius: 14,
+              border: '1.5px solid #ede8dc', display: 'flex', flexWrap: 'wrap',
+              justifyContent: 'space-between', alignItems: 'center', gap: 8, flexShrink: 0
+            }}>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <button
+                  onClick={() => exportToPdf({
+                    schoolName: header.school || 'ESCOLA DE IDIOMAS & ENSINO',
+                    teacherName: header.teacher || 'Professor(a)',
+                    className: grade || '8º Ano',
+                    title: header.title || (topic ? `ATIVIDADE — ${topic.toUpperCase()}` : 'ATIVIDADE DE FIXAÇÃO'),
+                    content: result
+                  })}
+                  style={{
+                    padding: '8px 14px', borderRadius: 10, border: 'none',
+                    background: '#8b5e3c', color: '#fff', fontSize: 12.5,
+                    fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6
+                  }}
+                >
+                  📄 Exportar PDF Oficial
+                </button>
+
+                <button
+                  onClick={() => exportToWord({
+                    schoolName: header.school || 'ESCOLA DE IDIOMAS & ENSINO',
+                    teacherName: header.teacher || 'Professor(a)',
+                    className: grade || '8º Ano',
+                    title: header.title || (topic ? `ATIVIDADE — ${topic.toUpperCase()}` : 'ATIVIDADE DE FIXAÇÃO'),
+                    content: result
+                  })}
+                  style={{
+                    padding: '8px 14px', borderRadius: 10, border: '1px solid #c0a080',
+                    background: '#fffcf8', color: '#8b5e3c', fontSize: 12.5,
+                    fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6
+                  }}
+                >
+                  📝 Exportar Word (.docx)
+                </button>
+              </div>
+
+              <div style={{ fontSize: 12, color: '#8b5e3c', fontWeight: 600 }}>
+                ✨ Pronto para impressão
+              </div>
+            </div>
+          )}
+
           {/* Document Canvas */}
           <div style={{ flex: 1, minHeight: 0 }}>
             <DocumentCanvas
+
               content={result}
               onContentChange={setResult}
               hideHeader={hideHeader}

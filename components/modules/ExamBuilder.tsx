@@ -93,12 +93,16 @@ async function callApi(api: ApiConfig, prompt: string): Promise<string> {
   return executeUnifiedAiCall(api, prompt)
 }
 
+import { OFFICIAL_SCHOOL_TEMPLATES } from '@/lib/exportUtils'
+
 function buildExamPrompt(opts: {
   topic: string
   cefr: string
   grade: string
   sections: string[]
   approach: string[]
+  stemLanguage?: 'pt' | 'en'
+  optionLanguage?: 'en' | 'pt'
   customPrompt?: string
   libraryContext?: string
   header: HeaderState
@@ -108,6 +112,14 @@ function buildExamPrompt(opts: {
   const librarySection = opts.libraryContext
     ? `\n=== CONTEXTO DA BIBLIOTECA — USE COMO FONTE PRINCIPAL ===\n${opts.libraryContext.slice(0, 4500)}\n=== FIM DO CONTEXTO ===\nIMPORTANTE: Construa os textos da prova, diálogos, e enunciados DIRETAMENTE com base no material acima. Cite personagens, situações e vocabulário presentes no conteúdo.\n`
     : ''
+
+  const stemInstruction = opts.stemLanguage === 'pt'
+    ? 'IDIOMA DOS ENUNCIADOS: Escreva as instruções, orientações e enunciados de TODAS as questões estritamente em PORTUGUÊS (ex: "1. Leia o texto e responda às perguntas:", "2. Assinale a alternativa correta:").'
+    : 'IDIOMA DOS ENUNCIADOS: Write all instructions and question stems strictly in ENGLISH (e.g. "1. Read the text and answer the questions:", "2. Choose the correct option:").'
+
+  const optionInstruction = opts.optionLanguage === 'pt'
+    ? 'IDIOMA DAS ALTERNATIVAS: As opções (A, B, C, D) e alternativas devem ser formuladas em PORTUGUÊS.'
+    : 'IDIOMA DAS ALTERNATIVAS: As opções (A, B, C, D) e respostas devem ser estritamente em INGLÊS.'
 
   return `Você é um examinador profissional Cambridge/IELTS e especialista pedagógico em ELT. Crie uma PROVA COMPLETA de inglês, formatada em HTML, pronta para impressão.
 ${librarySection}
@@ -120,13 +132,15 @@ ESPECIFICAÇÕES DA PROVA:
 - Tópico Central: ${opts.topic || 'General Knowledge'}
 - Seções: ${opts.sections.join(', ')}
 - Abordagem Pedagógica: ${opts.approach.join(', ')}
+- ${stemInstruction}
+- ${optionInstruction}
 ${opts.customPrompt ? `\nDIRETRIZES DO PROFESSOR:\n"${opts.customPrompt}"\n` : ''}
 ${methInstructions}
 
 ESTRUTURA OBRIGATÓRIA DA PROVA:
 1. Para cada seção selecionada (${opts.sections.join(', ')}), crie um bloco com:
    - Título da seção em <h2>
-   - Instruções claras em <p><em>Instructions: ...</em></p>
+   - Instruções claras em <p><em>${opts.stemLanguage === 'pt' ? 'Instruções' : 'Instructions'}: ...</em></p>
    - Questões numeradas sequencialmente
    - Espaço para resposta (linha tracejada ou caixa de texto visual)
 2. Questões de Múltipla Escolha: exatamente 4 alternativas (A, B, C, D)
@@ -154,9 +168,16 @@ export default function ExamBuilder() {
   const [topic, setTopic]       = useState('')
   const [cefr, setCefr]         = useState('B2')
   const [grade, setGrade]       = useState('9º Fund.')
+  const [stemLanguage, setStemLanguage] = useState<'pt' | 'en'>('pt')
+  const [optionLanguage, setOptionLanguage] = useState<'en' | 'pt'>('en')
   const [customPrompt, setCustomPrompt] = useState('')
   const [sections, setSections] = useState<string[]>(['Reading Comprehension', 'Use of English', 'Writing'])
   const [approach, setApproach] = useState<string[]>(['Cambridge'])
+
+  // Escolas cadastradas & Modelos
+  const [registeredSchools, setRegisteredSchools] = useState<Array<{ id: string; name: string }>>([])
+  const [selectedSchoolTemplate, setSelectedSchoolTemplate] = useState<string>('')
+
 
   // Header
   const [header, setHeader] = useState<HeaderState>({ school: '', teacher: '', classGroup: '', title: '' })
@@ -321,9 +342,11 @@ export default function ExamBuilder() {
 
       const prompt = buildExamPrompt({
         topic, cefr, grade, sections, approach, customPrompt,
+        stemLanguage, optionLanguage,
         header: { ...header, title: header.title || effectiveTitle },
         libraryContext: libContext,
       })
+
       const raw  = await callApi(selectedApi!, prompt)
       const html = cleanHtml(raw)
       setResult(html)
@@ -496,16 +519,118 @@ export default function ExamBuilder() {
             )}
           </div>
 
-          {/* ── Cabeçalho ── */}
+          {/* ── Idioma dos Enunciados e das Alternativas ── */}
           <div style={{ ...CARD, display: 'flex', flexDirection: 'column', gap: 12 }}>
             <label style={{ ...SL, marginBottom: 2 }}>
-              <i className="ti ti-id-badge" style={{ marginRight: 6, color: '#268bd2' }} />
-              Cabeçalho do Documento
+              <i className="ti ti-language" style={{ marginRight: 6, color: '#cb4b16' }} />
+              Configuração de Idioma das Questões & Opções
             </label>
+            
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <div>
+                <label style={{ ...SL, fontSize: 11.5 }}>Enunciados / Instruções</label>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button
+                    type="button"
+                    onClick={() => setStemLanguage('pt')}
+                    style={{
+                      flex: 1, padding: '8px 10px', borderRadius: 8, fontSize: 12, fontWeight: 700,
+                      border: stemLanguage === 'pt' ? '1.5px solid #cb4b16' : '1px solid #e8e0d0',
+                      background: stemLanguage === 'pt' ? '#fdf8f2' : '#fff',
+                      color: stemLanguage === 'pt' ? '#cb4b16' : '#586e75', cursor: 'pointer'
+                    }}
+                  >
+                    🇧🇷 Português
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setStemLanguage('en')}
+                    style={{
+                      flex: 1, padding: '8px 10px', borderRadius: 8, fontSize: 12, fontWeight: 700,
+                      border: stemLanguage === 'en' ? '1.5px solid #268bd2' : '1px solid #e8e0d0',
+                      background: stemLanguage === 'en' ? '#f0f8ff' : '#fff',
+                      color: stemLanguage === 'en' ? '#268bd2' : '#586e75', cursor: 'pointer'
+                    }}
+                  >
+                    🇬🇧 Inglês
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label style={{ ...SL, fontSize: 11.5 }}>Alternativas (A, B, C, D)</label>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button
+                    type="button"
+                    onClick={() => setOptionLanguage('en')}
+                    style={{
+                      flex: 1, padding: '8px 10px', borderRadius: 8, fontSize: 12, fontWeight: 700,
+                      border: optionLanguage === 'en' ? '1.5px solid #268bd2' : '1px solid #e8e0d0',
+                      background: optionLanguage === 'en' ? '#f0f8ff' : '#fff',
+                      color: optionLanguage === 'en' ? '#268bd2' : '#586e75', cursor: 'pointer'
+                    }}
+                  >
+                    🇬🇧 Inglês
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setOptionLanguage('pt')}
+                    style={{
+                      flex: 1, padding: '8px 10px', borderRadius: 8, fontSize: 12, fontWeight: 700,
+                      border: optionLanguage === 'pt' ? '1.5px solid #cb4b16' : '1px solid #e8e0d0',
+                      background: optionLanguage === 'pt' ? '#fdf8f2' : '#fff',
+                      color: optionLanguage === 'pt' ? '#cb4b16' : '#586e75', cursor: 'pointer'
+                    }}
+                  >
+                    🇧🇷 Português
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* ── Cabeçalho Oficial da Escola ── */}
+          <div style={{ ...CARD, display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <label style={{ ...SL, marginBottom: 0 }}>
+                <i className="ti ti-id-badge" style={{ marginRight: 6, color: '#268bd2' }} />
+                Cabeçalho Oficial da Escola
+              </label>
+            </div>
+
+            {/* Modelos de Cabeçalho Pré-Configurados */}
             <div>
-              <label style={{ ...SL, fontSize: 12 }}>Nome da Escola</label>
+              <label style={{ ...SL, fontSize: 11.5 }}>Importar Modelo de Escola Cadastrada:</label>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                {OFFICIAL_SCHOOL_TEMPLATES.map(tpl => (
+                  <button
+                    key={tpl.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedSchoolTemplate(tpl.id)
+                      setHeader(h => ({
+                        ...h,
+                        school: tpl.officialName,
+                        title: tpl.id === 'cambridge' ? `Cambridge Assessment — ${cefr}` : `Avaliação Trimestral — Língua Inglesa`
+                      }))
+                    }}
+                    style={{
+                      padding: '7px 10px', borderRadius: 8, fontSize: 11.5, fontWeight: 700, textAlign: 'left',
+                      border: selectedSchoolTemplate === tpl.id ? '1.5px solid #8b5e3c' : '1px solid #e8e0d0',
+                      background: selectedSchoolTemplate === tpl.id ? '#fdf8f2' : '#faf8f5',
+                      color: selectedSchoolTemplate === tpl.id ? '#8b5e3c' : '#2c1a0e', cursor: 'pointer'
+                    }}
+                  >
+                    🏛️ {tpl.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label style={{ ...SL, fontSize: 12 }}>Nome Oficial da Escola</label>
               <input value={header.school} onChange={e => setHeader(h => ({ ...h, school: e.target.value }))}
-                placeholder="Ex: Colégio São Paulo" style={SI} />
+                placeholder="Ex: Colégio Machado Sobrinho" style={SI} />
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
               <div>
@@ -520,11 +645,12 @@ export default function ExamBuilder() {
               </div>
             </div>
             <div>
-              <label style={{ ...SL, fontSize: 12 }}>Título da Prova</label>
+              <label style={{ ...SL, fontSize: 12 }}>Título da Avaliação</label>
               <input value={header.title} onChange={e => setHeader(h => ({ ...h, title: e.target.value }))}
-                placeholder="Ex: Prova Bimestral — Inglês" style={SI} />
+                placeholder="Ex: Prova Bimestral — Língua Inglesa" style={SI} />
             </div>
           </div>
+
 
           {/* ── Seções ── */}
           <div style={CARD}>
