@@ -2,14 +2,20 @@ import { AGENT_TOOLS, toGeminiTools, type CanonicalMessage } from '@/lib/agentTo
 import { pruneConversationHistory, calculateDynamicTokens } from '@/lib/tokenOptimizer'
 import { NextRequest } from 'next/server'
 
-const ANTHROPIC_KEY  = process.env.ANTHROPIC_KEY  || process.env.ANTHROPIC_API_KEY  || ''
-const GEMINI_KEY     = process.env.GEMINI_KEY     || process.env.GEMINI_API_KEY     || ''
-const OPENAI_KEY     = process.env.OPENAI_KEY     || process.env.OPENAI_API_KEY     || ''
-const GROQ_KEY       = process.env.GROQ_KEY       || process.env.GROQ_API_KEY       || ''
-const DEEPSEEK_KEY   = process.env.DEEPSEEK_KEY   || process.env.DEEPSEEK_API_KEY   || ''
-const ZHIPU_KEY      = process.env.ZHIPU_KEY      || process.env.ZHIPU_API_KEY      || ''
-const SILICONFLOW_KEY = process.env.SILICONFLOW_KEY || process.env.SILICONFLOW_API_KEY || ''
-const OPENROUTER_KEY = process.env.OPENROUTER_KEY || process.env.OPENROUTER_API_KEY || ''
+function getEnvKey(provider: string): string {
+  if (provider === 'groq') return process.env.GROQ_API_KEY || process.env.GROQ_KEY || ''
+  if (provider === 'gemini') return process.env.GEMINI_API_KEY || process.env.GEMINI_KEY || ''
+  if (provider === 'openai') return process.env.OPENAI_API_KEY || process.env.OPENAI_KEY || ''
+  if (provider === 'deepseek') return process.env.DEEPSEEK_API_KEY || process.env.DEEPSEEK_KEY || ''
+  if (provider === 'elevenlabs') return process.env.ELEVENLABS_API_KEY || process.env.ELEVENLABS_KEY || ''
+  if (provider === 'anthropic') return process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_KEY || ''
+  if (provider === 'zhipu') return process.env.ZHIPU_API_KEY || process.env.ZHIPU_KEY || ''
+  if (provider === 'siliconflow') return process.env.SILICONFLOW_API_KEY || process.env.SILICONFLOW_KEY || ''
+  if (provider === 'openrouter') return process.env.OPENROUTER_API_KEY || process.env.OPENROUTER_KEY || ''
+  return ''
+}
+
+
 
 // ─── System Prompt ────────────────────────────────────────────────────────────
 function getSystemPrompt(context: string, todayDate: string, tomorrowDate: string): string {
@@ -244,9 +250,10 @@ function resolveAutoProvider(
   for (const p of priority) {
     const keyNames = PROVIDER_KEY_MAP[p] || []
     for (const kn of keyNames) {
-      const key = userKeys[kn] || (p === 'groq' ? GROQ_KEY : p === 'deepseek' ? DEEPSEEK_KEY : p === 'zhipu' ? ZHIPU_KEY : p === 'siliconflow' ? SILICONFLOW_KEY : p === 'openrouter' ? OPENROUTER_KEY : p === 'anthropic' ? ANTHROPIC_KEY : p === 'gemini' ? GEMINI_KEY : p === 'openai' ? OPENAI_KEY : '')
+      const key = userKeys[kn] || getEnvKey(p)
       if (key) return { provider: p, key }
     }
+
   }
   return null
 }
@@ -261,13 +268,14 @@ async function callProviderWithFallback(
   allUserKeys: Record<string, string>
 ): Promise<Response> {
 
-  const providersToTry = [provider, 'groq', 'deepseek', 'zhipu', 'siliconflow', 'openrouter', 'gemini', 'openai', 'anthropic'].filter((v, i, a) => a.indexOf(v) === i)
-  let lastError = ''
+  const errorLogs: string[] = []
+  const providersToTry = [provider, 'groq', 'deepseek', 'zhipu', 'siliconflow', 'openrouter', 'gemini', 'openai', 'anthropic'].filter((v, i, a) => a && a.indexOf(v) === i)
+
 
   for (const p of providersToTry) {
     const key = (p === provider ? apiKey : '') ||
                 allUserKeys[`${p}_key`] ||
-                (p === 'groq' ? GROQ_KEY : p === 'deepseek' ? DEEPSEEK_KEY : p === 'zhipu' ? ZHIPU_KEY : p === 'siliconflow' ? SILICONFLOW_KEY : p === 'openrouter' ? OPENROUTER_KEY : p === 'gemini' ? GEMINI_KEY : p === 'openai' ? OPENAI_KEY : p === 'anthropic' ? ANTHROPIC_KEY : '')
+                getEnvKey(p)
 
     if (!key) continue
 
@@ -286,7 +294,7 @@ async function callProviderWithFallback(
           const data = await response.json()
           return Response.json({ provider: 'anthropic', ...data })
         } else {
-          lastError = `Anthropic ${response.status}: ${await response.text()}`
+          errorLogs.push(`Anthropic ${response.status}: ${await response.text()}`)
         }
       }
 
@@ -305,7 +313,7 @@ async function callProviderWithFallback(
           const data = await response.json()
           return Response.json(normalizeGeminiResponse(data))
         } else {
-          lastError = `Gemini ${response.status}: ${await response.text()}`
+          errorLogs.push(`Gemini ${response.status}: ${await response.text()}`)
         }
       }
 
@@ -347,15 +355,16 @@ async function callProviderWithFallback(
           const data = await response.json()
           return Response.json(normalizeOpenAIResponse(data, p))
         } else {
-          lastError = `${p} ${response.status}: ${await response.text()}`
+          errorLogs.push(`${p} ${response.status}: ${await response.text()}`)
         }
       }
     } catch (err) {
-      lastError = err instanceof Error ? err.message : 'Erro de rede'
+      errorLogs.push(`${p} catch: ${err instanceof Error ? err.message : 'Erro de rede'}`)
     }
   }
 
-  throw new Error(`Nenhum provedor de IA conseguiu responder. Último erro: ${lastError}`)
+  throw new Error(`Nenhum provedor de IA conseguiu responder. Erros tentados:\n${errorLogs.join('\n')}`)
+
 }
 
 import { checkRateLimit } from '@/lib/rateLimit'
@@ -399,8 +408,9 @@ export async function POST(req: NextRequest) {
     }
 
     if (!effectiveProvider) {
-      effectiveProvider = GROQ_KEY ? 'groq' : GEMINI_KEY ? 'gemini' : OPENAI_KEY ? 'openai' : 'user'
+      effectiveProvider = getEnvKey('groq') ? 'groq' : getEnvKey('gemini') ? 'gemini' : 'groq'
     }
+
 
     const optimizedMessages = pruneConversationHistory(messages, 8)
     const lastUserText = [...messages].reverse().find(m => m.role === 'user')?.content || ''
