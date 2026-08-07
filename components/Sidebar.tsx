@@ -9,6 +9,12 @@ const NAV: Section[] = [
   { label: '', items: [
     { key: 'dashboard', label: 'Início', icon: 'ti-home-2' },
   ]},
+  { label: 'Organização', items: [
+    { key: 'organization',   label: 'Escolas',               icon: 'ti-building-school' },
+    { key: 'classes',        label: 'Turmas',                icon: 'ti-school' },
+    { key: 'students',       label: 'Alunos',                icon: 'ti-user-circle' },
+    { key: 'privatetutoring',label: 'Alunos Particulares',   icon: 'ti-user-dollar' },
+  ]},
   { label: 'Criação', items: [
     { key: 'lessonstudio',      label: 'Criar Aula',            icon: 'ti-chalkboard' },
     { key: 'quick',             label: 'Gerar Exercício',       icon: 'ti-sparkles' },
@@ -23,12 +29,7 @@ const NAV: Section[] = [
     { key: 'flashcardmode', label: 'Flashcards',           icon: 'ti-cards' },
     { key: 'livequiz',      label: 'Quiz ao Vivo',         icon: 'ti-device-gamepad-2' },
   ]},
-  { label: 'Organização', items: [
-    { key: 'organization',   label: 'Escolas',               icon: 'ti-building-school' },
-    { key: 'classes',        label: 'Turmas',                icon: 'ti-school' },
-    { key: 'students',       label: 'Alunos',                icon: 'ti-user-circle' },
-    { key: 'privatetutoring',label: 'Alunos Particulares',   icon: 'ti-user-dollar' },
-  ]},
+
   { label: 'Alunos & Avaliação', items: [
     { key: 'gradebook',      label: 'Caderneta de Notas',  icon: 'ti-chart-bar' },
     { key: 'omnigrader',     label: 'OmniCorretor',        icon: 'ti-camera' },
