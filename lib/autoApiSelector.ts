@@ -236,11 +236,12 @@ export async function executeUnifiedAiCall(api: ApiConfig | null, prompt: string
 
   // 3. Google Gemini
   else if (p === 'gemini') {
-    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model || 'gemini-2.0-flash'}:generateContent?key=${key}`, {
+    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model || 'gemini-3.6-flash'}:generateContent?key=${key}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
     })
+
     const d = await r.json()
     if (d.error) throw new Error(d.error.message || 'Erro no Google Gemini')
     resultText = d.candidates?.[0]?.content?.parts?.[0]?.text || ''
