@@ -4,6 +4,8 @@ import { useState, useEffect, useRef } from 'react'
 import DocumentCanvas from '@/components/DocumentCanvas'
 import { ApiConfig } from '@/components/modules/ApiManager'
 import SavedItemsDrawer, { saveItemToStorage, SavedItem } from '@/components/SavedItemsDrawer'
+import { exportToPdf, exportToWord } from '@/lib/exportUtils'
+
 
 interface MethodologyBox {
   id: string
@@ -914,7 +916,38 @@ Gere o HTML completo agora:`
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12, flex: 1, minHeight: 0 }}>
             {/* Header Action Bar when Result is ready */}
             {resultHtml && (
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, background: '#fff', padding: '10px 16px', borderRadius: 14, border: '1px solid #ede8dc' }}>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, background: '#fff', padding: '10px 16px', borderRadius: 14, border: '1px solid #ede8dc', flexWrap: 'wrap' }}>
+                <button
+                  onClick={() => exportToPdf({
+                    title: `PLANO DE AULA TKT — ${topic.toUpperCase() || 'LÍNGUA INGLESA'}`,
+                    className: cefr || 'B1-B2',
+                    content: resultHtml,
+                    showStudentNameBox: false
+                  })}
+                  style={{
+                    padding: '8px 14px', borderRadius: 10, border: 'none',
+                    background: '#8b5e3c', color: '#fff', fontSize: 12.5,
+                    fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
+                  }}
+                >
+                  📄 Exportar PDF Oficial
+                </button>
+                <button
+                  onClick={() => exportToWord({
+                    title: `PLANO DE AULA TKT — ${topic.toUpperCase() || 'LÍNGUA INGLESA'}`,
+                    className: cefr || 'B1-B2',
+                    content: resultHtml,
+                    showStudentNameBox: false
+                  })}
+                  style={{
+                    padding: '8px 14px', borderRadius: 10, border: '1px solid #c0a080',
+                    background: '#fffcf8', color: '#8b5e3c', fontSize: 12.5,
+                    fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
+                  }}
+                >
+                  📝 Exportar Word (.docx)
+                </button>
+
                 <button
                   onClick={handleSaveLesson}
                   style={{
@@ -923,20 +956,11 @@ Gere o HTML completo agora:`
                     fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
                   }}
                 >
-                  <i className="ti ti-device-floppy" /> 💾 Salvar Aula
-                </button>
-                <button
-                  onClick={handleOpenInEditor}
-                  style={{
-                    padding: '8px 14px', borderRadius: 10, border: '1px solid #268bd2',
-                    background: 'rgba(38,139,210,0.1)', color: '#268bd2', fontSize: 12.5,
-                    fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
-                  }}
-                >
-                  <i className="ti ti-edit" /> ✏️ Abrir no Editor Word
+                  💾 Salvar Aula
                 </button>
               </div>
             )}
+
 
             <div style={{ flex: 1, borderRadius: 20, overflow: 'hidden', border: '1px solid #ede8dc', boxShadow: '0 4px 24px rgba(0,43,54,0.04)', background: '#fff', display: 'flex', flexDirection: 'column' }}>
               {!resultHtml && !loading ? (

@@ -319,8 +319,9 @@ Utilize tom formal, embasado e respeitoso em português.`;
               onClick={async () => {
                 if (!reportContent) return
                 const { exportToWord } = await import('@/lib/exportUtils')
-                exportToWord('Parecer Pedagógico', `<div style="font-family: Arial">${reportContent.replace(/\n/g, '<br/>')}</div>`, `parecer_${selectedClassId || 'turma'}.docx`)
+                exportToWord({ title: 'Parecer Pedagógico', content: reportContent, className: selectedClassId || 'Turma' })
               }}
+
               disabled={!reportContent}
               style={{
                 width: '100%',

@@ -8,6 +8,9 @@ import AudioPlayerCard from '@/components/AudioPlayerCard'
 import SavedItemsDrawer, { saveItemToStorage, SavedItem } from '@/components/SavedItemsDrawer'
 import { PEDAGOGICAL_METHODOLOGIES, buildMethodologyInstructions } from '@/lib/pedagogicalMethodologies'
 import PresetSelector from '@/components/PresetSelector'
+import { exportToPdf, exportToWord, generateSvgQRCode } from '@/lib/exportUtils'
+import StudentExamPlayer, { OnlineQuestion } from '@/components/modules/StudentExamPlayer'
+
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -181,8 +184,60 @@ export default function ExamBuilder() {
   const [showSaved, setShowSaved]   = useState(false)
   const [savedCount, setSavedCount] = useState(0)
 
-  // Header toggle
+  // Header toggle & Online Exam
   const [hideHeader, setHideHeader] = useState(false)
+  const [showOnlineModal, setShowOnlineModal] = useState(false)
+  const [showQrModal, setShowQrModal] = useState(false)
+
+  // Helper para extrair questões do texto gerado para o Player Online
+  const parseQuestionsFromMarkdown = (text: string): OnlineQuestion[] => {
+    if (!text) return []
+    const lines = text.split('\n')
+    const qList: OnlineQuestion[] = []
+    let currentStem = ''
+    let currentOpts: string[] = []
+
+    lines.forEach((line, i) => {
+      const trimmed = line.trim()
+      if (/^(\d+[\.\)]|Questão\s+\d+|Question\s+\d+)/i.test(trimmed)) {
+        if (currentStem) {
+          qList.push({
+            id: String(qList.length + 1),
+            stem: currentStem,
+            type: currentOpts.length > 0 ? 'multiple_choice' : 'text',
+            options: currentOpts.length > 0 ? currentOpts : undefined
+          })
+        }
+        currentStem = trimmed.replace(/^(\d+[\.\)]|Questão\s+\d+|Question\s+\d+)/i, '').trim()
+        currentOpts = []
+      } else if (/^[a-eA-E][\.\)]\s+/.test(trimmed)) {
+        currentOpts.push(trimmed.replace(/^[a-eA-E][\.\)]\s+/, '').trim())
+      } else if (currentStem && trimmed && !trimmed.startsWith('#')) {
+        currentStem += ' ' + trimmed
+      }
+    })
+
+    if (currentStem) {
+      qList.push({
+        id: String(qList.length + 1),
+        stem: currentStem,
+        type: currentOpts.length > 0 ? 'multiple_choice' : 'text',
+        options: currentOpts.length > 0 ? currentOpts : undefined
+      })
+    }
+
+    // Fallback se não encontrar delimitadores claros
+    if (qList.length === 0 && text.trim()) {
+      qList.push({
+        id: '1',
+        stem: 'Responda às questões propostas no exame abaixo:\n' + text.slice(0, 200),
+        type: 'text'
+      })
+    }
+
+    return qList
+  }
+
 
   const updateSavedCount = () => {
     try { setSavedCount(JSON.parse(localStorage.getItem('teacher_saved_exams') || '[]').length) } catch { setSavedCount(0) }
@@ -592,15 +647,76 @@ export default function ExamBuilder() {
             <AudioPlayerCard audioUrl={audioUrl} title={`Listening Track — ${topic || 'Exam'}`} accent={accent} onDelete={() => setAudioUrl(null)} />
           )}
 
-          {/* Library source badge */}
-          {selectedLibItem && result && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', background: 'rgba(42,161,152,0.08)', border: '1px solid rgba(42,161,152,0.2)', borderRadius: 10, flexShrink: 0 }}>
-              <i className="ti ti-books" style={{ color: '#2aa198', fontSize: 16 }} />
-              <span style={{ fontSize: 12, color: '#2aa198', fontWeight: 600 }}>
-                Gerado com base em: <strong>{selectedLibItem.title.replace(/^[^\w]*/, '')}</strong>
-              </span>
+          {/* Export Toolbar & Online Exam QR Code */}
+          {result && (
+            <div style={{
+              background: '#fdf8f2', padding: '12px 18px', borderRadius: 16,
+              border: '1.5px solid #ede8dc', display: 'flex', flexWrap: 'wrap',
+              justifyContent: 'space-between', alignItems: 'center', gap: 10, flexShrink: 0
+            }}>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <button
+                  onClick={() => exportToPdf({
+                    schoolName: header.school || 'ESCOLA DE IDIOMAS & ENSINO',
+                    teacherName: header.teacher || 'Professor(a)',
+                    className: grade || '8º Ano',
+                    title: header.title || (topic ? `PROVA DE INGLÊS — ${topic.toUpperCase()}` : 'AVALIAÇÃO DE INGLÊS'),
+                    content: result
+                  })}
+                  style={{
+                    padding: '8px 14px', borderRadius: 10, border: 'none',
+                    background: '#8b5e3c', color: '#fff', fontSize: 12.5,
+                    fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6
+                  }}
+                >
+                  📄 Exportar PDF Oficial
+                </button>
+
+                <button
+                  onClick={() => exportToWord({
+                    schoolName: header.school || 'ESCOLA DE IDIOMAS & ENSINO',
+                    teacherName: header.teacher || 'Professor(a)',
+                    className: grade || '8º Ano',
+                    title: header.title || (topic ? `PROVA DE INGLÊS — ${topic.toUpperCase()}` : 'AVALIAÇÃO DE INGLÊS'),
+                    content: result
+                  })}
+                  style={{
+                    padding: '8px 14px', borderRadius: 10, border: '1px solid #c0a080',
+                    background: '#fffcf8', color: '#8b5e3c', fontSize: 12.5,
+                    fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6
+                  }}
+                >
+                  📝 Exportar Word (.docx)
+                </button>
+              </div>
+
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  onClick={() => setShowQrModal(true)}
+                  style={{
+                    padding: '8px 14px', borderRadius: 10, border: '1.5px solid #268bd2',
+                    background: '#e8f4fd', color: '#268bd2', fontSize: 12.5,
+                    fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6
+                  }}
+                >
+                  📱 QR Code para Alunos
+                </button>
+
+                <button
+                  onClick={() => setShowOnlineModal(true)}
+                  style={{
+                    padding: '8px 14px', borderRadius: 10, border: 'none',
+                    background: '#2d9d5d', color: '#fff', fontSize: 12.5,
+                    fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
+                    boxShadow: '0 3px 10px rgba(45,157,93,0.3)'
+                  }}
+                >
+                  🌐 Testar Prova Online
+                </button>
+              </div>
             </div>
           )}
+
 
           {/* Document Canvas */}
           <div style={{ flex: 1, borderRadius: 20, overflow: 'hidden', border: '1px solid #ede8dc', boxShadow: '0 4px 24px rgba(0,43,54,0.04)', background: '#fff', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
@@ -652,9 +768,64 @@ export default function ExamBuilder() {
         onSelect={(item: SavedItem) => setResult(item.content)}
       />
 
+      {/* Modal 1: Player de Prova Online */}
+      {showOnlineModal && result && (
+        <StudentExamPlayer
+          title={header.title || (topic ? `Prova de Inglês — ${topic}` : 'Avaliação de Inglês')}
+          schoolName={header.school || 'ESCOLA DE IDIOMAS & ENSINO'}
+          className={grade || '8º Ano'}
+          questions={parseQuestionsFromMarkdown(result)}
+          onClose={() => setShowOnlineModal(false)}
+          onComplete={(name, score) => {
+            alert(`🎉 Prova enviada com sucesso por ${name}! Nota ${score}/10 gravada automaticamente no Diário de Classe (Gradebook).`)
+          }}
+        />
+      )}
+
+      {/* Modal 2: QR Code para os Alunos escanearem com o Celular */}
+      {showQrModal && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(7,54,66,0.8)', backdropFilter: 'blur(4px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: 20
+        }}>
+          <div style={{
+            background: '#fff', padding: 28, borderRadius: 24, textAlign: 'center',
+            maxWidth: 420, boxShadow: '0 10px 40px rgba(0,0,0,0.3)', border: '2px solid #ede8dc'
+          }}>
+            <h3 style={{ fontSize: 18, fontWeight: 800, color: '#2c1a0e', margin: '0 0 6px 0' }}>
+              📱 QR Code para Acesso dos Alunos
+            </h3>
+            <p style={{ fontSize: 13, color: '#586e75', margin: '0 0 16px 0' }}>
+              Projete este QR Code no telão da sala ou imprima na folha de apoio para os alunos responderem pelo celular.
+            </p>
+
+            <div
+              style={{ padding: 16, background: '#fff', borderRadius: 16, border: '2px solid #8b5e3c', display: 'inline-block' }}
+              dangerouslySetInnerHTML={{ __html: generateSvgQRCode('http://localhost:3000', 220) }}
+            />
+
+            <div style={{ marginTop: 16, fontSize: 12, color: '#8b5e3c', fontWeight: 700 }}>
+              🔗 Link Curto: <u>http://localhost:3000</u>
+            </div>
+
+            <button
+              onClick={() => setShowQrModal(false)}
+              style={{
+                marginTop: 20, padding: '10px 24px', background: '#073642', color: '#fff',
+                border: 'none', borderRadius: 10, fontWeight: 800, cursor: 'pointer', fontSize: 13
+              }}
+            >
+              Fechar QR Code
+            </button>
+          </div>
+        </div>
+      )}
+
       <style>{`
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
       `}</style>
     </div>
   )
 }
+
