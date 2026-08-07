@@ -727,21 +727,22 @@ export default function QuickGenerate() {
           <button
             id="quick-generate-btn"
             onClick={handleGenerate}
-            disabled={loading || !hasApi}
+            disabled={loading}
             style={{
               padding: '14px 24px',
-              background: loading ? '#93a1a1' : !hasApi ? '#e8e0d0' : 'linear-gradient(135deg, #073642, #0a4a5e)',
-              color: !hasApi ? '#93a1a1' : '#fff',
+              background: loading ? '#93a1a1' : 'linear-gradient(135deg, #8b5e3c, #5c3a21)',
+              color: '#fff',
               border: 'none', borderRadius: 14, fontSize: 15, fontWeight: 700,
-              cursor: loading || !hasApi ? 'not-allowed' : 'pointer',
+              cursor: loading ? 'not-allowed' : 'pointer',
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
-              boxShadow: hasApi && !loading ? '0 4px 16px rgba(7,54,66,0.25)' : 'none',
+              boxShadow: !loading ? '0 4px 16px rgba(139,94,60,0.35)' : 'none',
               transition: 'all 0.2s',
             }}
           >
             <i className={`ti ${loading ? 'ti-loader-2' : 'ti-sparkles'}`} style={{ fontSize: 18, animation: loading ? 'spin 1s linear infinite' : 'none' }} />
-            {loading ? 'Gerando exercício...' : !hasApi ? 'Configure uma API para gerar' : '✨ Gerar Exercício Completo'}
+            {loading ? 'Gerando exercício...' : '✨ Gerar Exercício Completo'}
           </button>
+
         </div>
 
         {/* ══ RIGHT PANEL ══ */}
