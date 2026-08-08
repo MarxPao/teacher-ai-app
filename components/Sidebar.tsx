@@ -14,7 +14,9 @@ const NAV: Section[] = [
     { key: 'classes',        label: 'Turmas',                icon: 'ti-school' },
     { key: 'students',       label: 'Alunos',                icon: 'ti-user-circle' },
     { key: 'privatetutoring',label: 'Alunos Particulares',   icon: 'ti-user-dollar' },
+    { key: 'insights',       label: 'Insights',              icon: 'ti-bulb' },
   ]},
+
   { label: 'Criação', items: [
     { key: 'lessonstudio',      label: 'Criar Aula',            icon: 'ti-chalkboard' },
     { key: 'quick',             label: 'Gerar Exercício',       icon: 'ti-sparkles' },

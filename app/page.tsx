@@ -48,12 +48,13 @@ import AutoReport from '@/components/modules/AutoReport'
 import Organization from '@/components/modules/Organization'
 import PrivateTutoring from '@/components/modules/PrivateTutoring'
 import Eventos from '@/components/modules/Eventos'
+import Insights from '@/components/modules/Insights'
 
 import CommandPalette from '@/components/CommandPalette'
 import LanguageSelector from '@/components/LanguageSelector'
 
 export type ModuleKey = 'dashboard' | 'quick' | 'exam' | 'lessonstudio' | 'plan' | 'rubric' |
-  'gradebook' | 'students' | 'classes' | 'organization' | 'privatetutoring' | 'eventos' | 'analytics' | 'calendar' | 'comms' | 'repo' |
+  'gradebook' | 'students' | 'classes' | 'organization' | 'privatetutoring' | 'eventos' | 'insights' | 'analytics' | 'calendar' | 'comms' | 'repo' |
   'wellbeing' | 'settings' | 'api' | 'qbank' | 'mindmap' | 'editor' |
   'communications' | 'portfolio' | 'extensions' | 'portalmirror' | 'omnigrader' | 'maestro' | 'classlog' | 'didacticsequence' | 'livequiz' | 'parentcomms' |
   'classroommode' | 'flashcardmode' | 'audiopronunciation' |
@@ -73,6 +74,7 @@ const MODULES: Record<ModuleKey, React.ComponentType> = {
   organization:     Organization,
   privatetutoring:  PrivateTutoring,
   eventos:          Eventos,
+  insights:         Insights,
   analytics:        Analytics,
   calendar:         Planner,
   comms:            Communications,
@@ -102,6 +104,7 @@ const MODULES: Record<ModuleKey, React.ComponentType> = {
   progresstracker:     ProgressTracker,
   autoreport:          AutoReport,
 }
+
 
 export default function Home() {
   const [active, setActive] = useState<ModuleKey>('dashboard')
