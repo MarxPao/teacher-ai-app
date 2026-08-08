@@ -100,9 +100,18 @@ export default function Dashboard() {
     localStorage.setItem('teacher_dashboard_todos', JSON.stringify(updated))
   }
 
-  const today = new Date()
-  const greeting = today.getHours() < 12 ? 'Bom dia' : today.getHours() < 18 ? 'Boa tarde' : 'Boa noite'
-  const dateStr = today.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })
+  const [mounted, setMounted] = useState(false)
+
+  const [greeting, setGreeting] = useState('Olá')
+  const [dateStr, setDateStr] = useState('')
+
+  useEffect(() => {
+    setMounted(true)
+    const today = new Date()
+    setGreeting(today.getHours() < 12 ? 'Bom dia' : today.getHours() < 18 ? 'Boa tarde' : 'Boa noite')
+    setDateStr(today.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' }))
+  }, [])
+
 
   const stats = [
     { label: 'Alunos ativos',    value: data.studentsCount,  icon: 'ti-users',       color: '#268bd2', bg: '#e8f4fb' },
@@ -118,13 +127,18 @@ export default function Dashboard() {
 
   return (
     <ModuleShell 
-      title={`${greeting}, Professora 👋`}
+      title={`${mounted ? greeting : 'Olá'}, Professora 👋`}
       subtitle="Aqui está um resumo dinâmico das suas turmas (baseado nos seus dados locais)."
     >
-      <div style={{ fontSize: 13, color: '#93a1a1', marginBottom: -30, position: 'relative', top: -75, textTransform: 'capitalize' }}>{dateStr}</div>
+      {dateStr && (
+        <div suppressHydrationWarning style={{ fontSize: 13, color: '#93a1a1', marginBottom: -30, position: 'relative', top: -75, textTransform: 'capitalize' }}>
+          {dateStr}
+        </div>
+      )}
 
       {/* Stat Cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 40 }}>
+
         {stats.map((s, i) => (
           <div
             key={s.label}

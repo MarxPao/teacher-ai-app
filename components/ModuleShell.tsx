@@ -33,7 +33,7 @@ export default function ModuleShell({
       {/* Header */}
       <div style={{ marginBottom: 40, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div>
-          <h1 style={{ 
+          <h1 suppressHydrationWarning style={{ 
             fontFamily: "'Playfair Display', serif", 
             fontSize: 36, 
             fontWeight: 600, 
@@ -44,11 +44,12 @@ export default function ModuleShell({
             {title}
           </h1>
           {subtitle && (
-            <p style={{ color: '#93a1a1', fontSize: 15, marginTop: 6, fontWeight: 300 }}>
+            <p suppressHydrationWarning style={{ color: '#93a1a1', fontSize: 15, marginTop: 6, fontWeight: 300 }}>
               {subtitle}
             </p>
           )}
         </div>
+
         {actions && (
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             {actions}
