@@ -171,11 +171,18 @@ export default function Home() {
   return (
     <div className="flex w-full h-screen overflow-hidden" style={{ background: '#fdf8f2' }}>
       <Sidebar active={active} onNavigate={setActive} />
-      <main className="flex-1 min-w-0 overflow-hidden flex flex-col relative">
+      <main
+        className="flex-1 min-w-0 overflow-hidden flex flex-col relative"
+        style={{
+          transition: 'all 0.28s cubic-bezier(0.16, 1, 0.3, 1)',
+          width: '100%',
+        }}
+      >
         <div key={active} className="animate-fade-up flex-1 min-h-0 min-w-0 h-full overflow-y-auto overflow-x-hidden">
           <Module />
         </div>
       </main>
+
 
       {/* ─── DOCK FLUTUANTE DE AÇÕES EMBUTIDAS NO CANTO INFERIOR DIREITO ─── */}
       <div style={{
