@@ -147,7 +147,7 @@ ESPECIFICAÇÕES DO EXERCÍCIO:
 - Habilidade foco: ${opts.skill}
 - Tipos de questão: ${opts.types.join(', ')}
 - Metodologias: ${opts.methodology.join(', ')}
-- Quantidade: ${opts.qtCount} questões
+- Quantidade Obrigatória: EXATAMENTE ${opts.qtCount} QUESTÕES COMPLETAS (Questão 1 a Questão ${opts.qtCount})
 - Tema/Tópico: ${opts.topic || 'tema relevante para o nível'}
 - ${stemInstruction}
 - ${optionInstruction}
@@ -155,17 +155,21 @@ ${opts.customPrompt ? `\nDIRETRIZES DO PROFESSOR:\n"${opts.customPrompt}"\n` : '
 ${opts.neeProfile ? `\nADAPTAÇÃO ESPECIAL: ${neeInstructions[opts.neeProfile] || ''}` : ''}
 ${methodologyInstructions}
 
+ESTRUTURA OBRIGATÓRIA DO EXERCÍCIO:
+1. QUANTIDADE RIGOROSA: O documento DEVE conter EXATAMENTE ${opts.qtCount} questões completas numeradas de 1 a ${opts.qtCount}. É PROIBIDO gerar menos de ${opts.qtCount} questões.
+2. Cada questão deve ter enunciado rico e contextualizado. Questões de múltipla escolha: exatamente 4 alternativas (A, B, C, D).
+3. Ao final, inclua um <h2>Gabarito Comentado</h2> cobrindo todas as ${opts.qtCount} questões com as respostas e justificativas pedagógicas.
+4. Inclua as habilidades BNCC ao final no formato: <p><strong>Habilidades BNCC:</strong> EF09LI14, EF09LI15</p>
+
 REGRAS ABSOLUTAS DE SAÍDA:
 1. Retorne APENAS HTML limpo. PROIBIDO usar markdown, blocos \`\`\`, asteriscos ou qualquer outra sintaxe que não seja HTML.
 2. Use apenas estas tags: h2, h3, p, ul, ol, li, strong, em, table, thead, tbody, tr, td, th, hr, br, blockquote, span.
 3. NÃO inclua <!DOCTYPE>, <html>, <head>, <body> — apenas o conteúdo interno.
-4. Comece diretamente com <h2> do título do exercício (sem o cabeçalho da escola, pois ele é gerado automaticamente).
-5. Cada questão deve ter enunciado rico e contextualizado. Questões de múltipla escolha: exatamente 4 alternativas (A, B, C, D).
-6. Ao final, inclua um <h2>Gabarito Comentado</h2> com as respostas e justificativas pedagógicas.
-7. Inclua as habilidades BNCC ao final no formato: <p><strong>Habilidades BNCC:</strong> EF09LI14, EF09LI15</p>
-8. O HTML gerado será renderizado diretamente em um editor — deve estar 100% pronto e completo.
+4. Comece diretamente com <h2> do título do exercício.
+5. O HTML gerado será renderizado diretamente em um editor — deve estar 100% pronto e completo com TODAS as ${opts.qtCount} questões.
 
-Gere agora o exercício completo:`
+Gere agora todas as ${opts.qtCount} questões completas:`
+
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────

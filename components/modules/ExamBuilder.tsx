@@ -99,6 +99,7 @@ function buildExamPrompt(opts: {
   topic: string
   cefr: string
   grade: string
+  questionCount: string
   sections: string[]
   approach: string[]
   stemLanguage?: 'pt' | 'en'
@@ -129,6 +130,7 @@ ESPECIFICAÇÕES DA PROVA:
 - Turma: ${opts.header.classGroup || opts.grade}
 - Série/Nível: ${opts.grade}
 - Nível CEFR: ${opts.cefr}
+- Quantidade Obrigatória de Questões: EXATAMENTE ${opts.questionCount} QUESTÕES COMPLETAS
 - Tópico Central: ${opts.topic || 'General Knowledge'}
 - Seções: ${opts.sections.join(', ')}
 - Abordagem Pedagógica: ${opts.approach.join(', ')}
@@ -138,41 +140,43 @@ ${opts.customPrompt ? `\nDIRETRIZES DO PROFESSOR:\n"${opts.customPrompt}"\n` : '
 ${methInstructions}
 
 ESTRUTURA OBRIGATÓRIA DA PROVA:
-1. Para cada seção selecionada (${opts.sections.join(', ')}), crie um bloco com:
+1. QUANTIDADE RIGOROSA: O exame DEVE conter EXATAMENTE ${opts.questionCount} QUESTÕES NUMERADAS (Questão 1 até Questão ${opts.questionCount}). PROIBIDO gerar menos de ${opts.questionCount} questões.
+2. Para cada seção selecionada (${opts.sections.join(', ')}), crie as questões distribuídas proporcionalmente com:
    - Título da seção em <h2>
    - Instruções claras em <p><em>${opts.stemLanguage === 'pt' ? 'Instruções' : 'Instructions'}: ...</em></p>
-   - Questões numeradas sequencialmente
+   - Questões numeradas sequencialmente de 1 a ${opts.questionCount}
    - Espaço para resposta (linha tracejada ou caixa de texto visual)
-2. Questões de Múltipla Escolha: exatamente 4 alternativas (A, B, C, D)
-3. Questões de Reading: inclua um texto de leitura em <blockquote> antes das questões
-4. Questões de Listening: inclua um script de áudio marcado como [AUDIO SCRIPT]
-5. Questões de Writing: inclua o enunciado completo com critérios de avaliação
-6. Gabarito do Professor: seção separada com <h2>Teacher's Answer Key & Marking Scheme</h2>
-7. Critérios de avaliação (rubrica básica) ao final
+3. Questões de Múltipla Escolha: exatamente 4 alternativas (A, B, C, D) completas.
+4. Questões de Reading: inclua um texto de leitura em <blockquote> antes das questões.
+5. Questões de Listening: inclua um script de áudio marcado como [AUDIO SCRIPT].
+6. Questões de Writing: inclua o enunciado completo com critérios de avaliação.
+7. Gabarito Completo do Professor: seção separada com <h2>Teacher's Answer Key & Marking Scheme</h2> cobrindo todas as ${opts.questionCount} questões com gabarito e explicação.
+8. Critérios de avaliação (rubrica básica) ao final.
 
 REGRAS ABSOLUTAS DE SAÍDA:
 1. Retorne APENAS HTML limpo. PROIBIDO usar markdown, asteriscos, blocos \`\`\` ou qualquer sintaxe não-HTML.
 2. Tags permitidas: h1, h2, h3, h4, p, ul, ol, li, strong, em, table, thead, tbody, tr, td, th, hr, br, blockquote, span, div.
 3. NÃO inclua <!DOCTYPE>, <html>, <head>, <body> — apenas o conteúdo interno.
 4. Comece com <h2>Section I — [Primeira Seção]</h2>
-5. O HTML será renderizado diretamente em um editor profissional — deve estar 100% completo.
-6. Use estilos inline apenas quando essencial (ex: tabelas de correlação).
+5. O HTML será renderizado diretamente em um editor profissional — deve estar 100% completo com TODAS as ${opts.questionCount} questões.
 
-Gere agora a prova completa:`
+Gere agora a prova completa com todas as ${opts.questionCount} questões:`
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export default function ExamBuilder() {
   // Form
-  const [topic, setTopic]       = useState('')
-  const [cefr, setCefr]         = useState('B2')
-  const [grade, setGrade]       = useState('9º Fund.')
+  const [topic, setTopic]               = useState('')
+  const [cefr, setCefr]                 = useState('B2')
+  const [grade, setGrade]               = useState('9º Fund.')
+  const [questionCount, setQuestionCount] = useState('10')
   const [stemLanguage, setStemLanguage] = useState<'pt' | 'en'>('pt')
   const [optionLanguage, setOptionLanguage] = useState<'en' | 'pt'>('en')
   const [customPrompt, setCustomPrompt] = useState('')
-  const [sections, setSections] = useState<string[]>(['Reading Comprehension', 'Use of English', 'Writing'])
-  const [approach, setApproach] = useState<string[]>(['Cambridge'])
+  const [sections, setSections]         = useState<string[]>(['Reading Comprehension', 'Use of English', 'Writing'])
+  const [approach, setApproach]         = useState<string[]>(['Cambridge'])
+
 
   // Escolas cadastradas & Modelos
   const [registeredSchools, setRegisteredSchools] = useState<Array<{ id: string; name: string }>>([])
@@ -341,11 +345,12 @@ export default function ExamBuilder() {
       }
 
       const prompt = buildExamPrompt({
-        topic, cefr, grade, sections, approach, customPrompt,
+        topic, cefr, grade, questionCount, sections, approach, customPrompt,
         stemLanguage, optionLanguage,
         header: { ...header, title: header.title || effectiveTitle },
         libraryContext: libContext,
       })
+
 
       const raw  = await callApi(selectedApi!, prompt)
       const html = cleanHtml(raw)
@@ -698,13 +703,41 @@ export default function ExamBuilder() {
             </div>
           </div>
 
-          {/* ── Detalhes ── */}
+          {/* ── Detalhes & Quantidade ── */}
           <div style={{ ...CARD, display: 'flex', flexDirection: 'column', gap: 14 }}>
             <div>
               <label style={SL}>Tópico Central</label>
               <input value={topic} onChange={e => setTopic(e.target.value)}
                 placeholder="Ex: Unit 5, Past Perfect, Environment…" style={SI} />
             </div>
+
+            {/* Quantidade de Questões */}
+            <div>
+              <label style={{ ...SL, display: 'flex', justifyContent: 'space-between' }}>
+                <span>🎯 Quantidade de Questões</span>
+                <span style={{ color: '#8b5e3c', fontWeight: 800 }}>{questionCount} questões</span>
+              </label>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 6 }}>
+                {['5', '8', '10', '12', '15', '20'].map(cnt => (
+                  <button
+                    key={cnt}
+                    type="button"
+                    onClick={() => setQuestionCount(cnt)}
+                    style={{
+                      flex: 1, minWidth: 42, padding: '7px 0', borderRadius: 8,
+                      border: questionCount === cnt ? '1.5px solid #8b5e3c' : '1px solid #e8e0d0',
+                      background: questionCount === cnt ? '#8b5e3c' : '#faf8f5',
+                      color: questionCount === cnt ? '#fff' : '#586e75',
+                      fontSize: 12, fontWeight: 700, cursor: 'pointer', textAlign: 'center',
+                      transition: 'all 0.15s'
+                    }}
+                  >
+                    {cnt}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
               <div>
                 <label style={SL}>Nível CEFR</label>
@@ -728,6 +761,7 @@ export default function ExamBuilder() {
               />
             </div>
           </div>
+
 
           {/* ── Metodologias ── */}
           <div style={CARD}>
