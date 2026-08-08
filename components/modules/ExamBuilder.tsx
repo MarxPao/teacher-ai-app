@@ -140,18 +140,19 @@ ${opts.customPrompt ? `\nDIRETRIZES DO PROFESSOR:\n"${opts.customPrompt}"\n` : '
 ${methInstructions}
 
 ESTRUTURA OBRIGATÓRIA DA PROVA:
-1. QUANTIDADE RIGOROSA: O exame DEVE conter EXATAMENTE ${opts.questionCount} QUESTÕES NUMERADAS (Questão 1 até Questão ${opts.questionCount}). PROIBIDO gerar menos de ${opts.questionCount} questões.
-2. Para cada seção selecionada (${opts.sections.join(', ')}), crie as questões distribuídas proporcionalmente com:
+1. QUANTIDADE RIGOROSA DE QUESTÕES: Você DEVE gerar EXATAMENTE ${opts.questionCount} questões completas numeradas sequencialmente de 1 a ${opts.questionCount} (Questão 1, Questão 2, Questão 3, Questão 4, Questão 5... até Questão ${opts.questionCount}). É ESTRITAMENTE PROIBIDO parar antes ou resumir gerando apenas 2, 3 ou 4 questões.
+2. DISTRIBUIÇÃO DAS SEÇÕES: Distribua as ${opts.questionCount} questões entre as seções selecionadas (${opts.sections.join(', ')}). Por exemplo, para ${opts.questionCount} questões com ${opts.sections.length} seções, coloque várias questões em cada seção para totalizar EXATAMENTE ${opts.questionCount} itens avaliativos.
+3. Para cada seção selecionada (${opts.sections.join(', ')}):
    - Título da seção em <h2>
    - Instruções claras em <p><em>${opts.stemLanguage === 'pt' ? 'Instruções' : 'Instructions'}: ...</em></p>
-   - Questões numeradas sequencialmente de 1 a ${opts.questionCount}
+   - Questões numeradas sequencialmente
    - Espaço para resposta (linha tracejada ou caixa de texto visual)
-3. Questões de Múltipla Escolha: exatamente 4 alternativas (A, B, C, D) completas.
-4. Questões de Reading: inclua um texto de leitura em <blockquote> antes das questões.
-5. Questões de Listening: inclua um script de áudio marcado como [AUDIO SCRIPT].
-6. Questões de Writing: inclua o enunciado completo com critérios de avaliação.
-7. Gabarito Completo do Professor: seção separada com <h2>Teacher's Answer Key & Marking Scheme</h2> cobrindo todas as ${opts.questionCount} questões com gabarito e explicação.
-8. Critérios de avaliação (rubrica básica) ao final.
+4. Questões de Múltipla Escolha: exatamente 4 alternativas (A, B, C, D) completas.
+5. Questões de Reading: inclua um texto de leitura em <blockquote> antes das questões.
+6. Questões de Listening: inclua um script de áudio marcado como [AUDIO SCRIPT].
+7. Questões de Writing: inclua o enunciado completo com critérios de avaliação.
+8. Gabarito Completo do Professor: seção separada com <h2>Teacher's Answer Key & Marking Scheme</h2> cobrindo todas as ${opts.questionCount} questões (1 a ${opts.questionCount}) com gabarito e explicação detalhada.
+9. Critérios de avaliação (rubrica básica) ao final.
 
 REGRAS ABSOLUTAS DE SAÍDA:
 1. Retorne APENAS HTML limpo. PROIBIDO usar markdown, asteriscos, blocos \`\`\` ou qualquer sintaxe não-HTML.
@@ -160,7 +161,8 @@ REGRAS ABSOLUTAS DE SAÍDA:
 4. Comece com <h2>Section I — [Primeira Seção]</h2>
 5. O HTML será renderizado diretamente em um editor profissional — deve estar 100% completo com TODAS as ${opts.questionCount} questões.
 
-Gere agora a prova completa com todas as ${opts.questionCount} questões:`
+Gere agora a prova completa contendo todas as ${opts.questionCount} questões numeradas:`
+
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
