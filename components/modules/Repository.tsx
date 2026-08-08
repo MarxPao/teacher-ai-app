@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import ModuleShell from '@/components/ModuleShell'
+import { exportToPdf, exportToWord, generateSvgQRCode, OFFICIAL_SCHOOL_TEMPLATES } from '@/lib/exportUtils'
+import StudentExamPlayer, { OnlineQuestion } from '@/components/modules/StudentExamPlayer'
 
 export interface RepositoryItem {
   id: number
@@ -13,6 +15,29 @@ export interface RepositoryItem {
   textbook?: string
   wordCount?: number
   chunkCount?: number
+}
+
+export interface SchoolHeaderModel {
+  id: string
+  name: string
+  officialName: string
+  motto?: string
+  subject?: string
+  teacherName?: string
+  instructions: string
+  gradeMax?: string
+}
+
+export interface SavedExerciseItem {
+  id: string
+  title: string
+  topic?: string
+  cefr?: string
+  grade?: string
+  date: string
+  content: string
+  type: 'exam' | 'quick' | 'qbank' | 'workbook'
+  school?: string
 }
 
 // ─── Presets Globalizers 4 ────────────────────────────────────────────────────
@@ -191,7 +216,7 @@ function typeColor(type: string) {
   return '#586e75'
 }
 
-// ─── RAG inlining (sem depender da lib) ─────────────────────────────────────
+// ─── RAG Search ─────────────────────────────────────────────────────────────
 function ragSearch(query: string, items: RepositoryItem[], docId?: number): string[] {
   const results: { text: string; score: number }[] = []
   const terms = query.toLowerCase().split(/\s+/).filter(t => t.length > 2)
@@ -212,30 +237,51 @@ function ragSearch(query: string, items: RepositoryItem[], docId?: number): stri
 }
 
 export default function Repository() {
-  const [items, setItems]             = useState<RepositoryItem[]>([])
-  const [viewItem, setViewItem]       = useState<RepositoryItem | null>(null)
-  const [activeFilter, setActiveFilter] = useState<string>('all')
-  const [searchText, setSearchText]   = useState('')
-  const [mode, setMode]               = useState<'view' | 'add' | 'edit' | 'rag'>('view')
+  // ── 3 PARTIÇÕES PRINCIPAIS ────────────────────────────────────────────────
+  const [activePartition, setActivePartition] = useState<'headers' | 'exercises' | 'bibliography'>('headers')
 
-  // Add / Edit form
-  const [editTitle, setEditTitle]     = useState('')
-  const [editContent, setEditContent] = useState('')
-  const [editType, setEditType]       = useState<RepositoryItem['type']>("Student's Book")
-  const [editCategory, setEditCategory] = useState('Macmillan Education')
-  const [editTextbook, setEditTextbook] = useState('')
+  // Bibliografia (Livros / Textos)
+  const [items, setItems]                     = useState<RepositoryItem[]>([])
+  const [viewItem, setViewItem]               = useState<RepositoryItem | null>(null)
+  const [activeFilter, setActiveFilter]       = useState<string>('all')
+  const [searchText, setSearchText]           = useState('')
+  const [mode, setMode]                       = useState<'view' | 'add' | 'edit' | 'rag'>('view')
+
+  // Cabeçalhos de Escolas
+  const [headerTemplates, setHeaderTemplates] = useState<SchoolHeaderModel[]>([])
+  const [selectedHeaderId, setSelectedHeaderId] = useState<string>('machado')
+  const [showNewHeaderModal, setShowNewHeaderModal] = useState(false)
+  const [newSchoolName, setNewSchoolName]     = useState('')
+  const [newOfficialName, setNewOfficialName] = useState('')
+  const [newInstructions, setNewInstructions] = useState('')
+  const [newSubject, setNewSubject]           = useState('Língua Inglesa')
+
+  // Exercícios & Provas Salvas
+  const [savedExercises, setSavedExercises]   = useState<SavedExerciseItem[]>([])
+  const [exerciseFilter, setExerciseFilter]   = useState<string>('all')
+  const [exerciseSearch, setExerciseSearch]   = useState<string>('')
+  const [viewExercise, setViewExercise]       = useState<SavedExerciseItem | null>(null)
+  const [showOnlinePlayer, setShowOnlinePlayer] = useState(false)
+  const [showQrModal, setShowQrModal]         = useState(false)
+
+  // Add / Edit form (Bibliografia)
+  const [editTitle, setEditTitle]             = useState('')
+  const [editContent, setEditContent]         = useState('')
+  const [editType, setEditType]               = useState<RepositoryItem['type']>("Student's Book")
+  const [editCategory, setEditCategory]       = useState('Macmillan Education')
+  const [editTextbook, setEditTextbook]       = useState('')
 
   // RAG test
-  const [ragQuery, setRagQuery]       = useState('')
-  const [ragResults, setRagResults]   = useState<string[]>([])
-  const [ragScope, setRagScope]       = useState<'all' | 'doc'>('all')
+  const [ragQuery, setRagQuery]               = useState('')
+  const [ragResults, setRagResults]           = useState<string[]>([])
+  const [ragScope, setRagScope]               = useState<'all' | 'doc'>('all')
 
   // Leitor Profissional State
-  const [readerFontSize, setReaderFontSize] = useState<'13px' | '15px' | '17px' | '19px'>('15px')
+  const [readerFontSize, setReaderFontSize]   = useState<'13px' | '15px' | '17px' | '19px'>('15px')
   const [readerFontFamily, setReaderFontFamily] = useState<'Georgia, serif' | "'Plus Jakarta Sans', sans-serif" | 'monospace'>('Georgia, serif')
-  const [readerTheme, setReaderTheme] = useState<'paper' | 'sepia' | 'dark'>('sepia')
+  const [readerTheme, setReaderTheme]         = useState<'paper' | 'sepia' | 'dark'>('sepia')
   const [readerFullscreen, setReaderFullscreen] = useState(false)
-  const [showToc, setShowToc] = useState(false)
+  const [showToc, setShowToc]                 = useState(false)
 
   // Upload Progress State
   const [uploadingStatus, setUploadingStatus] = useState<string>('')
@@ -243,8 +289,9 @@ export default function Repository() {
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const imageInputRef = useRef<HTMLInputElement | null>(null)
 
-  // ── Load ──────────────────────────────────────────────────────────────────
-  useEffect(() => {
+  // ── Load All Partitions Data ──────────────────────────────────────────────
+  const loadAllData = useCallback(() => {
+    // 1. Bibliografia
     const s = localStorage.getItem(LS_KEY)
     let current: RepositoryItem[] = s ? JSON.parse(s) : []
     const hasG4 = current.some(i => i.title.includes('Globalizers 4'))
@@ -260,10 +307,100 @@ export default function Repository() {
       localStorage.setItem(LS_KEY, JSON.stringify(current))
     }
     setItems(current)
-    setViewItem(current[0] || null)
-  }, [])
+    if (!viewItem && current.length > 0) setViewItem(current[0])
 
-  // ── Persist & Re-Index RAG ──────────────────────────────────────────────
+    // 2. Cabeçalhos das Escolas (combina OFFICIAL_SCHOOL_TEMPLATES com teacher_schools)
+    const customSchoolsStr = localStorage.getItem('teacher_schools')
+    const customSchools = customSchoolsStr ? JSON.parse(customSchoolsStr) : []
+    const baseHeaders: SchoolHeaderModel[] = OFFICIAL_SCHOOL_TEMPLATES.map(t => ({
+      id: t.id,
+      name: t.name,
+      officialName: t.officialName,
+      motto: t.motto,
+      subject: 'Língua Inglesa',
+      instructions: t.instructions,
+      gradeMax: '10,0'
+    }))
+
+    const mergedHeaders: SchoolHeaderModel[] = [...baseHeaders]
+    customSchools.forEach((cs: any) => {
+      if (!mergedHeaders.some(h => h.name.toLowerCase() === cs.name.toLowerCase())) {
+        mergedHeaders.push({
+          id: cs.id || String(Date.now()),
+          name: cs.name,
+          officialName: cs.name.toUpperCase(),
+          motto: 'Educação & Ensino de Excelência',
+          subject: 'Língua Inglesa',
+          instructions: '1. Responda todas as questões com clareza e atenção.\n2. Utilize caneta azul ou preta.\n3. Boa prova!',
+          gradeMax: '10,0'
+        })
+      }
+    })
+    setHeaderTemplates(mergedHeaders)
+
+    // 3. Exercícios & Provas Salvas
+    const examsStr = localStorage.getItem('teacher_saved_exams') || '[]'
+    const quicksStr = localStorage.getItem('teacher_saved_quicks') || '[]'
+    const qbankStr = localStorage.getItem('teacher_question_bank') || '[]'
+
+    const exams = JSON.parse(examsStr)
+    const quicks = JSON.parse(quicksStr)
+    const qbanks = JSON.parse(qbankStr)
+
+    const compiledExercises: SavedExerciseItem[] = []
+
+    // Provas completas
+    exams.forEach((ex: any, idx: number) => {
+      compiledExercises.push({
+        id: `exam-${ex.id || idx}`,
+        title: ex.title || `Avaliação Bimestral — ${ex.topic || 'Inglês'}`,
+        topic: ex.topic,
+        cefr: ex.cefr || 'B1',
+        grade: ex.grade || '9º Ano',
+        date: ex.date || new Date().toLocaleDateString('pt-BR'),
+        content: ex.content || '',
+        type: 'exam',
+        school: ex.school
+      })
+    })
+
+    // Exercícios rápidos
+    quicks.forEach((qk: any, idx: number) => {
+      compiledExercises.push({
+        id: `quick-${qk.id || idx}`,
+        title: qk.title || `Exercício de Fixação — ${qk.topic || 'Inglês'}`,
+        topic: qk.topic,
+        cefr: qk.cefr || 'B1',
+        grade: qk.grade || 'Geral',
+        date: qk.date || new Date().toLocaleDateString('pt-BR'),
+        content: qk.content || '',
+        type: 'quick',
+        school: qk.school
+      })
+    })
+
+    // Presets do Workbook como exercícios de referência
+    compiledExercises.push({
+      id: 'wb-g4',
+      title: 'Globalizers 4 — Banco de Exercícios & Gabarito Comentado (Units 1-8)',
+      topic: 'Conditionals, Reported Speech & Inversion',
+      cefr: 'B2',
+      grade: 'Ensino Médio / Avançado',
+      date: new Date().toLocaleDateString('pt-BR'),
+      content: G4_WORKBOOK.content,
+      type: 'workbook',
+      school: 'Macmillan Education'
+    })
+
+    setSavedExercises(compiledExercises)
+    if (!viewExercise && compiledExercises.length > 0) setViewExercise(compiledExercises[0])
+  }, [viewItem, viewExercise])
+
+  useEffect(() => {
+    loadAllData()
+  }, [loadAllData])
+
+  // ── Persist & Re-Index RAG ────────────────────────────────────────────────
   const save = useCallback((updated: RepositoryItem[]) => {
     setItems(updated)
     const jsonStr = JSON.stringify(updated)
@@ -272,13 +409,12 @@ export default function Repository() {
     localStorage.setItem('teacher_repo_materials', jsonStr)
     localStorage.removeItem(LS_RAG_KEY)
 
-    // Re-indexa o motor RAG imediatamente
     try {
       import('@/lib/ragEngine').then(({ indexAllLibraryItems }) => indexAllLibraryItems())
     } catch { /* ignora */ }
   }, [])
 
-  // ── Add item ──────────────────────────────────────────────────────────────
+  // ── Add Item (Bibliografia) ───────────────────────────────────────────────
   function addItem() {
     if (!editTitle.trim() || !editContent.trim()) {
       alert('Preencha o título e o conteúdo para continuar.')
@@ -302,7 +438,41 @@ export default function Repository() {
     clearForm()
   }
 
-  // ── Save edits ────────────────────────────────────────────────────────────
+  // ── Add New School Header ─────────────────────────────────────────────────
+  function handleAddSchoolHeader() {
+    if (!newSchoolName.trim()) {
+      alert('Preencha o nome da escola para cadastrar o cabeçalho.')
+      return
+    }
+    const newHeader: SchoolHeaderModel = {
+      id: `school-${Date.now()}`,
+      name: newSchoolName.trim(),
+      officialName: newOfficialName.trim() || newSchoolName.trim().toUpperCase(),
+      motto: 'Ensino de Excelência & Formação Integral',
+      subject: newSubject.trim() || 'Língua Inglesa',
+      instructions: newInstructions.trim() || '1. Responda todas as questões com atenção.\n2. Utilize caneta azul ou preta.\n3. Boa avaliação!',
+      gradeMax: '10,0'
+    }
+
+    const updated = [...headerTemplates, newHeader]
+    setHeaderTemplates(updated)
+    setSelectedHeaderId(newHeader.id)
+
+    // Sincroniza em teacher_schools
+    try {
+      const cur = JSON.parse(localStorage.getItem('teacher_schools') || '[]')
+      cur.push({ id: newHeader.id, name: newHeader.name })
+      localStorage.setItem('teacher_schools', JSON.stringify(cur))
+    } catch {}
+
+    setShowNewHeaderModal(false)
+    setNewSchoolName('')
+    setNewOfficialName('')
+    setNewInstructions('')
+    alert(`🎉 Cabeçalho da escola "${newHeader.name}" cadastrado com sucesso!`)
+  }
+
+  // ── Save Edits (Bibliografia) ─────────────────────────────────────────────
   function saveEdit() {
     if (!viewItem) return
     const updated = items.map(i => i.id === viewItem.id ? {
@@ -344,7 +514,23 @@ export default function Repository() {
     setMode('view')
   }
 
-  // ── Upload de arquivo (PDF, DOCX, TXT, MD, CSV, JSON) ────────────────────
+  function deleteExercise(id: string) {
+    if (!confirm('Deseja excluir este exercício do repositório?')) return
+    const upd = savedExercises.filter(e => e.id !== id)
+    setSavedExercises(upd)
+    if (id.startsWith('exam-')) {
+      const realId = id.replace('exam-', '')
+      const savedExams = JSON.parse(localStorage.getItem('teacher_saved_exams') || '[]').filter((x: any, idx: number) => String(x.id || idx) !== realId)
+      localStorage.setItem('teacher_saved_exams', JSON.stringify(savedExams))
+    } else if (id.startsWith('quick-')) {
+      const realId = id.replace('quick-', '')
+      const savedQuicks = JSON.parse(localStorage.getItem('teacher_saved_quicks') || '[]').filter((x: any, idx: number) => String(x.id || idx) !== realId)
+      localStorage.setItem('teacher_saved_quicks', JSON.stringify(savedQuicks))
+    }
+    setViewExercise(upd[0] || null)
+  }
+
+  // ── File Upload (PDF, DOCX, TXT, MD, CSV, JSON) ───────────────────────────
   async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
@@ -399,179 +585,53 @@ export default function Repository() {
       setViewItem(item)
       setMode('view')
       setUploadingStatus('')
-      alert(`🎉 Livro "${file.name}" compilado de ponta a ponta e indexado no RAG com sucesso!\n\n📊 Compilação: 100% do livro lido (${wCount.toLocaleString()} palavras em ${cCount} seções).\n\nA IA usará todo o conteúdo deste livro para gerar aulas e provas.`)
+      alert(`🎉 Livro "${file.name}" compilado e indexado no RAG com sucesso!\n\n📊 Total: ${wCount.toLocaleString()} palavras em ${cCount} seções.`)
     } catch (err: unknown) {
       setUploadingStatus('')
       alert(`⚠️ Falha na importação: ${err instanceof Error ? err.message : 'Não foi possível extrair o texto do arquivo.'}`)
     }
   }
 
-  // ── Upload de Imagens / Prints da Tela (OCR Visão IA) ─────────────────────
-  async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(e.target.files || [])
-    if (files.length === 0) return
-    if (imageInputRef.current) imageInputRef.current.value = ''
+  // ── Helper para extrair questões para o Player Online ─────────────────────
+  const parseQuestionsFromContent = (text: string): OnlineQuestion[] => {
+    if (!text) return []
+    const lines = text.split('\n')
+    const qList: OnlineQuestion[] = []
+    let currentStem = ''
+    let currentOpts: string[] = []
 
-    setUploadingStatus(`📷 Lendo ${files.length} foto(s)/print(s) de página via Visão IA (OCR)...`)
-
-    try {
-      const { extractTextFromImageAuto } = await import('@/lib/ocrCapture')
-      let compiledText = ''
-      let processedCount = 0
-
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i]
-        setUploadingStatus(`📷 Processando foto/print ${i + 1} de ${files.length} (${file.name})...`)
-
-        const base64 = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader()
-          reader.onload = (ev) => resolve(ev.target?.result as string)
-          reader.onerror = () => reject(new Error(`Erro ao ler imagem ${file.name}`))
-          reader.readAsDataURL(file)
-        })
-
-        const extracted = await extractTextFromImageAuto(base64)
-        if (extracted) {
-          compiledText += `--- Página / Print ${i + 1} (${file.name}) ---\n${extracted}\n\n`
-          processedCount++
+    lines.forEach((line) => {
+      const trimmed = line.trim()
+      if (/^(\d+[\.\)]|Questão\s+\d+|Question\s+\d+)/i.test(trimmed)) {
+        if (currentStem) {
+          qList.push({
+            id: String(qList.length + 1),
+            stem: currentStem,
+            type: currentOpts.length > 0 ? 'multiple_choice' : 'text',
+            options: currentOpts.length > 0 ? currentOpts : undefined
+          })
         }
+        currentStem = trimmed.replace(/^(\d+[\.\)]|Questão\s+\d+|Question\s+\d+)/i, '').trim()
+        currentOpts = []
+      } else if (/^[a-eA-E][\.\)]\s+/.test(trimmed)) {
+        currentOpts.push(trimmed)
+      } else if (currentStem && !/Gabarito|Answer Key/i.test(trimmed)) {
+        currentStem += ' ' + trimmed
       }
+    })
 
-      if (!compiledText.trim()) {
-        setUploadingStatus('')
-        alert('Não foi possível extrair texto legível das fotos/prints selecionados.')
-        return
-      }
-
-      const { normalizeAndReconstructText } = await import('@/lib/pdfExtractor')
-      const cleaned = normalizeAndReconstructText(compiledText)
-      const wCount = countWords(cleaned)
-      const cCount = countChunks(cleaned)
-      const bookTitle = files.length === 1 ? files[0].name.replace(/\.[^/.]+$/, '') : `Captura de Material (${files.length} páginas)`
-
-      const item: RepositoryItem = {
-        id: Date.now(),
-        title: bookTitle,
-        content: cleaned,
-        type: "Student's Book",
-        category: 'Captura Visual (Prints/Fotos)',
-        date: new Date().toLocaleDateString('pt-BR'),
-        wordCount: wCount,
-        chunkCount: cCount,
-      }
-
-      const updated = [item, ...items]
-      save(updated)
-      setViewItem(item)
-      setMode('view')
-      setUploadingStatus('')
-      alert(`🎉 Material compilado com sucesso por Visão IA (OCR)!\n\n📊 Total: ${processedCount} página(s) lida(s) · ${wCount.toLocaleString()} palavras em ${cCount} seções.\n\nTodo o texto extraído da tela/foto já alimentou a biblioteca e a IA (ExamBuilder, LessonStudio e Rafinha).`)
-    } catch (err: unknown) {
-      setUploadingStatus('')
-      alert(`⚠️ Falha no OCR Visual: ${err instanceof Error ? err.message : 'Não foi possível extrair texto das imagens.'}`)
+    if (currentStem) {
+      qList.push({
+        id: String(qList.length + 1),
+        stem: currentStem,
+        type: currentOpts.length > 0 ? 'multiple_choice' : 'text',
+        options: currentOpts.length > 0 ? currentOpts : undefined
+      })
     }
+    return qList
   }
 
-  // ── Captura de Tela da Plataforma ao Vivo (Screen Share Frame Grab) ─────────
-  async function captureScreenLive() {
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
-      alert('Seu navegador não suporta a captura de tela direta. Por favor tire prints da tela e use o botão "📷 Importar Prints / Fotos (OCR)".')
-      return
-    }
-
-    try {
-      const stream = await navigator.mediaDevices.getDisplayMedia({ video: { displaySurface: 'browser' } as any })
-      const video = document.createElement('video')
-      video.srcObject = stream
-      await video.play()
-
-      // Aguarda 1s para o vídeo estabilizar
-      await new Promise(r => setTimeout(r, 1000))
-
-      const canvas = document.createElement('canvas')
-      canvas.width = video.videoWidth || 1280
-      canvas.height = video.videoHeight || 720
-      const ctx = canvas.getContext('2d')
-      ctx?.drawImage(video, 0, 0, canvas.width, canvas.height)
-
-      // Para a gravação da tela
-      stream.getTracks().forEach(track => track.stop())
-
-      const base64 = canvas.toDataURL('image/png')
-      setUploadingStatus('📸 Analisando captura da plataforma via IA Visão...')
-
-      const { extractTextFromImageAuto } = await import('@/lib/ocrCapture')
-      const extractedText = await extractTextFromImageAuto(base64)
-
-      if (!extractedText || extractedText.trim().length < 15) {
-        setUploadingStatus('')
-        alert('Não foi possível identificar texto legível na tela capturada.')
-        return
-      }
-
-      const { normalizeAndReconstructText } = await import('@/lib/pdfExtractor')
-      const cleaned = normalizeAndReconstructText(extractedText)
-      const wCount = countWords(cleaned)
-      const cCount = countChunks(cleaned)
-
-      const item: RepositoryItem = {
-        id: Date.now(),
-        title: `Captura de Tela - ${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`,
-        content: cleaned,
-        type: "Student's Book",
-        category: 'Captura de Tela ao Vivo',
-        date: new Date().toLocaleDateString('pt-BR'),
-        wordCount: wCount,
-        chunkCount: cCount,
-      }
-
-      const updated = [item, ...items]
-      save(updated)
-      setViewItem(item)
-      setMode('view')
-      setUploadingStatus('')
-      alert(`🎉 Tela da plataforma lida e gravada com sucesso!\n\n📊 Estatísticas: ${wCount.toLocaleString()} palavras extraídas.\n\nO conteúdo capturado já está alimentando a biblioteca e o RAG da IA.`)
-    } catch (err: unknown) {
-      setUploadingStatus('')
-      if (err instanceof Error && err.name === 'NotAllowedError') return
-      alert(`⚠️ Falha na captura de tela: ${err instanceof Error ? err.message : String(err)}`)
-    }
-  }
-
-
-  // ── Reimport Globalizers 4 ────────────────────────────────────────────────
-  function reimportG4() {
-    const presets: RepositoryItem[] = ALL_G4_PRESETS.map((p, idx) => ({
-      id: Date.now() + idx,
-      ...p,
-      date: new Date().toLocaleDateString('pt-BR'),
-      wordCount: countWords(p.content),
-      chunkCount: countChunks(p.content),
-    }))
-    const filtered = items.filter(i => !i.title.includes('Globalizers 4'))
-    const updated = [...presets, ...filtered]
-    save(updated)
-    setViewItem(presets[0])
-    setMode('view')
-    alert('✅ Todos os 4 componentes do Globalizers 4 restaurados e reindexados!')
-  }
-
-  // ── RAG Search ────────────────────────────────────────────────────────────
-  function runRagSearch() {
-    if (!ragQuery.trim()) return
-    const docId = ragScope === 'doc' && viewItem ? viewItem.id : undefined
-    const results = ragSearch(ragQuery, items, docId)
-    setRagResults(results.length > 0 ? results : ['Nenhum trecho relevante encontrado para esta consulta.'])
-  }
-
-  // ── Filtragem e busca ─────────────────────────────────────────────────────
-  const filtered = items.filter(i => {
-    const matchType = activeFilter === 'all' || i.type === activeFilter
-    const matchSearch = !searchText || i.title.toLowerCase().includes(searchText.toLowerCase()) || i.content.toLowerCase().includes(searchText.toLowerCase())
-    return matchType && matchSearch
-  })
-
-  // ── Formatação do conteúdo para exibição ──────────────────────────────────
+  // ── Formatação de Texto da Bibliografia ───────────────────────────────────
   function formatContent(raw: string): React.ReactElement[] {
     const lines = raw.split('\n')
     const elements: React.ReactElement[] = []
@@ -634,436 +694,601 @@ export default function Repository() {
     return elements
   }
 
+  // ── Filtros da Bibliografia ───────────────────────────────────────────────
+  const filteredBibliography = items.filter(i => {
+    const matchType = activeFilter === 'all' || i.type === activeFilter
+    const matchSearch = !searchText || i.title.toLowerCase().includes(searchText.toLowerCase()) || i.content.toLowerCase().includes(searchText.toLowerCase())
+    return matchType && matchSearch
+  })
+
+  // ── Filtros de Exercícios ─────────────────────────────────────────────────
+  const filteredExercises = savedExercises.filter(e => {
+    const matchType = exerciseFilter === 'all' || e.type === exerciseFilter
+    const matchSearch = !exerciseSearch || e.title.toLowerCase().includes(exerciseSearch.toLowerCase()) || e.content.toLowerCase().includes(exerciseSearch.toLowerCase())
+    return matchType && matchSearch
+  })
+
+  const currentSelectedHeader = headerTemplates.find(h => h.id === selectedHeaderId) || headerTemplates[0]
+
   const btnPrimary: React.CSSProperties = {
-    padding: '10px 18px', borderRadius: 10,
-    borderWidth: '0px', borderStyle: 'none', borderColor: 'transparent',
+    padding: '10px 18px', borderRadius: 10, border: 'none',
     background: '#8b5e3c', color: '#fff',
     fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6
   }
   const btnSecondary: React.CSSProperties = {
     padding: '10px 18px', borderRadius: 10,
-    borderWidth: '1px', borderStyle: 'solid', borderColor: 'rgba(139,115,85,0.35)',
+    border: '1px solid rgba(139,115,85,0.35)',
     background: '#fffcf8', color: '#586e75', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6
   }
   const inputStyle: React.CSSProperties = {
     width: '100%', padding: '10px 14px', borderRadius: 10,
-    borderWidth: '1px', borderStyle: 'solid', borderColor: 'rgba(139,115,85,0.25)',
+    border: '1px solid rgba(139,115,85,0.25)',
     fontSize: 13, outline: 'none', background: '#fffcf8', color: '#2c1a0e', boxSizing: 'border-box'
   }
 
   return (
     <ModuleShell
-      title="📚 Biblioteca Digital"
-      subtitle="Gerencie seus livros didáticos e documentos. A IA (Rafinha, ExamBuilder, LessonStudio) usa estes materiais como base de contexto RAG."
+      title="📚 Biblioteca & Repositório Pedagógico"
+      subtitle="Organização centralizada em 3 partições: Cabeçalhos Oficiais das Escolas, Exercícios & Provas Salvas, e Bibliografia RAG."
       isFullHeight
       maxWidth="100%"
       actions={
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           {uploadingStatus && (
-            <div style={{ background: '#fdf3e7', borderWidth: '1px', borderStyle: 'solid', borderColor: '#8b5e3c', color: '#8b5e3c', padding: '6px 14px', borderRadius: 10, fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ background: '#fdf3e7', border: '1px solid #8b5e3c', color: '#8b5e3c', padding: '6px 14px', borderRadius: 10, fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
               <i className="ti ti-loader text-spin" /> {uploadingStatus}
             </div>
           )}
 
-          <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept=".txt,.md,.json,.csv,.pdf,.docx,.doc" style={{ display: 'none' }} />
-          <input type="file" ref={imageInputRef} onChange={handleImageUpload} accept="image/*" multiple style={{ display: 'none' }} />
+          {activePartition === 'headers' && (
+            <button onClick={() => setShowNewHeaderModal(true)} style={btnPrimary}>
+              <i className="ti ti-plus" /> Cadastrar Novo Cabeçalho
+            </button>
+          )}
 
-          <button onClick={() => fileInputRef.current?.click()} style={btnSecondary}>
-            <i className="ti ti-upload" /> Importar PDF / Word / Arquivo
-          </button>
+          {activePartition === 'exercises' && (
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={() => window.dispatchEvent(new CustomEvent('teacher:navigate', { detail: 'exam' }))} style={btnPrimary}>
+                <i className="ti ti-file-text" /> Criar Nova Prova
+              </button>
+              <button onClick={() => window.dispatchEvent(new CustomEvent('teacher:navigate', { detail: 'quick' }))} style={btnSecondary}>
+                <i className="ti ti-sparkles" /> Criar Exercício Rápido
+              </button>
+            </div>
+          )}
 
-          <button onClick={() => imageInputRef.current?.click()} style={{ ...btnSecondary, borderColor: '#8b5e3c', color: '#8b5e3c' }} title="Faça upload de fotos ou prints das páginas da plataforma para extrair 100% do texto com Visão IA (OCR)">
-            <i className="ti ti-camera" /> 📷 Prints / Fotos (OCR)
-          </button>
-
-          <button onClick={captureScreenLive} style={{ ...btnSecondary, borderColor: '#d4944a', color: '#d4944a' }} title="Capture a tela ou aba da plataforma educacional ao vivo para ler o material">
-            <i className="ti ti-device-desktop" /> 📸 Capturar Tela da Plataforma
-          </button>
-
-          <button onClick={reimportG4} style={{ ...btnSecondary, borderColor: '#27ae60', color: '#27ae60' }}>
-            <i className="ti ti-book" /> Restaurar Globalizers 4
-          </button>
-
-          <button onClick={() => { clearForm(); setMode('add') }} style={btnPrimary}>
-            <i className="ti ti-plus" /> Adicionar Material
-          </button>
-
+          {activePartition === 'bibliography' && (
+            <>
+              <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept=".txt,.md,.json,.csv,.pdf,.docx,.doc" style={{ display: 'none' }} />
+              <button onClick={() => fileInputRef.current?.click()} style={btnSecondary}>
+                <i className="ti ti-upload" /> Importar Livro / Arquivo
+              </button>
+              <button onClick={() => { clearForm(); setMode('add') }} style={btnPrimary}>
+                <i className="ti ti-plus" /> Adicionar Livro Manual
+              </button>
+            </>
+          )}
         </div>
       }
     >
-      <div style={{ display: 'grid', gridTemplateColumns: '360px 1fr', gap: 24, flex: 1, minHeight: 0, height: '100%' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 16 }}>
 
-        {/* ── Coluna Esquerda: Lista + Busca ── */}
-        <div style={{ background: '#fff', borderRadius: 20, border: '1px solid rgba(139,115,85,0.12)', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 4px 20px rgba(44,26,14,0.04)' }}>
+        {/* ── BARRA DE SELEÇÃO DAS 3 PARTIÇÕES ── */}
+        <div style={{
+          display: 'flex', gap: 8, background: '#fffcf8', padding: '6px',
+          borderRadius: 14, border: '1.5px solid rgba(139,115,85,0.18)', width: 'fit-content',
+          boxShadow: '0 2px 10px rgba(44,26,14,0.04)'
+        }}>
+          <button
+            onClick={() => setActivePartition('headers')}
+            style={{
+              padding: '10px 18px', borderRadius: 10, border: 'none',
+              background: activePartition === 'headers' ? '#8b5e3c' : 'transparent',
+              color: activePartition === 'headers' ? '#fff' : '#665c54',
+              fontSize: 13.5, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
+              transition: 'all 0.15s'
+            }}
+          >
+            <i className="ti ti-id-badge" /> 🏛️ 1. Cabeçalho ({headerTemplates.length})
+          </button>
 
-          {/* Busca */}
-          <div style={{ padding: '16px 16px 12px', borderBottom: '1px solid rgba(139,115,85,0.1)' }}>
-            <div style={{ position: 'relative', marginBottom: 12 }}>
-              <i className="ti ti-search" style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#a08060', fontSize: 14 }} />
-              <input
-                placeholder="Buscar por título ou conteúdo..."
-                value={searchText}
-                onChange={e => setSearchText(e.target.value)}
-                style={{ ...inputStyle, paddingLeft: 36 }}
-              />
-            </div>
-            {/* Filtros de tipo */}
-            <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-              {['all', "Student's Book", 'Workbook', 'Reference Book', 'CLIL Book', 'Syllabus', 'Text'].map(f => (
-                <button key={f} onClick={() => setActiveFilter(f)} style={{
-                  padding: '4px 9px', borderRadius: 7, borderWidth: '0px', borderStyle: 'none', borderColor: 'transparent', fontSize: 11, fontWeight: 700, cursor: 'pointer',
-                  background: activeFilter === f ? '#8b5e3c' : '#f5efe6',
-                  color: activeFilter === f ? '#fff' : '#665c54',
-                }}>
-                  {f === 'all' ? 'Todos' : f.replace(' Book', '')}
-                </button>
-              ))}
-            </div>
-          </div>
+          <button
+            onClick={() => setActivePartition('exercises')}
+            style={{
+              padding: '10px 18px', borderRadius: 10, border: 'none',
+              background: activePartition === 'exercises' ? '#8b5e3c' : 'transparent',
+              color: activePartition === 'exercises' ? '#fff' : '#665c54',
+              fontSize: 13.5, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
+              transition: 'all 0.15s'
+            }}
+          >
+            <i className="ti ti-file-certificate" /> 📝 2. Exercícios & Provas ({savedExercises.length})
+          </button>
 
-          {/* Contagem */}
-          <div style={{ padding: '8px 16px', fontSize: 11, color: '#a08060', fontWeight: 600, borderBottom: '1px solid rgba(139,115,85,0.06)' }}>
-            {filtered.length} documento{filtered.length !== 1 ? 's' : ''} encontrado{filtered.length !== 1 ? 's' : ''}
-            {searchText && <span style={{ marginLeft: 6, color: '#8b5e3c' }}>· filtro ativo: "{searchText}"</span>}
-          </div>
-
-          {/* Lista de itens */}
-          <div style={{ flex: 1, overflowY: 'auto', padding: '10px 10px' }}>
-            {filtered.length === 0 ? (
-              <div style={{ padding: '40px 20px', textAlign: 'center', color: '#a08060', fontSize: 13 }}>
-                <i className="ti ti-books-off" style={{ fontSize: 36, display: 'block', marginBottom: 8, opacity: 0.4 }} />
-                Nenhum documento encontrado.<br />
-                <span style={{ fontSize: 11 }}>Tente outro filtro ou clique em "Adicionar Material".</span>
-              </div>
-            ) : filtered.map(item => (
-              <div
-                key={item.id}
-                onClick={() => { setViewItem(item); setMode('view') }}
-                style={{
-                  padding: '12px 14px', borderRadius: 12, cursor: 'pointer', marginBottom: 6,
-                  background: viewItem?.id === item.id ? '#fdf3e7' : 'transparent',
-                  border: viewItem?.id === item.id ? `1.5px solid ${typeColor(item.type)}40` : '1.5px solid transparent',
-                  transition: 'all 0.15s'
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-                  <span style={{ fontSize: 20, flexShrink: 0, marginTop: 2 }}>{typeIcon(item.type)}</span>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 12.5, fontWeight: 700, color: viewItem?.id === item.id ? '#2c1a0e' : '#586e75', lineHeight: 1.35, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {item.title.replace(/^(📘|📙|📗|🟨|📋|📄)\s/, '')}
-                    </div>
-                    <div style={{ display: 'flex', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
-                      <span style={{ fontSize: 10, background: typeColor(item.type) + '20', color: typeColor(item.type), padding: '2px 6px', borderRadius: 5, fontWeight: 700 }}>
-                        {item.type}
-                      </span>
-                      {item.wordCount && (
-                        <span style={{ fontSize: 10, color: '#a08060' }}>
-                          {item.wordCount.toLocaleString()} palavras · {item.chunkCount} seções
-                        </span>
-                      )}
-                    </div>
-                    <div style={{ fontSize: 10, color: '#c0a882', marginTop: 3 }}>
-                      {item.category} · {item.date}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
+          <button
+            onClick={() => setActivePartition('bibliography')}
+            style={{
+              padding: '10px 18px', borderRadius: 10, border: 'none',
+              background: activePartition === 'bibliography' ? '#8b5e3c' : 'transparent',
+              color: activePartition === 'bibliography' ? '#fff' : '#665c54',
+              fontSize: 13.5, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
+              transition: 'all 0.15s'
+            }}
+          >
+            <i className="ti ti-books" /> 📚 3. Bibliografia RAG ({items.length})
+          </button>
         </div>
 
-        {/* ── Coluna Direita: Visualizador / Editor / RAG ── */}
-        <div style={{ background: '#fff', borderRadius: 20, border: '1px solid rgba(139,115,85,0.12)', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 4px 20px rgba(44,26,14,0.04)' }}>
 
-          {/* ── MODO ADD / EDIT ── */}
-          {(mode === 'add' || mode === 'edit') ? (
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: 28, gap: 16, overflowY: 'auto' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <h2 style={{ fontSize: 20, fontFamily: 'Georgia, serif', fontStyle: 'italic', color: '#2c1a0e', margin: 0 }}>
-                  {mode === 'add' ? '➕ Adicionar Material à Biblioteca' : '✏️ Editar Material'}
-                </h2>
-                <button onClick={() => setMode('view')} style={{ ...btnSecondary, padding: '7px 12px', fontSize: 12 }}>
-                  <i className="ti ti-x" /> Cancelar
-                </button>
+        {/* ══════════════════════════════════════════════════════════════════════
+            PARTIÇÃO 1: CABEÇALHO (MODELOS ESCOLARES OFICIAIS)
+           ══════════════════════════════════════════════════════════════════════ */}
+        {activePartition === 'headers' && (
+          <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: 24, flex: 1, minHeight: 0 }}>
+            {/* Lista de Modelos de Cabeçalho */}
+            <div style={{ background: '#fff', borderRadius: 16, border: '1px solid rgba(139,115,85,0.12)', padding: 16, display: 'flex', flexDirection: 'column', gap: 10, overflowY: 'auto' }}>
+              <div style={{ fontSize: 13, fontWeight: 800, color: '#8b5e3c', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                Instituições & Modelos ({headerTemplates.length})
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 14 }}>
-                <div>
-                  <label style={{ fontSize: 11, fontWeight: 700, color: '#a08060', textTransform: 'uppercase', display: 'block', marginBottom: 5 }}>Título do Documento *</label>
-                  <input value={editTitle} onChange={e => setEditTitle(e.target.value)} placeholder="Ex: Globalizers 4 — Workbook Unit 3" style={inputStyle} />
-                </div>
-                <div>
-                  <label style={{ fontSize: 11, fontWeight: 700, color: '#a08060', textTransform: 'uppercase', display: 'block', marginBottom: 5 }}>Tipo de Componente *</label>
-                  <select value={editType} onChange={e => setEditType(e.target.value as RepositoryItem['type'])} style={{ ...inputStyle }}>
-                    <option value="Student's Book">Student's Book</option>
-                    <option value="Workbook">Workbook</option>
-                    <option value="Reference Book">Reference Book</option>
-                    <option value="CLIL Book">CLIL Book</option>
-                    <option value="Syllabus">Syllabus</option>
-                    <option value="Text">Texto / Documento Livre</option>
-                  </select>
-                </div>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-                <div>
-                  <label style={{ fontSize: 11, fontWeight: 700, color: '#a08060', textTransform: 'uppercase', display: 'block', marginBottom: 5 }}>Editora / Categoria</label>
-                  <input value={editCategory} onChange={e => setEditCategory(e.target.value)} placeholder="Ex: Macmillan Education" style={inputStyle} />
-                </div>
-                <div>
-                  <label style={{ fontSize: 11, fontWeight: 700, color: '#a08060', textTransform: 'uppercase', display: 'block', marginBottom: 5 }}>Livro Didático (opcional)</label>
-                  <input value={editTextbook} onChange={e => setEditTextbook(e.target.value)} placeholder="Ex: Globalizers 4" style={inputStyle} />
-                </div>
-              </div>
-
-              <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-                <label style={{ fontSize: 11, fontWeight: 700, color: '#a08060', textTransform: 'uppercase', display: 'block', marginBottom: 5 }}>
-                  Conteúdo do Material * <span style={{ fontSize: 10, fontWeight: 400, color: '#c0a882' }}>— Cole textos, gramática, exercícios, transcrições, etc.</span>
-                </label>
-                <textarea
-                  value={editContent}
-                  onChange={e => setEditContent(e.target.value)}
-                  placeholder={`Cole aqui o conteúdo do livro...\n\nDicas de formatação:\n- [UNIT 1 — TEMA] para criar seções que a IA indexa\n- Exercícios numerados (1., 2., 3.)\n- Gabarito: [Answer: ...]`}
-                  style={{ ...inputStyle, flex: 1, minHeight: 300, resize: 'none', lineHeight: 1.6, fontFamily: 'monospace', fontSize: 13 }}
-                />
-                {editContent && (
-                  <div style={{ marginTop: 6, fontSize: 11, color: '#a08060' }}>
-                    📊 {countWords(editContent).toLocaleString()} palavras · {countChunks(editContent)} seções detectadas
+              {headerTemplates.map(tpl => (
+                <div
+                  key={tpl.id}
+                  onClick={() => setSelectedHeaderId(tpl.id)}
+                  style={{
+                    padding: '14px', borderRadius: 12, cursor: 'pointer',
+                    background: selectedHeaderId === tpl.id ? '#fdf8f2' : '#faf8f5',
+                    border: selectedHeaderId === tpl.id ? '1.5px solid #8b5e3c' : '1px solid #ede8dc',
+                    transition: 'all 0.15s'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                    <i className="ti ti-building-school" style={{ color: '#8b5e3c', fontSize: 18 }} />
+                    <span style={{ fontSize: 13.5, fontWeight: 700, color: '#2c1a0e' }}>{tpl.name}</span>
                   </div>
-                )}
+                  <div style={{ fontSize: 11, color: '#586e75' }}>
+                    {tpl.officialName}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Visualizador & Folha Oficial do Cabeçalho */}
+            <div style={{ background: '#fff', borderRadius: 16, border: '1px solid rgba(139,115,85,0.15)', padding: '24px 32px', display: 'flex', flexDirection: 'column', gap: 20, overflowY: 'auto', boxShadow: '0 4px 20px rgba(44,26,14,0.06)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #ede8dc', paddingBottom: 14 }}>
+                <div>
+                  <h2 style={{ fontFamily: 'Georgia, serif', fontSize: 22, color: '#2c1a0e', margin: 0 }}>
+                    {currentSelectedHeader.name}
+                  </h2>
+                  <p style={{ fontSize: 12, color: '#8b5e3c', margin: '4px 0 0', fontWeight: 600 }}>
+                    {currentSelectedHeader.motto || 'Modelo Oficial Formatado para Folhas de Avaliação e Exercícios'}
+                  </p>
+                </div>
+
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(`${currentSelectedHeader.officialName}\nDisciplina: ${currentSelectedHeader.subject}\nInstruções:\n${currentSelectedHeader.instructions}`)
+                      alert('📋 Tabela e texto do cabeçalho copiados para a área de transferência!')
+                    }}
+                    style={btnSecondary}
+                  >
+                    <i className="ti ti-copy" /> Copiar Cabeçalho
+                  </button>
+
+                  <button
+                    onClick={() => window.dispatchEvent(new CustomEvent('teacher:navigate', { detail: 'exam' }))}
+                    style={btnPrimary}
+                  >
+                    <i className="ti ti-sparkles" /> Usar no Gerador de Provas
+                  </button>
+                </div>
               </div>
 
-              <div style={{ display: 'flex', gap: 12 }}>
-                <button onClick={mode === 'add' ? addItem : saveEdit} style={{ ...btnPrimary, padding: '12px 28px', fontSize: 14 }}>
-                  <i className="ti ti-device-floppy" /> {mode === 'add' ? 'Salvar na Biblioteca' : 'Salvar Alterações'}
-                </button>
-                <button onClick={() => setMode('view')} style={{ ...btnSecondary, padding: '12px 20px' }}>
-                  Cancelar
-                </button>
+              {/* Folha A4 com o Cabeçalho Renderizado */}
+              <div style={{
+                background: '#fffcf8', border: '2px solid #2c1a0e', borderRadius: 6,
+                padding: '24px 28px', color: '#1a110a', fontFamily: 'Georgia, serif'
+              }}>
+                <div style={{ textAlign: 'center', borderBottom: '2px solid #2c1a0e', paddingBottom: 12, marginBottom: 16 }}>
+                  <div style={{ fontSize: 16, fontWeight: 800, letterSpacing: '1px', textTransform: 'uppercase' }}>
+                    {currentSelectedHeader.officialName}
+                  </div>
+                  <div style={{ fontSize: 12, fontStyle: 'italic', color: '#555', marginTop: 4 }}>
+                    {currentSelectedHeader.motto}
+                  </div>
+                </div>
+
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, marginBottom: 16 }}>
+                  <tbody>
+                    <tr>
+                      <td style={{ border: '1px solid #2c1a0e', padding: '6px 10px', width: '50%' }}>
+                        <strong>Disciplina:</strong> {currentSelectedHeader.subject}
+                      </td>
+                      <td style={{ border: '1px solid #2c1a0e', padding: '6px 10px', width: '25%' }}>
+                        <strong>Turma:</strong> ________
+                      </td>
+                      <td style={{ border: '1px solid #2c1a0e', padding: '6px 10px', width: '25%' }}>
+                        <strong>Data:</strong> ____/____/2026
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style={{ border: '1px solid #2c1a0e', padding: '6px 10px' }}>
+                        <strong>Professor(a):</strong> ________________________
+                      </td>
+                      <td colSpan={2} style={{ border: '1px solid #2c1a0e', padding: '6px 10px' }}>
+                        <strong>Aluno(a):</strong> ____________________________________
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style={{ border: '1px solid #2c1a0e', padding: '6px 10px' }}>
+                        <strong>Tipo de Avaliação:</strong> Prova Trimestral
+                      </td>
+                      <td style={{ border: '1px solid #2c1a0e', padding: '6px 10px' }}>
+                        <strong>Valor Total:</strong> {currentSelectedHeader.gradeMax || '10,0'} pts
+                      </td>
+                      <td style={{ border: '2px solid #8b5e3c', padding: '6px 10px', background: '#fdf8f2', textAlign: 'center' }}>
+                        <strong>Nota Obtida:</strong> ________
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+
+                <div style={{ background: '#f5f0e8', padding: '10px 14px', borderRadius: 6, fontSize: 11.5, borderLeft: '4px solid #8b5e3c' }}>
+                  <strong>Instruções Gerais de Preenchimento:</strong>
+                  <pre style={{ margin: '4px 0 0', fontFamily: 'inherit', whiteSpace: 'pre-wrap', fontSize: 11.5, color: '#333' }}>
+                    {currentSelectedHeader.instructions}
+                  </pre>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+
+        {/* ══════════════════════════════════════════════════════════════════════
+            PARTIÇÃO 2: EXERCÍCIOS & PROVAS SALVAS
+           ══════════════════════════════════════════════════════════════════════ */}
+        {activePartition === 'exercises' && (
+          <div style={{ display: 'grid', gridTemplateColumns: '360px 1fr', gap: 24, flex: 1, minHeight: 0 }}>
+            {/* Lista de Exercícios */}
+            <div style={{ background: '#fff', borderRadius: 16, border: '1px solid rgba(139,115,85,0.12)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+              <div style={{ padding: '14px 16px', borderBottom: '1px solid #ede8dc' }}>
+                <input
+                  placeholder="Buscar prova ou exercício..."
+                  value={exerciseSearch}
+                  onChange={e => setExerciseSearch(e.target.value)}
+                  style={{ ...inputStyle, marginBottom: 10 }}
+                />
+                <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                  {['all', 'exam', 'quick', 'workbook'].map(f => (
+                    <button
+                      key={f}
+                      onClick={() => setExerciseFilter(f)}
+                      style={{
+                        padding: '4px 9px', borderRadius: 7, border: 'none', fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                        background: exerciseFilter === f ? '#8b5e3c' : '#f5efe6',
+                        color: exerciseFilter === f ? '#fff' : '#665c54',
+                      }}
+                    >
+                      {f === 'all' ? 'Todos' : f === 'exam' ? 'Provas' : f === 'quick' ? 'Exercícios' : 'Workbook'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ flex: 1, overflowY: 'auto', padding: '10px' }}>
+                {filteredExercises.length === 0 ? (
+                  <div style={{ padding: '30px 16px', textAlign: 'center', color: '#8b5e3c', fontSize: 12.5 }}>
+                    Nenhum exercício encontrado. Gere uma prova no <strong>ExamBuilder</strong> para salvar aqui automaticamente.
+                  </div>
+                ) : filteredExercises.map(ex => (
+                  <div
+                    key={ex.id}
+                    onClick={() => setViewExercise(ex)}
+                    style={{
+                      padding: '12px 14px', borderRadius: 12, cursor: 'pointer', marginBottom: 6,
+                      background: viewExercise?.id === ex.id ? '#fdf8f2' : '#faf8f5',
+                      border: viewExercise?.id === ex.id ? '1.5px solid #8b5e3c' : '1px solid #ede8dc',
+                      transition: 'all 0.15s'
+                    }}
+                  >
+                    <div style={{ fontSize: 13, fontWeight: 700, color: '#2c1a0e', marginBottom: 4 }}>
+                      {ex.type === 'exam' ? '📋 ' : ex.type === 'quick' ? '⚡ ' : '📙 '}
+                      {ex.title}
+                    </div>
+                    <div style={{ display: 'flex', gap: 6, fontSize: 10.5, color: '#586e75' }}>
+                      <span style={{ background: '#ede8dc', padding: '2px 6px', borderRadius: 4, fontWeight: 600 }}>{ex.cefr || 'B1'}</span>
+                      <span style={{ background: '#ede8dc', padding: '2px 6px', borderRadius: 4 }}>{ex.grade || '9º Ano'}</span>
+                      <span style={{ marginLeft: 'auto' }}>{ex.date}</span>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
 
-          /* ── MODO RAG TEST ── */
-          ) : mode === 'rag' ? (
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: 28, gap: 16, overflowY: 'auto' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <h2 style={{ fontSize: 20, fontFamily: 'Georgia, serif', fontStyle: 'italic', color: '#2c1a0e', margin: 0 }}>
-                  🔍 Testar Busca RAG
-                </h2>
-                <button onClick={() => setMode('view')} style={{ ...btnSecondary, padding: '7px 12px', fontSize: 12 }}>
-                  <i className="ti ti-x" /> Fechar
-                </button>
-              </div>
-
-              <div style={{ background: '#fdf3e7', border: '1px solid rgba(139,115,85,0.2)', borderRadius: 14, padding: 16, fontSize: 13, color: '#665c54', lineHeight: 1.6 }}>
-                <strong>O que é isso?</strong> Aqui você pode testar exatamente o que a IA recupera da sua biblioteca quando você pede para ela gerar uma prova, aula ou atividade. Se a busca retornar bons trechos, a IA terá um bom contexto para trabalhar.
-              </div>
-
-              <div style={{ display: 'flex', gap: 10 }}>
-                <div style={{ flex: 1 }}>
-                  <label style={{ fontSize: 11, fontWeight: 700, color: '#a08060', textTransform: 'uppercase', display: 'block', marginBottom: 5 }}>Consulta de Busca</label>
-                  <input
-                    value={ragQuery}
-                    onChange={e => setRagQuery(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && runRagSearch()}
-                    placeholder="Ex: present perfect continuous, Unit 3 conditionals, kinetic energy..."
-                    style={inputStyle}
-                  />
-                </div>
-                <div>
-                  <label style={{ fontSize: 11, fontWeight: 700, color: '#a08060', textTransform: 'uppercase', display: 'block', marginBottom: 5 }}>Escopo</label>
-                  <select value={ragScope} onChange={e => setRagScope(e.target.value as 'all' | 'doc')} style={{ ...inputStyle, width: 180 }}>
-                    <option value="all">Toda a Biblioteca</option>
-                    <option value="doc">Apenas: {viewItem?.title?.slice(0, 25)}...</option>
-                  </select>
-                </div>
-              </div>
-
-              <button onClick={runRagSearch} style={btnPrimary}>
-                <i className="ti ti-search" /> Executar Busca RAG
-              </button>
-
-              {ragResults.length > 0 && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: '#27ae60' }}>
-                    ✅ {ragResults.length} trecho(s) recuperado(s) — Este é o contexto que a IA recebe:
-                  </div>
-                  {ragResults.map((r, i) => (
-                    <div key={i} style={{ background: '#f8fff5', border: '1px solid rgba(39,174,96,0.2)', borderRadius: 12, padding: 16, fontSize: 12.5, lineHeight: 1.7, color: '#2c1a0e', fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}>
-                      <div style={{ fontSize: 10, fontWeight: 700, color: '#27ae60', marginBottom: 6 }}>📄 RESULTADO #{i + 1}</div>
-                      {r}
+            {/* Visualizador & Ações do Exercício */}
+            <div style={{ background: '#fff', borderRadius: 16, border: '1px solid rgba(139,115,85,0.15)', padding: '24px', display: 'flex', flexDirection: 'column', gap: 16, overflowY: 'auto' }}>
+              {viewExercise ? (
+                <>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #ede8dc', paddingBottom: 14 }}>
+                    <div>
+                      <h2 style={{ fontFamily: 'Georgia, serif', fontSize: 20, color: '#2c1a0e', margin: 0 }}>
+                        {viewExercise.title}
+                      </h2>
+                      <div style={{ fontSize: 12, color: '#8b5e3c', marginTop: 4 }}>
+                        Tópico: <strong>{viewExercise.topic || 'Inglês Geral'}</strong> · Nível CEFR: <strong>{viewExercise.cefr}</strong> · {viewExercise.date}
+                      </div>
                     </div>
-                  ))}
+
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      <button
+                        onClick={() => exportToPdf({
+                          schoolName: viewExercise.school || 'COLÉGIO & ESCOLA DE ENSINO',
+                          teacherName: 'Professor(a)',
+                          className: viewExercise.grade || '9º Ano',
+                          title: viewExercise.title,
+                          content: viewExercise.content
+                        })}
+                        style={btnPrimary}
+                      >
+                        📄 Exportar PDF Oficial
+                      </button>
+
+                      <button
+                        onClick={() => exportToWord({
+                          schoolName: viewExercise.school || 'COLÉGIO & ESCOLA DE ENSINO',
+                          teacherName: 'Professor(a)',
+                          className: viewExercise.grade || '9º Ano',
+                          title: viewExercise.title,
+                          content: viewExercise.content
+                        })}
+                        style={btnSecondary}
+                      >
+                        📝 Word (.docx)
+                      </button>
+
+                      <button
+                        onClick={() => setShowOnlinePlayer(true)}
+                        style={{ ...btnSecondary, borderColor: '#2aa198', color: '#2aa198' }}
+                      >
+                        📱 Responder Online
+                      </button>
+
+                      <button
+                        onClick={() => setShowQrModal(true)}
+                        style={{ ...btnSecondary, borderColor: '#8b5e3c', color: '#8b5e3c' }}
+                      >
+                        🔗 QR Code Aluno
+                      </button>
+
+                      <button
+                        onClick={() => deleteExercise(viewExercise.id)}
+                        style={{ ...btnSecondary, borderColor: '#dc322f', color: '#dc322f' }}
+                      >
+                        🗑️ Excluir
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Conteúdo Renderizado da Prova/Exercício */}
+                  <div
+                    style={{
+                      background: '#fffcf8', border: '1px solid #ede8dc', borderRadius: 12,
+                      padding: '24px 28px', color: '#2c1a0e', lineHeight: 1.7, fontSize: 13.5
+                    }}
+                    dangerouslySetInnerHTML={{ __html: viewExercise.content }}
+                  />
+                </>
+              ) : (
+                <div style={{ padding: 40, textAlign: 'center', color: '#8b5e3c' }}>
+                  Selecione um exercício ou prova ao lado para visualizar e exportar.
                 </div>
               )}
             </div>
+          </div>
+        )}
 
-          /* ── MODO VIEW (LEITOR PROFISSIONAL) ── */
-          ) : viewItem ? (
-            <div style={{
-              flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden',
-              position: readerFullscreen ? 'fixed' : 'relative',
-              top: readerFullscreen ? 0 : 'auto', left: readerFullscreen ? 0 : 'auto',
-              right: readerFullscreen ? 0 : 'auto', bottom: readerFullscreen ? 0 : 'auto',
-              zIndex: readerFullscreen ? 9999 : 'auto',
-              background: readerTheme === 'dark' ? '#1c1b18' : readerTheme === 'sepia' ? '#f4ecd8' : '#fffcf8',
-              color: readerTheme === 'dark' ? '#e2d5c3' : '#2c1a0e',
-              transition: 'all 0.2s ease'
-            }}>
 
-              {/* Header do Leitor Profissional */}
-              <div style={{
-                padding: '16px 24px', borderBottom: readerTheme === 'dark' ? '1px solid rgba(255,255,255,0.1)' : '1px solid rgba(139,115,85,0.12)',
-                background: readerTheme === 'dark' ? '#151412' : readerTheme === 'sepia' ? '#eee3cb' : '#fff',
-                display: 'flex', flexDirection: 'column', gap: 12
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
-                    <span style={{ background: typeColor(viewItem.type), color: '#fff', fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 8, flexShrink: 0 }}>
-                      {viewItem.type}
-                    </span>
-                    <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'Georgia, serif' }}>
-                      {typeIcon(viewItem.type)} {viewItem.title.replace(/^(📘|📙|📗|🟨|📋|📄)\s/, '')}
-                    </h2>
-                  </div>
-
-                  {/* Ações de Povoamento no App */}
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        {/* ══════════════════════════════════════════════════════════════════════
+            PARTIÇÃO 3: BIBLIOGRAFIA (LIVROS DIDÁTICOS & RAG)
+           ══════════════════════════════════════════════════════════════════════ */}
+        {activePartition === 'bibliography' && (
+          <div style={{ display: 'grid', gridTemplateColumns: '360px 1fr', gap: 24, flex: 1, minHeight: 0 }}>
+            {/* Lista de Livros e Artigos Bibliográficos */}
+            <div style={{ background: '#fff', borderRadius: 16, border: '1px solid rgba(139,115,85,0.12)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+              <div style={{ padding: '14px 16px', borderBottom: '1px solid #ede8dc' }}>
+                <input
+                  placeholder="Buscar na bibliografia..."
+                  value={searchText}
+                  onChange={e => setSearchText(e.target.value)}
+                  style={{ ...inputStyle, marginBottom: 10 }}
+                />
+                <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                  {['all', "Student's Book", 'Workbook', 'Reference Book', 'CLIL Book'].map(f => (
                     <button
-                      onClick={() => {
-                        localStorage.setItem('teacher_lessonstudio_prefill', JSON.stringify({ topic: viewItem.title, text: viewItem.content.slice(0, 2000) }))
-                        window.dispatchEvent(new CustomEvent('teacher:navigate', { detail: 'lessonstudio' }))
+                      key={f}
+                      onClick={() => setActiveFilter(f)}
+                      style={{
+                        padding: '4px 9px', borderRadius: 7, border: 'none', fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                        background: activeFilter === f ? '#8b5e3c' : '#f5efe6',
+                        color: activeFilter === f ? '#fff' : '#665c54',
                       }}
-                      style={{ padding: '7px 12px', borderRadius: 8, borderWidth: '0px', borderStyle: 'none', borderColor: 'transparent', background: '#8b5e3c', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}
-                      title="Gerar plano de aula no Lesson Studio usando este livro"
                     >
-                      <i className="ti ti-chalkboard" /> 📝 Criar Aula
+                      {f === 'all' ? 'Todos' : f.replace(' Book', '')}
                     </button>
-
-                    <button
-                      onClick={() => {
-                        localStorage.setItem('teacher_exam_prefill', JSON.stringify({ topic: viewItem.title, libraryId: viewItem.id }))
-                        window.dispatchEvent(new CustomEvent('teacher:navigate', { detail: 'exam' }))
-                      }}
-                      style={{ padding: '7px 12px', borderRadius: 8, borderWidth: '0px', borderStyle: 'none', borderColor: 'transparent', background: '#d4944a', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}
-                      title="Gerar prova no ExamBuilder usando este livro"
-                    >
-                      <i className="ti ti-file-text" /> ✍️ Criar Prova
-                    </button>
-
-                    <button onClick={() => setMode('rag')} style={{ ...btnSecondary, fontSize: 12, padding: '7px 12px', borderColor: '#27ae60', color: '#27ae60' }}>
-                      <i className="ti ti-search" /> Testar RAG
-                    </button>
-
-                    <button
-                      onClick={async () => {
-                        const { normalizeAndReconstructText } = await import('@/lib/pdfExtractor')
-                        const cleaned = normalizeAndReconstructText(viewItem.content)
-                        const updated = items.map(i => i.id === viewItem.id ? {
-                          ...i,
-                          content: cleaned,
-                          wordCount: countWords(cleaned),
-                          chunkCount: countChunks(cleaned)
-                        } : i)
-                        save(updated)
-                        const saved = updated.find(i => i.id === viewItem.id)!
-                        setViewItem(saved)
-                        alert(`✨ Texto normalizado com sucesso!\n\nLinhas picadas foram unificadas em parágrafos contínuos (${countWords(cleaned).toLocaleString()} palavras em ${countChunks(cleaned)} seções).`)
-                      }}
-                      style={{ ...btnSecondary, fontSize: 12, padding: '7px 12px', borderColor: '#8b5e3c', color: '#8b5e3c' }}
-                      title="Recompor frases quebradas e unificar parágrafos do texto picado"
-                    >
-                      <i className="ti ti-wand" /> 🧹 Unificar Texto Picado
-                    </button>
-                    <button onClick={() => startEdit(viewItem)} style={{ ...btnSecondary, fontSize: 12, padding: '7px 12px' }}>
-                      <i className="ti ti-pencil" /> Editar
-                    </button>
-                    <button onClick={() => deleteItem(viewItem.id)} style={{ ...btnSecondary, fontSize: 12, padding: '7px 12px', borderColor: '#dc322f', color: '#dc322f' }}>
-                      <i className="ti ti-trash" />
-                    </button>
-                  </div>
-                </div>
-
-                {/* Controles de Tipografia & Tema do Leitor */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: readerTheme === 'dark' ? '#252320' : 'rgba(139,115,85,0.06)', padding: '6px 12px', borderRadius: 10, flexWrap: 'wrap', gap: 10 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 12 }}>
-                    {/* Temas */}
-                    <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-                      <span style={{ fontSize: 11, opacity: 0.7, fontWeight: 700, textTransform: 'uppercase' }}>Tema:</span>
-                      <button onClick={() => setReaderTheme('paper')} style={{ padding: '3px 8px', borderRadius: 6, borderWidth: '1px', borderStyle: 'solid', borderColor: '#d5cfc0', background: '#fff', color: '#2c1a0e', fontSize: 11, cursor: 'pointer', fontWeight: readerTheme === 'paper' ? 700 : 400 }}>☀️ Papel</button>
-                      <button onClick={() => setReaderTheme('sepia')} style={{ padding: '3px 8px', borderRadius: 6, borderWidth: '1px', borderStyle: 'solid', borderColor: '#c8ba9d', background: '#f4ecd8', color: '#433422', fontSize: 11, cursor: 'pointer', fontWeight: readerTheme === 'sepia' ? 700 : 400 }}>📜 Sépia</button>
-                      <button onClick={() => setReaderTheme('dark')} style={{ padding: '3px 8px', borderRadius: 6, borderWidth: '1px', borderStyle: 'solid', borderColor: '#444', background: '#1c1b18', color: '#e2d5c3', fontSize: 11, cursor: 'pointer', fontWeight: readerTheme === 'dark' ? 700 : 400 }}>🌙 Noche</button>
-                    </div>
-
-                    {/* Fonte */}
-                    <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-                      <span style={{ fontSize: 11, opacity: 0.7, fontWeight: 700, textTransform: 'uppercase' }}>Fonte:</span>
-                      <select value={readerFontFamily} onChange={e => setReaderFontFamily(e.target.value as any)} style={{ padding: '3px 8px', borderRadius: 6, borderWidth: '1px', borderStyle: 'solid', borderColor: 'rgba(139,115,85,0.2)', fontSize: 11, background: 'transparent', color: 'inherit', outline: 'none', cursor: 'pointer' }}>
-                        <option value="Georgia, serif">Georgia (Serif)</option>
-                        <option value="'Plus Jakarta Sans', sans-serif">Sans (Moderna)</option>
-                        <option value="monospace">Monospace</option>
-                      </select>
-                    </div>
-
-                    {/* Tamanho */}
-                    <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-                      <span style={{ fontSize: 11, opacity: 0.7, fontWeight: 700, textTransform: 'uppercase' }}>Tamanho:</span>
-                      <button onClick={() => setReaderFontSize(s => s === '19px' ? '17px' : s === '17px' ? '15px' : '13px')} style={{ padding: '3px 8px', borderRadius: 6, borderWidth: '1px', borderStyle: 'solid', borderColor: 'rgba(139,115,85,0.2)', background: 'transparent', color: 'inherit', fontSize: 11, cursor: 'pointer' }}>A-</button>
-                      <span style={{ fontSize: 11, fontWeight: 700 }}>{readerFontSize}</span>
-                      <button onClick={() => setReaderFontSize(s => s === '13px' ? '15px' : s === '15px' ? '17px' : '19px')} style={{ padding: '3px 8px', borderRadius: 6, borderWidth: '1px', borderStyle: 'solid', borderColor: 'rgba(139,115,85,0.2)', background: 'transparent', color: 'inherit', fontSize: 11, cursor: 'pointer' }}>A+</button>
-                    </div>
-                  </div>
-
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <button onClick={() => setShowToc(v => !v)} style={{ padding: '4px 10px', borderRadius: 6, borderWidth: '1px', borderStyle: 'solid', borderColor: 'rgba(139,115,85,0.2)', background: 'transparent', color: 'inherit', fontSize: 11, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <i className="ti ti-list" /> {showToc ? 'Ocultar Índice' : '📋 Índice'}
-                    </button>
-                    <button onClick={() => setReaderFullscreen(v => !v)} style={{ padding: '4px 10px', borderRadius: 6, borderWidth: '1px', borderStyle: 'solid', borderColor: 'rgba(139,115,85,0.2)', background: 'transparent', color: 'inherit', fontSize: 11, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <i className={readerFullscreen ? 'ti ti-minimize' : 'ti ti-maximize'} /> {readerFullscreen ? 'Sair da Tela Cheia' : '📖 Modo Imersivo'}
-                    </button>
-                  </div>
+                  ))}
                 </div>
               </div>
 
-
-              {/* Corpo do Leitor Profissional com Painel de Índice (TOC) */}
-              <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-                {showToc && (
-                  <div style={{ width: 260, borderRight: readerTheme === 'dark' ? '1px solid rgba(255,255,255,0.1)' : '1px solid rgba(139,115,85,0.12)', padding: 16, overflowY: 'auto', background: readerTheme === 'dark' ? '#181714' : readerTheme === 'sepia' ? '#ebdcb9' : '#fcfaf6', fontSize: 12 }}>
-                    <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12, opacity: 0.7 }}>📋 Índice das Seções</div>
-                    {viewItem.content.split('\n').filter(l => /^\[.*\]$/.test(l.trim())).map((sec, idx) => (
-                      <div key={idx} style={{ padding: '6px 8px', borderRadius: 6, marginBottom: 4, cursor: 'pointer', fontWeight: 600, background: 'rgba(139,115,85,0.1)' }}>
-                        {sec.trim().replace(/^\[|\]$/g, '')}
-                      </div>
-                    ))}
+              <div style={{ flex: 1, overflowY: 'auto', padding: '10px' }}>
+                {filteredBibliography.map(item => (
+                  <div
+                    key={item.id}
+                    onClick={() => { setViewItem(item); setMode('view') }}
+                    style={{
+                      padding: '12px 14px', borderRadius: 12, cursor: 'pointer', marginBottom: 6,
+                      background: viewItem?.id === item.id ? '#fdf8f2' : '#faf8f5',
+                      border: viewItem?.id === item.id ? '1.5px solid #8b5e3c' : '1px solid #ede8dc',
+                      transition: 'all 0.15s'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                      <span style={{ fontSize: 18 }}>{typeIcon(item.type)}</span>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: '#2c1a0e' }}>{item.title}</span>
+                    </div>
+                    <div style={{ display: 'flex', gap: 6, fontSize: 11, color: '#586e75' }}>
+                      <span>{item.wordCount?.toLocaleString() || 0} palavras</span> ·
+                      <span>{item.category || 'Material RAG'}</span>
+                    </div>
                   </div>
-                )}
+                ))}
+              </div>
+            </div>
 
-                <div style={{ flex: 1, overflowY: 'auto', padding: '28px 36px' }}>
+            {/* Leitor Profissional do Livro / Artigo */}
+            <div style={{ background: '#fff', borderRadius: 16, border: '1px solid rgba(139,115,85,0.15)', padding: '24px', display: 'flex', flexDirection: 'column', gap: 16, overflowY: 'auto' }}>
+              {mode === 'add' || mode === 'edit' ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  <h3 style={{ margin: 0, color: '#8b5e3c' }}>{mode === 'add' ? 'Adicionar Novo Livro/Material' : 'Editar Material'}</h3>
+                  <input placeholder="Título do Livro/Capítulo..." value={editTitle} onChange={e => setEditTitle(e.target.value)} style={inputStyle} />
+                  <textarea placeholder="Cole aqui o texto completo do livro ou capítulo..." value={editContent} onChange={e => setEditContent(e.target.value)} rows={16} style={{ ...inputStyle, fontFamily: 'monospace', resize: 'vertical' }} />
+                  <div style={{ display: 'flex', gap: 10 }}>
+                    <button onClick={mode === 'add' ? addItem : saveEdit} style={btnPrimary}>Salvar na Bibliografia</button>
+                    <button onClick={() => setMode('view')} style={btnSecondary}>Cancelar</button>
+                  </div>
+                </div>
+              ) : viewItem ? (
+                <>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #ede8dc', paddingBottom: 14 }}>
+                    <div>
+                      <h2 style={{ fontFamily: 'Georgia, serif', fontSize: 20, color: '#2c1a0e', margin: 0 }}>{viewItem.title}</h2>
+                      <div style={{ fontSize: 12, color: '#8b5e3c', marginTop: 4 }}>
+                        {viewItem.wordCount?.toLocaleString()} palavras · Indexado no Motor RAG
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button onClick={() => startEdit(viewItem)} style={btnSecondary}>
+                        <i className="ti ti-edit" /> Editar
+                      </button>
+                      <button onClick={() => deleteItem(viewItem.id)} style={{ ...btnSecondary, color: '#dc322f' }}>
+                        <i className="ti ti-trash" /> Excluir
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Leitor de Texto */}
                   <div style={{
-                    maxWidth: 800, margin: '0 auto',
-                    background: readerTheme === 'dark' ? '#252320' : readerTheme === 'sepia' ? '#fdf8ec' : '#ffffff',
-                    borderRadius: 16, padding: '32px 40px',
-                    border: readerTheme === 'dark' ? '1px solid rgba(255,255,255,0.06)' : '1px solid rgba(139,115,85,0.15)',
-                    boxShadow: '0 8px 30px rgba(0,0,0,0.06)',
-                    fontSize: readerFontSize, fontFamily: readerFontFamily, lineHeight: 1.8
+                    background: readerTheme === 'sepia' ? '#fdf8f2' : readerTheme === 'paper' ? '#ffffff' : '#1e1e1e',
+                    color: readerTheme === 'dark' ? '#fdf8f2' : '#2c1a0e',
+                    padding: '24px 28px', borderRadius: 12, border: '1px solid #ede8dc',
+                    fontFamily: readerFontFamily, fontSize: readerFontSize, lineHeight: 1.8
                   }}>
                     {formatContent(viewItem.content)}
                   </div>
+                </>
+              ) : (
+                <div style={{ padding: 40, textAlign: 'center', color: '#8b5e3c' }}>
+                  Selecione um livro ou material didático ao lado.
                 </div>
-              </div>
+              )}
+            </div>
+          </div>
+        )}
+
+      </div>
+
+      {/* ── Modal de Cadastrar Novo Cabeçalho ── */}
+      {showNewHeaderModal && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(6px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99999, padding: 20
+        }}>
+          <div style={{
+            background: '#fffcf8', borderRadius: 20, border: '2px solid #8b5e3c', padding: 28,
+            maxWidth: 540, width: '100%', boxShadow: '0 10px 40px rgba(0,0,0,0.3)', display: 'flex', flexDirection: 'column', gap: 16
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ margin: 0, fontFamily: 'Georgia, serif', fontSize: 20, color: '#2c1a0e' }}>
+                🏛️ Cadastrar Novo Cabeçalho Oficial
+              </h3>
+              <button onClick={() => setShowNewHeaderModal(false)} style={{ background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: '#8b5e3c' }}>✕</button>
             </div>
 
-          ) : (
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#a08060', gap: 16 }}>
-              <i className="ti ti-books" style={{ fontSize: 56, opacity: 0.25 }} />
-              <p style={{ fontSize: 16, fontWeight: 500, color: '#665c54', textAlign: 'center', maxWidth: 360 }}>
-                Selecione um documento na lista ao lado para visualizá-lo, ou clique em <strong>"Adicionar Material"</strong> para criar um novo.
-              </p>
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 700, color: '#8b5e3c', display: 'block', marginBottom: 4 }}>Nome da Escola (Exibição)</label>
+              <input placeholder="Ex: Colégio Anglo Pró-Ensino" value={newSchoolName} onChange={e => setNewSchoolName(e.target.value)} style={inputStyle} />
             </div>
-          )}
+
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 700, color: '#8b5e3c', display: 'block', marginBottom: 4 }}>Nome Oficial no Cabeçalho (Em Caixa Alta)</label>
+              <input placeholder="Ex: COLÉGIO ANGLO — SISTEMA DE ENSINO INTEGRADO" value={newOfficialName} onChange={e => setNewOfficialName(e.target.value)} style={inputStyle} />
+            </div>
+
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 700, color: '#8b5e3c', display: 'block', marginBottom: 4 }}>Disciplina Padrão</label>
+              <input placeholder="Ex: Língua Inglesa" value={newSubject} onChange={e => setNewSubject(e.target.value)} style={inputStyle} />
+            </div>
+
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 700, color: '#8b5e3c', display: 'block', marginBottom: 4 }}>Instruções Oficiais da Avaliação</label>
+              <textarea
+                placeholder="1. Utilize caneta azul ou preta...\n2. Respostas rasuradas serão desconsideradas..."
+                value={newInstructions}
+                onChange={e => setNewInstructions(e.target.value)}
+                rows={4}
+                style={{ ...inputStyle, resize: 'vertical' }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 10 }}>
+              <button onClick={() => setShowNewHeaderModal(false)} style={btnSecondary}>Cancelar</button>
+              <button onClick={handleAddSchoolHeader} style={btnPrimary}>Salvar Cabeçalho</button>
+            </div>
+          </div>
         </div>
-      </div>
+      )}
+
+      {/* ── Modal de Player Online ── */}
+      {showOnlinePlayer && viewExercise && (
+        <StudentExamPlayer
+          title={viewExercise.title}
+          schoolName={viewExercise.school || 'ESCOLA DE ENSINO'}
+          questions={parseQuestionsFromContent(viewExercise.content)}
+          onClose={() => setShowOnlinePlayer(false)}
+        />
+      )}
+
+
+      {/* ── Modal de QR Code para Alunos ── */}
+      {showQrModal && viewExercise && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(6px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99999, padding: 20
+        }}>
+          <div style={{
+            background: '#fffcf8', borderRadius: 20, border: '2px solid #8b5e3c', padding: 28,
+            maxWidth: 440, width: '100%', textAlign: 'center', boxShadow: '0 10px 40px rgba(0,0,0,0.3)'
+          }}>
+            <h3 style={{ margin: '0 0 10px', fontFamily: 'Georgia, serif', color: '#2c1a0e' }}>
+              📱 QR Code da Prova Online
+            </h3>
+            <p style={{ fontSize: 13, color: '#586e75', margin: '0 0 20px' }}>
+              Peça para os alunos apontarem a câmera do celular para responder digitalmente.
+            </p>
+
+            <div
+              style={{ display: 'flex', justifyContent: 'center', marginBottom: 20 }}
+              dangerouslySetInnerHTML={{ __html: generateSvgQRCode(`https://teacher-ai.app/exam/${viewExercise.id}`) }}
+            />
+
+            <button onClick={() => setShowQrModal(false)} style={{ ...btnPrimary, width: '100%', justifyContent: 'center' }}>
+              Fechar
+            </button>
+          </div>
+        </div>
+      )}
     </ModuleShell>
   )
 }
