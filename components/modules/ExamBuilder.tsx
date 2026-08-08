@@ -285,7 +285,23 @@ export default function ExamBuilder() {
     if (a.length > 0) setSelectedApiId(a[0].id)
     setLibraryItems(lib)
 
+    // Carrega estritamente as escolas cadastradas pelo professor em Organização
+    try {
+      const sStr = localStorage.getItem('teacher_schools')
+      if (sStr) {
+        const parsed = JSON.parse(sStr)
+        if (Array.isArray(parsed)) {
+          setRegisteredSchools(parsed)
+          if (parsed.length > 0 && !cfg.school) {
+            setHeader(h => ({ ...h, school: parsed[0].name }))
+            setSelectedSchoolTemplate(parsed[0].id)
+          }
+        }
+      }
+    } catch {}
+
     // F7: Lê prefill gerado pela Rafinha (tool generate_exam_content)
+
     try {
       const raw = localStorage.getItem('teacher_exam_prefill')
       if (raw) {
@@ -627,34 +643,46 @@ export default function ExamBuilder() {
               </label>
             </div>
 
-            {/* Modelos de Cabeçalho Pré-Configurados */}
+            {/* Escolas Cadastradas pelo Professor em Organização */}
             <div>
-              <label style={{ ...SL, fontSize: 11.5 }}>Importar Modelo de Escola Cadastrada:</label>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-                {OFFICIAL_SCHOOL_TEMPLATES.map(tpl => (
-                  <button
-                    key={tpl.id}
-                    type="button"
-                    onClick={() => {
-                      setSelectedSchoolTemplate(tpl.id)
-                      setHeader(h => ({
-                        ...h,
-                        school: tpl.officialName,
-                        title: tpl.id === 'cambridge' ? `Cambridge Assessment — ${cefr}` : `Avaliação Trimestral — Língua Inglesa`
-                      }))
-                    }}
-                    style={{
-                      padding: '7px 10px', borderRadius: 8, fontSize: 11.5, fontWeight: 700, textAlign: 'left',
-                      border: selectedSchoolTemplate === tpl.id ? '1.5px solid #8b5e3c' : '1px solid #e8e0d0',
-                      background: selectedSchoolTemplate === tpl.id ? '#fdf8f2' : '#faf8f5',
-                      color: selectedSchoolTemplate === tpl.id ? '#8b5e3c' : '#2c1a0e', cursor: 'pointer'
-                    }}
-                  >
-                    🏛️ {tpl.name}
-                  </button>
-                ))}
-              </div>
+              <label style={{ ...SL, fontSize: 11.5 }}>Vincular Escola Cadastrada (Organização):</label>
+              {registeredSchools.length > 0 ? (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {registeredSchools.map(sch => {
+                    const isSelected = selectedSchoolTemplate === sch.id || header.school === sch.name
+                    return (
+                      <button
+                        key={sch.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedSchoolTemplate(sch.id)
+                          setHeader(h => ({
+                            ...h,
+                            school: sch.name,
+                            title: h.title || `Avaliação Trimestral — Língua Inglesa`
+                          }))
+                        }}
+                        style={{
+                          padding: '7px 12px', borderRadius: 8, fontSize: 11.5, fontWeight: 700, textAlign: 'left',
+                          border: isSelected ? '1.5px solid #8b5e3c' : '1px solid #e8e0d0',
+                          background: isSelected ? '#fdf8f2' : '#faf8f5',
+                          color: isSelected ? '#8b5e3c' : '#2c1a0e', cursor: 'pointer',
+                          display: 'flex', alignItems: 'center', gap: 6, transition: 'all 0.15s'
+                        }}
+                      >
+                        🏛️ {sch.name}
+                      </button>
+                    )
+                  })}
+                </div>
+              ) : (
+                <div style={{ fontSize: 11.5, color: '#8b5e3c', background: '#fdf8f2', border: '1px dashed #e8d8c8', padding: '8px 12px', borderRadius: 8 }}>
+                  ℹ️ Nenhuma escola cadastrada ainda. Digite o nome abaixo ou cadastre em <strong>Organização &gt; Escolas</strong> para vincular automaticamente.
+                </div>
+
+              )}
             </div>
+
 
             <div>
               <label style={{ ...SL, fontSize: 12 }}>Nome Oficial da Escola</label>
