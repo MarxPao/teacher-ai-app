@@ -199,39 +199,113 @@ export async function extractTextFromPdf(
   }
 }
 
+function decodeXmlEntities(str: string): string {
+  if (!str) return ''
+  return str
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&amp;/g, '&')
+}
+
 /**
- * Extrai texto de arquivos .docx (Microsoft Word) parseando o XML do documento
+ * Extrai texto de arquivos .docx (Microsoft Word) descompactando o ZIP e parseando
+ * word/document.xml, bem como cabeçalhos (word/header*.xml) e rodapés (word/footer*.xml).
+ * Inclui fallback para remoção direta de tags XML e extração de strings de texto legível.
  */
 export async function extractTextFromDocx(file: File): Promise<string> {
   try {
     const arrayBuffer = await file.arrayBuffer()
-    let documentXml = ''
+    let rawText = ''
 
     try {
-      const textDecoder = new TextDecoder('utf-8', { fatal: false })
-      documentXml = textDecoder.decode(arrayBuffer)
-    } catch {
-      throw new Error('Não foi possível decodificar o arquivo .docx.')
-    }
+      const JSZipModule = await import('jszip')
+      const JSZip = JSZipModule.default || JSZipModule
 
-    if (!documentXml) {
-      throw new Error('Não foi possível ler o arquivo .docx.')
-    }
+      const zip = await JSZip.loadAsync(arrayBuffer)
+      const allFileNames = Object.keys(zip.files)
 
-    const paragraphs: string[] = []
-    const pMatches = documentXml.match(/<w:p\b[^>]*>(.*?)<\/w:p>/g) || [documentXml]
+      // Filtra arquivos XML relevantes dentro da pasta word/
+      const targetFiles = allFileNames.filter(name =>
+        /^word\/(document|header\d*|footer\d*|footnotes|endnotes)\.xml$/i.test(name)
+      )
 
-    for (const pXml of pMatches) {
-      const tMatches = Array.from(pXml.matchAll(/<w:t[^>]*>(.*?)<\/w:t>/g)).map(m => m[1])
-      const pText = tMatches.join('').trim()
-      if (pText) {
-        paragraphs.push(pText)
+      // Fallback: Se não encontrou no padrão exato, procura qualquer .xml em word/
+      if (targetFiles.length === 0) {
+        targetFiles.push(...allFileNames.filter(name => /^word\/.*\.xml$/i.test(name)))
       }
+
+      // Ordena para que os cabeçalhos venham antes do corpo principal
+      targetFiles.sort((a, b) => {
+        if (a.includes('header') && !b.includes('header')) return -1
+        if (!a.includes('header') && b.includes('header')) return 1
+        if (a.includes('document') && !b.includes('document')) return -1
+        if (!a.includes('document') && b.includes('document')) return 1
+        return a.localeCompare(b)
+      })
+
+      const extractedSections: string[] = []
+
+      for (const fileName of targetFiles) {
+        const zipFile = zip.file(fileName)
+        if (!zipFile) continue
+
+        let xmlText = await zipFile.async('text')
+        if (!xmlText) continue
+
+        xmlText = xmlText.replace(/<w:br\s*\/?>/gi, '\n')
+
+        const paragraphs: string[] = []
+        const pMatches = xmlText.match(/<w:p\b[^>]*>([\s\S]*?)<\/w:p>/g) || [xmlText]
+
+        for (const pXml of pMatches) {
+          // Pass 1: busca por tags <w:t>
+          const tMatches = Array.from(pXml.matchAll(/<w:t\b[^>]*>([\s\S]*?)<\/w:t>/g)).map(m => decodeXmlEntities(m[1]))
+          let pText = tMatches.join('').trim()
+
+          // Pass 2: se <w:t> não pegou texto (ex: caixas de texto ou formas), remove tags XML
+          if (!pText) {
+            const stripped = pXml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+            if (stripped.length > 1) {
+              pText = decodeXmlEntities(stripped)
+            }
+          }
+
+          if (pText) {
+            paragraphs.push(pText)
+          }
+        }
+
+        if (paragraphs.length === 0) {
+          const globalStripped = xmlText.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+          if (globalStripped.length > 1) {
+            paragraphs.push(decodeXmlEntities(globalStripped))
+          }
+        }
+
+        if (paragraphs.length > 0) {
+          extractedSections.push(paragraphs.join('\n'))
+        }
+      }
+
+      rawText = extractedSections.join('\n\n')
+    } catch (zipError) {
+      console.warn('[DOCX Extractor Warning]: Erro no parser ZIP, tentando extração de fallback...', zipError)
     }
 
-    const rawText = paragraphs.join('\n\n')
+    // Fallback secundário: Se ZIP falhou ou não produziu texto
+    if (!rawText || rawText.trim().length < 2) {
+      const textDecoder = new TextDecoder('utf-8', { fatal: false })
+      const decodedString = textDecoder.decode(arrayBuffer)
 
-    if (rawText.length < 20) {
+      // Procura sequências de texto legíveis no binário
+      const printableMatches = decodedString.match(/[A-Za-z0-9\u00C0-\u00FF\s.,:;!?()\/\-]{4,}/g) || []
+      const filteredWords = printableMatches.map(s => s.trim()).filter(s => s.length > 3 && !/^[A-Za-z0-9]{30,}$/.test(s))
+      rawText = filteredWords.join(' ')
+    }
+
+    if (!rawText || rawText.trim().length < 2) {
       throw new Error(`O arquivo Word "${file.name}" está vazio ou não possui texto extraível.`)
     }
 
@@ -241,3 +315,57 @@ export async function extractTextFromDocx(file: File): Promise<string> {
     throw new Error(error instanceof Error ? error.message : 'Falha ao extrair texto do arquivo Word.')
   }
 }
+
+export interface DocxExtractionResult {
+  text: string
+  images: { name: string; dataUrl: string }[]
+}
+
+/**
+ * Extrai texto E imagens (logos, fotos em word/media/) de um arquivo .docx
+ */
+export async function extractDocxWithImages(file: File): Promise<DocxExtractionResult> {
+  const images: { name: string; dataUrl: string }[] = []
+
+  try {
+    const arrayBuffer = await file.arrayBuffer()
+    const JSZipModule = await import('jszip')
+    const JSZip = JSZipModule.default || JSZipModule
+
+    const zip = await JSZip.loadAsync(arrayBuffer)
+    const mediaFiles = Object.keys(zip.files).filter(name => /^word\/media\//i.test(name))
+
+    for (const mediaPath of mediaFiles) {
+      const zipFile = zip.file(mediaPath)
+      if (!zipFile) continue
+
+      const fileName = mediaPath.split('/').pop() || 'image'
+      const ext = fileName.split('.').pop()?.toLowerCase() || 'png'
+
+      let mimeType = 'image/png'
+      if (ext === 'jpg' || ext === 'jpeg') mimeType = 'image/jpeg'
+      else if (ext === 'svg') mimeType = 'image/svg+xml'
+      else if (ext === 'gif') mimeType = 'image/gif'
+      else if (ext === 'webp') mimeType = 'image/webp'
+
+      try {
+        const base64 = await zipFile.async('base64')
+        if (base64) {
+          images.push({
+            name: fileName,
+            dataUrl: `data:${mimeType};base64,${base64}`
+          })
+        }
+      } catch (err) {
+        console.warn(`[DOCX Image Extractor]: Falha ao converter imagem ${mediaPath}`, err)
+      }
+    }
+  } catch (err) {
+    console.warn('[DOCX Image Extractor]: Não foi possível ler mídia do pacote ZIP.', err)
+  }
+
+  const text = await extractTextFromDocx(file)
+  return { text, images }
+}
+
+

@@ -80,41 +80,70 @@ body {
   min-height: 100vh;
 }
 
-/* ───── Scrollbar Refinada ───── */
+/* ───── Scrollbar Global Refinada e Confortável (12px) ───── */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 12px !important;
+  height: 12px !important;
 }
 ::-webkit-scrollbar-track {
-  background: transparent;
+  background: rgba(0, 0, 0, 0.08);
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--border-medium);
-  border-radius: 99px;
+  background: rgba(139, 94, 60, 0.5);
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: content-box;
   transition: background 0.2s;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--paper-light);
+  background: rgba(139, 94, 60, 0.85);
 }
 
-/* ───── Scrollbar de Alto Contraste da Sidebar ───── */
-.sidebar-scrollbar::-webkit-scrollbar {
-  width: 7px;
+/* ───── Scrollbar de Alto Contraste e Largura Expandida da Sidebar (20px Forçada) ───── */
+html nav.sidebar-scrollbar,
+body nav.sidebar-scrollbar,
+.sidebar-scrollbar {
+  scrollbar-width: auto !important;
+  scrollbar-color: #e2a355 #1a0f08 !important;
 }
-.sidebar-scrollbar::-webkit-scrollbar-track {
-  background: rgba(0, 0, 0, 0.15);
-  border-radius: 99px;
+
+html nav.sidebar-scrollbar::-webkit-scrollbar,
+body nav.sidebar-scrollbar::-webkit-scrollbar,
+.sidebar-scrollbar::-webkit-scrollbar,
+nav.sidebar-scrollbar *::-webkit-scrollbar,
+[class*="sidebar"]::-webkit-scrollbar {
+  width: 20px !important;
+  height: 20px !important;
+  display: block !important;
 }
-.sidebar-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(226, 163, 85, 0.45);
-  border: 1px solid rgba(226, 163, 85, 0.2);
-  border-radius: 99px;
-  box-shadow: inset 0 0 4px rgba(0, 0, 0, 0.2);
-  transition: background 0.2s ease;
+
+html nav.sidebar-scrollbar::-webkit-scrollbar-track,
+body nav.sidebar-scrollbar::-webkit-scrollbar-track,
+.sidebar-scrollbar::-webkit-scrollbar-track,
+nav.sidebar-scrollbar *::-webkit-scrollbar-track,
+[class*="sidebar"]::-webkit-scrollbar-track {
+  background: #1a0f08 !important;
+  border-left: 2px solid rgba(226, 163, 85, 0.4) !important;
 }
-.sidebar-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(226, 163, 85, 0.85);
-  box-shadow: 0 0 6px rgba(226, 163, 85, 0.6);
+
+html nav.sidebar-scrollbar::-webkit-scrollbar-thumb,
+body nav.sidebar-scrollbar::-webkit-scrollbar-thumb,
+.sidebar-scrollbar::-webkit-scrollbar-thumb,
+nav.sidebar-scrollbar *::-webkit-scrollbar-thumb,
+[class*="sidebar"]::-webkit-scrollbar-thumb {
+  background: #e2a355 !important;
+  border: 3px solid #1a0f08 !important;
+  border-radius: 10px !important;
+  min-height: 50px !important;
+}
+
+html nav.sidebar-scrollbar::-webkit-scrollbar-thumb:hover,
+body nav.sidebar-scrollbar::-webkit-scrollbar-thumb:hover,
+.sidebar-scrollbar::-webkit-scrollbar-thumb:hover,
+nav.sidebar-scrollbar *::-webkit-scrollbar-thumb:hover,
+[class*="sidebar"]::-webkit-scrollbar-thumb:hover {
+  background: #ffd38d !important;
+  box-shadow: 0 0 14px rgba(226, 163, 85, 1) !important;
 }
 
 /* ───── Tipografia Expressiva Global ───── */

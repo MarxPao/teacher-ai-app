@@ -26,6 +26,9 @@ export interface SchoolHeaderModel {
   teacherName?: string
   instructions: string
   gradeMax?: string
+  logoUrl?: string
+  headerImageUrl?: string
+  isImageHeader?: boolean
 }
 
 export interface SavedExerciseItem {
@@ -249,12 +252,34 @@ export default function Repository() {
 
   // Cabeçalhos de Escolas
   const [headerTemplates, setHeaderTemplates] = useState<SchoolHeaderModel[]>([])
-  const [selectedHeaderId, setSelectedHeaderId] = useState<string>('machado')
+  const [selectedHeaderId, setSelectedHeaderId] = useState<string>('')
+  const [registeredSchools, setRegisteredSchools] = useState<{ id: string; name: string }[]>([])
+  const [selectedSchoolForUpload, setSelectedSchoolForUpload] = useState<string>('')
   const [showNewHeaderModal, setShowNewHeaderModal] = useState(false)
+
+  // Edição direta em cima do cabeçalho importado
+  const [isEditingHeader, setIsEditingHeader] = useState(false)
+  const [editHeaderName, setEditHeaderName] = useState('')
+  const [editHeaderOfficialName, setEditHeaderOfficialName] = useState('')
+  const [editHeaderSubject, setEditHeaderSubject] = useState('')
+  const [editHeaderInstructions, setEditHeaderInstructions] = useState('')
   const [newSchoolName, setNewSchoolName]     = useState('')
   const [newOfficialName, setNewOfficialName] = useState('')
   const [newInstructions, setNewInstructions] = useState('')
   const [newSubject, setNewSubject]           = useState('Língua Inglesa')
+  const [newLogoUrl, setNewLogoUrl]           = useState('')
+  const [newHeaderImageUrl, setNewHeaderImageUrl] = useState('')
+  const [headerDate, setHeaderDate]           = useState(new Date().toLocaleDateString('pt-BR'))
+  const [headerClassGroup, setHeaderClassGroup] = useState('9º Ano A')
+  const [headerTeacher, setHeaderTeacher]     = useState('Professor(a)')
+  const [toastMessage, setToastMessage]       = useState<string | null>(null)
+
+  function showToast(msg = 'Item salvo') {
+    setToastMessage(msg)
+    setTimeout(() => {
+      setToastMessage(null)
+    }, 2200)
+  }
 
   // Exercícios & Provas Salvas
   const [savedExercises, setSavedExercises]   = useState<SavedExerciseItem[]>([])
@@ -288,6 +313,7 @@ export default function Repository() {
 
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const imageInputRef = useRef<HTMLInputElement | null>(null)
+  const headerFileInputRef = useRef<HTMLInputElement | null>(null)
 
   // ── Load All Partitions Data ──────────────────────────────────────────────
   const loadAllData = useCallback(() => {
@@ -309,34 +335,21 @@ export default function Repository() {
     setItems(current)
     if (!viewItem && current.length > 0) setViewItem(current[0])
 
-    // 2. Cabeçalhos das Escolas (combina OFFICIAL_SCHOOL_TEMPLATES com teacher_schools)
+    // 2. Cabeçalhos das Escolas e Cadastro de Escolas
     const customSchoolsStr = localStorage.getItem('teacher_schools')
-    const customSchools = customSchoolsStr ? JSON.parse(customSchoolsStr) : []
-    const baseHeaders: SchoolHeaderModel[] = OFFICIAL_SCHOOL_TEMPLATES.map(t => ({
-      id: t.id,
-      name: t.name,
-      officialName: t.officialName,
-      motto: t.motto,
-      subject: 'Língua Inglesa',
-      instructions: t.instructions,
-      gradeMax: '10,0'
-    }))
+    const customSchools: { id: string; name: string }[] = customSchoolsStr ? JSON.parse(customSchoolsStr) : []
+    setRegisteredSchools(customSchools)
+    if (customSchools.length > 0 && !selectedSchoolForUpload) {
+      setSelectedSchoolForUpload(customSchools[0].name)
+    }
 
-    const mergedHeaders: SchoolHeaderModel[] = [...baseHeaders]
-    customSchools.forEach((cs: any) => {
-      if (!mergedHeaders.some(h => h.name.toLowerCase() === cs.name.toLowerCase())) {
-        mergedHeaders.push({
-          id: cs.id || String(Date.now()),
-          name: cs.name,
-          officialName: cs.name.toUpperCase(),
-          motto: 'Educação & Ensino de Excelência',
-          subject: 'Língua Inglesa',
-          instructions: '1. Responda todas as questões com clareza e atenção.\n2. Utilize caneta azul ou preta.\n3. Boa prova!',
-          gradeMax: '10,0'
-        })
-      }
-    })
-    setHeaderTemplates(mergedHeaders)
+    const customHeadersStr = localStorage.getItem('teacher_custom_headers') || localStorage.getItem('teacher_school_headers')
+    const savedCustomHeaders: SchoolHeaderModel[] = customHeadersStr ? JSON.parse(customHeadersStr) : []
+
+    setHeaderTemplates(savedCustomHeaders)
+    if (savedCustomHeaders.length > 0 && (!selectedHeaderId || !savedCustomHeaders.some(h => h.id === selectedHeaderId))) {
+      setSelectedHeaderId(savedCustomHeaders[0].id)
+    }
 
     // 3. Exercícios & Provas Salvas
     const examsStr = localStorage.getItem('teacher_saved_exams') || '[]'
@@ -400,7 +413,7 @@ export default function Repository() {
     loadAllData()
   }, [loadAllData])
 
-  // ── Persist & Re-Index RAG ────────────────────────────────────────────────
+  // ── Persist & Re-Index RAG & Supabase Sync ──────────────────────────────
   const save = useCallback((updated: RepositoryItem[]) => {
     setItems(updated)
     const jsonStr = JSON.stringify(updated)
@@ -411,6 +424,17 @@ export default function Repository() {
 
     try {
       import('@/lib/ragEngine').then(({ indexAllLibraryItems }) => indexAllLibraryItems())
+    } catch { /* ignora */ }
+
+    // Sincroniza em tempo real com o Supabase
+    try {
+      import('@/lib/supabaseClient').then(({ syncToSupabase }) => {
+        syncToSupabase({
+          teacher_repo: updated,
+          teacher_repository: updated,
+          teacher_repo_materials: updated
+        })
+      })
     } catch { /* ignora */ }
   }, [])
 
@@ -436,6 +460,7 @@ export default function Repository() {
     setViewItem(item)
     setMode('view')
     clearForm()
+    showToast('item salvo')
   }
 
   // ── Add New School Header ─────────────────────────────────────────────────
@@ -451,26 +476,226 @@ export default function Repository() {
       motto: 'Ensino de Excelência & Formação Integral',
       subject: newSubject.trim() || 'Língua Inglesa',
       instructions: newInstructions.trim() || '1. Responda todas as questões com atenção.\n2. Utilize caneta azul ou preta.\n3. Boa avaliação!',
-      gradeMax: '10,0'
+      gradeMax: '10,0',
+      logoUrl: newLogoUrl.trim() || undefined,
+      headerImageUrl: newHeaderImageUrl.trim() || undefined,
+      isImageHeader: Boolean(newHeaderImageUrl.trim())
     }
 
     const updated = [...headerTemplates, newHeader]
     setHeaderTemplates(updated)
     setSelectedHeaderId(newHeader.id)
 
-    // Sincroniza em teacher_schools
+    // Sincroniza em teacher_custom_headers e teacher_schools + Supabase
     try {
+      const existingCustom = JSON.parse(localStorage.getItem('teacher_custom_headers') || '[]')
+      const customUpdated = [...existingCustom.filter((h: any) => h.id !== newHeader.id), newHeader]
+      localStorage.setItem('teacher_custom_headers', JSON.stringify(customUpdated))
+
       const cur = JSON.parse(localStorage.getItem('teacher_schools') || '[]')
-      cur.push({ id: newHeader.id, name: newHeader.name })
-      localStorage.setItem('teacher_schools', JSON.stringify(cur))
+      if (!cur.some((s: any) => s.name.toLowerCase() === newHeader.name.toLowerCase())) {
+        cur.push({ id: newHeader.id, name: newHeader.name })
+        localStorage.setItem('teacher_schools', JSON.stringify(cur))
+      }
+
+      import('@/lib/supabaseClient').then(({ syncToSupabase }) => {
+        syncToSupabase({
+          teacher_custom_headers: customUpdated,
+          teacher_schools: cur
+        })
+      })
     } catch {}
 
     setShowNewHeaderModal(false)
     setNewSchoolName('')
     setNewOfficialName('')
     setNewInstructions('')
-    alert(`🎉 Cabeçalho da escola "${newHeader.name}" cadastrado com sucesso!`)
+    setNewLogoUrl('')
+    setNewHeaderImageUrl('')
+    showToast('item salvo')
   }
+
+  const handleSaveAndApplyHeader = handleAddSchoolHeader
+
+  function deleteSchoolHeader(id: string) {
+    if (!confirm('Deseja realmente excluir este modelo de cabeçalho?')) return
+    const updated = headerTemplates.filter(h => h.id !== id)
+    setHeaderTemplates(updated)
+
+    try {
+      const existingCustom = JSON.parse(localStorage.getItem('teacher_custom_headers') || '[]')
+      const customUpdated = existingCustom.filter((h: any) => h.id !== id)
+      localStorage.setItem('teacher_custom_headers', JSON.stringify(customUpdated))
+
+      import('@/lib/supabaseClient').then(({ syncToSupabase }) => {
+        syncToSupabase({
+          teacher_custom_headers: customUpdated
+        })
+      })
+    } catch {}
+
+    if (updated.length > 0) {
+      setSelectedHeaderId(updated[0].id)
+    } else {
+      setSelectedHeaderId('')
+    }
+    setIsEditingHeader(false)
+    showToast('Cabeçalho excluído com sucesso!')
+  }
+
+  function startEditingHeader() {
+    if (!currentSelectedHeader) return
+    setEditHeaderName(currentSelectedHeader.name || '')
+    setEditHeaderOfficialName(currentSelectedHeader.officialName || '')
+    setEditHeaderSubject(currentSelectedHeader.subject || 'Língua Inglesa')
+    setEditHeaderInstructions(currentSelectedHeader.instructions || '')
+    setIsEditingHeader(true)
+  }
+
+  function saveHeaderEdits() {
+    if (!currentSelectedHeader) return
+    const updated: SchoolHeaderModel = {
+      ...currentSelectedHeader,
+      name: editHeaderName.trim() || currentSelectedHeader.name,
+      officialName: editHeaderOfficialName.trim() || currentSelectedHeader.officialName,
+      subject: editHeaderSubject.trim() || currentSelectedHeader.subject,
+      instructions: editHeaderInstructions.trim() || currentSelectedHeader.instructions
+    }
+
+    const updatedList = headerTemplates.map(h => h.id === updated.id ? updated : h)
+    setHeaderTemplates(updatedList)
+
+    try {
+      const existingCustom = JSON.parse(localStorage.getItem('teacher_custom_headers') || '[]')
+      const customUpdated = existingCustom.map((h: any) => h.id === updated.id ? updated : h)
+      localStorage.setItem('teacher_custom_headers', JSON.stringify(customUpdated))
+
+      import('@/lib/supabaseClient').then(({ syncToSupabase }) => {
+        syncToSupabase({ teacher_custom_headers: customUpdated })
+      })
+    } catch {}
+
+    setIsEditingHeader(false)
+    showToast('Alterações do cabeçalho salvas!')
+  }
+
+  function linkHeaderToSchool(headerId: string, schoolName: string) {
+    if (!schoolName) return
+    const updatedList = headerTemplates.map(h => {
+      if (h.id === headerId) {
+        return {
+          ...h,
+          name: schoolName,
+          officialName: schoolName.toUpperCase()
+        }
+      }
+      return h
+    })
+    setHeaderTemplates(updatedList)
+
+    try {
+      localStorage.setItem('teacher_custom_headers', JSON.stringify(updatedList))
+      import('@/lib/supabaseClient').then(({ syncToSupabase }) => {
+        syncToSupabase({ teacher_custom_headers: updatedList })
+      })
+    } catch {}
+
+    showToast(`Cabeçalho vinculado à escola "${schoolName}"!`)
+  }
+
+  // ── Import / Process Header File (PNG, JPEG, DOCX, PDF) ─────────────────
+  async function processHeaderFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (headerFileInputRef.current) headerFileInputRef.current.value = ''
+
+    setUploadingStatus(`⏳ Processando cabeçalho de "${file.name}"...`)
+
+    try {
+      let text = ''
+      let extractedLogo = ''
+      let extractedHeaderImg = ''
+      const fileNameLower = file.name.toLowerCase()
+
+      if (fileNameLower.endsWith('.docx') || fileNameLower.endsWith('.doc')) {
+        const { extractDocxWithImages } = await import('@/lib/pdfExtractor')
+        const res = await extractDocxWithImages(file)
+        text = res.text || ''
+        if (res.images && res.images.length > 0) {
+          extractedHeaderImg = res.images[0].dataUrl
+          extractedLogo = res.images[0].dataUrl
+        }
+      } else if (fileNameLower.endsWith('.pdf')) {
+        const { extractTextFromPdf } = await import('@/lib/pdfExtractor')
+        text = await extractTextFromPdf(file)
+      } else if (file.type.startsWith('image/') || /\.(png|jpg|jpeg|webp)$/i.test(fileNameLower)) {
+        extractedHeaderImg = await new Promise<string>((resolve) => {
+          const reader = new FileReader()
+          reader.onload = (ev) => resolve((ev.target?.result as string) || '')
+          reader.readAsDataURL(file)
+        })
+      } else {
+        text = await file.text()
+      }
+
+      if ((!text || text.trim().length === 0) && !extractedHeaderImg) {
+        setUploadingStatus('')
+        alert('O arquivo selecionado não contém imagem nem texto de cabeçalho válido.')
+        return
+      }
+
+      const cleanFileName = file.name.replace(/\.[^/.]+$/, '').replace(/cabeçalho/i, '').trim()
+      const lines = text ? text.split('\n').map(l => l.trim()).filter(Boolean) : []
+      const instructionsLines = lines.filter(l => /^(1\.|2\.|3\.|instrução|instrucoes|instruções|atenção|atencao)/i.test(l))
+
+      const schoolToUse = selectedSchoolForUpload.trim() || cleanFileName || (lines[0] || 'Cabeçalho Personalizado')
+
+      const newHeader: SchoolHeaderModel = {
+        id: `school-${Date.now()}`,
+        name: schoolToUse,
+        officialName: schoolToUse.toUpperCase(),
+        motto: 'Ensino de Excelência & Formação Integral',
+        subject: 'Língua Inglesa',
+        instructions: instructionsLines.length > 0
+          ? instructionsLines.join('\n')
+          : '1. Responda todas as questões com atenção.\n2. Utilize caneta azul ou preta.\n3. Boa avaliação!',
+        gradeMax: '10,0',
+        logoUrl: extractedLogo || undefined,
+        headerImageUrl: extractedHeaderImg || undefined,
+        isImageHeader: Boolean(extractedHeaderImg)
+      }
+
+      const updated = [...headerTemplates, newHeader]
+      setHeaderTemplates(updated)
+      setSelectedHeaderId(newHeader.id)
+
+      try {
+        const existingCustom = JSON.parse(localStorage.getItem('teacher_custom_headers') || '[]')
+        const customUpdated = [...existingCustom.filter((h: any) => h.id !== newHeader.id), newHeader]
+        localStorage.setItem('teacher_custom_headers', JSON.stringify(customUpdated))
+
+        const cur = JSON.parse(localStorage.getItem('teacher_schools') || '[]')
+        if (!cur.some((s: any) => s.name.toLowerCase() === newHeader.name.toLowerCase())) {
+          cur.push({ id: newHeader.id, name: newHeader.name })
+          localStorage.setItem('teacher_schools', JSON.stringify(cur))
+        }
+
+        import('@/lib/supabaseClient').then(({ syncToSupabase }) => {
+          syncToSupabase({
+            teacher_custom_headers: customUpdated,
+            teacher_schools: cur
+          })
+        })
+      } catch {}
+
+      setUploadingStatus('')
+      showToast(`Cabeçalho "${newHeader.name}" injetado com sucesso!`)
+    } catch (err: unknown) {
+      setUploadingStatus('')
+      alert(`⚠️ Erro ao processar o cabeçalho: ${err instanceof Error ? err.message : 'Falha ao ler arquivo.'}`)
+    }
+  }
+
 
   // ── Save Edits (Bibliografia) ─────────────────────────────────────────────
   function saveEdit() {
@@ -489,6 +714,7 @@ export default function Repository() {
     const saved = updated.find(i => i.id === viewItem.id)!
     setViewItem(saved)
     setMode('view')
+    showToast('item salvo')
   }
 
   function startEdit(item: RepositoryItem) {
@@ -528,6 +754,12 @@ export default function Repository() {
       localStorage.setItem('teacher_saved_quicks', JSON.stringify(savedQuicks))
     }
     setViewExercise(upd[0] || null)
+
+    try {
+      import('@/lib/supabaseClient').then(({ syncToSupabase }) => {
+        syncToSupabase()
+      })
+    } catch {}
   }
 
   // ── File Upload (PDF, DOCX, TXT, MD, CSV, JSON) ───────────────────────────
@@ -585,7 +817,7 @@ export default function Repository() {
       setViewItem(item)
       setMode('view')
       setUploadingStatus('')
-      alert(`🎉 Livro "${file.name}" compilado e indexado no RAG com sucesso!\n\n📊 Total: ${wCount.toLocaleString()} palavras em ${cCount} seções.`)
+      showToast('item salvo')
     } catch (err: unknown) {
       setUploadingStatus('')
       alert(`⚠️ Falha na importação: ${err instanceof Error ? err.message : 'Não foi possível extrair o texto do arquivo.'}`)
@@ -708,7 +940,17 @@ export default function Repository() {
     return matchType && matchSearch
   })
 
-  const currentSelectedHeader = headerTemplates.find(h => h.id === selectedHeaderId) || headerTemplates[0]
+  const defaultFallbackHeader: SchoolHeaderModel = {
+    id: 'default-school',
+    name: 'Colégio Machado Sobrinho',
+    officialName: 'COLÉGIO MACHADO SOBRINHO — SISTEMA DE ENSINO INTEGRADO',
+    motto: 'Ensino de Excelência & Formação Integral',
+    subject: 'Língua Inglesa',
+    instructions: '1. Responda todas as questões com clareza e atenção.\n2. Utilize caneta azul ou preta.\n3. Boa avaliação!',
+    gradeMax: '10,0'
+  }
+
+  const currentSelectedHeader = headerTemplates.find(h => h.id === selectedHeaderId) || headerTemplates[0] || defaultFallbackHeader
 
   const btnPrimary: React.CSSProperties = {
     padding: '10px 18px', borderRadius: 10, border: 'none',
@@ -741,9 +983,15 @@ export default function Repository() {
           )}
 
           {activePartition === 'headers' && (
-            <button onClick={() => setShowNewHeaderModal(true)} style={btnPrimary}>
-              <i className="ti ti-plus" /> Cadastrar Novo Cabeçalho
-            </button>
+            <>
+              <input type="file" ref={headerFileInputRef} onChange={processHeaderFile} accept=".txt,.md,.json,.csv,.pdf,.docx,.doc" style={{ display: 'none' }} />
+              <button onClick={() => headerFileInputRef.current?.click()} style={btnSecondary}>
+                <i className="ti ti-upload" /> Importar Cabeçalho (.docx / .pdf)
+              </button>
+              <button onClick={() => setShowNewHeaderModal(true)} style={btnPrimary}>
+                <i className="ti ti-plus" /> Cadastrar Novo Cabeçalho
+              </button>
+            </>
           )}
 
           {activePartition === 'exercises' && (
@@ -821,127 +1069,253 @@ export default function Repository() {
 
 
         {/* ══════════════════════════════════════════════════════════════════════
-            PARTIÇÃO 1: CABEÇALHO (MODELOS ESCOLARES OFICIAIS)
+            PARTIÇÃO 1: CABEÇALHO (IMPORTAÇÃO DIRETA PNG, JPEG, DOCX, PDF)
            ══════════════════════════════════════════════════════════════════════ */}
         {activePartition === 'headers' && (
-          <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: 24, flex: 1, minHeight: 0 }}>
-            {/* Lista de Modelos de Cabeçalho */}
-            <div style={{ background: '#fff', borderRadius: 16, border: '1px solid rgba(139,115,85,0.12)', padding: 16, display: 'flex', flexDirection: 'column', gap: 10, overflowY: 'auto' }}>
-              <div style={{ fontSize: 13, fontWeight: 800, color: '#8b5e3c', textTransform: 'uppercase', letterSpacing: '1px' }}>
-                Instituições & Modelos ({headerTemplates.length})
-              </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16, flex: 1, minHeight: 0 }}>
+            {/* Input Oculto de Arquivo de Cabeçalho */}
+            <input
+              type="file"
+              ref={headerFileInputRef}
+              onChange={processHeaderFile}
+              accept="image/png,image/jpeg,image/jpg,image/webp,.png,.jpg,.jpeg,.webp,.docx,.doc,.pdf"
+              style={{ display: 'none' }}
+            />
 
-              {headerTemplates.map(tpl => (
+            {headerTemplates.length === 0 ? (
+              /* Estado Vazio: Apenas Box para Importar o Arquivo */
+              <div style={{
+                background: '#fffcf8', borderRadius: 16, border: '2px dashed #8b5e3c',
+                padding: '60px 40px', textAlign: 'center', margin: '20px 0',
+                boxShadow: '0 4px 20px rgba(44,26,14,0.04)'
+              }}>
+                <i className="ti ti-cloud-upload" style={{ fontSize: 56, color: '#8b5e3c', marginBottom: 14, display: 'block' }} />
+                <h3 style={{ fontFamily: 'Georgia, serif', fontSize: 22, color: '#2c1a0e', margin: '0 0 8px' }}>
+                  Nenhum cabeçalho importado ainda
+                </h3>
+                <p style={{ fontSize: 13.5, color: '#8b5e3c', maxWidth: 480, margin: '0 auto 24px', lineHeight: 1.6 }}>
+                  Importe o arquivo do cabeçalho da sua escola (<strong>PNG, JPEG, DOCX ou PDF</strong>). Ele será exibido exatamente no papel A4 e você poderá editar o texto diretamente sobre ele caso necessário.
+                </p>
+                <button
+                  onClick={() => headerFileInputRef.current?.click()}
+                  style={{ ...btnPrimary, padding: '12px 28px', fontSize: 14.5, margin: '0 auto' }}
+                >
+                  <i className="ti ti-upload" /> Importar Arquivo de Cabeçalho
+                </button>
+              </div>
+            ) : (
+              /* Com Cabeçalhos Importados: Exibe Lista + Papel A4 para Edição */
+              <>
+                {/* Box Superior para Importar Mais Cabeçalhos */}
                 <div
-                  key={tpl.id}
-                  onClick={() => setSelectedHeaderId(tpl.id)}
+                  onClick={() => headerFileInputRef.current?.click()}
                   style={{
-                    padding: '14px', borderRadius: 12, cursor: 'pointer',
-                    background: selectedHeaderId === tpl.id ? '#fdf8f2' : '#faf8f5',
-                    border: selectedHeaderId === tpl.id ? '1.5px solid #8b5e3c' : '1px solid #ede8dc',
-                    transition: 'all 0.15s'
+                    border: '2px dashed #8b5e3c',
+                    borderRadius: 14,
+                    padding: '16px 24px',
+                    background: 'linear-gradient(135deg, #fffcf8 0%, #fdf8f2 100%)',
+                    textAlign: 'center',
+                    cursor: 'pointer',
+                    boxShadow: '0 2px 10px rgba(139,94,60,0.06)',
+                    transition: 'all 0.2s ease',
                   }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                    <i className="ti ti-building-school" style={{ color: '#8b5e3c', fontSize: 18 }} />
-                    <span style={{ fontSize: 13.5, fontWeight: 700, color: '#2c1a0e' }}>{tpl.name}</span>
-                  </div>
-                  <div style={{ fontSize: 11, color: '#586e75' }}>
-                    {tpl.officialName}
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Visualizador & Folha Oficial do Cabeçalho */}
-            <div style={{ background: '#fff', borderRadius: 16, border: '1px solid rgba(139,115,85,0.15)', padding: '24px 32px', display: 'flex', flexDirection: 'column', gap: 20, overflowY: 'auto', boxShadow: '0 4px 20px rgba(44,26,14,0.06)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #ede8dc', paddingBottom: 14 }}>
-                <div>
-                  <h2 style={{ fontFamily: 'Georgia, serif', fontSize: 22, color: '#2c1a0e', margin: 0 }}>
-                    {currentSelectedHeader.name}
-                  </h2>
-                  <p style={{ fontSize: 12, color: '#8b5e3c', margin: '4px 0 0', fontWeight: 600 }}>
-                    {currentSelectedHeader.motto || 'Modelo Oficial Formatado para Folhas de Avaliação e Exercícios'}
-                  </p>
-                </div>
-
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <button
-                    onClick={() => {
-                      navigator.clipboard.writeText(`${currentSelectedHeader.officialName}\nDisciplina: ${currentSelectedHeader.subject}\nInstruções:\n${currentSelectedHeader.instructions}`)
-                      alert('📋 Tabela e texto do cabeçalho copiados para a área de transferência!')
-                    }}
-                    style={btnSecondary}
-                  >
-                    <i className="ti ti-copy" /> Copiar Cabeçalho
-                  </button>
-
-                  <button
-                    onClick={() => window.dispatchEvent(new CustomEvent('teacher:navigate', { detail: 'exam' }))}
-                    style={btnPrimary}
-                  >
-                    <i className="ti ti-sparkles" /> Usar no Gerador de Provas
-                  </button>
-                </div>
-              </div>
-
-              {/* Folha A4 com o Cabeçalho Renderizado */}
-              <div style={{
-                background: '#fffcf8', border: '2px solid #2c1a0e', borderRadius: 6,
-                padding: '24px 28px', color: '#1a110a', fontFamily: 'Georgia, serif'
-              }}>
-                <div style={{ textAlign: 'center', borderBottom: '2px solid #2c1a0e', paddingBottom: 12, marginBottom: 16 }}>
-                  <div style={{ fontSize: 16, fontWeight: 800, letterSpacing: '1px', textTransform: 'uppercase' }}>
-                    {currentSelectedHeader.officialName}
-                  </div>
-                  <div style={{ fontSize: 12, fontStyle: 'italic', color: '#555', marginTop: 4 }}>
-                    {currentSelectedHeader.motto}
+                  <div style={{ fontSize: 14, fontWeight: 700, color: '#2c1a0e', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                    <i className="ti ti-cloud-upload" style={{ fontSize: 22, color: '#8b5e3c' }} />
+                    <span>Clique para importar outro Cabeçalho (PNG, JPEG, DOCX, PDF)</span>
                   </div>
                 </div>
 
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, marginBottom: 16 }}>
-                  <tbody>
-                    <tr>
-                      <td style={{ border: '1px solid #2c1a0e', padding: '6px 10px', width: '50%' }}>
-                        <strong>Disciplina:</strong> {currentSelectedHeader.subject}
-                      </td>
-                      <td style={{ border: '1px solid #2c1a0e', padding: '6px 10px', width: '25%' }}>
-                        <strong>Turma:</strong> ________
-                      </td>
-                      <td style={{ border: '1px solid #2c1a0e', padding: '6px 10px', width: '25%' }}>
-                        <strong>Data:</strong> ____/____/2026
-                      </td>
-                    </tr>
-                    <tr>
-                      <td style={{ border: '1px solid #2c1a0e', padding: '6px 10px' }}>
-                        <strong>Professor(a):</strong> ________________________
-                      </td>
-                      <td colSpan={2} style={{ border: '1px solid #2c1a0e', padding: '6px 10px' }}>
-                        <strong>Aluno(a):</strong> ____________________________________
-                      </td>
-                    </tr>
-                    <tr>
-                      <td style={{ border: '1px solid #2c1a0e', padding: '6px 10px' }}>
-                        <strong>Tipo de Avaliação:</strong> Prova Trimestral
-                      </td>
-                      <td style={{ border: '1px solid #2c1a0e', padding: '6px 10px' }}>
-                        <strong>Valor Total:</strong> {currentSelectedHeader.gradeMax || '10,0'} pts
-                      </td>
-                      <td style={{ border: '2px solid #8b5e3c', padding: '6px 10px', background: '#fdf8f2', textAlign: 'center' }}>
-                        <strong>Nota Obtida:</strong> ________
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
+                <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: 24, flex: 1, minHeight: 0 }}>
+                  {/* Lista de Modelos de Cabeçalho Salvos */}
+                  <div style={{ background: '#fff', borderRadius: 16, border: '1px solid rgba(139,115,85,0.12)', padding: 16, display: 'flex', flexDirection: 'column', gap: 10, overflowY: 'auto' }}>
+                    <div style={{ fontSize: 13, fontWeight: 800, color: '#8b5e3c', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                      Cabeçalhos Importados ({headerTemplates.length})
+                    </div>
 
-                <div style={{ background: '#f5f0e8', padding: '10px 14px', borderRadius: 6, fontSize: 11.5, borderLeft: '4px solid #8b5e3c' }}>
-                  <strong>Instruções Gerais de Preenchimento:</strong>
-                  <pre style={{ margin: '4px 0 0', fontFamily: 'inherit', whiteSpace: 'pre-wrap', fontSize: 11.5, color: '#333' }}>
-                    {currentSelectedHeader.instructions}
-                  </pre>
+                    {headerTemplates.map(tpl => (
+                      <div
+                        key={tpl.id}
+                        onClick={() => { setSelectedHeaderId(tpl.id); setIsEditingHeader(false); }}
+                        style={{
+                          padding: '14px', borderRadius: 12, cursor: 'pointer',
+                          background: selectedHeaderId === tpl.id ? '#fdf8f2' : '#faf8f5',
+                          border: selectedHeaderId === tpl.id ? '1.5px solid #8b5e3c' : '1px solid #ede8dc',
+                          transition: 'all 0.15s'
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                          <i className="ti ti-building-school" style={{ color: '#8b5e3c', fontSize: 18 }} />
+                          <span style={{ fontSize: 13.5, fontWeight: 700, color: '#2c1a0e' }}>{tpl.name}</span>
+                        </div>
+                        <div style={{ fontSize: 11, color: '#586e75' }}>
+                          {tpl.officialName}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Visualizador & Folha Oficial A4 para Editar em Cima do Cabeçalho */}
+                  {currentSelectedHeader && (
+                    <div style={{ background: '#fff', borderRadius: 16, border: '1px solid rgba(139,115,85,0.15)', padding: '24px 32px', display: 'flex', flexDirection: 'column', gap: 20, overflowY: 'auto', boxShadow: '0 4px 20px rgba(44,26,14,0.06)' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #ede8dc', paddingBottom: 14 }}>
+                        <div>
+                          <h2 style={{ fontFamily: 'Georgia, serif', fontSize: 22, color: '#2c1a0e', margin: 0 }}>
+                            {currentSelectedHeader.name}
+                          </h2>
+                          <p style={{ fontSize: 12, color: '#8b5e3c', margin: '4px 0 0', fontWeight: 600 }}>
+                            {currentSelectedHeader.motto || 'Modelo Importado Formatado para Folhas de Avaliação'}
+                          </p>
+                        </div>
+
+                        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                          {registeredSchools.length > 0 && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#fdf8f2', padding: '4px 10px', borderRadius: 8, border: '1px solid #8b5e3c' }}>
+                              <span style={{ fontSize: 12, fontWeight: 700, color: '#8b5e3c' }}>🏫 Escola:</span>
+                              <select
+                                value={currentSelectedHeader.name}
+                                onChange={e => linkHeaderToSchool(currentSelectedHeader.id, e.target.value)}
+                                style={{
+                                  padding: '4px 8px', borderRadius: 6, border: '1px solid rgba(139,115,85,0.3)',
+                                  fontSize: 12, fontWeight: 700, color: '#2c1a0e', background: '#fff', outline: 'none', cursor: 'pointer'
+                                }}
+                              >
+                                {registeredSchools.map(sch => (
+                                  <option key={sch.id} value={sch.name}>{sch.name}</option>
+                                ))}
+                                {!registeredSchools.some(s => s.name.toLowerCase() === currentSelectedHeader.name.toLowerCase()) && (
+                                  <option value={currentSelectedHeader.name}>{currentSelectedHeader.name}</option>
+                                )}
+                              </select>
+                            </div>
+                          )}
+
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(`${currentSelectedHeader.officialName}\nDisciplina: ${currentSelectedHeader.subject}\nInstruções:\n${currentSelectedHeader.instructions}`)
+                              showToast('Cabeçalho copiado!')
+                            }}
+                            style={btnSecondary}
+                          >
+                            <i className="ti ti-copy" /> Copiar Texto
+                          </button>
+
+                          {isEditingHeader ? (
+                            <button onClick={saveHeaderEdits} style={btnPrimary}>
+                              <i className="ti ti-check" /> Salvar Edições
+                            </button>
+                          ) : (
+                            <button onClick={startEditingHeader} style={btnSecondary}>
+                              <i className="ti ti-edit" /> Editar em Cima
+                            </button>
+                          )}
+
+                          <button
+                            onClick={() => deleteSchoolHeader(currentSelectedHeader.id)}
+                            style={{ ...btnSecondary, background: '#dc322f', color: '#fff', border: 'none' }}
+                          >
+                            <i className="ti ti-trash" /> Excluir
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Folha A4 com o Cabeçalho Renderizado (Permite edição direta em cima se ativado) */}
+                      <div style={{
+                        background: '#fffcf8', border: '2px solid #2c1a0e', borderRadius: 6,
+                        padding: '24px 28px', color: '#1a110a', fontFamily: 'Georgia, serif'
+                      }}>
+                        {currentSelectedHeader.headerImageUrl ? (
+                          <div style={{ textAlign: 'center', borderBottom: '2px solid #2c1a0e', paddingBottom: 12, marginBottom: 16 }}>
+                            <img
+                              src={currentSelectedHeader.headerImageUrl}
+                              alt={currentSelectedHeader.name}
+                              style={{ width: '100%', maxHeight: 180, objectFit: 'contain', borderRadius: 4, marginBottom: 6 }}
+                            />
+                          </div>
+                        ) : (
+                          <div style={{ textAlign: 'center', borderBottom: '2px solid #2c1a0e', paddingBottom: 12, marginBottom: 16 }}>
+                            {currentSelectedHeader.logoUrl && (
+                              <img src={currentSelectedHeader.logoUrl} alt="Logo Oficial" style={{ maxHeight: 70, maxWidth: 200, marginBottom: 8, objectFit: 'contain' }} />
+                            )}
+                            {isEditingHeader ? (
+                              <input
+                                value={editHeaderOfficialName}
+                                onChange={e => setEditHeaderOfficialName(e.target.value)}
+                                style={{ ...inputStyle, textAlign: 'center', fontWeight: 800, fontSize: 15 }}
+                              />
+                            ) : (
+                              <div style={{ fontSize: 16, fontWeight: 800, letterSpacing: '1px', textTransform: 'uppercase' }}>
+                                {currentSelectedHeader.officialName}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, marginBottom: 16 }}>
+                          <tbody>
+                            <tr>
+                              <td style={{ border: '1px solid #2c1a0e', padding: '6px 10px', width: '50%' }}>
+                                <strong>Disciplina:</strong>{' '}
+                                {isEditingHeader ? (
+                                  <input
+                                    value={editHeaderSubject}
+                                    onChange={e => setEditHeaderSubject(e.target.value)}
+                                    style={{ ...inputStyle, padding: '2px 6px', fontSize: 12, display: 'inline-block', width: '70%' }}
+                                  />
+                                ) : (
+                                  currentSelectedHeader.subject
+                                )}
+                              </td>
+                              <td style={{ border: '1px solid #2c1a0e', padding: '6px 10px', width: '25%' }}>
+                                <strong>Turma:</strong> ________
+                              </td>
+                              <td style={{ border: '1px solid #2c1a0e', padding: '6px 10px', width: '25%' }}>
+                                <strong>Data:</strong> ____/____/2026
+                              </td>
+                            </tr>
+                            <tr>
+                              <td style={{ border: '1px solid #2c1a0e', padding: '6px 10px' }}>
+                                <strong>Professor(a):</strong> ________________________
+                              </td>
+                              <td colSpan={2} style={{ border: '1px solid #2c1a0e', padding: '6px 10px' }}>
+                                <strong>Aluno(a):</strong> ____________________________________
+                              </td>
+                            </tr>
+                            <tr>
+                              <td style={{ border: '1px solid #2c1a0e', padding: '6px 10px' }}>
+                                <strong>Tipo de Avaliação:</strong> Prova Trimestral
+                              </td>
+                              <td style={{ border: '1px solid #2c1a0e', padding: '6px 10px' }}>
+                                <strong>Valor Total:</strong> {currentSelectedHeader.gradeMax || '10,0'} pts
+                              </td>
+                              <td style={{ border: '2px solid #8b5e3c', padding: '6px 10px', background: '#fdf8f2', textAlign: 'center' }}>
+                                <strong>Nota Obtida:</strong> ________
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
+
+                        <div style={{ background: '#f5f0e8', padding: '10px 14px', borderRadius: 6, fontSize: 11.5, borderLeft: '4px solid #8b5e3c' }}>
+                          <strong style={{ display: 'block', marginBottom: 4 }}>Instruções Gerais de Preenchimento:</strong>
+                          {isEditingHeader ? (
+                            <textarea
+                              value={editHeaderInstructions}
+                              onChange={e => setEditHeaderInstructions(e.target.value)}
+                              rows={4}
+                              style={{ ...inputStyle, fontFamily: 'inherit', fontSize: 11.5 }}
+                            />
+                          ) : (
+                            <pre style={{ margin: 0, fontFamily: 'inherit', whiteSpace: 'pre-wrap', fontSize: 11.5, color: '#333' }}>
+                              {currentSelectedHeader.instructions}
+                            </pre>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </div>
-            </div>
+              </>
+            )}
           </div>
         )}
 
@@ -1231,6 +1605,18 @@ export default function Repository() {
               <input placeholder="Ex: Língua Inglesa" value={newSubject} onChange={e => setNewSubject(e.target.value)} style={inputStyle} />
             </div>
 
+            {newLogoUrl && (
+              <div style={{ textAlign: 'center', background: '#fdf8f2', border: '1.5px dashed #8b5e3c', padding: 12, borderRadius: 12 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#8b5e3c', marginBottom: 6 }}>🖼️ Logo da Escola (Extraído do Documento)</div>
+                <img src={newLogoUrl} alt="Logo" style={{ maxHeight: 60, objectFit: 'contain' }} />
+                <button onClick={() => setNewLogoUrl('')} style={{ display: 'block', margin: '6px auto 0', background: 'none', border: 'none', color: '#dc322f', fontSize: 11, cursor: 'pointer', fontWeight: 600 }}>Remover logo</button>
+              </div>
+            )}
+
+            <button onClick={() => headerFileInputRef.current?.click()} style={{ ...btnSecondary, justifyContent: 'center' }}>
+              <i className="ti ti-upload" /> 📁 Importar Dados & Logo de Arquivo Word (.docx)
+            </button>
+
             <div>
               <label style={{ fontSize: 12, fontWeight: 700, color: '#8b5e3c', display: 'block', marginBottom: 4 }}>Instruções Oficiais da Avaliação</label>
               <textarea
@@ -1244,7 +1630,7 @@ export default function Repository() {
 
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 10 }}>
               <button onClick={() => setShowNewHeaderModal(false)} style={btnSecondary}>Cancelar</button>
-              <button onClick={handleAddSchoolHeader} style={btnPrimary}>Salvar Cabeçalho</button>
+              <button onClick={handleSaveAndApplyHeader} style={btnPrimary}>Salvar Cabeçalho</button>
             </div>
           </div>
         </div>
@@ -1287,6 +1673,23 @@ export default function Repository() {
               Fechar
             </button>
           </div>
+        </div>
+      )}
+
+      {/* ── Toast de Confirmação Flutuante (Auto-Dismiss) ── */}
+      {toastMessage && (
+        <div style={{
+          position: 'fixed', bottom: 28, right: 28, zIndex: 999999,
+          background: 'linear-gradient(135deg, #2c1a0e, #3d2510)',
+          color: '#fdf8f2', border: '1.5px solid #e2a355',
+          padding: '12px 22px', borderRadius: 14,
+          fontSize: 13.5, fontWeight: 700,
+          boxShadow: '0 8px 30px rgba(0,0,0,0.35)',
+          display: 'flex', alignItems: 'center', gap: 10,
+          pointerEvents: 'none'
+        }}>
+          <span style={{ fontSize: 16, color: '#e2a355' }}>✓</span>
+          <span>{toastMessage}</span>
         </div>
       )}
     </ModuleShell>

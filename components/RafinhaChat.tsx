@@ -692,8 +692,8 @@ export default function RafinhaChat({ onNavigate, onCommandReady }: RafinhaChatP
 
   useEffect(() => { isLiveModeRef.current = isLiveMode }, [isLiveMode])
 
-  // Wake word global — sempre escuta "Rafinha" em qualquer tela
-  useGlobalWakeWord(true)
+  // Wake word global — desativado por padrão para não ligar o microfone sem solicitação do usuário
+  useGlobalWakeWord(false)
 
   // Expõe sendMessage para componentes externos
   useEffect(() => {

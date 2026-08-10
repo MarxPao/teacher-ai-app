@@ -5,7 +5,7 @@ import { useEffect, useRef } from 'react'
  * useGlobalWakeWord — Sempre escuta "Rafinha" em qualquer tela
  * Mutex Lock: Não faz nada se a Rafinha estiver falando ou processando
  */
-export function useGlobalWakeWord(enabled = true) {
+export function useGlobalWakeWord(enabled = false) {
   const recRef      = useRef<any>(null)
   const activeRef   = useRef(false)
   const enabledRef  = useRef(enabled)
