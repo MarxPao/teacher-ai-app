@@ -480,7 +480,15 @@ export default function Repository() {
  }
  }, [])
 
- // Add Item (Bibliografia) 
+  function clearForm() {
+    setEditTitle('')
+    setEditContent('')
+    setEditType("Student's Book")
+    setEditCategory('Macmillan Education')
+    setEditTextbook('')
+  }
+
+  // Add Item (Bibliografia) 
   function addItem() {
     if (!editTitle.trim() || !editContent.trim()) {
       alert('Preencha o título e o conteúdo para continuar.')
