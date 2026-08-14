@@ -48,7 +48,7 @@ const styles: Record<string, CSSProperties> = {
     backgroundColor: '#fdf8f2',
     color: '#2c1a0e',
     minHeight: '100vh',
-    fontFamily: "'Inter', system-ui, sans-serif",
+    fontFamily: "'Plus Jakarta Sans', sans-serif",
     display: 'flex',
     flexDirection: 'column',
     gap: '24px',
@@ -65,7 +65,7 @@ const styles: Record<string, CSSProperties> = {
   title: {
     fontSize: '1.8rem',
     fontWeight: 700,
-    fontFamily: "'Playfair Display', Georgia, serif",
+    fontFamily: "'Fraunces', Georgia, serif",
     color: '#2c1a0e',
     margin: 0,
   },
@@ -93,7 +93,7 @@ const styles: Record<string, CSSProperties> = {
     alignItems: 'center',
     gap: '8px',
     color: '#2c1a0e',
-    fontFamily: "'Playfair Display', Georgia, serif",
+    fontFamily: "'Plus Jakarta Sans', sans-serif",
   },
   moodContainer: {
     display: 'flex',
@@ -102,7 +102,7 @@ const styles: Record<string, CSSProperties> = {
     marginTop: '12px',
   },
   moodBtn: {
-    background: '#f5efe6',
+    background: '#f5f0e8',
     border: '1px solid rgba(139,115,85,0.16)',
     borderRadius: '12px',
     padding: '12px 8px',

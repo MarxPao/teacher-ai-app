@@ -199,13 +199,13 @@ export default function Extensions() {
   const toastColors = { ok: '#859900', err: '#dc322f', info: '#2aa198' }
 
   return (
-    <div style={{ padding: '36px 48px', maxWidth: 1440, margin: '0 auto', background: '#fdf6e3', fontFamily: "'Outfit', sans-serif", minHeight: '100%' }}>
+    <div style={{ padding: '36px 48px', maxWidth: 1440, margin: '0 auto', background: '#fdf8f2', fontFamily: "'Plus Jakarta Sans', sans-serif", minHeight: '100%' }}>
 
       {/* Toast */}
       {toastMessage && (
         <div style={{
-          position: 'fixed', top: 24, right: 24, background: '#002b36', color: '#fdf6e3',
-          padding: '14px 20px', borderRadius: 16, boxShadow: '0 20px 40px rgba(0,0,0,0.3)',
+          position: 'fixed', top: 24, right: 24, background: '#2c1a0e', color: '#fdf8f2',
+          padding: '14px 20px', borderRadius: 16, boxShadow: '0 20px 40px rgba(44,26,14,0.25)',
           display: 'flex', alignItems: 'center', gap: 12, fontSize: 13.5, fontWeight: 600,
           zIndex: 1100, border: `1px solid ${toastColors[toastMessage.type]}50`, maxWidth: 420
         }}>
@@ -217,11 +217,11 @@ export default function Extensions() {
       {/* Header */}
       <div style={{ marginBottom: 32 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 8 }}>
-          <div style={{ width: 48, height: 48, borderRadius: 14, background: 'linear-gradient(135deg, #b58900, #cb4b16)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>
+          <div style={{ width: 48, height: 48, borderRadius: 14, background: 'linear-gradient(135deg, #8b5e3c, #c4834a)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>
             🔌
           </div>
           <div>
-            <h1 style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: 32, fontWeight: 700, color: '#073642', margin: 0 }}>
+            <h1 style={{ fontFamily: "'Fraunces', Georgia, serif", fontSize: 32, fontWeight: 600, color: '#2c1a0e', margin: 0 }}>
               Central de Extensões Agênticas
             </h1>
             <p style={{ color: '#586e75', fontSize: 13, margin: 0 }}>
@@ -232,20 +232,20 @@ export default function Extensions() {
 
         {/* Extension status banner */}
         <div style={{
-          background: 'linear-gradient(135deg, rgba(133,153,0,0.08), rgba(42,161,152,0.08))',
-          border: '1px solid rgba(133,153,0,0.2)', borderRadius: 14, padding: '12px 20px',
+          background: 'linear-gradient(135deg, rgba(139,94,60,0.07), rgba(42,161,152,0.06))',
+          border: '1px solid rgba(139,94,60,0.18)', borderRadius: 14, padding: '12px 20px',
           display: 'flex', alignItems: 'center', gap: 12, marginTop: 20
         }}>
-          <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#859900', boxShadow: '0 0 10px #859900', display: 'inline-block', flexShrink: 0 }} />
+          <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#3d7a4e', boxShadow: '0 0 10px rgba(61,122,78,0.5)', display: 'inline-block', flexShrink: 0 }} />
           <div>
             <span style={{ fontSize: 13, fontWeight: 700, color: '#073642' }}>Extensão pronta para uso</span>
             <span style={{ fontSize: 12, color: '#586e75', marginLeft: 12 }}>
-              Pasta: <code style={{ background: '#eee8d5', padding: '1px 6px', borderRadius: 4 }}>teacher-extension/</code> já existe — basta carregar no Chrome
+              Pasta: <code style={{ background: '#ede4d6', padding: '1px 6px', borderRadius: 4 }}>teacher-extension/</code> já existe — basta carregar no Chrome
             </span>
           </div>
           <button
             onClick={() => setActiveTab('install')}
-            style={{ marginLeft: 'auto', background: '#859900', color: '#fff', border: 'none', padding: '6px 14px', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+            style={{ marginLeft: 'auto', background: '#8b5e3c', color: '#fff', border: 'none', padding: '6px 14px', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
           >
             Ver Como Instalar →
           </button>

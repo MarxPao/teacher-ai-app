@@ -365,7 +365,7 @@ export default function Planner() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4" style={{ marginBottom: 24 }}>
         <div>
           <div className="flex items-center gap-3">
-            <h1 style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: 38, fontWeight: 600, color: '#073642', fontStyle: 'italic' }}>
+            <h1 style={{ fontFamily: "'Fraunces', Georgia, serif", fontSize: 34, fontWeight: 600, color: '#2c1a0e', fontStyle: 'normal' }}>
               Academic Deadlines
             </h1>
             {urgentCount > 0 && (

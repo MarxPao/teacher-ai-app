@@ -37,7 +37,7 @@ const styles: Record<string, CSSProperties> = {
     backgroundColor: '#fdf8f2',
     color: '#2c1a0e',
     minHeight: '100vh',
-    fontFamily: '"Inter", system-ui, sans-serif',
+    fontFamily: "'Plus Jakarta Sans', sans-serif",
     padding: '36px 40px',
     boxSizing: 'border-box',
   },
@@ -50,7 +50,7 @@ const styles: Record<string, CSSProperties> = {
     paddingBottom: 20,
   },
   title: {
-    fontFamily: '"Playfair Display", Georgia, serif',
+    fontFamily: "'Fraunces', Georgia, serif",
     fontSize: '1.8rem',
     fontWeight: 700,
     color: '#2c1a0e',
@@ -85,7 +85,7 @@ const styles: Record<string, CSSProperties> = {
     cursor: 'pointer',
     boxShadow: 'none',
     transition: 'all 0.15s ease',
-    fontFamily: '"Inter", system-ui, sans-serif',
+    fontFamily: "'Plus Jakarta Sans', sans-serif",
     display: 'flex',
     alignItems: 'center',
     gap: '0.5rem',
@@ -130,7 +130,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 13.5,
     boxSizing: 'border-box',
     outline: 'none',
-    fontFamily: '"Inter", system-ui, sans-serif',
+    fontFamily: "'Plus Jakarta Sans', sans-serif",
   },
   textarea: {
     width: '100%',
@@ -144,7 +144,7 @@ const styles: Record<string, CSSProperties> = {
     boxSizing: 'border-box',
     resize: 'vertical',
     outline: 'none',
-    fontFamily: '"Inter", system-ui, sans-serif',
+    fontFamily: "'Plus Jakarta Sans', sans-serif",
   },
   tagContainer: {
     display: 'flex',
@@ -181,7 +181,7 @@ const styles: Record<string, CSSProperties> = {
     gap: 8,
     transition: 'all 0.18s ease',
     boxShadow: '0 2px 8px rgba(139,94,60,0.3)',
-    fontFamily: '"Inter", system-ui, sans-serif',
+    fontFamily: "'Plus Jakarta Sans', sans-serif",
   },
   buttonSecondary: {
     padding: '9px 18px',
@@ -196,7 +196,7 @@ const styles: Record<string, CSSProperties> = {
     alignItems: 'center',
     gap: 8,
     transition: 'all 0.15s ease',
-    fontFamily: '"Inter", system-ui, sans-serif',
+    fontFamily: "'Plus Jakarta Sans', sans-serif",
   },
   timelineCard: {
     backgroundColor: '#f5efe6',
@@ -219,7 +219,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 700,
     color: '#2c1a0e',
     margin: '0 0 0.5rem 0',
-    fontFamily: '"Playfair Display", Georgia, serif',
+    fontFamily: "'Fraunces', Georgia, serif",
   },
   aiFeedbackBox: {
     marginTop: '1rem',
@@ -503,7 +503,7 @@ Incorpore atividades de Task-Based Learning para fortalecer a área de ${formDat
               boxShadow: '0 4px 12px rgba(44,26,14,0.15)',
               display: 'flex', alignItems: 'center', gap: '0.5rem',
               animation: 'fadeIn 0.3s',
-              fontFamily: '"Inter", system-ui, sans-serif'
+              fontFamily: "'Plus Jakarta Sans', sans-serif"
             }}>
               <i className={`ti ${toastIcon}`} />
               {toast.message}
@@ -555,7 +555,7 @@ Incorpore atividades de Task-Based Learning para fortalecer a área de ${formDat
       {/* NEW REFLECTION TAB */}
       {activeTab === 'new' && (
         <div style={styles.card}>
-          <h2 style={{ color: '#2c1a0e', fontFamily: '"Playfair Display", Georgia, serif', display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: 0 }}>
+          <h2 style={{ color: '#2c1a0e', fontFamily: "'Fraunces', Georgia, serif", display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: 0 }}>
             <i className="ti ti-notebook" style={{ color: '#8b5e3c' }} /> Ciclo Reflexivo de Gibbs
           </h2>
           
@@ -670,7 +670,7 @@ Incorpore atividades de Task-Based Learning para fortalecer a área de ${formDat
       {/* HISTORY TAB */}
       {activeTab === 'history' && (
         <div style={styles.card}>
-          <h2 style={{ color: '#2c1a0e', fontFamily: '"Playfair Display", Georgia, serif', marginTop: 0 }}>Histórico de Reflexões</h2>
+          <h2 style={{ color: '#2c1a0e', fontFamily: "'Fraunces', Georgia, serif", marginTop: 0 }}>Histórico de Reflexões</h2>
           
           {journal.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '3rem', color: '#a08060' }}>
@@ -729,7 +729,7 @@ Incorpore atividades de Task-Based Learning para fortalecer a área de ${formDat
       {/* COMPETENCIES TAB */}
       {activeTab === 'competencies' && (
         <div style={styles.card}>
-          <h2 style={{ color: '#2c1a0e', fontFamily: '"Playfair Display", Georgia, serif', marginTop: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <h2 style={{ color: '#2c1a0e', fontFamily: "'Fraunces', Georgia, serif", marginTop: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <i className="ti ti-target" style={{ color: '#8b5e3c' }} /> Matriz de Auto-avaliação Docente
           </h2>
           <p style={{ color: '#7a5c42', marginBottom: '2rem' }}>

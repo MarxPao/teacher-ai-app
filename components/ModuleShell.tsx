@@ -34,17 +34,18 @@ export default function ModuleShell({
       <div style={{ marginBottom: 40, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div>
           <h1 suppressHydrationWarning style={{ 
-            fontFamily: "'Playfair Display', serif", 
-            fontSize: 36, 
+            fontFamily: "'Fraunces', Georgia, serif", 
+            fontSize: 34, 
             fontWeight: 600, 
-            color: '#073642', 
-            fontStyle: 'italic', 
-            letterSpacing: '-0.5px' 
+            color: '#2c1a0e', 
+            fontStyle: 'normal',
+            letterSpacing: '-0.5px',
+            margin: 0
           }}>
             {title}
           </h1>
           {subtitle && (
-            <p suppressHydrationWarning style={{ color: '#93a1a1', fontSize: 15, marginTop: 6, fontWeight: 300 }}>
+            <p suppressHydrationWarning style={{ color: '#a08060', fontSize: 14, marginTop: 6, fontWeight: 400, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
               {subtitle}
             </p>
           )}

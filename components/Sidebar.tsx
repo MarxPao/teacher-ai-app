@@ -10,7 +10,7 @@ const NAV: Section[] = [
     { key: 'dashboard', label: 'Início', icon: 'ti-home-2' },
   ]},
   { label: 'Organização', items: [
-    { key: 'organization',   label: 'Escolas',               icon: 'ti-building-school' },
+    { key: 'organization',   label: 'Escolas',               icon: 'ti-building-community' },
     { key: 'classes',        label: 'Turmas',                icon: 'ti-school' },
     { key: 'students',       label: 'Alunos',                icon: 'ti-user-circle' },
     { key: 'privatetutoring',label: 'Alunos Particulares',   icon: 'ti-user-dollar' },
@@ -98,36 +98,36 @@ export default function Sidebar({ active, onNavigate }: Props) {
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       style={{
-        width: isExpanded ? 275 : 68,
+        width: isExpanded ? 260 : 64,
         flexShrink: 0,
         height: '100vh',
-        overflowY: 'scroll',
+        overflowY: 'auto',
         overflowX: 'hidden',
-        scrollbarGutter: 'stable',
-        background: 'linear-gradient(180deg, #3d2510 0%, #2c1a0e 65%, #190f09 100%)',
-        boxShadow: isExpanded ? '6px 0 32px rgba(28,17,10,0.35)' : '2px 0 12px rgba(28,17,10,0.18)',
+        background: 'linear-gradient(180deg, #2e1a0c 0%, #231408 100%)',
+        boxShadow: isExpanded
+          ? '4px 0 24px rgba(28,17,10,0.28)'
+          : '2px 0 8px rgba(28,17,10,0.15)',
         display: 'flex',
         flexDirection: 'column',
-        padding: isExpanded ? '0 6px 24px 12px' : '0 4px 24px 6px',
+        padding: isExpanded ? '0 8px 20px 10px' : '0 4px 20px 4px',
         gap: 0,
         zIndex: 50,
-        transition: 'width 0.28s cubic-bezier(0.16, 1, 0.3, 1), padding 0.28s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.28s ease',
+        transition: 'width 0.24s cubic-bezier(0.16, 1, 0.3, 1), padding 0.24s ease, box-shadow 0.24s ease',
       }}
     >
-      {/* Brand & Pin Action */}
+      {/* Brand & Pin */}
       <div style={{
-        padding: isExpanded ? '20px 10px 16px' : '18px 4px 14px',
-        borderBottom: '1px solid rgba(255,220,170,0.1)',
-        marginBottom: 14,
+        padding: isExpanded ? '18px 8px 14px' : '16px 0 12px',
+        borderBottom: '1px solid rgba(255,220,170,0.08)',
+        marginBottom: 12,
         position: 'sticky',
         top: 0,
-        background: 'linear-gradient(180deg, #3d2510 0%, #3d2510 90%, rgba(61,37,16,0.95) 100%)',
-        backdropFilter: 'blur(8px)',
+        background: '#2e1a0c',
         zIndex: 10,
         display: 'flex',
         flexDirection: 'column',
         alignItems: isExpanded ? 'flex-start' : 'center',
-        transition: 'all 0.28s ease',
+        transition: 'all 0.24s ease',
       }}>
         <div style={{
           display: 'flex',
@@ -137,11 +137,11 @@ export default function Sidebar({ active, onNavigate }: Props) {
         }}>
           {isExpanded ? (
             <div style={{
-              fontFamily: "'Fraunces', 'Playfair Display', Georgia, serif",
-              fontSize: 22,
+              fontFamily: "var(--font-display, 'Fraunces', Georgia, serif)",
+              fontSize: 20,
               fontWeight: 700,
               color: '#fdf8f2',
-              letterSpacing: '-0.4px',
+              letterSpacing: '-0.3px',
               lineHeight: 1.1,
               display: 'flex',
               alignItems: 'center',
@@ -150,48 +150,51 @@ export default function Sidebar({ active, onNavigate }: Props) {
             }}>
               <span>Teacher</span>
               <span style={{
-                color: '#e2a355',
-                background: 'rgba(226,163,85,0.18)',
-                padding: '2px 8px',
-                borderRadius: 6,
-                fontSize: 16,
-                border: '1px solid rgba(226,163,85,0.3)',
+                color: '#c4834a',
+                background: 'rgba(196,131,74,0.15)',
+                padding: '1px 7px',
+                borderRadius: 5,
+                fontSize: 14,
+                fontWeight: 700,
+                border: '1px solid rgba(196,131,74,0.25)',
+                fontFamily: "var(--font-sans, 'Plus Jakarta Sans', sans-serif)",
+                letterSpacing: '0.5px',
               }}>AI</span>
             </div>
           ) : (
             <div
-              title="Teacher AI (Passe o mouse para expandir o menu)"
+              title="Teacher AI"
               style={{
-                fontFamily: "'Fraunces', 'Playfair Display', Georgia, serif",
-                fontSize: 18,
+                fontFamily: "var(--font-display, 'Fraunces', Georgia, serif)",
+                fontSize: 16,
                 fontWeight: 800,
-                color: '#e2a355',
-                background: 'rgba(226,163,85,0.18)',
-                border: '1.5px solid rgba(226,163,85,0.35)',
-                width: 38,
-                height: 38,
-                borderRadius: 10,
+                color: '#c4834a',
+                background: 'rgba(196,131,74,0.12)',
+                border: '1px solid rgba(196,131,74,0.22)',
+                width: 36,
+                height: 36,
+                borderRadius: 8,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
               }}
             >
               T
             </div>
           )}
 
-          {/* Pin/Unpin Toggle */}
           {isExpanded && (
             <button
               onClick={togglePin}
-              title={isPinned ? "Desafixar menu (Modo Retrátil no Hover)" : "Fixar menu na tela"}
+              title={isPinned ? 'Desafixar menu' : 'Fixar menu'}
               style={{
-                background: isPinned ? 'rgba(226,163,85,0.25)' : 'rgba(255,255,255,0.06)',
-                border: isPinned ? '1px solid #e2a355' : '1px solid rgba(255,255,255,0.1)',
-                color: isPinned ? '#e2a355' : 'rgba(212,180,140,0.6)',
+                background: isPinned ? 'rgba(196,131,74,0.18)' : 'transparent',
+                border: isPinned
+                  ? '1px solid rgba(196,131,74,0.35)'
+                  : '1px solid rgba(255,255,255,0.08)',
+                color: isPinned ? '#c4834a' : 'rgba(196,160,120,0.5)',
                 borderRadius: 6,
-                padding: '4px 7px',
+                padding: '4px 6px',
                 cursor: 'pointer',
                 fontSize: 12,
                 display: 'flex',
@@ -201,20 +204,20 @@ export default function Sidebar({ active, onNavigate }: Props) {
               }}
             >
               <i className={isPinned ? 'ti ti-pinned' : 'ti ti-pin'} style={{ fontSize: 13 }} />
-              <span style={{ fontSize: 10, fontWeight: 700 }}>{isPinned ? 'Fixada' : 'Auto'}</span>
+              <span style={{ fontSize: 10, fontWeight: 600 }}>{isPinned ? 'Fixada' : 'Auto'}</span>
             </button>
           )}
         </div>
 
         {isExpanded && (
           <div style={{
-            fontSize: 9.5,
-            color: 'rgba(212,180,140,0.6)',
-            marginTop: 6,
+            fontSize: 9,
+            color: 'rgba(196,160,120,0.45)',
+            marginTop: 5,
             fontWeight: 600,
-            letterSpacing: '1.6px',
+            letterSpacing: '1.4px',
             textTransform: 'uppercase',
-            fontFamily: "'Plus Jakarta Sans', system-ui, sans-serif",
+            fontFamily: "var(--font-sans, 'Plus Jakarta Sans', sans-serif)",
             whiteSpace: 'nowrap',
           }}>
             Assistente Pedagógico
@@ -225,16 +228,16 @@ export default function Sidebar({ active, onNavigate }: Props) {
       {/* Nav sections */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 0 }}>
         {NAV.map((section) => (
-          <div key={section.label} style={{ marginBottom: section.label ? 4 : 0 }}>
+          <div key={section.label} style={{ marginBottom: section.label ? 2 : 0 }}>
             {section.label && isExpanded && (
               <div style={{
                 fontSize: 9,
                 fontWeight: 700,
                 textTransform: 'uppercase',
-                letterSpacing: '2px',
-                color: 'rgba(212,180,140,0.45)',
-                padding: '12px 10px 4px',
-                fontFamily: "'Plus Jakarta Sans', system-ui, sans-serif",
+                letterSpacing: '1.8px',
+                color: 'rgba(196,160,120,0.38)',
+                padding: '12px 8px 4px',
+                fontFamily: "var(--font-sans, 'Plus Jakarta Sans', sans-serif)",
                 whiteSpace: 'nowrap',
               }}>
                 {section.label}
@@ -259,19 +262,19 @@ export default function Sidebar({ active, onNavigate }: Props) {
       {/* Footer */}
       {isExpanded && (
         <div style={{
-          marginTop: 16,
-          padding: '12px 10px 0',
-          borderTop: '1px solid rgba(255,220,170,0.08)',
+          marginTop: 12,
+          padding: '10px 8px 0',
+          borderTop: '1px solid rgba(255,220,170,0.07)',
         }}>
           <div style={{
-            fontSize: 9.5,
-            color: 'rgba(212,180,140,0.4)',
-            letterSpacing: '0.5px',
-            fontFamily: "'Plus Jakarta Sans', system-ui, sans-serif",
+            fontSize: 9,
+            color: 'rgba(196,160,120,0.35)',
+            letterSpacing: '0.4px',
+            fontFamily: "var(--font-sans, 'Plus Jakarta Sans', sans-serif)",
             fontWeight: 500,
             whiteSpace: 'nowrap',
           }}>
-            TeacherAI v2.0 · Enterprise
+            TeacherAI v2.0
           </div>
         </div>
       )}
@@ -298,47 +301,45 @@ function SidebarItem({ item, isActive, isExpanded, onNavigate }: {
           display: 'flex',
           alignItems: 'center',
           justifyContent: isExpanded ? 'flex-start' : 'center',
-          gap: isExpanded ? 11 : 0,
+          gap: isExpanded ? 10 : 0,
           width: '100%',
-          padding: isExpanded ? '8.5px 12px' : '9px 0',
-          borderRadius: 10,
+          padding: isExpanded ? '7px 10px' : '8px 0',
+          borderRadius: 8,
           border: 'none',
           background: isActive
-            ? 'linear-gradient(135deg, rgba(253,248,242,0.16) 0%, rgba(253,248,242,0.08) 100%)'
+            ? 'rgba(253,248,242,0.10)'
             : 'transparent',
-          color: isActive ? '#ffffff' : 'rgba(212,180,140,0.72)',
+          color: isActive ? '#fdf8f2' : 'rgba(196,160,120,0.65)',
           fontSize: 13,
-          fontWeight: isActive ? 600 : 500,
+          fontWeight: isActive ? 600 : 400,
           cursor: 'pointer',
           textAlign: 'left',
-          transition: 'all 0.18s cubic-bezier(0.16, 1, 0.3, 1)',
-          boxShadow: isActive
-            ? '0 4px 14px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.15), inset 0 0 0 1px rgba(253,248,242,0.18)'
-            : 'none',
-          marginBottom: 2,
-          borderLeft: isExpanded && isActive ? '3px solid #e2a355' : '3px solid transparent',
+          transition: 'all 0.15s ease',
+          borderLeft: isExpanded && isActive
+            ? '2px solid rgba(196,131,74,0.65)'
+            : '2px solid transparent',
+          marginBottom: 1,
           lineHeight: 1.25,
-          fontFamily: "'Plus Jakarta Sans', system-ui, sans-serif",
+          fontFamily: "var(--font-sans, 'Plus Jakarta Sans', sans-serif)",
         }}
       >
-        {/* Icon Wrapper */}
+        {/* Icon */}
         <div style={{
-          width: 28,
-          height: 28,
-          borderRadius: 8,
+          width: 26,
+          height: 26,
+          borderRadius: 6,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          background: isActive ? 'rgba(226,163,85,0.22)' : 'transparent',
-          transition: 'all 0.18s ease',
+          background: isActive ? 'rgba(196,131,74,0.15)' : 'transparent',
+          transition: 'background 0.15s ease',
           flexShrink: 0,
         }}>
           <i
             className={`ti ${item.icon}`}
             style={{
-              fontSize: 19,
-              color: isActive ? '#e2a355' : 'rgba(226,163,85,0.68)',
-              flexShrink: 0,
+              fontSize: 17,
+              color: isActive ? '#c4834a' : 'rgba(196,131,74,0.60)',
               lineHeight: 1,
             }}
           />
@@ -354,46 +355,29 @@ function SidebarItem({ item, isActive, isExpanded, onNavigate }: {
             {item.label}
           </span>
         )}
-
-        {isExpanded && isActive && (
-          <span style={{
-            width: 6,
-            height: 6,
-            borderRadius: '50%',
-            background: '#e2a355',
-            boxShadow: '0 0 8px rgba(226,163,85,0.8)',
-            flexShrink: 0,
-          }} />
-        )}
       </button>
 
-      {/* Floating Tooltip when collapsed */}
+      {/* Tooltip when collapsed */}
       {!isExpanded && showTooltip && (
         <div style={{
           position: 'fixed',
-          left: 74,
-          top: 'auto',
+          left: 70,
           transform: 'translateY(-30px)',
           background: '#1c110a',
-          color: '#fffcf8',
-          padding: '6px 12px',
-          borderRadius: 8,
+          color: '#fdf8f2',
+          padding: '5px 10px',
+          borderRadius: 6,
           fontSize: 12,
-          fontWeight: 600,
+          fontWeight: 500,
           whiteSpace: 'nowrap',
-          boxShadow: '0 4px 18px rgba(0,0,0,0.4), 0 0 0 1px rgba(226,163,85,0.25)',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.35)',
+          border: '1px solid rgba(255,255,255,0.08)',
           zIndex: 9999,
           pointerEvents: 'none',
-          letterSpacing: '-0.2px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 6,
         }}>
-          <span>{item.label}</span>
-          {isActive && <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#e2a355' }} />}
+          {item.label}
         </div>
       )}
     </div>
   )
 }
-

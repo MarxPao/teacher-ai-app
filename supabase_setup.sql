@@ -167,5 +167,66 @@ CREATE TRIGGER trg_set_updated_at_questions BEFORE UPDATE ON questions FOR EACH 
 DROP TRIGGER IF EXISTS trg_set_updated_at_meeting_diaries ON meeting_diaries;
 CREATE TRIGGER trg_set_updated_at_meeting_diaries BEFORE UPDATE ON meeting_diaries FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+-- ─── TABELA DE ALUNOS PARTICULARES ─────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS private_students (
+  id                 TEXT PRIMARY KEY,
+  name               TEXT NOT NULL,
+  subject            TEXT NOT NULL,
+  guardian_name      TEXT,
+  phone              TEXT,
+  email              TEXT,
+  monthly_fee        NUMERIC(10,2) NOT NULL DEFAULT 0,
+  due_day            INT NOT NULL DEFAULT 10,
+  payment_method     TEXT DEFAULT 'PIX',
+  last_payment_date  TEXT,
+  modality           TEXT NOT NULL DEFAULT 'Online',
+  schedule_info      TEXT,
+  payment_status     TEXT NOT NULL DEFAULT 'em_dia',
+  mastery_percentage INT DEFAULT 75,
+  goals              TEXT,
+  ai_diagnostic      TEXT,
+  roadmap            JSONB DEFAULT '[]',
+  lessons_history    JSONB DEFAULT '[]',
+  grades_history     JSONB DEFAULT '[]',
+  created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+ALTER TABLE private_students ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow anon full access on private_students" ON private_students;
+CREATE POLICY "Allow anon full access on private_students" ON private_students FOR ALL USING (true) WITH CHECK (true);
+
+DROP TRIGGER IF EXISTS trg_set_updated_at_private_students ON private_students;
+CREATE TRIGGER trg_set_updated_at_private_students 
+  BEFORE UPDATE ON private_students 
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- ─── TABELA DE DOCUMENTOS DA BIBLIOTECA (Repository) ──────────────────────
+CREATE TABLE IF NOT EXISTS documents (
+  id          TEXT PRIMARY KEY,
+  title       TEXT NOT NULL,
+  type        TEXT NOT NULL DEFAULT 'Text',
+  category    TEXT,
+  textbook    TEXT,
+  content     TEXT NOT NULL DEFAULT '',
+  file_url    TEXT,
+  word_count  INTEGER,
+  chunk_count INTEGER,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_documents_updated_at ON documents(updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_documents_textbook ON documents(textbook);
+
+ALTER TABLE documents ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow anon full access on documents" ON documents;
+CREATE POLICY "Allow anon full access on documents" ON documents FOR ALL USING (true) WITH CHECK (true);
+
+DROP TRIGGER IF EXISTS trg_set_updated_at_documents ON documents;
+CREATE TRIGGER trg_set_updated_at_documents
+  BEFORE UPDATE ON documents
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
 -- ─── VERIFICAÇÃO ─────────────────────────────────────────────────────────────
 SELECT 'Schema do Teacher AI instalado com sucesso no Supabase!' AS status;

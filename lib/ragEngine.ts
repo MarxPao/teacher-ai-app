@@ -218,12 +218,12 @@ export function buildRagPromptContext(chunks: DocumentChunk[]): string {
 
   const formatted = chunks.map((c, i) => `
 === CONTEXTO DA BIBLIOTECA DA ESCOLA #${i + 1} ===
-LIVRO: ${c.docTitle} (${c.type})
+LIVRO/MATERIAL: ${c.docTitle} (${c.type})
 UNIDADE/SEÇÃO: ${c.unitTitle}
 ${c.grammarFocus.length > 0 ? `FOCO GRAMATICAL: ${c.grammarFocus.join(', ')}\n` : ''}
-TRECHO DO MATERIAL:
+CONTEÚDO DE REFERÊNCIA:
 ${c.content}
 `).join('\n')
 
-  return `\n=== MATERIAIS RAG DA BIBLIOTECA DIGITAL DA ESCOLA ===\nO conteúdo abaixo deve ser usado como BASE PRINCIPAL para gerar os textos, questões e exercícios:\n${formatted}\n`
+  return `\n=== MATERIAIS RAG DA BIBLIOTECA DIGITAL DA ESCOLA ===\nO conteúdo abaixo deve ser usado como BASE TEMÁTICA, VOCABULAR E GRAMATICAL para criar questões 100% INÉDITAS E ORIGINAIS. NUNCA copie ou reproduza questões prontas do material. Elabore novos itens avaliativos baseados nos tópicos do conteúdo:\n${formatted}\n`
 }

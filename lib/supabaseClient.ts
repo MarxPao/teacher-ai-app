@@ -6,17 +6,36 @@
 export interface SupabaseConfig {
   url: string
   anonKey: string
-  serviceKey: string
+  serviceKey?: string
 }
 
 function getSupabaseConfig(): SupabaseConfig | null {
+  const envUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const envAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+  if (envUrl && envAnonKey) {
+    return { url: envUrl, anonKey: envAnonKey }
+  }
+
   try {
+    if (typeof window === 'undefined') return null
     const s = localStorage.getItem('teacher_supabase_config')
-    return s ? JSON.parse(s) : null
+    if (!s) return null
+    const parsed = JSON.parse(s)
+    // Sanitizar localStorage removendo a serviceKey se estiver presente no cliente
+    if (parsed.serviceKey) {
+      delete parsed.serviceKey
+      localStorage.setItem('teacher_supabase_config', JSON.stringify(parsed))
+    }
+    return parsed
   } catch { return null }
 }
 
 function getActiveKey(cfg: SupabaseConfig): string {
+  // No navegador, NUNCA usar serviceKey por motivos de segurança (RLS bypass)
+  if (typeof window !== 'undefined') {
+    return cfg.anonKey || ''
+  }
   return cfg.serviceKey || cfg.anonKey || ''
 }
 
@@ -134,6 +153,29 @@ export async function syncToSupabase(payload?: Record<string, unknown>): Promise
     if (Array.isArray(syncPayload['teacher_repository'])) {
       promises.push(upsertRelational('documents', syncPayload['teacher_repository'].map((doc: any) => ({
         id: String(doc.id), title: String(doc.title || ''), type: String(doc.type || 'Text'), category: doc.category || null, textbook: doc.textbook || null, content: String(doc.content || ''), file_url: doc.fileUrl || null
+      }))))
+    }
+    if (Array.isArray(syncPayload['teacher_private_students'])) {
+      promises.push(upsertRelational('private_students', syncPayload['teacher_private_students'].map((s: any) => ({
+        id: String(s.id),
+        name: String(s.name),
+        subject: String(s.subject),
+        guardian_name: s.guardianName || null,
+        phone: s.phone || null,
+        email: s.email || null,
+        monthly_fee: s.monthlyFee || 0,
+        due_day: s.dueDay || 10,
+        payment_method: s.paymentMethod || 'PIX',
+        last_payment_date: s.lastPaymentDate || null,
+        modality: s.modality || 'Online',
+        schedule_info: s.scheduleInfo || '',
+        payment_status: s.paymentStatus || 'em_dia',
+        mastery_percentage: s.masteryPercentage || 75,
+        goals: s.goals || null,
+        ai_diagnostic: s.aiDiagnostic || null,
+        roadmap: s.roadmap || [],
+        lessons_history: s.lessonsHistory || [],
+        grades_history: s.gradesHistory || []
       }))))
     }
 
@@ -362,5 +404,225 @@ export async function testSupabaseConnection(url: string, key: string): Promise<
     return res.ok ? { ok: true } : { ok: false, error: `HTTP ${res.status}` }
   } catch (e: unknown) {
     return { ok: false, error: e instanceof Error ? e.message : 'Erro de rede' }
+  }
+}
+
+/**
+ * Busca todos os alunos particulares cadastrados no Supabase Cloud.
+ */
+export async function fetchPrivateStudentsFromSupabase(): Promise<any[]> {
+  const cfg = getSupabaseConfig()
+  if (!cfg?.url) return []
+  const apiKey = getActiveKey(cfg)
+  if (!apiKey) return []
+
+  try {
+    const res = await fetch(`${cfg.url}/rest/v1/private_students?select=*&order=created_at.desc`, {
+      headers: { 'apikey': apiKey, 'Authorization': `Bearer ${apiKey}` }
+    })
+    if (!res.ok) return []
+    const rows = await res.json()
+    return rows.map((r: any) => ({
+      id: r.id,
+      name: r.name,
+      subject: r.subject,
+      guardianName: r.guardian_name || undefined,
+      phone: r.phone || undefined,
+      email: r.email || undefined,
+      monthlyFee: Number(r.monthly_fee || 0),
+      dueDay: Number(r.due_day || 10),
+      paymentMethod: r.payment_method || 'PIX',
+      lastPaymentDate: r.last_payment_date || undefined,
+      modality: r.modality || 'Online',
+      scheduleInfo: r.schedule_info || '',
+      paymentStatus: r.payment_status || 'em_dia',
+      masteryPercentage: Number(r.mastery_percentage || 75),
+      goals: r.goals || undefined,
+      aiDiagnostic: r.ai_diagnostic || undefined,
+      roadmap: Array.isArray(r.roadmap) ? r.roadmap : [],
+      lessonsHistory: Array.isArray(r.lessons_history) ? r.lessons_history : [],
+      gradesHistory: Array.isArray(r.grades_history) ? r.grades_history : []
+    }))
+  } catch (e: unknown) {
+    return []
+  }
+}
+
+/**
+ * Salva/Atualiza um aluno particular diretamente no Supabase Cloud.
+ */
+export async function upsertPrivateStudentToSupabase(student: any): Promise<{ ok: boolean; error?: string }> {
+  const cfg = getSupabaseConfig()
+  if (!cfg?.url) return { ok: true }
+  const apiKey = getActiveKey(cfg)
+  if (!apiKey) return { ok: true }
+
+  const rowPayload = {
+    id: String(student.id),
+    name: String(student.name),
+    subject: String(student.subject),
+    guardian_name: student.guardianName || null,
+    phone: student.phone || null,
+    email: student.email || null,
+    monthly_fee: student.monthlyFee || 0,
+    due_day: student.dueDay || 10,
+    payment_method: student.paymentMethod || 'PIX',
+    last_payment_date: student.lastPaymentDate || null,
+    modality: student.modality || 'Online',
+    schedule_info: student.scheduleInfo || '',
+    payment_status: student.paymentStatus || 'em_dia',
+    mastery_percentage: student.masteryPercentage || 75,
+    goals: student.goals || null,
+    ai_diagnostic: student.aiDiagnostic || null,
+    roadmap: student.roadmap || [],
+    lessons_history: student.lessonsHistory || [],
+    grades_history: student.gradesHistory || [],
+    updated_at: new Date().toISOString()
+  }
+
+  try {
+    const res = await fetch(`${cfg.url}/rest/v1/private_students`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': apiKey,
+        'Authorization': `Bearer ${apiKey}`,
+        'Prefer': 'resolution=merge-duplicates'
+      },
+      body: JSON.stringify(rowPayload)
+    })
+    return { ok: res.ok }
+  } catch (e: unknown) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Erro de rede' }
+  }
+}
+
+/**
+ * Exclui um aluno particular no Supabase Cloud.
+ */
+export async function deletePrivateStudentFromSupabase(studentId: string): Promise<boolean> {
+  const cfg = getSupabaseConfig()
+  if (!cfg?.url) return false
+  const apiKey = getActiveKey(cfg)
+  if (!apiKey) return false
+
+  try {
+    const res = await fetch(`${cfg.url}/rest/v1/private_students?id=eq.${encodeURIComponent(studentId)}`, {
+      method: 'DELETE',
+      headers: { 'apikey': apiKey, 'Authorization': `Bearer ${apiKey}` }
+    })
+    return res.ok
+  } catch {
+    return false
+  }
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BIBLIOTECA DE CONTEÚDO — Documentos (Repository)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface SupabaseDocument {
+  id: string
+  title: string
+  type: string
+  category: string | null
+  textbook: string | null
+  content: string
+  file_url: string | null
+  word_count: number | null
+  chunk_count: number | null
+  created_at?: string
+}
+
+/**
+ * Busca todos os documentos da biblioteca no Supabase (exclui presets fixos).
+ */
+export async function fetchDocumentsFromSupabase(): Promise<SupabaseDocument[]> {
+  const cfg = getSupabaseConfig()
+  if (!cfg?.url) return []
+  const apiKey = getActiveKey(cfg)
+  if (!apiKey) return []
+
+  try {
+    const res = await fetch(
+      `${cfg.url}/rest/v1/documents?select=*&order=created_at.desc&limit=200`,
+      {
+        headers: {
+          'apikey': apiKey,
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        }
+      }
+    )
+    if (!res.ok) return []
+    const data: SupabaseDocument[] = await res.json()
+    return Array.isArray(data) ? data : []
+  } catch {
+    return []
+  }
+}
+
+/**
+ * Insere ou atualiza um documento da biblioteca no Supabase.
+ */
+export async function upsertDocumentToSupabase(
+  doc: SupabaseDocument
+): Promise<{ ok: boolean; error?: string }> {
+  const cfg = getSupabaseConfig()
+  if (!cfg?.url) return { ok: false, error: 'Supabase não configurado.' }
+  const apiKey = getActiveKey(cfg)
+  if (!apiKey) return { ok: false, error: 'Chave ausente.' }
+
+  try {
+    const res = await fetch(`${cfg.url}/rest/v1/documents`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': apiKey,
+        'Authorization': `Bearer ${apiKey}`,
+        'Prefer': 'resolution=merge-duplicates',
+      },
+      body: JSON.stringify({
+        id: doc.id,
+        title: doc.title,
+        type: doc.type,
+        category: doc.category,
+        textbook: doc.textbook,
+        content: doc.content,
+        file_url: doc.file_url,
+        word_count: doc.word_count,
+        chunk_count: doc.chunk_count,
+      }),
+    })
+    return { ok: res.ok }
+  } catch (e: unknown) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Erro de rede' }
+  }
+}
+
+/**
+ * Remove um documento da biblioteca no Supabase.
+ */
+export async function deleteDocumentFromSupabase(docId: string): Promise<boolean> {
+  const cfg = getSupabaseConfig()
+  if (!cfg?.url) return false
+  const apiKey = getActiveKey(cfg)
+  if (!apiKey) return false
+
+  try {
+    const res = await fetch(
+      `${cfg.url}/rest/v1/documents?id=eq.${encodeURIComponent(docId)}`,
+      {
+        method: 'DELETE',
+        headers: {
+          'apikey': apiKey,
+          'Authorization': `Bearer ${apiKey}`,
+        }
+      }
+    )
+    return res.ok
+  } catch {
+    return false
   }
 }

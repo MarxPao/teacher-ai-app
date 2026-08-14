@@ -9,247 +9,247 @@ interface ClassRecord { id: string; name: string; schoolId: string }
 interface Student { id: string; name: string; classId: string; schoolId: string; grades: Record<string, string> }
 
 export default function Gradebook() {
-  const [schools, setSchools] = useState<School[]>([])
-  const [classes, setClasses] = useState<ClassRecord[]>([])
-  const [students, setStudents] = useState<Student[]>([])
-  const [cols, setCols] = useState<string[]>([])
-  
-  const [selectedStudent, setSelectedStudent] = useState<Student | null>(null)
-  const [filterSchool, setFilterSchool] = useState<string>('all')
-  const [filterClass, setFilterClass] = useState<string>('all')
-  const [searchTerm, setSearchTerm] = useState('')
-  const [viewMode, setViewMode] = useState<'table' | 'cards'>('table')
+ const [schools, setSchools] = useState<School[]>([])
+ const [classes, setClasses] = useState<ClassRecord[]>([])
+ const [students, setStudents] = useState<Student[]>([])
+ const [cols, setCols] = useState<string[]>([])
+ 
+ const [selectedStudent, setSelectedStudent] = useState<Student | null>(null)
+ const [filterSchool, setFilterSchool] = useState<string>('all')
+ const [filterClass, setFilterClass] = useState<string>('all')
+ const [searchTerm, setSearchTerm] = useState('')
+ const [viewMode, setViewMode] = useState<'table' | 'cards'>('table')
 
-  useEffect(() => {
-    const sSchools = localStorage.getItem('teacher_schools')
-    const sClasses = localStorage.getItem('teacher_classes')
-    const sStudents = localStorage.getItem('teacher_students')
-    const sGbConfig = localStorage.getItem('teacher_gbConfig')
+ useEffect(() => {
+ const sSchools = localStorage.getItem('teacher_schools')
+ const sClasses = localStorage.getItem('teacher_classes')
+ const sStudents = localStorage.getItem('teacher_students')
+ const sGbConfig = localStorage.getItem('teacher_gbConfig')
 
-    setSchools(sSchools ? JSON.parse(sSchools) : [])
-    setClasses(sClasses ? JSON.parse(sClasses) : [])
-    const parsedStudents = sStudents ? JSON.parse(sStudents) : []
-    setStudents(parsedStudents.map((s: any) => ({ ...s, grades: s.grades || {} })))
-    setCols(sGbConfig ? JSON.parse(sGbConfig).cols : ['Teste 1', 'Teste 2', 'Participação'])
-  }, [])
+ setSchools(sSchools ? JSON.parse(sSchools) : [])
+ setClasses(sClasses ? JSON.parse(sClasses) : [])
+ const parsedStudents = sStudents ? JSON.parse(sStudents) : []
+ setStudents(parsedStudents.map((s: any) => ({ ...s, grades: s.grades || {} })))
+ setCols(sGbConfig ? JSON.parse(sGbConfig).cols : ['Teste 1', 'Teste 2', 'Participação'])
+ }, [])
 
-  const sync = (newStudents: Student[]) => {
-    setStudents(newStudents)
-    localStorage.setItem('teacher_students', JSON.stringify(newStudents))
-  }
+ const sync = (newStudents: Student[]) => {
+ setStudents(newStudents)
+ localStorage.setItem('teacher_students', JSON.stringify(newStudents))
+ }
 
-  const updateStudentField = (sid: string, field: keyof Student, val: string) => {
-    const updated = students.map(s => s.id === sid ? { ...s, [field]: val } : s)
-    sync(updated)
-  }
+ const updateStudentField = (sid: string, field: keyof Student, val: string) => {
+ const updated = students.map(s => s.id === sid ? { ...s, [field]: val } : s)
+ sync(updated)
+ }
 
-  const updateGrade = (sid: string, col: string, val: string) => {
-    const updated = students.map(s => s.id === sid ? { ...s, grades: { ...s.grades, [col]: val } } : s)
-    sync(updated)
-  }
+ const updateGrade = (sid: string, col: string, val: string) => {
+ const updated = students.map(s => s.id === sid ? { ...s, grades: { ...s.grades, [col]: val } } : s)
+ sync(updated)
+ }
 
-  const renameCol = (idx: number, newName: string) => {
-    const oldName = cols[idx]
-    if (oldName === newName) return
+ const renameCol = (idx: number, newName: string) => {
+ const oldName = cols[idx]
+ if (oldName === newName) return
 
-    const newCols = [...cols]
-    newCols[idx] = newName
-    setCols(newCols)
-    localStorage.setItem('teacher_gbConfig', JSON.stringify({ cols: newCols }))
-    
-    const updatedStudents = students.map(s => {
-      if (s.grades[oldName] !== undefined) {
-        const newGrades = { ...s.grades, [newName]: s.grades[oldName] }
-        delete newGrades[oldName]
-        return { ...s, grades: newGrades }
-      }
-      return s
-    })
-    
-    setStudents(updatedStudents)
-    localStorage.setItem('teacher_students', JSON.stringify(updatedStudents))
-  }
+ const newCols = [...cols]
+ newCols[idx] = newName
+ setCols(newCols)
+ localStorage.setItem('teacher_gbConfig', JSON.stringify({ cols: newCols }))
+ 
+ const updatedStudents = students.map(s => {
+ if (s.grades[oldName] !== undefined) {
+ const newGrades = { ...s.grades, [newName]: s.grades[oldName] }
+ delete newGrades[oldName]
+ return { ...s, grades: newGrades }
+ }
+ return s
+ })
+ 
+ setStudents(updatedStudents)
+ localStorage.setItem('teacher_students', JSON.stringify(updatedStudents))
+ }
 
-  const deleteCol = (idx: number) => {
-    const colName = cols[idx]
-    if (!confirm(`Deseja excluir a coluna "${colName}"? As notas desta coluna serão removidas.`)) return
+ const deleteCol = (idx: number) => {
+ const colName = cols[idx]
+ if (!confirm(`Deseja excluir a coluna "${colName}"? As notas desta coluna serão removidas.`)) return
 
-    const newCols = cols.filter((_, i) => i !== idx)
-    setCols(newCols)
-    localStorage.setItem('teacher_gbConfig', JSON.stringify({ cols: newCols }))
+ const newCols = cols.filter((_, i) => i !== idx)
+ setCols(newCols)
+ localStorage.setItem('teacher_gbConfig', JSON.stringify({ cols: newCols }))
 
-    const updatedStudents = students.map(s => {
-      const newGrades = { ...s.grades }
-      delete newGrades[colName]
-      return { ...s, grades: newGrades }
-    })
-    setStudents(updatedStudents)
-    localStorage.setItem('teacher_students', JSON.stringify(updatedStudents))
-  }
+ const updatedStudents = students.map(s => {
+ const newGrades = { ...s.grades }
+ delete newGrades[colName]
+ return { ...s, grades: newGrades }
+ })
+ setStudents(updatedStudents)
+ localStorage.setItem('teacher_students', JSON.stringify(updatedStudents))
+ }
 
-  const addCol = () => {
-    const newCols = [...cols, `Nova Coluna ${cols.length + 1}`]
-    setCols(newCols)
-    localStorage.setItem('teacher_gbConfig', JSON.stringify({ cols: newCols }))
-  }
+ const addCol = () => {
+ const newCols = [...cols, `Nova Coluna ${cols.length + 1}`]
+ setCols(newCols)
+ localStorage.setItem('teacher_gbConfig', JSON.stringify({ cols: newCols }))
+ }
 
-  const calcAvg = (s: Student) => {
-    const vals = cols.map(c => parseFloat(s.grades[c]?.replace(',', '.'))).filter(n => !isNaN(n))
-    return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null
-  }
+ const calcAvg = (s: Student) => {
+ const vals = cols.map(c => parseFloat(s.grades[c]?.replace(',', '.'))).filter(n => !isNaN(n))
+ return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null
+ }
 
-  const gradeColor = (n: number | null) => {
-    if (n === null) return { text: '#93a1a1', bg: '#eee8d5', label: '—' }
-    if (n >= 9) return { text: '#859900', bg: '#eef2d5', label: n.toFixed(1) }
-    if (n >= 7) return { text: '#b58900', bg: '#f5edcc', label: n.toFixed(1) }
-    if (n >= 5) return { text: '#cb4b16', bg: '#fce9e0', label: n.toFixed(1) }
-    return { text: '#dc322f', bg: '#fce8e8', label: n.toFixed(1) }
-  }
+ const gradeColor = (n: number | null) => {
+ if (n === null) return { text: '#93a1a1', bg: '#eee8d5', label: '' }
+ if (n >= 9) return { text: '#859900', bg: '#eef2d5', label: n.toFixed(1) }
+ if (n >= 7) return { text: '#b58900', bg: '#f5edcc', label: n.toFixed(1) }
+ if (n >= 5) return { text: '#cb4b16', bg: '#fce9e0', label: n.toFixed(1) }
+ return { text: '#dc322f', bg: '#fce8e8', label: n.toFixed(1) }
+ }
 
-  const filtered = students.filter(s => {
-    const matchSchool = filterSchool === 'all' || s.schoolId === filterSchool || (classes.find(c => c.id === s.classId)?.schoolId === filterSchool)
-    const matchClass = filterClass === 'all' || s.classId === filterClass
-    const matchSearch = s.name.toLowerCase().includes(searchTerm.toLowerCase())
-    return matchSchool && matchClass && matchSearch
-  })
+ const filtered = students.filter(s => {
+ const matchSchool = filterSchool === 'all' || s.schoolId === filterSchool || (classes.find(c => c.id === s.classId)?.schoolId === filterSchool)
+ const matchClass = filterClass === 'all' || s.classId === filterClass
+ const matchSearch = s.name.toLowerCase().includes(searchTerm.toLowerCase())
+ return matchSchool && matchClass && matchSearch
+ })
 
-  return (
-    <div style={{ display: 'flex', height: '100%', overflow: 'hidden', background: '#fdf6e3' }}>
-      <div style={{ flex: 1, height: '100%', overflowY: 'auto' }}>
-        <ModuleShell 
-          title="Caderneta de Notas Editável"
-          subtitle="Organizada por Escola e Turma. Clique em qualquer caixa para editar notas ou nomes."
-          maxWidth="100%"
-          actions={
-            <div style={{ display: 'flex', gap: 12 }}>
-              <input placeholder="🔍 Buscar aluno..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} style={SearchInS} />
-              <button onClick={addCol} style={ActionBtn}>+ Nova Coluna</button>
-              <button onClick={() => setViewMode(viewMode === 'table' ? 'cards' : 'table')} style={ToggleBtn}>
-                {viewMode === 'table' ? 'Visualização em Cards' : 'Visualização em Tabela'}
-              </button>
-            </div>
-          }
-        >
-          {/* Filtros por Escola & Turma */}
-          <div style={{ display: 'flex', gap: 16, marginBottom: 20, alignItems: 'center', flexWrap: 'wrap', background: '#fffcf8', padding: '12px 16px', borderRadius: 16, border: '1px solid rgba(139,115,85,0.15)' }}>
-            <div>
-              <span style={{ fontSize: 12, fontWeight: 700, color: '#8b5e3c', marginRight: 8 }}>🏫 Escola:</span>
-              <select
-                value={filterSchool}
-                onChange={e => { setFilterSchool(e.target.value); setFilterClass('all') }}
-                style={{ padding: '7px 12px', borderRadius: 10, border: '1px solid rgba(139,115,85,0.2)', background: '#fff', fontSize: 13, color: '#2c1a0e', outline: 'none', fontWeight: 600 }}
-              >
-                <option value="all">Todas as Escolas</option>
-                {schools.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-              </select>
-            </div>
+ return (
+ <div style={{ display: 'flex', height: '100%', overflow: 'hidden', background: '#fdf6e3' }}>
+ <div style={{ flex: 1, height: '100%', overflowY: 'auto' }}>
+ <ModuleShell 
+ title="Caderneta de Notas Editável"
+ subtitle="Organizada por Escola e Turma. Clique em qualquer caixa para editar notas ou nomes."
+ maxWidth="100%"
+ actions={
+ <div style={{ display: 'flex', gap: 12 }}>
+ <input placeholder=" Buscar aluno..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} style={SearchInS} />
+ <button onClick={addCol} style={ActionBtn}>+ Nova Coluna</button>
+ <button onClick={() => setViewMode(viewMode === 'table' ? 'cards' : 'table')} style={ToggleBtn}>
+ {viewMode === 'table' ? 'Visualização em Cards' : 'Visualização em Tabela'}
+ </button>
+ </div>
+ }
+ >
+ {/* Filtros por Escola & Turma */}
+ <div style={{ display: 'flex', gap: 16, marginBottom: 20, alignItems: 'center', flexWrap: 'wrap', background: '#fffcf8', padding: '12px 16px', borderRadius: 16, border: '1px solid rgba(139,115,85,0.15)' }}>
+ <div>
+ <span style={{ fontSize: 12, fontWeight: 700, color: '#8b5e3c', marginRight: 8 }}> Escola:</span>
+ <select
+ value={filterSchool}
+ onChange={e => { setFilterSchool(e.target.value); setFilterClass('all') }}
+ style={{ padding: '7px 12px', borderRadius: 10, border: '1px solid rgba(139,115,85,0.2)', background: '#fff', fontSize: 13, color: '#2c1a0e', outline: 'none', fontWeight: 600 }}
+ >
+ <option value="all">Todas as Escolas</option>
+ {schools.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+ </select>
+ </div>
 
-            <div>
-              <span style={{ fontSize: 12, fontWeight: 700, color: '#8b5e3c', marginRight: 8 }}>👥 Turma:</span>
-              <select
-                value={filterClass}
-                onChange={e => setFilterClass(e.target.value)}
-                style={{ padding: '7px 12px', borderRadius: 10, border: '1px solid rgba(139,115,85,0.2)', background: '#fff', fontSize: 13, color: '#2c1a0e', outline: 'none', fontWeight: 600 }}
-              >
-                <option value="all">Todas as Turmas</option>
-                {classes.filter(c => filterSchool === 'all' || c.schoolId === filterSchool).map(c => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
-            </div>
-          </div>
+ <div>
+ <span style={{ fontSize: 12, fontWeight: 700, color: '#8b5e3c', marginRight: 8 }}> Turma:</span>
+ <select
+ value={filterClass}
+ onChange={e => setFilterClass(e.target.value)}
+ style={{ padding: '7px 12px', borderRadius: 10, border: '1px solid rgba(139,115,85,0.2)', background: '#fff', fontSize: 13, color: '#2c1a0e', outline: 'none', fontWeight: 600 }}
+ >
+ <option value="all">Todas as Turmas</option>
+ {classes.filter(c => filterSchool === 'all' || c.schoolId === filterSchool).map(c => (
+ <option key={c.id} value={c.id}>{c.name}</option>
+ ))}
+ </select>
+ </div>
+ </div>
 
-          {viewMode === 'table' ? (
-            <div style={TableContainer}>
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead>
-                  <tr style={{ background: '#fdf6e3', borderBottom: '2px solid #073642' }}>
-                    <th style={{...ThS, width: 250}}>Nome do Aluno</th>
-                    {cols.map((c, idx) => (
-                      <th key={idx} style={{...ThS, textAlign: 'center', padding: '8px 4px'}}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
-                          <input 
-                            value={c} 
-                            onChange={e => renameCol(idx, e.target.value)} 
-                            style={{ background: 'rgba(181, 137, 0, 0.05)', border: 'none', textAlign: 'center', fontWeight: 800, color: '#b58900', width: '80%', outline: 'none', padding: '6px 4px', borderRadius: 6 }} 
-                          />
-                          <button 
-                            onClick={() => deleteCol(idx)} 
-                            title="Excluir Coluna"
-                            style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, padding: '2px 4px' }}
-                          >
-                            🗑️
-                          </button>
-                        </div>
-                      </th>
-                    ))}
-                    <th style={{...ThS, textAlign: 'right', width: 100}}>Média</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map(s => {
-                    const avg = calcAvg(s); const gc = gradeColor(avg)
-                    return (
-                      <tr key={s.id} style={TrS}>
-                        <td style={{ padding: '8px 16px' }}>
-                          <input 
-                            value={s.name} 
-                            onChange={e => updateStudentField(s.id, 'name', e.target.value)} 
-                            style={{ background: 'transparent', border: 'none', fontWeight: 700, color: '#073642', outline: 'none', width: '100%', padding: '8px' }}
-                          />
-                        </td>
-                        {cols.map(c => (
-                          <td key={c} style={{ padding: '8px 4px', textAlign: 'center' }}>
-                            <input 
-                              value={s.grades[c] || ''} 
-                              onChange={e => updateGrade(s.id, c, e.target.value)} 
-                              style={{ 
-                                width: 50, textAlign: 'center', border: '1px solid #ede8dc', borderRadius: 8, 
-                                padding: '8px 4px', fontWeight: 800, fontSize: 14, 
-                                background: gradeColor(parseFloat(s.grades[c]?.replace(',','.'))).bg,
-                                color: gradeColor(parseFloat(s.grades[c]?.replace(',','.'))).text,
-                                outline: 'none'
-                              }}
-                            />
-                          </td>
-                        ))}
-                        <td style={{ padding: '8px 24px', textAlign: 'right' }}>
-                          <span style={{ fontSize: 18, fontWeight: 900, color: gc.text }}>{gc.label}</span>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 20 }}>
-              {filtered.map(s => {
-                const avg = calcAvg(s); const gc = gradeColor(avg)
-                return (
-                  <ModuleCard key={s.id} padding={20}>
-                    <input value={s.name} onChange={e => updateStudentField(s.id, 'name', e.target.value)} style={{ background: 'transparent', border: 'none', fontWeight: 800, color: '#073642', width: '100%', fontSize: 16, marginBottom: 16, outline: 'none' }} />
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                       {cols.map(c => (
-                         <div key={c} style={{ background: '#fdf6e3', padding: 8, borderRadius: 12 }}>
-                            <div style={{ fontSize: 9, color: '#93a1a1', fontWeight: 700, marginBottom: 4 }}>{c}</div>
-                            <input value={s.grades[c] || ''} onChange={e => updateGrade(s.id, c, e.target.value)} style={{ background: 'transparent', border: 'none', fontWeight: 800, color: '#073642', width: '100%', outline: 'none' }} />
-                         </div>
-                       ))}
-                    </div>
-                    <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid #eee8d5', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                       <span style={{ fontSize: 12, fontWeight: 700, color: '#93a1a1' }}>MÉDIA FINAL</span>
-                       <span style={{ fontSize: 20, fontWeight: 900, color: gc.text }}>{gc.label}</span>
-                    </div>
-                  </ModuleCard>
-                )
-              })}
-            </div>
-          )}
-        </ModuleShell>
-      </div>
-    </div>
-  )
+ {viewMode === 'table' ? (
+ <div style={TableContainer}>
+ <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+ <thead>
+ <tr style={{ background: '#fdf6e3', borderBottom: '2px solid #073642' }}>
+ <th style={{...ThS, width: 250}}>Nome do Aluno</th>
+ {cols.map((c, idx) => (
+ <th key={idx} style={{...ThS, textAlign: 'center', padding: '8px 4px'}}>
+ <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+ <input 
+ value={c} 
+ onChange={e => renameCol(idx, e.target.value)} 
+ style={{ background: 'rgba(181, 137, 0, 0.05)', border: 'none', textAlign: 'center', fontWeight: 800, color: '#b58900', width: '80%', outline: 'none', padding: '6px 4px', borderRadius: 6 }} 
+ />
+ <button 
+ onClick={() => deleteCol(idx)} 
+ title="Excluir Coluna"
+ style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, padding: '2px 4px' }}
+ >
+ 
+ </button>
+ </div>
+ </th>
+ ))}
+ <th style={{...ThS, textAlign: 'right', width: 100}}>Média</th>
+ </tr>
+ </thead>
+ <tbody>
+ {filtered.map(s => {
+ const avg = calcAvg(s); const gc = gradeColor(avg)
+ return (
+ <tr key={s.id} style={TrS}>
+ <td style={{ padding: '8px 16px' }}>
+ <input 
+ value={s.name} 
+ onChange={e => updateStudentField(s.id, 'name', e.target.value)} 
+ style={{ background: 'transparent', border: 'none', fontWeight: 700, color: '#073642', outline: 'none', width: '100%', padding: '8px' }}
+ />
+ </td>
+ {cols.map(c => (
+ <td key={c} style={{ padding: '8px 4px', textAlign: 'center' }}>
+ <input 
+ value={s.grades[c] || ''} 
+ onChange={e => updateGrade(s.id, c, e.target.value)} 
+ style={{ 
+ width: 50, textAlign: 'center', border: '1px solid #ede8dc', borderRadius: 8, 
+ padding: '8px 4px', fontWeight: 800, fontSize: 14, 
+ background: gradeColor(parseFloat(s.grades[c]?.replace(',','.'))).bg,
+ color: gradeColor(parseFloat(s.grades[c]?.replace(',','.'))).text,
+ outline: 'none'
+ }}
+ />
+ </td>
+ ))}
+ <td style={{ padding: '8px 24px', textAlign: 'right' }}>
+ <span style={{ fontSize: 18, fontWeight: 900, color: gc.text }}>{gc.label}</span>
+ </td>
+ </tr>
+ )
+ })}
+ </tbody>
+ </table>
+ </div>
+ ) : (
+ <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 20 }}>
+ {filtered.map(s => {
+ const avg = calcAvg(s); const gc = gradeColor(avg)
+ return (
+ <ModuleCard key={s.id} padding={20}>
+ <input value={s.name} onChange={e => updateStudentField(s.id, 'name', e.target.value)} style={{ background: 'transparent', border: 'none', fontWeight: 800, color: '#073642', width: '100%', fontSize: 16, marginBottom: 16, outline: 'none' }} />
+ <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+ {cols.map(c => (
+ <div key={c} style={{ background: '#fdf6e3', padding: 8, borderRadius: 12 }}>
+ <div style={{ fontSize: 9, color: '#93a1a1', fontWeight: 700, marginBottom: 4 }}>{c}</div>
+ <input value={s.grades[c] || ''} onChange={e => updateGrade(s.id, c, e.target.value)} style={{ background: 'transparent', border: 'none', fontWeight: 800, color: '#073642', width: '100%', outline: 'none' }} />
+ </div>
+ ))}
+ </div>
+ <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid #eee8d5', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+ <span style={{ fontSize: 12, fontWeight: 700, color: '#93a1a1' }}>MÉDIA FINAL</span>
+ <span style={{ fontSize: 20, fontWeight: 900, color: gc.text }}>{gc.label}</span>
+ </div>
+ </ModuleCard>
+ )
+ })}
+ </div>
+ )}
+ </ModuleShell>
+ </div>
+ </div>
+ )
 }
 
 const SearchInS: React.CSSProperties = { padding: '10px 16px', borderRadius: 12, border: '1px solid #ede8dc', outline: 'none', fontSize: 13, width: 220, background: '#fff' }
@@ -258,4 +258,4 @@ const ToggleBtn: React.CSSProperties = { padding: '8px 16px', borderRadius: 12, 
 const TabS: React.CSSProperties = { padding: '8px 20px', borderRadius: 12, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap' }
 const TableContainer: React.CSSProperties = { background: '#fff', borderRadius: 24, border: '1px solid rgba(88,110,117,0.08)', overflow: 'hidden' }
 const ThS: React.CSSProperties = { textAlign: 'left', padding: '16px 24px', fontSize: 11, fontWeight: 700, color: '#93a1a1', textTransform: 'uppercase' }
-const TrS: React.CSSProperties = { borderBottom: '1px solid #fdf6e3' }
+const TrS: React.CSSProperties = { borderBottom: '1px solid #fdf6e3' }

@@ -164,7 +164,7 @@ export default function WeeklyAgenda() {
   const prepPercentage = totalClasses === 0 ? 0 : Math.round((preppedClasses / totalClasses) * 100);
   const uniqueClassesAttended = new Set(schedule.map(s => s.classId)).size;
 
-  if (!isLoaded) return <div style={{ color: '#2c1a0e', padding: '2rem', fontFamily: "'Inter', system-ui, sans-serif" }}>Carregando Agenda...</div>;
+  if (!isLoaded) return <div style={{ color: '#2c1a0e', padding: '2rem', fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Carregando Agenda...</div>;
 
   // --- Render Helpers ---
   const renderStatusBadge = (status: PrepStatus) => {
@@ -324,7 +324,7 @@ const styles: Record<string, CSSProperties> = {
     color: '#2c1a0e',
     minHeight: '100%',
     padding: '24px',
-    fontFamily: "'Inter', system-ui, sans-serif",
+    fontFamily: "'Plus Jakarta Sans', sans-serif",
     position: 'relative'
   },
   toast: {
@@ -342,7 +342,7 @@ const styles: Record<string, CSSProperties> = {
     zIndex: 1000,
     fontWeight: 600,
     animation: 'fadeIn 0.3s ease-out',
-    fontFamily: "'Inter', system-ui, sans-serif"
+    fontFamily: "'Plus Jakarta Sans', sans-serif"
   },
   header: {
     display: 'flex',
@@ -362,7 +362,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 700,
     margin: '0 0 8px 0',
     color: '#2c1a0e',
-    fontFamily: "'Playfair Display', Georgia, serif",
+    fontFamily: "'Fraunces', Georgia, serif",
     display: 'flex',
     alignItems: 'center'
   },
@@ -569,7 +569,7 @@ const styles: Record<string, CSSProperties> = {
     color: '#2c1a0e',
     display: 'flex',
     alignItems: 'center',
-    fontFamily: "'Playfair Display', Georgia, serif",
+    fontFamily: "'Fraunces', Georgia, serif",
     fontWeight: 700
   },
   checklistInputContainer: {
@@ -586,7 +586,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: '0.9rem',
     outline: 'none',
     boxSizing: 'border-box',
-    fontFamily: "'Inter', system-ui, sans-serif"
+    fontFamily: "'Plus Jakarta Sans', sans-serif"
   },
   checklistItems: {
     display: 'flex',

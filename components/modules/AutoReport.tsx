@@ -165,11 +165,11 @@ Utilize tom formal, embasado e respeitoso em português.`;
       backgroundColor: '#fdf8f2',
       color: '#2c1a0e',
       padding: '36px 40px',
-      fontFamily: "'Inter', system-ui, sans-serif"
+      fontFamily: "'Plus Jakarta Sans', sans-serif"
     }}>
       {/* Header */}
       <div style={{ marginBottom: '32px', paddingBottom: '20px', borderBottom: '1px solid rgba(139,115,85,0.12)' }}>
-        <h1 style={{ margin: '0 0 8px 0', fontSize: '1.8rem', fontWeight: '700', fontFamily: "'Playfair Display', Georgia, serif", display: 'flex', alignItems: 'center', gap: '12px', color: '#2c1a0e' }}>
+        <h1 style={{  textAlign: 'center', margin: '0 0 8px 0', fontSize: '1.8rem', fontWeight: '700', fontFamily: "'Fraunces', Georgia, serif", display: 'flex', alignItems: 'center', gap: '12px', color: '#2c1a0e'  }}>
           <i className="ti ti-report" style={{ color: '#8b5e3c', fontSize: '32px' }}></i>
           Relatório Mensal da Turma
         </h1>
@@ -189,7 +189,7 @@ Utilize tom formal, embasado e respeitoso em português.`;
             border: '1px solid rgba(139,115,85,0.12)',
             boxShadow: '0 2px 8px rgba(44,26,14,0.06)'
           }}>
-            <h2 style={{ margin: '0 0 20px 0', fontSize: '1.2rem', fontFamily: "'Playfair Display', Georgia, serif", display: 'flex', alignItems: 'center', gap: '8px', color: '#2c1a0e' }}>
+            <h2 style={{ margin: '0 0 20px 0', fontSize: '1.2rem', fontFamily: "'Fraunces', Georgia, serif", display: 'flex', alignItems: 'center', gap: '8px', color: '#2c1a0e' }}>
               <i className="ti ti-adjustments-horizontal" style={{ color: '#8b5e3c' }}></i>
               Configurações
             </h2>
@@ -208,7 +208,7 @@ Utilize tom formal, embasado e respeitoso em português.`;
                   color: '#2c1a0e',
                   outline: 'none',
                   fontSize: '13.5px',
-                  fontFamily: "'Inter', system-ui, sans-serif"
+                  fontFamily: "'Plus Jakarta Sans', sans-serif"
                 }}
               >
                 <option value="">Selecione uma turma...</option>
@@ -234,7 +234,7 @@ Utilize tom formal, embasado e respeitoso em português.`;
                   outline: 'none',
                   fontSize: '13.5px',
                   boxSizing: 'border-box',
-                  fontFamily: "'Inter', system-ui, sans-serif"
+                  fontFamily: "'Plus Jakarta Sans', sans-serif"
                 }}
               />
             </div>
@@ -259,7 +259,7 @@ Utilize tom formal, embasado e respeitoso em português.`;
                 transition: 'all 0.18s ease',
                 opacity: isGenerating ? 0.7 : 1,
                 boxShadow: '0 2px 8px rgba(139,94,60,0.3)',
-                fontFamily: "'Inter', system-ui, sans-serif"
+                fontFamily: "'Plus Jakarta Sans', sans-serif"
               }}
             >
               {isGenerating ? (
@@ -307,7 +307,7 @@ Utilize tom formal, embasado e respeitoso em português.`;
                 justifyContent: 'center',
                 gap: '8px',
                 transition: 'all 0.15s ease',
-                fontFamily: "'Inter', system-ui, sans-serif",
+                fontFamily: "'Plus Jakarta Sans', sans-serif",
                 boxShadow: reportContent ? '0 2px 6px rgba(203,75,22,0.25)' : 'none'
               }}
             >
@@ -338,7 +338,7 @@ Utilize tom formal, embasado e respeitoso em português.`;
                 justifyContent: 'center',
                 gap: '8px',
                 transition: 'all 0.15s ease',
-                fontFamily: "'Inter', system-ui, sans-serif",
+                fontFamily: "'Plus Jakarta Sans', sans-serif",
                 boxShadow: reportContent ? '0 2px 6px rgba(38,139,210,0.25)' : 'none'
               }}
             >
@@ -358,7 +358,7 @@ Utilize tom formal, embasado e respeitoso em português.`;
           display: 'flex',
           flexDirection: 'column'
         }}>
-           <h2 style={{ margin: '0 0 20px 0', fontSize: '1.2rem', fontFamily: "'Playfair Display', Georgia, serif", display: 'flex', alignItems: 'center', gap: '8px', color: '#2c1a0e' }}>
+           <h2 style={{ margin: '0 0 20px 0', fontSize: '1.2rem', fontFamily: "'Fraunces', Georgia, serif", display: 'flex', alignItems: 'center', gap: '8px', color: '#2c1a0e' }}>
               <i className="ti ti-file-text" style={{ color: '#3d7a4e' }}></i>
               Pré-visualização do Documento
             </h2>
@@ -378,8 +378,8 @@ Utilize tom formal, embasado e respeitoso em português.`;
                 <div style={{ whiteSpace: 'pre-wrap', lineHeight: '1.6', fontSize: '14px', fontFamily: '"Times New Roman", Times, serif' }}>
                   {/* Fake Header Escolar */}
                   <div style={{ textAlign: 'center', borderBottom: '2px solid #2c1a0e', paddingBottom: '16px', marginBottom: '24px' }}>
-                    <h3 style={{ margin: '0 0 4px 0', fontSize: '18px', textTransform: 'uppercase', fontFamily: "'Playfair Display', Georgia, serif" }}>Escola de Idiomas TeacherAI</h3>
-                    <p style={{ margin: '0', fontSize: '12px', color: '#5c3d20', fontFamily: "'Inter', system-ui, sans-serif" }}>Coordenação Pedagógica - Relatório Oficial</p>
+                    <h3 style={{ margin: '0 0 4px 0', fontSize: '18px', textTransform: 'uppercase', fontFamily: "'Fraunces', Georgia, serif" }}>Escola de Idiomas TeacherAI</h3>
+                    <p style={{ margin: '0', fontSize: '12px', color: '#5c3d20', fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Coordenação Pedagógica - Relatório Oficial</p>
                   </div>
                   {reportContent}
                 </div>
@@ -409,7 +409,7 @@ Utilize tom formal, embasado e respeitoso em português.`;
           alignItems: 'center',
           gap: '8px',
           zIndex: 1000,
-          fontFamily: "'Inter', system-ui, sans-serif",
+          fontFamily: "'Plus Jakarta Sans', sans-serif",
           fontSize: '13.5px',
           animation: 'slideIn 0.3s ease-out'
         }}>

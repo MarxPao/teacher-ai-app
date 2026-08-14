@@ -14,6 +14,8 @@ export interface ExportHeaderOptions {
   showStudentNameBox?: boolean
   instructions?: string
   schoolTemplate?: 'machado' | 'santacatarina' | 'plurall' | 'cambridge' | 'standard'
+  headerImageUrl?: string
+  isImageHeader?: boolean
 }
 
 /**
@@ -191,6 +193,11 @@ export function exportToPdf(options: ExportHeaderOptions) {
       </div>
 
       <div style="padding: 15px;">
+        ${options.headerImageUrl ? `
+        <div style="text-align: center; margin-bottom: 16px; border-bottom: 2px solid #000; padding-bottom: 8px;">
+          <img src="${options.headerImageUrl}" style="width: 100%; max-height: 220px; object-fit: contain;" />
+        </div>
+        ` : `
         <table class="header-table">
           <tr>
             <td colspan="3" class="school-title">${school}</td>
@@ -216,6 +223,7 @@ export function exportToPdf(options: ExportHeaderOptions) {
           <strong>INSTRUÇÕES GERAIS:</strong><br/>
           ${instructions.replace(/\n/g, '<br/>')}
         </div>
+        `}
 
         <div class="doc-title">${title}</div>
 
@@ -265,6 +273,11 @@ export function exportToWord(options: ExportHeaderOptions) {
       </style>
     </head>
     <body>
+      ${options.headerImageUrl ? `
+      <div style="text-align:center; margin-bottom:12pt;">
+        <img src="${options.headerImageUrl}" style="max-width:100%; max-height:180pt;" />
+      </div>
+      ` : `
       <table>
         <tr><td colspan="3" style="text-align:center; font-weight:bold; font-size:12pt;">${school}</td></tr>
         <tr>
@@ -286,6 +299,7 @@ export function exportToWord(options: ExportHeaderOptions) {
         <b>INSTRUÇÕES:</b><br/>
         ${instructions.replace(/\n/g, '<br/>')}
       </div>
+      `}
 
       <h1>${title}</h1>
 

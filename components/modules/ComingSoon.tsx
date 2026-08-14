@@ -31,7 +31,7 @@ export default function ComingSoon() {
         }}>
           <i className="ti ti-rocket text-6xl text-sol-yellow opacity-40" />
         </div>
-        <h2 style={{ fontSize: 24, fontWeight: 700, color: '#073642', marginBottom: 12 }}>Novidades a caminho!</h2>
+        <h2 style={{ fontSize: 24, fontWeight: 700, color: '#2c1a0e', marginBottom: 12 }}>Novidades a caminho!</h2>
         <p style={{ fontSize: 16, maxWidth: 400, textAlign: 'center', lineHeight: 1.6 }}>
           Esta funcionalidade está sendo desenvolvida com foco em produtividade e elegância. Fique atento às próximas atualizações.
         </p>

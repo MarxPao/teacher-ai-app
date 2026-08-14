@@ -3,7 +3,12 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import ModuleShell from '@/components/ModuleShell'
 import ModuleCard from '@/components/ModuleCard'
-import { syncToSupabase } from '@/lib/supabaseClient'
+import {
+  syncToSupabase,
+  fetchPrivateStudentsFromSupabase,
+  upsertPrivateStudentToSupabase,
+  deletePrivateStudentFromSupabase
+} from '@/lib/supabaseClient'
 
 // ─── Interfaces Data Model ───────────────────────────────────────────────────
 
@@ -56,96 +61,6 @@ export interface PrivateStudent {
 
 const STORAGE_KEY = 'teacher_private_students'
 
-const PRESET_STUDENTS: PrivateStudent[] = [
-  {
-    id: 'ps-1',
-    name: 'Lucas Mendes',
-    subject: 'Inglês Instrumental & Conversação',
-    guardianName: 'Clara Mendes (Mãe)',
-    phone: '11998877665',
-    email: 'clara.mendes@email.com',
-    monthlyFee: 480,
-    dueDay: 5,
-    paymentMethod: 'PIX',
-    lastPaymentDate: '05/07/2026',
-    modality: 'Online',
-    scheduleInfo: 'Terças e Quintas · 14h00 às 15h00',
-    paymentStatus: 'pago',
-    masteryPercentage: 85,
-    goals: 'Preparação para Exame de Proficiência B2 (FCE)',
-    roadmap: [
-      { id: 'rm1', title: 'Módulo 1: Business Phrasal Verbs', status: 'concluido', progress: 100, targetDate: '15/06/2026' },
-      { id: 'rm2', title: 'Módulo 2: Present Perfect vs Past Simple', status: 'concluido', progress: 100, targetDate: '30/06/2026' },
-      { id: 'rm3', title: 'Módulo 3: FCE Essay & Formal Writing', status: 'em_andamento', progress: 65, targetDate: '15/08/2026' },
-      { id: 'rm4', title: 'Módulo 4: Advanced Listening Cloze', status: 'planejado', progress: 0, targetDate: '30/09/2026' },
-    ],
-    lessonsHistory: [
-      { id: 'l1', date: '28/07/2026', topic: 'Phrasal Verbs em Contexto de Negócios', homework: 'Página 42 a 45 do Workbook', performanceRating: 'Excelente' },
-      { id: 'l2', date: '21/07/2026', topic: 'Present Perfect vs Past Simple', homework: 'Gravar áudio de 1 min sobre as férias', performanceRating: 'Bom' }
-    ],
-    gradesHistory: [
-      { id: 'g1', date: '25/07/2026', title: 'Simulado FCE - Listening & Reading', score: 8.8, maxScore: 10 },
-      { id: 'g2', date: '10/07/2026', title: 'Grammar Quiz Unit 4', score: 9.0, maxScore: 10 }
-    ],
-    aiDiagnostic: 'O aluno apresenta excelente compreensão auditiva e vocabulário avançado. Recomendado focar em conectores de coesão para escrita formal nas próximas 4 aulas.'
-  },
-  {
-    id: 'ps-2',
-    name: 'Beatriz Lima',
-    subject: 'Matemática & Física para ENEM',
-    guardianName: 'Roberto Lima (Pai)',
-    phone: '11987654321',
-    email: 'roberto.lima@email.com',
-    monthlyFee: 550,
-    dueDay: 10,
-    paymentMethod: 'Boleto',
-    lastPaymentDate: '10/06/2026',
-    modality: 'Presencial',
-    scheduleInfo: 'Quartas-feiras · 16h00 às 18h00',
-    paymentStatus: 'pendente',
-    masteryPercentage: 72,
-    goals: 'Aprovação em Medicina via ENEM',
-    roadmap: [
-      { id: 'rm5', title: 'Funções Quadráticas & Problemas de Máximo', status: 'concluido', progress: 100, targetDate: '10/07/2026' },
-      { id: 'rm6', title: 'Geometria Espacial & Prismas', status: 'em_andamento', progress: 45, targetDate: '20/08/2026' },
-      { id: 'rm7', title: 'Cinemática & Leis de Newton', status: 'planejado', progress: 0, targetDate: '15/09/2026' }
-    ],
-    lessonsHistory: [
-      { id: 'l3', date: '29/07/2026', topic: 'Funções Quadráticas & Problemas de Máximo/Mínimo', homework: 'Lista de 15 exercícios ENEM', performanceRating: 'Bom' }
-    ],
-    gradesHistory: [
-      { id: 'g3', date: '20/07/2026', title: 'Simulado Matemática ENEM - Bloco I', score: 7.2, maxScore: 10 }
-    ]
-  },
-  {
-    id: 'ps-3',
-    name: 'Gabriel Souza',
-    subject: 'Reforço de Química & Biologia',
-    guardianName: 'Gabriel Souza (Próprio)',
-    phone: '11976543210',
-    email: 'gabriel.souza@email.com',
-    monthlyFee: 400,
-    dueDay: 15,
-    paymentMethod: 'PIX',
-    lastPaymentDate: '15/07/2026',
-    modality: 'Online',
-    scheduleInfo: 'Sábados · 10h00 às 11h30',
-    paymentStatus: 'em_dia',
-    masteryPercentage: 90,
-    goals: 'Reforço Escolar do 3º Ano do Ensino Médio',
-    roadmap: [
-      { id: 'rm8', title: 'Estequiometria & Soluções', status: 'concluido', progress: 100, targetDate: '05/07/2026' },
-      { id: 'rm9', title: 'Genética Mendeliana & Biologia Celular', status: 'concluido', progress: 100, targetDate: '25/07/2026' }
-    ],
-    lessonsHistory: [
-      { id: 'l4', date: '25/07/2026', topic: 'Estequiometria & Rendimento de Reações', homework: 'Resolver lista de fixação', performanceRating: 'Excelente' }
-    ],
-    gradesHistory: [
-      { id: 'g4', date: '18/07/2026', title: 'Prova de Química Orgânica', score: 9.5, maxScore: 10 }
-    ]
-  }
-]
-
 export default function PrivateTutoring() {
   const [students, setStudents] = useState<PrivateStudent[]>([])
   const [activeSubModule, setActiveSubModule] = useState<'overview' | 'finance' | 'stats' | 'profiles' | 'roadmap' | 'teaching'>('overview')
@@ -187,19 +102,49 @@ export default function PrivateTutoring() {
 
   // ─── Carregamento & Persistência ─────────────────────────────────────────────
 
-  const loadStudents = useCallback(() => {
+  const LEGACY_PRESET_NAMES = ['Lucas Mendes', 'Beatriz Lima', 'Gabriel Souza']
+  const LEGACY_PRESET_IDS = ['ps-1', 'ps-2', 'ps-3']
+
+  const loadStudents = useCallback(async () => {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY)
-      if (raw) {
-        const parsed = JSON.parse(raw) as PrivateStudent[]
+      // 0. Purga automatizada de dados legados do localStorage
+      const rawLocal = localStorage.getItem(STORAGE_KEY)
+      if (rawLocal) {
+        try {
+          const parsedLocal = JSON.parse(rawLocal) as PrivateStudent[]
+          const sanitizedLocal = parsedLocal.filter(s =>
+            !LEGACY_PRESET_IDS.includes(s.id) && !LEGACY_PRESET_NAMES.includes(s.name)
+          )
+          if (sanitizedLocal.length !== parsedLocal.length) {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(sanitizedLocal))
+          }
+        } catch {}
+      }
+
+      // 1. Tenta carregar os dados reais diretamente do Supabase Cloud
+      const cloudStudents = await fetchPrivateStudentsFromSupabase()
+      if (Array.isArray(cloudStudents) && cloudStudents.length > 0) {
+        const sanitizedCloud = cloudStudents.filter(s =>
+          !LEGACY_PRESET_IDS.includes(s.id) && !LEGACY_PRESET_NAMES.includes(s.name)
+        )
+        setStudents(sanitizedCloud)
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(sanitizedCloud))
+        return
+      }
+
+      // 2. Se não houver dados no Supabase, tenta carregar do localStorage apenas alunos reais
+      const cleanRaw = localStorage.getItem(STORAGE_KEY)
+      if (cleanRaw) {
+        const parsed = (JSON.parse(cleanRaw) as PrivateStudent[]).filter(s =>
+          !LEGACY_PRESET_IDS.includes(s.id) && !LEGACY_PRESET_NAMES.includes(s.name)
+        )
         setStudents(parsed)
       } else {
-        setStudents(PRESET_STUDENTS)
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(PRESET_STUDENTS))
+        setStudents([])
       }
     } catch (e) {
       console.error('Erro ao carregar alunos particulares:', e)
-      setStudents(PRESET_STUDENTS)
+      setStudents([])
     }
   }, [])
 
@@ -215,10 +160,15 @@ export default function PrivateTutoring() {
     window.dispatchEvent(new Event('storage'))
     window.dispatchEvent(new CustomEvent('teacher:data_changed'))
     syncToSupabase().catch(() => {})
+
+    // Persiste individualmente cada aluno no Supabase Cloud
+    updated.forEach(st => {
+      upsertPrivateStudentToSupabase(st).catch(() => {})
+    })
   }
 
   // ─── Aluno Selecionado Padrão ────────────────────────────────────────────────
-  const activeStudent = students.find(s => s.id === selectedStudentId) || students[0] || PRESET_STUDENTS[0]
+  const activeStudent = students.find(s => s.id === selectedStudentId) || students[0] || null
 
   // ─── Filtro de Pesquisa ──────────────────────────────────────────────────────
   const filteredStudents = students.filter(s =>
@@ -321,6 +271,7 @@ export default function PrivateTutoring() {
 
   const handleDeleteStudent = (id: string) => {
     if (!confirm('Deseja realmente remover este aluno particular e todo o seu histórico?')) return
+    deletePrivateStudentFromSupabase(id).catch(() => {})
     const updated = students.filter(s => s.id !== id)
     saveAndSync(updated)
   }
@@ -517,7 +468,7 @@ export default function PrivateTutoring() {
           <div style={{ background: 'linear-gradient(135deg, #fffcf8 0%, #fdf8f2 100%)', border: '1px solid rgba(139,115,85,0.2)', borderRadius: 20, padding: 24, marginBottom: 24, boxShadow: '0 4px 15px rgba(44,26,14,0.06)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
               <div>
-                <h2 style={{ margin: '0 0 6px', fontSize: 22, fontWeight: 800, color: '#2c1a0e', fontFamily: 'Georgia, serif' }}>
+                <h2 style={{ margin: '0 0 6px', fontSize: 22, fontWeight: 800, color: '#2c1a0e', fontFamily: "'Fraunces', Georgia, serif" }}>
                   📌 Painel Geral — Visão 360° dos Alunos Particulares
                 </h2>
                 <p style={{ margin: 0, fontSize: 13.5, color: '#665c54', lineHeight: 1.5 }}>
@@ -570,7 +521,7 @@ export default function PrivateTutoring() {
                 {/* Última Aula Ministrada */}
                 <div style={{ background: '#fdf8f2', border: '1px solid rgba(139,115,85,0.15)', borderRadius: 14, padding: 16 }}>
                   <div style={{ fontSize: 11, fontWeight: 700, color: '#8b5e3c', textTransform: 'uppercase', marginBottom: 8 }}>📖 Última Aula Ministrada</div>
-                  {activeStudent.lessonsHistory[0] ? (
+                  {activeStudent.lessonsHistory?.[0] ? (
                     <div>
                       <div style={{ fontSize: 12, fontWeight: 700, color: '#665c54' }}>{activeStudent.lessonsHistory[0].date}</div>
                       <div style={{ fontSize: 13.5, fontWeight: 700, color: '#2c1a0e', margin: '4px 0' }}>{activeStudent.lessonsHistory[0].topic}</div>
@@ -584,7 +535,7 @@ export default function PrivateTutoring() {
                 {/* Próximo Marco no Roadmap */}
                 <div style={{ background: '#fdf8f2', border: '1px solid rgba(139,115,85,0.15)', borderRadius: 14, padding: 16 }}>
                   <div style={{ fontSize: 11, fontWeight: 700, color: '#8b5e3c', textTransform: 'uppercase', marginBottom: 8 }}>🗺️ Próximo Marco na Trilha</div>
-                  {activeStudent.roadmap[0] ? (
+                  {activeStudent.roadmap?.[0] ? (
                     <div>
                       <div style={{ fontSize: 13.5, fontWeight: 700, color: '#2c1a0e', marginBottom: 6 }}>{activeStudent.roadmap[0].title}</div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { captureImageFile, extractContentFromImage } from '@/lib/ocrCapture'
 
 interface StudentRecord { id: string; name: string; classId: string; schoolId: string; grades?: Record<string, string> }
-interface ClassRecord   { id: string; name: string }
+interface ClassRecord { id: string; name: string }
 
 interface QuestionGradeResult {
   num: number
@@ -15,24 +15,24 @@ interface QuestionGradeResult {
 }
 
 const S: Record<string, React.CSSProperties> = {
-  page:  { padding: '32px 48px', minHeight: '100%', boxSizing: 'border-box', background: '#fdf6e3' },
-  card:  { background: '#fff', border: '1px solid #ede8dc', borderRadius: 16, padding: '20px 24px', boxShadow: '0 2px 8px rgba(0,43,54,0.06)' },
+  page: { padding: '32px 48px', minHeight: '100%', boxSizing: 'border-box', background: '#fdf6e3' },
+  card: { background: '#fff', border: '1px solid #ede8dc', borderRadius: 16, padding: '20px 24px', boxShadow: '0 2px 8px rgba(0,43,54,0.06)' },
   badge: { display: 'inline-flex', alignItems: 'center', padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600 },
-  btn:   { display: 'inline-flex', alignItems: 'center', gap: 6, padding: '9px 18px', borderRadius: 10, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600 },
+  btn: { display: 'inline-flex', alignItems: 'center', gap: 6, padding: '9px 18px', borderRadius: 10, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600 },
   input: { width: '100%', padding: '9px 12px', borderRadius: 10, border: '1px solid #ddd', background: '#fdf6e3', fontSize: 13, outline: 'none', boxSizing: 'border-box' },
   label: { display: 'block', fontSize: 11, fontWeight: 700, color: '#586e75', textTransform: 'uppercase' as const, letterSpacing: '0.8px', marginBottom: 5 },
 }
 
 export default function OmniGrader() {
   const [students, setStudents] = useState<StudentRecord[]>([])
-  const [classes,  setClasses]  = useState<ClassRecord[]>([])
+  const [classes, setClasses] = useState<ClassRecord[]>([])
 
   const [selectedStudent, setSelectedStudent] = useState('')
-  const [examTitle,       setExamTitle]       = useState('Prova Bimestral')
-  const [answerKey,       setAnswerKey]       = useState('1:A, 2:B, 3:C, 4:D, 5:A, 6:C, 7:B, 8:D, 9:A, 10:B')
+  const [examTitle, setExamTitle] = useState('Prova Bimestral')
+  const [answerKey, setAnswerKey] = useState('1:A, 2:B, 3:C, 4:D, 5:A, 6:C, 7:B, 8:D, 9:A, 10:B')
 
-  const [imageUri,    setImageUri]    = useState<string | null>(null)
-  const [isGrading,   setIsGrading]   = useState(false)
+  const [imageUri, setImageUri] = useState<string | null>(null)
+  const [isGrading, setIsGrading] = useState(false)
   const [gradeResult, setGradeResult] = useState<{
     score: number
     totalQuestions: number
@@ -93,12 +93,10 @@ export default function OmniGrader() {
       const results: QuestionGradeResult[] = []
       let correct = 0
 
-      // Match extracted answers with key
       for (let i = 1; i <= totalQ; i++) {
         const expected = parsedKey[i] || 'A'
-        // Procurar resposta no OCR
         const match = ocr.rawText.match(new RegExp(`${i}\\s*[:\\-\\)]\\s*([A-Da-d])`))
-        const found = match ? match[1].toUpperCase() : (i <= ocr.questions.length ? ocr.questions[i-1].answer?.toUpperCase() || '—' : '—')
+        const found = match ? match[1].toUpperCase() : (i <= (ocr.questions?.length || 0) ? ocr.questions?.[i-1]?.answer?.toUpperCase() || '' : '')
         const isOk = found === expected
         if (isOk) correct++
 
@@ -157,12 +155,9 @@ export default function OmniGrader() {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 28 }}>
         <div>
-          <h1 style={{ fontFamily: 'Georgia, serif', fontSize: 30, fontWeight: 600, color: '#073642', fontStyle: 'italic', margin: 0 }}>
-            OmniGrader — Correção Automática por Câmera
+          <h1 style={{  textAlign: 'center', fontFamily: "'Fraunces', Georgia, serif", fontSize: 30, fontWeight: 600, color: '#2c1a0e', margin: '0 auto'  }}>
+            OmniGrader Correção Automática por Câmera
           </h1>
-          <p style={{ color: '#586e75', fontSize: 13, marginTop: 4 }}>
-            Tire foto da prova do aluno e a IA corrige instantaneamente e lança a nota no Gradebook.
-          </p>
         </div>
       </div>
 
@@ -178,15 +173,13 @@ export default function OmniGrader() {
               <div>
                 <label style={S.label}>Aluno Avaliado</label>
                 <select value={selectedStudent} onChange={e => setSelectedStudent(e.target.value)} style={S.input}>
-                  {students.map(s => (
-                    <option key={s.id} value={s.id}>{s.name} ({classes.find(c => c.id === s.classId)?.name || 'Sem turma'})</option>
-                  ))}
+                  {students.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>
               </div>
 
               <div>
                 <label style={S.label}>Título da Avaliação</label>
-                <input value={examTitle} onChange={e => setExamTitle(e.target.value)} style={S.input} placeholder="Ex: Prova 1 - Inglês B2" />
+                <input value={examTitle} onChange={e => setExamTitle(e.target.value)} style={S.input} />
               </div>
 
               <div>
@@ -218,7 +211,7 @@ export default function OmniGrader() {
             )}
 
             <button onClick={handleGrade} disabled={!imageUri || isGrading}
-              style={{ ...S.btn, width: '100%', justifyContent: 'center', background: '#073642', color: '#fff', opacity: !imageUri || isGrading ? 0.6 : 1 }}>
+              style={{ ...S.btn, width: '100%', justifyContent: 'center', background: '#2c1a0e', color: '#fff', opacity: !imageUri || isGrading ? 0.6 : 1 }}>
               {isGrading ? <><i className="ti ti-loader-2" style={{ animation: 'spin 1s linear infinite' }} /> Processando OCR Vision...</> : <><i className="ti ti-check" /> Corrigir Prova Agora</>}
             </button>
           </div>
@@ -258,7 +251,7 @@ export default function OmniGrader() {
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10, marginBottom: 20 }}>
-                {gradeResult.questions.map(q => (
+                {(gradeResult.questions || []).map(q => (
                   <div key={q.num} style={{
                     padding: '10px 14px', borderRadius: 12, border: `1px solid ${q.isCorrect ? '#2d7a00' : '#dc322f'}`,
                     background: q.isCorrect ? '#f0fdf4' : '#fef2f2', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
