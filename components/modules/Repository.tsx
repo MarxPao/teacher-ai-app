@@ -43,6 +43,95 @@ export interface SavedExerciseItem {
  school?: string
 }
 
+export interface LooseFileItem {
+ id: string
+ title: string
+ fileName: string
+ fileType: 'pdf' | 'docx' | 'image' | 'audio' | 'sheet' | 'slide' | 'text' | 'other'
+ fileSize: number // em bytes
+ category: string // 'Atividade Complementar' | 'Artigo / Texto' | 'Lista de Vocabulário' | 'Handout / Ficha' | 'Slide / Apresentação' | 'Áudio de Aula' | 'Infográfico / Imagem' | 'Gabarito' | 'Outro'
+ tags: string[]
+ school?: string
+ className?: string
+ extractedText: string
+ fileDataUrl?: string
+ date: string
+ createdAt: string
+}
+
+const INITIAL_LOOSE_FILES: LooseFileItem[] = [
+ {
+  id: 'loose_1',
+  title: 'Lista de Phrasal Verbs Essenciais (com Exemplos e Contexto)',
+  fileName: 'phrasal_verbs_handout_b1_b2.pdf',
+  fileType: 'pdf',
+  fileSize: 145000,
+  category: 'Lista de Vocabulário',
+  tags: ['#vocabulary', '#phrasalverbs', '#b1', '#b2'],
+  school: 'Machado Sobrinho',
+  className: '9º Ano B',
+  extractedText: `GUIA COMPLETO: PHRASAL VERBS ESSENCIAIS PARA O ENSINO FUNDAMENTAL II & MÉDIO
+
+1. LOOK FOR: Procurar por algo ou alguém.
+Exemplo: I have been looking for my keys all morning.
+
+2. GIVE UP: Desistir ou parar um hábito.
+Exemplo: Never give up on your goals, even when grammar feels challenging!
+
+3. BRING UP: Mencionar um assunto ou educar/criar.
+Exemplo: She brought up an interesting point during our discussion.
+
+4. CARRY OUT: Realizar ou executar uma pesquisa/tarefa.
+Exemplo: Students must carry out the laboratory experiment safely.
+
+5. RUN INTO: Encontrar alguém por acaso.
+Exemplo: Guess who I ran into at the bookstore yesterday?`,
+  date: new Date().toLocaleDateString('pt-BR'),
+  createdAt: '2026-08-10T10:00:00Z',
+ },
+ {
+  id: 'loose_2',
+  title: 'Artigo: The Future of Renewable Energy in Smart Cities',
+  fileName: 'future_renewable_energy_article.docx',
+  fileType: 'docx',
+  fileSize: 82000,
+  category: 'Artigo / Texto',
+  tags: ['#reading', '#clil', '#environment', '#smartcities'],
+  school: 'Rede Santa Catarina',
+  className: '8º Ano A',
+  extractedText: `THE FUTURE OF RENEWABLE ENERGY IN SMART CITIES
+
+As urban populations continue to expand, modern metropolises are transitioning from fossil fuel dependency to interconnected smart grids powered by solar, wind, and geothermal energy.
+
+In cities like Copenhagen and Tokyo, automated sensors monitor energy consumption block by block, routing surplus electricity to electric vehicle charging stations and residential buildings in real time.
+
+Discussion Questions:
+1. What are the main advantages of decentralized smart grids?
+2. How can schools contribute to energy conservation campaigns?`,
+  date: new Date().toLocaleDateString('pt-BR'),
+  createdAt: '2026-08-12T14:20:00Z',
+ },
+ {
+  id: 'loose_3',
+  title: 'Infográfico: Conectivos e Discurso Argumentativo (Writing Essay)',
+  fileName: 'essay_linking_words_infographic.png',
+  fileType: 'image',
+  fileSize: 310000,
+  category: 'Handout / Ficha',
+  tags: ['#writing', '#connectors', '#essay', '#redacao'],
+  school: 'Colégio Anglo',
+  className: '3º Médio A',
+  extractedText: `LINKING WORDS FOR ESSAY WRITING & ACADEMIC PAPERS
+
+• ADDITION: Furthermore, Moreover, In addition to, Not only... but also
+• CONTRAST: However, On the other hand, Nevertheless, In spite of
+• CAUSE & EFFECT: Consequently, Therefore, As a result, Due to
+• CONCLUSION: In summary, Ultimately, To conclude, Taking everything into account`,
+  date: new Date().toLocaleDateString('pt-BR'),
+  createdAt: '2026-08-14T09:15:00Z',
+ }
+]
+
 // Presets Globalizers 4 
 const G4_STUDENT_BOOK: Omit<RepositoryItem, 'id' | 'date' | 'wordCount' | 'chunkCount'> = {
  title: ' Globalizers 4 Student\'s Book (Units 1-8 Main Texts & Dialogues)',
@@ -231,7 +320,7 @@ function ragSearch(query: string, items: RepositoryItem[], docId?: number): stri
  let score = 0
  const lower = para.toLowerCase()
  if (lower.includes(query.toLowerCase())) score += 15
- for (const term of terms) if (lower.includes(term)) score += 3
+for (const term of terms) if (lower.includes(term)) score += 3
  if (score > 0) results.push({ text: `[${item.title}]\n${para.trim()}`, score })
  }
  }
@@ -240,80 +329,94 @@ function ragSearch(query: string, items: RepositoryItem[], docId?: number): stri
 }
 
 export default function Repository() {
- // 3 PARTIÇÕES PRINCIPAIS 
- const [activePartition, setActivePartition] = useState<'headers' | 'exercises' | 'bibliography'>('headers')
+  // 4 PARTIÇÕES PRINCIPAIS 
+  const [activePartition, setActivePartition] = useState<'headers' | 'exercises' | 'bibliography' | 'files'>('headers')
 
- // Bibliografia (Livros / Textos)
- const [items, setItems] = useState<RepositoryItem[]>([])
- const [viewItem, setViewItem] = useState<RepositoryItem | null>(null)
- const [activeFilter, setActiveFilter] = useState<string>('all')
- const [searchText, setSearchText] = useState('')
- const [mode, setMode] = useState<'view' | 'add' | 'edit' | 'rag'>('view')
+  // Bibliografia (Livros / Textos)
+  const [items, setItems] = useState<RepositoryItem[]>([])
+  const [viewItem, setViewItem] = useState<RepositoryItem | null>(null)
+  const [activeFilter, setActiveFilter] = useState<string>('all')
+  const [searchText, setSearchText] = useState('')
+  const [mode, setMode] = useState<'view' | 'add' | 'edit' | 'rag'>('view')
 
- // Cabeçalhos de Escolas
- const [headerTemplates, setHeaderTemplates] = useState<SchoolHeaderModel[]>([])
- const [selectedHeaderId, setSelectedHeaderId] = useState<string>('')
- const [registeredSchools, setRegisteredSchools] = useState<{ id: string; name: string }[]>([])
- const [selectedSchoolForUpload, setSelectedSchoolForUpload] = useState<string>('')
+  // 4. Arquivos Avulsos (Subfuncionalidade Arquivos)
+  const [looseFiles, setLooseFiles] = useState<LooseFileItem[]>([])
+  const [selectedLooseFile, setSelectedLooseFile] = useState<LooseFileItem | null>(null)
+  const [looseFileFilter, setLooseFileFilter] = useState<string>('all')
+  const [looseFileSearch, setLooseFileSearch] = useState<string>('')
+  const [looseFileSchoolFilter, setLooseFileSchoolFilter] = useState<string>('all')
+  const [isAddLooseModalOpen, setIsAddLooseModalOpen] = useState(false)
+  const [newLooseTitle, setNewLooseTitle] = useState('')
+  const [newLooseCategory, setNewLooseCategory] = useState('Atividade Complementar')
+  const [newLooseSchool, setNewLooseSchool] = useState('')
+  const [newLooseTags, setNewLooseTags] = useState('')
+  const [newLooseContent, setNewLooseContent] = useState('')
+  const looseFileInputRef = useRef<HTMLInputElement | null>(null)
 
- // Edição direta em cima do cabeçalho importado
- const [isEditingHeader, setIsEditingHeader] = useState(false)
- const [editHeaderName, setEditHeaderName] = useState('')
- const [editHeaderOfficialName, setEditHeaderOfficialName] = useState('')
- const [editHeaderSubject, setEditHeaderSubject] = useState('')
- const [editHeaderInstructions, setEditHeaderInstructions] = useState('')
- const [newSchoolName, setNewSchoolName] = useState('')
- const [newOfficialName, setNewOfficialName] = useState('')
- const [newInstructions, setNewInstructions] = useState('')
- const [newSubject, setNewSubject] = useState('Língua Inglesa')
- const [newLogoUrl, setNewLogoUrl] = useState('')
- const [newHeaderImageUrl, setNewHeaderImageUrl] = useState('')
- const [headerDate, setHeaderDate] = useState(new Date().toLocaleDateString('pt-BR'))
- const [headerClassGroup, setHeaderClassGroup] = useState('9º Ano A')
- const [headerTeacher, setHeaderTeacher] = useState('Professor(a)')
- const [toastMessage, setToastMessage] = useState<string | null>(null)
+  // Cabeçalhos de Escolas
+  const [headerTemplates, setHeaderTemplates] = useState<SchoolHeaderModel[]>([])
+  const [selectedHeaderId, setSelectedHeaderId] = useState<string>('')
+  const [registeredSchools, setRegisteredSchools] = useState<{ id: string; name: string }[]>([])
+  const [selectedSchoolForUpload, setSelectedSchoolForUpload] = useState<string>('')
 
- function showToast(msg = 'Item salvo') {
- setToastMessage(msg)
- setTimeout(() => {
- setToastMessage(null)
- }, 2200)
- }
+  // Edição direta em cima do cabeçalho importado
+  const [isEditingHeader, setIsEditingHeader] = useState(false)
+  const [editHeaderName, setEditHeaderName] = useState('')
+  const [editHeaderOfficialName, setEditHeaderOfficialName] = useState('')
+  const [editHeaderSubject, setEditHeaderSubject] = useState('')
+  const [editHeaderInstructions, setEditHeaderInstructions] = useState('')
+  const [newSchoolName, setNewSchoolName] = useState('')
+  const [newOfficialName, setNewOfficialName] = useState('')
+  const [newInstructions, setNewInstructions] = useState('')
+  const [newSubject, setNewSubject] = useState('Língua Inglesa')
+  const [newLogoUrl, setNewLogoUrl] = useState('')
+  const [newHeaderImageUrl, setNewHeaderImageUrl] = useState('')
+  const [headerDate, setHeaderDate] = useState(new Date().toLocaleDateString('pt-BR'))
+  const [headerClassGroup, setHeaderClassGroup] = useState('9º Ano A')
+  const [headerTeacher, setHeaderTeacher] = useState('Professor(a)')
+  const [toastMessage, setToastMessage] = useState<string | null>(null)
 
- // Exercícios & Provas Salvas
- const [savedExercises, setSavedExercises] = useState<SavedExerciseItem[]>([])
- const [exerciseFilter, setExerciseFilter] = useState<string>('all')
- const [exerciseSearch, setExerciseSearch] = useState<string>('')
- const [viewExercise, setViewExercise] = useState<SavedExerciseItem | null>(null)
- const [showOnlinePlayer, setShowOnlinePlayer] = useState(false)
- const [showQrModal, setShowQrModal] = useState(false)
+  function showToast(msg = 'Item salvo') {
+    setToastMessage(msg)
+    setTimeout(() => {
+      setToastMessage(null)
+    }, 2200)
+  }
 
- // Add / Edit form (Bibliografia)
- const [editTitle, setEditTitle] = useState('')
- const [editContent, setEditContent] = useState('')
- const [editType, setEditType] = useState<RepositoryItem['type']>("Student's Book")
- const [editCategory, setEditCategory] = useState('Macmillan Education')
- const [editTextbook, setEditTextbook] = useState('')
+  // Exercícios & Provas Salvas
+  const [savedExercises, setSavedExercises] = useState<SavedExerciseItem[]>([])
+  const [exerciseFilter, setExerciseFilter] = useState<string>('all')
+  const [exerciseSearch, setExerciseSearch] = useState<string>('')
+  const [viewExercise, setViewExercise] = useState<SavedExerciseItem | null>(null)
+  const [showOnlinePlayer, setShowOnlinePlayer] = useState(false)
+  const [showQrModal, setShowQrModal] = useState(false)
 
- // RAG test
- const [ragQuery, setRagQuery] = useState('')
- const [ragResults, setRagResults] = useState<string[]>([])
- const [ragScope, setRagScope] = useState<'all' | 'doc'>('all')
+  // Add / Edit form (Bibliografia)
+  const [editTitle, setEditTitle] = useState('')
+  const [editContent, setEditContent] = useState('')
+  const [editType, setEditType] = useState<RepositoryItem['type']>("Student's Book")
+  const [editCategory, setEditCategory] = useState('Macmillan Education')
+  const [editTextbook, setEditTextbook] = useState('')
 
- // Leitor Profissional State
- const [readerFontSize, setReaderFontSize] = useState<'13px' | '15px' | '17px' | '19px'>('15px')
- const [readerFontFamily, setReaderFontFamily] = useState<'Georgia, serif' | "'Plus Jakarta Sans', sans-serif" | 'monospace'>('Georgia, serif')
- const [readerTheme, setReaderTheme] = useState<'paper' | 'sepia' | 'dark'>('sepia')
- const [readerFullscreen, setReaderFullscreen] = useState(false)
- const [showToc, setShowToc] = useState(false)
+  // RAG test
+  const [ragQuery, setRagQuery] = useState('')
+  const [ragResults, setRagResults] = useState<string[]>([])
+  const [ragScope, setRagScope] = useState<'all' | 'doc'>('all')
 
- // Upload Progress State
- const [uploadingStatus, setUploadingStatus] = useState<string>('')
+  // Leitor Profissional State
+  const [readerFontSize, setReaderFontSize] = useState<'13px' | '15px' | '17px' | '19px'>('15px')
+  const [readerFontFamily, setReaderFontFamily] = useState<'Georgia, serif' | "'Plus Jakarta Sans', sans-serif" | 'monospace'>('Georgia, serif')
+  const [readerTheme, setReaderTheme] = useState<'paper' | 'sepia' | 'dark'>('sepia')
+  const [readerFullscreen, setReaderFullscreen] = useState(false)
+  const [showToc, setShowToc] = useState(false)
 
- const fileInputRef = useRef<HTMLInputElement | null>(null)
- const imageInputRef = useRef<HTMLInputElement | null>(null)
- const headerFileInputRef = useRef<HTMLInputElement | null>(null)
- const ocrImageInputRef = useRef<HTMLInputElement | null>(null)
+  // Upload Progress State
+  const [uploadingStatus, setUploadingStatus] = useState<string>('')
+
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const imageInputRef = useRef<HTMLInputElement | null>(null)
+  const headerFileInputRef = useRef<HTMLInputElement | null>(null)
+  const ocrImageInputRef = useRef<HTMLInputElement | null>(null)
 
  // Load All Partitions Data 
  const loadAllData = useCallback(() => {
@@ -405,34 +508,70 @@ export default function Repository() {
  school: 'Macmillan Education'
  })
 
- setSavedExercises(compiledExercises)
- if (!viewExercise && compiledExercises.length > 0) setViewExercise(compiledExercises[0])
+    // 4. Arquivos Avulsos
+    const looseStr = localStorage.getItem('teacher_loose_files_v1')
+    let parsedLoose: LooseFileItem[] = looseStr ? JSON.parse(looseStr) : []
+    if (!parsedLoose || parsedLoose.length === 0) {
+      parsedLoose = INITIAL_LOOSE_FILES
+      localStorage.setItem('teacher_loose_files_v1', JSON.stringify(INITIAL_LOOSE_FILES))
+    }
+    setLooseFiles(parsedLoose)
+    if (!selectedLooseFile && parsedLoose.length > 0) {
+      setSelectedLooseFile(parsedLoose[0])
+    }
 
- // Mescla com documentos reais do Supabase (assíncrono, não bloqueia UI)
- import('@/lib/supabaseClient').then(({ fetchDocumentsFromSupabase }) => {
- fetchDocumentsFromSupabase().then(supabaseDocs => {
- if (!supabaseDocs || supabaseDocs.length === 0) return
- setItems(prev => {
- const presetIds = new Set(prev.filter(i => i.title.includes('Globalizers 4')).map(i => String(i.id)))
- const localCustomIds = new Set(prev.filter(i => !presetIds.has(String(i.id))).map(i => String(i.id)))
- const newFromSupabase = supabaseDocs.filter(d => !presetIds.has(d.id) && !localCustomIds.has(d.id))
- if (newFromSupabase.length === 0) return prev
- const mapped: RepositoryItem[] = newFromSupabase.map(d => ({
- id: Number(d.id) || parseInt(d.id) || Date.now(),
- title: d.title,
- content: d.content,
- type: (d.type as RepositoryItem['type']) || "Student's Book",
- category: d.category || 'Supabase',
- textbook: d.textbook || undefined,
- date: d.created_at ? new Date(d.created_at).toLocaleDateString('pt-BR') : new Date().toLocaleDateString('pt-BR'),
- wordCount: d.word_count || countWords(d.content),
- chunkCount: d.chunk_count || countChunks(d.content),
- }))
- return [...prev, ...mapped]
- })
- }).catch(() => {})
- }).catch(() => {})
- }, [viewItem, viewExercise])
+    setSavedExercises(compiledExercises)
+    if (!viewExercise && compiledExercises.length > 0) setViewExercise(compiledExercises[0])
+
+    // Mescla com documentos reais do Supabase (assíncrono, não bloqueia UI)
+    import('@/lib/supabaseClient').then(({ fetchDocumentsFromSupabase }) => {
+      fetchDocumentsFromSupabase().then(supabaseDocs => {
+        if (!supabaseDocs || supabaseDocs.length === 0) return
+        
+        // Livros & Bibliografia
+        setItems(prev => {
+          const presetIds = new Set(prev.filter(i => i.title.includes('Globalizers 4')).map(i => String(i.id)))
+          const localCustomIds = new Set(prev.filter(i => !presetIds.has(String(i.id))).map(i => String(i.id)))
+          const newFromSupabase = supabaseDocs.filter(d => d.type !== 'Arquivo Avulso' && !presetIds.has(d.id) && !localCustomIds.has(d.id))
+          if (newFromSupabase.length === 0) return prev
+          const mapped: RepositoryItem[] = newFromSupabase.map(d => ({
+            id: Number(d.id) || parseInt(d.id) || Date.now(),
+            title: d.title,
+            content: d.content,
+            type: (d.type as RepositoryItem['type']) || "Student's Book",
+            category: d.category || 'Supabase',
+            textbook: d.textbook || undefined,
+            date: d.created_at ? new Date(d.created_at).toLocaleDateString('pt-BR') : new Date().toLocaleDateString('pt-BR'),
+            wordCount: d.word_count || countWords(d.content),
+            chunkCount: d.chunk_count || countChunks(d.content),
+          }))
+          return [...prev, ...mapped]
+        })
+
+        // Arquivos Avulsos do Supabase
+        const supabaseLoose = supabaseDocs.filter(d => d.type === 'Arquivo Avulso')
+        if (supabaseLoose.length > 0) {
+          setLooseFiles(prev => {
+            const localIds = new Set(prev.map(f => f.id))
+            const toAdd = supabaseLoose.filter(d => !localIds.has(d.id)).map(d => ({
+              id: d.id,
+              title: d.title,
+              fileName: d.title,
+              fileType: (d.textbook as LooseFileItem['fileType']) || 'pdf',
+              fileSize: (d.content?.length || 0) * 2,
+              category: d.category || 'Atividade Complementar',
+              tags: ['#nuvem', '#supabase'],
+              extractedText: d.content || '',
+              fileDataUrl: d.file_url || undefined,
+              date: d.created_at ? new Date(d.created_at).toLocaleDateString('pt-BR') : new Date().toLocaleDateString('pt-BR'),
+              createdAt: d.created_at || new Date().toISOString(),
+            }))
+            return [...prev, ...toAdd]
+          })
+        }
+      }).catch(() => {})
+    }).catch(() => {})
+ }, [viewItem, viewExercise, selectedLooseFile])
 
  useEffect(() => {
  loadAllData()
@@ -479,6 +618,118 @@ export default function Repository() {
  }).catch(() => {})
  }
  }, [])
+
+  // Persistência e Sincronização de Arquivos Avulsos
+  const saveLooseFiles = useCallback((updated: LooseFileItem[], newItem?: LooseFileItem) => {
+    setLooseFiles(updated)
+    localStorage.setItem('teacher_loose_files_v1', JSON.stringify(updated))
+    window.dispatchEvent(new Event('storage'))
+
+    try {
+      import('@/lib/supabaseClient').then(({ saveLooseFileToSupabase, syncToSupabase }) => {
+        if (newItem) {
+          saveLooseFileToSupabase(newItem)
+        }
+        syncToSupabase({
+          teacher_loose_files: updated
+        })
+      }).catch(() => {})
+    } catch {}
+  }, [])
+
+  const handleUploadLooseFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (looseFileInputRef.current) looseFileInputRef.current.value = ''
+
+    const fileNameLower = file.name.toLowerCase()
+    let fileType: LooseFileItem['fileType'] = 'other'
+    if (fileNameLower.endsWith('.pdf')) fileType = 'pdf'
+    else if (fileNameLower.endsWith('.docx') || fileNameLower.endsWith('.doc')) fileType = 'docx'
+    else if (fileNameLower.endsWith('.png') || fileNameLower.endsWith('.jpg') || fileNameLower.endsWith('.jpeg') || fileNameLower.endsWith('.webp')) fileType = 'image'
+    else if (fileNameLower.endsWith('.xlsx') || fileNameLower.endsWith('.csv')) fileType = 'sheet'
+    else if (fileNameLower.endsWith('.pptx') || fileNameLower.endsWith('.ppt')) fileType = 'slide'
+    else if (fileNameLower.endsWith('.mp3') || fileNameLower.endsWith('.wav') || fileNameLower.endsWith('.m4a')) fileType = 'audio'
+    else if (fileNameLower.endsWith('.txt') || fileNameLower.endsWith('.md')) fileType = 'text'
+
+    setUploadingStatus(` Extraindo e indexando arquivo avulso "${file.name}"...`)
+
+    try {
+      let text = ''
+      let dataUrl = ''
+
+      const reader = new FileReader()
+      const dataUrlPromise = new Promise<string>((resolve) => {
+        reader.onload = (ev) => resolve((ev.target?.result as string) || '')
+        reader.onerror = () => resolve('')
+        reader.readAsDataURL(file)
+      })
+
+      if (fileType === 'pdf') {
+        const { extractTextFromPdf } = await import('@/lib/pdfExtractor')
+        text = await extractTextFromPdf(file, (curr, tot) => {
+          setUploadingStatus(` Processando PDF avulso: pág ${curr}/${tot}...`)
+        })
+      } else if (fileType === 'docx') {
+        const { extractDocxWithImages } = await import('@/lib/pdfExtractor')
+        const docxRes = await extractDocxWithImages(file)
+        text = docxRes.text || ''
+      } else if (fileType === 'image') {
+        const formData = new FormData()
+        formData.append('file', file)
+        const res = await fetch('/api/ocr', { method: 'POST', body: formData })
+        if (res.ok) {
+          const data = await res.json()
+          text = data.text || ''
+        }
+      } else if (fileType === 'text') {
+        text = await file.text()
+      } else {
+        text = `Arquivo Avulso: ${file.name}\nTamanho: ${(file.size / 1024).toFixed(1)} KB\nFormato: ${file.type || fileType}`
+      }
+
+      dataUrl = await dataUrlPromise
+
+      const newFileItem: LooseFileItem = {
+        id: `file_${Date.now()}`,
+        title: file.name.replace(/\.[^/.]+$/, ''),
+        fileName: file.name,
+        fileType,
+        fileSize: file.size,
+        category: fileType === 'pdf' ? 'Atividade Complementar' : fileType === 'image' ? 'Infográfico / Imagem' : fileType === 'audio' ? 'Áudio de Aula' : fileType === 'slide' ? 'Slide / Apresentação' : 'Documento Avulso',
+        tags: [`#${fileType}`, '#avulso'],
+        school: registeredSchools[0]?.name || 'Geral',
+        extractedText: text || file.name,
+        fileDataUrl: dataUrl || undefined,
+        date: new Date().toLocaleDateString('pt-BR'),
+        createdAt: new Date().toISOString()
+      }
+
+      const updated = [newFileItem, ...looseFiles]
+      saveLooseFiles(updated, newFileItem)
+      setSelectedLooseFile(newFileItem)
+      setUploadingStatus('')
+      showToast('Arquivo avulso adicionado e indexado no Supabase!')
+    } catch (err: unknown) {
+      setUploadingStatus('')
+      alert(`Erro ao processar arquivo: ${err instanceof Error ? err.message : 'Falha na leitura.'}`)
+    }
+  }
+
+  const handleDeleteLooseFile = (id: string) => {
+    if (!confirm('Deseja realmente excluir este arquivo avulso da biblioteca?')) return
+    const updated = looseFiles.filter(f => f.id !== id)
+    saveLooseFiles(updated)
+    if (selectedLooseFile?.id === id) {
+      setSelectedLooseFile(updated[0] || null)
+    }
+    try {
+      import('@/lib/supabaseClient').then(({ deleteLooseFileFromSupabase }) => {
+        deleteLooseFileFromSupabase(id)
+      })
+    } catch {}
+    showToast('Arquivo removido')
+  }
 
   // Add New School Header
   function handleAddSchoolHeader() {
@@ -1028,151 +1279,194 @@ export default function Repository() {
  return elements
  }
 
- // Filtros da Bibliografia 
- const filteredBibliography = items.filter(i => {
- const matchType = activeFilter === 'all' || i.type === activeFilter
- const matchSearch = !searchText || i.title.toLowerCase().includes(searchText.toLowerCase()) || i.content.toLowerCase().includes(searchText.toLowerCase())
- return matchType && matchSearch
- })
+  // Filtros da Bibliografia 
+  const filteredBibliography = items.filter(i => {
+    const matchType = activeFilter === 'all' || i.type === activeFilter
+    const matchSearch = !searchText || i.title.toLowerCase().includes(searchText.toLowerCase()) || i.content.toLowerCase().includes(searchText.toLowerCase())
+    return matchType && matchSearch
+  })
 
- // Filtros de Exercícios 
- const filteredExercises = savedExercises.filter(e => {
- const matchType = exerciseFilter === 'all' || e.type === exerciseFilter
- const matchSearch = !exerciseSearch || e.title.toLowerCase().includes(exerciseSearch.toLowerCase()) || e.content.toLowerCase().includes(exerciseSearch.toLowerCase())
- return matchType && matchSearch
- })
+  // Filtros de Exercícios 
+  const filteredExercises = savedExercises.filter(e => {
+    const matchType = exerciseFilter === 'all' || e.type === exerciseFilter
+    const matchSearch = !exerciseSearch || e.title.toLowerCase().includes(exerciseSearch.toLowerCase()) || e.content.toLowerCase().includes(exerciseSearch.toLowerCase())
+    return matchType && matchSearch
+  })
 
- const defaultFallbackHeader: SchoolHeaderModel = {
- id: 'default-school',
- name: 'Colégio Machado Sobrinho',
- officialName: 'COLÉGIO MACHADO SOBRINHO SISTEMA DE ENSINO INTEGRADO',
- motto: 'Ensino de Excelência & Formação Integral',
- subject: 'Língua Inglesa',
- instructions: '1. Responda todas as questões com clareza e atenção.\n2. Utilize caneta azul ou preta.\n3. Boa avaliação!',
- gradeMax: '10,0'
- }
+  // Filtros de Arquivos Avulsos (Subfuncionalidade Arquivos)
+  const filteredLooseFiles = looseFiles.filter(f => {
+    const matchCategory = looseFileFilter === 'all' || f.category === looseFileFilter || (looseFileFilter === 'image' && f.fileType === 'image') || (looseFileFilter === 'audio' && f.fileType === 'audio')
+    const matchSchool = looseFileSchoolFilter === 'all' || (f.school && f.school.toLowerCase().includes(looseFileSchoolFilter.toLowerCase()))
+    const searchLower = looseFileSearch.toLowerCase()
+    const matchSearch = !looseFileSearch || 
+      f.title.toLowerCase().includes(searchLower) || 
+      f.fileName.toLowerCase().includes(searchLower) || 
+      f.extractedText.toLowerCase().includes(searchLower) ||
+      (f.tags && f.tags.some(t => t.toLowerCase().includes(searchLower)))
+    return matchCategory && matchSchool && matchSearch
+  })
 
- const currentSelectedHeader = headerTemplates.find(h => h.id === selectedHeaderId) || headerTemplates[0] || defaultFallbackHeader
+  const defaultFallbackHeader: SchoolHeaderModel = {
+    id: 'default-school',
+    name: 'Colégio Machado Sobrinho',
+    officialName: 'COLÉGIO MACHADO SOBRINHO SISTEMA DE ENSINO INTEGRADO',
+    motto: 'Ensino de Excelência & Formação Integral',
+    subject: 'Língua Inglesa',
+    instructions: '1. Responda todas as questões com clareza e atenção.\n2. Utilize caneta azul ou preta.\n3. Boa avaliação!',
+    gradeMax: '10,0'
+  }
 
- const btnPrimary: React.CSSProperties = {
- padding: '10px 18px', borderRadius: 10, border: 'none',
- background: '#8b5e3c', color: '#fff',
- fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6
- }
- const btnSecondary: React.CSSProperties = {
- padding: '10px 18px', borderRadius: 10,
- border: '1px solid rgba(139,115,85,0.35)',
- background: '#fffcf8', color: '#586e75', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6
- }
- const inputStyle: React.CSSProperties = {
- width: '100%', padding: '10px 14px', borderRadius: 10,
- border: '1px solid rgba(139,115,85,0.25)',
- fontSize: 13, outline: 'none', background: '#fffcf8', color: '#2c1a0e', boxSizing: 'border-box'
- }
+  const currentSelectedHeader = headerTemplates.find(h => h.id === selectedHeaderId) || headerTemplates[0] || defaultFallbackHeader
 
- return (
- <ModuleShell
- title=" Biblioteca & Repositório Pedagógico"
- subtitle="Organização centralizada em 3 partições: Cabeçalhos Oficiais das Escolas, Exercícios & Provas Salvas, e Bibliografia RAG."
- isFullHeight
- maxWidth="100%"
- actions={
- <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
- {uploadingStatus && (
- <div style={{ background: '#fdf3e7', border: '1px solid #8b5e3c', color: '#8b5e3c', padding: '6px 14px', borderRadius: 10, fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
- <i className="ti ti-loader text-spin" /> {uploadingStatus}
- </div>
- )}
+  const btnPrimary: React.CSSProperties = {
+    padding: '10px 18px', borderRadius: 10, border: 'none',
+    background: '#8b5e3c', color: '#fff',
+    fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6
+  }
+  const btnSecondary: React.CSSProperties = {
+    padding: '10px 18px', borderRadius: 10,
+    border: '1px solid rgba(139,115,85,0.35)',
+    background: '#fffcf8', color: '#586e75', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6
+  }
+  const inputStyle: React.CSSProperties = {
+    width: '100%', padding: '10px 14px', borderRadius: 10,
+    border: '1px solid rgba(139,115,85,0.25)',
+    fontSize: 13, outline: 'none', background: '#fffcf8', color: '#2c1a0e', boxSizing: 'border-box'
+  }
 
- {activePartition === 'headers' && (
- <input
- type="file"
- ref={headerFileInputRef}
- onChange={processHeaderFile}
- accept="image/png,image/jpeg,image/jpg,image/webp,.png,.jpg,.jpeg,.webp,.docx,.doc,.pdf"
- style={{ display: 'none' }}
- />
- )}
+  return (
+    <ModuleShell
+      title="📚 Biblioteca & Repositório Pedagógico"
+      subtitle="Organização centralizada em 4 partições: Cabeçalhos Oficiais, Exercícios & Provas, Livros Didáticos RAG e Arquivos Avulsos."
+      isFullHeight
+      maxWidth="100%"
+      actions={
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          {uploadingStatus && (
+            <div style={{ background: '#fdf3e7', border: '1px solid #8b5e3c', color: '#8b5e3c', padding: '6px 14px', borderRadius: 10, fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <i className="ti ti-loader text-spin" /> {uploadingStatus}
+            </div>
+          )}
 
- {activePartition === 'exercises' && (
- <div style={{ display: 'flex', gap: 8 }}>
- <button onClick={() => window.dispatchEvent(new CustomEvent('teacher:navigate', { detail: 'exam' }))} style={btnPrimary}>
- <i className="ti ti-file-text" /> Criar Nova Prova
- </button>
- <button onClick={() => window.dispatchEvent(new CustomEvent('teacher:navigate', { detail: 'quick' }))} style={btnSecondary}>
- <i className="ti ti-sparkles" /> Criar Exercício Rápido
- </button>
- </div>
- )}
+          {activePartition === 'headers' && (
+            <input
+              type="file"
+              ref={headerFileInputRef}
+              onChange={processHeaderFile}
+              accept="image/png,image/jpeg,image/jpg,image/webp,.png,.jpg,.jpeg,.webp,.docx,.doc,.pdf"
+              style={{ display: 'none' }}
+            />
+          )}
 
- {activePartition === 'bibliography' && (
- <>
- <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept=".txt,.md,.json,.csv,.pdf,.docx,.doc" style={{ display: 'none' }} />
- <button onClick={() => fileInputRef.current?.click()} style={btnSecondary}>
- <i className="ti ti-upload" /> Importar Livro / Arquivo
- </button>
- <button onClick={() => { clearForm(); setMode('add') }} style={btnPrimary}>
- <i className="ti ti-plus" /> Adicionar Livro Manual
- </button>
- </>
- )}
- </div>
- }
- >
- <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 16 }}>
+          {activePartition === 'exercises' && (
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={() => window.dispatchEvent(new CustomEvent('teacher:navigate', { detail: 'exam' }))} style={btnPrimary}>
+                <i className="ti ti-file-text" /> Criar Nova Prova
+              </button>
+              <button onClick={() => window.dispatchEvent(new CustomEvent('teacher:navigate', { detail: 'quick' }))} style={btnSecondary}>
+                <i className="ti ti-sparkles" /> Criar Exercício Rápido
+              </button>
+            </div>
+          )}
 
- {/* BARRA DE SELEÇÃO DAS 3 PARTIÇÕES */}
- <div style={{
- display: 'flex', gap: 8, background: '#fffcf8', padding: '6px',
- borderRadius: 14, border: '1.5px solid rgba(139,115,85,0.18)', width: 'fit-content',
- boxShadow: '0 2px 10px rgba(44,26,14,0.04)'
- }}>
- <button
- onClick={() => setActivePartition('headers')}
- style={{
- padding: '10px 18px', borderRadius: 10, border: 'none',
- background: activePartition === 'headers' ? '#8b5e3c' : 'transparent',
- color: activePartition === 'headers' ? '#fff' : '#665c54',
- fontSize: 13.5, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
- transition: 'all 0.15s'
- }}
- >
- <i className="ti ti-id-badge" /> 1. Cabeçalho ({headerTemplates.length})
- </button>
+          {activePartition === 'bibliography' && (
+            <>
+              <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept=".txt,.md,.json,.csv,.pdf,.docx,.doc" style={{ display: 'none' }} />
+              <button onClick={() => fileInputRef.current?.click()} style={btnSecondary}>
+                <i className="ti ti-upload" /> Importar Livro / Arquivo
+              </button>
+              <button onClick={() => { clearForm(); setMode('add') }} style={btnPrimary}>
+                <i className="ti ti-plus" /> Adicionar Livro Manual
+              </button>
+            </>
+          )}
 
- <button
- onClick={() => setActivePartition('exercises')}
- style={{
- padding: '10px 18px', borderRadius: 10, border: 'none',
- background: activePartition === 'exercises' ? '#8b5e3c' : 'transparent',
- color: activePartition === 'exercises' ? '#fff' : '#665c54',
- fontSize: 13.5, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
- transition: 'all 0.15s'
- }}
- >
- <i className="ti ti-file-certificate" /> 2. Exercícios & Provas ({savedExercises.length})
- </button>
+          {activePartition === 'files' && (
+            <>
+              <input
+                type="file"
+                ref={looseFileInputRef}
+                onChange={handleUploadLooseFile}
+                accept=".pdf,.docx,.doc,.txt,.md,.png,.jpg,.jpeg,.webp,.xlsx,.pptx,.mp3,.wav"
+                style={{ display: 'none' }}
+              />
+              <button onClick={() => looseFileInputRef.current?.click()} style={btnSecondary}>
+                <i className="ti ti-upload" /> Importar Arquivo Avulso
+              </button>
+              <button onClick={() => { setNewLooseTitle(''); setNewLooseContent(''); setIsAddLooseModalOpen(true) }} style={btnPrimary}>
+                <i className="ti ti-plus" /> Novo Arquivo Manual
+              </button>
+            </>
+          )}
+        </div>
+      }
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 16 }}>
 
- <button
- onClick={() => setActivePartition('bibliography')}
- style={{
- padding: '10px 18px', borderRadius: 10, border: 'none',
- background: activePartition === 'bibliography' ? '#8b5e3c' : 'transparent',
- color: activePartition === 'bibliography' ? '#fff' : '#665c54',
- fontSize: 13.5, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
- transition: 'all 0.15s'
- }}
- >
- <i className="ti ti-books" /> 3. Bibliografia RAG ({items.length})
- </button>
- </div>
+        {/* BARRA DE SELEÇÃO DAS 4 PARTIÇÕES */}
+        <div style={{
+          display: 'flex', gap: 8, background: '#fffcf8', padding: '6px',
+          borderRadius: 14, border: '1.5px solid rgba(139,115,85,0.18)', width: 'fit-content',
+          boxShadow: '0 2px 10px rgba(44,26,14,0.04)', flexWrap: 'wrap'
+        }}>
+          <button
+            onClick={() => setActivePartition('headers')}
+            style={{
+              padding: '10px 18px', borderRadius: 10, border: 'none',
+              background: activePartition === 'headers' ? '#8b5e3c' : 'transparent',
+              color: activePartition === 'headers' ? '#fff' : '#665c54',
+              fontSize: 13.5, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
+              transition: 'all 0.15s'
+            }}
+          >
+            <i className="ti ti-id-badge" /> 1. Cabeçalho ({headerTemplates.length})
+          </button>
 
+          <button
+            onClick={() => setActivePartition('exercises')}
+            style={{
+              padding: '10px 18px', borderRadius: 10, border: 'none',
+              background: activePartition === 'exercises' ? '#8b5e3c' : 'transparent',
+              color: activePartition === 'exercises' ? '#fff' : '#665c54',
+              fontSize: 13.5, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
+              transition: 'all 0.15s'
+            }}
+          >
+            <i className="ti ti-file-certificate" /> 2. Exercícios & Provas ({savedExercises.length})
+          </button>
 
- {/* 
- PARTIÇÃO 1: CABEÇALHO (SIDEBAR UNIFICADA PARA ESCOLAS & UPLOAD)
- */}
- {activePartition === 'headers' && (
- <div style={{ display: 'flex', flexDirection: 'column', gap: 16, flex: 1, minHeight: 0 }}>
+          <button
+            onClick={() => setActivePartition('bibliography')}
+            style={{
+              padding: '10px 18px', borderRadius: 10, border: 'none',
+              background: activePartition === 'bibliography' ? '#8b5e3c' : 'transparent',
+              color: activePartition === 'bibliography' ? '#fff' : '#665c54',
+              fontSize: 13.5, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
+              transition: 'all 0.15s'
+            }}
+          >
+            <i className="ti ti-books" /> 3. Livros Didáticos ({items.length})
+          </button>
+
+          <button
+            onClick={() => setActivePartition('files')}
+            style={{
+              padding: '10px 18px', borderRadius: 10, border: 'none',
+              background: activePartition === 'files' ? '#8b5e3c' : 'transparent',
+              color: activePartition === 'files' ? '#fff' : '#665c54',
+              fontSize: 13.5, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
+              transition: 'all 0.15s'
+            }}
+          >
+            <i className="ti ti-folders" /> 4. Arquivos Avulsos ({looseFiles.length})
+          </button>
+        </div>
+
+        {/* 
+            PARTIÇÃO 1: CABEÇALHO (SIDEBAR UNIFICADA PARA ESCOLAS & UPLOAD)
+        */}
+        {activePartition === 'headers' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16, flex: 1, minHeight: 0 }}>
  <input
  type="file"
  ref={headerFileInputRef}
@@ -1705,7 +1999,6 @@ export default function Repository() {
  {viewItem.wordCount?.toLocaleString()} palavras · Indexado no Motor RAG
  </div>
  </div>
-
  <div style={{ display: 'flex', gap: 8 }}>
  <button onClick={() => startEdit(viewItem)} style={btnSecondary}>
  <i className="ti ti-edit" /> Editar
@@ -1735,9 +2028,316 @@ export default function Repository() {
  </div>
  )}
 
+ {/* 
+ PARTIÇÃO 4: ARQUIVOS AVULSOS (DOCUMENTOS, PDFS, DOCX, SLIDES, IMAGENS, ÁUDIOS)
+ */}
+ {activePartition === 'files' && (
+ <div style={{ display: 'flex', flexDirection: 'column', gap: 16, flex: 1, minHeight: 0 }}>
+ {/* Barra de Filtros e Busca */}
+ <div style={{ background: '#fff', padding: '14px 20px', borderRadius: 16, border: '1px solid #ede8dc', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+ <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+ {[
+ { key: 'all', label: `Todos (${looseFiles.length})` },
+ { key: 'Atividade Complementar', label: 'Atividades' },
+ { key: 'Artigo / Texto', label: 'Artigos / Leituras' },
+ { key: 'Lista de Vocabulário', label: 'Vocabulário' },
+ { key: 'Handout / Ficha', label: 'Handouts & Fichas' },
+ { key: 'Slide / Apresentação', label: 'Slides' },
+ { key: 'image', label: 'Infográficos & Imagens' },
+ { key: 'audio', label: 'Áudios de Aula' },
+ ].map(tab => (
+ <button
+ key={tab.key}
+ onClick={() => setLooseFileFilter(tab.key)}
+ style={{
+ padding: '7px 14px', borderRadius: 9, border: 'none', fontSize: 12.5, fontWeight: 700, cursor: 'pointer',
+ background: looseFileFilter === tab.key ? '#8b5e3c' : '#f5efe6',
+ color: looseFileFilter === tab.key ? '#fff' : '#665c54',
+ transition: 'all 0.15s'
+ }}
+ >
+ {tab.label}
+ </button>
+ ))}
  </div>
 
+ <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+ <input
+ type="text"
+ placeholder="🔍 Buscar por nome, conteúdo ou tag..."
+ value={looseFileSearch}
+ onChange={e => setLooseFileSearch(e.target.value)}
+ style={{ padding: '8px 14px', borderRadius: 10, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, color: '#2c1a0e', outline: 'none', minWidth: 260 }}
+ />
+ </div>
+ </div>
 
+ {/* Split View: Lista de Arquivos (Esquerda) e Preview / Ações (Direita) */}
+ <div style={{ display: 'grid', gridTemplateColumns: '420px 1fr', gap: 20, flex: 1, minHeight: 0 }}>
+ {/* Coluna Esquerda: Cartões de Arquivos */}
+ <div style={{ background: '#fff', borderRadius: 16, border: '1px solid rgba(139,115,85,0.15)', padding: 14, display: 'flex', flexDirection: 'column', gap: 10, overflowY: 'auto' }}>
+ {filteredLooseFiles.length === 0 ? (
+ <div style={{ padding: '40px 20px', textAlign: 'center', color: '#8b5e3c' }}>
+ <i className="ti ti-folder-off" style={{ fontSize: 36, opacity: 0.5, display: 'block', marginBottom: 10 }} />
+ <p style={{ margin: 0, fontWeight: 600, fontSize: 14 }}>Nenhum arquivo avulso encontrado.</p>
+ <p style={{ margin: '6px 0 0', fontSize: 12, opacity: 0.8 }}>Clique em "Importar Arquivo Avulso" para adicionar PDFs, DOCXs, apresentações ou listas.</p>
+ </div>
+ ) : (
+ filteredLooseFiles.map(file => {
+ const isSelected = selectedLooseFile?.id === file.id
+ const isPdf = file.fileType === 'pdf'
+ const isDocx = file.fileType === 'docx'
+ const isImg = file.fileType === 'image'
+ const isAudio = file.fileType === 'audio'
+ const isSlide = file.fileType === 'slide'
+
+ const iconColor = isPdf ? '#dc2626' : isDocx ? '#2563eb' : isImg ? '#059669' : isAudio ? '#7c3aed' : isSlide ? '#ea580c' : '#8b5e3c'
+ const iconName = isPdf ? 'ti ti-file-type-pdf' : isDocx ? 'ti ti-file-type-docx' : isImg ? 'ti ti-photo' : isAudio ? 'ti ti-volume' : isSlide ? 'ti ti-presentation' : 'ti ti-file-text'
+
+ return (
+ <div
+ key={file.id}
+ onClick={() => setSelectedLooseFile(file)}
+ style={{
+ padding: 14, borderRadius: 14, cursor: 'pointer',
+ background: isSelected ? '#fdf8f2' : '#faf8f5',
+ border: isSelected ? '2px solid #8b5e3c' : '1px solid #ede8dc',
+ boxShadow: isSelected ? '0 4px 14px rgba(139,94,60,0.12)' : 'none',
+ display: 'flex', flexDirection: 'column', gap: 8,
+ transition: 'all 0.15s'
+ }}
+ >
+ <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+ <div style={{ width: 36, height: 36, borderRadius: 10, background: `${iconColor}15`, color: iconColor, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>
+ <i className={iconName} />
+ </div>
+ <div style={{ flex: 1, minWidth: 0 }}>
+ <div style={{ fontSize: 13.5, fontWeight: 700, color: '#2c1a0e', lineHeight: 1.3, wordBreak: 'break-word' }}>
+ {file.title}
+ </div>
+ <div style={{ fontSize: 11, color: '#8b5e3c', marginTop: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
+ <span style={{ fontWeight: 600 }}>{file.category}</span>
+ {file.school && <span>· {file.school}</span>}
+ </div>
+ </div>
+ </div>
+
+ <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11, color: '#586e75', borderTop: '1px dashed #ede8dc', paddingTop: 6 }}>
+ <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+ {file.tags && file.tags.slice(0, 3).map(tag => (
+ <span key={tag} style={{ background: '#eee8d5', color: '#073642', padding: '1px 6px', borderRadius: 6, fontSize: 10, fontWeight: 600 }}>
+ {tag}
+ </span>
+ ))}
+ </div>
+ <span style={{ fontSize: 10.5, fontWeight: 600 }}>
+ {file.fileSize ? `${(file.fileSize / 1024).toFixed(0)} KB` : 'Texto'} · {file.date}
+ </span>
+ </div>
+ </div>
+ )
+ })
+ )}
+ </div>
+
+ {/* Coluna Direita: Detalhes, Ações e Preview do Arquivo Selecionado */}
+ <div style={{ background: '#fff', borderRadius: 16, border: '1px solid rgba(139,115,85,0.15)', padding: 24, display: 'flex', flexDirection: 'column', gap: 16, overflowY: 'auto' }}>
+ {selectedLooseFile ? (
+ <>
+ <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px solid #ede8dc', paddingBottom: 16, gap: 16, flexWrap: 'wrap' }}>
+ <div style={{ flex: 1, minWidth: 280 }}>
+ <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+ <span style={{ background: '#8b5e3c', color: '#fff', padding: '3px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700, textTransform: 'uppercase' }}>
+ {selectedLooseFile.fileType.toUpperCase()}
+ </span>
+ <span style={{ fontSize: 12, fontWeight: 600, color: '#586e75' }}>
+ {selectedLooseFile.category} {selectedLooseFile.school ? `· ${selectedLooseFile.school}` : ''}
+ </span>
+ </div>
+ <h2 style={{ fontFamily: "'Fraunces', Georgia, serif", fontSize: 22, color: '#2c1a0e', margin: 0 }}>
+ {selectedLooseFile.title}
+ </h2>
+ <div style={{ fontSize: 12, color: '#8b5e3c', marginTop: 4 }}>
+ Nome do Arquivo: <strong>{selectedLooseFile.fileName}</strong> · Adicionado em {selectedLooseFile.date} · Sincronizado no Supabase Cloud
+ </div>
+ </div>
+
+ <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+ {selectedLooseFile.fileDataUrl && (
+ <a
+ href={selectedLooseFile.fileDataUrl}
+ download={selectedLooseFile.fileName}
+ style={{ ...btnSecondary, textDecoration: 'none', color: '#8b5e3c' }}
+ >
+ <i className="ti ti-download" /> Baixar Arquivo
+ </a>
+ )}
+
+ <button
+ onClick={() => {
+ localStorage.setItem('teacher_exam_seed_text', selectedLooseFile.extractedText)
+ window.dispatchEvent(new CustomEvent('teacher:navigate', { detail: 'exam' }))
+ }}
+ style={{ ...btnPrimary, background: '#16a34a' }}
+ title="Criar Prova ou Lista de Exercícios usando este material"
+ >
+ <i className="ti ti-sparkles" /> Gerar Prova com Este Arquivo
+ </button>
+
+ <button
+ onClick={() => {
+ navigator.clipboard.writeText(selectedLooseFile.extractedText)
+ showToast('Texto copiado para a área de transferência!')
+ }}
+ style={btnSecondary}
+ >
+ <i className="ti ti-copy" /> Copiar Texto
+ </button>
+
+ <button
+ onClick={() => handleDeleteLooseFile(selectedLooseFile.id)}
+ style={{ ...btnSecondary, color: '#dc322f' }}
+ >
+ <i className="ti ti-trash" /> Excluir
+ </button>
+ </div>
+ </div>
+
+ {/* Preview Especial por Tipo de Arquivo */}
+ {selectedLooseFile.fileType === 'image' && selectedLooseFile.fileDataUrl && (
+ <div style={{ background: '#f5efe6', padding: 14, borderRadius: 12, textAlign: 'center', border: '1px solid #ede8dc' }}>
+ <img src={selectedLooseFile.fileDataUrl} alt={selectedLooseFile.title} style={{ maxWidth: '100%', maxHeight: 340, borderRadius: 8, objectFit: 'contain' }} />
+ </div>
+ )}
+
+ {selectedLooseFile.fileType === 'audio' && selectedLooseFile.fileDataUrl && (
+ <div style={{ background: '#f5efe6', padding: 16, borderRadius: 12, display: 'flex', alignItems: 'center', gap: 14 }}>
+ <i className="ti ti-volume" style={{ fontSize: 28, color: '#7c3aed' }} />
+ <audio controls src={selectedLooseFile.fileDataUrl} style={{ width: '100%' }} />
+ </div>
+ )}
+
+ {/* Conteúdo Extraído / Leitor de Texto */}
+ <div>
+ <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+ <h4 style={{ fontSize: 13, fontWeight: 800, color: '#8b5e3c', margin: 0, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+ 📄 Conteúdo Indexado (Pronto para o Motor RAG & IA da Rafinha)
+ </h4>
+ <span style={{ fontSize: 11.5, color: '#586e75', fontWeight: 600 }}>
+ {selectedLooseFile.extractedText ? `${selectedLooseFile.extractedText.trim().split(/\s+/).length} palavras` : 'Sem texto extraído'}
+ </span>
+ </div>
+
+ <div style={{
+ background: '#fdf8f2', color: '#2c1a0e', padding: 22, borderRadius: 12, border: '1px solid #ede8dc',
+ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 13.5, lineHeight: 1.7, whiteSpace: 'pre-wrap', maxHeight: 420, overflowY: 'auto'
+ }}>
+ {selectedLooseFile.extractedText || 'Nenhum texto pôde ser extraído deste arquivo.'}
+ </div>
+ </div>
+ </>
+ ) : (
+ <div style={{ padding: 60, textAlign: 'center', color: '#8b5e3c' }}>
+ <i className="ti ti-folders" style={{ fontSize: 48, opacity: 0.4, display: 'block', marginBottom: 12 }} />
+ <p style={{ fontWeight: 600, fontSize: 15, margin: 0 }}>Selecione um arquivo avulso ao lado para visualizar e gerar atividades.</p>
+ </div>
+ )}
+ </div>
+ </div>
+ </div>
+ )}
+
+ </div>
+
+ {/* Modal Novo Arquivo Avulso Manual */}
+ {isAddLooseModalOpen && (
+ <div style={{ position: 'fixed', inset: 0, background: 'rgba(7,54,66,0.65)', zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, backdropFilter: 'blur(4px)' }}>
+ <div style={{ background: '#fff', borderRadius: 20, padding: 28, width: 620, maxWidth: '95vw', border: '1px solid #ede8dc', boxShadow: '0 20px 60px rgba(0,0,0,0.3)', display: 'flex', flexDirection: 'column', gap: 16 }}>
+ <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+ <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+ <span style={{ fontSize: 22 }}>📁</span>
+ <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#073642' }}>Cadastrar Arquivo Avulso</h3>
+ </div>
+ <button onClick={() => setIsAddLooseModalOpen(false)} style={{ background: '#f5f0e8', border: 'none', width: 32, height: 32, borderRadius: '50%', cursor: 'pointer', fontWeight: 700 }}>×</button>
+ </div>
+
+ <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+ <div>
+ <label style={{ fontSize: 12, fontWeight: 700, color: '#586e75', display: 'block', marginBottom: 4 }}>Título do Arquivo / Material</label>
+ <input value={newLooseTitle} onChange={e => setNewLooseTitle(e.target.value)} placeholder="Ex: Lista de Phrasal Verbs, Artigo sobre IA..." style={inputStyle} />
+ </div>
+
+ <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+ <div>
+ <label style={{ fontSize: 12, fontWeight: 700, color: '#586e75', display: 'block', marginBottom: 4 }}>Categoria</label>
+ <select value={newLooseCategory} onChange={e => setNewLooseCategory(e.target.value)} style={inputStyle}>
+ <option value="Atividade Complementar">Atividade Complementar</option>
+ <option value="Artigo / Texto">Artigo / Texto</option>
+ <option value="Lista de Vocabulário">Lista de Vocabulário</option>
+ <option value="Handout / Ficha">Handout / Ficha</option>
+ <option value="Slide / Apresentação">Slide / Apresentação</option>
+ <option value="Áudio de Aula">Áudio de Aula</option>
+ <option value="Infográfico / Imagem">Infográfico / Imagem</option>
+ <option value="Outro">Outro</option>
+ </select>
+ </div>
+
+ <div>
+ <label style={{ fontSize: 12, fontWeight: 700, color: '#586e75', display: 'block', marginBottom: 4 }}>Escola Associada (opcional)</label>
+ <select value={newLooseSchool} onChange={e => setNewLooseSchool(e.target.value)} style={inputStyle}>
+ <option value="">Geral / Todas</option>
+ {registeredSchools.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+ </select>
+ </div>
+ </div>
+
+ <div>
+ <label style={{ fontSize: 12, fontWeight: 700, color: '#586e75', display: 'block', marginBottom: 4 }}>Tags (separadas por vírgula)</label>
+ <input value={newLooseTags} onChange={e => setNewLooseTags(e.target.value)} placeholder="#grammar, #9ano, #reading" style={inputStyle} />
+ </div>
+
+ <div>
+ <label style={{ fontSize: 12, fontWeight: 700, color: '#586e75', display: 'block', marginBottom: 4 }}>Texto / Conteúdo do Arquivo</label>
+ <textarea value={newLooseContent} onChange={e => setNewLooseContent(e.target.value)} placeholder="Cole aqui o texto do exercício, artigo, vocabulário..." rows={6} style={{ ...inputStyle, fontFamily: 'monospace' }} />
+ </div>
+ </div>
+
+ <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 8 }}>
+ <button onClick={() => setIsAddLooseModalOpen(false)} style={btnSecondary}>Cancelar</button>
+ <button
+ onClick={() => {
+ if (!newLooseTitle.trim()) {
+ alert('Informe o título do arquivo.')
+ return
+ }
+ const tagList = newLooseTags.split(',').map(t => t.trim()).filter(Boolean)
+ const item: LooseFileItem = {
+ id: `file_${Date.now()}`,
+ title: newLooseTitle.trim(),
+ fileName: `${newLooseTitle.trim().toLowerCase().replace(/\s+/g, '_')}.txt`,
+ fileType: 'text',
+ fileSize: newLooseContent.length,
+ category: newLooseCategory,
+ tags: tagList.length > 0 ? tagList : ['#manual', '#texto'],
+ school: newLooseSchool || 'Geral',
+ extractedText: newLooseContent,
+ date: new Date().toLocaleDateString('pt-BR'),
+ createdAt: new Date().toISOString()
+ }
+ const updated = [item, ...looseFiles]
+ saveLooseFiles(updated, item)
+ setSelectedLooseFile(item)
+ setIsAddLooseModalOpen(false)
+ showToast('Arquivo avulso salvo!')
+ }}
+ style={btnPrimary}
+ >
+ Salvar Arquivo Avulso
+ </button>
+ </div>
+ </div>
+ </div>
+ )}
 
  {/* Modal de Player Online */}
  {showOnlinePlayer && viewExercise && (
@@ -1791,7 +2391,7 @@ export default function Repository() {
  display: 'flex', alignItems: 'center', gap: 10,
  pointerEvents: 'none'
  }}>
- <span style={{ fontSize: 16, color: '#e2a355' }}></span>
+ <span style={{ fontSize: 16, color: '#e2a355' }}>✓</span>
  <span>{toastMessage}</span>
  </div>
  )}

@@ -9,51 +9,41 @@ import SavedItemsDrawer, { saveItemToStorage, SavedItem } from '@/components/Sav
 import { PEDAGOGICAL_METHODOLOGIES, buildMethodologyInstructions } from '@/lib/pedagogicalMethodologies'
 import PresetSelector from '@/components/PresetSelector'
 import { exportToPdf, exportToWord, OFFICIAL_SCHOOL_TEMPLATES } from '@/lib/exportUtils'
-
+import SourceKnowledgeHub, { SourceItem, KnowledgeMode, compileSourcesPrompt } from '@/components/SourceKnowledgeHub'
 
 // Types 
 
-interface RepositoryItem {
- id: number
- title: string
- content: string
- date: string
- type: string
- category?: string
- textbook?: string
-}
-
 interface HeaderState {
- school: string
- teacher: string
- classGroup: string
- title: string
+  school: string
+  teacher: string
+  classGroup: string
+  title: string
 }
 
 // Constants 
 
 const CEFR = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2']
 const QTYPES = [
- { label: 'Múltipla escolha', sub: '4 alternativas, A-D', icon: 'ti-circle-dot' },
- { label: 'Dissertativa', sub: 'Resposta aberta', icon: 'ti-writing' },
- { label: 'Verdadeiro / Falso', sub: 'Afirmações V ou F', icon: 'ti-toggle-left' },
- { label: 'Lacuna (gap fill)', sub: 'Complete a frase', icon: 'ti-dots' },
- { label: 'Correlação', sub: 'Ligue as colunas', icon: 'ti-arrows-shuffle' },
- { label: 'Interpretação de texto', sub: 'Baseada em texto', icon: 'ti-align-left' },
- { label: 'Ordenação', sub: 'Ordene itens/eventos', icon: 'ti-sort-ascending' },
- { label: 'Produção textual', sub: 'Redação / escrita', icon: 'ti-notebook' },
+  { label: 'Múltipla escolha', sub: '4 alternativas, A-D', icon: 'ti-circle-dot' },
+  { label: 'Dissertativa', sub: 'Resposta aberta', icon: 'ti-writing' },
+  { label: 'Verdadeiro / Falso', sub: 'Afirmações V ou F', icon: 'ti-toggle-left' },
+  { label: 'Lacuna (gap fill)', sub: 'Complete a frase', icon: 'ti-dots' },
+  { label: 'Correlação', sub: 'Ligue as colunas', icon: 'ti-arrows-shuffle' },
+  { label: 'Interpretação de texto', sub: 'Baseada em texto', icon: 'ti-align-left' },
+  { label: 'Ordenação', sub: 'Ordene itens/eventos', icon: 'ti-sort-ascending' },
+  { label: 'Produção textual', sub: 'Redação / escrita', icon: 'ti-notebook' },
 ]
 const GRADES = [
- '1º Fund.', '2º Fund.', '3º Fund.', '4º Fund.', '5º Fund.',
- '6º Fund.', '7º Fund.', '8º Fund.', '9º Fund.',
- '1º Médio', '2º Médio', '3º Médio',
+  '1º Fund.', '2º Fund.', '3º Fund.', '4º Fund.', '5º Fund.',
+  '6º Fund.', '7º Fund.', '8º Fund.', '9º Fund.',
+  '1º Médio', '2º Médio', '3º Médio',
 ]
 const NEE_PROFILES = [
- { id: 'dyslexia', label: 'Dislexia', icon: 'ti-text-size', color: '#268bd2' },
- { id: 'adhd', label: 'TDAH', icon: 'ti-bolt', color: '#b58900' },
- { id: 'asd', label: 'TEA', icon: 'ti-puzzle', color: '#2aa198' },
- { id: 'low_vis', label: 'Baixa Visão', icon: 'ti-eye-off', color: '#6c71c4' },
- { id: 'gifted', label: 'Superdotação', icon: 'ti-star', color: '#cb4b16' },
+  { id: 'dyslexia', label: 'Dislexia', icon: 'ti-text-size', color: '#268bd2' },
+  { id: 'adhd', label: 'TDAH', icon: 'ti-bolt', color: '#b58900' },
+  { id: 'asd', label: 'TEA', icon: 'ti-puzzle', color: '#2aa198' },
+  { id: 'low_vis', label: 'Baixa Visão', icon: 'ti-eye-off', color: '#6c71c4' },
+  { id: 'gifted', label: 'Superdotação', icon: 'ti-star', color: '#cb4b16' },
 ]
 
 // Style helpers 
@@ -66,77 +56,67 @@ const CARD: React.CSSProperties = { background: '#fff', borderRadius: 14, paddin
 // Helpers 
 
 function loadApis(): ApiConfig[] {
- try {
- const { getAvailableApisForSelect } = require('@/lib/autoApiSelector')
- return getAvailableApisForSelect()
- } catch { return [] }
+  try {
+    const { getAvailableApisForSelect } = require('@/lib/autoApiSelector')
+    return getAvailableApisForSelect()
+  } catch { return [] }
 }
 
 function loadConfig(): { school: string; teacher: string } {
- try { return JSON.parse(localStorage.getItem('teacher_cfg') || '{}') } catch { return { school: '', teacher: '' } }
-}
-
-function loadLibrary(): RepositoryItem[] {
- try {
- const raw = localStorage.getItem('teacher_repo')
- || localStorage.getItem('teacher_repository')
- || localStorage.getItem('teacher_library')
- || '[]'
- return JSON.parse(raw)
- } catch { return [] }
+  try { return JSON.parse(localStorage.getItem('teacher_cfg') || '{}') } catch { return { school: '', teacher: '' } }
 }
 
 async function callApi(api: ApiConfig, prompt: string): Promise<string> {
- const { executeUnifiedAiCall } = await import('@/lib/autoApiSelector')
- return executeUnifiedAiCall(api, prompt)
+  const { executeUnifiedAiCall } = await import('@/lib/autoApiSelector')
+  return executeUnifiedAiCall(api, prompt)
 }
 
 function cleanHtml(raw: string): string {
- return raw
- .replace(/^```html\n?/i, '')
- .replace(/^```\n?/, '')
- .replace(/```$/, '')
- .trim()
+  return raw
+    .replace(/^```html\n?/i, '')
+    .replace(/^```\n?/, '')
+    .replace(/```$/, '')
+    .trim()
 }
 
 function buildPrompt(opts: {
- types: string[]
- cefr: string
- grade: string
- skill: string
- methodology: string[]
- topic: string
- qtCount: string
- neeProfile: string
- stemLanguage?: 'pt' | 'en'
- optionLanguage?: 'en' | 'pt'
- customPrompt?: string
- libraryContext?: string
- header: HeaderState
+  types: string[]
+  cefr: string
+  grade: string
+  skill: string
+  methodology: string[]
+  topic: string
+  qtCount: string
+  neeProfile: string
+  stemLanguage?: 'pt' | 'en'
+  optionLanguage?: 'en' | 'pt'
+  customPrompt?: string
+  libraryContext?: string
+  header: HeaderState
 }) {
- const neeInstructions: Record<string, string> = {
- dyslexia: 'Adapte para alunos com dislexia: frases curtas (máx 15 palavras), evite negativas duplas, sem itálico no enunciado.',
- adhd: 'Adapte para TDAH: instruções numeradas, uma ação por instrução, destaque em negrito as palavras-chave.',
- asd: 'Adapte para TEA: linguagem literal e objetiva, sem metáforas ou expressões idiomáticas, contexto explícito em cada questão.',
- low_vis: 'Adapte para baixa visão: evite referências visuais ("observe a figura"), use descrições textuais completas.',
- gifted: 'Adapte para superdotação: adicione questões de extensão, conexões interdisciplinares e desafios de pensamento crítico.',
- }
+  const neeInstructions: Record<string, string> = {
+    dyslexia: 'Adapte para alunos com dislexia: frases curtas (máx 15 palavras), evite negativas duplas, sem itálico no enunciado.',
+    adhd: 'Adapte para TDAH: instruções numeradas, uma ação por instrução, destaque em negrito as palavras-chave.',
+    asd: 'Adapte para TEA: linguagem literal e objetiva, sem metáforas ou expressões idiomáticas, contexto explícito em cada questão.',
+    low_vis: 'Adapte para baixa visão: evite referências visuais ("observe a figura"), use descrições textuais completas.',
+    gifted: 'Adapte para superdotação: adicione questões de extensão, conexões interdisciplinares e desafios de pensamento crítico.',
+  }
 
- const methodologyInstructions = buildMethodologyInstructions(opts.methodology)
+  const methodologyInstructions = buildMethodologyInstructions(opts.methodology)
 
   const librarySection = opts.libraryContext
-  ? `\n=== CONTEXTO DA BIBLIOTECA (BASE PEDAGÓGICA & TEMÁTICA) ===\n${opts.libraryContext.slice(0, 4000)}\n=== FIM DO CONTEXTO ===\nREGRA FUNDAMENTAL: Use o material acima apenas como BASE TEMÁTICA E CONTEXTO PEDAGÓGICO (vocabulário, gramática e tópicos). NUNCA reproduza questões prontas do texto. Crie EXERCÍCIOS TOTALMENTE INÉDITOS E NOVOS inspirados nesse conteúdo.\n`
-  : ''
+    ? `\n${opts.libraryContext}\nREGRA FUNDAMENTAL: Use o material acima como BASE TEMÁTICA E CONTEXTO PEDAGÓGICO (vocabulário, gramática e tópicos). NUNCA reproduza questões prontas do texto. Crie EXERCÍCIOS TOTALMENTE INÉDITOS E NOVOS inspirados nesse conteúdo.\n`
+    : ''
 
- const stemInstruction = opts.stemLanguage === 'pt'
- ? 'IDIOMA DOS ENUNCIADOS: Escreva as instruções, orientações e enunciados de TODAS as questões estritamente em PORTUGUÊS.'
- : 'IDIOMA DOS ENUNCIADOS: Write all instructions and question stems strictly in ENGLISH.'
+  const stemInstruction = opts.stemLanguage === 'pt'
+    ? 'IDIOMA DOS ENUNCIADOS: Escreva as instruções, orientações e enunciados de TODAS as questões estritamente em PORTUGUÊS.'
+    : 'IDIOMA DOS ENUNCIADOS: Write all instructions and question stems strictly in ENGLISH.'
 
- const optionInstruction = opts.optionLanguage === 'pt'
- ? 'IDIOMA DAS ALTERNATIVAS: As opções e respostas devem ser formuladas em PORTUGUÊS.'
- : 'IDIOMA DAS ALTERNATIVAS: As opções (A, B, C, D) e respostas devem ser estritamente em INGLÊS.'
+  const optionInstruction = opts.optionLanguage === 'pt'
+    ? 'IDIOMA DAS ALTERNATIVAS: As opções e respostas devem ser formuladas em PORTUGUÊS.'
+    : 'IDIOMA DAS ALTERNATIVAS: As opções (A, B, C, D) e respostas devem ser estritamente em INGLÊS.'
 
- return `Você é um professor especialista em ELT (English Language Teaching) e pedagogia. Sua tarefa é gerar um EXERCÍCIO COMPLETO formatado em HTML, pronto para uso em sala de aula.
+  return `Você é um professor especialista em ELT (English Language Teaching) e pedagogia. Sua tarefa é gerar um EXERCÍCIO COMPLETO formatado em HTML, pronto para uso em sala de aula.
 ${librarySection}
 ESPECIFICAÇÕES DO EXERCÍCIO:
 - Escola: ${opts.header.school || 'Escola'}
@@ -175,740 +155,707 @@ Gere agora todas as ${opts.qtCount} questões completas:`
 // Component 
 
 export default function QuickGenerate() {
- // Form
- const [types, setTypes] = useState<string[]>(['Múltipla escolha'])
- const [cefr, setCefr] = useState('B1')
- const [grade, setGrade] = useState('9º Fund.')
- const [skill, setSkill] = useState('Reading')
- const [stemLanguage, setStemLanguage] = useState<'pt' | 'en'>('pt')
- const [optionLanguage, setOptionLanguage] = useState<'en' | 'pt'>('en')
- const [methodology, setMethodology] = useState<string[]>(['Cambridge'])
- const [topic, setTopic] = useState('')
- const [customPrompt, setCustomPrompt] = useState('')
- const [qtCount, setQtCount] = useState('10')
- const [neeProfile, setNeeProfile] = useState('')
- const [showNeePanel, setShowNeePanel] = useState(false)
- const [selectedSchoolTemplate, setSelectedSchoolTemplate] = useState<string>('')
- const [registeredSchools, setRegisteredSchools] = useState<Array<{ id: string; name: string }>>([])
+  // Form
+  const [types, setTypes] = useState<string[]>(['Múltipla escolha'])
+  const [cefr, setCefr] = useState('B1')
+  const [grade, setGrade] = useState('9º Fund.')
+  const [skill, setSkill] = useState('Reading')
+  const [stemLanguage, setStemLanguage] = useState<'pt' | 'en'>('pt')
+  const [optionLanguage, setOptionLanguage] = useState<'en' | 'pt'>('en')
+  const [methodology, setMethodology] = useState<string[]>(['Cambridge'])
+  const [topic, setTopic] = useState('')
+  const [customPrompt, setCustomPrompt] = useState('')
+  const [qtCount, setQtCount] = useState('10')
+  const [neeProfile, setNeeProfile] = useState('')
+  const [showNeePanel, setShowNeePanel] = useState(false)
+  const [selectedSchoolTemplate, setSelectedSchoolTemplate] = useState<string>('')
+  const [registeredSchools, setRegisteredSchools] = useState<Array<{ id: string; name: string }>>([])
 
+  // Header
+  const [header, setHeader] = useState<HeaderState>({ school: '', teacher: '', classGroup: '', title: '' })
 
- // Header
- const [header, setHeader] = useState<HeaderState>({ school: '', teacher: '', classGroup: '', title: '' })
+  // NotebookLM Multi-Source Knowledge Hub
+  const [sources, setSources] = useState<SourceItem[]>([])
+  const [knowledgeMode, setKnowledgeMode] = useState<KnowledgeMode>('hybrid')
 
- // Library / RAG
- const [libraryItems, setLibraryItems] = useState<RepositoryItem[]>([])
- const [selectedLibraryId, setSelectedLibraryId] = useState<number | null>(null)
- const [showLibraryPreview, setShowLibraryPreview] = useState(false)
+  // Generation
+  const [result, setResult] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [checking, setChecking] = useState(false)
+  const [error, setError] = useState('')
+  const [factCheck, setFactCheck] = useState<FactCheckResult | null>(null)
+  const [bnccTags, setBnccTags] = useState<string[]>([])
 
- // Generation
- const [result, setResult] = useState('')
- const [loading, setLoading] = useState(false)
- const [checking, setChecking] = useState(false)
- const [error, setError] = useState('')
- const [factCheck, setFactCheck] = useState<FactCheckResult | null>(null)
- const [bnccTags, setBnccTags] = useState<string[]>([])
+  // API
+  const [apis, setApis] = useState<ApiConfig[]>([])
+  const [selectedApiId, setSelectedApiId] = useState<string>('')
 
- // API
- const [apis, setApis] = useState<ApiConfig[]>([])
- const [selectedApiId, setSelectedApiId] = useState<string>('')
+  // Saved
+  const [showSaved, setShowSaved] = useState(false)
+  const [savedCount, setSavedCount] = useState(0)
 
- // Saved
- const [showSaved, setShowSaved] = useState(false)
- const [savedCount, setSavedCount] = useState(0)
+  // Header toggle
+  const [hideHeader, setHideHeader] = useState(false)
 
- // Header toggle
- const [hideHeader, setHideHeader] = useState(false)
+  const updateSavedCount = () => {
+    try { setSavedCount(JSON.parse(localStorage.getItem('teacher_saved_quicks') || '[]').length) } catch { setSavedCount(0) }
+  }
 
- const updateSavedCount = () => {
- try { setSavedCount(JSON.parse(localStorage.getItem('teacher_saved_quicks') || '[]').length) } catch { setSavedCount(0) }
- }
+  useEffect(() => {
+    updateSavedCount()
+    window.addEventListener('storage', updateSavedCount)
+    return () => window.removeEventListener('storage', updateSavedCount)
+  }, [])
 
- useEffect(() => {
- updateSavedCount()
- window.addEventListener('storage', updateSavedCount)
- return () => window.removeEventListener('storage', updateSavedCount)
- }, [])
+  useEffect(() => {
+    const cfg = loadConfig()
+    const a = loadApis()
+    setHeader(h => ({ ...h, school: cfg.school || '', teacher: cfg.teacher || '' }))
+    setApis(a)
+    if (a.length > 0) setSelectedApiId(a[0].id)
 
- useEffect(() => {
- const cfg = loadConfig()
- const a = loadApis()
- const lib = loadLibrary()
- setHeader(h => ({ ...h, school: cfg.school || '', teacher: cfg.teacher || '' }))
- setApis(a)
- if (a.length > 0) setSelectedApiId(a[0].id)
- setLibraryItems(lib)
+    // Carrega estritamente as escolas cadastradas pelo professor em Organização
+    try {
+      const sStr = localStorage.getItem('teacher_schools')
+      if (sStr) {
+        const parsed = JSON.parse(sStr)
+        if (Array.isArray(parsed)) {
+          setRegisteredSchools(parsed)
+          if (parsed.length > 0 && !cfg.school) {
+            setHeader(h => ({ ...h, school: parsed[0].name }))
+            setSelectedSchoolTemplate(parsed[0].id)
+          }
+        }
+      }
+    } catch {}
+  }, [])
 
- // Carrega estritamente as escolas cadastradas pelo professor em Organização
- try {
- const sStr = localStorage.getItem('teacher_schools')
- if (sStr) {
- const parsed = JSON.parse(sStr)
- if (Array.isArray(parsed)) {
- setRegisteredSchools(parsed)
- if (parsed.length > 0 && !cfg.school) {
- setHeader(h => ({ ...h, school: parsed[0].name }))
- setSelectedSchoolTemplate(parsed[0].id)
- }
- }
- }
- } catch {}
- }, [])
+  useEffect(() => {
+    const handleQuickPrefill = () => {
+      try {
+        const raw = localStorage.getItem('teacher_quick_prefill')
+        if (raw) {
+          const prefill = JSON.parse(raw)
+          if (prefill.topic) {
+            setTopic(prefill.topic)
+            setTimeout(() => {
+              document.getElementById('quick-generate-btn')?.click()
+            }, 600)
+          }
+          localStorage.removeItem('teacher_quick_prefill')
+        }
+      } catch { /* ignore */ }
+    }
 
+    handleQuickPrefill()
+    window.addEventListener('teacher:quick_prefill', handleQuickPrefill)
+    return () => window.removeEventListener('teacher:quick_prefill', handleQuickPrefill)
+  }, [])
 
+  const selectedApi = apis.find(a => a.id === selectedApiId) || apis[0]
+  const hasApi = !!selectedApi && selectedApi.provider !== 'manual'
 
- useEffect(() => {
- const handleQuickPrefill = () => {
- try {
- const raw = localStorage.getItem('teacher_quick_prefill')
- if (raw) {
- const prefill = JSON.parse(raw)
- if (prefill.topic) {
- setTopic(prefill.topic)
- setTimeout(() => {
- document.getElementById('quick-generate-btn')?.click()
- }, 600)
- }
- localStorage.removeItem('teacher_quick_prefill')
- }
- } catch { /* ignore */ }
- }
+  const toggleType = (t: string) => setTypes(prev => prev.includes(t) ? prev.filter(x => x !== t) : [...prev, t])
+  const toggleMethod = (m: string) => setMethodology(prev => prev.includes(m) ? prev.filter(x => x !== m) : [...prev, m])
 
- handleQuickPrefill()
- window.addEventListener('teacher:quick_prefill', handleQuickPrefill)
- return () => window.removeEventListener('teacher:quick_prefill', handleQuickPrefill)
- }, [])
+  const extractBncc = useCallback((text: string) => {
+    const matches = text.match(/EF\d{2}[A-Z]{2}\d{2}/g) || []
+    setBnccTags([...new Set(matches)])
+  }, [])
 
- const selectedApi = apis.find(a => a.id === selectedApiId) || apis[0]
- const selectedLibItem = libraryItems.find(i => i.id === selectedLibraryId) || null
- const hasApi = !!selectedApi && selectedApi.provider !== 'manual'
+  async function handleGenerate() {
+    if (!selectedApi) { setError('Nenhuma API ativa. Vá em "APIs & Modelos".'); return }
+    if (selectedApi.provider === 'manual') { setError('Configure uma API com chave válida em "APIs & Modelos" para gerar automaticamente.'); return }
+    setLoading(true); setError(''); setResult(''); setFactCheck(null); setBnccTags([])
 
- const toggleType = (t: string) => setTypes(prev => prev.includes(t) ? prev.filter(x => x !== t) : [...prev, t])
- const toggleMethod = (m: string) => setMethodology(prev => prev.includes(m) ? prev.filter(x => x !== m) : [...prev, m])
+    const effectiveTitle = topic || `Exercício ${cefr} ${grade}`
+    setHeader(h => ({ ...h, title: h.title || effectiveTitle }))
 
- const extractBncc = useCallback((text: string) => {
- const matches = text.match(/EF\d{2}[A-Z]{2}\d{2}/g) || []
- setBnccTags([...new Set(matches)])
- }, [])
+    try {
+      let libContext = ''
+      const compiled = compileSourcesPrompt(sources, knowledgeMode)
+      if (compiled.activeCount > 0) {
+        libContext = compiled.promptContext
+      } else {
+        // Fallback RAG se não houver fontes manuais selecionadas
+        const { searchLibraryContext, buildRagPromptContext } = await import('@/lib/ragEngine')
+        const chunks = searchLibraryContext(topic || skill || 'English', { limit: 3 })
+        if (chunks.length > 0) {
+          libContext = buildRagPromptContext(chunks)
+        }
+      }
 
- async function handleGenerate() {
- if (!selectedApi) { setError('Nenhuma API ativa. Vá em "APIs & Modelos".'); return }
- if (selectedApi.provider === 'manual') { setError('Configure uma API com chave válida em "APIs & Modelos" para gerar automaticamente.'); return }
- setLoading(true); setError(''); setResult(''); setFactCheck(null); setBnccTags([])
+      const prompt = buildPrompt({
+        types, cefr, grade, skill, methodology, topic, qtCount, neeProfile, customPrompt,
+        stemLanguage, optionLanguage,
+        header: { ...header, title: header.title || effectiveTitle },
+        libraryContext: libContext,
+      })
 
- const effectiveTitle = topic || `Exercício ${cefr} ${grade}`
- setHeader(h => ({ ...h, title: h.title || effectiveTitle }))
+      const raw = await callApi(selectedApi, prompt)
+      const html = cleanHtml(raw)
+      setResult(html)
+      extractBncc(html)
+      try {
+        const fc = await runFactCheck(html, grade, types.join(', '), selectedApi)
+        setFactCheck(fc)
+      } catch { /* non-critical */ }
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Erro desconhecido.')
+    } finally {
+      setLoading(false)
+    }
+  }
 
- try {
- const prompt = buildPrompt({
- types, cefr, grade, skill, methodology, topic, qtCount, neeProfile, customPrompt,
- stemLanguage, optionLanguage,
- header: { ...header, title: header.title || effectiveTitle },
- libraryContext: selectedLibItem?.content,
- })
+  function handleSave() {
+    if (!result) { alert('Gere um exercício primeiro.'); return }
+    const saved = saveItemToStorage('teacher_saved_quicks', {
+      title: header.title || (topic ? `Exercício ${topic}` : `Atividade (${skill})`),
+      subtitle: `${cefr} · ${grade} · ${types.slice(0, 2).join(', ')}`,
+      content: result,
+    })
+    if (saved) { updateSavedCount(); alert(' Exercício salvo!') }
+  }
 
- const raw = await callApi(selectedApi, prompt)
- const html = cleanHtml(raw)
- setResult(html)
- extractBncc(html)
- try {
- const fc = await runFactCheck(html, grade, types.join(', '), selectedApi)
- setFactCheck(fc)
- } catch { /* non-critical */ }
- } catch (e: unknown) {
- setError(e instanceof Error ? e.message : 'Erro desconhecido.')
- } finally {
- setLoading(false)
- }
- }
+  async function handleSaveToActivitiesBank() {
+    if (!result) { alert('Gere um exercício primeiro.'); return }
+    const { saveActivityToSupabase } = await import('@/lib/supabaseClient')
+    const title = header.title || (topic ? `Exercício ${topic}` : `Atividade (${skill})`)
+    await saveActivityToSupabase({
+      title,
+      type: 'exercise',
+      grade,
+      cefr,
+      content: result
+    })
+    alert(' Exercício salvo com sucesso no Banco de Dados!')
+  }
 
- function handleSave() {
- if (!result) { alert('Gere um exercício primeiro.'); return }
- const saved = saveItemToStorage('teacher_saved_quicks', {
- title: header.title || (topic ? `Exercício ${topic}` : `Atividade (${skill})`),
- subtitle: `${cefr} · ${grade} · ${types.slice(0, 2).join(', ')}`,
- content: result,
- })
- if (saved) { updateSavedCount(); alert(' Exercício salvo!') }
- }
+  const fcColor = factCheck
+    ? factCheck.level === 'ok' ? '#859900'
+    : factCheck.level === 'warn' ? '#b58900'
+    : '#dc322f'
+    : '#93a1a1'
 
- async function handleSaveToActivitiesBank() {
- if (!result) { alert('Gere um exercício primeiro.'); return }
- const { saveActivityToSupabase } = await import('@/lib/supabaseClient')
- const title = header.title || (topic ? `Exercício ${topic}` : `Atividade (${skill})`)
- await saveActivityToSupabase({
- title,
- type: 'exercise',
- grade,
- cefr,
- content: result
- })
- alert(' Exercício salvo com sucesso no Banco de Dados!')
- }
+  const currentPresetConfig = {
+    types, cefr, grade, skill, methodology, topic, customPrompt, qtCount, neeProfile, selectedApiId
+  }
 
- const fcColor = factCheck
- ? factCheck.level === 'ok' ? '#859900'
- : factCheck.level === 'warn' ? '#b58900'
- : '#dc322f'
- : '#93a1a1'
+  const handleLoadPreset = (config: Record<string, any>) => {
+    if (config.types) setTypes(config.types)
+    if (config.cefr) setCefr(config.cefr)
+    if (config.grade) setGrade(config.grade)
+    if (config.skill) setSkill(config.skill)
+    if (config.methodology) setMethodology(config.methodology)
+    if (config.topic) setTopic(config.topic)
+    if (config.customPrompt) setCustomPrompt(config.customPrompt)
+    if (config.qtCount) setQtCount(config.qtCount)
+    if (config.neeProfile) setNeeProfile(config.neeProfile)
+    if (config.selectedApiId) setSelectedApiId(config.selectedApiId)
+  }
 
- return (
- <div style={{ padding: '32px 44px', height: '100%', display: 'flex', flexDirection: 'column', maxWidth: 1600, margin: '0 auto', boxSizing: 'border-box', width: '100%' }}>
+  return (
+    <div style={{ padding: '32px 44px', height: '100%', display: 'flex', flexDirection: 'column', maxWidth: 1600, margin: '0 auto', boxSizing: 'border-box', width: '100%' }}>
 
- <div style={{ marginBottom: 24, display: "flex", flexDirection: "column", alignItems: "center", gap: 14, flexShrink: 0  }}>
- <div>
- <h1 style={{  textAlign: 'center', fontFamily: "'Fraunces', Georgia, serif", fontSize: 32, fontWeight: 600, color: '#2c1a0e', margin: '0 auto'  }}>
- Gerar Exercício
- </h1>
- </div>
-      <div style={{ display: "flex", justifyContent: "center", flexWrap: "wrap", gap: 10 }}>
- {result && (
- <>
- <button onClick={handleSaveToActivitiesBank} style={{ padding: '9px 16px', borderRadius: 12, border: '1px solid #8b5e3c', background: '#8b5e3c', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, boxShadow: '0 2px 8px rgba(139,94,60,0.2)' }}>
- <i className="ti ti-database" /> Salvar no Banco de Dados
- </button>
- </>
- )}
- <button onClick={() => setShowSaved(true)} style={{ padding: '9px 16px', borderRadius: 12, border: '1px solid #8b5e3c', background: '#fdf9f3', color: '#073642', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
- <i className="ti ti-bookmark" style={{ color: '#b58900' }} /> Salvos ({savedCount})
- </button>
- </div>
- </div>
+      {/* Header */}
+      <div style={{ marginBottom: 24, display: "flex", flexDirection: "column", alignItems: "center", gap: 14, flexShrink: 0 }}>
+        <div>
+          <h1 style={{ textAlign: 'center', fontFamily: "'Fraunces', Georgia, serif", fontSize: 32, fontWeight: 600, color: '#2c1a0e', margin: '0 auto' }}>
+            Exercício Rápido
+          </h1>
+        </div>
+        <div style={{ display: "flex", justifyContent: "center", flexWrap: "wrap", gap: 10 }}>
+          {result && (
+            <button onClick={handleSaveToActivitiesBank} style={{ padding: '9px 16px', borderRadius: 12, border: '1px solid #8b5e3c', background: '#8b5e3c', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, boxShadow: '0 2px 8px rgba(139,94,60,0.2)' }}>
+              <i className="ti ti-database" /> Salvar no Banco de Dados
+            </button>
+          )}
+          <button onClick={() => setShowSaved(true)} style={{ padding: '9px 16px', borderRadius: 12, border: '1px solid #8b5e3c', background: '#fdf9f3', color: '#073642', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <i className="ti ti-bookmark" style={{ color: '#b58900' }} /> Exercícios Salvos ({savedCount})
+          </button>
+        </div>
+      </div>
 
- {/* Seletor de Presets Salvos (Modelos do Professor) */}
- <PresetSelector
- module="quick"
- currentConfig={{
- topic, types, cefr, grade, skill, methodology, qtCount, neeProfile, customPrompt, selectedApiId
- }}
- onLoadPreset={(config: Record<string, any>) => {
- if (config.topic) setTopic(config.topic)
- if (config.types) setTypes(config.types)
- if (config.cefr) setCefr(config.cefr)
- if (config.grade) setGrade(config.grade)
- if (config.skill) setSkill(config.skill)
- if (config.methodology) setMethodology(config.methodology)
- if (config.qtCount) setQtCount(config.qtCount)
- if (config.neeProfile) setNeeProfile(config.neeProfile)
- if (config.customPrompt) setCustomPrompt(config.customPrompt)
- if (config.selectedApiId) setSelectedApiId(config.selectedApiId)
- }}
- />
+      {/* Seletor de Presets Salvos */}
+      <PresetSelector
+        module="quick"
+        currentConfig={currentPresetConfig}
+        onLoadPreset={handleLoadPreset}
+      />
 
- {/* Error */}
- {error && (
- <div style={{ background: 'rgba(220,50,47,0.08)', border: '1px solid rgba(220,50,47,0.2)', borderRadius: 10, padding: '10px 16px', color: '#dc322f', fontSize: 13, marginBottom: 14, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
- <i className="ti ti-alert-triangle" /> {error}
- </div>
- )}
+      {/* Error banner */}
+      {error && (
+        <div style={{ background: 'rgba(220,50,47,0.08)', border: '1px solid rgba(220,50,47,0.2)', borderRadius: 10, padding: '10px 16px', color: '#dc322f', fontSize: 13, marginBottom: 14, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <i className="ti ti-alert-triangle" /> {error}
+        </div>
+      )}
 
- <div style={{ display: 'grid', gridTemplateColumns: 'minmax(300px, 400px) 1fr', gap: 24, flex: 1, minHeight: 0 }}>
+      {/* Main Form Grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(340px, 460px) 1fr', gap: 32, flex: 1, minHeight: 0 }}>
 
- {/* LEFT PANEL */}
- <div style={{ overflowY: 'auto', paddingRight: 6, paddingBottom: 32, display: 'flex', flexDirection: 'column', gap: 14 }}>
+        {/* LEFT PANEL */}
+        <div style={{ overflowY: 'auto', paddingRight: 8, paddingBottom: 32, display: 'flex', flexDirection: 'column', gap: 16 }}>
 
- {/* API Selector */}
- {apis.length > 0 && (
- <div style={CARD}>
- <label style={SL}> Modelo de IA</label>
- <select value={selectedApiId} onChange={e => setSelectedApiId(e.target.value)} style={SS}>
- {apis.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
- </select>
- {!hasApi && (
- <div style={{ fontSize: 12, color: '#b58900', background: 'rgba(181,137,0,0.08)', borderRadius: 8, padding: '8px 12px', display: 'flex', alignItems: 'center', gap: 6 }}>
- <i className="ti ti-alert-triangle" /> Modo manual adicione uma API key para gerar automaticamente.
- </div>
- )}
- </div>
- )}
- {apis.length === 0 && (
- <div style={{ ...CARD, background: 'rgba(181,137,0,0.06)', border: '1px solid rgba(181,137,0,0.25)' }}>
- <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
- <i className="ti ti-alert-circle" style={{ color: '#b58900', fontSize: 20 }} />
- <div>
- <div style={{ fontSize: 13, fontWeight: 700, color: '#b58900' }}>Nenhuma API configurada</div>
- <div style={{ fontSize: 12, color: '#586e75', marginTop: 2 }}>Vá em <strong>APIs & Modelos</strong> para configurar uma chave de IA e gerar exercícios automaticamente.</div>
- </div>
- </div>
- </div>
- )}
+          {/* Generate Button (Top) */}
+          <button
+            id="quick-generate-btn"
+            onClick={handleGenerate}
+            disabled={loading}
+            style={{
+              padding: '14px 24px',
+              background: loading ? '#93a1a1' : 'linear-gradient(135deg, #8b5e3c, #5c3a21)',
+              color: '#fff',
+              border: 'none', borderRadius: 14, fontSize: 15, fontWeight: 700,
+              cursor: loading ? 'not-allowed' : 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+              boxShadow: !loading ? '0 4px 16px rgba(139,94,60,0.35)' : 'none',
+              transition: 'all 0.2s',
+            }}
+          >
+            <i className={`ti ${loading ? 'ti-loader-2' : 'ti-sparkles'}`} style={{ fontSize: 18, animation: loading ? 'spin 1s linear infinite' : 'none' }} />
+            {loading ? 'Gerando exercício...' : ' Gerar Exercício Completo'}
+          </button>
 
- {/* Biblioteca (RAG) */}
- <div style={CARD}>
- <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
- <label style={{ ...SL, marginBottom: 0 }}>
- <i className="ti ti-books" style={{ marginRight: 6, color: '#2aa198' }} />
- Fonte da Biblioteca
- </label>
- {selectedLibItem && (
- <button onClick={() => setShowLibraryPreview(!showLibraryPreview)} style={{ fontSize: 11, color: '#2aa198', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>
- {showLibraryPreview ? 'Ocultar' : 'Ver conteúdo'}
- </button>
- )}
- </div>
- <select
- value={selectedLibraryId ?? ''}
- onChange={e => setSelectedLibraryId(e.target.value ? Number(e.target.value) : null)}
- style={SS}
- >
- <option value=""> Sem fonte (tema livre) </option>
- {libraryItems.map(i => (
- <option key={i.id} value={i.id}>{i.title.replace(/^[^\w]*/, '')}</option>
- ))}
- </select>
- {selectedLibItem && (
- <div style={{ fontSize: 12, color: '#2aa198', background: 'rgba(42,161,152,0.08)', borderRadius: 8, padding: '8px 12px', display: 'flex', alignItems: 'center', gap: 6 }}>
- <i className="ti ti-check" /> A IA usará <strong>"{selectedLibItem.title.replace(/^[^\w]*/, '')}"</strong> como fonte das questões.
- </div>
- )}
- {selectedLibItem && showLibraryPreview && (
- <div style={{ background: '#f5f0e8', borderRadius: 10, padding: 10, maxHeight: 140, overflowY: 'auto', fontSize: 11, color: '#586e75', lineHeight: 1.6, fontFamily: 'monospace' }}>
- {selectedLibItem.content.slice(0, 600)}
- </div>
- )}
- {libraryItems.length === 0 && (
- <div style={{ fontSize: 12, color: '#93a1a1' }}>
- Nenhum item na Biblioteca. Adicione livros em <strong>Biblioteca</strong> para usar como fonte.
- </div>
- )}
- </div>
+          {/* API Selector */}
+          {apis.length > 0 && (
+            <div style={CARD}>
+              <label style={SL}> Modelo de IA</label>
+              <select value={selectedApiId} onChange={e => setSelectedApiId(e.target.value)} style={SS}>
+                {apis.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+              </select>
+              {!hasApi && (
+                <div style={{ fontSize: 12, color: '#b58900', background: 'rgba(181,137,0,0.08)', borderRadius: 8, padding: '8px 12px', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <i className="ti ti-alert-triangle" /> Configure uma API key em APIs & Modelos para gerar automaticamente.
+                </div>
+              )}
+            </div>
+          )}
 
- {/* Idioma dos Enunciados e das Alternativas */}
- <div style={{ ...CARD, display: 'flex', flexDirection: 'column', gap: 12 }}>
- <label style={{ ...SL, marginBottom: 2 }}>
- <i className="ti ti-language" style={{ marginRight: 6, color: '#cb4b16' }} />
- Configuração de Idioma das Questões & Opções
- </label>
- 
- <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
- <div>
- <label style={{ ...SL, fontSize: 11.5 }}>Enunciados / Instruções</label>
- <div style={{ display: 'flex', gap: 6 }}>
- <button
- type="button"
- onClick={() => setStemLanguage('pt')}
- style={{
- flex: 1, padding: '8px 10px', borderRadius: 8, fontSize: 12, fontWeight: 700,
- border: stemLanguage === 'pt' ? '1.5px solid #cb4b16' : '1px solid #e8e0d0',
- background: stemLanguage === 'pt' ? '#fdf8f2' : '#fff',
- color: stemLanguage === 'pt' ? '#cb4b16' : '#586e75', cursor: 'pointer'
- }}
- >
- Português
- </button>
- <button
- type="button"
- onClick={() => setStemLanguage('en')}
- style={{
- flex: 1, padding: '8px 10px', borderRadius: 8, fontSize: 12, fontWeight: 700,
- border: stemLanguage === 'en' ? '1.5px solid #268bd2' : '1px solid #e8e0d0',
- background: stemLanguage === 'en' ? '#f0f8ff' : '#fff',
- color: stemLanguage === 'en' ? '#268bd2' : '#586e75', cursor: 'pointer'
- }}
- >
- Inglês
- </button>
- </div>
- </div>
+          {apis.length === 0 && (
+            <div style={{ ...CARD, background: 'rgba(181,137,0,0.06)', border: '1px solid rgba(181,137,0,0.25)' }}>
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                <i className="ti ti-alert-circle" style={{ color: '#b58900', fontSize: 20 }} />
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: '#b58900' }}>Nenhuma API configurada</div>
+                  <div style={{ fontSize: 12, color: '#586e75', marginTop: 2 }}>Vá em <strong>APIs & Modelos</strong> para configurar uma chave de IA e gerar exercícios automaticamente.</div>
+                </div>
+              </div>
+            </div>
+          )}
 
- <div>
- <label style={{ ...SL, fontSize: 11.5 }}>Alternativas (A, B, C, D)</label>
- <div style={{ display: 'flex', gap: 6 }}>
- <button
- type="button"
- onClick={() => setOptionLanguage('en')}
- style={{
- flex: 1, padding: '8px 10px', borderRadius: 8, fontSize: 12, fontWeight: 700,
- border: optionLanguage === 'en' ? '1.5px solid #268bd2' : '1px solid #e8e0d0',
- background: optionLanguage === 'en' ? '#f0f8ff' : '#fff',
- color: optionLanguage === 'en' ? '#268bd2' : '#586e75', cursor: 'pointer'
- }}
- >
- Inglês
- </button>
- <button
- type="button"
- onClick={() => setOptionLanguage('pt')}
- style={{
- flex: 1, padding: '8px 10px', borderRadius: 8, fontSize: 12, fontWeight: 700,
- border: optionLanguage === 'pt' ? '1.5px solid #cb4b16' : '1px solid #e8e0d0',
- background: optionLanguage === 'pt' ? '#fdf8f2' : '#fff',
- color: optionLanguage === 'pt' ? '#cb4b16' : '#586e75', cursor: 'pointer'
- }}
- >
- Português
- </button>
- </div>
- </div>
- </div>
- </div>
+          {/* HUB MULTI-FONTES DE CONHECIMENTO (NOTEBOOKLM STYLE) */}
+          <SourceKnowledgeHub
+            sources={sources}
+            onChangeSources={setSources}
+            knowledgeMode={knowledgeMode}
+            onChangeKnowledgeMode={setKnowledgeMode}
+            title="Fontes de Conhecimento do Exercício (Estilo NotebookLM)"
+            description="Selecione múltiplos livros, capítulos, páginas, arquivos avulsos (PDFs/DOCXs), anotações ou pesquise na Web para alimentar a criação dos exercícios."
+          />
 
- {/* Cabeçalho Oficial da Escola */}
- <div style={CARD}>
- <label style={{ ...SL, marginBottom: 2 }}>
- <i className="ti ti-id-badge" style={{ marginRight: 6, color: '#268bd2' }} />
- Cabeçalho Oficial da Escola
- </label>
+          {/* Idioma dos Enunciados e das Alternativas */}
+          <div style={{ ...CARD, display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <label style={{ ...SL, marginBottom: 2 }}>
+              <i className="ti ti-language" style={{ marginRight: 6, color: '#cb4b16' }} />
+              Configuração de Idioma das Questões & Opções
+            </label>
+            
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <div>
+                <label style={{ ...SL, fontSize: 11.5 }}>Enunciados / Instruções</label>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button
+                    type="button"
+                    onClick={() => setStemLanguage('pt')}
+                    style={{
+                      flex: 1, padding: '8px 10px', borderRadius: 8, fontSize: 12, fontWeight: 700,
+                      border: stemLanguage === 'pt' ? '1.5px solid #cb4b16' : '1px solid #e8e0d0',
+                      background: stemLanguage === 'pt' ? '#fdf8f2' : '#fff',
+                      color: stemLanguage === 'pt' ? '#cb4b16' : '#586e75', cursor: 'pointer'
+                    }}
+                  >
+                    Português
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setStemLanguage('en')}
+                    style={{
+                      flex: 1, padding: '8px 10px', borderRadius: 8, fontSize: 12, fontWeight: 700,
+                      border: stemLanguage === 'en' ? '1.5px solid #268bd2' : '1px solid #e8e0d0',
+                      background: stemLanguage === 'en' ? '#f0f8ff' : '#fff',
+                      color: stemLanguage === 'en' ? '#268bd2' : '#586e75', cursor: 'pointer'
+                    }}
+                  >
+                    Inglês
+                  </button>
+                </div>
+              </div>
 
- {/* Escolas Cadastradas pelo Professor em Organização */}
- <div>
- <label style={{ ...SL, fontSize: 11.5 }}>Vincular Escola Cadastrada (Organização):</label>
- {registeredSchools.length > 0 ? (
- <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
- {registeredSchools.map(sch => {
- const isSelected = selectedSchoolTemplate === sch.id || header.school === sch.name
- return (
- <button
- key={sch.id}
- type="button"
- onClick={() => {
- setSelectedSchoolTemplate(sch.id)
- setHeader(h => ({
- ...h,
- school: sch.name,
- title: h.title || `Atividade de Fixação Língua Inglesa`
- }))
- }}
- style={{
- padding: '7px 12px', borderRadius: 8, fontSize: 11.5, fontWeight: 700, textAlign: 'left',
- border: isSelected ? '1.5px solid #8b5e3c' : '1px solid #e8e0d0',
- background: isSelected ? '#fdf8f2' : '#faf8f5',
- color: isSelected ? '#8b5e3c' : '#2c1a0e', cursor: 'pointer',
- display: 'flex', alignItems: 'center', gap: 6, transition: 'all 0.15s'
- }}
- >
- {sch.name}
- </button>
- )
- })}
- </div>
- ) : (
- <div style={{ fontSize: 11.5, color: '#8b5e3c', background: '#fdf8f2', border: '1px dashed #e8d8c8', padding: '8px 12px', borderRadius: 8 }}>
- Nenhuma escola cadastrada ainda. Digite o nome abaixo ou cadastre em <strong>Organização &gt; Escolas</strong> para vincular automaticamente.
- </div>
+              <div>
+                <label style={{ ...SL, fontSize: 11.5 }}>Alternativas (A, B, C, D)</label>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button
+                    type="button"
+                    onClick={() => setOptionLanguage('en')}
+                    style={{
+                      flex: 1, padding: '8px 10px', borderRadius: 8, fontSize: 12, fontWeight: 700,
+                      border: optionLanguage === 'en' ? '1.5px solid #268bd2' : '1px solid #e8e0d0',
+                      background: optionLanguage === 'en' ? '#f0f8ff' : '#fff',
+                      color: optionLanguage === 'en' ? '#268bd2' : '#586e75', cursor: 'pointer'
+                    }}
+                  >
+                    Inglês
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setOptionLanguage('pt')}
+                    style={{
+                      flex: 1, padding: '8px 10px', borderRadius: 8, fontSize: 12, fontWeight: 700,
+                      border: optionLanguage === 'pt' ? '1.5px solid #cb4b16' : '1px solid #e8e0d0',
+                      background: optionLanguage === 'pt' ? '#fdf8f2' : '#fff',
+                      color: optionLanguage === 'pt' ? '#cb4b16' : '#586e75', cursor: 'pointer'
+                    }}
+                  >
+                    Português
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
 
- )}
- </div>
+          {/* Cabeçalho Oficial da Escola */}
+          <div style={CARD}>
+            <label style={{ ...SL, marginBottom: 2 }}>
+              <i className="ti ti-id-badge" style={{ marginRight: 6, color: '#268bd2' }} />
+              Cabeçalho Oficial da Escola
+            </label>
 
+            {/* Escolas Cadastradas pelo Professor em Organização */}
+            <div>
+              <label style={{ ...SL, fontSize: 11.5 }}>Vincular Escola Cadastrada (Organização):</label>
+              {registeredSchools.length > 0 ? (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {registeredSchools.map(sch => {
+                    const isSelected = selectedSchoolTemplate === sch.id || header.school === sch.name
+                    return (
+                      <button
+                        key={sch.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedSchoolTemplate(sch.id)
+                          setHeader(h => ({
+                            ...h,
+                            school: sch.name,
+                            title: h.title || `Atividade de Fixação Língua Inglesa`
+                          }))
+                        }}
+                        style={{
+                          padding: '7px 12px', borderRadius: 8, fontSize: 11.5, fontWeight: 700, textAlign: 'left',
+                          border: isSelected ? '1.5px solid #8b5e3c' : '1px solid #e8e0d0',
+                          background: isSelected ? '#fdf8f2' : '#faf8f5',
+                          color: isSelected ? '#8b5e3c' : '#2c1a0e', cursor: 'pointer',
+                          display: 'flex', alignItems: 'center', gap: 6, transition: 'all 0.15s'
+                        }}
+                      >
+                        {sch.name}
+                      </button>
+                    )
+                  })}
+                </div>
+              ) : (
+                <div style={{ fontSize: 11.5, color: '#8b5e3c', background: '#fdf8f2', border: '1px dashed #e8d8c8', padding: '8px 12px', borderRadius: 8 }}>
+                  Nenhuma escola cadastrada ainda. Digite o nome abaixo ou cadastre em <strong>Organização &gt; Escolas</strong> para vincular automaticamente.
+                </div>
+              )}
+            </div>
 
- <div>
- <label style={{ ...SL, fontSize: 12 }}>Nome Oficial da Escola</label>
- <input value={header.school} onChange={e => setHeader(h => ({ ...h, school: e.target.value }))}
- placeholder="Ex: Colégio Machado Sobrinho" style={SI} />
- </div>
- <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
- <div>
- <label style={{ ...SL, fontSize: 12 }}>Professor(a)</label>
- <input value={header.teacher} onChange={e => setHeader(h => ({ ...h, teacher: e.target.value }))}
- placeholder="Seu nome" style={SI} />
- </div>
- <div>
- <label style={{ ...SL, fontSize: 12 }}>Turma</label>
- <input value={header.classGroup} onChange={e => setHeader(h => ({ ...h, classGroup: e.target.value }))}
- placeholder="Ex: 9A, 1°EM" style={SI} />
- </div>
- </div>
- <div>
- <label style={{ ...SL, fontSize: 12 }}>Título do Exercício</label>
- <input value={header.title} onChange={e => setHeader(h => ({ ...h, title: e.target.value }))}
- placeholder="Ex: Exercício Present Perfect" style={SI} />
- </div>
- </div>
+            <div>
+              <label style={{ ...SL, fontSize: 12 }}>Nome Oficial da Escola</label>
+              <input value={header.school} onChange={e => setHeader(h => ({ ...h, school: e.target.value }))}
+                placeholder="Ex: Colégio Machado Sobrinho" style={SI} />
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <div>
+                <label style={{ ...SL, fontSize: 12 }}>Professor(a)</label>
+                <input value={header.teacher} onChange={e => setHeader(h => ({ ...h, teacher: e.target.value }))}
+                  placeholder="Seu nome" style={SI} />
+              </div>
+              <div>
+                <label style={{ ...SL, fontSize: 12 }}>Turma</label>
+                <input value={header.classGroup} onChange={e => setHeader(h => ({ ...h, classGroup: e.target.value }))}
+                  placeholder="Ex: 9A, 1°EM" style={SI} />
+              </div>
+            </div>
+            <div>
+              <label style={{ ...SL, fontSize: 12 }}>Título do Exercício</label>
+              <input value={header.title} onChange={e => setHeader(h => ({ ...h, title: e.target.value }))}
+                placeholder="Ex: Exercício Present Perfect" style={SI} />
+            </div>
+          </div>
 
+          {/* Tópico & Prompt */}
+          <div style={CARD}>
+            <div>
+              <label style={SL}> Tema / Tópico Principal</label>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <input value={topic} onChange={e => setTopic(e.target.value)}
+                  placeholder="Ex: Simple Past, Present Perfect, Meio Ambiente"
+                  style={SI} />
+                <VoiceButton onResult={t => setTopic(prev => prev ? prev + ' ' + t : t)} />
+              </div>
+            </div>
+            <div>
+              <label style={SL}> Diretrizes Adicionais</label>
+              <textarea value={customPrompt} onChange={e => setCustomPrompt(e.target.value)}
+                placeholder="Ex: incluir pelo menos 2 questões baseadas no Capítulo 3, usar contexto de esportes"
+                rows={3}
+                style={{ ...SI, resize: 'vertical', fontFamily: 'inherit', boxSizing: 'border-box' }}
+              />
+            </div>
+          </div>
 
- {/* Tópico & Prompt */}
- <div style={CARD}>
- <div>
- <label style={SL}> Tema / Tópico Principal</label>
- <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
- <input value={topic} onChange={e => setTopic(e.target.value)}
- placeholder="Ex: Simple Past, Present Perfect, Meio Ambiente"
- style={SI} />
- <VoiceButton onResult={t => setTopic(prev => prev ? prev + ' ' + t : t)} />
- </div>
- </div>
- <div>
- <label style={SL}> Diretrizes Adicionais</label>
- <textarea value={customPrompt} onChange={e => setCustomPrompt(e.target.value)}
- placeholder="Ex: incluir pelo menos 2 questões baseadas no Capítulo 3, usar contexto de esportes"
- rows={3}
- style={{ ...SI, resize: 'vertical', fontFamily: 'inherit', boxSizing: 'border-box' }}
- />
- </div>
- </div>
+          {/* Grade + CEFR */}
+          <div style={{ ...CARD, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div>
+              <label style={SL}> Série</label>
+              <select value={grade} onChange={e => setGrade(e.target.value)} style={SS}>
+                {GRADES.map(g => <option key={g}>{g}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={SL}> CEFR</label>
+              <select value={cefr} onChange={e => setCefr(e.target.value)} style={SS}>
+                {CEFR.map(c => <option key={c}>{c}</option>)}
+              </select>
+            </div>
+          </div>
 
- {/* Grade + CEFR */}
- <div style={{ ...CARD, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
- <div>
- <label style={SL}> Série</label>
- <select value={grade} onChange={e => setGrade(e.target.value)} style={SS}>
- {GRADES.map(g => <option key={g}>{g}</option>)}
- </select>
- </div>
- <div>
- <label style={SL}> CEFR</label>
- <select value={cefr} onChange={e => setCefr(e.target.value)} style={SS}>
- {CEFR.map(c => <option key={c}>{c}</option>)}
- </select>
- </div>
- </div>
+          {/* Skill */}
+          <div style={CARD}>
+            <label style={SL}> Habilidade Foco</label>
+            <select value={skill} onChange={e => setSkill(e.target.value)} style={SS}>
+              {['Reading', 'Writing', 'Listening', 'Speaking', 'Grammar', 'Vocabulary', 'Use of English'].map(s => <option key={s}>{s}</option>)}
+            </select>
+          </div>
 
- {/* Skill */}
- <div style={CARD}>
- <label style={SL}> Habilidade Foco</label>
- <select value={skill} onChange={e => setSkill(e.target.value)} style={SS}>
- {['Reading', 'Writing', 'Listening', 'Speaking', 'Grammar', 'Vocabulary', 'Use of English'].map(s => <option key={s}>{s}</option>)}
- </select>
- </div>
+          {/* Quantity */}
+          <div style={CARD}>
+            <label style={SL}> Quantidade de questões: <strong>{qtCount}</strong></label>
+            <input type="range" min="3" max="30" value={qtCount} onChange={e => setQtCount(e.target.value)}
+              style={{ width: '100%', accentColor: '#073642' }} />
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#93a1a1' }}>
+              <span>3</span><span>30</span>
+            </div>
+          </div>
 
- {/* Quantity */}
- <div style={CARD}>
- <label style={SL}> Quantidade de questões: <strong>{qtCount}</strong></label>
- <input type="range" min="3" max="30" value={qtCount} onChange={e => setQtCount(e.target.value)}
- style={{ width: '100%', accentColor: '#073642' }} />
- <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#93a1a1' }}>
- <span>3</span><span>30</span>
- </div>
- </div>
+          {/* Question Types */}
+          <div style={CARD}>
+            <label style={SL}> Tipos de questão</label>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              {QTYPES.map(qt => {
+                const sel = types.includes(qt.label)
+                return (
+                  <button key={qt.label} onClick={() => toggleType(qt.label)} style={{
+                    padding: '8px 10px', borderRadius: 10,
+                    border: sel ? '2px solid #073642' : '1px solid #e8e0d0',
+                    background: sel ? '#073642' : '#f5f0e8',
+                    color: sel ? '#fff' : '#586e75',
+                    cursor: 'pointer', fontSize: 11, textAlign: 'left', display: 'flex', alignItems: 'center', gap: 6,
+                  }}>
+                    <i className={`ti ${qt.icon}`} /> {qt.label}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
 
- {/* Question Types */}
- <div style={CARD}>
- <label style={SL}> Tipos de questão</label>
- <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
- {QTYPES.map(qt => {
- const sel = types.includes(qt.label)
- return (
- <button key={qt.label} onClick={() => toggleType(qt.label)} style={{
- padding: '8px 10px', borderRadius: 10,
- border: sel ? '2px solid #073642' : '1px solid #e8e0d0',
- background: sel ? '#073642' : '#f5f0e8',
- color: sel ? '#fff' : '#586e75',
- cursor: 'pointer', fontSize: 11, textAlign: 'left', display: 'flex', alignItems: 'center', gap: 6,
- }}>
- <i className={`ti ${qt.icon}`} /> {qt.label}
- </button>
- )
- })}
- </div>
- </div>
+          {/* Methodologies */}
+          <div style={CARD}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <label style={{ ...SL, marginBottom: 0 }}> Metodologias Ativas</label>
+              <span style={{ fontSize: 11, color: '#93a1a1' }}>{methodology.length} selecionada(s)</span>
+            </div>
+            {(['Metodologias Ativas', 'Abordagens ELT', 'Marcos & Taxonomias'] as const).map(cat => {
+              const items = PEDAGOGICAL_METHODOLOGIES.filter(m => m.category === cat)
+              return (
+                <div key={cat}>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: '#93a1a1', textTransform: 'uppercase', letterSpacing: '0.8px', display: 'block', marginBottom: 6 }}>{cat}</span>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    {items.map(m => {
+                      const sel = methodology.includes(m.name) || methodology.includes(m.id)
+                      return (
+                        <button key={m.id} onClick={() => toggleMethod(m.name)} title={m.description} style={{
+                          padding: '4px 10px', borderRadius: 14,
+                          border: sel ? `1.5px solid ${m.badgeColor}` : '1px solid #e8e0d0',
+                          background: sel ? m.badgeColor : '#f5f0e8',
+                          color: sel ? '#fff' : '#586e75',
+                          cursor: 'pointer', fontSize: 11, fontWeight: 600, transition: 'all 0.15s',
+                        }}>
+                          {m.name}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
 
- {/* Methodologies */}
- <div style={CARD}>
- <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
- <label style={{ ...SL, marginBottom: 0 }}> Metodologias Ativas</label>
- <span style={{ fontSize: 11, color: '#93a1a1' }}>{methodology.length} selecionada(s)</span>
- </div>
- {(['Metodologias Ativas', 'Abordagens ELT', 'Marcos & Taxonomias'] as const).map(cat => {
- const items = PEDAGOGICAL_METHODOLOGIES.filter(m => m.category === cat)
- return (
- <div key={cat}>
- <span style={{ fontSize: 10, fontWeight: 700, color: '#93a1a1', textTransform: 'uppercase', letterSpacing: '0.8px', display: 'block', marginBottom: 6 }}>{cat}</span>
- <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
- {items.map(m => {
- const sel = methodology.includes(m.name) || methodology.includes(m.id)
- return (
- <button key={m.id} onClick={() => toggleMethod(m.name)} title={m.description} style={{
- padding: '4px 10px', borderRadius: 14,
- border: sel ? `1.5px solid ${m.badgeColor}` : '1px solid #e8e0d0',
- background: sel ? m.badgeColor : '#f5f0e8',
- color: sel ? '#fff' : '#586e75',
- cursor: 'pointer', fontSize: 11, fontWeight: 600, transition: 'all 0.15s',
- }}>
- {m.name}
- </button>
- )
- })}
- </div>
- </div>
- )
- })}
- </div>
+          {/* NEE */}
+          <div style={CARD}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <label style={{ ...SL, marginBottom: 0 }}> Adaptação NEE</label>
+              <button onClick={() => setShowNeePanel(!showNeePanel)} style={{
+                padding: '4px 12px', borderRadius: 20, border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700,
+                background: showNeePanel ? '#073642' : '#f5f0e8', color: showNeePanel ? '#fff' : '#586e75',
+              }}>{showNeePanel ? 'Ocultar' : 'Ativar'}</button>
+            </div>
+            {showNeePanel && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
+                <button onClick={() => setNeeProfile('')} style={{
+                  padding: '5px 12px', borderRadius: 20,
+                  border: !neeProfile ? '2px solid #073642' : '1px solid #e8e0d0',
+                  background: !neeProfile ? '#073642' : '#f5f0e8',
+                  color: !neeProfile ? '#fff' : '#586e75',
+                  cursor: 'pointer', fontSize: 11, fontWeight: 600,
+                }}>Padrão</button>
+                {NEE_PROFILES.map(p => (
+                  <button key={p.id} onClick={() => setNeeProfile(p.id)} style={{
+                    padding: '5px 12px', borderRadius: 20,
+                    border: neeProfile === p.id ? `2px solid ${p.color}` : '1px solid #e8e0d0',
+                    background: neeProfile === p.id ? p.color : '#f5f0e8',
+                    color: neeProfile === p.id ? '#fff' : '#586e75',
+                    cursor: 'pointer', fontSize: 11, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5,
+                  }}><i className={`ti ${p.icon}`} /> {p.label}</button>
+                ))}
+              </div>
+            )}
+          </div>
 
- {/* NEE */}
- <div style={CARD}>
- <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
- <label style={{ ...SL, marginBottom: 0 }}> Adaptação NEE</label>
- <button onClick={() => setShowNeePanel(!showNeePanel)} style={{
- padding: '4px 12px', borderRadius: 20, border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700,
- background: showNeePanel ? '#073642' : '#f5f0e8', color: showNeePanel ? '#fff' : '#586e75',
- }}>{showNeePanel ? 'Ocultar' : 'Ativar'}</button>
- </div>
- {showNeePanel && (
- <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
- <button onClick={() => setNeeProfile('')} style={{
- padding: '5px 12px', borderRadius: 20,
- border: !neeProfile ? '2px solid #073642' : '1px solid #e8e0d0',
- background: !neeProfile ? '#073642' : '#f5f0e8',
- color: !neeProfile ? '#fff' : '#586e75',
- cursor: 'pointer', fontSize: 11, fontWeight: 600,
- }}>Padrão</button>
- {NEE_PROFILES.map(p => (
- <button key={p.id} onClick={() => setNeeProfile(p.id)} style={{
- padding: '5px 12px', borderRadius: 20,
- border: neeProfile === p.id ? `2px solid ${p.color}` : '1px solid #e8e0d0',
- background: neeProfile === p.id ? p.color : '#f5f0e8',
- color: neeProfile === p.id ? '#fff' : '#586e75',
- cursor: 'pointer', fontSize: 11, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5,
- }}><i className={`ti ${p.icon}`} /> {p.label}</button>
- ))}
- </div>
- )}
- </div>
+        </div>
 
- {/* Generate Button */}
- <button
- id="quick-generate-btn"
- onClick={handleGenerate}
- disabled={loading}
- style={{
- padding: '14px 24px',
- background: loading ? '#93a1a1' : 'linear-gradient(135deg, #8b5e3c, #5c3a21)',
- color: '#fff',
- border: 'none', borderRadius: 14, fontSize: 15, fontWeight: 700,
- cursor: loading ? 'not-allowed' : 'pointer',
- display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
- boxShadow: !loading ? '0 4px 16px rgba(139,94,60,0.35)' : 'none',
- transition: 'all 0.2s',
- }}
- >
- <i className={`ti ${loading ? 'ti-loader-2' : 'ti-sparkles'}`} style={{ fontSize: 18, animation: loading ? 'spin 1s linear infinite' : 'none' }} />
- {loading ? 'Gerando exercício...' : ' Gerar Exercício Completo'}
- </button>
+        {/* RIGHT PANEL */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, minHeight: 0 }}>
 
- </div>
+          {/* Quality badge */}
+          {(checking || factCheck) && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', background: '#fff', borderRadius: 12, border: `1px solid ${fcColor}33`, flexShrink: 0 }}>
+              {checking
+                ? <><i className="ti ti-loader-2" style={{ color: '#93a1a1', animation: 'spin 1s linear infinite' }} /> <span style={{ fontSize: 13, color: '#93a1a1' }}>Verificando qualidade pedagógica</span></>
+                : factCheck && (
+                  <>
+                    <i className={`ti ${factCheck.level === 'ok' ? 'ti-shield-check' : factCheck.level === 'warn' ? 'ti-alert-triangle' : 'ti-shield-x'}`} style={{ color: fcColor, fontSize: 20 }} />
+                    <div style={{ flex: 1 }}>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: fcColor }}>
+                        {factCheck.level === 'ok' ? ` Conteúdo validado Qualidade ${factCheck.score}/100` :
+                          factCheck.level === 'warn' ? ` Revisar Qualidade ${factCheck.score}/100` :
+                            ` Problemas encontrados Qualidade ${factCheck.score}/100`}
+                      </span>
+                      {factCheck.issues.length > 0 && (
+                        <ul style={{ margin: '4px 0 0', padding: '0 0 0 16px', fontSize: 12, color: '#586e75' }}>
+                          {factCheck.issues.map((i, idx) => <li key={idx}>{i}</li>)}
+                        </ul>
+                      )}
+                    </div>
+                  </>
+                )}
+            </div>
+          )}
 
- {/* RIGHT PANEL */}
- <div style={{ display: 'flex', flexDirection: 'column', gap: 10, minHeight: 0 }}>
+          {/* BNCC tags */}
+          {bnccTags.length > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', flexShrink: 0 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: '#586e75' }}>BNCC:</span>
+              {bnccTags.map(tag => (
+                <span key={tag} style={{ padding: '3px 10px', borderRadius: 20, background: 'rgba(133,153,0,0.12)', border: '1px solid rgba(133,153,0,0.3)', color: '#859900', fontSize: 11, fontWeight: 700 }}>{tag}</span>
+              ))}
+            </div>
+          )}
 
- {/* Quality badge */}
- {(checking || factCheck) && (
- <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', background: '#fff', borderRadius: 12, border: `1px solid ${fcColor}33`, flexShrink: 0 }}>
- {checking
- ? <><i className="ti ti-loader-2" style={{ color: '#93a1a1', animation: 'spin 1s linear infinite' }} /> <span style={{ fontSize: 13, color: '#93a1a1' }}>Verificando qualidade pedagógica</span></>
- : factCheck && (
- <>
- <i className={`ti ${factCheck.level === 'ok' ? 'ti-shield-check' : factCheck.level === 'warn' ? 'ti-alert-triangle' : 'ti-shield-x'}`} style={{ color: fcColor, fontSize: 20 }} />
- <div style={{ flex: 1 }}>
- <span style={{ fontSize: 13, fontWeight: 700, color: fcColor }}>
- {factCheck.level === 'ok' ? ` Conteúdo validado Qualidade ${factCheck.score}/100` :
- factCheck.level === 'warn' ? ` Revisar Qualidade ${factCheck.score}/100` :
- ` Problemas encontrados Qualidade ${factCheck.score}/100`}
- </span>
- {factCheck.issues.length > 0 && (
- <ul style={{ margin: '4px 0 0', padding: '0 0 0 16px', fontSize: 12, color: '#586e75' }}>
- {factCheck.issues.map((i, idx) => <li key={idx}>{i}</li>)}
- </ul>
- )}
- </div>
- </>
- )}
- </div>
- )}
+          {/* Export Toolbar */}
+          {result && (
+            <div style={{
+              background: '#fdf8f2', padding: '10px 16px', borderRadius: 14,
+              border: '1.5px solid #ede8dc', display: 'flex', flexWrap: 'wrap',
+              justifyContent: 'space-between', alignItems: 'center', gap: 8, flexShrink: 0
+            }}>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <button
+                  onClick={() => exportToPdf({
+                    schoolName: header.school || 'ESCOLA DE IDIOMAS & ENSINO',
+                    teacherName: header.teacher || 'Professor(a)',
+                    className: grade || '8º Ano',
+                    title: header.title || (topic ? `ATIVIDADE ${topic.toUpperCase()}` : 'ATIVIDADE DE FIXAÇÃO'),
+                    content: result
+                  })}
+                  style={{
+                    padding: '8px 14px', borderRadius: 10, border: 'none',
+                    background: '#8b5e3c', color: '#fff', fontSize: 12.5,
+                    fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6
+                  }}
+                >
+                  Exportar PDF Oficial
+                </button>
 
- {/* BNCC tags */}
- {bnccTags.length > 0 && (
- <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', flexShrink: 0 }}>
- <span style={{ fontSize: 11, fontWeight: 700, color: '#586e75' }}>BNCC:</span>
- {bnccTags.map(tag => (
- <span key={tag} style={{ padding: '3px 10px', borderRadius: 20, background: 'rgba(133,153,0,0.12)', border: '1px solid rgba(133,153,0,0.3)', color: '#859900', fontSize: 11, fontWeight: 700 }}>{tag}</span>
- ))}
- </div>
- )}
+                <button
+                  onClick={() => exportToWord({
+                    schoolName: header.school || 'ESCOLA DE IDIOMAS & ENSINO',
+                    teacherName: header.teacher || 'Professor(a)',
+                    className: grade || '8º Ano',
+                    title: header.title || (topic ? `ATIVIDADE ${topic.toUpperCase()}` : 'ATIVIDADE DE FIXAÇÃO'),
+                    content: result
+                  })}
+                  style={{
+                    padding: '8px 14px', borderRadius: 10, border: '1px solid #c0a080',
+                    background: '#fffcf8', color: '#8b5e3c', fontSize: 12.5,
+                    fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6
+                  }}
+                >
+                  Exportar Word (.docx)
+                </button>
+              </div>
 
- {/* Library source badge */}
- {selectedLibItem && result && (
- <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', background: 'rgba(42,161,152,0.08)', border: '1px solid rgba(42,161,152,0.2)', borderRadius: 10, flexShrink: 0 }}>
- <i className="ti ti-books" style={{ color: '#2aa198', fontSize: 16 }} />
- <span style={{ fontSize: 12, color: '#2aa198', fontWeight: 600 }}>
- Gerado com base em: <strong>{selectedLibItem.title.replace(/^[^\w]*/, '')}</strong>
- </span>
- </div>
- )}
+              <div style={{ fontSize: 12, color: '#8b5e3c', fontWeight: 600 }}>
+                Pronto para impressão
+              </div>
+            </div>
+          )}
 
- {/* Export Toolbar */}
- {result && (
- <div style={{
- background: '#fdf8f2', padding: '10px 16px', borderRadius: 14,
- border: '1.5px solid #ede8dc', display: 'flex', flexWrap: 'wrap',
- justifyContent: 'space-between', alignItems: 'center', gap: 8, flexShrink: 0
- }}>
- <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
- <button
- onClick={() => exportToPdf({
- schoolName: header.school || 'ESCOLA DE IDIOMAS & ENSINO',
- teacherName: header.teacher || 'Professor(a)',
- className: grade || '8º Ano',
- title: header.title || (topic ? `ATIVIDADE ${topic.toUpperCase()}` : 'ATIVIDADE DE FIXAÇÃO'),
- content: result
- })}
- style={{
- padding: '8px 14px', borderRadius: 10, border: 'none',
- background: '#8b5e3c', color: '#fff', fontSize: 12.5,
- fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6
- }}
- >
- Exportar PDF Oficial
- </button>
+          {/* Document Canvas */}
+          <div style={{ flex: 1, minHeight: 0 }}>
+            <DocumentCanvas
+              content={result}
+              onContentChange={setResult}
+              hideHeader={hideHeader}
+              onToggleHeader={() => setHideHeader(h => !h)}
+              headerData={{
+                school: header.school || 'Nome da Escola',
+                teacher: header.teacher || 'Professor(a)',
+                title: header.title || topic || 'Exercício Gerado',
+              }}
+              onHeaderChange={patch => setHeader(h => ({
+                ...h,
+                ...(patch.headerSchool !== undefined ? { school: patch.headerSchool } : {}),
+                ...(patch.headerTeacher !== undefined ? { teacher: patch.headerTeacher } : {}),
+                ...(patch.headerTitle !== undefined ? { title: patch.headerTitle } : {}),
+              }))}
+            />
+          </div>
+        </div>
+      </div>
 
- <button
- onClick={() => exportToWord({
- schoolName: header.school || 'ESCOLA DE IDIOMAS & ENSINO',
- teacherName: header.teacher || 'Professor(a)',
- className: grade || '8º Ano',
- title: header.title || (topic ? `ATIVIDADE ${topic.toUpperCase()}` : 'ATIVIDADE DE FIXAÇÃO'),
- content: result
- })}
- style={{
- padding: '8px 14px', borderRadius: 10, border: '1px solid #c0a080',
- background: '#fffcf8', color: '#8b5e3c', fontSize: 12.5,
- fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6
- }}
- >
- Exportar Word (.docx)
- </button>
- </div>
+      {/* Saved Drawer */}
+      <SavedItemsDrawer
+        isOpen={showSaved}
+        onClose={() => setShowSaved(false)}
+        title="Exercícios Salvos"
+        storageKey="teacher_saved_quicks"
+        onSelect={(item: SavedItem) => setResult(item.content)}
+      />
 
- <div style={{ fontSize: 12, color: '#8b5e3c', fontWeight: 600 }}>
- Pronto para impressão
- </div>
- </div>
- )}
-
- {/* Document Canvas */}
- <div style={{ flex: 1, minHeight: 0 }}>
- <DocumentCanvas
-
- content={result}
- onContentChange={setResult}
- hideHeader={hideHeader}
- onToggleHeader={() => setHideHeader(h => !h)}
- headerData={{
- school: header.school || 'Nome da Escola',
- teacher: header.teacher || 'Professor(a)',
- title: header.title || topic || 'Exercício Gerado',
- }}
- onHeaderChange={patch => setHeader(h => ({
- ...h,
- ...(patch.headerSchool !== undefined ? { school: patch.headerSchool } : {}),
- ...(patch.headerTeacher !== undefined ? { teacher: patch.headerTeacher } : {}),
- ...(patch.headerTitle !== undefined ? { title: patch.headerTitle } : {}),
- }))}
- />
- </div>
- </div>
- </div>
-
- {/* Saved Drawer */}
- <SavedItemsDrawer
- isOpen={showSaved}
- onClose={() => setShowSaved(false)}
- title="Exercícios Salvos"
- storageKey="teacher_saved_quicks"
- onSelect={(item: SavedItem) => setResult(item.content)}
- />
-
- <style>{`
- @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
- `}</style>
- </div>
- )
-}
+      <style>{`
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+      `}</style>
+    </div>
+  )
+}

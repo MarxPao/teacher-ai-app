@@ -118,7 +118,26 @@ export const AGENT_TOOLS: ToolDefinition[] = [
     }
   },
 
-  // 7. PORTAIS ESCOLARES (INTEGRAÇÃO EXTENSÃO)
+  // 7. PORTAIS ESCOLARES (INTEGRAÇÃO EXTENSÃO & AUTOMAÇÃO AGÊNTICA)
+  {
+    name: 'execute_portal_action',
+    description: 'Executa ações operacionais reais em portais escolares (Machado Sobrinho, Plurall, Rede Santa Catarina, Cambridge One, etc.). Suporta lançamento de diários de classe, frequências/chamadas, notas de boletim e criação de tarefas, nos modos supervisionado ou autônomo.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        platform:       { type: 'string', description: 'ID do portal, ex: machado, santacatarina, plural, cambridge, ou nome da escola' },
+        actionType:     { type: 'string', enum: ['diary', 'attendance', 'grades', 'assignment', 'custom'], description: 'Tipo da ação: diário, chamada, notas, tarefa' },
+        title:          { type: 'string', description: 'Título da aula, diário ou avaliação' },
+        date:           { type: 'string', description: 'Data YYYY-MM-DD' },
+        classRef:       { type: 'string', description: 'Turma vinculada, ex: 9º Ano A, 8B' },
+        description:    { type: 'string', description: 'Conteúdo programático, pauta, metodologia ou instruções da tarefa' },
+        mode:           { type: 'string', enum: ['supervised', 'autonomous'], description: 'Supervisionado (preenche e aguarda revisão) ou Autônomo (preenche e salva automaticamente)' },
+        absentStudents: { type: 'array', items: { type: 'string' }, description: 'Lista de nomes de alunos ausentes/faltas na chamada' },
+        evaluationName: { type: 'string', description: 'Nome da avaliação para lançamento de notas (ex: Prova 1, Simulado)' }
+      },
+      required: ['platform', 'title']
+    }
+  },
   {
     name: 'fill_school_portal',
     description: 'Preenche campos em portal escolar (Machado, Plural, Santa Catarina, Cambridge One, Teams).',
@@ -140,7 +159,7 @@ export const AGENT_TOOLS: ToolDefinition[] = [
     input_schema: {
       type: 'object',
       properties: {
-        platform: { type: 'string', enum: ['machado', 'santacatarina', 'plural', 'cambridge', 'teams'] }
+        platform: { type: 'string' }
       },
       required: ['platform']
     }
@@ -435,6 +454,7 @@ export const TOOL_DISPLAY_NAMES: Record<string, { label: string; icon: string; c
   create_lesson_plan:         { label: 'Criando plano',        icon: 'ti-notebook',           color: '#2aa198' },
   create_communication:       { label: 'Redigindo bilhete',    icon: 'ti-message',            color: '#6c71c4' },
   add_student_grade:          { label: 'Lançando nota',        icon: 'ti-report-analytics',   color: '#2aa198' },
+  execute_portal_action:      { label: 'Operando no Portal',   icon: 'ti-wand',               color: '#8b5e3c' },
   fill_school_portal:         { label: 'Preenchendo portal',   icon: 'ti-plug-connected',     color: '#cb4b16' },
   open_school_portal:         { label: 'Abrindo portal',       icon: 'ti-external-link',      color: '#268bd2' },
   generate_exam_content:      { label: 'Gerando prova',        icon: 'ti-file-certificate',   color: '#d33682' },

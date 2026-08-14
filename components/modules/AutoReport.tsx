@@ -41,24 +41,19 @@ export default function AutoReport() {
         console.error(e);
       }
     } else {
-      setClasses([
-        { id: '1', name: 'English 101', level: 'Beginner' },
-        { id: '2', name: 'Advanced Conversation', level: 'Advanced' }
-      ]);
+      setClasses([]);
     }
 
     if (storedStudents) {
       try {
-        setStudents(JSON.parse(storedStudents));
+        const loaded = JSON.parse(storedStudents);
+        const MOCK_NAMES = ['Alice Smith', 'Bob Johnson', 'Bob Jones', 'Charlie Brown', 'Diana Prince'];
+        setStudents(Array.isArray(loaded) ? loaded.filter((s: any) => !MOCK_NAMES.includes(s.name)) : []);
       } catch (e) {
         console.error(e);
       }
     } else {
-      setStudents([
-        { id: 's1', classId: '1', name: 'Alice Smith', grades: [8, 9, 8.5], attendance: 95 },
-        { id: 's2', classId: '1', name: 'Bob Johnson', grades: [6, 5.5, 6], attendance: 70 },
-        { id: 's3', classId: '2', name: 'Charlie Brown', grades: [9, 9.5, 10], attendance: 100 },
-      ]);
+      setStudents([]);
     }
     
     const today = new Date();

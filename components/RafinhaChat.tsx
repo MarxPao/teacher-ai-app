@@ -446,6 +446,63 @@ async function executeTool(
 
  return `Nota ${input.grade} lançada para ${students[idx].name}`
  }
+ case 'execute_portal_action': {
+ takeSnapshot()
+ const platform = (input.platform as string) || 'machado'
+ const actionType = (input.actionType as any) || 'diary'
+ const title = (input.title as string) || 'Aula de Inglês'
+ const date = (input.date as string) || new Date().toISOString().split('T')[0]
+ const classRef = (input.classRef as string) || ''
+ const description = (input.description as string) || ''
+ const mode = (input.mode as any) || 'supervised'
+ const absentStudents = (input.absentStudents as string[]) || []
+ const evaluationName = (input.evaluationName as string) || 'Avaliação 1'
+
+ let studentGrades: any[] = []
+ if (actionType === 'grades') {
+ const rawStudents = localStorage.getItem('teacher_students')
+ if (rawStudents) {
+ try {
+ const parsed = JSON.parse(rawStudents)
+ if (Array.isArray(parsed)) {
+ studentGrades = parsed
+ .filter((s: any) => !classRef || s.class === classRef || (s.className && s.className.includes(classRef)))
+ .map((s: any) => {
+ const gradesList = Object.values(s.grades || {}).map(Number).filter(n => !isNaN(n))
+ const avg = gradesList.length > 0 ? gradesList.reduce((a, b) => a + b, 0) / gradesList.length : 8.5
+ return { name: s.name, grade: Number(avg.toFixed(1)), id: s.id }
+ })
+ }
+ } catch {}
+ }
+ }
+
+ const payload = {
+ platform,
+ actionType,
+ title,
+ date,
+ classRef,
+ description,
+ mode,
+ absentStudents,
+ studentGrades,
+ evaluationName
+ }
+
+ logPortalFill(payload as any)
+ const result = await fillPortal(payload as any)
+ window.dispatchEvent(new Event('storage'))
+
+ const spokenMsg = result.success
+ ? (mode === 'autonomous'
+ ? `Pronto! Ação de ${actionType} executada e salva automaticamente no portal ${platform}.`
+ : `Pronto! Preenchi os campos da ação de ${actionType} no portal ${platform} para você revisar e salvar.`)
+ : `Não consegui conectar à aba do portal ${platform}. Verifique se a página está aberta no Chrome.`
+
+ if (speakFn) speakFn(spokenMsg)
+ return spokenMsg
+ }
  case 'fill_school_portal': {
  takeSnapshot()
  const result = await fillPortal({ platform: input.platform as never, title: input.title as string, date: input.date as string || '', classRef: input.classRef as string || '', description: input.description as string || '' }) as any

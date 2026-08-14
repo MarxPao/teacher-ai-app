@@ -1,0 +1,408 @@
+/**
+ * portalActionsEngine.ts — Motor de Ações e Portais Escolares Editáveis
+ * Permite cadastrar, editar e orquestrar rotinas de automação em portais oficiais.
+ */
+
+export interface FieldMappingDef {
+  fieldId: string
+  label: string
+  type: 'text' | 'textarea' | 'date' | 'select' | 'number' | 'checkbox_list'
+  selectors: string[]
+  semanticKeywords: string[]
+  description: string
+  required?: boolean
+}
+
+export interface PortalActionDef {
+  id: string
+  title: string
+  type: 'diary' | 'attendance' | 'grades' | 'assignment' | 'communication' | 'custom'
+  description: string
+  fields: FieldMappingDef[]
+  submitSelector?: string
+  executionMode: 'supervised' | 'autonomous'
+  spokenConfirmation: string
+  isCustom?: boolean
+}
+
+export interface PortalProfileDef {
+  id: string
+  name: string
+  shortName: string
+  url: string
+  matchUrl: string
+  icon: string
+  color: string
+  bg: string
+  border: string
+  category: string
+  description: string
+  isCustom: boolean
+  actions: PortalActionDef[]
+}
+
+export const DEFAULT_PORTALS: PortalProfileDef[] = [
+  {
+    id: 'machado',
+    name: 'Machado Sobrinho',
+    shortName: 'Machado',
+    url: 'https://machadosobrinho.paineldoaluno.com.br/professor_painel',
+    matchUrl: 'paineldoaluno.com.br',
+    icon: 'ti-chalkboard',
+    color: '#b58900',
+    bg: '#fef9c3',
+    border: '#fef08a',
+    category: 'Diário & Notas',
+    description: 'Painel oficial de professores para lançamento de diários de classe, frequências e notas bimestrais.',
+    isCustom: false,
+    actions: [
+      {
+        id: 'machado_diary',
+        title: 'Lançar Diário de Classe',
+        type: 'diary',
+        description: 'Preenche o conteúdo programático, assunto da aula e metodologia no diário.',
+        executionMode: 'supervised',
+        spokenConfirmation: 'Diário de classe preenchido no Machado Sobrinho com sucesso!',
+        fields: [
+          {
+            fieldId: 'title',
+            label: 'Título / Assunto da Aula',
+            type: 'text',
+            selectors: ['input[name*="titulo"]', 'input[name*="assunto"]', 'input[id*="diario"]', 'input[placeholder*="Assunto"]'],
+            semanticKeywords: ['título', 'assunto', 'conteúdo', 'tema'],
+            description: 'Tema trabalhado em aula (ex: Present Perfect & Listening)'
+          },
+          {
+            fieldId: 'date',
+            label: 'Data da Aula',
+            type: 'date',
+            selectors: ['input[type="date"]', 'input[name*="data"]', 'input[id*="data"]'],
+            semanticKeywords: ['data', 'dia', 'date'],
+            description: 'Data em formato AAAA-MM-DD'
+          },
+          {
+            fieldId: 'description',
+            label: 'Conteúdo & Metodologia',
+            type: 'textarea',
+            selectors: ['textarea[name*="conteudo"]', 'textarea[name*="descricao"]', 'textarea[name*="pauta"]', 'div[contenteditable="true"]'],
+            semanticKeywords: ['conteúdo', 'descrição', 'pauta', 'metodologia'],
+            description: 'Resumo detalhado das atividades aplicadas'
+          },
+          {
+            fieldId: 'classRef',
+            label: 'Turma',
+            type: 'select',
+            selectors: ['select[name*="turma"]', 'select[id*="turma"]', 'input[name*="turma"]'],
+            semanticKeywords: ['turma', 'classe', 'série'],
+            description: 'Turma vinculada'
+          }
+        ]
+      },
+      {
+        id: 'machado_attendance',
+        title: 'Lançar Frequência & Chamada',
+        type: 'attendance',
+        description: 'Registra presenças e marca faltas na lista de alunos da turma.',
+        executionMode: 'supervised',
+        spokenConfirmation: 'Chamada registrada no painel Machado Sobrinho!',
+        fields: [
+          {
+            fieldId: 'date',
+            label: 'Data da Chamada',
+            type: 'date',
+            selectors: ['input[type="date"]', 'input[name*="data"]'],
+            semanticKeywords: ['data', 'dia'],
+            description: 'Data da aula'
+          },
+          {
+            fieldId: 'absentStudents',
+            label: 'Alunos Ausentes / Faltas',
+            type: 'checkbox_list',
+            selectors: ['input[type="checkbox"][name*="falta"]', 'input[type="checkbox"][name*="presenca"]', 'tr[data-student]'],
+            semanticKeywords: ['falta', 'ausente', 'presença'],
+            description: 'Lista de faltas identificadas'
+          }
+        ]
+      },
+      {
+        id: 'machado_grades',
+        title: 'Lançar Boletim de Notas',
+        type: 'grades',
+        description: 'Lança as notas de avaliações, simulados e tarefas para os alunos.',
+        executionMode: 'supervised',
+        spokenConfirmation: 'Notas lançadas na planilha do Machado Sobrinho!',
+        fields: [
+          {
+            fieldId: 'evaluationName',
+            label: 'Nome da Avaliação',
+            type: 'text',
+            selectors: ['select[name*="avaliacao"]', 'input[name*="etapa"]', 'input[name*="prova"]'],
+            semanticKeywords: ['avaliação', 'etapa', 'prova', 'trabalho'],
+            description: 'Identificação da avaliação no sistema'
+          },
+          {
+            fieldId: 'gradesMap',
+            label: 'Notas dos Alunos',
+            type: 'number',
+            selectors: ['input[name*="nota"]', 'input[type="number"]', 'input[data-nota]'],
+            semanticKeywords: ['nota', 'grade', 'pontos'],
+            description: 'Notas individuais de 0 a 10'
+          }
+        ]
+      }
+    ]
+  },
+  {
+    id: 'santacatarina',
+    name: 'Rede Santa Catarina',
+    shortName: 'Sta. Catarina',
+    url: 'https://portaleducacao.redesantacatarina.org.br/auth/login',
+    matchUrl: 'redesantacatarina.org.br',
+    icon: 'ti-shield-check',
+    color: '#dc322f',
+    bg: '#fee2e2',
+    border: '#fca5a5',
+    category: 'Portal Acadêmico',
+    description: 'Portal acadêmico oficial para planos de aula, pautas escolares e notas da Rede Santa Catarina.',
+    isCustom: false,
+    actions: [
+      {
+        id: 'stacatarina_plan',
+        title: 'Registrar Plano de Aula & Pauta',
+        type: 'diary',
+        description: 'Publica o planejamento pedagógico e pauta no portal.',
+        executionMode: 'supervised',
+        spokenConfirmation: 'Plano de aula publicado na Rede Santa Catarina!',
+        fields: [
+          {
+            fieldId: 'title',
+            label: 'Planejamento / Tema',
+            type: 'text',
+            selectors: ['input[placeholder*="planejamento"]', 'input[name*="titulo"]', 'input[name*="plano"]'],
+            semanticKeywords: ['planejamento', 'título', 'plano', 'tema'],
+            description: 'Título do planejamento'
+          },
+          {
+            fieldId: 'date',
+            label: 'Data de Execução',
+            type: 'date',
+            selectors: ['input[type="date"]', 'input[name*="data"]'],
+            semanticKeywords: ['data', 'prazo'],
+            description: 'Data prevista da aula'
+          },
+          {
+            fieldId: 'description',
+            label: 'Pauta & Habilidades BNCC',
+            type: 'textarea',
+            selectors: ['textarea', 'div[contenteditable="true"]', 'input[name*="pauta"]'],
+            semanticKeywords: ['pauta', 'habilidades', 'objetivos', 'bncc'],
+            description: 'Detalhamento da aula e códigos da BNCC'
+          }
+        ]
+      },
+      {
+        id: 'stacatarina_grades',
+        title: 'Lançar Notas & Avaliações',
+        type: 'grades',
+        description: 'Preenche notas do trimestre no boletim escolar.',
+        executionMode: 'supervised',
+        spokenConfirmation: 'Notas lançadas no Portal Santa Catarina!',
+        fields: [
+          {
+            fieldId: 'gradesMap',
+            label: 'Matriz de Notas',
+            type: 'number',
+            selectors: ['input[name*="nota"]', 'input[type="number"]'],
+            semanticKeywords: ['nota', 'boletim', 'rendimento'],
+            description: 'Notas de 0 a 10 por aluno'
+          }
+        ]
+      }
+    ]
+  },
+  {
+    id: 'plural',
+    name: 'Plurall (SOMOS Educação)',
+    shortName: 'Plurall',
+    url: 'https://www.plurall.net/',
+    matchUrl: 'plural.net',
+    icon: 'ti-notebook',
+    color: '#cb4b16',
+    bg: '#fff7ed',
+    border: '#ffedd5',
+    category: 'LMS & Atividades',
+    description: 'Portal de tarefas online, avaliações digitais e acompanhamento pedagógico SOMOS.',
+    isCustom: false,
+    actions: [
+      {
+        id: 'plural_assignment',
+        title: 'Criar Tarefa / Atividade Online',
+        type: 'assignment',
+        description: 'Cria uma tarefa ou atividade para a turma no Plurall.',
+        executionMode: 'supervised',
+        spokenConfirmation: 'Tarefa agendada e criada no Plurall!',
+        fields: [
+          {
+            fieldId: 'title',
+            label: 'Título da Atividade',
+            type: 'text',
+            selectors: ['input[placeholder*="título"]', 'input[name*="title"]', 'input[name*="nome"]'],
+            semanticKeywords: ['título', 'nome da tarefa', 'atividade'],
+            description: 'Nome da atividade (ex: Homework Unit 4)'
+          },
+          {
+            fieldId: 'date',
+            label: 'Data Limite de Entrega',
+            type: 'date',
+            selectors: ['input[type="date"]', 'input[name*="datalimite"]', 'input[name*="prazo"]'],
+            semanticKeywords: ['prazo', 'data limite', 'entrega'],
+            description: 'Prazo final de submissão'
+          },
+          {
+            fieldId: 'description',
+            label: 'Instruções da Tarefa',
+            type: 'textarea',
+            selectors: ['textarea[name*="descricao"]', 'div[contenteditable="true"]'],
+            semanticKeywords: ['instruções', 'descrição', 'exercícios'],
+            description: 'Orientações aos alunos'
+          }
+        ]
+      }
+    ]
+  },
+  {
+    id: 'cambridge',
+    name: 'Cambridge One',
+    shortName: 'Cambridge',
+    url: 'https://www.cambridgeone.org/',
+    matchUrl: 'cambridgeone.org',
+    icon: 'ti-book-2',
+    color: '#268bd2',
+    bg: '#f0f9ff',
+    border: '#bae6fd',
+    category: 'ELT & Avaliações',
+    description: 'Portal oficial Cambridge para atribuição de materiais digitais e diários de notas ELT.',
+    isCustom: false,
+    actions: [
+      {
+        id: 'cambridge_assignment',
+        title: 'Atribuir Practice / Assignment',
+        type: 'assignment',
+        description: 'Atribui unidades de exercícios digitais na turma.',
+        executionMode: 'supervised',
+        spokenConfirmation: 'Atividade atribuída no Cambridge One!',
+        fields: [
+          {
+            fieldId: 'title',
+            label: 'Nome da Lição / Unidade',
+            type: 'text',
+            selectors: ['input[name*="lesson"]', 'input[name*="title"]', 'input[placeholder*="lesson"]'],
+            semanticKeywords: ['lesson', 'unit', 'practice'],
+            description: 'Ex: Unit 3 Grammar & Vocab'
+          },
+          {
+            fieldId: 'date',
+            label: 'Prazo de Conclusão',
+            type: 'date',
+            selectors: ['input[type="date"]', 'input[name*="due"]'],
+            semanticKeywords: ['due date', 'deadline'],
+            description: 'Data de entrega'
+          }
+        ]
+      }
+    ]
+  }
+]
+
+const STORAGE_KEY = 'teacher_custom_portals_v2'
+
+/**
+ * Retorna todos os portais cadastrados (padrão + customizados)
+ */
+export function getPortalProfiles(): PortalProfileDef[] {
+  if (typeof window === 'undefined') return DEFAULT_PORTALS
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY)
+    if (saved) {
+      const parsed = JSON.parse(saved)
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed
+      }
+    }
+  } catch (e) {
+    console.error('Erro ao ler perfis de portais:', e)
+  }
+  return DEFAULT_PORTALS
+}
+
+/**
+ * Salva a lista completa de perfis de portais
+ */
+export function savePortalProfiles(profiles: PortalProfileDef[]): void {
+  if (typeof window === 'undefined') return
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(profiles))
+    window.dispatchEvent(new CustomEvent('teacher:portals_changed'))
+    window.dispatchEvent(new CustomEvent('teacher:data_changed'))
+  } catch (e) {
+    console.error('Erro ao salvar perfis de portais:', e)
+  }
+}
+
+/**
+ * Adiciona ou atualiza um perfil de portal
+ */
+export function upsertPortalProfile(profile: PortalProfileDef): void {
+  const all = getPortalProfiles()
+  const idx = all.findIndex(p => p.id === profile.id)
+  if (idx >= 0) {
+    all[idx] = profile
+  } else {
+    all.push(profile)
+  }
+  savePortalProfiles(all)
+}
+
+/**
+ * Remove um portal customizado
+ */
+export function deletePortalProfile(id: string): void {
+  const all = getPortalProfiles().filter(p => p.id !== id)
+  savePortalProfiles(all)
+}
+
+/**
+ * Adiciona ou atualiza uma ação dentro de um portal
+ */
+export function upsertPortalAction(portalId: string, action: PortalActionDef): void {
+  const all = getPortalProfiles()
+  const portal = all.find(p => p.id === portalId)
+  if (!portal) return
+
+  const actionIdx = portal.actions.findIndex(a => a.id === action.id)
+  if (actionIdx >= 0) {
+    portal.actions[actionIdx] = action
+  } else {
+    portal.actions.push(action)
+  }
+  savePortalProfiles(all)
+}
+
+/**
+ * Remove uma ação de um portal
+ */
+export function deletePortalAction(portalId: string, actionId: string): void {
+  const all = getPortalProfiles()
+  const portal = all.find(p => p.id === portalId)
+  if (!portal) return
+
+  portal.actions = portal.actions.filter(a => a.id !== actionId)
+  savePortalProfiles(all)
+}
+
+/**
+ * Restaura os portais para o padrão de fábrica
+ */
+export function resetDefaultPortals(): void {
+  savePortalProfiles(DEFAULT_PORTALS)
+}

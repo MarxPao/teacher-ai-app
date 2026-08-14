@@ -1,14 +1,26 @@
 /**
  * portalBridge.ts — Bridge bidirecional entre o TEACHER??? e a extensão Chrome
- * Usa BroadcastChannel para comunicação confiável dentro do mesmo browser
+ * Suporta Execução Agêntica Completa (Diários, Chamadas, Notas, Tarefas)
+ * nos Modos Supervisionado e Autônomo com Voz.
  */
 
+import { getPortalProfiles, PortalProfileDef, PortalActionDef } from './portalActionsEngine'
+
 export interface PortalFillPayload {
-  platform: 'machado' | 'santacatarina' | 'plural' | 'cambridge' | 'teams' | 'canva'
+  platform: string
+  actionType?: 'diary' | 'attendance' | 'grades' | 'assignment' | 'custom'
   title: string
   date?: string
   classRef?: string
   description?: string
+  methodology?: string
+  bncc?: string
+  absentStudents?: string[]
+  presentStudents?: string[]
+  studentGrades?: Array<{ name: string; grade: number; id?: string }>
+  evaluationName?: string
+  mode?: 'supervised' | 'autonomous'
+  customFields?: Record<string, any>
 }
 
 export interface PortalStatus {
@@ -29,81 +41,113 @@ export interface BridgeMessage {
   timestamp?: number
 }
 
-const PORTAL_NAMES: Record<string, string> = {
-  machado:       'Machado Sobrinho',
-  santacatarina: 'Rede Santa Catarina',
-  plural:        'Plural (SOMOS)',
-  cambridge:     'Cambridge One',
-  teams:         'Microsoft Teams',
-  canva:         'Canva Studio & Connect',
-}
-
-const PORTAL_URLS: Record<string, string> = {
-  machado:       'https://machadosobrinho.paineldoaluno.com.br/professor_painel',
-  santacatarina: 'https://portaleducacao.redesantacatarina.org.br/auth/login',
-  plural:        'https://www.plural.net/',
-  cambridge:     'https://www.cambridgeone.org/',
-  teams:         'https://teams.microsoft.com/',
-  canva:         'https://www.canva.com/projects',
-}
-
+export const ALL_PORTALS = [
+  { id: 'machado', platform: 'machado', name: 'Machado Sobrinho', color: '#b58900', url: 'https://machadosobrinho.paineldoaluno.com.br/professor_painel', category: 'Diário & Notas', desc: 'Painel oficial de professores' },
+  { id: 'santacatarina', platform: 'santacatarina', name: 'Rede Santa Catarina', color: '#dc322f', url: 'https://portaleducacao.redesantacatarina.org.br/auth/login', category: 'Portal Acadêmico', desc: 'Portal acadêmico oficial' },
+  { id: 'plural', platform: 'plural', name: 'Plural (SOMOS)', color: '#cb4b16', url: 'https://www.plural.net/', category: 'LMS & Atividades', desc: 'Portal de tarefas online' },
+  { id: 'cambridge', platform: 'cambridge', name: 'Cambridge One', color: '#268bd2', url: 'https://www.cambridgeone.org/', category: 'ELT', desc: 'Portal oficial Cambridge' },
+  { id: 'teams', platform: 'teams', name: 'Microsoft Teams', color: '#6c71c4', url: 'https://teams.microsoft.com/', category: 'Colaboração', desc: 'Ambiente escolar Teams' },
+  { id: 'canva', platform: 'canva', name: 'Canva Studio & Connect', color: '#00c4cc', url: 'https://www.canva.com/projects', category: 'Design', desc: 'Estúdio de design' }
+]
 
 /**
- * Envia um preenchimento para o portal via extensão Chrome
- * Usa múltiplos canais para garantia de entrega
+ * Obtém o perfil de um portal pelo ID ou matchUrl
  */
-export function fillPortal(payload: PortalFillPayload): Promise<{ success: boolean; error?: string }> {
+export function getPortalProfileById(platformId: string): PortalProfileDef | undefined {
+  const profiles = getPortalProfiles()
+  return profiles.find(p => p.id === platformId || p.url.includes(platformId) || platformId.includes(p.id))
+}
+
+/**
+ * Obtém a URL de um portal
+ */
+export function getPortalUrl(platform: string): string {
+  const profile = getPortalProfileById(platform)
+  return profile ? profile.url : ''
+}
+
+/**
+ * Obtém o nome amigável de um portal
+ */
+export function getPortalName(platform: string): string {
+  const profile = getPortalProfileById(platform)
+  return profile ? profile.name : platform
+}
+
+/**
+ * Abre um portal escolar em nova aba
+ */
+export function openPortal(platform: string): void {
+  const url = getPortalUrl(platform)
+  if (url) window.open(url, '_blank', 'noopener')
+}
+
+/**
+ * Executa uma ação de preenchimento ou automação no portal via extensão Chrome
+ */
+export function fillPortal(payload: PortalFillPayload): Promise<{ success: boolean; message?: string; error?: string }> {
   return new Promise((resolve) => {
+    const profile = getPortalProfileById(payload.platform)
+    const mode = payload.mode || 'supervised'
+
     const message = {
-      action: 'FILL_DEADLINE',
+      action: 'EXECUTE_PORTAL_ACTION',
       platform: payload.platform,
-      task: {
-        title:       payload.title,
-        date:        payload.date || '',
+      platformName: profile ? profile.name : payload.platform,
+      actionType: payload.actionType || 'diary',
+      mode,
+      payload: {
+        title: payload.title,
+        date: payload.date || new Date().toISOString().split('T')[0],
         description: payload.description || '',
-        classRef:    payload.classRef || '',
-        type:        'tarefa',
+        classRef: payload.classRef || '',
+        methodology: payload.methodology || '',
+        bncc: payload.bncc || '',
+        absentStudents: payload.absentStudents || [],
+        presentStudents: payload.presentStudents || [],
+        studentGrades: payload.studentGrades || [],
+        evaluationName: payload.evaluationName || 'Avaliação 1',
+        customFields: payload.customFields || {}
       }
     }
 
-    // Canal 1: postMessage para extensão injectada na página atual
+    // Canal 1: postMessage na janela
     window.postMessage(message, window.location.origin)
 
-    // Canal 2: BroadcastChannel para side panel da extensão
+    // Canal 2: BroadcastChannel global para a extensão
     try {
       const bc = new BroadcastChannel('teacher_portal_bridge')
       bc.postMessage({ action: 'FORWARD_TO_PORTAL', payload: message })
       bc.close()
-    } catch (e) { /* BroadcastChannel não disponível */ }
+    } catch {}
 
-    // Salva como última tarefa para replay no popup da extensão
+    // Salva última tarefa para replay no popup
     try {
       localStorage.setItem('teacher_last_portal_task', JSON.stringify({
-        platform: payload.platform,
-        title:    payload.title,
-        date:     payload.date || '',
-        classRef: payload.classRef || '',
+        ...payload,
         timestamp: Date.now(),
       }))
-    } catch (e) { /* ignore */ }
+    } catch {}
 
-    // Aguarda resposta de confirmação por 3s
-    // F11: retorna false após timeout (extensão não instalada ou não responsiva)
+    // Timeout de 3.5s para resposta da extensão
     const timeout = setTimeout(() => {
       window.removeEventListener('message', handler)
       resolve({
         success: false,
-        error: 'Extensão do TEACHER??? não respondeu. Verifique se está instalada e ativa no Chrome.'
+        error: `A extensão do Chrome não respondeu no portal ${getPortalName(payload.platform)}. Verifique se ela está instalada e a aba do portal está aberta.`
       })
-    }, 3000)
+    }, 3500)
 
-    // Ouve confirmação da extensão
     const handler = (event: MessageEvent) => {
       if (event.origin !== window.location.origin) return
-      if (event.data?.action === 'FILL_RESULT' && event.data?.platform === payload.platform) {
+      if (event.data?.action === 'FILL_RESULT' && (event.data?.platform === payload.platform || !event.data?.platform)) {
         clearTimeout(timeout)
         window.removeEventListener('message', handler)
-        resolve({ success: event.data.success, error: event.data.error })
+        resolve({
+          success: event.data.success,
+          message: event.data.message || (event.data.success ? 'Ação executada no portal!' : 'Erro na execução.'),
+          error: event.data.error
+        })
       }
     }
     window.addEventListener('message', handler)
@@ -111,33 +155,17 @@ export function fillPortal(payload: PortalFillPayload): Promise<{ success: boole
 }
 
 /**
- * Abre um portal escolar em nova aba
- */
-export function openPortal(platform: string): void {
-  const url = PORTAL_URLS[platform]
-  if (url) window.open(url, '_blank', 'noopener')
-}
-
-/**
- * Obtém o nome amigável de um portal
- */
-export function getPortalName(platform: string): string {
-  return PORTAL_NAMES[platform] || platform
-}
-
-/**
- * Obtém a URL de um portal
- */
-export function getPortalUrl(platform: string): string {
-  return PORTAL_URLS[platform] || ''
-}
-
-/**
  * Carrega o log de preenchimentos recentes
  */
 export function getRecentFills(): Array<{
-  platform: string; platformName: string; title: string;
-  date: string; classRef: string; timestamp: number
+  platform: string
+  platformName: string
+  actionType: string
+  title: string
+  date: string
+  classRef: string
+  mode: string
+  timestamp: number
 }> {
   try {
     const raw = localStorage.getItem('teacher_portal_fill_log')
@@ -152,16 +180,17 @@ export function logPortalFill(payload: PortalFillPayload): void {
   try {
     const log = getRecentFills()
     log.unshift({
-      platform:     payload.platform,
+      platform: payload.platform,
       platformName: getPortalName(payload.platform),
-      title:        payload.title,
-      date:         payload.date || '',
-      classRef:     payload.classRef || '',
-      timestamp:    Date.now(),
+      actionType: payload.actionType || 'diary',
+      title: payload.title,
+      date: payload.date || '',
+      classRef: payload.classRef || '',
+      mode: payload.mode || 'supervised',
+      timestamp: Date.now(),
     })
-    // Mantém apenas os últimos 20
-    localStorage.setItem('teacher_portal_fill_log', JSON.stringify(log.slice(0, 20)))
-  } catch { /* ignore */ }
+    localStorage.setItem('teacher_portal_fill_log', JSON.stringify(log.slice(0, 30)))
+  } catch {}
 }
 
 /**
@@ -177,7 +206,3 @@ export function onExtensionMessage(handler: (msg: BridgeMessage) => void): () =>
   window.addEventListener('message', listener)
   return () => window.removeEventListener('message', listener)
 }
-
-export const ALL_PORTALS = Object.entries(PORTAL_NAMES).map(([id, name]) => ({
-  id, name, url: PORTAL_URLS[id]
-}))

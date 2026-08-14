@@ -126,7 +126,12 @@ export default function PrivateTutoring() {
       if (Array.isArray(cloudStudents) && cloudStudents.length > 0) {
         const sanitizedCloud = cloudStudents.filter(s =>
           !LEGACY_PRESET_IDS.includes(s.id) && !LEGACY_PRESET_NAMES.includes(s.name)
-        )
+        ).map(s => ({
+          ...s,
+          roadmap: Array.isArray(s.roadmap) ? s.roadmap : [],
+          lessonsHistory: Array.isArray(s.lessonsHistory) ? s.lessonsHistory : [],
+          gradesHistory: Array.isArray(s.gradesHistory) ? s.gradesHistory : []
+        }))
         setStudents(sanitizedCloud)
         localStorage.setItem(STORAGE_KEY, JSON.stringify(sanitizedCloud))
         return
@@ -137,7 +142,12 @@ export default function PrivateTutoring() {
       if (cleanRaw) {
         const parsed = (JSON.parse(cleanRaw) as PrivateStudent[]).filter(s =>
           !LEGACY_PRESET_IDS.includes(s.id) && !LEGACY_PRESET_NAMES.includes(s.name)
-        )
+        ).map(s => ({
+          ...s,
+          roadmap: Array.isArray(s.roadmap) ? s.roadmap : [],
+          lessonsHistory: Array.isArray(s.lessonsHistory) ? s.lessonsHistory : [],
+          gradesHistory: Array.isArray(s.gradesHistory) ? s.gradesHistory : []
+        }))
         setStudents(parsed)
       } else {
         setStudents([])
@@ -313,10 +323,13 @@ export default function PrivateTutoring() {
       performanceRating: lessonRating,
       notes: lessonNotes.trim()
     }
-    const updated = students.map(s => s.id === activeStudent.id ? {
-      ...s,
-      lessonsHistory: [newLesson, ...s.lessonsHistory]
-    } : s)
+    const updated = students.map(s => {
+      if (s.id !== activeStudent.id) return s
+      return {
+        ...s,
+        lessonsHistory: [newLesson, ...(s.lessonsHistory || [])]
+      }
+    })
     saveAndSync(updated)
     setShowLessonModal(false)
     setLessonTopic('')
@@ -334,15 +347,18 @@ export default function PrivateTutoring() {
       score: scoreNum,
       maxScore: 10
     }
-    const updatedGrades = [newGrade, ...activeStudent.gradesHistory]
+    const updatedGrades = [newGrade, ...(activeStudent.gradesHistory || [])]
     const avgScore = updatedGrades.reduce((acc, g) => acc + (g.score / g.maxScore), 0) / updatedGrades.length
     const newMastery = Math.round(avgScore * 100)
 
-    const updated = students.map(s => s.id === activeStudent.id ? {
-      ...s,
-      gradesHistory: updatedGrades,
-      masteryPercentage: newMastery
-    } : s)
+    const updated = students.map(s => {
+      if (s.id !== activeStudent.id) return s
+      return {
+        ...s,
+        gradesHistory: updatedGrades,
+        masteryPercentage: newMastery
+      }
+    })
     saveAndSync(updated)
     setShowGradeModal(false)
     setGradeTitle('')
@@ -399,7 +415,7 @@ export default function PrivateTutoring() {
         body: JSON.stringify({
           messages: [{
             role: 'user',
-            content: `Gere um diagnóstico pedagógico sintético (máximo 4 frases) para o aluno particular ${st.name}, matéria "${st.subject}", domínio atual ${st.masteryPercentage}%, com histórico de aulas: ${st.lessonsHistory.map(l => l.topic).join(', ') || 'Sem aulas recentes'}. Destaque pontos fortes e plano de ação curto.`
+            content: `Gere um diagnóstico pedagógico sintético (máximo 4 frases) para o aluno particular ${st.name}, matéria "${st.subject}", domínio atual ${st.masteryPercentage}%, com histórico de aulas: ${(st.lessonsHistory || []).map(l => l.topic).join(', ') || 'Sem aulas recentes'}. Destaque pontos fortes e plano de ação curto.`
           }],
           context: 'privatetutoring_diagnostic',
           provider: 'auto'
@@ -521,11 +537,11 @@ export default function PrivateTutoring() {
                 {/* Última Aula Ministrada */}
                 <div style={{ background: '#fdf8f2', border: '1px solid rgba(139,115,85,0.15)', borderRadius: 14, padding: 16 }}>
                   <div style={{ fontSize: 11, fontWeight: 700, color: '#8b5e3c', textTransform: 'uppercase', marginBottom: 8 }}>📖 Última Aula Ministrada</div>
-                  {activeStudent.lessonsHistory?.[0] ? (
+                  {(activeStudent.lessonsHistory || []).length > 0 ? (
                     <div>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: '#665c54' }}>{activeStudent.lessonsHistory[0].date}</div>
-                      <div style={{ fontSize: 13.5, fontWeight: 700, color: '#2c1a0e', margin: '4px 0' }}>{activeStudent.lessonsHistory[0].topic}</div>
-                      <div style={{ fontSize: 12, color: '#586e75' }}><strong>Homework:</strong> {activeStudent.lessonsHistory[0].homework || 'Nenhum'}</div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: '#665c54' }}>{(activeStudent.lessonsHistory || [])[0].date}</div>
+                      <div style={{ fontSize: 13.5, fontWeight: 700, color: '#2c1a0e', margin: '4px 0' }}>{(activeStudent.lessonsHistory || [])[0].topic}</div>
+                      <div style={{ fontSize: 12, color: '#586e75' }}><strong>Homework:</strong> {(activeStudent.lessonsHistory || [])[0].homework || 'Nenhum'}</div>
                     </div>
                   ) : (
                     <div style={{ fontSize: 12.5, color: '#665c54' }}>Nenhuma aula registrada ainda.</div>
@@ -535,12 +551,12 @@ export default function PrivateTutoring() {
                 {/* Próximo Marco no Roadmap */}
                 <div style={{ background: '#fdf8f2', border: '1px solid rgba(139,115,85,0.15)', borderRadius: 14, padding: 16 }}>
                   <div style={{ fontSize: 11, fontWeight: 700, color: '#8b5e3c', textTransform: 'uppercase', marginBottom: 8 }}>🗺️ Próximo Marco na Trilha</div>
-                  {activeStudent.roadmap?.[0] ? (
+                  {(activeStudent.roadmap || []).length > 0 ? (
                     <div>
-                      <div style={{ fontSize: 13.5, fontWeight: 700, color: '#2c1a0e', marginBottom: 6 }}>{activeStudent.roadmap[0].title}</div>
+                      <div style={{ fontSize: 13.5, fontWeight: 700, color: '#2c1a0e', marginBottom: 6 }}>{(activeStudent.roadmap || [])[0].title}</div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <ProgressBar value={activeStudent.roadmap[0].progress} color="#8b5e3c" width={70} />
-                        <span style={{ fontSize: 12, fontWeight: 700 }}>{activeStudent.roadmap[0].progress}%</span>
+                        <ProgressBar value={(activeStudent.roadmap || [])[0].progress} color="#8b5e3c" width={70} />
+                        <span style={{ fontSize: 12, fontWeight: 700 }}>{(activeStudent.roadmap || [])[0].progress}%</span>
                       </div>
                     </div>
                   ) : (
@@ -739,8 +755,8 @@ export default function PrivateTutoring() {
                   </thead>
                   <tbody>
                     {filteredStudents.map(st => {
-                      const avgGrade = st.gradesHistory.length > 0
-                        ? (st.gradesHistory.reduce((acc, g) => acc + g.score, 0) / st.gradesHistory.length).toFixed(1)
+                      const avgGrade = (st.gradesHistory?.length || 0) > 0
+                        ? ((st.gradesHistory || []).reduce((acc, g) => acc + g.score, 0) / (st.gradesHistory?.length || 1)).toFixed(1)
                         : '—'
                       return (
                         <tr key={st.id} style={TableRowStyle}>
@@ -757,7 +773,7 @@ export default function PrivateTutoring() {
                           <td style={TdStyle}>
                             <strong style={{ color: Number(avgGrade) >= 8 ? '#2e7d32' : '#2c1a0e' }}>{avgGrade}</strong>
                           </td>
-                          <td style={TdStyle}>{st.lessonsHistory.length} aulas</td>
+                          <td style={TdStyle}>{(st.lessonsHistory || []).length} aulas</td>
                         </tr>
                       )
                     })}
@@ -971,7 +987,7 @@ export default function PrivateTutoring() {
                     </tr>
                   </thead>
                   <tbody>
-                    {activeStudent.lessonsHistory.map(l => (
+                    {(activeStudent.lessonsHistory || []).map(l => (
                       <tr key={l.id} style={TableRowStyle}>
                         <td style={TdStyle}>
                           <span style={{ fontSize: 12, fontWeight: 700 }}>{l.date}</span>
@@ -989,7 +1005,7 @@ export default function PrivateTutoring() {
                         </td>
                       </tr>
                     ))}
-                    {activeStudent.lessonsHistory.length === 0 && (
+                    {(!activeStudent.lessonsHistory || activeStudent.lessonsHistory.length === 0) && (
                       <tr>
                         <td colSpan={4} style={{ textAlign: 'center', padding: 20, color: '#665c54', fontSize: 13 }}>
                           Nenhuma aula registrada ainda.
@@ -1013,7 +1029,7 @@ export default function PrivateTutoring() {
                     </tr>
                   </thead>
                   <tbody>
-                    {activeStudent.gradesHistory.map(g => (
+                    {(activeStudent.gradesHistory || []).map(g => (
                       <tr key={g.id} style={TableRowStyle}>
                         <td style={TdStyle}>
                           <span style={{ fontSize: 12, fontWeight: 700 }}>{g.date}</span>
@@ -1028,7 +1044,7 @@ export default function PrivateTutoring() {
                         </td>
                       </tr>
                     ))}
-                    {activeStudent.gradesHistory.length === 0 && (
+                    {(!activeStudent.gradesHistory || activeStudent.gradesHistory.length === 0) && (
                       <tr>
                         <td colSpan={3} style={{ textAlign: 'center', padding: 20, color: '#665c54', fontSize: 13 }}>
                           Nenhuma nota registrada ainda.
