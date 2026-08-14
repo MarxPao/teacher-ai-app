@@ -788,6 +788,28 @@ export default function Repository() {
     } catch {}
   }
 
+  function deleteExercise(id: string) {
+    if (!confirm('Deseja excluir este exercício do repositório?')) return
+    const upd = savedExercises.filter(e => e.id !== id)
+    setSavedExercises(upd)
+    if (id.startsWith('exam-')) {
+      const realId = id.replace('exam-', '')
+      const savedExams = JSON.parse(localStorage.getItem('teacher_saved_exams') || '[]').filter((x: any, idx: number) => String(x.id || idx) !== realId)
+      localStorage.setItem('teacher_saved_exams', JSON.stringify(savedExams))
+    } else if (id.startsWith('quick-')) {
+      const realId = id.replace('quick-', '')
+      const savedQuicks = JSON.parse(localStorage.getItem('teacher_saved_quicks') || '[]').filter((x: any, idx: number) => String(x.id || idx) !== realId)
+      localStorage.setItem('teacher_saved_quicks', JSON.stringify(savedQuicks))
+    }
+    setViewExercise(upd[0] || null)
+
+    try {
+      import('@/lib/supabaseClient').then(({ syncToSupabase }) => {
+        syncToSupabase()
+      })
+    } catch {}
+  }
+
   // File Upload (PDF, DOCX, TXT, MD, CSV, JSON) 
   async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
