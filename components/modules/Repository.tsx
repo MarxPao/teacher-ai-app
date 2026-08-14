@@ -480,6 +480,267 @@ export default function Repository() {
  }
  }, [])
 
+  // Add New School Header
+  function handleAddSchoolHeader() {
+    if (!newSchoolName.trim()) {
+      alert('Preencha o nome da escola para cadastrar o cabeçalho.')
+      return
+    }
+    const newHeader: SchoolHeaderModel = {
+      id: `school-${Date.now()}`,
+      name: newSchoolName.trim(),
+      officialName: newOfficialName.trim() || newSchoolName.trim().toUpperCase(),
+      motto: 'Ensino de Excelência & Formação Integral',
+      subject: newSubject.trim() || 'Língua Inglesa',
+      instructions: newInstructions.trim() || '1. Responda todas as questões com atenção.\n2. Utilize caneta azul ou preta.\n3. Boa avaliação!',
+      gradeMax: '10,0',
+      logoUrl: newLogoUrl.trim() || undefined,
+      headerImageUrl: newHeaderImageUrl.trim() || undefined,
+      isImageHeader: Boolean(newHeaderImageUrl.trim())
+    }
+
+    const updated = [...headerTemplates, newHeader]
+    setHeaderTemplates(updated)
+    setSelectedHeaderId(newHeader.id)
+
+    try {
+      const existingCustom = JSON.parse(localStorage.getItem('teacher_custom_headers') || '[]')
+      const customUpdated = [...existingCustom.filter((h: any) => h.id !== newHeader.id), newHeader]
+      localStorage.setItem('teacher_custom_headers', JSON.stringify(customUpdated))
+
+      const cur = JSON.parse(localStorage.getItem('teacher_schools') || '[]')
+      if (!cur.some((s: any) => s.name.toLowerCase() === newHeader.name.toLowerCase())) {
+        cur.push({ id: newHeader.id, name: newHeader.name })
+        localStorage.setItem('teacher_schools', JSON.stringify(cur))
+      }
+
+      import('@/lib/supabaseClient').then(({ syncToSupabase }) => {
+        syncToSupabase({
+          teacher_custom_headers: customUpdated,
+          teacher_schools: cur
+        })
+      })
+    } catch {}
+
+    setNewSchoolName('')
+    setNewOfficialName('')
+    setNewInstructions('')
+    setNewLogoUrl('')
+    setNewHeaderImageUrl('')
+    showToast('item salvo')
+  }
+
+  const handleSaveAndApplyHeader = handleAddSchoolHeader
+
+  function deleteSchoolHeader(id: string) {
+    if (!confirm('Deseja realmente excluir este modelo de cabeçalho?')) return
+    const updated = headerTemplates.filter(h => h.id !== id)
+    setHeaderTemplates(updated)
+
+    try {
+      const existingCustom = JSON.parse(localStorage.getItem('teacher_custom_headers') || '[]')
+      const customUpdated = existingCustom.filter((h: any) => h.id !== id)
+      localStorage.setItem('teacher_custom_headers', JSON.stringify(customUpdated))
+
+      import('@/lib/supabaseClient').then(({ syncToSupabase }) => {
+        syncToSupabase({
+          teacher_custom_headers: customUpdated
+        })
+      })
+    } catch {}
+
+    if (updated.length > 0) {
+      setSelectedHeaderId(updated[0].id)
+    } else {
+      setSelectedHeaderId('')
+    }
+    setIsEditingHeader(false)
+    showToast('Cabeçalho excluído com sucesso!')
+  }
+
+  function startEditingHeader() {
+    if (!currentSelectedHeader) return
+    setEditHeaderName(currentSelectedHeader.name || '')
+    setEditHeaderOfficialName(currentSelectedHeader.officialName || '')
+    setEditHeaderSubject(currentSelectedHeader.subject || 'Língua Inglesa')
+    setEditHeaderInstructions(currentSelectedHeader.instructions || '')
+    setIsEditingHeader(true)
+  }
+
+  function saveHeaderEdits() {
+    if (!currentSelectedHeader) return
+    const updated: SchoolHeaderModel = {
+      ...currentSelectedHeader,
+      name: editHeaderName.trim() || currentSelectedHeader.name,
+      officialName: editHeaderOfficialName.trim() || currentSelectedHeader.officialName,
+      subject: editHeaderSubject.trim() || currentSelectedHeader.subject,
+      instructions: editHeaderInstructions.trim() || currentSelectedHeader.instructions
+    }
+
+    const updatedList = headerTemplates.map(h => h.id === updated.id ? updated : h)
+    setHeaderTemplates(updatedList)
+
+    try {
+      const existingCustom = JSON.parse(localStorage.getItem('teacher_custom_headers') || '[]')
+      const customUpdated = existingCustom.map((h: any) => h.id === updated.id ? updated : h)
+      localStorage.setItem('teacher_custom_headers', JSON.stringify(customUpdated))
+
+      import('@/lib/supabaseClient').then(({ syncToSupabase }) => {
+        syncToSupabase({ teacher_custom_headers: customUpdated })
+      })
+    } catch {}
+
+    setIsEditingHeader(false)
+    showToast('Alterações do cabeçalho salvas!')
+  }
+
+  function linkHeaderToSchool(headerId: string, schoolName: string) {
+    if (!schoolName) return
+    const updatedList = headerTemplates.map(h => {
+      if (h.id === headerId) {
+        return {
+          ...h,
+          name: schoolName,
+          officialName: schoolName.toUpperCase()
+        }
+      }
+      return h
+    })
+    setHeaderTemplates(updatedList)
+
+    try {
+      localStorage.setItem('teacher_custom_headers', JSON.stringify(updatedList))
+      import('@/lib/supabaseClient').then(({ syncToSupabase }) => {
+        syncToSupabase({ teacher_custom_headers: updatedList })
+      })
+    } catch {}
+
+    showToast(`Cabeçalho vinculado à escola "${schoolName}"!`)
+  }
+
+  // Import / Process Header File (PNG, JPEG, DOCX, PDF)
+  async function processHeaderFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (headerFileInputRef.current) headerFileInputRef.current.value = ''
+
+    setUploadingStatus(`Processando cabeçalho de "${file.name}"...`)
+
+    try {
+      let text = ''
+      let extractedLogo = ''
+      let extractedHeaderImg = ''
+      const fileNameLower = file.name.toLowerCase()
+
+      if (fileNameLower.endsWith('.docx') || fileNameLower.endsWith('.doc')) {
+        const { extractDocxWithImages } = await import('@/lib/pdfExtractor')
+        const res = await extractDocxWithImages(file)
+        text = res.text || ''
+        if (res.images && res.images.length > 0) {
+          extractedHeaderImg = res.images[0].dataUrl
+          extractedLogo = res.images[0].dataUrl
+        }
+      } else if (fileNameLower.endsWith('.pdf')) {
+        const { extractTextFromPdf } = await import('@/lib/pdfExtractor')
+        text = await extractTextFromPdf(file)
+      } else if (file.type.startsWith('image/') || /\.(png|jpg|jpeg|webp)$/i.test(fileNameLower)) {
+        extractedHeaderImg = await new Promise<string>((resolve) => {
+          const reader = new FileReader()
+          reader.onload = (ev) => resolve((ev.target?.result as string) || '')
+          reader.readAsDataURL(file)
+        })
+      } else {
+        text = await file.text()
+      }
+
+      if ((!text || text.trim().length === 0) && !extractedHeaderImg) {
+        setUploadingStatus('')
+        alert('O arquivo selecionado não contém imagem nem texto de cabeçalho válido.')
+        return
+      }
+
+      const cleanFileName = file.name.replace(/\.[^/.]+$/, '').replace(/cabeçalho/i, '').trim()
+      const lines = text ? text.split('\n').map(l => l.trim()).filter(Boolean) : []
+      const instructionsLines = lines.filter(l => /^(1\.|2\.|3\.|instrução|instrucoes|instruções|atenção|atencao)/i.test(l))
+
+      const schoolToUse = selectedSchoolForUpload.trim() || cleanFileName || (lines[0] || 'Cabeçalho Personalizado')
+
+      const newHeader: SchoolHeaderModel = {
+        id: `school-${Date.now()}`,
+        name: schoolToUse,
+        officialName: schoolToUse.toUpperCase(),
+        motto: 'Ensino de Excelência & Formação Integral',
+        subject: 'Língua Inglesa',
+        instructions: instructionsLines.length > 0
+          ? instructionsLines.join('\n')
+          : '1. Responda todas as questões com atenção.\n2. Utilize caneta azul ou preta.\n3. Boa avaliação!',
+        gradeMax: '10,0',
+        logoUrl: extractedLogo || undefined,
+        headerImageUrl: extractedHeaderImg || undefined,
+        isImageHeader: Boolean(extractedHeaderImg)
+      }
+
+      const updated = [...headerTemplates, newHeader]
+      setHeaderTemplates(updated)
+      setSelectedHeaderId(newHeader.id)
+
+      try {
+        const existingCustom = JSON.parse(localStorage.getItem('teacher_custom_headers') || '[]')
+        const customUpdated = [...existingCustom.filter((h: any) => h.id !== newHeader.id), newHeader]
+        localStorage.setItem('teacher_custom_headers', JSON.stringify(customUpdated))
+
+        const cur = JSON.parse(localStorage.getItem('teacher_schools') || '[]')
+        if (!cur.some((s: any) => s.name.toLowerCase() === newHeader.name.toLowerCase())) {
+          cur.push({ id: newHeader.id, name: newHeader.name })
+          localStorage.setItem('teacher_schools', JSON.stringify(cur))
+        }
+
+        import('@/lib/supabaseClient').then(({ syncToSupabase }) => {
+          syncToSupabase({
+            teacher_custom_headers: customUpdated,
+            teacher_schools: cur
+          })
+        })
+      } catch {}
+
+      setUploadingStatus('')
+      showToast(`Cabeçalho "${newHeader.name}" injetado com sucesso!`)
+    } catch (err: unknown) {
+      setUploadingStatus('')
+      alert(`Erro ao processar o cabeçalho: ${err instanceof Error ? err.message : 'Falha ao ler arquivo.'}`)
+    }
+  }
+
+  // Save Edits (Bibliografia)
+  function saveEdit() {
+    if (!viewItem) return
+    const updated = items.map(i => i.id === viewItem.id ? {
+      ...i,
+      title: editTitle.trim() || i.title,
+      content: editContent.trim() || i.content,
+      type: editType,
+      category: editCategory,
+      textbook: editTextbook || undefined,
+      wordCount: countWords(editContent),
+      chunkCount: countChunks(editContent),
+    } : i)
+    save(updated)
+    const saved = updated.find(i => i.id === viewItem.id)!
+    setViewItem(saved)
+    setMode('view')
+    showToast('item salvo')
+  }
+
+  function startEdit(item: RepositoryItem) {
+    setEditTitle(item.title)
+    setEditContent(item.content)
+    setEditType(item.type)
+    setEditCategory(item.category || '')
+    setEditTextbook(item.textbook || '')
+    setViewItem(item)
+    setMode('edit')
+  }
+
   function clearForm() {
     setEditTitle('')
     setEditContent('')
