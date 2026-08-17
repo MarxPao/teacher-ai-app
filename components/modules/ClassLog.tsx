@@ -187,11 +187,11 @@ export default function ClassLog() {
     return tips.join(' | ')
   }, [previousClassMemory])
 
+  // Status do Lançamento
+  const [classStatus, setClassStatus] = useState<'Realizada' | 'Cancelada' | 'Revisão' | 'Avaliação'>('Realizada')
+
   const handleSaveClassLog = () => {
-    if (!topic.trim()) {
-      alert('Por favor, preencha pelo menos o Tema/Tópico Principal da Aula.')
-      return
-    }
+    const effectiveTopic = topic.trim() || (classStatus === 'Cancelada' ? 'Aula Cancelada / Reprogramada' : `Registro de Aula — ${selectedClass || 'Geral'}`)
 
     const newEntry: ClassLogEntry = {
       id: `log_${Date.now()}`,
@@ -201,8 +201,8 @@ export default function ClassLog() {
       dayOfWeek,
       semester,
       quarter,
-      topic,
-      focusSkill,
+      topic: effectiveTopic,
+      focusSkill: classStatus === 'Cancelada' ? 'N/A (Cancelada)' : focusSkill,
       resources,
       warmup,
       presentation,
@@ -218,7 +218,8 @@ export default function ClassLog() {
       createdAt: new Date().toISOString(),
     }
 
-    const updated = [newEntry, ...logs]
+    // Ordenação cronológica estrita por data da aula (não por data de lançamento)
+    const updated = [newEntry, ...logs].sort((a, b) => new Date(b.date + 'T00:00:00').getTime() - new Date(a.date + 'T00:00:00').getTime())
     saveLogsToStorage(updated)
     setSavedSuccess(true)
     setTimeout(() => setSavedSuccess(false), 3000)
@@ -239,10 +240,14 @@ export default function ClassLog() {
     setActiveTab('calendar')
   }
 
-  const filteredLogs = logs.filter(l =>
-    (selectedSchool === 'all' || l.school === selectedSchool) &&
-    (selectedClass === 'all' || l.className === selectedClass)
-  )
+  const filteredLogs = useMemo(() => {
+    return logs
+      .filter(l =>
+        (selectedSchool === 'all' || l.school === selectedSchool) &&
+        (selectedClass === 'all' || l.className === selectedClass)
+      )
+      .sort((a, b) => new Date(b.date + 'T00:00:00').getTime() - new Date(a.date + 'T00:00:00').getTime())
+  }, [logs, selectedSchool, selectedClass])
 
   // CÁLCULO DA GRADE MENSAL DE DIAS (CALENDÁRIO REAL DE POST-ITS)
   const calendarDaysGrid = useMemo(() => {
@@ -523,10 +528,45 @@ export default function ClassLog() {
               Planejamento Diário da Aula ({dayOfWeek}, {new Date(date + 'T00:00:00').toLocaleDateString('pt-BR')})
             </h3>
 
+            {/* Status da Aula */}
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ fontSize: 12.5, fontWeight: 700, color: '#586e75', display: 'block', marginBottom: 6 }}>
+                Status da Aula
+              </label>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {(['Realizada', 'Cancelada', 'Revisão', 'Avaliação'] as const).map(st => (
+                  <button
+                    key={st}
+                    type="button"
+                    onClick={() => setClassStatus(st)}
+                    style={{
+                      padding: '6px 14px',
+                      borderRadius: 8,
+                      border: classStatus === st ? '2px solid #073642' : '1px solid #d5c0b0',
+                      background: classStatus === st ? (st === 'Cancelada' ? '#fee2e2' : '#f5eee6') : '#fff',
+                      color: classStatus === st ? (st === 'Cancelada' ? '#991b1b' : '#073642') : '#586e75',
+                      fontWeight: 700,
+                      fontSize: 12,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    {st === 'Cancelada' ? '❌ Cancelada' : st === 'Realizada' ? '✅ Realizada' : st === 'Revisão' ? '🔄 Revisão' : '📝 Avaliação'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 16, marginBottom: 14 }}>
               <div>
-                <label style={{ fontSize: 12.5, fontWeight: 700, color: '#586e75', display: 'block', marginBottom: 6 }}>Tema / Tópico Principal da Aula</label>
-                <input value={topic} onChange={e => setTopic(e.target.value)} placeholder="Ex: Past Continuous & Interrupted Actions in Past" style={{ width: '100%', padding: '10px 14px', borderRadius: 10, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13.5, color: '#073642', outline: 'none', boxSizing: 'border-box' }} />
+                <label style={{ fontSize: 12.5, fontWeight: 700, color: '#586e75', display: 'block', marginBottom: 6 }}>
+                  Tema / Tópico Principal da Aula {classStatus === 'Cancelada' ? '(Opcional — Cancelada)' : '(Opcional)'}
+                </label>
+                <input
+                  value={topic}
+                  onChange={e => setTopic(e.target.value)}
+                  placeholder={classStatus === 'Cancelada' ? 'Motivo do cancelamento (opcional)...' : 'Ex: Past Continuous & Interrupted Actions in Past'}
+                  style={{ width: '100%', padding: '10px 14px', borderRadius: 10, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13.5, color: '#073642', outline: 'none', boxSizing: 'border-box' }}
+                />
               </div>
 
               <div>

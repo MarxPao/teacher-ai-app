@@ -118,10 +118,10 @@ export const AGENT_TOOLS: ToolDefinition[] = [
     }
   },
 
-  // 7. PORTAIS ESCOLARES (INTEGRAÇÃO EXTENSÃO & AUTOMAÇÃO AGÊNTICA)
+  // 7. PORTAIS ESCOLARES (INTEGRAÇÃO EXTENSÃO & AUTOMAÇÃO AGÊNTICA - SEGURANÇA 0-TESTER)
   {
     name: 'execute_portal_action',
-    description: 'Executa ações operacionais reais em portais escolares (Machado Sobrinho, Plurall, Rede Santa Catarina, Cambridge One, etc.). Suporta lançamento de diários de classe, frequências/chamadas, notas de boletim e criação de tarefas, nos modos supervisionado ou autônomo.',
+    description: 'Preenche visualmente ações operacionais em portais escolares (Machado Sobrinho, Plurall, Rede Santa Catarina, Cambridge One, etc.) para diários de classe, frequências/chamadas e notas de boletim. Opera exclusivamente em MODO SUPERVISIONADO (preenche os campos na tela e aguarda a professora revisar e clicar em Salvar).',
     input_schema: {
       type: 'object',
       properties: {
@@ -131,7 +131,7 @@ export const AGENT_TOOLS: ToolDefinition[] = [
         date:           { type: 'string', description: 'Data YYYY-MM-DD' },
         classRef:       { type: 'string', description: 'Turma vinculada, ex: 9º Ano A, 8B' },
         description:    { type: 'string', description: 'Conteúdo programático, pauta, metodologia ou instruções da tarefa' },
-        mode:           { type: 'string', enum: ['supervised', 'autonomous'], description: 'Supervisionado (preenche e aguarda revisão) ou Autônomo (preenche e salva automaticamente)' },
+        mode:           { type: 'string', enum: ['supervised'], description: 'Supervisionado obrigatório (preenche os campos no formulário do portal e aguarda a confirmação manual da professora para salvar)' },
         absentStudents: { type: 'array', items: { type: 'string' }, description: 'Lista de nomes de alunos ausentes/faltas na chamada' },
         evaluationName: { type: 'string', description: 'Nome da avaliação para lançamento de notas (ex: Prova 1, Simulado)' }
       },
@@ -432,6 +432,55 @@ export const AGENT_TOOLS: ToolDefinition[] = [
       },
       required: ['topic']
     }
+  },
+
+  // 21. SEQUÊNCIA DIDÁTICA & CRONOGRAMA TIMELINE [NOVO]
+  {
+    name: 'manage_didactic_sequence',
+    description: 'Atualiza o status da sequência didática e define o conteúdo/unidade atual da matéria.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        unitNumber: { type: 'number', description: 'Número da unidade (1 a 12)' },
+        status:     { type: 'string', enum: ['current', 'completed', 'upcoming'], description: 'Novo status da unidade' },
+        action:     { type: 'string', enum: ['set_current', 'advance_unit', 'view'], description: 'Ação a ser executada' }
+      },
+      required: ['action']
+    }
+  },
+
+  // 22. AGENDA SEMANAL [NOVO]
+  {
+    name: 'add_weekly_agenda_item',
+    description: 'Adiciona um compromisso, aula ou postagem na Agenda Semanal do professor.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        day:       { type: 'string', enum: ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'], description: 'Dia da semana' },
+        time:      { type: 'string', description: 'Horário, ex: 07:30 - 08:20' },
+        title:     { type: 'string', description: 'Título da aula ou compromisso' },
+        school:    { type: 'string', description: 'Escola' },
+        className: { type: 'string', description: 'Turma' },
+        room:      { type: 'string', description: 'Sala de aula' },
+        notes:     { type: 'string', description: 'Observações ou pauta da aula' }
+      },
+      required: ['day', 'title']
+    }
+  },
+
+  // 23. COMUNICAÇÃO COM PAIS VIA WHATSAPP [NOVO]
+  {
+    name: 'generate_parent_communication',
+    description: 'Redige e pré-carrega uma mensagem personalizada de WhatsApp para os pais de um aluno.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        studentName: { type: 'string', description: 'Nome do aluno' },
+        topic:       { type: 'string', description: 'Motivo do contato (elogio, notas, tarefas, comportamento)' },
+        tone:        { type: 'string', enum: ['formal', 'amigavel', 'direto', 'encorajador'], description: 'Tom da mensagem' }
+      },
+      required: ['studentName', 'topic']
+    }
   }
 ]
 
@@ -448,28 +497,31 @@ export function toGeminiTools(tools: ToolDefinition[]) {
 
 // Nomes amigáveis das tools para exibição no UI
 export const TOOL_DISPLAY_NAMES: Record<string, { label: string; icon: string; color: string }> = {
-  navigate_to_module:         { label: 'Navegando',            icon: 'ti-arrow-right',       color: '#268bd2' },
-  add_todo:                   { label: 'Adicionando tarefa',    icon: 'ti-checkbox',          color: '#859900' },
-  create_calendar_task:       { label: 'Criando evento',       icon: 'ti-calendar-plus',      color: '#b58900' },
-  create_lesson_plan:         { label: 'Criando plano',        icon: 'ti-notebook',           color: '#2aa198' },
-  create_communication:       { label: 'Redigindo bilhete',    icon: 'ti-message',            color: '#6c71c4' },
-  add_student_grade:          { label: 'Lançando nota',        icon: 'ti-report-analytics',   color: '#2aa198' },
-  execute_portal_action:      { label: 'Operando no Portal',   icon: 'ti-wand',               color: '#8b5e3c' },
-  fill_school_portal:         { label: 'Preenchendo portal',   icon: 'ti-plug-connected',     color: '#cb4b16' },
-  open_school_portal:         { label: 'Abrindo portal',       icon: 'ti-external-link',      color: '#268bd2' },
-  generate_exam_content:      { label: 'Gerando prova',        icon: 'ti-file-certificate',   color: '#d33682' },
-  speak_response:             { label: 'Falando',              icon: 'ti-volume',             color: '#586e75' },
-  update_student_metric:      { label: 'Métrica de aluno',     icon: 'ti-chart-radar',        color: '#859900' },
-  record_student_observation: { label: 'Registrando memória',  icon: 'ti-brain',              color: '#b58900' },
-  create_class:               { label: 'Criando turma',        icon: 'ti-school',             color: '#268bd2' },
-  create_student:             { label: 'Cadastrando aluno',    icon: 'ti-user-plus',          color: '#2aa198' },
-  add_qbank_question:         { label: 'Salvando no QBank',    icon: 'ti-database-plus',      color: '#d33682' },
-  create_mindmap:             { label: 'Mapa Mental',          icon: 'ti-sitemap',            color: '#6c71c4' },
-  create_document:            { label: 'Abrindo no Editor',    icon: 'ti-file-text',          color: '#268bd2' },
-  apply_school_header:        { label: 'Aplicando cabeçalho',  icon: 'ti-template',           color: '#cb4b16' },
-  create_rubric:              { label: 'Criando rubrica',      icon: 'ti-table-alias',        color: '#859900' },
-  add_portfolio_item:         { label: 'Portfólio de Aluno',   icon: 'ti-folder-plus',        color: '#b58900' },
-  save_repo_material:         { label: 'Salvando no Repositório', icon: 'ti-archive',         color: '#2aa198' },
-  generate_quick_questions:   { label: 'Questões Rápidas',     icon: 'ti-bolt',               color: '#d33682' },
+  navigate_to_module:             { label: 'Navegando',               icon: 'ti-arrow-right',       color: '#268bd2' },
+  add_todo:                       { label: 'Adicionando tarefa',       icon: 'ti-checkbox',          color: '#859900' },
+  create_calendar_task:           { label: 'Criando evento',          icon: 'ti-calendar-plus',      color: '#b58900' },
+  create_lesson_plan:             { label: 'Criando plano',           icon: 'ti-notebook',           color: '#2aa198' },
+  create_communication:           { label: 'Redigindo bilhete',       icon: 'ti-message',            color: '#6c71c4' },
+  add_student_grade:              { label: 'Lançando nota',           icon: 'ti-report-analytics',   color: '#2aa198' },
+  execute_portal_action:          { label: 'Operando no Portal',      icon: 'ti-wand',               color: '#8b5e3c' },
+  fill_school_portal:             { label: 'Preenchendo portal',      icon: 'ti-plug-connected',     color: '#cb4b16' },
+  open_school_portal:             { label: 'Abrindo portal',          icon: 'ti-external-link',      color: '#268bd2' },
+  generate_exam_content:          { label: 'Gerando prova',           icon: 'ti-file-certificate',   color: '#d33682' },
+  speak_response:                 { label: 'Falando',                 icon: 'ti-volume',             color: '#586e75' },
+  update_student_metric:          { label: 'Métrica de aluno',        icon: 'ti-chart-radar',        color: '#859900' },
+  record_student_observation:     { label: 'Registrando memória',     icon: 'ti-brain',              color: '#b58900' },
+  create_class:                   { label: 'Criando turma',           icon: 'ti-school',             color: '#268bd2' },
+  create_student:                 { label: 'Cadastrando aluno',       icon: 'ti-user-plus',          color: '#2aa198' },
+  add_qbank_question:             { label: 'Salvando no QBank',       icon: 'ti-database-plus',      color: '#d33682' },
+  create_mindmap:                 { label: 'Mapa Mental',             icon: 'ti-sitemap',            color: '#6c71c4' },
+  create_document:                { label: 'Abrindo no Editor',       icon: 'ti-file-text',          color: '#268bd2' },
+  apply_school_header:            { label: 'Aplicando cabeçalho',     icon: 'ti-template',           color: '#cb4b16' },
+  create_rubric:                  { label: 'Criando rubrica',         icon: 'ti-table-alias',        color: '#859900' },
+  add_portfolio_item:             { label: 'Portfólio de Aluno',      icon: 'ti-folder-plus',        color: '#b58900' },
+  save_repo_material:             { label: 'Salvando no Repositório', icon: 'ti-archive',            color: '#2aa198' },
+  generate_quick_questions:       { label: 'Questões Rápidas',        icon: 'ti-bolt',               color: '#d33682' },
+  manage_didactic_sequence:       { label: 'Sequência Didática',      icon: 'ti-timeline',           color: '#8b5e3c' },
+  add_weekly_agenda_item:         { label: 'Agenda Semanal',          icon: 'ti-calendar-event',     color: '#268bd2' },
+  generate_parent_communication:  { label: 'Mensagem para Pais',      icon: 'ti-brand-whatsapp',     color: '#25d366' },
 }
 

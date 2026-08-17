@@ -1,6 +1,13 @@
 /**
  * portalActionsEngine.ts — Motor de Ações e Portais Escolares Editáveis
- * Permite cadastrar, editar e orquestrar rotinas de automação em portais oficiais.
+ *
+ * ============================================================================
+ * DIRETIVA DE SEGURANÇA 0-TESTER (CONFIRMAÇÃO HUMANA OBRIGATÓRIA):
+ * 1. É terminantemente proibido qualquer disparo de submit/save automático no DOM do portal.
+ * 2. O único fluxo permitido é: IA identifica ação/campos -> Preenche VISUALMENTE no formulário
+ *    -> PARA IMEDIATAMENTE -> Aguarda a professora conferir e clicar manualmente em Salvar no portal.
+ * 3. Todos os perfis e ações operam estritamente no modo 'supervised'.
+ * ============================================================================
  */
 
 export interface FieldMappingDef {
@@ -19,8 +26,7 @@ export interface PortalActionDef {
   type: 'diary' | 'attendance' | 'grades' | 'assignment' | 'communication' | 'custom'
   description: string
   fields: FieldMappingDef[]
-  submitSelector?: string
-  executionMode: 'supervised' | 'autonomous'
+  executionMode: 'supervised'
   spokenConfirmation: string
   isCustom?: boolean
 }

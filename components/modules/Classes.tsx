@@ -3,7 +3,7 @@ import { useState, useEffect, useMemo } from 'react'
 
 /* ─── Tipos ─────────────────────────────────────────────────────────────────── */
 interface School { id: string; name: string; color: string }
-interface ClassRecord { id: string; name: string; schoolId: string; description: string; subject?: string; year?: string }
+interface ClassRecord { id: string; name: string; schoolId: string; description: string; subject?: string; year?: string; gradeYear?: string }
 interface StudentRecord { id: string; name: string; classId: string; schoolId: string; notes: string; level: string; grades?: Record<string, string> }
 
 const PALETTE = ['#b58900','#dc322f','#d33682','#6c71c4','#268bd2','#2aa198','#859900','#cb4b16','#073642']
@@ -30,8 +30,9 @@ export default function Classes() {
   const [editId,    setEditId]    = useState<string | null>(null)
   const [formName,  setFormName]  = useState('')
   const [formSchool,setFormSchool]= useState('')
-  const [formSubj,  setFormSubj]  = useState('')
+  const [formSubj,  setFormSubj]  = useState('Inglês')
   const [formYear,  setFormYear]  = useState(new Date().getFullYear().toString())
+  const [formGradeYear, setFormGradeYear] = useState('9º Fund.')
   const [formDesc,  setFormDesc]  = useState('')
   const [formColor, setFormColor] = useState('#268bd2')
 
@@ -66,13 +67,13 @@ export default function Classes() {
 
   /* ─── CRUD ───────────────────────────────────────────────────────────────── */
   function openAdd() {
-    setFormName(''); setFormSchool(schools[0]?.id || ''); setFormSubj('')
-    setFormYear(new Date().getFullYear().toString()); setFormDesc(''); setFormColor('#268bd2')
+    setFormName(''); setFormSchool(schools[0]?.id || ''); setFormSubj('Inglês')
+    setFormYear(new Date().getFullYear().toString()); setFormGradeYear('9º Fund.'); setFormDesc(''); setFormColor('#268bd2')
     setEditId(null); setModal('add')
   }
   function openEdit(cls: ClassRecord) {
-    setFormName(cls.name); setFormSchool(cls.schoolId); setFormSubj(cls.subject || '')
-    setFormYear(cls.year || ''); setFormDesc(cls.description); setFormColor('#268bd2')
+    setFormName(cls.name); setFormSchool(cls.schoolId); setFormSubj(cls.subject || 'Inglês')
+    setFormYear(cls.year || ''); setFormGradeYear(cls.gradeYear || '9º Fund.'); setFormDesc(cls.description); setFormColor('#268bd2')
     setEditId(cls.id); setModal('edit')
   }
   function saveForm() {
@@ -90,12 +91,12 @@ export default function Classes() {
 
     if (editId) {
       saveClasses(classes.map(c => c.id === editId
-        ? { ...c, name: formName, schoolId, subject: formSubj, year: formYear, description: formDesc }
+        ? { ...c, name: formName, schoolId, subject: formSubj, year: formYear, gradeYear: formGradeYear, description: formDesc }
         : c))
     } else {
       const newCls: ClassRecord = {
         id: `cls_${Date.now()}`, name: formName, schoolId, description: formDesc,
-        subject: formSubj, year: formYear,
+        subject: formSubj, year: formYear, gradeYear: formGradeYear
       }
       saveClasses([...classes, newCls])
     }
@@ -308,9 +309,27 @@ export default function Classes() {
                   <input style={S.input} value={formYear} onChange={e => setFormYear(e.target.value)} placeholder="2025" />
                 </div>
               </div>
-              <div>
-                <label style={S.label}>Disciplina</label>
-                <input style={S.input} value={formSubj} onChange={e => setFormSubj(e.target.value)} placeholder="Ex: Inglês, Matemática..." />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div>
+                  <label style={S.label}>Disciplina</label>
+                  <input style={S.input} value={formSubj} onChange={e => setFormSubj(e.target.value)} placeholder="Ex: Inglês..." />
+                </div>
+                <div>
+                  <label style={S.label}>Série / Matriz BNCC</label>
+                  <select
+                    style={S.input}
+                    value={formGradeYear}
+                    onChange={e => setFormGradeYear(e.target.value)}
+                  >
+                    <option value="6º Fund.">6º Ano (Ens. Fund.)</option>
+                    <option value="7º Fund.">7º Ano (Ens. Fund.)</option>
+                    <option value="8º Fund.">8º Ano (Ens. Fund.)</option>
+                    <option value="9º Fund.">9º Ano (Ens. Fund.)</option>
+                    <option value="1º Médio">1º Ano (Ens. Médio)</option>
+                    <option value="2º Médio">2º Ano (Ens. Médio)</option>
+                    <option value="3º Médio">3º Ano (Ens. Médio)</option>
+                  </select>
+                </div>
               </div>
               <div>
                 <label style={S.label}>Descrição / Observações</label>

@@ -1,5 +1,6 @@
 import { AGENT_TOOLS, toGeminiTools, type CanonicalMessage } from '@/lib/agentTools'
 import { pruneConversationHistory, calculateDynamicTokens } from '@/lib/tokenOptimizer'
+import { checkRateLimit } from '@/lib/rateLimit'
 import { NextRequest } from 'next/server'
 
 function getEnvKey(provider: string): string {
@@ -53,9 +54,40 @@ dashboard, quick (gerar questões), exam (montar provas), plan (Lesson Planner),
 - Se o professor fizer qualquer pergunta geral, dúvida gramatical avançada, notícia recente, diretriz da BNCC ou curiosidade que NÃO esteja nos livros da biblioteca, VOCÊ É OBRIGADA A USAR A FERRAMENTA 'search_web' para pesquisar na internet em tempo real e responder com 100% de exatidão!
 - Você pode responder TUDO o que for perguntado. Se for um assunto novo ou informação externa, pesquise na web com 'search_web'.
 
+=== PROTOCOLO DE CRIAÇÃO DE PROVAS & AVALIAÇÕES (CHECKLIST INTERATIVO OBRIGATÓRIO) ===
+- Quando o professor pedir para criar, gerar ou montar uma prova, teste ou exame (ex: "crie uma prova", "monte um teste de inglês", "quero uma prova sobre X"):
+  1. ANALISE AS ESPECIFICAÇÕES NECESSÁRIAS:
+     - 🏫 Turma / Série (ex: 6º, 7º, 8º, 9º ano, 1º EM, etc.)
+     - 🎯 Conteúdo / Tópico gramatical ou temático específico (ex: Simple Past, Present Perfect, Reading Comprehension, Phrasal Verbs)
+     - 📊 Nível de Dificuldade / CEFR (A1 Iniciante, A2 Básico, B1 Intermediário, B2 Avançado)
+     - 📝 Formato das Questões (Múltipla Escolha, Dissertativa, Mista, Verdadeiro/Falso)
+     - 🔢 Quantidade de Questões (ex: 5, 10, 15 questões)
+     - 📚 Base / Material de Apoio (Livro didático da Biblioteca RAG ou Conteúdo Geral)
+     - 🌐 Idioma dos Enunciados (Português ou Inglês)
+
+  2. SE FALTAR QUALQUER UMA DESSAS INFORMAÇÕES NO PEDIDO DO PROFESSOR:
+     - NÃO CHAME A FERRAMENTA 'generate_exam_content' AINDA!
+     - Responda em TEXTO estruturado, amigável e direto, apresentando um CHECKLIST CLARO com as informações já identificadas e os pontos pendentes para ele confirmar.
+     - Formato da resposta do Checklist:
+       "Com certeza! Antes de eu gerar sua prova, confirme para mim os detalhes no checklist abaixo:
+
+📋 **Checklist de Configuração da Prova:**
+- 🏫 **Turma / Série:** [Informado: 8º Ano | ou: Qual é a turma?]
+- 🎯 **Conteúdo / Tema:** [Informado: Simple Past | ou: Qual o tema principal?]
+- 📊 **Nível CEFR:** [A1 / A2 / B1 / B2]
+- 📝 **Formato das Questões:** [Múltipla Escolha / Dissertativa / Mista]
+- 🔢 **Quantidade de Questões:** [5 / 10 / 15 questões]
+- 📚 **Material Didático:** [Usar livro da Biblioteca / Conteúdo Geral]
+- 🌐 **Idioma dos Enunciados:** [Português / Inglês]
+
+Você pode me responder por texto ou por voz dizendo apenas o que prefere (ex: *'8º ano, 10 questões, múltipla escolha, nível A2, enunciados em português'*), e eu monto tudo na hora!"
+
+  3. QUANDO O PROFESSOR RESPONDER AO CHECKLIST (ou se o pedido inicial já contiver os dados essenciais):
+     - Agradeça brevemente e INVOQUE IMEDIATAMENTE a ferramenta 'generate_exam_content' passando 'topic', 'classRef', 'level', 'questionCount', 'type', 'eltCategory' e 'stemLanguage'.
+
 === REGRAS DE EXECUÇÃO AGÊNTICA OBRIGATÓRIA ===
 - VOCÊ É UMA ASSISTENTE AGÊNTICA QUE EXECUTA AÇÕES NO APP E NOS PORTAIS ESCOLARES OFICIAIS (PLURALL, MACHADO SOBRINHO, REDE SANTA CATARINA, ETC.).
-- Quando o professor pedir qualquer ação (ex: "vá para X", "abra módulo Y", "crie prova de Z", "crie turma W", "adicione tarefa", "lance nota de aluno", "crie plano de aula", "pesquise sobre W"), VOCÊ É OBRIGADA A INVOCAR A FERRAMENTA CORRESPONDENTE (navigate_to_module, query_library, search_web, create_class, add_todo, etc.).
+- Quando o professor pedir qualquer ação (ex: "vá para X", "abra módulo Y", "crie turma W", "adicione tarefa", "lance nota de aluno", "crie plano de aula", "pesquise sobre W"), VOCÊ É OBRIGADA A INVOCAR A FERRAMENTA CORRESPONDENTE (navigate_to_module, query_library, search_web, create_class, add_todo, etc.).
 - QUANDO O PROFESSOR PEDIR PARA OPERAR OU PREENCHER PORTAIS ESCOLARES (ex: "lance diário no Plurall", "preencha chamada no Machado Sobrinho", "lance notas no Santa Catarina", "atribua tarefa no Cambridge"), USE A FERRAMENTA 'execute_portal_action' imediatamente especificando a plataforma, tipo de ação (diary, attendance, grades, assignment) e dados necessários!
 - NUNCA APENAS RESPONDA EM TEXTO DIZENDO QUE VAI FAZER — INVOQUE A FERRAMENTA IMEDIATAMENTE!
 - Ao gerar exames ou questões, especifique a categoria ELT (Grammar, Vocabulary, Use of English, etc.) e subcategoria se aplicável.
@@ -101,24 +133,23 @@ function toGeminiContents(messages: CanonicalMessage[]) {
   return messages.map(m => {
     if (m.role === 'user') {
       if (m.toolResults && m.toolResults.length > 0) {
-        const parts: unknown[] = m.toolResults.map(tr => ({
-          functionResponse: { name: tr.name, response: { result: tr.result } }
-        }))
-        if (m.content) parts.push({ text: m.content })
-        return { role: 'user', parts }
+        const textParts = m.toolResults.map(tr => `[Resultado de ${tr.name}: ${tr.result}]`).join('\n')
+        const fullUserText = m.content ? `${m.content}\n${textParts}` : textParts
+        return { role: 'user', parts: [{ text: fullUserText || ' ' }] }
       }
       return { role: 'user', parts: [{ text: m.content || ' ' }] }
     }
 
-    const parts: unknown[] = []
-    if (m.content) parts.push({ text: m.content })
-    if (m.toolUse) {
+    // Papel 'assistant' (model)
+    const textParts: string[] = []
+    if (m.content) textParts.push(m.content)
+    if (m.toolUse && m.toolUse.length > 0) {
       m.toolUse.forEach(tu =>
-        parts.push({ functionCall: { name: tu.name, args: tu.input } })
+        textParts.push(`[Chamou ferramenta: ${tu.name}(${JSON.stringify(tu.input)})]`)
       )
     }
-    if (!parts.length) parts.push({ text: ' ' })
-    return { role: 'model', parts }
+    const finalModelText = textParts.join('\n').trim() || ' '
+    return { role: 'model', parts: [{ text: finalModelText }] }
   })
 }
 
@@ -301,23 +332,33 @@ async function callProviderWithFallback(
       }
 
       if (p === 'gemini') {
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${key}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            system_instruction: { parts: [{ text: systemPrompt }] },
-            tools: toGeminiTools(AGENT_TOOLS),
-            contents: toGeminiContents(optimizedMessages),
-            generationConfig: { maxOutputTokens: maxTokens, temperature },
-          }),
-        })
+        const geminiModels = ['gemini-flash-latest', 'gemini-2.5-flash', 'gemini-pro-latest', 'gemini-flash-lite-latest', 'gemini-2.0-flash', 'gemini-1.5-flash']
+        let geminiSuccess = false
+        for (const gModel of geminiModels) {
+          try {
+            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${gModel}:generateContent?key=${key}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                system_instruction: { parts: [{ text: systemPrompt }] },
+                tools: toGeminiTools(AGENT_TOOLS),
+                contents: toGeminiContents(optimizedMessages),
+                generationConfig: { maxOutputTokens: maxTokens, temperature },
+              }),
+            })
 
-        if (response.ok) {
-          const data = await response.json()
-          return Response.json(normalizeGeminiResponse(data))
-        } else {
-          errorLogs.push(`Gemini ${response.status}: ${await response.text()}`)
+            if (response.ok) {
+              const data = await response.json()
+              geminiSuccess = true
+              return Response.json(normalizeGeminiResponse(data))
+            } else {
+              errorLogs.push(`Gemini (${gModel}) ${response.status}: ${await response.text()}`)
+            }
+          } catch (gErr: any) {
+            errorLogs.push(`Gemini (${gModel}) error: ${gErr.message}`)
+          }
         }
+        if (geminiSuccess) continue
       }
 
       if (['openai', 'groq', 'deepseek', 'zhipu', 'siliconflow', 'openrouter'].includes(p)) {
@@ -329,36 +370,43 @@ async function callProviderWithFallback(
           siliconflow: 'https://api.siliconflow.cn/v1/chat/completions',
           openrouter:  'https://openrouter.ai/api/v1/chat/completions',
         }
-        const defaultModels: Record<string, string> = {
-          openai:      'gpt-4o-mini',
-          groq:        'llama-3.3-70b-versatile',
-          deepseek:    'deepseek-chat',
-          zhipu:       'glm-4-flash',
-          siliconflow: 'Qwen/Qwen2.5-72B-Instruct',
-          openrouter:  'google/gemma-2-9b-it:free',
+        const modelsByProvider: Record<string, string[]> = {
+          openai:      ['gpt-4o-mini', 'gpt-4o'],
+          groq:        ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant'],
+          deepseek:    ['deepseek-chat'],
+          zhipu:       ['glm-4-flash'],
+          siliconflow: ['Qwen/Qwen2.5-72B-Instruct'],
+          openrouter:  ['google/gemma-2-9b-it:free', 'meta-llama/llama-3.1-8b-instruct:free'],
         }
         const oaiTools = AGENT_TOOLS.map(t => ({
           type: 'function',
           function: { name: t.name, description: t.description, parameters: t.input_schema },
         }))
 
-        const response = await fetch(baseUrls[p], {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
-          body: JSON.stringify({
-            model: defaultModels[p],
-            messages: toOpenAIMessages(systemPrompt, optimizedMessages),
-            tools: oaiTools,
-            tool_choice: 'auto',
-            max_tokens: maxTokens,
-            temperature,
-          }),
-        })
-        if (response.ok) {
-          const data = await response.json()
-          return Response.json(normalizeOpenAIResponse(data, p))
-        } else {
-          errorLogs.push(`${p} ${response.status}: ${await response.text()}`)
+        const modelsToTry = modelsByProvider[p] || ['gpt-4o-mini']
+        for (const mName of modelsToTry) {
+          try {
+            const response = await fetch(baseUrls[p], {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+              body: JSON.stringify({
+                model: mName,
+                messages: toOpenAIMessages(systemPrompt, optimizedMessages),
+                tools: oaiTools,
+                tool_choice: 'auto',
+                max_tokens: maxTokens,
+                temperature,
+              }),
+            })
+            if (response.ok) {
+              const data = await response.json()
+              return Response.json(normalizeOpenAIResponse(data, p))
+            } else {
+              errorLogs.push(`${p} (${mName}) ${response.status}: ${await response.text()}`)
+            }
+          } catch (mErr: any) {
+            errorLogs.push(`${p} (${mName}) error: ${mErr.message}`)
+          }
         }
       }
     } catch (err) {
@@ -366,11 +414,12 @@ async function callProviderWithFallback(
     }
   }
 
-  throw new Error(`Nenhum provedor de IA conseguiu responder. Erros tentados:\n${errorLogs.join('\n')}`)
+  if (errorLogs.length === 0) {
+    throw new Error('Nenhuma chave de API configurada. Por favor, adicione uma chave gratuita (Google Gemini, Groq, DeepSeek ou OpenAI) no Gerenciador de APIs (menu lateral) para conversar com a Rafinha.')
+  }
 
+  throw new Error(`Falha ao conectar com os provedores de IA:\n${errorLogs.join('\n')}`)
 }
-
-import { checkRateLimit } from '@/lib/rateLimit'
 
 // ─── Handler principal ────────────────────────────────────────────────────────
 export async function POST(req: NextRequest) {

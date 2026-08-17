@@ -76,6 +76,7 @@ export default function QuestionBank() {
  /* Filtros */
  const [fKind, setFKind] = useState<'all' | ActivityKind>('all')
  const [fSchool, setFSchool] = useState('all')
+ const [fClass, setFClass] = useState('all')
  const [fYear, setFYear] = useState('all')
  const [fSubject, setFSubject] = useState('all')
  const [fType, setFType] = useState('all')
@@ -183,6 +184,7 @@ export default function QuestionBank() {
  const qKind = q.activityKind || 'question'
  if (fKind !== 'all' && qKind !== fKind) return false
  if (fSchool !== 'all' && q.schoolId !== fSchool) return false
+ if (fClass !== 'all' && q.classRef !== fClass && !q.tags?.includes(fClass)) return false
  if (fYear !== 'all' && q.year !== fYear) return false
  if (fSubject !== 'all' && q.subject !== fSubject) return false
  if (fType !== 'all' && q.type !== fType) return false
@@ -190,7 +192,7 @@ export default function QuestionBank() {
  if (fText && !q.statement.toLowerCase().includes(fText.toLowerCase()) && !q.topic.toLowerCase().includes(fText.toLowerCase())) return false
  return true
  }).sort((a, b) => b.createdAt - a.createdAt)
- }, [questions, fKind, fSchool, fYear, fSubject, fType, fLevel, fText])
+ }, [questions, fKind, fSchool, fClass, fYear, fSubject, fType, fLevel, fText])
 
  /* Adicionar manualmente */
  function addManual() {
@@ -462,7 +464,7 @@ Para questões dissertativas ou V/F, omita "options". Para V/F, o "answer" deve 
  </div>
  <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
  <button onClick={importFromLibrary} style={{ ...S.btn, background: '#27ae60', color: '#fffcf8' }}>
- <i className="ti ti-book" /> Extrair da Biblioteca
+ <i className="ti ti-book" /> Importar Exercícios de Livro
  </button>
  <button onClick={() => setModal('ai')} style={{ ...S.btn, background: '#d4944a', color: '#fffcf8' }}>
  <i className="ti ti-sparkles" /> Gerar com IA
@@ -640,6 +642,7 @@ Para questões dissertativas ou V/F, omita "options". Para V/F, o "answer" deve 
  </div>
  {([
  ['fSchool', fSchool, setFSchool, 'Escola', [['all','Todas escolas'], ...schools.map(s => [s.id, s.name])]],
+ ['fClass', fClass, setFClass, 'Turma', [['all','Todas turmas'], ...classes.map(c => [c.id, c.name])]],
  ['fYear', fYear, setFYear, 'Ano', [['all','Todos anos'], ...YEARS.map(y => [y, y])]],
  ['fSubject', fSubject, setFSubject, 'Disciplina', [['all','Todas'], ...subjects.map(s => [s, s])]],
  ['fType', fType, setFType, 'Formato', [['all','Todos formatos'], ...Object.entries(TYPE_LABELS)]],

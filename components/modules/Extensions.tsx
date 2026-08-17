@@ -107,7 +107,7 @@ export default function Extensions() {
           title: 'Lançar Diário de Aula',
           type: 'diary',
           description: 'Preenche conteúdo e data da aula',
-          executionMode: globalMode,
+          executionMode: 'supervised',
           spokenConfirmation: `Diário preenchido com sucesso no ${portalFormName}!`,
           fields: [
             { fieldId: 'title', label: 'Título/Assunto', type: 'text', selectors: ['input[name*="titulo"]', 'input[placeholder*="Assunto"]'], semanticKeywords: ['titulo', 'assunto'], description: 'Tema' },
@@ -129,7 +129,7 @@ export default function Extensions() {
     setActionFormTitle('')
     setActionFormType('diary')
     setActionFormDescription('')
-    setActionFormMode(globalMode)
+    setActionFormMode('supervised')
     setActionFormConfirmation('')
     setIsActionModalOpen(true)
   }
@@ -139,7 +139,7 @@ export default function Extensions() {
     setActionFormTitle(action.title)
     setActionFormType(action.type)
     setActionFormDescription(action.description)
-    setActionFormMode(action.executionMode || globalMode)
+    setActionFormMode('supervised')
     setActionFormConfirmation(action.spokenConfirmation)
     setIsActionModalOpen(true)
   }
@@ -157,7 +157,7 @@ export default function Extensions() {
       title: actionFormTitle.trim(),
       type: actionFormType,
       description: actionFormDescription.trim() || 'Ação operacional agêntica',
-      executionMode: actionFormMode,
+      executionMode: 'supervised',
       spokenConfirmation: actionFormConfirmation.trim() || `${actionFormTitle} executada com sucesso!`,
       isCustom: true,
       fields: editingAction ? editingAction.fields : [
@@ -209,45 +209,18 @@ export default function Extensions() {
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
           {/* Seletor Global de Modo */}
           <div style={{
-            background: '#faf6f0',
-            border: '1px solid #d5c8bb',
-            borderRadius: 10,
-            padding: '4px 8px',
             display: 'flex',
             alignItems: 'center',
-            gap: 6
+            gap: 8,
+            background: '#fdf6e3',
+            padding: '6px 14px',
+            borderRadius: 10,
+            border: '1.5px solid #cb4b16'
           }}>
-            <span style={{ fontSize: 12, fontWeight: 700, color: '#2c1a0e' }}>Modo de Operação:</span>
-            <button
-              onClick={() => setGlobalMode('supervised')}
-              style={{
-                padding: '5px 10px',
-                borderRadius: 6,
-                border: 'none',
-                background: globalMode === 'supervised' ? '#8b5e3c' : 'transparent',
-                color: globalMode === 'supervised' ? '#fff' : '#665c54',
-                fontSize: 12,
-                fontWeight: 700,
-                cursor: 'pointer'
-              }}
-            >
-              🎛️ Supervisionado
-            </button>
-            <button
-              onClick={() => setGlobalMode('autonomous')}
-              style={{
-                padding: '5px 10px',
-                borderRadius: 6,
-                border: 'none',
-                background: globalMode === 'autonomous' ? '#16a34a' : 'transparent',
-                color: globalMode === 'autonomous' ? '#fff' : '#665c54',
-                fontSize: 12,
-                fontWeight: 700,
-                cursor: 'pointer'
-              }}
-            >
-              🚀 Autônomo com Voz
-            </button>
+            <span style={{ fontSize: 12, fontWeight: 800, color: '#cb4b16' }}>🛡️ Segurança 0-Tester:</span>
+            <span style={{ fontSize: 12, fontWeight: 700, color: '#073642' }}>
+              🎛️ Modo Supervisionado Obrigatório (A IA preenche visualmente no portal e aguarda seu clique em Salvar)
+            </span>
           </div>
 
           <button
@@ -531,7 +504,7 @@ export default function Extensions() {
                             {action.title}
                           </h4>
                           <span style={{ fontSize: 11, fontWeight: 700, color: '#8b5e3c', textTransform: 'uppercase' }}>
-                            Tipo: {action.type} · Modo: {action.executionMode === 'autonomous' ? '🚀 Autônomo' : '🎛️ Supervisionado'}
+                            Tipo: {action.type} · Modo: 🎛️ Supervisionado (Preenchimento Visual)
                           </span>
                         </div>
 
@@ -792,12 +765,11 @@ export default function Extensions() {
                   <div>
                     <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#2c1a0e', marginBottom: 4 }}>Modo de Execução:</label>
                     <select
-                      value={actionFormMode}
-                      onChange={e => setActionFormMode(e.target.value as any)}
-                      style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #d5c8bb', fontSize: 13, outline: 'none' }}
+                      value="supervised"
+                      disabled
+                      style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #d5c8bb', fontSize: 13, outline: 'none', background: '#f5f0eb', color: '#586e75' }}
                     >
-                      <option value="supervised">🎛️ Supervisionado (Revisão)</option>
-                      <option value="autonomous">🚀 Autônomo com Voz</option>
+                      <option value="supervised">🎛️ Supervisionado (Preenche e aguarda seu clique)</option>
                     </select>
                   </div>
                 </div>

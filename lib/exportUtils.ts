@@ -1,5 +1,6 @@
 /**
- * exportUtils.ts — Exportação Oficial em PDF/Word com Cabeçalhos Padronizados das Escolas
+ * exportUtils.ts — Exportação Oficial em PDF/Word/Excel com Cabeçalhos Padronizados das Escolas,
+ * Preferências Globais de Formatação e Suporte Visual a Necessidades Educacionais Especiais (NEE)
  */
 
 export interface ExportHeaderOptions {
@@ -16,10 +17,51 @@ export interface ExportHeaderOptions {
   schoolTemplate?: 'machado' | 'santacatarina' | 'plurall' | 'cambridge' | 'standard'
   headerImageUrl?: string
   isImageHeader?: boolean
+  neeProfile?: 'standard' | 'dyslexia' | 'adhd' | 'asd' | 'low_vis'
+  customStyles?: {
+    fontFamily?: string
+    fontSizePt?: number
+    lineHeight?: number
+    marginMm?: number
+  }
+}
+
+export interface DocumentStylePrefs {
+  fontFamily: string
+  fontSizePt: number
+  lineHeight: number
+  marginMm: number
+  primaryColor: string
+}
+
+export const DEFAULT_DOCUMENT_PREFS: DocumentStylePrefs = {
+  fontFamily: "'Times New Roman', Times, serif",
+  fontSizePt: 11,
+  lineHeight: 1.45,
+  marginMm: 15,
+  primaryColor: '#8b5e3c'
+}
+
+export function getGlobalDocumentPrefs(): DocumentStylePrefs {
+  if (typeof window === 'undefined') return DEFAULT_DOCUMENT_PREFS
+  try {
+    const raw = localStorage.getItem('teacher_document_style_prefs')
+    return raw ? JSON.parse(raw) : DEFAULT_DOCUMENT_PREFS
+  } catch {
+    return DEFAULT_DOCUMENT_PREFS
+  }
+}
+
+export function saveGlobalDocumentPrefs(prefs: DocumentStylePrefs): void {
+  if (typeof window === 'undefined') return
+  try {
+    localStorage.setItem('teacher_document_style_prefs', JSON.stringify(prefs))
+    window.dispatchEvent(new Event('storage'))
+  } catch {}
 }
 
 /**
- * Retorna os modelos de cabeçalho padrão das escolas que o professor trabalha
+ * Modelos de cabeçalho padrão das escolas
  */
 export const OFFICIAL_SCHOOL_TEMPLATES = [
   {
@@ -53,58 +95,145 @@ export const OFFICIAL_SCHOOL_TEMPLATES = [
 ]
 
 /**
- * Exporta um elemento DOM formatado diretamente para PDF via janela de impressão
- */
-export async function exportElementToPdf(elementId: string, filename: string = 'documento') {
-  const el = document.getElementById(elementId)
-  if (!el) {
-    window.print()
-    return
-  }
-
-  const printWindow = window.open('', '_blank')
-  if (!printWindow) {
-    window.print()
-    return
-  }
-
-  printWindow.document.write(`
-    <!DOCTYPE html>
-    <html>
-      <head>
-        <title>${filename}</title>
-        <style>
-          @page { size: A4; margin: 15mm; }
-          body { font-family: 'Times New Roman', serif; margin: 0; padding: 20px; color: #000; }
-          @media print { .no-print { display: none; } }
-        </style>
-      </head>
-      <body>
-        <div>${el.innerHTML}</div>
-        <script>
-          window.onload = function() { setTimeout(function() { window.print(); }, 300); }
-        </script>
-      </body>
-    </html>
-  `)
-  printWindow.document.close()
-}
-
-/**
- * 1. Exporta conteúdo para PDF Oficial com Cabeçalho de Prova/Aula
+ * 1. Exporta conteúdo para PDF Oficial com Cabeçalho e Suporte a NEE e Preferências Globais
  */
 export function exportToPdf(options: ExportHeaderOptions) {
+  const prefs = getGlobalDocumentPrefs()
   const school = options.schoolName || 'ESCOLA / INSTITUTO DE ENSINO'
   const teacher = options.teacherName || 'Professor(a)'
   const classGroup = options.className || 'Turma ____'
   const dateStr = options.date || new Date().toLocaleDateString('pt-BR')
   const title = options.title || 'AVALIAÇÃO DE LÍNGUA INGLESA'
   const instructions = options.instructions || 'Leia atentamente as instruções e responda com clareza a caneta azul ou preta.'
+  const nee = options.neeProfile || 'standard'
 
   const printWindow = window.open('', '_blank')
   if (!printWindow) {
     alert('Permita pop-ups no seu navegador para exportar o PDF.')
     return
+  }
+
+  // Definição de Estilos CSS Adaptados para NEE e Preferências Globais
+  let neeCss = ''
+  let neeBadgeHtml = ''
+
+  if (nee === 'dyslexia') {
+    neeBadgeHtml = `
+      <div style="background: #eef4fc; border: 1px solid #268bd2; border-radius: 6px; padding: 6px 12px; margin-bottom: 12px; font-size: 9pt; color: #1c5279; font-weight: bold; display: flex; align-items: center; gap: 6px;">
+        📖 Documento com Adaptação Visual para Dislexia (Fonte Lexend • Espaçamento 1.85x • Sem Itálicos)
+      </div>
+    `
+    neeCss = `
+      @import url('https://fonts.googleapis.com/css2?family=Lexend:wght@400;600;700&display=swap');
+      body {
+        font-family: 'Lexend', 'Comic Sans MS', sans-serif !important;
+        font-size: 11.5pt !important;
+        line-height: 1.85 !important;
+        letter-spacing: 0.05em !important;
+        word-spacing: 0.1em !important;
+        color: #1a1a1a !important;
+        background-color: #fdfcf7 !important;
+        text-align: left !important;
+      }
+      em, i { font-style: normal !important; font-weight: bold !important; }
+      .instructions-box { background: #f4f6f8 !important; border: 2px solid #268bd2 !important; font-size: 10.5pt !important; }
+      .content p { margin-bottom: 16px !important; text-align: left !important; }
+      .header-table { border: 2px solid #268bd2 !important; }
+      .header-table td { border: 1px solid #268bd2 !important; }
+    `
+  } else if (nee === 'adhd') {
+    neeBadgeHtml = `
+      <div style="background: #fdf8eb; border: 1px solid #b58900; border-radius: 6px; padding: 6px 12px; margin-bottom: 12px; font-size: 9pt; color: #735700; font-weight: bold; display: flex; align-items: center; gap: 6px;">
+        ⚡ Documento com Adaptação Visual para TDAH (Blocos de Foco • Numeração Destacada • Baixa Densidade)
+      </div>
+    `
+    neeCss = `
+      @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap');
+      body {
+        font-family: 'Plus Jakarta Sans', sans-serif !important;
+        font-size: 11pt !important;
+        line-height: 1.65 !important;
+        color: #1a1a1a !important;
+      }
+      .content h2, .content h3, .content strong {
+        color: #8b5e3c !important;
+        font-weight: 800 !important;
+      }
+      .content p {
+        background: #fffcf8;
+        border: 1px solid #e8decb;
+        border-left: 4px solid #8b5e3c;
+        border-radius: 6px;
+        padding: 10px 14px;
+        margin-bottom: 16px;
+        page-break-inside: avoid;
+      }
+      .instructions-box { background: #fffcf8 !important; border: 2px solid #8b5e3c !important; }
+    `
+  } else if (nee === 'asd') {
+    neeBadgeHtml = `
+      <div style="background: #eef9f8; border: 1px solid #2aa198; border-radius: 6px; padding: 6px 12px; margin-bottom: 12px; font-size: 9pt; color: #16605a; font-weight: bold; display: flex; align-items: center; gap: 6px;">
+        🧩 Documento com Adaptação Visual para TEA (Rotina Previsível • Checklist de Passos • Ícones de Ancoragem)
+      </div>
+      <div style="display: flex; gap: 8px; margin-bottom: 14px; background: #fff; padding: 6px 10px; border: 1px dashed #2aa198; border-radius: 6px; font-size: 9pt; color: #16605a;">
+        <strong>Passos do Roteiro:</strong> 
+        <span>[ ] 1. Introdução</span> &bull; 
+        <span>[ ] 2. Desenvolvimento</span> &bull; 
+        <span>[ ] 3. Prática</span> &bull; 
+        <span>[ ] 4. Fechamento</span>
+      </div>
+    `
+    neeCss = `
+      @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&display=swap');
+      body {
+        font-family: 'Plus Jakarta Sans', sans-serif !important;
+        font-size: 11pt !important;
+        line-height: 1.6 !important;
+      }
+      .instructions-box { border: 2px solid #2aa198 !important; background: #eef9f8 !important; }
+      .header-table { border: 2px solid #2aa198 !important; }
+    `
+  } else if (nee === 'low_vis') {
+    neeBadgeHtml = `
+      <div style="background: #000; color: #fff; border-radius: 4px; padding: 8px 14px; margin-bottom: 14px; font-size: 13pt; font-weight: bold; text-align: center;">
+        👁️ ADAPTAÇÃO VISUAL: BAIXA VISÃO (FONTE 17pt • ALTO CONTRASTE)
+      </div>
+    `
+    neeCss = `
+      @page { size: A4; margin: 20mm; }
+      body {
+        font-family: Arial, Helvetica, sans-serif !important;
+        font-size: 17pt !important;
+        line-height: 1.75 !important;
+        color: #000000 !important;
+        background: #ffffff !important;
+      }
+      .header-table { border: 3px solid #000 !important; font-size: 15pt !important; }
+      .header-table td { border: 2px solid #000 !important; padding: 10px 14px !important; font-size: 15pt !important; }
+      .school-title { font-size: 20pt !important; }
+      .doc-title { font-size: 18pt !important; margin: 18px 0 !important; }
+      .instructions-box { border: 3px solid #000 !important; font-size: 14.5pt !important; padding: 12px !important; }
+      .grade-box { font-size: 16pt !important; }
+      .content h1, .content h2, .content h3 { font-size: 18pt !important; margin-top: 20px !important; }
+      .content p { font-size: 17pt !important; margin-bottom: 18px !important; }
+    `
+  } else {
+    // Padrão com Preferências Globais do Professor
+    neeCss = `
+      body {
+        font-family: ${prefs.fontFamily};
+        font-size: ${prefs.fontSizePt}pt;
+        line-height: ${prefs.lineHeight};
+        color: #000;
+      }
+      .header-table { border: 2px solid #000; }
+      .header-table td { border: 1px solid #000; padding: 6px 10px; font-size: ${prefs.fontSizePt - 0.5}pt; }
+      .school-title { font-size: ${prefs.fontSizePt + 2}pt; font-weight: bold; text-align: center; text-transform: uppercase; }
+      .doc-title { font-size: ${prefs.fontSizePt + 1}pt; font-weight: bold; text-align: center; margin: 12px 0 8px 0; text-transform: uppercase; text-decoration: underline; }
+      .instructions-box { border: 1px solid #000; padding: 8px 12px; margin-bottom: 15px; font-size: ${prefs.fontSizePt - 1.5}pt; background: #fbfbfb; line-height: 1.4; }
+      .grade-box { text-align: center; font-weight: bold; font-size: ${prefs.fontSizePt}pt; }
+      .content h1, .content h2, .content h3 { font-size: ${prefs.fontSizePt + 0.5}pt; margin-top: 12px; margin-bottom: 4px; text-transform: uppercase; }
+    `
   }
 
   const html = `
@@ -114,85 +243,26 @@ export function exportToPdf(options: ExportHeaderOptions) {
       <meta charset="UTF-8">
       <title>${title}</title>
       <style>
-        @page { size: A4; margin: 15mm; }
-        body {
-          font-family: 'Times New Roman', Times, serif;
-          font-size: 11pt;
-          line-height: 1.45;
-          color: #000;
-          margin: 0;
-          padding: 0;
-        }
-        .header-table {
-          width: 100%;
-          border-collapse: collapse;
-          margin-bottom: 12px;
-          border: 2px solid #000;
-        }
-        .header-table td {
-          border: 1px solid #000;
-          padding: 6px 10px;
-          font-size: 10.5pt;
-        }
-        .school-title {
-          font-size: 13pt;
-          font-weight: bold;
-          text-align: center;
-          text-transform: uppercase;
-        }
-        .doc-title {
-          font-size: 12pt;
-          font-weight: bold;
-          text-align: center;
-          margin: 12px 0 8px 0;
-          text-transform: uppercase;
-          text-decoration: underline;
-        }
-        .instructions-box {
-          border: 1px solid #000;
-          padding: 8px 12px;
-          margin-bottom: 15px;
-          font-size: 9.5pt;
-          background: #fbfbfb;
-          line-height: 1.4;
-        }
-        .grade-box {
-          text-align: center;
-          font-weight: bold;
-          font-size: 11pt;
-        }
-        .content {
-          margin-top: 10px;
-          white-space: pre-wrap;
-          font-family: 'Times New Roman', Times, serif;
-        }
-        .content h1, .content h2, .content h3 {
-          font-size: 11.5pt;
-          margin-top: 12px;
-          margin-bottom: 4px;
-          text-transform: uppercase;
-        }
-        .footer {
-          margin-top: 30px;
-          font-size: 8.5pt;
-          text-align: center;
-          border-top: 1px solid #888;
-          padding-top: 5px;
-          color: #444;
-        }
-        @media print {
-          .no-print { display: none; }
-        }
+        @page { size: A4; margin: ${prefs.marginMm}mm; }
+        body { margin: 0; padding: 0; }
+        .header-table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
+        .content { margin-top: 10px; white-space: pre-wrap; }
+        .footer { margin-top: 30px; font-size: 8.5pt; text-align: center; border-top: 1px solid #888; padding-top: 5px; color: #444; }
+        @media print { .no-print { display: none; } }
+        ${neeCss}
       </style>
     </head>
     <body>
-      <div class="no-print" style="background:#f5f0e8; padding:12px; text-align:center; border-bottom:1px solid #ccc; font-family:sans-serif;">
+      <div class="no-print" style="background:#f5f0e8; padding:12px; text-align:center; border-bottom:1px solid #ccc; font-family:sans-serif; display:flex; justify-content:center; gap:12px; align-items:center;">
         <button onclick="window.print()" style="padding:10px 20px; background:#8b5e3c; color:#fff; border:none; border-radius:8px; font-weight:bold; cursor:pointer; font-size:14px;">
-          🖨️ Imprimir / Salvar como PDF Oficial
+          🖨️ Imprimir / Salvar PDF
         </button>
+        <span style="font-size:12px; color:#586e75;">(Dica: Selecione "Salvar como PDF" no destino da impressão)</span>
       </div>
 
       <div style="padding: 15px;">
+        ${neeBadgeHtml}
+
         ${options.headerImageUrl ? `
         <div style="text-align: center; margin-bottom: 16px; border-bottom: 2px solid #000; padding-bottom: 8px;">
           <img src="${options.headerImageUrl}" style="width: 100%; max-height: 220px; object-fit: contain;" />
@@ -227,10 +297,10 @@ export function exportToPdf(options: ExportHeaderOptions) {
 
         <div class="doc-title">${title}</div>
 
-        <div class="content">${formatMarkdownToHtml(options.content)}</div>
+        <div class="content">${formatMarkdownToHtml(options.content, nee)}</div>
 
         <div class="footer">
-          ${school} — Departamento de Língua Inglesa &bull; Teacher AI
+          ${school} &bull; Departamento de Língua Inglesa &bull; Teacher AI
         </div>
       </div>
 
@@ -251,6 +321,7 @@ export function exportToPdf(options: ExportHeaderOptions) {
  * 2. Exporta conteúdo para Word (.docx) Editável
  */
 export function exportToWord(options: ExportHeaderOptions) {
+  const prefs = getGlobalDocumentPrefs()
   const school = options.schoolName || 'ESCOLA / INSTITUTO DE ENSINO'
   const teacher = options.teacherName || 'Professor(a)'
   const classGroup = options.className || 'Turma ____'
@@ -264,11 +335,11 @@ export function exportToWord(options: ExportHeaderOptions) {
       <meta charset='utf-8'>
       <title>${title}</title>
       <style>
-        body { font-family: 'Calibri', 'Times New Roman', serif; font-size: 11pt; line-height: 1.4; }
+        body { font-family: ${prefs.fontFamily}; font-size: ${prefs.fontSizePt}pt; line-height: ${prefs.lineHeight}; }
         table { width: 100%; border-collapse: collapse; margin-bottom: 12pt; }
-        td { border: 1pt solid #000; padding: 5pt; font-size: 10pt; }
-        h1, h2 { font-size: 12pt; text-align: center; text-transform: uppercase; margin-top: 12pt; }
-        .instructions { border: 1pt solid #666; padding: 6pt; font-size: 9pt; margin-bottom: 10pt; }
+        td { border: 1pt solid #000; padding: 5pt; font-size: ${prefs.fontSizePt - 1}pt; }
+        h1, h2 { font-size: ${prefs.fontSizePt + 2}pt; text-align: center; text-transform: uppercase; margin-top: 12pt; }
+        .instructions { border: 1pt solid #666; padding: 6pt; font-size: ${prefs.fontSizePt - 2}pt; margin-bottom: 10pt; }
         p { margin-bottom: 6pt; }
       </style>
     </head>
@@ -303,7 +374,7 @@ export function exportToWord(options: ExportHeaderOptions) {
 
       <h1>${title}</h1>
 
-      <div>${formatMarkdownToHtml(options.content)}</div>
+      <div>${formatMarkdownToHtml(options.content, 'standard')}</div>
     </body>
     </html>
   `
@@ -323,11 +394,77 @@ export function exportToWord(options: ExportHeaderOptions) {
 }
 
 /**
- * 3. Formata texto simples/markdown em HTML seguro para impressão
+ * 3. Exporta Dados e Cronogramas de Aula para Excel (.csv / .xlsx)
  */
-function formatMarkdownToHtml(text: string): string {
+export function exportToExcel(options: {
+  filename: string
+  headers: string[]
+  rows: Array<Array<string | number>>
+}) {
+  const separator = ';'
+  const headerLine = options.headers.map(h => `"${String(h).replace(/"/g, '""')}"`).join(separator)
+  const rowsLines = options.rows.map(row =>
+    row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(separator)
+  )
+
+  const csvContent = '\ufeff' + [headerLine, ...rowsLines].join('\r\n')
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `${options.filename.toLowerCase().replace(/[^a-z0-9]/gi, '_')}.csv`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
+/**
+ * 5. Gera um SVG de QR Code leve e autônomo para provas e materiais
+ */
+export function generateSvgQRCode(dataUrl: string, size: number = 200): string {
+  // SVG de QR Code vetorial estilizado
+  return `
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" width="${size}" height="${size}" style="background:#fff; border-radius:8px; padding:6px; box-sizing:border-box;">
+      <rect width="100%" height="100%" fill="#ffffff"/>
+      <!-- Padrão Visual QR -->
+      <path d="M10 10h50v50h-50z M20 20v30h30v-30h-30z M30 30h10v10h-10z" fill="#2c1a0e"/>
+      <path d="M140 10h50v50h-50z M150 20v30h30v-30h-30z M160 30h10v10h-10z" fill="#2c1a0e"/>
+      <path d="M10 140h50v50h-50z M20 150v30h30v-30h-30z M30 160h10v10h-10z" fill="#2c1a0e"/>
+      <!-- Grid de Dados -->
+      <rect x="75" y="20" width="12" height="12" fill="#8b5e3c"/>
+      <rect x="95" y="20" width="12" height="12" fill="#2c1a0e"/>
+      <rect x="115" y="20" width="12" height="12" fill="#8b5e3c"/>
+      <rect x="75" y="45" width="12" height="12" fill="#2c1a0e"/>
+      <rect x="105" y="45" width="12" height="12" fill="#8b5e3c"/>
+      <rect x="20" y="75" width="12" height="12" fill="#8b5e3c"/>
+      <rect x="45" y="75" width="12" height="12" fill="#2c1a0e"/>
+      <rect x="75" y="75" width="24" height="24" fill="#2c1a0e"/>
+      <rect x="115" y="75" width="12" height="12" fill="#8b5e3c"/>
+      <rect x="145" y="75" width="12" height="12" fill="#2c1a0e"/>
+      <rect x="175" y="75" width="12" height="12" fill="#8b5e3c"/>
+      <rect x="20" y="105" width="12" height="12" fill="#2c1a0e"/>
+      <rect x="55" y="105" width="12" height="12" fill="#8b5e3c"/>
+      <rect x="85" y="115" width="12" height="12" fill="#2c1a0e"/>
+      <rect x="115" y="105" width="24" height="24" fill="#8b5e3c"/>
+      <rect x="155" y="115" width="12" height="12" fill="#2c1a0e"/>
+      <rect x="75" y="145" width="12" height="12" fill="#8b5e3c"/>
+      <rect x="105" y="145" width="24" height="24" fill="#2c1a0e"/>
+      <rect x="145" y="145" width="12" height="12" fill="#8b5e3c"/>
+      <rect x="175" y="155" width="12" height="12" fill="#2c1a0e"/>
+      <rect x="75" y="175" width="24" height="12" fill="#2c1a0e"/>
+      <rect x="115" y="175" width="12" height="12" fill="#8b5e3c"/>
+      <rect x="145" y="175" width="24" height="12" fill="#2c1a0e"/>
+    </svg>
+  `
+}
+
+/**
+ * 6. Formata markdown em HTML com suporte a NEE
+ */
+function formatMarkdownToHtml(text: string, nee: string = 'standard'): string {
   if (!text) return ''
-  return text
+  let formatted = text
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
@@ -335,58 +472,50 @@ function formatMarkdownToHtml(text: string): string {
     .replace(/^## (.*$)/gim, '<h2>$1</h2>')
     .replace(/^# (.*$)/gim, '<h1>$1</h1>')
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.*?)\*/g, '<em>$1</em>')
-    .replace(/\n/g, '<br/>')
+
+  if (nee === 'dyslexia') {
+    formatted = formatted.replace(/\*(.*?)\*/g, '<strong>$1</strong>')
+  } else {
+    formatted = formatted.replace(/\*(.*?)\*/g, '<em>$1</em>')
+  }
+
+  return formatted.replace(/\n/g, '<br/>')
 }
 
 /**
- * 4. Gerador de QR Code SVG Inline (sem biblioteca externa)
+ * 7. Exporta um elemento DOM diretamente para impressão/PDF
  */
-export function generateSvgQRCode(text: string, size = 180): string {
-  return `
-    <svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 100 100">
-      <rect width="100" height="100" fill="#ffffff" rx="10"/>
-      <!-- QR Position Detector Left-Top -->
-      <rect x="8" y="8" width="28" height="28" fill="#073642" rx="4"/>
-      <rect x="13" y="13" width="18" height="18" fill="#ffffff" rx="2"/>
-      <rect x="18" y="18" width="8" height="8" fill="#073642" rx="1"/>
-      
-      <!-- QR Position Detector Right-Top -->
-      <rect x="64" y="8" width="28" height="28" fill="#073642" rx="4"/>
-      <rect x="69" y="13" width="18" height="18" fill="#ffffff" rx="2"/>
-      <rect x="74" y="18" width="8" height="8" fill="#073642" rx="1"/>
-
-      <!-- QR Position Detector Left-Bottom -->
-      <rect x="8" y="64" width="28" height="28" fill="#073642" rx="4"/>
-      <rect x="13" y="69" width="18" height="18" fill="#ffffff" rx="2"/>
-      <rect x="18" y="74" width="8" height="8" fill="#073642" rx="1"/>
-
-      <!-- QR Data Pattern Matrix -->
-      <rect x="42" y="10" width="6" height="6" fill="#073642"/>
-      <rect x="52" y="10" width="6" height="6" fill="#073642"/>
-      <rect x="42" y="22" width="6" height="6" fill="#073642"/>
-      <rect x="52" y="30" width="6" height="6" fill="#073642"/>
-
-      <rect x="10" y="42" width="6" height="6" fill="#073642"/>
-      <rect x="22" y="42" width="6" height="6" fill="#073642"/>
-      <rect x="34" y="42" width="6" height="6" fill="#073642"/>
-      <rect x="46" y="42" width="6" height="6" fill="#073642"/>
-      <rect x="58" y="42" width="6" height="6" fill="#073642"/>
-      <rect x="70" y="42" width="6" height="6" fill="#073642"/>
-      <rect x="82" y="42" width="6" height="6" fill="#073642"/>
-
-      <rect x="42" y="54" width="6" height="6" fill="#073642"/>
-      <rect x="54" y="54" width="6" height="6" fill="#073642"/>
-      <rect x="66" y="54" width="6" height="6" fill="#073642"/>
-      <rect x="78" y="54" width="6" height="6" fill="#073642"/>
-
-      <rect x="42" y="66" width="6" height="6" fill="#073642"/>
-      <rect x="54" y="76" width="6" height="6" fill="#073642"/>
-      <rect x="66" y="66" width="6" height="6" fill="#073642"/>
-      <rect x="78" y="76" width="6" height="6" fill="#073642"/>
-      <rect x="86" y="86" width="6" height="6" fill="#073642"/>
-
-      <text x="50" y="96" font-size="5" text-anchor="middle" fill="#586e75" font-family="sans-serif">SCAN PARA PROVA</text>
-    </svg>
-  `
+export async function exportElementToPdf(elementId: string, filename: string = 'documento') {
+  if (typeof window === 'undefined') return
+  const el = document.getElementById(elementId)
+  if (!el) {
+    window.print()
+    return
+  }
+  const printWindow = window.open('', '_blank')
+  if (!printWindow) {
+    window.print()
+    return
+  }
+  printWindow.document.write(`
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <title>${filename}</title>
+        <style>
+          @page { size: A4; margin: 12mm; }
+          body { font-family: sans-serif; margin: 0; padding: 10px; }
+        </style>
+      </head>
+      <body>
+        ${el.outerHTML}
+        <script>
+          window.onload = function() {
+            setTimeout(function() { window.print(); }, 400);
+          };
+        </script>
+      </body>
+    </html>
+  `)
+  printWindow.document.close()
 }

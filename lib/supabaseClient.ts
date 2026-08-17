@@ -418,6 +418,34 @@ export async function testSupabaseConnection(url: string, key: string): Promise<
   }
 }
 
+export interface SupabasePrivateBook {
+  id: string
+  title: string
+  author?: string
+  subject: string
+  level?: string
+  studentId?: string
+  studentName?: string
+  pdfUrl?: string
+  unitsCount?: number
+  notes?: string
+  createdAt?: string
+}
+
+export interface SupabasePrivateDidacticUnit {
+  id: string
+  studentId?: string
+  studentName?: string
+  unitNumber: number
+  unitTitle: string
+  topic: string
+  grammarFocus: string
+  vocabularyFocus?: string
+  estimatedHours?: number
+  status: 'current' | 'completed' | 'upcoming'
+  createdAt?: string
+}
+
 /**
  * Busca todos os alunos particulares cadastrados no Supabase Cloud.
  */
@@ -436,16 +464,23 @@ export async function fetchPrivateStudentsFromSupabase(): Promise<any[]> {
     return rows.map((r: any) => ({
       id: r.id,
       name: r.name,
+      type: r.type || 'individual',
+      groupMembersCount: r.group_members_count ? Number(r.group_members_count) : undefined,
       subject: r.subject,
       guardianName: r.guardian_name || undefined,
       phone: r.phone || undefined,
       email: r.email || undefined,
+      billingType: r.billing_type || 'mensal',
       monthlyFee: Number(r.monthly_fee || 0),
+      feePerLesson: r.fee_per_lesson ? Number(r.fee_per_lesson) : undefined,
       dueDay: Number(r.due_day || 10),
       paymentMethod: r.payment_method || 'PIX',
       lastPaymentDate: r.last_payment_date || undefined,
       modality: r.modality || 'Online',
       scheduleInfo: r.schedule_info || '',
+      daysOfWeek: Array.isArray(r.days_of_week) ? r.days_of_week : [],
+      timeStart: r.time_start || undefined,
+      timeEnd: r.time_end || undefined,
       paymentStatus: r.payment_status || 'em_dia',
       masteryPercentage: Number(r.mastery_percentage || 75),
       goals: r.goals || undefined,
@@ -471,16 +506,23 @@ export async function upsertPrivateStudentToSupabase(student: any): Promise<{ ok
   const rowPayload = {
     id: String(student.id),
     name: String(student.name),
+    type: student.type || 'individual',
+    group_members_count: student.groupMembersCount || null,
     subject: String(student.subject),
     guardian_name: student.guardianName || null,
     phone: student.phone || null,
     email: student.email || null,
+    billing_type: student.billingType || 'mensal',
     monthly_fee: student.monthlyFee || 0,
+    fee_per_lesson: student.feePerLesson || null,
     due_day: student.dueDay || 10,
     payment_method: student.paymentMethod || 'PIX',
     last_payment_date: student.lastPaymentDate || null,
     modality: student.modality || 'Online',
     schedule_info: student.scheduleInfo || '',
+    days_of_week: student.daysOfWeek || [],
+    time_start: student.timeStart || null,
+    time_end: student.timeEnd || null,
     payment_status: student.paymentStatus || 'em_dia',
     mastery_percentage: student.masteryPercentage || 75,
     goals: student.goals || null,
@@ -519,6 +561,192 @@ export async function deletePrivateStudentFromSupabase(studentId: string): Promi
 
   try {
     const res = await fetch(`${cfg.url}/rest/v1/private_students?id=eq.${encodeURIComponent(studentId)}`, {
+      method: 'DELETE',
+      headers: { 'apikey': apiKey, 'Authorization': `Bearer ${apiKey}` }
+    })
+    return res.ok
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Busca livros da tutoria particular no Supabase.
+ */
+export async function fetchPrivateBooksFromSupabase(): Promise<SupabasePrivateBook[]> {
+  const cfg = getSupabaseConfig()
+  if (!cfg?.url) return []
+  const apiKey = getActiveKey(cfg)
+  if (!apiKey) return []
+
+  try {
+    const res = await fetch(`${cfg.url}/rest/v1/private_books?select=*&order=created_at.desc`, {
+      headers: { 'apikey': apiKey, 'Authorization': `Bearer ${apiKey}` }
+    })
+    if (!res.ok) return []
+    const rows = await res.json()
+    return rows.map((r: any) => ({
+      id: r.id,
+      title: r.title,
+      author: r.author || undefined,
+      subject: r.subject || 'Inglês',
+      level: r.level || undefined,
+      studentId: r.student_id || undefined,
+      studentName: r.student_name || undefined,
+      pdfUrl: r.pdf_url || undefined,
+      unitsCount: r.units_count ? Number(r.units_count) : undefined,
+      notes: r.notes || undefined,
+      createdAt: r.created_at
+    }))
+  } catch {
+    return []
+  }
+}
+
+/**
+ * Salva livro de aula particular no Supabase.
+ */
+export async function upsertPrivateBookToSupabase(book: SupabasePrivateBook): Promise<{ ok: boolean }> {
+  const cfg = getSupabaseConfig()
+  if (!cfg?.url) return { ok: true }
+  const apiKey = getActiveKey(cfg)
+  if (!apiKey) return { ok: true }
+
+  const row = {
+    id: book.id,
+    title: book.title,
+    author: book.author || null,
+    subject: book.subject,
+    level: book.level || null,
+    student_id: book.studentId || null,
+    student_name: book.studentName || null,
+    pdf_url: book.pdfUrl || null,
+    units_count: book.unitsCount || null,
+    notes: book.notes || null,
+    updated_at: new Date().toISOString()
+  }
+
+  try {
+    const res = await fetch(`${cfg.url}/rest/v1/private_books`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': apiKey,
+        'Authorization': `Bearer ${apiKey}`,
+        'Prefer': 'resolution=merge-duplicates'
+      },
+      body: JSON.stringify(row)
+    })
+    return { ok: res.ok }
+  } catch {
+    return { ok: false }
+  }
+}
+
+/**
+ * Exclui livro da tutoria no Supabase.
+ */
+export async function deletePrivateBookFromSupabase(bookId: string): Promise<boolean> {
+  const cfg = getSupabaseConfig()
+  if (!cfg?.url) return false
+  const apiKey = getActiveKey(cfg)
+  if (!apiKey) return false
+
+  try {
+    const res = await fetch(`${cfg.url}/rest/v1/private_books?id=eq.${encodeURIComponent(bookId)}`, {
+      method: 'DELETE',
+      headers: { 'apikey': apiKey, 'Authorization': `Bearer ${apiKey}` }
+    })
+    return res.ok
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Busca unidades da sequência didática de tutoria particular no Supabase.
+ */
+export async function fetchPrivateDidacticUnitsFromSupabase(): Promise<SupabasePrivateDidacticUnit[]> {
+  const cfg = getSupabaseConfig()
+  if (!cfg?.url) return []
+  const apiKey = getActiveKey(cfg)
+  if (!apiKey) return []
+
+  try {
+    const res = await fetch(`${cfg.url}/rest/v1/private_didactic_units?select=*&order=unit_number.asc`, {
+      headers: { 'apikey': apiKey, 'Authorization': `Bearer ${apiKey}` }
+    })
+    if (!res.ok) return []
+    const rows = await res.json()
+    return rows.map((r: any) => ({
+      id: r.id,
+      studentId: r.student_id || undefined,
+      studentName: r.student_name || undefined,
+      unitNumber: Number(r.unit_number || 1),
+      unitTitle: r.unit_title,
+      topic: r.topic,
+      grammarFocus: r.grammar_focus,
+      vocabularyFocus: r.vocabulary_focus || undefined,
+      estimatedHours: r.estimated_hours ? Number(r.estimated_hours) : undefined,
+      status: r.status || 'upcoming',
+      createdAt: r.created_at
+    }))
+  } catch {
+    return []
+  }
+}
+
+/**
+ * Salva unidade didática de tutoria particular no Supabase.
+ */
+export async function upsertPrivateDidacticUnitToSupabase(unit: SupabasePrivateDidacticUnit): Promise<{ ok: boolean }> {
+  const cfg = getSupabaseConfig()
+  if (!cfg?.url) return { ok: true }
+  const apiKey = getActiveKey(cfg)
+  if (!apiKey) return { ok: true }
+
+  const row = {
+    id: unit.id,
+    student_id: unit.studentId || null,
+    student_name: unit.studentName || null,
+    unit_number: unit.unitNumber,
+    unit_title: unit.unitTitle,
+    topic: unit.topic,
+    grammar_focus: unit.grammarFocus,
+    vocabulary_focus: unit.vocabularyFocus || null,
+    estimated_hours: unit.estimatedHours || null,
+    status: unit.status,
+    updated_at: new Date().toISOString()
+  }
+
+  try {
+    const res = await fetch(`${cfg.url}/rest/v1/private_didactic_units`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': apiKey,
+        'Authorization': `Bearer ${apiKey}`,
+        'Prefer': 'resolution=merge-duplicates'
+      },
+      body: JSON.stringify(row)
+    })
+    return { ok: res.ok }
+  } catch {
+    return { ok: false }
+  }
+}
+
+/**
+ * Exclui unidade didática de tutoria no Supabase.
+ */
+export async function deletePrivateDidacticUnitFromSupabase(unitId: string): Promise<boolean> {
+  const cfg = getSupabaseConfig()
+  if (!cfg?.url) return false
+  const apiKey = getActiveKey(cfg)
+  if (!apiKey) return false
+
+  try {
+    const res = await fetch(`${cfg.url}/rest/v1/private_didactic_units?id=eq.${encodeURIComponent(unitId)}`, {
       method: 'DELETE',
       headers: { 'apikey': apiKey, 'Authorization': `Bearer ${apiKey}` }
     })

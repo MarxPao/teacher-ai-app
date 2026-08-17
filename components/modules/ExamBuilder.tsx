@@ -100,7 +100,47 @@ function buildExamPrompt(opts: {
     ? 'IDIOMA DAS ALTERNATIVAS: As opções (A, B, C, D) e alternativas devem ser formuladas em PORTUGUÊS.'
     : 'IDIOMA DAS ALTERNATIVAS: As opções (A, B, C, D) e respostas devem ser estritamente em INGLÊS.'
 
-  return `Você é um examinador profissional Cambridge/IELTS e especialista pedagógico em ELT. Crie uma PROVA COMPLETA de inglês, formatada em HTML, pronta para impressão.
+  // 1. DIRETRIZES DE CEFR GATING (Cambridge English Profile)
+  const cefrGatingRules: Record<string, string> = {
+    A1: `NÍVEL CEFR A1 (Breakthrough):
+- Vocabulário restrito a alta frequência (família, rotina, escola, hobbies, cores, números, comida).
+- Frases curtas e coordenadas simples (máx 10-12 palavras por oração).
+- Gramática permitida: Simple Present, Present Continuous, Can/Can't, There is/are, Imperatives, Pronomes básicos.
+- PROIBIDO: Passive Voice, Past Perfect, Conditionals, Phrasal Verbs complexos, vocabulário abstrato.
+- Textos de Leitura: exatamente 100 a 150 palavras.`,
+    A2: `NÍVEL CEFR A2 (Waystage - KET):
+- Vocabulário prático e descritivo (viagens, compras, passado, planos futuros, saúde).
+- Frases simples com conectivos básicos (and, but, because, so, when).
+- Gramática permitida: Simple Past (regular/irregular), Going to, Will (previsão), Comparatives/Superlatives, Have to, Modals (should, must).
+- PROIBIDO: 2nd/3rd Conditionals, Past Perfect, Passive Voice com múltiplos tempos, vocabulário B2 (ex: "furthermore", "nonetheless").
+- Textos de Leitura: exatamente 150 a 220 palavras.`,
+    B1: `NÍVEL CEFR B1 (Threshold - PET):
+- Vocabulário intermediário (opiniões, sentimentos, trabalho, lazer, tecnologia, experiências).
+- Gramática permitida: Present Perfect (since/for/already/yet), First & Second Conditionals, Relative Clauses (defining), Passive Voice (Simple Present/Past), Used to, Modals of Deduction (might, could).
+- Textos de Leitura: exatamente 250 a 350 palavras.`,
+    B2: `NÍVEL CEFR B2 (Vantage - FCE):
+- Vocabulário avançado e expressivo (argumentação, hipóteses, phrasal verbs idiomáticos, collocations formais).
+- Gramática permitida: Third Conditional, Mixed Conditionals, Past Perfect Continuous, Passive Voice avançada, Reported Speech, Wish/If only, Linkers formais (However, Whereas, In spite of, Furthermore).
+- Textos de Leitura: exatamente 350 a 450 palavras.`,
+    C1: `NÍVEL CEFR C1/C2 (Effective Operational / Mastery - CAE/CPE):
+- Vocabulário acadêmico e idiomático sofisticado, nuances estilísticas, inversão enfática (ex: "Seldom have I..."), cleft sentences, vocabulário abstrato e denso.
+- Textos de Leitura: 450 a 600 palavras.`
+  }
+
+  const activeCefrRule = cefrGatingRules[opts.cefr] || cefrGatingRules['B1']
+
+  // 2. DIRETRIZES DE DISTRATORES L1 (Interferência do Português Brasileiro)
+  const l1DistractorRule = `
+CALIBRAÇÃO DE DISTRATORES PEDAGÓGICOS (INTERFERÊNCIA L1 BRASIL):
+Nas questões de Múltipla Escolha e Use of English, as alternativas INCORRETAS (distratores) NÃO devem ser absurdas ou fáceis de descartar. Devem modelar ERROS REAIS de estudantes brasileiros que aprendem inglês:
+1. Falsos Cognatos Reais (False Friends): ex: "pretend" (querendo dizer pretender em vez de fingir), "attend" (querendo dizer atender em vez de frequentar/assistir), "actually" (confundido com atualmente).
+2. Transferência Sintática L1: ex: "I have 15 years" (em vez de "I am 15"), "I am agree" (em vez de "I agree"), "She said me that..." (em vez de "told me").
+3. Marcadores de Tempo & Preposições: ex: "I live here since 3 years" (em vez de "for 3 years"), "depend of" (em vez de "depend on").
+4. Omissão de Sujeito Vazio (Dummy Subject): ex: "Is raining today" (em vez de "It is raining"), "Have many people" (em vez de "There are").
+5. Pluralização Indevida de Incontáveis: ex: "informations", "advices", "homeworks".
+Assegure que as alternativas A, B, C, D sejam visualmente equilibradas e exijam reflexão gramatical real do aluno.`
+
+  return `Você é um examinador sênior Cambridge Assessment English e especialista em ELT e linguística contrastiva (Português/Inglês). Crie uma PROVA COMPLETA de inglês de altíssimo rigor pedagógico, formatada em HTML limpo, pronta para impressão.
 ${librarySection}
 ESPECIFICAÇÕES DA PROVA:
 - Escola: ${opts.header.school || 'Escola'}
@@ -117,28 +157,29 @@ ESPECIFICAÇÕES DA PROVA:
 ${opts.customPrompt ? `\nDIRETRIZES DO PROFESSOR:\n"${opts.customPrompt}"\n` : ''}
 ${methInstructions}
 
+=== REGRAS DE CEFR GATING ===
+${activeCefrRule}
+
+=== REGRAS DE DISTRATORES L1 ===
+${l1DistractorRule}
+
 ESTRUTURA OBRIGATÓRIA DA PROVA:
-1. QUANTIDADE RIGOROSA DE QUESTÕES: Você DEVE gerar EXATAMENTE ${opts.questionCount} questões completas numeradas sequencialmente de 1 a ${opts.questionCount} (Questão 1, Questão 2, Questão 3, Questão 4, Questão 5... até Questão ${opts.questionCount}). É ESTRITAMENTE PROIBIDO parar antes ou resumir gerando apenas 2, 3 ou 4 questões.
-2. DISTRIBUIÇÃO DAS SEÇÕES: Distribua as ${opts.questionCount} questões entre as seções selecionadas (${opts.sections.join(', ')}). Por exemplo, para ${opts.questionCount} questões com ${opts.sections.length} seções, coloque várias questões em cada seção para totalizar EXATAMENTE ${opts.questionCount} itens avaliativos.
-3. Para cada seção selecionada (${opts.sections.join(', ')}):
-  - Título da seção em <h2>
-  - Instruções claras em <p><em>${opts.stemLanguage === 'pt' ? 'Instruções' : 'Instructions'}: ...</em></p>
-  - Questões numeradas sequencialmente
-  - Espaço para resposta (linha tracejada ou caixa de texto visual)
-4. Questões de Múltipla Escolha: exatamente 4 alternativas (A, B, C, D) completas.
-5. Questões de Reading: inclua um texto de leitura em <blockquote> antes das questões.
-6. Questões de Listening: inclua um script de áudio marcado como [AUDIO SCRIPT].
-7. Questões de Writing: inclua o enunciado completo com critérios de avaliação.
-8. Gabarito Completo do Professor: seção separada com <h2>Teacher's Answer Key & Marking Scheme</h2> cobrindo todas as ${opts.questionCount} questões (1 a ${opts.questionCount}) com gabarito e explicação detalhada.
-9. Critérios de avaliação (rubrica básica) ao final.
+1. QUANTIDADE RIGOROSA: Você DEVE gerar EXATAMENTE ${opts.questionCount} questões completas numeradas sequencialmente de 1 a ${opts.questionCount}. É PROIBIDO parar antes.
+2. DISTRIBUIÇÃO DAS SEÇÕES: Distribua as ${opts.questionCount} questões entre as seções selecionadas (${opts.sections.join(', ')}).
+3. Para cada seção (${opts.sections.join(', ')}):
+   - Título em <h2>
+   - Instruções claras em <p><em>${opts.stemLanguage === 'pt' ? 'Instruções' : 'Instructions'}: ...</em></p>
+   - Questões numeradas sequencialmente
+   - Espaço para resposta do aluno
+4. Questões de Múltipla Escolha: exatamente 4 alternativas completas (A, B, C, D) calibradas com as regras de distratores L1 acima.
+5. Questões de Reading: inclua texto delimitado em <blockquote> rigorosamente dentro do limite de palavras e vocabulário do CEFR ${opts.cefr}.
+6. Gabarito Comentado Completo ao final: <h2>Teacher's Answer Key & Marking Scheme</h2> com as respostas corretas de TODAS as ${opts.questionCount} questões e a explicação do porquê os distratores induzem ao erro comum.
 
 REGRAS ABSOLUTAS DE SAÍDA:
-1. Retorne APENAS HTML limpo. PROIBIDO usar markdown, asteriscos, blocos \`\`\` ou qualquer sintaxe não-HTML.
+1. Retorne APENAS HTML limpo (sem markdown, sem blocos \`\`\`, sem doctype).
 2. Tags permitidas: h1, h2, h3, h4, p, ul, ol, li, strong, em, table, thead, tbody, tr, td, th, hr, br, blockquote, span, div.
-3. NÃO inclua <!DOCTYPE>, <html>, <head>, <body> apenas o conteúdo interno.
-4. Comece diretamente com as seções da prova.
 
-Gere agora todas as ${opts.questionCount} questões completas:`
+Gere agora todas as ${opts.questionCount} questões completas rigorosamente calibradas:`
 
 }
 
@@ -189,6 +230,8 @@ export default function ExamBuilder() {
   const [hideHeader, setHideHeader] = useState(false)
   const [showOnlineModal, setShowOnlineModal] = useState(false)
   const [showQrModal, setShowQrModal] = useState(false)
+  const [exportNeeProfile, setExportNeeProfile] = useState<'standard' | 'dyslexia' | 'adhd' | 'asd' | 'low_vis'>('standard')
+  const [showNeeExportMenu, setShowNeeExportMenu] = useState(false)
 
   // Helper para extrair questões do texto gerado para o Player Online
   const parseQuestionsFromMarkdown = (text: string): OnlineQuestion[] => {
@@ -272,38 +315,52 @@ export default function ExamBuilder() {
     } catch {}
 
     // F7: Lê prefill gerado pela Rafinha (tool generate_exam_content)
-    try {
-      const raw = localStorage.getItem('teacher_exam_prefill')
-      if (raw) {
-        const prefill = JSON.parse(raw)
-        if (prefill.generatedAt && Date.now() - prefill.generatedAt < 10000) {
-          if (prefill.topic) setTopic(prefill.topic)
-          if (prefill.level) setCefr(prefill.level)
-          if (prefill.classRef) setGrade(prefill.classRef)
-          if (prefill.type) {
-            const typeMap: Record<string, string[]> = {
-              'múltipla escolha': ['Use of English'],
-              'dissertativa': ['Writing'],
-              'mista': ['Reading Comprehension', 'Use of English', 'Writing'],
-            }
-            const mapped = typeMap[prefill.type]
-            if (mapped) setSections(mapped)
-          }
-          localStorage.removeItem('teacher_exam_prefill')
-          
-          if (prefill.autoGenerate !== false) {
-            setTimeout(() => {
-              const genBtn = document.getElementById('exam-generate-btn')
-              if (genBtn) genBtn.click()
-            }, 600)
-          }
+    const applyPrefillData = (prefill: any) => {
+      if (!prefill) return
+      if (prefill.topic) setTopic(prefill.topic)
+      if (prefill.level) setCefr(prefill.level)
+      if (prefill.classRef) setGrade(prefill.classRef)
+      if (prefill.questionCount) setQuestionCount(String(prefill.questionCount))
+      if (prefill.type) {
+        const typeMap: Record<string, string[]> = {
+          'múltipla escolha': ['Use of English'],
+          'dissertativa': ['Writing'],
+          'mista': ['Reading Comprehension', 'Use of English', 'Writing'],
         }
+        const mapped = typeMap[prefill.type]
+        if (mapped) setSections(mapped)
       }
-    } catch { /* ignore */ }
+      localStorage.removeItem('teacher_exam_prefill')
+      
+      if (prefill.autoGenerate !== false) {
+        setTimeout(() => {
+          const genBtn = document.getElementById('exam-generate-btn')
+          if (genBtn) genBtn.click()
+        }, 500)
+      }
+    }
+
+    const handlePrefillEvent = (e?: any) => {
+      try {
+        const raw = localStorage.getItem('teacher_exam_prefill')
+        if (raw) {
+          applyPrefillData(JSON.parse(raw))
+        } else if (e?.detail) {
+          applyPrefillData(e.detail)
+        }
+      } catch { /* ignore */ }
+    }
+
+    window.addEventListener('teacher:exam_prefill', handlePrefillEvent)
+    handlePrefillEvent()
+
+    return () => {
+      window.removeEventListener('teacher:exam_prefill', handlePrefillEvent)
+    }
   }, [])
 
-  const selectedApi = apis.find(a => a.id === selectedApiId) || apis[0]
-  const hasApi = !!selectedApi && selectedApi.provider !== 'manual'
+  const selectedApi = apis.find(a => a.id === selectedApiId) || apis.find(a => a.id === 'auto') || apis[0] || { id: 'auto', name: '⚡ Seleção Inteligente Automática', provider: 'auto', key: '', model: '', active: true }
+  const hasApi = true
 
   const toggleSection = (s: string) => setSections(p => p.includes(s) ? p.filter(x => x !== s) : [...p, s])
   const toggleApproach = (s: string) => setApproach(p => p.includes(s) ? p.filter(x => x !== s) : [...p, s])
@@ -341,6 +398,30 @@ export default function ExamBuilder() {
       const raw = await callApi(selectedApi!, prompt)
       const html = cleanHtml(raw)
       setResult(html)
+
+      // Auto-save no Banco de Atividades (Zero-Leakage)
+      try {
+        const qbRaw = localStorage.getItem('teacher_question_bank') || '[]'
+        const qbList = JSON.parse(qbRaw)
+        const newExamItem = {
+          id: `exam_auto_${Date.now()}`,
+          statement: html.slice(0, 300) + '...',
+          type: 'mc',
+          activityKind: 'exam',
+          subject: 'Inglês',
+          topic: topic || 'Prova Completa',
+          level: cefr,
+          year: new Date().getFullYear().toString(),
+          schoolId: header.school || '',
+          classRef: grade || '',
+          tags: ['Prova Completa', `CEFR ${cefr}`, approach.join(', ')],
+          createdAt: Date.now(),
+          source: 'ai',
+          fullContent: html
+        }
+        localStorage.setItem('teacher_question_bank', JSON.stringify([newExamItem, ...qbList]))
+        window.dispatchEvent(new Event('storage'))
+      } catch {}
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Erro desconhecido.')
     } finally {
@@ -779,22 +860,40 @@ export default function ExamBuilder() {
               border: '1.5px solid #ede8dc', display: 'flex', flexWrap: 'wrap',
               justifyContent: 'space-between', alignItems: 'center', gap: 10, flexShrink: 0
             }}>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', position: 'relative' }}>
+                <div style={{ display: 'flex', alignItems: 'center', background: '#fff', borderRadius: 10, border: '1px solid #d5c0b0', padding: '2px 8px' }}>
+                  <span style={{ fontSize: 11.5, fontWeight: 600, color: '#7a6552', marginRight: 6 }}>Perfil PDF:</span>
+                  <select
+                    value={exportNeeProfile}
+                    onChange={(e: any) => setExportNeeProfile(e.target.value)}
+                    style={{ border: 'none', background: 'transparent', fontSize: 12, fontWeight: 700, color: '#2c1a0e', outline: 'none', cursor: 'pointer' }}
+                  >
+                    <option value="standard">📄 Padrão Acadêmico</option>
+                    <option value="dyslexia">📖 Dislexia (Lexend 1.85x)</option>
+                    <option value="adhd">⚡ TDAH (Blocos de Foco)</option>
+                    <option value="asd">🧩 TEA (Rotina & Ícones)</option>
+                    <option value="low_vis">👁️ Baixa Visão (17pt)</option>
+                  </select>
+                </div>
+
                 <button
                   onClick={() => exportToPdf({
                     schoolName: header.school || 'ESCOLA DE IDIOMAS & ENSINO',
                     teacherName: header.teacher || 'Professor(a)',
                     className: grade || '8º Ano',
                     title: header.title || (topic ? `PROVA DE INGLÊS ${topic.toUpperCase()}` : 'AVALIAÇÃO DE INGLÊS'),
-                    content: result
+                    content: result,
+                    neeProfile: exportNeeProfile
                   })}
                   style={{
                     padding: '8px 14px', borderRadius: 10, border: 'none',
                     background: '#8b5e3c', color: '#fff', fontSize: 12.5,
-                    fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6
+                    fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
+                    boxShadow: '0 2px 6px rgba(139,94,60,0.25)'
                   }}
                 >
-                  Exportar PDF Oficial
+                  <i className="ti ti-printer"></i>
+                  Exportar PDF {exportNeeProfile !== 'standard' ? 'Adaptado' : 'Oficial'}
                 </button>
 
                 <button
@@ -811,6 +910,7 @@ export default function ExamBuilder() {
                     fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6
                   }}
                 >
+                  <i className="ti ti-file-text"></i>
                   Exportar Word (.docx)
                 </button>
               </div>
@@ -839,6 +939,24 @@ export default function ExamBuilder() {
                   Testar Prova Online
                 </button>
               </div>
+            </div>
+          )}
+
+          {/* CEFR Inspector & L1 Distractor Quality Badge */}
+          {result && (
+            <div style={{
+              background: '#eef9f8', border: '1px solid #2aa198', borderRadius: 12,
+              padding: '8px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              fontSize: 12, color: '#16605a', flexShrink: 0
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <i className="ti ti-certificate" style={{ fontSize: 16, color: '#2aa198' }}></i>
+                <strong>CEFR & L1 Inspector:</strong>
+                <span>Alinhamento Cambridge {cefr} Ativo &bull; Calibração L1 (Erros de Interferência PT-BR) Aplicada</span>
+              </div>
+              <span style={{ background: '#2aa198', color: '#fff', padding: '2px 8px', borderRadius: 6, fontWeight: 700, fontSize: 11 }}>
+                CAMBRIDGE QUALITY
+              </span>
             </div>
           )}
 

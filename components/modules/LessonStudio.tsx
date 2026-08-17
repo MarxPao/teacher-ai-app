@@ -1,1011 +1,1085 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import DocumentCanvas from '@/components/DocumentCanvas'
 import { ApiConfig } from '@/components/modules/ApiManager'
-import SavedItemsDrawer, { saveItemToStorage, SavedItem } from '@/components/SavedItemsDrawer'
-import { exportToPdf, exportToWord } from '@/lib/exportUtils'
+import { exportToPdf, exportToWord, exportToExcel } from '@/lib/exportUtils'
+import { getStoredBnccSkills, getBnccSkillsForGrade, getClassPostponedSkills, saveClassPostponedSkills, BnccSkill } from '@/lib/bnccData'
+import { buildTeacherStylePromptDirective, updateTeacherProfileFromLessonPlan } from '@/lib/teacherProfile'
 
-
-interface MethodologyBox {
- id: string
- name: string
- tktModule: string
- icon: string
- badgeColor: string
- shortDesc: string
- stagesSnippet: string
- promptInstruction: string
+// ─── Tipos ───────────────────────────────────────────────────────────────────
+interface ClassRecord {
+  id: string
+  name: string
+  schoolId: string
+  subject?: string
+  year?: string
+  gradeYear?: string
 }
 
-const TKT_METHODOLOGY_BOXES: MethodologyBox[] = [
- {
- id: 'ppp',
- name: 'PPP (Presentation, Practice, Production)',
- tktModule: 'TKT M1 & M2',
- icon: 'ti-slideshow',
- badgeColor: '#268bd2',
- shortDesc: 'Abordagem clássica e estruturada para introdução e consolidação de gramática e vocabulário.',
- stagesSnippet: 'Lead-in Presentation (Context + Form) Controlled Practice Freer Production Feedback',
- promptInstruction: 'Estruture o roteiro de aula rigorosamente no modelo PPP: (1) Lead-in/Warm-up, (2) Presentation of Meaning, Form & Pronunciation (MFP), (3) Controlled Practice Activity, (4) Freer Production Activity, (5) Feedback & Delayed Error Correction.',
- },
- {
- id: 'tblt',
- name: 'TBLT (Task-Based Language Teaching)',
- tktModule: 'TKT M1 & M2',
- icon: 'ti-list-check',
- badgeColor: '#b58900',
- shortDesc: 'Aprendizagem orientada por tarefas reais, onde o foco linguístico surge da necessidade prática.',
- stagesSnippet: 'Pre-Task (Warm-up & Model) Task Cycle (Planning & Report) Language Focus & Analysis',
- promptInstruction: 'Estruture o roteiro de aula no ciclo TBLT: (1) Pre-Task (introdução ao tópico e ativação de vocabulário), (2) Task Cycle (alunos realizam a tarefa em duplas, preparam relatório e apresentam), (3) Language Focus (análise da linguagem usada e prática de aperfeiçoamento).',
- },
- {
- id: 'ttt',
- name: 'TTT (Test-Teach-Test)',
- tktModule: 'TKT M1 & M2',
- icon: 'ti-report-analytics',
- badgeColor: '#cb4b16',
- shortDesc: 'Diagnóstico inicial do conhecimento dos alunos para ensinar apenas o que necessita de intervenção.',
- stagesSnippet: 'Test 1 (Diagnostic Task) Teach (Targeted Input & Clarification) Test 2 (Consolidation Task)',
- promptInstruction: 'Estruture o roteiro no modelo Test-Teach-Test: (1) Test 1 - Tarefa diagnóstica sem explicação prévia, (2) Teach - Esclarecimento focado nas lacunas identificadas, (3) Test 2 - Nova tarefa para verificar a consolidação.',
- },
- {
- id: 'guided_discovery',
- name: 'Guided Discovery (Descoberta Guiada)',
- tktModule: 'TKT M1 & M3',
- icon: 'ti-bulb',
- badgeColor: '#2aa198',
- shortDesc: 'Alunos analisam exemplos autênticos e descobrem as regras gramaticais/léxicas autonomamente.',
- stagesSnippet: 'Exposure to Text Guided Questions (Noticing) Rule Elicitation Concept Check Practice',
- promptInstruction: 'Utilize Descoberta Guiada: forneça texto/exemplos contextuais, faça perguntas direcionadas de observação (Noticing Tasks), elicie a regra gramatical/léxica dos próprios alunos e aplique CCQs.',
- },
- {
- id: 'flipped',
- name: 'Sala de Aula Invertida (Flipped Classroom)',
- tktModule: 'TKT M2 & Metodologias Ativas',
- icon: 'ti-replace',
- badgeColor: '#6c71c4',
- shortDesc: 'Estudo autônomo prévio e uso do tempo presencial para tarefas colaborativas de alta cognição.',
- stagesSnippet: 'Pre-Class Prep Task In-Class Warm-up Q&A Collaborative Challenge Synthesis & Peer Assessment',
- promptInstruction: 'Divida o plano em: (1) Pre-Class Preparation (leitura/vídeo prévio), (2) In-Class Warm-up & Q&A, (3) In-Class Collaborative Challenge (trabalho em grupo de aplicação profunda), (4) Peer Feedback & Wrap-up.',
- },
- {
- id: 'lexical',
- name: 'Abordagem Léxica (Lexical Approach / Lewis)',
- tktModule: 'TKT M1',
- icon: 'ti-abc',
- badgeColor: '#d33682',
- shortDesc: 'Foco no ensino de blocos de linguagem (chunks, collocations e expressões prontas da vida real).',
- stagesSnippet: 'Chunk Identification Collocation Matching Personalised Drilling Fluency Task',
- promptInstruction: 'Aplique a Abordagem Léxica: destaque collocations, lexical chunks e expressões fixas. Crie tarefas de identificação de chunks em textos e exercícios de produção combinatória.',
- },
- {
- id: 'clil',
- name: 'CLIL (Content & Language Integrated Learning)',
- tktModule: 'TKT CLIL Specialist',
- icon: 'ti-world-latitude',
- badgeColor: '#859900',
- shortDesc: 'Ensino integrado de conteúdos acadêmicos (Ciências, História, Geografia) em língua inglesa.',
- stagesSnippet: 'Content Input (Text/Video) Scaffolding & Dual Aims Task & Processing Subject Synthesis',
- promptInstruction: 'Estruture como aula CLIL: integre um tema acadêmico (ex: Ciências, Geografia, História, Sustentabilidade) com objetivos duplos (Content Aim + Language Support Aim). Inclua suporte de andaimes (Scaffolding).',
- },
- {
- id: 'gamification',
- name: 'Gamificação (Gamified Learning)',
- tktModule: 'Metodologias Ativas & TKT M3',
- icon: 'ti-trophy',
- badgeColor: '#073642',
- shortDesc: 'Uso de mecânicas de jogos (pontuação, missões, níveis de desafio e conquistas em equipe).',
- stagesSnippet: 'Mission Briefing Level 1 (Easy Quest) Level 2 (Boss Challenge) XP Tally & Badges',
- promptInstruction: 'Incorpore Gamificação no roteiro: atribua pontos de XP por etapa, divida as fases em "Quests" (Fácil, Médio, Boss Level) e adicione um sistema de feedback imediato e insígnias.',
- },
-]
-
-const PROMPT_PRESETS = [
- {
- id: 'cinema',
- name: ' Cinema & Storytelling Imersivo',
- prompt: 'Seja uma consultora de roteiro cinematográfico! Traga ganchos narrativos de mistério, suspense ou ficção, transformando a aula em uma cena inesquecível de filme.',
- },
- {
- id: 'rpg',
- name: ' RPG & Gamificação Fora da Caixa',
- prompt: 'Aja como uma Game Designer Pedagógica! Crie dinâmicas de RPG de mesa, avatares, inventários de palavras e missões onde o erro é apenas uma perda de HP temporária.',
- },
- {
- id: 'philosophy',
- name: ' Dilemas Éticos & Debate Profundo',
- prompt: 'Seja uma provocadora de pensamento crítico! Proponha dilemas morais abstratos do século XXI que forcem os alunos a pensar alto e debater posições complexas em inglês.',
- },
- {
- id: 'arts',
- name: ' Artes, Metáforas & Sensorialidade',
- prompt: 'Utilize estímulos multisensoriais, metáforas poéticas, música, artes plásticas e imagens marcantes para introduzir conceitos gramaticais de forma orgânica.',
- },
- {
- id: 'sci_fi',
- name: ' Viagem no Tempo & STEAM',
- prompt: 'Imagine uma aula com elementos de ficção científica, viagens temporais, tecnologias futuristas e experimentos interativos para engajar a turma.',
- },
-]
-
-const CEFR_LEVELS = ['A1 (Beg)', 'A2 (Elem)', 'B1 (Inter)', 'B2 (Upper)', 'C1 (Adv)', 'C2 (Master)']
-const GRADES = ['5º Fund.', '6º Fund.', '7º Fund.', '8º Fund.', '9º Fund.', '1º Médio', '2º Médio', '3º Médio', 'Inglês Adultos / Idiomas']
-const DURATIONS = ['45 minutos', '50 minutos (Padrao)', '60 minutos', '90 minutos (Dupla)', '120 minutos']
-const MAIN_SKILLS = [
- 'Grammar & Structural Accuracy',
- 'Vocabulary & Lexical Chunks',
- 'Speaking & Conversational Fluency',
- 'Listening & Phonological Awareness',
- 'Reading & Critical Inference',
- 'Writing & Text Composition',
- 'Functional Language & Situational English',
-]
-
-interface CreativeMessage {
- id: string
- sender: 'user' | 'rafinha'
- text: string
- suggestedTopic?: string
- timestamp: string
+interface SchoolRecord {
+  id: string
+  name: string
 }
+
+interface LessonStage {
+  name: string
+  durationMin: number
+  teacherAction: string
+  studentAction: string
+  completed?: boolean
+}
+
+export interface LessonPlanDocument {
+  id: string
+  date: string
+  classId: string
+  className: string
+  schoolName: string
+  subject: string
+  topic: string
+  roomSpace: string // 'Sala de Aula' | 'Laboratório' | 'Pátio' | 'Biblioteca'
+  selectedSkills: Array<{ code: string; desc: string; status: 'planned' | 'covered' | 'postponed' }>
+  methodology: string
+  referenceMaterial: {
+    bookTitle: string
+    unit: string
+    pages: string
+  }
+  stages: LessonStage[]
+  guidingQuestions: string[]
+  homework: string
+  postLessonNotes: string
+  savedInBank?: boolean
+  savedInCalendar?: boolean
+  createdAt: number
+}
+
+const METHODOLOGY_PRESETS = [
+  { id: 'tblt', name: 'TBLT (Task-Based)', badge: '#b58900', desc: 'Foco em tarefas práticas reais (Pre-Task, Task Cycle, Language Focus)' },
+  { id: 'ppp', name: 'PPP (Presentation, Practice, Production)', badge: '#268bd2', desc: 'Estruturado para gramática e vocabulário MFP' },
+  { id: 'guided_discovery', name: 'Guided Discovery (Descoberta Guiada)', badge: '#2aa198', desc: 'Indução de regras através de exemplos e Noticing' },
+  { id: 'ttt', name: 'TTT (Test-Teach-Test)', badge: '#cb4b16', desc: 'Diagnóstico inicial para ensinar apenas as lacunas' },
+  { id: 'flipped', name: 'Sala de Aula Invertida (Flipped)', badge: '#6c71c4', desc: 'Estudo prévio e atividades de alta cognição em sala' },
+  { id: 'lexical', name: 'Abordagem Léxica (Lexical Approach)', badge: '#d33682', desc: 'Foco em chunks, collocations e expressões prontas' }
+]
+
+const DEFAULT_STAGES: LessonStage[] = [
+  { name: 'Warm-up / Lead-in', durationMin: 5, teacherAction: 'Ativar vocabulário prévio com imagem/pergunta', studentAction: 'Compartilhar opiniões rápidas em duplas', completed: false },
+  { name: 'Apresentação / Task Cycle', durationMin: 20, teacherAction: 'Introduzir o desafio e orientar a produção comunicativa', studentAction: 'Executar tarefa em pares/grupos usando a língua-alvo', completed: false },
+  { name: 'Prática Guiada / Análise', durationMin: 15, teacherAction: 'Esclarecer dúvidas e destacar estruturas linguísticas chave', studentAction: 'Resolver exercícios de consolidação e correção mútua', completed: false },
+  { name: 'Wrap-up & Feedback', durationMin: 10, teacherAction: 'Feedback coletivo de erros (Delayed Error Correction) e orientar Homework', studentAction: 'Registrar anotações e dúvidas no caderno', completed: false }
+]
 
 export default function LessonStudio() {
- // Mode State: 'brainstorm' (Co-Criação & Chat) | 'studio' (Formulário, Boxes & Canvas)
- const [mode, setMode] = useState<'brainstorm' | 'studio'>('brainstorm')
-
- // Form State
- const [topic, setTopic] = useState('')
- const [grade, setGrade] = useState('9º Fund.')
- const [cefr, setCefr] = useState('B1 (Inter)')
- const [duration, setDuration] = useState('50 minutos (Padrao)')
- const [skill, setSkill] = useState('Speaking & Conversational Fluency')
- const [selectedBoxIds, setSelectedBoxIds] = useState<string[]>(['ppp', 'flipped'])
-
- // Creative Persona & Calibration State
- const [selectedPresetId, setSelectedPresetId] = useState('cinema')
- const [customPersonaPrompt, setCustomPersonaPrompt] = useState(PROMPT_PRESETS[0].prompt)
- const [showCalibration, setShowCalibration] = useState(false)
-
- // Creative Chat State
- const [creativeMessages, setCreativeMessages] = useState<CreativeMessage[]>([
- {
- id: '1',
- sender: 'rafinha',
- text: 'Oi! Sou a Rafinha Bem-vindo ao nosso espaço de co-criação! Aqui a gente pode viajar, trocar ideias loucas, criar ganchos de cinema ou metáforas abstratas antes de fechar a aula. O que você quer inventar hoje com seus alunos?',
- timestamp: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
- }
- ])
- const [inputMessage, setInputMessage] = useState('')
- const [chatLoading, setChatLoading] = useState(false)
- const chatEndRef = useRef<HTMLDivElement>(null)
-
- // API & Document State
- const [apis, setApis] = useState<ApiConfig[]>([])
- const [selectedApiId, setSelectedApiId] = useState<string>('')
- const [loading, setLoading] = useState(false)
- const [resultHtml, setResultHtml] = useState('')
-
- // Saved Items State
- const [showSaved, setShowSaved] = useState(false)
- const [savedCount, setSavedCount] = useState(0)
-
- const updateSavedCount = () => {
- try {
- const items = JSON.parse(localStorage.getItem('teacher_saved_lessons') || '[]')
- setSavedCount(items.length)
- } catch { setSavedCount(0) }
- }
-
- useEffect(() => {
- updateSavedCount()
- window.addEventListener('storage', updateSavedCount)
- try {
- const { getAvailableApisForSelect } = require('@/lib/autoApiSelector')
- const allApis = getAvailableApisForSelect()
- setApis(allApis)
- if (allApis.length > 0) setSelectedApiId(allApis[0].id)
- } catch {}
-
- // F8: Lê prefill enviado pela Rafinha (tool create_full_lesson)
- try {
- const prefillRaw = localStorage.getItem('teacher_lessonstudio_prefill')
- if (prefillRaw) {
- const prefill = JSON.parse(prefillRaw)
- if (prefill.generatedAt && Date.now() - prefill.generatedAt < 10000) {
- if (prefill.topic) setTopic(prefill.topic)
- if (prefill.grade) setGrade(prefill.grade)
- if (prefill.cefr) setCefr(prefill.cefr)
- if (prefill.duration) setDuration(prefill.duration)
- localStorage.removeItem('teacher_lessonstudio_prefill')
- }
- }
- } catch { /* ignore */ }
-
- return () => window.removeEventListener('storage', updateSavedCount)
- }, [])
-
-
- useEffect(() => {
- chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
- }, [creativeMessages])
-
- const toggleBox = (id: string) => {
- setSelectedBoxIds(prev =>
- prev.includes(id) ? (prev.length > 1 ? prev.filter(x => x !== id) : prev) : [...prev, id]
- )
- }
-
- const handleSelectPreset = (presetId: string) => {
- const found = PROMPT_PRESETS.find(p => p.id === presetId)
- if (found) {
- setSelectedPresetId(presetId)
- setCustomPersonaPrompt(found.prompt)
- }
- }
-
- // Enviar mensagem no Chat Criativo de Brainstorming
- async function handleSendCreativeMessage() {
- if (!inputMessage.trim() || chatLoading) return
- const userText = inputMessage.trim()
- setInputMessage('')
-
- const userMsg: CreativeMessage = {
- id: Date.now().toString(),
- sender: 'user',
- text: userText,
- timestamp: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
- }
- setCreativeMessages(prev => [...prev, userMsg])
- setChatLoading(true)
-
- const systemPrompt = `Você é a Rafinha em MODO CO-CRIADORA E BRAINSTORMER CRIATIVA DE AULAS DE INGLÊS.
-Seu objetivo é trocar ideias de forma abstrata, aberta, viajada, inspiradora e entusiasmada com o professor de inglês!
-NÃO responda de forma rígida ou formal. Traga metáforas visuais, ganchos narrativos, dinâmicas de sala fora da caixa, jogos mentais e provocação pedagógica.
-
-DIRETRIZ DE CALIBRAGEM PERSONALIZADA DEFINIDA PELO PROFESSOR:
-"${customPersonaPrompt}"
-
-SE O PROFESSOR SEGESTIONAR UM TÓPICO OU TEMA (ex: Past Perfect, viagens, comida, IA), abra a mente e proponha 3 ideias super criativas e diferentonas para a aula!
-No final da resposta, se um tópico for claro, inclua uma linha isolada no formato:
-"[SUGGESTED_TOPIC: Nome do Tópico Sugerido]"`
-
- try {
- const api = apis.find(a => a.id === selectedApiId)
- let replyText = ''
-
- if (api && (api.provider === 'openai' || api.provider === 'deepseek')) {
- const baseUrl = api.provider === 'deepseek' ? 'https://api.deepseek.com/v1/chat/completions' : 'https://api.openai.com/v1/chat/completions'
- const r = await fetch(baseUrl, {
- method: 'POST',
- headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${api.key}` },
- body: JSON.stringify({
- model: api.model,
- messages: [
- { role: 'system', content: systemPrompt },
- ...creativeMessages.map(m => ({ role: m.sender === 'user' ? 'user' : 'assistant', content: m.text })),
- { role: 'user', content: userText }
- ]
- })
- })
- const d = await r.json()
- replyText = d.choices?.[0]?.message?.content || ''
- } else {
- const r = await fetch('/api/agent', {
- method: 'POST',
- headers: { 'Content-Type': 'application/json' },
- body: JSON.stringify({
- messages: [
- { role: 'system', content: systemPrompt },
- ...creativeMessages.map(m => ({ role: m.sender === 'user' ? 'user' : 'assistant', content: m.text })),
- { role: 'user', content: userText }
- ],
- context: 'lessonstudio',
- provider: api?.provider || 'manual',
- userKey: api?.key || '',
- model: api?.model || ''
- })
- })
- const d = await r.json()
- replyText = d.response || d.text || 'Que ideia fantástica! Vamos pensar em como transformar isso em uma experiência inesquecível para os alunos.'
- }
-
- // Extrai tópico sugerido se houver
- let extractedTopic = ''
- const topicMatch = replyText.match(/\[SUGGESTED_TOPIC:\s*([^\]]+)\]/)
- if (topicMatch) {
- extractedTopic = topicMatch[1].trim()
- replyText = replyText.replace(/\[SUGGESTED_TOPIC:\s*([^\]]+)\]/, '').trim()
- }
-
- const rafinhaMsg: CreativeMessage = {
- id: (Date.now() + 1).toString(),
- sender: 'rafinha',
- text: replyText,
- suggestedTopic: extractedTopic || userText.slice(0, 40),
- timestamp: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
- }
- setCreativeMessages(prev => [...prev, rafinhaMsg])
- } catch {
- setCreativeMessages(prev => [...prev, {
- id: Date.now().toString(),
- sender: 'rafinha',
- text: 'Nossa, amei essa direção! O que acha de a gente conectar isso com um desafio em duplas onde os alunos criam a resolução em formato de story?',
- timestamp: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
- }])
- } finally {
- setChatLoading(false)
- }
- }
-
- // Transforma uma ideia do chat no Roteiro Timed TKT Completo
- function handleUseIdeaForLesson(suggestedTopic: string) {
- setTopic(suggestedTopic)
- setMode('studio')
- handleGenerateLessonWithTopic(suggestedTopic)
- }
-
- async function handleGenerateLessonWithTopic(overrideTopic?: string) {
- const finalTopic = overrideTopic || topic
- if (!selectedBoxIds.length) {
- alert('Selecione pelo menos uma metodologia em Box para a aula.')
- return
- }
- setLoading(true)
- setResultHtml('')
-
- const chosenBoxes = TKT_METHODOLOGY_BOXES.filter(b => selectedBoxIds.includes(b.id))
- const boxNames = chosenBoxes.map(b => b.name).join(', ')
- const boxInstructions = chosenBoxes.map(b => `- **${b.name}**: ${b.promptInstruction}`).join('\n')
-
- const prompt = `Você é um Master Trainer especialista em metodologia de ensino de inglês credenciado pela Cambridge English (TKT Modules 1, 2 e 3 / CELTA) com sensibilidade altamente criativa.
-Crie um PLANO DE AULA COMPLETO, ROTEIRO DE AULA PASSO A PASSO EM TABELA E GUIA PEDAGÓGICO DE REGÊNCIA com as especificações abaixo.
-
-CALIBRAGEM CRIATIVA / PERSONALIDADE:
-"${customPersonaPrompt}"
-
-ESPECIFICAÇÕES DA AULA:
-- Tópico da Aula: ${finalTopic || 'Past Simple vs Present Perfect in Authentic Contexts'}
-- Público/Série: ${grade}
-- Nível CEFR: ${cefr}
-- Duração Total: ${duration}
-- Habilidade Foco: ${skill}
-- Metodologias Escolhidas: ${boxNames}
-
-INSTRUÇÕES DAS METODOLOGIAS SELECIONADAS:
-${boxInstructions}
-
-ESTRUTURA OBRIGATÓRIA DA RESPOSTA (GERE EM HTML LIMPO PARA EXIBIÇÃO EM CANVAS):
-
-<h1> PLANO DE AULA & ROTEIRO CRIATIVO (CAMBRIDGE TKT STANDARD)</h1>
-<p><strong>Tópico:</strong> ${finalTopic || 'General Topic'} | <strong>Nível:</strong> ${cefr} | <strong>Duração:</strong> ${duration} | <strong>Público:</strong> ${grade}</p>
-
-<h2>1. METADADOS & OBJETIVOS DO PLANO DE AULA (TKT Module 2)</h2>
-<ul>
- <li><strong>Main Aim (Objetivo Principal):</strong> Defina claramente o que os alunos serão capazes de fazer até o final da aula.</li>
- <li><strong>Subsidiary Aims (Objetivos Secundários):</strong> Estruturas gramaticais, vocabulário e sub-habilidades de suporte.</li>
- <li><strong>Personal Teacher Aim (Objetivo do Professor):</strong> Prática de regência TKT (ex: Reduzir TTT, aprimorar ICQs/CCQs, gerenciar tempo).</li>
- <li><strong>Target Language & Vocabulary:</strong> Lista de estruturas-chave e chunks.</li>
- <li><strong>Assumed Knowledge (Conhecimentos Prévios):</strong> O que os alunos já dominam antes da aula.</li>
-</ul>
-
-<h3> Anticipated Problems & Solutions (TKT Problem Analysis)</h3>
-<table border="1" cellpadding="8" cellspacing="0" style="width:100%; border-collapse:collapse; margin-bottom:20px;">
- <tr style="background:#073642; color:#fff;">
- <th>Área (Linguagem / Gestão / Técnica)</th>
- <th>Problema Antecipado</th>
- <th>Solução Pedagógica Planejada (TKT Strategy)</th>
- </tr>
- <tr>
- <td>Linguagem / Pronúncia</td>
- <td>Ex: Dificuldade na pronúncia do som /θ/ ou confusão entre L1 e L2.</td>
- <td>Modelagem de boca, drill coral/individual e par mínimo.</td>
- </tr>
- <tr>
- <td>Gestão de Sala / Ritmo</td>
- <td>Ex: Alunos mais rápidos terminam a prática controlada antes.</td>
- <td>Fornecer Fast-Finisher Activity (desafio de extensão no verso).</td>
- </tr>
-</table>
-
-<h2>2. ROTEIRO DE AULA PASSO A PASSO COM MARCAÇÃO DE TEMPO (TKT Stage Table)</h2>
-<table border="1" cellpadding="8" cellspacing="0" style="width:100%; border-collapse:collapse; margin-bottom:24px;">
- <thead>
- <tr style="background:#073642; color:#fff;">
- <th style="width:15%">Etapa & Objetivo</th>
- <th style="width:10%">Tempo</th>
- <th style="width:12%">Interação</th>
- <th style="width:25%">Ação do Professor (Teacher Procedure)</th>
- <th style="width:23%">Ação dos Alunos (Student Procedure)</th>
- <th style="width:15%">Técnicas TKT (CCQs / ICQs)</th>
- </tr>
- </thead>
- <tbody>
- <!-- Inclua de 4 a 6 etapas detalhadas correspondentes às metodologias escolhidas -->
- </tbody>
-</table>
-
-<h2>3. GUIA DE REGÊNCIA & TÉCNICAS DE SALA DE AULA (TKT Module 3)</h2>
-<ul>
- <li><strong>Condução da Sensibilização (Lead-in / Hook Criativo):</strong> Gancho instigante para a aula.</li>
- <li><strong>Checagem de Instrução (ICQs):</strong> Perguntas para verificar o entendimento das regras da atividade.</li>
- <li><strong>Checagem de Conceito (CCQs):</strong> Perguntas para testar a compreensão do significado gramatical/léxico.</li>
- <li><strong>Plano de Lousa (Board Plan Setup):</strong> Organização visual da lousa.</li>
- <li><strong>Estratégia de Correção de Erros:</strong> Feedback imediato vs Delayed Error Correction.</li>
- <li><strong>Atividade de Extensão / Homework:</strong> Tarefa para casa.</li>
-</ul>
-
-Gere o HTML completo agora:`
-
- try {
- const api = apis.find(a => a.id === selectedApiId) || apis[0] || null
- const { executeUnifiedAiCall } = await import('@/lib/autoApiSelector')
- const text = await executeUnifiedAiCall(api, prompt)
-
- const cleanHtml = text.replace(/^```html\n?/, '').replace(/```$/, '').trim()
- setResultHtml(cleanHtml)
- } catch (e: any) {
- alert(`Erro ao gerar aula: ${e.message}`)
- } finally {
- setLoading(false)
- }
- }
-
- function handleSaveLesson() {
- if (!resultHtml) { alert('Gere uma aula primeiro.'); return }
- const saved = saveItemToStorage('teacher_saved_lessons', {
- title: topic ? `Aula ${topic}` : `Plano de Aula (${cefr})`,
- subtitle: `${cefr} · ${grade} · ${duration}`,
- content: resultHtml,
- })
- if (saved) {
- updateSavedCount()
- alert(' Aula salva com sucesso em "Aulas Salvas"!')
- }
- }
-
- function handleOpenInEditor() {
- if (!resultHtml) return
- localStorage.setItem('teacher_editor_prefill', JSON.stringify({
- title: topic ? `Plano de Aula ${topic}` : `Plano de Aula Cambridge TKT`,
- content: resultHtml,
- school: '',
- }))
- window.dispatchEvent(new Event('teacher:editor_prefill'))
- alert(' Aula enviada para o Editor Word! Navegando...')
- }
-
- return (
- <div style={{ padding: '32px 40px', height: '100%', display: 'flex', flexDirection: 'column', maxWidth: 1650, margin: '0 auto', boxSizing: 'border-box', width: '100%' }}>
- {/* Top Header & Tab Mode Switcher */}
- <div style={{ marginBottom: 24, display: "flex", flexDirection: "column", alignItems: "center", gap: 16, flexWrap: 'wrap' }}>
- <div>
- <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
- <h1 style={{  textAlign: 'center', fontFamily: "'Fraunces', Georgia, serif", fontSize: 32, fontWeight: 600, color: '#2c1a0e', margin: '0 auto'  }}>
- Criar Aula & Co-Criação
- </h1>
- <span style={{ background: '#073642', color: '#b58900', fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 12, textTransform: 'uppercase', letterSpacing: '0.8px' }}>
- Cambridge TKT & Studio Criativo
- </span>
- </div>
- <p style={{ color: '#586e75', fontSize: 13, marginTop: 4, margin: 0 }}>
- Troque ideias abstratas com a Rafinha, calibre personas e gere roteiros pedagógicos em tabelas timed.
- </p>
- </div>
-
- {/* Tab Selector */}
- <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
- <div style={{ background: '#eee8d5', padding: 4, borderRadius: 14, display: 'flex', gap: 4 }}>
- <button
- onClick={() => setMode('brainstorm')}
- style={{
- padding: '8px 16px', borderRadius: 10, border: 'none',
- background: mode === 'brainstorm' ? '#073642' : 'transparent',
- color: mode === 'brainstorm' ? '#fff' : '#586e75',
- fontSize: 13, fontWeight: 700, cursor: 'pointer',
- display: 'flex', alignItems: 'center', gap: 6, transition: 'all 0.15s',
- }}
- >
- <i className="ti ti-palette" /> Co-Criação & Brainstorm
- </button>
- <button
- onClick={() => setMode('studio')}
- style={{
- padding: '8px 16px', borderRadius: 10, border: 'none',
- background: mode === 'studio' ? '#073642' : 'transparent',
- color: mode === 'studio' ? '#fff' : '#586e75',
- fontSize: 13, fontWeight: 700, cursor: 'pointer',
- display: 'flex', alignItems: 'center', gap: 6, transition: 'all 0.15s',
- }}
- >
- <i className="ti ti-layout-grid" /> Boxes & Canvas TKT
- </button>
- </div>
-
- <button
- onClick={() => setShowSaved(true)}
- style={{
- padding: '9px 16px', borderRadius: 12, border: '1px solid #8b5e3c',
- background: '#fdf9f3', color: '#073642', fontSize: 13, fontWeight: 700,
- cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
- }}
- >
- <i className="ti ti-bookmark" style={{ color: '#b58900' }} /> Salvos ({savedCount})
- </button>
- </div>
- </div>
-
- {/* PROMPT CALIBRATION PANEL (EXPANDABLE) */}
- <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #ede8dc', marginBottom: 20, overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,43,54,0.03)' }}>
- <div
- onClick={() => setShowCalibration(!showCalibration)}
- style={{
- padding: '12px 18px', background: '#fdf9f3', cursor: 'pointer',
- display: 'flex', justifyContent: 'space-between', alignItems: 'center',
- borderBottom: showCalibration ? '1px solid #ede8dc' : 'none',
- }}
- >
- <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
- <i className="ti ti-adjustments" style={{ color: '#b58900', fontSize: 18 }} />
- <span style={{ fontSize: 13, fontWeight: 700, color: '#073642' }}>
- Calibragem Criativa do Prompt & Persona da Rafinha
- </span>
- <span style={{ fontSize: 11, color: '#93a1a1' }}>
- (Ajuste o tom abstrato, metáforas e estilo de co-criação)
- </span>
- </div>
- <i className={`ti ${showCalibration ? 'ti-chevron-up' : 'ti-chevron-down'}`} style={{ color: '#93a1a1' }} />
- </div>
-
- {showCalibration && (
- <div style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 14 }}>
- <div>
- <span style={{ fontSize: 11, fontWeight: 700, color: '#586e75', textTransform: 'uppercase', display: 'block', marginBottom: 8 }}>
- Presets de Estilo Criativo:
- </span>
- <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
- {PROMPT_PRESETS.map(p => {
- const active = selectedPresetId === p.id
- return (
- <button
- key={p.id}
- onClick={() => handleSelectPreset(p.id)}
- style={{
- padding: '6px 12px', borderRadius: 20,
- border: active ? '1.5px solid #073642' : '1px solid #e8e0d0',
- background: active ? '#073642' : '#f5f0e8',
- color: active ? '#fff' : '#586e75',
- fontSize: 12, fontWeight: 600, cursor: 'pointer',
- }}
- >
- {p.name}
- </button>
- )
- })}
- </div>
- </div>
-
- <div>
- <label style={{ fontSize: 12, fontWeight: 600, color: '#586e75', display: 'block', marginBottom: 4 }}>
- Diretriz de Calibragem (Edite como quiser):
- </label>
- <textarea
- rows={2}
- value={customPersonaPrompt}
- onChange={e => setCustomPersonaPrompt(e.target.value)}
- style={{
- width: '100%', padding: '10px', borderRadius: 10,
- border: '1px solid #e8e0d0', background: '#fdf6e3',
- fontSize: 12.5, outline: 'none', color: '#073642',
- fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box',
- }}
- />
- </div>
- </div>
- )}
- </div>
-
- {/* MODE 1: BRAINSTORMING & CO-CREATION CHAT STUDIO */}
- {mode === 'brainstorm' && (
- <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'minmax(320px, 380px) 1fr', gap: 24, minHeight: 0 }}>
- {/* Quick Parameters for Brainstorm */}
- <div style={{ background: '#fff', borderRadius: 18, padding: 20, border: '1px solid #ede8dc', display: 'flex', flexDirection: 'column', gap: 14, overflowY: 'auto' }}>
- <h3 style={{ fontSize: 15, fontWeight: 700, color: '#073642', margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
- <i className="ti ti-adjustments-horizontal" style={{ color: '#268bd2' }} /> Parâmetros da Aula
- </h3>
-
- <div>
- <label style={{ fontSize: 12, fontWeight: 600, color: '#586e75', display: 'block', marginBottom: 4 }}> Tópico da Aula</label>
- <input
- value={topic}
- onChange={e => setTopic(e.target.value)}
- placeholder="Ex: Travel Stories, Viagem no Tempo..."
- style={{ width: '100%', padding: '9px 12px', borderRadius: 10, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, outline: 'none', color: '#073642', boxSizing: 'border-box' }}
- />
- </div>
-
- <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
- <div>
- <label style={{ fontSize: 11, fontWeight: 600, color: '#586e75', display: 'block', marginBottom: 4 }}> Série</label>
- <select value={grade} onChange={e => setGrade(e.target.value)} style={{ width: '100%', padding: '8px', borderRadius: 8, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 12, color: '#073642' }}>
- {GRADES.map(g => <option key={g}>{g}</option>)}
- </select>
- </div>
- <div>
- <label style={{ fontSize: 11, fontWeight: 600, color: '#586e75', display: 'block', marginBottom: 4 }}> CEFR</label>
- <select value={cefr} onChange={e => setCefr(e.target.value)} style={{ width: '100%', padding: '8px', borderRadius: 8, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 12, color: '#073642' }}>
- {CEFR_LEVELS.map(c => <option key={c}>{c}</option>)}
- </select>
- </div>
- </div>
-
- <div>
- <label style={{ fontSize: 11, fontWeight: 600, color: '#586e75', display: 'block', marginBottom: 4 }}> Habilidade</label>
- <select value={skill} onChange={e => setSkill(e.target.value)} style={{ width: '100%', padding: '8px', borderRadius: 8, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 12, color: '#073642' }}>
- {MAIN_SKILLS.map(s => <option key={s}>{s}</option>)}
- </select>
- </div>
-
- <div style={{ marginTop: 10, padding: 12, background: '#fdf6e3', borderRadius: 12, border: '1px solid rgba(181,137,0,0.2)' }}>
- <span style={{ fontSize: 11, fontWeight: 700, color: '#b58900', display: 'block', marginBottom: 4 }}>
- Dica de Co-Criação:
- </span>
- <p style={{ fontSize: 11.5, color: '#586e75', margin: 0, lineHeight: 1.4 }}>
- Pergunte à Rafinha: <em>"Como posso explicar Present Perfect usando uma metáfora visual de mochila de viagem?"</em> ou <em>"Me dê 3 ganchos de cinema para abrir essa aula."</em>
- </p>
- </div>
-
- <button
- onClick={() => { setMode('studio'); handleGenerateLessonWithTopic() }}
- style={{
- marginTop: 'auto', padding: '12px', borderRadius: 12,
- background: '#073642', color: '#fff', fontSize: 13, fontWeight: 700,
- border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6
- }}
- >
- <i className="ti ti-arrow-right" /> Ir para Roteiro & Canvas TKT
- </button>
- </div>
-
- {/* CREATIVE CHAT WINDOW */}
- <div style={{ background: '#fff', borderRadius: 18, border: '1px solid #ede8dc', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 4px 20px rgba(0,43,54,0.04)' }}>
- {/* Chat Messages */}
- <div style={{ flex: 1, padding: 20, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 14 }}>
- {creativeMessages.map(msg => (
- <div
- key={msg.id}
- style={{
- display: 'flex', flexDirection: 'column',
- alignItems: msg.sender === 'user' ? 'flex-end' : 'flex-start',
- }}
- >
- <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
- <span style={{ fontSize: 11, fontWeight: 700, color: msg.sender === 'user' ? '#073642' : '#b58900' }}>
- {msg.sender === 'user' ? 'Você' : 'Rafinha (Co-Criadora)'}
- </span>
- <span style={{ fontSize: 10, color: '#93a1a1' }}>{msg.timestamp}</span>
- </div>
-
- <div
- style={{
- maxWidth: '85%', padding: '12px 16px', borderRadius: 16,
- background: msg.sender === 'user' ? '#073642' : '#fdf6e3',
- color: msg.sender === 'user' ? '#fff' : '#073642',
- border: msg.sender === 'user' ? 'none' : '1px solid #ede8dc',
- fontSize: 13.5, lineHeight: 1.5, whiteSpace: 'pre-wrap',
- boxShadow: '0 2px 8px rgba(0,43,54,0.03)',
- }}
- >
- {msg.text}
-
- {msg.sender === 'rafinha' && msg.suggestedTopic && (
- <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px dashed #d3cbbd', display: 'flex', justifyContent: 'flex-end' }}>
- <button
- onClick={() => handleUseIdeaForLesson(msg.suggestedTopic!)}
- style={{
- padding: '6px 12px', borderRadius: 10, border: 'none',
- background: '#8b5e3c', color: '#fff', fontSize: 11.5,
- fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6
- }}
- >
- <i className="ti ti-sparkles" /> Usar esta Ideia no Roteiro TKT
- </button>
- </div>
- )}
- </div>
- </div>
- ))}
- {chatLoading && (
- <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#93a1a1', fontSize: 12 }}>
- <i className="ti ti-loader" style={{ animation: 'spin 1s linear infinite' }} /> Rafinha viajando na ideia...
- </div>
- )}
- <div ref={chatEndRef} />
- </div>
-
- {/* Input Bar */}
- <div style={{ padding: 14, background: '#eee8d5', borderTop: '1px solid #e4ddd0', display: 'flex', gap: 10 }}>
- <input
- value={inputMessage}
- onChange={e => setInputMessage(e.target.value)}
- onKeyDown={e => e.key === 'Enter' && handleSendCreativeMessage()}
- placeholder="Ex: Rafinha, me dê um gancho de suspense para a aula de Present Perfect..."
- style={{
- flex: 1, padding: '12px 16px', borderRadius: 12, border: '1px solid #d3cbbd',
- background: '#fff', fontSize: 13.5, outline: 'none', color: '#2c1a0e',
- }}
- />
- <button
- onClick={handleSendCreativeMessage}
- disabled={chatLoading}
- style={{
- padding: '0 20px', borderRadius: 12, border: 'none',
- background: '#073642', color: '#fff', fontSize: 14, fontWeight: 700,
- cursor: chatLoading ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: 6,
- }}
- >
- <i className="ti ti-send" /> Enviar
- </button>
- </div>
- </div>
- </div>
- )}
-
- {/* MODE 2: FORM BOXES & TIMED TABLE CANVAS STUDIO */}
- {mode === 'studio' && (
- <div style={{ display: 'grid', gridTemplateColumns: 'minmax(420px, 480px) 1fr', gap: 28, flex: 1, minHeight: 0 }}>
- {/* LEFT COLUMN: PARAMETERS & METHODOLOGY BOX CARDS */}
- <div style={{ overflowY: 'auto', paddingRight: 6, paddingBottom: 32, display: 'flex', flexDirection: 'column', gap: 20 }}>
- 
- {/* Main Inputs */}
- <div style={{ background: '#fff', borderRadius: 18, padding: 20, border: '1px solid #ede8dc', boxShadow: '0 2px 10px rgba(0,43,54,0.04)', display: 'flex', flexDirection: 'column', gap: 14 }}>
- <div>
- <label style={{ fontSize: 13, fontWeight: 700, color: '#073642', display: 'block', marginBottom: 6 }}>
- Tópico ou Conteúdo Central da Aula
- </label>
- <input
- value={topic}
- onChange={e => setTopic(e.target.value)}
- placeholder="Ex: Present Perfect vs Past Simple through Storytelling..."
- style={{
- width: '100%', padding: '10px 14px', borderRadius: 10,
- border: '1px solid #e8e0d0', background: '#f5f0e8',
- fontSize: 14, outline: 'none', color: '#073642', boxSizing: 'border-box',
- }}
- />
- </div>
-
- <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
- <div>
- <label style={{ fontSize: 12, fontWeight: 600, color: '#586e75', display: 'block', marginBottom: 4 }}> Ano / Série</label>
- <select value={grade} onChange={e => setGrade(e.target.value)} style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, color: '#073642' }}>
- {GRADES.map(g => <option key={g}>{g}</option>)}
- </select>
- </div>
-
- <div>
- <label style={{ fontSize: 12, fontWeight: 600, color: '#586e75', display: 'block', marginBottom: 4 }}> Nível CEFR</label>
- <select value={cefr} onChange={e => setCefr(e.target.value)} style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, color: '#073642' }}>
- {CEFR_LEVELS.map(c => <option key={c}>{c}</option>)}
- </select>
- </div>
- </div>
-
- <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
- <div>
- <label style={{ fontSize: 12, fontWeight: 600, color: '#586e75', display: 'block', marginBottom: 4 }}> Duração da Aula</label>
- <select value={duration} onChange={e => setDuration(e.target.value)} style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, color: '#073642' }}>
- {DURATIONS.map(d => <option key={d}>{d}</option>)}
- </select>
- </div>
-
- <div>
- <label style={{ fontSize: 12, fontWeight: 600, color: '#586e75', display: 'block', marginBottom: 4 }}> Habilidade Principal</label>
- <select value={skill} onChange={e => setSkill(e.target.value)} style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, color: '#073642' }}>
- {MAIN_SKILLS.map(s => <option key={s}>{s}</option>)}
- </select>
- </div>
- </div>
- </div>
-
- {/* METHODOLOGY SELECTION IN BOXES */}
- <div style={{ background: '#fff', borderRadius: 18, padding: 20, border: '1px solid #ede8dc', boxShadow: '0 2px 10px rgba(0,43,54,0.04)' }}>
- <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
- <div>
- <span style={{ fontSize: 13, fontWeight: 700, color: '#073642', display: 'block' }}>
- Seleção de Metodologias em Box
- </span>
- <span style={{ fontSize: 11, color: '#93a1a1' }}>
- Escolha uma ou mais metodologias para estruturar as etapas da aula
- </span>
- </div>
- <span style={{ fontSize: 11, fontWeight: 700, color: '#b58900', background: '#fdf6e3', padding: '3px 8px', borderRadius: 8 }}>
- {selectedBoxIds.length} selecionada(s)
- </span>
- </div>
-
- <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
- {TKT_METHODOLOGY_BOXES.map(box => {
- const selected = selectedBoxIds.includes(box.id)
- return (
- <div
- key={box.id}
- onClick={() => toggleBox(box.id)}
- style={{
- padding: '12px 14px', borderRadius: 14,
- border: selected ? `2px solid ${box.badgeColor}` : '1px solid #ede8dc',
- background: selected ? '#fdf9f3' : '#faf8f5',
- cursor: 'pointer', transition: 'all 0.15s',
- display: 'flex', flexDirection: 'column', gap: 6,
- boxShadow: selected ? '0 4px 12px rgba(7,54,66,0.06)' : 'none',
- }}
- >
- <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
- <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
- <div style={{
- width: 24, height: 24, borderRadius: 6,
- background: selected ? box.badgeColor : '#e4ddd0',
- color: selected ? '#fff' : '#586e75',
- display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12,
- }}>
- <i className={`ti ${box.icon}`} />
- </div>
- <span style={{ fontSize: 13, fontWeight: 700, color: '#073642' }}>
- {box.name}
- </span>
- </div>
-
- <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
- <span style={{ fontSize: 10, fontWeight: 600, color: box.badgeColor, background: '#fff', border: `1px solid ${box.badgeColor}`, padding: '2px 6px', borderRadius: 6 }}>
- {box.tktModule}
- </span>
- <input
- type="checkbox"
- checked={selected}
- onChange={() => {}}
- style={{ accentColor: box.badgeColor, cursor: 'pointer' }}
- />
- </div>
- </div>
-
- <p style={{ fontSize: 11, color: '#586e75', margin: 0, lineHeight: 1.4 }}>
- {box.shortDesc}
- </p>
-
- <div style={{ fontSize: 10, fontFamily: 'monospace', color: '#93a1a1', background: '#fff', padding: '4px 8px', borderRadius: 6, border: '1px solid #eee8d5' }}>
- {box.stagesSnippet}
- </div>
- </div>
- )
- })}
- </div>
- </div>
-
- {/* AI Selector & Generate Button */}
- <div style={{ background: '#fff', borderRadius: 18, padding: 18, border: '1px solid #ede8dc', display: 'flex', flexDirection: 'column', gap: 12 }}>
- <div>
- <label style={{ fontSize: 12, fontWeight: 600, color: '#586e75', display: 'block', marginBottom: 4 }}> IA para Construção</label>
- <select
- value={selectedApiId}
- onChange={e => setSelectedApiId(e.target.value)}
- style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, color: '#073642' }}
- >
- {apis.length === 0 ? <option value="auto">Modo AUTO (DeepSeek / Groq)</option> : apis.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
- </select>
- </div>
-
- <button
- onClick={() => handleGenerateLessonWithTopic()}
- disabled={loading}
- style={{
- padding: '14px', borderRadius: 14,
- background: loading ? '#93a1a1' : '#073642',
- color: '#fff', fontSize: 15, fontWeight: 700,
- border: 'none', cursor: loading ? 'not-allowed' : 'pointer',
- display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
- boxShadow: '0 4px 16px rgba(7,54,66,0.2)', fontFamily: 'inherit',
- }}
- >
- <i className={loading ? 'ti ti-loader' : 'ti ti-sparkles'} style={{ fontSize: 18, animation: loading ? 'spin 1s linear infinite' : 'none' }} />
- {loading ? 'Construindo Roteiro TKT...' : ' Gerar Aula Completa TKT'}
- </button>
- </div>
- </div>
-
- {/* RIGHT COLUMN: DOCUMENT CANVAS DISPLAY */}
- <div style={{ display: 'flex', flexDirection: 'column', gap: 12, flex: 1, minHeight: 0 }}>
- {/* Header Action Bar when Result is ready */}
- {resultHtml && (
- <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, background: '#fff', padding: '10px 16px', borderRadius: 14, border: '1px solid #ede8dc', flexWrap: 'wrap' }}>
- <button
- onClick={() => exportToPdf({
- title: `PLANO DE AULA TKT ${topic.toUpperCase() || 'LÍNGUA INGLESA'}`,
- className: cefr || 'B1-B2',
- content: resultHtml,
- showStudentNameBox: false
- })}
- style={{
- padding: '8px 14px', borderRadius: 10, border: 'none',
- background: '#8b5e3c', color: '#fff', fontSize: 12.5,
- fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
- }}
- >
- Exportar PDF Oficial
- </button>
- <button
- onClick={() => exportToWord({
- title: `PLANO DE AULA TKT ${topic.toUpperCase() || 'LÍNGUA INGLESA'}`,
- className: cefr || 'B1-B2',
- content: resultHtml,
- showStudentNameBox: false
- })}
- style={{
- padding: '8px 14px', borderRadius: 10, border: '1px solid #c0a080',
- background: '#fffcf8', color: '#8b5e3c', fontSize: 12.5,
- fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
- }}
- >
- Exportar Word (.docx)
- </button>
-
- <button
- onClick={handleSaveLesson}
- style={{
- padding: '8px 14px', borderRadius: 10, border: '1px solid #859900',
- background: 'rgba(133,153,0,0.1)', color: '#859900', fontSize: 12.5,
- fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
- }}
- >
- Salvar Aula
- </button>
- </div>
- )}
-
-
- <div style={{ flex: 1, borderRadius: 20, overflow: 'hidden', border: '1px solid #ede8dc', boxShadow: '0 4px 24px rgba(0,43,54,0.04)', background: '#fff', display: 'flex', flexDirection: 'column' }}>
- {!resultHtml && !loading ? (
- <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#93a1a1', gap: 16, padding: 40, textAlign: 'center' }}>
- <i className="ti ti-school" style={{ fontSize: 64, opacity: 0.3, color: '#073642' }} />
- <div>
- <h3 style={{ fontSize: 18, color: '#073642', margin: 0, fontWeight: 700 }}>
- Seu Plano & Roteiro de Aula Cambridge TKT
- </h3>
- <p style={{ fontSize: 14, color: '#586e75', marginTop: 6, maxWidth: 460 }}>
- Preencha o tópico, selecione as metodologias em box e clique em "Gerar Aula Completa". A tabela de roteiro timed e o guia de regência aparecerão aqui.
- </p>
- </div>
- </div>
- ) : loading ? (
- <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16 }}>
- <div style={{ width: 56, height: 56, borderRadius: '50%', border: '5px solid #eee8d5', borderTopColor: '#073642', animation: 'spin 0.8s linear infinite' }} />
- <span style={{ fontSize: 14, color: '#586e75', fontWeight: 600 }}>
- Formatando tabela de roteiro timed & técnicas TKT...
- </span>
- </div>
- ) : (
- <DocumentCanvas
- content={resultHtml}
- onContentChange={setResultHtml}
- headerData={{ school: '', teacher: '', title: `Lesson Plan ${topic}` }}
- />
- )}
- </div>
- </div>
- </div>
- )}
-
- {/* Drawer de Aulas Salvas */}
- <SavedItemsDrawer
- isOpen={showSaved}
- onClose={() => setShowSaved(false)}
- title="Aulas Salvas (Cambridge TKT)"
- storageKey="teacher_saved_lessons"
- onSelect={(item: SavedItem) => { setResultHtml(item.content); setMode('studio') }}
- />
-
- <style>{`
- @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
- `}</style>
- </div>
- )
-}
+  // Navigation tabs
+  const [activeTab, setActiveTab] = useState<'editor' | 'bank'>('editor')
+
+  // Context Data
+  const [classes, setClasses] = useState<ClassRecord[]>([])
+  const [schools, setSchools] = useState<SchoolRecord[]>([])
+  const [bankPlans, setBankPlans] = useState<LessonPlanDocument[]>([])
+  const [availableQuestions, setAvailableQuestions] = useState<any[]>([])
+
+  // Form & Document State
+  const [selectedClassId, setSelectedClassId] = useState('')
+  const [lessonDate, setLessonDate] = useState(new Date().toISOString().slice(0, 10))
+  const [roomSpace, setRoomSpace] = useState('Sala de Aula')
+  const [topic, setTopic] = useState('')
+  const [selectedMethodology, setSelectedMethodology] = useState('tblt')
+  const [bookTitle, setBookTitle] = useState('')
+  const [unitChapter, setUnitChapter] = useState('')
+  const [pages, setPages] = useState('')
+  const [stages, setStages] = useState<LessonStage[]>(DEFAULT_STAGES)
+  const [guidingQuestions, setGuidingQuestions] = useState<string[]>([
+    'Como os alunos utilizam a estrutura para expressar ideias reais?',
+    'Qual vocabulário essencial foi consolidado durante a prática?'
+  ])
+  const [homework, setHomework] = useState('')
+  const [postLessonNotes, setPostLessonNotes] = useState('')
+
+  // BNCC Skills state
+  const [selectedSkills, setSelectedSkills] = useState<Array<{ code: string; desc: string; status: 'planned' | 'covered' | 'postponed' }>>([])
+  const [skillSearch, setSkillSearch] = useState('')
+
+  // History & Navigation
+  const [historyIndex, setHistoryIndex] = useState(0)
+
+  // Modals & Generation
+  const [isGenerating, setIsGenerating] = useState(false)
+  const [showAttachActivityModal, setShowAttachActivityModal] = useState(false)
+  const [toast, setToast] = useState<string | null>(null)
+
+  // ─── Carregamento Inicial ──────────────────────────────────────────────────
+  useEffect(() => {
+    try {
+      const cl = localStorage.getItem('teacher_classes')
+      const sc = localStorage.getItem('teacher_schools')
+      const bk = localStorage.getItem('teacher_lesson_plans_bank')
+      const qb = localStorage.getItem('teacher_question_bank')
+      const privPrefill = localStorage.getItem('teacher_lesson_studio_student_prefill')
+
+      let parsedCl: ClassRecord[] = []
+      if (cl) parsedCl = JSON.parse(cl)
+
+      if (privPrefill) {
+        try {
+          const priv = JSON.parse(privPrefill)
+          const privClassRecord: ClassRecord = {
+            id: `priv_${priv.studentId}`,
+            name: `🎓 Particular: ${priv.studentName}`,
+            schoolId: 'priv_school',
+            subject: priv.subject || 'Língua Inglesa',
+            gradeYear: '9º Fund.'
+          }
+          parsedCl = [privClassRecord, ...parsedCl]
+          setSelectedClassId(privClassRecord.id)
+          setTopic(`Aula Individual — ${priv.subject || 'Inglês'}`)
+          localStorage.removeItem('teacher_lesson_studio_student_prefill')
+        } catch {}
+      } else if (parsedCl.length > 0) {
+        setSelectedClassId(parsedCl[0].id)
+      }
+
+      setClasses(parsedCl)
+      if (sc) setSchools(JSON.parse(sc))
+      if (bk) setBankPlans(JSON.parse(bk))
+      if (qb) setAvailableQuestions(JSON.parse(qb))
+    } catch {}
+  }, [])
+
+  // Turma Atual e Matriz BNCC
+  const currentClass = useMemo(() => classes.find(c => c.id === selectedClassId), [classes, selectedClassId])
+  const currentSchool = useMemo(() => schools.find(s => s.id === currentClass?.schoolId), [schools, currentClass])
+  const availableBnccSkills = useMemo(() => getBnccSkillsForGrade(currentClass?.gradeYear || '9º Fund.'), [currentClass])
+
+  // Planos Anteriores da mesma turma
+  const classHistoryPlans = useMemo(() => {
+    return bankPlans
+      .filter(p => p.classId === selectedClassId)
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+  }, [bankPlans, selectedClassId])
+
+  // Habilidades Adiadas da Aula Anterior
+  const pendingBacklog = useMemo(() => {
+    if (!selectedClassId) return []
+    return getClassPostponedSkills(selectedClassId)
+  }, [selectedClassId])
+
+  const showNotification = (msg: string) => {
+    setToast(msg)
+    setTimeout(() => setToast(null), 3500)
+  }
+
+  // Totalizador de Minutos da Aula
+  const totalTiming = useMemo(() => stages.reduce((acc, s) => acc + (Number(s.durationMin) || 0), 0), [stages])
+
+  // ─── Alternar Seleção de Habilidade BNCC ──────────────────────────────────
+  const toggleSkill = (skill: BnccSkill) => {
+    const exists = selectedSkills.find(s => s.code === skill.code)
+    if (exists) {
+      setSelectedSkills(selectedSkills.filter(s => s.code !== skill.code))
+    } else {
+      setSelectedSkills([...selectedSkills, { code: skill.code, desc: skill.description, status: 'planned' }])
+    }
+  }
+
+  const setSkillStatus = (code: string, status: 'planned' | 'covered' | 'postponed') => {
+    setSelectedSkills(selectedSkills.map(s => s.code === code ? { ...s, status } : s))
+    if (status === 'postponed') {
+      const currentPostponed = getClassPostponedSkills(selectedClassId)
+      if (!currentPostponed.includes(code)) {
+        saveClassPostponedSkills(selectedClassId, [...currentPostponed, code])
+        showNotification(`Habilidade ${code} adiada. Será sugerida na próxima aula da turma.`)
+      }
+    }
+  }
+
+  const importPendingBacklogSkill = (code: string) => {
+    const skillObj = availableBnccSkills.find(s => s.code === code)
+    if (skillObj && !selectedSkills.some(s => s.code === code)) {
+      setSelectedSkills([...selectedSkills, { code: skillObj.code, desc: skillObj.description, status: 'planned' }])
+    }
+    // Remove do backlog
+    const updated = pendingBacklog.filter(c => c !== code)
+    saveClassPostponedSkills(selectedClassId, updated)
+    showNotification(`Habilidade ${code} incluída no plano de hoje!`)
+  }
+
+  // ─── Geração de Conteúdo e Roteiro com IA ─────────────────────────────────
+  const handleGenerateWithAi = async () => {
+    if (!topic.trim()) {
+      alert('Digite o Tópico ou Conteúdo Central antes de gerar com IA.')
+      return
+    }
+
+    setIsGenerating(true)
+    try {
+      const meth = METHODOLOGY_PRESETS.find(m => m.id === selectedMethodology)?.name || 'TBLT'
+      const promptDirective = buildTeacherStylePromptDirective()
+
+      const prompt = `Você é um coordenador pedagógico sênior de Ensino de Língua Inglesa.
+Elabore um Plano de Aula estruturado em blocos para a seguinte configuração:
+
+DADOS DA AULA:
+- Turma: ${currentClass?.name || 'Turma'} (${currentClass?.gradeYear || 'Ensino Fundamental'})
+- Tópico Central: "${topic}"
+- Metodologia Ativa: ${meth}
+- Material de Apoio: ${bookTitle || 'Livro Didático'} ${unitChapter ? `(${unitChapter})` : ''}
+- Habilidades BNCC: ${selectedSkills.map(s => s.code).join(', ') || 'Geral'}
+
+${promptDirective}
+
+Retorne ESTRITAMENTE um objeto JSON no formato:
+{
+  "guidingQuestions": ["Pergunta 1", "Pergunta 2"],
+  "stages": [
+    {
+      "name": "Warm-up",
+      "durationMin": 5,
+      "teacherAction": "Ação do professor",
+      "studentAction": "Ação do aluno"
+    },
+    {
+      "name": "Core Task / Presentation",
+      "durationMin": 20,
+      "teacherAction": "Ação do professor",
+      "studentAction": "Ação do aluno"
+    },
+    {
+      "name": "Guided Practice",
+      "durationMin": 15,
+      "teacherAction": "Ação do professor",
+      "studentAction": "Ação do aluno"
+    },
+    {
+      "name": "Wrap-up & Feedback",
+      "durationMin": 10,
+      "teacherAction": "Ação do professor",
+      "studentAction": "Ação do aluno"
+    }
+  ],
+  "homework": "Sugestão concisa de dever de casa comunicativo"
+}`
+
+      const res = await fetch('/api/agent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: [{ role: 'user', content: prompt }] })
+      })
+
+      const data = await res.json()
+      const raw = data?.reply || data?.content || ''
+      const match = raw.match(/\{[\s\S]*\}/)
+      if (match) {
+        const parsed = JSON.parse(match[0])
+        if (Array.isArray(parsed.stages)) setStages(parsed.stages)
+        if (Array.isArray(parsed.guidingQuestions)) setGuidingQuestions(parsed.guidingQuestions)
+        if (parsed.homework) setHomework(parsed.homework)
+        showNotification('Roteiro e Perguntas-Guia gerados com sucesso pela IA!')
+      }
+    } catch (err: any) {
+      alert(`Erro na geração: ${err.message || 'Tente novamente'}`)
+    } finally {
+      setIsGenerating(false)
+    }
+  }
+
+  // ─── Salvamento 1: Salvar no Calendário / Agenda ──────────────────────────
+  const handleSaveToCalendar = () => {
+    if (!currentClass) return
+    const calendarTask = {
+      id: `task_${Date.now()}`,
+      title: `Aula de Inglês: ${topic || 'Planejamento'} (${currentClass.name})`,
+      date: lessonDate,
+      time: '08:00',
+      classId: currentClass.id,
+      className: currentClass.name,
+      room: roomSpace,
+      completed: false
+    }
+
+    try {
+      const existing = JSON.parse(localStorage.getItem('teacher_calendar_tasks') || '[]')
+      const updated = [calendarTask, ...existing]
+      localStorage.setItem('teacher_calendar_tasks', JSON.stringify(updated))
+      window.dispatchEvent(new Event('storage'))
+      showNotification('📅 Aula agendada com sucesso no Calendário!')
+    } catch {}
+  }
+
+  // ─── Salvamento 2: Salvar no Banco de Planejamento (Repositório) ──────────
+  const handleSaveToBank = () => {
+    if (!currentClass) return
+    const newPlan: LessonPlanDocument = {
+      id: `plan_${Date.now()}`,
+      date: lessonDate,
+      classId: currentClass.id,
+      className: currentClass.name,
+      schoolName: currentSchool?.name || 'Escola',
+      subject: currentClass.subject || 'Inglês',
+      topic: topic || 'Plano de Aula Sem Título',
+      roomSpace,
+      selectedSkills,
+      methodology: selectedMethodology,
+      referenceMaterial: { bookTitle, unit: unitChapter, pages },
+      stages,
+      guidingQuestions,
+      homework,
+      postLessonNotes,
+      savedInBank: true,
+      createdAt: Date.now()
+    }
+
+    const updated = [newPlan, ...bankPlans.filter(p => p.id !== newPlan.id)]
+    setBankPlans(updated)
+    try {
+      localStorage.setItem('teacher_lesson_plans_bank', JSON.stringify(updated))
+      window.dispatchEvent(new Event('storage'))
+      // Atualiza o perfil adaptativo do professor incrementalmente
+      updateTeacherProfileFromLessonPlan({
+        methodology: selectedMethodology,
+        timingTotal: totalTiming,
+        stagesCount: stages.length,
+        hasHomework: Boolean(homework.trim())
+      })
+      showNotification('💾 Plano salvo com sucesso no Banco de Planejamento!')
+    } catch {}
+  }
+
+  // ─── Exportações ─────────────────────────────────────────────────────────
+  const generatePlanMarkdown = () => {
+    return `
+# PLANO DE AULA: ${topic.toUpperCase()}
+
+**Escola:** ${currentSchool?.name || 'Escola'} &bull; **Turma:** ${currentClass?.name || 'Turma'} (${currentClass?.gradeYear || '9º Ano'})
+**Data:** ${new Date(lessonDate).toLocaleDateString('pt-BR')} &bull; **Espaço Utilizado:** ${roomSpace}
+**Metodologia:** ${METHODOLOGY_PRESETS.find(m => m.id === selectedMethodology)?.name || 'TBLT'}
+**Material de Referência:** ${bookTitle || 'Livro Base'} ${unitChapter ? `(${unitChapter})` : ''} ${pages ? `[${pages}]` : ''}
+
+---
+
+## 🎯 Competências e Habilidades BNCC Trabalhadas
+${selectedSkills.map(s => `- **[${s.code}]** ${s.desc} (${s.status === 'covered' ? 'Concluída' : s.status === 'postponed' ? 'Adiada' : 'Planejada'})`).join('\n') || '- Nenhuma habilidade específica vinculada.'}
+
+---
+
+## ❓ Perguntas-Guia da Aula
+${guidingQuestions.map(q => `- *${q}*`).join('\n')}
+
+---
+
+## ⏱️ Roteiro da Aula e Cronograma (${totalTiming} min)
+| Etapa | Duração | Ação do Professor | Ação do Aluno |
+| :--- | :--- | :--- | :--- |
+${stages.map(s => `| **${s.name}** | ${s.durationMin} min | ${s.teacherAction} | ${s.studentAction} |`).join('\n')}
+
+---
+
+## 📝 Dever de Casa / Homework
+${homework || 'Sem tarefa de casa atribuída para esta aula.'}
+
+---
+
+## 💡 Observações & Log Reflexivo Pós-Aula
+${postLessonNotes || 'Nenhuma observação registrada.'}
+`
+  }
+
+  const handleExportPdf = () => {
+    exportToPdf({
+      schoolName: currentSchool?.name || 'ESCOLA DE ENSINO BÁSICO',
+      teacherName: 'Professor(a)',
+      className: currentClass?.name || 'Turma',
+      date: new Date(lessonDate).toLocaleDateString('pt-BR'),
+      title: `PLANO DE AULA — ${topic.toUpperCase() || 'LÍNGUA INGLESA'}`,
+      content: generatePlanMarkdown()
+    })
+  }
+
+  const handleExportWord = () => {
+    exportToWord({
+      schoolName: currentSchool?.name || 'ESCOLA DE ENSINO BÁSICO',
+      teacherName: 'Professor(a)',
+      className: currentClass?.name || 'Turma',
+      date: new Date(lessonDate).toLocaleDateString('pt-BR'),
+      title: `PLANO DE AULA — ${topic.toUpperCase() || 'LÍNGUA INGLESA'}`,
+      content: generatePlanMarkdown()
+    })
+  }
+
+  const handleExportExcel = () => {
+    exportToExcel({
+      filename: `Plano_Aula_${currentClass?.name || 'Turma'}_${lessonDate}`,
+      headers: ['Etapa', 'Duração (min)', 'Ação do Professor', 'Ação do Aluno', 'Status'],
+      rows: stages.map(s => [s.name, s.durationMin, s.teacherAction, s.studentAction, s.completed ? 'Concluído' : 'Pendente'])
+    })
+    showNotification('📊 Cronograma da aula exportado para Excel (.csv)!')
+  }
+
+  return (
+    <div style={{ padding: '32px 48px', minHeight: '100%', boxSizing: 'border-box', background: '#fdf8f2', maxWidth: 1440, margin: '0 auto' }}>
+      
+      {/* ─── HEADER & TABS ─────────────────────────────────────────────────── */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ background: '#8b5e3c', color: '#fff', padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700 }}>
+              DIDACTIC SEQUENCE 2.0
+            </span>
+            <span style={{ fontSize: 13, color: '#7a6552' }}>Ecossistema de Planejamento Docente</span>
+          </div>
+          <h1 style={{ margin: '4px 0 0 0', fontSize: 26, fontFamily: 'Fraunces, Georgia, serif', color: '#2c1a0e' }}>
+            Planejamento & Roteiro de Aula
+          </h1>
+        </div>
+
+        <div style={{ display: 'flex', gap: 6, background: '#fffcf8', padding: 4, borderRadius: 12, border: '1px solid #d5c0b0' }}>
+          <button
+            onClick={() => setActiveTab('editor')}
+            style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: activeTab === 'editor' ? '#8b5e3c' : 'transparent', color: activeTab === 'editor' ? '#fff' : '#586e75', fontWeight: 700, cursor: 'pointer', fontSize: 13 }}
+          >
+            <i className="ti ti-edit"></i> Documento de Planejamento
+          </button>
+          <button
+            onClick={() => setActiveTab('bank')}
+            style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: activeTab === 'bank' ? '#8b5e3c' : 'transparent', color: activeTab === 'bank' ? '#fff' : '#586e75', fontWeight: 700, cursor: 'pointer', fontSize: 13 }}
+          >
+            <i className="ti ti-archive"></i> Banco de Planejamento ({bankPlans.length})
+          </button>
+        </div>
+      </div>
+
+      {/* ─── ABA 1: DOCUMENTO DE PLANEJAMENTO EM BOXES ─────────────────────── */}
+      {activeTab === 'editor' && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 24, alignItems: 'start' }}>
+          
+          {/* Coluna Principal: Os 8 Boxes Estruturados */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+            
+            {/* Box 1: Logística & Identificação */}
+            <div style={{ background: '#fffcf8', border: '1px solid rgba(139,115,85,0.16)', borderRadius: 16, padding: 20 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+                <span style={{ fontSize: 12, fontWeight: 800, color: '#8b5e3c', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                  📦 Box 1: Identificação & Espaço da Aula
+                </span>
+                <span style={{ fontSize: 12, color: '#7a6552' }}>{currentSchool?.name || 'Escola'}</span>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14 }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: 11.5, fontWeight: 700, color: '#7a6552', marginBottom: 4 }}>Turma</label>
+                  <select
+                    value={selectedClassId}
+                    onChange={e => setSelectedClassId(e.target.value)}
+                    style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid #d5c0b0', background: '#fdf8f2', fontSize: 13, outline: 'none' }}
+                  >
+                    {classes.map(c => (
+                      <option key={c.id} value={c.id}>{c.name} ({c.gradeYear || '9º Fund.'})</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: 11.5, fontWeight: 700, color: '#7a6552', marginBottom: 4 }}>Data da Aula</label>
+                  <input
+                    type="date"
+                    value={lessonDate}
+                    onChange={e => setLessonDate(e.target.value)}
+                    style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #d5c0b0', background: '#fdf8f2', fontSize: 13, outline: 'none' }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: 11.5, fontWeight: 700, color: '#7a6552', marginBottom: 4 }}>Espaço / Local</label>
+                  <select
+                    value={roomSpace}
+                    onChange={e => setRoomSpace(e.target.value)}
+                    style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid #d5c0b0', background: '#fdf8f2', fontSize: 13, outline: 'none' }}
+                  >
+                    <option value="Sala de Aula Regular">🏫 Sala de Aula Regular</option>
+                    <option value="Laboratório de Informática">💻 Lab. de Informática</option>
+                    <option value="Biblioteca">📚 Biblioteca</option>
+                    <option value="Pátio / Espaço Aberto">🌳 Pátio / Atividade Externa</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* Box 2: Conteúdo & Tópico Central */}
+            <div style={{ background: '#fffcf8', border: '1px solid rgba(139,115,85,0.16)', borderRadius: 16, padding: 20 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                <span style={{ fontSize: 12, fontWeight: 800, color: '#8b5e3c', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                  📦 Box 2: Conteúdo & Tópico Central
+                </span>
+                <button
+                  onClick={handleGenerateWithAi}
+                  disabled={isGenerating}
+                  style={{ background: '#8b5e3c', color: '#fff', border: 'none', borderRadius: 8, padding: '6px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+                >
+                  <i className={isGenerating ? 'ti ti-loader ti-spin' : 'ti ti-sparkles'}></i>
+                  {isGenerating ? 'Elaborando Roteiro...' : 'Gerar Roteiro com IA'}
+                </button>
+              </div>
+
+              <input
+                value={topic}
+                onChange={e => setTopic(e.target.value)}
+                placeholder="Ex: Simple Past vs Past Continuous narrating a travel experience..."
+                style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid #d5c0b0', background: '#fdf8f2', fontSize: 14, outline: 'none', boxSizing: 'border-box' }}
+              />
+            </div>
+
+            {/* Box 3: Competências & Habilidades BNCC */}
+            <div style={{ background: '#fffcf8', border: '1px solid rgba(139,115,85,0.16)', borderRadius: 16, padding: 20 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <span style={{ fontSize: 12, fontWeight: 800, color: '#8b5e3c', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                  📦 Box 3: Habilidades BNCC ({currentClass?.gradeYear || 'Geral'})
+                </span>
+                <span style={{ fontSize: 12, color: '#7a6552' }}>{selectedSkills.length} selecionada(s)</span>
+              </div>
+
+              {/* Alerta de Habilidade Adiada na Aula Anterior */}
+              {pendingBacklog.length > 0 && (
+                <div style={{ background: '#fff8eb', border: '1px solid #f59e0b', borderRadius: 10, padding: '10px 14px', marginBottom: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <i className="ti ti-pin" style={{ color: '#d97706', fontSize: 18 }}></i>
+                    <span style={{ fontSize: 12.5, color: '#92400e', fontWeight: 600 }}>
+                      <strong>Replanejamento:</strong> {pendingBacklog.length} habilidade(s) adiada(s) da aula anterior: <strong>{pendingBacklog.join(', ')}</strong>
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => importPendingBacklogSkill(pendingBacklog[0])}
+                    style={{ background: '#d97706', color: '#fff', border: 'none', borderRadius: 6, padding: '4px 10px', fontSize: 11.5, fontWeight: 700, cursor: 'pointer' }}
+                  >
+                    + Incluir no Plano de Hoje
+                  </button>
+                </div>
+              )}
+
+              {/* Lista de Habilidades Selecionadas com Status */}
+              {selectedSkills.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
+                  {selectedSkills.map(sk => (
+                    <div key={sk.code} style={{ background: '#fdf8f2', border: '1px solid #e8decb', borderRadius: 8, padding: '8px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                      <div style={{ flex: 1, minWidth: 240 }}>
+                        <strong style={{ color: '#8b5e3c', fontSize: 12.5 }}>[{sk.code}]</strong>
+                        <span style={{ fontSize: 12, color: '#4a382a', marginLeft: 6 }}>{sk.desc}</span>
+                      </div>
+                      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                        <button
+                          onClick={() => setSkillStatus(sk.code, 'covered')}
+                          style={{ padding: '3px 8px', borderRadius: 6, border: 'none', background: sk.status === 'covered' ? '#2d9d5d' : '#eee', color: sk.status === 'covered' ? '#fff' : '#555', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
+                        >
+                          ✓ Coberta
+                        </button>
+                        <button
+                          onClick={() => setSkillStatus(sk.code, 'postponed')}
+                          style={{ padding: '3px 8px', borderRadius: 6, border: 'none', background: sk.status === 'postponed' ? '#d97706' : '#eee', color: sk.status === 'postponed' ? '#fff' : '#555', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
+                        >
+                          ⏳ Adiar
+                        </button>
+                        <button
+                          onClick={() => toggleSkill({ code: sk.code } as any)}
+                          style={{ background: 'transparent', border: 'none', color: '#dc322f', cursor: 'pointer', fontSize: 13 }}
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Seletor Rápido de Habilidades da BNCC */}
+              <div>
+                <input
+                  placeholder="Pesquisar código ou descrição na BNCC..."
+                  value={skillSearch}
+                  onChange={e => setSkillSearch(e.target.value)}
+                  style={{ width: '100%', padding: '7px 12px', borderRadius: 8, border: '1px solid #d5c0b0', background: '#fdf8f2', fontSize: 12.5, marginBottom: 8, outline: 'none' }}
+                />
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 6, maxHeight: 160, overflowY: 'auto' }}>
+                  {availableBnccSkills
+                    .filter(s => s.code.toLowerCase().includes(skillSearch.toLowerCase()) || s.description.toLowerCase().includes(skillSearch.toLowerCase()))
+                    .map(s => {
+                      const isSelected = selectedSkills.some(sel => sel.code === s.code)
+                      return (
+                        <div
+                          key={s.code}
+                          onClick={() => toggleSkill(s)}
+                          style={{
+                            padding: '6px 10px', borderRadius: 6, cursor: 'pointer',
+                            border: isSelected ? '1px solid #8b5e3c' : '1px solid #e8decb',
+                            background: isSelected ? '#f5efe6' : '#fff',
+                            fontSize: 11.5, color: isSelected ? '#8b5e3c' : '#4a382a',
+                            display: 'flex', alignItems: 'center', gap: 6
+                          }}
+                        >
+                          <input type="checkbox" checked={isSelected} readOnly />
+                          <span><strong>{s.code}</strong>: {s.description.slice(0, 50)}...</span>
+                        </div>
+                      )
+                    })}
+                </div>
+              </div>
+            </div>
+
+            {/* Box 4: Metodologia & Ações Pedagógicas */}
+            <div style={{ background: '#fffcf8', border: '1px solid rgba(139,115,85,0.16)', borderRadius: 16, padding: 20 }}>
+              <span style={{ fontSize: 12, fontWeight: 800, color: '#8b5e3c', textTransform: 'uppercase', letterSpacing: 0.5, display: 'block', marginBottom: 12 }}>
+                📦 Box 4: Metodologia Ativa Selecionada
+              </span>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10 }}>
+                {METHODOLOGY_PRESETS.map(m => {
+                  const isSel = selectedMethodology === m.id
+                  return (
+                    <div
+                      key={m.id}
+                      onClick={() => setSelectedMethodology(m.id)}
+                      style={{
+                        padding: 12, borderRadius: 10, cursor: 'pointer',
+                        border: isSel ? `2px solid ${m.badge}` : '1px solid #e8decb',
+                        background: isSel ? '#fdf8f2' : '#fff',
+                        transition: 'all 0.15s'
+                      }}
+                    >
+                      <strong style={{ fontSize: 12.5, color: '#2c1a0e', display: 'block', marginBottom: 4 }}>{m.name}</strong>
+                      <p style={{ margin: 0, fontSize: 11.5, color: '#7a6552', lineHeight: 1.35 }}>{m.desc}</p>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Box 5: Material de Referência (Multi-Turma) */}
+            <div style={{ background: '#fffcf8', border: '1px solid rgba(139,115,85,0.16)', borderRadius: 16, padding: 20 }}>
+              <span style={{ fontSize: 12, fontWeight: 800, color: '#8b5e3c', textTransform: 'uppercase', letterSpacing: 0.5, display: 'block', marginBottom: 12 }}>
+                📦 Box 5: Livro Didático & Material de Referência
+              </span>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 12 }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: 11.5, fontWeight: 700, color: '#7a6552', marginBottom: 4 }}>Livro / Apostila</label>
+                  <input
+                    value={bookTitle}
+                    onChange={e => setBookTitle(e.target.value)}
+                    placeholder="Ex: Eyes Open 3 (Cambridge)"
+                    style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #d5c0b0', background: '#fdf8f2', fontSize: 13, outline: 'none' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: 11.5, fontWeight: 700, color: '#7a6552', marginBottom: 4 }}>Unidade / Capítulo</label>
+                  <input
+                    value={unitChapter}
+                    onChange={e => setUnitChapter(e.target.value)}
+                    placeholder="Ex: Unit 4"
+                    style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #d5c0b0', background: '#fdf8f2', fontSize: 13, outline: 'none' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: 11.5, fontWeight: 700, color: '#7a6552', marginBottom: 4 }}>Páginas</label>
+                  <input
+                    value={pages}
+                    onChange={e => setPages(e.target.value)}
+                    placeholder="Ex: pp. 44-47"
+                    style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #d5c0b0', background: '#fdf8f2', fontSize: 13, outline: 'none' }}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Box 6: Roteiro com Timing por Etapa */}
+            <div style={{ background: '#fffcf8', border: '1px solid rgba(139,115,85,0.16)', borderRadius: 16, padding: 20 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+                <span style={{ fontSize: 12, fontWeight: 800, color: '#8b5e3c', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                  📦 Box 6: Roteiro da Aula & Timing ({totalTiming} min)
+                </span>
+                <span style={{
+                  padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 800,
+                  background: totalTiming === 50 ? '#dcfce7' : '#fef3c7',
+                  color: totalTiming === 50 ? '#15803d' : '#b45309'
+                }}>
+                  {totalTiming} / 50 min
+                </span>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {stages.map((stage, idx) => (
+                  <div key={idx} style={{ background: '#fdf8f2', border: '1px solid #e8decb', borderRadius: 10, padding: 12, display: 'grid', gridTemplateColumns: '180px 70px 1fr 1fr 30px', gap: 10, alignItems: 'center' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <input
+                        type="checkbox"
+                        checked={stage.completed || false}
+                        onChange={e => {
+                          const updated = [...stages]
+                          updated[idx].completed = e.target.checked
+                          setStages(updated)
+                        }}
+                      />
+                      <input
+                        value={stage.name}
+                        onChange={e => {
+                          const updated = [...stages]
+                          updated[idx].name = e.target.value
+                          setStages(updated)
+                        }}
+                        style={{ border: 'none', background: 'transparent', fontWeight: 700, fontSize: 12.5, color: '#2c1a0e', outline: 'none', width: '100%' }}
+                      />
+                    </div>
+
+                    <div>
+                      <input
+                        type="number"
+                        value={stage.durationMin}
+                        onChange={e => {
+                          const updated = [...stages]
+                          updated[idx].durationMin = Number(e.target.value)
+                          setStages(updated)
+                        }}
+                        style={{ width: '100%', padding: '4px 6px', borderRadius: 6, border: '1px solid #d5c0b0', background: '#fff', fontSize: 12, textAlign: 'center' }}
+                      />
+                    </div>
+
+                    <div>
+                      <input
+                        value={stage.teacherAction}
+                        placeholder="Ação do Professor..."
+                        onChange={e => {
+                          const updated = [...stages]
+                          updated[idx].teacherAction = e.target.value
+                          setStages(updated)
+                        }}
+                        style={{ width: '100%', padding: '6px 8px', borderRadius: 6, border: '1px solid #d5c0b0', background: '#fff', fontSize: 12 }}
+                      />
+                    </div>
+
+                    <div>
+                      <input
+                        value={stage.studentAction}
+                        placeholder="Ação do Aluno..."
+                        onChange={e => {
+                          const updated = [...stages]
+                          updated[idx].studentAction = e.target.value
+                          setStages(updated)
+                        }}
+                        style={{ width: '100%', padding: '6px 8px', borderRadius: 6, border: '1px solid #d5c0b0', background: '#fff', fontSize: 12 }}
+                      />
+                    </div>
+
+                    <button
+                      onClick={() => setStages(stages.filter((_, i) => i !== idx))}
+                      style={{ background: 'transparent', border: 'none', color: '#dc322f', cursor: 'pointer' }}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              <button
+                onClick={() => setStages([...stages, { name: 'Nova Etapa', durationMin: 5, teacherAction: '', studentAction: '', completed: false }])}
+                style={{ marginTop: 10, background: 'transparent', border: '1px dashed #8b5e3c', color: '#8b5e3c', borderRadius: 8, padding: '6px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+              >
+                + Adicionar Etapa ao Roteiro
+              </button>
+            </div>
+
+            {/* Box 7: Tarefa de Casa & Anotações */}
+            <div style={{ background: '#fffcf8', border: '1px solid rgba(139,115,85,0.16)', borderRadius: 16, padding: 20 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                <div>
+                  <span style={{ fontSize: 12, fontWeight: 800, color: '#8b5e3c', textTransform: 'uppercase', letterSpacing: 0.5, display: 'block', marginBottom: 6 }}>
+                    📦 Box 7: Tarefa de Casa (Homework)
+                  </span>
+                  <textarea
+                    value={homework}
+                    onChange={e => setHomework(e.target.value)}
+                    placeholder="Ex: Workbook p. 28 exercícios 1 a 3..."
+                    rows={3}
+                    style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #d5c0b0', background: '#fdf8f2', fontSize: 12.5, outline: 'none', resize: 'vertical' }}
+                  />
+                </div>
+
+                <div>
+                  <span style={{ fontSize: 12, fontWeight: 800, color: '#8b5e3c', textTransform: 'uppercase', letterSpacing: 0.5, display: 'block', marginBottom: 6 }}>
+                    📦 Box 8: Anotações Pós-Aula (Log Reflexivo)
+                  </span>
+                  <textarea
+                    value={postLessonNotes}
+                    onChange={e => setPostLessonNotes(e.target.value)}
+                    placeholder="Como a turma respondeu? Quais pontos precisam de revisão na próxima aula?"
+                    rows={3}
+                    style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #d5c0b0', background: '#fdf8f2', fontSize: 12.5, outline: 'none', resize: 'vertical' }}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* ─── RODAPÉ DE AÇÃO COM OS 2 BOTÕES DISTINTOS (BLOCO H) ───────── */}
+            <div style={{
+              background: '#fffcf8', border: '1px solid #d5c0b0', borderRadius: 16,
+              padding: '16px 24px', display: 'flex', justifyContent: 'space-between',
+              alignItems: 'center', flexWrap: 'wrap', gap: 12, boxShadow: '0 4px 14px rgba(44,26,14,0.06)'
+            }}>
+              {/* Botões de Exportação Universal */}
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <button onClick={handleExportPdf} style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid #d5c0b0', background: '#fff', color: '#2c1a0e', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <i className="ti ti-printer"></i> PDF
+                </button>
+                <button onClick={handleExportWord} style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid #d5c0b0', background: '#fff', color: '#2c1a0e', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <i className="ti ti-file-text"></i> Word (.doc)
+                </button>
+                <button onClick={handleExportExcel} style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid #d5c0b0', background: '#fff', color: '#2c1a0e', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <i className="ti ti-table"></i> Excel (.csv)
+                </button>
+                <button
+                  onClick={() => setShowAttachActivityModal(true)}
+                  style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid #268bd2', background: '#e8f4fd', color: '#268bd2', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+                >
+                  <i className="ti ti-link"></i> Anexar Atividade do Banco
+                </button>
+              </div>
+
+              {/* OS 2 BOTÕES DE SALVAMENTO DISTINTOS */}
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button
+                  onClick={handleSaveToCalendar}
+                  style={{
+                    padding: '10px 18px', borderRadius: 10, border: '1.5px solid #8b5e3c',
+                    background: '#fff', color: '#8b5e3c', fontSize: 13,
+                    fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6
+                  }}
+                >
+                  <i className="ti ti-calendar-plus"></i> Salvar no Calendário
+                </button>
+
+                <button
+                  onClick={handleSaveToBank}
+                  style={{
+                    padding: '10px 20px', borderRadius: 10, border: 'none',
+                    background: 'linear-gradient(135deg, #8b5e3c 0%, #6f4728 100%)',
+                    color: '#fff', fontSize: 13.5, fontWeight: 700,
+                    cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
+                    boxShadow: '0 3px 10px rgba(139,94,60,0.3)'
+                  }}
+                >
+                  <i className="ti ti-database"></i> Salvar no Banco
+                </button>
+              </div>
+            </div>
+
+          </div>
+
+          {/* ─── COLUNA LATERAL: PERGUNTAS-GUIA & RESUMO DA AULA ANTERIOR ──── */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+            
+            {/* Box Lateral 1: Perguntas-Guia (Guiding Questions) */}
+            <div style={{ background: '#fffcf8', border: '1px solid rgba(139,115,85,0.16)', borderRadius: 16, padding: 18 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                <span style={{ fontSize: 11.5, fontWeight: 800, color: '#8b5e3c', textTransform: 'uppercase' }}>
+                  ❓ Perguntas-Guia (Key Questions)
+                </span>
+              </div>
+              <p style={{ fontSize: 11.5, color: '#7a6552', margin: '0 0 10px 0', lineHeight: 1.35 }}>
+                O que os alunos devem ser capazes de responder ou demonstrar ao final desta aula:
+              </p>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {guidingQuestions.map((q, idx) => (
+                  <input
+                    key={idx}
+                    value={q}
+                    onChange={e => {
+                      const updated = [...guidingQuestions]
+                      updated[idx] = e.target.value
+                      setGuidingQuestions(updated)
+                    }}
+                    style={{ width: '100%', padding: '6px 10px', borderRadius: 6, border: '1px solid #d5c0b0', background: '#fdf8f2', fontSize: 12, color: '#2c1a0e', outline: 'none' }}
+                  />
+                ))}
+              </div>
+            </div>
+
+            {/* Box Lateral 2: Resumo da Aula Anterior com Navegação Histórica */}
+            <div style={{ background: '#fffcf8', border: '1px solid rgba(139,115,85,0.16)', borderRadius: 16, padding: 18 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <span style={{ fontSize: 11.5, fontWeight: 800, color: '#8b5e3c', textTransform: 'uppercase' }}>
+                  ⏮️ Histórico de Aulas ({currentClass?.name || 'Turma'})
+                </span>
+              </div>
+
+              {classHistoryPlans.length === 0 ? (
+                <p style={{ fontSize: 12, color: '#a08060', margin: 0 }}>
+                  Nenhum plano anterior salvo no banco para esta turma.
+                </p>
+              ) : (
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                    <span style={{ fontSize: 11, color: '#7a6552' }}>
+                      Aula {historyIndex + 1} de {classHistoryPlans.length}
+                    </span>
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      <button
+                        disabled={historyIndex >= classHistoryPlans.length - 1}
+                        onClick={() => setHistoryIndex(historyIndex + 1)}
+                        style={{ padding: '2px 8px', borderRadius: 4, border: '1px solid #d5c0b0', background: '#fff', cursor: 'pointer', fontSize: 11 }}
+                      >
+                        ◀ Mais Antiga
+                      </button>
+                      <button
+                        disabled={historyIndex <= 0}
+                        onClick={() => setHistoryIndex(historyIndex - 1)}
+                        style={{ padding: '2px 8px', borderRadius: 4, border: '1px solid #d5c0b0', background: '#fff', cursor: 'pointer', fontSize: 11 }}
+                      >
+                        Mais Recente ▶
+                      </button>
+                    </div>
+                  </div>
+
+                  {classHistoryPlans[historyIndex] && (
+                    <div style={{ background: '#fdf8f2', padding: 12, borderRadius: 10, border: '1px solid #e8decb' }}>
+                      <strong style={{ fontSize: 12.5, color: '#2c1a0e', display: 'block' }}>
+                        {classHistoryPlans[historyIndex].topic}
+                      </strong>
+                      <div style={{ fontSize: 11, color: '#8b5e3c', margin: '2px 0 6px 0' }}>
+                        Data: {new Date(classHistoryPlans[historyIndex].date).toLocaleDateString('pt-BR')}
+                      </div>
+                      <div style={{ fontSize: 11.5, color: '#4a382a', lineHeight: 1.35 }}>
+                        <strong>Dever de Casa Dado:</strong> {classHistoryPlans[historyIndex].homework || 'Nenhum'}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+          </div>
+
+        </div>
+      )}
+
+      {/* ─── ABA 2: BANCO DE PLANEJAMENTO (REPOSITÓRIO PERENE) ──────────────── */}
+      {activeTab === 'bank' && (
+        <div style={{ background: '#fffcf8', border: '1px solid rgba(139,115,85,0.16)', borderRadius: 16, padding: 24 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+            <div>
+              <h2 style={{ fontFamily: 'Fraunces, Georgia, serif', fontSize: 20, color: '#2c1a0e', margin: '0 0 4px 0' }}>
+                Acervo de Planos de Aula Salvos
+              </h2>
+              <p style={{ margin: 0, fontSize: 13, color: '#7a6552' }}>
+                Planos perenes recuperáveis e reutilizáveis ano a ano por turma e tópico curricular.
+              </p>
+            </div>
+          </div>
+
+          {bankPlans.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '60px 20px', color: '#a08060' }}>
+              <i className="ti ti-archive" style={{ fontSize: 48, opacity: 0.4, marginBottom: 12 }}></i>
+              <p>Nenhum plano salvo no banco ainda. Crie um plano na aba anterior e clique em "Salvar no Banco".</p>
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 16 }}>
+              {bankPlans.map(plan => (
+                <div key={plan.id} style={{ background: '#fdf8f2', border: '1px solid #e8decb', borderRadius: 12, padding: 16, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
+                      <span style={{ background: '#8b5e3c', color: '#fff', padding: '2px 8px', borderRadius: 6, fontSize: 10.5, fontWeight: 700 }}>
+                        {plan.className}
+                      </span>
+                      <span style={{ fontSize: 11, color: '#7a6552' }}>
+                        {new Date(plan.date).toLocaleDateString('pt-BR')}
+                      </span>
+                    </div>
+                    <strong style={{ fontSize: 14, color: '#2c1a0e', display: 'block', marginBottom: 6 }}>
+                      {plan.topic}
+                    </strong>
+                    <div style={{ fontSize: 11.5, color: '#7a6552', marginBottom: 10 }}>
+                      Espaço: {plan.roomSpace} &bull; {plan.stages?.length || 4} etapas
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: 6, marginTop: 12, borderTop: '1px solid #e8decb', paddingTop: 10 }}>
+                    <button
+                      onClick={() => {
+                        setTopic(plan.topic)
+                        setSelectedClassId(plan.classId)
+                        setStages(plan.stages || DEFAULT_STAGES)
+                        setGuidingQuestions(plan.guidingQuestions || [])
+                        setHomework(plan.homework || '')
+                        setPostLessonNotes(plan.postLessonNotes || '')
+                        setActiveTab('editor')
+                        showNotification('Plano carregado no editor para reutilização!')
+                      }}
+                      style={{ flex: 1, padding: '6px 10px', background: '#8b5e3c', color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+                    >
+                      Reutilizar / Editar
+                    </button>
+                    <button
+                      onClick={() => {
+                        const updated = bankPlans.filter(p => p.id !== plan.id)
+                        setBankPlans(updated)
+                        localStorage.setItem('teacher_lesson_plans_bank', JSON.stringify(updated))
+                      }}
+                      style={{ padding: '6px 10px', background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}
+                    >
+                      Excluir
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ─── MODAL: ANEXAR ATIVIDADE DO BANCO (BLOCO I) ────────────────────── */}
+      {showAttachActivityModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,43,54,0.4)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: '#fffcf8', border: '1px solid #ede8dc', borderRadius: 16, padding: 24, width: 520, maxWidth: '90vw', maxHeight: '80vh', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <h3 style={{ margin: 0, fontSize: 16, color: '#2c1a0e' }}>
+                🔗 Vincular Atividade do Banco de Questões
+              </h3>
+              <button onClick={() => setShowAttachActivityModal(false)} style={{ background: 'transparent', border: 'none', fontSize: 16, cursor: 'pointer' }}>✕</button>
+            </div>
+
+            {availableQuestions.length === 0 ? (
+              <p style={{ fontSize: 13, color: '#7a6552' }}>Nenhuma atividade salva no Banco de Atividades ainda.</p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {availableQuestions.slice(0, 15).map((q: any) => (
+                  <div key={q.id} style={{ background: '#fdf8f2', border: '1px solid #e8decb', padding: 10, borderRadius: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <strong style={{ fontSize: 12.5, color: '#2c1a0e' }}>{q.topic || 'Exercício'}</strong>
+                      <div style={{ fontSize: 11.5, color: '#7a6552' }}>{q.statement?.slice(0, 60)}...</div>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setHomework(prev => `${prev ? prev + '\n' : ''}Atividade Vinculada: [${q.topic || 'Exercício'}] ${q.statement}`)
+                        setShowAttachActivityModal(false)
+                        showNotification('Atividade vinculada como Homework da aula!')
+                      }}
+                      style={{ background: '#268bd2', color: '#fff', border: 'none', borderRadius: 6, padding: '4px 10px', fontSize: 11.5, fontWeight: 700, cursor: 'pointer' }}
+                    >
+                      + Anexar
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Toast Notification */}
+      {toast && (
+        <div style={{ position: 'fixed', bottom: 24, right: 24, background: '#2c1a0e', color: '#fdf8f2', padding: '10px 18px', borderRadius: 8, fontSize: 13, zIndex: 9999, boxShadow: '0 4px 14px rgba(0,0,0,0.2)' }}>
+          {toast}
+        </div>
+      )}
+
+    </div>
+  )
+}

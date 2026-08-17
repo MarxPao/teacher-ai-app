@@ -296,6 +296,31 @@ export default function QuickGenerate() {
       const html = cleanHtml(raw)
       setResult(html)
       extractBncc(html)
+
+      // Auto-save no Banco de Atividades (Zero-Leakage)
+      try {
+        const qbRaw = localStorage.getItem('teacher_question_bank') || '[]'
+        const qbList = JSON.parse(qbRaw)
+        const newQuickItem = {
+          id: `quick_auto_${Date.now()}`,
+          statement: html.slice(0, 300) + '...',
+          type: types[0] === 'mc' ? 'mc' : 'fill',
+          activityKind: 'exercise',
+          subject: 'Inglês',
+          topic: topic || skill || 'Exercício Rápido',
+          level: cefr,
+          year: new Date().getFullYear().toString(),
+          schoolId: header.school || '',
+          classRef: grade || '',
+          tags: ['Gerador Rápido', `CEFR ${cefr}`, methodology],
+          createdAt: Date.now(),
+          source: 'ai',
+          fullContent: html
+        }
+        localStorage.setItem('teacher_question_bank', JSON.stringify([newQuickItem, ...qbList]))
+        window.dispatchEvent(new Event('storage'))
+      } catch {}
+
       try {
         const fc = await runFactCheck(html, grade, types.join(', '), selectedApi)
         setFactCheck(fc)

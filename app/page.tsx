@@ -37,6 +37,7 @@ import VoiceOrb from '@/components/VoiceOrb'
 import WisprFlowOverlay from '@/components/WisprFlowOverlay'
 import ClassroomMode from '@/components/modules/ClassroomMode'
 import FlashcardMode from '@/components/modules/FlashcardMode'
+import AttendanceList from '@/components/modules/AttendanceList'
 import Wellbeing from '@/components/modules/Wellbeing'
 import AudioPronunciation from '@/components/modules/AudioPronunciation'
 import ReflectivePractice from '@/components/modules/ReflectivePractice'
@@ -57,7 +58,7 @@ export type ModuleKey = 'dashboard' | 'quick' | 'exam' | 'lessonstudio' | 'plan'
  'gradebook' | 'students' | 'classes' | 'organization' | 'privatetutoring' | 'eventos' | 'insights' | 'analytics' | 'calendar' | 'comms' | 'repo' |
  'wellbeing' | 'settings' | 'api' | 'qbank' | 'mindmap' | 'editor' |
  'communications' | 'portfolio' | 'extensions' | 'portalmirror' | 'omnigrader' | 'maestro' | 'classlog' | 'didacticsequence' | 'livequiz' | 'parentcomms' |
- 'classroommode' | 'flashcardmode' | 'audiopronunciation' |
+ 'classroommode' | 'attendancelist' | 'flashcardmode' | 'audiopronunciation' |
  'reflectivepractice' | 'meetingclassrecorder' | 'weeklyagenda' | 'batchgrader' | 'progresstracker' | 'autoreport'
 
 const MODULES: Record<ModuleKey, React.ComponentType> = {
@@ -95,13 +96,14 @@ const MODULES: Record<ModuleKey, React.ComponentType> = {
  livequiz: LiveQuizModule,
  parentcomms: ParentCommunicator,
  classroommode: ClassroomMode,
+ attendancelist: AttendanceList,
  flashcardmode: FlashcardMode,
  audiopronunciation: AudioPronunciation,
  reflectivepractice: ReflectivePractice,
  meetingclassrecorder:MeetingClassRecorder,
  weeklyagenda: WeeklyAgenda,
  batchgrader: BatchGrader,
- progresstracker: ProgressTracker,
+ progresstracker: Analytics,
  autoreport: AutoReport,
 }
 

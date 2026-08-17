@@ -14,7 +14,6 @@ const NAV: Section[] = [
     { key: 'classes',        label: 'Turmas',                icon: 'ti-school' },
     { key: 'students',       label: 'Alunos',                icon: 'ti-user-circle' },
     { key: 'privatetutoring',label: 'Alunos Particulares',   icon: 'ti-user-dollar' },
-    { key: 'insights',       label: 'Insights',              icon: 'ti-bulb' },
   ]},
 
   { label: 'Criação', items: [
@@ -27,17 +26,18 @@ const NAV: Section[] = [
     { key: 'audiopronunciation',label: 'Pronúncia & Áudio',     icon: 'ti-microphone' },
   ]},
   { label: 'Em Sala de Aula', items: [
-    { key: 'classroommode', label: 'Auxiliar de Sala',     icon: 'ti-layout-dashboard' },
-    { key: 'flashcardmode', label: 'Flashcards',           icon: 'ti-cards' },
-    { key: 'livequiz',      label: 'Quiz ao Vivo',         icon: 'ti-device-gamepad-2' },
+    { key: 'attendancelist', label: 'Lista de Presença',    icon: 'ti-list-check' },
+    { key: 'classroommode',  label: 'Auxiliar de Sala',     icon: 'ti-layout-dashboard' },
+    { key: 'flashcardmode',  label: 'Flashcards',           icon: 'ti-cards' },
+    { key: 'livequiz',       label: 'Quiz ao Vivo',         icon: 'ti-device-gamepad-2' },
   ]},
 
   { label: 'Alunos & Avaliação', items: [
-    { key: 'gradebook',      label: 'Caderneta de Notas',  icon: 'ti-chart-bar' },
-    { key: 'omnigrader',     label: 'OmniCorretor',        icon: 'ti-camera' },
-    { key: 'batchgrader',    label: 'Correção em Lote',    icon: 'ti-files' },
-    { key: 'progresstracker',label: 'Evolução do Aluno',   icon: 'ti-trending-up' },
-    { key: 'analytics',      label: 'Desempenho',          icon: 'ti-chart-line' },
+    { key: 'gradebook',      label: 'Caderneta de Notas',    icon: 'ti-chart-bar' },
+    { key: 'omnigrader',     label: 'OmniCorretor',          icon: 'ti-camera' },
+    { key: 'batchgrader',    label: 'Correção em Lote',      icon: 'ti-files' },
+    { key: 'analytics',      label: 'Desempenho & Evolução', icon: 'ti-chart-line' },
+    { key: 'insights',       label: 'Insights Pedagógicos',  icon: 'ti-bulb' },
   ]},
   { label: 'Comunicação', items: [
     { key: 'parentcomms',    label: 'Mensagens aos Pais',  icon: 'ti-brand-whatsapp' },

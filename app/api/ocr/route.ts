@@ -1,4 +1,4 @@
-﻿import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -27,21 +27,32 @@ export async function POST(req: NextRequest) {
         ? `Extraia TODO o texto deste documento PDF, preservando a estrutura: titulos, subtitulos, paragrafos numerados, listas e tabelas. Retorne apenas o texto puro, sem comentarios.`
         : `Voce e um sistema de OCR especializado. Extraia TODO o texto visivel nesta imagem com maxima fidelidade. Preserve: numeracao de questoes, opcoes (a, b, c, d, e), enunciados, instrucoes, dialogos e qualquer texto impresso. Retorne apenas o texto extraido, sem comentarios adicionais.`
 
-      const geminiRes = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: mimeType, data: base64 } }] }],
-            generationConfig: { temperature: 0.1, maxOutputTokens: 8192 }
-          })
-        }
-      )
+      const models = ['gemini-flash-latest', 'gemini-2.5-flash', 'gemini-1.5-flash']
+      let geminiRes: Response | null = null
 
-      if (!geminiRes.ok) {
-        const errBody = await geminiRes.json().catch(() => ({}))
-        return NextResponse.json({ error: `Erro na API Gemini: ${errBody?.error?.message || geminiRes.status}` }, { status: 500 })
+      for (const m of models) {
+        try {
+          const res = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${geminiKey}`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: mimeType, data: base64 } }] }],
+                generationConfig: { temperature: 0.1, maxOutputTokens: 8192 }
+              })
+            }
+          )
+          if (res.ok) {
+            geminiRes = res
+            break
+          }
+        } catch {}
+      }
+
+      if (!geminiRes || !geminiRes.ok) {
+        const errBody = geminiRes ? await geminiRes.json().catch(() => ({})) : {}
+        return NextResponse.json({ error: `Erro na API Gemini: ${errBody?.error?.message || 'Falha ao processar OCR'}` }, { status: 500 })
       }
 
       const geminiData = await geminiRes.json()

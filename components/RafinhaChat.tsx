@@ -7,6 +7,8 @@ import { fillPortal, openPortal, logPortalFill } from '@/lib/portalBridge'
 import { addObservation, buildMemoryContext, diagnoseClassPerformance } from '@/lib/studentMemory'
 import type { CanonicalMessage } from '@/lib/agentTools'
 import type { ModuleKey } from '@/app/page'
+import { buildLongTermMemoryContext, saveLearnedFact, autoReflectAndLearn } from '@/lib/longTermMemory'
+import { matchStudentByName } from '@/lib/studentMatcher'
 
 // Types 
 interface Message {
@@ -31,55 +33,69 @@ interface RafinhaChatProps {
 
 // Tool display names 
 const TOOL_LABELS: Record<string, string> = {
- navigate_to_module: ' Navegando',
- add_todo: ' Adicionando tarefa',
- create_calendar_task: ' Criando evento',
- create_lesson_plan: ' Criando plano de aula',
- create_communication: ' Criando comunicado',
- add_student_grade: ' Lançando nota',
- fill_school_portal: ' Preenchendo portal',
- open_school_portal: ' Abrindo portal',
- generate_exam_content: ' Preparando prova',
- speak_response: ' Falando',
- update_student_metric: ' Métrica de aluno',
- record_student_observation: ' Registrando memória',
- create_class: ' Criando turma',
- create_student: ' Cadastrando aluno',
- add_qbank_question: ' Salvando no QBank',
- create_mindmap: ' Gerando Mapa Mental',
- create_document: ' Abrindo no Editor',
- apply_school_header: ' Aplicando cabeçalho',
- create_rubric: ' Criando rubrica',
- add_portfolio_item: ' Adicionando ao Portfólio',
- save_repo_material: ' Salvando no Repositório',
- generate_quick_questions: ' Questões Rápidas',
- query_library: ' Pesquisando na Biblioteca',
- search_web: ' Pesquisando na Internet',
+  navigate_to_module:             ' Navegando',
+  add_todo:                       ' Adicionando tarefa',
+  create_calendar_task:           ' Criando evento',
+  create_lesson_plan:             ' Criando plano de aula',
+  create_communication:           ' Criando comunicado',
+  add_student_grade:              ' Lançando nota',
+  fill_school_portal:             ' Preenchendo portal',
+  execute_portal_action:          ' Operando portal escolar',
+  open_school_portal:             ' Abrindo portal escolar',
+  generate_exam_content:          ' Gerando prova',
+  create_full_lesson:             ' Criando aula completa',
+  speak_response:                 ' Falando',
+  update_student_metric:          ' Atualizando métrica',
+  record_student_observation:     ' Gravando memória de aluno',
+  create_class:                   ' Criando turma',
+  create_student:                 ' Cadastrando aluno',
+  query_library:                  ' Consultando biblioteca RAG',
+  search_web:                     ' Pesquisando na internet',
+  remember_fact:                  ' Gravando aprendizado',
+  add_qbank_question:             ' Salvando no QBank',
+  create_mindmap:                 ' Gerando mapa mental',
+  create_document:                ' Abrindo no Editor',
+  apply_school_header:            ' Aplicando cabeçalho',
+  create_rubric:                  ' Criando rubrica',
+  add_portfolio_item:             ' Adicionando ao portfólio',
+  save_repo_material:             ' Salvando no repositório',
+  generate_quick_questions:       ' Gerando questões rápidas',
+  manage_didactic_sequence:       ' Atualizando sequência didática',
+  add_weekly_agenda_item:         ' Adicionando à agenda semanal',
+  generate_parent_communication:  ' Gerando mensagem para pais',
 }
 
 const TOOL_EST_SECONDS: Record<string, number> = {
- navigate_to_module: 1,
- add_todo: 1,
- create_calendar_task: 2,
- create_lesson_plan: 3,
- create_communication: 2,
- add_student_grade: 2,
- fill_school_portal: 5,
- open_school_portal: 2,
- generate_exam_content: 4,
- speak_response: 2,
- update_student_metric: 2,
- record_student_observation: 1,
- create_class: 1,
- create_student: 1,
- add_qbank_question: 2,
- create_mindmap: 3,
- create_document: 2,
- apply_school_header: 1,
- create_rubric: 2,
- add_portfolio_item: 2,
- save_repo_material: 2,
- generate_quick_questions: 3,
+  navigate_to_module:             1,
+  add_todo:                       1,
+  create_calendar_task:           2,
+  create_lesson_plan:             3,
+  create_communication:           3,
+  add_student_grade:              2,
+  fill_school_portal:             4,
+  execute_portal_action:          5,
+  open_school_portal:             1,
+  generate_exam_content:          6,
+  create_full_lesson:             6,
+  speak_response:                 1,
+  update_student_metric:          2,
+  record_student_observation:     2,
+  create_class:                   2,
+  create_student:                 2,
+  query_library:                  3,
+  search_web:                     4,
+  remember_fact:                  1,
+  add_qbank_question:             2,
+  create_mindmap:                 3,
+  create_document:                2,
+  apply_school_header:            1,
+  create_rubric:                  3,
+  add_portfolio_item:             2,
+  save_repo_material:             2,
+  generate_quick_questions:       3,
+  manage_didactic_sequence:       2,
+  add_weekly_agenda_item:         2,
+  generate_parent_communication:  3,
 }
 
 // Avatar SVG 
@@ -133,35 +149,34 @@ function undoLastAction(): boolean {
 
 // App context (enriquecido com memória de alunos) 
 function getAppContext(): string {
- try {
- const students = JSON.parse(localStorage.getItem('teacher_students') || '[]')
- const classes = JSON.parse(localStorage.getItem('teacher_classes') || '[]')
- const tasks = JSON.parse(localStorage.getItem('teacher_calendar_tasks') || '[]')
- const boards = JSON.parse(localStorage.getItem('teacher_lessonplanner_boards') || '[]')
- const todos = JSON.parse(localStorage.getItem('teacher_dashboard_todos') || '[]')
- const comms = JSON.parse(localStorage.getItem('teacher_communications') || '[]')
- const repo = JSON.parse(localStorage.getItem('teacher_repository') || '[]')
- const pending = tasks.filter((t: { done: boolean }) => !t.done)
- const upcoming = pending.slice(0, 15).map((t: { title: string; date: string; type: string }) => `${t.title} (${t.date})`).join(', ')
- const cardCount = boards.reduce((a: number, b: { cards: unknown[] }) => a + b.cards.length, 0)
- const repoSummary = repo.slice(0, 5).map((r: { title: string }) => r.title.replace(/^[^\w]*/, '')).join(', ')
+  try {
+    const students = JSON.parse(localStorage.getItem('teacher_students') || '[]')
+    const classes = JSON.parse(localStorage.getItem('teacher_classes') || '[]')
+    const tasks = JSON.parse(localStorage.getItem('teacher_calendar_tasks') || '[]')
+    const boards = JSON.parse(localStorage.getItem('teacher_lessonplanner_boards') || '[]')
+    const todos = JSON.parse(localStorage.getItem('teacher_dashboard_todos') || '[]')
+    const comms = JSON.parse(localStorage.getItem('teacher_communications') || '[]')
+    const repo = JSON.parse(localStorage.getItem('teacher_repository') || '[]')
+    const pending = tasks.filter((t: { done: boolean }) => !t.done)
+    const upcoming = pending.slice(0, 15).map((t: { title: string; date: string; type: string }) => `${t.title} (${t.date})`).join(', ')
+    const cardCount = boards.reduce((a: number, b: { cards: unknown[] }) => a + b.cards.length, 0)
+    const repoSummary = repo.slice(0, 5).map((r: { title: string }) => r.title.replace(/^[^\w]*/, '')).join(', ')
 
- const base = [
- `Alunos (${students.length}): ${students.slice(0, 40).map((s: { name: string }) => s.name).join(', ') || 'nenhum'}`,
- `Turmas: ${classes.map((c: { name: string }) => c.name).join(', ') || 'nenhuma'}`,
- `Biblioteca RAG (${repo.length} livros): ${repoSummary || 'nenhum'}`,
- `Eventos pendentes (${pending.length}): ${upcoming || 'nenhum'}`,
- `Planos: ${cardCount} | Checklist: ${todos.filter((t: { done: boolean }) => !t.done).length} | Comunicados: ${comms.length}`,
- ].join(' | ')
+    const base = [
+      `Alunos (${students.length}): ${students.slice(0, 40).map((s: { name: string }) => s.name).join(', ') || 'nenhum'}`,
+      `Turmas: ${classes.map((c: { name: string }) => c.name).join(', ') || 'nenhuma'}`,
+      `Biblioteca RAG (${repo.length} livros): ${repoSummary || 'nenhum'}`,
+      `Eventos pendentes (${pending.length}): ${upcoming || 'nenhum'}`,
+      `Planos: ${cardCount} | Checklist: ${todos.filter((t: { done: boolean }) => !t.done).length} | Comunicados: ${comms.length}`,
+    ].join(' | ')
 
- let longTermCtx = ''
- try {
- const { buildLongTermMemoryContext } = require('@/lib/longTermMemory')
- longTermCtx = buildLongTermMemoryContext()
- } catch {}
+    let longTermCtx = ''
+    try {
+      longTermCtx = buildLongTermMemoryContext()
+    } catch {}
 
- return base + buildMemoryContext() + longTermCtx
- } catch { return 'Dados indisponíveis' }
+    return base + buildMemoryContext() + longTermCtx
+  } catch { return 'Dados indisponíveis' }
 }
 
 // Tool executor 
@@ -241,33 +256,21 @@ async function executeTool(
  return `Comunicado "${input.title}" criado`
  }
  case 'record_student_observation': {
- // Encontra o studentId real
- const students = JSON.parse(localStorage.getItem('teacher_students') || '[]')
- const exactMatch = students.findIndex((s: { name: string; id: string }) =>
- s.name.toLowerCase() === (input.studentName as string).toLowerCase()
- )
- const partialMatches = students.filter((s: { name: string; id: string }) =>
- s.name.toLowerCase().includes((input.studentName as string).toLowerCase())
- )
- let found;
- if (exactMatch !== -1) {
- found = students[exactMatch]
- } else if (partialMatches.length === 1) {
- found = partialMatches[0]
- } else if (partialMatches.length > 1) {
- return `Encontrei ${partialMatches.length} alunos com esse nome: ${partialMatches.map((s: { name: string }) => s.name).join(', ')}. Por favor, especifique o nome completo.`
- } else {
- return `Aluno "${input.studentName}" não encontrado`
- }
- addObservation(
- found.id,
- found.name,
- input.note as string,
- input.category as string | undefined,
- input.subcategory as string | undefined,
- 'rafinha'
- )
- return `Observação registrada para ${found.name}: "${input.note}"`
+    const students = JSON.parse(localStorage.getItem('teacher_students') || '[]')
+    const match = matchStudentByName(input.studentName as string, students)
+    if (match.status === 'ambiguous' || match.status === 'not_found' || !match.student) {
+      return match.disambiguationPrompt || `Aluno "${input.studentName}" não encontrado.`
+    }
+    const found = students.find((s: { id: string }) => s.id === match.student!.id) || match.student
+    addObservation(
+      found.id,
+      found.name,
+      input.note as string,
+      input.category as string | undefined,
+      input.subcategory as string | undefined,
+      'rafinha'
+    )
+    return `Observação registrada para ${found.name}: "${input.note}"`
  }
  case 'create_class': {
  takeSnapshot()
@@ -407,44 +410,34 @@ async function executeTool(
  return `5 Questões Rápidas de Warm-up geradas sobre "${input.topic}"!`
  }
  case 'add_student_grade': {
- takeSnapshot()
- const students = JSON.parse(localStorage.getItem('teacher_students') || '[]')
- const gbConfig = JSON.parse(localStorage.getItem('teacher_gbConfig') || '{"cols":[]}')
- const exactMatch = students.findIndex((s: { name: string }) =>
- s.name.toLowerCase() === (input.studentName as string).toLowerCase()
- )
- const partialMatches = students.filter((s: { name: string }) =>
- s.name.toLowerCase().includes((input.studentName as string).toLowerCase())
- )
- let idx = -1;
- if (exactMatch !== -1) {
- idx = exactMatch
- } else if (partialMatches.length === 1) {
- idx = students.findIndex((s: { name: string }) => s.name === partialMatches[0].name)
- } else if (partialMatches.length > 1) {
- return `Encontrei ${partialMatches.length} alunos com esse nome: ${partialMatches.map((s: { name: string }) => s.name).join(', ')}. Por favor, especifique o nome completo.`
- } else {
- return `Aluno "${input.studentName}" não encontrado`
- }
- students[idx].grades = { ...(students[idx].grades || {}), [input.column as string]: String(input.grade) }
- localStorage.setItem('teacher_students', JSON.stringify(students))
- if (!gbConfig.cols.includes(input.column)) {
- gbConfig.cols.push(input.column)
- localStorage.setItem('teacher_gbConfig', JSON.stringify(gbConfig))
- }
- window.dispatchEvent(new Event('storage'))
+    takeSnapshot()
+    const students = JSON.parse(localStorage.getItem('teacher_students') || '[]')
+    const gbConfig = JSON.parse(localStorage.getItem('teacher_gbConfig') || '{"cols":[]}')
+    const match = matchStudentByName(input.studentName as string, students)
+    if (match.status === 'ambiguous' || match.status === 'not_found' || !match.student) {
+      return match.disambiguationPrompt || `Aluno "${input.studentName}" não encontrado.`
+    }
+    const idx = students.findIndex((s: { id: string }) => s.id === match.student!.id)
+    if (idx === -1) {
+      return `Aluno "${input.studentName}" não encontrado na lista.`
+    }
+    students[idx].grades = { ...(students[idx].grades || {}), [input.column as string]: String(input.grade) }
+    localStorage.setItem('teacher_students', JSON.stringify(students))
+    if (!gbConfig.cols.includes(input.column)) {
+      gbConfig.cols.push(input.column)
+      localStorage.setItem('teacher_gbConfig', JSON.stringify(gbConfig))
+    }
+    window.dispatchEvent(new Event('storage'))
 
- // Diagnóstico proativo de turma após lançar nota 
- const classRef = (students[idx] as { class?: string; classRef?: string }).class
- || (students[idx] as { class?: string; classRef?: string }).classRef || ''
- if (classRef) {
- setTimeout(() => {
- const diagnosis = diagnoseClassPerformance(classRef)
- if (diagnosis && speakFn) speakFn(diagnosis)
- }, 1500)
- }
-
- return `Nota ${input.grade} lançada para ${students[idx].name}`
+    // Diagnóstico proativo de turma após lançar nota 
+    const classRef = (students[idx] as { class?: string; classRef?: string }).class
+      || (students[idx] as { class?: string; classRef?: string }).classRef || ''
+    if (classRef) {
+      setTimeout(() => {
+        diagnoseClassPerformance(classRef)
+      }, 1000)
+    }
+    return `Nota ${input.grade} lançada para ${students[idx].name} em "${input.column}"`
  }
  case 'execute_portal_action': {
  takeSnapshot()
@@ -484,7 +477,7 @@ async function executeTool(
  date,
  classRef,
  description,
- mode,
+ mode: 'supervised' as const,
  absentStudents,
  studentGrades,
  evaluationName
@@ -495,9 +488,7 @@ async function executeTool(
  window.dispatchEvent(new Event('storage'))
 
  const spokenMsg = result.success
- ? (mode === 'autonomous'
- ? `Pronto! Ação de ${actionType} executada e salva automaticamente no portal ${platform}.`
- : `Pronto! Preenchi os campos da ação de ${actionType} no portal ${platform} para você revisar e salvar.`)
+ ? `Pronto! Preenchi visualmente os campos de ${actionType} no portal ${platform}. Por favor, confira os dados na tela do portal e clique manualmente em Salvar para concluir com segurança.`
  : `Não consegui conectar à aba do portal ${platform}. Verifique se a página está aberta no Chrome.`
 
  if (speakFn) speakFn(spokenMsg)
@@ -505,13 +496,26 @@ async function executeTool(
  }
  case 'fill_school_portal': {
  takeSnapshot()
- const result = await fillPortal({ platform: input.platform as never, title: input.title as string, date: input.date as string || '', classRef: input.classRef as string || '', description: input.description as string || '' }) as any
+ const result = await fillPortal({ 
+ platform: input.platform as never, 
+ title: input.title as string, 
+ date: input.date as string || '', 
+ classRef: input.classRef as string || '', 
+ description: input.description as string || '',
+ mode: 'supervised'
+ }) as any
  if (result && result.success === false) {
- return `Portal ${PORTAL_NAMES[input.platform as string] || input.platform} não respondeu. Verifique se a extensão Chrome está instalada e o portal está aberto.`
+ return `Portal ${PORTAL_NAMES[input.platform as string] || input.platform} não respondeu. Verifique se o portal está aberto no Chrome.`
  }
- logPortalFill({ platform: input.platform as never, title: input.title as string, date: input.date as string || '', classRef: input.classRef as string || '' })
+ logPortalFill({ 
+ platform: input.platform as never, 
+ title: input.title as string, 
+ date: input.date as string || '', 
+ classRef: input.classRef as string || '',
+ mode: 'supervised'
+ })
  window.dispatchEvent(new Event('storage'))
- return `Preenchido no ${PORTAL_NAMES[input.platform as string] || input.platform}`
+ return `Campos preenchidos visualmente no ${PORTAL_NAMES[input.platform as string] || input.platform}. Revise e clique em Salvar no portal.`
  }
  case 'open_school_portal': {
  openPortal(input.platform as string)
@@ -536,34 +540,26 @@ async function executeTool(
  return `Falando: "${text?.slice(0, 50)}"`
  }
  case 'update_student_metric': {
- takeSnapshot()
- const studentName = input.studentName as string
- const metricKey = input.metricKey as string
- const score = Number(input.score)
- const students = JSON.parse(localStorage.getItem('teacher_students') || '[]')
- const exactMatch = students.findIndex((s: { name: string }) =>
- s.name.toLowerCase() === studentName.toLowerCase()
- )
- const partialMatches = students.filter((s: { name: string }) =>
- s.name.toLowerCase().includes(studentName.toLowerCase())
- )
- let idx = -1;
- if (exactMatch !== -1) {
- idx = exactMatch
- } else if (partialMatches.length === 1) {
- idx = students.findIndex((s: { name: string }) => s.name === partialMatches[0].name)
- } else if (partialMatches.length > 1) {
- return `Encontrei ${partialMatches.length} alunos com esse nome: ${partialMatches.map((s: { name: string }) => s.name).join(', ')}. Por favor, especifique o nome completo.`
- } else {
- return `Aluno "${studentName}" não encontrado`
- }
- const studentId = students[idx].id
- const allMetrics = JSON.parse(localStorage.getItem('teacher_student_metrics') || '[]')
- const upd = allMetrics.filter((m: { studentId: string }) => m.studentId !== studentId)
- const old = allMetrics.find((m: { studentId: string }) => m.studentId === studentId)?.scores || {}
- localStorage.setItem('teacher_student_metrics', JSON.stringify([...upd, { studentId, scores: { ...old, [metricKey]: score } }]))
- window.dispatchEvent(new Event('storage'))
- return `Métrica "${metricKey}" de ${students[idx].name} ${score}/10`
+    takeSnapshot()
+    const studentName = input.studentName as string
+    const metricKey = input.metricKey as string
+    const score = Number(input.score)
+    const students = JSON.parse(localStorage.getItem('teacher_students') || '[]')
+    const match = matchStudentByName(studentName, students)
+    if (match.status === 'ambiguous' || match.status === 'not_found' || !match.student) {
+      return match.disambiguationPrompt || `Aluno "${studentName}" não encontrado.`
+    }
+    const idx = students.findIndex((s: { id: string }) => s.id === match.student!.id)
+    if (idx === -1) {
+      return `Aluno "${studentName}" não encontrado.`
+    }
+    const studentId = students[idx].id
+    const allMetrics = JSON.parse(localStorage.getItem('teacher_student_metrics') || '[]')
+    const upd = allMetrics.filter((m: { studentId: string }) => m.studentId !== studentId)
+    const old = allMetrics.find((m: { studentId: string }) => m.studentId === studentId)?.scores || {}
+    localStorage.setItem('teacher_student_metrics', JSON.stringify([...upd, { studentId, scores: { ...old, [metricKey]: score } }]))
+    window.dispatchEvent(new Event('storage'))
+    return `Métrica "${metricKey}" de ${students[idx].name} atualizada para ${score}/10`
  }
  case 'query_library': {
  const { searchLibraryContext } = await import('@/lib/ragEngine')
@@ -590,6 +586,58 @@ async function executeTool(
  const { saveLearnedFact } = await import('@/lib/longTermMemory')
  saveLearnedFact(input.fact as string, (input.category as any) || 'teacher_preference', 'rafinha_tool')
  return `Fato gravado na memória de longo prazo: "${input.fact}"`
+ }
+ case 'manage_didactic_sequence': {
+ takeSnapshot()
+ const rawUnits = localStorage.getItem('teacher_didactic_sequence_units_v3') || localStorage.getItem('teacher_didactic_sequence_units_v2') || '[]'
+ let unitsList = JSON.parse(rawUnits)
+ const unitNum = Number(input.unitNumber) || 1
+ if (input.action === 'set_current' || input.action === 'advance_unit') {
+ unitsList = unitsList.map((u: any) => {
+ if (u.unitNumber === unitNum) return { ...u, status: 'current', completionStatus: 'in_progress' }
+ if (u.unitNumber < unitNum) return { ...u, status: 'completed', completionStatus: 'completed' }
+ return { ...u, status: 'upcoming', completionStatus: 'pending' }
+ })
+ localStorage.setItem('teacher_didactic_sequence_units_v3', JSON.stringify(unitsList))
+ window.dispatchEvent(new Event('storage'))
+ }
+ if (onNavigate) onNavigate('didacticsequence' as any)
+ return `Sequência Didática atualizada! Unidade ${unitNum} definida como o conteúdo atual da matéria.`
+ }
+ case 'add_weekly_agenda_item': {
+ takeSnapshot()
+ const rawPosts = localStorage.getItem('teacher_weekly_agenda_posts_v1') || '[]'
+ const posts = JSON.parse(rawPosts)
+ const newPost = {
+ id: `post_${Date.now()}`,
+ day: input.day || 'Segunda',
+ time: input.time || '08:00 - 08:50',
+ title: input.title,
+ school: input.school || 'Escola Principal',
+ className: input.className || '9º Ano',
+ room: input.room || 'Sala 12',
+ color: '#8b5e3c',
+ notes: input.notes || '',
+ syncedToSupabase: false,
+ }
+ posts.push(newPost)
+ localStorage.setItem('teacher_weekly_agenda_posts_v1', JSON.stringify(posts))
+ window.dispatchEvent(new Event('storage'))
+ if (onNavigate) onNavigate('weeklyagenda' as any)
+ return `Aula/compromisso "${input.title}" adicionado à Agenda Semanal na ${input.day}!`
+ }
+ case 'generate_parent_communication': {
+ takeSnapshot()
+ const messageData = {
+ studentName: input.studentName,
+ topic: input.topic,
+ tone: input.tone || 'amigavel',
+ generatedAt: Date.now()
+ }
+ localStorage.setItem('teacher_parent_comms_prefill', JSON.stringify(messageData))
+ window.dispatchEvent(new CustomEvent('teacher:parent_comms_prefill'))
+ if (onNavigate) onNavigate('parentcomms' as any)
+ return `Mensagem personalizada para os pais de ${input.studentName} sobre "${input.topic}" redigida no ParentComms!`
  }
  default:
  return `${name} executado`
@@ -721,13 +769,39 @@ export default function RafinhaChat({ onNavigate, onCommandReady }: RafinhaChatP
  }])
  const [interimText, setInterimText] = useState('')
  const [isLoading, setIsLoading] = useState(false)
- const [voiceOut, setVoiceOut] = useState(true)
+ const [voiceOut, setVoiceOut] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return true
+    try {
+      return localStorage.getItem('teacher_voice_out') !== 'false'
+    } catch {
+      return true
+    }
+  })
  const [isLiveMode, setIsLiveMode] = useState(false)
  const [isHDVoice, setIsHDVoice] = useState(false)
  const [isSpeaking, setIsSpeaking] = useState(false)
  const [inputText, setInputText] = useState('')
  const [canUndo, setCanUndo] = useState(false)
  const [showLog, setShowLog] = useState(false)
+
+ const toggleVoiceOut = () => {
+    setVoiceOut(prev => {
+      const next = !prev
+      try {
+        localStorage.setItem('teacher_voice_out', String(next))
+      } catch {}
+      if (!next) {
+        if (window.speechSynthesis) window.speechSynthesis.cancel()
+        if (audioRef.current) {
+          audioRef.current.pause()
+          audioRef.current = null
+        }
+        setIsSpeaking(false)
+        isSpeakingRef.current = false
+      }
+      return next
+    })
+  }
 
  // Execution state
  const [runningTools, setRunningTools] = useState<LogEntry[]>([])
@@ -1035,11 +1109,11 @@ export default function RafinhaChat({ onNavigate, onCommandReady }: RafinhaChatP
  // O indicador visual de loading já comunica que a Rafinha está pensando
 
  try {
- // B1: Limitar iterations por tipo de task evita loop agêntico em tasks simples
+ // B1: Limitar iterations por tipo de task com profundidade suficiente para encadeamento de ferramentas
  const taskLower = trimmed.toLowerCase()
  const isActionTask = /vá|va |abra|abrir|naveg|adicione|crie turma|crie aluno|lance|lançar|registre/i.test(taskLower)
  const isGenerationTask = /prova|exercício|plano de aula|questão|atividade|sequência didática/i.test(taskLower)
- const maxIterations = isActionTask ? 2 : isGenerationTask ? 4 : 3
+ const maxIterations = isActionTask ? 4 : isGenerationTask ? 6 : 5
 
  for (let iteration = 0; iteration < maxIterations; iteration++) {
  const res = await fetch('/api/agent', {
@@ -1154,18 +1228,23 @@ export default function RafinhaChat({ onNavigate, onCommandReady }: RafinhaChatP
 
  } catch (error) {
  const rawMsg = error instanceof Error ? error.message : 'Erro de conexão'
- const isQuotaError = rawMsg.includes('429') || rawMsg.includes('quota') || rawMsg.includes('exceeded') || rawMsg.includes('provedor')
- const cleanMsg = isQuotaError
- ? ' As cotas das IAs atingiram o limite temporário. O aplicativo foi reencaminhado para o provedor Groq. Por favor, envie sua mensagem novamente!'
- : ` Não foi possível completar a ação: ${rawMsg}`
+ let cleanMsg = ''
+
+ if (rawMsg.includes('Nenhuma chave de API configurada') || rawMsg.includes('API key') || rawMsg.includes('key')) {
+ cleanMsg = '⚠️ Nenhuma chave de IA está ativa no momento. Para conversar comigo, acesse o menu lateral **APIs & Modelos** e insira sua chave gratuita do **Google Gemini** ou **Groq**!'
+ } else if (rawMsg.includes('429') || rawMsg.includes('quota') || rawMsg.includes('rate limit')) {
+ cleanMsg = '⏱️ Limite temporário de requisições atingido. Por favor, aguarde cerca de 20 segundos para a cota por minuto renovar e envie novamente!'
+ } else {
+ cleanMsg = `⚠️ Não foi possível completar a resposta: ${rawMsg}`
+ }
 
  setMessages(prev => {
  const last = prev[prev.length - 1]
- if (last.role === 'assistant' && !last.content)
+ if (last && last.role === 'assistant' && !last.content)
  return [...prev.slice(0, -1), { role: 'assistant', content: cleanMsg }]
  return [...prev, { role: 'assistant', content: cleanMsg }]
  })
- speak('Ops, tive uma falha de conexão. Por favor, tente novamente.')
+ speak('Ops, verifique as configurações de API no menu lateral.')
  } finally {
  setIsLoading(false)
  isLoadingRef.current = false
@@ -1280,12 +1359,26 @@ export default function RafinhaChat({ onNavigate, onCommandReady }: RafinhaChatP
  <i className="ti ti-headset" />
  <span>{isLiveMode ? ' ALEXA ON' : ' Modo Alexa'}</span>
  </button>
- {/* Voz */}
- <button onClick={() => setVoiceOut(v => !v)} style={{
- background: voiceOut ? 'rgba(133,153,0,0.25)' : 'rgba(255,255,255,0.08)', border: 'none',
- color: voiceOut ? '#859900' : '#93a1a1', padding: 6, borderRadius: 8, cursor: 'pointer', fontSize: 15,
- }}>
- <i className={voiceOut ? 'ti ti-volume' : 'ti ti-volume-off'} />
+ {/* Voz / Modo Silencioso */}
+ <button
+ onClick={toggleVoiceOut}
+ title={voiceOut ? '🔊 Voz Ativada (Rafinha fala as respostas). Clique para alternar para Modo Silencioso.' : '🔇 Modo Silencioso Ativo (Apenas texto, sem áudio). Clique para ativar a voz.'}
+ style={{
+ background: voiceOut ? 'rgba(133,153,0,0.25)' : 'rgba(255,255,255,0.08)',
+ border: `1px solid ${voiceOut ? 'rgba(133,153,0,0.4)' : 'rgba(255,255,255,0.15)'}`,
+ color: voiceOut ? '#859900' : '#93a1a1',
+ padding: '4px 8px',
+ borderRadius: 8,
+ cursor: 'pointer',
+ fontSize: 12,
+ fontWeight: 700,
+ display: 'flex',
+ alignItems: 'center',
+ gap: 4,
+ }}
+ >
+ <i className={voiceOut ? 'ti ti-volume' : 'ti ti-volume-off'} style={{ fontSize: 13 }} />
+ <span>{voiceOut ? 'Voz' : 'Mudo'}</span>
  </button>
  <button onClick={() => setIsOpen(false)} style={{ background: 'none', border: 'none', color: '#93a1a1', fontSize: 20, cursor: 'pointer', lineHeight: 1 }}>×</button>
  </div>

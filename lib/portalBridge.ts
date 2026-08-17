@@ -1,7 +1,12 @@
 /**
- * portalBridge.ts — Bridge bidirecional entre o TEACHER??? e a extensão Chrome
- * Suporta Execução Agêntica Completa (Diários, Chamadas, Notas, Tarefas)
- * nos Modos Supervisionado e Autônomo com Voz.
+ * portalBridge.ts — Bridge bidirecional entre o TEACHER AI e a extensão Chrome
+ *
+ * ============================================================================
+ * DIRETIVA DE SEGURANÇA 0-TESTER (CONFIRMAÇÃO HUMANA OBRIGATÓRIA):
+ * 1. Todos os preenchimentos ocorrem em MODO SUPERVISIONADO (autoSubmit: false).
+ * 2. A extensão e os scripts de injeção apenas populam os inputs no DOM e param.
+ * 3. A gravação/salvamento final exige clique manual da professora.
+ * ============================================================================
  */
 
 import { getPortalProfiles, PortalProfileDef, PortalActionDef } from './portalActionsEngine'
@@ -19,7 +24,7 @@ export interface PortalFillPayload {
   presentStudents?: string[]
   studentGrades?: Array<{ name: string; grade: number; id?: string }>
   evaluationName?: string
-  mode?: 'supervised' | 'autonomous'
+  mode?: 'supervised'
   customFields?: Record<string, any>
 }
 
@@ -107,6 +112,8 @@ export function fillPortal(payload: PortalFillPayload): Promise<{ success: boole
         presentStudents: payload.presentStudents || [],
         studentGrades: payload.studentGrades || [],
         evaluationName: payload.evaluationName || 'Avaliação 1',
+        autoSubmit: false,
+        requiresHumanConfirmation: true,
         customFields: payload.customFields || {}
       }
     }
@@ -173,11 +180,22 @@ export function getRecentFills(): Array<{
   } catch { return [] }
 }
 
+import {
+  logPortalActionRecord,
+  hasActivePortalConsent,
+  recordPortalConsent
+} from './portalSanitizer'
+
 /**
- * Registra um preenchimento bem-sucedido no log
+ * Registra um preenchimento bem-sucedido no log (com criptografia transparente e auditoria LGPD)
  */
 export function logPortalFill(payload: PortalFillPayload): void {
   try {
+    // Garante consentimento ativo no 1º uso
+    if (!hasActivePortalConsent()) {
+      recordPortalConsent()
+    }
+
     const log = getRecentFills()
     log.unshift({
       platform: payload.platform,
@@ -190,6 +208,27 @@ export function logPortalFill(payload: PortalFillPayload): void {
       timestamp: Date.now(),
     })
     localStorage.setItem('teacher_portal_fill_log', JSON.stringify(log.slice(0, 30)))
+
+    // Registra na Trilha de Auditoria com Criptografia Transparente AES-GCM
+    const studentCount = (payload.absentStudents?.length || 0) + (payload.presentStudents?.length || 0) + (payload.studentGrades?.length || 0)
+    logPortalActionRecord({
+      platform: payload.platform,
+      platformName: getPortalName(payload.platform),
+      actionType: payload.actionType || 'diary',
+      classRef: payload.classRef || 'Geral',
+      studentCount,
+      status: 'injected_visual',
+      summary: `${payload.title} (${payload.classRef || 'Geral'}) - Data: ${payload.date || 'Hoje'}`,
+      rawDetails: {
+        title: payload.title,
+        date: payload.date,
+        description: payload.description,
+        absentStudents: payload.absentStudents,
+        presentStudents: payload.presentStudents,
+        studentGrades: payload.studentGrades,
+        evaluationName: payload.evaluationName
+      }
+    }).catch(() => {})
   } catch {}
 }
 

@@ -18,10 +18,6 @@ interface ClassData {
 
 type AttendanceStatus = 'present' | 'absent' | 'late' | 'none';
 
-interface AttendanceRecord {
-  status: AttendanceStatus;
-}
-
 interface ParticipationRecord {
   participated: number;
   correct: number;
@@ -320,6 +316,11 @@ export default function ClassroomMode() {
   const [toastMessage, setToastMessage] = useState('');
   const audioCtxRef = useRef<AudioContext | null>(null);
 
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(''), 3000);
+  };
+
   const handleExecuteMirrorAttendance = async () => {
     if (!selectedClass) return;
     const targetClassObj = classes.find(c => c.id === selectedClass);
@@ -347,13 +348,11 @@ export default function ClassroomMode() {
   };
 
   useEffect(() => {
-    // Load real data from localStorage
     const rawClasses = localStorage.getItem('teacher_classes');
     const rawStudents = localStorage.getItem('teacher_students');
     const loadedClasses = rawClasses ? JSON.parse(rawClasses) : [];
     const loadedStudents = rawStudents ? JSON.parse(rawStudents) : [];
 
-    // Purga de dados mock legados se existirem
     const MOCK_NAMES = ['Alice Smith', 'Bob Jones', 'Charlie Brown', 'Diana Prince'];
     const cleanClasses = loadedClasses.filter((c: any) => c.id !== 'c1' && c.id !== 'c2');
     const cleanStudents = loadedStudents.filter((s: any) => !MOCK_NAMES.includes(s.name) && !['s1', 's2', 's3', 's4'].includes(s.id));
@@ -374,7 +373,6 @@ export default function ClassroomMode() {
       const filtered = students.filter(s => s.classId === selectedClass);
       setClassStudents(filtered);
 
-      // Load or init today's attendance
       const today = new Date().toISOString().split('T')[0];
       const attKey = `teacher_attendance_${selectedClass}_${today}`;
       const savedAtt = JSON.parse(localStorage.getItem(attKey) || '{}');
@@ -383,7 +381,8 @@ export default function ClassroomMode() {
       const initPart: Record<string, ParticipationRecord> = {};
 
       filtered.forEach(s => {
-        initAtt[s.id] = savedAtt[s.id] || 'none';
+        const val = savedAtt[s.id];
+        initAtt[s.id] = (typeof val === 'string' ? val : val?.status) || 'none';
         initPart[s.id] = { participated: 0, correct: 0, incorrect: 0, help: 0 };
       });
 
@@ -407,7 +406,7 @@ export default function ClassroomMode() {
     const gainNode = ctx.createGain();
 
     osc.type = 'sine';
-    osc.frequency.setValueAtTime(880, ctx.currentTime); // A5
+    osc.frequency.setValueAtTime(880, ctx.currentTime);
     gainNode.gain.setValueAtTime(0.1, ctx.currentTime);
     gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
 
@@ -425,8 +424,6 @@ export default function ClassroomMode() {
       interval = setInterval(() => {
         setTimeLeft(prev => {
           const newTime = prev - 1;
-
-          // Phase check (15% warmup, 70% main, 15% wrapup)
           const totalSecs = totalMinutes * 60;
           const warmupThreshold = totalSecs * 0.85;
           const wrapupThreshold = totalSecs * 0.15;
@@ -461,42 +458,35 @@ export default function ClassroomMode() {
   const formatTime = (secs: number) => {
     const m = Math.floor(secs / 60);
     const s = secs % 60;
-    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
   };
 
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(''), 3000);
+  const handleAttendance = (studentId: string, status: AttendanceStatus) => {
+    setAttendance(prev => ({
+      ...prev,
+      [studentId]: prev[studentId] === status ? 'none' : status
+    }));
   };
 
-  const handleAttendance = (id: string, status: AttendanceStatus) => {
-    setAttendance(prev => ({ ...prev, [id]: status }));
-  };
-
-  const saveAttendance = () => {
-    if (!selectedClass) return;
-    const today = new Date().toISOString().split('T')[0];
-    localStorage.setItem(`teacher_attendance_${selectedClass}_${today}`, JSON.stringify(attendance));
-
-    // Save participation
-    localStorage.setItem(`teacher_participation_${selectedClass}_${today}`, JSON.stringify(participation));
-
-    showToast('Aula salva com sucesso!');
-  };
-
-  const handleParticipation = (id: string, type: keyof ParticipationRecord) => {
+  const handleParticipation = (studentId: string, type: keyof ParticipationRecord) => {
     setParticipation(prev => ({
       ...prev,
-      [id]: {
-        ...prev[id],
-        [type]: prev[id][type] + 1
+      [studentId]: {
+        ...prev[studentId],
+        [type]: prev[studentId][type] + 1,
+        participated: prev[studentId].participated + 1
       }
     }));
   };
 
+  const saveAttendance = () => {
+    const today = new Date().toISOString().split('T')[0];
+    localStorage.setItem(`teacher_attendance_${selectedClass}_${today}`, JSON.stringify(attendance));
+    showToast('Chamada salva localmente com sucesso!');
+  };
+
   const spinRoulette = () => {
-    if (classStudents.length === 0) return;
-    
+    if (isSpinning) return;
     const presentStudents = classStudents.filter(s => attendance[s.id] === 'present' || attendance[s.id] === 'late');
     
     if (presentStudents.length === 0) {
@@ -525,7 +515,6 @@ export default function ClassroomMode() {
     }, 100);
   };
 
-  // Color mapping based on phase
   let timerColor = '#3d7a4e';
   if (currentPhase === 'main') timerColor = '#8b5e3c';
   if (currentPhase === 'wrapup') timerColor = '#a83232';
@@ -585,7 +574,7 @@ export default function ClassroomMode() {
         <div style={styles.emptyState}>
           <i className="ti ti-chalkboard" style={{ fontSize: '64px', opacity: 0.5 }}></i>
           <h2>Selecione uma turma para começar a aula</h2>
-          <p>Você terá acesso ao cronômetro estruturado, chamada e controle de participação.</p>
+          <p>Você terá acesso ao cronômetro estruturado, chamada rápida e controle de participação.</p>
         </div>
       ) : (
         <div style={styles.grid}>

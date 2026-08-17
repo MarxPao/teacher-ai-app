@@ -48,17 +48,16 @@ export function calculateDynamicTokens(lastUserMessage: string): { maxTokens: nu
 
   // Comandos simples (adicionar tarefa, navegar, checklist, confirmação)
   if (/^adicion[ae]|naveg[ue]|vái para|cri[ae] tarefa|abra|limp[ae]|marqu[ae]/.test(lower) || lower.length < 30) {
-    return { maxTokens: 768, temperature: 0.3 }
+    return { maxTokens: 512, temperature: 0.3 }
   }
 
-  // Geração de provas, planos de aula ou exercícios ELT — 8192 tokens para garantir 10 a 20 questões completas sem truncamento
+  // Geração de provas, planos de aula ou exercícios ELT
   if (/crie|gere|monte|prova|exame|plano de aula|exercício|rubrica|questão|exam|exercise/.test(lower)) {
-    return { maxTokens: 8192, temperature: 0.7 }
+    return { maxTokens: 2500, temperature: 0.7 }
   }
-
 
   // Chat padrão / respostas do dia a dia
-  return { maxTokens: 1280, temperature: 0.6 }
+  return { maxTokens: 1024, temperature: 0.6 }
 }
 
 /**

@@ -1,0 +1,379 @@
+================================================================================
+                    TEACHER AI APP — WHITE PAPER & DOSSIÊ TÉCNICO
+         PLATAFORMA INTEGRADA DE INTELIGÊNCIA ARTIFICIAL E GESTÃO PEDAGÓGICA
+================================================================================
+Documento Oficial: Ficha Técnica, Plano Conceitual e Arquitetura Funcional
+Versão: 2.5 Enterprise Pro
+Autor/Mantenedor: MarxPao / Equipe Pedagógica Teacher AI
+Data de Emissão: Agosto de 2026
+Formato: Texto Puro Estruturado (.txt)
+================================================================================
+
+
+--------------------------------------------------------------------------------
+1. SUMÁRIO EXECUTIVO
+--------------------------------------------------------------------------------
+O Teacher AI App é um ecossistema computacional de ponta concebido para resolver
+o maior gargalo da educação contemporânea: a sobrecarga burocrática, o retrabalho
+de digitação manual em múltiplos portais escolares e a fragmentação do planejamento
+pedagógico do professor.
+
+A plataforma unifica em uma única interface fluida, moderna e reativa:
+1. Criação acelerada de aulas, avaliações e exercícios com ancoragem estrita ou
+   híbrida em múltiplos arquivos (PDF, DOCX, Imagens com OCR, Áudios, Web).
+2. Diagnóstico longitudinal de desempenho e evolução dos alunos com IA.
+3. Assistência em sala de aula em tempo real (gamificação, cronômetros, quizzes).
+4. Correção automatizada de provas manuscritas e testes via Visão Computacional.
+5. Espelhamento bidirecional autônomo com portais escolares (SigaEdu, SEDUC,
+   Google Classroom, Totvs, etc.) através de extensão de navegador e Web Bridge.
+6. Gestão financeira e pedagógica completa para professores particulares.
+
+
+--------------------------------------------------------------------------------
+2. FICHA TÉCNICA (TECHNICAL SPECIFICATIONS)
+--------------------------------------------------------------------------------
+Nome do Sistema:        Teacher AI App (Sistema Operacional do Professor)
+Repositório Git:        https://github.com/MarxPao/teacher-ai-app.git
+Branch de Produção:     main
+Arquitetura de UI:      Next.js 16 (App Router + Turbopack Bundler)
+Linguagem Principal:    TypeScript (Strict Type-Checking) + React 19
+Estilização:            Design System Nativo HSL, Vanilla CSS, Micro-animações
+Ícones e Tipografia:    Tabler Icons, Google Fonts (Fraunces & Plus Jakarta Sans)
+Banco de Dados Cloud:   PostgreSQL via Supabase (REST API + Row Level Security)
+Arquitetura de Dados:   Local-First Resiliente (LocalStorage + Auto-Sync Cloud)
+Servidor de Voz / Áudio: ElevenLabs API (Síntese Neural de Vozes Multilíngues)
+Motor de Transcrição:   OpenAI Whisper API (Transcrição de Aulas e Atas)
+Motores de IA LLM:      Google Gemini 2.5 Flash / Pro, GPT-4o, Groq Llama 3 (70B)
+Visão Computacional:    Gemini 2.5 Flash Vision OCR para documentos manuscritos
+Pesquisa Web ao Vivo:   DuckDuckGo Live Search Engine & HTML Scraper
+Extensão de Navegador:  Chrome Extension Manifest V3 (Content Script + Bridge)
+
+
+--------------------------------------------------------------------------------
+3. PLANO CONCEITUAL & FILOSOFIA PEDAGÓGICA
+--------------------------------------------------------------------------------
+3.1. A MISSÃO DO PROFESSOR AUMENTADO (AI-AUGMENTED EDUCATOR)
+O Teacher AI App não substitui o julgamento humano do educador; pelo contrário,
+ele atua como um exoesqueleto cognitivo e administrativo que assume 100% das
+tarefas mecânicas e repetitivas (formatação de provas, digitação de notas,
+elaboração de gabaritos, busca de imagens, elaboração de relatórios burocráticos
+e transcrição de atas), devolvendo ao professor o tempo para focar na mediação
+humana e no acolhimento afetivo do estudante.
+
+3.2. SUPORTE NATIVO A METODOLOGIAS ATIVAS E CURRÍCULOS INTERNACIONAIS
+O motor generativo do sistema foi calibrado com diretrizes pedagógicas estritas:
+- BNCC (Base Nacional Comum Curricular): Competências gerais, campos de atuação e
+  códigos de habilidades (EF06LI, EM13LGG, etc.).
+- CEFR (Quadro Comum Europeu de Referência): Progressão nivelada de A1 a C2.
+- Frameworks Ativos:
+  * Cambridge Assessment English (Task-Based Learning - TBL).
+  * CLIL (Content and Language Integrated Learning).
+  * PBL (Project-Based Learning / Aprendizagem Baseada em Problemas).
+  * Metodologia 4C (Pensamento Crítico, Criatividade, Colaboração, Comunicação).
+  * Gamificação Estruturada e Ensino Híbrido.
+
+3.3. INCLUSÃO E ACESSIBILIDADE UNIVERSAL (MOTOR NEE / SEN)
+O sistema possui gerador e conversor integrado para Necessidades Educacionais
+Especiais (NEE):
+- TDAH: Questões fragmentadas, comandos diretos e destaque visual em negrito.
+- TEA (Espectro Autista): Redução de ambiguidades, linguagem literal e pistas visuais.
+- Dislexia: Fontes de alta legibilidade, espaçamento ampliado e suporte fonético.
+- Baixa Visão: Alto contraste e descrições semânticas de áudio.
+
+
+--------------------------------------------------------------------------------
+4. AGENTES & MOTORES DE INTELIGÊNCIA ARTIFICIAL
+--------------------------------------------------------------------------------
+4.1. RAFINHA IA (ASSISTENTE PEDAGÓGICA AUTÔNOMA)
+A Rafinha é o cérebro conversacional do sistema, acessível em qualquer tela via
+chat lateral retrátil ou comando de voz. Ela é equipada com "Function Calling"
+(Agent Tools) que a capacita a:
+- Navegar automaticamente entre os 37 módulos do sistema a pedido do usuário.
+- Criar e matricular alunos no banco de dados.
+- Consultar notas, calcular médias e gerar diagnósticos de retenção.
+- Gerar exercícios, planos de aula e comunicados instantâneos.
+- Enviar ordens de preenchimento e espelhamento para a extensão do Chrome.
+
+4.2. HUB DE CONHECIMENTO MULTI-FONTES (NOTEBOOKLM ARCHITECTURE)
+Inspirado na arquitetura do Google NotebookLM, o Teacher AI App permite ao
+professor alimentar seus geradores com múltiplos arquivos simultâneos:
+- Livros Didáticos cadastrados na Biblioteca (`teacher_repository`).
+- Arquivos Avulsos (`teacher_loose_files_v1`).
+- Upload direto de PDFs (extraídos via pdfjs), Word DOCX, imagens com OCR e notas.
+- Pesquisa ao Vivo na Web com injeção de artigos recentes.
+- Boxes Modulares: Cada fonte possui toggle ativo/inativo, contador de palavras,
+  visualizador do texto completo e campo de recorte de páginas/unidade.
+- Três Modos de Grounding IA:
+  * ⚡ Modo Híbrido: Combina as fontes com as metodologias ativas e BNCC.
+  * 📌 Modo Estrito (Grounded RAG): 100% fiel às fontes sem alucinação.
+  * 🌐 Modo Web & Aberto: Enriquece com fatos atualizados da internet.
+
+4.3. WISPRFLOW & VOICEORB (CONTROLE POR VOZ CONTÍNUO)
+- Interface circular translúcida reativa (VoiceOrb) que detecta a fala do professor.
+- Ditado rápido contínuo (WisprFlow) para preenchimento de campos de texto,
+  pareceres e anotações sem encostar no teclado.
+
+4.4. OMNIGRADER & VISION COMPUTACIONAL (OCR PEDAGÓGICO)
+- Processa fotos e digitalizações de provas manuscritas e testes de múltipla escolha.
+- Compara a resposta do aluno com o gabarito oficial, identifica a caligrafia,
+  computa a pontuação e gera justificativas pedagógicas de correção.
+
+
+--------------------------------------------------------------------------------
+5. GUIA EXAUSTIVO DE MÓDULOS & FUNCIONALIDADES
+--------------------------------------------------------------------------------
+O sistema está organizado em 7 macro-áreas estratégicas contendo 37 módulos:
+
+================================================================================
+ÁREA 1: ORGANIZAÇÃO & GESTÃO ACADÊMICA
+================================================================================
+1.1. Início (Dashboard)
+- Painel central consolidado com métricas do dia, atalhos rápidos de criação,
+  status do espelhamento de portais e agenda de aulas em tempo real.
+
+1.2. Escolas (Organization)
+- Cadastro de múltiplas unidades escolares com identificador visual em cores.
+- Definição de regras curriculares, pesos de notas e períodos letivos por escola.
+
+1.3. Turmas (Classes)
+- Gerenciamento de classes por ano, série, turno, disciplina e escola.
+- Visualização de horários semanais e lista de alunos matriculados.
+
+1.4. Alunos (Students)
+- Ficha individual de cada estudante: foto, nível de proficiência (CEFR A1-C2),
+  necessidades educacionais especiais (NEE), histórico de notas e contatos dos pais.
+
+1.5. Alunos Particulares (Private Tutoring)
+- Módulo financeiro e pedagógico completo para aulas particulares:
+  * Gestão de mensalidades, pacotes de horas e controle de pagamentos (PIX/Cartão).
+  * Controle de presenças, aulas ministradas e horas restantes no pacote.
+  * Trilha de evolução individual e emissão de recibos e relatórios para clientes.
+
+1.6. Insights Pedagógicos (Insights)
+- Motor analítico preditivo que identifica alunos em risco de evasão, quedas
+  bruscas de rendimento e competências curriculares não consolidadas na turma.
+
+================================================================================
+ÁREA 2: CRIAÇÃO & ENGENHARIA PEDAGÓGICA
+================================================================================
+2.1. Criar Aula (Lesson Studio)
+- Estúdio completo para elaboração de planos de aula e experiências ativas.
+- Geração de objetivos BNCC, warm-ups, atividades de produção, vocabulário-chave
+  e critérios de avaliação com 1 clique.
+
+2.2. Gerar Exercício (Quick Generate)
+- Gerador instantâneo de listas de exercícios, quizzes e tarefas para casa.
+- Suporte a múltipla escolha, verdadeiro/falso, preenchimento de lacunas e dissertativas.
+- Conectado ao Hub de Conhecimento Multi-Fontes (NotebookLM), verificador de fatos
+  e seletor de adaptação NEE.
+
+2.3. Gerar Prova (Exam Builder)
+- Construtor profissional de provas e exames avaliativos:
+  * Cabeçalho escolar personalizável com logotipo e campos de identificação.
+  * Ingestão de múltiplos livros didáticos e recortes de páginas via Hub Multi-Fontes.
+  * Seção de Áudio Player integrado para questões de Listening com vozes IA.
+  * Gerador de QR Code para aplicação online no celular do aluno.
+  * Exportação com diagramação profissional para Microsoft Word (DOCX) e PDF.
+  * Gabarito oficial detalhado com justificativa pedagógica por questão.
+
+2.4. Plano de Aula (Lesson Planner)
+- Planejamento estruturado por competências, objetivos de aprendizagem, recursos
+  didáticos e cronograma minuto a minuto da aula.
+
+2.5. Rubrica & Gabarito (Rubric)
+- Criação de matrizes de avaliação analíticas e holísticas (Escala Likert de 1 a 4).
+- Definição de critérios transparentes para redação, oralidade, projetos e apresentações.
+
+2.6. Banco de Atividades (Question Bank)
+- Repositório pesquisável de questões categorizadas por disciplina, nível CEFR,
+  habilidade BNCC e tag temática para reutilização rápida em novas provas.
+
+2.7. Pronúncia & Áudio IPA (Audio Pronunciation)
+- Laboratório fonético com transcrição fonética internacional (IPA).
+- Síntese de áudio de alta precisão via ElevenLabs para pares mínimos (minimal pairs),
+  entoação e prática auditiva guiada.
+
+================================================================================
+ÁREA 3: EM SALA DE AULA & GAMIFICAÇÃO
+================================================================================
+3.1. Auxiliar de Sala (Classroom Mode)
+- Painel ao vivo projetável em telão/TV com ferramentas interativas:
+  * Cronômetro regressivo com alarmes sonoros.
+  * Sorteador de alunos justo (sem repetição).
+  * Gerador de grupos e duplas equilibradas.
+  * Medidor de nível de ruído em sala de aula com alerta visual.
+  * Registro rápido de frequência e participação.
+
+3.2. Flashcards Interativos (Flashcard Mode)
+- Sistema de cartas de memorização com algoritmo de repetição espaçada (Leitner).
+- Pronúncia nativa em tempo real e visualização de imagens associativas.
+
+3.3. Quiz ao Vivo (Live Quiz)
+- Dinâmica gamificada em tempo real estilo Kahoot.
+- Geração de PIN de sala para os alunos entrarem com seus próprios celulares.
+- Placar dinâmico de pontuação e ranking final com pódio animado.
+
+================================================================================
+ÁREA 4: ALUNOS, AVALIAÇÃO & DESEMPENHO
+================================================================================
+4.1. Caderneta de Notas (Gradebook)
+- Planilha inteligente de notas com cálculo de médias aritméticas e ponderadas.
+- Destaque automático por cor (verde para aprovados, amarelo em alerta, vermelho em recuperação).
+- Botão de sincronização com o Supabase e espelhamento direto nos portais escolares.
+
+4.2. OmniCorretor (OmniGrader)
+- Correção de folhas de resposta e redações individuais usando fotos da câmera.
+- IA Vision OCR identifica respostas marcadas, assinala acertos/erros e soma os pontos.
+
+4.3. Correção em Lote (Batch Grader)
+- Upload de pacotes de fotos ou PDFs escaneados de turmas inteiras.
+- Processamento paralelo que gera uma tabela consolidada de notas em segundos.
+
+4.4. Desempenho & Evolução do Aluno (Analytics Unificado)
+- Módulo central de inteligência analítica longitudinal:
+  * 🌐 Visão Global: Média de rede, taxa de aprovação e distribuição de notas 1-10.
+  * 🏫 Visão por Escola & 👥 Turma: Rankings e scores pedagógicos compostos.
+  * 📈 Evolução do Aluno:
+    - Radar de Competências Multidimensionais (10 critérios ponderados).
+    - Linha do Tempo Histórica (Gráfico Mês a Mês de notas vs. participação).
+    - Diagnóstico Inteligente com Rafinha IA (Ponto de Atenção, Ponto Forte e Plano de Ação).
+    - Editor individual de scores e impressão de laudo pedagógico.
+  * ⚙️ Configuração de Pesos das Métricas.
+
+================================================================================
+ÁREA 5: COMUNICAÇÃO, FAMÍLIA & PORTFÓLIO
+================================================================================
+5.1. Mensagens aos Pais (Parent Communicator)
+- Gerador de recados personalizados para envio via WhatsApp em 1 clique.
+- Ajuste de tom: Acolhedor, Formal, Motivador, Alerta de Desempenho ou Elogio.
+
+5.2. Relatórios Mensais (AutoReport)
+- Geração automática de laudos individuais de acompanhamento bimestral/semestral.
+- Inclui gráficos de evolução, assiduidade, pontos de destaque e orientações para a família.
+
+5.3. Comunicados Gerais (Communications)
+- Redator inteligente de circulares escolares, avisos de eventos e convocações de reuniões.
+
+5.4. Portfólio de Evidências (Portfolio)
+- Galeria digital de produções dos alunos (áudios, redações, projetos e fotos).
+
+================================================================================
+ÁREA 6: ÁREA DO PROFESSOR & REGISTRO DOCENTE
+================================================================================
+6.1. Eventos Escolares (Eventos)
+- Planejador de feiras culturais, festivais temáticos, apresentações e semanas pedagógicas.
+
+6.2. Reflexão da Prática (Reflective Practice)
+- Diário de autoavaliação docente com rubricas de desenvolvimento profissional.
+
+6.3. Diário de Aulas & Reuniões (Meeting Class Recorder)
+- Gravador de reuniões pedagógicas e conselhos de classe com transcrição Whisper.
+- Síntese automática de atas, decisões tomadas e planos de ação.
+
+6.4. Agenda Semanal (Weekly Agenda)
+- Calendário semanal interativo integrando aulas, compromissos escolares e prazos.
+
+6.5. Mapa Mental (Mind Map)
+- Ferramenta gráfica de mapas mentais com nós conectáveis para brainstorm e síntese de tópicos.
+
+6.6. Registro de Aula (Class Log)
+- Livro de registro digital de conteúdos ministrados, ocorrências de sala e observações.
+
+6.7. Sequência Didática (Didactic Sequence)
+- Estruturação de projetos pedagógicos de médio prazo com objetivos encadeados aula a aula.
+
+6.8. Maestro (Workflow Orchestrator)
+- Automação de fluxos de trabalho docentes (ex: Gerar Prova -> Criar Gabarito -> Notificar Pais).
+
+6.9. Portal Conectado (Portal Mirror)
+- Centro de controle e monitoramento de sincronização com portais institucionais.
+
+6.10. Calendário & Planner (Planner)
+- Planejamento anual, semestral e mensal de aulas e recessos escolares.
+
+6.11. Editor de Documentos (Editor)
+- Processador de texto rich-text integrado com ferramentas de reescrita, resumo e tradução por IA.
+
+6.12. Biblioteca Digital & Arquivos Avulsos (Repository)
+- Centro de armazenamento pedagógico:
+  * Livros didáticos e apostilas indexadas para RAG.
+  * Partição "4. Arquivos Avulsos" para PDFs, DOCX, imagens e listas avulsas.
+  * Ação rápida: "✨ Gerar Prova com este Arquivo".
+
+6.13. Bem-Estar Docente (Wellbeing)
+- Rastreador de carga horária semanal, pausas ativas e prevenção contra burnout.
+
+================================================================================
+ÁREA 7: INFRAESTRUTURA, INTEGRAÇÕES & EXTENSÕES
+================================================================================
+7.1. Preferências (Settings)
+- Configuração de perfil do professor, tema visual e parâmetros de exportação.
+
+7.2. Modelos de IA (ApiManager)
+- Painel de gerenciamento e teste de chaves de API (OpenAI, Gemini, Groq, ElevenLabs).
+
+7.3. Portais & Extensões (Extensions)
+- Guia de instalação e emparelhamento da Extensão do Google Chrome.
+
+
+--------------------------------------------------------------------------------
+6. SISTEMA DE ESPELHAMENTO BIDIRECIONAL COM PORTAIS ESCOLARES
+--------------------------------------------------------------------------------
+6.1. O DESAFIO DO RETRABALHO
+Professores tradicionalmente precisam lançar as mesmas informações duas vezes:
+uma em seu caderno/planilha pessoal e outra no sistema oficial da escola/governo
+(SigaEdu, SEDUC, Google Classroom, Totvs, etc.), consumindo horas de digitação.
+
+6.2. ARQUITETURA DA PONTE DE ESPELHAMENTO
+O Teacher AI App resolve isso através de um ecossistema de 3 camadas:
+1. Web Application Core: Mantém a fonte da verdade em `teacher_grades` e `teacher_class_logs`.
+2. Portal Actions Engine (`lib/portalActionsEngine.ts`): Converte ações do usuário
+   em filas de comandos serializados (`teacher_portal_queue_v1`).
+3. Extensão Chrome (`teacher-extension`): Injeta Content Scripts na página do portal
+   escolar que executam:
+   - Extração automática de turmas e listas de alunos do portal para o app.
+   - Algoritmo de Fuzzy Matching (compatibilização de nomes parciais/abreviados).
+   - Preenchimento automático de notas, faltas e diários de aula nos inputs HTML do portal.
+
+
+--------------------------------------------------------------------------------
+7. ESQUEMA DO BANCO DE DADOS (SUPABASE POSTGRESQL)
+--------------------------------------------------------------------------------
+O banco de dados relacional é estruturado nas seguintes tabelas principais:
+
+- `teacher_schools`:          Unidades escolares e configurações visuais.
+- `teacher_classes`:          Turmas vinculadas a escolas com metadados curriculares.
+- `teacher_students`:         Alunos com notas, nível CEFR e dados de contato.
+- `teacher_repository`:       Livros didáticos e apostilas indexadas para RAG.
+- `teacher_loose_files_v1`:   Arquivos avulsos (PDF, DOCX, imagens com OCR).
+- `teacher_grades`:           Lançamentos históricos de notas e avaliações.
+- `teacher_class_logs`:       Registros diários de aulas e conteúdos ministrados.
+- `teacher_pedagogic_metrics`:Definição dos 10 critérios e pesos de avaliação.
+- `teacher_school_metrics`:   Scores avaliativos ponderados por escola.
+- `teacher_class_metrics`:    Scores avaliativos ponderados por turma.
+- `teacher_student_metrics`:  Scores avaliativos ponderados por aluno.
+- `teacher_tutoring_students`:Alunos particulares de reforço e idiomas.
+- `teacher_tutoring_packages`:Pacotes de aulas contratados.
+- `teacher_tutoring_transactions`:Fluxo de caixa e mensalidades recebidas.
+- `teacher_eventos`:          Eventos escolares e projetos interdisciplinares.
+- `teacher_insights`:         Histórico de análises preditivas geradas por IA.
+- `teacher_portal_queue_v1`:  Fila assíncrona de comandos de espelhamento da extensão.
+
+
+--------------------------------------------------------------------------------
+8. CONSIDERAÇÕES FINAIS & ROADMAP
+--------------------------------------------------------------------------------
+O Teacher AI App representa o estado da arte na convergência entre Inteligência
+Artificial Generativa, Visão Computacional, Engenharia de Prompt Pedagógica e
+Automação de Tarefas Web. Ao consolidar planejamento, criação, avaliação em sala,
+diagnóstico preditivo e espelhamento burocrático em um único sistema local-first
+resiliente, a plataforma redefine o padrão de produtividade e excelência docente.
+
+Roadmap Próximo:
+- Lançamento do aplicativo mobile nativo (iOS & Android).
+- Suporte a geração multimodal direta de podcasts pedagógicos com vozes duplas.
+- Integração direta via OAuth com Google Classroom API e Microsoft Teams for Education.
+
+================================================================================
+                       FIM DO DOCUMENTO WHITE PAPER
+================================================================================

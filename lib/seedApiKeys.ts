@@ -21,7 +21,7 @@ export interface ApiSeed {
 // ─── Executa seed somente se ainda não configurado ────────────────────────────
 export function seedApiKeysIfNeeded(userProvidedKeys: Record<string, string>) {
   const STORAGE_KEY = 'teacher_apis'
-  const SEED_VERSION_KEY = 'teacher_api_seed_v5'
+  const SEED_VERSION_KEY = 'teacher_api_seed_v6'
 
   // Só roda uma vez por versão de seed
   if (typeof window === 'undefined') return
