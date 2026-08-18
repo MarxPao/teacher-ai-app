@@ -15,7 +15,21 @@ const NAV: Section[] = [
     { key: 'students',       label: 'Alunos',                icon: 'ti-user-circle' },
     { key: 'privatetutoring',label: 'Alunos Particulares',   icon: 'ti-user-dollar' },
   ]},
-
+  { label: 'Área do Professor', items: [
+    { key: 'eventos',             label: 'Eventos Escolares',       icon: 'ti-sparkles' },
+    { key: 'reflectivepractice',  label: 'Reflexão da Prática',     icon: 'ti-bulb' },
+    { key: 'meetingclassrecorder',label: 'Diário de Aulas',         icon: 'ti-notebook' },
+    { key: 'weeklyagenda',        label: 'Agenda Semanal',          icon: 'ti-calendar-time' },
+    { key: 'mindmap',             label: 'Mapa Mental',             icon: 'ti-hierarchy-2' },
+    { key: 'classlog',            label: 'Registro de Aula',        icon: 'ti-book' },
+    { key: 'didacticsequence',    label: 'Sequência Didática',      icon: 'ti-route-2' },
+    { key: 'maestro',             label: 'Maestro',                 icon: 'ti-subtask' },
+    { key: 'portalmirror',        label: 'Portal Conectado',        icon: 'ti-plug-connected' },
+    { key: 'calendar',            label: 'Calendário',              icon: 'ti-calendar' },
+    { key: 'editor',              label: 'Editor de Documentos',    icon: 'ti-file-pencil' },
+    { key: 'repo',                label: 'Biblioteca',              icon: 'ti-books' },
+    { key: 'wellbeing',           label: 'Bem-Estar',               icon: 'ti-heart' },
+  ]},
   { label: 'Criação', items: [
     { key: 'lessonstudio',      label: 'Criar Aula',            icon: 'ti-chalkboard' },
     { key: 'quick',             label: 'Gerar Exercício',       icon: 'ti-sparkles' },
@@ -31,7 +45,6 @@ const NAV: Section[] = [
     { key: 'flashcardmode',  label: 'Flashcards',           icon: 'ti-cards' },
     { key: 'livequiz',       label: 'Quiz ao Vivo',         icon: 'ti-device-gamepad-2' },
   ]},
-
   { label: 'Alunos & Avaliação', items: [
     { key: 'gradebook',      label: 'Caderneta de Notas',    icon: 'ti-chart-bar' },
     { key: 'omnigrader',     label: 'OmniCorretor',          icon: 'ti-camera' },
@@ -44,21 +57,6 @@ const NAV: Section[] = [
     { key: 'autoreport',     label: 'Relatórios Mensais',  icon: 'ti-file-report' },
     { key: 'communications', label: 'Comunicados',         icon: 'ti-mail-forward' },
     { key: 'portfolio',      label: 'Portfólio',           icon: 'ti-award' },
-  ]},
-  { label: 'Área do Professor', items: [
-    { key: 'eventos',             label: 'Eventos Escolares',       icon: 'ti-sparkles' },
-    { key: 'reflectivepractice',  label: 'Reflexão da Prática',     icon: 'ti-bulb' },
-    { key: 'meetingclassrecorder',label: 'Diário de Aulas',         icon: 'ti-notebook' },
-    { key: 'weeklyagenda',        label: 'Agenda Semanal',          icon: 'ti-calendar-time' },
-    { key: 'mindmap',             label: 'Mapa Mental',             icon: 'ti-hierarchy-2' },
-    { key: 'classlog',            label: 'Registro de Aula',        icon: 'ti-book' },
-    { key: 'didacticsequence',    label: 'Sequência Didática',      icon: 'ti-route-2' },
-    { key: 'maestro',             label: 'Maestro',                 icon: 'ti-subtask' },
-    { key: 'portalmirror',        label: 'Portal Conectado',        icon: 'ti-plug-connected' },
-    { key: 'calendar',            label: 'Calendário',              icon: 'ti-calendar' },
-    { key: 'editor',              label: 'Editor de Documentos',    icon: 'ti-file-pencil' },
-    { key: 'repo',                label: 'Biblioteca',              icon: 'ti-books' },
-    { key: 'wellbeing',           label: 'Bem-Estar',               icon: 'ti-heart' },
   ]},
   { label: 'Configurações', items: [
     { key: 'settings',   label: 'Preferências',         icon: 'ti-settings' },
