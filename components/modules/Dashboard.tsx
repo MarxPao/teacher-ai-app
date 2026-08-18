@@ -574,8 +574,8 @@ export default function Dashboard() {
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4 }}>
                   {calendarGrid.map((item, idx) => {
-                    const isSelected = item.dateKey === selectedDateKey
-                    const isToday = item.dateKey === todayDateKey
+                    const isSelected = mounted ? item.dateKey === selectedDateKey : false
+                    const isToday = mounted ? item.dateKey === todayDateKey : false
 
                     return (
                       <button
@@ -931,8 +931,8 @@ export default function Dashboard() {
               {/* Seletor de Dias da Semana */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 6, marginBottom: 14 }}>
                 {WEEK_DAYS.map(day => {
-                  const isSelected = selectedDayOfWeek === day.id
-                  const isToday = (new Date().getDay() === 0 ? 1 : new Date().getDay()) === day.id
+                  const isSelected = mounted ? selectedDayOfWeek === day.id : false
+                  const isToday = mounted ? ((new Date().getDay() === 0 ? 1 : new Date().getDay()) === day.id) : false
                   const countForDay = classesList.filter(c => {
                     if (c.dayOfWeek !== day.id) return false
                     if (classFilter === 'school') return c.type === 'school'
