@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect, useMemo } from 'react'
 import DocumentCanvas from '@/components/DocumentCanvas'
+import ReflectionModal, { ReflectionData } from '@/components/ReflectionModal'
+import LessonProgressView from '@/components/LessonProgressView'
 import { ApiConfig } from '@/components/modules/ApiManager'
 import { exportToPdf, exportToWord, exportToExcel } from '@/lib/exportUtils'
 import { getStoredBnccSkills, getBnccSkillsForGrade, getClassPostponedSkills, saveClassPostponedSkills, BnccSkill } from '@/lib/bnccData'
@@ -108,6 +110,9 @@ export default function LessonStudio() {
   // Modals & Generation
   const [isGenerating, setIsGenerating] = useState(false)
   const [showAttachActivityModal, setShowAttachActivityModal] = useState(false)
+  const [showReflectionModal, setShowReflectionModal] = useState(false)
+  const [showProgressView, setShowProgressView] = useState(false)
+  const [planId, setPlanId] = useState('')
   const [toast, setToast] = useState<string | null>(null)
 
   // ─── Carregamento Inicial ──────────────────────────────────────────────────
@@ -118,11 +123,79 @@ export default function LessonStudio() {
       const bk = localStorage.getItem('teacher_lesson_plans_bank')
       const qb = localStorage.getItem('teacher_question_bank')
       const privPrefill = localStorage.getItem('teacher_lesson_studio_student_prefill')
+      const unifiedPrefill = localStorage.getItem('teacher_lesson_studio_prefill')
 
       let parsedCl: ClassRecord[] = []
       if (cl) parsedCl = JSON.parse(cl)
+      let parsedBk: LessonPlanDocument[] = []
+      if (bk) parsedBk = JSON.parse(bk)
 
-      if (privPrefill) {
+      if (unifiedPrefill) {
+        try {
+          const prefill = JSON.parse(unifiedPrefill)
+          // 1. Verifica se existe plano completo já salvo no banco
+          let foundPlan = prefill.planId ? parsedBk.find(p => p.id === prefill.planId) : null
+          if (!foundPlan && prefill.className && prefill.topic) {
+            foundPlan = parsedBk.find(p => 
+              (p.className?.toLowerCase() === prefill.className?.toLowerCase() && p.topic?.toLowerCase() === prefill.topic?.toLowerCase()) ||
+              (p.className?.toLowerCase() === prefill.className?.toLowerCase() && p.date === prefill.date)
+            )
+          }
+
+          if (foundPlan) {
+            // Restaura plano completo
+            setPlanId(foundPlan.id)
+            setTopic(foundPlan.topic)
+            setSelectedClassId(foundPlan.classId)
+            if (foundPlan.date) setLessonDate(foundPlan.date)
+            if (foundPlan.roomSpace) setRoomSpace(foundPlan.roomSpace)
+            if (foundPlan.methodology) setSelectedMethodology(foundPlan.methodology)
+            if (foundPlan.referenceMaterial) {
+              setBookTitle(foundPlan.referenceMaterial.bookTitle || '')
+              setUnitChapter(foundPlan.referenceMaterial.unit || '')
+              setPages(foundPlan.referenceMaterial.pages || '')
+            }
+            if (foundPlan.stages && foundPlan.stages.length > 0) setStages(foundPlan.stages)
+            if (foundPlan.guidingQuestions) setGuidingQuestions(foundPlan.guidingQuestions)
+            if (foundPlan.selectedSkills) setSelectedSkills(foundPlan.selectedSkills)
+            if (foundPlan.homework) setHomework(foundPlan.homework)
+            if (foundPlan.postLessonNotes) setPostLessonNotes(foundPlan.postLessonNotes)
+            setActiveTab('editor')
+            setToast(`Planejamento completo carregado: ${foundPlan.className} — ${foundPlan.topic}`)
+          } else {
+            if (prefill.planId) setPlanId(prefill.planId)
+            // 2. Novo plano pré-preenchido pronto para edição
+            let targetClassId = prefill.classId
+            const matchingClass = parsedCl.find(c => 
+              c.id === prefill.classId || c.name.toLowerCase() === prefill.className?.toLowerCase()
+            )
+            if (matchingClass) {
+              targetClassId = matchingClass.id
+            } else if (prefill.className) {
+              const newClRecord: ClassRecord = {
+                id: prefill.classId || `cls_${Date.now()}`,
+                name: prefill.className,
+                schoolId: prefill.schoolName || 'Escola',
+                subject: 'Língua Inglesa',
+                gradeYear: prefill.className.includes('1º EM') ? '1º EM' : '9º Fund.'
+              }
+              parsedCl = [newClRecord, ...parsedCl]
+              targetClassId = newClRecord.id
+            }
+
+            if (targetClassId) setSelectedClassId(targetClassId)
+            if (prefill.topic) setTopic(prefill.topic)
+            if (prefill.date) setLessonDate(prefill.date)
+            if (prefill.room) setRoomSpace(prefill.room)
+            setActiveTab('editor')
+            setToast(`Novo planejamento: ${prefill.className || ''} pronto para preenchimento`)
+          }
+          if (prefill.openProgressTracker) {
+            setTimeout(() => setShowProgressView(true), 400)
+          }
+          localStorage.removeItem('teacher_lesson_studio_prefill')
+        } catch {}
+      } else if (privPrefill) {
         try {
           const priv = JSON.parse(privPrefill)
           const privClassRecord: ClassRecord = {
@@ -143,7 +216,7 @@ export default function LessonStudio() {
 
       setClasses(parsedCl)
       if (sc) setSchools(JSON.parse(sc))
-      if (bk) setBankPlans(JSON.parse(bk))
+      if (bk) setBankPlans(parsedBk)
       if (qb) setAvailableQuestions(JSON.parse(qb))
     } catch {}
   }, [])
@@ -169,6 +242,37 @@ export default function LessonStudio() {
   const showNotification = (msg: string) => {
     setToast(msg)
     setTimeout(() => setToast(null), 3500)
+  }
+
+  // ─── Análise com IA Rafinha ────────────────────────────────────────────────
+  const handleRafinhaAnalysis = () => {
+    const className = currentClass?.name || selectedClassId || 'Turma'
+    const totalMin = stages.reduce((acc, s) => acc + (s.durationMin || 0), 0)
+    const completedStages = stages.filter(s => s.completed).length
+    const bloomCoverage = stages.some(s =>
+      s.teacherAction?.toLowerCase().includes('anali') ||
+      s.studentAction?.toLowerCase().includes('cri') ||
+      s.teacherAction?.toLowerCase().includes('avali')
+    ) ? 'inclui ordens superiores' : 'maioria recall/compreensão'
+
+    let lastLessonCtx = ''
+    try {
+      const summary = JSON.parse(localStorage.getItem(`teacher_last_lesson_summary_${className.replace(/\s/g,'_')}`) || 'null')
+      if (summary) lastLessonCtx = `\nÚltima aula desta turma foi sobre "${summary.topic}" em ${summary.date}. ${summary.summary}`
+    } catch {}
+
+    const prompt = `Analise este plano de aula e dê sugestões práticas em português (máx 150 palavras):
+
+Turma: ${className || selectedClassId || 'Turma'} | Tópico: ${topic} | Duração total: ${totalMin} min
+Etapas: ${stages.map(s => `${s.name} (${s.durationMin}min)`).join(' → ')}
+Cobertura cognitiva: ${bloomCoverage}${lastLessonCtx}
+
+Verifique: 1) Timing realista? 2) Bloom bem distribuído? 3) Transições claras? 4) Sugestão de melhoria?`
+
+    window.dispatchEvent(new CustomEvent('rafinha:wake'))
+    setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('rafinha:send_text', { detail: prompt }))
+    }, 300)
   }
 
   // Totalizador de Minutos da Aula
@@ -705,6 +809,73 @@ ${postLessonNotes || 'Nenhuma observação registrada.'}
                 </span>
               </div>
 
+              {/* Widget Consolidado de Pendências do Checklist */}
+              {(() => {
+                const completedCount = stages.filter(s => s.completed).length
+                const totalCount = stages.length
+                const progressPct = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0
+                const pendingStagesList = stages.filter(s => !s.completed)
+                const isAllDone = completedCount === totalCount && totalCount > 0
+
+                return (
+                  <div style={{
+                    background: isAllDone ? '#f0fdf4' : '#fffbeb',
+                    border: `1px solid ${isAllDone ? '#bbf7d0' : '#fde68a'}`,
+                    borderRadius: 12,
+                    padding: '12px 16px',
+                    marginBottom: 16,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 8
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <i className={`ti ${isAllDone ? 'ti-circle-check text-emerald-600' : 'ti-alert-circle text-amber-600'}`} style={{ fontSize: 18 }} />
+                        <strong style={{ fontSize: 13, color: '#2c1a0e' }}>
+                          Status de Execução: {completedCount} de {totalCount} partes concluídas ({progressPct}%)
+                        </strong>
+                      </div>
+                      <span style={{ fontSize: 11.5, fontWeight: 700, color: isAllDone ? '#15803d' : '#b45309' }}>
+                        {isAllDone ? '✓ Todas as etapas executadas' : `⏳ ${pendingStagesList.length} etapa(s) pendente(s)`}
+                      </span>
+                    </div>
+
+                    {/* Barra de Progresso Visual */}
+                    <div style={{ width: '100%', height: 6, background: 'rgba(0,0,0,0.06)', borderRadius: 3, overflow: 'hidden' }}>
+                      <div style={{
+                        width: `${progressPct}%`,
+                        height: '100%',
+                        background: isAllDone ? '#10b981' : '#f59e0b',
+                        transition: 'width 0.3s ease'
+                      }} />
+                    </div>
+
+                    {!isAllDone && pendingStagesList.length > 0 && (
+                      <div style={{ fontSize: 11.5, color: '#78350f', display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', marginTop: 2 }}>
+                        <span style={{ fontWeight: 700 }}>Pendências do roteiro:</span>
+                        {pendingStagesList.map((st, i) => (
+                          <span key={i} style={{ background: '#fef3c7', border: '1px solid #fde68a', padding: '1px 6px', borderRadius: 4 }}>
+                            {st.name || `Etapa ${i + 1}`} ({st.durationMin} min)
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    {isAllDone && (
+                      <div style={{ marginTop: 4, display: 'flex', justifyContent: 'flex-end' }}>
+                        <button
+                          type="button"
+                          onClick={() => setShowReflectionModal(true)}
+                          className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold shadow-sm transition-all"
+                        >
+                          ✅ Registrar reflexão pós-aula
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )
+              })()}
+
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {stages.map((stage, idx) => (
                   <div key={idx} style={{ background: '#fdf8f2', border: '1px solid #e8decb', borderRadius: 10, padding: 12, display: 'grid', gridTemplateColumns: '180px 70px 1fr 1fr 30px', gap: 10, alignItems: 'center' }}>
@@ -842,8 +1013,20 @@ ${postLessonNotes || 'Nenhuma observação registrada.'}
                 </button>
               </div>
 
-              {/* OS 2 BOTÕES DE SALVAMENTO DISTINTOS */}
-              <div style={{ display: 'flex', gap: 10 }}>
+              {/* OS BOTÕES DE AÇÃO E SALVAMENTO */}
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+                <button
+                  onClick={() => setShowProgressView(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-medium shadow-sm transition-all"
+                >
+                  ▶️ Iniciar aula
+                </button>
+                <button
+                  onClick={handleRafinhaAnalysis}
+                  className="flex items-center gap-2 px-4 py-2 bg-purple-100 hover:bg-purple-200 text-purple-700 rounded-xl text-sm font-medium transition-all"
+                >
+                  🤖 Sugestão da Rafinha
+                </button>
                 <button
                   onClick={handleSaveToCalendar}
                   style={{
@@ -1003,6 +1186,7 @@ ${postLessonNotes || 'Nenhuma observação registrada.'}
                   <div style={{ display: 'flex', gap: 6, marginTop: 12, borderTop: '1px solid #e8decb', paddingTop: 10 }}>
                     <button
                       onClick={() => {
+                        setPlanId(plan.id)
                         setTopic(plan.topic)
                         setSelectedClassId(plan.classId)
                         setStages(plan.stages || DEFAULT_STAGES)
@@ -1078,6 +1262,33 @@ ${postLessonNotes || 'Nenhuma observação registrada.'}
         <div style={{ position: 'fixed', bottom: 24, right: 24, background: '#2c1a0e', color: '#fdf8f2', padding: '10px 18px', borderRadius: 8, fontSize: 13, zIndex: 9999, boxShadow: '0 4px 14px rgba(0,0,0,0.2)' }}>
           {toast}
         </div>
+      )}
+
+      {/* Modais de Execução e Reflexão */}
+      {showReflectionModal && (
+        <ReflectionModal
+          planId={planId || `plan_${Date.now()}`}
+          planTopic={topic}
+          className={currentClass?.name || selectedClassId || ''}
+          onSave={(data: ReflectionData) => {
+            setShowReflectionModal(false)
+          }}
+          onDismiss={() => setShowReflectionModal(false)}
+        />
+      )}
+      {showProgressView && (
+        <LessonProgressView
+          planId={planId || `plan_${Date.now()}`}
+          topic={topic}
+          className={currentClass?.name || selectedClassId || ''}
+          stages={stages}
+          onStagesUpdate={(updatedStages) => setStages(updatedStages)}
+          onFinish={() => {
+            setShowProgressView(false)
+            setShowReflectionModal(true)
+          }}
+          onClose={() => setShowProgressView(false)}
+        />
       )}
 
     </div>

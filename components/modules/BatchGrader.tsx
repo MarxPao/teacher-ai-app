@@ -303,6 +303,30 @@ export default function BatchGrader() {
   });
   
   const [toasts, setToasts] = useState<Toast[]>([]);
+
+  const [blindMode, setBlindMode] = useState(false)
+  const [blindMap, setBlindMap] = useState<Record<string, string>>({}) // codigo -> nome real
+  const [identitiesRevealed, setIdentitiesRevealed] = useState(false)
+
+  const activateBlindMode = () => {
+    const map: Record<string, string> = {}
+    submissions.forEach((sub, i) => {
+      map[`Aluno #${i + 1}`] = sub.studentName
+    })
+    setBlindMap(map)
+    setBlindMode(true)
+    setIdentitiesRevealed(false)
+  }
+
+  const getDisplayName = (studentName: string): string => {
+    if (!blindMode || identitiesRevealed) return studentName
+    const entry = Object.entries(blindMap).find(([_, name]) => name === studentName)
+    return entry ? entry[0] : studentName
+  }
+
+  const revealIdentities = () => setIdentitiesRevealed(true)
+  const allDone = submissions.length > 0 && submissions.every(s => s.status === 'done')
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // --- Initial Load ---
@@ -719,7 +743,7 @@ Responda APENAS um objeto JSON no formato:
                             <button 
                               title="Ver Feedback"
                               style={{ ...styles.buttonOutline, padding: '0.4rem' }}
-                              onClick={() => alert(`Feedback para ${sub.studentName}:\n\nNota: ${sub.grade}/${maxGrade}\n\nJustificativa: ${sub.justification}\n\nFeedback Aluno: ${sub.feedback}`)}
+                              onClick={() => alert(`Feedback para ${getDisplayName(sub.studentName)}:\n\nNota: ${sub.grade}/${maxGrade}\n\nJustificativa: ${sub.justification}\n\nFeedback Aluno: ${sub.feedback}`)}
                             >
                               <i className="ti ti-eye"></i>
                             </button>

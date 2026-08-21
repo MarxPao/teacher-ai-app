@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import ModuleShell from '@/components/ModuleShell'
 import { fillPortal, logPortalFill } from '@/lib/portalBridge'
 import { syncToSupabase } from '@/lib/supabaseClient'
+import { recordAttendanceObservation } from '@/lib/studentMemory'
 
 // ─── Interfaces ─────────────────────────────────────────────────────────────
 export interface School {
@@ -428,6 +429,47 @@ export default function AttendanceList() {
     setAttendanceHistory(updatedHistory)
     localStorage.setItem('teacher_attendance_records_v1', JSON.stringify(updatedHistory))
     localStorage.setItem(`teacher_attendance_${selectedClass}_${selectedDate}`, JSON.stringify(attendance))
+
+    // Gravação automática na memória viva dos alunos para faltas relevantes
+    try {
+      classStudents.forEach(s => {
+        const currentRec = attendance[s.id]
+        if (currentRec && (currentRec.status === 'absent' || currentRec.note)) {
+          // Conta total de faltas no histórico
+          let totalAbsences = 0
+          let consecutiveAbsences = 0
+          let countingConsecutive = true
+
+          // Ordena sessões por data decrescente
+          const sortedSessions = [...updatedHistory]
+            .filter(h => h.classId === selectedClass)
+            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+
+          for (const sess of sortedSessions) {
+            const stRec = sess.records[s.id]
+            if (stRec && stRec.status === 'absent') {
+              totalAbsences++
+              if (countingConsecutive) consecutiveAbsences++
+            } else if (stRec && stRec.status === 'present') {
+              countingConsecutive = false
+            }
+          }
+
+          const specificNote = currentRec.note 
+            ? `Observação de presença (${selectedDate}): ${currentRec.note}`
+            : undefined
+
+          recordAttendanceObservation(
+            s.id,
+            s.name,
+            totalAbsences,
+            consecutiveAbsences,
+            selectedClassObj.name,
+            specificNote
+          )
+        }
+      })
+    } catch {}
 
     syncToSupabase().catch(() => {})
     showToast('💾 Lista de presença salva com sucesso!')

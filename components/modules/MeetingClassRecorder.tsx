@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef, CSSProperties } from 'react';
 import { exportToPdf } from '@/lib/exportUtils';
+import { extractAndRecordMeetingStudentMentions } from '@/lib/studentMemory';
 
 // --- Interfaces ---
 interface TranscriptionSegment {
@@ -236,7 +237,15 @@ export default function MeetingClassRecorder() {
       const updatedRecords = [newRecord, ...records];
       setRecords(updatedRecords);
       localStorage.setItem('teacher_meeting_diaries', JSON.stringify(updatedRecords));
-      
+
+      // Extração automática de menções a alunos para a memória viva
+      try {
+        const reportSummary = newRecord.report?.summary || '';
+        const reportHighlights = (newRecord.report?.studentHighlights || []).join('\n');
+        const combinedText = `${newRecord.title}\n${reportSummary}\n${reportHighlights}\n${newRecord.rawText}`;
+        extractAndRecordMeetingStudentMentions(combinedText, newRecord.title);
+      } catch {}
+
       setSelectedRecord(newRecord);
       resetRecording();
       setManualInput('');

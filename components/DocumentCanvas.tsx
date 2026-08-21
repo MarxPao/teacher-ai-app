@@ -1,6 +1,12 @@
 'use client'
 
 import { useRef, useEffect, useState, useCallback } from 'react'
+import { 
+  MediaLibraryItem, 
+  fetchMediaLibraryFromSupabase, 
+  uploadMediaFileToSupabase, 
+  saveMediaItemToSupabase 
+} from '@/lib/supabaseClient'
 
 interface HeaderPatch { headerSchool?: string; headerTeacher?: string; headerTitle?: string }
 
@@ -41,6 +47,21 @@ export default function DocumentCanvas({
  const [fontSize, setFontSize] = useState('14')
  const [isDragOver, setIsDragOver] = useState(false)
  const [showHeaderForm, setShowHeaderForm] = useState(true)
+
+ // Image Picker Modal State
+ const [isImagePickerOpen, setIsImagePickerOpen] = useState(false)
+ const [imagePickerTab, setImagePickerTab] = useState<'library' | 'upload' | 'url'>('library')
+ const [libraryImages, setLibraryImages] = useState<MediaLibraryItem[]>([])
+ const [librarySearch, setLibrarySearch] = useState('')
+ const [libraryCategory, setLibraryCategory] = useState('all')
+ const [selectedImageForInsert, setSelectedImageForInsert] = useState<MediaLibraryItem | null>(null)
+ const [customImageUrl, setCustomImageUrl] = useState('')
+ const [imageAlign, setImageAlign] = useState<'left' | 'center' | 'right'>('center')
+ const [imageWidthPercent, setImageWidthPercent] = useState<'25%' | '50%' | '75%' | '100%'>('50%')
+ const [imageCaption, setImageCaption] = useState('')
+ const [saveToLibraryCheckbox, setSaveToLibraryCheckbox] = useState(true)
+ const [isUploadingImage, setIsUploadingImage] = useState(false)
+ const uploadFileInputRef = useRef<HTMLInputElement | null>(null)
 
  // School Header Matching 
  const [matchedHeader, setMatchedHeader] = useState<{
@@ -105,36 +126,64 @@ export default function DocumentCanvas({
  handleInput()
  }
 
- function handleImageUpload(file: File) {
- if (!file.type.startsWith('image/')) return
- const reader = new FileReader()
- reader.onload = (e) => {
- const src = e.target?.result as string
- const imgHtml = `<img src="${src}" style="max-width:100%; height:auto; border-radius:6px; margin:12px 0; display:block;" alt="${file.name}" />`
- editorRef.current?.focus()
- document.execCommand('insertHTML', false, imgHtml)
- handleInput()
- }
- reader.readAsDataURL(file)
- }
+  // Open Image Picker Modal
+  async function openImagePicker() {
+    try {
+      const local = localStorage.getItem('teacher_media_library')
+      if (local) {
+        const parsed = JSON.parse(local)
+        if (Array.isArray(parsed)) setLibraryImages(parsed)
+      }
+    } catch {}
 
- function handleDrop(e: React.DragEvent) {
- e.preventDefault()
- setIsDragOver(false)
- const files = Array.from(e.dataTransfer.files)
- files.forEach(handleImageUpload)
- }
+    fetchMediaLibraryFromSupabase().then(items => {
+      if (items && items.length > 0) setLibraryImages(items)
+    }).catch(() => {})
 
- function pickImage() {
- const input = document.createElement('input')
- input.type = 'file'
- input.accept = 'image/*'
- input.onchange = (e) => {
- const file = (e.target as HTMLInputElement).files?.[0]
- if (file) handleImageUpload(file)
- }
- input.click()
- }
+    setSelectedImageForInsert(null)
+    setIsImagePickerOpen(true)
+  }
+
+  function insertImageIntoDocument(srcUrl: string, title?: string, caption?: string) {
+    if (!srcUrl) return
+
+    const alignStyle = imageAlign === 'center' ? 'margin-left: auto; margin-right: auto; display: block;' : imageAlign === 'right' ? 'margin-left: auto; display: block;' : 'display: block;'
+    const containerAlign = imageAlign === 'center' ? 'text-align: center;' : imageAlign === 'right' ? 'text-align: right;' : 'text-align: left;'
+
+    const imgHtml = `
+      <div style="${containerAlign} margin: 16px 0;" data-teacher-image="true">
+        <img 
+          src="${srcUrl}" 
+          alt="${title || caption || 'Imagem Didática'}" 
+          style="max-width: ${imageWidthPercent}; height: auto; border-radius: 6px; ${alignStyle} box-shadow: 0 2px 8px rgba(0,0,0,0.08);" 
+        />
+        ${caption ? `<div style="font-size: 11.5px; color: #586e75; font-style: italic; margin-top: 4px;">${caption}</div>` : ''}
+      </div>
+      <p><br /></p>
+    `
+
+    editorRef.current?.focus()
+    document.execCommand('insertHTML', false, imgHtml)
+    handleInput()
+    setIsImagePickerOpen(false)
+  }
+
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault()
+    setIsDragOver(false)
+    const files = Array.from(e.dataTransfer.files)
+    files.forEach(async (file) => {
+      if (!file.type.startsWith('image/')) return
+      const res = await uploadMediaFileToSupabase(file, 'documents')
+      if (res.ok) {
+        insertImageIntoDocument(res.url, file.name)
+      }
+    })
+  }
+
+  function pickImage() {
+    openImagePicker()
+  }
 
  // Export DOCX 
  function exportDocx() {
@@ -506,8 +555,373 @@ export default function DocumentCanvas({
 
  </div>
  </div>
- </div>
- )
+
+      {/* ================================================================= */}
+      {/* MODAL SELETOR VISUAL DE IMAGENS                                   */}
+      {/* ================================================================= */}
+      {isImagePickerOpen && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(5px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99999, padding: 20
+        }}>
+          <div style={{
+            background: '#fffcf8', borderRadius: 20, border: '2px solid #8b5e3c', padding: 24,
+            maxWidth: 780, width: '100%', maxHeight: '90vh', overflowY: 'auto',
+            boxShadow: '0 20px 60px rgba(0,0,0,0.35)', display: 'flex', flexDirection: 'column', gap: 16
+          }}>
+            {/* Cabeçalho do Modal */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(139,115,85,0.18)', paddingBottom: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: 24 }}>🖼️</span>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#2c1a0e' }}>
+                    Inserir Imagem no Documento
+                  </h3>
+                  <span style={{ fontSize: 12, color: '#8b7355' }}>
+                    Selecione da sua biblioteca, envie um novo arquivo ou use uma URL externa
+                  </span>
+                </div>
+              </div>
+              <button 
+                onClick={() => setIsImagePickerOpen(false)} 
+                style={{ background: '#f5efe6', border: 'none', width: 32, height: 32, borderRadius: '50%', cursor: 'pointer', fontWeight: 700 }}
+              >
+                ×
+              </button>
+            </div>
+
+            {/* Abas do Seletor */}
+            <div style={{ display: 'flex', gap: 8, background: '#f5efe6', padding: 4, borderRadius: 10 }}>
+              <button
+                onClick={() => setImagePickerTab('library')}
+                style={{
+                  flex: 1, padding: '8px 14px', borderRadius: 8, border: 'none',
+                  background: imagePickerTab === 'library' ? '#8b5e3c' : 'transparent',
+                  color: imagePickerTab === 'library' ? '#fff' : '#665c54',
+                  fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6
+                }}
+              >
+                <i className="ti ti-books" /> Da Biblioteca ({libraryImages.length})
+              </button>
+              <button
+                onClick={() => setImagePickerTab('upload')}
+                style={{
+                  flex: 1, padding: '8px 14px', borderRadius: 8, border: 'none',
+                  background: imagePickerTab === 'upload' ? '#8b5e3c' : 'transparent',
+                  color: imagePickerTab === 'upload' ? '#fff' : '#665c54',
+                  fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6
+                }}
+              >
+                <i className="ti ti-upload" /> Enviar do Computador
+              </button>
+              <button
+                onClick={() => setImagePickerTab('url')}
+                style={{
+                  flex: 1, padding: '8px 14px', borderRadius: 8, border: 'none',
+                  background: imagePickerTab === 'url' ? '#8b5e3c' : 'transparent',
+                  color: imagePickerTab === 'url' ? '#fff' : '#665c54',
+                  fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6
+                }}
+              >
+                <i className="ti ti-link" /> Link Web (URL)
+              </button>
+            </div>
+
+            {/* CONTEÚDO DA ABA 1: BIBLIOTECA DE IMAGENS */}
+            {imagePickerTab === 'library' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {/* Busca e Categorias */}
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
+                    <i className="ti ti-search" style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#8b7355', fontSize: 14 }} />
+                    <input
+                      type="text"
+                      placeholder="Buscar por título ou tag..."
+                      value={librarySearch}
+                      onChange={e => setLibrarySearch(e.target.value)}
+                      style={{
+                        width: '100%', padding: '7px 10px 7px 32px', borderRadius: 8,
+                        border: '1px solid rgba(139,115,85,0.25)', background: '#fff', fontSize: 12.5, outline: 'none'
+                      }}
+                    />
+                  </div>
+                  <select
+                    value={libraryCategory}
+                    onChange={e => setLibraryCategory(e.target.value)}
+                    style={{
+                      padding: '7px 12px', borderRadius: 8, border: '1px solid rgba(139,115,85,0.25)',
+                      background: '#fff', fontSize: 12.5, outline: 'none', color: '#2c1a0e', fontWeight: 600
+                    }}
+                  >
+                    <option value="all">Todas as Categorias</option>
+                    <option value="Ilustrações Didáticas">Ilustrações Didáticas</option>
+                    <option value="Mapas & Gráficos">Mapas & Gráficos</option>
+                    <option value="Logos & Selos">Logos & Selos</option>
+                    <option value="Questões & Exercícios">Questões & Exercícios</option>
+                    <option value="Diagramas Científicos">Diagramas Científicos</option>
+                    <option value="Geral">Geral</option>
+                  </select>
+                </div>
+
+                {/* Grid de Seleção */}
+                {libraryImages.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: 30, background: '#fdfaf5', borderRadius: 12, border: '1.5px dashed rgba(139,115,85,0.2)' }}>
+                    <p style={{ margin: '0 0 10px', color: '#8b7355', fontSize: 13, fontWeight: 600 }}>Sua biblioteca de imagens ainda está vazia.</p>
+                    <button
+                      onClick={() => setImagePickerTab('upload')}
+                      style={{ padding: '6px 14px', borderRadius: 8, background: '#8b5e3c', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}
+                    >
+                      Enviar primeira imagem
+                    </button>
+                  </div>
+                ) : (
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fill, minmax(135px, 1fr))',
+                    gap: 10,
+                    maxHeight: 240,
+                    overflowY: 'auto',
+                    padding: 4
+                  }}>
+                    {libraryImages
+                      .filter(img => {
+                        const matchCat = libraryCategory === 'all' || img.category === libraryCategory
+                        const matchSearch = !librarySearch.trim() || 
+                          img.title.toLowerCase().includes(librarySearch.toLowerCase()) ||
+                          (img.tags && img.tags.some(t => t.toLowerCase().includes(librarySearch.toLowerCase())))
+                        return matchCat && matchSearch
+                      })
+                      .map(img => {
+                        const isSelected = selectedImageForInsert?.id === img.id
+                        return (
+                          <div
+                            key={img.id}
+                            onClick={() => setSelectedImageForInsert(img)}
+                            style={{
+                              border: isSelected ? '2.5px solid #8b5e3c' : '1.5px solid rgba(139,115,85,0.2)',
+                              borderRadius: 10,
+                              background: isSelected ? '#fdf8f0' : '#fff',
+                              cursor: 'pointer',
+                              overflow: 'hidden',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              position: 'relative',
+                              boxShadow: isSelected ? '0 0 0 2px rgba(139,115,85,0.2)' : 'none',
+                              transition: 'all 0.15s'
+                            }}
+                          >
+                            <div style={{ height: 85, background: '#f7f2ea', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                              <img src={img.fileUrl} alt={img.title} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+                            </div>
+                            <div style={{ padding: '6px 8px', fontSize: 11, fontWeight: 700, color: '#2c1a0e', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {img.title}
+                            </div>
+                            {isSelected && (
+                              <span style={{ position: 'absolute', top: 4, right: 4, background: '#8b5e3c', color: '#fff', borderRadius: '50%', width: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800 }}>
+                                ✓
+                              </span>
+                            )}
+                          </div>
+                        )
+                      })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* CONTEÚDO DA ABA 2: ENVIAR NOVO ARQUIVO */}
+            {imagePickerTab === 'upload' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <input
+                  type="file"
+                  ref={uploadFileInputRef}
+                  accept="image/*"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0]
+                    if (!file) return
+                    setIsUploadingImage(true)
+                    try {
+                      const res = await uploadMediaFileToSupabase(file, 'documents')
+                      if (res.ok) {
+                        const tempItem: MediaLibraryItem = {
+                          id: `img_${Date.now()}`,
+                          title: file.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' '),
+                          fileUrl: res.url,
+                          fileName: file.name,
+                          fileType: file.type,
+                          fileSize: file.size,
+                          category: 'Ilustrações Didáticas',
+                          tags: ['#documento'],
+                          createdAt: new Date().toISOString()
+                        }
+                        if (saveToLibraryCheckbox) {
+                          await saveMediaItemToSupabase(tempItem)
+                          setLibraryImages(prev => [tempItem, ...prev.filter(x => x.id !== tempItem.id)])
+                        }
+                        setSelectedImageForInsert(tempItem)
+                      }
+                    } catch (err: any) {
+                      alert('Erro ao carregar arquivo: ' + err.message)
+                    } finally {
+                      setIsUploadingImage(false)
+                    }
+                  }}
+                  style={{ display: 'none' }}
+                />
+
+                <div
+                  onClick={() => uploadFileInputRef.current?.click()}
+                  style={{
+                    border: '2px dashed #8b5e3c', borderRadius: 14, padding: 30, textAlign: 'center',
+                    background: '#fdfaf5', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8
+                  }}
+                >
+                  <i className={isUploadingImage ? "ti ti-loader rotate" : "ti ti-cloud-upload"} style={{ fontSize: 32, color: '#8b5e3c' }} />
+                  <span style={{ fontSize: 14, fontWeight: 700, color: '#2c1a0e' }}>
+                    {isUploadingImage ? 'Processando imagem...' : 'Clique para selecionar do computador'}
+                  </span>
+                  <span style={{ fontSize: 12, color: '#8b7355' }}>
+                    Formatos suportados: PNG, JPG, JPEG, WEBP, SVG, GIF
+                  </span>
+                </div>
+
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#2c1a0e', cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={saveToLibraryCheckbox}
+                    onChange={e => setSaveToLibraryCheckbox(e.target.checked)}
+                    style={{ accentColor: '#8b5e3c' }}
+                  />
+                  <span>Salvar também na <strong>Biblioteca de Imagens</strong> para reutilizar depois</span>
+                </label>
+              </div>
+            )}
+
+            {/* CONTEÚDO DA ABA 3: LINK WEB (URL) */}
+            {imagePickerTab === 'url' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <label style={{ fontSize: 12.5, fontWeight: 700, color: '#586e75' }}>URL Direta da Imagem:</label>
+                <input
+                  type="text"
+                  placeholder="https://exemplo.com/imagem.png"
+                  value={customImageUrl}
+                  onChange={e => {
+                    setCustomImageUrl(e.target.value)
+                    if (e.target.value.trim()) {
+                      setSelectedImageForInsert({
+                        id: `url_${Date.now()}`,
+                        title: 'Imagem Externa',
+                        fileUrl: e.target.value.trim()
+                      })
+                    }
+                  }}
+                  style={{
+                    padding: '10px 14px', borderRadius: 10, border: '1px solid rgba(139,115,85,0.25)',
+                    background: '#fff', fontSize: 13, outline: 'none'
+                  }}
+                />
+              </div>
+            )}
+
+            {/* PAINEL DE FORMATAÇÃO E AJUSTES DE INSERÇÃO */}
+            {selectedImageForInsert && (
+              <div style={{
+                background: '#f7f2ea', borderRadius: 14, padding: 14, border: '1px solid rgba(139,115,85,0.2)',
+                display: 'flex', flexDirection: 'column', gap: 10
+              }}>
+                <div style={{ fontSize: 12.5, fontWeight: 800, color: '#8b5e3c', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <i className="ti ti-adjustments" /> Configurações da Imagem no Documento
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+                  {/* Tamanho */}
+                  <div>
+                    <label style={{ fontSize: 11.5, fontWeight: 700, color: '#586e75', display: 'block', marginBottom: 4 }}>Largura / Tamanho</label>
+                    <select
+                      value={imageWidthPercent}
+                      onChange={e => setImageWidthPercent(e.target.value as any)}
+                      style={{ width: '100%', padding: '6px 10px', borderRadius: 8, border: '1px solid #c0a88a', background: '#fff', fontSize: 12 }}
+                    >
+                      <option value="25%">25% (Pequena)</option>
+                      <option value="50%">50% (Média)</option>
+                      <option value="75%">75% (Grande)</option>
+                      <option value="100%">100% (Largura Total)</option>
+                    </select>
+                  </div>
+
+                  {/* Alinhamento */}
+                  <div>
+                    <label style={{ fontSize: 11.5, fontWeight: 700, color: '#586e75', display: 'block', marginBottom: 4 }}>Alinhamento</label>
+                    <select
+                      value={imageAlign}
+                      onChange={e => setImageAlign(e.target.value as any)}
+                      style={{ width: '100%', padding: '6px 10px', borderRadius: 8, border: '1px solid #c0a88a', background: '#fff', fontSize: 12 }}
+                    >
+                      <option value="center">Centralizado</option>
+                      <option value="left">Alinhado à Esquerda</option>
+                      <option value="right">Alinhado à Direita</option>
+                    </select>
+                  </div>
+
+                  {/* Legenda */}
+                  <div>
+                    <label style={{ fontSize: 11.5, fontWeight: 700, color: '#586e75', display: 'block', marginBottom: 4 }}>Legenda (Opcional)</label>
+                    <input
+                      type="text"
+                      placeholder="Ex: Figura 1.1..."
+                      value={imageCaption}
+                      onChange={e => setImageCaption(e.target.value)}
+                      style={{ width: '100%', padding: '6px 10px', borderRadius: 8, border: '1px solid #c0a88a', background: '#fff', fontSize: 12 }}
+                    />
+                  </div>
+                </div>
+
+                {/* Preview Mini */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#fff', padding: 8, borderRadius: 8, border: '1px solid #ede8dc' }}>
+                  <img src={selectedImageForInsert.fileUrl} alt="Preview" style={{ height: 44, width: 44, objectFit: 'cover', borderRadius: 6 }} />
+                  <div style={{ flex: 1, fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <strong>{selectedImageForInsert.title || 'Imagem Selecionada'}</strong>
+                  </div>
+                  <span style={{ fontSize: 11, color: '#8b5e3c', fontWeight: 700 }}>Pronta para Inserir</span>
+                </div>
+              </div>
+            )}
+
+            {/* Rodapé de Ações */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, borderTop: '1px solid rgba(139,115,85,0.18)', paddingTop: 12 }}>
+              <button
+                onClick={() => setIsImagePickerOpen(false)}
+                style={{
+                  padding: '9px 18px', borderRadius: 10, border: '1px solid rgba(139,115,85,0.35)',
+                  background: '#fffcf8', color: '#586e75', fontSize: 13, fontWeight: 700, cursor: 'pointer'
+                }}
+              >
+                Cancelar
+              </button>
+              <button
+                disabled={!selectedImageForInsert?.fileUrl}
+                onClick={() => {
+                  if (selectedImageForInsert?.fileUrl) {
+                    insertImageIntoDocument(selectedImageForInsert.fileUrl, selectedImageForInsert.title, imageCaption)
+                  }
+                }}
+                style={{
+                  padding: '9px 22px', borderRadius: 10, border: 'none',
+                  background: selectedImageForInsert?.fileUrl ? '#8b5e3c' : '#ccc',
+                  color: '#fff', fontSize: 13, fontWeight: 700,
+                  cursor: selectedImageForInsert?.fileUrl ? 'pointer' : 'not-allowed',
+                  display: 'flex', alignItems: 'center', gap: 6
+                }}
+              >
+                <i className="ti ti-check" /> Inserir no Documento
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+    </div>
+  )
 }
 
 // Micro Components & Styles 

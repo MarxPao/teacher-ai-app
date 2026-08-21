@@ -1,9 +1,10 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import DocumentCanvas from '@/components/DocumentCanvas'
-import VoiceButton from '@/components/VoiceButton'
+import { AssessmentPreset, BloomDistribution, QuestionWeights, DifficultyDistribution, getDefaultPreset, getStoredPresets, savePreset } from "@/lib/assessmentPresets"
 import { ApiConfig } from '@/components/modules/ApiManager'
+import VoiceButton from '@/components/VoiceButton'
+import DocumentCanvas from '@/components/DocumentCanvas'
 import { runFactCheck, FactCheckResult } from '@/lib/factCheck'
 import SavedItemsDrawer, { saveItemToStorage, SavedItem } from '@/components/SavedItemsDrawer'
 import { PEDAGOGICAL_METHODOLOGIES, buildMethodologyInstructions } from '@/lib/pedagogicalMethodologies'
@@ -11,7 +12,7 @@ import PresetSelector from '@/components/PresetSelector'
 import { exportToPdf, exportToWord, OFFICIAL_SCHOOL_TEMPLATES } from '@/lib/exportUtils'
 import SourceKnowledgeHub, { SourceItem, KnowledgeMode, compileSourcesPrompt } from '@/components/SourceKnowledgeHub'
 
-// Types 
+// Types
 
 interface HeaderState {
   school: string

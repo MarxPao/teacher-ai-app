@@ -5,6 +5,7 @@ import ModuleShell from '@/components/ModuleShell'
 import ModuleCard from '@/components/ModuleCard'
 import { fillPortal, logPortalFill } from '@/lib/portalBridge'
 import { getPortalProfiles, PortalProfileDef } from '@/lib/portalActionsEngine'
+import { recordStudentGrade } from '@/lib/studentMemory'
 
 interface School { id: string; name: string; color: string }
 interface ClassRecord { id: string; name: string; schoolId: string }
@@ -60,7 +61,17 @@ export default function Gradebook() {
   }
 
   const updateGrade = (sid: string, col: string, val: string) => {
-    const updated = students.map(s => s.id === sid ? { ...s, grades: { ...s.grades, [col]: val } } : s)
+    const updated = students.map(s => {
+      if (s.id === sid) {
+        const numVal = parseFloat(val.replace(',', '.'))
+        if (!isNaN(numVal)) {
+          const className = classes.find(c => c.id === s.classId)?.name || ''
+          recordStudentGrade(s.id, s.name, col, numVal, 10, className)
+        }
+        return { ...s, grades: { ...s.grades, [col]: val } }
+      }
+      return s
+    })
     sync(updated)
   }
 

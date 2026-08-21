@@ -11,6 +11,7 @@ import PresetSelector from '@/components/PresetSelector'
 import { exportToPdf, exportToWord, generateSvgQRCode, OFFICIAL_SCHOOL_TEMPLATES } from '@/lib/exportUtils'
 import StudentExamPlayer, { OnlineQuestion } from '@/components/modules/StudentExamPlayer'
 import SourceKnowledgeHub, { SourceItem, KnowledgeMode, compileSourcesPrompt } from '@/components/SourceKnowledgeHub'
+import SmartInsightsPanel from '@/components/modules/SmartInsightsPanel'
 
 // Types 
 
@@ -191,6 +192,22 @@ export default function ExamBuilder() {
   const [cefr, setCefr] = useState('B1')
   const [grade, setGrade] = useState('9º Fund.')
   const [questionCount, setQuestionCount] = useState('10')
+
+  const [showSmartInsights, setShowSmartInsights] = useState(false)
+  const [additionalPromptContext, setAdditionalPromptContext] = useState('')
+
+  const [bloomRemember, setBloomRemember] = useState(25)
+  const [bloomApply, setBloomApply] = useState(30)
+  const [bloomAnalyze, setBloomAnalyze] = useState(25)
+  const [bloomEvaluate, setBloomEvaluate] = useState(20)
+  const [diffEasy, setDiffEasy] = useState(20)
+  const [diffMedium, setDiffMedium] = useState(50)
+  const [diffHard, setDiffHard] = useState(25)
+  const [diffChallenge, setDiffChallenge] = useState(5)
+  const [totalScore, setTotalScore] = useState(10)
+  const [examDuration, setExamDuration] = useState(50)
+  const [kioskMode, setKioskMode] = useState(false)
+
   const [sections, setSections] = useState<string[]>(['Grammar', 'Vocabulary', 'Reading Comprehension'])
   const [customPrompt, setCustomPrompt] = useState('')
   const [stemLanguage, setStemLanguage] = useState<'pt' | 'en'>('pt')
@@ -389,7 +406,8 @@ export default function ExamBuilder() {
       }
 
       const prompt = buildExamPrompt({
-        topic, cefr, grade, questionCount, sections, approach, customPrompt,
+        topic, cefr, grade, questionCount, sections, approach,
+        customPrompt: additionalPromptContext ? `${customPrompt}\n\n${additionalPromptContext}` : customPrompt,
         stemLanguage, optionLanguage,
         header: { ...header, title: header.title || effectiveTitle },
         libraryContext: libContext,
@@ -492,6 +510,12 @@ export default function ExamBuilder() {
           </h1>
         </div>
         <div style={{ display: "flex", justifyContent: "center", flexWrap: "wrap", gap: 10 }}>
+          <button
+            onClick={() => setShowSmartInsights(true)}
+            className="flex items-center gap-1.5 px-3 py-2 bg-indigo-50 border border-indigo-200 text-indigo-700 rounded-lg text-sm font-medium hover:bg-indigo-100"
+          >
+            🧠 Smart Insights
+          </button>
           {result && (
             <>
               <button onClick={handleSaveToActivitiesBank} style={{ padding: '9px 16px', borderRadius: 12, border: '1px solid #8b5e3c', background: '#8b5e3c', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, boxShadow: '0 2px 8px rgba(139,94,60,0.2)' }}>
@@ -1061,6 +1085,30 @@ export default function ExamBuilder() {
               Fechar QR Code
             </button>
           </div>
+        </div>
+      )}
+
+      {/* Smart Insights Panel */}
+      {showSmartInsights && (
+        <div className="fixed inset-y-0 right-0 w-96 bg-white border-l shadow-2xl z-50 flex flex-col">
+          <SmartInsightsPanel
+            classRef={header.classGroup || grade}
+            topic={topic}
+            cefrLevel={cefr}
+            onInsightsAccepted={(params) => {
+              setBloomRemember(params.bloomRemember)
+              setBloomApply(params.bloomApply)
+              setBloomAnalyze(params.bloomAnalyze)
+              setBloomEvaluate(params.bloomEvaluate)
+              setDiffEasy(params.diffEasy)
+              setDiffMedium(params.diffMedium)
+              setDiffHard(params.diffHard)
+              setDiffChallenge(params.diffChallenge)
+              setAdditionalPromptContext(params.additionalPromptContext)
+              setShowSmartInsights(false)
+            }}
+            onDismiss={() => setShowSmartInsights(false)}
+          />
         </div>
       )}
 

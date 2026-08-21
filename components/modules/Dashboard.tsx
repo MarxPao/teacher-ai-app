@@ -430,6 +430,93 @@ export default function Dashboard() {
       .sort((a, b) => a.timeStart.localeCompare(b.timeStart))
   }, [classesList, selectedDayOfWeek, classFilter])
 
+  // Resumo Consolidado de Pendências de Planejamento da Semana
+  const planningPendenciesSummary = useMemo(() => {
+    let incompletePlansCount = 0
+    let unplannedClassesCount = 0
+    let totalPendingStages = 0
+
+    try {
+      const bankRaw = localStorage.getItem('teacher_lesson_plans_bank')
+      const bank: Array<{ id: string; className: string; stages?: Array<{ completed?: boolean }> }> = bankRaw ? JSON.parse(bankRaw) : []
+
+      classesList.forEach(cls => {
+        const found = bank.find(p => p.className?.toLowerCase() === cls.className?.toLowerCase())
+        if (!found) {
+          unplannedClassesCount++
+        } else if (found.stages && found.stages.length > 0) {
+          const pending = found.stages.filter(s => !s.completed).length
+          if (pending > 0) {
+            incompletePlansCount++
+            totalPendingStages += pending
+          }
+        }
+      })
+    } catch {}
+
+    return {
+      incompletePlansCount,
+      unplannedClassesCount,
+      totalPendingStages,
+      hasPendencies: incompletePlansCount > 0 || unplannedClassesCount > 0
+    }
+  }, [classesList])
+
+  // Abre o Planejamento Completo da Aula ou Formulário Pré-preenchido
+  const handleOpenLessonPlan = (item: TodayClassItem) => {
+    if (item.type === 'private') {
+      localStorage.setItem('teacher_lesson_studio_student_prefill', JSON.stringify({
+        studentId: item.studentId || item.id,
+        studentName: item.className,
+        subject: item.topic || 'Inglês',
+        level: 'B1'
+      }))
+      navigateTo('lessonstudio')
+      return
+    }
+
+    // Calcula a data da aula para o dia da semana selecionado
+    const today = new Date()
+    const currentDay = today.getDay() === 0 ? 7 : today.getDay()
+    const targetDay = item.dayOfWeek
+    const diff = targetDay - currentDay
+    const targetDateObj = new Date(today)
+    targetDateObj.setDate(today.getDate() + diff)
+    const targetDateKey = targetDateObj.toISOString().split('T')[0]
+
+    // Busca se já existe planejamento completo salvo no banco
+    let matchedPlanId: string | undefined = item.lessonPlanId
+    try {
+      const bankRaw = localStorage.getItem('teacher_lesson_plans_bank')
+      if (bankRaw) {
+        const bank: Array<{ id: string; className: string; classId: string; topic: string; date?: string }> = JSON.parse(bankRaw)
+        const found = bank.find(p => 
+          (item.lessonPlanId && p.id === item.lessonPlanId) ||
+          (p.className?.toLowerCase() === item.className?.toLowerCase() && p.topic?.toLowerCase() === item.topic?.toLowerCase()) ||
+          (p.className?.toLowerCase() === item.className?.toLowerCase() && p.date === targetDateKey)
+        )
+        if (found) {
+          matchedPlanId = found.id
+        }
+      }
+    } catch {}
+
+    const prefillData = {
+      classId: item.id,
+      className: item.className,
+      schoolName: item.schoolName,
+      date: targetDateKey,
+      topic: item.topic,
+      room: item.room || 'Sala de Aula',
+      timeSlot: `${item.timeStart} - ${item.timeEnd}`,
+      planId: matchedPlanId,
+      isPrivate: false
+    }
+
+    localStorage.setItem('teacher_lesson_studio_prefill', JSON.stringify(prefillData))
+    navigateTo('lessonstudio')
+  }
+
   // Unidade Ativa da Sequência Didática
   const currentDidacticUnit = useMemo(() => {
     return didacticContents.find(u => u.status === 'current') || didacticContents[0]
@@ -981,6 +1068,52 @@ export default function Dashboard() {
                 })}
               </div>
 
+              {/* Resumo Consolidado de Pendências do Planejamento */}
+              {planningPendenciesSummary.hasPendencies && (
+                <div style={{
+                  background: '#fffbeb',
+                  border: '1px solid #fde68a',
+                  borderRadius: 12,
+                  padding: '10px 14px',
+                  marginBottom: 12,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 10,
+                  flexWrap: 'wrap'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <i className="ti ti-checklist text-amber-600" style={{ fontSize: 18 }} />
+                    <div>
+                      <strong style={{ fontSize: 12.5, color: '#78350f', display: 'block' }}>
+                        Pendências de Planejamento da Semana
+                      </strong>
+                      <span style={{ fontSize: 11.5, color: '#92400e' }}>
+                        {planningPendenciesSummary.incompletePlansCount > 0 && `${planningPendenciesSummary.incompletePlansCount} plano(s) com etapas incompletas`}
+                        {planningPendenciesSummary.incompletePlansCount > 0 && planningPendenciesSummary.unplannedClassesCount > 0 && ' · '}
+                        {planningPendenciesSummary.unplannedClassesCount > 0 && `${planningPendenciesSummary.unplannedClassesCount} aula(s) sem planejamento registrado`}
+                      </span>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => navigateTo('lessonstudio')}
+                    style={{
+                      padding: '4px 10px',
+                      borderRadius: 6,
+                      background: '#d97706',
+                      color: '#fff',
+                      border: 'none',
+                      fontSize: 11,
+                      fontWeight: 700,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Ver no LessonStudio &rarr;
+                  </button>
+                </div>
+              )}
+
               {/* Lista de Aulas */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {classesForSelectedDay.length === 0 ? (
@@ -992,10 +1125,7 @@ export default function Dashboard() {
                   classesForSelectedDay.map(item => (
                     <div
                       key={item.id}
-                      onClick={() => {
-                        if (item.type === 'private') navigateTo('privatetutoring')
-                        else navigateTo('lessonstudio')
-                      }}
+                      onClick={() => handleOpenLessonPlan(item)}
                       style={{
                         display: 'flex',
                         alignItems: 'center',
@@ -1045,9 +1175,26 @@ export default function Dashboard() {
 
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                         <button
-                          onClick={() => {
-                            if (item.type === 'private') navigateTo('privatetutoring')
-                            else navigateTo('lessonstudio')
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            localStorage.setItem('teacher_lesson_studio_prefill', JSON.stringify({
+                              classId: (item as any).classId || item.id,
+                              className: item.className || (item as any).name,
+                              date: selectedDateKey || new Date().toISOString().split('T')[0],
+                              topic: item.topic || '',
+                              openProgressTracker: true
+                            }))
+                            window.dispatchEvent(new CustomEvent('teacher:navigate', { detail: 'lessonstudio' }))
+                          }}
+                          className="flex items-center gap-1 px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-medium shadow-sm transition-all"
+                          title="Iniciar aula com Progress Tracker"
+                        >
+                          ▶️ Iniciar
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleOpenLessonPlan(item)
                           }}
                           style={{
                             padding: '5px 12px',

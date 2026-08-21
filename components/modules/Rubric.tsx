@@ -30,6 +30,58 @@ const S = {
  btn: { display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 10, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600 },
 }
 
+export interface RubricPreviewProps {
+  cefrLevel?: string
+  compact?: boolean
+}
+
+export function RubricPreview({ cefrLevel, compact = false }: RubricPreviewProps) {
+  const criteria = [
+    { name: 'Content', desc: 'Cumprimento da proposta, relevancia e desenvolvimento das ideias' },
+    { name: 'Communicative Achievement', desc: 'Registro, tom e engajamento do leitor-alvo' },
+    { name: 'Organisation', desc: 'Estrutura de paragrafos, conectivos e sequencia logica' },
+    { name: 'Language', desc: 'Amplitude, precisao e complexidade de vocabulario e gramatica' },
+  ]
+  
+  if (compact) {
+    return (
+      <div className="flex flex-wrap gap-2 text-xs" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, fontSize: 12 }}>
+        {criteria.map(c => (
+          <span key={c.name} className="px-2 py-1 bg-blue-50 text-blue-700 rounded" style={{ padding: '4px 8px', background: '#eff6ff', color: '#1d4ed8', borderRadius: 4 }}>
+            {c.name} (0-5)
+          </span>
+        ))}
+        <span className="px-2 py-1 bg-gray-50 text-gray-600 rounded" style={{ padding: '4px 8px', background: '#f9fafb', color: '#4b5563', borderRadius: 4 }}>Nota = soma/2</span>
+      </div>
+    )
+  }
+  
+  return (
+    <div className="text-sm" style={{ fontSize: 14 }}>
+      {cefrLevel && <p className="text-xs text-gray-500 mb-2" style={{ fontSize: 12, color: '#6b7280', marginBottom: 8 }}>Nivel CEFR: <strong>{cefrLevel}</strong></p>}
+      <table className="w-full border-collapse border border-gray-200" style={{ width: '100%', borderCollapse: 'collapse', border: '1px solid #e5e7eb' }}>
+        <thead>
+          <tr className="bg-blue-50" style={{ background: '#eff6ff' }}>
+            <th className="border border-gray-200 p-2 text-left text-xs" style={{ border: '1px solid #e5e7eb', padding: 8, textAlign: 'left', fontSize: 12 }}>Criterio</th>
+            <th className="border border-gray-200 p-2 text-center text-xs" style={{ border: '1px solid #e5e7eb', padding: 8, textAlign: 'center', fontSize: 12 }}>Escala</th>
+            <th className="border border-gray-200 p-2 text-left text-xs" style={{ border: '1px solid #e5e7eb', padding: 8, textAlign: 'left', fontSize: 12 }}>O que avalia</th>
+          </tr>
+        </thead>
+        <tbody>
+          {criteria.map(c => (
+            <tr key={c.name} className="border border-gray-200 hover:bg-gray-50" style={{ border: '1px solid #e5e7eb' }}>
+              <td className="p-2 font-medium text-xs" style={{ padding: 8, fontWeight: 500, fontSize: 12 }}>{c.name}</td>
+              <td className="p-2 text-center text-xs" style={{ padding: 8, textAlign: 'center', fontSize: 12 }}>0 – 5</td>
+              <td className="p-2 text-xs text-gray-600" style={{ padding: 8, fontSize: 12, color: '#4b5563' }}>{c.desc}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="mt-2 text-xs text-gray-400" style={{ marginTop: 8, fontSize: 12, color: '#9ca3af' }}>Nota final (0-10) = (Content + Comm. Achievement + Organisation + Language) ÷ 2</p>
+    </div>
+  )
+}
+
 export default function Rubric() {
  const [preset, setPreset] = useState<'writing' | 'speaking'>('writing')
  const [taskDesc, setTaskDesc] = useState('')
@@ -327,4 +379,4 @@ Style the table with professional Cambridge Assessment styling (border-collapse:
  </div>
  </div>
  )
-}
+}

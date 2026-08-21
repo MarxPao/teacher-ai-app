@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { captureImageFile, extractContentFromImage } from '@/lib/ocrCapture'
 import { exportToPdf } from '@/lib/exportUtils'
+import { recordStudentGrade, addObservation } from '@/lib/studentMemory'
 
 interface StudentRecord {
   id: string
@@ -65,6 +66,15 @@ const S: Record<string, React.CSSProperties> = {
   label: { display: 'block', fontSize: 11.5, fontWeight: 700, color: '#7a6552', textTransform: 'uppercase' as const, letterSpacing: '0.8px', marginBottom: 6 },
   btnPrimary: { background: 'linear-gradient(135deg, #8b5e3c 0%, #6f4728 100%)', color: '#fff', padding: '10px 20px', borderRadius: 10, border: 'none', fontWeight: 700, fontSize: 13.5, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, boxShadow: '0 2px 8px rgba(139,94,60,0.25)' },
   btnSecondary: { background: '#fffcf8', border: '1px solid #d5c0b0', color: '#4a382a', padding: '10px 18px', borderRadius: 10, fontWeight: 700, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }
+}
+
+const CEFR_WORD_LIMITS: Record<string, { min: number; max: number; task: string }> = {
+  'A1': { min: 50, max: 80, task: 'Simple Message' },
+  'A2': { min: 100, max: 120, task: 'Message/Email' },
+  'B1': { min: 100, max: 150, task: 'Article/Story/Letter' },
+  'B2': { min: 140, max: 190, task: 'Task 1 (220-260 Task 2)' },
+  'C1': { min: 220, max: 260, task: 'Task 1 (280-320 Task 2)' },
+  'C2': { min: 280, max: 320, task: 'Advanced Composition' },
 }
 
 export default function OmniGrader() {
@@ -187,6 +197,18 @@ export default function OmniGrader() {
       localStorage.setItem('teacher_students', JSON.stringify(updated))
       setStudents(updated)
       setLaunchedPhoto(true)
+      
+      // Gravação automática na memória viva do aluno
+      recordStudentGrade(
+        updated[idx].id,
+        updated[idx].name,
+        `Prova OCR (${photoGradeResult.totalQuestions} questões)`,
+        photoGradeResult.score,
+        10,
+        '',
+        'Avaliação Escrita (OCR)'
+      )
+
       window.dispatchEvent(new Event('storage'))
       alert(`Nota ${photoGradeResult.score}/10 lançada com sucesso para ${updated[idx].name}!`)
     }
@@ -339,6 +361,28 @@ Retorne ESTRITAMENTE um objeto JSON no seguinte formato (sem markdown, sem bloco
       localStorage.setItem('teacher_students', JSON.stringify(updated))
       setStudents(updated)
       setLaunchedEssay(true)
+
+      // Gravação automática na memória viva do aluno
+      recordStudentGrade(
+        updated[idx].id,
+        updated[idx].name,
+        `Redação (${textGenre || 'Cambridge Assessment'})`,
+        essayEvaluation.overallScore,
+        10,
+        '',
+        'Redação'
+      )
+      if (essayEvaluation.overallSummary) {
+        addObservation(
+          updated[idx].id,
+          updated[idx].name,
+          `Feedback Redação: ${essayEvaluation.overallSummary.slice(0, 160)}`,
+          'Redação',
+          undefined,
+          'teacher'
+        )
+      }
+
       window.dispatchEvent(new Event('storage'))
       alert(`Nota ${essayEvaluation.overallScore}/10 lançada com sucesso no Gradebook de ${updated[idx].name}!`)
     }

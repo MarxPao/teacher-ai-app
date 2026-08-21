@@ -4,6 +4,15 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import ModuleShell from '@/components/ModuleShell'
 import { exportToPdf, exportToWord, generateSvgQRCode, OFFICIAL_SCHOOL_TEMPLATES } from '@/lib/exportUtils'
 import StudentExamPlayer, { OnlineQuestion } from '@/components/modules/StudentExamPlayer'
+import { 
+  MediaLibraryItem, 
+  uploadMediaFileToSupabase, 
+  saveMediaItemToSupabase, 
+  fetchMediaLibraryFromSupabase, 
+  deleteMediaItemFromSupabase,
+  syncToSupabase 
+} from '@/lib/supabaseClient'
+import { BnccSkill, getStoredBnccSkills, saveStoredBnccSkills } from '@/lib/bnccData'
 
 export interface RepositoryItem {
  id: number
@@ -329,8 +338,38 @@ for (const term of terms) if (lower.includes(term)) score += 3
 }
 
 export default function Repository() {
-  // 4 PARTIÇÕES PRINCIPAIS 
-  const [activePartition, setActivePartition] = useState<'headers' | 'exercises' | 'bibliography' | 'files'>('headers')
+  // 6 PARTIÇÕES PRINCIPAIS 
+  const [activePartition, setActivePartition] = useState<'headers' | 'exercises' | 'bibliography' | 'files' | 'images' | 'competencies'>('headers')
+
+  // 6. Matriz Central de Competências & Habilidades (BNCC/ELT)
+  const [competencies, setCompetencies] = useState<BnccSkill[]>([])
+  const [compGradeFilter, setCompGradeFilter] = useState<string>('all')
+  const [compAxisFilter, setCompAxisFilter] = useState<string>('all')
+  const [compSearch, setCompSearch] = useState<string>('')
+  const [isAddCompModalOpen, setIsAddCompModalOpen] = useState(false)
+  const [editingComp, setEditingComp] = useState<BnccSkill | null>(null)
+  const [compCode, setCompCode] = useState('')
+  const [compGradeYear, setCompGradeYear] = useState('9º Fund.')
+  const [compAxis, setCompAxis] = useState<BnccSkill['axis']>('Conhecimentos Linguísticos')
+  const [compDescription, setCompDescription] = useState('')
+  const [compUnit, setCompUnit] = useState('')
+
+  // 5. Banco de Imagens & Mídias
+  const [mediaItems, setMediaItems] = useState<MediaLibraryItem[]>([])
+  const [mediaCategoryFilter, setMediaCategoryFilter] = useState<string>('all')
+  const [mediaSearch, setMediaSearch] = useState<string>('')
+  const [mediaSchoolFilter, setMediaSchoolFilter] = useState<string>('all')
+  const [selectedMediaModal, setSelectedMediaModal] = useState<MediaLibraryItem | null>(null)
+  const [editingMediaModal, setEditingMediaModal] = useState<MediaLibraryItem | null>(null)
+  const [isAddMediaModalOpen, setIsAddMediaModalOpen] = useState(false)
+  const [newMediaTitle, setNewMediaTitle] = useState('')
+  const [newMediaCategory, setNewMediaCategory] = useState('Ilustrações Didáticas')
+  const [newMediaSchool, setNewMediaSchool] = useState('')
+  const [newMediaTags, setNewMediaTags] = useState('')
+  const [newMediaDescription, setNewMediaDescription] = useState('')
+  const [newMediaUrl, setNewMediaUrl] = useState('')
+  const [isUploadingMedia, setIsUploadingMedia] = useState(false)
+  const mediaFileInputRef = useRef<HTMLInputElement | null>(null)
 
   // Bibliografia (Livros / Textos)
   const [items, setItems] = useState<RepositoryItem[]>([])
@@ -523,6 +562,9 @@ export default function Repository() {
     setSavedExercises(compiledExercises)
     if (!viewExercise && compiledExercises.length > 0) setViewExercise(compiledExercises[0])
 
+    // 6. Matriz Central de Competências & Habilidades (BNCC/ELT)
+    setCompetencies(getStoredBnccSkills())
+
     // Mescla com documentos reais do Supabase (assíncrono, não bloqueia UI)
     import('@/lib/supabaseClient').then(({ fetchDocumentsFromSupabase }) => {
       fetchDocumentsFromSupabase().then(supabaseDocs => {
@@ -533,7 +575,6 @@ export default function Repository() {
           const presetIds = new Set(prev.filter(i => i.title.includes('Globalizers 4')).map(i => String(i.id)))
           const localCustomIds = new Set(prev.filter(i => !presetIds.has(String(i.id))).map(i => String(i.id)))
           const newFromSupabase = supabaseDocs.filter(d => d.type !== 'Arquivo Avulso' && !presetIds.has(d.id) && !localCustomIds.has(d.id))
-          if (newFromSupabase.length === 0) return prev
           const mapped: RepositoryItem[] = newFromSupabase.map(d => ({
             id: Number(d.id) || parseInt(d.id) || Date.now(),
             title: d.title,
@@ -570,6 +611,23 @@ export default function Repository() {
           })
         }
       }).catch(() => {})
+    }).catch(() => {})
+
+    // 5. Banco de Imagens & Mídias
+    try {
+      const localMedia = localStorage.getItem('teacher_media_library')
+      if (localMedia) {
+        const parsedMedia: MediaLibraryItem[] = JSON.parse(localMedia)
+        if (parsedMedia && parsedMedia.length > 0) {
+          setMediaItems(parsedMedia)
+        }
+      }
+    } catch {}
+
+    fetchMediaLibraryFromSupabase().then(media => {
+      if (media && media.length > 0) {
+        setMediaItems(media)
+      }
     }).catch(() => {})
  }, [viewItem, viewExercise, selectedLooseFile])
 
@@ -1318,6 +1376,77 @@ export default function Repository() {
 
   const currentSelectedHeader = headerTemplates.find(h => h.id === selectedHeaderId) || headerTemplates[0] || defaultFallbackHeader
 
+  // Filtro de Mídias / Imagens
+  const filteredMediaItems = mediaItems.filter(item => {
+    const matchCat = mediaCategoryFilter === 'all' || item.category === mediaCategoryFilter
+    const matchSchool = mediaSchoolFilter === 'all' || item.schoolName === mediaSchoolFilter || (!item.schoolName && mediaSchoolFilter === 'Geral')
+    const matchSearch = !mediaSearch.trim() || 
+      item.title.toLowerCase().includes(mediaSearch.toLowerCase()) ||
+      (item.description && item.description.toLowerCase().includes(mediaSearch.toLowerCase())) ||
+      (item.tags && item.tags.some(t => t.toLowerCase().includes(mediaSearch.toLowerCase())))
+    return matchCat && matchSchool && matchSearch
+  })
+
+  // Filtro de Competências / Habilidades BNCC (6ª Partição)
+  const filteredCompetencies = competencies.filter(c => {
+    const matchGrade = compGradeFilter === 'all' || c.gradeYear.toLowerCase().includes(compGradeFilter.toLowerCase())
+    const matchAxis = compAxisFilter === 'all' || c.axis === compAxisFilter
+    const searchLower = compSearch.toLowerCase().trim()
+    const matchSearch = !searchLower ||
+      c.code.toLowerCase().includes(searchLower) ||
+      c.description.toLowerCase().includes(searchLower) ||
+      (c.unit && c.unit.toLowerCase().includes(searchLower)) ||
+      c.axis.toLowerCase().includes(searchLower)
+    return matchGrade && matchAxis && matchSearch
+  })
+
+  // Handlers para Competências
+  const handleSaveCompetency = () => {
+    if (!compCode.trim() || !compDescription.trim()) {
+      alert('Código e descrição da competência são obrigatórios.')
+      return
+    }
+    let updated: BnccSkill[] = []
+    if (editingComp) {
+      updated = competencies.map(c => c.id === editingComp.id ? {
+        ...c,
+        code: compCode.trim().toUpperCase(),
+        gradeYear: compGradeYear,
+        axis: compAxis,
+        description: compDescription.trim(),
+        unit: compUnit.trim() || undefined,
+        isCustom: true
+      } : c)
+    } else {
+      const newComp: BnccSkill = {
+        id: compCode.trim().toUpperCase(),
+        code: compCode.trim().toUpperCase(),
+        gradeYear: compGradeYear,
+        axis: compAxis,
+        description: compDescription.trim(),
+        unit: compUnit.trim() || undefined,
+        isCustom: true
+      }
+      updated = [newComp, ...competencies]
+    }
+    setCompetencies(updated)
+    saveStoredBnccSkills(updated)
+    setIsAddCompModalOpen(false)
+    setEditingComp(null)
+    setCompCode('')
+    setCompDescription('')
+    setCompUnit('')
+    showToast('Competência salva no Repositório!')
+  }
+
+  const handleDeleteCompetency = (id: string) => {
+    if (!confirm('Deseja realmente remover esta competência do repositório?')) return
+    const updated = competencies.filter(c => c.id !== id)
+    setCompetencies(updated)
+    saveStoredBnccSkills(updated)
+    showToast('Competência removida do Repositório!')
+  }
+
   const btnPrimary: React.CSSProperties = {
     padding: '10px 18px', borderRadius: 10, border: 'none',
     background: '#8b5e3c', color: '#fff',
@@ -1337,7 +1466,7 @@ export default function Repository() {
   return (
     <ModuleShell
       title="📚 Biblioteca & Repositório Pedagógico"
-      subtitle="Organização centralizada em 4 partições: Cabeçalhos Oficiais, Exercícios & Provas, Livros Didáticos RAG e Arquivos Avulsos."
+      subtitle="Organização centralizada em 5 partições: Cabeçalhos Oficiais, Exercícios & Provas, Livros Didáticos RAG, Arquivos Avulsos e Banco de Imagens & Mídias."
       isFullHeight
       maxWidth="100%"
       actions={
@@ -1398,12 +1527,88 @@ export default function Repository() {
               </button>
             </>
           )}
+
+          {activePartition === 'images' && (
+            <>
+              <input
+                type="file"
+                ref={mediaFileInputRef}
+                onChange={async (e) => {
+                  const files = Array.from(e.target.files || [])
+                  if (files.length === 0) return
+                  setIsUploadingMedia(true)
+                  try {
+                    for (const file of files) {
+                      const uploadRes = await uploadMediaFileToSupabase(file, 'library')
+                      if (uploadRes.ok) {
+                        const newItem: MediaLibraryItem = {
+                          id: `img_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+                          title: file.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' '),
+                          fileName: file.name,
+                          fileType: file.type || 'image/png',
+                          fileSize: file.size,
+                          fileUrl: uploadRes.url,
+                          category: 'Ilustrações Didáticas',
+                          tags: ['#imagem', '#upload'],
+                          schoolName: 'Geral',
+                          description: '',
+                          createdAt: new Date().toISOString()
+                        }
+                        await saveMediaItemToSupabase(newItem)
+                        setMediaItems(prev => [newItem, ...prev.filter(x => x.id !== newItem.id)])
+                      }
+                    }
+                    showToast(`${files.length} imagem(ns) adicionada(s) à biblioteca!`)
+                  } catch (err: any) {
+                    alert('Erro ao enviar imagem: ' + err.message)
+                  } finally {
+                    setIsUploadingMedia(false)
+                    if (mediaFileInputRef.current) mediaFileInputRef.current.value = ''
+                  }
+                }}
+                accept="image/*"
+                multiple
+                style={{ display: 'none' }}
+              />
+              <button 
+                onClick={() => mediaFileInputRef.current?.click()} 
+                disabled={isUploadingMedia}
+                style={btnSecondary}
+              >
+                <i className={isUploadingMedia ? "ti ti-loader rotate" : "ti ti-upload"} /> 
+                {isUploadingMedia ? 'Enviando...' : 'Upload de Imagens'}
+              </button>
+              <button onClick={() => { 
+                setNewMediaTitle('')
+                setNewMediaUrl('')
+                setNewMediaTags('')
+                setNewMediaDescription('')
+                setIsAddMediaModalOpen(true) 
+              }} style={btnPrimary}>
+                <i className="ti ti-plus" /> Nova Mídia / URL
+              </button>
+            </>
+          )}
+
+          {activePartition === 'competencies' && (
+            <button onClick={() => { 
+              setEditingComp(null)
+              setCompCode('')
+              setCompDescription('')
+              setCompUnit('')
+              setCompGradeYear('9º Fund.')
+              setCompAxis('Conhecimentos Linguísticos')
+              setIsAddCompModalOpen(true) 
+            }} style={btnPrimary}>
+              <i className="ti ti-plus" /> Nova Competência / Habilidade
+            </button>
+          )}
         </div>
       }
     >
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 16 }}>
 
-        {/* BARRA DE SELEÇÃO DAS 4 PARTIÇÕES */}
+        {/* BARRA DE SELEÇÃO DAS 6 PARTIÇÕES */}
         <div style={{
           display: 'flex', gap: 8, background: '#fffcf8', padding: '6px',
           borderRadius: 14, border: '1.5px solid rgba(139,115,85,0.18)', width: 'fit-content',
@@ -1459,6 +1664,32 @@ export default function Repository() {
             }}
           >
             <i className="ti ti-folders" /> 4. Arquivos Avulsos ({looseFiles.length})
+          </button>
+
+          <button
+            onClick={() => setActivePartition('images')}
+            style={{
+              padding: '10px 18px', borderRadius: 10, border: 'none',
+              background: activePartition === 'images' ? '#8b5e3c' : 'transparent',
+              color: activePartition === 'images' ? '#fff' : '#665c54',
+              fontSize: 13.5, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
+              transition: 'all 0.15s'
+            }}
+          >
+            <i className="ti ti-photo" /> 5. Imagens & Mídias ({mediaItems.length})
+          </button>
+
+          <button
+            onClick={() => setActivePartition('competencies')}
+            style={{
+              padding: '10px 18px', borderRadius: 10, border: 'none',
+              background: activePartition === 'competencies' ? '#8b5e3c' : 'transparent',
+              color: activePartition === 'competencies' ? '#fff' : '#665c54',
+              fontSize: 13.5, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
+              transition: 'all 0.15s'
+            }}
+          >
+            <i className="ti ti-target" /> 6. Competências BNCC ({competencies.length})
           </button>
         </div>
 
@@ -2247,7 +2478,615 @@ export default function Repository() {
  </div>
  )}
 
+ {/* ================================================================= */}
+ {/* PARTIÇÃO 5: BANCO DE IMAGENS & MÍDIAS DIDÁTICAS                  */}
+ {/* ================================================================= */}
+ {activePartition === 'images' && (
+   <div style={{ display: 'flex', flexDirection: 'column', gap: 16, flex: 1, minHeight: 0 }}>
+     {/* BARRA DE PESQUISA, FILTROS E AÇÕES */}
+     <div style={{
+       display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap',
+       background: '#fffcf8', padding: '12px 16px', borderRadius: 14,
+       border: '1.5px solid rgba(139,115,85,0.18)', boxShadow: '0 2px 8px rgba(44,26,14,0.03)'
+     }}>
+       {/* Campo de Busca */}
+       <div style={{ position: 'relative', flex: 1, minWidth: 220 }}>
+         <i className="ti ti-search" style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#8b7355', fontSize: 16 }} />
+         <input
+           type="text"
+           placeholder="Pesquisar por título, tag (#mapa) ou descrição..."
+           value={mediaSearch}
+           onChange={e => setMediaSearch(e.target.value)}
+           style={{
+             width: '100%', padding: '9px 12px 9px 36px', borderRadius: 10,
+             border: '1.5px solid rgba(139,115,85,0.22)', background: '#fff',
+             fontSize: 13, color: '#2c1a0e', outline: 'none'
+           }}
+         />
+       </div>
+
+       {/* Filtro por Escola */}
+       <select
+         value={mediaSchoolFilter}
+         onChange={e => setMediaSchoolFilter(e.target.value)}
+         style={{
+           padding: '9px 14px', borderRadius: 10, border: '1.5px solid rgba(139,115,85,0.22)',
+           background: '#fff', fontSize: 13, color: '#2c1a0e', fontWeight: 600, outline: 'none'
+         }}
+       >
+         <option value="all">🏫 Todas as Escolas</option>
+         {registeredSchools.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+       </select>
+
+       {/* Contador */}
+       <div style={{ fontSize: 12.5, fontWeight: 700, color: '#8b7355', display: 'flex', alignItems: 'center', gap: 6 }}>
+         <i className="ti ti-photo" />
+         <span>{filteredMediaItems.length} imagem(ns)</span>
+       </div>
+     </div>
+
+     {/* Categorias / Tags Rápidas */}
+     <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4 }}>
+       {[
+         { key: 'all', label: 'Todas as Categorias', icon: 'ti-apps' },
+         { key: 'Ilustrações Didáticas', label: '🎨 Ilustrações', icon: 'ti-brush' },
+         { key: 'Mapas & Gráficos', label: '🗺️ Mapas & Gráficos', icon: 'ti-map' },
+         { key: 'Logos & Selos', label: '🏫 Logos Escolares', icon: 'ti-id' },
+         { key: 'Questões & Exercícios', label: '📝 Imagens p/ Questões', icon: 'ti-help' },
+         { key: 'Diagramas Científicos', label: '🔬 Diagramas & Ciência', icon: 'ti-atom' },
+         { key: 'Geral', label: '📁 Geral', icon: 'ti-folder' }
+       ].map(cat => (
+         <button
+           key={cat.key}
+           onClick={() => setMediaCategoryFilter(cat.key)}
+           style={{
+             padding: '6px 14px', borderRadius: 20, border: 'none',
+             fontSize: 12, fontWeight: 700, cursor: 'pointer',
+             background: mediaCategoryFilter === cat.key ? '#8b5e3c' : '#f5efe6',
+             color: mediaCategoryFilter === cat.key ? '#fff' : '#665c54',
+             display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap',
+             transition: 'all 0.15s'
+           }}
+         >
+           <i className={`ti ${cat.icon}`} />
+           {cat.label}
+         </button>
+       ))}
+     </div>
+
+     {/* GRADE DE IMAGENS OU ESTADO VAZIO */}
+     {filteredMediaItems.length === 0 ? (
+       <div style={{
+         flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+         background: '#fffcf8', borderRadius: 16, border: '2px dashed rgba(139,115,85,0.25)', padding: 40, textAlign: 'center'
+       }}>
+         <div style={{ fontSize: 48, marginBottom: 12 }}>🖼️</div>
+         <h3 style={{ margin: '0 0 6px', color: '#2c1a0e', fontSize: 17, fontWeight: 800 }}>
+           Nenhuma imagem cadastrada
+         </h3>
+         <p style={{ margin: '0 0 20px', color: '#665c54', fontSize: 13, maxWidth: 460 }}>
+           Faça upload de figuras didáticas, ilustrações, gráficos ou logotipos para salvar na nuvem e reutilizar facilmente em provas, aulas e documentos.
+         </p>
+         <div style={{ display: 'flex', gap: 10 }}>
+           <button 
+             onClick={() => mediaFileInputRef.current?.click()} 
+             style={{ ...btnPrimary, padding: '10px 24px', fontSize: 14 }}
+           >
+             <i className="ti ti-upload" /> Fazer Upload de Imagens
+           </button>
+           <button 
+             onClick={() => {
+               setNewMediaTitle('')
+               setNewMediaUrl('')
+               setNewMediaTags('')
+               setNewMediaDescription('')
+               setIsAddMediaModalOpen(true)
+             }} 
+             style={{ ...btnSecondary, padding: '10px 20px', fontSize: 14 }}
+           >
+             <i className="ti ti-link" /> Adicionar via Link URL
+           </button>
+         </div>
+       </div>
+     ) : (
+       <div style={{
+         display: 'grid',
+         gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
+         gap: 16,
+         overflowY: 'auto',
+         paddingRight: 4,
+         paddingBottom: 20
+       }}>
+         {filteredMediaItems.map(item => (
+           <div
+             key={item.id}
+             style={{
+               background: '#fffcf8',
+               borderRadius: 14,
+               border: '1.5px solid rgba(139,115,85,0.18)',
+               boxShadow: '0 3px 12px rgba(44,26,14,0.05)',
+               display: 'flex',
+               flexDirection: 'column',
+               overflow: 'hidden',
+               transition: 'transform 0.15s, box-shadow 0.15s'
+             }}
+           >
+             {/* Imagem Container com Preview */}
+             <div 
+               onClick={() => setSelectedMediaModal(item)}
+               style={{
+                 position: 'relative',
+                 height: 160,
+                 background: '#f7f2ea',
+                 cursor: 'pointer',
+                 display: 'flex',
+                 alignItems: 'center',
+                 justifyContent: 'center',
+                 overflow: 'hidden'
+               }}
+             >
+               <img
+                 src={item.fileUrl}
+                 alt={item.title}
+                 style={{
+                   width: '100%',
+                   height: '100%',
+                   objectFit: 'contain',
+                   padding: 6,
+                   transition: 'transform 0.2s'
+                 }}
+               />
+               {/* Badge de Categoria */}
+               <span style={{
+                 position: 'absolute', top: 8, left: 8,
+                 background: 'rgba(44,26,14,0.82)', backdropFilter: 'blur(4px)',
+                 color: '#fff', fontSize: 10.5, fontWeight: 700, padding: '3px 8px', borderRadius: 6
+               }}>
+                 {item.category || 'Geral'}
+               </span>
+             </div>
+
+             {/* Conteúdo do Card */}
+             <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 6, flex: 1 }}>
+               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                 <div style={{ fontWeight: 800, fontSize: 13.5, color: '#2c1a0e', lineHeight: 1.3, wordBreak: 'break-word' }}>
+                   {item.title}
+                 </div>
+               </div>
+
+               {item.description && (
+                 <p style={{ fontSize: 11.5, color: '#665c54', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+                   {item.description}
+                 </p>
+               )}
+
+               {/* Tags */}
+               {item.tags && item.tags.length > 0 && (
+                 <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 2 }}>
+                   {item.tags.slice(0, 3).map((t, idx) => (
+                     <span key={idx} style={{ fontSize: 10, background: '#f5efe6', color: '#8b5e3c', padding: '2px 6px', borderRadius: 4, fontWeight: 600 }}>
+                       {t}
+                     </span>
+                   ))}
+                 </div>
+               )}
+
+               {/* Metadados adicionais */}
+               <div style={{ fontSize: 11, color: '#8b7355', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto', paddingTop: 6, borderTop: '1px solid rgba(139,115,85,0.12)' }}>
+                 <span>{item.schoolName || 'Geral'}</span>
+                 {item.fileSize ? <span>{(item.fileSize / 1024).toFixed(0)} KB</span> : null}
+               </div>
+
+               {/* Barra de Ações Rápidas */}
+               <div style={{ display: 'flex', gap: 6, marginTop: 6, paddingTop: 4 }}>
+                 <button
+                   onClick={() => {
+                     const markdownTag = `![${item.title}](${item.fileUrl})`
+                     navigator.clipboard.writeText(markdownTag)
+                     showToast('Tag Markdown copiada para a área de transferência!')
+                   }}
+                   title="Copiar Tag Markdown / Link"
+                   style={{
+                     flex: 1, padding: '6px 8px', borderRadius: 8, border: '1px solid rgba(139,115,85,0.25)',
+                     background: '#fdfbf7', color: '#8b5e3c', fontSize: 11.5, fontWeight: 700,
+                     cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4
+                   }}
+                 >
+                   <i className="ti ti-copy" /> Copiar Tag
+                 </button>
+
+                 <button
+                   onClick={() => setSelectedMediaModal(item)}
+                   title="Visualizar Detalhes"
+                   style={{
+                     padding: '6px 10px', borderRadius: 8, border: '1px solid rgba(139,115,85,0.25)',
+                     background: '#fdfbf7', color: '#665c54', fontSize: 12, cursor: 'pointer'
+                   }}
+                 >
+                   <i className="ti ti-eye" />
+                 </button>
+
+                 <button
+                   onClick={() => {
+                     setEditingMediaModal(item)
+                     setNewMediaTitle(item.title)
+                     setNewMediaCategory(item.category || 'Ilustrações Didáticas')
+                     setNewMediaSchool(item.schoolName || '')
+                     setNewMediaTags(item.tags ? item.tags.join(', ') : '')
+                     setNewMediaDescription(item.description || '')
+                   }}
+                   title="Editar Informações"
+                   style={{
+                     padding: '6px 10px', borderRadius: 8, border: '1px solid rgba(139,115,85,0.25)',
+                     background: '#fdfbf7', color: '#665c54', fontSize: 12, cursor: 'pointer'
+                   }}
+                 >
+                   <i className="ti ti-edit" />
+                 </button>
+
+                 <button
+                   onClick={async () => {
+                     if (confirm(`Deseja excluir permanentemente a imagem "${item.title}"?`)) {
+                       await deleteMediaItemFromSupabase(item.id, item.fileUrl)
+                       setMediaItems(prev => prev.filter(x => x.id !== item.id))
+                       showToast('Imagem removida!')
+                     }
+                   }}
+                   title="Excluir Imagem"
+                   style={{
+                     padding: '6px 10px', borderRadius: 8, border: '1px solid rgba(220,53,69,0.2)',
+                     background: '#fff5f5', color: '#dc3545', fontSize: 12, cursor: 'pointer'
+                   }}
+                 >
+                   <i className="ti ti-trash" />
+                 </button>
+               </div>
+             </div>
+           </div>
+         ))}
+       </div>
+     )}
+   </div>
+ )}
+
+</div>
+
+{/* ================================================================= */}
+{/* MODAIS DO BANCO DE IMAGENS & MÍDIAS                               */}
+{/* ================================================================= */}
+
+{/* 1. Modal Visualizar Imagem em Detalhe */}
+{selectedMediaModal && (
+ <div style={{
+   position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(6px)',
+   display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99999, padding: 20
+ }}>
+   <div style={{
+     background: '#fffcf8', borderRadius: 20, border: '2px solid #8b5e3c', padding: 24,
+     maxWidth: 720, width: '100%', maxHeight: '90vh', overflowY: 'auto',
+     boxShadow: '0 20px 60px rgba(0,0,0,0.4)', display: 'flex', flexDirection: 'column', gap: 16
+   }}>
+     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+         <span style={{ fontSize: 24 }}>🖼️</span>
+         <div>
+           <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#2c1a0e' }}>
+             {selectedMediaModal.title}
+           </h3>
+           <span style={{ fontSize: 12, color: '#8b7355' }}>
+             {selectedMediaModal.category} • {selectedMediaModal.schoolName || 'Geral'}
+           </span>
+         </div>
+       </div>
+       <button 
+         onClick={() => setSelectedMediaModal(null)} 
+         style={{ background: '#f5efe6', border: 'none', width: 32, height: 32, borderRadius: '50%', cursor: 'pointer', fontWeight: 700 }}
+       >
+         ×
+       </button>
+     </div>
+
+     {/* Imagem Ampliada */}
+     <div style={{
+       background: '#f7f2ea', borderRadius: 12, border: '1px solid rgba(139,115,85,0.2)',
+       padding: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', maxHeight: 380, overflow: 'hidden'
+     }}>
+       <img
+         src={selectedMediaModal.fileUrl}
+         alt={selectedMediaModal.title}
+         style={{ maxWidth: '100%', maxHeight: 360, objectFit: 'contain', borderRadius: 8 }}
+       />
+     </div>
+
+     {/* Metadados e Descrição */}
+     {selectedMediaModal.description && (
+       <p style={{ fontSize: 13, color: '#586e75', margin: 0, background: '#fcf8f2', padding: 12, borderRadius: 10, border: '1px solid rgba(139,115,85,0.15)' }}>
+         {selectedMediaModal.description}
+       </p>
+     )}
+
+     {/* Ações e Tags de Cópia */}
+     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+       <label style={{ fontSize: 12, fontWeight: 700, color: '#8b5e3c' }}>Copiar para Documentos:</label>
+       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+         <button
+           onClick={() => {
+             navigator.clipboard.writeText(`![${selectedMediaModal.title}](${selectedMediaModal.fileUrl})`)
+             showToast('Tag Markdown copiada!')
+           }}
+           style={{ ...btnSecondary, justifyContent: 'center', fontSize: 12 }}
+         >
+           <i className="ti ti-markdown" /> Copiar Markdown
+         </button>
+         <button
+           onClick={() => {
+             navigator.clipboard.writeText(`<img src="${selectedMediaModal.fileUrl}" alt="${selectedMediaModal.title}" style="max-width:100%; height:auto;" />`)
+             showToast('Tag HTML copiada!')
+           }}
+           style={{ ...btnSecondary, justifyContent: 'center', fontSize: 12 }}
+         >
+           <i className="ti ti-code" /> Copiar HTML
+         </button>
+       </div>
+     </div>
+
+     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
+       <a
+         href={selectedMediaModal.fileUrl}
+         target="_blank"
+         rel="noreferrer"
+         download={selectedMediaModal.fileName || 'imagem.png'}
+         style={{ ...btnSecondary, textDecoration: 'none' }}
+       >
+         <i className="ti ti-download" /> Abrir / Baixar Arquivo
+       </a>
+       <button onClick={() => setSelectedMediaModal(null)} style={btnPrimary}>
+         Fechar
+       </button>
+     </div>
+   </div>
  </div>
+)}
+
+{/* 2. Modal Adicionar Nova Imagem / URL */}
+{isAddMediaModalOpen && (
+ <div style={{
+   position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(5px)',
+   display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99999, padding: 20
+ }}>
+   <div style={{
+     background: '#fffcf8', borderRadius: 20, border: '2px solid #8b5e3c', padding: 26,
+     maxWidth: 580, width: '100%', boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+     display: 'flex', flexDirection: 'column', gap: 16
+   }}>
+     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+         <span style={{ fontSize: 24 }}>🖼️</span>
+         <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#2c1a0e' }}>
+           Adicionar Imagem à Biblioteca
+         </h3>
+       </div>
+       <button 
+         onClick={() => setIsAddMediaModalOpen(false)} 
+         style={{ background: '#f5efe6', border: 'none', width: 32, height: 32, borderRadius: '50%', cursor: 'pointer', fontWeight: 700 }}
+       >
+         ×
+       </button>
+     </div>
+
+     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+       <div>
+         <label style={{ fontSize: 12, fontWeight: 700, color: '#586e75', display: 'block', marginBottom: 4 }}>Título da Imagem / Figura *</label>
+         <input 
+           value={newMediaTitle} 
+           onChange={e => setNewMediaTitle(e.target.value)} 
+           placeholder="Ex: Mapa da América do Sul, Diagrama da Célula Animal..." 
+           style={inputStyle} 
+         />
+       </div>
+
+       <div>
+         <label style={{ fontSize: 12, fontWeight: 700, color: '#586e75', display: 'block', marginBottom: 4 }}>URL da Imagem (Link Direto)</label>
+         <input 
+           value={newMediaUrl} 
+           onChange={e => setNewMediaUrl(e.target.value)} 
+           placeholder="https://exemplo.com/imagem.png ou deixe em branco para fazer upload" 
+           style={inputStyle} 
+         />
+       </div>
+
+       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+         <div>
+           <label style={{ fontSize: 12, fontWeight: 700, color: '#586e75', display: 'block', marginBottom: 4 }}>Categoria Pedagógica</label>
+           <select value={newMediaCategory} onChange={e => setNewMediaCategory(e.target.value)} style={inputStyle}>
+             <option value="Ilustrações Didáticas">🎨 Ilustrações Didáticas</option>
+             <option value="Mapas & Gráficos">🗺️ Mapas & Gráficos</option>
+             <option value="Logos & Selos">🏫 Logos & Selos</option>
+             <option value="Questões & Exercícios">📝 Questões & Exercícios</option>
+             <option value="Diagramas Científicos">🔬 Diagramas Científicos</option>
+             <option value="Geral">📁 Geral</option>
+           </select>
+         </div>
+
+         <div>
+           <label style={{ fontSize: 12, fontWeight: 700, color: '#586e75', display: 'block', marginBottom: 4 }}>Escola Associada</label>
+           <select value={newMediaSchool} onChange={e => setNewMediaSchool(e.target.value)} style={inputStyle}>
+             <option value="">Geral / Todas</option>
+             {registeredSchools.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+           </select>
+         </div>
+       </div>
+
+       <div>
+         <label style={{ fontSize: 12, fontWeight: 700, color: '#586e75', display: 'block', marginBottom: 4 }}>Tags (separadas por vírgula)</label>
+         <input 
+           value={newMediaTags} 
+           onChange={e => setNewMediaTags(e.target.value)} 
+           placeholder="#geografia, #9ano, #avaliacao, #mapa" 
+           style={inputStyle} 
+         />
+       </div>
+
+       <div>
+         <label style={{ fontSize: 12, fontWeight: 700, color: '#586e75', display: 'block', marginBottom: 4 }}>Descrição / Legenda Pedagógica</label>
+         <textarea 
+           value={newMediaDescription} 
+           onChange={e => setNewMediaDescription(e.target.value)} 
+           placeholder="Informações para orientar a atividade ou questão..." 
+           rows={3} 
+           style={{ ...inputStyle, fontFamily: 'inherit' }} 
+         />
+       </div>
+     </div>
+
+     <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 8 }}>
+       <button onClick={() => setIsAddMediaModalOpen(false)} style={btnSecondary}>Cancelar</button>
+       <button
+         onClick={async () => {
+           if (!newMediaTitle.trim()) {
+             alert('Informe o título da imagem.')
+             return
+           }
+           if (!newMediaUrl.trim()) {
+             alert('Informe a URL da imagem ou utilize o botão "Upload de Imagens" para arquivos locais.')
+             return
+           }
+
+           const tagList = newMediaTags.split(',').map(t => t.trim()).filter(Boolean)
+           const item: MediaLibraryItem = {
+             id: `img_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+             title: newMediaTitle.trim(),
+             fileUrl: newMediaUrl.trim(),
+             fileType: 'image/url',
+             category: newMediaCategory,
+             tags: tagList.length > 0 ? tagList : ['#imagem'],
+             schoolName: newMediaSchool || 'Geral',
+             description: newMediaDescription.trim(),
+             createdAt: new Date().toISOString()
+           }
+
+           await saveMediaItemToSupabase(item)
+           setMediaItems(prev => [item, ...prev.filter(x => x.id !== item.id)])
+           setIsAddMediaModalOpen(false)
+           showToast('Imagem adicionada com sucesso!')
+         }}
+         style={btnPrimary}
+       >
+         Salvar Imagem
+       </button>
+     </div>
+   </div>
+ </div>
+)}
+
+{/* 3. Modal Editar Informações da Imagem */}
+{editingMediaModal && (
+ <div style={{
+   position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(5px)',
+   display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99999, padding: 20
+ }}>
+   <div style={{
+     background: '#fffcf8', borderRadius: 20, border: '2px solid #8b5e3c', padding: 26,
+     maxWidth: 580, width: '100%', boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+     display: 'flex', flexDirection: 'column', gap: 16
+   }}>
+     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+         <span style={{ fontSize: 24 }}>✏️</span>
+         <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#2c1a0e' }}>
+           Editar Dados da Imagem
+         </h3>
+       </div>
+       <button 
+         onClick={() => setEditingMediaModal(null)} 
+         style={{ background: '#f5efe6', border: 'none', width: 32, height: 32, borderRadius: '50%', cursor: 'pointer', fontWeight: 700 }}
+       >
+         ×
+       </button>
+     </div>
+
+     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+       <div>
+         <label style={{ fontSize: 12, fontWeight: 700, color: '#586e75', display: 'block', marginBottom: 4 }}>Título da Imagem *</label>
+         <input 
+           value={newMediaTitle} 
+           onChange={e => setNewMediaTitle(e.target.value)} 
+           style={inputStyle} 
+         />
+       </div>
+
+       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+         <div>
+           <label style={{ fontSize: 12, fontWeight: 700, color: '#586e75', display: 'block', marginBottom: 4 }}>Categoria</label>
+           <select value={newMediaCategory} onChange={e => setNewMediaCategory(e.target.value)} style={inputStyle}>
+             <option value="Ilustrações Didáticas">🎨 Ilustrações Didáticas</option>
+             <option value="Mapas & Gráficos">🗺️ Mapas & Gráficos</option>
+             <option value="Logos & Selos">🏫 Logos & Selos</option>
+             <option value="Questões & Exercícios">📝 Questões & Exercícios</option>
+             <option value="Diagramas Científicos">🔬 Diagramas Científicos</option>
+             <option value="Geral">📁 Geral</option>
+           </select>
+         </div>
+
+         <div>
+           <label style={{ fontSize: 12, fontWeight: 700, color: '#586e75', display: 'block', marginBottom: 4 }}>Escola</label>
+           <select value={newMediaSchool} onChange={e => setNewMediaSchool(e.target.value)} style={inputStyle}>
+             <option value="Geral">Geral / Todas</option>
+             {registeredSchools.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+           </select>
+         </div>
+       </div>
+
+       <div>
+         <label style={{ fontSize: 12, fontWeight: 700, color: '#586e75', display: 'block', marginBottom: 4 }}>Tags</label>
+         <input 
+           value={newMediaTags} 
+           onChange={e => setNewMediaTags(e.target.value)} 
+           style={inputStyle} 
+         />
+       </div>
+
+       <div>
+         <label style={{ fontSize: 12, fontWeight: 700, color: '#586e75', display: 'block', marginBottom: 4 }}>Descrição / Legenda</label>
+         <textarea 
+           value={newMediaDescription} 
+           onChange={e => setNewMediaDescription(e.target.value)} 
+           rows={3} 
+           style={{ ...inputStyle, fontFamily: 'inherit' }} 
+         />
+       </div>
+     </div>
+
+     <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 8 }}>
+       <button onClick={() => setEditingMediaModal(null)} style={btnSecondary}>Cancelar</button>
+       <button
+         onClick={async () => {
+           if (!newMediaTitle.trim()) {
+             alert('Informe o título.')
+             return
+           }
+           const tagList = newMediaTags.split(',').map(t => t.trim()).filter(Boolean)
+           const updated: MediaLibraryItem = {
+             ...editingMediaModal,
+             title: newMediaTitle.trim(),
+             category: newMediaCategory,
+             schoolName: newMediaSchool || 'Geral',
+             tags: tagList,
+             description: newMediaDescription.trim()
+           }
+           await saveMediaItemToSupabase(updated)
+           setMediaItems(prev => prev.map(x => x.id === updated.id ? updated : x))
+           setEditingMediaModal(null)
+           showToast('Alterações salvas com sucesso!')
+         }}
+         style={btnPrimary}
+       >
+         Salvar Alterações
+       </button>
+     </div>
+   </div>
+ </div>
+)}
 
  {/* Modal Novo Arquivo Avulso Manual */}
  {isAddLooseModalOpen && (

@@ -65,6 +65,30 @@ function getActiveApi() {
 /* 
  COMPONENTE PRINCIPAL
  */
+function calculateItemStats(item: { responseHistory?: Array<{ studentId: string; correct: boolean; timestamp: number }> }): {
+  p: number; D: number; classification: string; classColor: string
+} {
+  const history = item.responseHistory || []
+  if (history.length < 3) return { p: -1, D: -1, classification: 'Sem dados', classColor: 'text-gray-400' }
+  
+  const p = history.filter(r => r.correct).length / history.length
+  const sorted = [...history]
+  const cutoff = Math.max(1, Math.floor(history.length * 0.27))
+  const bottom27 = sorted.filter(r => !r.correct).slice(0, cutoff)
+  const top27 = sorted.filter(r => r.correct).slice(-cutoff)
+  const pHigh = top27.length > 0 ? top27.filter(r => r.correct).length / top27.length : 0
+  const pLow = bottom27.length > 0 ? bottom27.filter(r => r.correct).length / bottom27.length : 1
+  const D = pHigh - pLow
+  
+  let classification = ''
+  let classColor = ''
+  if (p < 0.3) { classification = 'Muito Dificil'; classColor = 'text-red-600' }
+  else if (p > 0.7) { classification = 'Muito Facil'; classColor = 'text-yellow-600' }
+  else { classification = 'Ideal'; classColor = 'text-green-600' }
+  
+  return { p, D, classification, classColor }
+}
+
 export default function QuestionBank() {
  const [schools, setSchools] = useState<School[]>([])
  const [classes, setClasses] = useState<ClassRecord[]>([])
@@ -698,6 +722,46 @@ Para questões dissertativas ou V/F, omita "options". Para V/F, o "answer" deve 
  </span>
  )}
  {q.bnccCode && <span style={{ ...S.badge, background: '#e0f2fe', color: '#0369a1' }}> BNCC: {q.bnccCode}</span>}
+                    {(q as any).responseHistory && (q as any).responseHistory.length >= 3 && (() => {
+                      const stats = calculateItemStats(q as any)
+                      return (
+                        <span className={`text-xs px-2 py-0.5 rounded-full bg-gray-100 ${stats.classColor}`}
+                          title={`Dificuldade: p=${stats.p.toFixed(2)} | Discriminacao: D=${stats.D.toFixed(2)}`}>
+                          {stats.p < 0.3 ? '🔴' : stats.p > 0.7 ? '🟡' : '🟢'} {stats.classification}
+                        </span>
+                      )
+                    })()}
+                    {(q as any).bloomLevel && (
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-purple-50 text-purple-600">
+                        {({ remember: '👁️', understand: '💡', apply: '🔧', analyze: '🔍', evaluate: '⚖️', create: '✨' } as Record<string, string>)[(q as any).bloomLevel] ?? ''} {(q as any).bloomLevel}
+                      </span>
+                    )}
+                    {(q as any).difficultyLevel && (
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-orange-50 text-orange-600">
+                        {({ easy: '🟢', medium: '🟡', hard: '🔴', challenge: '⭐' } as Record<string, string>)[(q as any).difficultyLevel] ?? ''} {(q as any).difficultyLevel}
+                      </span>
+                    )}
+
+                    {(q as any).responseHistory && (q as any).responseHistory.length >= 3 && (() => {
+                      const stats = calculateItemStats(q as any)
+                      return (
+                        <span className={`text-xs px-2 py-0.5 rounded-full bg-gray-100 ${stats.classColor}`}
+                          title={`Dificuldade: p=${stats.p.toFixed(2)} | Discriminacao: D=${stats.D.toFixed(2)}`}>
+                          {stats.p < 0.3 ? '🔴' : stats.p > 0.7 ? '🟡' : '🟢'} {stats.classification}
+                        </span>
+                      )
+                    })()}
+                    {(q as any).bloomLevel && (
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-purple-50 text-purple-600">
+                        {({ remember: '👁️', understand: '💡', apply: '🔧', analyze: '🔍', evaluate: '⚖️', create: '✨' } as any)[(q as any).bloomLevel]} {(q as any).bloomLevel}
+                      </span>
+                    )}
+                    {(q as any).difficultyLevel && (
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-orange-50 text-orange-600">
+                        {({ easy: '🟢', medium: '🟡', hard: '🔴', challenge: '⭐' } as any)[(q as any).difficultyLevel]} {(q as any).difficultyLevel}
+                      </span>
+                    )}
+
  {sc && <span style={{ ...S.badge, background: '#f5efe6', color: '#7a5c42' }}>{sc.name}</span>}
  <span style={{ ...S.badge, background: '#f5efe6', color: '#7a5c42' }}>{q.year}</span>
  <span style={{ ...S.badge, background: '#f5efe6', color: '#7a5c42' }}>{q.subject}</span>
@@ -929,4 +993,4 @@ Para questões dissertativas ou V/F, omita "options". Para V/F, o "answer" deve 
  <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
  </div>
  )
-}
+}

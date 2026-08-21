@@ -40,6 +40,9 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+*.log
+tsc_output.txt
+
 # scratch scripts
 /scratch/
 

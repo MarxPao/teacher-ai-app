@@ -189,6 +189,22 @@ export async function syncToSupabase(payload?: Record<string, unknown>): Promise
         grades_history: s.gradesHistory || []
       }))))
     }
+    if (Array.isArray(syncPayload['teacher_media_library'])) {
+      promises.push(upsertRelational('media_library', syncPayload['teacher_media_library'].map((m: any) => ({
+        id: String(m.id),
+        title: String(m.title || 'Imagem'),
+        file_name: m.fileName || null,
+        file_type: m.fileType || null,
+        file_size: m.fileSize || 0,
+        file_url: String(m.fileUrl || ''),
+        category: m.category || 'Geral',
+        tags: Array.isArray(m.tags) ? m.tags : [],
+        school_id: m.schoolId || null,
+        school_name: m.schoolName || null,
+        description: m.description || null,
+        created_at: m.createdAt || new Date().toISOString()
+      }))))
+    }
 
     await Promise.all(promises);
 
@@ -1428,5 +1444,241 @@ export async function saveLearnedFactToSupabase(factItem: {
   }
 }
 
+// ==============================================================================
+// BANCO DE IMAGENS E MÍDIAS (MEDIA LIBRARY & SUPABASE STORAGE)
+// ==============================================================================
 
+export interface MediaLibraryItem {
+  id: string
+  title: string
+  fileName?: string
+  fileType?: string
+  fileSize?: number
+  fileUrl: string
+  category?: 'Ilustrações Didáticas' | 'Mapas & Gráficos' | 'Logos & Selos' | 'Questões & Exercícios' | 'Diagramas Científicos' | 'Geral' | string
+  tags?: string[]
+  schoolId?: string
+  schoolName?: string
+  description?: string
+  createdAt?: string
+}
 
+/**
+ * Converte um arquivo File do navegador para Base64 Data URL (fallback resiliente).
+ */
+export function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result as string)
+    reader.onerror = reject
+    reader.readAsDataURL(file)
+  })
+}
+
+/**
+ * Faz upload de imagem para o Supabase Storage (bucket 'media').
+ * Se a nuvem falhar ou não estiver configurada, faz fallback transparente para DataURL local.
+ */
+export async function uploadMediaFileToSupabase(file: File, folder: string = 'library'): Promise<{ ok: boolean; url: string; isCloud: boolean; error?: string }> {
+  const cfg = getSupabaseConfig()
+  const apiKey = cfg ? getActiveKey(cfg) : ''
+
+  // Fallback imediato se não houver Supabase configurado
+  if (!cfg?.url || !apiKey) {
+    try {
+      const dataUrl = await fileToDataUrl(file)
+      return { ok: true, url: dataUrl, isCloud: false }
+    } catch (e: any) {
+      return { ok: false, url: '', isCloud: false, error: e.message || 'Erro ao processar arquivo local' }
+    }
+  }
+
+  try {
+    const cleanName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
+    const filePath = `${folder}/${Date.now()}_${cleanName}`
+
+    // 1. Tenta upload no bucket 'media'
+    const uploadRes = await fetch(`${cfg.url}/storage/v1/object/media/${filePath}`, {
+      method: 'POST',
+      headers: {
+        'apikey': apiKey,
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': file.type || 'application/octet-stream',
+        'x-upsert': 'true'
+      },
+      body: file
+    })
+
+    if (uploadRes.ok) {
+      const publicUrl = `${cfg.url}/storage/v1/object/public/media/${filePath}`
+      return { ok: true, url: publicUrl, isCloud: true }
+    }
+
+    // Se o bucket não existir ou der erro de permissão no storage, usa fallback DataURL
+    const dataUrl = await fileToDataUrl(file)
+    return { ok: true, url: dataUrl, isCloud: false }
+  } catch (err: any) {
+    // Fallback gracioso para offline
+    try {
+      const dataUrl = await fileToDataUrl(file)
+      return { ok: true, url: dataUrl, isCloud: false }
+    } catch {
+      return { ok: false, url: '', isCloud: false, error: err.message || 'Falha no upload' }
+    }
+  }
+}
+
+/**
+ * Salva metadados de uma imagem no Supabase e no localStorage local
+ */
+export async function saveMediaItemToSupabase(item: MediaLibraryItem): Promise<{ ok: boolean; error?: string }> {
+  try {
+    if (typeof window !== 'undefined') {
+      const currentList: MediaLibraryItem[] = JSON.parse(localStorage.getItem('teacher_media_library') || '[]')
+      const index = currentList.findIndex(x => x.id === item.id)
+      if (index >= 0) {
+        currentList[index] = item
+      } else {
+        currentList.unshift(item)
+      }
+      localStorage.setItem('teacher_media_library', JSON.stringify(currentList))
+      window.dispatchEvent(new Event('storage'))
+    }
+
+    const cfg = getSupabaseConfig()
+    const apiKey = cfg ? getActiveKey(cfg) : ''
+    if (cfg?.url && apiKey) {
+      await fetch(`${cfg.url}/rest/v1/media_library`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': apiKey,
+          'Authorization': `Bearer ${apiKey}`,
+          'Prefer': 'resolution=merge-duplicates'
+        },
+        body: JSON.stringify({
+          id: String(item.id),
+          user_id: 'default_teacher',
+          title: String(item.title || 'Imagem'),
+          file_name: item.fileName || null,
+          file_type: item.fileType || null,
+          file_size: item.fileSize || 0,
+          file_url: String(item.fileUrl || ''),
+          category: item.category || 'Geral',
+          tags: Array.isArray(item.tags) ? item.tags : [],
+          school_id: item.schoolId || null,
+          school_name: item.schoolName || null,
+          description: item.description || null,
+          created_at: item.createdAt || new Date().toISOString()
+        })
+      }).catch(() => null)
+    }
+
+    return { ok: true }
+  } catch (e: any) {
+    return { ok: false, error: e.message }
+  }
+}
+
+/**
+ * Busca todas as imagens da biblioteca (Supabase + localStorage merge)
+ */
+export async function fetchMediaLibraryFromSupabase(): Promise<MediaLibraryItem[]> {
+  let items: MediaLibraryItem[] = []
+  if (typeof window !== 'undefined') {
+    try {
+      items = JSON.parse(localStorage.getItem('teacher_media_library') || '[]')
+    } catch { items = [] }
+  }
+
+  const cfg = getSupabaseConfig()
+  const apiKey = cfg ? getActiveKey(cfg) : ''
+  if (!cfg?.url || !apiKey) return items
+
+  try {
+    const res = await fetch(`${cfg.url}/rest/v1/media_library?select=*&order=created_at.desc&limit=500`, {
+      headers: {
+        'apikey': apiKey,
+        'Authorization': `Bearer ${apiKey}`
+      }
+    })
+    if (res.ok) {
+      const cloudData = await res.json()
+      if (Array.isArray(cloudData) && cloudData.length > 0) {
+        const mappedCloud: MediaLibraryItem[] = cloudData.map(c => ({
+          id: String(c.id),
+          title: c.title,
+          fileName: c.file_name,
+          fileType: c.file_type,
+          fileSize: c.file_size,
+          fileUrl: c.file_url,
+          category: c.category,
+          tags: Array.isArray(c.tags) ? c.tags : [],
+          schoolId: c.school_id,
+          schoolName: c.school_name,
+          description: c.description,
+          createdAt: c.created_at
+        }))
+
+        // Merge: manter itens que estão na nuvem e itens locais ainda não sincronizados
+        const mergedMap = new Map<string, MediaLibraryItem>()
+        items.forEach(it => mergedMap.set(it.id, it))
+        mappedCloud.forEach(it => mergedMap.set(it.id, it))
+        const merged = Array.from(mergedMap.values()).sort((a, b) => 
+          new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+        )
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('teacher_media_library', JSON.stringify(merged))
+        }
+        return merged
+      }
+    }
+  } catch {
+    // Retorna dados locais em caso de falha de conexão
+  }
+  return items
+}
+
+/**
+ * Remove uma imagem da biblioteca e do Supabase
+ */
+export async function deleteMediaItemFromSupabase(id: string, fileUrl?: string): Promise<{ ok: boolean }> {
+  try {
+    if (typeof window !== 'undefined') {
+      const currentList: MediaLibraryItem[] = JSON.parse(localStorage.getItem('teacher_media_library') || '[]')
+      const filtered = currentList.filter(x => x.id !== id)
+      localStorage.setItem('teacher_media_library', JSON.stringify(filtered))
+      window.dispatchEvent(new Event('storage'))
+    }
+
+    const cfg = getSupabaseConfig()
+    const apiKey = cfg ? getActiveKey(cfg) : ''
+    if (cfg?.url && apiKey) {
+      // 1. Delete do registro relacional
+      await fetch(`${cfg.url}/rest/v1/media_library?id=eq.${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        headers: {
+          'apikey': apiKey,
+          'Authorization': `Bearer ${apiKey}`
+        }
+      }).catch(() => null)
+
+      // 2. Se for arquivo no storage, tenta remover
+      if (fileUrl && fileUrl.includes('/storage/v1/object/public/media/')) {
+        const storagePath = fileUrl.split('/storage/v1/object/public/media/')[1]
+        if (storagePath) {
+          await fetch(`${cfg.url}/storage/v1/object/media/${storagePath}`, {
+            method: 'DELETE',
+            headers: {
+              'apikey': apiKey,
+              'Authorization': `Bearer ${apiKey}`
+            }
+          }).catch(() => null)
+        }
+      }
+    }
+    return { ok: true }
+  } catch {
+    return { ok: false }
+  }
+}
