@@ -26,7 +26,6 @@ const NAV: Section[] = [
     { key: 'calendar',            label: 'Calendário',              icon: 'ti-calendar' },
     { key: 'maestro',             label: 'Maestro',                 icon: 'ti-subtask' },
     { key: 'reflectivepractice',  label: 'Reflexão da Prática',     icon: 'ti-bulb' },
-    { key: 'editor',              label: 'Editor de Documentos',    icon: 'ti-file-pencil' },
     { key: 'wellbeing',           label: 'Bem-Estar',               icon: 'ti-heart' },
   ]},
   { label: 'Criação', items: [
@@ -34,6 +33,7 @@ const NAV: Section[] = [
     { key: 'quick',             label: 'Gerar Exercício',       icon: 'ti-sparkles' },
     { key: 'exam',              label: 'Gerar Prova',           icon: 'ti-file-text' },
     { key: 'eventos',           label: 'Eventos Escolares',     icon: 'ti-sparkles' },
+    { key: 'editor',            label: 'Editor de Documentos',  icon: 'ti-file-pencil' },
     { key: 'rubric',            label: 'Rubrica & Gabarito',    icon: 'ti-list-check' },
     { key: 'qbank',             label: 'Banco de Atividades',   icon: 'ti-archive' },
     { key: 'audiopronunciation',label: 'Pronúncia & Áudio',     icon: 'ti-microphone' },
