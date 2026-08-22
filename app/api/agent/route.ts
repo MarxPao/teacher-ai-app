@@ -372,7 +372,7 @@ async function callProviderWithFallback(
         }
         const modelsByProvider: Record<string, string[]> = {
           openai:      ['gpt-4o-mini', 'gpt-4o'],
-          groq:        ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant'],
+          groq:        ['openai/gpt-oss-120b', 'openai/gpt-oss-20b', 'qwen/qwen3.6-27b', 'groq/compound', 'llama-3.3-70b-versatile', 'llama-3.1-8b-instant'],
           deepseek:    ['deepseek-chat'],
           zhipu:       ['glm-4-flash'],
           siliconflow: ['Qwen/Qwen2.5-72B-Instruct'],
@@ -384,19 +384,26 @@ async function callProviderWithFallback(
         }))
 
         const modelsToTry = modelsByProvider[p] || ['gpt-4o-mini']
+        const lastUser = optimizedMessages.filter(m => m.role === 'user').slice(-1)[0]?.content || ''
+        const needsTools = !/examinador|redação|avalie|critérios|rubrica|retorne estritamente|json no formato/i.test(lastUser)
+
         for (const mName of modelsToTry) {
           try {
+            const reqBody: Record<string, any> = {
+              model: mName,
+              messages: toOpenAIMessages(systemPrompt, optimizedMessages),
+              max_tokens: maxTokens,
+              temperature,
+            }
+            if (needsTools) {
+              reqBody.tools = oaiTools
+              reqBody.tool_choice = 'auto'
+            }
+
             const response = await fetch(baseUrls[p], {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
-              body: JSON.stringify({
-                model: mName,
-                messages: toOpenAIMessages(systemPrompt, optimizedMessages),
-                tools: oaiTools,
-                tool_choice: 'auto',
-                max_tokens: maxTokens,
-                temperature,
-              }),
+              body: JSON.stringify(reqBody),
             })
             if (response.ok) {
               const data = await response.json()

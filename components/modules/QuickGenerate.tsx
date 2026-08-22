@@ -94,6 +94,14 @@ function buildPrompt(opts: {
   customPrompt?: string
   libraryContext?: string
   header: HeaderState
+  bloomRemember?: number
+  bloomApply?: number
+  bloomAnalyze?: number
+  bloomEvaluate?: number
+  diffEasy?: number
+  diffMedium?: number
+  diffHard?: number
+  diffChallenge?: number
 }) {
   const neeInstructions: Record<string, string> = {
     dyslexia: 'Adapte para alunos com dislexia: frases curtas (máx 15 palavras), evite negativas duplas, sem itálico no enunciado.',
@@ -117,7 +125,17 @@ function buildPrompt(opts: {
     ? 'IDIOMA DAS ALTERNATIVAS: As opções e respostas devem ser formuladas em PORTUGUÊS.'
     : 'IDIOMA DAS ALTERNATIVAS: As opções (A, B, C, D) e respostas devem ser estritamente em INGLÊS.'
 
-  return `Você é um professor especialista em ELT (English Language Teaching) e pedagogia. Sua tarefa é gerar um EXERCÍCIO COMPLETO formatado em HTML, pronto para uso em sala de aula.
+  const bRemember = opts.bloomRemember ?? 25
+  const bApply = opts.bloomApply ?? 30
+  const bAnalyze = opts.bloomAnalyze ?? 25
+  const bEvaluate = opts.bloomEvaluate ?? 20
+
+  const dEasy = opts.diffEasy ?? 20
+  const dMedium = opts.diffMedium ?? 50
+  const dHard = opts.diffHard ?? 25
+  const dChallenge = opts.diffChallenge ?? 5
+
+  return `Você é um professor especialista em ELT (English Language Teaching), Psicometria e Design Instrucional. Sua tarefa é gerar uma LISTA DE EXERCÍCIOS COMPLETA formatada em HTML, com rigor psicométrico e pedagógico.
 ${librarySection}
 ESPECIFICAÇÕES DO EXERCÍCIO:
 - Escola: ${opts.header.school || 'Escola'}
@@ -136,21 +154,40 @@ ${opts.customPrompt ? `\nDIRETRIZES DO PROFESSOR:\n"${opts.customPrompt}"\n` : '
 ${opts.neeProfile ? `\nADAPTAÇÃO ESPECIAL: ${neeInstructions[opts.neeProfile] || ''}` : ''}
 ${methodologyInstructions}
 
+=== 1. DISTRIBUIÇÃO COGNITIVA OBRIGATÓRIA (BLOOM REVISADO) ===
+- LEMBRAR/COMPREENDER (${bRemember}%): Recall, identificação factual e reconhecimento lexical direto.
+- APLICAR (${bApply}%): Uso de regras em novos contextos, conjugação e estruturação oracional inédita.
+- ANALISAR (${bAnalyze}%): Inferência, identificação de tom/propósito e distinção de fatos vs opiniões.
+- AVALIAR / CRIAR (${bEvaluate}%): Julgamento crítico fundamentado e reestruturação criativa.
+Rotule cada questão com comentário HTML: <!-- bloom:remember|apply|analyze|evaluate|create -->
+
+=== 2. CALIBRAÇÃO DE DIFICULDADE DOS ITENS ===
+- FÁCIL (${dEasy}%): Resposta contextual direta ($p > 0.70$).
+- MÉDIO (${dMedium}%): Raciocínio de 2 etapas ($p \\approx 0.45 - 0.70$).
+- DIFÍCIL (${dHard}%): Estruturas subordinadas e complexidade gramatical ($p < 0.45$).
+- ⭐ DESAFIO (${dChallenge}%): Questão analítica de alta discriminação; adicione o selo ⭐ DESAFIO no enunciado.
+
+=== 3. DESIGN DIAGNÓSTICO DE DISTRATORES & ANTI-CUEING ===
+- CADA distrator nas questões de múltipla escolha deve representar um erro diagnóstico concreto (L1 interference, super-generalização de regra, confusão de tempo verbal, falso cognato).
+- ANTI-CUEING: Proibido repetir palavras exclusivas do enunciado na alternativa correta.
+- HOMOGENEIDADE: Alternativas com tamanho balanceado (±25% caracteres) e paralelismo sintático.
+- SEM DUPLAS NEGATIVAS: Se usar negação no enunciado, use **NÃO**, **EXCETO**, **INCORRETA**.
+- INDEPENDÊNCIA: Questões 100% autônomas.
+
 ESTRUTURA OBRIGATÓRIA DO EXERCÍCIO:
-1. QUANTIDADE RIGOROSA: O documento DEVE conter EXATAMENTE ${opts.qtCount} questões completas numeradas de 1 a ${opts.qtCount}. É PROIBIDO gerar menos de ${opts.qtCount} questões.
+1. QUANTIDADE RIGOROSA: Exatamente ${opts.qtCount} questões completas numeradas de 1 a ${opts.qtCount}.
 2. Cada questão deve ter enunciado rico e contextualizado. Questões de múltipla escolha: exatamente 4 alternativas (A, B, C, D).
-3. Ao final, inclua um <h2>Gabarito Comentado</h2> cobrindo todas as ${opts.qtCount} questões com as respostas e justificativas pedagógicas.
+3. Ao final, inclua um <h2>Gabarito Comentado</h2> cobrindo todas as ${opts.qtCount} questões com as respostas e diagnósticos pedagógicos de erro para cada distrator.
 4. Inclua as habilidades BNCC ao final no formato: <p><strong>Habilidades BNCC:</strong> EF09LI14, EF09LI15</p>
 
 REGRAS ABSOLUTAS DE SAÍDA:
 1. Retorne APENAS HTML limpo. PROIBIDO usar markdown, blocos \`\`\`, asteriscos ou qualquer outra sintaxe que não seja HTML.
-2. Use apenas estas tags: h2, h3, p, ul, ol, li, strong, em, table, thead, tbody, tr, td, th, hr, br, blockquote, span.
+2. Use apenas estas tags: h2, h3, p, ul, ol, li, strong, em, table, thead, tbody, tr, td, th, hr, br, blockquote, span, div.
 3. NÃO inclua <!DOCTYPE>, <html>, <head>, <body> apenas o conteúdo interno.
 4. Comece diretamente com <h2> do título do exercício.
 5. O HTML gerado será renderizado diretamente em um editor deve estar 100% pronto e completo com TODAS as ${opts.qtCount} questões.
 
 Gere agora todas as ${opts.qtCount} questões completas:`
-
 }
 
 // Component 
@@ -171,6 +208,15 @@ export default function QuickGenerate() {
   const [showNeePanel, setShowNeePanel] = useState(false)
   const [selectedSchoolTemplate, setSelectedSchoolTemplate] = useState<string>('')
   const [registeredSchools, setRegisteredSchools] = useState<Array<{ id: string; name: string }>>([])
+
+  const [bloomRemember, setBloomRemember] = useState(25)
+  const [bloomApply, setBloomApply] = useState(30)
+  const [bloomAnalyze, setBloomAnalyze] = useState(25)
+  const [bloomEvaluate, setBloomEvaluate] = useState(20)
+  const [diffEasy, setDiffEasy] = useState(20)
+  const [diffMedium, setDiffMedium] = useState(50)
+  const [diffHard, setDiffHard] = useState(25)
+  const [diffChallenge, setDiffChallenge] = useState(5)
 
   // Header
   const [header, setHeader] = useState<HeaderState>({ school: '', teacher: '', classGroup: '', title: '' })
@@ -291,6 +337,8 @@ export default function QuickGenerate() {
         stemLanguage, optionLanguage,
         header: { ...header, title: header.title || effectiveTitle },
         libraryContext: libContext,
+        bloomRemember, bloomApply, bloomAnalyze, bloomEvaluate,
+        diffEasy, diffMedium, diffHard, diffChallenge
       })
 
       const raw = await callApi(selectedApi, prompt)
@@ -672,6 +720,12 @@ export default function QuickGenerate() {
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#93a1a1' }}>
               <span>3</span><span>30</span>
             </div>
+            {types.length > 0 && Number(qtCount) < types.length * 2 && (
+              <div style={{ background: '#fdf6e2', border: '1px solid #b58900', borderRadius: 8, padding: '8px 10px', fontSize: 11, color: '#856404', marginTop: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <i className="ti ti-alert-triangle" style={{ fontSize: 15, color: '#b58900', flexShrink: 0 }} />
+                <span><strong>Aviso Psicométrico:</strong> {types.length} tipos para {qtCount} questões ({(Number(qtCount)/types.length).toFixed(1)} q/tipo). Recomendamos pelo menos 2 a 3 itens por tipo para consistência diagnóstica.</span>
+              </div>
+            )}
           </div>
 
           {/* Question Types */}
@@ -757,6 +811,47 @@ export default function QuickGenerate() {
               </div>
             )}
           </div>
+
+          {/* BLOCO: Cognição & Dificuldade Psicométrica */}
+          <details style={{ ...CARD, padding: 0, overflow: 'hidden' }}>
+            <summary style={{ padding: '10px 14px', background: '#f5f0fb', cursor: 'pointer', fontWeight: 700, color: '#5e2a84', display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5 }}>
+              <span>🧠</span>
+              <span>Cognição & Dificuldade (Bloom)</span>
+            </summary>
+            <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div>
+                <div style={{ fontSize: 11, color: '#586e75', marginBottom: 4, fontWeight: 600 }}>Taxonomia de Bloom:</div>
+                {([
+                  ['Lembrar / Compreender', bloomRemember, setBloomRemember, '#2aa198'],
+                  ['Aplicar', bloomApply, setBloomApply, '#268bd2'],
+                  ['Analisar', bloomAnalyze, setBloomAnalyze, '#6c71c4'],
+                  ['Avaliar / Criar', bloomEvaluate, setBloomEvaluate, '#d33682']
+                ] as [string, number, (v: number) => void, string][]).map(([label, val, setter, color]) => (
+                  <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+                    <label style={{ fontSize: 11, width: 130, color: '#586e75' }}>{label}</label>
+                    <input type="range" min={0} max={100} value={val} onChange={e => setter(Number(e.target.value))} style={{ flex: 1, accentColor: color }} />
+                    <span style={{ fontSize: 11, width: 30, textAlign: 'right', fontWeight: 700, color }}>{val}%</span>
+                  </div>
+                ))}
+              </div>
+              <hr style={{ border: 'none', borderTop: '1px solid #ede8dc', margin: '2px 0' }} />
+              <div>
+                <div style={{ fontSize: 11, color: '#586e75', marginBottom: 4, fontWeight: 600 }}>Dificuldade dos Itens:</div>
+                {([
+                  ['Fácil (p > 0.70)', diffEasy, setDiffEasy, '#2aa198'],
+                  ['Médio (p ≈ 0.50)', diffMedium, setDiffMedium, '#b58900'],
+                  ['Difícil (p < 0.45)', diffHard, setDiffHard, '#dc322f'],
+                  ['⭐ Desafio', diffChallenge, setDiffChallenge, '#cb4b16']
+                ] as [string, number, (v: number) => void, string][]).map(([label, val, setter, color]) => (
+                  <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+                    <label style={{ fontSize: 11, width: 130, color: '#586e75' }}>{label}</label>
+                    <input type="range" min={0} max={100} value={val} onChange={e => setter(Number(e.target.value))} style={{ flex: 1, accentColor: color }} />
+                    <span style={{ fontSize: 11, width: 30, textAlign: 'right', fontWeight: 700, color }}>{val}%</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </details>
 
         </div>
 

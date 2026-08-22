@@ -265,7 +265,9 @@ export default function OmniGrader() {
       const studentObj = students.find(s => s.id === selectedStudentEssay)
       const studentName = studentObj ? studentObj.name : 'Aluno'
 
-      const prompt = `Você é um Examinador Oficial de Redação Cambridge Assessment English (A2 Key / B1 Preliminary / B2 First / C1 Advanced).
+      // PASSO 1: Macro-Discurso (Content + Communicative Achievement) com isolamento psicométrico
+      const promptPass1 = `Você é um Examinador Oficial de Redação Cambridge Assessment English (A2 Key / B1 Preliminary / B2 First / C1 Advanced).
+AVALIAÇÃO — PASSO 1: MACRO-DISCURSO (CONTENT & COMMUNICATIVE ACHIEVEMENT)
 Avalie a seguinte redação do aluno ${studentName}:
 
 NÍVEL CEFR ALVO: ${targetLevel}
@@ -278,46 +280,68 @@ REDAÇÃO DO ALUNO:
 ${studentEssayText}
 """
 
-Avalie a redação rigorosamente segundo a Rubrica Oficial de 4 Critérios Cambridge (escala de 0.0 a 5.0 para cada critério):
-1. Content (0-5)
-2. Communicative Achievement (0-5)
-3. Organisation (0-5)
-4. Language (0-5)
-
-A nota geral deve ser a média ponderada na escala brasileira de 0.0 a 10.0 (onde média = (Content + CommAch + Org + Lang) / 2).
+REGRA DE ISOLAMENTO PSICOMÉTRICO OBRIGATÓRIA:
+Avalie ESTRITAMENTE o cumprimento da tarefa e a eficácia comunicativa ao leitor-alvo.
+IGNORE completamente pequenos erros gramaticais ou de pontuação local (que serão avaliados em outra etapa separada), a menos que impeçam totalmente a inteligibilidade da mensagem.
+Avalie em escala de 0.0 a 5.0:
+1. Content (0.0 a 5.0): Cumprimento integral da proposta, relevância das ideias, desenvolvimento e completude dos pontos pedidos.
+2. Communicative Achievement (0.0 a 5.0): Adequação ao gênero textual, registro formal/informal correto, tom e engajamento do leitor.
 
 Retorne ESTRITAMENTE um objeto JSON no seguinte formato (sem markdown, sem blocos fora do JSON):
 {
-  "overallScore": number (0.0 a 10.0),
   "content": {
     "score": number (0.0 a 5.0),
-    "justification": "justificativa do cumprimento da proposta",
+    "justification": "justificativa detalhada do cumprimento da proposta",
     "strengths": ["ponto forte 1", "ponto forte 2"],
-    "improvements": ["sugestão 1"]
+    "improvements": ["sugestão de melhoria"]
   },
   "communicativeAchievement": {
     "score": number (0.0 a 5.0),
-    "justification": "adequação ao gênero e leitor-alvo",
+    "justification": "justificativa da adequação ao leitor e convenções do gênero",
     "strengths": ["ponto forte"],
     "improvements": ["sugestão"]
   },
+  "macroSummary": "Parecer formativo sobre o conteúdo e mensagem da redação"
+}`
+
+      // PASSO 2: Micro-Linguístico (Organisation + Language) com isolamento psicométrico
+      const promptPass2 = `Você é um Examinador Oficial de Redação Cambridge Assessment English (A2 Key / B1 Preliminary / B2 First / C1 Advanced).
+AVALIAÇÃO — PASSO 2: MICRO-LINGUÍSTICO (ORGANISATION & LANGUAGE)
+Avalie a seguinte redação em inglês:
+
+NÍVEL CEFR ALVO: ${targetLevel}
+GÊNERO TEXTUAL: ${textGenre}
+
+REDAÇÃO DO ALUNO:
+"""
+${studentEssayText}
+"""
+
+REGRA DE ISOLAMENTO PSICOMÉTRICO OBRIGATÓRIA:
+Avalie ESTRITAMENTE a organização textual, coesão, amplitude lexical e precisão gramatical da escrita em inglês.
+NÃO julgue se o aluno concordou ou discordou do tema de fundo ou se a ideia é original — foque puramente na competência linguística e estrutural do texto.
+Avalie em escala de 0.0 a 5.0:
+3. Organisation (0.0 a 5.0): Estruturação de parágrafos, encadeamento lógico de ideias, variedade e precisão no uso de conectivos (linkers).
+4. Language (0.0 a 5.0): Amplitude de vocabulário específico do nível ${targetLevel}, controle e variedade de estruturas gramaticais, precisão sintática e erros de interferência L1 (português).
+
+Retorne ESTRITAMENTE um objeto JSON no seguinte formato (sem markdown, sem blocos fora do JSON):
+{
   "organisation": {
     "score": number (0.0 a 5.0),
-    "justification": "estrutura de parágrafos e conectivos",
+    "justification": "justificativa da estrutura, parágrafos e conectivos",
     "strengths": ["ponto forte"],
     "improvements": ["sugestão"]
   },
   "language": {
     "score": number (0.0 a 5.0),
-    "justification": "vocabulário, gramática e controle sintático",
+    "justification": "justificativa da amplitude lexical e precisão gramatical",
     "strengths": ["ponto forte"],
     "improvements": ["sugestão"]
   },
-  "overallSummary": "Parecer formativo encorajador para o aluno",
-  "studentActionPlan": "Passo prático que o aluno deve praticar na próxima semana",
+  "studentActionPlan": "Passo prático prioritário para o aluno aprimorar a escrita",
   "detectedErrors": [
     {
-      "excerpt": "trecho com erro no texto",
+      "excerpt": "trecho exato com erro no texto",
       "correction": "correção recomendada",
       "explanation": "explicação pedagógica com foco em L1/gramática",
       "type": "grammar"
@@ -325,23 +349,53 @@ Retorne ESTRITAMENTE um objeto JSON no seguinte formato (sem markdown, sem bloco
   ]
 }`
 
-      const res = await fetch('/api/agent', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messages: [{ role: 'user', content: prompt }]
+      // Execução em 2 passadas independentes via API
+      const [res1, res2] = await Promise.all([
+        fetch('/api/agent', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ messages: [{ role: 'user', content: promptPass1 }] })
+        }),
+        fetch('/api/agent', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ messages: [{ role: 'user', content: promptPass2 }] })
         })
-      })
+      ])
 
-      const data = await res.json()
-      const raw = data?.reply || data?.content || ''
-      const match = raw.match(/\{[\s\S]*\}/)
-      if (match) {
-        const parsed = JSON.parse(match[0])
-        setEssayEvaluation(parsed)
-      } else {
-        throw new Error('Falha ao processar resposta JSON da IA')
+      const [data1, data2] = await Promise.all([res1.json(), res2.json()])
+      const raw1 = data1?.reply || data1?.content || ''
+      const raw2 = data2?.reply || data2?.content || ''
+
+      const match1 = raw1.match(/\{[\s\S]*\}/)
+      const match2 = raw2.match(/\{[\s\S]*\}/)
+
+      if (!match1 || !match2) {
+        throw new Error('Falha ao processar as respostas JSON da avaliação em dupla passada.')
       }
+
+      const pass1 = JSON.parse(match1[0])
+      const pass2 = JSON.parse(match2[0])
+
+      const contentScore = Math.min(5, Math.max(0, Number(pass1.content?.score || 0)))
+      const commAchScore = Math.min(5, Math.max(0, Number(pass1.communicativeAchievement?.score || 0)))
+      const orgScore = Math.min(5, Math.max(0, Number(pass2.organisation?.score || 0)))
+      const langScore = Math.min(5, Math.max(0, Number(pass2.language?.score || 0)))
+
+      const overallScore = Number(((contentScore + commAchScore + orgScore + langScore) / 2).toFixed(1))
+
+      const combinedEvaluation = {
+        overallScore,
+        content: pass1.content || { score: contentScore, justification: '', strengths: [], improvements: [] },
+        communicativeAchievement: pass1.communicativeAchievement || { score: commAchScore, justification: '', strengths: [], improvements: [] },
+        organisation: pass2.organisation || { score: orgScore, justification: '', strengths: [], improvements: [] },
+        language: pass2.language || { score: langScore, justification: '', strengths: [], improvements: [] },
+        overallSummary: pass1.macroSummary || 'Redação avaliada com rigor psicométrico em dupla passada independente.',
+        studentActionPlan: pass2.studentActionPlan || 'Praticar o uso variado de linkers e vocabulário avançado.',
+        detectedErrors: Array.isArray(pass2.detectedErrors) ? pass2.detectedErrors : []
+      }
+
+      setEssayEvaluation(combinedEvaluation)
     } catch (err: any) {
       alert(`Erro na avaliação da redação: ${err.message || 'Tente novamente'}`)
     } finally {

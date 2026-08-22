@@ -27,3 +27,6 @@ jobs:
 
       - name: Run Package Security Audit
         run: npm audit --audit-level=critical
+
+      - name: Run Zero-Simulation Anti-Mock Audit
+        run: node scripts/scan-mocks.mjs

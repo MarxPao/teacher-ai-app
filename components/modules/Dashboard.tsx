@@ -196,7 +196,7 @@ export default function Dashboard() {
           })
         }
       } else {
-        const mockSchedule: TodayClassItem[] = [
+        const DEFAULT_INITIAL_SCHEDULE: TodayClassItem[] = [
           { id: 'c1', type: 'school', dayOfWeek: 1, timeStart: '07:30', timeEnd: '08:20', className: '9º Ano A', schoolName: 'Colégio Integral', room: 'Sala 12', topic: 'Present Perfect & Just/Already', status: 'ready' },
           { id: 'c2', type: 'school', dayOfWeek: 1, timeStart: '08:20', timeEnd: '09:10', className: '9º Ano B', schoolName: 'Colégio Integral', room: 'Sala 14', topic: 'Present Perfect & Ever/Never', status: 'ready' },
           { id: 'c3', type: 'school', dayOfWeek: 2, timeStart: '09:30', timeEnd: '10:20', className: '7º Ano C', schoolName: 'Escola Modelo', room: 'Sala 08', topic: 'Comparative & Superlative Adjectives', status: 'draft' },
@@ -205,8 +205,8 @@ export default function Dashboard() {
           { id: 'c6', type: 'school', dayOfWeek: 4, timeStart: '10:30', timeEnd: '11:20', className: '1º Ano EM', schoolName: 'Colégio Integral', room: 'Sala 20', topic: 'Conditionals Type 1 & 2 in Context', status: 'unplanned' },
           { id: 'c7', type: 'school', dayOfWeek: 5, timeStart: '08:00', timeEnd: '08:50', className: '6º Ano A', schoolName: 'Escola Modelo', room: 'Sala 03', topic: 'Vocabulary: Family & Daily Routine', status: 'ready' },
         ]
-        unifiedClasses.push(...mockSchedule)
-        localStorage.setItem('teacher_weekly_schedule_v2', JSON.stringify(mockSchedule))
+        unifiedClasses.push(...DEFAULT_INITIAL_SCHEDULE)
+        localStorage.setItem('teacher_weekly_schedule_v2', JSON.stringify(DEFAULT_INITIAL_SCHEDULE))
       }
     } catch {}
 

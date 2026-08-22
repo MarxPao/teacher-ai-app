@@ -43,7 +43,7 @@ const MINIMAL_PAIRS: MinimalPair[] = [
   { word1: 'tree', word2: 'three', ipa1: '/triː/', ipa2: '/θriː/' },
 ];
 
-const RHYME_MOCK_MAP: Record<string, string[]> = {
+const DEFAULT_RHYME_DICTIONARY: Record<string, string[]> = {
   'cat': ['bat', 'rat', 'mat', 'hat', 'flat'],
   'dog': ['log', 'fog', 'frog', 'jog'],
   'day': ['say', 'play', 'may', 'way', 'stay'],

@@ -12,6 +12,7 @@ import { exportToPdf, exportToWord, generateSvgQRCode, OFFICIAL_SCHOOL_TEMPLATES
 import StudentExamPlayer, { OnlineQuestion } from '@/components/modules/StudentExamPlayer'
 import SourceKnowledgeHub, { SourceItem, KnowledgeMode, compileSourcesPrompt } from '@/components/SourceKnowledgeHub'
 import SmartInsightsPanel from '@/components/modules/SmartInsightsPanel'
+import { AssessmentPreset, getStoredPresets, savePreset } from '@/lib/assessmentPresets'
 
 // Types 
 
@@ -86,6 +87,19 @@ function buildExamPrompt(opts: {
   customPrompt?: string
   libraryContext?: string
   header: HeaderState
+  bloomRemember?: number
+  bloomApply?: number
+  bloomAnalyze?: number
+  bloomEvaluate?: number
+  diffEasy?: number
+  diffMedium?: number
+  diffHard?: number
+  diffChallenge?: number
+  totalScore?: number
+  examDurationMinutes?: number
+  kioskMode?: boolean
+  formVariant?: 'A' | 'B'
+  bankContextSnippet?: string
 }): string {
   const methInstructions = buildMethodologyInstructions(opts.approach)
 
@@ -130,18 +144,17 @@ function buildExamPrompt(opts: {
 
   const activeCefrRule = cefrGatingRules[opts.cefr] || cefrGatingRules['B1']
 
-  // 2. DIRETRIZES DE DISTRATORES L1 (Interferência do Português Brasileiro)
-  const l1DistractorRule = `
-CALIBRAÇÃO DE DISTRATORES PEDAGÓGICOS (INTERFERÊNCIA L1 BRASIL):
-Nas questões de Múltipla Escolha e Use of English, as alternativas INCORRETAS (distratores) NÃO devem ser absurdas ou fáceis de descartar. Devem modelar ERROS REAIS de estudantes brasileiros que aprendem inglês:
-1. Falsos Cognatos Reais (False Friends): ex: "pretend" (querendo dizer pretender em vez de fingir), "attend" (querendo dizer atender em vez de frequentar/assistir), "actually" (confundido com atualmente).
-2. Transferência Sintática L1: ex: "I have 15 years" (em vez de "I am 15"), "I am agree" (em vez de "I agree"), "She said me that..." (em vez de "told me").
-3. Marcadores de Tempo & Preposições: ex: "I live here since 3 years" (em vez de "for 3 years"), "depend of" (em vez de "depend on").
-4. Omissão de Sujeito Vazio (Dummy Subject): ex: "Is raining today" (em vez de "It is raining"), "Have many people" (em vez de "There are").
-5. Pluralização Indevida de Incontáveis: ex: "informations", "advices", "homeworks".
-Assegure que as alternativas A, B, C, D sejam visualmente equilibradas e exijam reflexão gramatical real do aluno.`
+  const bRemember = opts.bloomRemember ?? 25
+  const bApply = opts.bloomApply ?? 30
+  const bAnalyze = opts.bloomAnalyze ?? 25
+  const bEvaluate = opts.bloomEvaluate ?? 20
 
-  return `Você é um examinador sênior Cambridge Assessment English e especialista em ELT e linguística contrastiva (Português/Inglês). Crie uma PROVA COMPLETA de inglês de altíssimo rigor pedagógico, formatada em HTML limpo, pronta para impressão.
+  const dEasy = opts.diffEasy ?? 20
+  const dMedium = opts.diffMedium ?? 50
+  const dHard = opts.diffHard ?? 25
+  const dChallenge = opts.diffChallenge ?? 5
+
+  return `Você é um examinador sênior Cambridge Assessment English e especialista em Psicometria Educacional, ELT e elaboração científica de itens de avaliação (Item Writing). Crie uma PROVA COMPLETA de inglês de altíssimo rigor psicométrico e pedagógico, formatada em HTML limpo, pronta para impressão.
 ${librarySection}
 ESPECIFICAÇÕES DA PROVA:
 - Escola: ${opts.header.school || 'Escola'}
@@ -161,27 +174,56 @@ ${methInstructions}
 === REGRAS DE CEFR GATING ===
 ${activeCefrRule}
 
-=== REGRAS DE DISTRATORES L1 ===
-${l1DistractorRule}
+=== 1. DISTRIBUIÇÃO COGNITIVA OBRIGATÓRIA (TAXONOMIA DE BLOOM REVISADA) ===
+Distribua as ${opts.questionCount} questões rigorosamente nestes percentuais cognitivos:
+- LEMBRAR/COMPREENDER (${bRemember}% das questões): Reconhecimento direto, recall de vocabulário, fatos explícitos do texto. Operação mental: identificar/lembrar.
+- APLICAR (${bApply}% das questões): Uso de regras gramaticais em contexto novo, conjugação correta em parágrafo inédito, transferência para situações cotidianas. Operação mental: aplicar/executar.
+- ANALISAR (${bAnalyze}% das questões): Inferência de leitura, tom e intenção do autor, distinção entre fato e opinião, análise estrutural de discurso. Operação mental: inferir/diferenciar.
+- AVALIAR / CRIAR (${bEvaluate}% das questões): Julgamento crítico fundamentado, síntese de ideias, produção textual orientada, reformulação. Operação mental: avaliar/construir.
+Rotule cada questão no HTML com: data-bloom="remember|apply|analyze|evaluate|create" e comentário <!-- bloom:nivel -->.
+
+=== 2. CALIBRAÇÃO DE DIFICULDADE (ÍNDICE DE DISCRIMINAÇÃO PSICOMÉTRICA) ===
+Distribua a dificuldade pretendida das questões:
+- FÁCIL (${dEasy}%): Resposta com apoio contextual claro, vocabulário de alta frequência ($p > 0.70$).
+- MÉDIO (${dMedium}%): Requer aplicação de regra combinada ou inferência moderada ($p \\approx 0.45 - 0.70$).
+- DIFÍCIL (${dHard}%): Múltiplos passos cognitivos, estruturas sintáticas complexas ($p < 0.45$).
+- ⭐ DESAFIO (${dChallenge}%): Questão analítica de alta discriminação; adicione o selo ⭐ DESAFIO no enunciado.
+Rotule cada questão no HTML com: data-difficulty="easy|medium|hard|challenge" e data-weight="1.0|1.5|2.0".
+
+=== 3. DESIGN DIAGNÓSTICO DE DISTRATORES (PADRÕES DE ERRO INTENCIONAIS) ===
+Nas questões de Múltipla Escolha e Use of English, NENHUMA alternativa incorreta (distrator) pode ser aleatória ou absurda. Cada distrator DEVE representar um erro diagnóstico específico e documentável:
+1. Interferência Sintática de L1 (Português): Ex: "I have 15 years", "I am agree", "She said me that...", "Is raining today".
+2. Falsos Cognatos Reais (False Friends): Ex: "pretend" (confundido com pretender), "attend" (atender vs frequentar), "actually" (atualmente vs na verdade).
+3. Super-generalização de Regras: Ex: aplicação de passado regular em irregular ("goed", "buyed"), ou uso de Present Perfect com data específica ("I have seen him yesterday").
+4. Aspecto Verbal & Preposições: Ex: confusão entre Simple Past vs Past Continuous, "depend of", "since 3 years".
+5. Pluralização de Incontáveis: Ex: "informations", "advices", "homeworks".
+
+=== 4. DIRETRIZES CIENTÍFICAS ANTI-CUEING & PARALELISMO (ITEM WRITING GUIDELINES) ===
+- ANTI-CUEING: É PROIBIDO repetir no corpo da alternativa correta palavras-chave exclusivas do enunciado que sirvam de "dica gratuita".
+- HOMOGENEIDADE DE TAMANHO: As 4 alternativas (A, B, C, D) DEVEM ter extensão semelhante (variação máxima de ±25% no número de caracteres). É expressamente proibido que a alternativa correta seja visivelmente mais longa ou detalhada que as outras.
+- PARALELISMO GRAMATICAL: Todas as alternativas de uma questão DEVEM ter a mesma estrutura sintática (todas verbos no infinitivo, todas sintagmas nominais, ou todas frases completas).
+- EQUILÍBRIO DE GABARITO: Distribua a resposta correta de maneira uniforme e equilibrada entre as letras A, B, C e D ao longo da prova.
+- SEM DUPLAS NEGATIVAS: Evite enunciados negativos. Se for estritamente necessário usar negação, destaque em caixa alta e negrito: **NÃO**, **EXCETO**, **INCORRETA**.
+- INDEPENDÊNCIA: Cada questão DEVE ser autônoma — o acerto de uma questão NUNCA deve depender da resposta de outra questão.
+
+${opts.bankContextSnippet ? `=== QUESTÕES JÁ EXISTENTES NO BANCO (NÃO DUPLICAR) ===\n${opts.bankContextSnippet}\n` : ''}
+${opts.formVariant === 'B' ? '=== FORMA B (VERSÃO EMBARALHADA) ===\nEsta é a FORMA B da avaliação. Mantenha os mesmos enunciados da Forma A, mas reordene as alternativas A, B, C, D e as questões. Adicione "FORMA B" em destaque no cabeçalho.' : ''}
 
 ESTRUTURA OBRIGATÓRIA DA PROVA:
-1. QUANTIDADE RIGOROSA: Você DEVE gerar EXATAMENTE ${opts.questionCount} questões completas numeradas sequencialmente de 1 a ${opts.questionCount}. É PROIBIDO parar antes.
-2. DISTRIBUIÇÃO DAS SEÇÕES: Distribua as ${opts.questionCount} questões entre as seções selecionadas (${opts.sections.join(', ')}).
+1. QUANTIDADE RIGOROSA: Exatamente ${opts.questionCount} questões completas numeradas sequencialmente de 1 a ${opts.questionCount}.
+2. Container principal: <div class="exam-document" data-total-score="${opts.totalScore ?? 10}" data-duration-minutes="${opts.examDurationMinutes ?? 50}" data-kiosk="${opts.kioskMode ?? false}" data-form-variant="${opts.formVariant ?? 'A'}">
 3. Para cada seção (${opts.sections.join(', ')}):
-   - Título em <h2>
+   - Título da seção em <h2>
    - Instruções claras em <p><em>${opts.stemLanguage === 'pt' ? 'Instruções' : 'Instructions'}: ...</em></p>
-   - Questões numeradas sequencialmente
-   - Espaço para resposta do aluno
-4. Questões de Múltipla Escolha: exatamente 4 alternativas completas (A, B, C, D) calibradas com as regras de distratores L1 acima.
-5. Questões de Reading: inclua texto delimitado em <blockquote> rigorosamente dentro do limite de palavras e vocabulário do CEFR ${opts.cefr}.
-6. Gabarito Comentado Completo ao final: <h2>Teacher's Answer Key & Marking Scheme</h2> com as respostas corretas de TODAS as ${opts.questionCount} questões e a explicação do porquê os distratores induzem ao erro comum.
+   - Cada questão em container próprio com seus metadados: <div class="question-item" data-question-num="X" data-bloom="..." data-difficulty="..." data-weight="...">
+4. Questões de Reading: texto delimitado em <blockquote> rigorosamente dentro do limite de ${opts.cefr}.
+5. Gabarito Comentado Completo: <h2>Teacher's Answer Key & Marking Scheme</h2> com a resposta correta de CADA questão E o diagnóstico pedagógico de por que cada distrator (A, B, C ou D) representa uma armadilha/erro comum de aprendizagem.
 
 REGRAS ABSOLUTAS DE SAÍDA:
 1. Retorne APENAS HTML limpo (sem markdown, sem blocos \`\`\`, sem doctype).
 2. Tags permitidas: h1, h2, h3, h4, p, ul, ol, li, strong, em, table, thead, tbody, tr, td, th, hr, br, blockquote, span, div.
 
-Gere agora todas as ${opts.questionCount} questões completas rigorosamente calibradas:`
-
+Gere agora todas as ${opts.questionCount} questões completas com rigor psicométrico:`
 }
 
 // Component 
@@ -207,6 +249,50 @@ export default function ExamBuilder() {
   const [totalScore, setTotalScore] = useState(10)
   const [examDuration, setExamDuration] = useState(50)
   const [kioskMode, setKioskMode] = useState(false)
+  const [generateFormB, setGenerateFormB] = useState(false)
+  const [savedPresets, setSavedPresets] = useState<AssessmentPreset[]>([])
+  const [activePresetName, setActivePresetName] = useState('Padrão Cambridge')
+
+  useEffect(() => {
+    setSavedPresets(getStoredPresets())
+  }, [])
+
+  const applyPreset = (preset: AssessmentPreset) => {
+    setBloomRemember(preset.bloomDistribution.remember)
+    setBloomApply(preset.bloomDistribution.apply)
+    setBloomAnalyze(preset.bloomDistribution.analyze)
+    setBloomEvaluate(preset.bloomDistribution.evaluate + (preset.bloomDistribution.create || 0))
+    setDiffEasy(preset.difficultyDistribution.easy)
+    setDiffMedium(preset.difficultyDistribution.medium)
+    setDiffHard(preset.difficultyDistribution.hard)
+    setDiffChallenge(preset.difficultyDistribution.challenge)
+    setTotalScore(preset.totalScore)
+    setExamDuration(preset.examDurationMinutes)
+    setKioskMode(preset.kioskMode)
+    setActivePresetName(preset.name)
+  }
+
+  const saveCurrentAsPreset = () => {
+    const name = prompt('Nome do preset de avaliação:')
+    if (!name) return
+    const newPreset: AssessmentPreset = {
+      id: `preset_${Date.now()}`,
+      name,
+      bloomDistribution: { remember: bloomRemember, understand: 0, apply: bloomApply, analyze: bloomAnalyze, evaluate: bloomEvaluate, create: 0 },
+      questionWeights: { mcSimple: 1.0, mcIntermediate: 1.5, mcComplex: 2.0, gapFill: 0.5, trueFalse: 0.5, shortEssay: 3.0, fullEssay: 5.0 },
+      difficultyDistribution: { easy: diffEasy, medium: diffMedium, hard: diffHard, challenge: diffChallenge },
+      totalScore,
+      examDurationMinutes: examDuration,
+      kioskMode,
+      feedbackMode: 'exam',
+      isDefault: false,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    }
+    savePreset(newPreset)
+    setSavedPresets(getStoredPresets())
+    setActivePresetName(name)
+  }
 
   const [sections, setSections] = useState<string[]>(['Grammar', 'Vocabulary', 'Reading Comprehension'])
   const [customPrompt, setCustomPrompt] = useState('')
@@ -411,6 +497,10 @@ export default function ExamBuilder() {
         stemLanguage, optionLanguage,
         header: { ...header, title: header.title || effectiveTitle },
         libraryContext: libContext,
+        bloomRemember, bloomApply, bloomAnalyze, bloomEvaluate,
+        diffEasy, diffMedium, diffHard, diffChallenge,
+        totalScore, examDurationMinutes: examDuration, kioskMode,
+        formVariant: 'A'
       })
 
       const raw = await callApi(selectedApi!, prompt)
@@ -804,6 +894,14 @@ export default function ExamBuilder() {
                   </button>
                 ))}
               </div>
+
+              {/* Aviso Psicométrico de Confiabilidade por Quantidade de Itens */}
+              {sections.length > 0 && Number(questionCount) < sections.length * 2 && (
+                <div style={{ background: '#fdf6e2', border: '1px solid #b58900', borderRadius: 8, padding: '8px 12px', fontSize: 11.5, color: '#856404', marginTop: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <i className="ti ti-alert-triangle" style={{ fontSize: 16, color: '#b58900', flexShrink: 0 }} />
+                  <span><strong>Aviso de Confiabilidade:</strong> Você selecionou {sections.length} seções para apenas {questionCount} questões ({(Number(questionCount)/sections.length).toFixed(1)} q/seção). Recomendamos pelo menos 2 a 3 questões por habilidade/seção para uma avaliação somativa válida.</span>
+                </div>
+              )}
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
@@ -850,6 +948,127 @@ export default function ExamBuilder() {
               })}
             </div>
           </div>
+
+          {/* BLOCO: Cognição Psicométrica (Bloom & Dificuldade) */}
+          <details style={{ ...CARD, padding: 0, overflow: 'hidden' }} open>
+            <summary style={{ padding: '12px 16px', background: '#f5f0fb', cursor: 'pointer', fontWeight: 700, color: '#5e2a84', display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
+              <span>🧠</span>
+              <span>Distribuição Cognitiva & Dificuldade</span>
+              <span style={{ marginLeft: 'auto', fontSize: 11, color: '#8a4baf' }}>Bloom: {bloomRemember}% / {bloomApply}% / {bloomAnalyze}% / {bloomEvaluate}%</span>
+            </summary>
+            <div style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, color: '#586e75', marginBottom: 6, fontWeight: 600 }}>
+                  <span>Taxonomia de Bloom:</span>
+                  <span>Total: {bloomRemember + bloomApply + bloomAnalyze + bloomEvaluate}%</span>
+                </div>
+                {([
+                  ['Lembrar / Compreender', bloomRemember, setBloomRemember, '#2aa198'],
+                  ['Aplicar', bloomApply, setBloomApply, '#268bd2'],
+                  ['Analisar', bloomAnalyze, setBloomAnalyze, '#6c71c4'],
+                  ['Avaliar / Criar', bloomEvaluate, setBloomEvaluate, '#d33682']
+                ] as [string, number, (v: number) => void, string][]).map(([label, val, setter, color]) => (
+                  <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                    <label style={{ fontSize: 11.5, width: 140, color: '#586e75', fontWeight: 500 }}>{label}</label>
+                    <input
+                      type="range"
+                      min={0}
+                      max={100}
+                      value={val}
+                      onChange={e => setter(Number(e.target.value))}
+                      style={{ flex: 1, accentColor: color, cursor: 'pointer' }}
+                    />
+                    <span style={{ fontSize: 11.5, width: 36, textAlign: 'right', fontWeight: 700, color }}>{val}%</span>
+                  </div>
+                ))}
+              </div>
+              <hr style={{ border: 'none', borderTop: '1px solid #ede8dc', margin: '4px 0' }} />
+              <div>
+                <div style={{ fontSize: 11.5, color: '#586e75', marginBottom: 6, fontWeight: 600 }}>
+                  Calibração de Dificuldade dos Itens:
+                </div>
+                {([
+                  ['Fácil (p > 0.70)', diffEasy, setDiffEasy, '#2aa198'],
+                  ['Médio (p ≈ 0.45-0.70)', diffMedium, setDiffMedium, '#b58900'],
+                  ['Difícil (p < 0.45)', diffHard, setDiffHard, '#dc322f'],
+                  ['⭐ Desafio / Extensão', diffChallenge, setDiffChallenge, '#cb4b16']
+                ] as [string, number, (v: number) => void, string][]).map(([label, val, setter, color]) => (
+                  <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                    <label style={{ fontSize: 11.5, width: 140, color: '#586e75', fontWeight: 500 }}>{label}</label>
+                    <input
+                      type="range"
+                      min={0}
+                      max={100}
+                      value={val}
+                      onChange={e => setter(Number(e.target.value))}
+                      style={{ flex: 1, accentColor: color, cursor: 'pointer' }}
+                    />
+                    <span style={{ fontSize: 11.5, width: 36, textAlign: 'right', fontWeight: 700, color }}>{val}%</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </details>
+
+          {/* BLOCO: Pontuação, Duração & Presets */}
+          <details style={{ ...CARD, padding: 0, overflow: 'hidden' }}>
+            <summary style={{ padding: '12px 16px', background: '#fdf8f2', cursor: 'pointer', fontWeight: 700, color: '#8b5e3c', display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
+              <span>⚖️</span>
+              <span>Pontuação, Kiosk & Presets ({activePresetName})</span>
+            </summary>
+            <div style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <div>
+                  <label style={{ ...SL, fontSize: 11.5 }}>Nota Total (Pontos)</label>
+                  <input type="number" min={1} max={100} value={totalScore} onChange={e => setTotalScore(Number(e.target.value))} style={SI} />
+                </div>
+                <div>
+                  <label style={{ ...SL, fontSize: 11.5 }}>Duração (Minutos)</label>
+                  <input type="number" min={5} max={240} value={examDuration} onChange={e => setExamDuration(Number(e.target.value))} style={SI} />
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, color: '#586e75' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                  <input type="checkbox" checked={kioskMode} onChange={e => setKioskMode(e.target.checked)} style={{ accentColor: '#268bd2' }} />
+                  <span>🔒 Modo Kiosk Online (detecta troca de abas e bloqueia cópia)</span>
+                </label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                  <input type="checkbox" checked={generateFormB} onChange={e => setGenerateFormB(e.target.checked)} style={{ accentColor: '#8b5e3c' }} />
+                  <span>🅰️🅱️ Gerar Forma B (questões e alternativas embaralhadas)</span>
+                </label>
+              </div>
+
+              <hr style={{ border: 'none', borderTop: '1px solid #ede8dc', margin: '4px 0' }} />
+              <div>
+                <label style={{ ...SL, fontSize: 11.5, marginBottom: 6 }}>Presets Psicométricos Salvos:</label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+                  {savedPresets.map(p => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => applyPreset(p)}
+                      style={{
+                        padding: '5px 10px', borderRadius: 8, fontSize: 11, fontWeight: 600,
+                        border: activePresetName === p.name ? '1.5px solid #268bd2' : '1px solid #e0d8cc',
+                        background: activePresetName === p.name ? '#f0f8ff' : '#faf8f5',
+                        color: activePresetName === p.name ? '#268bd2' : '#586e75', cursor: 'pointer'
+                      }}
+                    >
+                      {p.isDefault ? '★ ' : ''}{p.name}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  onClick={saveCurrentAsPreset}
+                  style={{ width: '100%', padding: '6px 10px', borderRadius: 8, border: '1px dashed #8b5e3c', background: '#fff', color: '#8b5e3c', fontSize: 11.5, fontWeight: 700, cursor: 'pointer' }}
+                >
+                  + Salvar Configuração Atual como Preset Padrão
+                </button>
+              </div>
+            </div>
+          </details>
 
         </div>
 

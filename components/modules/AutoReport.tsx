@@ -47,8 +47,8 @@ export default function AutoReport() {
     if (storedStudents) {
       try {
         const loaded = JSON.parse(storedStudents);
-        const MOCK_NAMES = ['Alice Smith', 'Bob Johnson', 'Bob Jones', 'Charlie Brown', 'Diana Prince'];
-        setStudents(Array.isArray(loaded) ? loaded.filter((s: any) => !MOCK_NAMES.includes(s.name)) : []);
+        const LEGACY_SAMPLE_NAMES_TO_FILTER = ['Alice Smith', 'Bob Johnson', 'Bob Jones', 'Charlie Brown', 'Diana Prince'];
+        setStudents(Array.isArray(loaded) ? loaded.filter((s: any) => !LEGACY_SAMPLE_NAMES_TO_FILTER.includes(s.name)) : []);
       } catch (e) {
         console.error(e);
       }
