@@ -384,7 +384,7 @@ Estruture em:
   }
 
   return (
-    <ModuleShell title="Insights & Prescrições Pedagógicas" subtitle="Inteligência pedagógica acionável fundamentada em evidências e grandes autores de ELT">
+    <ModuleShell title="Insights" subtitle="Inteligência pedagógica acionável fundamentada em evidências e grandes autores de ELT">
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', width: '100%', maxWidth: 1200, margin: '0 auto' }}>
         
         {/* Banner de Cabeçalho com Fundamentação */}

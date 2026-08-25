@@ -15,6 +15,7 @@ const NAV: Section[] = [
     { key: 'students',       label: 'Alunos',                icon: 'ti-user-circle' },
     { key: 'privatetutoring',label: 'Alunos Particulares',   icon: 'ti-user-dollar' },
     { key: 'lessonstudio',   label: 'Planejamento de Aula',  icon: 'ti-chalkboard' },
+    { key: 'insights',       label: 'Insights',              icon: 'ti-bulb' },
     { key: 'repo',           label: 'Biblioteca',            icon: 'ti-books' },
   ]},
   { label: 'Área do Professor', items: [
@@ -45,7 +46,6 @@ const NAV: Section[] = [
     { key: 'omnigrader',     label: 'OmniCorretor',          icon: 'ti-camera' },
     { key: 'batchgrader',    label: 'Correção em Lote',      icon: 'ti-files' },
     { key: 'analytics',      label: 'Desempenho & Evolução', icon: 'ti-chart-line' },
-    { key: 'insights',       label: 'Insights Pedagógicos',  icon: 'ti-bulb' },
   ]},
   { label: 'Comunicação', items: [
     { key: 'parentcomms',    label: 'Mensagens aos Pais',  icon: 'ti-brand-whatsapp' },
