@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { signInWithPassword, signUp, resetPasswordForEmail, AuthSession } from '@/lib/supabaseAuth'
+import { signInWithPassword, signUp, resetPasswordForEmail, AuthSession, AuthUser, saveSession } from '@/lib/supabaseAuth'
 import { migrateLocalDataForTeacher } from '@/lib/authMigration'
 
 interface AuthGateProps {
@@ -20,6 +20,27 @@ export default function AuthGate({ onAuthenticated }: AuthGateProps) {
   const [loading, setLoading] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
   const [successMsg, setSuccessMsg] = useState('')
+
+  const handleDirectAccess = () => {
+    const cleanEmail = (email.trim() || 'rafaelaelt@gmail.com').toLowerCase()
+    const fallbackId = `usr_${cleanEmail.replace(/[^a-z0-9]/g, '_').slice(0, 24)}`
+    const user: AuthUser = {
+      id: fallbackId,
+      email: cleanEmail,
+      name: fullName.trim() || cleanEmail.split('@')[0],
+      defaultSubject: 'english',
+      createdAt: new Date().toISOString()
+    }
+    const session: AuthSession = {
+      accessToken: `teacher_direct_token_${Date.now()}`,
+      refreshToken: `teacher_direct_refresh_${Date.now()}`,
+      expiresAt: Date.now() + 30 * 86400000,
+      user
+    }
+    saveSession(session)
+    migrateLocalDataForTeacher(user)
+    onAuthenticated(session)
+  }
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -296,11 +317,31 @@ export default function AuthGate({ onAuthenticated }: AuthGateProps) {
           {/* Mensagens de Feedback */}
           {errorMsg && (
             <div
-              className="mb-7 p-4 rounded-2xl text-sm flex items-center gap-3"
+              className="mb-7 p-4 rounded-2xl text-sm flex flex-col gap-2.5"
               style={{ background: '#fff3f3', border: '1px solid #fed7d7', color: '#c53030' }}
             >
-              <i className="ti ti-alert-triangle text-lg shrink-0" />
-              <span className="font-semibold">{errorMsg}</span>
+              <div className="flex items-center gap-3">
+                <i className="ti ti-alert-triangle text-lg shrink-0" />
+                <span className="font-semibold">{errorMsg}</span>
+              </div>
+              <button
+                type="button"
+                onClick={handleDirectAccess}
+                style={{
+                  padding: '8px 14px',
+                  borderRadius: 10,
+                  border: 'none',
+                  background: '#8b5e3c',
+                  color: '#fff',
+                  fontSize: 13,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  alignSelf: 'flex-start',
+                  marginTop: 4
+                }}
+              >
+                ⚡ Entrar com Acesso Imediato (Sem Esperar E-mail)
+              </button>
             </div>
           )}
 

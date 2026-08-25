@@ -55,7 +55,7 @@ import CommandPalette from '@/components/CommandPalette'
 import LanguageSelector from '@/components/LanguageSelector'
 import AuthGate from '@/components/AuthGate'
 import OnboardingFlow from '@/components/OnboardingFlow'
-import { getCurrentSession, AuthSession } from '@/lib/supabaseAuth'
+import { getCurrentSession, saveSession, AuthSession } from '@/lib/supabaseAuth'
 
 export type ModuleKey = 'dashboard' | 'quick' | 'exam' | 'lessonstudio' | 'plan' | 'rubric' |
   'gradebook' | 'students' | 'classes' | 'organization' | 'privatetutoring' | 'eventos' | 'insights' | 'analytics' | 'calendar' | 'comms' | 'repo' |
@@ -194,20 +194,24 @@ export default function Home() {
       localStorage.setItem('teacher_supabase_config', JSON.stringify(defaultSb))
     }
 
-    // Verificar sessão atual
-    const currentSession = getCurrentSession()
-    setSession(currentSession)
-
-    if (currentSession) {
-      try {
-        const rawSettings = localStorage.getItem('teacher_settings')
-        const settings = rawSettings ? JSON.parse(rawSettings) : {}
-        setOnboardingDone(Boolean(settings.onboardingCompleted))
-      } catch {
-        setOnboardingDone(true)
+    // Verificar sessão atual (ou inicializar padrão quando auth estiver pausado)
+    let currentSession = getCurrentSession()
+    if (!currentSession) {
+      currentSession = {
+        accessToken: `teacher_token_${Date.now()}`,
+        refreshToken: '',
+        expiresAt: Date.now() + 30 * 86400000,
+        user: {
+          id: 'usr_rafaela_elt',
+          email: 'rafaelaelt@gmail.com',
+          name: 'Rafaela',
+          defaultSubject: 'english'
+        }
       }
+      saveSession(currentSession)
     }
-
+    setSession(currentSession)
+    setOnboardingDone(true)
     setAuthMounted(true)
 
     if (localStorage.getItem('teacher_supabase_config')) {
@@ -219,15 +223,7 @@ export default function Home() {
     const authChangeHandler = (e: Event) => {
       const newSession = (e as CustomEvent).detail as AuthSession | null
       setSession(newSession)
-      if (newSession) {
-        try {
-          const rawSettings = localStorage.getItem('teacher_settings')
-          const settings = rawSettings ? JSON.parse(rawSettings) : {}
-          setOnboardingDone(Boolean(settings.onboardingCompleted))
-        } catch {
-          setOnboardingDone(true)
-        }
-      }
+      setOnboardingDone(true)
     }
 
     window.addEventListener('teacher:navigate', handler)
@@ -272,35 +268,8 @@ export default function Home() {
     )
   }
 
-  // Se não autenticado, exibir tela de Login/Cadastro (AuthGate)
-  if (!session) {
-    return (
-      <AuthGate
-        onAuthenticated={(s) => {
-          setSession(s)
-          try {
-            const rawSettings = localStorage.getItem('teacher_settings')
-            const settings = rawSettings ? JSON.parse(rawSettings) : {}
-            setOnboardingDone(Boolean(settings.onboardingCompleted))
-          } catch {
-            setOnboardingDone(true)
-          }
-        }}
-      />
-    )
-  }
-
-  // Se autenticado mas sem onboarding concluído, exibir OnboardingFlow
-  if (!onboardingDone) {
-    return (
-      <OnboardingFlow
-        teacherName={session.user.name}
-        onComplete={() => {
-          setOnboardingDone(true)
-        }}
-      />
-    )
-  }
+  // ─── JANELA DE AUTENTICAÇÃO E ONBOARDING PAUSADAS TEMPORARIAMENTE ───
+  // Permite acesso direto a todas as funcionalidades do aplicativo
 
  return (
  <div className="flex w-full h-screen overflow-hidden" style={{ background: '#fdf8f2' }}>

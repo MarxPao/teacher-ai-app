@@ -43,7 +43,7 @@ describe('Browser Harness & Automação de Navegador — Testes Unitários', () 
 
     it('permite execução autônoma para exigência baixa com qualquer modelo', () => {
       const result = checkBrowserCapability(
-        { id: '1', provider: 'groq', name: 'Llama 3', active: true, key: 'sk-test' },
+        { id: '1', provider: 'groq', name: 'Llama 3', model: 'llama-3.3-70b-versatile', active: true, key: 'sk-test' },
         'low'
       )
       expect(result.canRunAutonomous).toBe(true)
@@ -52,7 +52,7 @@ describe('Browser Harness & Automação de Navegador — Testes Unitários', () 
 
     it('bloqueia execução autônoma e ativa fallback manual para modelos text-only em tarefas de alta exigência', () => {
       const result = checkBrowserCapability(
-        { id: '2', provider: 'groq', model: 'llama-3.3-70b-versatile', active: true, key: 'sk-groq' },
+        { id: '2', provider: 'groq', name: 'Llama 3 Text Only', model: 'llama-3.3-70b-versatile', active: true, key: 'sk-groq' },
         'high'
       )
       expect(result.canRunAutonomous).toBe(false)
@@ -62,7 +62,7 @@ describe('Browser Harness & Automação de Navegador — Testes Unitários', () 
 
     it('permite execução de alta exigência quando o modelo é vision-capable (ex: GPT-4o / Claude)', () => {
       const result = checkBrowserCapability(
-        { id: '3', provider: 'openai', model: 'gpt-4o', active: true, key: 'sk-openai' },
+        { id: '3', provider: 'openai', name: 'OpenAI GPT-4o', model: 'gpt-4o', active: true, key: 'sk-openai' },
         'high'
       )
       expect(result.canRunAutonomous).toBe(true)

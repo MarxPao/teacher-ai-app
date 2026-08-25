@@ -1682,3 +1682,292 @@ export async function deleteMediaItemFromSupabase(id: string, fileUrl?: string):
     return { ok: false }
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EMENTAS & CONTEÚDOS PROGRAMÁTICOS (Syllabuses)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface SupabaseSyllabusRow {
+  id: string
+  title: string
+  school: string
+  class_name: string
+  term: string
+  book_title: string
+  book_units_chapters: string
+  grammar_topics: string[]
+  vocabulary_themes: string[]
+  skills_and_objectives: string[]
+  study_tips: string
+  status: 'planejado' | 'em_andamento' | 'lecionado' | 'avaliado'
+  evaluation_date?: string
+  created_at?: string
+  updated_at?: string
+}
+
+export async function fetchSyllabusesFromSupabase(): Promise<any[]> {
+  const cfg = getSupabaseConfig()
+  if (!cfg?.url) return []
+  const apiKey = getActiveKey(cfg)
+  if (!apiKey) return []
+
+  try {
+    const res = await fetch(`${cfg.url}/rest/v1/syllabuses?select=*&order=created_at.desc`, {
+      headers: {
+        'apikey': apiKey,
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      }
+    })
+    if (!res.ok) return []
+    const data = await res.json()
+    if (!Array.isArray(data)) return []
+    return data.map((row: any) => ({
+      id: row.id,
+      title: row.title || '',
+      school: row.school || '',
+      className: row.class_name || row.className || '',
+      term: row.term || '',
+      bookTitle: row.book_title || row.bookTitle || '',
+      bookUnitsChapters: row.book_units_chapters || row.bookUnitsChapters || '',
+      grammarTopics: Array.isArray(row.grammar_topics) ? row.grammar_topics : (Array.isArray(row.grammarTopics) ? row.grammarTopics : []),
+      vocabularyThemes: Array.isArray(row.vocabulary_themes) ? row.vocabulary_themes : (Array.isArray(row.vocabularyThemes) ? row.vocabularyThemes : []),
+      skillsAndObjectives: Array.isArray(row.skills_and_objectives) ? row.skills_and_objectives : (Array.isArray(row.skillsAndObjectives) ? row.skillsAndObjectives : []),
+      studyTips: row.study_tips || row.studyTips || '',
+      status: row.status || 'planejado',
+      evaluationDate: row.evaluation_date || row.evaluationDate || '',
+      createdAt: row.created_at || new Date().toISOString(),
+      updatedAt: row.updated_at || new Date().toISOString()
+    }))
+  } catch {
+    return []
+  }
+}
+
+export async function saveSyllabusToSupabase(entry: any): Promise<{ ok: boolean; error?: string }> {
+  const cfg = getSupabaseConfig()
+  if (!cfg?.url) return { ok: true }
+  const apiKey = getActiveKey(cfg)
+  if (!apiKey) return { ok: true }
+
+  try {
+    const payload = {
+      id: entry.id,
+      title: entry.title,
+      school: entry.school || '',
+      class_name: entry.className || entry.class_name || '',
+      term: entry.term || '',
+      book_title: entry.bookTitle || entry.book_title || '',
+      book_units_chapters: entry.bookUnitsChapters || entry.book_units_chapters || '',
+      grammar_topics: entry.grammarTopics || entry.grammar_topics || [],
+      vocabulary_themes: entry.vocabularyThemes || entry.vocabulary_themes || [],
+      skills_and_objectives: entry.skillsAndObjectives || entry.skills_and_objectives || [],
+      study_tips: entry.studyTips || entry.study_tips || '',
+      status: entry.status || 'planejado',
+      evaluation_date: entry.evaluationDate || entry.evaluation_date || null,
+      updated_at: new Date().toISOString()
+    }
+
+    const res = await fetch(`${cfg.url}/rest/v1/syllabuses`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': apiKey,
+        'Authorization': `Bearer ${apiKey}`,
+        'Prefer': 'resolution=merge-duplicates'
+      },
+      body: JSON.stringify(payload)
+    })
+    return { ok: res.ok }
+  } catch (e: unknown) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Erro de rede' }
+  }
+}
+
+export async function deleteSyllabusFromSupabase(id: string): Promise<boolean> {
+  const cfg = getSupabaseConfig()
+  if (!cfg?.url) return true
+  const apiKey = getActiveKey(cfg)
+  if (!apiKey) return true
+
+  try {
+    const res = await fetch(`${cfg.url}/rest/v1/syllabuses?id=eq.${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      headers: { 'apikey': apiKey, 'Authorization': `Bearer ${apiKey}` }
+    })
+    return res.ok
+  } catch {
+    return false
+  }
+}
+
+export async function fetchSchoolsFromSupabase(): Promise<Array<{ id: string; name: string }>> {
+  const cfg = getSupabaseConfig()
+  if (!cfg?.url) return []
+  const apiKey = getActiveKey(cfg)
+  if (!apiKey) return []
+
+  try {
+    const res = await fetch(`${cfg.url}/rest/v1/schools?select=id,name&order=name.asc`, {
+      headers: { 'apikey': apiKey, 'Authorization': `Bearer ${apiKey}` }
+    })
+    if (!res.ok) return []
+    const data = await res.json()
+    return Array.isArray(data) ? data : []
+  } catch {
+    return []
+  }
+}
+
+export async function fetchClassesFromSupabase(): Promise<Array<{ id: string; name: string; school_id?: string }>> {
+  const cfg = getSupabaseConfig()
+  if (!cfg?.url) return []
+  const apiKey = getActiveKey(cfg)
+  if (!apiKey) return []
+
+  try {
+    const res = await fetch(`${cfg.url}/rest/v1/classes?select=id,name,school_id&order=name.asc`, {
+      headers: { 'apikey': apiKey, 'Authorization': `Bearer ${apiKey}` }
+    })
+    if (!res.ok) return []
+    const data = await res.json()
+    return Array.isArray(data) ? data : []
+  } catch {
+    return []
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SEQUÊNCIA DIDÁTICA (Didactic Sequences)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface DidacticSequenceStage {
+  id: string
+  stageNumber: number
+  title: string
+  bookRef: string
+  plannedDate?: string
+  actualDate?: string
+  topics: string[]
+  grammarFocus: string
+  vocabularyFocus: string
+  skillsAndObjectives?: string[]
+  status: 'completed' | 'current' | 'upcoming'
+  masteryPercentage: number
+  aiAssessment?: string
+  suggestedAction?: string
+  notes?: string
+}
+
+export interface DidacticSequenceModel {
+  id: string
+  title: string
+  school: string
+  className: string
+  subject: string
+  year: string
+  term: string
+  bookRef: string
+  currentStageIndex: number
+  stages: DidacticSequenceStage[]
+  aiDiagnostic?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export async function fetchDidacticSequencesFromSupabase(school?: string, className?: string): Promise<DidacticSequenceModel[]> {
+  const cfg = getSupabaseConfig()
+  if (!cfg?.url) return []
+  const apiKey = getActiveKey(cfg)
+  if (!apiKey) return []
+
+  try {
+    let queryUrl = `${cfg.url}/rest/v1/didactic_sequences?select=*&order=updated_at.desc`
+    if (school && school !== 'all') queryUrl += `&school=eq.${encodeURIComponent(school)}`
+    if (className && className !== 'all') queryUrl += `&class_name=eq.${encodeURIComponent(className)}`
+
+    const res = await fetch(queryUrl, {
+      headers: {
+        'apikey': apiKey,
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      }
+    })
+    if (!res.ok) return []
+    const data = await res.json()
+    if (!Array.isArray(data)) return []
+    return data.map((row: any) => ({
+      id: row.id,
+      title: row.title || '',
+      school: row.school || '',
+      className: row.class_name || row.className || '',
+      subject: row.subject || 'Inglês',
+      year: row.year || '2026',
+      term: row.term || '2º Trimestre',
+      bookRef: row.book_ref || row.bookRef || '',
+      currentStageIndex: row.current_stage_index !== undefined ? row.current_stage_index : (row.currentStageIndex || 0),
+      stages: Array.isArray(row.stages) ? row.stages : [],
+      aiDiagnostic: row.ai_diagnostic || row.aiDiagnostic || '',
+      createdAt: row.created_at || new Date().toISOString(),
+      updatedAt: row.updated_at || new Date().toISOString()
+    }))
+  } catch {
+    return []
+  }
+}
+
+export async function saveDidacticSequenceToSupabase(seq: DidacticSequenceModel): Promise<{ ok: boolean; error?: string }> {
+  const cfg = getSupabaseConfig()
+  if (!cfg?.url) return { ok: true }
+  const apiKey = getActiveKey(cfg)
+  if (!apiKey) return { ok: true }
+
+  try {
+    const payload = {
+      id: seq.id,
+      title: seq.title,
+      school: seq.school || '',
+      class_name: seq.className || '',
+      subject: seq.subject || 'Inglês',
+      year: seq.year || '2026',
+      term: seq.term || '2º Trimestre',
+      book_ref: seq.bookRef || '',
+      current_stage_index: seq.currentStageIndex || 0,
+      stages: seq.stages || [],
+      ai_diagnostic: seq.aiDiagnostic || '',
+      updated_at: new Date().toISOString()
+    }
+
+    const res = await fetch(`${cfg.url}/rest/v1/didactic_sequences`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': apiKey,
+        'Authorization': `Bearer ${apiKey}`,
+        'Prefer': 'resolution=merge-duplicates'
+      },
+      body: JSON.stringify(payload)
+    })
+    return { ok: res.ok }
+  } catch (e: unknown) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Erro de rede' }
+  }
+}
+
+export async function deleteDidacticSequenceFromSupabase(id: string): Promise<boolean> {
+  const cfg = getSupabaseConfig()
+  if (!cfg?.url) return true
+  const apiKey = getActiveKey(cfg)
+  if (!apiKey) return true
+
+  try {
+    const res = await fetch(`${cfg.url}/rest/v1/didactic_sequences?id=eq.${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      headers: { 'apikey': apiKey, 'Authorization': `Bearer ${apiKey}` }
+    })
+    return res.ok
+  } catch {
+    return false
+  }
+}
+
