@@ -80,8 +80,12 @@ const CEFR_WORD_LIMITS: Record<string, { min: number; max: number; task: string 
   'C2': { min: 280, max: 320, task: 'Advanced Composition' },
 }
 
-export default function OmniGrader() {
-  const [activeTab, setActiveTab] = useState<'photo' | 'essay' | 'batch'>('essay')
+interface OmniGraderProps {
+  initialTab?: 'photo' | 'essay' | 'batch'
+}
+
+export default function OmniGrader({ initialTab = 'photo' }: OmniGraderProps) {
+  const [activeTab, setActiveTab] = useState<'photo' | 'essay' | 'batch'>(initialTab)
   const [students, setStudents] = useState<StudentRecord[]>([])
   const [classes, setClasses] = useState<ClassRecord[]>([])
 

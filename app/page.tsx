@@ -99,7 +99,7 @@ const MODULES: Record<ModuleKey, React.ComponentType<any>> = {
   classlog: ClassLog,
   didacticsequence: LessonStudio,
   livequiz: LiveQuizModule,
-  parentcomms: ParentCommunicator,
+  parentcomms: () => <Communications initialTab="parents" />,
   classroommode: ClassroomMode,
   attendancelist: AttendanceList,
   flashcardmode: FlashcardMode,
@@ -107,7 +107,7 @@ const MODULES: Record<ModuleKey, React.ComponentType<any>> = {
   reflectivepractice: ReflectivePractice,
   meetingclassrecorder: MeetingClassRecorder,
   weeklyagenda: Planner,
-  batchgrader: BatchGrader,
+  batchgrader: () => <OmniGrader initialTab="batch" />,
   progresstracker: Analytics,
   autoreport: AutoReport,
 }

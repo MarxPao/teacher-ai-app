@@ -44,13 +44,11 @@ const NAV: Section[] = [
   { label: 'Alunos & Avaliação', items: [
     { key: 'gradebook',      label: 'Caderneta de Notas',    icon: 'ti-chart-bar' },
     { key: 'omnigrader',     label: 'OmniCorretor',          icon: 'ti-camera' },
-    { key: 'batchgrader',    label: 'Correção em Lote',      icon: 'ti-files' },
     { key: 'analytics',      label: 'Desempenho & Evolução', icon: 'ti-chart-line' },
   ]},
   { label: 'Comunicação', items: [
-    { key: 'parentcomms',    label: 'Mensagens aos Pais',  icon: 'ti-brand-whatsapp' },
+    { key: 'communications', label: 'Comunicação',         icon: 'ti-brand-whatsapp' },
     { key: 'autoreport',     label: 'Relatórios Mensais',  icon: 'ti-file-report' },
-    { key: 'communications', label: 'Comunicados',         icon: 'ti-mail-forward' },
     { key: 'portfolio',      label: 'Portfólio',           icon: 'ti-award' },
     { key: 'portalmirror',   label: 'Portal Conectado',    icon: 'ti-plug-connected' },
   ]},
@@ -92,18 +90,18 @@ export default function Sidebar({ active, onNavigate }: Props) {
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       style={{
-        width: isExpanded ? 260 : 64,
+        width: isExpanded ? 320 : 82,
         flexShrink: 0,
         height: '100vh',
         overflowY: 'auto',
         overflowX: 'hidden',
         background: 'linear-gradient(180deg, #2e1a0c 0%, #231408 100%)',
         boxShadow: isExpanded
-          ? '4px 0 24px rgba(28,17,10,0.28)'
-          : '2px 0 8px rgba(28,17,10,0.15)',
+          ? '4px 0 28px rgba(28,17,10,0.32)'
+          : '2px 0 10px rgba(28,17,10,0.18)',
         display: 'flex',
         flexDirection: 'column',
-        padding: isExpanded ? '0 8px 20px 10px' : '0 4px 20px 4px',
+        padding: isExpanded ? '0 10px 24px 12px' : '0 6px 24px 6px',
         gap: 0,
         zIndex: 50,
         transition: 'width 0.24s cubic-bezier(0.16, 1, 0.3, 1), padding 0.24s ease, box-shadow 0.24s ease',
@@ -111,9 +109,9 @@ export default function Sidebar({ active, onNavigate }: Props) {
     >
       {/* Brand & Pin */}
       <div style={{
-        padding: isExpanded ? '18px 8px 14px' : '16px 0 12px',
+        padding: isExpanded ? '20px 10px 16px' : '18px 0 14px',
         borderBottom: '1px solid rgba(255,220,170,0.08)',
-        marginBottom: 12,
+        marginBottom: 14,
         position: 'sticky',
         top: 0,
         background: '#2e1a0c',
@@ -132,23 +130,23 @@ export default function Sidebar({ active, onNavigate }: Props) {
           {isExpanded ? (
             <div style={{
               fontFamily: "var(--font-display, 'Fraunces', Georgia, serif)",
-              fontSize: 20,
+              fontSize: 24,
               fontWeight: 700,
               color: '#fdf8f2',
               letterSpacing: '-0.3px',
               lineHeight: 1.1,
               display: 'flex',
               alignItems: 'center',
-              gap: 8,
+              gap: 10,
               whiteSpace: 'nowrap',
             }}>
               <span>Teacher</span>
               <span style={{
                 color: '#c4834a',
                 background: 'rgba(196,131,74,0.15)',
-                padding: '1px 7px',
-                borderRadius: 5,
-                fontSize: 14,
+                padding: '2px 9px',
+                borderRadius: 6,
+                fontSize: 15,
                 fontWeight: 700,
                 border: '1px solid rgba(196,131,74,0.25)',
                 fontFamily: "var(--font-sans, 'Plus Jakarta Sans', sans-serif)",
@@ -160,14 +158,14 @@ export default function Sidebar({ active, onNavigate }: Props) {
               title="Teacher AI"
               style={{
                 fontFamily: "var(--font-display, 'Fraunces', Georgia, serif)",
-                fontSize: 16,
+                fontSize: 18,
                 fontWeight: 800,
                 color: '#c4834a',
                 background: 'rgba(196,131,74,0.12)',
                 border: '1px solid rgba(196,131,74,0.22)',
-                width: 36,
-                height: 36,
-                borderRadius: 8,
+                width: 44,
+                height: 44,
+                borderRadius: 10,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -187,29 +185,29 @@ export default function Sidebar({ active, onNavigate }: Props) {
                   ? '1px solid rgba(196,131,74,0.35)'
                   : '1px solid rgba(255,255,255,0.08)',
                 color: isPinned ? '#c4834a' : 'rgba(196,160,120,0.5)',
-                borderRadius: 6,
-                padding: '4px 6px',
+                borderRadius: 8,
+                padding: '5px 8px',
                 cursor: 'pointer',
-                fontSize: 12,
+                fontSize: 13,
                 display: 'flex',
                 alignItems: 'center',
-                gap: 4,
+                gap: 5,
                 transition: 'all 0.15s ease',
               }}
             >
-              <i className={isPinned ? 'ti ti-pinned' : 'ti ti-pin'} style={{ fontSize: 13 }} />
-              <span style={{ fontSize: 10, fontWeight: 600 }}>{isPinned ? 'Fixada' : 'Auto'}</span>
+              <i className={isPinned ? 'ti ti-pinned' : 'ti ti-pin'} style={{ fontSize: 14 }} />
+              <span style={{ fontSize: 11, fontWeight: 600 }}>{isPinned ? 'Fixada' : 'Auto'}</span>
             </button>
           )}
         </div>
 
         {isExpanded && (
           <div style={{
-            fontSize: 9,
-            color: 'rgba(196,160,120,0.45)',
-            marginTop: 5,
+            fontSize: 11,
+            color: 'rgba(196,160,120,0.5)',
+            marginTop: 6,
             fontWeight: 600,
-            letterSpacing: '1.4px',
+            letterSpacing: '1.5px',
             textTransform: 'uppercase',
             fontFamily: "var(--font-sans, 'Plus Jakarta Sans', sans-serif)",
             whiteSpace: 'nowrap',
@@ -220,17 +218,17 @@ export default function Sidebar({ active, onNavigate }: Props) {
       </div>
 
       {/* Nav sections */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 0 }}>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
         {NAV.map((section) => (
-          <div key={section.label} style={{ marginBottom: section.label ? 2 : 0 }}>
+          <div key={section.label} style={{ marginBottom: section.label ? 4 : 0 }}>
             {section.label && isExpanded && (
               <div style={{
-                fontSize: 9,
+                fontSize: 11,
                 fontWeight: 700,
                 textTransform: 'uppercase',
                 letterSpacing: '1.8px',
-                color: 'rgba(196,160,120,0.38)',
-                padding: '12px 8px 4px',
+                color: 'rgba(196,160,120,0.42)',
+                padding: '14px 10px 6px',
                 fontFamily: "var(--font-sans, 'Plus Jakarta Sans', sans-serif)",
                 whiteSpace: 'nowrap',
               }}>
@@ -256,13 +254,13 @@ export default function Sidebar({ active, onNavigate }: Props) {
       {/* Footer */}
       {isExpanded && (
         <div style={{
-          marginTop: 12,
-          padding: '10px 8px 0',
+          marginTop: 14,
+          padding: '12px 10px 0',
           borderTop: '1px solid rgba(255,220,170,0.07)',
         }}>
           <div style={{
-            fontSize: 9,
-            color: 'rgba(196,160,120,0.35)',
+            fontSize: 11,
+            color: 'rgba(196,160,120,0.4)',
             letterSpacing: '0.4px',
             fontFamily: "var(--font-sans, 'Plus Jakarta Sans', sans-serif)",
             fontWeight: 500,
@@ -295,45 +293,45 @@ function SidebarItem({ item, isActive, isExpanded, onNavigate }: {
           display: 'flex',
           alignItems: 'center',
           justifyContent: isExpanded ? 'flex-start' : 'center',
-          gap: isExpanded ? 10 : 0,
+          gap: isExpanded ? 12 : 0,
           width: '100%',
-          padding: isExpanded ? '7px 10px' : '8px 0',
-          borderRadius: 8,
+          padding: isExpanded ? '10px 14px' : '10px 0',
+          borderRadius: 10,
           border: 'none',
           background: isActive
-            ? 'rgba(253,248,242,0.10)'
+            ? 'rgba(253,248,242,0.12)'
             : 'transparent',
-          color: isActive ? '#fdf8f2' : 'rgba(196,160,120,0.65)',
-          fontSize: 13,
-          fontWeight: isActive ? 600 : 400,
+          color: isActive ? '#fdf8f2' : 'rgba(196,160,120,0.7)',
+          fontSize: 15,
+          fontWeight: isActive ? 700 : 500,
           cursor: 'pointer',
           textAlign: 'left',
           transition: 'all 0.15s ease',
           borderLeft: isExpanded && isActive
-            ? '2px solid rgba(196,131,74,0.65)'
-            : '2px solid transparent',
-          marginBottom: 1,
-          lineHeight: 1.25,
+            ? '3px solid rgba(196,131,74,0.75)'
+            : '3px solid transparent',
+          marginBottom: 3,
+          lineHeight: 1.3,
           fontFamily: "var(--font-sans, 'Plus Jakarta Sans', sans-serif)",
         }}
       >
-        {/* Icon */}
+        {/* Icon Container (+40% scale) */}
         <div style={{
-          width: 26,
-          height: 26,
-          borderRadius: 6,
+          width: 34,
+          height: 34,
+          borderRadius: 8,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          background: isActive ? 'rgba(196,131,74,0.15)' : 'transparent',
+          background: isActive ? 'rgba(196,131,74,0.18)' : 'transparent',
           transition: 'background 0.15s ease',
           flexShrink: 0,
         }}>
           <i
             className={`ti ${item.icon}`}
             style={{
-              fontSize: 17,
-              color: isActive ? '#c4834a' : 'rgba(196,131,74,0.60)',
+              fontSize: 21,
+              color: isActive ? '#c4834a' : 'rgba(196,131,74,0.65)',
               lineHeight: 1,
             }}
           />
@@ -355,17 +353,17 @@ function SidebarItem({ item, isActive, isExpanded, onNavigate }: {
       {!isExpanded && showTooltip && (
         <div style={{
           position: 'fixed',
-          left: 70,
-          transform: 'translateY(-30px)',
+          left: 88,
+          transform: 'translateY(-34px)',
           background: '#1c110a',
           color: '#fdf8f2',
-          padding: '5px 10px',
-          borderRadius: 6,
-          fontSize: 12,
-          fontWeight: 500,
+          padding: '6px 12px',
+          borderRadius: 8,
+          fontSize: 13.5,
+          fontWeight: 600,
           whiteSpace: 'nowrap',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.35)',
-          border: '1px solid rgba(255,255,255,0.08)',
+          boxShadow: '0 4px 14px rgba(0,0,0,0.4)',
+          border: '1px solid rgba(255,255,255,0.1)',
           zIndex: 9999,
           pointerEvents: 'none',
         }}>
