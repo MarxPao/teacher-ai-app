@@ -7,6 +7,7 @@ import Sidebar from '@/components/Sidebar'
 import Dashboard from '@/components/modules/Dashboard'
 import QuickGenerate from '@/components/modules/QuickGenerate'
 import ExamBuilder from '@/components/modules/ExamBuilder'
+import TestAndWorksheets from '@/components/modules/TestAndWorksheets'
 import LessonPlanner from '@/components/modules/LessonPlanner'
 import LessonStudio from '@/components/modules/LessonStudio'
 import Rubric from '@/components/modules/Rubric'
@@ -57,17 +58,18 @@ import AuthGate from '@/components/AuthGate'
 import OnboardingFlow from '@/components/OnboardingFlow'
 import { getCurrentSession, saveSession, AuthSession } from '@/lib/supabaseAuth'
 
-export type ModuleKey = 'dashboard' | 'quick' | 'exam' | 'lessonstudio' | 'plan' | 'rubric' |
+export type ModuleKey = 'dashboard' | 'test_and_worksheets' | 'quick' | 'exam' | 'lessonstudio' | 'plan' | 'rubric' |
   'gradebook' | 'students' | 'classes' | 'organization' | 'privatetutoring' | 'eventos' | 'insights' | 'analytics' | 'calendar' | 'comms' | 'repo' |
   'wellbeing' | 'settings' | 'api' | 'qbank' | 'mindmap' | 'editor' |
   'communications' | 'portfolio' | 'extensions' | 'portalmirror' | 'omnigrader' | 'maestro' | 'classlog' | 'didacticsequence' | 'livequiz' | 'parentcomms' |
   'classroommode' | 'attendancelist' | 'flashcardmode' | 'audiopronunciation' |
   'reflectivepractice' | 'meetingclassrecorder' | 'weeklyagenda' | 'batchgrader' | 'progresstracker' | 'autoreport'
 
-const MODULES: Record<ModuleKey, React.ComponentType> = {
+const MODULES: Record<ModuleKey, React.ComponentType<any>> = {
   dashboard: Dashboard,
-  quick: QuickGenerate,
-  exam: ExamBuilder,
+  test_and_worksheets: TestAndWorksheets,
+  quick: () => <TestAndWorksheets initialMode="worksheet" />,
+  exam: () => <TestAndWorksheets initialMode="exam" />,
   lessonstudio: LessonStudio,
   plan: LessonStudio,
   rubric: Rubric,

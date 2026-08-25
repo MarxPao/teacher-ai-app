@@ -27,8 +27,7 @@ const NAV: Section[] = [
     { key: 'wellbeing',           label: 'Bem-Estar',               icon: 'ti-heart' },
   ]},
   { label: 'Criação', items: [
-    { key: 'quick',             label: 'Gerar Exercício',       icon: 'ti-sparkles' },
-    { key: 'exam',              label: 'Gerar Prova',           icon: 'ti-file-text' },
+    { key: 'test_and_worksheets', label: 'Test & Worksheets',   icon: 'ti-file-certificate' },
     { key: 'eventos',           label: 'Eventos Escolares',     icon: 'ti-sparkles' },
     { key: 'editor',            label: 'Editor de Documentos',  icon: 'ti-file-pencil' },
     { key: 'rubric',            label: 'Rubrica & Gabarito',    icon: 'ti-list-check' },
