@@ -56,6 +56,10 @@ import CommandPalette from '@/components/CommandPalette'
 import LanguageSelector from '@/components/LanguageSelector'
 import AuthGate from '@/components/AuthGate'
 import OnboardingFlow from '@/components/OnboardingFlow'
+import Topbar from '@/components/Topbar'
+import GlobalVoiceFAB from '@/components/GlobalVoiceFAB'
+import BottomTabBar from '@/components/BottomTabBar'
+import Scratchpad from '@/components/Scratchpad'
 import { getCurrentSession, saveSession, AuthSession } from '@/lib/supabaseAuth'
 
 export type ModuleKey = 'dashboard' | 'test_and_worksheets' | 'quick' | 'exam' | 'lessonstudio' | 'plan' | 'rubric' |
@@ -272,64 +276,73 @@ export default function Home() {
 
   // ─── JANELA DE AUTENTICAÇÃO E ONBOARDING PAUSADAS TEMPORARIAMENTE ───
   // Permite acesso direto a todas as funcionalidades do aplicativo
+  return (
+    <div className="flex w-full h-screen overflow-hidden" style={{ background: '#fdf8f2' }}>
+      <div className="sidebar-wrapper">
+        <Sidebar active={active} onNavigate={setActive} />
+      </div>
+      <main
+        className="flex-1 min-w-0 overflow-hidden flex flex-col relative main-content"
+        style={{
+          transition: 'all 0.28s cubic-bezier(0.16, 1, 0.3, 1)',
+          width: '100%',
+        }}
+      >
+        <Topbar module={active} isAiLoading={false} onNavigate={setActive} />
+        <div key={active} className="module-enter flex-1 min-h-0 min-w-0 h-full overflow-y-auto overflow-x-hidden">
+          <Module />
+        </div>
+      </main>
 
- return (
- <div className="flex w-full h-screen overflow-hidden" style={{ background: '#fdf8f2' }}>
- <Sidebar active={active} onNavigate={setActive} />
- <main
- className="flex-1 min-w-0 overflow-hidden flex flex-col relative"
- style={{
- transition: 'all 0.28s cubic-bezier(0.16, 1, 0.3, 1)',
- width: '100%',
- }}
- >
- <div key={active} className="animate-fade-up flex-1 min-h-0 min-w-0 h-full overflow-y-auto overflow-x-hidden">
- <Module />
- </div>
- </main>
+      {/* DOCK FLUTUANTE DE AÇÕES EMBUTIDAS NO CANTO INFERIOR DIREITO */}
+      <div style={{
+        position: 'fixed', bottom: 24, right: 94, zIndex: 9995,
+        display: 'flex', alignItems: 'center', gap: 10
+      }}>
+        {/* Botão de Busca Rápida no Canto Inferior Direito */}
+        <button
+          onClick={() => setIsCommandPaletteOpen(true)}
+          title="Abrir Busca Rápida (Ctrl+K)"
+          style={{
+            padding: '9px 16px', borderRadius: 24, border: '1px solid rgba(139,115,85,0.22)',
+            background: '#fffcf8', color: '#2c1a0e', fontSize: 12.5, fontWeight: 700,
+            cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
+            boxShadow: '0 4px 16px rgba(44,26,14,0.08)', transition: 'all 0.15s ease'
+          }}
+        >
+          <i className="ti ti-search" style={{ color: '#8b5e3c', fontSize: 16 }} />
+          <span>Busca Rápida</span>
+          <kbd style={{ background: '#f5efe6', color: '#8b5e3c', padding: '2px 6px', borderRadius: 6, fontSize: 10, fontWeight: 700 }}>Ctrl+K</kbd>
+        </button>
+      </div>
 
+      {/* Command Palette Modal (Ctrl+K) */}
+      <CommandPalette
+        isOpen={isCommandPaletteOpen}
+        onClose={() => setIsCommandPaletteOpen(false)}
+        onNavigate={setActive}
+      />
 
- {/* DOCK FLUTUANTE DE AÇÕES EMBUTIDAS NO CANTO INFERIOR DIREITO */}
- <div style={{
- position: 'fixed', bottom: 24, right: 94, zIndex: 9995,
- display: 'flex', alignItems: 'center', gap: 10
- }}>
- {/* Botão de Busca Rápida no Canto Inferior Direito */}
- <button
- onClick={() => setIsCommandPaletteOpen(true)}
- title="Abrir Busca Rápida (Ctrl+K)"
- style={{
- padding: '9px 16px', borderRadius: 24, border: '1px solid rgba(139,115,85,0.22)',
- background: '#fffcf8', color: '#2c1a0e', fontSize: 12.5, fontWeight: 700,
- cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
- boxShadow: '0 4px 16px rgba(44,26,14,0.08)', transition: 'all 0.15s ease'
- }}
- >
- <i className="ti ti-search" style={{ color: '#8b5e3c', fontSize: 16 }} />
- <span>Busca Rápida</span>
- <kbd style={{ background: '#f5efe6', color: '#8b5e3c', padding: '2px 6px', borderRadius: 6, fontSize: 10, fontWeight: 700 }}>Ctrl+K</kbd>
- </button>
- </div>
+      {/* VoiceOrb UI visual pura */}
+      <VoiceOrb />
 
- {/* Command Palette Modal (Ctrl+K) */}
- <CommandPalette
- isOpen={isCommandPaletteOpen}
- onClose={() => setIsCommandPaletteOpen(false)}
- onNavigate={setActive}
- />
+      {/* WisprFlow Overlay (Alt+Shift+V) */}
+      <WisprFlowOverlay />
 
- {/* VoiceOrb UI visual pura */}
- <VoiceOrb />
+      {/* Scratchpad — Bloco de Notas Rápidas Persistente (#26) */}
+      <Scratchpad />
 
- {/* WisprFlow Overlay (Alt+Shift+V) */}
- <WisprFlowOverlay />
+      {/* GlobalVoiceFAB — Ditado por Voz (#34) */}
+      <GlobalVoiceFAB />
 
- {/* RafinhaChat */}
- <RafinhaChat
- onNavigate={setActive}
- onCommandReady={(fn) => { rafinhaCommandRef.current = fn }}
- />
- </div>
- )
+      {/* Bottom Tab Bar — Mobile Navigation (#42) */}
+      <BottomTabBar active={active} onNavigate={setActive} />
+
+      {/* RafinhaChat */}
+      <RafinhaChat
+        onNavigate={setActive}
+        onCommandReady={(fn) => { rafinhaCommandRef.current = fn }}
+      />
+    </div>
+  )
 }
-

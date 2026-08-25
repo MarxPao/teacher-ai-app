@@ -231,7 +231,19 @@ export default function Sidebar({ active, onNavigate }: Props) {
                 padding: '14px 10px 6px',
                 fontFamily: "var(--font-sans, 'Plus Jakarta Sans', sans-serif)",
                 whiteSpace: 'nowrap',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
               }}>
+                <span style={{ fontSize: 13, opacity: 0.7 }}>
+                  {section.label === 'Organização' ? '🏢' :
+                   section.label === 'Área do Professor' ? '👨‍🏫' :
+                   section.label === 'Criação' ? '✨' :
+                   section.label === 'Em Sala de Aula' ? '🎓' :
+                   section.label === 'Alunos & Avaliação' ? '📊' :
+                   section.label === 'Comunicação' ? '💬' :
+                   section.label === 'Configurações' ? '⚙️' : ''}
+                </span>
                 {section.label}
               </div>
             )}

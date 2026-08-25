@@ -1,8 +1,9 @@
-'use client'
-
 import React, { useState, useEffect, useMemo } from 'react'
 import ModuleShell from '@/components/ModuleShell'
 import type { ModuleKey } from '@/app/page'
+import SubstituteMode from '@/components/SubstituteMode'
+import OnboardingWizard from '@/components/OnboardingWizard'
+import { generatePedagogicalInsights, PedagogicalAlert } from '@/lib/pedagogicalInsights'
 
 // --- Tipos & Interfaces ---
 
@@ -124,6 +125,11 @@ export default function Dashboard() {
   // 5. Atividades Pendentes
   const [pendingActivities, setPendingActivities] = useState<PendingActivityItem[]>([])
 
+  // 6. Modais e Alertas de IA
+  const [isSubstituteOpen, setIsSubstituteOpen] = useState(false)
+  const [isOnboardingOpen, setIsOnboardingOpen] = useState(false)
+  const [pedagogicalAlerts, setPedagogicalAlerts] = useState<PedagogicalAlert[]>([])
+
   // Helper de Navegação Global
   const navigateTo = (module: ModuleKey) => {
     window.dispatchEvent(new CustomEvent('teacher:navigate', { detail: module }))
@@ -137,6 +143,13 @@ export default function Dashboard() {
     setDateStr(now.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }))
 
     const todayKey = formatDateKey(now)
+
+    // Alertas Pedagógicos Contextuais (#22)
+    try {
+      const storedStudents = JSON.parse(localStorage.getItem('teacher_students') || '[]')
+      const alerts = generatePedagogicalInsights(storedStudents)
+      setPedagogicalAlerts(alerts)
+    } catch {}
 
     // 1. Post-its
     try {
@@ -543,9 +556,134 @@ export default function Dashboard() {
           subtitle="Seu painel integrado: calendário unificado (Escolas + Aulas Particulares), checklist, diários e planejamento."
         >
           {dateStr && (
-            <div suppressHydrationWarning style={{ fontSize: 13, color: '#8b5e3c', fontWeight: 600, marginTop: -15, marginBottom: 16, textTransform: 'capitalize', display: 'flex', alignItems: 'center', gap: 6 }}>
-              <i className="ti ti-calendar-event" style={{ fontSize: 15 }} />
-              {dateStr}
+            <div suppressHydrationWarning style={{ fontSize: 13, color: '#8b5e3c', fontWeight: 600, marginTop: -15, marginBottom: 16, textTransform: 'capitalize', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <i className="ti ti-calendar-event" style={{ fontSize: 15 }} />
+                {dateStr}
+              </div>
+
+              {/* Botões Rápidos de Produtividade (#18, #49) */}
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  onClick={() => setIsSubstituteOpen(true)}
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: 8,
+                    border: '1px solid rgba(168,50,50,0.3)',
+                    background: 'rgba(168,50,50,0.06)',
+                    color: '#a83232',
+                    fontSize: 12,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                  }}
+                >
+                  <span>🆘</span> Modo Substituto
+                </button>
+                <button
+                  onClick={() => setIsOnboardingOpen(true)}
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: 8,
+                    border: '1px solid rgba(139,115,85,0.25)',
+                    background: '#fff',
+                    color: '#7a5c42',
+                    fontSize: 12,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                  }}
+                >
+                  <i className="ti ti-wand" /> Tour Inicial
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ══════════════════════════════════════════════════════════════════════
+              ALERTAS PEDAGÓGICOS DA IA (#22, #52)
+             ══════════════════════════════════════════════════════════════════════ */}
+          {pedagogicalAlerts.length > 0 && (
+            <div
+              className="dashboard-widget animate-slide-up"
+              style={{
+                marginBottom: 20,
+                padding: '14px 18px',
+                background: 'rgba(255, 252, 248, 0.85)',
+                border: '1px solid rgba(196,131,74,0.25)',
+                borderRadius: 16,
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 18 }}>🧠</span>
+                  <strong style={{ fontSize: 13.5, color: '#2c1a0e' }}>
+                    Alertas & Recomendações da Rafinha IA
+                  </strong>
+                </div>
+                <span style={{ fontSize: 11, color: '#8b5e3c', fontWeight: 600 }}>
+                  {pedagogicalAlerts.length} itens requerem atenção
+                </span>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 10 }}>
+                {pedagogicalAlerts.map((alert) => {
+                  const isDanger = alert.type === 'danger'
+                  const isSuccess = alert.type === 'success'
+                  const borderColor = isDanger ? 'rgba(168,50,50,0.3)' : isSuccess ? 'rgba(61,122,78,0.3)' : 'rgba(200,122,30,0.3)'
+                  const bgColor = isDanger ? 'rgba(168,50,50,0.04)' : isSuccess ? 'rgba(61,122,78,0.04)' : 'rgba(200,122,30,0.04)'
+                  const textColor = isDanger ? '#a83232' : isSuccess ? '#3d7a4e' : '#c87a1e'
+
+                  return (
+                    <div
+                      key={alert.id}
+                      style={{
+                        padding: '10px 14px',
+                        borderRadius: 10,
+                        border: `1px solid ${borderColor}`,
+                        background: bgColor,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'space-between',
+                        gap: 6,
+                      }}
+                    >
+                      <div>
+                        <div style={{ fontSize: 12.5, fontWeight: 700, color: textColor, marginBottom: 2 }}>
+                          {alert.title}
+                        </div>
+                        <p style={{ margin: 0, fontSize: 12, color: '#5c3d20', lineHeight: 1.4 }}>
+                          {alert.description} {alert.recommendation}
+                        </p>
+                      </div>
+
+                      {alert.actionLabel && alert.targetModule && (
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 4 }}>
+                          <button
+                            onClick={() => navigateTo(alert.targetModule as ModuleKey)}
+                            style={{
+                              padding: '4px 10px',
+                              borderRadius: 6,
+                              border: `1px solid ${borderColor}`,
+                              background: '#fff',
+                              color: textColor,
+                              fontSize: 11,
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            {alert.actionLabel} &rarr;
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
             </div>
           )}
 
@@ -1676,6 +1814,21 @@ export default function Dashboard() {
               </div>
             </div>
           )}
+
+          {/* Modal Professor Substituto (#49) */}
+          <SubstituteMode
+            open={isSubstituteOpen}
+            onClose={() => setIsSubstituteOpen(false)}
+          />
+
+          {/* Wizard de Onboarding Inicial (#18) */}
+          <OnboardingWizard
+            open={isOnboardingOpen}
+            onComplete={() => {
+              setIsOnboardingOpen(false)
+              loadDashboardData()
+            }}
+          />
 
         </ModuleShell>
       </div>

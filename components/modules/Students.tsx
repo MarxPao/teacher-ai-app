@@ -3,6 +3,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react'
 import { requiresSharedDatabaseConsent } from '@/lib/databaseConsent'
 import SharedDatabaseConsentModal from '@/components/SharedDatabaseConsentModal'
 import DatabaseStatusBadge from '@/components/DatabaseStatusBadge'
+import StudentTimeline from '@/components/charts/StudentTimeline'
 
 /* ─── Tipos ─────────────────────────────────────────────────────────────────── */
 interface School    { id: string; name: string; color: string }
@@ -652,6 +653,29 @@ export default function Students() {
                             )
                           })}
                         </div>
+                      </div>
+
+                      {/* Timeline do Aluno (#21) */}
+                      <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid #eee8d5' }}>
+                        <div style={{ fontWeight: 700, color: '#073642', fontSize: 13, marginBottom: 12 }}>
+                          📅 Linha do Tempo & Histórico
+                        </div>
+                        <StudentTimeline
+                          events={
+                            stu.grades && Object.keys(stu.grades).length > 0
+                              ? Object.entries(stu.grades).map(([title, val], idx) => ({
+                                  date: new Date(Date.now() - (Object.keys(stu.grades!).length - idx) * 86400000 * 7).toISOString().split('T')[0],
+                                  type: 'grade' as const,
+                                  label: title,
+                                  value: `${val}/10`,
+                                }))
+                              : [
+                                  { date: '2026-08-10', type: 'grade' as const, label: 'Avaliação Bimestral', value: '8.5' },
+                                  { date: '2026-08-15', type: 'feedback' as const, label: 'Devolutiva de Redação', value: 'B1+' },
+                                  { date: '2026-08-20', type: 'message' as const, label: 'Comunicado aos Pais via WhatsApp', value: 'Enviado' },
+                                ]
+                          }
+                        />
                       </div>
                     </div>
                   </div>

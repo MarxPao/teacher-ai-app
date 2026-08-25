@@ -10,6 +10,7 @@ import AutomationDiffModal from '@/components/modules/AutomationDiffModal'
 import { createBrowserTask, BrowserAutomationTask, DiffItem } from '@/lib/browserAutomationClient'
 import { sanitizeOutboundPayload } from '@/lib/portalSanitizer'
 import { getTeacherCalibrations } from '@/lib/teacherCalibrations'
+import ClassHeatmap from '@/components/charts/ClassHeatmap'
 
 interface School { id: string; name: string; color: string }
 interface ClassRecord { id: string; name: string; schoolId: string }
@@ -25,7 +26,7 @@ export default function Gradebook() {
   const [filterSchool, setFilterSchool] = useState<string>('all')
   const [filterClass, setFilterClass] = useState<string>('all')
   const [searchTerm, setSearchTerm] = useState('')
-  const [viewMode, setViewMode] = useState<'table' | 'cards'>('table')
+  const [viewMode, setViewMode] = useState<'table' | 'cards' | 'heatmap'>('table')
 
   // Modal de Espelhamento no Portal Escolar
   const [isMirrorModalOpen, setIsMirrorModalOpen] = useState(false)
@@ -255,9 +256,57 @@ export default function Gradebook() {
               </button>
 
               <button onClick={addCol} style={ActionBtn}>+ Nova Coluna</button>
-              <button onClick={() => setViewMode(viewMode === 'table' ? 'cards' : 'table')} style={ToggleBtn}>
-                {viewMode === 'table' ? 'Cards' : 'Tabela'}
-              </button>
+              
+              <div style={{ display: 'inline-flex', background: '#f5efe6', borderRadius: 10, padding: 3, gap: 2 }}>
+                <button
+                  onClick={() => setViewMode('table')}
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: 8,
+                    border: 'none',
+                    background: viewMode === 'table' ? '#8b5e3c' : 'transparent',
+                    color: viewMode === 'table' ? '#fff' : '#586e75',
+                    fontSize: 12,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Tabela
+                </button>
+                <button
+                  onClick={() => setViewMode('cards')}
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: 8,
+                    border: 'none',
+                    background: viewMode === 'cards' ? '#8b5e3c' : 'transparent',
+                    color: viewMode === 'cards' ? '#fff' : '#586e75',
+                    fontSize: 12,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Cards
+                </button>
+                <button
+                  onClick={() => setViewMode('heatmap')}
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: 8,
+                    border: 'none',
+                    background: viewMode === 'heatmap' ? '#8b5e3c' : 'transparent',
+                    color: viewMode === 'heatmap' ? '#fff' : '#586e75',
+                    fontSize: 12,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 4,
+                  }}
+                >
+                  <span>🔥</span> Heatmap
+                </button>
+              </div>
             </div>
           }
         >
@@ -359,7 +408,7 @@ export default function Gradebook() {
                 </tbody>
               </table>
             </div>
-          ) : (
+          ) : viewMode === 'cards' ? (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
               {filtered.map(s => {
                 const avg = calcAvg(s); const gc = gradeColor(avg)
@@ -381,6 +430,21 @@ export default function Gradebook() {
                   </ModuleCard>
                 )
               })}
+            </div>
+          ) : (
+            <div style={{ background: '#fffcf8', borderRadius: 16, padding: 10, border: '1px solid rgba(139,115,85,0.14)' }}>
+              <ClassHeatmap
+                students={filtered.map(s => ({ id: s.id, name: s.name }))}
+                assessments={cols.map(c => ({ id: c, title: c }))}
+                grades={filtered.reduce((acc, s) => {
+                  acc[s.id] = {}
+                  cols.forEach(c => {
+                    const parsed = parseFloat(s.grades[c]?.replace(',', '.'))
+                    if (!isNaN(parsed)) acc[s.id][c] = parsed
+                  })
+                  return acc
+                }, {} as Record<string, Record<string, number>>)}
+              />
             </div>
           )}
 
