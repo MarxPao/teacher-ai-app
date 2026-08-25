@@ -4,6 +4,7 @@ import type { ModuleKey } from '@/app/page'
 import SubstituteMode from '@/components/SubstituteMode'
 import OnboardingWizard from '@/components/OnboardingWizard'
 import { generatePedagogicalInsights, PedagogicalAlert } from '@/lib/pedagogicalInsights'
+import TeacherLogo, { TeacherOwlAvatar } from '@/components/TeacherLogo'
 
 // --- Tipos & Interfaces ---
 
@@ -552,7 +553,8 @@ export default function Dashboard() {
     <div style={{ display: 'flex', height: '100%', overflow: 'hidden', background: '#fdf6e3' }}>
       <div style={{ flex: 1, height: '100%', overflowY: 'auto' }}>
         <ModuleShell
-          title={`${mounted ? greeting : 'Olá'}, Professora 👩‍🏫`}
+          title={`${mounted ? greeting : 'Olá'}, Professora`}
+          icon={<TeacherOwlAvatar size={38} />}
           subtitle="Seu painel integrado: calendário unificado (Escolas + Aulas Particulares), checklist, diários e planejamento."
         >
           {dateStr && (
@@ -620,7 +622,7 @@ export default function Dashboard() {
             >
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontSize: 18 }}>🧠</span>
+                  <TeacherLogo size={20} color="#8b5e3c" />
                   <strong style={{ fontSize: 13.5, color: '#2c1a0e' }}>
                     Alertas & Recomendações da Rafinha IA
                   </strong>

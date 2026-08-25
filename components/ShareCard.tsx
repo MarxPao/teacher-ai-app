@@ -2,6 +2,7 @@
 
 import React, { useRef, useCallback, useState } from 'react'
 import { COLOR, FONT, TEXT, SPACE, RADIUS, SHADOW, BORDER } from '@/styles/tokens'
+import TeacherLogo from '@/components/TeacherLogo'
 
 interface ShareStats {
   lessonsCreated: number
@@ -111,7 +112,7 @@ export default function ShareCard({ teacherName, stats }: ShareCardProps) {
               border: '1px solid rgba(255,255,255,0.2)',
             }}
           >
-            <i className="ti ti-school" style={{ fontSize: 20, color: COLOR.accentGold }} />
+            <TeacherLogo size={24} color={COLOR.accentGold} />
           </div>
           <div>
             <div style={{ fontSize: TEXT.xs, color: 'rgba(255,252,248,0.6)', fontWeight: 700, letterSpacing: '0.8px', textTransform: 'uppercase' }}>

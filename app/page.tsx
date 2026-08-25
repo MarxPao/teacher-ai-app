@@ -60,6 +60,7 @@ import Topbar from '@/components/Topbar'
 import GlobalVoiceFAB from '@/components/GlobalVoiceFAB'
 import BottomTabBar from '@/components/BottomTabBar'
 import Scratchpad from '@/components/Scratchpad'
+import TeacherLogo from '@/components/TeacherLogo'
 import { getCurrentSession, saveSession, AuthSession } from '@/lib/supabaseAuth'
 
 export type ModuleKey = 'dashboard' | 'test_and_worksheets' | 'quick' | 'exam' | 'lessonstudio' | 'plan' | 'rubric' |
@@ -265,10 +266,10 @@ export default function Home() {
     return (
       <div className="w-full h-screen flex items-center justify-center bg-[#fdf8f2]">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-[#2aa198] flex items-center justify-center animate-pulse shadow-md">
-            <i className="ti ti-school text-xl text-white" />
+          <div className="w-14 h-14 rounded-2xl bg-[#8b5e3c] flex items-center justify-center animate-pulse shadow-md">
+            <TeacherLogo size={32} color="#fff" />
           </div>
-          <span className="text-xs font-bold text-[#586e75] tracking-wider uppercase">Carregando Teacher AI...</span>
+          <span className="text-xs font-bold text-[#8b5e3c] tracking-wider uppercase">Carregando Teacher AI...</span>
         </div>
       </div>
     )

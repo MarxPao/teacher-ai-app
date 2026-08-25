@@ -1,7 +1,6 @@
-'use client'
-
 import React, { useState } from 'react'
 import { ModuleKey } from '@/app/page'
+import TeacherLogo from '@/components/TeacherLogo'
 
 interface AskRafinhaBarProps {
   onNavigate: (module: ModuleKey) => void
@@ -71,7 +70,7 @@ export default function AskRafinhaBar({ onNavigate, onTriggerCommand }: AskRafin
         transition: 'all 0.2s ease',
       }}
     >
-      <span style={{ fontSize: 14, marginRight: 6 }}>✨</span>
+      <TeacherLogo size={18} color="#8b5e3c" style={{ marginRight: 6 }} />
       <input
         type="text"
         placeholder="Peça à Rafinha... (ex: gerar prova B1)"

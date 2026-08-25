@@ -1,6 +1,7 @@
 'use client'
 
 import { ModuleKey } from '@/app/page'
+import TeacherLogo from '@/components/TeacherLogo'
 
 interface NavItem { key: ModuleKey; label: string; icon: string }
 interface Section { label: string; items: NavItem[] }
@@ -137,30 +138,29 @@ export default function Sidebar({ active, onNavigate }: Props) {
               lineHeight: 1.1,
               display: 'flex',
               alignItems: 'center',
-              gap: 10,
+              gap: 8,
               whiteSpace: 'nowrap',
             }}>
               <span>Teacher</span>
-              <span style={{
-                color: '#c4834a',
-                background: 'rgba(196,131,74,0.15)',
-                padding: '2px 9px',
-                borderRadius: 6,
-                fontSize: 15,
-                fontWeight: 700,
-                border: '1px solid rgba(196,131,74,0.25)',
-                fontFamily: "var(--font-sans, 'Plus Jakarta Sans', sans-serif)",
-                letterSpacing: '0.5px',
-              }}>AI</span>
+              <div
+                title="Teacher AI"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  background: 'rgba(196,131,74,0.15)',
+                  padding: '3px 6px',
+                  borderRadius: 8,
+                  border: '1px solid rgba(196,131,74,0.3)',
+                }}
+              >
+                <TeacherLogo size={22} color="#c4834a" />
+              </div>
             </div>
           ) : (
             <div
               title="Teacher AI"
               style={{
-                fontFamily: "var(--font-display, 'Fraunces', Georgia, serif)",
-                fontSize: 18,
-                fontWeight: 800,
-                color: '#c4834a',
                 background: 'rgba(196,131,74,0.12)',
                 border: '1px solid rgba(196,131,74,0.22)',
                 width: 44,
@@ -171,7 +171,7 @@ export default function Sidebar({ active, onNavigate }: Props) {
                 justifyContent: 'center',
               }}
             >
-              T
+              <TeacherLogo size={26} color="#c4834a" />
             </div>
           )}
 

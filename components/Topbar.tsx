@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react'
 import { useTheme, ThemeMode, FontScale } from '@/lib/useTheme'
 import { COLOR, FONT, TEXT, SPACE, RADIUS, TRANSITION, BORDER } from '@/styles/tokens'
 import AskRafinhaBar from '@/components/AskRafinhaBar'
+import TeacherLogo from '@/components/TeacherLogo'
 import { ModuleKey } from '@/app/page'
 
 interface TopbarProps {
@@ -70,8 +71,8 @@ export default function Topbar({ module, submodule, isAiLoading = false, onNavig
         gap: SPACE[3],
       }}
     >
-      <nav aria-label="Breadcrumb" style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, flex: 1 }}>
-        <i className="ti ti-book-2" style={{ fontSize: 15, color: COLOR.accent, flexShrink: 0 }} />
+      <nav aria-label="Breadcrumb" style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
+        <TeacherLogo size={20} color={COLOR.accent} style={{ flexShrink: 0 }} />
         <span style={{ fontSize: TEXT.sm + 1, fontWeight: 700, color: COLOR.paperSepia, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {module}
         </span>

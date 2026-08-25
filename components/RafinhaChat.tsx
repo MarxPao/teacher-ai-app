@@ -102,21 +102,13 @@ const TOOL_EST_SECONDS: Record<string, number> = {
   generate_parent_communication:  3,
 }
 
-// Avatar SVG 
-const AvatarSVG = () => (
- <svg viewBox="0 0 100 100" width="100%" height="100%">
- <circle cx="50" cy="50" r="50" fill="#fdf6e3" />
- <path d="M 25 40 Q 20 60 25 85 Q 50 95 75 85 Q 80 60 75 40 Z" fill="#1a1a1a" />
- <path d="M 35 45 Q 50 80 65 45 Z" fill="#f4d2b3" />
- <path d="M 43 65 L 57 65 L 65 95 L 35 95 Z" fill="#073642" />
- <path d="M 25 45 Q 50 15 75 45 Q 65 25 50 30 Q 35 25 25 45 Z" fill="#1a1a1a" />
- <circle cx="43" cy="48" r="3" fill="#2d2d2d" />
- <circle cx="57" cy="48" r="3" fill="#2d2d2d" />
- <rect x="37" y="44" width="12" height="8" rx="2" fill="none" stroke="#dc322f" strokeWidth="1.5" />
- <rect x="51" y="44" width="12" height="8" rx="2" fill="none" stroke="#dc322f" strokeWidth="1.5" />
- <path d="M 49 48 L 51 48" stroke="#dc322f" strokeWidth="1.5" />
- <path d="M 45 56 Q 50 61 55 56" fill="none" stroke="#2d2d2d" strokeWidth="1.5" strokeLinecap="round" />
- </svg>
+import TeacherLogo from '@/components/TeacherLogo'
+
+// Avatar SVG — Coruja Oficial Teacher AI
+const AvatarSVG = ({ size = 34 }: { size?: number }) => (
+  <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+    <TeacherLogo size={size} color="#fff" />
+  </div>
 )
 
 // Portal names 
