@@ -15,6 +15,18 @@ import SmartInsightsPanel from '@/components/modules/SmartInsightsPanel'
 import { AssessmentPreset, getStoredPresets, savePreset } from '@/lib/assessmentPresets'
 import { getTeacherCalibrations, saveModuleCalibration } from '@/lib/teacherCalibrations'
 import { addQuestionsBatch } from '@/lib/questionBankService'
+import EditableQuestionBoxes, {
+  EditableQuestionItem,
+  parseContentToQuestions,
+  compileQuestionsToHtml
+} from '@/components/EditableQuestionBoxes'
+import QuestionCountByTypeList, {
+  QuestionTypeCountMap,
+  DEFAULT_QUESTION_COUNTS,
+  computeTotalQuestions,
+  buildQuestionDistributionPrompt
+} from '@/components/QuestionCountByTypeList'
+import PedagogicalMethodologiesAccordion from '@/components/PedagogicalMethodologiesAccordion'
 import {
   getSubjectProfile,
   getExamSections,
@@ -82,6 +94,7 @@ function buildExamPrompt(opts: {
   cefr: string
   grade: string
   questionCount: string
+  questionDistributionText?: string
   sections: string[]
   approach: string[]
   stemLanguage?: 'pt' | 'en'
@@ -158,6 +171,7 @@ ESPECIFICAÇÕES DA PROVA:
 - Abordagem Pedagógica: ${opts.approach.join(', ')}
 - ${stemInstruction}
 - ${optionInstruction}
+${opts.questionDistributionText ? `\n${opts.questionDistributionText}\n` : ''}
 ${opts.customPrompt ? `\nDIRETRIZES DO PROFESSOR:\n"${opts.customPrompt}"\n` : ''}
 ${methInstructions}
 
@@ -219,6 +233,8 @@ export default function ExamBuilder() {
   const [cefr, setCefr] = useState(() => cal.defaultLevel || 'B1')
   const [grade, setGrade] = useState('9º Fund.')
   const [questionCount, setQuestionCount] = useState(() => cal.defaultQuestionCount || '10')
+  const [questionCounts, setQuestionCounts] = useState<QuestionTypeCountMap>(DEFAULT_QUESTION_COUNTS)
+  const [activeViewTab, setActiveViewTab] = useState<'boxes' | 'canvas'>('boxes')
 
   const [showSmartInsights, setShowSmartInsights] = useState(false)
   const [additionalPromptContext, setAdditionalPromptContext] = useState('')
@@ -512,8 +528,14 @@ export default function ExamBuilder() {
         }
       }
 
+      const totalCalculatedQuestions = computeTotalQuestions(questionCounts) || Number(questionCount) || 10
+      const distributionPrompt = buildQuestionDistributionPrompt(questionCounts)
+
       const prompt = buildExamPrompt({
-        topic, cefr, grade, questionCount, sections, approach,
+        topic, cefr, grade,
+        questionCount: String(totalCalculatedQuestions),
+        questionDistributionText: distributionPrompt,
+        sections, approach,
         customPrompt: additionalPromptContext ? `${customPrompt}\n\n${additionalPromptContext}` : customPrompt,
         stemLanguage, optionLanguage,
         header: { ...header, title: header.title || effectiveTitle },
@@ -553,6 +575,36 @@ export default function ExamBuilder() {
       setError(e instanceof Error ? e.message : 'Erro desconhecido.')
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function handleAskRafinhaForQuestion(
+    questionIndex: number,
+    currentQuestion: EditableQuestionItem,
+    userInstruction: string
+  ): Promise<string | void> {
+    if (!selectedApi) return
+    const prompt = `Você é a assistente pedagógica Rafinha IA. Reformule e aprimore a seguinte questão de avaliação conforme a instrução do professor:
+INSTRUÇÃO DO PROFESSOR: "${userInstruction}"
+QUESTÃO ATUAL:
+Tipo: ${currentQuestion.typeLabel}
+Enunciado: ${currentQuestion.stem}
+${currentQuestion.options ? `Alternativas:\n${currentQuestion.options.map(o => `${o.letter}) ${o.text}`).join('\n')}` : ''}
+Gabarito atual: ${currentQuestion.answerKey || 'Não definido'}
+
+Retorne a questão reformulada no formato padrão (Enunciado, Alternativas se aplicável, e Gabarito/Resolução):`
+
+    const raw = await callApi(selectedApi, prompt)
+    const newQuestions = parseContentToQuestions(raw)
+    if (newQuestions.length > 0) {
+      const parsed = parseContentToQuestions(result)
+      parsed[questionIndex] = {
+        ...parsed[questionIndex],
+        stem: newQuestions[0].stem,
+        options: newQuestions[0].options || parsed[questionIndex].options,
+        answerKey: newQuestions[0].answerKey || parsed[questionIndex].answerKey
+      }
+      setResult(compileQuestionsToHtml(parsed))
     }
   }
 
@@ -908,52 +960,26 @@ export default function ExamBuilder() {
             </div>
           </div>
 
-          {/* Detalhes & Quantidade */}
+          {/* Numerador de Questões Detalhado por Tipo */}
+          <QuestionCountByTypeList
+            counts={questionCounts}
+            onChange={counts => {
+              setQuestionCounts(counts)
+              setQuestionCount(String(computeTotalQuestions(counts)))
+            }}
+          />
+
+          {/* Detalhes & Configurações da Turma */}
           <div style={{ ...CARD, display: 'flex', flexDirection: 'column', gap: 14 }}>
             <div>
-              <label style={SL}>Tópico Central</label>
+              <label style={SL}>Tópico Central / Unidade de Conteúdo</label>
               <input value={topic} onChange={e => setTopic(e.target.value)}
-                placeholder="Ex: Unit 5, Past Perfect, Environment" style={SI} />
-            </div>
-
-            {/* Quantidade de Questões */}
-            <div>
-              <label style={{ ...SL, display: 'flex', justifyContent: 'space-between' }}>
-                <span> Quantidade de Questões</span>
-                <span style={{ color: '#8b5e3c', fontWeight: 800 }}>{questionCount} questões</span>
-              </label>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 6 }}>
-                {['5', '8', '10', '12', '15', '20'].map(cnt => (
-                  <button
-                    key={cnt}
-                    type="button"
-                    onClick={() => setQuestionCount(cnt)}
-                    style={{
-                      flex: 1, minWidth: 42, padding: '7px 0', borderRadius: 8,
-                      border: questionCount === cnt ? '1.5px solid #8b5e3c' : '1px solid #e8e0d0',
-                      background: questionCount === cnt ? '#8b5e3c' : '#faf8f5',
-                      color: questionCount === cnt ? '#fff' : '#586e75',
-                      fontSize: 12, fontWeight: 700, cursor: 'pointer', textAlign: 'center',
-                      transition: 'all 0.15s'
-                    }}
-                  >
-                    {cnt}
-                  </button>
-                ))}
-              </div>
-
-              {/* Aviso Psicométrico de Confiabilidade por Quantidade de Itens */}
-              {sections.length > 0 && Number(questionCount) < sections.length * 2 && (
-                <div style={{ background: '#fdf6e2', border: '1px solid #b58900', borderRadius: 8, padding: '8px 12px', fontSize: 11.5, color: '#856404', marginTop: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <i className="ti ti-alert-triangle" style={{ fontSize: 16, color: '#b58900', flexShrink: 0 }} />
-                  <span><strong>Aviso de Confiabilidade:</strong> Você selecionou {sections.length} seções para apenas {questionCount} questões ({(Number(questionCount)/sections.length).toFixed(1)} q/seção). Recomendamos pelo menos 2 a 3 questões por habilidade/seção para uma avaliação somativa válida.</span>
-                </div>
-              )}
+                placeholder="Ex: Unit 5, Past Perfect, Meio Ambiente & Sustentabilidade" style={SI} />
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
               <div>
-                <label style={SL}>Nível CEFR</label>
+                <label style={SL}>Nível ({activeProfile.levelFramework.name})</label>
                 <select value={cefr} onChange={e => setCefr(e.target.value)} style={SS}>
                   {CEFR.map(c => <option key={c}>{c}</option>)}
                 </select>
@@ -966,96 +992,28 @@ export default function ExamBuilder() {
               </div>
             </div>
             <div>
-              <label style={SL}> Diretrizes do Professor</label>
+              <label style={SL}> Diretrizes Personalizadas do Professor</label>
               <textarea value={customPrompt} onChange={e => setCustomPrompt(e.target.value)}
-                placeholder="Ex: incluir 2 questões focadas no capítulo 3, usar contexto de esportes"
-                rows={3}
+                placeholder="Ex: incluir 2 questões focadas no capítulo 3, usar contexto de tecnologia..."
+                rows={2}
                 style={{ ...SI, resize: 'vertical', fontFamily: 'inherit', fontSize: 13, boxSizing: 'border-box' }}
               />
             </div>
           </div>
 
-          {/* Metodologias */}
-          <div style={CARD}>
-            <p style={{ fontSize: 13, fontWeight: 700, color: '#586e75', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 14, marginTop: 0 }}>Metodologias & Abordagens</p>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-              {PEDAGOGICAL_METHODOLOGIES.map(m => {
-                const on = approach.includes(m.name) || approach.includes(m.id)
-                return (
-                  <button key={m.id} onClick={() => toggleApproach(m.name)} title={m.description} style={{
-                    padding: '5px 12px', borderRadius: 100,
-                    border: on ? `1.5px solid ${m.badgeColor}` : '1.5px solid #ddd6c9',
-                    background: on ? m.badgeColor : 'transparent',
-                    color: on ? '#fff' : '#586e75',
-                    fontSize: 12, fontWeight: 500, cursor: 'pointer', transition: 'all 0.15s', fontFamily: 'inherit',
-                  }}>
-                    {m.name}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-
-          {/* BLOCO: Cognição Psicométrica (Bloom & Dificuldade) */}
-          <details style={{ ...CARD, padding: 0, overflow: 'hidden' }} open>
-            <summary style={{ padding: '12px 16px', background: '#f5f0fb', cursor: 'pointer', fontWeight: 700, color: '#5e2a84', display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
-              <span>🧠</span>
-              <span>Distribuição Cognitiva & Dificuldade</span>
-              <span style={{ marginLeft: 'auto', fontSize: 11, color: '#8a4baf' }}>Bloom: {bloomRemember}% / {bloomApply}% / {bloomAnalyze}% / {bloomEvaluate}%</span>
-            </summary>
-            <div style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, color: '#586e75', marginBottom: 6, fontWeight: 600 }}>
-                  <span>Taxonomia de Bloom:</span>
-                  <span>Total: {bloomRemember + bloomApply + bloomAnalyze + bloomEvaluate}%</span>
-                </div>
-                {([
-                  ['Lembrar / Compreender', bloomRemember, setBloomRemember, '#2aa198'],
-                  ['Aplicar', bloomApply, setBloomApply, '#268bd2'],
-                  ['Analisar', bloomAnalyze, setBloomAnalyze, '#6c71c4'],
-                  ['Avaliar / Criar', bloomEvaluate, setBloomEvaluate, '#d33682']
-                ] as [string, number, (v: number) => void, string][]).map(([label, val, setter, color]) => (
-                  <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                    <label style={{ fontSize: 11.5, width: 140, color: '#586e75', fontWeight: 500 }}>{label}</label>
-                    <input
-                      type="range"
-                      min={0}
-                      max={100}
-                      value={val}
-                      onChange={e => setter(Number(e.target.value))}
-                      style={{ flex: 1, accentColor: color, cursor: 'pointer' }}
-                    />
-                    <span style={{ fontSize: 11.5, width: 36, textAlign: 'right', fontWeight: 700, color }}>{val}%</span>
-                  </div>
-                ))}
-              </div>
-              <hr style={{ border: 'none', borderTop: '1px solid #ede8dc', margin: '4px 0' }} />
-              <div>
-                <div style={{ fontSize: 11.5, color: '#586e75', marginBottom: 6, fontWeight: 600 }}>
-                  Calibração de Dificuldade dos Itens:
-                </div>
-                {([
-                  ['Fácil (p > 0.70)', diffEasy, setDiffEasy, '#2aa198'],
-                  ['Médio (p ≈ 0.45-0.70)', diffMedium, setDiffMedium, '#b58900'],
-                  ['Difícil (p < 0.45)', diffHard, setDiffHard, '#dc322f'],
-                  ['⭐ Desafio / Extensão', diffChallenge, setDiffChallenge, '#cb4b16']
-                ] as [string, number, (v: number) => void, string][]).map(([label, val, setter, color]) => (
-                  <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                    <label style={{ fontSize: 11.5, width: 140, color: '#586e75', fontWeight: 500 }}>{label}</label>
-                    <input
-                      type="range"
-                      min={0}
-                      max={100}
-                      value={val}
-                      onChange={e => setter(Number(e.target.value))}
-                      style={{ flex: 1, accentColor: color, cursor: 'pointer' }}
-                    />
-                    <span style={{ fontSize: 11.5, width: 36, textAlign: 'right', fontWeight: 700, color }}>{val}%</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </details>
+          {/* Caixas Retráteis de Metodologias (Científicas & do Inglês), Abordagens, Marcos e Taxonomia */}
+          <PedagogicalMethodologiesAccordion
+            selectedIds={approach}
+            onChange={setApproach}
+            bloomRemember={bloomRemember}
+            setBloomRemember={setBloomRemember}
+            bloomApply={bloomApply}
+            setBloomApply={setBloomApply}
+            bloomAnalyze={bloomAnalyze}
+            setBloomAnalyze={setBloomAnalyze}
+            bloomEvaluate={bloomEvaluate}
+            setBloomEvaluate={setBloomEvaluate}
+          />
 
           {/* BLOCO: Pontuação, Duração & Presets */}
           <details style={{ ...CARD, padding: 0, overflow: 'hidden' }}>
@@ -1250,10 +1208,69 @@ export default function ExamBuilder() {
             </div>
           )}
 
-          {/* Document Canvas */}
-          <div style={{ flex: 1, borderRadius: 20, overflow: 'hidden', border: '1px solid #ede8dc', boxShadow: '0 4px 24px rgba(0,43,54,0.04)', background: '#fff', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+          {/* Alternador de Visualização: Boxes Editáveis vs Canvas de Impressão */}
+          {result && (
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              background: '#fff',
+              padding: '8px 16px',
+              borderRadius: 14,
+              border: '1px solid #ede8dc',
+              boxShadow: '0 2px 8px rgba(0,43,54,0.03)',
+              flexShrink: 0
+            }}>
+              <span style={{ fontSize: 13, fontWeight: 800, color: '#2c1a0e' }}>
+                Modo de Visualização & Edição:
+              </span>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  type="button"
+                  onClick={() => setActiveViewTab('boxes')}
+                  style={{
+                    padding: '6px 14px',
+                    borderRadius: 10,
+                    border: activeViewTab === 'boxes' ? '1.5px solid #8b5e3c' : '1px solid #d5c8bb',
+                    background: activeViewTab === 'boxes' ? '#8b5e3c' : '#fff',
+                    color: activeViewTab === 'boxes' ? '#fff' : '#2c1a0e',
+                    fontSize: 12.5,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6
+                  }}
+                >
+                  📑 Boxes Editáveis & Reordenação
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveViewTab('canvas')}
+                  style={{
+                    padding: '6px 14px',
+                    borderRadius: 10,
+                    border: activeViewTab === 'canvas' ? '1.5px solid #8b5e3c' : '1px solid #d5c8bb',
+                    background: activeViewTab === 'canvas' ? '#8b5e3c' : '#fff',
+                    color: activeViewTab === 'canvas' ? '#fff' : '#2c1a0e',
+                    fontSize: 12.5,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6
+                  }}
+                >
+                  📄 Folha Formatada / Canvas Oficial
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Document Canvas / Editable Boxes Container */}
+          <div style={{ flex: 1, borderRadius: 20, overflowY: 'auto', border: '1px solid #ede8dc', boxShadow: '0 4px 24px rgba(0,43,54,0.04)', background: '#fff', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
             {!result && !loading ? (
-              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#93a1a1', gap: 16 }}>
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#93a1a1', gap: 16, padding: 32 }}>
                 <i className="ti ti-file-certificate" style={{ fontSize: 56, opacity: 0.3 }} />
                 <p style={{ fontSize: 16 }}>Sua prova aparecerá aqui, pronta para editar e exportar</p>
                 {!hasApi && (
@@ -1264,9 +1281,17 @@ export default function ExamBuilder() {
                 )}
               </div>
             ) : loading ? (
-              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16 }}>
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, padding: 32 }}>
                 <div style={{ width: 56, height: 56, borderRadius: '50%', border: '5px solid #eee8d5', borderTopColor: '#073642', animation: 'spin 0.8s linear infinite' }} />
-                <p style={{ color: '#586e75', fontSize: 14 }}>Construindo sua prova...</p>
+                <p style={{ color: '#586e75', fontSize: 14 }}>Construindo sua prova completa...</p>
+              </div>
+            ) : activeViewTab === 'boxes' ? (
+              <div style={{ padding: 18 }}>
+                <EditableQuestionBoxes
+                  initialContent={result}
+                  onContentChange={setResult}
+                  onAskRafinhaForQuestion={handleAskRafinhaForQuestion}
+                />
               </div>
             ) : (
               <DocumentCanvas

@@ -12,6 +12,18 @@ import PresetSelector from '@/components/PresetSelector'
 import { exportToPdf, exportToWord, OFFICIAL_SCHOOL_TEMPLATES } from '@/lib/exportUtils'
 import SourceKnowledgeHub, { SourceItem, KnowledgeMode, compileSourcesPrompt } from '@/components/SourceKnowledgeHub'
 import { getTeacherCalibrations } from '@/lib/teacherCalibrations'
+import EditableQuestionBoxes, {
+  EditableQuestionItem,
+  parseContentToQuestions,
+  compileQuestionsToHtml
+} from '@/components/EditableQuestionBoxes'
+import QuestionCountByTypeList, {
+  QuestionTypeCountMap,
+  DEFAULT_QUESTION_COUNTS,
+  computeTotalQuestions,
+  buildQuestionDistributionPrompt
+} from '@/components/QuestionCountByTypeList'
+import PedagogicalMethodologiesAccordion from '@/components/PedagogicalMethodologiesAccordion'
 import {
   getSubjectProfile,
   getLevelIds,
@@ -99,6 +111,7 @@ function buildPrompt(opts: {
   methodology: string[]
   topic: string
   qtCount: string
+  questionDistributionText?: string
   neeProfile: string
   stemLanguage?: 'pt' | 'en'
   optionLanguage?: 'en' | 'pt'
@@ -170,6 +183,7 @@ ESPECIFICAÇÕES DO EXERCÍCIO:
 - Tema/Tópico: ${opts.topic || 'tema relevante para o nível'}
 - ${stemInstruction}
 - ${optionInstruction}
+${opts.questionDistributionText ? `\n${opts.questionDistributionText}\n` : ''}
 ${opts.customPrompt ? `\nDIRETRIZES DO PROFESSOR:\n"${opts.customPrompt}"\n` : ''}
 ${opts.neeProfile ? `\nADAPTAÇÃO ESPECIAL: ${neeInstructions[opts.neeProfile] || ''}` : ''}
 ${methodologyInstructions}
@@ -234,6 +248,8 @@ export default function QuickGenerate() {
   const [topic, setTopic] = useState('')
   const [customPrompt, setCustomPrompt] = useState('')
   const [qtCount, setQtCount] = useState(() => cal.defaultQuestionCount || '10')
+  const [questionCounts, setQuestionCounts] = useState<QuestionTypeCountMap>(DEFAULT_QUESTION_COUNTS)
+  const [activeViewTab, setActiveViewTab] = useState<'boxes' | 'canvas'>('boxes')
   const [neeProfile, setNeeProfile] = useState('')
   const [showNeePanel, setShowNeePanel] = useState(false)
   const [selectedSchoolTemplate, setSelectedSchoolTemplate] = useState<string>('')
@@ -362,8 +378,14 @@ export default function QuickGenerate() {
         }
       }
 
+      const totalCalculatedQuestions = computeTotalQuestions(questionCounts) || Number(qtCount) || 10
+      const distributionPrompt = buildQuestionDistributionPrompt(questionCounts)
+
       const prompt = buildPrompt({
-        types, cefr, grade, skill, methodology, topic, qtCount, neeProfile, customPrompt,
+        types, cefr, grade, skill, methodology, topic,
+        qtCount: String(totalCalculatedQuestions),
+        questionDistributionText: distributionPrompt,
+        neeProfile, customPrompt,
         stemLanguage, optionLanguage,
         header: { ...header, title: header.title || effectiveTitle },
         libraryContext: libContext,
@@ -408,6 +430,36 @@ export default function QuickGenerate() {
       setError(e instanceof Error ? e.message : 'Erro desconhecido.')
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function handleAskRafinhaForQuestion(
+    questionIndex: number,
+    currentQuestion: EditableQuestionItem,
+    userInstruction: string
+  ): Promise<string | void> {
+    if (!selectedApi) return
+    const prompt = `Você é a assistente pedagógica Rafinha IA. Reformule e aprimore a seguinte questão de exercício conforme a instrução do professor:
+INSTRUÇÃO DO PROFESSOR: "${userInstruction}"
+QUESTÃO ATUAL:
+Tipo: ${currentQuestion.typeLabel}
+Enunciado: ${currentQuestion.stem}
+${currentQuestion.options ? `Alternativas:\n${currentQuestion.options.map(o => `${o.letter}) ${o.text}`).join('\n')}` : ''}
+Gabarito atual: ${currentQuestion.answerKey || 'Não definido'}
+
+Retorne a questão reformulada no formato padrão (Enunciado, Alternativas se aplicável, e Gabarito/Resolução):`
+
+    const raw = await callApi(selectedApi, prompt)
+    const newQuestions = parseContentToQuestions(raw)
+    if (newQuestions.length > 0) {
+      const parsed = parseContentToQuestions(result)
+      parsed[questionIndex] = {
+        ...parsed[questionIndex],
+        stem: newQuestions[0].stem,
+        options: newQuestions[0].options || parsed[questionIndex].options,
+        answerKey: newQuestions[0].answerKey || parsed[questionIndex].answerKey
+      }
+      setResult(compileQuestionsToHtml(parsed))
     }
   }
 
@@ -742,74 +794,28 @@ export default function QuickGenerate() {
             </select>
           </div>
 
-          {/* Quantity */}
-          <div style={CARD}>
-            <label style={SL}> Quantidade de questões: <strong>{qtCount}</strong></label>
-            <input type="range" min="3" max="30" value={qtCount} onChange={e => setQtCount(e.target.value)}
-              style={{ width: '100%', accentColor: '#073642' }} />
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#93a1a1' }}>
-              <span>3</span><span>30</span>
-            </div>
-            {types.length > 0 && Number(qtCount) < types.length * 2 && (
-              <div style={{ background: '#fdf6e2', border: '1px solid #b58900', borderRadius: 8, padding: '8px 10px', fontSize: 11, color: '#856404', marginTop: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
-                <i className="ti ti-alert-triangle" style={{ fontSize: 15, color: '#b58900', flexShrink: 0 }} />
-                <span><strong>Aviso Psicométrico:</strong> {types.length} tipos para {qtCount} questões ({(Number(qtCount)/types.length).toFixed(1)} q/tipo). Recomendamos pelo menos 2 a 3 itens por tipo para consistência diagnóstica.</span>
-              </div>
-            )}
-          </div>
+          {/* Numerador de Questões Detalhado por Tipo */}
+          <QuestionCountByTypeList
+            counts={questionCounts}
+            onChange={counts => {
+              setQuestionCounts(counts)
+              setQtCount(String(computeTotalQuestions(counts)))
+            }}
+          />
 
-          {/* Question Types */}
-          <div style={CARD}>
-            <label style={SL}> Tipos de questão</label>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-              {QTYPES.map(qt => {
-                const sel = types.includes(qt.label)
-                return (
-                  <button key={qt.label} onClick={() => toggleType(qt.label)} style={{
-                    padding: '8px 10px', borderRadius: 10,
-                    border: sel ? '2px solid #073642' : '1px solid #e8e0d0',
-                    background: sel ? '#073642' : '#f5f0e8',
-                    color: sel ? '#fff' : '#586e75',
-                    cursor: 'pointer', fontSize: 11, textAlign: 'left', display: 'flex', alignItems: 'center', gap: 6,
-                  }}>
-                    <i className={`ti ${qt.icon}`} /> {qt.label}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-
-          {/* Methodologies */}
-          <div style={CARD}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <label style={{ ...SL, marginBottom: 0 }}> Metodologias Ativas</label>
-              <span style={{ fontSize: 11, color: '#93a1a1' }}>{methodology.length} selecionada(s)</span>
-            </div>
-            {(['Metodologias Ativas', 'Abordagens ELT', 'Marcos & Taxonomias'] as const).map(cat => {
-              const items = PEDAGOGICAL_METHODOLOGIES.filter(m => m.category === cat)
-              return (
-                <div key={cat}>
-                  <span style={{ fontSize: 10, fontWeight: 700, color: '#93a1a1', textTransform: 'uppercase', letterSpacing: '0.8px', display: 'block', marginBottom: 6 }}>{cat}</span>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                    {items.map(m => {
-                      const sel = methodology.includes(m.name) || methodology.includes(m.id)
-                      return (
-                        <button key={m.id} onClick={() => toggleMethod(m.name)} title={m.description} style={{
-                          padding: '4px 10px', borderRadius: 14,
-                          border: sel ? `1.5px solid ${m.badgeColor}` : '1px solid #e8e0d0',
-                          background: sel ? m.badgeColor : '#f5f0e8',
-                          color: sel ? '#fff' : '#586e75',
-                          cursor: 'pointer', fontSize: 11, fontWeight: 600, transition: 'all 0.15s',
-                        }}>
-                          {m.name}
-                        </button>
-                      )
-                    })}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
+          {/* Caixas Retráteis de Metodologias (Científicas & do Inglês), Abordagens, Marcos e Taxonomia */}
+          <PedagogicalMethodologiesAccordion
+            selectedIds={methodology}
+            onChange={setMethodology}
+            bloomRemember={bloomRemember}
+            setBloomRemember={setBloomRemember}
+            bloomApply={bloomApply}
+            setBloomApply={setBloomApply}
+            bloomAnalyze={bloomAnalyze}
+            setBloomAnalyze={setBloomAnalyze}
+            bloomEvaluate={bloomEvaluate}
+            setBloomEvaluate={setBloomEvaluate}
+          />
 
           {/* NEE */}
           <div style={CARD}>
@@ -841,47 +847,6 @@ export default function QuickGenerate() {
               </div>
             )}
           </div>
-
-          {/* BLOCO: Cognição & Dificuldade Psicométrica */}
-          <details style={{ ...CARD, padding: 0, overflow: 'hidden' }}>
-            <summary style={{ padding: '10px 14px', background: '#f5f0fb', cursor: 'pointer', fontWeight: 700, color: '#5e2a84', display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5 }}>
-              <span>🧠</span>
-              <span>Cognição & Dificuldade (Bloom)</span>
-            </summary>
-            <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <div>
-                <div style={{ fontSize: 11, color: '#586e75', marginBottom: 4, fontWeight: 600 }}>Taxonomia de Bloom:</div>
-                {([
-                  ['Lembrar / Compreender', bloomRemember, setBloomRemember, '#2aa198'],
-                  ['Aplicar', bloomApply, setBloomApply, '#268bd2'],
-                  ['Analisar', bloomAnalyze, setBloomAnalyze, '#6c71c4'],
-                  ['Avaliar / Criar', bloomEvaluate, setBloomEvaluate, '#d33682']
-                ] as [string, number, (v: number) => void, string][]).map(([label, val, setter, color]) => (
-                  <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
-                    <label style={{ fontSize: 11, width: 130, color: '#586e75' }}>{label}</label>
-                    <input type="range" min={0} max={100} value={val} onChange={e => setter(Number(e.target.value))} style={{ flex: 1, accentColor: color }} />
-                    <span style={{ fontSize: 11, width: 30, textAlign: 'right', fontWeight: 700, color }}>{val}%</span>
-                  </div>
-                ))}
-              </div>
-              <hr style={{ border: 'none', borderTop: '1px solid #ede8dc', margin: '2px 0' }} />
-              <div>
-                <div style={{ fontSize: 11, color: '#586e75', marginBottom: 4, fontWeight: 600 }}>Dificuldade dos Itens:</div>
-                {([
-                  ['Fácil (p > 0.70)', diffEasy, setDiffEasy, '#2aa198'],
-                  ['Médio (p ≈ 0.50)', diffMedium, setDiffMedium, '#b58900'],
-                  ['Difícil (p < 0.45)', diffHard, setDiffHard, '#dc322f'],
-                  ['⭐ Desafio', diffChallenge, setDiffChallenge, '#cb4b16']
-                ] as [string, number, (v: number) => void, string][]).map(([label, val, setter, color]) => (
-                  <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
-                    <label style={{ fontSize: 11, width: 130, color: '#586e75' }}>{label}</label>
-                    <input type="range" min={0} max={100} value={val} onChange={e => setter(Number(e.target.value))} style={{ flex: 1, accentColor: color }} />
-                    <span style={{ fontSize: 11, width: 30, textAlign: 'right', fontWeight: 700, color }}>{val}%</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </details>
 
         </div>
 
@@ -972,25 +937,94 @@ export default function QuickGenerate() {
             </div>
           )}
 
-          {/* Document Canvas */}
-          <div style={{ flex: 1, minHeight: 0 }}>
-            <DocumentCanvas
-              content={result}
-              onContentChange={setResult}
-              hideHeader={hideHeader}
-              onToggleHeader={() => setHideHeader(h => !h)}
-              headerData={{
-                school: header.school || 'Nome da Escola',
-                teacher: header.teacher || 'Professor(a)',
-                title: header.title || topic || 'Exercício Gerado',
-              }}
-              onHeaderChange={patch => setHeader(h => ({
-                ...h,
-                ...(patch.headerSchool !== undefined ? { school: patch.headerSchool } : {}),
-                ...(patch.headerTeacher !== undefined ? { teacher: patch.headerTeacher } : {}),
-                ...(patch.headerTitle !== undefined ? { title: patch.headerTitle } : {}),
-              }))}
-            />
+          {/* Alternador de Visualização: Boxes Editáveis vs Canvas de Impressão */}
+          {result && (
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              background: '#fff',
+              padding: '8px 16px',
+              borderRadius: 14,
+              border: '1px solid #ede8dc',
+              boxShadow: '0 2px 8px rgba(0,43,54,0.03)',
+              flexShrink: 0
+            }}>
+              <span style={{ fontSize: 13, fontWeight: 800, color: '#2c1a0e' }}>
+                Modo de Visualização & Edição:
+              </span>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  type="button"
+                  onClick={() => setActiveViewTab('boxes')}
+                  style={{
+                    padding: '6px 14px',
+                    borderRadius: 10,
+                    border: activeViewTab === 'boxes' ? '1.5px solid #8b5e3c' : '1px solid #d5c8bb',
+                    background: activeViewTab === 'boxes' ? '#8b5e3c' : '#fff',
+                    color: activeViewTab === 'boxes' ? '#fff' : '#2c1a0e',
+                    fontSize: 12.5,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6
+                  }}
+                >
+                  📑 Boxes Editáveis & Reordenação
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveViewTab('canvas')}
+                  style={{
+                    padding: '6px 14px',
+                    borderRadius: 10,
+                    border: activeViewTab === 'canvas' ? '1.5px solid #8b5e3c' : '1px solid #d5c8bb',
+                    background: activeViewTab === 'canvas' ? '#8b5e3c' : '#fff',
+                    color: activeViewTab === 'canvas' ? '#fff' : '#2c1a0e',
+                    fontSize: 12.5,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6
+                  }}
+                >
+                  📄 Folha Formatada / Canvas Oficial
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Document Canvas / Editable Boxes Container */}
+          <div style={{ flex: 1, overflowY: 'auto', borderRadius: 20, border: '1px solid #ede8dc', boxShadow: '0 4px 24px rgba(0,43,54,0.04)', background: '#fff', minHeight: 0 }}>
+            {activeViewTab === 'boxes' && result ? (
+              <div style={{ padding: 18 }}>
+                <EditableQuestionBoxes
+                  initialContent={result}
+                  onContentChange={setResult}
+                  onAskRafinhaForQuestion={handleAskRafinhaForQuestion}
+                />
+              </div>
+            ) : (
+              <DocumentCanvas
+                content={result}
+                onContentChange={setResult}
+                hideHeader={hideHeader}
+                onToggleHeader={() => setHideHeader(h => !h)}
+                headerData={{
+                  school: header.school || 'Nome da Escola',
+                  teacher: header.teacher || 'Professor(a)',
+                  title: header.title || topic || 'Exercício Gerado',
+                }}
+                onHeaderChange={patch => setHeader(h => ({
+                  ...h,
+                  ...(patch.headerSchool !== undefined ? { school: patch.headerSchool } : {}),
+                  ...(patch.headerTeacher !== undefined ? { teacher: patch.headerTeacher } : {}),
+                  ...(patch.headerTitle !== undefined ? { title: patch.headerTitle } : {}),
+                }))}
+              />
+            )}
           </div>
         </div>
       </div>
