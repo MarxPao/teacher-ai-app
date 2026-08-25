@@ -104,15 +104,37 @@ Estrutura requerida no parecer:
 
 Utilize tom formal, embasado e respeitoso em português.`;
 
-      const res = await fetch('/api/agent', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messages: [{ role: 'user', content: prompt }]
-        })
-      });
-      const data = await res.json();
-      let text = data?.reply || data?.content || '';
+      let text = '';
+
+      // Tentativa 1: Via executeUnifiedAiCall com APIs configuradas no client
+      try {
+        const { getAvailableApisForSelect, executeUnifiedAiCall } = await import('@/lib/autoApiSelector');
+        const apis = getAvailableApisForSelect();
+        if (apis.length > 0) {
+          text = await executeUnifiedAiCall(apis[0], prompt);
+        }
+      } catch {}
+
+      // Tentativa 2: Via endpoint de agente
+      if (!text) {
+        try {
+          const storedApis = JSON.parse(localStorage.getItem('teacher_apis') || '[]');
+          const userKeys: Record<string, string> = {};
+          storedApis.forEach((a: any) => { if (a.key) userKeys[`${a.provider}_key`] = a.key });
+          const res = await fetch('/api/agent', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              messages: [{ role: 'user', content: prompt }],
+              userKeys,
+            })
+          });
+          if (res.ok) {
+            const data = await res.json();
+            text = data?.reply || data?.content || '';
+          }
+        } catch {}
+      }
 
       if (!text) {
         text = `PARECER PEDAGÓGICO MENSAL - REFERÊNCIA: ${selectedMonth}\n\n` +
