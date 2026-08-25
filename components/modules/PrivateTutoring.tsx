@@ -58,10 +58,12 @@ export interface PrivateStudent {
   guardianName?: string
   phone?: string
   email?: string
-  billingType: 'mensal' | 'por_aula' // Mensalidade fixa vs Cobrança por aula
-  monthlyFee: number // Valor mensal em R$
-  feePerLesson?: number // Valor por aula em R$ quando billingType === 'por_aula'
-  dueDay: number // Dia do vencimento (1-31)
+  billingType: 'mensal' | 'semanal' | 'por_aula' // Mensalidade fixa, Cobrança semanal, ou Por aula
+  monthlyFee: number // Valor mensal total/estimado em R$
+  feePerLesson?: number // Valor unitário por aula em R$ (ex: R$ 80)
+  lessonsPerWeek?: number // Qtd de aulas por semana (ex: 1, 2, 3, 4...)
+  weeklyFee?: number // Valor semanal somado (feePerLesson * lessonsPerWeek)
+  dueDay: number // Dia do vencimento (1-31) ou dia da semana
   paymentMethod?: 'PIX' | 'Cartão' | 'Boleto' | 'Dinheiro'
   lastPaymentDate?: string
   modality: 'Presencial' | 'Online' | 'Híbrido'
@@ -194,9 +196,10 @@ export default function PrivateTutoring() {
   const [formGuardian, setFormGuardian] = useState('')
   const [formPhone, setFormPhone] = useState('')
   const [formEmail, setFormEmail] = useState('')
-  const [formBillingType, setFormBillingType] = useState<'mensal' | 'por_aula'>('mensal')
-  const [formFee, setFormFee] = useState('450')
+  const [formBillingType, setFormBillingType] = useState<'mensal' | 'semanal' | 'por_aula'>('semanal')
+  const [formFee, setFormFee] = useState('640')
   const [formFeePerLesson, setFormFeePerLesson] = useState('80')
+  const [formLessonsPerWeek, setFormLessonsPerWeek] = useState('2')
   const [formDueDay, setFormDueDay] = useState('10')
   const [formModality, setFormModality] = useState<'Presencial' | 'Online' | 'Híbrido'>('Online')
   const [formDaysOfWeek, setFormDaysOfWeek] = useState<number[]>([2, 4])
@@ -473,10 +476,14 @@ export default function PrivateTutoring() {
     (s.guardianName || '').toLowerCase().includes(search.toLowerCase())
   )
 
-  // ─── KPIs Financeiros & Estatísticos Globais (Com suporte a Mensal vs Por Aula) ───
+  // ─── KPIs Financeiros & Estatísticos Globais (Com suporte a Semanal, Mensal e Por Aula) ───
   const totalExpectedRevenue = students.reduce((acc, s) => {
+    if (s.billingType === 'semanal') {
+      const weekly = s.weeklyFee || ((s.feePerLesson || 80) * (s.lessonsPerWeek || (s.daysOfWeek?.length || 2)))
+      return acc + (weekly * 4)
+    }
     if (s.billingType === 'por_aula') {
-      const lessonsCount = (s.lessonsHistory || []).length || 4
+      const lessonsCount = (s.lessonsHistory || []).length || ((s.lessonsPerWeek || 2) * 4)
       return acc + ((s.feePerLesson || 80) * lessonsCount)
     }
     return acc + (s.monthlyFee || 0)
@@ -485,8 +492,12 @@ export default function PrivateTutoring() {
   const totalPaidRevenue = students
     .filter(s => s.paymentStatus === 'pago' || s.paymentStatus === 'em_dia')
     .reduce((acc, s) => {
+      if (s.billingType === 'semanal') {
+        const weekly = s.weeklyFee || ((s.feePerLesson || 80) * (s.lessonsPerWeek || (s.daysOfWeek?.length || 2)))
+        return acc + (weekly * 4)
+      }
       if (s.billingType === 'por_aula') {
-        const completed = (s.lessonsHistory || []).filter(l => l.status === 'realizada').length || 4
+        const completed = (s.lessonsHistory || []).filter(l => l.status === 'realizada').length || ((s.lessonsPerWeek || 2) * 4)
         return acc + ((s.feePerLesson || 80) * completed)
       }
       return acc + (s.monthlyFee || 0)
@@ -508,9 +519,10 @@ export default function PrivateTutoring() {
     setFormGuardian('')
     setFormPhone('')
     setFormEmail('')
-    setFormBillingType('mensal')
-    setFormFee('450')
+    setFormBillingType('semanal')
     setFormFeePerLesson('80')
+    setFormLessonsPerWeek('2')
+    setFormFee('640')
     setFormDueDay('10')
     setFormModality('Online')
     setFormDaysOfWeek([2, 4])
@@ -530,9 +542,12 @@ export default function PrivateTutoring() {
     setFormGuardian(st.guardianName || '')
     setFormPhone(st.phone || '')
     setFormEmail(st.email || '')
-    setFormBillingType(st.billingType || 'mensal')
-    setFormFee(st.monthlyFee ? String(st.monthlyFee) : '450')
-    setFormFeePerLesson(st.feePerLesson ? String(st.feePerLesson) : '80')
+    setFormBillingType(st.billingType || 'semanal')
+    const lPerWeek = st.lessonsPerWeek || (st.daysOfWeek?.length || 2)
+    const fPerLesson = st.feePerLesson || 80
+    setFormLessonsPerWeek(String(lPerWeek))
+    setFormFeePerLesson(String(fPerLesson))
+    setFormFee(st.monthlyFee ? String(st.monthlyFee) : String(fPerLesson * lPerWeek * 4))
     setFormDueDay(st.dueDay ? String(st.dueDay) : '10')
     setFormModality(st.modality || 'Online')
     setFormDaysOfWeek(st.daysOfWeek || [2, 4])
@@ -549,6 +564,10 @@ export default function PrivateTutoring() {
 
     const daysText = formDaysOfWeek.map(d => WEEK_DAYS.find(w => w.id === d)?.name).filter(Boolean).join(' e ')
     const autoSchedule = daysText ? `${daysText} · ${formTimeStart} às ${formTimeEnd}` : formSchedule.trim()
+    const numLessons = parseInt(formLessonsPerWeek) || (formDaysOfWeek.length || 1)
+    const valLesson = parseFloat(formFeePerLesson) || 0
+    const weeklyTotal = valLesson * numLessons
+    const monthlyTotal = formBillingType === 'semanal' ? (weeklyTotal * 4) : (parseFloat(formFee) || weeklyTotal * 4)
 
     if (editingStudent) {
       const updated = students.map(s => s.id === editingStudent.id ? {
@@ -561,8 +580,10 @@ export default function PrivateTutoring() {
         phone: formPhone.trim(),
         email: formEmail.trim(),
         billingType: formBillingType,
-        monthlyFee: parseFloat(formFee) || 0,
-        feePerLesson: parseFloat(formFeePerLesson) || 0,
+        monthlyFee: monthlyTotal,
+        feePerLesson: valLesson,
+        lessonsPerWeek: numLessons,
+        weeklyFee: weeklyTotal,
         dueDay: parseInt(formDueDay) || 10,
         modality: formModality,
         daysOfWeek: formDaysOfWeek,
@@ -583,8 +604,10 @@ export default function PrivateTutoring() {
         phone: formPhone.trim(),
         email: formEmail.trim(),
         billingType: formBillingType,
-        monthlyFee: parseFloat(formFee) || 0,
-        feePerLesson: parseFloat(formFeePerLesson) || 0,
+        monthlyFee: monthlyTotal,
+        feePerLesson: valLesson,
+        lessonsPerWeek: numLessons,
+        weeklyFee: weeklyTotal,
         dueDay: parseInt(formDueDay) || 10,
         paymentMethod: 'PIX',
         modality: formModality,
@@ -612,11 +635,13 @@ export default function PrivateTutoring() {
   }
 
   const handleDeleteStudent = (id: string) => {
-    if (!confirm('Deseja realmente remover este cadastro e todo o seu histórico?')) return
+    if (!confirm('Deseja realmente excluir este aluno/turma e todo seu histórico?')) return
     const updated = students.filter(s => s.id !== id)
     saveStudentsAndSync(updated)
     deletePrivateStudentFromSupabase(id).catch(() => {})
-    if (selectedStudentId === id) setSelectedStudentId(null)
+    if (selectedStudentId === id) {
+      setSelectedStudentId(updated[0]?.id || '')
+    }
   }
 
   const togglePaymentStatus = (id: string) => {
@@ -631,11 +656,15 @@ export default function PrivateTutoring() {
   }
 
   const generateWhatsAppReminder = (st: PrivateStudent) => {
-    const amountStr = st.billingType === 'por_aula'
-      ? `R$ ${st.feePerLesson || 80},00 por aula ministrada`
-      : `mensalidade de R$ ${st.monthlyFee},00 (Dia ${st.dueDay})`
+    let amountStr = `mensalidade de R$ ${st.monthlyFee},00 (Dia ${st.dueDay})`
+    if (st.billingType === 'semanal') {
+      const weekly = st.weeklyFee || ((st.feePerLesson || 80) * (st.lessonsPerWeek || 2))
+      amountStr = `cobrança semanal de R$ ${weekly},00 (${st.lessonsPerWeek || 2}x na semana a R$ ${st.feePerLesson || 80}/aula)`
+    } else if (st.billingType === 'por_aula') {
+      amountStr = `R$ ${st.feePerLesson || 80},00 por aula ministrada`
+    }
     const text = encodeURIComponent(
-      `Olá ${st.guardianName || st.name}! Passando para lembrar sobre a aula de ${st.subject} e o pagamento (${amountStr}). Qualquer dúvida estou à disposição! 👩‍🏫`
+      `Olá ${st.guardianName || st.name}! Passando para lembrar sobre as aulas particulares de ${st.subject} e o pagamento (${amountStr}). Qualquer dúvida estou à disposição! 👩‍🏫`
     )
     const phone = (st.phone || '').replace(/\D/g, '')
     if (phone) window.open(`https://wa.me/55${phone}?text=${text}`, '_blank')
@@ -1606,14 +1635,23 @@ export default function PrivateTutoring() {
                         <span style={{ fontSize: 12.5 }}>{st.modality}</span>
                       </td>
                       <td style={TdStyle}>
-                        <span style={{ fontSize: 12, fontWeight: 700, color: '#586e75' }}>
-                          {st.billingType === 'por_aula' ? 'Por Aula' : 'Mensalidade'}
+                        <span style={BadgeStyle(st.billingType === 'semanal' ? '#fef3c7' : st.billingType === 'por_aula' ? '#e0f2fe' : '#fdf3e7', st.billingType === 'semanal' ? '#b58900' : st.billingType === 'por_aula' ? '#0284c7' : '#8b5e3c')}>
+                          {st.billingType === 'semanal' ? `🗓️ Semanal (${st.lessonsPerWeek || 2}x/sem)` : st.billingType === 'por_aula' ? '🎟️ Por Aula' : '📅 Mensalidade'}
                         </span>
                       </td>
                       <td style={TdStyle}>
                         <strong style={{ fontSize: 13, color: '#2c1a0e' }}>
-                          {st.billingType === 'por_aula' ? `R$ ${st.feePerLesson || 80}/aula` : `R$ ${st.monthlyFee},00/mês`}
+                          {st.billingType === 'semanal'
+                            ? `R$ ${st.weeklyFee || ((st.feePerLesson || 80) * (st.lessonsPerWeek || 2))},00/sem`
+                            : st.billingType === 'por_aula'
+                            ? `R$ ${st.feePerLesson || 80}/aula`
+                            : `R$ ${st.monthlyFee},00/mês`}
                         </strong>
+                        {st.billingType === 'semanal' && (
+                          <div style={{ fontSize: 10.5, color: '#8b5e3c', fontWeight: 600 }}>
+                            ≈ R$ {(st.weeklyFee || ((st.feePerLesson || 80) * (st.lessonsPerWeek || 2))) * 4},00/mês
+                          </div>
+                        )}
                       </td>
                       <td style={TdStyle}>
                         <button
@@ -1681,7 +1719,9 @@ export default function PrivateTutoring() {
                 <tbody>
                   {filteredStudents.map(st => {
                     const completedLessons = (st.lessonsHistory || []).filter(l => l.status === 'realizada').length
-                    const calculatedTotal = st.billingType === 'por_aula'
+                    const calculatedTotal = st.billingType === 'semanal'
+                      ? (st.weeklyFee || ((st.feePerLesson || 80) * (st.lessonsPerWeek || 2))) * 4
+                      : st.billingType === 'por_aula'
                       ? (st.feePerLesson || 80) * (completedLessons || 4)
                       : (st.monthlyFee || 0)
 
@@ -1692,14 +1732,23 @@ export default function PrivateTutoring() {
                           <div style={{ fontSize: 12, color: '#8b5e3c' }}>{st.subject} ({st.type === 'turma' ? 'Turma' : 'Individual'})</div>
                         </td>
                         <td style={TdStyle}>
-                          <span style={BadgeStyle(st.billingType === 'por_aula' ? '#e0f2fe' : '#fdf3e7', st.billingType === 'por_aula' ? '#0284c7' : '#8b5e3c')}>
-                            {st.billingType === 'por_aula' ? 'Por Aula' : 'Mensalidade Fixa'}
+                          <span style={BadgeStyle(st.billingType === 'semanal' ? '#fef3c7' : st.billingType === 'por_aula' ? '#e0f2fe' : '#fdf3e7', st.billingType === 'semanal' ? '#b58900' : st.billingType === 'por_aula' ? '#0284c7' : '#8b5e3c')}>
+                            {st.billingType === 'semanal' ? '🗓️ Semanal' : st.billingType === 'por_aula' ? '🎟️ Por Aula' : '📅 Mensalidade Fixa'}
                           </span>
                         </td>
                         <td style={TdStyle}>
                           <strong style={{ fontSize: 13.5, color: '#2c1a0e' }}>
-                            {st.billingType === 'por_aula' ? `R$ ${st.feePerLesson || 80}/aula` : `R$ ${st.monthlyFee}/mês`}
+                            {st.billingType === 'semanal'
+                              ? `R$ ${st.feePerLesson || 80},00/aula`
+                              : st.billingType === 'por_aula'
+                              ? `R$ ${st.feePerLesson || 80}/aula`
+                              : `R$ ${st.monthlyFee}/mês`}
                           </strong>
+                          {st.billingType === 'semanal' && (
+                            <div style={{ fontSize: 11, color: '#8b5e3c', fontWeight: 600 }}>
+                              {st.lessonsPerWeek || 2}x/semana (R$ {st.weeklyFee || ((st.feePerLesson || 80) * (st.lessonsPerWeek || 2))},00/sem)
+                            </div>
+                          )}
                         </td>
                         <td style={TdStyle}>
                           <span style={{ fontSize: 13, fontWeight: 700 }}>{completedLessons} aula(s)</span>
@@ -1708,6 +1757,11 @@ export default function PrivateTutoring() {
                           <strong style={{ fontSize: 14, color: '#2e7d32' }}>
                             R$ {calculatedTotal.toLocaleString('pt-BR')},00
                           </strong>
+                          {st.billingType === 'semanal' && (
+                            <div style={{ fontSize: 11, color: '#2e7d32', fontWeight: 600 }}>
+                              (R$ {st.weeklyFee || ((st.feePerLesson || 80) * (st.lessonsPerWeek || 2))},00/semana)
+                            </div>
+                          )}
                         </td>
                         <td style={TdStyle}>
                           <button
@@ -2020,8 +2074,14 @@ export default function PrivateTutoring() {
                 <div style={{ fontSize: 12.5, color: '#665c54', lineHeight: 1.5, marginBottom: 14 }}>
                   <div><strong>Matéria:</strong> {st.subject}</div>
                   <div><strong>Responsável:</strong> {st.guardianName || 'Próprio aluno'}</div>
-                  <div><strong>Telefone:</strong> {st.phone || 'Não informado'}</div>
-                  <div><strong>Cobrança:</strong> {st.billingType === 'por_aula' ? `R$ ${st.feePerLesson || 80}/aula` : `R$ ${st.monthlyFee}/mês (Dia ${st.dueDay})`}</div>
+                  <div>
+                    <strong>Cobrança:</strong>{' '}
+                    {st.billingType === 'semanal'
+                      ? `🗓️ R$ ${st.weeklyFee || ((st.feePerLesson || 80) * (st.lessonsPerWeek || 2))},00/sem (${st.lessonsPerWeek || 2}x/sem · R$ ${st.feePerLesson || 80}/aula)`
+                      : st.billingType === 'por_aula'
+                      ? `🎟️ R$ ${st.feePerLesson || 80}/aula`
+                      : `📅 R$ ${st.monthlyFee}/mês (Dia ${st.dueDay})`}
+                  </div>
                   <div><strong>Horário:</strong> {st.scheduleInfo}</div>
                   <div><strong>Modalidade:</strong> {st.modality}</div>
                 </div>
@@ -2196,35 +2256,192 @@ export default function PrivateTutoring() {
                 </div>
               </div>
 
-              {/* Modelo de Cobrança: Mensal vs Por Aula */}
-              <div style={{ background: '#fdf8f2', padding: 12, borderRadius: 10, border: '1px solid rgba(139,115,85,0.15)', marginBottom: 12 }}>
-                <label style={{ ...LabelStyle, color: '#8b5e3c' }}>Modelo de Cobrança Financeira:</label>
-                <div style={{ display: 'flex', gap: 10, marginBottom: 8 }}>
-                  <label style={{ fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
-                    <input type="radio" checked={formBillingType === 'mensal'} onChange={() => setFormBillingType('mensal')} />
-                    Mensalidade Fixa
+              {/* Modelo de Cobrança: Semanal vs Mensal vs Por Aula */}
+              <div style={{ background: '#fdf8f2', padding: 14, borderRadius: 12, border: '1px solid rgba(139,115,85,0.2)', marginBottom: 14 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                  <label style={{ ...LabelStyle, color: '#8b5e3c', margin: 0 }}>Modelo de Cobrança Financeira:</label>
+                  <span style={{ fontSize: 11, color: '#8b5e3c', fontWeight: 700, background: '#f5efe6', padding: '2px 8px', borderRadius: 6 }}>
+                    Cálculo Inteligente ⚡
+                  </span>
+                </div>
+
+                <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+                  <label style={{
+                    fontSize: 12, display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer',
+                    padding: '6px 10px', borderRadius: 8,
+                    background: formBillingType === 'semanal' ? '#8b5e3c' : '#fff',
+                    color: formBillingType === 'semanal' ? '#fff' : '#2c1a0e',
+                    border: '1px solid rgba(139,115,85,0.3)', fontWeight: 700
+                  }}>
+                    <input
+                      type="radio"
+                      name="billingTypeRadio"
+                      checked={formBillingType === 'semanal'}
+                      onChange={() => {
+                        setFormBillingType('semanal')
+                        const n = parseInt(formLessonsPerWeek) || 1
+                        const v = parseFloat(formFeePerLesson) || 0
+                        setFormFee(String(n * v * 4))
+                      }}
+                      style={{ accentColor: '#8b5e3c' }}
+                    />
+                    🗓️ Cobrança Semanal
                   </label>
-                  <label style={{ fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
-                    <input type="radio" checked={formBillingType === 'por_aula'} onChange={() => setFormBillingType('por_aula')} />
-                    Cobrança Por Aula Ministrada
+
+                  <label style={{
+                    fontSize: 12, display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer',
+                    padding: '6px 10px', borderRadius: 8,
+                    background: formBillingType === 'mensal' ? '#8b5e3c' : '#fff',
+                    color: formBillingType === 'mensal' ? '#fff' : '#2c1a0e',
+                    border: '1px solid rgba(139,115,85,0.3)', fontWeight: 700
+                  }}>
+                    <input
+                      type="radio"
+                      name="billingTypeRadio"
+                      checked={formBillingType === 'mensal'}
+                      onChange={() => {
+                        setFormBillingType('mensal')
+                        const n = parseInt(formLessonsPerWeek) || 1
+                        const v = parseFloat(formFeePerLesson) || 0
+                        setFormFee(String(n * v * 4))
+                      }}
+                      style={{ accentColor: '#8b5e3c' }}
+                    />
+                    📅 Mensalidade Fixa
+                  </label>
+
+                  <label style={{
+                    fontSize: 12, display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer',
+                    padding: '6px 10px', borderRadius: 8,
+                    background: formBillingType === 'por_aula' ? '#8b5e3c' : '#fff',
+                    color: formBillingType === 'por_aula' ? '#fff' : '#2c1a0e',
+                    border: '1px solid rgba(139,115,85,0.3)', fontWeight: 700
+                  }}>
+                    <input
+                      type="radio"
+                      name="billingTypeRadio"
+                      checked={formBillingType === 'por_aula'}
+                      onChange={() => setFormBillingType('por_aula')}
+                      style={{ accentColor: '#8b5e3c' }}
+                    />
+                    🎟️ Por Aula Ministrada
                   </label>
                 </div>
 
-                {formBillingType === 'mensal' ? (
+                {/* Slots: Valor por Aula e Qtd de Aulas por Semana */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+                  <div>
+                    <label style={LabelStyle}>Valor por Aula (R$):</label>
+                    <input
+                      type="number"
+                      value={formFeePerLesson}
+                      onChange={e => {
+                        const val = e.target.value
+                        setFormFeePerLesson(val)
+                        const n = parseInt(formLessonsPerWeek) || 1
+                        const v = parseFloat(val) || 0
+                        setFormFee(String(n * v * 4))
+                      }}
+                      placeholder="Ex: 80"
+                      style={InputStyle}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={LabelStyle}>Aulas por Semana (Qtd):</label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="14"
+                      value={formLessonsPerWeek}
+                      onChange={e => {
+                        const count = e.target.value
+                        setFormLessonsPerWeek(count)
+                        const n = parseInt(count) || 1
+                        const v = parseFloat(formFeePerLesson) || 0
+                        setFormFee(String(n * v * 4))
+                      }}
+                      placeholder="Ex: 2"
+                      style={InputStyle}
+                    />
+                  </div>
+                </div>
+
+                {/* Resumo da Soma Automática */}
+                {(() => {
+                  const n = parseInt(formLessonsPerWeek) || 1
+                  const v = parseFloat(formFeePerLesson) || 0
+                  const weeklySum = n * v
+                  const monthlyEstimate = weeklySum * 4
+
+                  return (
+                    <div style={{
+                      background: '#fff',
+                      border: '1px solid rgba(139,115,85,0.25)',
+                      borderRadius: 10,
+                      padding: '10px 14px',
+                      marginBottom: 10,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      boxShadow: '0 2px 8px rgba(44,26,14,0.03)'
+                    }}>
+                      <div>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: '#8b5e3c', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                          ⚡ Total Calculado ({n} aula{n > 1 ? 's' : ''}/sem × R$ {v.toFixed(2)}/aula):
+                        </div>
+                        <div style={{ fontSize: 13, fontWeight: 800, color: '#2c1a0e', marginTop: 2 }}>
+                          Total Semanal: <span style={{ color: '#2e7d32' }}>R$ {weeklySum.toFixed(2)}</span>
+                          <span style={{ margin: '0 6px', color: '#d5c8bb' }}>|</span>
+                          Estimativa Mensal (4 semanas): <span style={{ color: '#8b5e3c' }}>R$ {monthlyEstimate.toFixed(2)}</span>
+                        </div>
+                      </div>
+                      <div style={{
+                        width: 32, height: 32, borderRadius: 8, background: '#fef3c7',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16
+                      }}>
+                        💰
+                      </div>
+                    </div>
+                  )
+                })()}
+
+                {/* Campos adicionais conforme o tipo */}
+                {formBillingType === 'mensal' && (
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                     <div>
-                      <label style={LabelStyle}>Mensalidade Fixa (R$):</label>
-                      <input type="number" value={formFee} onChange={e => setFormFee(e.target.value)} style={InputStyle} />
+                      <label style={LabelStyle}>Mensalidade Cobrada (R$):</label>
+                      <input
+                        type="number"
+                        value={formFee}
+                        onChange={e => setFormFee(e.target.value)}
+                        placeholder="Valor mensal final"
+                        style={InputStyle}
+                      />
                     </div>
                     <div>
                       <label style={LabelStyle}>Dia de Vencimento:</label>
-                      <input type="number" value={formDueDay} onChange={e => setFormDueDay(e.target.value)} style={InputStyle} />
+                      <input
+                        type="number"
+                        min="1"
+                        max="31"
+                        value={formDueDay}
+                        onChange={e => setFormDueDay(e.target.value)}
+                        style={InputStyle}
+                      />
                     </div>
                   </div>
-                ) : (
+                )}
+
+                {formBillingType === 'semanal' && (
                   <div>
-                    <label style={LabelStyle}>Valor por Aula Ministrada (R$):</label>
-                    <input type="number" value={formFeePerLesson} onChange={e => setFormFeePerLesson(e.target.value)} placeholder="Ex: 80" style={InputStyle} />
+                    <label style={LabelStyle}>Dia de Acerto Semanal / Observação:</label>
+                    <input
+                      type="text"
+                      value={`Acerto semanal: Toda sexta-feira (R$ ${(parseInt(formLessonsPerWeek) || 1) * (parseFloat(formFeePerLesson) || 0)},00)`}
+                      disabled
+                      style={{ ...InputStyle, background: '#f5efe6', color: '#665c54', fontWeight: 700 }}
+                    />
                   </div>
                 )}
               </div>
@@ -2240,8 +2457,15 @@ export default function PrivateTutoring() {
                         type="button"
                         key={w.id}
                         onClick={() => {
-                          if (isSelected) setFormDaysOfWeek(formDaysOfWeek.filter(d => d !== w.id))
-                          else setFormDaysOfWeek([...formDaysOfWeek, w.id])
+                          const nextDays = isSelected
+                            ? formDaysOfWeek.filter(d => d !== w.id)
+                            : [...formDaysOfWeek, w.id]
+                          setFormDaysOfWeek(nextDays)
+                          if (nextDays.length > 0) {
+                            setFormLessonsPerWeek(String(nextDays.length))
+                            const vLesson = parseFloat(formFeePerLesson) || 0
+                            setFormFee(String(vLesson * nextDays.length * 4))
+                          }
                         }}
                         style={{
                           padding: '4px 8px', borderRadius: 6, border: '1px solid #d5c8bb',
