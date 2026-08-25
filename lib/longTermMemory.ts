@@ -128,7 +128,11 @@ export function updateTeacherProfile(patch: Partial<TeacherProfile>): TeacherPro
  */
 export function buildLongTermMemoryContext(currentQuery: string = ''): string {
   const memories = getLongTermMemories()
-  const profile  = getTeacherProfile()
+  let styleSnippet = ''
+  try {
+    const { buildTeacherStyleSystemPrompt } = require('./teacherStyleProfile')
+    styleSnippet = buildTeacherStyleSystemPrompt()
+  } catch {}
 
   let relevantFacts = memories
   if (currentQuery.trim()) {
@@ -148,11 +152,7 @@ export function buildLongTermMemoryContext(currentQuery: string = ''): string {
 
   return `
 === MEMÓRIA VIVA & APRENDIZADO DE LONGO PRAZO DA RAFINHA ===
-PERFIL E ESTILO DO PROFESSOR:
-- Dialeto Preferido: ${profile.preferredDialect} English
-- Metodologias Favoritas: ${profile.preferredMethodology.join(', ')}
-- Estilo de Provas: ${profile.examFormattingPreferences}
-- Tom de Comunicação com Pais: ${profile.parentCommunicationTone}
+${styleSnippet}
 
 FATOS E REGRAS APRENDIDAS PELA RAFINHA ACUMULADAS AO LONGO DO TEMPO:
 ${factLines || '- Nenhuma regra customizada gravada ainda (aprendendo ativamente a cada interação)'}

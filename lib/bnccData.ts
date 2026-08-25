@@ -1,13 +1,16 @@
 /**
- * bnccData.ts — Matriz Central de Competências e Habilidades BNCC para Língua Inglesa
- * Reutilizável em Turmas, Planejamento de Aula, Provas e Relatórios de Cobertura Curricular
+ * bnccData.ts — Matriz Central de Competências e Habilidades BNCC
+ * Suporta múltiplas disciplinas: Língua Inglesa (padrão), Língua Portuguesa e futuras.
+ * Reutilizável em Turmas, Planejamento de Aula, Provas e Relatórios de Cobertura Curricular.
  */
 
 export interface BnccSkill {
   id: string
   code: string
   gradeYear: string // "6º Fund.", "7º Fund.", "8º Fund.", "9º Fund.", "1º Médio", "2º Médio", "3º Médio"
-  axis: 'Oralidade' | 'Leitura' | 'Escrita' | 'Conhecimentos Linguísticos' | 'Dimensão Intercultural'
+  /** Matéria — 'EF_LI' = Língua Inglesa (padrão), 'EF_LP' = Língua Portuguesa */
+  subject?: 'EF_LI' | 'EF_LP' | 'EF_MA' | 'EF_CI' | 'EF_HI' | 'EM_LGG' | string
+  axis: 'Oralidade' | 'Leitura' | 'Escrita' | 'Conhecimentos Linguísticos' | 'Dimensão Intercultural' | 'Análise Linguística' | 'Produção de Textos'
   description: string
   unit?: string
   isCustom?: boolean
@@ -150,6 +153,22 @@ export const DEFAULT_BNCC_SKILLS: BnccSkill[] = [
     unit: 'Persuasão e Opinião'
   },
   {
+    id: 'EF09LI02',
+    code: 'EF09LI02',
+    gradeYear: '9º Fund.',
+    axis: 'Oralidade',
+    description: 'Compilar as ideias-chave de textos por meio de tomada de notas.',
+    unit: 'Compreensão Oral e Notas'
+  },
+  {
+    id: 'EF09LI03',
+    code: 'EF09LI03',
+    gradeYear: '9º Fund.',
+    axis: 'Oralidade',
+    description: 'Analisar posicionamentos defendidos e refutados em textos orais sobre temas de interesse social e coletivo.',
+    unit: 'Argumentação Oral'
+  },
+  {
     id: 'EF09LI08',
     code: 'EF09LI08',
     gradeYear: '9º Fund.',
@@ -221,7 +240,7 @@ export const DEFAULT_BNCC_SKILLS: BnccSkill[] = [
  * Retorna as competências salvas ou a lista padrão inicial
  */
 export function getStoredBnccSkills(): BnccSkill[] {
-  if (typeof window === 'undefined') return DEFAULT_BNCC_SKILLS
+  if (typeof localStorage === 'undefined') return DEFAULT_BNCC_SKILLS
   try {
     const raw = localStorage.getItem('teacher_bncc_skills')
     if (raw) {
@@ -239,10 +258,10 @@ export function getStoredBnccSkills(): BnccSkill[] {
  * Salva a lista personalizada de competências
  */
 export function saveStoredBnccSkills(skills: BnccSkill[]): void {
-  if (typeof window === 'undefined') return
+  if (typeof localStorage === 'undefined') return
   try {
     localStorage.setItem('teacher_bncc_skills', JSON.stringify(skills))
-    window.dispatchEvent(new Event('storage'))
+    if (typeof window !== 'undefined') window.dispatchEvent(new Event('storage'))
   } catch {}
 }
 
@@ -260,7 +279,7 @@ export function getBnccSkillsForGrade(gradeYear: string): BnccSkill[] {
  * Gerenciamento de Backlog de Habilidades Adiadas por Turma
  */
 export function getClassPostponedSkills(classId: string): string[] {
-  if (typeof window === 'undefined') return []
+  if (typeof localStorage === 'undefined') return []
   try {
     const raw = localStorage.getItem(`teacher_backlog_skills_${classId}`)
     return raw ? JSON.parse(raw) : []
@@ -270,8 +289,202 @@ export function getClassPostponedSkills(classId: string): string[] {
 }
 
 export function saveClassPostponedSkills(classId: string, skillCodes: string[]): void {
-  if (typeof window === 'undefined') return
+  if (typeof localStorage === 'undefined') return
   try {
     localStorage.setItem(`teacher_backlog_skills_${classId}`, JSON.stringify(skillCodes))
   } catch {}
+}
+
+// ─── Habilidades BNCC — Língua Portuguesa (piloto A.3) ────────────────────────
+
+export const PORTUGUESE_BNCC_SKILLS: BnccSkill[] = [
+  // ─── 6º ANO ───────────────────────────────────────────────────────────────
+  { id: 'EF06LP01', code: 'EF06LP01', gradeYear: '6º Fund.', subject: 'EF_LP',
+    axis: 'Leitura', unit: 'Estratégias de Leitura',
+    description: 'Selecionar e utilizar, com ajuda do professor, estratégias de leitura (skimming, scanning, leitura detalhada) adequadas ao objetivo e ao gênero textual.' },
+  { id: 'EF06LP06', code: 'EF06LP06', gradeYear: '6º Fund.', subject: 'EF_LP',
+    axis: 'Leitura', unit: 'Gêneros Textuais',
+    description: 'Identificar o gênero textual com base em suas características composicionais (forma de organização interna, recursos linguísticos e marcas enunciativas).' },
+  { id: 'EF06LP15', code: 'EF06LP15', gradeYear: '6º Fund.', subject: 'EF_LP',
+    axis: 'Produção de Textos', unit: 'Planejamento Textual',
+    description: 'Planejar textos considerando o contexto de produção (finalidade, interlocutores, suporte, gênero), selecionando forma de tratamento e registro adequados.' },
+  { id: 'EF06LP32', code: 'EF06LP32', gradeYear: '6º Fund.', subject: 'EF_LP',
+    axis: 'Análise Linguística', unit: 'Morfologia',
+    description: 'Identificar e classificar as classes de palavras (substantivos, adjetivos, verbos, artigos, pronomes, numerais, advérbios, preposições, conjunções e interjeições).' },
+  { id: 'EF06LP33', code: 'EF06LP33', gradeYear: '6º Fund.', subject: 'EF_LP',
+    axis: 'Análise Linguística', unit: 'Sintaxe',
+    description: 'Reconhecer a estrutura básica da oração (sujeito e predicado) e a relação de concordância verbal e nominal.' },
+  { id: 'EF06LP36', code: 'EF06LP36', gradeYear: '6º Fund.', subject: 'EF_LP',
+    axis: 'Análise Linguística', unit: 'Semântica',
+    description: 'Identificar sinonímia, antonímia e polissemia no texto, e compreender seus efeitos de sentido.' },
+  { id: 'EF06LP38', code: 'EF06LP38', gradeYear: '6º Fund.', subject: 'EF_LP',
+    axis: 'Análise Linguística', unit: 'Ortografia e Acentuação',
+    description: 'Empregar as regras básicas de acentuação gráfica (palavras oxítonas, paroxítonas e proparoxítonas) e o hífen.' },
+  // ─── 7º ANO ───────────────────────────────────────────────────────────────
+  { id: 'EF07LP01', code: 'EF07LP01', gradeYear: '7º Fund.', subject: 'EF_LP',
+    axis: 'Leitura', unit: 'Estratégias de Leitura',
+    description: 'Inferir, com base em dados do texto e do contexto, o sentido de palavras, expressões ou trechos desconhecidos.' },
+  { id: 'EF07LP03', code: 'EF07LP03', gradeYear: '7º Fund.', subject: 'EF_LP',
+    axis: 'Leitura', unit: 'Implícitos e Subentendidos',
+    description: 'Identificar implícitos e pressupostos nos textos lidos, reconhecendo as diferentes vozes sociais que neles circulam.' },
+  { id: 'EF07LP15', code: 'EF07LP15', gradeYear: '7º Fund.', subject: 'EF_LP',
+    axis: 'Produção de Textos', unit: 'Planejamento Textual',
+    description: 'Produzir textos em diferentes gêneros, considerando sua adequação ao contexto (tema, interlocutores, finalidade e suporte).' },
+  { id: 'EF07LP31', code: 'EF07LP31', gradeYear: '7º Fund.', subject: 'EF_LP',
+    axis: 'Análise Linguística', unit: 'Sintaxe',
+    description: 'Reconhecer e empregar os recursos de concordância verbal e nominal, emprego de pronomes e regência de verbos frequentes.' },
+  // ─── 8º ANO ───────────────────────────────────────────────────────────────
+  { id: 'EF08LP01', code: 'EF08LP01', gradeYear: '8º Fund.', subject: 'EF_LP',
+    axis: 'Leitura', unit: 'Estratégias de Leitura',
+    description: 'Fazer inferências e deduções em textos de maior complexidade, articulando conhecimentos prévios com os dados do texto.' },
+  { id: 'EF08LP14', code: 'EF08LP14', gradeYear: '8º Fund.', subject: 'EF_LP',
+    axis: 'Leitura', unit: 'Figuras de Linguagem',
+    description: 'Identificar e analisar os efeitos de sentido provocados pelo uso de figuras de linguagem (metáfora, metonímia, hipérbole, ironia, eufemismo, antítese, paradoxo).' },
+  { id: 'EF08LP16', code: 'EF08LP16', gradeYear: '8º Fund.', subject: 'EF_LP',
+    axis: 'Produção de Textos', unit: 'Argumentação',
+    description: 'Produzir textos argumentativos (artigo de opinião, editorial), apresentando tese, argumentos e contra-argumentos com uso de conectivos adequados.' },
+  { id: 'EF08LP30', code: 'EF08LP30', gradeYear: '8º Fund.', subject: 'EF_LP',
+    axis: 'Análise Linguística', unit: 'Sintaxe',
+    description: 'Empregar adequadamente as regras de regência verbal e nominal, colocação pronominal e emprego de crase.' },
+  // ─── 9º ANO ───────────────────────────────────────────────────────────────
+  { id: 'EF09LP01', code: 'EF09LP01', gradeYear: '9º Fund.', subject: 'EF_LP',
+    axis: 'Leitura', unit: 'Estratégias de Leitura',
+    description: 'Analisar diferentes textos de divulgação científica, artigos de opinião e textos literários, identificando argumentos, pressupostos e implícitos.' },
+  { id: 'EF09LP09', code: 'EF09LP09', gradeYear: '9º Fund.', subject: 'EF_LP',
+    axis: 'Leitura', unit: 'Figuras de Linguagem e Sentido',
+    description: 'Analisar o efeito de sentido de figuras de linguagem (ironia, eufemismo, antítese, paradoxo) em textos literários e jornalísticos.' },
+  { id: 'EF09LP15', code: 'EF09LP15', gradeYear: '9º Fund.', subject: 'EF_LP',
+    axis: 'Produção de Textos', unit: 'Dissertação-Argumentativa',
+    description: 'Produzir texto dissertativo-argumentativo em prosa, defendendo uma tese com argumentos consistentes, articulados e coerentes, e com proposta de intervenção.' },
+  { id: 'EF09LP29', code: 'EF09LP29', gradeYear: '9º Fund.', subject: 'EF_LP',
+    axis: 'Análise Linguística', unit: 'Sintaxe Avançada',
+    description: 'Identificar e empregar orações subordinadas substantivas, adjetivas e adverbiais, reconhecendo os conectivos que as introduzem e os efeitos de sentido que produzem.' },
+  { id: 'EF09LP26', code: 'EF09LP26', gradeYear: '9º Fund.', subject: 'EF_LP',
+    axis: 'Oralidade', unit: 'Variação Linguística',
+    description: 'Analisar, em textos orais e escritos, as marcas de variação linguística (regional, social, etária, de registro) e seus efeitos de sentido.' }
+]
+
+// ─── Índice Multi-Matéria ─────────────────────────────────────────────────────
+
+/**
+ * Retorna todas as habilidades BNCC de uma matéria específica.
+ * subject: 'EF_LI' (Inglês, padrão), 'EF_LP' (Português), etc.
+ */
+export function getBnccSkillsBySubject(subject: 'EF_LI' | 'EF_LP' | string): BnccSkill[] {
+  if (subject === 'EF_LP') return PORTUGUESE_BNCC_SKILLS
+  // Padrão: retorna habilidades de inglês (comportamento original)
+  return DEFAULT_BNCC_SKILLS
+}
+
+// ─── Relatório de Cobertura Curricular BNCC (Bloco A.5) ─────────────────────
+
+export interface CurriculumCoverageReport {
+  gradeYear: string
+  totalSkills: number
+  coveredCount: number
+  postponedCount: number
+  plannedCount: number
+  uncoveredCount: number
+  coveragePercentage: number
+  byAxis: Record<string, { total: number; covered: number; percentage: number }>
+  skillsDetail: Array<{
+    code: string
+    axis: string
+    description: string
+    status: 'covered' | 'postponed' | 'planned' | 'uncovered'
+    coveredCount: number
+    lastLessonDate?: string
+  }>
+}
+
+export function getCurriculumCoverageReport(
+  gradeYear: string,
+  lessonPlans: Array<{ date: string; classId?: string; selectedSkills?: Array<{ code: string; desc?: string; status: string }> }>,
+  classId?: string
+): CurriculumCoverageReport {
+  const allGradeSkills = getBnccSkillsForGrade(gradeYear)
+  const filteredPlans = classId ? lessonPlans.filter(p => p.classId === classId) : lessonPlans
+  
+  const skillOccurrences = new Map<string, { count: number; lastDate: string; status: 'covered' | 'postponed' | 'planned' }>()
+
+  filteredPlans.forEach(plan => {
+    if (Array.isArray(plan.selectedSkills)) {
+      plan.selectedSkills.forEach(s => {
+        const existing = skillOccurrences.get(s.code)
+        const currentCount = (existing?.count || 0) + (s.status === 'covered' ? 1 : 0)
+        skillOccurrences.set(s.code, {
+          count: currentCount,
+          lastDate: plan.date || existing?.lastDate || '',
+          status: s.status as any
+        })
+      })
+    }
+  })
+
+  // Se tiver backlog salvo na turma
+  const postponedBacklog = classId ? getClassPostponedSkills(classId) : []
+
+  const byAxis: Record<string, { total: number; covered: number; percentage: number }> = {}
+  let coveredCount = 0
+  let postponedCount = 0
+  let plannedCount = 0
+
+  const skillsDetail = allGradeSkills.map(skill => {
+    const axis = skill.axis || 'Geral'
+    if (!byAxis[axis]) {
+      byAxis[axis] = { total: 0, covered: 0, percentage: 0 }
+    }
+    byAxis[axis].total++
+
+    const record = skillOccurrences.get(skill.code)
+    let status: 'covered' | 'postponed' | 'planned' | 'uncovered' = 'uncovered'
+
+    if (postponedBacklog.includes(skill.code)) {
+      status = 'postponed'
+      postponedCount++
+    } else if (record) {
+      if (record.status === 'covered' || record.count > 0) {
+        status = 'covered'
+        coveredCount++
+        byAxis[axis].covered++
+      } else if (record.status === 'postponed') {
+        status = 'postponed'
+        postponedCount++
+      } else {
+        status = 'planned'
+        plannedCount++
+      }
+    }
+
+    return {
+      code: skill.code,
+      axis,
+      description: skill.description,
+      status,
+      coveredCount: record?.count || 0,
+      lastLessonDate: record?.lastDate
+    }
+  })
+
+  // Calcula percentuais por eixo
+  Object.keys(byAxis).forEach(axis => {
+    const item = byAxis[axis]
+    item.percentage = item.total > 0 ? Math.round((item.covered / item.total) * 100) : 0
+  })
+
+  const totalSkills = allGradeSkills.length
+  const uncoveredCount = totalSkills - coveredCount - postponedCount - plannedCount
+  const coveragePercentage = totalSkills > 0 ? Math.round((coveredCount / totalSkills) * 100) : 0
+
+  return {
+    gradeYear,
+    totalSkills,
+    coveredCount,
+    postponedCount,
+    plannedCount,
+    uncoveredCount: Math.max(0, uncoveredCount),
+    coveragePercentage,
+    byAxis,
+    skillsDetail
+  }
 }

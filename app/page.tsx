@@ -53,124 +53,254 @@ import Insights from '@/components/modules/Insights'
 
 import CommandPalette from '@/components/CommandPalette'
 import LanguageSelector from '@/components/LanguageSelector'
+import AuthGate from '@/components/AuthGate'
+import OnboardingFlow from '@/components/OnboardingFlow'
+import { getCurrentSession, AuthSession } from '@/lib/supabaseAuth'
 
 export type ModuleKey = 'dashboard' | 'quick' | 'exam' | 'lessonstudio' | 'plan' | 'rubric' |
- 'gradebook' | 'students' | 'classes' | 'organization' | 'privatetutoring' | 'eventos' | 'insights' | 'analytics' | 'calendar' | 'comms' | 'repo' |
- 'wellbeing' | 'settings' | 'api' | 'qbank' | 'mindmap' | 'editor' |
- 'communications' | 'portfolio' | 'extensions' | 'portalmirror' | 'omnigrader' | 'maestro' | 'classlog' | 'didacticsequence' | 'livequiz' | 'parentcomms' |
- 'classroommode' | 'attendancelist' | 'flashcardmode' | 'audiopronunciation' |
- 'reflectivepractice' | 'meetingclassrecorder' | 'weeklyagenda' | 'batchgrader' | 'progresstracker' | 'autoreport'
+  'gradebook' | 'students' | 'classes' | 'organization' | 'privatetutoring' | 'eventos' | 'insights' | 'analytics' | 'calendar' | 'comms' | 'repo' |
+  'wellbeing' | 'settings' | 'api' | 'qbank' | 'mindmap' | 'editor' |
+  'communications' | 'portfolio' | 'extensions' | 'portalmirror' | 'omnigrader' | 'maestro' | 'classlog' | 'didacticsequence' | 'livequiz' | 'parentcomms' |
+  'classroommode' | 'attendancelist' | 'flashcardmode' | 'audiopronunciation' |
+  'reflectivepractice' | 'meetingclassrecorder' | 'weeklyagenda' | 'batchgrader' | 'progresstracker' | 'autoreport'
 
 const MODULES: Record<ModuleKey, React.ComponentType> = {
- dashboard: Dashboard,
- quick: QuickGenerate,
- exam: ExamBuilder,
- lessonstudio: LessonStudio,
- plan: LessonPlanner,
- rubric: Rubric,
- gradebook: Gradebook,
- omnigrader: OmniGrader,
- students: Students,
- classes: Classes,
- organization: Organization,
- privatetutoring: PrivateTutoring,
- eventos: Eventos,
- insights: Insights,
- analytics: Analytics,
- calendar: Planner,
- comms: Communications,
- repo: Repository,
- qbank: QuestionBank,
- mindmap: MindMap,
- editor: Editor,
- communications: Communications,
- portfolio: Portfolio,
- wellbeing: Wellbeing,
- settings: Settings,
- api: ApiManager,
- extensions: Extensions,
- portalmirror: PortalMirrorModule,
- maestro: Maestro,
- classlog: ClassLog,
- didacticsequence: DidacticSequence,
- livequiz: LiveQuizModule,
- parentcomms: ParentCommunicator,
- classroommode: ClassroomMode,
- attendancelist: AttendanceList,
- flashcardmode: FlashcardMode,
- audiopronunciation: AudioPronunciation,
- reflectivepractice: ReflectivePractice,
- meetingclassrecorder:MeetingClassRecorder,
- weeklyagenda: WeeklyAgenda,
- batchgrader: BatchGrader,
- progresstracker: Analytics,
- autoreport: AutoReport,
+  dashboard: Dashboard,
+  quick: QuickGenerate,
+  exam: ExamBuilder,
+  lessonstudio: LessonStudio,
+  plan: LessonStudio,
+  rubric: Rubric,
+  gradebook: Gradebook,
+  omnigrader: OmniGrader,
+  students: Students,
+  classes: Classes,
+  organization: Organization,
+  privatetutoring: PrivateTutoring,
+  eventos: Eventos,
+  insights: Insights,
+  analytics: Analytics,
+  calendar: Planner,
+  comms: Communications,
+  repo: Repository,
+  qbank: QuestionBank,
+  mindmap: MindMap,
+  editor: Editor,
+  communications: Communications,
+  portfolio: Portfolio,
+  wellbeing: Wellbeing,
+  settings: Settings,
+  api: ApiManager,
+  extensions: Extensions,
+  portalmirror: PortalMirrorModule,
+  maestro: Maestro,
+  classlog: ClassLog,
+  didacticsequence: LessonStudio,
+  livequiz: LiveQuizModule,
+  parentcomms: ParentCommunicator,
+  classroommode: ClassroomMode,
+  attendancelist: AttendanceList,
+  flashcardmode: FlashcardMode,
+  audiopronunciation: AudioPronunciation,
+  reflectivepractice: ReflectivePractice,
+  meetingclassrecorder: MeetingClassRecorder,
+  weeklyagenda: Planner,
+  batchgrader: BatchGrader,
+  progresstracker: Analytics,
+  autoreport: AutoReport,
 }
 
 
 export default function Home() {
- const [active, setActive] = useState<ModuleKey>('dashboard')
- const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false)
- const [showLangMenu, setShowLangMenu] = useState(false)
- const Module = MODULES[active]
+  const [active, setActive] = useState<ModuleKey>('dashboard')
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false)
+  const [showLangMenu, setShowLangMenu] = useState(false)
+  const Module = MODULES[active]
 
- // Bridge: VoiceOrb sends commands RafinhaChat processes them
- const rafinhaCommandRef = useRef<((text: string) => void) | null>(null)
+  // Auth & Onboarding state
+  const [session, setSession] = useState<AuthSession | null>(null)
+  const [authMounted, setAuthMounted] = useState(false)
+  const [onboardingDone, setOnboardingDone] = useState(true)
 
- // Auto-seed: configura APIs e Supabase no 1º carregamento 
- useEffect(() => {
- seedApiKeysIfNeeded({
- elevenlabs_key: process.env.NEXT_PUBLIC_ELEVENLABS_KEY || '',
- groq_key: process.env.NEXT_PUBLIC_GROQ_KEY || '',
- gemini_key: process.env.NEXT_PUBLIC_GEMINI_KEY || '',
- openai_key: process.env.NEXT_PUBLIC_OPENAI_KEY || '',
- })
+  // Bridge: VoiceOrb sends commands RafinhaChat processes them
+  const rafinhaCommandRef = useRef<((text: string) => void) | null>(null)
 
- if (localStorage.getItem('teacher_auto_mode') === null) {
- localStorage.setItem('teacher_auto_mode', 'true')
- }
+  // Auto-seed: configura APIs e Supabase no 1º carregamento 
+  useEffect(() => {
+    seedApiKeysIfNeeded({
+      elevenlabs_key: process.env.NEXT_PUBLIC_ELEVENLABS_KEY || '',
+      groq_key: process.env.NEXT_PUBLIC_GROQ_KEY || '',
+      gemini_key: process.env.NEXT_PUBLIC_GEMINI_KEY || '',
+      openai_key: process.env.NEXT_PUBLIC_OPENAI_KEY || '',
+    })
 
- const sbCfg = localStorage.getItem('teacher_supabase_config')
- if (!sbCfg || sbCfg === '{}' || sbCfg.includes('serviceKey')) {
- const defaultSb = {
- url: process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://parxakvjvuvsmvbvrshk.supabase.co',
- anonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBhcnhha3ZqdnV2c212YnZyc2hrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgyNjgyMDcsImV4cCI6MjA5Mzg0NDIwN30.m7usRhAT6Z_wHxZsykPjV_op5GyRscz3Gnu9teKTMoM',
- }
- localStorage.setItem('teacher_supabase_config', JSON.stringify(defaultSb))
- }
+    if (localStorage.getItem('teacher_auto_mode') === null) {
+      localStorage.setItem('teacher_auto_mode', 'true')
+    }
 
- if (localStorage.getItem('teacher_supabase_config')) {
- loadFromSupabase().catch(() => {})
- }
+    // ─── Purga de Dados Simulados Legados (Escola Modelo, Colégio Integral, Demos) ───
+    try {
+      // 1. Limpar escolas simuladas
+      const rawSch = localStorage.getItem('teacher_schools')
+      if (rawSch) {
+        const parsed = JSON.parse(rawSch)
+        if (Array.isArray(parsed)) {
+          const cleaned = parsed.filter(s => s.name !== 'Colégio Integral' && s.name !== 'Escola Modelo')
+          if (cleaned.length !== parsed.length) {
+            localStorage.setItem('teacher_schools', JSON.stringify(cleaned))
+          }
+        }
+      }
 
- const handler = (e: Event) => setActive((e as CustomEvent).detail as ModuleKey)
- const togglePaletteHandler = () => setIsCommandPaletteOpen(prev => !prev)
+      // 2. Limpar grade / agenda simulada
+      const rawAgenda = localStorage.getItem('teacher_agenda_schedule')
+      if (rawAgenda) {
+        const parsed = JSON.parse(rawAgenda)
+        if (Array.isArray(parsed)) {
+          const cleaned = parsed.filter(item => {
+            const isMockId = !item.id || item.id.startsWith('demo-') || /^c[1-7]$/.test(item.id)
+            const isMockSchool = item.schoolName === 'Colégio Integral' || item.schoolName === 'Escola Modelo' || item.school === 'Colégio Integral' || item.school === 'Escola Modelo'
+            const isLegacySample = (item.className === 'Turma Geral' || item.schoolName === 'Escola') && (item.topic === 'Verb To Be' || item.topic === 'Simple Past' || item.topic === 'Simple Past: Regular vs Irregular Verbs')
+            return !isMockId && !isMockSchool && !isLegacySample
+          })
+          if (cleaned.length !== parsed.length) {
+            localStorage.setItem('teacher_agenda_schedule', JSON.stringify(cleaned))
+          }
+        }
+      }
 
- window.addEventListener('teacher:navigate', handler)
- window.addEventListener('teacher:toggle_command_palette', togglePaletteHandler)
- return () => {
- window.removeEventListener('teacher:navigate', handler)
- window.removeEventListener('teacher:toggle_command_palette', togglePaletteHandler)
- }
- }, [])
+      // 3. Limpar weekly schedule v2 legado
+      localStorage.removeItem('teacher_weekly_schedule_v2')
 
- // Auto-Sync: sincroniza dados em background ao detectar mudanças 
- useEffect(() => {
- let timer: NodeJS.Timeout
- const handleDataChange = () => {
- clearTimeout(timer)
- timer = setTimeout(() => {
- syncToSupabase().catch(() => {})
- }, 2500)
- }
- window.addEventListener('storage', handleDataChange)
- window.addEventListener('teacher:data_changed', handleDataChange)
- return () => {
- clearTimeout(timer)
- window.removeEventListener('storage', handleDataChange)
- window.removeEventListener('teacher:data_changed', handleDataChange)
- }
- }, [])
+      // 4. Limpar tarefas de calendário simuladas
+      const rawCal = localStorage.getItem('teacher_calendar_tasks')
+      if (rawCal) {
+        const parsed = JSON.parse(rawCal)
+        if (Array.isArray(parsed)) {
+          const cleaned = parsed.filter(t => !t.id?.startsWith('demo-') && !t.id?.startsWith('suggest-'))
+          if (cleaned.length !== parsed.length) {
+            localStorage.setItem('teacher_calendar_tasks', JSON.stringify(cleaned))
+          }
+        }
+      }
+    } catch {}
+
+    const sbCfg = localStorage.getItem('teacher_supabase_config')
+    if (!sbCfg || sbCfg === '{}' || sbCfg.includes('serviceKey')) {
+      const defaultSb = {
+        url: process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://parxakvjvuvsmvbvrshk.supabase.co',
+        anonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBhcnhha3ZqdnV2c212YnZyc2hrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgyNjgyMDcsImV4cCI6MjA5Mzg0NDIwN30.m7usRhAT6Z_wHxZsykPjV_op5GyRscz3Gnu9teKTMoM',
+      }
+      localStorage.setItem('teacher_supabase_config', JSON.stringify(defaultSb))
+    }
+
+    // Verificar sessão atual
+    const currentSession = getCurrentSession()
+    setSession(currentSession)
+
+    if (currentSession) {
+      try {
+        const rawSettings = localStorage.getItem('teacher_settings')
+        const settings = rawSettings ? JSON.parse(rawSettings) : {}
+        setOnboardingDone(Boolean(settings.onboardingCompleted))
+      } catch {
+        setOnboardingDone(true)
+      }
+    }
+
+    setAuthMounted(true)
+
+    if (localStorage.getItem('teacher_supabase_config')) {
+      loadFromSupabase().catch(() => {})
+    }
+
+    const handler = (e: Event) => setActive((e as CustomEvent).detail as ModuleKey)
+    const togglePaletteHandler = () => setIsCommandPaletteOpen(prev => !prev)
+    const authChangeHandler = (e: Event) => {
+      const newSession = (e as CustomEvent).detail as AuthSession | null
+      setSession(newSession)
+      if (newSession) {
+        try {
+          const rawSettings = localStorage.getItem('teacher_settings')
+          const settings = rawSettings ? JSON.parse(rawSettings) : {}
+          setOnboardingDone(Boolean(settings.onboardingCompleted))
+        } catch {
+          setOnboardingDone(true)
+        }
+      }
+    }
+
+    window.addEventListener('teacher:navigate', handler)
+    window.addEventListener('teacher:toggle_command_palette', togglePaletteHandler)
+    window.addEventListener('teacher:auth_changed', authChangeHandler)
+    return () => {
+      window.removeEventListener('teacher:navigate', handler)
+      window.removeEventListener('teacher:toggle_command_palette', togglePaletteHandler)
+      window.removeEventListener('teacher:auth_changed', authChangeHandler)
+    }
+  }, [])
+
+  // Auto-Sync: sincroniza dados em background ao detectar mudanças 
+  useEffect(() => {
+    let timer: NodeJS.Timeout
+    const handleDataChange = () => {
+      clearTimeout(timer)
+      timer = setTimeout(() => {
+        syncToSupabase().catch(() => {})
+      }, 2500)
+    }
+    window.addEventListener('storage', handleDataChange)
+    window.addEventListener('teacher:data_changed', handleDataChange)
+    return () => {
+      clearTimeout(timer)
+      window.removeEventListener('storage', handleDataChange)
+      window.removeEventListener('teacher:data_changed', handleDataChange)
+    }
+  }, [])
+
+  // Se ainda não montou no cliente, renderizar splash limpo para evitar hydration mismatch
+  if (!authMounted) {
+    return (
+      <div className="w-full h-screen flex items-center justify-center bg-[#fdf8f2]">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-10 h-10 rounded-2xl bg-[#2aa198] flex items-center justify-center animate-pulse shadow-md">
+            <i className="ti ti-school text-xl text-white" />
+          </div>
+          <span className="text-xs font-bold text-[#586e75] tracking-wider uppercase">Carregando Teacher AI...</span>
+        </div>
+      </div>
+    )
+  }
+
+  // Se não autenticado, exibir tela de Login/Cadastro (AuthGate)
+  if (!session) {
+    return (
+      <AuthGate
+        onAuthenticated={(s) => {
+          setSession(s)
+          try {
+            const rawSettings = localStorage.getItem('teacher_settings')
+            const settings = rawSettings ? JSON.parse(rawSettings) : {}
+            setOnboardingDone(Boolean(settings.onboardingCompleted))
+          } catch {
+            setOnboardingDone(true)
+          }
+        }}
+      />
+    )
+  }
+
+  // Se autenticado mas sem onboarding concluído, exibir OnboardingFlow
+  if (!onboardingDone) {
+    return (
+      <OnboardingFlow
+        teacherName={session.user.name}
+        onComplete={() => {
+          setOnboardingDone(true)
+        }}
+      />
+    )
+  }
 
  return (
  <div className="flex w-full h-screen overflow-hidden" style={{ background: '#fdf8f2' }}>

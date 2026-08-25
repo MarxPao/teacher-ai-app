@@ -1,5 +1,8 @@
 'use client'
 import { useState, useEffect, useMemo, useCallback } from 'react'
+import { requiresSharedDatabaseConsent } from '@/lib/databaseConsent'
+import SharedDatabaseConsentModal from '@/components/SharedDatabaseConsentModal'
+import DatabaseStatusBadge from '@/components/DatabaseStatusBadge'
 
 /* ─── Tipos ─────────────────────────────────────────────────────────────────── */
 interface School    { id: string; name: string; color: string }
@@ -134,6 +137,7 @@ export default function Students() {
 
   /* Modal Relatório Pedagógico para Pais */
   const [reportStudentId, setReportStudentId] = useState<string | null>(null)
+  const [showConsentModal, setShowConsentModal] = useState(false)
 
   /* ─── Carregar ────────────────────────────────────────────────────────────── */
   useEffect(() => {
@@ -248,17 +252,29 @@ export default function Students() {
   return (
     <div style={S.page}>
       {/* Cabeçalho */}
-      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 24 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 24, flexWrap: 'wrap', gap: 14 }}>
         <div>
-          <h1 style={{ fontFamily: 'Georgia, serif', fontSize: 30, fontWeight: 600, color: '#073642', fontStyle: 'italic', margin: 0 }}>
-            Alunos
-          </h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <h1 style={{ fontFamily: 'Georgia, serif', fontSize: 30, fontWeight: 600, color: '#073642', fontStyle: 'italic', margin: 0 }}>
+              Alunos
+            </h1>
+            <DatabaseStatusBadge onConfigureClick={() => window.dispatchEvent(new CustomEvent('teacher:navigate_module', { detail: 'settings' }))} />
+          </div>
           <p style={{ color: '#586e75', fontSize: 13, marginTop: 4 }}>
             {students.length} alunos · {classes.length} turmas
           </p>
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
-          <button onClick={() => setAddModal(true)} style={{ ...S.btn, background: '#073642', color: '#fff' }}>
+          <button
+            onClick={() => {
+              if (requiresSharedDatabaseConsent()) {
+                setShowConsentModal(true)
+              } else {
+                setAddModal(true)
+              }
+            }}
+            style={{ ...S.btn, background: '#073642', color: '#fff' }}
+          >
             <i className="ti ti-user-plus" /> Novo Aluno
           </button>
         </div>
@@ -651,6 +667,19 @@ export default function Students() {
           )}
         </div>
       )}
+
+      {/* ─── Modal Consentimento de Banco Compartilhado (Transparência) ─────── */}
+      <SharedDatabaseConsentModal
+        isOpen={showConsentModal}
+        onConsented={() => {
+          setShowConsentModal(false)
+          setAddModal(true)
+        }}
+        onConfigureCustom={() => {
+          setShowConsentModal(false)
+          window.dispatchEvent(new CustomEvent('teacher:navigate_module', { detail: 'settings' }))
+        }}
+      />
 
       {/* ─── Modal Adicionar Aluno ─────────────────────────────────────────── */}
       {addModal && (

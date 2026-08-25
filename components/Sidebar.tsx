@@ -14,14 +14,12 @@ const NAV: Section[] = [
     { key: 'classes',        label: 'Turmas',                icon: 'ti-school' },
     { key: 'students',       label: 'Alunos',                icon: 'ti-user-circle' },
     { key: 'privatetutoring',label: 'Alunos Particulares',   icon: 'ti-user-dollar' },
-    { key: 'plan',           label: 'Plano de Aula',         icon: 'ti-calendar-event' },
+    { key: 'lessonstudio',   label: 'Planejamento de Aula',  icon: 'ti-chalkboard' },
     { key: 'repo',           label: 'Biblioteca',            icon: 'ti-books' },
   ]},
   { label: 'Área do Professor', items: [
     { key: 'meetingclassrecorder',label: 'Diário de Aulas',         icon: 'ti-notebook' },
-    { key: 'weeklyagenda',        label: 'Agenda Semanal',          icon: 'ti-calendar-time' },
     { key: 'classlog',            label: 'Registro de Aula',        icon: 'ti-book' },
-    { key: 'didacticsequence',    label: 'Sequência Didática',      icon: 'ti-route-2' },
     { key: 'mindmap',             label: 'Mapa Mental',             icon: 'ti-hierarchy-2' },
     { key: 'calendar',            label: 'Calendário',              icon: 'ti-calendar' },
     { key: 'maestro',             label: 'Maestro',                 icon: 'ti-subtask' },
@@ -29,7 +27,6 @@ const NAV: Section[] = [
     { key: 'wellbeing',           label: 'Bem-Estar',               icon: 'ti-heart' },
   ]},
   { label: 'Criação', items: [
-    { key: 'lessonstudio',      label: 'Criar Aula',            icon: 'ti-chalkboard' },
     { key: 'quick',             label: 'Gerar Exercício',       icon: 'ti-sparkles' },
     { key: 'exam',              label: 'Gerar Prova',           icon: 'ti-file-text' },
     { key: 'eventos',           label: 'Eventos Escolares',     icon: 'ti-sparkles' },

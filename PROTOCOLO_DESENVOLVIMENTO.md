@@ -72,3 +72,23 @@ Se, ao investigar algo, você descobrir que uma afirmação feita em uma respost
 - [ ] Alguma informação que dei aqui contradiz algo que eu disse antes? Sinalizei isso?
 
 Se a resposta a qualquer item acima for "não" ou "não tenho certeza", a tarefa não está pronta — reporte como parcial e explique o motivo.
+
+---
+
+## REGISTRO DE DECISÕES ARQUITETURAIS FECHADAS (DEFINITIVAS)
+
+As seguintes decisões foram discutidas, deliberadas e formalmente aprovadas. **NÃO reabrir como dúvidas ou perguntas em aberto em sessões futuras:**
+
+### 1. Escopo de Matéria — Matéria Principal por Conta (Aprovado)
+- **Modelo:** A matéria padrão (`defaultSubject`) é definida por conta do professor e sincronizada com o `SubjectProfile` ativo (Língua Inglesa / Língua Portuguesa).
+- **Status:** Decisão fechada e implementada em `Settings.tsx`, `ExamBuilder.tsx`, `QuickGenerate.tsx`, `OmniGrader.tsx`.
+
+### 2. Infraestrutura de Banco de Dados — Supabase Compartilhado Transparente + BYOK (Aprovado)
+- **Modelo:** A plataforma mantém o banco compartilhado com isolamento por usuário (Row Level Security via JWT) como infraestrutura padrão para conveniência do professor, com aviso explícito e consentimento prévio obrigatório no onboarding/primeiro cadastro de alunos (`SharedDatabaseConsentModal`), badge visual permanente (`DatabaseStatusBadge`), e liberdade total de configuração BYOK em Configurações.
+- **Segurança:** A chave do banco compartilhado no frontend é estritamente uma `anon key` protegida por RLS.
+- **Status:** Decisão fechada e implementada em `lib/databaseConsent.ts`, `components/DatabaseStatusBadge.tsx`, `components/SharedDatabaseConsentModal.tsx`, `components/modules/Students.tsx`, `components/modules/Settings.tsx`.
+
+### 3. Automação de Portais Escolares (Browser Harness) — Pausa Antes do Submit (Aprovado)
+- **Modelo:** O preenchimento dos campos do portal (`_apply_diff_to_dom`) é executado de forma autônoma pelo runner após a criação da tarefa. A pausa de segurança e a confirmação humana do professor ocorrem estritamente antes do clique no botão irreversível de submissão final (`_submit_portal_form`).
+- **Status:** Decisão fechada e implementada no runner (`sidecar/browser_harness_runner.py`). Testes contra portais reais continuam bloqueados aguardando definição do portal piloto prioritário.
+

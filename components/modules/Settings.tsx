@@ -15,6 +15,15 @@ import {
 } from '@/lib/portalSanitizer'
 
 import { getGlobalDocumentPrefs, saveGlobalDocumentPrefs, DocumentStylePrefs } from '@/lib/exportUtils'
+import { getCurrentUser, signOut } from '@/lib/supabaseAuth'
+import { getAllSubjectProfiles, getSubjectProfile } from '@/lib/subjectProfile'
+import { saveTeacherStyleProfile } from '@/lib/teacherStyleProfile'
+import DatabaseStatusBadge from '@/components/DatabaseStatusBadge'
+import SharedDatabaseConsentModal from '@/components/SharedDatabaseConsentModal'
+import { isCustomSupabaseConfigured } from '@/lib/databaseConsent'
+import TeacherCalibrationsManager from '@/components/modules/TeacherCalibrationsManager'
+import '@/lib/subjects/english'
+import '@/lib/subjects/portuguese'
 
 interface Config { school: string; teacher: string; apikey: string; instructions: string; cloudSyncUrl?: string }
 
@@ -36,16 +45,32 @@ const STORAGE_KEYS = [
   'teacher_cfg',
   'teacher_document_style_prefs',
   'teacher_portal_action_logs_v1',
-  'teacher_portal_consent_v1'
+  'teacher_portal_consent_v1',
+  'teacher_app_calibrations_v1'
 ]
 
 export default function Settings() {
-  const [activeTab, setActiveTab] = useState<'general' | 'formatting' | 'audit' | 'privacy'>('general')
+  const [activeTab, setActiveTab] = useState<'general' | 'calibrations' | 'formatting' | 'audit' | 'privacy'>('general')
   const [cfg, setCfg] = useState<Config>({ school: '', teacher: '', apikey: '', instructions: '', cloudSyncUrl: '' })
   const [docPrefs, setDocPrefs] = useState<DocumentStylePrefs>(getGlobalDocumentPrefs())
   const [saved, setSaved] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [syncStatus, setSyncStatus] = useState('')
+
+  // Supabase BYOK & Transparência
+  const [showTransparencyModal, setShowTransparencyModal] = useState(false)
+  const [supabaseCustomUrl, setSupabaseCustomUrl] = useState(() => {
+    try {
+      const s = typeof window !== 'undefined' ? localStorage.getItem('teacher_supabase_config') : null
+      return s ? JSON.parse(s).url || '' : ''
+    } catch { return '' }
+  })
+  const [supabaseCustomKey, setSupabaseCustomKey] = useState(() => {
+    try {
+      const s = typeof window !== 'undefined' ? localStorage.getItem('teacher_supabase_config') : null
+      return s ? JSON.parse(s).anonKey || '' : ''
+    } catch { return '' }
+  })
 
   // Trilha de Auditoria
   const [auditLogs, setAuditLogs] = useState<PortalActionLogRecord[]>([])
@@ -231,10 +256,11 @@ export default function Settings() {
       subtitle="Identidade do professor, trilha de auditoria de agência em portais, retenção de dados e backup seguro."
       maxWidth={860}
     >
-      {/* ─── BARRA DE NAVEGAÇÃO DE ABAS ─────────────────────────────────────── */}
+      {/* -- BARRA DE NAVEGAÇÃO DE ABAS -- */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 20, borderBottom: '1px solid #d5c8bb', paddingBottom: 10, flexWrap: 'wrap' }}>
         {[
           { key: 'general', label: '⚙️ Geral & Identidade', icon: 'ti-settings' },
+          { key: 'calibrations', label: '🎛️ Calibrações & Padrões', icon: 'ti-adjustments-horizontal' },
           { key: 'formatting', label: '🎨 Formatação de Documentos', icon: 'ti-typography' },
           { key: 'audit', label: '🛡️ Auditoria de Ações', icon: 'ti-shield-check', badge: auditLogs.length },
           { key: 'privacy', label: '🔒 Privacidade, LGPD & Backup', icon: 'ti-lock' }
@@ -267,9 +293,201 @@ export default function Settings() {
         ))}
       </div>
 
-      {/* ─── ABA 1: GERAL & IDENTIDADE ─────────────────────────────────────── */}
+      {/* -- ABA 1: GERAL & IDENTIDADE -- */}
       {activeTab === 'general' && (
         <>
+          {/* Conta de Professor & Matéria Principal */}
+          <ModuleCard title="Conta de Professor & Matéria Principal" icon="ti-user-check" style={{ marginBottom: 20 }}>
+            {(() => {
+              const user = getCurrentUser()
+              const rawSettings = typeof window !== 'undefined' ? localStorage.getItem('teacher_settings') : null
+              const settings = rawSettings ? JSON.parse(rawSettings) : {}
+              const currentDefaultSub = settings.defaultSubject || 'english'
+              const subjects = getAllSubjectProfiles()
+
+              return (
+                <div className="space-y-4">
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: '#fdf6e3', borderRadius: 12, border: '1px solid rgba(88,110,117,0.2)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <div style={{ width: 40, height: 40, borderRadius: 10, background: '#073642', color: '#fdf6e3', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>
+                        <i className="ti ti-user" />
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: '#073642' }}>
+                          {user?.name || cfg.teacher || 'Professor(a)'}
+                        </div>
+                        <div style={{ fontSize: 12, color: '#586e75' }}>
+                          {user?.email || 'Sessão Docente Ativa'}
+                        </div>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={async () => {
+                        if (confirm('Deseja realmente sair da sua conta?')) {
+                          await signOut()
+                          window.location.reload()
+                        }
+                      }}
+                      style={{
+                        padding: '6px 14px', borderRadius: 8, border: '1px solid #dc322f',
+                        background: '#fff', color: '#dc322f', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', gap: 6
+                      }}
+                    >
+                      <i className="ti ti-logout" />
+                      <span>Sair da Conta</span>
+                    </button>
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1.2px', color: '#93a1a1', marginBottom: 6 }}>
+                      Matéria Principal Padrão
+                    </label>
+                    <select
+                      value={currentDefaultSub}
+                      onChange={e => {
+                        const newSub = e.target.value
+                        const s = typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('teacher_settings') || '{}') : {}
+                        s.defaultSubject = newSub
+                        localStorage.setItem('teacher_settings', JSON.stringify(s))
+                        saveTeacherStyleProfile({ defaultSubject: newSub })
+                        window.dispatchEvent(new Event('teacher:data_changed'))
+                        setSaved(true)
+                        setTimeout(() => setSaved(false), 2000)
+                      }}
+                      style={{ width: '100%', border: '1px solid rgba(88,110,117,0.2)', borderRadius: 9, padding: '9px 12px', fontSize: 13.5, background: '#fdf6e3', color: '#073642', outline: 'none', fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+                    >
+                      {subjects.map(s => (
+                        <option key={s.id} value={s.id}>
+                          {s.name} ({s.id === 'english' ? 'Cambridge / CEFR' : 'BNCC / ENEM'})
+                        </option>
+                      ))}
+                    </select>
+                    <p style={{ fontSize: 11.5, color: '#586e75', marginTop: 6, margin: '6px 0 0' }}>
+                      Define a taxonomia e o gerador padrão quando nenhuma turma específica estiver selecionada.
+                    </p>
+                  </div>
+                </div>
+              )
+            })()}
+          </ModuleCard>
+
+          {/* Armazenamento de Dados & Banco de Dados (Supabase) */}
+          <ModuleCard title="Armazenamento de Dados & Banco de Dados (Supabase)" icon="ti-database" style={{ marginBottom: 20 }}>
+            <div className="space-y-4">
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10, padding: '12px 16px', background: '#fdf6e3', borderRadius: 12, border: '1px solid rgba(88,110,117,0.2)' }}>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: '#073642' }}>Status da Infraestrutura:</span>
+                    <DatabaseStatusBadge />
+                  </div>
+                  <p style={{ fontSize: 12, color: '#586e75', margin: 0 }}>
+                    {isCustomSupabaseConfigured()
+                      ? 'Conectado ao seu próprio projeto Supabase (BYOK). Seus dados estão 100% sob seu controle direto.'
+                      : 'Utilizando o banco compartilhado padrão da plataforma com isolamento por usuário. Você pode conectar seu próprio banco Supabase a qualquer momento.'}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowTransparencyModal(true)}
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: 8,
+                    border: '1px solid #d5c0b0',
+                    background: '#fff',
+                    color: '#073642',
+                    fontSize: 12,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6
+                  }}
+                >
+                  <i className="ti ti-info-circle" /> Ver Termos de Transparência
+                </button>
+              </div>
+
+              <div style={{ borderTop: '1px solid #ede8dc', paddingTop: 14 }}>
+                <h4 style={{ fontSize: 12, fontWeight: 800, color: '#073642', textTransform: 'uppercase', letterSpacing: '0.8px', margin: '0 0 10px' }}>
+                  Configurar Supabase Próprio (BYOK — Opcional)
+                </h4>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 12 }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', color: '#93a1a1', marginBottom: 5 }}>
+                      URL do Projeto Supabase
+                    </label>
+                    <input
+                      value={supabaseCustomUrl}
+                      onChange={e => setSupabaseCustomUrl(e.target.value)}
+                      placeholder="https://seu-projeto.supabase.co"
+                      style={{ width: '100%', border: '1px solid rgba(88,110,117,0.2)', borderRadius: 9, padding: '9px 12px', fontSize: 13, background: '#fdf6e3', color: '#073642', outline: 'none' }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', color: '#93a1a1', marginBottom: 5 }}>
+                      Chave Anônima (Anon Key)
+                    </label>
+                    <input
+                      type="password"
+                      value={supabaseCustomKey}
+                      onChange={e => setSupabaseCustomKey(e.target.value)}
+                      placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                      style={{ width: '100%', border: '1px solid rgba(88,110,117,0.2)', borderRadius: 9, padding: '9px 12px', fontSize: 13, background: '#fdf6e3', color: '#073642', outline: 'none' }}
+                    />
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+                  {isCustomSupabaseConfigured() && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (confirm('Deseja remover sua conexão personalizada e voltar ao banco compartilhado padrão?')) {
+                          localStorage.removeItem('teacher_supabase_config')
+                          setSupabaseCustomUrl('')
+                          setSupabaseCustomKey('')
+                          window.dispatchEvent(new CustomEvent('teacher:data_changed'))
+                          setSaved(true)
+                          setTimeout(() => setSaved(false), 2000)
+                        }
+                      }}
+                      style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid #dc322f', background: '#fff', color: '#dc322f', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+                    >
+                      Restaurar Banco Padrão
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!supabaseCustomUrl.trim() || !supabaseCustomKey.trim()) {
+                        alert('Preencha a URL e a Anon Key do seu projeto Supabase.')
+                        return
+                      }
+                      localStorage.setItem('teacher_supabase_config', JSON.stringify({
+                        url: supabaseCustomUrl.trim(),
+                        anonKey: supabaseCustomKey.trim()
+                      }))
+                      window.dispatchEvent(new CustomEvent('teacher:data_changed'))
+                      setSaved(true)
+                      setTimeout(() => setSaved(false), 2000)
+                    }}
+                    style={{ padding: '8px 18px', borderRadius: 8, border: 'none', background: '#073642', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+                  >
+                    <i className="ti ti-check" /> Salvar Conexão BYOK
+                  </button>
+                </div>
+              </div>
+            </div>
+          </ModuleCard>
+
+          <SharedDatabaseConsentModal
+            isOpen={showTransparencyModal}
+            onConsented={() => setShowTransparencyModal(false)}
+            onConfigureCustom={() => setShowTransparencyModal(false)}
+          />
+
           <ModuleCard title="Idioma do Aplicativo / Language" icon="ti-world" style={{ marginBottom: 20 }}>
             <p style={{ fontSize: 13, color: '#586e75', margin: '0 0 12px' }}>
               Escolha o idioma de preferência para a interface do Teacher AI.
@@ -322,7 +540,12 @@ export default function Settings() {
         </>
       )}
 
-      {/* ─── ABA DE FORMATAÇÃO DE DOCUMENTOS (BLOCO E) ────────────────────── */}
+      {/* -- ABA DE CALIBRAÇÕES E PADRÕES DOS MÓDULOS -- */}
+      {activeTab === 'calibrations' && (
+        <TeacherCalibrationsManager />
+      )}
+
+      {/* -- ABA DE FORMATAÇÃO DE DOCUMENTOS (BLOCO E) -- */}
       {activeTab === 'formatting' && (
         <>
           <ModuleCard title="Preferências Globais de Documento & Impressão" icon="ti-typography" style={{ marginBottom: 20 }}>
@@ -373,10 +596,26 @@ export default function Settings() {
                   onChange={e => setDocPrefs({ ...docPrefs, lineHeight: Number(e.target.value) })}
                   style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid #d5c8bb', background: '#fffcf8', fontSize: 13, outline: 'none' }}
                 >
-                  <option value={1.2}>1.2x (Econômico)</option>
-                  <option value={1.45}>1.45x (Equilibrado Padrão)</option>
-                  <option value={1.6}>1.6x (Espaçoso / Anotações)</option>
-                  <option value={1.85}>1.85x (Acessibilidade)</option>
+                  <option value={1.15}>1.15 (Compacto)</option>
+                  <option value={1.25}>1.25 (Recomendado)</option>
+                  <option value={1.5}>1.5 (Espaçado / Tradicional)</option>
+                </select>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#586e75', marginBottom: 6 }}>
+                  Esquema de Cores do Documento
+                </label>
+                <select
+                  value={docPrefs.primaryColor}
+                  onChange={e => setDocPrefs({ ...docPrefs, primaryColor: e.target.value })}
+                  style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid #d5c8bb', background: '#fffcf8', fontSize: 13, outline: 'none' }}
+                >
+                  <option value="#073642">Azul Escuro Sobrancelha (#073642)</option>
+                  <option value="#8b5e3c">Tons de Terra / Caramelo (#8b5e3c)</option>
+                  <option value="#2aa198">Turquesa Pedagógico (#2aa198)</option>
+                  <option value="#268bd2">Azul Clássico (#268bd2)</option>
+                  <option value="#000000">Monocromático Puro (#000000)</option>
                 </select>
               </div>
 
@@ -396,39 +635,27 @@ export default function Settings() {
               </div>
             </div>
 
-            <div style={{ background: '#fdf8f2', border: '1px dashed #d5c8bb', borderRadius: 10, padding: 14, marginBottom: 16 }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: '#8b5e3c', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>
-                Visualização Prévia do Estilo:
-              </span>
-              <div style={{
-                fontFamily: docPrefs.fontFamily,
-                fontSize: `${docPrefs.fontSizePt}pt`,
-                lineHeight: docPrefs.lineHeight,
-                color: '#2c1a0e',
-                background: '#fff',
-                padding: 12,
-                borderRadius: 6,
-                border: '1px solid #ede8dc'
-              }}>
-                <strong>Lesson Plan / Avaliação Demonstrativa:</strong> The students will interact in pairs using Simple Past to describe their weekend experiences. (EF07LI15)
-              </div>
-            </div>
-
             <button
               onClick={() => {
                 saveGlobalDocumentPrefs(docPrefs)
                 setSaved(true)
                 setTimeout(() => setSaved(false), 2000)
               }}
-              style={{ padding: '10px 22px', borderRadius: 10, border: 'none', background: '#8b5e3c', color: '#fff', fontSize: 13.5, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}
+              style={{
+                marginTop: 20, width: '100%', padding: '14px 28px', borderRadius: 12, border: 'none',
+                background: saved ? '#859900' : '#8b5e3c', color: '#fff',
+                fontSize: 14, fontWeight: 700, cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, transition: 'all 0.2s'
+              }}
             >
-              <i className="ti ti-device-floppy" /> {saved ? 'Preferências Salvas!' : 'Salvar Preferências Universais'}
+              <i className={`ti ${saved ? 'ti-check' : 'ti-device-floppy'} text-lg`} />
+              {saved ? 'Padrão Visual Salvo!' : 'Salvar Padrão Visual de Documentos'}
             </button>
           </ModuleCard>
         </>
       )}
 
-      {/* ─── ABA 2: AUDITORIA DE AÇÕES (PORTAIS ESCOLARES) ─────────────────── */}
+      {/* -- ABA 2: AUDITORIA DE AÇÕES (PORTAIS ESCOLARES) -- */}
       {activeTab === 'audit' && (
         <div>
           {/* Status do Consentimento */}
@@ -444,7 +671,7 @@ export default function Settings() {
                 </span>
               </div>
               <p style={{ margin: '4px 0 0', fontSize: 12, color: '#14532d' }}>
-                Aceite único registrado em {consentRecord ? new Date(consentRecord.acceptedAt).toLocaleString('pt-BR') : 'Uso ativo'}. Modo estritamente supervisionado (0-Tester).
+                Aceite único registrado em {consentRecord ? new Date(consentRecord.acceptedAt).toLocaleString('pt-BR') : 'Uso ativo'}. Modo estritamente supervisionado.
               </p>
             </div>
 
@@ -560,7 +787,7 @@ export default function Settings() {
         </div>
       )}
 
-      {/* ─── ABA 3: PRIVACIDADE, LGPD & BACKUP ─────────────────────────────── */}
+      {/* -- ABA 3: PRIVACIDADE, LGPD & BACKUP -- */}
       {activeTab === 'privacy' && (
         <>
           <ModuleCard title="Backup & Transferência de Dados (.JSON)" icon="ti-database" style={{ marginBottom: 20 }}>

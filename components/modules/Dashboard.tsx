@@ -174,39 +174,34 @@ export default function Dashboard() {
     // 3. Horários Unificados: Escolas + Aulas Particulares
     const unifiedClasses: TodayClassItem[] = []
 
-    // Aulas Escolares
+    // Aulas Escolares (Apenas dados 100% reais do Quadro Semanal / Agenda)
     try {
-      const storedSchedule = localStorage.getItem('teacher_weekly_schedule_v2') || localStorage.getItem('teacher_weekly_agenda_posts_v1')
+      const storedSchedule = localStorage.getItem('teacher_agenda_schedule')
       if (storedSchedule) {
         const parsed = JSON.parse(storedSchedule)
         if (Array.isArray(parsed) && parsed.length > 0) {
-          parsed.forEach((item: any) => {
+          // Filtrar qualquer resquício legado de dados simulados (c1..c7, Colégio Integral, Escola Modelo)
+          const realItems = parsed.filter((item: any) => {
+            const isMockId = typeof item.id === 'string' && /^c[1-7]$/.test(item.id)
+            const isMockSchool = item.schoolName === 'Colégio Integral' || item.schoolName === 'Escola Modelo' || item.school === 'Colégio Integral' || item.school === 'Escola Modelo'
+            return !isMockId && !isMockSchool
+          })
+
+          realItems.forEach((item: any) => {
             unifiedClasses.push({
               id: item.id || `cls_${Date.now()}_${Math.random()}`,
               type: 'school',
               dayOfWeek: item.dayOfWeek || (item.day === 'Segunda' ? 1 : item.day === 'Terça' ? 2 : item.day === 'Quarta' ? 3 : item.day === 'Quinta' ? 4 : item.day === 'Sexta' ? 5 : 6),
               timeStart: item.timeStart || (item.time ? item.time.split('-')[0]?.trim() : '07:30'),
               timeEnd: item.timeEnd || (item.time ? item.time.split('-')[1]?.trim() : '08:20'),
-              className: item.className || item.title || '8º Ano A',
-              schoolName: item.school || item.schoolName || 'Colégio Integral',
-              room: item.room || 'Sala 04',
-              topic: item.topic || item.notes || 'Gramática & Conversação',
+              className: item.className || item.title || 'Turma Geral',
+              schoolName: item.school || item.schoolName || 'Escola',
+              room: item.room || 'Sala de Aula',
+              topic: item.topic || item.notes || 'Planejamento de Conteúdo',
               status: item.status || 'ready',
             })
           })
         }
-      } else {
-        const DEFAULT_INITIAL_SCHEDULE: TodayClassItem[] = [
-          { id: 'c1', type: 'school', dayOfWeek: 1, timeStart: '07:30', timeEnd: '08:20', className: '9º Ano A', schoolName: 'Colégio Integral', room: 'Sala 12', topic: 'Present Perfect & Just/Already', status: 'ready' },
-          { id: 'c2', type: 'school', dayOfWeek: 1, timeStart: '08:20', timeEnd: '09:10', className: '9º Ano B', schoolName: 'Colégio Integral', room: 'Sala 14', topic: 'Present Perfect & Ever/Never', status: 'ready' },
-          { id: 'c3', type: 'school', dayOfWeek: 2, timeStart: '09:30', timeEnd: '10:20', className: '7º Ano C', schoolName: 'Escola Modelo', room: 'Sala 08', topic: 'Comparative & Superlative Adjectives', status: 'draft' },
-          { id: 'c4', type: 'school', dayOfWeek: 3, timeStart: '07:30', timeEnd: '08:20', className: '8º Ano A', schoolName: 'Colégio Integral', room: 'Sala 10', topic: 'Simple Past: Regular vs Irregular Verbs', status: 'ready' },
-          { id: 'c5', type: 'school', dayOfWeek: 3, timeStart: '08:20', timeEnd: '09:10', className: '8º Ano B', schoolName: 'Colégio Integral', room: 'Sala 11', topic: 'Simple Past: Negative & Questions', status: 'ready' },
-          { id: 'c6', type: 'school', dayOfWeek: 4, timeStart: '10:30', timeEnd: '11:20', className: '1º Ano EM', schoolName: 'Colégio Integral', room: 'Sala 20', topic: 'Conditionals Type 1 & 2 in Context', status: 'unplanned' },
-          { id: 'c7', type: 'school', dayOfWeek: 5, timeStart: '08:00', timeEnd: '08:50', className: '6º Ano A', schoolName: 'Escola Modelo', room: 'Sala 03', topic: 'Vocabulary: Family & Daily Routine', status: 'ready' },
-        ]
-        unifiedClasses.push(...DEFAULT_INITIAL_SCHEDULE)
-        localStorage.setItem('teacher_weekly_schedule_v2', JSON.stringify(DEFAULT_INITIAL_SCHEDULE))
       }
     } catch {}
 
@@ -305,6 +300,24 @@ export default function Dashboard() {
     const updated = todos.filter(t => t.id !== id)
     setTodos(updated)
     localStorage.setItem('teacher_dashboard_todos', JSON.stringify(updated))
+  }
+
+  // --- Handler de Exclusão de Aula do Quadro Semanal ---
+  const handleDeleteClass = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    try {
+      const raw = localStorage.getItem('teacher_agenda_schedule')
+      if (raw) {
+        const parsed = JSON.parse(raw)
+        if (Array.isArray(parsed)) {
+          const updated = parsed.filter((item: any) => item.id !== id)
+          localStorage.setItem('teacher_agenda_schedule', JSON.stringify(updated))
+        }
+      }
+      localStorage.removeItem('teacher_weekly_schedule_v2')
+      loadDashboardData()
+      window.dispatchEvent(new Event('storage'))
+    } catch {}
   }
 
   // --- Handlers de Post-its ---
@@ -980,38 +993,52 @@ export default function Dashboard() {
                   </div>
                   <div>
                     <h3 style={{ margin: 0, fontSize: 15, fontWeight: 800, color: '#2c1a0e' }}>
-                      Quadro Semanal Unificado (Escolas 🏫 & Particulares 🎓)
+                      Quadro Semanal
                     </h3>
                     <p style={{ margin: 0, fontSize: 11, color: '#665c54' }}>
-                      Selecione um dia da semana para ver a grade horária integrada
+                      Aulas e horários sincronizados com o Calendário
                     </p>
                   </div>
                 </div>
 
-                {/* Filtro Escola vs Particular */}
-                <div style={{ display: 'flex', gap: 4, background: '#faf6f0', padding: 2, borderRadius: 8, border: '1px solid #e8e0d0' }}>
-                  {[
-                    { id: 'all', label: 'Todas' },
-                    { id: 'school', label: '🏫 Escolas' },
-                    { id: 'private', label: '🎓 Particulares' },
-                  ].map(f => (
-                    <button
-                      key={f.id}
-                      onClick={() => setClassFilter(f.id as any)}
-                      style={{
-                        padding: '4px 8px',
-                        borderRadius: 6,
-                        border: 'none',
-                        background: classFilter === f.id ? '#2c1a0e' : 'transparent',
-                        color: classFilter === f.id ? '#fff' : '#665c54',
-                        fontSize: 11,
-                        fontWeight: 700,
-                        cursor: 'pointer',
-                      }}
-                    >
-                      {f.label}
-                    </button>
-                  ))}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  {/* Ir para o Calendário */}
+                  <button
+                    onClick={() => navigateTo('calendar')}
+                    style={{
+                      padding: '4px 10px', borderRadius: 8, border: '1px solid #d5c0b0',
+                      background: '#fff', color: '#8b5e3c', fontSize: 11.5, fontWeight: 700,
+                      cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4
+                    }}
+                  >
+                    <i className="ti ti-calendar" /> Abrir Calendário
+                  </button>
+
+                  {/* Filtro Escola vs Particular */}
+                  <div style={{ display: 'flex', gap: 4, background: '#faf6f0', padding: 2, borderRadius: 8, border: '1px solid #e8e0d0' }}>
+                    {[
+                      { id: 'all', label: 'Todas' },
+                      { id: 'school', label: '🏫 Escolas' },
+                      { id: 'private', label: '🎓 Particulares' },
+                    ].map(f => (
+                      <button
+                        key={f.id}
+                        onClick={() => setClassFilter(f.id as any)}
+                        style={{
+                          padding: '4px 8px',
+                          borderRadius: 6,
+                          border: 'none',
+                          background: classFilter === f.id ? '#2c1a0e' : 'transparent',
+                          color: classFilter === f.id ? '#fff' : '#665c54',
+                          fontSize: 11,
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {f.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
 
@@ -1122,7 +1149,17 @@ export default function Dashboard() {
                     Nenhuma aula agendada para este dia com o filtro atual.
                   </div>
                 ) : (
-                  classesForSelectedDay.map(item => (
+                  classesForSelectedDay.map(item => {
+                    let hasPlan = Boolean(item.lessonPlanId)
+                    try {
+                      const bankRaw = localStorage.getItem('teacher_lesson_plans_bank')
+                      if (bankRaw) {
+                        const bank: Array<{ id: string; className: string; topic?: string; date?: string }> = JSON.parse(bankRaw)
+                        hasPlan = hasPlan || bank.some(p => p.className?.toLowerCase() === item.className?.toLowerCase())
+                      }
+                    } catch {}
+
+                    return (
                     <div
                       key={item.id}
                       onClick={() => handleOpenLessonPlan(item)}
@@ -1166,6 +1203,19 @@ export default function Dashboard() {
                             }}>
                               {item.type === 'private' ? '🎓 Particular' : '🏫 Escola'} · {item.schoolName} {item.room ? `· ${item.room}` : ''}
                             </span>
+                            <span style={{
+                              fontSize: 10,
+                              fontWeight: 700,
+                              padding: '1px 6px',
+                              borderRadius: 4,
+                              background: hasPlan ? '#dcfce7' : '#fef3c7',
+                              color: hasPlan ? '#15803d' : '#b45309',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 3
+                            }}>
+                              {hasPlan ? '✓ Plano Pronto' : '⏳ Sem Plano'}
+                            </span>
                           </div>
                           <div style={{ fontSize: 11.5, color: '#665c54', marginTop: 1 }}>
                             🎯 {item.topic}
@@ -1199,19 +1249,36 @@ export default function Dashboard() {
                           style={{
                             padding: '5px 12px',
                             borderRadius: 6,
-                            border: '1px solid #d5c8bb',
-                            background: '#fff',
-                            color: '#2c1a0e',
+                            border: hasPlan ? '1px solid #10b981' : '1px solid #d5c8bb',
+                            background: hasPlan ? '#f0fdf4' : '#fff',
+                            color: hasPlan ? '#15803d' : '#2c1a0e',
                             fontSize: 11,
                             fontWeight: 700,
                             cursor: 'pointer',
                           }}
                         >
-                          {item.type === 'private' ? 'Abrir Tutoria 🎓' : 'Plano de Aula 🪄'}
+                          {item.type === 'private' ? 'Abrir Tutoria 🎓' : hasPlan ? 'Ver Plano 📖' : 'Planejar Aula ✨'}
                         </button>
+                        {item.type !== 'private' && (
+                          <button
+                            onClick={(e) => handleDeleteClass(item.id, e)}
+                            style={{
+                              padding: '5px 8px',
+                              borderRadius: 6,
+                              border: '1px solid #fecaca',
+                              background: '#fff',
+                              color: '#dc2626',
+                              fontSize: 11,
+                              cursor: 'pointer',
+                            }}
+                            title="Remover aula da grade"
+                          >
+                            <i className="ti ti-trash" />
+                          </button>
+                        )}
                       </div>
                     </div>
-                  ))
+                  )})
                 )}
               </div>
             </div>

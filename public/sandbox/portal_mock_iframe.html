@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Portal Escolar Sandbox (Iframe + Botão Condicional)</title>
+  <style>
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f4f6f9; margin: 0; padding: 30px; }
+    .card { background: #fff; max-width: 900px; margin: 0 auto; padding: 24px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+    h2 { color: #1e293b; margin-top: 0; }
+    .iframe-wrapper { border: 1px solid #cbd5e1; border-radius: 8px; overflow: hidden; margin-top: 16px; min-height: 260px; }
+    iframe { width: 100%; height: 260px; border: none; }
+    input[type="text"], input[type="date"] { padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; box-sizing: border-box; }
+    .btn { background: #2563eb; color: #fff; border: none; padding: 12px 24px; border-radius: 6px; font-weight: 700; cursor: pointer; margin-top: 20px; font-size: 14px; transition: all 0.2s; }
+    .btn:hover:not(:disabled) { background: #1d4ed8; }
+    .btn:disabled { background: #94a3b8 !important; cursor: not-allowed !important; opacity: 0.6; }
+    .status-msg { margin-top: 16px; padding: 12px; background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 6px; color: #065f46; display: none; }
+    .badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; background: #e2e8f0; color: #334155; }
+    .metrics-bar { display: flex; gap: 16px; margin-top: 12px; font-size: 13px; color: #64748b; }
+    .alert-banner { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 10px 14px; color: #1e40af; font-size: 13px; margin-top: 12px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>Diário Online — 9º Ano B (Língua Inglesa)</h2>
+    <p style="color: #64748b; font-size: 14px;">Sandbox Avançada: Tabela embutida em <strong>Iframe</strong> com <strong>Botão de Submit Condicional</strong></p>
+
+    <div class="metrics-bar">
+      <span>Submissões Efetivadas: <strong id="submission_counter" class="badge">0</strong></span>
+      <span>Estado do Formulário: <strong id="form_state" class="badge">Aberto (Não Submetido)</strong></span>
+      <span>Botão Salvar: <strong id="btn_state_badge" class="badge" style="background: #fee2e2; color: #991b1b;">Bloqueado (Disabled)</strong></span>
+    </div>
+
+    <div style="margin-top: 16px; margin-bottom: 16px; display: grid; grid-template-columns: 1fr 2fr; gap: 12px;">
+      <div>
+        <label><strong>Data da Aula:</strong></label>
+        <input type="date" name="data_aula" id="data_aula" value="2026-08-23" style="width: 100%; margin-top: 4px;">
+      </div>
+      <div>
+        <label><strong>Conteúdo Obrigatório da Aula (*):</strong></label>
+        <input type="text" name="conteudo_aula" id="conteudo_aula" placeholder="Digite o conteúdo para liberar o botão salvar" style="width: 100%; margin-top: 4px;" oninput="checkFormValidity()">
+      </div>
+    </div>
+
+    <div class="iframe-wrapper">
+      <iframe id="portal_grades_iframe" name="portal_grades_iframe" src="iframe_content.html"></iframe>
+    </div>
+
+    <div class="alert-banner" id="submit_hint">
+      ⚠️ <em>O botão de submissão permanecerá desabilitado até que o campo de conteúdo e os campos da tabela sejam preenchidos.</em>
+    </div>
+
+    <button type="button" class="btn" id="btn_salvar" disabled onclick="salvarDiario()">Salvar Lançamentos</button>
+    <div id="status_msg" class="status-msg">✅ Lançamento gravado com sucesso no diário eletrônico (Iframe validado)!</div>
+  </div>
+
+  <script>
+    window.__submission_count = 0;
+
+    function checkFormValidity() {
+      const conteudo = document.getElementById('conteudo_aula').value.trim();
+      const btn = document.getElementById('btn_salvar');
+      const badge = document.getElementById('btn_state_badge');
+      const hint = document.getElementById('submit_hint');
+
+      // Validação: conteúdo não pode ser vazio
+      if (conteudo.length > 3) {
+        btn.disabled = false;
+        badge.innerText = 'Liberado (Habilitado)';
+        badge.style.background = '#dcfce7';
+        badge.style.color = '#166534';
+        hint.style.display = 'none';
+      } else {
+        btn.disabled = true;
+        badge.innerText = 'Bloqueado (Disabled)';
+        badge.style.background = '#fee2e2';
+        badge.style.color = '#991b1b';
+        hint.style.display = 'block';
+      }
+    }
+
+    function salvarDiario() {
+      const btn = document.getElementById('btn_salvar');
+      if (btn.disabled) return;
+
+      window.__submission_count += 1;
+      document.getElementById('submission_counter').innerText = window.__submission_count.toString();
+      document.getElementById('form_state').innerText = 'Gravado (Submetido com Sucesso)';
+      document.getElementById('form_state').style.background = '#dcfce7';
+      document.getElementById('form_state').style.color = '#166534';
+      document.getElementById('status_msg').style.display = 'block';
+    }
+  </script>
+</body>
+</html>

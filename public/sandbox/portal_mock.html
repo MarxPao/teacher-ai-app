@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Portal Escolar Sandbox — Lançamento de Notas e Frequência</title>
+  <style>
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f4f6f9; margin: 0; padding: 30px; }
+    .card { background: #fff; max-width: 850px; margin: 0 auto; padding: 24px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+    h2 { color: #1e293b; margin-top: 0; }
+    table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+    th, td { padding: 12px; text-align: left; border-bottom: 1px solid #e2e8f0; font-size: 14px; }
+    th { background: #f8fafc; color: #475569; }
+    input[type="number"], input[type="text"], input[type="date"], textarea { padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; box-sizing: border-box; }
+    input[type="number"] { width: 90px; }
+    .btn { background: #2563eb; color: #fff; border: none; padding: 10px 20px; border-radius: 6px; font-weight: 600; cursor: pointer; margin-top: 20px; font-size: 14px; }
+    .btn:hover { background: #1d4ed8; }
+    .status-msg { margin-top: 16px; padding: 12px; background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 6px; color: #065f46; display: none; }
+    .badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; background: #e2e8f0; color: #334155; }
+    .metrics-bar { display: flex; gap: 16px; margin-top: 12px; font-size: 13px; color: #64748b; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>Diário Online — 9º Ano B (Língua Inglesa)</h2>
+    <p style="color: #64748b; font-size: 14px;">Portal de Testes Local (Sandbox para Browser Harness & CDP)</p>
+
+    <div class="metrics-bar">
+      <span>Submissões Efetivadas: <strong id="submission_counter" class="badge">0</strong></span>
+      <span>Estado do Formulário: <strong id="form_state" class="badge">Aberto (Não Submetido)</strong></span>
+    </div>
+
+    <div style="margin-top: 16px; margin-bottom: 16px; display: grid; grid-template-columns: 1fr 2fr; gap: 12px;">
+      <div>
+        <label><strong>Data da Aula:</strong></label>
+        <input type="date" name="data_aula" id="data_aula" value="2026-08-23" style="width: 100%; margin-top: 4px;">
+      </div>
+      <div>
+        <label><strong>Conteúdo / Pauta da Aula:</strong></label>
+        <input type="text" name="conteudo_aula" id="conteudo_aula" placeholder="Ex: Simple Past vs Present Perfect" style="width: 100%; margin-top: 4px;">
+      </div>
+    </div>
+
+    <table id="grades_table">
+      <thead>
+        <tr>
+          <th>Nº</th>
+          <th>Nome do Aluno</th>
+          <th>Presença</th>
+          <th>Avaliação 1 (Nota 0.0 - 10.0)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr data-student-id="1">
+          <td>1</td>
+          <td class="student-name">Ana Júlia Santos</td>
+          <td><input type="checkbox" name="presenca_1" id="presenca_1" checked></td>
+          <td><input type="number" name="nota_1" id="nota_1" step="0.1" min="0" max="10" value="9.0" oninput="applyGradeMask(this)"></td>
+        </tr>
+        <tr data-student-id="2">
+          <td>2</td>
+          <td class="student-name">Carlos Eduardo Souza</td>
+          <td><input type="checkbox" name="presenca_2" id="presenca_2" checked></td>
+          <td><input type="number" name="nota_2" id="nota_2" step="0.1" min="0" max="10" value="6.5" oninput="applyGradeMask(this)"></td>
+        </tr>
+        <tr data-student-id="3">
+          <td>3</td>
+          <td class="student-name">Lucas Silva</td>
+          <td><input type="checkbox" name="presenca_3" id="presenca_3" checked></td>
+          <td><input type="number" name="nota_3" id="nota_3" step="0.1" min="0" max="10" value="8.0" oninput="applyGradeMask(this)"></td>
+        </tr>
+        <tr data-student-id="4">
+          <td>4</td>
+          <td class="student-name">Mariana Lima</td>
+          <td><input type="checkbox" name="presenca_4" id="presenca_4" checked></td>
+          <td><input type="number" name="nota_4" id="nota_4" step="0.1" min="0" max="10" value="9.5" oninput="applyGradeMask(this)"></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <button type="button" class="btn" id="btn_salvar" onclick="salvarDiario()">Salvar Lançamentos</button>
+    <div id="status_msg" class="status-msg">✅ Lançamento gravado com sucesso no diário eletrônico!</div>
+  </div>
+
+  <script>
+    window.__submission_count = 0;
+
+    function applyGradeMask(input) {
+      let val = parseFloat(input.value);
+      if (isNaN(val)) return;
+      if (val < 0) input.value = 0;
+      if (val > 10) input.value = 10;
+    }
+
+    function salvarDiario() {
+      window.__submission_count += 1;
+      document.getElementById('submission_counter').innerText = window.__submission_count.toString();
+      document.getElementById('form_state').innerText = 'Gravado (Submetido com Sucesso)';
+      document.getElementById('form_state').style.background = '#dcfce7';
+      document.getElementById('form_state').style.color = '#166534';
+      document.getElementById('status_msg').style.display = 'block';
+    }
+  </script>
+</body>
+</html>

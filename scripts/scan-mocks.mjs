@@ -217,10 +217,85 @@ export function runScan() {
 
   const findings = []
 
+  // 2. Varredura linha a linha
   for (const file of filesToScan) {
     const relPath = path.relative(ROOT_DIR, file).replace(/\\/g, '/')
     const content = fs.readFileSync(file, 'utf8')
     const lines = content.split('\n')
+
+    // Heurística de funções async sem await/fetch/supabase/Promise (AVISO)
+    const asyncPattern = /(?:export\s+)?(?:async\s+function\s+([a-zA-Z0-9_]+)|const\s+([a-zA-Z0-9_]+)\s*=\s*async)/g
+    let match
+    while ((match = asyncPattern.exec(content)) !== null) {
+      const fnName = match[1] || match[2] || 'anônima'
+      const startIdx = match.index
+      const openParenIdx = content.indexOf('(', startIdx)
+      if (openParenIdx === -1 || openParenIdx > startIdx + 80) continue
+
+      // Encontra fechamento dos parâmetros ()
+      let pDepth = 1
+      let closeParenIdx = -1
+      for (let i = openParenIdx + 1; i < content.length; i++) {
+        if (content[i] === '(') pDepth++
+        else if (content[i] === ')') {
+          pDepth--
+          if (pDepth === 0) {
+            closeParenIdx = i
+            break
+          }
+        }
+      }
+      if (closeParenIdx === -1) continue
+
+      // Encontra a chave de abertura { do corpo da função (após => ou assinatura)
+      let openBraceIdx = -1
+      let angleDepth = 0
+      let inType = false
+      for (let i = closeParenIdx + 1; i < content.length && i < closeParenIdx + 300; i++) {
+        if (content[i] === '<') angleDepth++
+        else if (content[i] === '>') angleDepth = Math.max(0, angleDepth - 1)
+        else if (content[i] === '{' && angleDepth === 0) {
+          // Verifica se não é parte de um tipo { ... } antes de =>
+          const lookahead = content.substring(i, i + 100)
+          if (!lookahead.includes('=>') || match[0].includes('async function')) {
+            openBraceIdx = i
+            break
+          }
+        }
+      }
+      if (openBraceIdx === -1) continue
+
+      // Extrai corpo respeitando aninhamento de chaves
+      let depth = 1
+      let closeBraceIdx = -1
+      for (let i = openBraceIdx + 1; i < content.length; i++) {
+        if (content[i] === '{') depth++
+        else if (content[i] === '}') {
+          depth--
+          if (depth === 0) {
+            closeBraceIdx = i
+            break
+          }
+        }
+      }
+
+      if (closeBraceIdx !== -1) {
+        const fnBody = content.substring(openBraceIdx + 1, closeBraceIdx)
+        const hasAsyncOp = /\b(await|fetch|supabase|Promise|new\s+Promise|executeUnifiedAiCall|callApi|syncToSupabase|loadFromSupabase|signInWithPassword|signUp|resetPasswordForEmail|signOut|exportToPdf|exportToWord|render|download)\b/.test(fnBody)
+
+        if (!hasAsyncOp && fnBody.trim().length > 20 && !fnBody.includes('// noop') && !fnBody.includes('Promise.resolve')) {
+          const lineOffset = content.substring(0, startIdx).split('\n').length
+          findings.push({
+            ruleId: 'ASYNC_WITHOUT_AWAIT',
+            severity: 'AVISO',
+            description: `Função async '${fnName}' sem await/fetch/supabase no corpo (possível mock/stub síncrono).`,
+            file: relPath,
+            lineNum: lineOffset,
+            lineContent: `async function ${fnName}() { ... }`
+          })
+        }
+      }
+    }
 
     lines.forEach((line, index) => {
       const lineNum = index + 1

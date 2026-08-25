@@ -6,6 +6,10 @@ import ModuleCard from '@/components/ModuleCard'
 import { fillPortal, logPortalFill } from '@/lib/portalBridge'
 import { getPortalProfiles, PortalProfileDef } from '@/lib/portalActionsEngine'
 import { recordStudentGrade } from '@/lib/studentMemory'
+import AutomationDiffModal from '@/components/modules/AutomationDiffModal'
+import { createBrowserTask, BrowserAutomationTask, DiffItem } from '@/lib/browserAutomationClient'
+import { sanitizeOutboundPayload } from '@/lib/portalSanitizer'
+import { getTeacherCalibrations } from '@/lib/teacherCalibrations'
 
 interface School { id: string; name: string; color: string }
 interface ClassRecord { id: string; name: string; schoolId: string }
@@ -25,10 +29,11 @@ export default function Gradebook() {
 
   // Modal de Espelhamento no Portal Escolar
   const [isMirrorModalOpen, setIsMirrorModalOpen] = useState(false)
-  const [mirrorPortalId, setMirrorPortalId] = useState('machado')
+  const [mirrorPortalId, setMirrorPortalId] = useState<string>(() => getTeacherCalibrations().gradebook.defaultPortalSync || 'machado')
   const [mirrorCol, setMirrorCol] = useState('')
   const [isMirroring, setIsMirroring] = useState(false)
   const [mirrorStatus, setMirrorStatus] = useState<string | null>(null)
+  const [activeAutomationTask, setActiveAutomationTask] = useState<BrowserAutomationTask | null>(null)
 
   useEffect(() => {
     const sSchools = localStorage.getItem('teacher_schools')
@@ -157,10 +162,17 @@ export default function Gradebook() {
       return { name: s.name, grade: g, id: s.id }
     })
 
-    const targetClass = classes.find(c => c.id === filterClass)?.name || 'Geral'
-    const targetPortal = portals.find(p => p.id === mirrorPortalId)
+    const diff: DiffItem[] = studentGrades.map(s => ({
+      studentName: s.name,
+      field: mirrorCol === '__avg__' ? 'Média Final' : mirrorCol,
+      beforeValue: '',
+      afterValue: s.grade,
+      approved: true
+    }))
 
-    const payload = {
+    const targetClass = classes.find(c => c.id === filterClass)?.name || 'Geral'
+
+    const rawPayload = {
       platform: mirrorPortalId,
       actionType: 'grades',
       title: `Lançamento de Notas - ${mirrorCol === '__avg__' ? 'Média Final' : mirrorCol}`,
@@ -169,16 +181,43 @@ export default function Gradebook() {
       description: `Espelhamento de notas da coluna ${mirrorCol} para a turma ${targetClass}`,
       mode: 'supervised',
       studentGrades,
+      diff,
+      confidence_flag: 'seletor_mapeado' as const,
       evaluationName: mirrorCol === '__avg__' ? 'Média Final' : mirrorCol
     }
 
-    logPortalFill(payload as any)
-    const res = await fillPortal(payload as any)
+    const cleanPayload = sanitizeOutboundPayload(rawPayload)
 
-    if (res.success) {
-      setMirrorStatus(`✅ Sucesso! As notas de ${studentGrades.length} alunos foram espelhadas no ${targetPortal?.name || mirrorPortalId}!`)
+    // Cria a tarefa de automação
+    const createdTask = await createBrowserTask({
+      portal: mirrorPortalId,
+      actionType: 'write_grades',
+      payload: cleanPayload,
+      approvalMode: 'batch',
+      classRef: targetClass,
+      studentCount: studentGrades.length
+    })
+
+    setIsMirrorModalOpen(false)
+
+    if (createdTask) {
+      setActiveAutomationTask(createdTask)
     } else {
-      setMirrorStatus(`⚠️ A aba do portal "${targetPortal?.name || mirrorPortalId}" não respondeu. Certifique-se de que a planilha de notas está aberta no seu Chrome.`)
+      const localTask: BrowserAutomationTask = {
+        id: `task_${Date.now()}`,
+        teacher_id: 'local_teacher',
+        trace_id: `trace_${Date.now()}`,
+        portal: mirrorPortalId,
+        action_type: 'write_grades',
+        status: 'drafted',
+        payload: cleanPayload,
+        approval_mode: 'batch',
+        class_ref: targetClass,
+        student_count: studentGrades.length,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }
+      setActiveAutomationTask(localTask)
     }
 
     setIsMirroring(false)
@@ -416,6 +455,14 @@ export default function Gradebook() {
                 </div>
               </div>
             </div>
+          )}
+
+          {activeAutomationTask && (
+            <AutomationDiffModal
+              task={activeAutomationTask}
+              onClose={() => setActiveAutomationTask(null)}
+              onCompleted={() => setActiveAutomationTask(null)}
+            />
           )}
 
         </ModuleShell>

@@ -8,6 +8,7 @@ import { ApiConfig } from '@/components/modules/ApiManager'
 import { exportToPdf, exportToWord, exportToExcel } from '@/lib/exportUtils'
 import { getStoredBnccSkills, getBnccSkillsForGrade, getClassPostponedSkills, saveClassPostponedSkills, BnccSkill } from '@/lib/bnccData'
 import { buildTeacherStylePromptDirective, updateTeacherProfileFromLessonPlan } from '@/lib/teacherProfile'
+import { getStoredQuestions } from '@/lib/questionBankService'
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 interface ClassRecord {
@@ -29,6 +30,7 @@ interface LessonStage {
   durationMin: number
   teacherAction: string
   studentAction: string
+  grouping?: string
   completed?: boolean
 }
 
@@ -44,9 +46,11 @@ export interface LessonPlanDocument {
   selectedSkills: Array<{ code: string; desc: string; status: 'planned' | 'covered' | 'postponed' }>
   methodology: string
   referenceMaterial: {
+    bookId?: string
     bookTitle: string
     unit: string
     pages: string
+    sharedClassIds?: string[]
   }
   stages: LessonStage[]
   guidingQuestions: string[]
@@ -62,6 +66,9 @@ const METHODOLOGY_PRESETS = [
   { id: 'ppp', name: 'PPP (Presentation, Practice, Production)', badge: '#268bd2', desc: 'Estruturado para gramática e vocabulário MFP' },
   { id: 'guided_discovery', name: 'Guided Discovery (Descoberta Guiada)', badge: '#2aa198', desc: 'Indução de regras através de exemplos e Noticing' },
   { id: 'ttt', name: 'TTT (Test-Teach-Test)', badge: '#cb4b16', desc: 'Diagnóstico inicial para ensinar apenas as lacunas' },
+  { id: 'clil', name: 'CLIL (Content & Language)', badge: '#2aa198', desc: 'Integração de conteúdo curricular interdisciplinar com língua-alvo' },
+  { id: 'pbl', name: 'PBL (Project-Based Learning)', badge: '#859900', desc: 'Resolução de problemas reais em projetos colaborativos' },
+  { id: 'four_c', name: '4C Skills (Século XXI)', badge: '#6c71c4', desc: 'Desenvolvimento de Criatividade, Colaboração, Comunicação e Crítica' },
   { id: 'flipped', name: 'Sala de Aula Invertida (Flipped)', badge: '#6c71c4', desc: 'Estudo prévio e atividades de alta cognição em sala' },
   { id: 'lexical', name: 'Abordagem Léxica (Lexical Approach)', badge: '#d33682', desc: 'Foco em chunks, collocations e expressões prontas' }
 ]
@@ -74,8 +81,8 @@ const DEFAULT_STAGES: LessonStage[] = [
 ]
 
 export default function LessonStudio() {
-  // Navigation tabs
-  const [activeTab, setActiveTab] = useState<'editor' | 'bank'>('editor')
+  // Navigation tabs: editor (boxes), preview (clean document), bank (repository)
+  const [activeTab, setActiveTab] = useState<'editor' | 'preview' | 'bank'>('editor')
 
   // Context Data
   const [classes, setClasses] = useState<ClassRecord[]>([])
@@ -92,6 +99,8 @@ export default function LessonStudio() {
   const [bookTitle, setBookTitle] = useState('')
   const [unitChapter, setUnitChapter] = useState('')
   const [pages, setPages] = useState('')
+  const [sharedClassIds, setSharedClassIds] = useState<string[]>([])
+  const [libraryBooks, setLibraryBooks] = useState<Array<{ id: number | string; title: string; content?: string; type?: string }>>([])
   const [stages, setStages] = useState<LessonStage[]>(DEFAULT_STAGES)
   const [guidingQuestions, setGuidingQuestions] = useState<string[]>([
     'Como os alunos utilizam a estrutura para expressar ideias reais?',
@@ -154,6 +163,9 @@ export default function LessonStudio() {
               setBookTitle(foundPlan.referenceMaterial.bookTitle || '')
               setUnitChapter(foundPlan.referenceMaterial.unit || '')
               setPages(foundPlan.referenceMaterial.pages || '')
+              if (Array.isArray(foundPlan.referenceMaterial.sharedClassIds)) {
+                setSharedClassIds(foundPlan.referenceMaterial.sharedClassIds)
+              }
             }
             if (foundPlan.stages && foundPlan.stages.length > 0) setStages(foundPlan.stages)
             if (foundPlan.guidingQuestions) setGuidingQuestions(foundPlan.guidingQuestions)
@@ -217,7 +229,11 @@ export default function LessonStudio() {
       setClasses(parsedCl)
       if (sc) setSchools(JSON.parse(sc))
       if (bk) setBankPlans(parsedBk)
-      if (qb) setAvailableQuestions(JSON.parse(qb))
+      setAvailableQuestions(getStoredQuestions())
+      const repo = localStorage.getItem('teacher_repo') || localStorage.getItem('teacher_repository')
+      if (repo) {
+        try { setLibraryBooks(JSON.parse(repo)) } catch {}
+      }
     } catch {}
   }, [])
 
@@ -238,6 +254,53 @@ export default function LessonStudio() {
     if (!selectedClassId) return []
     return getClassPostponedSkills(selectedClassId)
   }, [selectedClassId])
+
+  // Resumo e Dicas da Última Aula (Hints de Continuidade)
+  const lastLessonSummaryData = useMemo(() => {
+    const className = currentClass?.name || selectedClassId || 'Turma'
+    try {
+      const stored = localStorage.getItem(`teacher_last_lesson_summary_${className.replace(/\s/g,'_')}`)
+      if (stored) return JSON.parse(stored)
+    } catch {}
+    return null
+  }, [currentClass, selectedClassId])
+
+  const lastLessonInfo = useMemo(() => {
+    const mostRecentPlan = classHistoryPlans[0]
+    return {
+      topic: lastLessonSummaryData?.topic || mostRecentPlan?.topic,
+      date: lastLessonSummaryData?.date || mostRecentPlan?.date,
+      homework: lastLessonSummaryData?.homework || mostRecentPlan?.homework,
+      notes: lastLessonSummaryData?.summary || mostRecentPlan?.postLessonNotes,
+      methodology: mostRecentPlan?.methodology,
+      skills: mostRecentPlan?.selectedSkills || []
+    }
+  }, [classHistoryPlans, lastLessonSummaryData])
+
+  const handleAddReviewWarmup = () => {
+    const topicToReview = lastLessonInfo.topic || 'conteúdo da aula anterior'
+    const warmupStage: LessonStage = {
+      name: 'Warm-up / Revisão da Aula Anterior',
+      durationMin: 5,
+      teacherAction: `Revisão oral rápida conectando os pontos centrais da aula passada (${topicToReview}) com o tema de hoje`,
+      studentAction: 'Participação oral ativa e ativação de vocabulário prévio',
+      grouping: 'pairs',
+      completed: false
+    }
+    setStages([warmupStage, ...stages])
+    showNotification('Warm-up de revisão (5 min) adicionado no início da aula!')
+  }
+
+  const handleAddHomeworkCheck = () => {
+    const hw = lastLessonInfo.homework || 'exercícios da aula passada'
+    const updatedStages = [...stages]
+    if (updatedStages.length > 0) {
+      const existing = updatedStages[0].teacherAction
+      updatedStages[0].teacherAction = `Checagem e correção do dever da aula anterior (${hw}). ${existing}`
+      setStages(updatedStages)
+      showNotification('Checagem do dever inserida na 1ª etapa!')
+    }
+  }
 
   const showNotification = (msg: string) => {
     setToast(msg)
@@ -426,7 +489,7 @@ Retorne ESTRITAMENTE um objeto JSON no formato:
       roomSpace,
       selectedSkills,
       methodology: selectedMethodology,
-      referenceMaterial: { bookTitle, unit: unitChapter, pages },
+      referenceMaterial: { bookTitle, unit: unitChapter, pages, sharedClassIds },
       stages,
       guidingQuestions,
       homework,
@@ -439,6 +502,12 @@ Retorne ESTRITAMENTE um objeto JSON no formato:
     setBankPlans(updated)
     try {
       localStorage.setItem('teacher_lesson_plans_bank', JSON.stringify(updated))
+      localStorage.setItem(`teacher_last_lesson_summary_${currentClass.name.replace(/\s/g, '_')}`, JSON.stringify({
+        date: lessonDate,
+        topic: topic || 'Plano de Aula',
+        summary: postLessonNotes || `Aula sobre ${topic} (${selectedMethodology.toUpperCase()})`,
+        homework: homework
+      }))
       window.dispatchEvent(new Event('storage'))
       // Atualiza o perfil adaptativo do professor incrementalmente
       updateTeacherProfileFromLessonPlan({
@@ -451,25 +520,33 @@ Retorne ESTRITAMENTE um objeto JSON no formato:
     } catch {}
   }
 
+  // ─── Salvamento 3: Salvar em Ambos (Calendário + Banco de Planejamento) ──
+  const handleSaveBoth = () => {
+    handleSaveToCalendar()
+    handleSaveToBank()
+    showNotification('✨ Plano salvo no Calendário e no Banco de Planejamento com sucesso!')
+  }
+
   // ─── Exportações ─────────────────────────────────────────────────────────
+  // ─── Exportações & Folha de Planejamento Limpa ────────────────────────────
   const generatePlanMarkdown = () => {
     return `
-# PLANO DE AULA: ${topic.toUpperCase()}
+# PLANO DE AULA: ${topic.toUpperCase() || 'LÍNGUA INGLESA'}
 
 **Escola:** ${currentSchool?.name || 'Escola'} &bull; **Turma:** ${currentClass?.name || 'Turma'} (${currentClass?.gradeYear || '9º Ano'})
 **Data:** ${new Date(lessonDate).toLocaleDateString('pt-BR')} &bull; **Espaço Utilizado:** ${roomSpace}
 **Metodologia:** ${METHODOLOGY_PRESETS.find(m => m.id === selectedMethodology)?.name || 'TBLT'}
-**Material de Referência:** ${bookTitle || 'Livro Base'} ${unitChapter ? `(${unitChapter})` : ''} ${pages ? `[${pages}]` : ''}
+${bookTitle ? `**Material Didático:** ${bookTitle} ${unitChapter ? `(${unitChapter})` : ''} ${pages ? `[${pages}]` : ''}` : ''}
 
 ---
 
-## 🎯 Competências e Habilidades BNCC Trabalhadas
-${selectedSkills.map(s => `- **[${s.code}]** ${s.desc} (${s.status === 'covered' ? 'Concluída' : s.status === 'postponed' ? 'Adiada' : 'Planejada'})`).join('\n') || '- Nenhuma habilidade específica vinculada.'}
+## 🎯 Competências e Habilidades BNCC
+${selectedSkills.length > 0 ? selectedSkills.map(s => `- **[${s.code}]** ${s.desc}`).join('\n') : '- Nenhuma habilidade específica vinculada.'}
 
 ---
 
 ## ❓ Perguntas-Guia da Aula
-${guidingQuestions.map(q => `- *${q}*`).join('\n')}
+${guidingQuestions.filter(q => q.trim()).map(q => `- *${q}*`).join('\n')}
 
 ---
 
@@ -480,13 +557,14 @@ ${stages.map(s => `| **${s.name}** | ${s.durationMin} min | ${s.teacherAction} |
 
 ---
 
-## 📝 Dever de Casa / Homework
-${homework || 'Sem tarefa de casa atribuída para esta aula.'}
+## 📝 Dever de Casa (Homework)
+${homework || 'Sem tarefa de casa atribuída.'}
 
----
+${postLessonNotes ? `---
 
-## 💡 Observações & Log Reflexivo Pós-Aula
-${postLessonNotes || 'Nenhuma observação registrada.'}
+## 💡 Observações & Reflexão Pedagógica
+${postLessonNotes}
+` : ''}
 `
   }
 
@@ -521,6 +599,11 @@ ${postLessonNotes || 'Nenhuma observação registrada.'}
     showNotification('📊 Cronograma da aula exportado para Excel (.csv)!')
   }
 
+  const handleCopyCleanText = () => {
+    navigator.clipboard.writeText(generatePlanMarkdown())
+    showNotification('📋 Texto formatado do plano copiado para a área de transferência!')
+  }
+
   return (
     <div style={{ padding: '32px 48px', minHeight: '100%', boxSizing: 'border-box', background: '#fdf8f2', maxWidth: 1440, margin: '0 auto' }}>
       
@@ -543,13 +626,19 @@ ${postLessonNotes || 'Nenhuma observação registrada.'}
             onClick={() => setActiveTab('editor')}
             style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: activeTab === 'editor' ? '#8b5e3c' : 'transparent', color: activeTab === 'editor' ? '#fff' : '#586e75', fontWeight: 700, cursor: 'pointer', fontSize: 13 }}
           >
-            <i className="ti ti-edit"></i> Documento de Planejamento
+            <i className="ti ti-edit"></i> Edição (Boxes)
+          </button>
+          <button
+            onClick={() => setActiveTab('preview')}
+            style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: activeTab === 'preview' ? '#8b5e3c' : 'transparent', color: activeTab === 'preview' ? '#fff' : '#586e75', fontWeight: 700, cursor: 'pointer', fontSize: 13 }}
+          >
+            <i className="ti ti-file-text"></i> Folha de Planejamento (Limpo)
           </button>
           <button
             onClick={() => setActiveTab('bank')}
             style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: activeTab === 'bank' ? '#8b5e3c' : 'transparent', color: activeTab === 'bank' ? '#fff' : '#586e75', fontWeight: 700, cursor: 'pointer', fontSize: 13 }}
           >
-            <i className="ti ti-archive"></i> Banco de Planejamento ({bankPlans.length})
+            <i className="ti ti-archive"></i> Banco de Planos ({bankPlans.length})
           </button>
         </div>
       </div>
@@ -757,11 +846,47 @@ ${postLessonNotes || 'Nenhuma observação registrada.'}
               </div>
             </div>
 
-            {/* Box 5: Material de Referência (Multi-Turma) */}
+            {/* Box 5: Material de Referência (Multi-Turma & Biblioteca RAG) */}
             <div style={{ background: '#fffcf8', border: '1px solid rgba(139,115,85,0.16)', borderRadius: 16, padding: 20 }}>
-              <span style={{ fontSize: 12, fontWeight: 800, color: '#8b5e3c', textTransform: 'uppercase', letterSpacing: 0.5, display: 'block', marginBottom: 12 }}>
-                📦 Box 5: Livro Didático & Material de Referência
-              </span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+                <span style={{ fontSize: 12, fontWeight: 800, color: '#8b5e3c', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                  📦 Box 5: Livro Didático & Material de Referência
+                </span>
+                {libraryBooks.length > 0 && (
+                  <span style={{ fontSize: 11.5, color: '#2aa198', fontWeight: 700 }}>
+                    📚 {libraryBooks.length} livro(s) indexado(s) no Repositório
+                  </span>
+                )}
+              </div>
+
+              {/* Sugestões Rápidas de Livros da Biblioteca */}
+              {libraryBooks.length > 0 && (
+                <div style={{ marginBottom: 12, display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+                  <span style={{ fontSize: 11, color: '#7a6552', fontWeight: 600 }}>Da sua biblioteca:</span>
+                  {libraryBooks.map(book => (
+                    <button
+                      key={book.id}
+                      type="button"
+                      onClick={() => {
+                        setBookTitle(book.title)
+                        if (!topic && book.title) {
+                          setTopic(`Conteúdo baseado em ${book.title}`)
+                        }
+                        showNotification(`Livro "${book.title}" vinculado ao planejamento.`)
+                      }}
+                      style={{
+                        padding: '3px 8px', borderRadius: 6,
+                        border: bookTitle === book.title ? '1px solid #8b5e3c' : '1px solid #d5c0b0',
+                        background: bookTitle === book.title ? '#f5efe6' : '#fff',
+                        fontSize: 11, color: bookTitle === book.title ? '#8b5e3c' : '#4a382a',
+                        cursor: 'pointer', fontWeight: 600
+                      }}
+                    >
+                      📖 {book.title}
+                    </button>
+                  ))}
+                </div>
+              )}
 
               <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 12 }}>
                 <div>
@@ -769,16 +894,22 @@ ${postLessonNotes || 'Nenhuma observação registrada.'}
                   <input
                     value={bookTitle}
                     onChange={e => setBookTitle(e.target.value)}
-                    placeholder="Ex: Eyes Open 3 (Cambridge)"
+                    list="library-books-options"
+                    placeholder="Ex: Eyes Open 3 (Cambridge) ou selecione..."
                     style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #d5c0b0', background: '#fdf8f2', fontSize: 13, outline: 'none' }}
                   />
+                  <datalist id="library-books-options">
+                    {libraryBooks.map(b => (
+                      <option key={b.id} value={b.title} />
+                    ))}
+                  </datalist>
                 </div>
                 <div>
                   <label style={{ display: 'block', fontSize: 11.5, fontWeight: 700, color: '#7a6552', marginBottom: 4 }}>Unidade / Capítulo</label>
                   <input
                     value={unitChapter}
                     onChange={e => setUnitChapter(e.target.value)}
-                    placeholder="Ex: Unit 4"
+                    placeholder="Ex: Unit 4: Free Time"
                     style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #d5c0b0', background: '#fdf8f2', fontSize: 13, outline: 'none' }}
                   />
                 </div>
@@ -792,6 +923,46 @@ ${postLessonNotes || 'Nenhuma observação registrada.'}
                   />
                 </div>
               </div>
+
+              {/* Vínculo Multi-Turma de Livros Paralelos */}
+              {classes.length > 1 && (
+                <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px dashed #e8decb' }}>
+                  <span style={{ fontSize: 11, color: '#7a6552', fontWeight: 700, display: 'block', marginBottom: 6 }}>
+                    👥 Turmas paralelas que compartilham este mesmo material:
+                  </span>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    {classes.filter(c => c.id !== selectedClassId).map(c => {
+                      const isShared = sharedClassIds.includes(c.id)
+                      return (
+                        <label
+                          key={c.id}
+                          style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 4,
+                            padding: '3px 8px', borderRadius: 6,
+                            border: isShared ? '1px solid #268bd2' : '1px solid #d5c0b0',
+                            background: isShared ? '#e8f4fd' : '#fff',
+                            fontSize: 11, color: isShared ? '#268bd2' : '#586e75',
+                            cursor: 'pointer', fontWeight: 600
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isShared}
+                            onChange={e => {
+                              if (e.target.checked) {
+                                setSharedClassIds([...sharedClassIds, c.id])
+                              } else {
+                                setSharedClassIds(sharedClassIds.filter(id => id !== c.id))
+                              }
+                            }}
+                          />
+                          {c.name}
+                        </label>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Box 6: Roteiro com Timing por Etapa */}
@@ -1011,6 +1182,16 @@ ${postLessonNotes || 'Nenhuma observação registrada.'}
                 >
                   <i className="ti ti-link"></i> Anexar Atividade do Banco
                 </button>
+                <button
+                  onClick={() => setActiveTab('preview')}
+                  style={{
+                    padding: '8px 14px', borderRadius: 8, border: '1.5px solid #8b5e3c',
+                    background: '#fdf8f2', color: '#8b5e3c', fontSize: 12.5,
+                    fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6
+                  }}
+                >
+                  <i className="ti ti-eye"></i> Visualizar Folha Limpa
+                </button>
               </div>
 
               {/* OS BOTÕES DE AÇÃO E SALVAMENTO */}
@@ -1030,8 +1211,8 @@ ${postLessonNotes || 'Nenhuma observação registrada.'}
                 <button
                   onClick={handleSaveToCalendar}
                   style={{
-                    padding: '10px 18px', borderRadius: 10, border: '1.5px solid #8b5e3c',
-                    background: '#fff', color: '#8b5e3c', fontSize: 13,
+                    padding: '9px 16px', borderRadius: 10, border: '1.5px solid #8b5e3c',
+                    background: '#fff', color: '#8b5e3c', fontSize: 12.5,
                     fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6
                   }}
                 >
@@ -1041,23 +1222,123 @@ ${postLessonNotes || 'Nenhuma observação registrada.'}
                 <button
                   onClick={handleSaveToBank}
                   style={{
-                    padding: '10px 20px', borderRadius: 10, border: 'none',
+                    padding: '9px 16px', borderRadius: 10, border: '1.5px solid #8b5e3c',
+                    background: '#fff', color: '#8b5e3c', fontSize: 12.5,
+                    fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6
+                  }}
+                >
+                  <i className="ti ti-database"></i> Salvar no Banco
+                </button>
+
+                <button
+                  onClick={handleSaveBoth}
+                  style={{
+                    padding: '9px 18px', borderRadius: 10, border: 'none',
                     background: 'linear-gradient(135deg, #8b5e3c 0%, #6f4728 100%)',
-                    color: '#fff', fontSize: 13.5, fontWeight: 700,
+                    color: '#fff', fontSize: 13, fontWeight: 700,
                     cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
                     boxShadow: '0 3px 10px rgba(139,94,60,0.3)'
                   }}
                 >
-                  <i className="ti ti-database"></i> Salvar no Banco
+                  <i className="ti ti-sparkles"></i> Salvar em Ambos
                 </button>
               </div>
             </div>
 
           </div>
 
-          {/* ─── COLUNA LATERAL: PERGUNTAS-GUIA & RESUMO DA AULA ANTERIOR ──── */}
+          {/* ─── COLUNA LATERAL: DICAS DA ÚLTIMA AULA, PERGUNTAS-GUIA & HISTÓRICO ──── */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
             
+            {/* Box Lateral 0: 💡 DICAS & CONTINUIDADE DA ÚLTIMA AULA (HINTS) */}
+            <div style={{ background: '#fffcf7', border: '1.5px solid #d4944a', borderRadius: 16, padding: 18, boxShadow: '0 2px 10px rgba(212,148,74,0.08)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                <span style={{ fontSize: 12, fontWeight: 800, color: '#a05e1a', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  💡 Continuidade & Dicas da Última Aula
+                </span>
+                <span style={{ fontSize: 10.5, background: '#fef3c7', color: '#92400e', padding: '2px 8px', borderRadius: 6, fontWeight: 700 }}>
+                  {currentClass?.name || 'Turma'}
+                </span>
+              </div>
+              <p style={{ fontSize: 11.5, color: '#7a6552', margin: '0 0 12px 0', lineHeight: 1.35 }}>
+                Ganchos pedagógicos e conexões com o conteúdo ministrado anteriormente:
+              </p>
+
+              {lastLessonInfo.topic ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <div style={{ background: '#fefbf6', border: '1px solid #e8decb', borderRadius: 10, padding: 10 }}>
+                    <div style={{ fontSize: 11, color: '#a08060', marginBottom: 2 }}>
+                      Último Tópico Ministrado {lastLessonInfo.date ? `(${new Date(lastLessonInfo.date).toLocaleDateString('pt-BR')})` : ''}:
+                    </div>
+                    <strong style={{ fontSize: 12.5, color: '#2c1a0e', display: 'block' }}>
+                      {lastLessonInfo.topic}
+                    </strong>
+                    {lastLessonInfo.homework && (
+                      <div style={{ marginTop: 6, fontSize: 11.5, color: '#8b5e3c', background: '#fff', padding: '4px 8px', borderRadius: 6, border: '1px solid #ede8dc' }}>
+                        <strong>Dever Passado:</strong> {lastLessonInfo.homework}
+                      </div>
+                    )}
+                    {lastLessonInfo.notes && (
+                      <div style={{ marginTop: 6, fontSize: 11, color: '#b45309', background: '#fffbeb', padding: '4px 8px', borderRadius: 6, border: '1px solid #fde68a', fontStyle: 'italic' }}>
+                        &ldquo;{lastLessonInfo.notes}&rdquo;
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Ações Rápidas de Continuidade */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <button
+                      type="button"
+                      onClick={handleAddReviewWarmup}
+                      style={{
+                        padding: '6px 10px', borderRadius: 8, border: '1px solid #d4944a',
+                        background: '#fff', fontSize: 11.5, color: '#a05e1a', cursor: 'pointer',
+                        fontWeight: 700, textAlign: 'left', display: 'flex', alignItems: 'center', gap: 6
+                      }}
+                    >
+                      <span>⚡</span> Inserir Warm-up de Revisão (+5 min)
+                    </button>
+
+                    {lastLessonInfo.homework && (
+                      <button
+                        type="button"
+                        onClick={handleAddHomeworkCheck}
+                        style={{
+                          padding: '6px 10px', borderRadius: 8, border: '1px solid #d5c0b0',
+                          background: '#fff', fontSize: 11.5, color: '#8b5e3c', cursor: 'pointer',
+                          fontWeight: 600, textAlign: 'left', display: 'flex', alignItems: 'center', gap: 6
+                        }}
+                      >
+                        <span>📋</span> Inserir Checagem do Dever na 1ª Etapa
+                      </button>
+                    )}
+
+                    {lastLessonInfo.skills && lastLessonInfo.skills.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedSkills(lastLessonInfo.skills)
+                          showNotification(`${lastLessonInfo.skills.length} habilidades copiadas da aula anterior!`)
+                        }}
+                        style={{
+                          padding: '6px 10px', borderRadius: 8, border: '1px solid #d5c0b0',
+                          background: '#fff', fontSize: 11.5, color: '#8b5e3c', cursor: 'pointer',
+                          fontWeight: 600, textAlign: 'left', display: 'flex', alignItems: 'center', gap: 6
+                        }}
+                      >
+                        <span>🎯</span> Conectar Habilidades da Aula Anterior
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div style={{ background: '#fdf8f2', padding: 12, borderRadius: 10, border: '1px solid #ede8dc', textAlign: 'center', color: '#a08060', fontSize: 11.5 }}>
+                  <i className="ti ti-bulb" style={{ fontSize: 22, display: 'block', marginBottom: 4, color: '#d4944a' }} />
+                  Nenhuma aula anterior salva para esta turma ainda. Ao planejar e salvar suas aulas, as dicas de revisão e continuidade aparecerão aqui automaticamente.
+                </div>
+              )}
+            </div>
+
             {/* Box Lateral 1: Perguntas-Guia (Guiding Questions) */}
             <div style={{ background: '#fffcf8', border: '1px solid rgba(139,115,85,0.16)', borderRadius: 16, padding: 18 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
@@ -1121,19 +1402,82 @@ ${postLessonNotes || 'Nenhuma observação registrada.'}
                     </div>
                   </div>
 
-                  {classHistoryPlans[historyIndex] && (
-                    <div style={{ background: '#fdf8f2', padding: 12, borderRadius: 10, border: '1px solid #e8decb' }}>
-                      <strong style={{ fontSize: 12.5, color: '#2c1a0e', display: 'block' }}>
-                        {classHistoryPlans[historyIndex].topic}
-                      </strong>
-                      <div style={{ fontSize: 11, color: '#8b5e3c', margin: '2px 0 6px 0' }}>
-                        Data: {new Date(classHistoryPlans[historyIndex].date).toLocaleDateString('pt-BR')}
+                  {classHistoryPlans[historyIndex] && (() => {
+                    const prevPlan = classHistoryPlans[historyIndex]
+                    return (
+                      <div style={{ background: '#fdf8f2', padding: 12, borderRadius: 10, border: '1px solid #e8decb', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <strong style={{ fontSize: 12.5, color: '#2c1a0e', display: 'block' }}>
+                          {prevPlan.topic}
+                        </strong>
+                        <div style={{ fontSize: 11, color: '#8b5e3c' }}>
+                          📅 {new Date(prevPlan.date).toLocaleDateString('pt-BR')} &bull; Metodologia: {prevPlan.methodology?.toUpperCase() || 'TBLT'}
+                        </div>
+                        {prevPlan.referenceMaterial?.bookTitle && (
+                          <div style={{ fontSize: 11, color: '#2aa198' }}>
+                            📖 {prevPlan.referenceMaterial.bookTitle} {prevPlan.referenceMaterial.unit ? `(${prevPlan.referenceMaterial.unit})` : ''}
+                          </div>
+                        )}
+                        <div style={{ fontSize: 11.5, color: '#4a382a', lineHeight: 1.35 }}>
+                          <strong>Dever de Casa:</strong> {prevPlan.homework || 'Nenhum'}
+                        </div>
+                        {prevPlan.postLessonNotes && (
+                          <div style={{ fontSize: 11, color: '#7a6552', fontStyle: 'italic', background: '#fff', padding: '6px 8px', borderRadius: 6, border: '1px solid #ede8dc' }}>
+                            &ldquo;{prevPlan.postLessonNotes}&rdquo;
+                          </div>
+                        )}
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 4 }}>
+                          {prevPlan.homework && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setHomework(prevPlan.homework)
+                                showNotification('Dever de casa da aula anterior copiado!')
+                              }}
+                              style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid #d5c0b0', background: '#fff', fontSize: 11, color: '#8b5e3c', cursor: 'pointer', fontWeight: 600, textAlign: 'left' }}
+                            >
+                              📋 Copiar Dever para Hoje
+                            </button>
+                          )}
+                          {prevPlan.selectedSkills && prevPlan.selectedSkills.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedSkills(prevPlan.selectedSkills)
+                                showNotification(`${prevPlan.selectedSkills.length} habilidades copiadas da aula anterior!`)
+                              }}
+                              style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid #d5c0b0', background: '#fff', fontSize: 11, color: '#8b5e3c', cursor: 'pointer', fontWeight: 600, textAlign: 'left' }}
+                            >
+                              🎯 Copiar {prevPlan.selectedSkills.length} Habilidades
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setPlanId(prevPlan.id)
+                              setTopic(prevPlan.topic)
+                              if (prevPlan.roomSpace) setRoomSpace(prevPlan.roomSpace)
+                              if (prevPlan.methodology) setSelectedMethodology(prevPlan.methodology)
+                              if (prevPlan.referenceMaterial) {
+                                setBookTitle(prevPlan.referenceMaterial.bookTitle || '')
+                                setUnitChapter(prevPlan.referenceMaterial.unit || '')
+                                setPages(prevPlan.referenceMaterial.pages || '')
+                              }
+                              if (prevPlan.stages && prevPlan.stages.length > 0) setStages(prevPlan.stages)
+                              if (prevPlan.guidingQuestions) setGuidingQuestions(prevPlan.guidingQuestions)
+                              if (prevPlan.selectedSkills) setSelectedSkills(prevPlan.selectedSkills)
+                              if (prevPlan.homework) setHomework(prevPlan.homework)
+                              if (prevPlan.postLessonNotes) setPostLessonNotes(prevPlan.postLessonNotes)
+                              showNotification(`Plano "${prevPlan.topic}" carregado para reutilização!`)
+                            }}
+                            style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid #8b5e3c', background: '#f5efe6', fontSize: 11, color: '#8b5e3c', cursor: 'pointer', fontWeight: 700, textAlign: 'left' }}
+                          >
+                            📂 Carregar este Plano Completo
+                          </button>
+                        </div>
                       </div>
-                      <div style={{ fontSize: 11.5, color: '#4a382a', lineHeight: 1.35 }}>
-                        <strong>Dever de Casa Dado:</strong> {classHistoryPlans[historyIndex].homework || 'Nenhum'}
-                      </div>
-                    </div>
-                  )}
+                    )
+                  })()}
                 </div>
               )}
             </div>
@@ -1143,7 +1487,191 @@ ${postLessonNotes || 'Nenhuma observação registrada.'}
         </div>
       )}
 
-      {/* ─── ABA 2: BANCO DE PLANEJAMENTO (REPOSITÓRIO PERENE) ──────────────── */}
+      {/* ─── ABA 2: FOLHA DE PLANEJAMENTO (DOCUMENTO LIMPO) ───────────────── */}
+      {activeTab === 'preview' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 960, margin: '0 auto' }}>
+          
+          {/* Barra Superior de Ações do Documento Limpo */}
+          <div style={{
+            background: '#fffcf8', border: '1px solid #d5c0b0', borderRadius: 14,
+            padding: '14px 20px', display: 'flex', justifyContent: 'space-between',
+            alignItems: 'center', flexWrap: 'wrap', gap: 10, boxShadow: '0 2px 8px rgba(44,26,14,0.06)'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <button
+                onClick={() => setActiveTab('editor')}
+                style={{ padding: '7px 14px', borderRadius: 8, border: '1px solid #d5c0b0', background: '#fff', color: '#8b5e3c', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+              >
+                <i className="ti ti-arrow-left"></i> Voltar para Edição nos Boxes
+              </button>
+              <span style={{ fontSize: 12.5, color: '#7a6552', fontWeight: 600 }}>
+                Visualização Oficial do Plano de Aula
+              </span>
+            </div>
+
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button onClick={handleCopyCleanText} style={{ padding: '7px 14px', borderRadius: 8, border: '1px solid #d5c0b0', background: '#fff', color: '#2c1a0e', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <i className="ti ti-copy"></i> Copiar Texto
+              </button>
+              <button onClick={handleExportPdf} style={{ padding: '7px 14px', borderRadius: 8, border: '1px solid #8b5e3c', background: '#8b5e3c', color: '#fff', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <i className="ti ti-printer"></i> Imprimir / PDF
+              </button>
+              <button onClick={handleExportWord} style={{ padding: '7px 14px', borderRadius: 8, border: '1px solid #d5c0b0', background: '#fff', color: '#2c1a0e', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <i className="ti ti-file-text"></i> Word (.doc)
+              </button>
+              <button onClick={handleExportExcel} style={{ padding: '7px 14px', borderRadius: 8, border: '1px solid #d5c0b0', background: '#fff', color: '#2c1a0e', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <i className="ti ti-table"></i> Excel (.csv)
+              </button>
+            </div>
+          </div>
+
+          {/* Folha Formal de Planejamento (A4 Paper Style) */}
+          <div style={{
+            background: '#ffffff', border: '1px solid #e2d9cc', borderRadius: 12,
+            padding: '44px 52px', boxShadow: '0 4px 20px rgba(44,26,14,0.08)',
+            fontFamily: 'Inter, system-ui, sans-serif', color: '#1f2937'
+          }}>
+            
+            {/* Cabeçalho Oficial Escolar */}
+            <div style={{ borderBottom: '2px solid #2c1a0e', paddingBottom: 16, marginBottom: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 14 }}>
+              <div>
+                <h2 style={{ margin: '0 0 4px 0', fontSize: 20, fontFamily: 'Fraunces, Georgia, serif', color: '#2c1a0e', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                  {currentSchool?.name || 'ESCOLA DE ENSINO BÁSICO'}
+                </h2>
+                <div style={{ fontSize: 13, color: '#4b5563' }}>
+                  <strong>Plano de Aula</strong> &bull; Disciplina: <strong>{currentClass?.subject || 'Língua Inglesa'}</strong>
+                </div>
+              </div>
+              <div style={{ textAlign: 'right', fontSize: 12.5, color: '#4b5563', lineHeight: 1.45 }}>
+                <div><strong>Turma:</strong> {currentClass?.name || 'Turma'} ({currentClass?.gradeYear || '9º Ano'})</div>
+                <div><strong>Data:</strong> {new Date(lessonDate).toLocaleDateString('pt-BR')}</div>
+                <div><strong>Espaço:</strong> {roomSpace}</div>
+              </div>
+            </div>
+
+            {/* Metodologia e Material */}
+            <div style={{ background: '#faf6f0', border: '1px solid #ede4d8', borderRadius: 8, padding: '12px 16px', marginBottom: 24, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, fontSize: 13 }}>
+              <div>
+                <strong style={{ color: '#8b5e3c' }}>Metodologia:</strong>{' '}
+                <span>{METHODOLOGY_PRESETS.find(m => m.id === selectedMethodology)?.name || 'TBLT'}</span>
+              </div>
+              <div>
+                <strong style={{ color: '#8b5e3c' }}>Material Didático:</strong>{' '}
+                <span>{bookTitle || 'Não especificado'} {unitChapter ? `(${unitChapter})` : ''} {pages ? `[${pages}]` : ''}</span>
+              </div>
+            </div>
+
+            {/* Título do Conteúdo */}
+            <div style={{ marginBottom: 24 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#8b5e3c', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>
+                Tópico Curricular
+              </div>
+              <h1 style={{ margin: 0, fontSize: 22, fontFamily: 'Fraunces, Georgia, serif', color: '#2c1a0e' }}>
+                {topic || 'Tópico da Aula'}
+              </h1>
+            </div>
+
+            {/* 1. Competências e Habilidades BNCC */}
+            <div style={{ marginBottom: 24 }}>
+              <h3 style={{ fontSize: 14, fontWeight: 700, color: '#2c1a0e', borderBottom: '1px solid #e5e7eb', paddingBottom: 6, marginBottom: 10 }}>
+                1. Competências & Habilidades BNCC
+              </h3>
+              {selectedSkills.length === 0 ? (
+                <p style={{ fontSize: 13, color: '#6b7280', margin: 0, fontStyle: 'italic' }}>Nenhuma habilidade específica vinculada.</p>
+              ) : (
+                <ul style={{ margin: 0, paddingLeft: 20, display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13, color: '#374151', lineHeight: 1.4 }}>
+                  {selectedSkills.map(s => (
+                    <li key={s.code}>
+                      <strong style={{ color: '#8b5e3c' }}>[{s.code}]</strong> {s.desc}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            {/* 2. Perguntas-Guia */}
+            {guidingQuestions.filter(q => q.trim()).length > 0 && (
+              <div style={{ marginBottom: 24 }}>
+                <h3 style={{ fontSize: 14, fontWeight: 700, color: '#2c1a0e', borderBottom: '1px solid #e5e7eb', paddingBottom: 6, marginBottom: 10 }}>
+                  2. Perguntas-Guia da Aula
+                </h3>
+                <ul style={{ margin: 0, paddingLeft: 20, display: 'flex', flexDirection: 'column', gap: 4, fontSize: 13, color: '#374151', fontStyle: 'italic' }}>
+                  {guidingQuestions.filter(q => q.trim()).map((q, idx) => (
+                    <li key={idx}>&ldquo;{q}&rdquo;</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* 3. Roteiro & Cronograma da Aula */}
+            <div style={{ marginBottom: 24 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e5e7eb', paddingBottom: 6, marginBottom: 10 }}>
+                <h3 style={{ fontSize: 14, fontWeight: 700, color: '#2c1a0e', margin: 0 }}>
+                  3. Roteiro & Cronograma da Aula
+                </h3>
+                <span style={{ fontSize: 12, fontWeight: 700, color: '#8b5e3c' }}>
+                  Tempo Total: {totalTiming} min
+                </span>
+              </div>
+
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, textAlign: 'left' }}>
+                <thead>
+                  <tr style={{ background: '#f8fafc', borderBottom: '1.5px solid #cbd5e1' }}>
+                    <th style={{ padding: '8px 10px', width: '22%', color: '#334155' }}>Etapa</th>
+                    <th style={{ padding: '8px 10px', width: '10%', color: '#334155' }}>Duração</th>
+                    <th style={{ padding: '8px 10px', width: '34%', color: '#334155' }}>Ação do Professor</th>
+                    <th style={{ padding: '8px 10px', width: '34%', color: '#334155' }}>Ação dos Alunos</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {stages.map((stg, idx) => (
+                    <tr key={idx} style={{ borderBottom: '1px solid #e2e8f0', background: idx % 2 === 0 ? '#fff' : '#fafafa' }}>
+                      <td style={{ padding: '10px', fontWeight: 600, color: '#2c1a0e', verticalAlign: 'top' }}>
+                        {stg.name}
+                      </td>
+                      <td style={{ padding: '10px', color: '#64748b', verticalAlign: 'top', fontWeight: 600 }}>
+                        {stg.durationMin} min
+                      </td>
+                      <td style={{ padding: '10px', color: '#374151', verticalAlign: 'top', lineHeight: 1.35 }}>
+                        {stg.teacherAction || '—'}
+                      </td>
+                      <td style={{ padding: '10px', color: '#374151', verticalAlign: 'top', lineHeight: 1.35 }}>
+                        {stg.studentAction || '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* 4. Tarefa de Casa (Homework) */}
+            <div style={{ marginBottom: 24 }}>
+              <h3 style={{ fontSize: 14, fontWeight: 700, color: '#2c1a0e', borderBottom: '1px solid #e5e7eb', paddingBottom: 6, marginBottom: 10 }}>
+                4. Tarefa de Casa (Homework)
+              </h3>
+              <div style={{ fontSize: 13, color: '#374151', background: '#f9fafb', border: '1px solid #f3f4f6', borderRadius: 8, padding: '10px 14px', lineHeight: 1.4 }}>
+                {homework || 'Nenhum dever de casa atribuído para esta aula.'}
+              </div>
+            </div>
+
+            {/* 5. Observações Pedagógicas */}
+            {postLessonNotes && (
+              <div>
+                <h3 style={{ fontSize: 14, fontWeight: 700, color: '#2c1a0e', borderBottom: '1px solid #e5e7eb', paddingBottom: 6, marginBottom: 10 }}>
+                  5. Observações Pedagógicas & Log Reflexivo
+                </h3>
+                <div style={{ fontSize: 13, color: '#4b5563', fontStyle: 'italic', background: '#fffbeb', border: '1px solid #fef3c7', borderRadius: 8, padding: '10px 14px', lineHeight: 1.4 }}>
+                  &ldquo;{postLessonNotes}&rdquo;
+                </div>
+              </div>
+            )}
+
+          </div>
+
+        </div>
+      )}
+
+      {/* ─── ABA 3: BANCO DE PLANEJAMENTO (REPOSITÓRIO PERENE) ──────────────── */}
       {activeTab === 'bank' && (
         <div style={{ background: '#fffcf8', border: '1px solid rgba(139,115,85,0.16)', borderRadius: 16, padding: 24 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>

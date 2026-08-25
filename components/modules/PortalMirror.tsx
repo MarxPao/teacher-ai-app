@@ -6,6 +6,11 @@ import ModuleCard from '@/components/ModuleCard'
 import { fillPortal, logPortalFill, getRecentFills, openPortal } from '@/lib/portalBridge'
 import { saveLearnedFact } from '@/lib/longTermMemory'
 import { getPortalProfiles, PortalProfileDef, PortalActionDef } from '@/lib/portalActionsEngine'
+import AutomationDiffModal from '@/components/modules/AutomationDiffModal'
+import SidecarPairingModal from '@/components/modules/SidecarPairingModal'
+import { createBrowserTask, BrowserAutomationTask, DiffItem } from '@/lib/browserAutomationClient'
+import { sanitizeOutboundPayload } from '@/lib/portalSanitizer'
+import { checkBrowserCapability, evaluateActionRequirement } from '@/lib/browserCapabilityRouter'
 
 interface RecentFill {
   platform: string
@@ -39,6 +44,8 @@ export default function PortalMirror() {
   const [isWorking, setIsWorking] = useState(false)
   const [customUrl, setCustomUrl] = useState('')
   const [hoveredId, setHoveredId] = useState<string | null>(null)
+  const [activeTask, setActiveTask] = useState<BrowserAutomationTask | null>(null)
+  const [isPairingOpen, setIsPairingOpen] = useState(false)
 
   const loadData = useCallback(() => {
     const list = getPortalProfiles()
@@ -72,13 +79,13 @@ export default function PortalMirror() {
     setIsWorking(false)
   }
 
-  // Rafinha executa preenchimento inteligente via Bridge
+  // Rafinha executa preenchimento inteligente via Browser Harness / Diff Modal
   const handleAutoFill = async (portal: PortalProfileDef, action?: PortalActionDef) => {
     setIsWorking(true)
     const actionType = action?.type || 'diary'
     const title = action?.title || 'Diário de Aula - Present Perfect'
     
-    setFillStatus(`⚡ Rafinha executando ${title} no ${portal.name}...`)
+    setFillStatus(`⚡ Preparando ação no ${portal.name}...`)
 
     let studentsCount = 0
     let studentGrades: any[] = []
@@ -94,7 +101,23 @@ export default function PortalMirror() {
       }
     } catch {}
 
-    const payload = {
+    const diff: DiffItem[] = studentGrades.length > 0
+      ? studentGrades.map(s => ({
+          studentName: s.name,
+          field: 'Nota / Avaliação 1',
+          beforeValue: '',
+          afterValue: s.grade,
+          approved: true
+        }))
+      : [{
+          studentName: 'Geral (Turma)',
+          field: 'Diário de Classe',
+          beforeValue: '',
+          afterValue: title,
+          approved: true
+        }]
+
+    const rawPayload = {
       platform: portal.id,
       actionType,
       title,
@@ -102,18 +125,45 @@ export default function PortalMirror() {
       classRef: '9º Ano A',
       description: `Lançamento agêntico para ${studentsCount || 5} alunos.`,
       mode: action?.executionMode || 'supervised',
-      studentGrades
+      studentGrades,
+      diff,
+      confidence_flag: 'seletor_mapeado' as const
     }
 
-    const res = await fillPortal(payload as any)
+    const cleanPayload = sanitizeOutboundPayload(rawPayload)
 
-    if (res.success) {
-      logPortalFill(payload as any)
-      setFillStatus(`✅ Ação executada com sucesso no ${portal.name}!`)
-      setRecentFills(getRecentFills())
+    // Cria a tarefa de automação
+    const createdTask = await createBrowserTask({
+      portal: portal.id,
+      actionType,
+      payload: cleanPayload,
+      approvalMode: 'batch',
+      classRef: '9º Ano A',
+      studentCount: studentsCount || 5
+    })
+
+    if (createdTask) {
+      setActiveTask(createdTask)
+      setFillStatus(`📋 Tarefa criada! Revise as alterações no modal de aprovação antes do envio.`)
     } else {
-      setFillStatus(`⚠️ A aba do portal "${portal.name}" não respondeu. Certifique-se de que o portal está aberto no seu navegador Chrome.`)
+      // Fallback para o modal local se offline ou Supabase em modo fallback
+      const localTask: BrowserAutomationTask = {
+        id: `task_${Date.now()}`,
+        teacher_id: 'local_teacher',
+        trace_id: `trace_${Date.now()}`,
+        portal: portal.id,
+        action_type: actionType,
+        status: 'drafted',
+        payload: cleanPayload,
+        approval_mode: 'batch',
+        class_ref: '9º Ano A',
+        student_count: studentsCount || 5,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }
+      setActiveTask(localTask)
     }
+
     setIsWorking(false)
   }
 
@@ -125,6 +175,19 @@ export default function PortalMirror() {
       title="Portal Mirror — Hub de Portais & Automação Agêntica"
       subtitle="Acesse os portais escolares oficiais e acione a Rafinha para preenchimento supervisionado ou autônomo via voz"
       maxWidth={1240}
+      actions={
+        <button
+          onClick={() => setIsPairingOpen(true)}
+          style={{
+            padding: '8px 16px', borderRadius: 10, border: '1.5px solid #8b5e3c',
+            background: '#fdf6e3', color: '#5b3a20', fontSize: 12.5, fontWeight: 800,
+            cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
+            boxShadow: '0 2px 6px rgba(0,0,0,0.04)'
+          }}
+        >
+          <span>🦉</span> Parear Sidecar Desktop
+        </button>
+      }
     >
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 20 }}>
 
@@ -389,6 +452,22 @@ export default function PortalMirror() {
 
         </div>
       </div>
+
+      {activeTask && (
+        <AutomationDiffModal
+          task={activeTask}
+          onClose={() => setActiveTask(null)}
+          onCompleted={() => {
+            setRecentFills(getRecentFills())
+            setActiveTask(null)
+          }}
+        />
+      )}
+
+      <SidecarPairingModal
+        isOpen={isPairingOpen}
+        onClose={() => setIsPairingOpen(false)}
+      />
 
       <style>{`
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }

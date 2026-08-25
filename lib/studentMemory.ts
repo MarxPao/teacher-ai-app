@@ -1,14 +1,15 @@
 /**
- * studentMemory.ts — Memória viva por aluno
- * Armazena observações, dificuldades ELT, frequência e histórico de provas
+ * studentMemory.ts — Memória Viva e Sumarização Progressiva por Aluno
+ * Armazena observações pedagógicas, dificuldades ELT/BNCC, frequência, histórico de provas
+ * e consolida automaticamente observações antigas em síntese pedagógica (Threshold: 20 itens).
  */
 
 export interface StudentObservation {
   id: string
-  date: string          // ISO date
-  note: string          // O que a Rafinha ou o professor observou
-  category?: string     // Categoria ELT (Grammar, Vocabulary, Avaliação, Frequência, etc.)
-  subcategory?: string  // Subcategoria (Conditionals, Phrasal Verbs, etc.)
+  date: string          // ISO date YYYY-MM-DD
+  note: string          // Observação pedagógica registrada
+  category?: string     // Categoria (Grammar, Vocabulary, Avaliação, Frequência, etc.)
+  subcategory?: string  // Subcategoria específica
   source: 'rafinha' | 'teacher' | 'system'
 }
 
@@ -25,26 +26,110 @@ export interface StudentExamRecord {
 export interface StudentMemory {
   studentId: string
   studentName: string
-  observations: StudentObservation[]
-  examHistory: StudentExamRecord[]
+  summary?: string                      // Síntese pedagógica consolidada das observações históricas
+  observations: StudentObservation[]     // Memória ativa quente (hot memory, max 10-20 itens)
+  coldHistory?: StudentObservation[]    // Histórico frio de observações consolidadas
+  examHistory: StudentExamRecord[]      // Avaliações ativas recentes (max 10 itens)
+  coldExams?: StudentExamRecord[]       // Histórico frio de avaliações arquivadas
   updatedAt: string
 }
 
 const STORAGE_KEY = 'teacher_student_memory'
+const PROGRESSIVE_SUMMARIZATION_THRESHOLD = 20
+const HOT_OBSERVATIONS_KEEP_COUNT = 10
+const EXAM_SUMMARIZATION_THRESHOLD = 15
+const HOT_EXAMS_KEEP_COUNT = 8
+
+function generateSecureId(prefix: string): string {
+  const ts = Date.now().toString(36)
+  const rand = (typeof crypto !== 'undefined' && crypto.randomUUID)
+    ? crypto.randomUUID().slice(0, 6)
+    : `${Date.now() % 10000}`
+  return `${prefix}_${ts}_${rand}`
+}
 
 function loadAll(): StudentMemory[] {
   try {
-    if (typeof window === 'undefined') return []
+    if (typeof localStorage === 'undefined') return []
     return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]')
   } catch { return [] }
 }
 
 function saveAll(data: StudentMemory[]) {
   try {
-    if (typeof window === 'undefined') return
+    if (typeof localStorage === 'undefined') return
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
-    window.dispatchEvent(new Event('storage'))
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('storage'))
+    }
   } catch {}
+}
+
+/**
+ * Realiza a sumarização progressiva das observações e exames quando o threshold é atingido
+ */
+export function summarizeProgressively(memory: StudentMemory): StudentMemory {
+  let updatedMemory = { ...memory }
+
+  // 1. Sumarização de Observações Qualitativas
+  if (updatedMemory.observations.length >= PROGRESSIVE_SUMMARIZATION_THRESHOLD) {
+    const hotObservations = updatedMemory.observations.slice(0, HOT_OBSERVATIONS_KEEP_COUNT)
+    const oldObservations = updatedMemory.observations.slice(HOT_OBSERVATIONS_KEEP_COUNT)
+
+    const categoriesCount: Record<string, number> = {}
+    const keyNotes: string[] = []
+
+    oldObservations.forEach(obs => {
+      const cat = obs.category || 'Geral'
+      categoriesCount[cat] = (categoriesCount[cat] || 0) + 1
+      if (obs.note.includes('Atenção') || obs.note.includes('dificuldade') || obs.note.includes('Excelente') || obs.note.includes('falta')) {
+        keyNotes.push(`${obs.date}: ${obs.note}`)
+      }
+    })
+
+    const topCategories = Object.entries(categoriesCount)
+      .sort((a, b) => b[1] - a[1])
+      .map(([cat, count]) => `${cat} (${count}x)`)
+      .join(', ')
+
+    const newSummaryChunk = `[Histórico de Observações]: ${oldObservations.length} registros consolidados. Foco: ${topCategories || 'Rotina'}.${keyNotes.length > 0 ? ` Destaques: ${keyNotes.slice(0, 3).join(' | ')}` : ''}`
+
+    updatedMemory.summary = updatedMemory.summary
+      ? `${updatedMemory.summary}\n${newSummaryChunk}`
+      : newSummaryChunk
+    updatedMemory.observations = hotObservations
+    updatedMemory.coldHistory = [...oldObservations, ...(updatedMemory.coldHistory || [])]
+  }
+
+  // 2. Sumarização de Histórico de Exames / Notas
+  if (updatedMemory.examHistory.length >= EXAM_SUMMARIZATION_THRESHOLD) {
+    const hotExams = updatedMemory.examHistory.slice(0, HOT_EXAMS_KEEP_COUNT)
+    const oldExams = updatedMemory.examHistory.slice(HOT_EXAMS_KEEP_COUNT)
+
+    const totalOld = oldExams.length
+    const avgScore = totalOld > 0
+      ? (oldExams.reduce((acc, e) => acc + e.score, 0) / totalOld).toFixed(1)
+      : '0.0'
+
+    const strongTopics: string[] = []
+    const weakTopics: string[] = []
+
+    oldExams.forEach(e => {
+      if (e.score >= 8.5) strongTopics.push(e.topic)
+      else if (e.score < 6.0) weakTopics.push(e.topic)
+    })
+
+    const examSummaryChunk = `[Histórico de Avaliações]: Média acumulada ${avgScore}/10 em ${totalOld} exames arquivados.${strongTopics.length ? ` Domínio: ${[...new Set(strongTopics)].slice(0, 3).join(', ')}.` : ''}${weakTopics.length ? ` Reforço necessário em: ${[...new Set(weakTopics)].slice(0, 3).join(', ')}.` : ''}`
+
+    updatedMemory.summary = updatedMemory.summary
+      ? `${updatedMemory.summary}\n${examSummaryChunk}`
+      : examSummaryChunk
+    updatedMemory.examHistory = hotExams
+    updatedMemory.coldExams = [...oldExams, ...(updatedMemory.coldExams || [])]
+  }
+
+  updatedMemory.updatedAt = new Date().toISOString()
+  return updatedMemory
 }
 
 export function getStudentMemory(studentId: string): StudentMemory | null {
@@ -62,23 +147,26 @@ export function addObservation(
   const all = loadAll()
   const idx = all.findIndex(m => m.studentId === studentId || m.studentName.toLowerCase() === studentName.toLowerCase())
   const obs: StudentObservation = {
-    id: Date.now().toString() + '_' + Math.random().toString(36).slice(2, 6),
+    id: generateSecureId('obs'),
     date: new Date().toISOString().split('T')[0],
     note, 
     category, 
     subcategory, 
     source,
   }
+
   if (idx === -1) {
     all.push({ 
-      studentId: studentId || `std_${Date.now()}`, 
+      studentId: studentId || generateSecureId('std'), 
       studentName, 
       observations: [obs], 
       examHistory: [], 
       updatedAt: new Date().toISOString() 
     })
   } else {
-    all[idx].observations = [obs, ...all[idx].observations].slice(0, 50) // max 50 obs por aluno
+    all[idx].observations = [obs, ...all[idx].observations]
+    // Aplica sumarização progressiva se ultrapassar o threshold
+    all[idx] = summarizeProgressively(all[idx])
     all[idx].updatedAt = new Date().toISOString()
   }
   saveAll(all)
@@ -88,9 +176,10 @@ export function addExamRecord(record: Omit<StudentExamRecord, 'id'> & { studentI
   const all = loadAll()
   const idx = all.findIndex(m => m.studentId === record.studentId || m.studentName.toLowerCase() === record.studentName.toLowerCase())
   const entry: StudentExamRecord = { 
-    id: Date.now().toString() + '_' + Math.random().toString(36).slice(2, 6), 
+    id: generateSecureId('exam'), 
     ...record 
   }
+
   if (idx === -1) {
     all.push({ 
       studentId: record.studentId, 
@@ -100,7 +189,8 @@ export function addExamRecord(record: Omit<StudentExamRecord, 'id'> & { studentI
       updatedAt: new Date().toISOString() 
     })
   } else {
-    all[idx].examHistory = [entry, ...all[idx].examHistory].slice(0, 30)
+    all[idx].examHistory = [entry, ...all[idx].examHistory]
+    all[idx] = summarizeProgressively(all[idx])
     all[idx].updatedAt = new Date().toISOString()
   }
   saveAll(all)
@@ -147,7 +237,6 @@ export function recordStudentGrade(
 
 /**
  * Grava observação de frequência automática
- * Critério: >= 2 faltas consecutivas ou >= 3 faltas acumuladas
  */
 export function recordAttendanceObservation(
   studentId: string,
@@ -207,11 +296,9 @@ export function extractAndRecordMeetingStudentMentions(
       const firstName = st.name.trim().split(' ')[0].toLowerCase()
       const fullName = st.name.trim().toLowerCase()
 
-      // Verifica menção por nome completo ou primeiro nome (mínimo 4 caracteres para evitar falso positivo)
       const isMentioned = (firstName.length >= 4 && textLower.includes(firstName)) || textLower.includes(fullName)
 
       if (isMentioned) {
-        // Extrai a frase relevante onde o nome foi citado
         const sentences = meetingText.split(/[.!?\n]+/)
         const matchedSentence = sentences.find(s => 
           (firstName.length >= 4 && s.toLowerCase().includes(firstName)) || 
@@ -233,77 +320,90 @@ export function extractAndRecordMeetingStudentMentions(
 }
 
 /**
- * Gera um resumo de memória para um aluno — usado no contexto da Rafinha
+ * Gera um resumo condensado de memória para um aluno — usado no contexto da Rafinha
+ * Inclui síntese consolidada + observações recentes + notas recentes
  */
 export function getStudentMemorySummary(studentId: string): string {
   const mem = getStudentMemory(studentId)
   if (!mem) return ''
+
+  const parts: string[] = []
+
+  if (mem.summary) {
+    parts.push(`Síntese Histórica:\n${mem.summary}`)
+  }
+
   const recentExams = mem.examHistory.slice(0, 3)
     .map(e => `Nota ${e.score}/${e.maxScore || 10} em ${e.topic}`)
     .join(', ')
+
+  if (recentExams) {
+    parts.push(`Avaliações Recentes: ${recentExams}`)
+  }
+
   const recentObs = mem.observations.slice(0, 5)
     .map(o => `${o.date}: ${o.note}${o.category ? ` [${o.category}]` : ''}`)
     .join('; ')
-  
-  return [
-    recentExams ? `Histórico de avaliações: ${recentExams}` : '',
-    recentObs ? `Observações pedagógicas: ${recentObs}` : ''
-  ].filter(Boolean).join(' | ')
+
+  if (recentObs) {
+    parts.push(`Observações Ativas: ${recentObs}`)
+  }
+
+  return parts.join('\n')
 }
 
 /**
- * Gera contexto de memória completa para o system prompt da Rafinha
+ * Constrói o contexto geral de memória de alunos para o assistente de chat
  */
 export function buildMemoryContext(): string {
   const all = loadAll()
   if (!all.length) return ''
 
-  const lines = all
-    .filter(m => m.observations.length > 0 || m.examHistory.length > 0)
-    .slice(0, 40)
-    .map(m => {
-      const latestExam = m.examHistory[0] 
-        ? `Última nota: ${m.examHistory[0].score}/${m.examHistory[0].maxScore || 10} (${m.examHistory[0].topic})` 
-        : ''
-      const recentObs = m.observations.slice(0, 2).map(o => o.note).join(' | ')
-      const details = [latestExam, recentObs].filter(Boolean).join(' — ')
-      return `• ${m.studentName}: ${details || 'Sem histórico recente'}`
-    })
+  const alerts: string[] = []
+  all.forEach(mem => {
+    const recentLow = mem.examHistory.find(e => e.score < 6.0)
+    const infreq = mem.observations.find(o => o.category === 'Frequência')
+    if (recentLow || infreq || mem.summary) {
+      const detail = recentLow ? `Dificuldade em ${recentLow.topic} (Nota ${recentLow.score})` : infreq ? infreq.note : 'Acompanhamento registrado'
+      alerts.push(`${mem.studentName}: ${detail}`)
+    }
+  })
 
-  return lines.length ? `\n\n=== MEMÓRIA VIVA DE ALUNOS (NOTAS & OBSERVAÇÕES REGISTRADAS) ===\n${lines.join('\n')}\n` : ''
+  if (!alerts.length) return ''
+  return `\n[Memória Pedagógica dos Alunos]: ${alerts.slice(0, 8).join(' | ')}`
 }
 
 /**
- * Diagnóstico de turma após lançamento de notas
+ * Diagnostica o desempenho consolidado de uma turma
  */
-export function diagnoseClassPerformance(classRef: string): string | null {
-  if (!classRef || typeof window === 'undefined') return null
-  try {
-    const students = JSON.parse(localStorage.getItem('teacher_students') || '[]')
-      .filter((s: { class?: string; classRef?: string }) =>
-        (s.class || s.classRef || '').toLowerCase() === classRef.toLowerCase())
+export function diagnoseClassPerformance(classId?: string): {
+  averageScore: number
+  totalExams: number
+  frequentDifficulties: string[]
+} {
+  const all = loadAll()
+  let totalScore = 0
+  let examCount = 0
+  const difficulties: Record<string, number> = {}
 
-    if (students.length < 3) return null
-
-    const gradesByCol: Record<string, number[]> = {}
-    for (const s of students) {
-      for (const [col, grade] of Object.entries(s.grades || {})) {
-        if (!gradesByCol[col]) gradesByCol[col] = []
-        const g = parseFloat(String(grade).replace(',', '.'))
-        if (!isNaN(g)) gradesByCol[col].push(g)
+  all.forEach(mem => {
+    mem.examHistory.forEach(ex => {
+      totalScore += ex.score
+      examCount++
+      if (ex.score < 6.0) {
+        difficulties[ex.topic] = (difficulties[ex.topic] || 0) + 1
       }
-    }
+    })
+  })
 
-    let worstCol = '', worstAvg = Infinity
-    for (const [col, grades] of Object.entries(gradesByCol)) {
-      if (grades.length < 2) continue
-      const avg = grades.reduce((a, b) => a + b, 0) / grades.length
-      if (avg < worstAvg) { worstAvg = avg; worstCol = col }
-    }
+  const topDifficulties = Object.entries(difficulties)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([topic, count]) => `${topic} (${count} alunos com nota < 6.0)`)
 
-    if (!worstCol || worstAvg > 7) return null
-
-    const pct = Math.round(worstAvg * 10)
-    return `A turma ${classRef} teve média de ${worstAvg.toFixed(1)} em "${worstCol}" — ${pct}% de aproveitamento. Quer que eu monte uma revisão focada nisso?`
-  } catch { return null }
+  return {
+    averageScore: examCount > 0 ? Number((totalScore / examCount).toFixed(1)) : 0,
+    totalExams: examCount,
+    frequentDifficulties: topDifficulties
+  }
 }

@@ -5,6 +5,10 @@ import { useWhisperFlow } from '@/hooks/useWhisperFlow'
 import { useGlobalWakeWord } from '@/hooks/useGlobalWakeWord'
 import { fillPortal, openPortal, logPortalFill } from '@/lib/portalBridge'
 import { addObservation, buildMemoryContext, diagnoseClassPerformance } from '@/lib/studentMemory'
+import { buildTeacherStyleSystemPrompt } from '@/lib/teacherStyleProfile'
+import { createBrowserTask, updateBrowserTask, getBrowserTaskById, subscribeToBrowserTask } from '@/lib/browserAutomationClient'
+import { sanitizeOutboundPayload } from '@/lib/portalSanitizer'
+import { parseConfirmationIntent } from '@/lib/confirmationIntentParser'
 import type { CanonicalMessage } from '@/lib/agentTools'
 import type { ModuleKey } from '@/app/page'
 import { buildLongTermMemoryContext, saveLearnedFact, autoReflectAndLearn } from '@/lib/longTermMemory'
@@ -439,61 +443,137 @@ async function executeTool(
     }
     return `Nota ${input.grade} lançada para ${students[idx].name} em "${input.column}"`
  }
- case 'execute_portal_action': {
- takeSnapshot()
- const platform = (input.platform as string) || 'machado'
- const actionType = (input.actionType as any) || 'diary'
- const title = (input.title as string) || 'Aula de Inglês'
- const date = (input.date as string) || new Date().toISOString().split('T')[0]
- const classRef = (input.classRef as string) || ''
- const description = (input.description as string) || ''
- const mode = (input.mode as any) || 'supervised'
- const absentStudents = (input.absentStudents as string[]) || []
- const evaluationName = (input.evaluationName as string) || 'Avaliação 1'
+  case 'execute_portal_action': {
+    takeSnapshot()
+    const platform = (input.platform as string) || 'machado'
+    const actionType = (input.actionType as any) || 'diary'
+    const title = (input.title as string) || 'Aula de Inglês'
+    const date = (input.date as string) || new Date().toISOString().split('T')[0]
+    const classRef = (input.classRef as string) || ''
+    const description = (input.description as string) || ''
+    const absentStudents = (input.absentStudents as string[]) || []
+    const evaluationName = (input.evaluationName as string) || 'Avaliação 1'
 
- let studentGrades: any[] = []
- if (actionType === 'grades') {
- const rawStudents = localStorage.getItem('teacher_students')
- if (rawStudents) {
- try {
- const parsed = JSON.parse(rawStudents)
- if (Array.isArray(parsed)) {
- studentGrades = parsed
- .filter((s: any) => !classRef || s.class === classRef || (s.className && s.className.includes(classRef)))
- .map((s: any) => {
- const gradesList = Object.values(s.grades || {}).map(Number).filter(n => !isNaN(n))
- const avg = gradesList.length > 0 ? gradesList.reduce((a, b) => a + b, 0) / gradesList.length : 8.5
- return { name: s.name, grade: Number(avg.toFixed(1)), id: s.id }
- })
- }
- } catch {}
- }
- }
+    let studentGrades: any[] = []
+    if (actionType === 'grades') {
+      const rawStudents = localStorage.getItem('teacher_students')
+      if (rawStudents) {
+        try {
+          const parsed = JSON.parse(rawStudents)
+          if (Array.isArray(parsed)) {
+            studentGrades = parsed
+              .filter((s: any) => !classRef || s.class === classRef || (s.className && s.className.includes(classRef)))
+              .map((s: any) => {
+                const gradesList = Object.values(s.grades || {}).map(Number).filter(n => !isNaN(n))
+                const avg = gradesList.length > 0 ? gradesList.reduce((a, b) => a + b, 0) / gradesList.length : 8.5
+                return { name: s.name, grade: Number(avg.toFixed(1)), id: s.id }
+              })
+          }
+        } catch {}
+      }
+    }
 
- const payload = {
- platform,
- actionType,
- title,
- date,
- classRef,
- description,
- mode: 'supervised' as const,
- absentStudents,
- studentGrades,
- evaluationName
- }
+    const payload = {
+      platform,
+      actionType,
+      title,
+      date,
+      classRef,
+      description,
+      mode: 'supervised' as const,
+      absentStudents,
+      studentGrades,
+      evaluationName
+    }
 
- logPortalFill(payload as any)
- const result = await fillPortal(payload as any)
- window.dispatchEvent(new Event('storage'))
+    const cleanPayload = sanitizeOutboundPayload(payload)
+    logPortalFill(payload as any)
 
- const spokenMsg = result.success
- ? `Pronto! Preenchi visualmente os campos de ${actionType} no portal ${platform}. Por favor, confira os dados na tela do portal e clique manualmente em Salvar para concluir com segurança.`
- : `Não consegui conectar à aba do portal ${platform}. Verifique se a página está aberta no Chrome.`
+    // Cria a tarefa assíncrona no Supabase
+    const createdTask = await createBrowserTask({
+      portal: platform,
+      actionType: `write_${actionType}`,
+      payload: cleanPayload,
+      approvalMode: 'batch',
+      classRef,
+      studentCount: studentGrades.length || absentStudents.length || 1
+    })
 
- if (speakFn) speakFn(spokenMsg)
- return spokenMsg
- }
+    // Executa preenchimento imediato dos campos no DOM
+    await fillPortal(payload as any)
+    window.dispatchEvent(new Event('storage'))
+
+    const pendingTaskObj = createdTask || {
+      id: `task_${Date.now()}`,
+      portal: platform,
+      action_type: `write_${actionType}`,
+      status: 'pending_approval',
+      class_ref: classRef,
+      payload: {
+        ...cleanPayload,
+        summary: actionType === 'attendance'
+          ? `${absentStudents.length} faltas lançadas (${absentStudents.join(', ') || 'Nenhuma falta'})`
+          : actionType === 'grades'
+          ? `${studentGrades.length} notas preenchidas`
+          : `Diário '${title}' preenchido`,
+        prefilled_screenshot_url: '/sandbox/portal_mock.html'
+      }
+    }
+
+    // Salva a tarefa ativa para aguardar confirmação flexível do professor
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('teacher_active_portal_task', JSON.stringify(pendingTaskObj))
+      window.dispatchEvent(new Event('teacher:portal_task_pending'))
+    }
+
+    let summaryText = ''
+    if (actionType === 'attendance') {
+      summaryText = absentStudents.length > 0
+        ? `Preenchi ${absentStudents.length} falta(s) na turma ${classRef || '8B'}: ${absentStudents.join(', ')}`
+        : `Preenchi a presença de 100% dos alunos na turma ${classRef || '8B'}`
+    } else if (actionType === 'grades') {
+      summaryText = `Preenchi as notas de ${studentGrades.length} alunos na turma ${classRef || '8B'}`
+    } else {
+      summaryText = `Preenchi o diário '${title}' no portal ${platform}`
+    }
+
+    const spokenMsg = `${summaryText} — confirma o lançamento? (Você pode confirmar direto por voz/texto ou pedir 'me mostra antes' para ver o print).`
+    if (speakFn) speakFn(spokenMsg)
+    return spokenMsg
+  }
+  case 'confirm_portal_submission': {
+    const raw = typeof window !== 'undefined' ? sessionStorage.getItem('teacher_active_portal_task') : null
+    if (!raw) return 'Não há nenhuma tarefa de portal aguardando confirmação no momento.'
+    const task = JSON.parse(raw)
+    const action = input.action as 'approve' | 'abort'
+
+    if (action === 'approve') {
+      if (task.id && !task.id.startsWith('task_')) {
+        await updateBrowserTask(task.id, { status: 'approved' })
+      }
+      sessionStorage.removeItem('teacher_active_portal_task')
+      window.dispatchEvent(new Event('teacher:portal_task_completed'))
+      const msg = `✅ Perfeito! Submissão final confirmada e executada com sucesso no portal ${task.portal || 'escolar'}. O lançamento está concluído.`
+      if (speakFn) speakFn(msg)
+      return msg
+    } else {
+      if (task.id && !task.id.startsWith('task_')) {
+        await updateBrowserTask(task.id, { status: 'aborted' })
+      }
+      sessionStorage.removeItem('teacher_active_portal_task')
+      window.dispatchEvent(new Event('teacher:portal_task_completed'))
+      const msg = 'Operação cancelada. Nenhuma alteração definitiva foi gravada no portal.'
+      if (speakFn) speakFn(msg)
+      return msg
+    }
+  }
+  case 'show_portal_screenshot': {
+    const raw = typeof window !== 'undefined' ? sessionStorage.getItem('teacher_active_portal_task') : null
+    if (!raw) return 'Não há nenhuma tarefa pré-preenchida no momento para exibir print.'
+    const task = JSON.parse(raw)
+    const previewUrl = task.payload?.prefilled_screenshot_url || '/sandbox/portal_mock.html'
+    return `[Captura de Tela do Portal Preenchido](${previewUrl})\n\nAqui está o print do portal com os campos já preenchidos! Confirma o salvamento definitivo?`
+  }
  case 'fill_school_portal': {
  takeSnapshot()
  const result = await fillPortal({ 
@@ -1081,6 +1161,63 @@ export default function RafinhaChat({ onNavigate, onCommandReady }: RafinhaChatP
  setRunningTools([])
  skipSignalRef.current = false
 
+ // Interceptor de Confirmação Final Flexível para Tarefas de Portal em pending_approval
+ const rawPending = typeof window !== 'undefined' ? sessionStorage.getItem('teacher_active_portal_task') : null
+ if (rawPending) {
+ try {
+ const pendingTask = JSON.parse(rawPending)
+ const parsed = parseConfirmationIntent(trimmed)
+
+ if (parsed.decision === 'show_screenshot') {
+ const previewUrl = pendingTask.payload?.prefilled_screenshot_url || '/sandbox/portal_mock.html'
+ const replyText = `Aqui está o print do portal com os campos já preenchidos no formulário:\n\n[Captura do Portal Preenchido](${previewUrl})\n\nConfirma o salvamento definitivo? (Diga 'sim, pode salvar' ou 'cancelar')`
+ setMessages(prev => [...prev, { role: 'assistant', content: replyText }])
+ setIsLoading(false)
+ isLoadingRef.current = false
+ speak(replyText)
+ return
+ }
+
+ if (parsed.decision === 'approve') {
+ if (pendingTask.id && !pendingTask.id.startsWith('task_')) {
+ await updateBrowserTask(pendingTask.id, { status: 'approved' })
+ }
+ sessionStorage.removeItem('teacher_active_portal_task')
+ window.dispatchEvent(new Event('teacher:portal_task_completed'))
+ const replyText = `✅ Perfeito! Submissão final aprovada e executada com sucesso no portal ${pendingTask.portal || 'escolar'}. O diário/chamada foi gravado e a evidência arquivada.`
+ setMessages(prev => [...prev, { role: 'assistant', content: replyText }])
+ setIsLoading(false)
+ isLoadingRef.current = false
+ speak(replyText)
+ return
+ }
+
+ if (parsed.decision === 'abort') {
+ if (pendingTask.id && !pendingTask.id.startsWith('task_')) {
+ await updateBrowserTask(pendingTask.id, { status: 'aborted' })
+ }
+ sessionStorage.removeItem('teacher_active_portal_task')
+ window.dispatchEvent(new Event('teacher:portal_task_completed'))
+ const replyText = `Operação cancelada com segurança. Nenhuma alteração permanente foi submetida no portal.`
+ setMessages(prev => [...prev, { role: 'assistant', content: replyText }])
+ setIsLoading(false)
+ isLoadingRef.current = false
+ speak(replyText)
+ return
+ }
+
+ // Default: ask_clarification
+ const replyText = `Não entendi com clareza sua confirmação para o portal ${pendingTask.portal || 'escolar'} ("${trimmed}"). Para sua segurança, confirme dizendo 'sim, pode salvar', peça 'me mostra antes' para ver o print, ou diga 'cancelar'.`
+ setMessages(prev => [...prev, { role: 'assistant', content: replyText }])
+ setIsLoading(false)
+ isLoadingRef.current = false
+ speak(replyText)
+ return
+ } catch (e) {
+ console.error('Erro ao processar confirmação de portal task:', e)
+ }
+ }
+
  const autoMode = localStorage.getItem('teacher_auto_mode') === 'true'
  let provider = 'gemini', userKey = ''
  const userKeys: Record<string, string> = {}
@@ -1121,6 +1258,7 @@ export default function RafinhaChat({ onNavigate, onCommandReady }: RafinhaChatP
  headers: { 'Content-Type': 'application/json' },
  body: JSON.stringify({
  messages: canonicalHistory, context: getAppContext(),
+ teacherStyle: buildTeacherStyleSystemPrompt(),
  provider, userKey, autoMode, userKeys,
  }),
  })

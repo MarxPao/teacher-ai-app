@@ -325,3 +325,95 @@ export function validateCommunityPortalMap(profile: any): { valid: boolean; viol
 
   return { valid: violations.length === 0, violations }
 }
+
+// ─── 7. Sanitização Bidirecional de PII (Inbound & Outbound) ────────────────
+
+/**
+ * Mascara parcialmente o nome do aluno para visualização segura e trânsito (ex: "Mariana Lima" -> "Mariana L.")
+ */
+export function maskStudentName(fullName: string): string {
+  if (!fullName) return 'Aluno(a)'
+  const parts = fullName.trim().split(/\s+/)
+  if (parts.length === 1) return parts[0]
+  const first = parts[0]
+  const lastInitial = parts[parts.length - 1].charAt(0).toUpperCase()
+  return `${first} ${lastInitial}.`
+}
+
+/**
+ * Higieniza o payload de saída (App -> Sidecar) removendo CPFs, telefones e substituindo
+ * nomes e dados sensíveis por representações seguras e hashes determinísticos.
+ */
+export function sanitizeOutboundPayload(payload: Record<string, any>): Record<string, any> {
+  if (!payload || typeof payload !== 'object') return {}
+
+  const clean: Record<string, any> = { ...payload }
+
+  // 1. Remove menções explícitas a contatos ou documentos
+  const PII_REGEXES = [
+    /[0-9]{3}\.?[0-9]{3}\.?[0-9]{3}-?[0-9]{2}/g, // CPF
+    /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g, // Email
+    /\(?\d{2}\)?\s?9?\d{4}-?\d{4}/g // Telefone
+  ]
+
+  const cleanString = (val: string) => {
+    let res = val
+    PII_REGEXES.forEach(r => { res = res.replace(r, '[PROTEGIDO]') })
+    return res
+  }
+
+  if (typeof clean.description === 'string') {
+    clean.description = cleanString(clean.description)
+  }
+  if (typeof clean.title === 'string') {
+    clean.title = cleanString(clean.title)
+  }
+
+  // 2. Sanitiza notas de alunos
+  if (Array.isArray(clean.studentGrades)) {
+    clean.studentGrades = clean.studentGrades.map((item: any) => ({
+      id: item.id || `st_${Date.now()}`,
+      name: item.name ? item.name.trim() : 'Aluno',
+      displayName: maskStudentName(item.name || ''),
+      grade: typeof item.grade === 'number' ? Number(item.grade.toFixed(1)) : item.grade
+    }))
+  }
+
+  // 3. Sanitiza lista de faltas/presenças
+  if (Array.isArray(clean.absentStudents)) {
+    clean.absentStudents = clean.absentStudents.map((name: string) => cleanString(name))
+  }
+  if (Array.isArray(clean.presentStudents)) {
+    clean.presentStudents = clean.presentStudents.map((name: string) => cleanString(name))
+  }
+
+  return clean
+}
+
+/**
+ * Higieniza dados de entrada (Portal Externo -> App) removendo PII estranha, notas médicas e registros de outros alunos
+ */
+export function sanitizeInboundScrapedData(scrapedRows: Array<Record<string, any>>): Array<Record<string, any>> {
+  if (!Array.isArray(scrapedRows)) return []
+
+  return scrapedRows.map(row => {
+    const cleanRow: Record<string, any> = {}
+
+    // Preserva apenas campos estritamente pedagógicos
+    if (row.name) cleanRow.name = String(row.name).trim().slice(0, 100)
+    if (row.grade !== undefined) {
+      const g = parseFloat(String(row.grade).replace(',', '.'))
+      cleanRow.grade = !isNaN(g) ? g : 0
+    }
+    if (row.attendanceStatus) {
+      cleanRow.attendanceStatus = ['present', 'absent', 'justified'].includes(row.attendanceStatus)
+        ? row.attendanceStatus
+        : 'present'
+    }
+    if (row.classRef) cleanRow.classRef = String(row.classRef).trim().slice(0, 50)
+    if (row.rollNumber) cleanRow.rollNumber = String(row.rollNumber).trim().slice(0, 20)
+
+    return cleanRow
+  })
+}
+

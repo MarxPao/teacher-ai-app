@@ -121,7 +121,7 @@ export const AGENT_TOOLS: ToolDefinition[] = [
   // 7. PORTAIS ESCOLARES (INTEGRAÇÃO EXTENSÃO & AUTOMAÇÃO AGÊNTICA - SEGURANÇA 0-TESTER)
   {
     name: 'execute_portal_action',
-    description: 'Preenche visualmente ações operacionais em portais escolares (Machado Sobrinho, Plurall, Rede Santa Catarina, Cambridge One, etc.) para diários de classe, frequências/chamadas e notas de boletim. Opera exclusivamente em MODO SUPERVISIONADO (preenche os campos na tela e aguarda a professora revisar e clicar em Salvar).',
+    description: 'Preenche autonomamente ações operacionais em portais escolares (Machado Sobrinho, Plurall, Rede Santa Catarina, Cambridge One, etc.) para diários de classe, frequências/chamadas e notas de boletim. Preenche todos os campos no DOM e deixa o formulário pronto para confirmação final.',
     input_schema: {
       type: 'object',
       properties: {
@@ -131,11 +131,33 @@ export const AGENT_TOOLS: ToolDefinition[] = [
         date:           { type: 'string', description: 'Data YYYY-MM-DD' },
         classRef:       { type: 'string', description: 'Turma vinculada, ex: 9º Ano A, 8B' },
         description:    { type: 'string', description: 'Conteúdo programático, pauta, metodologia ou instruções da tarefa' },
-        mode:           { type: 'string', enum: ['supervised'], description: 'Supervisionado obrigatório (preenche os campos no formulário do portal e aguarda a confirmação manual da professora para salvar)' },
+        mode:           { type: 'string', enum: ['supervised'], description: 'Modo supervisionado com preenchimento autônomo e confirmação final' },
         absentStudents: { type: 'array', items: { type: 'string' }, description: 'Lista de nomes de alunos ausentes/faltas na chamada' },
         evaluationName: { type: 'string', description: 'Nome da avaliação para lançamento de notas (ex: Prova 1, Simulado)' }
       },
       required: ['platform', 'title']
+    }
+  },
+  {
+    name: 'confirm_portal_submission',
+    description: 'Confirma a submissão final irreversível ou cancelamento de uma tarefa de portal que já teve seus campos preenchidos e aguarda confirmação final.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        taskId:  { type: 'string', description: 'ID da tarefa de automação em pending_approval' },
+        action:  { type: 'string', enum: ['approve', 'abort'], description: "'approve' para clicar em Salvar/Confirmar ou 'abort' para cancelar" }
+      },
+      required: ['action']
+    }
+  },
+  {
+    name: 'show_portal_screenshot',
+    description: 'Solicita e exibe a captura de tela (screenshot) do portal com os campos já pré-preenchidos para o professor inspecionar visualmente antes de confirmar.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        taskId:  { type: 'string', description: 'ID da tarefa de automação (opcional se houver tarefa pendente ativa)' }
+      }
     }
   },
   {
@@ -504,6 +526,8 @@ export const TOOL_DISPLAY_NAMES: Record<string, { label: string; icon: string; c
   create_communication:           { label: 'Redigindo bilhete',       icon: 'ti-message',            color: '#6c71c4' },
   add_student_grade:              { label: 'Lançando nota',           icon: 'ti-report-analytics',   color: '#2aa198' },
   execute_portal_action:          { label: 'Operando no Portal',      icon: 'ti-wand',               color: '#8b5e3c' },
+  confirm_portal_submission:      { label: 'Confirmando Submissão',   icon: 'ti-check',              color: '#16a34a' },
+  show_portal_screenshot:         { label: 'Exibindo Prévia',         icon: 'ti-photo',              color: '#2563eb' },
   fill_school_portal:             { label: 'Preenchendo portal',      icon: 'ti-plug-connected',     color: '#cb4b16' },
   open_school_portal:             { label: 'Abrindo portal',          icon: 'ti-external-link',      color: '#268bd2' },
   generate_exam_content:          { label: 'Gerando prova',           icon: 'ti-file-certificate',   color: '#d33682' },

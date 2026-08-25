@@ -236,13 +236,11 @@ export default function Analytics() {
 
       if (sc) {
         const parsedSc = JSON.parse(sc)
-        setSchools(parsedSc)
-        if (parsedSc.length > 0) setPanelSchoolId(prev => prev || parsedSc[0].id)
+        const realSchools = Array.isArray(parsedSc) ? parsedSc.filter((s: any) => s.name !== 'Colégio Integral' && s.name !== 'Escola Modelo') : []
+        setSchools(realSchools)
+        if (realSchools.length > 0) setPanelSchoolId(prev => prev || realSchools[0].id)
       } else {
-        const def = [{ id: 's1', name: 'Escola Padrão', color: '#073642' }]
-        setSchools(def)
-        setPanelSchoolId('s1')
-        localStorage.setItem('teacher_schools', JSON.stringify(def))
+        setSchools([])
       }
       if (cl) {
         const parsedCl = JSON.parse(cl)

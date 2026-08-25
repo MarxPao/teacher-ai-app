@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Tabela de Notas - Iframe Interno</title>
+  <style>
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 10px; background: #fff; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #e2e8f0; font-size: 13.5px; }
+    th { background: #f1f5f9; color: #334155; font-weight: 600; }
+    input[type="number"], input[type="text"] { padding: 6px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13.5px; width: 80px; }
+  </style>
+</head>
+<body>
+  <table id="iframe_grades_table">
+    <thead>
+      <tr>
+        <th>Nº</th>
+        <th>Nome do Aluno</th>
+        <th>Presença</th>
+        <th>Avaliação 1 (Nota 0.0 - 10.0)</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr data-student-id="1">
+        <td>1</td>
+        <td class="student-name">Ana Júlia Santos</td>
+        <td><input type="checkbox" name="presenca_1" id="presenca_1" checked onchange="notifyParent()"></td>
+        <td><input type="number" name="nota_1" id="nota_1" step="0.1" min="0" max="10" value="9.0" oninput="notifyParent()"></td>
+      </tr>
+      <tr data-student-id="2">
+        <td>2</td>
+        <td class="student-name">Carlos Eduardo Souza</td>
+        <td><input type="checkbox" name="presenca_2" id="presenca_2" checked onchange="notifyParent()"></td>
+        <td><input type="number" name="nota_2" id="nota_2" step="0.1" min="0" max="10" value="6.5" oninput="notifyParent()"></td>
+      </tr>
+      <tr data-student-id="3">
+        <td>3</td>
+        <td class="student-name">Lucas Silva</td>
+        <td><input type="checkbox" name="presenca_3" id="presenca_3" checked onchange="notifyParent()"></td>
+        <td><input type="number" name="nota_3" id="nota_3" step="0.1" min="0" max="10" value="8.0" oninput="notifyParent()"></td>
+      </tr>
+      <tr data-student-id="4">
+        <td>4</td>
+        <td class="student-name">Mariana Lima</td>
+        <td><input type="checkbox" name="presenca_4" id="presenca_4" checked onchange="notifyParent()"></td>
+        <td><input type="number" name="nota_4" id="nota_4" step="0.1" min="0" max="10" value="9.5" oninput="notifyParent()"></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <script>
+    function notifyParent() {
+      if (window.parent && window.parent.checkFormValidity) {
+        window.parent.checkFormValidity();
+      }
+    }
+  </script>
+</body>
+</html>

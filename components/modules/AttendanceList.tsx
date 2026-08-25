@@ -5,6 +5,10 @@ import ModuleShell from '@/components/ModuleShell'
 import { fillPortal, logPortalFill } from '@/lib/portalBridge'
 import { syncToSupabase } from '@/lib/supabaseClient'
 import { recordAttendanceObservation } from '@/lib/studentMemory'
+import AutomationDiffModal from '@/components/modules/AutomationDiffModal'
+import { createBrowserTask, BrowserAutomationTask, DiffItem } from '@/lib/browserAutomationClient'
+import { sanitizeOutboundPayload } from '@/lib/portalSanitizer'
+import { getTeacherCalibrations } from '@/lib/teacherCalibrations'
 
 // ─── Interfaces ─────────────────────────────────────────────────────────────
 export interface School {
@@ -107,9 +111,10 @@ export default function AttendanceList() {
   // 5. Abas do Módulo: 'daily' (Chamada Diária), 'report' (Relatório de Frequência), 'history' (Histórico)
   const [activeTab, setActiveTab] = useState<'daily' | 'report' | 'history'>('daily')
 
-  // 6. Espelhamento em Portais
+  // 6. Modal de Espelhamento no Portal
   const [isMirrorModalOpen, setIsMirrorModalOpen] = useState(false)
-  const [selectedMirrorPortal, setSelectedMirrorPortal] = useState('plural')
+  const [selectedMirrorPortal, setSelectedMirrorPortal] = useState<string>(() => getTeacherCalibrations().attendance.defaultPortalMirror || 'machado')
+  const [activeAutomationTask, setActiveAutomationTask] = useState<BrowserAutomationTask | null>(null)
 
   // 7. Notificações Toast
   const [toastMessage, setToastMessage] = useState('')
@@ -134,13 +139,8 @@ export default function AttendanceList() {
       let loadedHistory: ClassAttendanceSession[] = rawHistory ? JSON.parse(rawHistory) : []
       let loadedSchedule: any[] = rawSchedule ? JSON.parse(rawSchedule) : []
 
-      if (loadedSchools.length === 0 && loadedClasses.length > 0) {
-        loadedSchools = [
-          { id: 'sch_1', name: 'Colégio Integral', color: '#8b5e3c' },
-          { id: 'sch_2', name: 'Escola Modelo', color: '#0284c7' }
-        ]
-        localStorage.setItem('teacher_schools', JSON.stringify(loadedSchools))
-      }
+      // Filtrar resquícios de escolas simuladas
+      loadedSchools = loadedSchools.filter(s => s.name !== 'Colégio Integral' && s.name !== 'Escola Modelo')
 
       setSchools(loadedSchools)
       setClasses(loadedClasses)
@@ -500,30 +500,75 @@ export default function AttendanceList() {
     showToast('📥 Arquivo CSV exportado!')
   }
 
-  // Espelhar no Portal
+  // Espelhar no Portal via Browser Harness / Diff Modal
   const handleExecuteMirrorAttendance = async () => {
     if (!selectedClass) return
     const targetClassObj = classes.find(c => c.id === selectedClass)
     const absentStudents = classStudents.filter(s => attendance[s.id]?.status === 'absent').map(s => s.name)
     const presentStudents = classStudents.filter(s => attendance[s.id]?.status === 'present').map(s => s.name)
 
-    const payload = {
+    const diff: DiffItem[] = [
+      ...absentStudents.map(name => ({
+        studentName: name,
+        field: 'Frequência / Presença',
+        beforeValue: 'Presente',
+        afterValue: 'Ausente (Falta)',
+        approved: true
+      })),
+      ...presentStudents.map(name => ({
+        studentName: name,
+        field: 'Frequência / Presença',
+        beforeValue: 'Pendente',
+        afterValue: 'Presente',
+        approved: true
+      }))
+    ]
+
+    const rawPayload = {
       platform: selectedMirrorPortal,
       actionType: 'attendance',
+      title: `Lançamento de Frequência - ${targetClassObj?.name || 'Turma'} (${selectedDate})`,
       classRef: targetClassObj?.name || '',
       date: selectedDate,
       absentStudents,
       presentStudents,
-      mode: 'supervised'
+      mode: 'supervised',
+      diff,
+      confidence_flag: 'seletor_mapeado' as const
     }
 
-    logPortalFill(payload as any)
-    const res = await fillPortal(payload as any)
-    if (res.success) {
-      showToast(`✅ Presença transferida para o portal ${selectedMirrorPortal}!`)
-      setIsMirrorModalOpen(false)
+    const cleanPayload = sanitizeOutboundPayload(rawPayload)
+
+    // Cria a tarefa de automação
+    const createdTask = await createBrowserTask({
+      portal: selectedMirrorPortal,
+      actionType: 'write_attendance',
+      payload: cleanPayload,
+      approvalMode: 'batch',
+      classRef: targetClassObj?.name || '',
+      studentCount: classStudents.length
+    })
+
+    setIsMirrorModalOpen(false)
+
+    if (createdTask) {
+      setActiveAutomationTask(createdTask)
     } else {
-      alert(`⚠️ Certifique-se de que a página de chamada do portal "${selectedMirrorPortal}" está aberta no navegador Chrome.`)
+      const localTask: BrowserAutomationTask = {
+        id: `task_${Date.now()}`,
+        teacher_id: 'local_teacher',
+        trace_id: `trace_${Date.now()}`,
+        portal: selectedMirrorPortal,
+        action_type: 'write_attendance',
+        status: 'drafted',
+        payload: cleanPayload,
+        approval_mode: 'batch',
+        class_ref: targetClassObj?.name || '',
+        student_count: classStudents.length,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }
+      setActiveAutomationTask(localTask)
     }
   }
 
@@ -1247,6 +1292,17 @@ export default function AttendanceList() {
               <i className="ti ti-check" />
               {toastMessage}
             </div>
+          )}
+
+          {activeAutomationTask && (
+            <AutomationDiffModal
+              task={activeAutomationTask}
+              onClose={() => setActiveAutomationTask(null)}
+              onCompleted={() => {
+                showToast('✅ Presença gravada e evidência salva no Supabase!')
+                setActiveAutomationTask(null)
+              }}
+            />
           )}
 
         </ModuleShell>

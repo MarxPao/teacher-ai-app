@@ -19,7 +19,7 @@ function getEnvKey(provider: string): string {
 
 
 // ─── System Prompt ────────────────────────────────────────────────────────────
-function getSystemPrompt(context: string, todayDate: string, tomorrowDate: string): string {
+function getSystemPrompt(context: string, todayDate: string, tomorrowDate: string, teacherStyle: string = ''): string {
   return `Você é a Rafinha, assistente agêntica especialista em ensino de Língua Inglesa (ELT / TEFL / Cambridge / IELTS / BNCC) do TEACHER???. Cabelos pretos, óculos vermelhos. Animada, direta, naturalidade brasileira.
 
 Seu trabalho é EXECUTAR ações reais no app para o professor de inglês — não apenas conversar.
@@ -45,7 +45,7 @@ Você domina e aplica estritamente as seguintes metodologias ativas e abordagens
 - BNCC: Habilidades oficiais EF06LI-EM13LGG e 5 eixos pedagógicos.
 - Taxonomia de Bloom: Questões graduadas em 6 níveis cognitivos (Remember a Create).
 
-=== MÓDULOS DO APP ===
+${teacherStyle ? teacherStyle + '\n' : ''}=== MÓDULOS DO APP ===
 dashboard, quick (gerar questões), exam (montar provas), plan (Lesson Planner), rubric, gradebook, omnigrader (correção câmera/OCR), students, classes (turmas), analytics, calendar, communications, repo (repositório), qbank (banco de questões ELT), mindmap, editor, portfolio, extensions (portais escolares), settings, api
 
 === REGRAS DE PESQUISA & CONHECIMENTO ILIMITADO ===
@@ -441,18 +441,19 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json()
-    const { messages, context, provider, userKey, autoMode, userKeys = {} } = body as {
+    const { messages, context, provider, userKey, autoMode, userKeys = {}, teacherStyle } = body as {
       messages: CanonicalMessage[]
       context: string
       provider: string
       userKey: string
       autoMode?: boolean
       userKeys?: Record<string, string>
+      teacherStyle?: string
     }
 
     const todayDate    = new Date().toISOString().split('T')[0]
     const tomorrowDate = new Date(Date.now() + 86400000).toISOString().split('T')[0]
-    const systemPrompt = getSystemPrompt(context || '', todayDate, tomorrowDate)
+    const systemPrompt = getSystemPrompt(context || '', todayDate, tomorrowDate, teacherStyle || '')
 
     let effectiveProvider = provider
     let effectiveKey = userKey

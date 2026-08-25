@@ -54,11 +54,74 @@ const PEDAGOGICAL_SUGGESTIONS: Omit<CalendarTask, 'id' | 'done'>[] = [
   }
 ]
 
+export interface ClassRecord {
+  id: string
+  name: string
+  schoolId?: string
+  grade?: string
+  color?: string
+}
+
+export type PrepStatus = 'unplanned' | 'draft' | 'ready'
+
+export interface ScheduleItem {
+  id: string
+  dayOfWeek: number // 1 (Mon) to 6 (Sat), 0 (Sun)
+  timeStart: string
+  timeEnd: string
+  classId: string
+  className?: string
+  topic: string
+  status: PrepStatus
+  notes?: string
+  color?: string
+  createdAt?: string
+  updatedAt?: string
+}
+
+export interface ChecklistItem {
+  id: string
+  text: string
+  completed: boolean
+}
+
+export const AGENDA_DAYS = [
+  { id: 1, name: 'Segunda-feira', short: 'Seg' },
+  { id: 2, name: 'Terça-feira', short: 'Ter' },
+  { id: 3, name: 'Quarta-feira', short: 'Qua' },
+  { id: 4, name: 'Quinta-feira', short: 'Qui' },
+  { id: 5, name: 'Sexta-feira', short: 'Sex' },
+  { id: 6, name: 'Sábado', short: 'Sáb' },
+]
+
+export const AGENDA_PALETTE = ['#8b5e3c', '#268bd2', '#859900', '#b58900', '#d33682', '#6c71c4', '#2aa198', '#dc322f']
+
 export default function Planner() {
   const [tasks, setTasks] = useState<CalendarTask[]>([])
-  const [activeTab, setActiveTab] = useState<'calendar' | 'postits' | 'countdown' | 'table'>('calendar')
+  const [activeTab, setActiveTab] = useState<'calendar' | 'week' | 'postits' | 'countdown' | 'table'>('calendar')
   const [currentDate, setCurrentDate] = useState(new Date())
   
+  // Weekly Agenda & Classes State (Amalgamated)
+  const [classes, setClasses] = useState<ClassRecord[]>([])
+  const [schedule, setSchedule] = useState<ScheduleItem[]>([])
+  const [checklist, setChecklist] = useState<ChecklistItem[]>([])
+  const [filterAgendaClass, setFilterAgendaClass] = useState<string>('all')
+  const [searchAgendaTopic, setSearchAgendaTopic] = useState<string>('')
+  
+  // Schedule post modal states
+  const [showScheduleModal, setShowScheduleModal] = useState(false)
+  const [editingSchedulePost, setEditingSchedulePost] = useState<ScheduleItem | null>(null)
+  const [scheduleFormTopic, setScheduleFormTopic] = useState('')
+  const [scheduleFormClassId, setScheduleFormClassId] = useState('')
+  const [scheduleFormCustomClass, setScheduleFormCustomClass] = useState('')
+  const [scheduleFormDay, setScheduleFormDay] = useState<number>(1)
+  const [scheduleFormTimeStart, setScheduleFormTimeStart] = useState('07:30')
+  const [scheduleFormTimeEnd, setScheduleFormTimeEnd] = useState('08:20')
+  const [scheduleFormStatus, setScheduleFormStatus] = useState<PrepStatus>('unplanned')
+  const [scheduleFormNotes, setScheduleFormNotes] = useState('')
+  const [scheduleFormColor, setScheduleFormColor] = useState(AGENDA_PALETTE[0])
+  const [postToDelete, setPostToDelete] = useState<ScheduleItem | null>(null)
+
   // Filtering states for the Table tab
   const [searchText, setSearchText] = useState('')
   const [filterClass, setFilterClass] = useState('all')
@@ -97,48 +160,206 @@ export default function Planner() {
     try {
       const savedTasks = localStorage.getItem('teacher_calendar_tasks')
       if (savedTasks) {
-        setTasks(JSON.parse(savedTasks))
+        const parsed = JSON.parse(savedTasks)
+        const realTasks = Array.isArray(parsed) ? parsed.filter(t => !t.id?.startsWith('demo-') && !t.id?.startsWith('suggest-')) : []
+        setTasks(realTasks)
+        localStorage.setItem('teacher_calendar_tasks', JSON.stringify(realTasks))
       } else {
-        // Fallback demo tasks setup
-        const demoTasks: CalendarTask[] = [
-          {
-            id: 'demo-1',
-            title: 'Grammar Quiz: Present Perfect',
-            description: 'Quiz no Google Forms cobrindo uso de Since/For.',
-            date: new Date().toISOString().split('T')[0], // Today
-            type: 'prova',
-            priority: 'high',
-            classRef: '9º Ano A',
-            done: false
-          },
-          {
-            id: 'demo-2',
-            title: 'Correção de Textos: Summer Vacation',
-            description: 'Avaliar as redações curtas de 150 palavras.',
-            date: new Date(Date.now() + 172800000).toISOString().split('T')[0], // In 2 days
-            type: 'correcao',
-            priority: 'medium',
-            classRef: '8º Ano B',
-            done: false
-          },
-          {
-            id: 'demo-3',
-            title: 'Planejar Aula com Música (Beatles)',
-            description: 'Trabalhar simple past através da letra de Yesterday.',
-            date: new Date(Date.now() + 432000000).toISOString().split('T')[0], // In 5 days
-            type: 'planejamento',
-            priority: 'low',
-            classRef: '7º Ano C',
-            done: false
-          }
-        ]
-        setTasks(demoTasks)
-        localStorage.setItem('teacher_calendar_tasks', JSON.stringify(demoTasks))
+        setTasks([])
       }
     } catch (e) {
       console.error('Error loading tasks:', e)
+      setTasks([])
+    }
+
+    // Load Agenda Data (Classes, Schedule, Checklist) - Only 100% real data
+    try {
+      const sc = localStorage.getItem('teacher_classes')
+      if (sc) setClasses(JSON.parse(sc))
+      const sch = localStorage.getItem('teacher_agenda_schedule')
+      if (sch) {
+        const parsedSch = JSON.parse(sch)
+        const realSchedule = Array.isArray(parsedSch) ? parsedSch.filter((s: any) => !s.id?.startsWith('demo-')) : []
+        setSchedule(realSchedule)
+      }
+      const chk = localStorage.getItem('teacher_agenda_checklist')
+      if (chk) {
+        const parsedChk = JSON.parse(chk)
+        const realChecklist = Array.isArray(parsedChk) ? parsedChk.filter((c: any) => !c.id?.startsWith('demo-')) : []
+        setChecklist(realChecklist)
+      }
+    } catch (e) {
+      console.error('Error loading agenda items:', e)
     }
   }, [])
+
+  const persistSchedule = (newSchedule: ScheduleItem[]) => {
+    setSchedule(newSchedule)
+    try {
+      localStorage.setItem('teacher_agenda_schedule', JSON.stringify(newSchedule))
+    } catch {}
+  }
+
+  const persistChecklist = (newChecklist: ChecklistItem[]) => {
+    setChecklist(newChecklist)
+    try {
+      localStorage.setItem('teacher_agenda_checklist', JSON.stringify(newChecklist))
+    } catch {}
+  }
+
+  const cycleScheduleStatus = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    const updated = schedule.map(item => {
+      if (item.id === id) {
+        const next: Record<PrepStatus, PrepStatus> = {
+          unplanned: 'draft',
+          draft: 'ready',
+          ready: 'unplanned',
+        }
+        return { ...item, status: next[item.status], updatedAt: new Date().toISOString() }
+      }
+      return item
+    })
+    persistSchedule(updated)
+  }
+
+  const handleOpenAddScheduleModal = (defaultDay = 1) => {
+    setEditingSchedulePost(null)
+    setScheduleFormTopic('')
+    setScheduleFormClassId(classes[0]?.id || '')
+    setScheduleFormCustomClass('')
+    setScheduleFormDay(defaultDay)
+    setScheduleFormTimeStart('07:30')
+    setScheduleFormTimeEnd('08:20')
+    setScheduleFormStatus('unplanned')
+    setScheduleFormNotes('')
+    setScheduleFormColor(AGENDA_PALETTE[0])
+    setShowScheduleModal(true)
+  }
+
+  const handleOpenEditScheduleModal = (item: ScheduleItem) => {
+    setEditingSchedulePost(item)
+    setScheduleFormTopic(item.topic || '')
+    setScheduleFormClassId(item.classId || '')
+    setScheduleFormCustomClass(item.className || '')
+    setScheduleFormDay(item.dayOfWeek)
+    setScheduleFormTimeStart(item.timeStart)
+    setScheduleFormTimeEnd(item.timeEnd)
+    setScheduleFormStatus(item.status)
+    setScheduleFormNotes(item.notes || '')
+    setScheduleFormColor(item.color || AGENDA_PALETTE[0])
+    setShowScheduleModal(true)
+  }
+
+  const handleSaveSchedulePost = () => {
+    if (!scheduleFormTopic.trim()) {
+      alert('Por favor, informe o tópico/título da aula na grade.')
+      return
+    }
+
+    const selectedCls = classes.find(c => c.id === scheduleFormClassId)
+    const resolvedClassName = selectedCls ? selectedCls.name : (scheduleFormCustomClass.trim() || 'Turma Geral')
+
+    if (editingSchedulePost) {
+      const updated = schedule.map(item => {
+        if (item.id === editingSchedulePost.id) {
+          return {
+            ...item,
+            topic: scheduleFormTopic.trim(),
+            classId: scheduleFormClassId,
+            className: resolvedClassName,
+            dayOfWeek: scheduleFormDay,
+            timeStart: scheduleFormTimeStart,
+            timeEnd: scheduleFormTimeEnd,
+            status: scheduleFormStatus,
+            notes: scheduleFormNotes.trim(),
+            color: scheduleFormColor,
+            updatedAt: new Date().toISOString(),
+          }
+        }
+        return item
+      })
+      persistSchedule(updated)
+      triggerToast('Aula na grade horária atualizada!')
+    } else {
+      const newPost: ScheduleItem = {
+        id: `post_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+        topic: scheduleFormTopic.trim(),
+        classId: scheduleFormClassId,
+        className: resolvedClassName,
+        dayOfWeek: scheduleFormDay,
+        timeStart: scheduleFormTimeStart,
+        timeEnd: scheduleFormTimeEnd,
+        status: scheduleFormStatus,
+        notes: scheduleFormNotes.trim(),
+        color: scheduleFormColor,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }
+      persistSchedule([...schedule, newPost])
+      triggerToast('Nova aula adicionada na grade semanal!')
+    }
+
+    setShowScheduleModal(false)
+  }
+
+  const handleConfirmDeleteSchedulePost = () => {
+    if (!postToDelete) return
+    const filtered = schedule.filter(item => item.id !== postToDelete.id)
+    persistSchedule(filtered)
+    triggerToast(`Aula "${postToDelete.topic}" excluída da grade.`)
+    setPostToDelete(null)
+  }
+
+  const handlePlanInStudio = (item: ScheduleItem) => {
+    const prefill = {
+      classId: item.classId,
+      className: item.className,
+      topic: item.topic,
+      date: new Date().toISOString().split('T')[0],
+    }
+    localStorage.setItem('teacher_lesson_studio_prefill', JSON.stringify(prefill))
+    window.dispatchEvent(new CustomEvent('teacher:navigate', { detail: 'lessonstudio' }))
+  }
+
+  const toggleChecklist = (id: string) => {
+    const updated = checklist.map(item => item.id === id ? { ...item, completed: !item.completed } : item)
+    persistChecklist(updated)
+  }
+
+  const handleAddChecklist = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && e.currentTarget.value.trim() !== '') {
+      const newItem: ChecklistItem = {
+        id: `chk_${Date.now()}`,
+        text: e.currentTarget.value.trim(),
+        completed: false,
+      }
+      persistChecklist([...checklist, newItem])
+      e.currentTarget.value = ''
+      triggerToast('Item adicionado à checklist semanal!')
+    }
+  }
+
+  const handleDeleteChecklist = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    const updated = checklist.filter(item => item.id !== id)
+    persistChecklist(updated)
+  }
+
+  // Filtered schedule for weekly view
+  const filteredSchedule = schedule.filter(item => {
+    const matchesClass = filterAgendaClass === 'all' || item.classId === filterAgendaClass
+    const matchesSearch = !searchAgendaTopic.trim() || 
+      item.topic.toLowerCase().includes(searchAgendaTopic.toLowerCase()) ||
+      (item.className && item.className.toLowerCase().includes(searchAgendaTopic.toLowerCase())) ||
+      (item.notes && item.notes.toLowerCase().includes(searchAgendaTopic.toLowerCase()))
+    return matchesClass && matchesSearch
+  })
+
+  const totalWeeklyClasses = schedule.length
+  const readyWeeklyClasses = schedule.filter(s => s.status === 'ready').length
+  const prepPercentage = totalWeeklyClasses === 0 ? 0 : Math.round((readyWeeklyClasses / totalWeeklyClasses) * 100)
+  const uniqueClassesCount = new Set(schedule.map(s => s.className || s.classId)).size
 
   // Identify the most urgent pending task
   const pendingTasks = tasks.filter(t => !t.done && getDaysUntil(t.date) >= 0)
@@ -250,14 +471,15 @@ export default function Planner() {
     })
   }
 
-  // Open add modal for a specific day
-  const handleOpenAddModal = (dateStr: string) => {
-    setSelectedDay(dateStr)
+  // Open add modal for a specific day or today
+  const handleOpenAddModal = (dateStr?: string) => {
+    const targetDate = dateStr || new Date().toISOString().split('T')[0]
+    setSelectedDay(targetDate)
     setEditingTask(null)
     setFormState({
       title: '',
       description: '',
-      date: dateStr,
+      date: targetDate,
       type: 'outro',
       priority: 'medium',
       classRef: '',
@@ -448,50 +670,48 @@ export default function Planner() {
             <div style={{ padding: '24px 0', display: 'flex', flexDirection: 'column', gap: 8 }}>
               <h3 style={{ fontSize: 18, fontWeight: 700, color: '#859900' }}>✓ Nenhuma atividade pendente cadastrada!</h3>
               <p style={{ fontSize: 13, color: '#93a1a1' }}>
-                Seu calendário está limpo. Use os botões à direita para sugerir tarefas prontas ou clique em um dia para criar as suas!
+                Seu calendário está pronto. Clique em um dia na grade ou use o botão à direita para agendar seus prazos e aulas reais.
               </p>
             </div>
           )}
         </div>
 
-        {/* Right Side: Quick Action buttons and suggestion tool */}
+        {/* Right Side: Quick Action buttons */}
         <div style={HeroActionsCard}>
-          <h4 style={{ fontSize: 13, fontWeight: 700, color: '#073642', marginBottom: 12 }}>⚡ Ferramentas de Produtividade</h4>
+          <h4 style={{ fontSize: 13, fontWeight: 700, color: '#073642', marginBottom: 12 }}>⚡ Ações Rápidas</h4>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {/* Suggest Pedagogy button */}
-            <button onClick={handleLoadSuggestions} style={SuggestionBtn}>
-              <i className="ti ti-bulb" style={{ fontSize: 16 }} />
-              <span>Sugerir Atividades Pedagógicas</span>
+            {/* New Task button */}
+            <button onClick={() => handleOpenAddModal()} style={SuggestionBtn}>
+              <i className="ti ti-plus" style={{ fontSize: 16 }} />
+              <span>Novo Prazo / Tarefa</span>
             </button>
             {/* Export Task Board button */}
             <button onClick={handleExportTasks} style={ExportBtn}>
               <i className="ti ti-share" style={{ fontSize: 16 }} />
-              <span>Exportar Prazos (Copiar Classroom)</span>
+              <span>Exportar Prazos (Copiar Texto)</span>
             </button>
           </div>
-          <p style={{ fontSize: 10, color: '#93a1a1', marginTop: 12, lineHeight: 1.4 }}>
-            A ferramenta "Sugerir" adiciona tarefas reais de planejamento, avaliação e correção comumente usadas por professores de inglês.
-          </p>
         </div>
       </div>
 
       {/* Tabs Selector & Sub-Filters */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid rgba(88,110,117,0.1)', paddingBottom: 12, marginBottom: 24 }}>
-        <div style={{ display: 'flex', gap: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid rgba(88,110,117,0.1)', paddingBottom: 12, marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
           {[
             { id: 'calendar', label: 'Calendário Mensal', icon: 'ti-calendar' },
+            { id: 'week', label: 'Quadro Semanal', icon: 'ti-calendar-time' },
             { id: 'postits', label: 'Quadro de Post-Its', icon: 'ti-notes' },
             { id: 'countdown', label: 'Cronômetros Regressivos', icon: 'ti-clock' },
-            { id: 'table', label: 'Tabela Geral (Ano / Semana)', icon: 'ti-table' },
+            { id: 'table', label: 'Todas as Tarefas', icon: 'ti-table' },
           ].map(tab => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as any)}
               style={{
-                background: 'none', border: 'none', padding: '8px 16px', fontSize: 15, fontWeight: 600, cursor: 'pointer',
+                background: 'none', border: 'none', padding: '8px 14px', fontSize: 14.5, fontWeight: 600, cursor: 'pointer',
                 color: activeTab === tab.id ? '#073642' : '#93a1a1',
                 borderBottom: activeTab === tab.id ? '4px solid #b58900' : '4px solid transparent',
-                marginBottom: -16, transition: 'all 0.2s', display: 'flex', alignItems: 'center', gap: 8
+                marginBottom: -14, transition: 'all 0.2s', display: 'flex', alignItems: 'center', gap: 8
               }}
             >
               <i className={`ti ${tab.icon}`} style={{ fontSize: 16 }} />
@@ -633,6 +853,282 @@ export default function Planner() {
               <span>
                 <strong>Dica de Organização:</strong> Dê um clique em qualquer dia da grade para abrir o formulário pré-preenchido e adicionar um post-it instantaneamente! Para editar ou ver detalhes, clique na etiqueta da tarefa.
               </span>
+            </div>
+          </div>
+        )}
+
+        {/* ==================== TAB: GRADE SEMANAL DE AULAS ==================== */}
+        {activeTab === 'week' && (
+          <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+            {/* KPI Summary and Filters */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
+              {/* KPI Badges */}
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                <div style={{ background: '#fff', padding: '12px 18px', borderRadius: 14, border: '1px solid rgba(88,110,117,0.12)', display: 'flex', alignItems: 'center', gap: 12, boxShadow: '0 2px 8px rgba(0,43,54,0.03)' }}>
+                  <div style={{ width: 38, height: 38, borderRadius: 10, background: '#f5efe6', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#8b5e3c', fontSize: 18 }}>
+                    <i className="ti ti-calendar-event" />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 18, fontWeight: 800, color: '#073642' }}>{totalWeeklyClasses}</div>
+                    <div style={{ fontSize: 11, color: '#586e75', fontWeight: 600 }}>Aulas na Grade</div>
+                  </div>
+                </div>
+
+                <div style={{ background: '#fff', padding: '12px 18px', borderRadius: 14, border: '1px solid rgba(88,110,117,0.12)', display: 'flex', alignItems: 'center', gap: 12, boxShadow: '0 2px 8px rgba(0,43,54,0.03)' }}>
+                  <div style={{ width: 38, height: 38, borderRadius: 10, background: '#e8f7ee', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#2d7a00', fontSize: 18 }}>
+                    <i className="ti ti-circle-check" />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 18, fontWeight: 800, color: '#2d7a00' }}>{prepPercentage}%</div>
+                    <div style={{ fontSize: 11, color: '#586e75', fontWeight: 600 }}>Aulas Preparadas</div>
+                  </div>
+                </div>
+
+                <div style={{ background: '#fff', padding: '12px 18px', borderRadius: 14, border: '1px solid rgba(88,110,117,0.12)', display: 'flex', alignItems: 'center', gap: 12, boxShadow: '0 2px 8px rgba(0,43,54,0.03)' }}>
+                  <div style={{ width: 38, height: 38, borderRadius: 10, background: '#e8f4fd', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#268bd2', fontSize: 18 }}>
+                    <i className="ti ti-users" />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 18, fontWeight: 800, color: '#268bd2' }}>{uniqueClassesCount}</div>
+                    <div style={{ fontSize: 11, color: '#586e75', fontWeight: 600 }}>Turmas Atendidas</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Filters & Add Action */}
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                <select
+                  value={filterAgendaClass}
+                  onChange={e => setFilterAgendaClass(e.target.value)}
+                  style={{ padding: '8px 12px', borderRadius: 10, border: '1px solid rgba(88,110,117,0.2)', background: '#fff', fontSize: 13, color: '#073642', fontWeight: 600 }}
+                >
+                  <option value="all">Todas as Turmas ({schedule.length})</option>
+                  {classes.map(c => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+
+                <div style={{ position: 'relative' }}>
+                  <i className="ti ti-search" style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#93a1a1', fontSize: 13 }} />
+                  <input
+                    type="text"
+                    placeholder="Buscar tópico..."
+                    value={searchAgendaTopic}
+                    onChange={e => setSearchAgendaTopic(e.target.value)}
+                    style={{ padding: '8px 12px 8px 30px', borderRadius: 10, border: '1px solid rgba(88,110,117,0.2)', background: '#fff', fontSize: 13, color: '#073642', width: 170 }}
+                  />
+                </div>
+
+                <button
+                  onClick={() => handleOpenAddScheduleModal(1)}
+                  style={{
+                    background: '#8b5e3c', color: '#fff', border: 'none', padding: '9px 16px',
+                    borderRadius: 10, fontWeight: 700, fontSize: 13, cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', gap: 6, boxShadow: '0 2px 8px rgba(139,94,60,0.25)'
+                  }}
+                >
+                  <i className="ti ti-plus" /> Adicionar Aula na Grade
+                </button>
+              </div>
+            </div>
+
+            {/* Layout: Weekly Columns Grid + Side Checklist */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 310px', gap: 20, alignItems: 'start' }}>
+              
+              {/* 6-Day Columns (Seg - Sáb) */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12 }}>
+                {AGENDA_DAYS.map(day => {
+                  const dayItems = filteredSchedule
+                    .filter(s => s.dayOfWeek === day.id)
+                    .sort((a, b) => a.timeStart.localeCompare(b.timeStart))
+
+                  return (
+                    <div key={day.id} style={{ background: '#fff', borderRadius: 16, border: '1px solid rgba(88,110,117,0.12)', display: 'flex', flexDirection: 'column', minHeight: 480, overflow: 'hidden' }}>
+                      {/* Column Header */}
+                      <div style={{ background: '#fdfcf9', borderBottom: '1px solid rgba(88,110,117,0.1)', padding: '12px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <span style={{ fontWeight: 800, fontSize: 13.5, color: '#073642', display: 'block' }}>{day.name}</span>
+                          <span style={{ fontSize: 11, color: '#93a1a1', fontWeight: 600 }}>{dayItems.length} aula{dayItems.length !== 1 ? 's' : ''}</span>
+                        </div>
+                        <button
+                          onClick={() => handleOpenAddScheduleModal(day.id)}
+                          style={{ width: 26, height: 26, borderRadius: 6, border: '1px solid rgba(139,94,60,0.25)', background: '#fff', color: '#8b5e3c', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13 }}
+                          title={`Adicionar aula na ${day.name}`}
+                        >
+                          <i className="ti ti-plus" />
+                        </button>
+                      </div>
+
+                      {/* Day Classes */}
+                      <div style={{ padding: 10, display: 'flex', flexDirection: 'column', gap: 10, flex: 1 }}>
+                        {dayItems.length === 0 ? (
+                          <div style={{ padding: '24px 10px', textAlign: 'center', color: '#93a1a1', fontSize: 12 }}>
+                            <i className="ti ti-calendar-plus" style={{ fontSize: 20, marginBottom: 4, display: 'block', opacity: 0.5 }} />
+                            <span>Sem aulas</span>
+                            <button
+                              onClick={() => handleOpenAddScheduleModal(day.id)}
+                              style={{ background: 'none', border: 'none', color: '#8b5e3c', fontSize: 11, fontWeight: 700, cursor: 'pointer', marginTop: 6, display: 'block', margin: '6px auto 0' }}
+                            >
+                              + Agendar
+                            </button>
+                          </div>
+                        ) : (
+                          dayItems.map(item => {
+                            const cls = classes.find(c => c.id === item.classId)
+                            const cardColor = item.color || cls?.color || '#8b5e3c'
+
+                            return (
+                              <div
+                                key={item.id}
+                                style={{
+                                  background: '#fefefe', border: '1px solid #ede4d8', borderLeft: `4px solid ${cardColor}`,
+                                  borderRadius: 10, padding: 10, boxShadow: '0 2px 6px rgba(0,0,0,0.03)',
+                                  display: 'flex', flexDirection: 'column', gap: 6, cursor: 'pointer'
+                                }}
+                                onClick={() => handleOpenEditScheduleModal(item)}
+                              >
+                                {/* Header: Time + Prep Badge */}
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                  <span style={{ fontSize: 11, fontWeight: 700, color: '#586e75', display: 'flex', alignItems: 'center', gap: 3 }}>
+                                    <i className="ti ti-clock" style={{ fontSize: 10 }} />
+                                    {item.timeStart} - {item.timeEnd}
+                                  </span>
+                                  <div onClick={(e) => cycleScheduleStatus(item.id, e)} style={{ cursor: 'pointer' }}>
+                                    {item.status === 'ready' && (
+                                      <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 4, background: 'rgba(61,122,78,0.15)', color: '#2d7a00' }} title="Pronta! Clique para alterar status">
+                                        ✓ Pronta
+                                      </span>
+                                    )}
+                                    {item.status === 'draft' && (
+                                      <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 4, background: 'rgba(200,122,30,0.15)', color: '#c87a1e' }} title="Rascunho. Clique para alterar status">
+                                        ✏️ Rascunho
+                                      </span>
+                                    )}
+                                    {item.status === 'unplanned' && (
+                                      <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 4, background: 'rgba(168,50,50,0.12)', color: '#dc322f' }} title="Não planejada. Clique para alterar status">
+                                        ⚠️ Não Planejada
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {/* Class & Topic */}
+                                <div>
+                                  <span style={{ fontSize: 11, fontWeight: 800, color: cardColor, display: 'block' }}>
+                                    {item.className || cls?.name || 'Turma Geral'}
+                                  </span>
+                                  <strong style={{ fontSize: 12.5, color: '#073642', display: 'block', lineHeight: 1.3 }}>
+                                    {item.topic}
+                                  </strong>
+                                  {item.notes && (
+                                    <div style={{ fontSize: 11, color: '#7a6552', marginTop: 4, fontStyle: 'italic', background: '#faf6f0', padding: '3px 6px', borderRadius: 4 }}>
+                                      📝 {item.notes}
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* Quick Actions */}
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4, paddingTop: 6, borderTop: '1px solid #f0e8dc' }} onClick={e => e.stopPropagation()}>
+                                  <button
+                                    onClick={() => handlePlanInStudio(item)}
+                                    style={{ background: 'none', border: 'none', color: '#8b5e3c', fontSize: 11, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 3, padding: 0 }}
+                                    title="Abrir no Planejamento de Aula"
+                                  >
+                                    <i className="ti ti-sparkles" /> Planejar Aula
+                                  </button>
+                                  <div style={{ display: 'flex', gap: 6 }}>
+                                    <button
+                                      onClick={() => handleOpenEditScheduleModal(item)}
+                                      style={{ background: 'none', border: 'none', color: '#268bd2', cursor: 'pointer', fontSize: 12 }}
+                                      title="Editar aula"
+                                    >
+                                      <i className="ti ti-pencil" />
+                                    </button>
+                                    <button
+                                      onClick={() => setPostToDelete(item)}
+                                      style={{ background: 'none', border: 'none', color: '#dc322f', cursor: 'pointer', fontSize: 12 }}
+                                      title="Excluir aula"
+                                    >
+                                      <i className="ti ti-trash" />
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            )
+                          })
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+
+              {/* Side Card: Checklist Semanal */}
+              <div style={{ background: '#fff', borderRadius: 16, border: '1px solid rgba(88,110,117,0.12)', padding: 18, boxShadow: '0 2px 10px rgba(0,43,54,0.03)', display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <h3 style={{ margin: 0, fontSize: 15, fontWeight: 800, color: '#073642', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <i className="ti ti-checklist" style={{ color: '#8b5e3c' }} /> Checklist da Semana
+                  </h3>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: '#2d7a00', background: '#e8f7ee', padding: '2px 8px', borderRadius: 6 }}>
+                    {checklist.filter(c => c.completed).length}/{checklist.length}
+                  </span>
+                </div>
+
+                {/* Add Input */}
+                <div>
+                  <input
+                    type="text"
+                    placeholder="+ Adicionar tarefa (Enter)..."
+                    onKeyDown={handleAddChecklist}
+                    style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', borderRadius: 8, border: '1px solid #d5c0b0', fontSize: 12.5, color: '#073642' }}
+                  />
+                </div>
+
+                {/* Checklist items */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 380, overflowY: 'auto' }}>
+                  {checklist.length === 0 ? (
+                    <div style={{ fontSize: 12, color: '#93a1a1', textAlign: 'center', padding: '16px 0', fontStyle: 'italic' }}>
+                      Nenhuma tarefa pendente nesta semana.
+                    </div>
+                  ) : (
+                    checklist.map(item => (
+                      <div
+                        key={item.id}
+                        onClick={() => toggleChecklist(item.id)}
+                        style={{
+                          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                          padding: '7px 10px', borderRadius: 8, background: item.completed ? '#f5f5f5' : '#fdfaf5',
+                          border: '1px solid #ede8dc', cursor: 'pointer'
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <input
+                            type="checkbox"
+                            checked={item.completed}
+                            onChange={() => {}}
+                            style={{ cursor: 'pointer' }}
+                          />
+                          <span style={{ fontSize: 12.5, color: item.completed ? '#93a1a1' : '#073642', textDecoration: item.completed ? 'line-through' : 'none' }}>
+                            {item.text}
+                          </span>
+                        </div>
+                        <button
+                          onClick={(e) => handleDeleteChecklist(item.id, e)}
+                          style={{ background: 'none', border: 'none', color: '#dc322f', cursor: 'pointer', fontSize: 12, opacity: 0.6 }}
+                          title="Excluir item"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                <div style={{ fontSize: 11, color: '#7a6552', background: '#faf6f0', border: '1px solid #ede4d8', borderRadius: 8, padding: '8px 10px', lineHeight: 1.35 }}>
+                  💡 <strong>Dica:</strong> Tarefas da checklist são salvas automaticamente e persistem para organizar suas prioridades docentes.
+                </div>
+              </div>
+
             </div>
           </div>
         )}
@@ -1324,6 +1820,171 @@ export default function Planner() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ==================== CREATE / EDIT SCHEDULE POST MODAL ==================== */}
+      {showScheduleModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,43,54,0.4)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div style={{ background: '#fff', borderRadius: 24, padding: 32, width: 480, maxWidth: '90%', boxShadow: '0 24px 48px rgba(0,0,0,0.18)', border: '1px solid rgba(88,110,117,0.15)', maxHeight: '90vh', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <h2 style={{ fontSize: 18, fontWeight: 800, color: '#073642', display: 'flex', alignItems: 'center', gap: 8, margin: 0 }}>
+                <i className="ti ti-calendar-plus" style={{ color: '#8b5e3c' }} />
+                {editingSchedulePost ? 'Editar Aula no Quadro Semanal' : 'Nova Aula no Quadro Semanal'}
+              </h2>
+              <button onClick={() => setShowScheduleModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: '#93a1a1' }}>
+                ✕
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {/* Tópico */}
+              <div>
+                <label style={ModalLabel}>Tópico / Conteúdo da Aula *</label>
+                <input
+                  type="text"
+                  placeholder="Ex: Simple Past: Regular Verbs, Leitura Unit 3..."
+                  value={scheduleFormTopic}
+                  onChange={e => setScheduleFormTopic(e.target.value)}
+                  style={ModalInput}
+                />
+              </div>
+
+              {/* Turma & Dia da Semana */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                <div>
+                  <label style={ModalLabel}>Turma</label>
+                  {classes.length > 0 ? (
+                    <select
+                      value={scheduleFormClassId}
+                      onChange={e => setScheduleFormClassId(e.target.value)}
+                      style={ModalSelect}
+                    >
+                      {classes.map(c => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                      <option value="">Personalizada</option>
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      placeholder="Nome da Turma"
+                      value={scheduleFormCustomClass}
+                      onChange={e => setScheduleFormCustomClass(e.target.value)}
+                      style={ModalInput}
+                    />
+                  )}
+                </div>
+
+                <div>
+                  <label style={ModalLabel}>Dia da Semana</label>
+                  <select
+                    value={scheduleFormDay}
+                    onChange={e => setScheduleFormDay(Number(e.target.value))}
+                    style={ModalSelect}
+                  >
+                    {AGENDA_DAYS.map(d => (
+                      <option key={d.id} value={d.id}>{d.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Horário Início / Fim */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                <div>
+                  <label style={ModalLabel}>Início</label>
+                  <input
+                    type="time"
+                    value={scheduleFormTimeStart}
+                    onChange={e => setScheduleFormTimeStart(e.target.value)}
+                    style={ModalInput}
+                  />
+                </div>
+                <div>
+                  <label style={ModalLabel}>Término</label>
+                  <input
+                    type="time"
+                    value={scheduleFormTimeEnd}
+                    onChange={e => setScheduleFormTimeEnd(e.target.value)}
+                    style={ModalInput}
+                  />
+                </div>
+              </div>
+
+              {/* Status de Preparação */}
+              <div>
+                <label style={ModalLabel}>Status de Preparação da Aula</label>
+                <select
+                  value={scheduleFormStatus}
+                  onChange={e => setScheduleFormStatus(e.target.value as any)}
+                  style={ModalSelect}
+                >
+                  <option value="unplanned">🔴 Não Planejada</option>
+                  <option value="draft">🟡 Em Rascunho</option>
+                  <option value="ready">🟢 Pronta / Planejada</option>
+                </select>
+              </div>
+
+              {/* Notas Rápidas */}
+              <div>
+                <label style={ModalLabel}>Notas Pedagógicas / Lembrete</label>
+                <textarea
+                  rows={2}
+                  placeholder="Ex: Levar folhas de exercícios impressas, projetor..."
+                  value={scheduleFormNotes}
+                  onChange={e => setScheduleFormNotes(e.target.value)}
+                  style={{ ...ModalInput, resize: 'none' }}
+                />
+              </div>
+
+              {/* Botões */}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 8 }}>
+                <button
+                  type="button"
+                  onClick={() => setShowScheduleModal(false)}
+                  style={{ padding: '9px 16px', borderRadius: 10, border: '1px solid #d5c0b0', background: '#fff', color: '#586e75', fontWeight: 600, cursor: 'pointer' }}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveSchedulePost}
+                  style={{ padding: '9px 20px', borderRadius: 10, border: 'none', background: '#8b5e3c', color: '#fff', fontWeight: 700, cursor: 'pointer', boxShadow: '0 2px 8px rgba(139,94,60,0.3)' }}
+                >
+                  {editingSchedulePost ? 'Salvar Alterações' : 'Adicionar Aula'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ==================== DELETE SCHEDULE POST CONFIRMATION ==================== */}
+      {postToDelete && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,43,54,0.4)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100 }}>
+          <div style={{ background: '#fff', borderRadius: 20, padding: 24, width: 420, maxWidth: '90%', border: '1px solid rgba(88,110,117,0.15)' }}>
+            <h3 style={{ margin: '0 0 10px 0', fontSize: 16, color: '#dc322f' }}>
+              🗑️ Excluir Aula da Grade
+            </h3>
+            <p style={{ fontSize: 13, color: '#586e75', margin: '0 0 20px 0' }}>
+              Deseja remover a aula <strong>"{postToDelete.topic}"</strong> da grade semanal?
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+              <button
+                onClick={() => setPostToDelete(null)}
+                style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid #d5c0b0', background: '#fff', color: '#586e75', fontWeight: 600, cursor: 'pointer' }}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleConfirmDeleteSchedulePost}
+                style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: '#dc322f', color: '#fff', fontWeight: 700, cursor: 'pointer' }}
+              >
+                Excluir
+              </button>
+            </div>
           </div>
         </div>
       )}

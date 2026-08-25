@@ -13,8 +13,22 @@ import StudentExamPlayer, { OnlineQuestion } from '@/components/modules/StudentE
 import SourceKnowledgeHub, { SourceItem, KnowledgeMode, compileSourcesPrompt } from '@/components/SourceKnowledgeHub'
 import SmartInsightsPanel from '@/components/modules/SmartInsightsPanel'
 import { AssessmentPreset, getStoredPresets, savePreset } from '@/lib/assessmentPresets'
+import { getTeacherCalibrations, saveModuleCalibration } from '@/lib/teacherCalibrations'
+import { addQuestionsBatch } from '@/lib/questionBankService'
+import {
+  getSubjectProfile,
+  getExamSections,
+  getLevelIds,
+  getLevelGatingRule,
+  getDistractorBlock,
+  getAllSubjectProfiles,
+  type SubjectProfile,
+} from '@/lib/subjectProfile'
+// Auto-registra os perfis disponíveis ao carregar o módulo
+import '@/lib/subjects/english'
+import '@/lib/subjects/portuguese'
 
-// Types 
+// Types
 
 interface HeaderState {
   school: string
@@ -23,19 +37,7 @@ interface HeaderState {
   title: string
 }
 
-// Constants 
-
-const CEFR = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2']
-
-const SECTIONS = [
-  { key: 'Grammar', icon: 'ti-book-2', sub: 'Tenses, Syntax, Conditionals, Reported Speech' },
-  { key: 'Vocabulary', icon: 'ti-abc', sub: 'Phrasal Verbs, Idioms, Collocations, False Friends' },
-  { key: 'Reading Comprehension', icon: 'ti-align-left', sub: 'Main Idea, Scanning, Inference, Context' },
-  { key: 'Listening Comprehension', icon: 'ti-headphones', sub: 'Main Point, Specific Details, Dictation' },
-  { key: 'Use of English', icon: 'ti-pencil', sub: 'Cloze, Word Formation, Key Word Transformation' },
-  { key: 'Writing', icon: 'ti-notebook', sub: 'Essays, Summarization, Emails & Letters' },
-  { key: 'Speaking', icon: 'ti-microphone', sub: 'Interview, Picture Description, Role-play' },
-]
+// Constants (backward-compat — mantidos para uso interno enquanto perfil não está selecionado)
 
 const GRADES = [
   '6º Fund.', '7º Fund.', '8º Fund.', '9º Fund.',
@@ -100,8 +102,11 @@ function buildExamPrompt(opts: {
   kioskMode?: boolean
   formVariant?: 'A' | 'B'
   bankContextSnippet?: string
+  /** SubjectProfile ativo — se não fornecido, usa inglês (comportamento original) */
+  subjectProfile?: SubjectProfile
 }): string {
   const methInstructions = buildMethodologyInstructions(opts.approach)
+  const profile = opts.subjectProfile ?? getSubjectProfile()
 
   const librarySection = opts.libraryContext
     ? `\n${opts.libraryContext}\nREGRA FUNDAMENTAL: O conteúdo da base de conhecimento acima deve ser usado estritamente como BASE DE CONTEÚDO, VOCABULÁRIO e CONCEITOS. NUNCA copie ou reproduza questões já prontas do material. Crie QUESTÕES 100% INÉDITAS, NOVAS E ORIGINAIS elaboradas a partir do assunto e nível gramatical presentes no material.\n`
@@ -109,40 +114,21 @@ function buildExamPrompt(opts: {
 
   const stemInstruction = opts.stemLanguage === 'pt'
     ? 'IDIOMA DOS ENUNCIADOS: Escreva as instruções, orientações e enunciados de TODAS as questões estritamente em PORTUGUÊS (ex: "1. Leia o texto e responda às perguntas:", "2. Assinale a alternativa correta:").'
-    : 'IDIOMA DOS ENUNCIADOS: Write all instructions and question stems strictly in ENGLISH (e.g. "1. Read the text and answer the questions:", "2. Choose the correct option:").'
+    : (profile.examLanguage === 'pt-BR'
+        ? 'IDIOMA DOS ENUNCIADOS: Escreva todos os enunciados, instruções e orientações em PORTUGUÊS.'
+        : 'IDIOMA DOS ENUNCIADOS: Write all instructions and question stems strictly in ENGLISH (e.g. "1. Read the text and answer the questions:", "2. Choose the correct option:").')
 
   const optionInstruction = opts.optionLanguage === 'pt'
     ? 'IDIOMA DAS ALTERNATIVAS: As opções (A, B, C, D) e alternativas devem ser formuladas em PORTUGUÊS.'
-    : 'IDIOMA DAS ALTERNATIVAS: As opções (A, B, C, D) e respostas devem ser estritamente em INGLÊS.'
+    : (profile.examLanguage === 'pt-BR'
+        ? 'IDIOMA DAS ALTERNATIVAS: As alternativas (A, B, C, D) devem ser formuladas em PORTUGUÊS.'
+        : 'IDIOMA DAS ALTERNATIVAS: As opções (A, B, C, D) e respostas devem ser estritamente em INGLÊS.')
 
-  // 1. DIRETRIZES DE CEFR GATING (Cambridge English Profile)
-  const cefrGatingRules: Record<string, string> = {
-    A1: `NÍVEL CEFR A1 (Breakthrough):
-- Vocabulário restrito a alta frequência (família, rotina, escola, hobbies, cores, números, comida).
-- Frases curtas e coordenadas simples (máx 10-12 palavras por oração).
-- Gramática permitida: Simple Present, Present Continuous, Can/Can't, There is/are, Imperatives, Pronomes básicos.
-- PROIBIDO: Passive Voice, Past Perfect, Conditionals, Phrasal Verbs complexos, vocabulário abstrato.
-- Textos de Leitura: exatamente 100 a 150 palavras.`,
-    A2: `NÍVEL CEFR A2 (Waystage - KET):
-- Vocabulário prático e descritivo (viagens, compras, passado, planos futuros, saúde).
-- Frases simples com conectivos básicos (and, but, because, so, when).
-- Gramática permitida: Simple Past (regular/irregular), Going to, Will (previsão), Comparatives/Superlatives, Have to, Modals (should, must).
-- PROIBIDO: 2nd/3rd Conditionals, Past Perfect, Passive Voice com múltiplos tempos, vocabulário B2 (ex: "furthermore", "nonetheless").
-- Textos de Leitura: exatamente 150 a 220 palavras.`,
-    B1: `NÍVEL CEFR B1 (Threshold - PET):
-- Vocabulário intermediário (opiniões, sentimentos, trabalho, lazer, tecnologia, experiências).
-- Gramática permitida: Present Perfect (since/for/already/yet), First & Second Conditionals, Relative Clauses (defining), Passive Voice (Simple Present/Past), Used to, Modals of Deduction (might, could).
-- Textos de Leitura: exatamente 250 a 350 palavras.`,
-    B2: `NÍVEL CEFR B2 (Vantage - FCE):
-- Vocabulário avançado e expressivo (argumentação, hipóteses, phrasal verbs idiomáticos, collocations formais).
-- Gramática permitida: Third Conditional, Mixed Conditionals, Past Perfect Continuous, Passive Voice avançada, Reported Speech, Wish/If only, Linkers formais (However, Whereas, In spite of, Furthermore).
-- Textos de Leitura: exatamente 350 a 450 palavras.`,
-    C1: `NÍVEL CEFR C1/C2 (Effective Operational / Mastery - CAE/CPE):
-- Vocabulário acadêmico e idiomático sofisticado, nuances estilísticas, inversão enfática (ex: "Seldom have I..."), cleft sentences, vocabulário abstrato e denso.
-- Textos de Leitura: 450 a 600 palavras.`
-  }
+  // Nível/framework dinâmico (CEFR para inglês, Ano Escolar para LP, etc.)
+  const levelGatingRule = getLevelGatingRule(profile, opts.cefr) || ''
 
-  const activeCefrRule = cefrGatingRules[opts.cefr] || cefrGatingRules['B1']
+  // Bloco de distratores diagnósticos dinâmico (L1 errors para inglês, erros LP para português, etc.)
+  const distractorBlock = getDistractorBlock(profile)
 
   const bRemember = opts.bloomRemember ?? 25
   const bApply = opts.bloomApply ?? 30
@@ -154,16 +140,20 @@ function buildExamPrompt(opts: {
   const dHard = opts.diffHard ?? 25
   const dChallenge = opts.diffChallenge ?? 5
 
-  return `Você é um examinador sênior Cambridge Assessment English e especialista em Psicometria Educacional, ELT e elaboração científica de itens de avaliação (Item Writing). Crie uma PROVA COMPLETA de inglês de altíssimo rigor psicométrico e pedagógico, formatada em HTML limpo, pronta para impressão.
+  const examLangLabel = profile.examLanguage === 'pt-BR' ? 'português' : 'inglês'
+  const levelFrameworkName = profile.levelFramework.name  // ex: 'CEFR', 'Ano Escolar BNCC'
+
+  return `Você é um examinador sênior especialista em Psicometria Educacional e elaboração científica de itens de avaliação (Item Writing) para ${profile.name}. Crie uma PROVA COMPLETA de altíssimo rigor psicométrico e pedagógico, formatada em HTML limpo, pronta para impressão.
 ${librarySection}
 ESPECIFICAÇÕES DA PROVA:
+- Matéria: ${profile.name}
 - Escola: ${opts.header.school || 'Escola'}
 - Professor(a): ${opts.header.teacher || 'Professor(a)'}
 - Turma: ${opts.header.classGroup || opts.grade}
 - Série/Nível: ${opts.grade}
-- Nível CEFR: ${opts.cefr}
+- ${levelFrameworkName}: ${opts.cefr}
 - Quantidade Obrigatória de Questões: EXATAMENTE ${opts.questionCount} QUESTÕES COMPLETAS
-- Tópico Central: ${opts.topic || 'General Knowledge'}
+- Tópico Central: ${opts.topic || 'Conteúdo da matéria'}
 - Seções: ${opts.sections.join(', ')}
 - Abordagem Pedagógica: ${opts.approach.join(', ')}
 - ${stemInstruction}
@@ -171,40 +161,33 @@ ESPECIFICAÇÕES DA PROVA:
 ${opts.customPrompt ? `\nDIRETRIZES DO PROFESSOR:\n"${opts.customPrompt}"\n` : ''}
 ${methInstructions}
 
-=== REGRAS DE CEFR GATING ===
-${activeCefrRule}
-
+${levelGatingRule ? `${levelGatingRule}\n` : ''}
 === 1. DISTRIBUIÇÃO COGNITIVA OBRIGATÓRIA (TAXONOMIA DE BLOOM REVISADA) ===
 Distribua as ${opts.questionCount} questões rigorosamente nestes percentuais cognitivos:
-- LEMBRAR/COMPREENDER (${bRemember}% das questões): Reconhecimento direto, recall de vocabulário, fatos explícitos do texto. Operação mental: identificar/lembrar.
-- APLICAR (${bApply}% das questões): Uso de regras gramaticais em contexto novo, conjugação correta em parágrafo inédito, transferência para situações cotidianas. Operação mental: aplicar/executar.
-- ANALISAR (${bAnalyze}% das questões): Inferência de leitura, tom e intenção do autor, distinção entre fato e opinião, análise estrutural de discurso. Operação mental: inferir/diferenciar.
-- AVALIAR / CRIAR (${bEvaluate}% das questões): Julgamento crítico fundamentado, síntese de ideias, produção textual orientada, reformulação. Operação mental: avaliar/construir.
+- LEMBRAR/COMPREENDER (${bRemember}% das questões): Reconhecimento direto, recall de conteúdo, fatos explícitos do texto. Operação mental: identificar/lembrar.
+- APLICAR (${bApply}% das questões): Uso de regras em contexto novo, transferência para situações cotidianas. Operação mental: aplicar/executar.
+- ANALISAR (${bAnalyze}% das questões): Inferência, tom e intenção do autor, distinção entre fato e opinião, análise estrutural. Operação mental: inferir/diferenciar.
+- AVALIAR / CRIAR (${bEvaluate}% das questões): Julgamento crítico fundamentado, síntese de ideias, produção orientada. Operação mental: avaliar/construir.
 Rotule cada questão no HTML com: data-bloom="remember|apply|analyze|evaluate|create" e comentário <!-- bloom:nivel -->.
 
 === 2. CALIBRAÇÃO DE DIFICULDADE (ÍNDICE DE DISCRIMINAÇÃO PSICOMÉTRICA) ===
 Distribua a dificuldade pretendida das questões:
 - FÁCIL (${dEasy}%): Resposta com apoio contextual claro, vocabulário de alta frequência ($p > 0.70$).
 - MÉDIO (${dMedium}%): Requer aplicação de regra combinada ou inferência moderada ($p \\approx 0.45 - 0.70$).
-- DIFÍCIL (${dHard}%): Múltiplos passos cognitivos, estruturas sintáticas complexas ($p < 0.45$).
+- DIFÍCIL (${dHard}%): Múltiplos passos cognitivos, estruturas complexas ($p < 0.45$).
 - ⭐ DESAFIO (${dChallenge}%): Questão analítica de alta discriminação; adicione o selo ⭐ DESAFIO no enunciado.
 Rotule cada questão no HTML com: data-difficulty="easy|medium|hard|challenge" e data-weight="1.0|1.5|2.0".
 
-=== 3. DESIGN DIAGNÓSTICO DE DISTRATORES (PADRÕES DE ERRO INTENCIONAIS) ===
-Nas questões de Múltipla Escolha e Use of English, NENHUMA alternativa incorreta (distrator) pode ser aleatória ou absurda. Cada distrator DEVE representar um erro diagnóstico específico e documentável:
-1. Interferência Sintática de L1 (Português): Ex: "I have 15 years", "I am agree", "She said me that...", "Is raining today".
-2. Falsos Cognatos Reais (False Friends): Ex: "pretend" (confundido com pretender), "attend" (atender vs frequentar), "actually" (atualmente vs na verdade).
-3. Super-generalização de Regras: Ex: aplicação de passado regular em irregular ("goed", "buyed"), ou uso de Present Perfect com data específica ("I have seen him yesterday").
-4. Aspecto Verbal & Preposições: Ex: confusão entre Simple Past vs Past Continuous, "depend of", "since 3 years".
-5. Pluralização de Incontáveis: Ex: "informations", "advices", "homeworks".
-
+${distractorBlock ? `${distractorBlock}\n` : `=== 3. DESIGN DIAGNÓSTICO DE DISTRATORES ===
+Nas questões de Múltipla Escolha, NENHUMA alternativa incorreta (distrator) pode ser aleatória ou absurda. Cada distrator DEVE representar um erro diagnóstico específico e documentável em ${profile.name}.
+`}
 === 4. DIRETRIZES CIENTÍFICAS ANTI-CUEING & PARALELISMO (ITEM WRITING GUIDELINES) ===
 - ANTI-CUEING: É PROIBIDO repetir no corpo da alternativa correta palavras-chave exclusivas do enunciado que sirvam de "dica gratuita".
-- HOMOGENEIDADE DE TAMANHO: As 4 alternativas (A, B, C, D) DEVEM ter extensão semelhante (variação máxima de ±25% no número de caracteres). É expressamente proibido que a alternativa correta seja visivelmente mais longa ou detalhada que as outras.
-- PARALELISMO GRAMATICAL: Todas as alternativas de uma questão DEVEM ter a mesma estrutura sintática (todas verbos no infinitivo, todas sintagmas nominais, ou todas frases completas).
-- EQUILÍBRIO DE GABARITO: Distribua a resposta correta de maneira uniforme e equilibrada entre as letras A, B, C e D ao longo da prova.
-- SEM DUPLAS NEGATIVAS: Evite enunciados negativos. Se for estritamente necessário usar negação, destaque em caixa alta e negrito: **NÃO**, **EXCETO**, **INCORRETA**.
-- INDEPENDÊNCIA: Cada questão DEVE ser autônoma — o acerto de uma questão NUNCA deve depender da resposta de outra questão.
+- HOMOGENEIDADE DE TAMANHO: As 4 alternativas (A, B, C, D) DEVEM ter extensão semelhante (variação máxima de ±25% no número de caracteres).
+- PARALELISMO GRAMATICAL: Todas as alternativas de uma questão DEVEM ter a mesma estrutura sintática.
+- EQUILÍBRIO DE GABARITO: Distribua a resposta correta de maneira uniforme entre as letras A, B, C e D ao longo da prova.
+- SEM DUPLAS NEGATIVAS: Se usar negação, destaque em caixa alta e negrito: **NÃO**, **EXCETO**, **INCORRETA**.
+- INDEPENDÊNCIA: Cada questão DEVE ser autônoma.
 
 ${opts.bankContextSnippet ? `=== QUESTÕES JÁ EXISTENTES NO BANCO (NÃO DUPLICAR) ===\n${opts.bankContextSnippet}\n` : ''}
 ${opts.formVariant === 'B' ? '=== FORMA B (VERSÃO EMBARALHADA) ===\nEsta é a FORMA B da avaliação. Mantenha os mesmos enunciados da Forma A, mas reordene as alternativas A, B, C, D e as questões. Adicione "FORMA B" em destaque no cabeçalho.' : ''}
@@ -214,10 +197,10 @@ ESTRUTURA OBRIGATÓRIA DA PROVA:
 2. Container principal: <div class="exam-document" data-total-score="${opts.totalScore ?? 10}" data-duration-minutes="${opts.examDurationMinutes ?? 50}" data-kiosk="${opts.kioskMode ?? false}" data-form-variant="${opts.formVariant ?? 'A'}">
 3. Para cada seção (${opts.sections.join(', ')}):
    - Título da seção em <h2>
-   - Instruções claras em <p><em>${opts.stemLanguage === 'pt' ? 'Instruções' : 'Instructions'}: ...</em></p>
-   - Cada questão em container próprio com seus metadados: <div class="question-item" data-question-num="X" data-bloom="..." data-difficulty="..." data-weight="...">
-4. Questões de Reading: texto delimitado em <blockquote> rigorosamente dentro do limite de ${opts.cefr}.
-5. Gabarito Comentado Completo: <h2>Teacher's Answer Key & Marking Scheme</h2> com a resposta correta de CADA questão E o diagnóstico pedagógico de por que cada distrator (A, B, C ou D) representa uma armadilha/erro comum de aprendizagem.
+   - Instruções claras em <p><em>Instruções: ...</em></p>
+   - Cada questão em container próprio: <div class="question-item" data-question-num="X" data-bloom="..." data-difficulty="..." data-weight="...">
+4. Questões de Leitura/Reading: texto delimitado em <blockquote>
+5. Gabarito Comentado Completo: <h2>Gabarito & Critérios de Correção</h2> com a resposta correta de CADA questão E o diagnóstico pedagógico de por que cada distrator representa uma armadilha/erro comum.
 
 REGRAS ABSOLUTAS DE SAÍDA:
 1. Retorne APENAS HTML limpo (sem markdown, sem blocos \`\`\`, sem doctype).
@@ -226,14 +209,16 @@ REGRAS ABSOLUTAS DE SAÍDA:
 Gere agora todas as ${opts.questionCount} questões completas com rigor psicométrico:`
 }
 
-// Component 
+// Component
 
 export default function ExamBuilder() {
+  const cal = getTeacherCalibrations().exam
+
   // Form
   const [topic, setTopic] = useState('')
-  const [cefr, setCefr] = useState('B1')
+  const [cefr, setCefr] = useState(() => cal.defaultLevel || 'B1')
   const [grade, setGrade] = useState('9º Fund.')
-  const [questionCount, setQuestionCount] = useState('10')
+  const [questionCount, setQuestionCount] = useState(() => cal.defaultQuestionCount || '10')
 
   const [showSmartInsights, setShowSmartInsights] = useState(false)
   const [additionalPromptContext, setAdditionalPromptContext] = useState('')
@@ -246,12 +231,13 @@ export default function ExamBuilder() {
   const [diffMedium, setDiffMedium] = useState(50)
   const [diffHard, setDiffHard] = useState(25)
   const [diffChallenge, setDiffChallenge] = useState(5)
-  const [totalScore, setTotalScore] = useState(10)
-  const [examDuration, setExamDuration] = useState(50)
-  const [kioskMode, setKioskMode] = useState(false)
+  const [totalScore, setTotalScore] = useState(() => cal.defaultTotalScore || 10)
+  const [examDuration, setExamDuration] = useState(() => cal.defaultDurationMinutes || 50)
+  const [kioskMode, setKioskMode] = useState(() => cal.kioskModeDefault || false)
   const [generateFormB, setGenerateFormB] = useState(false)
   const [savedPresets, setSavedPresets] = useState<AssessmentPreset[]>([])
   const [activePresetName, setActivePresetName] = useState('Padrão Cambridge')
+  const [calibrationSavedToast, setCalibrationSavedToast] = useState(false)
 
   useEffect(() => {
     setSavedPresets(getStoredPresets())
@@ -294,11 +280,46 @@ export default function ExamBuilder() {
     setActivePresetName(name)
   }
 
-  const [sections, setSections] = useState<string[]>(['Grammar', 'Vocabulary', 'Reading Comprehension'])
+  const saveCurrentAsDefaultCalibration = () => {
+    saveModuleCalibration('exam', {
+      defaultLevel: cefr,
+      defaultQuestionCount: questionCount,
+      defaultStemLanguage: stemLanguage,
+      defaultOptionLanguage: optionLanguage,
+      defaultTotalScore: totalScore,
+      defaultDurationMinutes: examDuration,
+      kioskModeDefault: kioskMode,
+      defaultSections: sections
+    })
+    setCalibrationSavedToast(true)
+    setTimeout(() => setCalibrationSavedToast(false), 2500)
+  }
+
+  const [sections, setSections] = useState<string[]>(() => cal.defaultSections || ['Grammar', 'Vocabulary', 'Reading Comprehension'])
   const [customPrompt, setCustomPrompt] = useState('')
-  const [stemLanguage, setStemLanguage] = useState<'pt' | 'en'>('pt')
-  const [optionLanguage, setOptionLanguage] = useState<'en' | 'pt'>('en')
-  const [approach, setApproach] = useState<string[]>(['Cambridge'])
+  const [stemLanguage, setStemLanguage] = useState<'pt' | 'en'>(() => cal.defaultStemLanguage || 'pt')
+  const [optionLanguage, setOptionLanguage] = useState<'en' | 'pt'>(() => cal.defaultOptionLanguage || 'en')
+  const [approach, setApproach] = useState<string[]>(() => cal.defaultApproach || ['Cambridge'])
+
+  // Matéria ativa — alimenta perfil dinâmico de taxonomia, níveis e distratores
+  const [subjectId, setSubjectId] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const activeClass = localStorage.getItem('teacher_active_class_subject')
+        if (activeClass) return activeClass
+        const settings = JSON.parse(localStorage.getItem('teacher_settings') || '{}')
+        if (settings.defaultSubject) return settings.defaultSubject
+      } catch {}
+    }
+    return 'english'
+  })
+  const activeProfile = getSubjectProfile(subjectId)
+  // Constantes derivadas do perfil — substituem CEFR e SECTIONS hardcoded
+  const SECTIONS = getExamSections(activeProfile)
+  const CEFR = getLevelIds(activeProfile).length > 0 ? getLevelIds(activeProfile) : ['A1', 'A2', 'B1', 'B2', 'C1', 'C2']
+  const availableSubjects = getAllSubjectProfiles()
+
+
 
   // Escolas cadastradas & Modelos
   const [registeredSchools, setRegisteredSchools] = useState<Array<{ id: string; name: string }>>([])
@@ -500,35 +521,33 @@ export default function ExamBuilder() {
         bloomRemember, bloomApply, bloomAnalyze, bloomEvaluate,
         diffEasy, diffMedium, diffHard, diffChallenge,
         totalScore, examDurationMinutes: examDuration, kioskMode,
-        formVariant: 'A'
+        formVariant: 'A',
+        subjectProfile: activeProfile,
       })
 
       const raw = await callApi(selectedApi!, prompt)
       const html = cleanHtml(raw)
       setResult(html)
 
-      // Auto-save no Banco de Atividades (Zero-Leakage)
+      // Auto-save no Banco de Atividades Unificado (Zero-Leakage)
       try {
-        const qbRaw = localStorage.getItem('teacher_question_bank') || '[]'
-        const qbList = JSON.parse(qbRaw)
         const newExamItem = {
           id: `exam_auto_${Date.now()}`,
           statement: html.slice(0, 300) + '...',
-          type: 'mc',
-          activityKind: 'exam',
-          subject: 'Inglês',
+          type: 'mc' as const,
+          activityKind: 'exam' as const,
+          subject: activeProfile.nameShort,
           topic: topic || 'Prova Completa',
           level: cefr,
           year: new Date().getFullYear().toString(),
           schoolId: header.school || '',
           classRef: grade || '',
-          tags: ['Prova Completa', `CEFR ${cefr}`, approach.join(', ')],
+          tags: ['Prova Completa', `${activeProfile.levelFramework.name} ${cefr}`, approach.join(', ')],
           createdAt: Date.now(),
-          source: 'ai',
+          source: 'ai' as const,
           fullContent: html
         }
-        localStorage.setItem('teacher_question_bank', JSON.stringify([newExamItem, ...qbList]))
-        window.dispatchEvent(new Event('storage'))
+        addQuestionsBatch([newExamItem as any])
       } catch {}
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Erro desconhecido.')
@@ -620,11 +639,39 @@ export default function ExamBuilder() {
       </div>
 
       {/* Seletor de Presets Salvos (Modelos do Professor) */}
-      <PresetSelector
-        module="exam"
-        currentConfig={currentExamConfig}
-        onLoadPreset={handleLoadExamPreset}
-      />
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+        <PresetSelector
+          module="exam"
+          currentConfig={currentExamConfig}
+          onLoadPreset={handleLoadExamPreset}
+        />
+        <button
+          onClick={saveCurrentAsDefaultCalibration}
+          title="Salva nível, formato, pontuação e duração selecionados como padrão para todas as futuras provas"
+          style={{
+            padding: '6px 12px',
+            borderRadius: 8,
+            border: '1px solid #d5c8bb',
+            background: '#faf6f0',
+            color: '#854d0e',
+            fontSize: 12,
+            fontWeight: 700,
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6
+          }}
+        >
+          <i className="ti ti-device-floppy" />
+          Fixar como meu Padrão
+        </button>
+      </div>
+
+      {calibrationSavedToast && (
+        <div style={{ background: '#dcfce7', border: '1px solid #86efac', borderRadius: 8, padding: '8px 14px', color: '#166534', fontSize: 12.5, fontWeight: 700, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+          <i className="ti ti-check" /> Suas escolhas foram salvas como padrão permanente do ExamBuilder!
+        </div>
+      )}
 
       {/* Error */}
       {error && (

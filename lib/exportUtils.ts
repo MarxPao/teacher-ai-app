@@ -43,7 +43,7 @@ export const DEFAULT_DOCUMENT_PREFS: DocumentStylePrefs = {
 }
 
 export function getGlobalDocumentPrefs(): DocumentStylePrefs {
-  if (typeof window === 'undefined') return DEFAULT_DOCUMENT_PREFS
+  if (typeof localStorage === 'undefined') return DEFAULT_DOCUMENT_PREFS
   try {
     const raw = localStorage.getItem('teacher_document_style_prefs')
     return raw ? JSON.parse(raw) : DEFAULT_DOCUMENT_PREFS
@@ -53,10 +53,10 @@ export function getGlobalDocumentPrefs(): DocumentStylePrefs {
 }
 
 export function saveGlobalDocumentPrefs(prefs: DocumentStylePrefs): void {
-  if (typeof window === 'undefined') return
+  if (typeof localStorage === 'undefined') return
   try {
     localStorage.setItem('teacher_document_style_prefs', JSON.stringify(prefs))
-    window.dispatchEvent(new Event('storage'))
+    if (typeof window !== 'undefined') window.dispatchEvent(new Event('storage'))
   } catch {}
 }
 

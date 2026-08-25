@@ -11,6 +11,17 @@ import { PEDAGOGICAL_METHODOLOGIES, buildMethodologyInstructions } from '@/lib/p
 import PresetSelector from '@/components/PresetSelector'
 import { exportToPdf, exportToWord, OFFICIAL_SCHOOL_TEMPLATES } from '@/lib/exportUtils'
 import SourceKnowledgeHub, { SourceItem, KnowledgeMode, compileSourcesPrompt } from '@/components/SourceKnowledgeHub'
+import { getTeacherCalibrations } from '@/lib/teacherCalibrations'
+import {
+  getSubjectProfile,
+  getLevelIds,
+  getLevelGatingRule,
+  getDistractorBlock,
+  getAllSubjectProfiles,
+  type SubjectProfile,
+} from '@/lib/subjectProfile'
+import '@/lib/subjects/english'
+import '@/lib/subjects/portuguese'
 
 // Types
 
@@ -102,7 +113,13 @@ function buildPrompt(opts: {
   diffMedium?: number
   diffHard?: number
   diffChallenge?: number
+  subjectProfile?: SubjectProfile
 }) {
+  const profile = opts.subjectProfile ?? getSubjectProfile()
+  const levelFrameworkName = profile.levelFramework.name
+  const levelGatingRule = getLevelGatingRule(profile, opts.cefr) || ''
+  const distractorBlock = getDistractorBlock(profile)
+
   const neeInstructions: Record<string, string> = {
     dyslexia: 'Adapte para alunos com dislexia: frases curtas (máx 15 palavras), evite negativas duplas, sem itálico no enunciado.',
     adhd: 'Adapte para TDAH: instruções numeradas, uma ação por instrução, destaque em negrito as palavras-chave.',
@@ -117,11 +134,11 @@ function buildPrompt(opts: {
     ? `\n${opts.libraryContext}\nREGRA FUNDAMENTAL: Use o material acima como BASE TEMÁTICA E CONTEXTO PEDAGÓGICO (vocabulário, gramática e tópicos). NUNCA reproduza questões prontas do texto. Crie EXERCÍCIOS TOTALMENTE INÉDITOS E NOVOS inspirados nesse conteúdo.\n`
     : ''
 
-  const stemInstruction = opts.stemLanguage === 'pt'
+  const stemInstruction = opts.stemLanguage === 'pt' || profile.examLanguage === 'pt-BR'
     ? 'IDIOMA DOS ENUNCIADOS: Escreva as instruções, orientações e enunciados de TODAS as questões estritamente em PORTUGUÊS.'
     : 'IDIOMA DOS ENUNCIADOS: Write all instructions and question stems strictly in ENGLISH.'
 
-  const optionInstruction = opts.optionLanguage === 'pt'
+  const optionInstruction = opts.optionLanguage === 'pt' || profile.examLanguage === 'pt-BR'
     ? 'IDIOMA DAS ALTERNATIVAS: As opções e respostas devem ser formuladas em PORTUGUÊS.'
     : 'IDIOMA DAS ALTERNATIVAS: As opções (A, B, C, D) e respostas devem ser estritamente em INGLÊS.'
 
@@ -135,14 +152,17 @@ function buildPrompt(opts: {
   const dHard = opts.diffHard ?? 25
   const dChallenge = opts.diffChallenge ?? 5
 
-  return `Você é um professor especialista em ELT (English Language Teaching), Psicometria e Design Instrucional. Sua tarefa é gerar uma LISTA DE EXERCÍCIOS COMPLETA formatada em HTML, com rigor psicométrico e pedagógico.
+  const defaultBnccExample = profile.id === 'portuguese' ? 'EF09LP01, EF09LP29' : 'EF09LI14, EF09LI15'
+
+  return `Você é um professor especialista em ${profile.name}, Psicometria Educacional e Design Instrucional. Sua tarefa é gerar uma LISTA DE EXERCÍCIOS COMPLETA formatada em HTML, com rigor psicométrico e pedagógico.
 ${librarySection}
 ESPECIFICAÇÕES DO EXERCÍCIO:
+- Matéria: ${profile.name}
 - Escola: ${opts.header.school || 'Escola'}
 - Professor(a): ${opts.header.teacher || 'Professor(a)'}
 - Turma: ${opts.header.classGroup || opts.grade}
 - Série/Nível: ${opts.grade}
-- Nível CEFR: ${opts.cefr}
+- ${levelFrameworkName}: ${opts.cefr}
 - Habilidade foco: ${opts.skill}
 - Tipos de questão: ${opts.types.join(', ')}
 - Metodologias: ${opts.methodology.join(', ')}
@@ -154,6 +174,7 @@ ${opts.customPrompt ? `\nDIRETRIZES DO PROFESSOR:\n"${opts.customPrompt}"\n` : '
 ${opts.neeProfile ? `\nADAPTAÇÃO ESPECIAL: ${neeInstructions[opts.neeProfile] || ''}` : ''}
 ${methodologyInstructions}
 
+${levelGatingRule ? `${levelGatingRule}\n` : ''}
 === 1. DISTRIBUIÇÃO COGNITIVA OBRIGATÓRIA (BLOOM REVISADO) ===
 - LEMBRAR/COMPREENDER (${bRemember}%): Recall, identificação factual e reconhecimento lexical direto.
 - APLICAR (${bApply}%): Uso de regras em novos contextos, conjugação e estruturação oracional inédita.
@@ -167,8 +188,9 @@ Rotule cada questão com comentário HTML: <!-- bloom:remember|apply|analyze|eva
 - DIFÍCIL (${dHard}%): Estruturas subordinadas e complexidade gramatical ($p < 0.45$).
 - ⭐ DESAFIO (${dChallenge}%): Questão analítica de alta discriminação; adicione o selo ⭐ DESAFIO no enunciado.
 
-=== 3. DESIGN DIAGNÓSTICO DE DISTRATORES & ANTI-CUEING ===
-- CADA distrator nas questões de múltipla escolha deve representar um erro diagnóstico concreto (L1 interference, super-generalização de regra, confusão de tempo verbal, falso cognato).
+${distractorBlock ? `${distractorBlock}\n` : `=== 3. DESIGN DIAGNÓSTICO DE DISTRATORES & ANTI-CUEING ===
+- CADA distrator nas questões de múltipla escolha deve representar um erro diagnóstico concreto.
+`}
 - ANTI-CUEING: Proibido repetir palavras exclusivas do enunciado na alternativa correta.
 - HOMOGENEIDADE: Alternativas com tamanho balanceado (±25% caracteres) e paralelismo sintático.
 - SEM DUPLAS NEGATIVAS: Se usar negação no enunciado, use **NÃO**, **EXCETO**, **INCORRETA**.
@@ -178,7 +200,7 @@ ESTRUTURA OBRIGATÓRIA DO EXERCÍCIO:
 1. QUANTIDADE RIGOROSA: Exatamente ${opts.qtCount} questões completas numeradas de 1 a ${opts.qtCount}.
 2. Cada questão deve ter enunciado rico e contextualizado. Questões de múltipla escolha: exatamente 4 alternativas (A, B, C, D).
 3. Ao final, inclua um <h2>Gabarito Comentado</h2> cobrindo todas as ${opts.qtCount} questões com as respostas e diagnósticos pedagógicos de erro para cada distrator.
-4. Inclua as habilidades BNCC ao final no formato: <p><strong>Habilidades BNCC:</strong> EF09LI14, EF09LI15</p>
+4. Inclua as habilidades BNCC ao final no formato: <p><strong>Habilidades BNCC:</strong> ${defaultBnccExample}</p>
 
 REGRAS ABSOLUTAS DE SAÍDA:
 1. Retorne APENAS HTML limpo. PROIBIDO usar markdown, blocos \`\`\`, asteriscos ou qualquer outra sintaxe que não seja HTML.
@@ -193,17 +215,25 @@ Gere agora todas as ${opts.qtCount} questões completas:`
 // Component 
 
 export default function QuickGenerate() {
+  const cal = getTeacherCalibrations().exam
+  const profile = getSubjectProfile()
+  const availableLevels = getLevelIds(profile)
+
   // Form
-  const [types, setTypes] = useState<string[]>(['Múltipla escolha'])
-  const [cefr, setCefr] = useState('B1')
+  const [types, setTypes] = useState<string[]>(() => {
+    if (cal.defaultQuestionType === 'multiple_choice') return ['Múltipla escolha']
+    if (cal.defaultQuestionType === 'open') return ['Dissertativa']
+    return ['Múltipla escolha', 'Dissertativa']
+  })
+  const [cefr, setCefr] = useState(() => availableLevels.includes(cal.defaultLevel) ? cal.defaultLevel : availableLevels[0] || 'B1')
   const [grade, setGrade] = useState('9º Fund.')
-  const [skill, setSkill] = useState('Reading')
-  const [stemLanguage, setStemLanguage] = useState<'pt' | 'en'>('pt')
-  const [optionLanguage, setOptionLanguage] = useState<'en' | 'pt'>('en')
-  const [methodology, setMethodology] = useState<string[]>(['Cambridge'])
+  const [skill, setSkill] = useState(profile.id === 'portuguese' ? 'Leitura e Interpretação' : 'Reading')
+  const [stemLanguage, setStemLanguage] = useState<'pt' | 'en'>(() => cal.defaultStemLanguage || 'pt')
+  const [optionLanguage, setOptionLanguage] = useState<'en' | 'pt'>(() => profile.examLanguage === 'pt-BR' ? 'pt' : (cal.defaultOptionLanguage || 'en'))
+  const [methodology, setMethodology] = useState<string[]>(() => cal.defaultApproach || ['Cambridge'])
   const [topic, setTopic] = useState('')
   const [customPrompt, setCustomPrompt] = useState('')
-  const [qtCount, setQtCount] = useState('10')
+  const [qtCount, setQtCount] = useState(() => cal.defaultQuestionCount || '10')
   const [neeProfile, setNeeProfile] = useState('')
   const [showNeePanel, setShowNeePanel] = useState(false)
   const [selectedSchoolTemplate, setSelectedSchoolTemplate] = useState<string>('')

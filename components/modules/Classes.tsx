@@ -45,11 +45,11 @@ export default function Classes() {
       const sc = localStorage.getItem('teacher_schools')
       const cl = localStorage.getItem('teacher_classes')
       const st = localStorage.getItem('teacher_students')
-      if (sc) setSchools(JSON.parse(sc))
-      else {
-        const def = [{ id: 's1', name: 'Escola Padrão', color: '#073642' }]
-        setSchools(def)
-        localStorage.setItem('teacher_schools', JSON.stringify(def))
+      if (sc) {
+        const parsed = JSON.parse(sc)
+        setSchools(Array.isArray(parsed) ? parsed.filter((s: any) => s.name !== 'Colégio Integral' && s.name !== 'Escola Modelo') : [])
+      } else {
+        setSchools([])
       }
       if (cl) setClasses(JSON.parse(cl))
       if (st) setStudents(JSON.parse(st))

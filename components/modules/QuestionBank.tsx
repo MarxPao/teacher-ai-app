@@ -1,6 +1,12 @@
 'use client'
 import { useState, useEffect, useMemo } from 'react'
 import { ELT_TAXONOMY, getSubcategoriesForCategory } from '@/lib/englishTaxonomy'
+import { 
+  getStoredQuestions, 
+  saveStoredQuestions, 
+  extractQuestionsFromBookText, 
+  UnifiedQuestion 
+} from '@/lib/questionBankService'
 
 /* Tipos */
 interface School { id: string; name: string; color: string }
@@ -97,6 +103,12 @@ export default function QuestionBank() {
  const [modal, setModal] = useState<'add' | 'ai' | null>(null)
  const [isGen, setIsGen] = useState(false)
 
+ /* Estado do Assistente de Extração Inteligente de Livros */
+ const [showExtractModal, setShowExtractModal] = useState(false)
+ const [extractBooks, setExtractBooks] = useState<Array<{ id: any; title: string; content?: string; type?: string; category?: string }>>([])
+ const [selectedExtractBookId, setSelectedExtractBookId] = useState<string>('')
+ const [extractedList, setExtractedList] = useState<Array<UnifiedQuestion & { selected: boolean }>>([])
+
  /* Filtros */
  const [fKind, setFKind] = useState<'all' | ActivityKind>('all')
  const [fSchool, setFSchool] = useState('all')
@@ -185,10 +197,10 @@ export default function QuestionBank() {
  const load = () => {
  const sc = localStorage.getItem('teacher_schools')
  const cl = localStorage.getItem('teacher_classes')
- const qb = localStorage.getItem('teacher_question_bank')
  if (sc) setSchools(JSON.parse(sc))
  if (cl) setClasses(JSON.parse(cl))
- if (qb) setQuestions(JSON.parse(qb))
+ const qList = getStoredQuestions()
+ setQuestions(qList as any)
  }
  load()
  window.addEventListener('storage', load)
@@ -197,8 +209,7 @@ export default function QuestionBank() {
 
  function saveQs(upd: Question[]) {
  setQuestions(upd)
- localStorage.setItem('teacher_question_bank', JSON.stringify(upd))
- window.dispatchEvent(new Event('storage'))
+ saveStoredQuestions(upd as any)
  }
 
  /* Filtros */
@@ -414,90 +425,81 @@ Para questões dissertativas ou V/F, omita "options". Para V/F, o "answer" deve 
  } finally { setIsGen(false) }
  }
 
- function importFromLibrary() {
- try {
- const raw = localStorage.getItem('teacher_repo') || localStorage.getItem('teacher_repository') || '[]'
- const items = JSON.parse(raw)
- if (!items.length) {
- alert('Nenhum livro encontrado na Biblioteca. Acesse o módulo "Biblioteca Digital" e adicione seus materiais.')
- return
- }
+ function openExtractModal() {
+    try {
+      const raw = localStorage.getItem('teacher_repo') || localStorage.getItem('teacher_repository') || '[]'
+      const items = JSON.parse(raw)
+      if (!items.length) {
+        alert('Nenhum livro encontrado na Biblioteca. Acesse o módulo "Biblioteca Digital" e adicione seus livros/materiais em PDF.')
+        return
+      }
+      setExtractBooks(items)
+      setSelectedExtractBookId(String(items[0].id))
+      const questionsExt = extractQuestionsFromBookText(items[0].title, items[0].content || '', items[0].category)
+      setExtractedList(questionsExt.map(q => ({ ...q, selected: true })))
+      setShowExtractModal(true)
+    } catch {
+      alert('Erro ao carregar livros da biblioteca.')
+    }
+  }
 
- let extractedCount = 0
- const newQs: Question[] = []
+  function handleSelectBookForExtraction(bookId: string) {
+    setSelectedExtractBookId(bookId)
+    const book = extractBooks.find(b => String(b.id) === String(bookId))
+    if (book) {
+      const questionsExt = extractQuestionsFromBookText(book.title, book.content || '', book.category)
+      setExtractedList(questionsExt.map(q => ({ ...q, selected: true })))
+    } else {
+      setExtractedList([])
+    }
+  }
 
- for (const item of items) {
- const text: string = item.content || ''
- const exMatches = text.match(/\d+\.\s+[^\n]+(?:\n\s*[a-d]\)[^\n]+)*/gi)
- if (exMatches) {
- exMatches.forEach((exText, idx) => {
- newQs.push({
- id: `lib_q_${Date.now()}_${idx}_${Math.random().toString(36).substring(2, 5)}`,
- statement: exText.trim(),
- type: exText.includes('Answer:') || exText.includes('a)') ? 'mc' : 'fill',
- activityKind: 'exercise',
- subject: 'Inglês',
- topic: item.title.replace(/^[^\w]*/, '').slice(0, 35),
- level: 'B1/B2',
- year: '2025',
- schoolId: schools[0]?.id || '',
- classRef: '',
- tags: ['Livro Didático', 'Biblioteca RAG', item.type || "Student's Book"],
- createdAt: Date.now() + idx,
- source: 'ai'
- })
- extractedCount++
- })
- }
- }
+  function handleSaveExtractedQuestions() {
+    const toSave = extractedList.filter(q => q.selected).map(({ selected, ...q }) => q)
+    if (toSave.length === 0) {
+      alert('Selecione ao menos um exercício para importar.')
+      return
+    }
+    const updated = [...(toSave as any), ...questions]
+    saveQs(updated)
+    setShowExtractModal(false)
+    alert(`✨ ${toSave.length} exercício(s) extraído(s) da biblioteca e importado(s) com sucesso para o Banco!`)
+  }
 
- if (extractedCount === 0) {
- alert('Nenhum exercício formatado foi detectado nos livros da biblioteca. Você pode adicionar materiais com exercícios numerados (ex: 1. Complete with...).')
- return
- }
+  function deleteQ(id: string) {
+    if (!confirm('Excluir esta questão?')) return
+    saveQs(questions.filter(q => q.id !== id))
+    if (selectedQ?.id === id) setSelectedQ(null)
+  }
 
- const updated = [...newQs, ...questions]
- saveQs(updated)
- alert(` ${extractedCount} exercício(s) extraído(s) da Biblioteca e adicionado(s) ao Banco de Questões com sucesso!`)
- } catch {
- alert('Erro ao importar da biblioteca.')
- }
- }
+  const typeColor: Record<QuestionType, string> = { mc: '#268bd2', essay: '#d33682', tf: '#859900', fill: '#b58900' }
+  const schoolOf = (id: string) => schools.find(s => s.id === id)
 
- function deleteQ(id: string) {
- if (!confirm('Excluir esta questão?')) return
- saveQs(questions.filter(q => q.id !== id))
- if (selectedQ?.id === id) setSelectedQ(null)
- }
-
- const typeColor: Record<QuestionType, string> = { mc: '#268bd2', essay: '#d33682', tf: '#859900', fill: '#b58900' }
- const schoolOf = (id: string) => schools.find(s => s.id === id)
-
- /* Render */
- return (
- <div style={S.page}>
- {/* Header */}
- <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 24, paddingBottom: 20, borderBottom: '1px solid rgba(139,115,85,0.12)' }}>
- <div>
- <h1 style={{  textAlign: 'center', fontFamily: "'Fraunces', 'Fraunces', Georgia, serif", fontSize: 32, fontWeight: 700, color: '#2c1a0e', margin: '0 auto'  }}>
- Banco de Atividades
- </h1>
- <p style={{ color: '#a08060', fontSize: 14, marginTop: 4, margin: 0 }}>
- Acervo central de aulas, provas, exercícios, rubricas e gabaritos integrados e auto-sincronizados.
- </p>
- </div>
- <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
- <button onClick={importFromLibrary} style={{ ...S.btn, background: '#27ae60', color: '#fffcf8' }}>
- <i className="ti ti-book" /> Importar Exercícios de Livro
- </button>
- <button onClick={() => setModal('ai')} style={{ ...S.btn, background: '#d4944a', color: '#fffcf8' }}>
- <i className="ti ti-sparkles" /> Gerar com IA
- </button>
- <button onClick={() => setModal('add')} style={{ ...S.btn, background: '#8b5e3c', color: '#fffcf8' }}>
- <i className="ti ti-plus" /> Adicionar Atividade
- </button>
- </div>
- </div>
+  /* Render */
+  return (
+    <div style={S.page}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 24, paddingBottom: 20, borderBottom: '1px solid rgba(139,115,85,0.12)' }}>
+        <div>
+          <h1 style={{  textAlign: 'center', fontFamily: "'Fraunces', 'Fraunces', Georgia, serif", fontSize: 32, fontWeight: 700, color: '#2c1a0e', margin: '0 auto'  }}>
+            Banco de Atividades
+          </h1>
+          <p style={{ color: '#a08060', fontSize: 14, marginTop: 4, margin: 0 }}>
+            Acervo central de aulas, provas, exercícios, rubricas e gabaritos integrados e auto-sincronizados.
+          </p>
+        </div>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <button onClick={openExtractModal} style={{ ...S.btn, background: '#27ae60', color: '#fffcf8' }}>
+            <i className="ti ti-book" /> Extrair Exercícios de Livro (RAG)
+          </button>
+          <button onClick={() => setModal('ai')} style={{ ...S.btn, background: '#d4944a', color: '#fffcf8' }}>
+            <i className="ti ti-sparkles" /> Gerar com IA
+          </button>
+          <button onClick={() => setModal('add')} style={{ ...S.btn, background: '#8b5e3c', color: '#fffcf8' }}>
+            <i className="ti ti-plus" /> Adicionar Atividade
+          </button>
+        </div>
+      </div>
 
  {/* ABAS DE CATEGORIA DE ATIVIDADE (MESMA PALETA DE CORES PAPER & INK) */}
  <div style={{ display: 'flex', gap: 10, marginBottom: 24, flexWrap: 'wrap' }}>
@@ -990,6 +992,128 @@ Para questões dissertativas ou V/F, omita "options". Para V/F, o "answer" deve 
  </div>
  </div>
  )}
+
+ {/* Modal: Assistente de Extração Inteligente de Livros / PDF */}
+ {showExtractModal && (
+ <div style={{ position: 'fixed', inset: 0, background: 'rgba(44,26,14,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+ <div style={{ ...S.card, width: 720, maxWidth: '95vw', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
+ <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, borderBottom: '1px solid #ede8dc', paddingBottom: 10 }}>
+ <div>
+ <h2 style={{ fontFamily: "'Fraunces', Georgia, serif", fontSize: 20, fontWeight: 700, color: '#2c1a0e', margin: 0 }}>
+ 📖 Assistente de Extração de Exercícios (Biblioteca)
+ </h2>
+ <p style={{ color: '#a08060', fontSize: 12.5, margin: '2px 0 0 0' }}>
+ Localize exercícios de livros da sua biblioteca e selecione quais deseja adicionar ao banco.
+ </p>
+ </div>
+ <button onClick={() => setShowExtractModal(false)} style={{ background: 'none', border: 'none', fontSize: 18, color: '#a08060', cursor: 'pointer' }}>✕</button>
+ </div>
+
+ {/* Seletor de Livro */}
+ <div style={{ marginBottom: 14 }}>
+ <label style={S.label}>Selecione o Livro / Material Didático</label>
+ <select
+ style={S.input}
+ value={selectedExtractBookId}
+ onChange={e => handleSelectBookForExtraction(e.target.value)}
+ >
+ {extractBooks.map(b => (
+ <option key={b.id} value={String(b.id)}>
+ {b.title} ({b.type || "Student's Book"})
+ </option>
+ ))}
+ </select>
+ </div>
+
+ {/* Lista de Exercícios Extraídos com Checkboxes */}
+ <div style={{ flex: 1, overflowY: 'auto', border: '1px solid #e8decb', borderRadius: 10, padding: 12, background: '#faf6f0', display: 'flex', flexDirection: 'column', gap: 10 }}>
+ {extractedList.length === 0 ? (
+ <div style={{ padding: 24, textAlign: 'center', color: '#a08060', fontSize: 13 }}>
+ <i className="ti ti-notes" style={{ fontSize: 28, display: 'block', marginBottom: 6, color: '#d4944a' }} />
+ Nenhum exercício formatado foi detectado automaticamente neste material.
+ </div>
+ ) : (
+ extractedList.map((item, idx) => (
+ <div
+ key={item.id || idx}
+ style={{
+ background: item.selected ? '#fff' : '#f5efe6',
+ border: item.selected ? '1.5px solid #8b5e3c' : '1px solid #d5c0b0',
+ borderRadius: 8, padding: 10, display: 'flex', gap: 10, alignItems: 'flex-start'
+ }}
+ >
+ <input
+ type="checkbox"
+ checked={item.selected}
+ onChange={e => {
+ const updated = [...extractedList]
+ updated[idx].selected = e.target.checked
+ setExtractedList(updated)
+ }}
+ style={{ marginTop: 3, cursor: 'pointer' }}
+ />
+ <div style={{ flex: 1 }}>
+ <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+ <span style={{ fontSize: 11, fontWeight: 700, background: '#e8f4fd', color: '#0284c7', padding: '1px 6px', borderRadius: 4 }}>
+ {item.type === 'mc' ? 'Múltipla Escolha' : item.type === 'fill' ? 'Preenchimento de Lacunas' : 'Dissertativa'}
+ </span>
+ <span style={{ fontSize: 11, color: '#a08060' }}>Item #{idx + 1}</span>
+ </div>
+ <p style={{ margin: '0 0 6px 0', fontSize: 12.5, color: '#2c1a0e', fontWeight: 600, lineHeight: 1.35 }}>
+ {item.statement}
+ </p>
+ {item.options && item.options.length > 0 && (
+ <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4, fontSize: 11.5, color: '#586e75' }}>
+ {item.options.map((opt, oIdx) => (
+ <div key={oIdx} style={{ background: '#fdf8f2', padding: '2px 6px', borderRadius: 4 }}>
+ {opt}
+ </div>
+ ))}
+ </div>
+ )}
+ </div>
+ </div>
+ ))
+ )}
+ </div>
+
+ {/* Ações do Rodapé do Modal */}
+ <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 14, paddingTop: 10, borderTop: '1px solid #ede8dc' }}>
+ <div style={{ display: 'flex', gap: 8 }}>
+ <button
+ type="button"
+ onClick={() => setExtractedList(extractedList.map(q => ({ ...q, selected: true })))}
+ style={{ ...S.btn, padding: '6px 12px', fontSize: 11.5, background: '#ede8dc', color: '#2c1a0e' }}
+ >
+ Marcar Todos
+ </button>
+ <button
+ type="button"
+ onClick={() => setExtractedList(extractedList.map(q => ({ ...q, selected: false })))}
+ style={{ ...S.btn, padding: '6px 12px', fontSize: 11.5, background: '#ede8dc', color: '#2c1a0e' }}
+ >
+ Desmarcar Todos
+ </button>
+ </div>
+
+ <div style={{ display: 'flex', gap: 10 }}>
+ <button onClick={() => setShowExtractModal(false)} style={{ ...S.btn, background: '#f5efe6', color: '#7a5c42' }}>
+ Cancelar
+ </button>
+ <button
+ onClick={handleSaveExtractedQuestions}
+ disabled={!extractedList.some(q => q.selected)}
+ style={{ ...S.btn, background: '#27ae60', color: '#fff', opacity: extractedList.some(q => q.selected) ? 1 : 0.5 }}
+ >
+ <i className="ti ti-download" /> Importar ({extractedList.filter(q => q.selected).length}) para o Banco
+ </button>
+ </div>
+ </div>
+
+ </div>
+ </div>
+ )}
+
  <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
  </div>
  )

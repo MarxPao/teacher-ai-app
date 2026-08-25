@@ -4,6 +4,9 @@ import { useState, useEffect } from 'react'
 import { captureImageFile, extractContentFromImage } from '@/lib/ocrCapture'
 import { exportToPdf } from '@/lib/exportUtils'
 import { recordStudentGrade, addObservation } from '@/lib/studentMemory'
+import { getSubjectProfile, SubjectProfile } from '@/lib/subjectProfile'
+import '@/lib/subjects/english'
+import '@/lib/subjects/portuguese'
 
 interface StudentRecord {
   id: string
@@ -264,9 +267,48 @@ export default function OmniGrader() {
     try {
       const studentObj = students.find(s => s.id === selectedStudentEssay)
       const studentName = studentObj ? studentObj.name : 'Aluno'
+      const profile = getSubjectProfile()
+      const isPortuguese = profile.id === 'portuguese'
 
-      // PASSO 1: Macro-Discurso (Content + Communicative Achievement) com isolamento psicométrico
-      const promptPass1 = `Você é um Examinador Oficial de Redação Cambridge Assessment English (A2 Key / B1 Preliminary / B2 First / C1 Advanced).
+      // PASSO 1: Macro-Discurso (Content + Communicative Achievement / Tema & Argumentação) com isolamento psicométrico
+      const promptPass1 = isPortuguese
+        ? `Você é um Avaliador Especialista em Redação e Produção Textual em Língua Portuguesa (Matriz ENEM adaptada para EF/EM).
+AVALIAÇÃO — PASSO 1: MACRO-DISCURSO, ESTRUTURA E ARGUMENTAÇÃO
+Avalie a seguinte produção textual do aluno ${studentName}:
+
+GÊNERO TEXTUAL: ${textGenre}
+PROPOSTA / TEMA:
+"${essayPrompt}"
+
+REDAÇÃO DO ALUNO:
+"""
+${studentEssayText}
+"""
+
+REGRA DE ISOLAMENTO PSICOMÉTRICO OBRIGATÓRIA:
+Avalie ESTRITAMENTE o cumprimento da proposta temática, adequação ao gênero, repertório e coerência argumentativa.
+IGNORE pequenos erros ortográficos ou gramaticais locais (que serão avaliados na etapa seguinte).
+Avalie em escala de 0.0 a 5.0:
+1. Content / Tema & Gênero (0.0 a 5.0): Cumprimento integral da proposta, compreensão temática e estrutura composicional do gênero.
+2. Communicative Achievement / Argumentação & Conclusão (0.0 a 5.0): Clareza na defesa de ponto de vista, encadeamento de ideias e consistência da conclusão.
+
+Retorne ESTRITAMENTE um objeto JSON no seguinte formato (sem markdown, sem blocos fora do JSON):
+{
+  "content": {
+    "score": number (0.0 a 5.0),
+    "justification": "justificativa detalhada do cumprimento da proposta",
+    "strengths": ["ponto forte 1", "ponto forte 2"],
+    "improvements": ["sugestão de melhoria"]
+  },
+  "communicativeAchievement": {
+    "score": number (0.0 a 5.0),
+    "justification": "justificativa da adequação ao leitor e progressão temática",
+    "strengths": ["ponto forte"],
+    "improvements": ["sugestão"]
+  },
+  "macroSummary": "Parecer formativo sobre o conteúdo e mensagem da redação"
+}`
+        : `Você é um Examinador Oficial de Redação Cambridge Assessment English (A2 Key / B1 Preliminary / B2 First / C1 Advanced).
 AVALIAÇÃO — PASSO 1: MACRO-DISCURSO (CONTENT & COMMUNICATIVE ACHIEVEMENT)
 Avalie a seguinte redação do aluno ${studentName}:
 
@@ -304,8 +346,51 @@ Retorne ESTRITAMENTE um objeto JSON no seguinte formato (sem markdown, sem bloco
   "macroSummary": "Parecer formativo sobre o conteúdo e mensagem da redação"
 }`
 
-      // PASSO 2: Micro-Linguístico (Organisation + Language) com isolamento psicométrico
-      const promptPass2 = `Você é um Examinador Oficial de Redação Cambridge Assessment English (A2 Key / B1 Preliminary / B2 First / C1 Advanced).
+      // PASSO 2: Micro-Linguístico (Organisation + Language / Coesão e Norma-Padrão) com isolamento psicométrico
+      const promptPass2 = isPortuguese
+        ? `Você é um Avaliador Especialista em Linguística e Gramática da Língua Portuguesa (Norma-Padrão e Coesão).
+AVALIAÇÃO — PASSO 2: MICRO-LINGUÍSTICO (COESÃO E NORMA-PADRÃO)
+Avalie a seguinte redação em Língua Portuguesa:
+
+GÊNERO TEXTUAL: ${textGenre}
+
+REDAÇÃO DO ALUNO:
+"""
+${studentEssayText}
+"""
+
+REGRA DE ISOLAMENTO PSICOMÉTRICO OBRIGATÓRIA:
+Avalie ESTRITAMENTE a organização textual, mecanismos coesivos, regras de ortografia, concordância, regência, crase e pontuação.
+NÃO julgue se o aluno concordou ou discordou do tema de fundo — foque puramente na competência linguística e estrutural.
+Avalie em escala de 0.0 a 5.0:
+3. Organisation / Coesão Textual (0.0 a 5.0): Estruturação de parágrafos, conectivos inter e intraparágrafos, progressão referencial.
+4. Language / Norma-Padrão (0.0 a 5.0): Correção ortográfica, concordância verbal/nominal, regência, emprego de crase e precisão lexical.
+
+Retorne ESTRITAMENTE um objeto JSON no seguinte formato (sem markdown, sem blocos fora do JSON):
+{
+  "organisation": {
+    "score": number (0.0 a 5.0),
+    "justification": "justificativa da estrutura, parágrafos e conectivos",
+    "strengths": ["ponto forte"],
+    "improvements": ["sugestão"]
+  },
+  "language": {
+    "score": number (0.0 a 5.0),
+    "justification": "justificativa do domínio da norma-padrão e precisão gramatical",
+    "strengths": ["ponto forte"],
+    "improvements": ["sugestão"]
+  },
+  "studentActionPlan": "Passo prático prioritário para o aluno aprimorar a escrita",
+  "detectedErrors": [
+    {
+      "excerpt": "trecho exato com desvio no texto",
+      "correction": "correção recomendada",
+      "explanation": "justificativa gramatical pedagógica",
+      "type": "grammar"
+    }
+  ]
+}`
+        : `Você é um Examinador Oficial de Redação Cambridge Assessment English (A2 Key / B1 Preliminary / B2 First / C1 Advanced).
 AVALIAÇÃO — PASSO 2: MICRO-LINGUÍSTICO (ORGANISATION & LANGUAGE)
 Avalie a seguinte redação em inglês:
 
