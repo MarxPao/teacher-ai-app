@@ -8,12 +8,20 @@ import TeacherLogo, { TeacherOwlAvatar } from '@/components/TeacherLogo'
 
 // --- Tipos & Interfaces ---
 
+export type TodoCategory = 'all' | 'recurrent' | 'one_off' | 'system_ai'
+
 export interface DashboardTodo {
   id: string
   text: string
   done: boolean
+  category?: 'recurrent' | 'one_off' | 'system_ai'
   priority?: 'high' | 'medium' | 'low'
   createdAt?: number
+  time?: string
+  tag?: string
+  actionLabel?: string
+  actionTarget?: ModuleKey | string
+  lastResetDate?: string
 }
 
 export interface DashboardPostIt {
@@ -108,9 +116,11 @@ export default function Dashboard() {
   const [newPostItColor, setNewPostItColor] = useState<DashboardPostIt['color']>('yellow')
   const [newPostItDate, setNewPostItDate] = useState<string>(() => formatDateKey(new Date()))
 
-  // 2. Checklist do Dia
+  // 2. Checklist do Dia & Rotina Unificada
   const [todos, setTodos] = useState<DashboardTodo[]>([])
   const [newTodoText, setNewTodoText] = useState('')
+  const [newTodoCategory, setNewTodoCategory] = useState<'one_off' | 'recurrent'>('one_off')
+  const [todoFilter, setTodoFilter] = useState<TodoCategory>('all')
 
   // 3. Aulas do Dia & Grade (Unificada: Escola + Particular)
   const [classesList, setClassesList] = useState<TodayClassItem[]>([])
@@ -168,17 +178,68 @@ export default function Dashboard() {
       }
     } catch {}
 
-    // 2. Checklist de Atividades
+    // 2. Checklist de Atividades & Rotinas Unificadas
     try {
       const storedTodos = localStorage.getItem('teacher_dashboard_todos')
+      const todayKey = formatDateKey(new Date())
       if (storedTodos) {
-        setTodos(JSON.parse(storedTodos))
+        let parsed: DashboardTodo[] = JSON.parse(storedTodos)
+        // Auto-reset diário para tarefas de rotina
+        parsed = parsed.map(t => {
+          const cat = t.category || (t.id.startsWith('rec_') ? 'recurrent' : 'one_off')
+          if (cat === 'recurrent' && t.lastResetDate && t.lastResetDate !== todayKey) {
+            return { ...t, done: false, category: cat, lastResetDate: todayKey }
+          }
+          return { ...t, category: cat, lastResetDate: t.lastResetDate || (cat === 'recurrent' ? todayKey : undefined) }
+        })
+        setTodos(parsed)
       } else {
         const defaultTodos: DashboardTodo[] = [
-          { id: 't1', text: 'Preparar atividade de Warm-up para o 8º Ano A', done: false, priority: 'high' },
-          { id: 't2', text: 'Conferir frequência e lançar diário de classe', done: false, priority: 'high' },
-          { id: 't3', text: 'Confirmar horário da aula particular de conversação', done: false, priority: 'medium' },
-          { id: 't4', text: 'Revisar sequência didática da próxima quinzena', done: false, priority: 'low' },
+          // 🔁 Rotinas Recorrentes (Diárias da Professora)
+          {
+            id: 'rec_1',
+            text: 'Conferir frequência e lançar diário de classe das turmas do dia',
+            done: false,
+            category: 'recurrent',
+            priority: 'high',
+            tag: 'Diário & Chamada',
+            lastResetDate: todayKey,
+          },
+          {
+            id: 'rec_2',
+            text: 'Preparar atividade de Warm-up / Aquecimento oral (5 min)',
+            done: false,
+            category: 'recurrent',
+            priority: 'medium',
+            tag: 'Warm-up',
+            lastResetDate: todayKey,
+          },
+          {
+            id: 'rec_3',
+            text: 'Confirmar agenda e links das aulas particulares de hoje',
+            done: false,
+            category: 'recurrent',
+            priority: 'medium',
+            tag: 'Aulas Particulares',
+            lastResetDate: todayKey,
+          },
+          // 📌 Tarefas Pontuais do Dia
+          {
+            id: 'opt_1',
+            text: 'Revisar sequência didática e materiais da próxima quinzena',
+            done: false,
+            category: 'one_off',
+            priority: 'low',
+            tag: 'Planejamento',
+          },
+          {
+            id: 'opt_2',
+            text: 'Imprimir folhas de atividades e simulados para o 8º Ano A',
+            done: false,
+            category: 'one_off',
+            priority: 'medium',
+            tag: 'Material Impresso',
+          }
         ]
         setTodos(defaultTodos)
         localStorage.setItem('teacher_dashboard_todos', JSON.stringify(defaultTodos))
@@ -287,16 +348,20 @@ export default function Dashboard() {
     return () => window.removeEventListener('storage', loadDashboardData)
   }, [])
 
-  // --- Handlers de Checklist ---
+  // --- Handlers de Checklist Unificado ---
   const handleAddTodo = (e: React.FormEvent) => {
     e.preventDefault()
     if (!newTodoText.trim()) return
+    const todayKey = formatDateKey(new Date())
     const newTodo: DashboardTodo = {
-      id: `todo_${Date.now()}`,
+      id: `${newTodoCategory === 'recurrent' ? 'rec' : 'todo'}_${Date.now()}`,
       text: newTodoText.trim(),
       done: false,
-      priority: 'medium',
-      createdAt: Date.now()
+      category: newTodoCategory,
+      priority: newTodoCategory === 'recurrent' ? 'high' : 'medium',
+      tag: newTodoCategory === 'recurrent' ? 'Rotina Diária' : 'Pontual',
+      createdAt: Date.now(),
+      lastResetDate: newTodoCategory === 'recurrent' ? todayKey : undefined,
     }
     const updated = [newTodo, ...todos]
     setTodos(updated)
@@ -305,6 +370,13 @@ export default function Dashboard() {
   }
 
   const handleToggleTodo = (id: string) => {
+    if (id.startsWith('sys_')) {
+      const sysItem = systemAiPendencies.find(s => s.id === id)
+      if (sysItem?.actionTarget) {
+        navigateTo(sysItem.actionTarget as ModuleKey)
+      }
+      return
+    }
     const updated = todos.map(t => t.id === id ? { ...t, done: !t.done } : t)
     setTodos(updated)
     localStorage.setItem('teacher_dashboard_todos', JSON.stringify(updated))
@@ -440,11 +512,6 @@ export default function Dashboard() {
     return classesList.filter(c => c.dayOfWeek === dayOfWeek)
   }, [classesList, selectedDate])
 
-  // Estatísticas do Checklist
-  const totalTodos = todos.length
-  const completedTodos = todos.filter(t => t.done).length
-  const progressPct = totalTodos > 0 ? Math.round((completedTodos / totalTodos) * 100) : 0
-
   // Aulas do Dia da Semana Selecionado (com filtro Escola vs Particular)
   const classesForSelectedDay = useMemo(() => {
     return classesList
@@ -456,6 +523,92 @@ export default function Dashboard() {
       })
       .sort((a, b) => a.timeStart.localeCompare(b.timeStart))
   }, [classesList, selectedDayOfWeek, classFilter])
+
+  // Sistema & Pendências da IA calculadas dinamicamente
+  const systemAiPendencies = useMemo<DashboardTodo[]>(() => {
+    const items: DashboardTodo[] = []
+
+    // 1. Aulas de hoje sem plano de aula registrado
+    classesForSelectedDay.forEach(cls => {
+      let hasPlan = Boolean(cls.lessonPlanId)
+      try {
+        const bankRaw = localStorage.getItem('teacher_lesson_plans_bank')
+        if (bankRaw) {
+          const bank: Array<{ id: string; className: string; topic?: string }> = JSON.parse(bankRaw)
+          hasPlan = hasPlan || bank.some(p => p.className?.toLowerCase() === cls.className?.toLowerCase())
+        }
+      } catch {}
+
+      if (!hasPlan) {
+        items.push({
+          id: `sys_plan_${cls.id}`,
+          text: `Aula de ${cls.className} (${cls.timeStart}) sem plano registrado`,
+          done: false,
+          category: 'system_ai',
+          priority: 'high',
+          tag: 'Plano de Aula',
+          actionLabel: '⚡ Gerar com IA',
+          actionTarget: 'lessonstudio',
+        })
+      }
+    })
+
+    // 2. Alertas pedagógicos críticos
+    if (pedagogicalAlerts.length > 0) {
+      const atRisk = pedagogicalAlerts.filter(a => a.type === 'danger' || a.type === 'warning')
+      if (atRisk.length > 0) {
+        items.push({
+          id: 'sys_pedag_alert',
+          text: `${atRisk.length} alerta(s) pedagógico(s) requerem atenção`,
+          done: false,
+          category: 'system_ai',
+          priority: 'high',
+          tag: 'Alerta Pedagógico',
+          actionLabel: '🧠 Ver Insights',
+          actionTarget: 'insights',
+        })
+      }
+    }
+
+    // 3. Atividades de portais e diários
+    pendingActivities.forEach(act => {
+      items.push({
+        id: `sys_act_${act.id}`,
+        text: `${act.title} — ${act.subtitle}`,
+        done: false,
+        category: 'system_ai',
+        priority: act.urgency,
+        tag: act.type === 'diary' ? 'Diário' : act.type === 'grade' ? 'Notas' : 'Comunicação',
+        actionLabel: 'Acessar →',
+        actionTarget: act.moduleTarget,
+      })
+    })
+
+    return items
+  }, [classesForSelectedDay, pedagogicalAlerts, pendingActivities])
+
+  // Contadores e listas por categoria
+  const recurrentTodos = useMemo(() => todos.filter(t => t.category === 'recurrent'), [todos])
+  const oneOffTodos = useMemo(() => todos.filter(t => t.category === 'one_off' || (!t.category && !t.id.startsWith('rec_'))), [todos])
+  const aiTodos = systemAiPendencies
+
+  // Lista consolidada
+  const allUnifiedTodos = useMemo(() => {
+    return [...todos, ...systemAiPendencies]
+  }, [todos, systemAiPendencies])
+
+  // Itens filtrados para exibição
+  const filteredTodos = useMemo(() => {
+    if (todoFilter === 'recurrent') return recurrentTodos
+    if (todoFilter === 'one_off') return oneOffTodos
+    if (todoFilter === 'system_ai') return aiTodos
+    return allUnifiedTodos
+  }, [todoFilter, recurrentTodos, oneOffTodos, aiTodos, allUnifiedTodos])
+
+  // Estatísticas do Checklist Unificado
+  const totalTodosCount = allUnifiedTodos.length
+  const completedTodosCount = allUnifiedTodos.filter(t => t.done).length
+  const unifiedProgressPct = totalTodosCount > 0 ? Math.round((completedTodosCount / totalTodosCount) * 100) : 0
 
   // Resumo Consolidado de Pendências de Planejamento da Semana
   const planningPendenciesSummary = useMemo(() => {
@@ -988,48 +1141,99 @@ export default function Dashboard() {
           </div>
 
           {/* ══════════════════════════════════════════════════════════════════════
-              ZONA 2: CHECKLIST DE ATIVIDADES DO DIA (PARTE DE CIMA DO APP)
+              ZONA 2: CENTRAL DE ATIVIDADES & ROTINA DO DIA (CHECKLIST UNIFICADO)
              ══════════════════════════════════════════════════════════════════════ */}
           <div style={{ marginBottom: 20 }}>
             <div style={{
               background: '#fff',
               borderRadius: 18,
               border: '1px solid #ede8dc',
-              padding: '16px 20px',
+              padding: '18px 22px',
               boxShadow: '0 3px 14px rgba(44,26,14,0.03)',
             }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 10 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <div style={{ width: 32, height: 32, borderRadius: 8, background: '#dcfce7', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <i className="ti ti-checklist" style={{ fontSize: 18, color: '#16a34a' }} />
-                  </div>
+              {/* Header com Progresso Geral */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, flexWrap: 'wrap', gap: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <TeacherLogo size={32} variant="badge" rounded={10} />
                   <div>
-                    <h3 style={{ margin: 0, fontSize: 15, fontWeight: 800, color: '#2c1a0e' }}>
-                      Checklist de Atividades do Dia
+                    <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#2c1a0e', display: 'flex', alignItems: 'center', gap: 8 }}>
+                      Central de Atividades & Rotina do Dia
                     </h3>
-                    <p style={{ margin: 0, fontSize: 11, color: '#665c54' }}>
-                      {completedTodos} de {totalTodos} tarefas concluídas ({progressPct}%)
+                    <p style={{ margin: 0, fontSize: 11.5, color: '#665c54' }}>
+                      {completedTodosCount} de {totalTodosCount} atividades concluídas ({unifiedProgressPct}%)
                     </p>
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: 180 }}>
-                  <div style={{ flex: 1, height: 7, background: '#f5f0e8', borderRadius: 99, overflow: 'hidden' }}>
-                    <div style={{ height: '100%', width: `${progressPct}%`, background: '#16a34a', borderRadius: 99, transition: 'width 0.4s ease' }} />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: 200 }}>
+                  <div style={{ flex: 1, height: 8, background: '#f5f0e8', borderRadius: 99, overflow: 'hidden' }}>
+                    <div style={{
+                      height: '100%',
+                      width: `${unifiedProgressPct}%`,
+                      background: unifiedProgressPct === 100 ? '#16a34a' : 'linear-gradient(90deg, #d4944a 0%, #16a34a 100%)',
+                      borderRadius: 99,
+                      transition: 'width 0.4s ease'
+                    }} />
                   </div>
-                  <span style={{ fontSize: 11.5, fontWeight: 800, color: '#16a34a' }}>{progressPct}%</span>
+                  <span style={{ fontSize: 12, fontWeight: 800, color: unifiedProgressPct === 100 ? '#16a34a' : '#8b5e3c' }}>
+                    {unifiedProgressPct}%
+                  </span>
                 </div>
               </div>
 
-              <form onSubmit={handleAddTodo} style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+              {/* Filtros em Pills */}
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
+                {[
+                  { id: 'all', label: 'Todas as Tarefas', count: totalTodosCount, icon: 'ti-list-check' },
+                  { id: 'recurrent', label: 'Rotinas Recorrentes', count: recurrentTodos.length, icon: 'ti-repeat' },
+                  { id: 'one_off', label: 'Pontuais do Dia', count: oneOffTodos.length, icon: 'ti-pin' },
+                  { id: 'system_ai', label: 'Pendências da IA', count: aiTodos.length, icon: 'ti-sparkles' },
+                ].map(tab => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setTodoFilter(tab.id as TodoCategory)}
+                    style={{
+                      padding: '5px 12px',
+                      borderRadius: 20,
+                      border: todoFilter === tab.id ? '1px solid #2c1a0e' : '1px solid #ede8dc',
+                      background: todoFilter === tab.id ? '#2c1a0e' : '#faf6f0',
+                      color: todoFilter === tab.id ? '#fff' : '#665c54',
+                      fontSize: 11.5,
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 5,
+                      transition: 'all 0.15s ease',
+                    }}
+                  >
+                    <i className={`ti ${tab.icon}`} style={{ fontSize: 13, color: todoFilter === tab.id ? '#fdf8f2' : '#8b5e3c' }} />
+                    <span>{tab.label}</span>
+                    <span style={{
+                      fontSize: 10,
+                      fontWeight: 800,
+                      padding: '1px 6px',
+                      borderRadius: 99,
+                      background: todoFilter === tab.id ? 'rgba(255,255,255,0.2)' : '#e8e0d0',
+                      color: todoFilter === tab.id ? '#fff' : '#7a5c42',
+                    }}>
+                      {tab.count}
+                    </span>
+                  </button>
+                ))}
+              </div>
+
+              {/* Formulário de Adição Rápida com Seletor de Tipo */}
+              <form onSubmit={handleAddTodo} style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
                 <input
                   value={newTodoText}
                   onChange={e => setNewTodoText(e.target.value)}
-                  placeholder="✍️ Adicionar nova tarefa prioritária..."
+                  placeholder={newTodoCategory === 'recurrent' ? '🔁 Adicionar rotina diária recorrente (ex: Fazer chamada, Warm-up)...' : '✍️ Adicionar tarefa pontual do dia...'}
                   style={{
                     flex: 1,
-                    padding: '8px 12px',
-                    borderRadius: 8,
+                    minWidth: 260,
+                    padding: '8px 14px',
+                    borderRadius: 10,
                     border: '1px solid #e8e0d0',
                     background: '#faf6f0',
                     fontSize: 12.5,
@@ -1037,11 +1241,51 @@ export default function Dashboard() {
                     color: '#2c1a0e',
                   }}
                 />
+                <div style={{ display: 'flex', background: '#faf6f0', padding: 2, borderRadius: 10, border: '1px solid #e8e0d0', gap: 2 }}>
+                  <button
+                    type="button"
+                    onClick={() => setNewTodoCategory('one_off')}
+                    style={{
+                      padding: '5px 10px',
+                      borderRadius: 8,
+                      border: 'none',
+                      background: newTodoCategory === 'one_off' ? '#2c1a0e' : 'transparent',
+                      color: newTodoCategory === 'one_off' ? '#fff' : '#7a5c42',
+                      fontSize: 11,
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 4,
+                    }}
+                  >
+                    <i className="ti ti-pin" style={{ fontSize: 12 }} /> Pontual
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setNewTodoCategory('recurrent')}
+                    style={{
+                      padding: '5px 10px',
+                      borderRadius: 8,
+                      border: 'none',
+                      background: newTodoCategory === 'recurrent' ? '#8b5e3c' : 'transparent',
+                      color: newTodoCategory === 'recurrent' ? '#fff' : '#7a5c42',
+                      fontSize: 11,
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 4,
+                    }}
+                  >
+                    <i className="ti ti-repeat" style={{ fontSize: 12 }} /> Recorrente
+                  </button>
+                </div>
                 <button
                   type="submit"
                   style={{
-                    padding: '0 16px',
-                    borderRadius: 8,
+                    padding: '8px 16px',
+                    borderRadius: 10,
                     border: 'none',
                     background: '#2c1a0e',
                     color: '#fff',
@@ -1057,60 +1301,113 @@ export default function Dashboard() {
                 </button>
               </form>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 8 }}>
-                {todos.map(todo => (
-                  <div
-                    key={todo.id}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 8,
-                      padding: '8px 12px',
-                      borderRadius: 10,
-                      background: todo.done ? '#faf6f0' : '#fff',
-                      border: `1px solid ${todo.done ? '#ede8dc' : '#e8e0d0'}`,
-                      transition: 'all 0.2s',
-                    }}
-                  >
-                    <div
-                      onClick={() => handleToggleTodo(todo.id)}
-                      style={{
-                        width: 18,
-                        height: 18,
-                        borderRadius: 5,
-                        border: todo.done ? 'none' : '2px solid #8b5e3c',
-                        background: todo.done ? '#16a34a' : 'transparent',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        cursor: 'pointer',
-                        flexShrink: 0,
-                      }}
-                    >
-                      {todo.done && <i className="ti ti-check" style={{ color: '#fff', fontSize: 12 }} />}
-                    </div>
-                    <span
-                      onClick={() => handleToggleTodo(todo.id)}
-                      style={{
-                        flex: 1,
-                        fontSize: 12.5,
-                        fontWeight: 600,
-                        color: todo.done ? '#93a1a1' : '#2c1a0e',
-                        textDecoration: todo.done ? 'line-through' : 'none',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      {todo.text}
-                    </span>
-                    <button
-                      onClick={() => handleDeleteTodo(todo.id)}
-                      style={{ background: 'none', border: 'none', color: '#dc322f', opacity: 0.5, cursor: 'pointer', fontSize: 13 }}
-                      title="Excluir"
-                    >
-                      <i className="ti ti-trash" />
-                    </button>
+              {/* Lista dos Itens do Checklist */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {filteredTodos.length === 0 ? (
+                  <div style={{ padding: '20px 0', textAlign: 'center', color: '#93a1a1', fontSize: 12.5 }}>
+                    <i className="ti ti-circle-check" style={{ fontSize: 24, display: 'block', marginBottom: 6, color: '#16a34a' }} />
+                    Nenhuma tarefa nesta categoria no momento. Tudo em dia!
                   </div>
-                ))}
+                ) : (
+                  filteredTodos.map(todo => {
+                    const isRecurrent = todo.category === 'recurrent'
+                    const isSystem = todo.category === 'system_ai'
+
+                    return (
+                      <div
+                        key={todo.id}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          gap: 10,
+                          padding: '10px 14px',
+                          borderRadius: 12,
+                          background: todo.done ? '#faf6f0' : isSystem ? '#fffbeb' : '#fff',
+                          border: `1px solid ${todo.done ? '#ede8dc' : isSystem ? '#fde68a' : '#e8e0d0'}`,
+                          transition: 'all 0.2s',
+                          flexWrap: 'wrap',
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 240 }}>
+                          <div
+                            onClick={() => handleToggleTodo(todo.id)}
+                            style={{
+                              width: 20,
+                              height: 20,
+                              borderRadius: 6,
+                              border: todo.done ? 'none' : isSystem ? '2px solid #b45309' : isRecurrent ? '2px solid #8b5e3c' : '2px solid #2c1a0e',
+                              background: todo.done ? '#16a34a' : 'transparent',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              cursor: 'pointer',
+                              flexShrink: 0,
+                            }}
+                          >
+                            {todo.done && <i className="ti ti-check" style={{ color: '#fff', fontSize: 13 }} />}
+                          </div>
+
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                            <span
+                              onClick={() => handleToggleTodo(todo.id)}
+                              style={{
+                                fontSize: 13,
+                                fontWeight: todo.done ? 500 : 700,
+                                color: todo.done ? '#93a1a1' : isSystem ? '#78350f' : '#2c1a0e',
+                                textDecoration: todo.done ? 'line-through' : 'none',
+                                cursor: 'pointer',
+                              }}
+                            >
+                              {todo.text}
+                            </span>
+                            {todo.tag && (
+                              <span style={{ fontSize: 10.5, color: '#8b5e3c', fontWeight: 600 }}>
+                                {isRecurrent && '🔁 Rotina Diária · '}
+                                {isSystem && '⚡ Ação Recomendada · '}
+                                {todo.tag}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Botão de Ação Direta ou Lixeira */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          {isSystem && todo.actionLabel && todo.actionTarget && (
+                            <button
+                              onClick={() => navigateTo(todo.actionTarget as ModuleKey)}
+                              style={{
+                                padding: '4px 10px',
+                                borderRadius: 6,
+                                background: '#d97706',
+                                color: '#fff',
+                                border: 'none',
+                                fontSize: 11,
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 4,
+                              }}
+                            >
+                              {todo.actionLabel}
+                            </button>
+                          )}
+
+                          {!isSystem && (
+                            <button
+                              onClick={() => handleDeleteTodo(todo.id)}
+                              style={{ background: 'none', border: 'none', color: '#dc322f', opacity: 0.5, cursor: 'pointer', fontSize: 13, padding: 4 }}
+                              title="Excluir"
+                            >
+                              <i className="ti ti-trash" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })
+                )}
               </div>
             </div>
           </div>
@@ -1526,7 +1823,7 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* Coluna Direita: Atividades Pendentes */}
+            {/* Coluna Direita: Atalhos & Recursos Pedagógicos Rápidos */}
             <div style={{
               background: '#fff',
               borderRadius: 18,
@@ -1536,62 +1833,51 @@ export default function Dashboard() {
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <div style={{ width: 32, height: 32, borderRadius: 8, background: '#fee2e2', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <i className="ti ti-alert-circle" style={{ fontSize: 18, color: '#dc2626' }} />
+                  <div style={{ width: 32, height: 32, borderRadius: 8, background: '#e0f2fe', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <i className="ti ti-sparkles" style={{ fontSize: 18, color: '#0284c7' }} />
                   </div>
                   <div>
                     <h3 style={{ margin: 0, fontSize: 14.5, fontWeight: 800, color: '#2c1a0e' }}>
-                      Atividades Pendentes
+                      Atalhos Rápidos de Aula
                     </h3>
                     <p style={{ margin: 0, fontSize: 11, color: '#665c54' }}>
-                      Lançamentos, diários e tutoria
+                      Ferramentas de criação e apoio com IA
                     </p>
                   </div>
                 </div>
               </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {pendingActivities.map(item => (
-                  <div
-                    key={item.id}
-                    onClick={() => navigateTo(item.moduleTarget)}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                {[
+                  { label: 'LessonStudio', icon: 'ti-file-certificate', color: '#8b5e3c', module: 'lessonstudio' as ModuleKey, desc: 'Criar Plano' },
+                  { label: 'OmniGrader', icon: 'ti-camera', color: '#16a34a', module: 'omnigrader' as ModuleKey, desc: 'Corrigir Prova' },
+                  { label: 'Simulador Oral', icon: 'ti-volume', color: '#9333ea', module: 'roleplay' as ModuleKey, desc: 'Roleplay B1/B2' },
+                  { label: 'Biblioteca', icon: 'ti-bookmarks', color: '#b45309', module: 'generator' as ModuleKey, desc: 'Banco de Ideias' },
+                ].map(tool => (
+                  <button
+                    key={tool.module}
+                    onClick={() => navigateTo(tool.module)}
                     style={{
+                      padding: '10px 12px',
+                      borderRadius: 12,
+                      border: '1px solid #ede8dc',
+                      background: '#faf6f0',
+                      cursor: 'pointer',
                       display: 'flex',
                       alignItems: 'center',
-                      justifyContent: 'space-between',
-                      padding: '8px 12px',
-                      borderRadius: 10,
-                      background: '#faf6f0',
-                      border: '1px solid #ede8dc',
-                      cursor: 'pointer',
-                      transition: 'all 0.15s',
+                      gap: 8,
+                      textAlign: 'left',
+                      transition: 'all 0.15s ease',
                     }}
-                    onMouseEnter={e => { e.currentTarget.style.borderColor = '#8b5e3c' }}
-                    onMouseLeave={e => { e.currentTarget.style.borderColor = '#ede8dc' }}
+                    onMouseEnter={e => { e.currentTarget.style.borderColor = '#8b5e3c'; e.currentTarget.style.background = '#fff' }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = '#ede8dc'; e.currentTarget.style.background = '#faf6f0' }}
                   >
+                    <i className={`ti ${tool.icon}`} style={{ fontSize: 18, color: tool.color }} />
                     <div>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: '#2c1a0e' }}>
-                        {item.title}
-                      </div>
-                      <div style={{ fontSize: 11, color: '#665c54', marginTop: 1 }}>
-                        {item.subtitle}
-                      </div>
+                      <div style={{ fontSize: 12, fontWeight: 800, color: '#2c1a0e' }}>{tool.label}</div>
+                      <div style={{ fontSize: 10, color: '#8b5e3c', fontWeight: 600 }}>{tool.desc}</div>
                     </div>
-
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <span style={{
-                        fontSize: 9.5,
-                        fontWeight: 800,
-                        padding: '2px 6px',
-                        borderRadius: 4,
-                        background: item.urgency === 'high' ? '#fee2e2' : item.urgency === 'medium' ? '#fef3c7' : '#e0f2fe',
-                        color: item.urgency === 'high' ? '#dc2626' : item.urgency === 'medium' ? '#b58900' : '#0284c7',
-                      }}>
-                        {item.urgency === 'high' ? 'Urgente' : item.urgency === 'medium' ? 'Pendente' : 'Revisão'}
-                      </span>
-                      <i className="ti ti-chevron-right" style={{ color: '#8b5e3c', fontSize: 13 }} />
-                    </div>
-                  </div>
+                  </button>
                 ))}
               </div>
             </div>
