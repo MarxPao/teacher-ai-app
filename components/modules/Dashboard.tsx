@@ -609,6 +609,9 @@ export default function Dashboard() {
   const totalTodosCount = allUnifiedTodos.length
   const completedTodosCount = allUnifiedTodos.filter(t => t.done).length
   const unifiedProgressPct = totalTodosCount > 0 ? Math.round((completedTodosCount / totalTodosCount) * 100) : 0
+  const totalTodos = totalTodosCount
+  const completedTodos = completedTodosCount
+  const progressPct = unifiedProgressPct
 
   // Resumo Consolidado de Pendências de Planejamento da Semana
   const planningPendenciesSummary = useMemo(() => {
