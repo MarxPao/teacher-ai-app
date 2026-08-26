@@ -72,7 +72,7 @@ export default function Topbar({ module, submodule, isAiLoading = false, onNavig
       }}
     >
       <nav aria-label="Breadcrumb" style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
-        <TeacherLogo size={20} color={COLOR.accent} style={{ flexShrink: 0 }} />
+        <TeacherLogo size={24} variant="badge" rounded={6} />
         <span style={{ fontSize: TEXT.sm + 1, fontWeight: 700, color: COLOR.paperSepia, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {module}
         </span>

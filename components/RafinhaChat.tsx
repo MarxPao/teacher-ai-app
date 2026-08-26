@@ -102,13 +102,11 @@ const TOOL_EST_SECONDS: Record<string, number> = {
   generate_parent_communication:  3,
 }
 
-import TeacherLogo from '@/components/TeacherLogo'
+import TeacherLogo, { TeacherOwlAvatar } from '@/components/TeacherLogo'
 
-// Avatar SVG — Coruja Oficial Teacher AI
-const AvatarSVG = ({ size = 34 }: { size?: number }) => (
-  <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-    <TeacherLogo size={size} color="#fff" />
-  </div>
+// Avatar SVG — Coruja Oficial Teacher AI em Alto Contraste Neutro
+const AvatarSVG = ({ size = 36 }: { size?: number }) => (
+  <TeacherOwlAvatar size={size} bg="#fbf7f0" border="none" shadow="none" owlColor="#1e3537" />
 )
 
 // Portal names 
@@ -1396,15 +1394,16 @@ export default function RafinhaChat({ onNavigate, onCommandReady }: RafinhaChatP
  if (!isOpen) return (
  <button onClick={() => setIsOpen(true)} style={{
  position: 'fixed', bottom: 24, right: 24, zIndex: 9999,
- width: 64, height: 64, borderRadius: '50%', background: '#b58900',
- border: '3px solid #fff', boxShadow: '0 8px 32px rgba(181,137,0,0.4)',
+ width: 64, height: 64, borderRadius: '50%', background: '#fbf7f0',
+ border: '2px solid rgba(30, 53, 55, 0.22)', boxShadow: '0 8px 32px rgba(30, 53, 55, 0.18)',
  cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
- transition: 'transform 0.2s', padding: 6,
+ transition: 'transform 0.2s', padding: 4,
  }}
  onMouseEnter={e => (e.currentTarget.style.transform = 'scale(1.1)')}
  onMouseLeave={e => (e.currentTarget.style.transform = 'scale(1)')}
+ title="Abrir Rafinha IA"
  >
- <AvatarSVG />
+ <AvatarSVG size={46} />
  </button>
  )
 
@@ -1428,8 +1427,8 @@ export default function RafinhaChat({ onNavigate, onCommandReady }: RafinhaChatP
  {/* Header */}
  <div style={{ padding: '13px 16px', background: '#073642', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
- <div style={{ width: 38, height: 38, borderRadius: '50%', background: '#b58900', border: '2px solid #fff', overflow: 'hidden', flexShrink: 0 }}>
- <AvatarSVG />
+ <div style={{ width: 38, height: 38, borderRadius: '50%', background: '#fbf7f0', border: '1.5px solid rgba(255,255,255,0.4)', overflow: 'hidden', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+ <AvatarSVG size={32} />
  </div>
  <div>
  <div style={{ fontSize: 14, fontWeight: 700, color: '#fdf6e3' }}>Rafinha</div>

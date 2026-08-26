@@ -639,7 +639,7 @@ Referência: ${new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'nu
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', color: '#8b5e3c', fontWeight: 700 }}>
-                <TeacherLogo size={22} color="#8b5e3c" />
+                <TeacherLogo size={26} variant="badge" rounded={6} />
                 <span>Parecer Pedagógico Geral da Rafinha IA</span>
               </div>
               <button

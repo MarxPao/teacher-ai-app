@@ -138,40 +138,15 @@ export default function Sidebar({ active, onNavigate }: Props) {
               lineHeight: 1.1,
               display: 'flex',
               alignItems: 'center',
-              gap: 8,
+              gap: 10,
               whiteSpace: 'nowrap',
             }}>
               <span>Teacher</span>
-              <div
-                title="Teacher AI"
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  background: 'rgba(196,131,74,0.15)',
-                  padding: '3px 6px',
-                  borderRadius: 8,
-                  border: '1px solid rgba(196,131,74,0.3)',
-                }}
-              >
-                <TeacherLogo size={22} color="#c4834a" />
-              </div>
+              <TeacherLogo size={30} variant="badge" rounded={8} />
             </div>
           ) : (
-            <div
-              title="Teacher AI"
-              style={{
-                background: 'rgba(196,131,74,0.12)',
-                border: '1px solid rgba(196,131,74,0.22)',
-                width: 44,
-                height: 44,
-                borderRadius: 10,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <TeacherLogo size={26} color="#c4834a" />
+            <div title="Teacher AI">
+              <TeacherLogo size={44} variant="badge" rounded={12} />
             </div>
           )}
 

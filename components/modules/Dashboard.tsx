@@ -622,7 +622,7 @@ export default function Dashboard() {
             >
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <TeacherLogo size={20} color="#8b5e3c" />
+                  <TeacherLogo size={24} variant="badge" rounded={6} />
                   <strong style={{ fontSize: 13.5, color: '#2c1a0e' }}>
                     Alertas & Recomendações da Rafinha IA
                   </strong>

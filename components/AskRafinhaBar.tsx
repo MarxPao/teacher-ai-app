@@ -70,7 +70,7 @@ export default function AskRafinhaBar({ onNavigate, onTriggerCommand }: AskRafin
         transition: 'all 0.2s ease',
       }}
     >
-      <TeacherLogo size={18} color="#8b5e3c" style={{ marginRight: 6 }} />
+      <TeacherLogo size={22} variant="badge" rounded={6} style={{ marginRight: 6 }} />
       <input
         type="text"
         placeholder="Peça à Rafinha... (ex: gerar prova B1)"
