@@ -320,6 +320,30 @@ export default function PrivateTutoring() {
   useEffect(() => {
     loadAllData()
     window.addEventListener('storage', loadAllData)
+
+    // Verifica se veio de redirecionamento da Home ("Lançar Aula")
+    try {
+      const requestedStudentId = sessionStorage.getItem('teacher_private_selected_student_id') || localStorage.getItem('teacher_private_selected_student_id')
+      if (requestedStudentId) {
+        setSelectedStudentId(requestedStudentId)
+        sessionStorage.removeItem('teacher_private_selected_student_id')
+        localStorage.removeItem('teacher_private_selected_student_id')
+
+        const shouldOpenLesson = sessionStorage.getItem('teacher_private_open_new_lesson') === 'true'
+        if (shouldOpenLesson) {
+          sessionStorage.removeItem('teacher_private_open_new_lesson')
+          setTimeout(() => {
+            const raw = localStorage.getItem(STORAGE_KEY)
+            const currentList: PrivateStudent[] = raw ? JSON.parse(raw) : students
+            const targetStudent = currentList.find(s => s.id === requestedStudentId) || currentList[0]
+            if (targetStudent) {
+              openNewLessonModal(targetStudent)
+            }
+          }, 200)
+        }
+      }
+    } catch {}
+
     return () => window.removeEventListener('storage', loadAllData)
   }, [loadAllData])
 
@@ -1534,71 +1558,7 @@ export default function PrivateTutoring() {
             </div>
           </div>
 
-          {/* ══════════════════════════════════════════════════════════════════════
-              ZONA 6: PAINEL DE PLANEJAMENTO & AÇÕES RÁPIDAS DE TUTORIA
-             ══════════════════════════════════════════════════════════════════════ */}
-          <div style={{ marginBottom: 20 }}>
-            <div style={{
-              background: '#2c1a0e', borderRadius: 18, padding: '16px 20px', color: '#fff',
-              boxShadow: '0 6px 24px rgba(44,26,14,0.12)'
-            }}>
-              <div style={{ marginBottom: 10 }}>
-                <h3 style={{ margin: 0, fontSize: 15, fontWeight: 800, color: '#fef3c7' }}>
-                  🗺️ Gestão & Ações Rápidas de Aula Particular
-                </h3>
-              </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 8 }}>
-                <div
-                  onClick={openNewStudentModal}
-                  style={{
-                    background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)',
-                    borderRadius: 10, padding: '10px 12px', cursor: 'pointer'
-                  }}
-                >
-                  <div style={{ fontSize: 16, marginBottom: 2 }}>👤</div>
-                  <div style={{ fontSize: 12.5, fontWeight: 800, color: '#fff' }}>Novo Aluno / Turma</div>
-                  <div style={{ fontSize: 10.5, color: '#d5c8bb' }}>Cadastre novo contrato.</div>
-                </div>
-
-                <div
-                  onClick={() => setActiveSubModule('teaching')}
-                  style={{
-                    background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)',
-                    borderRadius: 10, padding: '10px 12px', cursor: 'pointer'
-                  }}
-                >
-                  <div style={{ fontSize: 16, marginBottom: 2 }}>📖</div>
-                  <div style={{ fontSize: 12.5, fontWeight: 800, color: '#fff' }}>Editar / Cancelar Aulas</div>
-                  <div style={{ fontSize: 10.5, color: '#d5c8bb' }}>Histórico completo de aulas.</div>
-                </div>
-
-                <div
-                  onClick={() => setActiveSubModule('books')}
-                  style={{
-                    background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)',
-                    borderRadius: 10, padding: '10px 12px', cursor: 'pointer'
-                  }}
-                >
-                  <div style={{ fontSize: 16, marginBottom: 2 }}>📚</div>
-                  <div style={{ fontSize: 12.5, fontWeight: 800, color: '#fff' }}>Biblioteca de Livros</div>
-                  <div style={{ fontSize: 10.5, color: '#d5c8bb' }}>Materiais e apostilas.</div>
-                </div>
-
-                <div
-                  onClick={() => setActiveSubModule('didactic')}
-                  style={{
-                    background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)',
-                    borderRadius: 10, padding: '10px 12px', cursor: 'pointer'
-                  }}
-                >
-                  <div style={{ fontSize: 16, marginBottom: 2 }}>📊</div>
-                  <div style={{ fontSize: 12.5, fontWeight: 800, color: '#fff' }}>Sequência Didática</div>
-                  <div style={{ fontSize: 10.5, color: '#d5c8bb' }}>Trilhas e unidades da aula.</div>
-                </div>
-              </div>
-            </div>
-          </div>
 
           {/* Tabela Consolidada de Alunos e Turmas */}
           <ModuleCard title="Tabela Consolidada de Alunos e Turmas Particulares" icon="ti-table" padding={18}>

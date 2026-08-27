@@ -1382,6 +1382,18 @@ export default function RafinhaChat({ onNavigate, onCommandReady }: RafinhaChatP
  }
  }, [messages, onNavigate, speak, voiceStop, allLogs]) // eslint-disable-line
 
+ // Listener de eventos para abrir Rafinha a partir do topo / Dashboard
+ useEffect(() => {
+   const handleOpen = () => setIsOpen(true)
+   const handleToggle = () => setIsOpen(prev => !prev)
+   window.addEventListener('teacher:open_rafinha', handleOpen)
+   window.addEventListener('teacher:toggle_rafinha', handleToggle)
+   return () => {
+     window.removeEventListener('teacher:open_rafinha', handleOpen)
+     window.removeEventListener('teacher:toggle_rafinha', handleToggle)
+   }
+ }, [])
+
  // Undo 
  const handleUndo = useCallback(() => {
  if (undoLastAction()) {
@@ -1390,22 +1402,8 @@ export default function RafinhaChat({ onNavigate, onCommandReady }: RafinhaChatP
  }
  }, [speak])
 
- // Render: botão flutuante 
- if (!isOpen) return (
- <button onClick={() => setIsOpen(true)} style={{
- position: 'fixed', bottom: 24, right: 24, zIndex: 9999,
- width: 64, height: 64, borderRadius: '50%', background: '#fbf7f0',
- border: '2px solid rgba(30, 53, 55, 0.22)', boxShadow: '0 8px 32px rgba(30, 53, 55, 0.18)',
- cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
- transition: 'transform 0.2s', padding: 4,
- }}
- onMouseEnter={e => (e.currentTarget.style.transform = 'scale(1.1)')}
- onMouseLeave={e => (e.currentTarget.style.transform = 'scale(1)')}
- title="Abrir Rafinha IA"
- >
- <AvatarSVG size={46} />
- </button>
- )
+ // Se fechado, não renderiza botão flutuante para manter o layout da tela limpo
+ if (!isOpen) return null
 
  // Render: chat 
  return (

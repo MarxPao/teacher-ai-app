@@ -333,9 +333,6 @@ export default function Home() {
       {/* Scratchpad — Bloco de Notas Rápidas Persistente (#26) */}
       <Scratchpad />
 
-      {/* GlobalVoiceFAB — Ditado por Voz (#34) */}
-      <GlobalVoiceFAB />
-
       {/* Bottom Tab Bar — Mobile Navigation (#42) */}
       <BottomTabBar active={active} onNavigate={setActive} />
 

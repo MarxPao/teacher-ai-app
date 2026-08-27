@@ -7,6 +7,8 @@ import AskRafinhaBar from '@/components/AskRafinhaBar'
 import TeacherLogo from '@/components/TeacherLogo'
 import { ModuleKey } from '@/app/page'
 
+import { useGlobalVoice } from '@/lib/useGlobalVoice'
+
 interface TopbarProps {
   module: string
   submodule?: string
@@ -29,6 +31,7 @@ const THEME_MODES: { value: ThemeMode; label: string; icon: string }[] = [
 
 export default function Topbar({ module, submodule, isAiLoading = false, onNavigate }: TopbarProps) {
   const { theme, toggleFocusMode, setMode, setFontScale } = useTheme()
+  const { isListening, startListening, stopListening, isSupported: isVoiceSupported } = useGlobalVoice('pt-BR')
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [focusHover, setFocusHover] = useState(false)
   const settingsRef = useRef<HTMLDivElement>(null)
@@ -101,6 +104,47 @@ export default function Topbar({ module, submodule, isAiLoading = false, onNavig
       )}
 
       <div style={{ display: 'flex', alignItems: 'center', gap: SPACE[2], flexShrink: 0 }}>
+        {/* Botão Rafinha IA */}
+        <button
+          onClick={() => window.dispatchEvent(new CustomEvent('teacher:open_rafinha'))}
+          title="Abrir assistente Rafinha IA"
+          style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            padding: '4px 10px',
+            borderRadius: RADIUS.md,
+            border: '1px solid rgba(30, 53, 55, 0.25)',
+            background: '#fbf7f0',
+            color: '#1e3537',
+            cursor: 'pointer', fontSize: TEXT.xs, fontWeight: 700,
+            fontFamily: FONT.sans, transition: TRANSITION.fast,
+            boxShadow: '0 2px 6px rgba(30, 53, 55, 0.06)'
+          }}
+        >
+          <TeacherLogo size={18} variant="badge" rounded={4} />
+          <span className="hidden sm:inline">Rafinha IA</span>
+        </button>
+
+        {/* Botão Ditado por Voz */}
+        {isVoiceSupported && (
+          <button
+            onClick={isListening ? stopListening : startListening}
+            title={isListening ? 'Parar gravação de voz' : 'Iniciar ditado por voz'}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 5,
+              padding: '5px 10px',
+              borderRadius: RADIUS.md,
+              border: isListening ? '1px solid #dc2626' : `1px solid ${BORDER.soft}`,
+              background: isListening ? 'rgba(220,38,38,0.1)' : 'transparent',
+              color: isListening ? '#dc2626' : COLOR.paperWarm,
+              cursor: 'pointer', fontSize: TEXT.xs, fontWeight: 600,
+              fontFamily: FONT.sans, transition: TRANSITION.fast,
+            }}
+          >
+            <i className={`ti ${isListening ? 'ti-microphone-filled text-red-600 animate-pulse' : 'ti-microphone'}`} style={{ fontSize: 15 }} />
+            <span className="hidden md:inline">{isListening ? 'Ouvindo...' : 'Voz'}</span>
+          </button>
+        )}
+
         <button
           onClick={toggleFocusMode}
           onMouseEnter={() => setFocusHover(true)}

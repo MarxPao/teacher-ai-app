@@ -5,6 +5,7 @@ import SubstituteMode from '@/components/SubstituteMode'
 import OnboardingWizard from '@/components/OnboardingWizard'
 import { generatePedagogicalInsights, PedagogicalAlert } from '@/lib/pedagogicalInsights'
 import TeacherLogo, { TeacherOwlAvatar } from '@/components/TeacherLogo'
+import { useGlobalVoice } from '@/lib/useGlobalVoice'
 
 // --- Tipos & Interfaces ---
 
@@ -102,6 +103,7 @@ export default function Dashboard() {
   const [mounted, setMounted] = useState(false)
   const [greeting, setGreeting] = useState('Olá')
   const [dateStr, setDateStr] = useState('')
+  const { isListening, startListening, stopListening, isSupported: isVoiceSupported } = useGlobalVoice('pt-BR')
 
   // 1. Calendário Compacto Real & Post-its
   const [calendarView, setCalendarView] = useState<'semana' | 'mes' | 'trimestre' | 'ano'>('mes')
@@ -648,13 +650,10 @@ export default function Dashboard() {
   // Abre o Planejamento Completo da Aula ou Formulário Pré-preenchido
   const handleOpenLessonPlan = (item: TodayClassItem) => {
     if (item.type === 'private') {
-      localStorage.setItem('teacher_lesson_studio_student_prefill', JSON.stringify({
-        studentId: item.studentId || item.id,
-        studentName: item.className,
-        subject: item.topic || 'Inglês',
-        level: 'B1'
-      }))
-      navigateTo('lessonstudio')
+      const studentId = item.studentId || item.id.replace(/^priv_/, '').replace(/_day_\d+$/, '')
+      sessionStorage.setItem('teacher_private_selected_student_id', studentId)
+      sessionStorage.setItem('teacher_private_open_new_lesson', 'true')
+      navigateTo('privatetutoring')
       return
     }
 
@@ -721,12 +720,64 @@ export default function Dashboard() {
               </div>
 
               {/* Botões Rápidos de Produtividade (#18, #49) */}
-              <div style={{ display: 'flex', gap: 8 }}>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                {/* Botão Rafinha IA */}
+                <button
+                  onClick={() => window.dispatchEvent(new CustomEvent('teacher:open_rafinha'))}
+                  title="Conversar com Rafinha IA"
+                  style={{
+                    padding: '6px 14px',
+                    borderRadius: 10,
+                    border: '1px solid rgba(30, 53, 55, 0.25)',
+                    background: '#fbf7f0',
+                    color: '#1e3537',
+                    fontSize: 12.5,
+                    fontWeight: 800,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 7,
+                    boxShadow: '0 2px 8px rgba(30, 53, 55, 0.08)',
+                    transition: 'transform 0.15s ease',
+                  }}
+                  onMouseEnter={e => (e.currentTarget.style.transform = 'translateY(-1px)')}
+                  onMouseLeave={e => (e.currentTarget.style.transform = 'none')}
+                >
+                  <TeacherLogo size={20} variant="badge" rounded={6} />
+                  <span>Rafinha IA ✨</span>
+                </button>
+
+                {/* Botão Ditado por Voz */}
+                {isVoiceSupported && (
+                  <button
+                    onClick={isListening ? stopListening : startListening}
+                    title={isListening ? 'Parar gravação' : 'Iniciar ditado por voz'}
+                    style={{
+                      padding: '6px 12px',
+                      borderRadius: 10,
+                      border: isListening ? '1px solid #dc2626' : '1px solid #d5c8bb',
+                      background: isListening ? 'rgba(220,38,38,0.1)' : '#fff',
+                      color: isListening ? '#dc2626' : '#2c1a0e',
+                      fontSize: 12,
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+                      transition: 'all 0.15s ease',
+                    }}
+                  >
+                    <i className={`ti ${isListening ? 'ti-microphone-filled text-red-600 animate-pulse' : 'ti-microphone text-amber-700'}`} style={{ fontSize: 15 }} />
+                    <span>{isListening ? 'Gravando...' : 'Ditado por Voz'}</span>
+                  </button>
+                )}
+
                 <button
                   onClick={() => setIsSubstituteOpen(true)}
                   style={{
                     padding: '6px 12px',
-                    borderRadius: 8,
+                    borderRadius: 10,
                     border: '1px solid rgba(168,50,50,0.3)',
                     background: 'rgba(168,50,50,0.06)',
                     color: '#a83232',
@@ -744,7 +795,7 @@ export default function Dashboard() {
                   onClick={() => setIsOnboardingOpen(true)}
                   style={{
                     padding: '6px 12px',
-                    borderRadius: 8,
+                    borderRadius: 10,
                     border: '1px solid rgba(139,115,85,0.25)',
                     background: '#fff',
                     color: '#7a5c42',
@@ -1667,19 +1718,26 @@ export default function Dashboard() {
                         <button
                           onClick={(e) => {
                             e.stopPropagation()
-                            localStorage.setItem('teacher_lesson_studio_prefill', JSON.stringify({
-                              classId: (item as any).classId || item.id,
-                              className: item.className || (item as any).name,
-                              date: selectedDateKey || new Date().toISOString().split('T')[0],
-                              topic: item.topic || '',
-                              openProgressTracker: true
-                            }))
-                            window.dispatchEvent(new CustomEvent('teacher:navigate', { detail: 'lessonstudio' }))
+                            if (item.type === 'private') {
+                              const studentId = item.studentId || item.id.replace(/^priv_/, '').replace(/_day_\d+$/, '')
+                              sessionStorage.setItem('teacher_private_selected_student_id', studentId)
+                              sessionStorage.setItem('teacher_private_open_new_lesson', 'true')
+                              navigateTo('privatetutoring')
+                            } else {
+                              localStorage.setItem('teacher_lesson_studio_prefill', JSON.stringify({
+                                classId: (item as any).classId || item.id,
+                                className: item.className || (item as any).name,
+                                date: selectedDateKey || new Date().toISOString().split('T')[0],
+                                topic: item.topic || '',
+                                openProgressTracker: true
+                              }))
+                              window.dispatchEvent(new CustomEvent('teacher:navigate', { detail: 'lessonstudio' }))
+                            }
                           }}
                           className="flex items-center gap-1 px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-medium shadow-sm transition-all"
-                          title="Iniciar aula com Progress Tracker"
+                          title={item.type === 'private' ? "Lançar aula para este aluno particular" : "Iniciar aula com Progress Tracker"}
                         >
-                          ▶️ Iniciar
+                          {item.type === 'private' ? '📝 Lançar Aula' : '▶️ Iniciar'}
                         </button>
                         <button
                           onClick={(e) => {
@@ -1689,15 +1747,15 @@ export default function Dashboard() {
                           style={{
                             padding: '5px 12px',
                             borderRadius: 6,
-                            border: hasPlan ? '1px solid #10b981' : '1px solid #d5c8bb',
-                            background: hasPlan ? '#f0fdf4' : '#fff',
-                            color: hasPlan ? '#15803d' : '#2c1a0e',
+                            border: hasPlan || item.type === 'private' ? '1px solid #10b981' : '1px solid #d5c8bb',
+                            background: hasPlan || item.type === 'private' ? '#f0fdf4' : '#fff',
+                            color: hasPlan || item.type === 'private' ? '#15803d' : '#2c1a0e',
                             fontSize: 11,
                             fontWeight: 700,
                             cursor: 'pointer',
                           }}
                         >
-                          {item.type === 'private' ? 'Abrir Tutoria 🎓' : hasPlan ? 'Ver Plano 📖' : 'Planejar Aula ✨'}
+                          {item.type === 'private' ? 'Ver Tutoria 🎓' : hasPlan ? 'Ver Plano 📖' : 'Planejar Aula ✨'}
                         </button>
                         {item.type !== 'private' && (
                           <button
@@ -1725,259 +1783,123 @@ export default function Dashboard() {
           </div>
 
           {/* ══════════════════════════════════════════════════════════════════════
-              ZONA 4 & 5: CONTEÚDOS DO DIA (ESQUERDA) & ATIVIDADES PENDENTES (DIREITA)
+              ZONA 4: CONTEÚDOS A MINISTRAR NO DIA / SEQUÊNCIA DIDÁTICA
              ══════════════════════════════════════════════════════════════════════ */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 16, marginBottom: 20 }}>
-            
-            {/* Coluna Esquerda: Conteúdos a Ministrar no Dia */}
+          <div style={{ marginBottom: 20 }}>
             <div style={{
               background: '#fff',
               borderRadius: 18,
               border: '1px solid #ede8dc',
-              padding: '16px 20px',
+              padding: '18px 22px',
               boxShadow: '0 3px 14px rgba(44,26,14,0.03)',
             }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <div style={{ width: 32, height: 32, borderRadius: 8, background: '#fef3c7', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <i className="ti ti-book" style={{ fontSize: 18, color: '#b58900' }} />
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, flexWrap: 'wrap', gap: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ width: 34, height: 34, borderRadius: 10, background: '#fef3c7', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <i className="ti ti-book" style={{ fontSize: 19, color: '#b58900' }} />
                   </div>
                   <div>
-                    <h3 style={{ margin: 0, fontSize: 14.5, fontWeight: 800, color: '#2c1a0e' }}>
-                      Conteúdos a Ministrar
+                    <h3 style={{ margin: 0, fontSize: 15, fontWeight: 800, color: '#2c1a0e' }}>
+                      Conteúdos a Ministrar & Sequência Didática
                     </h3>
-                    <p style={{ margin: 0, fontSize: 11, color: '#665c54' }}>
-                      Sequência didática ativa
+                    <p style={{ margin: 0, fontSize: 11.5, color: '#665c54' }}>
+                      Unidade ativa e atividades em foco para as turmas e aulas particulares
                     </p>
                   </div>
                 </div>
 
                 <button
                   onClick={() => navigateTo('didacticsequence')}
-                  style={{ background: 'none', border: 'none', color: '#8b5e3c', fontSize: 11.5, fontWeight: 700, cursor: 'pointer' }}
+                  style={{ background: 'none', border: 'none', color: '#8b5e3c', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
                 >
-                  Ver Sequência →
+                  Ver Sequência Completa →
                 </button>
               </div>
 
               {currentDidacticUnit && (
                 <div style={{
                   background: '#faf6f0',
-                  borderRadius: 12,
-                  padding: '12px 14px',
+                  borderRadius: 14,
+                  padding: '14px 16px',
                   border: '1px solid #ede8dc',
-                  marginBottom: 10,
+                  marginBottom: 12,
                 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                    <span style={{ fontSize: 10.5, fontWeight: 800, color: '#b58900', textTransform: 'uppercase' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                    <span style={{ fontSize: 11.5, fontWeight: 800, color: '#b58900', textTransform: 'uppercase' }}>
                       {currentDidacticUnit.unitTitle} ({currentDidacticUnit.level})
                     </span>
-                    <span style={{ fontSize: 10, fontWeight: 700, background: '#b58900', color: '#fff', padding: '1px 6px', borderRadius: 4 }}>
+                    <span style={{ fontSize: 10.5, fontWeight: 700, background: '#b58900', color: '#fff', padding: '2px 8px', borderRadius: 6 }}>
                       Ativa
                     </span>
                   </div>
 
-                  <div style={{ fontSize: 12, color: '#665c54', lineHeight: 1.35 }}>
+                  <div style={{ fontSize: 12.5, color: '#44352a', lineHeight: 1.45 }}>
                     📖 <strong>Tópico:</strong> {currentDidacticUnit.topic}<br />
-                    🎯 <strong>Gramática:</strong> {currentDidacticUnit.grammarFocus}
+                    🎯 <strong>Gramática & Foco:</strong> {currentDidacticUnit.grammarFocus}
                   </div>
                 </div>
               )}
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                 <button
                   onClick={() => navigateTo('quick')}
                   style={{
-                    padding: '8px 10px',
-                    borderRadius: 8,
+                    padding: '8px 14px',
+                    borderRadius: 10,
                     border: '1px solid #ede8dc',
                     background: '#fff',
                     color: '#2c1a0e',
-                    fontSize: 11.5,
+                    fontSize: 12,
                     fontWeight: 700,
                     cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 4,
+                    gap: 6,
+                    boxShadow: '0 2px 6px rgba(0,0,0,0.02)'
                   }}
                 >
-                  <i className="ti ti-bolt" style={{ color: '#b58900' }} /> Warm-up
+                  <i className="ti ti-bolt" style={{ color: '#b58900' }} /> Warm-up Oral
                 </button>
+
                 <button
                   onClick={() => navigateTo('flashcardmode')}
                   style={{
-                    padding: '8px 10px',
-                    borderRadius: 8,
+                    padding: '8px 14px',
+                    borderRadius: 10,
                     border: '1px solid #ede8dc',
                     background: '#fff',
                     color: '#2c1a0e',
-                    fontSize: 11.5,
+                    fontSize: 12,
                     fontWeight: 700,
                     cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 4,
+                    gap: 6,
+                    boxShadow: '0 2px 6px rgba(0,0,0,0.02)'
                   }}
                 >
                   <i className="ti ti-cards" style={{ color: '#268bd2' }} /> Flashcards
                 </button>
-              </div>
-            </div>
 
-            {/* Coluna Direita: Atalhos & Recursos Pedagógicos Rápidos */}
-            <div style={{
-              background: '#fff',
-              borderRadius: 18,
-              border: '1px solid #ede8dc',
-              padding: '16px 20px',
-              boxShadow: '0 3px 14px rgba(44,26,14,0.03)',
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <div style={{ width: 32, height: 32, borderRadius: 8, background: '#e0f2fe', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <i className="ti ti-sparkles" style={{ fontSize: 18, color: '#0284c7' }} />
-                  </div>
-                  <div>
-                    <h3 style={{ margin: 0, fontSize: 14.5, fontWeight: 800, color: '#2c1a0e' }}>
-                      Atalhos Rápidos de Aula
-                    </h3>
-                    <p style={{ margin: 0, fontSize: 11, color: '#665c54' }}>
-                      Ferramentas de criação e apoio com IA
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                {[
-                  { label: 'LessonStudio', icon: 'ti-file-certificate', color: '#8b5e3c', module: 'lessonstudio' as ModuleKey, desc: 'Criar Plano' },
-                  { label: 'OmniGrader', icon: 'ti-camera', color: '#16a34a', module: 'omnigrader' as ModuleKey, desc: 'Corrigir Prova' },
-                  { label: 'Simulador Oral', icon: 'ti-volume', color: '#9333ea', module: 'roleplay' as ModuleKey, desc: 'Roleplay B1/B2' },
-                  { label: 'Biblioteca', icon: 'ti-bookmarks', color: '#b45309', module: 'generator' as ModuleKey, desc: 'Banco de Ideias' },
-                ].map(tool => (
-                  <button
-                    key={tool.module}
-                    onClick={() => navigateTo(tool.module)}
-                    style={{
-                      padding: '10px 12px',
-                      borderRadius: 12,
-                      border: '1px solid #ede8dc',
-                      background: '#faf6f0',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 8,
-                      textAlign: 'left',
-                      transition: 'all 0.15s ease',
-                    }}
-                    onMouseEnter={e => { e.currentTarget.style.borderColor = '#8b5e3c'; e.currentTarget.style.background = '#fff' }}
-                    onMouseLeave={e => { e.currentTarget.style.borderColor = '#ede8dc'; e.currentTarget.style.background = '#faf6f0' }}
-                  >
-                    <i className={`ti ${tool.icon}`} style={{ fontSize: 18, color: tool.color }} />
-                    <div>
-                      <div style={{ fontSize: 12, fontWeight: 800, color: '#2c1a0e' }}>{tool.label}</div>
-                      <div style={{ fontSize: 10, color: '#8b5e3c', fontWeight: 600 }}>{tool.desc}</div>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* ══════════════════════════════════════════════════════════════════════
-              ZONA 6: PAINEL DE PLANEJAMENTO & PRÓXIMOS PASSOS
-             ══════════════════════════════════════════════════════════════════════ */}
-          <div style={{ marginBottom: 24 }}>
-            <div style={{
-              background: '#2c1a0e',
-              borderRadius: 18,
-              padding: '18px 22px',
-              color: '#fff',
-              boxShadow: '0 6px 24px rgba(44,26,14,0.12)',
-            }}>
-              <div style={{ marginBottom: 12 }}>
-                <h3 style={{ margin: 0, fontSize: 15.5, fontWeight: 800, color: '#fef3c7' }}>
-                  🗺️ Planejamento Pedagógico & Ações Rápidas
-                </h3>
-                <p style={{ margin: 0, fontSize: 11.5, color: '#d5c8bb', marginTop: 2 }}>
-                  Gere planos Cambridge TKT, crie provas inéditas ou gerencie aulas particulares
-                </p>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10 }}>
-                <div
-                  onClick={() => navigateTo('lessonstudio')}
-                  style={{
-                    background: 'rgba(255,255,255,0.08)',
-                    border: '1px solid rgba(255,255,255,0.15)',
-                    borderRadius: 12,
-                    padding: '12px 14px',
-                    cursor: 'pointer',
-                    transition: 'all 0.15s',
-                  }}
-                >
-                  <div style={{ fontSize: 18, marginBottom: 4 }}>🪄</div>
-                  <div style={{ fontSize: 13, fontWeight: 800, color: '#fff' }}>Criar Plano de Aula</div>
-                  <div style={{ fontSize: 11, color: '#d5c8bb', marginTop: 2 }}>
-                    Modelo Cambridge TKT com a Rafinha.
-                  </div>
-                </div>
-
-                <div
+                <button
                   onClick={() => navigateTo('privatetutoring')}
                   style={{
-                    background: 'rgba(255,255,255,0.08)',
-                    border: '1px solid rgba(255,255,255,0.15)',
-                    borderRadius: 12,
-                    padding: '12px 14px',
+                    padding: '8px 14px',
+                    borderRadius: 10,
+                    border: '1px solid #ede8dc',
+                    background: '#faf6f0',
+                    color: '#8b5e3c',
+                    fontSize: 12,
+                    fontWeight: 700,
                     cursor: 'pointer',
-                    transition: 'all 0.15s',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    boxShadow: '0 2px 6px rgba(0,0,0,0.02)'
                   }}
                 >
-                  <div style={{ fontSize: 18, marginBottom: 4 }}>🎓</div>
-                  <div style={{ fontSize: 13, fontWeight: 800, color: '#fff' }}>Aulas Particulares</div>
-                  <div style={{ fontSize: 11, color: '#d5c8bb', marginTop: 2 }}>
-                    Alunos, turmas, livros e sequência.
-                  </div>
-                </div>
-
-                <div
-                  onClick={() => navigateTo('exam')}
-                  style={{
-                    background: 'rgba(255,255,255,0.08)',
-                    border: '1px solid rgba(255,255,255,0.15)',
-                    borderRadius: 12,
-                    padding: '12px 14px',
-                    cursor: 'pointer',
-                    transition: 'all 0.15s',
-                  }}
-                >
-                  <div style={{ fontSize: 18, marginBottom: 4 }}>📄</div>
-                  <div style={{ fontSize: 13, fontWeight: 800, color: '#fff' }}>Elaborar Prova</div>
-                  <div style={{ fontSize: 11, color: '#d5c8bb', marginTop: 2 }}>
-                    Questões inéditas com checklist.
-                  </div>
-                </div>
-
-                <div
-                  onClick={() => navigateTo('extensions')}
-                  style={{
-                    background: 'rgba(255,255,255,0.08)',
-                    border: '1px solid rgba(255,255,255,0.15)',
-                    borderRadius: 12,
-                    padding: '12px 14px',
-                    cursor: 'pointer',
-                    transition: 'all 0.15s',
-                  }}
-                >
-                  <div style={{ fontSize: 18, marginBottom: 4 }}>⚡</div>
-                  <div style={{ fontSize: 13, fontWeight: 800, color: '#fff' }}>Portais Escolares</div>
-                  <div style={{ fontSize: 11, color: '#d5c8bb', marginTop: 2 }}>
-                    Chamadas e diários oficiais.
-                  </div>
-                </div>
+                  <i className="ti ti-school" style={{ color: '#8b5e3c' }} /> Diário de Aulas Particulares
+                </button>
               </div>
             </div>
           </div>
