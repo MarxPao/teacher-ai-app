@@ -1160,7 +1160,7 @@ export default function Dashboard() {
                   <TeacherLogo size={32} variant="badge" rounded={10} />
                   <div>
                     <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#2c1a0e', display: 'flex', alignItems: 'center', gap: 8 }}>
-                      Central de Atividades & Rotina do Dia
+                      Checklist
                     </h3>
                     <p style={{ margin: 0, fontSize: 11.5, color: '#665c54' }}>
                       {completedTodosCount} de {totalTodosCount} atividades concluídas ({unifiedProgressPct}%)
