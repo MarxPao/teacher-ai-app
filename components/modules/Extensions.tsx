@@ -1,4 +1,5 @@
 'use client'
+import { toast, showConfirm } from '@/components/Toast'
 
 import React, { useState, useEffect, useCallback } from 'react'
 import ModuleShell from '@/components/ModuleShell'
@@ -81,7 +82,7 @@ export default function Extensions() {
   const handleSavePortal = (e: React.FormEvent) => {
     e.preventDefault()
     if (!portalFormName.trim() || !portalFormUrl.trim()) {
-      alert('Preencha o nome e a URL do portal.')
+      toast.success('Preencha o nome e a URL do portal.')
       return
     }
 
@@ -147,7 +148,7 @@ export default function Extensions() {
   const handleSaveAction = (e: React.FormEvent) => {
     e.preventDefault()
     if (!selectedPortal || !actionFormTitle.trim()) {
-      alert('Informe um título para a ação.')
+      toast.success('Informe um título para a ação.')
       return
     }
 
@@ -186,9 +187,9 @@ export default function Extensions() {
     logPortalFill(payload as any)
     const res = await fillPortal(payload as any)
     if (res.success) {
-      alert(`✅ Sucesso!\n${res.message || 'Ação enviada para a aba do portal via Extensão da Rafinha.'}`)
+      toast.success(`✅ Sucesso!\n${res.message || 'Ação enviada para a aba do portal via Extensão da Rafinha.'}`)
     } else {
-      alert(`⚠️ Aviso da Extensão:\n${res.error}\n\nCertifique-se de que a aba do portal "${portal.name}" está aberta no seu Google Chrome.`)
+      toast.success(`⚠️ Aviso da Extensão:\n${res.error}\n\nCertifique-se de que a aba do portal "${portal.name}" está aberta no seu Google Chrome.`)
     }
     loadData()
   }
@@ -212,13 +213,13 @@ export default function Extensions() {
             display: 'flex',
             alignItems: 'center',
             gap: 8,
-            background: '#fdf6e3',
+            background: '#fdf8f2',
             padding: '6px 14px',
             borderRadius: 10,
             border: '1.5px solid #cb4b16'
           }}>
             <span style={{ fontSize: 12, fontWeight: 800, color: '#cb4b16' }}>🛡️ Segurança 0-Tester:</span>
-            <span style={{ fontSize: 12, fontWeight: 700, color: '#073642' }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: '#2c1a0e' }}>
               🎛️ Modo Supervisionado Obrigatório (A IA preenche visualmente no portal e aguarda seu clique em Salvar)
             </span>
           </div>
@@ -363,8 +364,8 @@ export default function Extensions() {
                       </button>
                       {p.isCustom && (
                         <button
-                          onClick={() => {
-                            if (confirm(`Remover portal ${p.name}?`)) deletePortalProfile(p.id)
+                          onClick={async () => {
+                            if ((await showConfirm({ message: `Remover portal ${p.name}?` }))) deletePortalProfile(p.id)
                           }}
                           title="Remover"
                           style={{ background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: 6, padding: '4px 8px', fontSize: 12, cursor: 'pointer', color: '#dc2626' }}
@@ -421,7 +422,7 @@ export default function Extensions() {
                   </button>
 
                   <button
-                    onClick={() => {
+                    onClick={async () => {
                       setSelectedPortal(p)
                       setActiveTab('actions')
                     }}
@@ -518,8 +519,8 @@ export default function Extensions() {
                           </button>
                           {action.isCustom && (
                             <button
-                              onClick={() => {
-                                if (confirm(`Remover ação "${action.title}"?`)) {
+                              onClick={async () => {
+                                if ((await showConfirm({ message: `Remover ação "${action.title}"?` }))) {
                                   deletePortalAction(selectedPortal.id, action.id)
                                   loadData()
                                 }
@@ -767,7 +768,7 @@ export default function Extensions() {
                     <select
                       value="supervised"
                       disabled
-                      style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #d5c8bb', fontSize: 13, outline: 'none', background: '#f5f0eb', color: '#586e75' }}
+                      style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #d5c8bb', fontSize: 13, outline: 'none', background: '#f5f0eb', color: '#7a5c42' }}
                     >
                       <option value="supervised">🎛️ Supervisionado (Preenche e aguarda seu clique)</option>
                     </select>

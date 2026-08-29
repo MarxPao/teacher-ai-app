@@ -1,4 +1,5 @@
 'use client'
+import { toast, showConfirm } from '@/components/Toast'
 
 import { useState, useEffect } from 'react'
 import { captureImageFile, extractContentFromImage } from '@/lib/ocrCapture'
@@ -146,12 +147,12 @@ export default function OmniGrader({ initialTab = 'photo' }: OmniGraderProps) {
       setPhotoGradeResult(null)
       setLaunchedPhoto(false)
     } catch (e) {
-      alert(`Falha ao selecionar imagem: ${String(e)}`)
+      toast.success(`Falha ao selecionar imagem: ${String(e)}`)
     }
   }
 
   async function handleGradePhoto() {
-    if (!imageUri) { alert('Selecione ou tire a foto da prova primeiro.'); return }
+    if (!imageUri) { toast.success('Selecione ou tire a foto da prova primeiro.'); return }
     const apis = JSON.parse(localStorage.getItem('teacher_apis') || '[]')
     const activeApi = apis.find((a: any) => a.active && a.key) || { id: 'auto', provider: 'gemini', key: 'auto' }
 
@@ -186,7 +187,7 @@ export default function OmniGrader({ initialTab = 'photo' }: OmniGraderProps) {
         rawText: ocr.rawText
       })
     } catch (err: any) {
-      alert(`Erro no processamento OCR: ${err.message || 'Verifique sua chave de IA'}`)
+      toast.success(`Erro no processamento OCR: ${err.message || 'Verifique sua chave de IA'}`)
     } finally {
       setIsGradingPhoto(false)
     }
@@ -217,7 +218,7 @@ export default function OmniGrader({ initialTab = 'photo' }: OmniGraderProps) {
       )
 
       window.dispatchEvent(new Event('storage'))
-      alert(`Nota ${photoGradeResult.score}/10 lançada com sucesso para ${updated[idx].name}!`)
+      toast.success(`Nota ${photoGradeResult.score}/10 lançada com sucesso para ${updated[idx].name}!`)
     }
   }
 
@@ -228,13 +229,13 @@ export default function OmniGrader({ initialTab = 'photo' }: OmniGraderProps) {
       setEssayImageUri(base64)
       setOcrWarning(null)
     } catch (e) {
-      alert(`Falha ao selecionar imagem: ${String(e)}`)
+      toast.success(`Falha ao selecionar imagem: ${String(e)}`)
     }
   }
 
   async function handleExtractEssayOcr() {
     if (!essayImageUri) {
-      alert('Selecione ou tire a foto da redação manuscrita primeiro.')
+      toast.success('Selecione ou tire a foto da redação manuscrita primeiro.')
       return
     }
 
@@ -260,7 +261,7 @@ export default function OmniGrader({ initialTab = 'photo' }: OmniGraderProps) {
   }
   async function handleEvaluateCambridgeEssay() {
     if (!studentEssayText.trim()) {
-      alert('Cole ou digite a redação do aluno para iniciar a avaliação.')
+      toast.success('Cole ou digite a redação do aluno para iniciar a avaliação.')
       return
     }
 
@@ -486,7 +487,7 @@ Retorne ESTRITAMENTE um objeto JSON no seguinte formato (sem markdown, sem bloco
 
       setEssayEvaluation(combinedEvaluation)
     } catch (err: any) {
-      alert(`Erro na avaliação da redação: ${err.message || 'Tente novamente'}`)
+      toast.success(`Erro na avaliação da redação: ${err.message || 'Tente novamente'}`)
     } finally {
       setIsEvaluatingEssay(false)
     }
@@ -527,7 +528,7 @@ Retorne ESTRITAMENTE um objeto JSON no seguinte formato (sem markdown, sem bloco
       }
 
       window.dispatchEvent(new Event('storage'))
-      alert(`Nota ${essayEvaluation.overallScore}/10 lançada com sucesso no Gradebook de ${updated[idx].name}!`)
+      toast.success(`Nota ${essayEvaluation.overallScore}/10 lançada com sucesso no Gradebook de ${updated[idx].name}!`)
     }
   }
 
@@ -608,13 +609,13 @@ ${essayEvaluation.studentActionPlan}
         <div style={{ display: 'flex', gap: 6, background: '#fffcf8', padding: 4, borderRadius: 12, border: '1px solid #d5c0b0' }}>
           <button
             onClick={() => setActiveTab('essay')}
-            style={{ ...S.tabBtn, background: activeTab === 'essay' ? '#8b5e3c' : 'transparent', color: activeTab === 'essay' ? '#fff' : '#586e75' }}
+            style={{ ...S.tabBtn, background: activeTab === 'essay' ? '#8b5e3c' : 'transparent', color: activeTab === 'essay' ? '#fff' : '#7a5c42' }}
           >
             <i className="ti ti-pencil"></i> Redação Cambridge (4D)
           </button>
           <button
             onClick={() => setActiveTab('photo')}
-            style={{ ...S.tabBtn, background: activeTab === 'photo' ? '#8b5e3c' : 'transparent', color: activeTab === 'photo' ? '#fff' : '#586e75' }}
+            style={{ ...S.tabBtn, background: activeTab === 'photo' ? '#8b5e3c' : 'transparent', color: activeTab === 'photo' ? '#fff' : '#7a5c42' }}
           >
             <i className="ti ti-camera"></i> Gabarito por Foto / OCR
           </button>
@@ -698,7 +699,7 @@ ${essayEvaluation.studentActionPlan}
                       borderRadius: 8,
                       border: essayInputMode === 'text' ? '2px solid #8b5e3c' : '1px solid #d5c0b0',
                       background: essayInputMode === 'text' ? '#f5eee6' : '#fff',
-                      color: essayInputMode === 'text' ? '#8b5e3c' : '#586e75',
+                      color: essayInputMode === 'text' ? '#8b5e3c' : '#7a5c42',
                       fontWeight: 700,
                       fontSize: 12,
                       cursor: 'pointer',
@@ -718,7 +719,7 @@ ${essayEvaluation.studentActionPlan}
                       borderRadius: 8,
                       border: essayInputMode === 'photo' ? '2px solid #8b5e3c' : '1px solid #d5c0b0',
                       background: essayInputMode === 'photo' ? '#f5eee6' : '#fff',
-                      color: essayInputMode === 'photo' ? '#8b5e3c' : '#586e75',
+                      color: essayInputMode === 'photo' ? '#8b5e3c' : '#7a5c42',
                       fontWeight: 700,
                       fontSize: 12,
                       cursor: 'pointer',

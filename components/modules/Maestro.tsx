@@ -1,4 +1,5 @@
 'use client'
+import { toast, showConfirm } from '@/components/Toast'
 
 import { useState, useEffect } from 'react'
 
@@ -110,7 +111,7 @@ export default function Maestro() {
  }))
  window.dispatchEvent(new Event('teacher:portal_sync'))
 
- alert(` "${item.title}" sincronizado com o Plurall / Portal Escolar com sucesso!`)
+ toast.success(` "${item.title}" sincronizado com o Plurall / Portal Escolar com sucesso!`)
  }
 
  const handleSendWhatsappLink = (title: string) => {
@@ -157,11 +158,11 @@ export default function Maestro() {
  <h1 style={{  textAlign: 'center', fontFamily: "'Fraunces', Georgia, serif", fontSize: 34, fontWeight: 600, color: '#2c1a0e', margin: '0 auto'  }}>
  Maestro 
  </h1>
- <span style={{ background: '#073642', color: '#b58900', fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 12, textTransform: 'uppercase' }}>
+ <span style={{ background: '#2c1a0e', color: '#b58900', fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 12, textTransform: 'uppercase' }}>
  Gestão & Envio de Atividades
  </span>
  </div>
- <p style={{ color: '#586e75', fontSize: 14, marginTop: 4 }}>
+ <p style={{ color: '#7a5c42', fontSize: 14, marginTop: 4 }}>
  Distribua tarefas, sincronize com portais escolares (Plurall / Sistemas), envie por WhatsApp e acompanhe entregas em tempo real.
  </p>
  </div>
@@ -170,7 +171,7 @@ export default function Maestro() {
  onClick={() => setShowCreateModal(true)}
  style={{
  padding: '12px 20px', borderRadius: 12, border: 'none',
- background: '#073642', color: '#fff', fontSize: 14, fontWeight: 700,
+ background: '#2c1a0e', color: '#fff', fontSize: 14, fontWeight: 700,
  cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
  boxShadow: '0 4px 14px rgba(7,54,66,0.18)',
  }}
@@ -181,24 +182,24 @@ export default function Maestro() {
 
  {/* Stats Cards */}
  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 24 }}>
- <div style={{ background: '#fff', padding: 18, borderRadius: 16, border: '1px solid #ede8dc', boxShadow: '0 2px 8px rgba(0,43,54,0.03)' }}>
- <span style={{ fontSize: 12, fontWeight: 600, color: '#586e75', textTransform: 'uppercase' }}>Atividades Ativas</span>
- <div style={{ fontSize: 26, fontWeight: 700, color: '#073642', marginTop: 4 }}>{activities.length}</div>
+ <div style={{ background: '#fff', padding: 18, borderRadius: 16, border: '1px solid #ede8dc', boxShadow: '0 2px 8px rgba(44,26,14,0.03)' }}>
+ <span style={{ fontSize: 12, fontWeight: 600, color: '#7a5c42', textTransform: 'uppercase' }}>Atividades Ativas</span>
+ <div style={{ fontSize: 26, fontWeight: 700, color: '#2c1a0e', marginTop: 4 }}>{activities.length}</div>
  </div>
- <div style={{ background: '#fff', padding: 18, borderRadius: 16, border: '1px solid #ede8dc', boxShadow: '0 2px 8px rgba(0,43,54,0.03)' }}>
- <span style={{ fontSize: 12, fontWeight: 600, color: '#586e75', textTransform: 'uppercase' }}>Taxa de Entrega Média</span>
+ <div style={{ background: '#fff', padding: 18, borderRadius: 16, border: '1px solid #ede8dc', boxShadow: '0 2px 8px rgba(44,26,14,0.03)' }}>
+ <span style={{ fontSize: 12, fontWeight: 600, color: '#7a5c42', textTransform: 'uppercase' }}>Taxa de Entrega Média</span>
  <div style={{ fontSize: 26, fontWeight: 700, color: '#859900', marginTop: 4 }}>
  {Math.round((activities.reduce((acc, a) => acc + (a.submittedCount / (a.totalStudents || 1)), 0) / (activities.length || 1)) * 100)}%
  </div>
  </div>
- <div style={{ background: '#fff', padding: 18, borderRadius: 16, border: '1px solid #ede8dc', boxShadow: '0 2px 8px rgba(0,43,54,0.03)' }}>
- <span style={{ fontSize: 12, fontWeight: 600, color: '#586e75', textTransform: 'uppercase' }}>Sincronizadas com Portais</span>
+ <div style={{ background: '#fff', padding: 18, borderRadius: 16, border: '1px solid #ede8dc', boxShadow: '0 2px 8px rgba(44,26,14,0.03)' }}>
+ <span style={{ fontSize: 12, fontWeight: 600, color: '#7a5c42', textTransform: 'uppercase' }}>Sincronizadas com Portais</span>
  <div style={{ fontSize: 26, fontWeight: 700, color: '#268bd2', marginTop: 4 }}>
  {activities.filter(a => a.portalSynced).length} / {activities.length}
  </div>
  </div>
- <div style={{ background: '#fff', padding: 18, borderRadius: 16, border: '1px solid #ede8dc', boxShadow: '0 2px 8px rgba(0,43,54,0.03)' }}>
- <span style={{ fontSize: 12, fontWeight: 600, color: '#586e75', textTransform: 'uppercase' }}>Simulados ENEM & Vestibulares</span>
+ <div style={{ background: '#fff', padding: 18, borderRadius: 16, border: '1px solid #ede8dc', boxShadow: '0 2px 8px rgba(44,26,14,0.03)' }}>
+ <span style={{ fontSize: 12, fontWeight: 600, color: '#7a5c42', textTransform: 'uppercase' }}>Simulados ENEM & Vestibulares</span>
  <div style={{ fontSize: 26, fontWeight: 700, color: '#cb4b16', marginTop: 4 }}>
  {activities.filter(a => a.type === 'ENEM Simulado').length}
  </div>
@@ -208,18 +209,18 @@ export default function Maestro() {
  {/* Filter Bar */}
  <div style={{ background: '#fff', padding: '14px 20px', borderRadius: 16, border: '1px solid #ede8dc', marginBottom: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
- <span style={{ fontSize: 13, fontWeight: 700, color: '#073642' }}>Filtrar por Turma:</span>
+ <span style={{ fontSize: 13, fontWeight: 700, color: '#2c1a0e' }}>Filtrar por Turma:</span>
  <select
  value={filterClass}
  onChange={e => setFilterClass(e.target.value)}
- style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, color: '#073642', outline: 'none' }}
+ style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, color: '#2c1a0e', outline: 'none' }}
  >
  <option value="all">Todas as Turmas</option>
  {classesList.map(c => <option key={c} value={c}>{c}</option>)}
  </select>
  </div>
 
- <span style={{ fontSize: 12, color: '#93a1a1' }}>
+ <span style={{ fontSize: 12, color: '#a08060' }}>
  Exibindo {filtered.length} atividade(s)
  </span>
  </div>
@@ -233,7 +234,7 @@ export default function Maestro() {
  key={item.id}
  style={{
  background: '#fff', borderRadius: 16, padding: '20px',
- border: '1px solid #ede8dc', boxShadow: '0 2px 10px rgba(0,43,54,0.04)',
+ border: '1px solid #ede8dc', boxShadow: '0 2px 10px rgba(44,26,14,0.04)',
  display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 20,
  }}
  >
@@ -241,8 +242,8 @@ export default function Maestro() {
  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
  <span style={{
  fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 6, textTransform: 'uppercase',
- background: item.type === 'ENEM Simulado' ? '#fce9e8' : item.type === 'Exam' ? '#eee8d5' : '#f0ede4',
- color: item.type === 'ENEM Simulado' ? '#cb4b16' : item.type === 'Exam' ? '#073642' : '#586e75',
+ background: item.type === 'ENEM Simulado' ? '#fce9e8' : item.type === 'Exam' ? '#f0e8d8' : '#f0ede4',
+ color: item.type === 'ENEM Simulado' ? '#cb4b16' : item.type === 'Exam' ? '#2c1a0e' : '#7a5c42',
  }}>
  {item.type}
  </span>
@@ -262,15 +263,15 @@ export default function Maestro() {
  )}
  </div>
 
- <h3 style={{ fontSize: 16, fontWeight: 700, color: '#073642', margin: 0 }}>
+ <h3 style={{ fontSize: 16, fontWeight: 700, color: '#2c1a0e', margin: 0 }}>
  {item.title}
  </h3>
 
- <p style={{ fontSize: 12.5, color: '#586e75', margin: 0 }}>
+ <p style={{ fontSize: 12.5, color: '#7a5c42', margin: 0 }}>
  {item.contentSnippet}
  </p>
 
- <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginTop: 4, fontSize: 12, color: '#93a1a1' }}>
+ <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginTop: 4, fontSize: 12, color: '#a08060' }}>
  <span> Prazo: <strong>{new Date(item.dueDate).toLocaleDateString('pt-BR')}</strong></span>
  <span> Entregas: <strong>{item.submittedCount} / {item.totalStudents} alunos ({pct}%)</strong></span>
  </div>
@@ -279,11 +280,11 @@ export default function Maestro() {
  {/* Progress bar and Action buttons */}
  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 10 }}>
  <div style={{ width: 160, display: 'flex', flexDirection: 'column', gap: 4 }}>
- <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#586e75', fontWeight: 600 }}>
+ <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#7a5c42', fontWeight: 600 }}>
  <span>Progresso</span>
  <span>{pct}%</span>
  </div>
- <div style={{ width: '100%', height: 6, background: '#eee8d5', borderRadius: 3, overflow: 'hidden' }}>
+ <div style={{ width: '100%', height: 6, background: '#f0e8d8', borderRadius: 3, overflow: 'hidden' }}>
  <div style={{ width: `${pct}%`, height: '100%', background: pct > 75 ? '#859900' : pct > 40 ? '#b58900' : '#268bd2', borderRadius: 3 }} />
  </div>
  </div>
@@ -304,8 +305,8 @@ export default function Maestro() {
  onClick={() => handleSyncPortal(item.id)}
  style={{
  padding: '7px 14px', borderRadius: 8, border: 'none',
- background: item.portalSynced ? '#eee8d5' : '#073642',
- color: item.portalSynced ? '#586e75' : '#fff', fontSize: 12,
+ background: item.portalSynced ? '#f0e8d8' : '#2c1a0e',
+ color: item.portalSynced ? '#7a5c42' : '#fff', fontSize: 12,
  fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
  }}
  >
@@ -321,29 +322,29 @@ export default function Maestro() {
  {/* Modal Nova Atividade */}
  {showCreateModal && (
  <div style={{ position: 'fixed', inset: 0, background: 'rgba(7,54,66,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(3px)' }}>
- <div style={{ background: '#fff', borderRadius: 20, padding: 28, width: 440, maxWidth: '90vw', display: 'flex', flexDirection: 'column', gap: 16, boxShadow: '0 12px 40px rgba(0,43,54,0.2)' }}>
+ <div style={{ background: '#fff', borderRadius: 20, padding: 28, width: 440, maxWidth: '90vw', display: 'flex', flexDirection: 'column', gap: 16, boxShadow: '0 12px 40px rgba(44,26,14,0.2)' }}>
  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
  <h3 style={{ fontSize: 18, fontWeight: 700, color: '#2c1a0e', margin: 0 }}>
  Nova Atividade no Maestro
  </h3>
- <button onClick={() => setShowCreateModal(false)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: '#93a1a1' }}>×</button>
+ <button onClick={() => setShowCreateModal(false)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: '#a08060' }}>×</button>
  </div>
 
  <div>
- <label style={{ fontSize: 12, fontWeight: 600, color: '#586e75', display: 'block', marginBottom: 4 }}>Título da Atividade</label>
+ <label style={{ fontSize: 12, fontWeight: 600, color: '#7a5c42', display: 'block', marginBottom: 4 }}>Título da Atividade</label>
  <input value={newTitle} onChange={e => setNewTitle(e.target.value)} placeholder="Ex: Lista 3 Past Perfect & Vocabulary..." style={{ width: '100%', padding: '10px', borderRadius: 8, border: '1px solid #e8e0d0', fontSize: 13, boxSizing: 'border-box' }} />
  </div>
 
  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
  <div>
- <label style={{ fontSize: 12, fontWeight: 600, color: '#586e75', display: 'block', marginBottom: 4 }}>Turma</label>
+ <label style={{ fontSize: 12, fontWeight: 600, color: '#7a5c42', display: 'block', marginBottom: 4 }}>Turma</label>
  <select value={newClass} onChange={e => setNewClass(e.target.value)} style={{ width: '100%', padding: '8px', borderRadius: 8, border: '1px solid #e8e0d0', fontSize: 13 }}>
  {classesListFromStorage.map(c => <option key={c} value={c}>{c}</option>)}
  </select>
  </div>
 
  <div>
- <label style={{ fontSize: 12, fontWeight: 600, color: '#586e75', display: 'block', marginBottom: 4 }}>Tipo</label>
+ <label style={{ fontSize: 12, fontWeight: 600, color: '#7a5c42', display: 'block', marginBottom: 4 }}>Tipo</label>
  <select value={newType} onChange={e => setNewType(e.target.value as any)} style={{ width: '100%', padding: '8px', borderRadius: 8, border: '1px solid #e8e0d0', fontSize: 13 }}>
  <option value="Homework">Dever de Casa</option>
  <option value="ENEM Simulado">Simulado ENEM</option>
@@ -354,13 +355,13 @@ export default function Maestro() {
  </div>
 
  <div>
- <label style={{ fontSize: 12, fontWeight: 600, color: '#586e75', display: 'block', marginBottom: 4 }}>Data Limite de Entrega</label>
+ <label style={{ fontSize: 12, fontWeight: 600, color: '#7a5c42', display: 'block', marginBottom: 4 }}>Data Limite de Entrega</label>
  <input type="date" value={newDueDate} onChange={e => setNewDueDate(e.target.value)} style={{ width: '100%', padding: '8px', borderRadius: 8, border: '1px solid #e8e0d0', fontSize: 13, boxSizing: 'border-box' }} />
  </div>
 
  <button
  onClick={handleCreateActivity}
- style={{ padding: '12px', borderRadius: 10, border: 'none', background: '#073642', color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer', marginTop: 8 }}
+ style={{ padding: '12px', borderRadius: 10, border: 'none', background: '#2c1a0e', color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer', marginTop: 8 }}
  >
  Criar Atividade no Maestro
  </button>

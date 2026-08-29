@@ -1,4 +1,5 @@
 'use client'
+import { toast, showConfirm } from '@/components/Toast'
 
 import React, { useState, useEffect, useRef } from 'react'
 
@@ -128,7 +129,7 @@ export default function StudentExamPlayer({
         if (document.hidden) {
           setTabSwitchCount(prev => {
             const next = prev + 1
-            alert(`Atenção: troca de aba detectada! Ocorrências: ${next}`)
+            toast.success(`Atenção: troca de aba detectada! Ocorrências: ${next}`)
             return next
           })
         }
@@ -159,7 +160,7 @@ export default function StudentExamPlayer({
   const handleSubmit = (e: React.FormEvent | Event) => {
     if (e.preventDefault) e.preventDefault()
     if (!studentName.trim()) {
-      alert('Por favor, informe seu nome antes de enviar a prova.')
+      toast.success('Por favor, informe seu nome antes de enviar a prova.')
       return
     }
 
@@ -308,7 +309,7 @@ export default function StudentExamPlayer({
               PROVA ONLINE PARA ALUNOS
             </div>
             <h2 style={{ fontSize: 20, fontWeight: 800, color: '#2c1a0e', margin: '4px 0 0 0' }}>{title}</h2>
-            <div style={{ fontSize: 13, color: '#586e75', marginTop: 2 }}>{schoolName} {className}</div>
+            <div style={{ fontSize: 13, color: '#7a5c42', marginTop: 2 }}>{schoolName} {className}</div>
           </div>
           <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
             <div className="flex gap-2 text-sm" style={{ display: 'flex', gap: '8px', fontSize: '0.875rem' }}>
@@ -463,7 +464,7 @@ export default function StudentExamPlayer({
             <h3 style={{ fontSize: 22, fontWeight: 800, color: '#2c1a0e' }}>
               Prova Enviada com Sucesso!
             </h3>
-            <p style={{ fontSize: 14, color: '#586e75', margin: '8px 0 20px 0' }}>
+            <p style={{ fontSize: 14, color: '#7a5c42', margin: '8px 0 20px 0' }}>
               Obrigado, <strong>{studentName}</strong>. Suas respostas foram computadas e enviadas diretamente para o diário do professor.
             </p>
             {kioskMode && tabSwitchCount > 0 && (

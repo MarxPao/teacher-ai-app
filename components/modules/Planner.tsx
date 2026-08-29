@@ -1,4 +1,5 @@
 'use client'
+import { toast, showConfirm } from '@/components/Toast'
 
 import { useState, useEffect } from 'react'
 import {
@@ -253,7 +254,7 @@ export default function Planner() {
 
   const handleSaveSchedulePost = () => {
     if (!scheduleFormTopic.trim()) {
-      alert('Por favor, informe o tópico/título da aula na grade.')
+      toast.success('Por favor, informe o tópico/título da aula na grade.')
       return
     }
 
@@ -429,8 +430,8 @@ export default function Planner() {
   }
 
   // Handle task delete
-  const deleteTask = (id: string) => {
-    if (confirm('Deseja realmente excluir esta tarefa?')) {
+  const deleteTask = async (id: string) => {
+    if ((await showConfirm({ message: 'Deseja realmente excluir esta tarefa?' }))) {
       const updated = tasks.filter(t => t.id !== id)
       saveTasks(updated)
       if (editingTask?.id === id) {
@@ -573,7 +574,7 @@ export default function Planner() {
   const urgentCount = tasks.filter(t => !t.done && getDaysUntil(t.date) <= 2).length
 
   return (
-    <div className="min-h-full flex flex-col" style={{ padding: '36px 48px', maxWidth: 1440, margin: '0 auto', background: '#fdf6e3', fontFamily: "'Outfit', sans-serif" }}>
+    <div className="min-h-full flex flex-col" style={{ padding: '36px 48px', maxWidth: 1440, margin: '0 auto', background: '#fdf8f2', fontFamily: "'Outfit', sans-serif" }}>
       
       {/* Toast Alert overlay notifications */}
       {toastMessage && (
@@ -596,7 +597,7 @@ export default function Planner() {
               </span>
             )}
           </div>
-          <p style={{ color: '#586e75', fontSize: 14, marginTop: 4 }}>
+          <p style={{ color: '#7a5c42', fontSize: 14, marginTop: 4 }}>
             Organize suas tarefas, provas e correções em um painel interativo de post-its com contadores de prazos.
           </p>
         </div>
@@ -635,11 +636,11 @@ export default function Planner() {
 
           {mostUrgentTask && heroCountdown ? (
             <div>
-              <h3 style={{ fontSize: 20, fontWeight: 700, color: '#073642', marginBottom: 4 }}>
+              <h3 style={{ fontSize: 20, fontWeight: 700, color: '#2c1a0e', marginBottom: 4 }}>
                 {mostUrgentTask.title}
               </h3>
-              <p style={{ fontSize: 13, color: '#586e75', marginBottom: 20 }}>
-                💡 Turma: <strong style={{ color: '#073642' }}>{mostUrgentTask.classRef || 'Geral'}</strong> · 
+              <p style={{ fontSize: 13, color: '#7a5c42', marginBottom: 20 }}>
+                💡 Turma: <strong style={{ color: '#2c1a0e' }}>{mostUrgentTask.classRef || 'Geral'}</strong> · 
                 Prazo final: <strong>{new Date(mostUrgentTask.date + 'T00:00:00').toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' })}</strong>
               </p>
 
@@ -669,7 +670,7 @@ export default function Planner() {
           ) : (
             <div style={{ padding: '24px 0', display: 'flex', flexDirection: 'column', gap: 8 }}>
               <h3 style={{ fontSize: 18, fontWeight: 700, color: '#859900' }}>✓ Nenhuma atividade pendente cadastrada!</h3>
-              <p style={{ fontSize: 13, color: '#93a1a1' }}>
+              <p style={{ fontSize: 13, color: '#a08060' }}>
                 Seu calendário está pronto. Clique em um dia na grade ou use o botão à direita para agendar seus prazos e aulas reais.
               </p>
             </div>
@@ -678,7 +679,7 @@ export default function Planner() {
 
         {/* Right Side: Quick Action buttons */}
         <div style={HeroActionsCard}>
-          <h4 style={{ fontSize: 13, fontWeight: 700, color: '#073642', marginBottom: 12 }}>⚡ Ações Rápidas</h4>
+          <h4 style={{ fontSize: 13, fontWeight: 700, color: '#2c1a0e', marginBottom: 12 }}>⚡ Ações Rápidas</h4>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {/* New Task button */}
             <button onClick={() => handleOpenAddModal()} style={SuggestionBtn}>
@@ -709,7 +710,7 @@ export default function Planner() {
               onClick={() => setActiveTab(tab.id as any)}
               style={{
                 background: 'none', border: 'none', padding: '8px 14px', fontSize: 14.5, fontWeight: 600, cursor: 'pointer',
-                color: activeTab === tab.id ? '#073642' : '#93a1a1',
+                color: activeTab === tab.id ? '#2c1a0e' : '#a08060',
                 borderBottom: activeTab === tab.id ? '4px solid #b58900' : '4px solid transparent',
                 marginBottom: -14, transition: 'all 0.2s', display: 'flex', alignItems: 'center', gap: 8
               }}
@@ -724,7 +725,7 @@ export default function Planner() {
         {activeTab === 'calendar' && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <button onClick={prevMonth} style={MonthNavBtn}>‹</button>
-            <span style={{ fontSize: 16, fontWeight: 700, color: '#073642', minWidth: 150, textAlign: 'center', cursor: 'pointer' }} onClick={setToday}>
+            <span style={{ fontSize: 16, fontWeight: 700, color: '#2c1a0e', minWidth: 150, textAlign: 'center', cursor: 'pointer' }} onClick={setToday}>
               {MONTHS[month]} {year}
             </span>
             <button onClick={nextMonth} style={MonthNavBtn}>›</button>
@@ -738,11 +739,11 @@ export default function Planner() {
         {/* ==================== TAB 1: CALENDÁRIO MENSAL ==================== */}
         {activeTab === 'calendar' && (
           <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: 16, height: '100%' }}>
-            <div style={{ background: '#fff', borderRadius: 24, border: '1px solid rgba(88,110,117,0.1)', boxShadow: '0 8px 32px rgba(0,43,54,0.03)', padding: 18, overflow: 'hidden' }}>
+            <div style={{ background: '#fff', borderRadius: 24, border: '1px solid rgba(88,110,117,0.1)', boxShadow: '0 8px 32px rgba(44,26,14,0.03)', padding: 18, overflow: 'hidden' }}>
               {/* Day Titles */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', textAlign: 'center', borderBottom: '1px solid rgba(88,110,117,0.1)', paddingBottom: 10, marginBottom: 8 }}>
                 {DAYS_SHORT.map((day, i) => (
-                  <span key={day} style={{ fontWeight: 700, fontSize: 13, color: i === 0 || i === 6 ? '#cb4b16' : '#93a1a1' }}>
+                  <span key={day} style={{ fontWeight: 700, fontSize: 13, color: i === 0 || i === 6 ? '#cb4b16' : '#a08060' }}>
                     {day}
                   </span>
                 ))}
@@ -773,7 +774,7 @@ export default function Planner() {
                       }}
                       onMouseEnter={(e) => {
                         e.currentTarget.style.transform = 'translateY(-2px)'
-                        e.currentTarget.style.boxShadow = '0 6px 16px rgba(0,43,54,0.04)'
+                        e.currentTarget.style.boxShadow = '0 6px 16px rgba(44,26,14,0.04)'
                         e.currentTarget.style.borderColor = 'rgba(181, 137, 0, 0.3)'
                       }}
                       onMouseLeave={(e) => {
@@ -785,7 +786,7 @@ export default function Planner() {
                       {/* Day number */}
                       <span style={{
                         fontSize: 13, fontWeight: 700,
-                        color: !dayInfo.isCurrentMonth ? '#cbd5e1' : isToday ? '#b58900' : '#586e75',
+                        color: !dayInfo.isCurrentMonth ? '#cbd5e1' : isToday ? '#b58900' : '#7a5c42',
                         background: isToday ? 'rgba(181,137,0,0.1)' : 'transparent',
                         borderRadius: 8, padding: '2px 6px', alignSelf: 'flex-start'
                       }}>
@@ -864,33 +865,33 @@ export default function Planner() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
               {/* KPI Badges */}
               <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                <div style={{ background: '#fff', padding: '12px 18px', borderRadius: 14, border: '1px solid rgba(88,110,117,0.12)', display: 'flex', alignItems: 'center', gap: 12, boxShadow: '0 2px 8px rgba(0,43,54,0.03)' }}>
+                <div style={{ background: '#fff', padding: '12px 18px', borderRadius: 14, border: '1px solid rgba(88,110,117,0.12)', display: 'flex', alignItems: 'center', gap: 12, boxShadow: '0 2px 8px rgba(44,26,14,0.03)' }}>
                   <div style={{ width: 38, height: 38, borderRadius: 10, background: '#f5efe6', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#8b5e3c', fontSize: 18 }}>
                     <i className="ti ti-calendar-event" />
                   </div>
                   <div>
-                    <div style={{ fontSize: 18, fontWeight: 800, color: '#073642' }}>{totalWeeklyClasses}</div>
-                    <div style={{ fontSize: 11, color: '#586e75', fontWeight: 600 }}>Aulas na Grade</div>
+                    <div style={{ fontSize: 18, fontWeight: 800, color: '#2c1a0e' }}>{totalWeeklyClasses}</div>
+                    <div style={{ fontSize: 11, color: '#7a5c42', fontWeight: 600 }}>Aulas na Grade</div>
                   </div>
                 </div>
 
-                <div style={{ background: '#fff', padding: '12px 18px', borderRadius: 14, border: '1px solid rgba(88,110,117,0.12)', display: 'flex', alignItems: 'center', gap: 12, boxShadow: '0 2px 8px rgba(0,43,54,0.03)' }}>
+                <div style={{ background: '#fff', padding: '12px 18px', borderRadius: 14, border: '1px solid rgba(88,110,117,0.12)', display: 'flex', alignItems: 'center', gap: 12, boxShadow: '0 2px 8px rgba(44,26,14,0.03)' }}>
                   <div style={{ width: 38, height: 38, borderRadius: 10, background: '#e8f7ee', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#2d7a00', fontSize: 18 }}>
                     <i className="ti ti-circle-check" />
                   </div>
                   <div>
                     <div style={{ fontSize: 18, fontWeight: 800, color: '#2d7a00' }}>{prepPercentage}%</div>
-                    <div style={{ fontSize: 11, color: '#586e75', fontWeight: 600 }}>Aulas Preparadas</div>
+                    <div style={{ fontSize: 11, color: '#7a5c42', fontWeight: 600 }}>Aulas Preparadas</div>
                   </div>
                 </div>
 
-                <div style={{ background: '#fff', padding: '12px 18px', borderRadius: 14, border: '1px solid rgba(88,110,117,0.12)', display: 'flex', alignItems: 'center', gap: 12, boxShadow: '0 2px 8px rgba(0,43,54,0.03)' }}>
+                <div style={{ background: '#fff', padding: '12px 18px', borderRadius: 14, border: '1px solid rgba(88,110,117,0.12)', display: 'flex', alignItems: 'center', gap: 12, boxShadow: '0 2px 8px rgba(44,26,14,0.03)' }}>
                   <div style={{ width: 38, height: 38, borderRadius: 10, background: '#e8f4fd', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#268bd2', fontSize: 18 }}>
                     <i className="ti ti-users" />
                   </div>
                   <div>
                     <div style={{ fontSize: 18, fontWeight: 800, color: '#268bd2' }}>{uniqueClassesCount}</div>
-                    <div style={{ fontSize: 11, color: '#586e75', fontWeight: 600 }}>Turmas Atendidas</div>
+                    <div style={{ fontSize: 11, color: '#7a5c42', fontWeight: 600 }}>Turmas Atendidas</div>
                   </div>
                 </div>
               </div>
@@ -900,7 +901,7 @@ export default function Planner() {
                 <select
                   value={filterAgendaClass}
                   onChange={e => setFilterAgendaClass(e.target.value)}
-                  style={{ padding: '8px 12px', borderRadius: 10, border: '1px solid rgba(88,110,117,0.2)', background: '#fff', fontSize: 13, color: '#073642', fontWeight: 600 }}
+                  style={{ padding: '8px 12px', borderRadius: 10, border: '1px solid rgba(88,110,117,0.2)', background: '#fff', fontSize: 13, color: '#2c1a0e', fontWeight: 600 }}
                 >
                   <option value="all">Todas as Turmas ({schedule.length})</option>
                   {classes.map(c => (
@@ -909,13 +910,13 @@ export default function Planner() {
                 </select>
 
                 <div style={{ position: 'relative' }}>
-                  <i className="ti ti-search" style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#93a1a1', fontSize: 13 }} />
+                  <i className="ti ti-search" style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#a08060', fontSize: 13 }} />
                   <input
                     type="text"
                     placeholder="Buscar tópico..."
                     value={searchAgendaTopic}
                     onChange={e => setSearchAgendaTopic(e.target.value)}
-                    style={{ padding: '8px 12px 8px 30px', borderRadius: 10, border: '1px solid rgba(88,110,117,0.2)', background: '#fff', fontSize: 13, color: '#073642', width: 170 }}
+                    style={{ padding: '8px 12px 8px 30px', borderRadius: 10, border: '1px solid rgba(88,110,117,0.2)', background: '#fff', fontSize: 13, color: '#2c1a0e', width: 170 }}
                   />
                 </div>
 
@@ -947,8 +948,8 @@ export default function Planner() {
                       {/* Column Header */}
                       <div style={{ background: '#fdfcf9', borderBottom: '1px solid rgba(88,110,117,0.1)', padding: '12px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div>
-                          <span style={{ fontWeight: 800, fontSize: 13.5, color: '#073642', display: 'block' }}>{day.name}</span>
-                          <span style={{ fontSize: 11, color: '#93a1a1', fontWeight: 600 }}>{dayItems.length} aula{dayItems.length !== 1 ? 's' : ''}</span>
+                          <span style={{ fontWeight: 800, fontSize: 13.5, color: '#2c1a0e', display: 'block' }}>{day.name}</span>
+                          <span style={{ fontSize: 11, color: '#a08060', fontWeight: 600 }}>{dayItems.length} aula{dayItems.length !== 1 ? 's' : ''}</span>
                         </div>
                         <button
                           onClick={() => handleOpenAddScheduleModal(day.id)}
@@ -962,7 +963,7 @@ export default function Planner() {
                       {/* Day Classes */}
                       <div style={{ padding: 10, display: 'flex', flexDirection: 'column', gap: 10, flex: 1 }}>
                         {dayItems.length === 0 ? (
-                          <div style={{ padding: '24px 10px', textAlign: 'center', color: '#93a1a1', fontSize: 12 }}>
+                          <div style={{ padding: '24px 10px', textAlign: 'center', color: '#a08060', fontSize: 12 }}>
                             <i className="ti ti-calendar-plus" style={{ fontSize: 20, marginBottom: 4, display: 'block', opacity: 0.5 }} />
                             <span>Sem aulas</span>
                             <button
@@ -989,7 +990,7 @@ export default function Planner() {
                               >
                                 {/* Header: Time + Prep Badge */}
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                  <span style={{ fontSize: 11, fontWeight: 700, color: '#586e75', display: 'flex', alignItems: 'center', gap: 3 }}>
+                                  <span style={{ fontSize: 11, fontWeight: 700, color: '#7a5c42', display: 'flex', alignItems: 'center', gap: 3 }}>
                                     <i className="ti ti-clock" style={{ fontSize: 10 }} />
                                     {item.timeStart} - {item.timeEnd}
                                   </span>
@@ -1017,7 +1018,7 @@ export default function Planner() {
                                   <span style={{ fontSize: 11, fontWeight: 800, color: cardColor, display: 'block' }}>
                                     {item.className || cls?.name || 'Turma Geral'}
                                   </span>
-                                  <strong style={{ fontSize: 12.5, color: '#073642', display: 'block', lineHeight: 1.3 }}>
+                                  <strong style={{ fontSize: 12.5, color: '#2c1a0e', display: 'block', lineHeight: 1.3 }}>
                                     {item.topic}
                                   </strong>
                                   {item.notes && (
@@ -1064,9 +1065,9 @@ export default function Planner() {
               </div>
 
               {/* Side Card: Checklist Semanal */}
-              <div style={{ background: '#fff', borderRadius: 16, border: '1px solid rgba(88,110,117,0.12)', padding: 18, boxShadow: '0 2px 10px rgba(0,43,54,0.03)', display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div style={{ background: '#fff', borderRadius: 16, border: '1px solid rgba(88,110,117,0.12)', padding: 18, boxShadow: '0 2px 10px rgba(44,26,14,0.03)', display: 'flex', flexDirection: 'column', gap: 14 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <h3 style={{ margin: 0, fontSize: 15, fontWeight: 800, color: '#073642', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <h3 style={{ margin: 0, fontSize: 15, fontWeight: 800, color: '#2c1a0e', display: 'flex', alignItems: 'center', gap: 6 }}>
                     <i className="ti ti-checklist" style={{ color: '#8b5e3c' }} /> Checklist da Semana
                   </h3>
                   <span style={{ fontSize: 11, fontWeight: 700, color: '#2d7a00', background: '#e8f7ee', padding: '2px 8px', borderRadius: 6 }}>
@@ -1080,14 +1081,14 @@ export default function Planner() {
                     type="text"
                     placeholder="+ Adicionar tarefa (Enter)..."
                     onKeyDown={handleAddChecklist}
-                    style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', borderRadius: 8, border: '1px solid #d5c0b0', fontSize: 12.5, color: '#073642' }}
+                    style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', borderRadius: 8, border: '1px solid #d5c0b0', fontSize: 12.5, color: '#2c1a0e' }}
                   />
                 </div>
 
                 {/* Checklist items */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 380, overflowY: 'auto' }}>
                   {checklist.length === 0 ? (
-                    <div style={{ fontSize: 12, color: '#93a1a1', textAlign: 'center', padding: '16px 0', fontStyle: 'italic' }}>
+                    <div style={{ fontSize: 12, color: '#a08060', textAlign: 'center', padding: '16px 0', fontStyle: 'italic' }}>
                       Nenhuma tarefa pendente nesta semana.
                     </div>
                   ) : (
@@ -1108,7 +1109,7 @@ export default function Planner() {
                             onChange={() => {}}
                             style={{ cursor: 'pointer' }}
                           />
-                          <span style={{ fontSize: 12.5, color: item.completed ? '#93a1a1' : '#073642', textDecoration: item.completed ? 'line-through' : 'none' }}>
+                          <span style={{ fontSize: 12.5, color: item.completed ? '#a08060' : '#2c1a0e', textDecoration: item.completed ? 'line-through' : 'none' }}>
                             {item.text}
                           </span>
                         </div>
@@ -1141,7 +1142,7 @@ export default function Planner() {
               const groupLabel = getPostItStyles(groupKey, 0).label
               const pinColor = getPostItStyles(groupKey, 0).pinColor
               
-              let headerBorderColor = '#eee8d5'
+              let headerBorderColor = '#f0e8d8'
               if (groupKey === 'vencida') headerBorderColor = '#dc322f'
               else if (groupKey === 'urgente') headerBorderColor = '#cb4b16'
               else if (groupKey === 'esta_semana') headerBorderColor = '#b58900'
@@ -1152,11 +1153,11 @@ export default function Planner() {
                 <div key={groupKey} style={{ background: 'rgba(255,255,255,0.4)', borderRadius: 20, border: '1px solid rgba(88,110,117,0.1)', padding: 12, minHeight: 500 }}>
                   {/* Column Header */}
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: `3px solid ${headerBorderColor}`, paddingBottom: 8, marginBottom: 16 }}>
-                    <h3 style={{ fontSize: 13, fontWeight: 700, color: '#073642', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <h3 style={{ fontSize: 13, fontWeight: 700, color: '#2c1a0e', display: 'flex', alignItems: 'center', gap: 6 }}>
                       <span style={{ width: 8, height: 8, borderRadius: '50%', background: headerBorderColor }} />
                       {groupLabel}
                     </h3>
-                    <span style={{ background: '#eee8d5', color: '#586e75', fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 99 }}>
+                    <span style={{ background: '#f0e8d8', color: '#7a5c42', fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 99 }}>
                       {groupTasks.length}
                     </span>
                   </div>
@@ -1207,7 +1208,7 @@ export default function Planner() {
                               <i className={`ti ${config.icon}`} /> {config.label.split(' ')[0]}
                             </span>
                             {task.classRef && (
-                              <span style={{ fontSize: 9, fontWeight: 600, color: '#586e75', opacity: 0.8 }}>
+                              <span style={{ fontSize: 9, fontWeight: 600, color: '#7a5c42', opacity: 0.8 }}>
                                 🏷️ {task.classRef}
                               </span>
                             )}
@@ -1218,7 +1219,7 @@ export default function Planner() {
                           </h4>
 
                           {task.description && (
-                            <p style={{ fontSize: 11, color: '#586e75', opacity: 0.9, lineHeight: 1.4, marginBottom: 12, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+                            <p style={{ fontSize: 11, color: '#7a5c42', opacity: 0.9, lineHeight: 1.4, marginBottom: 12, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
                               {task.description}
                             </p>
                           )}
@@ -1248,7 +1249,7 @@ export default function Planner() {
                               }}
                               style={{
                                 background: task.done ? '#859900' : 'transparent',
-                                border: '1.5px solid ' + (task.done ? '#859900' : '#93a1a1'),
+                                border: '1.5px solid ' + (task.done ? '#859900' : '#a08060'),
                                 width: 22, height: 22, borderRadius: 6, cursor: 'pointer',
                                 display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s'
                               }}
@@ -1268,7 +1269,7 @@ export default function Planner() {
                     })}
                     
                     {groupTasks.length === 0 && (
-                      <div style={{ textAlign: 'center', color: '#93a1a1', fontSize: 12, fontStyle: 'italic', padding: '32px 0', border: '1.5px dashed rgba(88,110,117,0.15)', borderRadius: 12 }}>
+                      <div style={{ textAlign: 'center', color: '#a08060', fontSize: 12, fontStyle: 'italic', padding: '32px 0', border: '1.5px dashed rgba(88,110,117,0.15)', borderRadius: 12 }}>
                         Nenhuma tarefa
                       </div>
                     )}
@@ -1284,8 +1285,8 @@ export default function Planner() {
           <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
-                <h3 style={{ fontSize: 18, fontWeight: 700, color: '#073642' }}>⏱️ Todos os Cronômetros Regressivos</h3>
-                <p style={{ fontSize: 13, color: '#586e75', marginTop: 2 }}>
+                <h3 style={{ fontSize: 18, fontWeight: 700, color: '#2c1a0e' }}>⏱️ Todos os Cronômetros Regressivos</h3>
+                <p style={{ fontSize: 13, color: '#7a5c42', marginTop: 2 }}>
                   Todas as suas tarefas ativas penduradas com relógios digitais ticking rodando simultaneamente em tempo real.
                 </p>
               </div>
@@ -1319,7 +1320,7 @@ export default function Planner() {
                         background: '#fff',
                         border: '1px solid rgba(88,110,117,0.1)',
                         borderRadius: 24,
-                        boxShadow: '0 10px 20px rgba(0,43,54,0.03)',
+                        boxShadow: '0 10px 20px rgba(44,26,14,0.03)',
                         padding: 20,
                         display: 'flex',
                         flexDirection: 'column',
@@ -1331,12 +1332,12 @@ export default function Planner() {
                       }}
                       onMouseEnter={(e) => {
                         e.currentTarget.style.transform = 'translateY(-4px)'
-                        e.currentTarget.style.boxShadow = '0 15px 30px rgba(0,43,54,0.06)'
+                        e.currentTarget.style.boxShadow = '0 15px 30px rgba(44,26,14,0.06)'
                         e.currentTarget.style.borderColor = 'rgba(181, 137, 0, 0.3)'
                       }}
                       onMouseLeave={(e) => {
                         e.currentTarget.style.transform = 'none'
-                        e.currentTarget.style.boxShadow = '0 10px 20px rgba(0,43,54,0.03)'
+                        e.currentTarget.style.boxShadow = '0 10px 20px rgba(44,26,14,0.03)'
                         e.currentTarget.style.borderColor = 'rgba(88,110,117,0.1)'
                       }}
                     >
@@ -1354,18 +1355,18 @@ export default function Planner() {
                             <i className={`ti ${config.icon}`} /> {config.label}
                           </span>
                           {task.classRef && (
-                            <span style={{ fontSize: 9, fontWeight: 700, color: '#586e75', background: '#eee8d5', padding: '2px 6px', borderRadius: 6 }}>
+                            <span style={{ fontSize: 9, fontWeight: 700, color: '#7a5c42', background: '#f0e8d8', padding: '2px 6px', borderRadius: 6 }}>
                               🏷️ {task.classRef}
                             </span>
                           )}
                         </div>
 
-                        <h4 style={{ fontSize: 14.5, fontWeight: 700, color: '#073642', lineHeight: 1.3, marginBottom: 6 }}>
+                        <h4 style={{ fontSize: 14.5, fontWeight: 700, color: '#2c1a0e', lineHeight: 1.3, marginBottom: 6 }}>
                           {task.title}
                         </h4>
 
                         {task.description && (
-                          <p style={{ fontSize: 12, color: '#93a1a1', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          <p style={{ fontSize: 12, color: '#a08060', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             {task.description}
                           </p>
                         )}
@@ -1373,7 +1374,7 @@ export default function Planner() {
 
                       {/* Dynamic Micro Clock */}
                       <div style={{
-                        background: '#073642',
+                        background: '#2c1a0e',
                         borderRadius: 16,
                         padding: '10px 12px',
                         display: 'flex',
@@ -1404,7 +1405,7 @@ export default function Planner() {
 
                       {/* Card Footer row */}
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid rgba(88,110,117,0.06)', paddingTop: 10 }}>
-                        <span style={{ fontSize: 11, fontWeight: 600, color: '#93a1a1' }}>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: '#a08060' }}>
                           Prazo: {new Date(task.date + 'T00:00:00').toLocaleDateString('pt-BR', { day: 'numeric', month: 'short' })}
                         </span>
                         
@@ -1430,9 +1431,9 @@ export default function Planner() {
               </div>
             ) : (
               <div style={{ padding: '64px 0', textAlign: 'center', border: '2px dashed rgba(88,110,117,0.15)', borderRadius: 24, background: 'rgba(255,255,255,0.2)' }}>
-                <i className="ti ti-clock" style={{ fontSize: 48, color: '#93a1a1', marginBottom: 16, display: 'inline-block' }} />
-                <h4 style={{ fontSize: 16, fontWeight: 700, color: '#073642' }}>Nenhum cronômetro ativo!</h4>
-                <p style={{ fontSize: 13, color: '#586e75', marginTop: 4, maxWidth: 400, margin: '4px auto 0 auto' }}>
+                <i className="ti ti-clock" style={{ fontSize: 48, color: '#a08060', marginBottom: 16, display: 'inline-block' }} />
+                <h4 style={{ fontSize: 16, fontWeight: 700, color: '#2c1a0e' }}>Nenhum cronômetro ativo!</h4>
+                <p style={{ fontSize: 13, color: '#7a5c42', marginTop: 4, maxWidth: 400, margin: '4px auto 0 auto' }}>
                   Não há tarefas ativas ou pendentes no momento. Crie novas tarefas ou carregue sugestões para ver os timers ticking.
                 </p>
               </div>
@@ -1444,10 +1445,10 @@ export default function Planner() {
         {activeTab === 'table' && (
           <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             {/* Filters Dashboard card */}
-            <div style={{ background: '#fff', borderRadius: 20, border: '1px solid rgba(88,110,117,0.1)', padding: 18, boxShadow: '0 4px 12px rgba(0,43,54,0.02)', display: 'flex', flexWrap: 'wrap', gap: 16, alignItems: 'center' }}>
+            <div style={{ background: '#fff', borderRadius: 20, border: '1px solid rgba(88,110,117,0.1)', padding: 18, boxShadow: '0 4px 12px rgba(44,26,14,0.02)', display: 'flex', flexWrap: 'wrap', gap: 16, alignItems: 'center' }}>
               {/* Search input */}
               <div style={{ flex: '1 1 250px', position: 'relative' }}>
-                <i className="ti ti-search" style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: '#93a1a1', fontSize: 16 }} />
+                <i className="ti ti-search" style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: '#a08060', fontSize: 16 }} />
                 <input
                   type="text"
                   placeholder="Pesquisar prazos por título ou detalhes..."
@@ -1455,14 +1456,14 @@ export default function Planner() {
                   onChange={(e) => setSearchText(e.target.value)}
                   style={{
                     width: '100%', padding: '10px 14px 10px 40px', background: '#f5f0e8', border: '1px solid #e8e0d0',
-                    borderRadius: 12, outline: 'none', color: '#073642', fontSize: 13, fontFamily: 'inherit'
+                    borderRadius: 12, outline: 'none', color: '#2c1a0e', fontSize: 13, fontFamily: 'inherit'
                   }}
                 />
               </div>
 
               {/* Class Filter */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: 12, fontWeight: 700, color: '#586e75' }}>Turma:</span>
+                <span style={{ fontSize: 12, fontWeight: 700, color: '#7a5c42' }}>Turma:</span>
                 <select
                   value={filterClass}
                   onChange={(e) => setFilterClass(e.target.value)}
@@ -1476,7 +1477,7 @@ export default function Planner() {
 
               {/* Type Filter */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: 12, fontWeight: 700, color: '#586e75' }}>Tipo:</span>
+                <span style={{ fontSize: 12, fontWeight: 700, color: '#7a5c42' }}>Tipo:</span>
                 <select
                   value={filterType}
                   onChange={(e) => setFilterType(e.target.value)}
@@ -1494,7 +1495,7 @@ export default function Planner() {
 
               {/* Status Filter */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: 12, fontWeight: 700, color: '#586e75' }}>Status:</span>
+                <span style={{ fontSize: 12, fontWeight: 700, color: '#7a5c42' }}>Status:</span>
                 <select
                   value={filterStatus}
                   onChange={(e) => setFilterStatus(e.target.value)}
@@ -1523,16 +1524,16 @@ export default function Planner() {
             </div>
 
             {/* Structured Table */}
-            <div style={{ background: '#fff', borderRadius: 24, border: '1px solid rgba(88,110,117,0.1)', overflow: 'hidden', boxShadow: '0 8px 32px rgba(0,43,54,0.03)' }}>
+            <div style={{ background: '#fff', borderRadius: 24, border: '1px solid rgba(88,110,117,0.1)', overflow: 'hidden', boxShadow: '0 8px 32px rgba(44,26,14,0.03)' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
                 <thead>
                   <tr style={{ background: '#f5f0e8', borderBottom: '2px solid rgba(88,110,117,0.1)' }}>
-                    <th style={{ padding: '16px 20px', fontSize: 12, fontWeight: 700, color: '#586e75', width: 60 }}>Status</th>
-                    <th style={{ padding: '16px 20px', fontSize: 12, fontWeight: 700, color: '#586e75' }}>Tarefa / Atividade</th>
-                    <th style={{ padding: '16px 20px', fontSize: 12, fontWeight: 700, color: '#586e75', width: 140 }}>Turma</th>
-                    <th style={{ padding: '16px 20px', fontSize: 12, fontWeight: 700, color: '#586e75', width: 150 }}>Data Limite</th>
-                    <th style={{ padding: '16px 20px', fontSize: 12, fontWeight: 700, color: '#586e75', width: 180 }}>Contagem Regressiva</th>
-                    <th style={{ padding: '16px 20px', fontSize: 12, fontWeight: 700, color: '#586e75', width: 100, textAlign: 'center' }}>Ações</th>
+                    <th style={{ padding: '16px 20px', fontSize: 12, fontWeight: 700, color: '#7a5c42', width: 60 }}>Status</th>
+                    <th style={{ padding: '16px 20px', fontSize: 12, fontWeight: 700, color: '#7a5c42' }}>Tarefa / Atividade</th>
+                    <th style={{ padding: '16px 20px', fontSize: 12, fontWeight: 700, color: '#7a5c42', width: 140 }}>Turma</th>
+                    <th style={{ padding: '16px 20px', fontSize: 12, fontWeight: 700, color: '#7a5c42', width: 150 }}>Data Limite</th>
+                    <th style={{ padding: '16px 20px', fontSize: 12, fontWeight: 700, color: '#7a5c42', width: 180 }}>Contagem Regressiva</th>
+                    <th style={{ padding: '16px 20px', fontSize: 12, fontWeight: 700, color: '#7a5c42', width: 100, textAlign: 'center' }}>Ações</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1547,8 +1548,8 @@ export default function Planner() {
                         const days = getDaysUntil(task.date)
                         
                         let countdownText = ''
-                        let countdownColor = '#586e75'
-                        let countdownBg = '#eee8d5'
+                        let countdownColor = '#7a5c42'
+                        let countdownBg = '#f0e8d8'
                         
                         if (task.done) {
                           countdownText = 'Concluído'
@@ -1592,7 +1593,7 @@ export default function Planner() {
                                 onClick={() => toggleTaskDone(task.id)}
                                 style={{
                                   background: task.done ? '#859900' : 'transparent',
-                                  border: '2px solid ' + (task.done ? '#859900' : '#93a1a1'),
+                                  border: '2px solid ' + (task.done ? '#859900' : '#a08060'),
                                   width: 22, height: 22, borderRadius: 6, cursor: 'pointer',
                                   display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s'
                                 }}
@@ -1605,7 +1606,7 @@ export default function Planner() {
                             <td style={{ padding: '16px 20px' }}>
                               <div>
                                 <span style={{
-                                  fontWeight: 700, color: '#073642', fontSize: 14.5,
+                                  fontWeight: 700, color: '#2c1a0e', fontSize: 14.5,
                                   textDecoration: task.done ? 'line-through' : 'none',
                                   opacity: task.done ? 0.75 : 1
                                 }}>
@@ -1622,7 +1623,7 @@ export default function Planner() {
                                 </div>
 
                                 {task.description && (
-                                  <div style={{ fontSize: 12, color: '#93a1a1', marginTop: 6, fontWeight: 400 }}>
+                                  <div style={{ fontSize: 12, color: '#a08060', marginTop: 6, fontWeight: 400 }}>
                                     {task.description}
                                   </div>
                                 )}
@@ -1630,18 +1631,18 @@ export default function Planner() {
                             </td>
 
                             {/* Class/Turma */}
-                            <td style={{ padding: '16px 20px', color: '#586e75', fontWeight: 600, fontSize: 13 }}>
+                            <td style={{ padding: '16px 20px', color: '#7a5c42', fontWeight: 600, fontSize: 13 }}>
                               {task.classRef ? (
-                                <span style={{ background: '#eee8d5', padding: '4px 8px', borderRadius: 8 }}>
+                                <span style={{ background: '#f0e8d8', padding: '4px 8px', borderRadius: 8 }}>
                                   {task.classRef}
                                 </span>
                               ) : (
-                                <span style={{ color: '#93a1a1', fontStyle: 'italic' }}>Geral</span>
+                                <span style={{ color: '#a08060', fontStyle: 'italic' }}>Geral</span>
                               )}
                             </td>
 
                             {/* Date formatted */}
-                            <td style={{ padding: '16px 20px', color: '#073642', fontWeight: 600, fontSize: 13 }}>
+                            <td style={{ padding: '16px 20px', color: '#2c1a0e', fontWeight: 600, fontSize: 13 }}>
                               {new Date(task.date + 'T00:00:00').toLocaleDateString('pt-BR', { day: 'numeric', month: 'short', year: 'numeric' })}
                             </td>
 
@@ -1680,7 +1681,7 @@ export default function Planner() {
                       })
                   ) : (
                     <tr>
-                      <td colSpan={6} style={{ textAlign: 'center', padding: '48px 0', color: '#93a1a1', fontStyle: 'italic', fontSize: 14 }}>
+                      <td colSpan={6} style={{ textAlign: 'center', padding: '48px 0', color: '#a08060', fontStyle: 'italic', fontSize: 14 }}>
                         Nenhum prazo encontrado correspondente aos filtros selecionados. 📚
                       </td>
                     </tr>
@@ -1695,16 +1696,16 @@ export default function Planner() {
 
       {/* ==================== CREATE / EDIT TASK MODAL ==================== */}
       {showAddEditModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,43,54,0.4)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(44,26,14,0.4)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
           <div style={{ background: '#fff', borderRadius: 24, padding: 32, width: 480, maxWidth: '90%', boxShadow: '0 24px 48px rgba(0,0,0,0.18)', border: '1px solid rgba(88,110,117,0.15)', maxHeight: '90vh', overflowY: 'auto' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-              <h2 style={{ fontSize: 20, fontWeight: 700, color: '#073642', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <h2 style={{ fontSize: 20, fontWeight: 700, color: '#2c1a0e', display: 'flex', alignItems: 'center', gap: 8 }}>
                 <i className="ti ti-pin" style={{ color: '#b58900', transform: 'rotate(45deg)' }} />
                 {editingTask ? 'Editar Post-it de Prazo' : 'Prender Novo Post-it'}
               </h2>
               <button 
                 onClick={() => setShowAddEditModal(false)}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: '#93a1a1', display: 'flex', alignItems: 'center' }}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: '#a08060', display: 'flex', alignItems: 'center' }}
               >
                 <i className="ti ti-x" />
               </button>
@@ -1804,14 +1805,14 @@ export default function Planner() {
                 <button
                   type="button"
                   onClick={() => setShowAddEditModal(false)}
-                  style={{ background: 'none', border: 'none', color: '#586e75', fontWeight: 600, cursor: 'pointer', fontSize: 14 }}
+                  style={{ background: 'none', border: 'none', color: '#7a5c42', fontWeight: 600, cursor: 'pointer', fontSize: 14 }}
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   style={{
-                    background: '#073642', color: '#fff', border: 'none', borderRadius: 12,
+                    background: '#2c1a0e', color: '#fff', border: 'none', borderRadius: 12,
                     padding: '10px 24px', fontWeight: 700, cursor: 'pointer', fontSize: 14,
                     boxShadow: '0 4px 12px rgba(7,54,66,0.15)'
                   }}
@@ -1826,14 +1827,14 @@ export default function Planner() {
 
       {/* ==================== CREATE / EDIT SCHEDULE POST MODAL ==================== */}
       {showScheduleModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,43,54,0.4)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(44,26,14,0.4)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
           <div style={{ background: '#fff', borderRadius: 24, padding: 32, width: 480, maxWidth: '90%', boxShadow: '0 24px 48px rgba(0,0,0,0.18)', border: '1px solid rgba(88,110,117,0.15)', maxHeight: '90vh', overflowY: 'auto' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              <h2 style={{ fontSize: 18, fontWeight: 800, color: '#073642', display: 'flex', alignItems: 'center', gap: 8, margin: 0 }}>
+              <h2 style={{ fontSize: 18, fontWeight: 800, color: '#2c1a0e', display: 'flex', alignItems: 'center', gap: 8, margin: 0 }}>
                 <i className="ti ti-calendar-plus" style={{ color: '#8b5e3c' }} />
                 {editingSchedulePost ? 'Editar Aula no Quadro Semanal' : 'Nova Aula no Quadro Semanal'}
               </h2>
-              <button onClick={() => setShowScheduleModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: '#93a1a1' }}>
+              <button onClick={() => setShowScheduleModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: '#a08060' }}>
                 ✕
               </button>
             </div>
@@ -1944,7 +1945,7 @@ export default function Planner() {
                 <button
                   type="button"
                   onClick={() => setShowScheduleModal(false)}
-                  style={{ padding: '9px 16px', borderRadius: 10, border: '1px solid #d5c0b0', background: '#fff', color: '#586e75', fontWeight: 600, cursor: 'pointer' }}
+                  style={{ padding: '9px 16px', borderRadius: 10, border: '1px solid #d5c0b0', background: '#fff', color: '#7a5c42', fontWeight: 600, cursor: 'pointer' }}
                 >
                   Cancelar
                 </button>
@@ -1963,18 +1964,18 @@ export default function Planner() {
 
       {/* ==================== DELETE SCHEDULE POST CONFIRMATION ==================== */}
       {postToDelete && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,43,54,0.4)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100 }}>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(44,26,14,0.4)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100 }}>
           <div style={{ background: '#fff', borderRadius: 20, padding: 24, width: 420, maxWidth: '90%', border: '1px solid rgba(88,110,117,0.15)' }}>
             <h3 style={{ margin: '0 0 10px 0', fontSize: 16, color: '#dc322f' }}>
               🗑️ Excluir Aula da Grade
             </h3>
-            <p style={{ fontSize: 13, color: '#586e75', margin: '0 0 20px 0' }}>
+            <p style={{ fontSize: 13, color: '#7a5c42', margin: '0 0 20px 0' }}>
               Deseja remover a aula <strong>"{postToDelete.topic}"</strong> da grade semanal?
             </p>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
               <button
                 onClick={() => setPostToDelete(null)}
-                style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid #d5c0b0', background: '#fff', color: '#586e75', fontWeight: 600, cursor: 'pointer' }}
+                style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid #d5c0b0', background: '#fff', color: '#7a5c42', fontWeight: 600, cursor: 'pointer' }}
               >
                 Cancelar
               </button>
@@ -2000,14 +2001,14 @@ const AddBtn: React.CSSProperties = {
 }
 
 const MonthNavBtn: React.CSSProperties = {
-  background: '#eee8d5', border: 'none', fontSize: 18, fontWeight: 700, cursor: 'pointer',
-  color: '#073642', width: 32, height: 32, borderRadius: '50%', display: 'flex',
+  background: '#f0e8d8', border: 'none', fontSize: 18, fontWeight: 700, cursor: 'pointer',
+  color: '#2c1a0e', width: 32, height: 32, borderRadius: '50%', display: 'flex',
   alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s'
 }
 
 const TableSelect: React.CSSProperties = {
   padding: '8px 12px', background: '#fff', border: '1px solid #ede8dc', borderRadius: 10,
-  fontSize: 12.5, fontWeight: 600, color: '#073642', outline: 'none'
+  fontSize: 12.5, fontWeight: 600, color: '#2c1a0e', outline: 'none'
 }
 
 const ActionBtn: React.CSSProperties = {
@@ -2016,15 +2017,15 @@ const ActionBtn: React.CSSProperties = {
 }
 
 const ModalLabel: React.CSSProperties = {
-  display: 'block', fontSize: 12, fontWeight: 700, color: '#586e75', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.5px'
+  display: 'block', fontSize: 12, fontWeight: 700, color: '#7a5c42', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.5px'
 }
 
 const ModalInput: React.CSSProperties = {
-  width: '100%', padding: '12px 14px', border: '1px solid #ede8dc', borderRadius: 12, outline: 'none', fontSize: 13.5, background: '#fcfaf7', color: '#073642'
+  width: '100%', padding: '12px 14px', border: '1px solid #ede8dc', borderRadius: 12, outline: 'none', fontSize: 13.5, background: '#fcfaf7', color: '#2c1a0e'
 }
 
 const ModalSelect: React.CSSProperties = {
-  width: '100%', padding: '12px 14px', border: '1px solid #ede8dc', borderRadius: 12, outline: 'none', fontSize: 13.5, background: '#fcfaf7', color: '#073642'
+  width: '100%', padding: '12px 14px', border: '1px solid #ede8dc', borderRadius: 12, outline: 'none', fontSize: 13.5, background: '#fcfaf7', color: '#2c1a0e'
 }
 
 // PREMIUM COUNTDOWN & HERO PANELS
@@ -2032,7 +2033,7 @@ const HeroContainer: React.CSSProperties = {
   background: '#fff',
   border: '1px solid rgba(88,110,117,0.1)',
   borderRadius: 24,
-  boxShadow: '0 8px 32px rgba(0,43,54,0.03)',
+  boxShadow: '0 8px 32px rgba(44,26,14,0.03)',
   padding: 24,
   display: 'flex',
   flexWrap: 'wrap',
@@ -2050,7 +2051,7 @@ const CountdownGrid: React.CSSProperties = {
 }
 
 const TimeBlock: React.CSSProperties = {
-  background: '#073642',
+  background: '#2c1a0e',
   borderRadius: 16,
   padding: '12px 16px',
   display: 'flex',
@@ -2071,7 +2072,7 @@ const TimeNumber: React.CSSProperties = {
 const TimeLabel: React.CSSProperties = {
   fontSize: 10,
   fontWeight: 600,
-  color: '#93a1a1',
+  color: '#a08060',
   textTransform: 'uppercase',
   marginTop: 4,
   letterSpacing: '0.5px'
@@ -2080,7 +2081,7 @@ const TimeLabel: React.CSSProperties = {
 const TimeDivider: React.CSSProperties = {
   fontSize: 24,
   fontWeight: 700,
-  color: '#586e75',
+  color: '#7a5c42',
   animation: 'pulse 1s infinite'
 }
 
@@ -2112,7 +2113,7 @@ const SuggestionBtn: React.CSSProperties = {
 }
 
 const ExportBtn: React.CSSProperties = {
-  background: '#073642',
+  background: '#2c1a0e',
   color: '#fff',
   border: 'none',
   padding: '10px 16px',
@@ -2132,7 +2133,7 @@ const ToastOverlay: React.CSSProperties = {
   top: 24,
   right: 24,
   background: '#002b36',
-  color: '#fdf6e3',
+  color: '#fdf8f2',
   padding: '14px 20px',
   borderRadius: 16,
   boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.25)',
@@ -2164,7 +2165,7 @@ const MicroClockNum: React.CSSProperties = {
 const MicroClockLbl: React.CSSProperties = {
   fontSize: 8,
   fontWeight: 600,
-  color: '#93a1a1',
+  color: '#a08060',
   textTransform: 'uppercase',
   marginTop: 2
 }
@@ -2172,5 +2173,5 @@ const MicroClockLbl: React.CSSProperties = {
 const MicroClockDivider: React.CSSProperties = {
   fontSize: 14,
   fontWeight: 700,
-  color: '#586e75'
+  color: '#7a5c42'
 }

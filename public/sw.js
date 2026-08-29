@@ -25,30 +25,17 @@ self.addEventListener('activate', (event) => {
   self.clients.claim()
 })
 
-// Fetch: cache-first para assets, network-first para API
+// Fetch: network-first, sem interceptar _next/ ou dev assets
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url)
 
-  // Skip non-GET, cross-origin, e chamadas de API de IA
+  // Skip non-GET, cross-origin, APIs e chunks dinâmicos do Next.js
   if (event.request.method !== 'GET') return
   if (url.origin !== self.location.origin) return
   if (url.pathname.startsWith('/api/')) return
+  if (url.pathname.startsWith('/_next/')) return
 
-  // Cache-first para assets estáticos (_next/static)
-  if (url.pathname.startsWith('/_next/static/')) {
-    event.respondWith(
-      caches.match(event.request).then(cached =>
-        cached || fetch(event.request).then(res => {
-          const clone = res.clone()
-          caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone))
-          return res
-        })
-      )
-    )
-    return
-  }
-
-  // Network-first para páginas HTML
+  // Network-first para páginas estáticas
   event.respondWith(
     fetch(event.request)
       .then(res => {

@@ -1,4 +1,5 @@
 'use client'
+import { toast, showConfirm } from '@/components/Toast'
 
 import React, { useState, useEffect, useCallback } from 'react'
 import ModuleShell from '@/components/ModuleShell'
@@ -31,9 +32,10 @@ interface Student {
 }
 
 import PrivateTutoring from '@/components/modules/PrivateTutoring'
+import ChecklistHistoryModule from '@/components/modules/ChecklistHistoryModule'
 
 export default function Organization() {
- const [activeTab, setActiveTab] = useState<'schools' | 'classes' | 'students' | 'privatetutoring'>('schools')
+ const [activeTab, setActiveTab] = useState<'schools' | 'classes' | 'students' | 'privatetutoring' | 'checklist'>('schools')
 
  const [schools, setSchools] = useState<School[]>([])
  const [classes, setClasses] = useState<ClassRecord[]>([])
@@ -121,8 +123,8 @@ export default function Organization() {
  notifyChange()
  }
 
- const deleteSchool = (id: string) => {
- if (!confirm('Deseja excluir esta escola? As turmas e alunos associados ficarão sem vínculo de escola.')) return
+ const deleteSchool = async (id: string) => {
+ if (!(await showConfirm({ message: 'Deseja excluir esta escola? As turmas e alunos associados ficarão sem vínculo de escola.' }))) return
  const updated = schools.filter(s => s.id !== id)
  setSchools(updated)
  localStorage.setItem('teacher_schools', JSON.stringify(updated))
@@ -163,8 +165,8 @@ export default function Organization() {
  notifyChange()
  }
 
- const deleteClass = (id: string) => {
- if (!confirm('Deseja excluir esta turma? Alunos associados ficarão com "Sem Turma".')) return
+ const deleteClass = async (id: string) => {
+ if (!(await showConfirm({ message: 'Deseja excluir esta turma? Alunos associados ficarão com "Sem Turma".' }))) return
  const updatedClasses = classes.filter(c => c.id !== id)
  setClasses(updatedClasses)
  localStorage.setItem('teacher_classes', JSON.stringify(updatedClasses))
@@ -229,8 +231,8 @@ export default function Organization() {
  notifyChange()
  }
 
- const deleteStudent = (id: string) => {
- if (!confirm('Deseja remover este aluno?')) return
+ const deleteStudent = async (id: string) => {
+ if (!(await showConfirm({ message: 'Deseja remover este aluno?' }))) return
  const updated = students.filter(s => s.id !== id)
  setStudents(updated)
  localStorage.setItem('teacher_students', JSON.stringify(updated))
@@ -294,6 +296,12 @@ export default function Organization() {
  style={activeTab === 'privatetutoring' ? ActiveTabS : InactiveTabS}
  >
  Alunos Particulares
+ </button>
+ <button
+ onClick={() => setActiveTab('checklist')}
+ style={activeTab === 'checklist' ? ActiveTabS : InactiveTabS}
+ >
+ 📋 Checklist & Histórico
  </button>
  </div>
 
@@ -368,7 +376,7 @@ export default function Organization() {
  <div style={{ background: '#fff', borderRadius: 16, border: '1px solid rgba(139,115,85,0.15)', overflow: 'hidden' }}>
  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
  <thead>
- <tr style={{ background: '#f5efe6', borderBottom: '1px solid rgba(139,115,85,0.15)', textAlign: 'left', color: '#586e75' }}>
+ <tr style={{ background: '#f5efe6', borderBottom: '1px solid rgba(139,115,85,0.15)', textAlign: 'left', color: '#7a5c42' }}>
  <th style={{ padding: '12px 16px' }}>Nome do Aluno</th>
  <th style={{ padding: '12px 16px' }}>E-mail</th>
  <th style={{ padding: '12px 16px' }}>Turma</th>
@@ -484,6 +492,11 @@ export default function Organization() {
  {activeTab === 'privatetutoring' && (
  <PrivateTutoring />
  )}
+
+ {/* ABA 5: CHECKLIST & HISTÓRICO */}
+ {activeTab === 'checklist' && (
+ <ChecklistHistoryModule />
+ )}
  </ModuleShell>
  )
 }
@@ -512,7 +525,7 @@ const ModalStyle: React.CSSProperties = {
  padding: 24, width: 440, maxWidth: '95vw', boxShadow: '0 20px 60px rgba(44,26,14,0.15)'
 }
 const LabelStyle: React.CSSProperties = {
- fontSize: 12, fontWeight: 700, color: '#586e75', display: 'block', marginBottom: 4
+ fontSize: 12, fontWeight: 700, color: '#7a5c42', display: 'block', marginBottom: 4
 }
 const InputStyle: React.CSSProperties = {
  width: '100%', padding: '9px 12px', borderRadius: 10, border: '1px solid rgba(139,115,85,0.2)',
@@ -520,7 +533,7 @@ const InputStyle: React.CSSProperties = {
 }
 const CancelBtn: React.CSSProperties = {
  padding: '9px 16px', background: '#f5efe6', border: '1px solid rgba(139,115,85,0.2)', borderRadius: 10,
- fontSize: 13, cursor: 'pointer', color: '#586e75'
+ fontSize: 13, cursor: 'pointer', color: '#7a5c42'
 }
 const SaveBtn: React.CSSProperties = {
  padding: '9px 18px', background: '#8b5e3c', color: '#fff', border: 'none', borderRadius: 10,

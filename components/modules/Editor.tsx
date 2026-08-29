@@ -1,4 +1,5 @@
 'use client'
+import { toast, showConfirm } from '@/components/Toast'
 import { useState, useEffect } from 'react'
 import DocumentCanvas from '@/components/DocumentCanvas'
 
@@ -116,10 +117,10 @@ export default function Editor() {
  setActiveId(id)
  }
 
- function deleteDoc(id: string, e: React.MouseEvent) {
+ async function deleteDoc(id: string, e: React.MouseEvent) {
  e.stopPropagation()
  if (docs.length === 1) return
- if (!window.confirm('Excluir este documento?')) return
+ if (!(await showConfirm({ message: 'Excluir este documento?' }))) return
  const newDocs = docs.filter(d => d.id !== id)
  saveDocs(newDocs)
  if (activeId === id) setActiveId(newDocs[0].id)
@@ -163,7 +164,7 @@ export default function Editor() {
  </div>
  <div style={{ display: 'flex', gap: 10 }}>
  <button onClick={() => setShowHeaderConfig(true)}
- style={{ ...Btn, background: '#eee8d5', color: '#586e75' }}>
+ style={{ ...Btn, background: '#f0e8d8', color: '#7a5c42' }}>
  <i className="ti ti-building-community" /> Configurar Cabeçalho
  </button>
  <button onClick={() => createNewDoc(docs)} style={Btn}>
@@ -175,13 +176,13 @@ export default function Editor() {
  {/* Seletor de escola para o documento ativo */}
  {active && schools.length > 0 && (
  <div style={{ display: 'flex', gap: 12, alignItems: 'center', padding: '10px 0', borderTop: '1px solid #ede8dc', marginBottom: 0 }}>
- <span style={{ fontSize: 12, fontWeight: 700, color: '#586e75', whiteSpace: 'nowrap' }}>
+ <span style={{ fontSize: 12, fontWeight: 700, color: '#7a5c42', whiteSpace: 'nowrap' }}>
  <i className="ti ti-building-community" style={{ marginRight: 6 }} />Escola deste doc:
  </span>
  <select
  value={active.headerSchoolId || ''}
  onChange={e => applySchoolProfile(e.target.value)}
- style={{ padding: '6px 12px', borderRadius: 10, border: '1px solid #ddd', background: '#fdf6e3', fontSize: 13, outline: 'none', cursor: 'pointer' }}>
+ style={{ padding: '6px 12px', borderRadius: 10, border: '1px solid #ddd', background: '#fdf8f2', fontSize: 13, outline: 'none', cursor: 'pointer' }}>
  <option value="">Sem escola</option>
  {schools.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
  </select>
@@ -204,8 +205,8 @@ export default function Editor() {
  {showDocs && (
  <div style={{ width: 240, flexShrink: 0, background: '#fff', borderRight: '1px solid #ede8dc', display: 'flex', flexDirection: 'column' }}>
  <div style={{ padding: '12px 16px', borderBottom: '1px solid #ede8dc', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
- <span style={{ fontSize: 11, fontWeight: 700, color: '#93a1a1', textTransform: 'uppercase' }}>Meus Arquivos</span>
- <button onClick={() => setShowDocs(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#93a1a1' }}>
+ <span style={{ fontSize: 11, fontWeight: 700, color: '#a08060', textTransform: 'uppercase' }}>Meus Arquivos</span>
+ <button onClick={() => setShowDocs(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#a08060' }}>
  <i className="ti ti-panel-left-close" />
  </button>
  </div>
@@ -215,12 +216,12 @@ export default function Editor() {
  const sc = schools.find(s => s.id === doc.headerSchoolId)
  return (
  <div key={doc.id} onClick={() => setActiveId(doc.id)} style={{
- padding: '12px 16px', borderBottom: '1px solid #fdf6e3', cursor: 'pointer',
- background: isActive ? '#fdf6e3' : 'transparent',
- borderLeft: isActive ? '3px solid #073642' : '3px solid transparent',
+ padding: '12px 16px', borderBottom: '1px solid #fdf8f2', cursor: 'pointer',
+ background: isActive ? '#fdf8f2' : 'transparent',
+ borderLeft: isActive ? '3px solid #2c1a0e' : '3px solid transparent',
  }}>
  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
- <div style={{ fontSize: 13, fontWeight: isActive ? 700 : 500, color: '#073642', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+ <div style={{ fontSize: 13, fontWeight: isActive ? 700 : 500, color: '#2c1a0e', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
  {doc.title}
  </div>
  <button onClick={e => deleteDoc(doc.id, e)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#dc322f', fontSize: 13, flexShrink: 0, marginLeft: 4 }}>
@@ -228,7 +229,7 @@ export default function Editor() {
  </button>
  </div>
  {sc && <div style={{ fontSize: 10, color: '#2aa198', marginTop: 3 }}><i className="ti ti-building-community" style={{ marginRight: 2 }} />{sc.name}</div>}
- <div style={{ fontSize: 10, color: '#93a1a1', marginTop: 2 }}>{doc.updatedAt}</div>
+ <div style={{ fontSize: 10, color: '#a08060', marginTop: 2 }}>{doc.updatedAt}</div>
  </div>
  )
  })}
@@ -238,7 +239,7 @@ export default function Editor() {
 
  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
  {!showDocs && (
- <button onClick={() => setShowDocs(true)} style={{ position: 'absolute', left: 0, top: '50%', background: '#073642', color: '#fff', border: 'none', borderRadius: '0 8px 8px 0', padding: '8px 6px', cursor: 'pointer', zIndex: 10 }}>
+ <button onClick={() => setShowDocs(true)} style={{ position: 'absolute', left: 0, top: '50%', background: '#2c1a0e', color: '#fff', border: 'none', borderRadius: '0 8px 8px 0', padding: '8px 6px', cursor: 'pointer', zIndex: 10 }}>
  <i className="ti ti-panel-left-open" />
  </button>
  )}
@@ -261,12 +262,12 @@ export default function Editor() {
 
  {/* Modal: Configurar Cabeçalho de Escola */}
  {showHeaderConfig && (
- <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,43,54,0.45)', zIndex: 9998, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
- <div style={{ background: '#fff', border: '1px solid #ede8dc', borderRadius: 20, padding: '28px 32px', width: 520, maxWidth: '95vw', boxShadow: '0 12px 48px rgba(0,43,54,0.18)' }}>
+ <div style={{ position: 'fixed', inset: 0, background: 'rgba(44,26,14,0.45)', zIndex: 9998, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+ <div style={{ background: '#fff', border: '1px solid #ede8dc', borderRadius: 20, padding: '28px 32px', width: 520, maxWidth: '95vw', boxShadow: '0 12px 48px rgba(44,26,14,0.18)' }}>
  <h2 style={{ fontSize: 18, fontWeight: 700, color: '#2c1a0e', margin: '0 0 6px' }}>
  <i className="ti ti-building-community" style={{ marginRight: 8 }} />Perfis de Cabeçalho por Escola
  </h2>
- <p style={{ color: '#586e75', fontSize: 13, marginBottom: 20 }}>Configure o cabeçalho que aparece em cada documento exportado.</p>
+ <p style={{ color: '#7a5c42', fontSize: 13, marginBottom: 20 }}>Configure o cabeçalho que aparece em cada documento exportado.</p>
 
  <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
  <div>
@@ -299,8 +300,8 @@ export default function Editor() {
  <div style={{ display: 'flex', gap: 10 }}>
  {(['modern', 'classic', 'minimal'] as const).map(s => (
  <button key={s} onClick={() => setEditingHeader(h => ({ ...h, style: s }))} style={{
- flex: 1, padding: '10px', borderRadius: 10, border: `2px solid ${editingHeader.style === s ? '#073642' : '#ede8dc'}`,
- background: editingHeader.style === s ? '#f0f6fa' : '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: '#073642',
+ flex: 1, padding: '10px', borderRadius: 10, border: `2px solid ${editingHeader.style === s ? '#2c1a0e' : '#ede8dc'}`,
+ background: editingHeader.style === s ? '#f0f6fa' : '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: '#2c1a0e',
  }}>
  {s === 'modern' ? ' Moderno' : s === 'classic' ? ' Clássico' : ' Minimalista'}
  </button>
@@ -317,10 +318,10 @@ export default function Editor() {
  {headers.map(h => {
  const sc = schools.find(s => s.id === h.schoolId)
  return (
- <div key={h.schoolId} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', background: '#eee8d5', borderRadius: 8, cursor: 'pointer' }}
+ <div key={h.schoolId} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', background: '#f0e8d8', borderRadius: 8, cursor: 'pointer' }}
  onClick={() => setEditingHeader(h)}>
  <i className="ti ti-building-community" style={{ color: sc?.color, fontSize: 13 }} />
- <span style={{ fontSize: 12, fontWeight: 600, color: '#073642' }}>{sc?.name}</span>
+ <span style={{ fontSize: 12, fontWeight: 600, color: '#2c1a0e' }}>{sc?.name}</span>
  </div>
  )
  })}
@@ -329,7 +330,7 @@ export default function Editor() {
  )}
 
  <div style={{ display: 'flex', gap: 10, marginTop: 24, justifyContent: 'flex-end' }}>
- <button onClick={() => setShowHeaderConfig(false)} style={{ padding: '8px 16px', borderRadius: 10, border: 'none', background: '#eee8d5', color: '#586e75', cursor: 'pointer', fontWeight: 600 }}>Fechar</button>
+ <button onClick={() => setShowHeaderConfig(false)} style={{ padding: '8px 16px', borderRadius: 10, border: 'none', background: '#f0e8d8', color: '#7a5c42', cursor: 'pointer', fontWeight: 600 }}>Fechar</button>
  <button onClick={saveHeaderProfile} style={Btn}>
  <i className="ti ti-check" /> Salvar Perfil
  </button>
@@ -341,6 +342,6 @@ export default function Editor() {
  )
 }
 
-const Btn: React.CSSProperties = { padding: '9px 18px', background: '#073642', color: '#fff', border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 7 }
-const InputS: React.CSSProperties = { width: '100%', padding: '9px 12px', borderRadius: 10, border: '1px solid #ddd', background: '#fdf6e3', fontSize: 13, outline: 'none', boxSizing: 'border-box' }
-const LabelS: React.CSSProperties = { display: 'block', fontSize: 11, fontWeight: 700, color: '#586e75', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 5 }
+const Btn: React.CSSProperties = { padding: '9px 18px', background: '#2c1a0e', color: '#fff', border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 7 }
+const InputS: React.CSSProperties = { width: '100%', padding: '9px 12px', borderRadius: 10, border: '1px solid #ddd', background: '#fdf8f2', fontSize: 13, outline: 'none', boxSizing: 'border-box' }
+const LabelS: React.CSSProperties = { display: 'block', fontSize: 11, fontWeight: 700, color: '#7a5c42', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 5 }

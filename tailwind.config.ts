@@ -15,13 +15,13 @@ const config: Config = {
       colors: {
         sol: {
           base03: '#002b36',
-          base02: '#073642',
-          base01: '#586e75',
+          base02: '#2c1a0e',
+          base01: '#7a5c42',
           base00: '#657b83',
           base0:  '#839496',
-          base1:  '#93a1a1',
-          base2:  '#eee8d5',
-          base3:  '#fdf6e3',
+          base1:  '#a08060',
+          base2:  '#f0e8d8',
+          base3:  '#fdf8f2',
           yellow: '#b58900',
           orange: '#cb4b16',
           red:    '#dc322f',
@@ -38,9 +38,9 @@ const config: Config = {
         xl: '30px',
       },
       boxShadow: {
-        card: '0 4px 20px rgba(0,43,54,0.08)',
-        'card-hover': '0 8px 32px rgba(0,43,54,0.13)',
-        sm: '0 1px 3px rgba(0,43,54,0.06)',
+        card: '0 4px 20px rgba(44,26,14,0.08)',
+        'card-hover': '0 8px 32px rgba(44,26,14,0.13)',
+        sm: '0 1px 3px rgba(44,26,14,0.06)',
       },
       animation: {
         'fade-in': 'fadeIn 0.35s cubic-bezier(0.4,0,0.2,1)',

@@ -1,4 +1,5 @@
 'use client'
+import { toast, showConfirm } from '@/components/Toast'
 
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import ModuleShell from '@/components/ModuleShell'
@@ -427,8 +428,8 @@ export default function Eventos() {
  setShowEventModal(false)
  }
 
- const handleDeleteEvent = (id: string) => {
- if (!confirm('Deseja excluir este evento e todas as suas listas povoadas?')) return
+ const handleDeleteEvent = async (id: string) => {
+ if (!(await showConfirm({ message: 'Deseja excluir este evento e todas as suas listas povoadas?' }))) return
  const updated = events.filter(e => e.id !== id)
  saveAndSync(updated)
  }
@@ -961,7 +962,7 @@ export default function Eventos() {
  <span style={{ fontSize: 12, fontWeight: 800, color: '#8b5e3c', background: '#fff', padding: '4px 8px', borderRadius: 6 }}>{step.timeOffset}</span>
  <div style={{ flex: 1 }}>
  <div style={{ fontWeight: 700, color: '#2c1a0e' }}>{step.title}</div>
- <div style={{ fontSize: 12, color: '#586e75' }}>{step.description}</div>
+ <div style={{ fontSize: 12, color: '#7a5c42' }}>{step.description}</div>
  </div>
  </div>
  ))}
@@ -1114,14 +1115,14 @@ const InactiveTabStyle: React.CSSProperties = {
  fontSize: 13, fontWeight: 600, cursor: 'pointer'
 }
 const ActionIconButton: React.CSSProperties = { background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: '#8b5e3c', fontWeight: 700 }
-const LabelStyle: React.CSSProperties = { fontSize: 12, fontWeight: 700, color: '#586e75', display: 'block', marginBottom: 4 }
+const LabelStyle: React.CSSProperties = { fontSize: 12, fontWeight: 700, color: '#7a5c42', display: 'block', marginBottom: 4 }
 const InputStyle: React.CSSProperties = {
  width: '100%', padding: '9px 12px', borderRadius: 10, border: '1px solid rgba(139,115,85,0.2)',
  background: '#fff', outline: 'none', fontSize: 13, color: '#2c1a0e', marginBottom: 12
 }
 const CancelBtnStyle: React.CSSProperties = {
  padding: '9px 16px', background: '#f5efe6', border: '1px solid rgba(139,115,85,0.2)', borderRadius: 10,
- fontSize: 13, cursor: 'pointer', color: '#586e75'
+ fontSize: 13, cursor: 'pointer', color: '#7a5c42'
 }
 const OverlayStyle: React.CSSProperties = {
  position: 'fixed', inset: 0, background: 'rgba(44,26,14,0.45)', zIndex: 9999,

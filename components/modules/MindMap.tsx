@@ -1,10 +1,11 @@
 'use client'
+import { toast, showConfirm } from '@/components/Toast'
 import { useState, useEffect, useRef, useCallback } from 'react'
 
 interface MindNode { id: string; text: string; x: number; y: number; color: string; parentId: string | null }
 interface MindMapData { id: string; title: string; nodes: MindNode[] }
 
-const PALETTE = ['#073642','#b58900','#2aa198','#268bd2','#cb4b16','#859900','#d33682','#6c71c4']
+const PALETTE = ['#2c1a0e','#b58900','#2aa198','#268bd2','#cb4b16','#859900','#d33682','#6c71c4']
 const DEPTH_SIZES = [
  { w: 180, h: 52, r: 22, fs: 15, fw: 700 }, // root
  { w: 150, h: 44, r: 16, fs: 13, fw: 600 }, // level 1
@@ -62,7 +63,7 @@ export default function MindMap() {
  }, [])
 
  function initDefault() {
- const m: MindMapData = { id: Date.now().toString(), title: 'Meu Primeiro Mapa', nodes: [{ id: 'root', text: 'Tema Central', x: 560, y: 320, color: '#073642', parentId: null }] }
+ const m: MindMapData = { id: Date.now().toString(), title: 'Meu Primeiro Mapa', nodes: [{ id: 'root', text: 'Tema Central', x: 560, y: 320, color: '#2c1a0e', parentId: null }] }
  setMaps([m]); setActiveMapId(m.id)
  localStorage.setItem('teacher_mindmaps_v2', JSON.stringify([m]))
  }
@@ -76,7 +77,7 @@ export default function MindMap() {
  const pre = JSON.parse(localStorage.getItem('teacher_mindmap_prefill') || '{}')
  if (pre.topic) {
  const rootId = `root_${Date.now()}`
- const rootNode: MindNode = { id: rootId, text: pre.topic, x: 560, y: 320, color: '#073642', parentId: null }
+ const rootNode: MindNode = { id: rootId, text: pre.topic, x: 560, y: 320, color: '#2c1a0e', parentId: null }
  const branches: string[] = pre.branches && pre.branches.length ? pre.branches : ['Conceitos Principais', 'Exemplos Práticos', 'Exercícios']
  
  const childNodes: MindNode[] = branches.map((b, idx) => {
@@ -121,7 +122,7 @@ export default function MindMap() {
  async function handleGenerateAiMindMap(overrideTopic?: string | React.MouseEvent) {
  const topic = typeof overrideTopic === 'string' ? overrideTopic : aiTopic
  if (!topic.trim() && !customPrompt.trim()) {
- alert('Digite um tema ou um prompt para a IA.')
+ toast.success('Digite um tema ou um prompt para a IA.')
  return
  }
  setAiLoading(true)
@@ -147,7 +148,7 @@ Retorne estritamente um JSON no formato:
  if (match) {
  const parsed = JSON.parse(match[0])
  const rootId = `root_${Date.now()}`
- const rootNode: MindNode = { id: rootId, text: parsed.topic || topic, x: 560, y: 320, color: '#073642', parentId: null }
+ const rootNode: MindNode = { id: rootId, text: parsed.topic || topic, x: 560, y: 320, color: '#2c1a0e', parentId: null }
  const branches: string[] = parsed.branches || ['Conceitos', 'Exemplos', 'Exercícios']
  const childNodes: MindNode[] = branches.map((b, idx) => {
  const angle = (idx / branches.length) * 2 * Math.PI
@@ -168,7 +169,7 @@ Retorne estritamente um JSON no formato:
  setCustomPrompt('')
  }
  } catch (e: any) {
- alert(`Erro ao gerar mapa mental: ${e.message}`)
+ toast.success(`Erro ao gerar mapa mental: ${e.message}`)
  } finally {
  setAiLoading(false)
  }
@@ -183,15 +184,15 @@ Retorne estritamente um JSON no formato:
  }
 
  function createMap() {
- const m: MindMapData = { id: Date.now().toString(), title: `Mapa ${maps.length + 1}`, nodes: [{ id: 'root', text: 'Tema Central', x: 560, y: 320, color: '#073642', parentId: null }] }
+ const m: MindMapData = { id: Date.now().toString(), title: `Mapa ${maps.length + 1}`, nodes: [{ id: 'root', text: 'Tema Central', x: 560, y: 320, color: '#2c1a0e', parentId: null }] }
  const nm = [...maps, m]; saveMaps(nm); setActiveMapId(m.id)
  setPanX(0); setPanY(0); setZoom(1)
  }
 
- function deleteMap(id: string, e: React.MouseEvent) {
+ async function deleteMap(id: string, e: React.MouseEvent) {
  e.stopPropagation()
  if (maps.length === 1) return
- if (!confirm('Excluir este mapa?')) return
+ if (!(await showConfirm({ message: 'Excluir este mapa?' }))) return
  const nm = maps.filter(m => m.id !== id)
  saveMaps(nm); if (activeMapId === id) setActiveMapId(nm[0].id)
  }
@@ -313,7 +314,7 @@ Retorne estritamente um JSON no formato:
  onClick={() => setShowAiBox(!showAiBox)}
  style={{
  padding: '8px 16px', borderRadius: 10, border: '1px solid #b58900',
- background: '#fdf6e3', color: '#b58900', fontSize: 13, fontWeight: 700,
+ background: '#fdf8f2', color: '#b58900', fontSize: 13, fontWeight: 700,
  cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
  }}
  >
@@ -327,12 +328,12 @@ Retorne estritamente um JSON no formato:
 
  {/* Box de Prompt Personalizado (Expansível) */}
  {showAiBox && (
- <div style={{ background: '#fff', padding: 16, borderRadius: 16, border: '1px solid #ede8dc', boxShadow: '0 4px 16px rgba(0,43,54,0.06)', display: 'flex', flexDirection: 'column', gap: 12, flexShrink: 0 }}>
+ <div style={{ background: '#fff', padding: 16, borderRadius: 16, border: '1px solid #ede8dc', boxShadow: '0 4px 16px rgba(44,26,14,0.06)', display: 'flex', flexDirection: 'column', gap: 12, flexShrink: 0 }}>
  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
  <span style={{ fontSize: 13, fontWeight: 700, color: '#2c1a0e' }}>
  Gerador de Mapa Mental com Prompt Personalizado da IA
  </span>
- <button onClick={() => setShowAiBox(false)} style={{ background: 'none', border: 'none', color: '#93a1a1', cursor: 'pointer', fontSize: 18 }}>×</button>
+ <button onClick={() => setShowAiBox(false)} style={{ background: 'none', border: 'none', color: '#a08060', cursor: 'pointer', fontSize: 18 }}>×</button>
  </div>
 
  <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr auto', gap: 12, alignItems: 'center' }}>
@@ -340,7 +341,7 @@ Retorne estritamente um JSON no formato:
  value={aiTopic}
  onChange={e => setAiTopic(e.target.value)}
  placeholder="Tema Central (ex: Present Perfect)"
- style={{ padding: '9px 12px', borderRadius: 8, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, color: '#073642', outline: 'none' }}
+ style={{ padding: '9px 12px', borderRadius: 8, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, color: '#2c1a0e', outline: 'none' }}
  />
  <input
  value={customPrompt}
@@ -353,7 +354,7 @@ Retorne estritamente um JSON no formato:
  disabled={aiLoading}
  style={{
  padding: '9px 18px', borderRadius: 8, border: 'none',
- background: '#073642', color: '#fff', fontSize: 13, fontWeight: 700,
+ background: '#2c1a0e', color: '#fff', fontSize: 13, fontWeight: 700,
  cursor: aiLoading ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: 6,
  }}
  >
@@ -369,15 +370,15 @@ Retorne estritamente um JSON no formato:
  {maps.map(m => (
  <div key={m.id} onClick={() => { setActiveMapId(m.id); resetView() }} style={{
  display: 'flex', alignItems: 'center', gap: 8, padding: '6px 14px', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: 600,
- background: activeMapId === m.id ? '#073642' : 'transparent', color: activeMapId === m.id ? '#fff' : '#586e75',
- border: activeMapId === m.id ? '1px solid #073642' : '1px solid #ede8dc'
+ background: activeMapId === m.id ? '#2c1a0e' : 'transparent', color: activeMapId === m.id ? '#fff' : '#7a5c42',
+ border: activeMapId === m.id ? '1px solid #2c1a0e' : '1px solid #ede8dc'
  }}>
  <i className="ti ti-atom" />
  <input value={m.title} onChange={e => renameMap(m.id, e.target.value)} onClick={e => e.stopPropagation()} style={{ background: 'transparent', border: 'none', color: 'inherit', fontSize: 'inherit', fontWeight: 'inherit', outline: 'none', width: Math.max(60, m.title.length * 8) }} />
  {maps.length > 1 && <i className="ti ti-x" onClick={e => deleteMap(m.id, e)} style={{ fontSize: 12, opacity: 0.6, padding: 4 }} />}
  </div>
  ))}
- <button onClick={createMap} style={{ padding: '6px 12px', background: 'transparent', border: '1px dashed #93a1a1', borderRadius: 8, cursor: 'pointer', color: '#586e75', display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 600 }}>
+ <button onClick={createMap} style={{ padding: '6px 12px', background: 'transparent', border: '1px dashed #a08060', borderRadius: 8, cursor: 'pointer', color: '#7a5c42', display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 600 }}>
  <i className="ti ti-plus" /> Novo Mapa
  </button>
  </div>
@@ -386,7 +387,7 @@ Retorne estritamente um JSON no formato:
  <div style={{ display: 'flex', gap: 10, background: '#fff', padding: 12, borderRadius: 16, border: '1px solid #ede8dc', flexShrink: 0, alignItems: 'center', minHeight: 56 }}>
  {selNode ? (
  <>
- <button onClick={() => addChild(selNode.id)} style={{ padding: '6px 14px', background: '#073642', color: '#fff', border: 'none', borderRadius: 20, fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}>
+ <button onClick={() => addChild(selNode.id)} style={{ padding: '6px 14px', background: '#2c1a0e', color: '#fff', border: 'none', borderRadius: 20, fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}>
  <i className="ti ti-plus" /> Filho (Tab)
  </button>
  {selNode.id !== 'root' && (
@@ -411,14 +412,14 @@ Retorne estritamente um JSON no formato:
  </div>
  )}
  </div>
- <div style={{ marginLeft: 'auto', fontSize: 12, color: '#93a1a1' }}>Use as teclas Delete ou Backspace para apagar rapidamente</div>
+ <div style={{ marginLeft: 'auto', fontSize: 12, color: '#a08060' }}>Use as teclas Delete ou Backspace para apagar rapidamente</div>
  </>
  ) : (
  <>
- <button onClick={() => addChild('root')} style={{ padding: '6px 14px', background: '#073642', color: '#fff', border: 'none', borderRadius: 20, fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}>
+ <button onClick={() => addChild('root')} style={{ padding: '6px 14px', background: '#2c1a0e', color: '#fff', border: 'none', borderRadius: 20, fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}>
  <i className="ti ti-plus" /> Adicionar Caixa
  </button>
- <span style={{ fontSize: 12, color: '#93a1a1' }}>Clique numa caixa para ver opções · Duplo clique para editar · Arraste o fundo para mover</span>
+ <span style={{ fontSize: 12, color: '#a08060' }}>Clique numa caixa para ver opções · Duplo clique para editar · Arraste o fundo para mover</span>
  </>
  )}
  </div>
@@ -462,7 +463,7 @@ Retorne estritamente um JSON no formato:
  {/* Selection ring */}
  {isSel && <rect x={n.x - w/2 - 4} y={n.y - h/2 - 4} width={w + 8} height={h + 8} rx={dim.r + 4} fill="none" stroke={n.color} strokeWidth={2} strokeOpacity={0.3} strokeDasharray="4 3" style={{ pointerEvents: 'none' }} />}
  {/* Text */}
- <text x={n.x} y={n.y + dim.fs * 0.37} textAnchor="middle" fontSize={dim.fs} fontWeight={dim.fw} fill={isRoot ? '#fdf6e3' : n.color} fontFamily="'Plus Jakarta Sans', sans-serif" style={{ userSelect: 'none', pointerEvents: 'none', visibility: editingId === n.id ? 'hidden' : 'visible' }}>
+ <text x={n.x} y={n.y + dim.fs * 0.37} textAnchor="middle" fontSize={dim.fs} fontWeight={dim.fw} fill={isRoot ? '#fdf8f2' : n.color} fontFamily="'Plus Jakarta Sans', sans-serif" style={{ userSelect: 'none', pointerEvents: 'none', visibility: editingId === n.id ? 'hidden' : 'visible' }}>
  {n.text.length > 22 ? n.text.slice(0, 20) + '' : n.text}
  </text>
  </g>
@@ -485,7 +486,7 @@ Retorne estritamente um JSON no formato:
  onChange={e => setEditText(e.target.value)}
  onBlur={commitEdit}
  style={{
- background: 'transparent', border: 'none', outline: 'none', textAlign: 'center', color: editingId === 'root' ? '#fff' : '#073642',
+ background: 'transparent', border: 'none', outline: 'none', textAlign: 'center', color: editingId === 'root' ? '#fff' : '#2c1a0e',
  fontSize: getDimensions(getDepth(editingId, nodes)).fs, fontWeight: getDimensions(getDepth(editingId, nodes)).fw,
  fontFamily: "'Plus Jakarta Sans', sans-serif", width: Math.max(100, editText.length * 10 + 20)
  }}

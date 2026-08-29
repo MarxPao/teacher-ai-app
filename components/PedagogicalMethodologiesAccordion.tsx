@@ -212,7 +212,7 @@ export default function PedagogicalMethodologiesAccordion({
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10 }}>
               <div>
-                <label style={{ fontSize: 11, fontWeight: 600, color: '#586e75', display: 'flex', justifyContent: 'space-between' }}>
+                <label style={{ fontSize: 11, fontWeight: 600, color: '#7a5c42', display: 'flex', justifyContent: 'space-between' }}>
                   <span>Lembrar/Entender:</span>
                   <strong>{bloomRemember}%</strong>
                 </label>
@@ -227,7 +227,7 @@ export default function PedagogicalMethodologiesAccordion({
               </div>
 
               <div>
-                <label style={{ fontSize: 11, fontWeight: 600, color: '#586e75', display: 'flex', justifyContent: 'space-between' }}>
+                <label style={{ fontSize: 11, fontWeight: 600, color: '#7a5c42', display: 'flex', justifyContent: 'space-between' }}>
                   <span>Aplicar:</span>
                   <strong>{bloomApply}%</strong>
                 </label>
@@ -242,7 +242,7 @@ export default function PedagogicalMethodologiesAccordion({
               </div>
 
               <div>
-                <label style={{ fontSize: 11, fontWeight: 600, color: '#586e75', display: 'flex', justifyContent: 'space-between' }}>
+                <label style={{ fontSize: 11, fontWeight: 600, color: '#7a5c42', display: 'flex', justifyContent: 'space-between' }}>
                   <span>Analisar:</span>
                   <strong>{bloomAnalyze}%</strong>
                 </label>
@@ -257,7 +257,7 @@ export default function PedagogicalMethodologiesAccordion({
               </div>
 
               <div>
-                <label style={{ fontSize: 11, fontWeight: 600, color: '#586e75', display: 'flex', justifyContent: 'space-between' }}>
+                <label style={{ fontSize: 11, fontWeight: 600, color: '#7a5c42', display: 'flex', justifyContent: 'space-between' }}>
                   <span>Avaliar/Criar:</span>
                   <strong>{bloomEvaluate}%</strong>
                 </label>

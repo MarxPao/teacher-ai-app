@@ -106,7 +106,7 @@ export default function QuestionCountByTypeList({ counts, onChange }: QuestionCo
 
       {/* Atalhos Rápidos de Quantidade */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12 }}>
-        <span style={{ fontSize: 11, fontWeight: 700, color: '#586e75' }}>Presets rápidos:</span>
+        <span style={{ fontSize: 11, fontWeight: 700, color: '#7a5c42' }}>Presets rápidos:</span>
         {[5, 10, 15, 20].map(n => (
           <button
             key={n}

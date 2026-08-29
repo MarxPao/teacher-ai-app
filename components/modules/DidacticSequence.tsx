@@ -1,4 +1,5 @@
 'use client'
+import { toast, showConfirm } from '@/components/Toast'
 
 import { useState, useEffect, useMemo, useRef } from 'react'
 
@@ -416,8 +417,8 @@ export default function DidacticSequence() {
     setIsAddingNewUnit(false)
   }
 
-  const handleDeleteUnit = (id: string) => {
-    if (!confirm('Deseja excluir esta unidade do cronograma?')) return
+  const handleDeleteUnit = async (id: string) => {
+    if (!(await showConfirm({ message: 'Deseja excluir esta unidade do cronograma?' }))) return
     const updated = units.filter(u => u.id !== id)
     saveUnits(updated)
     showToast('Unidade removida da timeline.')
@@ -552,7 +553,7 @@ Gere um diagnóstico estruturado com:
             <h1 style={{ fontFamily: "'Fraunces', Georgia, serif", fontSize: 30, fontWeight: 700, color: '#2c1a0e', margin: 0 }}>
               Sequência Didática & Timeline Curricular
             </h1>
-            <span style={{ background: '#073642', color: '#b58900', fontSize: 11, fontWeight: 700, padding: '4px 12px', borderRadius: 20, textTransform: 'uppercase' }}>
+            <span style={{ background: '#2c1a0e', color: '#b58900', fontSize: 11, fontWeight: 700, padding: '4px 12px', borderRadius: 20, textTransform: 'uppercase' }}>
               Previsto vs. Realizado
             </span>
           </div>
@@ -643,7 +644,7 @@ Gere um diagnóstico estruturado com:
                 display: 'inline-flex', alignItems: 'center', gap: 6, padding: '10px 18px',
                 borderRadius: '10px 10px 0 0', border: 'none', cursor: 'pointer',
                 background: activeTab === t.key ? '#fff' : 'transparent',
-                color: activeTab === t.key ? '#2c1a0e' : '#93a1a1',
+                color: activeTab === t.key ? '#2c1a0e' : '#a08060',
                 borderBottom: activeTab === t.key ? '2px solid #8b5e3c' : '2px solid transparent',
                 marginBottom: -2, fontWeight: activeTab === t.key ? 700 : 500, fontSize: 13.5,
               }}
@@ -872,7 +873,7 @@ Gere um diagnóstico estruturado com:
                     }}>
                       1
                     </span>
-                    <strong style={{ fontSize: 13, color: '#073642', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                    <strong style={{ fontSize: 13, color: '#2c1a0e', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                       Seta 1: Conteúdo Programático Previsto (Cronograma Oficial)
                     </strong>
                     <span style={{ fontSize: 11, color: '#7a5c42' }}>— Planejamento da ementa distribuído na escala {timeScale}</span>
@@ -1077,7 +1078,7 @@ Gere um diagnóstico estruturado com:
                         <td style={{ padding: '12px', color: '#268bd2', fontWeight: 600 }}>
                           {u.plannedMonthStart} → {u.plannedMonthEnd} (Sem {u.plannedWeekStart || 1}-{u.plannedWeekEnd || 4})
                         </td>
-                        <td style={{ padding: '12px', color: '#586e75' }}>
+                        <td style={{ padding: '12px', color: '#7a5c42' }}>
                           {u.plannedLessons} aulas
                         </td>
                         <td style={{ padding: '12px', color: '#8b5e3c', fontWeight: 700 }}>
@@ -1105,7 +1106,7 @@ Gere um diagnóstico estruturado com:
                               CONCLUÍDO
                             </span>
                           ) : (
-                            <span style={{ background: '#eee8d5', color: '#7a5c42', fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 6 }}>
+                            <span style={{ background: '#f0e8d8', color: '#7a5c42', fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 6 }}>
                               PENDENTE
                             </span>
                           )}
@@ -1138,10 +1139,10 @@ Gere um diagnóstico estruturado com:
 
       {/* 2. ABA: SEQUÊNCIA CURRICULAR VERTICAL (VISÃO POR UNIDADE) */}
       {activeTab === 'units' && (
-        <div style={{ flex: 1, overflowY: 'auto', background: '#fffcf8', padding: 32, borderRadius: 20, border: '1px solid rgba(139,115,85,0.14)', boxShadow: '0 2px 10px rgba(0,43,54,0.04)' }}>
+        <div style={{ flex: 1, overflowY: 'auto', background: '#fffcf8', padding: 32, borderRadius: 20, border: '1px solid rgba(139,115,85,0.14)', boxShadow: '0 2px 10px rgba(44,26,14,0.04)' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 0, position: 'relative' }}>
             {/* Linha vertical central da timeline */}
-            <div style={{ position: 'absolute', left: 40, top: 20, bottom: 40, width: 4, background: '#eee8d5', zIndex: 1 }} />
+            <div style={{ position: 'absolute', left: 40, top: 20, bottom: 40, width: 4, background: '#f0e8d8', zIndex: 1 }} />
 
             {units.map((unit) => {
               const isCurrent = unit.status === 'current'
@@ -1165,8 +1166,8 @@ Gere um diagnóstico estruturado com:
                     title="Clique para definir esta unidade como o conteúdo atual da matéria"
                     style={{
                       width: 48, height: 48, borderRadius: '50%',
-                      background: isCurrent ? '#cb4b16' : isCompleted ? '#3d7a4e' : '#eee8d5',
-                      color: isCurrent || isCompleted ? '#fff' : '#93a1a1',
+                      background: isCurrent ? '#cb4b16' : isCompleted ? '#3d7a4e' : '#f0e8d8',
+                      color: isCurrent || isCompleted ? '#fff' : '#a08060',
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       fontSize: 18, fontWeight: 800, cursor: 'pointer',
                       boxShadow: isCurrent ? '0 0 0 6px rgba(203,75,22,0.2)' : 'none',
@@ -1182,7 +1183,7 @@ Gere um diagnóstico estruturado com:
                       flex: 1, background: isCurrent ? '#fff9f0' : '#fff',
                       border: `2px solid ${isCurrent ? '#cb4b16' : isCompleted ? '#e8e0d0' : '#ede8dc'}`,
                       borderRadius: 16, padding: 22,
-                      boxShadow: isCurrent ? '0 6px 20px rgba(203,75,22,0.1)' : '0 2px 8px rgba(0,43,54,0.03)',
+                      boxShadow: isCurrent ? '0 6px 20px rgba(203,75,22,0.1)' : '0 2px 8px rgba(44,26,14,0.03)',
                     }}
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
@@ -1199,12 +1200,12 @@ Gere um diagnóstico estruturado com:
                             </span>
                           )}
                           {!isCurrent && !isCompleted && (
-                            <span style={{ background: '#eee8d5', color: '#586e75', fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 6, textTransform: 'uppercase' }}>
+                            <span style={{ background: '#f0e8d8', color: '#7a5c42', fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 6, textTransform: 'uppercase' }}>
                               Próxima Unidade
                             </span>
                           )}
 
-                          <span style={{ fontSize: 12, fontWeight: 600, color: '#586e75' }}>
+                          <span style={{ fontSize: 12, fontWeight: 600, color: '#7a5c42' }}>
                             {unit.bookRef}
                           </span>
                         </div>
@@ -1217,9 +1218,9 @@ Gere um diagnóstico estruturado com:
                       {/* Indicador de Domínio da Turma */}
                       {(isCompleted || isCurrent) && (
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
-                          <span style={{ fontSize: 12, fontWeight: 700, color: '#586e75' }}>Domínio da Turma</span>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: '#7a5c42' }}>Domínio da Turma</span>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <div style={{ width: 100, height: 8, background: '#eee8d5', borderRadius: 4, overflow: 'hidden' }}>
+                            <div style={{ width: 100, height: 8, background: '#f0e8d8', borderRadius: 4, overflow: 'hidden' }}>
                               <div style={{ width: `${unit.masteryPercentage}%`, height: '100%', background: unit.masteryPercentage > 75 ? '#3d7a4e' : '#cb4b16', borderRadius: 4 }} />
                             </div>
                             <span style={{ fontSize: 14, fontWeight: 800, color: unit.masteryPercentage > 75 ? '#3d7a4e' : '#cb4b16' }}>
@@ -1233,14 +1234,14 @@ Gere um diagnóstico estruturado com:
                     {/* Tópicos e Foco Gramatical */}
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, margin: '12px 0', padding: 12, background: 'rgba(255,255,255,0.7)', borderRadius: 12, fontSize: 13 }}>
                       <div>
-                        <strong style={{ color: '#073642' }}> Gramática:</strong> {unit.grammarFocus}<br />
-                        <strong style={{ color: '#073642' }}> Vocabulário:</strong> {unit.vocabularyFocus}
+                        <strong style={{ color: '#2c1a0e' }}> Gramática:</strong> {unit.grammarFocus}<br />
+                        <strong style={{ color: '#2c1a0e' }}> Vocabulário:</strong> {unit.vocabularyFocus}
                       </div>
                       <div>
-                        <strong style={{ color: '#073642' }}> Tópicos Curriculares:</strong>
+                        <strong style={{ color: '#2c1a0e' }}> Tópicos Curriculares:</strong>
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
                           {unit.topics.map(t => (
-                            <span key={t} style={{ fontSize: 11, background: '#f5efe6', color: '#586e75', padding: '2px 8px', borderRadius: 6, fontWeight: 600 }}>
+                            <span key={t} style={{ fontSize: 11, background: '#f5efe6', color: '#7a5c42', padding: '2px 8px', borderRadius: 6, fontWeight: 600 }}>
                               {t}
                             </span>
                           ))}
@@ -1250,7 +1251,7 @@ Gere um diagnóstico estruturado com:
 
                     {/* Diagnóstico da IA e Ação Recomendada */}
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 8, borderTop: '1px dashed #e8e0d0', fontSize: 12.5 }}>
-                      <span style={{ color: '#586e75' }}>
+                      <span style={{ color: '#7a5c42' }}>
                         <strong>IA Status:</strong> {unit.aiAssessment}
                       </span>
                       <div style={{ display: 'flex', gap: 8 }}>
@@ -1280,7 +1281,7 @@ Gere um diagnóstico estruturado com:
       {activeTab === 'analytics' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
           {/* Relatório de Cruzamento Inteligente da Rafinha */}
-          <div style={{ background: '#073642', color: '#fdf6e3', padding: 24, borderRadius: 16, boxShadow: '0 4px 16px rgba(0,43,54,0.15)', border: '1px solid #002b36' }}>
+          <div style={{ background: '#2c1a0e', color: '#fdf8f2', padding: 24, borderRadius: 16, boxShadow: '0 4px 16px rgba(44,26,14,0.15)', border: '1px solid #002b36' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <i className="ti ti-sparkles" style={{ fontSize: 24, color: '#b58900' }} />
@@ -1291,12 +1292,12 @@ Gere um diagnóstico estruturado com:
               <button
                 onClick={handleRunRafinhaCrossing}
                 disabled={analyzingAi}
-                style={{ padding: '6px 14px', borderRadius: 8, border: 'none', background: '#b58900', color: '#073642', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+                style={{ padding: '6px 14px', borderRadius: 8, border: 'none', background: '#b58900', color: '#2c1a0e', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
               >
                 {analyzingAi ? 'Analisando...' : 'Reavaliar Agora'}
               </button>
             </div>
-            <div style={{ fontSize: 14, lineHeight: 1.6, color: '#eee8d5', whiteSpace: 'pre-wrap' }}>
+            <div style={{ fontSize: 14, lineHeight: 1.6, color: '#f0e8d8', whiteSpace: 'pre-wrap' }}>
               {aiReport || 'Clique em "Cruzar com Rafinha IA" para gerar um relatório aprofundado cruzando a linha do tempo, a ementa do livro e as notas dos alunos.'}
             </div>
           </div>
@@ -1305,7 +1306,7 @@ Gere um diagnóstico estruturado com:
 
       {/* MODAL DE CRIAÇÃO / EDIÇÃO DE UNIDADE DA TIMELINE */}
       {editModalUnit && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,43,54,0.5)', zIndex: 9998, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(44,26,14,0.5)', zIndex: 9998, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
           <div style={{ background: '#fffcf8', border: '1px solid rgba(139,115,85,0.2)', borderRadius: 16, padding: '24px 28px', width: '100%', maxWidth: 540, maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 8px 32px rgba(44,26,14,0.2)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <h3 style={{ fontSize: 18, fontWeight: 700, color: '#2c1a0e', margin: 0, fontFamily: "'Fraunces', Georgia, serif" }}>
@@ -1337,7 +1338,7 @@ Gere um diagnóstico estruturado com:
 
               {/* Previsto */}
               <div style={{ background: '#f0f6fa', padding: '12px 14px', borderRadius: 10, border: '1px solid #c8e1f5' }}>
-                <strong style={{ fontSize: 12, color: '#073642', display: 'block', marginBottom: 8 }}>Seta 1: Cronograma Previsto (Ementa)</strong>
+                <strong style={{ fontSize: 12, color: '#2c1a0e', display: 'block', marginBottom: 8 }}>Seta 1: Cronograma Previsto (Ementa)</strong>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
                   <div>
                     <label style={{ fontSize: 10, color: '#7a5c42', display: 'block' }}>Mês Início</label>
@@ -1545,21 +1546,21 @@ Gere um diagnóstico estruturado com:
       {/* MODAL DETALHES DA UNIDADE */}
       {selectedUnit && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(7,54,66,0.6)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-          <div style={{ background: '#fff', borderRadius: 20, padding: 28, width: 500, maxWidth: '90vw', display: 'flex', flexDirection: 'column', gap: 16, boxShadow: '0 12px 40px rgba(0,43,54,0.2)' }}>
+          <div style={{ background: '#fff', borderRadius: 20, padding: 28, width: 500, maxWidth: '90vw', display: 'flex', flexDirection: 'column', gap: 16, boxShadow: '0 12px 40px rgba(44,26,14,0.2)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h3 style={{ fontSize: 18, fontWeight: 700, color: '#2c1a0e', margin: 0, fontFamily: "'Fraunces', Georgia, serif" }}>
                 {selectedUnit.title}
               </h3>
-              <button onClick={() => setSelectedUnit(null)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: '#93a1a1' }}>×</button>
+              <button onClick={() => setSelectedUnit(null)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: '#a08060' }}>×</button>
             </div>
 
-            <div style={{ fontSize: 13, color: '#586e75', display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ fontSize: 13, color: '#7a5c42', display: 'flex', flexDirection: 'column', gap: 10 }}>
               <div><strong>Livro / Material:</strong> {selectedUnit.bookRef}</div>
               <div><strong>Foco Gramatical:</strong> {selectedUnit.grammarFocus}</div>
               <div><strong>Vocabulário:</strong> {selectedUnit.vocabularyFocus}</div>
               <div><strong>Índice de Domínio:</strong> {selectedUnit.masteryPercentage}%</div>
               <div><strong>Aulas Previstas vs Dadas:</strong> {selectedUnit.plannedLessons} previstas / {selectedUnit.actualLessonsGiven || 0} ministradas</div>
-              <div style={{ background: '#f5efe6', padding: 12, borderRadius: 10, color: '#073642' }}>
+              <div style={{ background: '#f5efe6', padding: 12, borderRadius: 10, color: '#2c1a0e' }}>
                 <strong>Recomendação Pedagógica:</strong><br />{selectedUnit.suggestedAction}
               </div>
             </div>

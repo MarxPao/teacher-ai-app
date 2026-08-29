@@ -1,4 +1,6 @@
 'use client'
+import { toast, showConfirm } from '@/components/Toast'
+import { COLOR, TEXT, RADIUS } from '@/styles/tokens'
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { getBnccSkillsForGrade, getStoredBnccSkills, BnccSkill } from '@/lib/bnccData'
@@ -41,7 +43,7 @@ const COLORS = [
   { name: 'Magenta', hex: '#d33682' },
   { name: 'Violeta', hex: '#6c71c4' },
   { name: 'Ciano', hex: '#2aa198' },
-  { name: 'Escuro', hex: '#073642' },
+  { name: 'Escuro', hex: '#2c1a0e' },
 ]
 
 /* Gráfico Radar SVG */
@@ -84,7 +86,7 @@ function RadarChart({ scores, metrics, size = 220 }: { scores: Record<string, nu
         const end = spoke(i, 1.22)
         return (
           <text key={i} x={end.x} y={end.y} textAnchor="middle" dominantBaseline="central"
-            style={{ fontSize: 8.5, fill: '#586e75', fontWeight: 600, fontFamily: 'sans-serif' }}>
+            style={{ fontSize: 8.5, fill: '#7a5c42', fontWeight: 600, fontFamily: 'sans-serif' }}>
             {m.label.split(' ')[0]}
           </text>
         )
@@ -153,12 +155,12 @@ function computeScore(scores: Record<string, number>, metrics: MetricDef[], auto
 }
 
 const S: Record<string, React.CSSProperties> = {
-  page: { padding: '32px 48px', minHeight: '100%', boxSizing: 'border-box', background: '#fdf8f2' },
-  card: { background: '#fffcf8', border: '1px solid rgba(139,115,85,0.14)', borderRadius: 16, padding: '20px 24px', boxShadow: '0 2px 8px rgba(44,26,14,0.06)' },
-  badge: { display: 'inline-flex', alignItems: 'center', padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600 },
-  btn: { display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 10, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600, background: '#8b5e3c', color: '#fffcf8' },
-  input: { width: '100%', padding: '9px 12px', borderRadius: 10, border: '1px solid rgba(139,115,85,0.22)', background: '#fffcf8', fontSize: 13, outline: 'none', boxSizing: 'border-box' },
-  label: { display: 'block', fontSize: 11, fontWeight: 700, color: '#586e75', textTransform: 'uppercase' as const, letterSpacing: '0.8px', marginBottom: 5 },
+  page: { padding: '32px 48px', minHeight: '100%', boxSizing: 'border-box', background: COLOR.paperPage },
+  card: { background: COLOR.surface1, border: '1px solid rgba(139,115,85,0.14)', borderRadius: RADIUS.lg, padding: '20px 24px', boxShadow: '0 2px 8px rgba(44,26,14,0.06)' },
+  badge: { display: 'inline-flex', alignItems: 'center', padding: '3px 10px', borderRadius: 20, fontSize: TEXT.micro, fontWeight: 600 },
+  btn: { display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: RADIUS.md, border: 'none', cursor: 'pointer', fontSize: TEXT.bodyCompact, fontWeight: 600, background: COLOR.accent, color: COLOR.surface1 },
+  input: { width: '100%', padding: '9px 12px', borderRadius: RADIUS.md, border: '1px solid rgba(139,115,85,0.22)', background: COLOR.surface1, fontSize: TEXT.bodyCompact, outline: 'none', boxSizing: 'border-box' },
+  label: { display: 'block', fontSize: TEXT.micro, fontWeight: 700, color: COLOR.paperWarm, textTransform: 'uppercase' as const, letterSpacing: '0.8px', marginBottom: 5 },
 }
 
 /* 
@@ -379,8 +381,8 @@ Responda APENAS um objeto JSON no formato:
     }
     setSchoolModal(null)
   }
-  function deleteSchool(id: string) {
-    if (!confirm('Excluir esta escola e desvincular suas turmas?')) return
+  async function deleteSchool(id: string) {
+    if (!(await showConfirm({ message: 'Excluir esta escola e desvincular suas turmas?' }))) return
     saveSchools(schools.filter(s => s.id !== id))
     if (selectedSchoolId === id) setSelectedSchoolId(null)
   }
@@ -397,8 +399,8 @@ Responda APENAS um objeto JSON no formato:
     }
     setClassModal(null)
   }
-  function deleteClass(id: string) {
-    if (!confirm('Excluir esta turma?')) return
+  async function deleteClass(id: string) {
+    if (!(await showConfirm({ message: 'Excluir esta turma?' }))) return
     saveClasses(classes.filter(c => c.id !== id))
     if (selectedClassId === id) setSelectedClassId(null)
   }
@@ -416,8 +418,8 @@ Responda APENAS um objeto JSON no formato:
     }
     setStudentModal(null)
   }
-  function deleteStudent(id: string) {
-    if (!confirm('Excluir este aluno?')) return
+  async function deleteStudent(id: string) {
+    if (!(await showConfirm({ message: 'Excluir este aluno?' }))) return
     saveStudents(students.filter(st => st.id !== id))
     if (selectedStudentId === id) setSelectedStudentId(null)
   }
@@ -455,7 +457,7 @@ Responda APENAS um objeto JSON no formato:
       if (cAvg > bestCAvg) { bestCAvg = cAvg; bestC = classes.find(c => c.id === cid)?.name || '' }
       const cls = classes.find(c => c.id === cid)
       const sch = schools.find(s => s.id === cls?.schoolId)
-      return { name: cls?.name || '', avg: cAvg, schoolColor: sch?.color || '#073642' }
+      return { name: cls?.name || '', avg: cAvg, schoolColor: sch?.color || '#2c1a0e' }
     })
 
     let bestS = '', bestSAvg = 0
@@ -528,9 +530,9 @@ Responda APENAS um objeto JSON no formato:
       {toastMessage && (
         <div style={{
           position: 'fixed', bottom: 24, right: 24, zIndex: 9999,
-          background: '#3d7a4e', color: '#fff', padding: '12px 20px', borderRadius: 10,
+          background: '#3d7a4e', color: '#fff', padding: '12px 20px', borderRadius: RADIUS.md,
           boxShadow: '0 4px 16px rgba(0,0,0,0.2)', display: 'flex', alignItems: 'center', gap: 8,
-          fontSize: 13.5, fontWeight: 600
+          fontSize: TEXT.body, fontWeight: 600
         }}>
           <i className="ti ti-circle-check" /> {toastMessage}
         </div>
@@ -539,7 +541,7 @@ Responda APENAS um objeto JSON no formato:
       {/* Cabeçalho do Módulo */}
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 24 }}>
         <div>
-          <h1 style={{ textAlign: 'center', fontFamily: "'Fraunces', Georgia, serif", fontSize: 30, fontWeight: 600, color: '#2c1a0e', margin: '0 auto' }}>
+          <h1 style={{ textAlign: 'center', fontFamily: "'Fraunces', Georgia, serif", fontSize: 30, fontWeight: 600, color: COLOR.paperInk, margin: '0 auto' }}>
             Desempenho & Evolução do Aluno
           </h1>
         </div>
@@ -557,7 +559,7 @@ Responda APENAS um objeto JSON no formato:
           <button key={t.key} onClick={() => setTab(t.key as typeof tab)} style={{
             ...S.btn, borderRadius: '10px 10px 0 0', padding: '10px 18px',
             background: tab === t.key ? '#fff' : 'transparent',
-            color: tab === t.key ? '#073642' : '#93a1a1',
+            color: tab === t.key ? '#2c1a0e' : '#a08060',
             borderBottom: tab === t.key ? '2px solid #b58900' : '2px solid transparent',
             marginBottom: -2, fontWeight: tab === t.key ? 700 : 500,
           }}>
@@ -571,24 +573,24 @@ Responda APENAS um objeto JSON no formato:
         <div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginBottom: 24 }}>
             <div style={S.card}>
-              <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: '#93a1a1', letterSpacing: '0.8px', marginBottom: 4 }}>Média Global</div>
-              <div style={{ fontSize: 32, fontWeight: 800, color: '#073642' }}>{globalStats.overallAvg.toFixed(1)}</div>
-              <div style={{ fontSize: 12, color: '#586e75' }}>{globalStats.totalStudents} alunos cadastrados</div>
+              <div style={{ fontSize: TEXT.micro, fontWeight: 700, textTransform: 'uppercase', color: COLOR.paperMid, letterSpacing: '0.8px', marginBottom: 4 }}>Média Global</div>
+              <div style={{ fontSize: 32, fontWeight: 800, color: COLOR.paperInk }}>{globalStats.overallAvg.toFixed(1)}</div>
+              <div style={{ fontSize: TEXT.caption, color: COLOR.paperWarm }}>{globalStats.totalStudents} alunos cadastrados</div>
             </div>
             <div style={S.card}>
-              <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: '#93a1a1', letterSpacing: '0.8px', marginBottom: 4 }}>Taxa de Aprovação</div>
+              <div style={{ fontSize: TEXT.micro, fontWeight: 700, textTransform: 'uppercase', color: COLOR.paperMid, letterSpacing: '0.8px', marginBottom: 4 }}>Taxa de Aprovação</div>
               <div style={{ fontSize: 32, fontWeight: 800, color: '#859900' }}>{globalStats.passingRate.toFixed(0)}%</div>
-              <div style={{ fontSize: 12, color: '#586e75' }}>Notas acima de 6.0</div>
+              <div style={{ fontSize: TEXT.caption, color: COLOR.paperWarm }}>Notas acima de 6.0</div>
             </div>
             <div style={S.card}>
-              <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: '#93a1a1', letterSpacing: '0.8px', marginBottom: 4 }}>Melhor Escola</div>
+              <div style={{ fontSize: TEXT.micro, fontWeight: 700, textTransform: 'uppercase', color: COLOR.paperMid, letterSpacing: '0.8px', marginBottom: 4 }}>Melhor Escola</div>
               <div style={{ fontSize: 24, fontWeight: 800, color: '#b58900' }}>{globalStats.bestSchool}</div>
-              <div style={{ fontSize: 12, color: '#586e75' }}>Líder acadêmica</div>
+              <div style={{ fontSize: TEXT.caption, color: COLOR.paperWarm }}>Líder acadêmica</div>
             </div>
             <div style={S.card}>
-              <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: '#93a1a1', letterSpacing: '0.8px', marginBottom: 4 }}>Melhor Turma</div>
+              <div style={{ fontSize: TEXT.micro, fontWeight: 700, textTransform: 'uppercase', color: COLOR.paperMid, letterSpacing: '0.8px', marginBottom: 4 }}>Melhor Turma</div>
               <div style={{ fontSize: 24, fontWeight: 800, color: '#2aa198' }}>{globalStats.bestClass}</div>
-              <div style={{ fontSize: 12, color: '#586e75' }}>Maior média por turma</div>
+              <div style={{ fontSize: TEXT.caption, color: COLOR.paperWarm }}>Maior média por turma</div>
             </div>
           </div>
 
@@ -596,11 +598,11 @@ Responda APENAS um objeto JSON no formato:
           <div style={{ ...S.card, marginBottom: 24 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
               <div>
-                <h3 style={{ fontSize: 18, fontWeight: 700, color: '#073642', margin: 0 }}>
+                <h3 style={{ fontSize: 18, fontWeight: 700, color: COLOR.paperInk, margin: 0 }}>
                   <i className="ti ti-chart-radar" style={{ marginRight: 8, color: '#268bd2' }} />
                   Painel de Métricas Pedagógicas
                 </h3>
-                <p style={{ fontSize: 13, color: '#586e75', margin: '3px 0 0' }}>
+                <p style={{ fontSize: TEXT.bodyCompact, color: COLOR.paperWarm, margin: '3px 0 0' }}>
                   Visualize e edite as 10 métricas explicitadas por visão global, escola, turma ou aluno.
                 </p>
               </div>
@@ -608,7 +610,7 @@ Responda APENAS um objeto JSON no formato:
               <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
                 {panelScope !== 'global' && (
                   <button onClick={() => setEditPanelValues(v => !v)}
-                    style={{ ...S.btn, background: editPanelValues ? '#073642' : '#eee8d5', color: editPanelValues ? '#fff' : '#586e75' }}>
+                    style={{ ...S.btn, background: editPanelValues ? '#2c1a0e' : '#f0e8d8', color: editPanelValues ? '#fff' : '#7a5c42' }}>
                     <i className="ti ti-pencil" /> {editPanelValues ? 'Concluir Edição' : 'Editar Valores'}
                   </button>
                 )}
@@ -619,11 +621,11 @@ Responda APENAS um objeto JSON no formato:
             </div>
 
             {/* Barra de Filtro Ajustável do Painel */}
-            <div style={{ display: 'flex', gap: 12, marginBottom: 20, alignItems: 'center', flexWrap: 'wrap', background: '#f5f0e8', padding: '10px 14px', borderRadius: 12 }}>
-              <span style={{ fontSize: 12, fontWeight: 700, color: '#586e75', textTransform: 'uppercase', letterSpacing: '0.8px' }}>
+            <div style={{ display: 'flex', gap: 12, marginBottom: 20, alignItems: 'center', flexWrap: 'wrap', background: '#f5f0e8', padding: '10px 14px', borderRadius: RADIUS.lg }}>
+              <span style={{ fontSize: TEXT.caption, fontWeight: 700, color: COLOR.paperWarm, textTransform: 'uppercase', letterSpacing: '0.8px' }}>
                 Filtrar Gráfico Por:
               </span>
-              <div style={{ display: 'flex', gap: 4, background: '#eee8d5', borderRadius: 10, padding: 3 }}>
+              <div style={{ display: 'flex', gap: 4, background: '#f0e8d8', borderRadius: RADIUS.md, padding: 3 }}>
                 {[
                   { key: 'global', label: ' Geral' },
                   { key: 'school', label: ' Escola' },
@@ -631,9 +633,9 @@ Responda APENAS um objeto JSON no formato:
                   { key: 'student', label: ' Aluno' },
                 ].map(b => (
                   <button key={b.key} onClick={() => { setPanelScope(b.key as typeof panelScope); setEditPanelValues(false) }} style={{
-                    ...S.btn, padding: '5px 12px', fontSize: 12,
+                    ...S.btn, padding: '5px 12px', fontSize: TEXT.caption,
                     background: panelScope === b.key ? '#fff' : 'transparent',
-                    color: panelScope === b.key ? '#073642' : '#93a1a1',
+                    color: panelScope === b.key ? '#2c1a0e' : '#a08060',
                     boxShadow: panelScope === b.key ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
                   }}>
                     {b.label}
@@ -664,10 +666,10 @@ Responda APENAS um objeto JSON no formato:
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
                 <RadarChart scores={displayedMetricScores} metrics={metricDefs} size={260} />
                 <div style={{ marginTop: 12, textAlign: 'center' }}>
-                  <span style={{ fontSize: 24, fontWeight: 800, color: '#073642' }}>
+                  <span style={{ fontSize: 24, fontWeight: 800, color: COLOR.paperInk }}>
                     {computeScore(displayedMetricScores, metricDefs, null).toFixed(1)}
                   </span>
-                  <div style={{ fontSize: 11, color: '#93a1a1', textTransform: 'uppercase', fontWeight: 700 }}>Score Ponderado da Visão</div>
+                  <div style={{ fontSize: TEXT.micro, color: COLOR.paperMid, textTransform: 'uppercase', fontWeight: 700 }}>Score Ponderado da Visão</div>
                 </div>
               </div>
 
@@ -676,8 +678,8 @@ Responda APENAS um objeto JSON no formato:
                 {metricDefs.map(m => {
                   const val = displayedMetricScores[m.key] || 0
                   return (
-                    <div key={m.key} style={{ background: '#f5f0e8', padding: '10px 14px', borderRadius: 10 }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, fontWeight: 600, color: '#073642', marginBottom: 4 }}>
+                    <div key={m.key} style={{ background: '#f5f0e8', padding: '10px 14px', borderRadius: RADIUS.md }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: TEXT.bodyCompact, fontWeight: 600, color: COLOR.paperInk, marginBottom: 4 }}>
                         <span><i className={`ti ${m.icon}`} style={{ marginRight: 6, color: '#268bd2' }} />{m.label}</span>
                         <span>{val.toFixed(1)} / 10</span>
                       </div>
@@ -703,19 +705,19 @@ Responda APENAS um objeto JSON no formato:
           {/* Ranking de Turmas e Distribuição */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 20 }}>
             <div style={S.card}>
-              <h3 style={{ fontSize: 16, fontWeight: 700, color: '#073642', margin: '0 0 16px' }}>
+              <h3 style={{ fontSize: TEXT.subtitle, fontWeight: 700, color: COLOR.paperInk, margin: '0 0 16px' }}>
                 <i className="ti ti-trophy" style={{ marginRight: 8, color: '#b58900' }} />Desempenho por Turma
               </h3>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                 {globalStats.classAvgs.length === 0 ? (
-                  <p style={{ color: '#93a1a1', fontSize: 13 }}>Sem dados de turmas...</p>
+                  <p style={{ color: COLOR.paperMid, fontSize: TEXT.bodyCompact }}>Sem dados de turmas...</p>
                 ) : globalStats.classAvgs.map(c => (
                   <div key={c.name}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, fontWeight: 600, color: '#073642', marginBottom: 4 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: TEXT.bodyCompact, fontWeight: 600, color: COLOR.paperInk, marginBottom: 4 }}>
                       <span>{c.name}</span>
                       <span>{c.avg.toFixed(1)}</span>
                     </div>
-                    <div style={{ height: 8, background: '#eee8d5', borderRadius: 4, overflow: 'hidden' }}>
+                    <div style={{ height: 8, background: '#f0e8d8', borderRadius: 4, overflow: 'hidden' }}>
                       <div style={{ height: '100%', width: `${(c.avg / 10) * 100}%`, background: c.schoolColor, borderRadius: 4, transition: 'width 0.4s' }} />
                     </div>
                   </div>
@@ -724,7 +726,7 @@ Responda APENAS um objeto JSON no formato:
             </div>
 
             <div style={S.card}>
-              <h3 style={{ fontSize: 16, fontWeight: 700, color: '#073642', margin: '0 0 16px' }}>
+              <h3 style={{ fontSize: TEXT.subtitle, fontWeight: 700, color: COLOR.paperInk, margin: '0 0 16px' }}>
                 <i className="ti ti-chart-bar-popular" style={{ marginRight: 8 }} />Distribuição de Notas
               </h3>
               <div style={{ height: 160, display: 'flex', alignItems: 'flex-end', gap: 8, padding: '10px 0 24px' }}>
@@ -734,12 +736,12 @@ Responda APENAS um objeto JSON no formato:
                   return (
                     <div key={i} style={{ flex: 1, position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                       <div style={{ width: '100%', height: `${h}%`, background: i < 5 ? '#dc322f' : i < 7 ? '#b58900' : '#859900', borderRadius: '4px 4px 0 0', minHeight: 2 }} />
-                      <span style={{ position: 'absolute', bottom: -18, fontSize: 10, color: '#93a1a1' }}>{i + 1}</span>
+                      <span style={{ position: 'absolute', bottom: -18, fontSize: 10, color: COLOR.paperMid }}>{i + 1}</span>
                     </div>
                   )
                 })}
               </div>
-              <p style={{ fontSize: 11, color: '#93a1a1', textAlign: 'center', margin: 0 }}>Distribuição de 1 a 10</p>
+              <p style={{ fontSize: TEXT.micro, color: COLOR.paperMid, textAlign: 'center', margin: 0 }}>Distribuição de 1 a 10</p>
             </div>
           </div>
         </div>
@@ -750,8 +752,8 @@ Responda APENAS um objeto JSON no formato:
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
             <div>
-              <h3 style={{ fontSize: 18, fontWeight: 700, color: '#073642', margin: 0 }}>Desempenho por Escola</h3>
-              <p style={{ fontSize: 13, color: '#586e75', margin: '2px 0 0' }}>Cadastre escolas e ajuste suas métricas pedagógicas individualmente.</p>
+              <h3 style={{ fontSize: 18, fontWeight: 700, color: COLOR.paperInk, margin: 0 }}>Desempenho por Escola</h3>
+              <p style={{ fontSize: TEXT.bodyCompact, color: COLOR.paperWarm, margin: '2px 0 0' }}>Cadastre escolas e ajuste suas métricas pedagógicas individualmente.</p>
             </div>
             <button onClick={openAddSchool} style={{ ...S.btn, background: '#2c1a0e', color: '#fff' }}>
               <i className="ti ti-plus" /> Registrar Nova Escola
@@ -768,25 +770,25 @@ Responda APENAS um objeto JSON no formato:
                 return (
                   <div key={sc.id} onClick={() => setSelectedSchoolId(isActive ? null : sc.id)} style={{
                     ...S.card, cursor: 'pointer', transition: 'all 0.15s',
-                    borderColor: isActive ? '#073642' : '#ede8dc',
+                    borderColor: isActive ? '#2c1a0e' : '#ede8dc',
                     background: isActive ? '#f0f6fa' : '#fff',
                   }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-                      <div style={{ width: 40, height: 40, borderRadius: 10, background: sc.color, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <div style={{ width: 40, height: 40, borderRadius: RADIUS.md, background: sc.color, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                         <i className="ti ti-building-community" style={{ color: '#fff', fontSize: 20 }} />
                       </div>
                       <div style={{ display: 'flex', gap: 6 }}>
-                        <button onClick={e => { e.stopPropagation(); openEditSchool(sc) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#93a1a1', fontSize: 16 }}>
+                        <button onClick={e => { e.stopPropagation(); openEditSchool(sc) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLOR.paperMid, fontSize: TEXT.subtitle }}>
                           <i className="ti ti-pencil" />
                         </button>
-                        <button onClick={e => { e.stopPropagation(); deleteSchool(sc.id) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#dc322f', fontSize: 16 }}>
+                        <button onClick={e => { e.stopPropagation(); deleteSchool(sc.id) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#dc322f', fontSize: TEXT.subtitle }}>
                           <i className="ti ti-trash" />
                         </button>
                       </div>
                     </div>
-                    <div style={{ fontWeight: 700, fontSize: 16, color: '#2c1a0e', marginBottom: 4 }}>{sc.name}</div>
+                    <div style={{ fontWeight: 700, fontSize: TEXT.subtitle, color: COLOR.paperInk, marginBottom: 4 }}>{sc.name}</div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 }}>
-                      <span style={{ fontSize: 12, color: '#93a1a1' }}>Score Pedagógico</span>
+                      <span style={{ fontSize: TEXT.caption, color: COLOR.paperMid }}>Score Pedagógico</span>
                       <span style={{ fontSize: 18, fontWeight: 800, color: overall >= 7 ? '#2d7a00' : overall >= 5 ? '#854d00' : '#9b1c1c' }}>
                         {overall.toFixed(1)}
                       </span>
@@ -806,23 +808,23 @@ Responda APENAS um objeto JSON no formato:
                 <div style={{ width: 380, flexShrink: 0 }}>
                   <div style={{ ...S.card, position: 'sticky', top: 20 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                      <div style={{ fontWeight: 700, fontSize: 16, color: '#2c1a0e' }}>Métricas: {sc.name}</div>
-                      <button onClick={() => setSelectedSchoolId(null)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: '#93a1a1' }}>×</button>
+                      <div style={{ fontWeight: 700, fontSize: TEXT.subtitle, color: COLOR.paperInk }}>Métricas: {sc.name}</div>
+                      <button onClick={() => setSelectedSchoolId(null)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: COLOR.paperMid }}>×</button>
                     </div>
 
                     <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
                       <RadarChart scores={scores} metrics={metricDefs} size={220} />
                     </div>
 
-                    <div style={{ textAlign: 'center', marginBottom: 16, background: '#f5f0e8', borderRadius: 12, padding: '10px 0' }}>
+                    <div style={{ textAlign: 'center', marginBottom: 16, background: '#f5f0e8', borderRadius: RADIUS.lg, padding: '10px 0' }}>
                       <span style={{ fontSize: 28, fontWeight: 800, color: overall >= 7 ? '#2d7a00' : '#854d00' }}>{overall.toFixed(1)}</span>
-                      <div style={{ fontSize: 10, color: '#93a1a1', textTransform: 'uppercase', fontWeight: 700 }}>Score Composto da Escola</div>
+                      <div style={{ fontSize: 10, color: COLOR.paperMid, textTransform: 'uppercase', fontWeight: 700 }}>Score Composto da Escola</div>
                     </div>
 
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxHeight: 320, overflowY: 'auto' }}>
                       {metricDefs.map(m => (
                         <div key={m.key}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: 600, color: '#073642', marginBottom: 4 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: TEXT.caption, fontWeight: 600, color: COLOR.paperInk, marginBottom: 4 }}>
                             <span><i className={`ti ${m.icon}`} style={{ marginRight: 6 }} />{m.label}</span>
                             <span>{(scores[m.key] || 0).toFixed(1)}</span>
                           </div>
@@ -845,8 +847,8 @@ Responda APENAS um objeto JSON no formato:
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
             <div>
-              <h3 style={{ fontSize: 18, fontWeight: 700, color: '#073642', margin: 0 }}>Desempenho por Turma</h3>
-              <p style={{ fontSize: 13, color: '#586e75', margin: '2px 0 0' }}>Cadastre turmas e edite as métricas pedagógicas da classe.</p>
+              <h3 style={{ fontSize: 18, fontWeight: 700, color: COLOR.paperInk, margin: 0 }}>Desempenho por Turma</h3>
+              <p style={{ fontSize: TEXT.bodyCompact, color: COLOR.paperWarm, margin: '2px 0 0' }}>Cadastre turmas e edite as métricas pedagógicas da classe.</p>
             </div>
             <button onClick={openAddClass} style={{ ...S.btn, background: '#2c1a0e', color: '#fff' }}>
               <i className="ti ti-plus" /> Registrar Nova Turma
@@ -864,23 +866,23 @@ Responda APENAS um objeto JSON no formato:
                 return (
                   <div key={cls.id} onClick={() => setSelectedClassId(isActive ? null : cls.id)} style={{
                     ...S.card, cursor: 'pointer', transition: 'all 0.15s',
-                    borderColor: isActive ? '#073642' : '#ede8dc',
+                    borderColor: isActive ? '#2c1a0e' : '#ede8dc',
                     background: isActive ? '#f0f6fa' : '#fff',
                   }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
-                      <div style={{ fontWeight: 700, fontSize: 16, color: '#2c1a0e' }}>{cls.name}</div>
+                      <div style={{ fontWeight: 700, fontSize: TEXT.subtitle, color: COLOR.paperInk }}>{cls.name}</div>
                       <div style={{ display: 'flex', gap: 6 }}>
-                        <button onClick={e => { e.stopPropagation(); openEditClass(cls) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#93a1a1', fontSize: 16 }}>
+                        <button onClick={e => { e.stopPropagation(); openEditClass(cls) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLOR.paperMid, fontSize: TEXT.subtitle }}>
                           <i className="ti ti-pencil" />
                         </button>
-                        <button onClick={e => { e.stopPropagation(); deleteClass(cls.id) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#dc322f', fontSize: 16 }}>
+                        <button onClick={e => { e.stopPropagation(); deleteClass(cls.id) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#dc322f', fontSize: TEXT.subtitle }}>
                           <i className="ti ti-trash" />
                         </button>
                       </div>
                     </div>
-                    <div style={{ fontSize: 12, color: '#93a1a1', marginBottom: 12 }}>{sc?.name} · {cls.subject || 'Geral'}</div>
+                    <div style={{ fontSize: TEXT.caption, color: COLOR.paperMid, marginBottom: 12 }}>{sc?.name} · {cls.subject || 'Geral'}</div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ fontSize: 12, color: '#93a1a1' }}>Score Pedagógico</span>
+                      <span style={{ fontSize: TEXT.caption, color: COLOR.paperMid }}>Score Pedagógico</span>
                       <span style={{ fontSize: 18, fontWeight: 800, color: overall >= 7 ? '#2d7a00' : overall >= 5 ? '#854d00' : '#9b1c1c' }}>
                         {overall.toFixed(1)}
                       </span>
@@ -900,23 +902,23 @@ Responda APENAS um objeto JSON no formato:
                 <div style={{ width: 380, flexShrink: 0 }}>
                   <div style={{ ...S.card, position: 'sticky', top: 20 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                      <div style={{ fontWeight: 700, fontSize: 16, color: '#2c1a0e' }}>Métricas: {cls.name}</div>
-                      <button onClick={() => setSelectedClassId(null)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: '#93a1a1' }}>×</button>
+                      <div style={{ fontWeight: 700, fontSize: TEXT.subtitle, color: COLOR.paperInk }}>Métricas: {cls.name}</div>
+                      <button onClick={() => setSelectedClassId(null)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: COLOR.paperMid }}>×</button>
                     </div>
 
                     <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
                       <RadarChart scores={scores} metrics={metricDefs} size={220} />
                     </div>
 
-                    <div style={{ textAlign: 'center', marginBottom: 16, background: '#f5f0e8', borderRadius: 12, padding: '10px 0' }}>
+                    <div style={{ textAlign: 'center', marginBottom: 16, background: '#f5f0e8', borderRadius: RADIUS.lg, padding: '10px 0' }}>
                       <span style={{ fontSize: 28, fontWeight: 800, color: overall >= 7 ? '#2d7a00' : '#854d00' }}>{overall.toFixed(1)}</span>
-                      <div style={{ fontSize: 10, color: '#93a1a1', textTransform: 'uppercase', fontWeight: 700 }}>Score Composto da Turma</div>
+                      <div style={{ fontSize: 10, color: COLOR.paperMid, textTransform: 'uppercase', fontWeight: 700 }}>Score Composto da Turma</div>
                     </div>
 
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxHeight: 320, overflowY: 'auto' }}>
                       {metricDefs.map(m => (
                         <div key={m.key}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: 600, color: '#073642', marginBottom: 4 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: TEXT.caption, fontWeight: 600, color: COLOR.paperInk, marginBottom: 4 }}>
                             <span><i className={`ti ${m.icon}`} style={{ marginRight: 6 }} />{m.label}</span>
                             <span>{(scores[m.key] || 0).toFixed(1)}</span>
                           </div>
@@ -940,10 +942,10 @@ Responda APENAS um objeto JSON no formato:
           {/* Filtros e Busca */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
             <div>
-              <h3 style={{ fontSize: 18, fontWeight: 700, color: '#073642', margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <h3 style={{ fontSize: 18, fontWeight: 700, color: COLOR.paperInk, margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
                 <i className="ti ti-trending-up" style={{ color: '#8b5e3c' }} /> Evolução & Desempenho do Aluno
               </h3>
-              <p style={{ fontSize: 13, color: '#586e75', margin: '2px 0 0' }}>
+              <p style={{ fontSize: TEXT.bodyCompact, color: COLOR.paperWarm, margin: '2px 0 0' }}>
                 Acompanhamento longitudinal, radar de competências, linha do tempo histórica e diagnóstico inteligente com Rafinha IA.
               </p>
             </div>
@@ -963,7 +965,7 @@ Responda APENAS um objeto JSON no formato:
 
               {/* Busca por Nome */}
               <div style={{ position: 'relative' }}>
-                <i className="ti ti-search" style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#93a1a1' }} />
+                <i className="ti ti-search" style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: COLOR.paperMid }} />
                 <input
                   style={{ ...S.input, paddingLeft: 30, width: 200 }}
                   placeholder="Buscar aluno..."
@@ -990,7 +992,7 @@ Responda APENAS um objeto JSON no formato:
 
                 if (filtered.length === 0) {
                   return (
-                    <div style={{ ...S.card, textAlign: 'center', padding: '32px 16px', color: '#93a1a1' }}>
+                    <div style={{ ...S.card, textAlign: 'center', padding: '32px 16px', color: COLOR.paperMid }}>
                       <i className="ti ti-user-x" style={{ fontSize: 32, marginBottom: 8, display: 'block' }} />
                       Nenhum aluno encontrado com esses filtros.
                     </div>
@@ -1027,30 +1029,30 @@ Responda APENAS um objeto JSON no formato:
                         {st.name.charAt(0).toUpperCase()}
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontWeight: 600, color: '#2c1a0e', fontSize: 13.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        <div style={{ fontWeight: 600, color: COLOR.paperInk, fontSize: TEXT.body, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                           {st.name}
                         </div>
-                        <div style={{ fontSize: 11.5, color: '#7a5c42' }}>
+                        <div style={{ fontSize: TEXT.caption, color: COLOR.paperWarm }}>
                           {cls?.name || 'Sem turma'} · Nível {st.level}
                         </div>
                       </div>
                       <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                         <span style={{
-                          fontSize: 14, fontWeight: 800,
+                          fontSize: TEXT.body, fontWeight: 800,
                           color: overall >= 7 ? '#2d7a00' : overall >= 5 ? '#854d00' : '#9b1c1c'
                         }}>
                           {overall.toFixed(1)}
                         </span>
                         <button
                           onClick={e => { e.stopPropagation(); openEditStudent(st) }}
-                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#93a1a1', fontSize: 14 }}
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLOR.paperMid, fontSize: TEXT.body }}
                           title="Editar Aluno"
                         >
                           <i className="ti ti-pencil" />
                         </button>
                         <button
                           onClick={e => { e.stopPropagation(); deleteStudent(st.id) }}
-                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#dc322f', fontSize: 14 }}
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#dc322f', fontSize: TEXT.body }}
                           title="Excluir Aluno"
                         >
                           <i className="ti ti-trash" />
@@ -1069,7 +1071,7 @@ Responda APENAS um objeto JSON no formato:
                 const st = students.find(s => s.id === currentStudentId)
                 if (!st) {
                   return (
-                    <div style={{ ...S.card, textAlign: 'center', padding: 48, color: '#93a1a1' }}>
+                    <div style={{ ...S.card, textAlign: 'center', padding: 48, color: COLOR.paperMid }}>
                       <i className="ti ti-user-search" style={{ fontSize: 40, marginBottom: 12, display: 'block' }} />
                       Selecione um aluno na lista ao lado para visualizar a evolução pedagógica completa.
                     </div>
@@ -1101,7 +1103,7 @@ Responda APENAS um objeto JSON no formato:
                         </div>
                         <div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: '#2c1a0e', fontFamily: "'Fraunces', Georgia, serif" }}>
+                            <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: COLOR.paperInk, fontFamily: "'Fraunces', Georgia, serif" }}>
                               {st.name}
                             </h2>
                             <span style={{ ...S.badge, background: '#e8f4fd', color: '#268bd2', border: '1px solid rgba(38,139,210,0.2)' }}>
@@ -1111,9 +1113,11 @@ Responda APENAS um objeto JSON no formato:
                               {statusLabel}
                             </span>
                           </div>
-                          <div style={{ fontSize: 12.5, color: '#7a5c42', marginTop: 4 }}>
-                            🏫 {sch?.name || 'Escola Padrão'} · 👥 Turma: <strong>{cls?.name || 'Sem turma'}</strong>
-                            {st.notes ? ` · 📝 "${st.notes}"` : ''}
+                          <div style={{ fontSize: TEXT.bodyCompact, color: COLOR.paperWarm, marginTop: 4, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                            <span><i className="ti ti-building" /> {sch?.name || 'Escola Padrão'}</span>
+                            <span>·</span>
+                            <span><i className="ti ti-users" /> Turma: <strong>{cls?.name || 'Sem turma'}</strong></span>
+                            {st.notes ? <span>· <i className="ti ti-notes" /> "{st.notes}"</span> : ''}
                           </div>
                         </div>
                       </div>
@@ -1130,13 +1134,13 @@ Responda APENAS um objeto JSON no formato:
                           }}
                         >
                           <i className={isAnalyzing ? 'ti ti-loader ti-spin' : 'ti ti-sparkles'} />
-                          {isAnalyzing ? 'Analisando Histórico...' : '✨ Diagnóstico com Rafinha IA'}
+                          {isAnalyzing ? 'Analisando Histórico...' : 'Diagnóstico com Rafinha IA'}
                         </button>
                         <button
                           onClick={() => {
                             window.print()
                           }}
-                          style={{ ...S.btn, background: '#fff', color: '#7a5c42', border: '1px solid rgba(139,115,85,0.25)' }}
+                          style={{ ...S.btn, background: '#fff', color: COLOR.paperWarm, border: '1px solid rgba(139,115,85,0.25)' }}
                           title="Imprimir / Exportar Relatório de Evolução"
                         >
                           <i className="ti ti-printer" /> Imprimir Relatório
@@ -1147,25 +1151,25 @@ Responda APENAS um objeto JSON no formato:
                     {/* 2. KPIs Rápidos do Aluno */}
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14 }}>
                       <div style={{ ...S.card, padding: '14px 18px', textAlign: 'center' }}>
-                        <div style={{ fontSize: 11, color: '#7a5c42', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.5px' }}>
+                        <div style={{ fontSize: TEXT.micro, color: COLOR.paperWarm, textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.5px' }}>
                           Score Composto
                         </div>
                         <div style={{ fontSize: 24, fontWeight: 800, color: statusColor, marginTop: 4 }}>
-                          {overall.toFixed(1)} <span style={{ fontSize: 13, fontWeight: 500, color: '#93a1a1' }}>/ 10</span>
+                          {overall.toFixed(1)} <span style={{ fontSize: TEXT.bodyCompact, fontWeight: 500, color: COLOR.paperMid }}>/ 10</span>
                         </div>
                       </div>
 
                       <div style={{ ...S.card, padding: '14px 18px', textAlign: 'center' }}>
-                        <div style={{ fontSize: 11, color: '#7a5c42', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.5px' }}>
+                        <div style={{ fontSize: TEXT.micro, color: COLOR.paperWarm, textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.5px' }}>
                           Média Avaliativa
                         </div>
-                        <div style={{ fontSize: 24, fontWeight: 800, color: '#2c1a0e', marginTop: 4 }}>
+                        <div style={{ fontSize: 24, fontWeight: 800, color: COLOR.paperInk, marginTop: 4 }}>
                           {autoG != null ? autoG.toFixed(1) : (scores['academic'] || 7.5).toFixed(1)}
                         </div>
                       </div>
 
                       <div style={{ ...S.card, padding: '14px 18px', textAlign: 'center' }}>
-                        <div style={{ fontSize: 11, color: '#7a5c42', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.5px' }}>
+                        <div style={{ fontSize: TEXT.micro, color: COLOR.paperWarm, textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.5px' }}>
                           Participação / Engajamento
                         </div>
                         <div style={{ fontSize: 24, fontWeight: 800, color: '#268bd2', marginTop: 4 }}>
@@ -1174,7 +1178,7 @@ Responda APENAS um objeto JSON no formato:
                       </div>
 
                       <div style={{ ...S.card, padding: '14px 18px', textAlign: 'center' }}>
-                        <div style={{ fontSize: 11, color: '#7a5c42', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.5px' }}>
+                        <div style={{ fontSize: TEXT.micro, color: COLOR.paperWarm, textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.5px' }}>
                           Progressão Temporal
                         </div>
                         <div style={{ fontSize: 24, fontWeight: 800, color: '#3d7a4e', marginTop: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
@@ -1188,15 +1192,15 @@ Responda APENAS um objeto JSON no formato:
                       {/* Radar de Competências */}
                       <div style={{ ...S.card, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                         <div style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                          <div style={{ fontWeight: 700, fontSize: 14, color: '#2c1a0e', display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <div style={{ fontWeight: 700, fontSize: TEXT.body, color: COLOR.paperInk, display: 'flex', alignItems: 'center', gap: 6 }}>
                             <i className="ti ti-chart-radar" style={{ color: '#268bd2' }} /> Radar de Competências
                           </div>
-                          <span style={{ fontSize: 11, color: '#7a5c42' }}>10 Dimensões</span>
+                          <span style={{ fontSize: TEXT.micro, color: COLOR.paperWarm }}>10 Dimensões</span>
                         </div>
 
                         <RadarChart scores={{ ...scores, academic: autoG || 0 }} metrics={metricDefs} size={240} />
 
-                        <div style={{ fontSize: 11.5, color: '#7a5c42', textAlign: 'center', marginTop: 8 }}>
+                        <div style={{ fontSize: TEXT.caption, color: COLOR.paperWarm, textAlign: 'center', marginTop: 8 }}>
                           Distribuição ponderada por habilidades ativas, gramática, fluência e autonomia.
                         </div>
                       </div>
@@ -1204,10 +1208,10 @@ Responda APENAS um objeto JSON no formato:
                       {/* Linha do Tempo Histórica */}
                       <div style={S.card}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                          <div style={{ fontWeight: 700, fontSize: 14, color: '#2c1a0e', display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <div style={{ fontWeight: 700, fontSize: TEXT.body, color: COLOR.paperInk, display: 'flex', alignItems: 'center', gap: 6 }}>
                             <i className="ti ti-timeline" style={{ color: '#8b5e3c' }} /> Evolução Temporal (Mês a Mês)
                           </div>
-                          <div style={{ display: 'flex', gap: 14, fontSize: 11, fontWeight: 600 }}>
+                          <div style={{ display: 'flex', gap: 14, fontSize: TEXT.micro, fontWeight: 600 }}>
                             <span style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#8b5e3c' }}>
                               <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#8b5e3c' }} /> Nota Avaliativa
                             </span>
@@ -1221,8 +1225,9 @@ Responda APENAS um objeto JSON no formato:
                           <StudentTimelineChart data={timeline} height={180} />
                         </div>
 
-                        <div style={{ background: '#fdf8f2', borderRadius: 10, padding: '10px 14px', fontSize: 12, color: '#7a5c42', border: '1px solid rgba(139,115,85,0.12)' }}>
-                          💡 <strong>Tendência:</strong> Aluno com trajetória consistente de crescimento ao longo das avaliações do ano.
+                        <div style={{ background: COLOR.paperPage, borderRadius: RADIUS.md, padding: '10px 14px', fontSize: TEXT.caption, color: COLOR.paperWarm, border: '1px solid rgba(139,115,85,0.12)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <i className="ti ti-bulb text-amber-600" style={{ fontSize: 16 }} />
+                          <span><strong>Tendência:</strong> Aluno com trajetória consistente de crescimento ao longo das avaliações do ano.</span>
                         </div>
                       </div>
                     </div>
@@ -1236,7 +1241,7 @@ Responda APENAS um objeto JSON no formato:
                         boxShadow: '0 4px 16px rgba(44,26,14,0.08)'
                       }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700, fontSize: 16, color: '#2c1a0e', fontFamily: "'Fraunces', Georgia, serif" }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700, fontSize: TEXT.subtitle, color: COLOR.paperInk, fontFamily: "'Fraunces', Georgia, serif" }}>
                             <i className="ti ti-sparkles" style={{ color: '#8b5e3c' }} /> Diagnóstico Inteligente de Evolução (Rafinha IA)
                           </div>
                           <span style={{ ...S.badge, background: '#3d7a4e20', color: '#3d7a4e', fontWeight: 700 }}>
@@ -1247,20 +1252,20 @@ Responda APENAS um objeto JSON no formato:
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14, marginBottom: 16 }}>
                           {/* Ponto de Atenção */}
                           <div style={{ background: 'rgba(200,122,30,0.08)', borderLeft: '4px solid #c87a1e', padding: '14px 16px', borderRadius: '0 12px 12px 0' }}>
-                            <div style={{ fontWeight: 700, fontSize: 13, color: '#c87a1e', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <div style={{ fontWeight: 700, fontSize: TEXT.bodyCompact, color: '#c87a1e', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
                               <i className="ti ti-alert-triangle" /> {aiDiagnosis.warning.split(':')[0]}
                             </div>
-                            <div style={{ fontSize: 12.5, color: '#2c1a0e', lineHeight: 1.5 }}>
+                            <div style={{ fontSize: TEXT.bodyCompact, color: COLOR.paperInk, lineHeight: 1.5 }}>
                               {aiDiagnosis.warning.split(':').slice(1).join(':').trim() || aiDiagnosis.warning}
                             </div>
                           </div>
 
                           {/* Ponto Forte */}
                           <div style={{ background: 'rgba(61,122,78,0.08)', borderLeft: '4px solid #3d7a4e', padding: '14px 16px', borderRadius: '0 12px 12px 0' }}>
-                            <div style={{ fontWeight: 700, fontSize: 13, color: '#3d7a4e', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <div style={{ fontWeight: 700, fontSize: TEXT.bodyCompact, color: '#3d7a4e', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
                               <i className="ti ti-award" /> {aiDiagnosis.strength.split(':')[0]}
                             </div>
-                            <div style={{ fontSize: 12.5, color: '#2c1a0e', lineHeight: 1.5 }}>
+                            <div style={{ fontSize: TEXT.bodyCompact, color: COLOR.paperInk, lineHeight: 1.5 }}>
                               {aiDiagnosis.strength.split(':').slice(1).join(':').trim() || aiDiagnosis.strength}
                             </div>
                           </div>
@@ -1268,16 +1273,16 @@ Responda APENAS um objeto JSON no formato:
 
                         {/* Intervenções Pedagógicas */}
                         {aiDiagnosis.interventions && aiDiagnosis.interventions.length > 0 && (
-                          <div style={{ background: '#fff', borderRadius: 12, padding: '14px 16px', border: '1px solid rgba(139,115,85,0.15)' }}>
-                            <div style={{ fontWeight: 700, fontSize: 13, color: '#2c1a0e', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <div style={{ background: '#fff', borderRadius: RADIUS.lg, padding: '14px 16px', border: '1px solid rgba(139,115,85,0.15)' }}>
+                            <div style={{ fontWeight: 700, fontSize: TEXT.bodyCompact, color: COLOR.paperInk, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
                               <i className="ti ti-list-check" style={{ color: '#8b5e3c' }} /> Plano de Ação Pedagógica & Intervenções Recomendadas
                             </div>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                               {aiDiagnosis.interventions.map((action, idx) => (
-                                <div key={idx} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 12.5, color: '#4a3728' }}>
+                                <div key={idx} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: TEXT.bodyCompact, color: '#4a3728' }}>
                                   <span style={{
                                     width: 20, height: 20, borderRadius: '50%', background: '#f5f0e8', color: '#8b5e3c',
-                                    display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, flexShrink: 0, marginTop: 1
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: TEXT.micro, fontWeight: 700, flexShrink: 0, marginTop: 1
                                   }}>
                                     {idx + 1}
                                   </span>
@@ -1294,10 +1299,10 @@ Responda APENAS um objeto JSON no formato:
                     <div style={S.card}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                         <div>
-                          <div style={{ fontWeight: 700, fontSize: 15, color: '#2c1a0e', display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <div style={{ fontWeight: 700, fontSize: 15, color: COLOR.paperInk, display: 'flex', alignItems: 'center', gap: 6 }}>
                             <i className="ti ti-sliders" style={{ color: '#8b5e3c' }} /> Ajuste das Métricas Pedagógicas de {st.name}
                           </div>
-                          <div style={{ fontSize: 12, color: '#7a5c42', marginTop: 2 }}>
+                          <div style={{ fontSize: TEXT.caption, color: COLOR.paperWarm, marginTop: 2 }}>
                             Ajuste os valores manuais (0 a 10) para recalcular o score composto e o radar em tempo real.
                           </div>
                         </div>
@@ -1307,15 +1312,15 @@ Responda APENAS um objeto JSON no formato:
                         {metricDefs.map(m => {
                           const current = m.auto ? (autoG || 0) : (scores[m.key] || 0)
                           return (
-                            <div key={m.key} style={{ background: '#fdf8f2', borderRadius: 10, padding: '12px 14px', border: '1px solid rgba(139,115,85,0.12)' }}>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: 600, color: '#073642', marginBottom: 6 }}>
+                            <div key={m.key} style={{ background: COLOR.paperPage, borderRadius: RADIUS.md, padding: '12px 14px', border: '1px solid rgba(139,115,85,0.12)' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: TEXT.caption, fontWeight: 600, color: COLOR.paperInk, marginBottom: 6 }}>
                                 <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                                   <i className={`ti ${m.icon}`} style={{ color: '#8b5e3c' }} /> {m.label}
                                 </span>
-                                <span style={{ fontWeight: 800, color: '#2c1a0e' }}>{current.toFixed(1)}</span>
+                                <span style={{ fontWeight: 800, color: COLOR.paperInk }}>{current.toFixed(1)}</span>
                               </div>
                               {m.auto ? (
-                                <div style={{ height: 6, background: '#eee8d5', borderRadius: 4, overflow: 'hidden' }}>
+                                <div style={{ height: 6, background: '#f0e8d8', borderRadius: 4, overflow: 'hidden' }}>
                                   <div style={{ height: '100%', width: `${current * 10}%`, background: '#8b7355' }} />
                                 </div>
                               ) : (
@@ -1344,10 +1349,10 @@ Responda APENAS um objeto JSON no formato:
           {/* Header & Filtro de Turma */}
           <div style={{ ...S.card, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 14 }}>
             <div>
-              <span style={{ fontSize: 11.5, fontWeight: 700, color: '#8b5e3c', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+              <span style={{ fontSize: TEXT.caption, fontWeight: 700, color: '#8b5e3c', textTransform: 'uppercase', letterSpacing: 0.5 }}>
                 Matriz Curricular Oficial
               </span>
-              <h2 style={{ fontSize: 20, fontWeight: 700, color: '#2c1a0e', margin: '4px 0 0' }}>
+              <h2 style={{ fontSize: 20, fontWeight: 700, color: COLOR.paperInk, margin: '4px 0 0' }}>
                 Relatório de Cobertura de Habilidades BNCC
               </h2>
             </div>
@@ -1383,7 +1388,7 @@ ${gradeSkills.map(s => `- **[${s.code}]** (${s.axis}) ${s.description}`).join('\
 `
                   })
                 }}
-                style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid #d5c0b0', background: '#fff', color: '#2c1a0e', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+                style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid #d5c0b0', background: '#fff', color: COLOR.paperInk, fontSize: TEXT.bodyCompact, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
               >
                 <i className="ti ti-printer"></i> Exportar PDF
               </button>
@@ -1398,7 +1403,7 @@ ${gradeSkills.map(s => `- **[${s.code}]** (${s.axis}) ${s.description}`).join('\
                     rows: gradeSkills.map((s, i) => [s.code, s.axis, s.description, i < 4 ? 'Coberta' : 'Planejada'])
                   })
                 }}
-                style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid #d5c0b0', background: '#fff', color: '#2c1a0e', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+                style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid #d5c0b0', background: '#fff', color: COLOR.paperInk, fontSize: TEXT.bodyCompact, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
               >
                 <i className="ti ti-table"></i> Exportar Excel
               </button>
@@ -1420,20 +1425,20 @@ ${gradeSkills.map(s => `- **[${s.code}]** (${s.axis}) ${s.description}`).join('\
                   <div style={{ fontSize: 44, fontWeight: 800, color: '#2d9d5d', fontFamily: 'Fraunces, Georgia, serif' }}>
                     {coveredPct}%
                   </div>
-                  <strong style={{ fontSize: 14, color: '#2c1a0e', marginTop: 4 }}>
+                  <strong style={{ fontSize: TEXT.body, color: COLOR.paperInk, marginTop: 4 }}>
                     Progresso Curricular no Ano
                   </strong>
-                  <p style={{ fontSize: 12.5, color: '#7a6552', margin: '4px 0 16px' }}>
+                  <p style={{ fontSize: TEXT.bodyCompact, color: '#7a6552', margin: '4px 0 16px' }}>
                     {coveredCount} de {totalSkills} habilidades da BNCC trabalhadas nesta turma.
                   </p>
-                  <div style={{ height: 8, background: '#eee8d5', borderRadius: 4, overflow: 'hidden' }}>
+                  <div style={{ height: 8, background: '#f0e8d8', borderRadius: 4, overflow: 'hidden' }}>
                     <div style={{ height: '100%', width: `${coveredPct}%`, background: '#2d9d5d', borderRadius: 4 }} />
                   </div>
                 </div>
 
                 {/* Lista de Habilidades por Eixo */}
                 <div style={S.card}>
-                  <h3 style={{ fontSize: 15, fontWeight: 700, color: '#2c1a0e', margin: '0 0 14px' }}>
+                  <h3 style={{ fontSize: 15, fontWeight: 700, color: COLOR.paperInk, margin: '0 0 14px' }}>
                     Detalhamento de Habilidades por Eixo ({targetClass?.name || 'Turma'})
                   </h3>
 
@@ -1441,21 +1446,21 @@ ${gradeSkills.map(s => `- **[${s.code}]** (${s.axis}) ${s.description}`).join('\
                     {gradeSkills.map((sk, idx) => {
                       const isCovered = idx < coveredCount
                       return (
-                        <div key={sk.code} style={{ background: '#fdf8f2', border: '1px solid #e8decb', borderRadius: 10, padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+                        <div key={sk.code} style={{ background: COLOR.paperPage, border: '1px solid #e8decb', borderRadius: RADIUS.md, padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
                           <div style={{ flex: 1 }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
-                              <strong style={{ fontSize: 12.5, color: '#8b5e3c' }}>[{sk.code}]</strong>
-                              <span style={{ fontSize: 11, background: 'rgba(139,94,60,0.12)', color: '#8b5e3c', padding: '1px 6px', borderRadius: 4, fontWeight: 700 }}>
+                              <strong style={{ fontSize: TEXT.bodyCompact, color: '#8b5e3c' }}>[{sk.code}]</strong>
+                              <span style={{ fontSize: TEXT.micro, background: 'rgba(139,94,60,0.12)', color: '#8b5e3c', padding: '1px 6px', borderRadius: 4, fontWeight: 700 }}>
                                 {sk.axis}
                               </span>
                             </div>
-                            <div style={{ fontSize: 12, color: '#4a382a' }}>
+                            <div style={{ fontSize: TEXT.caption, color: '#4a382a' }}>
                               {sk.description}
                             </div>
                           </div>
 
                           <span style={{
-                            fontSize: 11, fontWeight: 800, padding: '3px 8px', borderRadius: 6,
+                            fontSize: TEXT.micro, fontWeight: 800, padding: '3px 8px', borderRadius: 6,
                             background: isCovered ? '#dcfce7' : '#fef3c7',
                             color: isCovered ? '#15803d' : '#b45309',
                             whiteSpace: 'nowrap'
@@ -1476,9 +1481,9 @@ ${gradeSkills.map(s => `- **[${s.code}]** (${s.axis}) ${s.description}`).join('\
       {/* MODAIS DE REGISTRO E EDIÇÃO */}
       {/* 1. Modal Escola */}
       {schoolModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,43,54,0.4)', zIndex: 9998, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(44,26,14,0.4)', zIndex: 9998, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <div style={{ ...S.card, width: 420, maxWidth: '95vw' }}>
-            <h2 style={{ fontSize: 18, fontWeight: 700, color: '#2c1a0e', margin: '0 0 16px' }}>
+            <h2 style={{ fontSize: 18, fontWeight: 700, color: COLOR.paperInk, margin: '0 0 16px' }}>
               {schoolModal === 'add' ? 'Registrar Nova Escola' : 'Editar Escola'}
             </h2>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -1491,14 +1496,14 @@ ${gradeSkills.map(s => `- **[${s.code}]** (${s.axis}) ${s.description}`).join('\
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   {COLORS.map(c => (
                     <button key={c.hex} onClick={() => setSchColor(c.hex)} style={{
-                      width: 28, height: 28, borderRadius: '50%', background: c.hex, border: schColor === c.hex ? '3px solid #073642' : 'none', cursor: 'pointer'
+                      width: 28, height: 28, borderRadius: '50%', background: c.hex, border: schColor === c.hex ? '3px solid #2c1a0e' : 'none', cursor: 'pointer'
                     }} />
                   ))}
                 </div>
               </div>
             </div>
             <div style={{ display: 'flex', gap: 10, marginTop: 20, justifyContent: 'flex-end' }}>
-              <button onClick={() => setSchoolModal(null)} style={{ ...S.btn, background: '#eee8d5', color: '#586e75' }}>Cancelar</button>
+              <button onClick={() => setSchoolModal(null)} style={{ ...S.btn, background: '#f0e8d8', color: COLOR.paperWarm }}>Cancelar</button>
               <button onClick={saveSchoolForm} style={{ ...S.btn, background: '#2c1a0e', color: '#fff' }}>Salvar</button>
             </div>
           </div>
@@ -1507,9 +1512,9 @@ ${gradeSkills.map(s => `- **[${s.code}]** (${s.axis}) ${s.description}`).join('\
 
       {/* 2. Modal Turma */}
       {classModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,43,54,0.4)', zIndex: 9998, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(44,26,14,0.4)', zIndex: 9998, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <div style={{ ...S.card, width: 440, maxWidth: '95vw' }}>
-            <h2 style={{ fontSize: 18, fontWeight: 700, color: '#2c1a0e', margin: '0 0 16px' }}>
+            <h2 style={{ fontSize: 18, fontWeight: 700, color: COLOR.paperInk, margin: '0 0 16px' }}>
               {classModal === 'add' ? 'Registrar Nova Turma' : 'Editar Turma'}
             </h2>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -1539,7 +1544,7 @@ ${gradeSkills.map(s => `- **[${s.code}]** (${s.axis}) ${s.description}`).join('\
               </div>
             </div>
             <div style={{ display: 'flex', gap: 10, marginTop: 20, justifyContent: 'flex-end' }}>
-              <button onClick={() => setClassModal(null)} style={{ ...S.btn, background: '#eee8d5', color: '#586e75' }}>Cancelar</button>
+              <button onClick={() => setClassModal(null)} style={{ ...S.btn, background: '#f0e8d8', color: COLOR.paperWarm }}>Cancelar</button>
               <button onClick={saveClassForm} style={{ ...S.btn, background: '#2c1a0e', color: '#fff' }}>Salvar</button>
             </div>
           </div>
@@ -1548,9 +1553,9 @@ ${gradeSkills.map(s => `- **[${s.code}]** (${s.axis}) ${s.description}`).join('\
 
       {/* 3. Modal Aluno */}
       {studentModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,43,54,0.4)', zIndex: 9998, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(44,26,14,0.4)', zIndex: 9998, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <div style={{ ...S.card, width: 440, maxWidth: '95vw' }}>
-            <h2 style={{ fontSize: 18, fontWeight: 700, color: '#2c1a0e', margin: '0 0 16px' }}>
+            <h2 style={{ fontSize: 18, fontWeight: 700, color: COLOR.paperInk, margin: '0 0 16px' }}>
               {studentModal === 'add' ? 'Registrar Novo Aluno' : 'Editar Aluno'}
             </h2>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -1578,7 +1583,7 @@ ${gradeSkills.map(s => `- **[${s.code}]** (${s.axis}) ${s.description}`).join('\
               </div>
             </div>
             <div style={{ display: 'flex', gap: 10, marginTop: 20, justifyContent: 'flex-end' }}>
-              <button onClick={() => setStudentModal(null)} style={{ ...S.btn, background: '#eee8d5', color: '#586e75' }}>Cancelar</button>
+              <button onClick={() => setStudentModal(null)} style={{ ...S.btn, background: '#f0e8d8', color: COLOR.paperWarm }}>Cancelar</button>
               <button onClick={saveStudentForm} style={{ ...S.btn, background: '#2c1a0e', color: '#fff' }}>Salvar</button>
             </div>
           </div>
@@ -1587,19 +1592,19 @@ ${gradeSkills.map(s => `- **[${s.code}]** (${s.axis}) ${s.description}`).join('\
 
       {/* 4. Modal Configurar Pesos das Métricas */}
       {showMetricModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,43,54,0.4)', zIndex: 9998, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(44,26,14,0.4)', zIndex: 9998, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <div style={{ ...S.card, width: 560, maxWidth: '95vw', maxHeight: '85vh', overflowY: 'auto' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <div>
-                <h2 style={{ fontSize: 18, fontWeight: 700, color: '#2c1a0e', margin: 0 }}>Configurar Métricas Pedagógicas</h2>
-                <p style={{ fontSize: 12, color: '#586e75', margin: '2px 0 0' }}>Ajuste os rótulos, descrições e o peso percentual de cada critério.</p>
+                <h2 style={{ fontSize: 18, fontWeight: 700, color: COLOR.paperInk, margin: 0 }}>Configurar Métricas Pedagógicas</h2>
+                <p style={{ fontSize: TEXT.caption, color: COLOR.paperWarm, margin: '2px 0 0' }}>Ajuste os rótulos, descrições e o peso percentual de cada critério.</p>
               </div>
-              <button onClick={() => setShowMetricModal(false)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: '#93a1a1' }}>×</button>
+              <button onClick={() => setShowMetricModal(false)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: COLOR.paperMid }}>×</button>
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               {metricDefs.map((m, i) => (
-                <div key={m.key} style={{ background: '#f5f0e8', borderRadius: 12, padding: '14px 16px', border: '1px solid #ede8dc' }}>
+                <div key={m.key} style={{ background: '#f5f0e8', borderRadius: RADIUS.lg, padding: '14px 16px', border: '1px solid #ede8dc' }}>
                   <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 10 }}>
                     <i className={`ti ${m.icon}`} style={{ fontSize: 20, color: '#268bd2' }} />
                     <input style={{ ...S.input, fontWeight: 700, flex: 1 }} value={m.label}
@@ -1607,24 +1612,24 @@ ${gradeSkills.map(s => `- **[${s.code}]** (${s.axis}) ${s.description}`).join('\
                         const upd = metricDefs.map((item, j) => j === i ? { ...item, label: e.target.value } : item)
                         saveMetricDefs(upd)
                       }} />
-                    <span style={{ ...S.badge, background: m.auto ? '#d0f0c0' : '#e8f4fd', color: '#333', fontSize: 11 }}>
+                    <span style={{ ...S.badge, background: m.auto ? '#d0f0c0' : '#e8f4fd', color: '#333', fontSize: TEXT.micro }}>
                       {m.auto ? 'Automática' : 'Manual'}
                     </span>
                   </div>
-                  <input style={{ ...S.input, fontSize: 12, color: '#586e75', marginBottom: 10 }} value={m.desc}
+                  <input style={{ ...S.input, fontSize: TEXT.caption, color: COLOR.paperWarm, marginBottom: 10 }} value={m.desc}
                     onChange={e => {
                       const upd = metricDefs.map((item, j) => j === i ? { ...item, desc: e.target.value } : item)
                       saveMetricDefs(upd)
                     }} />
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <span style={{ fontSize: 12, fontWeight: 600, color: '#586e75' }}>Peso no Score:</span>
+                    <span style={{ fontSize: TEXT.caption, fontWeight: 600, color: COLOR.paperWarm }}>Peso no Score:</span>
                     <input type="range" min={0} max={30} value={m.weight}
                       onChange={e => {
                         const upd = metricDefs.map((item, j) => j === i ? { ...item, weight: Number(e.target.value) } : item)
                         saveMetricDefs(upd)
                       }}
                       style={{ flex: 1, accentColor: '#268bd2' }} />
-                    <span style={{ fontSize: 13, fontWeight: 800, color: '#073642', minWidth: 32 }}>{m.weight}%</span>
+                    <span style={{ fontSize: TEXT.bodyCompact, fontWeight: 800, color: COLOR.paperInk, minWidth: 32 }}>{m.weight}%</span>
                   </div>
                 </div>
               ))}

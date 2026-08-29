@@ -1,4 +1,5 @@
 'use client'
+import { toast, showConfirm } from '@/components/Toast'
 
 import React, { useState, useEffect, useMemo } from 'react'
 import DocumentCanvas from '@/components/DocumentCanvas'
@@ -122,7 +123,6 @@ export default function LessonStudio() {
   const [showReflectionModal, setShowReflectionModal] = useState(false)
   const [showProgressView, setShowProgressView] = useState(false)
   const [planId, setPlanId] = useState('')
-  const [toast, setToast] = useState<string | null>(null)
 
   // ─── Carregamento Inicial ──────────────────────────────────────────────────
   useEffect(() => {
@@ -173,7 +173,7 @@ export default function LessonStudio() {
             if (foundPlan.homework) setHomework(foundPlan.homework)
             if (foundPlan.postLessonNotes) setPostLessonNotes(foundPlan.postLessonNotes)
             setActiveTab('editor')
-            setToast(`Planejamento completo carregado: ${foundPlan.className} — ${foundPlan.topic}`)
+            toast.info(`Planejamento completo carregado: ${foundPlan.className} — ${foundPlan.topic}`)
           } else {
             if (prefill.planId) setPlanId(prefill.planId)
             // 2. Novo plano pré-preenchido pronto para edição
@@ -200,7 +200,7 @@ export default function LessonStudio() {
             if (prefill.date) setLessonDate(prefill.date)
             if (prefill.room) setRoomSpace(prefill.room)
             setActiveTab('editor')
-            setToast(`Novo planejamento: ${prefill.className || ''} pronto para preenchimento`)
+            toast.info(`Novo planejamento: ${prefill.className || ''} pronto para preenchimento`)
           }
           if (prefill.openProgressTracker) {
             setTimeout(() => setShowProgressView(true), 400)
@@ -303,8 +303,7 @@ export default function LessonStudio() {
   }
 
   const showNotification = (msg: string) => {
-    setToast(msg)
-    setTimeout(() => setToast(null), 3500)
+    toast.success(msg)
   }
 
   // ─── Análise com IA Rafinha ────────────────────────────────────────────────
@@ -376,7 +375,7 @@ Verifique: 1) Timing realista? 2) Bloom bem distribuído? 3) Transições claras
   // ─── Geração de Conteúdo e Roteiro com IA ─────────────────────────────────
   const handleGenerateWithAi = async () => {
     if (!topic.trim()) {
-      alert('Digite o Tópico ou Conteúdo Central antes de gerar com IA.')
+      toast.success('Digite o Tópico ou Conteúdo Central antes de gerar com IA.')
       return
     }
 
@@ -446,7 +445,7 @@ Retorne ESTRITAMENTE um objeto JSON no formato:
         showNotification('Roteiro e Perguntas-Guia gerados com sucesso pela IA!')
       }
     } catch (err: any) {
-      alert(`Erro na geração: ${err.message || 'Tente novamente'}`)
+      toast.success(`Erro na geração: ${err.message || 'Tente novamente'}`)
     } finally {
       setIsGenerating(false)
     }
@@ -624,19 +623,19 @@ ${postLessonNotes}
         <div style={{ display: 'flex', gap: 6, background: '#fffcf8', padding: 4, borderRadius: 12, border: '1px solid #d5c0b0' }}>
           <button
             onClick={() => setActiveTab('editor')}
-            style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: activeTab === 'editor' ? '#8b5e3c' : 'transparent', color: activeTab === 'editor' ? '#fff' : '#586e75', fontWeight: 700, cursor: 'pointer', fontSize: 13 }}
+            style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: activeTab === 'editor' ? '#8b5e3c' : 'transparent', color: activeTab === 'editor' ? '#fff' : '#7a5c42', fontWeight: 700, cursor: 'pointer', fontSize: 13 }}
           >
             <i className="ti ti-edit"></i> Edição (Boxes)
           </button>
           <button
             onClick={() => setActiveTab('preview')}
-            style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: activeTab === 'preview' ? '#8b5e3c' : 'transparent', color: activeTab === 'preview' ? '#fff' : '#586e75', fontWeight: 700, cursor: 'pointer', fontSize: 13 }}
+            style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: activeTab === 'preview' ? '#8b5e3c' : 'transparent', color: activeTab === 'preview' ? '#fff' : '#7a5c42', fontWeight: 700, cursor: 'pointer', fontSize: 13 }}
           >
             <i className="ti ti-file-text"></i> Folha de Planejamento (Limpo)
           </button>
           <button
             onClick={() => setActiveTab('bank')}
-            style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: activeTab === 'bank' ? '#8b5e3c' : 'transparent', color: activeTab === 'bank' ? '#fff' : '#586e75', fontWeight: 700, cursor: 'pointer', fontSize: 13 }}
+            style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: activeTab === 'bank' ? '#8b5e3c' : 'transparent', color: activeTab === 'bank' ? '#fff' : '#7a5c42', fontWeight: 700, cursor: 'pointer', fontSize: 13 }}
           >
             <i className="ti ti-archive"></i> Banco de Planos ({bankPlans.length})
           </button>
@@ -941,7 +940,7 @@ ${postLessonNotes}
                             padding: '3px 8px', borderRadius: 6,
                             border: isShared ? '1px solid #268bd2' : '1px solid #d5c0b0',
                             background: isShared ? '#e8f4fd' : '#fff',
-                            fontSize: 11, color: isShared ? '#268bd2' : '#586e75',
+                            fontSize: 11, color: isShared ? '#268bd2' : '#7a5c42',
                             cursor: 'pointer', fontWeight: 600
                           }}
                         >
@@ -1748,7 +1747,7 @@ ${postLessonNotes}
 
       {/* ─── MODAL: ANEXAR ATIVIDADE DO BANCO (BLOCO I) ────────────────────── */}
       {showAttachActivityModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,43,54,0.4)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(44,26,14,0.4)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <div style={{ background: '#fffcf8', border: '1px solid #ede8dc', borderRadius: 16, padding: 24, width: 520, maxWidth: '90vw', maxHeight: '80vh', overflowY: 'auto' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <h3 style={{ margin: 0, fontSize: 16, color: '#2c1a0e' }}>
@@ -1782,13 +1781,6 @@ ${postLessonNotes}
               </div>
             )}
           </div>
-        </div>
-      )}
-
-      {/* Toast Notification */}
-      {toast && (
-        <div style={{ position: 'fixed', bottom: 24, right: 24, background: '#2c1a0e', color: '#fdf8f2', padding: '10px 18px', borderRadius: 8, fontSize: 13, zIndex: 9999, boxShadow: '0 4px 14px rgba(0,0,0,0.2)' }}>
-          {toast}
         </div>
       )}
 

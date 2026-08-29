@@ -754,12 +754,12 @@ function ExecutionTimer({
  <span style={{ fontSize: 12, fontWeight: 600, color: isDone ? '#859900' : isErr ? '#dc322f' : '#2aa198' }}>
  {label}
  {entry.status === 'running' && (
- <span style={{ color: '#93a1a1', fontWeight: 400, marginLeft: 6 }}>
+ <span style={{ color: '#a08060', fontWeight: 400, marginLeft: 6 }}>
  {elapsed.toFixed(1)}s {!isDone && <span style={{ fontSize: 10 }}>· toque p/ pular</span>}
  </span>
  )}
  </span>
- <span style={{ fontSize: 11, color: isDone ? '#859900' : isErr ? '#dc322f' : '#93a1a1' }}>
+ <span style={{ fontSize: 11, color: isDone ? '#859900' : isErr ? '#dc322f' : '#a08060' }}>
  {isDone ? ` ${(entry.elapsed || 0).toFixed(1)}s` : isErr ? ' erro' : ''}
  </span>
  </div>
@@ -807,7 +807,7 @@ function LogDrawer({ logs, onClose }: { logs: LogEntry[]; onClose: () => void })
  <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#657b83', cursor: 'pointer', fontSize: 18, lineHeight: 1 }}>×</button>
  </div>
  {logs.length === 0 && (
- <div style={{ fontSize: 12, color: '#586e75', textAlign: 'center', padding: '16px 0' }}>
+ <div style={{ fontSize: 12, color: '#7a5c42', textAlign: 'center', padding: '16px 0' }}>
  Nenhuma ação executada ainda.
  </div>
  )}
@@ -817,12 +817,12 @@ function LogDrawer({ logs, onClose }: { logs: LogEntry[]; onClose: () => void })
  <span style={{ fontSize: 12, fontWeight: 600, color: entry.status === 'done' ? '#859900' : entry.status === 'error' ? '#dc322f' : '#2aa198' }}>
  {TOOL_LABELS[entry.name] || entry.name}
  </span>
- <span style={{ fontSize: 10, color: '#586e75' }}>
+ <span style={{ fontSize: 10, color: '#7a5c42' }}>
  {entry.status === 'done' ? ` ${(entry.elapsed || 0).toFixed(1)}s` : entry.status === 'error' ? '' : ''}
  </span>
  </div>
  {entry.result && (
- <div style={{ fontSize: 11, color: '#93a1a1', marginTop: 3 }}>{entry.result}</div>
+ <div style={{ fontSize: 11, color: '#a08060', marginTop: 3 }}>{entry.result}</div>
  )}
  </div>
  ))}
@@ -1410,7 +1410,7 @@ export default function RafinhaChat({ onNavigate, onCommandReady }: RafinhaChatP
  <div style={{
  position: 'fixed', bottom: 24, right: 24, zIndex: 9999,
  width: 400, maxHeight: '80vh', background: '#fff', borderRadius: 20,
- boxShadow: '0 12px 48px rgba(0,43,54,0.18)', border: '1px solid #ede8dc',
+ boxShadow: '0 12px 48px rgba(44,26,14,0.18)', border: '1px solid #ede8dc',
  display: 'flex', flexDirection: 'column', overflow: 'hidden',
  animation: 'rafSlideUp 0.3s cubic-bezier(0.16,1,0.3,1)',
  }}>
@@ -1423,14 +1423,14 @@ export default function RafinhaChat({ onNavigate, onCommandReady }: RafinhaChatP
  `}</style>
 
  {/* Header */}
- <div style={{ padding: '13px 16px', background: '#073642', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+ <div style={{ padding: '13px 16px', background: '#2c1a0e', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
  <div style={{ width: 38, height: 38, borderRadius: '50%', background: '#fbf7f0', border: '1.5px solid rgba(255,255,255,0.4)', overflow: 'hidden', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
  <AvatarSVG size={32} />
  </div>
  <div>
- <div style={{ fontSize: 14, fontWeight: 700, color: '#fdf6e3' }}>Rafinha</div>
- <div style={{ fontSize: 10, color: '#93a1a1', display: 'flex', alignItems: 'center', gap: 4 }}>
+ <div style={{ fontSize: 14, fontWeight: 700, color: '#fdf8f2' }}>Rafinha</div>
+ <div style={{ fontSize: 10, color: '#a08060', display: 'flex', alignItems: 'center', gap: 4 }}>
  <div style={{
  width: 5, height: 5, borderRadius: '50%',
  background: isLoading ? '#b58900' : isSpeaking ? '#268bd2' : isListening ? '#2aa198' : '#859900',
@@ -1451,7 +1451,7 @@ export default function RafinhaChat({ onNavigate, onCommandReady }: RafinhaChatP
  title="Ver log de ações"
  style={{
  background: showLog ? 'rgba(42,161,152,0.2)' : 'rgba(255,255,255,0.08)',
- border: 'none', color: showLog ? '#2aa198' : '#93a1a1',
+ border: 'none', color: showLog ? '#2aa198' : '#a08060',
  padding: '5px 8px', borderRadius: 8, cursor: 'pointer', fontSize: 13,
  display: 'flex', alignItems: 'center', gap: 4, position: 'relative',
  }}
@@ -1493,7 +1493,7 @@ export default function RafinhaChat({ onNavigate, onCommandReady }: RafinhaChatP
  style={{
  background: voiceOut ? 'rgba(133,153,0,0.25)' : 'rgba(255,255,255,0.08)',
  border: `1px solid ${voiceOut ? 'rgba(133,153,0,0.4)' : 'rgba(255,255,255,0.15)'}`,
- color: voiceOut ? '#859900' : '#93a1a1',
+ color: voiceOut ? '#859900' : '#a08060',
  padding: '4px 8px',
  borderRadius: 8,
  cursor: 'pointer',
@@ -1507,19 +1507,19 @@ export default function RafinhaChat({ onNavigate, onCommandReady }: RafinhaChatP
  <i className={voiceOut ? 'ti ti-volume' : 'ti ti-volume-off'} style={{ fontSize: 13 }} />
  <span>{voiceOut ? 'Voz' : 'Mudo'}</span>
  </button>
- <button onClick={() => setIsOpen(false)} style={{ background: 'none', border: 'none', color: '#93a1a1', fontSize: 20, cursor: 'pointer', lineHeight: 1 }}>×</button>
+ <button onClick={() => setIsOpen(false)} style={{ background: 'none', border: 'none', color: '#a08060', fontSize: 20, cursor: 'pointer', lineHeight: 1 }}>×</button>
  </div>
  </div>
 
  {/* Messages (CLEAN só texto) */}
- <div style={{ flex: 1, padding: '14px', overflowY: 'auto', background: '#fdf6e3', display: 'flex', flexDirection: 'column', gap: 12 }}>
+ <div style={{ flex: 1, padding: '14px', overflowY: 'auto', background: '#fdf8f2', display: 'flex', flexDirection: 'column', gap: 12 }}>
  {messages.map((m, i) => (
  <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: m.role === 'user' ? 'flex-end' : 'flex-start' }}>
  {m.content && (
  <div style={{
  maxWidth: '88%', padding: '10px 14px', borderRadius: 16,
- background: m.role === 'user' ? '#073642' : '#fff',
- color: m.role === 'user' ? '#fdf6e3' : '#073642',
+ background: m.role === 'user' ? '#2c1a0e' : '#fff',
+ color: m.role === 'user' ? '#fdf8f2' : '#2c1a0e',
  border: m.role === 'user' ? 'none' : '1px solid #ede8dc',
  boxShadow: m.role === 'user' ? 'none' : '0 1px 6px rgba(0,0,0,0.05)',
  fontSize: 13.5, lineHeight: 1.55,
@@ -1558,7 +1558,7 @@ export default function RafinhaChat({ onNavigate, onCommandReady }: RafinhaChatP
  alignSelf: 'flex-end', maxWidth: '85%', padding: '8px 14px',
  borderRadius: 14, background: 'rgba(7,54,66,0.06)',
  border: '1px dashed rgba(7,54,66,0.2)',
- fontSize: 13, color: '#93a1a1', fontStyle: 'italic',
+ fontSize: 13, color: '#a08060', fontStyle: 'italic',
  }}>
  {interimText}...
  </div>
@@ -1576,7 +1576,7 @@ export default function RafinhaChat({ onNavigate, onCommandReady }: RafinhaChatP
  style={{
  width: 40, height: 40, borderRadius: '50%', border: 'none', flexShrink: 0,
  background: isListening ? '#dc322f' : '#f5f0e8',
- color: isListening ? '#fff' : '#073642',
+ color: isListening ? '#fff' : '#2c1a0e',
  cursor: isLoading || isSpeaking || isLiveMode ? 'not-allowed' : 'pointer',
  display: 'flex', alignItems: 'center', justifyContent: 'center',
  animation: isListening ? 'rafListen 1.5s ease-in-out infinite' : 'none',
@@ -1595,8 +1595,8 @@ export default function RafinhaChat({ onNavigate, onCommandReady }: RafinhaChatP
  style={{
  flex: 1, padding: '10px 14px', borderRadius: 20,
  border: `1px solid ${isListening ? '#2aa198' : '#ede8dc'}`,
- background: isLiveMode ? '#eee8d5' : isListening ? 'rgba(42,161,152,0.06)' : '#f5f0e8',
- outline: 'none', fontSize: 13.5, color: '#073642',
+ background: isLiveMode ? '#f0e8d8' : isListening ? 'rgba(42,161,152,0.06)' : '#f5f0e8',
+ outline: 'none', fontSize: 13.5, color: '#2c1a0e',
  fontFamily: "'Outfit', sans-serif",
  transition: 'border 0.2s, background 0.2s',
  }}

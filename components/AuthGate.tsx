@@ -340,7 +340,7 @@ export default function AuthGate({ onAuthenticated }: AuthGateProps) {
                   marginTop: 4
                 }}
               >
-                ⚡ Entrar com Acesso Imediato (Sem Esperar E-mail)
+                <i className="ti ti-bolt" /> Entrar com Acesso Imediato (Sem Esperar E-mail)
               </button>
             </div>
           )}

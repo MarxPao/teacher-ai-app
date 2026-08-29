@@ -600,7 +600,7 @@ export default function AttendanceList() {
   }, [selectedClass, classStudents, attendanceHistory])
 
   return (
-    <div style={{ display: 'flex', height: '100%', overflow: 'hidden', background: '#fdf6e3' }}>
+    <div style={{ display: 'flex', height: '100%', overflow: 'hidden', background: '#fdf8f2' }}>
       <div style={{ flex: 1, height: '100%', overflowY: 'auto' }}>
         <ModuleShell
           title="Lista de Presença 📋"

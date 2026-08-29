@@ -17,7 +17,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 type OrbStatus = 'idle' | 'listening' | 'processing' | 'speaking'
 
 const STATUS_COLORS: Record<OrbStatus, { primary: string; glow: string }> = {
-  idle:       { primary: '#586e75', glow: 'rgba(88,110,117,0.15)' },
+  idle:       { primary: '#7a5c42', glow: 'rgba(88,110,117,0.15)' },
   listening:  { primary: '#2aa198', glow: 'rgba(42,161,152,0.45)' },
   processing: { primary: '#b58900', glow: 'rgba(181,137,0,0.45)'  },
   speaking:   { primary: '#859900', glow: 'rgba(133,153,0,0.45)'  },

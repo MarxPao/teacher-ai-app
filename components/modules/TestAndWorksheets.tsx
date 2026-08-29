@@ -1,4 +1,5 @@
 'use client'
+import { toast, showConfirm } from '@/components/Toast'
 
 import React, { useState, useEffect, useCallback } from 'react'
 import DocumentCanvas from '@/components/DocumentCanvas'
@@ -66,10 +67,10 @@ const NEE_PROFILES = [
 ]
 
 // Helpers de Estilo
-const SL: React.CSSProperties = { fontSize: 13, fontWeight: 600, color: '#586e75', display: 'block', marginBottom: 6 }
-const SS: React.CSSProperties = { width: '100%', padding: '10px 14px', background: '#f5f0e8', border: '1px solid #e8e0d0', borderRadius: 10, outline: 'none', color: '#073642', fontSize: 14, fontFamily: 'inherit', appearance: 'none' as const, cursor: 'pointer' }
-const SI: React.CSSProperties = { width: '100%', padding: '10px 14px', background: '#f5f0e8', border: '1px solid #e8e0d0', borderRadius: 10, outline: 'none', color: '#073642', fontSize: 14, fontFamily: 'inherit' }
-const CARD: React.CSSProperties = { background: '#fff', borderRadius: 16, padding: 18, boxShadow: '0 2px 12px rgba(0,43,54,0.05)', border: '1px solid #ede8dc' }
+const SL: React.CSSProperties = { fontSize: 13, fontWeight: 600, color: '#7a5c42', display: 'block', marginBottom: 6 }
+const SS: React.CSSProperties = { width: '100%', padding: '10px 14px', background: '#f5f0e8', border: '1px solid #e8e0d0', borderRadius: 10, outline: 'none', color: '#2c1a0e', fontSize: 14, fontFamily: 'inherit', appearance: 'none' as const, cursor: 'pointer' }
+const SI: React.CSSProperties = { width: '100%', padding: '10px 14px', background: '#f5f0e8', border: '1px solid #e8e0d0', borderRadius: 10, outline: 'none', color: '#2c1a0e', fontSize: 14, fontFamily: 'inherit' }
+const CARD: React.CSSProperties = { background: '#fff', borderRadius: 16, padding: 18, boxShadow: '0 2px 12px rgba(44,26,14,0.05)', border: '1px solid #ede8dc' }
 
 function loadApis(): ApiConfig[] {
   try {
@@ -457,7 +458,7 @@ Retorne a questão reformulada no formato estruturado:`
       const res = await generateListeningAudio({ text: cleanText, accent })
       setAudioUrl(res.audioUrl)
     } catch (e: any) {
-      alert(`Falha ao gerar áudio: ${e?.message || 'Erro'}`)
+      toast.success(`Falha ao gerar áudio: ${e?.message || 'Erro'}`)
     } finally {
       setAudioLoading(false)
     }
@@ -489,7 +490,7 @@ Retorne a questão reformulada no formato estruturado:`
               borderRadius: 10,
               border: 'none',
               background: mode === 'exam' ? '#8b5e3c' : 'transparent',
-              color: mode === 'exam' ? '#fff' : '#586e75',
+              color: mode === 'exam' ? '#fff' : '#7a5c42',
               fontSize: 13,
               fontWeight: 800,
               cursor: 'pointer',
@@ -510,7 +511,7 @@ Retorne a questão reformulada no formato estruturado:`
               borderRadius: 10,
               border: 'none',
               background: mode === 'worksheet' ? '#8b5e3c' : 'transparent',
-              color: mode === 'worksheet' ? '#fff' : '#586e75',
+              color: mode === 'worksheet' ? '#fff' : '#7a5c42',
               fontSize: 13,
               fontWeight: 800,
               cursor: 'pointer',
@@ -561,7 +562,7 @@ Retorne a questão reformulada no formato estruturado:`
             style={{
               padding: '14px 20px',
               borderRadius: 14,
-              background: loading ? '#93a1a1' : 'linear-gradient(135deg, #8b5e3c, #5c3a21)',
+              background: loading ? '#a08060' : 'linear-gradient(135deg, #8b5e3c, #5c3a21)',
               color: '#fff',
               fontSize: 15,
               fontWeight: 800,
@@ -657,7 +658,7 @@ Retorne a questão reformulada no formato estruturado:`
                         textAlign: 'left', padding: '8px 10px', borderRadius: 10,
                         border: on ? '1.5px solid #8b5e3c' : '1px solid #e4ddd0',
                         background: on ? '#fdf8f2' : '#fafafa',
-                        color: on ? '#8b5e3c' : '#586e75',
+                        color: on ? '#8b5e3c' : '#7a5c42',
                         cursor: 'pointer', fontSize: 12, fontWeight: 700
                       }}
                     >
@@ -831,7 +832,7 @@ Retorne a questão reformulada no formato estruturado:`
               padding: '8px 16px',
               borderRadius: 14,
               border: '1px solid #ede8dc',
-              boxShadow: '0 2px 8px rgba(0,43,54,0.03)',
+              boxShadow: '0 2px 8px rgba(44,26,14,0.03)',
               flexShrink: 0
             }}>
               <span style={{ fontSize: 13, fontWeight: 800, color: '#2c1a0e' }}>
@@ -881,16 +882,16 @@ Retorne a questão reformulada no formato estruturado:`
           )}
 
           {/* Container do Documento */}
-          <div style={{ flex: 1, overflowY: 'auto', borderRadius: 20, border: '1px solid #ede8dc', boxShadow: '0 4px 24px rgba(0,43,54,0.04)', background: '#fff', minHeight: 0 }}>
+          <div style={{ flex: 1, overflowY: 'auto', borderRadius: 20, border: '1px solid #ede8dc', boxShadow: '0 4px 24px rgba(44,26,14,0.04)', background: '#fff', minHeight: 0 }}>
             {!result && !loading ? (
-              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#93a1a1', gap: 16, padding: 32 }}>
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#a08060', gap: 16, padding: 32 }}>
                 <span style={{ fontSize: 56, opacity: 0.3 }}>📝</span>
                 <p style={{ fontSize: 16 }}>Sua avaliação ou lista de exercícios aparecerá aqui</p>
               </div>
             ) : loading ? (
               <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, padding: 32 }}>
-                <div style={{ width: 56, height: 56, borderRadius: '50%', border: '5px solid #eee8d5', borderTopColor: '#8b5e3c', animation: 'spin 0.8s linear infinite' }} />
-                <p style={{ color: '#586e75', fontSize: 14 }}>Elaborando com psicometria e didática...</p>
+                <div style={{ width: 56, height: 56, borderRadius: '50%', border: '5px solid #f0e8d8', borderTopColor: '#8b5e3c', animation: 'spin 0.8s linear infinite' }} />
+                <p style={{ color: '#7a5c42', fontSize: 14 }}>Elaborando com psicometria e didática...</p>
               </div>
             ) : activeViewTab === 'boxes' ? (
               <div style={{ padding: 18 }}>
@@ -947,7 +948,7 @@ Retorne a questão reformulada no formato estruturado:`
           questions={parseQuestionsForPlayer(result)}
           onClose={() => setShowOnlineModal(false)}
           onComplete={(name, score) => {
-            alert(`✓ Prova enviada por ${name}! Nota ${score}/10 gravada no Diário de Classe.`)
+            toast.success(`✓ Prova enviada por ${name}! Nota ${score}/10 gravada no Diário de Classe.`)
           }}
         />
       )}

@@ -21,10 +21,10 @@ interface StudentTimelineProps {
 // ─── Config ──────────────────────────────────────────────────────────────────
 
 const EVENT_CONFIG: Record<EventType, { color: string; bg: string; icon: string; label: string }> = {
-  grade:      { color: COLOR.success,  bg: COLOR.successBg,  icon: '📊', label: 'Nota' },
-  feedback:   { color: COLOR.accent,   bg: COLOR.accentGlow, icon: '💬', label: 'Feedback' },
-  message:    { color: COLOR.info,     bg: COLOR.infoBg,     icon: '✉️',  label: 'Mensagem' },
-  attendance: { color: COLOR.warning,  bg: COLOR.warningBg,  icon: '📋', label: 'Frequência' },
+  grade:      { color: COLOR.success,  bg: COLOR.successBg,  icon: 'ti-chart-bar', label: 'Nota' },
+  feedback:   { color: COLOR.accent,   bg: COLOR.accentGlow, icon: 'ti-message-circle', label: 'Feedback' },
+  message:    { color: COLOR.info,     bg: COLOR.infoBg,     icon: 'ti-mail',  label: 'Mensagem' },
+  attendance: { color: COLOR.warning,  bg: COLOR.warningBg,  icon: 'ti-calendar-check', label: 'Frequência' },
 }
 
 function formatDate(dateStr: string): string {
@@ -91,10 +91,9 @@ export default function StudentTimeline({ events }: StudentTimelineProps) {
       <div style={{ display: 'flex', gap: SPACE[4], marginBottom: SPACE[4], flexWrap: 'wrap' }}>
         {(Object.entries(EVENT_CONFIG) as [EventType, typeof EVENT_CONFIG[EventType]][]).map(([type, cfg]) => (
           <div key={type} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <div style={{ width: 12, height: 12, borderRadius: RADIUS.full,
-              background: cfg.color, flexShrink: 0 }} />
-            <span style={{ fontSize: TEXT.xs, color: COLOR.paperWarm }}>
-              {cfg.icon} {cfg.label}
+            <i className={`ti ${cfg.icon}`} style={{ color: cfg.color, fontSize: 14 }} />
+            <span style={{ fontSize: TEXT.xs, color: COLOR.paperWarm, fontWeight: 600 }}>
+              {cfg.label}
             </span>
           </div>
         ))}
@@ -145,7 +144,7 @@ export default function StudentTimeline({ events }: StudentTimelineProps) {
                       ;(e.currentTarget as HTMLDivElement).style.boxShadow = SHADOW.sm
                     }}
                   >
-                    {cfg.icon}
+                    <i className={`ti ${cfg.icon}`} style={{ color: cfg.color, fontSize: 15 }} />
                   </div>
 
                   {/* Value badge */}

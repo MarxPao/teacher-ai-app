@@ -1,20 +1,21 @@
 /**
- * Design Tokens — Teacher AI
+ * Design Tokens — Teacher AI (v2, unified)
  * Fonte única de verdade para todas as constantes visuais do app.
- * Use esses tokens em inline styles para consistência.
+ * REGRA: Todo inline style deve referenciar estes tokens — nunca hardcode.
  */
 
 // ─── Cores: Paleta Warm Leather ────────────────────────────────────────────
 export const COLOR = {
-  // Paper
+  // Paper scale (ink → page)
   paperDeep:   '#1c110a',
-  paperInk:    '#2c1a0e',
+  paperInk:    '#2c1a0e',   // texto primário
   paperSepia:  '#5c3d20',
-  paperWarm:   '#7a5c42',
-  paperMid:    '#a08060',
+  paperWarm:   '#7a5c42',   // texto secundário / labels
+  paperMid:    '#a08060',   // ícones / metadados
   paperLight:  '#c4a882',
   paperCream:  '#f5efe6',
-  paperPage:   '#fdf8f2',
+  paperPage:   '#fdf8f2',   // fundo creme quente
+  paperAlt:    '#f0e8d8',   // fundo suave
   paperWhite:  '#fffcf8',
 
   // Accent
@@ -23,7 +24,7 @@ export const COLOR = {
   accentGold:  '#c4834a',
   accentGlow:  'rgba(139,94,60,0.10)',
 
-  // Status
+  // Status (semantic)
   success:     '#3d7a4e',
   successBg:   'rgba(61,122,78,0.10)',
   warning:     '#c87a1e',
@@ -56,7 +57,7 @@ export const SUBJECT_THEMES: Record<string, { accent: string; accentBg: string; 
   default:    { accent: '#8b5e3c', accentBg: 'rgba(139,94,60,0.10)',   label: 'Geral' },
 }
 
-// ─── Tipografia ─────────────────────────────────────────────────────────────
+// ─── Tipografia (escala modular, sem frações de pixel) ───────────────────
 export const FONT = {
   sans:    "'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
   serif:   "'Newsreader', Georgia, serif",
@@ -64,7 +65,19 @@ export const FONT = {
   mono:    "'JetBrains Mono', 'Fira Code', monospace",
 } as const
 
+/**
+ * Escala tipográfica aprovada — todos os font-sizes devem ser um destes valores.
+ * Sem frações de pixel (ex: 11.5px, 13.5px são proibidos).
+ */
 export const TEXT = {
+  micro:        11,   // rótulos internos de badges/chips
+  caption:      12,   // legendas e metadados secundários
+  bodyCompact:  13,   // texto compacto (tabelas, sidebars, dropdowns)
+  body:         14,   // corpo de texto padrão
+  subtitle:     16,   // subtítulos de seção e tabs ativas
+  cardTitle:    20,   // títulos de card
+  pageTitle:    28,   // títulos de página (h1 em ModuleShell)
+  // Aliases para compatibilidade retroativa
   xs:   11,
   sm:   12,
   base: 14,
@@ -76,7 +89,11 @@ export const TEXT = {
   '4xl': 36,
 } as const
 
-// ─── Espaçamento ────────────────────────────────────────────────────────────
+// ─── Espaçamento (grade de 4px) ─────────────────────────────────────────
+/**
+ * REGRA: todos os paddings, margins e gaps devem ser múltiplos de 4px.
+ * Use os aliases nomeados para clareza semântica.
+ */
 export const SPACE = {
   1: 4,
   2: 8,
@@ -89,16 +106,22 @@ export const SPACE = {
   12: 48,
 } as const
 
-// ─── Border Radius ──────────────────────────────────────────────────────────
+// ─── Border Radius (3 níveis apenas) ─────────────────────────────────────
+/**
+ * REGRA: Apenas 3 valores permitidos + full.
+ * - radiusSm: tags, chips, badges, ícones pequenos
+ * - radiusMd: inputs, botões, dropdowns, pequenos cards internos
+ * - radiusLg: cards, modais, drawers, painéis
+ */
 export const RADIUS = {
-  sm: 6,
-  md: 10,
-  lg: 14,
-  xl: 18,
-  full: 9999,
+  sm:   8,      // tags/chips/badges
+  md:   10,     // inputs/botões
+  lg:   14,     // cards/modais
+  xl:   18,     // cards maiores / especiais (usar raramente)
+  full: 9999,   // circular
 } as const
 
-// ─── Sombras ────────────────────────────────────────────────────────────────
+// ─── Sombras (baseadas em warm leather, sem azul) ──────────────────────
 export const SHADOW = {
   flat: '0 1px 2px rgba(44,26,14,0.04)',
   sm:   '0 1px 3px rgba(44,26,14,0.06), 0 4px 10px rgba(44,26,14,0.05)',
@@ -106,7 +129,7 @@ export const SHADOW = {
   lg:   '0 8px 24px rgba(44,26,14,0.10), 0 24px 48px -12px rgba(44,26,14,0.13)',
 } as const
 
-// ─── Bordas ─────────────────────────────────────────────────────────────────
+// ─── Bordas ─────────────────────────────────────────────────────────────
 export const BORDER = {
   soft:      'rgba(139,115,85,0.12)',
   medium:    'rgba(139,115,85,0.20)',
@@ -114,14 +137,38 @@ export const BORDER = {
   highlight: 'rgba(255,255,255,0.75)',
 } as const
 
-// ─── Transições ─────────────────────────────────────────────────────────────
+// ─── Tamanhos de Botão ────────────────────────────────────────────────────
+/**
+ * REGRA: Todo botão deve usar um destes 3 tamanhos.
+ * height é a altura total — não ajuste manualmente padding vertical.
+ */
+export const BUTTON_SIZE = {
+  sm: { height: 32, paddingX: 12, paddingY: 6,  fontSize: TEXT.bodyCompact },
+  md: { height: 40, paddingX: 16, paddingY: 10, fontSize: TEXT.body },
+  lg: { height: 48, paddingX: 20, paddingY: 14, fontSize: TEXT.subtitle },
+} as const
+
+// ─── Tamanhos de Ícone ────────────────────────────────────────────────────
+/**
+ * REGRA: Ícone SEMPRE dentro de container com display:flex + alignItems:center + gap.
+ * NUNCA usar marginRight manual.
+ */
+export const ICON_SIZE = {
+  xs: 14,   // ao lado de caption/micro (12px)
+  sm: 16,   // ao lado de body (14px)
+  md: 20,   // ao lado de subtitle/cardTitle (16-20px)
+  lg: 24,   // standalone ou em headers
+} as const
+
+// ─── Transições ─────────────────────────────────────────────────────────
 export const TRANSITION = {
   fast:   'all 0.12s ease',
   normal: 'all 0.20s ease',
   slow:   'all 0.35s cubic-bezier(0.16, 1, 0.3, 1)',
+  button: 'all 0.15s ease',  // padrão para botões (hover/active)
 } as const
 
-// ─── Glassmorphism ──────────────────────────────────────────────────────────
+// ─── Glassmorphism ──────────────────────────────────────────────────────
 export const GLASS = {
   light: {
     background: 'rgba(255,252,248,0.75)',
@@ -146,8 +193,9 @@ export const GLASS = {
   },
 } as const
 
-// ─── Inline Style Helpers ────────────────────────────────────────────────────
+// ─── Inline Style Helpers (Blocos pré-construídos reutilizáveis) ──────────
 export const S = {
+  // Card padrão: 1 nível, sem aninhamento
   card: {
     background: COLOR.surface1,
     border: `1px solid ${BORDER.soft}`,
@@ -156,60 +204,97 @@ export const S = {
     boxShadow: SHADOW.sm,
   } as React.CSSProperties,
 
+  // Card compacto
+  cardCompact: {
+    background: COLOR.surface1,
+    border: `1px solid ${BORDER.soft}`,
+    borderRadius: RADIUS.md,
+    padding: `${SPACE[3]}px ${SPACE[4]}px`,
+    boxShadow: SHADOW.flat,
+  } as React.CSSProperties,
+
+  // Label de campo
   label: {
     display: 'block' as const,
-    fontSize: TEXT.xs,
+    fontSize: TEXT.caption,
     fontWeight: 700,
     color: COLOR.paperWarm,
     textTransform: 'uppercase' as const,
-    letterSpacing: '0.8px',
-    marginBottom: SPACE[1] + 2,
+    letterSpacing: '0.7px',
+    marginBottom: SPACE[1],
   } as React.CSSProperties,
 
+  // Input / Textarea
   input: {
     width: '100%',
-    padding: `${SPACE[2] + 2}px ${SPACE[3] + 2}px`,
+    padding: `${SPACE[2]}px ${SPACE[3]}px`,
     borderRadius: RADIUS.md,
     border: `1px solid ${BORDER.medium}`,
     background: COLOR.paperPage,
-    fontSize: TEXT.base,
+    fontSize: TEXT.body,
     color: COLOR.paperInk,
     outline: 'none',
     fontFamily: FONT.sans,
     boxSizing: 'border-box' as const,
   } as React.CSSProperties,
 
+  // Select (mesmo que input mas com cursor pointer)
+  select: {
+    width: '100%',
+    padding: `${SPACE[2]}px ${SPACE[3]}px`,
+    borderRadius: RADIUS.md,
+    border: `1px solid ${BORDER.medium}`,
+    background: COLOR.paperPage,
+    fontSize: TEXT.body,
+    color: COLOR.paperInk,
+    outline: 'none',
+    fontFamily: FONT.sans,
+    boxSizing: 'border-box' as const,
+    cursor: 'pointer',
+    appearance: 'none' as const,
+  } as React.CSSProperties,
+
+  // Botão primário inline (use <Button> quando possível)
   btnPrimary: {
     background: `linear-gradient(135deg, ${COLOR.accent} 0%, #6f4728 100%)`,
     color: '#fff',
-    padding: `${SPACE[2] + 2}px ${SPACE[5]}px`,
+    padding: `${BUTTON_SIZE.md.paddingY}px ${BUTTON_SIZE.md.paddingX}px`,
+    height: BUTTON_SIZE.md.height,
     borderRadius: RADIUS.md,
     border: 'none',
     fontWeight: 700,
-    fontSize: TEXT.base,
+    fontSize: BUTTON_SIZE.md.fontSize,
     cursor: 'pointer',
     display: 'flex' as const,
     alignItems: 'center',
     gap: SPACE[2],
     boxShadow: '0 2px 8px rgba(139,94,60,0.25)',
-    transition: TRANSITION.fast,
+    transition: TRANSITION.button,
     fontFamily: FONT.sans,
   } as React.CSSProperties,
 
+  // Botão secundário inline
   btnSecondary: {
     background: COLOR.surface1,
     border: `1px solid ${BORDER.medium}`,
     color: COLOR.paperSepia,
-    padding: `${SPACE[2] + 2}px ${SPACE[4] + 2}px`,
+    padding: `${BUTTON_SIZE.md.paddingY}px ${BUTTON_SIZE.md.paddingX}px`,
+    height: BUTTON_SIZE.md.height,
     borderRadius: RADIUS.md,
-    fontWeight: 700,
-    fontSize: TEXT.sm + 1,
+    fontWeight: 600,
+    fontSize: BUTTON_SIZE.md.fontSize,
     cursor: 'pointer',
     display: 'flex' as const,
     alignItems: 'center',
-    gap: SPACE[1] + 2,
-    transition: TRANSITION.fast,
+    gap: SPACE[2],
+    transition: TRANSITION.button,
     fontFamily: FONT.sans,
+  } as React.CSSProperties,
+
+  // Divisor de seção (substitui caixa intermediária)
+  divider: {
+    borderTop: `1px solid ${BORDER.soft}`,
+    margin: `${SPACE[5]}px 0`,
   } as React.CSSProperties,
 } as const
 

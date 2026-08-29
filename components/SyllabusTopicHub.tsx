@@ -1,4 +1,5 @@
 'use client'
+import { toast, showConfirm } from '@/components/Toast'
 
 import React, { useState, useEffect, useMemo } from 'react'
 import {
@@ -328,7 +329,7 @@ export default function SyllabusTopicHub({ onApplyToPrompt, targetModule }: Syll
   }
 
   const handleDelete = async (id: string) => {
-    if (confirm('Tem certeza que deseja excluir esta ementa?')) {
+    if ((await showConfirm({ message: 'Tem certeza que deseja excluir esta ementa?' }))) {
       const remaining = syllabuses.filter(s => s.id !== id)
       await persistSyllabuses(remaining)
       if (selectedSyllabusId === id) {
@@ -550,7 +551,7 @@ ${item.studyTips ? `## 5. Roteiro e Dicas de Estudo\n${item.studyTips}\n` : ''}
       : '⚡ Alimentar Roteiro de Aula'
 
   return (
-    <div style={{ padding: '8px 0', fontFamily: 'system-ui, sans-serif', color: '#073642' }}>
+    <div style={{ padding: '8px 0', fontFamily: 'system-ui, sans-serif', color: '#2c1a0e' }}>
       
       {/* Toast Notification */}
       {toastMessage && (
@@ -559,8 +560,8 @@ ${item.studyTips ? `## 5. Roteiro e Dicas de Estudo\n${item.studyTips}\n` : ''}
           top: 24,
           right: 24,
           zIndex: 9999,
-          background: '#073642',
-          color: '#fdf6e3',
+          background: '#2c1a0e',
+          color: '#fdf8f2',
           padding: '14px 22px',
           borderRadius: 12,
           boxShadow: '0 8px 24px rgba(0,0,0,0.25)',
@@ -577,8 +578,8 @@ ${item.studyTips ? `## 5. Roteiro e Dicas de Estudo\n${item.studyTips}\n` : ''}
 
       {/* Banner Informativo da Sub-Aba */}
       <div style={{
-        background: 'linear-gradient(135deg, #fdf6e3 0%, #f7efe1 100%)',
-        border: '1px solid #eee8d5',
+        background: 'linear-gradient(135deg, #fdf8f2 0%, #f7efe1 100%)',
+        border: '1px solid #f0e8d8',
         borderRadius: 14,
         padding: '16px 20px',
         marginBottom: 20,
@@ -604,7 +605,7 @@ ${item.studyTips ? `## 5. Roteiro e Dicas de Estudo\n${item.studyTips}\n` : ''}
           </div>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <h3 style={{ margin: '0 0 2px 0', fontSize: 16, fontWeight: 800, color: '#073642' }}>
+              <h3 style={{ margin: '0 0 2px 0', fontSize: 16, fontWeight: 800, color: '#2c1a0e' }}>
                 Ementa & Conteúdo Programático
               </h3>
               <span style={{ background: '#dcfce7', color: '#15803d', fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 10, display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -639,7 +640,7 @@ ${item.studyTips ? `## 5. Roteiro e Dicas de Estudo\n${item.studyTips}\n` : ''}
       </div>
 
       {/* Navegação Interna da Sub-Aba */}
-      <div style={{ display: 'flex', gap: 8, borderBottom: '2px solid #eee8d5', marginBottom: 20 }}>
+      <div style={{ display: 'flex', gap: 8, borderBottom: '2px solid #f0e8d8', marginBottom: 20 }}>
         {[
           { key: 'list', label: `📋 Todas as Ementas (${syllabuses.length})`, icon: 'ti-list' },
           { key: 'document', label: '📄 Documento Avulso (Ver & Enviar)', icon: 'ti-file-text' },
@@ -675,7 +676,7 @@ ${item.studyTips ? `## 5. Roteiro e Dicas de Estudo\n${item.studyTips}\n` : ''}
         <div>
           {/* Barra de Filtros */}
           {syllabuses.length > 0 && (
-            <div style={{ background: '#fff', border: '1px solid #eee8d5', borderRadius: 12, padding: 14, marginBottom: 18, display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+            <div style={{ background: '#fff', border: '1px solid #f0e8d8', borderRadius: 12, padding: 14, marginBottom: 18, display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
               <input
                 type="text"
                 placeholder="🔍 Buscar por tópico, livro, unidade ou título..."
@@ -708,10 +709,10 @@ ${item.studyTips ? `## 5. Roteiro e Dicas de Estudo\n${item.studyTips}\n` : ''}
           {/* Estado Vazio Real */}
           {syllabuses.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '60px 20px', background: '#fff', borderRadius: 14, border: '2px dashed #d0c8b8' }}>
-              <div style={{ width: 56, height: 56, borderRadius: '50%', background: '#fdf6e3', color: '#8b5e3c', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px auto', fontSize: 28 }}>
+              <div style={{ width: 56, height: 56, borderRadius: '50%', background: '#fdf8f2', color: '#8b5e3c', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px auto', fontSize: 28 }}>
                 <i className="ti ti-notebook" />
               </div>
-              <h3 style={{ margin: '0 0 6px 0', fontSize: 18, fontWeight: 700, color: '#073642' }}>
+              <h3 style={{ margin: '0 0 6px 0', fontSize: 18, fontWeight: 700, color: '#2c1a0e' }}>
                 Nenhuma ementa cadastrada ainda
               </h3>
               <p style={{ margin: '0 auto 20px auto', fontSize: 13.5, color: '#657b83', maxWidth: 500 }}>
@@ -738,17 +739,17 @@ ${item.studyTips ? `## 5. Roteiro e Dicas de Estudo\n${item.studyTips}\n` : ''}
               </button>
             </div>
           ) : filteredSyllabuses.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '40px 20px', background: '#fff', borderRadius: 12, border: '1px solid #eee8d5' }}>
+            <div style={{ textAlign: 'center', padding: '40px 20px', background: '#fff', borderRadius: 12, border: '1px solid #f0e8d8' }}>
               <p style={{ margin: 0, fontSize: 14, color: '#657b83' }}>Nenhuma ementa corresponde aos filtros selecionados.</p>
             </div>
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: 16 }}>
               {filteredSyllabuses.map(item => (
-                <div key={item.id} style={{ background: '#fff', borderRadius: 12, border: '1px solid #eee8d5', padding: 18, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
+                <div key={item.id} style={{ background: '#fff', borderRadius: 12, border: '1px solid #f0e8d8', padding: 18, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
                   <div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                       <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-                        {item.school && <span style={{ background: '#fdf6e3', color: '#8b5e3c', padding: '2px 7px', borderRadius: 6, fontSize: 11, fontWeight: 700 }}>{item.school}</span>}
+                        {item.school && <span style={{ background: '#fdf8f2', color: '#8b5e3c', padding: '2px 7px', borderRadius: 6, fontSize: 11, fontWeight: 700 }}>{item.school}</span>}
                         {item.className && <span style={{ background: '#e0f2fe', color: '#0369a1', padding: '2px 7px', borderRadius: 6, fontSize: 11, fontWeight: 700 }}>{item.className}</span>}
                         {item.term && <span style={{ background: '#f3e8ff', color: '#7e22ce', padding: '2px 7px', borderRadius: 6, fontSize: 11, fontWeight: 600 }}>{item.term}</span>}
                       </div>
@@ -757,10 +758,10 @@ ${item.studyTips ? `## 5. Roteiro e Dicas de Estudo\n${item.studyTips}\n` : ''}
                       </span>
                     </div>
 
-                    <h4 style={{ margin: '0 0 8px 0', fontSize: 15, fontWeight: 700, color: '#073642' }}>{item.title}</h4>
+                    <h4 style={{ margin: '0 0 8px 0', fontSize: 15, fontWeight: 700, color: '#2c1a0e' }}>{item.title}</h4>
 
                     {(item.bookTitle || item.bookUnitsChapters) && (
-                      <div style={{ background: '#fbf8ef', padding: '8px 10px', borderRadius: 8, marginBottom: 10, fontSize: 12, color: '#586e75' }}>
+                      <div style={{ background: '#fbf8ef', padding: '8px 10px', borderRadius: 8, marginBottom: 10, fontSize: 12, color: '#7a5c42' }}>
                         📖 <strong>{item.bookTitle || 'Livro Base'}</strong> {item.bookUnitsChapters ? `• ${item.bookUnitsChapters}` : ''}
                       </div>
                     )}
@@ -776,7 +777,7 @@ ${item.studyTips ? `## 5. Roteiro e Dicas de Estudo\n${item.studyTips}\n` : ''}
                     )}
                   </div>
 
-                  <div style={{ borderTop: '1px solid #eee8d5', paddingTop: 12, marginTop: 8 }}>
+                  <div style={{ borderTop: '1px solid #f0e8d8', paddingTop: 12, marginTop: 8 }}>
                     <button
                       onClick={() => handleApplyToCreation(item)}
                       style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: 'none', background: '#8b5e3c', color: '#fff', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginBottom: 8 }}
@@ -786,7 +787,7 @@ ${item.studyTips ? `## 5. Roteiro e Dicas de Estudo\n${item.studyTips}\n` : ''}
 
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <div style={{ display: 'flex', gap: 4 }}>
-                        <button onClick={() => { setSelectedSyllabusId(item.id); setActiveSubTab('document') }} style={{ padding: '5px 8px', borderRadius: 6, border: '1px solid #d0c8b8', background: '#fff', color: '#073642', fontSize: 11.5, cursor: 'pointer' }}>
+                        <button onClick={() => { setSelectedSyllabusId(item.id); setActiveSubTab('document') }} style={{ padding: '5px 8px', borderRadius: 6, border: '1px solid #d0c8b8', background: '#fff', color: '#2c1a0e', fontSize: 11.5, cursor: 'pointer' }}>
                           <i className="ti ti-eye" /> Ver Documento
                         </button>
                         <button onClick={() => handleCopyForWhatsApp(item)} style={{ padding: '5px 8px', borderRadius: 6, border: '1px solid #25d366', background: '#f0fdf4', color: '#16a34a', fontSize: 11.5, cursor: 'pointer' }} title="Copiar para WhatsApp/Classroom">
@@ -798,7 +799,7 @@ ${item.studyTips ? `## 5. Roteiro e Dicas de Estudo\n${item.studyTips}\n` : ''}
                       </div>
 
                       <div style={{ display: 'flex', gap: 4 }}>
-                        <button onClick={() => handleOpenEdit(item)} style={{ padding: '5px 7px', borderRadius: 6, border: '1px solid #d0c8b8', background: '#fff', color: '#586e75', fontSize: 11.5, cursor: 'pointer' }}>
+                        <button onClick={() => handleOpenEdit(item)} style={{ padding: '5px 7px', borderRadius: 6, border: '1px solid #d0c8b8', background: '#fff', color: '#7a5c42', fontSize: 11.5, cursor: 'pointer' }}>
                           <i className="ti ti-pencil" />
                         </button>
                         <button onClick={() => handleDelete(item.id)} style={{ padding: '5px 7px', borderRadius: 6, border: '1px solid #fecdd3', background: '#fff1f2', color: '#e11d48', fontSize: 11.5, cursor: 'pointer' }}>
@@ -818,9 +819,9 @@ ${item.studyTips ? `## 5. Roteiro e Dicas de Estudo\n${item.studyTips}\n` : ''}
       {activeSubTab === 'document' && (
         currentSelectedSyllabus ? (
           <div>
-            <div style={{ background: '#fff', border: '1px solid #eee8d5', borderRadius: 12, padding: 14, marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+            <div style={{ background: '#fff', border: '1px solid #f0e8d8', borderRadius: 12, padding: 14, marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <label style={{ fontSize: 12.5, fontWeight: 700, color: '#073642' }}>Ementa em Exibição:</label>
+                <label style={{ fontSize: 12.5, fontWeight: 700, color: '#2c1a0e' }}>Ementa em Exibição:</label>
                 <select value={selectedSyllabusId || ''} onChange={e => setSelectedSyllabusId(e.target.value)} style={{ padding: '7px 10px', borderRadius: 8, border: '1px solid #d0c8b8', background: '#fff', fontSize: 12.5 }}>
                   {syllabuses.map(s => <option key={s.id} value={s.id}>{s.school ? `${s.school} - ` : ''}{s.className ? `${s.className}: ` : ''}{s.title}</option>)}
                 </select>
@@ -836,7 +837,7 @@ ${item.studyTips ? `## 5. Roteiro e Dicas de Estudo\n${item.studyTips}\n` : ''}
                 <button onClick={() => window.print()} style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #8b5e3c', background: '#fff', color: '#8b5e3c', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}>
                   <i className="ti ti-printer" /> Imprimir / PDF
                 </button>
-                <button onClick={() => handleSaveToRepository(currentSelectedSyllabus)} style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #d0c8b8', background: '#fff', color: '#073642', fontSize: 12.5, cursor: 'pointer' }}>
+                <button onClick={() => handleSaveToRepository(currentSelectedSyllabus)} style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #d0c8b8', background: '#fff', color: '#2c1a0e', fontSize: 12.5, cursor: 'pointer' }}>
                   <i className="ti ti-bookmark" /> Biblioteca
                 </button>
               </div>
@@ -844,19 +845,19 @@ ${item.studyTips ? `## 5. Roteiro e Dicas de Estudo\n${item.studyTips}\n` : ''}
 
             {/* Folha A4 */}
             <div style={{ background: '#fff', maxWidth: 840, margin: '0 auto', padding: '40px 48px', borderRadius: 12, boxShadow: '0 3px 16px rgba(0,0,0,0.05)', border: '1px solid #e2e8f0', color: '#1e293b' }}>
-              <div style={{ borderBottom: '2px solid #073642', paddingBottom: 12, marginBottom: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+              <div style={{ borderBottom: '2px solid #2c1a0e', paddingBottom: 12, marginBottom: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
                 <div>
-                  <div style={{ fontSize: 18, fontWeight: 900, textTransform: 'uppercase', color: '#073642' }}>{currentSelectedSyllabus.school || 'INSTITUIÇÃO DE ENSINO'}</div>
+                  <div style={{ fontSize: 18, fontWeight: 900, textTransform: 'uppercase', color: '#2c1a0e' }}>{currentSelectedSyllabus.school || 'INSTITUIÇÃO DE ENSINO'}</div>
                   <div style={{ fontSize: 12, color: '#64748b' }}>Departamento de Língua Inglesa &bull; Coordenação Pedagógica</div>
                 </div>
                 <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: 12.5, fontWeight: 700, color: '#073642' }}>Turma: {currentSelectedSyllabus.className || 'Geral'}</div>
+                  <div style={{ fontSize: 12.5, fontWeight: 700, color: '#2c1a0e' }}>Turma: {currentSelectedSyllabus.className || 'Geral'}</div>
                   <div style={{ fontSize: 11.5, color: '#64748b' }}>{currentSelectedSyllabus.term || 'Período Letivo'} {currentSelectedSyllabus.evaluationDate ? `• Avaliação: ${formatDateBR(currentSelectedSyllabus.evaluationDate)}` : ''}</div>
                 </div>
               </div>
 
               <div style={{ textAlign: 'center', margin: '16px 0 22px 0' }}>
-                <h2 style={{ fontSize: 20, fontWeight: 800, color: '#073642', margin: '0 0 4px 0' }}>{currentSelectedSyllabus.title}</h2>
+                <h2 style={{ fontSize: 20, fontWeight: 800, color: '#2c1a0e', margin: '0 0 4px 0' }}>{currentSelectedSyllabus.title}</h2>
                 <div style={{ fontSize: 12.5, color: '#64748b', fontStyle: 'italic' }}>Guia Oficial de Conteúdos &bull; Tópicos Gramaticais &bull; Roteiro de Estudos</div>
               </div>
 
@@ -870,7 +871,7 @@ ${item.studyTips ? `## 5. Roteiro e Dicas de Estudo\n${item.studyTips}\n` : ''}
 
               {currentSelectedSyllabus.grammarTopics.length > 0 && (
                 <div style={{ marginBottom: 20 }}>
-                  <h4 style={{ margin: '0 0 10px 0', fontSize: 13, fontWeight: 800, textTransform: 'uppercase', color: '#073642', borderBottom: '1px solid #e2e8f0', paddingBottom: 4 }}>🧩 2. Tópicos Gramaticais & Estruturas</h4>
+                  <h4 style={{ margin: '0 0 10px 0', fontSize: 13, fontWeight: 800, textTransform: 'uppercase', color: '#2c1a0e', borderBottom: '1px solid #e2e8f0', paddingBottom: 4 }}>🧩 2. Tópicos Gramaticais & Estruturas</h4>
                   <ul style={{ margin: 0, paddingLeft: 18 }}>
                     {currentSelectedSyllabus.grammarTopics.map((g, idx) => (
                       <li key={idx} style={{ fontSize: 13, marginBottom: 4, fontWeight: 600 }}>{g}</li>
@@ -881,7 +882,7 @@ ${item.studyTips ? `## 5. Roteiro e Dicas de Estudo\n${item.studyTips}\n` : ''}
 
               {currentSelectedSyllabus.vocabularyThemes.length > 0 && (
                 <div style={{ marginBottom: 20 }}>
-                  <h4 style={{ margin: '0 0 10px 0', fontSize: 13, fontWeight: 800, textTransform: 'uppercase', color: '#073642', borderBottom: '1px solid #e2e8f0', paddingBottom: 4 }}>🔤 3. Vocabulário & Campos Lexicais</h4>
+                  <h4 style={{ margin: '0 0 10px 0', fontSize: 13, fontWeight: 800, textTransform: 'uppercase', color: '#2c1a0e', borderBottom: '1px solid #e2e8f0', paddingBottom: 4 }}>🔤 3. Vocabulário & Campos Lexicais</h4>
                   <ul style={{ margin: 0, paddingLeft: 18 }}>
                     {currentSelectedSyllabus.vocabularyThemes.map((v, idx) => (
                       <li key={idx} style={{ fontSize: 13, marginBottom: 4 }}>{v}</li>
@@ -892,7 +893,7 @@ ${item.studyTips ? `## 5. Roteiro e Dicas de Estudo\n${item.studyTips}\n` : ''}
 
               {currentSelectedSyllabus.skillsAndObjectives.length > 0 && (
                 <div style={{ marginBottom: 20 }}>
-                  <h4 style={{ margin: '0 0 10px 0', fontSize: 13, fontWeight: 800, textTransform: 'uppercase', color: '#073642', borderBottom: '1px solid #e2e8f0', paddingBottom: 4 }}>🎯 4. Habilidades Pedagógicas (BNCC / CEFR)</h4>
+                  <h4 style={{ margin: '0 0 10px 0', fontSize: 13, fontWeight: 800, textTransform: 'uppercase', color: '#2c1a0e', borderBottom: '1px solid #e2e8f0', paddingBottom: 4 }}>🎯 4. Habilidades Pedagógicas (BNCC / CEFR)</h4>
                   <ul style={{ margin: 0, paddingLeft: 18 }}>
                     {currentSelectedSyllabus.skillsAndObjectives.map((s, idx) => (
                       <li key={idx} style={{ fontSize: 12.5, marginBottom: 4, color: '#475569' }}>{s}</li>
@@ -910,7 +911,7 @@ ${item.studyTips ? `## 5. Roteiro e Dicas de Estudo\n${item.studyTips}\n` : ''}
             </div>
           </div>
         ) : (
-          <div style={{ textAlign: 'center', padding: '50px 20px', background: '#fff', borderRadius: 12, border: '1px solid #eee8d5' }}>
+          <div style={{ textAlign: 'center', padding: '50px 20px', background: '#fff', borderRadius: 12, border: '1px solid #f0e8d8' }}>
             <p style={{ margin: 0, fontSize: 14, color: '#657b83' }}>Cadastre uma ementa para visualizar o documento de tópicos.</p>
           </div>
         )
@@ -920,12 +921,12 @@ ${item.studyTips ? `## 5. Roteiro e Dicas de Estudo\n${item.studyTips}\n` : ''}
       {activeSubTab === 'timeline' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           {syllabuses.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '50px 20px', background: '#fff', borderRadius: 12, border: '1px solid #eee8d5' }}>
+            <div style={{ textAlign: 'center', padding: '50px 20px', background: '#fff', borderRadius: 12, border: '1px solid #f0e8d8' }}>
               <p style={{ margin: 0, fontSize: 14, color: '#657b83' }}>Nenhuma matéria registrada na linha do tempo ainda.</p>
             </div>
           ) : (
             syllabuses.map((item, index) => (
-              <div key={item.id} style={{ background: '#fff', borderRadius: 10, border: '1px solid #eee8d5', padding: 16, display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+              <div key={item.id} style={{ background: '#fff', borderRadius: 10, border: '1px solid #f0e8d8', padding: 16, display: 'flex', gap: 16, alignItems: 'flex-start' }}>
                 <div style={{ width: 32, height: 32, borderRadius: '50%', background: item.status === 'lecionado' ? '#22c55e' : item.status === 'em_andamento' ? '#f59e0b' : '#94a3b8', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 13 }}>
                   {index + 1}
                 </div>
@@ -937,10 +938,10 @@ ${item.studyTips ? `## 5. Roteiro e Dicas de Estudo\n${item.studyTips}\n` : ''}
                           {item.school} {item.className ? `• ${item.className}` : ''}
                         </span>
                       )}
-                      <h4 style={{ margin: '2px 0 0 0', fontSize: 14.5, fontWeight: 700, color: '#073642' }}>{item.title}</h4>
+                      <h4 style={{ margin: '2px 0 0 0', fontSize: 14.5, fontWeight: 700, color: '#2c1a0e' }}>{item.title}</h4>
                     </div>
                     <div style={{ display: 'flex', gap: 6 }}>
-                      <button onClick={() => handlePushToClassLog(item)} style={{ padding: '5px 10px', borderRadius: 6, border: '1px solid #8b5e3c', background: '#fdf6e3', color: '#8b5e3c', fontSize: 11.5, fontWeight: 700, cursor: 'pointer' }}>
+                      <button onClick={() => handlePushToClassLog(item)} style={{ padding: '5px 10px', borderRadius: 6, border: '1px solid #8b5e3c', background: '#fdf8f2', color: '#8b5e3c', fontSize: 11.5, fontWeight: 700, cursor: 'pointer' }}>
                         Sincronizar Diário
                       </button>
                       <button onClick={() => handleApplyToCreation(item)} style={{ padding: '5px 10px', borderRadius: 6, border: 'none', background: '#8b5e3c', color: '#fff', fontSize: 11.5, fontWeight: 700, cursor: 'pointer' }}>
@@ -949,7 +950,7 @@ ${item.studyTips ? `## 5. Roteiro e Dicas de Estudo\n${item.studyTips}\n` : ''}
                     </div>
                   </div>
                   {(item.bookTitle || item.bookUnitsChapters) && (
-                    <div style={{ fontSize: 12, color: '#586e75', marginBottom: 6 }}>
+                    <div style={{ fontSize: 12, color: '#7a5c42', marginBottom: 6 }}>
                       📖 {item.bookTitle} {item.bookUnitsChapters ? `• ${item.bookUnitsChapters}` : ''}
                     </div>
                   )}
@@ -969,9 +970,9 @@ ${item.studyTips ? `## 5. Roteiro e Dicas de Estudo\n${item.studyTips}\n` : ''}
 
       {/* ABA: FORMULÁRIO */}
       {activeSubTab === 'editor' && (
-        <form onSubmit={handleSaveForm} style={{ background: '#fff', borderRadius: 12, border: '1px solid #eee8d5', padding: 22 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18, borderBottom: '1px solid #eee8d5', paddingBottom: 10 }}>
-            <h4 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#073642' }}>
+        <form onSubmit={handleSaveForm} style={{ background: '#fff', borderRadius: 12, border: '1px solid #f0e8d8', padding: 22 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18, borderBottom: '1px solid #f0e8d8', paddingBottom: 10 }}>
+            <h4 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#2c1a0e' }}>
               {formId ? '✏️ Editar Ementa & Tópicos' : '✍️ Cadastrar Nova Ementa de Conteúdo'}
             </h4>
             <div style={{ display: 'flex', gap: 6 }}>
@@ -986,12 +987,12 @@ ${item.studyTips ? `## 5. Roteiro e Dicas de Estudo\n${item.studyTips}\n` : ''}
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 14, marginBottom: 16 }}>
             <div style={{ gridColumn: '1 / -1' }}>
-              <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#073642', marginBottom: 4 }}>Título da Ementa *</label>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#2c1a0e', marginBottom: 4 }}>Título da Ementa *</label>
               <input type="text" required placeholder="Ex: Ementa da Prova Bimestral - Units 4 & 5" value={formTitle} onChange={e => setFormTitle(e.target.value)} style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid #d0c8b8', fontSize: 13 }} />
             </div>
 
             <div>
-              <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#073642', marginBottom: 4 }}>Escola / Instituição</label>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#2c1a0e', marginBottom: 4 }}>Escola / Instituição</label>
               <input
                 list="schools-list"
                 type="text"
@@ -1006,7 +1007,7 @@ ${item.studyTips ? `## 5. Roteiro e Dicas de Estudo\n${item.studyTips}\n` : ''}
             </div>
 
             <div>
-              <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#073642', marginBottom: 4 }}>Turma</label>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#2c1a0e', marginBottom: 4 }}>Turma</label>
               <input
                 list="classes-list"
                 type="text"
@@ -1021,25 +1022,25 @@ ${item.studyTips ? `## 5. Roteiro e Dicas de Estudo\n${item.studyTips}\n` : ''}
             </div>
 
             <div>
-              <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#073642', marginBottom: 4 }}>Período / Bimestre / Trimestre</label>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#2c1a0e', marginBottom: 4 }}>Período / Bimestre / Trimestre</label>
               <input type="text" placeholder="Ex: 2º Trimestre" value={formTerm} onChange={e => setFormTerm(e.target.value)} style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid #d0c8b8', fontSize: 12.5 }} />
             </div>
 
             <div>
-              <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#073642', marginBottom: 4 }}>Data Prevista da Avaliação</label>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#2c1a0e', marginBottom: 4 }}>Data Prevista da Avaliação</label>
               <input type="date" value={formEvaluationDate} onChange={e => setFormEvaluationDate(e.target.value)} style={{ width: '100%', padding: '7px 12px', borderRadius: 6, border: '1px solid #d0c8b8', fontSize: 12.5 }} />
             </div>
           </div>
 
           {/* Livro e Capítulos */}
-          <div style={{ background: '#fdf6e3', padding: 14, borderRadius: 8, border: '1px solid #eee8d5', marginBottom: 16 }}>
+          <div style={{ background: '#fdf8f2', padding: 14, borderRadius: 8, border: '1px solid #f0e8d8', marginBottom: 16 }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
               <div>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#073642', marginBottom: 4 }}>📖 Livro / Apostila Base</label>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#2c1a0e', marginBottom: 4 }}>📖 Livro / Apostila Base</label>
                 <input type="text" placeholder="Ex: English in Mind - Volume 3" value={formBookTitle} onChange={e => setFormBookTitle(e.target.value)} style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid #d0c8b8', fontSize: 12.5, background: '#fff' }} />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#073642', marginBottom: 4 }}>📑 Capítulos, Unidades e Páginas Expressas</label>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#2c1a0e', marginBottom: 4 }}>📑 Capítulos, Unidades e Páginas Expressas</label>
                 <input type="text" placeholder="Ex: Units 4 e 5 (págs. 36-52) | Workbook págs. 22-30" value={formBookUnitsChapters} onChange={e => setFormBookUnitsChapters(e.target.value)} style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid #d0c8b8', fontSize: 12.5, background: '#fff' }} />
               </div>
             </div>
@@ -1047,19 +1048,19 @@ ${item.studyTips ? `## 5. Roteiro e Dicas de Estudo\n${item.studyTips}\n` : ''}
 
           {/* Tópicos Gramaticais */}
           <div style={{ marginBottom: 16 }}>
-            <label style={{ display: 'block', fontSize: 12.5, fontWeight: 700, color: '#073642', marginBottom: 6 }}>🧩 Tópicos Gramaticais</label>
+            <label style={{ display: 'block', fontSize: 12.5, fontWeight: 700, color: '#2c1a0e', marginBottom: 6 }}>🧩 Tópicos Gramaticais</label>
             <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
               <input type="text" placeholder="Ex: Present Perfect Continuous, First Conditional..." value={newGrammarInput} onChange={e => setNewGrammarInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddGrammarTag(newGrammarInput) } }} style={{ flex: 1, padding: '8px 12px', borderRadius: 6, border: '1px solid #d0c8b8', fontSize: 12.5 }} />
               <button type="button" onClick={() => handleAddGrammarTag(newGrammarInput)} style={{ padding: '8px 14px', borderRadius: 6, border: 'none', background: '#8b5e3c', color: '#fff', fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}>+ Adicionar</button>
             </div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
               {COMMON_GRAMMAR_SUGGESTIONS.slice(0, 8).map(sug => (
-                <button key={sug} type="button" onClick={() => handleAddGrammarTag(sug)} style={{ background: '#fdf6e3', border: '1px dashed #d0c8b8', color: '#8b5e3c', borderRadius: 4, padding: '2px 6px', fontSize: 11, cursor: 'pointer' }}>+ {sug}</button>
+                <button key={sug} type="button" onClick={() => handleAddGrammarTag(sug)} style={{ background: '#fdf8f2', border: '1px dashed #d0c8b8', color: '#8b5e3c', borderRadius: 4, padding: '2px 6px', fontSize: 11, cursor: 'pointer' }}>+ {sug}</button>
               ))}
             </div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 8, minHeight: 30 }}>
               {formGrammarTopics.map((g, idx) => (
-                <span key={idx} style={{ background: '#073642', color: '#fdf6e3', padding: '3px 8px', borderRadius: 4, fontSize: 11.5, display: 'flex', alignItems: 'center', gap: 5 }}>
+                <span key={idx} style={{ background: '#2c1a0e', color: '#fdf8f2', padding: '3px 8px', borderRadius: 4, fontSize: 11.5, display: 'flex', alignItems: 'center', gap: 5 }}>
                   {g} <i className="ti ti-x" onClick={() => handleRemoveGrammarTag(idx)} style={{ cursor: 'pointer' }} />
                 </span>
               ))}
@@ -1068,10 +1069,10 @@ ${item.studyTips ? `## 5. Roteiro e Dicas de Estudo\n${item.studyTips}\n` : ''}
 
           {/* Vocabulário */}
           <div style={{ marginBottom: 16 }}>
-            <label style={{ display: 'block', fontSize: 12.5, fontWeight: 700, color: '#073642', marginBottom: 6 }}>🔤 Vocabulário & Temáticas</label>
+            <label style={{ display: 'block', fontSize: 12.5, fontWeight: 700, color: '#2c1a0e', marginBottom: 6 }}>🔤 Vocabulário & Temáticas</label>
             <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
               <input type="text" placeholder="Ex: Technology, Environment, Travel..." value={newVocabInput} onChange={e => setNewVocabInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddVocabTag(newVocabInput) } }} style={{ flex: 1, padding: '8px 12px', borderRadius: 6, border: '1px solid #d0c8b8', fontSize: 12.5 }} />
-              <button type="button" onClick={() => handleAddVocabTag(newVocabInput)} style={{ padding: '8px 14px', borderRadius: 6, border: '1px solid #8b5e3c', background: '#fdf6e3', color: '#8b5e3c', fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}>+ Adicionar</button>
+              <button type="button" onClick={() => handleAddVocabTag(newVocabInput)} style={{ padding: '8px 14px', borderRadius: 6, border: '1px solid #8b5e3c', background: '#fdf8f2', color: '#8b5e3c', fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}>+ Adicionar</button>
             </div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
               {formVocabularyThemes.map((v, idx) => (
@@ -1084,13 +1085,13 @@ ${item.studyTips ? `## 5. Roteiro e Dicas de Estudo\n${item.studyTips}\n` : ''}
 
           {/* Dicas de Estudo */}
           <div style={{ marginBottom: 16 }}>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#073642', marginBottom: 4 }}>💡 Roteiro & Dicas de Estudo aos Alunos</label>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#2c1a0e', marginBottom: 4 }}>💡 Roteiro & Dicas de Estudo aos Alunos</label>
             <textarea rows={2} placeholder="Ex: Praticar os exercícios do Workbook págs. 22-25 e revisar os verbos irregulares..." value={formStudyTips} onChange={e => setFormStudyTips(e.target.value)} style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid #d0c8b8', fontSize: 12.5 }} />
           </div>
 
           {/* Status */}
           <div style={{ marginBottom: 16 }}>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#073642', marginBottom: 4 }}>Status</label>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#2c1a0e', marginBottom: 4 }}>Status</label>
             <select value={formStatus} onChange={e => setFormStatus(e.target.value as any)} style={{ padding: '8px 12px', borderRadius: 6, border: '1px solid #d0c8b8', fontSize: 12.5, background: '#fff' }}>
               <option value="planejado">📌 Planejado</option>
               <option value="em_andamento">⏳ Em Andamento</option>
@@ -1099,7 +1100,7 @@ ${item.studyTips ? `## 5. Roteiro e Dicas de Estudo\n${item.studyTips}\n` : ''}
             </select>
           </div>
 
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, borderTop: '1px solid #eee8d5', paddingTop: 14 }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, borderTop: '1px solid #f0e8d8', paddingTop: 14 }}>
             <button type="button" onClick={() => setActiveSubTab('list')} style={{ padding: '8px 14px', borderRadius: 6, border: '1px solid #d0c8b8', background: '#fff', color: '#657b83', fontSize: 12.5, cursor: 'pointer' }}>Cancelar</button>
             <button type="submit" style={{ padding: '8px 20px', borderRadius: 6, border: 'none', background: '#8b5e3c', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>💾 Salvar Ementa no Supabase</button>
           </div>

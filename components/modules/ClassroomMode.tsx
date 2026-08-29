@@ -1,4 +1,5 @@
 'use client';
+import { toast, showConfirm } from '@/components/Toast'
 
 import React, { useState, useEffect, CSSProperties, useRef, useCallback } from 'react';
 import { fillPortal, logPortalFill } from '@/lib/portalBridge';
@@ -343,7 +344,7 @@ export default function ClassroomMode() {
       showToast(`✅ Chamada espelhada no portal ${selectedMirrorPortal}!`);
       setIsMirrorModalOpen(false);
     } else {
-      alert(`⚠️ Não foi possível comunicar com a aba do portal "${selectedMirrorPortal}". Certifique-se de que a página de chamada do portal está aberta no navegador Chrome.`);
+      toast.success(`⚠️ Não foi possível comunicar com a aba do portal "${selectedMirrorPortal}". Certifique-se de que a página de chamada do portal está aberta no navegador Chrome.`);
     }
   };
 
@@ -805,24 +806,24 @@ export default function ClassroomMode() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <span style={{ fontSize: 22 }}>⚡</span>
-                <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#073642' }}>
+                <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#2c1a0e' }}>
                   Espelhar Chamada no Portal Escolar
                 </h2>
               </div>
               <button onClick={() => setIsMirrorModalOpen(false)} style={{ background: '#f5f0e8', border: 'none', width: 32, height: 32, borderRadius: '50%', cursor: 'pointer', fontWeight: 700 }}>×</button>
             </div>
 
-            <p style={{ fontSize: 13.5, color: '#586e75', margin: 0, lineHeight: 1.5 }}>
+            <p style={{ fontSize: 13.5, color: '#7a5c42', margin: 0, lineHeight: 1.5 }}>
               Transfira a lista de presença e faltas da turma <strong>{classes.find(c => c.id === selectedClass)?.name}</strong> diretamente para a tela de chamada aberta no portal oficial, sem digitar nome por nome.
             </p>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div>
-                <label style={{ fontSize: 12, fontWeight: 700, color: '#586e75', display: 'block', marginBottom: 6 }}>Selecione o Portal de Destino</label>
+                <label style={{ fontSize: 12, fontWeight: 700, color: '#7a5c42', display: 'block', marginBottom: 6 }}>Selecione o Portal de Destino</label>
                 <select
                   value={selectedMirrorPortal}
                   onChange={e => setSelectedMirrorPortal(e.target.value)}
-                  style={{ width: '100%', padding: '10px 14px', borderRadius: 10, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13.5, color: '#073642', outline: 'none' }}
+                  style={{ width: '100%', padding: '10px 14px', borderRadius: 10, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13.5, color: '#2c1a0e', outline: 'none' }}
                 >
                   <option value="plural">Plurall (SOMOS Educação)</option>
                   <option value="machado">Portal Machado Sobrinho</option>
@@ -840,7 +841,7 @@ export default function ClassroomMode() {
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 6 }}>
               <button
                 onClick={() => setIsMirrorModalOpen(false)}
-                style={{ padding: '10px 18px', borderRadius: 10, border: '1px solid #e8e0d0', background: '#f5f0e8', color: '#586e75', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
+                style={{ padding: '10px 18px', borderRadius: 10, border: '1px solid #e8e0d0', background: '#f5f0e8', color: '#7a5c42', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
               >
                 Cancelar
               </button>

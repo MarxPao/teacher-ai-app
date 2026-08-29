@@ -70,10 +70,10 @@ export default function AudioPlayerCard({ audioUrl, title = 'Listening Audio Tra
 
   return (
     <div style={{
-      background: 'linear-gradient(135deg, #073642 0%, #002b36 100%)',
+      background: 'linear-gradient(135deg, #2c1a0e 0%, #002b36 100%)',
       borderRadius: 16,
       padding: '16px 20px',
-      color: '#fdf6e3',
+      color: '#fdf8f2',
       boxShadow: '0 8px 24px rgba(7,54,66,0.18)',
       margin: '16px 0',
       border: '1px solid rgba(255,255,255,0.1)',
@@ -87,8 +87,8 @@ export default function AudioPlayerCard({ audioUrl, title = 'Listening Audio Tra
             <i className="ti ti-headphones" style={{ color: '#fff', fontSize: 18 }} />
           </div>
           <div>
-            <div style={{ fontWeight: 700, fontSize: 14, color: '#fdf6e3' }}>{title}</div>
-            <div style={{ fontSize: 11, color: '#93a1a1' }}>
+            <div style={{ fontWeight: 700, fontSize: 14, color: '#fdf8f2' }}>{title}</div>
+            <div style={{ fontSize: 11, color: '#a08060' }}>
               🇬🇧 Sotaque: <b>{accent}</b> · ELT Audio Engine
             </div>
           </div>
@@ -126,7 +126,7 @@ export default function AudioPlayerCard({ audioUrl, title = 'Listening Audio Tra
             onChange={handleSeek}
             style={{ width: '100%', accentColor: '#b58900', cursor: 'pointer' }}
           />
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#93a1a1' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#a08060' }}>
             <span>{fmtTime(currentTime)}</span>
             <span>{fmtTime(duration)}</span>
           </div>
@@ -141,7 +141,7 @@ export default function AudioPlayerCard({ audioUrl, title = 'Listening Audio Tra
               style={{
                 padding: '3px 8px', borderRadius: 6, border: 'none', fontSize: 10, fontWeight: 700,
                 background: speed === spd ? '#268bd2' : 'transparent',
-                color: speed === spd ? '#fff' : '#93a1a1', cursor: 'pointer',
+                color: speed === spd ? '#fff' : '#a08060', cursor: 'pointer',
               }}
             >
               {spd}x

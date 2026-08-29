@@ -22,7 +22,7 @@ export default function AgentToolFeedback({ toolCalls }: AgentToolFeedbackProps)
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       {toolCalls.map((tc) => {
-        const display = TOOL_DISPLAY_NAMES[tc.name] || { label: tc.name, icon: 'ti-bolt', color: '#586e75' }
+        const display = TOOL_DISPLAY_NAMES[tc.name] || { label: tc.name, icon: 'ti-bolt', color: '#7a5c42' }
         const isRunning = tc.status === 'running'
         const isDone    = tc.status === 'done'
         const isError   = tc.status === 'error'
@@ -106,13 +106,13 @@ function ToolCallBubble({
 
       {/* Label + detalhe */}
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontWeight: 600, color: '#073642', display: 'flex', alignItems: 'center', gap: 6 }}>
+        <div style={{ fontWeight: 600, color: '#2c1a0e', display: 'flex', alignItems: 'center', gap: 6 }}>
           <i className={`ti ${display.icon}`} style={{ fontSize: 12, color: iconColor }} />
           {display.label}
           {isRunning && <span style={{ color: iconColor, letterSpacing: 2 }}>{dots}</span>}
         </div>
         {inputSummary && (
-          <div style={{ color: '#93a1a1', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <div style={{ color: '#a08060', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {inputSummary}
           </div>
         )}

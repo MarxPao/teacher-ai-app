@@ -1,4 +1,5 @@
 'use client'
+import { toast, showConfirm } from '@/components/Toast'
 import { useState, useEffect, useMemo } from 'react'
 import { ELT_TAXONOMY, getSubcategoriesForCategory } from '@/lib/englishTaxonomy'
 import { 
@@ -180,7 +181,7 @@ export default function QuestionBank() {
  }, [])
 
  const handleDeleteRubric = async (item: any) => {
- if (!confirm(`Deseja excluir a rubrica/gabarito "${item.title}"?`)) return
+ if (!(await showConfirm({ message: `Deseja excluir a rubrica/gabarito "${item.title}"?` }))) return
  try {
  const { deleteSupabaseActivity } = await import('@/lib/supabaseClient')
  await deleteSupabaseActivity(item.id, 'rubrics_and_answer_keys')
@@ -349,8 +350,8 @@ function parseJsonFromAI(text: string): Array<{ statement: string; options?: str
  /* Gerar com IA */
  async function generateWithAI() {
  const api = getActiveApi()
- if (!api) { alert('Configure uma API ativa em APIs & Modelos.'); return }
- if (!aiTopic.trim()) { alert('Informe o tópico ou assunto.'); return }
+ if (!api) { toast.success('Configure uma API ativa em APIs & Modelos.'); return }
+ if (!aiTopic.trim()) { toast.success('Informe o tópico ou assunto.'); return }
 
  setIsGen(true)
  try {
@@ -421,7 +422,7 @@ Para questões dissertativas ou V/F, omita "options". Para V/F, o "answer" deve 
  saveQs([...newQs, ...questions])
  setModal(null)
  } catch (e) {
- alert(`Erro ao gerar: ${e instanceof Error ? e.message : 'desconhecido'}`)
+ toast.success(`Erro ao gerar: ${e instanceof Error ? e.message : 'desconhecido'}`)
  } finally { setIsGen(false) }
  }
 
@@ -430,7 +431,7 @@ Para questões dissertativas ou V/F, omita "options". Para V/F, o "answer" deve 
       const raw = localStorage.getItem('teacher_repo') || localStorage.getItem('teacher_repository') || '[]'
       const items = JSON.parse(raw)
       if (!items.length) {
-        alert('Nenhum livro encontrado na Biblioteca. Acesse o módulo "Biblioteca Digital" e adicione seus livros/materiais em PDF.')
+        toast.success('Nenhum livro encontrado na Biblioteca. Acesse o módulo "Biblioteca Digital" e adicione seus livros/materiais em PDF.')
         return
       }
       setExtractBooks(items)
@@ -439,7 +440,7 @@ Para questões dissertativas ou V/F, omita "options". Para V/F, o "answer" deve 
       setExtractedList(questionsExt.map(q => ({ ...q, selected: true })))
       setShowExtractModal(true)
     } catch {
-      alert('Erro ao carregar livros da biblioteca.')
+      toast.success('Erro ao carregar livros da biblioteca.')
     }
   }
 
@@ -457,17 +458,17 @@ Para questões dissertativas ou V/F, omita "options". Para V/F, o "answer" deve 
   function handleSaveExtractedQuestions() {
     const toSave = extractedList.filter(q => q.selected).map(({ selected, ...q }) => q)
     if (toSave.length === 0) {
-      alert('Selecione ao menos um exercício para importar.')
+      toast.success('Selecione ao menos um exercício para importar.')
       return
     }
     const updated = [...(toSave as any), ...questions]
     saveQs(updated)
     setShowExtractModal(false)
-    alert(`✨ ${toSave.length} exercício(s) extraído(s) da biblioteca e importado(s) com sucesso para o Banco!`)
+    toast.success(`✨ ${toSave.length} exercício(s) extraído(s) da biblioteca e importado(s) com sucesso para o Banco!`)
   }
 
-  function deleteQ(id: string) {
-    if (!confirm('Excluir esta questão?')) return
+  async function deleteQ(id: string) {
+    if (!(await showConfirm({ message: 'Excluir esta questão?' }))) return
     saveQs(questions.filter(q => q.id !== id))
     if (selectedQ?.id === id) setSelectedQ(null)
   }
@@ -583,7 +584,7 @@ Para questões dissertativas ou V/F, omita "options". Para V/F, o "answer" deve 
  <button
  onClick={() => {
  navigator.clipboard.writeText(item.content)
- alert(' Rubrica copiada para a área de transferência!')
+ toast.success(' Rubrica copiada para a área de transferência!')
  }}
  style={{ ...S.btn, background: '#f5efe6', color: '#7a5c42', padding: '8px 12px' }}
  title="Copiar texto"
@@ -628,7 +629,7 @@ Para questões dissertativas ou V/F, omita "options". Para V/F, o "answer" deve 
  <button
  onClick={() => {
  navigator.clipboard.writeText(previewRubric.content)
- alert(' Conteúdo copiado!')
+ toast.success(' Conteúdo copiado!')
  }}
  style={{ ...S.btn, background: '#8b5e3c', color: '#fff' }}
  >
@@ -791,7 +792,7 @@ Para questões dissertativas ou V/F, omita "options". Para V/F, o "answer" deve 
  <span style={{ ...S.badge, background: typeColor[selectedQ.type] + '20', color: typeColor[selectedQ.type] }}>
  {TYPE_LABELS[selectedQ.type]}
  </span>
- <button onClick={() => setSelectedQ(null)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: '#93a1a1' }}>×</button>
+ <button onClick={() => setSelectedQ(null)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: '#a08060' }}>×</button>
  </div>
  <p style={{ fontSize: 14, color: '#2c1a0e', lineHeight: 1.6, marginBottom: 16 }}>{selectedQ.statement}</p>
 
@@ -800,7 +801,7 @@ Para questões dissertativas ou V/F, omita "options". Para V/F, o "answer" deve 
  padding: '8px 14px', borderRadius: 10, marginBottom: 6,
  background: selectedQ.answer === OPTION_LETTERS[i] ? '#d0f0c0' : '#f5f0e8',
  border: `1px solid ${selectedQ.answer === OPTION_LETTERS[i] ? '#2d7a00' : 'transparent'}`,
- color: '#073642', fontSize: 13,
+ color: '#2c1a0e', fontSize: 13,
  }}>
  <b>{OPTION_LETTERS[i]})</b> {opt}
  </div>
@@ -809,19 +810,19 @@ Para questões dissertativas ou V/F, omita "options". Para V/F, o "answer" deve 
  {selectedQ.answer && selectedQ.type !== 'mc' && (
  <div style={{ background: '#d0f0c0', borderRadius: 10, padding: '10px 14px', marginBottom: 12 }}>
  <div style={{ fontSize: 11, color: '#2d7a00', fontWeight: 700, marginBottom: 4 }}>GABARITO</div>
- <div style={{ fontSize: 13, color: '#073642' }}>{selectedQ.answer}</div>
+ <div style={{ fontSize: 13, color: '#2c1a0e' }}>{selectedQ.answer}</div>
  </div>
  )}
 
  {selectedQ.explanation && (
- <div style={{ background: '#eee8d5', borderRadius: 10, padding: '10px 14px', marginBottom: 12 }}>
- <div style={{ fontSize: 11, color: '#586e75', fontWeight: 700, marginBottom: 4 }}>COMENTÁRIO</div>
- <div style={{ fontSize: 13, color: '#073642' }}>{selectedQ.explanation}</div>
+ <div style={{ background: '#f0e8d8', borderRadius: 10, padding: '10px 14px', marginBottom: 12 }}>
+ <div style={{ fontSize: 11, color: '#7a5c42', fontWeight: 700, marginBottom: 4 }}>COMENTÁRIO</div>
+ <div style={{ fontSize: 13, color: '#2c1a0e' }}>{selectedQ.explanation}</div>
  </div>
  )}
 
  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
- {selectedQ.tags.map(t => <span key={t} style={{ ...S.badge, background: '#eee8d5', color: '#586e75' }}>{t}</span>)}
+ {selectedQ.tags.map(t => <span key={t} style={{ ...S.badge, background: '#f0e8d8', color: '#7a5c42' }}>{t}</span>)}
  </div>
  </div>
  </div>
@@ -916,7 +917,7 @@ Para questões dissertativas ou V/F, omita "options". Para V/F, o "answer" deve 
  </div>
  </div>
  <div style={{ display: 'flex', gap: 10, marginTop: 20, justifyContent: 'flex-end' }}>
- <button onClick={() => { resetForm(); setModal(null) }} style={{ ...S.btn, background: '#eee8d5', color: '#586e75' }}>Cancelar</button>
+ <button onClick={() => { resetForm(); setModal(null) }} style={{ ...S.btn, background: '#f0e8d8', color: '#7a5c42' }}>Cancelar</button>
  <button onClick={addManual} style={{ ...S.btn, background: '#2c1a0e', color: '#fff' }}>
  <i className="ti ti-check" /> Salvar Questão
  </button>
@@ -1063,7 +1064,7 @@ Para questões dissertativas ou V/F, omita "options". Para V/F, o "answer" deve 
  {item.statement}
  </p>
  {item.options && item.options.length > 0 && (
- <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4, fontSize: 11.5, color: '#586e75' }}>
+ <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4, fontSize: 11.5, color: '#7a5c42' }}>
  {item.options.map((opt, oIdx) => (
  <div key={oIdx} style={{ background: '#fdf8f2', padding: '2px 6px', borderRadius: 4 }}>
  {opt}

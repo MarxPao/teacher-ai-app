@@ -87,8 +87,8 @@ export default function WisprFlowOverlay() {
     <>
       <style>{`
         @keyframes wisprBarGlow {
-          0%, 100% { box-shadow: 0 0 24px rgba(42,161,152,0.3), 0 16px 40px rgba(0,43,54,0.4); }
-          50%       { box-shadow: 0 0 40px rgba(42,161,152,0.6), 0 16px 40px rgba(0,43,54,0.5); }
+          0%, 100% { box-shadow: 0 0 24px rgba(42,161,152,0.3), 0 16px 40px rgba(44,26,14,0.4); }
+          50%       { box-shadow: 0 0 40px rgba(42,161,152,0.6), 0 16px 40px rgba(44,26,14,0.5); }
         }
         @keyframes wisprSlideUp {
           from { transform: translateX(-50%) translateY(30px) scale(0.92); opacity: 0; }
@@ -106,7 +106,7 @@ export default function WisprFlowOverlay() {
           <div style={{
             background: 'rgba(7,54,66,0.92)', backdropFilter: 'blur(16px)',
             border: '1px solid rgba(42,161,152,0.4)', borderRadius: 16,
-            padding: '10px 18px', maxWidth: 420, color: '#fdf6e3', fontSize: 13,
+            padding: '10px 18px', maxWidth: 420, color: '#fdf8f2', fontSize: 13,
             boxShadow: '0 8px 32px rgba(0,0,0,0.3)', textAlign: 'center', lineHeight: 1.4,
           }}>
             <div style={{ fontSize: 10, color: '#2aa198', fontWeight: 800, marginBottom: 2 }}>
@@ -119,9 +119,9 @@ export default function WisprFlowOverlay() {
         {/* Barra de Ditado Flutuante Principal */}
         <div style={{
           display: 'flex', alignItems: 'center', gap: 14,
-          background: 'rgba(0,43,54,0.92)', backdropFilter: 'blur(20px)',
+          background: 'rgba(44,26,14,0.92)', backdropFilter: 'blur(20px)',
           border: '1px solid rgba(42,161,152,0.5)', borderRadius: 40,
-          padding: '10px 22px', color: '#fdf6e3',
+          padding: '10px 22px', color: '#fdf8f2',
           boxShadow: '0 12px 40px rgba(0,0,0,0.4)',
           animation: whisper.isRecording ? 'wisprBarGlow 2s ease-in-out infinite' : 'none',
         }}>
@@ -163,10 +163,10 @@ export default function WisprFlowOverlay() {
 
           {/* Label de status */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 1, fontFamily: "'Outfit', sans-serif" }}>
-            <div style={{ fontSize: 12, fontWeight: 800, color: '#fdf6e3' }}>
+            <div style={{ fontSize: 12, fontWeight: 800, color: '#fdf8f2' }}>
               {whisper.isTranscribing ? 'Transcrevendo Wispr Flow...' : whisper.isRecording ? 'Ditando (Opus HD)...' : 'Wispr Flow Prático'}
             </div>
-            <div style={{ fontSize: 10, color: '#93a1a1', display: 'flex', alignItems: 'center', gap: 4 }}>
+            <div style={{ fontSize: 10, color: '#a08060', display: 'flex', alignItems: 'center', gap: 4 }}>
               <kbd style={{ background: 'rgba(255,255,255,0.12)', padding: '1px 5px', borderRadius: 4, fontSize: 9 }}>Alt+Shift+V</kbd> ou pausa para enviar
             </div>
           </div>
@@ -174,7 +174,7 @@ export default function WisprFlowOverlay() {
           {/* Botão fechar */}
           <button
             onClick={() => { whisper.cancelRecording(); setIsVisible(false); setLastText('') }}
-            style={{ background: 'none', border: 'none', color: '#93a1a1', fontSize: 16, cursor: 'pointer', marginLeft: 6 }}
+            style={{ background: 'none', border: 'none', color: '#a08060', fontSize: 16, cursor: 'pointer', marginLeft: 6 }}
           >
             ×
           </button>

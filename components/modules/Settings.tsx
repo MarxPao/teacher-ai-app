@@ -1,4 +1,5 @@
 'use client'
+import { toast, showConfirm } from '@/components/Toast'
 
 import { useState, useEffect, useCallback } from 'react'
 import ModuleShell from '@/components/ModuleShell'
@@ -153,10 +154,10 @@ export default function Settings() {
           })
 
           window.dispatchEvent(new Event('storage'))
-          alert(' Backup restaurado com sucesso! Recarregando dados...')
+          toast.success(' Backup restaurado com sucesso! Recarregando dados...')
           window.location.reload()
         } catch (err) {
-          alert(` Falha ao restaurar backup: ${err instanceof Error ? err.message : String(err)}`)
+          toast.success(` Falha ao restaurar backup: ${err instanceof Error ? err.message : String(err)}`)
         }
       }
       reader.readAsText(file)
@@ -180,7 +181,7 @@ export default function Settings() {
 
   /* Limpar Logs de Auditoria */
   async function handlePurgeAudit() {
-    if (confirm('Deseja limpar todo o histórico da Trilha de Auditoria de Ações em Portais?')) {
+    if ((await showConfirm({ message: 'Deseja limpar todo o histórico da Trilha de Auditoria de Ações em Portais?' }))) {
       await purgePortalActionLogs()
       await loadAuditData()
       setSelectedLogDetail(null)
@@ -204,7 +205,7 @@ export default function Settings() {
   /* Sincronização Cloud Opcional */
   async function triggerCloudSync() {
     if (!cfg.cloudSyncUrl) {
-      alert('Insira a URL do seu servidor/endpoint Cloud Sync ou Supabase.')
+      toast.success('Insira a URL do seu servidor/endpoint Cloud Sync ou Supabase.')
       return
     }
     setSyncing(true)
@@ -245,7 +246,7 @@ export default function Settings() {
       localStorage.removeItem('teacher_crypto_salt_v1')
 
       window.dispatchEvent(new Event('storage'))
-      alert(' Seus dados pessoais e registros foram excluídos com sucesso em conformidade com a LGPD. A aplicação será reiniciada.')
+      toast.success(' Seus dados pessoais e registros foram excluídos com sucesso em conformidade com a LGPD. A aplicação será reiniciada.')
       window.location.reload()
     }
   }
@@ -307,16 +308,16 @@ export default function Settings() {
 
               return (
                 <div className="space-y-4">
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: '#fdf6e3', borderRadius: 12, border: '1px solid rgba(88,110,117,0.2)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: '#fdf8f2', borderRadius: 12, border: '1px solid rgba(88,110,117,0.2)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                      <div style={{ width: 40, height: 40, borderRadius: 10, background: '#073642', color: '#fdf6e3', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>
+                      <div style={{ width: 40, height: 40, borderRadius: 10, background: '#2c1a0e', color: '#fdf8f2', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>
                         <i className="ti ti-user" />
                       </div>
                       <div>
-                        <div style={{ fontSize: 14, fontWeight: 700, color: '#073642' }}>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: '#2c1a0e' }}>
                           {user?.name || cfg.teacher || 'Professor(a)'}
                         </div>
-                        <div style={{ fontSize: 12, color: '#586e75' }}>
+                        <div style={{ fontSize: 12, color: '#7a5c42' }}>
                           {user?.email || 'Sessão Docente Ativa'}
                         </div>
                       </div>
@@ -324,7 +325,7 @@ export default function Settings() {
 
                     <button
                       onClick={async () => {
-                        if (confirm('Deseja realmente sair da sua conta?')) {
+                        if ((await showConfirm({ message: 'Deseja realmente sair da sua conta?' }))) {
                           await signOut()
                           window.location.reload()
                         }
@@ -341,7 +342,7 @@ export default function Settings() {
                   </div>
 
                   <div>
-                    <label style={{ display: 'block', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1.2px', color: '#93a1a1', marginBottom: 6 }}>
+                    <label style={{ display: 'block', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1.2px', color: '#a08060', marginBottom: 6 }}>
                       Matéria Principal Padrão
                     </label>
                     <select
@@ -356,7 +357,7 @@ export default function Settings() {
                         setSaved(true)
                         setTimeout(() => setSaved(false), 2000)
                       }}
-                      style={{ width: '100%', border: '1px solid rgba(88,110,117,0.2)', borderRadius: 9, padding: '9px 12px', fontSize: 13.5, background: '#fdf6e3', color: '#073642', outline: 'none', fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+                      style={{ width: '100%', border: '1px solid rgba(88,110,117,0.2)', borderRadius: 9, padding: '9px 12px', fontSize: 13.5, background: '#fdf8f2', color: '#2c1a0e', outline: 'none', fontFamily: "'Plus Jakarta Sans', sans-serif" }}
                     >
                       {subjects.map(s => (
                         <option key={s.id} value={s.id}>
@@ -364,7 +365,7 @@ export default function Settings() {
                         </option>
                       ))}
                     </select>
-                    <p style={{ fontSize: 11.5, color: '#586e75', marginTop: 6, margin: '6px 0 0' }}>
+                    <p style={{ fontSize: 11.5, color: '#7a5c42', marginTop: 6, margin: '6px 0 0' }}>
                       Define a taxonomia e o gerador padrão quando nenhuma turma específica estiver selecionada.
                     </p>
                   </div>
@@ -376,13 +377,13 @@ export default function Settings() {
           {/* Armazenamento de Dados & Banco de Dados (Supabase) */}
           <ModuleCard title="Armazenamento de Dados & Banco de Dados (Supabase)" icon="ti-database" style={{ marginBottom: 20 }}>
             <div className="space-y-4">
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10, padding: '12px 16px', background: '#fdf6e3', borderRadius: 12, border: '1px solid rgba(88,110,117,0.2)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10, padding: '12px 16px', background: '#fdf8f2', borderRadius: 12, border: '1px solid rgba(88,110,117,0.2)' }}>
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: '#073642' }}>Status da Infraestrutura:</span>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: '#2c1a0e' }}>Status da Infraestrutura:</span>
                     <DatabaseStatusBadge />
                   </div>
-                  <p style={{ fontSize: 12, color: '#586e75', margin: 0 }}>
+                  <p style={{ fontSize: 12, color: '#7a5c42', margin: 0 }}>
                     {isCustomSupabaseConfigured()
                       ? 'Conectado ao seu próprio projeto Supabase (BYOK). Seus dados estão 100% sob seu controle direto.'
                       : 'Utilizando o banco compartilhado padrão da plataforma com isolamento por usuário. Você pode conectar seu próprio banco Supabase a qualquer momento.'}
@@ -396,7 +397,7 @@ export default function Settings() {
                     borderRadius: 8,
                     border: '1px solid #d5c0b0',
                     background: '#fff',
-                    color: '#073642',
+                    color: '#2c1a0e',
                     fontSize: 12,
                     fontWeight: 700,
                     cursor: 'pointer',
@@ -410,23 +411,23 @@ export default function Settings() {
               </div>
 
               <div style={{ borderTop: '1px solid #ede8dc', paddingTop: 14 }}>
-                <h4 style={{ fontSize: 12, fontWeight: 800, color: '#073642', textTransform: 'uppercase', letterSpacing: '0.8px', margin: '0 0 10px' }}>
+                <h4 style={{ fontSize: 12, fontWeight: 800, color: '#2c1a0e', textTransform: 'uppercase', letterSpacing: '0.8px', margin: '0 0 10px' }}>
                   Configurar Supabase Próprio (BYOK — Opcional)
                 </h4>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 12 }}>
                   <div>
-                    <label style={{ display: 'block', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', color: '#93a1a1', marginBottom: 5 }}>
+                    <label style={{ display: 'block', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', color: '#a08060', marginBottom: 5 }}>
                       URL do Projeto Supabase
                     </label>
                     <input
                       value={supabaseCustomUrl}
                       onChange={e => setSupabaseCustomUrl(e.target.value)}
                       placeholder="https://seu-projeto.supabase.co"
-                      style={{ width: '100%', border: '1px solid rgba(88,110,117,0.2)', borderRadius: 9, padding: '9px 12px', fontSize: 13, background: '#fdf6e3', color: '#073642', outline: 'none' }}
+                      style={{ width: '100%', border: '1px solid rgba(88,110,117,0.2)', borderRadius: 9, padding: '9px 12px', fontSize: 13, background: '#fdf8f2', color: '#2c1a0e', outline: 'none' }}
                     />
                   </div>
                   <div>
-                    <label style={{ display: 'block', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', color: '#93a1a1', marginBottom: 5 }}>
+                    <label style={{ display: 'block', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', color: '#a08060', marginBottom: 5 }}>
                       Chave Anônima (Anon Key)
                     </label>
                     <input
@@ -434,7 +435,7 @@ export default function Settings() {
                       value={supabaseCustomKey}
                       onChange={e => setSupabaseCustomKey(e.target.value)}
                       placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-                      style={{ width: '100%', border: '1px solid rgba(88,110,117,0.2)', borderRadius: 9, padding: '9px 12px', fontSize: 13, background: '#fdf6e3', color: '#073642', outline: 'none' }}
+                      style={{ width: '100%', border: '1px solid rgba(88,110,117,0.2)', borderRadius: 9, padding: '9px 12px', fontSize: 13, background: '#fdf8f2', color: '#2c1a0e', outline: 'none' }}
                     />
                   </div>
                 </div>
@@ -443,8 +444,8 @@ export default function Settings() {
                   {isCustomSupabaseConfigured() && (
                     <button
                       type="button"
-                      onClick={() => {
-                        if (confirm('Deseja remover sua conexão personalizada e voltar ao banco compartilhado padrão?')) {
+                      onClick={async () => {
+                        if ((await showConfirm({ message: 'Deseja remover sua conexão personalizada e voltar ao banco compartilhado padrão?' }))) {
                           localStorage.removeItem('teacher_supabase_config')
                           setSupabaseCustomUrl('')
                           setSupabaseCustomKey('')
@@ -462,7 +463,7 @@ export default function Settings() {
                     type="button"
                     onClick={() => {
                       if (!supabaseCustomUrl.trim() || !supabaseCustomKey.trim()) {
-                        alert('Preencha a URL e a Anon Key do seu projeto Supabase.')
+                        toast.success('Preencha a URL e a Anon Key do seu projeto Supabase.')
                         return
                       }
                       localStorage.setItem('teacher_supabase_config', JSON.stringify({
@@ -473,7 +474,7 @@ export default function Settings() {
                       setSaved(true)
                       setTimeout(() => setSaved(false), 2000)
                     }}
-                    style={{ padding: '8px 18px', borderRadius: 8, border: 'none', background: '#073642', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+                    style={{ padding: '8px 18px', borderRadius: 8, border: 'none', background: '#2c1a0e', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
                   >
                     <i className="ti ti-check" /> Salvar Conexão BYOK
                   </button>
@@ -489,7 +490,7 @@ export default function Settings() {
           />
 
           <ModuleCard title="Idioma do Aplicativo / Language" icon="ti-world" style={{ marginBottom: 20 }}>
-            <p style={{ fontSize: 13, color: '#586e75', margin: '0 0 12px' }}>
+            <p style={{ fontSize: 13, color: '#7a5c42', margin: '0 0 12px' }}>
               Escolha o idioma de preferência para a interface do Teacher AI.
             </p>
             <LanguageSelector />
@@ -502,24 +503,24 @@ export default function Settings() {
                 { label: 'Professor(a)', key: 'teacher' as const, placeholder: 'Seu nome completo' }
               ].map(f => (
                 <div key={f.key}>
-                  <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1.2px', color: '#93a1a1', marginBottom: 6 }}>{f.label}</div>
+                  <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1.2px', color: '#a08060', marginBottom: 6 }}>{f.label}</div>
                   <input
                     value={cfg[f.key] || ''}
                     onChange={e => setCfg({ ...cfg, [f.key]: e.target.value })}
                     placeholder={f.placeholder}
-                    style={{ width: '100%', border: '1px solid rgba(88,110,117,0.2)', borderRadius: 9, padding: '9px 12px', fontSize: 13.5, background: '#fdf6e3', color: '#073642', outline: 'none', fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+                    style={{ width: '100%', border: '1px solid rgba(88,110,117,0.2)', borderRadius: 9, padding: '9px 12px', fontSize: 13.5, background: '#fdf8f2', color: '#2c1a0e', outline: 'none', fontFamily: "'Plus Jakarta Sans', sans-serif" }}
                   />
                 </div>
               ))}
             </div>
             <div>
-              <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1.2px', color: '#93a1a1', marginBottom: 6 }}>Instruções Padrão & Cabeçalhos</div>
+              <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1.2px', color: '#a08060', marginBottom: 6 }}>Instruções Padrão & Cabeçalhos</div>
               <textarea
                 value={cfg.instructions || ''}
                 onChange={e => setCfg({ ...cfg, instructions: e.target.value })}
                 rows={2}
                 placeholder="Cabeçalho padrão das provas, orientações metodológicas..."
-                style={{ width: '100%', border: '1px solid rgba(88,110,117,0.2)', borderRadius: 9, padding: '9px 12px', fontSize: 13.5, background: '#fdf6e3', color: '#073642', outline: 'none', resize: 'none', fontFamily: "'Plus Jakarta Sans', sans-serif", lineHeight: 1.5 }}
+                style={{ width: '100%', border: '1px solid rgba(88,110,117,0.2)', borderRadius: 9, padding: '9px 12px', fontSize: 13.5, background: '#fdf8f2', color: '#2c1a0e', outline: 'none', resize: 'none', fontFamily: "'Plus Jakarta Sans', sans-serif", lineHeight: 1.5 }}
               />
             </div>
           </ModuleCard>
@@ -549,13 +550,13 @@ export default function Settings() {
       {activeTab === 'formatting' && (
         <>
           <ModuleCard title="Preferências Globais de Documento & Impressão" icon="ti-typography" style={{ marginBottom: 20 }}>
-            <p style={{ fontSize: 13, color: '#586e75', margin: '0 0 16px', lineHeight: 1.5 }}>
+            <p style={{ fontSize: 13, color: '#7a5c42', margin: '0 0 16px', lineHeight: 1.5 }}>
               Defina o padrão visual universal que será aplicado automaticamente a <strong>todos os Planos de Aula, Provas do ExamBuilder e Exercícios</strong> exportados pelo sistema.
             </p>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16, marginBottom: 20 }}>
               <div>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#586e75', marginBottom: 6 }}>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#7a5c42', marginBottom: 6 }}>
                   Tipografia Padrão
                 </label>
                 <select
@@ -572,7 +573,7 @@ export default function Settings() {
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#586e75', marginBottom: 6 }}>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#7a5c42', marginBottom: 6 }}>
                   Tamanho de Fonte do Corpo
                 </label>
                 <select
@@ -588,7 +589,7 @@ export default function Settings() {
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#586e75', marginBottom: 6 }}>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#7a5c42', marginBottom: 6 }}>
                   Espaçamento entre Linhas
                 </label>
                 <select
@@ -603,7 +604,7 @@ export default function Settings() {
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#586e75', marginBottom: 6 }}>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#7a5c42', marginBottom: 6 }}>
                   Esquema de Cores do Documento
                 </label>
                 <select
@@ -611,7 +612,7 @@ export default function Settings() {
                   onChange={e => setDocPrefs({ ...docPrefs, primaryColor: e.target.value })}
                   style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid #d5c8bb', background: '#fffcf8', fontSize: 13, outline: 'none' }}
                 >
-                  <option value="#073642">Azul Escuro Sobrancelha (#073642)</option>
+                  <option value="#2c1a0e">Azul Escuro Sobrancelha (#2c1a0e)</option>
                   <option value="#8b5e3c">Tons de Terra / Caramelo (#8b5e3c)</option>
                   <option value="#2aa198">Turquesa Pedagógico (#2aa198)</option>
                   <option value="#268bd2">Azul Clássico (#268bd2)</option>
@@ -620,7 +621,7 @@ export default function Settings() {
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#586e75', marginBottom: 6 }}>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#7a5c42', marginBottom: 6 }}>
                   Margens da Página (A4)
                 </label>
                 <select
@@ -694,7 +695,7 @@ export default function Settings() {
 
           {/* Histórico de Ações */}
           <ModuleCard title="Trilha de Auditoria de Ações Agênticas" icon="ti-list-check" style={{ marginBottom: 20 }}>
-            <p style={{ fontSize: 12.5, color: '#586e75', margin: '0 0 14px', lineHeight: 1.5 }}>
+            <p style={{ fontSize: 12.5, color: '#7a5c42', margin: '0 0 14px', lineHeight: 1.5 }}>
               Registro formal de todas as injeções e preenchimentos assistidos realizados em portais escolares (Machado Sobrinho, Plurall, Santa Catarina, Cambridge One). Os dados sensíveis são protegidos por criptografia local AES-GCM em repouso.
             </p>
 
@@ -760,7 +761,7 @@ export default function Settings() {
                     </div>
 
                     {selectedLogDetail?.id === log.id && (
-                      <div style={{ background: '#fff', border: '1px solid #d5c8bb', borderRadius: 8, padding: '10px 12px', marginTop: 6, fontSize: 12, fontFamily: 'monospace', whiteSpace: 'pre-wrap', color: '#073642', maxHeight: 180, overflowY: 'auto' }}>
+                      <div style={{ background: '#fff', border: '1px solid #d5c8bb', borderRadius: 8, padding: '10px 12px', marginTop: 6, fontSize: 12, fontFamily: 'monospace', whiteSpace: 'pre-wrap', color: '#2c1a0e', maxHeight: 180, overflowY: 'auto' }}>
                         {selectedLogDetail.decrypted}
                       </div>
                     )}
@@ -772,7 +773,7 @@ export default function Settings() {
 
           {/* Retenção de Dados & Expurgo (Decisão D3: B) */}
           <ModuleCard title="Política de Retenção & Expurgo de Logs" icon="ti-trash" style={{ marginBottom: 20 }}>
-            <p style={{ fontSize: 12.5, color: '#586e75', margin: '0 0 12px', lineHeight: 1.5 }}>
+            <p style={{ fontSize: 12.5, color: '#7a5c42', margin: '0 0 12px', lineHeight: 1.5 }}>
               <strong>Política Ativa:</strong> Retenção permanente local e no Supabase pessoal (BYOK) até exclusão manual pelo professor. Você pode limpar a trilha a qualquer momento.
             </p>
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
@@ -791,21 +792,21 @@ export default function Settings() {
       {activeTab === 'privacy' && (
         <>
           <ModuleCard title="Backup & Transferência de Dados (.JSON)" icon="ti-database" style={{ marginBottom: 20 }}>
-            <p style={{ fontSize: 13, color: '#586e75', margin: '0 0 16px' }}>
+            <p style={{ fontSize: 13, color: '#7a5c42', margin: '0 0 16px' }}>
               Baixe um arquivo de backup completo com todas as suas escolas, turmas, alunos, notas, questões, provas e logs de auditoria.
             </p>
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-              <button onClick={exportBackup} style={{ padding: '10px 20px', borderRadius: 10, border: 'none', background: '#073642', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <button onClick={exportBackup} style={{ padding: '10px 20px', borderRadius: 10, border: 'none', background: '#2c1a0e', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
                 <i className="ti ti-download" /> Exportar Backup Completo (.JSON)
               </button>
-              <button onClick={importBackup} style={{ padding: '10px 20px', borderRadius: 10, border: '1px solid #8b5e3c', background: '#eee8d5', color: '#073642', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <button onClick={importBackup} style={{ padding: '10px 20px', borderRadius: 10, border: '1px solid #8b5e3c', background: '#f0e8d8', color: '#2c1a0e', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
                 <i className="ti ti-upload" /> Restaurar Backup (.JSON)
               </button>
             </div>
           </ModuleCard>
 
           <ModuleCard title="Privacidade & Direitos do Titular (LGPD)" icon="ti-shield-lock" style={{ marginBottom: 20 }}>
-            <p style={{ fontSize: 13, color: '#586e75', margin: '0 0 14px', lineHeight: 1.5 }}>
+            <p style={{ fontSize: 13, color: '#7a5c42', margin: '0 0 14px', lineHeight: 1.5 }}>
               Conforme a Lei Geral de Proteção de Dados (Lei 13.709/2018), você tem controle total sobre a portabilidade e eliminação dos seus dados pessoais e de seus alunos.
             </p>
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
@@ -819,7 +820,7 @@ export default function Settings() {
           </ModuleCard>
 
           <ModuleCard title="Sincronização Cloud (Opcional)" icon="ti-cloud-upload" style={{ marginBottom: 24 }}>
-            <p style={{ fontSize: 13, color: '#586e75', margin: '0 0 12px' }}>
+            <p style={{ fontSize: 13, color: '#7a5c42', margin: '0 0 12px' }}>
               Configuração de endpoint para sincronizar os dados entre múltiplos dispositivos via Supabase/Webhook.
             </p>
             <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -827,7 +828,7 @@ export default function Settings() {
                 value={cfg.cloudSyncUrl || ''}
                 onChange={e => setCfg({ ...cfg, cloudSyncUrl: e.target.value })}
                 placeholder="https://seu-servidor.com/api/sync"
-                style={{ flex: 1, minWidth: 240, border: '1px solid rgba(88,110,117,0.2)', borderRadius: 9, padding: '9px 12px', fontSize: 13, background: '#fdf6e3', color: '#2c1a0e', outline: 'none' }}
+                style={{ flex: 1, minWidth: 240, border: '1px solid rgba(88,110,117,0.2)', borderRadius: 9, padding: '9px 12px', fontSize: 13, background: '#fdf8f2', color: '#2c1a0e', outline: 'none' }}
               />
               <button onClick={triggerCloudSync} disabled={syncing} style={{ padding: '9px 18px', borderRadius: 9, border: 'none', background: '#8b5e3c', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
                 {syncing ? <><i className="ti ti-loader-2" style={{ animation: 'spin 1s linear infinite' }} /> Sincronizando...</> : <><i className="ti ti-cloud-upload" /> Sincronizar Agora</>}

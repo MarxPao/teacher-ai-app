@@ -196,8 +196,8 @@ export default function OnboardingFlow({ teacherName, onComplete }: OnboardingFl
                         <span
                           className="text-[11px] font-bold px-2.5 py-1 rounded-full"
                           style={{
-                            background: sub.ready ? 'rgba(139,94,60,0.1)' : '#eee8d5',
-                            color: sub.ready ? '#8b5e3c' : '#93a1a1',
+                            background: sub.ready ? 'rgba(139,94,60,0.1)' : '#f0e8d8',
+                            color: sub.ready ? '#8b5e3c' : '#a08060',
                             border: sub.ready ? '1px solid rgba(139,94,60,0.2)' : 'none'
                           }}
                         >
@@ -226,7 +226,7 @@ export default function OnboardingFlow({ teacherName, onComplete }: OnboardingFl
             <div
               className="p-4 rounded-xl text-xs flex items-start gap-3"
               style={{
-                background: '#fdf6e3',
+                background: '#fdf8f2',
                 border: '1px solid rgba(139,115,85,0.2)',
                 color: '#5c3d24'
               }}

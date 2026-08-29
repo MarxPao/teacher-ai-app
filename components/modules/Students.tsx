@@ -1,8 +1,9 @@
 'use client'
+import { toast, showConfirm } from '@/components/Toast'
+import { COLOR, TEXT, RADIUS, SPACE } from '@/styles/tokens'
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { requiresSharedDatabaseConsent } from '@/lib/databaseConsent'
 import SharedDatabaseConsentModal from '@/components/SharedDatabaseConsentModal'
-import DatabaseStatusBadge from '@/components/DatabaseStatusBadge'
 import StudentTimeline from '@/components/charts/StudentTimeline'
 
 /* ─── Tipos ─────────────────────────────────────────────────────────────────── */
@@ -73,7 +74,7 @@ function RadarChart({ scores, metrics, size = 240 }: { scores: Record<string, nu
         const end = spoke(i, 1.22)
         return (
           <text key={i} x={end.x} y={end.y} textAnchor="middle" dominantBaseline="central"
-            style={{ fontSize: 8.5, fill: '#586e75', fontWeight: 600, fontFamily: 'Outfit, sans-serif' }}>
+            style={{ fontSize: 8.5, fill: COLOR.paperWarm, fontWeight: 600, fontFamily: 'Outfit, sans-serif' }}>
             {m.label.split(' ')[0]}
           </text>
         )
@@ -94,12 +95,12 @@ function computeScore(scores: Record<string, number>, metrics: MetricDef[], auto
 }
 
 const S: Record<string, React.CSSProperties> = {
-  page:  { padding: '32px 48px', minHeight: '100%', boxSizing: 'border-box', background: '#fdf6e3' },
-  card:  { background: '#fff', border: '1px solid #ede8dc', borderRadius: 16, padding: '20px 24px', boxShadow: '0 2px 8px rgba(0,43,54,0.06)' },
-  badge: { display: 'inline-flex', alignItems: 'center', padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600 },
-  btn:   { display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 10, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600 },
-  input: { width: '100%', padding: '9px 12px', borderRadius: 10, border: '1px solid #ddd', background: '#fdf6e3', fontSize: 13, outline: 'none', boxSizing: 'border-box' },
-  label: { display: 'block', fontSize: 11, fontWeight: 700, color: '#586e75', textTransform: 'uppercase' as const, letterSpacing: '0.8px', marginBottom: 5 },
+  page:  { padding: '32px 48px', minHeight: '100%', boxSizing: 'border-box', background: COLOR.paperPage },
+  card:  { background: '#fff', border: '1px solid #ede8dc', borderRadius: RADIUS.lg, padding: '20px 24px', boxShadow: '0 2px 8px rgba(44,26,14,0.06)' },
+  badge: { display: 'inline-flex', alignItems: 'center', padding: '3px 10px', borderRadius: 20, fontSize: TEXT.micro, fontWeight: 600 },
+  btn:   { display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: RADIUS.md, border: 'none', cursor: 'pointer', fontSize: TEXT.bodyCompact, fontWeight: 600 },
+  input: { width: '100%', padding: '9px 12px', borderRadius: RADIUS.md, border: '1px solid #ddd', background: COLOR.paperPage, fontSize: TEXT.bodyCompact, outline: 'none', boxSizing: 'border-box' },
+  label: { display: 'block', fontSize: TEXT.micro, fontWeight: 700, color: COLOR.paperWarm, textTransform: 'uppercase' as const, letterSpacing: '0.8px', marginBottom: 5 },
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════════
@@ -185,8 +186,8 @@ export default function Students() {
     setStuName(''); setStuClassId(''); setStuLevel('A2'); setStuNotes('')
     setAddModal(false)
   }
-  function removeStudent(id: string) {
-    if (!confirm('Excluir este aluno?')) return
+  async function removeStudent(id: string) {
+    if (!(await showConfirm({ message: 'Excluir este aluno?' }))) return
     saveStudents(students.filter(s => s.id !== id))
     saveMetrics(allMetrics.filter(m => m.studentId !== id))
     if (selectedId === id) setSelectedId(null)
@@ -255,13 +256,10 @@ export default function Students() {
       {/* Cabeçalho */}
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 24, flexWrap: 'wrap', gap: 14 }}>
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <h1 style={{ fontFamily: 'Georgia, serif', fontSize: 30, fontWeight: 600, color: '#073642', fontStyle: 'italic', margin: 0 }}>
-              Alunos
-            </h1>
-            <DatabaseStatusBadge onConfigureClick={() => window.dispatchEvent(new CustomEvent('teacher:navigate_module', { detail: 'settings' }))} />
-          </div>
-          <p style={{ color: '#586e75', fontSize: 13, marginTop: 4 }}>
+          <h1 style={{ fontFamily: 'Georgia, serif', fontSize: 30, fontWeight: 600, color: COLOR.paperInk, fontStyle: 'italic', margin: 0 }}>
+            Alunos
+          </h1>
+          <p style={{ color: COLOR.paperWarm, fontSize: TEXT.bodyCompact, marginTop: 4 }}>
             {students.length} alunos · {classes.length} turmas
           </p>
         </div>
@@ -274,7 +272,7 @@ export default function Students() {
                 setAddModal(true)
               }
             }}
-            style={{ ...S.btn, background: '#073642', color: '#fff' }}
+            style={{ ...S.btn, background: '#2c1a0e', color: '#fff' }}
           >
             <i className="ti ti-user-plus" /> Novo Aluno
           </button>
@@ -287,7 +285,7 @@ export default function Students() {
           <button key={key} onClick={() => setTab(key)} style={{
             ...S.btn, borderRadius: '10px 10px 0 0', paddingBottom: 12,
             background: tab === key ? '#fff' : 'transparent',
-            color: tab === key ? '#073642' : '#93a1a1',
+            color: tab === key ? '#2c1a0e' : '#a08060',
             borderBottom: tab === key ? '2px solid #b58900' : '2px solid transparent',
             marginBottom: -2,
           }}>
@@ -304,7 +302,7 @@ export default function Students() {
             {/* Filtros */}
             <div style={{ display: 'flex', gap: 12, marginBottom: 20 }}>
               <div style={{ position: 'relative', flex: 1 }}>
-                <i className="ti ti-search" style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#93a1a1' }} />
+                <i className="ti ti-search" style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: COLOR.paperMid }} />
                 <input value={filter} onChange={e => setFilter(e.target.value)}
                   placeholder="Buscar aluno ou nível..."
                   style={{ ...S.input, paddingLeft: 36 }} />
@@ -319,7 +317,7 @@ export default function Students() {
             {filteredStudents.length === 0 ? (
               <div style={{ ...S.card, textAlign: 'center', padding: '60px 40px' }}>
                 <i className="ti ti-users" style={{ fontSize: 48, color: '#ddd', display: 'block', marginBottom: 12 }} />
-                <p style={{ color: '#93a1a1', margin: 0 }}>Nenhum aluno encontrado.</p>
+                <p style={{ color: COLOR.paperMid, margin: 0 }}>Nenhum aluno encontrado.</p>
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -334,15 +332,15 @@ export default function Students() {
                     <div key={stu.id} onClick={() => setSelectedId(isActive ? null : stu.id)} style={{
                       ...S.card, cursor: 'pointer', display: 'flex', alignItems: 'center',
                       gap: 14, padding: '14px 18px', transition: 'all 0.15s',
-                      borderColor: isActive ? '#073642' : '#ede8dc',
+                      borderColor: isActive ? '#2c1a0e' : '#ede8dc',
                       background: isActive ? '#f0f6fa' : '#fff',
                     }}>
-                      <div style={{ width: 40, height: 40, borderRadius: '50%', background: sc?.color || '#268bd2', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: '#fff', fontWeight: 700, fontSize: 16 }}>
+                      <div style={{ width: 40, height: 40, borderRadius: '50%', background: sc?.color || '#268bd2', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: '#fff', fontWeight: 700, fontSize: TEXT.subtitle }}>
                         {stu.name.charAt(0).toUpperCase()}
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontWeight: 600, color: '#073642', fontSize: 14, marginBottom: 2 }}>{stu.name}</div>
-                        <div style={{ fontSize: 12, color: '#93a1a1' }}>{cls?.name || '—'} · {stu.level}</div>
+                        <div style={{ fontWeight: 600, color: COLOR.paperInk, fontSize: TEXT.body, marginBottom: 2 }}>{stu.name}</div>
+                        <div style={{ fontSize: TEXT.caption, color: COLOR.paperMid }}>{cls?.name || '—'} · {stu.level}</div>
                       </div>
                       <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                         {avg && <span style={{ ...S.badge, background: Number(avg) >= 7 ? '#d0f0c0' : '#fef9c3', color: '#333' }}>Notas: {avg}</span>}
@@ -353,11 +351,11 @@ export default function Students() {
                           setEditClassId(stu.classId)
                           setEditEmail(stu.email || '')
                           setEditingStudent(stu.id)
-                        }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#93a1a1', fontSize: 16 }}>
+                        }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLOR.paperMid, fontSize: TEXT.subtitle }}>
                           <i className="ti ti-pencil" />
                         </button>
                         <button onClick={e => { e.stopPropagation(); removeStudent(stu.id) }}
-                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#dc322f', fontSize: 16 }}>
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#dc322f', fontSize: TEXT.subtitle }}>
                           <i className="ti ti-trash" />
                         </button>
                       </div>
@@ -374,15 +372,15 @@ export default function Students() {
               <div style={{ ...S.card, position: 'sticky', top: 20 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
                   <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                    <div style={{ width: 48, height: 48, borderRadius: '50%', background: '#073642', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fdf6e3', fontWeight: 700, fontSize: 20 }}>
+                    <div style={{ width: 48, height: 48, borderRadius: '50%', background: '#2c1a0e', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fdf8f2', fontWeight: 700, fontSize: 20 }}>
                       {selectedStudent.name.charAt(0).toUpperCase()}
                     </div>
                     <div>
-                      <div style={{ fontWeight: 700, color: '#073642', fontSize: 16 }}>{selectedStudent.name}</div>
-                      <div style={{ fontSize: 12, color: '#93a1a1' }}>{classOf(selectedStudent)?.name} · {selectedStudent.level}</div>
+                      <div style={{ fontWeight: 700, color: COLOR.paperInk, fontSize: TEXT.subtitle }}>{selectedStudent.name}</div>
+                      <div style={{ fontSize: TEXT.caption, color: COLOR.paperMid }}>{classOf(selectedStudent)?.name} · {selectedStudent.level}</div>
                     </div>
                   </div>
-                  <button onClick={() => setSelectedId(null)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: '#93a1a1' }}>×</button>
+                  <button onClick={() => setSelectedId(null)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: COLOR.paperMid }}>×</button>
                 </div>
 
                 {/* Radar mini */}
@@ -396,7 +394,7 @@ export default function Students() {
                     <div style={S.label}>Notas</div>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                       {Object.entries(selectedStudent.grades || {}).map(([col, val]) => (
-                        <span key={col} style={{ ...S.badge, background: '#f5f0e8', color: '#073642', fontSize: 12 }}>
+                        <span key={col} style={{ ...S.badge, background: '#f5f0e8', color: COLOR.paperInk, fontSize: TEXT.caption }}>
                           {col}: {val}
                         </span>
                       ))}
@@ -405,11 +403,11 @@ export default function Students() {
                 )}
 
                 {/* Observações */}
-                {selectedStudent.notes && <p style={{ fontSize: 13, color: '#586e75', background: '#f5f0e8', borderRadius: 10, padding: '10px 12px', margin: '0 0 16px' }}>{selectedStudent.notes}</p>}
+                {selectedStudent.notes && <p style={{ fontSize: TEXT.bodyCompact, color: COLOR.paperWarm, background: '#f5f0e8', borderRadius: RADIUS.md, padding: '10px 12px', margin: '0 0 16px' }}>{selectedStudent.notes}</p>}
 
                 {/* Botão de Relatório Pedagógico */}
                 <button onClick={() => setReportStudentId(selectedStudent.id)}
-                  style={{ ...S.btn, width: '100%', justifyContent: 'center', background: '#073642', color: '#fff' }}>
+                  style={{ ...S.btn, width: '100%', justifyContent: 'center', background: '#2c1a0e', color: '#fff' }}>
                   <i className="ti ti-file-text" /> Relatório Pedagógico (PDF)
                 </button>
               </div>
@@ -423,12 +421,12 @@ export default function Students() {
         <div>
           {/* Toolbar de métricas */}
           <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap', alignItems: 'center' }}>
-            <div style={{ display: 'flex', gap: 4, background: '#eee8d5', borderRadius: 12, padding: 4 }}>
+            <div style={{ display: 'flex', gap: 4, background: '#f0e8d8', borderRadius: RADIUS.lg, padding: 4 }}>
               {(['escola', 'turma', 'aluno'] as const).map(v => (
                 <button key={v} onClick={() => setMView(v)} style={{
                   ...S.btn, padding: '6px 14px',
                   background: mView === v ? '#fff' : 'transparent',
-                  color: mView === v ? '#073642' : '#93a1a1',
+                  color: mView === v ? '#2c1a0e' : '#a08060',
                   boxShadow: mView === v ? '0 1px 4px rgba(0,0,0,0.08)' : 'none',
                 }}>
                   {v === 'escola' ? 'Por Escola' : v === 'turma' ? 'Por Turma' : 'Por Aluno'}
@@ -448,7 +446,7 @@ export default function Students() {
                 {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             )}
-            <button onClick={() => setEditDefs(d => !d)} style={{ ...S.btn, background: editDefs ? '#073642' : '#eee8d5', color: editDefs ? '#fff' : '#586e75', marginLeft: 'auto' }}>
+            <button onClick={() => setEditDefs(d => !d)} style={{ ...S.btn, background: editDefs ? '#2c1a0e' : '#f0e8d8', color: editDefs ? '#fff' : '#7a5c42', marginLeft: 'auto' }}>
               <i className="ti ti-adjustments" /> {editDefs ? 'Fechar Configuração' : 'Ajustar Métricas'}
             </button>
           </div>
@@ -456,30 +454,30 @@ export default function Students() {
           {/* Configuração de métricas */}
           {editDefs && (
             <div style={{ ...S.card, marginBottom: 24 }}>
-              <div style={{ fontWeight: 700, color: '#073642', fontSize: 15, marginBottom: 16 }}>
+              <div style={{ fontWeight: 700, color: COLOR.paperInk, fontSize: 15, marginBottom: 16 }}>
                 <i className="ti ti-adjustments" style={{ marginRight: 8 }} />Configurar Pesos das Métricas
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
                 {metricDefs.map((m, i) => (
-                  <div key={m.key} style={{ background: '#f5f0e8', borderRadius: 12, padding: '12px 16px' }}>
+                  <div key={m.key} style={{ background: '#f5f0e8', borderRadius: RADIUS.lg, padding: '12px 16px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                      <div style={{ fontWeight: 600, fontSize: 13, color: '#073642' }}>
+                      <div style={{ fontWeight: 600, fontSize: TEXT.bodyCompact, color: COLOR.paperInk }}>
                         <i className={`ti ${m.icon}`} style={{ marginRight: 6 }} />{m.label}
                       </div>
                       <span style={{ ...S.badge, background: m.auto ? '#d0f0c0' : '#e8f4fd', color: '#333', fontSize: 10 }}>
                         {m.auto ? 'Auto' : 'Manual'}
                       </span>
                     </div>
-                    <div style={{ fontSize: 11, color: '#93a1a1', marginBottom: 8 }}>{m.desc}</div>
+                    <div style={{ fontSize: TEXT.micro, color: COLOR.paperMid, marginBottom: 8 }}>{m.desc}</div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <span style={{ fontSize: 11, color: '#586e75', whiteSpace: 'nowrap' }}>Peso:</span>
+                      <span style={{ fontSize: TEXT.micro, color: COLOR.paperWarm, whiteSpace: 'nowrap' }}>Peso:</span>
                       <input type="range" min={0} max={30} value={m.weight}
                         onChange={e => {
                           const upd = metricDefs.map((md, j) => j === i ? { ...md, weight: Number(e.target.value) } : md)
                           saveMetricDefs(upd)
                         }}
                         style={{ flex: 1 }} />
-                      <span style={{ fontSize: 12, fontWeight: 700, color: '#073642', minWidth: 28 }}>{m.weight}%</span>
+                      <span style={{ fontSize: TEXT.caption, fontWeight: 700, color: COLOR.paperInk, minWidth: 28 }}>{m.weight}%</span>
                     </div>
                   </div>
                 ))}
@@ -505,18 +503,18 @@ export default function Students() {
                 return (
                   <div key={sc.id} style={S.card}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-                      <div style={{ width: 42, height: 42, borderRadius: 10, background: sc.color, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <div style={{ width: 42, height: 42, borderRadius: RADIUS.md, background: sc.color, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                         <i className="ti ti-building-school" style={{ color: '#fff', fontSize: 20 }} />
                       </div>
                       <div>
-                        <div style={{ fontWeight: 700, color: '#073642' }}>{sc.name}</div>
-                        <div style={{ fontSize: 12, color: '#93a1a1' }}>{scClasses.length} turmas · {scStudents.length} alunos</div>
+                        <div style={{ fontWeight: 700, color: COLOR.paperInk }}>{sc.name}</div>
+                        <div style={{ fontSize: TEXT.caption, color: COLOR.paperMid }}>{scClasses.length} turmas · {scStudents.length} alunos</div>
                       </div>
                       <div style={{ marginLeft: 'auto', textAlign: 'center' }}>
                         <div style={{ fontSize: 24, fontWeight: 800, color: overall >= 7 ? '#2d7a00' : overall >= 5 ? '#854d00' : '#9b1c1c' }}>
                           {overall.toFixed(1)}
                         </div>
-                        <div style={{ fontSize: 10, color: '#93a1a1' }}>Score</div>
+                        <div style={{ fontSize: 10, color: COLOR.paperMid }}>Score</div>
                       </div>
                     </div>
                     <RadarChart scores={overallScores} metrics={metricDefs} size={200} />
@@ -544,14 +542,14 @@ export default function Students() {
                   const overall = computeScore(overallScores, metricDefs, null)
                   return (
                     <div key={cls.id} style={{ ...S.card, minWidth: 260, flexShrink: 0 }}>
-                      <div style={{ fontWeight: 700, color: '#073642', marginBottom: 4 }}>{cls.name}</div>
-                      <div style={{ fontSize: 12, color: '#93a1a1', marginBottom: 16 }}>{clsStudents.length} alunos</div>
+                      <div style={{ fontWeight: 700, color: COLOR.paperInk, marginBottom: 4 }}>{cls.name}</div>
+                      <div style={{ fontSize: TEXT.caption, color: COLOR.paperMid, marginBottom: 16 }}>{clsStudents.length} alunos</div>
                       <RadarChart scores={overallScores} metrics={metricDefs} size={200} />
                       <div style={{ textAlign: 'center', marginTop: 12 }}>
                         <span style={{ fontSize: 24, fontWeight: 800, color: overall >= 7 ? '#2d7a00' : overall >= 5 ? '#854d00' : '#9b1c1c' }}>
                           {overall.toFixed(1)}
                         </span>
-                        <span style={{ fontSize: 12, color: '#93a1a1', marginLeft: 4 }}>/ 10</span>
+                        <span style={{ fontSize: TEXT.caption, color: COLOR.paperMid, marginLeft: 4 }}>/ 10</span>
                       </div>
                       {/* Barras por métrica */}
                       <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -559,11 +557,11 @@ export default function Students() {
                           const v = overallScores[m.key] || 0
                           return (
                             <div key={m.key}>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#586e75', marginBottom: 3 }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: TEXT.micro, color: COLOR.paperWarm, marginBottom: 3 }}>
                                 <span><i className={`ti ${m.icon}`} style={{ marginRight: 4 }} />{m.label}</span>
                                 <span style={{ fontWeight: 600 }}>{v.toFixed(1)}</span>
                               </div>
-                              <div style={{ height: 5, background: '#eee8d5', borderRadius: 4, overflow: 'hidden' }}>
+                              <div style={{ height: 5, background: '#f0e8d8', borderRadius: 4, overflow: 'hidden' }}>
                                 <div style={{ height: '100%', width: `${v * 10}%`, background: v >= 7 ? '#859900' : v >= 5 ? '#b58900' : '#dc322f', borderRadius: 4, transition: 'width 0.3s' }} />
                               </div>
                             </div>
@@ -587,15 +585,15 @@ export default function Students() {
                   return (
                     <button key={stu.id} onClick={() => setMStudent(stu.id)} style={{
                       ...S.card, display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px',
-                      cursor: 'pointer', border: `1px solid ${mStudent === stu.id ? '#073642' : '#ede8dc'}`,
+                      cursor: 'pointer', border: `1px solid ${mStudent === stu.id ? '#2c1a0e' : '#ede8dc'}`,
                       background: mStudent === stu.id ? '#f0f6fa' : '#fff', textAlign: 'left',
                     }}>
-                      <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#073642', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fdf6e3', fontWeight: 700, flexShrink: 0 }}>
+                      <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#2c1a0e', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fdf8f2', fontWeight: 700, flexShrink: 0 }}>
                         {stu.name.charAt(0)}
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontWeight: 600, color: '#073642', fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{stu.name}</div>
-                        <div style={{ fontSize: 11, color: '#93a1a1' }}>{classOf(stu)?.name}</div>
+                        <div style={{ fontWeight: 600, color: COLOR.paperInk, fontSize: TEXT.bodyCompact, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{stu.name}</div>
+                        <div style={{ fontSize: TEXT.micro, color: COLOR.paperMid }}>{classOf(stu)?.name}</div>
                       </div>
                       <span style={{ fontSize: 15, fontWeight: 800, color: score >= 7 ? '#2d7a00' : score >= 5 ? '#854d00' : '#9b1c1c' }}>{score.toFixed(1)}</span>
                     </button>
@@ -615,12 +613,12 @@ export default function Students() {
                     <div style={S.card}>
                       <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start', marginBottom: 24, flexWrap: 'wrap' }}>
                         <div>
-                          <h2 style={{ fontWeight: 700, color: '#073642', fontSize: 22, margin: '0 0 4px' }}>{stu.name}</h2>
-                          <p style={{ color: '#93a1a1', fontSize: 13, margin: 0 }}>{classOf(stu)?.name} · {stu.level}</p>
+                          <h2 style={{ fontWeight: 700, color: COLOR.paperInk, fontSize: 22, margin: '0 0 4px' }}>{stu.name}</h2>
+                          <p style={{ color: COLOR.paperMid, fontSize: TEXT.bodyCompact, margin: 0 }}>{classOf(stu)?.name} · {stu.level}</p>
                         </div>
-                        <div style={{ marginLeft: 'auto', textAlign: 'center', background: '#f5f0e8', borderRadius: 16, padding: '12px 24px' }}>
+                        <div style={{ marginLeft: 'auto', textAlign: 'center', background: '#f5f0e8', borderRadius: RADIUS.lg, padding: '12px 24px' }}>
                           <div style={{ fontSize: 36, fontWeight: 800, color: overall >= 7 ? '#2d7a00' : overall >= 5 ? '#854d00' : '#9b1c1c' }}>{overall.toFixed(1)}</div>
-                          <div style={{ fontSize: 11, color: '#93a1a1', fontWeight: 600 }}>SCORE PEDAGÓGICO</div>
+                          <div style={{ fontSize: TEXT.micro, color: COLOR.paperMid, fontWeight: 600 }}>SCORE PEDAGÓGICO</div>
                         </div>
                       </div>
 
@@ -633,14 +631,14 @@ export default function Students() {
                             return (
                               <div key={m.key} style={{ marginBottom: 16 }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                                  <div style={{ fontSize: 13, fontWeight: 600, color: '#073642' }}>
+                                  <div style={{ fontSize: TEXT.bodyCompact, fontWeight: 600, color: COLOR.paperInk }}>
                                     <i className={`ti ${m.icon}`} style={{ marginRight: 6 }} />{m.label}
                                     {m.auto && <span style={{ ...S.badge, marginLeft: 6, background: '#d0f0c0', color: '#2d7a00', fontSize: 9 }}>Auto</span>}
                                   </div>
-                                  <span style={{ fontSize: 16, fontWeight: 800, color: '#073642' }}>{current.toFixed(1)}</span>
+                                  <span style={{ fontSize: TEXT.subtitle, fontWeight: 800, color: COLOR.paperInk }}>{current.toFixed(1)}</span>
                                 </div>
                                 {m.auto ? (
-                                  <div style={{ height: 8, background: '#eee8d5', borderRadius: 6, overflow: 'hidden' }}>
+                                  <div style={{ height: 8, background: '#f0e8d8', borderRadius: 6, overflow: 'hidden' }}>
                                     <div style={{ height: '100%', width: `${current * 10}%`, background: '#2aa198', borderRadius: 6 }} />
                                   </div>
                                 ) : (
@@ -648,7 +646,7 @@ export default function Students() {
                                     onChange={e => setScore(stu.id, m.key, Number(e.target.value))}
                                     style={{ width: '100%', accentColor: '#268bd2' }} />
                                 )}
-                                <div style={{ fontSize: 10, color: '#93a1a1', marginTop: 2 }}>{m.desc}</div>
+                                <div style={{ fontSize: 10, color: COLOR.paperMid, marginTop: 2 }}>{m.desc}</div>
                               </div>
                             )
                           })}
@@ -656,8 +654,8 @@ export default function Students() {
                       </div>
 
                       {/* Timeline do Aluno (#21) */}
-                      <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid #eee8d5' }}>
-                        <div style={{ fontWeight: 700, color: '#073642', fontSize: 13, marginBottom: 12 }}>
+                      <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid #f0e8d8' }}>
+                        <div style={{ fontWeight: 700, color: COLOR.paperInk, fontSize: TEXT.bodyCompact, marginBottom: 12 }}>
                           📅 Linha do Tempo & Histórico
                         </div>
                         <StudentTimeline
@@ -682,7 +680,7 @@ export default function Students() {
                 )
               })()}
               {!mStudent && (
-                <div style={{ flex: 1, ...S.card, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 12, color: '#93a1a1' }}>
+                <div style={{ flex: 1, ...S.card, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 12, color: COLOR.paperMid }}>
                   <i className="ti ti-user-circle" style={{ fontSize: 48, color: '#ddd' }} />
                   <p>Selecione um aluno para ver e editar suas métricas pedagógicas</p>
                 </div>
@@ -707,10 +705,10 @@ export default function Students() {
 
       {/* ─── Modal Adicionar Aluno ─────────────────────────────────────────── */}
       {addModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,43,54,0.4)', zIndex: 9998, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(44,26,14,0.4)', zIndex: 9998, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <div style={{ ...S.card, width: 440, maxWidth: '95vw', animation: 'modalIn 0.2s ease' }}>
             <style>{`@keyframes modalIn { from { opacity:0; transform:scale(0.97) } to { opacity:1; transform:none } }`}</style>
-            <h2 style={{ fontSize: 18, fontWeight: 700, color: '#073642', margin: '0 0 20px' }}>Novo Aluno</h2>
+            <h2 style={{ fontSize: 18, fontWeight: 700, color: COLOR.paperInk, margin: '0 0 20px' }}>Novo Aluno</h2>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div>
                 <label style={S.label}>Nome completo *</label>
@@ -738,8 +736,8 @@ export default function Students() {
               </div>
             </div>
             <div style={{ display: 'flex', gap: 10, marginTop: 20, justifyContent: 'flex-end' }}>
-              <button onClick={() => setAddModal(false)} style={{ ...S.btn, background: '#eee8d5', color: '#586e75' }}>Cancelar</button>
-              <button onClick={addStudent} style={{ ...S.btn, background: '#073642', color: '#fff' }}>
+              <button onClick={() => setAddModal(false)} style={{ ...S.btn, background: '#f0e8d8', color: COLOR.paperWarm }}>Cancelar</button>
+              <button onClick={addStudent} style={{ ...S.btn, background: '#2c1a0e', color: '#fff' }}>
                 <i className="ti ti-user-plus" /> Adicionar Aluno
               </button>
             </div>
@@ -748,9 +746,9 @@ export default function Students() {
       )}
       {/* ─── Modal Editar Aluno ─────────────────────────────────────────── */}
       {editingStudent && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,43,54,0.4)', zIndex: 9998, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(44,26,14,0.4)', zIndex: 9998, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <div style={{ ...S.card, width: 440, maxWidth: '95vw', animation: 'modalIn 0.2s ease' }}>
-            <h2 style={{ fontSize: 18, fontWeight: 700, color: '#073642', margin: '0 0 20px' }}>Editar Aluno</h2>
+            <h2 style={{ fontSize: 18, fontWeight: 700, color: COLOR.paperInk, margin: '0 0 20px' }}>Editar Aluno</h2>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div>
                 <label style={S.label}>Nome completo</label>
@@ -769,8 +767,8 @@ export default function Students() {
               </div>
             </div>
             <div style={{ display: 'flex', gap: 10, marginTop: 20, justifyContent: 'flex-end' }}>
-              <button onClick={() => setEditingStudent(null)} style={{ ...S.btn, background: '#eee8d5', color: '#586e75' }}>Cancelar</button>
-              <button onClick={saveEdit} style={{ ...S.btn, background: '#073642', color: '#fff' }}>Salvar</button>
+              <button onClick={() => setEditingStudent(null)} style={{ ...S.btn, background: '#f0e8d8', color: COLOR.paperWarm }}>Cancelar</button>
+              <button onClick={saveEdit} style={{ ...S.btn, background: '#2c1a0e', color: '#fff' }}>Salvar</button>
             </div>
           </div>
         </div>
@@ -787,41 +785,41 @@ export default function Students() {
         const overall = computeScore(scores, metricDefs, autoG)
 
         return (
-          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,43,54,0.5)', zIndex: 9999, display: 'flex', justifyContent: 'center', alignItems: 'flex-start', paddingTop: 20, overflowY: 'auto' }}>
-            <div style={{ background: '#fff', width: 780, maxWidth: '95vw', borderRadius: 16, padding: '36px 44px', boxShadow: '0 12px 48px rgba(0,0,0,0.2)', marginBottom: 40, position: 'relative' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, borderBottom: '2px solid #073642', paddingBottom: 16 }}>
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(44,26,14,0.5)', zIndex: 9999, display: 'flex', justifyContent: 'center', alignItems: 'flex-start', paddingTop: 20, overflowY: 'auto' }}>
+            <div style={{ background: '#fff', width: 780, maxWidth: '95vw', borderRadius: RADIUS.lg, padding: '36px 44px', boxShadow: '0 12px 48px rgba(0,0,0,0.2)', marginBottom: 40, position: 'relative' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, borderBottom: '2px solid #2c1a0e', paddingBottom: 16 }}>
                 <div>
-                  <div style={{ fontSize: 22, fontWeight: 800, color: '#073642', fontFamily: 'Georgia, serif' }}>{sc?.name || 'Escola Padrão'}</div>
-                  <div style={{ fontSize: 13, color: '#586e75', fontWeight: 600 }}>RELATÓRIO DE DESEMPENHO PEDAGÓGICO INDIVIDUAL</div>
+                  <div style={{ fontSize: 22, fontWeight: 800, color: COLOR.paperInk, fontFamily: 'Georgia, serif' }}>{sc?.name || 'Escola Padrão'}</div>
+                  <div style={{ fontSize: TEXT.bodyCompact, color: COLOR.paperWarm, fontWeight: 600 }}>RELATÓRIO DE DESEMPENHO PEDAGÓGICO INDIVIDUAL</div>
                 </div>
                 <div style={{ display: 'flex', gap: 10 }}>
-                  <button onClick={() => window.print()} style={{ ...S.btn, background: '#073642', color: '#fff' }}>
+                  <button onClick={() => window.print()} style={{ ...S.btn, background: '#2c1a0e', color: '#fff' }}>
                     <i className="ti ti-printer" /> Imprimir / Salvar PDF
                   </button>
-                  <button onClick={() => setReportStudentId(null)} style={{ background: 'none', border: 'none', fontSize: 24, cursor: 'pointer', color: '#93a1a1' }}>×</button>
+                  <button onClick={() => setReportStudentId(null)} style={{ background: 'none', border: 'none', fontSize: 24, cursor: 'pointer', color: COLOR.paperMid }}>×</button>
                 </div>
               </div>
 
               {/* Dados do Aluno */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, background: '#fdf9f3', padding: '14px 18px', borderRadius: 12, marginBottom: 20, border: '1px solid #ede8dc' }}>
-                <div><span style={{ fontSize: 11, color: '#93a1a1', textTransform: 'uppercase', fontWeight: 700 }}>Aluno(a)</span><div style={{ fontWeight: 700, color: '#073642' }}>{stu.name}</div></div>
-                <div><span style={{ fontSize: 11, color: '#93a1a1', textTransform: 'uppercase', fontWeight: 700 }}>Turma / Nível</span><div style={{ fontWeight: 600, color: '#073642' }}>{cls?.name || '—'} ({stu.level})</div></div>
-                <div><span style={{ fontSize: 11, color: '#93a1a1', textTransform: 'uppercase', fontWeight: 700 }}>Score Global</span><div style={{ fontWeight: 800, color: overall >= 7 ? '#2d7a00' : '#854d00', fontSize: 18 }}>{overall.toFixed(1)} / 10</div></div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, background: '#fdf9f3', padding: '14px 18px', borderRadius: RADIUS.lg, marginBottom: 20, border: '1px solid #ede8dc' }}>
+                <div><span style={{ fontSize: TEXT.micro, color: COLOR.paperMid, textTransform: 'uppercase', fontWeight: 700 }}>Aluno(a)</span><div style={{ fontWeight: 700, color: COLOR.paperInk }}>{stu.name}</div></div>
+                <div><span style={{ fontSize: TEXT.micro, color: COLOR.paperMid, textTransform: 'uppercase', fontWeight: 700 }}>Turma / Nível</span><div style={{ fontWeight: 600, color: COLOR.paperInk }}>{cls?.name || '—'} ({stu.level})</div></div>
+                <div><span style={{ fontSize: TEXT.micro, color: COLOR.paperMid, textTransform: 'uppercase', fontWeight: 700 }}>Score Global</span><div style={{ fontWeight: 800, color: overall >= 7 ? '#2d7a00' : '#854d00', fontSize: 18 }}>{overall.toFixed(1)} / 10</div></div>
               </div>
 
               {/* Radar & Métricas Explicitadas */}
               <div style={{ display: 'flex', gap: 24, alignItems: 'center', marginBottom: 24, flexWrap: 'wrap' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                   <RadarChart scores={{ ...scores, academic: autoG || 0 }} metrics={metricDefs} size={220} />
-                  <span style={{ fontSize: 10, color: '#93a1a1', marginTop: 4 }}>Perfil Pedagógico em Teia</span>
+                  <span style={{ fontSize: 10, color: COLOR.paperMid, marginTop: 4 }}>Perfil Pedagógico em Teia</span>
                 </div>
                 <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                   {metricDefs.map(m => {
                     const score = m.auto ? (autoG || 0) : (scores[m.key] || 0)
                     return (
                       <div key={m.key} style={{ background: '#fdf9f3', padding: '8px 12px', borderRadius: 8, border: '1px solid #ede8dc', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span style={{ fontSize: 12, fontWeight: 600, color: '#073642' }}><i className={`ti ${m.icon}`} style={{ marginRight: 4, color: '#268bd2' }} />{m.label}</span>
-                        <span style={{ fontSize: 13, fontWeight: 800, color: score >= 7 ? '#2d7a00' : '#854d00' }}>{score.toFixed(1)}</span>
+                        <span style={{ fontSize: TEXT.caption, fontWeight: 600, color: COLOR.paperInk }}><i className={`ti ${m.icon}`} style={{ marginRight: 4, color: '#268bd2' }} />{m.label}</span>
+                        <span style={{ fontSize: TEXT.bodyCompact, fontWeight: 800, color: score >= 7 ? '#2d7a00' : '#854d00' }}>{score.toFixed(1)}</span>
                       </div>
                     )
                   })}
@@ -829,9 +827,9 @@ export default function Students() {
               </div>
 
               {/* Parecer Pedagógico Síntese */}
-              <div style={{ background: '#f5f0e8', padding: '16px 20px', borderRadius: 12, marginBottom: 24, border: '1px solid #ede8dc' }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: '#073642', textTransform: 'uppercase', marginBottom: 6 }}>Parecer Descritivo do Professor</div>
-                <p style={{ fontSize: 13, color: '#073642', lineHeight: 1.6, margin: 0 }}>
+              <div style={{ background: '#f5f0e8', padding: '16px 20px', borderRadius: RADIUS.lg, marginBottom: 24, border: '1px solid #ede8dc' }}>
+                <div style={{ fontSize: TEXT.micro, fontWeight: 700, color: COLOR.paperInk, textTransform: 'uppercase', marginBottom: 6 }}>Parecer Descritivo do Professor</div>
+                <p style={{ fontSize: TEXT.bodyCompact, color: COLOR.paperInk, lineHeight: 1.6, margin: 0 }}>
                   O(A) estudante <b>{stu.name}</b> demonstra progresso constante ao longo do período letivo. Destaca-se com boa regularidade nas entregas de trabalhos e participação ativa nas atividades propostas. Recomenda-se manter a constância nos estudos e aprofundar os exercícios de fixação.
                 </p>
               </div>
@@ -839,13 +837,13 @@ export default function Students() {
               {/* Seção de Assinaturas */}
               <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 40, paddingTop: 20, borderTop: '1px solid #ddd' }}>
                 <div style={{ textAlign: 'center', width: 200 }}>
-                  <div style={{ borderTop: '1px solid #073642', marginTop: 30, paddingTop: 6, fontSize: 12, color: '#073642', fontWeight: 600 }}>Assinatura do Professor</div>
+                  <div style={{ borderTop: '1px solid #2c1a0e', marginTop: 30, paddingTop: 6, fontSize: TEXT.caption, color: COLOR.paperInk, fontWeight: 600 }}>Assinatura do Professor</div>
                 </div>
                 <div style={{ textAlign: 'center', width: 200 }}>
-                  <div style={{ borderTop: '1px solid #073642', marginTop: 30, paddingTop: 6, fontSize: 12, color: '#073642', fontWeight: 600 }}>Coordenação Pedagógica</div>
+                  <div style={{ borderTop: '1px solid #2c1a0e', marginTop: 30, paddingTop: 6, fontSize: TEXT.caption, color: COLOR.paperInk, fontWeight: 600 }}>Coordenação Pedagógica</div>
                 </div>
                 <div style={{ textAlign: 'center', width: 200 }}>
-                  <div style={{ borderTop: '1px solid #073642', marginTop: 30, paddingTop: 6, fontSize: 12, color: '#073642', fontWeight: 600 }}>Responsável / Pais</div>
+                  <div style={{ borderTop: '1px solid #2c1a0e', marginTop: 30, paddingTop: 6, fontSize: TEXT.caption, color: COLOR.paperInk, fontWeight: 600 }}>Responsável / Pais</div>
                 </div>
               </div>
             </div>

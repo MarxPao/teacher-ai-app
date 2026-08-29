@@ -1,4 +1,5 @@
 'use client'
+import { toast, showConfirm } from '@/components/Toast'
 
 import React, { useState, useEffect } from 'react'
 import DocumentCanvas from '@/components/DocumentCanvas'
@@ -33,14 +34,14 @@ const TEMPLATES = [
   { label: 'Carta de Recomendação', icon: 'ti-award', color: '#6c71c4' },
   { label: 'Advertência / Ocorrência', icon: 'ti-alert-circle', color: '#cb4b16' },
   { label: 'Relatório de Progresso', icon: 'ti-user-check', color: '#2aa198' },
-  { label: 'Comunicado Geral da Turma', icon: 'ti-speakerphone', color: '#586e75' },
+  { label: 'Comunicado Geral da Turma', icon: 'ti-speakerphone', color: '#7a5c42' },
 ]
 
 const TONES = ['Acolhedor & Positivo', 'Formal & Institucional', 'Direto & Objetivo', 'Motivacional', 'Urgente']
 
-const SL: React.CSSProperties = { fontSize: 13, fontWeight: 600, color: '#586e75', display: 'block', marginBottom: 6 }
-const SI: React.CSSProperties = { width: '100%', padding: '10px 14px', background: '#f5f0e8', border: '1px solid #e8e0d0', borderRadius: 10, outline: 'none', color: '#073642', fontSize: 14, fontFamily: 'inherit' }
-const CARD: React.CSSProperties = { background: '#fff', borderRadius: 16, padding: 18, boxShadow: '0 2px 12px rgba(0,43,54,0.05)', border: '1px solid #ede8dc' }
+const SL: React.CSSProperties = { fontSize: 13, fontWeight: 600, color: '#7a5c42', display: 'block', marginBottom: 6 }
+const SI: React.CSSProperties = { width: '100%', padding: '10px 14px', background: '#f5f0e8', border: '1px solid #e8e0d0', borderRadius: 10, outline: 'none', color: '#2c1a0e', fontSize: 14, fontFamily: 'inherit' }
+const CARD: React.CSSProperties = { background: '#fff', borderRadius: 16, padding: 18, boxShadow: '0 2px 12px rgba(44,26,14,0.05)', border: '1px solid #ede8dc' }
 
 function loadApis(): ApiConfig[] {
   try {
@@ -146,7 +147,7 @@ Use formatação leve com emojis adequados e negritos para leitura dinâmica.`
       const text = await callApi(selectedApi, prompt)
       setParentMessage(text)
     } catch (e: any) {
-      alert(`Erro ao gerar mensagem: ${e?.message || 'Falha na IA'}`)
+      toast.success(`Erro ao gerar mensagem: ${e?.message || 'Falha na IA'}`)
     } finally {
       setGeneratingParent(false)
     }
@@ -180,7 +181,7 @@ Gere o documento completo em HTML agora:`
         setFactCheck(fc)
       } catch {}
     } catch (e: any) {
-      alert(`Erro: ${e?.message || 'Falha na geração'}`)
+      toast.success(`Erro: ${e?.message || 'Falha na geração'}`)
     } finally {
       setLoadingOfficial(false)
     }
@@ -229,7 +230,7 @@ Gere o documento completo em HTML agora:`
               borderRadius: 10,
               border: 'none',
               background: activeTab === 'parents' ? '#8b5e3c' : 'transparent',
-              color: activeTab === 'parents' ? '#fff' : '#586e75',
+              color: activeTab === 'parents' ? '#fff' : '#7a5c42',
               fontSize: 13,
               fontWeight: 800,
               cursor: 'pointer',
@@ -250,7 +251,7 @@ Gere o documento completo em HTML agora:`
               borderRadius: 10,
               border: 'none',
               background: activeTab === 'official' ? '#8b5e3c' : 'transparent',
-              color: activeTab === 'official' ? '#fff' : '#586e75',
+              color: activeTab === 'official' ? '#fff' : '#7a5c42',
               fontSize: 13,
               fontWeight: 800,
               cursor: 'pointer',
@@ -296,7 +297,7 @@ Gere o documento completo em HTML agora:`
               </select>
 
               {selectedStudent && (
-                <div style={{ marginTop: 12, padding: '10px 12px', background: '#faf6f0', borderRadius: 10, border: '1px solid #ede4d8', fontSize: 12.5, color: '#586e75', lineHeight: 1.5 }}>
+                <div style={{ marginTop: 12, padding: '10px 12px', background: '#faf6f0', borderRadius: 10, border: '1px solid #ede4d8', fontSize: 12.5, color: '#7a5c42', lineHeight: 1.5 }}>
                   <div><strong>Responsável:</strong> {selectedStudent.parentName}</div>
                   <div><strong>WhatsApp:</strong> {selectedStudent.parentPhone}</div>
                   <div><strong>Desempenho:</strong> <span style={{ color: selectedStudent.performance === 'Excelente' ? '#2aa198' : selectedStudent.performance === 'Bom' ? '#268bd2' : '#cb4b16', fontWeight: 700 }}>{selectedStudent.performance} (Nota {selectedStudent.lastGrade}/10)</span></div>
@@ -319,7 +320,7 @@ Gere o documento completo em HTML agora:`
                       padding: '5px 12px', borderRadius: 16,
                       border: parentTone === t ? '1.5px solid #8b5e3c' : '1px solid #e8e0d0',
                       background: parentTone === t ? '#8b5e3c' : '#faf8f5',
-                      color: parentTone === t ? '#fff' : '#586e75',
+                      color: parentTone === t ? '#fff' : '#7a5c42',
                       fontSize: 11.5, fontWeight: 700, cursor: 'pointer'
                     }}
                   >
@@ -348,7 +349,7 @@ Gere o documento completo em HTML agora:`
                 padding: '14px',
                 borderRadius: 14,
                 border: 'none',
-                background: generatingParent ? '#93a1a1' : 'linear-gradient(135deg, #8b5e3c, #5c3a21)',
+                background: generatingParent ? '#a08060' : 'linear-gradient(135deg, #8b5e3c, #5c3a21)',
                 color: '#fff',
                 fontSize: 14.5,
                 fontWeight: 800,
@@ -378,7 +379,7 @@ Gere o documento completo em HTML agora:`
                   <div style={{ display: 'flex', gap: 8 }}>
                     <button
                       onClick={handleCopyMessage}
-                      style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid #d5c8bb', background: '#fff', fontSize: 12, fontWeight: 700, color: '#586e75', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
+                      style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid #d5c8bb', background: '#fff', fontSize: 12, fontWeight: 700, color: '#7a5c42', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
                     >
                       📋 Copiar
                     </button>
@@ -437,7 +438,7 @@ Gere o documento completo em HTML agora:`
                         padding: '8px 10px', borderRadius: 8,
                         border: sel ? `1.5px solid ${t.color}` : '1px solid #e8e0d0',
                         background: sel ? t.color : '#faf8f5',
-                        color: sel ? '#fff' : '#586e75',
+                        color: sel ? '#fff' : '#7a5c42',
                         cursor: 'pointer', fontSize: 11.5, textAlign: 'left',
                         display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700
                       }}
@@ -461,7 +462,7 @@ Gere o documento completo em HTML agora:`
                       padding: '5px 12px', borderRadius: 16,
                       border: officialTone === t ? '1.5px solid #8b5e3c' : '1px solid #e8e0d0',
                       background: officialTone === t ? '#8b5e3c' : '#faf8f5',
-                      color: officialTone === t ? '#fff' : '#586e75',
+                      color: officialTone === t ? '#fff' : '#7a5c42',
                       fontSize: 11.5, fontWeight: 700, cursor: 'pointer'
                     }}
                   >
@@ -501,7 +502,7 @@ Gere o documento completo em HTML agora:`
                 padding: '14px',
                 borderRadius: 14,
                 border: 'none',
-                background: loadingOfficial ? '#93a1a1' : 'linear-gradient(135deg, #8b5e3c, #5c3a21)',
+                background: loadingOfficial ? '#a08060' : 'linear-gradient(135deg, #8b5e3c, #5c3a21)',
                 color: '#fff',
                 fontSize: 14.5,
                 fontWeight: 800,
@@ -520,7 +521,7 @@ Gere o documento completo em HTML agora:`
           {/* Painel Direito: DocumentCanvas Oficial */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, minHeight: 0 }}>
             {factCheck && (
-              <div style={{ padding: '8px 14px', background: '#fdf8f2', borderRadius: 10, border: '1px solid #ede8dc', fontSize: 12, color: '#586e75' }}>
+              <div style={{ padding: '8px 14px', background: '#fdf8f2', borderRadius: 10, border: '1px solid #ede8dc', fontSize: 12, color: '#7a5c42' }}>
                 ✓ <strong>Qualidade:</strong> {factCheck.score}/100 &bull; {factCheck.level === 'ok' ? 'Texto claro e polido.' : factCheck.issues.join('; ')}
               </div>
             )}

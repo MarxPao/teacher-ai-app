@@ -1,4 +1,5 @@
 'use client';
+import { toast, showConfirm } from '@/components/Toast'
 
 import React, { useState, useEffect, useMemo, CSSProperties } from 'react';
 import { syncToSupabase, loadFromSupabase } from '@/lib/supabaseClient';
@@ -224,7 +225,7 @@ export default function WeeklyAgenda() {
   // Save Post Form (Create or Update)
   const handleSavePost = () => {
     if (!formTopic.trim()) {
-      alert('Por favor, informe o tópico/título da postagem.');
+      toast.success('Por favor, informe o tópico/título da postagem.');
       return;
     }
 
@@ -1278,7 +1279,7 @@ const styles: Record<string, CSSProperties> = {
   modalOverlay: {
     position: 'fixed',
     inset: 0,
-    background: 'rgba(0,43,54,0.45)',
+    background: 'rgba(44,26,14,0.45)',
     backdropFilter: 'blur(2px)',
     zIndex: 9998,
     display: 'flex',

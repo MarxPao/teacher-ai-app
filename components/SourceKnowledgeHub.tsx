@@ -1,4 +1,5 @@
 'use client'
+import { toast, showConfirm } from '@/components/Toast'
 
 import React, { useState, useEffect, useRef } from 'react'
 import { RepositoryItem } from '@/components/modules/Repository'
@@ -230,7 +231,7 @@ export default function SourceKnowledgeHub({
       setUploadStatus('')
     } catch (err: unknown) {
       setUploadStatus('')
-      alert(`Falha ao ler arquivo: ${err instanceof Error ? err.message : 'Erro na extração.'}`)
+      toast.success(`Falha ao ler arquivo: ${err instanceof Error ? err.message : 'Erro na extração.'}`)
     }
   }
 
@@ -243,7 +244,7 @@ export default function SourceKnowledgeHub({
       setWebResults(res)
       setSelectedWebIndexes(res.map((_, idx) => idx))
     } catch (e) {
-      alert('Não foi possível realizar a pesquisa na web no momento.')
+      toast.success('Não foi possível realizar a pesquisa na web no momento.')
     } finally {
       setWebSearching(false)
     }
@@ -252,7 +253,7 @@ export default function SourceKnowledgeHub({
   // Adiciona Resultados da Web selecionados como Fontes
   const handleAddWebResultsToSources = () => {
     if (selectedWebIndexes.length === 0) {
-      alert('Selecione pelo menos um resultado da web.')
+      toast.success('Selecione pelo menos um resultado da web.')
       return
     }
 
@@ -440,7 +441,7 @@ export default function SourceKnowledgeHub({
               📊 {activeSourcesCount} {activeSourcesCount === 1 ? 'fonte ativa' : 'fontes ativas'}
             </span>
             <span>·</span>
-            <span style={{ color: '#586e75' }}>
+            <span style={{ color: '#7a5c42' }}>
               {totalActiveWords.toLocaleString()} palavras de referência prontas para a IA
             </span>
           </div>
@@ -562,7 +563,7 @@ export default function SourceKnowledgeHub({
 
                 {/* Footer do Box com Ações */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px dashed #ede8dc', paddingTop: 8, marginTop: 'auto' }}>
-                  <span style={{ fontSize: 11, color: '#586e75', fontWeight: 600 }}>
+                  <span style={{ fontSize: 11, color: '#7a5c42', fontWeight: 600 }}>
                     {source.wordCount?.toLocaleString() || 0} palavras
                   </span>
 
@@ -611,7 +612,7 @@ export default function SourceKnowledgeHub({
               <button onClick={() => setShowAddBookModal(false)} style={{ background: '#f5f0e8', border: 'none', width: 30, height: 30, borderRadius: '50%', cursor: 'pointer', fontWeight: 700 }}>×</button>
             </div>
 
-            <p style={{ fontSize: 12.5, color: '#586e75', margin: 0 }}>
+            <p style={{ fontSize: 12.5, color: '#7a5c42', margin: 0 }}>
               Escolha livros didáticos completos ou apostilas para adicionar como fonte ao gerador:
             </p>
 
@@ -685,7 +686,7 @@ export default function SourceKnowledgeHub({
               <button onClick={() => setShowAddLooseModal(false)} style={{ background: '#f5f0e8', border: 'none', width: 30, height: 30, borderRadius: '50%', cursor: 'pointer', fontWeight: 700 }}>×</button>
             </div>
 
-            <p style={{ fontSize: 12.5, color: '#586e75', margin: 0 }}>
+            <p style={{ fontSize: 12.5, color: '#7a5c42', margin: 0 }}>
               Escolha PDFs, DOCXs, listas de vocabulário ou artigos salvos na Biblioteca:
             </p>
 
@@ -802,7 +803,7 @@ export default function SourceKnowledgeHub({
                       />
                       <div style={{ flex: 1 }}>
                         <div style={{ fontSize: 13, fontWeight: 700, color: '#2c1a0e', marginBottom: 2 }}>{res.title}</div>
-                        <div style={{ fontSize: 12, color: '#586e75', lineHeight: 1.5 }}>{res.snippet}</div>
+                        <div style={{ fontSize: 12, color: '#7a5c42', lineHeight: 1.5 }}>{res.snippet}</div>
                         {res.url && <div style={{ fontSize: 10.5, color: '#8b5e3c', marginTop: 4 }}>{res.url}</div>}
                       </div>
                     </div>
@@ -846,7 +847,7 @@ export default function SourceKnowledgeHub({
             </div>
 
             <div>
-              <label style={{ fontSize: 12, fontWeight: 700, color: '#586e75', display: 'block', marginBottom: 4 }}>Título da Nota / Instrução</label>
+              <label style={{ fontSize: 12, fontWeight: 700, color: '#7a5c42', display: 'block', marginBottom: 4 }}>Título da Nota / Instrução</label>
               <input
                 value={noteTitle}
                 onChange={e => setNoteTitle(e.target.value)}
@@ -856,7 +857,7 @@ export default function SourceKnowledgeHub({
             </div>
 
             <div>
-              <label style={{ fontSize: 12, fontWeight: 700, color: '#586e75', display: 'block', marginBottom: 4 }}>Recorte / Páginas (opcional)</label>
+              <label style={{ fontSize: 12, fontWeight: 700, color: '#7a5c42', display: 'block', marginBottom: 4 }}>Recorte / Páginas (opcional)</label>
               <input
                 value={noteScope}
                 onChange={e => setNoteScope(e.target.value)}
@@ -866,7 +867,7 @@ export default function SourceKnowledgeHub({
             </div>
 
             <div>
-              <label style={{ fontSize: 12, fontWeight: 700, color: '#586e75', display: 'block', marginBottom: 4 }}>Texto Completo de Apoio</label>
+              <label style={{ fontSize: 12, fontWeight: 700, color: '#7a5c42', display: 'block', marginBottom: 4 }}>Texto Completo de Apoio</label>
               <textarea
                 value={noteContent}
                 onChange={e => setNoteContent(e.target.value)}
@@ -884,7 +885,7 @@ export default function SourceKnowledgeHub({
                 type="button"
                 onClick={() => {
                   if (!noteTitle.trim() || !noteContent.trim()) {
-                    alert('Preencha o título e o texto da nota.')
+                    toast.success('Preencha o título e o texto da nota.')
                     return
                   }
                   const item: SourceItem = {
@@ -939,7 +940,7 @@ export default function SourceKnowledgeHub({
                 type="button"
                 onClick={() => {
                   navigator.clipboard.writeText(previewSource.content)
-                  alert('Texto copiado para a área de transferência!')
+                  toast.success('Texto copiado para a área de transferência!')
                 }}
                 style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid #ede8dc', background: '#fff', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
               >

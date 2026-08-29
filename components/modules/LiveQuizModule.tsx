@@ -1,4 +1,5 @@
 'use client'
+import { toast, showConfirm } from '@/components/Toast'
 
 import { useState, useEffect } from 'react'
 
@@ -89,7 +90,7 @@ export default function LiveQuizModule() {
  }
 
  const handleSyncGradebook = () => {
- alert(` Resultados do Quiz ao Vivo sincronizados com o Gradebook da Turma ${className}!`)
+ toast.success(` Resultados do Quiz ao Vivo sincronizados com o Gradebook da Turma ${className}!`)
  }
 
  const q = SAMPLE_QUIZ[currentQIdx]

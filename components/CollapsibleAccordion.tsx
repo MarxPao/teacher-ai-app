@@ -28,7 +28,7 @@ export default function CollapsibleAccordion({
       background: '#ffffff',
       borderRadius: 14,
       border: '1px solid #ede8dc',
-      boxShadow: '0 2px 8px rgba(0,43,54,0.03)',
+      boxShadow: '0 2px 8px rgba(44,26,14,0.03)',
       overflow: 'hidden',
       marginBottom: 12,
       transition: 'all 0.2s ease'

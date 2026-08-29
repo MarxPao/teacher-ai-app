@@ -93,14 +93,19 @@ export default function ExamReport({ examTitle, results, questionCount, onClose 
 
         {/* Tabs */}
         <div className="flex border-b print:hidden">
-          {[['overview', '📈 Visao Geral'], ['heatmap', '🔥 Heatmap'], ['questions', '❓ Por Questao']] .map(([key, label]) => (
+          {[
+            { key: 'overview', label: 'Visão Geral', icon: 'ti-chart-line' },
+            { key: 'heatmap', label: 'Heatmap', icon: 'ti-flame' },
+            { key: 'questions', label: 'Por Questão', icon: 'ti-help-circle' }
+          ].map(({ key, label, icon }) => (
             <button key={key} onClick={() => setView(key as typeof view)}
-              className={`px-5 py-3 text-sm font-medium border-b-2 transition-colors ${
+              className={`px-5 py-3 text-sm font-semibold border-b-2 transition-colors flex items-center gap-2 ${
                 view === key
-                  ? 'border-blue-600 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
+                  ? 'border-[#8b5e3c] text-[#8b5e3c]'
+                  : 'border-transparent text-[#7a5c42] hover:text-[#2c1a0e]'
               }`}>
-              {label}
+              <i className={`ti ${icon}`} />
+              <span>{label}</span>
             </button>
           ))}
         </div>

@@ -1,4 +1,6 @@
 'use client'
+import { toast, showConfirm } from '@/components/Toast'
+import AiProgressStepper from '@/components/AiProgressStepper'
 
 import { useState, useEffect, useCallback } from 'react'
 import { AssessmentPreset, BloomDistribution, QuestionWeights, DifficultyDistribution, getDefaultPreset, getStoredPresets, savePreset } from "@/lib/assessmentPresets"
@@ -72,9 +74,9 @@ const NEE_PROFILES = [
 
 // Style helpers 
 
-const SL: React.CSSProperties = { fontSize: 13, fontWeight: 600, color: '#586e75', display: 'block', marginBottom: 6 }
-const SS: React.CSSProperties = { width: '100%', padding: '10px 14px', background: '#f5f0e8', border: '1px solid #e8e0d0', borderRadius: 10, outline: 'none', color: '#073642', fontSize: 14, fontFamily: 'inherit', appearance: 'none' as const }
-const SI: React.CSSProperties = { width: '100%', padding: '10px 14px', background: '#f5f0e8', border: '1px solid #e8e0d0', borderRadius: 10, outline: 'none', color: '#073642', fontSize: 14, fontFamily: 'inherit' }
+const SL: React.CSSProperties = { fontSize: 13, fontWeight: 600, color: '#7a5c42', display: 'block', marginBottom: 6 }
+const SS: React.CSSProperties = { width: '100%', padding: '10px 14px', background: '#f5f0e8', border: '1px solid #e8e0d0', borderRadius: 10, outline: 'none', color: '#2c1a0e', fontSize: 14, fontFamily: 'inherit', appearance: 'none' as const }
+const SI: React.CSSProperties = { width: '100%', padding: '10px 14px', background: '#f5f0e8', border: '1px solid #e8e0d0', borderRadius: 10, outline: 'none', color: '#2c1a0e', fontSize: 14, fontFamily: 'inherit' }
 const CARD: React.CSSProperties = { background: '#fff', borderRadius: 14, padding: 16, border: '1px solid #ede8dc', display: 'flex', flexDirection: 'column', gap: 12 }
 
 // Helpers 
@@ -464,17 +466,17 @@ Retorne a questão reformulada no formato padrão (Enunciado, Alternativas se ap
   }
 
   function handleSave() {
-    if (!result) { alert('Gere um exercício primeiro.'); return }
+    if (!result) { toast.success('Gere um exercício primeiro.'); return }
     const saved = saveItemToStorage('teacher_saved_quicks', {
       title: header.title || (topic ? `Exercício ${topic}` : `Atividade (${skill})`),
       subtitle: `${cefr} · ${grade} · ${types.slice(0, 2).join(', ')}`,
       content: result,
     })
-    if (saved) { updateSavedCount(); alert(' Exercício salvo!') }
+    if (saved) { updateSavedCount(); toast.success(' Exercício salvo!') }
   }
 
   async function handleSaveToActivitiesBank() {
-    if (!result) { alert('Gere um exercício primeiro.'); return }
+    if (!result) { toast.success('Gere um exercício primeiro.'); return }
     const { saveActivityToSupabase } = await import('@/lib/supabaseClient')
     const title = header.title || (topic ? `Exercício ${topic}` : `Atividade (${skill})`)
     await saveActivityToSupabase({
@@ -484,14 +486,14 @@ Retorne a questão reformulada no formato padrão (Enunciado, Alternativas se ap
       cefr,
       content: result
     })
-    alert(' Exercício salvo com sucesso no Banco de Dados!')
+    toast.success(' Exercício salvo com sucesso no Banco de Dados!')
   }
 
   const fcColor = factCheck
     ? factCheck.level === 'ok' ? '#859900'
     : factCheck.level === 'warn' ? '#b58900'
     : '#dc322f'
-    : '#93a1a1'
+    : '#a08060'
 
   const currentPresetConfig = {
     types, cefr, grade, skill, methodology, topic, customPrompt, qtCount, neeProfile, selectedApiId
@@ -526,7 +528,7 @@ Retorne a questão reformulada no formato padrão (Enunciado, Alternativas se ap
               <i className="ti ti-database" /> Salvar no Banco de Dados
             </button>
           )}
-          <button onClick={() => setShowSaved(true)} style={{ padding: '9px 16px', borderRadius: 12, border: '1px solid #8b5e3c', background: '#fdf9f3', color: '#073642', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+          <button onClick={() => setShowSaved(true)} style={{ padding: '9px 16px', borderRadius: 12, border: '1px solid #8b5e3c', background: '#fdf9f3', color: '#2c1a0e', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
             <i className="ti ti-bookmark" style={{ color: '#b58900' }} /> Exercícios Salvos ({savedCount})
           </button>
         </div>
@@ -559,7 +561,7 @@ Retorne a questão reformulada no formato padrão (Enunciado, Alternativas se ap
             disabled={loading}
             style={{
               padding: '14px 24px',
-              background: loading ? '#93a1a1' : 'linear-gradient(135deg, #8b5e3c, #5c3a21)',
+              background: loading ? '#a08060' : 'linear-gradient(135deg, #8b5e3c, #5c3a21)',
               color: '#fff',
               border: 'none', borderRadius: 14, fontSize: 15, fontWeight: 700,
               cursor: loading ? 'not-allowed' : 'pointer',
@@ -593,7 +595,7 @@ Retorne a questão reformulada no formato padrão (Enunciado, Alternativas se ap
                 <i className="ti ti-alert-circle" style={{ color: '#b58900', fontSize: 20 }} />
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 700, color: '#b58900' }}>Nenhuma API configurada</div>
-                  <div style={{ fontSize: 12, color: '#586e75', marginTop: 2 }}>Vá em <strong>APIs & Modelos</strong> para configurar uma chave de IA e gerar exercícios automaticamente.</div>
+                  <div style={{ fontSize: 12, color: '#7a5c42', marginTop: 2 }}>Vá em <strong>APIs & Modelos</strong> para configurar uma chave de IA e gerar exercícios automaticamente.</div>
                 </div>
               </div>
             </div>
@@ -627,7 +629,7 @@ Retorne a questão reformulada no formato padrão (Enunciado, Alternativas se ap
                       flex: 1, padding: '8px 10px', borderRadius: 8, fontSize: 12, fontWeight: 700,
                       border: stemLanguage === 'pt' ? '1.5px solid #cb4b16' : '1px solid #e8e0d0',
                       background: stemLanguage === 'pt' ? '#fdf8f2' : '#fff',
-                      color: stemLanguage === 'pt' ? '#cb4b16' : '#586e75', cursor: 'pointer'
+                      color: stemLanguage === 'pt' ? '#cb4b16' : '#7a5c42', cursor: 'pointer'
                     }}
                   >
                     Português
@@ -639,7 +641,7 @@ Retorne a questão reformulada no formato padrão (Enunciado, Alternativas se ap
                       flex: 1, padding: '8px 10px', borderRadius: 8, fontSize: 12, fontWeight: 700,
                       border: stemLanguage === 'en' ? '1.5px solid #268bd2' : '1px solid #e8e0d0',
                       background: stemLanguage === 'en' ? '#f0f8ff' : '#fff',
-                      color: stemLanguage === 'en' ? '#268bd2' : '#586e75', cursor: 'pointer'
+                      color: stemLanguage === 'en' ? '#268bd2' : '#7a5c42', cursor: 'pointer'
                     }}
                   >
                     Inglês
@@ -657,7 +659,7 @@ Retorne a questão reformulada no formato padrão (Enunciado, Alternativas se ap
                       flex: 1, padding: '8px 10px', borderRadius: 8, fontSize: 12, fontWeight: 700,
                       border: optionLanguage === 'en' ? '1.5px solid #268bd2' : '1px solid #e8e0d0',
                       background: optionLanguage === 'en' ? '#f0f8ff' : '#fff',
-                      color: optionLanguage === 'en' ? '#268bd2' : '#586e75', cursor: 'pointer'
+                      color: optionLanguage === 'en' ? '#268bd2' : '#7a5c42', cursor: 'pointer'
                     }}
                   >
                     Inglês
@@ -669,7 +671,7 @@ Retorne a questão reformulada no formato padrão (Enunciado, Alternativas se ap
                       flex: 1, padding: '8px 10px', borderRadius: 8, fontSize: 12, fontWeight: 700,
                       border: optionLanguage === 'pt' ? '1.5px solid #cb4b16' : '1px solid #e8e0d0',
                       background: optionLanguage === 'pt' ? '#fdf8f2' : '#fff',
-                      color: optionLanguage === 'pt' ? '#cb4b16' : '#586e75', cursor: 'pointer'
+                      color: optionLanguage === 'pt' ? '#cb4b16' : '#7a5c42', cursor: 'pointer'
                     }}
                   >
                     Português
@@ -823,16 +825,16 @@ Retorne a questão reformulada no formato padrão (Enunciado, Alternativas se ap
               <label style={{ ...SL, marginBottom: 0 }}> Adaptação NEE</label>
               <button onClick={() => setShowNeePanel(!showNeePanel)} style={{
                 padding: '4px 12px', borderRadius: 20, border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700,
-                background: showNeePanel ? '#073642' : '#f5f0e8', color: showNeePanel ? '#fff' : '#586e75',
+                background: showNeePanel ? '#2c1a0e' : '#f5f0e8', color: showNeePanel ? '#fff' : '#7a5c42',
               }}>{showNeePanel ? 'Ocultar' : 'Ativar'}</button>
             </div>
             {showNeePanel && (
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
                 <button onClick={() => setNeeProfile('')} style={{
                   padding: '5px 12px', borderRadius: 20,
-                  border: !neeProfile ? '2px solid #073642' : '1px solid #e8e0d0',
-                  background: !neeProfile ? '#073642' : '#f5f0e8',
-                  color: !neeProfile ? '#fff' : '#586e75',
+                  border: !neeProfile ? '2px solid #2c1a0e' : '1px solid #e8e0d0',
+                  background: !neeProfile ? '#2c1a0e' : '#f5f0e8',
+                  color: !neeProfile ? '#fff' : '#7a5c42',
                   cursor: 'pointer', fontSize: 11, fontWeight: 600,
                 }}>Padrão</button>
                 {NEE_PROFILES.map(p => (
@@ -840,7 +842,7 @@ Retorne a questão reformulada no formato padrão (Enunciado, Alternativas se ap
                     padding: '5px 12px', borderRadius: 20,
                     border: neeProfile === p.id ? `2px solid ${p.color}` : '1px solid #e8e0d0',
                     background: neeProfile === p.id ? p.color : '#f5f0e8',
-                    color: neeProfile === p.id ? '#fff' : '#586e75',
+                    color: neeProfile === p.id ? '#fff' : '#7a5c42',
                     cursor: 'pointer', fontSize: 11, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5,
                   }}><i className={`ti ${p.icon}`} /> {p.label}</button>
                 ))}
@@ -857,7 +859,7 @@ Retorne a questão reformulada no formato padrão (Enunciado, Alternativas se ap
           {(checking || factCheck) && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', background: '#fff', borderRadius: 12, border: `1px solid ${fcColor}33`, flexShrink: 0 }}>
               {checking
-                ? <><i className="ti ti-loader-2" style={{ color: '#93a1a1', animation: 'spin 1s linear infinite' }} /> <span style={{ fontSize: 13, color: '#93a1a1' }}>Verificando qualidade pedagógica</span></>
+                ? <><i className="ti ti-loader-2" style={{ color: '#a08060', animation: 'spin 1s linear infinite' }} /> <span style={{ fontSize: 13, color: '#a08060' }}>Verificando qualidade pedagógica</span></>
                 : factCheck && (
                   <>
                     <i className={`ti ${factCheck.level === 'ok' ? 'ti-shield-check' : factCheck.level === 'warn' ? 'ti-alert-triangle' : 'ti-shield-x'}`} style={{ color: fcColor, fontSize: 20 }} />
@@ -868,7 +870,7 @@ Retorne a questão reformulada no formato padrão (Enunciado, Alternativas se ap
                             ` Problemas encontrados Qualidade ${factCheck.score}/100`}
                       </span>
                       {factCheck.issues.length > 0 && (
-                        <ul style={{ margin: '4px 0 0', padding: '0 0 0 16px', fontSize: 12, color: '#586e75' }}>
+                        <ul style={{ margin: '4px 0 0', padding: '0 0 0 16px', fontSize: 12, color: '#7a5c42' }}>
                           {factCheck.issues.map((i, idx) => <li key={idx}>{i}</li>)}
                         </ul>
                       )}
@@ -881,7 +883,7 @@ Retorne a questão reformulada no formato padrão (Enunciado, Alternativas se ap
           {/* BNCC tags */}
           {bnccTags.length > 0 && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', flexShrink: 0 }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: '#586e75' }}>BNCC:</span>
+              <span style={{ fontSize: 11, fontWeight: 700, color: '#7a5c42' }}>BNCC:</span>
               {bnccTags.map(tag => (
                 <span key={tag} style={{ padding: '3px 10px', borderRadius: 20, background: 'rgba(133,153,0,0.12)', border: '1px solid rgba(133,153,0,0.3)', color: '#859900', fontSize: 11, fontWeight: 700 }}>{tag}</span>
               ))}
@@ -947,7 +949,7 @@ Retorne a questão reformulada no formato padrão (Enunciado, Alternativas se ap
               padding: '8px 16px',
               borderRadius: 14,
               border: '1px solid #ede8dc',
-              boxShadow: '0 2px 8px rgba(0,43,54,0.03)',
+              boxShadow: '0 2px 8px rgba(44,26,14,0.03)',
               flexShrink: 0
             }}>
               <span style={{ fontSize: 13, fontWeight: 800, color: '#2c1a0e' }}>
@@ -997,8 +999,21 @@ Retorne a questão reformulada no formato padrão (Enunciado, Alternativas se ap
           )}
 
           {/* Document Canvas / Editable Boxes Container */}
-          <div style={{ flex: 1, overflowY: 'auto', borderRadius: 20, border: '1px solid #ede8dc', boxShadow: '0 4px 24px rgba(0,43,54,0.04)', background: '#fff', minHeight: 0 }}>
-            {activeViewTab === 'boxes' && result ? (
+          <div style={{ flex: 1, overflowY: 'auto', borderRadius: 20, border: '1px solid #ede8dc', boxShadow: '0 4px 24px rgba(44,26,14,0.04)', background: '#fff', minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+            {loading ? (
+              <div style={{ flex: 1, padding: 32, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <AiProgressStepper
+                  isGenerating={loading}
+                  title="Gerando Lista de Atividades"
+                  subtitle={`Disciplina: ${profile.name} • Conteúdo: ${topic || 'Geral'}`}
+                  steps={[
+                    `Consultando perfil pedagógico ${profile.name}...`,
+                    'Elaborando enunciados e alternativas dinâmicas...',
+                    'Formatando gabarito e critérios de aplicação...',
+                  ]}
+                />
+              </div>
+            ) : activeViewTab === 'boxes' && result ? (
               <div style={{ padding: 18 }}>
                 <EditableQuestionBoxes
                   initialContent={result}

@@ -83,20 +83,20 @@ Formate de modo ideal para envio direto via WhatsApp!`
  Boletim Individual com 1 Clique
  </span>
  </div>
- <p style={{ color: '#586e75', fontSize: 14, marginTop: 4 }}>
+ <p style={{ color: '#7a5c42', fontSize: 14, marginTop: 4 }}>
  Gere relatórios pedagógicos afetuosos e individuais de progresso para envio direto aos responsáveis via WhatsApp Web ou PDF.
  </p>
  </div>
 
  <div style={{ display: 'grid', gridTemplateColumns: '380px 1fr', gap: 24, flex: 1, minHeight: 0 }}>
  {/* Painel de Seleção do Aluno */}
- <div style={{ background: '#fff', borderRadius: 20, padding: 22, border: '1px solid #ede8dc', boxShadow: '0 2px 10px rgba(0,43,54,0.04)', display: 'flex', flexDirection: 'column', gap: 16 }}>
+ <div style={{ background: '#fff', borderRadius: 20, padding: 22, border: '1px solid #ede8dc', boxShadow: '0 2px 10px rgba(44,26,14,0.04)', display: 'flex', flexDirection: 'column', gap: 16 }}>
  <div>
- <label style={{ fontSize: 12, fontWeight: 700, color: '#586e75', display: 'block', marginBottom: 6 }}>Selecione o Aluno</label>
+ <label style={{ fontSize: 12, fontWeight: 700, color: '#7a5c42', display: 'block', marginBottom: 6 }}>Selecione o Aluno</label>
  <select
  value={selectedStudentId}
  onChange={e => setSelectedStudentId(e.target.value)}
- style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13.5, color: '#073642', outline: 'none' }}
+ style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13.5, color: '#2c1a0e', outline: 'none' }}
  >
  {students.map(s => (
  <option key={s.id} value={s.id}>{s.name} ({s.className})</option>
@@ -111,15 +111,15 @@ Formate de modo ideal para envio direto via WhatsApp!`
  </div>
 
  <div>
- <label style={{ fontSize: 12, fontWeight: 700, color: '#586e75', display: 'block', marginBottom: 6 }}>Tom do Relatório</label>
+ <label style={{ fontSize: 12, fontWeight: 700, color: '#7a5c42', display: 'block', marginBottom: 6 }}>Tom do Relatório</label>
  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
  {(['acolhedor', 'formal', 'direto'] as const).map(t => (
  <button
  key={t}
  onClick={() => setTone(t)}
  style={{
- padding: '8px', borderRadius: 8, border: tone === t ? '2px solid #073642' : '1px solid #e8e0d0',
- background: tone === t ? '#eee8d5' : '#fff', color: '#073642', fontSize: 12, fontWeight: 700, cursor: 'pointer', textTransform: 'capitalize'
+ padding: '8px', borderRadius: 8, border: tone === t ? '2px solid #2c1a0e' : '1px solid #e8e0d0',
+ background: tone === t ? '#f0e8d8' : '#fff', color: '#2c1a0e', fontSize: 12, fontWeight: 700, cursor: 'pointer', textTransform: 'capitalize'
  }}
  >
  {t}
@@ -130,10 +130,10 @@ Formate de modo ideal para envio direto via WhatsApp!`
  </div>
 
  {/* Pré-visualização do Relatório e Envio */}
- <div style={{ background: '#fff', borderRadius: 20, padding: 24, border: '1px solid #ede8dc', boxShadow: '0 2px 10px rgba(0,43,54,0.04)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+ <div style={{ background: '#fff', borderRadius: 20, padding: 24, border: '1px solid #ede8dc', boxShadow: '0 2px 10px rgba(44,26,14,0.04)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
  <div>
  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
- <span style={{ fontSize: 13, fontWeight: 700, color: '#073642' }}>
+ <span style={{ fontSize: 13, fontWeight: 700, color: '#2c1a0e' }}>
  Pré-visualização da Mensagem para os Pais
  </span>
  {generating && <span style={{ fontSize: 12, color: '#b58900' }}><i className="ti ti-loader" style={{ animation: 'spin 1s linear infinite' }} /> Gerando com IA...</span>}
@@ -143,14 +143,14 @@ Formate de modo ideal para envio direto via WhatsApp!`
  value={generatedReport}
  onChange={e => setGeneratedReport(e.target.value)}
  rows={16}
- style={{ width: '100%', padding: '16px', borderRadius: 14, border: '1px solid #e8e0d0', background: '#fdf6e3', fontSize: 14, color: '#073642', fontFamily: 'inherit', lineHeight: 1.6, resize: 'vertical', boxSizing: 'border-box' }}
+ style={{ width: '100%', padding: '16px', borderRadius: 14, border: '1px solid #e8e0d0', background: '#fdf8f2', fontSize: 14, color: '#2c1a0e', fontFamily: 'inherit', lineHeight: 1.6, resize: 'vertical', boxSizing: 'border-box' }}
  />
  </div>
 
  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 16 }}>
  <button
  onClick={() => window.print()}
- style={{ padding: '12px 20px', borderRadius: 10, border: '1px solid #e8e0d0', background: '#fff', fontSize: 13, fontWeight: 700, color: '#073642', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+ style={{ padding: '12px 20px', borderRadius: 10, border: '1px solid #e8e0d0', background: '#fff', fontSize: 13, fontWeight: 700, color: '#2c1a0e', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
  >
  <i className="ti ti-printer" /> Imprimir / PDF
  </button>

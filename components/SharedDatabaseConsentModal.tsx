@@ -66,7 +66,7 @@ export default function SharedDatabaseConsentModal({ isOpen, onConsented, onConf
             <i className="ti ti-database-cog" />
           </div>
           <div>
-            <h2 style={{ fontSize: 19, fontWeight: 800, color: '#073642', margin: 0, lineHeight: 1.3 }}>
+            <h2 style={{ fontSize: 19, fontWeight: 800, color: '#2c1a0e', margin: 0, lineHeight: 1.3 }}>
               Transparência no Armazenamento de Dados
             </h2>
             <span style={{ fontSize: 12, fontWeight: 700, color: '#b58900', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
@@ -75,20 +75,20 @@ export default function SharedDatabaseConsentModal({ isOpen, onConsented, onConf
           </div>
         </div>
 
-        <div style={{ background: '#fdf6e3', border: '1px solid rgba(181,137,0,0.25)', borderRadius: 12, padding: '16px 18px', marginBottom: 20 }}>
-          <p style={{ fontSize: 13.5, color: '#073642', lineHeight: 1.6, margin: '0 0 10px' }}>
+        <div style={{ background: '#fdf8f2', border: '1px solid rgba(181,137,0,0.25)', borderRadius: 12, padding: '16px 18px', marginBottom: 20 }}>
+          <p style={{ fontSize: 13.5, color: '#2c1a0e', lineHeight: 1.6, margin: '0 0 10px' }}>
             <strong>Você ainda não configurou seu próprio banco de dados (Supabase BYOK).</strong>
           </p>
-          <p style={{ fontSize: 13, color: '#586e75', lineHeight: 1.55, margin: 0 }}>
+          <p style={{ fontSize: 13, color: '#7a5c42', lineHeight: 1.55, margin: 0 }}>
             Seus dados escolares (alunos, turmas, notas e avaliações) serão salvos no <strong>banco de dados compartilhado da plataforma</strong>, isolados com segurança sob sua conta de professor, até que você decida conectar seu próprio Supabase.
           </p>
         </div>
 
         <div style={{ marginBottom: 24 }}>
-          <h4 style={{ fontSize: 12, fontWeight: 800, color: '#073642', textTransform: 'uppercase', letterSpacing: '0.8px', margin: '0 0 8px' }}>
+          <h4 style={{ fontSize: 12, fontWeight: 800, color: '#2c1a0e', textTransform: 'uppercase', letterSpacing: '0.8px', margin: '0 0 8px' }}>
             O que muda na prática para você?
           </h4>
-          <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12.5, color: '#586e75', lineHeight: 1.6 }}>
+          <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12.5, color: '#7a5c42', lineHeight: 1.6 }}>
             <li><strong>Banco Compartilhado (Atual):</strong> A infraestrutura do servidor é gerenciada pela plataforma. Seus dados são protegidos por isolamento de usuário (RLS), mas hospedados no projeto padrão.</li>
             <li><strong>Banco Próprio (BYOK - Opcional):</strong> Você tem 100% da soberania, controle de acesso e auditoria direta na sua própria conta gratuita do Supabase.</li>
             <li>Você pode alternar para o seu próprio banco a qualquer momento em <em>Configurações → Banco de Dados</em>.</li>
@@ -103,7 +103,7 @@ export default function SharedDatabaseConsentModal({ isOpen, onConsented, onConf
               borderRadius: 10,
               border: '1px solid #d5c0b0',
               background: '#fff',
-              color: '#073642',
+              color: '#2c1a0e',
               fontSize: 13,
               fontWeight: 700,
               cursor: 'pointer',
@@ -122,7 +122,7 @@ export default function SharedDatabaseConsentModal({ isOpen, onConsented, onConf
               padding: '11px 22px',
               borderRadius: 10,
               border: 'none',
-              background: 'linear-gradient(135deg, #073642 0%, #002b36 100%)',
+              background: 'linear-gradient(135deg, #2c1a0e 0%, #002b36 100%)',
               color: '#fff',
               fontSize: 13,
               fontWeight: 700,
@@ -130,7 +130,7 @@ export default function SharedDatabaseConsentModal({ isOpen, onConsented, onConf
               display: 'flex',
               alignItems: 'center',
               gap: 6,
-              boxShadow: '0 2px 8px rgba(0,43,54,0.3)'
+              boxShadow: '0 2px 8px rgba(44,26,14,0.3)'
             }}
           >
             <i className="ti ti-check" /> Entendi e Desejo Continuar

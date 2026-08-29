@@ -1,4 +1,5 @@
 'use client';
+import { toast, showConfirm } from '@/components/Toast'
 
 import React, { useState, useEffect, CSSProperties, useRef } from 'react';
 
@@ -387,7 +388,7 @@ export default function BatchGrader() {
         };
         reader.readAsText(file);
       } else if (file.name.match(/\.(pdf|doc|docx)$/i)) {
-        alert(`Arquivos ${file.name.split('.').pop()?.toUpperCase()} requerem extração de texto. Cole a resposta do aluno no campo correspondente.`);
+        toast.success(`Arquivos ${file.name.split('.').pop()?.toUpperCase()} requerem extração de texto. Cole a resposta do aluno no campo correspondente.`);
         addSubmission('');
       } else {
         addSubmission(`Conteúdo de ${file.name}`);
@@ -743,7 +744,7 @@ Responda APENAS um objeto JSON no formato:
                             <button 
                               title="Ver Feedback"
                               style={{ ...styles.buttonOutline, padding: '0.4rem' }}
-                              onClick={() => alert(`Feedback para ${getDisplayName(sub.studentName)}:\n\nNota: ${sub.grade}/${maxGrade}\n\nJustificativa: ${sub.justification}\n\nFeedback Aluno: ${sub.feedback}`)}
+                              onClick={() => toast.success(`Feedback para ${getDisplayName(sub.studentName)}:\n\nNota: ${sub.grade}/${maxGrade}\n\nJustificativa: ${sub.justification}\n\nFeedback Aluno: ${sub.feedback}`)}
                             >
                               <i className="ti ti-eye"></i>
                             </button>

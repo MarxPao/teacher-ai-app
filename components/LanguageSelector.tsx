@@ -25,7 +25,7 @@ export default function LanguageSelector() {
         title="Português (Brasil)"
         style={{
           border: 'none', background: lang === 'pt' ? '#8b5e3c' : 'transparent',
-          color: lang === 'pt' ? '#fff' : '#586e75', padding: '3px 8px', borderRadius: 14,
+          color: lang === 'pt' ? '#fff' : '#7a5c42', padding: '3px 8px', borderRadius: 14,
           fontSize: 11, fontWeight: 700, cursor: 'pointer', transition: 'all 0.2s'
         }}
       >
@@ -36,7 +36,7 @@ export default function LanguageSelector() {
         title="English (United States)"
         style={{
           border: 'none', background: lang === 'en' ? '#8b5e3c' : 'transparent',
-          color: lang === 'en' ? '#fff' : '#586e75', padding: '3px 8px', borderRadius: 14,
+          color: lang === 'en' ? '#fff' : '#7a5c42', padding: '3px 8px', borderRadius: 14,
           fontSize: 11, fontWeight: 700, cursor: 'pointer', transition: 'all 0.2s'
         }}
       >
@@ -47,7 +47,7 @@ export default function LanguageSelector() {
         title="Español"
         style={{
           border: 'none', background: lang === 'es' ? '#8b5e3c' : 'transparent',
-          color: lang === 'es' ? '#fff' : '#586e75', padding: '3px 8px', borderRadius: 14,
+          color: lang === 'es' ? '#fff' : '#7a5c42', padding: '3px 8px', borderRadius: 14,
           fontSize: 11, fontWeight: 700, cursor: 'pointer', transition: 'all 0.2s'
         }}
       >

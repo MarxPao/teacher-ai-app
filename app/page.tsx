@@ -34,7 +34,6 @@ import ParentCommunicator from '@/components/modules/ParentCommunicator'
 import RafinhaChat from '@/components/RafinhaChat'
 import Extensions from '@/components/modules/Extensions'
 import PortalMirrorModule from '@/components/modules/PortalMirrorModule'
-import VoiceOrb from '@/components/VoiceOrb'
 import WisprFlowOverlay from '@/components/WisprFlowOverlay'
 import ClassroomMode from '@/components/modules/ClassroomMode'
 import FlashcardMode from '@/components/modules/FlashcardMode'
@@ -51,20 +50,21 @@ import Organization from '@/components/modules/Organization'
 import PrivateTutoring from '@/components/modules/PrivateTutoring'
 import Eventos from '@/components/modules/Eventos'
 import Insights from '@/components/modules/Insights'
+import ChecklistHistoryModule from '@/components/modules/ChecklistHistoryModule'
 
 import CommandPalette from '@/components/CommandPalette'
 import LanguageSelector from '@/components/LanguageSelector'
 import AuthGate from '@/components/AuthGate'
 import OnboardingFlow from '@/components/OnboardingFlow'
 import Topbar from '@/components/Topbar'
-import GlobalVoiceFAB from '@/components/GlobalVoiceFAB'
 import BottomTabBar from '@/components/BottomTabBar'
 import Scratchpad from '@/components/Scratchpad'
 import TeacherLogo from '@/components/TeacherLogo'
 import { getCurrentSession, saveSession, AuthSession } from '@/lib/supabaseAuth'
+import { ToastProvider, ConfirmProvider } from '@/components/Toast'
 
 export type ModuleKey = 'dashboard' | 'test_and_worksheets' | 'quick' | 'exam' | 'lessonstudio' | 'plan' | 'rubric' |
-  'gradebook' | 'students' | 'classes' | 'organization' | 'privatetutoring' | 'eventos' | 'insights' | 'analytics' | 'calendar' | 'comms' | 'repo' |
+  'gradebook' | 'students' | 'classes' | 'organization' | 'checklist' | 'privatetutoring' | 'eventos' | 'insights' | 'analytics' | 'calendar' | 'comms' | 'repo' |
   'wellbeing' | 'settings' | 'api' | 'qbank' | 'mindmap' | 'editor' |
   'communications' | 'portfolio' | 'extensions' | 'portalmirror' | 'omnigrader' | 'maestro' | 'classlog' | 'didacticsequence' | 'livequiz' | 'parentcomms' |
   'classroommode' | 'attendancelist' | 'flashcardmode' | 'audiopronunciation' |
@@ -83,6 +83,7 @@ const MODULES: Record<ModuleKey, React.ComponentType<any>> = {
   students: Students,
   classes: Classes,
   organization: Organization,
+  checklist: ChecklistHistoryModule,
   privatetutoring: PrivateTutoring,
   eventos: Eventos,
   insights: Insights,
@@ -278,6 +279,8 @@ export default function Home() {
   // ─── JANELA DE AUTENTICAÇÃO E ONBOARDING PAUSADAS TEMPORARIAMENTE ───
   // Permite acesso direto a todas as funcionalidades do aplicativo
   return (
+    <ToastProvider>
+    <ConfirmProvider>
     <div className="flex w-full h-screen overflow-hidden" style={{ background: '#fdf8f2' }}>
       <div className="sidebar-wrapper">
         <Sidebar active={active} onNavigate={setActive} />
@@ -295,37 +298,12 @@ export default function Home() {
         </div>
       </main>
 
-      {/* DOCK FLUTUANTE DE AÇÕES EMBUTIDAS NO CANTO INFERIOR DIREITO */}
-      <div style={{
-        position: 'fixed', bottom: 24, right: 94, zIndex: 9995,
-        display: 'flex', alignItems: 'center', gap: 10
-      }}>
-        {/* Botão de Busca Rápida no Canto Inferior Direito */}
-        <button
-          onClick={() => setIsCommandPaletteOpen(true)}
-          title="Abrir Busca Rápida (Ctrl+K)"
-          style={{
-            padding: '9px 16px', borderRadius: 24, border: '1px solid rgba(139,115,85,0.22)',
-            background: '#fffcf8', color: '#2c1a0e', fontSize: 12.5, fontWeight: 700,
-            cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
-            boxShadow: '0 4px 16px rgba(44,26,14,0.08)', transition: 'all 0.15s ease'
-          }}
-        >
-          <i className="ti ti-search" style={{ color: '#8b5e3c', fontSize: 16 }} />
-          <span>Busca Rápida</span>
-          <kbd style={{ background: '#f5efe6', color: '#8b5e3c', padding: '2px 6px', borderRadius: 6, fontSize: 10, fontWeight: 700 }}>Ctrl+K</kbd>
-        </button>
-      </div>
-
       {/* Command Palette Modal (Ctrl+K) */}
       <CommandPalette
         isOpen={isCommandPaletteOpen}
         onClose={() => setIsCommandPaletteOpen(false)}
         onNavigate={setActive}
       />
-
-      {/* VoiceOrb UI visual pura */}
-      <VoiceOrb />
 
       {/* WisprFlow Overlay (Alt+Shift+V) */}
       <WisprFlowOverlay />
@@ -342,5 +320,7 @@ export default function Home() {
         onCommandReady={(fn) => { rafinhaCommandRef.current = fn }}
       />
     </div>
+    </ConfirmProvider>
+    </ToastProvider>
   )
 }

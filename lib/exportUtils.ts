@@ -1,3 +1,4 @@
+import { toast, showConfirm } from '@/components/Toast'
 /**
  * exportUtils.ts — Exportação Oficial em PDF/Word/Excel com Cabeçalhos Padronizados das Escolas,
  * Preferências Globais de Formatação e Suporte Visual a Necessidades Educacionais Especiais (NEE)
@@ -109,7 +110,7 @@ export function exportToPdf(options: ExportHeaderOptions) {
 
   const printWindow = window.open('', '_blank')
   if (!printWindow) {
-    alert('Permita pop-ups no seu navegador para exportar o PDF.')
+    toast.success('Permita pop-ups no seu navegador para exportar o PDF.')
     return
   }
 
@@ -257,7 +258,7 @@ export function exportToPdf(options: ExportHeaderOptions) {
         <button onclick="window.print()" style="padding:10px 20px; background:#8b5e3c; color:#fff; border:none; border-radius:8px; font-weight:bold; cursor:pointer; font-size:14px;">
           🖨️ Imprimir / Salvar PDF
         </button>
-        <span style="font-size:12px; color:#586e75;">(Dica: Selecione "Salvar como PDF" no destino da impressão)</span>
+        <span style="font-size:12px; color:#7a5c42;">(Dica: Selecione "Salvar como PDF" no destino da impressão)</span>
       </div>
 
       <div style="padding: 15px;">

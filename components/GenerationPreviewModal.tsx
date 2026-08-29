@@ -67,7 +67,14 @@ export default function GenerationPreviewModal({
       >
         {/* Header */}
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
-          <div style={{ fontSize: 40, marginBottom: 12 }}>✨</div>
+          <div style={{
+            width: 54, height: 54, borderRadius: 16,
+            background: 'rgba(139,94,60,0.12)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            margin: '0 auto 14px',
+          }}>
+            <i className="ti ti-sparkles" style={{ fontSize: 28, color: '#8b5e3c' }} />
+          </div>
           <h2 style={{
             fontFamily: "'Fraunces', Georgia, serif",
             fontSize: 22,
@@ -98,8 +105,12 @@ export default function GenerationPreviewModal({
             letterSpacing: '1px',
             color: '#8b5e3c',
             marginBottom: 8,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
           }}>
-            📋 {title}
+            <i className="ti ti-file-text" style={{ fontSize: 14 }} />
+            <span>{title}</span>
           </div>
           <p style={{
             fontSize: 15,
@@ -156,9 +167,13 @@ export default function GenerationPreviewModal({
               fontWeight: 700,
               cursor: 'pointer',
               fontFamily: "'Plus Jakarta Sans', sans-serif",
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 6,
             }}
           >
-            ✏️ Ajustar
+            <i className="ti ti-edit" /> Ajustar
           </button>
           <button
             onClick={onConfirm}
@@ -180,7 +195,7 @@ export default function GenerationPreviewModal({
               gap: 8,
             }}
           >
-            Gerar Agora ✨
+            <i className="ti ti-sparkles" /> Gerar Agora
             <span style={{ fontSize: 11, opacity: 0.7, fontWeight: 500 }}>
               Ctrl+Enter
             </span>

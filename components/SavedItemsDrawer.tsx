@@ -1,4 +1,5 @@
 'use client'
+import { toast, showConfirm } from '@/components/Toast'
 import { useState, useEffect } from 'react'
 
 export interface SavedItem {
@@ -43,9 +44,9 @@ export default function SavedItemsDrawer({
     if (isOpen) loadItems()
   }, [isOpen, storageKey])
 
-  const handleDelete = (id: string, e: React.MouseEvent) => {
+  const handleDelete = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation()
-    if (!confirm('Deseja excluir este item salvo?')) return
+    if (!(await showConfirm({ message: 'Deseja excluir este item salvo?' }))) return
     const upd = items.filter(i => i.id !== id)
     setItems(upd)
     localStorage.setItem(storageKey, JSON.stringify(upd))
@@ -68,8 +69,8 @@ export default function SavedItemsDrawer({
     }}>
       <div style={{
         width: 440, maxWidth: '90vw', height: '100%',
-        background: '#fdf6e3', borderLeft: '1px solid #ede8dc',
-        boxShadow: '-12px 0 40px rgba(0,43,54,0.18)',
+        background: '#fdf8f2', borderLeft: '1px solid #ede8dc',
+        boxShadow: '-12px 0 40px rgba(44,26,14,0.18)',
         display: 'flex', flexDirection: 'column',
         animation: 'slideLeft 0.25s cubic-bezier(0.16,1,0.3,1)',
       }}>
@@ -80,14 +81,14 @@ export default function SavedItemsDrawer({
 
         {/* Header */}
         <div style={{
-          padding: '20px 24px', background: '#073642', color: '#fdf6e3',
+          padding: '20px 24px', background: '#2c1a0e', color: '#fdf8f2',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <i className="ti ti-bookmark" style={{ fontSize: 22, color: '#b58900' }} />
             <div>
               <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>{title}</h2>
-              <span style={{ fontSize: 11, color: '#93a1a1' }}>
+              <span style={{ fontSize: 11, color: '#a08060' }}>
                 {items.length} {items.length === 1 ? 'item salvo' : 'itens salvos'}
               </span>
             </div>
@@ -95,7 +96,7 @@ export default function SavedItemsDrawer({
           <button
             onClick={onClose}
             style={{
-              background: 'none', border: 'none', color: '#93a1a1',
+              background: 'none', border: 'none', color: '#a08060',
               fontSize: 24, cursor: 'pointer', lineHeight: 1,
             }}
           >
@@ -104,9 +105,9 @@ export default function SavedItemsDrawer({
         </div>
 
         {/* Search */}
-        <div style={{ padding: '14px 20px', background: '#eee8d5', borderBottom: '1px solid #e4ddd0' }}>
+        <div style={{ padding: '14px 20px', background: '#f0e8d8', borderBottom: '1px solid #e4ddd0' }}>
           <div style={{ position: 'relative' }}>
-            <i className="ti ti-search" style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#93a1a1', fontSize: 14 }} />
+            <i className="ti ti-search" style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#a08060', fontSize: 14 }} />
             <input
               value={filter}
               onChange={e => setFilter(e.target.value)}
@@ -114,7 +115,7 @@ export default function SavedItemsDrawer({
               style={{
                 width: '100%', padding: '8px 12px 8px 34px', borderRadius: 10,
                 border: '1px solid #d3cbbd', background: '#fff', fontSize: 13,
-                outline: 'none', boxSizing: 'border-box', color: '#073642',
+                outline: 'none', boxSizing: 'border-box', color: '#2c1a0e',
               }}
             />
           </div>
@@ -123,7 +124,7 @@ export default function SavedItemsDrawer({
         {/* List */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
           {filtered.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '60px 20px', color: '#93a1a1' }}>
+            <div style={{ textAlign: 'center', padding: '60px 20px', color: '#a08060' }}>
               <i className="ti ti-folder-off" style={{ fontSize: 44, opacity: 0.4, marginBottom: 12, display: 'block' }} />
               <p style={{ fontSize: 14, margin: 0 }}>Nenhum item salvo encontrado.</p>
               <span style={{ fontSize: 12, color: '#657b83', display: 'block', marginTop: 4 }}>
@@ -137,15 +138,15 @@ export default function SavedItemsDrawer({
                 onClick={() => { onSelect(item); onClose() }}
                 style={{
                   background: '#fff', borderRadius: 14, padding: '14px 16px',
-                  border: '1px solid #ede8dc', boxShadow: '0 2px 8px rgba(0,43,54,0.04)',
+                  border: '1px solid #ede8dc', boxShadow: '0 2px 8px rgba(44,26,14,0.04)',
                   cursor: 'pointer', transition: 'all 0.15s',
                   display: 'flex', flexDirection: 'column', gap: 8,
                 }}
-                onMouseEnter={e => (e.currentTarget.style.borderColor = '#073642')}
+                onMouseEnter={e => (e.currentTarget.style.borderColor = '#2c1a0e')}
                 onMouseLeave={e => (e.currentTarget.style.borderColor = '#ede8dc')}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                  <div style={{ fontWeight: 700, fontSize: 14, color: '#073642', lineHeight: 1.3 }}>
+                  <div style={{ fontWeight: 700, fontSize: 14, color: '#2c1a0e', lineHeight: 1.3 }}>
                     {item.title}
                   </div>
                   <button
@@ -161,13 +162,13 @@ export default function SavedItemsDrawer({
                 </div>
 
                 {item.subtitle && (
-                  <div style={{ fontSize: 12, color: '#586e75' }}>
+                  <div style={{ fontSize: 12, color: '#7a5c42' }}>
                     {item.subtitle}
                   </div>
                 )}
 
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
-                  <span style={{ fontSize: 10, color: '#93a1a1' }}>
+                  <span style={{ fontSize: 10, color: '#a08060' }}>
                     📅 {new Date(item.createdAt).toLocaleDateString('pt-BR')} às {new Date(item.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                   </span>
                   <span style={{ fontSize: 11, fontWeight: 600, color: '#268bd2', display: 'flex', alignItems: 'center', gap: 3 }}>

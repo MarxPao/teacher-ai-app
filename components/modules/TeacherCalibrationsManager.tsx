@@ -1,4 +1,5 @@
 'use client'
+import { toast, showConfirm } from '@/components/Toast'
 
 import React, { useState, useEffect } from 'react'
 import {
@@ -52,8 +53,8 @@ export default function TeacherCalibrationsManager() {
         </div>
 
         <button
-          onClick={() => {
-            if (confirm('Deseja restaurar todas as calibrações para os padrões recomendados de fábrica?')) {
+          onClick={async () => {
+            if ((await showConfirm({ message: 'Deseja restaurar todas as calibrações para os padrões recomendados de fábrica?' }))) {
               handleSave(DEFAULT_CALIBRATIONS)
             }
           }}

@@ -1,4 +1,5 @@
 'use client'
+import { toast, showConfirm } from '@/components/Toast'
 
 import React, { useState, useEffect } from 'react'
 import { getPresets, savePreset, deletePreset, SavedPreset } from '@/lib/presetManager'
@@ -45,9 +46,9 @@ export default function PresetSelector({ module, currentConfig, onLoadPreset }: 
     setSelectedId(created.id)
   }
 
-  const handleDelete = (id: string, e: React.MouseEvent) => {
+  const handleDelete = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation()
-    if (confirm('Deseja excluir esta configuração salva?')) {
+    if ((await showConfirm({ message: 'Deseja excluir esta configuração salva?' }))) {
       deletePreset(module, id)
       if (selectedId === id) setSelectedId('')
       reload()
@@ -59,7 +60,7 @@ export default function PresetSelector({ module, currentConfig, onLoadPreset }: 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <i className="ti ti-bookmark" style={{ color: '#b58900', fontSize: 18 }} />
-          <span style={{ fontSize: 13, fontWeight: 700, color: '#073642' }}>Configurações Salvas (Presets):</span>
+          <span style={{ fontSize: 13, fontWeight: 700, color: '#2c1a0e' }}>Configurações Salvas (Presets):</span>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 240, justifyContent: 'flex-end' }}>
@@ -70,7 +71,7 @@ export default function PresetSelector({ module, currentConfig, onLoadPreset }: 
             style={{
               flex: 1, maxWidth: 280, padding: '7px 12px', background: '#fff',
               border: '1px solid #e8e0d0', borderRadius: 8, fontSize: 13,
-              color: '#073642', outline: 'none', fontWeight: 600, cursor: 'pointer'
+              color: '#2c1a0e', outline: 'none', fontWeight: 600, cursor: 'pointer'
             }}
           >
             <option value="">-- Carregar preset salvo... --</option>
@@ -119,13 +120,13 @@ export default function PresetSelector({ module, currentConfig, onLoadPreset }: 
         }}>
           <form onSubmit={handleSave} style={{
             width: '100%', maxWidth: 420, background: '#fff', borderRadius: 16, padding: 22,
-            boxShadow: '0 10px 30px rgba(0,43,54,0.2)', border: '1px solid #ede8dc'
+            boxShadow: '0 10px 30px rgba(44,26,14,0.2)', border: '1px solid #ede8dc'
           }}>
-            <h3 style={{ fontSize: 16, fontWeight: 800, color: '#073642', marginTop: 0, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <h3 style={{ fontSize: 16, fontWeight: 800, color: '#2c1a0e', marginTop: 0, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
               <i className="ti ti-device-floppy" style={{ color: '#8b5e3c' }} />
               Salvar Nova Configuração
             </h3>
-            <p style={{ fontSize: 13, color: '#586e75', marginBottom: 14 }}>
+            <p style={{ fontSize: 13, color: '#7a5c42', marginBottom: 14 }}>
               Dê um nome para este preset de parâmetros para carregar em 1 clique depois.
             </p>
 
@@ -138,7 +139,7 @@ export default function PresetSelector({ module, currentConfig, onLoadPreset }: 
               style={{
                 width: '100%', padding: '10px 14px', background: '#f5f0e8',
                 border: '1px solid #e8e0d0', borderRadius: 8, fontSize: 14,
-                color: '#073642', outline: 'none', marginBottom: 16, fontFamily: 'inherit'
+                color: '#2c1a0e', outline: 'none', marginBottom: 16, fontFamily: 'inherit'
               }}
             />
 
@@ -146,7 +147,7 @@ export default function PresetSelector({ module, currentConfig, onLoadPreset }: 
               <button
                 type="button"
                 onClick={() => setShowSaveModal(false)}
-                style={{ padding: '8px 16px', background: '#f5f0e8', color: '#586e75', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}
+                style={{ padding: '8px 16px', background: '#f5f0e8', color: '#7a5c42', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}
               >
                 Cancelar
               </button>

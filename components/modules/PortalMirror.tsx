@@ -180,7 +180,7 @@ export default function PortalMirror() {
           onClick={() => setIsPairingOpen(true)}
           style={{
             padding: '8px 16px', borderRadius: 10, border: '1.5px solid #8b5e3c',
-            background: '#fdf6e3', color: '#5b3a20', fontSize: 12.5, fontWeight: 800,
+            background: '#fdf8f2', color: '#5b3a20', fontSize: 12.5, fontWeight: 800,
             cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
             boxShadow: '0 2px 6px rgba(0,0,0,0.04)'
           }}
@@ -204,7 +204,7 @@ export default function PortalMirror() {
                   padding: '6px 14px', borderRadius: 20,
                   border: `1.5px solid ${activeCategory === cat ? '#8b5e3c' : '#ede8dc'}`,
                   background: activeCategory === cat ? '#8b5e3c' : '#fff',
-                  color: activeCategory === cat ? '#fff' : '#586e75',
+                  color: activeCategory === cat ? '#fff' : '#7a5c42',
                   fontSize: 12.5, fontWeight: 700, cursor: 'pointer', transition: 'all 0.18s',
                 }}
               >
@@ -248,12 +248,12 @@ export default function PortalMirror() {
                   </div>
                   <div>
                     <div style={{ fontSize: 14, fontWeight: 800, color: '#2c1a0e', lineHeight: 1.3 }}>{portal.shortName || portal.name}</div>
-                    <div style={{ fontSize: 11, color: '#93a1a1', lineHeight: 1.4 }}>{portal.name}</div>
+                    <div style={{ fontSize: 11, color: '#a08060', lineHeight: 1.4 }}>{portal.name}</div>
                   </div>
                 </div>
 
                 {/* Descrição */}
-                <div style={{ fontSize: 12, color: '#586e75', lineHeight: 1.6, minHeight: 38 }}>
+                <div style={{ fontSize: 12, color: '#7a5c42', lineHeight: 1.6, minHeight: 38 }}>
                   {portal.description}
                 </div>
 
@@ -323,7 +323,7 @@ export default function PortalMirror() {
 
           {/* URL Personalizada */}
           <ModuleCard title="Abrir URL Personalizada" icon="ti-world" padding={16}>
-            <div style={{ fontSize: 12, color: '#586e75', marginBottom: 10 }}>
+            <div style={{ fontSize: 12, color: '#7a5c42', marginBottom: 10 }}>
               Cole qualquer URL de portal ou ferramenta e abra em janela de app diretamente.
             </div>
             <form
@@ -364,7 +364,7 @@ export default function PortalMirror() {
 
           {/* Status Agêntico */}
           <ModuleCard title="Rafinha Web Operator" icon="ti-brain" padding={16}>
-            <div style={{ fontSize: 12, color: '#586e75', lineHeight: 1.6, marginBottom: 8 }}>
+            <div style={{ fontSize: 12, color: '#7a5c42', lineHeight: 1.6, marginBottom: 8 }}>
               Clique em <strong>🔍 Inspecionar</strong> para mapear uma tela ou <strong>⚡ Preencher</strong> para auto-preencher diários, frequências e notas.
             </div>
 
@@ -373,7 +373,7 @@ export default function PortalMirror() {
               background: fillStatus ? '#f0fff4' : '#fdf8f2',
               border: `1.5px solid ${fillStatus ? '#2d9d5d44' : '#ede8dc'}`,
               borderRadius: 12, padding: 12, fontSize: 12,
-              color: fillStatus ? '#073642' : '#93a1a1',
+              color: fillStatus ? '#2c1a0e' : '#a08060',
               minHeight: 56, lineHeight: 1.6,
               transition: 'all 0.3s',
             }}>
@@ -388,7 +388,7 @@ export default function PortalMirror() {
             {fillStatus && (
               <button
                 onClick={() => setFillStatus(null)}
-                style={{ background: 'none', border: 'none', fontSize: 11, color: '#93a1a1', cursor: 'pointer', textAlign: 'left', marginTop: 4 }}
+                style={{ background: 'none', border: 'none', fontSize: 11, color: '#a08060', cursor: 'pointer', textAlign: 'left', marginTop: 4 }}
               >
                 × Limpar
               </button>
@@ -413,7 +413,7 @@ export default function PortalMirror() {
                   </div>
                   <div>
                     <div style={{ fontSize: 12.5, fontWeight: 800, color: '#2c1a0e' }}>{item.title}</div>
-                    <div style={{ fontSize: 11.5, color: '#586e75', lineHeight: 1.5, marginTop: 2 }}>{item.desc}</div>
+                    <div style={{ fontSize: 11.5, color: '#7a5c42', lineHeight: 1.5, marginTop: 2 }}>{item.desc}</div>
                   </div>
                 </div>
               ))}
@@ -423,7 +423,7 @@ export default function PortalMirror() {
           {/* Histórico de Preenchimentos */}
           <ModuleCard title="Histórico de Operações" icon="ti-history" padding={16}>
             {recentFills.length === 0 ? (
-              <div style={{ fontSize: 12, color: '#93a1a1', textAlign: 'center', padding: '12px 0' }}>
+              <div style={{ fontSize: 12, color: '#a08060', textAlign: 'center', padding: '12px 0' }}>
                 Nenhuma operação recente.
               </div>
             ) : (
@@ -439,7 +439,7 @@ export default function PortalMirror() {
                   >
                     <div>
                       <div style={{ fontSize: 12, fontWeight: 700, color: '#2c1a0e' }}>{fill.platformName || fill.platform}</div>
-                      <div style={{ fontSize: 11, color: '#93a1a1' }}>{fill.title}</div>
+                      <div style={{ fontSize: 11, color: '#a08060' }}>{fill.title}</div>
                     </div>
                     <div style={{ fontSize: 10.5, color: '#b58900', fontWeight: 700 }}>
                       {new Date(fill.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}

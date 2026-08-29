@@ -39,9 +39,11 @@ export default function GlobalVoiceFAB() {
           boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
           border: '1px solid rgba(255,255,255,0.1)',
           fontFamily: "'Plus Jakarta Sans', sans-serif",
-          pointerEvents: 'none',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
         }}>
-          🎙️ Ditado por voz
+          <i className="ti ti-microphone" /> Ditado por voz
         </div>
       )}
 

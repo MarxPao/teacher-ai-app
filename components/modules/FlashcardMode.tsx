@@ -1,4 +1,5 @@
 'use client';
+import { toast, showConfirm } from '@/components/Toast'
 
 import React, { useState, useEffect, useRef, CSSProperties } from 'react';
 
@@ -103,8 +104,8 @@ export default function FlashcardMode() {
  }
  };
 
- const deleteDeck = (deckId: string) => {
- if(confirm('Delete this deck?')) {
+ const deleteDeck = async (deckId: string) => {
+ if((await showConfirm({ message: 'Delete this deck?' }))) {
  setDecks(decks.filter(d => d.id !== deckId));
  showToast('Deck deleted');
  }
@@ -383,8 +384,8 @@ function DeckDetailsView({ deck, updateDeck, onStudy, onGame, onMatching, showTo
  }
  };
 
- const removeCard = (cardId: string) => {
- if(confirm('Remove this card?')) {
+ const removeCard = async (cardId: string) => {
+ if((await showConfirm({ message: 'Remove this card?' }))) {
  updateDeck({...deck, cards: deck.cards.filter((c:any) => c.id !== cardId)});
  }
  };
@@ -486,7 +487,7 @@ function StudyMode({ deck, updateDeck, onComplete }: any) {
  setCurrentIndex(currentIndex + 1);
  } else {
  // End of queue
- alert(`Session complete! You knew ${sessionStats.known + (rating >= 2 ? 1 : 0)} out of ${sessionStats.seen + 1}.`);
+ toast.success(`Session complete! You knew ${sessionStats.known + (rating >= 2 ? 1 : 0)} out of ${sessionStats.seen + 1}.`);
  onComplete();
  }
  }, 300);

@@ -79,7 +79,7 @@ export default function SidecarPairingModal({ isOpen, onClose, onPaired }: Sidec
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
           <div style={{
-            width: 44, height: 44, borderRadius: 12, background: '#fdf6e3',
+            width: 44, height: 44, borderRadius: 12, background: '#fdf8f2',
             display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22
           }}>
             🦉
@@ -94,7 +94,7 @@ export default function SidecarPairingModal({ isOpen, onClose, onPaired }: Sidec
           </div>
         </div>
 
-        <p style={{ fontSize: 13, color: '#586e75', lineHeight: 1.6, marginBottom: 20 }}>
+        <p style={{ fontSize: 13, color: '#7a5c42', lineHeight: 1.6, marginBottom: 20 }}>
           Ao iniciar o Sidecar no terminal (<code>iniciar-sidecar.bat</code>), um código de pareamento de 6 dígitos será gerado. Digite-o abaixo para autorizar o daemon a operar localmente.
         </p>
 

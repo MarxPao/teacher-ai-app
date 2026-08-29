@@ -515,7 +515,7 @@ Referência: ${new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'nu
               fontWeight: 600,
               border: '1px solid #d5c0b0',
               background: activeFilterCategory === 'all' ? '#8b5e3c' : '#fffcf8',
-              color: activeFilterCategory === 'all' ? '#fff' : '#586e75',
+              color: activeFilterCategory === 'all' ? '#fff' : '#7a5c42',
               cursor: 'pointer',
               whiteSpace: 'nowrap'
             }}

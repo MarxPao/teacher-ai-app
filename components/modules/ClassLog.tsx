@@ -1,4 +1,5 @@
 'use client'
+import { toast, showConfirm } from '@/components/Toast'
 
 import { useState, useEffect, useMemo } from 'react'
 import { fillPortal, logPortalFill } from '@/lib/portalBridge'
@@ -303,23 +304,23 @@ export default function ClassLog() {
             <h1 style={{ textAlign: 'center', fontFamily: "'Fraunces', Georgia, serif", fontSize: 34, fontWeight: 600, color: '#2c1a0e', margin: '0 auto' }}>
               Diário de Aula
             </h1>
-            <span style={{ background: '#073642', color: '#b58900', fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 12, textTransform: 'uppercase' }}>
+            <span style={{ background: '#2c1a0e', color: '#b58900', fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 12, textTransform: 'uppercase' }}>
               Diário Online & Calendário de Post-its
             </span>
           </div>
-          <p style={{ color: '#586e75', fontSize: 14, marginTop: 4 }}>
+          <p style={{ color: '#7a5c42', fontSize: 14, marginTop: 4 }}>
             Grade mensal estilo Post-it por dias da semana, planejamento sequencial e memória contínua das turmas.
           </p>
         </div>
 
         {/* Tabs de Navegação */}
-        <div style={{ display: 'flex', gap: 6, background: '#eee8d5', padding: 4, borderRadius: 12 }}>
+        <div style={{ display: 'flex', gap: 6, background: '#f0e8d8', padding: 4, borderRadius: 12 }}>
           <button
             onClick={() => setActiveTab('calendar')}
             style={{
               padding: '8px 16px', borderRadius: 10, border: 'none',
-              background: activeTab === 'calendar' ? '#073642' : 'transparent',
-              color: activeTab === 'calendar' ? '#fff' : '#586e75',
+              background: activeTab === 'calendar' ? '#2c1a0e' : 'transparent',
+              color: activeTab === 'calendar' ? '#fff' : '#7a5c42',
               fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6
             }}
           >
@@ -330,8 +331,8 @@ export default function ClassLog() {
             onClick={() => setActiveTab('new')}
             style={{
               padding: '8px 16px', borderRadius: 10, border: 'none',
-              background: activeTab === 'new' ? '#073642' : 'transparent',
-              color: activeTab === 'new' ? '#fff' : '#586e75',
+              background: activeTab === 'new' ? '#2c1a0e' : 'transparent',
+              color: activeTab === 'new' ? '#fff' : '#7a5c42',
               fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6
             }}
           >
@@ -342,8 +343,8 @@ export default function ClassLog() {
             onClick={() => setActiveTab('history')}
             style={{
               padding: '8px 16px', borderRadius: 10, border: 'none',
-              background: activeTab === 'history' ? '#073642' : 'transparent',
-              color: activeTab === 'history' ? '#fff' : '#586e75',
+              background: activeTab === 'history' ? '#2c1a0e' : 'transparent',
+              color: activeTab === 'history' ? '#fff' : '#7a5c42',
               fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6
             }}
           >
@@ -353,31 +354,31 @@ export default function ClassLog() {
       </div>
 
       {/* BARRA DE SELEÇÃO CONTEXTUAL (ESCOLA, TURMA, DATA, TRIMESTRE) */}
-      <div style={{ background: '#fff', padding: '14px 20px', borderRadius: 16, border: '1px solid #ede8dc', marginBottom: 20, boxShadow: '0 2px 10px rgba(0,43,54,0.04)', display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 14, alignItems: 'center' }}>
+      <div style={{ background: '#fff', padding: '14px 20px', borderRadius: 16, border: '1px solid #ede8dc', marginBottom: 20, boxShadow: '0 2px 10px rgba(44,26,14,0.04)', display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 14, alignItems: 'center' }}>
         <div>
-          <label style={{ fontSize: 12, fontWeight: 700, color: '#586e75', display: 'block', marginBottom: 4 }}>🏫 Escola</label>
-          <select value={selectedSchool} onChange={e => setSelectedSchool(e.target.value)} style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, color: '#073642', outline: 'none' }}>
+          <label style={{ fontSize: 12, fontWeight: 700, color: '#7a5c42', display: 'block', marginBottom: 4 }}>🏫 Escola</label>
+          <select value={selectedSchool} onChange={e => setSelectedSchool(e.target.value)} style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, color: '#2c1a0e', outline: 'none' }}>
             <option value="all">Todas as Escolas</option>
             {schools.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
         </div>
 
         <div>
-          <label style={{ fontSize: 12, fontWeight: 700, color: '#586e75', display: 'block', marginBottom: 4 }}>👥 Turma</label>
-          <select value={selectedClass} onChange={e => setSelectedClass(e.target.value)} style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, color: '#073642', outline: 'none' }}>
+          <label style={{ fontSize: 12, fontWeight: 700, color: '#7a5c42', display: 'block', marginBottom: 4 }}>👥 Turma</label>
+          <select value={selectedClass} onChange={e => setSelectedClass(e.target.value)} style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, color: '#2c1a0e', outline: 'none' }}>
             <option value="all">Todas as Turmas</option>
             {classes.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
         </div>
 
         <div>
-          <label style={{ fontSize: 12, fontWeight: 700, color: '#586e75', display: 'block', marginBottom: 4 }}>📅 Data da Aula</label>
-          <input type="date" value={date} onChange={e => setDate(e.target.value)} style={{ width: '100%', padding: '7px 8px', borderRadius: 8, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 12, color: '#073642' }} />
+          <label style={{ fontSize: 12, fontWeight: 700, color: '#7a5c42', display: 'block', marginBottom: 4 }}>📅 Data da Aula</label>
+          <input type="date" value={date} onChange={e => setDate(e.target.value)} style={{ width: '100%', padding: '7px 8px', borderRadius: 8, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 12, color: '#2c1a0e' }} />
         </div>
 
         <div>
-          <label style={{ fontSize: 12, fontWeight: 700, color: '#586e75', display: 'block', marginBottom: 4 }}>🎯 Período / Trimestre</label>
-          <select value={quarter} onChange={e => setQuarter(e.target.value as any)} style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, color: '#073642', outline: 'none' }}>
+          <label style={{ fontSize: 12, fontWeight: 700, color: '#7a5c42', display: 'block', marginBottom: 4 }}>🎯 Período / Trimestre</label>
+          <select value={quarter} onChange={e => setQuarter(e.target.value as any)} style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, color: '#2c1a0e', outline: 'none' }}>
             <option value="1º Trimestre">1º Trimestre</option>
             <option value="2º Trimestre">2º Trimestre</option>
             <option value="3º Trimestre">3º Trimestre</option>
@@ -385,8 +386,8 @@ export default function ClassLog() {
         </div>
 
         <div>
-          <label style={{ fontSize: 12, fontWeight: 700, color: '#586e75', display: 'block', marginBottom: 4 }}>⏳ Semestre</label>
-          <select value={semester} onChange={e => setSemester(e.target.value as any)} style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, color: '#073642', outline: 'none' }}>
+          <label style={{ fontSize: 12, fontWeight: 700, color: '#7a5c42', display: 'block', marginBottom: 4 }}>⏳ Semestre</label>
+          <select value={semester} onChange={e => setSemester(e.target.value as any)} style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, color: '#2c1a0e', outline: 'none' }}>
             <option value="1º Semestre">1º Semestre</option>
             <option value="2º Semestre">2º Semestre</option>
           </select>
@@ -402,7 +403,7 @@ export default function ClassLog() {
               <h2 style={{ fontSize: 22, fontWeight: 700, color: '#2c1a0e', margin: 0, fontFamily: "'Fraunces', Georgia, serif" }}>
                 Calendário do Diário {monthNames[calendarMonth]} de {calendarYear}
               </h2>
-              <span style={{ fontSize: 12, background: '#eee8d5', color: '#586e75', padding: '4px 12px', borderRadius: 12, fontWeight: 700 }}>
+              <span style={{ fontSize: 12, background: '#f0e8d8', color: '#7a5c42', padding: '4px 12px', borderRadius: 12, fontWeight: 700 }}>
                 {filteredLogs.filter(l => new Date(l.date + 'T00:00:00').getMonth() === calendarMonth).length} aula(s) este mês
               </span>
             </div>
@@ -418,11 +419,11 @@ export default function ClassLog() {
           </div>
 
           {/* Grade de Calendário Real (7 Colunas com os Dias da Semana) */}
-          <div style={{ background: '#fff', borderRadius: 20, padding: 20, border: '1px solid #ede8dc', boxShadow: '0 4px 16px rgba(0,43,54,0.04)' }}>
+          <div style={{ background: '#fff', borderRadius: 20, padding: 20, border: '1px solid #ede8dc', boxShadow: '0 4px 16px rgba(44,26,14,0.04)' }}>
             {/* Header dos Dias da Semana */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 10, marginBottom: 12, textAlign: 'center' }}>
               {weekDayNames.map((d, i) => (
-                <div key={d} style={{ padding: '8px', background: i === 0 || i === 6 ? '#f5f0e8' : '#073642', color: i === 0 || i === 6 ? '#586e75' : '#fff', fontWeight: 800, borderRadius: 8, fontSize: 12, textTransform: 'uppercase' }}>
+                <div key={d} style={{ padding: '8px', background: i === 0 || i === 6 ? '#f5f0e8' : '#2c1a0e', color: i === 0 || i === 6 ? '#7a5c42' : '#fff', fontWeight: 800, borderRadius: 8, fontSize: 12, textTransform: 'uppercase' }}>
                   {d}
                 </div>
               ))}
@@ -432,7 +433,7 @@ export default function ClassLog() {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 10 }}>
               {calendarDaysGrid.map((cell, idx) => {
                 if (!cell.dayNumber) {
-                  return <div key={`empty_${idx}`} style={{ minHeight: 130, background: '#faf8f5', borderRadius: 12, border: '1px dashed #eee8d5' }} />
+                  return <div key={`empty_${idx}`} style={{ minHeight: 130, background: '#faf8f5', borderRadius: 12, border: '1px dashed #f0e8d8' }} />
                 }
 
                 const hasLogs = cell.logsForDay.length > 0
@@ -453,7 +454,7 @@ export default function ClassLog() {
                   >
                     {/* Número do Dia */}
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ fontSize: 12, fontWeight: 800, color: hasLogs ? '#073642' : '#93a1a1', background: hasLogs ? '#eee8d5' : 'transparent', width: 22, height: 22, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <span style={{ fontSize: 12, fontWeight: 800, color: hasLogs ? '#2c1a0e' : '#a08060', background: hasLogs ? '#f0e8d8' : 'transparent', width: 22, height: 22, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                         {cell.dayNumber}
                       </span>
                     </div>
@@ -507,7 +508,7 @@ export default function ClassLog() {
         <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 24, paddingRight: 4 }}>
           {/* Box de Memória */}
           {aiMemoryTip && (
-            <div style={{ background: '#fdf6e3', border: '2px solid #b58900', borderRadius: 16, padding: 18, boxShadow: '0 4px 14px rgba(181,137,0,0.12)', display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+            <div style={{ background: '#fdf8f2', border: '2px solid #b58900', borderRadius: 16, padding: 18, boxShadow: '0 4px 14px rgba(181,137,0,0.12)', display: 'flex', alignItems: 'flex-start', gap: 14 }}>
               <div style={{ width: 38, height: 38, borderRadius: 10, background: '#b58900', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>
                 🧠
               </div>
@@ -515,7 +516,7 @@ export default function ClassLog() {
                 <div style={{ fontSize: 13, fontWeight: 700, color: '#b58900', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                   Memória Pedagógica Contínua (Dica da Rafinha para a Turma {selectedClass}):
                 </div>
-                <p style={{ fontSize: 13.5, color: '#073642', margin: '4px 0 0 0', lineHeight: 1.5, fontWeight: 500 }}>
+                <p style={{ fontSize: 13.5, color: '#2c1a0e', margin: '4px 0 0 0', lineHeight: 1.5, fontWeight: 500 }}>
                   {aiMemoryTip}
                 </p>
               </div>
@@ -523,14 +524,14 @@ export default function ClassLog() {
           )}
 
           {/* Planejamento Diário */}
-          <div style={{ background: '#fff', padding: 24, borderRadius: 20, border: '1px solid #ede8dc', boxShadow: '0 2px 10px rgba(0,43,54,0.04)' }}>
-            <h3 style={{ fontSize: 16, fontWeight: 700, color: '#073642', marginTop: 0, marginBottom: 16 }}>
+          <div style={{ background: '#fff', padding: 24, borderRadius: 20, border: '1px solid #ede8dc', boxShadow: '0 2px 10px rgba(44,26,14,0.04)' }}>
+            <h3 style={{ fontSize: 16, fontWeight: 700, color: '#2c1a0e', marginTop: 0, marginBottom: 16 }}>
               Planejamento Diário da Aula ({dayOfWeek}, {new Date(date + 'T00:00:00').toLocaleDateString('pt-BR')})
             </h3>
 
             {/* Status da Aula */}
             <div style={{ marginBottom: 14 }}>
-              <label style={{ fontSize: 12.5, fontWeight: 700, color: '#586e75', display: 'block', marginBottom: 6 }}>
+              <label style={{ fontSize: 12.5, fontWeight: 700, color: '#7a5c42', display: 'block', marginBottom: 6 }}>
                 Status da Aula
               </label>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -542,9 +543,9 @@ export default function ClassLog() {
                     style={{
                       padding: '6px 14px',
                       borderRadius: 8,
-                      border: classStatus === st ? '2px solid #073642' : '1px solid #d5c0b0',
+                      border: classStatus === st ? '2px solid #2c1a0e' : '1px solid #d5c0b0',
                       background: classStatus === st ? (st === 'Cancelada' ? '#fee2e2' : '#f5eee6') : '#fff',
-                      color: classStatus === st ? (st === 'Cancelada' ? '#991b1b' : '#073642') : '#586e75',
+                      color: classStatus === st ? (st === 'Cancelada' ? '#991b1b' : '#2c1a0e') : '#7a5c42',
                       fontWeight: 700,
                       fontSize: 12,
                       cursor: 'pointer'
@@ -558,20 +559,20 @@ export default function ClassLog() {
 
             <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 16, marginBottom: 14 }}>
               <div>
-                <label style={{ fontSize: 12.5, fontWeight: 700, color: '#586e75', display: 'block', marginBottom: 6 }}>
+                <label style={{ fontSize: 12.5, fontWeight: 700, color: '#7a5c42', display: 'block', marginBottom: 6 }}>
                   Tema / Tópico Principal da Aula {classStatus === 'Cancelada' ? '(Opcional — Cancelada)' : '(Opcional)'}
                 </label>
                 <input
                   value={topic}
                   onChange={e => setTopic(e.target.value)}
                   placeholder={classStatus === 'Cancelada' ? 'Motivo do cancelamento (opcional)...' : 'Ex: Past Continuous & Interrupted Actions in Past'}
-                  style={{ width: '100%', padding: '10px 14px', borderRadius: 10, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13.5, color: '#073642', outline: 'none', boxSizing: 'border-box' }}
+                  style={{ width: '100%', padding: '10px 14px', borderRadius: 10, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13.5, color: '#2c1a0e', outline: 'none', boxSizing: 'border-box' }}
                 />
               </div>
 
               <div>
-                <label style={{ fontSize: 12.5, fontWeight: 700, color: '#586e75', display: 'block', marginBottom: 6 }}>Habilidade Foco (ELT/BNCC)</label>
-                <select value={focusSkill} onChange={e => setFocusSkill(e.target.value)} style={{ width: '100%', padding: '10px 14px', borderRadius: 10, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13.5, color: '#073642', outline: 'none', boxSizing: 'border-box' }}>
+                <label style={{ fontSize: 12.5, fontWeight: 700, color: '#7a5c42', display: 'block', marginBottom: 6 }}>Habilidade Foco (ELT/BNCC)</label>
+                <select value={focusSkill} onChange={e => setFocusSkill(e.target.value)} style={{ width: '100%', padding: '10px 14px', borderRadius: 10, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13.5, color: '#2c1a0e', outline: 'none', boxSizing: 'border-box' }}>
                   <option>Speaking & Listening</option>
                   <option>Reading & Vocabulary</option>
                   <option>Grammar & Writing</option>
@@ -582,89 +583,89 @@ export default function ClassLog() {
             </div>
 
             <div>
-              <label style={{ fontSize: 12.5, fontWeight: 700, color: '#586e75', display: 'block', marginBottom: 6 }}>Recursos & Materiais Utilizados</label>
-              <input value={resources} onChange={e => setResources(e.target.value)} placeholder="Ex: Projetor, Livro Digital pág. 48, Caixas de Som, Flashcards..." style={{ width: '100%', padding: '10px 14px', borderRadius: 10, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13.5, color: '#073642', outline: 'none', boxSizing: 'border-box' }} />
+              <label style={{ fontSize: 12.5, fontWeight: 700, color: '#7a5c42', display: 'block', marginBottom: 6 }}>Recursos & Materiais Utilizados</label>
+              <input value={resources} onChange={e => setResources(e.target.value)} placeholder="Ex: Projetor, Livro Digital pág. 48, Caixas de Som, Flashcards..." style={{ width: '100%', padding: '10px 14px', borderRadius: 10, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13.5, color: '#2c1a0e', outline: 'none', boxSizing: 'border-box' }} />
             </div>
           </div>
 
           {/* Sequência Didática */}
-          <div style={{ background: '#fff', padding: 24, borderRadius: 20, border: '1px solid #ede8dc', boxShadow: '0 2px 10px rgba(0,43,54,0.04)' }}>
-            <h3 style={{ fontSize: 16, fontWeight: 700, color: '#073642', marginTop: 0, marginBottom: 16 }}>
+          <div style={{ background: '#fff', padding: 24, borderRadius: 20, border: '1px solid #ede8dc', boxShadow: '0 2px 10px rgba(44,26,14,0.04)' }}>
+            <h3 style={{ fontSize: 16, fontWeight: 700, color: '#2c1a0e', marginTop: 0, marginBottom: 16 }}>
               Sequência Didática (Passo a Passo da Aula)
             </h3>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
               <div>
                 <label style={{ fontSize: 12, fontWeight: 700, color: '#cb4b16', display: 'block', marginBottom: 4 }}>1. Warm-up / Engajamento (5-10 min)</label>
-                <textarea value={warmup} onChange={e => setWarmup(e.target.value)} placeholder="Dinâmica inicial, contexto ou revisão rápida..." rows={3} style={{ width: '100%', padding: '10px', borderRadius: 8, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, color: '#073642', resize: 'vertical', boxSizing: 'border-box' }} />
+                <textarea value={warmup} onChange={e => setWarmup(e.target.value)} placeholder="Dinâmica inicial, contexto ou revisão rápida..." rows={3} style={{ width: '100%', padding: '10px', borderRadius: 8, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, color: '#2c1a0e', resize: 'vertical', boxSizing: 'border-box' }} />
               </div>
 
               <div>
                 <label style={{ fontSize: 12, fontWeight: 700, color: '#268bd2', display: 'block', marginBottom: 4 }}>2. Apresentação / Input (15-20 min)</label>
-                <textarea value={presentation} onChange={e => setPresentation(e.target.value)} placeholder="Apresentação do conteúdo, explicação ou leitura de texto..." rows={3} style={{ width: '100%', padding: '10px', borderRadius: 8, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, color: '#073642', resize: 'vertical', boxSizing: 'border-box' }} />
+                <textarea value={presentation} onChange={e => setPresentation(e.target.value)} placeholder="Apresentação do conteúdo, explicação ou leitura de texto..." rows={3} style={{ width: '100%', padding: '10px', borderRadius: 8, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, color: '#2c1a0e', resize: 'vertical', boxSizing: 'border-box' }} />
               </div>
 
               <div>
                 <label style={{ fontSize: 12, fontWeight: 700, color: '#6c71c4', display: 'block', marginBottom: 4 }}>3. Prática Guiada & Autônoma (20 min)</label>
-                <textarea value={practice} onChange={e => setPractice(e.target.value)} placeholder="Exercícios em duplas/grupos, resolução de lista ou debate..." rows={3} style={{ width: '100%', padding: '10px', borderRadius: 8, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, color: '#073642', resize: 'vertical', boxSizing: 'border-box' }} />
+                <textarea value={practice} onChange={e => setPractice(e.target.value)} placeholder="Exercícios em duplas/grupos, resolução de lista ou debate..." rows={3} style={{ width: '100%', padding: '10px', borderRadius: 8, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, color: '#2c1a0e', resize: 'vertical', boxSizing: 'border-box' }} />
               </div>
 
               <div>
                 <label style={{ fontSize: 12, fontWeight: 700, color: '#859900', display: 'block', marginBottom: 4 }}>4. Wrap-up / Checagem (5-10 min)</label>
-                <textarea value={wrapup} onChange={e => setWrapup(e.target.value)} placeholder="CCQs, encerramento e indicação de dever de casa..." rows={3} style={{ width: '100%', padding: '10px', borderRadius: 8, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, color: '#073642', resize: 'vertical', boxSizing: 'border-box' }} />
+                <textarea value={wrapup} onChange={e => setWrapup(e.target.value)} placeholder="CCQs, encerramento e indicação de dever de casa..." rows={3} style={{ width: '100%', padding: '10px', borderRadius: 8, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, color: '#2c1a0e', resize: 'vertical', boxSizing: 'border-box' }} />
               </div>
             </div>
           </div>
 
           {/* Reflexão Pós-Aula */}
-          <div style={{ background: '#fff', padding: 24, borderRadius: 20, border: '1px solid #ede8dc', boxShadow: '0 2px 10px rgba(0,43,54,0.04)' }}>
-            <h3 style={{ fontSize: 16, fontWeight: 700, color: '#073642', marginTop: 0, marginBottom: 16 }}>
+          <div style={{ background: '#fff', padding: 24, borderRadius: 20, border: '1px solid #ede8dc', boxShadow: '0 2px 10px rgba(44,26,14,0.04)' }}>
+            <h3 style={{ fontSize: 16, fontWeight: 700, color: '#2c1a0e', marginTop: 0, marginBottom: 16 }}>
               Reflexão Pós-Aula (Auto-Avaliação Docente)
             </h3>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
               <div>
                 <label style={{ fontSize: 12.5, fontWeight: 700, color: '#2d9d5d', display: 'block', marginBottom: 4 }}>1. O que deu certo / pode ser feito?</label>
-                <textarea value={whatWorked} onChange={e => setWhatWorked(e.target.value)} placeholder="Pontos fortes da aula, engajamento e conquistas dos alunos..." rows={3} style={{ width: '100%', padding: '10px', borderRadius: 8, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, color: '#073642', resize: 'vertical', boxSizing: 'border-box' }} />
+                <textarea value={whatWorked} onChange={e => setWhatWorked(e.target.value)} placeholder="Pontos fortes da aula, engajamento e conquistas dos alunos..." rows={3} style={{ width: '100%', padding: '10px', borderRadius: 8, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, color: '#2c1a0e', resize: 'vertical', boxSizing: 'border-box' }} />
               </div>
 
               <div>
                 <label style={{ fontSize: 12.5, fontWeight: 700, color: '#b58900', display: 'block', marginBottom: 4 }}>2. O que pode melhorar?</label>
-                <textarea value={whatCanImprove} onChange={e => setWhatCanImprove(e.target.value)} placeholder="Aspectos de ritmo, clareza nas instruções ou gestão do tempo..." rows={3} style={{ width: '100%', padding: '10px', borderRadius: 8, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, color: '#073642', resize: 'vertical', boxSizing: 'border-box' }} />
+                <textarea value={whatCanImprove} onChange={e => setWhatCanImprove(e.target.value)} placeholder="Aspectos de ritmo, clareza nas instruções ou gestão do tempo..." rows={3} style={{ width: '100%', padding: '10px', borderRadius: 8, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, color: '#2c1a0e', resize: 'vertical', boxSizing: 'border-box' }} />
               </div>
 
               <div>
                 <label style={{ fontSize: 12.5, fontWeight: 700, color: '#dc322f', display: 'block', marginBottom: 4 }}>3. O que faltou nesta aula?</label>
-                <textarea value={whatWasMissing} onChange={e => setWhatWasMissing(e.target.value)} placeholder="Conteúdos não concluídos ou exercícios não corrigidos..." rows={3} style={{ width: '100%', padding: '10px', borderRadius: 8, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, color: '#073642', resize: 'vertical', boxSizing: 'border-box' }} />
+                <textarea value={whatWasMissing} onChange={e => setWhatWasMissing(e.target.value)} placeholder="Conteúdos não concluídos ou exercícios não corrigidos..." rows={3} style={{ width: '100%', padding: '10px', borderRadius: 8, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, color: '#2c1a0e', resize: 'vertical', boxSizing: 'border-box' }} />
               </div>
 
               <div>
                 <label style={{ fontSize: 12.5, fontWeight: 700, color: '#268bd2', display: 'block', marginBottom: 4 }}>4. O que precisa ser revisado para a próxima aula?</label>
-                <textarea value={needsReviewNextClass} onChange={e => setNeedsReviewNextClass(e.target.value)} placeholder="Tópicos que exigem retomada no início da próxima aula..." rows={3} style={{ width: '100%', padding: '10px', borderRadius: 8, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, color: '#073642', resize: 'vertical', boxSizing: 'border-box' }} />
+                <textarea value={needsReviewNextClass} onChange={e => setNeedsReviewNextClass(e.target.value)} placeholder="Tópicos que exigem retomada no início da próxima aula..." rows={3} style={{ width: '100%', padding: '10px', borderRadius: 8, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, color: '#2c1a0e', resize: 'vertical', boxSizing: 'border-box' }} />
               </div>
             </div>
           </div>
 
           {/* Observações */}
-          <div style={{ background: '#fff', padding: 24, borderRadius: 20, border: '1px solid #ede8dc', boxShadow: '0 2px 10px rgba(0,43,54,0.04)' }}>
-            <h3 style={{ fontSize: 16, fontWeight: 700, color: '#073642', marginTop: 0, marginBottom: 16 }}>
+          <div style={{ background: '#fff', padding: 24, borderRadius: 20, border: '1px solid #ede8dc', boxShadow: '0 2px 10px rgba(44,26,14,0.04)' }}>
+            <h3 style={{ fontSize: 16, fontWeight: 700, color: '#2c1a0e', marginTop: 0, marginBottom: 16 }}>
               Observações da Turma, Comportamento & Espaços Usados
             </h3>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
               <div>
-                <label style={{ fontSize: 12, fontWeight: 700, color: '#586e75', display: 'block', marginBottom: 4 }}>👥 Dinâmica de Grupos & Comportamento</label>
-                <textarea value={groupObservations} onChange={e => setGroupObservations(e.target.value)} placeholder="Observações sobre entrosamento, grupos dispersos ou engajados..." rows={4} style={{ width: '100%', padding: '10px', borderRadius: 8, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, color: '#073642', resize: 'vertical', boxSizing: 'border-box' }} />
+                <label style={{ fontSize: 12, fontWeight: 700, color: '#7a5c42', display: 'block', marginBottom: 4 }}>👥 Dinâmica de Grupos & Comportamento</label>
+                <textarea value={groupObservations} onChange={e => setGroupObservations(e.target.value)} placeholder="Observações sobre entrosamento, grupos dispersos ou engajados..." rows={4} style={{ width: '100%', padding: '10px', borderRadius: 8, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, color: '#2c1a0e', resize: 'vertical', boxSizing: 'border-box' }} />
               </div>
 
               <div>
-                <label style={{ fontSize: 12, fontWeight: 700, color: '#586e75', display: 'block', marginBottom: 4 }}>🏛️ Espaço Usado & Arranjo Físico</label>
-                <textarea value={spaceUsed} onChange={e => setSpaceUsed(e.target.value)} placeholder="Sala, laboratório, pátio, arranjo em U, duplas, etc..." rows={4} style={{ width: '100%', padding: '10px', borderRadius: 8, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, color: '#073642', resize: 'vertical', boxSizing: 'border-box' }} />
+                <label style={{ fontSize: 12, fontWeight: 700, color: '#7a5c42', display: 'block', marginBottom: 4 }}>🏛️ Espaço Usado & Arranjo Físico</label>
+                <textarea value={spaceUsed} onChange={e => setSpaceUsed(e.target.value)} placeholder="Sala, laboratório, pátio, arranjo em U, duplas, etc..." rows={4} style={{ width: '100%', padding: '10px', borderRadius: 8, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, color: '#2c1a0e', resize: 'vertical', boxSizing: 'border-box' }} />
               </div>
 
               <div>
-                <label style={{ fontSize: 12, fontWeight: 700, color: '#586e75', display: 'block', marginBottom: 4 }}>⭐ Alunos em Destaque / Necessidades</label>
-                <textarea value={studentNotes} onChange={e => setStudentNotes(e.target.value)} placeholder="Alunos que se destacaram ou precisam de apoio pedagógico..." rows={4} style={{ width: '100%', padding: '10px', borderRadius: 8, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, color: '#073642', resize: 'vertical', boxSizing: 'border-box' }} />
+                <label style={{ fontSize: 12, fontWeight: 700, color: '#7a5c42', display: 'block', marginBottom: 4 }}>⭐ Alunos em Destaque / Necessidades</label>
+                <textarea value={studentNotes} onChange={e => setStudentNotes(e.target.value)} placeholder="Alunos que se destacaram ou precisam de apoio pedagógico..." rows={4} style={{ width: '100%', padding: '10px', borderRadius: 8, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, color: '#2c1a0e', resize: 'vertical', boxSizing: 'border-box' }} />
               </div>
             </div>
           </div>
@@ -680,7 +681,7 @@ export default function ClassLog() {
               onClick={handleSaveClassLog}
               style={{
                 padding: '14px 32px', borderRadius: 12, border: 'none',
-                background: '#073642', color: '#fff', fontSize: 15, fontWeight: 700,
+                background: '#2c1a0e', color: '#fff', fontSize: 15, fontWeight: 700,
                 cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
                 boxShadow: '0 4px 16px rgba(7,54,66,0.2)',
               }}
@@ -700,21 +701,21 @@ export default function ClassLog() {
               onClick={() => setSelectedLogModal(item)}
               style={{
                 background: '#fff', borderRadius: 16, padding: 22, cursor: 'pointer',
-                border: '1px solid #ede8dc', boxShadow: '0 2px 10px rgba(0,43,54,0.04)',
+                border: '1px solid #ede8dc', boxShadow: '0 2px 10px rgba(44,26,14,0.04)',
                 display: 'flex', flexDirection: 'column', gap: 12,
               }}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-                    <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 6, background: '#073642', color: '#b58900' }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 6, background: '#2c1a0e', color: '#b58900' }}>
                       {item.school} {item.className}
                     </span>
-                    <span style={{ fontSize: 12, fontWeight: 600, color: '#586e75' }}>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: '#7a5c42' }}>
                       {item.dayOfWeek}, {new Date(item.date + 'T00:00:00').toLocaleDateString('pt-BR')} ({item.quarter} / {item.semester})
                     </span>
                   </div>
-                  <h3 style={{ fontSize: 17, fontWeight: 700, color: '#073642', margin: 0 }}>
+                  <h3 style={{ fontSize: 17, fontWeight: 700, color: '#2c1a0e', margin: 0 }}>
                     {item.topic}
                   </h3>
                 </div>
@@ -830,9 +831,9 @@ export default function ClassLog() {
                   logPortalFill(payload as any)
                   const res = await fillPortal(payload as any)
                   if (res.success) {
-                    alert(`✅ Diário espelhado com sucesso no portal ${targetPortal}!`)
+                    toast.success(`✅ Diário espelhado com sucesso no portal ${targetPortal}!`)
                   } else {
-                    alert(`⚠️ Não foi possível conectar à aba do portal. Certifique-se de que o portal "${targetPortal}" está aberto no Chrome.`)
+                    toast.success(`⚠️ Não foi possível conectar à aba do portal. Certifique-se de que o portal "${targetPortal}" está aberto no Chrome.`)
                   }
                 }}
                 style={{ padding: '10px 20px', borderRadius: 10, border: 'none', background: '#16a34a', color: '#fff', fontSize: 13, fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}

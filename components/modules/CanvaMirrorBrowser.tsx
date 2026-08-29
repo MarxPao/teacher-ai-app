@@ -1,4 +1,5 @@
 'use client'
+import { toast, showConfirm } from '@/components/Toast'
 
 import React, { useState, useEffect, useRef } from 'react'
 import { SchoolEvent, CanvaLink } from './Eventos'
@@ -121,7 +122,7 @@ export default function CanvaMirrorBrowser({ activeEvent, onUpdateEventCanvaLink
  // Helper Themes for live poster editor
  const themes = {
  gold: { bg: 'linear-gradient(135deg, #8b5e3c 0%, #2c1a0e 100%)', text: '#ffffff', accent: '#fde047', border: '#b58900' },
- neon: { bg: 'linear-gradient(135deg, #00c4cc 0%, #073642 100%)', text: '#ffffff', accent: '#99f6e4', border: '#00c4cc' },
+ neon: { bg: 'linear-gradient(135deg, #00c4cc 0%, #2c1a0e 100%)', text: '#ffffff', accent: '#99f6e4', border: '#00c4cc' },
  paper: { bg: 'linear-gradient(135deg, #fffcf8 0%, #fdf8f2 100%)', text: '#2c1a0e', accent: '#8b5e3c', border: 'rgba(139,115,85,0.3)' },
  dark: { bg: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)', text: '#f8fafc', accent: '#38bdf8', border: '#0284c7' },
  emerald: { bg: 'linear-gradient(135deg, #065f46 0%, #064e3b 100%)', text: '#ffffff', accent: '#a7f3d0', border: '#10b981' },
@@ -329,7 +330,7 @@ export default function CanvaMirrorBrowser({ activeEvent, onUpdateEventCanvaLink
  <div style={{ display: 'flex', gap: 12, marginTop: 20 }}>
  <button
  onClick={() => {
- alert('Cartaz formatado com sucesso! Arquivo salvo na biblioteca de mídia do evento.')
+ toast.success('Cartaz formatado com sucesso! Arquivo salvo na biblioteca de mídia do evento.')
  }}
  style={PrimaryBtnStyle}
  >
@@ -473,7 +474,7 @@ export default function CanvaMirrorBrowser({ activeEvent, onUpdateEventCanvaLink
  <button
  onClick={() => {
  setIsConnectedToCanvaApi(true)
- alert('API do Canva Connect salva e configurada com sucesso!')
+ toast.success('API do Canva Connect salva e configurada com sucesso!')
  }}
  style={PrimaryBtnStyle}
  >
@@ -497,5 +498,5 @@ export default function CanvaMirrorBrowser({ activeEvent, onUpdateEventCanvaLink
 const ActionBtnStyle: React.CSSProperties = { background: '#fff', border: '1px solid rgba(139,115,85,0.25)', borderRadius: 8, padding: '6px 10px', fontSize: 13, cursor: 'pointer' }
 const PrimaryBtnStyle: React.CSSProperties = { padding: '9px 18px', background: '#8b5e3c', color: '#fff', border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: 'pointer' }
 const SecondaryBtnStyle: React.CSSProperties = { padding: '8px 14px', background: '#f5efe6', color: '#8b5e3c', border: '1px solid rgba(139,115,85,0.3)', borderRadius: 10, fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }
-const LabelStyle: React.CSSProperties = { fontSize: 12, fontWeight: 700, color: '#586e75', display: 'block', marginBottom: 4 }
+const LabelStyle: React.CSSProperties = { fontSize: 12, fontWeight: 700, color: '#7a5c42', display: 'block', marginBottom: 4 }
 const InputStyle: React.CSSProperties = { width: '100%', padding: '8px 12px', borderRadius: 10, border: '1px solid rgba(139,115,85,0.2)', background: '#fff', outline: 'none', fontSize: 13, color: '#2c1a0e', marginBottom: 10 }

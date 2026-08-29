@@ -5,7 +5,14 @@ import SubstituteMode from '@/components/SubstituteMode'
 import OnboardingWizard from '@/components/OnboardingWizard'
 import { generatePedagogicalInsights, PedagogicalAlert } from '@/lib/pedagogicalInsights'
 import TeacherLogo, { TeacherOwlAvatar } from '@/components/TeacherLogo'
-import { useGlobalVoice } from '@/lib/useGlobalVoice'
+import {
+  loadChecklistTodos,
+  saveChecklistTodos,
+  getCompletedSystemTodoIds,
+  toggleSystemAiTodo,
+  toggleRegularTodo,
+  recordChecklistHistory,
+} from '@/lib/checklistManager'
 
 // --- Tipos & Interfaces ---
 
@@ -103,7 +110,6 @@ export default function Dashboard() {
   const [mounted, setMounted] = useState(false)
   const [greeting, setGreeting] = useState('Olá')
   const [dateStr, setDateStr] = useState('')
-  const { isListening, startListening, stopListening, isSupported: isVoiceSupported } = useGlobalVoice('pt-BR')
 
   // 1. Calendário Compacto Real & Post-its
   const [calendarView, setCalendarView] = useState<'semana' | 'mes' | 'trimestre' | 'ano'>('mes')
@@ -120,6 +126,7 @@ export default function Dashboard() {
 
   // 2. Checklist do Dia & Rotina Unificada
   const [todos, setTodos] = useState<DashboardTodo[]>([])
+  const [completedSysIds, setCompletedSysIds] = useState<string[]>([])
   const [newTodoText, setNewTodoText] = useState('')
   const [newTodoCategory, setNewTodoCategory] = useState<'one_off' | 'recurrent'>('one_off')
   const [todoFilter, setTodoFilter] = useState<TodoCategory>('all')
@@ -182,19 +189,12 @@ export default function Dashboard() {
 
     // 2. Checklist de Atividades & Rotinas Unificadas
     try {
-      const storedTodos = localStorage.getItem('teacher_dashboard_todos')
       const todayKey = formatDateKey(new Date())
+      setCompletedSysIds(getCompletedSystemTodoIds(todayKey))
+      const storedTodos = localStorage.getItem('teacher_dashboard_todos')
       if (storedTodos) {
-        let parsed: DashboardTodo[] = JSON.parse(storedTodos)
-        // Auto-reset diário para tarefas de rotina
-        parsed = parsed.map(t => {
-          const cat = t.category || (t.id.startsWith('rec_') ? 'recurrent' : 'one_off')
-          if (cat === 'recurrent' && t.lastResetDate && t.lastResetDate !== todayKey) {
-            return { ...t, done: false, category: cat, lastResetDate: todayKey }
-          }
-          return { ...t, category: cat, lastResetDate: t.lastResetDate || (cat === 'recurrent' ? todayKey : undefined) }
-        })
-        setTodos(parsed)
+        const loaded = loadChecklistTodos()
+        setTodos(loaded)
       } else {
         const defaultTodos: DashboardTodo[] = [
           // 🔁 Rotinas Recorrentes (Diárias da Professora)
@@ -374,14 +374,15 @@ export default function Dashboard() {
   const handleToggleTodo = (id: string) => {
     if (id.startsWith('sys_')) {
       const sysItem = systemAiPendencies.find(s => s.id === id)
-      if (sysItem?.actionTarget) {
-        navigateTo(sysItem.actionTarget as ModuleKey)
-      }
+      const isNowDone = toggleSystemAiTodo(
+        id,
+        sysItem ? { text: sysItem.text, tag: sysItem.tag } : undefined
+      )
+      setCompletedSysIds(prev => isNowDone ? [...prev, id] : prev.filter(i => i !== id))
       return
     }
-    const updated = todos.map(t => t.id === id ? { ...t, done: !t.done } : t)
+    const updated = toggleRegularTodo(id, todos)
     setTodos(updated)
-    localStorage.setItem('teacher_dashboard_todos', JSON.stringify(updated))
   }
 
   const handleDeleteTodo = (id: string) => {
@@ -542,10 +543,11 @@ export default function Dashboard() {
       } catch {}
 
       if (!hasPlan) {
+        const id = `sys_plan_${cls.id}`
         items.push({
-          id: `sys_plan_${cls.id}`,
+          id,
           text: `Aula de ${cls.className} (${cls.timeStart}) sem plano registrado`,
-          done: false,
+          done: completedSysIds.includes(id),
           category: 'system_ai',
           priority: 'high',
           tag: 'Plano de Aula',
@@ -559,10 +561,11 @@ export default function Dashboard() {
     if (pedagogicalAlerts.length > 0) {
       const atRisk = pedagogicalAlerts.filter(a => a.type === 'danger' || a.type === 'warning')
       if (atRisk.length > 0) {
+        const id = 'sys_pedag_alert'
         items.push({
-          id: 'sys_pedag_alert',
+          id,
           text: `${atRisk.length} alerta(s) pedagógico(s) requerem atenção`,
-          done: false,
+          done: completedSysIds.includes(id),
           category: 'system_ai',
           priority: 'high',
           tag: 'Alerta Pedagógico',
@@ -574,10 +577,11 @@ export default function Dashboard() {
 
     // 3. Atividades de portais e diários
     pendingActivities.forEach(act => {
+      const id = `sys_act_${act.id}`
       items.push({
-        id: `sys_act_${act.id}`,
+        id,
         text: `${act.title} — ${act.subtitle}`,
-        done: false,
+        done: completedSysIds.includes(id),
         category: 'system_ai',
         priority: act.urgency,
         tag: act.type === 'diary' ? 'Diário' : act.type === 'grade' ? 'Notas' : 'Comunicação',
@@ -587,7 +591,7 @@ export default function Dashboard() {
     })
 
     return items
-  }, [classesForSelectedDay, pedagogicalAlerts, pendingActivities])
+  }, [classesForSelectedDay, pedagogicalAlerts, pendingActivities, completedSysIds])
 
   // Contadores e listas por categoria
   const recurrentTodos = useMemo(() => todos.filter(t => t.category === 'recurrent'), [todos])
@@ -705,7 +709,7 @@ export default function Dashboard() {
   }, [didacticContents])
 
   return (
-    <div style={{ display: 'flex', height: '100%', overflow: 'hidden', background: '#fdf6e3' }}>
+    <div style={{ display: 'flex', height: '100%', overflow: 'hidden', background: '#fdf8f2' }}>
       <div style={{ flex: 1, height: '100%', overflowY: 'auto' }}>
         <ModuleShell
           title={`${mounted ? greeting : 'Olá'}, Professora`}
@@ -719,64 +723,13 @@ export default function Dashboard() {
                 {dateStr}
               </div>
 
-              {/* Botões Rápidos de Produtividade (#18, #49) */}
+              {/* Ações Rápidas da Home */}
               <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                {/* Botão Rafinha IA */}
-                <button
-                  onClick={() => window.dispatchEvent(new CustomEvent('teacher:open_rafinha'))}
-                  title="Conversar com Rafinha IA"
-                  style={{
-                    padding: '6px 14px',
-                    borderRadius: 10,
-                    border: '1px solid rgba(30, 53, 55, 0.25)',
-                    background: '#fbf7f0',
-                    color: '#1e3537',
-                    fontSize: 12.5,
-                    fontWeight: 800,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 7,
-                    boxShadow: '0 2px 8px rgba(30, 53, 55, 0.08)',
-                    transition: 'transform 0.15s ease',
-                  }}
-                  onMouseEnter={e => (e.currentTarget.style.transform = 'translateY(-1px)')}
-                  onMouseLeave={e => (e.currentTarget.style.transform = 'none')}
-                >
-                  <TeacherLogo size={20} variant="badge" rounded={6} />
-                  <span>Rafinha IA ✨</span>
-                </button>
-
-                {/* Botão Ditado por Voz */}
-                {isVoiceSupported && (
-                  <button
-                    onClick={isListening ? stopListening : startListening}
-                    title={isListening ? 'Parar gravação' : 'Iniciar ditado por voz'}
-                    style={{
-                      padding: '6px 12px',
-                      borderRadius: 10,
-                      border: isListening ? '1px solid #dc2626' : '1px solid #d5c8bb',
-                      background: isListening ? 'rgba(220,38,38,0.1)' : '#fff',
-                      color: isListening ? '#dc2626' : '#2c1a0e',
-                      fontSize: 12,
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 6,
-                      boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
-                      transition: 'all 0.15s ease',
-                    }}
-                  >
-                    <i className={`ti ${isListening ? 'ti-microphone-filled text-red-600 animate-pulse' : 'ti-microphone text-amber-700'}`} style={{ fontSize: 15 }} />
-                    <span>{isListening ? 'Gravando...' : 'Ditado por Voz'}</span>
-                  </button>
-                )}
 
                 <button
                   onClick={() => setIsSubstituteOpen(true)}
                   style={{
-                    padding: '6px 12px',
+                    padding: '6px 11px',
                     borderRadius: 10,
                     border: '1px solid rgba(168,50,50,0.3)',
                     background: 'rgba(168,50,50,0.06)',
@@ -791,10 +744,11 @@ export default function Dashboard() {
                 >
                   <span>🆘</span> Modo Substituto
                 </button>
+
                 <button
                   onClick={() => setIsOnboardingOpen(true)}
                   style={{
-                    padding: '6px 12px',
+                    padding: '6px 11px',
                     borderRadius: 10,
                     border: '1px solid rgba(139,115,85,0.25)',
                     background: '#fff',
@@ -1103,7 +1057,7 @@ export default function Dashboard() {
                       </button>
                       <button
                         onClick={() => setIsPostItViewerOpen(false)}
-                        style={{ background: 'none', border: 'none', color: '#93a1a1', fontSize: 14, cursor: 'pointer', padding: '0 4px' }}
+                        style={{ background: 'none', border: 'none', color: '#a08060', fontSize: 14, cursor: 'pointer', padding: '0 4px' }}
                         title="Fechar"
                       >
                         ✕
@@ -1282,7 +1236,7 @@ export default function Dashboard() {
                 <input
                   value={newTodoText}
                   onChange={e => setNewTodoText(e.target.value)}
-                  placeholder={newTodoCategory === 'recurrent' ? '🔁 Adicionar rotina diária recorrente (ex: Fazer chamada, Warm-up)...' : '✍️ Adicionar tarefa pontual do dia...'}
+                  placeholder={newTodoCategory === 'recurrent' ? 'Adicionar rotina diária recorrente (ex: Fazer chamada, Warm-up)...' : 'Adicionar tarefa pontual do dia...'}
                   style={{
                     flex: 1,
                     minWidth: 260,
@@ -1358,7 +1312,7 @@ export default function Dashboard() {
               {/* Lista dos Itens do Checklist */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {filteredTodos.length === 0 ? (
-                  <div style={{ padding: '20px 0', textAlign: 'center', color: '#93a1a1', fontSize: 12.5 }}>
+                  <div style={{ padding: '20px 0', textAlign: 'center', color: '#a08060', fontSize: 12.5 }}>
                     <i className="ti ti-circle-check" style={{ fontSize: 24, display: 'block', marginBottom: 6, color: '#16a34a' }} />
                     Nenhuma tarefa nesta categoria no momento. Tudo em dia!
                   </div>
@@ -1408,7 +1362,7 @@ export default function Dashboard() {
                               style={{
                                 fontSize: 13,
                                 fontWeight: todo.done ? 500 : 700,
-                                color: todo.done ? '#93a1a1' : isSystem ? '#78350f' : '#2c1a0e',
+                                color: todo.done ? '#a08060' : isSystem ? '#78350f' : '#2c1a0e',
                                 textDecoration: todo.done ? 'line-through' : 'none',
                                 cursor: 'pointer',
                               }}
@@ -1416,9 +1370,9 @@ export default function Dashboard() {
                               {todo.text}
                             </span>
                             {todo.tag && (
-                              <span style={{ fontSize: 10.5, color: '#8b5e3c', fontWeight: 600 }}>
-                                {isRecurrent && '🔁 Rotina Diária · '}
-                                {isSystem && '⚡ Ação Recomendada · '}
+                              <span style={{ fontSize: 10.5, color: '#8b5e3c', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                {isRecurrent && <><i className="ti ti-repeat" style={{ fontSize: 11 }} /> Rotina Diária · </>}
+                                {isSystem && <><i className="ti ti-bolt" style={{ fontSize: 11 }} /> Ação Recomendada · </>}
                                 {todo.tag}
                               </span>
                             )}
@@ -1429,7 +1383,10 @@ export default function Dashboard() {
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                           {isSystem && todo.actionLabel && todo.actionTarget && (
                             <button
-                              onClick={() => navigateTo(todo.actionTarget as ModuleKey)}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                navigateTo(todo.actionTarget as ModuleKey)
+                              }}
                               style={{
                                 padding: '4px 10px',
                                 borderRadius: 6,
@@ -1575,7 +1532,7 @@ export default function Dashboard() {
                           HOJE
                         </span>
                       )}
-                      <div style={{ fontSize: 10.5, fontWeight: 700, color: isSelected ? '#8b5e3c' : '#93a1a1', textTransform: 'uppercase' }}>
+                      <div style={{ fontSize: 10.5, fontWeight: 700, color: isSelected ? '#8b5e3c' : '#a08060', textTransform: 'uppercase' }}>
                         {day.short}
                       </div>
                       <div style={{ fontSize: 13, fontWeight: 800, color: '#2c1a0e', marginTop: 1 }}>
@@ -1635,7 +1592,7 @@ export default function Dashboard() {
               {/* Lista de Aulas */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {classesForSelectedDay.length === 0 ? (
-                  <div style={{ padding: '16px 0', textAlign: 'center', color: '#93a1a1', fontSize: 12 }}>
+                  <div style={{ padding: '16px 0', textAlign: 'center', color: '#a08060', fontSize: 12 }}>
                     <i className="ti ti-coffee" style={{ fontSize: 20, display: 'block', marginBottom: 4, color: '#b58900' }} />
                     Nenhuma aula agendada para este dia com o filtro atual.
                   </div>

@@ -1,4 +1,5 @@
 'use client'
+import { toast, showConfirm } from '@/components/Toast'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import ModuleShell from '@/components/ModuleShell'
@@ -314,7 +315,7 @@ function typeColor(type: string) {
  if (type === 'Reference Book') return '#27ae60'
  if (type === 'CLIL Book') return '#8b5cf6'
  if (type === 'Syllabus') return '#c0392b'
- return '#586e75'
+ return '#7a5c42'
 }
 
 // RAG Search 
@@ -770,12 +771,12 @@ export default function Repository() {
       showToast('Arquivo avulso adicionado e indexado no Supabase!')
     } catch (err: unknown) {
       setUploadingStatus('')
-      alert(`Erro ao processar arquivo: ${err instanceof Error ? err.message : 'Falha na leitura.'}`)
+      toast.success(`Erro ao processar arquivo: ${err instanceof Error ? err.message : 'Falha na leitura.'}`)
     }
   }
 
-  const handleDeleteLooseFile = (id: string) => {
-    if (!confirm('Deseja realmente excluir este arquivo avulso da biblioteca?')) return
+  const handleDeleteLooseFile = async (id: string) => {
+    if (!(await showConfirm({ message: 'Deseja realmente excluir este arquivo avulso da biblioteca?' }))) return
     const updated = looseFiles.filter(f => f.id !== id)
     saveLooseFiles(updated)
     if (selectedLooseFile?.id === id) {
@@ -792,7 +793,7 @@ export default function Repository() {
   // Add New School Header
   function handleAddSchoolHeader() {
     if (!newSchoolName.trim()) {
-      alert('Preencha o nome da escola para cadastrar o cabeçalho.')
+      toast.success('Preencha o nome da escola para cadastrar o cabeçalho.')
       return
     }
     const newHeader: SchoolHeaderModel = {
@@ -841,8 +842,8 @@ export default function Repository() {
 
   const handleSaveAndApplyHeader = handleAddSchoolHeader
 
-  function deleteSchoolHeader(id: string) {
-    if (!confirm('Deseja realmente excluir este modelo de cabeçalho?')) return
+  async function deleteSchoolHeader(id: string) {
+    if (!(await showConfirm({ message: 'Deseja realmente excluir este modelo de cabeçalho?' }))) return
     const updated = headerTemplates.filter(h => h.id !== id)
     setHeaderTemplates(updated)
 
@@ -964,7 +965,7 @@ export default function Repository() {
 
       if ((!text || text.trim().length === 0) && !extractedHeaderImg) {
         setUploadingStatus('')
-        alert('O arquivo selecionado não contém imagem nem texto de cabeçalho válido.')
+        toast.success('O arquivo selecionado não contém imagem nem texto de cabeçalho válido.')
         return
       }
 
@@ -1016,7 +1017,7 @@ export default function Repository() {
       showToast(`Cabeçalho "${newHeader.name}" injetado com sucesso!`)
     } catch (err: unknown) {
       setUploadingStatus('')
-      alert(`Erro ao processar o cabeçalho: ${err instanceof Error ? err.message : 'Falha ao ler arquivo.'}`)
+      toast.success(`Erro ao processar o cabeçalho: ${err instanceof Error ? err.message : 'Falha ao ler arquivo.'}`)
     }
   }
 
@@ -1061,7 +1062,7 @@ export default function Repository() {
   // Add Item (Bibliografia) 
   function addItem() {
     if (!editTitle.trim() || !editContent.trim()) {
-      alert('Preencha o título e o conteúdo para continuar.')
+      toast.success('Preencha o título e o conteúdo para continuar.')
       return
     }
     const item: RepositoryItem = {
@@ -1084,8 +1085,8 @@ export default function Repository() {
   }
 
   // Delete 
-  function deleteItem(id: number) {
-    if (!confirm('Deseja remover este documento da Biblioteca?')) return
+  async function deleteItem(id: number) {
+    if (!(await showConfirm({ message: 'Deseja remover este documento da Biblioteca?' }))) return
     const upd = items.filter(i => i.id !== id)
     save(upd)
     setViewItem(upd[0] || null)
@@ -1097,8 +1098,8 @@ export default function Repository() {
     } catch {}
   }
 
-  function deleteExercise(id: string) {
-    if (!confirm('Deseja excluir este exercício do repositório?')) return
+  async function deleteExercise(id: string) {
+    if (!(await showConfirm({ message: 'Deseja excluir este exercício do repositório?' }))) return
     const upd = savedExercises.filter(e => e.id !== id)
     setSavedExercises(upd)
     if (id.startsWith('exam-')) {
@@ -1152,7 +1153,7 @@ export default function Repository() {
 
       if (!text || text.trim().length < 15) {
         setUploadingStatus('')
-        alert('O arquivo selecionado não contém texto legível ou está vazio.')
+        toast.success('O arquivo selecionado não contém texto legível ou está vazio.')
         return
       }
 
@@ -1177,7 +1178,7 @@ export default function Repository() {
       showToast('item salvo')
     } catch (err: unknown) {
       setUploadingStatus('')
-      alert(` Falha na importação: ${err instanceof Error ? err.message : 'Não foi possível extrair o texto do arquivo.'}`)
+      toast.success(` Falha na importação: ${err instanceof Error ? err.message : 'Não foi possível extrair o texto do arquivo.'}`)
     }
   }
 
@@ -1231,7 +1232,7 @@ export default function Repository() {
       showToast('🔍 OCR concluído e imagem salva na biblioteca!')
     } catch (err: unknown) {
       setUploadingStatus('')
-      alert(` Falha no OCR da Imagem: ${err instanceof Error ? err.message : 'Erro ao ler texto da imagem.'}`)
+      toast.success(` Falha no OCR da Imagem: ${err instanceof Error ? err.message : 'Erro ao ler texto da imagem.'}`)
     }
   }
 
@@ -1403,7 +1404,7 @@ export default function Repository() {
   // Handlers para Competências
   const handleSaveCompetency = () => {
     if (!compCode.trim() || !compDescription.trim()) {
-      alert('Código e descrição da competência são obrigatórios.')
+      toast.success('Código e descrição da competência são obrigatórios.')
       return
     }
     let updated: BnccSkill[] = []
@@ -1439,8 +1440,8 @@ export default function Repository() {
     showToast('Competência salva no Repositório!')
   }
 
-  const handleDeleteCompetency = (id: string) => {
-    if (!confirm('Deseja realmente remover esta competência do repositório?')) return
+  const handleDeleteCompetency = async (id: string) => {
+    if (!(await showConfirm({ message: 'Deseja realmente remover esta competência do repositório?' }))) return
     const updated = competencies.filter(c => c.id !== id)
     setCompetencies(updated)
     saveStoredBnccSkills(updated)
@@ -1455,7 +1456,7 @@ export default function Repository() {
   const btnSecondary: React.CSSProperties = {
     padding: '10px 18px', borderRadius: 10,
     border: '1px solid rgba(139,115,85,0.35)',
-    background: '#fffcf8', color: '#586e75', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6
+    background: '#fffcf8', color: '#7a5c42', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6
   }
   const inputStyle: React.CSSProperties = {
     width: '100%', padding: '10px 14px', borderRadius: 10,
@@ -1560,7 +1561,7 @@ export default function Repository() {
                     }
                     showToast(`${files.length} imagem(ns) adicionada(s) à biblioteca!`)
                   } catch (err: any) {
-                    alert('Erro ao enviar imagem: ' + err.message)
+                    toast.success('Erro ao enviar imagem: ' + err.message)
                   } finally {
                     setIsUploadingMedia(false)
                     if (mediaFileInputRef.current) mediaFileInputRef.current.value = ''
@@ -1870,7 +1871,7 @@ export default function Repository() {
  <i className="ti ti-building-community" style={{ color: '#8b5e3c', fontSize: 18 }} />
  <span style={{ fontSize: 13, fontWeight: 700, color: '#2c1a0e' }}>{tpl.name}</span>
  </div>
- <div style={{ fontSize: 11, color: '#586e75' }}>
+ <div style={{ fontSize: 11, color: '#7a5c42' }}>
  {tpl.officialName}
  </div>
  </div>
@@ -2056,7 +2057,7 @@ export default function Repository() {
  {ex.type === 'exam' ? ' ' : ex.type === 'quick' ? ' ' : ' '}
  {ex.title}
  </div>
- <div style={{ display: 'flex', gap: 6, fontSize: 10.5, color: '#586e75' }}>
+ <div style={{ display: 'flex', gap: 6, fontSize: 10.5, color: '#7a5c42' }}>
  <span style={{ background: '#ede8dc', padding: '2px 6px', borderRadius: 4, fontWeight: 600 }}>{ex.cefr || 'B1'}</span>
  <span style={{ background: '#ede8dc', padding: '2px 6px', borderRadius: 4 }}>{ex.grade || '9º Ano'}</span>
  <span style={{ marginLeft: 'auto' }}>{ex.date}</span>
@@ -2200,7 +2201,7 @@ export default function Repository() {
  <span style={{ fontSize: 18 }}>{typeIcon(item.type)}</span>
  <span style={{ fontSize: 13, fontWeight: 700, color: '#2c1a0e' }}>{item.title}</span>
  </div>
- <div style={{ display: 'flex', gap: 6, fontSize: 11, color: '#586e75' }}>
+ <div style={{ display: 'flex', gap: 6, fontSize: 11, color: '#7a5c42' }}>
  <span>{item.wordCount?.toLocaleString() || 0} palavras</span> ·
  <span>{item.category || 'Material RAG'}</span>
  </div>
@@ -2353,10 +2354,10 @@ export default function Repository() {
  </div>
  </div>
 
- <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11, color: '#586e75', borderTop: '1px dashed #ede8dc', paddingTop: 6 }}>
+ <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11, color: '#7a5c42', borderTop: '1px dashed #ede8dc', paddingTop: 6 }}>
  <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
  {file.tags && file.tags.slice(0, 3).map(tag => (
- <span key={tag} style={{ background: '#eee8d5', color: '#073642', padding: '1px 6px', borderRadius: 6, fontSize: 10, fontWeight: 600 }}>
+ <span key={tag} style={{ background: '#f0e8d8', color: '#2c1a0e', padding: '1px 6px', borderRadius: 6, fontSize: 10, fontWeight: 600 }}>
  {tag}
  </span>
  ))}
@@ -2381,7 +2382,7 @@ export default function Repository() {
  <span style={{ background: '#8b5e3c', color: '#fff', padding: '3px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700, textTransform: 'uppercase' }}>
  {selectedLooseFile.fileType.toUpperCase()}
  </span>
- <span style={{ fontSize: 12, fontWeight: 600, color: '#586e75' }}>
+ <span style={{ fontSize: 12, fontWeight: 600, color: '#7a5c42' }}>
  {selectedLooseFile.category} {selectedLooseFile.school ? `· ${selectedLooseFile.school}` : ''}
  </span>
  </div>
@@ -2454,7 +2455,7 @@ export default function Repository() {
  <h4 style={{ fontSize: 13, fontWeight: 800, color: '#8b5e3c', margin: 0, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
  📄 Conteúdo Indexado (Pronto para o Motor RAG & IA da Rafinha)
  </h4>
- <span style={{ fontSize: 11.5, color: '#586e75', fontWeight: 600 }}>
+ <span style={{ fontSize: 11.5, color: '#7a5c42', fontWeight: 600 }}>
  {selectedLooseFile.extractedText ? `${selectedLooseFile.extractedText.trim().split(/\s+/).length} palavras` : 'Sem texto extraído'}
  </span>
  </div>
@@ -2726,7 +2727,7 @@ export default function Repository() {
 
                  <button
                    onClick={async () => {
-                     if (confirm(`Deseja excluir permanentemente a imagem "${item.title}"?`)) {
+                     if ((await showConfirm({ message: `Deseja excluir permanentemente a imagem "${item.title}"?` }))) {
                        await deleteMediaItemFromSupabase(item.id, item.fileUrl)
                        setMediaItems(prev => prev.filter(x => x.id !== item.id))
                        showToast('Imagem removida!')
@@ -2800,7 +2801,7 @@ export default function Repository() {
 
      {/* Metadados e Descrição */}
      {selectedMediaModal.description && (
-       <p style={{ fontSize: 13, color: '#586e75', margin: 0, background: '#fcf8f2', padding: 12, borderRadius: 10, border: '1px solid rgba(139,115,85,0.15)' }}>
+       <p style={{ fontSize: 13, color: '#7a5c42', margin: 0, background: '#fcf8f2', padding: 12, borderRadius: 10, border: '1px solid rgba(139,115,85,0.15)' }}>
          {selectedMediaModal.description}
        </p>
      )}
@@ -2876,7 +2877,7 @@ export default function Repository() {
 
      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
        <div>
-         <label style={{ fontSize: 12, fontWeight: 700, color: '#586e75', display: 'block', marginBottom: 4 }}>Título da Imagem / Figura *</label>
+         <label style={{ fontSize: 12, fontWeight: 700, color: '#7a5c42', display: 'block', marginBottom: 4 }}>Título da Imagem / Figura *</label>
          <input 
            value={newMediaTitle} 
            onChange={e => setNewMediaTitle(e.target.value)} 
@@ -2886,7 +2887,7 @@ export default function Repository() {
        </div>
 
        <div>
-         <label style={{ fontSize: 12, fontWeight: 700, color: '#586e75', display: 'block', marginBottom: 4 }}>URL da Imagem (Link Direto)</label>
+         <label style={{ fontSize: 12, fontWeight: 700, color: '#7a5c42', display: 'block', marginBottom: 4 }}>URL da Imagem (Link Direto)</label>
          <input 
            value={newMediaUrl} 
            onChange={e => setNewMediaUrl(e.target.value)} 
@@ -2897,7 +2898,7 @@ export default function Repository() {
 
        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
          <div>
-           <label style={{ fontSize: 12, fontWeight: 700, color: '#586e75', display: 'block', marginBottom: 4 }}>Categoria Pedagógica</label>
+           <label style={{ fontSize: 12, fontWeight: 700, color: '#7a5c42', display: 'block', marginBottom: 4 }}>Categoria Pedagógica</label>
            <select value={newMediaCategory} onChange={e => setNewMediaCategory(e.target.value)} style={inputStyle}>
              <option value="Ilustrações Didáticas">🎨 Ilustrações Didáticas</option>
              <option value="Mapas & Gráficos">🗺️ Mapas & Gráficos</option>
@@ -2909,7 +2910,7 @@ export default function Repository() {
          </div>
 
          <div>
-           <label style={{ fontSize: 12, fontWeight: 700, color: '#586e75', display: 'block', marginBottom: 4 }}>Escola Associada</label>
+           <label style={{ fontSize: 12, fontWeight: 700, color: '#7a5c42', display: 'block', marginBottom: 4 }}>Escola Associada</label>
            <select value={newMediaSchool} onChange={e => setNewMediaSchool(e.target.value)} style={inputStyle}>
              <option value="">Geral / Todas</option>
              {registeredSchools.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
@@ -2918,7 +2919,7 @@ export default function Repository() {
        </div>
 
        <div>
-         <label style={{ fontSize: 12, fontWeight: 700, color: '#586e75', display: 'block', marginBottom: 4 }}>Tags (separadas por vírgula)</label>
+         <label style={{ fontSize: 12, fontWeight: 700, color: '#7a5c42', display: 'block', marginBottom: 4 }}>Tags (separadas por vírgula)</label>
          <input 
            value={newMediaTags} 
            onChange={e => setNewMediaTags(e.target.value)} 
@@ -2928,7 +2929,7 @@ export default function Repository() {
        </div>
 
        <div>
-         <label style={{ fontSize: 12, fontWeight: 700, color: '#586e75', display: 'block', marginBottom: 4 }}>Descrição / Legenda Pedagógica</label>
+         <label style={{ fontSize: 12, fontWeight: 700, color: '#7a5c42', display: 'block', marginBottom: 4 }}>Descrição / Legenda Pedagógica</label>
          <textarea 
            value={newMediaDescription} 
            onChange={e => setNewMediaDescription(e.target.value)} 
@@ -2944,11 +2945,11 @@ export default function Repository() {
        <button
          onClick={async () => {
            if (!newMediaTitle.trim()) {
-             alert('Informe o título da imagem.')
+             toast.success('Informe o título da imagem.')
              return
            }
            if (!newMediaUrl.trim()) {
-             alert('Informe a URL da imagem ou utilize o botão "Upload de Imagens" para arquivos locais.')
+             toast.success('Informe a URL da imagem ou utilize o botão "Upload de Imagens" para arquivos locais.')
              return
            }
 
@@ -3007,7 +3008,7 @@ export default function Repository() {
 
      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
        <div>
-         <label style={{ fontSize: 12, fontWeight: 700, color: '#586e75', display: 'block', marginBottom: 4 }}>Título da Imagem *</label>
+         <label style={{ fontSize: 12, fontWeight: 700, color: '#7a5c42', display: 'block', marginBottom: 4 }}>Título da Imagem *</label>
          <input 
            value={newMediaTitle} 
            onChange={e => setNewMediaTitle(e.target.value)} 
@@ -3017,7 +3018,7 @@ export default function Repository() {
 
        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
          <div>
-           <label style={{ fontSize: 12, fontWeight: 700, color: '#586e75', display: 'block', marginBottom: 4 }}>Categoria</label>
+           <label style={{ fontSize: 12, fontWeight: 700, color: '#7a5c42', display: 'block', marginBottom: 4 }}>Categoria</label>
            <select value={newMediaCategory} onChange={e => setNewMediaCategory(e.target.value)} style={inputStyle}>
              <option value="Ilustrações Didáticas">🎨 Ilustrações Didáticas</option>
              <option value="Mapas & Gráficos">🗺️ Mapas & Gráficos</option>
@@ -3029,7 +3030,7 @@ export default function Repository() {
          </div>
 
          <div>
-           <label style={{ fontSize: 12, fontWeight: 700, color: '#586e75', display: 'block', marginBottom: 4 }}>Escola</label>
+           <label style={{ fontSize: 12, fontWeight: 700, color: '#7a5c42', display: 'block', marginBottom: 4 }}>Escola</label>
            <select value={newMediaSchool} onChange={e => setNewMediaSchool(e.target.value)} style={inputStyle}>
              <option value="Geral">Geral / Todas</option>
              {registeredSchools.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
@@ -3038,7 +3039,7 @@ export default function Repository() {
        </div>
 
        <div>
-         <label style={{ fontSize: 12, fontWeight: 700, color: '#586e75', display: 'block', marginBottom: 4 }}>Tags</label>
+         <label style={{ fontSize: 12, fontWeight: 700, color: '#7a5c42', display: 'block', marginBottom: 4 }}>Tags</label>
          <input 
            value={newMediaTags} 
            onChange={e => setNewMediaTags(e.target.value)} 
@@ -3047,7 +3048,7 @@ export default function Repository() {
        </div>
 
        <div>
-         <label style={{ fontSize: 12, fontWeight: 700, color: '#586e75', display: 'block', marginBottom: 4 }}>Descrição / Legenda</label>
+         <label style={{ fontSize: 12, fontWeight: 700, color: '#7a5c42', display: 'block', marginBottom: 4 }}>Descrição / Legenda</label>
          <textarea 
            value={newMediaDescription} 
            onChange={e => setNewMediaDescription(e.target.value)} 
@@ -3062,7 +3063,7 @@ export default function Repository() {
        <button
          onClick={async () => {
            if (!newMediaTitle.trim()) {
-             alert('Informe o título.')
+             toast.success('Informe o título.')
              return
            }
            const tagList = newMediaTags.split(',').map(t => t.trim()).filter(Boolean)
@@ -3095,20 +3096,20 @@ export default function Repository() {
  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
  <span style={{ fontSize: 22 }}>📁</span>
- <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#073642' }}>Cadastrar Arquivo Avulso</h3>
+ <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#2c1a0e' }}>Cadastrar Arquivo Avulso</h3>
  </div>
  <button onClick={() => setIsAddLooseModalOpen(false)} style={{ background: '#f5f0e8', border: 'none', width: 32, height: 32, borderRadius: '50%', cursor: 'pointer', fontWeight: 700 }}>×</button>
  </div>
 
  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
  <div>
- <label style={{ fontSize: 12, fontWeight: 700, color: '#586e75', display: 'block', marginBottom: 4 }}>Título do Arquivo / Material</label>
+ <label style={{ fontSize: 12, fontWeight: 700, color: '#7a5c42', display: 'block', marginBottom: 4 }}>Título do Arquivo / Material</label>
  <input value={newLooseTitle} onChange={e => setNewLooseTitle(e.target.value)} placeholder="Ex: Lista de Phrasal Verbs, Artigo sobre IA..." style={inputStyle} />
  </div>
 
  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
  <div>
- <label style={{ fontSize: 12, fontWeight: 700, color: '#586e75', display: 'block', marginBottom: 4 }}>Categoria</label>
+ <label style={{ fontSize: 12, fontWeight: 700, color: '#7a5c42', display: 'block', marginBottom: 4 }}>Categoria</label>
  <select value={newLooseCategory} onChange={e => setNewLooseCategory(e.target.value)} style={inputStyle}>
  <option value="Atividade Complementar">Atividade Complementar</option>
  <option value="Artigo / Texto">Artigo / Texto</option>
@@ -3122,7 +3123,7 @@ export default function Repository() {
  </div>
 
  <div>
- <label style={{ fontSize: 12, fontWeight: 700, color: '#586e75', display: 'block', marginBottom: 4 }}>Escola Associada (opcional)</label>
+ <label style={{ fontSize: 12, fontWeight: 700, color: '#7a5c42', display: 'block', marginBottom: 4 }}>Escola Associada (opcional)</label>
  <select value={newLooseSchool} onChange={e => setNewLooseSchool(e.target.value)} style={inputStyle}>
  <option value="">Geral / Todas</option>
  {registeredSchools.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
@@ -3131,12 +3132,12 @@ export default function Repository() {
  </div>
 
  <div>
- <label style={{ fontSize: 12, fontWeight: 700, color: '#586e75', display: 'block', marginBottom: 4 }}>Tags (separadas por vírgula)</label>
+ <label style={{ fontSize: 12, fontWeight: 700, color: '#7a5c42', display: 'block', marginBottom: 4 }}>Tags (separadas por vírgula)</label>
  <input value={newLooseTags} onChange={e => setNewLooseTags(e.target.value)} placeholder="#grammar, #9ano, #reading" style={inputStyle} />
  </div>
 
  <div>
- <label style={{ fontSize: 12, fontWeight: 700, color: '#586e75', display: 'block', marginBottom: 4 }}>Texto / Conteúdo do Arquivo</label>
+ <label style={{ fontSize: 12, fontWeight: 700, color: '#7a5c42', display: 'block', marginBottom: 4 }}>Texto / Conteúdo do Arquivo</label>
  <textarea value={newLooseContent} onChange={e => setNewLooseContent(e.target.value)} placeholder="Cole aqui o texto do exercício, artigo, vocabulário..." rows={6} style={{ ...inputStyle, fontFamily: 'monospace' }} />
  </div>
  </div>
@@ -3146,7 +3147,7 @@ export default function Repository() {
  <button
  onClick={() => {
  if (!newLooseTitle.trim()) {
- alert('Informe o título do arquivo.')
+ toast.success('Informe o título do arquivo.')
  return
  }
  const tagList = newLooseTags.split(',').map(t => t.trim()).filter(Boolean)
@@ -3202,7 +3203,7 @@ export default function Repository() {
  <h3 style={{ margin: '0 0 10px', fontFamily: "'Fraunces', Georgia, serif", color: '#2c1a0e' }}>
  QR Code da Prova Online
  </h3>
- <p style={{ fontSize: 13, color: '#586e75', margin: '0 0 20px' }}>
+ <p style={{ fontSize: 13, color: '#7a5c42', margin: '0 0 20px' }}>
  Peça para os alunos apontarem a câmera do celular para responder digitalmente.
  </p>
 

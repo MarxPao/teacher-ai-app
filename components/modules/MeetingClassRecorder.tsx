@@ -1,4 +1,5 @@
 'use client';
+import { toast, showConfirm } from '@/components/Toast'
 
 import React, { useState, useEffect, useRef, CSSProperties } from 'react';
 import { exportToPdf } from '@/lib/exportUtils';
@@ -130,7 +131,7 @@ export default function MeetingClassRecorder() {
   // --- Recording Actions ---
   const startRecording = () => {
     if (!meetingTitle) {
-      alert('Por favor, defina um título para a reunião/aula.');
+      toast.success('Por favor, defina um título para a reunião/aula.');
       return;
     }
     
@@ -210,7 +211,7 @@ export default function MeetingClassRecorder() {
     } else {
       rawText = currentTranscription.map(t => t.text).join(' ');
       if (!rawText && !interimText) {
-        alert('Nenhum áudio foi capturado.');
+        toast.success('Nenhum áudio foi capturado.');
         setIsProcessing(false);
         return;
       }
@@ -253,7 +254,7 @@ export default function MeetingClassRecorder() {
       
     } catch (error) {
       console.error('Error generating report', error);
-      alert('Erro ao processar o relatório.');
+      toast.success('Erro ao processar o relatório.');
     } finally {
       setIsProcessing(false);
     }
@@ -333,7 +334,7 @@ Responda APENAS um objeto JSON estrito com o seguinte formato:
   // --- Export Actions ---
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
-    alert('Copiado para a área de transferência!');
+    toast.success('Copiado para a área de transferência!');
   };
 
   const generateWhatsAppFormat = (record: MeetingRecord) => {

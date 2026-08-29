@@ -531,7 +531,7 @@ export const TOOL_DISPLAY_NAMES: Record<string, { label: string; icon: string; c
   fill_school_portal:             { label: 'Preenchendo portal',      icon: 'ti-plug-connected',     color: '#cb4b16' },
   open_school_portal:             { label: 'Abrindo portal',          icon: 'ti-external-link',      color: '#268bd2' },
   generate_exam_content:          { label: 'Gerando prova',           icon: 'ti-file-certificate',   color: '#d33682' },
-  speak_response:                 { label: 'Falando',                 icon: 'ti-volume',             color: '#586e75' },
+  speak_response:                 { label: 'Falando',                 icon: 'ti-volume',             color: '#7a5c42' },
   update_student_metric:          { label: 'Métrica de aluno',        icon: 'ti-chart-radar',        color: '#859900' },
   record_student_observation:     { label: 'Registrando memória',     icon: 'ti-brain',              color: '#b58900' },
   create_class:                   { label: 'Criando turma',           icon: 'ti-school',             color: '#268bd2' },

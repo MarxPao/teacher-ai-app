@@ -1,4 +1,5 @@
 'use client'
+import { toast, showConfirm } from '@/components/Toast'
 
 import { useState, useEffect } from 'react'
 
@@ -73,7 +74,7 @@ export default function Portfolio() {
 
  function saveMeta() {
  localStorage.setItem('teacher_portfolio_meta', JSON.stringify({ about, philosophy, name }))
- alert('Portfólio salvo!')
+ toast.success('Portfólio salvo!')
  }
 
  const types = ['Todos', 'Documento', 'Questão', 'Mapa Mental']
@@ -89,7 +90,7 @@ export default function Portfolio() {
  <h1 style={{  textAlign: 'center', fontFamily: "'Fraunces', Georgia, serif", fontSize: 30, fontWeight: 600, color: '#2c1a0e', margin: '0 auto'  }}>Portfólio Profissional</h1>
  </div>
  <button onClick={() => window.print()} style={{
- padding: '9px 20px', background: '#073642', color: '#fff', border: 'none', borderRadius: 20,
+ padding: '9px 20px', background: '#2c1a0e', color: '#fff', border: 'none', borderRadius: 20,
  fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6
  }}>
  <i className="ti ti-printer" /> Exportar PDF
@@ -99,7 +100,7 @@ export default function Portfolio() {
  {/* Stats Cards */}
  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 28 }}>
  {[
- { label: 'Total de Materiais', val: stats.total, icon: 'ti-stack', color: '#073642' },
+ { label: 'Total de Materiais', val: stats.total, icon: 'ti-stack', color: '#2c1a0e' },
  { label: 'Documentos', val: stats.docs, icon: 'ti-file-text', color: '#268bd2' },
  { label: 'Questões', val: stats.questions, icon: 'ti-help-circle', color: '#b58900' },
  { label: 'Mapas Mentais', val: stats.maps, icon: 'ti-atom-2', color: '#2aa198' },
@@ -107,7 +108,7 @@ export default function Portfolio() {
  <div key={s.label} style={{ background: '#fff', borderRadius: 16, padding: 20, border: '1px solid #ede8dc', textAlign: 'center' }}>
  <i className={`ti ${s.icon}`} style={{ fontSize: 28, color: s.color, display: 'block', marginBottom: 8 }} />
  <div style={{ fontSize: 32, fontWeight: 700, color: s.color }}>{s.val}</div>
- <div style={{ fontSize: 12, color: '#93a1a1', marginTop: 4 }}>{s.label}</div>
+ <div style={{ fontSize: 12, color: '#a08060', marginTop: 4 }}>{s.label}</div>
  </div>
  ))}
  </div>
@@ -119,19 +120,19 @@ export default function Portfolio() {
  </h2>
  <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 16 }}>
  <div>
- <label style={{ fontSize: 12, fontWeight: 600, color: '#586e75', display: 'block', marginBottom: 6 }}>Nome completo</label>
+ <label style={{ fontSize: 12, fontWeight: 600, color: '#7a5c42', display: 'block', marginBottom: 6 }}>Nome completo</label>
  <input value={name} onChange={e => setName(e.target.value)} placeholder="Seu nome completo"
- style={{ width: '100%', padding: '10px 14px', background: '#f5f0e8', border: '1px solid #e8e0d0', borderRadius: 10, outline: 'none', color: '#073642', fontSize: 14, fontFamily: 'inherit', boxSizing: 'border-box' }} />
+ style={{ width: '100%', padding: '10px 14px', background: '#f5f0e8', border: '1px solid #e8e0d0', borderRadius: 10, outline: 'none', color: '#2c1a0e', fontSize: 14, fontFamily: 'inherit', boxSizing: 'border-box' }} />
  </div>
  <div>
- <label style={{ fontSize: 12, fontWeight: 600, color: '#586e75', display: 'block', marginBottom: 6 }}>Sobre mim</label>
+ <label style={{ fontSize: 12, fontWeight: 600, color: '#7a5c42', display: 'block', marginBottom: 6 }}>Sobre mim</label>
  <textarea value={about} onChange={e => setAbout(e.target.value)} placeholder="Descreva sua trajetória, especializações, disciplinas que leciona..."
- style={{ width: '100%', padding: '10px 14px', background: '#f5f0e8', border: '1px solid #e8e0d0', borderRadius: 10, outline: 'none', color: '#073642', fontSize: 14, fontFamily: 'inherit', height: 80, resize: 'vertical', boxSizing: 'border-box' }} />
+ style={{ width: '100%', padding: '10px 14px', background: '#f5f0e8', border: '1px solid #e8e0d0', borderRadius: 10, outline: 'none', color: '#2c1a0e', fontSize: 14, fontFamily: 'inherit', height: 80, resize: 'vertical', boxSizing: 'border-box' }} />
  </div>
  <div style={{ gridColumn: '1 / -1' }}>
- <label style={{ fontSize: 12, fontWeight: 600, color: '#586e75', display: 'block', marginBottom: 6 }}>Filosofia de ensino</label>
+ <label style={{ fontSize: 12, fontWeight: 600, color: '#7a5c42', display: 'block', marginBottom: 6 }}>Filosofia de ensino</label>
  <textarea value={philosophy} onChange={e => setPhilosophy(e.target.value)} placeholder="Descreva sua abordagem pedagógica, metodologias preferidas..."
- style={{ width: '100%', padding: '10px 14px', background: '#f5f0e8', border: '1px solid #e8e0d0', borderRadius: 10, outline: 'none', color: '#073642', fontSize: 14, fontFamily: 'inherit', height: 70, resize: 'vertical', boxSizing: 'border-box' }} />
+ style={{ width: '100%', padding: '10px 14px', background: '#f5f0e8', border: '1px solid #e8e0d0', borderRadius: 10, outline: 'none', color: '#2c1a0e', fontSize: 14, fontFamily: 'inherit', height: 70, resize: 'vertical', boxSizing: 'border-box' }} />
  </div>
  </div>
  <button onClick={saveMeta} style={{
@@ -149,8 +150,8 @@ export default function Portfolio() {
  <div style={{ display: 'flex', gap: 7 }}>
  {types.map(t => (
  <button key={t} onClick={() => setFilter(t)} style={{
- padding: '5px 14px', borderRadius: 20, border: filter === t ? '2px solid #073642' : '1px solid #e8e0d0',
- background: filter === t ? '#073642' : '#f5f0e8', color: filter === t ? '#fff' : '#586e75',
+ padding: '5px 14px', borderRadius: 20, border: filter === t ? '2px solid #2c1a0e' : '1px solid #e8e0d0',
+ background: filter === t ? '#2c1a0e' : '#f5f0e8', color: filter === t ? '#fff' : '#7a5c42',
  cursor: 'pointer', fontSize: 12, fontWeight: 600
  }}>{t}</button>
  ))}
@@ -158,7 +159,7 @@ export default function Portfolio() {
  </div>
 
  {filtered.length === 0 ? (
- <div style={{ textAlign: 'center', padding: '40px 0', color: '#93a1a1' }}>
+ <div style={{ textAlign: 'center', padding: '40px 0', color: '#a08060' }}>
  <i className="ti ti-folder-off" style={{ fontSize: 40, display: 'block', marginBottom: 12 }} />
  Nenhum material encontrado. Crie conteúdo nos módulos e ele aparecerá aqui automaticamente.
  </div>
@@ -169,18 +170,18 @@ export default function Portfolio() {
  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
  <span style={{
  padding: '3px 10px', borderRadius: 20, fontSize: 10, fontWeight: 700,
- background: (typeColors[item.type] || '#073642') + '18',
- color: typeColors[item.type] || '#073642', display: 'flex', alignItems: 'center', gap: 4
+ background: (typeColors[item.type] || '#2c1a0e') + '18',
+ color: typeColors[item.type] || '#2c1a0e', display: 'flex', alignItems: 'center', gap: 4
  }}>
  <i className={`ti ${typeIcons[item.type] || 'ti-file'}`} /> {item.type}
  </span>
- <span style={{ fontSize: 11, color: '#93a1a1' }}>{item.date}</span>
+ <span style={{ fontSize: 11, color: '#a08060' }}>{item.date}</span>
  </div>
- <div style={{ fontWeight: 700, fontSize: 14, color: '#073642', marginBottom: 6 }}>{item.title}</div>
- {item.preview && <div style={{ fontSize: 12, color: '#93a1a1', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{item.preview}</div>}
+ <div style={{ fontWeight: 700, fontSize: 14, color: '#2c1a0e', marginBottom: 6 }}>{item.title}</div>
+ {item.preview && <div style={{ fontSize: 12, color: '#a08060', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{item.preview}</div>}
  {item.tags.length > 0 && (
  <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 8 }}>
- {item.tags.map(t => <span key={t} style={{ padding: '2px 8px', borderRadius: 20, background: '#eee8d5', color: '#586e75', fontSize: 10 }}>{t}</span>)}
+ {item.tags.map(t => <span key={t} style={{ padding: '2px 8px', borderRadius: 20, background: '#f0e8d8', color: '#7a5c42', fontSize: 10 }}>{t}</span>)}
  </div>
  )}
  </div>

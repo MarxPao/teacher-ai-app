@@ -1,4 +1,5 @@
 'use client'
+import { toast, showConfirm } from '@/components/Toast'
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 
 // Types 
@@ -15,7 +16,7 @@ interface LessonBoard {
 }
 
 // Constants 
-const COLORS = ['#073642','#268bd2','#2aa198','#859900','#b58900','#cb4b16','#6c71c4','#d33682']
+const COLORS = ['#2c1a0e','#268bd2','#2aa198','#859900','#b58900','#cb4b16','#6c71c4','#d33682']
 const PERIODS = ['Dia','Semana','Mês','Bimestre','Trimestre','Semestre','Ano']
 const CARD_W = 260; const CARD_H = 170
 
@@ -183,9 +184,9 @@ export default function LessonPlanner() {
  const next = [...boards, nb]; setBoards(next); saveBoards(next); setActiveBoardId(nb.id)
  }
 
- function deleteBoard(id: string) {
+ async function deleteBoard(id: string) {
  if (boards.length <= 1) return
- if (confirm('Deletar este workspace e todos os seus cards?')) {
+ if ((await showConfirm({ message: 'Deletar este workspace e todos os seus cards?' }))) {
  const next = boards.filter(b => b.id !== id)
  setBoards(next); saveBoards(next)
  if (activeBoardId === id) setActiveBoardId(next[0].id)
@@ -307,7 +308,7 @@ export default function LessonPlanner() {
  }
  function scheduleStudioLesson() {
  if (!studioTitle.trim()) {
- alert('Por favor, informe o título da aula.')
+ toast.success('Por favor, informe o título da aula.')
  return
  }
  const schoolToUse = studioSchool || (userSchools[0]?.name || addSchool)
@@ -319,7 +320,7 @@ export default function LessonPlanner() {
  card.date = studioDate
 
  updateActiveCards([...cards, card])
- alert(` Aula "${card.title}" agendada no Calendário para ${card.date}!`)
+ toast.success(` Aula "${card.title}" agendada no Calendário para ${card.date}!`)
  setStudioTitle('')
  setStudioText('')
  setViewMode('calendar')
@@ -327,13 +328,13 @@ export default function LessonPlanner() {
 
  function resetView() { setPanX(40); setPanY(40); setZoom(1) }
 
- const SS = { width:'100%', padding:'8px 10px', background:'#f5f0e8', border:'1px solid #e8e0d0', borderRadius:8, outline:'none', color:'#073642', fontSize:13, fontFamily:'inherit' }
- const SL = { fontSize:12, fontWeight:600 as const, color:'#586e75', display:'block' as const, marginBottom:4 }
+ const SS = { width:'100%', padding:'8px 10px', background:'#f5f0e8', border:'1px solid #e8e0d0', borderRadius:8, outline:'none', color:'#2c1a0e', fontSize:13, fontFamily:'inherit' }
+ const SL = { fontSize:12, fontWeight:600 as const, color:'#7a5c42', display:'block' as const, marginBottom:4 }
 
  if (!activeBoard) return null
 
  return (
- <div style={{display:'flex', flexDirection:'column', height:'100%', background:'#fdf6e3'}}>
+ <div style={{display:'flex', flexDirection:'column', height:'100%', background:'#fdf8f2'}}>
  
  {/* Tabs / Workspaces & Mode Switcher */}
  <div style={{display:'flex', justifyContent:'space-between', gap:12, padding:'10px 16px', background:'#ede8dc', overflowX:'auto', flexShrink:0, alignItems:'center'}}>
@@ -341,8 +342,8 @@ export default function LessonPlanner() {
  {boards.map(b => (
  <div key={b.id} onClick={()=>setActiveBoardId(b.id)} style={{
  display:'flex', alignItems:'center', gap:8, padding:'6px 14px', borderRadius:8, cursor:'pointer', fontSize:13, fontWeight:600,
- background: activeBoardId === b.id ? '#073642' : 'rgba(255,255,255,0.6)',
- color: activeBoardId === b.id ? '#fff' : '#586e75',
+ background: activeBoardId === b.id ? '#2c1a0e' : 'rgba(255,255,255,0.6)',
+ color: activeBoardId === b.id ? '#fff' : '#7a5c42',
  boxShadow: activeBoardId === b.id ? '0 2px 8px rgba(0,0,0,0.1)' : 'none'
  }}>
  <i className="ti ti-folder" />
@@ -357,7 +358,7 @@ export default function LessonPlanner() {
  )}
  </div>
  ))}
- <button onClick={addBoard} style={{padding:'6px 12px', background:'transparent', border:'1px dashed #93a1a1', borderRadius:8, cursor:'pointer', color:'#586e75', display:'flex', alignItems:'center', gap:4, fontSize:12, fontWeight:600}}>
+ <button onClick={addBoard} style={{padding:'6px 12px', background:'transparent', border:'1px dashed #a08060', borderRadius:8, cursor:'pointer', color:'#7a5c42', display:'flex', alignItems:'center', gap:4, fontSize:12, fontWeight:600}}>
  <i className="ti ti-plus" /> Novo Workspace
  </button>
  </div>
@@ -369,7 +370,7 @@ export default function LessonPlanner() {
  style={{
  padding:'6px 12px', borderRadius:8, border:'none', cursor:'pointer', fontSize:12, fontWeight:700,
  background: viewMode === 'calendar' ? '#8b5e3c' : 'transparent',
- color: viewMode === 'calendar' ? '#fff' : '#586e75',
+ color: viewMode === 'calendar' ? '#fff' : '#7a5c42',
  display:'flex', alignItems:'center', gap:5, transition:'all 0.15s'
  }}
  >
@@ -381,7 +382,7 @@ export default function LessonPlanner() {
  style={{
  padding:'6px 12px', borderRadius:8, border:'none', cursor:'pointer', fontSize:12, fontWeight:700,
  background: viewMode === 'studio' ? '#8b5e3c' : 'transparent',
- color: viewMode === 'studio' ? '#fff' : '#586e75',
+ color: viewMode === 'studio' ? '#fff' : '#7a5c42',
  display:'flex', alignItems:'center', gap:5, transition:'all 0.15s'
  }}
  >
@@ -393,7 +394,7 @@ export default function LessonPlanner() {
  style={{
  padding:'6px 12px', borderRadius:8, border:'none', cursor:'pointer', fontSize:12, fontWeight:700,
  background: viewMode === 'folders' ? '#8b5e3c' : 'transparent',
- color: viewMode === 'folders' ? '#fff' : '#586e75',
+ color: viewMode === 'folders' ? '#fff' : '#7a5c42',
  display:'flex', alignItems:'center', gap:5, transition:'all 0.15s'
  }}
  >
@@ -404,8 +405,8 @@ export default function LessonPlanner() {
  onClick={() => setViewMode('canvas')}
  style={{
  padding:'6px 12px', borderRadius:8, border:'none', cursor:'pointer', fontSize:12, fontWeight:700,
- background: viewMode === 'canvas' ? '#073642' : 'transparent',
- color: viewMode === 'canvas' ? '#fff' : '#586e75',
+ background: viewMode === 'canvas' ? '#2c1a0e' : 'transparent',
+ color: viewMode === 'canvas' ? '#fff' : '#7a5c42',
  display:'flex', alignItems:'center', gap:5, transition:'all 0.15s'
  }}
  >
@@ -423,7 +424,7 @@ export default function LessonPlanner() {
 
  {/* Add Card */}
  <div style={{padding:'14px 16px', borderBottom:'1px solid #ede8dc', display:'flex', flexDirection:'column', gap:8}}>
- <p style={{fontSize:11, fontWeight:700, color:'#586e75', textTransform:'uppercase', letterSpacing:'1px', margin:0}}>Novo Plano</p>
+ <p style={{fontSize:11, fontWeight:700, color:'#7a5c42', textTransform:'uppercase', letterSpacing:'1px', margin:0}}>Novo Plano</p>
  <div>
  <label style={SL}>Escola</label>
  <input style={SS} value={addSchool} onChange={e=>setAddSchool(e.target.value)} placeholder="Nome da escola" />
@@ -432,14 +433,14 @@ export default function LessonPlanner() {
  <label style={SL}>Turma</label>
  <input style={SS} value={addClass} onChange={e=>setAddClass(e.target.value)} placeholder="Ex: 9º A" />
  </div>
- <button onClick={addCard} style={{padding:'9px', background:'#073642', color:'#fff', border:'none', borderRadius:10, fontSize:13, fontWeight:700, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:6}}>
+ <button onClick={addCard} style={{padding:'9px', background:'#2c1a0e', color:'#fff', border:'none', borderRadius:10, fontSize:13, fontWeight:700, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:6}}>
  <i className="ti ti-plus" /> Adicionar Card
  </button>
  </div>
 
  {/* Filters */}
  <div style={{padding:'14px 16px', borderBottom:'1px solid #ede8dc', display:'flex', flexDirection:'column', gap:8}}>
- <p style={{fontSize:11, fontWeight:700, color:'#586e75', textTransform:'uppercase', letterSpacing:'1px', margin:0}}>Filtros</p>
+ <p style={{fontSize:11, fontWeight:700, color:'#7a5c42', textTransform:'uppercase', letterSpacing:'1px', margin:0}}>Filtros</p>
  <div>
  <label style={SL}>Escola</label>
  <select style={SS} value={filterSchool} onChange={e=>setFilterSchool(e.target.value)}>
@@ -463,7 +464,7 @@ export default function LessonPlanner() {
 
  {/* Compile */}
  <div style={{padding:'14px 16px', display:'flex', flexDirection:'column', gap:8}}>
- <p style={{fontSize:11, fontWeight:700, color:'#586e75', textTransform:'uppercase', letterSpacing:'1px', margin:0}}>Compilar</p>
+ <p style={{fontSize:11, fontWeight:700, color:'#7a5c42', textTransform:'uppercase', letterSpacing:'1px', margin:0}}>Compilar</p>
  <div>
  <label style={SL}>Agrupar por</label>
  <select style={SS} value={compilePeriod} onChange={e=>setCompilePeriod(e.target.value)}>
@@ -493,7 +494,7 @@ export default function LessonPlanner() {
  <i className="ti ti-calendar-event" style={{ color: '#8b5e3c' }} />
  {monthNames[calMonth]} {calYear}
  </h2>
- <span style={{ fontSize: 13, color: '#586e75' }}>
+ <span style={{ fontSize: 13, color: '#7a5c42' }}>
  {cards.length} planejamentos de aula · Clique em um dia para agendar nova aula
  </span>
  </div>
@@ -507,7 +508,7 @@ export default function LessonPlanner() {
  </button>
  <button
  onClick={() => setCalDate(new Date())}
- style={{ padding: '8px 14px', background: '#073642', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: 700 }}
+ style={{ padding: '8px 14px', background: '#2c1a0e', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: 700 }}
  >
  Hoje
  </button>
@@ -524,11 +525,11 @@ export default function LessonPlanner() {
  <div style={{ display: 'flex', gap: 16, alignItems: 'center', background: '#f5efe6', padding: '12px 18px', borderRadius: 14, marginBottom: 20, border: '1px solid #e8e0d0', flexWrap: 'wrap' }}>
  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
  <i className="ti ti-building-community" style={{ color: '#8b5e3c', fontSize: 18 }} />
- <span style={{ fontSize: 13, fontWeight: 700, color: '#073642' }}>Escola:</span>
+ <span style={{ fontSize: 13, fontWeight: 700, color: '#2c1a0e' }}>Escola:</span>
  <select
  value={filterSchool}
  onChange={e => { setFilterSchool(e.target.value); setFilterClass('Todas') }}
- style={{ padding: '7px 12px', background: '#fff', border: '1px solid #d5cfc0', borderRadius: 8, fontSize: 13, fontWeight: 600, color: '#073642', outline: 'none', cursor: 'pointer' }}
+ style={{ padding: '7px 12px', background: '#fff', border: '1px solid #d5cfc0', borderRadius: 8, fontSize: 13, fontWeight: 600, color: '#2c1a0e', outline: 'none', cursor: 'pointer' }}
  >
  {schools.map(s => <option key={s} value={s}>{s}</option>)}
  </select>
@@ -536,11 +537,11 @@ export default function LessonPlanner() {
 
  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
  <i className="ti ti-users" style={{ color: '#8b5e3c', fontSize: 18 }} />
- <span style={{ fontSize: 13, fontWeight: 700, color: '#073642' }}>Turma:</span>
+ <span style={{ fontSize: 13, fontWeight: 700, color: '#2c1a0e' }}>Turma:</span>
  <select
  value={filterClass}
  onChange={e => setFilterClass(e.target.value)}
- style={{ padding: '7px 12px', background: '#fff', border: '1px solid #d5cfc0', borderRadius: 8, fontSize: 13, fontWeight: 600, color: '#073642', outline: 'none', cursor: 'pointer' }}
+ style={{ padding: '7px 12px', background: '#fff', border: '1px solid #d5cfc0', borderRadius: 8, fontSize: 13, fontWeight: 600, color: '#2c1a0e', outline: 'none', cursor: 'pointer' }}
  >
  {classes.map(c => <option key={c} value={c}>{c}</option>)}
  </select>
@@ -595,7 +596,7 @@ export default function LessonPlanner() {
  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
  <span style={{
  fontSize: 12, fontWeight: isToday ? 800 : 700,
- color: isToday ? '#8b5e3c' : '#073642',
+ color: isToday ? '#8b5e3c' : '#2c1a0e',
  background: isToday ? 'rgba(139,94,60,0.15)' : 'transparent',
  padding: '2px 6px', borderRadius: 6
  }}>
@@ -620,7 +621,7 @@ export default function LessonPlanner() {
  setEditCard({ ...card })
  }}
  style={{
- background: card.color || '#073642',
+ background: card.color || '#2c1a0e',
  color: '#fff', padding: '6px 8px', borderRadius: 8,
  fontSize: 11, fontWeight: 700, cursor: 'grab',
  display: 'flex', flexDirection: 'column', gap: 3,
@@ -688,7 +689,7 @@ export default function LessonPlanner() {
 
  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
  <div>
- <label style={{ fontSize: 11, fontWeight: 700, color: '#586e75', textTransform: 'uppercase' }}>Título da Aula</label>
+ <label style={{ fontSize: 11, fontWeight: 700, color: '#7a5c42', textTransform: 'uppercase' }}>Título da Aula</label>
  <input
  value={studioTitle}
  onChange={e => setStudioTitle(e.target.value)}
@@ -697,7 +698,7 @@ export default function LessonPlanner() {
  />
  </div>
  <div>
- <label style={{ fontSize: 11, fontWeight: 700, color: '#586e75', textTransform: 'uppercase' }}>Data de Aplicação</label>
+ <label style={{ fontSize: 11, fontWeight: 700, color: '#7a5c42', textTransform: 'uppercase' }}>Data de Aplicação</label>
  <input
  type="date"
  value={studioDate}
@@ -709,27 +710,27 @@ export default function LessonPlanner() {
 
  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
  <div>
- <label style={{ fontSize: 11, fontWeight: 700, color: '#586e75', textTransform: 'uppercase' }}>Escola</label>
+ <label style={{ fontSize: 11, fontWeight: 700, color: '#7a5c42', textTransform: 'uppercase' }}>Escola</label>
  <select value={studioSchool} onChange={e => setStudioSchool(e.target.value)} style={{ width: '100%', padding: '9px 12px', borderRadius: 10, border: '1px solid rgba(139,115,85,0.2)', fontSize: 13, outline: 'none', background: '#fcfaf6' }}>
  <option value="">Selecione...</option>
  {userSchools.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
  </select>
  </div>
  <div>
- <label style={{ fontSize: 11, fontWeight: 700, color: '#586e75', textTransform: 'uppercase' }}>Turma</label>
+ <label style={{ fontSize: 11, fontWeight: 700, color: '#7a5c42', textTransform: 'uppercase' }}>Turma</label>
  <select value={studioClass} onChange={e => setStudioClass(e.target.value)} style={{ width: '100%', padding: '9px 12px', borderRadius: 10, border: '1px solid rgba(139,115,85,0.2)', fontSize: 13, outline: 'none', background: '#fcfaf6' }}>
  <option value="">Selecione...</option>
  {userClasses.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
  </select>
  </div>
  <div>
- <label style={{ fontSize: 11, fontWeight: 700, color: '#586e75', textTransform: 'uppercase' }}>Duração (min)</label>
+ <label style={{ fontSize: 11, fontWeight: 700, color: '#7a5c42', textTransform: 'uppercase' }}>Duração (min)</label>
  <input value={studioDuration} onChange={e => setStudioDuration(e.target.value)} placeholder="50" style={{ width: '100%', padding: '9px 12px', borderRadius: 10, border: '1px solid rgba(139,115,85,0.2)', fontSize: 13, outline: 'none', background: '#fcfaf6' }} />
  </div>
  </div>
 
  <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
- <label style={{ fontSize: 11, fontWeight: 700, color: '#586e75', textTransform: 'uppercase', marginBottom: 6 }}>Desenvolvimento do Plano de Aula (Escrita Livre)</label>
+ <label style={{ fontSize: 11, fontWeight: 700, color: '#7a5c42', textTransform: 'uppercase', marginBottom: 6 }}>Desenvolvimento do Plano de Aula (Escrita Livre)</label>
  <textarea
  value={studioText}
  onChange={e => setStudioText(e.target.value)}
@@ -745,7 +746,7 @@ export default function LessonPlanner() {
  <h3 style={{ fontSize: 15, fontWeight: 700, color: '#8b5e3c', margin: '0 0 12px', display: 'flex', alignItems: 'center', gap: 8 }}>
  Perguntas Guia de Planejamento
  </h3>
- <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12.5, color: '#586e75', lineHeight: 1.6 }}>
+ <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12.5, color: '#7a5c42', lineHeight: 1.6 }}>
  <li><strong>Warm-up:</strong> Qual é o gancho inicial para despertar interesse?</li>
  <li><strong>Evidência:</strong> Como saber se o aluno aprendeu ao final da aula?</li>
  <li><strong>Diferenciação:</strong> Como apoiar alunos com dificuldades de compreensão?</li>
@@ -777,7 +778,7 @@ export default function LessonPlanner() {
  <h2 style={{ fontFamily: "'Fraunces', Georgia, serif", fontSize: 22, fontWeight: 700, color: '#2c1a0e', margin: '0 0 16px', display: 'flex', alignItems: 'center', gap: 10 }}>
  Organização Visual de Aulas por Pastas
  </h2>
- <p style={{ fontSize: 13, color: '#586e75', margin: '0 0 24px' }}>
+ <p style={{ fontSize: 13, color: '#7a5c42', margin: '0 0 24px' }}>
  Selecione uma pasta de Escola e Turma para visualizar os planejamentos associados.
  </p>
 
@@ -829,7 +830,7 @@ export default function LessonPlanner() {
  >
  {/* Empty state */}
  {cards.length === 0 && (
- <div style={{position:'absolute', top:'50%', left:'50%', transform:'translate(-50%,-50%)', textAlign:'center', color:'#93a1a1', pointerEvents:'none'}}>
+ <div style={{position:'absolute', top:'50%', left:'50%', transform:'translate(-50%,-50%)', textAlign:'center', color:'#a08060', pointerEvents:'none'}}>
  <i className="ti ti-layout-board" style={{fontSize:56, display:'block', marginBottom:16, opacity:0.3}} />
  <p style={{fontSize:16, fontWeight:300}}>Adicione um plano de aula na barra lateral</p>
  <p style={{fontSize:13}}>Arraste os cards, aproxime com o scroll</p>
@@ -848,7 +849,7 @@ export default function LessonPlanner() {
  position:'absolute', left:card.x, top:card.y, width:CARD_W, height:CARD_H,
  background:'#fff', borderRadius:14,
  border: isSel ? `2px solid ${card.color}` : '1px solid #e8e0d0',
- boxShadow: isSel ? `0 8px 32px ${card.color}33` : '0 2px 12px rgba(0,43,54,0.08)',
+ boxShadow: isSel ? `0 8px 32px ${card.color}33` : '0 2px 12px rgba(44,26,14,0.08)',
  cursor:'grab', overflow:'hidden', display:'flex', flexDirection:'column',
  transition:'box-shadow 0.15s'
  }}
@@ -862,13 +863,13 @@ export default function LessonPlanner() {
  </div>
  {/* Card body */}
  <div style={{padding:'10px 14px', flex:1, display:'flex', flexDirection:'column', gap:4}}>
- <div style={{fontSize:13, fontWeight:700, color:'#073642', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>
+ <div style={{fontSize:13, fontWeight:700, color:'#2c1a0e', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>
  {card.title}
  </div>
- {card.subject && <div style={{fontSize:12, color:'#073642', fontWeight:600, marginTop:4}}>{card.subject}</div>}
- {card.objectives && <div style={{fontSize:11, color:'#93a1a1', flex:1, overflow:'hidden', display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical'}}>{card.objectives}</div>}
+ {card.subject && <div style={{fontSize:12, color:'#2c1a0e', fontWeight:600, marginTop:4}}>{card.subject}</div>}
+ {card.objectives && <div style={{fontSize:11, color:'#a08060', flex:1, overflow:'hidden', display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical'}}>{card.objectives}</div>}
  <button onMouseDown={e=>e.stopPropagation()} onClick={()=>setEditCard({...card})}
- style={{marginTop:'auto', padding:'5px', background:'#f5f0e8', border:'1px solid #e8e0d0', borderRadius:7, cursor:'pointer', fontSize:11, color:'#586e75', fontWeight:600}}>
+ style={{marginTop:'auto', padding:'5px', background:'#f5f0e8', border:'1px solid #e8e0d0', borderRadius:7, cursor:'pointer', fontSize:11, color:'#7a5c42', fontWeight:600}}>
  Editar
  </button>
  </div>
@@ -891,7 +892,7 @@ export default function LessonPlanner() {
  <div onMouseDown={e=>e.stopPropagation()} style={{background:'#fff', borderRadius:20, padding:28, width:520, maxHeight:'85vh', overflowY:'auto', boxShadow:'0 24px 80px rgba(0,0,0,0.2)'}}>
  <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20}}>
  <h2 style={{fontFamily:'Georgia, serif', fontSize:20, fontStyle:'italic', color: '#2c1a0e', margin:0}}>Editar Plano de Aula</h2>
- <button onClick={()=>setEditCard(null)} style={{background:'none', border:'none', fontSize:20, cursor:'pointer', color:'#93a1a1'}}>×</button>
+ <button onClick={()=>setEditCard(null)} style={{background:'none', border:'none', fontSize:20, cursor:'pointer', color:'#a08060'}}>×</button>
  </div>
 
  {[
@@ -903,41 +904,41 @@ export default function LessonPlanner() {
  {label:'Objetivos', key:'objectives', ph:'O que os alunos vão aprender...', area:true},
  ].map(f => (
  <div key={f.key} style={{marginBottom:14}}>
- <label style={{fontSize:12, fontWeight:600, color:'#586e75', display:'block', marginBottom:5}}>{f.label}</label>
+ <label style={{fontSize:12, fontWeight:600, color:'#7a5c42', display:'block', marginBottom:5}}>{f.label}</label>
  {f.area
- ? <textarea value={(editCard as unknown as Record<string,string>)[f.key]||''} onChange={e=>setEditCard({...editCard,[f.key]:e.target.value})} placeholder={f.ph} style={{width:'100%',padding:'8px 10px',background:'#f5f0e8',border:'1px solid #e8e0d0',borderRadius:8,outline:'none',color:'#073642',fontSize:13,fontFamily:'inherit',height:80,resize:'vertical'}} />
- : <input type={f.type||'text'} value={(editCard as unknown as Record<string,string>)[f.key]||''} onChange={e=>setEditCard({...editCard,[f.key]:e.target.value})} placeholder={f.ph} style={{width:'100%',padding:'8px 10px',background:'#f5f0e8',border:'1px solid #e8e0d0',borderRadius:8,outline:'none',color:'#073642',fontSize:13,fontFamily:'inherit'}} />
+ ? <textarea value={(editCard as unknown as Record<string,string>)[f.key]||''} onChange={e=>setEditCard({...editCard,[f.key]:e.target.value})} placeholder={f.ph} style={{width:'100%',padding:'8px 10px',background:'#f5f0e8',border:'1px solid #e8e0d0',borderRadius:8,outline:'none',color:'#2c1a0e',fontSize:13,fontFamily:'inherit',height:80,resize:'vertical'}} />
+ : <input type={f.type||'text'} value={(editCard as unknown as Record<string,string>)[f.key]||''} onChange={e=>setEditCard({...editCard,[f.key]:e.target.value})} placeholder={f.ph} style={{width:'100%',padding:'8px 10px',background:'#f5f0e8',border:'1px solid #e8e0d0',borderRadius:8,outline:'none',color:'#2c1a0e',fontSize:13,fontFamily:'inherit'}} />
  }
  </div>
  ))}
 
  <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:16}}>
  <div>
- <label style={{fontSize:12, fontWeight:600, color:'#586e75', display:'block', marginBottom:5}}>Duração (min)</label>
- <input type="number" value={editCard.duration} onChange={e=>setEditCard({...editCard,duration:e.target.value})} style={{width:'100%',padding:'8px 10px',background:'#f5f0e8',border:'1px solid #e8e0d0',borderRadius:8,outline:'none',color:'#073642',fontSize:13,fontFamily:'inherit'}} />
+ <label style={{fontSize:12, fontWeight:600, color:'#7a5c42', display:'block', marginBottom:5}}>Duração (min)</label>
+ <input type="number" value={editCard.duration} onChange={e=>setEditCard({...editCard,duration:e.target.value})} style={{width:'100%',padding:'8px 10px',background:'#f5f0e8',border:'1px solid #e8e0d0',borderRadius:8,outline:'none',color:'#2c1a0e',fontSize:13,fontFamily:'inherit'}} />
  </div>
  <div>
- <label style={{fontSize:12, fontWeight:600, color:'#586e75', display:'block', marginBottom:5}}>Período</label>
- <select value={editCard.period} onChange={e=>setEditCard({...editCard,period:e.target.value})} style={{width:'100%',padding:'8px 10px',background:'#f5f0e8',border:'1px solid #e8e0d0',borderRadius:8,outline:'none',color:'#073642',fontSize:13,fontFamily:'inherit'}}>
+ <label style={{fontSize:12, fontWeight:600, color:'#7a5c42', display:'block', marginBottom:5}}>Período</label>
+ <select value={editCard.period} onChange={e=>setEditCard({...editCard,period:e.target.value})} style={{width:'100%',padding:'8px 10px',background:'#f5f0e8',border:'1px solid #e8e0d0',borderRadius:8,outline:'none',color:'#2c1a0e',fontSize:13,fontFamily:'inherit'}}>
  {PERIODS.map(p=><option key={p}>{p}</option>)}
  </select>
  </div>
  </div>
 
  <div style={{marginBottom:16}}>
- <label style={{fontSize:12, fontWeight:600, color:'#586e75', display:'block', marginBottom:8}}>Cor do Card</label>
+ <label style={{fontSize:12, fontWeight:600, color:'#7a5c42', display:'block', marginBottom:8}}>Cor do Card</label>
  <div style={{display:'flex', gap:8}}>
  {COLORS.map(c=>(
- <button key={c} onClick={()=>setEditCard({...editCard,color:c})} style={{width:28,height:28,borderRadius:'50%',background:c,border:editCard.color===c?'3px solid #073642':'2px solid transparent',cursor:'pointer'}} />
+ <button key={c} onClick={()=>setEditCard({...editCard,color:c})} style={{width:28,height:28,borderRadius:'50%',background:c,border:editCard.color===c?'3px solid #2c1a0e':'2px solid transparent',cursor:'pointer'}} />
  ))}
  </div>
  </div>
 
  <div style={{display:'flex', gap:10}}>
- <button onClick={()=>{updateCard(editCard);setEditCard(null)}} style={{flex:1, padding:'11px', background:'#073642', color:'#fff', border:'none', borderRadius:12, fontSize:14, fontWeight:700, cursor:'pointer'}}>
+ <button onClick={()=>{updateCard(editCard);setEditCard(null)}} style={{flex:1, padding:'11px', background:'#2c1a0e', color:'#fff', border:'none', borderRadius:12, fontSize:14, fontWeight:700, cursor:'pointer'}}>
  Salvar
  </button>
- <button onClick={()=>setEditCard(null)} style={{padding:'11px 20px', background:'#f5f0e8', border:'1px solid #e8e0d0', borderRadius:12, fontSize:14, cursor:'pointer', color:'#586e75'}}>
+ <button onClick={()=>setEditCard(null)} style={{padding:'11px 20px', background:'#f5f0e8', border:'1px solid #e8e0d0', borderRadius:12, fontSize:14, cursor:'pointer', color:'#7a5c42'}}>
  Cancelar
  </button>
  </div>
@@ -950,18 +951,18 @@ export default function LessonPlanner() {
  <div style={{position:'fixed', inset:0, background:'rgba(0,0,0,0.4)', zIndex:1000, display:'flex', alignItems:'center', justifyContent:'center'}} onMouseDown={()=>setShowCompile(false)}>
  <div onMouseDown={e=>e.stopPropagation()} style={{background:'#fff', borderRadius:20, padding:28, width:640, maxHeight:'80vh', display:'flex', flexDirection:'column', boxShadow:'0 24px 80px rgba(0,0,0,0.2)'}}>
  <div style={{display:'flex', justifyContent:'space-between', marginBottom:16}}>
- <h2 style={{fontFamily:'Georgia, serif', fontSize:20, fontStyle:'italic', color:'#073642', margin:0}}> Compilação {compilePeriod}</h2>
+ <h2 style={{fontFamily:'Georgia, serif', fontSize:20, fontStyle:'italic', color:'#2c1a0e', margin:0}}> Compilação {compilePeriod}</h2>
  <div style={{display:'flex', gap:8}}>
  <button onClick={()=>navigator.clipboard.writeText(compiledText)} style={{padding:'7px 14px', background: '#8b7355', color:'#fff', border:'none', borderRadius:10, fontSize:12, fontWeight:700, cursor:'pointer'}}>
  <i className="ti ti-copy" /> Copiar
  </button>
- <button onClick={()=>window.print()} style={{padding:'7px 14px', background:'#073642', color:'#fff', border:'none', borderRadius:10, fontSize:12, fontWeight:700, cursor:'pointer'}}>
+ <button onClick={()=>window.print()} style={{padding:'7px 14px', background:'#2c1a0e', color:'#fff', border:'none', borderRadius:10, fontSize:12, fontWeight:700, cursor:'pointer'}}>
  <i className="ti ti-printer" /> Imprimir
  </button>
- <button onClick={()=>setShowCompile(false)} style={{background:'none', border:'none', fontSize:20, cursor:'pointer', color:'#93a1a1'}}>×</button>
+ <button onClick={()=>setShowCompile(false)} style={{background:'none', border:'none', fontSize:20, cursor:'pointer', color:'#a08060'}}>×</button>
  </div>
  </div>
- <pre style={{flex:1, overflowY:'auto', background:'#f5f0e8', borderRadius:12, padding:20, fontSize:13, lineHeight:1.7, whiteSpace:'pre-wrap', fontFamily:'inherit', color:'#073642'}}>
+ <pre style={{flex:1, overflowY:'auto', background:'#f5f0e8', borderRadius:12, padding:20, fontSize:13, lineHeight:1.7, whiteSpace:'pre-wrap', fontFamily:'inherit', color:'#2c1a0e'}}>
  {compiledText}
  </pre>
  </div>

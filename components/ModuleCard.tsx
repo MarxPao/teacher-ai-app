@@ -1,6 +1,7 @@
 'use client'
 
 import { ReactNode } from 'react'
+import { COLOR, BORDER, RADIUS, SHADOW, TEXT, FONT } from '@/styles/tokens'
 
 interface Props {
   children: ReactNode
@@ -25,11 +26,11 @@ export default function ModuleCard({
     <div 
       className={className}
       style={{
-        background: '#fff',
-        border: '1px solid rgba(88,110,117,0.1)',
-        borderRadius: 24,
+        background: COLOR.surface1,
+        border: `1px solid ${BORDER.soft}`,
+        borderRadius: RADIUS.lg,
         padding: padding,
-        boxShadow: '0 4px 20px rgba(0,43,54,0.04)',
+        boxShadow: SHADOW.sm,
         position: 'relative',
         overflow: 'hidden',
         ...style
@@ -37,10 +38,18 @@ export default function ModuleCard({
     >
       {(title || icon || headerAction) && (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            {icon && <i className={`ti ${icon}`} style={{ fontSize: 18, color: '#93a1a1' }} />}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {icon && <i className={`ti ${icon}`} style={{ fontSize: 18, color: COLOR.paperMid }} />}
             {title && (
-              <h3 style={{ fontSize: 15, fontWeight: 600, color: '#073642', textTransform: 'uppercase', letterSpacing: '0.8px' }}>
+              <h3 style={{
+                fontSize: TEXT.caption,
+                fontWeight: 700,
+                color: COLOR.paperWarm,
+                textTransform: 'uppercase',
+                letterSpacing: '0.7px',
+                margin: 0,
+                fontFamily: FONT.sans,
+              }}>
                 {title}
               </h3>
             )}

@@ -145,6 +145,36 @@ export default function Topbar({ module, submodule, isAiLoading = false, onNavig
           </button>
         )}
 
+        {/* Botão Busca Rápida (Ctrl+K) */}
+        <button
+          onClick={() => window.dispatchEvent(new CustomEvent('teacher:toggle_command_palette'))}
+          title="Busca Rápida e Ações (Ctrl+K)"
+          style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            width: 32, height: 32, borderRadius: RADIUS.md,
+            border: `1px solid ${BORDER.soft}`,
+            background: 'transparent',
+            color: COLOR.paperWarm, cursor: 'pointer', transition: TRANSITION.fast,
+          }}
+        >
+          <i className="ti ti-search" style={{ fontSize: 16 }} />
+        </button>
+
+        {/* Botão Bloco de Notas Rápido */}
+        <button
+          onClick={() => window.dispatchEvent(new CustomEvent('teacher:toggle_scratchpad'))}
+          title="Bloco de Notas Rápido"
+          style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            width: 32, height: 32, borderRadius: RADIUS.md,
+            border: `1px solid ${BORDER.soft}`,
+            background: 'transparent',
+            color: COLOR.paperWarm, cursor: 'pointer', transition: TRANSITION.fast,
+          }}
+        >
+          <i className="ti ti-notebook" style={{ fontSize: 16 }} />
+        </button>
+
         <button
           onClick={toggleFocusMode}
           onMouseEnter={() => setFocusHover(true)}

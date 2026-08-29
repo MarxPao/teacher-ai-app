@@ -15,7 +15,7 @@ export default function ComingSoon() {
         alignItems: 'center', 
         justifyContent: 'center', 
         padding: '100px 0',
-        color: '#93a1a1'
+        color: '#a08060'
       }}>
         <div style={{ 
           width: 120, 
@@ -25,7 +25,7 @@ export default function ComingSoon() {
           display: 'flex', 
           alignItems: 'center', 
           justifyContent: 'center',
-          boxShadow: '0 10px 30px rgba(0,43,54,0.05)',
+          boxShadow: '0 10px 30px rgba(44,26,14,0.05)',
           marginBottom: 32,
           border: '1px solid rgba(88,110,117,0.1)'
         }}>

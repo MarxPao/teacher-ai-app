@@ -78,7 +78,7 @@ export default function CommandPalette({ isOpen, onClose, onNavigate }: Props) {
         onClick={e => e.stopPropagation()}
         style={{
           width: '100%', maxWidth: 640, background: '#fff', borderRadius: 18,
-          boxShadow: '0 20px 50px rgba(0,43,54,0.3)', border: '1px solid #ede8dc',
+          boxShadow: '0 20px 50px rgba(44,26,14,0.3)', border: '1px solid #ede8dc',
           overflow: 'hidden', display: 'flex', flexDirection: 'column'
         }}
       >
@@ -92,11 +92,11 @@ export default function CommandPalette({ isOpen, onClose, onNavigate }: Props) {
             onChange={e => { setQuery(e.target.value); setSelectedIndex(0) }}
             placeholder="Digite um comando ou módulo... (ex: Prova, Portal, Notas)"
             style={{
-              flex: 1, border: 'none', outline: 'none', fontSize: 16, color: '#073642',
+              flex: 1, border: 'none', outline: 'none', fontSize: 16, color: '#2c1a0e',
               fontFamily: 'inherit', background: 'transparent'
             }}
           />
-          <kbd style={{ background: '#f5f0e8', color: '#586e75', padding: '3px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700, border: '1px solid #ede8dc' }}>
+          <kbd style={{ background: '#f5f0e8', color: '#7a5c42', padding: '3px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700, border: '1px solid #ede8dc' }}>
             ESC
           </kbd>
         </div>
@@ -104,7 +104,7 @@ export default function CommandPalette({ isOpen, onClose, onNavigate }: Props) {
         {/* Lista de Resultados */}
         <div style={{ maxHeight: 380, overflowY: 'auto', padding: 8 }}>
           {filtered.length === 0 ? (
-            <div style={{ padding: 24, textAlign: 'center', color: '#93a1a1', fontSize: 14 }}>
+            <div style={{ padding: 24, textAlign: 'center', color: '#a08060', fontSize: 14 }}>
               Nenhum comando encontrado para "{query}".
             </div>
           ) : (
@@ -130,11 +130,11 @@ export default function CommandPalette({ isOpen, onClose, onNavigate }: Props) {
                     <i className={`ti ${item.icon}`} style={{ fontSize: 18 }} />
                   </div>
                   <div>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: '#073642' }}>{item.title}</div>
-                    <div style={{ fontSize: 12, color: '#586e75' }}>{item.subtitle}</div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: '#2c1a0e' }}>{item.title}</div>
+                    <div style={{ fontSize: 12, color: '#7a5c42' }}>{item.subtitle}</div>
                   </div>
                 </div>
-                <span style={{ fontSize: 11, fontWeight: 600, color: '#93a1a1', background: '#fff', padding: '2px 8px', borderRadius: 6, border: '1px solid #ede8dc' }}>
+                <span style={{ fontSize: 11, fontWeight: 600, color: '#a08060', background: '#fff', padding: '2px 8px', borderRadius: 6, border: '1px solid #ede8dc' }}>
                   {item.category}
                 </span>
               </div>
@@ -143,7 +143,7 @@ export default function CommandPalette({ isOpen, onClose, onNavigate }: Props) {
         </div>
 
         {/* Dica de Rodapé */}
-        <div style={{ background: '#faf8f5', padding: '8px 16px', borderTop: '1px solid #ede8dc', display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#93a1a1' }}>
+        <div style={{ background: '#faf8f5', padding: '8px 16px', borderTop: '1px solid #ede8dc', display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#a08060' }}>
           <span>Navegue com a busca rápida do Teacher AI</span>
           <span>Atalho: <strong>Ctrl + K</strong> / <strong>Cmd + K</strong></span>
         </div>

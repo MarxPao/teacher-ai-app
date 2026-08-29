@@ -1,4 +1,5 @@
 'use client'
+import { toast, showConfirm } from '@/components/Toast'
 
 import React, { useState, useEffect, useCallback } from 'react'
 
@@ -156,7 +157,7 @@ export function parseContentToQuestions(raw: string): EditableQuestionItem[] {
 export function compileQuestionsToHtml(questions: EditableQuestionItem[]): string {
   if (!questions || questions.length === 0) return ''
 
-  let html = '<div class="generated-exam-document" style="font-family: inherit; color: #073642; line-height: 1.6;">\n'
+  let html = '<div class="generated-exam-document" style="font-family: inherit; color: #2c1a0e; line-height: 1.6;">\n'
 
   questions.forEach((q, idx) => {
     const qNum = idx + 1
@@ -166,7 +167,7 @@ export function compileQuestionsToHtml(questions: EditableQuestionItem[]): strin
     html += `    <div style="font-weight: 700; font-size: 15px; color: #2c1a0e; margin-bottom: 8px;">\n`
     html += `      <span style="display: inline-block; background: #8b5e3c; color: #fff; padding: 2px 8px; border-radius: 6px; font-size: 12px; margin-right: 8px;">${qNum}</span>\n`
     if (q.points) {
-      html += `      <span style="float: right; font-size: 12px; color: #586e75; font-weight: 600;">(${q.points.toFixed(1)} pt${q.points !== 1 ? 's' : ''})</span>\n`
+      html += `      <span style="float: right; font-size: 12px; color: #7a5c42; font-weight: 600;">(${q.points.toFixed(1)} pt${q.points !== 1 ? 's' : ''})</span>\n`
     }
     html += `    </div>\n`
 
@@ -178,7 +179,7 @@ export function compileQuestionsToHtml(questions: EditableQuestionItem[]): strin
     }
 
     // Enunciado
-    html += `    <p style="margin: 0 0 12px 0; font-size: 14.5px; color: #073642;">${q.stem.replace(/\n/g, '<br />')}</p>\n`
+    html += `    <p style="margin: 0 0 12px 0; font-size: 14.5px; color: #2c1a0e;">${q.stem.replace(/\n/g, '<br />')}</p>\n`
 
     // Alternativas (se houver)
     if (q.options && q.options.length > 0) {
@@ -267,8 +268,8 @@ export default function EditableQuestionBoxes({
   }
 
   // Excluir Questão
-  const handleDelete = (index: number) => {
-    if (!confirm(`Deseja realmente excluir a Questão #${index + 1}?`)) return
+  const handleDelete = async (index: number) => {
+    if (!(await showConfirm({ message: `Deseja realmente excluir a Questão #${index + 1}?` }))) return
     const updated = questions.filter((_, i) => i !== index)
     updated.forEach((q, i) => { q.number = i + 1 })
     triggerUpdate(updated)
@@ -349,7 +350,7 @@ export default function EditableQuestionBoxes({
   // Chamar Rafinha para Reformular Questão
   const handleCallRafinha = async (index: number) => {
     if (!onAskRafinhaForQuestion) {
-      alert('Assistente Rafinha IA não disponível neste modo.')
+      toast.success('Assistente Rafinha IA não disponível neste modo.')
       return
     }
     setRafinhaLoading(true)
@@ -378,8 +379,9 @@ export default function EditableQuestionBoxes({
         gap: 10
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span style={{ fontSize: 14, fontWeight: 800, color: '#2c1a0e' }}>
-            📑 {questions.length} Questões em Boxes Editáveis
+          <span style={{ fontSize: 14, fontWeight: 800, color: '#2c1a0e', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <i className="ti ti-layout-cards" />
+            <span>{questions.length} Questões em Boxes Editáveis</span>
           </span>
           <span style={{ fontSize: 12, color: '#8b5e3c', background: 'rgba(139,94,60,0.12)', padding: '3px 8px', borderRadius: 6, fontWeight: 700 }}>
             Total: {questions.reduce((acc, q) => acc + (q.points || 1), 0).toFixed(1)} pts
@@ -398,10 +400,14 @@ export default function EditableQuestionBoxes({
               color: showAnswerKeys ? '#166534' : '#665c54',
               fontSize: 12,
               fontWeight: 700,
-              cursor: 'pointer'
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 5,
             }}
           >
-            {showAnswerKeys ? '👁️ Ocultar Gabaritos' : '✓ Exibir Gabaritos'}
+            <i className={showAnswerKeys ? 'ti ti-eye-off' : 'ti ti-check'} />
+            <span>{showAnswerKeys ? 'Ocultar Gabaritos' : 'Exibir Gabaritos'}</span>
           </button>
 
           <button
@@ -508,7 +514,7 @@ export default function EditableQuestionBoxes({
 
                   {/* Pontuação Editável */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 6 }}>
-                    <span style={{ fontSize: 11.5, color: '#586e75', fontWeight: 600 }}>Valor:</span>
+                    <span style={{ fontSize: 11.5, color: '#7a5c42', fontWeight: 600 }}>Valor:</span>
                     <input
                       type="number"
                       step="0.5"
@@ -527,7 +533,7 @@ export default function EditableQuestionBoxes({
                         background: '#faf6f0'
                       }}
                     />
-                    <span style={{ fontSize: 11.5, color: '#586e75' }}>pt</span>
+                    <span style={{ fontSize: 11.5, color: '#7a5c42' }}>pt</span>
                   </div>
                 </div>
 
@@ -592,10 +598,10 @@ export default function EditableQuestionBoxes({
                       fontWeight: 700,
                       display: 'flex',
                       alignItems: 'center',
-                      gap: 3
+                      gap: 4
                     }}
                   >
-                    ✨ Rafinha
+                    <i className="ti ti-sparkles" /> Rafinha
                   </button>
 
                   {/* Duplicar */}
@@ -610,10 +616,12 @@ export default function EditableQuestionBoxes({
                       background: '#fff',
                       color: '#2c1a0e',
                       cursor: 'pointer',
-                      fontSize: 12
+                      fontSize: 13,
+                      display: 'flex',
+                      alignItems: 'center',
                     }}
                   >
-                    📋
+                    <i className="ti ti-copy" />
                   </button>
 
                   {/* Excluir */}
@@ -628,10 +636,12 @@ export default function EditableQuestionBoxes({
                       background: '#fee2e2',
                       color: '#dc2626',
                       cursor: 'pointer',
-                      fontSize: 12
+                      fontSize: 13,
+                      display: 'flex',
+                      alignItems: 'center',
                     }}
                   >
-                    🗑️
+                    <i className="ti ti-trash" />
                   </button>
                 </div>
               </div>
@@ -641,7 +651,7 @@ export default function EditableQuestionBoxes({
                 {/* Texto de Apoio / Contexto Opcional */}
                 <div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                    <label style={{ fontSize: 11.5, fontWeight: 700, color: '#586e75', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                    <label style={{ fontSize: 11.5, fontWeight: 700, color: '#7a5c42', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                       Enunciado / Instrução:
                     </label>
                   </div>
@@ -657,7 +667,7 @@ export default function EditableQuestionBoxes({
                       border: '1px solid #d5c8bb',
                       background: '#faf6f0',
                       fontSize: 14,
-                      color: '#073642',
+                      color: '#2c1a0e',
                       fontFamily: 'inherit',
                       lineHeight: 1.5,
                       resize: 'vertical',
@@ -720,7 +730,7 @@ export default function EditableQuestionBoxes({
                               border: '1px solid #d5c8bb',
                               background: '#fff',
                               fontSize: 13,
-                              color: '#073642',
+                              color: '#2c1a0e',
                               outline: 'none'
                             }}
                           />
@@ -875,7 +885,7 @@ export default function EditableQuestionBoxes({
                   gap: 6
                 }}
               >
-                {rafinhaLoading ? 'Ajustando...' : '✨ Aplicar Ajuste'}
+                {rafinhaLoading ? <><i className="ti ti-loader-2 animate-spin" /> Ajustando...</> : <><i className="ti ti-sparkles" /> Aplicar Ajuste</>}
               </button>
             </div>
           </div>

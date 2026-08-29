@@ -1,4 +1,5 @@
 'use client'
+import { toast, showConfirm } from '@/components/Toast'
 
 import React, { useState } from 'react'
 import { FONT, RADIUS } from '@/styles/tokens'
@@ -83,7 +84,7 @@ Retorne APENAS um JSON válido no seguinte formato:
         })
       }
     } catch (e: any) {
-      alert(`Erro ao gerar pacote de substituto: ${e?.message || 'Falha na IA'}`)
+      toast.success(`Erro ao gerar pacote de substituto: ${e?.message || 'Falha na IA'}`)
     } finally {
       setIsGenerating(false)
     }
@@ -197,7 +198,7 @@ Retorne APENAS um JSON válido no seguinte formato:
             width: '100%',
             padding: 12,
             borderRadius: 10,
-            background: isGenerating ? '#93a1a1' : 'linear-gradient(135deg, #8b5e3c, #5c3a21)',
+            background: isGenerating ? '#a08060' : 'linear-gradient(135deg, #8b5e3c, #5c3a21)',
             color: '#fff',
             border: 'none',
             fontSize: 14,

@@ -261,19 +261,19 @@ Retorne ESTRITAMENTE um objeto JSON no formato:
         <div style={{ display: 'flex', gap: 6, background: '#fffcf8', padding: 4, borderRadius: 12, border: '1px solid #d5c0b0' }}>
           <button
             onClick={() => setActiveTab('pronunciation')}
-            style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: activeTab === 'pronunciation' ? '#8b5e3c' : 'transparent', color: activeTab === 'pronunciation' ? '#fff' : '#586e75', fontWeight: 700, cursor: 'pointer', fontSize: 13 }}
+            style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: activeTab === 'pronunciation' ? '#8b5e3c' : 'transparent', color: activeTab === 'pronunciation' ? '#fff' : '#7a5c42', fontWeight: 700, cursor: 'pointer', fontSize: 13 }}
           >
             <i className="ti ti-microphone"></i> Análise Fonética
           </button>
           <button
             onClick={() => setActiveTab('minimal')}
-            style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: activeTab === 'minimal' ? '#8b5e3c' : 'transparent', color: activeTab === 'minimal' ? '#fff' : '#586e75', fontWeight: 700, cursor: 'pointer', fontSize: 13 }}
+            style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: activeTab === 'minimal' ? '#8b5e3c' : 'transparent', color: activeTab === 'minimal' ? '#fff' : '#7a5c42', fontWeight: 700, cursor: 'pointer', fontSize: 13 }}
           >
             <i className="ti ti-arrows-diff"></i> Pares Mínimos
           </button>
           <button
             onClick={() => setActiveTab('bank')}
-            style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: activeTab === 'bank' ? '#8b5e3c' : 'transparent', color: activeTab === 'bank' ? '#fff' : '#586e75', fontWeight: 700, cursor: 'pointer', fontSize: 13 }}
+            style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: activeTab === 'bank' ? '#8b5e3c' : 'transparent', color: activeTab === 'bank' ? '#fff' : '#7a5c42', fontWeight: 700, cursor: 'pointer', fontSize: 13 }}
           >
             <i className="ti ti-books"></i> Banco de Vocabulário ({wordBank.length})
           </button>

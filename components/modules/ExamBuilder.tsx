@@ -1,4 +1,6 @@
 'use client'
+import { toast, showConfirm } from '@/components/Toast'
+import AiProgressStepper from '@/components/AiProgressStepper'
 
 import { useState, useEffect } from 'react'
 import DocumentCanvas from '@/components/DocumentCanvas'
@@ -58,10 +60,10 @@ const GRADES = [
 
 // Style helpers 
 
-const SL: React.CSSProperties = { fontSize: 13, fontWeight: 600, color: '#586e75', display: 'block', marginBottom: 6 }
-const SS: React.CSSProperties = { width: '100%', padding: '10px 14px', background: '#f5f0e8', border: '1px solid #e8e0d0', borderRadius: 10, outline: 'none', color: '#073642', fontSize: 14, fontFamily: 'inherit', appearance: 'none' as const, cursor: 'pointer' }
-const SI: React.CSSProperties = { width: '100%', padding: '10px 14px', background: '#f5f0e8', border: '1px solid #e8e0d0', borderRadius: 10, outline: 'none', color: '#073642', fontSize: 14, fontFamily: 'inherit' }
-const CARD: React.CSSProperties = { background: '#fff', borderRadius: 20, padding: 20, boxShadow: '0 2px 12px rgba(0,43,54,0.06)', border: '1px solid #ede8dc' }
+const SL: React.CSSProperties = { fontSize: 13, fontWeight: 600, color: '#7a5c42', display: 'block', marginBottom: 6 }
+const SS: React.CSSProperties = { width: '100%', padding: '10px 14px', background: '#f5f0e8', border: '1px solid #e8e0d0', borderRadius: 10, outline: 'none', color: '#2c1a0e', fontSize: 14, fontFamily: 'inherit', appearance: 'none' as const, cursor: 'pointer' }
+const SI: React.CSSProperties = { width: '100%', padding: '10px 14px', background: '#f5f0e8', border: '1px solid #e8e0d0', borderRadius: 10, outline: 'none', color: '#2c1a0e', fontSize: 14, fontFamily: 'inherit' }
+const CARD: React.CSSProperties = { background: '#fff', borderRadius: 20, padding: 20, boxShadow: '0 2px 12px rgba(44,26,14,0.06)', border: '1px solid #ede8dc' }
 
 // Helpers 
 
@@ -506,7 +508,7 @@ export default function ExamBuilder() {
   const toggleApproach = (s: string) => setApproach(p => p.includes(s) ? p.filter(x => x !== s) : [...p, s])
 
   async function generate() {
-    if (!sections.length) { alert('Selecione pelo menos uma seção.'); return }
+    if (!sections.length) { toast.success('Selecione pelo menos uma seção.'); return }
     if (!hasApi) { setError('Configure uma API com chave válida em "APIs & Modelos" para gerar automaticamente.'); return }
 
     setLoading(true); setResult(''); setError('')
@@ -609,27 +611,27 @@ Retorne a questão reformulada no formato padrão (Enunciado, Alternativas se ap
   }
 
   async function handleGenerateAudio() {
-    if (!result) { alert('Gere a prova primeiro para extrair o texto de listening.'); return }
+    if (!result) { toast.success('Gere a prova primeiro para extrair o texto de listening.'); return }
     setAudioLoading(true)
     try {
       const cleanText = result.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').slice(0, 800)
       const res = await generateListeningAudio({ text: cleanText, accent })
       setAudioUrl(res.audioUrl)
     } catch (e: unknown) {
-      alert(`Falha ao gerar áudio: ${e instanceof Error ? e.message : 'Erro'}`)
+      toast.success(`Falha ao gerar áudio: ${e instanceof Error ? e.message : 'Erro'}`)
     } finally {
       setAudioLoading(false)
     }
   }
 
   function handleSave() {
-    if (!result) { alert('Gere ou cole uma prova primeiro.'); return }
+    if (!result) { toast.success('Gere ou cole uma prova primeiro.'); return }
     const saved = saveItemToStorage('teacher_saved_exams', {
       title: header.title || (topic ? `Prova ${topic}` : `Exam (${cefr})`),
       subtitle: `${cefr} · ${grade} · ${sections.slice(0, 2).join(', ')}`,
       content: result,
     })
-    if (saved) { updateSavedCount(); alert(' Prova salva!') }
+    if (saved) { updateSavedCount(); toast.success(' Prova salva!') }
   }
 
   const currentExamConfig = {
@@ -647,7 +649,7 @@ Retorne a questão reformulada no formato padrão (Enunciado, Alternativas se ap
   }
 
   async function handleSaveToActivitiesBank() {
-    if (!result) { alert('Gere ou cole uma prova primeiro.'); return }
+    if (!result) { toast.success('Gere ou cole uma prova primeiro.'); return }
     const { saveActivityToSupabase } = await import('@/lib/supabaseClient')
     const title = header.title || (topic ? `Prova ${topic}` : `Prova (${cefr})`)
     await saveActivityToSupabase({
@@ -657,7 +659,7 @@ Retorne a questão reformulada no formato padrão (Enunciado, Alternativas se ap
       cefr,
       content: result
     })
-    alert(' Prova salva com sucesso no Banco de Dados!')
+    toast.success(' Prova salva com sucesso no Banco de Dados!')
   }
 
   return (
@@ -684,7 +686,7 @@ Retorne a questão reformulada no formato padrão (Enunciado, Alternativas se ap
               </button>
             </>
           )}
-          <button onClick={() => setShowSaved(true)} style={{ padding: '9px 16px', borderRadius: 12, border: '1px solid #8b5e3c', background: '#fdf9f3', color: '#073642', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+          <button onClick={() => setShowSaved(true)} style={{ padding: '9px 16px', borderRadius: 12, border: '1px solid #8b5e3c', background: '#fdf9f3', color: '#2c1a0e', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
             <i className="ti ti-bookmark" style={{ color: '#b58900' }} /> Provas Salvas ({savedCount})
           </button>
         </div>
@@ -744,7 +746,7 @@ Retorne a questão reformulada no formato padrão (Enunciado, Alternativas se ap
             disabled={loading}
             style={{
               padding: '14px 20px', borderRadius: 14,
-              background: loading ? '#93a1a1' : 'linear-gradient(135deg, #8b5e3c, #5c3a21)',
+              background: loading ? '#a08060' : 'linear-gradient(135deg, #8b5e3c, #5c3a21)',
               color: '#fff',
               fontSize: 15, fontWeight: 800, border: 'none',
               cursor: loading ? 'not-allowed' : 'pointer',
@@ -778,7 +780,7 @@ Retorne a questão reformulada no formato padrão (Enunciado, Alternativas se ap
                 <i className="ti ti-alert-circle" style={{ color: '#b58900', fontSize: 20 }} />
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 700, color: '#b58900' }}>Nenhuma API configurada</div>
-                  <div style={{ fontSize: 12, color: '#586e75', marginTop: 2 }}>Vá em <strong>APIs & Modelos</strong> para configurar uma chave de IA.</div>
+                  <div style={{ fontSize: 12, color: '#7a5c42', marginTop: 2 }}>Vá em <strong>APIs & Modelos</strong> para configurar uma chave de IA.</div>
                 </div>
               </div>
             </div>
@@ -812,7 +814,7 @@ Retorne a questão reformulada no formato padrão (Enunciado, Alternativas se ap
                       flex: 1, padding: '8px 10px', borderRadius: 8, fontSize: 12, fontWeight: 700,
                       border: stemLanguage === 'pt' ? '1.5px solid #cb4b16' : '1px solid #e8e0d0',
                       background: stemLanguage === 'pt' ? '#fdf8f2' : '#fff',
-                      color: stemLanguage === 'pt' ? '#cb4b16' : '#586e75', cursor: 'pointer'
+                      color: stemLanguage === 'pt' ? '#cb4b16' : '#7a5c42', cursor: 'pointer'
                     }}
                   >
                     Português
@@ -824,7 +826,7 @@ Retorne a questão reformulada no formato padrão (Enunciado, Alternativas se ap
                       flex: 1, padding: '8px 10px', borderRadius: 8, fontSize: 12, fontWeight: 700,
                       border: stemLanguage === 'en' ? '1.5px solid #268bd2' : '1px solid #e8e0d0',
                       background: stemLanguage === 'en' ? '#f0f8ff' : '#fff',
-                      color: stemLanguage === 'en' ? '#268bd2' : '#586e75', cursor: 'pointer'
+                      color: stemLanguage === 'en' ? '#268bd2' : '#7a5c42', cursor: 'pointer'
                     }}
                   >
                     Inglês
@@ -842,7 +844,7 @@ Retorne a questão reformulada no formato padrão (Enunciado, Alternativas se ap
                       flex: 1, padding: '8px 10px', borderRadius: 8, fontSize: 12, fontWeight: 700,
                       border: optionLanguage === 'en' ? '1.5px solid #268bd2' : '1px solid #e8e0d0',
                       background: optionLanguage === 'en' ? '#f0f8ff' : '#fff',
-                      color: optionLanguage === 'en' ? '#268bd2' : '#586e75', cursor: 'pointer'
+                      color: optionLanguage === 'en' ? '#268bd2' : '#7a5c42', cursor: 'pointer'
                     }}
                   >
                     Inglês
@@ -854,7 +856,7 @@ Retorne a questão reformulada no formato padrão (Enunciado, Alternativas se ap
                       flex: 1, padding: '8px 10px', borderRadius: 8, fontSize: 12, fontWeight: 700,
                       border: optionLanguage === 'pt' ? '1.5px solid #cb4b16' : '1px solid #e8e0d0',
                       background: optionLanguage === 'pt' ? '#fdf8f2' : '#fff',
-                      color: optionLanguage === 'pt' ? '#cb4b16' : '#586e75', cursor: 'pointer'
+                      color: optionLanguage === 'pt' ? '#cb4b16' : '#7a5c42', cursor: 'pointer'
                     }}
                   >
                     Português
@@ -938,22 +940,22 @@ Retorne a questão reformulada no formato padrão (Enunciado, Alternativas se ap
 
           {/* Seções */}
           <div style={CARD}>
-            <p style={{ fontSize: 13, fontWeight: 700, color: '#586e75', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 14, marginTop: 0 }}>Seções da Prova</p>
+            <p style={{ fontSize: 13, fontWeight: 700, color: '#7a5c42', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 14, marginTop: 0 }}>Seções da Prova</p>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
               {SECTIONS.map(({ key, icon, sub }) => {
                 const on = sections.includes(key)
                 return (
                   <button key={key} onClick={() => toggleSection(key)} style={{
                     textAlign: 'left', padding: '10px 12px', borderRadius: 12,
-                    border: on ? '1.5px solid #073642' : '1.5px solid #e4ddd0',
+                    border: on ? '1.5px solid #2c1a0e' : '1.5px solid #e4ddd0',
                     background: on ? '#f0ede4' : '#fdf9f3',
                     cursor: 'pointer', transition: 'all 0.15s',
                   }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
-                      <i className={`ti ${icon}`} style={{ fontSize: 16, color: on ? '#073642' : '#93a1a1' }} />
-                      <span style={{ fontSize: 13, fontWeight: 600, color: on ? '#073642' : '#586e75' }}>{key}</span>
+                      <i className={`ti ${icon}`} style={{ fontSize: 16, color: on ? '#2c1a0e' : '#a08060' }} />
+                      <span style={{ fontSize: 13, fontWeight: 600, color: on ? '#2c1a0e' : '#7a5c42' }}>{key}</span>
                     </div>
-                    <span style={{ fontSize: 11, color: '#93a1a1' }}>{sub}</span>
+                    <span style={{ fontSize: 11, color: '#a08060' }}>{sub}</span>
                   </button>
                 )
               })}
@@ -1018,29 +1020,29 @@ Retorne a questão reformulada no formato padrão (Enunciado, Alternativas se ap
           {/* BLOCO: Pontuação, Duração & Presets */}
           <details style={{ ...CARD, padding: 0, overflow: 'hidden' }}>
             <summary style={{ padding: '12px 16px', background: '#fdf8f2', cursor: 'pointer', fontWeight: 700, color: '#8b5e3c', display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
-              <span>⚖️</span>
+              <i className="ti ti-scale" style={{ fontSize: 16 }} />
               <span>Pontuação, Kiosk & Presets ({activePresetName})</span>
             </summary>
             <div style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                 <div>
-                  <label style={{ ...SL, fontSize: 11.5 }}>Nota Total (Pontos)</label>
+                  <label style={{ ...SL, fontSize: 11 }}>Nota Total (Pontos)</label>
                   <input type="number" min={1} max={100} value={totalScore} onChange={e => setTotalScore(Number(e.target.value))} style={SI} />
                 </div>
                 <div>
-                  <label style={{ ...SL, fontSize: 11.5 }}>Duração (Minutos)</label>
+                  <label style={{ ...SL, fontSize: 11 }}>Duração (Minutos)</label>
                   <input type="number" min={5} max={240} value={examDuration} onChange={e => setExamDuration(Number(e.target.value))} style={SI} />
                 </div>
               </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, color: '#586e75' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, color: '#7a5c42' }}>
                 <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
                   <input type="checkbox" checked={kioskMode} onChange={e => setKioskMode(e.target.checked)} style={{ accentColor: '#268bd2' }} />
-                  <span>🔒 Modo Kiosk Online (detecta troca de abas e bloqueia cópia)</span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><i className="ti ti-lock" style={{ fontSize: 14 }} /> Modo Kiosk Online (detecta troca de abas e bloqueia cópia)</span>
                 </label>
                 <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
                   <input type="checkbox" checked={generateFormB} onChange={e => setGenerateFormB(e.target.checked)} style={{ accentColor: '#8b5e3c' }} />
-                  <span>🅰️🅱️ Gerar Forma B (questões e alternativas embaralhadas)</span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><i className="ti ti-copy" style={{ fontSize: 14 }} /> Gerar Forma B (questões e alternativas embaralhadas)</span>
                 </label>
               </div>
 
@@ -1057,7 +1059,7 @@ Retorne a questão reformulada no formato padrão (Enunciado, Alternativas se ap
                         padding: '5px 10px', borderRadius: 8, fontSize: 11, fontWeight: 600,
                         border: activePresetName === p.name ? '1.5px solid #268bd2' : '1px solid #e0d8cc',
                         background: activePresetName === p.name ? '#f0f8ff' : '#faf8f5',
-                        color: activePresetName === p.name ? '#268bd2' : '#586e75', cursor: 'pointer'
+                        color: activePresetName === p.name ? '#268bd2' : '#7a5c42', cursor: 'pointer'
                       }}
                     >
                       {p.isDefault ? '★ ' : ''}{p.name}
@@ -1085,7 +1087,7 @@ Retorne a questão reformulada no formato padrão (Enunciado, Alternativas se ap
             <div style={{ background: '#fff', padding: '12px 18px', borderRadius: 16, border: '1px solid #ede8dc', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexShrink: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <i className="ti ti-headphones" style={{ fontSize: 20, color: '#268bd2' }} />
-                <span style={{ fontSize: 13, fontWeight: 700, color: '#073642' }}>Listening Track</span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: '#2c1a0e' }}>Listening Track</span>
                 <select value={accent} onChange={e => setAccent(e.target.value as 'US' | 'UK')} style={{ padding: '4px 8px', borderRadius: 8, border: '1px solid #ddd', fontSize: 12, outline: 'none' }}>
                   <option value="US"> US</option>
                   <option value="UK"> UK</option>
@@ -1218,7 +1220,7 @@ Retorne a questão reformulada no formato padrão (Enunciado, Alternativas se ap
               padding: '8px 16px',
               borderRadius: 14,
               border: '1px solid #ede8dc',
-              boxShadow: '0 2px 8px rgba(0,43,54,0.03)',
+              boxShadow: '0 2px 8px rgba(44,26,14,0.03)',
               flexShrink: 0
             }}>
               <span style={{ fontSize: 13, fontWeight: 800, color: '#2c1a0e' }}>
@@ -1242,7 +1244,8 @@ Retorne a questão reformulada no formato padrão (Enunciado, Alternativas se ap
                     gap: 6
                   }}
                 >
-                  📑 Boxes Editáveis & Reordenação
+                  <i className="ti ti-layout-cards" style={{ fontSize: 14 }} />
+                  <span>Boxes Editáveis & Reordenação</span>
                 </button>
                 <button
                   type="button"
@@ -1253,7 +1256,7 @@ Retorne a questão reformulada no formato padrão (Enunciado, Alternativas se ap
                     border: activeViewTab === 'canvas' ? '1.5px solid #8b5e3c' : '1px solid #d5c8bb',
                     background: activeViewTab === 'canvas' ? '#8b5e3c' : '#fff',
                     color: activeViewTab === 'canvas' ? '#fff' : '#2c1a0e',
-                    fontSize: 12.5,
+                    fontSize: 13,
                     fontWeight: 700,
                     cursor: 'pointer',
                     display: 'flex',
@@ -1261,16 +1264,17 @@ Retorne a questão reformulada no formato padrão (Enunciado, Alternativas se ap
                     gap: 6
                   }}
                 >
-                  📄 Folha Formatada / Canvas Oficial
+                  <i className="ti ti-file-text" style={{ fontSize: 14 }} />
+                  <span>Folha Formatada / Canvas</span>
                 </button>
               </div>
             </div>
           )}
 
           {/* Document Canvas / Editable Boxes Container */}
-          <div style={{ flex: 1, borderRadius: 20, overflowY: 'auto', border: '1px solid #ede8dc', boxShadow: '0 4px 24px rgba(0,43,54,0.04)', background: '#fff', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+          <div style={{ flex: 1, borderRadius: 20, overflowY: 'auto', border: '1px solid #ede8dc', boxShadow: '0 4px 24px rgba(44,26,14,0.04)', background: '#fff', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
             {!result && !loading ? (
-              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#93a1a1', gap: 16, padding: 32 }}>
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#a08060', gap: 16, padding: 32 }}>
                 <i className="ti ti-file-certificate" style={{ fontSize: 56, opacity: 0.3 }} />
                 <p style={{ fontSize: 16 }}>Sua prova aparecerá aqui, pronta para editar e exportar</p>
                 {!hasApi && (
@@ -1281,9 +1285,17 @@ Retorne a questão reformulada no formato padrão (Enunciado, Alternativas se ap
                 )}
               </div>
             ) : loading ? (
-              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, padding: 32 }}>
-                <div style={{ width: 56, height: 56, borderRadius: '50%', border: '5px solid #eee8d5', borderTopColor: '#073642', animation: 'spin 0.8s linear infinite' }} />
-                <p style={{ color: '#586e75', fontSize: 14 }}>Construindo sua prova completa...</p>
+              <div style={{ flex: 1, padding: 32, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <AiProgressStepper
+                  isGenerating={loading}
+                  title="Construindo Prova Estruturada com IA"
+                  subtitle={`Disciplina: ${activeProfile.name} • Tópico: ${topic || 'Conteúdo Programático'}`}
+                  steps={[
+                    `Consultando matriz de referência ${activeProfile.name} e habilidades BNCC...`,
+                    `Elaborando enunciados psicométricos, distratores e textos-base...`,
+                    'Calibrando gabarito oficial, critérios de correção e folha formatada...',
+                  ]}
+                />
               </div>
             ) : activeViewTab === 'boxes' ? (
               <div style={{ padding: 18 }}>
@@ -1334,7 +1346,7 @@ Retorne a questão reformulada no formato padrão (Enunciado, Alternativas se ap
           questions={parseQuestionsFromMarkdown(result)}
           onClose={() => setShowOnlineModal(false)}
           onComplete={(name, score) => {
-            alert(` Prova enviada com sucesso por ${name}! Nota ${score}/10 gravada automaticamente no Diário de Classe (Gradebook).`)
+            toast.success(` Prova enviada com sucesso por ${name}! Nota ${score}/10 gravada automaticamente no Diário de Classe (Gradebook).`)
           }}
         />
       )}
@@ -1353,7 +1365,7 @@ Retorne a questão reformulada no formato padrão (Enunciado, Alternativas se ap
             <h3 style={{ fontSize: 18, fontWeight: 800, color: '#2c1a0e', margin: '0 0 6px 0' }}>
               QR Code para Acesso dos Alunos
             </h3>
-            <p style={{ fontSize: 13, color: '#586e75', margin: '0 0 16px 0' }}>
+            <p style={{ fontSize: 13, color: '#7a5c42', margin: '0 0 16px 0' }}>
               Projete este QR Code no telão da sala ou imprima na folha de apoio para os alunos responderem pelo celular.
             </p>
 
@@ -1369,7 +1381,7 @@ Retorne a questão reformulada no formato padrão (Enunciado, Alternativas se ap
             <button
               onClick={() => setShowQrModal(false)}
               style={{
-                marginTop: 20, padding: '10px 24px', background: '#073642', color: '#fff',
+                marginTop: 20, padding: '10px 24px', background: '#2c1a0e', color: '#fff',
                 border: 'none', borderRadius: 10, fontWeight: 800, cursor: 'pointer', fontSize: 13
               }}
             >

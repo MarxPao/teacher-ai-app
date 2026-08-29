@@ -1,4 +1,5 @@
 'use client'
+import { toast, showConfirm } from '@/components/Toast'
 
 import { useRef, useEffect, useState, useCallback } from 'react'
 import { 
@@ -157,7 +158,7 @@ export default function DocumentCanvas({
           alt="${title || caption || 'Imagem Didática'}" 
           style="max-width: ${imageWidthPercent}; height: auto; border-radius: 6px; ${alignStyle} box-shadow: 0 2px 8px rgba(0,0,0,0.08);" 
         />
-        ${caption ? `<div style="font-size: 11.5px; color: #586e75; font-style: italic; margin-top: 4px;">${caption}</div>` : ''}
+        ${caption ? `<div style="font-size: 11.5px; color: #7a5c42; font-style: italic; margin-top: 4px;">${caption}</div>` : ''}
       </div>
       <p><br /></p>
     `
@@ -196,7 +197,7 @@ export default function DocumentCanvas({
  matchedHeader?.headerImageUrl ? `
  <div style="margin-bottom:16px;">
  <img src="${matchedHeader.headerImageUrl}" style="width:100%;height:auto;display:block;" />
- <table style="width:100%;border-collapse:collapse;font-size:10pt;border:1px solid #073642;margin-top:6px;">
+ <table style="width:100%;border-collapse:collapse;font-size:10pt;border:1px solid #2c1a0e;margin-top:6px;">
  <tr>
  <td style="padding:4px 8px;border:1px solid #ccc;"><b>Data:</b> ${fields.date || '___/___/______'}</td>
  <td style="padding:4px 8px;border:1px solid #ccc;"><b>Professor(a):</b> ${fields.teacher || teacherName}</td>
@@ -210,8 +211,8 @@ export default function DocumentCanvas({
  </table>
  </div>
  ` : `
- <div style="border-bottom:2px solid #073642;padding-bottom:15px;margin-bottom:30px;font-family:'Times New Roman',serif;">
- <h2 style="margin:0;color:#073642;font-size:18pt;">${schoolName}</h2>
+ <div style="border-bottom:2px solid #2c1a0e;padding-bottom:15px;margin-bottom:30px;font-family:'Times New Roman',serif;">
+ <h2 style="margin:0;color:#2c1a0e;font-size:18pt;">${schoolName}</h2>
  <p style="margin:5px 0 0;font-size:11pt;">
  Professor(a): <b>${fields.teacher || teacherName}</b> | 
  Data: <b>${fields.date || '____/____/____'}</b> | 
@@ -219,7 +220,7 @@ export default function DocumentCanvas({
  Valor: <b>${fields.gradeValue || '____'}</b>
  </p>
  <p style="margin:3px 0 0;font-size:11pt;">Aluno(a): <b>${fields.student || '____________________________________________________'}</b></p>
- <h1 style="margin:20px 0 0;color:#073642;font-size:16pt;text-align:center;">${docTitle}</h1>
+ <h1 style="margin:20px 0 0;color:#2c1a0e;font-size:16pt;text-align:center;">${docTitle}</h1>
  </div>
  `
  ) : ''
@@ -233,7 +234,7 @@ export default function DocumentCanvas({
  @page WordSection1 { size:21cm 29.7cm; margin:3cm 2cm 2cm 3cm; }
  div.WordSection1 { page:WordSection1; }
  body { font-family:Arial,sans-serif; font-size:12pt; line-height:1.6; color:#000; }
- h1, h2, h3 { color:#073642; }
+ h1, h2, h3 { color:#2c1a0e; }
  </style>
  </head>
  <body>
@@ -308,7 +309,7 @@ export default function DocumentCanvas({
  {/* Header Toggle */}
  <button
  onClick={onToggleHeader}
- style={{ ...BtnStyle, background: hideHeader ? '#cb4b16' : '#eee8d5', color: hideHeader ? '#fff' : '#073642' }}
+ style={{ ...BtnStyle, background: hideHeader ? '#cb4b16' : '#f0e8d8', color: hideHeader ? '#fff' : '#2c1a0e' }}
  >
  <i className={hideHeader ? 'ti ti-eye-off' : 'ti ti-eye'} />
  {hideHeader ? 'Sem Cabeçalho' : 'Com Cabeçalho'}
@@ -319,7 +320,7 @@ export default function DocumentCanvas({
  <button
  onClick={() => setShowHeaderForm(!showHeaderForm)}
  title="Mostrar/Ocultar campos de dados do cabeçalho"
- style={{ ...BtnStyle, background: showHeaderForm ? '#268bd2' : '#f5f0e8', color: showHeaderForm ? '#fff' : '#586e75' }}
+ style={{ ...BtnStyle, background: showHeaderForm ? '#268bd2' : '#f5f0e8', color: showHeaderForm ? '#fff' : '#7a5c42' }}
  >
  <i className="ti ti-edit" />
  Campos do Cabeçalho
@@ -355,11 +356,11 @@ export default function DocumentCanvas({
  background: '#fffdf9', borderBottom: '1px solid #ede8dc', padding: '10px 16px',
  display: 'flex', flexWrap: 'wrap', gap: '10px 16px', alignItems: 'center', fontSize: 13
  }}>
- <span style={{ fontSize: 11, fontWeight: 700, color: '#586e75', textTransform: 'uppercase', letterSpacing: 0.5, marginRight: 4 }}>
+ <span style={{ fontSize: 11, fontWeight: 700, color: '#7a5c42', textTransform: 'uppercase', letterSpacing: 0.5, marginRight: 4 }}>
  Preencher Cabeçalho:
  </span>
 
- <label style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#073642', fontWeight: 600 }}>
+ <label style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#2c1a0e', fontWeight: 600 }}>
  Data:
  <input
  type="text"
@@ -370,7 +371,7 @@ export default function DocumentCanvas({
  />
  </label>
 
- <label style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#073642', fontWeight: 600 }}>
+ <label style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#2c1a0e', fontWeight: 600 }}>
  Turma:
  <input
  type="text"
@@ -381,7 +382,7 @@ export default function DocumentCanvas({
  />
  </label>
 
- <label style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#073642', fontWeight: 600 }}>
+ <label style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#2c1a0e', fontWeight: 600 }}>
  Disciplina:
  <input
  type="text"
@@ -392,7 +393,7 @@ export default function DocumentCanvas({
  />
  </label>
 
- <label style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#073642', fontWeight: 600 }}>
+ <label style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#2c1a0e', fontWeight: 600 }}>
  Valor:
  <input
  type="text"
@@ -403,7 +404,7 @@ export default function DocumentCanvas({
  />
  </label>
 
- <label style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#073642', fontWeight: 600 }}>
+ <label style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#2c1a0e', fontWeight: 600 }}>
  Professor(a):
  <input
  type="text"
@@ -414,7 +415,7 @@ export default function DocumentCanvas({
  />
  </label>
 
- <label style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#073642', fontWeight: 600, flex: 1, minWidth: 220 }}>
+ <label style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#2c1a0e', fontWeight: 600, flex: 1, minWidth: 220 }}>
  Aluno(a):
  <input
  type="text"
@@ -430,7 +431,7 @@ export default function DocumentCanvas({
  {/* Document Page Container */}
  <div
  ref={scrollRef}
- style={{ flex: 1, overflowY: 'auto', padding: '32px', background: '#eee8d5', display: 'flex', justifyContent: 'center' }}
+ style={{ flex: 1, overflowY: 'auto', padding: '32px', background: '#f0e8d8', display: 'flex', justifyContent: 'center' }}
  >
  <div
  id="exam-document-page"
@@ -472,38 +473,38 @@ export default function DocumentCanvas({
  </div>
  ) : (
  /* Mode B: Full ContentEditable Academic Text Header */
- <div style={{ borderBottom: '2px solid #073642', paddingBottom: 18 }}>
+ <div style={{ borderBottom: '2px solid #2c1a0e', paddingBottom: 18 }}>
  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
  <div
  contentEditable
  suppressContentEditableWarning
  onBlur={e => onHeaderChange?.({ headerSchool: e.currentTarget.textContent || '' })}
- style={{ fontSize: 20, fontWeight: 800, color: '#073642', outline: 'none', fontFamily: 'Georgia, serif' }}
+ style={{ fontSize: 20, fontWeight: 800, color: '#2c1a0e', outline: 'none', fontFamily: 'Georgia, serif' }}
  >
  {matchedHeader?.officialName || headerData?.school || 'Nome da Escola'}
  </div>
- <div style={{ fontSize: 13, color: '#073642', fontWeight: 600 }}>
- Data: <span contentEditable suppressContentEditableWarning onBlur={e => updateField('date', e.currentTarget.textContent || '')} style={{ outline: 'none', borderBottom: '1px dashed #073642', padding: '0 4px' }}>{fields.date || '____/____/____'}</span>
+ <div style={{ fontSize: 13, color: '#2c1a0e', fontWeight: 600 }}>
+ Data: <span contentEditable suppressContentEditableWarning onBlur={e => updateField('date', e.currentTarget.textContent || '')} style={{ outline: 'none', borderBottom: '1px dashed #2c1a0e', padding: '0 4px' }}>{fields.date || '____/____/____'}</span>
  </div>
  </div>
 
- <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px 16px', fontSize: 13, color: '#073642', marginBottom: 10 }}>
+ <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px 16px', fontSize: 13, color: '#2c1a0e', marginBottom: 10 }}>
  <div>
- Professor(a): <span contentEditable suppressContentEditableWarning onBlur={e => updateField('teacher', e.currentTarget.textContent || '')} style={{ fontWeight: 600, outline: 'none', borderBottom: '1px dashed #073642', padding: '0 4px' }}>{fields.teacher || headerData?.teacher || 'Seu Nome'}</span>
+ Professor(a): <span contentEditable suppressContentEditableWarning onBlur={e => updateField('teacher', e.currentTarget.textContent || '')} style={{ fontWeight: 600, outline: 'none', borderBottom: '1px dashed #2c1a0e', padding: '0 4px' }}>{fields.teacher || headerData?.teacher || 'Seu Nome'}</span>
  </div>
  <div>
- Turma: <span contentEditable suppressContentEditableWarning onBlur={e => updateField('classGroup', e.currentTarget.textContent || '')} style={{ fontWeight: 600, outline: 'none', borderBottom: '1px dashed #073642', padding: '0 4px' }}>{fields.classGroup || '_________'}</span>
+ Turma: <span contentEditable suppressContentEditableWarning onBlur={e => updateField('classGroup', e.currentTarget.textContent || '')} style={{ fontWeight: 600, outline: 'none', borderBottom: '1px dashed #2c1a0e', padding: '0 4px' }}>{fields.classGroup || '_________'}</span>
  </div>
  <div>
- Valor: <span contentEditable suppressContentEditableWarning onBlur={e => updateField('gradeValue', e.currentTarget.textContent || '')} style={{ fontWeight: 600, outline: 'none', borderBottom: '1px dashed #073642', padding: '0 4px' }}>{fields.gradeValue || '____'}</span>
+ Valor: <span contentEditable suppressContentEditableWarning onBlur={e => updateField('gradeValue', e.currentTarget.textContent || '')} style={{ fontWeight: 600, outline: 'none', borderBottom: '1px dashed #2c1a0e', padding: '0 4px' }}>{fields.gradeValue || '____'}</span>
  </div>
  {fields.subject && (
  <div style={{ gridColumn: '1 / -1' }}>
- Disciplina: <span contentEditable suppressContentEditableWarning onBlur={e => updateField('subject', e.currentTarget.textContent || '')} style={{ fontWeight: 600, outline: 'none', borderBottom: '1px dashed #073642', padding: '0 4px' }}>{fields.subject}</span>
+ Disciplina: <span contentEditable suppressContentEditableWarning onBlur={e => updateField('subject', e.currentTarget.textContent || '')} style={{ fontWeight: 600, outline: 'none', borderBottom: '1px dashed #2c1a0e', padding: '0 4px' }}>{fields.subject}</span>
  </div>
  )}
  <div style={{ gridColumn: '1 / -1' }}>
- Aluno(a): <span contentEditable suppressContentEditableWarning onBlur={e => updateField('student', e.currentTarget.textContent || '')} style={{ fontWeight: 500, outline: 'none', borderBottom: '1px dashed #073642', padding: '0 4px', display: 'inline-block', minWidth: 300 }}>{fields.student || '__________________________________________________________________'}</span>
+ Aluno(a): <span contentEditable suppressContentEditableWarning onBlur={e => updateField('student', e.currentTarget.textContent || '')} style={{ fontWeight: 500, outline: 'none', borderBottom: '1px dashed #2c1a0e', padding: '0 4px', display: 'inline-block', minWidth: 300 }}>{fields.student || '__________________________________________________________________'}</span>
  </div>
  </div>
 
@@ -511,7 +512,7 @@ export default function DocumentCanvas({
  contentEditable
  suppressContentEditableWarning
  onBlur={e => onHeaderChange?.({ headerTitle: e.currentTarget.textContent || '' })}
- style={{ marginTop: 16, fontSize: 22, fontWeight: 800, color: '#073642', textAlign: 'center', outline: 'none' }}
+ style={{ marginTop: 16, fontSize: 22, fontWeight: 800, color: '#2c1a0e', textAlign: 'center', outline: 'none' }}
  >
  {headerData?.title || 'Título do Documento'}
  </div>
@@ -530,7 +531,7 @@ export default function DocumentCanvas({
  {isDragOver && (
  <div style={{
  position: 'absolute', inset: 0,
- background: 'rgba(7,54,66,0.05)', border: '2px dashed #073642',
+ background: 'rgba(7,54,66,0.05)', border: '2px dashed #2c1a0e',
  borderRadius: 8, pointerEvents: 'none', zIndex: 10
  }} />
  )}
@@ -545,7 +546,7 @@ export default function DocumentCanvas({
  outline: 'none',
  fontSize: 14,
  lineHeight: 1.8,
- color: '#073642',
+ color: '#2c1a0e',
  fontFamily: fontFamily + ', sans-serif',
  cursor: 'text',
  wordBreak: 'break-word'
@@ -761,7 +762,7 @@ export default function DocumentCanvas({
                         setSelectedImageForInsert(tempItem)
                       }
                     } catch (err: any) {
-                      alert('Erro ao carregar arquivo: ' + err.message)
+                      toast.success('Erro ao carregar arquivo: ' + err.message)
                     } finally {
                       setIsUploadingImage(false)
                     }
@@ -800,7 +801,7 @@ export default function DocumentCanvas({
             {/* CONTEÚDO DA ABA 3: LINK WEB (URL) */}
             {imagePickerTab === 'url' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <label style={{ fontSize: 12.5, fontWeight: 700, color: '#586e75' }}>URL Direta da Imagem:</label>
+                <label style={{ fontSize: 12.5, fontWeight: 700, color: '#7a5c42' }}>URL Direta da Imagem:</label>
                 <input
                   type="text"
                   placeholder="https://exemplo.com/imagem.png"
@@ -836,7 +837,7 @@ export default function DocumentCanvas({
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
                   {/* Tamanho */}
                   <div>
-                    <label style={{ fontSize: 11.5, fontWeight: 700, color: '#586e75', display: 'block', marginBottom: 4 }}>Largura / Tamanho</label>
+                    <label style={{ fontSize: 11.5, fontWeight: 700, color: '#7a5c42', display: 'block', marginBottom: 4 }}>Largura / Tamanho</label>
                     <select
                       value={imageWidthPercent}
                       onChange={e => setImageWidthPercent(e.target.value as any)}
@@ -851,7 +852,7 @@ export default function DocumentCanvas({
 
                   {/* Alinhamento */}
                   <div>
-                    <label style={{ fontSize: 11.5, fontWeight: 700, color: '#586e75', display: 'block', marginBottom: 4 }}>Alinhamento</label>
+                    <label style={{ fontSize: 11.5, fontWeight: 700, color: '#7a5c42', display: 'block', marginBottom: 4 }}>Alinhamento</label>
                     <select
                       value={imageAlign}
                       onChange={e => setImageAlign(e.target.value as any)}
@@ -865,7 +866,7 @@ export default function DocumentCanvas({
 
                   {/* Legenda */}
                   <div>
-                    <label style={{ fontSize: 11.5, fontWeight: 700, color: '#586e75', display: 'block', marginBottom: 4 }}>Legenda (Opcional)</label>
+                    <label style={{ fontSize: 11.5, fontWeight: 700, color: '#7a5c42', display: 'block', marginBottom: 4 }}>Legenda (Opcional)</label>
                     <input
                       type="text"
                       placeholder="Ex: Figura 1.1..."
@@ -893,7 +894,7 @@ export default function DocumentCanvas({
                 onClick={() => setIsImagePickerOpen(false)}
                 style={{
                   padding: '9px 18px', borderRadius: 10, border: '1px solid rgba(139,115,85,0.35)',
-                  background: '#fffcf8', color: '#586e75', fontSize: 13, fontWeight: 700, cursor: 'pointer'
+                  background: '#fffcf8', color: '#7a5c42', fontSize: 13, fontWeight: 700, cursor: 'pointer'
                 }}
               >
                 Cancelar
@@ -934,7 +935,7 @@ function TBtn({ icon, title, onClick }: { icon: string; title: string; onClick: 
  title={title}
  style={{
  width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center',
- background: 'none', border: 'none', cursor: 'pointer', color: '#586e75', borderRadius: 8,
+ background: 'none', border: 'none', cursor: 'pointer', color: '#7a5c42', borderRadius: 8,
  transition: 'background 0.15s'
  }}
  onMouseOver={e => (e.currentTarget.style.background = '#f5f0e8')}
@@ -952,7 +953,7 @@ const OverlayInputStyle: React.CSSProperties = {
  padding: '2px 6px',
  fontSize: '11px',
  fontWeight: 700,
- color: '#073642',
+ color: '#2c1a0e',
  fontFamily: 'Arial, sans-serif',
  outline: 'none',
  boxSizing: 'border-box',
@@ -961,21 +962,21 @@ const OverlayInputStyle: React.CSSProperties = {
 
 const FormInputStyle: React.CSSProperties = {
  padding: '4px 8px', borderRadius: 6, border: '1px solid #c0a88a',
- background: '#fff', fontSize: 13, color: '#073642', outline: 'none',
+ background: '#fff', fontSize: 13, color: '#2c1a0e', outline: 'none',
  width: 130
 }
 
 const CellHeadStyle: React.CSSProperties = {
- padding: '4px 6px', border: '1px solid #073642', background: '#f5f0e8', color: '#073642', whiteSpace: 'nowrap'
+ padding: '4px 6px', border: '1px solid #2c1a0e', background: '#f5f0e8', color: '#2c1a0e', whiteSpace: 'nowrap'
 }
 
 const CellBodyStyle: React.CSSProperties = {
- padding: '4px 8px', border: '1px solid #073642', color: '#073642', outline: 'none', background: '#fff'
+ padding: '4px 8px', border: '1px solid #2c1a0e', color: '#2c1a0e', outline: 'none', background: '#fff'
 }
 
 const SS: React.CSSProperties = {
  padding: '4px 8px', border: '1px solid #ede8dc', borderRadius: 6,
- fontSize: 12, background: '#fdf9f3', color: '#073642', outline: 'none', cursor: 'pointer'
+ fontSize: 12, background: '#fdf9f3', color: '#2c1a0e', outline: 'none', cursor: 'pointer'
 }
 const BtnStyle: React.CSSProperties = {
  padding: '6px 12px', borderRadius: 8, border: 'none', fontSize: 11,

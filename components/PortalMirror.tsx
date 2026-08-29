@@ -96,10 +96,11 @@ export default function PortalMirror() {
             style={{ fontSize: 18, color: extensionDetected ? '#859900' : '#b58900' }} />
         </div>
         <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: '#073642' }}>
-            {extensionDetected ? '✅ Extensão TEACHER??? ativa' : '⚠️ Extensão não detectada'}
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#2c1a0e', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <i className={`ti ${extensionDetected ? 'ti-circle-check text-green-600' : 'ti-alert-circle text-amber-600'}`} />
+            <span>{extensionDetected ? 'Extensão Teacher AI ativa' : 'Extensão não detectada'}</span>
           </div>
-          <div style={{ fontSize: 11, color: '#93a1a1', marginTop: 2 }}>
+          <div style={{ fontSize: 11, color: '#a08060', marginTop: 2 }}>
             {extensionDetected
               ? 'Preenchimento automático de portais disponível'
               : 'Instale a extensão no Chrome para autopreenchimento dos portais'
@@ -123,12 +124,12 @@ export default function PortalMirror() {
 
       {/* Portais */}
       <div>
-        <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', color: '#93a1a1', marginBottom: 12 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', color: '#a08060', marginBottom: 12 }}>
           Portais Escolares
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10 }}>
           {ALL_PORTALS.map((portal) => {
-            const style = PORTAL_COLORS[portal.id] || { bg: '#eee8d5', color: '#586e75', icon: 'ti-world' }
+            const style = PORTAL_COLORS[portal.id] || { bg: '#f0e8d8', color: '#7a5c42', icon: 'ti-world' }
             const isFilling = fillingPortal === portal.id
             return (
               <div
@@ -141,7 +142,7 @@ export default function PortalMirror() {
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <i className={`ti ${style.icon}`} style={{ fontSize: 18, color: style.color }} />
-                  <span style={{ fontSize: 12, fontWeight: 700, color: '#073642' }}>{portal.name}</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: '#2c1a0e' }}>{portal.name}</span>
                 </div>
                 <div style={{ display: 'flex', gap: 6 }}>
                   <button
@@ -160,7 +161,7 @@ export default function PortalMirror() {
                       disabled={isFilling}
                       style={{
                         flex: 1, padding: '6px 0', border: 'none', borderRadius: 8,
-                        background: isFilling ? '#eee8d5' : style.color, color: isFilling ? '#93a1a1' : '#fff',
+                        background: isFilling ? '#f0e8d8' : style.color, color: isFilling ? '#a08060' : '#fff',
                         fontSize: 11, fontWeight: 600, cursor: isFilling ? 'not-allowed' : 'pointer',
                       }}
                     >
@@ -178,12 +179,12 @@ export default function PortalMirror() {
       {/* Log de preenchimentos recentes */}
       {recentFills.length > 0 && (
         <div>
-          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', color: '#93a1a1', marginBottom: 12 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', color: '#a08060', marginBottom: 12 }}>
             Lançamentos Recentes
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {recentFills.slice(0, 8).map((fill, i) => {
-              const style = PORTAL_COLORS[fill.platform] || { color: '#586e75', icon: 'ti-world' }
+              const style = PORTAL_COLORS[fill.platform] || { color: '#7a5c42', icon: 'ti-world' }
               const ts = new Date(fill.timestamp)
               const timeLabel = ts.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) +
                 ' ' + ts.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
@@ -198,14 +199,14 @@ export default function PortalMirror() {
                 >
                   <i className={`ti ${style.icon}`} style={{ color: style.color, fontSize: 16, flexShrink: 0 }} />
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: '#073642', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: '#2c1a0e', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {fill.title}
                     </div>
-                    <div style={{ fontSize: 11, color: '#93a1a1' }}>
+                    <div style={{ fontSize: 11, color: '#a08060' }}>
                       {fill.platformName}{fill.classRef ? ` · ${fill.classRef}` : ''}{fill.date ? ` · ${fill.date.split('-').reverse().join('/')}` : ''}
                     </div>
                   </div>
-                  <span style={{ fontSize: 10, color: '#93a1a1', flexShrink: 0 }}>{timeLabel}</span>
+                  <span style={{ fontSize: 10, color: '#a08060', flexShrink: 0 }}>{timeLabel}</span>
                 </div>
               )
             })}

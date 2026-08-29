@@ -58,7 +58,7 @@ export const PEDAGOGICAL_METHODOLOGIES: MethodologyDefinition[] = [
     category: 'Metodologias do Inglês (ELT)',
     description: 'Ensino focado no diálogo emergente dos alunos com mínimo recurso artificial.',
     promptInstruction: 'Crie prompts de conversação emergente e altamente pessoais baseados em experiências do aluno, estimulando linguagem natural e correção no momento oportuno.',
-    badgeColor: '#073642',
+    badgeColor: '#2c1a0e',
   },
   {
     id: 'audio_lingual',
@@ -226,7 +226,7 @@ export const PEDAGOGICAL_METHODOLOGIES: MethodologyDefinition[] = [
     category: 'Taxonomia Cognitiva',
     description: '4 Níveis de Profundidade do Conhecimento: Recall, Skill/Concept, Strategic Thinking, Extended Thinking.',
     promptInstruction: 'Classifique e estruture as questões conforme os 4 níveis DOK de Webb, enfatizando raciocínio estratégico e pensamento estendido.',
-    badgeColor: '#073642',
+    badgeColor: '#2c1a0e',
   }
 ]
 

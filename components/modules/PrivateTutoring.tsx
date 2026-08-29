@@ -1,4 +1,5 @@
 'use client'
+import { toast, showConfirm } from '@/components/Toast'
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import ModuleShell from '@/components/ModuleShell'
@@ -658,8 +659,8 @@ export default function PrivateTutoring() {
     setEditingStudent(null)
   }
 
-  const handleDeleteStudent = (id: string) => {
-    if (!confirm('Deseja realmente excluir este aluno/turma e todo seu histórico?')) return
+  const handleDeleteStudent = async (id: string) => {
+    if (!(await showConfirm({ message: 'Deseja realmente excluir este aluno/turma e todo seu histórico?' }))) return
     const updated = students.filter(s => s.id !== id)
     saveStudentsAndSync(updated)
     deletePrivateStudentFromSupabase(id).catch(() => {})
@@ -717,7 +718,7 @@ export default function PrivateTutoring() {
         saveStudentsAndSync(updated)
       }
     } catch {
-      alert('Não foi possível gerar o diagnóstico no momento.')
+      toast.success('Não foi possível gerar o diagnóstico no momento.')
     } finally {
       setAiDiagnosticLoading(false)
     }
@@ -802,8 +803,8 @@ export default function PrivateTutoring() {
     setEditingLesson(null)
   }
 
-  const handleDeleteLesson = (lesId: string) => {
-    if (!activeStudent || !confirm('Deseja excluir este registro de aula?')) return
+  const handleDeleteLesson = async (lesId: string) => {
+    if (!activeStudent || !(await showConfirm({ message: 'Deseja excluir este registro de aula?' }))) return
     const updatedLessons = (activeStudent.lessonsHistory || []).filter(l => l.id !== lesId)
     const updatedStudents = students.map(s => s.id === activeStudent.id ? {
       ...s,
@@ -842,8 +843,8 @@ export default function PrivateTutoring() {
     setBookNotes('')
   }
 
-  const handleDeleteBook = (id: string) => {
-    if (!confirm('Deseja remover este livro da biblioteca?')) return
+  const handleDeleteBook = async (id: string) => {
+    if (!(await showConfirm({ message: 'Deseja remover este livro da biblioteca?' }))) return
     const updated = books.filter(b => b.id !== id)
     saveBooksAndSync(updated)
     deletePrivateBookFromSupabase(id).catch(() => {})
@@ -879,8 +880,8 @@ export default function PrivateTutoring() {
     setDidacticVocabularyFocus('')
   }
 
-  const handleDeleteDidacticUnit = (id: string) => {
-    if (!confirm('Deseja remover esta unidade da sequência didática?')) return
+  const handleDeleteDidacticUnit = async (id: string) => {
+    if (!(await showConfirm({ message: 'Deseja remover esta unidade da sequência didática?' }))) return
     const updated = didacticUnits.filter(u => u.id !== id)
     saveDidacticAndSync(updated)
     deletePrivateDidacticUnitFromSupabase(id).catch(() => {})
@@ -1101,7 +1102,7 @@ export default function PrivateTutoring() {
                       </button>
                       <button
                         onClick={() => setIsPostItViewerOpen(false)}
-                        style={{ background: 'none', border: 'none', color: '#93a1a1', fontSize: 14, cursor: 'pointer' }}
+                        style={{ background: 'none', border: 'none', color: '#a08060', fontSize: 14, cursor: 'pointer' }}
                       >
                         ✕
                       </button>
@@ -1258,7 +1259,7 @@ export default function PrivateTutoring() {
                     <span
                       onClick={() => handleToggleTodo(todo.id)}
                       style={{
-                        flex: 1, fontSize: 12.5, fontWeight: 600, color: todo.done ? '#93a1a1' : '#2c1a0e',
+                        flex: 1, fontSize: 12.5, fontWeight: 600, color: todo.done ? '#a08060' : '#2c1a0e',
                         textDecoration: todo.done ? 'line-through' : 'none', cursor: 'pointer'
                       }}
                     >
@@ -1329,7 +1330,7 @@ export default function PrivateTutoring() {
                           HOJE
                         </span>
                       )}
-                      <div style={{ fontSize: 10.5, fontWeight: 700, color: isSelected ? '#8b5e3c' : '#93a1a1', textTransform: 'uppercase' }}>
+                      <div style={{ fontSize: 10.5, fontWeight: 700, color: isSelected ? '#8b5e3c' : '#a08060', textTransform: 'uppercase' }}>
                         {day.short}
                       </div>
                       <div style={{ fontSize: 12.5, fontWeight: 800, color: '#2c1a0e', marginTop: 1 }}>
@@ -1343,7 +1344,7 @@ export default function PrivateTutoring() {
               {/* Lista de Alunos/Turmas com Aula no Dia Selecionado */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {students.filter(s => (s.daysOfWeek || []).includes(selectedDayOfWeek)).length === 0 ? (
-                  <div style={{ padding: '16px 0', textAlign: 'center', color: '#93a1a1', fontSize: 12 }}>
+                  <div style={{ padding: '16px 0', textAlign: 'center', color: '#a08060', fontSize: 12 }}>
                     <i className="ti ti-coffee" style={{ fontSize: 20, display: 'block', marginBottom: 4, color: '#b58900' }} />
                     Nenhuma aula particular agendada para este dia da semana.
                   </div>
@@ -1766,7 +1767,7 @@ export default function PrivateTutoring() {
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
             <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-              <label style={{ fontSize: 13, fontWeight: 700, color: '#586e75' }}>Aluno / Turma Selecionada:</label>
+              <label style={{ fontSize: 13, fontWeight: 700, color: '#7a5c42' }}>Aluno / Turma Selecionada:</label>
               <select
                 value={activeStudent.id}
                 onChange={e => setSelectedStudentId(e.target.value)}
@@ -1842,7 +1843,7 @@ export default function PrivateTutoring() {
                       )}
 
                       {les.homework && (
-                        <div style={{ fontSize: 12, color: '#586e75', marginBottom: 4 }}>
+                        <div style={{ fontSize: 12, color: '#7a5c42', marginBottom: 4 }}>
                           <strong>Homework:</strong> {les.homework}
                         </div>
                       )}
@@ -1912,7 +1913,7 @@ export default function PrivateTutoring() {
                   </h3>
                   {book.author && <div style={{ fontSize: 12, color: '#665c54', marginBottom: 6 }}>Autor / Editora: {book.author}</div>}
                   {book.studentName && <div style={{ fontSize: 11.5, color: '#0284c7', fontWeight: 700, marginBottom: 8 }}>🎓 Vinculado a: {book.studentName}</div>}
-                  {book.notes && <p style={{ fontSize: 12, color: '#586e75', lineHeight: 1.4, margin: '8px 0' }}>{book.notes}</p>}
+                  {book.notes && <p style={{ fontSize: 12, color: '#7a5c42', lineHeight: 1.4, margin: '8px 0' }}>{book.notes}</p>}
                 </div>
 
                 <div style={{ borderTop: '1px solid rgba(139,115,85,0.1)', paddingTop: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -1929,7 +1930,7 @@ export default function PrivateTutoring() {
                       Abrir PDF 📄
                     </a>
                   ) : (
-                    <span style={{ fontSize: 11, color: '#93a1a1' }}>Material Físico / Digital</span>
+                    <span style={{ fontSize: 11, color: '#a08060' }}>Material Físico / Digital</span>
                   )}
                 </div>
               </div>
@@ -2072,7 +2073,7 @@ export default function PrivateTutoring() {
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
             <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-              <label style={{ fontSize: 13, fontWeight: 700, color: '#586e75' }}>Aluno / Turma Selecionada:</label>
+              <label style={{ fontSize: 13, fontWeight: 700, color: '#7a5c42' }}>Aluno / Turma Selecionada:</label>
               <select
                 value={activeStudent.id}
                 onChange={e => setSelectedStudentId(e.target.value)}
@@ -2145,7 +2146,7 @@ export default function PrivateTutoring() {
                     {aiDiagnosticLoading ? 'Analisando...' : 'Diagnóstico IA ✨'}
                   </button>
                 </div>
-                <p style={{ fontSize: 12.5, color: '#586e75', lineHeight: 1.45, margin: 0 }}>
+                <p style={{ fontSize: 12.5, color: '#7a5c42', lineHeight: 1.45, margin: 0 }}>
                   {st.aiDiagnostic || 'Sem diagnóstico gerado. Clique em "Diagnóstico IA" para avaliar a evolução pedagógica.'}
                 </p>
               </div>
@@ -2823,14 +2824,14 @@ const InactiveTabStyle: React.CSSProperties = {
   fontSize: 12, fontWeight: 600, cursor: 'pointer'
 }
 const ActionIconButton: React.CSSProperties = { background: 'none', border: 'none', cursor: 'pointer', fontSize: 13 }
-const LabelStyle: React.CSSProperties = { fontSize: 11.5, fontWeight: 700, color: '#586e75', display: 'block', marginBottom: 3 }
+const LabelStyle: React.CSSProperties = { fontSize: 11.5, fontWeight: 700, color: '#7a5c42', display: 'block', marginBottom: 3 }
 const InputStyle: React.CSSProperties = {
   width: '100%', padding: '7px 10px', borderRadius: 8, border: '1px solid rgba(139,115,85,0.2)',
   background: '#fff', outline: 'none', fontSize: 12.5, color: '#2c1a0e', marginBottom: 10
 }
 const CancelBtnStyle: React.CSSProperties = {
   padding: '7px 12px', background: '#f5efe6', border: '1px solid rgba(139,115,85,0.2)', borderRadius: 8,
-  fontSize: 12, cursor: 'pointer', color: '#586e75'
+  fontSize: 12, cursor: 'pointer', color: '#7a5c42'
 }
 const OverlayStyle: React.CSSProperties = {
   position: 'fixed', inset: 0, background: 'rgba(44,26,14,0.45)', zIndex: 9999,

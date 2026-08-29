@@ -1,4 +1,5 @@
 'use client'
+import { toast, showConfirm } from '@/components/Toast'
 
 import React, { useState, useEffect } from 'react'
 import { FONT, RADIUS } from '@/styles/tokens'
@@ -29,42 +30,26 @@ export default function Scratchpad() {
     } catch {}
   }
 
-  const handleClear = () => {
-    if (confirm('Deseja limpar as anotações do bloco rápido?')) {
+  const handleClear = async () => {
+    if ((await showConfirm({ message: 'Deseja limpar as anotações do bloco rápido?' }))) {
       setNote('')
       localStorage.removeItem(SCRATCHPAD_KEY)
     }
   }
 
+  useEffect(() => {
+    const handleOpen = () => setIsOpen(true)
+    const handleToggle = () => setIsOpen((v) => !v)
+    window.addEventListener('teacher:open_scratchpad', handleOpen)
+    window.addEventListener('teacher:toggle_scratchpad', handleToggle)
+    return () => {
+      window.removeEventListener('teacher:open_scratchpad', handleOpen)
+      window.removeEventListener('teacher:toggle_scratchpad', handleToggle)
+    }
+  }, [])
+
   return (
     <>
-      {/* Botão de Acesso Rápido */}
-      <button
-        onClick={() => setIsOpen((v) => !v)}
-        title="Bloco de Notas Rápido"
-        style={{
-          position: 'fixed',
-          bottom: 88,
-          right: 24,
-          width: 44,
-          height: 44,
-          borderRadius: '50%',
-          border: '1px solid rgba(139,115,85,0.25)',
-          background: '#fffcf8',
-          color: '#8b5e3c',
-          boxShadow: '0 4px 14px rgba(44,26,14,0.1)',
-          cursor: 'pointer',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 998,
-          transition: 'transform 0.15s ease',
-        }}
-        onMouseEnter={(e) => (e.currentTarget.style.transform = 'scale(1.08)')}
-        onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
-      >
-        <i className="ti ti-notebook" style={{ fontSize: 20 }} />
-      </button>
 
       {/* Drawer do Scratchpad */}
       {isOpen && (

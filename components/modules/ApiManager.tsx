@@ -59,7 +59,7 @@ function TokenProgressBar({ provider }: { provider: string }) {
  return (
  <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px dashed rgba(88,110,117,0.15)' }}>
  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
- <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: '#073642' }}>
+ <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: '#2c1a0e' }}>
  <i className="ti ti-chart-bar" style={{ color: barColor }} />
  <span>Consumo de Tokens: <strong>{usage.totalTokens.toLocaleString('pt-BR')}</strong> / {softLimit.toLocaleString('pt-BR')} ({formattedPct}%)</span>
  </div>
@@ -67,7 +67,7 @@ function TokenProgressBar({ provider }: { provider: string }) {
  <span style={{ fontSize: 11, fontWeight: 700, color: usage.estimatedCostUsd > 0 ? '#b58900' : '#859900' }}>
  {usage.estimatedCostUsd > 0 ? `~$${usage.estimatedCostUsd.toFixed(4)} USD` : 'Grátis'}
  </span>
- <button onClick={handleReset} style={{ fontSize: 10, padding: '2px 8px', borderRadius: 4, border: '1px solid rgba(88,110,117,0.2)', background: '#fdf6e3', color: '#586e75', cursor: 'pointer' }} title="Zerar consumo de tokens">
+ <button onClick={handleReset} style={{ fontSize: 10, padding: '2px 8px', borderRadius: 4, border: '1px solid rgba(88,110,117,0.2)', background: '#fdf8f2', color: '#7a5c42', cursor: 'pointer' }} title="Zerar consumo de tokens">
  Zerar
  </button>
  </div>
@@ -87,14 +87,14 @@ function TokenProgressBar({ provider }: { provider: string }) {
  bottom: '100%',
  left: '50%',
  transform: 'translateX(-50%) translateY(-6px)',
- background: '#073642',
- color: '#fdf6e3',
+ background: '#2c1a0e',
+ color: '#fdf8f2',
  padding: '5px 12px',
  borderRadius: 6,
  fontSize: 11,
  fontWeight: 700,
  whiteSpace: 'nowrap',
- boxShadow: '0 4px 14px rgba(0,43,54,0.25)',
+ boxShadow: '0 4px 14px rgba(44,26,14,0.25)',
  zIndex: 50,
  pointerEvents: 'none',
  display: 'flex',
@@ -113,7 +113,7 @@ function TokenProgressBar({ provider }: { provider: string }) {
  </div>
  </div>
 
- <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#93a1a1', marginTop: 4 }}>
+ <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#a08060', marginTop: 4 }}>
  <span>Entrada: {usage.promptTokens.toLocaleString('pt-BR')}t | Saída: {usage.completionTokens.toLocaleString('pt-BR')}t</span>
  <span>{usage.requestsCount} requisições {usage.lastUsedAt !== 'Nunca' ? `· Último: ${usage.lastUsedAt}` : ''}</span>
  </div>
@@ -264,7 +264,7 @@ export default function ApiManager() {
  const providerColor: Record<string, string> = {
  anthropic: '#b58900', openai: '#268bd2', gemini: '#859900', deepseek: '#2aa198',
  groq: '#dc322f', zhipu: '#cb4b16', siliconflow: '#268bd2', openrouter: '#b58900',
- elevenlabs: '#6c71c4', manual: '#586e75',
+ elevenlabs: '#6c71c4', manual: '#7a5c42',
  }
 
  const Tabs = [
@@ -299,7 +299,7 @@ export default function ApiManager() {
  title={autoMode ? 'Modo AUTO ativo: a IA escolhe a melhor API por tarefa' : 'Clique para ativar o roteamento automático de APIs'}
  style={{
  padding: '8px 18px', borderRadius: 22, border: 'none', cursor: 'pointer',
- background: autoMode ? 'linear-gradient(135deg, #2d9d5d, #1a7a3d)' : '#073642',
+ background: autoMode ? 'linear-gradient(135deg, #2d9d5d, #1a7a3d)' : '#2c1a0e',
  color: '#fff', fontWeight: 700, fontSize: 13,
  display: 'flex', alignItems: 'center', gap: 8,
  boxShadow: autoMode ? '0 0 16px rgba(45,157,93,0.4)' : 'none',
@@ -310,7 +310,7 @@ export default function ApiManager() {
  {autoMode ? ' AUTO ON' : 'AUTO OFF'}
  </button>
 
- <button onClick={() => save(apis)} style={{ padding: '8px 20px', borderRadius: 10, border: 'none', background: saved ? '#859900' : '#073642', color: '#fdf6e3', fontSize: 14, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, transition: 'all 0.2s' }}>
+ <button onClick={() => save(apis)} style={{ padding: '8px 20px', borderRadius: 10, border: 'none', background: saved ? '#859900' : '#2c1a0e', color: '#fdf8f2', fontSize: 14, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, transition: 'all 0.2s' }}>
  <i className={`ti ${saved ? 'ti-check' : 'ti-device-floppy'}`} />
  {saved ? 'Salvo!' : 'Salvar'}
  </button>
@@ -323,7 +323,7 @@ export default function ApiManager() {
  <button key={t.key} onClick={() => setTab(t.key)} style={{
  padding: '10px 16px', borderRadius: '10px 10px 0 0', border: 'none', whiteSpace: 'nowrap',
  background: tab === t.key ? '#fff' : 'transparent',
- color: tab === t.key ? '#073642' : '#93a1a1', fontWeight: tab === t.key ? 700 : 400,
+ color: tab === t.key ? '#2c1a0e' : '#a08060', fontWeight: tab === t.key ? 700 : 400,
  cursor: 'pointer', fontSize: 13, marginBottom: -2,
  borderBottom: tab === t.key ? '2px solid #b58900' : '2px solid transparent',
  }}>
@@ -336,7 +336,7 @@ export default function ApiManager() {
  {tab === 'hierarchy' && (
  <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
  {/* Header informativo */}
- <div style={{ background: '#073642', color: '#fdf6e3', padding: 22, borderRadius: 16, border: '1px solid #002b36', boxShadow: '0 4px 16px rgba(0,43,54,0.12)' }}>
+ <div style={{ background: '#2c1a0e', color: '#fdf8f2', padding: 22, borderRadius: 16, border: '1px solid #002b36', boxShadow: '0 4px 16px rgba(44,26,14,0.12)' }}>
  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
  <i className="ti ti-crown" style={{ fontSize: 24, color: '#b58900' }} />
@@ -348,14 +348,14 @@ export default function ApiManager() {
  Proteção Ativa Contra Estouro de Cota (429)
  </span>
  </div>
- <p style={{ fontSize: 13, color: '#93a1a1', margin: 0, lineHeight: 1.5 }}>
+ <p style={{ fontSize: 13, color: '#a08060', margin: 0, lineHeight: 1.5 }}>
  O sistema gerencia os tokens reservando as <strong>IAs de alta capacidade cognitiva (Tier 1)</strong> exclusivamente para exames e planos pedagógicos complexos, enquanto utiliza as <strong>IAs de latência ultrabaixa (Tier 2)</strong> e a <strong>rede de contingência permanente (Tier 3)</strong> para manter o app veloz e com custo zero.
  </p>
  </div>
 
  {/* Painel de Consumo Real de Tokens por Modelo (Com Hover %) */}
- <div style={{ background: '#fff', padding: 22, borderRadius: 16, border: '1px solid #ede8dc', boxShadow: '0 2px 10px rgba(0,43,54,0.04)' }}>
- <h3 style={{ fontSize: 15, fontWeight: 700, color: '#073642', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+ <div style={{ background: '#fff', padding: 22, borderRadius: 16, border: '1px solid #ede8dc', boxShadow: '0 2px 10px rgba(44,26,14,0.04)' }}>
+ <h3 style={{ fontSize: 15, fontWeight: 700, color: '#2c1a0e', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
  <i className="ti ti-activity" style={{ color: '#2d9d5d', fontSize: 20 }} />
  Monitor de Consumo em Tempo Real (Passe o mouse na barra para ver a % exata)
  </h3>
@@ -371,7 +371,7 @@ export default function ApiManager() {
  { provider: 'anthropic', label: ' Anthropic Claude 3.5' },
  ].map(item => (
  <div key={item.provider} style={{ background: '#fcfbf9', border: '1px solid #ede8dc', borderRadius: 12, padding: '14px 16px' }}>
- <div style={{ fontSize: 13, fontWeight: 700, color: '#073642', marginBottom: 4, display: 'flex', justifyContent: 'space-between' }}>
+ <div style={{ fontSize: 13, fontWeight: 700, color: '#2c1a0e', marginBottom: 4, display: 'flex', justifyContent: 'space-between' }}>
  <span>{item.label}</span>
  </div>
  <TokenProgressBar provider={item.provider} />
@@ -381,8 +381,8 @@ export default function ApiManager() {
  </div>
 
  {/* Gráfico da Pirâmide de Hierarquia de Capacidade */}
- <div style={{ background: '#fff', padding: 24, borderRadius: 16, border: '1px solid #ede8dc', boxShadow: '0 2px 10px rgba(0,43,54,0.04)' }}>
- <h3 style={{ fontSize: 15, fontWeight: 700, color: '#073642', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+ <div style={{ background: '#fff', padding: 24, borderRadius: 16, border: '1px solid #ede8dc', boxShadow: '0 2px 10px rgba(44,26,14,0.04)' }}>
+ <h3 style={{ fontSize: 15, fontWeight: 700, color: '#2c1a0e', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
  <i className="ti ti-chart-bar" style={{ color: '#b58900' }} /> Pirâmide de Capacidade & Roteamento Inteligente
  </h3>
 
@@ -394,16 +394,16 @@ export default function ApiManager() {
  <span style={{ background: '#b58900', color: '#fff', fontSize: 11, fontWeight: 800, padding: '3px 10px', borderRadius: 8 }}>
  TIER 1 HEAVYWEIGHTS PEDAGÓGICOS
  </span>
- <span style={{ fontSize: 13, fontWeight: 700, color: '#073642' }}>Capacidade Cognitiva: 9.8 / 10</span>
+ <span style={{ fontSize: 13, fontWeight: 700, color: '#2c1a0e' }}>Capacidade Cognitiva: 9.8 / 10</span>
  </div>
  <span style={{ fontSize: 12, fontWeight: 600, color: '#b58900' }}>4.096 Tokens Reservados / Req</span>
  </div>
- <p style={{ fontSize: 12.5, color: '#586e75', marginBottom: 12 }}>
+ <p style={{ fontSize: 12.5, color: '#7a5c42', marginBottom: 12 }}>
  <strong>Provedores:</strong> DeepSeek V3/R1 · Anthropic Claude Opus · OpenAI GPT-4o · SiliconFlow (Qwen2.5-72B).<br />
  <strong>Destino Pedagógico:</strong> Provas Finais, Matriz TRI, Planos de Aula TKT, Rubricas Cambridge e Análise Dissertativa.
  </p>
  {/* Barra de Progresso Capacidade */}
- <div style={{ width: '100%', height: 8, background: '#eee8d5', borderRadius: 4, overflow: 'hidden' }}>
+ <div style={{ width: '100%', height: 8, background: '#f0e8d8', borderRadius: 4, overflow: 'hidden' }}>
  <div style={{ width: '98%', height: '100%', background: '#b58900', borderRadius: 4 }} />
  </div>
  </div>
@@ -415,15 +415,15 @@ export default function ApiManager() {
  <span style={{ background: '#cb4b16', color: '#fff', fontSize: 11, fontWeight: 800, padding: '3px 10px', borderRadius: 8 }}>
  TIER 2 HIGH SPEEDSTERS & EXECUÇÃO
  </span>
- <span style={{ fontSize: 13, fontWeight: 700, color: '#073642' }}>Capacidade Cognitiva: 8.8 / 10 (Latência: ~350ms)</span>
+ <span style={{ fontSize: 13, fontWeight: 700, color: '#2c1a0e' }}>Capacidade Cognitiva: 8.8 / 10 (Latência: ~350ms)</span>
  </div>
  <span style={{ fontSize: 12, fontWeight: 600, color: '#cb4b16' }}>2.048 Tokens Reservados / Req</span>
  </div>
- <p style={{ fontSize: 12.5, color: '#586e75', marginBottom: 12 }}>
+ <p style={{ fontSize: 12.5, color: '#7a5c42', marginBottom: 12 }}>
  <strong>Provedores:</strong> Zhipu AI (GLM-4-Flash - 131k tokens) · Groq (Llama-3.3 70B).<br />
  <strong>Destino Pedagógico:</strong> Chat Agêntico Rápido (Rafinha), Ações no App, Quick Generate, Mapas Mentais.
  </p>
- <div style={{ width: '100%', height: 8, background: '#eee8d5', borderRadius: 4, overflow: 'hidden' }}>
+ <div style={{ width: '100%', height: 8, background: '#f0e8d8', borderRadius: 4, overflow: 'hidden' }}>
  <div style={{ width: '88%', height: '100%', background: '#cb4b16', borderRadius: 4 }} />
  </div>
  </div>
@@ -435,15 +435,15 @@ export default function ApiManager() {
  <span style={{ background: '#c4834a', color: '#fff', fontSize: 11, fontWeight: 800, padding: '3px 10px', borderRadius: 8 }}>
  TIER 3 PERMANENT SAFETY NET
  </span>
- <span style={{ fontSize: 13, fontWeight: 700, color: '#073642' }}>Capacidade Cognitiva: 8.2 / 10 (Tokens Ilimitados)</span>
+ <span style={{ fontSize: 13, fontWeight: 700, color: '#2c1a0e' }}>Capacidade Cognitiva: 8.2 / 10 (Tokens Ilimitados)</span>
  </div>
  <span style={{ fontSize: 12, fontWeight: 600, color: '#859900' }}>Contingência Permanente</span>
  </div>
- <p style={{ fontSize: 12.5, color: '#586e75', marginBottom: 12 }}>
+ <p style={{ fontSize: 12.5, color: '#7a5c42', marginBottom: 12 }}>
  <strong>Provedores:</strong> OpenRouter (Gemma 2 9B Free / Llama 3.1 Free) · Google Gemini 2.0 Flash.<br />
  <strong>Destino Pedagógico:</strong> Rota de redundância absoluta. Se qualquer API sofrer rate-limit, assume o tráfego sem pausar.
  </p>
- <div style={{ width: '100%', height: 8, background: '#eee8d5', borderRadius: 4, overflow: 'hidden' }}>
+ <div style={{ width: '100%', height: 8, background: '#f0e8d8', borderRadius: 4, overflow: 'hidden' }}>
  <div style={{ width: '82%', height: '100%', background: '#c4834a', borderRadius: 4 }} />
  </div>
  </div>
@@ -451,14 +451,14 @@ export default function ApiManager() {
  </div>
 
  {/* Tabela de Alocação por Tipo de Tarefa */}
- <div style={{ background: '#fff', padding: 24, borderRadius: 16, border: '1px solid #ede8dc', boxShadow: '0 2px 10px rgba(0,43,54,0.04)' }}>
- <h3 style={{ fontSize: 15, fontWeight: 700, color: '#073642', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+ <div style={{ background: '#fff', padding: 24, borderRadius: 16, border: '1px solid #ede8dc', boxShadow: '0 2px 10px rgba(44,26,14,0.04)' }}>
+ <h3 style={{ fontSize: 15, fontWeight: 700, color: '#2c1a0e', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
  <i className="ti ti-subtask" style={{ color: '#268bd2' }} /> Matriz Roteamento & Reserva de Tokens
  </h3>
 
  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
  <thead>
- <tr style={{ background: '#f5f0e8', textAlign: 'left', color: '#586e75', fontWeight: 700 }}>
+ <tr style={{ background: '#f5f0e8', textAlign: 'left', color: '#7a5c42', fontWeight: 700 }}>
  <th style={{ padding: '10px 14px', borderRadius: '8px 0 0 8px' }}>Tipo de Tarefa</th>
  <th style={{ padding: '10px 14px' }}>IA Primária (Recomendada)</th>
  <th style={{ padding: '10px 14px' }}>Rota de Fallback</th>
@@ -466,34 +466,34 @@ export default function ApiManager() {
  </tr>
  </thead>
  <tbody>
- <tr style={{ borderBottom: '1px solid #eee8d5' }}>
- <td style={{ padding: '12px 14px', fontWeight: 700, color: '#073642' }}> Provas & Exames (ELT/ENEM)</td>
+ <tr style={{ borderBottom: '1px solid #f0e8d8' }}>
+ <td style={{ padding: '12px 14px', fontWeight: 700, color: '#2c1a0e' }}> Provas & Exames (ELT/ENEM)</td>
  <td style={{ padding: '12px 14px', color: '#b58900', fontWeight: 600 }}>DeepSeek / SiliconFlow Qwen2.5</td>
- <td style={{ padding: '12px 14px', color: '#586e75' }}>Claude Zhipu GLM-4 OpenRouter</td>
+ <td style={{ padding: '12px 14px', color: '#7a5c42' }}>Claude Zhipu GLM-4 OpenRouter</td>
  <td style={{ padding: '12px 14px', fontWeight: 700, color: '#2d9d5d' }}>4.096 tokens</td>
  </tr>
- <tr style={{ borderBottom: '1px solid #eee8d5' }}>
- <td style={{ padding: '12px 14px', fontWeight: 700, color: '#073642' }}> Plano de Aula & TKT Timed</td>
+ <tr style={{ borderBottom: '1px solid #f0e8d8' }}>
+ <td style={{ padding: '12px 14px', fontWeight: 700, color: '#2c1a0e' }}> Plano de Aula & TKT Timed</td>
  <td style={{ padding: '12px 14px', color: '#b58900', fontWeight: 600 }}>Claude / DeepSeek</td>
- <td style={{ padding: '12px 14px', color: '#586e75' }}>SiliconFlow Groq OpenRouter</td>
+ <td style={{ padding: '12px 14px', color: '#7a5c42' }}>SiliconFlow Groq OpenRouter</td>
  <td style={{ padding: '12px 14px', fontWeight: 700, color: '#2d9d5d' }}>4.096 tokens</td>
  </tr>
- <tr style={{ borderBottom: '1px solid #eee8d5' }}>
- <td style={{ padding: '12px 14px', fontWeight: 700, color: '#073642' }}> Chat Agêntico (Rafinha)</td>
+ <tr style={{ borderBottom: '1px solid #f0e8d8' }}>
+ <td style={{ padding: '12px 14px', fontWeight: 700, color: '#2c1a0e' }}> Chat Agêntico (Rafinha)</td>
  <td style={{ padding: '12px 14px', color: '#dc322f', fontWeight: 600 }}>Groq Llama-3.3 70B</td>
- <td style={{ padding: '12px 14px', color: '#586e75' }}>Zhipu GLM-4 SiliconFlow OpenRouter</td>
+ <td style={{ padding: '12px 14px', color: '#7a5c42' }}>Zhipu GLM-4 SiliconFlow OpenRouter</td>
  <td style={{ padding: '12px 14px', fontWeight: 700, color: '#2d9d5d' }}>2.048 tokens</td>
  </tr>
- <tr style={{ borderBottom: '1px solid #eee8d5' }}>
- <td style={{ padding: '12px 14px', fontWeight: 700, color: '#073642' }}> Quick Generate & Exercícios</td>
+ <tr style={{ borderBottom: '1px solid #f0e8d8' }}>
+ <td style={{ padding: '12px 14px', fontWeight: 700, color: '#2c1a0e' }}> Quick Generate & Exercícios</td>
  <td style={{ padding: '12px 14px', color: '#cb4b16', fontWeight: 600 }}>Zhipu AI GLM-4-Flash</td>
- <td style={{ padding: '12px 14px', color: '#586e75' }}>Groq SiliconFlow OpenRouter</td>
+ <td style={{ padding: '12px 14px', color: '#7a5c42' }}>Groq SiliconFlow OpenRouter</td>
  <td style={{ padding: '12px 14px', fontWeight: 700, color: '#2d9d5d' }}>2.048 tokens</td>
  </tr>
  <tr>
- <td style={{ padding: '12px 14px', fontWeight: 700, color: '#073642' }}> OmniGrader (OCR / Correção)</td>
+ <td style={{ padding: '12px 14px', fontWeight: 700, color: '#2c1a0e' }}> OmniGrader (OCR / Correção)</td>
  <td style={{ padding: '12px 14px', color: '#268bd2', fontWeight: 600 }}>OpenAI GPT-4o Vision</td>
- <td style={{ padding: '12px 14px', color: '#586e75' }}>Gemini 2.0 Flash</td>
+ <td style={{ padding: '12px 14px', color: '#7a5c42' }}>Gemini 2.0 Flash</td>
  <td style={{ padding: '12px 14px', fontWeight: 700, color: '#2d9d5d' }}>2.500 tokens</td>
  </tr>
  </tbody>
@@ -517,22 +517,22 @@ export default function ApiManager() {
  border: `2px solid ${api.active && api.key ? providerColor[api.provider] : 'transparent'}`,
  transition: 'all 0.3s',
  }}>
- <i className={`ti ${providerIcon[api.provider]}`} style={{ fontSize: 22, color: api.active && api.key ? providerColor[api.provider] : '#93a1a1', transition: 'all 0.3s' }} />
+ <i className={`ti ${providerIcon[api.provider]}`} style={{ fontSize: 22, color: api.active && api.key ? providerColor[api.provider] : '#a08060', transition: 'all 0.3s' }} />
  </div>
  <div>
- <div style={{ fontSize: 15, fontWeight: 700, color: '#073642' }}>{api.name}</div>
+ <div style={{ fontSize: 15, fontWeight: 700, color: '#2c1a0e' }}>{api.name}</div>
  {api.key && api.provider !== 'manual' && (
  <div style={{ fontSize: 11, color: '#2aa198', fontWeight: 600, marginTop: 2 }}> Chave configurada</div>
  )}
  {!api.key && api.provider !== 'manual' && (
- <div style={{ fontSize: 11, color: '#93a1a1', marginTop: 2 }}>Sem chave configure abaixo</div>
+ <div style={{ fontSize: 11, color: '#a08060', marginTop: 2 }}>Sem chave configure abaixo</div>
  )}
  </div>
  </div>
 
  {/* Toggle estilo iOS */}
  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
- <span style={{ fontSize: 12, fontWeight: 600, color: api.active ? '#2d9d5d' : '#93a1a1' }}>
+ <span style={{ fontSize: 12, fontWeight: 600, color: api.active ? '#2d9d5d' : '#a08060' }}>
  {api.active ? 'ON' : 'OFF'}
  </span>
  <button
@@ -557,13 +557,13 @@ export default function ApiManager() {
  <div style={{ padding: '0 22px 20px', borderTop: '1px dashed rgba(88,110,117,0.15)' }}>
  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, paddingTop: 16 }}>
  <div>
- <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1.2px', color: '#93a1a1', marginBottom: 6 }}>API Key</div>
+ <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1.2px', color: '#a08060', marginBottom: 6 }}>API Key</div>
  <div style={{ position: 'relative' }}>
  <input type={showKeys[api.id] ? 'text' : 'password'} value={api.key}
  onChange={e => updateApi(api.id, 'key', e.target.value)}
  placeholder="Cole sua chave aqui..."
- style={{ width: '100%', border: `1.5px solid ${api.key ? '#2aa198' : 'rgba(88,110,117,0.2)'}`, borderRadius: 9, padding: '9px 40px 9px 12px', fontSize: 13.5, background: '#fdf6e3', color: '#073642', outline: 'none', fontFamily: 'monospace', letterSpacing: showKeys[api.id] ? 0 : '2px', boxSizing: 'border-box', transition: 'border-color 0.2s' }} />
- <button onClick={() => setShowKeys(p => ({ ...p, [api.id]: !p[api.id] }))} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'transparent', cursor: 'pointer', color: '#93a1a1' }}>
+ style={{ width: '100%', border: `1.5px solid ${api.key ? '#2aa198' : 'rgba(88,110,117,0.2)'}`, borderRadius: 9, padding: '9px 40px 9px 12px', fontSize: 13.5, background: '#fdf8f2', color: '#2c1a0e', outline: 'none', fontFamily: 'monospace', letterSpacing: showKeys[api.id] ? 0 : '2px', boxSizing: 'border-box', transition: 'border-color 0.2s' }} />
+ <button onClick={() => setShowKeys(p => ({ ...p, [api.id]: !p[api.id] }))} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'transparent', cursor: 'pointer', color: '#a08060' }}>
  <i className={`ti ${showKeys[api.id] ? 'ti-eye-off' : 'ti-eye'}`} />
  </button>
  </div>
@@ -576,9 +576,9 @@ export default function ApiManager() {
  <div>
  {api.provider === 'elevenlabs' ? (
  <>
- <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1.2px', color: '#93a1a1', marginBottom: 6 }}>Voz da Rafinha (Seletor ou Voice ID)</div>
+ <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1.2px', color: '#a08060', marginBottom: 6 }}>Voz da Rafinha (Seletor ou Voice ID)</div>
  <select value={api.voiceId || ''} onChange={e => updateApi(api.id, 'voiceId', e.target.value)}
- style={{ width: '100%', border: '1px solid rgba(88,110,117,0.2)', borderRadius: 9, padding: '9px 12px', fontSize: 13.5, background: '#fdf6e3', color: '#073642', outline: 'none', marginBottom: 8 }}>
+ style={{ width: '100%', border: '1px solid rgba(88,110,117,0.2)', borderRadius: 9, padding: '9px 12px', fontSize: 13.5, background: '#fdf8f2', color: '#2c1a0e', outline: 'none', marginBottom: 8 }}>
  <option value="">-- Selecione uma voz ou digite abaixo --</option>
  <option value="EXAVITQu4vr4xnSDxMaL">Bella Natural, quente (PT-BR recomendado)</option>
  <option value="MF3mGyEYCl7XYWbV9V6O">Elli Expressiva, jovem</option>
@@ -594,14 +594,14 @@ export default function ApiManager() {
  value={api.voiceId || ''}
  onChange={e => updateApi(api.id, 'voiceId', e.target.value.trim())}
  placeholder="Cole o Voice ID aqui (ex: 21m00Tcm4TlvDq8ikWAM)"
- style={{ width: '100%', border: '1.5px solid #6c71c4', borderRadius: 8, padding: '8px 12px', fontSize: 12.5, background: '#fdf6e3', color: '#073642', outline: 'none', fontFamily: 'monospace' }}
+ style={{ width: '100%', border: '1.5px solid #6c71c4', borderRadius: 8, padding: '8px 12px', fontSize: 12.5, background: '#fdf8f2', color: '#2c1a0e', outline: 'none', fontFamily: 'monospace' }}
  />
  </>
  ) : (
  <>
- <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1.2px', color: '#93a1a1', marginBottom: 6 }}>Modelo Padrão</div>
+ <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1.2px', color: '#a08060', marginBottom: 6 }}>Modelo Padrão</div>
  <input value={api.model} onChange={e => updateApi(api.id, 'model', e.target.value)}
- style={{ width: '100%', border: '1px solid rgba(88,110,117,0.2)', borderRadius: 9, padding: '9px 12px', fontSize: 13.5, background: '#fdf6e3', color: '#073642', outline: 'none', fontFamily: 'monospace' }} />
+ style={{ width: '100%', border: '1px solid rgba(88,110,117,0.2)', borderRadius: 9, padding: '9px 12px', fontSize: 13.5, background: '#fdf8f2', color: '#2c1a0e', outline: 'none', fontFamily: 'monospace' }} />
  </>
  )}
  </div>
@@ -616,7 +616,7 @@ export default function ApiManager() {
  )}
 
  {api.provider === 'manual' && api.active && (
- <div style={{ fontSize: 13, color: '#586e75', margin: '0 22px 16px', padding: '12px 16px', borderTop: '1px dashed rgba(88,110,117,0.1)', background: '#f5f0e8', borderRadius: 8 }}>
+ <div style={{ fontSize: 13, color: '#7a5c42', margin: '0 22px 16px', padding: '12px 16px', borderTop: '1px dashed rgba(88,110,117,0.1)', background: '#f5f0e8', borderRadius: 8 }}>
  Modo sem conexão automática. Gera o <strong>Prompt Estruturado</strong> para copiar e colar no ChatGPT/Claude/Gemini gratuito.
  </div>
  )}
@@ -638,13 +638,13 @@ export default function ApiManager() {
  border: `3px solid ${autoMode ? '#2d9d5d' : '#ede8dc'}`,
  transition: 'all 0.4s',
  }}>
- <i className="ti ti-brain" style={{ fontSize: 32, color: autoMode ? '#2d9d5d' : '#93a1a1', transition: 'color 0.4s' }} />
+ <i className="ti ti-brain" style={{ fontSize: 32, color: autoMode ? '#2d9d5d' : '#a08060', transition: 'color 0.4s' }} />
  </div>
  <div style={{ flex: 1 }}>
- <div style={{ fontSize: 20, fontWeight: 800, color: '#073642', marginBottom: 4 }}>
+ <div style={{ fontSize: 20, fontWeight: 800, color: '#2c1a0e', marginBottom: 4 }}>
  Roteamento Inteligente de APIs
  </div>
- <div style={{ fontSize: 13, color: '#586e75', lineHeight: 1.5 }}>
+ <div style={{ fontSize: 13, color: '#7a5c42', lineHeight: 1.5 }}>
  A Rafinha analisa cada tarefa e escolhe automaticamente qual API oferece o melhor custo-benefício para o trabalho em questão.
  </div>
  </div>
@@ -664,7 +664,7 @@ export default function ApiManager() {
  boxShadow: '0 2px 6px rgba(0,0,0,0.2)', transition: 'left 0.3s',
  }} />
  </button>
- <span style={{ fontSize: 12, fontWeight: 800, color: autoMode ? '#2d9d5d' : '#93a1a1' }}>
+ <span style={{ fontSize: 12, fontWeight: 800, color: autoMode ? '#2d9d5d' : '#a08060' }}>
  {autoMode ? 'ATIVO' : 'INATIVO'}
  </span>
  </div>
@@ -673,13 +673,13 @@ export default function ApiManager() {
  {autoMode && (
  <div style={{ background: 'linear-gradient(135deg, rgba(45,157,93,0.08), rgba(26,122,61,0.04))', border: '1.5px solid rgba(45,157,93,0.2)', borderRadius: 12, padding: '14px 18px', marginBottom: 16 }}>
  <div style={{ fontSize: 13, fontWeight: 700, color: '#2d9d5d', marginBottom: 4 }}> Modo AUTO ativado</div>
- <div style={{ fontSize: 12, color: '#586e75' }}>A Rafinha está roteando cada pedido para a API mais adequada com base no tipo de tarefa.</div>
+ <div style={{ fontSize: 12, color: '#7a5c42' }}>A Rafinha está roteando cada pedido para a API mais adequada com base no tipo de tarefa.</div>
  </div>
  )}
  </ModuleCard>
 
  {/* Tabela de prioridade por tarefa */}
- <div style={{ fontSize: 15, fontWeight: 700, color: '#073642', marginBottom: 4, paddingLeft: 4 }}>
+ <div style={{ fontSize: 15, fontWeight: 700, color: '#2c1a0e', marginBottom: 4, paddingLeft: 4 }}>
  Mapa de Prioridade por Tipo de Tarefa
  </div>
  {(Object.entries(TASK_DESCRIPTIONS) as [TaskType, string][]).map(([task, label]) => {
@@ -690,7 +690,7 @@ export default function ApiManager() {
  <ModuleCard key={task} padding="16px 20px">
  <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
  <div style={{ flex: 1 }}>
- <div style={{ fontSize: 14, fontWeight: 700, color: '#073642', marginBottom: 4 }}>{label}</div>
+ <div style={{ fontSize: 14, fontWeight: 700, color: '#2c1a0e', marginBottom: 4 }}>{label}</div>
  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
  {priority.map((p, i) => {
  const isSelected = p === selected && autoMode
@@ -698,8 +698,8 @@ export default function ApiManager() {
  return (
  <span key={p} style={{
  padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700,
- background: isSelected ? '#2d9d5d' : isActive ? '#eee8d5' : '#f5f0e8',
- color: isSelected ? '#fff' : isActive ? '#073642' : '#93a1a1',
+ background: isSelected ? '#2d9d5d' : isActive ? '#f0e8d8' : '#f5f0e8',
+ color: isSelected ? '#fff' : isActive ? '#2c1a0e' : '#a08060',
  border: `1px solid ${isSelected ? '#2d9d5d' : isActive ? '#ede8dc' : 'transparent'}`,
  display: 'flex', alignItems: 'center', gap: 4,
  }}>
@@ -734,39 +734,39 @@ export default function ApiManager() {
  <i className="ti ti-cloud" style={{ fontSize: 26, color: '#3ecf8e' }} />
  </div>
  <div>
- <div style={{ fontSize: 18, fontWeight: 800, color: '#073642' }}>Supabase Cloud Sync</div>
- <div style={{ fontSize: 13, color: '#586e75' }}>Sincronize todos os dados do app com o banco de dados na nuvem.</div>
+ <div style={{ fontSize: 18, fontWeight: 800, color: '#2c1a0e' }}>Supabase Cloud Sync</div>
+ <div style={{ fontSize: 13, color: '#7a5c42' }}>Sincronize todos os dados do app com o banco de dados na nuvem.</div>
  </div>
  </div>
 
  <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
  <div>
- <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1.2px', color: '#93a1a1', marginBottom: 6 }}>URL do Projeto Supabase</div>
+ <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1.2px', color: '#a08060', marginBottom: 6 }}>URL do Projeto Supabase</div>
  <input value={sbUrl} onChange={e => setSbUrl(e.target.value)}
  placeholder="https://xxxxxxxxxxx.supabase.co"
- style={{ width: '100%', border: `1.5px solid ${sbUrl ? '#3ecf8e' : 'rgba(88,110,117,0.2)'}`, borderRadius: 9, padding: '10px 14px', fontSize: 13.5, background: '#fdf6e3', color: '#073642', outline: 'none', fontFamily: 'monospace', boxSizing: 'border-box' }} />
+ style={{ width: '100%', border: `1.5px solid ${sbUrl ? '#3ecf8e' : 'rgba(88,110,117,0.2)'}`, borderRadius: 9, padding: '10px 14px', fontSize: 13.5, background: '#fdf8f2', color: '#2c1a0e', outline: 'none', fontFamily: 'monospace', boxSizing: 'border-box' }} />
  </div>
  <div>
- <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1.2px', color: '#93a1a1', marginBottom: 6 }}>Anon Public Key (JWT)</div>
+ <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1.2px', color: '#a08060', marginBottom: 6 }}>Anon Public Key (JWT)</div>
  <input type="password" value={sbAnonKey} onChange={e => setSbAnonKey(e.target.value)}
  placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
- style={{ width: '100%', border: `1.5px solid ${sbAnonKey ? '#3ecf8e' : 'rgba(88,110,117,0.2)'}`, borderRadius: 9, padding: '10px 14px', fontSize: 13.5, background: '#fdf6e3', color: '#073642', outline: 'none', fontFamily: 'monospace', boxSizing: 'border-box' }} />
+ style={{ width: '100%', border: `1.5px solid ${sbAnonKey ? '#3ecf8e' : 'rgba(88,110,117,0.2)'}`, borderRadius: 9, padding: '10px 14px', fontSize: 13.5, background: '#fdf8f2', color: '#2c1a0e', outline: 'none', fontFamily: 'monospace', boxSizing: 'border-box' }} />
  </div>
  <div>
- <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1.2px', color: '#93a1a1', marginBottom: 6 }}>Service Role Key (Secret)</div>
+ <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1.2px', color: '#a08060', marginBottom: 6 }}>Service Role Key (Secret)</div>
  <input type="password" value={sbServiceKey} onChange={e => setSbServiceKey(e.target.value)}
  placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
- style={{ width: '100%', border: `1.5px solid ${sbServiceKey ? '#3ecf8e' : 'rgba(88,110,117,0.2)'}`, borderRadius: 9, padding: '10px 14px', fontSize: 13.5, background: '#fdf6e3', color: '#073642', outline: 'none', fontFamily: 'monospace', boxSizing: 'border-box' }} />
+ style={{ width: '100%', border: `1.5px solid ${sbServiceKey ? '#3ecf8e' : 'rgba(88,110,117,0.2)'}`, borderRadius: 9, padding: '10px 14px', fontSize: 13.5, background: '#fdf8f2', color: '#2c1a0e', outline: 'none', fontFamily: 'monospace', boxSizing: 'border-box' }} />
  </div>
 
  {sbStatus && (
- <div style={{ padding: '10px 16px', borderRadius: 10, background: sbStatus.includes('') ? 'rgba(45,157,93,0.1)' : sbStatus.includes('') ? 'rgba(220,50,47,0.08)' : 'rgba(88,110,117,0.08)', border: `1px solid ${sbStatus.includes('') ? '#2d9d5d' : sbStatus.includes('') ? '#dc322f' : '#93a1a1'}`, fontSize: 13, fontWeight: 600, color: '#073642' }}>
+ <div style={{ padding: '10px 16px', borderRadius: 10, background: sbStatus.includes('') ? 'rgba(45,157,93,0.1)' : sbStatus.includes('') ? 'rgba(220,50,47,0.08)' : 'rgba(88,110,117,0.08)', border: `1px solid ${sbStatus.includes('') ? '#2d9d5d' : sbStatus.includes('') ? '#dc322f' : '#a08060'}`, fontSize: 13, fontWeight: 600, color: '#2c1a0e' }}>
  {sbStatus}
  </div>
  )}
 
  <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', paddingTop: 4 }}>
- <button onClick={saveSupabaseConfig} style={{ flex: 1, padding: '10px 18px', borderRadius: 10, border: 'none', background: '#073642', color: '#fff', fontWeight: 700, cursor: 'pointer', fontSize: 13 }}>
+ <button onClick={saveSupabaseConfig} style={{ flex: 1, padding: '10px 18px', borderRadius: 10, border: 'none', background: '#2c1a0e', color: '#fff', fontWeight: 700, cursor: 'pointer', fontSize: 13 }}>
  <i className="ti ti-device-floppy" /> Salvar Config
  </button>
  <button onClick={testSupabase} style={{ flex: 1, padding: '10px 18px', borderRadius: 10, border: '1.5px solid #3ecf8e', background: 'transparent', color: '#2b8a5e', fontWeight: 700, cursor: 'pointer', fontSize: 13 }}>
@@ -779,15 +779,15 @@ export default function ApiManager() {
  {/* Sync & Load */}
  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
  <ModuleCard padding="20px">
- <div style={{ fontSize: 14, fontWeight: 700, color: '#073642', marginBottom: 6 }}> Enviar para a Nuvem</div>
- <div style={{ fontSize: 12, color: '#586e75', marginBottom: 14 }}>Salva todos os dados locais (alunos, aulas, notas, APIs) no Supabase.</div>
+ <div style={{ fontSize: 14, fontWeight: 700, color: '#2c1a0e', marginBottom: 6 }}> Enviar para a Nuvem</div>
+ <div style={{ fontSize: 12, color: '#7a5c42', marginBottom: 14 }}>Salva todos os dados locais (alunos, aulas, notas, APIs) no Supabase.</div>
  <button onClick={syncNow} disabled={sbSyncing} style={{ width: '100%', padding: '10px', borderRadius: 10, border: 'none', background: 'linear-gradient(135deg, #3ecf8e, #2b8a5e)', color: '#fff', fontWeight: 700, cursor: 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
  {sbSyncing ? <><i className="ti ti-loader-2" style={{ animation: 'spin 1s linear infinite' }} /> Sincronizando...</> : <><i className="ti ti-cloud-upload" /> Sincronizar Agora</>}
  </button>
  </ModuleCard>
  <ModuleCard padding="20px">
- <div style={{ fontSize: 14, fontWeight: 700, color: '#073642', marginBottom: 6 }}> Restaurar da Nuvem</div>
- <div style={{ fontSize: 12, color: '#586e75', marginBottom: 14 }}>Carrega os dados do Supabase e restaura o aplicativo para o último estado salvo.</div>
+ <div style={{ fontSize: 14, fontWeight: 700, color: '#2c1a0e', marginBottom: 6 }}> Restaurar da Nuvem</div>
+ <div style={{ fontSize: 12, color: '#7a5c42', marginBottom: 14 }}>Carrega os dados do Supabase e restaura o aplicativo para o último estado salvo.</div>
  <button onClick={loadFromCloud} disabled={sbLoading} style={{ width: '100%', padding: '10px', borderRadius: 10, border: '1.5px solid #3ecf8e', background: 'transparent', color: '#2b8a5e', fontWeight: 700, cursor: 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
  {sbLoading ? <><i className="ti ti-loader-2" style={{ animation: 'spin 1s linear infinite' }} /> Carregando...</> : <><i className="ti ti-cloud-download" /> Restaurar</>}
  </button>
@@ -799,9 +799,9 @@ export default function ApiManager() {
  {/* ABA: COMO OBTER */}
  {tab === 'guide' && (
  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
- <div style={{ background: '#eee8d5', borderRadius: 14, padding: '16px 20px', marginBottom: 8 }}>
- <div style={{ fontWeight: 700, color: '#073642', marginBottom: 6 }}> Por onde começar?</div>
- <p style={{ color: '#586e75', fontSize: 13, margin: 0 }}>
+ <div style={{ background: '#f0e8d8', borderRadius: 14, padding: '16px 20px', marginBottom: 8 }}>
+ <div style={{ fontWeight: 700, color: '#2c1a0e', marginBottom: 6 }}> Por onde começar?</div>
+ <p style={{ color: '#7a5c42', fontSize: 13, margin: 0 }}>
  Recomendamos começar pelo <strong>Groq</strong> (grátis, rápido) para o chat da Rafinha, e pelo <strong>ElevenLabs</strong> para a voz natural. Ambos têm planos gratuitos suficientes para uso diário.
  </p>
  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
@@ -816,14 +816,14 @@ export default function ApiManager() {
  {/* ABA: TESTAR CONEXÃO */}
  {tab === 'test' && (
  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
- <p style={{ color: '#586e75', fontSize: 13 }}>Verifique se suas chaves estão funcionando antes de usar o app.</p>
+ <p style={{ color: '#7a5c42', fontSize: 13 }}>Verifique se suas chaves estão funcionando antes de usar o app.</p>
  {apis.filter(a => a.provider !== 'manual').map(api => (
  <ModuleCard key={api.id} padding="16px 20px">
  <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
  <i className={`ti ${providerIcon[api.provider]}`} style={{ fontSize: 22, color: providerColor[api.provider] }} />
  <div style={{ flex: 1 }}>
- <div style={{ fontWeight: 600, color: '#073642' }}>{api.name}</div>
- <div style={{ fontSize: 12, color: api.key ? '#2aa198' : '#93a1a1' }}>
+ <div style={{ fontWeight: 600, color: '#2c1a0e' }}>{api.name}</div>
+ <div style={{ fontSize: 12, color: api.key ? '#2aa198' : '#a08060' }}>
  {api.key ? ' Chave configurada' : ' Sem chave'}
  </div>
  </div>
@@ -833,7 +833,7 @@ export default function ApiManager() {
  </span>
  )}
  <button onClick={() => testConnection(api)} disabled={!api.key || testing === api.id}
- style={{ padding: '8px 16px', borderRadius: 10, border: 'none', background: '#073642', color: '#fff', cursor: api.key ? 'pointer' : 'not-allowed', opacity: api.key ? 1 : 0.4, fontWeight: 600, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}>
+ style={{ padding: '8px 16px', borderRadius: 10, border: 'none', background: '#2c1a0e', color: '#fff', cursor: api.key ? 'pointer' : 'not-allowed', opacity: api.key ? 1 : 0.4, fontWeight: 600, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}>
  {testing === api.id ? <><i className="ti ti-loader-2" style={{ animation: 'spin 1s linear infinite' }} /> Testando...</> : <><i className="ti ti-plug-connected" /> Testar</>}
  </button>
  </div>
