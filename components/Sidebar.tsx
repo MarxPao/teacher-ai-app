@@ -52,13 +52,12 @@ const NAV: Section[] = [
   { label: 'Comunicação', items: [
     { key: 'portfolio',      label: 'Portfólio',           icon: 'ti-award' },
     { key: 'communications', label: 'Comunicação',         icon: 'ti-brand-whatsapp' },
-    { key: 'portalmirror',   label: 'Portal Conectado',    icon: 'ti-plug-connected' },
     { key: 'autoreport',     label: 'Relatórios Mensais',  icon: 'ti-file-report' },
   ]},
   { label: 'Configurações', items: [
-    { key: 'settings',   label: 'Preferências',         icon: 'ti-settings' },
-    { key: 'api',        label: 'Modelos de IA',        icon: 'ti-brain' },
-    { key: 'extensions', label: 'Portais & Extensões',  icon: 'ti-plug' },
+    { key: 'settings',   label: 'Preferências',               icon: 'ti-settings' },
+    { key: 'api',        label: 'Modelos de IA',              icon: 'ti-brain' },
+    { key: 'extensions', label: 'Portais Conectados & Extensões', icon: 'ti-plug-connected' },
   ]},
 ]
 
