@@ -12,6 +12,8 @@ import {
   fetchTrelloLists,
   fetchTrelloCardsFromList,
   fetchTrelloCardsFromBoard,
+  fetchTrelloCardsFromMultipleLists,
+  isTrelloOnboardingList,
   TrelloConfig,
   TRELLO_CONFIG_KEY,
   TRELLO_IMPORTED_CARDS_KEY
@@ -191,5 +193,42 @@ describe('Trello Client & BYOK Storage', () => {
 
     // O segundo cartão não foi importado ainda
     expect(cards[1].isAlreadyImported).toBe(false)
+  })
+
+  it('detecta listas de onboarding padrão do Trello', () => {
+    expect(isTrelloOnboardingList('Guia de introdução ao Trello')).toBe(true)
+    expect(isTrelloOnboardingList('Welcome to Trello')).toBe(true)
+    expect(isTrelloOnboardingList('Primeiros Passos')).toBe(true)
+    expect(isTrelloOnboardingList('Santa Catarina')).toBe(false)
+    expect(isTrelloOnboardingList('Machado Sobrinho')).toBe(false)
+    expect(isTrelloOnboardingList('Aulas Particulares')).toBe(false)
+  })
+
+  it('busca cartões de múltiplas listas selecionadas simultaneamente', async () => {
+    saveTrelloConfig({ apiKey: 'k', apiToken: 't' })
+
+    const mockCardsList1 = [{ id: 'c1', name: 'Tarefa Escola 1', labels: [] }]
+    const mockCardsList2 = [{ id: 'c2', name: 'Tarefa Escola 2', labels: [] }]
+
+    vi.stubGlobal('fetch', vi.fn().mockImplementation((url: string) => {
+      if (url.includes('/lists/list_1/cards')) {
+        return Promise.resolve({ ok: true, json: async () => mockCardsList1 })
+      }
+      if (url.includes('/lists/list_2/cards')) {
+        return Promise.resolve({ ok: true, json: async () => mockCardsList2 })
+      }
+      return Promise.resolve({ ok: true, json: async () => [] })
+    }))
+
+    const multiCards = await fetchTrelloCardsFromMultipleLists([
+      { id: 'list_1', name: 'Santa Catarina' },
+      { id: 'list_2', name: 'Machado Sobrinho' }
+    ])
+
+    expect(multiCards.length).toBe(2)
+    expect(multiCards[0].id).toBe('c1')
+    expect((multiCards[0] as any).listName).toBe('Santa Catarina')
+    expect(multiCards[1].id).toBe('c2')
+    expect((multiCards[1] as any).listName).toBe('Machado Sobrinho')
   })
 })

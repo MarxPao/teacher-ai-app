@@ -309,3 +309,54 @@ export async function fetchTrelloCardsFromBoard(boardId: string, apiKey?: string
     isAlreadyImported: Boolean(importedMap[c.id])
   }))
 }
+
+/**
+ * Detecta se uma lista possui nome correspondente ao conteúdo padrão de onboarding do Trello
+ */
+export function isTrelloOnboardingList(listName: string): boolean {
+  if (!listName) return false
+  return /guia de introdu[çc][ãa]o|welcome to trello|primeiros passos|trello basics|modelos do trello|dicas do trello/i.test(listName)
+}
+
+/**
+ * Lista todos os cartões de múltiplas listas selecionadas com identificação da lista de origem
+ */
+export async function fetchTrelloCardsFromMultipleLists(
+  lists: Array<{ id: string; name: string }>,
+  apiKey?: string,
+  apiToken?: string
+): Promise<TrelloCard[]> {
+  const cfg = getTrelloConfig()
+  const key = apiKey || cfg?.apiKey
+  const token = apiToken || cfg?.apiToken
+
+  if (!key || !token) {
+    throw new Error('Credenciais do Trello não fornecidas.')
+  }
+
+  const allCards: TrelloCard[] = []
+  const importedMap = getImportedTrelloCardIds()
+
+  for (const list of lists) {
+    try {
+      const cards = await trelloFetch<TrelloCard[]>(`/lists/${list.id}/cards`, key, token, {
+        fields: 'id,name,desc,due,dueComplete,idList,idBoard,shortUrl,url,labels,idChecklists',
+        checklists: 'all'
+      })
+
+      cards.forEach(c => {
+        allCards.push({
+          ...c,
+          isAlreadyImported: Boolean(importedMap[c.id]),
+          // Metadado customizado de lista
+          ...( { listName: list.name } as any )
+        })
+      })
+    } catch (e) {
+      console.warn(`Erro ao buscar cartões da lista ${list.name}:`, e)
+    }
+  }
+
+  return allCards
+}
+

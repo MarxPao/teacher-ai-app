@@ -36,6 +36,59 @@ export interface TrelloRoutingDecision {
   approved: boolean
   importChecklistAsSubtasks: boolean
   isAlreadyImported?: boolean
+  listName?: string
+  isOnboarding?: boolean
+  onboardingWarning?: string
+}
+
+/**
+ * Detecta se um cartão ou lista é conteúdo padrão de onboarding/introdução do próprio Trello
+ */
+export function isTrelloOnboardingContent(
+  cardName: string,
+  cardDesc: string = '',
+  listName: string = ''
+): { isOnboarding: boolean; reason?: string } {
+  const listLower = (listName || '').toLowerCase()
+  const cardLower = (cardName || '').toLowerCase()
+  const descLower = (cardDesc || '').toLowerCase()
+  const fullText = `${listLower} ${cardLower} ${descLower}`
+
+  const onboardingListPatterns = [
+    /guia de introdu[çc][ãa]o/i,
+    /welcome to trello/i,
+    /primeiros passos/i,
+    /trello basics/i,
+    /modelos do trello/i,
+    /dicas do trello/i,
+  ]
+
+  const onboardingCardPatterns = [
+    /baixe o aplicativo para dispositivos m[óo]veis/i,
+    /conhe[çc]a o jira/i,
+    /atlassian intelligence/i,
+    /capture a partir de e-mail/i,
+    /trabalhe de forma mais inteligente/i,
+    /descubra o essencial do trello/i,
+    /loom\.com\/share/i,
+    /comece a usar o trello/i,
+    /trello\.com\/tour/i,
+    /power-ups do trello/i,
+  ]
+
+  for (const pat of onboardingListPatterns) {
+    if (pat.test(listLower)) {
+      return { isOnboarding: true, reason: 'Lista padrão de onboarding ("Guia de introdução ao Trello") gerada automaticamente pelo Trello.' }
+    }
+  }
+
+  for (const pat of onboardingCardPatterns) {
+    if (pat.test(fullText)) {
+      return { isOnboarding: true, reason: 'Cartão de tutorial/onboarding da Atlassian detectado (não é conteúdo pedagógico seu).' }
+    }
+  }
+
+  return { isOnboarding: false }
 }
 
 /**
@@ -62,10 +115,14 @@ export function routeTrelloCard(
 ): TrelloRoutingDecision {
   const title = (card.name || '').trim()
   const desc = (card.desc || '').trim()
-  const fullText = `${title} ${desc}`.toLowerCase()
+  const listName = (card as any).listName || ''
+  const fullText = `${listName} ${title} ${desc}`.toLowerCase()
   const labelNames = (card.labels || []).map(l => (l.name || '').toLowerCase())
   const allLabelsStr = labelNames.join(' ')
   const checkItems = extractCheckItems(card)
+
+  const onboardingInfo = isTrelloOnboardingContent(title, desc, listName)
+  const isApprovedByDefault = !card.isAlreadyImported && !card.dueComplete && !onboardingInfo.isOnboarding
 
   // 1. Verificação de Aluno (Observação ou Comunicado aos Pais)
   const isParentComms = /mãe|pai|pais|fam[ií]lia|respons[áa]vel|recado|ligar para|whatsapp|comunicado/i.test(fullText) ||
@@ -105,14 +162,17 @@ export function routeTrelloCard(
       },
       confidence: 'high',
       confidenceScore: 0.92,
-      reasoning: `Detectado contato com responsáveis para o aluno ${matchedStudent.name}.`,
+      reasoning: onboardingInfo.isOnboarding ? onboardingInfo.reason! : `Detectado contato com responsáveis para o aluno ${matchedStudent.name}.`,
       alternativeTools: [
         { toolName: 'add_todo', label: 'Tarefa (To-Do)', payload: { text: title, priority: 'high' } },
         { toolName: 'record_student_observation', label: 'Memória do Aluno', payload: { studentName: matchedStudent.name, note: `${title} - ${desc}` } }
       ],
-      approved: !card.isAlreadyImported && !card.dueComplete,
+      approved: isApprovedByDefault,
       importChecklistAsSubtasks: true,
-      isAlreadyImported: card.isAlreadyImported
+      isAlreadyImported: card.isAlreadyImported,
+      listName: listName || undefined,
+      isOnboarding: onboardingInfo.isOnboarding,
+      onboardingWarning: onboardingInfo.reason,
     }
   }
 
@@ -137,14 +197,17 @@ export function routeTrelloCard(
       },
       confidence: 'high',
       confidenceScore: 0.88,
-      reasoning: `Detectada observação individual para o aluno ${matchedStudent.name}.`,
+      reasoning: onboardingInfo.isOnboarding ? onboardingInfo.reason! : `Detectada observação individual para o aluno ${matchedStudent.name}.`,
       alternativeTools: [
         { toolName: 'add_todo', label: 'Tarefa (To-Do)', payload: { text: title, priority: 'medium' } },
         { toolName: 'generate_parent_communication', label: 'Mensagem para Pais', payload: { studentName: matchedStudent.name, topic: title } }
       ],
-      approved: !card.isAlreadyImported && !card.dueComplete,
+      approved: isApprovedByDefault,
       importChecklistAsSubtasks: true,
-      isAlreadyImported: card.isAlreadyImported
+      isAlreadyImported: card.isAlreadyImported,
+      listName: listName || undefined,
+      isOnboarding: onboardingInfo.isOnboarding,
+      onboardingWarning: onboardingInfo.reason,
     }
   }
 
@@ -171,13 +234,16 @@ export function routeTrelloCard(
       },
       confidence: 'high',
       confidenceScore: 0.89,
-      reasoning: 'Tarefa operacional de rotina para o checklist do Dashboard.',
+      reasoning: onboardingInfo.isOnboarding ? onboardingInfo.reason! : 'Tarefa operacional de rotina para o checklist do Dashboard.',
       alternativeTools: [
         { toolName: 'create_calendar_task', label: 'Evento de Calendário', payload: { title, date: card.due } }
       ],
-      approved: !card.isAlreadyImported && !card.dueComplete,
+      approved: isApprovedByDefault,
       importChecklistAsSubtasks: true,
-      isAlreadyImported: card.isAlreadyImported
+      isAlreadyImported: card.isAlreadyImported,
+      listName: listName || undefined,
+      isOnboarding: onboardingInfo.isOnboarding,
+      onboardingWarning: onboardingInfo.reason,
     }
   }
 
@@ -203,14 +269,17 @@ export function routeTrelloCard(
       },
       confidence: 'high',
       confidenceScore: 0.85,
-      reasoning: `Conteúdo identificado como avaliação/prova escolar.`,
+      reasoning: onboardingInfo.isOnboarding ? onboardingInfo.reason! : `Conteúdo identificado como avaliação/prova escolar.`,
       alternativeTools: [
         { toolName: 'add_todo', label: 'Tarefa (To-Do)', payload: { text: `Preparar ${title}`, priority: 'high' } },
         { toolName: 'create_lesson_plan', label: 'Plano de Aula', payload: { title, objectives: desc } }
       ],
-      approved: !card.isAlreadyImported && !card.dueComplete,
+      approved: isApprovedByDefault,
       importChecklistAsSubtasks: true,
-      isAlreadyImported: card.isAlreadyImported
+      isAlreadyImported: card.isAlreadyImported,
+      listName: listName || undefined,
+      isOnboarding: onboardingInfo.isOnboarding,
+      onboardingWarning: onboardingInfo.reason,
     }
   }
 
@@ -236,14 +305,17 @@ export function routeTrelloCard(
       },
       confidence: 'high',
       confidenceScore: 0.84,
-      reasoning: `Identificado como preparação de roteiro ou conteúdo de aula.`,
+      reasoning: onboardingInfo.isOnboarding ? onboardingInfo.reason! : `Identificado como preparação de roteiro ou conteúdo de aula.`,
       alternativeTools: [
         { toolName: 'add_todo', label: 'Tarefa (To-Do)', payload: { text: title, priority: 'medium' } },
         { toolName: 'create_calendar_task', label: 'Evento de Calendário', payload: { title, date: card.due } }
       ],
-      approved: !card.isAlreadyImported && !card.dueComplete,
+      approved: isApprovedByDefault,
       importChecklistAsSubtasks: true,
-      isAlreadyImported: card.isAlreadyImported
+      isAlreadyImported: card.isAlreadyImported,
+      listName: listName || undefined,
+      isOnboarding: onboardingInfo.isOnboarding,
+      onboardingWarning: onboardingInfo.reason,
     }
   }
 
@@ -269,13 +341,16 @@ export function routeTrelloCard(
       },
       confidence: 'high',
       confidenceScore: 0.86,
-      reasoning: `Compromisso com data agendada detectado (${card.due ? new Date(card.due).toLocaleDateString('pt-BR') : 'Data informada'}).`,
+      reasoning: onboardingInfo.isOnboarding ? onboardingInfo.reason! : `Compromisso com data agendada detectado (${card.due ? new Date(card.due).toLocaleDateString('pt-BR') : 'Data informada'}).`,
       alternativeTools: [
         { toolName: 'add_todo', label: 'Tarefa (To-Do)', payload: { text: title, priority: 'high' } }
       ],
-      approved: !card.isAlreadyImported && !card.dueComplete,
+      approved: isApprovedByDefault,
       importChecklistAsSubtasks: true,
-      isAlreadyImported: card.isAlreadyImported
+      isAlreadyImported: card.isAlreadyImported,
+      listName: listName || undefined,
+      isOnboarding: onboardingInfo.isOnboarding,
+      onboardingWarning: onboardingInfo.reason,
     }
   }
 
@@ -296,18 +371,21 @@ export function routeTrelloCard(
       text: title,
       priority,
       category: 'one_off',
-      tag: card.labels?.[0]?.name || 'Trello'
+      tag: card.labels?.[0]?.name || (listName || 'Trello')
     },
     confidence: isHighPriority || card.due ? 'high' : 'medium',
     confidenceScore: isHighPriority ? 0.82 : 0.75,
-    reasoning: 'Tarefa operacional para o checklist diário do Dashboard.',
+    reasoning: onboardingInfo.isOnboarding ? onboardingInfo.reason! : 'Tarefa operacional para o checklist diário do Dashboard.',
     alternativeTools: [
       { toolName: 'create_calendar_task', label: 'Evento de Calendário', payload: { title, date: card.due } },
       { toolName: 'create_lesson_plan', label: 'Plano de Aula', payload: { title, objectives: desc } }
     ],
-    approved: !card.isAlreadyImported && !card.dueComplete,
+    approved: isApprovedByDefault,
     importChecklistAsSubtasks: true,
-    isAlreadyImported: card.isAlreadyImported
+    isAlreadyImported: card.isAlreadyImported,
+    listName: listName || undefined,
+    isOnboarding: onboardingInfo.isOnboarding,
+    onboardingWarning: onboardingInfo.reason,
   }
 }
 

@@ -234,4 +234,26 @@ describe('Trello Router Engine & Intelligent Agent Mapping', () => {
     expect(rawImported['card_exec_1']).toBeDefined()
     expect(rawImported['card_exec_2']).toBeUndefined()
   })
+
+  it('detecta e sinaliza conteúdo padrão de onboarding do Trello (ex: Guia de Introdução, Baixe o App)', () => {
+    const onboardingCard: TrelloCard = {
+      id: 'c_onb_1',
+      name: 'Baixe o aplicativo para dispositivos móveis',
+      desc: 'Acesse seus quadros no iOS e Android',
+      due: null,
+      dueComplete: false,
+      idList: 'list_onb',
+      idBoard: 'board_main',
+      shortUrl: '',
+      url: '',
+      labels: [],
+      // Metadado da lista
+      ...( { listName: 'Guia de introdução ao Trello' } as any )
+    }
+
+    const decision = routeTrelloCard(onboardingCard)
+    expect(decision.isOnboarding).toBe(true)
+    expect(decision.onboardingWarning).toBeDefined()
+    expect(decision.approved).toBe(false) // Desmarcado por padrão para proteger o usuário
+  })
 })
