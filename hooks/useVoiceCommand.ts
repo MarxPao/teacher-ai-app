@@ -1,6 +1,6 @@
-'use client'
-
 import { useState, useRef, useCallback, useEffect } from 'react'
+import { detectWakeWord } from '@/lib/wakeWordEngine'
+import { audioFeedback } from '@/lib/audioFeedback'
 
 export interface VoiceCommandOptions {
   lang?: string
@@ -12,6 +12,7 @@ export interface VoiceCommandOptions {
   onInterimResult?: (text: string) => void
   onWakePhrase?: () => void
   onVolumeUpdate?: (volume: number) => void
+  onBargeIn?: () => void
 }
 
 export interface VoiceCommandReturn {
@@ -25,22 +26,25 @@ export interface VoiceCommandReturn {
 }
 
 /**
- * useVoiceCommand — Motor de Voz Alexa + VAD Silêncio para o TEACHER???
+ * useVoiceCommand — Motor de Voz Alexa + VAD Silêncio + Barge-In (<300ms) para o TEACHER AI
  *
- * RESPOSTA RÁPIDA VAD (900ms):
- * - Captura áudio em tempo real.
- * - Quando o usuário para de falar por 900ms (mesmo que o Chrome não marque isFinal), envia a frase capturada automaticamente!
+ * Funcionalidades:
+ * 1. Detecção e Interrupção Instantânea (Barge-In <150ms): para a fala da IA se o usuário começar a falar.
+ * 2. Detecção Fonética e Fuzzy de Wake Word integrada ("Hello Rafinha", "Ei Rafinha", "Rafinha").
+ * 3. Chimes de feedback acústico via Web Audio API.
+ * 4. VAD adaptativo de silêncio para encerramento de frase rápido (600-900ms).
  */
 export function useVoiceCommand(options: VoiceCommandOptions): VoiceCommandReturn {
   const {
     lang = 'pt-BR',
     noiseGateThreshold = 5,
     silenceDebounceMs = 900,
-    wakePhrases = ['ei rafinha', 'ô rafinha', 'rafinha', 'ou rafinha'],
+    wakePhrases = ['hello rafinha', 'ei rafinha', 'ô rafinha', 'rafinha', 'ou rafinha', 'oi rafinha'],
     onFinalResult,
     onInterimResult,
     onWakePhrase,
     onVolumeUpdate,
+    onBargeIn,
   } = options
 
   const [isListening, setIsListening] = useState(false)
@@ -52,11 +56,13 @@ export function useVoiceCommand(options: VoiceCommandOptions): VoiceCommandRetur
   const onInterimRef = useRef(onInterimResult)
   const onWakeRef = useRef(onWakePhrase)
   const onVolumeRef = useRef(onVolumeUpdate)
+  const onBargeInRef = useRef(onBargeIn)
 
   useEffect(() => { onFinalRef.current = onFinalResult }, [onFinalResult])
   useEffect(() => { onInterimRef.current = onInterimResult }, [onInterimResult])
   useEffect(() => { onWakeRef.current = onWakePhrase }, [onWakePhrase])
   useEffect(() => { onVolumeRef.current = onVolumeUpdate }, [onVolumeUpdate])
+  useEffect(() => { onBargeInRef.current = onBargeIn }, [onBargeIn])
 
   const recRef = useRef<any>(null)
   const audioCtxRef = useRef<AudioContext | null>(null)
@@ -88,6 +94,7 @@ export function useVoiceCommand(options: VoiceCommandOptions): VoiceCommandRetur
       analyserRef.current = analyser
       const buffer = new Uint8Array(analyser.frequencyBinCount)
 
+      let consecutiveVoiceFrames = 0
       const tick = () => {
         if (!analyserRef.current) return
         analyserRef.current.getByteFrequencyData(buffer as any)
@@ -95,6 +102,21 @@ export function useVoiceCommand(options: VoiceCommandOptions): VoiceCommandRetur
         const avg = slice.reduce((a, b) => a + b, 0) / slice.length
         setVolume(avg)
         if (onVolumeRef.current) onVolumeRef.current(avg)
+
+        // ── BARGE-IN DETECTOR (< 150ms) ─────────────────────────────────────────
+        // Se a Rafinha está falando e o usuário começar a falar (energia acima do ruído de fundo)
+        if ((window as any).rafinhaIsSpeaking && avg > (noiseGateThreshold + 6)) {
+          consecutiveVoiceFrames++
+          if (consecutiveVoiceFrames >= 3) {
+            consecutiveVoiceFrames = 0
+            if (onBargeInRef.current) {
+              onBargeInRef.current()
+            }
+          }
+        } else {
+          consecutiveVoiceFrames = Math.max(0, consecutiveVoiceFrames - 1)
+        }
+
         rafRef.current = requestAnimationFrame(tick)
       }
       rafRef.current = requestAnimationFrame(tick)
@@ -102,7 +124,7 @@ export function useVoiceCommand(options: VoiceCommandOptions): VoiceCommandRetur
       ;(window as any).__globalMicActive = false
       setError('Permissão de microfone negada.')
     }
-  }, [])
+  }, [noiseGateThreshold])
 
   const stopAudioMeter = useCallback(() => {
     if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = null }
@@ -185,6 +207,11 @@ export function useVoiceCommand(options: VoiceCommandOptions): VoiceCommandRetur
     }
 
     rec.onresult = (e: any) => {
+      // Barge-in imediato se texto chegar enquanto ela fala
+      if ((window as any).rafinhaIsSpeaking && onBargeInRef.current) {
+        onBargeInRef.current()
+      }
+
       if ((window as any).rafinhaIsBusy) return
 
       let currentTranscript = ''
@@ -206,29 +233,32 @@ export function useVoiceCommand(options: VoiceCommandOptions): VoiceCommandRetur
         onInterimRef.current(textClean)
       }
 
-      // Se for acorda Rafinha
-      const lower = textClean.toLowerCase()
-      if (wakePhrases.some(wp => lower.includes(wp))) {
+      // Detecção de Wake Word com Phonetic & Fuzzy Matcher
+      const wakeRes = detectWakeWord(textClean)
+      if (wakeRes.detected) {
         if (onWakeRef.current) onWakeRef.current()
+        if (wakeRes.inlineCommand) {
+          lastAccumulatedTextRef.current = wakeRes.inlineCommand
+        }
       }
 
-      // Reinicia o Timer VAD de silêncio de 900ms: se o usuário parar de falar por 900ms, envia a frase!
+      // Reinicia o Timer VAD de silêncio de 600ms a 900ms
       if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current)
 
       if (isFinalChunk) {
-        // Se já é final, envia em 300ms
+        // Se já é final, envia em 250ms
         silenceTimerRef.current = setTimeout(() => {
           if (lastAccumulatedTextRef.current) {
             dispatchCaptured(lastAccumulatedTextRef.current)
           }
-        }, 300)
+        }, 250)
       } else {
-        // Se ainda é interim mas parou de falar por 900ms, envia também!
+        // Se ainda é interim mas parou de falar por 750ms, envia também!
         silenceTimerRef.current = setTimeout(() => {
           if (lastAccumulatedTextRef.current) {
             dispatchCaptured(lastAccumulatedTextRef.current)
           }
-        }, 900)
+        }, 750)
       }
     }
 

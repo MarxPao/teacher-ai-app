@@ -1,9 +1,16 @@
 'use client'
 import { useEffect, useRef } from 'react'
+import { detectWakeWord } from '@/lib/wakeWordEngine'
+import { audioFeedback } from '@/lib/audioFeedback'
 
 /**
- * useGlobalWakeWord — Sempre escuta "Rafinha" em qualquer tela
- * Mutex Lock: Não faz nada se a Rafinha estiver falando ou processando
+ * useGlobalWakeWord — Escuta a Wake Word "Hello Rafinha" em qualquer tela do aplicativo (Primeiro Plano)
+ * 
+ * Funcionalidades:
+ * 1. Detecção fonética e fuzzy tolerante a ruídos ("Hello Rafinha", "Ei Rafinha", "Oi Rafinha", "Rafinha")
+ * 2. Bip sonoro acústico imediato (<10ms) confirmando a ativação
+ * 3. Extração e execução de comando inline falado na mesma frase ("Hello Rafinha, vá para turmas")
+ * 4. Mutex Lock para não conflitar com síntese de áudio ativa
  */
 export function useGlobalWakeWord(enabled = false) {
   const recRef      = useRef<any>(null)
@@ -17,17 +24,14 @@ export function useGlobalWakeWord(enabled = false) {
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
     if (!SR) return
 
-    const WAKE_PHRASES = ['rafinha', 'ei rafinha', 'ô rafinha', 'ou rafinha', 'hey rafinha']
-
     function build() {
       if (activeRef.current) return
-      // A2: Não roda se a Rafinha estiver ocupada (falando/processando)
+      // Não roda se a Rafinha estiver ocupada (falando/processando)
       if ((window as any).rafinhaIsBusy) {
         setTimeout(build, 800)
         return
       }
-      // A2: Mutex global — não inicia SpeechRecognition se useVoiceCommand já está ativo
-      // Evita três streams de microfone simultâneos (wake + voiceCommand + whisper = eco + metalização)
+      // Mutex global — não inicia SpeechRecognition se useVoiceCommand já está ativo
       if ((window as any).__globalMicActive) {
         setTimeout(build, 600)
         return
@@ -42,12 +46,24 @@ export function useGlobalWakeWord(enabled = false) {
         if ((window as any).rafinhaIsBusy) return
 
         for (let i = e.resultIndex; i < e.results.length; i++) {
-          const text = e.results[i][0].transcript.toLowerCase().trim()
-          if (WAKE_PHRASES.some(wp => text.includes(wp))) {
+          const rawTranscript = e.results[i][0].transcript
+          const detection = detectWakeWord(rawTranscript)
+
+          if (detection.detected) {
             const lastWake = Number(sessionStorage.getItem('rafinha_last_wake') || '0')
-            if (Date.now() - lastWake < 3000) continue
+            if (Date.now() - lastWake < 2500) continue
             sessionStorage.setItem('rafinha_last_wake', String(Date.now()))
+
+            // 1. Toca chime harmônico de ativação da wake word
+            audioFeedback.playWakeChime()
+
+            // 2. Abre o modal/chat da Rafinha
             window.dispatchEvent(new CustomEvent('rafinha:wake'))
+
+            // 3. Se o usuário já falou o comando na mesma frase, dispara diretamente!
+            if (detection.inlineCommand && detection.inlineCommand.trim().length > 2) {
+              window.dispatchEvent(new CustomEvent('rafinha:send_text', { detail: detection.inlineCommand }))
+            }
           }
         }
       }
@@ -72,7 +88,7 @@ export function useGlobalWakeWord(enabled = false) {
       try { rec.start() } catch { activeRef.current = false }
     }
 
-    const t = setTimeout(build, 1000)
+    const t = setTimeout(build, 800)
 
     return () => {
       clearTimeout(t)
@@ -82,3 +98,4 @@ export function useGlobalWakeWord(enabled = false) {
     }
   }, [enabled])
 }
+

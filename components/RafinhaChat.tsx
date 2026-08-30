@@ -14,6 +14,8 @@ import type { ModuleKey } from '@/app/page'
 import { buildLongTermMemoryContext, saveLearnedFact, autoReflectAndLearn } from '@/lib/longTermMemory'
 import { matchStudentByName } from '@/lib/studentMatcher'
 import { getSubjectProfile } from '@/lib/subjectProfile'
+import { ActiveVoiceSession } from '@/lib/wakeWordEngine'
+import { audioFeedback } from '@/lib/audioFeedback'
 import '@/lib/subjects/english'
 import '@/lib/subjects/portuguese'
 
@@ -881,12 +883,14 @@ export default function RafinhaChat({ onNavigate, onCommandReady }: RafinhaChatP
  const [allLogs, setAllLogs] = useState<LogEntry[]>([])
  const skipSignalRef = useRef(false) // flag to skip timer animation
 
+
  const messagesEndRef = useRef<HTMLDivElement>(null)
  const audioRef = useRef<HTMLAudioElement | null>(null)
  const isSpeakingRef = useRef(false)
  const isLoadingRef = useRef(false)
  const isLiveModeRef = useRef(false)
  const isListeningRef = useRef(false)
+ const voiceStartRef = useRef<() => void>(() => {})
 
  useEffect(() => {
  isLoadingRef.current = isLoading
@@ -898,6 +902,7 @@ export default function RafinhaChat({ onNavigate, onCommandReady }: RafinhaChatP
 
  // Wake word global desativado por padrão para não ligar o microfone sem solicitação do usuário
  useGlobalWakeWord(false)
+
 
  // Expõe sendMessage para componentes externos
  useEffect(() => {
@@ -912,18 +917,27 @@ export default function RafinhaChat({ onNavigate, onCommandReady }: RafinhaChatP
 
  // Wake word
  useEffect(() => {
- const handleWake = () => setIsOpen(true)
- const handleSendText = (e: Event) => {
- const text = (e as CustomEvent<string>).detail
- if (text) { setIsOpen(true); setTimeout(() => dispatchSend(text), 200) }
- }
- window.addEventListener('rafinha:wake', handleWake)
- window.addEventListener('rafinha:send_text', handleSendText)
- return () => {
- window.removeEventListener('rafinha:wake', handleWake)
- window.removeEventListener('rafinha:send_text', handleSendText)
- }
- }, []) // eslint-disable-line
+    const handleWake = () => {
+      setIsOpen(true)
+      activeSessionRef.current?.activate()
+      audioFeedback.playListenStartChime()
+      setTimeout(() => voiceStartRef.current(), 200)
+    }
+    const handleSendText = (e: Event) => {
+      const text = (e as CustomEvent<string>).detail
+      if (text) {
+        setIsOpen(true)
+        activeSessionRef.current?.activate()
+        setTimeout(() => dispatchSend(text), 200)
+      }
+    }
+    window.addEventListener('rafinha:wake', handleWake)
+    window.addEventListener('rafinha:send_text', handleSendText)
+    return () => {
+      window.removeEventListener('rafinha:wake', handleWake)
+      window.removeEventListener('rafinha:send_text', handleSendText)
+    }
+  }, [])
 
  useEffect(() => {
  messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -939,40 +953,60 @@ export default function RafinhaChat({ onNavigate, onCommandReady }: RafinhaChatP
  return () => window.removeEventListener('storage', check)
  }, [])
 
+ const activeSessionRef = useRef<ActiveVoiceSession | null>(null)
+
+ useEffect(() => {
+   activeSessionRef.current = new ActiveVoiceSession(10000, () => {
+     audioFeedback.playListenEndChime()
+     if (!isLiveModeRef.current) {
+       voiceStop()
+     }
+   })
+   return () => {
+     activeSessionRef.current?.close()
+   }
+ }, [])
+
  // TTS 
  const speak = useCallback(async (text: string) => {
- if (!voiceOut || !text.trim()) return
+    if (!voiceOut || !text.trim()) return
 
- // A5: Cancelar TODOS os canais de áudio antes de qualquer nova reprodução
- if (window.speechSynthesis) window.speechSynthesis.cancel()
- if (audioRef.current) {
- audioRef.current.onended = null
- audioRef.current.onerror = null
- audioRef.current.pause()
- audioRef.current = null
- }
+    // Cancelar TODOS os canais de áudio antes de qualquer nova reprodução
+    if (window.speechSynthesis) window.speechSynthesis.cancel()
+    if (audioRef.current) {
+      audioRef.current.onended = null
+      audioRef.current.onerror = null
+      audioRef.current.pause()
+      audioRef.current = null
+    }
 
- const cleanText = text.replace(/[*_#`\[\]]/g, '').replace(/\n/g, ' ').slice(0, 400)
- setIsSpeaking(true)
- isSpeakingRef.current = true
- ;(window as any).rafinhaIsBusy = true
+    const cleanText = text.replace(/[*_#`\[\]]/g, '').replace(/\n/g, ' ').slice(0, 400)
+    setIsSpeaking(true)
+    isSpeakingRef.current = true
+    ;(window as any).rafinhaIsBusy = true
+    ;(window as any).rafinhaIsSpeaking = true
 
- // A4: Para o microfone e aguarda encerramento antes de tocar áudio (evita eco e metalização)
- voiceStop()
- await new Promise(r => setTimeout(r, 300))
+    // Para o microfone e aguarda encerramento antes de tocar áudio
+    voiceStop()
+    await new Promise(r => setTimeout(r, 200))
 
- const onDone = () => {
- setIsSpeaking(false)
- isSpeakingRef.current = false
- ;(window as any).rafinhaIsBusy = false
- audioRef.current = null
- // A2: delay maior (800ms) para garantir que o áudio terminou COMPLETAMENTE antes de reabrir mic
- setTimeout(() => {
- if (!isSpeakingRef.current && !isLoadingRef.current) {
- voiceStart()
- }
- }, 800)
- }
+    const onDone = () => {
+      setIsSpeaking(false)
+      isSpeakingRef.current = false
+      ;(window as any).rafinhaIsBusy = false
+      ;(window as any).rafinhaIsSpeaking = false
+      audioRef.current = null
+
+      // Reabre microfone se estiver em sessão ativa ou live mode
+      if (activeSessionRef.current?.isActive() || isLiveModeRef.current) {
+        setTimeout(() => {
+          if (!isSpeakingRef.current && !isLoadingRef.current) {
+            voiceStart()
+            activeSessionRef.current?.keepAlive()
+          }
+        }, 350)
+      }
+    }
 
  try {
  const apis = JSON.parse(localStorage.getItem('teacher_apis') || '[]')
@@ -1072,13 +1106,34 @@ export default function RafinhaChat({ onNavigate, onCommandReady }: RafinhaChatP
  },
  })
 
+ const handleBargeIn = useCallback(() => {
+    if (window.speechSynthesis) window.speechSynthesis.cancel()
+    if (audioRef.current) {
+      audioRef.current.onended = null
+      audioRef.current.onerror = null
+      audioRef.current.pause()
+      audioRef.current = null
+    }
+    setIsSpeaking(false)
+    isSpeakingRef.current = false
+    ;(window as any).rafinhaIsSpeaking = false
+    ;(window as any).rafinhaIsBusy = false
+    audioFeedback.playListenStartChime()
+    activeSessionRef.current?.keepAlive()
+  }, [])
+
  const { isListening: isWebListening, start: webVoiceStart, stop: webVoiceStop } = useVoiceCommand({
  onFinalResult: handleFinalVoice,
  onInterimResult: handleInterimVoice,
- silenceDebounceMs: 1200, // Espera 1.2s de silêncio ela não vai cortar você no meio da fala
- noiseGateThreshold: 2,
+ silenceDebounceMs: 900,
+ noiseGateThreshold: 3,
  minConfidence: 0.1,
- onWakePhrase: () => { setIsOpen(true) },
+ onBargeIn: handleBargeIn,
+ onWakePhrase: () => {
+   setIsOpen(true)
+   audioFeedback.playWakeChime()
+   activeSessionRef.current?.activate()
+ },
  onVolumeUpdate: (vol: number) => {
  window.dispatchEvent(new CustomEvent('rafinha:orb_volume', { detail: vol }))
  },
@@ -1094,6 +1149,10 @@ export default function RafinhaChat({ onNavigate, onCommandReady }: RafinhaChatP
  whisper.startRecording().catch(() => {})
  }
  }, [webVoiceStart, whisper])
+
+  useEffect(() => {
+    voiceStartRef.current = voiceStart
+  }, [voiceStart])
 
  const voiceStop = useCallback(() => {
  if (isWebListening) webVoiceStop()
