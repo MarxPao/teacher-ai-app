@@ -121,9 +121,30 @@ export default function VoiceOrb() {
 
       <div style={{
         position: 'fixed', bottom: 24, right: 98, zIndex: 9998,
-        display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 10,
+        display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6,
         animation: 'orbIn 0.4s cubic-bezier(0.34,1.56,0.64,1)',
       }}>
+        {/* Badge Permanente de Microfone Ativo / Transparência */}
+        {status === 'listening' && (
+          <div style={{
+            background: 'rgba(220,50,47,0.92)',
+            color: '#fff',
+            fontSize: 9.5,
+            fontWeight: 800,
+            padding: '3px 8px',
+            borderRadius: 8,
+            boxShadow: '0 2px 8px rgba(220,50,47,0.4)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 5,
+            animation: 'orbPulse 1.5s infinite',
+            fontFamily: "'Plus Jakarta Sans', sans-serif"
+          }} title="Microfone ativo transmitindo áudio para reconhecimento de voz do Google">
+            <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#fff' }} />
+            <span>MIC ATIVO (Google STT)</span>
+          </div>
+        )}
+
         {/* Orbe principal + forma de onda */}
         <div
           onClick={handleClick}

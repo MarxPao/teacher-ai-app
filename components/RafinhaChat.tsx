@@ -16,6 +16,8 @@ import { matchStudentByName } from '@/lib/studentMatcher'
 import { getSubjectProfile } from '@/lib/subjectProfile'
 import { ActiveVoiceSession } from '@/lib/wakeWordEngine'
 import { audioFeedback } from '@/lib/audioFeedback'
+import ContinuousListeningConsentModal from '@/components/ContinuousListeningConsentModal'
+import { requiresContinuousListeningConsent } from '@/lib/wakeWordConsent'
 import '@/lib/subjects/english'
 import '@/lib/subjects/portuguese'
 
@@ -858,6 +860,15 @@ export default function RafinhaChat({ onNavigate, onCommandReady }: RafinhaChatP
  const [inputText, setInputText] = useState('')
  const [canUndo, setCanUndo] = useState(false)
  const [showLog, setShowLog] = useState(false)
+ const [showWakeConsentModal, setShowWakeConsentModal] = useState(false)
+
+ const toggleLiveMode = () => {
+    if (!isLiveMode && requiresContinuousListeningConsent()) {
+      setShowWakeConsentModal(true)
+      return
+    }
+    setIsLiveMode(v => !v)
+  }
 
  const toggleVoiceOut = () => {
     setVoiceOut(prev => {
@@ -1538,8 +1549,8 @@ export default function RafinhaChat({ onNavigate, onCommandReady }: RafinhaChatP
  )}
  {/* Modo Alexa 24/7 */}
  <button
- onClick={() => setIsLiveMode(v => !v)}
- title={isLiveMode ? 'Modo Alexa Ativo (Mãos Livres Contínuo)' : 'Ativar Modo Alexa 24/7'}
+ onClick={toggleLiveMode}
+ title={isLiveMode ? 'Modo Alexa Ativo (Mãos Livres Contínuo). Clique para desligar.' : 'Ativar Modo Alexa 24/7 (Requer consentimento de privacidade)'}
  style={{
  background: isLiveMode ? '#dc322f' : 'rgba(255,255,255,0.12)', border: 'none', color: '#fff',
  padding: '5px 10px', borderRadius: 8, cursor: 'pointer', fontSize: 12, fontWeight: 700,
@@ -1574,6 +1585,42 @@ export default function RafinhaChat({ onNavigate, onCommandReady }: RafinhaChatP
  <button onClick={() => setIsOpen(false)} style={{ background: 'none', border: 'none', color: '#a08060', fontSize: 20, cursor: 'pointer', lineHeight: 1 }}>×</button>
  </div>
  </div>
+
+ {/* Indicador Visual Permanente de Escuta Contínua (Transparência Google STT) */}
+ {isLiveMode && (
+    <div style={{
+      background: '#fef2f2',
+      borderBottom: '1px solid #fecaca',
+      padding: '6px 14px',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      fontSize: 11,
+      color: '#991b1b',
+      fontWeight: 700,
+      flexShrink: 0
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#dc322f', display: 'inline-block', animation: 'rafPing 1.5s infinite' }} />
+        <span>🎙️ ESCUTA CONTÍNUA ATIVA (Google STT)</span>
+      </div>
+      <button
+        onClick={toggleLiveMode}
+        style={{
+          background: '#dc322f',
+          color: '#fff',
+          border: 'none',
+          borderRadius: 6,
+          padding: '2px 8px',
+          fontSize: 10,
+          fontWeight: 700,
+          cursor: 'pointer'
+        }}
+      >
+        Desligar
+      </button>
+    </div>
+  )}
 
  {/* Messages (CLEAN só texto) */}
  <div style={{ flex: 1, padding: '14px', overflowY: 'auto', background: '#fdf8f2', display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -1691,6 +1738,16 @@ export default function RafinhaChat({ onNavigate, onCommandReady }: RafinhaChatP
  {showLog && (
  <LogDrawer logs={allLogs} onClose={() => setShowLog(false)} />
  )}
+
+ {/* Modal de Consentimento para Escuta Contínua (Transparência Google STT) */}
+ <ContinuousListeningConsentModal
+   isOpen={showWakeConsentModal}
+   onConsented={() => {
+     setShowWakeConsentModal(false)
+     setIsLiveMode(true)
+   }}
+   onCancel={() => setShowWakeConsentModal(false)}
+ />
  </div>
  )
-}
+}
