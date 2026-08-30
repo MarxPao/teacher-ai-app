@@ -1,6 +1,6 @@
 /**
  * browserAutomationClient.ts — Cliente para orquestração de tarefas de automação de navegador (CDP)
- * Interage com o Supabase (PostgreSQL, RLS e Realtime) com fallback local 100% resiliente.
+ * Interage com o Supabase (PostgreSQL, RLS e Realtime) com fallback local 100% resiliente e reativo.
  */
 
 import { getValidAccessToken, getCurrentUser } from './supabaseAuth'
@@ -91,7 +91,7 @@ function saveLocalTask(task: BrowserAutomationTask): void {
       list.unshift(task)
     }
     localStorage.setItem(LOCAL_TASKS_KEY, JSON.stringify(list))
-    window.dispatchEvent(new Event('storage'))
+    window.dispatchEvent(new CustomEvent('teacher:browser_task_updated', { detail: task }))
   } catch {}
 }
 
@@ -164,7 +164,7 @@ export async function createBrowserTask(params: {
         }
       }
     } catch {
-      // Falha silenciosa de rede/Supabase — fallback local transparente
+      // Fallback local silencioso
     }
   }
 
@@ -231,9 +231,7 @@ export async function updateBrowserTask(
           return remoteTask
         }
       }
-    } catch {
-      // Fallback local silencioso
-    }
+    } catch {}
   }
 
   return updatedTask || (existingLocal ? existingLocal : null)
@@ -243,6 +241,10 @@ export async function updateBrowserTask(
  * Busca uma tarefa pelo ID
  */
 export async function getBrowserTaskById(taskId: string): Promise<BrowserAutomationTask | null> {
+  const localList = getLocalTasks()
+  const localTask = localList.find(t => t.id === taskId)
+  if (localTask) return localTask
+
   const config = getSupabaseUrlAndKey()
   const token = await getValidAccessToken()
 
@@ -266,40 +268,99 @@ export async function getBrowserTaskById(taskId: string): Promise<BrowserAutomat
     } catch {}
   }
 
-  const localList = getLocalTasks()
-  return localList.find(t => t.id === taskId) || null
+  return null
 }
 
 /**
- * Assina atualizações de uma tarefa com polling resiliente (fallback transparente para Realtime)
+ * Assina atualizações de uma tarefa com barramento de eventos locais reativo e fallback transparente
  */
 export function subscribeToBrowserTask(
   taskId: string,
   onUpdate: (task: BrowserAutomationTask) => void,
-  intervalMs = 1500
+  intervalMs = 2500
 ): () => void {
   let active = true
+  let isRemotePollingDisabled = false
 
-  const poll = async () => {
+  // Se já existe localmente, dispara imediatamente
+  const initial = getLocalTasks().find(t => t.id === taskId)
+  if (initial) {
+    onUpdate(initial)
+  }
+
+  // Listener para eventos locais em tempo real (0ms latência e zero requisições HTTP)
+  const handleLocalUpdate = (e: Event) => {
     if (!active) return
-    const task = await getBrowserTaskById(taskId)
-    if (task && active) {
-      onUpdate(task)
-      // Se terminou em done, error ou aborted, encerra o loop de polling
-      if (['done', 'error', 'aborted'].includes(task.status)) {
+    const customEvt = e as CustomEvent<BrowserAutomationTask>
+    if (customEvt.detail && customEvt.detail.id === taskId) {
+      onUpdate(customEvt.detail)
+    } else {
+      const task = getLocalTasks().find(t => t.id === taskId)
+      if (task) onUpdate(task)
+    }
+  }
+
+  if (typeof window !== 'undefined') {
+    window.addEventListener('teacher:browser_task_updated', handleLocalUpdate)
+    window.addEventListener('storage', handleLocalUpdate)
+  }
+
+  // Polling apenas para tarefas remotas de nuvem
+  const poll = async () => {
+    if (!active || isRemotePollingDisabled) return
+    
+    try {
+      const config = getSupabaseUrlAndKey()
+      const token = await getValidAccessToken()
+      if (!config || !token) {
+        isRemotePollingDisabled = true
         return
       }
+
+      const res = await fetch(`${config.url}/rest/v1/browser_automation_tasks?id=eq.${taskId}&select=*`, {
+        method: 'GET',
+        headers: {
+          'apikey': config.anonKey,
+          'Authorization': `Bearer ${token}`
+        }
+      })
+
+      if (res.status === 401 || res.status === 403 || res.status === 404) {
+        // Desativa polling imediatamente ao receber 401/403/404 para evitar poluir o console
+        isRemotePollingDisabled = true
+        return
+      }
+
+      if (res.ok) {
+        const data = await res.json()
+        if (Array.isArray(data) && data.length > 0 && active) {
+          saveLocalTask(data[0])
+          onUpdate(data[0])
+          if (['done', 'error', 'aborted'].includes(data[0].status)) {
+            return
+          }
+        }
+      }
+    } catch {
+      isRemotePollingDisabled = true
     }
-    if (active) {
+
+    if (active && !isRemotePollingDisabled) {
       setTimeout(poll, intervalMs)
     }
   }
 
-  // Inicia polling inicial
-  poll()
+  // Se não foi desabilitado, agenda o próximo poll
+  if (!isRemotePollingDisabled) {
+    setTimeout(poll, intervalMs)
+  }
 
   return () => {
     active = false
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('teacher:browser_task_updated', handleLocalUpdate)
+      window.removeEventListener('storage', handleLocalUpdate)
+    }
   }
 }
 
@@ -307,6 +368,17 @@ export function subscribeToBrowserTask(
  * Busca os logs de auditoria de uma tarefa
  */
 export async function getBrowserAuditLogs(taskId: string): Promise<BrowserAutomationAuditLog[]> {
+  if (typeof window !== 'undefined') {
+    try {
+      const raw = localStorage.getItem(LOCAL_AUDIT_KEY)
+      if (raw) {
+        const list: BrowserAutomationAuditLog[] = JSON.parse(raw)
+        const localFound = list.filter(l => l.task_id === taskId)
+        if (localFound.length > 0) return localFound
+      }
+    } catch {}
+  }
+
   const config = getSupabaseUrlAndKey()
   const token = await getValidAccessToken()
 
@@ -323,16 +395,6 @@ export async function getBrowserAuditLogs(taskId: string): Promise<BrowserAutoma
       if (res.ok) {
         const data = await res.json()
         return Array.isArray(data) ? data : []
-      }
-    } catch {}
-  }
-
-  if (typeof window !== 'undefined') {
-    try {
-      const raw = localStorage.getItem(LOCAL_AUDIT_KEY)
-      if (raw) {
-        const list: BrowserAutomationAuditLog[] = JSON.parse(raw)
-        return list.filter(l => l.task_id === taskId)
       }
     } catch {}
   }
