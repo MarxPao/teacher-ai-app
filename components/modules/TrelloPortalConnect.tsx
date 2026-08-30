@@ -21,8 +21,8 @@ import {
 
 export default function TrelloPortalConnect() {
   const [config, setConfig] = useState<TrelloConfig | null>(null)
-  const [apiKeyInput, setApiKeyInput] = useState('')
-  const [tokenInput, setTokenInput] = useState('')
+  const [apiKeyInput, setApiKeyInput] = useState('f50002fe58947ff4bac9b5876d822e08')
+  const [tokenInput, setTokenInput] = useState('ATTAcbe6f5f844b3b5567c5ab2de18d862641c4da39fbcd26ff41cf40af04179e2de74A6BAAB')
   const [isLoadingAuth, setIsLoadingAuth] = useState(false)
   const [authError, setAuthError] = useState<string | null>(null)
 
@@ -40,8 +40,8 @@ export default function TrelloPortalConnect() {
     const saved = getTrelloConfig()
     setConfig(saved)
     if (saved) {
-      setApiKeyInput(saved.apiKey || '')
-      setTokenInput(saved.apiToken || '')
+      setApiKeyInput(saved.apiKey || 'f50002fe58947ff4bac9b5876d822e08')
+      setTokenInput(saved.apiToken || 'ATTAcbe6f5f844b3b5567c5ab2de18d862641c4da39fbcd26ff41cf40af04179e2de74A6BAAB')
     }
   }, [])
 

@@ -98,6 +98,15 @@ export function getTrelloAuthorizeUrl(apiKey: string): string {
   return `https://trello.com/1/authorize?expiration=never&name=Teacher+AI&scope=read,write&response_type=token&key=${encodeURIComponent(apiKey.trim())}`
 }
 
+export const DEFAULT_TRELLO_CONFIG: TrelloConfig = {
+  apiKey: 'f50002fe58947ff4bac9b5876d822e08',
+  apiToken: 'ATTAcbe6f5f844b3b5567c5ab2de18d862641c4da39fbcd26ff41cf40af04179e2de74A6BAAB',
+  memberId: '6a669cdf5b043bd217da3474',
+  username: 'rafaelafrancotoldo',
+  fullName: 'Rafaela Franco Toldo',
+  connectedAt: '2026-08-30T01:52:00.000Z'
+}
+
 /**
  * Carrega a configuração do Trello salva no localStorage
  */
