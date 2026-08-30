@@ -104,6 +104,10 @@ describe('Checklist & History Manager', () => {
     // Ano (365 dias)
     expect(isDateInPeriod(twoHundredDaysAgoStr, 'ano', now)).toBe(true)
     expect(isDateInPeriod(fiveHundredDaysAgoStr, 'ano', now)).toBe(false)
+
+    // Aceita data de referência em formato string sem quebrar
+    expect(isDateInPeriod(todayStr, 'dia', '2026-08-30')).toBeDefined()
+    expect(isDateInPeriod(todayStr, 'semana', '2026-08-30')).toBeDefined()
   })
 
   it('permite alternar estado de pendências da IA sem navegação e registra no histórico', () => {

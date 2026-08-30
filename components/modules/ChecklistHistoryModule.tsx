@@ -229,9 +229,9 @@ export default function ChecklistHistoryModule() {
 
   // Filtragem de Histórico no Período
   const filteredHistory = useMemo(() => {
-    const today = getTodayKey()
+    const now = new Date()
     return history.filter(item => {
-      const matchPeriod = isDateInPeriod(item.completedAt || item.dateKey, selectedPeriod, today)
+      const matchPeriod = isDateInPeriod(item.completedAt || item.dateKey, selectedPeriod, now)
       if (!matchPeriod) return false
       if (filterCategory !== 'all' && item.category !== filterCategory) return false
       if (searchTerm.trim()) {

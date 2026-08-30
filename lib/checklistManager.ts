@@ -81,18 +81,24 @@ export type ChecklistPeriod = 'dia' | 'semana' | 'mes' | 'trimestre' | 'ano'
 
 export const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000
 
-export function isDateInPeriod(dateStr: string, period: ChecklistPeriod, referenceDate: Date = new Date()): boolean {
+export function isDateInPeriod(dateStr: string, period: ChecklistPeriod, referenceDate: Date | string = new Date()): boolean {
   const d = new Date(dateStr)
   if (isNaN(d.getTime())) return false
 
+  const ref: Date = typeof referenceDate === 'string'
+    ? (referenceDate.includes('T') ? new Date(referenceDate) : new Date(referenceDate + 'T23:59:59.999'))
+    : (referenceDate instanceof Date ? referenceDate : new Date(referenceDate))
+
+  if (isNaN(ref.getTime())) return false
+
   const ONE_DAY = 86400000
-  const refTime = referenceDate.getTime()
+  const refTime = ref.getTime()
   const targetTime = d.getTime()
   const diffMs = refTime - targetTime
 
   switch (period) {
     case 'dia':
-      return diffMs >= 0 && diffMs <= ONE_DAY && d.getDate() === referenceDate.getDate() && d.getMonth() === referenceDate.getMonth() && d.getFullYear() === referenceDate.getFullYear()
+      return diffMs >= 0 && diffMs <= ONE_DAY && d.getDate() === ref.getDate() && d.getMonth() === ref.getMonth() && d.getFullYear() === ref.getFullYear()
     case 'semana':
       return diffMs >= 0 && diffMs <= 7 * ONE_DAY
     case 'mes':
