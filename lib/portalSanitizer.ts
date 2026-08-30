@@ -399,8 +399,26 @@ export function sanitizeInboundScrapedData(scrapedRows: Array<Record<string, any
   return scrapedRows.map(row => {
     const cleanRow: Record<string, any> = {}
 
-    // Preserva apenas campos estritamente pedagógicos
+    // Preserva apenas campos estritamente pedagógicos e cadastrais oficiais
     if (row.name) cleanRow.name = String(row.name).trim().slice(0, 100)
+    if (row.portal_native_id || row.matricula || row.id) {
+      cleanRow.portal_native_id = String(row.portal_native_id || row.matricula || row.id).trim().slice(0, 50)
+    }
+    if (row.rollNumber || row.num_chamada) {
+      cleanRow.rollNumber = String(row.rollNumber || row.num_chamada).trim().slice(0, 20)
+    }
+    if (row.classRef || row.class_name || row.turma) {
+      cleanRow.classRef = String(row.classRef || row.class_name || row.turma).trim().slice(0, 50)
+    }
+    if (row.status || row.situacao) {
+      const s = String(row.status || row.situacao).toLowerCase()
+      cleanRow.status = /transf/i.test(s) ? 'transferred' : /inativ|cancel/i.test(s) ? 'inactive' : 'active'
+    } else {
+      cleanRow.status = 'active'
+    }
+    if (row.nee_flag !== undefined || row.inclusao !== undefined || row.nee !== undefined) {
+      cleanRow.nee_flag = Boolean(row.nee_flag || row.inclusao || row.nee)
+    }
     if (row.grade !== undefined) {
       const g = parseFloat(String(row.grade).replace(',', '.'))
       cleanRow.grade = !isNaN(g) ? g : 0
@@ -410,8 +428,6 @@ export function sanitizeInboundScrapedData(scrapedRows: Array<Record<string, any
         ? row.attendanceStatus
         : 'present'
     }
-    if (row.classRef) cleanRow.classRef = String(row.classRef).trim().slice(0, 50)
-    if (row.rollNumber) cleanRow.rollNumber = String(row.rollNumber).trim().slice(0, 20)
 
     return cleanRow
   })

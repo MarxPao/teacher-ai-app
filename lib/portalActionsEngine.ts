@@ -20,15 +20,26 @@ export interface FieldMappingDef {
   required?: boolean
 }
 
+export type PortalActionType = 'diary' | 'attendance' | 'grades' | 'assignment' | 'communication' | 'read_roster' | 'custom'
+
+export interface PaginationStrategyDef {
+  type: 'next_button' | 'page_numbers' | 'infinite_scroll' | 'none'
+  nextSelector?: string
+  pageNumberSelector?: string
+  maxPages?: number
+  delayBetweenPagesMs?: number
+}
+
 export interface PortalActionDef {
   id: string
   title: string
-  type: 'diary' | 'attendance' | 'grades' | 'assignment' | 'communication' | 'custom'
+  type: PortalActionType
   description: string
   fields: FieldMappingDef[]
-  executionMode: 'supervised'
+  executionMode: 'supervised' | 'read_only'
   spokenConfirmation: string
   isCustom?: boolean
+  paginationStrategy?: PaginationStrategyDef
 }
 
 export interface PortalProfileDef {
@@ -62,6 +73,30 @@ export const DEFAULT_PORTALS: PortalProfileDef[] = [
     description: 'Painel oficial de professores para lançamento de diários de classe, frequências e notas bimestrais.',
     isCustom: false,
     actions: [
+      {
+        id: 'machado_read_roster',
+        title: 'Importar Roster de Alunos e Turmas',
+        type: 'read_roster',
+        description: 'Lê a lista oficial de chamada de alunos e matrículas direto do portal do Machado Sobrinho.',
+        executionMode: 'read_only',
+        spokenConfirmation: 'Lista de alunos do Machado Sobrinho importada e pronta para conferência!',
+        paginationStrategy: {
+          type: 'next_button',
+          nextSelector: '.pagination .next, a[rel="next"], button.btn-proxima-pagina',
+          maxPages: 10,
+          delayBetweenPagesMs: 1000
+        },
+        fields: [
+          {
+            fieldId: 'classRef',
+            label: 'Turma',
+            type: 'select',
+            selectors: ['select[name*="turma"]', 'select[id*="turma"]'],
+            semanticKeywords: ['turma', 'classe', 'todas', 'all'],
+            description: 'Código da turma ou "all" para importar todas as turmas do professor'
+          }
+        ]
+      },
       {
         id: 'machado_diary',
         title: 'Lançar Diário de Classe',

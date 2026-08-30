@@ -79,6 +79,10 @@ class BrowserHarnessRunner:
             })
             return False
 
+        # [MODO LEITURA EXCLUSIVO READ_ROSTER]:
+        if action_type == "read_roster":
+            return await self._handle_read_roster(task, page, portal, teacher_byok)
+
         # 3. Extração de Before State e Montagem de Diff Real
         before_state = await self._extract_inputs(page)
         diff = payload.get("diff") or self._build_diff(before_state, payload)
@@ -393,6 +397,156 @@ class BrowserHarnessRunner:
                 failed.append(f"{student_name or field}: {str(e)}")
 
         return filled, failed
+
+    async def _handle_read_roster(self, task: Dict[str, Any], page, portal: str, teacher_byok: Dict[str, str]) -> bool:
+        """
+        Executa a leitura segura e estruturada do Roster de Alunos e Turmas.
+        GARANTIA INEGOCIÁVEL: 100% Read-Only (nenhum clique em submit/salvar).
+        Inclui rate-limiting defensivo (1.0s) e tratamento de paginação declarativa.
+        """
+        task_id = task.get("id")
+        payload = task.get("payload", {})
+        class_ref = task.get("class_ref") or payload.get("class_ref", "all")
+        pagination_config = payload.get("pagination", {
+            "type": "next_button",
+            "nextSelector": ".pagination .next, a[rel='next'], button.btn-proxima-pagina, a.paginate_button.next",
+            "maxPages": 10,
+            "delayBetweenPagesMs": 1000
+        })
+
+        print(f"\n[Runner] [READ_ROSTER] Modo Leitura Segura: Iniciando extracao da turma '{class_ref}' no portal '{portal}'...")
+
+        all_students = []
+        current_page = 1
+        max_pages = pagination_config.get("maxPages", 10)
+        delay_s = max(0.8, min(pagination_config.get("delayBetweenPagesMs", 1000) / 1000.0, 3.0))
+
+        while current_page <= max_pages:
+            # 1. Extrai tabela de alunos da página visível
+            page_students = await self._extract_roster_table(page, class_ref)
+            print(f"[Runner] [READ_ROSTER] Pagina {current_page}: {len(page_students)} alunos identificados.")
+
+            for st in page_students:
+                all_students.append(st)
+
+            # 2. Verifica se existe próxima página habilitada
+            has_next = await self._has_next_page(page, pagination_config)
+            if not has_next:
+                break
+
+            # 3. Rate limiting defensivo antes da próxima requisição/página
+            await asyncio.sleep(delay_s)
+
+            # 4. Avança para a próxima página
+            advanced = await self._click_next_page_and_wait(page, pagination_config)
+            if not advanced:
+                break
+
+            current_page += 1
+
+        print(f"[Runner] [READ_ROSTER] Extracao concluida: {len(all_students)} alunos totais obtidos do portal '{portal}'.")
+
+        # 5. Atualiza tarefa no Supabase para 'done' com o payload higienizado
+        self._update_task_status(task_id, "done", {
+            "scraped_students": all_students,
+            "total_scraped": len(all_students),
+            "pages_read": current_page,
+            "class_ref": class_ref,
+            "read_only": True,
+            "summary": f"{len(all_students)} alunos lidos com sucesso do portal '{portal}'."
+        })
+        return True
+
+    async def _extract_roster_table(self, page, class_ref: str = "all") -> List[Dict[str, Any]]:
+        """Extrai linhas da tabela de alunos via JavaScript estruturado no DOM."""
+        js_extract = """
+        () => {
+            const results = [];
+            const rows = Array.from(document.querySelectorAll(
+                'table tbody tr, .tabela-alunos tr, .aluno-item, table tr, div[data-aluno-id]'
+            ));
+            
+            for (let i = 0; i < rows.length; i++) {
+                const row = rows[i];
+                const text = (row.innerText || '').trim();
+                
+                // Ignora cabeçalhos
+                if (!text || (/(nome|matr[íi]cula|situa[çc]|n[úu]mero)/i.test(text.slice(0, 40)) && i === 0)) {
+                    continue;
+                }
+                
+                const cells = Array.from(row.querySelectorAll('td, th, .coluna, .campo'));
+                let name = '';
+                let rollNumber = '';
+                let portal_native_id = '';
+                let status = 'active';
+                let nee_flag = false;
+                
+                if (cells.length >= 2) {
+                    rollNumber = (cells[0].innerText || '').trim().replace(/[^0-9]/g, '');
+                    name = (cells[1].innerText || '').trim();
+                    if (cells.length >= 3) {
+                        portal_native_id = (cells[2].innerText || '').trim();
+                    }
+                } else {
+                    const lines = text.split('\\n').map(l => l.trim()).filter(Boolean);
+                    if (lines.length > 0) name = lines[0];
+                }
+                
+                if (row.querySelector('.tag-inclusao, .badge-nee, [title*="inclus"], [title*="NEE"]')) {
+                    nee_flag = true;
+                }
+                if (/transf/i.test(text)) status = 'transferred';
+                if (/inativ|cancel/i.test(text)) status = 'inactive';
+                
+                if (name && name.length >= 2) {
+                    results.push({
+                        name: name,
+                        rollNumber: rollNumber,
+                        portal_native_id: portal_native_id,
+                        status: status,
+                        nee_flag: nee_flag
+                    });
+                }
+            }
+            return results;
+        }
+        """
+        try:
+            raw_list = await page.evaluate(js_extract)
+            for item in raw_list:
+                item["classRef"] = class_ref if class_ref != "all" else "Geral"
+            return raw_list
+        except Exception as e:
+            print(f"[Runner] Erro ao extrair tabela de roster: {e}")
+            return []
+
+    async def _has_next_page(self, page, pagination_config: Dict[str, Any]) -> bool:
+        """Verifica se o botão de próxima página está presente e habilitado."""
+        sel = pagination_config.get("nextSelector", ".pagination .next, a[rel='next'], button.btn-proxima-pagina")
+        try:
+            btn = page.locator(sel)
+            if await btn.count() == 0:
+                return False
+            first = btn.first
+            is_vis = await first.is_visible()
+            is_dis = await first.is_disabled() or "disabled" in (await first.get_attribute("class") or "").lower()
+            return is_vis and not is_dis
+        except Exception:
+            return False
+
+    async def _click_next_page_and_wait(self, page, pagination_config: Dict[str, Any]) -> bool:
+        """Clica no botão de próxima página e aguarda carregamento."""
+        sel = pagination_config.get("nextSelector", ".pagination .next, a[rel='next'], button.btn-proxima-pagina")
+        try:
+            btn = page.locator(sel).first
+            await btn.click()
+            await asyncio.sleep(0.5)
+            await page.wait_for_load_state("domcontentloaded", timeout=5000)
+            return True
+        except Exception as e:
+            print(f"[Runner] ⚠️ Erro ao avançar para a próxima página: {e}")
+            return False
 
     async def _submit_portal_form(self, page) -> bool:
         """
