@@ -1,5 +1,6 @@
 'use client'
 
+import React, { useState, useEffect } from 'react'
 import { ModuleKey } from '@/app/page'
 import TeacherLogo from '@/components/TeacherLogo'
 
@@ -16,7 +17,6 @@ const NAV: Section[] = [
     { key: 'organization',   label: 'Escolas',               icon: 'ti-building-community' },
     { key: 'insights',       label: 'Insights',              icon: 'ti-bulb' },
     { key: 'checklist',      label: 'Checklist',             icon: 'ti-list-check' },
-    { key: 'trello',         label: 'Trello & Quadros',      icon: 'ti-layout-kanban' },
     { key: 'repo',           label: 'Biblioteca',            icon: 'ti-books' },
     { key: 'privatetutoring',label: 'Alunos Particulares',   icon: 'ti-user-dollar' },
     { key: 'lessonstudio',   label: 'Planejamento de Aula',  icon: 'ti-chalkboard' },
@@ -61,8 +61,6 @@ const NAV: Section[] = [
     { key: 'extensions', label: 'Portais & Extensões',  icon: 'ti-plug' },
   ]},
 ]
-
-import { useState, useEffect } from 'react'
 
 interface Props { active: ModuleKey; onNavigate: (k: ModuleKey) => void }
 
