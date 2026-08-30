@@ -374,7 +374,17 @@ export function getPortalProfiles(): PortalProfileDef[] {
     if (saved) {
       const parsed = JSON.parse(saved)
       if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed
+        // Garante que todos os portais padrão (incluindo Trello Workspace) estejam sempre presentes
+        const defaultsMap = new Map(DEFAULT_PORTALS.map(p => [p.id, p]))
+        const customOnly = parsed.filter((p: any) => p.isCustom)
+        
+        parsed.forEach((p: any) => {
+          if (!p.isCustom && defaultsMap.has(p.id)) {
+            defaultsMap.set(p.id, { ...defaultsMap.get(p.id)!, ...p })
+          }
+        })
+        
+        return [...Array.from(defaultsMap.values()), ...customOnly]
       }
     }
   } catch (e) {
@@ -382,6 +392,7 @@ export function getPortalProfiles(): PortalProfileDef[] {
   }
   return DEFAULT_PORTALS
 }
+
 
 /**
  * Salva a lista completa de perfis de portais

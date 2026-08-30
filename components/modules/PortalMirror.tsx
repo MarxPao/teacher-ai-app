@@ -11,6 +11,7 @@ import SidecarPairingModal from '@/components/modules/SidecarPairingModal'
 import { createBrowserTask, BrowserAutomationTask, DiffItem } from '@/lib/browserAutomationClient'
 import { sanitizeOutboundPayload } from '@/lib/portalSanitizer'
 import { checkBrowserCapability, evaluateActionRequirement } from '@/lib/browserCapabilityRouter'
+import TrelloImportModal from '@/components/modules/TrelloImportModal'
 
 interface RecentFill {
   platform: string
@@ -46,6 +47,8 @@ export default function PortalMirror() {
   const [hoveredId, setHoveredId] = useState<string | null>(null)
   const [activeTask, setActiveTask] = useState<BrowserAutomationTask | null>(null)
   const [isPairingOpen, setIsPairingOpen] = useState(false)
+  const [isTrelloModalOpen, setIsTrelloModalOpen] = useState(false)
+
 
   const loadData = useCallback(() => {
     const list = getPortalProfiles()
@@ -276,46 +279,78 @@ export default function PortalMirror() {
                 )}
 
                 {/* Botões Principais */}
-                <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
-                  <button
-                    onClick={() => launchPortalWindow(portal)}
-                    style={{
-                      flex: 1, padding: '8px 10px', background: portal.color,
-                      color: '#fff', border: 'none', borderRadius: 8,
-                      fontSize: 12, fontWeight: 800, cursor: 'pointer',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
-                      boxShadow: `0 3px 10px ${portal.color}44`,
-                      transition: 'all 0.18s',
-                    }}
-                  >
-                    <i className="ti-arrow-top-right" /> Abrir
-                  </button>
-                  <button
-                    onClick={() => { setSelectedPortal(portal); handleInspect(portal) }}
-                    disabled={isWorking}
-                    style={{
-                      padding: '8px 10px', background: '#faf6f0',
-                      color: portal.color, border: `1px solid ${portal.color}44`,
-                      borderRadius: 8, fontSize: 11.5, fontWeight: 700, cursor: 'pointer',
-                      transition: 'all 0.18s',
-                    }}
-                    title="Rafinha inspeciona o portal"
-                  >
-                    🔍 Inspecionar
-                  </button>
-                  <button
-                    onClick={() => { setSelectedPortal(portal); handleAutoFill(portal) }}
-                    disabled={isWorking}
-                    style={{
-                      padding: '8px 10px', background: '#f0fff4',
-                      color: '#2d9d5d', border: '1px solid #2d9d5d44',
-                      borderRadius: 8, fontSize: 11.5, fontWeight: 700, cursor: 'pointer',
-                      transition: 'all 0.18s',
-                    }}
-                    title="Auto-preencher via ponte agêntica"
-                  >
-                    ⚡ Preencher
-                  </button>
+                <div style={{ display: 'flex', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
+                  {portal.id === 'trello' ? (
+                    <>
+                      <button
+                        onClick={() => setIsTrelloModalOpen(true)}
+                        style={{
+                          flex: 1, padding: '8px 10px', background: '#0079bf',
+                          color: '#fff', border: 'none', borderRadius: 8,
+                          fontSize: 12, fontWeight: 800, cursor: 'pointer',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                          boxShadow: '0 3px 10px rgba(0,121,191,0.3)',
+                          transition: 'all 0.18s',
+                        }}
+                      >
+                        <i className="ti-layout-kanban" /> Importar Quadros & Cartões
+                      </button>
+                      <button
+                        onClick={() => launchPortalWindow(portal)}
+                        style={{
+                          padding: '8px 12px', background: '#e6f4fb',
+                          color: '#0079bf', border: '1px solid #b8e1f7',
+                          borderRadius: 8, fontSize: 11.5, fontWeight: 700, cursor: 'pointer',
+                          transition: 'all 0.18s',
+                        }}
+                        title="Abrir Trello na web"
+                      >
+                        <i className="ti-arrow-top-right" /> Abrir
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => launchPortalWindow(portal)}
+                        style={{
+                          flex: 1, padding: '8px 10px', background: portal.color,
+                          color: '#fff', border: 'none', borderRadius: 8,
+                          fontSize: 12, fontWeight: 800, cursor: 'pointer',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+                          boxShadow: `0 3px 10px ${portal.color}44`,
+                          transition: 'all 0.18s',
+                        }}
+                      >
+                        <i className="ti-arrow-top-right" /> Abrir
+                      </button>
+                      <button
+                        onClick={() => { setSelectedPortal(portal); handleInspect(portal) }}
+                        disabled={isWorking}
+                        style={{
+                          padding: '8px 10px', background: '#faf6f0',
+                          color: portal.color, border: `1px solid ${portal.color}44`,
+                          borderRadius: 8, fontSize: 11.5, fontWeight: 700, cursor: 'pointer',
+                          transition: 'all 0.18s',
+                        }}
+                        title="Rafinha inspeciona o portal"
+                      >
+                        🔍 Inspecionar
+                      </button>
+                      <button
+                        onClick={() => { setSelectedPortal(portal); handleAutoFill(portal) }}
+                        disabled={isWorking}
+                        style={{
+                          padding: '8px 10px', background: '#f0fff4',
+                          color: '#2d9d5d', border: '1px solid #2d9d5d44',
+                          borderRadius: 8, fontSize: 11.5, fontWeight: 700, cursor: 'pointer',
+                          transition: 'all 0.18s',
+                        }}
+                        title="Auto-preencher via ponte agêntica"
+                      >
+                        ⚡ Preencher
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             ))}
@@ -469,9 +504,15 @@ export default function PortalMirror() {
         onClose={() => setIsPairingOpen(false)}
       />
 
+      <TrelloImportModal
+        isOpen={isTrelloModalOpen}
+        onClose={() => setIsTrelloModalOpen(false)}
+      />
+
       <style>{`
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
       `}</style>
+
     </ModuleShell>
   )
 }

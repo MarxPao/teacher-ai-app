@@ -2,6 +2,7 @@
 import { toast, showConfirm } from '@/components/Toast'
 
 import { useState, useEffect } from 'react'
+import TrelloImportModal from '@/components/modules/TrelloImportModal'
 
 interface ActivityItem {
  id: string
@@ -59,6 +60,7 @@ export default function Maestro() {
  const [activities, setActivities] = useState<ActivityItem[]>([])
  const [filterClass, setFilterClass] = useState('all')
  const [showCreateModal, setShowCreateModal] = useState(false)
+ const [isTrelloModalOpen, setIsTrelloModalOpen] = useState(false)
  const [newTitle, setNewTitle] = useState('')
  const [newClass, setNewClass] = useState('9º Ano B')
  const [newType, setNewType] = useState<ActivityItem['type']>('Homework')
@@ -165,19 +167,32 @@ export default function Maestro() {
  <p style={{ color: '#7a5c42', fontSize: 14, marginTop: 4 }}>
  Distribua tarefas, sincronize com portais escolares (Plurall / Sistemas), envie por WhatsApp e acompanhe entregas em tempo real.
  </p>
- </div>
+    <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center', marginTop: 10 }}>
+      <button
+        onClick={() => setIsTrelloModalOpen(true)}
+        style={{
+          padding: '12px 18px', borderRadius: 12, border: '1px solid #0079bf',
+          background: '#0079bf', color: '#fff', fontSize: 13.5, fontWeight: 700,
+          cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
+          boxShadow: '0 4px 12px rgba(0,121,191,0.25)',
+        }}
+      >
+        <i className="ti ti-layout-kanban" /> Importar do Trello
+      </button>
 
- <button
- onClick={() => setShowCreateModal(true)}
- style={{
- padding: '12px 20px', borderRadius: 12, border: 'none',
- background: '#2c1a0e', color: '#fff', fontSize: 14, fontWeight: 700,
- cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
- boxShadow: '0 4px 14px rgba(7,54,66,0.18)',
- }}
- >
- <i className="ti ti-plus" /> Nova Atividade no Maestro
- </button>
+      <button
+        onClick={() => setShowCreateModal(true)}
+        style={{
+          padding: '12px 20px', borderRadius: 12, border: 'none',
+          background: '#2c1a0e', color: '#fff', fontSize: 14, fontWeight: 700,
+          cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
+          boxShadow: '0 4px 14px rgba(7,54,66,0.18)',
+        }}
+      >
+        <i className="ti ti-plus" /> Nova Atividade no Maestro
+      </button>
+    </div>
+ </div>
  </div>
 
  {/* Stats Cards */}
@@ -368,6 +383,16 @@ export default function Maestro() {
  </div>
  </div>
  )}
+
+      {/* Modal de Importação do Trello */}
+      <TrelloImportModal
+        isOpen={isTrelloModalOpen}
+        onClose={() => setIsTrelloModalOpen(false)}
+        onImportSuccess={() => {
+          const raw = localStorage.getItem('teacher_maestro_activities');
+          if (raw) setActivities(JSON.parse(raw));
+        }}
+      />
  </div>
  )
-}
+}
