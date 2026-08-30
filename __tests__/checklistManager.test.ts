@@ -1,4 +1,4 @@
-﻿import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import {
   loadChecklistTodos,
   saveChecklistTodos,
@@ -13,6 +13,7 @@ import {
   exportChecklistHistoryCSV,
   getTodayKey,
   isDateInPeriod,
+  formatRecurrenceText,
   ChecklistTodo,
 } from '../lib/checklistManager'
 
@@ -133,5 +134,51 @@ describe('Checklist & History Manager', () => {
     expect(csv).toContain('Data / Hora')
     expect(csv).toContain('Conferir frequência da turma')
     expect(csv).toContain('Rotina Diária')
+  })
+
+  it('formata adequadamente todas as regras de recorrência', () => {
+    // 1. Pontual
+    expect(formatRecurrenceText(null)).toBe('Pontual')
+    expect(formatRecurrenceText({ type: 'none' })).toBe('Pontual')
+
+    // 2. Diária
+    expect(formatRecurrenceText({ type: 'daily' })).toBe('Diária (Todo dia)')
+
+    // 3. Dias Úteis
+    expect(formatRecurrenceText({ type: 'weekdays' })).toBe('Dias Úteis (Seg a Sex)')
+
+    // 4. Dia Específico (ex: Toda Terça-feira)
+    expect(formatRecurrenceText({ type: 'specific_day', daysOfWeek: [2] })).toBe('Toda Terça-feira')
+    expect(formatRecurrenceText({ type: 'specific_day', daysOfWeek: [4] })).toBe('Toda Quinta-feira')
+
+    // 5. Dias Personalizados (ex: Seg, Qua, Sex)
+    expect(formatRecurrenceText({ type: 'custom_days', daysOfWeek: [1, 3, 5] })).toBe('Personalizado: Seg, Qua, Sex')
+
+    // 6. Mensal
+    expect(formatRecurrenceText({ type: 'monthly', dayOfMonth: 15 })).toBe('Mensal (Todo dia 15)')
+  })
+
+  it('salva e recupera tarefas com regras de recorrência personalizadas', () => {
+    const todoWithRecurrence: ChecklistTodo = {
+      id: 'rec_terca_1',
+      text: 'Enviar relatório pedagógico',
+      done: false,
+      category: 'recurrent',
+      priority: 'high',
+      tag: 'Coordenação',
+      recurrence: {
+        type: 'specific_day',
+        daysOfWeek: [2], // Terça-feira
+      },
+    }
+
+    saveChecklistTodos([todoWithRecurrence])
+    const loaded = loadChecklistTodos()
+
+    expect(loaded.length).toBe(1)
+    expect(loaded[0].text).toBe('Enviar relatório pedagógico')
+    expect(loaded[0].recurrence?.type).toBe('specific_day')
+    expect(loaded[0].recurrence?.daysOfWeek).toEqual([2])
+    expect(formatRecurrenceText(loaded[0].recurrence)).toBe('Toda Terça-feira')
   })
 })

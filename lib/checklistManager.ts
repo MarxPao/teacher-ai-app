@@ -7,6 +7,36 @@
 export type TodoCategory = 'all' | 'recurrent' | 'one_off' | 'system_ai'
 export type TodoPriority = 'high' | 'medium' | 'low'
 
+export type RecurrenceType = 'none' | 'daily' | 'weekdays' | 'specific_day' | 'custom_days' | 'monthly'
+
+export interface RecurrenceRule {
+  type: RecurrenceType
+  daysOfWeek?: number[] // 0=Dom, 1=Seg, 2=Ter, 3=Qua, 4=Qui, 5=Sex, 6=Sáb
+  dayOfMonth?: number
+  time?: string
+  customLabel?: string
+}
+
+export function formatRecurrenceText(rec?: RecurrenceRule | null): string {
+  if (!rec || rec.type === 'none') return 'Pontual'
+  if (rec.type === 'daily') return 'Diária (Todo dia)'
+  if (rec.type === 'weekdays') return 'Dias Úteis (Seg a Sex)'
+  if (rec.type === 'specific_day') {
+    const dayNames = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado']
+    const day = (rec.daysOfWeek && rec.daysOfWeek.length > 0) ? rec.daysOfWeek[0] : 2
+    return `Toda ${dayNames[day]}`
+  }
+  if (rec.type === 'custom_days') {
+    const dayShorts = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
+    const days = (rec.daysOfWeek && rec.daysOfWeek.length > 0) ? rec.daysOfWeek : [1, 3, 5]
+    return `Personalizado: ${days.map(d => dayShorts[d]).join(', ')}`
+  }
+  if (rec.type === 'monthly') {
+    return `Mensal (Todo dia ${rec.dayOfMonth || 1})`
+  }
+  return 'Recorrente'
+}
+
 export interface ChecklistTodo {
   id: string
   text: string
@@ -20,6 +50,7 @@ export interface ChecklistTodo {
   completedAt?: string
   actionLabel?: string
   actionTarget?: string
+  recurrence?: RecurrenceRule
 }
 
 export interface ChecklistHistoryItem {

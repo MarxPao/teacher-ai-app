@@ -18,8 +18,10 @@ import {
   exportChecklistHistoryCSV,
   getTodayKey,
   isDateInPeriod,
+  formatRecurrenceText,
 } from '@/lib/checklistManager'
 import TrelloImportModal from '@/components/modules/TrelloImportModal'
+import ChecklistEditModal from '@/components/modules/ChecklistEditModal'
 import { COLOR, FONT, TEXT, RADIUS, SHADOW, BORDER, TRANSITION } from '@/styles/tokens'
 
 const PERIOD_LABELS: { id: ChecklistPeriod; label: string; icon: string; desc: string }[] = [
@@ -34,6 +36,7 @@ export default function ChecklistHistoryModule() {
   const [todos, setTodos] = useState<ChecklistTodo[]>([])
   const [history, setHistory] = useState<ChecklistHistoryItem[]>([])
   const [completedSysIds, setCompletedSysIds] = useState<string[]>([])
+  const [editingTodo, setEditingTodo] = useState<ChecklistTodo | null>(null)
 
   // Filtros de Período e Visualização
   const [selectedPeriod, setSelectedPeriod] = useState<ChecklistPeriod>('dia')
@@ -146,6 +149,14 @@ export default function ChecklistHistoryModule() {
     link.click()
     document.body.removeChild(link)
     toast.success('Histórico exportado em CSV com sucesso!')
+  }
+
+  const handleSaveEditedTodo = (updatedTodo: ChecklistTodo) => {
+    const updated = todos.map(t => t.id === updatedTodo.id ? updatedTodo : t)
+    setTodos(updated)
+    saveChecklistTodos(updated)
+    setEditingTodo(null)
+    toast.success('Tarefa e frequência de repetição atualizadas com sucesso!')
   }
 
   // Filtragem do Histórico por Período e Categoria
@@ -673,14 +684,14 @@ export default function ChecklistHistoryModule() {
                             fontWeight: 700,
                             padding: '2px 8px',
                             borderRadius: RADIUS.sm,
-                            background: isRecurrent ? 'rgba(139,94,60,0.1)' : COLOR.warningBg,
+                            background: isRecurrent ? 'rgba(139,94,60,0.12)' : COLOR.warningBg,
                             color: isRecurrent ? COLOR.accent : COLOR.warning,
                             display: 'inline-flex',
                             alignItems: 'center',
                             gap: 4,
                           }}>
                             <i className={isRecurrent ? 'ti ti-repeat' : 'ti ti-pin'} style={{ fontSize: 11 }} />
-                            {isRecurrent ? 'Rotina Diária' : 'Pontual'}
+                            {isRecurrent ? formatRecurrenceText(todo.recurrence || { type: 'daily' }) : 'Pontual'}
                           </span>
                           {todo.tag && (
                             <span style={{ fontSize: TEXT.micro, color: COLOR.paperWarm, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
@@ -698,13 +709,46 @@ export default function ChecklistHistoryModule() {
                       </div>
                     </div>
 
-                    <button
-                      onClick={() => handleDelete(todo.id)}
-                      style={{ background: 'none', border: 'none', color: COLOR.danger, opacity: 0.6, cursor: 'pointer', fontSize: 14, padding: 6 }}
-                      title="Excluir tarefa"
-                    >
-                      <i className="ti ti-trash" />
-                    </button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <button
+                        onClick={() => setEditingTodo(todo)}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: COLOR.paperWarm,
+                          opacity: 0.8,
+                          cursor: 'pointer',
+                          fontSize: 15,
+                          padding: 6,
+                          borderRadius: RADIUS.sm,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                        title="Editar tarefa e frequência de repetição"
+                      >
+                        <i className="ti ti-edit" />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(todo.id)}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: COLOR.danger,
+                          opacity: 0.6,
+                          cursor: 'pointer',
+                          fontSize: 15,
+                          padding: 6,
+                          borderRadius: RADIUS.sm,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                        title="Excluir tarefa"
+                      >
+                        <i className="ti ti-trash" />
+                      </button>
+                    </div>
                   </div>
                 )
               })
@@ -814,6 +858,14 @@ export default function ChecklistHistoryModule() {
         isOpen={isTrelloModalOpen}
         onClose={() => setIsTrelloModalOpen(false)}
         onImportSuccess={() => loadData()}
+      />
+
+      {/* Modal de Edição de Post / Recorrência */}
+      <ChecklistEditModal
+        isOpen={!!editingTodo}
+        todo={editingTodo}
+        onClose={() => setEditingTodo(null)}
+        onSave={handleSaveEditedTodo}
       />
     </div>
   )

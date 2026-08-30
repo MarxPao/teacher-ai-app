@@ -12,8 +12,12 @@ import {
   toggleSystemAiTodo,
   toggleRegularTodo,
   recordChecklistHistory,
+  formatRecurrenceText,
+  ChecklistTodo,
+  RecurrenceRule,
 } from '@/lib/checklistManager'
 import TrelloImportModal from '@/components/modules/TrelloImportModal'
+import ChecklistEditModal from '@/components/modules/ChecklistEditModal'
 
 // --- Tipos & Interfaces ---
 
@@ -31,6 +35,7 @@ export interface DashboardTodo {
   actionLabel?: string
   actionTarget?: ModuleKey | string
   lastResetDate?: string
+  recurrence?: RecurrenceRule
 }
 
 export interface DashboardPostIt {
@@ -132,6 +137,7 @@ export default function Dashboard() {
   const [newTodoCategory, setNewTodoCategory] = useState<'one_off' | 'recurrent'>('one_off')
   const [todoFilter, setTodoFilter] = useState<TodoCategory>('all')
   const [isTrelloImportModalOpen, setIsTrelloImportModalOpen] = useState(false)
+  const [editingChecklistTodo, setEditingChecklistTodo] = useState<ChecklistTodo | null>(null)
 
   // 3. Aulas do Dia & Grade (Unificada: Escola + Particular)
   const [classesList, setClassesList] = useState<TodayClassItem[]>([])
@@ -391,6 +397,13 @@ export default function Dashboard() {
     const updated = todos.filter(t => t.id !== id)
     setTodos(updated)
     localStorage.setItem('teacher_dashboard_todos', JSON.stringify(updated))
+  }
+
+  const handleSaveEditedChecklistTodo = (updatedTodo: ChecklistTodo) => {
+    const updated = todos.map(t => t.id === updatedTodo.id ? { ...t, ...updatedTodo } : t)
+    setTodos(updated)
+    saveChecklistTodos(updated as any)
+    setEditingChecklistTodo(null)
   }
 
   // --- Handler de Exclusão de Aula do Quadro Semanal ---
@@ -1398,7 +1411,7 @@ export default function Dashboard() {
                             </span>
                             {todo.tag && (
                               <span style={{ fontSize: 10.5, color: '#8b5e3c', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                                {isRecurrent && <><i className="ti ti-repeat" style={{ fontSize: 11 }} /> Rotina Diária · </>}
+                                {isRecurrent && <><i className="ti ti-repeat" style={{ fontSize: 11 }} /> {formatRecurrenceText(todo.recurrence || { type: 'daily' })} · </>}
                                 {isSystem && <><i className="ti ti-bolt" style={{ fontSize: 11 }} /> Ação Recomendada · </>}
                                 {todo.tag}
                               </span>
@@ -1406,7 +1419,7 @@ export default function Dashboard() {
                           </div>
                         </div>
 
-                        {/* Botão de Ação Direta ou Lixeira */}
+                        {/* Botão de Ação Direta, Edição ou Lixeira */}
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                           {isSystem && todo.actionLabel && todo.actionTarget && (
                             <button
@@ -1433,13 +1446,22 @@ export default function Dashboard() {
                           )}
 
                           {!isSystem && (
-                            <button
-                              onClick={() => handleDeleteTodo(todo.id)}
-                              style={{ background: 'none', border: 'none', color: '#dc322f', opacity: 0.5, cursor: 'pointer', fontSize: 13, padding: 4 }}
-                              title="Excluir"
-                            >
-                              <i className="ti ti-trash" />
-                            </button>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                              <button
+                                onClick={() => setEditingChecklistTodo(todo as unknown as ChecklistTodo)}
+                                style={{ background: 'none', border: 'none', color: '#7a5c42', opacity: 0.75, cursor: 'pointer', fontSize: 13, padding: 4, borderRadius: 4 }}
+                                title="Editar post/tarefa e recorrência"
+                              >
+                                <i className="ti ti-edit" />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteTodo(todo.id)}
+                                style={{ background: 'none', border: 'none', color: '#dc322f', opacity: 0.5, cursor: 'pointer', fontSize: 13, padding: 4, borderRadius: 4 }}
+                                title="Excluir"
+                              >
+                                <i className="ti ti-trash" />
+                              </button>
+                            </div>
                           )}
                         </div>
                       </div>
@@ -2035,6 +2057,14 @@ export default function Dashboard() {
               const loaded = loadChecklistTodos()
               setTodos(loaded)
             }}
+          />
+
+          {/* Modal de Edição de Post / Tarefa da Checklist & Recorrência */}
+          <ChecklistEditModal
+            isOpen={!!editingChecklistTodo}
+            todo={editingChecklistTodo}
+            onClose={() => setEditingChecklistTodo(null)}
+            onSave={handleSaveEditedChecklistTodo}
           />
 
         </ModuleShell>
