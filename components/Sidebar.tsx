@@ -16,6 +16,7 @@ const NAV: Section[] = [
     { key: 'organization',   label: 'Escolas',               icon: 'ti-building-community' },
     { key: 'insights',       label: 'Insights',              icon: 'ti-bulb' },
     { key: 'checklist',      label: 'Checklist',             icon: 'ti-list-check' },
+    { key: 'trello',         label: 'Trello & Quadros',      icon: 'ti-layout-kanban' },
     { key: 'repo',           label: 'Biblioteca',            icon: 'ti-books' },
     { key: 'privatetutoring',label: 'Alunos Particulares',   icon: 'ti-user-dollar' },
     { key: 'lessonstudio',   label: 'Planejamento de Aula',  icon: 'ti-chalkboard' },

@@ -63,8 +63,11 @@ import TeacherLogo from '@/components/TeacherLogo'
 import { getCurrentSession, saveSession, AuthSession } from '@/lib/supabaseAuth'
 import { ToastProvider, ConfirmProvider } from '@/components/Toast'
 
+import TrelloPortalConnect from '@/components/modules/TrelloPortalConnect'
+import ModuleShell from '@/components/ModuleShell'
+
 export type ModuleKey = 'dashboard' | 'test_and_worksheets' | 'quick' | 'exam' | 'lessonstudio' | 'plan' | 'rubric' |
-  'gradebook' | 'students' | 'classes' | 'organization' | 'checklist' | 'privatetutoring' | 'eventos' | 'insights' | 'analytics' | 'calendar' | 'comms' | 'repo' |
+  'gradebook' | 'students' | 'classes' | 'organization' | 'checklist' | 'trello' | 'privatetutoring' | 'eventos' | 'insights' | 'analytics' | 'calendar' | 'comms' | 'repo' |
   'wellbeing' | 'settings' | 'api' | 'qbank' | 'mindmap' | 'editor' |
   'communications' | 'portfolio' | 'extensions' | 'portalmirror' | 'omnigrader' | 'maestro' | 'classlog' | 'didacticsequence' | 'livequiz' | 'parentcomms' |
   'classroommode' | 'attendancelist' | 'flashcardmode' | 'audiopronunciation' |
@@ -84,6 +87,15 @@ const MODULES: Record<ModuleKey, React.ComponentType<any>> = {
   classes: Classes,
   organization: Organization,
   checklist: ChecklistHistoryModule,
+  trello: () => (
+    <ModuleShell
+      title="Trello Workspace & Quadros"
+      subtitle="Sincronização agêntica de cartões, listas e quadros do Trello (100% BYOK Local)"
+      icon={<i className="ti ti-layout-kanban" style={{ fontSize: 32, color: '#0079bf' }} />}
+    >
+      <TrelloPortalConnect />
+    </ModuleShell>
+  ),
   privatetutoring: PrivateTutoring,
   eventos: Eventos,
   insights: Insights,

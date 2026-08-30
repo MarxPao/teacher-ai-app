@@ -205,7 +205,7 @@ export default function TrelloPortalConnect() {
               fontSize: 24,
               boxShadow: '0 2px 8px rgba(0, 121, 191, 0.3)'
             }}>
-              <i className="ti-layout-kanban" />
+              <i className="ti ti-layout-kanban" />
             </div>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

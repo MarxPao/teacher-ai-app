@@ -293,7 +293,7 @@ export default function PortalMirror() {
                           transition: 'all 0.18s',
                         }}
                       >
-                        <i className="ti-layout-kanban" /> Importar Quadros & Cartões
+                        <i className="ti ti-layout-kanban" /> Importar Quadros & Cartões
                       </button>
                       <button
                         onClick={() => launchPortalWindow(portal)}
@@ -305,7 +305,7 @@ export default function PortalMirror() {
                         }}
                         title="Abrir Trello na web"
                       >
-                        <i className="ti-arrow-top-right" /> Abrir
+                        <i className="ti ti-external-link" /> Abrir
                       </button>
                     </>
                   ) : (

@@ -265,7 +265,7 @@ export default function TrelloImportModal({
               justifyContent: 'center',
               fontSize: 20
             }}>
-              <i className="ti-layout-kanban" />
+              <i className="ti ti-layout-kanban" />
             </div>
             <div>
               <h3 style={{ margin: 0, fontSize: 17, fontWeight: 800 }}>
