@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import './globals.css'
+import ServiceWorkerRegister from '@/components/ServiceWorkerRegister'
 
 export const metadata: Metadata = {
   title: 'TeacherAI — Assistente Pedagógico Inteligente',
@@ -34,30 +35,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           rel="stylesheet"
           href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css"
         />
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              if ('serviceWorker' in navigator) {
-                if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-                  navigator.serviceWorker.getRegistrations().then(function(registrations) {
-                    for (var r of registrations) { r.unregister(); }
-                  });
-                  if ('caches' in window) {
-                    caches.keys().then(function(names) {
-                      for (var name of names) { caches.delete(name); }
-                    });
-                  }
-                } else {
-                  window.addEventListener('load', function() {
-                    navigator.serviceWorker.register('/sw.js').catch(function() {});
-                  });
-                }
-              }
-            `,
-          }}
-        />
       </head>
-      <body suppressHydrationWarning>{children}</body>
+      <body suppressHydrationWarning>
+        <ServiceWorkerRegister />
+        {children}
+      </body>
     </html>
   )
 }
