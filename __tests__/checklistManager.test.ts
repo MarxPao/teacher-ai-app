@@ -10,6 +10,8 @@ import {
   deleteChecklistHistoryItem,
   toggleSystemAiTodo,
   toggleRegularTodo,
+  toggleTodoSubtask,
+  updateTodoTag,
   exportChecklistHistoryCSV,
   getTodayKey,
   isDateInPeriod,
@@ -180,5 +182,44 @@ describe('Checklist & History Manager', () => {
     expect(loaded[0].recurrence?.type).toBe('specific_day')
     expect(loaded[0].recurrence?.daysOfWeek).toEqual([2])
     expect(formatRecurrenceText(loaded[0].recurrence)).toBe('Toda Terça-feira')
+  })
+
+  it('alterna o estado de subtarefas individuais de um cartão', () => {
+    const todoWithSubtasks: ChecklistTodo = {
+      id: 'todo_trello_1',
+      text: 'English Week',
+      done: false,
+      tag: 'Machado Sobrinho',
+      subtasks: [
+        { id: 'st_1', text: 'Marcar reunião', done: false },
+        { id: 'st_2', text: 'Comprar materiais', done: false }
+      ]
+    }
+
+    saveChecklistTodos([todoWithSubtasks])
+    const updated = toggleTodoSubtask('todo_trello_1', 'st_1')
+
+    expect(updated[0].subtasks?.[0].done).toBe(true)
+    expect(updated[0].subtasks?.[1].done).toBe(false)
+    expect(updated[0].done).toBe(false)
+
+    // Se marcar a segunda subtarefa, todo o cartão é marcado como done
+    const allDone = toggleTodoSubtask('todo_trello_1', 'st_2', updated)
+    expect(allDone[0].subtasks?.[1].done).toBe(true)
+    expect(allDone[0].done).toBe(true)
+  })
+
+  it('atualiza o tópico/tag para mover cartões entre colunas no Kanban', () => {
+    const todo: ChecklistTodo = {
+      id: 'todo_mov',
+      text: 'Preparar Prova 3º Bimestre',
+      done: false,
+      tag: 'Santa Catarina'
+    }
+
+    saveChecklistTodos([todo])
+    const updated = updateTodoTag('todo_mov', 'Machado Sobrinho')
+
+    expect(updated[0].tag).toBe('Machado Sobrinho')
   })
 })

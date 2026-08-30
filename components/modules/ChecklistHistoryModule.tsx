@@ -14,6 +14,8 @@ import {
   deleteChecklistHistoryItem,
   toggleRegularTodo,
   toggleSystemAiTodo,
+  toggleTodoSubtask,
+  updateTodoTag,
   getCompletedSystemTodoIds,
   exportChecklistHistoryCSV,
   getTodayKey,
@@ -38,9 +40,10 @@ export default function ChecklistHistoryModule() {
   const [completedSysIds, setCompletedSysIds] = useState<string[]>([])
   const [editingTodo, setEditingTodo] = useState<ChecklistTodo | null>(null)
 
-  // Filtros de Período e Visualização
+  // Filtros de Período e Visualização: Ativas | Visual Trello (Kanban) | Histórico
   const [selectedPeriod, setSelectedPeriod] = useState<ChecklistPeriod>('dia')
-  const [viewMode, setViewMode] = useState<'active' | 'history'>('active')
+  const [viewMode, setViewMode] = useState<'active' | 'trello' | 'history'>('active')
+  const [groupByTopic, setGroupByTopic] = useState(true)
   const [filterCategory, setFilterCategory] = useState<'all' | 'recurrent' | 'one_off' | 'system_ai'>('all')
   const [searchTerm, setSearchTerm] = useState('')
   const [isTrelloModalOpen, setIsTrelloModalOpen] = useState(false)
@@ -49,6 +52,10 @@ export default function ChecklistHistoryModule() {
   const [newText, setNewText] = useState('')
   const [newCategory, setNewCategory] = useState<'one_off' | 'recurrent'>('one_off')
   const [newTag, setNewTag] = useState('')
+
+  // Estado para rápida criação dentro de uma coluna do Kanban
+  const [quickAddColumnTag, setQuickAddColumnTag] = useState<string | null>(null)
+  const [quickAddText, setQuickAddText] = useState('')
 
   const loadData = useCallback(() => {
     const loadedTodos = loadChecklistTodos()
@@ -95,6 +102,28 @@ export default function ChecklistHistoryModule() {
     toast.success('Tarefa adicionada com sucesso!')
   }
 
+  const handleQuickAddInColumn = (tag: string) => {
+    if (!quickAddText.trim()) return
+    const todayKey = getTodayKey()
+    const newTodo: ChecklistTodo = {
+      id: `todo_${Date.now()}`,
+      text: quickAddText.trim(),
+      done: false,
+      category: 'one_off',
+      priority: 'medium',
+      tag: tag,
+      createdAt: Date.now(),
+      lastResetDate: todayKey,
+    }
+
+    const updated = [newTodo, ...todos]
+    setTodos(updated)
+    saveChecklistTodos(updated)
+    setQuickAddText('')
+    setQuickAddColumnTag(null)
+    toast.success(`Cartão adicionado em "${tag}"!`)
+  }
+
   const handleToggle = (id: string) => {
     if (id.startsWith('sys_')) {
       const isNowDone = toggleSystemAiTodo(id)
@@ -103,6 +132,17 @@ export default function ChecklistHistoryModule() {
     }
     const updated = toggleRegularTodo(id, todos)
     setTodos(updated)
+  }
+
+  const handleToggleSubtask = (todoId: string, subtaskId: string) => {
+    const updated = toggleTodoSubtask(todoId, subtaskId, todos)
+    setTodos(updated)
+  }
+
+  const handleMoveTag = (todoId: string, newTag: string) => {
+    const updated = updateTodoTag(todoId, newTag, todos)
+    setTodos(updated)
+    toast.success(`Cartão movido para "${newTag}"!`)
   }
 
   const handleDelete = async (id: string) => {
@@ -148,55 +188,78 @@ export default function ChecklistHistoryModule() {
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
-    toast.success('Histórico exportado em CSV com sucesso!')
+    toast.success('Relatório CSV exportado com sucesso!')
   }
 
-  const handleSaveEditedTodo = (updatedTodo: ChecklistTodo) => {
-    const updated = todos.map(t => t.id === updatedTodo.id ? updatedTodo : t)
-    setTodos(updated)
-    saveChecklistTodos(updated)
-    setEditingTodo(null)
-    toast.success('Tarefa e frequência de repetição atualizadas com sucesso!')
-  }
-
-  // Filtragem do Histórico por Período e Categoria
-  const filteredHistory = useMemo(() => {
-    return history.filter(item => {
-      if (!isDateInPeriod(item.completedAt, selectedPeriod)) return false
-      if (filterCategory !== 'all' && item.category !== filterCategory) return false
-      if (searchTerm) {
-        const q = searchTerm.toLowerCase()
-        const textMatch = item.text?.toLowerCase().includes(q)
-        const tagMatch = item.tag?.toLowerCase().includes(q)
-        if (!textMatch && !tagMatch) return false
-      }
-      return true
-    })
-  }, [history, selectedPeriod, filterCategory, searchTerm])
-
-  // Filtragem das Tarefas Ativas
+  // Filtragem de Tarefas Ativas
   const filteredTodos = useMemo(() => {
     return todos.filter(t => {
       if (filterCategory !== 'all' && t.category !== filterCategory) return false
-      if (searchTerm) {
-        const q = searchTerm.toLowerCase()
-        const textMatch = t.text?.toLowerCase().includes(q)
-        const tagMatch = t.tag?.toLowerCase().includes(q)
-        if (!textMatch && !tagMatch) return false
+      if (searchTerm.trim()) {
+        const term = searchTerm.toLowerCase()
+        const matchText = t.text.toLowerCase().includes(term)
+        const matchTag = t.tag?.toLowerCase().includes(term)
+        const matchSubtasks = t.subtasks?.some(st => st.text.toLowerCase().includes(term))
+        if (!matchText && !matchTag && !matchSubtasks) return false
       }
       return true
     })
   }, [todos, filterCategory, searchTerm])
 
-  // Métricas do Período Selecionado
-  const historyForPeriod = useMemo(() => {
-    return history.filter(item => isDateInPeriod(item.completedAt, selectedPeriod))
-  }, [history, selectedPeriod])
+  // Agrupamento por Tópicos / Listas
+  const groupedTodosByTopic = useMemo(() => {
+    const map: Record<string, ChecklistTodo[]> = {}
+    filteredTodos.forEach(t => {
+      const topic = t.tag?.trim() || 'Geral'
+      if (!map[topic]) map[topic] = []
+      map[topic].push(t)
+    })
+    return map
+  }, [filteredTodos])
 
-  const totalPeriodDone = historyForPeriod.length
-  const recurrentPeriodDone = historyForPeriod.filter(h => h.category === 'recurrent').length
-  const oneOffPeriodDone = historyForPeriod.filter(h => h.category === 'one_off').length
-  const aiPeriodDone = historyForPeriod.filter(h => h.category === 'system_ai').length
+  // Lista única de todos os tópicos/tags existentes para o Kanban
+  const allUniqueTopics = useMemo(() => {
+    const set = new Set<string>()
+    todos.forEach(t => {
+      if (t.tag?.trim()) set.add(t.tag.trim())
+    })
+    if (set.size === 0) set.add('Geral')
+    return Array.from(set)
+  }, [todos])
+
+  // Filtragem de Histórico no Período
+  const filteredHistory = useMemo(() => {
+    const today = getTodayKey()
+    return history.filter(item => {
+      const matchPeriod = isDateInPeriod(item.completedAt || item.dateKey, selectedPeriod, today)
+      if (!matchPeriod) return false
+      if (filterCategory !== 'all' && item.category !== filterCategory) return false
+      if (searchTerm.trim()) {
+        const term = searchTerm.toLowerCase()
+        const matchText = item.text.toLowerCase().includes(term)
+        const matchTag = item.tag?.toLowerCase().includes(term)
+        if (!matchText && !matchTag) return false
+      }
+      return true
+    })
+  }, [history, selectedPeriod, filterCategory, searchTerm])
+
+  // Métricas do Período
+  const totalPeriodDone = filteredHistory.length
+  const recurrentPeriodDone = filteredHistory.filter(h => h.category === 'recurrent').length
+  const oneOffPeriodDone = filteredHistory.filter(h => h.category === 'one_off').length
+  const aiPeriodDone = filteredHistory.filter(h => h.category === 'system_ai').length
+
+  const StatCardStyle = {
+    background: COLOR.surface1,
+    borderRadius: RADIUS.lg,
+    padding: '16px 20px',
+    border: `1px solid ${BORDER.soft}`,
+    boxShadow: SHADOW.sm,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  }
 
   const periodLabelText = PERIOD_LABELS.find(p => p.id === selectedPeriod)?.desc || ''
 
@@ -308,7 +371,7 @@ export default function ChecklistHistoryModule() {
         </div>
       </div>
 
-      {/* ─── CONTROLES DE SUB-ABA: TAREFAS ATIVAS vs HISTÓRICO DE CONCLUSÕES ─── */}
+      {/* ─── CONTROLES DE SUB-ABA: TAREFAS ATIVAS vs VISUAL TRELLO (KANBAN) vs HISTÓRICO ─── */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
         <div style={{ display: 'flex', gap: 6, background: COLOR.surface2, padding: 3, borderRadius: RADIUS.md, border: `1px solid ${BORDER.soft}` }}>
           <button
@@ -331,6 +394,29 @@ export default function ChecklistHistoryModule() {
           >
             <i className="ti ti-list-check" />
             <span>Tarefas Ativas ({todos.length})</span>
+          </button>
+
+          <button
+            onClick={() => setViewMode('trello')}
+            style={{
+              padding: '8px 16px',
+              borderRadius: RADIUS.sm,
+              border: 'none',
+              background: viewMode === 'trello' ? '#0079bf' : 'transparent',
+              color: viewMode === 'trello' ? '#fff' : COLOR.paperWarm,
+              fontSize: TEXT.bodyCompact,
+              fontWeight: 700,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              transition: TRANSITION.button,
+              fontFamily: FONT.sans,
+              boxShadow: viewMode === 'trello' ? '0 2px 6px rgba(0,121,191,0.3)' : 'none',
+            }}
+          >
+            <i className="ti ti-layout-kanban" />
+            <span>Visual Trello (Kanban)</span>
           </button>
 
           <button
@@ -358,6 +444,29 @@ export default function ChecklistHistoryModule() {
 
         {/* Filtros de Categoria, Busca e Ações */}
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          {viewMode === 'active' && (
+            <button
+              type="button"
+              onClick={() => setGroupByTopic(!groupByTopic)}
+              style={{
+                padding: '6px 12px',
+                borderRadius: RADIUS.sm,
+                border: groupByTopic ? `1px solid ${COLOR.accent}` : `1px solid ${BORDER.medium}`,
+                background: groupByTopic ? 'rgba(139,94,60,0.12)' : COLOR.surface1,
+                color: groupByTopic ? COLOR.accent : COLOR.paperWarm,
+                fontSize: TEXT.caption,
+                fontWeight: 700,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 5,
+              }}
+            >
+              <i className="ti ti-category" />
+              <span>{groupByTopic ? 'Agrupado por Tópicos' : 'Lista Corrida'}</span>
+            </button>
+          )}
+
           {/* Seletor de Categoria */}
           <div style={{ display: 'flex', gap: 4 }}>
             {[
@@ -463,7 +572,7 @@ export default function ChecklistHistoryModule() {
             </>
           )}
 
-          {viewMode === 'active' && (
+          {(viewMode === 'active' || viewMode === 'trello') && (
             <>
               <button
                 onClick={() => setIsTrelloModalOpen(true)}
@@ -512,7 +621,7 @@ export default function ChecklistHistoryModule() {
         </div>
       </div>
 
-      {/* ─── SUB-ABA 1: TAREFAS ATIVAS ─── */}
+      {/* ─── SUB-ABA 1: TAREFAS ATIVAS (COM SUPORTE A POST-IT & TÓPICOS) ─── */}
       {viewMode === 'active' && (
         <ModuleCard padding={20}>
           {/* Formulário de Criação de Tarefas */}
@@ -540,7 +649,7 @@ export default function ChecklistHistoryModule() {
               type="text"
               value={newTag}
               onChange={e => setNewTag(e.target.value)}
-              placeholder="Tag (ex: Inglês, Chamada, Prova)"
+              placeholder="Tópico / Lista (ex: Santa Catarina, Machado Sobrinho, Provas)"
               style={{
                 flex: 1,
                 minWidth: 160,
@@ -620,234 +729,266 @@ export default function ChecklistHistoryModule() {
             </button>
           </form>
 
-          {/* Listagem de Tarefas Ativas */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {filteredTodos.length === 0 ? (
-              <div style={{ padding: '36px 0', textAlign: 'center', color: COLOR.paperMid, fontSize: TEXT.bodyCompact }}>
-                <i className="ti ti-circle-check" style={{ fontSize: 32, display: 'block', marginBottom: 8, color: COLOR.success }} />
-                Nenhuma tarefa ativa nesta categoria. Todas as pendências estão em dia!
-              </div>
-            ) : (
-              filteredTodos.map(todo => {
-                const isRecurrent = todo.category === 'recurrent'
-                return (
-                  <div
-                    key={todo.id}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      gap: 12,
-                      padding: '12px 16px',
-                      borderRadius: RADIUS.md,
-                      background: todo.done ? COLOR.paperPage : COLOR.surface1,
-                      border: `1px solid ${todo.done ? BORDER.soft : BORDER.medium}`,
-                      transition: TRANSITION.fast,
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1 }}>
-                      <div
-                        onClick={() => handleToggle(todo.id)}
-                        style={{
-                          width: 22,
-                          height: 22,
-                          borderRadius: 6,
-                          border: todo.done ? 'none' : isRecurrent ? `2px solid ${COLOR.accent}` : `2px solid ${COLOR.paperInk}`,
-                          background: todo.done ? COLOR.success : 'transparent',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          cursor: 'pointer',
-                          flexShrink: 0,
-                          transition: TRANSITION.fast,
-                        }}
-                      >
-                        {todo.done && <i className="ti ti-check" style={{ color: '#fff', fontSize: 14 }} />}
-                      </div>
-
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                        <span
-                          onClick={() => handleToggle(todo.id)}
-                          style={{
-                            fontSize: TEXT.body,
-                            fontWeight: todo.done ? 500 : 700,
-                            color: todo.done ? COLOR.paperMid : COLOR.paperInk,
-                            textDecoration: todo.done ? 'line-through' : 'none',
-                            cursor: 'pointer',
-                          }}
-                        >
-                          {todo.text}
-                        </span>
-                        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          {/* Listagem com Agrupamento por Tópicos / Listas */}
+          {groupByTopic ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+              {Object.keys(groupedTodosByTopic).length === 0 ? (
+                <div style={{ padding: '36px 0', textAlign: 'center', color: COLOR.paperMid, fontSize: TEXT.bodyCompact }}>
+                  <i className="ti ti-circle-check" style={{ fontSize: 32, display: 'block', marginBottom: 8, color: COLOR.success }} />
+                  Nenhuma tarefa ativa. Todas as pendências estão em dia!
+                </div>
+              ) : (
+                Object.entries(groupedTodosByTopic).map(([topicName, topicTodos]) => {
+                  const doneInTopic = topicTodos.filter(t => t.done).length
+                  return (
+                    <div
+                      key={topicName}
+                      style={{
+                        background: 'rgba(253, 248, 242, 0.65)',
+                        border: `1px solid ${BORDER.medium}`,
+                        borderRadius: RADIUS.lg,
+                        padding: '14px 16px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 10,
+                        boxShadow: SHADOW.sm,
+                      }}
+                    >
+                      {/* Header do Tópico / Post-it Container */}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${BORDER.soft}`, paddingBottom: 8 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <div style={{ width: 8, height: 18, background: COLOR.accent, borderRadius: 4 }} />
+                          <span style={{ fontSize: 14, fontWeight: 800, color: COLOR.paperInk }}>
+                            {topicName}
+                          </span>
                           <span style={{
-                            fontSize: TEXT.micro,
+                            fontSize: 11,
                             fontWeight: 700,
                             padding: '2px 8px',
                             borderRadius: RADIUS.sm,
-                            background: isRecurrent ? 'rgba(139,94,60,0.12)' : COLOR.warningBg,
-                            color: isRecurrent ? COLOR.accent : COLOR.warning,
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: 4,
+                            background: 'rgba(139,94,60,0.12)',
+                            color: COLOR.accent
                           }}>
-                            <i className={isRecurrent ? 'ti ti-repeat' : 'ti ti-pin'} style={{ fontSize: 11 }} />
-                            {isRecurrent ? formatRecurrenceText(todo.recurrence || { type: 'daily' }) : 'Pontual'}
+                            {doneInTopic}/{topicTodos.length} concluídas
                           </span>
-                          {todo.tag && (
-                            <span style={{ fontSize: TEXT.micro, color: COLOR.paperWarm, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-                              <i className="ti ti-tag" style={{ fontSize: 11 }} />
-                              {todo.tag}
-                            </span>
-                          )}
-                          {todo.done && todo.completedAt && (
-                            <span style={{ fontSize: TEXT.micro, color: COLOR.success, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-                              <i className="ti ti-check" style={{ fontSize: 11 }} />
-                              Concluída (visível por 24h)
-                            </span>
-                          )}
                         </div>
                       </div>
-                    </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <button
-                        onClick={() => setEditingTodo(todo)}
-                        style={{
-                          background: 'none',
-                          border: 'none',
-                          color: COLOR.paperWarm,
-                          opacity: 0.8,
-                          cursor: 'pointer',
-                          fontSize: 15,
-                          padding: 6,
-                          borderRadius: RADIUS.sm,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                        }}
-                        title="Editar tarefa e frequência de repetição"
-                      >
-                        <i className="ti ti-edit" />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(todo.id)}
-                        style={{
-                          background: 'none',
-                          border: 'none',
-                          color: COLOR.danger,
-                          opacity: 0.6,
-                          cursor: 'pointer',
-                          fontSize: 15,
-                          padding: 6,
-                          borderRadius: RADIUS.sm,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                        }}
-                        title="Excluir tarefa"
-                      >
-                        <i className="ti ti-trash" />
-                      </button>
+                      {/* Cartões dentro do Tópico */}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        {topicTodos.map(todo => renderTodoCardItem(todo))}
+                      </div>
                     </div>
-                  </div>
-                )
-              })
-            )}
-          </div>
+                  )
+                })
+              )}
+            </div>
+          ) : (
+            /* Lista Corrida Simples */
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {filteredTodos.length === 0 ? (
+                <div style={{ padding: '36px 0', textAlign: 'center', color: COLOR.paperMid, fontSize: TEXT.bodyCompact }}>
+                  <i className="ti ti-circle-check" style={{ fontSize: 32, display: 'block', marginBottom: 8, color: COLOR.success }} />
+                  Nenhuma tarefa ativa nesta categoria. Todas as pendências estão em dia!
+                </div>
+              ) : (
+                filteredTodos.map(todo => renderTodoCardItem(todo))
+              )}
+            </div>
+          )}
         </ModuleCard>
       )}
 
-      {/* ─── SUB-ABA 2: HISTÓRICO DE CONCLUSÕES ─── */}
+      {/* ─── SUB-ABA 2: VISUAL TRELLO (QUADRO KANBAN COM COLUNAS POR TÓPICO) ─── */}
+      {viewMode === 'trello' && (
+        <div style={{
+          display: 'flex',
+          gap: 16,
+          overflowX: 'auto',
+          paddingBottom: 16,
+          alignItems: 'flex-start',
+        }}>
+          {allUniqueTopics.map(topic => {
+            const columnTodos = filteredTodos.filter(t => (t.tag?.trim() || 'Geral') === topic)
+            const completedCount = columnTodos.filter(t => t.done).length
+
+            return (
+              <div
+                key={topic}
+                style={{
+                  minWidth: 300,
+                  maxWidth: 320,
+                  flex: '0 0 310px',
+                  background: '#f4ece1',
+                  borderRadius: RADIUS.lg,
+                  border: `1px solid ${BORDER.medium}`,
+                  padding: 12,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 10,
+                  boxShadow: SHADOW.sm,
+                }}
+              >
+                {/* Header da Coluna */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 6px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <i className="ti ti-list" style={{ color: COLOR.accent, fontSize: 16 }} />
+                    <span style={{ fontSize: 13.5, fontWeight: 800, color: COLOR.paperInk }}>
+                      {topic}
+                    </span>
+                  </div>
+                  <span style={{
+                    fontSize: 11,
+                    fontWeight: 700,
+                    padding: '2px 8px',
+                    borderRadius: RADIUS.sm,
+                    background: 'rgba(44,26,14,0.08)',
+                    color: COLOR.paperWarm
+                  }}>
+                    {completedCount}/{columnTodos.length}
+                  </span>
+                </div>
+
+                {/* Cartões da Coluna */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: '65vh', overflowY: 'auto', paddingRight: 2 }}>
+                  {columnTodos.length === 0 ? (
+                    <div style={{ padding: '20px 10px', textAlign: 'center', color: COLOR.paperMid, fontSize: TEXT.caption, border: `1px dashed ${BORDER.soft}`, borderRadius: RADIUS.md }}>
+                      Nenhum cartão nesta lista.
+                    </div>
+                  ) : (
+                    columnTodos.map(todo => renderKanbanCardItem(todo, allUniqueTopics))
+                  )}
+                </div>
+
+                {/* Ação Rápida de Adicionar Cartão na Coluna */}
+                {quickAddColumnTag === topic ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, background: '#fff', padding: 8, borderRadius: RADIUS.md, border: `1px solid ${BORDER.medium}` }}>
+                    <textarea
+                      value={quickAddText}
+                      onChange={e => setQuickAddText(e.target.value)}
+                      placeholder="Título do novo cartão..."
+                      rows={2}
+                      style={{
+                        width: '100%',
+                        border: 'none',
+                        outline: 'none',
+                        fontSize: TEXT.bodyCompact,
+                        fontFamily: FONT.sans,
+                        resize: 'none',
+                        color: COLOR.paperInk,
+                      }}
+                      autoFocus
+                    />
+                    <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setQuickAddColumnTag(null)
+                          setQuickAddText('')
+                        }}
+                        style={{ padding: '4px 8px', borderRadius: RADIUS.sm, border: 'none', background: 'transparent', color: COLOR.paperWarm, fontSize: 11, cursor: 'pointer' }}
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleQuickAddInColumn(topic)}
+                        style={{ padding: '4px 10px', borderRadius: RADIUS.sm, border: 'none', background: COLOR.accent, color: '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
+                      >
+                        Adicionar
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setQuickAddColumnTag(topic)
+                      setQuickAddText('')
+                    }}
+                    style={{
+                      padding: '8px 10px',
+                      borderRadius: RADIUS.md,
+                      border: 'none',
+                      background: 'rgba(44,26,14,0.05)',
+                      color: COLOR.paperWarm,
+                      fontSize: 12,
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      transition: TRANSITION.fast,
+                    }}
+                  >
+                    <i className="ti ti-plus" style={{ fontSize: 13 }} />
+                    <span>Adicionar Cartão</span>
+                  </button>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {/* ─── SUB-ABA 3: HISTÓRICO DE CONCLUSÕES ─── */}
       {viewMode === 'history' && (
         <ModuleCard padding={20}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-            <h4 style={{ margin: 0, fontSize: TEXT.body, fontWeight: 700, color: COLOR.paperInk, display: 'flex', alignItems: 'center', gap: 8 }}>
-              <i className="ti ti-calendar-check" style={{ color: COLOR.success }} />
-              <span>Histórico de Tarefas Concluídas — {PERIOD_LABELS.find(p => p.id === selectedPeriod)?.label} ({filteredHistory.length})</span>
-            </h4>
-          </div>
-
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {filteredHistory.length === 0 ? (
               <div style={{ padding: '36px 0', textAlign: 'center', color: COLOR.paperMid, fontSize: TEXT.bodyCompact }}>
-                <i className="ti ti-history-toggle" style={{ fontSize: 32, display: 'block', marginBottom: 8, opacity: 0.5 }} />
-                Nenhum registro de conclusão no período selecionado ({PERIOD_LABELS.find(p => p.id === selectedPeriod)?.desc}).
+                <i className="ti ti-inbox" style={{ fontSize: 32, display: 'block', marginBottom: 8 }} />
+                Nenhum registro de tarefa concluída neste período ({periodLabelText}).
               </div>
             ) : (
-              filteredHistory.map(item => {
-                const dateFormatted = new Date(item.completedAt).toLocaleString('pt-BR', {
-                  day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
-                })
-                const isRec = item.category === 'recurrent'
-                const isAi = item.category === 'system_ai'
-
-                return (
-                  <div
-                    key={item.id}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      gap: 12,
-                      padding: '12px 16px',
-                      borderRadius: RADIUS.md,
-                      background: COLOR.surface1,
-                      border: `1px solid ${BORDER.soft}`,
-                      boxShadow: SHADOW.flat,
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1 }}>
-                      <div style={{
-                        width: 28, height: 28, borderRadius: RADIUS.sm,
-                        background: COLOR.successBg,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
-                      }}>
-                        <i className="ti ti-check" style={{ color: COLOR.success, fontSize: 16 }} />
+              filteredHistory.map((item, idx) => (
+                <div
+                  key={item.id || idx}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 12,
+                    padding: '12px 16px',
+                    borderRadius: RADIUS.md,
+                    background: COLOR.surface1,
+                    border: `1px solid ${BORDER.soft}`,
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <div style={{ width: 22, height: 22, borderRadius: 6, background: COLOR.success, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <i className="ti ti-check" style={{ color: '#fff', fontSize: 13 }} />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: TEXT.body, fontWeight: 600, color: COLOR.paperInk }}>
+                        {item.text}
                       </div>
-
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                        <span style={{ fontSize: TEXT.bodyCompact, fontWeight: 700, color: COLOR.paperInk }}>
-                          {item.text}
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 2 }}>
+                        <span style={{ fontSize: TEXT.micro, color: COLOR.paperWarm, fontWeight: 600 }}>
+                          {new Date(item.completedAt).toLocaleString('pt-BR')}
                         </span>
-                        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                          <span style={{
-                            fontSize: TEXT.micro,
-                            fontWeight: 700,
-                            padding: '2px 8px',
-                            borderRadius: RADIUS.sm,
-                            background: isAi ? COLOR.warningBg : isRec ? 'rgba(139,94,60,0.1)' : COLOR.infoBg,
-                            color: isAi ? COLOR.warning : isRec ? COLOR.accent : COLOR.info,
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: 4,
-                          }}>
-                            <i className={isAi ? 'ti ti-sparkles' : isRec ? 'ti ti-repeat' : 'ti ti-pin'} style={{ fontSize: 11 }} />
-                            {isAi ? 'Pendência da IA' : isRec ? 'Rotina Diária' : 'Pontual'}
+                        {item.tag && (
+                          <span style={{ fontSize: TEXT.micro, color: COLOR.paperWarm, background: 'rgba(44,26,14,0.06)', padding: '1px 6px', borderRadius: RADIUS.sm }}>
+                            {item.tag}
                           </span>
-                          {item.tag && (
-                            <span style={{ fontSize: TEXT.micro, color: COLOR.paperWarm, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-                              <i className="ti ti-tag" style={{ fontSize: 11 }} />
-                              {item.tag}
-                            </span>
-                          )}
-                          <span style={{ fontSize: TEXT.micro, color: COLOR.paperMid, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-                            <i className="ti ti-clock" style={{ fontSize: 11 }} />
-                            Concluído em {dateFormatted}
-                          </span>
-                        </div>
+                        )}
                       </div>
                     </div>
-
-                    <button
-                      onClick={() => deleteChecklistHistoryItem(item.id)}
-                      style={{ background: 'none', border: 'none', color: COLOR.danger, opacity: 0.5, cursor: 'pointer', fontSize: 13, padding: 4 }}
-                      title="Excluir do histórico"
-                    >
-                      <i className="ti ti-trash" />
-                    </button>
                   </div>
-                )
-              })
+
+                  <button
+                    onClick={() => {
+                      deleteChecklistHistoryItem(item.id)
+                      setHistory(loadChecklistHistory())
+                      toast.info('Item removido do histórico.')
+                    }}
+                    style={{ background: 'none', border: 'none', color: COLOR.paperMid, cursor: 'pointer', fontSize: 14 }}
+                    title="Excluir este registro"
+                  >
+                    <i className="ti ti-trash" />
+                  </button>
+                </div>
+              ))
             )}
           </div>
         </ModuleCard>
@@ -860,21 +1001,347 @@ export default function ChecklistHistoryModule() {
         onImportSuccess={() => loadData()}
       />
 
-      {/* Modal de Edição de Post / Recorrência */}
-      <ChecklistEditModal
-        isOpen={!!editingTodo}
-        todo={editingTodo}
-        onClose={() => setEditingTodo(null)}
-        onSave={handleSaveEditedTodo}
-      />
+      {/* Modal de Edição de Tarefas */}
+      {editingTodo && (
+        <ChecklistEditModal
+          todo={editingTodo}
+          isOpen={Boolean(editingTodo)}
+          onClose={() => setEditingTodo(null)}
+          onSave={updated => {
+            const list = todos.map(t => t.id === updated.id ? updated : t)
+            setTodos(list)
+            saveChecklistTodos(list)
+            setEditingTodo(null)
+          }}
+        />
+      )}
     </div>
   )
-}
 
-const StatCardStyle: React.CSSProperties = {
-  background: COLOR.surface1,
-  border: `1px solid ${BORDER.soft}`,
-  borderRadius: RADIUS.lg,
-  padding: '14px 18px',
-  boxShadow: SHADOW.sm,
+  // Helper para renderizar item na Visualização em Lista / Tópicos
+  function renderTodoCardItem(todo: ChecklistTodo) {
+    const isRecurrent = todo.category === 'recurrent'
+    const hasSubtasks = todo.subtasks && todo.subtasks.length > 0
+    const completedSubtasks = hasSubtasks ? todo.subtasks!.filter(s => s.done).length : 0
+
+    return (
+      <div
+        key={todo.id}
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 6,
+          padding: '12px 16px',
+          borderRadius: RADIUS.md,
+          background: todo.done ? COLOR.paperPage : COLOR.surface1,
+          border: `1px solid ${todo.done ? BORDER.soft : BORDER.medium}`,
+          transition: TRANSITION.fast,
+          boxShadow: todo.done ? 'none' : SHADOW.sm,
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1 }}>
+            <div
+              onClick={() => handleToggle(todo.id)}
+              style={{
+                width: 22,
+                height: 22,
+                borderRadius: 6,
+                border: todo.done ? 'none' : isRecurrent ? `2px solid ${COLOR.accent}` : `2px solid ${COLOR.paperInk}`,
+                background: todo.done ? COLOR.success : 'transparent',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                flexShrink: 0,
+                transition: TRANSITION.fast,
+              }}
+            >
+              {todo.done && <i className="ti ti-check" style={{ color: '#fff', fontSize: 14 }} />}
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <span
+                onClick={() => handleToggle(todo.id)}
+                style={{
+                  fontSize: TEXT.body,
+                  fontWeight: todo.done ? 500 : 700,
+                  color: todo.done ? COLOR.paperMid : COLOR.paperInk,
+                  textDecoration: todo.done ? 'line-through' : 'none',
+                  cursor: 'pointer',
+                }}
+              >
+                {todo.text}
+              </span>
+
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                <span style={{
+                  fontSize: TEXT.micro,
+                  fontWeight: 700,
+                  padding: '2px 8px',
+                  borderRadius: RADIUS.sm,
+                  background: isRecurrent ? 'rgba(139,94,60,0.12)' : COLOR.warningBg,
+                  color: isRecurrent ? COLOR.accent : COLOR.warning,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 4,
+                }}>
+                  <i className={isRecurrent ? 'ti ti-repeat' : 'ti ti-pin'} style={{ fontSize: 11 }} />
+                  {isRecurrent ? formatRecurrenceText(todo.recurrence || { type: 'daily' }) : 'Pontual'}
+                </span>
+
+                {hasSubtasks && (
+                  <span style={{
+                    fontSize: TEXT.micro,
+                    fontWeight: 700,
+                    padding: '2px 8px',
+                    borderRadius: RADIUS.sm,
+                    background: 'rgba(34,197,94,0.12)',
+                    color: '#15803d',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 4,
+                  }}>
+                    <i className="ti ti-list-check" style={{ fontSize: 11 }} />
+                    {completedSubtasks}/{todo.subtasks!.length} subtarefas
+                  </span>
+                )}
+
+                {todo.attachments && todo.attachments.length > 0 && (
+                  <span style={{ fontSize: TEXT.micro, color: '#7e22ce', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                    <i className="ti ti-paperclip" style={{ fontSize: 11 }} />
+                    {todo.attachments.length} anexo(s)
+                  </span>
+                )}
+
+                {todo.tag && !groupByTopic && (
+                  <span style={{ fontSize: TEXT.micro, color: COLOR.paperWarm, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                    <i className="ti ti-tag" style={{ fontSize: 11 }} />
+                    {todo.tag}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <button
+              onClick={() => setEditingTodo(todo)}
+              style={{ background: 'none', border: 'none', color: COLOR.paperWarm, cursor: 'pointer', fontSize: 15, padding: 6 }}
+              title="Editar tarefa"
+            >
+              <i className="ti ti-edit" />
+            </button>
+            <button
+              onClick={() => handleDelete(todo.id)}
+              style={{ background: 'none', border: 'none', color: COLOR.danger, cursor: 'pointer', fontSize: 15, padding: 6 }}
+              title="Excluir tarefa"
+            >
+              <i className="ti ti-trash" />
+            </button>
+          </div>
+        </div>
+
+        {/* Subtarefas do Cartão com Checkboxes Clicáveis */}
+        {hasSubtasks && (
+          <div style={{
+            marginLeft: 34,
+            padding: '8px 12px',
+            background: 'rgba(44,26,14,0.03)',
+            borderRadius: RADIUS.sm,
+            borderLeft: `3px solid ${COLOR.accent}`,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 4,
+            marginTop: 4,
+          }}>
+            {todo.subtasks!.map(st => (
+              <div
+                key={st.id}
+                onClick={() => handleToggleSubtask(todo.id, st.id)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  cursor: 'pointer',
+                  fontSize: 12,
+                  color: st.done ? COLOR.paperMid : COLOR.paperInk,
+                  textDecoration: st.done ? 'line-through' : 'none',
+                }}
+              >
+                <div style={{
+                  width: 14,
+                  height: 14,
+                  borderRadius: 3,
+                  border: st.done ? 'none' : `1px solid ${BORDER.medium}`,
+                  background: st.done ? COLOR.success : '#fff',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0
+                }}>
+                  {st.done && <i className="ti ti-check" style={{ color: '#fff', fontSize: 10 }} />}
+                </div>
+                <span>{st.text}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // Helper para renderizar item no Visual Trello / Kanban
+  function renderKanbanCardItem(todo: ChecklistTodo, allTopics: string[]) {
+    const isRecurrent = todo.category === 'recurrent'
+    const hasSubtasks = todo.subtasks && todo.subtasks.length > 0
+    const completedSubtasks = hasSubtasks ? todo.subtasks!.filter(s => s.done).length : 0
+
+    return (
+      <div
+        key={todo.id}
+        style={{
+          background: todo.done ? 'rgba(253, 248, 242, 0.7)' : '#ffffff',
+          borderRadius: RADIUS.md,
+          border: `1px solid ${todo.done ? BORDER.soft : BORDER.medium}`,
+          padding: 12,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 8,
+          boxShadow: todo.done ? 'none' : '0 2px 5px rgba(44,26,14,0.06)',
+          transition: TRANSITION.fast,
+        }}
+      >
+        {/* Topo do Cartão: Checkbox Principal e Título */}
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+          <div
+            onClick={() => handleToggle(todo.id)}
+            style={{
+              width: 18,
+              height: 18,
+              borderRadius: 4,
+              border: todo.done ? 'none' : `2px solid ${COLOR.paperInk}`,
+              background: todo.done ? COLOR.success : 'transparent',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              flexShrink: 0,
+              marginTop: 2,
+            }}
+          >
+            {todo.done && <i className="ti ti-check" style={{ color: '#fff', fontSize: 12 }} />}
+          </div>
+
+          <div style={{ flex: 1, fontSize: 13, fontWeight: 700, color: todo.done ? COLOR.paperMid : COLOR.paperInk, textDecoration: todo.done ? 'line-through' : 'none' }}>
+            {todo.text}
+          </div>
+        </div>
+
+        {/* Subtarefas / Checklist do Trello Interativo */}
+        {hasSubtasks && (
+          <div style={{
+            background: 'rgba(44,26,14,0.03)',
+            borderRadius: RADIUS.sm,
+            padding: '8px 10px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 4,
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, fontWeight: 700, color: COLOR.paperWarm }}>
+              <span>Checklist</span>
+              <span>{completedSubtasks}/{todo.subtasks!.length}</span>
+            </div>
+
+            {/* Barra de Progresso */}
+            <div style={{ height: 4, background: 'rgba(44,26,14,0.1)', borderRadius: 2, overflow: 'hidden' }}>
+              <div style={{
+                height: '100%',
+                width: `${(completedSubtasks / todo.subtasks!.length) * 100}%`,
+                background: completedSubtasks === todo.subtasks!.length ? COLOR.success : COLOR.accent,
+                transition: TRANSITION.fast,
+              }} />
+            </div>
+
+            {/* Itens do Checklist */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginTop: 4 }}>
+              {todo.subtasks!.map(st => (
+                <div
+                  key={st.id}
+                  onClick={() => handleToggleSubtask(todo.id, st.id)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    cursor: 'pointer',
+                    fontSize: 11.5,
+                    color: st.done ? COLOR.paperMid : COLOR.paperInk,
+                    textDecoration: st.done ? 'line-through' : 'none',
+                  }}
+                >
+                  <div style={{
+                    width: 12,
+                    height: 12,
+                    borderRadius: 2,
+                    border: st.done ? 'none' : `1px solid ${BORDER.medium}`,
+                    background: st.done ? COLOR.success : '#fff',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0
+                  }}>
+                    {st.done && <i className="ti ti-check" style={{ color: '#fff', fontSize: 9 }} />}
+                  </div>
+                  <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{st.text}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Rodapé do Cartão com Badges e Menu Mover */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: `1px solid ${BORDER.soft}`, paddingTop: 6, marginTop: 2 }}>
+          {/* Seletor Rápido de Mover Coluna */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <span style={{ fontSize: 10, color: COLOR.paperWarm, fontWeight: 700 }}>Mover:</span>
+            <select
+              value={todo.tag || 'Geral'}
+              onChange={e => handleMoveTag(todo.id, e.target.value)}
+              style={{
+                fontSize: 10.5,
+                padding: '2px 4px',
+                borderRadius: RADIUS.sm,
+                border: `1px solid ${BORDER.soft}`,
+                background: '#fff',
+                color: COLOR.paperInk,
+                cursor: 'pointer',
+                maxWidth: 110,
+              }}
+            >
+              {allTopics.map(t => (
+                <option key={t} value={t}>{t}</option>
+              ))}
+            </select>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <button
+              onClick={() => setEditingTodo(todo)}
+              style={{ background: 'none', border: 'none', color: COLOR.paperWarm, cursor: 'pointer', fontSize: 13, padding: 3 }}
+              title="Editar"
+            >
+              <i className="ti ti-edit" />
+            </button>
+            <button
+              onClick={() => handleDelete(todo.id)}
+              style={{ background: 'none', border: 'none', color: COLOR.danger, cursor: 'pointer', fontSize: 13, padding: 3 }}
+              title="Excluir"
+            >
+              <i className="ti ti-trash" />
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
 }

@@ -380,3 +380,60 @@ export function exportChecklistHistoryCSV(items: ChecklistHistoryItem[]): string
 
   return [headers.join(','), ...rows].join('\n')
 }
+
+/**
+ * Alterna o estado de uma subtarefa dentro de um ChecklistTodo
+ */
+export function toggleTodoSubtask(
+  todoId: string,
+  subtaskId: string,
+  currentTodos?: ChecklistTodo[]
+): ChecklistTodo[] {
+  const list = currentTodos ? [...currentTodos] : loadChecklistTodos()
+  const todoIdx = list.findIndex(t => t.id === todoId)
+  if (todoIdx === -1) return list
+
+  const todo = list[todoIdx]
+  if (!todo.subtasks || todo.subtasks.length === 0) return list
+
+  const updatedSubtasks = todo.subtasks.map(st => {
+    if (st.id === subtaskId) {
+      return { ...st, done: !st.done }
+    }
+    return st
+  })
+
+  const allSubtasksDone = updatedSubtasks.every(st => st.done)
+
+  list[todoIdx] = {
+    ...todo,
+    subtasks: updatedSubtasks,
+    // Se todas as subtarefas forem concluídas, podemos marcar o cartão como done
+    done: allSubtasksDone ? true : todo.done
+  }
+
+  saveChecklistTodos(list)
+  return list
+}
+
+/**
+ * Atualiza o tópico / tag / lista de um ChecklistTodo (útil para arrastar entre colunas no visual Trello)
+ */
+export function updateTodoTag(
+  todoId: string,
+  newTag: string,
+  currentTodos?: ChecklistTodo[]
+): ChecklistTodo[] {
+  const list = currentTodos ? [...currentTodos] : loadChecklistTodos()
+  const todoIdx = list.findIndex(t => t.id === todoId)
+  if (todoIdx === -1) return list
+
+  list[todoIdx] = {
+    ...list[todoIdx],
+    tag: newTag
+  }
+
+  saveChecklistTodos(list)
+  return list
+}
+

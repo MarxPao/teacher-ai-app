@@ -527,6 +527,7 @@ export async function executeTrelloDecisions(
           }
 
           const attachments = (decision.attachments || []).map(a => ({ name: a.name, url: a.url }))
+          const finalTag = decision.listName || decision.suggestedPayload.tag || 'Trello'
 
           currentTodos.unshift({
             id: `trello_${decision.cardId}_${Date.now()}`,
@@ -534,7 +535,7 @@ export async function executeTrelloDecisions(
             done: decision.dueComplete || false,
             category: 'one_off',
             priority: decision.suggestedPayload.priority || 'medium',
-            tag: decision.suggestedPayload.tag || 'Trello',
+            tag: finalTag,
             createdAt: Date.now(),
             subtasks: subtasks.length > 0 ? subtasks : undefined,
             notes: notesParts.join('\n\n') || undefined,

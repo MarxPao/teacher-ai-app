@@ -11,6 +11,7 @@ import {
   getCompletedSystemTodoIds,
   toggleSystemAiTodo,
   toggleRegularTodo,
+  toggleTodoSubtask,
   recordChecklistHistory,
   formatRecurrenceText,
   ChecklistTodo,
@@ -390,6 +391,11 @@ export default function Dashboard() {
       return
     }
     const updated = toggleRegularTodo(id, todos)
+    setTodos(updated)
+  }
+
+  const handleToggleSubtask = (todoId: string, subtaskId: string) => {
+    const updated = toggleTodoSubtask(todoId, subtaskId, todos as any)
     setTodos(updated)
   }
 
@@ -1464,6 +1470,56 @@ export default function Dashboard() {
                             </div>
                           )}
                         </div>
+
+                        {/* Subtarefas / Checklists se existirem */}
+                        {(todo as any).subtasks && (todo as any).subtasks.length > 0 && (
+                          <div style={{
+                            width: '100%',
+                            marginLeft: 30,
+                            marginTop: 4,
+                            padding: '6px 10px',
+                            background: 'rgba(44,26,14,0.03)',
+                            borderRadius: 6,
+                            borderLeft: '2px solid #8b5e3c',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: 3,
+                          }}>
+                            {(todo as any).subtasks.map((st: any) => (
+                              <div
+                                key={st.id}
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handleToggleSubtask(todo.id, st.id)
+                                }}
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: 6,
+                                  cursor: 'pointer',
+                                  fontSize: 11.5,
+                                  color: st.done ? '#a08060' : '#2c1a0e',
+                                  textDecoration: st.done ? 'line-through' : 'none',
+                                }}
+                              >
+                                <div style={{
+                                  width: 12,
+                                  height: 12,
+                                  borderRadius: 2,
+                                  border: st.done ? 'none' : '1px solid #d4c8b8',
+                                  background: st.done ? '#16a34a' : '#fff',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  flexShrink: 0,
+                                }}>
+                                  {st.done && <i className="ti ti-check" style={{ color: '#fff', fontSize: 9 }} />}
+                                </div>
+                                <span>{st.text}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     )
                   })
