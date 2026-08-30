@@ -49,6 +49,7 @@ import AutoReport from '@/components/modules/AutoReport'
 import Organization from '@/components/modules/Organization'
 import PrivateTutoring from '@/components/modules/PrivateTutoring'
 import Eventos from '@/components/modules/Eventos'
+import VisualStudio from '@/components/modules/VisualStudio'
 import Insights from '@/components/modules/Insights'
 import ChecklistHistoryModule from '@/components/modules/ChecklistHistoryModule'
 
@@ -64,7 +65,7 @@ import { getCurrentSession, saveSession, AuthSession } from '@/lib/supabaseAuth'
 import { ToastProvider, ConfirmProvider } from '@/components/Toast'
 
 export type ModuleKey = 'dashboard' | 'test_and_worksheets' | 'quick' | 'exam' | 'lessonstudio' | 'plan' | 'rubric' |
-  'gradebook' | 'students' | 'classes' | 'organization' | 'checklist' | 'privatetutoring' | 'eventos' | 'insights' | 'analytics' | 'calendar' | 'comms' | 'repo' |
+  'gradebook' | 'students' | 'classes' | 'organization' | 'checklist' | 'privatetutoring' | 'eventos' | 'visualstudio' | 'insights' | 'analytics' | 'calendar' | 'comms' | 'repo' |
   'wellbeing' | 'settings' | 'api' | 'qbank' | 'mindmap' | 'editor' |
   'communications' | 'portfolio' | 'extensions' | 'portalmirror' | 'omnigrader' | 'maestro' | 'classlog' | 'didacticsequence' | 'livequiz' | 'parentcomms' |
   'classroommode' | 'attendancelist' | 'flashcardmode' | 'audiopronunciation' |
@@ -86,6 +87,7 @@ const MODULES: Record<ModuleKey, React.ComponentType<any>> = {
   checklist: ChecklistHistoryModule,
   privatetutoring: PrivateTutoring,
   eventos: Eventos,
+  visualstudio: VisualStudio,
   insights: Insights,
   analytics: Analytics,
   calendar: Planner,

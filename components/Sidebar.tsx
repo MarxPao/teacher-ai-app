@@ -31,12 +31,13 @@ const NAV: Section[] = [
     { key: 'reflectivepractice',  label: 'Reflexão da Prática',     icon: 'ti-bulb' },
   ]},
   { label: 'Criação', items: [
-    { key: 'audiopronunciation',  label: 'Pronúncia & Áudio',     icon: 'ti-microphone' },
-    { key: 'eventos',             label: 'Eventos Escolares',     icon: 'ti-sparkles' },
-    { key: 'rubric',              label: 'Rubrica & Gabarito',    icon: 'ti-list-check' },
     { key: 'test_and_worksheets', label: 'Test & Worksheets',     icon: 'ti-file-certificate' },
     { key: 'qbank',               label: 'Banco de Atividades',   icon: 'ti-archive' },
+    { key: 'visualstudio',        label: 'Estúdio Visual & Artes',icon: 'ti-palette' },
+    { key: 'eventos',             label: 'Eventos Escolares',     icon: 'ti-sparkles' },
+    { key: 'rubric',              label: 'Rubrica & Gabarito',    icon: 'ti-list-check' },
     { key: 'editor',              label: 'Editor de Documentos',  icon: 'ti-file-pencil' },
+    { key: 'audiopronunciation',  label: 'Pronúncia & Áudio',     icon: 'ti-microphone' },
   ]},
   { label: 'Em Sala de Aula', items: [
     { key: 'flashcardmode',  label: 'Flashcards',           icon: 'ti-cards' },
