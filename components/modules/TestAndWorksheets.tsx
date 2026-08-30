@@ -3,6 +3,7 @@ import { toast, showConfirm } from '@/components/Toast'
 
 import React, { useState, useEffect, useCallback } from 'react'
 import DocumentCanvas from '@/components/DocumentCanvas'
+import ExamResultThreeTabs from '@/components/ExamResultThreeTabs'
 import { ApiConfig } from '@/components/modules/ApiManager'
 import { generateListeningAudio } from '@/lib/audioGenerator'
 import AudioPlayerCard from '@/components/AudioPlayerCard'
@@ -737,190 +738,80 @@ Retorne a questão reformulada no formato estruturado:`
           </div>
         </div>
 
-        {/* COLUNA DIREITA: DOCUMENTO & BOXES EDITÁVEIS */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, minHeight: 0 }}>
-
-          {/* Listening Track (se houver no modo exame) */}
-          {mode === 'exam' && result && (
-            <div style={{ background: '#fff', padding: '10px 16px', borderRadius: 14, border: '1px solid #ede8dc', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: 18 }}>🎧</span>
-                <span style={{ fontSize: 13, fontWeight: 700 }}>Listening Track Audio</span>
-                <select value={accent} onChange={e => setAccent(e.target.value as any)} style={{ padding: '3px 6px', borderRadius: 6, border: '1px solid #ddd', fontSize: 12 }}>
-                  <option value="US">🇺🇸 US</option>
-                  <option value="UK">🇬🇧 UK</option>
-                </select>
-              </div>
-              <button
-                type="button"
-                onClick={handleGenerateAudio}
-                disabled={audioLoading}
-                style={{ padding: '6px 14px', borderRadius: 8, border: 'none', background: '#8b5e3c', color: '#fff', fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}
-              >
-                {audioLoading ? 'Gerando Áudio MP3...' : '🔊 Gerar Áudio'}
-              </button>
-            </div>
-          )}
-
-          {audioUrl && (
-            <AudioPlayerCard audioUrl={audioUrl} title={`Listening Track - ${topic || 'Exam'}`} accent={accent} onDelete={() => setAudioUrl(null)} />
-          )}
-
-          {/* Toolbar de Exportação e Ações Rápidas */}
-          {result && (
-            <div style={{
-              background: '#fdf8f2', padding: '10px 16px', borderRadius: 14,
-              border: '1.5px solid #ede8dc', display: 'flex', flexWrap: 'wrap',
-              justifyContent: 'space-between', alignItems: 'center', gap: 8, flexShrink: 0
-            }}>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                <button
-                  onClick={() => exportToPdf({
-                    schoolName: header.school || 'ESCOLA DE ENSINO & IDIOMAS',
-                    teacherName: header.teacher || 'Professor(a)',
-                    className: grade || '9º Ano',
-                    title: header.title || (topic ? `${mode === 'exam' ? 'PROVA' : 'ATIVIDADE'} ${topic.toUpperCase()}` : 'AVALIAÇÃO'),
-                    content: result
-                  })}
-                  style={{
-                    padding: '8px 14px', borderRadius: 10, border: 'none',
-                    background: '#8b5e3c', color: '#fff', fontSize: 12.5,
-                    fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6
-                  }}
-                >
-                  <i className="ti ti-printer" /> Exportar PDF Oficial
-                </button>
-
-                <button
-                  onClick={() => exportToWord({
-                    schoolName: header.school || 'ESCOLA DE ENSINO & IDIOMAS',
-                    teacherName: header.teacher || 'Professor(a)',
-                    className: grade || '9º Ano',
-                    title: header.title || (topic ? `${mode === 'exam' ? 'PROVA' : 'ATIVIDADE'} ${topic.toUpperCase()}` : 'AVALIAÇÃO'),
-                    content: result
-                  })}
-                  style={{
-                    padding: '8px 14px', borderRadius: 10, border: '1px solid #c0a080',
-                    background: '#fffcf8', color: '#8b5e3c', fontSize: 12.5,
-                    fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6
-                  }}
-                >
-                  <i className="ti ti-file-text" /> Exportar Word (.docx)
-                </button>
-              </div>
-
-              {mode === 'exam' && (
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <button
-                    onClick={() => setShowOnlineModal(true)}
-                    style={{ padding: '8px 14px', borderRadius: 10, border: 'none', background: '#2d9d5d', color: '#fff', fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}
-                  >
-                    🚀 Testar Prova Online
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Alternador de Visualização: Boxes Editáveis vs Folha Formatada */}
-          {result && (
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              background: '#fff',
-              padding: '8px 16px',
-              borderRadius: 14,
-              border: '1px solid #ede8dc',
-              boxShadow: '0 2px 8px rgba(44,26,14,0.03)',
-              flexShrink: 0
-            }}>
-              <span style={{ fontSize: 13, fontWeight: 800, color: '#2c1a0e' }}>
-                Visualização & Edição:
-              </span>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button
-                  type="button"
-                  onClick={() => setActiveViewTab('boxes')}
-                  style={{
-                    padding: '6px 14px',
-                    borderRadius: 10,
-                    border: activeViewTab === 'boxes' ? '1.5px solid #8b5e3c' : '1px solid #d5c8bb',
-                    background: activeViewTab === 'boxes' ? '#8b5e3c' : '#fff',
-                    color: activeViewTab === 'boxes' ? '#fff' : '#2c1a0e',
-                    fontSize: 12.5,
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 6
-                  }}
-                >
-                  📑 Boxes Editáveis & Reordenação
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveViewTab('canvas')}
-                  style={{
-                    padding: '6px 14px',
-                    borderRadius: 10,
-                    border: activeViewTab === 'canvas' ? '1.5px solid #8b5e3c' : '1px solid #d5c8bb',
-                    background: activeViewTab === 'canvas' ? '#8b5e3c' : '#fff',
-                    color: activeViewTab === 'canvas' ? '#fff' : '#2c1a0e',
-                    fontSize: 12.5,
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 6
-                  }}
-                >
-                  📄 Folha Formatada / Canvas Oficial
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Container do Documento */}
-          <div style={{ flex: 1, overflowY: 'auto', borderRadius: 20, border: '1px solid #ede8dc', boxShadow: '0 4px 24px rgba(44,26,14,0.04)', background: '#fff', minHeight: 0 }}>
-            {!result && !loading ? (
-              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#a08060', gap: 16, padding: 32 }}>
-                <span style={{ fontSize: 56, opacity: 0.3 }}>📝</span>
-                <p style={{ fontSize: 16 }}>Sua avaliação ou lista de exercícios aparecerá aqui</p>
-              </div>
-            ) : loading ? (
-              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, padding: 32 }}>
-                <div style={{ width: 56, height: 56, borderRadius: '50%', border: '5px solid #f0e8d8', borderTopColor: '#8b5e3c', animation: 'spin 0.8s linear infinite' }} />
-                <p style={{ color: '#7a5c42', fontSize: 14 }}>Elaborando com psicometria e didática...</p>
-              </div>
-            ) : activeViewTab === 'boxes' ? (
-              <div style={{ padding: 18 }}>
-                <EditableQuestionBoxes
-                  initialContent={result}
-                  onContentChange={setResult}
-                  onAskRafinhaForQuestion={handleAskRafinhaForQuestion}
-                />
-              </div>
-            ) : (
-              <DocumentCanvas
-                content={result}
-                onContentChange={setResult}
-                hideHeader={hideHeader}
-                onToggleHeader={() => setHideHeader(h => !h)}
-                headerData={{
-                  school: header.school || 'Nome da Escola',
-                  teacher: header.teacher || 'Professor(a)',
-                  title: header.title || (topic ? `${mode === 'exam' ? 'Prova' : 'Exercício'} ${topic}` : 'Documento'),
+        {/* COLUNA DIREITA: 3 TELAS / ABAS (DOCUMENTO, TÓPICOS & FONTES, RACIOCÍNIO PEDAGÓGICO) */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, minHeight: 0, height: '100%' }}>
+          {loading ? (
+            <div
+              style={{
+                flex: 1,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 16,
+                padding: 32,
+                background: '#fff',
+                borderRadius: 20,
+                border: '1px solid #ede8dc',
+              }}
+            >
+              <div
+                style={{
+                  width: 56,
+                  height: 56,
+                  borderRadius: '50%',
+                  border: '5px solid #f0e8d8',
+                  borderTopColor: '#8b5e3c',
+                  animation: 'spin 0.8s linear infinite',
                 }}
-                onHeaderChange={patch => setHeader(h => ({
-                  ...h,
-                  ...(patch.headerSchool !== undefined ? { school: patch.headerSchool } : {}),
-                  ...(patch.headerTeacher !== undefined ? { teacher: patch.headerTeacher } : {}),
-                  ...(patch.headerTitle !== undefined ? { title: patch.headerTitle } : {}),
-                }))}
               />
-            )}
-          </div>
+              <p style={{ color: '#7a5c42', fontSize: 14, fontWeight: 700 }}>
+                Elaborando com psicometria, taxonomia de Bloom e didática...
+              </p>
+            </div>
+          ) : (
+            <ExamResultThreeTabs
+              result={result}
+              onContentChange={setResult}
+              mode={mode}
+              topic={topic}
+              grade={grade}
+              level={cefr}
+              subjectName={activeProfile.name}
+              subjectId={activeProfile.id}
+              sections={sections}
+              skill={skill}
+              sources={sources}
+              questionCounts={questionCounts}
+              header={header}
+              onHeaderChange={patch => setHeader(h => ({ ...h, ...patch }))}
+              hideHeader={hideHeader}
+              onToggleHeader={() => setHideHeader(h => !h)}
+              bloomDistribution={{
+                remember: bloomRemember,
+                apply: bloomApply,
+                analyze: bloomAnalyze,
+                evaluate: bloomEvaluate,
+              }}
+              difficultyDistribution={{
+                easy: diffEasy,
+                medium: diffMedium,
+                hard: diffHard,
+                challenge: diffChallenge,
+              }}
+              approach={approach}
+              neeProfile={neeProfile}
+              factCheck={factCheck}
+              onAskRafinhaForQuestion={handleAskRafinhaForQuestion}
+              audioUrl={audioUrl}
+              audioLoading={audioLoading}
+              accent={accent}
+              onAccentChange={setAccent}
+              onGenerateAudio={handleGenerateAudio}
+              onDeleteAudio={() => setAudioUrl(null)}
+              onOpenOnlinePlayer={() => setShowOnlineModal(true)}
+            />
+          )}
         </div>
       </div>
 

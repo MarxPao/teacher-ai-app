@@ -4,6 +4,7 @@ import AiProgressStepper from '@/components/AiProgressStepper'
 
 import { useState, useEffect } from 'react'
 import DocumentCanvas from '@/components/DocumentCanvas'
+import ExamResultThreeTabs from '@/components/ExamResultThreeTabs'
 import { ApiConfig } from '@/components/modules/ApiManager'
 import { generateListeningAudio } from '@/lib/audioGenerator'
 import AudioPlayerCard from '@/components/AudioPlayerCard'
@@ -1094,278 +1095,62 @@ Retorne a questão reformulada no formato padrão (Enunciado, Alternativas se ap
 
         </div>
 
-        {/* RIGHT */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, flex: 1, minHeight: 0 }}>
-
-          {/* Audio toolbar */}
-          {result && (
-            <div style={{ background: '#fff', padding: '12px 18px', borderRadius: 16, border: '1px solid #ede8dc', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexShrink: 0 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <i className="ti ti-headphones" style={{ fontSize: 20, color: '#268bd2' }} />
-                <span style={{ fontSize: 13, fontWeight: 700, color: '#2c1a0e' }}>Listening Track</span>
-                <select value={accent} onChange={e => setAccent(e.target.value as 'US' | 'UK')} style={{ padding: '4px 8px', borderRadius: 8, border: '1px solid #ddd', fontSize: 12, outline: 'none' }}>
-                  <option value="US"> US</option>
-                  <option value="UK"> UK</option>
-                </select>
-              </div>
-              <button onClick={handleGenerateAudio} disabled={audioLoading} style={{ padding: '8px 16px', borderRadius: 10, border: 'none', background: '#8b5e3c', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
-                {audioLoading ? <><i className="ti ti-loader" style={{ animation: 'spin 1s linear infinite' }} /> Gerando</> : <><i className="ti ti-volume" /> Gerar Áudio MP3</>}
-              </button>
-            </div>
-          )}
-
-          {audioUrl && (
-            <AudioPlayerCard audioUrl={audioUrl} title={`Listening Track ${topic || 'Exam'}`} accent={accent} onDelete={() => setAudioUrl(null)} />
-          )}
-
-          {/* Export Toolbar & Online Exam QR Code */}
-          {result && (
-            <div style={{
-              background: '#fdf8f2', padding: '12px 18px', borderRadius: 16,
-              border: '1.5px solid #ede8dc', display: 'flex', flexWrap: 'wrap',
-              justifyContent: 'space-between', alignItems: 'center', gap: 10, flexShrink: 0
-            }}>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', position: 'relative' }}>
-                <div style={{ display: 'flex', alignItems: 'center', background: '#fff', borderRadius: 10, border: '1px solid #d5c0b0', padding: '2px 8px' }}>
-                  <span style={{ fontSize: 11.5, fontWeight: 600, color: '#7a6552', marginRight: 6 }}>Perfil PDF:</span>
-                  <select
-                    value={exportNeeProfile}
-                    onChange={(e: any) => setExportNeeProfile(e.target.value)}
-                    style={{ border: 'none', background: 'transparent', fontSize: 12, fontWeight: 700, color: '#2c1a0e', outline: 'none', cursor: 'pointer' }}
-                  >
-                    <option value="standard">📄 Padrão Acadêmico</option>
-                    <option value="dyslexia">📖 Dislexia (Lexend 1.85x)</option>
-                    <option value="adhd">⚡ TDAH (Blocos de Foco)</option>
-                    <option value="asd">🧩 TEA (Rotina & Ícones)</option>
-                    <option value="low_vis">👁️ Baixa Visão (17pt)</option>
-                  </select>
-                </div>
-
-                <button
-                  onClick={() => exportToPdf({
-                    schoolName: header.school || 'ESCOLA DE IDIOMAS & ENSINO',
-                    teacherName: header.teacher || 'Professor(a)',
-                    className: grade || '8º Ano',
-                    title: header.title || (topic ? `PROVA DE INGLÊS ${topic.toUpperCase()}` : 'AVALIAÇÃO DE INGLÊS'),
-                    content: result,
-                    neeProfile: exportNeeProfile
-                  })}
-                  style={{
-                    padding: '8px 14px', borderRadius: 10, border: 'none',
-                    background: '#8b5e3c', color: '#fff', fontSize: 12.5,
-                    fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
-                    boxShadow: '0 2px 6px rgba(139,94,60,0.25)'
-                  }}
-                >
-                  <i className="ti ti-printer"></i>
-                  Exportar PDF {exportNeeProfile !== 'standard' ? 'Adaptado' : 'Oficial'}
-                </button>
-
-                <button
-                  onClick={() => exportToWord({
-                    schoolName: header.school || 'ESCOLA DE IDIOMAS & ENSINO',
-                    teacherName: header.teacher || 'Professor(a)',
-                    className: grade || '8º Ano',
-                    title: header.title || (topic ? `PROVA DE INGLÊS ${topic.toUpperCase()}` : 'AVALIAÇÃO DE INGLÊS'),
-                    content: result
-                  })}
-                  style={{
-                    padding: '8px 14px', borderRadius: 10, border: '1px solid #c0a080',
-                    background: '#fffcf8', color: '#8b5e3c', fontSize: 12.5,
-                    fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6
-                  }}
-                >
-                  <i className="ti ti-file-text"></i>
-                  Exportar Word (.docx)
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (!result) return
-                    const parsedQs = parseContentToQuestions(result)
-                    if (parsedQs.length === 0) {
-                      toast.warning('Nenhuma questão estruturada encontrada para transformar em Forma B.')
-                      return
-                    }
-                    const { formBQuestions, letterDistribution } = generateIsomorphicFormB(parsedQs, `${topic || 'prova'}_form_b_${Date.now()}`)
-                    const htmlB = compileQuestionsToHtml(formBQuestions, header.title ? `${header.title} (FORMA B)` : 'AVALIAÇÃO (FORMA B)')
-                    setResult(htmlB)
-                    setHeader(prev => ({ ...prev, title: prev.title.includes('FORMA B') ? prev.title : `${prev.title} (FORMA B)` }))
-                    toast.success(`✨ Forma B gerada com equivalência psicométrica exata! Gabarito balanceado (A: ${letterDistribution.A || 0}, B: ${letterDistribution.B || 0}, C: ${letterDistribution.C || 0}, D: ${letterDistribution.D || 0})`)
-                  }}
-                  style={{
-                    padding: '8px 14px', borderRadius: 10, border: '1px solid #7c3aed',
-                    background: '#f5f3ff', color: '#6d28d9', fontSize: 12.5,
-                    fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6
-                  }}
-                  title="Gera a versão B com rotação de alternativas e balanceamento de gabarito sem alterar a dificuldade"
-                >
-                  <i className="ti ti-arrows-shuffle"></i>
-                  Gerar Forma B (Isomórfica)
-                </button>
-              </div>
-
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button
-                  onClick={() => setShowQrModal(true)}
-                  style={{
-                    padding: '8px 14px', borderRadius: 10, border: '1.5px solid #268bd2',
-                    background: '#e8f4fd', color: '#268bd2', fontSize: 12.5,
-                    fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6
-                  }}
-                >
-                  QR Code para Alunos
-                </button>
-
-                <button
-                  onClick={() => setShowOnlineModal(true)}
-                  style={{
-                    padding: '8px 14px', borderRadius: 10, border: 'none',
-                    background: '#2d9d5d', color: '#fff', fontSize: 12.5,
-                    fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
-                    boxShadow: '0 3px 10px rgba(45,157,93,0.3)'
-                  }}
-                >
-                  Testar Prova Online
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* CEFR Inspector & L1 Distractor Quality Badge */}
-          {result && (
-            <div style={{
-              background: '#eef9f8', border: '1px solid #2aa198', borderRadius: 12,
-              padding: '8px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              fontSize: 12, color: '#16605a', flexShrink: 0
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <i className="ti ti-certificate" style={{ fontSize: 16, color: '#2aa198' }}></i>
-                <strong>CEFR & L1 Inspector:</strong>
-                <span>Alinhamento Cambridge {cefr} Ativo &bull; Calibração L1 (Erros de Interferência PT-BR) Aplicada</span>
-              </div>
-              <span style={{ background: '#2aa198', color: '#fff', padding: '2px 8px', borderRadius: 6, fontWeight: 700, fontSize: 11 }}>
-                CAMBRIDGE QUALITY
-              </span>
-            </div>
-          )}
-
-          {/* Alternador de Visualização: Boxes Editáveis vs Canvas de Impressão */}
-          {result && (
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              background: '#fff',
-              padding: '8px 16px',
-              borderRadius: 14,
-              border: '1px solid #ede8dc',
-              boxShadow: '0 2px 8px rgba(44,26,14,0.03)',
-              flexShrink: 0
-            }}>
-              <span style={{ fontSize: 13, fontWeight: 800, color: '#2c1a0e' }}>
-                Modo de Visualização & Edição:
-              </span>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button
-                  type="button"
-                  onClick={() => setActiveViewTab('boxes')}
-                  style={{
-                    padding: '6px 14px',
-                    borderRadius: 10,
-                    border: activeViewTab === 'boxes' ? '1.5px solid #8b5e3c' : '1px solid #d5c8bb',
-                    background: activeViewTab === 'boxes' ? '#8b5e3c' : '#fff',
-                    color: activeViewTab === 'boxes' ? '#fff' : '#2c1a0e',
-                    fontSize: 12.5,
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 6
-                  }}
-                >
-                  <i className="ti ti-layout-cards" style={{ fontSize: 14 }} />
-                  <span>Boxes Editáveis & Reordenação</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveViewTab('canvas')}
-                  style={{
-                    padding: '6px 14px',
-                    borderRadius: 10,
-                    border: activeViewTab === 'canvas' ? '1.5px solid #8b5e3c' : '1px solid #d5c8bb',
-                    background: activeViewTab === 'canvas' ? '#8b5e3c' : '#fff',
-                    color: activeViewTab === 'canvas' ? '#fff' : '#2c1a0e',
-                    fontSize: 13,
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 6
-                  }}
-                >
-                  <i className="ti ti-file-text" style={{ fontSize: 14 }} />
-                  <span>Folha Formatada / Canvas</span>
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Document Canvas / Editable Boxes Container */}
-          <div style={{ flex: 1, borderRadius: 20, overflowY: 'auto', border: '1px solid #ede8dc', boxShadow: '0 4px 24px rgba(44,26,14,0.04)', background: '#fff', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-            {!result && !loading ? (
-              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#a08060', gap: 16, padding: 32 }}>
-                <i className="ti ti-file-certificate" style={{ fontSize: 56, opacity: 0.3 }} />
-                <p style={{ fontSize: 16 }}>Sua prova aparecerá aqui, pronta para editar e exportar</p>
-                {!hasApi && (
-                  <p style={{ fontSize: 13, color: '#b58900', textAlign: 'center', maxWidth: 300 }}>
-                    Configure uma API em <strong>APIs & Modelos</strong> para geração automática.
-                    <br />Ou cole o conteúdo diretamente neste espaço após configurar.
-                  </p>
-                )}
-              </div>
-            ) : loading ? (
-              <div style={{ flex: 1, padding: 32, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <AiProgressStepper
-                  isGenerating={loading}
-                  title="Construindo Prova Estruturada com IA"
-                  subtitle={`Disciplina: ${activeProfile.name} • Tópico: ${topic || 'Conteúdo Programático'}`}
-                  steps={[
-                    `Consultando matriz de referência ${activeProfile.name} e habilidades BNCC...`,
-                    `Elaborando enunciados psicométricos, distratores e textos-base...`,
-                    'Calibrando gabarito oficial, critérios de correção e folha formatada...',
-                  ]}
-                />
-              </div>
-            ) : activeViewTab === 'boxes' ? (
-              <div style={{ padding: 18 }}>
-                <EditableQuestionBoxes
-                  initialContent={result}
-                  onContentChange={setResult}
-                  onAskRafinhaForQuestion={handleAskRafinhaForQuestion}
-                />
-              </div>
-            ) : (
-              <DocumentCanvas
-                content={result}
-                onContentChange={setResult}
-                hideHeader={hideHeader}
-                onToggleHeader={() => setHideHeader(h => !h)}
-                headerData={{
-                  school: header.school || 'Nome da Escola',
-                  teacher: header.teacher || 'Professor(a)',
-                  title: header.title || (topic ? `Prova ${topic}` : 'Prova de Inglês'),
-                }}
-                onHeaderChange={patch => setHeader(h => ({
-                  ...h,
-                  ...(patch.headerSchool !== undefined ? { school: patch.headerSchool } : {}),
-                  ...(patch.headerTeacher !== undefined ? { teacher: patch.headerTeacher } : {}),
-                  ...(patch.headerTitle !== undefined ? { title: patch.headerTitle } : {}),
-                }))}
+        {/* RIGHT: 3 TELAS / ABAS (DOCUMENTO, TÓPICOS & FONTES, RACIOCÍNIO PEDAGÓGICO) */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, minHeight: 0, height: '100%' }}>
+          {loading ? (
+            <div style={{ flex: 1, padding: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#fff', borderRadius: 20, border: '1px solid #ede8dc' }}>
+              <AiProgressStepper
+                isGenerating={loading}
+                title="Construindo Prova Estruturada com IA"
+                subtitle={`Disciplina: ${activeProfile.name} • Tópico: ${topic || 'Conteúdo Programático'}`}
+                steps={[
+                  `Consultando matriz de referência ${activeProfile.name} e habilidades BNCC...`,
+                  `Elaborando enunciados psicométricos, distratores e textos-base...`,
+                  'Calibrando gabarito oficial, critérios de correção e folha formatada...',
+                ]}
               />
-            )}
-          </div>
+            </div>
+          ) : (
+            <ExamResultThreeTabs
+              result={result}
+              onContentChange={setResult}
+              mode="exam"
+              topic={topic}
+              grade={grade}
+              level={cefr}
+              subjectName={activeProfile.name}
+              subjectId={activeProfile.id}
+              sections={sections}
+              sources={sources}
+              questionCounts={questionCounts}
+              header={header}
+              onHeaderChange={patch => setHeader(h => ({ ...h, ...patch }))}
+              hideHeader={hideHeader}
+              onToggleHeader={() => setHideHeader(h => !h)}
+              bloomDistribution={{
+                remember: bloomRemember,
+                apply: bloomApply,
+                analyze: bloomAnalyze,
+                evaluate: bloomEvaluate,
+              }}
+              difficultyDistribution={{
+                easy: diffEasy,
+                medium: diffMedium,
+                hard: diffHard,
+                challenge: diffChallenge,
+              }}
+              approach={approach}
+              neeProfile={exportNeeProfile !== 'standard' ? exportNeeProfile : ''}
+              onAskRafinhaForQuestion={handleAskRafinhaForQuestion}
+              audioUrl={audioUrl}
+              audioLoading={audioLoading}
+              accent={accent}
+              onAccentChange={setAccent}
+              onGenerateAudio={handleGenerateAudio}
+              onDeleteAudio={() => setAudioUrl(null)}
+              onOpenOnlinePlayer={() => setShowOnlineModal(true)}
+            />
+          )}
         </div>
       </div>
 

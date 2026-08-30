@@ -7,6 +7,7 @@ import { AssessmentPreset, BloomDistribution, QuestionWeights, DifficultyDistrib
 import { ApiConfig } from '@/components/modules/ApiManager'
 import VoiceButton from '@/components/VoiceButton'
 import DocumentCanvas from '@/components/DocumentCanvas'
+import ExamResultThreeTabs from '@/components/ExamResultThreeTabs'
 import { runFactCheck, FactCheckResult } from '@/lib/factCheck'
 import SavedItemsDrawer, { saveItemToStorage, SavedItem } from '@/components/SavedItemsDrawer'
 import { PEDAGOGICAL_METHODOLOGIES, buildMethodologyInstructions } from '@/lib/pedagogicalMethodologies'
@@ -855,195 +856,54 @@ Retorne a questão reformulada no formato padrão (Enunciado, Alternativas se ap
 
         </div>
 
-        {/* RIGHT PANEL */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, minHeight: 0 }}>
-
-          {/* Quality badge */}
-          {(checking || factCheck) && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', background: '#fff', borderRadius: 12, border: `1px solid ${fcColor}33`, flexShrink: 0 }}>
-              {checking
-                ? <><i className="ti ti-loader-2" style={{ color: '#a08060', animation: 'spin 1s linear infinite' }} /> <span style={{ fontSize: 13, color: '#a08060' }}>Verificando qualidade pedagógica</span></>
-                : factCheck && (
-                  <>
-                    <i className={`ti ${factCheck.level === 'ok' ? 'ti-shield-check' : factCheck.level === 'warn' ? 'ti-alert-triangle' : 'ti-shield-x'}`} style={{ color: fcColor, fontSize: 20 }} />
-                    <div style={{ flex: 1 }}>
-                      <span style={{ fontSize: 13, fontWeight: 700, color: fcColor }}>
-                        {factCheck.level === 'ok' ? ` Conteúdo validado Qualidade ${factCheck.score}/100` :
-                          factCheck.level === 'warn' ? ` Revisar Qualidade ${factCheck.score}/100` :
-                            ` Problemas encontrados Qualidade ${factCheck.score}/100`}
-                      </span>
-                      {factCheck.issues.length > 0 && (
-                        <ul style={{ margin: '4px 0 0', padding: '0 0 0 16px', fontSize: 12, color: '#7a5c42' }}>
-                          {factCheck.issues.map((i, idx) => <li key={idx}>{i}</li>)}
-                        </ul>
-                      )}
-                    </div>
-                  </>
-                )}
-            </div>
-          )}
-
-          {/* BNCC tags */}
-          {bnccTags.length > 0 && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', flexShrink: 0 }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: '#7a5c42' }}>BNCC:</span>
-              {bnccTags.map(tag => (
-                <span key={tag} style={{ padding: '3px 10px', borderRadius: 20, background: 'rgba(133,153,0,0.12)', border: '1px solid rgba(133,153,0,0.3)', color: '#859900', fontSize: 11, fontWeight: 700 }}>{tag}</span>
-              ))}
-            </div>
-          )}
-
-          {/* Export Toolbar */}
-          {result && (
-            <div style={{
-              background: '#fdf8f2', padding: '10px 16px', borderRadius: 14,
-              border: '1.5px solid #ede8dc', display: 'flex', flexWrap: 'wrap',
-              justifyContent: 'space-between', alignItems: 'center', gap: 8, flexShrink: 0
-            }}>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                <button
-                  onClick={() => exportToPdf({
-                    schoolName: header.school || 'ESCOLA DE IDIOMAS & ENSINO',
-                    teacherName: header.teacher || 'Professor(a)',
-                    className: grade || '8º Ano',
-                    title: header.title || (topic ? `ATIVIDADE ${topic.toUpperCase()}` : 'ATIVIDADE DE FIXAÇÃO'),
-                    content: result
-                  })}
-                  style={{
-                    padding: '8px 14px', borderRadius: 10, border: 'none',
-                    background: '#8b5e3c', color: '#fff', fontSize: 12.5,
-                    fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6
-                  }}
-                >
-                  Exportar PDF Oficial
-                </button>
-
-                <button
-                  onClick={() => exportToWord({
-                    schoolName: header.school || 'ESCOLA DE IDIOMAS & ENSINO',
-                    teacherName: header.teacher || 'Professor(a)',
-                    className: grade || '8º Ano',
-                    title: header.title || (topic ? `ATIVIDADE ${topic.toUpperCase()}` : 'ATIVIDADE DE FIXAÇÃO'),
-                    content: result
-                  })}
-                  style={{
-                    padding: '8px 14px', borderRadius: 10, border: '1px solid #c0a080',
-                    background: '#fffcf8', color: '#8b5e3c', fontSize: 12.5,
-                    fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6
-                  }}
-                >
-                  Exportar Word (.docx)
-                </button>
-              </div>
-
-              <div style={{ fontSize: 12, color: '#8b5e3c', fontWeight: 600 }}>
-                Pronto para impressão
-              </div>
-            </div>
-          )}
-
-          {/* Alternador de Visualização: Boxes Editáveis vs Canvas de Impressão */}
-          {result && (
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              background: '#fff',
-              padding: '8px 16px',
-              borderRadius: 14,
-              border: '1px solid #ede8dc',
-              boxShadow: '0 2px 8px rgba(44,26,14,0.03)',
-              flexShrink: 0
-            }}>
-              <span style={{ fontSize: 13, fontWeight: 800, color: '#2c1a0e' }}>
-                Modo de Visualização & Edição:
-              </span>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button
-                  type="button"
-                  onClick={() => setActiveViewTab('boxes')}
-                  style={{
-                    padding: '6px 14px',
-                    borderRadius: 10,
-                    border: activeViewTab === 'boxes' ? '1.5px solid #8b5e3c' : '1px solid #d5c8bb',
-                    background: activeViewTab === 'boxes' ? '#8b5e3c' : '#fff',
-                    color: activeViewTab === 'boxes' ? '#fff' : '#2c1a0e',
-                    fontSize: 12.5,
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 6
-                  }}
-                >
-                  📑 Boxes Editáveis & Reordenação
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveViewTab('canvas')}
-                  style={{
-                    padding: '6px 14px',
-                    borderRadius: 10,
-                    border: activeViewTab === 'canvas' ? '1.5px solid #8b5e3c' : '1px solid #d5c8bb',
-                    background: activeViewTab === 'canvas' ? '#8b5e3c' : '#fff',
-                    color: activeViewTab === 'canvas' ? '#fff' : '#2c1a0e',
-                    fontSize: 12.5,
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 6
-                  }}
-                >
-                  📄 Folha Formatada / Canvas Oficial
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Document Canvas / Editable Boxes Container */}
-          <div style={{ flex: 1, overflowY: 'auto', borderRadius: 20, border: '1px solid #ede8dc', boxShadow: '0 4px 24px rgba(44,26,14,0.04)', background: '#fff', minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-            {loading ? (
-              <div style={{ flex: 1, padding: 32, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <AiProgressStepper
-                  isGenerating={loading}
-                  title="Gerando Lista de Atividades"
-                  subtitle={`Disciplina: ${profile.name} • Conteúdo: ${topic || 'Geral'}`}
-                  steps={[
-                    `Consultando perfil pedagógico ${profile.name}...`,
-                    'Elaborando enunciados e alternativas dinâmicas...',
-                    'Formatando gabarito e critérios de aplicação...',
-                  ]}
-                />
-              </div>
-            ) : activeViewTab === 'boxes' && result ? (
-              <div style={{ padding: 18 }}>
-                <EditableQuestionBoxes
-                  initialContent={result}
-                  onContentChange={setResult}
-                  onAskRafinhaForQuestion={handleAskRafinhaForQuestion}
-                />
-              </div>
-            ) : (
-              <DocumentCanvas
-                content={result}
-                onContentChange={setResult}
-                hideHeader={hideHeader}
-                onToggleHeader={() => setHideHeader(h => !h)}
-                headerData={{
-                  school: header.school || 'Nome da Escola',
-                  teacher: header.teacher || 'Professor(a)',
-                  title: header.title || topic || 'Exercício Gerado',
-                }}
-                onHeaderChange={patch => setHeader(h => ({
-                  ...h,
-                  ...(patch.headerSchool !== undefined ? { school: patch.headerSchool } : {}),
-                  ...(patch.headerTeacher !== undefined ? { teacher: patch.headerTeacher } : {}),
-                  ...(patch.headerTitle !== undefined ? { title: patch.headerTitle } : {}),
-                }))}
+        {/* RIGHT PANEL: 3 TELAS / ABAS (DOCUMENTO, TÓPICOS & FONTES, RACIOCÍNIO PEDAGÓGICO) */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, minHeight: 0, height: '100%' }}>
+          {loading ? (
+            <div style={{ flex: 1, padding: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#fff', borderRadius: 20, border: '1px solid #ede8dc' }}>
+              <AiProgressStepper
+                isGenerating={loading}
+                title="Gerando Lista de Atividades"
+                subtitle={`Disciplina: ${profile.name} • Conteúdo: ${topic || 'Geral'}`}
+                steps={[
+                  `Consultando perfil pedagógico ${profile.name}...`,
+                  'Elaborando enunciados e alternativas dinâmicas...',
+                  'Formatando gabarito e critérios de aplicação...',
+                ]}
               />
-            )}
-          </div>
+            </div>
+          ) : (
+            <ExamResultThreeTabs
+              result={result}
+              onContentChange={setResult}
+              mode="worksheet"
+              topic={topic}
+              grade={grade}
+              level={cefr}
+              subjectName={profile.name}
+              subjectId={profile.id}
+              sources={sources}
+              questionCounts={questionCounts}
+              header={header}
+              onHeaderChange={patch => setHeader(h => ({ ...h, ...patch }))}
+              hideHeader={hideHeader}
+              onToggleHeader={() => setHideHeader(h => !h)}
+              bloomDistribution={{
+                remember: bloomRemember,
+                apply: bloomApply,
+                analyze: bloomAnalyze,
+                evaluate: bloomEvaluate,
+              }}
+              difficultyDistribution={{
+                easy: 20,
+                medium: 50,
+                hard: 25,
+                challenge: 5,
+              }}
+              approach={methodology}
+              factCheck={factCheck}
+              onAskRafinhaForQuestion={handleAskRafinhaForQuestion}
+            />
+          )}
         </div>
       </div>
 
