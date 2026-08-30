@@ -13,6 +13,9 @@ import type { CanonicalMessage } from '@/lib/agentTools'
 import type { ModuleKey } from '@/app/page'
 import { buildLongTermMemoryContext, saveLearnedFact, autoReflectAndLearn } from '@/lib/longTermMemory'
 import { matchStudentByName } from '@/lib/studentMatcher'
+import { getSubjectProfile } from '@/lib/subjectProfile'
+import '@/lib/subjects/english'
+import '@/lib/subjects/portuguese'
 
 // Types 
 interface Message {
@@ -1249,7 +1252,9 @@ export default function RafinhaChat({ onNavigate, onCommandReady }: RafinhaChatP
  body: JSON.stringify({
  messages: canonicalHistory, context: getAppContext(),
  teacherStyle: buildTeacherStyleSystemPrompt(),
+ subject: getSubjectProfile().id,
  provider, userKey, autoMode, userKeys,
+ temperatureMode: isActionTask ? 'deterministic' : isGenerationTask ? 'creative' : 'balanced',
  }),
  })
 

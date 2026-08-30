@@ -43,14 +43,15 @@ export function evaluateActionRequirement(
   actionType: string,
   hasExplicitSelectors: boolean = true
 ): ActionRequirementLevel {
-  // Se não há seletores CSS mapeados previamente, exige inferência visual
-  if (!hasExplicitSelectors) {
-    return 'high'
+  // Se possui seletores CSS/DOM explicitamente mapeados (ou ação estruturada),
+  // a exigência é baixa (low), executando diretamente sem depender de visão computacional
+  if (hasExplicitSelectors) {
+    return 'low'
   }
 
-  // Portais conhecidos com seletores estáveis operam em exigência baixa
-  const knownMappedPortals = ['machado', 'santacatarina', 'plural', 'cambridge']
-  if (knownMappedPortals.includes(portalId)) {
+  // Fallback: Portais conhecidos com seletores estáveis embutidos operam em exigência baixa
+  const knownMappedPortals = ['machado', 'santacatarina', 'plural', 'cambridge', 'teams', 'canva', 'trello']
+  if (knownMappedPortals.includes((portalId || '').toLowerCase())) {
     return 'low'
   }
 

@@ -6,6 +6,8 @@ import { captureImageFile, extractContentFromImage } from '@/lib/ocrCapture'
 import { exportToPdf } from '@/lib/exportUtils'
 import { recordStudentGrade, addObservation } from '@/lib/studentMemory'
 import { getSubjectProfile, SubjectProfile } from '@/lib/subjectProfile'
+import { getAnchorExemplarsPrompt } from '@/lib/rubrics/anchorExemplars'
+import ModelCapabilityBanner from '@/components/ModelCapabilityBanner'
 import '@/lib/subjects/english'
 import '@/lib/subjects/portuguese'
 
@@ -50,7 +52,9 @@ interface CambridgeEssayEvaluation {
     explanation: string
     type: 'grammar' | 'spelling' | 'vocabulary' | 'l1_interference'
   }>
+  phantomErrorsFiltered?: number
 }
+
 
 interface BatchSubmission {
   id: string
@@ -250,8 +254,15 @@ export default function OmniGrader({ initialTab = 'photo' }: OmniGraderProps) {
       if (!text || text.length < 15) {
         setOcrWarning('⚠️ A caligrafia na foto não pôde ser reconhecida com nitidez suficiente. Por favor, envie uma foto com melhor iluminação e enquadramento reto, ou digite o texto manualmente.')
       } else {
+        // Validação de confiança de legibilidade pós-OCR
+        const { computeOcrConfidence } = await import('@/lib/ocrCapture')
+        const conf = computeOcrConfidence(text)
         setStudentEssayText(text)
-        setOcrWarning(null)
+        if (conf.lowConfidence && conf.warning) {
+          setOcrWarning(conf.warning + ' Você pode editar o texto manualmente antes de avaliar.')
+        } else {
+          setOcrWarning(null)
+        }
       }
     } catch (err: any) {
       setOcrWarning('⚠️ Falha ao processar o texto manuscrito da imagem. Por favor, verifique a nitidez da foto ou insira o texto manualmente.')
@@ -297,6 +308,8 @@ Avalie em escala de 0.0 a 5.0:
 1. Content / Tema & Gênero (0.0 a 5.0): Cumprimento integral da proposta, compreensão temática e estrutura composicional do gênero.
 2. Communicative Achievement / Argumentação & Conclusão (0.0 a 5.0): Clareza na defesa de ponto de vista, encadeamento de ideias e consistência da conclusão.
 
+${getAnchorExemplarsPrompt('portuguese', 'macro')}
+
 Retorne ESTRITAMENTE um objeto JSON no seguinte formato (sem markdown, sem blocos fora do JSON):
 {
   "content": {
@@ -334,6 +347,8 @@ Avalie em escala de 0.0 a 5.0:
 1. Content (0.0 a 5.0): Cumprimento integral da proposta, relevância das ideias, desenvolvimento e completude dos pontos pedidos.
 2. Communicative Achievement (0.0 a 5.0): Adequação ao gênero textual, registro formal/informal correto, tom e engajamento do leitor.
 
+${getAnchorExemplarsPrompt('english', 'macro')}
+
 Retorne ESTRITAMENTE um objeto JSON no seguinte formato (sem markdown, sem blocos fora do JSON):
 {
   "content": {
@@ -370,6 +385,8 @@ NÃO julgue se o aluno concordou ou discordou do tema de fundo — foque puramen
 Avalie em escala de 0.0 a 5.0:
 3. Organisation / Coesão Textual (0.0 a 5.0): Estruturação de parágrafos, conectivos inter e intraparágrafos, progressão referencial.
 4. Language / Norma-Padrão (0.0 a 5.0): Correção ortográfica, concordância verbal/nominal, regência, emprego de crase e precisão lexical.
+
+${getAnchorExemplarsPrompt('portuguese', 'micro')}
 
 Retorne ESTRITAMENTE um objeto JSON no seguinte formato (sem markdown, sem blocos fora do JSON):
 {
@@ -414,6 +431,8 @@ Avalie em escala de 0.0 a 5.0:
 3. Organisation (0.0 a 5.0): Estruturação de parágrafos, encadeamento lógico de ideias, variedade e precisão no uso de conectivos (linkers).
 4. Language (0.0 a 5.0): Amplitude de vocabulário específico do nível ${targetLevel}, controle e variedade de estruturas gramaticais, precisão sintática e erros de interferência L1 (português).
 
+${getAnchorExemplarsPrompt('english', 'micro')}
+
 Retorne ESTRITAMENTE um objeto JSON no seguinte formato (sem markdown, sem blocos fora do JSON):
 {
   "organisation": {
@@ -444,12 +463,12 @@ Retorne ESTRITAMENTE um objeto JSON no seguinte formato (sem markdown, sem bloco
         fetch('/api/agent', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ messages: [{ role: 'user', content: promptPass1 }] })
+          body: JSON.stringify({ messages: [{ role: 'user', content: promptPass1 }], temperatureMode: 'deterministic' })
         }),
         fetch('/api/agent', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ messages: [{ role: 'user', content: promptPass2 }] })
+          body: JSON.stringify({ messages: [{ role: 'user', content: promptPass2 }], temperatureMode: 'deterministic' })
         })
       ])
 
@@ -474,6 +493,35 @@ Retorne ESTRITAMENTE um objeto JSON no seguinte formato (sem markdown, sem bloco
 
       const overallScore = Number(((contentScore + commAchScore + orgScore + langScore) / 2).toFixed(1))
 
+      // ── Validação Determinística de Citações em detectedErrors ────────────────
+      // Cada 'excerpt' deve ser substring literal da redação original.
+      // Erros "inventados" pela IA (hallucination) são filtrados antes de exibição.
+      const rawErrors: Array<{
+        excerpt: string
+        correction: string
+        explanation: string
+        type: 'grammar' | 'spelling' | 'vocabulary' | 'l1_interference'
+      }> = (Array.isArray(pass2.detectedErrors) ? pass2.detectedErrors : []).map((e: any) => ({
+        excerpt: String(e.excerpt || ''),
+        correction: String(e.correction || ''),
+        explanation: String(e.explanation || ''),
+        type: (['grammar', 'spelling', 'vocabulary', 'l1_interference'].includes(e.type)
+          ? e.type
+          : 'grammar') as 'grammar' | 'spelling' | 'vocabulary' | 'l1_interference'
+      }))
+
+      const essayLower = studentEssayText.toLowerCase()
+      const validErrors = rawErrors.filter(e => {
+        if (!e.excerpt || e.excerpt.length < 3) return false
+        // Tolerância: ignora capitalização e espaços extras
+        return essayLower.includes(e.excerpt.toLowerCase().trim())
+      })
+      const phantomErrors = rawErrors.filter(e => !validErrors.includes(e))
+      if (phantomErrors.length > 0) {
+        console.warn(`[OmniGrader] ${phantomErrors.length} erro(s) hallucinated detectado(s) e removido(s):`, phantomErrors.map(e => e.excerpt))
+      }
+
+
       const combinedEvaluation = {
         overallScore,
         content: pass1.content || { score: contentScore, justification: '', strengths: [], improvements: [] },
@@ -482,10 +530,12 @@ Retorne ESTRITAMENTE um objeto JSON no seguinte formato (sem markdown, sem bloco
         language: pass2.language || { score: langScore, justification: '', strengths: [], improvements: [] },
         overallSummary: pass1.macroSummary || 'Redação avaliada com rigor psicométrico em dupla passada independente.',
         studentActionPlan: pass2.studentActionPlan || 'Praticar o uso variado de linkers e vocabulário avançado.',
-        detectedErrors: Array.isArray(pass2.detectedErrors) ? pass2.detectedErrors : []
+        detectedErrors: validErrors,
+        phantomErrorsFiltered: phantomErrors.length // Quantidade de erros hallucinated removidos
       }
 
       setEssayEvaluation(combinedEvaluation)
+
     } catch (err: any) {
       toast.success(`Erro na avaliação da redação: ${err.message || 'Tente novamente'}`)
     } finally {
@@ -591,6 +641,8 @@ ${essayEvaluation.studentActionPlan}
 
   return (
     <div style={S.page}>
+      {/* Model Capability Warning */}
+      <ModelCapabilityBanner taskLabel="Correção de Redação (OmniGrader)" />
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
         <div>

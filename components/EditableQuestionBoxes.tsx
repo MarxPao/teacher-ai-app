@@ -2,6 +2,8 @@
 import { toast, showConfirm } from '@/components/Toast'
 
 import React, { useState, useEffect, useCallback } from 'react'
+import { checkOptionParallelism } from '@/lib/itemQualityChecker'
+import { auditReadingLoad } from '@/lib/readingLoadAuditor'
 
 export interface QuestionOption {
   letter: string
@@ -18,6 +20,8 @@ export interface EditableQuestionItem {
   contextText?: string
   options?: QuestionOption[]
   answerKey?: string
+  parallelismWarning?: string
+  readingLoadWarning?: string
 }
 
 interface EditableQuestionBoxesProps {
@@ -72,6 +76,23 @@ export function parseContentToQuestions(raw: string): EditableQuestionItem[] {
       typeLabel = 'Interpretação de Texto'
     }
 
+    let parallelismWarning: string | undefined
+    if (currentOpts.length >= 2) {
+      const check = checkOptionParallelism(currentOpts.map(o => `${o.letter}) ${o.text}`))
+      if (!check.isParallel) {
+        parallelismWarning = check.warning
+      }
+    }
+
+    let readingLoadWarning: string | undefined
+    const textToAudit = currentContext.trim() || (currentStem.length > 150 ? currentStem : '')
+    if (textToAudit && textToAudit.split(/\s+/).length >= 35) {
+      const loadAudit = auditReadingLoad(textToAudit)
+      if (loadAudit.warning) {
+        readingLoadWarning = `📊 Carga de Leitura: ${loadAudit.warning}`
+      }
+    }
+
     questions.push({
       id: `q_${Date.now()}_${questions.length + 1}_${Math.random().toString(36).slice(2, 6)}`,
       number: questions.length + 1,
@@ -81,7 +102,9 @@ export function parseContentToQuestions(raw: string): EditableQuestionItem[] {
       stem: currentStem.trim(),
       contextText: currentContext.trim() || undefined,
       options: currentOpts.length > 0 ? [...currentOpts] : undefined,
-      answerKey: currentAnswer.trim() || undefined
+      answerKey: currentAnswer.trim() || undefined,
+      parallelismWarning,
+      readingLoadWarning
     })
 
     currentStem = ''
@@ -154,10 +177,13 @@ export function parseContentToQuestions(raw: string): EditableQuestionItem[] {
 // COMPILADOR DE QUESTÕES ESTRUTURADAS DE VOLTA PARA HTML FORMATADO
 // ─────────────────────────────────────────────────────────────────────────────
 
-export function compileQuestionsToHtml(questions: EditableQuestionItem[]): string {
+export function compileQuestionsToHtml(questions: EditableQuestionItem[], customTitle?: string): string {
   if (!questions || questions.length === 0) return ''
 
   let html = '<div class="generated-exam-document" style="font-family: inherit; color: #2c1a0e; line-height: 1.6;">\n'
+  if (customTitle) {
+    html += `  <h2 style="font-size: 18px; font-weight: 700; color: #2c1a0e; margin-bottom: 16px; border-bottom: 2px solid #8b5e3c; padding-bottom: 6px;">${customTitle}</h2>\n`
+  }
 
   questions.forEach((q, idx) => {
     const qNum = idx + 1
@@ -674,11 +700,49 @@ export default function EditableQuestionBoxes({
                       outline: 'none'
                     }}
                   />
+                  {q.readingLoadWarning && (
+                    <div style={{
+                      background: '#eff6ff',
+                      border: '1px solid #bfdbfe',
+                      borderRadius: 8,
+                      padding: '6px 10px',
+                      marginTop: 6,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      fontSize: 11.5,
+                      color: '#1e40af',
+                      fontWeight: 600,
+                      lineHeight: 1.4
+                    }}>
+                      <i className="ti ti-book" style={{ fontSize: 16, color: '#2563eb', flexShrink: 0 }} />
+                      <span>{q.readingLoadWarning}</span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Alternativas de Múltipla Escolha */}
                 {(q.type === 'multiple_choice' || q.type === 'true_false' || (q.options && q.options.length > 0)) && (
                   <div style={{ background: '#faf6f0', padding: 12, borderRadius: 10, border: '1px solid #ede8dc' }}>
+                    {q.parallelismWarning && (
+                      <div style={{
+                        background: '#fef3c7',
+                        border: '1px solid #fde68a',
+                        borderRadius: 8,
+                        padding: '6px 10px',
+                        marginBottom: 10,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        fontSize: 11.5,
+                        color: '#92400e',
+                        fontWeight: 600,
+                        lineHeight: 1.4
+                      }}>
+                        <i className="ti ti-alert-triangle" style={{ fontSize: 16, color: '#d97706', flexShrink: 0 }} />
+                        <span><strong>Item Writing Quality:</strong> {q.parallelismWarning}</span>
+                      </div>
+                    )}
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                       <span style={{ fontSize: 12, fontWeight: 700, color: '#8b5e3c' }}>
                         Alternativas de Resposta:

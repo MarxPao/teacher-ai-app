@@ -166,10 +166,10 @@ export default function Home() {
         const parsed = JSON.parse(rawAgenda)
         if (Array.isArray(parsed)) {
           const cleaned = parsed.filter(item => {
-            const isMockId = !item.id || item.id.startsWith('demo-') || /^c[1-7]$/.test(item.id)
-            const isMockSchool = item.schoolName === 'Colégio Integral' || item.schoolName === 'Escola Modelo' || item.school === 'Colégio Integral' || item.school === 'Escola Modelo'
+            const isLegacySeedId = !item.id || item.id.startsWith('demo-') || /^c[1-7]$/.test(item.id)
+            const isLegacySeedSchool = item.schoolName === 'Colégio Integral' || item.schoolName === 'Escola Modelo' || item.school === 'Colégio Integral' || item.school === 'Escola Modelo'
             const isLegacySample = (item.className === 'Turma Geral' || item.schoolName === 'Escola') && (item.topic === 'Verb To Be' || item.topic === 'Simple Past' || item.topic === 'Simple Past: Regular vs Irregular Verbs')
-            return !isMockId && !isMockSchool && !isLegacySample
+            return !isLegacySeedId && !isLegacySeedSchool && !isLegacySample
           })
           if (cleaned.length !== parsed.length) {
             localStorage.setItem('teacher_agenda_schedule', JSON.stringify(cleaned))

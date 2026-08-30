@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { validateReportGrounding } from '@/lib/reportGroundingValidator';
+import { logAiCall, summarize } from '@/lib/aiAuditLog';
 
 // Tipagens baseadas nos dados do app
 interface ClassData {
@@ -28,6 +30,8 @@ export default function AutoReport() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [reportContent, setReportContent] = useState<string>('');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [groundingViolations, setGroundingViolations] = useState<Array<{excerpt:string;expected:string;found:string}>>([]);
+  const [exportBlocked, setExportBlocked] = useState(false);
 
   useEffect(() => {
     // Carregar dados reais do localStorage se existirem
@@ -63,7 +67,7 @@ export default function AutoReport() {
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3000);
+    setTimeout(() => setToastMessage(null), 4000);
   };
 
   const handleGenerateReport = async () => {
@@ -74,6 +78,8 @@ export default function AutoReport() {
     
     setIsGenerating(true);
     setReportContent('');
+    setGroundingViolations([]);
+    setExportBlocked(false);
     
     const selectedClass = classes.find(c => c.id === selectedClassId);
     const classStudents = students.filter(s => s.classId === selectedClassId);
@@ -102,9 +108,11 @@ Estrutura requerida no parecer:
 3. DESTAQUES E PONTOS DE ATENÇÃO
 4. RECOMENDAÇÕES E PLANO DE AÇÃO PARA O PRÓXIMO MÊS
 
+REGRA CRÍTICA: Use EXATAMENTE os dados fornecidos acima. Não invente frequências, nomes ou métricas diferentes das fornecidas.
 Utilize tom formal, embasado e respeitoso em português.`;
 
       let text = '';
+      let rawAiResponse = '';
 
       // Tentativa 1: Via executeUnifiedAiCall com APIs configuradas no client
       try {
@@ -112,10 +120,11 @@ Utilize tom formal, embasado e respeitoso em português.`;
         const apis = getAvailableApisForSelect();
         if (apis.length > 0) {
           text = await executeUnifiedAiCall(apis[0], prompt);
+          rawAiResponse = text;
         }
       } catch {}
 
-      // Tentativa 2: Via endpoint de agente
+      // Tentativa 2: Via endpoint de agente com temperatureMode balanced
       if (!text) {
         try {
           const storedApis = JSON.parse(localStorage.getItem('teacher_apis') || '[]');
@@ -127,11 +136,13 @@ Utilize tom formal, embasado e respeitoso em português.`;
             body: JSON.stringify({
               messages: [{ role: 'user', content: prompt }],
               userKeys,
+              temperatureMode: 'balanced'
             })
           });
           if (res.ok) {
             const data = await res.json();
             text = data?.reply || data?.content || '';
+            rawAiResponse = text;
           }
         } catch {}
       }
@@ -140,20 +151,49 @@ Utilize tom formal, embasado e respeitoso em português.`;
         text = `PARECER PEDAGÓGICO MENSAL - REFERÊNCIA: ${selectedMonth}\n\n` +
         `TURMA: ${selectedClass?.name} | NÍVEL: ${selectedClass?.level || 'N/A'}\n\n` +
         `1. DESEMPENHO GERAL DA TURMA\n` +
-        `A turma demonstrou um bom engajamento nas atividades propostas. A taxa média de frequência foi de ${avgAttendance.toFixed(1)}%, indicando um nível satisfatório de assiduidade. A participação oral e a compreensão auditiva foram os pontos fortes trabalhados neste período.\n\n` +
+        `A turma demonstrou um bom engajamento nas atividades propostas. A taxa média de frequência foi de ${avgAttendance.toFixed(1)}%, indicando um nível satisfatório de assiduidade.\n\n` +
         `2. CONTEÚDOS LECIONADOS E METODOLOGIA\n` +
         `- Revisão de tempos verbais e estrutura sintática em inglês\n` +
-        `- Vocabulário temático e atividades de conversação orientada\n` +
-        `- Dinâmicas de Task-Based Learning e produção oral\n\n` +
+        `- Vocabulário temático e atividades de conversação orientada\n\n` +
         `3. DESTAQUES E PONTOS DE ATENÇÃO\n` +
         `Alunos com excelente desempenho: ${highlightStudents.map(s => s.name).join(', ') || 'Nenhum destaque específico'}.\n` +
         `Alunos que requerem acompanhamento: ${attentionStudents.map(s => s.name).join(', ') || 'Nenhum'}.\n\n` +
         `4. RECOMENDAÇÕES E PLANO DE AÇÃO PARA O PRÓXIMO MÊS\n` +
-        `Focaremos em aprimorar a produção escrita e continuaremos com os simulados de fluência, buscando elevar a confiança dos alunos.`;
+        `Focaremos em aprimorar a produção escrita e continuaremos com os simulados de fluência.`;
       }
 
+      // ── Validação Cruzada Determinística Pós-IA ───────────────────────────────
+      const groundTruth = {
+        className: selectedClass?.name || '',
+        avgAttendance,
+        highlightStudentNames: highlightStudents.map(s => s.name),
+        attentionStudentNames: attentionStudents.map(s => s.name),
+        studentCount: classStudents.length,
+        month: selectedMonth,
+      };
+
+      const groundingResult = validateReportGrounding(text, groundTruth);
+
+      // Log de auditoria
+      logAiCall({
+        module: 'AutoReport',
+        temperatureUsed: 0.4,
+        promptSummary: summarize(`Turma: ${selectedClass?.name} | Mês: ${selectedMonth} | Freq: ${avgAttendance.toFixed(1)}%`),
+        rawResponseSummary: summarize(rawAiResponse, 200),
+        parsedResult: JSON.stringify({ valid: groundingResult.isValid, violations: groundingResult.violations.length }),
+        flagged: !groundingResult.isValid,
+        flagReason: groundingResult.violations.map(v => v.found).join('; ') || undefined,
+      });
+
       setReportContent(text);
-      showToast('Parecer gerado com sucesso via IA!');
+
+      if (!groundingResult.isValid) {
+        setGroundingViolations(groundingResult.violations);
+        setExportBlocked(true);
+        showToast('⚠️ Inconsistências detectadas entre o parecer e o banco de dados. Exportação bloqueada.');
+      } else {
+        showToast('Parecer gerado e validado com sucesso via IA!');
+      }
     } catch (err) {
       console.error('AutoReport AI error:', err);
       const fallbackText = `PARECER PEDAGÓGICO MENSAL - REFERÊNCIA: ${selectedMonth}\n\nTURMA: ${selectedClass?.name}\n\n1. DESEMPENHO GERAL DA TURMA\nFrequência média de ${avgAttendance.toFixed(1)}%. Bom nível de engajamento nas práticas orais e auditivas.\n\n2. RECOMENDAÇÕES\nContinuar com dinâmicas de conversação e reforço em produção escrita.`;
@@ -300,7 +340,7 @@ Utilize tom formal, embasado e respeitoso em português.`;
              <h2 style={{ margin: '0 0 16px 0', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1.4px', color: '#c4a882' }}>Ações de Documento</h2>
              <button
               onClick={async () => {
-                if (!reportContent) return
+                if (!reportContent || exportBlocked) return
                 try {
                   const { exportElementToPdf } = await import('@/lib/exportUtils')
                   await exportElementToPdf('auto-report-paper', `parecer_${selectedClassId || 'turma'}`)
@@ -308,17 +348,17 @@ Utilize tom formal, embasado e respeitoso em português.`;
                   window.print()
                 }
               }}
-              disabled={!reportContent}
+              disabled={!reportContent || exportBlocked}
               style={{
                 width: '100%',
                 padding: '10px 14px',
-                backgroundColor: reportContent ? '#cb4b16' : 'transparent',
-                color: reportContent ? '#ffffff' : '#a08060',
-                border: 'none',
+                backgroundColor: (reportContent && !exportBlocked) ? '#cb4b16' : 'transparent',
+                color: (reportContent && !exportBlocked) ? '#ffffff' : '#a08060',
+                border: exportBlocked ? '1px solid #ffc107' : 'none',
                 borderRadius: '9px',
                 fontSize: '13.5px',
                 fontWeight: '600',
-                cursor: reportContent ? 'pointer' : 'not-allowed',
+                cursor: (reportContent && !exportBlocked) ? 'pointer' : 'not-allowed',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -378,8 +418,35 @@ Utilize tom formal, embasado e respeitoso em português.`;
            <h2 style={{ margin: '0 0 20px 0', fontSize: '1.2rem', fontFamily: "'Fraunces', Georgia, serif", display: 'flex', alignItems: 'center', gap: '8px', color: '#2c1a0e' }}>
               <i className="ti ti-file-text" style={{ color: '#3d7a4e' }}></i>
               Pré-visualização do Documento
+              {exportBlocked && (
+                <span style={{ marginLeft: 8, background: '#fff3cd', color: '#856404', border: '1px solid #ffc107', borderRadius: 8, padding: '2px 10px', fontSize: '0.75rem', fontWeight: 700 }}>
+                  ⚠️ Exportação Bloqueada
+                </span>
+              )}
             </h2>
             
+            {/* Painel de Violações de Grounding */}
+            {groundingViolations.length > 0 && (
+              <div style={{ marginBottom: 16, padding: 16, background: '#fff3cd', border: '1px solid #ffc107', borderRadius: 10, fontSize: 13 }}>
+                <strong style={{ color: '#856404', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                  <i className="ti ti-alert-triangle"></i> Inconsistências Detectadas — Revise Antes de Exportar
+                </strong>
+                {groundingViolations.map((v, idx) => (
+                  <div key={idx} style={{ marginBottom: 8, paddingLeft: 12, borderLeft: '3px solid #ffc107' }}>
+                    <div style={{ color: '#5c3d00', marginBottom: 2 }}>📄 Trecho: <em>"{v.excerpt}"</em></div>
+                    <div style={{ color: '#3d7a4e' }}>✅ Banco real: {v.expected}</div>
+                    <div style={{ color: '#a83232' }}>❌ IA escreveu: {v.found}</div>
+                  </div>
+                ))}
+                <button
+                  onClick={() => { setExportBlocked(false); setGroundingViolations([]); }}
+                  style={{ marginTop: 8, padding: '6px 14px', background: '#856404', color: '#fff', border: 'none', borderRadius: 7, cursor: 'pointer', fontSize: 12, fontWeight: 700 }}
+                >
+                  Liberar Exportação Assim Mesmo (Aceitar Risco)
+                </button>
+              </div>
+            )}
+
             <div id="auto-report-paper" style={{
               flex: 1,
               backgroundColor: '#ffffff',

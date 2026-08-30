@@ -1,7 +1,7 @@
 'use client'
 import { toast, showConfirm } from '@/components/Toast'
 
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useRef } from 'react'
 import DocumentCanvas from '@/components/DocumentCanvas'
 import ReflectionModal, { ReflectionData } from '@/components/ReflectionModal'
 import LessonProgressView from '@/components/LessonProgressView'
@@ -123,6 +123,8 @@ export default function LessonStudio() {
   const [showReflectionModal, setShowReflectionModal] = useState(false)
   const [showProgressView, setShowProgressView] = useState(false)
   const [planId, setPlanId] = useState('')
+  const planSessionStartTime = useRef<number>(Date.now())
+  const isPlanEditedByUser = useRef<boolean>(false)
 
   // ─── Carregamento Inicial ──────────────────────────────────────────────────
   useEffect(() => {
@@ -508,13 +510,16 @@ Retorne ESTRITAMENTE um objeto JSON no formato:
         homework: homework
       }))
       window.dispatchEvent(new Event('storage'))
-      // Atualiza o perfil adaptativo do professor incrementalmente
-      updateTeacherProfileFromLessonPlan({
-        methodology: selectedMethodology,
-        timingTotal: totalTiming,
-        stagesCount: stages.length,
-        hasHomework: Boolean(homework.trim())
-      })
+      // Atualiza o perfil adaptativo do professor com proteção contra falso positivo (tempo mínimo de 15s de tela ou edição explícita)
+      const reviewDurationSec = (Date.now() - planSessionStartTime.current) / 1000
+      if (isPlanEditedByUser.current || reviewDurationSec >= 15) {
+        updateTeacherProfileFromLessonPlan({
+          methodology: selectedMethodology,
+          timingTotal: totalTiming,
+          stagesCount: stages.length,
+          hasHomework: Boolean(homework.trim())
+        })
+      }
       showNotification('💾 Plano salvo com sucesso no Banco de Planejamento!')
     } catch {}
   }

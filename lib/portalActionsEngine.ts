@@ -317,6 +317,48 @@ export const DEFAULT_PORTALS: PortalProfileDef[] = [
         ]
       }
     ]
+  },
+  {
+    id: 'trello',
+    name: 'Trello Workspace',
+    shortName: 'Trello',
+    url: 'https://trello.com/',
+    matchUrl: 'trello.com',
+    icon: 'ti-layout-kanban',
+    color: '#0079bf',
+    bg: '#e6f4fb',
+    border: '#b8e1f7',
+    category: 'Produtividade & Quadros',
+    description: 'Conexão direta com quadros, listas, cartões e checklists do Trello para roteamento agêntico e gestão de tarefas.',
+    isCustom: false,
+    actions: [
+      {
+        id: 'trello_import_checklist',
+        title: 'Importar Checklists & Cartões',
+        type: 'custom',
+        description: 'Lê listas e cartões do Trello para conversão inteligente em To-Dos, Planos e Eventos.',
+        executionMode: 'supervised',
+        spokenConfirmation: 'Cartões do Trello sincronizados com sucesso!',
+        fields: [
+          {
+            fieldId: 'boardId',
+            label: 'ID do Quadro',
+            type: 'text',
+            selectors: ['input[name="board"]'],
+            semanticKeywords: ['quadro', 'board', 'kanban'],
+            description: 'Identificador do quadro Trello'
+          },
+          {
+            fieldId: 'listId',
+            label: 'ID da Lista',
+            type: 'text',
+            selectors: ['input[name="list"]'],
+            semanticKeywords: ['lista', 'coluna', 'list'],
+            description: 'Identificador da lista/coluna'
+          }
+        ]
+      }
+    ]
   }
 ]
 

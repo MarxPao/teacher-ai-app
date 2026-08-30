@@ -38,6 +38,9 @@ import {
   getAllSubjectProfiles,
   type SubjectProfile,
 } from '@/lib/subjectProfile'
+import { buildTeacherStyleSystemPrompt } from '@/lib/teacherStyleProfile'
+import { createBalancedBlueprint, generateBlueprintPromptSection } from '@/lib/testBlueprintEngine'
+import { generateIsomorphicFormB } from '@/lib/examFormTransformer'
 // Auto-registra os perfis disponíveis ao carregar o módulo
 import '@/lib/subjects/english'
 import '@/lib/subjects/portuguese'
@@ -158,6 +161,16 @@ function buildExamPrompt(opts: {
   const examLangLabel = profile.examLanguage === 'pt-BR' ? 'português' : 'inglês'
   const levelFrameworkName = profile.levelFramework.name  // ex: 'CEFR', 'Ano Escolar BNCC'
 
+  const blueprint = createBalancedBlueprint({
+    title: opts.topic || 'Avaliação',
+    subject: profile.name,
+    totalQuestions: Number(opts.questionCount) || 10,
+    topics: opts.topic ? opts.topic.split(/[,;\n]+/).map(t => t.trim()).filter(Boolean) : [opts.topic || 'Conteúdo Central'],
+    bloomDistribution: { remember: bRemember, apply: bApply, analyze: bAnalyze, evaluate: bEvaluate },
+    difficultyDistribution: { easy: dEasy, medium: dMedium, hard: dHard, challenge: dChallenge }
+  })
+  const blueprintSection = generateBlueprintPromptSection(blueprint)
+
   return `Você é um examinador sênior especialista em Psicometria Educacional e elaboração científica de itens de avaliação (Item Writing) para ${profile.name}. Crie uma PROVA COMPLETA de altíssimo rigor psicométrico e pedagógico, formatada em HTML limpo, pronta para impressão.
 ${librarySection}
 ESPECIFICAÇÕES DA PROVA:
@@ -176,6 +189,8 @@ ESPECIFICAÇÕES DA PROVA:
 ${opts.questionDistributionText ? `\n${opts.questionDistributionText}\n` : ''}
 ${opts.customPrompt ? `\nDIRETRIZES DO PROFESSOR:\n"${opts.customPrompt}"\n` : ''}
 ${methInstructions}
+${buildTeacherStyleSystemPrompt()}
+${blueprintSection}
 
 ${levelGatingRule ? `${levelGatingRule}\n` : ''}
 === 1. DISTRIBUIÇÃO COGNITIVA OBRIGATÓRIA (TAXONOMIA DE BLOOM REVISADA) ===
@@ -1162,6 +1177,32 @@ Retorne a questão reformulada no formato padrão (Enunciado, Alternativas se ap
                 >
                   <i className="ti ti-file-text"></i>
                   Exportar Word (.docx)
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!result) return
+                    const parsedQs = parseContentToQuestions(result)
+                    if (parsedQs.length === 0) {
+                      toast.warning('Nenhuma questão estruturada encontrada para transformar em Forma B.')
+                      return
+                    }
+                    const { formBQuestions, letterDistribution } = generateIsomorphicFormB(parsedQs, `${topic || 'prova'}_form_b_${Date.now()}`)
+                    const htmlB = compileQuestionsToHtml(formBQuestions, header.title ? `${header.title} (FORMA B)` : 'AVALIAÇÃO (FORMA B)')
+                    setResult(htmlB)
+                    setHeader(prev => ({ ...prev, title: prev.title.includes('FORMA B') ? prev.title : `${prev.title} (FORMA B)` }))
+                    toast.success(`✨ Forma B gerada com equivalência psicométrica exata! Gabarito balanceado (A: ${letterDistribution.A || 0}, B: ${letterDistribution.B || 0}, C: ${letterDistribution.C || 0}, D: ${letterDistribution.D || 0})`)
+                  }}
+                  style={{
+                    padding: '8px 14px', borderRadius: 10, border: '1px solid #7c3aed',
+                    background: '#f5f3ff', color: '#6d28d9', fontSize: 12.5,
+                    fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6
+                  }}
+                  title="Gera a versão B com rotação de alternativas e balanceamento de gabarito sem alterar a dificuldade"
+                >
+                  <i className="ti ti-arrows-shuffle"></i>
+                  Gerar Forma B (Isomórfica)
                 </button>
               </div>
 

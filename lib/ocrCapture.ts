@@ -27,6 +27,39 @@ export interface OcrResult {
   rawText: string
 }
 
+// ─── Confidence Score de OCR ──────────────────────────────────────────────────
+export interface OcrConfidence {
+  ratio: number       // 0.0 (totalmente ilegível) a 1.0 (totalmente legível)
+  lowConfidence: boolean
+  warning?: string
+}
+
+const LOW_CONFIDENCE_THRESHOLD = 0.80  // < 80% de chars legíveis = sinalizar revisão
+
+/**
+ * Computa um score de confiança de legibilidade do texto extraído por OCR.
+ * Detecta: runs de '?' ou '□', alta proporção de chars especiais, texto muito curto.
+ */
+export function computeOcrConfidence(text: string): OcrConfidence {
+  if (!text || text.length < 5) {
+    return { ratio: 0, lowConfidence: true, warning: 'Texto extraído muito curto ou vazio.' }
+  }
+
+  // Conta chars "ilegíveis": ?, □, ▪, caracteres de controle, excesso de símbolos
+  const illegalRuns = (text.match(/[?□▪\ufffd]{2,}/g) || []).reduce((a, m) => a + m.length, 0)
+  const specialChars = (text.match(/[^\w\s\u00C0-\u024F.,;:!?'"()\-–\/áéíóúãõâêîôûàèìòùäëïöüçñ]/g) || []).length
+  const totalIllegible = illegalRuns + Math.max(0, specialChars - text.length * 0.05)
+  const ratio = Math.max(0, Math.min(1, 1 - (totalIllegible / text.length)))
+
+  return {
+    ratio,
+    lowConfidence: ratio < LOW_CONFIDENCE_THRESHOLD,
+    warning: ratio < LOW_CONFIDENCE_THRESHOLD
+      ? `⚠️ Confiança de leitura: ${(ratio * 100).toFixed(0)}%. Revise o texto antes de aceitar o resultado — a caligrafia pode ter sido parcialmente ilegível.`
+      : undefined,
+  }
+}
+
 const OCR_PROMPT = `Analise esta imagem de material pedagógico.
 Extraia TODO o conteúdo textual e identifique questões/exercícios.
 Responda EXATAMENTE neste JSON (sem markdown):
@@ -125,7 +158,12 @@ export async function extractContentFromImage(base64: string, api: ApiConfig): P
   }
 }
 
-export async function extractTextFromImageAuto(base64: string): Promise<string> {
+export interface TextExtractionResult {
+  text: string
+  confidence: OcrConfidence
+}
+
+export async function extractTextFromImageAuto(base64: string): Promise<TextExtractionResult> {
   try {
     const apisRaw = typeof window !== 'undefined' ? localStorage.getItem('teacher_apis') : null
     let api: ApiConfig | null = null
@@ -134,32 +172,36 @@ export async function extractTextFromImageAuto(base64: string): Promise<string> 
       api = parsed.find(a => (a.provider === 'gemini' || a.provider === 'openai') && a.key) || parsed[0] || null
     }
 
+    let extractedText = ''
+
     if (api && api.key && api.provider !== 'manual') {
       const res = await extractContentFromImage(base64, api)
-      return res.rawText || ''
+      extractedText = res.rawText || ''
+    } else {
+      // Fallback: faz chamada via /api/agent com Vision (temperatureMode: deterministic para OCR)
+      const r = await fetch('/api/agent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: [{
+            role: 'user',
+            content: 'Extraia todo o texto didático, diálogos e exercícios visíveis nesta imagem de página de livro. Retorne o texto limpo e organizado.',
+            image: base64
+          }],
+          context: 'ocr_capture',
+          temperatureMode: 'deterministic'
+        })
+      })
+
+      const d = await r.json()
+      if (d.error) throw new Error(d.error)
+      extractedText = (d.content?.find((c: any) => c.type === 'text')?.text || d.text || '').trim()
     }
 
-    // Fallback: faz chamada via /api/agent com Vision
-    const r = await fetch('/api/agent', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        messages: [{
-          role: 'user',
-          content: 'Extraia todo o texto didático, diálogos e exercícios visíveis nesta imagem de página de livro. Retorne o texto limpo e organizado.',
-          image: base64
-        }],
-        context: 'ocr_capture'
-      })
-    })
-
-    const d = await r.json()
-    if (d.error) throw new Error(d.error)
-    const extracted = d.content?.find((c: any) => c.type === 'text')?.text || d.text || ''
-    return extracted.trim()
+    const confidence = computeOcrConfidence(extractedText)
+    return { text: extractedText, confidence }
   } catch (err: unknown) {
     console.error('[OCR Auto Error]:', err)
     throw new Error(err instanceof Error ? err.message : 'Falha na leitura visual da imagem.')
   }
 }
-

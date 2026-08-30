@@ -16,49 +16,97 @@ export interface OptimizedPayload {
   temperature: number
 }
 
+// ─── Sistema de Temperatura Explícita por Modo ────────────────────────────────
+/**
+ * Modos de temperatura calibrados por categoria de tarefa:
+ * - 'deterministic': Correção, pontuação, OCR, ações em portal.
+ * - 'balanced':      Diagnósticos, pareceres textuais, análises pedagógicas.
+ * - 'creative':      Geração de exercícios, planos, comunicados, conteúdo criativo.
+ */
+export type TemperatureMode = 'deterministic' | 'balanced' | 'creative'
+
+const TEMPERATURE_VALUES: Record<TemperatureMode, number> = {
+  deterministic: 0.05,
+  balanced:      0.4,
+  creative:      0.75,
+}
+
+export function resolveTemperature(mode: TemperatureMode): number {
+  return TEMPERATURE_VALUES[mode]
+}
+
+/** Mapa canônico: módulo → modo de temperatura correto. */
+export const TEMPERATURE_MODE_MAP: Record<string, TemperatureMode> = {
+  OmniGrader:           'deterministic',
+  BatchGrader:          'deterministic',
+  OcrCapture:           'deterministic',
+  MeetingClassRecorder: 'deterministic',
+  RafinhaPortalAction:  'deterministic',
+  AutoReport:           'balanced',
+  ProgressTracker:      'balanced',
+  Analytics:            'balanced',
+  Insights:             'balanced',
+  PrivateTutoring:      'balanced',
+  ParentCommunicator:   'balanced',
+  Communications:       'balanced',
+  AudioPronunciation:   'balanced',
+  RafinhaChat:          'balanced',
+  ExamBuilder:          'creative',
+  QuickGenerate:        'creative',
+  LessonStudio:         'creative',
+  DidacticSequence:     'creative',
+  TestAndWorksheets:    'creative',
+  Eventos:              'creative',
+  SubstituteMode:       'creative',
+  FlashcardMode:        'creative',
+  ReflectivePractice:   'creative',
+  MindMap:              'creative',
+  QuestionBank:         'creative',
+}
+
 /**
  * Trunca o histórico de mensagens mantendo pares de tool_use / tool_result intactos.
- * Reduz em até 75% o consumo de tokens em conversas longas.
  */
 export function pruneConversationHistory(
   messages: CanonicalMessage[],
   maxTurns: number = 8
 ): CanonicalMessage[] {
   if (messages.length <= maxTurns) return messages
-
-  // Sempre preserva as últimas N mensagens
   const slice = messages.slice(-maxTurns)
-
-  // Garante que se a primeira mensagem do slice for um tool_result sem a chamada, ajusta o corte
   const first = slice[0]
   if (first && first.role === 'user' && first.toolResults && first.toolResults.length > 0) {
-    // Pega 1 mensagem a mais para incluir o assistente correspondente
-    const expanded = messages.slice(-(maxTurns + 1))
-    return expanded
+    return messages.slice(-(maxTurns + 1))
   }
-
   return slice
 }
 
 /**
- * Define o orçamento dinâmico de tokens com base na intenção da mensagem.
+ * Define o orçamento dinâmico de tokens. Aceita temperatureMode explícito com prioridade
+ * total sobre a heurística de regex legada.
  */
-export function calculateDynamicTokens(lastUserMessage: string): { maxTokens: number; temperature: number } {
-  const lower = lastUserMessage.toLowerCase()
-
-  // Comandos simples (adicionar tarefa, navegar, checklist, confirmação)
-  if (/^adicion[ae]|naveg[ue]|vái para|cri[ae] tarefa|abra|limp[ae]|marqu[ae]/.test(lower) || lower.length < 30) {
-    return { maxTokens: 512, temperature: 0.3 }
+export function calculateDynamicTokens(
+  lastUserMessage: string,
+  temperatureMode?: TemperatureMode
+): { maxTokens: number; temperature: number } {
+  if (temperatureMode) {
+    const lower = lastUserMessage.toLowerCase()
+    const maxTokens = /crie|gere|monte|prova|exame|plano|exercício|rubrica|questão/.test(lower) ? 2500 : 1024
+    return { maxTokens, temperature: resolveTemperature(temperatureMode) }
   }
 
-  // Geração de provas, planos de aula ou exercícios ELT
+  const lower = lastUserMessage.toLowerCase()
+  // Geração de provas, planos ou exercícios
   if (/crie|gere|monte|prova|exame|plano de aula|exercício|rubrica|questão|exam|exercise/.test(lower)) {
     return { maxTokens: 2500, temperature: 0.7 }
   }
-
-  // Chat padrão / respostas do dia a dia
+  // Comandos curtos ou ações simples
+  if (/^adicion[ae]|naveg[ue]|vái para|cri[ae] tarefa|abra|limp[ae]|marqu[ae]/.test(lower) || lower.length < 30) {
+    return { maxTokens: 512, temperature: 0.3 }
+  }
   return { maxTokens: 1024, temperature: 0.6 }
 }
+
+
 
 /**
  * Otimiza o texto enviado para síntese de voz (ElevenLabs / OpenAI TTS).

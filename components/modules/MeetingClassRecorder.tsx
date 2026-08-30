@@ -239,12 +239,24 @@ export default function MeetingClassRecorder() {
       setRecords(updatedRecords);
       localStorage.setItem('teacher_meeting_diaries', JSON.stringify(updatedRecords));
 
-      // Extração automática de menções a alunos para a memória viva
+      // Extração de menções a alunos — exige confirmação do professor antes de gravar na memória
       try {
+        const reportHighlights = (newRecord.report?.studentHighlights || []);
         const reportSummary = newRecord.report?.summary || '';
-        const reportHighlights = (newRecord.report?.studentHighlights || []).join('\n');
-        const combinedText = `${newRecord.title}\n${reportSummary}\n${reportHighlights}\n${newRecord.rawText}`;
-        extractAndRecordMeetingStudentMentions(combinedText, newRecord.title);
+
+        if (reportHighlights.length > 0) {
+          // Monta lista legível de menções para o professor revisar
+          const mentionsPreview = reportHighlights.slice(0, 5).map((h, i) => `${i + 1}. ${h}`).join('\n');
+          const confirmed = await showConfirm({
+            message: `📝 A IA identificou ${reportHighlights.length} menção(ões) a alunos nesta ata:\n\n${mentionsPreview}\n\nDeseja registrar estas menções na memória de longo prazo dos alunos?`
+          });
+
+
+          if (confirmed) {
+            const combinedText = `${newRecord.title}\n${reportSummary}\n${reportHighlights.join('\n')}\n${newRecord.rawText}`;
+            extractAndRecordMeetingStudentMentions(combinedText, newRecord.title);
+          }
+        }
       } catch {}
 
       setSelectedRecord(newRecord);
@@ -290,7 +302,8 @@ Responda APENAS um objeto JSON estrito com o seguinte formato:
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          messages: [{ role: 'user', content: prompt }]
+          messages: [{ role: 'user', content: prompt }],
+          temperatureMode: 'deterministic'
         })
       });
       const data = await res.json();

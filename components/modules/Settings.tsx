@@ -19,6 +19,7 @@ import { getGlobalDocumentPrefs, saveGlobalDocumentPrefs, DocumentStylePrefs } f
 import { getCurrentUser, signOut } from '@/lib/supabaseAuth'
 import { getAllSubjectProfiles, getSubjectProfile } from '@/lib/subjectProfile'
 import { saveTeacherStyleProfile } from '@/lib/teacherStyleProfile'
+import { getAuditLog, clearAuditLog, AiAuditEntry } from '@/lib/aiAuditLog'
 import DatabaseStatusBadge from '@/components/DatabaseStatusBadge'
 import SharedDatabaseConsentModal from '@/components/SharedDatabaseConsentModal'
 import { isCustomSupabaseConfigured } from '@/lib/databaseConsent'
@@ -75,8 +76,10 @@ export default function Settings() {
 
   // Trilha de Auditoria
   const [auditLogs, setAuditLogs] = useState<PortalActionLogRecord[]>([])
+  const [aiAuditLogs, setAiAuditLogs] = useState<AiAuditEntry[]>([])
   const [consentRecord, setConsentRecord] = useState<PortalConsentRecord | null>(null)
   const [selectedLogDetail, setSelectedLogDetail] = useState<{ id: string; decrypted: string } | null>(null)
+  const [selectedAiLogDetail, setSelectedAiLogDetail] = useState<string | null>(null)
   const [loadingLogs, setLoadingLogs] = useState(false)
 
   const loadAuditData = useCallback(async () => {
@@ -84,6 +87,8 @@ export default function Settings() {
     try {
       const logs = await getPortalActionLogs()
       setAuditLogs(logs)
+      const aiLogs = getAuditLog()
+      setAiAuditLogs(aiLogs)
       const consent = getPortalConsentRecord()
       setConsentRecord(consent)
     } finally {
@@ -179,12 +184,21 @@ export default function Settings() {
     URL.revokeObjectURL(url)
   }
 
-  /* Limpar Logs de Auditoria */
+  /* Limpar Logs de Auditoria de Portais */
   async function handlePurgeAudit() {
     if ((await showConfirm({ message: 'Deseja limpar todo o histórico da Trilha de Auditoria de Ações em Portais?' }))) {
       await purgePortalActionLogs()
       await loadAuditData()
       setSelectedLogDetail(null)
+    }
+  }
+
+  /* Limpar Logs de Auditoria de Chamadas IA */
+  async function handlePurgeAiAudit() {
+    if ((await showConfirm({ message: 'Deseja limpar todo o registro de auditoria de chamadas de IA?' }))) {
+      clearAuditLog()
+      await loadAuditData()
+      setSelectedAiLogDetail(null)
     }
   }
 
@@ -771,6 +785,99 @@ export default function Settings() {
             )}
           </ModuleCard>
 
+          {/* Trilha de Auditoria de Chamadas de IA (Domesticação) */}
+          <ModuleCard title="Trilha de Auditoria IA (Chamadas Críticas)" icon="ti-brain" style={{ marginBottom: 20 }}>
+            <p style={{ fontSize: 12.5, color: '#7a5c42', margin: '0 0 14px', lineHeight: 1.5 }}>
+              Registro de todas as chamadas de IA classificadas como críticas (OmniGrader, BatchGrader, AutoReport, MeetingClassRecorder). Armazena metadados, temperatura utilizada, validações determinísticas e respostas brutas resumidas para inspeção pós-fato sem expor dados integrais do aluno.
+            </p>
+
+            {aiAuditLogs.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '30px 10px', color: '#665c54', background: '#faf6f0', borderRadius: 10, fontSize: 13 }}>
+                🤖 Nenhuma chamada crítica de IA auditada ainda nesta sessão. Conforme você corrigir redações ou gerar pareceres, os registros aparecerão aqui.
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {aiAuditLogs.map(log => (
+                  <div
+                    key={log.id}
+                    style={{
+                      background: '#faf6f0',
+                      border: log.flagged ? '1px solid #f59e0b' : '1px solid #d5c8bb',
+                      borderRadius: 10,
+                      padding: '12px 16px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 6
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 6 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ fontWeight: 800, color: '#2c1a0e', fontSize: 13.5 }}>
+                          {log.module}
+                        </span>
+                        <span style={{
+                          fontSize: 11,
+                          fontWeight: 700,
+                          padding: '2px 7px',
+                          borderRadius: 6,
+                          background: '#e0e7ff',
+                          color: '#3730a3'
+                        }}>
+                          Temp: {log.temperatureUsed}
+                        </span>
+                        {log.flagged && (
+                          <span style={{
+                            fontSize: 11,
+                            fontWeight: 700,
+                            padding: '2px 7px',
+                            borderRadius: 6,
+                            background: '#fef3c7',
+                            color: '#92400e',
+                            border: '1px solid #fcd34d'
+                          }}>
+                            ⚠️ Revisão / Flag
+                          </span>
+                        )}
+                      </div>
+
+                      <span style={{ fontSize: 11, color: '#665c54' }}>
+                        {new Date(log.timestamp).toLocaleString('pt-BR')}
+                      </span>
+                    </div>
+
+                    <div style={{ fontSize: 12.5, color: '#2c1a0e' }}>
+                      <strong>Contexto:</strong> {log.promptSummary}
+                    </div>
+
+                    {log.flagReason && (
+                      <div style={{ fontSize: 12, color: '#b45309', background: '#fffbeb', padding: '4px 8px', borderRadius: 6 }}>
+                        <strong>Motivo do Flag:</strong> {log.flagReason}
+                      </div>
+                    )}
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
+                      <span style={{ fontSize: 11, color: '#665c54' }}>
+                        Resultado: <code style={{ background: '#e8ded4', padding: '1px 5px', borderRadius: 4 }}>{log.parsedResult}</code>
+                      </span>
+                      <button
+                        onClick={() => setSelectedAiLogDetail(selectedAiLogDetail === log.id ? null : log.id)}
+                        style={{ background: 'transparent', border: 'none', color: '#8b5e3c', fontSize: 11.5, fontWeight: 700, cursor: 'pointer', padding: 0 }}
+                      >
+                        {selectedAiLogDetail === log.id ? '▲ Ocultar Resposta' : '▼ Ver Resposta Bruta'}
+                      </button>
+                    </div>
+
+                    {selectedAiLogDetail === log.id && (
+                      <div style={{ background: '#fff', border: '1px solid #d5c8bb', borderRadius: 8, padding: '10px 12px', marginTop: 6, fontSize: 12, fontFamily: 'monospace', whiteSpace: 'pre-wrap', color: '#2c1a0e', maxHeight: 180, overflowY: 'auto' }}>
+                        {log.rawResponseSummary}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </ModuleCard>
+
           {/* Retenção de Dados & Expurgo (Decisão D3: B) */}
           <ModuleCard title="Política de Retenção & Expurgo de Logs" icon="ti-trash" style={{ marginBottom: 20 }}>
             <p style={{ fontSize: 12.5, color: '#7a5c42', margin: '0 0 12px', lineHeight: 1.5 }}>
@@ -781,12 +888,19 @@ export default function Settings() {
                 onClick={handlePurgeAudit}
                 style={{ padding: '9px 16px', borderRadius: 8, border: '1px solid #dc2626', background: '#fee2e2', color: '#dc2626', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
               >
-                <i className="ti ti-trash" /> Limpar Histórico de Auditoria
+                <i className="ti ti-trash" /> Limpar Auditoria de Portais
+              </button>
+              <button
+                onClick={handlePurgeAiAudit}
+                style={{ padding: '9px 16px', borderRadius: 8, border: '1px solid #b45309', background: '#fef3c7', color: '#92400e', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+              >
+                <i className="ti ti-trash" /> Limpar Auditoria IA
               </button>
             </div>
           </ModuleCard>
         </div>
       )}
+
 
       {/* -- ABA 3: PRIVACIDADE, LGPD & BACKUP -- */}
       {activeTab === 'privacy' && (

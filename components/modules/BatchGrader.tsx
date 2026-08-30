@@ -1,5 +1,8 @@
 'use client';
 import { toast, showConfirm } from '@/components/Toast'
+import { logAiCall, summarize } from '@/lib/aiAuditLog'
+import { getAnchorExemplarsPrompt } from '@/lib/rubrics/anchorExemplars'
+import ModelCapabilityBanner from '@/components/ModelCapabilityBanner'
 
 import React, { useState, useEffect, CSSProperties, useRef } from 'react';
 
@@ -23,10 +26,12 @@ interface Submission {
   studentName: string;
   content: string;
   fileName?: string;
-  status: 'pending' | 'grading' | 'done';
+  status: 'pending' | 'grading' | 'done' | 'needs_review';
   grade?: number;
   feedback?: string;
   justification?: string;
+  rawAiResponse?: string;    // Resposta bruta da IA — trilha de auditoria
+  reviewReason?: string;     // Motivo pelo qual foi sinalizado para revisão manual
 }
 
 interface Toast {
@@ -431,6 +436,7 @@ export default function BatchGrader() {
     setSubmissions(submissions.filter(sub => sub.id !== id));
   };
 
+
   const startBatchGrading = async () => {
     const pendingCount = submissions.filter(s => s.status === 'pending').length;
     if (pendingCount === 0) {
@@ -439,7 +445,7 @@ export default function BatchGrader() {
     }
 
     setIsGrading(true);
-    showToast('Iniciando correção em lote com IA...', 'info');
+    showToast('Iniciando correção em lote com IA (2 passos)...', 'info');
 
     for (let i = 0; i < submissions.length; i++) {
       if (submissions[i].status !== 'pending') continue;
@@ -450,64 +456,144 @@ export default function BatchGrader() {
         return copy;
       });
 
-      let finalGrade = 0;
+      let finalGrade: number | undefined = undefined;
       let justification = 'Aguardando avaliação manual do professor.';
       let feedback = 'Feedback pendente.';
+      let rawAiResponse = '';
+      let needsReview = false;
+      let reviewReason = '';
 
       try {
-        const subContent = submissions[i].content || `Resposta do aluno ${submissions[i].studentName}`;
-        const activeRubricNames = Object.keys(rubric).join(', ');
-        
-        const prompt = `Você é a Rafinha OmniGrader do TeacherAI. Avalie esta resposta/redação em inglês do aluno ${submissions[i].studentName}:
+        const subContent = submissions[i].content?.trim() || '';
+
+        // ── PASSO A: Extração Determinística da Resposta do Aluno ──────────────
+        const promptPassA = `Você é um sistema de extração de dados pedagógicos.
+Analise o texto abaixo (resposta de aluno, pode conter OCR de manuscrito):
 
 """
-${subContent}
+${subContent || '(texto vazio — sem resposta detectada)'}
 """
 
-Rubricas ativas: ${activeRubricNames || 'Gramática, Vocabulário, Coesão'}
-Nota Máxima: ${maxGrade}
+Sua única tarefa: extraia APENAS o conteúdo substantivo da resposta do aluno (remova cabeçalhos, nome, turma, data, gabarito impresso).
+Se o texto estiver vazio, ilegível ou for impossível identificar a resposta, responda APENAS: {"extractedAnswer": null, "confidence": "low", "reason": "texto vazio ou ilegível"}
 
-Responda APENAS um objeto JSON no formato:
-{
-  "grade": number (entre 0 e ${maxGrade}),
-  "justification": "justificativa pedagógica curta em português",
-  "feedback": "feedback encorajador em inglês para o aluno"
-}`;
+Responda APENAS um JSON válido:
+{"extractedAnswer": "resposta limpa do aluno ou null", "confidence": "high" | "medium" | "low", "reason": "breve justificativa"}`;
 
-        const res = await fetch('/api/agent', {
+        const resA = await fetch('/api/agent', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            messages: [{ role: 'user', content: prompt }]
+            messages: [{ role: 'user', content: promptPassA }],
+            temperatureMode: 'deterministic'
           })
         });
-        const data = await res.json();
-        const rawReply = data?.reply || data?.content || '';
-        const jsonMatch = rawReply.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          const parsed = JSON.parse(jsonMatch[0]);
-          if (typeof parsed.grade === 'number') {
-            finalGrade = Math.min(maxGrade, Math.max(0, Math.round(parsed.grade)));
-            justification = parsed.justification || justification;
-            feedback = parsed.feedback || feedback;
+        const dataA = await resA.json();
+        const rawA = dataA?.reply || dataA?.content || '';
+        rawAiResponse += `[PASSO A]\n${rawA}\n\n`;
+
+        const matchA = rawA.match(/\{[\s\S]*\}/);
+        if (!matchA) {
+          needsReview = true;
+          reviewReason = 'Passo A: resposta da IA fora do formato JSON esperado.';
+        } else {
+          const parsedA = JSON.parse(matchA[0]);
+
+          if (!parsedA.extractedAnswer || parsedA.confidence === 'low') {
+            needsReview = true;
+            reviewReason = `Passo A: conteúdo ambíguo ou ilegível (confiança: ${parsedA.confidence}). Motivo: ${parsedA.reason || 'desconhecido'}`;
+          } else {
+            // ── PASSO B: Pontuação com Âncoras e Rubrica ────────────────────────
+            const activeRubricNames = Object.keys(rubric).join(', ');
+            const anchorSection = getAnchorExemplarsPrompt('english', 'macro');
+
+            const promptPassB = `Você é a Rafinha OmniGrader do TeacherAI — avaliador especialista em produção textual em inglês.
+
+RESPOSTA EXTRAÍDA DO ALUNO ${submissions[i].studentName}:
+"""
+${parsedA.extractedAnswer}
+"""
+
+RUBRICAS ATIVAS: ${activeRubricNames || 'Gramática, Vocabulário, Coesão, Tema'}
+NOTA MÁXIMA: ${maxGrade}
+
+${anchorSection}
+
+REGRAS OBRIGATÓRIAS:
+1. Use as âncoras acima para calibrar sua régua avaliativa — NÃO derive da escala estabelecida.
+2. "grade" DEVE ser um número entre 0 e ${maxGrade}, com no máximo 1 casa decimal.
+3. "justification" deve citar especificamente o que foi observado na resposta do aluno.
+4. "feedback" deve ser encorajador, em inglês, dirigido ao aluno.
+5. Responda APENAS JSON válido, sem markdown, sem texto fora do objeto.
+
+{"grade": number, "justification": "justificativa pedagógica em português", "feedback": "feedback em inglês para o aluno"}`;
+
+            const resB = await fetch('/api/agent', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                messages: [{ role: 'user', content: promptPassB }],
+                temperatureMode: 'deterministic'
+              })
+            });
+            const dataB = await resB.json();
+            const rawB = dataB?.reply || dataB?.content || '';
+            rawAiResponse += `[PASSO B]\n${rawB}`;
+
+            const matchB = rawB.match(/\{[\s\S]*\}/);
+            if (!matchB) {
+              needsReview = true;
+              reviewReason = 'Passo B: resposta da IA fora do formato JSON esperado.';
+            } else {
+              const parsedB = JSON.parse(matchB[0]);
+              const rawGrade = Number(parsedB.grade);
+
+              if (isNaN(rawGrade) || rawGrade < 0 || rawGrade > maxGrade) {
+                needsReview = true;
+                reviewReason = `Passo B: nota retornada (${parsedB.grade}) fora do range esperado (0–${maxGrade}).`;
+              } else {
+                finalGrade = Math.round(rawGrade * 10) / 10;
+                justification = parsedB.justification || justification;
+                feedback = parsedB.feedback || feedback;
+              }
+            }
           }
         }
       } catch (err) {
         console.error('Batch Grading AI error:', err);
+        needsReview = true;
+        reviewReason = `Erro de rede ou parse: ${err instanceof Error ? err.message : 'desconhecido'}`;
       }
+
+      logAiCall({
+        module: 'BatchGrader',
+        temperatureUsed: 0.05,
+        promptSummary: summarize(`Aluno: ${submissions[i].studentName} | Nota máx: ${maxGrade}`),
+        rawResponseSummary: summarize(rawAiResponse, 200),
+        parsedResult: JSON.stringify({ grade: finalGrade, needsReview, reviewReason }),
+        flagged: needsReview,
+        flagReason: reviewReason || undefined,
+      });
 
       setSubmissions(prev => {
         const copy = [...prev];
-        copy[i].status = 'done';
+        copy[i].status = needsReview ? 'needs_review' : 'done';
         copy[i].grade = finalGrade;
         copy[i].justification = justification;
         copy[i].feedback = feedback;
+        copy[i].rawAiResponse = rawAiResponse.slice(0, 500);
+        copy[i].reviewReason = reviewReason || undefined;
         return copy;
       });
     }
 
+    const reviewCount = submissions.filter(s => s.status === 'needs_review').length;
     setIsGrading(false);
-    showToast('Correção em lote concluída com IA!', 'success');
+    if (reviewCount > 0) {
+      showToast(`Correção concluída. ⚠️ ${reviewCount} submissão(ões) requerem revisão manual.`, 'info');
+    } else {
+      showToast('Correção em lote concluída com IA!', 'success');
+    }
   };
 
   const syncWithGradebook = () => {
@@ -550,6 +636,7 @@ Responda APENAS um objeto JSON no formato:
 
   return (
     <div style={styles.container}>
+      <ModelCapabilityBanner taskLabel="Correção em Lote" />
       <div style={styles.header}>
         <div>
           <h1 style={styles.title}>
@@ -728,25 +815,34 @@ Responda APENAS um objeto JSON no formato:
                         {sub.status === 'pending' && <span style={styles.badgePending}><i className="ti ti-clock"></i> Pendente</span>}
                         {sub.status === 'grading' && <span style={styles.badgeGrading}><i className="ti ti-loader"></i> Corrigindo</span>}
                         {sub.status === 'done' && <span style={styles.badgeDone}><i className="ti ti-check"></i> Concluído</span>}
+                        {sub.status === 'needs_review' && (
+                          <span title={sub.reviewReason || 'Revisar manualmente'} style={{ display:'inline-flex', alignItems:'center', gap:4, background:'#fff3cd', color:'#856404', border:'1px solid #ffc107', borderRadius:8, padding:'2px 8px', fontSize:'0.78rem', fontWeight:700, cursor:'help' }}>
+                            <i className="ti ti-alert-triangle"></i> Revisão Manual
+                          </span>
+                        )}
                       </td>
                       <td style={styles.td}>
                         {sub.grade !== undefined ? (
                           <strong style={{ color: colors.success, fontSize: '1.1rem' }}>
                             {sub.grade.toFixed(1)} <span style={{ fontSize: '0.8rem', color: colors.textMuted }}>/ {maxGrade}</span>
                           </strong>
+                        ) : sub.status === 'needs_review' ? (
+                          <span style={{ color: colors.warning, fontSize: '0.8rem' }}>⚠️ Ver motivo</span>
                         ) : (
                           <span style={{ color: colors.textMuted }}>--</span>
                         )}
                       </td>
                       <td style={styles.td}>
                         <div style={{ display: 'flex', gap: '0.5rem' }}>
-                          {sub.status === 'done' && (
+                          {(sub.status === 'done' || sub.status === 'needs_review') && (
                             <button 
-                              title="Ver Feedback"
+                              title={sub.status === 'needs_review' ? `Motivo: ${sub.reviewReason}` : 'Ver Feedback'}
                               style={{ ...styles.buttonOutline, padding: '0.4rem' }}
-                              onClick={() => toast.success(`Feedback para ${getDisplayName(sub.studentName)}:\n\nNota: ${sub.grade}/${maxGrade}\n\nJustificativa: ${sub.justification}\n\nFeedback Aluno: ${sub.feedback}`)}
+                              onClick={() => toast.success(sub.status === 'needs_review'
+                                ? `⚠️ Revisão Manual — ${getDisplayName(sub.studentName)}\n\nMotivo: ${sub.reviewReason}\n\nResponda bruta (truncada): ${sub.rawAiResponse?.slice(0,200) || 'N/A'}`
+                                : `Feedback para ${getDisplayName(sub.studentName)}:\n\nNota: ${sub.grade}/${maxGrade}\n\nJustificativa: ${sub.justification}\n\nFeedback Aluno: ${sub.feedback}`)}
                             >
-                              <i className="ti ti-eye"></i>
+                              <i className={sub.status === 'needs_review' ? 'ti ti-alert-circle' : 'ti ti-eye'}></i>
                             </button>
                           )}
                           <button 

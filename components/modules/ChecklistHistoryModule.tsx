@@ -19,6 +19,7 @@ import {
   getTodayKey,
   isDateInPeriod,
 } from '@/lib/checklistManager'
+import TrelloImportModal from '@/components/modules/TrelloImportModal'
 import { COLOR, FONT, TEXT, RADIUS, SHADOW, BORDER, TRANSITION } from '@/styles/tokens'
 
 const PERIOD_LABELS: { id: ChecklistPeriod; label: string; icon: string; desc: string }[] = [
@@ -39,6 +40,7 @@ export default function ChecklistHistoryModule() {
   const [viewMode, setViewMode] = useState<'active' | 'history'>('active')
   const [filterCategory, setFilterCategory] = useState<'all' | 'recurrent' | 'one_off' | 'system_ai'>('all')
   const [searchTerm, setSearchTerm] = useState('')
+  const [isTrelloModalOpen, setIsTrelloModalOpen] = useState(false)
 
   // Formulário de Nova Tarefa
   const [newText, setNewText] = useState('')
@@ -451,26 +453,50 @@ export default function ChecklistHistoryModule() {
           )}
 
           {viewMode === 'active' && (
-            <button
-              onClick={handleClearCompleted}
-              title="Limpar tarefas concluídas da lista ativa"
-              style={{
-                padding: '7px 14px',
-                borderRadius: RADIUS.md,
-                border: `1px solid ${BORDER.medium}`,
-                background: COLOR.surface1,
-                color: COLOR.paperWarm,
-                fontSize: TEXT.caption,
-                fontWeight: 600,
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 5,
-                fontFamily: FONT.sans,
-              }}
-            >
-              <i className="ti ti-check" /> Limpar Concluídas
-            </button>
+            <>
+              <button
+                onClick={() => setIsTrelloModalOpen(true)}
+                title="Importar tarefas e checklists do Trello"
+                style={{
+                  padding: '7px 14px',
+                  borderRadius: RADIUS.md,
+                  border: '1px solid #0079bf',
+                  background: '#0079bf',
+                  color: '#ffffff',
+                  fontSize: TEXT.caption,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 5,
+                  fontFamily: FONT.sans,
+                  boxShadow: '0 2px 6px rgba(0, 121, 191, 0.25)'
+                }}
+              >
+                <i className="ti ti-layout-kanban" /> Importar Trello
+              </button>
+
+              <button
+                onClick={handleClearCompleted}
+                title="Limpar tarefas concluídas da lista ativa"
+                style={{
+                  padding: '7px 14px',
+                  borderRadius: RADIUS.md,
+                  border: `1px solid ${BORDER.medium}`,
+                  background: COLOR.surface1,
+                  color: COLOR.paperWarm,
+                  fontSize: TEXT.caption,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 5,
+                  fontFamily: FONT.sans,
+                }}
+              >
+                <i className="ti ti-check" /> Limpar Concluídas
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -782,6 +808,13 @@ export default function ChecklistHistoryModule() {
           </div>
         </ModuleCard>
       )}
+
+      {/* Modal de Importação do Trello */}
+      <TrelloImportModal
+        isOpen={isTrelloModalOpen}
+        onClose={() => setIsTrelloModalOpen(false)}
+        onImportSuccess={() => loadData()}
+      />
     </div>
   )
 }

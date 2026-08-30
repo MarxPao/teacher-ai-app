@@ -52,7 +52,8 @@ export const ALL_PORTALS = [
   { id: 'plural', platform: 'plural', name: 'Plural (SOMOS)', color: '#cb4b16', url: 'https://www.plural.net/', category: 'LMS & Atividades', desc: 'Portal de tarefas online' },
   { id: 'cambridge', platform: 'cambridge', name: 'Cambridge One', color: '#268bd2', url: 'https://www.cambridgeone.org/', category: 'ELT', desc: 'Portal oficial Cambridge' },
   { id: 'teams', platform: 'teams', name: 'Microsoft Teams', color: '#6c71c4', url: 'https://teams.microsoft.com/', category: 'Colaboração', desc: 'Ambiente escolar Teams' },
-  { id: 'canva', platform: 'canva', name: 'Canva Studio & Connect', color: '#00c4cc', url: 'https://www.canva.com/projects', category: 'Design', desc: 'Estúdio de design' }
+  { id: 'canva', platform: 'canva', name: 'Canva Studio & Connect', color: '#00c4cc', url: 'https://www.canva.com/projects', category: 'Design', desc: 'Estúdio de design' },
+  { id: 'trello', platform: 'trello', name: 'Trello Workspace', color: '#0079bf', url: 'https://trello.com/', category: 'Produtividade & Quadros', desc: 'Quadros, listas e checklists pedagógicos' }
 ]
 
 /**

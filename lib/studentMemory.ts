@@ -77,13 +77,18 @@ export function summarizeProgressively(memory: StudentMemory): StudentMemory {
     const oldObservations = updatedMemory.observations.slice(HOT_OBSERVATIONS_KEEP_COUNT)
 
     const categoriesCount: Record<string, number> = {}
-    const keyNotes: string[] = []
+    const pedagogicalHighlights: string[] = []
+
+    // Padrões semânticos de relevância pedagógica (desafios, evolução, comportamento, engajamento)
+    const semanticPattern = /atenção|dificuldade|excelente|falta|resistência|recusa|ansiedade|liderança|participação|colaboração|conflito|desmotivado|desatento|descompromisso|erro\s+recorrente|não\s+assimilou|confunde|travou|hesitação|lacuna|reforço|apoio|progresso|evolução|dominou|superou|destaque|autônomo|facilidade|proativo|fluência|interferência|bloqueio/i
 
     oldObservations.forEach(obs => {
       const cat = obs.category || 'Geral'
       categoriesCount[cat] = (categoriesCount[cat] || 0) + 1
-      if (obs.note.includes('Atenção') || obs.note.includes('dificuldade') || obs.note.includes('Excelente') || obs.note.includes('falta')) {
-        keyNotes.push(`${obs.date}: ${obs.note}`)
+
+      // Se a nota contiver qualquer marcador de sinal pedagógico ou for uma observação substancial (> 25 caracteres)
+      if (semanticPattern.test(obs.note) || obs.note.trim().length > 30) {
+        pedagogicalHighlights.push(`${obs.date}: ${obs.note}`)
       }
     })
 
@@ -92,7 +97,12 @@ export function summarizeProgressively(memory: StudentMemory): StudentMemory {
       .map(([cat, count]) => `${cat} (${count}x)`)
       .join(', ')
 
-    const newSummaryChunk = `[Histórico de Observações]: ${oldObservations.length} registros consolidados. Foco: ${topCategories || 'Rotina'}.${keyNotes.length > 0 ? ` Destaques: ${keyNotes.slice(0, 3).join(' | ')}` : ''}`
+    // Se nenhuma nota específica disparou o regex, usa as observações mais recentes arquivadas
+    const selectedHighlights = pedagogicalHighlights.length > 0 
+      ? pedagogicalHighlights.slice(0, 4)
+      : oldObservations.slice(0, 3).map(o => `${o.date}: ${o.note}`)
+
+    const newSummaryChunk = `[Histórico de Observações]: ${oldObservations.length} registros consolidados. Foco: ${topCategories || 'Rotina'}.${selectedHighlights.length > 0 ? ` Destaques: ${selectedHighlights.join(' | ')}` : ''}`
 
     updatedMemory.summary = updatedMemory.summary
       ? `${updatedMemory.summary}\n${newSummaryChunk}`
@@ -319,15 +329,79 @@ export function extractAndRecordMeetingStudentMentions(
   }
 }
 
+export interface StudentTrajectoryAnalysis {
+  status: 'ascensao' | 'queda_recente' | 'estavel' | 'inicial'
+  trajectoryLabel: string
+  recentAvg: number
+  historicalAvg: number
+  delta: number
+}
+
+/**
+ * Calcula a trajetória longitudinal e momentum pedagógico do aluno
+ * Protege contra viés de recência: contextualiza variações pontuais contra o histórico global.
+ */
+export function calculateStudentTrajectory(mem: StudentMemory): StudentTrajectoryAnalysis {
+  const allExams = [...mem.examHistory, ...(mem.coldExams || [])]
+  if (allExams.length < 2) {
+    return {
+      status: 'inicial',
+      trajectoryLabel: 'Histórico longitudinal em formação',
+      recentAvg: allExams[0]?.score || 0,
+      historicalAvg: allExams[0]?.score || 0,
+      delta: 0
+    }
+  }
+
+  const recent = mem.examHistory.slice(0, 3)
+  const historical = allExams.slice(recent.length)
+
+  const recentAvg = Number((recent.reduce((acc, e) => acc + e.score, 0) / recent.length).toFixed(1))
+  const historicalAvg = historical.length > 0
+    ? Number((historical.reduce((acc, e) => acc + e.score, 0) / historical.length).toFixed(1))
+    : recentAvg
+
+  const delta = Number((recentAvg - historicalAvg).toFixed(1))
+
+  if (delta >= 1.0) {
+    return {
+      status: 'ascensao',
+      trajectoryLabel: `Em ascensão pedagógica (+${delta} pts recentes vs média histórica ${historicalAvg})`,
+      recentAvg,
+      historicalAvg,
+      delta
+    }
+  } else if (delta <= -1.2) {
+    return {
+      status: 'queda_recente',
+      trajectoryLabel: `Atenção: Queda atípica recente (${delta} pts vs histórico anterior ${historicalAvg}) — investigar oscilação pontual`,
+      recentAvg,
+      historicalAvg,
+      delta
+    }
+  }
+
+  return {
+    status: 'estavel',
+    trajectoryLabel: `Desempenho estável e consistente (Média ~${recentAvg}/10)`,
+    recentAvg,
+    historicalAvg,
+    delta
+  }
+}
+
 /**
  * Gera um resumo condensado de memória para um aluno — usado no contexto da Rafinha
- * Inclui síntese consolidada + observações recentes + notas recentes
+ * Inclui síntese consolidada + trajetória longitudinal + observações recentes + notas
  */
 export function getStudentMemorySummary(studentId: string): string {
   const mem = getStudentMemory(studentId)
   if (!mem) return ''
 
   const parts: string[] = []
+
+  const trajectory = calculateStudentTrajectory(mem)
+  parts.push(`Trajetória Longitudinal: ${trajectory.trajectoryLabel}`)
 
   if (mem.summary) {
     parts.push(`Síntese Histórica:\n${mem.summary}`)
@@ -361,9 +435,15 @@ export function buildMemoryContext(): string {
 
   const alerts: string[] = []
   all.forEach(mem => {
+    const trajectory = calculateStudentTrajectory(mem)
     const recentLow = mem.examHistory.find(e => e.score < 6.0)
     const infreq = mem.observations.find(o => o.category === 'Frequência')
-    if (recentLow || infreq || mem.summary) {
+
+    if (trajectory.status === 'queda_recente') {
+      alerts.push(`${mem.studentName}: [Queda Recente] ${trajectory.trajectoryLabel}`)
+    } else if (trajectory.status === 'ascensao') {
+      alerts.push(`${mem.studentName}: [Evolução] ${trajectory.trajectoryLabel}`)
+    } else if (recentLow || infreq || mem.summary) {
       const detail = recentLow ? `Dificuldade em ${recentLow.topic} (Nota ${recentLow.score})` : infreq ? infreq.note : 'Acompanhamento registrado'
       alerts.push(`${mem.studentName}: ${detail}`)
     }

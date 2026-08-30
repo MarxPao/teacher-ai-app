@@ -7,6 +7,10 @@
  * 3. Prompt Augmentation: Formata trechos recuperados para injeção direta nos prompts do ExamBuilder, LessonStudio e Rafinha.
  */
 
+import { getSubjectProfileById, getSubjectProfile } from '@/lib/subjectProfile'
+import '@/lib/subjects/english'
+import '@/lib/subjects/portuguese'
+
 export interface DocumentChunk {
   id: string
   docId: number | string
@@ -14,6 +18,7 @@ export interface DocumentChunk {
   type: string
   unitTitle: string
   category: string
+  subjectId?: string
   grammarFocus: string[]
   vocabFocus: string[]
   content: string
@@ -24,7 +29,24 @@ export interface SearchOptions {
   docId?: number | string
   type?: string
   textbook?: string
+  subjectId?: string
   limit?: number
+}
+
+/**
+ * Retorna termos da taxonomia gramatical e conceitual do perfil de matéria ativo para scoring dinâmico
+ */
+export function getGrammarKeywordsForSubject(subjectId?: string): string[] {
+  const profile = subjectId ? getSubjectProfileById(subjectId) : getSubjectProfile()
+  if (!profile) return ['present perfect', 'past simple', 'conditionals', 'concordância', 'regência', 'crase']
+
+  const keywords: string[] = []
+  profile.taxonomy?.forEach(domain => {
+    domain.subcategories?.forEach(sub => {
+      keywords.push(sub.name.toLowerCase())
+    })
+  })
+  return keywords.length > 0 ? keywords : ['grammar', 'leitura', 'escrita']
 }
 
 /**
@@ -35,7 +57,8 @@ export function indexDocumentContent(
   docTitle: string,
   type: string,
   category: string,
-  rawContent: string
+  rawContent: string,
+  subjectId?: string
 ): DocumentChunk[] {
   if (!rawContent || !rawContent.trim()) return []
 
@@ -54,14 +77,14 @@ export function indexDocumentContent(
       const chunkText = rawContent.slice(startIndex, endIndex).trim()
 
       if (chunkText.length > 30) {
-        chunks.push(buildChunk(docId, docTitle, type, category, unitTitle, chunkText, i))
+        chunks.push(buildChunk(docId, docTitle, type, category, unitTitle, chunkText, i, subjectId))
       }
     }
   } else {
     // Se não houver divisores claros de unidades, divide por parágrafos duplos (~400 caracteres por bloco)
     const blocks = rawContent.split(/\n\s*\n/).filter(b => b.trim().length > 30)
     blocks.forEach((block, idx) => {
-      chunks.push(buildChunk(docId, docTitle, type, category, `Seção ${idx + 1}`, block, idx))
+      chunks.push(buildChunk(docId, docTitle, type, category, `Seção ${idx + 1}`, block, idx, subjectId))
     })
   }
 
@@ -78,10 +101,11 @@ function buildChunk(
   category: string,
   unitTitle: string,
   content: string,
-  index: number
+  index: number,
+  subjectId?: string
 ): DocumentChunk {
-  const grammarKeywords = ['present perfect', 'past simple', 'conditionals', 'passive voice', 'reported speech', 'modals', 'gerund', 'infinitive', 'relative clauses']
-  const foundGrammar = grammarKeywords.filter(g => content.toLowerCase().includes(g))
+  const dynamicKeywords = getGrammarKeywordsForSubject(subjectId)
+  const foundGrammar = dynamicKeywords.filter(g => content.toLowerCase().includes(g.toLowerCase()))
 
   // Extrai palavras em destaque ou entre aspas como vocabulário
   const vocabMatches = Array.from(content.matchAll(/"([^"]{3,25})"/g)).map(m => m[1])
@@ -93,7 +117,8 @@ function buildChunk(
     type,
     unitTitle,
     category: category || 'Geral',
-    grammarFocus: foundGrammar,
+    subjectId: subjectId || 'english',
+    grammarFocus: foundGrammar.slice(0, 10),
     vocabFocus: Array.from(new Set(vocabMatches)).slice(0, 8),
     content: content.slice(0, 1500) // Limita tamanho por chunk
   }
@@ -122,7 +147,8 @@ export function indexAllLibraryItems(): DocumentChunk[] {
         item.title,
         item.type || 'Student\'s Book',
         item.category || 'Geral',
-        item.content || ''
+        item.content || '',
+        item.subjectId || item.subject || 'english'
       )
       allChunks = allChunks.concat(docChunks)
     }
@@ -158,8 +184,11 @@ export function searchLibraryContext(query: string, options: SearchOptions = {})
     const limit = options.limit || 4
     const terms = query.toLowerCase().split(/\s+/).filter(t => t.length > 2)
 
-    // Filtra por tipo de livro ou docId se especificado
+    // Filtra por matéria (subjectId), tipo de livro ou docId se especificado
     let filtered = chunks
+    if (options.subjectId) {
+      filtered = filtered.filter(c => !c.subjectId || c.subjectId === options.subjectId)
+    }
     if (options.docId) {
       filtered = filtered.filter(c => String(c.docId) === String(options.docId))
     }

@@ -112,6 +112,32 @@ export const LEGITIMATE_EXCEPTIONS = [
     file: 'lib/supabaseClient.ts',
     pattern: /purgeMockDataFromStorage|MOCK_NAMES|MOCK_IDS/,
     reason: 'Função de sanitização explícita cujo propósito é limpar e purgar resquícios de dados mock legados do localStorage.'
+  },
+  // 7. Efeitos Visuais de UI, Partículas de Celebração e Stepper Progressivo
+  {
+    file: 'components/ConfettiEffect.tsx',
+    pattern: /Math\.random/,
+    reason: 'Física e trajetórias estocásticas de confetes e partículas na tela de celebração.'
+  },
+  {
+    file: 'components/UIComponents.tsx',
+    pattern: /Math\.random/,
+    reason: 'Partículas estocásticas de canvas para efeitos visuais de confete.'
+  },
+  {
+    file: 'components/AiProgressStepper.tsx',
+    pattern: /Math\.random/,
+    reason: 'Incremento visual suave da barra de progresso do stepper da IA.'
+  },
+  {
+    file: 'lib/trelloRouterEngine.ts',
+    pattern: /Math\.random/,
+    reason: 'Deslocamento de coordenadas espaciais (x, y) de post-its de planos importados no canvas do LessonPlanner.'
+  },
+  {
+    file: 'components/Toast.tsx',
+    pattern: /Math\.random/,
+    reason: 'Geração de ID único client-side para toasts e notificações efêmeras.'
   }
 ]
 

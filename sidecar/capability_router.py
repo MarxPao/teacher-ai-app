@@ -30,8 +30,8 @@ def classify_action(action_type: str, portal: str, has_known_selector_map: bool 
     'low_complexity': seletor já mapeado, ação é preenchimento direto sem necessidade de inferência visual.
     'high_complexity': portal sem mapa conhecido, presença de iframe/Shadow DOM, ou ação exige leitura de tabela não estruturada.
     """
-    if not has_known_selector_map:
-        return "high_complexity"
+    if has_known_selector_map:
+        return "low_complexity"
 
     portal_clean = (portal or "").lower().strip()
     if portal_clean in KNOWN_MAPPED_PORTALS:

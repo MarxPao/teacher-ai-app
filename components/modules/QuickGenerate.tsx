@@ -34,6 +34,7 @@ import {
   getAllSubjectProfiles,
   type SubjectProfile,
 } from '@/lib/subjectProfile'
+import { buildTeacherStyleSystemPrompt } from '@/lib/teacherStyleProfile'
 import '@/lib/subjects/english'
 import '@/lib/subjects/portuguese'
 
@@ -211,6 +212,8 @@ ${distractorBlock ? `${distractorBlock}\n` : `=== 3. DESIGN DIAGNÓSTICO DE DIST
 - HOMOGENEIDADE: Alternativas com tamanho balanceado (±25% caracteres) e paralelismo sintático.
 - SEM DUPLAS NEGATIVAS: Se usar negação no enunciado, use **NÃO**, **EXCETO**, **INCORRETA**.
 - INDEPENDÊNCIA: Questões 100% autônomas.
+
+${buildTeacherStyleSystemPrompt()}
 
 ESTRUTURA OBRIGATÓRIA DO EXERCÍCIO:
 1. QUANTIDADE RIGOROSA: Exatamente ${opts.qtCount} questões completas numeradas de 1 a ${opts.qtCount}.

@@ -15,11 +15,12 @@ import {
   PortalActionDef
 } from '@/lib/portalActionsEngine'
 import { fillPortal, openPortal, getRecentFills, logPortalFill } from '@/lib/portalBridge'
+import TrelloPortalConnect from './TrelloPortalConnect'
 
 export default function Extensions() {
   const [portals, setPortals] = useState<PortalProfileDef[]>([])
   const [selectedPortal, setSelectedPortal] = useState<PortalProfileDef | null>(null)
-  const [activeTab, setActiveTab] = useState<'portals' | 'actions' | 'logs' | 'install'>('portals')
+  const [activeTab, setActiveTab] = useState<'portals' | 'actions' | 'logs' | 'install' | 'trello'>('portals')
   const [globalMode, setGlobalMode] = useState<'supervised' | 'autonomous'>('supervised')
 
   // Modais de Criação / Edição
@@ -296,6 +297,7 @@ export default function Extensions() {
         <div style={{ display: 'flex', gap: 8, borderBottom: '2px solid #e7dfd5' }}>
           {[
             { key: 'portals', label: `🏛️ Portais & Escolas (${portals.length})`, icon: 'ti-world' },
+            { key: 'trello', label: '📋 Trello & Quadros', icon: 'ti-layout-kanban' },
             { key: 'actions', label: '⚡ Estúdio de Ações da Rafinha', icon: 'ti-wand' },
             { key: 'logs', label: `📋 Histórico de Operações (${recentLogs.length})`, icon: 'ti-receipt' },
             { key: 'install', label: '📦 Extensão Chrome MV3', icon: 'ti-plug' },
@@ -443,6 +445,11 @@ export default function Extensions() {
               </div>
             ))}
           </div>
+        )}
+
+        {/* ─── ABA TRELLO: PORTAL CONECTADO & QUADROS ──────────────────────── */}
+        {activeTab === 'trello' && (
+          <TrelloPortalConnect />
         )}
 
         {/* ─── ABA 2: ESTÚDIO DE AÇÕES EDITÁVEIS DA RAFINHA ──────────────────── */}

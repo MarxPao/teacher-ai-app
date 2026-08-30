@@ -13,6 +13,7 @@ import {
   toggleRegularTodo,
   recordChecklistHistory,
 } from '@/lib/checklistManager'
+import TrelloImportModal from '@/components/modules/TrelloImportModal'
 
 // --- Tipos & Interfaces ---
 
@@ -130,6 +131,7 @@ export default function Dashboard() {
   const [newTodoText, setNewTodoText] = useState('')
   const [newTodoCategory, setNewTodoCategory] = useState<'one_off' | 'recurrent'>('one_off')
   const [todoFilter, setTodoFilter] = useState<TodoCategory>('all')
+  const [isTrelloImportModalOpen, setIsTrelloImportModalOpen] = useState(false)
 
   // 3. Aulas do Dia & Grade (Unificada: Escola + Particular)
   const [classesList, setClassesList] = useState<TodayClassItem[]>([])
@@ -259,9 +261,9 @@ export default function Dashboard() {
         if (Array.isArray(parsed) && parsed.length > 0) {
           // Filtrar qualquer resquício legado de dados simulados (c1..c7, Colégio Integral, Escola Modelo)
           const realItems = parsed.filter((item: any) => {
-            const isMockId = typeof item.id === 'string' && /^c[1-7]$/.test(item.id)
-            const isMockSchool = item.schoolName === 'Colégio Integral' || item.schoolName === 'Escola Modelo' || item.school === 'Colégio Integral' || item.school === 'Escola Modelo'
-            return !isMockId && !isMockSchool
+            const isLegacySeedId = typeof item.id === 'string' && /^c[1-7]$/.test(item.id)
+            const isLegacySeedSchool = item.schoolName === 'Colégio Integral' || item.schoolName === 'Escola Modelo' || item.school === 'Colégio Integral' || item.school === 'Escola Modelo'
+            return !isLegacySeedId && !isLegacySeedSchool
           })
 
           realItems.forEach((item: any) => {
@@ -1229,6 +1231,31 @@ export default function Dashboard() {
                     </span>
                   </button>
                 ))}
+
+                <button
+                  type="button"
+                  onClick={() => setIsTrelloImportModalOpen(true)}
+                  style={{
+                    padding: '5px 12px',
+                    borderRadius: 20,
+                    border: '1px solid #0079bf',
+                    background: '#0079bf',
+                    color: '#ffffff',
+                    fontSize: 11.5,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 5,
+                    transition: 'all 0.15s ease',
+                    boxShadow: '0 2px 6px rgba(0,121,191,0.25)',
+                    marginLeft: 'auto'
+                  }}
+                  title="Importar tarefas do Trello via roteamento agêntico"
+                >
+                  <i className="ti ti-layout-kanban" style={{ fontSize: 13, color: '#ffffff' }} />
+                  <span>Importar Trello</span>
+                </button>
               </div>
 
               {/* Formulário de Adição Rápida com Seletor de Tipo */}
@@ -1997,6 +2024,16 @@ export default function Dashboard() {
             onComplete={() => {
               setIsOnboardingOpen(false)
               loadDashboardData()
+            }}
+          />
+
+          {/* Modal de Importação do Trello via Roteador Agêntico */}
+          <TrelloImportModal
+            isOpen={isTrelloImportModalOpen}
+            onClose={() => setIsTrelloImportModalOpen(false)}
+            onImportSuccess={() => {
+              const loaded = loadChecklistTodos()
+              setTodos(loaded)
             }}
           />
 

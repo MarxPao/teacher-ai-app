@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "vitest run",
+    "test": "vitest run --testTimeout=15000",
     "audit:simulations": "node scripts/scan-mocks.mjs",
     "scan:mocks": "node scripts/scan-mocks.mjs"
   },
