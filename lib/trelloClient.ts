@@ -4,7 +4,7 @@
  * DIRETRIZES DE ARQUITETURA & PRIVACIDADE:
  * 1. BYOK (Bring Your Own Key): As credenciais (API Key e Token) ficam 100% no localStorage do professor.
  * 2. Zero Server Dependency: Nenhuma credencial trafega por servidores centrais ou intermediários.
- * 3. Leitura e Estruturação: Extrai boards, listas, cartões, etiquetas, datas e checklists completos.
+ * 3. Leitura e Estruturação: Extrai boards, listas, cartões, etiquetas, datas, checklists, anexos e comentários.
  * 4. Idempotência: Rastreia IDs de cartões já importados para evitar duplicidade.
  */
 
@@ -40,6 +40,22 @@ export interface TrelloLabel {
   color: string
 }
 
+export interface TrelloAttachment {
+  id: string
+  name: string
+  url: string
+  isUpload: boolean
+  mimeType?: string
+  date?: string
+}
+
+export interface TrelloComment {
+  id: string
+  text: string
+  date: string
+  authorName: string
+}
+
 export interface TrelloCard {
   id: string
   name: string
@@ -52,8 +68,11 @@ export interface TrelloCard {
   url: string
   labels: TrelloLabel[]
   checklists?: TrelloChecklist[]
+  attachments?: TrelloAttachment[]
+  comments?: TrelloComment[]
   idChecklists?: string[]
   isAlreadyImported?: boolean
+  listName?: string
 }
 
 export interface TrelloList {
@@ -262,7 +281,46 @@ export async function fetchTrelloLists(boardId: string, apiKey?: string, apiToke
 }
 
 /**
- * Lista os cartões de uma lista específica com checklists e etiquetas
+ * Normaliza um cartão bruto do Trello mapeando checklists, anexos e comentários
+ */
+function normalizeRawTrelloCard(raw: any, importedMap: Record<string, any>, listName?: string): TrelloCard {
+  const attachments: TrelloAttachment[] = (raw.attachments || []).map((a: any) => ({
+    id: a.id,
+    name: a.name || 'Anexo',
+    url: a.url || '',
+    isUpload: Boolean(a.isUpload),
+    mimeType: a.mimeType || '',
+    date: a.date || ''
+  }))
+
+  const comments: TrelloComment[] = (raw.actions || []).map((act: any) => ({
+    id: act.id,
+    text: act.data?.text || '',
+    date: act.date || '',
+    authorName: act.memberCreator?.fullName || act.memberCreator?.username || 'Membro'
+  }))
+
+  return {
+    id: raw.id,
+    name: raw.name || '',
+    desc: raw.desc || '',
+    due: raw.due || null,
+    dueComplete: Boolean(raw.dueComplete),
+    idList: raw.idList,
+    idBoard: raw.idBoard,
+    shortUrl: raw.shortUrl || '',
+    url: raw.url || '',
+    labels: raw.labels || [],
+    checklists: raw.checklists || [],
+    attachments,
+    comments,
+    isAlreadyImported: Boolean(importedMap[raw.id]),
+    listName: listName || raw.listName
+  }
+}
+
+/**
+ * Lista os cartões de uma lista específica com checklists, anexos e comentários
  */
 export async function fetchTrelloCardsFromList(listId: string, apiKey?: string, apiToken?: string): Promise<TrelloCard[]> {
   const cfg = getTrelloConfig()
@@ -273,20 +331,21 @@ export async function fetchTrelloCardsFromList(listId: string, apiKey?: string, 
     throw new Error('Credenciais do Trello não fornecidas.')
   }
 
-  const cards = await trelloFetch<TrelloCard[]>(`/lists/${listId}/cards`, key, token, {
+  const rawCards = await trelloFetch<any[]>(`/lists/${listId}/cards`, key, token, {
     fields: 'id,name,desc,due,dueComplete,idList,idBoard,shortUrl,url,labels,idChecklists',
-    checklists: 'all'
+    checklists: 'all',
+    attachments: 'true',
+    attachment_fields: 'all',
+    actions: 'commentCard',
+    action_fields: 'data,date,memberCreator'
   })
 
   const importedMap = getImportedTrelloCardIds()
-  return cards.map(c => ({
-    ...c,
-    isAlreadyImported: Boolean(importedMap[c.id])
-  }))
+  return rawCards.map(c => normalizeRawTrelloCard(c, importedMap))
 }
 
 /**
- * Lista todos os cartões de um quadro inteiro com checklists
+ * Lista todos os cartões de um quadro inteiro com checklists, anexos e comentários
  */
 export async function fetchTrelloCardsFromBoard(boardId: string, apiKey?: string, apiToken?: string): Promise<TrelloCard[]> {
   const cfg = getTrelloConfig()
@@ -297,17 +356,18 @@ export async function fetchTrelloCardsFromBoard(boardId: string, apiKey?: string
     throw new Error('Credenciais do Trello não fornecidas.')
   }
 
-  const cards = await trelloFetch<TrelloCard[]>(`/boards/${boardId}/cards`, key, token, {
+  const rawCards = await trelloFetch<any[]>(`/boards/${boardId}/cards`, key, token, {
     filter: 'open',
     fields: 'id,name,desc,due,dueComplete,idList,idBoard,shortUrl,url,labels,idChecklists',
-    checklists: 'all'
+    checklists: 'all',
+    attachments: 'true',
+    attachment_fields: 'all',
+    actions: 'commentCard',
+    action_fields: 'data,date,memberCreator'
   })
 
   const importedMap = getImportedTrelloCardIds()
-  return cards.map(c => ({
-    ...c,
-    isAlreadyImported: Boolean(importedMap[c.id])
-  }))
+  return rawCards.map(c => normalizeRawTrelloCard(c, importedMap))
 }
 
 /**
@@ -319,7 +379,7 @@ export function isTrelloOnboardingList(listName: string): boolean {
 }
 
 /**
- * Lista todos os cartões de múltiplas listas selecionadas com identificação da lista de origem
+ * Lista todos os cartões de múltiplas listas selecionadas com checklists, anexos, comentários e lista de origem
  */
 export async function fetchTrelloCardsFromMultipleLists(
   lists: Array<{ id: string; name: string }>,
@@ -339,18 +399,17 @@ export async function fetchTrelloCardsFromMultipleLists(
 
   for (const list of lists) {
     try {
-      const cards = await trelloFetch<TrelloCard[]>(`/lists/${list.id}/cards`, key, token, {
+      const rawCards = await trelloFetch<any[]>(`/lists/${list.id}/cards`, key, token, {
         fields: 'id,name,desc,due,dueComplete,idList,idBoard,shortUrl,url,labels,idChecklists',
-        checklists: 'all'
+        checklists: 'all',
+        attachments: 'true',
+        attachment_fields: 'all',
+        actions: 'commentCard',
+        action_fields: 'data,date,memberCreator'
       })
 
-      cards.forEach(c => {
-        allCards.push({
-          ...c,
-          isAlreadyImported: Boolean(importedMap[c.id]),
-          // Metadado customizado de lista
-          ...( { listName: list.name } as any )
-        })
+      rawCards.forEach(c => {
+        allCards.push(normalizeRawTrelloCard(c, importedMap, list.name))
       })
     } catch (e) {
       console.warn(`Erro ao buscar cartões da lista ${list.name}:`, e)
@@ -360,3 +419,49 @@ export async function fetchTrelloCardsFromMultipleLists(
   return allCards
 }
 
+/**
+ * Busca os dados de um quadro a partir do seu link ou shortLink (com proteção de 1 nível de profundidade)
+ */
+export async function fetchTrelloBoardByLink(
+  boardIdOrShortLink: string,
+  apiKey?: string,
+  apiToken?: string
+): Promise<{ board: TrelloBoard; lists: TrelloList[]; cardCount: number }> {
+  const cfg = getTrelloConfig()
+  const key = apiKey || cfg?.apiKey
+  const token = apiToken || cfg?.apiToken
+
+  if (!key || !token) {
+    throw new Error('Credenciais do Trello não fornecidas.')
+  }
+
+  const cleanId = boardIdOrShortLink.replace(/^.*trello\.com\/b\//i, '').split('/')[0].trim()
+
+  const rawBoard = await trelloFetch<any>(`/boards/${cleanId}`, key, token, {
+    fields: 'id,name,desc,closed,url,shortUrl,prefs',
+    lists: 'open',
+    cards: 'open'
+  })
+
+  const board: TrelloBoard = {
+    id: rawBoard.id,
+    name: rawBoard.name,
+    desc: rawBoard.desc || '',
+    closed: Boolean(rawBoard.closed),
+    url: rawBoard.url,
+    shortUrl: rawBoard.shortUrl,
+    prefs: rawBoard.prefs
+  }
+
+  const lists: TrelloList[] = (rawBoard.lists || []).map((l: any) => ({
+    id: l.id,
+    name: l.name,
+    idBoard: l.idBoard || rawBoard.id,
+    closed: Boolean(l.closed),
+    pos: l.pos || 0
+  }))
+
+  const cardCount = Array.isArray(rawBoard.cards) ? rawBoard.cards.length : 0
+
+  return { board, lists, cardCount }
+}

@@ -51,6 +51,9 @@ export interface ChecklistTodo {
   actionLabel?: string
   actionTarget?: string
   recurrence?: RecurrenceRule
+  subtasks?: Array<{ id: string; text: string; done: boolean }>
+  notes?: string
+  attachments?: Array<{ name: string; url: string }>
 }
 
 export interface ChecklistHistoryItem {

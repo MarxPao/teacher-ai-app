@@ -256,4 +256,75 @@ describe('Trello Router Engine & Intelligent Agent Mapping', () => {
     expect(decision.onboardingWarning).toBeDefined()
     expect(decision.approved).toBe(false) // Desmarcado por padrão para proteger o usuário
   })
+
+  it('detecta link para outro quadro do Trello no cartão sem seguir automaticamente', () => {
+    const linkedCard: TrelloCard = {
+      id: 'c_link_1',
+      name: 'Planejamento do 4º Bimestre (Ver quadro)',
+      desc: 'Detalhes completos em https://trello.com/b/abc12345/planejamento-4-bimestre',
+      due: null,
+      dueComplete: false,
+      idList: 'list_1',
+      idBoard: 'board_main',
+      shortUrl: '',
+      url: '',
+      labels: []
+    }
+
+    const decision = routeTrelloCard(linkedCard)
+    expect(decision.linkedBoard).toBeDefined()
+    expect(decision.linkedBoard?.boardIdOrShortLink).toBe('abc12345')
+    expect(decision.linkedBoard?.url).toContain('trello.com/b/abc12345')
+  })
+
+  it('grava checklists internos como subtarefas e anexa notas com comentários no ChecklistTodo', async () => {
+    const deepCard: TrelloCard = {
+      id: 'card_deep_1',
+      name: 'English Week',
+      desc: 'Semana de imersão cultural em inglês',
+      due: null,
+      dueComplete: false,
+      idList: 'l1',
+      idBoard: 'b1',
+      shortUrl: '',
+      url: '',
+      labels: [],
+      checklists: [
+        {
+          id: 'chk_1',
+          name: 'Ações',
+          idCard: 'card_deep_1',
+          checkItems: [
+            { id: 'i1', name: 'Marcar reunião com coordenação', state: 'complete' },
+            { id: 'i2', name: 'Comprar materiais e brindes', state: 'incomplete' }
+          ]
+        }
+      ],
+      attachments: [
+        { id: 'att_1', name: 'cronograma.pdf', url: 'https://link.com/cronograma.pdf', isUpload: true }
+      ],
+      comments: [
+        { id: 'comm_1', text: 'Professores de arte já confirmaram apoio', date: '2026-08-30T14:00:00Z', authorName: 'Rafaela' }
+      ]
+    }
+
+    const decision = routeTrelloCard(deepCard)
+    expect(decision.checkItems.length).toBe(2)
+    expect(decision.attachments?.length).toBe(1)
+    expect(decision.comments?.length).toBe(1)
+
+    const result = await executeTrelloDecisions([decision])
+    expect(result.executedCount).toBe(1)
+
+    const todos = loadChecklistTodos()
+    expect(todos.length).toBe(1)
+    expect(todos[0].text).toBe('English Week')
+    expect(todos[0].subtasks?.length).toBe(2)
+    expect(todos[0].subtasks?.[0].text).toBe('Marcar reunião com coordenação')
+    expect(todos[0].subtasks?.[0].done).toBe(true)
+    expect(todos[0].subtasks?.[1].done).toBe(false)
+    expect(todos[0].notes).toContain('cronograma.pdf')
+    expect(todos[0].notes).toContain('Professores de arte já confirmaram apoio')
+    expect(todos[0].attachments?.length).toBe(1)
+  })
 })

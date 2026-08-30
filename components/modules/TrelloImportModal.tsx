@@ -10,6 +10,7 @@ import {
   fetchTrelloBoards,
   fetchTrelloLists,
   fetchTrelloCardsFromMultipleLists,
+  fetchTrelloBoardByLink,
   isTrelloConnected,
   isTrelloOnboardingList,
 } from '@/lib/trelloClient'
@@ -46,12 +47,23 @@ export default function TrelloImportModal({
   
   const [lists, setLists] = useState<TrelloList[]>([])
   const [selectedListIds, setSelectedListIds] = useState<string[]>([])
-  const [listCardCounts, setListCardCounts] = useState<Record<string, number>>({})
 
   const [includeDone, setIncludeDone] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [isExecuting, setIsExecuting] = useState(false)
   const [decisions, setDecisions] = useState<TrelloRoutingDecision[]>([])
+
+  // Estado para Quadro Vinculado Detectado (Confirmação Explícita)
+  const [inspectingLinkedBoard, setInspectingLinkedBoard] = useState<{
+    url: string
+    boardIdOrShortLink: string
+  } | null>(null)
+  const [linkedBoardPreview, setLinkedBoardPreview] = useState<{
+    board: TrelloBoard
+    lists: TrelloList[]
+    cardCount: number
+  } | null>(null)
+  const [isLoadingLinkedBoard, setIsLoadingLinkedBoard] = useState(false)
 
   // 1. Carrega Quadros ao Abrir
   useEffect(() => {
@@ -155,6 +167,35 @@ export default function TrelloImportModal({
     }
   }
 
+  // 4. Inspeciona Quadro Vinculado com confirmação explícita
+  const handleInspectLinkedBoard = async (linkInfo: { url: string; boardIdOrShortLink: string }) => {
+    const cfg = getTrelloConfig()
+    if (!cfg) return
+
+    setInspectingLinkedBoard(linkInfo)
+    setIsLoadingLinkedBoard(true)
+    setLinkedBoardPreview(null)
+
+    try {
+      const data = await fetchTrelloBoardByLink(linkInfo.boardIdOrShortLink, cfg.apiKey, cfg.apiToken)
+      setLinkedBoardPreview(data)
+    } catch (err: any) {
+      toast.error(`Não foi possível carregar o quadro vinculado: ${err.message}`)
+      setInspectingLinkedBoard(null)
+    } finally {
+      setIsLoadingLinkedBoard(false)
+    }
+  }
+
+  // 5. Confirma carregar o quadro vinculado no wizard
+  const handleConfirmLoadLinkedBoard = () => {
+    if (!linkedBoardPreview) return
+    loadListsForBoard(linkedBoardPreview.board)
+    setInspectingLinkedBoard(null)
+    setLinkedBoardPreview(null)
+    toast.info(`Quadro "${linkedBoardPreview.board.name}" carregado. Selecione as listas para importar.`)
+  }
+
   // Toggle de seleção de lista individual
   const toggleListSelection = (listId: string) => {
     setSelectedListIds(prev =>
@@ -178,7 +219,7 @@ export default function TrelloImportModal({
     setSelectedListIds([])
   }
 
-  // Verifica se o usuário marcou alguma lista de onboarding
+  // Verifica se o usuário marcou alguma lista de Onboarding
   const hasSelectedOnboardingList = useMemo(() => {
     return lists.some(l => selectedListIds.includes(l.id) && isTrelloOnboardingList(l.name))
   }, [lists, selectedListIds])
@@ -239,7 +280,7 @@ export default function TrelloImportModal({
       if (res.errors.length > 0) {
         toast.error(`Importados ${res.executedCount} itens com alguns avisos: ${res.errors[0]}`)
       } else {
-        toast.success(`🎉 ${res.executedCount} cartões importados e distribuídos com sucesso no app!`)
+        toast.success(`🎉 ${res.executedCount} cartões importados com checklists, anexos e detalhes no app!`)
       }
       if (onImportSuccess) onImportSuccess(res.executedCount)
       onClose()
@@ -270,13 +311,13 @@ export default function TrelloImportModal({
         border: `1px solid ${BORDER.medium}`,
         borderRadius: RADIUS.xl,
         padding: '24px 28px',
-        maxWidth: 780,
+        maxWidth: 820,
         width: '100%',
         boxShadow: SHADOW.lg,
         display: 'flex',
         flexDirection: 'column',
         gap: 18,
-        maxHeight: '90vh',
+        maxHeight: '92vh',
         overflowY: 'auto',
       }}>
         {/* Header do Modal */}
@@ -285,11 +326,11 @@ export default function TrelloImportModal({
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <i className="ti ti-trello" style={{ fontSize: 22, color: '#0079bf' }} />
               <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: COLOR.paperInk }}>
-                Importação Agêntica do Trello
+                Importação Agêntica Profunda do Trello
               </h3>
             </div>
             <p style={{ margin: '4px 0 0', fontSize: TEXT.caption, color: COLOR.paperWarm }}>
-              Escolha exatamente de qual quadro e quais listas deseja importar suas tarefas e conteúdos.
+              Importa cartões com checklists internos completos, anexos, comentários e quadros vinculados.
             </p>
           </div>
           <button
@@ -305,8 +346,8 @@ export default function TrelloImportModal({
           {[
             { id: 'select_board', label: '1. Quadro (Board)', icon: 'ti-layout-board' },
             { id: 'select_lists', label: '2. Selecionar Listas', icon: 'ti-list-check' },
-            { id: 'review_decisions', label: '3. Revisão com IA', icon: 'ti-sparkles' },
-          ].map((s, idx) => {
+            { id: 'review_decisions', label: '3. Revisão com IA & Detalhes', icon: 'ti-sparkles' },
+          ].map((s) => {
             const isActive = step === s.id
             return (
               <div
@@ -581,7 +622,7 @@ export default function TrelloImportModal({
                 {isLoading ? (
                   <>
                     <i className="ti ti-loader-2 ti-spin" />
-                    <span>Lendo cartões...</span>
+                    <span>Lendo cartões, checklists e anexos...</span>
                   </>
                 ) : (
                   <>
@@ -595,7 +636,7 @@ export default function TrelloImportModal({
         )}
 
         {/* ══════════════════════════════════════════════════════════════════════
-            PASSO 3: REVISÃO AGÊNTICA & CONFIRMAÇÃO DE ROTEAMENTO
+            PASSO 3: REVISÃO AGÊNTICA & CONFIRMAÇÃO DE ROTEAMENTO (LEITURA PROFUNDA)
            ══════════════════════════════════════════════════════════════════════ */}
         {step === 'review_decisions' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -615,6 +656,76 @@ export default function TrelloImportModal({
               </button>
             </div>
 
+            {/* Modal/Dialog de Inspecionar Quadro Vinculado */}
+            {inspectingLinkedBoard && (
+              <div style={{
+                background: '#f0fdf4',
+                border: '1px solid #bbf7d0',
+                borderRadius: RADIUS.md,
+                padding: 14,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 8,
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <i className="ti ti-link" style={{ fontSize: 18, color: '#16a34a' }} />
+                  <span style={{ fontSize: 13, fontWeight: 800, color: '#166534' }}>
+                    Quadro Trello Vinculado Detectado
+                  </span>
+                </div>
+                <div style={{ fontSize: 12, color: '#14532d' }}>
+                  Link: <code>{inspectingLinkedBoard.url}</code>
+                </div>
+
+                {isLoadingLinkedBoard ? (
+                  <div style={{ fontSize: 12, color: '#15803d', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <i className="ti ti-loader-2 ti-spin" />
+                    <span>Buscando detalhes do quadro vinculado na API...</span>
+                  </div>
+                ) : linkedBoardPreview ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 4 }}>
+                    <div style={{ fontSize: 12, color: '#166534' }}>
+                      📦 Quadro: <strong>{linkedBoardPreview.board.name}</strong> ({linkedBoardPreview.lists.length} listas, {linkedBoardPreview.cardCount} cartões)
+                    </div>
+                    <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                      <button
+                        type="button"
+                        onClick={handleConfirmLoadLinkedBoard}
+                        style={{
+                          padding: '6px 14px',
+                          borderRadius: RADIUS.sm,
+                          border: 'none',
+                          background: '#16a34a',
+                          color: '#fff',
+                          fontSize: 12,
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        📥 Sim, Carregar e Selecionar Listas deste Quadro
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setInspectingLinkedBoard(null)}
+                        style={{
+                          padding: '6px 12px',
+                          borderRadius: RADIUS.sm,
+                          border: '1px solid #bbf7d0',
+                          background: '#fff',
+                          color: '#166534',
+                          fontSize: 12,
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Não, Apenas Importar como Link
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            )}
+
             {/* Alerta de Cartões de Onboarding Detectados */}
             {onboardingCardsCount > 0 && (
               <div style={{
@@ -630,7 +741,7 @@ export default function TrelloImportModal({
               }}>
                 <i className="ti ti-shield-alert" style={{ fontSize: 16, marginTop: 1, flexShrink: 0 }} />
                 <div>
-                  <strong>Filtro de Proteção Ativo:</strong> Detectamos {onboardingCardsCount} cartão(ões) com conteúdo típico do onboarding padrão da Atlassian/Trello. Eles foram <strong>desmarcados por padrão</strong> para não poluir sua checklist com tutoriais da plataforma.
+                  <strong>Filtro de Proteção Ativo:</strong> Detectamos {onboardingCardsCount} cartão(ões) com conteúdo de introdução da Atlassian/Trello. Eles foram <strong>desmarcados por padrão</strong>.
                 </div>
               </div>
             )}
@@ -653,8 +764,8 @@ export default function TrelloImportModal({
               </button>
             </div>
 
-            {/* Lista de Cartões Roteados */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 360, overflowY: 'auto', paddingRight: 4 }}>
+            {/* Lista de Cartões Roteados com Checklists, Anexos e Comentários */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 380, overflowY: 'auto', paddingRight: 4 }}>
               {decisions.map((d, idx) => {
                 return (
                   <div
@@ -678,7 +789,8 @@ export default function TrelloImportModal({
                       style={{ marginTop: 4, cursor: 'pointer' }}
                     />
 
-                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      {/* Título & Badges */}
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                         <span style={{ fontSize: 13, fontWeight: 700, color: COLOR.paperInk }}>
                           {d.cardName}
@@ -687,6 +799,27 @@ export default function TrelloImportModal({
                         {d.listName && (
                           <span style={{ fontSize: 10.5, fontWeight: 700, padding: '1px 6px', borderRadius: RADIUS.sm, background: 'rgba(0,121,191,0.1)', color: '#0079bf' }}>
                             📋 {d.listName}
+                          </span>
+                        )}
+
+                        {d.checkItems.length > 0 && (
+                          <span style={{ fontSize: 10.5, fontWeight: 700, padding: '1px 6px', borderRadius: RADIUS.sm, background: 'rgba(34,197,94,0.12)', color: '#15803d', display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                            <i className="ti ti-list-check" style={{ fontSize: 11 }} />
+                            {d.checkItems.length} subtarefas
+                          </span>
+                        )}
+
+                        {d.attachments && d.attachments.length > 0 && (
+                          <span style={{ fontSize: 10.5, fontWeight: 700, padding: '1px 6px', borderRadius: RADIUS.sm, background: 'rgba(168,85,247,0.12)', color: '#7e22ce', display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                            <i className="ti ti-paperclip" style={{ fontSize: 11 }} />
+                            {d.attachments.length} anexo(s)
+                          </span>
+                        )}
+
+                        {d.comments && d.comments.length > 0 && (
+                          <span style={{ fontSize: 10.5, fontWeight: 700, padding: '1px 6px', borderRadius: RADIUS.sm, background: 'rgba(234,88,12,0.12)', color: '#c2410c', display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                            <i className="ti ti-message-circle" style={{ fontSize: 11 }} />
+                            {d.comments.length} comentário(s)
                           </span>
                         )}
 
@@ -704,9 +837,96 @@ export default function TrelloImportModal({
                         )}
                       </div>
 
+                      {/* Descrição do Cartão */}
                       {d.cardDesc && (
                         <div style={{ fontSize: 11.5, color: COLOR.paperWarm, lineHeight: 1.4 }}>
-                          {d.cardDesc.length > 120 ? d.cardDesc.slice(0, 120) + '...' : d.cardDesc}
+                          {d.cardDesc.length > 150 ? d.cardDesc.slice(0, 150) + '...' : d.cardDesc}
+                        </div>
+                      )}
+
+                      {/* Subtarefas / Checklists Internos */}
+                      {d.checkItems.length > 0 && (
+                        <div style={{
+                          background: 'rgba(44,26,14,0.03)',
+                          border: `1px dashed ${BORDER.soft}`,
+                          borderRadius: RADIUS.sm,
+                          padding: '6px 10px',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 3,
+                          marginTop: 2
+                        }}>
+                          <div style={{ fontSize: 11, fontWeight: 700, color: COLOR.paperInk, display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <i className="ti ti-checkbox" style={{ color: COLOR.accent }} />
+                            <span>Itens do Checklist Interno ({d.checkItems.length}):</span>
+                          </div>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 4 }}>
+                            {d.checkItems.slice(0, 6).map((ci, cIdx) => (
+                              <div key={ci.id || cIdx} style={{ fontSize: 11, color: ci.state === 'complete' ? COLOR.paperMid : COLOR.paperInk, textDecoration: ci.state === 'complete' ? 'line-through' : 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
+                                <span>{ci.state === 'complete' ? '☑' : '☐'}</span>
+                                <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{ci.name}</span>
+                              </div>
+                            ))}
+                            {d.checkItems.length > 6 && (
+                              <span style={{ fontSize: 10.5, color: COLOR.paperMid, fontStyle: 'italic' }}>
+                                ... e mais {d.checkItems.length - 6} itens
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Anexos e Comentários Detectados */}
+                      {( (d.attachments && d.attachments.length > 0) || (d.comments && d.comments.length > 0) ) && (
+                        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', fontSize: 11, color: COLOR.paperWarm, marginTop: 2 }}>
+                          {d.attachments && d.attachments.length > 0 && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                              <i className="ti ti-paperclip" style={{ color: '#7e22ce' }} />
+                              <span>{d.attachments.map(a => a.name).join(', ')}</span>
+                            </div>
+                          )}
+                          {d.comments && d.comments.length > 0 && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                              <i className="ti ti-message" style={{ color: '#c2410c' }} />
+                              <span>"{d.comments[0].text.slice(0, 50)}..."</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Aviso de Quadro Vinculado com Botão de Confirmação */}
+                      {d.linkedBoard && (
+                        <div style={{
+                          background: '#f0fdf4',
+                          border: '1px solid #bbf7d0',
+                          borderRadius: RADIUS.sm,
+                          padding: '6px 10px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          gap: 8,
+                          marginTop: 4
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: '#166534' }}>
+                            <i className="ti ti-link" />
+                            <span>Link para outro quadro do Trello detectado: <strong>{d.linkedBoard.boardIdOrShortLink}</strong></span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleInspectLinkedBoard(d.linkedBoard!)}
+                            style={{
+                              padding: '3px 8px',
+                              borderRadius: RADIUS.sm,
+                              border: '1px solid #16a34a',
+                              background: '#fff',
+                              color: '#166534',
+                              fontSize: 11,
+                              fontWeight: 700,
+                              cursor: 'pointer'
+                            }}
+                          >
+                            🔍 Inspecionar Quadro Vinculado
+                          </button>
                         </div>
                       )}
 

@@ -13,6 +13,7 @@ import {
   fetchTrelloCardsFromList,
   fetchTrelloCardsFromBoard,
   fetchTrelloCardsFromMultipleLists,
+  fetchTrelloBoardByLink,
   isTrelloOnboardingList,
   TrelloConfig,
   TRELLO_CONFIG_KEY,
@@ -230,5 +231,58 @@ describe('Trello Client & BYOK Storage', () => {
     expect((multiCards[0] as any).listName).toBe('Santa Catarina')
     expect(multiCards[1].id).toBe('c2')
     expect((multiCards[1] as any).listName).toBe('Machado Sobrinho')
+  })
+
+  it('extrai anexos e comentários de cartões do Trello', async () => {
+    saveTrelloConfig({ apiKey: 'k', apiToken: 't' })
+
+    const mockCardWithDepth = [{
+      id: 'c_deep',
+      name: 'Cartão com Anexo e Comentário',
+      desc: 'Descrição',
+      attachments: [
+        { id: 'att_1', name: 'documento.pdf', url: 'https://trello.com/doc.pdf', isUpload: true }
+      ],
+      actions: [
+        { id: 'act_1', date: '2026-08-30T10:00:00Z', memberCreator: { fullName: 'Professora Rafaela' }, data: { text: 'Anotação importante da reunião' } }
+      ]
+    }]
+
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => mockCardWithDepth
+    }))
+
+    const cards = await fetchTrelloCardsFromList('list_1')
+    expect(cards[0].attachments?.length).toBe(1)
+    expect(cards[0].attachments?.[0].name).toBe('documento.pdf')
+    expect(cards[0].comments?.length).toBe(1)
+    expect(cards[0].comments?.[0].text).toBe('Anotação importante da reunião')
+    expect(cards[0].comments?.[0].authorName).toBe('Professora Rafaela')
+  })
+
+  it('busca informações de quadro vinculado através de shortLink com proteção', async () => {
+    saveTrelloConfig({ apiKey: 'k', apiToken: 't' })
+
+    const mockLinkedBoard = {
+      id: 'board_linked_99',
+      name: 'Quadro Vinculado Especial',
+      desc: 'Descrição do quadro',
+      closed: false,
+      url: 'https://trello.com/b/xyz999/quadro-vinculado',
+      shortUrl: 'https://trello.com/b/xyz999',
+      lists: [{ id: 'l1', name: 'Lista 1' }, { id: 'l2', name: 'Lista 2' }],
+      cards: [{ id: 'c1' }, { id: 'c2' }, { id: 'c3' }]
+    }
+
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => mockLinkedBoard
+    }))
+
+    const result = await fetchTrelloBoardByLink('https://trello.com/b/xyz999/quadro-vinculado')
+    expect(result.board.name).toBe('Quadro Vinculado Especial')
+    expect(result.lists.length).toBe(2)
+    expect(result.cardCount).toBe(3)
   })
 })
