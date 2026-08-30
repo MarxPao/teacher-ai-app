@@ -49,6 +49,8 @@ export function logAiCall(entry: Omit<AiAuditEntry, 'id' | 'timestamp'>): AiAudi
     const existing: AiAuditEntry[] = raw ? JSON.parse(raw) : []
     const updated = [full, ...existing].slice(0, MAX_ENTRIES)
     localStorage.setItem(AUDIT_KEY, JSON.stringify(updated))
+    window.dispatchEvent(new Event('teacher:action_logged'))
+    window.dispatchEvent(new Event('teacher_ai_audit_logged'))
   } catch { /* silently fail */ }
   return full
 }

@@ -204,6 +204,32 @@ Utilize tom formal, embasado e respeitoso em português.`;
     }
   };
 
+  const handleAcceptRisk = () => {
+    const selectedClass = classes.find(c => c.id === selectedClassId);
+    const violationsDetail = groundingViolations
+      .map((v, i) => `[#${i + 1}] Trecho: "${v.excerpt}" | Esperado no Banco: "${v.expected}" | Gerado pela IA: "${v.found}"`)
+      .join('; ');
+
+    logAiCall({
+      module: 'AutoReport',
+      temperatureUsed: 0.0,
+      promptSummary: summarize(`[OVERRIDE DE RISCO] Professor liberou exportação com ${groundingViolations.length} inconsistência(s) | Turma: ${selectedClass?.name || selectedClassId || 'Não especificada'} | Mês: ${selectedMonth}`),
+      rawResponseSummary: summarize(`Inconsistências ignoradas conscientemente pelo professor: ${violationsDetail}`, 200),
+      parsedResult: JSON.stringify({
+        action: 'ACCEPT_RISK_OVERRIDE',
+        unlockedAt: new Date().toISOString(),
+        violationsCount: groundingViolations.length,
+        ignoredViolations: groundingViolations,
+      }),
+      flagged: true,
+      flagReason: `[OVERRIDE MANUAL] Professor assumiu o risco e liberou exportação com ${groundingViolations.length} inconsistência(s): ${violationsDetail}`,
+    });
+
+    setExportBlocked(false);
+    setGroundingViolations([]);
+    showToast('🛡️ Decisão gravada na Trilha de Auditoria com sucesso. Exportação liberada!');
+  };
+
   const handlePrint = () => {
     if (!reportContent) {
       showToast('Gere um relatório antes de imprimir.');
@@ -439,7 +465,7 @@ Utilize tom formal, embasado e respeitoso em português.`;
                   </div>
                 ))}
                 <button
-                  onClick={() => { setExportBlocked(false); setGroundingViolations([]); }}
+                  onClick={handleAcceptRisk}
                   style={{ marginTop: 8, padding: '6px 14px', background: '#856404', color: '#fff', border: 'none', borderRadius: 7, cursor: 'pointer', fontSize: 12, fontWeight: 700 }}
                 >
                   Liberar Exportação Assim Mesmo (Aceitar Risco)
