@@ -1,4 +1,5 @@
 'use client'
+import { COLOR, RADIUS, TEXT, SHADOW, FONT } from '@/styles/tokens'
 import { toast, showConfirm } from '@/components/Toast'
 
 import React, { useState, useEffect, useRef } from 'react'
@@ -313,14 +314,14 @@ export default function SourceKnowledgeHub({
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{ width: 34, height: 34, borderRadius: 10, background: 'linear-gradient(135deg, #8b5e3c, #b07d58)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>
+            <div style={{ width: 34, height: 34, borderRadius: RADIUS.md, background: 'linear-gradient(135deg, #8b5e3c, #b07d58)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>
               <i className="ti ti-brain" />
             </div>
             <div>
               <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#2c1a0e', fontFamily: "'Fraunces', Georgia, serif" }}>
                 {title}
               </h3>
-              <p style={{ margin: 0, fontSize: 11.5, color: '#8b5e3c' }}>
+              <p style={{ margin: 0, fontSize: TEXT.caption, color: '#8b5e3c' }}>
                 {description}
               </p>
             </div>
@@ -328,7 +329,7 @@ export default function SourceKnowledgeHub({
         </div>
 
         {/* Seletor de Modo de Conhecimento RAG */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#faf8f5', padding: '4px 6px', borderRadius: 12, border: '1px solid #ede8dc' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#faf8f5', padding: '4px 6px', borderRadius: RADIUS.lg, border: '1px solid #ede8dc' }}>
           <span style={{ fontSize: 11, fontWeight: 700, color: '#8b5e3c', marginLeft: 4, marginRight: 2 }}>
             Modo IA:
           </span>
@@ -343,8 +344,8 @@ export default function SourceKnowledgeHub({
               onClick={() => onChangeKnowledgeMode(m.id as KnowledgeMode)}
               title={m.desc}
               style={{
-                padding: '6px 11px', borderRadius: 8, border: 'none',
-                fontSize: 11.5, fontWeight: 700, cursor: 'pointer',
+                padding: '6px 11px', borderRadius: RADIUS.md, border: 'none',
+                fontSize: TEXT.caption, fontWeight: 700, cursor: 'pointer',
                 background: knowledgeMode === m.id ? '#8b5e3c' : 'transparent',
                 color: knowledgeMode === m.id ? '#fff' : '#665c54',
                 transition: 'all 0.15s'
@@ -370,8 +371,8 @@ export default function SourceKnowledgeHub({
           type="button"
           onClick={() => setShowAddBookModal(true)}
           style={{
-            padding: '8px 14px', borderRadius: 10, border: '1px solid rgba(139,115,85,0.3)',
-            background: '#fffcf8', color: '#2c1a0e', fontSize: 12.5, fontWeight: 700, cursor: 'pointer',
+            padding: '8px 14px', borderRadius: RADIUS.md, border: '1px solid rgba(139,115,85,0.3)',
+            background: '#fffcf8', color: '#2c1a0e', fontSize: TEXT.bodyCompact, fontWeight: 700, cursor: 'pointer',
             display: 'flex', alignItems: 'center', gap: 6
           }}
         >
@@ -382,8 +383,8 @@ export default function SourceKnowledgeHub({
           type="button"
           onClick={() => setShowAddLooseModal(true)}
           style={{
-            padding: '8px 14px', borderRadius: 10, border: '1px solid rgba(139,115,85,0.3)',
-            background: '#fffcf8', color: '#2c1a0e', fontSize: 12.5, fontWeight: 700, cursor: 'pointer',
+            padding: '8px 14px', borderRadius: RADIUS.md, border: '1px solid rgba(139,115,85,0.3)',
+            background: '#fffcf8', color: '#2c1a0e', fontSize: TEXT.bodyCompact, fontWeight: 700, cursor: 'pointer',
             display: 'flex', alignItems: 'center', gap: 6
           }}
         >
@@ -394,8 +395,8 @@ export default function SourceKnowledgeHub({
           type="button"
           onClick={() => uploadFileInputRef.current?.click()}
           style={{
-            padding: '8px 14px', borderRadius: 10, border: '1px solid rgba(139,115,85,0.3)',
-            background: '#fffcf8', color: '#2c1a0e', fontSize: 12.5, fontWeight: 700, cursor: 'pointer',
+            padding: '8px 14px', borderRadius: RADIUS.md, border: '1px solid rgba(139,115,85,0.3)',
+            background: '#fffcf8', color: '#2c1a0e', fontSize: TEXT.bodyCompact, fontWeight: 700, cursor: 'pointer',
             display: 'flex', alignItems: 'center', gap: 6
           }}
         >
@@ -406,8 +407,8 @@ export default function SourceKnowledgeHub({
           type="button"
           onClick={() => setShowAddWebModal(true)}
           style={{
-            padding: '8px 14px', borderRadius: 10, border: '1px solid rgba(139,115,85,0.3)',
-            background: '#fffcf8', color: '#2c1a0e', fontSize: 12.5, fontWeight: 700, cursor: 'pointer',
+            padding: '8px 14px', borderRadius: RADIUS.md, border: '1px solid rgba(139,115,85,0.3)',
+            background: '#fffcf8', color: '#2c1a0e', fontSize: TEXT.bodyCompact, fontWeight: 700, cursor: 'pointer',
             display: 'flex', alignItems: 'center', gap: 6
           }}
         >
@@ -418,8 +419,8 @@ export default function SourceKnowledgeHub({
           type="button"
           onClick={() => { setNoteTitle(''); setNoteContent(''); setNoteScope(''); setShowAddNoteModal(true); }}
           style={{
-            padding: '8px 14px', borderRadius: 10, border: '1px solid rgba(139,115,85,0.3)',
-            background: '#fffcf8', color: '#2c1a0e', fontSize: 12.5, fontWeight: 700, cursor: 'pointer',
+            padding: '8px 14px', borderRadius: RADIUS.md, border: '1px solid rgba(139,115,85,0.3)',
+            background: '#fffcf8', color: '#2c1a0e', fontSize: TEXT.bodyCompact, fontWeight: 700, cursor: 'pointer',
             display: 'flex', alignItems: 'center', gap: 6
           }}
         >
@@ -435,7 +436,7 @@ export default function SourceKnowledgeHub({
 
       {/* Resumo de Fontes Ativas & Ações em Lote */}
       {sources.length > 0 && (
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#faf8f5', padding: '8px 14px', borderRadius: 12, border: '1px solid #ede8dc' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#faf8f5', padding: '8px 14px', borderRadius: RADIUS.lg, border: '1px solid #ede8dc' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#2c1a0e' }}>
             <span style={{ fontWeight: 800, color: '#8b5e3c' }}>
               📊 {activeSourcesCount} {activeSourcesCount === 1 ? 'fonte ativa' : 'fontes ativas'}
@@ -450,7 +451,7 @@ export default function SourceKnowledgeHub({
             <button
               type="button"
               onClick={() => toggleAllSources(true)}
-              style={{ background: 'none', border: 'none', color: '#8b5e3c', fontSize: 11.5, fontWeight: 700, cursor: 'pointer' }}
+              style={{ background: 'none', border: 'none', color: '#8b5e3c', fontSize: TEXT.caption, fontWeight: 700, cursor: 'pointer' }}
             >
               Marcar Todas
             </button>
@@ -458,7 +459,7 @@ export default function SourceKnowledgeHub({
             <button
               type="button"
               onClick={() => toggleAllSources(false)}
-              style={{ background: 'none', border: 'none', color: '#8b5e3c', fontSize: 11.5, fontWeight: 700, cursor: 'pointer' }}
+              style={{ background: 'none', border: 'none', color: '#8b5e3c', fontSize: TEXT.caption, fontWeight: 700, cursor: 'pointer' }}
             >
               Desmarcar Todas
             </button>
@@ -466,7 +467,7 @@ export default function SourceKnowledgeHub({
             <button
               type="button"
               onClick={() => onChangeSources([])}
-              style={{ background: 'none', border: 'none', color: '#dc322f', fontSize: 11.5, fontWeight: 700, cursor: 'pointer' }}
+              style={{ background: 'none', border: 'none', color: '#dc322f', fontSize: TEXT.caption, fontWeight: 700, cursor: 'pointer' }}
             >
               Limpar Hub
             </button>
@@ -478,13 +479,13 @@ export default function SourceKnowledgeHub({
       {sources.length === 0 ? (
         <div style={{
           padding: '28px 20px', textAlign: 'center',
-          background: '#faf8f5', borderRadius: 16, border: '1.5px dashed #ede8dc',
+          background: '#faf8f5', borderRadius: RADIUS.xl, border: '1.5px dashed #ede8dc',
           display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8
         }}>
           <div style={{ width: 44, height: 44, borderRadius: '50%', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, color: '#8b5e3c', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
             <i className="ti ti-folders" />
           </div>
-          <div style={{ fontSize: 13.5, fontWeight: 700, color: '#2c1a0e' }}>
+          <div style={{ fontSize: TEXT.body, fontWeight: 700, color: '#2c1a0e' }}>
             Nenhuma fonte selecionada no momento.
           </div>
           <div style={{ fontSize: 12, color: '#8b5e3c', maxWidth: 520, lineHeight: 1.5 }}>
@@ -504,7 +505,7 @@ export default function SourceKnowledgeHub({
                 key={source.id}
                 style={{
                   background: source.active ? '#fffcf8' : '#f9f9f9',
-                  borderRadius: 14,
+                  borderRadius: RADIUS.lg,
                   border: source.active ? '1.5px solid #8b5e3c' : '1px solid #e5e7eb',
                   padding: '14px',
                   boxShadow: source.active ? '0 4px 14px rgba(139,94,60,0.08)' : 'none',
@@ -536,7 +537,7 @@ export default function SourceKnowledgeHub({
 
                 {/* Título e Categoria */}
                 <div>
-                  <div style={{ fontSize: 13.5, fontWeight: 700, color: '#2c1a0e', lineHeight: 1.3, marginBottom: 2 }}>
+                  <div style={{ fontSize: TEXT.body, fontWeight: 700, color: '#2c1a0e', lineHeight: 1.3, marginBottom: 2 }}>
                     {source.title}
                   </div>
                   {source.category && (
@@ -554,9 +555,9 @@ export default function SourceKnowledgeHub({
                     onChange={e => updateSourceScope(source.id, e.target.value)}
                     placeholder="Capítulo / Páginas (ex: Págs 14-22, Unit 2)..."
                     style={{
-                      width: '100%', padding: '6px 10px', borderRadius: 8,
+                      width: '100%', padding: '6px 10px', borderRadius: RADIUS.md,
                       border: '1px solid #e8e0d0', background: source.active ? '#fff' : '#f3f4f6',
-                      fontSize: 11.5, color: '#2c1a0e', outline: 'none', boxSizing: 'border-box'
+                      fontSize: TEXT.caption, color: '#2c1a0e', outline: 'none', boxSizing: 'border-box'
                     }}
                   />
                 </div>
@@ -612,7 +613,7 @@ export default function SourceKnowledgeHub({
               <button onClick={() => setShowAddBookModal(false)} style={{ background: '#f5f0e8', border: 'none', width: 30, height: 30, borderRadius: '50%', cursor: 'pointer', fontWeight: 700 }}>×</button>
             </div>
 
-            <p style={{ fontSize: 12.5, color: '#7a5c42', margin: 0 }}>
+            <p style={{ fontSize: TEXT.bodyCompact, color: '#7a5c42', margin: 0 }}>
               Escolha livros didáticos completos ou apostilas para adicionar como fonte ao gerador:
             </p>
 
@@ -628,12 +629,12 @@ export default function SourceKnowledgeHub({
                     <div
                       key={b.id}
                       style={{
-                        padding: 12, borderRadius: 12, border: '1px solid #ede8dc', background: '#faf8f5',
+                        padding: 12, borderRadius: RADIUS.lg, border: '1px solid #ede8dc', background: '#faf8f5',
                         display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12
                       }}
                     >
                       <div>
-                        <div style={{ fontSize: 13.5, fontWeight: 700, color: '#2c1a0e' }}>{b.title}</div>
+                        <div style={{ fontSize: TEXT.body, fontWeight: 700, color: '#2c1a0e' }}>{b.title}</div>
                         <div style={{ fontSize: 11, color: '#8b5e3c' }}>
                           {b.category || 'Livro'} · {b.wordCount?.toLocaleString() || 0} palavras
                         </div>
@@ -657,7 +658,7 @@ export default function SourceKnowledgeHub({
                           setShowAddBookModal(false)
                         }}
                         style={{
-                          padding: '6px 12px', borderRadius: 8, border: 'none',
+                          padding: '6px 12px', borderRadius: RADIUS.md, border: 'none',
                           background: alreadyAdded ? '#e5e7eb' : '#8b5e3c',
                           color: alreadyAdded ? '#9ca3af' : '#fff',
                           fontSize: 12, fontWeight: 700, cursor: alreadyAdded ? 'default' : 'pointer'
@@ -686,7 +687,7 @@ export default function SourceKnowledgeHub({
               <button onClick={() => setShowAddLooseModal(false)} style={{ background: '#f5f0e8', border: 'none', width: 30, height: 30, borderRadius: '50%', cursor: 'pointer', fontWeight: 700 }}>×</button>
             </div>
 
-            <p style={{ fontSize: 12.5, color: '#7a5c42', margin: 0 }}>
+            <p style={{ fontSize: TEXT.bodyCompact, color: '#7a5c42', margin: 0 }}>
               Escolha PDFs, DOCXs, listas de vocabulário ou artigos salvos na Biblioteca:
             </p>
 
@@ -702,12 +703,12 @@ export default function SourceKnowledgeHub({
                     <div
                       key={f.id}
                       style={{
-                        padding: 12, borderRadius: 12, border: '1px solid #ede8dc', background: '#faf8f5',
+                        padding: 12, borderRadius: RADIUS.lg, border: '1px solid #ede8dc', background: '#faf8f5',
                         display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12
                       }}
                     >
                       <div>
-                        <div style={{ fontSize: 13.5, fontWeight: 700, color: '#2c1a0e' }}>{f.title}</div>
+                        <div style={{ fontSize: TEXT.body, fontWeight: 700, color: '#2c1a0e' }}>{f.title}</div>
                         <div style={{ fontSize: 11, color: '#8b5e3c' }}>
                           {f.category} · {f.fileType.toUpperCase()} {f.school ? `· ${f.school}` : ''}
                         </div>
@@ -732,7 +733,7 @@ export default function SourceKnowledgeHub({
                           setShowAddLooseModal(false)
                         }}
                         style={{
-                          padding: '6px 12px', borderRadius: 8, border: 'none',
+                          padding: '6px 12px', borderRadius: RADIUS.md, border: 'none',
                           background: alreadyAdded ? '#e5e7eb' : '#8b5e3c',
                           color: alreadyAdded ? '#9ca3af' : '#fff',
                           fontSize: 12, fontWeight: 700, cursor: alreadyAdded ? 'default' : 'pointer'
@@ -768,13 +769,13 @@ export default function SourceKnowledgeHub({
                 onChange={e => setWebQuery(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter') handleExecuteWebSearch() }}
                 placeholder="Ex: Artificial intelligence in education 2026, Climate change facts..."
-                style={{ flex: 1, padding: '10px 14px', borderRadius: 10, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, outline: 'none', color: '#2c1a0e' }}
+                style={{ flex: 1, padding: '10px 14px', borderRadius: RADIUS.md, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, outline: 'none', color: '#2c1a0e' }}
               />
               <button
                 type="button"
                 onClick={handleExecuteWebSearch}
                 disabled={webSearching}
-                style={{ padding: '10px 18px', borderRadius: 10, border: 'none', background: '#8b5e3c', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+                style={{ padding: '10px 18px', borderRadius: RADIUS.md, border: 'none', background: '#8b5e3c', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
               >
                 {webSearching ? <><i className="ti ti-loader text-spin" /> Buscando...</> : <><i className="ti ti-search" /> Pesquisar</>}
               </button>
@@ -791,7 +792,7 @@ export default function SourceKnowledgeHub({
                         setSelectedWebIndexes(prev => prev.includes(idx) ? prev.filter(i => i !== idx) : [...prev, idx])
                       }}
                       style={{
-                        padding: 12, borderRadius: 12, border: isChecked ? '1.5px solid #8b5e3c' : '1px solid #ede8dc',
+                        padding: 12, borderRadius: RADIUS.lg, border: isChecked ? '1.5px solid #8b5e3c' : '1px solid #ede8dc',
                         background: isChecked ? '#fdf8f2' : '#faf8f5', cursor: 'pointer', display: 'flex', gap: 10, alignItems: 'flex-start'
                       }}
                     >
@@ -818,13 +819,13 @@ export default function SourceKnowledgeHub({
 
             {webResults.length > 0 && (
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, borderTop: '1px solid #ede8dc', paddingTop: 12 }}>
-                <button type="button" onClick={() => setShowAddWebModal(false)} style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid #ede8dc', background: '#fff', fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}>
+                <button type="button" onClick={() => setShowAddWebModal(false)} style={{ padding: '8px 14px', borderRadius: RADIUS.md, border: '1px solid #ede8dc', background: '#fff', fontSize: TEXT.bodyCompact, fontWeight: 700, cursor: 'pointer' }}>
                   Cancelar
                 </button>
                 <button
                   type="button"
                   onClick={handleAddWebResultsToSources}
-                  style={{ padding: '8px 18px', borderRadius: 8, border: 'none', background: '#8b5e3c', color: '#fff', fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}
+                  style={{ padding: '8px 18px', borderRadius: RADIUS.md, border: 'none', background: '#8b5e3c', color: '#fff', fontSize: TEXT.bodyCompact, fontWeight: 700, cursor: 'pointer' }}
                 >
                   Adicionar {selectedWebIndexes.length} {selectedWebIndexes.length === 1 ? 'Fonte Selecionada' : 'Fontes Selecionadas'}
                 </button>
@@ -852,7 +853,7 @@ export default function SourceKnowledgeHub({
                 value={noteTitle}
                 onChange={e => setNoteTitle(e.target.value)}
                 placeholder="Ex: Anotações da Turma 9º B, Lista de Vocabulário do Mês..."
-                style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, color: '#2c1a0e', outline: 'none', boxSizing: 'border-box' }}
+                style={{ width: '100%', padding: '9px 12px', borderRadius: RADIUS.md, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, color: '#2c1a0e', outline: 'none', boxSizing: 'border-box' }}
               />
             </div>
 
@@ -862,7 +863,7 @@ export default function SourceKnowledgeHub({
                 value={noteScope}
                 onChange={e => setNoteScope(e.target.value)}
                 placeholder="Ex: Páginas 30 a 35, Unit 4..."
-                style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, color: '#2c1a0e', outline: 'none', boxSizing: 'border-box' }}
+                style={{ width: '100%', padding: '9px 12px', borderRadius: RADIUS.md, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, color: '#2c1a0e', outline: 'none', boxSizing: 'border-box' }}
               />
             </div>
 
@@ -873,12 +874,12 @@ export default function SourceKnowledgeHub({
                 onChange={e => setNoteContent(e.target.value)}
                 placeholder="Cole aqui o texto, regras gramaticais, vocabulário ou instruções detalhadas..."
                 rows={8}
-                style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, color: '#2c1a0e', outline: 'none', fontFamily: 'monospace', resize: 'vertical', boxSizing: 'border-box' }}
+                style={{ width: '100%', padding: '10px 12px', borderRadius: RADIUS.md, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, color: '#2c1a0e', outline: 'none', fontFamily: 'monospace', resize: 'vertical', boxSizing: 'border-box' }}
               />
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-              <button type="button" onClick={() => setShowAddNoteModal(false)} style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid #ede8dc', background: '#fff', fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}>
+              <button type="button" onClick={() => setShowAddNoteModal(false)} style={{ padding: '8px 14px', borderRadius: RADIUS.md, border: '1px solid #ede8dc', background: '#fff', fontSize: TEXT.bodyCompact, fontWeight: 700, cursor: 'pointer' }}>
                 Cancelar
               </button>
               <button
@@ -903,7 +904,7 @@ export default function SourceKnowledgeHub({
                   onChangeSources([item, ...sources])
                   setShowAddNoteModal(false)
                 }}
-                style={{ padding: '8px 18px', borderRadius: 8, border: 'none', background: '#8b5e3c', color: '#fff', fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}
+                style={{ padding: '8px 18px', borderRadius: RADIUS.md, border: 'none', background: '#8b5e3c', color: '#fff', fontSize: TEXT.bodyCompact, fontWeight: 700, cursor: 'pointer' }}
               >
                 Adicionar Nota
               </button>
@@ -919,7 +920,7 @@ export default function SourceKnowledgeHub({
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #ede8dc', paddingBottom: 10 }}>
               <div>
                 <h3 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: '#2c1a0e' }}>{previewSource.title}</h3>
-                <div style={{ fontSize: 11.5, color: '#8b5e3c', marginTop: 2 }}>
+                <div style={{ fontSize: TEXT.caption, color: '#8b5e3c', marginTop: 2 }}>
                   {previewSource.sourceType.toUpperCase()} · {previewSource.wordCount?.toLocaleString() || 0} palavras
                   {previewSource.scopeInfo && ` · Recorte: ${previewSource.scopeInfo}`}
                 </div>
@@ -928,7 +929,7 @@ export default function SourceKnowledgeHub({
             </div>
 
             <div style={{
-              flex: 1, overflowY: 'auto', background: '#fdf8f2', borderRadius: 12, padding: 18,
+              flex: 1, overflowY: 'auto', background: '#fdf8f2', borderRadius: RADIUS.lg, padding: 18,
               border: '1px solid #ede8dc', fontSize: 13, color: '#2c1a0e', lineHeight: 1.7,
               whiteSpace: 'pre-wrap', fontFamily: "'Plus Jakarta Sans', sans-serif"
             }}>
@@ -942,7 +943,7 @@ export default function SourceKnowledgeHub({
                   navigator.clipboard.writeText(previewSource.content)
                   toast.success('Texto copiado para a área de transferência!')
                 }}
-                style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid #ede8dc', background: '#fff', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+                style={{ padding: '8px 14px', borderRadius: RADIUS.md, border: '1px solid #ede8dc', background: '#fff', fontSize: TEXT.bodyCompact, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
               >
                 <i className="ti ti-copy" /> Copiar Conteúdo
               </button>
@@ -950,7 +951,7 @@ export default function SourceKnowledgeHub({
               <button
                 type="button"
                 onClick={() => setPreviewSource(null)}
-                style={{ padding: '8px 18px', borderRadius: 8, border: 'none', background: '#8b5e3c', color: '#fff', fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}
+                style={{ padding: '8px 18px', borderRadius: RADIUS.md, border: 'none', background: '#8b5e3c', color: '#fff', fontSize: TEXT.bodyCompact, fontWeight: 700, cursor: 'pointer' }}
               >
                 Fechar
               </button>

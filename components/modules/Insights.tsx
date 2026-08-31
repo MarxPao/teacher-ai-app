@@ -1,4 +1,5 @@
 'use client'
+import { COLOR, RADIUS, TEXT, SHADOW, FONT } from '@/styles/tokens'
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import ModuleShell from '@/components/ModuleShell'
@@ -449,7 +450,7 @@ Referência: ${new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'nu
         {/* Banner de Cabeçalho com Fundamentação */}
         <div style={{
           background: 'linear-gradient(135deg, #2c1a0e 0%, #4a2f1b 100%)',
-          borderRadius: 16,
+          borderRadius: RADIUS.xl,
           padding: '1.75rem 2rem',
           color: '#fdf8f2',
           display: 'flex',
@@ -483,7 +484,7 @@ Referência: ${new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'nu
                 color: '#2c1a0e',
                 border: 'none',
                 padding: '0.75rem 1.25rem',
-                borderRadius: 10,
+                borderRadius: RADIUS.md,
                 fontWeight: 700,
                 fontSize: '0.9rem',
                 cursor: isGeneratingAi ? 'not-allowed' : 'pointer',
@@ -555,7 +556,7 @@ Referência: ${new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'nu
         <div style={{
           background: '#fffcf8',
           padding: '1rem 1.25rem',
-          borderRadius: 12,
+          borderRadius: RADIUS.lg,
           border: '1px solid rgba(139,115,85,0.16)',
           display: 'flex',
           gap: '1rem',
@@ -571,7 +572,7 @@ Referência: ${new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'nu
                 onChange={e => setSelectedClass(e.target.value)}
                 style={{
                   padding: '0.4rem 0.8rem',
-                  borderRadius: 8,
+                  borderRadius: RADIUS.md,
                   border: '1px solid #d5c0b0',
                   background: '#fdf8f2',
                   fontSize: '0.85rem',
@@ -592,7 +593,7 @@ Referência: ${new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'nu
                 onChange={e => setSelectedStudent(e.target.value)}
                 style={{
                   padding: '0.4rem 0.8rem',
-                  borderRadius: 8,
+                  borderRadius: RADIUS.md,
                   border: '1px solid #d5c0b0',
                   background: '#fdf8f2',
                   fontSize: '0.85rem',
@@ -617,7 +618,7 @@ Referência: ${new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'nu
               style={{
                 width: '100%',
                 padding: '0.45rem 0.75rem 0.45rem 2rem',
-                borderRadius: 8,
+                borderRadius: RADIUS.md,
                 border: '1px solid #d5c0b0',
                 background: '#fdf8f2',
                 fontSize: '0.85rem',
@@ -633,7 +634,7 @@ Referência: ${new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'nu
           <div style={{
             background: '#fffdfa',
             border: '1px solid #d4944a',
-            borderRadius: 14,
+            borderRadius: RADIUS.lg,
             padding: '1.5rem',
             position: 'relative'
           }}>
@@ -656,7 +657,7 @@ Referência: ${new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'nu
               color: '#2c1a0e',
               background: '#fdf8f2',
               padding: '1rem',
-              borderRadius: 8,
+              borderRadius: RADIUS.md,
               border: '1px solid rgba(139,115,85,0.1)'
             }}>
               {customAiDiagnostic}
@@ -669,7 +670,7 @@ Referência: ${new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'nu
           {filteredHints.length === 0 ? (
             <div style={{
               background: '#fffcf8',
-              borderRadius: 14,
+              borderRadius: RADIUS.lg,
               padding: '3rem 2rem',
               textAlign: 'center',
               border: '1px dashed #d5c0b0',
@@ -689,7 +690,7 @@ Referência: ${new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'nu
                   key={hint.id}
                   style={{
                     background: '#fffcf8',
-                    borderRadius: 14,
+                    borderRadius: RADIUS.lg,
                     border: '1px solid rgba(139,115,85,0.16)',
                     boxShadow: '0 2px 8px rgba(44,26,14,0.04)',
                     padding: '1.5rem',
@@ -738,7 +739,7 @@ Referência: ${new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'nu
                         style={{
                           background: 'transparent',
                           border: '1px solid #d5c0b0',
-                          borderRadius: 8,
+                          borderRadius: RADIUS.md,
                           padding: '0.35rem 0.6rem',
                           color: '#4a382a',
                           cursor: 'pointer',
@@ -758,7 +759,7 @@ Referência: ${new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'nu
                   <div style={{
                     background: '#fdf8f2',
                     padding: '0.9rem 1.1rem',
-                    borderRadius: 10,
+                    borderRadius: RADIUS.md,
                     borderLeft: `4px solid ${fw.color}`,
                     display: 'flex',
                     flexDirection: 'column',
@@ -823,7 +824,7 @@ Referência: ${new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'nu
             background: '#2c1a0e',
             color: '#fdf8f2',
             padding: '0.75rem 1.25rem',
-            borderRadius: 8,
+            borderRadius: RADIUS.md,
             fontSize: '0.85rem',
             boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
             zIndex: 9999,

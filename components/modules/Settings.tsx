@@ -1,4 +1,5 @@
 'use client'
+import { COLOR, RADIUS, TEXT, SHADOW, FONT } from '@/styles/tokens'
 import { toast, showConfirm } from '@/components/Toast'
 
 import { useState, useEffect, useCallback } from 'react'
@@ -288,7 +289,7 @@ export default function Settings() {
             onClick={() => setActiveTab(tab.key as any)}
             style={{
               padding: '8px 16px',
-              borderRadius: 10,
+              borderRadius: RADIUS.md,
               border: activeTab === tab.key ? '1px solid #8b5e3c' : '1px solid transparent',
               background: activeTab === tab.key ? '#8b5e3c' : '#f5f0eb',
               color: activeTab === tab.key ? '#fff' : '#2c1a0e',
@@ -303,7 +304,7 @@ export default function Settings() {
           >
             <span>{tab.label}</span>
             {tab.badge !== undefined && tab.badge > 0 && (
-              <span style={{ background: activeTab === tab.key ? 'rgba(255,255,255,0.25)' : '#d5c8bb', padding: '2px 7px', borderRadius: 12, fontSize: 11, fontWeight: 800 }}>
+              <span style={{ background: activeTab === tab.key ? 'rgba(255,255,255,0.25)' : '#d5c8bb', padding: '2px 7px', borderRadius: RADIUS.lg, fontSize: 11, fontWeight: 800 }}>
                 {tab.badge}
               </span>
             )}
@@ -334,9 +335,9 @@ export default function Settings() {
 
               return (
                 <div className="space-y-4">
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: '#fdf8f2', borderRadius: 12, border: '1px solid rgba(88,110,117,0.2)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: '#fdf8f2', borderRadius: RADIUS.lg, border: '1px solid rgba(88,110,117,0.2)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                      <div style={{ width: 40, height: 40, borderRadius: 10, background: '#2c1a0e', color: '#fdf8f2', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>
+                      <div style={{ width: 40, height: 40, borderRadius: RADIUS.md, background: '#2c1a0e', color: '#fdf8f2', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>
                         <i className="ti ti-user" />
                       </div>
                       <div>
@@ -357,7 +358,7 @@ export default function Settings() {
                         }
                       }}
                       style={{
-                        padding: '6px 14px', borderRadius: 8, border: '1px solid #dc322f',
+                        padding: '6px 14px', borderRadius: RADIUS.md, border: '1px solid #dc322f',
                         background: '#fff', color: '#dc322f', fontSize: 12, fontWeight: 700, cursor: 'pointer',
                         display: 'flex', alignItems: 'center', gap: 6
                       }}
@@ -383,7 +384,7 @@ export default function Settings() {
                         setSaved(true)
                         setTimeout(() => setSaved(false), 2000)
                       }}
-                      style={{ width: '100%', border: '1px solid rgba(88,110,117,0.2)', borderRadius: 9, padding: '9px 12px', fontSize: 13.5, background: '#fdf8f2', color: '#2c1a0e', outline: 'none', fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+                      style={{ width: '100%', border: '1px solid rgba(88,110,117,0.2)', borderRadius: 9, padding: '9px 12px', fontSize: TEXT.body, background: '#fdf8f2', color: '#2c1a0e', outline: 'none', fontFamily: "'Plus Jakarta Sans', sans-serif" }}
                     >
                       {subjects.map(s => (
                         <option key={s.id} value={s.id}>
@@ -391,7 +392,7 @@ export default function Settings() {
                         </option>
                       ))}
                     </select>
-                    <p style={{ fontSize: 11.5, color: '#7a5c42', marginTop: 6, margin: '6px 0 0' }}>
+                    <p style={{ fontSize: TEXT.caption, color: '#7a5c42', marginTop: 6, margin: '6px 0 0' }}>
                       Define a taxonomia e o gerador padrão quando nenhuma turma específica estiver selecionada.
                     </p>
                   </div>
@@ -403,7 +404,7 @@ export default function Settings() {
           {/* Armazenamento de Dados & Banco de Dados (Supabase) */}
           <ModuleCard title="Armazenamento de Dados & Banco de Dados (Supabase)" icon="ti-database" style={{ marginBottom: 20 }}>
             <div className="space-y-4">
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10, padding: '12px 16px', background: '#fdf8f2', borderRadius: 12, border: '1px solid rgba(88,110,117,0.2)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10, padding: '12px 16px', background: '#fdf8f2', borderRadius: RADIUS.lg, border: '1px solid rgba(88,110,117,0.2)' }}>
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                     <span style={{ fontSize: 13, fontWeight: 700, color: '#2c1a0e' }}>Status da Infraestrutura:</span>
@@ -420,7 +421,7 @@ export default function Settings() {
                   onClick={() => setShowTransparencyModal(true)}
                   style={{
                     padding: '6px 12px',
-                    borderRadius: 8,
+                    borderRadius: RADIUS.md,
                     border: '1px solid #d5c0b0',
                     background: '#fff',
                     color: '#2c1a0e',
@@ -480,7 +481,7 @@ export default function Settings() {
                           setTimeout(() => setSaved(false), 2000)
                         }
                       }}
-                      style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid #dc322f', background: '#fff', color: '#dc322f', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+                      style={{ padding: '8px 14px', borderRadius: RADIUS.md, border: '1px solid #dc322f', background: '#fff', color: '#dc322f', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
                     >
                       Restaurar Banco Padrão
                     </button>
@@ -500,7 +501,7 @@ export default function Settings() {
                       setSaved(true)
                       setTimeout(() => setSaved(false), 2000)
                     }}
-                    style={{ padding: '8px 18px', borderRadius: 8, border: 'none', background: '#2c1a0e', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+                    style={{ padding: '8px 18px', borderRadius: RADIUS.md, border: 'none', background: '#2c1a0e', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
                   >
                     <i className="ti ti-check" /> Salvar Conexão BYOK
                   </button>
@@ -534,7 +535,7 @@ export default function Settings() {
                     value={cfg[f.key] || ''}
                     onChange={e => setCfg({ ...cfg, [f.key]: e.target.value })}
                     placeholder={f.placeholder}
-                    style={{ width: '100%', border: '1px solid rgba(88,110,117,0.2)', borderRadius: 9, padding: '9px 12px', fontSize: 13.5, background: '#fdf8f2', color: '#2c1a0e', outline: 'none', fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+                    style={{ width: '100%', border: '1px solid rgba(88,110,117,0.2)', borderRadius: 9, padding: '9px 12px', fontSize: TEXT.body, background: '#fdf8f2', color: '#2c1a0e', outline: 'none', fontFamily: "'Plus Jakarta Sans', sans-serif" }}
                   />
                 </div>
               ))}
@@ -546,7 +547,7 @@ export default function Settings() {
                 onChange={e => setCfg({ ...cfg, instructions: e.target.value })}
                 rows={2}
                 placeholder="Cabeçalho padrão das provas, orientações metodológicas..."
-                style={{ width: '100%', border: '1px solid rgba(88,110,117,0.2)', borderRadius: 9, padding: '9px 12px', fontSize: 13.5, background: '#fdf8f2', color: '#2c1a0e', outline: 'none', resize: 'none', fontFamily: "'Plus Jakarta Sans', sans-serif", lineHeight: 1.5 }}
+                style={{ width: '100%', border: '1px solid rgba(88,110,117,0.2)', borderRadius: 9, padding: '9px 12px', fontSize: TEXT.body, background: '#fdf8f2', color: '#2c1a0e', outline: 'none', resize: 'none', fontFamily: "'Plus Jakarta Sans', sans-serif", lineHeight: 1.5 }}
               />
             </div>
           </ModuleCard>
@@ -554,7 +555,7 @@ export default function Settings() {
           <button
             onClick={save}
             style={{
-              width: '100%', padding: '15px 32px', borderRadius: 14, border: 'none',
+              width: '100%', padding: '15px 32px', borderRadius: RADIUS.lg, border: 'none',
               background: saved ? '#859900' : '#8b5e3c', color: '#fff',
               fontSize: 15, fontWeight: 700, cursor: 'pointer',
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, transition: 'all 0.2s',
@@ -588,7 +589,7 @@ export default function Settings() {
                 <select
                   value={docPrefs.fontFamily}
                   onChange={e => setDocPrefs({ ...docPrefs, fontFamily: e.target.value })}
-                  style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid #d5c8bb', background: '#fffcf8', fontSize: 13, outline: 'none' }}
+                  style={{ width: '100%', padding: '9px 12px', borderRadius: RADIUS.md, border: '1px solid #d5c8bb', background: '#fffcf8', fontSize: 13, outline: 'none' }}
                 >
                   <option value="'Times New Roman', Times, serif">Times New Roman (Acadêmico Tradicional)</option>
                   <option value="'Plus Jakarta Sans', sans-serif">Plus Jakarta Sans (Moderno & Claro)</option>
@@ -605,7 +606,7 @@ export default function Settings() {
                 <select
                   value={docPrefs.fontSizePt}
                   onChange={e => setDocPrefs({ ...docPrefs, fontSizePt: Number(e.target.value) })}
-                  style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid #d5c8bb', background: '#fffcf8', fontSize: 13, outline: 'none' }}
+                  style={{ width: '100%', padding: '9px 12px', borderRadius: RADIUS.md, border: '1px solid #d5c8bb', background: '#fffcf8', fontSize: 13, outline: 'none' }}
                 >
                   <option value={10}>10 pt (Compacto / Mais conteúdo por folha)</option>
                   <option value={11}>11 pt (Padrão Recomendado)</option>
@@ -621,7 +622,7 @@ export default function Settings() {
                 <select
                   value={docPrefs.lineHeight}
                   onChange={e => setDocPrefs({ ...docPrefs, lineHeight: Number(e.target.value) })}
-                  style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid #d5c8bb', background: '#fffcf8', fontSize: 13, outline: 'none' }}
+                  style={{ width: '100%', padding: '9px 12px', borderRadius: RADIUS.md, border: '1px solid #d5c8bb', background: '#fffcf8', fontSize: 13, outline: 'none' }}
                 >
                   <option value={1.15}>1.15 (Compacto)</option>
                   <option value={1.25}>1.25 (Recomendado)</option>
@@ -636,7 +637,7 @@ export default function Settings() {
                 <select
                   value={docPrefs.primaryColor}
                   onChange={e => setDocPrefs({ ...docPrefs, primaryColor: e.target.value })}
-                  style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid #d5c8bb', background: '#fffcf8', fontSize: 13, outline: 'none' }}
+                  style={{ width: '100%', padding: '9px 12px', borderRadius: RADIUS.md, border: '1px solid #d5c8bb', background: '#fffcf8', fontSize: 13, outline: 'none' }}
                 >
                   <option value="#2c1a0e">Azul Escuro Sobrancelha (#2c1a0e)</option>
                   <option value="#8b5e3c">Tons de Terra / Caramelo (#8b5e3c)</option>
@@ -653,7 +654,7 @@ export default function Settings() {
                 <select
                   value={docPrefs.marginMm}
                   onChange={e => setDocPrefs({ ...docPrefs, marginMm: Number(e.target.value) })}
-                  style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid #d5c8bb', background: '#fffcf8', fontSize: 13, outline: 'none' }}
+                  style={{ width: '100%', padding: '9px 12px', borderRadius: RADIUS.md, border: '1px solid #d5c8bb', background: '#fffcf8', fontSize: 13, outline: 'none' }}
                 >
                   <option value={10}>10 mm (Margens Estreitas)</option>
                   <option value={15}>15 mm (Margens Médias / Padrão ABNT)</option>
@@ -669,7 +670,7 @@ export default function Settings() {
                 setTimeout(() => setSaved(false), 2000)
               }}
               style={{
-                marginTop: 20, width: '100%', padding: '14px 28px', borderRadius: 12, border: 'none',
+                marginTop: 20, width: '100%', padding: '14px 28px', borderRadius: RADIUS.lg, border: 'none',
                 background: saved ? '#859900' : '#8b5e3c', color: '#fff',
                 fontSize: 14, fontWeight: 700, cursor: 'pointer',
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, transition: 'all 0.2s'
@@ -686,11 +687,11 @@ export default function Settings() {
       {activeTab === 'audit' && (
         <div>
           {/* Status do Consentimento */}
-          <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 12, padding: '14px 18px', marginBottom: 18, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+          <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: RADIUS.lg, padding: '14px 18px', marginBottom: 18, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#16a34a' }}></span>
-                <span style={{ fontSize: 13.5, fontWeight: 800, color: '#166534' }}>
+                <span style={{ fontSize: TEXT.body, fontWeight: 800, color: '#166534' }}>
                   Consentimento de Agência Ativo (LGPD)
                 </span>
                 <span style={{ background: '#dcfce7', color: '#15803d', fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6 }}>
@@ -705,13 +706,13 @@ export default function Settings() {
             <div style={{ display: 'flex', gap: 8 }}>
               <button
                 onClick={handleExportAuditCSV}
-                style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid #16a34a', background: '#fff', color: '#16a34a', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+                style={{ padding: '8px 14px', borderRadius: RADIUS.md, border: '1px solid #16a34a', background: '#fff', color: '#16a34a', fontSize: TEXT.bodyCompact, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
               >
                 <i className="ti ti-file-spreadsheet" /> Exportar CSV
               </button>
               <button
                 onClick={loadAuditData}
-                style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #bbf7d0', background: '#fff', color: '#15803d', fontSize: 12.5, cursor: 'pointer' }}
+                style={{ padding: '8px 12px', borderRadius: RADIUS.md, border: '1px solid #bbf7d0', background: '#fff', color: '#15803d', fontSize: TEXT.bodyCompact, cursor: 'pointer' }}
                 title="Atualizar lista"
               >
                 🔄
@@ -721,14 +722,14 @@ export default function Settings() {
 
           {/* Histórico de Ações */}
           <ModuleCard title="Trilha de Auditoria de Ações Agênticas" icon="ti-list-check" style={{ marginBottom: 20 }}>
-            <p style={{ fontSize: 12.5, color: '#7a5c42', margin: '0 0 14px', lineHeight: 1.5 }}>
+            <p style={{ fontSize: TEXT.bodyCompact, color: '#7a5c42', margin: '0 0 14px', lineHeight: 1.5 }}>
               Registro formal de todas as injeções e preenchimentos assistidos realizados em portais escolares (Machado Sobrinho, Plurall, Santa Catarina, Cambridge One). Os dados sensíveis são protegidos por criptografia local AES-GCM em repouso.
             </p>
 
             {loadingLogs ? (
               <div style={{ textAlign: 'center', padding: 24, color: '#8b5e3c' }}>Carregando trilha de auditoria...</div>
             ) : auditLogs.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '30px 10px', color: '#665c54', background: '#faf6f0', borderRadius: 10, fontSize: 13 }}>
+              <div style={{ textAlign: 'center', padding: '30px 10px', color: '#665c54', background: '#faf6f0', borderRadius: RADIUS.md, fontSize: 13 }}>
                 🛡️ Nenhuma ação registrada ainda. Quando a Rafinha ou você disparar um preenchimento em portal, ele será auditado aqui.
               </div>
             ) : (
@@ -739,7 +740,7 @@ export default function Settings() {
                     style={{
                       background: '#faf6f0',
                       border: '1px solid #d5c8bb',
-                      borderRadius: 10,
+                      borderRadius: RADIUS.md,
                       padding: '12px 16px',
                       display: 'flex',
                       flexDirection: 'column',
@@ -748,7 +749,7 @@ export default function Settings() {
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 6 }}>
                       <div>
-                        <span style={{ fontWeight: 800, color: '#2c1a0e', fontSize: 13.5 }}>
+                        <span style={{ fontWeight: 800, color: '#2c1a0e', fontSize: TEXT.body }}>
                           {log.platformName || log.platform}
                         </span>
                         <span style={{ color: '#8b5e3c', fontWeight: 600, fontSize: 13 }}> · {log.actionType}</span>
@@ -770,7 +771,7 @@ export default function Settings() {
                       </div>
                     </div>
 
-                    <div style={{ fontSize: 12.5, color: '#2c1a0e' }}>
+                    <div style={{ fontSize: TEXT.bodyCompact, color: '#2c1a0e' }}>
                       {log.summary}
                     </div>
 
@@ -780,14 +781,14 @@ export default function Settings() {
                       </span>
                       <button
                         onClick={() => handleViewDetail(log)}
-                        style={{ background: 'transparent', border: 'none', color: '#8b5e3c', fontSize: 11.5, fontWeight: 700, cursor: 'pointer', padding: 0 }}
+                        style={{ background: 'transparent', border: 'none', color: '#8b5e3c', fontSize: TEXT.caption, fontWeight: 700, cursor: 'pointer', padding: 0 }}
                       >
                         {selectedLogDetail?.id === log.id ? '▲ Ocultar Detalhes' : '▼ Ver Detalhes Seguros'}
                       </button>
                     </div>
 
                     {selectedLogDetail?.id === log.id && (
-                      <div style={{ background: '#fff', border: '1px solid #d5c8bb', borderRadius: 8, padding: '10px 12px', marginTop: 6, fontSize: 12, fontFamily: 'monospace', whiteSpace: 'pre-wrap', color: '#2c1a0e', maxHeight: 180, overflowY: 'auto' }}>
+                      <div style={{ background: '#fff', border: '1px solid #d5c8bb', borderRadius: RADIUS.md, padding: '10px 12px', marginTop: 6, fontSize: 12, fontFamily: 'monospace', whiteSpace: 'pre-wrap', color: '#2c1a0e', maxHeight: 180, overflowY: 'auto' }}>
                         {selectedLogDetail.decrypted}
                       </div>
                     )}
@@ -799,12 +800,12 @@ export default function Settings() {
 
           {/* Trilha de Auditoria de Chamadas de IA (Domesticação) */}
           <ModuleCard title="Trilha de Auditoria IA (Chamadas Críticas)" icon="ti-brain" style={{ marginBottom: 20 }}>
-            <p style={{ fontSize: 12.5, color: '#7a5c42', margin: '0 0 14px', lineHeight: 1.5 }}>
+            <p style={{ fontSize: TEXT.bodyCompact, color: '#7a5c42', margin: '0 0 14px', lineHeight: 1.5 }}>
               Registro de todas as chamadas de IA classificadas como críticas (OmniGrader, BatchGrader, AutoReport, MeetingClassRecorder). Armazena metadados, temperatura utilizada, validações determinísticas e respostas brutas resumidas para inspeção pós-fato sem expor dados integrais do aluno.
             </p>
 
             {aiAuditLogs.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '30px 10px', color: '#665c54', background: '#faf6f0', borderRadius: 10, fontSize: 13 }}>
+              <div style={{ textAlign: 'center', padding: '30px 10px', color: '#665c54', background: '#faf6f0', borderRadius: RADIUS.md, fontSize: 13 }}>
                 🤖 Nenhuma chamada crítica de IA auditada ainda nesta sessão. Conforme você corrigir redações ou gerar pareceres, os registros aparecerão aqui.
               </div>
             ) : (
@@ -815,7 +816,7 @@ export default function Settings() {
                     style={{
                       background: '#faf6f0',
                       border: log.flagged ? '1px solid #f59e0b' : '1px solid #d5c8bb',
-                      borderRadius: 10,
+                      borderRadius: RADIUS.md,
                       padding: '12px 16px',
                       display: 'flex',
                       flexDirection: 'column',
@@ -824,7 +825,7 @@ export default function Settings() {
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 6 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span style={{ fontWeight: 800, color: '#2c1a0e', fontSize: 13.5 }}>
+                        <span style={{ fontWeight: 800, color: '#2c1a0e', fontSize: TEXT.body }}>
                           {log.module}
                         </span>
                         <span style={{
@@ -857,7 +858,7 @@ export default function Settings() {
                       </span>
                     </div>
 
-                    <div style={{ fontSize: 12.5, color: '#2c1a0e' }}>
+                    <div style={{ fontSize: TEXT.bodyCompact, color: '#2c1a0e' }}>
                       <strong>Contexto:</strong> {log.promptSummary}
                     </div>
 
@@ -873,14 +874,14 @@ export default function Settings() {
                       </span>
                       <button
                         onClick={() => setSelectedAiLogDetail(selectedAiLogDetail === log.id ? null : log.id)}
-                        style={{ background: 'transparent', border: 'none', color: '#8b5e3c', fontSize: 11.5, fontWeight: 700, cursor: 'pointer', padding: 0 }}
+                        style={{ background: 'transparent', border: 'none', color: '#8b5e3c', fontSize: TEXT.caption, fontWeight: 700, cursor: 'pointer', padding: 0 }}
                       >
                         {selectedAiLogDetail === log.id ? '▲ Ocultar Resposta' : '▼ Ver Resposta Bruta'}
                       </button>
                     </div>
 
                     {selectedAiLogDetail === log.id && (
-                      <div style={{ background: '#fff', border: '1px solid #d5c8bb', borderRadius: 8, padding: '10px 12px', marginTop: 6, fontSize: 12, fontFamily: 'monospace', whiteSpace: 'pre-wrap', color: '#2c1a0e', maxHeight: 180, overflowY: 'auto' }}>
+                      <div style={{ background: '#fff', border: '1px solid #d5c8bb', borderRadius: RADIUS.md, padding: '10px 12px', marginTop: 6, fontSize: 12, fontFamily: 'monospace', whiteSpace: 'pre-wrap', color: '#2c1a0e', maxHeight: 180, overflowY: 'auto' }}>
                         {log.rawResponseSummary}
                       </div>
                     )}
@@ -892,19 +893,19 @@ export default function Settings() {
 
           {/* Retenção de Dados & Expurgo (Decisão D3: B) */}
           <ModuleCard title="Política de Retenção & Expurgo de Logs" icon="ti-trash" style={{ marginBottom: 20 }}>
-            <p style={{ fontSize: 12.5, color: '#7a5c42', margin: '0 0 12px', lineHeight: 1.5 }}>
+            <p style={{ fontSize: TEXT.bodyCompact, color: '#7a5c42', margin: '0 0 12px', lineHeight: 1.5 }}>
               <strong>Política Ativa:</strong> Retenção permanente local e no Supabase pessoal (BYOK) até exclusão manual pelo professor. Você pode limpar a trilha a qualquer momento.
             </p>
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
               <button
                 onClick={handlePurgeAudit}
-                style={{ padding: '9px 16px', borderRadius: 8, border: '1px solid #dc2626', background: '#fee2e2', color: '#dc2626', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+                style={{ padding: '9px 16px', borderRadius: RADIUS.md, border: '1px solid #dc2626', background: '#fee2e2', color: '#dc2626', fontSize: TEXT.bodyCompact, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
               >
                 <i className="ti ti-trash" /> Limpar Auditoria de Portais
               </button>
               <button
                 onClick={handlePurgeAiAudit}
-                style={{ padding: '9px 16px', borderRadius: 8, border: '1px solid #b45309', background: '#fef3c7', color: '#92400e', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+                style={{ padding: '9px 16px', borderRadius: RADIUS.md, border: '1px solid #b45309', background: '#fef3c7', color: '#92400e', fontSize: TEXT.bodyCompact, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
               >
                 <i className="ti ti-trash" /> Limpar Auditoria IA
               </button>
@@ -922,10 +923,10 @@ export default function Settings() {
               Baixe um arquivo de backup completo com todas as suas escolas, turmas, alunos, notas, questões, provas e logs de auditoria.
             </p>
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-              <button onClick={exportBackup} style={{ padding: '10px 20px', borderRadius: 10, border: 'none', background: '#2c1a0e', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <button onClick={exportBackup} style={{ padding: '10px 20px', borderRadius: RADIUS.md, border: 'none', background: '#2c1a0e', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
                 <i className="ti ti-download" /> Exportar Backup Completo (.JSON)
               </button>
-              <button onClick={importBackup} style={{ padding: '10px 20px', borderRadius: 10, border: '1px solid #8b5e3c', background: '#f0e8d8', color: '#2c1a0e', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <button onClick={importBackup} style={{ padding: '10px 20px', borderRadius: RADIUS.md, border: '1px solid #8b5e3c', background: '#f0e8d8', color: '#2c1a0e', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
                 <i className="ti ti-upload" /> Restaurar Backup (.JSON)
               </button>
             </div>
@@ -936,10 +937,10 @@ export default function Settings() {
               Conforme a Lei Geral de Proteção de Dados (Lei 13.709/2018), você tem controle total sobre a portabilidade e eliminação dos seus dados pessoais e de seus alunos.
             </p>
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-              <button onClick={exportBackup} style={{ padding: '9px 16px', borderRadius: 9, borderWidth: '1px', borderStyle: 'solid', borderColor: '#2b6cb0', background: '#ebf8ff', color: '#2b6cb0', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <button onClick={exportBackup} style={{ padding: '9px 16px', borderRadius: 9, borderWidth: '1px', borderStyle: 'solid', borderColor: '#2b6cb0', background: '#ebf8ff', color: '#2b6cb0', fontSize: TEXT.bodyCompact, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
                 <i className="ti ti-file-export" /> Portabilidade LGPD (Exportar JSON)
               </button>
-              <button onClick={eraseAllDataLGPD} style={{ padding: '9px 16px', borderRadius: 9, borderWidth: '1px', borderStyle: 'solid', borderColor: '#e53e3e', background: '#fff5f5', color: '#e53e3e', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <button onClick={eraseAllDataLGPD} style={{ padding: '9px 16px', borderRadius: 9, borderWidth: '1px', borderStyle: 'solid', borderColor: '#e53e3e', background: '#fff5f5', color: '#e53e3e', fontSize: TEXT.bodyCompact, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
                 <i className="ti ti-trash" /> Excluir Todos os Dados (Esquecimento LGPD)
               </button>
             </div>

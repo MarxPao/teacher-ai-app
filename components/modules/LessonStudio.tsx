@@ -1,4 +1,5 @@
 'use client'
+import { COLOR, RADIUS, TEXT, SHADOW, FONT } from '@/styles/tokens'
 import { toast, showConfirm } from '@/components/Toast'
 
 import React, { useState, useEffect, useMemo, useRef } from 'react'
@@ -625,22 +626,22 @@ ${postLessonNotes}
           </h1>
         </div>
 
-        <div style={{ display: 'flex', gap: 6, background: '#fffcf8', padding: 4, borderRadius: 12, border: '1px solid #d5c0b0' }}>
+        <div style={{ display: 'flex', gap: 6, background: '#fffcf8', padding: 4, borderRadius: RADIUS.lg, border: '1px solid #d5c0b0' }}>
           <button
             onClick={() => setActiveTab('editor')}
-            style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: activeTab === 'editor' ? '#8b5e3c' : 'transparent', color: activeTab === 'editor' ? '#fff' : '#7a5c42', fontWeight: 700, cursor: 'pointer', fontSize: 13 }}
+            style={{ padding: '8px 16px', borderRadius: RADIUS.md, border: 'none', background: activeTab === 'editor' ? '#8b5e3c' : 'transparent', color: activeTab === 'editor' ? '#fff' : '#7a5c42', fontWeight: 700, cursor: 'pointer', fontSize: 13 }}
           >
             <i className="ti ti-edit"></i> Edição (Boxes)
           </button>
           <button
             onClick={() => setActiveTab('preview')}
-            style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: activeTab === 'preview' ? '#8b5e3c' : 'transparent', color: activeTab === 'preview' ? '#fff' : '#7a5c42', fontWeight: 700, cursor: 'pointer', fontSize: 13 }}
+            style={{ padding: '8px 16px', borderRadius: RADIUS.md, border: 'none', background: activeTab === 'preview' ? '#8b5e3c' : 'transparent', color: activeTab === 'preview' ? '#fff' : '#7a5c42', fontWeight: 700, cursor: 'pointer', fontSize: 13 }}
           >
             <i className="ti ti-file-text"></i> Folha de Planejamento (Limpo)
           </button>
           <button
             onClick={() => setActiveTab('bank')}
-            style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: activeTab === 'bank' ? '#8b5e3c' : 'transparent', color: activeTab === 'bank' ? '#fff' : '#7a5c42', fontWeight: 700, cursor: 'pointer', fontSize: 13 }}
+            style={{ padding: '8px 16px', borderRadius: RADIUS.md, border: 'none', background: activeTab === 'bank' ? '#8b5e3c' : 'transparent', color: activeTab === 'bank' ? '#fff' : '#7a5c42', fontWeight: 700, cursor: 'pointer', fontSize: 13 }}
           >
             <i className="ti ti-archive"></i> Banco de Planos ({bankPlans.length})
           </button>
@@ -655,7 +656,7 @@ ${postLessonNotes}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
             
             {/* Box 1: Logística & Identificação */}
-            <div style={{ background: '#fffcf8', border: '1px solid rgba(139,115,85,0.16)', borderRadius: 16, padding: 20 }}>
+            <div style={{ background: '#fffcf8', border: '1px solid rgba(139,115,85,0.16)', borderRadius: RADIUS.xl, padding: 20 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
                 <span style={{ fontSize: 12, fontWeight: 800, color: '#8b5e3c', textTransform: 'uppercase', letterSpacing: 0.5 }}>
                   📦 Box 1: Identificação & Espaço da Aula
@@ -665,11 +666,11 @@ ${postLessonNotes}
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14 }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: 11.5, fontWeight: 700, color: '#7a6552', marginBottom: 4 }}>Turma</label>
+                  <label style={{ display: 'block', fontSize: TEXT.caption, fontWeight: 700, color: '#7a6552', marginBottom: 4 }}>Turma</label>
                   <select
                     value={selectedClassId}
                     onChange={e => setSelectedClassId(e.target.value)}
-                    style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid #d5c0b0', background: '#fdf8f2', fontSize: 13, outline: 'none' }}
+                    style={{ width: '100%', padding: '9px 12px', borderRadius: RADIUS.md, border: '1px solid #d5c0b0', background: '#fdf8f2', fontSize: 13, outline: 'none' }}
                   >
                     {classes.map(c => (
                       <option key={c.id} value={c.id}>{c.name} ({c.gradeYear || '9º Fund.'})</option>
@@ -678,21 +679,21 @@ ${postLessonNotes}
                 </div>
 
                 <div>
-                  <label style={{ display: 'block', fontSize: 11.5, fontWeight: 700, color: '#7a6552', marginBottom: 4 }}>Data da Aula</label>
+                  <label style={{ display: 'block', fontSize: TEXT.caption, fontWeight: 700, color: '#7a6552', marginBottom: 4 }}>Data da Aula</label>
                   <input
                     type="date"
                     value={lessonDate}
                     onChange={e => setLessonDate(e.target.value)}
-                    style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #d5c0b0', background: '#fdf8f2', fontSize: 13, outline: 'none' }}
+                    style={{ width: '100%', padding: '8px 12px', borderRadius: RADIUS.md, border: '1px solid #d5c0b0', background: '#fdf8f2', fontSize: 13, outline: 'none' }}
                   />
                 </div>
 
                 <div>
-                  <label style={{ display: 'block', fontSize: 11.5, fontWeight: 700, color: '#7a6552', marginBottom: 4 }}>Espaço / Local</label>
+                  <label style={{ display: 'block', fontSize: TEXT.caption, fontWeight: 700, color: '#7a6552', marginBottom: 4 }}>Espaço / Local</label>
                   <select
                     value={roomSpace}
                     onChange={e => setRoomSpace(e.target.value)}
-                    style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid #d5c0b0', background: '#fdf8f2', fontSize: 13, outline: 'none' }}
+                    style={{ width: '100%', padding: '9px 12px', borderRadius: RADIUS.md, border: '1px solid #d5c0b0', background: '#fdf8f2', fontSize: 13, outline: 'none' }}
                   >
                     <option value="Sala de Aula Regular">🏫 Sala de Aula Regular</option>
                     <option value="Laboratório de Informática">💻 Lab. de Informática</option>
@@ -704,7 +705,7 @@ ${postLessonNotes}
             </div>
 
             {/* Box 2: Conteúdo & Tópico Central */}
-            <div style={{ background: '#fffcf8', border: '1px solid rgba(139,115,85,0.16)', borderRadius: 16, padding: 20 }}>
+            <div style={{ background: '#fffcf8', border: '1px solid rgba(139,115,85,0.16)', borderRadius: RADIUS.xl, padding: 20 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                 <span style={{ fontSize: 12, fontWeight: 800, color: '#8b5e3c', textTransform: 'uppercase', letterSpacing: 0.5 }}>
                   📦 Box 2: Conteúdo & Tópico Central
@@ -712,7 +713,7 @@ ${postLessonNotes}
                 <button
                   onClick={handleGenerateWithAi}
                   disabled={isGenerating}
-                  style={{ background: '#8b5e3c', color: '#fff', border: 'none', borderRadius: 8, padding: '6px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+                  style={{ background: '#8b5e3c', color: '#fff', border: 'none', borderRadius: RADIUS.md, padding: '6px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
                 >
                   <i className={isGenerating ? 'ti ti-loader ti-spin' : 'ti ti-sparkles'}></i>
                   {isGenerating ? 'Elaborando Roteiro...' : 'Gerar Roteiro com IA'}
@@ -723,12 +724,12 @@ ${postLessonNotes}
                 value={topic}
                 onChange={e => setTopic(e.target.value)}
                 placeholder="Ex: Simple Past vs Past Continuous narrating a travel experience..."
-                style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid #d5c0b0', background: '#fdf8f2', fontSize: 14, outline: 'none', boxSizing: 'border-box' }}
+                style={{ width: '100%', padding: '10px 14px', borderRadius: RADIUS.md, border: '1px solid #d5c0b0', background: '#fdf8f2', fontSize: 14, outline: 'none', boxSizing: 'border-box' }}
               />
             </div>
 
             {/* Box 3: Competências & Habilidades BNCC */}
-            <div style={{ background: '#fffcf8', border: '1px solid rgba(139,115,85,0.16)', borderRadius: 16, padding: 20 }}>
+            <div style={{ background: '#fffcf8', border: '1px solid rgba(139,115,85,0.16)', borderRadius: RADIUS.xl, padding: 20 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                 <span style={{ fontSize: 12, fontWeight: 800, color: '#8b5e3c', textTransform: 'uppercase', letterSpacing: 0.5 }}>
                   📦 Box 3: Habilidades BNCC ({currentClass?.gradeYear || 'Geral'})
@@ -738,16 +739,16 @@ ${postLessonNotes}
 
               {/* Alerta de Habilidade Adiada na Aula Anterior */}
               {pendingBacklog.length > 0 && (
-                <div style={{ background: '#fff8eb', border: '1px solid #f59e0b', borderRadius: 10, padding: '10px 14px', marginBottom: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+                <div style={{ background: '#fff8eb', border: '1px solid #f59e0b', borderRadius: RADIUS.md, padding: '10px 14px', marginBottom: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <i className="ti ti-pin" style={{ color: '#d97706', fontSize: 18 }}></i>
-                    <span style={{ fontSize: 12.5, color: '#92400e', fontWeight: 600 }}>
+                    <span style={{ fontSize: TEXT.bodyCompact, color: '#92400e', fontWeight: 600 }}>
                       <strong>Replanejamento:</strong> {pendingBacklog.length} habilidade(s) adiada(s) da aula anterior: <strong>{pendingBacklog.join(', ')}</strong>
                     </span>
                   </div>
                   <button
                     onClick={() => importPendingBacklogSkill(pendingBacklog[0])}
-                    style={{ background: '#d97706', color: '#fff', border: 'none', borderRadius: 6, padding: '4px 10px', fontSize: 11.5, fontWeight: 700, cursor: 'pointer' }}
+                    style={{ background: '#d97706', color: '#fff', border: 'none', borderRadius: 6, padding: '4px 10px', fontSize: TEXT.caption, fontWeight: 700, cursor: 'pointer' }}
                   >
                     + Incluir no Plano de Hoje
                   </button>
@@ -758,9 +759,9 @@ ${postLessonNotes}
               {selectedSkills.length > 0 && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
                   {selectedSkills.map(sk => (
-                    <div key={sk.code} style={{ background: '#fdf8f2', border: '1px solid #e8decb', borderRadius: 8, padding: '8px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                    <div key={sk.code} style={{ background: '#fdf8f2', border: '1px solid #e8decb', borderRadius: RADIUS.md, padding: '8px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
                       <div style={{ flex: 1, minWidth: 240 }}>
-                        <strong style={{ color: '#8b5e3c', fontSize: 12.5 }}>[{sk.code}]</strong>
+                        <strong style={{ color: '#8b5e3c', fontSize: TEXT.bodyCompact }}>[{sk.code}]</strong>
                         <span style={{ fontSize: 12, color: '#4a382a', marginLeft: 6 }}>{sk.desc}</span>
                       </div>
                       <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
@@ -794,7 +795,7 @@ ${postLessonNotes}
                   placeholder="Pesquisar código ou descrição na BNCC..."
                   value={skillSearch}
                   onChange={e => setSkillSearch(e.target.value)}
-                  style={{ width: '100%', padding: '7px 12px', borderRadius: 8, border: '1px solid #d5c0b0', background: '#fdf8f2', fontSize: 12.5, marginBottom: 8, outline: 'none' }}
+                  style={{ width: '100%', padding: '7px 12px', borderRadius: RADIUS.md, border: '1px solid #d5c0b0', background: '#fdf8f2', fontSize: TEXT.bodyCompact, marginBottom: 8, outline: 'none' }}
                 />
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 6, maxHeight: 160, overflowY: 'auto' }}>
                   {availableBnccSkills
@@ -809,7 +810,7 @@ ${postLessonNotes}
                             padding: '6px 10px', borderRadius: 6, cursor: 'pointer',
                             border: isSelected ? '1px solid #8b5e3c' : '1px solid #e8decb',
                             background: isSelected ? '#f5efe6' : '#fff',
-                            fontSize: 11.5, color: isSelected ? '#8b5e3c' : '#4a382a',
+                            fontSize: TEXT.caption, color: isSelected ? '#8b5e3c' : '#4a382a',
                             display: 'flex', alignItems: 'center', gap: 6
                           }}
                         >
@@ -823,7 +824,7 @@ ${postLessonNotes}
             </div>
 
             {/* Box 4: Metodologia & Ações Pedagógicas */}
-            <div style={{ background: '#fffcf8', border: '1px solid rgba(139,115,85,0.16)', borderRadius: 16, padding: 20 }}>
+            <div style={{ background: '#fffcf8', border: '1px solid rgba(139,115,85,0.16)', borderRadius: RADIUS.xl, padding: 20 }}>
               <span style={{ fontSize: 12, fontWeight: 800, color: '#8b5e3c', textTransform: 'uppercase', letterSpacing: 0.5, display: 'block', marginBottom: 12 }}>
                 📦 Box 4: Metodologia Ativa Selecionada
               </span>
@@ -836,14 +837,14 @@ ${postLessonNotes}
                       key={m.id}
                       onClick={() => setSelectedMethodology(m.id)}
                       style={{
-                        padding: 12, borderRadius: 10, cursor: 'pointer',
+                        padding: 12, borderRadius: RADIUS.md, cursor: 'pointer',
                         border: isSel ? `2px solid ${m.badge}` : '1px solid #e8decb',
                         background: isSel ? '#fdf8f2' : '#fff',
                         transition: 'all 0.15s'
                       }}
                     >
-                      <strong style={{ fontSize: 12.5, color: '#2c1a0e', display: 'block', marginBottom: 4 }}>{m.name}</strong>
-                      <p style={{ margin: 0, fontSize: 11.5, color: '#7a6552', lineHeight: 1.35 }}>{m.desc}</p>
+                      <strong style={{ fontSize: TEXT.bodyCompact, color: '#2c1a0e', display: 'block', marginBottom: 4 }}>{m.name}</strong>
+                      <p style={{ margin: 0, fontSize: TEXT.caption, color: '#7a6552', lineHeight: 1.35 }}>{m.desc}</p>
                     </div>
                   )
                 })}
@@ -851,13 +852,13 @@ ${postLessonNotes}
             </div>
 
             {/* Box 5: Material de Referência (Multi-Turma & Biblioteca RAG) */}
-            <div style={{ background: '#fffcf8', border: '1px solid rgba(139,115,85,0.16)', borderRadius: 16, padding: 20 }}>
+            <div style={{ background: '#fffcf8', border: '1px solid rgba(139,115,85,0.16)', borderRadius: RADIUS.xl, padding: 20 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
                 <span style={{ fontSize: 12, fontWeight: 800, color: '#8b5e3c', textTransform: 'uppercase', letterSpacing: 0.5 }}>
                   📦 Box 5: Livro Didático & Material de Referência
                 </span>
                 {libraryBooks.length > 0 && (
-                  <span style={{ fontSize: 11.5, color: '#2aa198', fontWeight: 700 }}>
+                  <span style={{ fontSize: TEXT.caption, color: '#2aa198', fontWeight: 700 }}>
                     📚 {libraryBooks.length} livro(s) indexado(s) no Repositório
                   </span>
                 )}
@@ -894,13 +895,13 @@ ${postLessonNotes}
 
               <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 12 }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: 11.5, fontWeight: 700, color: '#7a6552', marginBottom: 4 }}>Livro / Apostila</label>
+                  <label style={{ display: 'block', fontSize: TEXT.caption, fontWeight: 700, color: '#7a6552', marginBottom: 4 }}>Livro / Apostila</label>
                   <input
                     value={bookTitle}
                     onChange={e => setBookTitle(e.target.value)}
                     list="library-books-options"
                     placeholder="Ex: Eyes Open 3 (Cambridge) ou selecione..."
-                    style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #d5c0b0', background: '#fdf8f2', fontSize: 13, outline: 'none' }}
+                    style={{ width: '100%', padding: '8px 12px', borderRadius: RADIUS.md, border: '1px solid #d5c0b0', background: '#fdf8f2', fontSize: 13, outline: 'none' }}
                   />
                   <datalist id="library-books-options">
                     {libraryBooks.map(b => (
@@ -909,21 +910,21 @@ ${postLessonNotes}
                   </datalist>
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: 11.5, fontWeight: 700, color: '#7a6552', marginBottom: 4 }}>Unidade / Capítulo</label>
+                  <label style={{ display: 'block', fontSize: TEXT.caption, fontWeight: 700, color: '#7a6552', marginBottom: 4 }}>Unidade / Capítulo</label>
                   <input
                     value={unitChapter}
                     onChange={e => setUnitChapter(e.target.value)}
                     placeholder="Ex: Unit 4: Free Time"
-                    style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #d5c0b0', background: '#fdf8f2', fontSize: 13, outline: 'none' }}
+                    style={{ width: '100%', padding: '8px 12px', borderRadius: RADIUS.md, border: '1px solid #d5c0b0', background: '#fdf8f2', fontSize: 13, outline: 'none' }}
                   />
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: 11.5, fontWeight: 700, color: '#7a6552', marginBottom: 4 }}>Páginas</label>
+                  <label style={{ display: 'block', fontSize: TEXT.caption, fontWeight: 700, color: '#7a6552', marginBottom: 4 }}>Páginas</label>
                   <input
                     value={pages}
                     onChange={e => setPages(e.target.value)}
                     placeholder="Ex: pp. 44-47"
-                    style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #d5c0b0', background: '#fdf8f2', fontSize: 13, outline: 'none' }}
+                    style={{ width: '100%', padding: '8px 12px', borderRadius: RADIUS.md, border: '1px solid #d5c0b0', background: '#fdf8f2', fontSize: 13, outline: 'none' }}
                   />
                 </div>
               </div>
@@ -970,7 +971,7 @@ ${postLessonNotes}
             </div>
 
             {/* Box 6: Roteiro com Timing por Etapa */}
-            <div style={{ background: '#fffcf8', border: '1px solid rgba(139,115,85,0.16)', borderRadius: 16, padding: 20 }}>
+            <div style={{ background: '#fffcf8', border: '1px solid rgba(139,115,85,0.16)', borderRadius: RADIUS.xl, padding: 20 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
                 <span style={{ fontSize: 12, fontWeight: 800, color: '#8b5e3c', textTransform: 'uppercase', letterSpacing: 0.5 }}>
                   📦 Box 6: Roteiro da Aula & Timing ({totalTiming} min)
@@ -996,7 +997,7 @@ ${postLessonNotes}
                   <div style={{
                     background: isAllDone ? '#f0fdf4' : '#fffbeb',
                     border: `1px solid ${isAllDone ? '#bbf7d0' : '#fde68a'}`,
-                    borderRadius: 12,
+                    borderRadius: RADIUS.lg,
                     padding: '12px 16px',
                     marginBottom: 16,
                     display: 'flex',
@@ -1010,7 +1011,7 @@ ${postLessonNotes}
                           Status de Execução: {completedCount} de {totalCount} partes concluídas ({progressPct}%)
                         </strong>
                       </div>
-                      <span style={{ fontSize: 11.5, fontWeight: 700, color: isAllDone ? '#15803d' : '#b45309' }}>
+                      <span style={{ fontSize: TEXT.caption, fontWeight: 700, color: isAllDone ? '#15803d' : '#b45309' }}>
                         {isAllDone ? '✓ Todas as etapas executadas' : `⏳ ${pendingStagesList.length} etapa(s) pendente(s)`}
                       </span>
                     </div>
@@ -1026,7 +1027,7 @@ ${postLessonNotes}
                     </div>
 
                     {!isAllDone && pendingStagesList.length > 0 && (
-                      <div style={{ fontSize: 11.5, color: '#78350f', display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', marginTop: 2 }}>
+                      <div style={{ fontSize: TEXT.caption, color: '#78350f', display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', marginTop: 2 }}>
                         <span style={{ fontWeight: 700 }}>Pendências do roteiro:</span>
                         {pendingStagesList.map((st, i) => (
                           <span key={i} style={{ background: '#fef3c7', border: '1px solid #fde68a', padding: '1px 6px', borderRadius: 4 }}>
@@ -1053,7 +1054,7 @@ ${postLessonNotes}
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {stages.map((stage, idx) => (
-                  <div key={idx} style={{ background: '#fdf8f2', border: '1px solid #e8decb', borderRadius: 10, padding: 12, display: 'grid', gridTemplateColumns: '180px 70px 1fr 1fr 30px', gap: 10, alignItems: 'center' }}>
+                  <div key={idx} style={{ background: '#fdf8f2', border: '1px solid #e8decb', borderRadius: RADIUS.md, padding: 12, display: 'grid', gridTemplateColumns: '180px 70px 1fr 1fr 30px', gap: 10, alignItems: 'center' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                       <input
                         type="checkbox"
@@ -1071,7 +1072,7 @@ ${postLessonNotes}
                           updated[idx].name = e.target.value
                           setStages(updated)
                         }}
-                        style={{ border: 'none', background: 'transparent', fontWeight: 700, fontSize: 12.5, color: '#2c1a0e', outline: 'none', width: '100%' }}
+                        style={{ border: 'none', background: 'transparent', fontWeight: 700, fontSize: TEXT.bodyCompact, color: '#2c1a0e', outline: 'none', width: '100%' }}
                       />
                     </div>
 
@@ -1126,14 +1127,14 @@ ${postLessonNotes}
 
               <button
                 onClick={() => setStages([...stages, { name: 'Nova Etapa', durationMin: 5, teacherAction: '', studentAction: '', completed: false }])}
-                style={{ marginTop: 10, background: 'transparent', border: '1px dashed #8b5e3c', color: '#8b5e3c', borderRadius: 8, padding: '6px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+                style={{ marginTop: 10, background: 'transparent', border: '1px dashed #8b5e3c', color: '#8b5e3c', borderRadius: RADIUS.md, padding: '6px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
               >
                 + Adicionar Etapa ao Roteiro
               </button>
             </div>
 
             {/* Box 7: Tarefa de Casa & Anotações */}
-            <div style={{ background: '#fffcf8', border: '1px solid rgba(139,115,85,0.16)', borderRadius: 16, padding: 20 }}>
+            <div style={{ background: '#fffcf8', border: '1px solid rgba(139,115,85,0.16)', borderRadius: RADIUS.xl, padding: 20 }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                 <div>
                   <span style={{ fontSize: 12, fontWeight: 800, color: '#8b5e3c', textTransform: 'uppercase', letterSpacing: 0.5, display: 'block', marginBottom: 6 }}>
@@ -1144,7 +1145,7 @@ ${postLessonNotes}
                     onChange={e => setHomework(e.target.value)}
                     placeholder="Ex: Workbook p. 28 exercícios 1 a 3..."
                     rows={3}
-                    style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #d5c0b0', background: '#fdf8f2', fontSize: 12.5, outline: 'none', resize: 'vertical' }}
+                    style={{ width: '100%', padding: '8px 12px', borderRadius: RADIUS.md, border: '1px solid #d5c0b0', background: '#fdf8f2', fontSize: TEXT.bodyCompact, outline: 'none', resize: 'vertical' }}
                   />
                 </div>
 
@@ -1157,7 +1158,7 @@ ${postLessonNotes}
                     onChange={e => setPostLessonNotes(e.target.value)}
                     placeholder="Como a turma respondeu? Quais pontos precisam de revisão na próxima aula?"
                     rows={3}
-                    style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #d5c0b0', background: '#fdf8f2', fontSize: 12.5, outline: 'none', resize: 'vertical' }}
+                    style={{ width: '100%', padding: '8px 12px', borderRadius: RADIUS.md, border: '1px solid #d5c0b0', background: '#fdf8f2', fontSize: TEXT.bodyCompact, outline: 'none', resize: 'vertical' }}
                   />
                 </div>
               </div>
@@ -1165,32 +1166,32 @@ ${postLessonNotes}
 
             {/* ─── RODAPÉ DE AÇÃO COM OS 2 BOTÕES DISTINTOS (BLOCO H) ───────── */}
             <div style={{
-              background: '#fffcf8', border: '1px solid #d5c0b0', borderRadius: 16,
+              background: '#fffcf8', border: '1px solid #d5c0b0', borderRadius: RADIUS.xl,
               padding: '16px 24px', display: 'flex', justifyContent: 'space-between',
               alignItems: 'center', flexWrap: 'wrap', gap: 12, boxShadow: '0 4px 14px rgba(44,26,14,0.06)'
             }}>
               {/* Botões de Exportação Universal */}
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                <button onClick={handleExportPdf} style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid #d5c0b0', background: '#fff', color: '#2c1a0e', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <button onClick={handleExportPdf} style={{ padding: '8px 14px', borderRadius: RADIUS.md, border: '1px solid #d5c0b0', background: '#fff', color: '#2c1a0e', fontSize: TEXT.bodyCompact, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
                   <i className="ti ti-printer"></i> PDF
                 </button>
-                <button onClick={handleExportWord} style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid #d5c0b0', background: '#fff', color: '#2c1a0e', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <button onClick={handleExportWord} style={{ padding: '8px 14px', borderRadius: RADIUS.md, border: '1px solid #d5c0b0', background: '#fff', color: '#2c1a0e', fontSize: TEXT.bodyCompact, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
                   <i className="ti ti-file-text"></i> Word (.doc)
                 </button>
-                <button onClick={handleExportExcel} style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid #d5c0b0', background: '#fff', color: '#2c1a0e', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <button onClick={handleExportExcel} style={{ padding: '8px 14px', borderRadius: RADIUS.md, border: '1px solid #d5c0b0', background: '#fff', color: '#2c1a0e', fontSize: TEXT.bodyCompact, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
                   <i className="ti ti-table"></i> Excel (.csv)
                 </button>
                 <button
                   onClick={() => setShowAttachActivityModal(true)}
-                  style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid #268bd2', background: '#e8f4fd', color: '#268bd2', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+                  style={{ padding: '8px 14px', borderRadius: RADIUS.md, border: '1px solid #268bd2', background: '#e8f4fd', color: '#268bd2', fontSize: TEXT.bodyCompact, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
                 >
                   <i className="ti ti-link"></i> Anexar Atividade do Banco
                 </button>
                 <button
                   onClick={() => setActiveTab('preview')}
                   style={{
-                    padding: '8px 14px', borderRadius: 8, border: '1.5px solid #8b5e3c',
-                    background: '#fdf8f2', color: '#8b5e3c', fontSize: 12.5,
+                    padding: '8px 14px', borderRadius: RADIUS.md, border: '1.5px solid #8b5e3c',
+                    background: '#fdf8f2', color: '#8b5e3c', fontSize: TEXT.bodyCompact,
                     fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6
                   }}
                 >
@@ -1215,8 +1216,8 @@ ${postLessonNotes}
                 <button
                   onClick={handleSaveToCalendar}
                   style={{
-                    padding: '9px 16px', borderRadius: 10, border: '1.5px solid #8b5e3c',
-                    background: '#fff', color: '#8b5e3c', fontSize: 12.5,
+                    padding: '9px 16px', borderRadius: RADIUS.md, border: '1.5px solid #8b5e3c',
+                    background: '#fff', color: '#8b5e3c', fontSize: TEXT.bodyCompact,
                     fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6
                   }}
                 >
@@ -1226,8 +1227,8 @@ ${postLessonNotes}
                 <button
                   onClick={handleSaveToBank}
                   style={{
-                    padding: '9px 16px', borderRadius: 10, border: '1.5px solid #8b5e3c',
-                    background: '#fff', color: '#8b5e3c', fontSize: 12.5,
+                    padding: '9px 16px', borderRadius: RADIUS.md, border: '1.5px solid #8b5e3c',
+                    background: '#fff', color: '#8b5e3c', fontSize: TEXT.bodyCompact,
                     fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6
                   }}
                 >
@@ -1237,7 +1238,7 @@ ${postLessonNotes}
                 <button
                   onClick={handleSaveBoth}
                   style={{
-                    padding: '9px 18px', borderRadius: 10, border: 'none',
+                    padding: '9px 18px', borderRadius: RADIUS.md, border: 'none',
                     background: 'linear-gradient(135deg, #8b5e3c 0%, #6f4728 100%)',
                     color: '#fff', fontSize: 13, fontWeight: 700,
                     cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
@@ -1255,7 +1256,7 @@ ${postLessonNotes}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
             
             {/* Box Lateral 0: 💡 DICAS & CONTINUIDADE DA ÚLTIMA AULA (HINTS) */}
-            <div style={{ background: '#fffcf7', border: '1.5px solid #d4944a', borderRadius: 16, padding: 18, boxShadow: '0 2px 10px rgba(212,148,74,0.08)' }}>
+            <div style={{ background: '#fffcf7', border: '1.5px solid #d4944a', borderRadius: RADIUS.xl, padding: 18, boxShadow: '0 2px 10px rgba(212,148,74,0.08)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                 <span style={{ fontSize: 12, fontWeight: 800, color: '#a05e1a', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}>
                   💡 Continuidade & Dicas da Última Aula
@@ -1264,21 +1265,21 @@ ${postLessonNotes}
                   {currentClass?.name || 'Turma'}
                 </span>
               </div>
-              <p style={{ fontSize: 11.5, color: '#7a6552', margin: '0 0 12px 0', lineHeight: 1.35 }}>
+              <p style={{ fontSize: TEXT.caption, color: '#7a6552', margin: '0 0 12px 0', lineHeight: 1.35 }}>
                 Ganchos pedagógicos e conexões com o conteúdo ministrado anteriormente:
               </p>
 
               {lastLessonInfo.topic ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  <div style={{ background: '#fefbf6', border: '1px solid #e8decb', borderRadius: 10, padding: 10 }}>
+                  <div style={{ background: '#fefbf6', border: '1px solid #e8decb', borderRadius: RADIUS.md, padding: 10 }}>
                     <div style={{ fontSize: 11, color: '#a08060', marginBottom: 2 }}>
                       Último Tópico Ministrado {lastLessonInfo.date ? `(${new Date(lastLessonInfo.date).toLocaleDateString('pt-BR')})` : ''}:
                     </div>
-                    <strong style={{ fontSize: 12.5, color: '#2c1a0e', display: 'block' }}>
+                    <strong style={{ fontSize: TEXT.bodyCompact, color: '#2c1a0e', display: 'block' }}>
                       {lastLessonInfo.topic}
                     </strong>
                     {lastLessonInfo.homework && (
-                      <div style={{ marginTop: 6, fontSize: 11.5, color: '#8b5e3c', background: '#fff', padding: '4px 8px', borderRadius: 6, border: '1px solid #ede8dc' }}>
+                      <div style={{ marginTop: 6, fontSize: TEXT.caption, color: '#8b5e3c', background: '#fff', padding: '4px 8px', borderRadius: 6, border: '1px solid #ede8dc' }}>
                         <strong>Dever Passado:</strong> {lastLessonInfo.homework}
                       </div>
                     )}
@@ -1295,8 +1296,8 @@ ${postLessonNotes}
                       type="button"
                       onClick={handleAddReviewWarmup}
                       style={{
-                        padding: '6px 10px', borderRadius: 8, border: '1px solid #d4944a',
-                        background: '#fff', fontSize: 11.5, color: '#a05e1a', cursor: 'pointer',
+                        padding: '6px 10px', borderRadius: RADIUS.md, border: '1px solid #d4944a',
+                        background: '#fff', fontSize: TEXT.caption, color: '#a05e1a', cursor: 'pointer',
                         fontWeight: 700, textAlign: 'left', display: 'flex', alignItems: 'center', gap: 6
                       }}
                     >
@@ -1308,8 +1309,8 @@ ${postLessonNotes}
                         type="button"
                         onClick={handleAddHomeworkCheck}
                         style={{
-                          padding: '6px 10px', borderRadius: 8, border: '1px solid #d5c0b0',
-                          background: '#fff', fontSize: 11.5, color: '#8b5e3c', cursor: 'pointer',
+                          padding: '6px 10px', borderRadius: RADIUS.md, border: '1px solid #d5c0b0',
+                          background: '#fff', fontSize: TEXT.caption, color: '#8b5e3c', cursor: 'pointer',
                           fontWeight: 600, textAlign: 'left', display: 'flex', alignItems: 'center', gap: 6
                         }}
                       >
@@ -1325,8 +1326,8 @@ ${postLessonNotes}
                           showNotification(`${lastLessonInfo.skills.length} habilidades copiadas da aula anterior!`)
                         }}
                         style={{
-                          padding: '6px 10px', borderRadius: 8, border: '1px solid #d5c0b0',
-                          background: '#fff', fontSize: 11.5, color: '#8b5e3c', cursor: 'pointer',
+                          padding: '6px 10px', borderRadius: RADIUS.md, border: '1px solid #d5c0b0',
+                          background: '#fff', fontSize: TEXT.caption, color: '#8b5e3c', cursor: 'pointer',
                           fontWeight: 600, textAlign: 'left', display: 'flex', alignItems: 'center', gap: 6
                         }}
                       >
@@ -1336,7 +1337,7 @@ ${postLessonNotes}
                   </div>
                 </div>
               ) : (
-                <div style={{ background: '#fdf8f2', padding: 12, borderRadius: 10, border: '1px solid #ede8dc', textAlign: 'center', color: '#a08060', fontSize: 11.5 }}>
+                <div style={{ background: '#fdf8f2', padding: 12, borderRadius: RADIUS.md, border: '1px solid #ede8dc', textAlign: 'center', color: '#a08060', fontSize: TEXT.caption }}>
                   <i className="ti ti-bulb" style={{ fontSize: 22, display: 'block', marginBottom: 4, color: '#d4944a' }} />
                   Nenhuma aula anterior salva para esta turma ainda. Ao planejar e salvar suas aulas, as dicas de revisão e continuidade aparecerão aqui automaticamente.
                 </div>
@@ -1344,13 +1345,13 @@ ${postLessonNotes}
             </div>
 
             {/* Box Lateral 1: Perguntas-Guia (Guiding Questions) */}
-            <div style={{ background: '#fffcf8', border: '1px solid rgba(139,115,85,0.16)', borderRadius: 16, padding: 18 }}>
+            <div style={{ background: '#fffcf8', border: '1px solid rgba(139,115,85,0.16)', borderRadius: RADIUS.xl, padding: 18 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                <span style={{ fontSize: 11.5, fontWeight: 800, color: '#8b5e3c', textTransform: 'uppercase' }}>
+                <span style={{ fontSize: TEXT.caption, fontWeight: 800, color: '#8b5e3c', textTransform: 'uppercase' }}>
                   ❓ Perguntas-Guia (Key Questions)
                 </span>
               </div>
-              <p style={{ fontSize: 11.5, color: '#7a6552', margin: '0 0 10px 0', lineHeight: 1.35 }}>
+              <p style={{ fontSize: TEXT.caption, color: '#7a6552', margin: '0 0 10px 0', lineHeight: 1.35 }}>
                 O que os alunos devem ser capazes de responder ou demonstrar ao final desta aula:
               </p>
 
@@ -1371,9 +1372,9 @@ ${postLessonNotes}
             </div>
 
             {/* Box Lateral 2: Resumo da Aula Anterior com Navegação Histórica */}
-            <div style={{ background: '#fffcf8', border: '1px solid rgba(139,115,85,0.16)', borderRadius: 16, padding: 18 }}>
+            <div style={{ background: '#fffcf8', border: '1px solid rgba(139,115,85,0.16)', borderRadius: RADIUS.xl, padding: 18 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                <span style={{ fontSize: 11.5, fontWeight: 800, color: '#8b5e3c', textTransform: 'uppercase' }}>
+                <span style={{ fontSize: TEXT.caption, fontWeight: 800, color: '#8b5e3c', textTransform: 'uppercase' }}>
                   ⏮️ Histórico de Aulas ({currentClass?.name || 'Turma'})
                 </span>
               </div>
@@ -1409,8 +1410,8 @@ ${postLessonNotes}
                   {classHistoryPlans[historyIndex] && (() => {
                     const prevPlan = classHistoryPlans[historyIndex]
                     return (
-                      <div style={{ background: '#fdf8f2', padding: 12, borderRadius: 10, border: '1px solid #e8decb', display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        <strong style={{ fontSize: 12.5, color: '#2c1a0e', display: 'block' }}>
+                      <div style={{ background: '#fdf8f2', padding: 12, borderRadius: RADIUS.md, border: '1px solid #e8decb', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <strong style={{ fontSize: TEXT.bodyCompact, color: '#2c1a0e', display: 'block' }}>
                           {prevPlan.topic}
                         </strong>
                         <div style={{ fontSize: 11, color: '#8b5e3c' }}>
@@ -1421,7 +1422,7 @@ ${postLessonNotes}
                             📖 {prevPlan.referenceMaterial.bookTitle} {prevPlan.referenceMaterial.unit ? `(${prevPlan.referenceMaterial.unit})` : ''}
                           </div>
                         )}
-                        <div style={{ fontSize: 11.5, color: '#4a382a', lineHeight: 1.35 }}>
+                        <div style={{ fontSize: TEXT.caption, color: '#4a382a', lineHeight: 1.35 }}>
                           <strong>Dever de Casa:</strong> {prevPlan.homework || 'Nenhum'}
                         </div>
                         {prevPlan.postLessonNotes && (
@@ -1497,33 +1498,33 @@ ${postLessonNotes}
           
           {/* Barra Superior de Ações do Documento Limpo */}
           <div style={{
-            background: '#fffcf8', border: '1px solid #d5c0b0', borderRadius: 14,
+            background: '#fffcf8', border: '1px solid #d5c0b0', borderRadius: RADIUS.lg,
             padding: '14px 20px', display: 'flex', justifyContent: 'space-between',
             alignItems: 'center', flexWrap: 'wrap', gap: 10, boxShadow: '0 2px 8px rgba(44,26,14,0.06)'
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <button
                 onClick={() => setActiveTab('editor')}
-                style={{ padding: '7px 14px', borderRadius: 8, border: '1px solid #d5c0b0', background: '#fff', color: '#8b5e3c', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+                style={{ padding: '7px 14px', borderRadius: RADIUS.md, border: '1px solid #d5c0b0', background: '#fff', color: '#8b5e3c', fontSize: TEXT.bodyCompact, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
               >
                 <i className="ti ti-arrow-left"></i> Voltar para Edição nos Boxes
               </button>
-              <span style={{ fontSize: 12.5, color: '#7a6552', fontWeight: 600 }}>
+              <span style={{ fontSize: TEXT.bodyCompact, color: '#7a6552', fontWeight: 600 }}>
                 Visualização Oficial do Plano de Aula
               </span>
             </div>
 
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              <button onClick={handleCopyCleanText} style={{ padding: '7px 14px', borderRadius: 8, border: '1px solid #d5c0b0', background: '#fff', color: '#2c1a0e', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <button onClick={handleCopyCleanText} style={{ padding: '7px 14px', borderRadius: RADIUS.md, border: '1px solid #d5c0b0', background: '#fff', color: '#2c1a0e', fontSize: TEXT.bodyCompact, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
                 <i className="ti ti-copy"></i> Copiar Texto
               </button>
-              <button onClick={handleExportPdf} style={{ padding: '7px 14px', borderRadius: 8, border: '1px solid #8b5e3c', background: '#8b5e3c', color: '#fff', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <button onClick={handleExportPdf} style={{ padding: '7px 14px', borderRadius: RADIUS.md, border: '1px solid #8b5e3c', background: '#8b5e3c', color: '#fff', fontSize: TEXT.bodyCompact, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
                 <i className="ti ti-printer"></i> Imprimir / PDF
               </button>
-              <button onClick={handleExportWord} style={{ padding: '7px 14px', borderRadius: 8, border: '1px solid #d5c0b0', background: '#fff', color: '#2c1a0e', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <button onClick={handleExportWord} style={{ padding: '7px 14px', borderRadius: RADIUS.md, border: '1px solid #d5c0b0', background: '#fff', color: '#2c1a0e', fontSize: TEXT.bodyCompact, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
                 <i className="ti ti-file-text"></i> Word (.doc)
               </button>
-              <button onClick={handleExportExcel} style={{ padding: '7px 14px', borderRadius: 8, border: '1px solid #d5c0b0', background: '#fff', color: '#2c1a0e', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <button onClick={handleExportExcel} style={{ padding: '7px 14px', borderRadius: RADIUS.md, border: '1px solid #d5c0b0', background: '#fff', color: '#2c1a0e', fontSize: TEXT.bodyCompact, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
                 <i className="ti ti-table"></i> Excel (.csv)
               </button>
             </div>
@@ -1531,7 +1532,7 @@ ${postLessonNotes}
 
           {/* Folha Formal de Planejamento (A4 Paper Style) */}
           <div style={{
-            background: '#ffffff', border: '1px solid #e2d9cc', borderRadius: 12,
+            background: '#ffffff', border: '1px solid #e2d9cc', borderRadius: RADIUS.lg,
             padding: '44px 52px', boxShadow: '0 4px 20px rgba(44,26,14,0.08)',
             fontFamily: 'Inter, system-ui, sans-serif', color: '#1f2937'
           }}>
@@ -1546,7 +1547,7 @@ ${postLessonNotes}
                   <strong>Plano de Aula</strong> &bull; Disciplina: <strong>{currentClass?.subject || 'Língua Inglesa'}</strong>
                 </div>
               </div>
-              <div style={{ textAlign: 'right', fontSize: 12.5, color: '#4b5563', lineHeight: 1.45 }}>
+              <div style={{ textAlign: 'right', fontSize: TEXT.bodyCompact, color: '#4b5563', lineHeight: 1.45 }}>
                 <div><strong>Turma:</strong> {currentClass?.name || 'Turma'} ({currentClass?.gradeYear || '9º Ano'})</div>
                 <div><strong>Data:</strong> {new Date(lessonDate).toLocaleDateString('pt-BR')}</div>
                 <div><strong>Espaço:</strong> {roomSpace}</div>
@@ -1554,7 +1555,7 @@ ${postLessonNotes}
             </div>
 
             {/* Metodologia e Material */}
-            <div style={{ background: '#faf6f0', border: '1px solid #ede4d8', borderRadius: 8, padding: '12px 16px', marginBottom: 24, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, fontSize: 13 }}>
+            <div style={{ background: '#faf6f0', border: '1px solid #ede4d8', borderRadius: RADIUS.md, padding: '12px 16px', marginBottom: 24, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, fontSize: 13 }}>
               <div>
                 <strong style={{ color: '#8b5e3c' }}>Metodologia:</strong>{' '}
                 <span>{METHODOLOGY_PRESETS.find(m => m.id === selectedMethodology)?.name || 'TBLT'}</span>
@@ -1618,7 +1619,7 @@ ${postLessonNotes}
                 </span>
               </div>
 
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, textAlign: 'left' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: TEXT.bodyCompact, textAlign: 'left' }}>
                 <thead>
                   <tr style={{ background: '#f8fafc', borderBottom: '1.5px solid #cbd5e1' }}>
                     <th style={{ padding: '8px 10px', width: '22%', color: '#334155' }}>Etapa</th>
@@ -1653,7 +1654,7 @@ ${postLessonNotes}
               <h3 style={{ fontSize: 14, fontWeight: 700, color: '#2c1a0e', borderBottom: '1px solid #e5e7eb', paddingBottom: 6, marginBottom: 10 }}>
                 4. Tarefa de Casa (Homework)
               </h3>
-              <div style={{ fontSize: 13, color: '#374151', background: '#f9fafb', border: '1px solid #f3f4f6', borderRadius: 8, padding: '10px 14px', lineHeight: 1.4 }}>
+              <div style={{ fontSize: 13, color: '#374151', background: '#f9fafb', border: '1px solid #f3f4f6', borderRadius: RADIUS.md, padding: '10px 14px', lineHeight: 1.4 }}>
                 {homework || 'Nenhum dever de casa atribuído para esta aula.'}
               </div>
             </div>
@@ -1664,7 +1665,7 @@ ${postLessonNotes}
                 <h3 style={{ fontSize: 14, fontWeight: 700, color: '#2c1a0e', borderBottom: '1px solid #e5e7eb', paddingBottom: 6, marginBottom: 10 }}>
                   5. Observações Pedagógicas & Log Reflexivo
                 </h3>
-                <div style={{ fontSize: 13, color: '#4b5563', fontStyle: 'italic', background: '#fffbeb', border: '1px solid #fef3c7', borderRadius: 8, padding: '10px 14px', lineHeight: 1.4 }}>
+                <div style={{ fontSize: 13, color: '#4b5563', fontStyle: 'italic', background: '#fffbeb', border: '1px solid #fef3c7', borderRadius: RADIUS.md, padding: '10px 14px', lineHeight: 1.4 }}>
                   &ldquo;{postLessonNotes}&rdquo;
                 </div>
               </div>
@@ -1677,7 +1678,7 @@ ${postLessonNotes}
 
       {/* ─── ABA 3: BANCO DE PLANEJAMENTO (REPOSITÓRIO PERENE) ──────────────── */}
       {activeTab === 'bank' && (
-        <div style={{ background: '#fffcf8', border: '1px solid rgba(139,115,85,0.16)', borderRadius: 16, padding: 24 }}>
+        <div style={{ background: '#fffcf8', border: '1px solid rgba(139,115,85,0.16)', borderRadius: RADIUS.xl, padding: 24 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
             <div>
               <h2 style={{ fontFamily: 'Fraunces, Georgia, serif', fontSize: 20, color: '#2c1a0e', margin: '0 0 4px 0' }}>
@@ -1697,7 +1698,7 @@ ${postLessonNotes}
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 16 }}>
               {bankPlans.map(plan => (
-                <div key={plan.id} style={{ background: '#fdf8f2', border: '1px solid #e8decb', borderRadius: 12, padding: 16, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                <div key={plan.id} style={{ background: '#fdf8f2', border: '1px solid #e8decb', borderRadius: RADIUS.lg, padding: 16, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                   <div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
                       <span style={{ background: '#8b5e3c', color: '#fff', padding: '2px 8px', borderRadius: 6, fontSize: 10.5, fontWeight: 700 }}>
@@ -1710,7 +1711,7 @@ ${postLessonNotes}
                     <strong style={{ fontSize: 14, color: '#2c1a0e', display: 'block', marginBottom: 6 }}>
                       {plan.topic}
                     </strong>
-                    <div style={{ fontSize: 11.5, color: '#7a6552', marginBottom: 10 }}>
+                    <div style={{ fontSize: TEXT.caption, color: '#7a6552', marginBottom: 10 }}>
                       Espaço: {plan.roomSpace} &bull; {plan.stages?.length || 4} etapas
                     </div>
                   </div>
@@ -1753,7 +1754,7 @@ ${postLessonNotes}
       {/* ─── MODAL: ANEXAR ATIVIDADE DO BANCO (BLOCO I) ────────────────────── */}
       {showAttachActivityModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(44,26,14,0.4)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div style={{ background: '#fffcf8', border: '1px solid #ede8dc', borderRadius: 16, padding: 24, width: 520, maxWidth: '90vw', maxHeight: '80vh', overflowY: 'auto' }}>
+          <div style={{ background: '#fffcf8', border: '1px solid #ede8dc', borderRadius: RADIUS.xl, padding: 24, width: 520, maxWidth: '90vw', maxHeight: '80vh', overflowY: 'auto' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <h3 style={{ margin: 0, fontSize: 16, color: '#2c1a0e' }}>
                 🔗 Vincular Atividade do Banco de Questões
@@ -1766,10 +1767,10 @@ ${postLessonNotes}
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {availableQuestions.slice(0, 15).map((q: any) => (
-                  <div key={q.id} style={{ background: '#fdf8f2', border: '1px solid #e8decb', padding: 10, borderRadius: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div key={q.id} style={{ background: '#fdf8f2', border: '1px solid #e8decb', padding: 10, borderRadius: RADIUS.md, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div>
-                      <strong style={{ fontSize: 12.5, color: '#2c1a0e' }}>{q.topic || 'Exercício'}</strong>
-                      <div style={{ fontSize: 11.5, color: '#7a6552' }}>{q.statement?.slice(0, 60)}...</div>
+                      <strong style={{ fontSize: TEXT.bodyCompact, color: '#2c1a0e' }}>{q.topic || 'Exercício'}</strong>
+                      <div style={{ fontSize: TEXT.caption, color: '#7a6552' }}>{q.statement?.slice(0, 60)}...</div>
                     </div>
                     <button
                       onClick={() => {
@@ -1777,7 +1778,7 @@ ${postLessonNotes}
                         setShowAttachActivityModal(false)
                         showNotification('Atividade vinculada como Homework da aula!')
                       }}
-                      style={{ background: '#268bd2', color: '#fff', border: 'none', borderRadius: 6, padding: '4px 10px', fontSize: 11.5, fontWeight: 700, cursor: 'pointer' }}
+                      style={{ background: '#268bd2', color: '#fff', border: 'none', borderRadius: 6, padding: '4px 10px', fontSize: TEXT.caption, fontWeight: 700, cursor: 'pointer' }}
                     >
                       + Anexar
                     </button>

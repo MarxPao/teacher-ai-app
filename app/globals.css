@@ -98,11 +98,37 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(139, 94, 60, 0.30);
+  background: rgba(139,115,85,0.25);
   border-radius: 99px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(139, 94, 60, 0.55);
+  background: rgba(139,115,85,0.45);
+}
+
+/* ───── Responsive 2-Column Module Layouts (≤ 860px) ───── */
+@media (max-width: 860px) {
+  .responsive-two-col {
+    grid-template-columns: 1fr !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 16px !important;
+  }
+  
+  .responsive-hide-mobile {
+    display: none !important;
+  }
+
+  .responsive-stack-mobile {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 10px !important;
+  }
+
+  .responsive-full-mobile {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+  }
 }
 
 /* Firefox */

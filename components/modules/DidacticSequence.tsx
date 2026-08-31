@@ -1,4 +1,5 @@
 'use client'
+import { COLOR, RADIUS, TEXT, SHADOW, FONT } from '@/styles/tokens'
 import { toast, showConfirm } from '@/components/Toast'
 
 import { useState, useEffect, useMemo, useRef } from 'react'
@@ -538,9 +539,9 @@ Gere um diagnóstico estruturado com:
       {toastMessage && (
         <div style={{
           position: 'fixed', bottom: 24, right: 24, zIndex: 9999,
-          background: '#8b5e3c', color: '#fff', padding: '12px 20px', borderRadius: 10,
+          background: '#8b5e3c', color: '#fff', padding: '12px 20px', borderRadius: RADIUS.md,
           boxShadow: '0 4px 16px rgba(0,0,0,0.2)', display: 'flex', alignItems: 'center', gap: 8,
-          fontSize: 13.5, fontWeight: 600
+          fontSize: TEXT.body, fontWeight: 600
         }}>
           <i className="ti ti-circle-check" /> {toastMessage}
         </div>
@@ -567,7 +568,7 @@ Gere um diagnóstico estruturado com:
             onClick={handleOpenAddModal}
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 6, padding: '10px 18px',
-              borderRadius: 10, border: 'none', background: '#2c1a0e', color: '#fff',
+              borderRadius: RADIUS.md, border: 'none', background: '#2c1a0e', color: '#fff',
               fontSize: 13, fontWeight: 700, cursor: 'pointer',
               boxShadow: '0 2px 6px rgba(44,26,14,0.2)'
             }}
@@ -580,7 +581,7 @@ Gere um diagnóstico estruturado com:
             disabled={analyzingAi}
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 18px',
-              borderRadius: 10, border: 'none', background: '#8b5e3c', color: '#fff',
+              borderRadius: RADIUS.md, border: 'none', background: '#8b5e3c', color: '#fff',
               fontSize: 13, fontWeight: 700, cursor: analyzingAi ? 'wait' : 'pointer',
               boxShadow: '0 2px 8px rgba(139,94,60,0.25)',
             }}
@@ -592,31 +593,31 @@ Gere um diagnóstico estruturado com:
       </div>
 
       {/* Barra de Filtros de Contexto (Escola / Turma / Ano) */}
-      <div style={{ background: '#fffcf8', padding: '16px 20px', borderRadius: 16, border: '1px solid rgba(139,115,85,0.14)', marginBottom: 24, boxShadow: '0 2px 8px rgba(44,26,14,0.04)', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 2fr', gap: 16, alignItems: 'center' }}>
+      <div style={{ background: '#fffcf8', padding: '16px 20px', borderRadius: RADIUS.xl, border: '1px solid rgba(139,115,85,0.14)', marginBottom: 24, boxShadow: '0 2px 8px rgba(44,26,14,0.04)', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 2fr', gap: 16, alignItems: 'center' }}>
         <div>
           <label style={{ fontSize: 11, fontWeight: 700, color: '#7a5c42', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Escola</label>
-          <select value={selectedSchool} onChange={e => setSelectedSchool(e.target.value)} style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid rgba(139,115,85,0.22)', background: '#fff', fontSize: 13, color: '#2c1a0e', outline: 'none', fontWeight: 600 }}>
+          <select value={selectedSchool} onChange={e => setSelectedSchool(e.target.value)} style={{ width: '100%', padding: '8px 12px', borderRadius: RADIUS.md, border: '1px solid rgba(139,115,85,0.22)', background: '#fff', fontSize: 13, color: '#2c1a0e', outline: 'none', fontWeight: 600 }}>
             {schools.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
         </div>
 
         <div>
           <label style={{ fontSize: 11, fontWeight: 700, color: '#7a5c42', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Turma</label>
-          <select value={selectedClass} onChange={e => setSelectedClass(e.target.value)} style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid rgba(139,115,85,0.22)', background: '#fff', fontSize: 13, color: '#2c1a0e', outline: 'none', fontWeight: 600 }}>
+          <select value={selectedClass} onChange={e => setSelectedClass(e.target.value)} style={{ width: '100%', padding: '8px 12px', borderRadius: RADIUS.md, border: '1px solid rgba(139,115,85,0.22)', background: '#fff', fontSize: 13, color: '#2c1a0e', outline: 'none', fontWeight: 600 }}>
             {classes.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
         </div>
 
         <div>
           <label style={{ fontSize: 11, fontWeight: 700, color: '#7a5c42', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Ano Letivo</label>
-          <select value={selectedYear} onChange={e => setSelectedYear(e.target.value)} style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid rgba(139,115,85,0.22)', background: '#fff', fontSize: 13, color: '#2c1a0e', outline: 'none', fontWeight: 600 }}>
+          <select value={selectedYear} onChange={e => setSelectedYear(e.target.value)} style={{ width: '100%', padding: '8px 12px', borderRadius: RADIUS.md, border: '1px solid rgba(139,115,85,0.22)', background: '#fff', fontSize: 13, color: '#2c1a0e', outline: 'none', fontWeight: 600 }}>
             <option>2026</option>
             <option>2025</option>
           </select>
         </div>
 
         {/* Resumo Rápido de Ritmo */}
-        <div style={{ background: '#f5efe6', padding: '10px 16px', borderRadius: 12, display: 'flex', justifyContent: 'space-around', alignItems: 'center' }}>
+        <div style={{ background: '#f5efe6', padding: '10px 16px', borderRadius: RADIUS.lg, display: 'flex', justifyContent: 'space-around', alignItems: 'center' }}>
           <div>
             <span style={{ fontSize: 10.5, color: '#7a5c42', fontWeight: 700, textTransform: 'uppercase', display: 'block' }}>Ritmo de Aulas</span>
             <span style={{ fontSize: 15, fontWeight: 800, color: timelineStats.paceColor }}>{timelineStats.paceStatus}</span>
@@ -646,7 +647,7 @@ Gere um diagnóstico estruturado com:
                 background: activeTab === t.key ? '#fff' : 'transparent',
                 color: activeTab === t.key ? '#2c1a0e' : '#a08060',
                 borderBottom: activeTab === t.key ? '2px solid #8b5e3c' : '2px solid transparent',
-                marginBottom: -2, fontWeight: activeTab === t.key ? 700 : 500, fontSize: 13.5,
+                marginBottom: -2, fontWeight: activeTab === t.key ? 700 : 500, fontSize: TEXT.body,
               }}
             >
               <i className={`ti ${t.icon}`} /> {t.label}
@@ -656,7 +657,7 @@ Gere um diagnóstico estruturado com:
 
         {/* Seletor de Escala Temporal (Semana / Mês / Trimestre / Ano) */}
         {activeTab === 'timeline' && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#f5efe6', padding: '4px 8px', borderRadius: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#f5efe6', padding: '4px 8px', borderRadius: RADIUS.lg }}>
             <span style={{ fontSize: 11, fontWeight: 700, color: '#7a5c42', textTransform: 'uppercase', paddingLeft: 4 }}>
               Escala:
             </span>
@@ -670,7 +671,7 @@ Gere um diagnóstico estruturado com:
                 key={sc.key}
                 onClick={() => setTimeScale(sc.key as TimeScale)}
                 style={{
-                  padding: '5px 12px', borderRadius: 8, border: 'none', cursor: 'pointer',
+                  padding: '5px 12px', borderRadius: RADIUS.md, border: 'none', cursor: 'pointer',
                   fontSize: 12, fontWeight: 700,
                   background: timeScale === sc.key ? '#8b5e3c' : 'transparent',
                   color: timeScale === sc.key ? '#fff' : '#7a5c42',
@@ -690,12 +691,12 @@ Gere um diagnóstico estruturado com:
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
           {/* BOX SUPERIOR DE ANALYTICS & INTELIGÊNCIA DE CRONOGRAMA */}
           <div style={{
-            background: '#fffcf8', border: '1px solid rgba(139,115,85,0.18)', borderRadius: 16,
+            background: '#fffcf8', border: '1px solid rgba(139,115,85,0.18)', borderRadius: RADIUS.xl,
             padding: '20px 24px', boxShadow: '0 4px 16px rgba(44,26,14,0.06)'
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <div style={{ width: 36, height: 36, borderRadius: 10, background: '#8b5e3c', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>
+                <div style={{ width: 36, height: 36, borderRadius: RADIUS.md, background: '#8b5e3c', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>
                   <i className="ti ti-chart-dots" />
                 </div>
                 <div>
@@ -721,13 +722,13 @@ Gere um diagnóstico estruturado com:
 
             {/* 4 Cards de Métricas de Ritmo */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginBottom: 16 }}>
-              <div style={{ background: '#fdf8f2', borderRadius: 12, padding: '12px 16px', border: '1px solid rgba(139,115,85,0.12)' }}>
+              <div style={{ background: '#fdf8f2', borderRadius: RADIUS.lg, padding: '12px 16px', border: '1px solid rgba(139,115,85,0.12)' }}>
                 <span style={{ fontSize: 11, color: '#7a5c42', textTransform: 'uppercase', fontWeight: 700 }}>Aderência ao Cronograma</span>
                 <div style={{ fontSize: 22, fontWeight: 800, color: '#2c1a0e', marginTop: 2 }}>{timelineStats.adherenceRate}%</div>
                 <div style={{ fontSize: 11, color: '#a08060' }}>Conformidade com o plano anual</div>
               </div>
 
-              <div style={{ background: '#fdf8f2', borderRadius: 12, padding: '12px 16px', border: '1px solid rgba(139,115,85,0.12)' }}>
+              <div style={{ background: '#fdf8f2', borderRadius: RADIUS.lg, padding: '12px 16px', border: '1px solid rgba(139,115,85,0.12)' }}>
                 <span style={{ fontSize: 11, color: '#7a5c42', textTransform: 'uppercase', fontWeight: 700 }}>Aulas Ministradas</span>
                 <div style={{ fontSize: 22, fontWeight: 800, color: '#8b5e3c', marginTop: 2 }}>
                   {timelineStats.totalActualLessonsGiven} <span style={{ fontSize: 13, fontWeight: 500, color: '#a08060' }}>/ {timelineStats.totalPlannedLessons} previstas</span>
@@ -735,7 +736,7 @@ Gere um diagnóstico estruturado com:
                 <div style={{ fontSize: 11, color: '#a08060' }}>{Math.round((timelineStats.totalActualLessonsGiven / timelineStats.totalPlannedLessons) * 100)}% da carga horária</div>
               </div>
 
-              <div style={{ background: '#fdf8f2', borderRadius: 12, padding: '12px 16px', border: '1px solid rgba(139,115,85,0.12)' }}>
+              <div style={{ background: '#fdf8f2', borderRadius: RADIUS.lg, padding: '12px 16px', border: '1px solid rgba(139,115,85,0.12)' }}>
                 <span style={{ fontSize: 11, color: '#7a5c42', textTransform: 'uppercase', fontWeight: 700 }}>Unidade em Andamento</span>
                 <div style={{ fontSize: 18, fontWeight: 800, color: '#cb4b16', marginTop: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   {currentUnit?.title.split(':')[0] || 'Unit 4'}
@@ -743,7 +744,7 @@ Gere um diagnóstico estruturado com:
                 <div style={{ fontSize: 11, color: '#a08060' }}>{currentUnit?.masteryPercentage}% de retenção média</div>
               </div>
 
-              <div style={{ background: '#fdf8f2', borderRadius: 12, padding: '12px 16px', border: '1px solid rgba(139,115,85,0.12)' }}>
+              <div style={{ background: '#fdf8f2', borderRadius: RADIUS.lg, padding: '12px 16px', border: '1px solid rgba(139,115,85,0.12)' }}>
                 <span style={{ fontSize: 11, color: '#7a5c42', textTransform: 'uppercase', fontWeight: 700 }}>Previsão de Conclusão</span>
                 <div style={{ fontSize: 20, fontWeight: 800, color: '#3d7a4e', marginTop: 2 }}>28 de Novembro</div>
                 <div style={{ fontSize: 11, color: '#a08060' }}>Dentro do calendário escolar</div>
@@ -751,9 +752,9 @@ Gere um diagnóstico estruturado com:
             </div>
 
             {/* Parecer / Alerta da Rafinha */}
-            <div style={{ background: '#f5efe6', borderRadius: 10, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12, border: '1px solid rgba(139,115,85,0.14)' }}>
+            <div style={{ background: '#f5efe6', borderRadius: RADIUS.md, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12, border: '1px solid rgba(139,115,85,0.14)' }}>
               <i className="ti ti-bulb" style={{ fontSize: 22, color: '#8b5e3c', flexShrink: 0 }} />
-              <div style={{ fontSize: 12.5, color: '#4a3728', lineHeight: 1.4 }}>
+              <div style={{ fontSize: TEXT.bodyCompact, color: '#4a3728', lineHeight: 1.4 }}>
                 <strong>Diagnóstico Pedagógico de Ritmo:</strong> A turma {selectedClass} precisou de 2 aulas adicionais de fixação na <strong>Unit 3</strong> (Present Perfect). O ritmo atual está 6 dias atrás do planejado, mas perfeitamente recuperável unificando as atividades de produção livre da Unit 5.
               </div>
             </div>
@@ -761,7 +762,7 @@ Gere um diagnóstico estruturado com:
 
           {/* DIAGRAMA VISUAL COM ROLAGEM INFINITA LATERAL E 2 LINHAS EM SETA */}
           <div style={{
-            background: '#fffcf8', border: '1px solid rgba(139,115,85,0.18)', borderRadius: 16,
+            background: '#fffcf8', border: '1px solid rgba(139,115,85,0.18)', borderRadius: RADIUS.xl,
             padding: '24px', boxShadow: '0 4px 16px rgba(44,26,14,0.06)', position: 'relative'
           }}>
             {/* Controles de Rolagem Lateral */}
@@ -780,7 +781,7 @@ Gere um diagnóstico estruturado com:
                 <button
                   onClick={() => scrollTimeline('left')}
                   style={{
-                    padding: '6px 12px', borderRadius: 8, border: '1px solid rgba(139,115,85,0.25)',
+                    padding: '6px 12px', borderRadius: RADIUS.md, border: '1px solid rgba(139,115,85,0.25)',
                     background: '#fff', color: '#7a5c42', cursor: 'pointer', fontSize: 12, fontWeight: 700,
                     display: 'flex', alignItems: 'center', gap: 4
                   }}
@@ -791,7 +792,7 @@ Gere um diagnóstico estruturado com:
                 <button
                   onClick={scrollToCurrentMonth}
                   style={{
-                    padding: '6px 12px', borderRadius: 8, border: '1px solid rgba(139,115,85,0.25)',
+                    padding: '6px 12px', borderRadius: RADIUS.md, border: '1px solid rgba(139,115,85,0.25)',
                     background: '#f5efe6', color: '#8b5e3c', cursor: 'pointer', fontSize: 12, fontWeight: 700,
                     display: 'flex', alignItems: 'center', gap: 4
                   }}
@@ -802,7 +803,7 @@ Gere um diagnóstico estruturado com:
                 <button
                   onClick={() => scrollTimeline('right')}
                   style={{
-                    padding: '6px 12px', borderRadius: 8, border: '1px solid rgba(139,115,85,0.25)',
+                    padding: '6px 12px', borderRadius: RADIUS.md, border: '1px solid rgba(139,115,85,0.25)',
                     background: '#fff', color: '#7a5c42', cursor: 'pointer', fontSize: 12, fontWeight: 700,
                     display: 'flex', alignItems: 'center', gap: 4
                   }}
@@ -910,7 +911,7 @@ Gere um diagnóstico estruturado com:
                             onClick={() => { setIsAddingNewUnit(false); setEditModalUnit(u) }}
                             style={{
                               gridColumn: `${colStart} / span ${span}`,
-                              background: '#268bd2', color: '#fff', borderRadius: 8,
+                              background: '#268bd2', color: '#fff', borderRadius: RADIUS.md,
                               padding: '6px 10px', fontSize: 11, fontWeight: 700,
                               display: 'flex', flexDirection: 'column', justifyContent: 'center',
                               cursor: 'pointer', boxShadow: '0 2px 6px rgba(38,139,210,0.3)',
@@ -983,7 +984,7 @@ Gere um diagnóstico estruturado com:
                             onClick={() => { setIsAddingNewUnit(false); setEditModalUnit(u) }}
                             style={{
                               gridColumn: `${colStart} / span ${span}`,
-                              background: bg, color: textColor, borderRadius: 8,
+                              background: bg, color: textColor, borderRadius: RADIUS.md,
                               padding: '6px 10px', fontSize: 11, fontWeight: 700,
                               display: 'flex', flexDirection: 'column', justifyContent: 'center',
                               cursor: 'pointer',
@@ -1034,7 +1035,7 @@ Gere um diagnóstico estruturado com:
           </div>
 
           {/* TABELA DETALHADA DE COMPARAÇÃO PREVISTO VS REAL (COM BOTÃO DE ADICIONAR E EDITAR) */}
-          <div style={{ background: '#fffcf8', border: '1px solid rgba(139,115,85,0.18)', borderRadius: 16, padding: '20px 24px', boxShadow: '0 4px 16px rgba(44,26,14,0.06)' }}>
+          <div style={{ background: '#fffcf8', border: '1px solid rgba(139,115,85,0.18)', borderRadius: RADIUS.xl, padding: '20px 24px', boxShadow: '0 4px 16px rgba(44,26,14,0.06)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
               <h3 style={{ fontSize: 16, fontWeight: 700, color: '#2c1a0e', margin: 0, fontFamily: "'Fraunces', Georgia, serif" }}>
                 Tabela de Detalhamento: Previsto vs. Executado
@@ -1042,8 +1043,8 @@ Gere um diagnóstico estruturado com:
               <button
                 onClick={handleOpenAddModal}
                 style={{
-                  padding: '6px 14px', borderRadius: 8, border: 'none', background: '#8b5e3c', color: '#fff',
-                  fontSize: 12.5, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6
+                  padding: '6px 14px', borderRadius: RADIUS.md, border: 'none', background: '#8b5e3c', color: '#fff',
+                  fontSize: TEXT.bodyCompact, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6
                 }}
               >
                 <i className="ti ti-plus" /> Adicionar Linha / Unidade
@@ -1089,7 +1090,7 @@ Gere um diagnóstico estruturado com:
                         </td>
                         <td style={{ padding: '12px' }}>
                           <span style={{
-                            padding: '3px 8px', borderRadius: 12, fontSize: 11, fontWeight: 700,
+                            padding: '3px 8px', borderRadius: RADIUS.lg, fontSize: 11, fontWeight: 700,
                             background: u.masteryPercentage >= 75 ? '#e8f7ee' : u.masteryPercentage > 0 ? '#fdf4ea' : '#f5efe6',
                             color: u.masteryPercentage >= 75 ? '#2d7a00' : u.masteryPercentage > 0 ? '#cb4b16' : '#a08060'
                           }}>
@@ -1115,13 +1116,13 @@ Gere um diagnóstico estruturado com:
                           <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
                             <button
                               onClick={() => { setIsAddingNewUnit(false); setEditModalUnit(u) }}
-                              style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid rgba(139,115,85,0.25)', background: '#fff', fontSize: 12, fontWeight: 700, color: '#8b5e3c', cursor: 'pointer' }}
+                              style={{ padding: '6px 10px', borderRadius: RADIUS.md, border: '1px solid rgba(139,115,85,0.25)', background: '#fff', fontSize: 12, fontWeight: 700, color: '#8b5e3c', cursor: 'pointer' }}
                             >
                               <i className="ti ti-pencil" />
                             </button>
                             <button
                               onClick={() => handleDeleteUnit(u.id)}
-                              style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid rgba(220,50,47,0.25)', background: '#fff', fontSize: 12, fontWeight: 700, color: '#dc322f', cursor: 'pointer' }}
+                              style={{ padding: '6px 10px', borderRadius: RADIUS.md, border: '1px solid rgba(220,50,47,0.25)', background: '#fff', fontSize: 12, fontWeight: 700, color: '#dc322f', cursor: 'pointer' }}
                             >
                               <i className="ti ti-trash" />
                             </button>
@@ -1182,7 +1183,7 @@ Gere um diagnóstico estruturado com:
                     style={{
                       flex: 1, background: isCurrent ? '#fff9f0' : '#fff',
                       border: `2px solid ${isCurrent ? '#cb4b16' : isCompleted ? '#e8e0d0' : '#ede8dc'}`,
-                      borderRadius: 16, padding: 22,
+                      borderRadius: RADIUS.xl, padding: 22,
                       boxShadow: isCurrent ? '0 6px 20px rgba(203,75,22,0.1)' : '0 2px 8px rgba(44,26,14,0.03)',
                     }}
                   >
@@ -1232,7 +1233,7 @@ Gere um diagnóstico estruturado com:
                     </div>
 
                     {/* Tópicos e Foco Gramatical */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, margin: '12px 0', padding: 12, background: 'rgba(255,255,255,0.7)', borderRadius: 12, fontSize: 13 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, margin: '12px 0', padding: 12, background: 'rgba(255,255,255,0.7)', borderRadius: RADIUS.lg, fontSize: 13 }}>
                       <div>
                         <strong style={{ color: '#2c1a0e' }}> Gramática:</strong> {unit.grammarFocus}<br />
                         <strong style={{ color: '#2c1a0e' }}> Vocabulário:</strong> {unit.vocabularyFocus}
@@ -1250,20 +1251,20 @@ Gere um diagnóstico estruturado com:
                     </div>
 
                     {/* Diagnóstico da IA e Ação Recomendada */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 8, borderTop: '1px dashed #e8e0d0', fontSize: 12.5 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 8, borderTop: '1px dashed #e8e0d0', fontSize: TEXT.bodyCompact }}>
                       <span style={{ color: '#7a5c42' }}>
                         <strong>IA Status:</strong> {unit.aiAssessment}
                       </span>
                       <div style={{ display: 'flex', gap: 8 }}>
                         <button
                           onClick={() => { setIsAddingNewUnit(false); setEditModalUnit(unit) }}
-                          style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid #e8e0d0', background: '#fff', fontSize: 12, fontWeight: 700, color: '#8b5e3c', cursor: 'pointer' }}
+                          style={{ padding: '6px 12px', borderRadius: RADIUS.md, border: '1px solid #e8e0d0', background: '#fff', fontSize: 12, fontWeight: 700, color: '#8b5e3c', cursor: 'pointer' }}
                         >
                           Editar Datas
                         </button>
                         <button
                           onClick={() => setSelectedUnit(unit)}
-                          style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid #e8e0d0', background: '#8b5e3c', fontSize: 12, fontWeight: 700, color: '#fff', cursor: 'pointer' }}
+                          style={{ padding: '6px 12px', borderRadius: RADIUS.md, border: '1px solid #e8e0d0', background: '#8b5e3c', fontSize: 12, fontWeight: 700, color: '#fff', cursor: 'pointer' }}
                         >
                           Ver Detalhes
                         </button>
@@ -1281,7 +1282,7 @@ Gere um diagnóstico estruturado com:
       {activeTab === 'analytics' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
           {/* Relatório de Cruzamento Inteligente da Rafinha */}
-          <div style={{ background: '#2c1a0e', color: '#fdf8f2', padding: 24, borderRadius: 16, boxShadow: '0 4px 16px rgba(44,26,14,0.15)', border: '1px solid #002b36' }}>
+          <div style={{ background: '#2c1a0e', color: '#fdf8f2', padding: 24, borderRadius: RADIUS.xl, boxShadow: '0 4px 16px rgba(44,26,14,0.15)', border: '1px solid #002b36' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <i className="ti ti-sparkles" style={{ fontSize: 24, color: '#b58900' }} />
@@ -1292,7 +1293,7 @@ Gere um diagnóstico estruturado com:
               <button
                 onClick={handleRunRafinhaCrossing}
                 disabled={analyzingAi}
-                style={{ padding: '6px 14px', borderRadius: 8, border: 'none', background: '#b58900', color: '#2c1a0e', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+                style={{ padding: '6px 14px', borderRadius: RADIUS.md, border: 'none', background: '#b58900', color: '#2c1a0e', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
               >
                 {analyzingAi ? 'Analisando...' : 'Reavaliar Agora'}
               </button>
@@ -1307,7 +1308,7 @@ Gere um diagnóstico estruturado com:
       {/* MODAL DE CRIAÇÃO / EDIÇÃO DE UNIDADE DA TIMELINE */}
       {editModalUnit && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(44,26,14,0.5)', zIndex: 9998, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-          <div style={{ background: '#fffcf8', border: '1px solid rgba(139,115,85,0.2)', borderRadius: 16, padding: '24px 28px', width: '100%', maxWidth: 540, maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 8px 32px rgba(44,26,14,0.2)' }}>
+          <div style={{ background: '#fffcf8', border: '1px solid rgba(139,115,85,0.2)', borderRadius: RADIUS.xl, padding: '24px 28px', width: '100%', maxWidth: 540, maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 8px 32px rgba(44,26,14,0.2)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <h3 style={{ fontSize: 18, fontWeight: 700, color: '#2c1a0e', margin: 0, fontFamily: "'Fraunces', Georgia, serif" }}>
                 {isAddingNewUnit ? 'Adicionar Nova Unidade / Marco' : `Editar Cronograma: ${editModalUnit.title.split(':')[0]}`}
@@ -1322,7 +1323,7 @@ Gere um diagnóstico estruturado com:
                   type="text"
                   value={editModalUnit.title}
                   onChange={e => setEditModalUnit({ ...editModalUnit, title: e.target.value })}
-                  style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid rgba(139,115,85,0.22)', fontSize: 13, boxSizing: 'border-box' }}
+                  style={{ width: '100%', padding: '8px 12px', borderRadius: RADIUS.md, border: '1px solid rgba(139,115,85,0.22)', fontSize: 13, boxSizing: 'border-box' }}
                 />
               </div>
 
@@ -1332,12 +1333,12 @@ Gere um diagnóstico estruturado com:
                   type="text"
                   value={editModalUnit.bookRef}
                   onChange={e => setEditModalUnit({ ...editModalUnit, bookRef: e.target.value })}
-                  style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid rgba(139,115,85,0.22)', fontSize: 13, boxSizing: 'border-box' }}
+                  style={{ width: '100%', padding: '8px 12px', borderRadius: RADIUS.md, border: '1px solid rgba(139,115,85,0.22)', fontSize: 13, boxSizing: 'border-box' }}
                 />
               </div>
 
               {/* Previsto */}
-              <div style={{ background: '#f0f6fa', padding: '12px 14px', borderRadius: 10, border: '1px solid #c8e1f5' }}>
+              <div style={{ background: '#f0f6fa', padding: '12px 14px', borderRadius: RADIUS.md, border: '1px solid #c8e1f5' }}>
                 <strong style={{ fontSize: 12, color: '#2c1a0e', display: 'block', marginBottom: 8 }}>Seta 1: Cronograma Previsto (Ementa)</strong>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
                   <div>
@@ -1412,7 +1413,7 @@ Gere um diagnóstico estruturado com:
               </div>
 
               {/* Realizado */}
-              <div style={{ background: '#fdf4ea', padding: '12px 14px', borderRadius: 10, border: '1px solid rgba(139,94,60,0.25)' }}>
+              <div style={{ background: '#fdf4ea', padding: '12px 14px', borderRadius: RADIUS.md, border: '1px solid rgba(139,94,60,0.25)' }}>
                 <strong style={{ fontSize: 12, color: '#2c1a0e', display: 'block', marginBottom: 8 }}>Seta 2: Execução Real (Aulas Ministradas)</strong>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
                   <div>
@@ -1493,7 +1494,7 @@ Gere um diagnóstico estruturado com:
                   <select
                     value={editModalUnit.status}
                     onChange={e => setEditModalUnit({ ...editModalUnit, status: e.target.value as any })}
-                    style={{ width: '100%', padding: '8px', borderRadius: 8, border: '1px solid rgba(139,115,85,0.22)', fontSize: 12 }}
+                    style={{ width: '100%', padding: '8px', borderRadius: RADIUS.md, border: '1px solid rgba(139,115,85,0.22)', fontSize: 12 }}
                   >
                     <option value="completed">Concluída</option>
                     <option value="current">Em Andamento (Atual)</option>
@@ -1508,7 +1509,7 @@ Gere um diagnóstico estruturado com:
                     min={0} max={100}
                     value={editModalUnit.masteryPercentage}
                     onChange={e => setEditModalUnit({ ...editModalUnit, masteryPercentage: Number(e.target.value) })}
-                    style={{ width: '100%', padding: '8px', borderRadius: 8, border: '1px solid rgba(139,115,85,0.22)', fontSize: 12, boxSizing: 'border-box' }}
+                    style={{ width: '100%', padding: '8px', borderRadius: RADIUS.md, border: '1px solid rgba(139,115,85,0.22)', fontSize: 12, boxSizing: 'border-box' }}
                   />
                 </div>
               </div>
@@ -1518,7 +1519,7 @@ Gere um diagnóstico estruturado com:
               {!isAddingNewUnit ? (
                 <button
                   onClick={() => handleDeleteUnit(editModalUnit.id)}
-                  style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid rgba(220,50,47,0.3)', background: '#fff', fontSize: 12.5, fontWeight: 700, color: '#dc322f', cursor: 'pointer' }}
+                  style={{ padding: '8px 14px', borderRadius: RADIUS.md, border: '1px solid rgba(220,50,47,0.3)', background: '#fff', fontSize: TEXT.bodyCompact, fontWeight: 700, color: '#dc322f', cursor: 'pointer' }}
                 >
                   <i className="ti ti-trash" /> Excluir
                 </button>
@@ -1527,13 +1528,13 @@ Gere um diagnóstico estruturado com:
               <div style={{ display: 'flex', gap: 10 }}>
                 <button
                   onClick={() => { setEditModalUnit(null); setIsAddingNewUnit(false) }}
-                  style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid rgba(139,115,85,0.25)', background: '#fff', fontSize: 13, fontWeight: 600, color: '#7a5c42', cursor: 'pointer' }}
+                  style={{ padding: '8px 16px', borderRadius: RADIUS.md, border: '1px solid rgba(139,115,85,0.25)', background: '#fff', fontSize: 13, fontWeight: 600, color: '#7a5c42', cursor: 'pointer' }}
                 >
                   Cancelar
                 </button>
                 <button
                   onClick={handleSaveUnitEdit}
-                  style={{ padding: '8px 18px', borderRadius: 8, border: 'none', background: '#8b5e3c', fontSize: 13, fontWeight: 700, color: '#fff', cursor: 'pointer' }}
+                  style={{ padding: '8px 18px', borderRadius: RADIUS.md, border: 'none', background: '#8b5e3c', fontSize: 13, fontWeight: 700, color: '#fff', cursor: 'pointer' }}
                 >
                   {isAddingNewUnit ? 'Adicionar Unidade' : 'Salvar Alterações'}
                 </button>
@@ -1560,7 +1561,7 @@ Gere um diagnóstico estruturado com:
               <div><strong>Vocabulário:</strong> {selectedUnit.vocabularyFocus}</div>
               <div><strong>Índice de Domínio:</strong> {selectedUnit.masteryPercentage}%</div>
               <div><strong>Aulas Previstas vs Dadas:</strong> {selectedUnit.plannedLessons} previstas / {selectedUnit.actualLessonsGiven || 0} ministradas</div>
-              <div style={{ background: '#f5efe6', padding: 12, borderRadius: 10, color: '#2c1a0e' }}>
+              <div style={{ background: '#f5efe6', padding: 12, borderRadius: RADIUS.md, color: '#2c1a0e' }}>
                 <strong>Recomendação Pedagógica:</strong><br />{selectedUnit.suggestedAction}
               </div>
             </div>
@@ -1568,7 +1569,7 @@ Gere um diagnóstico estruturado com:
             <div style={{ display: 'flex', gap: 10, marginTop: 10 }}>
               <button
                 onClick={() => { handleSetCurrentUnit(selectedUnit.id); setSelectedUnit(null) }}
-                style={{ flex: 1, padding: '12px', borderRadius: 10, border: 'none', background: '#cb4b16', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
+                style={{ flex: 1, padding: '12px', borderRadius: RADIUS.md, border: 'none', background: '#cb4b16', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
               >
                 Definir Como Conteúdo Atual da Turma
               </button>

@@ -1,4 +1,5 @@
 'use client'
+import { COLOR, RADIUS, TEXT, SHADOW, FONT } from '@/styles/tokens'
 import { toast, showConfirm } from '@/components/Toast'
 import { useState, useEffect, useRef, useCallback } from 'react'
 
@@ -313,22 +314,22 @@ Retorne estritamente um JSON no formato:
  <button
  onClick={() => setShowAiBox(!showAiBox)}
  style={{
- padding: '8px 16px', borderRadius: 10, border: '1px solid #b58900',
+ padding: '8px 16px', borderRadius: RADIUS.md, border: '1px solid #b58900',
  background: '#fdf8f2', color: '#b58900', fontSize: 13, fontWeight: 700,
  cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
  }}
  >
  <i className="ti ti-sparkles" /> Gerar com Prompt IA
  </button>
- <button onClick={()=>setZoom(z=>Math.min(2.5,z+0.1))} title="Aproximar" style={{padding:'8px 12px', background:'#fff', border:'1px solid #ede8dc', borderRadius:10, cursor:'pointer', fontSize:14}}>+</button>
- <button onClick={resetView} title="Resetar visão" style={{padding:'8px 14px', background:'#fff', border:'1px solid #ede8dc', borderRadius:10, cursor:'pointer', fontSize:13, fontWeight:600}}>{Math.round(zoom*100)}%</button>
- <button onClick={()=>setZoom(z=>Math.max(0.3,z-0.1))} title="Afastar" style={{padding:'8px 12px', background:'#fff', border:'1px solid #ede8dc', borderRadius:10, cursor:'pointer', fontSize:14}}></button>
+ <button onClick={()=>setZoom(z=>Math.min(2.5,z+0.1))} title="Aproximar" style={{padding:'8px 12px', background:'#fff', border:'1px solid #ede8dc', borderRadius: RADIUS.md, cursor:'pointer', fontSize:14}}>+</button>
+ <button onClick={resetView} title="Resetar visão" style={{padding:'8px 14px', background:'#fff', border:'1px solid #ede8dc', borderRadius: RADIUS.md, cursor:'pointer', fontSize:13, fontWeight:600}}>{Math.round(zoom*100)}%</button>
+ <button onClick={()=>setZoom(z=>Math.max(0.3,z-0.1))} title="Afastar" style={{padding:'8px 12px', background:'#fff', border:'1px solid #ede8dc', borderRadius: RADIUS.md, cursor:'pointer', fontSize:14}}></button>
  </div>
  </div>
 
  {/* Box de Prompt Personalizado (Expansível) */}
  {showAiBox && (
- <div style={{ background: '#fff', padding: 16, borderRadius: 16, border: '1px solid #ede8dc', boxShadow: '0 4px 16px rgba(44,26,14,0.06)', display: 'flex', flexDirection: 'column', gap: 12, flexShrink: 0 }}>
+ <div style={{ background: '#fff', padding: 16, borderRadius: RADIUS.xl, border: '1px solid #ede8dc', boxShadow: '0 4px 16px rgba(44,26,14,0.06)', display: 'flex', flexDirection: 'column', gap: 12, flexShrink: 0 }}>
  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
  <span style={{ fontSize: 13, fontWeight: 700, color: '#2c1a0e' }}>
  Gerador de Mapa Mental com Prompt Personalizado da IA
@@ -341,19 +342,19 @@ Retorne estritamente um JSON no formato:
  value={aiTopic}
  onChange={e => setAiTopic(e.target.value)}
  placeholder="Tema Central (ex: Present Perfect)"
- style={{ padding: '9px 12px', borderRadius: 8, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, color: '#2c1a0e', outline: 'none' }}
+ style={{ padding: '9px 12px', borderRadius: RADIUS.md, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, color: '#2c1a0e', outline: 'none' }}
  />
  <input
  value={customPrompt}
  onChange={e => setCustomPrompt(e.target.value)}
  placeholder="Prompt personalizado (ex: divida em uso, estrutura, dicas e erros comuns)..."
- style={{ padding: '9px 12px', borderRadius: 8, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, color: '#2c1a0e', outline: 'none' }}
+ style={{ padding: '9px 12px', borderRadius: RADIUS.md, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, color: '#2c1a0e', outline: 'none' }}
  />
  <button
  onClick={handleGenerateAiMindMap}
  disabled={aiLoading}
  style={{
- padding: '9px 18px', borderRadius: 8, border: 'none',
+ padding: '9px 18px', borderRadius: RADIUS.md, border: 'none',
  background: '#2c1a0e', color: '#fff', fontSize: 13, fontWeight: 700,
  cursor: aiLoading ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: 6,
  }}
@@ -369,7 +370,7 @@ Retorne estritamente um JSON no formato:
  <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4, flexShrink: 0, alignItems: 'center' }}>
  {maps.map(m => (
  <div key={m.id} onClick={() => { setActiveMapId(m.id); resetView() }} style={{
- display: 'flex', alignItems: 'center', gap: 8, padding: '6px 14px', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: 600,
+ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 14px', borderRadius: RADIUS.md, cursor: 'pointer', fontSize: 13, fontWeight: 600,
  background: activeMapId === m.id ? '#2c1a0e' : 'transparent', color: activeMapId === m.id ? '#fff' : '#7a5c42',
  border: activeMapId === m.id ? '1px solid #2c1a0e' : '1px solid #ede8dc'
  }}>
@@ -378,13 +379,13 @@ Retorne estritamente um JSON no formato:
  {maps.length > 1 && <i className="ti ti-x" onClick={e => deleteMap(m.id, e)} style={{ fontSize: 12, opacity: 0.6, padding: 4 }} />}
  </div>
  ))}
- <button onClick={createMap} style={{ padding: '6px 12px', background: 'transparent', border: '1px dashed #a08060', borderRadius: 8, cursor: 'pointer', color: '#7a5c42', display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 600 }}>
+ <button onClick={createMap} style={{ padding: '6px 12px', background: 'transparent', border: '1px dashed #a08060', borderRadius: RADIUS.md, cursor: 'pointer', color: '#7a5c42', display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 600 }}>
  <i className="ti ti-plus" /> Novo Mapa
  </button>
  </div>
 
  {/* Toolbar */}
- <div style={{ display: 'flex', gap: 10, background: '#fff', padding: 12, borderRadius: 16, border: '1px solid #ede8dc', flexShrink: 0, alignItems: 'center', minHeight: 56 }}>
+ <div style={{ display: 'flex', gap: 10, background: '#fff', padding: 12, borderRadius: RADIUS.xl, border: '1px solid #ede8dc', flexShrink: 0, alignItems: 'center', minHeight: 56 }}>
  {selNode ? (
  <>
  <button onClick={() => addChild(selNode.id)} style={{ padding: '6px 14px', background: '#2c1a0e', color: '#fff', border: 'none', borderRadius: 20, fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}>
@@ -407,7 +408,7 @@ Retorne estritamente um JSON no formato:
  <i className="ti ti-palette" style={{ color: '#fff', fontSize: 14 }} />
  </button>
  {colorPicker === selNode.id && (
- <div style={{ position: 'absolute', top: 36, left: 0, background: '#fff', padding: 8, borderRadius: 12, boxShadow: '0 4px 12px rgba(0,0,0,0.1)', display: 'flex', gap: 6, zIndex: 10 }}>
+ <div style={{ position: 'absolute', top: 36, left: 0, background: '#fff', padding: 8, borderRadius: RADIUS.lg, boxShadow: '0 4px 12px rgba(0,0,0,0.1)', display: 'flex', gap: 6, zIndex: 10 }}>
  {PALETTE.map(c => <button key={c} onClick={() => changeColor(selNode.id, c)} style={{ width: 24, height: 24, borderRadius: '50%', background: c, border: 'none', cursor: 'pointer' }} />)}
  </div>
  )}
@@ -425,7 +426,7 @@ Retorne estritamente um JSON no formato:
  </div>
 
  {/* Canvas SVG */}
- <div style={{ flex: 1, borderRadius: 16, border: '1px solid #ede8dc', background: `radial-gradient(circle at 1px 1px, #e8e2d8 1px, transparent 0) 0 0 / ${28*zoom}px ${28*zoom}px`, backgroundPosition: `${panX}px ${panY}px`, overflow: 'hidden', position: 'relative', cursor: isPanning.current ? 'grabbing' : 'grab' }}>
+ <div style={{ flex: 1, borderRadius: RADIUS.xl, border: '1px solid #ede8dc', background: `radial-gradient(circle at 1px 1px, #e8e2d8 1px, transparent 0) 0 0 / ${28*zoom}px ${28*zoom}px`, backgroundPosition: `${panX}px ${panY}px`, overflow: 'hidden', position: 'relative', cursor: isPanning.current ? 'grabbing' : 'grab' }}>
  <svg ref={svgRef} width="100%" height="100%" onMouseDown={onCanvasDown} onMouseMove={onMouseMove} onMouseUp={onMouseUp} onMouseLeave={onMouseUp} onWheel={onWheel} style={{ display: 'block' }}>
  
  <g transform={`translate(${panX},${panY}) scale(${zoom})`}>
@@ -496,4 +497,4 @@ Retorne estritamente um JSON no formato:
  </div>
  </div>
  )
-}
+}

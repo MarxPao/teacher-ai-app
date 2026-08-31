@@ -1,4 +1,5 @@
 'use client'
+import { COLOR, RADIUS, TEXT, SHADOW, FONT } from '@/styles/tokens'
 
 import React, { useState, useEffect } from 'react'
 import { ModuleKey } from '@/app/page'
@@ -160,7 +161,7 @@ export default function Sidebar({ active, onNavigate }: Props) {
                   ? '1px solid rgba(196,131,74,0.35)'
                   : '1px solid rgba(255,255,255,0.08)',
                 color: isPinned ? '#c4834a' : 'rgba(196,160,120,0.5)',
-                borderRadius: 8,
+                borderRadius: RADIUS.md,
                 padding: '5px 8px',
                 cursor: 'pointer',
                 fontSize: 13,
@@ -283,7 +284,7 @@ function SidebarItem({ item, isActive, isExpanded, onNavigate }: {
           gap: isExpanded ? 12 : 0,
           width: '100%',
           padding: isExpanded ? '10px 14px' : '10px 0',
-          borderRadius: 10,
+          borderRadius: RADIUS.md,
           border: 'none',
           background: isActive
             ? 'rgba(253,248,242,0.12)'
@@ -306,7 +307,7 @@ function SidebarItem({ item, isActive, isExpanded, onNavigate }: {
         <div style={{
           width: 34,
           height: 34,
-          borderRadius: 8,
+          borderRadius: RADIUS.md,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -345,8 +346,8 @@ function SidebarItem({ item, isActive, isExpanded, onNavigate }: {
           background: '#1c110a',
           color: '#fdf8f2',
           padding: '6px 12px',
-          borderRadius: 8,
-          fontSize: 13.5,
+          borderRadius: RADIUS.md,
+          fontSize: TEXT.body,
           fontWeight: 600,
           whiteSpace: 'nowrap',
           boxShadow: '0 4px 14px rgba(0,0,0,0.4)',

@@ -1,4 +1,5 @@
 'use client'
+import { COLOR, RADIUS, TEXT, SHADOW, FONT } from '@/styles/tokens'
 
 import { useState, useEffect } from 'react'
 
@@ -79,7 +80,7 @@ Formate de modo ideal para envio direto via WhatsApp!`
  <h1 style={{  textAlign: 'center', fontFamily: "'Fraunces', Georgia, serif", fontSize: 34, fontWeight: 600, color: '#2c1a0e', margin: '0 auto'  }}>
  Comunicação com Pais & WhatsApp 
  </h1>
- <span style={{ background: '#25D366', color: '#fff', fontSize: 11, fontWeight: 800, padding: '3px 10px', borderRadius: 12, textTransform: 'uppercase' }}>
+ <span style={{ background: '#25D366', color: '#fff', fontSize: 11, fontWeight: 800, padding: '3px 10px', borderRadius: RADIUS.lg, textTransform: 'uppercase' }}>
  Boletim Individual com 1 Clique
  </span>
  </div>
@@ -96,7 +97,7 @@ Formate de modo ideal para envio direto via WhatsApp!`
  <select
  value={selectedStudentId}
  onChange={e => setSelectedStudentId(e.target.value)}
- style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13.5, color: '#2c1a0e', outline: 'none' }}
+ style={{ width: '100%', padding: '10px 12px', borderRadius: RADIUS.md, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: TEXT.body, color: '#2c1a0e', outline: 'none' }}
  >
  {students.map(s => (
  <option key={s.id} value={s.id}>{s.name} ({s.className})</option>
@@ -104,7 +105,7 @@ Formate de modo ideal para envio direto via WhatsApp!`
  </select>
  </div>
 
- <div style={{ background: '#f5f0e8', padding: 14, borderRadius: 12, fontSize: 13, display: 'flex', flexDirection: 'column', gap: 6 }}>
+ <div style={{ background: '#f5f0e8', padding: 14, borderRadius: RADIUS.lg, fontSize: 13, display: 'flex', flexDirection: 'column', gap: 6 }}>
  <div><strong>Responsável:</strong> {selectedStudent.parentName}</div>
  <div><strong>WhatsApp:</strong> +55 {selectedStudent.parentPhone}</div>
  <div><strong>Nota Recente em Inglês:</strong> <strong style={{ color: selectedStudent.lastGrade >= 8 ? '#859900' : '#cb4b16' }}>{selectedStudent.lastGrade}/10</strong></div>
@@ -118,7 +119,7 @@ Formate de modo ideal para envio direto via WhatsApp!`
  key={t}
  onClick={() => setTone(t)}
  style={{
- padding: '8px', borderRadius: 8, border: tone === t ? '2px solid #2c1a0e' : '1px solid #e8e0d0',
+ padding: '8px', borderRadius: RADIUS.md, border: tone === t ? '2px solid #2c1a0e' : '1px solid #e8e0d0',
  background: tone === t ? '#f0e8d8' : '#fff', color: '#2c1a0e', fontSize: 12, fontWeight: 700, cursor: 'pointer', textTransform: 'capitalize'
  }}
  >
@@ -143,14 +144,14 @@ Formate de modo ideal para envio direto via WhatsApp!`
  value={generatedReport}
  onChange={e => setGeneratedReport(e.target.value)}
  rows={16}
- style={{ width: '100%', padding: '16px', borderRadius: 14, border: '1px solid #e8e0d0', background: '#fdf8f2', fontSize: 14, color: '#2c1a0e', fontFamily: 'inherit', lineHeight: 1.6, resize: 'vertical', boxSizing: 'border-box' }}
+ style={{ width: '100%', padding: '16px', borderRadius: RADIUS.lg, border: '1px solid #e8e0d0', background: '#fdf8f2', fontSize: 14, color: '#2c1a0e', fontFamily: 'inherit', lineHeight: 1.6, resize: 'vertical', boxSizing: 'border-box' }}
  />
  </div>
 
  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 16 }}>
  <button
  onClick={() => window.print()}
- style={{ padding: '12px 20px', borderRadius: 10, border: '1px solid #e8e0d0', background: '#fff', fontSize: 13, fontWeight: 700, color: '#2c1a0e', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+ style={{ padding: '12px 20px', borderRadius: RADIUS.md, border: '1px solid #e8e0d0', background: '#fff', fontSize: 13, fontWeight: 700, color: '#2c1a0e', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
  >
  <i className="ti ti-printer" /> Imprimir / PDF
  </button>
@@ -158,7 +159,7 @@ Formate de modo ideal para envio direto via WhatsApp!`
  <button
  onClick={handleSendWhatsApp}
  style={{
- padding: '12px 24px', borderRadius: 10, border: 'none',
+ padding: '12px 24px', borderRadius: RADIUS.md, border: 'none',
  background: '#25D366', color: '#fff', fontSize: 14, fontWeight: 800,
  cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
  boxShadow: '0 4px 14px rgba(37,211,102,0.3)'
@@ -171,4 +172,4 @@ Formate de modo ideal para envio direto via WhatsApp!`
  </div>
  </div>
  )
-}
+}

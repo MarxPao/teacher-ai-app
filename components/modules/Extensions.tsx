@@ -1,4 +1,5 @@
 'use client'
+import { COLOR, RADIUS, TEXT, SHADOW, FONT } from '@/styles/tokens'
 
 import React, { useState, useEffect, useCallback } from 'react'
 import { toast, showConfirm } from '@/components/Toast'
@@ -58,7 +59,7 @@ const cardBaseStyle: React.CSSProperties = {
 const cardStyle: React.CSSProperties = {
   background: '#ffffff',
   border: '1.5px solid #e7dfd5',
-  borderRadius: 14,
+  borderRadius: RADIUS.lg,
   padding: '18px 20px',
   boxShadow: '0 2px 8px rgba(44, 26, 14, 0.04)',
 }
@@ -496,8 +497,8 @@ export default function Extensions({ initialTab = 'portals' }: Props) {
           <button
             onClick={() => setIsPairingOpen(true)}
             style={{
-              padding: '8px 14px', borderRadius: 10, border: '1.5px solid #8b5e3c',
-              background: '#fdf8f2', color: '#5b3a20', fontSize: 12.5, fontWeight: 800,
+              padding: '8px 14px', borderRadius: RADIUS.md, border: '1.5px solid #8b5e3c',
+              background: '#fdf8f2', color: '#5b3a20', fontSize: TEXT.bodyCompact, fontWeight: 800,
               cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
               boxShadow: '0 2px 6px rgba(0,0,0,0.04)'
             }}
@@ -507,8 +508,8 @@ export default function Extensions({ initialTab = 'portals' }: Props) {
           <button
             onClick={() => setActiveTab('install')}
             style={{
-              padding: '8px 14px', borderRadius: 10, border: 'none',
-              background: '#8b5e3c', color: '#fff', fontSize: 12.5, fontWeight: 800,
+              padding: '8px 14px', borderRadius: RADIUS.md, border: 'none',
+              background: '#8b5e3c', color: '#fff', fontSize: TEXT.bodyCompact, fontWeight: 800,
               cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6
             }}
           >
@@ -541,7 +542,7 @@ export default function Extensions({ initialTab = 'portals' }: Props) {
                   background: isActive ? '#ffffff' : 'transparent',
                   color: isActive ? '#8b5e3c' : '#665c54',
                   fontWeight: isActive ? 800 : 600,
-                  fontSize: 13.5,
+                  fontSize: TEXT.body,
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
@@ -574,7 +575,7 @@ export default function Extensions({ initialTab = 'portals' }: Props) {
                       border: `1.5px solid ${activeCategory === cat ? '#8b5e3c' : '#ede8dc'}`,
                       background: activeCategory === cat ? '#8b5e3c' : '#fff',
                       color: activeCategory === cat ? '#fff' : '#7a5c42',
-                      fontSize: 12.5, fontWeight: 700, cursor: 'pointer', transition: 'all 0.18s',
+                      fontSize: TEXT.bodyCompact, fontWeight: 700, cursor: 'pointer', transition: 'all 0.18s',
                     }}
                   >
                     {cat}
@@ -609,7 +610,7 @@ export default function Extensions({ initialTab = 'portals' }: Props) {
                     {/* Ícone + Nome */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                       <div style={{
-                        width: 48, height: 48, borderRadius: 14,
+                        width: 48, height: 48, borderRadius: RADIUS.lg,
                         background: portal.bg || '#faf6f0', display: 'flex', alignItems: 'center',
                         justifyContent: 'center', fontSize: 22, flexShrink: 0, color: portal.color
                       }}>
@@ -628,7 +629,7 @@ export default function Extensions({ initialTab = 'portals' }: Props) {
 
                     {/* Ações Rápidas Disponíveis */}
                     {portal.actions && portal.actions.length > 0 && (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, background: '#faf6f0', padding: 8, borderRadius: 8 }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, background: '#faf6f0', padding: 8, borderRadius: RADIUS.md }}>
                         <span style={{ fontSize: 10, fontWeight: 800, color: '#8b5e3c', textTransform: 'uppercase' }}>Ações Rápidas:</span>
                         {portal.actions.slice(0, 2).map(act => (
                           <div key={act.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11 }}>
@@ -652,7 +653,7 @@ export default function Extensions({ initialTab = 'portals' }: Props) {
                             onClick={() => setIsTrelloModalOpen(true)}
                             style={{
                               flex: 1, padding: '8px 10px', background: '#0079bf',
-                              color: '#fff', border: 'none', borderRadius: 8,
+                              color: '#fff', border: 'none', borderRadius: RADIUS.md,
                               fontSize: 12, fontWeight: 800, cursor: 'pointer',
                               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                               boxShadow: '0 3px 10px rgba(0,121,191,0.3)',
@@ -666,7 +667,7 @@ export default function Extensions({ initialTab = 'portals' }: Props) {
                             style={{
                               padding: '8px 12px', background: '#e6f4fb',
                               color: '#0079bf', border: '1px solid #b8e1f7',
-                              borderRadius: 8, fontSize: 11.5, fontWeight: 700, cursor: 'pointer',
+                              borderRadius: RADIUS.md, fontSize: TEXT.caption, fontWeight: 700, cursor: 'pointer',
                               transition: 'all 0.18s',
                             }}
                             title="Abrir Trello na web"
@@ -681,7 +682,7 @@ export default function Extensions({ initialTab = 'portals' }: Props) {
                             disabled={isWorking}
                             style={{
                               flex: 1, padding: '8px 10px', background: '#b58900',
-                              color: '#fff', border: 'none', borderRadius: 8,
+                              color: '#fff', border: 'none', borderRadius: RADIUS.md,
                               fontSize: 12, fontWeight: 800, cursor: 'pointer',
                               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
                               boxShadow: '0 3px 10px rgba(181, 137, 0, 0.3)',
@@ -697,7 +698,7 @@ export default function Extensions({ initialTab = 'portals' }: Props) {
                             style={{
                               padding: '8px 10px', background: '#f0fff4',
                               color: '#2d9d5d', border: '1px solid #2d9d5d44',
-                              borderRadius: 8, fontSize: 11.5, fontWeight: 700, cursor: 'pointer',
+                              borderRadius: RADIUS.md, fontSize: TEXT.caption, fontWeight: 700, cursor: 'pointer',
                               display: 'flex', alignItems: 'center', gap: 4,
                               transition: 'all 0.18s',
                             }}
@@ -710,7 +711,7 @@ export default function Extensions({ initialTab = 'portals' }: Props) {
                             style={{
                               padding: '8px 10px', background: '#faf6f0',
                               color: portal.color, border: `1.5px solid ${portal.color}44`,
-                              borderRadius: 8, fontSize: 11.5, fontWeight: 700, cursor: 'pointer',
+                              borderRadius: RADIUS.md, fontSize: TEXT.caption, fontWeight: 700, cursor: 'pointer',
                               display: 'flex', alignItems: 'center', gap: 4,
                               transition: 'all 0.18s',
                             }}
@@ -744,7 +745,7 @@ export default function Extensions({ initialTab = 'portals' }: Props) {
                     onChange={e => setCustomUrl(e.target.value)}
                     placeholder="ex: https://seuportal.com.br/login"
                     style={{
-                      flex: 1, padding: '9px 14px', borderRadius: 10,
+                      flex: 1, padding: '9px 14px', borderRadius: RADIUS.md,
                       border: '1.5px solid #ede8dc', fontSize: 13,
                       color: '#2c1a0e', outline: 'none', background: '#fff',
                     }}
@@ -753,7 +754,7 @@ export default function Extensions({ initialTab = 'portals' }: Props) {
                     type="submit"
                     style={{
                       padding: '9px 18px', background: '#8b5e3c', color: '#fff',
-                      border: 'none', borderRadius: 10, fontWeight: 800,
+                      border: 'none', borderRadius: RADIUS.md, fontWeight: 800,
                       fontSize: 13, cursor: 'pointer',
                     }}
                   >
@@ -775,7 +776,7 @@ export default function Extensions({ initialTab = 'portals' }: Props) {
                 <div style={{
                   background: fillStatus ? '#f0fff4' : '#fdf8f2',
                   border: `1.5px solid ${fillStatus ? '#2d9d5d44' : '#ede8dc'}`,
-                  borderRadius: 12, padding: 12, fontSize: 12,
+                  borderRadius: RADIUS.lg, padding: 12, fontSize: 12,
                   color: fillStatus ? '#2c1a0e' : '#a08060',
                   minHeight: 56, lineHeight: 1.6,
                   transition: 'all 0.3s',
@@ -808,14 +809,14 @@ export default function Extensions({ initialTab = 'portals' }: Props) {
                   ].map(item => (
                     <div key={item.step} style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
                       <div style={{
-                        width: 32, height: 32, borderRadius: 10, background: '#8b5e3c12',
+                        width: 32, height: 32, borderRadius: RADIUS.md, background: '#8b5e3c12',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         fontSize: 16, flexShrink: 0,
                       }}>
                         {item.icon}
                       </div>
                       <div>
-                        <div style={{ fontSize: 12.5, fontWeight: 800, color: '#2c1a0e' }}>{item.title}</div>
+                        <div style={{ fontSize: TEXT.bodyCompact, fontWeight: 800, color: '#2c1a0e' }}>{item.title}</div>
                         <div style={{ fontSize: 11, color: '#7a5c42', lineHeight: 1.4 }}>{item.desc}</div>
                       </div>
                     </div>
@@ -853,7 +854,7 @@ export default function Extensions({ initialTab = 'portals' }: Props) {
                     if (p) setSelectedPortal(p)
                   }}
                   style={{
-                    padding: '8px 12px', borderRadius: 8, border: '1px solid #d5c8bb',
+                    padding: '8px 12px', borderRadius: RADIUS.md, border: '1px solid #d5c8bb',
                     background: '#fff', fontSize: 13, fontWeight: 700, color: '#2c1a0e'
                   }}
                 >
@@ -867,7 +868,7 @@ export default function Extensions({ initialTab = 'portals' }: Props) {
                 onClick={openNewActionModal}
                 style={{
                   background: '#8b5e3c', color: '#ffffff', border: 'none',
-                  padding: '9px 16px', borderRadius: 8, fontSize: 13, fontWeight: 700,
+                  padding: '9px 16px', borderRadius: RADIUS.md, fontSize: 13, fontWeight: 700,
                   cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6
                 }}
               >
@@ -886,10 +887,10 @@ export default function Extensions({ initialTab = 'portals' }: Props) {
                           {act.type}
                         </span>
                       </div>
-                      <p style={{ margin: '0 0 10px', fontSize: 12.5, color: '#665c54', lineHeight: 1.4 }}>
+                      <p style={{ margin: '0 0 10px', fontSize: TEXT.bodyCompact, color: '#665c54', lineHeight: 1.4 }}>
                         {act.description}
                       </p>
-                      <div style={{ fontSize: 11.5, color: '#2c1a0e', background: '#faf6f0', padding: '6px 10px', borderRadius: 6 }}>
+                      <div style={{ fontSize: TEXT.caption, color: '#2c1a0e', background: '#faf6f0', padding: '6px 10px', borderRadius: 6 }}>
                         🗣️ <em>"{act.spokenConfirmation}"</em>
                       </div>
                     </div>
@@ -945,7 +946,7 @@ export default function Extensions({ initialTab = 'portals' }: Props) {
                 onClick={exportLogsCsv}
                 style={{
                   background: '#2d9d5d', color: '#ffffff', border: 'none',
-                  padding: '9px 16px', borderRadius: 8, fontSize: 13, fontWeight: 700,
+                  padding: '9px 16px', borderRadius: RADIUS.md, fontSize: 13, fontWeight: 700,
                   cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
                   boxShadow: '0 2px 6px rgba(45,157,93,0.3)'
                 }}
@@ -986,12 +987,12 @@ export default function Extensions({ initialTab = 'portals' }: Props) {
 
             {logSubTab === 'sync' ? (
               syncLogs.length === 0 ? (
-                <div style={{ padding: 40, textAlign: 'center', background: '#faf6f0', borderRadius: 12, color: '#a08060' }}>
+                <div style={{ padding: 40, textAlign: 'center', background: '#faf6f0', borderRadius: RADIUS.lg, color: '#a08060' }}>
                   <i className="ti ti-school" style={{ fontSize: 32, display: 'block', marginBottom: 8 }} />
                   Nenhuma sincronização de alunos ou turmas registrada ainda.
                 </div>
               ) : (
-                <div style={{ overflowX: 'auto', background: '#fff', borderRadius: 12, border: '1px solid #e7dfd5' }}>
+                <div style={{ overflowX: 'auto', background: '#fff', borderRadius: RADIUS.lg, border: '1px solid #e7dfd5' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, textAlign: 'left' }}>
                     <thead>
                       <tr style={{ background: '#faf6f0', borderBottom: '1px solid #e7dfd5', color: '#2c1a0e' }}>
@@ -1017,17 +1018,17 @@ export default function Extensions({ initialTab = 'portals' }: Props) {
                             {log.classRef === 'all' ? 'Todas as turmas' : log.classRef}
                           </td>
                           <td style={{ padding: '12px 16px' }}>
-                            <span style={{ fontSize: 11.5, fontWeight: 700, color: '#16a34a', background: '#f0fdf4', padding: '2px 8px', borderRadius: 6, border: '1px solid #bbf7d0' }}>
+                            <span style={{ fontSize: TEXT.caption, fontWeight: 700, color: '#16a34a', background: '#f0fdf4', padding: '2px 8px', borderRadius: 6, border: '1px solid #bbf7d0' }}>
                               +{log.importedCount} novos
                             </span>
                           </td>
                           <td style={{ padding: '12px 16px' }}>
-                            <span style={{ fontSize: 11.5, fontWeight: 700, color: '#0369a1', background: '#e0f2fe', padding: '2px 8px', borderRadius: 6, border: '1px solid #bae6fd' }}>
+                            <span style={{ fontSize: TEXT.caption, fontWeight: 700, color: '#0369a1', background: '#e0f2fe', padding: '2px 8px', borderRadius: 6, border: '1px solid #bae6fd' }}>
                               🔗 {log.mergedCount}
                             </span>
                           </td>
                           <td style={{ padding: '12px 16px' }}>
-                            <span style={{ fontSize: 11.5, fontWeight: 700, color: '#7a5c42', background: '#f5eee6', padding: '2px 8px', borderRadius: 6 }}>
+                            <span style={{ fontSize: TEXT.caption, fontWeight: 700, color: '#7a5c42', background: '#f5eee6', padding: '2px 8px', borderRadius: 6 }}>
                               📌 {log.unmatchedLocalCount}
                             </span>
                           </td>
@@ -1044,12 +1045,12 @@ export default function Extensions({ initialTab = 'portals' }: Props) {
               )
             ) : (
               recentFills.length === 0 ? (
-                <div style={{ padding: 40, textAlign: 'center', background: '#faf6f0', borderRadius: 12, color: '#a08060' }}>
+                <div style={{ padding: 40, textAlign: 'center', background: '#faf6f0', borderRadius: RADIUS.lg, color: '#a08060' }}>
                   <i className="ti ti-receipt" style={{ fontSize: 32, display: 'block', marginBottom: 8 }} />
                   Nenhum lançamento registrado recentemente na trilha de auditoria.
                 </div>
               ) : (
-                <div style={{ overflowX: 'auto', background: '#fff', borderRadius: 12, border: '1px solid #e7dfd5' }}>
+                <div style={{ overflowX: 'auto', background: '#fff', borderRadius: RADIUS.lg, border: '1px solid #e7dfd5' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, textAlign: 'left' }}>
                     <thead>
                       <tr style={{ background: '#faf6f0', borderBottom: '1px solid #e7dfd5', color: '#2c1a0e' }}>
@@ -1093,7 +1094,7 @@ export default function Extensions({ initialTab = 'portals' }: Props) {
         {/* ─── ABA 6: INSTALAÇÃO DA EXTENSÃO CHROME & SIDECAR ──────────────── */}
         {activeTab === 'install' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-            <div style={{ background: '#faf6f0', border: '1px solid #d5c8bb', borderRadius: 14, padding: 24 }}>
+            <div style={{ background: '#faf6f0', border: '1px solid #d5c8bb', borderRadius: RADIUS.lg, padding: 24 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
                 <span style={{ fontSize: 28 }}>📦</span>
                 <div>
@@ -1104,7 +1105,7 @@ export default function Extensions({ initialTab = 'portals' }: Props) {
                 </div>
               </div>
 
-              <div style={{ background: '#fff', borderRadius: 10, padding: 18, border: '1px solid #e7dfd5', marginBottom: 16 }}>
+              <div style={{ background: '#fff', borderRadius: RADIUS.md, padding: 18, border: '1px solid #e7dfd5', marginBottom: 16 }}>
                 <h4 style={{ margin: '0 0 10px', fontSize: 14, fontWeight: 800, color: '#2c1a0e' }}>Passo a Passo de Instalação no Google Chrome:</h4>
                 <ol style={{ margin: 0, paddingLeft: 20, fontSize: 13, color: '#665c54', lineHeight: 1.7 }}>
                   <li>Abra o Google Chrome e acesse: <code>chrome://extensions</code></li>
@@ -1119,7 +1120,7 @@ export default function Extensions({ initialTab = 'portals' }: Props) {
                 <button
                   onClick={() => setIsPairingOpen(true)}
                   style={{
-                    padding: '10px 18px', borderRadius: 8, border: 'none', background: '#8b5e3c',
+                    padding: '10px 18px', borderRadius: RADIUS.md, border: 'none', background: '#8b5e3c',
                     color: '#fff', fontSize: 13, fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8
                   }}
                 >
@@ -1187,7 +1188,7 @@ export default function Extensions({ initialTab = 'portals' }: Props) {
           position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000,
           display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20
         }}>
-          <div style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 500, padding: 24, boxShadow: '0 20px 40px rgba(0,0,0,0.2)' }}>
+          <div style={{ background: '#fff', borderRadius: RADIUS.xl, width: '100%', maxWidth: 500, padding: 24, boxShadow: '0 20px 40px rgba(0,0,0,0.2)' }}>
             <h3 style={{ margin: '0 0 16px', fontSize: 18, fontWeight: 800, color: '#2c1a0e' }}>
               {editingPortal ? 'Editar Portal Escolar' : 'Cadastrar Novo Portal'}
             </h3>
@@ -1200,7 +1201,7 @@ export default function Extensions({ initialTab = 'portals' }: Props) {
                   onChange={e => setPortalFormName(e.target.value)}
                   placeholder="ex: Sistema Positivo, COC, Bernoulli"
                   required
-                  style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid #d5c8bb', fontSize: 13, boxSizing: 'border-box' }}
+                  style={{ width: '100%', padding: '9px 12px', borderRadius: RADIUS.md, border: '1px solid #d5c8bb', fontSize: 13, boxSizing: 'border-box' }}
                 />
               </div>
 
@@ -1212,7 +1213,7 @@ export default function Extensions({ initialTab = 'portals' }: Props) {
                   onChange={e => setPortalFormUrl(e.target.value)}
                   placeholder="https://portal.suaescola.com.br"
                   required
-                  style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid #d5c8bb', fontSize: 13, boxSizing: 'border-box' }}
+                  style={{ width: '100%', padding: '9px 12px', borderRadius: RADIUS.md, border: '1px solid #d5c8bb', fontSize: 13, boxSizing: 'border-box' }}
                 />
               </div>
 
@@ -1222,7 +1223,7 @@ export default function Extensions({ initialTab = 'portals' }: Props) {
                   <select
                     value={portalFormCategory}
                     onChange={e => setPortalFormCategory(e.target.value)}
-                    style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid #d5c8bb', fontSize: 13, boxSizing: 'border-box' }}
+                    style={{ width: '100%', padding: '9px 12px', borderRadius: RADIUS.md, border: '1px solid #d5c8bb', fontSize: 13, boxSizing: 'border-box' }}
                   >
                     <option value="Diário & Notas">Diário & Notas</option>
                     <option value="Provas & Conteúdos">Provas & Conteúdos</option>
@@ -1237,7 +1238,7 @@ export default function Extensions({ initialTab = 'portals' }: Props) {
                     type="color"
                     value={portalFormColor}
                     onChange={e => setPortalFormColor(e.target.value)}
-                    style={{ width: '100%', height: 38, padding: 2, borderRadius: 8, border: '1px solid #d5c8bb', cursor: 'pointer' }}
+                    style={{ width: '100%', height: 38, padding: 2, borderRadius: RADIUS.md, border: '1px solid #d5c8bb', cursor: 'pointer' }}
                   />
                 </div>
               </div>
@@ -1249,7 +1250,7 @@ export default function Extensions({ initialTab = 'portals' }: Props) {
                   onChange={e => setPortalFormDescription(e.target.value)}
                   rows={2}
                   placeholder="Notas adicionais sobre o portal..."
-                  style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid #d5c8bb', fontSize: 13, boxSizing: 'border-box' }}
+                  style={{ width: '100%', padding: '9px 12px', borderRadius: RADIUS.md, border: '1px solid #d5c8bb', fontSize: 13, boxSizing: 'border-box' }}
                 />
               </div>
 
@@ -1257,13 +1258,13 @@ export default function Extensions({ initialTab = 'portals' }: Props) {
                 <button
                   type="button"
                   onClick={() => setIsPortalModalOpen(false)}
-                  style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid #d5c8bb', background: '#fff', color: '#665c54', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
+                  style={{ padding: '8px 14px', borderRadius: RADIUS.md, border: '1px solid #d5c8bb', background: '#fff', color: '#665c54', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: '#8b5e3c', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
+                  style={{ padding: '8px 16px', borderRadius: RADIUS.md, border: 'none', background: '#8b5e3c', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
                 >
                   Salvar Portal
                 </button>
@@ -1279,7 +1280,7 @@ export default function Extensions({ initialTab = 'portals' }: Props) {
           position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000,
           display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20
         }}>
-          <div style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 500, padding: 24, boxShadow: '0 20px 40px rgba(0,0,0,0.2)' }}>
+          <div style={{ background: '#fff', borderRadius: RADIUS.xl, width: '100%', maxWidth: 500, padding: 24, boxShadow: '0 20px 40px rgba(0,0,0,0.2)' }}>
             <h3 style={{ margin: '0 0 16px', fontSize: 18, fontWeight: 800, color: '#2c1a0e' }}>
               {editingAction ? 'Editar Ação Agêntica' : 'Nova Ação Agêntica'}
             </h3>
@@ -1292,7 +1293,7 @@ export default function Extensions({ initialTab = 'portals' }: Props) {
                   onChange={e => setActionFormTitle(e.target.value)}
                   placeholder="ex: Lançar Frequência da Manhã"
                   required
-                  style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid #d5c8bb', fontSize: 13, boxSizing: 'border-box' }}
+                  style={{ width: '100%', padding: '9px 12px', borderRadius: RADIUS.md, border: '1px solid #d5c8bb', fontSize: 13, boxSizing: 'border-box' }}
                 />
               </div>
 
@@ -1302,7 +1303,7 @@ export default function Extensions({ initialTab = 'portals' }: Props) {
                   <select
                     value={actionFormType}
                     onChange={e => setActionFormType(e.target.value as any)}
-                    style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid #d5c8bb', fontSize: 13, boxSizing: 'border-box' }}
+                    style={{ width: '100%', padding: '9px 12px', borderRadius: RADIUS.md, border: '1px solid #d5c8bb', fontSize: 13, boxSizing: 'border-box' }}
                   >
                     <option value="diary">Diário de Classe</option>
                     <option value="grades">Lançamento de Notas</option>
@@ -1318,7 +1319,7 @@ export default function Extensions({ initialTab = 'portals' }: Props) {
                     value={actionFormConfirmation}
                     onChange={e => setActionFormConfirmation(e.target.value)}
                     placeholder="ex: Chamada finalizada com sucesso!"
-                    style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid #d5c8bb', fontSize: 13, boxSizing: 'border-box' }}
+                    style={{ width: '100%', padding: '9px 12px', borderRadius: RADIUS.md, border: '1px solid #d5c8bb', fontSize: 13, boxSizing: 'border-box' }}
                   />
                 </div>
               </div>
@@ -1330,7 +1331,7 @@ export default function Extensions({ initialTab = 'portals' }: Props) {
                   onChange={e => setActionFormDescription(e.target.value)}
                   rows={2}
                   placeholder="Instruções para o preenchimento automático..."
-                  style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid #d5c8bb', fontSize: 13, boxSizing: 'border-box' }}
+                  style={{ width: '100%', padding: '9px 12px', borderRadius: RADIUS.md, border: '1px solid #d5c8bb', fontSize: 13, boxSizing: 'border-box' }}
                 />
               </div>
 
@@ -1338,13 +1339,13 @@ export default function Extensions({ initialTab = 'portals' }: Props) {
                 <button
                   type="button"
                   onClick={() => setIsActionModalOpen(false)}
-                  style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid #d5c8bb', background: '#fff', color: '#665c54', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
+                  style={{ padding: '8px 14px', borderRadius: RADIUS.md, border: '1px solid #d5c8bb', background: '#fff', color: '#665c54', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: '#8b5e3c', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
+                  style={{ padding: '8px 16px', borderRadius: RADIUS.md, border: 'none', background: '#8b5e3c', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
                 >
                   Salvar Ação
                 </button>

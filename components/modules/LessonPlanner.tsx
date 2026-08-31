@@ -1,4 +1,5 @@
 'use client'
+import { COLOR, RADIUS, TEXT, SHADOW, FONT } from '@/styles/tokens'
 import { toast, showConfirm } from '@/components/Toast'
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 
@@ -328,7 +329,7 @@ export default function LessonPlanner() {
 
  function resetView() { setPanX(40); setPanY(40); setZoom(1) }
 
- const SS = { width:'100%', padding:'8px 10px', background:'#f5f0e8', border:'1px solid #e8e0d0', borderRadius:8, outline:'none', color:'#2c1a0e', fontSize:13, fontFamily:'inherit' }
+ const SS = { width:'100%', padding:'8px 10px', background:'#f5f0e8', border:'1px solid #e8e0d0', borderRadius: RADIUS.md, outline:'none', color:'#2c1a0e', fontSize:13, fontFamily:'inherit' }
  const SL = { fontSize:12, fontWeight:600 as const, color:'#7a5c42', display:'block' as const, marginBottom:4 }
 
  if (!activeBoard) return null
@@ -341,7 +342,7 @@ export default function LessonPlanner() {
  <div style={{display:'flex', gap:6, alignItems:'center'}}>
  {boards.map(b => (
  <div key={b.id} onClick={()=>setActiveBoardId(b.id)} style={{
- display:'flex', alignItems:'center', gap:8, padding:'6px 14px', borderRadius:8, cursor:'pointer', fontSize:13, fontWeight:600,
+ display:'flex', alignItems:'center', gap:8, padding:'6px 14px', borderRadius: RADIUS.md, cursor:'pointer', fontSize:13, fontWeight:600,
  background: activeBoardId === b.id ? '#2c1a0e' : 'rgba(255,255,255,0.6)',
  color: activeBoardId === b.id ? '#fff' : '#7a5c42',
  boxShadow: activeBoardId === b.id ? '0 2px 8px rgba(0,0,0,0.1)' : 'none'
@@ -358,17 +359,17 @@ export default function LessonPlanner() {
  )}
  </div>
  ))}
- <button onClick={addBoard} style={{padding:'6px 12px', background:'transparent', border:'1px dashed #a08060', borderRadius:8, cursor:'pointer', color:'#7a5c42', display:'flex', alignItems:'center', gap:4, fontSize:12, fontWeight:600}}>
+ <button onClick={addBoard} style={{padding:'6px 12px', background:'transparent', border:'1px dashed #a08060', borderRadius: RADIUS.md, cursor:'pointer', color:'#7a5c42', display:'flex', alignItems:'center', gap:4, fontSize:12, fontWeight:600}}>
  <i className="ti ti-plus" /> Novo Workspace
  </button>
  </div>
 
  {/* Seletor de Modo: Calendário vs Estúdio vs Pastas vs Canvas */}
- <div style={{display:'flex', background:'rgba(255,255,255,0.7)', padding:3, borderRadius:10, border:'1px solid #d5cfc0', gap:2}}>
+ <div style={{display:'flex', background:'rgba(255,255,255,0.7)', padding:3, borderRadius: RADIUS.md, border:'1px solid #d5cfc0', gap:2}}>
  <button
  onClick={() => setViewMode('calendar')}
  style={{
- padding:'6px 12px', borderRadius:8, border:'none', cursor:'pointer', fontSize:12, fontWeight:700,
+ padding:'6px 12px', borderRadius: RADIUS.md, border:'none', cursor:'pointer', fontSize:12, fontWeight:700,
  background: viewMode === 'calendar' ? '#8b5e3c' : 'transparent',
  color: viewMode === 'calendar' ? '#fff' : '#7a5c42',
  display:'flex', alignItems:'center', gap:5, transition:'all 0.15s'
@@ -380,7 +381,7 @@ export default function LessonPlanner() {
  <button
  onClick={() => setViewMode('studio')}
  style={{
- padding:'6px 12px', borderRadius:8, border:'none', cursor:'pointer', fontSize:12, fontWeight:700,
+ padding:'6px 12px', borderRadius: RADIUS.md, border:'none', cursor:'pointer', fontSize:12, fontWeight:700,
  background: viewMode === 'studio' ? '#8b5e3c' : 'transparent',
  color: viewMode === 'studio' ? '#fff' : '#7a5c42',
  display:'flex', alignItems:'center', gap:5, transition:'all 0.15s'
@@ -392,7 +393,7 @@ export default function LessonPlanner() {
  <button
  onClick={() => setViewMode('folders')}
  style={{
- padding:'6px 12px', borderRadius:8, border:'none', cursor:'pointer', fontSize:12, fontWeight:700,
+ padding:'6px 12px', borderRadius: RADIUS.md, border:'none', cursor:'pointer', fontSize:12, fontWeight:700,
  background: viewMode === 'folders' ? '#8b5e3c' : 'transparent',
  color: viewMode === 'folders' ? '#fff' : '#7a5c42',
  display:'flex', alignItems:'center', gap:5, transition:'all 0.15s'
@@ -404,7 +405,7 @@ export default function LessonPlanner() {
  <button
  onClick={() => setViewMode('canvas')}
  style={{
- padding:'6px 12px', borderRadius:8, border:'none', cursor:'pointer', fontSize:12, fontWeight:700,
+ padding:'6px 12px', borderRadius: RADIUS.md, border:'none', cursor:'pointer', fontSize:12, fontWeight:700,
  background: viewMode === 'canvas' ? '#2c1a0e' : 'transparent',
  color: viewMode === 'canvas' ? '#fff' : '#7a5c42',
  display:'flex', alignItems:'center', gap:5, transition:'all 0.15s'
@@ -433,7 +434,7 @@ export default function LessonPlanner() {
  <label style={SL}>Turma</label>
  <input style={SS} value={addClass} onChange={e=>setAddClass(e.target.value)} placeholder="Ex: 9º A" />
  </div>
- <button onClick={addCard} style={{padding:'9px', background:'#2c1a0e', color:'#fff', border:'none', borderRadius:10, fontSize:13, fontWeight:700, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:6}}>
+ <button onClick={addCard} style={{padding:'9px', background:'#2c1a0e', color:'#fff', border:'none', borderRadius: RADIUS.md, fontSize:13, fontWeight:700, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:6}}>
  <i className="ti ti-plus" /> Adicionar Card
  </button>
  </div>
@@ -471,16 +472,16 @@ export default function LessonPlanner() {
  {PERIODS.slice(1).map(p=><option key={p}>{p}</option>)}
  </select>
  </div>
- <button onClick={compileCards} style={{padding:'9px', background: '#c4834a', color:'#fff', border:'none', borderRadius:10, fontSize:13, fontWeight:700, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:6}}>
+ <button onClick={compileCards} style={{padding:'9px', background: '#c4834a', color:'#fff', border:'none', borderRadius: RADIUS.md, fontSize:13, fontWeight:700, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:6}}>
  <i className="ti ti-stack-2" /> Compilar Visíveis ({visible.length})
  </button>
  </div>
 
  {/* Canvas controls */}
  <div style={{marginTop:'auto', padding:'12px 16px', borderTop:'1px solid #ede8dc', display:'flex', gap:6}}>
- <button onClick={()=>setZoom(z=>Math.min(2,z+0.1))} title="Aproximar" style={{flex:1, padding:'7px', background:'#f5f0e8', border:'1px solid #e8e0d0', borderRadius:8, cursor:'pointer', fontSize:13}}>+</button>
- <button onClick={resetView} title="Resetar" style={{flex:2, padding:'7px', background:'#f5f0e8', border:'1px solid #e8e0d0', borderRadius:8, cursor:'pointer', fontSize:11, fontWeight:600}}>{Math.round(zoom*100)}%</button>
- <button onClick={()=>setZoom(z=>Math.max(0.3,z-0.1))} title="Afastar" style={{flex:1, padding:'7px', background:'#f5f0e8', border:'1px solid #e8e0d0', borderRadius:8, cursor:'pointer', fontSize:13}}></button>
+ <button onClick={()=>setZoom(z=>Math.min(2,z+0.1))} title="Aproximar" style={{flex:1, padding:'7px', background:'#f5f0e8', border:'1px solid #e8e0d0', borderRadius: RADIUS.md, cursor:'pointer', fontSize:13}}>+</button>
+ <button onClick={resetView} title="Resetar" style={{flex:2, padding:'7px', background:'#f5f0e8', border:'1px solid #e8e0d0', borderRadius: RADIUS.md, cursor:'pointer', fontSize:11, fontWeight:600}}>{Math.round(zoom*100)}%</button>
+ <button onClick={()=>setZoom(z=>Math.max(0.3,z-0.1))} title="Afastar" style={{flex:1, padding:'7px', background:'#f5f0e8', border:'1px solid #e8e0d0', borderRadius: RADIUS.md, cursor:'pointer', fontSize:13}}></button>
  </div>
  </div>
 
@@ -502,19 +503,19 @@ export default function LessonPlanner() {
  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
  <button
  onClick={() => setCalDate(new Date(calYear, calMonth - 1, 1))}
- style={{ padding: '8px 14px', background: '#f5efe6', border: '1px solid #e8e0d0', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: 600, color: '#2c1a0e' }}
+ style={{ padding: '8px 14px', background: '#f5efe6', border: '1px solid #e8e0d0', borderRadius: RADIUS.md, cursor: 'pointer', fontSize: 13, fontWeight: 600, color: '#2c1a0e' }}
  >
  Mês Anterior
  </button>
  <button
  onClick={() => setCalDate(new Date())}
- style={{ padding: '8px 14px', background: '#2c1a0e', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: 700 }}
+ style={{ padding: '8px 14px', background: '#2c1a0e', color: '#fff', border: 'none', borderRadius: RADIUS.md, cursor: 'pointer', fontSize: 13, fontWeight: 700 }}
  >
  Hoje
  </button>
  <button
  onClick={() => setCalDate(new Date(calYear, calMonth + 1, 1))}
- style={{ padding: '8px 14px', background: '#f5efe6', border: '1px solid #e8e0d0', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: 600, color: '#2c1a0e' }}
+ style={{ padding: '8px 14px', background: '#f5efe6', border: '1px solid #e8e0d0', borderRadius: RADIUS.md, cursor: 'pointer', fontSize: 13, fontWeight: 600, color: '#2c1a0e' }}
  >
  Mês Seguinte 
  </button>
@@ -522,14 +523,14 @@ export default function LessonPlanner() {
  </div>
 
  {/* BARRA DE SELEÇÃO DE CALENDÁRIO POR ESCOLA E TURMA */}
- <div style={{ display: 'flex', gap: 16, alignItems: 'center', background: '#f5efe6', padding: '12px 18px', borderRadius: 14, marginBottom: 20, border: '1px solid #e8e0d0', flexWrap: 'wrap' }}>
+ <div style={{ display: 'flex', gap: 16, alignItems: 'center', background: '#f5efe6', padding: '12px 18px', borderRadius: RADIUS.lg, marginBottom: 20, border: '1px solid #e8e0d0', flexWrap: 'wrap' }}>
  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
  <i className="ti ti-building-community" style={{ color: '#8b5e3c', fontSize: 18 }} />
  <span style={{ fontSize: 13, fontWeight: 700, color: '#2c1a0e' }}>Escola:</span>
  <select
  value={filterSchool}
  onChange={e => { setFilterSchool(e.target.value); setFilterClass('Todas') }}
- style={{ padding: '7px 12px', background: '#fff', border: '1px solid #d5cfc0', borderRadius: 8, fontSize: 13, fontWeight: 600, color: '#2c1a0e', outline: 'none', cursor: 'pointer' }}
+ style={{ padding: '7px 12px', background: '#fff', border: '1px solid #d5cfc0', borderRadius: RADIUS.md, fontSize: 13, fontWeight: 600, color: '#2c1a0e', outline: 'none', cursor: 'pointer' }}
  >
  {schools.map(s => <option key={s} value={s}>{s}</option>)}
  </select>
@@ -541,7 +542,7 @@ export default function LessonPlanner() {
  <select
  value={filterClass}
  onChange={e => setFilterClass(e.target.value)}
- style={{ padding: '7px 12px', background: '#fff', border: '1px solid #d5cfc0', borderRadius: 8, fontSize: 13, fontWeight: 600, color: '#2c1a0e', outline: 'none', cursor: 'pointer' }}
+ style={{ padding: '7px 12px', background: '#fff', border: '1px solid #d5cfc0', borderRadius: RADIUS.md, fontSize: 13, fontWeight: 600, color: '#2c1a0e', outline: 'none', cursor: 'pointer' }}
  >
  {classes.map(c => <option key={c} value={c}>{c}</option>)}
  </select>
@@ -553,7 +554,7 @@ export default function LessonPlanner() {
 
  <button
  onClick={() => setShowManageModal(true)}
- style={{ marginLeft: 'auto', padding: '7px 14px', background: '#8b5e3c', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12.5, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+ style={{ marginLeft: 'auto', padding: '7px 14px', background: '#8b5e3c', color: '#fff', border: 'none', borderRadius: RADIUS.md, fontSize: TEXT.bodyCompact, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
  >
  <i className="ti ti-settings" /> Cadastrar Minhas Escolas & Turmas
  </button>
@@ -586,7 +587,7 @@ export default function LessonPlanner() {
  style={{
  background: day.isCurrentMonth ? '#fff' : '#fcfaf6',
  border: isToday ? '2px solid #8b5e3c' : '1px solid #ede8dc',
- borderRadius: 12, padding: 8, display: 'flex', flexDirection: 'column', gap: 6,
+ borderRadius: RADIUS.lg, padding: 8, display: 'flex', flexDirection: 'column', gap: 6,
  minHeight: 110, opacity: day.isCurrentMonth ? 1 : 0.45,
  cursor: 'pointer', position: 'relative', transition: 'all 0.15s ease',
  boxShadow: isToday ? '0 4px 12px rgba(139,94,60,0.15)' : 'none'
@@ -622,7 +623,7 @@ export default function LessonPlanner() {
  }}
  style={{
  background: card.color || '#2c1a0e',
- color: '#fff', padding: '6px 8px', borderRadius: 8,
+ color: '#fff', padding: '6px 8px', borderRadius: RADIUS.md,
  fontSize: 11, fontWeight: 700, cursor: 'grab',
  display: 'flex', flexDirection: 'column', gap: 3,
  boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
@@ -681,7 +682,7 @@ export default function LessonPlanner() {
  </h2>
  <button
  onClick={scheduleStudioLesson}
- style={{ padding: '10px 20px', background: '#8b5e3c', color: '#fff', border: 'none', borderRadius: 12, fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}
+ style={{ padding: '10px 20px', background: '#8b5e3c', color: '#fff', border: 'none', borderRadius: RADIUS.lg, fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}
  >
  <i className="ti ti-calendar-event" /> Agendar no Calendário
  </button>
@@ -694,7 +695,7 @@ export default function LessonPlanner() {
  value={studioTitle}
  onChange={e => setStudioTitle(e.target.value)}
  placeholder="Ex: Present Perfect vs Past Simple Practice & Roleplay"
- style={{ width: '100%', padding: '9px 12px', borderRadius: 10, border: '1px solid rgba(139,115,85,0.2)', fontSize: 13, outline: 'none', background: '#fcfaf6' }}
+ style={{ width: '100%', padding: '9px 12px', borderRadius: RADIUS.md, border: '1px solid rgba(139,115,85,0.2)', fontSize: 13, outline: 'none', background: '#fcfaf6' }}
  />
  </div>
  <div>
@@ -703,7 +704,7 @@ export default function LessonPlanner() {
  type="date"
  value={studioDate}
  onChange={e => setStudioDate(e.target.value)}
- style={{ width: '100%', padding: '9px 12px', borderRadius: 10, border: '1px solid rgba(139,115,85,0.2)', fontSize: 13, outline: 'none', background: '#fcfaf6' }}
+ style={{ width: '100%', padding: '9px 12px', borderRadius: RADIUS.md, border: '1px solid rgba(139,115,85,0.2)', fontSize: 13, outline: 'none', background: '#fcfaf6' }}
  />
  </div>
  </div>
@@ -711,21 +712,21 @@ export default function LessonPlanner() {
  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
  <div>
  <label style={{ fontSize: 11, fontWeight: 700, color: '#7a5c42', textTransform: 'uppercase' }}>Escola</label>
- <select value={studioSchool} onChange={e => setStudioSchool(e.target.value)} style={{ width: '100%', padding: '9px 12px', borderRadius: 10, border: '1px solid rgba(139,115,85,0.2)', fontSize: 13, outline: 'none', background: '#fcfaf6' }}>
+ <select value={studioSchool} onChange={e => setStudioSchool(e.target.value)} style={{ width: '100%', padding: '9px 12px', borderRadius: RADIUS.md, border: '1px solid rgba(139,115,85,0.2)', fontSize: 13, outline: 'none', background: '#fcfaf6' }}>
  <option value="">Selecione...</option>
  {userSchools.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
  </select>
  </div>
  <div>
  <label style={{ fontSize: 11, fontWeight: 700, color: '#7a5c42', textTransform: 'uppercase' }}>Turma</label>
- <select value={studioClass} onChange={e => setStudioClass(e.target.value)} style={{ width: '100%', padding: '9px 12px', borderRadius: 10, border: '1px solid rgba(139,115,85,0.2)', fontSize: 13, outline: 'none', background: '#fcfaf6' }}>
+ <select value={studioClass} onChange={e => setStudioClass(e.target.value)} style={{ width: '100%', padding: '9px 12px', borderRadius: RADIUS.md, border: '1px solid rgba(139,115,85,0.2)', fontSize: 13, outline: 'none', background: '#fcfaf6' }}>
  <option value="">Selecione...</option>
  {userClasses.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
  </select>
  </div>
  <div>
  <label style={{ fontSize: 11, fontWeight: 700, color: '#7a5c42', textTransform: 'uppercase' }}>Duração (min)</label>
- <input value={studioDuration} onChange={e => setStudioDuration(e.target.value)} placeholder="50" style={{ width: '100%', padding: '9px 12px', borderRadius: 10, border: '1px solid rgba(139,115,85,0.2)', fontSize: 13, outline: 'none', background: '#fcfaf6' }} />
+ <input value={studioDuration} onChange={e => setStudioDuration(e.target.value)} placeholder="50" style={{ width: '100%', padding: '9px 12px', borderRadius: RADIUS.md, border: '1px solid rgba(139,115,85,0.2)', fontSize: 13, outline: 'none', background: '#fcfaf6' }} />
  </div>
  </div>
 
@@ -735,7 +736,7 @@ export default function LessonPlanner() {
  value={studioText}
  onChange={e => setStudioText(e.target.value)}
  placeholder="Escreva livremente os passos da sua aula, introdução, atividade prática, exercícios e fechamento..."
- style={{ flex: 1, minHeight: 300, padding: 16, borderRadius: 12, border: '1px solid rgba(139,115,85,0.2)', fontSize: 14, lineHeight: 1.6, background: '#fffcf8', color: '#2c1a0e', outline: 'none', resize: 'none', fontFamily: 'inherit' }}
+ style={{ flex: 1, minHeight: 300, padding: 16, borderRadius: RADIUS.lg, border: '1px solid rgba(139,115,85,0.2)', fontSize: 14, lineHeight: 1.6, background: '#fffcf8', color: '#2c1a0e', outline: 'none', resize: 'none', fontFamily: 'inherit' }}
  />
  </div>
  </div>
@@ -746,7 +747,7 @@ export default function LessonPlanner() {
  <h3 style={{ fontSize: 15, fontWeight: 700, color: '#8b5e3c', margin: '0 0 12px', display: 'flex', alignItems: 'center', gap: 8 }}>
  Perguntas Guia de Planejamento
  </h3>
- <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12.5, color: '#7a5c42', lineHeight: 1.6 }}>
+ <ul style={{ margin: 0, paddingLeft: 18, fontSize: TEXT.bodyCompact, color: '#7a5c42', lineHeight: 1.6 }}>
  <li><strong>Warm-up:</strong> Qual é o gancho inicial para despertar interesse?</li>
  <li><strong>Evidência:</strong> Como saber se o aluno aprendeu ao final da aula?</li>
  <li><strong>Diferenciação:</strong> Como apoiar alunos com dificuldades de compreensão?</li>
@@ -759,13 +760,13 @@ export default function LessonPlanner() {
  Ferramentas & Metodologias
  </h3>
  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 12 }}>
- <button onClick={() => setStudioText(prev => prev + '\n\n**Metodologia PPP (Presentation - Practice - Production)**\n1. Presentation (10m)\n2. Practice (20m)\n3. Production (20m)')} style={{ padding: '8px 12px', background: '#f5efe6', border: '1px solid rgba(139,115,85,0.2)', borderRadius: 10, cursor: 'pointer', textAlign: 'left', fontWeight: 600, color: '#2c1a0e' }}>
+ <button onClick={() => setStudioText(prev => prev + '\n\n**Metodologia PPP (Presentation - Practice - Production)**\n1. Presentation (10m)\n2. Practice (20m)\n3. Production (20m)')} style={{ padding: '8px 12px', background: '#f5efe6', border: '1px solid rgba(139,115,85,0.2)', borderRadius: RADIUS.md, cursor: 'pointer', textAlign: 'left', fontWeight: 600, color: '#2c1a0e' }}>
  + Inserir Estrutura PPP
  </button>
- <button onClick={() => setStudioText(prev => prev + '\n\n**Competência BNCC (EF06LI01)**\nInteragir em situações de intercâmbio oral, demonstrando iniciativa para utilizar a língua inglesa.')} style={{ padding: '8px 12px', background: '#f5efe6', border: '1px solid rgba(139,115,85,0.2)', borderRadius: 10, cursor: 'pointer', textAlign: 'left', fontWeight: 600, color: '#2c1a0e' }}>
+ <button onClick={() => setStudioText(prev => prev + '\n\n**Competência BNCC (EF06LI01)**\nInteragir em situações de intercâmbio oral, demonstrando iniciativa para utilizar a língua inglesa.')} style={{ padding: '8px 12px', background: '#f5efe6', border: '1px solid rgba(139,115,85,0.2)', borderRadius: RADIUS.md, cursor: 'pointer', textAlign: 'left', fontWeight: 600, color: '#2c1a0e' }}>
  + Inserir Competência BNCC
  </button>
- <button onClick={() => setStudioText(prev => prev + '\n\n**Avaliação Formativa:**\n- Checagem rápida por sinalização de mãos\n- Mini quiz de fechamento')} style={{ padding: '8px 12px', background: '#f5efe6', border: '1px solid rgba(139,115,85,0.2)', borderRadius: 10, cursor: 'pointer', textAlign: 'left', fontWeight: 600, color: '#2c1a0e' }}>
+ <button onClick={() => setStudioText(prev => prev + '\n\n**Avaliação Formativa:**\n- Checagem rápida por sinalização de mãos\n- Mini quiz de fechamento')} style={{ padding: '8px 12px', background: '#f5efe6', border: '1px solid rgba(139,115,85,0.2)', borderRadius: RADIUS.md, cursor: 'pointer', textAlign: 'left', fontWeight: 600, color: '#2c1a0e' }}>
  + Inserir Avaliação Formativa
  </button>
  </div>
@@ -796,7 +797,7 @@ export default function LessonPlanner() {
  setViewMode('calendar')
  }}
  style={{
- background: '#fff', border: '1px solid rgba(139,115,85,0.2)', borderRadius: 16,
+ background: '#fff', border: '1px solid rgba(139,115,85,0.2)', borderRadius: RADIUS.xl,
  padding: 20, cursor: 'pointer', boxShadow: '0 4px 16px rgba(44,26,14,0.06)',
  transition: 'transform 0.15s ease', display: 'flex', flexDirection: 'column', gap: 8
  }}
@@ -847,7 +848,7 @@ export default function LessonPlanner() {
  onDoubleClick={e => { e.stopPropagation(); setEditCard({...card}) }}
  style={{
  position:'absolute', left:card.x, top:card.y, width:CARD_W, height:CARD_H,
- background:'#fff', borderRadius:14,
+ background:'#fff', borderRadius: RADIUS.lg,
  border: isSel ? `2px solid ${card.color}` : '1px solid #e8e0d0',
  boxShadow: isSel ? `0 8px 32px ${card.color}33` : '0 2px 12px rgba(44,26,14,0.08)',
  cursor:'grab', overflow:'hidden', display:'flex', flexDirection:'column',
@@ -906,8 +907,8 @@ export default function LessonPlanner() {
  <div key={f.key} style={{marginBottom:14}}>
  <label style={{fontSize:12, fontWeight:600, color:'#7a5c42', display:'block', marginBottom:5}}>{f.label}</label>
  {f.area
- ? <textarea value={(editCard as unknown as Record<string,string>)[f.key]||''} onChange={e=>setEditCard({...editCard,[f.key]:e.target.value})} placeholder={f.ph} style={{width:'100%',padding:'8px 10px',background:'#f5f0e8',border:'1px solid #e8e0d0',borderRadius:8,outline:'none',color:'#2c1a0e',fontSize:13,fontFamily:'inherit',height:80,resize:'vertical'}} />
- : <input type={f.type||'text'} value={(editCard as unknown as Record<string,string>)[f.key]||''} onChange={e=>setEditCard({...editCard,[f.key]:e.target.value})} placeholder={f.ph} style={{width:'100%',padding:'8px 10px',background:'#f5f0e8',border:'1px solid #e8e0d0',borderRadius:8,outline:'none',color:'#2c1a0e',fontSize:13,fontFamily:'inherit'}} />
+ ? <textarea value={(editCard as unknown as Record<string,string>)[f.key]||''} onChange={e=>setEditCard({...editCard,[f.key]:e.target.value})} placeholder={f.ph} style={{width:'100%',padding:'8px 10px',background:'#f5f0e8',border:'1px solid #e8e0d0',borderRadius: RADIUS.md,outline:'none',color:'#2c1a0e',fontSize:13,fontFamily:'inherit',height:80,resize:'vertical'}} />
+ : <input type={f.type||'text'} value={(editCard as unknown as Record<string,string>)[f.key]||''} onChange={e=>setEditCard({...editCard,[f.key]:e.target.value})} placeholder={f.ph} style={{width:'100%',padding:'8px 10px',background:'#f5f0e8',border:'1px solid #e8e0d0',borderRadius: RADIUS.md,outline:'none',color:'#2c1a0e',fontSize:13,fontFamily:'inherit'}} />
  }
  </div>
  ))}
@@ -915,11 +916,11 @@ export default function LessonPlanner() {
  <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:16}}>
  <div>
  <label style={{fontSize:12, fontWeight:600, color:'#7a5c42', display:'block', marginBottom:5}}>Duração (min)</label>
- <input type="number" value={editCard.duration} onChange={e=>setEditCard({...editCard,duration:e.target.value})} style={{width:'100%',padding:'8px 10px',background:'#f5f0e8',border:'1px solid #e8e0d0',borderRadius:8,outline:'none',color:'#2c1a0e',fontSize:13,fontFamily:'inherit'}} />
+ <input type="number" value={editCard.duration} onChange={e=>setEditCard({...editCard,duration:e.target.value})} style={{width:'100%',padding:'8px 10px',background:'#f5f0e8',border:'1px solid #e8e0d0',borderRadius: RADIUS.md,outline:'none',color:'#2c1a0e',fontSize:13,fontFamily:'inherit'}} />
  </div>
  <div>
  <label style={{fontSize:12, fontWeight:600, color:'#7a5c42', display:'block', marginBottom:5}}>Período</label>
- <select value={editCard.period} onChange={e=>setEditCard({...editCard,period:e.target.value})} style={{width:'100%',padding:'8px 10px',background:'#f5f0e8',border:'1px solid #e8e0d0',borderRadius:8,outline:'none',color:'#2c1a0e',fontSize:13,fontFamily:'inherit'}}>
+ <select value={editCard.period} onChange={e=>setEditCard({...editCard,period:e.target.value})} style={{width:'100%',padding:'8px 10px',background:'#f5f0e8',border:'1px solid #e8e0d0',borderRadius: RADIUS.md,outline:'none',color:'#2c1a0e',fontSize:13,fontFamily:'inherit'}}>
  {PERIODS.map(p=><option key={p}>{p}</option>)}
  </select>
  </div>
@@ -935,10 +936,10 @@ export default function LessonPlanner() {
  </div>
 
  <div style={{display:'flex', gap:10}}>
- <button onClick={()=>{updateCard(editCard);setEditCard(null)}} style={{flex:1, padding:'11px', background:'#2c1a0e', color:'#fff', border:'none', borderRadius:12, fontSize:14, fontWeight:700, cursor:'pointer'}}>
+ <button onClick={()=>{updateCard(editCard);setEditCard(null)}} style={{flex:1, padding:'11px', background:'#2c1a0e', color:'#fff', border:'none', borderRadius: RADIUS.lg, fontSize:14, fontWeight:700, cursor:'pointer'}}>
  Salvar
  </button>
- <button onClick={()=>setEditCard(null)} style={{padding:'11px 20px', background:'#f5f0e8', border:'1px solid #e8e0d0', borderRadius:12, fontSize:14, cursor:'pointer', color:'#7a5c42'}}>
+ <button onClick={()=>setEditCard(null)} style={{padding:'11px 20px', background:'#f5f0e8', border:'1px solid #e8e0d0', borderRadius: RADIUS.lg, fontSize:14, cursor:'pointer', color:'#7a5c42'}}>
  Cancelar
  </button>
  </div>
@@ -953,16 +954,16 @@ export default function LessonPlanner() {
  <div style={{display:'flex', justifyContent:'space-between', marginBottom:16}}>
  <h2 style={{fontFamily:'Georgia, serif', fontSize:20, fontStyle:'italic', color:'#2c1a0e', margin:0}}> Compilação {compilePeriod}</h2>
  <div style={{display:'flex', gap:8}}>
- <button onClick={()=>navigator.clipboard.writeText(compiledText)} style={{padding:'7px 14px', background: '#8b7355', color:'#fff', border:'none', borderRadius:10, fontSize:12, fontWeight:700, cursor:'pointer'}}>
+ <button onClick={()=>navigator.clipboard.writeText(compiledText)} style={{padding:'7px 14px', background: '#8b7355', color:'#fff', border:'none', borderRadius: RADIUS.md, fontSize:12, fontWeight:700, cursor:'pointer'}}>
  <i className="ti ti-copy" /> Copiar
  </button>
- <button onClick={()=>window.print()} style={{padding:'7px 14px', background:'#2c1a0e', color:'#fff', border:'none', borderRadius:10, fontSize:12, fontWeight:700, cursor:'pointer'}}>
+ <button onClick={()=>window.print()} style={{padding:'7px 14px', background:'#2c1a0e', color:'#fff', border:'none', borderRadius: RADIUS.md, fontSize:12, fontWeight:700, cursor:'pointer'}}>
  <i className="ti ti-printer" /> Imprimir
  </button>
  <button onClick={()=>setShowCompile(false)} style={{background:'none', border:'none', fontSize:20, cursor:'pointer', color:'#a08060'}}>×</button>
  </div>
  </div>
- <pre style={{flex:1, overflowY:'auto', background:'#f5f0e8', borderRadius:12, padding:20, fontSize:13, lineHeight:1.7, whiteSpace:'pre-wrap', fontFamily:'inherit', color:'#2c1a0e'}}>
+ <pre style={{flex:1, overflowY:'auto', background:'#f5f0e8', borderRadius: RADIUS.lg, padding:20, fontSize:13, lineHeight:1.7, whiteSpace:'pre-wrap', fontFamily:'inherit', color:'#2c1a0e'}}>
  {compiledText}
  </pre>
  </div>
@@ -981,41 +982,41 @@ export default function LessonPlanner() {
 
  <div style={{display:'flex', flexDirection:'column', gap:20}}>
  {/* Seção 1: Nova Escola */}
- <div style={{background:'#fdf8f2', padding:16, borderRadius:14, border:'1px solid rgba(139,115,85,0.12)'}}>
+ <div style={{background:'#fdf8f2', padding:16, borderRadius: RADIUS.lg, border:'1px solid rgba(139,115,85,0.12)'}}>
  <h4 style={{fontSize:14, fontWeight:700, color:'#8b5e3c', margin:'0 0 10px 0'}}>1. Cadastrar Nova Escola</h4>
  <div style={{display:'flex', gap:10}}>
  <input
  value={newSchoolName}
  onChange={e=>setNewSchoolName(e.target.value)}
  placeholder="Nome da Escola (ex: Colégio São Paulo)"
- style={{flex:1, padding:'8px 12px', background:'#fff', border:'1px solid #d5cfc0', borderRadius:8, fontSize:13, outline:'none'}}
+ style={{flex:1, padding:'8px 12px', background:'#fff', border:'1px solid #d5cfc0', borderRadius: RADIUS.md, fontSize:13, outline:'none'}}
  />
- <button onClick={handleCreateSchool} style={{padding:'8px 16px', background:'#8b5e3c', color:'#fff', border:'none', borderRadius:8, fontWeight:700, fontSize:13, cursor:'pointer'}}>
+ <button onClick={handleCreateSchool} style={{padding:'8px 16px', background:'#8b5e3c', color:'#fff', border:'none', borderRadius: RADIUS.md, fontWeight:700, fontSize:13, cursor:'pointer'}}>
  + Criar
  </button>
  </div>
  </div>
 
  {/* Seção 2: Nova Turma */}
- <div style={{background:'#fdf8f2', padding:16, borderRadius:14, border:'1px solid rgba(139,115,85,0.12)'}}>
+ <div style={{background:'#fdf8f2', padding:16, borderRadius: RADIUS.lg, border:'1px solid rgba(139,115,85,0.12)'}}>
  <h4 style={{fontSize:14, fontWeight:700, color:'#8b5e3c', margin:'0 0 10px 0'}}>2. Cadastrar Nova Turma</h4>
  <div style={{display:'flex', flexDirection:'column', gap:10}}>
  <input
  value={newClassName}
  onChange={e=>setNewClassName(e.target.value)}
  placeholder="Nome da Turma (ex: 9º Ano A, 3º EM B)"
- style={{padding:'8px 12px', background:'#fff', border:'1px solid #d5cfc0', borderRadius:8, fontSize:13, outline:'none'}}
+ style={{padding:'8px 12px', background:'#fff', border:'1px solid #d5cfc0', borderRadius: RADIUS.md, fontSize:13, outline:'none'}}
  />
  <div style={{display:'flex', gap:10}}>
  <select
  value={newClassSchoolId}
  onChange={e=>setNewClassSchoolId(e.target.value)}
- style={{flex:1, padding:'8px 12px', background:'#fff', border:'1px solid #d5cfc0', borderRadius:8, fontSize:13, outline:'none'}}
+ style={{flex:1, padding:'8px 12px', background:'#fff', border:'1px solid #d5cfc0', borderRadius: RADIUS.md, fontSize:13, outline:'none'}}
  >
  <option value="">Vincular à Escola (Opcional)...</option>
  {userSchools.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
  </select>
- <button onClick={handleCreateClass} style={{padding:'8px 16px', background:'#8b5e3c', color:'#fff', border:'none', borderRadius:8, fontWeight:700, fontSize:13, cursor:'pointer'}}>
+ <button onClick={handleCreateClass} style={{padding:'8px 16px', background:'#8b5e3c', color:'#fff', border:'none', borderRadius: RADIUS.md, fontWeight:700, fontSize:13, cursor:'pointer'}}>
  + Criar Turma
  </button>
  </div>
@@ -1032,4 +1033,4 @@ export default function LessonPlanner() {
  )}
  </div>
  )
-}
+}

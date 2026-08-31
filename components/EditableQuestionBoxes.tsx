@@ -1,4 +1,5 @@
 'use client'
+import { COLOR, RADIUS, TEXT, SHADOW, FONT } from '@/styles/tokens'
 import { toast, showConfirm } from '@/components/Toast'
 
 import React, { useState, useEffect, useCallback } from 'react'
@@ -399,7 +400,7 @@ export default function EditableQuestionBoxes({
         alignItems: 'center',
         background: '#faf6f0',
         padding: '12px 18px',
-        borderRadius: 14,
+        borderRadius: RADIUS.lg,
         border: '1px solid #ede8dc',
         flexWrap: 'wrap',
         gap: 10
@@ -420,7 +421,7 @@ export default function EditableQuestionBoxes({
             onClick={() => setShowAnswerKeys(prev => !prev)}
             style={{
               padding: '6px 12px',
-              borderRadius: 8,
+              borderRadius: RADIUS.md,
               border: '1px solid #d5c8bb',
               background: showAnswerKeys ? '#f0fdf4' : '#fff',
               color: showAnswerKeys ? '#166534' : '#665c54',
@@ -441,11 +442,11 @@ export default function EditableQuestionBoxes({
             onClick={handleAddNewQuestion}
             style={{
               padding: '6px 14px',
-              borderRadius: 8,
+              borderRadius: RADIUS.md,
               border: 'none',
               background: '#8b5e3c',
               color: '#fff',
-              fontSize: 12.5,
+              fontSize: TEXT.bodyCompact,
               fontWeight: 700,
               cursor: 'pointer',
               display: 'flex',
@@ -470,7 +471,7 @@ export default function EditableQuestionBoxes({
               style={{
                 background: '#ffffff',
                 border: '1px solid rgba(139,115,85,0.22)',
-                borderRadius: 16,
+                borderRadius: RADIUS.xl,
                 padding: '16px 20px',
                 boxShadow: '0 4px 14px rgba(44,26,14,0.04)',
                 transition: 'all 0.15s ease'
@@ -490,7 +491,7 @@ export default function EditableQuestionBoxes({
                   <span style={{
                     width: 28,
                     height: 28,
-                    borderRadius: 8,
+                    borderRadius: RADIUS.md,
                     background: '#8b5e3c',
                     color: '#fff',
                     display: 'flex',
@@ -521,7 +522,7 @@ export default function EditableQuestionBoxes({
                     }}
                     style={{
                       padding: '4px 8px',
-                      borderRadius: 8,
+                      borderRadius: RADIUS.md,
                       border: '1px solid #d5c8bb',
                       background: '#faf6f0',
                       fontSize: 12,
@@ -540,7 +541,7 @@ export default function EditableQuestionBoxes({
 
                   {/* Pontuação Editável */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 6 }}>
-                    <span style={{ fontSize: 11.5, color: '#7a5c42', fontWeight: 600 }}>Valor:</span>
+                    <span style={{ fontSize: TEXT.caption, color: '#7a5c42', fontWeight: 600 }}>Valor:</span>
                     <input
                       type="number"
                       step="0.5"
@@ -559,7 +560,7 @@ export default function EditableQuestionBoxes({
                         background: '#faf6f0'
                       }}
                     />
-                    <span style={{ fontSize: 11.5, color: '#7a5c42' }}>pt</span>
+                    <span style={{ fontSize: TEXT.caption, color: '#7a5c42' }}>pt</span>
                   </div>
                 </div>
 
@@ -677,7 +678,7 @@ export default function EditableQuestionBoxes({
                 {/* Texto de Apoio / Contexto Opcional */}
                 <div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                    <label style={{ fontSize: 11.5, fontWeight: 700, color: '#7a5c42', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                    <label style={{ fontSize: TEXT.caption, fontWeight: 700, color: '#7a5c42', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                       Enunciado / Instrução:
                     </label>
                   </div>
@@ -689,7 +690,7 @@ export default function EditableQuestionBoxes({
                     style={{
                       width: '100%',
                       padding: '10px 12px',
-                      borderRadius: 10,
+                      borderRadius: RADIUS.md,
                       border: '1px solid #d5c8bb',
                       background: '#faf6f0',
                       fontSize: 14,
@@ -704,13 +705,13 @@ export default function EditableQuestionBoxes({
                     <div style={{
                       background: '#eff6ff',
                       border: '1px solid #bfdbfe',
-                      borderRadius: 8,
+                      borderRadius: RADIUS.md,
                       padding: '6px 10px',
                       marginTop: 6,
                       display: 'flex',
                       alignItems: 'center',
                       gap: 8,
-                      fontSize: 11.5,
+                      fontSize: TEXT.caption,
                       color: '#1e40af',
                       fontWeight: 600,
                       lineHeight: 1.4
@@ -723,18 +724,18 @@ export default function EditableQuestionBoxes({
 
                 {/* Alternativas de Múltipla Escolha */}
                 {(q.type === 'multiple_choice' || q.type === 'true_false' || (q.options && q.options.length > 0)) && (
-                  <div style={{ background: '#faf6f0', padding: 12, borderRadius: 10, border: '1px solid #ede8dc' }}>
+                  <div style={{ background: '#faf6f0', padding: 12, borderRadius: RADIUS.md, border: '1px solid #ede8dc' }}>
                     {q.parallelismWarning && (
                       <div style={{
                         background: '#fef3c7',
                         border: '1px solid #fde68a',
-                        borderRadius: 8,
+                        borderRadius: RADIUS.md,
                         padding: '6px 10px',
                         marginBottom: 10,
                         display: 'flex',
                         alignItems: 'center',
                         gap: 8,
-                        fontSize: 11.5,
+                        fontSize: TEXT.caption,
                         color: '#92400e',
                         fontWeight: 600,
                         lineHeight: 1.4
@@ -790,7 +791,7 @@ export default function EditableQuestionBoxes({
                             style={{
                               flex: 1,
                               padding: '8px 12px',
-                              borderRadius: 8,
+                              borderRadius: RADIUS.md,
                               border: '1px solid #d5c8bb',
                               background: '#fff',
                               fontSize: 13,
@@ -824,7 +825,7 @@ export default function EditableQuestionBoxes({
                 {/* Gabarito / Chave de Resposta */}
                 {showAnswerKeys && (
                   <div>
-                    <label style={{ fontSize: 11.5, fontWeight: 700, color: '#166534', display: 'flex', alignItems: 'center', gap: 4, marginBottom: 4 }}>
+                    <label style={{ fontSize: TEXT.caption, fontWeight: 700, color: '#166534', display: 'flex', alignItems: 'center', gap: 4, marginBottom: 4 }}>
                       ✓ Gabarito / Resolução Comentada:
                     </label>
                     <input
@@ -835,7 +836,7 @@ export default function EditableQuestionBoxes({
                       style={{
                         width: '100%',
                         padding: '8px 12px',
-                        borderRadius: 8,
+                        borderRadius: RADIUS.md,
                         border: '1px solid #bbf7d0',
                         background: '#f0fdf4',
                         fontSize: 13,
@@ -905,9 +906,9 @@ export default function EditableQuestionBoxes({
               style={{
                 width: '100%',
                 padding: '10px 12px',
-                borderRadius: 10,
+                borderRadius: RADIUS.md,
                 border: '1px solid #d5c8bb',
-                fontSize: 13.5,
+                fontSize: TEXT.body,
                 background: '#faf6f0',
                 outline: 'none',
                 marginBottom: 16
@@ -920,7 +921,7 @@ export default function EditableQuestionBoxes({
                 onClick={() => setRafinhaPromptModalQIndex(null)}
                 style={{
                   padding: '8px 16px',
-                  borderRadius: 10,
+                  borderRadius: RADIUS.md,
                   border: '1px solid #d5c8bb',
                   background: '#fff',
                   color: '#665c54',
@@ -937,7 +938,7 @@ export default function EditableQuestionBoxes({
                 disabled={rafinhaLoading}
                 style={{
                   padding: '8px 18px',
-                  borderRadius: 10,
+                  borderRadius: RADIUS.md,
                   border: 'none',
                   background: '#8b5e3c',
                   color: '#fff',

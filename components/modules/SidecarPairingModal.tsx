@@ -1,4 +1,5 @@
 'use client'
+import { COLOR, RADIUS, TEXT, SHADOW, FONT } from '@/styles/tokens'
 
 import React, { useState } from 'react'
 import { getValidAccessToken, getCurrentUser } from '@/lib/supabaseAuth'
@@ -79,7 +80,7 @@ export default function SidecarPairingModal({ isOpen, onClose, onPaired }: Sidec
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
           <div style={{
-            width: 44, height: 44, borderRadius: 12, background: '#fdf8f2',
+            width: 44, height: 44, borderRadius: RADIUS.lg, background: '#fdf8f2',
             display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22
           }}>
             🦉
@@ -110,7 +111,7 @@ export default function SidecarPairingModal({ isOpen, onClose, onPaired }: Sidec
             maxLength={10}
             style={{
               width: '100%', padding: '12px 16px', fontSize: 16, fontWeight: 800,
-              letterSpacing: 2, textAlign: 'center', borderRadius: 10,
+              letterSpacing: 2, textAlign: 'center', borderRadius: RADIUS.md,
               border: '2px solid #ede8dc', outline: 'none', background: '#fdf8f2'
             }}
           />
@@ -118,7 +119,7 @@ export default function SidecarPairingModal({ isOpen, onClose, onPaired }: Sidec
 
         {statusMsg && (
           <div style={{
-            padding: 12, borderRadius: 10, fontSize: 12.5, marginBottom: 20,
+            padding: 12, borderRadius: RADIUS.md, fontSize: TEXT.bodyCompact, marginBottom: 20,
             background: status === 'success' ? '#f0fdf4' : '#fef2f2',
             border: `1px solid ${status === 'success' ? '#86efac' : '#fca5a5'}`,
             color: status === 'success' ? '#166534' : '#991b1b'
@@ -131,7 +132,7 @@ export default function SidecarPairingModal({ isOpen, onClose, onPaired }: Sidec
           <button
             onClick={onClose}
             style={{
-              padding: '10px 18px', borderRadius: 10, border: '1px solid #d5c8bb',
+              padding: '10px 18px', borderRadius: RADIUS.md, border: '1px solid #d5c8bb',
               background: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer'
             }}
           >
@@ -141,7 +142,7 @@ export default function SidecarPairingModal({ isOpen, onClose, onPaired }: Sidec
             onClick={handlePair}
             disabled={status === 'loading' || status === 'success'}
             style={{
-              padding: '10px 22px', borderRadius: 10, border: 'none',
+              padding: '10px 22px', borderRadius: RADIUS.md, border: 'none',
               background: '#8b5e3c', color: '#fff', fontSize: 13,
               fontWeight: 800, cursor: 'pointer'
             }}

@@ -1,4 +1,5 @@
-'use client';
+'use client'
+import { COLOR, RADIUS, TEXT, SHADOW, FONT } from '@/styles/tokens';
 
 import React, { useState, useEffect, useMemo, CSSProperties } from 'react';
 import { exportToPdf } from '@/lib/exportUtils';
@@ -87,7 +88,7 @@ const styles: Record<string, CSSProperties> = {
     color: theme.text,
     border: '1px solid rgba(139,115,85,0.18)',
     borderRadius: '9px',
-    fontSize: '13.5px',
+    fontSize: TEXT.body,
     fontFamily: "'Plus Jakarta Sans', sans-serif",
     outline: 'none',
     width: '320px',
@@ -118,7 +119,7 @@ const styles: Record<string, CSSProperties> = {
     color: '#fffcf8',
     border: 'none',
     borderRadius: '9px',
-    fontSize: '13.5px',
+    fontSize: TEXT.body,
     fontWeight: 600,
     fontFamily: "'Plus Jakarta Sans', sans-serif",
     cursor: 'pointer',
@@ -609,7 +610,7 @@ Retorne um JSON estrito:
         <div style={{ ...styles.card, textAlign: 'center', padding: '40px 20px', color: theme.textMuted }}>
           <i className="ti ti-users" style={{ fontSize: '32px', marginBottom: '12px', display: 'block', color: theme.primary }}></i>
           <h3 style={{ margin: '0 0 8px 0', color: theme.text }}>Nenhum Aluno Encontrado</h3>
-          <p style={{ margin: 0, fontSize: '13.5px' }}>Cadastre suas turmas e alunos no menu <strong>Alunos & Turmas</strong> para visualizar o progresso e o radar de habilidades com dados reais.</p>
+          <p style={{ margin: 0, fontSize: TEXT.body }}>Cadastre suas turmas e alunos no menu <strong>Alunos & Turmas</strong> para visualizar o progresso e o radar de habilidades com dados reais.</p>
         </div>
       ) : (
         <>
@@ -674,18 +675,18 @@ Retorne um JSON estrito:
 
                 <div style={styles.alertCard}>
                   <strong style={{ color: theme.warning, display: 'block', marginBottom: '4px' }}>⚠️ Ponto de Atenção:</strong>
-                  <span style={{ fontSize: '13.5px' }}>{aiDiagnosis.warning}</span>
+                  <span style={{ fontSize: TEXT.body }}>{aiDiagnosis.warning}</span>
                 </div>
 
                 <div style={{ ...styles.alertCard, backgroundColor: 'rgba(61, 122, 78, 0.1)', borderLeft: `4px solid ${theme.success}` }}>
                   <strong style={{ color: theme.success, display: 'block', marginBottom: '4px' }}>✨ Ponto Forte:</strong>
-                  <span style={{ fontSize: '13.5px' }}>{aiDiagnosis.strength}</span>
+                  <span style={{ fontSize: TEXT.body }}>{aiDiagnosis.strength}</span>
                 </div>
 
                 {aiDiagnosis.interventions.length > 0 && (
                   <div style={{ marginTop: '16px' }}>
                     <strong style={{ fontSize: '13px', color: theme.textMuted, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Intervenções Recomendadas:</strong>
-                    <ul style={{ margin: '8px 0 0 0', paddingLeft: '20px', fontSize: '13.5px' }}>
+                    <ul style={{ margin: '8px 0 0 0', paddingLeft: '20px', fontSize: TEXT.body }}>
                       {aiDiagnosis.interventions.map((intv, idx) => (
                         <li key={idx} style={{ marginBottom: '4px' }}>{intv}</li>
                       ))}

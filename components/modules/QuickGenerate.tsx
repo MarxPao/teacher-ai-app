@@ -1,4 +1,5 @@
 'use client'
+import { COLOR, RADIUS, TEXT, SHADOW, FONT } from '@/styles/tokens'
 import { toast, showConfirm } from '@/components/Toast'
 import AiProgressStepper from '@/components/AiProgressStepper'
 
@@ -77,9 +78,9 @@ const NEE_PROFILES = [
 // Style helpers 
 
 const SL: React.CSSProperties = { fontSize: 13, fontWeight: 600, color: '#7a5c42', display: 'block', marginBottom: 6 }
-const SS: React.CSSProperties = { width: '100%', padding: '10px 14px', background: '#f5f0e8', border: '1px solid #e8e0d0', borderRadius: 10, outline: 'none', color: '#2c1a0e', fontSize: 14, fontFamily: 'inherit', appearance: 'none' as const }
-const SI: React.CSSProperties = { width: '100%', padding: '10px 14px', background: '#f5f0e8', border: '1px solid #e8e0d0', borderRadius: 10, outline: 'none', color: '#2c1a0e', fontSize: 14, fontFamily: 'inherit' }
-const CARD: React.CSSProperties = { background: '#fff', borderRadius: 14, padding: 16, border: '1px solid #ede8dc', display: 'flex', flexDirection: 'column', gap: 12 }
+const SS: React.CSSProperties = { width: '100%', padding: '10px 14px', background: '#f5f0e8', border: '1px solid #e8e0d0', borderRadius: RADIUS.md, outline: 'none', color: '#2c1a0e', fontSize: 14, fontFamily: 'inherit', appearance: 'none' as const }
+const SI: React.CSSProperties = { width: '100%', padding: '10px 14px', background: '#f5f0e8', border: '1px solid #e8e0d0', borderRadius: RADIUS.md, outline: 'none', color: '#2c1a0e', fontSize: 14, fontFamily: 'inherit' }
+const CARD: React.CSSProperties = { background: '#fff', borderRadius: RADIUS.lg, padding: 16, border: '1px solid #ede8dc', display: 'flex', flexDirection: 'column', gap: 12 }
 
 // Helpers 
 
@@ -528,11 +529,11 @@ Retorne a questão reformulada no formato padrão (Enunciado, Alternativas se ap
         </div>
         <div style={{ display: "flex", justifyContent: "center", flexWrap: "wrap", gap: 10 }}>
           {result && (
-            <button onClick={handleSaveToActivitiesBank} style={{ padding: '9px 16px', borderRadius: 12, border: '1px solid #8b5e3c', background: '#8b5e3c', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, boxShadow: '0 2px 8px rgba(139,94,60,0.2)' }}>
+            <button onClick={handleSaveToActivitiesBank} style={{ padding: '9px 16px', borderRadius: RADIUS.lg, border: '1px solid #8b5e3c', background: '#8b5e3c', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, boxShadow: '0 2px 8px rgba(139,94,60,0.2)' }}>
               <i className="ti ti-database" /> Salvar no Banco de Dados
             </button>
           )}
-          <button onClick={() => setShowSaved(true)} style={{ padding: '9px 16px', borderRadius: 12, border: '1px solid #8b5e3c', background: '#fdf9f3', color: '#2c1a0e', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+          <button onClick={() => setShowSaved(true)} style={{ padding: '9px 16px', borderRadius: RADIUS.lg, border: '1px solid #8b5e3c', background: '#fdf9f3', color: '#2c1a0e', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
             <i className="ti ti-bookmark" style={{ color: '#b58900' }} /> Exercícios Salvos ({savedCount})
           </button>
         </div>
@@ -547,7 +548,7 @@ Retorne a questão reformulada no formato padrão (Enunciado, Alternativas se ap
 
       {/* Error banner */}
       {error && (
-        <div style={{ background: 'rgba(220,50,47,0.08)', border: '1px solid rgba(220,50,47,0.2)', borderRadius: 10, padding: '10px 16px', color: '#dc322f', fontSize: 13, marginBottom: 14, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ background: 'rgba(220,50,47,0.08)', border: '1px solid rgba(220,50,47,0.2)', borderRadius: RADIUS.md, padding: '10px 16px', color: '#dc322f', fontSize: 13, marginBottom: 14, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
           <i className="ti ti-alert-triangle" /> {error}
         </div>
       )}
@@ -567,7 +568,7 @@ Retorne a questão reformulada no formato padrão (Enunciado, Alternativas se ap
               padding: '14px 24px',
               background: loading ? '#a08060' : 'linear-gradient(135deg, #8b5e3c, #5c3a21)',
               color: '#fff',
-              border: 'none', borderRadius: 14, fontSize: 15, fontWeight: 700,
+              border: 'none', borderRadius: RADIUS.lg, fontSize: 15, fontWeight: 700,
               cursor: loading ? 'not-allowed' : 'pointer',
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
               boxShadow: !loading ? '0 4px 16px rgba(139,94,60,0.35)' : 'none',
@@ -586,7 +587,7 @@ Retorne a questão reformulada no formato padrão (Enunciado, Alternativas se ap
                 {apis.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
               </select>
               {!hasApi && (
-                <div style={{ fontSize: 12, color: '#b58900', background: 'rgba(181,137,0,0.08)', borderRadius: 8, padding: '8px 12px', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <div style={{ fontSize: 12, color: '#b58900', background: 'rgba(181,137,0,0.08)', borderRadius: RADIUS.md, padding: '8px 12px', display: 'flex', alignItems: 'center', gap: 6 }}>
                   <i className="ti ti-alert-triangle" /> Configure uma API key em APIs & Modelos para gerar automaticamente.
                 </div>
               )}
@@ -624,13 +625,13 @@ Retorne a questão reformulada no formato padrão (Enunciado, Alternativas se ap
             
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
               <div>
-                <label style={{ ...SL, fontSize: 11.5 }}>Enunciados / Instruções</label>
+                <label style={{ ...SL, fontSize: TEXT.caption }}>Enunciados / Instruções</label>
                 <div style={{ display: 'flex', gap: 6 }}>
                   <button
                     type="button"
                     onClick={() => setStemLanguage('pt')}
                     style={{
-                      flex: 1, padding: '8px 10px', borderRadius: 8, fontSize: 12, fontWeight: 700,
+                      flex: 1, padding: '8px 10px', borderRadius: RADIUS.md, fontSize: 12, fontWeight: 700,
                       border: stemLanguage === 'pt' ? '1.5px solid #cb4b16' : '1px solid #e8e0d0',
                       background: stemLanguage === 'pt' ? '#fdf8f2' : '#fff',
                       color: stemLanguage === 'pt' ? '#cb4b16' : '#7a5c42', cursor: 'pointer'
@@ -642,7 +643,7 @@ Retorne a questão reformulada no formato padrão (Enunciado, Alternativas se ap
                     type="button"
                     onClick={() => setStemLanguage('en')}
                     style={{
-                      flex: 1, padding: '8px 10px', borderRadius: 8, fontSize: 12, fontWeight: 700,
+                      flex: 1, padding: '8px 10px', borderRadius: RADIUS.md, fontSize: 12, fontWeight: 700,
                       border: stemLanguage === 'en' ? '1.5px solid #268bd2' : '1px solid #e8e0d0',
                       background: stemLanguage === 'en' ? '#f0f8ff' : '#fff',
                       color: stemLanguage === 'en' ? '#268bd2' : '#7a5c42', cursor: 'pointer'
@@ -654,13 +655,13 @@ Retorne a questão reformulada no formato padrão (Enunciado, Alternativas se ap
               </div>
 
               <div>
-                <label style={{ ...SL, fontSize: 11.5 }}>Alternativas (A, B, C, D)</label>
+                <label style={{ ...SL, fontSize: TEXT.caption }}>Alternativas (A, B, C, D)</label>
                 <div style={{ display: 'flex', gap: 6 }}>
                   <button
                     type="button"
                     onClick={() => setOptionLanguage('en')}
                     style={{
-                      flex: 1, padding: '8px 10px', borderRadius: 8, fontSize: 12, fontWeight: 700,
+                      flex: 1, padding: '8px 10px', borderRadius: RADIUS.md, fontSize: 12, fontWeight: 700,
                       border: optionLanguage === 'en' ? '1.5px solid #268bd2' : '1px solid #e8e0d0',
                       background: optionLanguage === 'en' ? '#f0f8ff' : '#fff',
                       color: optionLanguage === 'en' ? '#268bd2' : '#7a5c42', cursor: 'pointer'
@@ -672,7 +673,7 @@ Retorne a questão reformulada no formato padrão (Enunciado, Alternativas se ap
                     type="button"
                     onClick={() => setOptionLanguage('pt')}
                     style={{
-                      flex: 1, padding: '8px 10px', borderRadius: 8, fontSize: 12, fontWeight: 700,
+                      flex: 1, padding: '8px 10px', borderRadius: RADIUS.md, fontSize: 12, fontWeight: 700,
                       border: optionLanguage === 'pt' ? '1.5px solid #cb4b16' : '1px solid #e8e0d0',
                       background: optionLanguage === 'pt' ? '#fdf8f2' : '#fff',
                       color: optionLanguage === 'pt' ? '#cb4b16' : '#7a5c42', cursor: 'pointer'
@@ -694,7 +695,7 @@ Retorne a questão reformulada no formato padrão (Enunciado, Alternativas se ap
 
             {/* Escolas Cadastradas pelo Professor em Organização */}
             <div>
-              <label style={{ ...SL, fontSize: 11.5 }}>Vincular Escola Cadastrada (Organização):</label>
+              <label style={{ ...SL, fontSize: TEXT.caption }}>Vincular Escola Cadastrada (Organização):</label>
               {registeredSchools.length > 0 ? (
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                   {registeredSchools.map(sch => {
@@ -712,7 +713,7 @@ Retorne a questão reformulada no formato padrão (Enunciado, Alternativas se ap
                           }))
                         }}
                         style={{
-                          padding: '7px 12px', borderRadius: 8, fontSize: 11.5, fontWeight: 700, textAlign: 'left',
+                          padding: '7px 12px', borderRadius: RADIUS.md, fontSize: TEXT.caption, fontWeight: 700, textAlign: 'left',
                           border: isSelected ? '1.5px solid #8b5e3c' : '1px solid #e8e0d0',
                           background: isSelected ? '#fdf8f2' : '#faf8f5',
                           color: isSelected ? '#8b5e3c' : '#2c1a0e', cursor: 'pointer',
@@ -725,7 +726,7 @@ Retorne a questão reformulada no formato padrão (Enunciado, Alternativas se ap
                   })}
                 </div>
               ) : (
-                <div style={{ fontSize: 11.5, color: '#8b5e3c', background: '#fdf8f2', border: '1px dashed #e8d8c8', padding: '8px 12px', borderRadius: 8 }}>
+                <div style={{ fontSize: TEXT.caption, color: '#8b5e3c', background: '#fdf8f2', border: '1px dashed #e8d8c8', padding: '8px 12px', borderRadius: RADIUS.md }}>
                   Nenhuma escola cadastrada ainda. Digite o nome abaixo ou cadastre em <strong>Organização &gt; Escolas</strong> para vincular automaticamente.
                 </div>
               )}

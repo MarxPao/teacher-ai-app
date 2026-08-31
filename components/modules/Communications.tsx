@@ -1,4 +1,5 @@
 'use client'
+import { COLOR, RADIUS, TEXT, SHADOW, FONT } from '@/styles/tokens'
 import { toast, showConfirm } from '@/components/Toast'
 
 import React, { useState, useEffect } from 'react'
@@ -40,8 +41,8 @@ const TEMPLATES = [
 const TONES = ['Acolhedor & Positivo', 'Formal & Institucional', 'Direto & Objetivo', 'Motivacional', 'Urgente']
 
 const SL: React.CSSProperties = { fontSize: 13, fontWeight: 600, color: '#7a5c42', display: 'block', marginBottom: 6 }
-const SI: React.CSSProperties = { width: '100%', padding: '10px 14px', background: '#f5f0e8', border: '1px solid #e8e0d0', borderRadius: 10, outline: 'none', color: '#2c1a0e', fontSize: 14, fontFamily: 'inherit' }
-const CARD: React.CSSProperties = { background: '#fff', borderRadius: 16, padding: 18, boxShadow: '0 2px 12px rgba(44,26,14,0.05)', border: '1px solid #ede8dc' }
+const SI: React.CSSProperties = { width: '100%', padding: '10px 14px', background: '#f5f0e8', border: '1px solid #e8e0d0', borderRadius: RADIUS.md, outline: 'none', color: '#2c1a0e', fontSize: 14, fontFamily: 'inherit' }
+const CARD: React.CSSProperties = { background: '#fff', borderRadius: RADIUS.xl, padding: 18, boxShadow: '0 2px 12px rgba(44,26,14,0.05)', border: '1px solid #ede8dc' }
 
 function loadApis(): ApiConfig[] {
   try {
@@ -218,7 +219,7 @@ Gere o documento completo em HTML agora:`
           display: 'inline-flex',
           background: '#ede8dc',
           padding: '4px',
-          borderRadius: 14,
+          borderRadius: RADIUS.lg,
           boxShadow: 'inset 0 2px 6px rgba(0,0,0,0.06)',
           gap: 4
         }}>
@@ -227,7 +228,7 @@ Gere o documento completo em HTML agora:`
             onClick={() => setActiveTab('parents')}
             style={{
               padding: '8px 22px',
-              borderRadius: 10,
+              borderRadius: RADIUS.md,
               border: 'none',
               background: activeTab === 'parents' ? '#8b5e3c' : 'transparent',
               color: activeTab === 'parents' ? '#fff' : '#7a5c42',
@@ -248,7 +249,7 @@ Gere o documento completo em HTML agora:`
             onClick={() => setActiveTab('official')}
             style={{
               padding: '8px 22px',
-              borderRadius: 10,
+              borderRadius: RADIUS.md,
               border: 'none',
               background: activeTab === 'official' ? '#8b5e3c' : 'transparent',
               color: activeTab === 'official' ? '#fff' : '#7a5c42',
@@ -268,7 +269,7 @@ Gere o documento completo em HTML agora:`
 
       {/* Toast Notification */}
       {toastMessage && (
-        <div style={{ position: 'fixed', bottom: 24, right: 24, background: '#2aa198', color: '#fff', padding: '12px 20px', borderRadius: 12, fontWeight: 700, boxShadow: '0 4px 16px rgba(0,0,0,0.2)', zIndex: 9999 }}>
+        <div style={{ position: 'fixed', bottom: 24, right: 24, background: '#2aa198', color: '#fff', padding: '12px 20px', borderRadius: RADIUS.lg, fontWeight: 700, boxShadow: '0 4px 16px rgba(0,0,0,0.2)', zIndex: 9999 }}>
           ✓ {toastMessage}
         </div>
       )}
@@ -297,7 +298,7 @@ Gere o documento completo em HTML agora:`
               </select>
 
               {selectedStudent && (
-                <div style={{ marginTop: 12, padding: '10px 12px', background: '#faf6f0', borderRadius: 10, border: '1px solid #ede4d8', fontSize: 12.5, color: '#7a5c42', lineHeight: 1.5 }}>
+                <div style={{ marginTop: 12, padding: '10px 12px', background: '#faf6f0', borderRadius: RADIUS.md, border: '1px solid #ede4d8', fontSize: TEXT.bodyCompact, color: '#7a5c42', lineHeight: 1.5 }}>
                   <div><strong>Responsável:</strong> {selectedStudent.parentName}</div>
                   <div><strong>WhatsApp:</strong> {selectedStudent.parentPhone}</div>
                   <div><strong>Desempenho:</strong> <span style={{ color: selectedStudent.performance === 'Excelente' ? '#2aa198' : selectedStudent.performance === 'Bom' ? '#268bd2' : '#cb4b16', fontWeight: 700 }}>{selectedStudent.performance} (Nota {selectedStudent.lastGrade}/10)</span></div>
@@ -317,11 +318,11 @@ Gere o documento completo em HTML agora:`
                     type="button"
                     onClick={() => setParentTone(t)}
                     style={{
-                      padding: '5px 12px', borderRadius: 16,
+                      padding: '5px 12px', borderRadius: RADIUS.xl,
                       border: parentTone === t ? '1.5px solid #8b5e3c' : '1px solid #e8e0d0',
                       background: parentTone === t ? '#8b5e3c' : '#faf8f5',
                       color: parentTone === t ? '#fff' : '#7a5c42',
-                      fontSize: 11.5, fontWeight: 700, cursor: 'pointer'
+                      fontSize: TEXT.caption, fontWeight: 700, cursor: 'pointer'
                     }}
                   >
                     {t}
@@ -347,11 +348,11 @@ Gere o documento completo em HTML agora:`
               disabled={generatingParent}
               style={{
                 padding: '14px',
-                borderRadius: 14,
+                borderRadius: RADIUS.lg,
                 border: 'none',
                 background: generatingParent ? '#a08060' : 'linear-gradient(135deg, #8b5e3c, #5c3a21)',
                 color: '#fff',
-                fontSize: 14.5,
+                fontSize: TEXT.body,
                 fontWeight: 800,
                 cursor: generatingParent ? 'wait' : 'pointer',
                 display: 'flex',
@@ -379,13 +380,13 @@ Gere o documento completo em HTML agora:`
                   <div style={{ display: 'flex', gap: 8 }}>
                     <button
                       onClick={handleCopyMessage}
-                      style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid #d5c8bb', background: '#fff', fontSize: 12, fontWeight: 700, color: '#7a5c42', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
+                      style={{ padding: '6px 12px', borderRadius: RADIUS.md, border: '1px solid #d5c8bb', background: '#fff', fontSize: 12, fontWeight: 700, color: '#7a5c42', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
                     >
                       📋 Copiar
                     </button>
                     <button
                       onClick={handleOpenWhatsApp}
-                      style={{ padding: '6px 14px', borderRadius: 8, border: 'none', background: '#25D366', color: '#fff', fontSize: 12, fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, boxShadow: '0 2px 8px rgba(37,211,102,0.3)' }}
+                      style={{ padding: '6px 14px', borderRadius: RADIUS.md, border: 'none', background: '#25D366', color: '#fff', fontSize: 12, fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, boxShadow: '0 2px 8px rgba(37,211,102,0.3)' }}
                     >
                       📲 Enviar WhatsApp Web
                     </button>
@@ -401,7 +402,7 @@ Gere o documento completo em HTML agora:`
                   flex: 1,
                   width: '100%',
                   padding: 16,
-                  borderRadius: 12,
+                  borderRadius: RADIUS.lg,
                   border: '1px solid #ede8dc',
                   background: '#faf8f5',
                   color: '#2c1a0e',
@@ -435,11 +436,11 @@ Gere o documento completo em HTML agora:`
                       type="button"
                       onClick={() => setTemplate(t.label)}
                       style={{
-                        padding: '8px 10px', borderRadius: 8,
+                        padding: '8px 10px', borderRadius: RADIUS.md,
                         border: sel ? `1.5px solid ${t.color}` : '1px solid #e8e0d0',
                         background: sel ? t.color : '#faf8f5',
                         color: sel ? '#fff' : '#7a5c42',
-                        cursor: 'pointer', fontSize: 11.5, textAlign: 'left',
+                        cursor: 'pointer', fontSize: TEXT.caption, textAlign: 'left',
                         display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700
                       }}
                     >
@@ -459,11 +460,11 @@ Gere o documento completo em HTML agora:`
                     type="button"
                     onClick={() => setOfficialTone(t)}
                     style={{
-                      padding: '5px 12px', borderRadius: 16,
+                      padding: '5px 12px', borderRadius: RADIUS.xl,
                       border: officialTone === t ? '1.5px solid #8b5e3c' : '1px solid #e8e0d0',
                       background: officialTone === t ? '#8b5e3c' : '#faf8f5',
                       color: officialTone === t ? '#fff' : '#7a5c42',
-                      fontSize: 11.5, fontWeight: 700, cursor: 'pointer'
+                      fontSize: TEXT.caption, fontWeight: 700, cursor: 'pointer'
                     }}
                   >
                     {t}
@@ -500,11 +501,11 @@ Gere o documento completo em HTML agora:`
               disabled={loadingOfficial}
               style={{
                 padding: '14px',
-                borderRadius: 14,
+                borderRadius: RADIUS.lg,
                 border: 'none',
                 background: loadingOfficial ? '#a08060' : 'linear-gradient(135deg, #8b5e3c, #5c3a21)',
                 color: '#fff',
-                fontSize: 14.5,
+                fontSize: TEXT.body,
                 fontWeight: 800,
                 cursor: loadingOfficial ? 'wait' : 'pointer',
                 display: 'flex',
@@ -521,11 +522,11 @@ Gere o documento completo em HTML agora:`
           {/* Painel Direito: DocumentCanvas Oficial */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, minHeight: 0 }}>
             {factCheck && (
-              <div style={{ padding: '8px 14px', background: '#fdf8f2', borderRadius: 10, border: '1px solid #ede8dc', fontSize: 12, color: '#7a5c42' }}>
+              <div style={{ padding: '8px 14px', background: '#fdf8f2', borderRadius: RADIUS.md, border: '1px solid #ede8dc', fontSize: 12, color: '#7a5c42' }}>
                 ✓ <strong>Qualidade:</strong> {factCheck.score}/100 &bull; {factCheck.level === 'ok' ? 'Texto claro e polido.' : factCheck.issues.join('; ')}
               </div>
             )}
-            <div style={{ flex: 1, minHeight: 0, borderRadius: 16, overflow: 'hidden', border: '1px solid #ede8dc', background: '#fff' }}>
+            <div style={{ flex: 1, minHeight: 0, borderRadius: RADIUS.xl, overflow: 'hidden', border: '1px solid #ede8dc', background: '#fff' }}>
               <DocumentCanvas
                 content={officialResult}
                 onContentChange={setOfficialResult}

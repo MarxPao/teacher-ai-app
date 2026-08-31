@@ -1,4 +1,5 @@
-'use client';
+'use client'
+import { COLOR, RADIUS, TEXT, SHADOW, FONT } from '@/styles/tokens';
 import { toast, showConfirm } from '@/components/Toast'
 
 import React, { useState, useEffect, useRef, CSSProperties } from 'react';
@@ -429,7 +430,7 @@ Responda APENAS um objeto JSON estrito com o seguinte formato:
     color: active ? theme.text : theme.textMuted,
     cursor: 'pointer',
     fontWeight: active ? 600 : 400,
-    fontSize: '13.5px',
+    fontSize: TEXT.body,
     boxShadow: active ? '0 1px 4px rgba(44,26,14,0.1)' : 'none',
     transition: 'all 0.15s ease',
     fontFamily: "'Plus Jakarta Sans', sans-serif"
@@ -505,7 +506,7 @@ Responda APENAS um objeto JSON estrito com o seguinte formato:
       marginBottom: '16px',
     },
     label: {
-      fontSize: '13.5px',
+      fontSize: TEXT.body,
       fontWeight: 600,
       color: theme.textMuted,
     },
@@ -639,7 +640,7 @@ Responda APENAS um objeto JSON estrito com o seguinte formato:
     list: {
       margin: 0,
       paddingLeft: '20px',
-      fontSize: '13.5px',
+      fontSize: TEXT.body,
       color: theme.text,
     },
     exportBar: {
@@ -658,7 +659,7 @@ Responda APENAS um objeto JSON estrito com o seguinte formato:
       border: 'none',
       padding: '10px 16px',
       borderRadius: '8px',
-      fontSize: '13.5px',
+      fontSize: TEXT.body,
       fontWeight: 600,
       cursor: 'pointer',
     },
@@ -671,7 +672,7 @@ Responda APENAS um objeto JSON estrito com o seguinte formato:
       border: `1px solid ${theme.border}`,
       padding: '10px 16px',
       borderRadius: '8px',
-      fontSize: '13.5px',
+      fontSize: TEXT.body,
       fontWeight: 600,
       cursor: 'pointer',
     },
@@ -992,7 +993,7 @@ Responda APENAS um objeto JSON estrito com o seguinte formato:
           <h3 style={{ margin: '0 0 16px 0', display: 'flex', alignItems: 'center', gap: '8px', fontFamily: "'Fraunces', Georgia, serif", fontSize: '18px' }}>
             <i className="ti ti-sparkles" style={{ color: theme.primary }}></i> Como Funciona?
           </h3>
-          <p style={{ color: theme.textMuted, fontSize: '13.5px', lineHeight: 1.5, margin: 0 }}>
+          <p style={{ color: theme.textMuted, fontSize: TEXT.body, lineHeight: 1.5, margin: 0 }}>
             O <strong>Diário Inteligente</strong> escuta suas aulas e reuniões em tempo real ou analisa textos colados para criar atas estruturadas.
           </p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '24px' }}>
@@ -1001,7 +1002,7 @@ Responda APENAS um objeto JSON estrito com o seguinte formato:
                 <i className="ti ti-ear" style={{ fontSize: '18px' }}></i>
               </div>
               <div>
-                <strong style={{ fontSize: '13.5px' }}>1. Captura</strong>
+                <strong style={{ fontSize: TEXT.body }}>1. Captura</strong>
                 <div style={{ color: theme.textMuted, fontSize: '12px', marginTop: '2px' }}>Grave o áudio ou digite/cole as anotações brutas.</div>
               </div>
             </div>
@@ -1010,7 +1011,7 @@ Responda APENAS um objeto JSON estrito com o seguinte formato:
                 <i className="ti ti-brain" style={{ fontSize: '18px' }}></i>
               </div>
               <div>
-                <strong style={{ fontSize: '13.5px' }}>2. Processamento IA</strong>
+                <strong style={{ fontSize: TEXT.body }}>2. Processamento IA</strong>
                 <div style={{ color: theme.textMuted, fontSize: '12px', marginTop: '2px' }}>Extração automática de ações, destaques e geração de resumo.</div>
               </div>
             </div>
@@ -1019,7 +1020,7 @@ Responda APENAS um objeto JSON estrito com o seguinte formato:
                 <i className="ti ti-share" style={{ fontSize: '18px' }}></i>
               </div>
               <div>
-                <strong style={{ fontSize: '13.5px' }}>3. Compartilhamento</strong>
+                <strong style={{ fontSize: TEXT.body }}>3. Compartilhamento</strong>
                 <div style={{ color: theme.textMuted, fontSize: '12px', marginTop: '2px' }}>Exporte rapidamente para o WhatsApp ou em PDF.</div>
               </div>
             </div>

@@ -1,4 +1,5 @@
 'use client'
+import { COLOR, RADIUS, TEXT, SHADOW, FONT } from '@/styles/tokens'
 
 import { useState, useRef, useEffect } from 'react'
 
@@ -71,7 +72,7 @@ export default function AudioPlayerCard({ audioUrl, title = 'Listening Audio Tra
   return (
     <div style={{
       background: 'linear-gradient(135deg, #2c1a0e 0%, #002b36 100%)',
-      borderRadius: 16,
+      borderRadius: RADIUS.xl,
       padding: '16px 20px',
       color: '#fdf8f2',
       boxShadow: '0 8px 24px rgba(7,54,66,0.18)',
@@ -133,7 +134,7 @@ export default function AudioPlayerCard({ audioUrl, title = 'Listening Audio Tra
         </div>
 
         {/* Speed Selector */}
-        <div style={{ display: 'flex', gap: 4, background: 'rgba(255,255,255,0.08)', borderRadius: 8, padding: 2 }}>
+        <div style={{ display: 'flex', gap: 4, background: 'rgba(255,255,255,0.08)', borderRadius: RADIUS.md, padding: 2 }}>
           {[0.8, 1.0, 1.2].map(spd => (
             <button
               key={spd}

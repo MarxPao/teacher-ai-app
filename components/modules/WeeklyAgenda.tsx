@@ -1,4 +1,5 @@
-'use client';
+'use client'
+import { COLOR, RADIUS, TEXT, SHADOW, FONT } from '@/styles/tokens';
 import { toast, showConfirm } from '@/components/Toast'
 
 import React, { useState, useEffect, useMemo, CSSProperties } from 'react';
@@ -928,7 +929,7 @@ const styles: Record<string, CSSProperties> = {
     alignItems: 'center',
     gap: 6,
     padding: '9px 18px',
-    borderRadius: 10,
+    borderRadius: RADIUS.md,
     border: 'none',
     cursor: 'pointer',
     fontSize: 13,
@@ -943,7 +944,7 @@ const styles: Record<string, CSSProperties> = {
     alignItems: 'center',
     gap: 6,
     padding: '9px 16px',
-    borderRadius: 10,
+    borderRadius: RADIUS.md,
     border: '1px solid rgba(139,115,85,0.25)',
     cursor: 'pointer',
     fontSize: 13,
@@ -996,7 +997,7 @@ const styles: Record<string, CSSProperties> = {
   },
   selectFilter: {
     padding: '8px 12px',
-    borderRadius: 10,
+    borderRadius: RADIUS.md,
     border: '1px solid rgba(139,115,85,0.22)',
     background: '#fffcf8',
     fontSize: 13,
@@ -1007,7 +1008,7 @@ const styles: Record<string, CSSProperties> = {
   },
   searchInput: {
     padding: '8px 12px 8px 32px',
-    borderRadius: 10,
+    borderRadius: RADIUS.md,
     border: '1px solid rgba(139,115,85,0.22)',
     background: '#fffcf8',
     fontSize: 13,
@@ -1290,7 +1291,7 @@ const styles: Record<string, CSSProperties> = {
   modalContent: {
     background: '#fffcf8',
     border: '1px solid rgba(139,115,85,0.2)',
-    borderRadius: 16,
+    borderRadius: RADIUS.xl,
     padding: '24px 28px',
     width: '100%',
     maxWidth: 520,
@@ -1317,7 +1318,7 @@ const styles: Record<string, CSSProperties> = {
   formInput: {
     width: '100%',
     padding: '9px 12px',
-    borderRadius: 10,
+    borderRadius: RADIUS.md,
     border: '1px solid rgba(139,115,85,0.22)',
     background: '#fff',
     fontSize: 13,

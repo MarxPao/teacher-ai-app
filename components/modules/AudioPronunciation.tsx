@@ -1,4 +1,5 @@
-'use client';
+'use client'
+import { COLOR, RADIUS, TEXT, SHADOW, FONT } from '@/styles/tokens';
 
 import React, { useState, useEffect, useRef } from 'react';
 
@@ -258,22 +259,22 @@ Retorne ESTRITAMENTE um objeto JSON no formato:
         </div>
 
         {/* Tab Switcher */}
-        <div style={{ display: 'flex', gap: 6, background: '#fffcf8', padding: 4, borderRadius: 12, border: '1px solid #d5c0b0' }}>
+        <div style={{ display: 'flex', gap: 6, background: '#fffcf8', padding: 4, borderRadius: RADIUS.lg, border: '1px solid #d5c0b0' }}>
           <button
             onClick={() => setActiveTab('pronunciation')}
-            style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: activeTab === 'pronunciation' ? '#8b5e3c' : 'transparent', color: activeTab === 'pronunciation' ? '#fff' : '#7a5c42', fontWeight: 700, cursor: 'pointer', fontSize: 13 }}
+            style={{ padding: '8px 16px', borderRadius: RADIUS.md, border: 'none', background: activeTab === 'pronunciation' ? '#8b5e3c' : 'transparent', color: activeTab === 'pronunciation' ? '#fff' : '#7a5c42', fontWeight: 700, cursor: 'pointer', fontSize: 13 }}
           >
             <i className="ti ti-microphone"></i> Análise Fonética
           </button>
           <button
             onClick={() => setActiveTab('minimal')}
-            style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: activeTab === 'minimal' ? '#8b5e3c' : 'transparent', color: activeTab === 'minimal' ? '#fff' : '#7a5c42', fontWeight: 700, cursor: 'pointer', fontSize: 13 }}
+            style={{ padding: '8px 16px', borderRadius: RADIUS.md, border: 'none', background: activeTab === 'minimal' ? '#8b5e3c' : 'transparent', color: activeTab === 'minimal' ? '#fff' : '#7a5c42', fontWeight: 700, cursor: 'pointer', fontSize: 13 }}
           >
             <i className="ti ti-arrows-diff"></i> Pares Mínimos
           </button>
           <button
             onClick={() => setActiveTab('bank')}
-            style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: activeTab === 'bank' ? '#8b5e3c' : 'transparent', color: activeTab === 'bank' ? '#fff' : '#7a5c42', fontWeight: 700, cursor: 'pointer', fontSize: 13 }}
+            style={{ padding: '8px 16px', borderRadius: RADIUS.md, border: 'none', background: activeTab === 'bank' ? '#8b5e3c' : 'transparent', color: activeTab === 'bank' ? '#fff' : '#7a5c42', fontWeight: 700, cursor: 'pointer', fontSize: 13 }}
           >
             <i className="ti ti-books"></i> Banco de Vocabulário ({wordBank.length})
           </button>
@@ -281,13 +282,13 @@ Retorne ESTRITAMENTE um objeto JSON no formato:
       </div>
 
       {/* Settings Bar */}
-      <div style={{ background: '#fffcf8', border: '1px solid rgba(139,115,85,0.16)', borderRadius: 14, padding: '14px 20px', marginBottom: 24, display: 'flex', gap: 20, alignItems: 'center', flexWrap: 'wrap' }}>
+      <div style={{ background: '#fffcf8', border: '1px solid rgba(139,115,85,0.16)', borderRadius: RADIUS.lg, padding: '14px 20px', marginBottom: 24, display: 'flex', gap: 20, alignItems: 'center', flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 12.5, fontWeight: 700, color: '#7a6552' }}>Voz em Inglês:</span>
+          <span style={{ fontSize: TEXT.bodyCompact, fontWeight: 700, color: '#7a6552' }}>Voz em Inglês:</span>
           <select 
             value={selectedVoice}
             onChange={(e) => setSelectedVoice(e.target.value)}
-            style={{ background: '#fdf8f2', border: '1px solid #d5c0b0', borderRadius: 8, padding: '6px 12px', fontSize: 13, color: '#2c1a0e', outline: 'none' }}
+            style={{ background: '#fdf8f2', border: '1px solid #d5c0b0', borderRadius: RADIUS.md, padding: '6px 12px', fontSize: 13, color: '#2c1a0e', outline: 'none' }}
           >
             {voices.map(v => (
               <option key={v.name} value={v.name}>{v.name} ({v.lang})</option>
@@ -295,11 +296,11 @@ Retorne ESTRITAMENTE um objeto JSON no formato:
           </select>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 12.5, fontWeight: 700, color: '#7a6552' }}>Velocidade:</span>
+          <span style={{ fontSize: TEXT.bodyCompact, fontWeight: 700, color: '#7a6552' }}>Velocidade:</span>
           <select 
             value={pronRate}
             onChange={(e) => setPronRate(Number(e.target.value))}
-            style={{ background: '#fdf8f2', border: '1px solid #d5c0b0', borderRadius: 8, padding: '6px 12px', fontSize: 13, color: '#2c1a0e', outline: 'none' }}
+            style={{ background: '#fdf8f2', border: '1px solid #d5c0b0', borderRadius: RADIUS.md, padding: '6px 12px', fontSize: 13, color: '#2c1a0e', outline: 'none' }}
           >
             <option value={1}>Normal (1.0x)</option>
             <option value={0.75}>Lento (0.75x)</option>
@@ -312,13 +313,13 @@ Retorne ESTRITAMENTE um objeto JSON no formato:
       {activeTab === 'pronunciation' && (
         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(360px, 480px) 1fr', gap: 24 }}>
           {/* Input Panel */}
-          <div style={{ background: '#fffcf8', border: '1px solid rgba(139,115,85,0.16)', borderRadius: 16, padding: 24 }}>
+          <div style={{ background: '#fffcf8', border: '1px solid rgba(139,115,85,0.16)', borderRadius: RADIUS.xl, padding: 24 }}>
             <h2 style={{ fontFamily: 'Fraunces, Georgia, serif', fontSize: '1.2rem', color: '#2c1a0e', margin: '0 0 16px 0' }}>
               Pesquisar Palavra ou Frase
             </h2>
             <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
               <input 
-                style={{ flex: 1, background: '#fdf8f2', border: '1px solid #d5c0b0', borderRadius: 10, padding: '10px 14px', fontSize: 14, color: '#2c1a0e', outline: 'none' }}
+                style={{ flex: 1, background: '#fdf8f2', border: '1px solid #d5c0b0', borderRadius: RADIUS.md, padding: '10px 14px', fontSize: 14, color: '#2c1a0e', outline: 'none' }}
                 placeholder="Ex: thorough, comfortable, schedule..."
                 value={pronWord}
                 onChange={(e) => setPronWord(e.target.value)}
@@ -335,7 +336,7 @@ Retorne ESTRITAMENTE um objeto JSON no formato:
                   fetchDynamicIpa(pronWord);
                 }}
                 disabled={isFetchingIpa}
-                style={{ background: '#8b5e3c', color: '#fff', border: 'none', borderRadius: 10, padding: '10px 18px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+                style={{ background: '#8b5e3c', color: '#fff', border: 'none', borderRadius: RADIUS.md, padding: '10px 18px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
               >
                 <i className={isFetchingIpa ? 'ti ti-loader ti-spin' : 'ti ti-player-play-filled'}></i>
                 {isFetchingIpa ? 'Buscando...' : 'Ouvir & Analisar'}
@@ -349,7 +350,7 @@ Retorne ESTRITAMENTE um objeto JSON no formato:
                 <button
                   onClick={() => fetchDynamicIpa(pronWord)}
                   disabled={isFetchingIpa}
-                  style={{ flex: 1, padding: '8px 12px', background: '#fdf8f2', border: '1px solid #d5c0b0', borderRadius: 8, fontSize: 12.5, fontWeight: 700, color: '#8b5e3c', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+                  style={{ flex: 1, padding: '8px 12px', background: '#fdf8f2', border: '1px solid #d5c0b0', borderRadius: RADIUS.md, fontSize: TEXT.bodyCompact, fontWeight: 700, color: '#8b5e3c', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
                 >
                   <i className="ti ti-sparkles"></i> Consultar Fonética IA
                 </button>
@@ -358,7 +359,7 @@ Retorne ESTRITAMENTE um objeto JSON no formato:
                     setNewBankWord({ ...newBankWord, word: pronWord, ipa: phonData ? `/${phonData.ipa}/` : '' });
                     setActiveTab('bank');
                   }}
-                  style={{ padding: '8px 14px', background: '#fdf8f2', border: '1px solid #d5c0b0', borderRadius: 8, fontSize: 12.5, fontWeight: 700, color: '#4a382a', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+                  style={{ padding: '8px 14px', background: '#fdf8f2', border: '1px solid #d5c0b0', borderRadius: RADIUS.md, fontSize: TEXT.bodyCompact, fontWeight: 700, color: '#4a382a', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
                 >
                   <i className="ti ti-bookmark"></i> Salvar
                 </button>
@@ -367,7 +368,7 @@ Retorne ESTRITAMENTE um objeto JSON no formato:
           </div>
 
           {/* Result Panel: IPA & Sílaba Tônica */}
-          <div style={{ background: '#fffcf8', border: '1px solid rgba(139,115,85,0.16)', borderRadius: 16, padding: 24 }}>
+          <div style={{ background: '#fffcf8', border: '1px solid rgba(139,115,85,0.16)', borderRadius: RADIUS.xl, padding: 24 }}>
             {!pronWord ? (
               <div style={{ textAlign: 'center', padding: '60px 20px', color: '#a08060' }}>
                 <i className="ti ti-microphone" style={{ fontSize: 48, opacity: 0.4, marginBottom: 12 }}></i>
@@ -376,7 +377,7 @@ Retorne ESTRITAMENTE um objeto JSON no formato:
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
                 {/* Transcrição IPA */}
-                <div style={{ background: '#fdf8f2', padding: 18, borderRadius: 12, border: '1px solid #e8decb' }}>
+                <div style={{ background: '#fdf8f2', padding: 18, borderRadius: RADIUS.lg, border: '1px solid #e8decb' }}>
                   <span style={{ fontSize: 11, fontWeight: 700, color: '#a08060', textTransform: 'uppercase', letterSpacing: 0.5 }}>
                     Transcrição Fonética Internacional (IPA)
                   </span>
@@ -402,7 +403,7 @@ Retorne ESTRITAMENTE um objeto JSON no formato:
 
                 {/* Sílaba Tônica (Stress Visualizer) */}
                 {phonData?.stress && (
-                  <div style={{ background: '#fdf8f2', padding: 18, borderRadius: 12, border: '1px solid #e8decb' }}>
+                  <div style={{ background: '#fdf8f2', padding: 18, borderRadius: RADIUS.lg, border: '1px solid #e8decb' }}>
                     <span style={{ fontSize: 11, fontWeight: 700, color: '#a08060', textTransform: 'uppercase', letterSpacing: 0.5 }}>
                       Sílaba Tônica & Ritmo (Word Stress)
                     </span>
@@ -413,7 +414,7 @@ Retorne ESTRITAMENTE um objeto JSON no formato:
                           <div 
                             key={i} 
                             style={{
-                              padding: '8px 16px', borderRadius: 8,
+                              padding: '8px 16px', borderRadius: RADIUS.md,
                               background: isStressed ? '#8b5e3c' : '#fff', 
                               color: isStressed ? '#fff' : '#2c1a0e', 
                               border: isStressed ? 'none' : '1px solid #d5c0b0',
@@ -436,19 +437,19 @@ Retorne ESTRITAMENTE um objeto JSON no formato:
 
       {/* Tab 2: Pares Mínimos */}
       {activeTab === 'minimal' && (
-        <div style={{ background: '#fffcf8', border: '1px solid rgba(139,115,85,0.16)', borderRadius: 16, padding: 24 }}>
+        <div style={{ background: '#fffcf8', border: '1px solid rgba(139,115,85,0.16)', borderRadius: RADIUS.xl, padding: 24 }}>
           <h2 style={{ fontFamily: 'Fraunces, Georgia, serif', fontSize: '1.2rem', color: '#2c1a0e', margin: '0 0 16px 0' }}>
             Treinamento de Pares Mínimos (Minimal Pairs)
           </h2>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
             {MINIMAL_PAIRS.map((pair, idx) => (
-              <div key={idx} style={{ background: '#fdf8f2', padding: 16, borderRadius: 12, border: '1px solid #e8decb', display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div key={idx} style={{ background: '#fdf8f2', padding: 16, borderRadius: RADIUS.lg, border: '1px solid #e8decb', display: 'flex', flexDirection: 'column', gap: 10 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <button onClick={() => speak(pair.word1)} style={{ flex: 1, padding: '8px 12px', background: '#fff', border: '1px solid #d5c0b0', borderRadius: 8, fontWeight: 700, color: '#8b5e3c', cursor: 'pointer' }}>
+                  <button onClick={() => speak(pair.word1)} style={{ flex: 1, padding: '8px 12px', background: '#fff', border: '1px solid #d5c0b0', borderRadius: RADIUS.md, fontWeight: 700, color: '#8b5e3c', cursor: 'pointer' }}>
                     🔊 {pair.word1} <span style={{ fontSize: 11, color: '#a08060' }}>{pair.ipa1}</span>
                   </button>
                   <span style={{ margin: '0 8px', fontWeight: 800, color: '#a08060' }}>vs</span>
-                  <button onClick={() => speak(pair.word2)} style={{ flex: 1, padding: '8px 12px', background: '#fff', border: '1px solid #d5c0b0', borderRadius: 8, fontWeight: 700, color: '#8b5e3c', cursor: 'pointer' }}>
+                  <button onClick={() => speak(pair.word2)} style={{ flex: 1, padding: '8px 12px', background: '#fff', border: '1px solid #d5c0b0', borderRadius: RADIUS.md, fontWeight: 700, color: '#8b5e3c', cursor: 'pointer' }}>
                     🔊 {pair.word2} <span style={{ fontSize: 11, color: '#a08060' }}>{pair.ipa2}</span>
                   </button>
                 </div>
@@ -460,7 +461,7 @@ Retorne ESTRITAMENTE um objeto JSON no formato:
 
       {/* Tab 3: Banco de Palavras */}
       {activeTab === 'bank' && (
-        <div style={{ background: '#fffcf8', border: '1px solid rgba(139,115,85,0.16)', borderRadius: 16, padding: 24 }}>
+        <div style={{ background: '#fffcf8', border: '1px solid rgba(139,115,85,0.16)', borderRadius: RADIUS.xl, padding: 24 }}>
           <h2 style={{ fontFamily: 'Fraunces, Georgia, serif', fontSize: '1.2rem', color: '#2c1a0e', margin: '0 0 16px 0' }}>
             Banco de Vocabulário & Pronúncia
           </h2>
@@ -469,22 +470,22 @@ Retorne ESTRITAMENTE um objeto JSON no formato:
               placeholder="Palavra em inglês..."
               value={newBankWord.word}
               onChange={e => setNewBankWord({ ...newBankWord, word: e.target.value })}
-              style={{ flex: 2, background: '#fdf8f2', border: '1px solid #d5c0b0', borderRadius: 8, padding: '8px 12px', fontSize: 13 }}
+              style={{ flex: 2, background: '#fdf8f2', border: '1px solid #d5c0b0', borderRadius: RADIUS.md, padding: '8px 12px', fontSize: 13 }}
             />
             <input 
               placeholder="IPA (opcional)..."
               value={newBankWord.ipa}
               onChange={e => setNewBankWord({ ...newBankWord, ipa: e.target.value })}
-              style={{ flex: 1, background: '#fdf8f2', border: '1px solid #d5c0b0', borderRadius: 8, padding: '8px 12px', fontSize: 13 }}
+              style={{ flex: 1, background: '#fdf8f2', border: '1px solid #d5c0b0', borderRadius: RADIUS.md, padding: '8px 12px', fontSize: 13 }}
             />
-            <button onClick={handleSaveToBank} style={{ background: '#8b5e3c', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 16px', fontWeight: 700, cursor: 'pointer' }}>
+            <button onClick={handleSaveToBank} style={{ background: '#8b5e3c', color: '#fff', border: 'none', borderRadius: RADIUS.md, padding: '8px 16px', fontWeight: 700, cursor: 'pointer' }}>
               Adicionar ao Banco
             </button>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12 }}>
             {wordBank.map(w => (
-              <div key={w.id} style={{ background: '#fdf8f2', border: '1px solid #e8decb', borderRadius: 10, padding: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div key={w.id} style={{ background: '#fdf8f2', border: '1px solid #e8decb', borderRadius: RADIUS.md, padding: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
                   <strong style={{ fontSize: 14, color: '#2c1a0e' }}>{w.word}</strong>
                   <div style={{ fontSize: 12, color: '#8b5e3c', fontFamily: 'monospace' }}>{w.ipa}</div>
@@ -505,7 +506,7 @@ Retorne ESTRITAMENTE um objeto JSON no formato:
 
       {/* Toast */}
       {toast && (
-        <div style={{ position: 'fixed', bottom: 24, right: 24, background: '#2c1a0e', color: '#fdf8f2', padding: '10px 18px', borderRadius: 8, fontSize: 13, zIndex: 9999, boxShadow: '0 4px 14px rgba(0,0,0,0.2)' }}>
+        <div style={{ position: 'fixed', bottom: 24, right: 24, background: '#2c1a0e', color: '#fdf8f2', padding: '10px 18px', borderRadius: RADIUS.md, fontSize: 13, zIndex: 9999, boxShadow: '0 4px 14px rgba(0,0,0,0.2)' }}>
           {toast}
         </div>
       )}

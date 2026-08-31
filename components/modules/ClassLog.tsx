@@ -1,4 +1,5 @@
 'use client'
+import { COLOR, RADIUS, TEXT, SHADOW, FONT } from '@/styles/tokens'
 import { toast, showConfirm } from '@/components/Toast'
 
 import { useState, useEffect, useMemo } from 'react'
@@ -308,7 +309,7 @@ export default function ClassLog() {
             <h1 style={{ textAlign: 'center', fontFamily: "'Fraunces', Georgia, serif", fontSize: 34, fontWeight: 600, color: '#2c1a0e', margin: '0 auto' }}>
               Diário de Aula
             </h1>
-            <span style={{ background: '#2c1a0e', color: '#b58900', fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 12, textTransform: 'uppercase' }}>
+            <span style={{ background: '#2c1a0e', color: '#b58900', fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: RADIUS.lg, textTransform: 'uppercase' }}>
               Diário Online & Calendário de Post-its
             </span>
           </div>
@@ -318,11 +319,11 @@ export default function ClassLog() {
         </div>
 
         {/* Tabs de Navegação */}
-        <div style={{ display: 'flex', gap: 6, background: '#f0e8d8', padding: 4, borderRadius: 12 }}>
+        <div style={{ display: 'flex', gap: 6, background: '#f0e8d8', padding: 4, borderRadius: RADIUS.lg }}>
           <button
             onClick={() => setActiveTab('calendar')}
             style={{
-              padding: '8px 16px', borderRadius: 10, border: 'none',
+              padding: '8px 16px', borderRadius: RADIUS.md, border: 'none',
               background: activeTab === 'calendar' ? '#2c1a0e' : 'transparent',
               color: activeTab === 'calendar' ? '#fff' : '#7a5c42',
               fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6
@@ -334,7 +335,7 @@ export default function ClassLog() {
           <button
             onClick={() => setActiveTab('new')}
             style={{
-              padding: '8px 16px', borderRadius: 10, border: 'none',
+              padding: '8px 16px', borderRadius: RADIUS.md, border: 'none',
               background: activeTab === 'new' ? '#2c1a0e' : 'transparent',
               color: activeTab === 'new' ? '#fff' : '#7a5c42',
               fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6
@@ -346,7 +347,7 @@ export default function ClassLog() {
           <button
             onClick={() => setActiveTab('history')}
             style={{
-              padding: '8px 16px', borderRadius: 10, border: 'none',
+              padding: '8px 16px', borderRadius: RADIUS.md, border: 'none',
               background: activeTab === 'history' ? '#2c1a0e' : 'transparent',
               color: activeTab === 'history' ? '#fff' : '#7a5c42',
               fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6
@@ -358,10 +359,10 @@ export default function ClassLog() {
       </div>
 
       {/* BARRA DE SELEÇÃO CONTEXTUAL (ESCOLA, TURMA, DATA, TRIMESTRE) */}
-      <div style={{ background: '#fff', padding: '14px 20px', borderRadius: 16, border: '1px solid #ede8dc', marginBottom: 20, boxShadow: '0 2px 10px rgba(44,26,14,0.04)', display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 14, alignItems: 'center' }}>
+      <div style={{ background: '#fff', padding: '14px 20px', borderRadius: RADIUS.xl, border: '1px solid #ede8dc', marginBottom: 20, boxShadow: '0 2px 10px rgba(44,26,14,0.04)', display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 14, alignItems: 'center' }}>
         <div>
           <label style={{ fontSize: 12, fontWeight: 700, color: '#7a5c42', display: 'block', marginBottom: 4 }}>🏫 Escola</label>
-          <select value={selectedSchool} onChange={e => setSelectedSchool(e.target.value)} style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, color: '#2c1a0e', outline: 'none' }}>
+          <select value={selectedSchool} onChange={e => setSelectedSchool(e.target.value)} style={{ width: '100%', padding: '8px 12px', borderRadius: RADIUS.md, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, color: '#2c1a0e', outline: 'none' }}>
             <option value="all">Todas as Escolas</option>
             {schools.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
@@ -369,7 +370,7 @@ export default function ClassLog() {
 
         <div>
           <label style={{ fontSize: 12, fontWeight: 700, color: '#7a5c42', display: 'block', marginBottom: 4 }}>👥 Turma</label>
-          <select value={selectedClass} onChange={e => setSelectedClass(e.target.value)} style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, color: '#2c1a0e', outline: 'none' }}>
+          <select value={selectedClass} onChange={e => setSelectedClass(e.target.value)} style={{ width: '100%', padding: '8px 12px', borderRadius: RADIUS.md, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, color: '#2c1a0e', outline: 'none' }}>
             <option value="all">Todas as Turmas</option>
             {classes.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
@@ -377,12 +378,12 @@ export default function ClassLog() {
 
         <div>
           <label style={{ fontSize: 12, fontWeight: 700, color: '#7a5c42', display: 'block', marginBottom: 4 }}>📅 Data da Aula</label>
-          <input type="date" value={date} onChange={e => setDate(e.target.value)} style={{ width: '100%', padding: '7px 8px', borderRadius: 8, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 12, color: '#2c1a0e' }} />
+          <input type="date" value={date} onChange={e => setDate(e.target.value)} style={{ width: '100%', padding: '7px 8px', borderRadius: RADIUS.md, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 12, color: '#2c1a0e' }} />
         </div>
 
         <div>
           <label style={{ fontSize: 12, fontWeight: 700, color: '#7a5c42', display: 'block', marginBottom: 4 }}>🎯 Período / Trimestre</label>
-          <select value={quarter} onChange={e => setQuarter(e.target.value as any)} style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, color: '#2c1a0e', outline: 'none' }}>
+          <select value={quarter} onChange={e => setQuarter(e.target.value as any)} style={{ width: '100%', padding: '8px 12px', borderRadius: RADIUS.md, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, color: '#2c1a0e', outline: 'none' }}>
             <option value="1º Trimestre">1º Trimestre</option>
             <option value="2º Trimestre">2º Trimestre</option>
             <option value="3º Trimestre">3º Trimestre</option>
@@ -391,7 +392,7 @@ export default function ClassLog() {
 
         <div>
           <label style={{ fontSize: 12, fontWeight: 700, color: '#7a5c42', display: 'block', marginBottom: 4 }}>⏳ Semestre</label>
-          <select value={semester} onChange={e => setSemester(e.target.value as any)} style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, color: '#2c1a0e', outline: 'none' }}>
+          <select value={semester} onChange={e => setSemester(e.target.value as any)} style={{ width: '100%', padding: '8px 12px', borderRadius: RADIUS.md, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, color: '#2c1a0e', outline: 'none' }}>
             <option value="1º Semestre">1º Semestre</option>
             <option value="2º Semestre">2º Semestre</option>
           </select>
@@ -402,21 +403,21 @@ export default function ClassLog() {
       {activeTab === 'calendar' && (
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 16, overflowY: 'auto' }}>
           {/* Controls do Mês */}
-          <div style={{ background: '#fff', padding: '14px 20px', borderRadius: 16, border: '1px solid #ede8dc', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ background: '#fff', padding: '14px 20px', borderRadius: RADIUS.xl, border: '1px solid #ede8dc', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <h2 style={{ fontSize: 22, fontWeight: 700, color: '#2c1a0e', margin: 0, fontFamily: "'Fraunces', Georgia, serif" }}>
                 Calendário do Diário {monthNames[calendarMonth]} de {calendarYear}
               </h2>
-              <span style={{ fontSize: 12, background: '#f0e8d8', color: '#7a5c42', padding: '4px 12px', borderRadius: 12, fontWeight: 700 }}>
+              <span style={{ fontSize: 12, background: '#f0e8d8', color: '#7a5c42', padding: '4px 12px', borderRadius: RADIUS.lg, fontWeight: 700 }}>
                 {filteredLogs.filter(l => new Date(l.date + 'T00:00:00').getMonth() === calendarMonth).length} aula(s) este mês
               </span>
             </div>
 
             <div style={{ display: 'flex', gap: 8 }}>
-              <button onClick={prevMonth} style={{ padding: '7px 14px', borderRadius: 8, border: '1px solid #e8e0d0', background: '#f5f0e8', cursor: 'pointer', fontSize: 13, color: '#2c1a0e', fontWeight: 700 }}>
+              <button onClick={prevMonth} style={{ padding: '7px 14px', borderRadius: RADIUS.md, border: '1px solid #e8e0d0', background: '#f5f0e8', cursor: 'pointer', fontSize: 13, color: '#2c1a0e', fontWeight: 700 }}>
                 Mês Anterior
               </button>
-              <button onClick={nextMonth} style={{ padding: '7px 14px', borderRadius: 8, border: '1px solid #e8e0d0', background: '#f5f0e8', cursor: 'pointer', fontSize: 13, color: '#2c1a0e', fontWeight: 700 }}>
+              <button onClick={nextMonth} style={{ padding: '7px 14px', borderRadius: RADIUS.md, border: '1px solid #e8e0d0', background: '#f5f0e8', cursor: 'pointer', fontSize: 13, color: '#2c1a0e', fontWeight: 700 }}>
                 Próximo Mês 
               </button>
             </div>
@@ -427,7 +428,7 @@ export default function ClassLog() {
             {/* Header dos Dias da Semana */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 10, marginBottom: 12, textAlign: 'center' }}>
               {weekDayNames.map((d, i) => (
-                <div key={d} style={{ padding: '8px', background: i === 0 || i === 6 ? '#f5f0e8' : '#2c1a0e', color: i === 0 || i === 6 ? '#7a5c42' : '#fff', fontWeight: 800, borderRadius: 8, fontSize: 12, textTransform: 'uppercase' }}>
+                <div key={d} style={{ padding: '8px', background: i === 0 || i === 6 ? '#f5f0e8' : '#2c1a0e', color: i === 0 || i === 6 ? '#7a5c42' : '#fff', fontWeight: 800, borderRadius: RADIUS.md, fontSize: 12, textTransform: 'uppercase' }}>
                   {d}
                 </div>
               ))}
@@ -437,7 +438,7 @@ export default function ClassLog() {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 10 }}>
               {calendarDaysGrid.map((cell, idx) => {
                 if (!cell.dayNumber) {
-                  return <div key={`empty_${idx}`} style={{ minHeight: 130, background: '#faf8f5', borderRadius: 12, border: '1px dashed #f0e8d8' }} />
+                  return <div key={`empty_${idx}`} style={{ minHeight: 130, background: '#faf8f5', borderRadius: RADIUS.lg, border: '1px dashed #f0e8d8' }} />
                 }
 
                 const hasLogs = cell.logsForDay.length > 0
@@ -448,7 +449,7 @@ export default function ClassLog() {
                     style={{
                       minHeight: 140,
                       background: hasLogs ? '#fdfcf7' : '#fff',
-                      borderRadius: 12,
+                      borderRadius: RADIUS.lg,
                       border: '1px solid #ede8dc',
                       padding: 8,
                       display: 'flex',
@@ -475,7 +476,7 @@ export default function ClassLog() {
                           style={{
                             background: palette.bg,
                             border: `1px solid ${palette.border}`,
-                            borderRadius: 10,
+                            borderRadius: RADIUS.md,
                             padding: 10,
                             cursor: 'pointer',
                             transform: `rotate(${rot}deg)`,
@@ -512,15 +513,15 @@ export default function ClassLog() {
         <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 24, paddingRight: 4 }}>
           {/* Box de Memória */}
           {aiMemoryTip && (
-            <div style={{ background: '#fdf8f2', border: '2px solid #b58900', borderRadius: 16, padding: 18, boxShadow: '0 4px 14px rgba(181,137,0,0.12)', display: 'flex', alignItems: 'flex-start', gap: 14 }}>
-              <div style={{ width: 38, height: 38, borderRadius: 10, background: '#b58900', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>
+            <div style={{ background: '#fdf8f2', border: '2px solid #b58900', borderRadius: RADIUS.xl, padding: 18, boxShadow: '0 4px 14px rgba(181,137,0,0.12)', display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+              <div style={{ width: 38, height: 38, borderRadius: RADIUS.md, background: '#b58900', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>
                 🧠
               </div>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 13, fontWeight: 700, color: '#b58900', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                   Memória Pedagógica Contínua (Dica da Rafinha para a Turma {selectedClass}):
                 </div>
-                <p style={{ fontSize: 13.5, color: '#2c1a0e', margin: '4px 0 0 0', lineHeight: 1.5, fontWeight: 500 }}>
+                <p style={{ fontSize: TEXT.body, color: '#2c1a0e', margin: '4px 0 0 0', lineHeight: 1.5, fontWeight: 500 }}>
                   {aiMemoryTip}
                 </p>
               </div>
@@ -535,7 +536,7 @@ export default function ClassLog() {
 
             {/* Status da Aula */}
             <div style={{ marginBottom: 14 }}>
-              <label style={{ fontSize: 12.5, fontWeight: 700, color: '#7a5c42', display: 'block', marginBottom: 6 }}>
+              <label style={{ fontSize: TEXT.bodyCompact, fontWeight: 700, color: '#7a5c42', display: 'block', marginBottom: 6 }}>
                 Status da Aula
               </label>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -546,7 +547,7 @@ export default function ClassLog() {
                     onClick={() => setClassStatus(st)}
                     style={{
                       padding: '6px 14px',
-                      borderRadius: 8,
+                      borderRadius: RADIUS.md,
                       border: classStatus === st ? '2px solid #2c1a0e' : '1px solid #d5c0b0',
                       background: classStatus === st ? (st === 'Cancelada' ? '#fee2e2' : '#f5eee6') : '#fff',
                       color: classStatus === st ? (st === 'Cancelada' ? '#991b1b' : '#2c1a0e') : '#7a5c42',
@@ -563,20 +564,20 @@ export default function ClassLog() {
 
             <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 16, marginBottom: 14 }}>
               <div>
-                <label style={{ fontSize: 12.5, fontWeight: 700, color: '#7a5c42', display: 'block', marginBottom: 6 }}>
+                <label style={{ fontSize: TEXT.bodyCompact, fontWeight: 700, color: '#7a5c42', display: 'block', marginBottom: 6 }}>
                   Tema / Tópico Principal da Aula {classStatus === 'Cancelada' ? '(Opcional — Cancelada)' : '(Opcional)'}
                 </label>
                 <input
                   value={topic}
                   onChange={e => setTopic(e.target.value)}
                   placeholder={classStatus === 'Cancelada' ? 'Motivo do cancelamento (opcional)...' : 'Ex: Past Continuous & Interrupted Actions in Past'}
-                  style={{ width: '100%', padding: '10px 14px', borderRadius: 10, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13.5, color: '#2c1a0e', outline: 'none', boxSizing: 'border-box' }}
+                  style={{ width: '100%', padding: '10px 14px', borderRadius: RADIUS.md, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: TEXT.body, color: '#2c1a0e', outline: 'none', boxSizing: 'border-box' }}
                 />
               </div>
 
               <div>
-                <label style={{ fontSize: 12.5, fontWeight: 700, color: '#7a5c42', display: 'block', marginBottom: 6 }}>Habilidade Foco (ELT/BNCC)</label>
-                <select value={focusSkill} onChange={e => setFocusSkill(e.target.value)} style={{ width: '100%', padding: '10px 14px', borderRadius: 10, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13.5, color: '#2c1a0e', outline: 'none', boxSizing: 'border-box' }}>
+                <label style={{ fontSize: TEXT.bodyCompact, fontWeight: 700, color: '#7a5c42', display: 'block', marginBottom: 6 }}>Habilidade Foco (ELT/BNCC)</label>
+                <select value={focusSkill} onChange={e => setFocusSkill(e.target.value)} style={{ width: '100%', padding: '10px 14px', borderRadius: RADIUS.md, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: TEXT.body, color: '#2c1a0e', outline: 'none', boxSizing: 'border-box' }}>
                   <option>Speaking & Listening</option>
                   <option>Reading & Vocabulary</option>
                   <option>Grammar & Writing</option>
@@ -587,8 +588,8 @@ export default function ClassLog() {
             </div>
 
             <div>
-              <label style={{ fontSize: 12.5, fontWeight: 700, color: '#7a5c42', display: 'block', marginBottom: 6 }}>Recursos & Materiais Utilizados</label>
-              <input value={resources} onChange={e => setResources(e.target.value)} placeholder="Ex: Projetor, Livro Digital pág. 48, Caixas de Som, Flashcards..." style={{ width: '100%', padding: '10px 14px', borderRadius: 10, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13.5, color: '#2c1a0e', outline: 'none', boxSizing: 'border-box' }} />
+              <label style={{ fontSize: TEXT.bodyCompact, fontWeight: 700, color: '#7a5c42', display: 'block', marginBottom: 6 }}>Recursos & Materiais Utilizados</label>
+              <input value={resources} onChange={e => setResources(e.target.value)} placeholder="Ex: Projetor, Livro Digital pág. 48, Caixas de Som, Flashcards..." style={{ width: '100%', padding: '10px 14px', borderRadius: RADIUS.md, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: TEXT.body, color: '#2c1a0e', outline: 'none', boxSizing: 'border-box' }} />
             </div>
           </div>
 
@@ -601,22 +602,22 @@ export default function ClassLog() {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
               <div>
                 <label style={{ fontSize: 12, fontWeight: 700, color: '#cb4b16', display: 'block', marginBottom: 4 }}>1. Warm-up / Engajamento (5-10 min)</label>
-                <textarea value={warmup} onChange={e => setWarmup(e.target.value)} placeholder="Dinâmica inicial, contexto ou revisão rápida..." rows={3} style={{ width: '100%', padding: '10px', borderRadius: 8, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, color: '#2c1a0e', resize: 'vertical', boxSizing: 'border-box' }} />
+                <textarea value={warmup} onChange={e => setWarmup(e.target.value)} placeholder="Dinâmica inicial, contexto ou revisão rápida..." rows={3} style={{ width: '100%', padding: '10px', borderRadius: RADIUS.md, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, color: '#2c1a0e', resize: 'vertical', boxSizing: 'border-box' }} />
               </div>
 
               <div>
                 <label style={{ fontSize: 12, fontWeight: 700, color: '#268bd2', display: 'block', marginBottom: 4 }}>2. Apresentação / Input (15-20 min)</label>
-                <textarea value={presentation} onChange={e => setPresentation(e.target.value)} placeholder="Apresentação do conteúdo, explicação ou leitura de texto..." rows={3} style={{ width: '100%', padding: '10px', borderRadius: 8, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, color: '#2c1a0e', resize: 'vertical', boxSizing: 'border-box' }} />
+                <textarea value={presentation} onChange={e => setPresentation(e.target.value)} placeholder="Apresentação do conteúdo, explicação ou leitura de texto..." rows={3} style={{ width: '100%', padding: '10px', borderRadius: RADIUS.md, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, color: '#2c1a0e', resize: 'vertical', boxSizing: 'border-box' }} />
               </div>
 
               <div>
                 <label style={{ fontSize: 12, fontWeight: 700, color: '#6c71c4', display: 'block', marginBottom: 4 }}>3. Prática Guiada & Autônoma (20 min)</label>
-                <textarea value={practice} onChange={e => setPractice(e.target.value)} placeholder="Exercícios em duplas/grupos, resolução de lista ou debate..." rows={3} style={{ width: '100%', padding: '10px', borderRadius: 8, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, color: '#2c1a0e', resize: 'vertical', boxSizing: 'border-box' }} />
+                <textarea value={practice} onChange={e => setPractice(e.target.value)} placeholder="Exercícios em duplas/grupos, resolução de lista ou debate..." rows={3} style={{ width: '100%', padding: '10px', borderRadius: RADIUS.md, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, color: '#2c1a0e', resize: 'vertical', boxSizing: 'border-box' }} />
               </div>
 
               <div>
                 <label style={{ fontSize: 12, fontWeight: 700, color: '#859900', display: 'block', marginBottom: 4 }}>4. Wrap-up / Checagem (5-10 min)</label>
-                <textarea value={wrapup} onChange={e => setWrapup(e.target.value)} placeholder="CCQs, encerramento e indicação de dever de casa..." rows={3} style={{ width: '100%', padding: '10px', borderRadius: 8, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, color: '#2c1a0e', resize: 'vertical', boxSizing: 'border-box' }} />
+                <textarea value={wrapup} onChange={e => setWrapup(e.target.value)} placeholder="CCQs, encerramento e indicação de dever de casa..." rows={3} style={{ width: '100%', padding: '10px', borderRadius: RADIUS.md, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, color: '#2c1a0e', resize: 'vertical', boxSizing: 'border-box' }} />
               </div>
             </div>
           </div>
@@ -629,23 +630,23 @@ export default function ClassLog() {
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
               <div>
-                <label style={{ fontSize: 12.5, fontWeight: 700, color: '#2d9d5d', display: 'block', marginBottom: 4 }}>1. O que deu certo / pode ser feito?</label>
-                <textarea value={whatWorked} onChange={e => setWhatWorked(e.target.value)} placeholder="Pontos fortes da aula, engajamento e conquistas dos alunos..." rows={3} style={{ width: '100%', padding: '10px', borderRadius: 8, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, color: '#2c1a0e', resize: 'vertical', boxSizing: 'border-box' }} />
+                <label style={{ fontSize: TEXT.bodyCompact, fontWeight: 700, color: '#2d9d5d', display: 'block', marginBottom: 4 }}>1. O que deu certo / pode ser feito?</label>
+                <textarea value={whatWorked} onChange={e => setWhatWorked(e.target.value)} placeholder="Pontos fortes da aula, engajamento e conquistas dos alunos..." rows={3} style={{ width: '100%', padding: '10px', borderRadius: RADIUS.md, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, color: '#2c1a0e', resize: 'vertical', boxSizing: 'border-box' }} />
               </div>
 
               <div>
-                <label style={{ fontSize: 12.5, fontWeight: 700, color: '#b58900', display: 'block', marginBottom: 4 }}>2. O que pode melhorar?</label>
-                <textarea value={whatCanImprove} onChange={e => setWhatCanImprove(e.target.value)} placeholder="Aspectos de ritmo, clareza nas instruções ou gestão do tempo..." rows={3} style={{ width: '100%', padding: '10px', borderRadius: 8, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, color: '#2c1a0e', resize: 'vertical', boxSizing: 'border-box' }} />
+                <label style={{ fontSize: TEXT.bodyCompact, fontWeight: 700, color: '#b58900', display: 'block', marginBottom: 4 }}>2. O que pode melhorar?</label>
+                <textarea value={whatCanImprove} onChange={e => setWhatCanImprove(e.target.value)} placeholder="Aspectos de ritmo, clareza nas instruções ou gestão do tempo..." rows={3} style={{ width: '100%', padding: '10px', borderRadius: RADIUS.md, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, color: '#2c1a0e', resize: 'vertical', boxSizing: 'border-box' }} />
               </div>
 
               <div>
-                <label style={{ fontSize: 12.5, fontWeight: 700, color: '#dc322f', display: 'block', marginBottom: 4 }}>3. O que faltou nesta aula?</label>
-                <textarea value={whatWasMissing} onChange={e => setWhatWasMissing(e.target.value)} placeholder="Conteúdos não concluídos ou exercícios não corrigidos..." rows={3} style={{ width: '100%', padding: '10px', borderRadius: 8, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, color: '#2c1a0e', resize: 'vertical', boxSizing: 'border-box' }} />
+                <label style={{ fontSize: TEXT.bodyCompact, fontWeight: 700, color: '#dc322f', display: 'block', marginBottom: 4 }}>3. O que faltou nesta aula?</label>
+                <textarea value={whatWasMissing} onChange={e => setWhatWasMissing(e.target.value)} placeholder="Conteúdos não concluídos ou exercícios não corrigidos..." rows={3} style={{ width: '100%', padding: '10px', borderRadius: RADIUS.md, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, color: '#2c1a0e', resize: 'vertical', boxSizing: 'border-box' }} />
               </div>
 
               <div>
-                <label style={{ fontSize: 12.5, fontWeight: 700, color: '#268bd2', display: 'block', marginBottom: 4 }}>4. O que precisa ser revisado para a próxima aula?</label>
-                <textarea value={needsReviewNextClass} onChange={e => setNeedsReviewNextClass(e.target.value)} placeholder="Tópicos que exigem retomada no início da próxima aula..." rows={3} style={{ width: '100%', padding: '10px', borderRadius: 8, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, color: '#2c1a0e', resize: 'vertical', boxSizing: 'border-box' }} />
+                <label style={{ fontSize: TEXT.bodyCompact, fontWeight: 700, color: '#268bd2', display: 'block', marginBottom: 4 }}>4. O que precisa ser revisado para a próxima aula?</label>
+                <textarea value={needsReviewNextClass} onChange={e => setNeedsReviewNextClass(e.target.value)} placeholder="Tópicos que exigem retomada no início da próxima aula..." rows={3} style={{ width: '100%', padding: '10px', borderRadius: RADIUS.md, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, color: '#2c1a0e', resize: 'vertical', boxSizing: 'border-box' }} />
               </div>
             </div>
           </div>
@@ -659,17 +660,17 @@ export default function ClassLog() {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
               <div>
                 <label style={{ fontSize: 12, fontWeight: 700, color: '#7a5c42', display: 'block', marginBottom: 4 }}>👥 Dinâmica de Grupos & Comportamento</label>
-                <textarea value={groupObservations} onChange={e => setGroupObservations(e.target.value)} placeholder="Observações sobre entrosamento, grupos dispersos ou engajados..." rows={4} style={{ width: '100%', padding: '10px', borderRadius: 8, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, color: '#2c1a0e', resize: 'vertical', boxSizing: 'border-box' }} />
+                <textarea value={groupObservations} onChange={e => setGroupObservations(e.target.value)} placeholder="Observações sobre entrosamento, grupos dispersos ou engajados..." rows={4} style={{ width: '100%', padding: '10px', borderRadius: RADIUS.md, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, color: '#2c1a0e', resize: 'vertical', boxSizing: 'border-box' }} />
               </div>
 
               <div>
                 <label style={{ fontSize: 12, fontWeight: 700, color: '#7a5c42', display: 'block', marginBottom: 4 }}>🏛️ Espaço Usado & Arranjo Físico</label>
-                <textarea value={spaceUsed} onChange={e => setSpaceUsed(e.target.value)} placeholder="Sala, laboratório, pátio, arranjo em U, duplas, etc..." rows={4} style={{ width: '100%', padding: '10px', borderRadius: 8, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, color: '#2c1a0e', resize: 'vertical', boxSizing: 'border-box' }} />
+                <textarea value={spaceUsed} onChange={e => setSpaceUsed(e.target.value)} placeholder="Sala, laboratório, pátio, arranjo em U, duplas, etc..." rows={4} style={{ width: '100%', padding: '10px', borderRadius: RADIUS.md, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, color: '#2c1a0e', resize: 'vertical', boxSizing: 'border-box' }} />
               </div>
 
               <div>
                 <label style={{ fontSize: 12, fontWeight: 700, color: '#7a5c42', display: 'block', marginBottom: 4 }}>⭐ Alunos em Destaque / Necessidades</label>
-                <textarea value={studentNotes} onChange={e => setStudentNotes(e.target.value)} placeholder="Alunos que se destacaram ou precisam de apoio pedagógico..." rows={4} style={{ width: '100%', padding: '10px', borderRadius: 8, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, color: '#2c1a0e', resize: 'vertical', boxSizing: 'border-box' }} />
+                <textarea value={studentNotes} onChange={e => setStudentNotes(e.target.value)} placeholder="Alunos que se destacaram ou precisam de apoio pedagógico..." rows={4} style={{ width: '100%', padding: '10px', borderRadius: RADIUS.md, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, color: '#2c1a0e', resize: 'vertical', boxSizing: 'border-box' }} />
               </div>
             </div>
           </div>
@@ -684,7 +685,7 @@ export default function ClassLog() {
             <button
               onClick={handleSaveClassLog}
               style={{
-                padding: '14px 32px', borderRadius: 12, border: 'none',
+                padding: '14px 32px', borderRadius: RADIUS.lg, border: 'none',
                 background: '#2c1a0e', color: '#fff', fontSize: 15, fontWeight: 700,
                 cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
                 boxShadow: '0 4px 16px rgba(7,54,66,0.2)',
@@ -704,7 +705,7 @@ export default function ClassLog() {
               key={item.id}
               onClick={() => setSelectedLogModal(item)}
               style={{
-                background: '#fff', borderRadius: 16, padding: 22, cursor: 'pointer',
+                background: '#fff', borderRadius: RADIUS.xl, padding: 22, cursor: 'pointer',
                 border: '1px solid #ede8dc', boxShadow: '0 2px 10px rgba(44,26,14,0.04)',
                 display: 'flex', flexDirection: 'column', gap: 12,
               }}
@@ -723,7 +724,7 @@ export default function ClassLog() {
                     {item.topic}
                   </h3>
                 </div>
-                <span style={{ fontSize: 12, fontWeight: 600, color: '#268bd2', background: 'rgba(38,139,210,0.1)', padding: '4px 10px', borderRadius: 8 }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: '#268bd2', background: 'rgba(38,139,210,0.1)', padding: '4px 10px', borderRadius: RADIUS.md }}>
                   {item.focusSkill}
                 </span>
               </div>
@@ -766,7 +767,7 @@ export default function ClassLog() {
 
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-                <span style={{ fontSize: 12, fontWeight: 800, background: '#5c5400', color: '#fff9b1', padding: '3px 10px', borderRadius: 8 }}>
+                <span style={{ fontSize: 12, fontWeight: 800, background: '#5c5400', color: '#fff9b1', padding: '3px 10px', borderRadius: RADIUS.md }}>
                   REGISTRO COMPLETO DA AULA
                 </span>
                 <span style={{ fontSize: 13, fontWeight: 700 }}>
@@ -785,7 +786,7 @@ export default function ClassLog() {
 
             <hr style={{ border: 'none', borderTop: '2px dashed #e6df7b', margin: 0 }} />
 
-            <div style={{ background: 'rgba(255,255,255,0.6)', padding: 18, borderRadius: 16 }}>
+            <div style={{ background: 'rgba(255,255,255,0.6)', padding: 18, borderRadius: RADIUS.xl }}>
               <h4 style={{ fontSize: 14, fontWeight: 800, margin: '0 0 10px 0', textTransform: 'uppercase' }}>
                 Sequência Didática Aplicada
               </h4>
@@ -797,7 +798,7 @@ export default function ClassLog() {
               </div>
             </div>
 
-            <div style={{ background: 'rgba(255,255,255,0.6)', padding: 18, borderRadius: 16 }}>
+            <div style={{ background: 'rgba(255,255,255,0.6)', padding: 18, borderRadius: RADIUS.xl }}>
               <h4 style={{ fontSize: 14, fontWeight: 800, margin: '0 0 10px 0', textTransform: 'uppercase' }}>
                 Auto-Avaliação & Reflexão Pós-Aula
               </h4>
@@ -810,7 +811,7 @@ export default function ClassLog() {
             </div>
 
             {(selectedLogModal.groupObservations || selectedLogModal.studentNotes) && (
-              <div style={{ background: 'rgba(255,255,255,0.6)', padding: 18, borderRadius: 16, fontSize: 13 }}>
+              <div style={{ background: 'rgba(255,255,255,0.6)', padding: 18, borderRadius: RADIUS.xl, fontSize: 13 }}>
                 <h4 style={{ fontSize: 14, fontWeight: 800, margin: '0 0 8px 0', textTransform: 'uppercase' }}>
                   Comportamento, Grupos & Alunos
                 </h4>
@@ -866,13 +867,13 @@ export default function ClassLog() {
                   setSelectedLogModal(null)
                   setActiveTask(createdTask)
                 }}
-                style={{ padding: '10px 20px', borderRadius: 10, border: 'none', background: '#16a34a', color: '#fff', fontSize: 13, fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+                style={{ padding: '10px 20px', borderRadius: RADIUS.md, border: 'none', background: '#16a34a', color: '#fff', fontSize: 13, fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
               >
                 ⚡ Espelhar Diário no Portal Oficial
               </button>
               <button
                 onClick={() => window.print()}
-                style={{ padding: '10px 20px', borderRadius: 10, border: 'none', background: '#5c5400', color: '#fff9b1', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+                style={{ padding: '10px 20px', borderRadius: RADIUS.md, border: 'none', background: '#5c5400', color: '#fff9b1', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
               >
                 <i className="ti ti-printer" /> Imprimir Registro
               </button>

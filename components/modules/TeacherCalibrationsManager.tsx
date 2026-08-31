@@ -1,4 +1,5 @@
 'use client'
+import { COLOR, RADIUS, TEXT, SHADOW, FONT } from '@/styles/tokens'
 import { toast, showConfirm } from '@/components/Toast'
 
 import React, { useState, useEffect } from 'react'
@@ -40,7 +41,7 @@ export default function TeacherCalibrationsManager() {
   ]
 
   return (
-    <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #d5c8bb', padding: 24 }}>
+    <div style={{ background: '#fff', borderRadius: RADIUS.lg, border: '1px solid #d5c8bb', padding: 24 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
         <div>
           <h2 style={{ fontSize: 18, fontWeight: 700, color: '#2c1a0e', margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -60,7 +61,7 @@ export default function TeacherCalibrationsManager() {
           }}
           style={{
             padding: '6px 12px',
-            borderRadius: 8,
+            borderRadius: RADIUS.md,
             border: '1px solid #e7dcd1',
             background: '#faf6f0',
             color: '#786555',
@@ -80,7 +81,7 @@ export default function TeacherCalibrationsManager() {
             onClick={() => setActiveSubTab(tab.id as any)}
             style={{
               padding: '8px 14px',
-              borderRadius: 8,
+              borderRadius: RADIUS.md,
               border: activeSubTab === tab.id ? '1px solid #854d0e' : '1px solid transparent',
               background: activeSubTab === tab.id ? '#fef9c3' : 'transparent',
               color: activeSubTab === tab.id ? '#854d0e' : '#5c4838',
@@ -108,7 +109,7 @@ export default function TeacherCalibrationsManager() {
             <select
               value={calibrations.exam.defaultLevel}
               onChange={e => handleSave({ exam: { ...calibrations.exam, defaultLevel: e.target.value } })}
-              style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #d5c8bb', background: '#faf6f0', fontSize: 13 }}
+              style={{ width: '100%', padding: '10px 12px', borderRadius: RADIUS.md, border: '1px solid #d5c8bb', background: '#faf6f0', fontSize: 13 }}
             >
               <option value="A1">A1 — Iniciante</option>
               <option value="A2">A2 — Básico</option>
@@ -126,7 +127,7 @@ export default function TeacherCalibrationsManager() {
             <select
               value={calibrations.exam.defaultQuestionCount}
               onChange={e => handleSave({ exam: { ...calibrations.exam, defaultQuestionCount: e.target.value } })}
-              style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #d5c8bb', background: '#faf6f0', fontSize: 13 }}
+              style={{ width: '100%', padding: '10px 12px', borderRadius: RADIUS.md, border: '1px solid #d5c8bb', background: '#faf6f0', fontSize: 13 }}
             >
               <option value="5">5 Questões (Avaliação Curta)</option>
               <option value="10">10 Questões (Padrão Oficial)</option>
@@ -142,7 +143,7 @@ export default function TeacherCalibrationsManager() {
             <select
               value={calibrations.exam.defaultQuestionType}
               onChange={e => handleSave({ exam: { ...calibrations.exam, defaultQuestionType: e.target.value as any } })}
-              style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #d5c8bb', background: '#faf6f0', fontSize: 13 }}
+              style={{ width: '100%', padding: '10px 12px', borderRadius: RADIUS.md, border: '1px solid #d5c8bb', background: '#faf6f0', fontSize: 13 }}
             >
               <option value="multiple_choice">Apenas Múltipla Escolha (A, B, C, D)</option>
               <option value="open">Apenas Dissertativas / Abertas</option>
@@ -157,7 +158,7 @@ export default function TeacherCalibrationsManager() {
             <select
               value={calibrations.exam.defaultStemLanguage}
               onChange={e => handleSave({ exam: { ...calibrations.exam, defaultStemLanguage: e.target.value as any } })}
-              style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #d5c8bb', background: '#faf6f0', fontSize: 13 }}
+              style={{ width: '100%', padding: '10px 12px', borderRadius: RADIUS.md, border: '1px solid #d5c8bb', background: '#faf6f0', fontSize: 13 }}
             >
               <option value="pt">Português (Enunciados em PT e conteúdo em EN)</option>
               <option value="en">Inglês Total (100% Imersivo)</option>
@@ -172,7 +173,7 @@ export default function TeacherCalibrationsManager() {
               type="number"
               value={calibrations.exam.defaultTotalScore}
               onChange={e => handleSave({ exam: { ...calibrations.exam, defaultTotalScore: Number(e.target.value) } })}
-              style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #d5c8bb', background: '#faf6f0', fontSize: 13 }}
+              style={{ width: '100%', padding: '10px 12px', borderRadius: RADIUS.md, border: '1px solid #d5c8bb', background: '#faf6f0', fontSize: 13 }}
             />
           </div>
 
@@ -184,7 +185,7 @@ export default function TeacherCalibrationsManager() {
               type="number"
               value={calibrations.exam.defaultDurationMinutes}
               onChange={e => handleSave({ exam: { ...calibrations.exam, defaultDurationMinutes: Number(e.target.value) } })}
-              style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #d5c8bb', background: '#faf6f0', fontSize: 13 }}
+              style={{ width: '100%', padding: '10px 12px', borderRadius: RADIUS.md, border: '1px solid #d5c8bb', background: '#faf6f0', fontSize: 13 }}
             />
           </div>
         </div>
@@ -200,7 +201,7 @@ export default function TeacherCalibrationsManager() {
             <select
               value={calibrations.grading.defaultRubricPreset}
               onChange={e => handleSave({ grading: { ...calibrations.grading, defaultRubricPreset: e.target.value as any } })}
-              style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #d5c8bb', background: '#faf6f0', fontSize: 13 }}
+              style={{ width: '100%', padding: '10px 12px', borderRadius: RADIUS.md, border: '1px solid #d5c8bb', background: '#faf6f0', fontSize: 13 }}
             >
               <option value="cambridge_4d">Cambridge 4D (Content, Communicative Achievement, Organisation, Language)</option>
               <option value="enem">ENEM (5 Competências Oficiais)</option>
@@ -216,7 +217,7 @@ export default function TeacherCalibrationsManager() {
             <select
               value={calibrations.grading.gradingRigor}
               onChange={e => handleSave({ grading: { ...calibrations.grading, gradingRigor: Number(e.target.value) as any } })}
-              style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #d5c8bb', background: '#faf6f0', fontSize: 13 }}
+              style={{ width: '100%', padding: '10px 12px', borderRadius: RADIUS.md, border: '1px solid #d5c8bb', background: '#faf6f0', fontSize: 13 }}
             >
               <option value={1}>1 — Altamente Tolerante (Iniciantes / Foco em Fluência)</option>
               <option value={2}>2 — Tolerante com Erros Leves</option>
@@ -262,7 +263,7 @@ export default function TeacherCalibrationsManager() {
               step="0.5"
               value={calibrations.gradebook.passingScore}
               onChange={e => handleSave({ gradebook: { ...calibrations.gradebook, passingScore: Number(e.target.value) } })}
-              style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #d5c8bb', background: '#faf6f0', fontSize: 13 }}
+              style={{ width: '100%', padding: '10px 12px', borderRadius: RADIUS.md, border: '1px solid #d5c8bb', background: '#faf6f0', fontSize: 13 }}
             />
           </div>
 
@@ -273,7 +274,7 @@ export default function TeacherCalibrationsManager() {
             <select
               value={calibrations.gradebook.calculationMethod}
               onChange={e => handleSave({ gradebook: { ...calibrations.gradebook, calculationMethod: e.target.value as any } })}
-              style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #d5c8bb', background: '#faf6f0', fontSize: 13 }}
+              style={{ width: '100%', padding: '10px 12px', borderRadius: RADIUS.md, border: '1px solid #d5c8bb', background: '#faf6f0', fontSize: 13 }}
             >
               <option value="arithmetic">Média Aritmética Simples</option>
               <option value="weighted">Média Ponderada por Pesos</option>
@@ -288,7 +289,7 @@ export default function TeacherCalibrationsManager() {
             <select
               value={calibrations.gradebook.defaultPortalSync}
               onChange={e => handleSave({ gradebook: { ...calibrations.gradebook, defaultPortalSync: e.target.value as any } })}
-              style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #d5c8bb', background: '#faf6f0', fontSize: 13 }}
+              style={{ width: '100%', padding: '10px 12px', borderRadius: RADIUS.md, border: '1px solid #d5c8bb', background: '#faf6f0', fontSize: 13 }}
             >
               <option value="machado">Portal Machado Sobrinho</option>
               <option value="plural">Plurall (SOMOS Educação)</option>
@@ -310,7 +311,7 @@ export default function TeacherCalibrationsManager() {
               type="text"
               value={calibrations.attendance.defaultTimeSlot}
               onChange={e => handleSave({ attendance: { ...calibrations.attendance, defaultTimeSlot: e.target.value } })}
-              style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #d5c8bb', background: '#faf6f0', fontSize: 13 }}
+              style={{ width: '100%', padding: '10px 12px', borderRadius: RADIUS.md, border: '1px solid #d5c8bb', background: '#faf6f0', fontSize: 13 }}
             />
           </div>
 
@@ -322,7 +323,7 @@ export default function TeacherCalibrationsManager() {
               type="number"
               value={calibrations.attendance.consecutiveAbsenceAlertThreshold}
               onChange={e => handleSave({ attendance: { ...calibrations.attendance, consecutiveAbsenceAlertThreshold: Number(e.target.value) } })}
-              style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #d5c8bb', background: '#faf6f0', fontSize: 13 }}
+              style={{ width: '100%', padding: '10px 12px', borderRadius: RADIUS.md, border: '1px solid #d5c8bb', background: '#faf6f0', fontSize: 13 }}
             />
             <span style={{ fontSize: 11, color: '#786555' }}>Gera aviso automático na memória se o aluno faltar N aulas seguidas.</span>
           </div>
@@ -334,7 +335,7 @@ export default function TeacherCalibrationsManager() {
             <select
               value={calibrations.attendance.defaultPortalMirror}
               onChange={e => handleSave({ attendance: { ...calibrations.attendance, defaultPortalMirror: e.target.value as any } })}
-              style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #d5c8bb', background: '#faf6f0', fontSize: 13 }}
+              style={{ width: '100%', padding: '10px 12px', borderRadius: RADIUS.md, border: '1px solid #d5c8bb', background: '#faf6f0', fontSize: 13 }}
             >
               <option value="machado">Portal Machado Sobrinho</option>
               <option value="plural">Plurall (SOMOS Educação)</option>
@@ -354,7 +355,7 @@ export default function TeacherCalibrationsManager() {
             <select
               value={calibrations.planner.defaultMethodology}
               onChange={e => handleSave({ planner: { ...calibrations.planner, defaultMethodology: e.target.value as any } })}
-              style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #d5c8bb', background: '#faf6f0', fontSize: 13 }}
+              style={{ width: '100%', padding: '10px 12px', borderRadius: RADIUS.md, border: '1px solid #d5c8bb', background: '#faf6f0', fontSize: 13 }}
             >
               <option value="TBL">TBL / TBLT (Task-Based Language Teaching)</option>
               <option value="Flipped Classroom">Sala de Aula Invertida (Flipped Classroom)</option>
@@ -373,7 +374,7 @@ export default function TeacherCalibrationsManager() {
               type="number"
               value={calibrations.planner.defaultDurationMinutes}
               onChange={e => handleSave({ planner: { ...calibrations.planner, defaultDurationMinutes: Number(e.target.value) } })}
-              style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #d5c8bb', background: '#faf6f0', fontSize: 13 }}
+              style={{ width: '100%', padding: '10px 12px', borderRadius: RADIUS.md, border: '1px solid #d5c8bb', background: '#faf6f0', fontSize: 13 }}
             />
           </div>
 
@@ -401,7 +402,7 @@ export default function TeacherCalibrationsManager() {
             <select
               value={calibrations.communication.preferredChannel}
               onChange={e => handleSave({ communication: { ...calibrations.communication, preferredChannel: e.target.value as any } })}
-              style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #d5c8bb', background: '#faf6f0', fontSize: 13 }}
+              style={{ width: '100%', padding: '10px 12px', borderRadius: RADIUS.md, border: '1px solid #d5c8bb', background: '#faf6f0', fontSize: 13 }}
             >
               <option value="whatsapp">WhatsApp (Mensagens diretas e grupos)</option>
               <option value="email">E-mail Formal</option>
@@ -418,7 +419,7 @@ export default function TeacherCalibrationsManager() {
               value={calibrations.communication.teacherSignature}
               onChange={e => handleSave({ communication: { ...calibrations.communication, teacherSignature: e.target.value } })}
               placeholder="Ex: Prof. Rafael — Língua Inglesa"
-              style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #d5c8bb', background: '#faf6f0', fontSize: 13 }}
+              style={{ width: '100%', padding: '10px 12px', borderRadius: RADIUS.md, border: '1px solid #d5c8bb', background: '#faf6f0', fontSize: 13 }}
             />
           </div>
         </div>
@@ -434,7 +435,7 @@ export default function TeacherCalibrationsManager() {
             <select
               value={calibrations.agent.preferredProvider}
               onChange={e => handleSave({ agent: { ...calibrations.agent, preferredProvider: e.target.value as any } })}
-              style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #d5c8bb', background: '#faf6f0', fontSize: 13 }}
+              style={{ width: '100%', padding: '10px 12px', borderRadius: RADIUS.md, border: '1px solid #d5c8bb', background: '#faf6f0', fontSize: 13 }}
             >
               <option value="auto">Seleção Automática Inteligente (Groq / DeepSeek / Gemini)</option>
               <option value="groq">Groq (Ultra-rápido Llama 3.3)</option>
@@ -468,7 +469,7 @@ export default function TeacherCalibrationsManager() {
           padding: '10px 16px',
           background: '#dcfce7',
           color: '#166534',
-          borderRadius: 8,
+          borderRadius: RADIUS.md,
           fontSize: 13,
           fontWeight: 700,
           display: 'flex',

@@ -1,4 +1,5 @@
 'use client'
+import { COLOR, RADIUS, TEXT, SHADOW, FONT } from '@/styles/tokens'
 
 import React from 'react'
 
@@ -85,20 +86,20 @@ export default function QuestionCountByTypeList({ counts, onChange }: QuestionCo
   }
 
   return (
-    <div style={{ background: '#fdf8f2', padding: 14, borderRadius: 14, border: '1px solid rgba(139,115,85,0.2)' }}>
+    <div style={{ background: '#fdf8f2', padding: 14, borderRadius: RADIUS.lg, border: '1px solid rgba(139,115,85,0.2)' }}>
       {/* Header com Total e Atalhos */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
         <div>
           <label style={{ fontSize: 13, fontWeight: 800, color: '#2c1a0e', margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
             🔢 Numerador de Questões por Tipo:
           </label>
-          <span style={{ fontSize: 11.5, color: '#8b5e3c' }}>
+          <span style={{ fontSize: TEXT.caption, color: '#8b5e3c' }}>
             Defina a quantidade exata de cada formato de exercício
           </span>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ fontSize: 13, fontWeight: 800, color: '#fff', background: '#8b5e3c', padding: '3px 10px', borderRadius: 8 }}>
+          <span style={{ fontSize: 13, fontWeight: 800, color: '#fff', background: '#8b5e3c', padding: '3px 10px', borderRadius: RADIUS.md }}>
             Total: {total} {total === 1 ? 'questão' : 'questões'}
           </span>
         </div>
@@ -140,7 +141,7 @@ export default function QuestionCountByTypeList({ counts, onChange }: QuestionCo
               style={{
                 background: isActive ? '#fff' : 'rgba(255,255,255,0.6)',
                 border: isActive ? `1px solid ${spec.color}60` : '1px solid #e8e0d0',
-                borderRadius: 10,
+                borderRadius: RADIUS.md,
                 padding: '8px 10px',
                 display: 'flex',
                 alignItems: 'center',

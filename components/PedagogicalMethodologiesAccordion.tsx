@@ -1,4 +1,5 @@
 'use client'
+import { COLOR, RADIUS, TEXT, SHADOW, FONT } from '@/styles/tokens'
 
 import React, { useState } from 'react'
 import { PEDAGOGICAL_METHODOLOGIES, MethodologyDefinition, MethodologyCategory } from '@/lib/pedagogicalMethodologies'
@@ -65,7 +66,7 @@ export default function PedagogicalMethodologiesAccordion({
               style={{
                 background: isSelected ? '#fdf8f2' : '#fafafa',
                 border: isSelected ? '1.5px solid #8b5e3c' : '1px solid #e8e0d0',
-                borderRadius: 10,
+                borderRadius: RADIUS.md,
                 padding: '8px 12px',
                 cursor: 'pointer',
                 display: 'flex',
@@ -81,7 +82,7 @@ export default function PedagogicalMethodologiesAccordion({
                 style={{ marginTop: 3, accentColor: '#8b5e3c', cursor: 'pointer' }}
               />
               <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 12.5, fontWeight: isSelected ? 800 : 600, color: isSelected ? '#8b5e3c' : '#2c1a0e' }}>
+                <div style={{ fontSize: TEXT.bodyCompact, fontWeight: isSelected ? 800 : 600, color: isSelected ? '#8b5e3c' : '#2c1a0e' }}>
                   {m.name}
                 </div>
                 <div style={{ fontSize: 11, color: '#665c54', marginTop: 2, lineHeight: 1.3 }}>
@@ -121,7 +122,7 @@ export default function PedagogicalMethodologiesAccordion({
               border: methodologySubFilter === 'all' ? '1px solid #8b5e3c' : '1px solid #d5c8bb',
               background: methodologySubFilter === 'all' ? '#8b5e3c' : '#fff',
               color: methodologySubFilter === 'all' ? '#fff' : '#2c1a0e',
-              fontSize: 11.5,
+              fontSize: TEXT.caption,
               fontWeight: 700,
               cursor: 'pointer'
             }}
@@ -137,7 +138,7 @@ export default function PedagogicalMethodologiesAccordion({
               border: methodologySubFilter === 'elt' ? '1px solid #268bd2' : '1px solid #d5c8bb',
               background: methodologySubFilter === 'elt' ? '#268bd2' : '#fff',
               color: methodologySubFilter === 'elt' ? '#fff' : '#2c1a0e',
-              fontSize: 11.5,
+              fontSize: TEXT.caption,
               fontWeight: 700,
               cursor: 'pointer'
             }}
@@ -153,7 +154,7 @@ export default function PedagogicalMethodologiesAccordion({
               border: methodologySubFilter === 'scientific' ? '1px solid #2aa198' : '1px solid #d5c8bb',
               background: methodologySubFilter === 'scientific' ? '#2aa198' : '#fff',
               color: methodologySubFilter === 'scientific' ? '#fff' : '#2c1a0e',
-              fontSize: 11.5,
+              fontSize: TEXT.caption,
               fontWeight: 700,
               cursor: 'pointer'
             }}
@@ -206,7 +207,7 @@ export default function PedagogicalMethodologiesAccordion({
 
         {/* Sliders de Distribuição Cognitiva de Bloom */}
         {setBloomRemember && setBloomApply && setBloomAnalyze && setBloomEvaluate && (
-          <div style={{ background: '#faf6f0', padding: 12, borderRadius: 10, border: '1px solid #ede8dc', marginTop: 10 }}>
+          <div style={{ background: '#faf6f0', padding: 12, borderRadius: RADIUS.md, border: '1px solid #ede8dc', marginTop: 10 }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: '#8b5e3c', marginBottom: 8 }}>
               📊 Distribuição de Esforço Cognitivo (Bloom):
             </div>

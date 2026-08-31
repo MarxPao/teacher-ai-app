@@ -1,4 +1,5 @@
 'use client'
+import { COLOR, RADIUS, TEXT, SHADOW, FONT } from '@/styles/tokens'
 import { toast, showConfirm } from '@/components/Toast'
 
 import React, { useState, useEffect, useRef } from 'react'
@@ -318,7 +319,7 @@ export default function StudentExamPlayer({
             </div>
             <button
               onClick={onClose}
-              style={{ padding: '6px 12px', background: '#f5f0e8', border: '1px solid #ede8dc', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
+              style={{ padding: '6px 12px', background: '#f5f0e8', border: '1px solid #ede8dc', borderRadius: RADIUS.md, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
             >
               Fechar
             </button>
@@ -327,7 +328,7 @@ export default function StudentExamPlayer({
 
         {!submitted ? (
           <form ref={formRef} onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-            <div style={{ background: '#fdf8f2', padding: 16, borderRadius: 14, border: '1px solid #ede8dc' }}>
+            <div style={{ background: '#fdf8f2', padding: 16, borderRadius: RADIUS.lg, border: '1px solid #ede8dc' }}>
               <label style={{ fontSize: 13, fontWeight: 700, color: '#2c1a0e', display: 'block', marginBottom: 6 }}>
                 Digite seu Nome Completo:
               </label>
@@ -337,7 +338,7 @@ export default function StudentExamPlayer({
                 placeholder="Ex: Maria Clara Silva"
                 required
                 style={{
-                  width: '100%', padding: '10px 14px', borderRadius: 10,
+                  width: '100%', padding: '10px 14px', borderRadius: RADIUS.md,
                   border: '1.5px solid #cb4b16', fontSize: 14, outline: 'none',
                   background: '#fff', color: '#2c1a0e', fontWeight: 600
                 }}
@@ -362,7 +363,7 @@ export default function StudentExamPlayer({
               }
 
               return (
-                <div key={q.id || idx} style={{ background: '#fff', padding: 20, borderRadius: 16, border: '1.5px solid #ede8dc' }}>
+                <div key={q.id || idx} style={{ background: '#fff', padding: 20, borderRadius: RADIUS.xl, border: '1.5px solid #ede8dc' }}>
                   <div style={{ fontSize: 14, fontWeight: 700, color: '#2c1a0e', marginBottom: 12, lineHeight: 1.5 }}>
                     <span style={{ background: '#8b5e3c', color: '#fff', padding: '2px 8px', borderRadius: 6, marginRight: 8, fontSize: 12 }}>
                       Questão {idx + 1}
@@ -380,11 +381,11 @@ export default function StudentExamPlayer({
                             type="button"
                             onClick={() => handleSelectOption(q.id, opt)}
                             style={{
-                              textAlign: 'left', padding: '10px 14px', borderRadius: 10,
+                              textAlign: 'left', padding: '10px 14px', borderRadius: RADIUS.md,
                               border: `1.5px solid ${isSelected ? '#8b5e3c' : '#ede8dc'}`,
                               background: isSelected ? '#fdf8f2' : '#faf8f5',
                               color: isSelected ? '#8b5e3c' : '#2c1a0e',
-                              fontSize: 13.5, fontWeight: isSelected ? 700 : 500,
+                              fontSize: TEXT.body, fontWeight: isSelected ? 700 : 500,
                               cursor: 'pointer', transition: 'all 0.15s'
                             }}
                           >
@@ -397,7 +398,7 @@ export default function StudentExamPlayer({
                   ) : (
                     <>
                       {isEssay && (
-                        <details style={{ marginBottom: 16, border: '1px solid #bfdbfe', borderRadius: 12, overflow: 'hidden' }}>
+                        <details style={{ marginBottom: 16, border: '1px solid #bfdbfe', borderRadius: RADIUS.lg, overflow: 'hidden' }}>
                           <summary style={{ cursor: 'pointer', padding: 12, background: '#eff6ff', fontWeight: 600, color: '#1e40af', display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <span>📋</span><span>Ver Rubrica de Avaliação Cambridge</span>
                           </summary>
@@ -435,8 +436,8 @@ export default function StudentExamPlayer({
                         onChange={e => handleSelectOption(q.id, e.target.value)}
                         placeholder="Sua resposta..."
                         style={{
-                          width: '100%', padding: '10px 14px', borderRadius: 10,
-                          border: '1px solid #ede8dc', fontSize: 13.5, outline: 'none',
+                          width: '100%', padding: '10px 14px', borderRadius: RADIUS.md,
+                          border: '1px solid #ede8dc', fontSize: TEXT.body, outline: 'none',
                           fontFamily: 'inherit'
                         }}
                       />
@@ -451,7 +452,7 @@ export default function StudentExamPlayer({
               type="submit"
               style={{
                 padding: '14px', background: '#2d9d5d', color: '#fff',
-                border: 'none', borderRadius: 14, fontSize: 15, fontWeight: 800,
+                border: 'none', borderRadius: RADIUS.lg, fontSize: 15, fontWeight: 800,
                 cursor: 'pointer', boxShadow: '0 4px 14px rgba(45,157,93,0.3)'
               }}
             >
@@ -475,7 +476,7 @@ export default function StudentExamPlayer({
             {score !== null && (
               <div style={{
                 background: '#f0fff4', border: '2px solid #2d9d5d',
-                borderRadius: 16, padding: 20, display: 'inline-block', minWidth: 200
+                borderRadius: RADIUS.xl, padding: 20, display: 'inline-block', minWidth: 200
               }}>
                 <div style={{ fontSize: 12, fontWeight: 800, color: '#2d9d5d', textTransform: 'uppercase' }}>Sua Nota:</div>
                 <div style={{ fontSize: 36, fontWeight: 900, color: '#2d9d5d' }}>{score} / 10</div>
@@ -485,7 +486,7 @@ export default function StudentExamPlayer({
             <div style={{ marginTop: 24 }}>
               <button
                 onClick={onClose}
-                style={{ padding: '10px 24px', background: '#8b5e3c', color: '#fff', border: 'none', borderRadius: 10, fontWeight: 800, cursor: 'pointer' }}
+                style={{ padding: '10px 24px', background: '#8b5e3c', color: '#fff', border: 'none', borderRadius: RADIUS.md, fontWeight: 800, cursor: 'pointer' }}
               >
                 Concluir
               </button>

@@ -1,4 +1,5 @@
 'use client'
+import { COLOR, RADIUS, TEXT, SHADOW, FONT } from '@/styles/tokens'
 import { toast, showConfirm } from '@/components/Toast'
 
 import React, { useState, useEffect, useCallback } from 'react'
@@ -69,9 +70,9 @@ const NEE_PROFILES = [
 
 // Helpers de Estilo
 const SL: React.CSSProperties = { fontSize: 13, fontWeight: 600, color: '#7a5c42', display: 'block', marginBottom: 6 }
-const SS: React.CSSProperties = { width: '100%', padding: '10px 14px', background: '#f5f0e8', border: '1px solid #e8e0d0', borderRadius: 10, outline: 'none', color: '#2c1a0e', fontSize: 14, fontFamily: 'inherit', appearance: 'none' as const, cursor: 'pointer' }
-const SI: React.CSSProperties = { width: '100%', padding: '10px 14px', background: '#f5f0e8', border: '1px solid #e8e0d0', borderRadius: 10, outline: 'none', color: '#2c1a0e', fontSize: 14, fontFamily: 'inherit' }
-const CARD: React.CSSProperties = { background: '#fff', borderRadius: 16, padding: 18, boxShadow: '0 2px 12px rgba(44,26,14,0.05)', border: '1px solid #ede8dc' }
+const SS: React.CSSProperties = { width: '100%', padding: '10px 14px', background: '#f5f0e8', border: '1px solid #e8e0d0', borderRadius: RADIUS.md, outline: 'none', color: '#2c1a0e', fontSize: 14, fontFamily: 'inherit', appearance: 'none' as const, cursor: 'pointer' }
+const SI: React.CSSProperties = { width: '100%', padding: '10px 14px', background: '#f5f0e8', border: '1px solid #e8e0d0', borderRadius: RADIUS.md, outline: 'none', color: '#2c1a0e', fontSize: 14, fontFamily: 'inherit' }
+const CARD: React.CSSProperties = { background: '#fff', borderRadius: RADIUS.xl, padding: 18, boxShadow: '0 2px 12px rgba(44,26,14,0.05)', border: '1px solid #ede8dc' }
 
 function loadApis(): ApiConfig[] {
   try {
@@ -479,7 +480,7 @@ Retorne a questão reformulada no formato estruturado:`
           display: 'inline-flex',
           background: '#ede8dc',
           padding: '4px',
-          borderRadius: 14,
+          borderRadius: RADIUS.lg,
           boxShadow: 'inset 0 2px 6px rgba(0,0,0,0.06)',
           gap: 4
         }}>
@@ -488,7 +489,7 @@ Retorne a questão reformulada no formato estruturado:`
             onClick={() => setMode('exam')}
             style={{
               padding: '8px 20px',
-              borderRadius: 10,
+              borderRadius: RADIUS.md,
               border: 'none',
               background: mode === 'exam' ? '#8b5e3c' : 'transparent',
               color: mode === 'exam' ? '#fff' : '#7a5c42',
@@ -509,7 +510,7 @@ Retorne a questão reformulada no formato estruturado:`
             onClick={() => setMode('worksheet')}
             style={{
               padding: '8px 20px',
-              borderRadius: 10,
+              borderRadius: RADIUS.md,
               border: 'none',
               background: mode === 'worksheet' ? '#8b5e3c' : 'transparent',
               color: mode === 'worksheet' ? '#fff' : '#7a5c42',
@@ -530,13 +531,13 @@ Retorne a questão reformulada no formato estruturado:`
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <button
             onClick={() => setSavedDrawerMode('exam')}
-            style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid #d5c8bb', background: '#faf6f0', fontSize: 12, fontWeight: 700, color: '#8b5e3c', cursor: 'pointer' }}
+            style={{ padding: '6px 12px', borderRadius: RADIUS.md, border: '1px solid #d5c8bb', background: '#faf6f0', fontSize: 12, fontWeight: 700, color: '#8b5e3c', cursor: 'pointer' }}
           >
             📁 Provas Salvas ({savedExamsCount})
           </button>
           <button
             onClick={() => setSavedDrawerMode('worksheet')}
-            style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid #d5c8bb', background: '#faf6f0', fontSize: 12, fontWeight: 700, color: '#268bd2', cursor: 'pointer' }}
+            style={{ padding: '6px 12px', borderRadius: RADIUS.md, border: '1px solid #d5c8bb', background: '#faf6f0', fontSize: 12, fontWeight: 700, color: '#268bd2', cursor: 'pointer' }}
           >
             📁 Exercícios Salvos ({savedWorksheetsCount})
           </button>
@@ -545,7 +546,7 @@ Retorne a questão reformulada no formato estruturado:`
 
       {/* Error */}
       {error && (
-        <div style={{ background: 'rgba(220,50,47,0.08)', border: '1px solid rgba(220,50,47,0.2)', borderRadius: 10, padding: '10px 16px', color: '#dc322f', fontSize: 13, marginBottom: 14 }}>
+        <div style={{ background: 'rgba(220,50,47,0.08)', border: '1px solid rgba(220,50,47,0.2)', borderRadius: RADIUS.md, padding: '10px 16px', color: '#dc322f', fontSize: 13, marginBottom: 14 }}>
           ⚠️ {error}
         </div>
       )}
@@ -562,7 +563,7 @@ Retorne a questão reformulada no formato estruturado:`
             disabled={loading}
             style={{
               padding: '14px 20px',
-              borderRadius: 14,
+              borderRadius: RADIUS.lg,
               background: loading ? '#a08060' : 'linear-gradient(135deg, #8b5e3c, #5c3a21)',
               color: '#fff',
               fontSize: 15,
@@ -656,7 +657,7 @@ Retorne a questão reformulada no formato estruturado:`
                       type="button"
                       onClick={() => toggleSection(key)}
                       style={{
-                        textAlign: 'left', padding: '8px 10px', borderRadius: 10,
+                        textAlign: 'left', padding: '8px 10px', borderRadius: RADIUS.md,
                         border: on ? '1.5px solid #8b5e3c' : '1px solid #e4ddd0',
                         background: on ? '#fdf8f2' : '#fafafa',
                         color: on ? '#8b5e3c' : '#7a5c42',
@@ -693,7 +694,7 @@ Retorne a questão reformulada no formato estruturado:`
                 <button
                   type="button"
                   onClick={() => setShowNeePanel(!showNeePanel)}
-                  style={{ padding: '3px 10px', borderRadius: 12, border: 'none', background: showNeePanel ? '#8b5e3c' : '#f5efe6', color: showNeePanel ? '#fff' : '#665c54', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
+                  style={{ padding: '3px 10px', borderRadius: RADIUS.lg, border: 'none', background: showNeePanel ? '#8b5e3c' : '#f5efe6', color: showNeePanel ? '#fff' : '#665c54', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
                 >
                   {showNeePanel ? 'Ocultar' : 'Configurar'}
                 </button>
@@ -703,7 +704,7 @@ Retorne a questão reformulada no formato estruturado:`
                   <button
                     type="button"
                     onClick={() => setNeeProfile('')}
-                    style={{ padding: '4px 10px', borderRadius: 8, border: !neeProfile ? '1.5px solid #8b5e3c' : '1px solid #d5c8bb', background: !neeProfile ? '#8b5e3c' : '#fff', color: !neeProfile ? '#fff' : '#2c1a0e', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
+                    style={{ padding: '4px 10px', borderRadius: RADIUS.md, border: !neeProfile ? '1.5px solid #8b5e3c' : '1px solid #d5c8bb', background: !neeProfile ? '#8b5e3c' : '#fff', color: !neeProfile ? '#fff' : '#2c1a0e', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
                   >
                     Padrão
                   </button>
@@ -712,7 +713,7 @@ Retorne a questão reformulada no formato estruturado:`
                       key={p.id}
                       type="button"
                       onClick={() => setNeeProfile(p.id)}
-                      style={{ padding: '4px 10px', borderRadius: 8, border: neeProfile === p.id ? `1.5px solid ${p.color}` : '1px solid #d5c8bb', background: neeProfile === p.id ? p.color : '#fff', color: neeProfile === p.id ? '#fff' : '#2c1a0e', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
+                      style={{ padding: '4px 10px', borderRadius: RADIUS.md, border: neeProfile === p.id ? `1.5px solid ${p.color}` : '1px solid #d5c8bb', background: neeProfile === p.id ? p.color : '#fff', color: neeProfile === p.id ? '#fff' : '#2c1a0e', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
                     >
                       <i className={`ti ${p.icon}`} /> {p.label}
                     </button>

@@ -6,6 +6,7 @@ import {
   ImageBuffer
 } from '@/lib/omr'
 'use client'
+import { COLOR, RADIUS, TEXT, SHADOW, FONT } from '@/styles/tokens'
 import { toast, showConfirm } from '@/components/Toast'
 
 import { useState, useEffect } from 'react'
@@ -75,12 +76,12 @@ interface BatchSubmission {
 
 const S: Record<string, React.CSSProperties> = {
   page: { padding: '32px 48px', minHeight: '100%', boxSizing: 'border-box', background: '#fdf8f2', maxWidth: 1400, margin: '0 auto' },
-  card: { background: '#fffcf8', border: '1px solid rgba(139,115,85,0.16)', borderRadius: 16, padding: '24px', boxShadow: '0 2px 8px rgba(44,26,14,0.06)' },
-  tabBtn: { padding: '10px 20px', borderRadius: 10, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8, transition: 'all 0.2s' },
-  input: { width: '100%', padding: '10px 14px', borderRadius: 10, border: '1px solid #d5c0b0', background: '#fdf8f2', fontSize: 13.5, color: '#2c1a0e', outline: 'none', boxSizing: 'border-box' },
-  label: { display: 'block', fontSize: 11.5, fontWeight: 700, color: '#7a6552', textTransform: 'uppercase' as const, letterSpacing: '0.8px', marginBottom: 6 },
-  btnPrimary: { background: 'linear-gradient(135deg, #8b5e3c 0%, #6f4728 100%)', color: '#fff', padding: '10px 20px', borderRadius: 10, border: 'none', fontWeight: 700, fontSize: 13.5, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, boxShadow: '0 2px 8px rgba(139,94,60,0.25)' },
-  btnSecondary: { background: '#fffcf8', border: '1px solid #d5c0b0', color: '#4a382a', padding: '10px 18px', borderRadius: 10, fontWeight: 700, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }
+  card: { background: '#fffcf8', border: '1px solid rgba(139,115,85,0.16)', borderRadius: RADIUS.xl, padding: '24px', boxShadow: '0 2px 8px rgba(44,26,14,0.06)' },
+  tabBtn: { padding: '10px 20px', borderRadius: RADIUS.md, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8, transition: 'all 0.2s' },
+  input: { width: '100%', padding: '10px 14px', borderRadius: RADIUS.md, border: '1px solid #d5c0b0', background: '#fdf8f2', fontSize: TEXT.body, color: '#2c1a0e', outline: 'none', boxSizing: 'border-box' },
+  label: { display: 'block', fontSize: TEXT.caption, fontWeight: 700, color: '#7a6552', textTransform: 'uppercase' as const, letterSpacing: '0.8px', marginBottom: 6 },
+  btnPrimary: { background: 'linear-gradient(135deg, #8b5e3c 0%, #6f4728 100%)', color: '#fff', padding: '10px 20px', borderRadius: RADIUS.md, border: 'none', fontWeight: 700, fontSize: TEXT.body, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, boxShadow: '0 2px 8px rgba(139,94,60,0.25)' },
+  btnSecondary: { background: '#fffcf8', border: '1px solid #d5c0b0', color: '#4a382a', padding: '10px 18px', borderRadius: RADIUS.md, fontWeight: 700, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }
 }
 
 const CEFR_WORD_LIMITS: Record<string, { min: number; max: number; task: string }> = {
@@ -786,7 +787,7 @@ ${essayEvaluation.studentActionPlan}
         </div>
 
         {/* Abas */}
-        <div style={{ display: 'flex', gap: 6, background: '#fffcf8', padding: 4, borderRadius: 12, border: '1px solid #d5c0b0' }}>
+        <div style={{ display: 'flex', gap: 6, background: '#fffcf8', padding: 4, borderRadius: RADIUS.lg, border: '1px solid #d5c0b0' }}>
           <button
             onClick={() => setActiveTab('essay')}
             style={{ ...S.tabBtn, background: activeTab === 'essay' ? '#8b5e3c' : 'transparent', color: activeTab === 'essay' ? '#fff' : '#7a5c42' }}
@@ -804,7 +805,7 @@ ${essayEvaluation.studentActionPlan}
 
       {/* ─── CONTEÚDO DA ABA 2: REDAÇÃO CAMBRIDGE ───────────────────────── */}
       {activeTab === 'essay' && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(350px, 450px) 1fr', gap: 24 }}>
+        <div className="responsive-two-col" style={{ display: 'grid', gridTemplateColumns: 'minmax(340px, 440px) 1fr', gap: 24 }}>
           {/* Painel Esquerdo: Entrada de Texto */}
           <div style={S.card}>
             <h3 style={{ margin: '0 0 16px 0', fontSize: 16, color: '#2c1a0e', display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -876,7 +877,7 @@ ${essayEvaluation.studentActionPlan}
                     onClick={() => setEssayInputMode('text')}
                     style={{
                       padding: '8px 12px',
-                      borderRadius: 8,
+                      borderRadius: RADIUS.md,
                       border: essayInputMode === 'text' ? '2px solid #8b5e3c' : '1px solid #d5c0b0',
                       background: essayInputMode === 'text' ? '#f5eee6' : '#fff',
                       color: essayInputMode === 'text' ? '#8b5e3c' : '#7a5c42',
@@ -896,7 +897,7 @@ ${essayEvaluation.studentActionPlan}
                     onClick={() => setEssayInputMode('photo')}
                     style={{
                       padding: '8px 12px',
-                      borderRadius: 8,
+                      borderRadius: RADIUS.md,
                       border: essayInputMode === 'photo' ? '2px solid #8b5e3c' : '1px solid #d5c0b0',
                       background: essayInputMode === 'photo' ? '#f5eee6' : '#fff',
                       color: essayInputMode === 'photo' ? '#8b5e3c' : '#7a5c42',
@@ -916,12 +917,12 @@ ${essayEvaluation.studentActionPlan}
 
               {/* Se for Foto Manuscrita: Upload & OCR */}
               {essayInputMode === 'photo' && (
-                <div style={{ background: '#fdf6ee', border: '1px dashed #d5bda5', borderRadius: 10, padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div style={{ background: '#fdf6ee', border: '1px dashed #d5bda5', borderRadius: RADIUS.md, padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
                   <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
                     <button
                       type="button"
                       onClick={handleCaptureEssayPhoto}
-                      style={{ ...S.btnSecondary, background: '#fff', fontSize: 12.5 }}
+                      style={{ ...S.btnSecondary, background: '#fff', fontSize: TEXT.bodyCompact }}
                     >
                       <i className="ti ti-upload"></i> {essayImageUri ? 'Trocar Foto da Redação' : 'Tirar ou Enviar Foto'}
                     </button>
@@ -930,7 +931,7 @@ ${essayEvaluation.studentActionPlan}
                         type="button"
                         onClick={handleExtractEssayOcr}
                         disabled={isOcrExtracting}
-                        style={{ ...S.btnPrimary, padding: '8px 14px', fontSize: 12.5 }}
+                        style={{ ...S.btnPrimary, padding: '8px 14px', fontSize: TEXT.bodyCompact }}
                       >
                         <i className={isOcrExtracting ? 'ti ti-loader ti-spin' : 'ti ti-scan'}></i>
                         {isOcrExtracting ? 'Lendo Manuscrito...' : 'Extrair Texto da Foto'}
@@ -939,13 +940,13 @@ ${essayEvaluation.studentActionPlan}
                   </div>
 
                   {essayImageUri && (
-                    <div style={{ position: 'relative', maxWidth: '100%', maxHeight: 180, overflow: 'hidden', borderRadius: 8, border: '1px solid #d5c0b0' }}>
+                    <div style={{ position: 'relative', maxWidth: '100%', maxHeight: 180, overflow: 'hidden', borderRadius: RADIUS.md, border: '1px solid #d5c0b0' }}>
                       <img src={essayImageUri} alt="Foto da Redação" style={{ width: '100%', height: 180, objectFit: 'cover' }} />
                     </div>
                   )}
 
                   {ocrWarning && (
-                    <div style={{ background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 8, padding: '10px 12px', fontSize: 12, color: '#991b1b', lineHeight: 1.4 }}>
+                    <div style={{ background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: RADIUS.md, padding: '10px 12px', fontSize: 12, color: '#991b1b', lineHeight: 1.4 }}>
                       {ocrWarning}
                     </div>
                   )}
@@ -1027,7 +1028,7 @@ ${essayEvaluation.studentActionPlan}
                 {/* Grid dos 4 Critérios Cambridge */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
                   {/* 1. Content */}
-                  <div style={{ background: '#fdf8f2', padding: 14, borderRadius: 12, border: '1px solid #e8decb' }}>
+                  <div style={{ background: '#fdf8f2', padding: 14, borderRadius: RADIUS.lg, border: '1px solid #e8decb' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
                       <strong style={{ fontSize: 13, color: '#2c1a0e' }}>1. Content</strong>
                       <span style={{ fontWeight: 800, color: '#8b5e3c' }}>{essayEvaluation.content.score.toFixed(1)} / 5.0</span>
@@ -1036,7 +1037,7 @@ ${essayEvaluation.studentActionPlan}
                   </div>
 
                   {/* 2. Communicative Achievement */}
-                  <div style={{ background: '#fdf8f2', padding: 14, borderRadius: 12, border: '1px solid #e8decb' }}>
+                  <div style={{ background: '#fdf8f2', padding: 14, borderRadius: RADIUS.lg, border: '1px solid #e8decb' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
                       <strong style={{ fontSize: 13, color: '#2c1a0e' }}>2. Comm. Achievement</strong>
                       <span style={{ fontWeight: 800, color: '#8b5e3c' }}>{essayEvaluation.communicativeAchievement.score.toFixed(1)} / 5.0</span>
@@ -1045,7 +1046,7 @@ ${essayEvaluation.studentActionPlan}
                   </div>
 
                   {/* 3. Organisation */}
-                  <div style={{ background: '#fdf8f2', padding: 14, borderRadius: 12, border: '1px solid #e8decb' }}>
+                  <div style={{ background: '#fdf8f2', padding: 14, borderRadius: RADIUS.lg, border: '1px solid #e8decb' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
                       <strong style={{ fontSize: 13, color: '#2c1a0e' }}>3. Organisation</strong>
                       <span style={{ fontWeight: 800, color: '#8b5e3c' }}>{essayEvaluation.organisation.score.toFixed(1)} / 5.0</span>
@@ -1054,7 +1055,7 @@ ${essayEvaluation.studentActionPlan}
                   </div>
 
                   {/* 4. Language */}
-                  <div style={{ background: '#fdf8f2', padding: 14, borderRadius: 12, border: '1px solid #e8decb' }}>
+                  <div style={{ background: '#fdf8f2', padding: 14, borderRadius: RADIUS.lg, border: '1px solid #e8decb' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
                       <strong style={{ fontSize: 13, color: '#2c1a0e' }}>4. Language</strong>
                       <span style={{ fontWeight: 800, color: '#8b5e3c' }}>{essayEvaluation.language.score.toFixed(1)} / 5.0</span>
@@ -1065,7 +1066,7 @@ ${essayEvaluation.studentActionPlan}
 
                 {/* Erros e Interferência L1 */}
                 {essayEvaluation.detectedErrors.length > 0 && (
-                  <div style={{ background: '#fff', border: '1px solid #e8decb', borderRadius: 12, padding: 14 }}>
+                  <div style={{ background: '#fff', border: '1px solid #e8decb', borderRadius: RADIUS.lg, padding: 14 }}>
                     <strong style={{ fontSize: 13, color: '#2c1a0e', display: 'block', marginBottom: 8 }}>
                       🔍 Análise Contrastiva & Erros Detectados:
                     </strong>
@@ -1089,7 +1090,7 @@ ${essayEvaluation.studentActionPlan}
 
       {/* ─── CONTEÚDO DA ABA 1: FOTO / OCR & OMR ──────────────────────── */}
       {activeTab === 'photo' && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(340px, 440px) 1fr', gap: 24 }}>
+        <div className="responsive-two-col" style={{ display: 'grid', gridTemplateColumns: 'minmax(340px, 440px) 1fr', gap: 24 }}>
           {/* Coluna Esquerda: Configuração e Captura */}
           <div style={S.card}>
             <h3 style={{ margin: '0 0 14px 0', fontSize: 16, color: '#2c1a0e', display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -1097,8 +1098,8 @@ ${essayEvaluation.studentActionPlan}
             </h3>
 
             {/* SELETOR DE CENÁRIO (A vs B) */}
-            <div style={{ marginBottom: 16, padding: '10px 12px', background: '#faf6f0', borderRadius: 10, border: '1px solid #e8decb' }}>
-              <label style={{ ...S.label, marginBottom: 8, fontSize: 11.5 }}>
+            <div style={{ marginBottom: 16, padding: '10px 12px', background: '#faf6f0', borderRadius: RADIUS.md, border: '1px solid #e8decb' }}>
+              <label style={{ ...S.label, marginBottom: 8, fontSize: TEXT.caption }}>
                 Tipo de Folha / Mecanismo de Reconhecimento:
               </label>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
@@ -1107,8 +1108,8 @@ ${essayEvaluation.studentActionPlan}
                   onClick={() => setGradingScenario('scenario_a_omr')}
                   style={{
                     padding: '8px 10px',
-                    borderRadius: 8,
-                    fontSize: 11.5,
+                    borderRadius: RADIUS.md,
+                    fontSize: TEXT.caption,
                     fontWeight: 700,
                     cursor: 'pointer',
                     display: 'flex',
@@ -1129,8 +1130,8 @@ ${essayEvaluation.studentActionPlan}
                   onClick={() => setGradingScenario('scenario_b_external')}
                   style={{
                     padding: '8px 10px',
-                    borderRadius: 8,
-                    fontSize: 11.5,
+                    borderRadius: RADIUS.md,
+                    fontSize: TEXT.caption,
                     fontWeight: 700,
                     cursor: 'pointer',
                     display: 'flex',
@@ -1184,7 +1185,7 @@ ${essayEvaluation.studentActionPlan}
               </div>
 
               {imageUri && (
-                <div style={{ textAlign: 'center', background: '#faf6f0', padding: 8, borderRadius: 8, border: '1px solid #e8decb' }}>
+                <div style={{ textAlign: 'center', background: '#faf6f0', padding: 8, borderRadius: RADIUS.md, border: '1px solid #e8decb' }}>
                   <img src={imageUri} style={{ maxWidth: '100%', maxHeight: 180, borderRadius: 6, objectFit: 'contain' }} />
                 </div>
               )}
@@ -1246,7 +1247,7 @@ ${essayEvaluation.studentActionPlan}
 
                 {/* Badge Informativo do Mecanismo Utilizado */}
                 {omrResult ? (
-                  <div style={{ padding: '8px 12px', borderRadius: 8, background: '#eef9f2', border: '1px solid #c0ebd0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12 }}>
+                  <div style={{ padding: '8px 12px', borderRadius: RADIUS.md, background: '#eef9f2', border: '1px solid #c0ebd0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#2d9d5d', fontWeight: 700 }}>
                       <i className="ti ti-circle-check" /> OMR Determinístico: {omrResult.processingTimeMs}ms &bull; Inclinação: {omrResult.skewAngleDegrees}°
                     </div>
@@ -1255,7 +1256,7 @@ ${essayEvaluation.studentActionPlan}
                     </span>
                   </div>
                 ) : (
-                  <div style={{ padding: '8px 12px', borderRadius: 8, background: '#fffdf0', border: '1px solid #ffe58f', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#b58900' }}>
+                  <div style={{ padding: '8px 12px', borderRadius: RADIUS.md, background: '#fffdf0', border: '1px solid #ffe58f', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#b58900' }}>
                     <i className="ti ti-alert-triangle" /> Prova Externa (Visão IA). Clique em qualquer questão abaixo para inspecionar ou ajustar.
                   </div>
                 )}
@@ -1285,7 +1286,7 @@ ${essayEvaluation.studentActionPlan}
                         onClick={() => setInspectingQuestionIndex(isSelected ? null : q.num)}
                         style={{
                           padding: '10px 12px',
-                          borderRadius: 8,
+                          borderRadius: RADIUS.md,
                           background: cardBg,
                           border: `1.5px solid ${cardBorder}`,
                           cursor: 'pointer',
@@ -1324,7 +1325,7 @@ ${essayEvaluation.studentActionPlan}
 
                 {/* PAINEL DE INSPEÇÃO & OVERRIDE DE 1 CLIQUE */}
                 {inspectingQuestionIndex !== null && (
-                  <div style={{ marginTop: 10, padding: 14, background: '#faf6f0', borderRadius: 10, border: '1.5px solid #8b5e3c' }}>
+                  <div style={{ marginTop: 10, padding: 14, background: '#faf6f0', borderRadius: RADIUS.md, border: '1.5px solid #8b5e3c' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                       <strong style={{ fontSize: 13, color: '#2c1a0e' }}>
                         🔍 Inspeção da Questão {inspectingQuestionIndex}
@@ -1349,7 +1350,7 @@ ${essayEvaluation.studentActionPlan}
                             onClick={() => handleManualOverrideQuestion(inspectingQuestionIndex, opt)}
                             style={{
                               padding: '8px 16px',
-                              borderRadius: 8,
+                              borderRadius: RADIUS.md,
                               fontSize: 13,
                               fontWeight: 800,
                               cursor: 'pointer',
@@ -1367,7 +1368,7 @@ ${essayEvaluation.studentActionPlan}
                         onClick={() => handleManualOverrideQuestion(inspectingQuestionIndex, null)}
                         style={{
                           padding: '8px 14px',
-                          borderRadius: 8,
+                          borderRadius: RADIUS.md,
                           fontSize: 12,
                           fontWeight: 700,
                           cursor: 'pointer',

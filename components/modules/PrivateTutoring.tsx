@@ -1,4 +1,5 @@
 'use client'
+import { COLOR, RADIUS, TEXT, SHADOW, FONT } from '@/styles/tokens'
 import { toast, showConfirm } from '@/components/Toast'
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
@@ -898,7 +899,7 @@ export default function PrivateTutoring() {
             value={search}
             onChange={e => setSearch(e.target.value)}
             style={{
-              padding: '8px 14px', borderRadius: 12, border: '1px solid rgba(139,115,85,0.2)',
+              padding: '8px 14px', borderRadius: RADIUS.lg, border: '1px solid rgba(139,115,85,0.2)',
               fontSize: 13, outline: 'none', background: '#fff', width: 220
             }}
           />
@@ -956,11 +957,11 @@ export default function PrivateTutoring() {
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 10 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <div style={{ width: 30, height: 30, borderRadius: 8, background: '#fef3c7', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <div style={{ width: 30, height: 30, borderRadius: RADIUS.md, background: '#fef3c7', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <i className="ti ti-calendar-pin" style={{ fontSize: 16, color: '#b58900' }} />
                   </div>
                   <div>
-                    <h3 style={{ margin: 0, fontSize: 14.5, fontWeight: 800, color: '#2c1a0e' }}>
+                    <h3 style={{ margin: 0, fontSize: TEXT.body, fontWeight: 800, color: '#2c1a0e' }}>
                       Calendário de Aulas Particulares & Post-its
                     </h3>
                   </div>
@@ -1012,8 +1013,8 @@ export default function PrivateTutoring() {
                     setShowNewPostItModal(true)
                   }}
                   style={{
-                    padding: '5px 10px', borderRadius: 8, border: 'none', background: '#b58900',
-                    color: '#fff', fontSize: 11.5, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4
+                    padding: '5px 10px', borderRadius: RADIUS.md, border: 'none', background: '#b58900',
+                    color: '#fff', fontSize: TEXT.caption, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4
                   }}
                 >
                   <i className="ti ti-pin" style={{ fontSize: 12 }} />
@@ -1022,7 +1023,7 @@ export default function PrivateTutoring() {
               </div>
 
               {/* Grade Mensal Proporcional */}
-              <div style={{ background: '#faf6f0', borderRadius: 14, padding: '10px 14px', border: '1px solid #ede8dc' }}>
+              <div style={{ background: '#faf6f0', borderRadius: RADIUS.lg, padding: '10px 14px', border: '1px solid #ede8dc' }}>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', textAlign: 'center', marginBottom: 4, fontSize: 11, fontWeight: 800, color: '#8b5e3c' }}>
                   {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map((d, i) => (
                     <div key={i} style={{ padding: '2px 0' }}>{d}</div>
@@ -1045,7 +1046,7 @@ export default function PrivateTutoring() {
                         }}
                         style={{
                           height: 32,
-                          borderRadius: 8,
+                          borderRadius: RADIUS.md,
                           border: isSelected ? '2px solid #2c1a0e' : isToday ? '1.5px solid #b58900' : '1px solid transparent',
                           background: isSelected ? '#2c1a0e' : isToday ? '#fef3c7' : item.isCurrentMonth ? '#fff' : 'rgba(255,255,255,0.4)',
                           color: isSelected ? '#fff' : item.isCurrentMonth ? '#2c1a0e' : '#b0a69a',
@@ -1079,11 +1080,11 @@ export default function PrivateTutoring() {
               {/* Gaveta Dinâmica de Post-its */}
               {isPostItViewerOpen && (
                 <div style={{
-                  marginTop: 12, background: '#faf6f0', borderRadius: 14, border: '1px solid #ede8dc',
+                  marginTop: 12, background: '#faf6f0', borderRadius: RADIUS.lg, border: '1px solid #ede8dc',
                   padding: '12px 16px', animation: 'rafSlideUp 0.2s ease-out'
                 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                    <span style={{ fontSize: 12.5, fontWeight: 800, color: '#2c1a0e' }}>
+                    <span style={{ fontSize: TEXT.bodyCompact, fontWeight: 800, color: '#2c1a0e' }}>
                       📌 Lembretes & Post-its ({selectedDate.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}):
                     </span>
                     <div style={{ display: 'flex', gap: 6 }}>
@@ -1096,7 +1097,7 @@ export default function PrivateTutoring() {
                           setNewPostItDate(selectedDateKey)
                           setShowNewPostItModal(true)
                         }}
-                        style={{ background: 'none', border: 'none', color: '#b58900', fontSize: 11.5, fontWeight: 800, cursor: 'pointer' }}
+                        style={{ background: 'none', border: 'none', color: '#b58900', fontSize: TEXT.caption, fontWeight: 800, cursor: 'pointer' }}
                       >
                         + Criar Post-it
                       </button>
@@ -1110,7 +1111,7 @@ export default function PrivateTutoring() {
                   </div>
 
                   {postItsForSelectedDay.length === 0 ? (
-                    <div style={{ padding: '8px', textAlign: 'center', color: '#665c54', fontSize: 11.5 }}>
+                    <div style={{ padding: '8px', textAlign: 'center', color: '#665c54', fontSize: TEXT.caption }}>
                       Nenhuma anotação de tutoria para este dia.{' '}
                       <span
                         onClick={() => {
@@ -1135,7 +1136,7 @@ export default function PrivateTutoring() {
                             key={note.id}
                             style={{
                               background: style.bg, border: `1px solid ${style.border}`,
-                              borderRadius: 10, padding: '8px 12px'
+                              borderRadius: RADIUS.md, padding: '8px 12px'
                             }}
                           >
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
@@ -1193,7 +1194,7 @@ export default function PrivateTutoring() {
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 10 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <div style={{ width: 32, height: 32, borderRadius: 8, background: '#dcfce7', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <div style={{ width: 32, height: 32, borderRadius: RADIUS.md, background: '#dcfce7', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <i className="ti ti-checklist" style={{ fontSize: 18, color: '#16a34a' }} />
                   </div>
                   <div>
@@ -1210,7 +1211,7 @@ export default function PrivateTutoring() {
                   <div style={{ flex: 1, height: 7, background: '#f5f0e8', borderRadius: 99, overflow: 'hidden' }}>
                     <div style={{ height: '100%', width: `${progressPct}%`, background: '#16a34a', borderRadius: 99, transition: 'width 0.4s ease' }} />
                   </div>
-                  <span style={{ fontSize: 11.5, fontWeight: 800, color: '#16a34a' }}>{progressPct}%</span>
+                  <span style={{ fontSize: TEXT.caption, fontWeight: 800, color: '#16a34a' }}>{progressPct}%</span>
                 </div>
               </div>
 
@@ -1220,14 +1221,14 @@ export default function PrivateTutoring() {
                   onChange={e => setNewTodoText(e.target.value)}
                   placeholder="✍️ Adicionar nova pendência de aula particular..."
                   style={{
-                    flex: 1, padding: '8px 12px', borderRadius: 8, border: '1px solid #e8e0d0',
-                    background: '#faf6f0', fontSize: 12.5, outline: 'none', color: '#2c1a0e'
+                    flex: 1, padding: '8px 12px', borderRadius: RADIUS.md, border: '1px solid #e8e0d0',
+                    background: '#faf6f0', fontSize: TEXT.bodyCompact, outline: 'none', color: '#2c1a0e'
                   }}
                 />
                 <button
                   type="submit"
                   style={{
-                    padding: '0 16px', borderRadius: 8, border: 'none', background: '#2c1a0e',
+                    padding: '0 16px', borderRadius: RADIUS.md, border: 'none', background: '#2c1a0e',
                     color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4
                   }}
                 >
@@ -1241,7 +1242,7 @@ export default function PrivateTutoring() {
                     key={todo.id}
                     style={{
                       display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px',
-                      borderRadius: 10, background: todo.done ? '#faf6f0' : '#fff',
+                      borderRadius: RADIUS.md, background: todo.done ? '#faf6f0' : '#fff',
                       border: `1px solid ${todo.done ? '#ede8dc' : '#e8e0d0'}`,
                       transition: 'all 0.2s',
                     }}
@@ -1259,7 +1260,7 @@ export default function PrivateTutoring() {
                     <span
                       onClick={() => handleToggleTodo(todo.id)}
                       style={{
-                        flex: 1, fontSize: 12.5, fontWeight: 600, color: todo.done ? '#a08060' : '#2c1a0e',
+                        flex: 1, fontSize: TEXT.bodyCompact, fontWeight: 600, color: todo.done ? '#a08060' : '#2c1a0e',
                         textDecoration: todo.done ? 'line-through' : 'none', cursor: 'pointer'
                       }}
                     >
@@ -1290,7 +1291,7 @@ export default function PrivateTutoring() {
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <div style={{ width: 32, height: 32, borderRadius: 8, background: '#e0f2fe', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <div style={{ width: 32, height: 32, borderRadius: RADIUS.md, background: '#e0f2fe', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <i className="ti ti-calendar-week" style={{ fontSize: 18, color: '#0284c7' }} />
                   </div>
                   <div>
@@ -1316,7 +1317,7 @@ export default function PrivateTutoring() {
                       key={day.id}
                       onClick={() => setSelectedDayOfWeek(day.id)}
                       style={{
-                        padding: '8px 6px', borderRadius: 10,
+                        padding: '8px 6px', borderRadius: RADIUS.md,
                         border: isSelected ? '2px solid #8b5e3c' : '1px solid #ede8dc',
                         background: isSelected ? '#faf6f0' : '#fff', cursor: 'pointer', textAlign: 'center',
                         position: 'relative'
@@ -1333,7 +1334,7 @@ export default function PrivateTutoring() {
                       <div style={{ fontSize: 10.5, fontWeight: 700, color: isSelected ? '#8b5e3c' : '#a08060', textTransform: 'uppercase' }}>
                         {day.short}
                       </div>
-                      <div style={{ fontSize: 12.5, fontWeight: 800, color: '#2c1a0e', marginTop: 1 }}>
+                      <div style={{ fontSize: TEXT.bodyCompact, fontWeight: 800, color: '#2c1a0e', marginTop: 1 }}>
                         {dayStudents.length} {dayStudents.length === 1 ? 'aula' : 'aulas'}
                       </div>
                     </button>
@@ -1354,13 +1355,13 @@ export default function PrivateTutoring() {
                       key={st.id}
                       style={{
                         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                        padding: '10px 14px', borderRadius: 12, background: '#faf6f0', border: '1px solid #ede8dc',
+                        padding: '10px 14px', borderRadius: RADIUS.lg, background: '#faf6f0', border: '1px solid #ede8dc',
                         flexWrap: 'wrap', gap: 8
                       }}
                     >
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                         <div style={{
-                          padding: '6px 10px', borderRadius: 8, background: '#2c1a0e', color: '#fff',
+                          padding: '6px 10px', borderRadius: RADIUS.md, background: '#2c1a0e', color: '#fff',
                           fontSize: 11, fontWeight: 800, flexShrink: 0
                         }}>
                           {st.timeStart || '15:00'} - {st.timeEnd || '16:00'}
@@ -1373,7 +1374,7 @@ export default function PrivateTutoring() {
                             </span>
                             <span style={{ color: '#8b5e3c', fontWeight: 600, fontSize: 11 }}>· {st.subject}</span>
                           </div>
-                          <div style={{ fontSize: 11.5, color: '#665c54', marginTop: 1 }}>
+                          <div style={{ fontSize: TEXT.caption, color: '#665c54', marginTop: 1 }}>
                             Modalidade: {st.modality} · Cobrança: {st.billingType === 'por_aula' ? `R$ ${st.feePerLesson || 80}/aula` : `R$ ${st.monthlyFee}/mês`}
                           </div>
                         </div>
@@ -1412,11 +1413,11 @@ export default function PrivateTutoring() {
               }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <div style={{ width: 30, height: 30, borderRadius: 8, background: '#fef3c7', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <div style={{ width: 30, height: 30, borderRadius: RADIUS.md, background: '#fef3c7', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       <i className="ti ti-notebook" style={{ fontSize: 16, color: '#b58900' }} />
                     </div>
                     <div>
-                      <h3 style={{ margin: 0, fontSize: 14.5, fontWeight: 800, color: '#2c1a0e' }}>
+                      <h3 style={{ margin: 0, fontSize: TEXT.body, fontWeight: 800, color: '#2c1a0e' }}>
                         Conteúdo em Foco: {activeStudent.name}
                       </h3>
                     </div>
@@ -1424,20 +1425,20 @@ export default function PrivateTutoring() {
                   <select
                     value={activeStudent.id}
                     onChange={e => setSelectedStudentId(e.target.value)}
-                    style={{ padding: '4px 8px', borderRadius: 8, border: '1px solid #d5c8bb', fontSize: 11.5, background: '#fff', fontWeight: 700 }}
+                    style={{ padding: '4px 8px', borderRadius: RADIUS.md, border: '1px solid #d5c8bb', fontSize: TEXT.caption, background: '#fff', fontWeight: 700 }}
                   >
                     {students.map(s => <option key={s.id} value={s.id}>{s.name} ({s.type === 'turma' ? 'Turma' : 'Individual'})</option>)}
                   </select>
                 </div>
 
-                <div style={{ background: '#faf6f0', borderRadius: 12, padding: '12px 14px', border: '1px solid #ede8dc', marginBottom: 10 }}>
-                  <div style={{ fontSize: 12.5, fontWeight: 800, color: '#2c1a0e', marginBottom: 4, display: 'flex', justifyContent: 'space-between' }}>
+                <div style={{ background: '#faf6f0', borderRadius: RADIUS.lg, padding: '12px 14px', border: '1px solid #ede8dc', marginBottom: 10 }}>
+                  <div style={{ fontSize: TEXT.bodyCompact, fontWeight: 800, color: '#2c1a0e', marginBottom: 4, display: 'flex', justifyContent: 'space-between' }}>
                     <span>📚 {activeStudent.subject}</span>
                     <span style={{ fontSize: 10.5, color: '#8b5e3c' }}>
                       {activeStudent.billingType === 'por_aula' ? `R$ ${activeStudent.feePerLesson || 80}/aula` : `R$ ${activeStudent.monthlyFee}/mês`}
                     </span>
                   </div>
-                  <div style={{ fontSize: 11.5, color: '#665c54', lineHeight: 1.4 }}>
+                  <div style={{ fontSize: TEXT.caption, color: '#665c54', lineHeight: 1.4 }}>
                     <strong>Última Aula:</strong> {(activeStudent.lessonsHistory || [])[0]?.topic || 'Nenhuma aula registrada ainda.'}<br />
                     <strong>Status da Última Aula:</strong> <span style={{ fontWeight: 700 }}>{(activeStudent.lessonsHistory || [])[0]?.status || 'N/A'}</span><br />
                     <strong>Homework:</strong> {(activeStudent.lessonsHistory || [])[0]?.homework || 'Nenhum'}
@@ -1448,7 +1449,7 @@ export default function PrivateTutoring() {
                   <button
                     onClick={() => openNewLessonModal(activeStudent)}
                     style={{
-                      padding: '8px 6px', borderRadius: 8, border: '1px solid #ede8dc',
+                      padding: '8px 6px', borderRadius: RADIUS.md, border: '1px solid #ede8dc',
                       background: '#fff', color: '#2c1a0e', fontSize: 11, fontWeight: 700, cursor: 'pointer',
                       display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4
                     }}
@@ -1466,7 +1467,7 @@ export default function PrivateTutoring() {
                       window.dispatchEvent(new CustomEvent('teacher:navigate', { detail: 'lessonstudio' }))
                     }}
                     style={{
-                      padding: '8px 6px', borderRadius: 8, border: '1px solid #ede8dc',
+                      padding: '8px 6px', borderRadius: RADIUS.md, border: '1px solid #ede8dc',
                       background: '#fdf6ee', color: '#8b5e3c', fontSize: 11, fontWeight: 700, cursor: 'pointer',
                       display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4
                     }}
@@ -1479,7 +1480,7 @@ export default function PrivateTutoring() {
                       setActiveSubModule('didactic')
                     }}
                     style={{
-                      padding: '8px 6px', borderRadius: 8, border: '1px solid #ede8dc',
+                      padding: '8px 6px', borderRadius: RADIUS.md, border: '1px solid #ede8dc',
                       background: '#fff', color: '#2c1a0e', fontSize: 11, fontWeight: 700, cursor: 'pointer',
                       display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4
                     }}
@@ -1497,18 +1498,18 @@ export default function PrivateTutoring() {
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <div style={{ width: 30, height: 30, borderRadius: 8, background: '#fee2e2', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <div style={{ width: 30, height: 30, borderRadius: RADIUS.md, background: '#fee2e2', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <i className="ti ti-currency-real" style={{ fontSize: 16, color: '#dc2626' }} />
                   </div>
                   <div>
-                    <h3 style={{ margin: 0, fontSize: 14.5, fontWeight: 800, color: '#2c1a0e' }}>
+                    <h3 style={{ margin: 0, fontSize: TEXT.body, fontWeight: 800, color: '#2c1a0e' }}>
                       Cobranças & Pagamentos
                     </h3>
                   </div>
                 </div>
                 <button
                   onClick={() => setActiveSubModule('finance')}
-                  style={{ background: 'none', border: 'none', color: '#8b5e3c', fontSize: 11.5, fontWeight: 700, cursor: 'pointer' }}
+                  style={{ background: 'none', border: 'none', color: '#8b5e3c', fontSize: TEXT.caption, fontWeight: 700, cursor: 'pointer' }}
                 >
                   Ver Todas →
                 </button>
@@ -1525,7 +1526,7 @@ export default function PrivateTutoring() {
                       key={st.id}
                       style={{
                         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                        padding: '8px 12px', borderRadius: 10, background: '#faf6f0', border: '1px solid #ede8dc'
+                        padding: '8px 12px', borderRadius: RADIUS.md, background: '#faf6f0', border: '1px solid #ede8dc'
                       }}
                     >
                       <div>
@@ -1581,8 +1582,8 @@ export default function PrivateTutoring() {
                   {filteredStudents.map(st => (
                     <tr key={st.id} style={TableRowStyle}>
                       <td style={TdStyle}>
-                        <div style={{ fontWeight: 700, color: '#2c1a0e', fontSize: 13.5 }}>{st.name}</div>
-                        <div style={{ fontSize: 11.5, color: '#665c54' }}>{st.guardianName || st.phone || 'Sem contato'}</div>
+                        <div style={{ fontWeight: 700, color: '#2c1a0e', fontSize: TEXT.body }}>{st.name}</div>
+                        <div style={{ fontSize: TEXT.caption, color: '#665c54' }}>{st.guardianName || st.phone || 'Sem contato'}</div>
                       </td>
                       <td style={TdStyle}>
                         <span style={BadgeStyle(st.type === 'turma' ? '#e0f2fe' : '#fdf3e7', st.type === 'turma' ? '#0284c7' : '#8b5e3c')}>
@@ -1590,10 +1591,10 @@ export default function PrivateTutoring() {
                         </span>
                       </td>
                       <td style={TdStyle}>
-                        <span style={{ fontSize: 12.5, fontWeight: 600 }}>{st.subject}</span>
+                        <span style={{ fontSize: TEXT.bodyCompact, fontWeight: 600 }}>{st.subject}</span>
                       </td>
                       <td style={TdStyle}>
-                        <span style={{ fontSize: 12.5 }}>{st.modality}</span>
+                        <span style={{ fontSize: TEXT.bodyCompact }}>{st.modality}</span>
                       </td>
                       <td style={TdStyle}>
                         <span style={BadgeStyle(st.billingType === 'semanal' ? '#fef3c7' : st.billingType === 'por_aula' ? '#e0f2fe' : '#fdf3e7', st.billingType === 'semanal' ? '#b58900' : st.billingType === 'por_aula' ? '#0284c7' : '#8b5e3c')}>
@@ -1698,7 +1699,7 @@ export default function PrivateTutoring() {
                           </span>
                         </td>
                         <td style={TdStyle}>
-                          <strong style={{ fontSize: 13.5, color: '#2c1a0e' }}>
+                          <strong style={{ fontSize: TEXT.body, color: '#2c1a0e' }}>
                             {st.billingType === 'semanal'
                               ? `R$ ${st.feePerLesson || 80},00/aula`
                               : st.billingType === 'por_aula'
@@ -1771,7 +1772,7 @@ export default function PrivateTutoring() {
               <select
                 value={activeStudent.id}
                 onChange={e => setSelectedStudentId(e.target.value)}
-                style={{ padding: '8px 14px', borderRadius: 10, border: '1px solid rgba(139,115,85,0.2)', fontSize: 13, background: '#fff', fontWeight: 700 }}
+                style={{ padding: '8px 14px', borderRadius: RADIUS.md, border: '1px solid rgba(139,115,85,0.2)', fontSize: 13, background: '#fff', fontWeight: 700 }}
               >
                 {students.map(s => <option key={s.id} value={s.id}>{s.name} ({s.type === 'turma' ? 'Turma' : 'Individual'})</option>)}
               </select>
@@ -1798,7 +1799,7 @@ export default function PrivateTutoring() {
                       style={{
                         padding: 14,
                         background: isCanceled ? '#fef2f2' : isRescheduled ? '#fffbeb' : '#fdf8f2',
-                        borderRadius: 12,
+                        borderRadius: RADIUS.lg,
                         border: `1px solid ${isCanceled ? '#fecaca' : isRescheduled ? '#fde68a' : 'rgba(139,115,85,0.15)'}`
                       }}
                     >
@@ -1872,7 +1873,7 @@ export default function PrivateTutoring() {
               <h2 style={{ margin: '0 0 4px', fontSize: 18, fontWeight: 800, color: '#2c1a0e' }}>
                 📚 Biblioteca de Livros & Materiais Didáticos
               </h2>
-              <p style={{ margin: 0, fontSize: 12.5, color: '#665c54' }}>
+              <p style={{ margin: 0, fontSize: TEXT.bodyCompact, color: '#665c54' }}>
                 Organize apostilas, livros de cursos e materiais de apoio específicos para aulas particulares.
               </p>
             </div>
@@ -1899,7 +1900,7 @@ export default function PrivateTutoring() {
               <div
                 key={book.id}
                 style={{
-                  background: '#fff', border: '1px solid rgba(139,115,85,0.18)', borderRadius: 16,
+                  background: '#fff', border: '1px solid rgba(139,115,85,0.18)', borderRadius: RADIUS.xl,
                   padding: 18, boxShadow: '0 4px 12px rgba(44,26,14,0.04)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between'
                 }}
               >
@@ -1908,16 +1909,16 @@ export default function PrivateTutoring() {
                     <span style={BadgeStyle('#fdf3e7', '#8b5e3c')}>{book.subject} · {book.level || 'Geral'}</span>
                     <button onClick={() => handleDeleteBook(book.id)} style={{ ...ActionIconButton, color: '#dc2626' }}>🗑️</button>
                   </div>
-                  <h3 style={{ margin: '0 0 4px', fontSize: 15.5, fontWeight: 800, color: '#2c1a0e' }}>
+                  <h3 style={{ margin: '0 0 4px', fontSize: TEXT.subtitle, fontWeight: 800, color: '#2c1a0e' }}>
                     {book.title}
                   </h3>
                   {book.author && <div style={{ fontSize: 12, color: '#665c54', marginBottom: 6 }}>Autor / Editora: {book.author}</div>}
-                  {book.studentName && <div style={{ fontSize: 11.5, color: '#0284c7', fontWeight: 700, marginBottom: 8 }}>🎓 Vinculado a: {book.studentName}</div>}
+                  {book.studentName && <div style={{ fontSize: TEXT.caption, color: '#0284c7', fontWeight: 700, marginBottom: 8 }}>🎓 Vinculado a: {book.studentName}</div>}
                   {book.notes && <p style={{ fontSize: 12, color: '#7a5c42', lineHeight: 1.4, margin: '8px 0' }}>{book.notes}</p>}
                 </div>
 
                 <div style={{ borderTop: '1px solid rgba(139,115,85,0.1)', paddingTop: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: 11.5, fontWeight: 700, color: '#8b5e3c' }}>
+                  <span style={{ fontSize: TEXT.caption, fontWeight: 700, color: '#8b5e3c' }}>
                     📖 {book.unitsCount || 10} Unidades
                   </span>
                   {book.pdfUrl ? (
@@ -1949,7 +1950,7 @@ export default function PrivateTutoring() {
               <h2 style={{ margin: '0 0 4px', fontSize: 18, fontWeight: 800, color: '#2c1a0e' }}>
                 📊 Sequência Didática da Tutoria
               </h2>
-              <p style={{ margin: 0, fontSize: 12.5, color: '#665c54' }}>
+              <p style={{ margin: 0, fontSize: TEXT.bodyCompact, color: '#665c54' }}>
                 Trilha estruturada de tópicos gramaticais, vocabulário e horas estimadas para aulas particulares.
               </p>
             </div>
@@ -1975,17 +1976,17 @@ export default function PrivateTutoring() {
               <div
                 key={u.id}
                 style={{
-                  background: '#fff', border: '1px solid rgba(139,115,85,0.18)', borderRadius: 14,
+                  background: '#fff', border: '1px solid rgba(139,115,85,0.18)', borderRadius: RADIUS.lg,
                   padding: 16, boxShadow: '0 2px 8px rgba(44,26,14,0.03)', display: 'flex',
                   justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <div style={{ width: 34, height: 34, borderRadius: 10, background: '#2c1a0e', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 14 }}>
+                  <div style={{ width: 34, height: 34, borderRadius: RADIUS.md, background: '#2c1a0e', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 14 }}>
                     {u.unitNumber}
                   </div>
                   <div>
-                    <h3 style={{ margin: 0, fontSize: 14.5, fontWeight: 800, color: '#2c1a0e' }}>
+                    <h3 style={{ margin: 0, fontSize: TEXT.body, fontWeight: 800, color: '#2c1a0e' }}>
                       {u.unitTitle}
                     </h3>
                     <div style={{ fontSize: 12, color: '#665c54', marginTop: 2 }}>
@@ -2022,7 +2023,7 @@ export default function PrivateTutoring() {
         <div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
             {filteredStudents.map(st => (
-              <div key={st.id} style={{ background: '#fff', border: '1px solid rgba(139,115,85,0.18)', borderRadius: 16, padding: 20, boxShadow: '0 4px 12px rgba(44,26,14,0.04)' }}>
+              <div key={st.id} style={{ background: '#fff', border: '1px solid rgba(139,115,85,0.18)', borderRadius: RADIUS.xl, padding: 20, boxShadow: '0 4px 12px rgba(44,26,14,0.04)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
                   <div>
                     <h3 style={{ margin: '0 0 2px', fontSize: 16, fontWeight: 800, color: '#2c1a0e' }}>{st.name}</h3>
@@ -2032,7 +2033,7 @@ export default function PrivateTutoring() {
                   </div>
                   <button onClick={() => openEditStudentModal(st)} style={ActionIconButton}>✏️</button>
                 </div>
-                <div style={{ fontSize: 12.5, color: '#665c54', lineHeight: 1.5, marginBottom: 14 }}>
+                <div style={{ fontSize: TEXT.bodyCompact, color: '#665c54', lineHeight: 1.5, marginBottom: 14 }}>
                   <div><strong>Matéria:</strong> {st.subject}</div>
                   <div><strong>Responsável:</strong> {st.guardianName || 'Próprio aluno'}</div>
                   <div>
@@ -2077,7 +2078,7 @@ export default function PrivateTutoring() {
               <select
                 value={activeStudent.id}
                 onChange={e => setSelectedStudentId(e.target.value)}
-                style={{ padding: '8px 14px', borderRadius: 10, border: '1px solid rgba(139,115,85,0.2)', fontSize: 13, background: '#fff', fontWeight: 700 }}
+                style={{ padding: '8px 14px', borderRadius: RADIUS.md, border: '1px solid rgba(139,115,85,0.2)', fontSize: 13, background: '#fff', fontWeight: 700 }}
               >
                 {students.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
@@ -2104,7 +2105,7 @@ export default function PrivateTutoring() {
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                 {(activeStudent.roadmap || []).map((m, idx) => (
-                  <div key={m.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 14, background: '#fdf8f2', borderRadius: 12, border: '1px solid rgba(139,115,85,0.15)' }}>
+                  <div key={m.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 14, background: '#fdf8f2', borderRadius: RADIUS.lg, border: '1px solid rgba(139,115,85,0.15)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                       <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#8b5e3c', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 12 }}>
                         {idx + 1}
@@ -2136,7 +2137,7 @@ export default function PrivateTutoring() {
         <div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 16 }}>
             {filteredStudents.map(st => (
-              <div key={st.id} style={{ background: '#fff', border: '1px solid rgba(139,115,85,0.18)', borderRadius: 16, padding: 18 }}>
+              <div key={st.id} style={{ background: '#fff', border: '1px solid rgba(139,115,85,0.18)', borderRadius: RADIUS.xl, padding: 18 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                   <strong style={{ color: '#2c1a0e', fontSize: 14 }}>{st.name} ({st.subject})</strong>
                   <button
@@ -2146,7 +2147,7 @@ export default function PrivateTutoring() {
                     {aiDiagnosticLoading ? 'Analisando...' : 'Diagnóstico IA ✨'}
                   </button>
                 </div>
-                <p style={{ fontSize: 12.5, color: '#7a5c42', lineHeight: 1.45, margin: 0 }}>
+                <p style={{ fontSize: TEXT.bodyCompact, color: '#7a5c42', lineHeight: 1.45, margin: 0 }}>
                   {st.aiDiagnostic || 'Sem diagnóstico gerado. Clique em "Diagnóstico IA" para avaliar a evolução pedagógica.'}
                 </p>
               </div>
@@ -2168,7 +2169,7 @@ export default function PrivateTutoring() {
                   type="button"
                   onClick={() => setFormType('individual')}
                   style={{
-                    flex: 1, padding: '8px', borderRadius: 8, border: 'none',
+                    flex: 1, padding: '8px', borderRadius: RADIUS.md, border: 'none',
                     background: formType === 'individual' ? '#2c1a0e' : '#f5efe6',
                     color: formType === 'individual' ? '#fff' : '#665c54',
                     fontSize: 12, fontWeight: 700, cursor: 'pointer'
@@ -2180,7 +2181,7 @@ export default function PrivateTutoring() {
                   type="button"
                   onClick={() => setFormType('turma')}
                   style={{
-                    flex: 1, padding: '8px', borderRadius: 8, border: 'none',
+                    flex: 1, padding: '8px', borderRadius: RADIUS.md, border: 'none',
                     background: formType === 'turma' ? '#2c1a0e' : '#f5efe6',
                     color: formType === 'turma' ? '#fff' : '#665c54',
                     fontSize: 12, fontWeight: 700, cursor: 'pointer'
@@ -2218,7 +2219,7 @@ export default function PrivateTutoring() {
               </div>
 
               {/* Modelo de Cobrança: Semanal vs Mensal vs Por Aula */}
-              <div style={{ background: '#fdf8f2', padding: 14, borderRadius: 12, border: '1px solid rgba(139,115,85,0.2)', marginBottom: 14 }}>
+              <div style={{ background: '#fdf8f2', padding: 14, borderRadius: RADIUS.lg, border: '1px solid rgba(139,115,85,0.2)', marginBottom: 14 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                   <label style={{ ...LabelStyle, color: '#8b5e3c', margin: 0 }}>Modelo de Cobrança Financeira:</label>
                   <span style={{ fontSize: 11, color: '#8b5e3c', fontWeight: 700, background: '#f5efe6', padding: '2px 8px', borderRadius: 6 }}>
@@ -2229,7 +2230,7 @@ export default function PrivateTutoring() {
                 <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
                   <label style={{
                     fontSize: 12, display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer',
-                    padding: '6px 10px', borderRadius: 8,
+                    padding: '6px 10px', borderRadius: RADIUS.md,
                     background: formBillingType === 'semanal' ? '#8b5e3c' : '#fff',
                     color: formBillingType === 'semanal' ? '#fff' : '#2c1a0e',
                     border: '1px solid rgba(139,115,85,0.3)', fontWeight: 700
@@ -2251,7 +2252,7 @@ export default function PrivateTutoring() {
 
                   <label style={{
                     fontSize: 12, display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer',
-                    padding: '6px 10px', borderRadius: 8,
+                    padding: '6px 10px', borderRadius: RADIUS.md,
                     background: formBillingType === 'mensal' ? '#8b5e3c' : '#fff',
                     color: formBillingType === 'mensal' ? '#fff' : '#2c1a0e',
                     border: '1px solid rgba(139,115,85,0.3)', fontWeight: 700
@@ -2273,7 +2274,7 @@ export default function PrivateTutoring() {
 
                   <label style={{
                     fontSize: 12, display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer',
-                    padding: '6px 10px', borderRadius: 8,
+                    padding: '6px 10px', borderRadius: RADIUS.md,
                     background: formBillingType === 'por_aula' ? '#8b5e3c' : '#fff',
                     color: formBillingType === 'por_aula' ? '#fff' : '#2c1a0e',
                     border: '1px solid rgba(139,115,85,0.3)', fontWeight: 700
@@ -2339,7 +2340,7 @@ export default function PrivateTutoring() {
                     <div style={{
                       background: '#fff',
                       border: '1px solid rgba(139,115,85,0.25)',
-                      borderRadius: 10,
+                      borderRadius: RADIUS.md,
                       padding: '10px 14px',
                       marginBottom: 10,
                       display: 'flex',
@@ -2358,7 +2359,7 @@ export default function PrivateTutoring() {
                         </div>
                       </div>
                       <div style={{
-                        width: 32, height: 32, borderRadius: 8, background: '#fef3c7',
+                        width: 32, height: 32, borderRadius: RADIUS.md, background: '#fef3c7',
                         display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16
                       }}>
                         💰
@@ -2408,7 +2409,7 @@ export default function PrivateTutoring() {
               </div>
 
               {/* Dias da Semana & Horário (Sincroniza com a Home) */}
-              <div style={{ background: '#fdf8f2', padding: 12, borderRadius: 10, border: '1px solid rgba(139,115,85,0.15)', marginBottom: 12 }}>
+              <div style={{ background: '#fdf8f2', padding: 12, borderRadius: RADIUS.md, border: '1px solid rgba(139,115,85,0.15)', marginBottom: 12 }}>
                 <label style={{ ...LabelStyle, color: '#8b5e3c' }}>Dias da Semana & Horário (Integração com a Home):</label>
                 <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
                   {WEEK_DAYS.map(w => {
@@ -2749,7 +2750,7 @@ export default function PrivateTutoring() {
 function KPIBox({ title, value, icon, color }: { title: string; value: string; icon: string; color: string }) {
   return (
     <div style={{
-      background: '#fff', border: '1px solid rgba(139,115,85,0.18)', borderRadius: 14,
+      background: '#fff', border: '1px solid rgba(139,115,85,0.18)', borderRadius: RADIUS.lg,
       padding: '12px 16px', boxShadow: '0 2px 8px rgba(44,26,14,0.03)', display: 'flex',
       alignItems: 'center', justifyContent: 'space-between'
     }}>
@@ -2757,7 +2758,7 @@ function KPIBox({ title, value, icon, color }: { title: string; value: string; i
         <div style={{ fontSize: 11, fontWeight: 700, color: '#665c54', textTransform: 'uppercase', marginBottom: 2 }}>{title}</div>
         <div style={{ fontSize: 16.5, fontWeight: 800, color: '#2c1a0e', lineHeight: 1.1 }}>{value}</div>
       </div>
-      <div style={{ width: 36, height: 36, borderRadius: 10, background: `${color}15`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>
+      <div style={{ width: 36, height: 36, borderRadius: RADIUS.md, background: `${color}15`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>
         {icon}
       </div>
     </div>
@@ -2773,14 +2774,14 @@ function ProgressBar({ value, color = '#8b5e3c', width = 100 }: { value: number;
 }
 
 function BadgeStyle(bg: string, fg: string): React.CSSProperties {
-  return { padding: '3px 8px', borderRadius: 6, background: bg, color: fg, fontSize: 11.5, fontWeight: 700, display: 'inline-block' }
+  return { padding: '3px 8px', borderRadius: 6, background: bg, color: fg, fontSize: TEXT.caption, fontWeight: 700, display: 'inline-block' }
 }
 
 function StatusBadgeStyle(status: PrivateStudent['paymentStatus']): React.CSSProperties {
   const isPaid = status === 'pago' || status === 'em_dia'
   const isPending = status === 'pendente'
   return {
-    padding: '4px 10px', borderRadius: 8, border: 'none', cursor: 'pointer',
+    padding: '4px 10px', borderRadius: RADIUS.md, border: 'none', cursor: 'pointer',
     background: isPaid ? '#e8f5e9' : isPending ? '#fffde7' : '#ffebee',
     color: isPaid ? '#2e7d32' : isPending ? '#f57f17' : '#c62828',
     fontSize: 11, fontWeight: 800
@@ -2797,14 +2798,14 @@ function MilestoneStatusBadge(status: RoadmapMilestone['status']): React.CSSProp
   }
 }
 
-const TableStyle: React.CSSProperties = { width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }
+const TableStyle: React.CSSProperties = { width: '100%', borderCollapse: 'collapse', fontSize: TEXT.bodyCompact }
 const TableHeaderRowStyle: React.CSSProperties = { background: '#fcf8f2', borderBottom: '2px solid rgba(139,115,85,0.15)' }
 const TableRowStyle: React.CSSProperties = { borderBottom: '1px solid rgba(139,115,85,0.08)' }
-const ThStyle: React.CSSProperties = { padding: '8px 12px', textAlign: 'left', fontWeight: 700, color: '#665c54', fontSize: 11.5 }
+const ThStyle: React.CSSProperties = { padding: '8px 12px', textAlign: 'left', fontWeight: 700, color: '#665c54', fontSize: TEXT.caption }
 const TdStyle: React.CSSProperties = { padding: '10px 12px', verticalAlign: 'middle' }
 
 const PrimaryBtnStyle: React.CSSProperties = {
-  padding: '7px 14px', background: '#8b5e3c', color: '#fff', border: 'none', borderRadius: 8,
+  padding: '7px 14px', background: '#8b5e3c', color: '#fff', border: 'none', borderRadius: RADIUS.md,
   fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4
 }
 const SecondaryBtnStyle: React.CSSProperties = {
@@ -2816,21 +2817,21 @@ const WhatsAppBtnStyle: React.CSSProperties = {
   fontSize: 11, fontWeight: 800, cursor: 'pointer'
 }
 const ActiveTabStyle: React.CSSProperties = {
-  padding: '6px 12px', borderRadius: 8, border: 'none', background: '#8b5e3c', color: '#fff',
+  padding: '6px 12px', borderRadius: RADIUS.md, border: 'none', background: '#8b5e3c', color: '#fff',
   fontSize: 12, fontWeight: 700, cursor: 'pointer'
 }
 const InactiveTabStyle: React.CSSProperties = {
-  padding: '6px 12px', borderRadius: 8, border: 'none', background: '#fdf8f2', color: '#665c54',
+  padding: '6px 12px', borderRadius: RADIUS.md, border: 'none', background: '#fdf8f2', color: '#665c54',
   fontSize: 12, fontWeight: 600, cursor: 'pointer'
 }
 const ActionIconButton: React.CSSProperties = { background: 'none', border: 'none', cursor: 'pointer', fontSize: 13 }
-const LabelStyle: React.CSSProperties = { fontSize: 11.5, fontWeight: 700, color: '#7a5c42', display: 'block', marginBottom: 3 }
+const LabelStyle: React.CSSProperties = { fontSize: TEXT.caption, fontWeight: 700, color: '#7a5c42', display: 'block', marginBottom: 3 }
 const InputStyle: React.CSSProperties = {
-  width: '100%', padding: '7px 10px', borderRadius: 8, border: '1px solid rgba(139,115,85,0.2)',
-  background: '#fff', outline: 'none', fontSize: 12.5, color: '#2c1a0e', marginBottom: 10
+  width: '100%', padding: '7px 10px', borderRadius: RADIUS.md, border: '1px solid rgba(139,115,85,0.2)',
+  background: '#fff', outline: 'none', fontSize: TEXT.bodyCompact, color: '#2c1a0e', marginBottom: 10
 }
 const CancelBtnStyle: React.CSSProperties = {
-  padding: '7px 12px', background: '#f5efe6', border: '1px solid rgba(139,115,85,0.2)', borderRadius: 8,
+  padding: '7px 12px', background: '#f5efe6', border: '1px solid rgba(139,115,85,0.2)', borderRadius: RADIUS.md,
   fontSize: 12, cursor: 'pointer', color: '#7a5c42'
 }
 const OverlayStyle: React.CSSProperties = {

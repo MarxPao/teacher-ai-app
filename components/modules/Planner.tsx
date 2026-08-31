@@ -1,4 +1,5 @@
 'use client'
+import { COLOR, RADIUS, TEXT, SHADOW, FONT } from '@/styles/tokens'
 import { toast, showConfirm } from '@/components/Toast'
 
 import { useState, useEffect } from 'react'
@@ -709,7 +710,7 @@ export default function Planner() {
               key={tab.id}
               onClick={() => setActiveTab(tab.id as any)}
               style={{
-                background: 'none', border: 'none', padding: '8px 14px', fontSize: 14.5, fontWeight: 600, cursor: 'pointer',
+                background: 'none', border: 'none', padding: '8px 14px', fontSize: TEXT.body, fontWeight: 600, cursor: 'pointer',
                 color: activeTab === tab.id ? '#2c1a0e' : '#a08060',
                 borderBottom: activeTab === tab.id ? '4px solid #b58900' : '4px solid transparent',
                 marginBottom: -14, transition: 'all 0.2s', display: 'flex', alignItems: 'center', gap: 8
@@ -762,7 +763,7 @@ export default function Planner() {
                       style={{
                         background: dayInfo.isCurrentMonth ? '#fff' : '#fcfaf2',
                         border: '1px solid rgba(88,110,117,0.06)',
-                        borderRadius: 14,
+                        borderRadius: RADIUS.lg,
                         padding: '8px',
                         display: 'flex',
                         flexDirection: 'column',
@@ -788,7 +789,7 @@ export default function Planner() {
                         fontSize: 13, fontWeight: 700,
                         color: !dayInfo.isCurrentMonth ? '#cbd5e1' : isToday ? '#b58900' : '#7a5c42',
                         background: isToday ? 'rgba(181,137,0,0.1)' : 'transparent',
-                        borderRadius: 8, padding: '2px 6px', alignSelf: 'flex-start'
+                        borderRadius: RADIUS.md, padding: '2px 6px', alignSelf: 'flex-start'
                       }}>
                         {dayInfo.day} {isToday && '📅'}
                       </span>
@@ -849,7 +850,7 @@ export default function Planner() {
             </div>
             
             {/* Quick Helper Tip */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#f5edcc', border: '1px solid rgba(181,137,0,0.15)', borderRadius: 16, padding: '12px 18px', color: '#713f12', fontSize: 13 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#f5edcc', border: '1px solid rgba(181,137,0,0.15)', borderRadius: RADIUS.xl, padding: '12px 18px', color: '#713f12', fontSize: 13 }}>
               <i className="ti ti-bulb" style={{ fontSize: 18, color: '#b58900' }} />
               <span>
                 <strong>Dica de Organização:</strong> Dê um clique em qualquer dia da grade para abrir o formulário pré-preenchido e adicionar um post-it instantaneamente! Para editar ou ver detalhes, clique na etiqueta da tarefa.
@@ -865,8 +866,8 @@ export default function Planner() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
               {/* KPI Badges */}
               <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                <div style={{ background: '#fff', padding: '12px 18px', borderRadius: 14, border: '1px solid rgba(88,110,117,0.12)', display: 'flex', alignItems: 'center', gap: 12, boxShadow: '0 2px 8px rgba(44,26,14,0.03)' }}>
-                  <div style={{ width: 38, height: 38, borderRadius: 10, background: '#f5efe6', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#8b5e3c', fontSize: 18 }}>
+                <div style={{ background: '#fff', padding: '12px 18px', borderRadius: RADIUS.lg, border: '1px solid rgba(88,110,117,0.12)', display: 'flex', alignItems: 'center', gap: 12, boxShadow: '0 2px 8px rgba(44,26,14,0.03)' }}>
+                  <div style={{ width: 38, height: 38, borderRadius: RADIUS.md, background: '#f5efe6', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#8b5e3c', fontSize: 18 }}>
                     <i className="ti ti-calendar-event" />
                   </div>
                   <div>
@@ -875,8 +876,8 @@ export default function Planner() {
                   </div>
                 </div>
 
-                <div style={{ background: '#fff', padding: '12px 18px', borderRadius: 14, border: '1px solid rgba(88,110,117,0.12)', display: 'flex', alignItems: 'center', gap: 12, boxShadow: '0 2px 8px rgba(44,26,14,0.03)' }}>
-                  <div style={{ width: 38, height: 38, borderRadius: 10, background: '#e8f7ee', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#2d7a00', fontSize: 18 }}>
+                <div style={{ background: '#fff', padding: '12px 18px', borderRadius: RADIUS.lg, border: '1px solid rgba(88,110,117,0.12)', display: 'flex', alignItems: 'center', gap: 12, boxShadow: '0 2px 8px rgba(44,26,14,0.03)' }}>
+                  <div style={{ width: 38, height: 38, borderRadius: RADIUS.md, background: '#e8f7ee', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#2d7a00', fontSize: 18 }}>
                     <i className="ti ti-circle-check" />
                   </div>
                   <div>
@@ -885,8 +886,8 @@ export default function Planner() {
                   </div>
                 </div>
 
-                <div style={{ background: '#fff', padding: '12px 18px', borderRadius: 14, border: '1px solid rgba(88,110,117,0.12)', display: 'flex', alignItems: 'center', gap: 12, boxShadow: '0 2px 8px rgba(44,26,14,0.03)' }}>
-                  <div style={{ width: 38, height: 38, borderRadius: 10, background: '#e8f4fd', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#268bd2', fontSize: 18 }}>
+                <div style={{ background: '#fff', padding: '12px 18px', borderRadius: RADIUS.lg, border: '1px solid rgba(88,110,117,0.12)', display: 'flex', alignItems: 'center', gap: 12, boxShadow: '0 2px 8px rgba(44,26,14,0.03)' }}>
+                  <div style={{ width: 38, height: 38, borderRadius: RADIUS.md, background: '#e8f4fd', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#268bd2', fontSize: 18 }}>
                     <i className="ti ti-users" />
                   </div>
                   <div>
@@ -901,7 +902,7 @@ export default function Planner() {
                 <select
                   value={filterAgendaClass}
                   onChange={e => setFilterAgendaClass(e.target.value)}
-                  style={{ padding: '8px 12px', borderRadius: 10, border: '1px solid rgba(88,110,117,0.2)', background: '#fff', fontSize: 13, color: '#2c1a0e', fontWeight: 600 }}
+                  style={{ padding: '8px 12px', borderRadius: RADIUS.md, border: '1px solid rgba(88,110,117,0.2)', background: '#fff', fontSize: 13, color: '#2c1a0e', fontWeight: 600 }}
                 >
                   <option value="all">Todas as Turmas ({schedule.length})</option>
                   {classes.map(c => (
@@ -916,7 +917,7 @@ export default function Planner() {
                     placeholder="Buscar tópico..."
                     value={searchAgendaTopic}
                     onChange={e => setSearchAgendaTopic(e.target.value)}
-                    style={{ padding: '8px 12px 8px 30px', borderRadius: 10, border: '1px solid rgba(88,110,117,0.2)', background: '#fff', fontSize: 13, color: '#2c1a0e', width: 170 }}
+                    style={{ padding: '8px 12px 8px 30px', borderRadius: RADIUS.md, border: '1px solid rgba(88,110,117,0.2)', background: '#fff', fontSize: 13, color: '#2c1a0e', width: 170 }}
                   />
                 </div>
 
@@ -924,7 +925,7 @@ export default function Planner() {
                   onClick={() => handleOpenAddScheduleModal(1)}
                   style={{
                     background: '#8b5e3c', color: '#fff', border: 'none', padding: '9px 16px',
-                    borderRadius: 10, fontWeight: 700, fontSize: 13, cursor: 'pointer',
+                    borderRadius: RADIUS.md, fontWeight: 700, fontSize: 13, cursor: 'pointer',
                     display: 'flex', alignItems: 'center', gap: 6, boxShadow: '0 2px 8px rgba(139,94,60,0.25)'
                   }}
                 >
@@ -944,11 +945,11 @@ export default function Planner() {
                     .sort((a, b) => a.timeStart.localeCompare(b.timeStart))
 
                   return (
-                    <div key={day.id} style={{ background: '#fff', borderRadius: 16, border: '1px solid rgba(88,110,117,0.12)', display: 'flex', flexDirection: 'column', minHeight: 480, overflow: 'hidden' }}>
+                    <div key={day.id} style={{ background: '#fff', borderRadius: RADIUS.xl, border: '1px solid rgba(88,110,117,0.12)', display: 'flex', flexDirection: 'column', minHeight: 480, overflow: 'hidden' }}>
                       {/* Column Header */}
                       <div style={{ background: '#fdfcf9', borderBottom: '1px solid rgba(88,110,117,0.1)', padding: '12px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div>
-                          <span style={{ fontWeight: 800, fontSize: 13.5, color: '#2c1a0e', display: 'block' }}>{day.name}</span>
+                          <span style={{ fontWeight: 800, fontSize: TEXT.body, color: '#2c1a0e', display: 'block' }}>{day.name}</span>
                           <span style={{ fontSize: 11, color: '#a08060', fontWeight: 600 }}>{dayItems.length} aula{dayItems.length !== 1 ? 's' : ''}</span>
                         </div>
                         <button
@@ -983,7 +984,7 @@ export default function Planner() {
                                 key={item.id}
                                 style={{
                                   background: '#fefefe', border: '1px solid #ede4d8', borderLeft: `4px solid ${cardColor}`,
-                                  borderRadius: 10, padding: 10, boxShadow: '0 2px 6px rgba(0,0,0,0.03)',
+                                  borderRadius: RADIUS.md, padding: 10, boxShadow: '0 2px 6px rgba(0,0,0,0.03)',
                                   display: 'flex', flexDirection: 'column', gap: 6, cursor: 'pointer'
                                 }}
                                 onClick={() => handleOpenEditScheduleModal(item)}
@@ -1018,7 +1019,7 @@ export default function Planner() {
                                   <span style={{ fontSize: 11, fontWeight: 800, color: cardColor, display: 'block' }}>
                                     {item.className || cls?.name || 'Turma Geral'}
                                   </span>
-                                  <strong style={{ fontSize: 12.5, color: '#2c1a0e', display: 'block', lineHeight: 1.3 }}>
+                                  <strong style={{ fontSize: TEXT.bodyCompact, color: '#2c1a0e', display: 'block', lineHeight: 1.3 }}>
                                     {item.topic}
                                   </strong>
                                   {item.notes && (
@@ -1065,7 +1066,7 @@ export default function Planner() {
               </div>
 
               {/* Side Card: Checklist Semanal */}
-              <div style={{ background: '#fff', borderRadius: 16, border: '1px solid rgba(88,110,117,0.12)', padding: 18, boxShadow: '0 2px 10px rgba(44,26,14,0.03)', display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div style={{ background: '#fff', borderRadius: RADIUS.xl, border: '1px solid rgba(88,110,117,0.12)', padding: 18, boxShadow: '0 2px 10px rgba(44,26,14,0.03)', display: 'flex', flexDirection: 'column', gap: 14 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <h3 style={{ margin: 0, fontSize: 15, fontWeight: 800, color: '#2c1a0e', display: 'flex', alignItems: 'center', gap: 6 }}>
                     <i className="ti ti-checklist" style={{ color: '#8b5e3c' }} /> Checklist da Semana
@@ -1081,7 +1082,7 @@ export default function Planner() {
                     type="text"
                     placeholder="+ Adicionar tarefa (Enter)..."
                     onKeyDown={handleAddChecklist}
-                    style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', borderRadius: 8, border: '1px solid #d5c0b0', fontSize: 12.5, color: '#2c1a0e' }}
+                    style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', borderRadius: RADIUS.md, border: '1px solid #d5c0b0', fontSize: TEXT.bodyCompact, color: '#2c1a0e' }}
                   />
                 </div>
 
@@ -1098,7 +1099,7 @@ export default function Planner() {
                         onClick={() => toggleChecklist(item.id)}
                         style={{
                           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                          padding: '7px 10px', borderRadius: 8, background: item.completed ? '#f5f5f5' : '#fdfaf5',
+                          padding: '7px 10px', borderRadius: RADIUS.md, background: item.completed ? '#f5f5f5' : '#fdfaf5',
                           border: '1px solid #ede8dc', cursor: 'pointer'
                         }}
                       >
@@ -1109,7 +1110,7 @@ export default function Planner() {
                             onChange={() => {}}
                             style={{ cursor: 'pointer' }}
                           />
-                          <span style={{ fontSize: 12.5, color: item.completed ? '#a08060' : '#2c1a0e', textDecoration: item.completed ? 'line-through' : 'none' }}>
+                          <span style={{ fontSize: TEXT.bodyCompact, color: item.completed ? '#a08060' : '#2c1a0e', textDecoration: item.completed ? 'line-through' : 'none' }}>
                             {item.text}
                           </span>
                         </div>
@@ -1125,7 +1126,7 @@ export default function Planner() {
                   )}
                 </div>
 
-                <div style={{ fontSize: 11, color: '#7a6552', background: '#faf6f0', border: '1px solid #ede4d8', borderRadius: 8, padding: '8px 10px', lineHeight: 1.35 }}>
+                <div style={{ fontSize: 11, color: '#7a6552', background: '#faf6f0', border: '1px solid #ede4d8', borderRadius: RADIUS.md, padding: '8px 10px', lineHeight: 1.35 }}>
                   💡 <strong>Dica:</strong> Tarefas da checklist são salvas automaticamente e persistem para organizar suas prioridades docentes.
                 </div>
               </div>
@@ -1269,7 +1270,7 @@ export default function Planner() {
                     })}
                     
                     {groupTasks.length === 0 && (
-                      <div style={{ textAlign: 'center', color: '#a08060', fontSize: 12, fontStyle: 'italic', padding: '32px 0', border: '1.5px dashed rgba(88,110,117,0.15)', borderRadius: 12 }}>
+                      <div style={{ textAlign: 'center', color: '#a08060', fontSize: 12, fontStyle: 'italic', padding: '32px 0', border: '1.5px dashed rgba(88,110,117,0.15)', borderRadius: RADIUS.lg }}>
                         Nenhuma tarefa
                       </div>
                     )}
@@ -1361,7 +1362,7 @@ export default function Planner() {
                           )}
                         </div>
 
-                        <h4 style={{ fontSize: 14.5, fontWeight: 700, color: '#2c1a0e', lineHeight: 1.3, marginBottom: 6 }}>
+                        <h4 style={{ fontSize: TEXT.body, fontWeight: 700, color: '#2c1a0e', lineHeight: 1.3, marginBottom: 6 }}>
                           {task.title}
                         </h4>
 
@@ -1375,7 +1376,7 @@ export default function Planner() {
                       {/* Dynamic Micro Clock */}
                       <div style={{
                         background: '#2c1a0e',
-                        borderRadius: 16,
+                        borderRadius: RADIUS.xl,
                         padding: '10px 12px',
                         display: 'flex',
                         justifyContent: 'space-around',
@@ -1456,7 +1457,7 @@ export default function Planner() {
                   onChange={(e) => setSearchText(e.target.value)}
                   style={{
                     width: '100%', padding: '10px 14px 10px 40px', background: '#f5f0e8', border: '1px solid #e8e0d0',
-                    borderRadius: 12, outline: 'none', color: '#2c1a0e', fontSize: 13, fontFamily: 'inherit'
+                    borderRadius: RADIUS.lg, outline: 'none', color: '#2c1a0e', fontSize: 13, fontFamily: 'inherit'
                   }}
                 />
               </div>
@@ -1606,7 +1607,7 @@ export default function Planner() {
                             <td style={{ padding: '16px 20px' }}>
                               <div>
                                 <span style={{
-                                  fontWeight: 700, color: '#2c1a0e', fontSize: 14.5,
+                                  fontWeight: 700, color: '#2c1a0e', fontSize: TEXT.body,
                                   textDecoration: task.done ? 'line-through' : 'none',
                                   opacity: task.done ? 0.75 : 1
                                 }}>
@@ -1633,7 +1634,7 @@ export default function Planner() {
                             {/* Class/Turma */}
                             <td style={{ padding: '16px 20px', color: '#7a5c42', fontWeight: 600, fontSize: 13 }}>
                               {task.classRef ? (
-                                <span style={{ background: '#f0e8d8', padding: '4px 8px', borderRadius: 8 }}>
+                                <span style={{ background: '#f0e8d8', padding: '4px 8px', borderRadius: RADIUS.md }}>
                                   {task.classRef}
                                 </span>
                               ) : (
@@ -1812,7 +1813,7 @@ export default function Planner() {
                 <button
                   type="submit"
                   style={{
-                    background: '#2c1a0e', color: '#fff', border: 'none', borderRadius: 12,
+                    background: '#2c1a0e', color: '#fff', border: 'none', borderRadius: RADIUS.lg,
                     padding: '10px 24px', fontWeight: 700, cursor: 'pointer', fontSize: 14,
                     boxShadow: '0 4px 12px rgba(7,54,66,0.15)'
                   }}
@@ -1945,14 +1946,14 @@ export default function Planner() {
                 <button
                   type="button"
                   onClick={() => setShowScheduleModal(false)}
-                  style={{ padding: '9px 16px', borderRadius: 10, border: '1px solid #d5c0b0', background: '#fff', color: '#7a5c42', fontWeight: 600, cursor: 'pointer' }}
+                  style={{ padding: '9px 16px', borderRadius: RADIUS.md, border: '1px solid #d5c0b0', background: '#fff', color: '#7a5c42', fontWeight: 600, cursor: 'pointer' }}
                 >
                   Cancelar
                 </button>
                 <button
                   type="button"
                   onClick={handleSaveSchedulePost}
-                  style={{ padding: '9px 20px', borderRadius: 10, border: 'none', background: '#8b5e3c', color: '#fff', fontWeight: 700, cursor: 'pointer', boxShadow: '0 2px 8px rgba(139,94,60,0.3)' }}
+                  style={{ padding: '9px 20px', borderRadius: RADIUS.md, border: 'none', background: '#8b5e3c', color: '#fff', fontWeight: 700, cursor: 'pointer', boxShadow: '0 2px 8px rgba(139,94,60,0.3)' }}
                 >
                   {editingSchedulePost ? 'Salvar Alterações' : 'Adicionar Aula'}
                 </button>
@@ -1975,13 +1976,13 @@ export default function Planner() {
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
               <button
                 onClick={() => setPostToDelete(null)}
-                style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid #d5c0b0', background: '#fff', color: '#7a5c42', fontWeight: 600, cursor: 'pointer' }}
+                style={{ padding: '8px 14px', borderRadius: RADIUS.md, border: '1px solid #d5c0b0', background: '#fff', color: '#7a5c42', fontWeight: 600, cursor: 'pointer' }}
               >
                 Cancelar
               </button>
               <button
                 onClick={handleConfirmDeleteSchedulePost}
-                style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: '#dc322f', color: '#fff', fontWeight: 700, cursor: 'pointer' }}
+                style={{ padding: '8px 16px', borderRadius: RADIUS.md, border: 'none', background: '#dc322f', color: '#fff', fontWeight: 700, cursor: 'pointer' }}
               >
                 Excluir
               </button>
@@ -1995,7 +1996,7 @@ export default function Planner() {
 
 // React CSS Styles
 const AddBtn: React.CSSProperties = {
-  background: '#b58900', color: '#fff', border: 'none', padding: '12px 24px', borderRadius: 16,
+  background: '#b58900', color: '#fff', border: 'none', padding: '12px 24px', borderRadius: RADIUS.xl,
   fontWeight: 700, fontSize: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
   boxShadow: '0 4px 12px rgba(181,137,0,0.2)', transition: 'all 0.2s',
 }
@@ -2007,12 +2008,12 @@ const MonthNavBtn: React.CSSProperties = {
 }
 
 const TableSelect: React.CSSProperties = {
-  padding: '8px 12px', background: '#fff', border: '1px solid #ede8dc', borderRadius: 10,
-  fontSize: 12.5, fontWeight: 600, color: '#2c1a0e', outline: 'none'
+  padding: '8px 12px', background: '#fff', border: '1px solid #ede8dc', borderRadius: RADIUS.md,
+  fontSize: TEXT.bodyCompact, fontWeight: 600, color: '#2c1a0e', outline: 'none'
 }
 
 const ActionBtn: React.CSSProperties = {
-  background: 'none', border: 'none', padding: 6, borderRadius: 8, cursor: 'pointer',
+  background: 'none', border: 'none', padding: 6, borderRadius: RADIUS.md, cursor: 'pointer',
   display: 'flex', alignItems: 'center', fontSize: 18, transition: 'all 0.15s'
 }
 
@@ -2021,11 +2022,11 @@ const ModalLabel: React.CSSProperties = {
 }
 
 const ModalInput: React.CSSProperties = {
-  width: '100%', padding: '12px 14px', border: '1px solid #ede8dc', borderRadius: 12, outline: 'none', fontSize: 13.5, background: '#fcfaf7', color: '#2c1a0e'
+  width: '100%', padding: '12px 14px', border: '1px solid #ede8dc', borderRadius: RADIUS.lg, outline: 'none', fontSize: TEXT.body, background: '#fcfaf7', color: '#2c1a0e'
 }
 
 const ModalSelect: React.CSSProperties = {
-  width: '100%', padding: '12px 14px', border: '1px solid #ede8dc', borderRadius: 12, outline: 'none', fontSize: 13.5, background: '#fcfaf7', color: '#2c1a0e'
+  width: '100%', padding: '12px 14px', border: '1px solid #ede8dc', borderRadius: RADIUS.lg, outline: 'none', fontSize: TEXT.body, background: '#fcfaf7', color: '#2c1a0e'
 }
 
 // PREMIUM COUNTDOWN & HERO PANELS
@@ -2052,7 +2053,7 @@ const CountdownGrid: React.CSSProperties = {
 
 const TimeBlock: React.CSSProperties = {
   background: '#2c1a0e',
-  borderRadius: 16,
+  borderRadius: RADIUS.xl,
   padding: '12px 16px',
   display: 'flex',
   flexDirection: 'column',
@@ -2101,7 +2102,7 @@ const SuggestionBtn: React.CSSProperties = {
   color: '#fff',
   border: 'none',
   padding: '10px 16px',
-  borderRadius: 12,
+  borderRadius: RADIUS.lg,
   fontWeight: 700,
   fontSize: 13,
   cursor: 'pointer',
@@ -2117,7 +2118,7 @@ const ExportBtn: React.CSSProperties = {
   color: '#fff',
   border: 'none',
   padding: '10px 16px',
-  borderRadius: 12,
+  borderRadius: RADIUS.lg,
   fontWeight: 700,
   fontSize: 13,
   cursor: 'pointer',
@@ -2135,12 +2136,12 @@ const ToastOverlay: React.CSSProperties = {
   background: '#002b36',
   color: '#fdf8f2',
   padding: '14px 20px',
-  borderRadius: 16,
+  borderRadius: RADIUS.xl,
   boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.25)',
   display: 'flex',
   alignItems: 'center',
   gap: 12,
-  fontSize: 13.5,
+  fontSize: TEXT.body,
   fontWeight: 600,
   zIndex: 1100,
   border: '1px solid rgba(42,161,152,0.3)',

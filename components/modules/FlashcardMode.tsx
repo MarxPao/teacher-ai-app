@@ -1,4 +1,5 @@
-'use client';
+'use client'
+import { COLOR, RADIUS, TEXT, SHADOW, FONT } from '@/styles/tokens';
 import { toast, showConfirm } from '@/components/Toast'
 
 import React, { useState, useEffect, useRef, CSSProperties } from 'react';
@@ -883,7 +884,7 @@ const inputStyle: CSSProperties = {
  color: paperTheme.textMain,
  padding: '10px 14px',
  borderRadius: '9px',
- fontSize: '13.5px',
+ fontSize: TEXT.body,
  fontFamily: "'Plus Jakarta Sans', sans-serif",
  outline: 'none',
  boxSizing: 'border-box',
@@ -911,7 +912,7 @@ const btnStyle = (variant: 'primary'|'secondary'|'danger'|'success'|'warning'|'a
  color: color,
  border: border,
  borderRadius: '9px',
- fontSize: '13.5px',
+ fontSize: TEXT.body,
  fontWeight: variant === 'secondary' ? 500 : 600,
  fontFamily: "'Plus Jakarta Sans', sans-serif",
  cursor: 'pointer',
@@ -919,4 +920,4 @@ const btnStyle = (variant: 'primary'|'secondary'|'danger'|'success'|'warning'|'a
  transition: 'all 0.18s ease',
  justifyContent: 'center'
  };
-};
+};

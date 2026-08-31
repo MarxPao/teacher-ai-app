@@ -1,4 +1,5 @@
 'use client'
+import { COLOR, RADIUS, TEXT, SHADOW, FONT } from '@/styles/tokens'
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import ModuleShell from '@/components/ModuleShell'
@@ -623,11 +624,11 @@ export default function AttendanceList() {
           }}>
             {/* Header com Abas e Ações */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
-              <div style={{ display: 'flex', background: '#faf6f0', padding: 3, borderRadius: 10, border: '1px solid #ede8dc', gap: 4 }}>
+              <div style={{ display: 'flex', background: '#faf6f0', padding: 3, borderRadius: RADIUS.md, border: '1px solid #ede8dc', gap: 4 }}>
                 <button
                   onClick={() => setActiveTab('daily')}
                   style={{
-                    padding: '6px 14px', borderRadius: 8, border: 'none',
+                    padding: '6px 14px', borderRadius: RADIUS.md, border: 'none',
                     background: activeTab === 'daily' ? '#2c1a0e' : 'transparent',
                     color: activeTab === 'daily' ? '#fff' : '#665c54',
                     fontSize: 12, fontWeight: 700, cursor: 'pointer'
@@ -638,7 +639,7 @@ export default function AttendanceList() {
                 <button
                   onClick={() => setActiveTab('report')}
                   style={{
-                    padding: '6px 14px', borderRadius: 8, border: 'none',
+                    padding: '6px 14px', borderRadius: RADIUS.md, border: 'none',
                     background: activeTab === 'report' ? '#2c1a0e' : 'transparent',
                     color: activeTab === 'report' ? '#fff' : '#665c54',
                     fontSize: 12, fontWeight: 700, cursor: 'pointer'
@@ -649,7 +650,7 @@ export default function AttendanceList() {
                 <button
                   onClick={() => setActiveTab('history')}
                   style={{
-                    padding: '6px 14px', borderRadius: 8, border: 'none',
+                    padding: '6px 14px', borderRadius: RADIUS.md, border: 'none',
                     background: activeTab === 'history' ? '#2c1a0e' : 'transparent',
                     color: activeTab === 'history' ? '#fff' : '#665c54',
                     fontSize: 12, fontWeight: 700, cursor: 'pointer'
@@ -664,8 +665,8 @@ export default function AttendanceList() {
                   <button
                     onClick={handleExportCSV}
                     style={{
-                      padding: '7px 12px', borderRadius: 8, border: '1px solid #d5c8bb', background: '#fff',
-                      color: '#2c1a0e', fontSize: 11.5, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5
+                      padding: '7px 12px', borderRadius: RADIUS.md, border: '1px solid #d5c8bb', background: '#fff',
+                      color: '#2c1a0e', fontSize: TEXT.caption, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5
                     }}
                   >
                     <i className="ti ti-file-spreadsheet" /> Exportar CSV
@@ -673,8 +674,8 @@ export default function AttendanceList() {
                   <button
                     onClick={() => setIsMirrorModalOpen(true)}
                     style={{
-                      padding: '7px 14px', borderRadius: 8, border: 'none', background: '#16a34a',
-                      color: '#fff', fontSize: 11.5, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5,
+                      padding: '7px 14px', borderRadius: RADIUS.md, border: 'none', background: '#16a34a',
+                      color: '#fff', fontSize: TEXT.caption, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5,
                       boxShadow: '0 2px 8px rgba(22,163,74,0.2)'
                     }}
                   >
@@ -683,8 +684,8 @@ export default function AttendanceList() {
                   <button
                     onClick={handleSaveAttendanceSession}
                     style={{
-                      padding: '7px 16px', borderRadius: 8, border: 'none', background: '#8b5e3c',
-                      color: '#fff', fontSize: 11.5, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5
+                      padding: '7px 16px', borderRadius: RADIUS.md, border: 'none', background: '#8b5e3c',
+                      color: '#fff', fontSize: TEXT.caption, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5
                     }}
                   >
                     <i className="ti ti-device-floppy" /> Salvar Chamada
@@ -709,7 +710,7 @@ export default function AttendanceList() {
                     if (matching.length > 0) setSelectedClass(matching[0].id)
                     else setSelectedClass('')
                   }}
-                  style={{ width: '100%', padding: '8px 12px', borderRadius: 10, border: '1px solid #d5c8bb', background: '#faf6f0', fontSize: 12.5, fontWeight: 600, outline: 'none', color: '#2c1a0e' }}
+                  style={{ width: '100%', padding: '8px 12px', borderRadius: RADIUS.md, border: '1px solid #d5c8bb', background: '#faf6f0', fontSize: TEXT.bodyCompact, fontWeight: 600, outline: 'none', color: '#2c1a0e' }}
                 >
                   <option value="all">🏫 Todas as Escolas</option>
                   {schools.map(s => (
@@ -726,7 +727,7 @@ export default function AttendanceList() {
                 <select
                   value={selectedClass}
                   onChange={e => setSelectedClass(e.target.value)}
-                  style={{ width: '100%', padding: '8px 12px', borderRadius: 10, border: '1px solid #d5c8bb', background: '#faf6f0', fontSize: 12.5, fontWeight: 700, outline: 'none', color: '#2c1a0e' }}
+                  style={{ width: '100%', padding: '8px 12px', borderRadius: RADIUS.md, border: '1px solid #d5c8bb', background: '#faf6f0', fontSize: TEXT.bodyCompact, fontWeight: 700, outline: 'none', color: '#2c1a0e' }}
                 >
                   <option value="">Selecione uma turma...</option>
                   {filteredClasses.map(c => {
@@ -749,7 +750,7 @@ export default function AttendanceList() {
                   placeholder="Buscar pelo nome do aluno..."
                   value={studentSearch}
                   onChange={e => setStudentSearch(e.target.value)}
-                  style={{ width: '100%', padding: '8px 12px', borderRadius: 10, border: '1px solid #d5c8bb', background: '#faf6f0', fontSize: 12.5, outline: 'none', color: '#2c1a0e' }}
+                  style={{ width: '100%', padding: '8px 12px', borderRadius: RADIUS.md, border: '1px solid #d5c8bb', background: '#faf6f0', fontSize: TEXT.bodyCompact, outline: 'none', color: '#2c1a0e' }}
                 />
               </div>
             </div>
@@ -757,7 +758,7 @@ export default function AttendanceList() {
             {/* Linha 2: Barra de Dia da Semana & Horário da Aula */}
             <div style={{
               background: '#faf6f0',
-              borderRadius: 14,
+              borderRadius: RADIUS.lg,
               padding: '12px 16px',
               border: '1px solid #ede8dc',
               display: 'flex',
@@ -786,11 +787,11 @@ export default function AttendanceList() {
                           onClick={() => handleSelectDayOfWeek(d.id)}
                           style={{
                             padding: '4px 10px',
-                            borderRadius: 8,
+                            borderRadius: RADIUS.md,
                             border: isSel ? '2px solid #8b5e3c' : '1px solid #d5c8bb',
                             background: isSel ? '#2c1a0e' : '#fff',
                             color: isSel ? '#fff' : '#665c54',
-                            fontSize: 11.5,
+                            fontSize: TEXT.caption,
                             fontWeight: isSel ? 800 : 600,
                             cursor: 'pointer',
                             transition: 'all 0.15s'
@@ -806,7 +807,7 @@ export default function AttendanceList() {
                     type="date"
                     value={selectedDate}
                     onChange={e => setSelectedDate(e.target.value)}
-                    style={{ padding: '4px 8px', borderRadius: 8, border: '1px solid #d5c8bb', background: '#fff', fontSize: 11.5, fontWeight: 700, color: '#2c1a0e', outline: 'none', marginLeft: 4 }}
+                    style={{ padding: '4px 8px', borderRadius: RADIUS.md, border: '1px solid #d5c8bb', background: '#fff', fontSize: TEXT.caption, fontWeight: 700, color: '#2c1a0e', outline: 'none', marginLeft: 4 }}
                   />
                 </div>
 
@@ -825,7 +826,7 @@ export default function AttendanceList() {
                           setSelectedTimeSlot(e.target.value)
                         }
                       }}
-                      style={{ padding: '5px 10px', borderRadius: 8, border: '1px solid #d5c8bb', background: '#fff', fontSize: 12, fontWeight: 700, color: '#2c1a0e', outline: 'none' }}
+                      style={{ padding: '5px 10px', borderRadius: RADIUS.md, border: '1px solid #d5c8bb', background: '#fff', fontSize: 12, fontWeight: 700, color: '#2c1a0e', outline: 'none' }}
                     >
                       {availableTimeSlots.map((slot, i) => (
                         <option key={i} value={slot}>{slot}</option>
@@ -838,7 +839,7 @@ export default function AttendanceList() {
                         value={customTime}
                         onChange={e => setCustomTime(e.target.value)}
                         placeholder="Ex: 08:00 - 08:50"
-                        style={{ padding: '5px 8px', borderRadius: 8, border: '1px solid #d5c8bb', background: '#fff', fontSize: 12, fontWeight: 700, color: '#2c1a0e', width: 120, outline: 'none' }}
+                        style={{ padding: '5px 8px', borderRadius: RADIUS.md, border: '1px solid #d5c8bb', background: '#fff', fontSize: 12, fontWeight: 700, color: '#2c1a0e', width: 120, outline: 'none' }}
                       />
                       <button
                         onClick={() => setIsCustomTime(false)}
@@ -888,7 +889,7 @@ export default function AttendanceList() {
                   <span style={{ fontSize: 11, fontWeight: 800, color: '#8b5e3c', textTransform: 'uppercase', letterSpacing: 0.5 }}>
                     📊 Estatísticas de Presença em Tempo Real
                   </span>
-                  <div style={{ fontSize: 14.5, fontWeight: 800, color: '#2c1a0e', marginTop: 1 }}>
+                  <div style={{ fontSize: TEXT.body, fontWeight: 800, color: '#2c1a0e', marginTop: 1 }}>
                     {dayOfWeekObj.full} · {isCustomTime ? customTime : selectedTimeSlot} · {selectedClassObj?.name}
                   </div>
                 </div>
@@ -898,8 +899,8 @@ export default function AttendanceList() {
                   <button
                     onClick={handleMarkAllPresent}
                     style={{
-                      padding: '6px 12px', borderRadius: 8, border: 'none', background: '#dcfce7',
-                      color: '#16a34a', fontSize: 11.5, fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4
+                      padding: '6px 12px', borderRadius: RADIUS.md, border: 'none', background: '#dcfce7',
+                      color: '#16a34a', fontSize: TEXT.caption, fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4
                     }}
                   >
                     <i className="ti ti-check" /> Todos PRESENÇA
@@ -907,8 +908,8 @@ export default function AttendanceList() {
                   <button
                     onClick={handleMarkAllAbsent}
                     style={{
-                      padding: '6px 12px', borderRadius: 8, border: 'none', background: '#fee2e2',
-                      color: '#dc2626', fontSize: 11.5, fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4
+                      padding: '6px 12px', borderRadius: RADIUS.md, border: 'none', background: '#fee2e2',
+                      color: '#dc2626', fontSize: TEXT.caption, fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4
                     }}
                   >
                     <i className="ti ti-x" /> Todos FALTA
@@ -916,8 +917,8 @@ export default function AttendanceList() {
                   <button
                     onClick={handleInvertAttendance}
                     style={{
-                      padding: '6px 12px', borderRadius: 8, border: '1px solid #ede8dc', background: '#faf6f0',
-                      color: '#665c54', fontSize: 11.5, fontWeight: 700, cursor: 'pointer'
+                      padding: '6px 12px', borderRadius: RADIUS.md, border: '1px solid #ede8dc', background: '#faf6f0',
+                      color: '#665c54', fontSize: TEXT.caption, fontWeight: 700, cursor: 'pointer'
                     }}
                   >
                     🔄 Inverter
@@ -928,13 +929,13 @@ export default function AttendanceList() {
               {/* Cards de Métricas Principais */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10 }}>
                 {/* Total */}
-                <div style={{ background: '#faf6f0', borderRadius: 12, padding: '10px 14px', border: '1px solid #ede8dc' }}>
+                <div style={{ background: '#faf6f0', borderRadius: RADIUS.lg, padding: '10px 14px', border: '1px solid #ede8dc' }}>
                   <div style={{ fontSize: 10.5, fontWeight: 700, color: '#665c54', textTransform: 'uppercase' }}>👥 Total de Alunos</div>
                   <div style={{ fontSize: 20, fontWeight: 800, color: '#2c1a0e', marginTop: 2 }}>{metrics.total}</div>
                 </div>
 
                 {/* Ponto 1: Presenças */}
-                <div style={{ background: '#f0fdf4', borderRadius: 12, padding: '10px 14px', border: '1.5px solid #86efac' }}>
+                <div style={{ background: '#f0fdf4', borderRadius: RADIUS.lg, padding: '10px 14px', border: '1.5px solid #86efac' }}>
                   <div style={{ fontSize: 10.5, fontWeight: 800, color: '#16a34a', textTransform: 'uppercase' }}>🟢 Presenças</div>
                   <div style={{ fontSize: 20, fontWeight: 800, color: '#15803d', marginTop: 2 }}>
                     {metrics.present} <span style={{ fontSize: 12, fontWeight: 700 }}>({metrics.presentPct}%)</span>
@@ -942,7 +943,7 @@ export default function AttendanceList() {
                 </div>
 
                 {/* Ponto 2: Faltas */}
-                <div style={{ background: '#fef2f2', borderRadius: 12, padding: '10px 14px', border: '1.5px solid #fca5a5' }}>
+                <div style={{ background: '#fef2f2', borderRadius: RADIUS.lg, padding: '10px 14px', border: '1.5px solid #fca5a5' }}>
                   <div style={{ fontSize: 10.5, fontWeight: 800, color: '#dc2626', textTransform: 'uppercase' }}>🔴 Faltas</div>
                   <div style={{ fontSize: 20, fontWeight: 800, color: '#b91c1c', marginTop: 2 }}>
                     {metrics.absent} <span style={{ fontSize: 12, fontWeight: 700 }}>({metrics.absentPct}%)</span>
@@ -950,7 +951,7 @@ export default function AttendanceList() {
                 </div>
 
                 {/* Taxa Global de Frequência */}
-                <div style={{ background: '#2c1a0e', borderRadius: 12, padding: '10px 14px', color: '#fff' }}>
+                <div style={{ background: '#2c1a0e', borderRadius: RADIUS.lg, padding: '10px 14px', color: '#fff' }}>
                   <div style={{ fontSize: 10.5, fontWeight: 800, color: '#fef3c7', textTransform: 'uppercase' }}>📈 Taxa da Aula</div>
                   <div style={{ fontSize: 20, fontWeight: 800, color: '#fff', marginTop: 2 }}>{metrics.attendanceRate}%</div>
                 </div>
@@ -991,10 +992,10 @@ export default function AttendanceList() {
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, flexWrap: 'wrap', gap: 8 }}>
                 <div>
-                  <h3 style={{ margin: 0, fontSize: 15.5, fontWeight: 800, color: '#2c1a0e' }}>
+                  <h3 style={{ margin: 0, fontSize: TEXT.subtitle, fontWeight: 800, color: '#2c1a0e' }}>
                     Chamada Rápida — 2 Pontos por Aluno ({displayedStudents.length} alunos)
                   </h3>
-                  <p style={{ margin: 0, fontSize: 11.5, color: '#665c54', marginTop: 2 }}>
+                  <p style={{ margin: 0, fontSize: TEXT.caption, color: '#665c54', marginTop: 2 }}>
                     Dica: Clique diretamente no botão <strong>PRESENÇA</strong> ou <strong>FALTA</strong> com 1 clique para alterar o estado do aluno.
                   </p>
                 </div>
@@ -1012,7 +1013,7 @@ export default function AttendanceList() {
                       key={student.id}
                       style={{
                         padding: '10px 16px',
-                        borderRadius: 12,
+                        borderRadius: RADIUS.lg,
                         background: isPresent ? '#f0fdf4' : isAbsent ? '#fef2f2' : '#faf6f0',
                         border: `1.5px solid ${isPresent ? '#86efac' : isAbsent ? '#fca5a5' : '#ede8dc'}`,
                         display: 'flex',
@@ -1056,7 +1057,7 @@ export default function AttendanceList() {
                           style={{
                             width: '100%',
                             padding: '6px 10px',
-                            borderRadius: 8,
+                            borderRadius: RADIUS.md,
                             border: '1px solid #d5c8bb',
                             background: '#fff',
                             fontSize: 12,
@@ -1073,7 +1074,7 @@ export default function AttendanceList() {
                           onClick={() => setStudentStatus(student.id, 'present')}
                           style={{
                             padding: '8px 16px',
-                            borderRadius: 10,
+                            borderRadius: RADIUS.md,
                             border: isPresent ? '2px solid #16a34a' : '1px solid #d5c8bb',
                             background: isPresent ? '#16a34a' : '#fff',
                             color: isPresent ? '#fff' : '#16a34a',
@@ -1098,7 +1099,7 @@ export default function AttendanceList() {
                           onClick={() => setStudentStatus(student.id, 'absent')}
                           style={{
                             padding: '8px 16px',
-                            borderRadius: 10,
+                            borderRadius: RADIUS.md,
                             border: isAbsent ? '2px solid #dc2626' : '1px solid #d5c8bb',
                             background: isAbsent ? '#dc2626' : '#fff',
                             color: isAbsent ? '#fff' : '#dc2626',
@@ -1138,7 +1139,7 @@ export default function AttendanceList() {
               border: '1px solid #ede8dc',
               boxShadow: '0 3px 14px rgba(44,26,14,0.03)'
             }}>
-              <h3 style={{ margin: '0 0 14px 0', fontSize: 15.5, fontWeight: 800, color: '#2c1a0e' }}>
+              <h3 style={{ margin: '0 0 14px 0', fontSize: TEXT.subtitle, fontWeight: 800, color: '#2c1a0e' }}>
                 📊 Relatório de Assiduidade Acumulada — {selectedClassObj?.name}
               </h3>
 
@@ -1147,12 +1148,12 @@ export default function AttendanceList() {
                   <div
                     key={stat.student.id}
                     style={{
-                      padding: '12px 14px', borderRadius: 12, background: '#faf6f0', border: '1px solid #ede8dc',
+                      padding: '12px 14px', borderRadius: RADIUS.lg, background: '#faf6f0', border: '1px solid #ede8dc',
                       display: 'flex', flexDirection: 'column', gap: 8
                     }}
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <strong style={{ fontSize: 13.5, color: '#2c1a0e' }}>{stat.student.name}</strong>
+                      <strong style={{ fontSize: TEXT.body, color: '#2c1a0e' }}>{stat.student.name}</strong>
                       <span style={{
                         fontSize: 12, fontWeight: 800, padding: '2px 8px', borderRadius: 6,
                         background: stat.rate >= 75 ? '#dcfce7' : '#fee2e2',
@@ -1162,7 +1163,7 @@ export default function AttendanceList() {
                       </span>
                     </div>
 
-                    <div style={{ fontSize: 11.5, color: '#665c54', display: 'flex', gap: 14 }}>
+                    <div style={{ fontSize: TEXT.caption, color: '#665c54', display: 'flex', gap: 14 }}>
                       <span>Presenças: <strong style={{ color: '#16a34a' }}>{stat.attended}</strong></span>
                       <span>Faltas: <strong style={{ color: '#dc2626' }}>{stat.absents}</strong></span>
                       <span>Total Aulas: <strong>{stat.totalSessions}</strong></span>
@@ -1184,7 +1185,7 @@ export default function AttendanceList() {
               border: '1px solid #ede8dc',
               boxShadow: '0 3px 14px rgba(44,26,14,0.03)'
             }}>
-              <h3 style={{ margin: '0 0 14px 0', fontSize: 15.5, fontWeight: 800, color: '#2c1a0e' }}>
+              <h3 style={{ margin: '0 0 14px 0', fontSize: TEXT.subtitle, fontWeight: 800, color: '#2c1a0e' }}>
                 📜 Histórico de Sessões de Chamada — {selectedClassObj?.name}
               </h3>
 
@@ -1198,21 +1199,21 @@ export default function AttendanceList() {
                     <div
                       key={session.id}
                       style={{
-                        padding: '12px 16px', borderRadius: 12, background: '#faf6f0', border: '1px solid #ede8dc',
+                        padding: '12px 16px', borderRadius: RADIUS.lg, background: '#faf6f0', border: '1px solid #ede8dc',
                         display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10
                       }}
                     >
                       <div>
-                        <div style={{ fontSize: 13.5, fontWeight: 800, color: '#2c1a0e' }}>
+                        <div style={{ fontSize: TEXT.body, fontWeight: 800, color: '#2c1a0e' }}>
                           📅 {session.dayOfWeekName || 'Dia'} · {session.date.split('-').reverse().join('/')} · {session.timeSlot || 'Horário Padrão'}
                         </div>
-                        <div style={{ fontSize: 11.5, color: '#665c54', marginTop: 2 }}>
+                        <div style={{ fontSize: TEXT.caption, color: '#665c54', marginTop: 2 }}>
                           Presenças: <strong style={{ color: '#16a34a' }}>{session.presentCount}</strong> · Faltas: <strong style={{ color: '#dc2626' }}>{session.absentCount}</strong> · Total: {session.totalStudents} alunos
                         </div>
                       </div>
 
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <span style={{ fontSize: 13, fontWeight: 800, color: '#16a34a', background: '#dcfce7', padding: '4px 10px', borderRadius: 8 }}>
+                        <span style={{ fontSize: 13, fontWeight: 800, color: '#16a34a', background: '#dcfce7', padding: '4px 10px', borderRadius: RADIUS.md }}>
                           {session.attendanceRate}% Presença
                         </span>
                         <button
@@ -1221,7 +1222,7 @@ export default function AttendanceList() {
                             if (session.timeSlot) setSelectedTimeSlot(session.timeSlot)
                             setActiveTab('daily')
                           }}
-                          style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid #d5c8bb', background: '#fff', color: '#2c1a0e', fontSize: 11.5, fontWeight: 700, cursor: 'pointer' }}
+                          style={{ padding: '6px 12px', borderRadius: RADIUS.md, border: '1px solid #d5c8bb', background: '#fff', color: '#2c1a0e', fontSize: TEXT.caption, fontWeight: 700, cursor: 'pointer' }}
                         >
                           Abrir Chamada
                         </button>
@@ -1246,18 +1247,18 @@ export default function AttendanceList() {
                   <button onClick={() => setIsMirrorModalOpen(false)} style={{ background: 'none', border: 'none', fontSize: 18, cursor: 'pointer' }}>✕</button>
                 </div>
 
-                <p style={{ fontSize: 12.5, color: '#665c54', margin: 0, lineHeight: 1.4 }}>
+                <p style={{ fontSize: TEXT.bodyCompact, color: '#665c54', margin: 0, lineHeight: 1.4 }}>
                   Transfira a lista de presença da turma <strong>{selectedClassObj?.name}</strong> para o portal oficial no Chrome sem digitação manual.
                 </p>
 
                 <div>
-                  <label style={{ fontSize: 11.5, fontWeight: 700, color: '#2c1a0e', display: 'block', marginBottom: 4 }}>
+                  <label style={{ fontSize: TEXT.caption, fontWeight: 700, color: '#2c1a0e', display: 'block', marginBottom: 4 }}>
                     Portal de Destino:
                   </label>
                   <select
                     value={selectedMirrorPortal}
                     onChange={e => setSelectedMirrorPortal(e.target.value)}
-                    style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #d5c8bb', background: '#faf6f0', fontSize: 12.5 }}
+                    style={{ width: '100%', padding: '8px 12px', borderRadius: RADIUS.md, border: '1px solid #d5c8bb', background: '#faf6f0', fontSize: TEXT.bodyCompact }}
                   >
                     <option value="plural">Plurall (SOMOS Educação)</option>
                     <option value="machado">Portal Machado Sobrinho</option>
@@ -1266,16 +1267,16 @@ export default function AttendanceList() {
                   </select>
                 </div>
 
-                <div style={{ background: '#faf6f0', padding: 12, borderRadius: 10, fontSize: 12, color: '#2c1a0e' }}>
+                <div style={{ background: '#faf6f0', padding: 12, borderRadius: RADIUS.md, fontSize: 12, color: '#2c1a0e' }}>
                   <div><strong>Presentes ({metrics.present}):</strong> {classStudents.filter(s => attendance[s.id]?.status === 'present').length} alunos</div>
                   <div><strong>Ausentes ({metrics.absent}):</strong> {classStudents.filter(s => attendance[s.id]?.status === 'absent').map(s => s.name).join(', ') || 'Nenhum'}</div>
                 </div>
 
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 4 }}>
-                  <button onClick={() => setIsMirrorModalOpen(false)} style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid #d5c8bb', background: '#fff', fontSize: 12, cursor: 'pointer' }}>
+                  <button onClick={() => setIsMirrorModalOpen(false)} style={{ padding: '8px 14px', borderRadius: RADIUS.md, border: '1px solid #d5c8bb', background: '#fff', fontSize: 12, cursor: 'pointer' }}>
                     Cancelar
                   </button>
-                  <button onClick={handleExecuteMirrorAttendance} style={{ padding: '8px 18px', borderRadius: 8, border: 'none', background: '#16a34a', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                  <button onClick={handleExecuteMirrorAttendance} style={{ padding: '8px 18px', borderRadius: RADIUS.md, border: 'none', background: '#16a34a', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
                     Preencher Portal Agora
                   </button>
                 </div>
@@ -1287,7 +1288,7 @@ export default function AttendanceList() {
           {toastMessage && (
             <div style={{
               position: 'fixed', bottom: 20, right: 20, padding: '12px 20px', background: '#2c1a0e', color: '#fff',
-              borderRadius: 10, boxShadow: '0 4px 16px rgba(0,0,0,0.25)', zIndex: 999999, fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8
+              borderRadius: RADIUS.md, boxShadow: '0 4px 16px rgba(0,0,0,0.25)', zIndex: 999999, fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8
             }}>
               <i className="ti ti-check" />
               {toastMessage}

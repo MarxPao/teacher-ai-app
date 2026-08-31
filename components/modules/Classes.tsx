@@ -1,4 +1,5 @@
 'use client'
+import { COLOR, RADIUS, TEXT, SHADOW, FONT } from '@/styles/tokens'
 import { toast, showConfirm } from '@/components/Toast'
 import { useState, useEffect, useMemo } from 'react'
 
@@ -11,10 +12,10 @@ const PALETTE = ['#b58900','#dc322f','#d33682','#6c71c4','#268bd2','#2aa198','#8
 
 const S: Record<string, React.CSSProperties> = {
   page:   { padding: '32px 48px', minHeight: '100%', boxSizing: 'border-box', background: '#fdf8f2' },
-  card:   { background: '#fff', border: '1px solid #ede8dc', borderRadius: 16, padding: '20px 24px', boxShadow: '0 2px 8px rgba(44,26,14,0.06)' },
+  card:   { background: '#fff', border: '1px solid #ede8dc', borderRadius: RADIUS.xl, padding: '20px 24px', boxShadow: '0 2px 8px rgba(44,26,14,0.06)' },
   badge:  { display: 'inline-flex', alignItems: 'center', padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600 },
-  btn:    { display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 10, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600 },
-  input:  { width: '100%', padding: '9px 12px', borderRadius: 10, border: '1px solid #ddd', background: '#fdf8f2', fontSize: 13, outline: 'none', boxSizing: 'border-box' },
+  btn:    { display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: RADIUS.md, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600 },
+  input:  { width: '100%', padding: '9px 12px', borderRadius: RADIUS.md, border: '1px solid #ddd', background: '#fdf8f2', fontSize: 13, outline: 'none', boxSizing: 'border-box' },
   label:  { display: 'block', fontSize: 11, fontWeight: 700, color: '#7a5c42', textTransform: 'uppercase' as const, letterSpacing: '0.8px', marginBottom: 5 },
 }
 
@@ -194,7 +195,7 @@ export default function Classes() {
                     transform: isActive ? 'translateY(-2px)' : undefined,
                   }}>
                     <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 12 }}>
-                      <div style={{ width: 44, height: 44, borderRadius: 12, background: school?.color || '#268bd2', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <div style={{ width: 44, height: 44, borderRadius: RADIUS.lg, background: school?.color || '#268bd2', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                         <i className="ti ti-school" style={{ color: '#fff', fontSize: 20 }} />
                       </div>
                       <div style={{ display: 'flex', gap: 6 }}>
@@ -243,7 +244,7 @@ export default function Classes() {
               </div>
 
               {detailClass.subject && (
-                <div style={{ background: '#f5f0e8', borderRadius: 10, padding: '10px 14px', marginBottom: 16 }}>
+                <div style={{ background: '#f5f0e8', borderRadius: RADIUS.md, padding: '10px 14px', marginBottom: 16 }}>
                   <div style={{ fontSize: 11, color: '#a08060', marginBottom: 2 }}>DISCIPLINA · ANO</div>
                   <div style={{ fontWeight: 600, color: '#2c1a0e' }}>{detailClass.subject} · {detailClass.year}</div>
                 </div>
@@ -263,7 +264,7 @@ export default function Classes() {
                   const grades = Object.values(st.grades || {}).map(Number).filter(n => !isNaN(n) && n > 0)
                   const avg = grades.length ? (grades.reduce((a, b) => a + b, 0) / grades.length).toFixed(1) : null
                   return (
-                    <div key={st.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: '#f5f0e8', borderRadius: 10 }}>
+                    <div key={st.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: '#f5f0e8', borderRadius: RADIUS.md }}>
                       <div>
                         <div style={{ fontSize: 13, fontWeight: 600, color: '#2c1a0e' }}>{st.name}</div>
                         <div style={{ fontSize: 11, color: '#a08060' }}>{st.level}</div>

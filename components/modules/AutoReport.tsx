@@ -1,4 +1,5 @@
-'use client';
+'use client'
+import { COLOR, RADIUS, TEXT, SHADOW, FONT } from '@/styles/tokens';
 
 import React, { useState, useEffect } from 'react';
 import { validateReportGrounding } from '@/lib/reportGroundingValidator';
@@ -278,7 +279,7 @@ Utilize tom formal, embasado e respeitoso em português.`;
             </h2>
 
             <div style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'block', marginBottom: '8px', fontSize: '13.5px', color: '#7a5c42', fontWeight: 500 }}>Turma</label>
+              <label style={{ display: 'block', marginBottom: '8px', fontSize: TEXT.body, color: '#7a5c42', fontWeight: 500 }}>Turma</label>
               <select
                 value={selectedClassId}
                 onChange={(e) => setSelectedClassId(e.target.value)}
@@ -290,7 +291,7 @@ Utilize tom formal, embasado e respeitoso em português.`;
                   borderRadius: '9px',
                   color: '#2c1a0e',
                   outline: 'none',
-                  fontSize: '13.5px',
+                  fontSize: TEXT.body,
                   fontFamily: "'Plus Jakarta Sans', sans-serif"
                 }}
               >
@@ -302,7 +303,7 @@ Utilize tom formal, embasado e respeitoso em português.`;
             </div>
 
             <div style={{ marginBottom: '24px' }}>
-              <label style={{ display: 'block', marginBottom: '8px', fontSize: '13.5px', color: '#7a5c42', fontWeight: 500 }}>Mês de Referência</label>
+              <label style={{ display: 'block', marginBottom: '8px', fontSize: TEXT.body, color: '#7a5c42', fontWeight: 500 }}>Mês de Referência</label>
               <input
                 type="month"
                 value={selectedMonth}
@@ -315,7 +316,7 @@ Utilize tom formal, embasado e respeitoso em português.`;
                   borderRadius: '9px',
                   color: '#2c1a0e',
                   outline: 'none',
-                  fontSize: '13.5px',
+                  fontSize: TEXT.body,
                   boxSizing: 'border-box',
                   fontFamily: "'Plus Jakarta Sans', sans-serif"
                 }}
@@ -332,7 +333,7 @@ Utilize tom formal, embasado e respeitoso em português.`;
                 color: '#fffcf8',
                 border: 'none',
                 borderRadius: '9px',
-                fontSize: '13.5px',
+                fontSize: TEXT.body,
                 fontWeight: '600',
                 cursor: isGenerating ? 'not-allowed' : 'pointer',
                 display: 'flex',
@@ -382,7 +383,7 @@ Utilize tom formal, embasado e respeitoso em português.`;
                 color: (reportContent && !exportBlocked) ? '#ffffff' : '#a08060',
                 border: exportBlocked ? '1px solid #ffc107' : 'none',
                 borderRadius: '9px',
-                fontSize: '13.5px',
+                fontSize: TEXT.body,
                 fontWeight: '600',
                 cursor: (reportContent && !exportBlocked) ? 'pointer' : 'not-allowed',
                 display: 'flex',
@@ -413,7 +414,7 @@ Utilize tom formal, embasado e respeitoso em português.`;
                 color: reportContent ? '#ffffff' : '#a08060',
                 border: 'none',
                 borderRadius: '9px',
-                fontSize: '13.5px',
+                fontSize: TEXT.body,
                 fontWeight: '600',
                 cursor: reportContent ? 'pointer' : 'not-allowed',
                 display: 'flex',
@@ -445,7 +446,7 @@ Utilize tom formal, embasado e respeitoso em português.`;
               <i className="ti ti-file-text" style={{ color: '#3d7a4e' }}></i>
               Pré-visualização do Documento
               {exportBlocked && (
-                <span style={{ marginLeft: 8, background: '#fff3cd', color: '#856404', border: '1px solid #ffc107', borderRadius: 8, padding: '2px 10px', fontSize: '0.75rem', fontWeight: 700 }}>
+                <span style={{ marginLeft: 8, background: '#fff3cd', color: '#856404', border: '1px solid #ffc107', borderRadius: RADIUS.md, padding: '2px 10px', fontSize: '0.75rem', fontWeight: 700 }}>
                   ⚠️ Exportação Bloqueada
                 </span>
               )}
@@ -453,7 +454,7 @@ Utilize tom formal, embasado e respeitoso em português.`;
             
             {/* Painel de Violações de Grounding */}
             {groundingViolations.length > 0 && (
-              <div style={{ marginBottom: 16, padding: 16, background: '#fff3cd', border: '1px solid #ffc107', borderRadius: 10, fontSize: 13 }}>
+              <div style={{ marginBottom: 16, padding: 16, background: '#fff3cd', border: '1px solid #ffc107', borderRadius: RADIUS.md, fontSize: 13 }}>
                 <strong style={{ color: '#856404', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
                   <i className="ti ti-alert-triangle"></i> Inconsistências Detectadas — Revise Antes de Exportar
                 </strong>
@@ -520,7 +521,7 @@ Utilize tom formal, embasado e respeitoso em português.`;
           gap: '8px',
           zIndex: 1000,
           fontFamily: "'Plus Jakarta Sans', sans-serif",
-          fontSize: '13.5px',
+          fontSize: TEXT.body,
           animation: 'slideIn 0.3s ease-out'
         }}>
           <i className="ti ti-info-circle" style={{ color: '#c4a882' }}></i>

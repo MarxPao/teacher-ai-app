@@ -1,4 +1,5 @@
 'use client'
+import { COLOR, RADIUS, TEXT, SHADOW, FONT } from '@/styles/tokens'
 import { toast, showConfirm } from '@/components/Toast'
 
 import { useState, useEffect } from 'react'
@@ -105,7 +106,7 @@ export default function Portfolio() {
  { label: 'Questões', val: stats.questions, icon: 'ti-help-circle', color: '#b58900' },
  { label: 'Mapas Mentais', val: stats.maps, icon: 'ti-atom-2', color: '#2aa198' },
  ].map(s => (
- <div key={s.label} style={{ background: '#fff', borderRadius: 16, padding: 20, border: '1px solid #ede8dc', textAlign: 'center' }}>
+ <div key={s.label} style={{ background: '#fff', borderRadius: RADIUS.xl, padding: 20, border: '1px solid #ede8dc', textAlign: 'center' }}>
  <i className={`ti ${s.icon}`} style={{ fontSize: 28, color: s.color, display: 'block', marginBottom: 8 }} />
  <div style={{ fontSize: 32, fontWeight: 700, color: s.color }}>{s.val}</div>
  <div style={{ fontSize: 12, color: '#a08060', marginTop: 4 }}>{s.label}</div>
@@ -122,17 +123,17 @@ export default function Portfolio() {
  <div>
  <label style={{ fontSize: 12, fontWeight: 600, color: '#7a5c42', display: 'block', marginBottom: 6 }}>Nome completo</label>
  <input value={name} onChange={e => setName(e.target.value)} placeholder="Seu nome completo"
- style={{ width: '100%', padding: '10px 14px', background: '#f5f0e8', border: '1px solid #e8e0d0', borderRadius: 10, outline: 'none', color: '#2c1a0e', fontSize: 14, fontFamily: 'inherit', boxSizing: 'border-box' }} />
+ style={{ width: '100%', padding: '10px 14px', background: '#f5f0e8', border: '1px solid #e8e0d0', borderRadius: RADIUS.md, outline: 'none', color: '#2c1a0e', fontSize: 14, fontFamily: 'inherit', boxSizing: 'border-box' }} />
  </div>
  <div>
  <label style={{ fontSize: 12, fontWeight: 600, color: '#7a5c42', display: 'block', marginBottom: 6 }}>Sobre mim</label>
  <textarea value={about} onChange={e => setAbout(e.target.value)} placeholder="Descreva sua trajetória, especializações, disciplinas que leciona..."
- style={{ width: '100%', padding: '10px 14px', background: '#f5f0e8', border: '1px solid #e8e0d0', borderRadius: 10, outline: 'none', color: '#2c1a0e', fontSize: 14, fontFamily: 'inherit', height: 80, resize: 'vertical', boxSizing: 'border-box' }} />
+ style={{ width: '100%', padding: '10px 14px', background: '#f5f0e8', border: '1px solid #e8e0d0', borderRadius: RADIUS.md, outline: 'none', color: '#2c1a0e', fontSize: 14, fontFamily: 'inherit', height: 80, resize: 'vertical', boxSizing: 'border-box' }} />
  </div>
  <div style={{ gridColumn: '1 / -1' }}>
  <label style={{ fontSize: 12, fontWeight: 600, color: '#7a5c42', display: 'block', marginBottom: 6 }}>Filosofia de ensino</label>
  <textarea value={philosophy} onChange={e => setPhilosophy(e.target.value)} placeholder="Descreva sua abordagem pedagógica, metodologias preferidas..."
- style={{ width: '100%', padding: '10px 14px', background: '#f5f0e8', border: '1px solid #e8e0d0', borderRadius: 10, outline: 'none', color: '#2c1a0e', fontSize: 14, fontFamily: 'inherit', height: 70, resize: 'vertical', boxSizing: 'border-box' }} />
+ style={{ width: '100%', padding: '10px 14px', background: '#f5f0e8', border: '1px solid #e8e0d0', borderRadius: RADIUS.md, outline: 'none', color: '#2c1a0e', fontSize: 14, fontFamily: 'inherit', height: 70, resize: 'vertical', boxSizing: 'border-box' }} />
  </div>
  </div>
  <button onClick={saveMeta} style={{
@@ -166,7 +167,7 @@ export default function Portfolio() {
  ) : (
  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 14 }}>
  {filtered.map((item, i) => (
- <div key={i} style={{ padding: 16, borderRadius: 14, border: '1px solid #ede8dc', background: '#fdf9f3' }}>
+ <div key={i} style={{ padding: 16, borderRadius: RADIUS.lg, border: '1px solid #ede8dc', background: '#fdf9f3' }}>
  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
  <span style={{
  padding: '3px 10px', borderRadius: 20, fontSize: 10, fontWeight: 700,
@@ -192,4 +193,4 @@ export default function Portfolio() {
  {showPrint && <span style={{ display: 'none' }}>{showPrint}</span>}
  </div>
  )
-}
+}

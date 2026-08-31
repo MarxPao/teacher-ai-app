@@ -1,4 +1,5 @@
 'use client'
+import { COLOR, RADIUS, TEXT, SHADOW, FONT } from '@/styles/tokens'
 import { toast, showConfirm } from '@/components/Toast'
 
 import { useRef, useEffect, useState, useCallback } from 'react'
@@ -532,7 +533,7 @@ export default function DocumentCanvas({
  <div style={{
  position: 'absolute', inset: 0,
  background: 'rgba(7,54,66,0.05)', border: '2px dashed #2c1a0e',
- borderRadius: 8, pointerEvents: 'none', zIndex: 10
+ borderRadius: RADIUS.md, pointerEvents: 'none', zIndex: 10
  }} />
  )}
 
@@ -592,11 +593,11 @@ export default function DocumentCanvas({
             </div>
 
             {/* Abas do Seletor */}
-            <div style={{ display: 'flex', gap: 8, background: '#f5efe6', padding: 4, borderRadius: 10 }}>
+            <div style={{ display: 'flex', gap: 8, background: '#f5efe6', padding: 4, borderRadius: RADIUS.md }}>
               <button
                 onClick={() => setImagePickerTab('library')}
                 style={{
-                  flex: 1, padding: '8px 14px', borderRadius: 8, border: 'none',
+                  flex: 1, padding: '8px 14px', borderRadius: RADIUS.md, border: 'none',
                   background: imagePickerTab === 'library' ? '#8b5e3c' : 'transparent',
                   color: imagePickerTab === 'library' ? '#fff' : '#665c54',
                   fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6
@@ -607,7 +608,7 @@ export default function DocumentCanvas({
               <button
                 onClick={() => setImagePickerTab('upload')}
                 style={{
-                  flex: 1, padding: '8px 14px', borderRadius: 8, border: 'none',
+                  flex: 1, padding: '8px 14px', borderRadius: RADIUS.md, border: 'none',
                   background: imagePickerTab === 'upload' ? '#8b5e3c' : 'transparent',
                   color: imagePickerTab === 'upload' ? '#fff' : '#665c54',
                   fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6
@@ -618,7 +619,7 @@ export default function DocumentCanvas({
               <button
                 onClick={() => setImagePickerTab('url')}
                 style={{
-                  flex: 1, padding: '8px 14px', borderRadius: 8, border: 'none',
+                  flex: 1, padding: '8px 14px', borderRadius: RADIUS.md, border: 'none',
                   background: imagePickerTab === 'url' ? '#8b5e3c' : 'transparent',
                   color: imagePickerTab === 'url' ? '#fff' : '#665c54',
                   fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6
@@ -641,8 +642,8 @@ export default function DocumentCanvas({
                       value={librarySearch}
                       onChange={e => setLibrarySearch(e.target.value)}
                       style={{
-                        width: '100%', padding: '7px 10px 7px 32px', borderRadius: 8,
-                        border: '1px solid rgba(139,115,85,0.25)', background: '#fff', fontSize: 12.5, outline: 'none'
+                        width: '100%', padding: '7px 10px 7px 32px', borderRadius: RADIUS.md,
+                        border: '1px solid rgba(139,115,85,0.25)', background: '#fff', fontSize: TEXT.bodyCompact, outline: 'none'
                       }}
                     />
                   </div>
@@ -650,8 +651,8 @@ export default function DocumentCanvas({
                     value={libraryCategory}
                     onChange={e => setLibraryCategory(e.target.value)}
                     style={{
-                      padding: '7px 12px', borderRadius: 8, border: '1px solid rgba(139,115,85,0.25)',
-                      background: '#fff', fontSize: 12.5, outline: 'none', color: '#2c1a0e', fontWeight: 600
+                      padding: '7px 12px', borderRadius: RADIUS.md, border: '1px solid rgba(139,115,85,0.25)',
+                      background: '#fff', fontSize: TEXT.bodyCompact, outline: 'none', color: '#2c1a0e', fontWeight: 600
                     }}
                   >
                     <option value="all">Todas as Categorias</option>
@@ -666,11 +667,11 @@ export default function DocumentCanvas({
 
                 {/* Grid de Seleção */}
                 {libraryImages.length === 0 ? (
-                  <div style={{ textAlign: 'center', padding: 30, background: '#fdfaf5', borderRadius: 12, border: '1.5px dashed rgba(139,115,85,0.2)' }}>
+                  <div style={{ textAlign: 'center', padding: 30, background: '#fdfaf5', borderRadius: RADIUS.lg, border: '1.5px dashed rgba(139,115,85,0.2)' }}>
                     <p style={{ margin: '0 0 10px', color: '#8b7355', fontSize: 13, fontWeight: 600 }}>Sua biblioteca de imagens ainda está vazia.</p>
                     <button
                       onClick={() => setImagePickerTab('upload')}
-                      style={{ padding: '6px 14px', borderRadius: 8, background: '#8b5e3c', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}
+                      style={{ padding: '6px 14px', borderRadius: RADIUS.md, background: '#8b5e3c', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}
                     >
                       Enviar primeira imagem
                     </button>
@@ -700,7 +701,7 @@ export default function DocumentCanvas({
                             onClick={() => setSelectedImageForInsert(img)}
                             style={{
                               border: isSelected ? '2.5px solid #8b5e3c' : '1.5px solid rgba(139,115,85,0.2)',
-                              borderRadius: 10,
+                              borderRadius: RADIUS.md,
                               background: isSelected ? '#fdf8f0' : '#fff',
                               cursor: 'pointer',
                               overflow: 'hidden',
@@ -773,7 +774,7 @@ export default function DocumentCanvas({
                 <div
                   onClick={() => uploadFileInputRef.current?.click()}
                   style={{
-                    border: '2px dashed #8b5e3c', borderRadius: 14, padding: 30, textAlign: 'center',
+                    border: '2px dashed #8b5e3c', borderRadius: RADIUS.lg, padding: 30, textAlign: 'center',
                     background: '#fdfaf5', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8
                   }}
                 >
@@ -801,7 +802,7 @@ export default function DocumentCanvas({
             {/* CONTEÚDO DA ABA 3: LINK WEB (URL) */}
             {imagePickerTab === 'url' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <label style={{ fontSize: 12.5, fontWeight: 700, color: '#7a5c42' }}>URL Direta da Imagem:</label>
+                <label style={{ fontSize: TEXT.bodyCompact, fontWeight: 700, color: '#7a5c42' }}>URL Direta da Imagem:</label>
                 <input
                   type="text"
                   placeholder="https://exemplo.com/imagem.png"
@@ -817,7 +818,7 @@ export default function DocumentCanvas({
                     }
                   }}
                   style={{
-                    padding: '10px 14px', borderRadius: 10, border: '1px solid rgba(139,115,85,0.25)',
+                    padding: '10px 14px', borderRadius: RADIUS.md, border: '1px solid rgba(139,115,85,0.25)',
                     background: '#fff', fontSize: 13, outline: 'none'
                   }}
                 />
@@ -827,21 +828,21 @@ export default function DocumentCanvas({
             {/* PAINEL DE FORMATAÇÃO E AJUSTES DE INSERÇÃO */}
             {selectedImageForInsert && (
               <div style={{
-                background: '#f7f2ea', borderRadius: 14, padding: 14, border: '1px solid rgba(139,115,85,0.2)',
+                background: '#f7f2ea', borderRadius: RADIUS.lg, padding: 14, border: '1px solid rgba(139,115,85,0.2)',
                 display: 'flex', flexDirection: 'column', gap: 10
               }}>
-                <div style={{ fontSize: 12.5, fontWeight: 800, color: '#8b5e3c', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <div style={{ fontSize: TEXT.bodyCompact, fontWeight: 800, color: '#8b5e3c', display: 'flex', alignItems: 'center', gap: 6 }}>
                   <i className="ti ti-adjustments" /> Configurações da Imagem no Documento
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
                   {/* Tamanho */}
                   <div>
-                    <label style={{ fontSize: 11.5, fontWeight: 700, color: '#7a5c42', display: 'block', marginBottom: 4 }}>Largura / Tamanho</label>
+                    <label style={{ fontSize: TEXT.caption, fontWeight: 700, color: '#7a5c42', display: 'block', marginBottom: 4 }}>Largura / Tamanho</label>
                     <select
                       value={imageWidthPercent}
                       onChange={e => setImageWidthPercent(e.target.value as any)}
-                      style={{ width: '100%', padding: '6px 10px', borderRadius: 8, border: '1px solid #c0a88a', background: '#fff', fontSize: 12 }}
+                      style={{ width: '100%', padding: '6px 10px', borderRadius: RADIUS.md, border: '1px solid #c0a88a', background: '#fff', fontSize: 12 }}
                     >
                       <option value="25%">25% (Pequena)</option>
                       <option value="50%">50% (Média)</option>
@@ -852,11 +853,11 @@ export default function DocumentCanvas({
 
                   {/* Alinhamento */}
                   <div>
-                    <label style={{ fontSize: 11.5, fontWeight: 700, color: '#7a5c42', display: 'block', marginBottom: 4 }}>Alinhamento</label>
+                    <label style={{ fontSize: TEXT.caption, fontWeight: 700, color: '#7a5c42', display: 'block', marginBottom: 4 }}>Alinhamento</label>
                     <select
                       value={imageAlign}
                       onChange={e => setImageAlign(e.target.value as any)}
-                      style={{ width: '100%', padding: '6px 10px', borderRadius: 8, border: '1px solid #c0a88a', background: '#fff', fontSize: 12 }}
+                      style={{ width: '100%', padding: '6px 10px', borderRadius: RADIUS.md, border: '1px solid #c0a88a', background: '#fff', fontSize: 12 }}
                     >
                       <option value="center">Centralizado</option>
                       <option value="left">Alinhado à Esquerda</option>
@@ -866,19 +867,19 @@ export default function DocumentCanvas({
 
                   {/* Legenda */}
                   <div>
-                    <label style={{ fontSize: 11.5, fontWeight: 700, color: '#7a5c42', display: 'block', marginBottom: 4 }}>Legenda (Opcional)</label>
+                    <label style={{ fontSize: TEXT.caption, fontWeight: 700, color: '#7a5c42', display: 'block', marginBottom: 4 }}>Legenda (Opcional)</label>
                     <input
                       type="text"
                       placeholder="Ex: Figura 1.1..."
                       value={imageCaption}
                       onChange={e => setImageCaption(e.target.value)}
-                      style={{ width: '100%', padding: '6px 10px', borderRadius: 8, border: '1px solid #c0a88a', background: '#fff', fontSize: 12 }}
+                      style={{ width: '100%', padding: '6px 10px', borderRadius: RADIUS.md, border: '1px solid #c0a88a', background: '#fff', fontSize: 12 }}
                     />
                   </div>
                 </div>
 
                 {/* Preview Mini */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#fff', padding: 8, borderRadius: 8, border: '1px solid #ede8dc' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#fff', padding: 8, borderRadius: RADIUS.md, border: '1px solid #ede8dc' }}>
                   <img src={selectedImageForInsert.fileUrl} alt="Preview" style={{ height: 44, width: 44, objectFit: 'cover', borderRadius: 6 }} />
                   <div style={{ flex: 1, fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     <strong>{selectedImageForInsert.title || 'Imagem Selecionada'}</strong>
@@ -893,7 +894,7 @@ export default function DocumentCanvas({
               <button
                 onClick={() => setIsImagePickerOpen(false)}
                 style={{
-                  padding: '9px 18px', borderRadius: 10, border: '1px solid rgba(139,115,85,0.35)',
+                  padding: '9px 18px', borderRadius: RADIUS.md, border: '1px solid rgba(139,115,85,0.35)',
                   background: '#fffcf8', color: '#7a5c42', fontSize: 13, fontWeight: 700, cursor: 'pointer'
                 }}
               >
@@ -907,7 +908,7 @@ export default function DocumentCanvas({
                   }
                 }}
                 style={{
-                  padding: '9px 22px', borderRadius: 10, border: 'none',
+                  padding: '9px 22px', borderRadius: RADIUS.md, border: 'none',
                   background: selectedImageForInsert?.fileUrl ? '#8b5e3c' : '#ccc',
                   color: '#fff', fontSize: 13, fontWeight: 700,
                   cursor: selectedImageForInsert?.fileUrl ? 'pointer' : 'not-allowed',
@@ -935,7 +936,7 @@ function TBtn({ icon, title, onClick }: { icon: string; title: string; onClick: 
  title={title}
  style={{
  width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center',
- background: 'none', border: 'none', cursor: 'pointer', color: '#7a5c42', borderRadius: 8,
+ background: 'none', border: 'none', cursor: 'pointer', color: '#7a5c42', borderRadius: RADIUS.md,
  transition: 'background 0.15s'
  }}
  onMouseOver={e => (e.currentTarget.style.background = '#f5f0e8')}
@@ -979,11 +980,11 @@ const SS: React.CSSProperties = {
  fontSize: 12, background: '#fdf9f3', color: '#2c1a0e', outline: 'none', cursor: 'pointer'
 }
 const BtnStyle: React.CSSProperties = {
- padding: '6px 12px', borderRadius: 8, border: 'none', fontSize: 11,
+ padding: '6px 12px', borderRadius: RADIUS.md, border: 'none', fontSize: 11,
  fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6
 }
 const ExportBtn: React.CSSProperties = {
  display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px',
  color: '#fff', border: 'none', borderRadius: 20, fontSize: 12, fontWeight: 700, cursor: 'pointer'
 }
-
+

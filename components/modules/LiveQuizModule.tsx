@@ -1,4 +1,5 @@
 'use client'
+import { COLOR, RADIUS, TEXT, SHADOW, FONT } from '@/styles/tokens'
 import { toast, showConfirm } from '@/components/Toast'
 
 import { useState, useEffect } from 'react'
@@ -104,7 +105,7 @@ export default function LiveQuizModule() {
  <h1 style={{  textAlign: 'center', fontFamily: "'Fraunces', 'Fraunces', Georgia, serif", fontSize: 32, fontWeight: 700, color: '#2c1a0e', margin: '0 auto'  }}>
  Live Quiz Gamificado 
  </h1>
- <span style={{ background: 'rgba(139,94,60,0.12)', color: '#8b5e3c', border: '1px solid rgba(139,94,60,0.2)', fontSize: 11, fontWeight: 700, padding: '4px 12px', borderRadius: 14, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+ <span style={{ background: 'rgba(139,94,60,0.12)', color: '#8b5e3c', border: '1px solid rgba(139,94,60,0.2)', fontSize: 11, fontWeight: 700, padding: '4px 12px', borderRadius: RADIUS.lg, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
  Modo TV / Projetor de Sala
  </span>
  </div>
@@ -117,7 +118,7 @@ export default function LiveQuizModule() {
  <button
  onClick={handleSyncGradebook}
  style={{
- padding: '12px 22px', borderRadius: 12, border: 'none',
+ padding: '12px 22px', borderRadius: RADIUS.lg, border: 'none',
  background: '#3d7a4e', color: '#fffcf8', fontSize: 14, fontWeight: 700,
  cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
  boxShadow: '0 4px 14px rgba(61,122,78,0.25)', transition: 'all 0.15s ease'
@@ -168,7 +169,7 @@ export default function LiveQuizModule() {
  <button
  onClick={handleStartGame}
  style={{
- padding: '16px 52px', borderRadius: 16, border: 'none',
+ padding: '16px 52px', borderRadius: RADIUS.xl, border: 'none',
  background: '#8b5e3c', color: '#fffcf8', fontSize: 19, fontWeight: 800,
  cursor: 'pointer', boxShadow: '0 6px 20px rgba(139,94,60,0.3)',
  transition: 'transform 0.15s ease',
@@ -190,7 +191,7 @@ export default function LiveQuizModule() {
  {/* Timer e Pergunta */}
  <div>
  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
- <span style={{ fontSize: 14, fontWeight: 700, color: '#8c7561', background: '#f5efe6', padding: '4px 14px', borderRadius: 12 }}>
+ <span style={{ fontSize: 14, fontWeight: 700, color: '#8c7561', background: '#f5efe6', padding: '4px 14px', borderRadius: RADIUS.lg }}>
  Questão {currentQIdx + 1} de {SAMPLE_QUIZ.length}
  </span>
  <div style={{
@@ -237,7 +238,7 @@ export default function LiveQuizModule() {
  }}>
  <div>
  <div style={{ textAlign: 'center', marginBottom: 28 }}>
- <span style={{ background: 'rgba(61,122,78,0.12)', color: '#3d7a4e', border: '1px solid rgba(61,122,78,0.2)', fontSize: 13, fontWeight: 700, padding: '6px 16px', borderRadius: 16 }}>
+ <span style={{ background: 'rgba(61,122,78,0.12)', color: '#3d7a4e', border: '1px solid rgba(61,122,78,0.2)', fontSize: 13, fontWeight: 700, padding: '6px 16px', borderRadius: RADIUS.xl }}>
  RESPOSTA CORRETA: {q.options[q.correctIdx]}
  </span>
  <h2 style={{ fontSize: 28, fontWeight: 700, color: '#2c1a0e', margin: '14px 0 0 0', fontFamily: "'Fraunces', 'Fraunces', Georgia, serif" }}>
@@ -252,7 +253,7 @@ export default function LiveQuizModule() {
  padding: '14px 22px',
  background: i === 0 ? '#fdf6eb' : '#fdf8f2',
  border: i === 0 ? '2px solid #d4944a' : '1px solid rgba(139,115,85,0.15)',
- borderRadius: 14, boxShadow: i === 0 ? '0 4px 12px rgba(212,148,74,0.15)' : 'none'
+ borderRadius: RADIUS.lg, boxShadow: i === 0 ? '0 4px 12px rgba(212,148,74,0.15)' : 'none'
  }}>
  <span style={{ fontSize: 16, fontWeight: 700, color: '#2c1a0e' }}>
  {i + 1}º {p.name}
@@ -269,7 +270,7 @@ export default function LiveQuizModule() {
  <button
  onClick={handleNextQuestion}
  style={{
- padding: '14px 40px', borderRadius: 14, border: 'none',
+ padding: '14px 40px', borderRadius: RADIUS.lg, border: 'none',
  background: '#8b5e3c', color: '#fffcf8', fontSize: 16, fontWeight: 700,
  cursor: 'pointer', boxShadow: '0 4px 14px rgba(139,94,60,0.25)'
  }}
@@ -330,7 +331,7 @@ export default function LiveQuizModule() {
  <button
  onClick={() => setGameState('lobby')}
  style={{
- padding: '14px 32px', borderRadius: 14, border: '1px solid rgba(139,94,60,0.25)',
+ padding: '14px 32px', borderRadius: RADIUS.lg, border: '1px solid rgba(139,94,60,0.25)',
  background: '#f5efe6', color: '#8b5e3c', fontSize: 15, fontWeight: 800, cursor: 'pointer'
  }}
  >
@@ -340,4 +341,4 @@ export default function LiveQuizModule() {
  )}
  </div>
  )
-}
+}

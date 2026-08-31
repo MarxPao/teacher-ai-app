@@ -1,4 +1,5 @@
 'use client'
+import { COLOR, RADIUS, TEXT, SHADOW, FONT } from '@/styles/tokens'
 import { toast, showConfirm } from '@/components/Toast'
 import { useState, useEffect } from 'react'
 import DocumentCanvas from '@/components/DocumentCanvas'
@@ -182,7 +183,7 @@ export default function Editor() {
  <select
  value={active.headerSchoolId || ''}
  onChange={e => applySchoolProfile(e.target.value)}
- style={{ padding: '6px 12px', borderRadius: 10, border: '1px solid #ddd', background: '#fdf8f2', fontSize: 13, outline: 'none', cursor: 'pointer' }}>
+ style={{ padding: '6px 12px', borderRadius: RADIUS.md, border: '1px solid #ddd', background: '#fdf8f2', fontSize: 13, outline: 'none', cursor: 'pointer' }}>
  <option value="">Sem escola</option>
  {schools.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
  </select>
@@ -300,7 +301,7 @@ export default function Editor() {
  <div style={{ display: 'flex', gap: 10 }}>
  {(['modern', 'classic', 'minimal'] as const).map(s => (
  <button key={s} onClick={() => setEditingHeader(h => ({ ...h, style: s }))} style={{
- flex: 1, padding: '10px', borderRadius: 10, border: `2px solid ${editingHeader.style === s ? '#2c1a0e' : '#ede8dc'}`,
+ flex: 1, padding: '10px', borderRadius: RADIUS.md, border: `2px solid ${editingHeader.style === s ? '#2c1a0e' : '#ede8dc'}`,
  background: editingHeader.style === s ? '#f0f6fa' : '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: '#2c1a0e',
  }}>
  {s === 'modern' ? ' Moderno' : s === 'classic' ? ' Clássico' : ' Minimalista'}
@@ -318,7 +319,7 @@ export default function Editor() {
  {headers.map(h => {
  const sc = schools.find(s => s.id === h.schoolId)
  return (
- <div key={h.schoolId} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', background: '#f0e8d8', borderRadius: 8, cursor: 'pointer' }}
+ <div key={h.schoolId} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', background: '#f0e8d8', borderRadius: RADIUS.md, cursor: 'pointer' }}
  onClick={() => setEditingHeader(h)}>
  <i className="ti ti-building-community" style={{ color: sc?.color, fontSize: 13 }} />
  <span style={{ fontSize: 12, fontWeight: 600, color: '#2c1a0e' }}>{sc?.name}</span>
@@ -330,7 +331,7 @@ export default function Editor() {
  )}
 
  <div style={{ display: 'flex', gap: 10, marginTop: 24, justifyContent: 'flex-end' }}>
- <button onClick={() => setShowHeaderConfig(false)} style={{ padding: '8px 16px', borderRadius: 10, border: 'none', background: '#f0e8d8', color: '#7a5c42', cursor: 'pointer', fontWeight: 600 }}>Fechar</button>
+ <button onClick={() => setShowHeaderConfig(false)} style={{ padding: '8px 16px', borderRadius: RADIUS.md, border: 'none', background: '#f0e8d8', color: '#7a5c42', cursor: 'pointer', fontWeight: 600 }}>Fechar</button>
  <button onClick={saveHeaderProfile} style={Btn}>
  <i className="ti ti-check" /> Salvar Perfil
  </button>
@@ -342,6 +343,6 @@ export default function Editor() {
  )
 }
 
-const Btn: React.CSSProperties = { padding: '9px 18px', background: '#2c1a0e', color: '#fff', border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 7 }
-const InputS: React.CSSProperties = { width: '100%', padding: '9px 12px', borderRadius: 10, border: '1px solid #ddd', background: '#fdf8f2', fontSize: 13, outline: 'none', boxSizing: 'border-box' }
-const LabelS: React.CSSProperties = { display: 'block', fontSize: 11, fontWeight: 700, color: '#7a5c42', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 5 }
+const Btn: React.CSSProperties = { padding: '9px 18px', background: '#2c1a0e', color: '#fff', border: 'none', borderRadius: RADIUS.md, fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 7 }
+const InputS: React.CSSProperties = { width: '100%', padding: '9px 12px', borderRadius: RADIUS.md, border: '1px solid #ddd', background: '#fdf8f2', fontSize: 13, outline: 'none', boxSizing: 'border-box' }
+const LabelS: React.CSSProperties = { display: 'block', fontSize: 11, fontWeight: 700, color: '#7a5c42', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 5 }

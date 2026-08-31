@@ -1,4 +1,5 @@
-'use client';
+'use client'
+import { COLOR, RADIUS, TEXT, SHADOW, FONT } from '@/styles/tokens';
 import { toast, showConfirm } from '@/components/Toast'
 
 import React, { useState, useEffect, CSSProperties, useRef, useCallback } from 'react';
@@ -46,7 +47,7 @@ const styles: Record<string, CSSProperties> = {
     alignItems: 'center',
     padding: '18px 24px',
     background: '#fffcf8',
-    borderRadius: 14,
+    borderRadius: RADIUS.lg,
     border: '1px solid rgba(139,115,85,0.1)',
     boxShadow: '0 2px 8px rgba(44,26,14,0.06)',
     marginBottom: 4,
@@ -78,7 +79,7 @@ const styles: Record<string, CSSProperties> = {
   },
   card: {
     background: '#fffcf8',
-    borderRadius: 14,
+    borderRadius: RADIUS.lg,
     padding: 20,
     border: '1px solid rgba(139,115,85,0.1)',
     display: 'flex',
@@ -164,7 +165,7 @@ const styles: Record<string, CSSProperties> = {
     alignItems: 'center',
     padding: '10px 14px',
     background: '#f5efe6',
-    borderRadius: 10,
+    borderRadius: RADIUS.md,
     border: '1px solid rgba(139,115,85,0.1)',
   },
   attendanceBtns: {
@@ -191,7 +192,7 @@ const styles: Record<string, CSSProperties> = {
   participationCard: {
     background: '#f5efe6',
     padding: 14,
-    borderRadius: 10,
+    borderRadius: RADIUS.md,
     border: '1px solid rgba(139,115,85,0.1)',
     display: 'flex',
     flexDirection: 'column',
@@ -205,7 +206,7 @@ const styles: Record<string, CSSProperties> = {
   actionBtn: {
     flex: 1,
     padding: '8px 0',
-    borderRadius: 8,
+    borderRadius: RADIUS.md,
     border: 'none',
     cursor: 'pointer',
     fontSize: 13,
@@ -223,7 +224,7 @@ const styles: Record<string, CSSProperties> = {
     alignItems: 'center',
     justifyContent: 'center',
     background: '#f5efe6',
-    borderRadius: 10,
+    borderRadius: RADIUS.md,
     fontSize: 22,
     fontWeight: 700,
     color: '#8b5e3c',
@@ -254,7 +255,7 @@ const styles: Record<string, CSSProperties> = {
   },
   input: {
     padding: '8px 12px',
-    borderRadius: 8,
+    borderRadius: RADIUS.md,
     border: '1px solid rgba(139,115,85,0.18)',
     background: '#f5efe6',
     color: '#2c1a0e',
@@ -813,7 +814,7 @@ export default function ClassroomMode() {
               <button onClick={() => setIsMirrorModalOpen(false)} style={{ background: '#f5f0e8', border: 'none', width: 32, height: 32, borderRadius: '50%', cursor: 'pointer', fontWeight: 700 }}>×</button>
             </div>
 
-            <p style={{ fontSize: 13.5, color: '#7a5c42', margin: 0, lineHeight: 1.5 }}>
+            <p style={{ fontSize: TEXT.body, color: '#7a5c42', margin: 0, lineHeight: 1.5 }}>
               Transfira a lista de presença e faltas da turma <strong>{classes.find(c => c.id === selectedClass)?.name}</strong> diretamente para a tela de chamada aberta no portal oficial, sem digitar nome por nome.
             </p>
 
@@ -823,7 +824,7 @@ export default function ClassroomMode() {
                 <select
                   value={selectedMirrorPortal}
                   onChange={e => setSelectedMirrorPortal(e.target.value)}
-                  style={{ width: '100%', padding: '10px 14px', borderRadius: 10, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13.5, color: '#2c1a0e', outline: 'none' }}
+                  style={{ width: '100%', padding: '10px 14px', borderRadius: RADIUS.md, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: TEXT.body, color: '#2c1a0e', outline: 'none' }}
                 >
                   <option value="plural">Plurall (SOMOS Educação)</option>
                   <option value="machado">Portal Machado Sobrinho</option>
@@ -832,7 +833,7 @@ export default function ClassroomMode() {
                 </select>
               </div>
 
-              <div style={{ background: '#f8fafc', padding: 14, borderRadius: 12, border: '1px solid #e2e8f0', fontSize: 12.5, color: '#334155', display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div style={{ background: '#f8fafc', padding: 14, borderRadius: RADIUS.lg, border: '1px solid #e2e8f0', fontSize: TEXT.bodyCompact, color: '#334155', display: 'flex', flexDirection: 'column', gap: 6 }}>
                 <div><strong>Presentes ({presentCount}):</strong> {classStudents.filter(s => attendance[s.id] === 'present' || attendance[s.id] === 'late').length} alunos</div>
                 <div><strong>Ausentes ({classStudents.length - presentCount}):</strong> {classStudents.filter(s => attendance[s.id] === 'absent').map(s => s.name).join(', ') || 'Nenhum'}</div>
               </div>
@@ -841,13 +842,13 @@ export default function ClassroomMode() {
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 6 }}>
               <button
                 onClick={() => setIsMirrorModalOpen(false)}
-                style={{ padding: '10px 18px', borderRadius: 10, border: '1px solid #e8e0d0', background: '#f5f0e8', color: '#7a5c42', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
+                style={{ padding: '10px 18px', borderRadius: RADIUS.md, border: '1px solid #e8e0d0', background: '#f5f0e8', color: '#7a5c42', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
               >
                 Cancelar
               </button>
               <button
                 onClick={handleExecuteMirrorAttendance}
-                style={{ padding: '10px 22px', borderRadius: 10, border: 'none', background: '#16a34a', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+                style={{ padding: '10px 22px', borderRadius: RADIUS.md, border: 'none', background: '#16a34a', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
               >
                 ⚡ Preencher Portal Agora
               </button>

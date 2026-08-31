@@ -1,4 +1,5 @@
 'use client'
+import { COLOR, RADIUS, TEXT, SHADOW, FONT } from '@/styles/tokens'
 import { toast, showConfirm } from '@/components/Toast'
 
 import { useState, useEffect, useMemo } from 'react'
@@ -26,9 +27,9 @@ const BANDS = ['Band 5 (Excelente)', 'Band 4 (Bom)', 'Band 3 (Regular)', 'Band 2
 
 const S = {
  label: { fontSize: 13, fontWeight: 600, color: '#7a5c42', display: 'block', marginBottom: 6 } as React.CSSProperties,
- select: { width: '100%', padding: '10px 14px', background: '#f5f0e8', border: '1px solid #e8e0d0', borderRadius: 10, outline: 'none', color: '#2c1a0e', fontSize: 14, fontFamily: 'inherit', appearance: 'none' as const, cursor: 'pointer' },
- input: { width: '100%', padding: '10px 14px', background: '#f5f0e8', border: '1px solid #e8e0d0', borderRadius: 10, outline: 'none', color: '#2c1a0e', fontSize: 14, fontFamily: 'inherit' },
- btn: { display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 10, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600 },
+ select: { width: '100%', padding: '10px 14px', background: '#f5f0e8', border: '1px solid #e8e0d0', borderRadius: RADIUS.md, outline: 'none', color: '#2c1a0e', fontSize: 14, fontFamily: 'inherit', appearance: 'none' as const, cursor: 'pointer' },
+ input: { width: '100%', padding: '10px 14px', background: '#f5f0e8', border: '1px solid #e8e0d0', borderRadius: RADIUS.md, outline: 'none', color: '#2c1a0e', fontSize: 14, fontFamily: 'inherit' },
+ btn: { display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: RADIUS.md, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600 },
 }
 
 export interface RubricPreviewProps {
@@ -216,7 +217,7 @@ Style the table with professional Cambridge Assessment styling (border-collapse:
  <button
  onClick={handleSaveRubricToDatabase}
  style={{
- padding: '9px 16px', borderRadius: 12, border: '1px solid #8b5e3c',
+ padding: '9px 16px', borderRadius: RADIUS.lg, border: '1px solid #8b5e3c',
  background: '#8b5e3c', color: '#fff', fontSize: 13,
  fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
  boxShadow: '0 2px 8px rgba(139,94,60,0.2)'
@@ -238,7 +239,7 @@ Style the table with professional Cambridge Assessment styling (border-collapse:
  </p>
  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
  <button onClick={() => setPreset('writing')} style={{
- padding: '12px', borderRadius: 12, border: preset === 'writing' ? '2px solid #2c1a0e' : '1px solid #e4ddd0',
+ padding: '12px', borderRadius: RADIUS.lg, border: preset === 'writing' ? '2px solid #2c1a0e' : '1px solid #e4ddd0',
  background: preset === 'writing' ? '#f0ede4' : '#fff', cursor: 'pointer', textAlign: 'left'
  }}>
  <div style={{ fontSize: 14, fontWeight: 700, color: '#2c1a0e' }}><i className="ti ti-notebook" style={{ marginRight: 6 }} /> Writing</div>
@@ -246,7 +247,7 @@ Style the table with professional Cambridge Assessment styling (border-collapse:
  </button>
 
  <button onClick={() => setPreset('speaking')} style={{
- padding: '12px', borderRadius: 12, border: preset === 'speaking' ? '2px solid #2c1a0e' : '1px solid #e4ddd0',
+ padding: '12px', borderRadius: RADIUS.lg, border: preset === 'speaking' ? '2px solid #2c1a0e' : '1px solid #e4ddd0',
  background: preset === 'speaking' ? '#f0ede4' : '#fff', cursor: 'pointer', textAlign: 'left'
  }}>
  <div style={{ fontSize: 14, fontWeight: 700, color: '#2c1a0e' }}><i className="ti ti-microphone" style={{ marginRight: 6 }} /> Speaking</div>
@@ -273,7 +274,7 @@ Style the table with professional Cambridge Assessment styling (border-collapse:
  <p style={{ fontSize: 13, fontWeight: 700, color: '#7a5c42', textTransform: 'uppercase', letterSpacing: '1px', margin: 0 }}>
  Avaliador do Aluno
  </p>
- <div style={{ background: '#f5f0e8', borderRadius: 12, padding: '4px 12px', textAlign: 'right' }}>
+ <div style={{ background: '#f5f0e8', borderRadius: RADIUS.lg, padding: '4px 12px', textAlign: 'right' }}>
  <span style={{ fontSize: 18, fontWeight: 800, color: finalGrade >= 7 ? '#2d7a00' : '#854d00' }}>{finalGrade}</span>
  <span style={{ fontSize: 10, color: '#a08060' }}> / 10</span>
  </div>
@@ -296,7 +297,7 @@ Style the table with professional Cambridge Assessment styling (border-collapse:
  {/* Matriz de Escolha de Bands */}
  <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 16 }}>
  {activeCriteria.map(c => (
- <div key={c.key} style={{ background: '#fdf9f3', borderRadius: 12, padding: '10px 12px', border: '1px solid #ede8dc' }}>
+ <div key={c.key} style={{ background: '#fdf9f3', borderRadius: RADIUS.lg, padding: '10px 12px', border: '1px solid #ede8dc' }}>
  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: 700, color: '#2c1a0e', marginBottom: 6 }}>
  <span><i className={`ti ${c.icon}`} style={{ marginRight: 6, color: '#268bd2' }} />{c.key}</span>
  <span style={{ color: '#268bd2' }}>Band {evalScores[c.key] || 4} / 5</span>
@@ -345,7 +346,7 @@ Style the table with professional Cambridge Assessment styling (border-collapse:
  </select>
  </div>
 
- <button onClick={generate} disabled={loading} style={{ padding: '14px', borderRadius: 14, background: loading ? '#a08060' : '#2c1a0e', color: '#fff', fontSize: 15, fontWeight: 700, border: 'none', cursor: loading ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, boxShadow: '0 4px 16px rgba(7,54,66,0.2)', fontFamily: 'inherit' }}>
+ <button onClick={generate} disabled={loading} style={{ padding: '14px', borderRadius: RADIUS.lg, background: loading ? '#a08060' : '#2c1a0e', color: '#fff', fontSize: 15, fontWeight: 700, border: 'none', cursor: loading ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, boxShadow: '0 4px 16px rgba(7,54,66,0.2)', fontFamily: 'inherit' }}>
  <i className={loading ? 'ti ti-loader' : 'ti ti-table'} style={{ fontSize: 18 }} />
  {loading ? 'Gerando Matriz Cambridge...' : 'Gerar Matriz Completa de Rubrica'}
  </button>
@@ -354,12 +355,12 @@ Style the table with professional Cambridge Assessment styling (border-collapse:
  {/* RIGHT PANEL: Canvas do Documento */}
  <div style={{ display: 'flex', flexDirection: 'column', gap: 12, flex: 1, minHeight: 0 }}>
  {manualPrompt && (
- <div style={{ background: '#fdf8f2', border: '1px solid rgba(181,137,0,0.3)', borderRadius: 14, padding: '14px 18px' }}>
+ <div style={{ background: '#fdf8f2', border: '1px solid rgba(181,137,0,0.3)', borderRadius: RADIUS.lg, padding: '14px 18px' }}>
  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
  <span style={{ fontSize: 13, fontWeight: 600, color: '#b58900' }}>Copie e cole em qualquer IA</span>
  <button onClick={() => navigator.clipboard.writeText(manualPrompt)} style={{ padding: '6px 14px', background: '#b58900', color: '#fff', borderRadius: 20, fontSize: 12, fontWeight: 600, border: 'none', cursor: 'pointer' }}>Copiar</button>
  </div>
- <div style={{ fontSize: 11, color: '#7a5c42', maxHeight: 80, overflow: 'auto', fontFamily: 'monospace', background: '#fff', borderRadius: 8, padding: 10 }}>{manualPrompt}</div>
+ <div style={{ fontSize: 11, color: '#7a5c42', maxHeight: 80, overflow: 'auto', fontFamily: 'monospace', background: '#fff', borderRadius: RADIUS.md, padding: 10 }}>{manualPrompt}</div>
  </div>
  )}
  <div style={{ flex: 1, borderRadius: 20, overflow: 'hidden', border: '1px solid #ede8dc', boxShadow: '0 4px 24px rgba(44,26,14,0.04)', background: '#fff', display: 'flex', flexDirection: 'column' }}>

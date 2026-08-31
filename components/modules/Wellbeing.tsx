@@ -1,4 +1,5 @@
-'use client';
+'use client'
+import { COLOR, RADIUS, TEXT, SHADOW, FONT } from '@/styles/tokens';
 
 import React, { useState, useEffect, CSSProperties } from 'react';
 
@@ -134,7 +135,7 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: '9px',
     padding: '12px',
     color: '#2c1a0e',
-    fontSize: '13.5px',
+    fontSize: TEXT.body,
     width: '100%',
     boxSizing: 'border-box',
     fontFamily: "'Inter', system-ui, sans-serif",
@@ -148,7 +149,7 @@ const styles: Record<string, CSSProperties> = {
     border: 'none',
     borderRadius: '9px',
     padding: '10px 20px',
-    fontSize: '13.5px',
+    fontSize: TEXT.body,
     fontWeight: 600,
     fontFamily: "'Inter', system-ui, sans-serif",
     cursor: 'pointer',

@@ -1,4 +1,5 @@
 'use client'
+import { COLOR, RADIUS, TEXT, SHADOW, FONT } from '@/styles/tokens'
 
 import React, { useState, useEffect, useCallback } from 'react'
 import { toast, showConfirm } from '@/components/Toast'
@@ -425,11 +426,11 @@ export default function Eventos() {
             placeholder="Buscar evento..."
             value={search}
             onChange={e => setSearch(e.target.value)}
-            style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid #ede8dc', fontSize: 13, background: '#fff', outline: 'none', width: 190 }}
+            style={{ padding: '8px 14px', borderRadius: RADIUS.md, border: '1px solid #ede8dc', fontSize: 13, background: '#fff', outline: 'none', width: 190 }}
           />
           <button
             onClick={openNewEventModal}
-            style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: '#2c1a0e', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+            style={{ padding: '8px 16px', borderRadius: RADIUS.md, border: 'none', background: '#2c1a0e', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
           >
             <i className="ti ti-plus" /> Novo Evento
           </button>
@@ -437,9 +438,9 @@ export default function Eventos() {
       }
     >
       {/* Seletor do Evento Ativo */}
-      <div style={{ background: '#fffcf8', border: '1px solid #ede8dc', borderRadius: 16, padding: '16px 20px', marginBottom: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 14 }}>
+      <div style={{ background: '#fffcf8', border: '1px solid #ede8dc', borderRadius: RADIUS.xl, padding: '16px 20px', marginBottom: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 14 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-          <div style={{ width: 44, height: 44, borderRadius: 12, background: '#fef3c7', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#b58900', fontSize: 22 }}>
+          <div style={{ width: 44, height: 44, borderRadius: RADIUS.lg, background: '#fef3c7', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#b58900', fontSize: 22 }}>
             <i className="ti ti-sparkles" />
           </div>
           <div>
@@ -459,10 +460,10 @@ export default function Eventos() {
             <i className="ti ti-map-pin" style={{ marginRight: 4, color: '#8b5e3c' }} />
             {activeEvent.location || 'Auditório'} · {daysUntil > 0 ? 'Faltam ' + daysUntil + ' dias' : daysUntil === 0 ? 'Hoje!' : 'Realizado'}
           </span>
-          <button onClick={() => openEditEventModal(activeEvent)} style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid #ede8dc', background: '#fff', color: '#2c1a0e', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+          <button onClick={() => openEditEventModal(activeEvent)} style={{ padding: '6px 12px', borderRadius: RADIUS.md, border: '1px solid #ede8dc', background: '#fff', color: '#2c1a0e', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
             <i className="ti ti-edit" /> Editar
           </button>
-          <button onClick={() => handleDeleteEvent(activeEvent.id)} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #fecaca', background: '#fef2f2', color: '#dc322f', fontSize: 12, cursor: 'pointer' }}>
+          <button onClick={() => handleDeleteEvent(activeEvent.id)} style={{ padding: '6px 10px', borderRadius: RADIUS.md, border: '1px solid #fecaca', background: '#fef2f2', color: '#dc322f', fontSize: 12, cursor: 'pointer' }}>
             <i className="ti ti-trash" />
           </button>
         </div>
@@ -482,7 +483,7 @@ export default function Eventos() {
             onClick={() => setActiveTab(t.key as typeof activeTab)}
             style={{
               padding: '8px 16px',
-              borderRadius: 8,
+              borderRadius: RADIUS.md,
               border: 'none',
               cursor: 'pointer',
               background: activeTab === t.key ? '#2c1a0e' : 'transparent',
@@ -523,7 +524,7 @@ export default function Eventos() {
 
               <div>
                 <span style={{ fontSize: 11, color: '#7a5c42', textTransform: 'uppercase', fontWeight: 700 }}>Descrição Pedagógica</span>
-                <p style={{ fontSize: 13.5, color: '#2c1a0e', lineHeight: 1.6, margin: '4px 0 0' }}>{activeEvent.description || 'Sem descrição cadastrada.'}</p>
+                <p style={{ fontSize: TEXT.body, color: '#2c1a0e', lineHeight: 1.6, margin: '4px 0 0' }}>{activeEvent.description || 'Sem descrição cadastrada.'}</p>
               </div>
             </ModuleCard>
 
@@ -533,7 +534,7 @@ export default function Eventos() {
               icon="ti-paperclip"
               padding={20}
               headerAction={
-                <button onClick={() => setShowLinkModal(true)} style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid #8b5e3c', background: '#fff', color: '#2c1a0e', fontSize: 11.5, fontWeight: 700, cursor: 'pointer' }}>
+                <button onClick={() => setShowLinkModal(true)} style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid #8b5e3c', background: '#fff', color: '#2c1a0e', fontSize: TEXT.caption, fontWeight: 700, cursor: 'pointer' }}>
                   + Adicionar Link
                 </button>
               }
@@ -543,10 +544,10 @@ export default function Eventos() {
               ) : (
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                   {activeEvent.links.map(lk => (
-                    <div key={lk.id} style={{ background: '#fdf8f2', border: '1px solid #ede8dc', borderRadius: 10, padding: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div key={lk.id} style={{ background: '#fdf8f2', border: '1px solid #ede8dc', borderRadius: RADIUS.md, padding: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <div>
                         <div style={{ fontSize: 13, fontWeight: 700, color: '#2c1a0e' }}>{lk.title}</div>
-                        <a href={lk.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11.5, color: '#268bd2', textDecoration: 'none' }}>{lk.url.slice(0, 32)}...</a>
+                        <a href={lk.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: TEXT.caption, color: '#268bd2', textDecoration: 'none' }}>{lk.url.slice(0, 32)}...</a>
                       </div>
                       <div style={{ display: 'flex', gap: 6 }}>
                         <button onClick={() => window.open(lk.url, '_blank')} style={{ background: '#2c1a0e', color: '#fff', border: 'none', borderRadius: 6, padding: '4px 8px', fontSize: 11, cursor: 'pointer' }}>
@@ -566,7 +567,7 @@ export default function Eventos() {
           {/* Lateral: Ações Rápidas de Criação Visual */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <ModuleCard title="🎨 Peças Visuais & Divulgação" icon="ti-palette" padding={18}>
-              <p style={{ fontSize: 12.5, color: '#7a5c42', lineHeight: 1.5, margin: '0 0 14px' }}>
+              <p style={{ fontSize: TEXT.bodyCompact, color: '#7a5c42', lineHeight: 1.5, margin: '0 0 14px' }}>
                 Gere cartazes, certificados e convites personalizados para este evento no Estúdio Visual ou edite no Canva:
               </p>
 
@@ -575,7 +576,7 @@ export default function Eventos() {
                 style={{
                   width: '100%',
                   padding: '12px',
-                  borderRadius: 10,
+                  borderRadius: RADIUS.md,
                   border: 'none',
                   background: 'linear-gradient(135deg, #8b5e3c 0%, #2c1a0e 100%)',
                   color: '#fff',
@@ -599,11 +600,11 @@ export default function Eventos() {
                 style={{
                   width: '100%',
                   padding: '10px',
-                  borderRadius: 10,
+                  borderRadius: RADIUS.md,
                   border: '1px solid #00c4cc',
                   background: '#f0fdfa',
                   color: '#0f766e',
-                  fontSize: 12.5,
+                  fontSize: TEXT.bodyCompact,
                   fontWeight: 700,
                   cursor: 'pointer',
                   display: 'flex',
@@ -620,9 +621,9 @@ export default function Eventos() {
             <ModuleCard title="📅 Sincronização de Agenda" icon="ti-calendar-check" padding={16}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#859900' }} />
-                <span style={{ fontSize: 12.5, color: '#2c1a0e', fontWeight: 600 }}>Sincronizado com o Calendário do Professor</span>
+                <span style={{ fontSize: TEXT.bodyCompact, color: '#2c1a0e', fontWeight: 600 }}>Sincronizado com o Calendário do Professor</span>
               </div>
-              <p style={{ fontSize: 11.5, color: '#7a5c42', margin: '8px 0 0' }}>
+              <p style={{ fontSize: TEXT.caption, color: '#7a5c42', margin: '8px 0 0' }}>
                 Este evento aparece na grade de horários e no cronograma do <strong>Planner</strong>.
               </p>
             </ModuleCard>
@@ -643,7 +644,7 @@ export default function Eventos() {
                   alignItems: 'flex-start',
                   gap: 16,
                   padding: '14px 18px',
-                  borderRadius: 12,
+                  borderRadius: RADIUS.lg,
                   border: step.completed ? '1px solid #c7d2fe' : '1px solid #ede8dc',
                   background: step.completed ? '#f5f3ff' : '#fffcf8',
                   cursor: 'pointer',
@@ -665,7 +666,7 @@ export default function Eventos() {
                       {step.title}
                     </span>
                   </div>
-                  <p style={{ fontSize: 12.5, color: '#7a5c42', margin: '4px 0 0' }}>{step.description}</p>
+                  <p style={{ fontSize: TEXT.bodyCompact, color: '#7a5c42', margin: '4px 0 0' }}>{step.description}</p>
                 </div>
               </div>
             ))}
@@ -680,7 +681,7 @@ export default function Eventos() {
           icon="ti-list-check"
           padding={20}
           headerAction={
-            <button onClick={() => setShowTaskModal(true)} style={{ padding: '6px 12px', borderRadius: 8, border: 'none', background: '#2c1a0e', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+            <button onClick={() => setShowTaskModal(true)} style={{ padding: '6px 12px', borderRadius: RADIUS.md, border: 'none', background: '#2c1a0e', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
               + Nova Tarefa
             </button>
           }
@@ -689,14 +690,14 @@ export default function Eventos() {
             {(['Pré-Evento', 'Dia do Evento', 'Pós-Evento'] as const).map(phase => {
               const phaseTasks = activeEvent.taskList.filter(t => t.phase === phase)
               return (
-                <div key={phase} style={{ background: '#fdf8f2', border: '1px solid #ede8dc', borderRadius: 12, padding: 14 }}>
+                <div key={phase} style={{ background: '#fdf8f2', border: '1px solid #ede8dc', borderRadius: RADIUS.lg, padding: 14 }}>
                   <h4 style={{ fontSize: 13, fontWeight: 800, color: '#2c1a0e', margin: '0 0 12px', display: 'flex', justifyContent: 'space-between' }}>
                     <span>{phase}</span>
                     <span style={{ fontSize: 11, color: '#7a5c42', fontWeight: 600 }}>{phaseTasks.filter(t => t.completed).length}/{phaseTasks.length}</span>
                   </h4>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {phaseTasks.map(t => (
-                      <div key={t.id} style={{ background: '#fff', padding: '10px 12px', borderRadius: 8, border: '1px solid #ede8dc', display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                      <div key={t.id} style={{ background: '#fff', padding: '10px 12px', borderRadius: RADIUS.md, border: '1px solid #ede8dc', display: 'flex', alignItems: 'flex-start', gap: 10 }}>
                         <input
                           type="checkbox"
                           checked={t.completed}
@@ -704,7 +705,7 @@ export default function Eventos() {
                           style={{ marginTop: 3, cursor: 'pointer' }}
                         />
                         <div style={{ flex: 1 }}>
-                          <div style={{ fontSize: 12.5, fontWeight: 600, color: t.completed ? '#9ca3af' : '#2c1a0e', textDecoration: t.completed ? 'line-through' : 'none' }}>
+                          <div style={{ fontSize: TEXT.bodyCompact, fontWeight: 600, color: t.completed ? '#9ca3af' : '#2c1a0e', textDecoration: t.completed ? 'line-through' : 'none' }}>
                             {t.title}
                           </div>
                           <div style={{ fontSize: 11, color: '#8b5e3c', marginTop: 2 }}>
@@ -732,21 +733,21 @@ export default function Eventos() {
           icon="ti-wallet"
           padding={20}
           headerAction={
-            <button onClick={() => setShowBudgetModal(true)} style={{ padding: '6px 12px', borderRadius: 8, border: 'none', background: '#2c1a0e', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+            <button onClick={() => setShowBudgetModal(true)} style={{ padding: '6px 12px', borderRadius: RADIUS.md, border: 'none', background: '#2c1a0e', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
               + Adicionar Item
             </button>
           }
         >
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, marginBottom: 20 }}>
-            <div style={{ background: '#fdf8f2', padding: 14, borderRadius: 10, border: '1px solid #ede8dc' }}>
+            <div style={{ background: '#fdf8f2', padding: 14, borderRadius: RADIUS.md, border: '1px solid #ede8dc' }}>
               <span style={{ fontSize: 11, color: '#7a5c42', fontWeight: 700, textTransform: 'uppercase' }}>Custo Total Estimado</span>
               <div style={{ fontSize: 20, fontWeight: 800, color: '#2c1a0e', marginTop: 2 }}>R$ {totalBudget.toFixed(2)}</div>
             </div>
-            <div style={{ background: '#f0fdf4', padding: 14, borderRadius: 10, border: '1px solid #bbf7d0' }}>
+            <div style={{ background: '#f0fdf4', padding: 14, borderRadius: RADIUS.md, border: '1px solid #bbf7d0' }}>
               <span style={{ fontSize: 11, color: '#166534', fontWeight: 700, textTransform: 'uppercase' }}>Total Pago</span>
               <div style={{ fontSize: 20, fontWeight: 800, color: '#15803d', marginTop: 2 }}>R$ {paidBudget.toFixed(2)}</div>
             </div>
-            <div style={{ background: '#fef2f2', padding: 14, borderRadius: 10, border: '1px solid #fecaca' }}>
+            <div style={{ background: '#fef2f2', padding: 14, borderRadius: RADIUS.md, border: '1px solid #fecaca' }}>
               <span style={{ fontSize: 11, color: '#991b1b', fontWeight: 700, textTransform: 'uppercase' }}>Pendente</span>
               <div style={{ fontSize: 20, fontWeight: 800, color: '#dc322f', marginTop: 2 }}>R$ {(totalBudget - paidBudget).toFixed(2)}</div>
             </div>
@@ -754,7 +755,7 @@ export default function Eventos() {
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {activeEvent.budgetList.map(b => (
-              <div key={b.id} style={{ background: '#fff', padding: '12px 16px', borderRadius: 8, border: '1px solid #ede8dc', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div key={b.id} style={{ background: '#fff', padding: '12px 16px', borderRadius: RADIUS.md, border: '1px solid #ede8dc', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                   <input type="checkbox" checked={b.paid} onChange={() => toggleBudgetPaid(b.id)} style={{ cursor: 'pointer' }} />
                   <div>
@@ -787,7 +788,7 @@ export default function Eventos() {
                   saveAndSync(updated)
                 }}
                 rows={8}
-                style={{ width: '100%', padding: '12px', borderRadius: 10, border: '1px solid #ede8dc', fontSize: 13, lineHeight: 1.6, outline: 'none' }}
+                style={{ width: '100%', padding: '12px', borderRadius: RADIUS.md, border: '1px solid #ede8dc', fontSize: 13, lineHeight: 1.6, outline: 'none' }}
               />
               <div style={{ marginTop: 12 }}>
                 <button
@@ -795,7 +796,7 @@ export default function Eventos() {
                     const text = encodeURIComponent(activeEvent.invitationText || '')
                     window.open('https://wa.me/?text=' + text, '_blank')
                   }}
-                  style={{ padding: '10px 20px', borderRadius: 8, border: 'none', background: '#25d366', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+                  style={{ padding: '10px 20px', borderRadius: RADIUS.md, border: 'none', background: '#25d366', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
                 >
                   <i className="ti ti-brand-whatsapp" />
                   <span>Enviar Convite via WhatsApp</span>
@@ -803,9 +804,9 @@ export default function Eventos() {
               </div>
             </div>
 
-            <div style={{ background: '#fdf8f2', border: '1px solid #ede8dc', borderRadius: 12, padding: 16 }}>
+            <div style={{ background: '#fdf8f2', border: '1px solid #ede8dc', borderRadius: RADIUS.lg, padding: 16 }}>
               <h4 style={{ fontSize: 13, fontWeight: 800, color: '#2c1a0e', margin: '0 0 10px' }}>💡 Dica de Divulgação</h4>
-              <p style={{ fontSize: 12.5, color: '#7a5c42', lineHeight: 1.5, margin: 0 }}>
+              <p style={{ fontSize: TEXT.bodyCompact, color: '#7a5c42', lineHeight: 1.5, margin: 0 }}>
                 Envie o convite para os grupos de pais com <strong>15 dias de antecedência</strong> e faça um lembrete com o cartaz do evento <strong>2 dias antes</strong>.
               </p>
             </div>
@@ -816,7 +817,7 @@ export default function Eventos() {
       {/* MODAL NOVO / EDITAR EVENTO */}
       {showEventModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(44,26,14,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-          <div style={{ background: '#fff', borderRadius: 16, padding: 28, maxWidth: 520, width: '100%', boxShadow: '0 20px 48px rgba(0,0,0,0.2)' }}>
+          <div style={{ background: '#fff', borderRadius: RADIUS.xl, padding: 28, maxWidth: 520, width: '100%', boxShadow: '0 20px 48px rgba(0,0,0,0.2)' }}>
             <h3 style={{ fontSize: 18, fontWeight: 800, color: '#2c1a0e', margin: '0 0 18px' }}>
               {editingEvent ? 'Editar Evento Escolar' : 'Novo Evento Escolar'}
             </h3>
@@ -860,10 +861,10 @@ export default function Eventos() {
             </div>
 
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 20 }}>
-              <button onClick={() => setShowEventModal(false)} style={{ padding: '9px 16px', borderRadius: 8, border: '1px solid #ede8dc', background: '#fff', color: '#7a5c42', cursor: 'pointer' }}>
+              <button onClick={() => setShowEventModal(false)} style={{ padding: '9px 16px', borderRadius: RADIUS.md, border: '1px solid #ede8dc', background: '#fff', color: '#7a5c42', cursor: 'pointer' }}>
                 Cancelar
               </button>
-              <button onClick={handleSaveEvent} style={{ padding: '9px 20px', borderRadius: 8, border: 'none', background: '#2c1a0e', color: '#fff', fontWeight: 700, cursor: 'pointer' }}>
+              <button onClick={handleSaveEvent} style={{ padding: '9px 20px', borderRadius: RADIUS.md, border: 'none', background: '#2c1a0e', color: '#fff', fontWeight: 700, cursor: 'pointer' }}>
                 Salvar Evento
               </button>
             </div>
@@ -874,7 +875,7 @@ export default function Eventos() {
       {/* MODAL NOVA TAREFA */}
       {showTaskModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(44,26,14,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-          <div style={{ background: '#fff', borderRadius: 16, padding: 24, maxWidth: 420, width: '100%' }}>
+          <div style={{ background: '#fff', borderRadius: RADIUS.xl, padding: 24, maxWidth: 420, width: '100%' }}>
             <h3 style={{ fontSize: 16, fontWeight: 800, color: '#2c1a0e', margin: '0 0 14px' }}>Nova Tarefa do Evento</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               <div>
@@ -895,8 +896,8 @@ export default function Eventos() {
               </div>
             </div>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
-              <button onClick={() => setShowTaskModal(false)} style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid #ede8dc', background: '#fff', color: '#7a5c42', cursor: 'pointer' }}>Cancelar</button>
-              <button onClick={handleSaveTask} style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: '#2c1a0e', color: '#fff', fontWeight: 700, cursor: 'pointer' }}>Adicionar</button>
+              <button onClick={() => setShowTaskModal(false)} style={{ padding: '8px 14px', borderRadius: RADIUS.md, border: '1px solid #ede8dc', background: '#fff', color: '#7a5c42', cursor: 'pointer' }}>Cancelar</button>
+              <button onClick={handleSaveTask} style={{ padding: '8px 16px', borderRadius: RADIUS.md, border: 'none', background: '#2c1a0e', color: '#fff', fontWeight: 700, cursor: 'pointer' }}>Adicionar</button>
             </div>
           </div>
         </div>
@@ -905,7 +906,7 @@ export default function Eventos() {
       {/* MODAL NOVO ITEM DE ORÇAMENTO */}
       {showBudgetModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(44,26,14,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-          <div style={{ background: '#fff', borderRadius: 16, padding: 24, maxWidth: 420, width: '100%' }}>
+          <div style={{ background: '#fff', borderRadius: RADIUS.xl, padding: 24, maxWidth: 420, width: '100%' }}>
             <h3 style={{ fontSize: 16, fontWeight: 800, color: '#2c1a0e', margin: '0 0 14px' }}>Item de Custo / Orçamento</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               <div>
@@ -926,8 +927,8 @@ export default function Eventos() {
               </div>
             </div>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
-              <button onClick={() => setShowBudgetModal(false)} style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid #ede8dc', background: '#fff', color: '#7a5c42', cursor: 'pointer' }}>Cancelar</button>
-              <button onClick={handleSaveBudget} style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: '#2c1a0e', color: '#fff', fontWeight: 700, cursor: 'pointer' }}>Salvar Custo</button>
+              <button onClick={() => setShowBudgetModal(false)} style={{ padding: '8px 14px', borderRadius: RADIUS.md, border: '1px solid #ede8dc', background: '#fff', color: '#7a5c42', cursor: 'pointer' }}>Cancelar</button>
+              <button onClick={handleSaveBudget} style={{ padding: '8px 16px', borderRadius: RADIUS.md, border: 'none', background: '#2c1a0e', color: '#fff', fontWeight: 700, cursor: 'pointer' }}>Salvar Custo</button>
             </div>
           </div>
         </div>
@@ -936,7 +937,7 @@ export default function Eventos() {
       {/* MODAL ADICIONAR LINK */}
       {showLinkModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(44,26,14,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-          <div style={{ background: '#fff', borderRadius: 16, padding: 24, maxWidth: 420, width: '100%' }}>
+          <div style={{ background: '#fff', borderRadius: RADIUS.xl, padding: 24, maxWidth: 420, width: '100%' }}>
             <h3 style={{ fontSize: 16, fontWeight: 800, color: '#2c1a0e', margin: '0 0 14px' }}>Adicionar Link ou Arquivo</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               <div>
@@ -949,8 +950,8 @@ export default function Eventos() {
               </div>
             </div>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
-              <button onClick={() => setShowLinkModal(false)} style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid #ede8dc', background: '#fff', color: '#7a5c42', cursor: 'pointer' }}>Cancelar</button>
-              <button onClick={handleSaveLink} style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: '#2c1a0e', color: '#fff', fontWeight: 700, cursor: 'pointer' }}>Salvar</button>
+              <button onClick={() => setShowLinkModal(false)} style={{ padding: '8px 14px', borderRadius: RADIUS.md, border: '1px solid #ede8dc', background: '#fff', color: '#7a5c42', cursor: 'pointer' }}>Cancelar</button>
+              <button onClick={handleSaveLink} style={{ padding: '8px 16px', borderRadius: RADIUS.md, border: 'none', background: '#2c1a0e', color: '#fff', fontWeight: 700, cursor: 'pointer' }}>Salvar</button>
             </div>
           </div>
         </div>
@@ -962,7 +963,7 @@ export default function Eventos() {
 const modalInputStyle: React.CSSProperties = {
   width: '100%',
   padding: '8px 12px',
-  borderRadius: 8,
+  borderRadius: RADIUS.md,
   border: '1px solid #ede8dc',
   fontSize: 13,
   outline: 'none',

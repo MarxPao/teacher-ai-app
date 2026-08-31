@@ -1,4 +1,5 @@
 'use client'
+import { COLOR, RADIUS, TEXT, SHADOW, FONT } from '@/styles/tokens'
 import { toast, showConfirm } from '@/components/Toast'
 
 import React, { useState, useEffect, useCallback } from 'react'
@@ -255,7 +256,7 @@ export default function Organization() {
  value={search}
  onChange={e => setSearch(e.target.value)}
  style={{
- padding: '8px 14px', borderRadius: 12, border: '1px solid rgba(139,115,85,0.2)',
+ padding: '8px 14px', borderRadius: RADIUS.lg, border: '1px solid rgba(139,115,85,0.2)',
  fontSize: 13, outline: 'none', background: '#fff'
  }}
  />
@@ -373,7 +374,7 @@ export default function Organization() {
 
  {/* ABA 3: ALUNOS */}
  {activeTab === 'students' && (
- <div style={{ background: '#fff', borderRadius: 16, border: '1px solid rgba(139,115,85,0.15)', overflow: 'hidden' }}>
+ <div style={{ background: '#fff', borderRadius: RADIUS.xl, border: '1px solid rgba(139,115,85,0.15)', overflow: 'hidden' }}>
  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
  <thead>
  <tr style={{ background: '#f5efe6', borderBottom: '1px solid rgba(139,115,85,0.15)', textAlign: 'left', color: '#7a5c42' }}>
@@ -425,7 +426,7 @@ export default function Organization() {
  <input value={schoolCode} onChange={e => setSchoolCode(e.target.value)} placeholder="Ex: CDP-01" style={InputStyle} />
 
  <label style={LabelStyle}>Cor Temática</label>
- <input type="color" value={schoolColor} onChange={e => setSchoolColor(e.target.value)} style={{ width: '100%', height: 38, border: 'none', borderRadius: 8, cursor: 'pointer', marginBottom: 16 }} />
+ <input type="color" value={schoolColor} onChange={e => setSchoolColor(e.target.value)} style={{ width: '100%', height: 38, border: 'none', borderRadius: RADIUS.md, cursor: 'pointer', marginBottom: 16 }} />
 
  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 10 }}>
  <button onClick={() => setShowSchoolModal(false)} style={CancelBtn}>Cancelar</button>
@@ -502,15 +503,15 @@ export default function Organization() {
 }
 
 const AddBtn: React.CSSProperties = {
- padding: '8px 16px', borderRadius: 12, border: 'none', background: '#8b5e3c', color: '#fff',
+ padding: '8px 16px', borderRadius: RADIUS.lg, border: 'none', background: '#8b5e3c', color: '#fff',
  fontSize: 13, fontWeight: 700, cursor: 'pointer'
 }
 const ActiveTabS: React.CSSProperties = {
- padding: '8px 16px', borderRadius: 10, border: 'none', background: '#8b5e3c', color: '#fff',
+ padding: '8px 16px', borderRadius: RADIUS.md, border: 'none', background: '#8b5e3c', color: '#fff',
  fontSize: 13, fontWeight: 700, cursor: 'pointer'
 }
 const InactiveTabS: React.CSSProperties = {
- padding: '8px 16px', borderRadius: 10, border: 'none', background: 'transparent', color: '#665c54',
+ padding: '8px 16px', borderRadius: RADIUS.md, border: 'none', background: 'transparent', color: '#665c54',
  fontSize: 13, fontWeight: 600, cursor: 'pointer'
 }
 const ActionIconButton: React.CSSProperties = {
@@ -528,14 +529,14 @@ const LabelStyle: React.CSSProperties = {
  fontSize: 12, fontWeight: 700, color: '#7a5c42', display: 'block', marginBottom: 4
 }
 const InputStyle: React.CSSProperties = {
- width: '100%', padding: '9px 12px', borderRadius: 10, border: '1px solid rgba(139,115,85,0.2)',
+ width: '100%', padding: '9px 12px', borderRadius: RADIUS.md, border: '1px solid rgba(139,115,85,0.2)',
  background: '#fff', outline: 'none', fontSize: 13, color: '#2c1a0e', marginBottom: 14
 }
 const CancelBtn: React.CSSProperties = {
- padding: '9px 16px', background: '#f5efe6', border: '1px solid rgba(139,115,85,0.2)', borderRadius: 10,
+ padding: '9px 16px', background: '#f5efe6', border: '1px solid rgba(139,115,85,0.2)', borderRadius: RADIUS.md,
  fontSize: 13, cursor: 'pointer', color: '#7a5c42'
 }
 const SaveBtn: React.CSSProperties = {
- padding: '9px 18px', background: '#8b5e3c', color: '#fff', border: 'none', borderRadius: 10,
+ padding: '9px 18px', background: '#8b5e3c', color: '#fff', border: 'none', borderRadius: RADIUS.md,
  fontSize: 13, fontWeight: 700, cursor: 'pointer'
-}
+}

@@ -1,4 +1,5 @@
 'use client'
+import { COLOR, RADIUS, TEXT, SHADOW, FONT } from '@/styles/tokens'
 import React, { useState, useMemo } from 'react'
 
 export interface QuestionResult {

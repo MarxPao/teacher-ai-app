@@ -1,4 +1,5 @@
 'use client'
+import { COLOR, RADIUS, TEXT, SHADOW, FONT } from '@/styles/tokens'
 import { toast, showConfirm } from '@/components/Toast'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
@@ -1290,7 +1291,7 @@ export default function Repository() {
  elements.push(<hr key={i} style={{ border: 'none', borderTop: '1px dashed rgba(139,115,85,0.25)', margin: '8px 0' }} />)
  } else if (/^\[.*\]$/.test(trimmed)) {
  elements.push(
- <div key={i} style={{ background: 'linear-gradient(135deg, #8b5e3c, #a0785a)', color: '#fff', padding: '8px 14px', borderRadius: 10, fontSize: 13, fontWeight: 700, margin: '14px 0 6px', letterSpacing: 0.5 }}>
+ <div key={i} style={{ background: 'linear-gradient(135deg, #8b5e3c, #a0785a)', color: '#fff', padding: '8px 14px', borderRadius: RADIUS.md, fontSize: 13, fontWeight: 700, margin: '14px 0 6px', letterSpacing: 0.5 }}>
  {trimmed}
  </div>
  )
@@ -1316,20 +1317,20 @@ export default function Repository() {
  } else if (/^[A-Z]:/.test(trimmed) || /^Teacher:|^Student:|^Dialogue/.test(trimmed)) {
  const [speaker, ...rest] = trimmed.split(':')
  elements.push(
- <div key={i} style={{ background: 'rgba(139,94,60,0.07)', padding: '6px 12px', borderRadius: 8, margin: '4px 0', fontSize: 13 }}>
+ <div key={i} style={{ background: 'rgba(139,94,60,0.07)', padding: '6px 12px', borderRadius: RADIUS.md, margin: '4px 0', fontSize: 13 }}>
  <strong style={{ color: '#8b5e3c' }}>{speaker}:</strong>
  <span style={{ color: '#2c1a0e' }}>{rest.join(':')}</span>
  </div>
  )
  } else if (/Answer:/i.test(trimmed)) {
  elements.push(
- <div key={i} style={{ fontSize: 12.5, color: '#27ae60', padding: '2px 0 2px 16px', fontStyle: 'italic' }}>
+ <div key={i} style={{ fontSize: TEXT.bodyCompact, color: '#27ae60', padding: '2px 0 2px 16px', fontStyle: 'italic' }}>
  {trimmed}
  </div>
  )
  } else {
  elements.push(
- <div key={i} style={{ fontSize: 13.5, color: '#2c1a0e', lineHeight: 1.7, margin: '2px 0' }}>
+ <div key={i} style={{ fontSize: TEXT.body, color: '#2c1a0e', lineHeight: 1.7, margin: '2px 0' }}>
  {trimmed}
  </div>
  )
@@ -1449,17 +1450,17 @@ export default function Repository() {
   }
 
   const btnPrimary: React.CSSProperties = {
-    padding: '10px 18px', borderRadius: 10, border: 'none',
+    padding: '10px 18px', borderRadius: RADIUS.md, border: 'none',
     background: '#8b5e3c', color: '#fff',
     fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6
   }
   const btnSecondary: React.CSSProperties = {
-    padding: '10px 18px', borderRadius: 10,
+    padding: '10px 18px', borderRadius: RADIUS.md,
     border: '1px solid rgba(139,115,85,0.35)',
     background: '#fffcf8', color: '#7a5c42', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6
   }
   const inputStyle: React.CSSProperties = {
-    width: '100%', padding: '10px 14px', borderRadius: 10,
+    width: '100%', padding: '10px 14px', borderRadius: RADIUS.md,
     border: '1px solid rgba(139,115,85,0.25)',
     fontSize: 13, outline: 'none', background: '#fffcf8', color: '#2c1a0e', boxSizing: 'border-box'
   }
@@ -1473,7 +1474,7 @@ export default function Repository() {
       actions={
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           {uploadingStatus && (
-            <div style={{ background: '#fdf3e7', border: '1px solid #8b5e3c', color: '#8b5e3c', padding: '6px 14px', borderRadius: 10, fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ background: '#fdf3e7', border: '1px solid #8b5e3c', color: '#8b5e3c', padding: '6px 14px', borderRadius: RADIUS.md, fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
               <i className="ti ti-loader text-spin" /> {uploadingStatus}
             </div>
           )}
@@ -1612,16 +1613,16 @@ export default function Repository() {
         {/* BARRA DE SELEÇÃO DAS 6 PARTIÇÕES */}
         <div style={{
           display: 'flex', gap: 8, background: '#fffcf8', padding: '6px',
-          borderRadius: 14, border: '1.5px solid rgba(139,115,85,0.18)', width: 'fit-content',
+          borderRadius: RADIUS.lg, border: '1.5px solid rgba(139,115,85,0.18)', width: 'fit-content',
           boxShadow: '0 2px 10px rgba(44,26,14,0.04)', flexWrap: 'wrap'
         }}>
           <button
             onClick={() => setActivePartition('headers')}
             style={{
-              padding: '10px 18px', borderRadius: 10, border: 'none',
+              padding: '10px 18px', borderRadius: RADIUS.md, border: 'none',
               background: activePartition === 'headers' ? '#8b5e3c' : 'transparent',
               color: activePartition === 'headers' ? '#fff' : '#665c54',
-              fontSize: 13.5, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
+              fontSize: TEXT.body, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
               transition: 'all 0.15s'
             }}
           >
@@ -1631,10 +1632,10 @@ export default function Repository() {
           <button
             onClick={() => setActivePartition('exercises')}
             style={{
-              padding: '10px 18px', borderRadius: 10, border: 'none',
+              padding: '10px 18px', borderRadius: RADIUS.md, border: 'none',
               background: activePartition === 'exercises' ? '#8b5e3c' : 'transparent',
               color: activePartition === 'exercises' ? '#fff' : '#665c54',
-              fontSize: 13.5, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
+              fontSize: TEXT.body, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
               transition: 'all 0.15s'
             }}
           >
@@ -1644,10 +1645,10 @@ export default function Repository() {
           <button
             onClick={() => setActivePartition('bibliography')}
             style={{
-              padding: '10px 18px', borderRadius: 10, border: 'none',
+              padding: '10px 18px', borderRadius: RADIUS.md, border: 'none',
               background: activePartition === 'bibliography' ? '#8b5e3c' : 'transparent',
               color: activePartition === 'bibliography' ? '#fff' : '#665c54',
-              fontSize: 13.5, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
+              fontSize: TEXT.body, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
               transition: 'all 0.15s'
             }}
           >
@@ -1657,10 +1658,10 @@ export default function Repository() {
           <button
             onClick={() => setActivePartition('files')}
             style={{
-              padding: '10px 18px', borderRadius: 10, border: 'none',
+              padding: '10px 18px', borderRadius: RADIUS.md, border: 'none',
               background: activePartition === 'files' ? '#8b5e3c' : 'transparent',
               color: activePartition === 'files' ? '#fff' : '#665c54',
-              fontSize: 13.5, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
+              fontSize: TEXT.body, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
               transition: 'all 0.15s'
             }}
           >
@@ -1670,10 +1671,10 @@ export default function Repository() {
           <button
             onClick={() => setActivePartition('images')}
             style={{
-              padding: '10px 18px', borderRadius: 10, border: 'none',
+              padding: '10px 18px', borderRadius: RADIUS.md, border: 'none',
               background: activePartition === 'images' ? '#8b5e3c' : 'transparent',
               color: activePartition === 'images' ? '#fff' : '#665c54',
-              fontSize: 13.5, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
+              fontSize: TEXT.body, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
               transition: 'all 0.15s'
             }}
           >
@@ -1683,10 +1684,10 @@ export default function Repository() {
           <button
             onClick={() => setActivePartition('competencies')}
             style={{
-              padding: '10px 18px', borderRadius: 10, border: 'none',
+              padding: '10px 18px', borderRadius: RADIUS.md, border: 'none',
               background: activePartition === 'competencies' ? '#8b5e3c' : 'transparent',
               color: activePartition === 'competencies' ? '#fff' : '#665c54',
-              fontSize: 13.5, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
+              fontSize: TEXT.body, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
               transition: 'all 0.15s'
             }}
           >
@@ -1708,20 +1709,20 @@ export default function Repository() {
  />
 
  <div style={{ display: 'grid', gridTemplateColumns: '350px 1fr', gap: 24, flex: 1, minHeight: 0 }}>
- <div style={{ background: '#fff', borderRadius: 16, border: '1px solid rgba(139,115,85,0.15)', padding: 18, display: 'flex', flexDirection: 'column', gap: 16, overflowY: 'auto' }}>
+ <div style={{ background: '#fff', borderRadius: RADIUS.xl, border: '1px solid rgba(139,115,85,0.15)', padding: 18, display: 'flex', flexDirection: 'column', gap: 16, overflowY: 'auto' }}>
  <div>
  <div style={{ fontSize: 14, fontWeight: 800, color: '#2c1a0e', display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
  <i className="ti ti-building-community" style={{ color: '#8b5e3c', fontSize: 20 }} />
  <span>Gerenciar Cabeçalhos</span>
  </div>
- <p style={{ fontSize: 11.5, color: '#8b5e3c', margin: 0, lineHeight: 1.4 }}>
+ <p style={{ fontSize: TEXT.caption, color: '#8b5e3c', margin: 0, lineHeight: 1.4 }}>
  Vincule cabeçalhos das escolas para aplicá-los em provas e exercícios.
  </p>
  </div>
 
  <div style={{ borderBottom: '1px solid #ede8dc' }} />
 
- <div style={{ background: '#fffcf8', border: '1.5px solid #8b5e3c', borderRadius: 12, padding: 14 }}>
+ <div style={{ background: '#fffcf8', border: '1.5px solid #8b5e3c', borderRadius: RADIUS.lg, padding: 14 }}>
  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
  <label style={{ fontSize: 11, fontWeight: 800, color: '#8b5e3c', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
  Escola Cadastrada:
@@ -1750,7 +1751,7 @@ export default function Repository() {
  }
  }}
  style={{
- width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid rgba(139,115,85,0.3)',
+ width: '100%', padding: '9px 12px', borderRadius: RADIUS.md, border: '1px solid rgba(139,115,85,0.3)',
  fontSize: 13, fontWeight: 700, color: '#2c1a0e', background: '#fff', outline: 'none', cursor: 'pointer'
  }}
  >
@@ -1759,7 +1760,7 @@ export default function Repository() {
  ))}
  </select>
  ) : (
- <div style={{ fontSize: 11.5, color: '#dc322f', fontWeight: 600 }}>
+ <div style={{ fontSize: TEXT.caption, color: '#dc322f', fontWeight: 600 }}>
  Nenhuma escola cadastrada em Escolas.
  <button
  onClick={() => window.dispatchEvent(new CustomEvent('teacher:navigate', { detail: 'organization' }))}
@@ -1780,7 +1781,7 @@ export default function Repository() {
  justifyContent: 'center',
  padding: '11px 14px',
  fontSize: 13,
- borderRadius: 10
+ borderRadius: RADIUS.md
  }}
  >
  <i className="ti ti-upload" /> Enviar Arquivo de Cabeçalho
@@ -1791,7 +1792,7 @@ export default function Repository() {
  </div>
 
  {currentSelectedHeader && (
- <div style={{ background: '#faf8f5', borderRadius: 12, border: '1px solid #ede8dc', padding: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
+ <div style={{ background: '#faf8f5', borderRadius: RADIUS.lg, border: '1px solid #ede8dc', padding: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
  <div style={{ fontSize: 11, fontWeight: 800, color: '#8b5e3c', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
  Ações do Cabeçalho
  </div>
@@ -1833,7 +1834,7 @@ export default function Repository() {
  setHeaderTemplates(updated)
  localStorage.setItem('teacher_custom_headers', JSON.stringify(updated))
  }}
- style={{ background: 'none', border: '1px solid #dc322f', color: '#dc322f', padding: '6px 8px', borderRadius: 8, fontSize: 11, cursor: 'pointer', fontWeight: 600, width: '100%', textAlign: 'center' }}
+ style={{ background: 'none', border: '1px solid #dc322f', color: '#dc322f', padding: '6px 8px', borderRadius: RADIUS.md, fontSize: 11, cursor: 'pointer', fontWeight: 600, width: '100%', textAlign: 'center' }}
  >
  Remover Imagem Personalizada
  </button>
@@ -1843,7 +1844,7 @@ export default function Repository() {
 
  <div style={{ borderBottom: '1px solid #ede8dc', margin: '2px 0' }} />
 
- <div style={{ fontSize: 11.5, fontWeight: 800, color: '#8b5e3c', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+ <div style={{ fontSize: TEXT.caption, fontWeight: 800, color: '#8b5e3c', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
  Cabeçalhos Cadastrados ({headerTemplates.length})
  </div>
 
@@ -1861,7 +1862,7 @@ export default function Repository() {
  setIsEditingHeader(false);
  }}
  style={{
- padding: '12px 14px', borderRadius: 12, cursor: 'pointer',
+ padding: '12px 14px', borderRadius: RADIUS.lg, cursor: 'pointer',
  background: selectedHeaderId === tpl.id ? '#fdf8f2' : '#faf8f5',
  border: selectedHeaderId === tpl.id ? '1.5px solid #8b5e3c' : '1px solid #ede8dc',
  transition: 'all 0.15s'
@@ -1880,7 +1881,7 @@ export default function Repository() {
  </div>
 
  {currentSelectedHeader ? (
- <div style={{ background: '#fff', borderRadius: 16, border: '1px solid rgba(139,115,85,0.15)', padding: '24px 32px', display: 'flex', flexDirection: 'column', gap: 20, overflowY: 'auto', boxShadow: '0 4px 20px rgba(44,26,14,0.06)' }}>
+ <div style={{ background: '#fff', borderRadius: RADIUS.xl, border: '1px solid rgba(139,115,85,0.15)', padding: '24px 32px', display: 'flex', flexDirection: 'column', gap: 20, overflowY: 'auto', boxShadow: '0 4px 20px rgba(44,26,14,0.06)' }}>
  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #ede8dc', paddingBottom: 14 }}>
  <div>
  <h2 style={{ fontFamily: "'Fraunces', Georgia, serif", fontSize: 22, color: '#2c1a0e', margin: 0 }}>
@@ -1891,7 +1892,7 @@ export default function Repository() {
  </p>
  </div>
 
- <div style={{ background: '#fdf8f2', border: '1px solid #8b5e3c', borderRadius: 8, padding: '6px 12px', fontSize: 12, fontWeight: 700, color: '#8b5e3c', display: 'flex', alignItems: 'center', gap: 6 }}>
+ <div style={{ background: '#fdf8f2', border: '1px solid #8b5e3c', borderRadius: RADIUS.md, padding: '6px 12px', fontSize: 12, fontWeight: 700, color: '#8b5e3c', display: 'flex', alignItems: 'center', gap: 6 }}>
  <i className="ti ti-check" /> Vinculado a {currentSelectedHeader.name}
  </div>
  </div>
@@ -1927,7 +1928,7 @@ export default function Repository() {
  )}
  </div>
 
- <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, marginBottom: 16 }}>
+ <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: TEXT.bodyCompact, marginBottom: 16 }}>
  <tbody>
  <tr>
  <td style={{ border: '1px solid #2c1a0e', padding: '6px 10px', width: '50%' }}>
@@ -1971,17 +1972,17 @@ export default function Repository() {
  </tbody>
  </table>
 
- <div style={{ background: '#f5f0e8', padding: '10px 14px', borderRadius: 6, fontSize: 11.5, borderLeft: '4px solid #8b5e3c' }}>
+ <div style={{ background: '#f5f0e8', padding: '10px 14px', borderRadius: 6, fontSize: TEXT.caption, borderLeft: '4px solid #8b5e3c' }}>
  <strong style={{ display: 'block', marginBottom: 4 }}>Instruções Gerais de Preenchimento:</strong>
  {isEditingHeader ? (
  <textarea
  value={editHeaderInstructions}
  onChange={e => setEditHeaderInstructions(e.target.value)}
  rows={4}
- style={{ ...inputStyle, fontFamily: 'inherit', fontSize: 11.5 }}
+ style={{ ...inputStyle, fontFamily: 'inherit', fontSize: TEXT.caption }}
  />
  ) : (
- <pre style={{ margin: 0, fontFamily: 'inherit', whiteSpace: 'pre-wrap', fontSize: 11.5, color: '#333' }}>
+ <pre style={{ margin: 0, fontFamily: 'inherit', whiteSpace: 'pre-wrap', fontSize: TEXT.caption, color: '#333' }}>
  {currentSelectedHeader.instructions}
  </pre>
  )}
@@ -1991,7 +1992,7 @@ export default function Repository() {
  </div>
  </div>
  ) : (
- <div style={{ background: '#fffcf8', borderRadius: 16, border: '2px dashed #8b5e3c', padding: '60px 40px', textAlign: 'center', margin: 'auto 0' }}>
+ <div style={{ background: '#fffcf8', borderRadius: RADIUS.xl, border: '2px dashed #8b5e3c', padding: '60px 40px', textAlign: 'center', margin: 'auto 0' }}>
  <i className="ti ti-building-community" style={{ fontSize: 48, color: '#8b5e3c', marginBottom: 12, display: 'block' }} />
  <h3 style={{ fontFamily: "'Fraunces', Georgia, serif", fontSize: 20, color: '#2c1a0e', margin: '0 0 8px' }}>
  Selecione ou envie um cabeçalho na barra lateral
@@ -2012,7 +2013,7 @@ export default function Repository() {
  {activePartition === 'exercises' && (
  <div style={{ display: 'grid', gridTemplateColumns: '360px 1fr', gap: 24, flex: 1, minHeight: 0 }}>
  {/* Lista de Exercícios */}
- <div style={{ background: '#fff', borderRadius: 16, border: '1px solid rgba(139,115,85,0.12)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+ <div style={{ background: '#fff', borderRadius: RADIUS.xl, border: '1px solid rgba(139,115,85,0.12)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
  <div style={{ padding: '14px 16px', borderBottom: '1px solid #ede8dc' }}>
  <input
  placeholder="Buscar prova ou exercício..."
@@ -2039,7 +2040,7 @@ export default function Repository() {
 
  <div style={{ flex: 1, overflowY: 'auto', padding: '10px' }}>
  {filteredExercises.length === 0 ? (
- <div style={{ padding: '30px 16px', textAlign: 'center', color: '#8b5e3c', fontSize: 12.5 }}>
+ <div style={{ padding: '30px 16px', textAlign: 'center', color: '#8b5e3c', fontSize: TEXT.bodyCompact }}>
  Nenhum exercício encontrado. Gere uma prova no <strong>ExamBuilder</strong> para salvar aqui automaticamente.
  </div>
  ) : filteredExercises.map(ex => (
@@ -2047,7 +2048,7 @@ export default function Repository() {
  key={ex.id}
  onClick={() => setViewExercise(ex)}
  style={{
- padding: '12px 14px', borderRadius: 12, cursor: 'pointer', marginBottom: 6,
+ padding: '12px 14px', borderRadius: RADIUS.lg, cursor: 'pointer', marginBottom: 6,
  background: viewExercise?.id === ex.id ? '#fdf8f2' : '#faf8f5',
  border: viewExercise?.id === ex.id ? '1.5px solid #8b5e3c' : '1px solid #ede8dc',
  transition: 'all 0.15s'
@@ -2068,7 +2069,7 @@ export default function Repository() {
  </div>
 
  {/* Visualizador & Ações do Exercício */}
- <div style={{ background: '#fff', borderRadius: 16, border: '1px solid rgba(139,115,85,0.15)', padding: '24px', display: 'flex', flexDirection: 'column', gap: 16, overflowY: 'auto' }}>
+ <div style={{ background: '#fff', borderRadius: RADIUS.xl, border: '1px solid rgba(139,115,85,0.15)', padding: '24px', display: 'flex', flexDirection: 'column', gap: 16, overflowY: 'auto' }}>
  {viewExercise ? (
  <>
  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #ede8dc', paddingBottom: 14 }}>
@@ -2138,8 +2139,8 @@ export default function Repository() {
  {/* Conteúdo Renderizado da Prova/Exercício */}
  <div
  style={{
- background: '#fffcf8', border: '1px solid #ede8dc', borderRadius: 12,
- padding: '24px 28px', color: '#2c1a0e', lineHeight: 1.7, fontSize: 13.5
+ background: '#fffcf8', border: '1px solid #ede8dc', borderRadius: RADIUS.lg,
+ padding: '24px 28px', color: '#2c1a0e', lineHeight: 1.7, fontSize: TEXT.body
  }}
  dangerouslySetInnerHTML={{ __html: viewExercise.content }}
  />
@@ -2160,7 +2161,7 @@ export default function Repository() {
  {activePartition === 'bibliography' && (
  <div style={{ display: 'grid', gridTemplateColumns: '360px 1fr', gap: 24, flex: 1, minHeight: 0 }}>
  {/* Lista de Livros e Artigos Bibliográficos */}
- <div style={{ background: '#fff', borderRadius: 16, border: '1px solid rgba(139,115,85,0.12)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+ <div style={{ background: '#fff', borderRadius: RADIUS.xl, border: '1px solid rgba(139,115,85,0.12)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
  <div style={{ padding: '14px 16px', borderBottom: '1px solid #ede8dc' }}>
  <input
  placeholder="Buscar na bibliografia..."
@@ -2191,7 +2192,7 @@ export default function Repository() {
  key={item.id}
  onClick={() => { setViewItem(item); setMode('view') }}
  style={{
- padding: '12px 14px', borderRadius: 12, cursor: 'pointer', marginBottom: 6,
+ padding: '12px 14px', borderRadius: RADIUS.lg, cursor: 'pointer', marginBottom: 6,
  background: viewItem?.id === item.id ? '#fdf8f2' : '#faf8f5',
  border: viewItem?.id === item.id ? '1.5px solid #8b5e3c' : '1px solid #ede8dc',
  transition: 'all 0.15s'
@@ -2211,7 +2212,7 @@ export default function Repository() {
  </div>
 
  {/* Leitor Profissional do Livro / Artigo */}
- <div style={{ background: '#fff', borderRadius: 16, border: '1px solid rgba(139,115,85,0.15)', padding: '24px', display: 'flex', flexDirection: 'column', gap: 16, overflowY: 'auto' }}>
+ <div style={{ background: '#fff', borderRadius: RADIUS.xl, border: '1px solid rgba(139,115,85,0.15)', padding: '24px', display: 'flex', flexDirection: 'column', gap: 16, overflowY: 'auto' }}>
  {mode === 'add' || mode === 'edit' ? (
  <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
  <h3 style={{ margin: 0, color: '#8b5e3c' }}>{mode === 'add' ? 'Adicionar Novo Livro/Material' : 'Editar Material'}</h3>
@@ -2245,7 +2246,7 @@ export default function Repository() {
  <div style={{
  background: readerTheme === 'sepia' ? '#fdf8f2' : readerTheme === 'paper' ? '#ffffff' : '#1e1e1e',
  color: readerTheme === 'dark' ? '#fdf8f2' : '#2c1a0e',
- padding: '24px 28px', borderRadius: 12, border: '1px solid #ede8dc',
+ padding: '24px 28px', borderRadius: RADIUS.lg, border: '1px solid #ede8dc',
  fontFamily: readerFontFamily, fontSize: readerFontSize, lineHeight: 1.8
  }}>
  {formatContent(viewItem.content)}
@@ -2266,7 +2267,7 @@ export default function Repository() {
  {activePartition === 'files' && (
  <div style={{ display: 'flex', flexDirection: 'column', gap: 16, flex: 1, minHeight: 0 }}>
  {/* Barra de Filtros e Busca */}
- <div style={{ background: '#fff', padding: '14px 20px', borderRadius: 16, border: '1px solid #ede8dc', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+ <div style={{ background: '#fff', padding: '14px 20px', borderRadius: RADIUS.xl, border: '1px solid #ede8dc', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
  {[
  { key: 'all', label: `Todos (${looseFiles.length})` },
@@ -2282,7 +2283,7 @@ export default function Repository() {
  key={tab.key}
  onClick={() => setLooseFileFilter(tab.key)}
  style={{
- padding: '7px 14px', borderRadius: 9, border: 'none', fontSize: 12.5, fontWeight: 700, cursor: 'pointer',
+ padding: '7px 14px', borderRadius: 9, border: 'none', fontSize: TEXT.bodyCompact, fontWeight: 700, cursor: 'pointer',
  background: looseFileFilter === tab.key ? '#8b5e3c' : '#f5efe6',
  color: looseFileFilter === tab.key ? '#fff' : '#665c54',
  transition: 'all 0.15s'
@@ -2299,7 +2300,7 @@ export default function Repository() {
  placeholder="🔍 Buscar por nome, conteúdo ou tag..."
  value={looseFileSearch}
  onChange={e => setLooseFileSearch(e.target.value)}
- style={{ padding: '8px 14px', borderRadius: 10, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, color: '#2c1a0e', outline: 'none', minWidth: 260 }}
+ style={{ padding: '8px 14px', borderRadius: RADIUS.md, border: '1px solid #e8e0d0', background: '#f5f0e8', fontSize: 13, color: '#2c1a0e', outline: 'none', minWidth: 260 }}
  />
  </div>
  </div>
@@ -2307,7 +2308,7 @@ export default function Repository() {
  {/* Split View: Lista de Arquivos (Esquerda) e Preview / Ações (Direita) */}
  <div style={{ display: 'grid', gridTemplateColumns: '420px 1fr', gap: 20, flex: 1, minHeight: 0 }}>
  {/* Coluna Esquerda: Cartões de Arquivos */}
- <div style={{ background: '#fff', borderRadius: 16, border: '1px solid rgba(139,115,85,0.15)', padding: 14, display: 'flex', flexDirection: 'column', gap: 10, overflowY: 'auto' }}>
+ <div style={{ background: '#fff', borderRadius: RADIUS.xl, border: '1px solid rgba(139,115,85,0.15)', padding: 14, display: 'flex', flexDirection: 'column', gap: 10, overflowY: 'auto' }}>
  {filteredLooseFiles.length === 0 ? (
  <div style={{ padding: '40px 20px', textAlign: 'center', color: '#8b5e3c' }}>
  <i className="ti ti-folder-off" style={{ fontSize: 36, opacity: 0.5, display: 'block', marginBottom: 10 }} />
@@ -2331,7 +2332,7 @@ export default function Repository() {
  key={file.id}
  onClick={() => setSelectedLooseFile(file)}
  style={{
- padding: 14, borderRadius: 14, cursor: 'pointer',
+ padding: 14, borderRadius: RADIUS.lg, cursor: 'pointer',
  background: isSelected ? '#fdf8f2' : '#faf8f5',
  border: isSelected ? '2px solid #8b5e3c' : '1px solid #ede8dc',
  boxShadow: isSelected ? '0 4px 14px rgba(139,94,60,0.12)' : 'none',
@@ -2340,11 +2341,11 @@ export default function Repository() {
  }}
  >
  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
- <div style={{ width: 36, height: 36, borderRadius: 10, background: `${iconColor}15`, color: iconColor, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>
+ <div style={{ width: 36, height: 36, borderRadius: RADIUS.md, background: `${iconColor}15`, color: iconColor, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>
  <i className={iconName} />
  </div>
  <div style={{ flex: 1, minWidth: 0 }}>
- <div style={{ fontSize: 13.5, fontWeight: 700, color: '#2c1a0e', lineHeight: 1.3, wordBreak: 'break-word' }}>
+ <div style={{ fontSize: TEXT.body, fontWeight: 700, color: '#2c1a0e', lineHeight: 1.3, wordBreak: 'break-word' }}>
  {file.title}
  </div>
  <div style={{ fontSize: 11, color: '#8b5e3c', marginTop: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -2373,7 +2374,7 @@ export default function Repository() {
  </div>
 
  {/* Coluna Direita: Detalhes, Ações e Preview do Arquivo Selecionado */}
- <div style={{ background: '#fff', borderRadius: 16, border: '1px solid rgba(139,115,85,0.15)', padding: 24, display: 'flex', flexDirection: 'column', gap: 16, overflowY: 'auto' }}>
+ <div style={{ background: '#fff', borderRadius: RADIUS.xl, border: '1px solid rgba(139,115,85,0.15)', padding: 24, display: 'flex', flexDirection: 'column', gap: 16, overflowY: 'auto' }}>
  {selectedLooseFile ? (
  <>
  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px solid #ede8dc', paddingBottom: 16, gap: 16, flexWrap: 'wrap' }}>
@@ -2437,13 +2438,13 @@ export default function Repository() {
 
  {/* Preview Especial por Tipo de Arquivo */}
  {selectedLooseFile.fileType === 'image' && selectedLooseFile.fileDataUrl && (
- <div style={{ background: '#f5efe6', padding: 14, borderRadius: 12, textAlign: 'center', border: '1px solid #ede8dc' }}>
- <img src={selectedLooseFile.fileDataUrl} alt={selectedLooseFile.title} style={{ maxWidth: '100%', maxHeight: 340, borderRadius: 8, objectFit: 'contain' }} />
+ <div style={{ background: '#f5efe6', padding: 14, borderRadius: RADIUS.lg, textAlign: 'center', border: '1px solid #ede8dc' }}>
+ <img src={selectedLooseFile.fileDataUrl} alt={selectedLooseFile.title} style={{ maxWidth: '100%', maxHeight: 340, borderRadius: RADIUS.md, objectFit: 'contain' }} />
  </div>
  )}
 
  {selectedLooseFile.fileType === 'audio' && selectedLooseFile.fileDataUrl && (
- <div style={{ background: '#f5efe6', padding: 16, borderRadius: 12, display: 'flex', alignItems: 'center', gap: 14 }}>
+ <div style={{ background: '#f5efe6', padding: 16, borderRadius: RADIUS.lg, display: 'flex', alignItems: 'center', gap: 14 }}>
  <i className="ti ti-volume" style={{ fontSize: 28, color: '#7c3aed' }} />
  <audio controls src={selectedLooseFile.fileDataUrl} style={{ width: '100%' }} />
  </div>
@@ -2455,14 +2456,14 @@ export default function Repository() {
  <h4 style={{ fontSize: 13, fontWeight: 800, color: '#8b5e3c', margin: 0, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
  📄 Conteúdo Indexado (Pronto para o Motor RAG & IA da Rafinha)
  </h4>
- <span style={{ fontSize: 11.5, color: '#7a5c42', fontWeight: 600 }}>
+ <span style={{ fontSize: TEXT.caption, color: '#7a5c42', fontWeight: 600 }}>
  {selectedLooseFile.extractedText ? `${selectedLooseFile.extractedText.trim().split(/\s+/).length} palavras` : 'Sem texto extraído'}
  </span>
  </div>
 
  <div style={{
- background: '#fdf8f2', color: '#2c1a0e', padding: 22, borderRadius: 12, border: '1px solid #ede8dc',
- fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 13.5, lineHeight: 1.7, whiteSpace: 'pre-wrap', maxHeight: 420, overflowY: 'auto'
+ background: '#fdf8f2', color: '#2c1a0e', padding: 22, borderRadius: RADIUS.lg, border: '1px solid #ede8dc',
+ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: TEXT.body, lineHeight: 1.7, whiteSpace: 'pre-wrap', maxHeight: 420, overflowY: 'auto'
  }}>
  {selectedLooseFile.extractedText || 'Nenhum texto pôde ser extraído deste arquivo.'}
  </div>
@@ -2487,7 +2488,7 @@ export default function Repository() {
      {/* BARRA DE PESQUISA, FILTROS E AÇÕES */}
      <div style={{
        display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap',
-       background: '#fffcf8', padding: '12px 16px', borderRadius: 14,
+       background: '#fffcf8', padding: '12px 16px', borderRadius: RADIUS.lg,
        border: '1.5px solid rgba(139,115,85,0.18)', boxShadow: '0 2px 8px rgba(44,26,14,0.03)'
      }}>
        {/* Campo de Busca */}
@@ -2499,7 +2500,7 @@ export default function Repository() {
            value={mediaSearch}
            onChange={e => setMediaSearch(e.target.value)}
            style={{
-             width: '100%', padding: '9px 12px 9px 36px', borderRadius: 10,
+             width: '100%', padding: '9px 12px 9px 36px', borderRadius: RADIUS.md,
              border: '1.5px solid rgba(139,115,85,0.22)', background: '#fff',
              fontSize: 13, color: '#2c1a0e', outline: 'none'
            }}
@@ -2511,7 +2512,7 @@ export default function Repository() {
          value={mediaSchoolFilter}
          onChange={e => setMediaSchoolFilter(e.target.value)}
          style={{
-           padding: '9px 14px', borderRadius: 10, border: '1.5px solid rgba(139,115,85,0.22)',
+           padding: '9px 14px', borderRadius: RADIUS.md, border: '1.5px solid rgba(139,115,85,0.22)',
            background: '#fff', fontSize: 13, color: '#2c1a0e', fontWeight: 600, outline: 'none'
          }}
        >
@@ -2520,7 +2521,7 @@ export default function Repository() {
        </select>
 
        {/* Contador */}
-       <div style={{ fontSize: 12.5, fontWeight: 700, color: '#8b7355', display: 'flex', alignItems: 'center', gap: 6 }}>
+       <div style={{ fontSize: TEXT.bodyCompact, fontWeight: 700, color: '#8b7355', display: 'flex', alignItems: 'center', gap: 6 }}>
          <i className="ti ti-photo" />
          <span>{filteredMediaItems.length} imagem(ns)</span>
        </div>
@@ -2559,7 +2560,7 @@ export default function Repository() {
      {filteredMediaItems.length === 0 ? (
        <div style={{
          flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-         background: '#fffcf8', borderRadius: 16, border: '2px dashed rgba(139,115,85,0.25)', padding: 40, textAlign: 'center'
+         background: '#fffcf8', borderRadius: RADIUS.xl, border: '2px dashed rgba(139,115,85,0.25)', padding: 40, textAlign: 'center'
        }}>
          <div style={{ fontSize: 48, marginBottom: 12 }}>🖼️</div>
          <h3 style={{ margin: '0 0 6px', color: '#2c1a0e', fontSize: 17, fontWeight: 800 }}>
@@ -2603,7 +2604,7 @@ export default function Repository() {
              key={item.id}
              style={{
                background: '#fffcf8',
-               borderRadius: 14,
+               borderRadius: RADIUS.lg,
                border: '1.5px solid rgba(139,115,85,0.18)',
                boxShadow: '0 3px 12px rgba(44,26,14,0.05)',
                display: 'flex',
@@ -2650,13 +2651,13 @@ export default function Repository() {
              {/* Conteúdo do Card */}
              <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 6, flex: 1 }}>
                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                 <div style={{ fontWeight: 800, fontSize: 13.5, color: '#2c1a0e', lineHeight: 1.3, wordBreak: 'break-word' }}>
+                 <div style={{ fontWeight: 800, fontSize: TEXT.body, color: '#2c1a0e', lineHeight: 1.3, wordBreak: 'break-word' }}>
                    {item.title}
                  </div>
                </div>
 
                {item.description && (
-                 <p style={{ fontSize: 11.5, color: '#665c54', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+                 <p style={{ fontSize: TEXT.caption, color: '#665c54', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
                    {item.description}
                  </p>
                )}
@@ -2688,8 +2689,8 @@ export default function Repository() {
                    }}
                    title="Copiar Tag Markdown / Link"
                    style={{
-                     flex: 1, padding: '6px 8px', borderRadius: 8, border: '1px solid rgba(139,115,85,0.25)',
-                     background: '#fdfbf7', color: '#8b5e3c', fontSize: 11.5, fontWeight: 700,
+                     flex: 1, padding: '6px 8px', borderRadius: RADIUS.md, border: '1px solid rgba(139,115,85,0.25)',
+                     background: '#fdfbf7', color: '#8b5e3c', fontSize: TEXT.caption, fontWeight: 700,
                      cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4
                    }}
                  >
@@ -2700,7 +2701,7 @@ export default function Repository() {
                    onClick={() => setSelectedMediaModal(item)}
                    title="Visualizar Detalhes"
                    style={{
-                     padding: '6px 10px', borderRadius: 8, border: '1px solid rgba(139,115,85,0.25)',
+                     padding: '6px 10px', borderRadius: RADIUS.md, border: '1px solid rgba(139,115,85,0.25)',
                      background: '#fdfbf7', color: '#665c54', fontSize: 12, cursor: 'pointer'
                    }}
                  >
@@ -2718,7 +2719,7 @@ export default function Repository() {
                    }}
                    title="Editar Informações"
                    style={{
-                     padding: '6px 10px', borderRadius: 8, border: '1px solid rgba(139,115,85,0.25)',
+                     padding: '6px 10px', borderRadius: RADIUS.md, border: '1px solid rgba(139,115,85,0.25)',
                      background: '#fdfbf7', color: '#665c54', fontSize: 12, cursor: 'pointer'
                    }}
                  >
@@ -2735,7 +2736,7 @@ export default function Repository() {
                    }}
                    title="Excluir Imagem"
                    style={{
-                     padding: '6px 10px', borderRadius: 8, border: '1px solid rgba(220,53,69,0.2)',
+                     padding: '6px 10px', borderRadius: RADIUS.md, border: '1px solid rgba(220,53,69,0.2)',
                      background: '#fff5f5', color: '#dc3545', fontSize: 12, cursor: 'pointer'
                    }}
                  >
@@ -2789,19 +2790,19 @@ export default function Repository() {
 
      {/* Imagem Ampliada */}
      <div style={{
-       background: '#f7f2ea', borderRadius: 12, border: '1px solid rgba(139,115,85,0.2)',
+       background: '#f7f2ea', borderRadius: RADIUS.lg, border: '1px solid rgba(139,115,85,0.2)',
        padding: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', maxHeight: 380, overflow: 'hidden'
      }}>
        <img
          src={selectedMediaModal.fileUrl}
          alt={selectedMediaModal.title}
-         style={{ maxWidth: '100%', maxHeight: 360, objectFit: 'contain', borderRadius: 8 }}
+         style={{ maxWidth: '100%', maxHeight: 360, objectFit: 'contain', borderRadius: RADIUS.md }}
        />
      </div>
 
      {/* Metadados e Descrição */}
      {selectedMediaModal.description && (
-       <p style={{ fontSize: 13, color: '#7a5c42', margin: 0, background: '#fcf8f2', padding: 12, borderRadius: 10, border: '1px solid rgba(139,115,85,0.15)' }}>
+       <p style={{ fontSize: 13, color: '#7a5c42', margin: 0, background: '#fcf8f2', padding: 12, borderRadius: RADIUS.md, border: '1px solid rgba(139,115,85,0.15)' }}>
          {selectedMediaModal.description}
        </p>
      )}
@@ -3225,8 +3226,8 @@ export default function Repository() {
  position: 'fixed', bottom: 28, right: 28, zIndex: 999999,
  background: 'linear-gradient(135deg, #2c1a0e, #3d2510)',
  color: '#fdf8f2', border: '1.5px solid #e2a355',
- padding: '12px 22px', borderRadius: 14,
- fontSize: 13.5, fontWeight: 700,
+ padding: '12px 22px', borderRadius: RADIUS.lg,
+ fontSize: TEXT.body, fontWeight: 700,
  boxShadow: '0 8px 30px rgba(0,0,0,0.35)',
  display: 'flex', alignItems: 'center', gap: 10,
  pointerEvents: 'none'
@@ -3237,4 +3238,4 @@ export default function Repository() {
  )}
  </ModuleShell>
  )
-}
+}

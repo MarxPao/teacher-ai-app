@@ -1,4 +1,5 @@
 'use client'
+import { COLOR, RADIUS, TEXT, SHADOW, FONT } from '@/styles/tokens'
 import { toast, showConfirm } from '@/components/Toast'
 import { useState, useEffect, useMemo } from 'react'
 import { ELT_TAXONOMY, getSubcategoriesForCategory } from '@/lib/englishTaxonomy'
@@ -58,10 +59,10 @@ const OPTION_LETTERS = ['A','B','C','D']
 
 const S: Record<string, React.CSSProperties> = {
  page: { padding: '36px 42px', minHeight: '100%', boxSizing: 'border-box', background: '#fdf8f2', fontFamily: "'Plus Jakarta Sans', system-ui, sans-serif" },
- card: { background: '#fffcf8', border: '1px solid rgba(139,115,85,0.14)', borderRadius: 16, padding: '20px 24px', boxShadow: '0 2px 8px rgba(44,26,14,0.06)' },
+ card: { background: '#fffcf8', border: '1px solid rgba(139,115,85,0.14)', borderRadius: RADIUS.xl, padding: '20px 24px', boxShadow: '0 2px 8px rgba(44,26,14,0.06)' },
  badge: { display: 'inline-flex', alignItems: 'center', padding: '4px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600 },
- btn: { display: 'inline-flex', alignItems: 'center', gap: 6, padding: '10px 18px', borderRadius: 10, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600, fontFamily: "'Plus Jakarta Sans', system-ui, sans-serif" },
- input: { width: '100%', padding: '10px 14px', borderRadius: 10, border: '1px solid rgba(139,115,85,0.18)', background: '#fffcf8', color: '#2c1a0e', fontSize: 13, outline: 'none', boxSizing: 'border-box' },
+ btn: { display: 'inline-flex', alignItems: 'center', gap: 6, padding: '10px 18px', borderRadius: RADIUS.md, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600, fontFamily: "'Plus Jakarta Sans', system-ui, sans-serif" },
+ input: { width: '100%', padding: '10px 14px', borderRadius: RADIUS.md, border: '1px solid rgba(139,115,85,0.18)', background: '#fffcf8', color: '#2c1a0e', fontSize: 13, outline: 'none', boxSizing: 'border-box' },
  label: { display: 'block', fontSize: 11, fontWeight: 700, color: '#a08060', textTransform: 'uppercase' as const, letterSpacing: '1px', marginBottom: 6 },
 }
 
@@ -519,7 +520,7 @@ Para questões dissertativas ou V/F, omita "options". Para V/F, o "answer" deve 
  onClick={() => setFKind(tab.key as any)}
  style={{
  display: 'flex', alignItems: 'center', gap: 8,
- padding: '10px 18px', borderRadius: 12, border: 'none',
+ padding: '10px 18px', borderRadius: RADIUS.lg, border: 'none',
  background: isActive ? '#8b5e3c' : '#f5efe6',
  color: isActive ? '#fffcf8' : '#7a5c42',
  fontWeight: isActive ? 700 : 500,
@@ -531,7 +532,7 @@ Para questões dissertativas ou V/F, omita "options". Para V/F, o "answer" deve 
  {tab.label}
  <span style={{
  background: isActive ? 'rgba(255,255,255,0.25)' : 'rgba(139,115,85,0.15)',
- padding: '2px 8px', borderRadius: 10, fontSize: 11
+ padding: '2px 8px', borderRadius: RADIUS.md, fontSize: 11
  }}>
  {tab.count}
  </span>
@@ -557,7 +558,7 @@ Para questões dissertativas ou V/F, omita "options". Para V/F, o "answer" deve 
  <div key={item.id} style={{ ...S.card, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
  <div>
  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
- <span style={{ padding: '4px 10px', borderRadius: 12, fontSize: 11, fontWeight: 700, textTransform: 'uppercase', background: 'rgba(139,94,60,0.12)', color: '#8b5e3c' }}>
+ <span style={{ padding: '4px 10px', borderRadius: RADIUS.lg, fontSize: 11, fontWeight: 700, textTransform: 'uppercase', background: 'rgba(139,94,60,0.12)', color: '#8b5e3c' }}>
  {item.type === 'answer_key' ? ' Gabarito Comentado' : ' Rubrica Pedagógica'}
  </span>
  <span style={{ fontSize: 11, color: '#a08060' }}>
@@ -618,7 +619,7 @@ Para questões dissertativas ou V/F, omita "options". Para V/F, o "answer" deve 
  <button onClick={() => setPreviewRubric(null)} style={{ background: '#f5efe6', border: 'none', borderRadius: '50%', width: 36, height: 36, cursor: 'pointer', fontSize: 18, color: '#2c1a0e' }}>×</button>
  </div>
 
- <div style={{ flex: 1, overflowY: 'auto', background: '#fff', border: '1px solid rgba(139,115,85,0.18)', borderRadius: 12, padding: 20, fontSize: 14, color: '#2c1a0e', lineHeight: 1.6 }}
+ <div style={{ flex: 1, overflowY: 'auto', background: '#fff', border: '1px solid rgba(139,115,85,0.18)', borderRadius: RADIUS.lg, padding: 20, fontSize: 14, color: '#2c1a0e', lineHeight: 1.6 }}
  dangerouslySetInnerHTML={{ __html: previewRubric.content }}
  />
 
@@ -798,7 +799,7 @@ Para questões dissertativas ou V/F, omita "options". Para V/F, o "answer" deve 
 
  {selectedQ.options?.map((opt, i) => (
  <div key={i} style={{
- padding: '8px 14px', borderRadius: 10, marginBottom: 6,
+ padding: '8px 14px', borderRadius: RADIUS.md, marginBottom: 6,
  background: selectedQ.answer === OPTION_LETTERS[i] ? '#d0f0c0' : '#f5f0e8',
  border: `1px solid ${selectedQ.answer === OPTION_LETTERS[i] ? '#2d7a00' : 'transparent'}`,
  color: '#2c1a0e', fontSize: 13,
@@ -808,14 +809,14 @@ Para questões dissertativas ou V/F, omita "options". Para V/F, o "answer" deve 
  ))}
 
  {selectedQ.answer && selectedQ.type !== 'mc' && (
- <div style={{ background: '#d0f0c0', borderRadius: 10, padding: '10px 14px', marginBottom: 12 }}>
+ <div style={{ background: '#d0f0c0', borderRadius: RADIUS.md, padding: '10px 14px', marginBottom: 12 }}>
  <div style={{ fontSize: 11, color: '#2d7a00', fontWeight: 700, marginBottom: 4 }}>GABARITO</div>
  <div style={{ fontSize: 13, color: '#2c1a0e' }}>{selectedQ.answer}</div>
  </div>
  )}
 
  {selectedQ.explanation && (
- <div style={{ background: '#f0e8d8', borderRadius: 10, padding: '10px 14px', marginBottom: 12 }}>
+ <div style={{ background: '#f0e8d8', borderRadius: RADIUS.md, padding: '10px 14px', marginBottom: 12 }}>
  <div style={{ fontSize: 11, color: '#7a5c42', fontWeight: 700, marginBottom: 4 }}>COMENTÁRIO</div>
  <div style={{ fontSize: 13, color: '#2c1a0e' }}>{selectedQ.explanation}</div>
  </div>
@@ -1003,7 +1004,7 @@ Para questões dissertativas ou V/F, omita "options". Para V/F, o "answer" deve 
  <h2 style={{ fontFamily: "'Fraunces', Georgia, serif", fontSize: 20, fontWeight: 700, color: '#2c1a0e', margin: 0 }}>
  📖 Assistente de Extração de Exercícios (Biblioteca)
  </h2>
- <p style={{ color: '#a08060', fontSize: 12.5, margin: '2px 0 0 0' }}>
+ <p style={{ color: '#a08060', fontSize: TEXT.bodyCompact, margin: '2px 0 0 0' }}>
  Localize exercícios de livros da sua biblioteca e selecione quais deseja adicionar ao banco.
  </p>
  </div>
@@ -1027,7 +1028,7 @@ Para questões dissertativas ou V/F, omita "options". Para V/F, o "answer" deve 
  </div>
 
  {/* Lista de Exercícios Extraídos com Checkboxes */}
- <div style={{ flex: 1, overflowY: 'auto', border: '1px solid #e8decb', borderRadius: 10, padding: 12, background: '#faf6f0', display: 'flex', flexDirection: 'column', gap: 10 }}>
+ <div style={{ flex: 1, overflowY: 'auto', border: '1px solid #e8decb', borderRadius: RADIUS.md, padding: 12, background: '#faf6f0', display: 'flex', flexDirection: 'column', gap: 10 }}>
  {extractedList.length === 0 ? (
  <div style={{ padding: 24, textAlign: 'center', color: '#a08060', fontSize: 13 }}>
  <i className="ti ti-notes" style={{ fontSize: 28, display: 'block', marginBottom: 6, color: '#d4944a' }} />
@@ -1040,7 +1041,7 @@ Para questões dissertativas ou V/F, omita "options". Para V/F, o "answer" deve 
  style={{
  background: item.selected ? '#fff' : '#f5efe6',
  border: item.selected ? '1.5px solid #8b5e3c' : '1px solid #d5c0b0',
- borderRadius: 8, padding: 10, display: 'flex', gap: 10, alignItems: 'flex-start'
+ borderRadius: RADIUS.md, padding: 10, display: 'flex', gap: 10, alignItems: 'flex-start'
  }}
  >
  <input
@@ -1060,11 +1061,11 @@ Para questões dissertativas ou V/F, omita "options". Para V/F, o "answer" deve 
  </span>
  <span style={{ fontSize: 11, color: '#a08060' }}>Item #{idx + 1}</span>
  </div>
- <p style={{ margin: '0 0 6px 0', fontSize: 12.5, color: '#2c1a0e', fontWeight: 600, lineHeight: 1.35 }}>
+ <p style={{ margin: '0 0 6px 0', fontSize: TEXT.bodyCompact, color: '#2c1a0e', fontWeight: 600, lineHeight: 1.35 }}>
  {item.statement}
  </p>
  {item.options && item.options.length > 0 && (
- <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4, fontSize: 11.5, color: '#7a5c42' }}>
+ <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4, fontSize: TEXT.caption, color: '#7a5c42' }}>
  {item.options.map((opt, oIdx) => (
  <div key={oIdx} style={{ background: '#fdf8f2', padding: '2px 6px', borderRadius: 4 }}>
  {opt}
@@ -1084,14 +1085,14 @@ Para questões dissertativas ou V/F, omita "options". Para V/F, o "answer" deve 
  <button
  type="button"
  onClick={() => setExtractedList(extractedList.map(q => ({ ...q, selected: true })))}
- style={{ ...S.btn, padding: '6px 12px', fontSize: 11.5, background: '#ede8dc', color: '#2c1a0e' }}
+ style={{ ...S.btn, padding: '6px 12px', fontSize: TEXT.caption, background: '#ede8dc', color: '#2c1a0e' }}
  >
  Marcar Todos
  </button>
  <button
  type="button"
  onClick={() => setExtractedList(extractedList.map(q => ({ ...q, selected: false })))}
- style={{ ...S.btn, padding: '6px 12px', fontSize: 11.5, background: '#ede8dc', color: '#2c1a0e' }}
+ style={{ ...S.btn, padding: '6px 12px', fontSize: TEXT.caption, background: '#ede8dc', color: '#2c1a0e' }}
  >
  Desmarcar Todos
  </button>

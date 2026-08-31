@@ -1,3 +1,4 @@
+import { COLOR, RADIUS, TEXT, SHADOW, FONT } from '@/styles/tokens'
 import React, { useState, useEffect, useMemo } from 'react'
 import ModuleShell from '@/components/ModuleShell'
 import type { ModuleKey } from '@/app/page'
@@ -751,7 +752,7 @@ export default function Dashboard() {
                   onClick={() => setIsSubstituteOpen(true)}
                   style={{
                     padding: '6px 11px',
-                    borderRadius: 10,
+                    borderRadius: RADIUS.md,
                     border: '1px solid rgba(168,50,50,0.3)',
                     background: 'rgba(168,50,50,0.06)',
                     color: '#a83232',
@@ -770,7 +771,7 @@ export default function Dashboard() {
                   onClick={() => setIsOnboardingOpen(true)}
                   style={{
                     padding: '6px 11px',
-                    borderRadius: 10,
+                    borderRadius: RADIUS.md,
                     border: '1px solid rgba(139,115,85,0.25)',
                     background: '#fff',
                     color: '#7a5c42',
@@ -799,13 +800,13 @@ export default function Dashboard() {
                 padding: '14px 18px',
                 background: 'rgba(255, 252, 248, 0.85)',
                 border: '1px solid rgba(196,131,74,0.25)',
-                borderRadius: 16,
+                borderRadius: RADIUS.xl,
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <TeacherLogo size={24} variant="badge" rounded={6} />
-                  <strong style={{ fontSize: 13.5, color: '#2c1a0e' }}>
+                  <strong style={{ fontSize: TEXT.body, color: '#2c1a0e' }}>
                     Alertas & Recomendações da Rafinha IA
                   </strong>
                 </div>
@@ -827,7 +828,7 @@ export default function Dashboard() {
                       key={alert.id}
                       style={{
                         padding: '10px 14px',
-                        borderRadius: 10,
+                        borderRadius: RADIUS.md,
                         border: `1px solid ${borderColor}`,
                         background: bgColor,
                         display: 'flex',
@@ -837,7 +838,7 @@ export default function Dashboard() {
                       }}
                     >
                       <div>
-                        <div style={{ fontSize: 12.5, fontWeight: 700, color: textColor, marginBottom: 2 }}>
+                        <div style={{ fontSize: TEXT.bodyCompact, fontWeight: 700, color: textColor, marginBottom: 2 }}>
                           {alert.title}
                         </div>
                         <p style={{ margin: 0, fontSize: 12, color: '#5c3d20', lineHeight: 1.4 }}>
@@ -885,11 +886,11 @@ export default function Dashboard() {
               {/* Header do Calendário */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 10 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <div style={{ width: 30, height: 30, borderRadius: 8, background: '#fef3c7', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <div style={{ width: 30, height: 30, borderRadius: RADIUS.md, background: '#fef3c7', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <i className="ti ti-calendar" style={{ fontSize: 16, color: '#b58900' }} />
                   </div>
                   <div>
-                    <h3 style={{ margin: 0, fontSize: 14.5, fontWeight: 800, color: '#2c1a0e' }}>
+                    <h3 style={{ margin: 0, fontSize: TEXT.body, fontWeight: 800, color: '#2c1a0e' }}>
                       Calendário Geral (Escolar & Tutoria)
                     </h3>
                   </div>
@@ -935,7 +936,7 @@ export default function Dashboard() {
 
                 {/* Seletor de Períodos & Botão Novo Post-it */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <div style={{ display: 'flex', background: '#faf6f0', padding: 2, borderRadius: 8, border: '1px solid #e8e0d0', gap: 2 }}>
+                  <div style={{ display: 'flex', background: '#faf6f0', padding: 2, borderRadius: RADIUS.md, border: '1px solid #e8e0d0', gap: 2 }}>
                     {(['semana', 'mes', 'trimestre', 'ano'] as const).map(view => (
                       <button
                         key={view}
@@ -968,11 +969,11 @@ export default function Dashboard() {
                     }}
                     style={{
                       padding: '5px 10px',
-                      borderRadius: 8,
+                      borderRadius: RADIUS.md,
                       border: 'none',
                       background: '#b58900',
                       color: '#fff',
-                      fontSize: 11.5,
+                      fontSize: TEXT.caption,
                       fontWeight: 700,
                       cursor: 'pointer',
                       display: 'flex',
@@ -987,7 +988,7 @@ export default function Dashboard() {
               </div>
 
               {/* Grade Mensal Proporcional (Tamanho Ideal) */}
-              <div style={{ background: '#faf6f0', borderRadius: 14, padding: '10px 14px', border: '1px solid #ede8dc' }}>
+              <div style={{ background: '#faf6f0', borderRadius: RADIUS.lg, padding: '10px 14px', border: '1px solid #ede8dc' }}>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', textAlign: 'center', marginBottom: 4, fontSize: 11, fontWeight: 800, color: '#8b5e3c' }}>
                   {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map((d, i) => (
                     <div key={i} style={{ padding: '2px 0' }}>{d}</div>
@@ -1008,7 +1009,7 @@ export default function Dashboard() {
                         }}
                         style={{
                           height: 32,
-                          borderRadius: 8,
+                          borderRadius: RADIUS.md,
                           border: isSelected ? '2px solid #2c1a0e' : isToday ? '1.5px solid #b58900' : '1px solid transparent',
                           background: isSelected ? '#2c1a0e' : isToday ? '#fef3c7' : item.isCurrentMonth ? '#fff' : 'rgba(255,255,255,0.4)',
                           color: isSelected ? '#fff' : item.isCurrentMonth ? '#2c1a0e' : '#b0a69a',
@@ -1050,14 +1051,14 @@ export default function Dashboard() {
                 <div style={{
                   marginTop: 12,
                   background: '#faf6f0',
-                  borderRadius: 14,
+                  borderRadius: RADIUS.lg,
                   border: '1px solid #ede8dc',
                   padding: '12px 16px',
                   animation: 'rafSlideUp 0.2s ease-out',
                 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span style={{ fontSize: 12.5, fontWeight: 800, color: '#2c1a0e' }}>
+                      <span style={{ fontSize: TEXT.bodyCompact, fontWeight: 800, color: '#2c1a0e' }}>
                         📅 Dia {selectedDate.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })} — Agenda & Post-its:
                       </span>
                     </div>
@@ -1072,7 +1073,7 @@ export default function Dashboard() {
                           setNewPostItDate(selectedDateKey)
                           setShowNewPostItModal(true)
                         }}
-                        style={{ background: 'none', border: 'none', color: '#b58900', fontSize: 11.5, fontWeight: 800, cursor: 'pointer' }}
+                        style={{ background: 'none', border: 'none', color: '#b58900', fontSize: TEXT.caption, fontWeight: 800, cursor: 'pointer' }}
                       >
                         + Criar Post-it
                       </button>
@@ -1097,7 +1098,7 @@ export default function Dashboard() {
                   </div>
 
                   {postItsForSelectedDay.length === 0 ? (
-                    <div style={{ padding: '6px 0', color: '#665c54', fontSize: 11.5 }}>
+                    <div style={{ padding: '6px 0', color: '#665c54', fontSize: TEXT.caption }}>
                       Nenhum post-it para este dia.{' '}
                       <span
                         onClick={() => {
@@ -1123,7 +1124,7 @@ export default function Dashboard() {
                             style={{
                               background: style.bg,
                               border: `1px solid ${style.border}`,
-                              borderRadius: 10,
+                              borderRadius: RADIUS.md,
                               padding: '8px 12px',
                             }}
                           >
@@ -1188,7 +1189,7 @@ export default function Dashboard() {
                     <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#2c1a0e', display: 'flex', alignItems: 'center', gap: 8 }}>
                       Checklist
                     </h3>
-                    <p style={{ margin: 0, fontSize: 11.5, color: '#665c54' }}>
+                    <p style={{ margin: 0, fontSize: TEXT.caption, color: '#665c54' }}>
                       {completedTodosCount} de {totalTodosCount} atividades concluídas ({unifiedProgressPct}%)
                     </p>
                   </div>
@@ -1227,7 +1228,7 @@ export default function Dashboard() {
                       border: todoFilter === tab.id ? '1px solid #2c1a0e' : '1px solid #ede8dc',
                       background: todoFilter === tab.id ? '#2c1a0e' : '#faf6f0',
                       color: todoFilter === tab.id ? '#fff' : '#665c54',
-                      fontSize: 11.5,
+                      fontSize: TEXT.caption,
                       fontWeight: 700,
                       cursor: 'pointer',
                       display: 'flex',
@@ -1260,7 +1261,7 @@ export default function Dashboard() {
                     border: '1px solid #0079bf',
                     background: '#0079bf',
                     color: '#ffffff',
-                    fontSize: 11.5,
+                    fontSize: TEXT.caption,
                     fontWeight: 700,
                     cursor: 'pointer',
                     display: 'flex',
@@ -1287,21 +1288,21 @@ export default function Dashboard() {
                     flex: 1,
                     minWidth: 260,
                     padding: '8px 14px',
-                    borderRadius: 10,
+                    borderRadius: RADIUS.md,
                     border: '1px solid #e8e0d0',
                     background: '#faf6f0',
-                    fontSize: 12.5,
+                    fontSize: TEXT.bodyCompact,
                     outline: 'none',
                     color: '#2c1a0e',
                   }}
                 />
-                <div style={{ display: 'flex', background: '#faf6f0', padding: 2, borderRadius: 10, border: '1px solid #e8e0d0', gap: 2 }}>
+                <div style={{ display: 'flex', background: '#faf6f0', padding: 2, borderRadius: RADIUS.md, border: '1px solid #e8e0d0', gap: 2 }}>
                   <button
                     type="button"
                     onClick={() => setNewTodoCategory('one_off')}
                     style={{
                       padding: '5px 10px',
-                      borderRadius: 8,
+                      borderRadius: RADIUS.md,
                       border: 'none',
                       background: newTodoCategory === 'one_off' ? '#2c1a0e' : 'transparent',
                       color: newTodoCategory === 'one_off' ? '#fff' : '#7a5c42',
@@ -1320,7 +1321,7 @@ export default function Dashboard() {
                     onClick={() => setNewTodoCategory('recurrent')}
                     style={{
                       padding: '5px 10px',
-                      borderRadius: 8,
+                      borderRadius: RADIUS.md,
                       border: 'none',
                       background: newTodoCategory === 'recurrent' ? '#8b5e3c' : 'transparent',
                       color: newTodoCategory === 'recurrent' ? '#fff' : '#7a5c42',
@@ -1339,7 +1340,7 @@ export default function Dashboard() {
                   type="submit"
                   style={{
                     padding: '8px 16px',
-                    borderRadius: 10,
+                    borderRadius: RADIUS.md,
                     border: 'none',
                     background: '#2c1a0e',
                     color: '#fff',
@@ -1358,7 +1359,7 @@ export default function Dashboard() {
               {/* Lista dos Itens do Checklist */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {filteredTodos.length === 0 ? (
-                  <div style={{ padding: '20px 0', textAlign: 'center', color: '#a08060', fontSize: 12.5 }}>
+                  <div style={{ padding: '20px 0', textAlign: 'center', color: '#a08060', fontSize: TEXT.bodyCompact }}>
                     <i className="ti ti-circle-check" style={{ fontSize: 24, display: 'block', marginBottom: 6, color: '#16a34a' }} />
                     Nenhuma tarefa nesta categoria no momento. Tudo em dia!
                   </div>
@@ -1376,7 +1377,7 @@ export default function Dashboard() {
                           justifyContent: 'space-between',
                           gap: 10,
                           padding: '10px 14px',
-                          borderRadius: 12,
+                          borderRadius: RADIUS.lg,
                           background: todo.done ? '#faf6f0' : isSystem ? '#fffbeb' : '#fff',
                           border: `1px solid ${todo.done ? '#ede8dc' : isSystem ? '#fde68a' : '#e8e0d0'}`,
                           transition: 'all 0.2s',
@@ -1497,7 +1498,7 @@ export default function Dashboard() {
                                   alignItems: 'center',
                                   gap: 6,
                                   cursor: 'pointer',
-                                  fontSize: 11.5,
+                                  fontSize: TEXT.caption,
                                   color: st.done ? '#a08060' : '#2c1a0e',
                                   textDecoration: st.done ? 'line-through' : 'none',
                                 }}
@@ -1541,7 +1542,7 @@ export default function Dashboard() {
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, flexWrap: 'wrap', gap: 8 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <div style={{ width: 32, height: 32, borderRadius: 8, background: '#e0f2fe', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <div style={{ width: 32, height: 32, borderRadius: RADIUS.md, background: '#e0f2fe', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <i className="ti ti-chalkboard" style={{ fontSize: 18, color: '#0284c7' }} />
                   </div>
                   <div>
@@ -1559,8 +1560,8 @@ export default function Dashboard() {
                   <button
                     onClick={() => navigateTo('calendar')}
                     style={{
-                      padding: '4px 10px', borderRadius: 8, border: '1px solid #d5c0b0',
-                      background: '#fff', color: '#8b5e3c', fontSize: 11.5, fontWeight: 700,
+                      padding: '4px 10px', borderRadius: RADIUS.md, border: '1px solid #d5c0b0',
+                      background: '#fff', color: '#8b5e3c', fontSize: TEXT.caption, fontWeight: 700,
                       cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4
                     }}
                   >
@@ -1568,7 +1569,7 @@ export default function Dashboard() {
                   </button>
 
                   {/* Filtro Escola vs Particular */}
-                  <div style={{ display: 'flex', gap: 4, background: '#faf6f0', padding: 2, borderRadius: 8, border: '1px solid #e8e0d0' }}>
+                  <div style={{ display: 'flex', gap: 4, background: '#faf6f0', padding: 2, borderRadius: RADIUS.md, border: '1px solid #e8e0d0' }}>
                     {[
                       { id: 'all', label: 'Todas' },
                       { id: 'school', label: '🏫 Escolas' },
@@ -1613,7 +1614,7 @@ export default function Dashboard() {
                       onClick={() => setSelectedDayOfWeek(day.id)}
                       style={{
                         padding: '8px 6px',
-                        borderRadius: 10,
+                        borderRadius: RADIUS.md,
                         border: isSelected ? '2px solid #8b5e3c' : '1px solid #ede8dc',
                         background: isSelected ? '#faf6f0' : '#fff',
                         cursor: 'pointer',
@@ -1653,7 +1654,7 @@ export default function Dashboard() {
                 <div style={{
                   background: '#fffbeb',
                   border: '1px solid #fde68a',
-                  borderRadius: 12,
+                  borderRadius: RADIUS.lg,
                   padding: '10px 14px',
                   marginBottom: 12,
                   display: 'flex',
@@ -1665,10 +1666,10 @@ export default function Dashboard() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <i className="ti ti-checklist text-amber-600" style={{ fontSize: 18 }} />
                     <div>
-                      <strong style={{ fontSize: 12.5, color: '#78350f', display: 'block' }}>
+                      <strong style={{ fontSize: TEXT.bodyCompact, color: '#78350f', display: 'block' }}>
                         Pendências de Planejamento da Semana
                       </strong>
-                      <span style={{ fontSize: 11.5, color: '#92400e' }}>
+                      <span style={{ fontSize: TEXT.caption, color: '#92400e' }}>
                         {planningPendenciesSummary.incompletePlansCount > 0 && `${planningPendenciesSummary.incompletePlansCount} plano(s) com etapas incompletas`}
                         {planningPendenciesSummary.incompletePlansCount > 0 && planningPendenciesSummary.unplannedClassesCount > 0 && ' · '}
                         {planningPendenciesSummary.unplannedClassesCount > 0 && `${planningPendenciesSummary.unplannedClassesCount} aula(s) sem planejamento registrado`}
@@ -1721,7 +1722,7 @@ export default function Dashboard() {
                         alignItems: 'center',
                         justifyContent: 'space-between',
                         padding: '10px 14px',
-                        borderRadius: 12,
+                        borderRadius: RADIUS.lg,
                         background: '#faf6f0',
                         border: '1px solid #ede8dc',
                         flexWrap: 'wrap',
@@ -1733,7 +1734,7 @@ export default function Dashboard() {
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                         <div style={{
                           padding: '6px 10px',
-                          borderRadius: 8,
+                          borderRadius: RADIUS.md,
                           background: item.type === 'private' ? '#8b5e3c' : '#2c1a0e',
                           color: '#fff',
                           fontSize: 11,
@@ -1770,7 +1771,7 @@ export default function Dashboard() {
                               {hasPlan ? '✓ Plano Pronto' : '⏳ Sem Plano'}
                             </span>
                           </div>
-                          <div style={{ fontSize: 11.5, color: '#665c54', marginTop: 1 }}>
+                          <div style={{ fontSize: TEXT.caption, color: '#665c54', marginTop: 1 }}>
                             🎯 {item.topic}
                           </div>
                         </div>
@@ -1857,14 +1858,14 @@ export default function Dashboard() {
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, flexWrap: 'wrap', gap: 10 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <div style={{ width: 34, height: 34, borderRadius: 10, background: '#fef3c7', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <div style={{ width: 34, height: 34, borderRadius: RADIUS.md, background: '#fef3c7', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <i className="ti ti-book" style={{ fontSize: 19, color: '#b58900' }} />
                   </div>
                   <div>
                     <h3 style={{ margin: 0, fontSize: 15, fontWeight: 800, color: '#2c1a0e' }}>
                       Conteúdos a Ministrar & Sequência Didática
                     </h3>
-                    <p style={{ margin: 0, fontSize: 11.5, color: '#665c54' }}>
+                    <p style={{ margin: 0, fontSize: TEXT.caption, color: '#665c54' }}>
                       Unidade ativa e atividades em foco para as turmas e aulas particulares
                     </p>
                   </div>
@@ -1881,13 +1882,13 @@ export default function Dashboard() {
               {currentDidacticUnit && (
                 <div style={{
                   background: '#faf6f0',
-                  borderRadius: 14,
+                  borderRadius: RADIUS.lg,
                   padding: '14px 16px',
                   border: '1px solid #ede8dc',
                   marginBottom: 12,
                 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                    <span style={{ fontSize: 11.5, fontWeight: 800, color: '#b58900', textTransform: 'uppercase' }}>
+                    <span style={{ fontSize: TEXT.caption, fontWeight: 800, color: '#b58900', textTransform: 'uppercase' }}>
                       {currentDidacticUnit.unitTitle} ({currentDidacticUnit.level})
                     </span>
                     <span style={{ fontSize: 10.5, fontWeight: 700, background: '#b58900', color: '#fff', padding: '2px 8px', borderRadius: 6 }}>
@@ -1895,7 +1896,7 @@ export default function Dashboard() {
                     </span>
                   </div>
 
-                  <div style={{ fontSize: 12.5, color: '#44352a', lineHeight: 1.45 }}>
+                  <div style={{ fontSize: TEXT.bodyCompact, color: '#44352a', lineHeight: 1.45 }}>
                     📖 <strong>Tópico:</strong> {currentDidacticUnit.topic}<br />
                     🎯 <strong>Gramática & Foco:</strong> {currentDidacticUnit.grammarFocus}
                   </div>
@@ -1907,7 +1908,7 @@ export default function Dashboard() {
                   onClick={() => navigateTo('quick')}
                   style={{
                     padding: '8px 14px',
-                    borderRadius: 10,
+                    borderRadius: RADIUS.md,
                     border: '1px solid #ede8dc',
                     background: '#fff',
                     color: '#2c1a0e',
@@ -1927,7 +1928,7 @@ export default function Dashboard() {
                   onClick={() => navigateTo('flashcardmode')}
                   style={{
                     padding: '8px 14px',
-                    borderRadius: 10,
+                    borderRadius: RADIUS.md,
                     border: '1px solid #ede8dc',
                     background: '#fff',
                     color: '#2c1a0e',
@@ -1947,7 +1948,7 @@ export default function Dashboard() {
                   onClick={() => navigateTo('privatetutoring')}
                   style={{
                     padding: '8px 14px',
-                    borderRadius: 10,
+                    borderRadius: RADIUS.md,
                     border: '1px solid #ede8dc',
                     background: '#faf6f0',
                     color: '#8b5e3c',
@@ -1987,7 +1988,7 @@ export default function Dashboard() {
                 boxShadow: '0 20px 40px rgba(0,0,0,0.25)',
               }}>
                 <div style={{ padding: '14px 18px', background: '#2c1a0e', color: '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <h3 style={{ margin: 0, fontSize: 14.5, fontWeight: 800 }}>
+                  <h3 style={{ margin: 0, fontSize: TEXT.body, fontWeight: 800 }}>
                     {editingPostIt ? '✏️ Editar Post-it' : '📌 Novo Post-it Adesivo'}
                   </h3>
                   <button
@@ -2000,32 +2001,32 @@ export default function Dashboard() {
 
                 <form onSubmit={handleSavePostIt} style={{ padding: '18px', display: 'flex', flexDirection: 'column', gap: 12 }}>
                   <div>
-                    <label style={{ display: 'block', fontSize: 11.5, fontWeight: 700, color: '#2c1a0e', marginBottom: 4 }}>
+                    <label style={{ display: 'block', fontSize: TEXT.caption, fontWeight: 700, color: '#2c1a0e', marginBottom: 4 }}>
                       Data do Post-it (Fixar no Calendário):
                     </label>
                     <input
                       type="date"
                       value={newPostItDate}
                       onChange={e => setNewPostItDate(e.target.value)}
-                      style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid #d5c8bb', fontSize: 12.5, outline: 'none' }}
+                      style={{ width: '100%', padding: '8px 10px', borderRadius: RADIUS.md, border: '1px solid #d5c8bb', fontSize: TEXT.bodyCompact, outline: 'none' }}
                     />
                   </div>
 
                   <div>
-                    <label style={{ display: 'block', fontSize: 11.5, fontWeight: 700, color: '#2c1a0e', marginBottom: 4 }}>
+                    <label style={{ display: 'block', fontSize: TEXT.caption, fontWeight: 700, color: '#2c1a0e', marginBottom: 4 }}>
                       Título da Nota:
                     </label>
                     <input
                       value={newPostItTitle}
                       onChange={e => setNewPostItTitle(e.target.value)}
                       placeholder="Ex: Lembrete da Prova, Atividade..."
-                      style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid #d5c8bb', fontSize: 12.5, outline: 'none' }}
+                      style={{ width: '100%', padding: '8px 10px', borderRadius: RADIUS.md, border: '1px solid #d5c8bb', fontSize: TEXT.bodyCompact, outline: 'none' }}
                       autoFocus
                     />
                   </div>
 
                   <div>
-                    <label style={{ display: 'block', fontSize: 11.5, fontWeight: 700, color: '#2c1a0e', marginBottom: 4 }}>
+                    <label style={{ display: 'block', fontSize: TEXT.caption, fontWeight: 700, color: '#2c1a0e', marginBottom: 4 }}>
                       Conteúdo:
                     </label>
                     <textarea
@@ -2033,12 +2034,12 @@ export default function Dashboard() {
                       onChange={e => setNewPostItContent(e.target.value)}
                       placeholder="Escreva sua anotação aqui..."
                       rows={3}
-                      style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid #d5c8bb', fontSize: 12.5, outline: 'none', resize: 'vertical' }}
+                      style={{ width: '100%', padding: '8px 10px', borderRadius: RADIUS.md, border: '1px solid #d5c8bb', fontSize: TEXT.bodyCompact, outline: 'none', resize: 'vertical' }}
                     />
                   </div>
 
                   <div>
-                    <label style={{ display: 'block', fontSize: 11.5, fontWeight: 700, color: '#2c1a0e', marginBottom: 6 }}>
+                    <label style={{ display: 'block', fontSize: TEXT.caption, fontWeight: 700, color: '#2c1a0e', marginBottom: 6 }}>
                       Cor do Post-it:
                     </label>
                     <div style={{ display: 'flex', gap: 8 }}>
@@ -2074,13 +2075,13 @@ export default function Dashboard() {
                     <button
                       type="button"
                       onClick={() => setShowNewPostItModal(false)}
-                      style={{ padding: '7px 12px', borderRadius: 8, border: '1px solid #d5c8bb', background: '#fff', fontSize: 12, cursor: 'pointer' }}
+                      style={{ padding: '7px 12px', borderRadius: RADIUS.md, border: '1px solid #d5c8bb', background: '#fff', fontSize: 12, cursor: 'pointer' }}
                     >
                       Cancelar
                     </button>
                     <button
                       type="submit"
-                      style={{ padding: '7px 16px', borderRadius: 8, border: 'none', background: '#b58900', color: '#fff', fontSize: 12.5, fontWeight: 800, cursor: 'pointer' }}
+                      style={{ padding: '7px 16px', borderRadius: RADIUS.md, border: 'none', background: '#b58900', color: '#fff', fontSize: TEXT.bodyCompact, fontWeight: 800, cursor: 'pointer' }}
                     >
                       Salvar Post-it
                     </button>

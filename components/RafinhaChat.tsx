@@ -1,4 +1,5 @@
 'use client'
+import { COLOR, RADIUS, TEXT, SHADOW, FONT } from '@/styles/tokens'
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useVoiceCommand } from '@/hooks/useVoiceCommand'
 import { useWhisperFlow } from '@/hooks/useWhisperFlow'
@@ -749,7 +750,7 @@ function ExecutionTimer({
  style={{
  margin: '4px 0',
  padding: '10px 14px',
- borderRadius: 14,
+ borderRadius: RADIUS.lg,
  background: isDone ? 'rgba(133,153,0,0.12)' : isErr ? 'rgba(220,50,47,0.1)' : 'rgba(42,161,152,0.1)',
  border: `1px solid ${isDone ? 'rgba(133,153,0,0.3)' : isErr ? 'rgba(220,50,47,0.3)' : 'rgba(42,161,152,0.25)'}`,
  cursor: isDone || isErr ? 'default' : 'pointer',
@@ -784,7 +785,7 @@ function ExecutionTimer({
  )}
 
  {entry.result && entry.status !== 'running' && (
- <div style={{ fontSize: 11.5, color: '#657b83', marginTop: 4 }}>
+ <div style={{ fontSize: TEXT.caption, color: '#657b83', marginTop: 4 }}>
  {entry.result}
  </div>
  )}
@@ -819,7 +820,7 @@ function LogDrawer({ logs, onClose }: { logs: LogEntry[]; onClose: () => void })
  </div>
  )}
  {[...logs].reverse().map(entry => (
- <div key={entry.id} style={{ marginBottom: 6, padding: '8px 10px', borderRadius: 10, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}>
+ <div key={entry.id} style={{ marginBottom: 6, padding: '8px 10px', borderRadius: RADIUS.md, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}>
  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
  <span style={{ fontSize: 12, fontWeight: 600, color: entry.status === 'done' ? '#859900' : entry.status === 'error' ? '#dc322f' : '#2aa198' }}>
  {TOOL_LABELS[entry.name] || entry.name}
@@ -1527,7 +1528,7 @@ export default function RafinhaChat({ onNavigate, onCommandReady }: RafinhaChatP
  style={{
  background: showLog ? 'rgba(42,161,152,0.2)' : 'rgba(255,255,255,0.08)',
  border: 'none', color: showLog ? '#2aa198' : '#a08060',
- padding: '5px 8px', borderRadius: 8, cursor: 'pointer', fontSize: 13,
+ padding: '5px 8px', borderRadius: RADIUS.md, cursor: 'pointer', fontSize: 13,
  display: 'flex', alignItems: 'center', gap: 4, position: 'relative',
  }}
  >
@@ -1542,7 +1543,7 @@ export default function RafinhaChat({ onNavigate, onCommandReady }: RafinhaChatP
  {canUndo && (
  <button onClick={handleUndo} title="Desfazer" style={{
  background: 'rgba(203,75,22,0.2)', border: '1px solid rgba(203,75,22,0.5)',
- color: '#cb4b16', padding: '4px 8px', borderRadius: 8, cursor: 'pointer', fontSize: 12,
+ color: '#cb4b16', padding: '4px 8px', borderRadius: RADIUS.md, cursor: 'pointer', fontSize: 12,
  }}>
  <i className="ti ti-arrow-back-up" style={{ fontSize: 13 }} />
  </button>
@@ -1553,7 +1554,7 @@ export default function RafinhaChat({ onNavigate, onCommandReady }: RafinhaChatP
  title={isLiveMode ? 'Modo Alexa Ativo (Mãos Livres Contínuo). Clique para desligar.' : 'Ativar Modo Alexa 24/7 (Requer consentimento de privacidade)'}
  style={{
  background: isLiveMode ? '#dc322f' : 'rgba(255,255,255,0.12)', border: 'none', color: '#fff',
- padding: '5px 10px', borderRadius: 8, cursor: 'pointer', fontSize: 12, fontWeight: 700,
+ padding: '5px 10px', borderRadius: RADIUS.md, cursor: 'pointer', fontSize: 12, fontWeight: 700,
  display: 'flex', alignItems: 'center', gap: 4,
  animation: isLiveMode ? 'rafPing 2s ease-in-out infinite' : 'none',
  }}
@@ -1570,7 +1571,7 @@ export default function RafinhaChat({ onNavigate, onCommandReady }: RafinhaChatP
  border: `1px solid ${voiceOut ? 'rgba(133,153,0,0.4)' : 'rgba(255,255,255,0.15)'}`,
  color: voiceOut ? '#859900' : '#a08060',
  padding: '4px 8px',
- borderRadius: 8,
+ borderRadius: RADIUS.md,
  cursor: 'pointer',
  fontSize: 12,
  fontWeight: 700,
@@ -1628,12 +1629,12 @@ export default function RafinhaChat({ onNavigate, onCommandReady }: RafinhaChatP
  <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: m.role === 'user' ? 'flex-end' : 'flex-start' }}>
  {m.content && (
  <div style={{
- maxWidth: '88%', padding: '10px 14px', borderRadius: 16,
+ maxWidth: '88%', padding: '10px 14px', borderRadius: RADIUS.xl,
  background: m.role === 'user' ? '#2c1a0e' : '#fff',
  color: m.role === 'user' ? '#fdf8f2' : '#2c1a0e',
  border: m.role === 'user' ? 'none' : '1px solid #ede8dc',
  boxShadow: m.role === 'user' ? 'none' : '0 1px 6px rgba(0,0,0,0.05)',
- fontSize: 13.5, lineHeight: 1.55,
+ fontSize: TEXT.body, lineHeight: 1.55,
  }}>
  <span dangerouslySetInnerHTML={{ __html: m.content.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>').replace(/\n/g, '<br/>') }} />
  </div>
@@ -1656,7 +1657,7 @@ export default function RafinhaChat({ onNavigate, onCommandReady }: RafinhaChatP
 
  {/* Loading dots (sem tools rodando) */}
  {isLoading && runningTools.length === 0 && (
- <div style={{ display: 'flex', gap: 5, padding: '10px 14px', background: '#fff', borderRadius: 14, width: 'fit-content', border: '1px solid #ede8dc' }}>
+ <div style={{ display: 'flex', gap: 5, padding: '10px 14px', background: '#fff', borderRadius: RADIUS.lg, width: 'fit-content', border: '1px solid #ede8dc' }}>
  {[0, 0.2, 0.4].map((d, i) => (
  <div key={i} style={{ width: 6, height: 6, borderRadius: '50%', background: '#b58900', animation: `rafPulse 1s infinite alternate ${d}s` }} />
  ))}
@@ -1667,7 +1668,7 @@ export default function RafinhaChat({ onNavigate, onCommandReady }: RafinhaChatP
  {interimText && !isLoading && (
  <div style={{
  alignSelf: 'flex-end', maxWidth: '85%', padding: '8px 14px',
- borderRadius: 14, background: 'rgba(7,54,66,0.06)',
+ borderRadius: RADIUS.lg, background: 'rgba(7,54,66,0.06)',
  border: '1px dashed rgba(7,54,66,0.2)',
  fontSize: 13, color: '#a08060', fontStyle: 'italic',
  }}>
@@ -1707,7 +1708,7 @@ export default function RafinhaChat({ onNavigate, onCommandReady }: RafinhaChatP
  flex: 1, padding: '10px 14px', borderRadius: 20,
  border: `1px solid ${isListening ? '#2aa198' : '#ede8dc'}`,
  background: isLiveMode ? '#f0e8d8' : isListening ? 'rgba(42,161,152,0.06)' : '#f5f0e8',
- outline: 'none', fontSize: 13.5, color: '#2c1a0e',
+ outline: 'none', fontSize: TEXT.body, color: '#2c1a0e',
  fontFamily: "'Outfit', sans-serif",
  transition: 'border 0.2s, background 0.2s',
  }}

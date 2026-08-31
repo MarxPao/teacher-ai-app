@@ -1,4 +1,5 @@
 'use client'
+import { COLOR, RADIUS, TEXT, SHADOW, FONT } from '@/styles/tokens'
 
 import React, { useState, useEffect, useCallback } from 'react'
 import { toast } from '@/components/Toast'
@@ -186,7 +187,7 @@ export default function TrelloPortalConnect() {
       {/* ─── CARD DE AUTENTICAÇÃO E STATUS BYOK ────────────────────────────── */}
       <div style={{
         background: '#ffffff',
-        borderRadius: 16,
+        borderRadius: RADIUS.xl,
         border: '1.5px solid #0079bf',
         padding: '20px 24px',
         boxShadow: '0 4px 16px rgba(0, 121, 191, 0.08)'
@@ -196,7 +197,7 @@ export default function TrelloPortalConnect() {
             <div style={{
               width: 48,
               height: 48,
-              borderRadius: 12,
+              borderRadius: RADIUS.lg,
               background: '#0079bf',
               color: '#ffffff',
               display: 'flex',
@@ -243,7 +244,7 @@ export default function TrelloPortalConnect() {
                   color: '#dc2626',
                   border: '1px solid #fca5a5',
                   padding: '6px 12px',
-                  borderRadius: 8,
+                  borderRadius: RADIUS.md,
                   fontSize: 12,
                   fontWeight: 700,
                   cursor: 'pointer'
@@ -261,10 +262,10 @@ export default function TrelloPortalConnect() {
             <div style={{
               background: '#f8fafc',
               border: '1px solid #e2e8f0',
-              borderRadius: 10,
+              borderRadius: RADIUS.md,
               padding: '12px 16px',
               marginBottom: 16,
-              fontSize: 12.5,
+              fontSize: TEXT.bodyCompact,
               color: '#334155',
               lineHeight: 1.5
             }}>
@@ -284,7 +285,7 @@ export default function TrelloPortalConnect() {
                     href="https://trello.com/app-key"
                     target="_blank"
                     rel="noreferrer"
-                    style={{ fontSize: 11.5, color: '#0079bf', fontWeight: 700, textDecoration: 'none' }}
+                    style={{ fontSize: TEXT.caption, color: '#0079bf', fontWeight: 700, textDecoration: 'none' }}
                   >
                     1. Obter API Key ↗
                   </a>
@@ -297,7 +298,7 @@ export default function TrelloPortalConnect() {
                   style={{
                     width: '100%',
                     padding: '8px 12px',
-                    borderRadius: 8,
+                    borderRadius: RADIUS.md,
                     border: '1px solid #cbd5e1',
                     fontSize: 13,
                     fontFamily: 'monospace'
@@ -313,12 +314,12 @@ export default function TrelloPortalConnect() {
                       href={getTrelloAuthorizeUrl(apiKeyInput)}
                       target="_blank"
                       rel="noreferrer"
-                      style={{ fontSize: 11.5, color: '#0079bf', fontWeight: 700, textDecoration: 'none' }}
+                      style={{ fontSize: TEXT.caption, color: '#0079bf', fontWeight: 700, textDecoration: 'none' }}
                     >
                       2. Gerar Token em 1 Clique ↗
                     </a>
                   ) : (
-                    <span style={{ fontSize: 11.5, color: '#94a3b8' }}>Insira a Key primeiro</span>
+                    <span style={{ fontSize: TEXT.caption, color: '#94a3b8' }}>Insira a Key primeiro</span>
                   )}
                 </div>
                 <input
@@ -329,7 +330,7 @@ export default function TrelloPortalConnect() {
                   style={{
                     width: '100%',
                     padding: '8px 12px',
-                    borderRadius: 8,
+                    borderRadius: RADIUS.md,
                     border: '1px solid #cbd5e1',
                     fontSize: 13,
                     fontFamily: 'monospace'
@@ -352,7 +353,7 @@ export default function TrelloPortalConnect() {
                   background: '#0079bf',
                   color: '#ffffff',
                   border: 'none',
-                  borderRadius: 8,
+                  borderRadius: RADIUS.md,
                   padding: '9px 20px',
                   fontSize: 13,
                   fontWeight: 700,
@@ -374,7 +375,7 @@ export default function TrelloPortalConnect() {
       {isConnected && (
         <div style={{
           background: '#ffffff',
-          borderRadius: 16,
+          borderRadius: RADIUS.xl,
           border: '1px solid #e7dfd5',
           padding: '20px 24px',
           boxShadow: '0 2px 10px rgba(44, 26, 14, 0.03)'
@@ -384,7 +385,7 @@ export default function TrelloPortalConnect() {
               <h4 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#2c1a0e' }}>
                 🗂️ Navegador de Quadros & Checklists em Tempo Real
               </h4>
-              <p style={{ margin: '2px 0 0', fontSize: 12.5, color: '#665c54' }}>
+              <p style={{ margin: '2px 0 0', fontSize: TEXT.bodyCompact, color: '#665c54' }}>
                 Leitura ao vivo das suas colunas, cartões e subtarefas para conferência visual.
               </p>
             </div>
@@ -396,7 +397,7 @@ export default function TrelloPortalConnect() {
               style={{
                 background: '#faf6f0',
                 border: '1px solid #d5c8bb',
-                borderRadius: 8,
+                borderRadius: RADIUS.md,
                 padding: '6px 12px',
                 fontSize: 12,
                 fontWeight: 700,
@@ -420,7 +421,7 @@ export default function TrelloPortalConnect() {
                 style={{
                   width: '100%',
                   padding: '8px 12px',
-                  borderRadius: 8,
+                  borderRadius: RADIUS.md,
                   border: '1.5px solid #0079bf',
                   fontSize: 13,
                   fontWeight: 600,
@@ -447,7 +448,7 @@ export default function TrelloPortalConnect() {
                 style={{
                   width: '100%',
                   padding: '8px 12px',
-                  borderRadius: 8,
+                  borderRadius: RADIUS.md,
                   border: '1px solid #cbd5e1',
                   fontSize: 13,
                   fontWeight: 600,
@@ -474,7 +475,7 @@ export default function TrelloPortalConnect() {
             </div>
 
             {cards.length === 0 ? (
-              <div style={{ padding: 24, textAlign: 'center', background: '#faf6f0', borderRadius: 10, color: '#665c54', fontSize: 13 }}>
+              <div style={{ padding: 24, textAlign: 'center', background: '#faf6f0', borderRadius: RADIUS.md, color: '#665c54', fontSize: 13 }}>
                 Nenhum cartão encontrado nesta coluna do Trello.
               </div>
             ) : (
@@ -490,7 +491,7 @@ export default function TrelloPortalConnect() {
                       style={{
                         background: '#ffffff',
                         border: '1px solid #e2e8f0',
-                        borderRadius: 10,
+                        borderRadius: RADIUS.md,
                         padding: '12px 16px',
                         transition: 'all 0.15s ease'
                       }}
@@ -564,7 +565,7 @@ export default function TrelloPortalConnect() {
                                 border: '1px solid #cbd5e1',
                                 borderRadius: 6,
                                 padding: '4px 8px',
-                                fontSize: 11.5,
+                                fontSize: TEXT.caption,
                                 fontWeight: 700,
                                 color: '#334155',
                                 cursor: 'pointer'
@@ -579,7 +580,7 @@ export default function TrelloPortalConnect() {
                             target="_blank"
                             rel="noreferrer"
                             style={{
-                              fontSize: 11.5,
+                              fontSize: TEXT.caption,
                               color: '#0079bf',
                               fontWeight: 700,
                               textDecoration: 'none'
@@ -595,7 +596,7 @@ export default function TrelloPortalConnect() {
                         <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px dashed #e2e8f0', display: 'flex', flexDirection: 'column', gap: 8 }}>
                           {card.checklists?.map(chk => (
                             <div key={chk.id} style={{ background: '#f8fafc', padding: '8px 12px', borderRadius: 6 }}>
-                              <div style={{ fontSize: 11.5, fontWeight: 700, color: '#475569', marginBottom: 6 }}>
+                              <div style={{ fontSize: TEXT.caption, fontWeight: 700, color: '#475569', marginBottom: 6 }}>
                                 📋 {chk.name}
                               </div>
                               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>

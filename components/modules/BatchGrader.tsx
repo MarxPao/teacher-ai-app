@@ -1,4 +1,5 @@
-'use client';
+'use client'
+import { COLOR, RADIUS, TEXT, SHADOW, FONT } from '@/styles/tokens';
 import { toast, showConfirm } from '@/components/Toast'
 import { logAiCall, summarize } from '@/lib/aiAuditLog'
 import { getAnchorExemplarsPrompt } from '@/lib/rubrics/anchorExemplars'
@@ -816,7 +817,7 @@ REGRAS OBRIGATÓRIAS:
                         {sub.status === 'grading' && <span style={styles.badgeGrading}><i className="ti ti-loader"></i> Corrigindo</span>}
                         {sub.status === 'done' && <span style={styles.badgeDone}><i className="ti ti-check"></i> Concluído</span>}
                         {sub.status === 'needs_review' && (
-                          <span title={sub.reviewReason || 'Revisar manualmente'} style={{ display:'inline-flex', alignItems:'center', gap:4, background:'#fff3cd', color:'#856404', border:'1px solid #ffc107', borderRadius:8, padding:'2px 8px', fontSize:'0.78rem', fontWeight:700, cursor:'help' }}>
+                          <span title={sub.reviewReason || 'Revisar manualmente'} style={{ display:'inline-flex', alignItems:'center', gap:4, background:'#fff3cd', color:'#856404', border:'1px solid #ffc107', borderRadius: RADIUS.md, padding:'2px 8px', fontSize:'0.78rem', fontWeight:700, cursor:'help' }}>
                             <i className="ti ti-alert-triangle"></i> Revisão Manual
                           </span>
                         )}

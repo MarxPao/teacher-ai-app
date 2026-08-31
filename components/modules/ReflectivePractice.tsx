@@ -1,4 +1,5 @@
-'use client';
+'use client'
+import { COLOR, RADIUS, TEXT, SHADOW, FONT } from '@/styles/tokens';
 import { toast, showConfirm } from '@/components/Toast'
 
 import React, { useState, useEffect, CSSProperties } from 'react';
@@ -69,7 +70,7 @@ const styles: Record<string, CSSProperties> = {
     display: 'flex',
     gap: 4,
     background: '#f5efe6',
-    borderRadius: 12,
+    borderRadius: RADIUS.lg,
     padding: 4,
     marginBottom: 24,
     border: '1px solid rgba(139,115,85,0.12)',
@@ -82,7 +83,7 @@ const styles: Record<string, CSSProperties> = {
     background: 'transparent',
     color: '#a08060',
     fontWeight: 400,
-    fontSize: 13.5,
+    fontSize: TEXT.body,
     cursor: 'pointer',
     boxShadow: 'none',
     transition: 'all 0.15s ease',
@@ -100,7 +101,7 @@ const styles: Record<string, CSSProperties> = {
   card: {
     backgroundColor: '#fffcf8',
     border: '1px solid rgba(139,115,85,0.12)',
-    borderRadius: 16,
+    borderRadius: RADIUS.xl,
     padding: 28,
     boxShadow: '0 2px 8px rgba(44,26,14,0.06)',
   },
@@ -128,7 +129,7 @@ const styles: Record<string, CSSProperties> = {
     border: '1px solid rgba(139,115,85,0.18)',
     borderRadius: 9,
     color: '#2c1a0e',
-    fontSize: 13.5,
+    fontSize: TEXT.body,
     boxSizing: 'border-box',
     outline: 'none',
     fontFamily: "'Plus Jakarta Sans', sans-serif",
@@ -140,7 +141,7 @@ const styles: Record<string, CSSProperties> = {
     border: '1px solid rgba(139,115,85,0.18)',
     borderRadius: 9,
     color: '#2c1a0e',
-    fontSize: 13.5,
+    fontSize: TEXT.body,
     minHeight: '100px',
     boxSizing: 'border-box',
     resize: 'vertical',
@@ -176,7 +177,7 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 9,
     cursor: 'pointer',
     fontWeight: 600,
-    fontSize: 13.5,
+    fontSize: TEXT.body,
     display: 'flex',
     alignItems: 'center',
     gap: 8,
@@ -192,7 +193,7 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 9,
     cursor: 'pointer',
     fontWeight: 500,
-    fontSize: 13.5,
+    fontSize: TEXT.body,
     display: 'flex',
     alignItems: 'center',
     gap: 8,
@@ -201,7 +202,7 @@ const styles: Record<string, CSSProperties> = {
   },
   timelineCard: {
     backgroundColor: '#f5efe6',
-    borderRadius: 12,
+    borderRadius: RADIUS.lg,
     padding: 20,
     marginBottom: '1rem',
     border: '1px solid rgba(139,115,85,0.14)',
@@ -227,7 +228,7 @@ const styles: Record<string, CSSProperties> = {
     padding: '1rem',
     backgroundColor: 'rgba(139,94,60,0.05)',
     border: '1px solid rgba(139,94,60,0.2)',
-    borderRadius: 8,
+    borderRadius: RADIUS.md,
     borderLeft: '4px solid #8b5e3c',
   },
   aiFeedbackHeader: {
@@ -261,7 +262,7 @@ const styles: Record<string, CSSProperties> = {
   statBox: {
     backgroundColor: '#f5efe6',
     padding: '1rem',
-    borderRadius: 12,
+    borderRadius: RADIUS.lg,
     textAlign: 'center',
     flex: '1',
     border: '1px solid rgba(139,115,85,0.16)',
@@ -500,7 +501,7 @@ Incorpore atividades de Task-Based Learning para fortalecer a área de ${formDat
             <div style={{
               position: 'fixed', top: '20px', right: '20px', zIndex: 9999,
               backgroundColor: toast.type === 'error' ? '#a83232' : toast.type === 'success' ? '#3d7a4e' : '#2a6080',
-              color: '#fffcf8', padding: '1rem 2rem', borderRadius: 12,
+              color: '#fffcf8', padding: '1rem 2rem', borderRadius: RADIUS.lg,
               boxShadow: '0 4px 12px rgba(44,26,14,0.15)',
               display: 'flex', alignItems: 'center', gap: '0.5rem',
               animation: 'fadeIn 0.3s',

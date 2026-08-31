@@ -1,4 +1,5 @@
 'use client'
+import { COLOR, RADIUS, TEXT, SHADOW, FONT } from '@/styles/tokens'
 import { useState, useEffect } from 'react'
 import ModuleShell from '@/components/ModuleShell'
 import ModuleCard from '@/components/ModuleCard'
@@ -310,7 +311,7 @@ export default function ApiManager() {
  {autoMode ? ' AUTO ON' : 'AUTO OFF'}
  </button>
 
- <button onClick={() => save(apis)} style={{ padding: '8px 20px', borderRadius: 10, border: 'none', background: saved ? '#859900' : '#2c1a0e', color: '#fdf8f2', fontSize: 14, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, transition: 'all 0.2s' }}>
+ <button onClick={() => save(apis)} style={{ padding: '8px 20px', borderRadius: RADIUS.md, border: 'none', background: saved ? '#859900' : '#2c1a0e', color: '#fdf8f2', fontSize: 14, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, transition: 'all 0.2s' }}>
  <i className={`ti ${saved ? 'ti-check' : 'ti-device-floppy'}`} />
  {saved ? 'Salvo!' : 'Salvar'}
  </button>
@@ -336,7 +337,7 @@ export default function ApiManager() {
  {tab === 'hierarchy' && (
  <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
  {/* Header informativo */}
- <div style={{ background: '#2c1a0e', color: '#fdf8f2', padding: 22, borderRadius: 16, border: '1px solid #002b36', boxShadow: '0 4px 16px rgba(44,26,14,0.12)' }}>
+ <div style={{ background: '#2c1a0e', color: '#fdf8f2', padding: 22, borderRadius: RADIUS.xl, border: '1px solid #002b36', boxShadow: '0 4px 16px rgba(44,26,14,0.12)' }}>
  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
  <i className="ti ti-crown" style={{ fontSize: 24, color: '#b58900' }} />
@@ -344,7 +345,7 @@ export default function ApiManager() {
  Administração de Hierarquia & Tokens de IA
  </h2>
  </div>
- <span style={{ background: '#c4834a', color: '#fff', fontSize: 11, fontWeight: 700, padding: '4px 12px', borderRadius: 12 }}>
+ <span style={{ background: '#c4834a', color: '#fff', fontSize: 11, fontWeight: 700, padding: '4px 12px', borderRadius: RADIUS.lg }}>
  Proteção Ativa Contra Estouro de Cota (429)
  </span>
  </div>
@@ -354,7 +355,7 @@ export default function ApiManager() {
  </div>
 
  {/* Painel de Consumo Real de Tokens por Modelo (Com Hover %) */}
- <div style={{ background: '#fff', padding: 22, borderRadius: 16, border: '1px solid #ede8dc', boxShadow: '0 2px 10px rgba(44,26,14,0.04)' }}>
+ <div style={{ background: '#fff', padding: 22, borderRadius: RADIUS.xl, border: '1px solid #ede8dc', boxShadow: '0 2px 10px rgba(44,26,14,0.04)' }}>
  <h3 style={{ fontSize: 15, fontWeight: 700, color: '#2c1a0e', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
  <i className="ti ti-activity" style={{ color: '#2d9d5d', fontSize: 20 }} />
  Monitor de Consumo em Tempo Real (Passe o mouse na barra para ver a % exata)
@@ -370,7 +371,7 @@ export default function ApiManager() {
  { provider: 'openai', label: ' OpenAI GPT-4o' },
  { provider: 'anthropic', label: ' Anthropic Claude 3.5' },
  ].map(item => (
- <div key={item.provider} style={{ background: '#fcfbf9', border: '1px solid #ede8dc', borderRadius: 12, padding: '14px 16px' }}>
+ <div key={item.provider} style={{ background: '#fcfbf9', border: '1px solid #ede8dc', borderRadius: RADIUS.lg, padding: '14px 16px' }}>
  <div style={{ fontSize: 13, fontWeight: 700, color: '#2c1a0e', marginBottom: 4, display: 'flex', justifyContent: 'space-between' }}>
  <span>{item.label}</span>
  </div>
@@ -381,24 +382,24 @@ export default function ApiManager() {
  </div>
 
  {/* Gráfico da Pirâmide de Hierarquia de Capacidade */}
- <div style={{ background: '#fff', padding: 24, borderRadius: 16, border: '1px solid #ede8dc', boxShadow: '0 2px 10px rgba(44,26,14,0.04)' }}>
+ <div style={{ background: '#fff', padding: 24, borderRadius: RADIUS.xl, border: '1px solid #ede8dc', boxShadow: '0 2px 10px rgba(44,26,14,0.04)' }}>
  <h3 style={{ fontSize: 15, fontWeight: 700, color: '#2c1a0e', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
  <i className="ti ti-chart-bar" style={{ color: '#b58900' }} /> Pirâmide de Capacidade & Roteamento Inteligente
  </h3>
 
  <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
  {/* TIER 1 */}
- <div style={{ background: '#fff9e6', border: '2px solid #b58900', borderRadius: 14, padding: 18 }}>
+ <div style={{ background: '#fff9e6', border: '2px solid #b58900', borderRadius: RADIUS.lg, padding: 18 }}>
  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
- <span style={{ background: '#b58900', color: '#fff', fontSize: 11, fontWeight: 800, padding: '3px 10px', borderRadius: 8 }}>
+ <span style={{ background: '#b58900', color: '#fff', fontSize: 11, fontWeight: 800, padding: '3px 10px', borderRadius: RADIUS.md }}>
  TIER 1 HEAVYWEIGHTS PEDAGÓGICOS
  </span>
  <span style={{ fontSize: 13, fontWeight: 700, color: '#2c1a0e' }}>Capacidade Cognitiva: 9.8 / 10</span>
  </div>
  <span style={{ fontSize: 12, fontWeight: 600, color: '#b58900' }}>4.096 Tokens Reservados / Req</span>
  </div>
- <p style={{ fontSize: 12.5, color: '#7a5c42', marginBottom: 12 }}>
+ <p style={{ fontSize: TEXT.bodyCompact, color: '#7a5c42', marginBottom: 12 }}>
  <strong>Provedores:</strong> DeepSeek V3/R1 · Anthropic Claude Opus · OpenAI GPT-4o · SiliconFlow (Qwen2.5-72B).<br />
  <strong>Destino Pedagógico:</strong> Provas Finais, Matriz TRI, Planos de Aula TKT, Rubricas Cambridge e Análise Dissertativa.
  </p>
@@ -409,17 +410,17 @@ export default function ApiManager() {
  </div>
 
  {/* TIER 2 */}
- <div style={{ background: '#fcf2ee', border: '2px solid #cb4b16', borderRadius: 14, padding: 18 }}>
+ <div style={{ background: '#fcf2ee', border: '2px solid #cb4b16', borderRadius: RADIUS.lg, padding: 18 }}>
  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
- <span style={{ background: '#cb4b16', color: '#fff', fontSize: 11, fontWeight: 800, padding: '3px 10px', borderRadius: 8 }}>
+ <span style={{ background: '#cb4b16', color: '#fff', fontSize: 11, fontWeight: 800, padding: '3px 10px', borderRadius: RADIUS.md }}>
  TIER 2 HIGH SPEEDSTERS & EXECUÇÃO
  </span>
  <span style={{ fontSize: 13, fontWeight: 700, color: '#2c1a0e' }}>Capacidade Cognitiva: 8.8 / 10 (Latência: ~350ms)</span>
  </div>
  <span style={{ fontSize: 12, fontWeight: 600, color: '#cb4b16' }}>2.048 Tokens Reservados / Req</span>
  </div>
- <p style={{ fontSize: 12.5, color: '#7a5c42', marginBottom: 12 }}>
+ <p style={{ fontSize: TEXT.bodyCompact, color: '#7a5c42', marginBottom: 12 }}>
  <strong>Provedores:</strong> Zhipu AI (GLM-4-Flash - 131k tokens) · Groq (Llama-3.3 70B).<br />
  <strong>Destino Pedagógico:</strong> Chat Agêntico Rápido (Rafinha), Ações no App, Quick Generate, Mapas Mentais.
  </p>
@@ -429,17 +430,17 @@ export default function ApiManager() {
  </div>
 
  {/* TIER 3 */}
- <div style={{ background: '#f5f9e8', border: '2px solid #859900', borderRadius: 14, padding: 18 }}>
+ <div style={{ background: '#f5f9e8', border: '2px solid #859900', borderRadius: RADIUS.lg, padding: 18 }}>
  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
- <span style={{ background: '#c4834a', color: '#fff', fontSize: 11, fontWeight: 800, padding: '3px 10px', borderRadius: 8 }}>
+ <span style={{ background: '#c4834a', color: '#fff', fontSize: 11, fontWeight: 800, padding: '3px 10px', borderRadius: RADIUS.md }}>
  TIER 3 PERMANENT SAFETY NET
  </span>
  <span style={{ fontSize: 13, fontWeight: 700, color: '#2c1a0e' }}>Capacidade Cognitiva: 8.2 / 10 (Tokens Ilimitados)</span>
  </div>
  <span style={{ fontSize: 12, fontWeight: 600, color: '#859900' }}>Contingência Permanente</span>
  </div>
- <p style={{ fontSize: 12.5, color: '#7a5c42', marginBottom: 12 }}>
+ <p style={{ fontSize: TEXT.bodyCompact, color: '#7a5c42', marginBottom: 12 }}>
  <strong>Provedores:</strong> OpenRouter (Gemma 2 9B Free / Llama 3.1 Free) · Google Gemini 2.0 Flash.<br />
  <strong>Destino Pedagógico:</strong> Rota de redundância absoluta. Se qualquer API sofrer rate-limit, assume o tráfego sem pausar.
  </p>
@@ -451,7 +452,7 @@ export default function ApiManager() {
  </div>
 
  {/* Tabela de Alocação por Tipo de Tarefa */}
- <div style={{ background: '#fff', padding: 24, borderRadius: 16, border: '1px solid #ede8dc', boxShadow: '0 2px 10px rgba(44,26,14,0.04)' }}>
+ <div style={{ background: '#fff', padding: 24, borderRadius: RADIUS.xl, border: '1px solid #ede8dc', boxShadow: '0 2px 10px rgba(44,26,14,0.04)' }}>
  <h3 style={{ fontSize: 15, fontWeight: 700, color: '#2c1a0e', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
  <i className="ti ti-subtask" style={{ color: '#268bd2' }} /> Matriz Roteamento & Reserva de Tokens
  </h3>
@@ -511,7 +512,7 @@ export default function ApiManager() {
  <div style={{ padding: '18px 22px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
  <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
  <div style={{
- width: 44, height: 44, borderRadius: 12,
+ width: 44, height: 44, borderRadius: RADIUS.lg,
  background: api.active && api.key ? `${providerColor[api.provider]}18` : '#f5f0e8',
  display: 'flex', alignItems: 'center', justifyContent: 'center',
  border: `2px solid ${api.active && api.key ? providerColor[api.provider] : 'transparent'}`,
@@ -538,7 +539,7 @@ export default function ApiManager() {
  <button
  onClick={() => updateApi(api.id, 'active', !api.active)}
  style={{
- width: 52, height: 28, borderRadius: 14, border: 'none', cursor: 'pointer',
+ width: 52, height: 28, borderRadius: RADIUS.lg, border: 'none', cursor: 'pointer',
  background: api.active ? '#2d9d5d' : '#ccc',
  position: 'relative', transition: 'background 0.3s', flexShrink: 0,
  }}
@@ -562,7 +563,7 @@ export default function ApiManager() {
  <input type={showKeys[api.id] ? 'text' : 'password'} value={api.key}
  onChange={e => updateApi(api.id, 'key', e.target.value)}
  placeholder="Cole sua chave aqui..."
- style={{ width: '100%', border: `1.5px solid ${api.key ? '#2aa198' : 'rgba(88,110,117,0.2)'}`, borderRadius: 9, padding: '9px 40px 9px 12px', fontSize: 13.5, background: '#fdf8f2', color: '#2c1a0e', outline: 'none', fontFamily: 'monospace', letterSpacing: showKeys[api.id] ? 0 : '2px', boxSizing: 'border-box', transition: 'border-color 0.2s' }} />
+ style={{ width: '100%', border: `1.5px solid ${api.key ? '#2aa198' : 'rgba(88,110,117,0.2)'}`, borderRadius: 9, padding: '9px 40px 9px 12px', fontSize: TEXT.body, background: '#fdf8f2', color: '#2c1a0e', outline: 'none', fontFamily: 'monospace', letterSpacing: showKeys[api.id] ? 0 : '2px', boxSizing: 'border-box', transition: 'border-color 0.2s' }} />
  <button onClick={() => setShowKeys(p => ({ ...p, [api.id]: !p[api.id] }))} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'transparent', cursor: 'pointer', color: '#a08060' }}>
  <i className={`ti ${showKeys[api.id] ? 'ti-eye-off' : 'ti-eye'}`} />
  </button>
@@ -578,7 +579,7 @@ export default function ApiManager() {
  <>
  <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1.2px', color: '#a08060', marginBottom: 6 }}>Voz da Rafinha (Seletor ou Voice ID)</div>
  <select value={api.voiceId || ''} onChange={e => updateApi(api.id, 'voiceId', e.target.value)}
- style={{ width: '100%', border: '1px solid rgba(88,110,117,0.2)', borderRadius: 9, padding: '9px 12px', fontSize: 13.5, background: '#fdf8f2', color: '#2c1a0e', outline: 'none', marginBottom: 8 }}>
+ style={{ width: '100%', border: '1px solid rgba(88,110,117,0.2)', borderRadius: 9, padding: '9px 12px', fontSize: TEXT.body, background: '#fdf8f2', color: '#2c1a0e', outline: 'none', marginBottom: 8 }}>
  <option value="">-- Selecione uma voz ou digite abaixo --</option>
  <option value="EXAVITQu4vr4xnSDxMaL">Bella Natural, quente (PT-BR recomendado)</option>
  <option value="MF3mGyEYCl7XYWbV9V6O">Elli Expressiva, jovem</option>
@@ -594,14 +595,14 @@ export default function ApiManager() {
  value={api.voiceId || ''}
  onChange={e => updateApi(api.id, 'voiceId', e.target.value.trim())}
  placeholder="Cole o Voice ID aqui (ex: 21m00Tcm4TlvDq8ikWAM)"
- style={{ width: '100%', border: '1.5px solid #6c71c4', borderRadius: 8, padding: '8px 12px', fontSize: 12.5, background: '#fdf8f2', color: '#2c1a0e', outline: 'none', fontFamily: 'monospace' }}
+ style={{ width: '100%', border: '1.5px solid #6c71c4', borderRadius: RADIUS.md, padding: '8px 12px', fontSize: TEXT.bodyCompact, background: '#fdf8f2', color: '#2c1a0e', outline: 'none', fontFamily: 'monospace' }}
  />
  </>
  ) : (
  <>
  <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1.2px', color: '#a08060', marginBottom: 6 }}>Modelo Padrão</div>
  <input value={api.model} onChange={e => updateApi(api.id, 'model', e.target.value)}
- style={{ width: '100%', border: '1px solid rgba(88,110,117,0.2)', borderRadius: 9, padding: '9px 12px', fontSize: 13.5, background: '#fdf8f2', color: '#2c1a0e', outline: 'none', fontFamily: 'monospace' }} />
+ style={{ width: '100%', border: '1px solid rgba(88,110,117,0.2)', borderRadius: 9, padding: '9px 12px', fontSize: TEXT.body, background: '#fdf8f2', color: '#2c1a0e', outline: 'none', fontFamily: 'monospace' }} />
  </>
  )}
  </div>
@@ -616,7 +617,7 @@ export default function ApiManager() {
  )}
 
  {api.provider === 'manual' && api.active && (
- <div style={{ fontSize: 13, color: '#7a5c42', margin: '0 22px 16px', padding: '12px 16px', borderTop: '1px dashed rgba(88,110,117,0.1)', background: '#f5f0e8', borderRadius: 8 }}>
+ <div style={{ fontSize: 13, color: '#7a5c42', margin: '0 22px 16px', padding: '12px 16px', borderTop: '1px dashed rgba(88,110,117,0.1)', background: '#f5f0e8', borderRadius: RADIUS.md }}>
  Modo sem conexão automática. Gera o <strong>Prompt Estruturado</strong> para copiar e colar no ChatGPT/Claude/Gemini gratuito.
  </div>
  )}
@@ -671,7 +672,7 @@ export default function ApiManager() {
  </div>
 
  {autoMode && (
- <div style={{ background: 'linear-gradient(135deg, rgba(45,157,93,0.08), rgba(26,122,61,0.04))', border: '1.5px solid rgba(45,157,93,0.2)', borderRadius: 12, padding: '14px 18px', marginBottom: 16 }}>
+ <div style={{ background: 'linear-gradient(135deg, rgba(45,157,93,0.08), rgba(26,122,61,0.04))', border: '1.5px solid rgba(45,157,93,0.2)', borderRadius: RADIUS.lg, padding: '14px 18px', marginBottom: 16 }}>
  <div style={{ fontSize: 13, fontWeight: 700, color: '#2d9d5d', marginBottom: 4 }}> Modo AUTO ativado</div>
  <div style={{ fontSize: 12, color: '#7a5c42' }}>A Rafinha está roteando cada pedido para a API mais adequada com base no tipo de tarefa.</div>
  </div>
@@ -711,7 +712,7 @@ export default function ApiManager() {
  </div>
  </div>
  <div style={{
- padding: '6px 14px', borderRadius: 8,
+ padding: '6px 14px', borderRadius: RADIUS.md,
  background: selected ? 'rgba(45,157,93,0.1)' : 'rgba(150,33,33,0.08)',
  fontSize: 12, fontWeight: 700,
  color: selected ? '#2d9d5d' : '#dc322f',
@@ -730,7 +731,7 @@ export default function ApiManager() {
  <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
  <ModuleCard padding="24px">
  <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 20 }}>
- <div style={{ width: 52, height: 52, borderRadius: 14, background: 'linear-gradient(135deg, #3ecf8e22, #2b8a5e22)', border: '2px solid #3ecf8e', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+ <div style={{ width: 52, height: 52, borderRadius: RADIUS.lg, background: 'linear-gradient(135deg, #3ecf8e22, #2b8a5e22)', border: '2px solid #3ecf8e', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
  <i className="ti ti-cloud" style={{ fontSize: 26, color: '#3ecf8e' }} />
  </div>
  <div>
@@ -744,32 +745,32 @@ export default function ApiManager() {
  <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1.2px', color: '#a08060', marginBottom: 6 }}>URL do Projeto Supabase</div>
  <input value={sbUrl} onChange={e => setSbUrl(e.target.value)}
  placeholder="https://xxxxxxxxxxx.supabase.co"
- style={{ width: '100%', border: `1.5px solid ${sbUrl ? '#3ecf8e' : 'rgba(88,110,117,0.2)'}`, borderRadius: 9, padding: '10px 14px', fontSize: 13.5, background: '#fdf8f2', color: '#2c1a0e', outline: 'none', fontFamily: 'monospace', boxSizing: 'border-box' }} />
+ style={{ width: '100%', border: `1.5px solid ${sbUrl ? '#3ecf8e' : 'rgba(88,110,117,0.2)'}`, borderRadius: 9, padding: '10px 14px', fontSize: TEXT.body, background: '#fdf8f2', color: '#2c1a0e', outline: 'none', fontFamily: 'monospace', boxSizing: 'border-box' }} />
  </div>
  <div>
  <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1.2px', color: '#a08060', marginBottom: 6 }}>Anon Public Key (JWT)</div>
  <input type="password" value={sbAnonKey} onChange={e => setSbAnonKey(e.target.value)}
  placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
- style={{ width: '100%', border: `1.5px solid ${sbAnonKey ? '#3ecf8e' : 'rgba(88,110,117,0.2)'}`, borderRadius: 9, padding: '10px 14px', fontSize: 13.5, background: '#fdf8f2', color: '#2c1a0e', outline: 'none', fontFamily: 'monospace', boxSizing: 'border-box' }} />
+ style={{ width: '100%', border: `1.5px solid ${sbAnonKey ? '#3ecf8e' : 'rgba(88,110,117,0.2)'}`, borderRadius: 9, padding: '10px 14px', fontSize: TEXT.body, background: '#fdf8f2', color: '#2c1a0e', outline: 'none', fontFamily: 'monospace', boxSizing: 'border-box' }} />
  </div>
  <div>
  <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1.2px', color: '#a08060', marginBottom: 6 }}>Service Role Key (Secret)</div>
  <input type="password" value={sbServiceKey} onChange={e => setSbServiceKey(e.target.value)}
  placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
- style={{ width: '100%', border: `1.5px solid ${sbServiceKey ? '#3ecf8e' : 'rgba(88,110,117,0.2)'}`, borderRadius: 9, padding: '10px 14px', fontSize: 13.5, background: '#fdf8f2', color: '#2c1a0e', outline: 'none', fontFamily: 'monospace', boxSizing: 'border-box' }} />
+ style={{ width: '100%', border: `1.5px solid ${sbServiceKey ? '#3ecf8e' : 'rgba(88,110,117,0.2)'}`, borderRadius: 9, padding: '10px 14px', fontSize: TEXT.body, background: '#fdf8f2', color: '#2c1a0e', outline: 'none', fontFamily: 'monospace', boxSizing: 'border-box' }} />
  </div>
 
  {sbStatus && (
- <div style={{ padding: '10px 16px', borderRadius: 10, background: sbStatus.includes('') ? 'rgba(45,157,93,0.1)' : sbStatus.includes('') ? 'rgba(220,50,47,0.08)' : 'rgba(88,110,117,0.08)', border: `1px solid ${sbStatus.includes('') ? '#2d9d5d' : sbStatus.includes('') ? '#dc322f' : '#a08060'}`, fontSize: 13, fontWeight: 600, color: '#2c1a0e' }}>
+ <div style={{ padding: '10px 16px', borderRadius: RADIUS.md, background: sbStatus.includes('') ? 'rgba(45,157,93,0.1)' : sbStatus.includes('') ? 'rgba(220,50,47,0.08)' : 'rgba(88,110,117,0.08)', border: `1px solid ${sbStatus.includes('') ? '#2d9d5d' : sbStatus.includes('') ? '#dc322f' : '#a08060'}`, fontSize: 13, fontWeight: 600, color: '#2c1a0e' }}>
  {sbStatus}
  </div>
  )}
 
  <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', paddingTop: 4 }}>
- <button onClick={saveSupabaseConfig} style={{ flex: 1, padding: '10px 18px', borderRadius: 10, border: 'none', background: '#2c1a0e', color: '#fff', fontWeight: 700, cursor: 'pointer', fontSize: 13 }}>
+ <button onClick={saveSupabaseConfig} style={{ flex: 1, padding: '10px 18px', borderRadius: RADIUS.md, border: 'none', background: '#2c1a0e', color: '#fff', fontWeight: 700, cursor: 'pointer', fontSize: 13 }}>
  <i className="ti ti-device-floppy" /> Salvar Config
  </button>
- <button onClick={testSupabase} style={{ flex: 1, padding: '10px 18px', borderRadius: 10, border: '1.5px solid #3ecf8e', background: 'transparent', color: '#2b8a5e', fontWeight: 700, cursor: 'pointer', fontSize: 13 }}>
+ <button onClick={testSupabase} style={{ flex: 1, padding: '10px 18px', borderRadius: RADIUS.md, border: '1.5px solid #3ecf8e', background: 'transparent', color: '#2b8a5e', fontWeight: 700, cursor: 'pointer', fontSize: 13 }}>
  <i className="ti ti-plug-connected" /> Testar Conexão
  </button>
  </div>
@@ -781,14 +782,14 @@ export default function ApiManager() {
  <ModuleCard padding="20px">
  <div style={{ fontSize: 14, fontWeight: 700, color: '#2c1a0e', marginBottom: 6 }}> Enviar para a Nuvem</div>
  <div style={{ fontSize: 12, color: '#7a5c42', marginBottom: 14 }}>Salva todos os dados locais (alunos, aulas, notas, APIs) no Supabase.</div>
- <button onClick={syncNow} disabled={sbSyncing} style={{ width: '100%', padding: '10px', borderRadius: 10, border: 'none', background: 'linear-gradient(135deg, #3ecf8e, #2b8a5e)', color: '#fff', fontWeight: 700, cursor: 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+ <button onClick={syncNow} disabled={sbSyncing} style={{ width: '100%', padding: '10px', borderRadius: RADIUS.md, border: 'none', background: 'linear-gradient(135deg, #3ecf8e, #2b8a5e)', color: '#fff', fontWeight: 700, cursor: 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
  {sbSyncing ? <><i className="ti ti-loader-2" style={{ animation: 'spin 1s linear infinite' }} /> Sincronizando...</> : <><i className="ti ti-cloud-upload" /> Sincronizar Agora</>}
  </button>
  </ModuleCard>
  <ModuleCard padding="20px">
  <div style={{ fontSize: 14, fontWeight: 700, color: '#2c1a0e', marginBottom: 6 }}> Restaurar da Nuvem</div>
  <div style={{ fontSize: 12, color: '#7a5c42', marginBottom: 14 }}>Carrega os dados do Supabase e restaura o aplicativo para o último estado salvo.</div>
- <button onClick={loadFromCloud} disabled={sbLoading} style={{ width: '100%', padding: '10px', borderRadius: 10, border: '1.5px solid #3ecf8e', background: 'transparent', color: '#2b8a5e', fontWeight: 700, cursor: 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+ <button onClick={loadFromCloud} disabled={sbLoading} style={{ width: '100%', padding: '10px', borderRadius: RADIUS.md, border: '1.5px solid #3ecf8e', background: 'transparent', color: '#2b8a5e', fontWeight: 700, cursor: 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
  {sbLoading ? <><i className="ti ti-loader-2" style={{ animation: 'spin 1s linear infinite' }} /> Carregando...</> : <><i className="ti ti-cloud-download" /> Restaurar</>}
  </button>
  </ModuleCard>
@@ -799,7 +800,7 @@ export default function ApiManager() {
  {/* ABA: COMO OBTER */}
  {tab === 'guide' && (
  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
- <div style={{ background: '#f0e8d8', borderRadius: 14, padding: '16px 20px', marginBottom: 8 }}>
+ <div style={{ background: '#f0e8d8', borderRadius: RADIUS.lg, padding: '16px 20px', marginBottom: 8 }}>
  <div style={{ fontWeight: 700, color: '#2c1a0e', marginBottom: 6 }}> Por onde começar?</div>
  <p style={{ color: '#7a5c42', fontSize: 13, margin: 0 }}>
  Recomendamos começar pelo <strong>Groq</strong> (grátis, rápido) para o chat da Rafinha, e pelo <strong>ElevenLabs</strong> para a voz natural. Ambos têm planos gratuitos suficientes para uso diário.
@@ -833,7 +834,7 @@ export default function ApiManager() {
  </span>
  )}
  <button onClick={() => testConnection(api)} disabled={!api.key || testing === api.id}
- style={{ padding: '8px 16px', borderRadius: 10, border: 'none', background: '#2c1a0e', color: '#fff', cursor: api.key ? 'pointer' : 'not-allowed', opacity: api.key ? 1 : 0.4, fontWeight: 600, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}>
+ style={{ padding: '8px 16px', borderRadius: RADIUS.md, border: 'none', background: '#2c1a0e', color: '#fff', cursor: api.key ? 'pointer' : 'not-allowed', opacity: api.key ? 1 : 0.4, fontWeight: 600, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}>
  {testing === api.id ? <><i className="ti ti-loader-2" style={{ animation: 'spin 1s linear infinite' }} /> Testando...</> : <><i className="ti ti-plug-connected" /> Testar</>}
  </button>
  </div>
@@ -848,4 +849,4 @@ export default function ApiManager() {
  `}</style>
  </ModuleShell>
  )
-}
+}
