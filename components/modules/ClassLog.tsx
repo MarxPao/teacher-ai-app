@@ -3,6 +3,9 @@ import { toast, showConfirm } from '@/components/Toast'
 
 import { useState, useEffect, useMemo } from 'react'
 import { fillPortal, logPortalFill } from '@/lib/portalBridge'
+import { createBrowserTask, BrowserAutomationTask, DiffItem } from '@/lib/browserAutomationClient'
+import { sanitizeOutboundPayload } from '@/lib/portalSanitizer'
+import AutomationDiffModal from '@/components/modules/AutomationDiffModal'
 
 export interface ClassLogEntry {
   id: string
@@ -131,6 +134,7 @@ export default function ClassLog() {
   const [activeTab, setActiveTab] = useState<'calendar' | 'new' | 'history'>('calendar')
   const [selectedLogModal, setSelectedLogModal] = useState<ClassLogEntry | null>(null)
   const [savedSuccess, setSavedSuccess] = useState(false)
+  const [activeTask, setActiveTask] = useState<BrowserAutomationTask | null>(null)
 
   // Controle de mês no Calendário Post-it
   const [calendarMonth, setCalendarMonth] = useState(new Date().getMonth())
@@ -819,22 +823,48 @@ export default function ClassLog() {
               <button
                 onClick={async () => {
                   const targetPortal = selectedLogModal.school.toLowerCase().includes('santa') ? 'santacatarina' : (selectedLogModal.school.toLowerCase().includes('machado') ? 'machado' : 'plural')
-                  const payload = {
+                  const portalName = selectedLogModal.school || 'Machado Sobrinho'
+                  
+                  const diff: DiffItem[] = [
+                    { studentName: 'Diário de Classe', field: 'Tema / Assunto da Aula', beforeValue: '', afterValue: selectedLogModal.topic, approved: true },
+                    { studentName: 'Diário de Classe', field: 'Data da Aula', beforeValue: '', afterValue: selectedLogModal.date, approved: true },
+                    { studentName: 'Diário de Classe', field: 'Turma', beforeValue: '', afterValue: selectedLogModal.className, approved: true },
+                    { studentName: 'Diário de Classe', field: 'Habilidade Foco (BNCC/ELT)', beforeValue: '', afterValue: selectedLogModal.focusSkill, approved: true },
+                    { studentName: 'Diário de Classe', field: 'Sequência Didática', beforeValue: '', afterValue: `Warm-up: ${selectedLogModal.warmup || 'N/A'}\nApresentação: ${selectedLogModal.presentation || 'N/A'}\nPrática: ${selectedLogModal.practice || 'N/A'}\nWrap-up: ${selectedLogModal.wrapup || 'N/A'}`, approved: true },
+                    { studentName: 'Diário de Classe', field: 'Recursos Utilizados', beforeValue: '', afterValue: selectedLogModal.resources || 'Padrão', approved: true }
+                  ]
+
+                  const cleanPayload = sanitizeOutboundPayload({
                     platform: targetPortal,
+                    actionType: 'diary',
+                    title: `Lançar Diário — ${selectedLogModal.topic}`,
+                    date: selectedLogModal.date,
+                    classRef: selectedLogModal.className,
+                    description: `Diário: ${selectedLogModal.topic}`,
+                    mode: 'supervised',
+                    diff
+                  })
+
+                  const createdTask = await createBrowserTask({
+                    portal: targetPortal,
+                    actionType: 'diary',
+                    payload: cleanPayload,
+                    approvalMode: 'batch',
+                    classRef: selectedLogModal.className,
+                    studentCount: 1
+                  })
+
+                  logPortalFill({
+                    platform: targetPortal,
+                    platformName: portalName,
                     actionType: 'diary',
                     title: selectedLogModal.topic,
                     date: selectedLogModal.date,
-                    classRef: selectedLogModal.className,
-                    description: `${selectedLogModal.topic}\n\nHabilidade: ${selectedLogModal.focusSkill}\n\nSequência:\n- Warm-up: ${selectedLogModal.warmup}\n- Apresentação: ${selectedLogModal.presentation}\n- Prática: ${selectedLogModal.practice}\n- Wrap-up: ${selectedLogModal.wrapup}`,
-                    mode: 'supervised'
-                  }
-                  logPortalFill(payload as any)
-                  const res = await fillPortal(payload as any)
-                  if (res.success) {
-                    toast.success(`✅ Diário espelhado com sucesso no portal ${targetPortal}!`)
-                  } else {
-                    toast.success(`⚠️ Não foi possível conectar à aba do portal. Certifique-se de que o portal "${targetPortal}" está aberto no Chrome.`)
-                  }
+                    classRef: selectedLogModal.className
+                  } as any)
+
+                  setSelectedLogModal(null)
+                  setActiveTask(createdTask)
                 }}
                 style={{ padding: '10px 20px', borderRadius: 10, border: 'none', background: '#16a34a', color: '#fff', fontSize: 13, fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
               >
@@ -849,6 +879,18 @@ export default function ClassLog() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* ─── MODAL DE APROVAÇÃO & DIFF (AUTOMATION DIFF MODAL) ─────────────── */}
+      {activeTask && (
+        <AutomationDiffModal
+          task={activeTask}
+          onClose={() => setActiveTask(null)}
+          onCompleted={(res) => {
+            setActiveTask(null)
+            toast.success(`Diário de aula publicado no portal oficial!`)
+          }}
+        />
       )}
     </div>
   )

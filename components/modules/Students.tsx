@@ -7,9 +7,9 @@ import SharedDatabaseConsentModal from '@/components/SharedDatabaseConsentModal'
 import StudentTimeline from '@/components/charts/StudentTimeline'
 import RosterReconciliationModal from '@/components/modules/RosterReconciliationModal'
 import { reconcileRosterBatch, RosterReconciliationResult, LocalStudentRecord } from '@/lib/rosterReconciler'
-import { getPortalProfiles, PortalProfileDef } from '@/lib/portalActionsEngine'
-import { createBrowserTask } from '@/lib/browserAutomationClient'
+import { createBrowserTask, BrowserAutomationTask, DiffItem } from '@/lib/browserAutomationClient'
 import { sanitizeOutboundPayload } from '@/lib/portalSanitizer'
+import AutomationDiffModal from '@/components/modules/AutomationDiffModal'
 
 /* ─── Tipos ─────────────────────────────────────────────────────────────────── */
 interface School    { id: string; name: string; color: string }
@@ -172,6 +172,7 @@ export default function Students() {
   const [importPortalUrl, setImportPortalUrl] = useState('https://machadosobrinho.paineldoaluno.com.br/professor_notas')
   const [importClassRef, setImportClassRef] = useState('all')
   const [isImportingRoster, setIsImportingRoster] = useState(false)
+  const [activeAutomationTask, setActiveAutomationTask] = useState<BrowserAutomationTask | null>(null)
 
   /* ─── Carregar ────────────────────────────────────────────────────────────── */
   useEffect(() => {
@@ -598,6 +599,44 @@ export default function Students() {
                     </span>
                   </div>
                 </div>
+
+                {/* Botão de Lançar Notas no Portal Oficial */}
+                {selectedStudent.grades && Object.keys(selectedStudent.grades).length > 0 && (
+                  <button
+                    onClick={async () => {
+                      const portalName = selectedStudent.source_portal || 'machadosobrinho.paineldoaluno.com.br'
+                      const diff: DiffItem[] = Object.entries(selectedStudent.grades || {}).map(([avaliacao, nota]) => ({
+                        studentName: selectedStudent.name,
+                        field: `Nota - ${avaliacao}`,
+                        beforeValue: '',
+                        afterValue: String(nota),
+                        approved: true
+                      }))
+
+                      const cleanPayload = sanitizeOutboundPayload({
+                        platform: portalName,
+                        actionType: 'write_grades',
+                        title: `Lançar Notas de ${selectedStudent.name}`,
+                        classRef: classOf(selectedStudent)?.name || 'Geral',
+                        diff
+                      })
+
+                      const createdTask = await createBrowserTask({
+                        portal: portalName,
+                        actionType: 'write_grades',
+                        payload: cleanPayload,
+                        approvalMode: 'batch',
+                        classRef: classOf(selectedStudent)?.name || 'Geral',
+                        studentCount: 1
+                      })
+
+                      setActiveAutomationTask(createdTask)
+                    }}
+                    style={{ ...S.btn, width: '100%', justifyContent: 'center', background: '#16a34a', color: '#fff', marginBottom: 8 }}
+                  >
+                    <i className="ti ti-upload" /> Lançar Notas no Portal
+                  </button>
+                )}
 
                 {/* Botão de Relatório Pedagógico */}
                 <button onClick={() => setReportStudentId(selectedStudent.id)}
@@ -1190,6 +1229,18 @@ export default function Students() {
             const st = localStorage.getItem('teacher_students')
             if (st) setStudents(JSON.parse(st))
             toast.success(`${count} alunos sincronizados com o portal ${reconcilePortal}!`)
+          }}
+        />
+      )}
+
+      {/* ─── MODAL DE APROVAÇÃO & DIFF (AUTOMATION DIFF MODAL) ─────────────── */}
+      {activeAutomationTask && (
+        <AutomationDiffModal
+          task={activeAutomationTask}
+          onClose={() => setActiveAutomationTask(null)}
+          onCompleted={() => {
+            setActiveAutomationTask(null)
+            toast.success('Notas lançadas com sucesso no portal oficial!')
           }}
         />
       )}

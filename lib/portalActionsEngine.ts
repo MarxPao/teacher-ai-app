@@ -103,28 +103,91 @@ export interface DiscoveredPortalMap {
 }
 
 /**
- * Busca o mapa ativo mais recente para um domínio.
- * Retorna null se não encontrado ou se o supabase não estiver disponível.
+ * Extrai o domínio raiz (registrável) tratando ccTLDs de 2 partes (.com.br, .edu.br, etc.)
+ * Ex: machadosobrinho.paineldoaluno.com.br -> paineldoaluno.com.br
+ *     colegioxyz.paineldoaluno.com.br -> paineldoaluno.com.br
+ *     sub.escola.edu.br -> escola.edu.br
+ */
+export function extractRootDomain(domainOrUrl: string): string {
+  const domain = extractDomain(domainOrUrl)
+  if (!domain) return ''
+  const COMMON_SLDS = new Set(['com', 'edu', 'org', 'net', 'gov', 'mil', 'tur', 'esp', 'coop', 'ind', 'inf'])
+  const parts = domain.split('.')
+  if (parts.length <= 2) return domain
+  if (parts.length >= 3 && COMMON_SLDS.has(parts[parts.length - 2])) {
+    return parts.slice(-3).join('.')
+  }
+  return parts.slice(-2).join('.')
+}
+
+/**
+ * Busca o mapa ativo mais recente para um domínio com fallback para domínio raiz (White-Label).
+ * Retorna null se não encontrado ou se o supabase/storage não estiver disponível.
  */
 export async function getDiscoveredPortalMap(
-  domain: string,
-  supabase: any
+  domainOrUrl: string,
+  supabase?: any
 ): Promise<DiscoveredPortalMap | null> {
-  if (!supabase || !domain) return null
-  try {
-    const { data, error } = await supabase
-      .from('discovered_portal_maps')
-      .select('*')
-      .eq('portal_domain', domain)
-      .is('superseded_by', null)
-      .limit(1)
-      .single()
+  const cleanDomain = extractDomain(domainOrUrl)
+  if (!cleanDomain) return null
+  const rootDomain = extractRootDomain(cleanDomain)
 
-    if (error || !data) return null
-    return data as DiscoveredPortalMap
-  } catch {
-    return null
+  // 1. Tenta Supabase se disponível
+  if (supabase) {
+    try {
+      // 1a. Busca exata por subdomínio
+      const queryExact = supabase
+        .from('discovered_portal_maps')
+        .select('*')
+        .eq('portal_domain', cleanDomain)
+        .is('superseded_by', null)
+        .limit(1)
+
+      const exactRes = typeof queryExact.maybeSingle === 'function' 
+        ? await queryExact.maybeSingle() 
+        : (typeof queryExact.single === 'function' ? await queryExact.single() : await queryExact)
+      const exactData = exactRes?.data
+
+      if (exactData) return exactData as DiscoveredPortalMap
+
+      // 1b. Fallback por domínio raiz (White-Label)
+      if (rootDomain !== cleanDomain) {
+        const queryRoot = supabase
+          .from('discovered_portal_maps')
+          .select('*')
+          .eq('portal_domain', rootDomain)
+          .is('superseded_by', null)
+          .limit(1)
+
+        const rootRes = typeof queryRoot.maybeSingle === 'function'
+          ? await queryRoot.maybeSingle()
+          : (typeof queryRoot.single === 'function' ? await queryRoot.single() : await queryRoot)
+        const rootData = rootRes?.data
+
+        if (rootData) return rootData as DiscoveredPortalMap
+      }
+    } catch {}
   }
+
+  // 2. Fallback para localStorage
+  if (typeof localStorage !== 'undefined') {
+    try {
+      const raw = localStorage.getItem('teacher_discovered_portal_maps')
+      if (raw) {
+        const list: DiscoveredPortalMap[] = JSON.parse(raw)
+        // Busca exata
+        const exact = list.find(m => m.portal_domain === cleanDomain && !m.superseded_by)
+        if (exact) return exact
+        // Busca por raiz
+        if (rootDomain !== cleanDomain) {
+          const rootMatch = list.find(m => m.portal_domain === rootDomain && !m.superseded_by)
+          if (rootMatch) return rootMatch
+        }
+      }
+    } catch {}
+  }
+
+  return null
 }
 
 /**

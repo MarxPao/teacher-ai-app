@@ -18,7 +18,7 @@ import {
 import { fillPortal, openPortal, getRecentFills, logPortalFill } from '@/lib/portalBridge'
 import { saveLearnedFact } from '@/lib/longTermMemory'
 import { createBrowserTask, BrowserAutomationTask, DiffItem } from '@/lib/browserAutomationClient'
-import { sanitizeOutboundPayload } from '@/lib/portalSanitizer'
+import { sanitizeOutboundPayload, getTeacherSyncLogs, TeacherSyncLogRecord } from '@/lib/portalSanitizer'
 import AutomationDiffModal from '@/components/modules/AutomationDiffModal'
 import SidecarPairingModal from '@/components/modules/SidecarPairingModal'
 import TrelloImportModal from '@/components/modules/TrelloImportModal'
@@ -73,6 +73,8 @@ export default function Extensions({ initialTab = 'portals' }: Props) {
 
   // Agente & Automação State
   const [recentFills, setRecentFills] = useState<RecentFill[]>([])
+  const [syncLogs, setSyncLogs] = useState<TeacherSyncLogRecord[]>([])
+  const [logSubTab, setLogSubTab] = useState<'sync' | 'fills'>('sync')
   const [fillStatus, setFillStatus] = useState<string | null>(null)
   const [isWorking, setIsWorking] = useState(false)
   const [activeTask, setActiveTask] = useState<BrowserAutomationTask | null>(null)
@@ -110,6 +112,7 @@ export default function Extensions({ initialTab = 'portals' }: Props) {
       setSelectedPortal(list[0])
     }
     setRecentFills(getRecentFills())
+    setSyncLogs(getTeacherSyncLogs())
   }, [selectedPortal])
 
   useEffect(() => {
@@ -117,9 +120,13 @@ export default function Extensions({ initialTab = 'portals' }: Props) {
     const handleChanged = () => loadData()
     window.addEventListener('storage', handleChanged)
     window.addEventListener('teacher:portals_changed', handleChanged)
+    window.addEventListener('teacher:sync_logged', handleChanged)
+    window.addEventListener('teacher:action_logged', handleChanged)
     return () => {
       window.removeEventListener('storage', handleChanged)
       window.removeEventListener('teacher:portals_changed', handleChanged)
+      window.removeEventListener('teacher:sync_logged', handleChanged)
+      window.removeEventListener('teacher:action_logged', handleChanged)
     }
   }, [loadData])
 
@@ -455,23 +462,28 @@ export default function Extensions({ initialTab = 'portals' }: Props) {
       return
     }
     const headers = ['Data', 'Plataforma', 'Ação', 'Turma', 'Timestamp']
-    const rows = recentFills.map(r => [
-      `"${r.date}"`,
-      `"${r.platformName || r.platform}"`,
-      `"${r.title}"`,
-      `"${r.classRef || 'N/A'}"`,
-      r.timestamp
-    ])
-    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n')
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    let csv = '\uFEFFTipo;Data/Hora;Portal;Turma;Acao/Resumo;Importados;Mesclados;Locais;Status LGPD\n'
+    
+    // 1. Logs de Sincronização de Roster
+    syncLogs.forEach(s => {
+      const dt = new Date(s.timestamp).toLocaleString('pt-BR')
+      csv += `Sincronizacao Roster;${dt};${s.portalName || s.portal};${s.classRef};Leitura de Alunos;+${s.importedCount};${s.mergedCount};${s.unmatchedLocalCount};LGPD Sanitizado\n`
+    })
+
+    // 2. Logs de Preenchimento / Ações
+    recentFills.forEach(f => {
+      const dt = `${f.date} ${new Date(f.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+      csv += `Lancamento Portal;${dt};${f.platformName || f.platform};${f.classRef || 'Geral'};${f.title};-;-;-;LGPD Sanitizado\n`
+    })
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.setAttribute('href', url)
-    link.setAttribute('download', `auditoria_portais_teacher_ai_${new Date().toISOString().split('T')[0]}.csv`)
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    toast.success('Relatório CSV de Auditoria LGPD exportado!')
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `teacher_ai_auditoria_portais_${new Date().toISOString().split('T')[0]}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+    toast.success('Relatório consolidado de auditoria exportado com sucesso!')
   }
 
   return (
@@ -942,48 +954,138 @@ export default function Extensions({ initialTab = 'portals' }: Props) {
               </button>
             </div>
 
-            {recentFills.length === 0 ? (
-              <div style={{ padding: 40, textAlign: 'center', background: '#faf6f0', borderRadius: 12, color: '#a08060' }}>
-                <i className="ti ti-receipt" style={{ fontSize: 32, display: 'block', marginBottom: 8 }} />
-                Nenhuma operação registrada recentemente na trilha de auditoria.
-              </div>
-            ) : (
-              <div style={{ overflowX: 'auto', background: '#fff', borderRadius: 12, border: '1px solid #e7dfd5' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, textAlign: 'left' }}>
-                  <thead>
-                    <tr style={{ background: '#faf6f0', borderBottom: '1px solid #e7dfd5', color: '#2c1a0e' }}>
-                      <th style={{ padding: '12px 16px' }}>Data / Hora</th>
-                      <th style={{ padding: '12px 16px' }}>Portal</th>
-                      <th style={{ padding: '12px 16px' }}>Ação Executada</th>
-                      <th style={{ padding: '12px 16px' }}>Turma / Referência</th>
-                      <th style={{ padding: '12px 16px' }}>Status LGPD</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {recentFills.map((log, idx) => (
-                      <tr key={idx} style={{ borderBottom: '1px solid #f5eee6' }}>
-                        <td style={{ padding: '12px 16px', color: '#665c54' }}>
-                          {log.date} {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </td>
-                        <td style={{ padding: '12px 16px', fontWeight: 700, color: '#2c1a0e' }}>
-                          {log.platformName || log.platform}
-                        </td>
-                        <td style={{ padding: '12px 16px', color: '#2c1a0e' }}>
-                          ⚡ {log.title}
-                        </td>
-                        <td style={{ padding: '12px 16px', color: '#665c54' }}>
-                          {log.classRef || 'Geral'}
-                        </td>
-                        <td style={{ padding: '12px 16px' }}>
-                          <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 6, background: '#e6f4ea', color: '#137333', border: '1px solid #a8dab5' }}>
-                            🔒 Sanitizado
-                          </span>
-                        </td>
+            {/* Sub-abas de Auditoria */}
+            <div style={{ display: 'flex', gap: 8, borderBottom: '1px solid #ede8dc' }}>
+              <button
+                onClick={() => setLogSubTab('sync')}
+                style={{
+                  padding: '8px 14px', borderRadius: '8px 8px 0 0', border: 'none',
+                  background: logSubTab === 'sync' ? '#fff' : 'transparent',
+                  color: logSubTab === 'sync' ? '#b58900' : '#7a5c42',
+                  fontWeight: logSubTab === 'sync' ? 800 : 600,
+                  borderBottom: logSubTab === 'sync' ? '2px solid #b58900' : '2px solid transparent',
+                  cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 13
+                }}
+              >
+                <i className="ti ti-school" /> Sincronizações de Roster ({syncLogs.length})
+              </button>
+              <button
+                onClick={() => setLogSubTab('fills')}
+                style={{
+                  padding: '8px 14px', borderRadius: '8px 8px 0 0', border: 'none',
+                  background: logSubTab === 'fills' ? '#fff' : 'transparent',
+                  color: logSubTab === 'fills' ? '#8b5e3c' : '#7a5c42',
+                  fontWeight: logSubTab === 'fills' ? 800 : 600,
+                  borderBottom: logSubTab === 'fills' ? '2px solid #8b5e3c' : '2px solid transparent',
+                  cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 13
+                }}
+              >
+                <i className="ti ti-bolt" /> Lançamentos nos Portais ({recentFills.length})
+              </button>
+            </div>
+
+            {logSubTab === 'sync' ? (
+              syncLogs.length === 0 ? (
+                <div style={{ padding: 40, textAlign: 'center', background: '#faf6f0', borderRadius: 12, color: '#a08060' }}>
+                  <i className="ti ti-school" style={{ fontSize: 32, display: 'block', marginBottom: 8 }} />
+                  Nenhuma sincronização de alunos ou turmas registrada ainda.
+                </div>
+              ) : (
+                <div style={{ overflowX: 'auto', background: '#fff', borderRadius: 12, border: '1px solid #e7dfd5' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, textAlign: 'left' }}>
+                    <thead>
+                      <tr style={{ background: '#faf6f0', borderBottom: '1px solid #e7dfd5', color: '#2c1a0e' }}>
+                        <th style={{ padding: '12px 16px' }}>Data / Hora</th>
+                        <th style={{ padding: '12px 16px' }}>Portal Oficial</th>
+                        <th style={{ padding: '12px 16px' }}>Turma</th>
+                        <th style={{ padding: '12px 16px' }}>Novos Alunos</th>
+                        <th style={{ padding: '12px 16px' }}>Mesclados</th>
+                        <th style={{ padding: '12px 16px' }}>Locais Mantidos</th>
+                        <th style={{ padding: '12px 16px' }}>Auditoria LGPD</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {syncLogs.map((log) => (
+                        <tr key={log.id} style={{ borderBottom: '1px solid #f5eee6' }}>
+                          <td style={{ padding: '12px 16px', color: '#665c54' }}>
+                            {new Date(log.timestamp).toLocaleDateString('pt-BR')} {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </td>
+                          <td style={{ padding: '12px 16px', fontWeight: 700, color: '#2c1a0e' }}>
+                            {log.portalName || log.portal}
+                          </td>
+                          <td style={{ padding: '12px 16px', color: '#665c54' }}>
+                            {log.classRef === 'all' ? 'Todas as turmas' : log.classRef}
+                          </td>
+                          <td style={{ padding: '12px 16px' }}>
+                            <span style={{ fontSize: 11.5, fontWeight: 700, color: '#16a34a', background: '#f0fdf4', padding: '2px 8px', borderRadius: 6, border: '1px solid #bbf7d0' }}>
+                              +{log.importedCount} novos
+                            </span>
+                          </td>
+                          <td style={{ padding: '12px 16px' }}>
+                            <span style={{ fontSize: 11.5, fontWeight: 700, color: '#0369a1', background: '#e0f2fe', padding: '2px 8px', borderRadius: 6, border: '1px solid #bae6fd' }}>
+                              🔗 {log.mergedCount}
+                            </span>
+                          </td>
+                          <td style={{ padding: '12px 16px' }}>
+                            <span style={{ fontSize: 11.5, fontWeight: 700, color: '#7a5c42', background: '#f5eee6', padding: '2px 8px', borderRadius: 6 }}>
+                              📌 {log.unmatchedLocalCount}
+                            </span>
+                          </td>
+                          <td style={{ padding: '12px 16px' }}>
+                            <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 6, background: '#e6f4ea', color: '#137333', border: '1px solid #a8dab5' }}>
+                              🔒 Sanitizado
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )
+            ) : (
+              recentFills.length === 0 ? (
+                <div style={{ padding: 40, textAlign: 'center', background: '#faf6f0', borderRadius: 12, color: '#a08060' }}>
+                  <i className="ti ti-receipt" style={{ fontSize: 32, display: 'block', marginBottom: 8 }} />
+                  Nenhum lançamento registrado recentemente na trilha de auditoria.
+                </div>
+              ) : (
+                <div style={{ overflowX: 'auto', background: '#fff', borderRadius: 12, border: '1px solid #e7dfd5' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, textAlign: 'left' }}>
+                    <thead>
+                      <tr style={{ background: '#faf6f0', borderBottom: '1px solid #e7dfd5', color: '#2c1a0e' }}>
+                        <th style={{ padding: '12px 16px' }}>Data / Hora</th>
+                        <th style={{ padding: '12px 16px' }}>Portal</th>
+                        <th style={{ padding: '12px 16px' }}>Ação Executada</th>
+                        <th style={{ padding: '12px 16px' }}>Turma / Referência</th>
+                        <th style={{ padding: '12px 16px' }}>Status LGPD</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {recentFills.map((log, idx) => (
+                        <tr key={idx} style={{ borderBottom: '1px solid #f5eee6' }}>
+                          <td style={{ padding: '12px 16px', color: '#665c54' }}>
+                            {log.date} {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </td>
+                          <td style={{ padding: '12px 16px', fontWeight: 700, color: '#2c1a0e' }}>
+                            {log.platformName || log.platform}
+                          </td>
+                          <td style={{ padding: '12px 16px', color: '#2c1a0e' }}>
+                            ⚡ {log.title}
+                          </td>
+                          <td style={{ padding: '12px 16px', color: '#665c54' }}>
+                            {log.classRef || 'Geral'}
+                          </td>
+                          <td style={{ padding: '12px 16px' }}>
+                            <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 6, background: '#e6f4ea', color: '#137333', border: '1px solid #a8dab5' }}>
+                              🔒 Sanitizado
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )
             )}
           </div>
         )}

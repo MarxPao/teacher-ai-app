@@ -8,6 +8,7 @@ import {
   applyReconciliationDecisions,
   LocalStudentRecord
 } from '@/lib/rosterReconciler'
+import { logTeacherSyncRecord } from '@/lib/portalSanitizer'
 import { COLOR, FONT, TEXT, RADIUS, SHADOW, BORDER, TRANSITION } from '@/styles/tokens'
 
 interface RosterReconciliationModalProps {
@@ -79,6 +80,18 @@ export default function RosterReconciliationModal({
       if (raw) currentStudents = JSON.parse(raw)
 
       const { updatedStudents, logSummary } = applyReconciliationDecisions(items, currentStudents, portalName)
+
+      // Registra no histórico de auditoria LGPD (teacher_sync_log)
+      logTeacherSyncRecord({
+        portal: portalName.toLowerCase().replace(/\s+/g, '_'),
+        portalName,
+        classRef: classRef || 'all',
+        actionType: 'read_roster',
+        importedCount: logSummary.created,
+        mergedCount: logSummary.merged,
+        unmatchedLocalCount: logSummary.preserved,
+        summaryDetails: logSummary
+      })
 
       localStorage.setItem('teacher_students', JSON.stringify(updatedStudents))
       window.dispatchEvent(new Event('storage'))

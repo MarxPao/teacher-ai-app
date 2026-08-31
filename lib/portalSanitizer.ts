@@ -43,8 +43,24 @@ export interface PortalActionLogRecord {
   detailsEncrypted?: string
 }
 
+export interface TeacherSyncLogRecord {
+  id: string
+  portal: string
+  portalName: string
+  classRef: string
+  actionType: string
+  importedCount: number
+  mergedCount: number
+  conflictsCount: number
+  unmatchedLocalCount: number
+  summaryDetails?: Record<string, any>
+  executedAt: string
+  timestamp: number
+}
+
 const CONSENT_STORAGE_KEY = 'teacher_portal_consent_v1'
 const ACTION_LOGS_STORAGE_KEY = 'teacher_portal_action_logs_v1'
+const SYNC_LOGS_STORAGE_KEY = 'teacher_sync_logs_v1'
 const CURRENT_TERMS_VERSION = 'v1.0_2026-08'
 const CURRENT_TERMS_HASH = 'sha256_pedagogical_agency_terms_v1_teacher_ai'
 
@@ -431,5 +447,63 @@ export function sanitizeInboundScrapedData(scrapedRows: Array<Record<string, any
 
     return cleanRow
   })
+}
+
+/**
+ * Registra um evento de reconciliação e sincronização de roster no log de auditoria LGPD
+ */
+export async function logTeacherSyncRecord(params: {
+  portal: string
+  portalName?: string
+  classRef?: string
+  actionType?: string
+  importedCount: number
+  mergedCount: number
+  conflictsCount?: number
+  unmatchedLocalCount: number
+  summaryDetails?: Record<string, any>
+}): Promise<TeacherSyncLogRecord> {
+  const now = new Date()
+  const record: TeacherSyncLogRecord = {
+    id: `sync_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    portal: params.portal,
+    portalName: params.portalName || params.portal,
+    classRef: params.classRef || 'all',
+    actionType: params.actionType || 'read_roster',
+    importedCount: params.importedCount,
+    mergedCount: params.mergedCount,
+    conflictsCount: params.conflictsCount || 0,
+    unmatchedLocalCount: params.unmatchedLocalCount,
+    summaryDetails: params.summaryDetails || {},
+    executedAt: now.toISOString(),
+    timestamp: now.getTime()
+  }
+
+  if (typeof localStorage !== 'undefined') {
+    try {
+      const raw = localStorage.getItem(SYNC_LOGS_STORAGE_KEY)
+      const list: TeacherSyncLogRecord[] = raw ? JSON.parse(raw) : []
+      const updated = [record, ...list]
+      localStorage.setItem(SYNC_LOGS_STORAGE_KEY, JSON.stringify(updated))
+      window.dispatchEvent(new CustomEvent('teacher:sync_logged', { detail: record }))
+    } catch {}
+  }
+
+  return record
+}
+
+/**
+ * Retorna todos os logs de sincronização de roster
+ */
+export function getTeacherSyncLogs(): TeacherSyncLogRecord[] {
+  if (typeof localStorage === 'undefined') return []
+  try {
+    const raw = localStorage.getItem(SYNC_LOGS_STORAGE_KEY)
+    if (!raw) return []
+    const parsed: TeacherSyncLogRecord[] = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
 }
 
