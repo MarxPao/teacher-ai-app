@@ -52,9 +52,14 @@ class TaskListener:
                 pass
 
     async def fetch_teacher_byok(self) -> Dict[str, str]:
-        """Busca o modelo BYOK configurado pelo professor no perfil do Supabase."""
+        """Busca o modelo BYOK configurado pelo professor no perfil do Supabase ou ambiente."""
+        default_byok = {
+            "provider": "openai",
+            "model": "gpt-4o",
+            "api_key": os.getenv("OPENAI_API_KEY", "") or os.getenv("GEMINI_API_KEY", "") or os.getenv("ANTHROPIC_API_KEY", "")
+        }
         if not self.supabase or not self.teacher_id:
-            return {"provider": "openai", "model": "gpt-4o"}
+            return default_byok
 
         try:
             res = self.supabase.table("profiles").select("settings").eq("id", self.teacher_id).execute()
@@ -62,14 +67,26 @@ class TaskListener:
                 settings = res.data[0].get("settings", {})
                 active_api = settings.get("active_api", {})
                 if active_api:
+                    prov = active_api.get("provider", "openai")
+                    model = active_api.get("model", "gpt-4o")
+                    key = active_api.get("api_key") or active_api.get("apiKey")
+                    if not key:
+                        apis = settings.get("apis", [])
+                        for a in apis:
+                            if (a.get("provider") or a.get("id")) == prov:
+                                key = a.get("apiKey") or a.get("api_key")
+                                break
+                    if not key:
+                        key = os.getenv(f"{prov.upper()}_API_KEY", "") or os.getenv("OPENAI_API_KEY", "") or os.getenv("GEMINI_API_KEY", "")
                     return {
-                        "provider": active_api.get("provider", "openai"),
-                        "model": active_api.get("model", "gpt-4o")
+                        "provider": prov,
+                        "model": model,
+                        "api_key": key or ""
                     }
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[Listener] Aviso ao buscar BYOK: {e}")
 
-        return {"provider": "openai", "model": "gpt-4o"}
+        return default_byok
 
     async def run_loop(self, on_status_change: Optional[Any] = None):
         """Loop contínuo de polling/realtime para detecção e execução de tarefas."""

@@ -24,6 +24,7 @@ import DatabaseStatusBadge from '@/components/DatabaseStatusBadge'
 import SharedDatabaseConsentModal from '@/components/SharedDatabaseConsentModal'
 import { isCustomSupabaseConfigured } from '@/lib/databaseConsent'
 import TeacherCalibrationsManager from '@/components/modules/TeacherCalibrationsManager'
+import ConnectedPortalsPanel from '@/components/modules/ConnectedPortalsPanel'
 import '@/lib/subjects/english'
 import '@/lib/subjects/portuguese'
 
@@ -48,11 +49,12 @@ const STORAGE_KEYS = [
   'teacher_document_style_prefs',
   'teacher_portal_action_logs_v1',
   'teacher_portal_consent_v1',
-  'teacher_app_calibrations_v1'
+  'teacher_app_calibrations_v1',
+  'teacher_discovered_portal_maps'
 ]
 
 export default function Settings() {
-  const [activeTab, setActiveTab] = useState<'general' | 'calibrations' | 'formatting' | 'audit' | 'privacy'>('general')
+  const [activeTab, setActiveTab] = useState<'general' | 'portals' | 'calibrations' | 'formatting' | 'audit' | 'privacy'>('general')
   const [cfg, setCfg] = useState<Config>({ school: '', teacher: '', apikey: '', instructions: '', cloudSyncUrl: '' })
   const [docPrefs, setDocPrefs] = useState<DocumentStylePrefs>(getGlobalDocumentPrefs())
   const [saved, setSaved] = useState(false)
@@ -275,6 +277,7 @@ export default function Settings() {
       <div style={{ display: 'flex', gap: 8, marginBottom: 20, borderBottom: '1px solid #d5c8bb', paddingBottom: 10, flexWrap: 'wrap' }}>
         {[
           { key: 'general', label: '⚙️ Geral & Identidade', icon: 'ti-settings' },
+          { key: 'portals', label: '🏫 Portais Conectados', icon: 'ti-plug-connected' },
           { key: 'calibrations', label: '🎛️ Calibrações & Padrões', icon: 'ti-adjustments-horizontal' },
           { key: 'formatting', label: '🎨 Formatação de Documentos', icon: 'ti-typography' },
           { key: 'audit', label: '🛡️ Auditoria de Ações', icon: 'ti-shield-check', badge: auditLogs.length },
@@ -307,6 +310,15 @@ export default function Settings() {
           </button>
         ))}
       </div>
+
+      {/* -- ABA 0: PORTAIS CONECTADOS -- */}
+      {activeTab === 'portals' && (
+        <ConnectedPortalsPanel
+          onNavigateToAiSettings={() => {
+            setActiveTab('general')
+          }}
+        />
+      )}
 
       {/* -- ABA 1: GERAL & IDENTIDADE -- */}
       {activeTab === 'general' && (

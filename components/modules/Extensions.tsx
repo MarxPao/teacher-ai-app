@@ -24,6 +24,7 @@ import SidecarPairingModal from '@/components/modules/SidecarPairingModal'
 import TrelloImportModal from '@/components/modules/TrelloImportModal'
 import RosterReconciliationModal from '@/components/modules/RosterReconciliationModal'
 import { reconcileRosterBatch, RosterReconciliationResult, LocalStudentRecord } from '@/lib/rosterReconciler'
+import ConnectedPortalsPanel from '@/components/modules/ConnectedPortalsPanel'
 import TrelloPortalConnect from './TrelloPortalConnect'
 
 export type ExtensionTabKey = 'mirror' | 'trello' | 'portals' | 'actions' | 'logs' | 'install'
@@ -766,113 +767,13 @@ export default function Extensions({ initialTab = 'mirror' }: Props) {
           <TrelloPortalConnect />
         )}
 
-        {/* ─── ABA 3: GERENCIAR PORTAIS & ESCOLAS (CRUD) ───────────────────── */}
+        {/* ─── ABA 3: GERENCIAR PORTAIS & ESCOLAS (CRUD & STATUS CONECTADO) ── */}
         {activeTab === 'portals' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
-              <div>
-                <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#2c1a0e' }}>Catálogo de Portais Escolares</h3>
-                <p style={{ margin: '4px 0 0', fontSize: 13, color: '#665c54' }}>Cadastre portais adicionais, ajuste URLs de login e cores de identificação.</p>
-              </div>
-              <button
-                onClick={openNewPortalModal}
-                style={{
-                  background: '#8b5e3c', color: '#ffffff', border: 'none',
-                  padding: '9px 16px', borderRadius: 8, fontSize: 13, fontWeight: 700,
-                  cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6
-                }}
-              >
-                <i className="ti ti-plus" /> Cadastrar Novo Portal
-              </button>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 16 }}>
-              {portals.map(p => (
-                <div
-                  key={p.id}
-                  style={{
-                    ...cardStyle,
-                    borderTop: `5px solid ${p.color}`,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    justifyContent: 'space-between',
-                    gap: 14
-                  }}
-                >
-                  <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
-                      <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <h4 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#2c1a0e' }}>{p.name}</h4>
-                          {p.isCustom && (
-                            <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: '#e0e7ff', color: '#3730a3' }}>Custom</span>
-                          )}
-                        </div>
-                        <span style={{ fontSize: 11.5, color: '#665c54', fontWeight: 600 }}>{p.category}</span>
-                      </div>
-
-                      <div style={{ display: 'flex', gap: 6 }}>
-                        <button
-                          onClick={() => openEditPortalModal(p)}
-                          title="Editar Portal"
-                          style={{ background: '#faf6f0', border: '1px solid #d5c8bb', borderRadius: 6, padding: '4px 8px', fontSize: 12, cursor: 'pointer' }}
-                        >
-                          ✏️
-                        </button>
-                        {p.isCustom && (
-                          <button
-                            onClick={async () => {
-                              if ((await showConfirm({ message: `Remover portal ${p.name}?` }))) {
-                                deletePortalProfile(p.id)
-                                loadData()
-                              }
-                            }}
-                            title="Remover"
-                            style={{ background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: 6, padding: '4px 8px', fontSize: 12, cursor: 'pointer', color: '#dc2626' }}
-                          >
-                            🗑️
-                          </button>
-                        )}
-                      </div>
-                    </div>
-
-                    <p style={{ margin: '0 0 12px', fontSize: 12.5, color: '#665c54', lineHeight: 1.4 }}>
-                      {p.description}
-                    </p>
-
-                    <div style={{ fontSize: 11.5, color: '#8b5e3c', background: '#faf6f0', padding: '6px 10px', borderRadius: 6 }}>
-                      🔗 <strong>URL:</strong> <span style={{ wordBreak: 'break-all' }}>{p.url || p.matchUrl}</span>
-                    </div>
-                  </div>
-
-                  <div style={{ display: 'flex', gap: 8, paddingTop: 10, borderTop: '1px solid #e7dfd5' }}>
-                    <button
-                      onClick={() => openPortal(p.id)}
-                      style={{
-                        flex: 1, padding: '8px 12px', borderRadius: 8, border: '1px solid #8b5e3c',
-                        background: '#fff', color: '#8b5e3c', fontSize: 12.5, fontWeight: 700,
-                        cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6
-                      }}
-                    >
-                      <i className="ti ti-external-link" /> Abrir no Navegador
-                    </button>
-                    <button
-                      onClick={() => {
-                        setSelectedPortal(p)
-                        setActiveTab('actions')
-                      }}
-                      style={{
-                        padding: '8px 12px', borderRadius: 8, border: 'none',
-                        background: '#8b5e3c', color: '#fff', fontSize: 12.5, fontWeight: 700, cursor: 'pointer'
-                      }}
-                    >
-                      Estúdio de Ações
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+          <ConnectedPortalsPanel
+            onNavigateToAiSettings={() => {
+              window.location.href = '/api-manager'
+            }}
+          />
         )}
 
         {/* ─── ABA 4: ESTÚDIO DE AÇÕES DA RAFINHA ───────────────────────────── */}

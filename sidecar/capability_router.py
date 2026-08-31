@@ -7,7 +7,8 @@ se o modelo BYOK configurado pelo professor possuir suporte confiável a visão 
 from typing import Tuple
 
 # Portais com seletores e formulários pré-mapeados e estáveis
-KNOWN_MAPPED_PORTALS = {"machado", "santacatarina", "plural", "cambridge", "teams", "canva"}
+# (Machado Sobrinho removido para forçar Camada 2 de Descoberta Autônoma por Visão)
+KNOWN_MAPPED_PORTALS = {"santacatarina", "plural", "cambridge", "teams", "canva"}
 
 # Provedores e modelos com suporte comprovado a Visão Computacional e Coordenadas
 VISION_CAPABLE_PROVIDERS = {"openai", "anthropic", "gemini"}

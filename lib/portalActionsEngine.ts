@@ -128,8 +128,125 @@ export async function getDiscoveredPortalMap(
 }
 
 /**
- * Persiste um mapa descoberto no banco.
- * Retorna o ID gerado ou null em caso de erro.
+ * Busca todos os mapas ativos descobertos (para listar status de todos os portais).
+ */
+export async function getAllDiscoveredPortalMaps(
+  supabase: any
+): Promise<DiscoveredPortalMap[]> {
+  // 1. Tenta carregar do Supabase se disponível
+  if (supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('discovered_portal_maps')
+        .select('*')
+        .is('superseded_by', null)
+        .order('last_validated_at', { ascending: false })
+
+      if (!error && data && data.length > 0) {
+        return data as DiscoveredPortalMap[]
+      }
+    } catch {}
+  }
+
+  // 2. Fallback para localStorage (modo offline / sandbox / demo)
+  if (typeof localStorage !== 'undefined') {
+    try {
+      const raw = localStorage.getItem('teacher_discovered_portal_maps')
+      if (raw) {
+        const list: DiscoveredPortalMap[] = JSON.parse(raw)
+        return list.filter(m => !m.superseded_by)
+      }
+    } catch {}
+  }
+
+  return []
+}
+
+// ============================================================================
+// Suporte a Visão Computacional (Capability Routing Frontend)
+// ============================================================================
+
+export const VISION_CAPABLE_PROVIDERS = ['openai', 'anthropic', 'gemini', 'google'] as const
+
+export const KNOWN_VISION_MODELS = [
+  'gpt-4o',
+  'gpt-4o-mini',
+  'gpt-4-turbo',
+  'claude-3-5-sonnet',
+  'claude-3-7-sonnet',
+  'claude-3-opus',
+  'claude-3-sonnet',
+  'gemini-2.0-flash',
+  'gemini-1.5-pro',
+  'gemini-1.5-flash',
+  'qwen-vl'
+]
+
+/**
+ * Verifica se o par provedor / modelo suporta visão computacional.
+ */
+export function modelSupportsVision(provider?: string, model?: string): boolean {
+  if (!provider) return false
+  const p = provider.toLowerCase().trim()
+  const isProvOk = VISION_CAPABLE_PROVIDERS.some(vp => p.includes(vp))
+  if (!isProvOk) return false
+  if (!model) return true
+  const m = model.toLowerCase().trim()
+  return KNOWN_VISION_MODELS.some(known => m.includes(known) || known.includes(m))
+}
+
+/**
+ * Retorna o status do modelo de visão BYOK atualmente ativo do professor.
+ */
+export function getTeacherVisionModelStatus(): {
+  hasVisionSupport: boolean
+  activeProvider: string
+  activeModel: string
+  reason?: string
+} {
+  if (typeof localStorage !== 'undefined') {
+    try {
+      const rawApis = localStorage.getItem('teacher_apis')
+      if (rawApis) {
+        const apis: any[] = JSON.parse(rawApis)
+        // Procura primeiro modelos de visão ativos com chave configurada
+        const visionApi = apis.find(a => a.apiKey && (a.id === 'openai' || a.id === 'gemini' || a.id === 'anthropic'))
+        if (visionApi) {
+          const isOk = modelSupportsVision(visionApi.id, visionApi.model)
+          const provName = visionApi.name || (visionApi.id === 'openai' ? 'OpenAI' : visionApi.id === 'gemini' ? 'Google Gemini' : visionApi.id === 'anthropic' ? 'Anthropic' : visionApi.id)
+          return {
+            hasVisionSupport: isOk,
+            activeProvider: provName,
+            activeModel: visionApi.model || 'Padrão',
+            reason: isOk ? undefined : `O modelo '${visionApi.model}' não possui suporte comprovado a visão computacional.`
+          }
+        }
+
+        // Se há alguma outra API ativa (ex: Groq text-only)
+        const anyActive = apis.find(a => a.apiKey)
+        if (anyActive) {
+          return {
+            hasVisionSupport: false,
+            activeProvider: anyActive.name || anyActive.id,
+            activeModel: anyActive.model || 'text-only',
+            reason: `O provedor '${anyActive.name || anyActive.id}' configurado opera apenas em modo texto (sem visão computacional para ler telas de portais).`
+          }
+        }
+      }
+    } catch {}
+  }
+
+  // Padrão do sistema caso nada configurado
+  return {
+    hasVisionSupport: true,
+    activeProvider: 'OpenAI',
+    activeModel: 'gpt-4o'
+  }
+}
+
+/**
+ * Persiste um mapa descoberto no Supabase.
+ * Retorna o ID gerado ou null em caso de erro / sem supabase.
  * Nunca persiste sem selectors.roster_table definido.
  */
 export async function saveDiscoveredPortalMap(
@@ -155,6 +272,45 @@ export async function saveDiscoveredPortalMap(
   }
 }
 
+/**
+ * Persiste um mapa descoberto no localStorage (para modo offline / sandbox / UI local).
+ */
+export function saveLocalDiscoveredPortalMap(
+  map: Omit<DiscoveredPortalMap, 'id' | 'discovered_at' | 'last_validated_at' | 'validation_failures' | 'superseded_by'>
+): string | null {
+  if (!map.discovered_selectors?.roster_table) return null
+  if (typeof localStorage === 'undefined') return null
+  const newId = `map_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
+  const record: DiscoveredPortalMap = {
+    ...map,
+    id: newId,
+    discovered_at: new Date().toISOString(),
+    last_validated_at: new Date().toISOString(),
+    validation_failures: 0,
+  }
+  try {
+    const raw = localStorage.getItem('teacher_discovered_portal_maps')
+    const list: DiscoveredPortalMap[] = raw ? JSON.parse(raw) : []
+    const filtered = list.filter(m => m.portal_domain !== map.portal_domain)
+    filtered.unshift(record)
+    localStorage.setItem('teacher_discovered_portal_maps', JSON.stringify(filtered))
+    return newId
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Extrai o domínio limpo a partir de uma URL ou host.
+ */
+export function extractDomain(urlOrDomain: string): string {
+  if (!urlOrDomain) return ''
+  let cleaned = urlOrDomain.trim().toLowerCase()
+  cleaned = cleaned.replace(/^https?:\/\//i, '').replace(/^www\./i, '')
+  cleaned = cleaned.split('/')[0].split('?')[0].split(':')[0]
+  return cleaned
+}
+
 export const DEFAULT_PORTALS: PortalProfileDef[] = [
   {
     id: 'machado',
@@ -174,25 +330,10 @@ export const DEFAULT_PORTALS: PortalProfileDef[] = [
         id: 'machado_read_roster',
         title: 'Importar Roster de Alunos e Turmas',
         type: 'read_roster',
-        description: 'Lê a lista oficial de chamada de alunos e matrículas direto do portal do Machado Sobrinho.',
+        description: 'Lê a lista oficial de chamada de alunos e matrículas direto do portal do Machado Sobrinho via Descoberta Autônoma.',
         executionMode: 'read_only',
         spokenConfirmation: 'Lista de alunos do Machado Sobrinho importada e pronta para conferência!',
-        paginationStrategy: {
-          type: 'next_button',
-          nextSelector: '.pagination .next, a[rel="next"], button.btn-proxima-pagina',
-          maxPages: 10,
-          delayBetweenPagesMs: 1000
-        },
-        fields: [
-          {
-            fieldId: 'classRef',
-            label: 'Turma',
-            type: 'select',
-            selectors: ['select[name*="turma"]', 'select[id*="turma"]'],
-            semanticKeywords: ['turma', 'classe', 'todas', 'all'],
-            description: 'Código da turma ou "all" para importar todas as turmas do professor'
-          }
-        ]
+        fields: []
       },
       {
         id: 'machado_diary',
