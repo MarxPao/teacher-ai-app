@@ -306,7 +306,7 @@ export async function exportPortalActionLogsCSV(): Promise<string> {
   return csv
 }
 
-// ─── 6. Validador de Perfis Comunitários (Anti-Vazamento de PII) ─────────────
+// ─── 6. Validador de Perfis Comunitários & Mapas Compartilhados (Anti-PII) ──
 export function validateCommunityPortalMap(profile: any): { valid: boolean; violations: string[] } {
   const violations: string[] = []
 
@@ -337,6 +337,53 @@ export function validateCommunityPortalMap(profile: any): { valid: boolean; viol
         })
       }
     })
+  }
+
+  return { valid: violations.length === 0, violations }
+}
+
+/**
+ * Validador estrito anti-vazamento de PII para discovered_portal_maps.
+ * Garante que nenhum mapa compartilhado (inclusive em redes White-Label) contenha:
+ * - Nomes próprios de alunos
+ * - CPFs ou números de documentos
+ * - E-mails ou telefones
+ * - Matrículas individuais nos seletores CSS
+ */
+export function validateDiscoveredPortalMapNoPII(map: {
+  portal_domain?: string
+  discovered_selectors?: Record<string, any>
+  pagination_strategy?: Record<string, any>
+}): { valid: boolean; violations: string[] } {
+  const violations: string[] = []
+
+  const FORBIDDEN_PATTERNS = [
+    { regex: /[0-9]{3}\.?[0-9]{3}\.?[0-9]{3}-?[0-9]{2}/, msg: 'CPF detectado no mapa' },
+    { regex: /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/, msg: 'E-mail detectado no mapa' },
+    { regex: /\(?\d{2}\)?\s?9?\d{4}-?\d{4}/, msg: 'Telefone detectado no mapa' },
+    { regex: /(maria|joao|pedro|lucas|gabriel|julia|bruno|carla|diego|eduarda|felipe|mariana|rodrigo|marcos|larissa|fernanda)/i, msg: 'Nome próprio individual detectado no seletor' },
+    { regex: /[0-9]{7,}/, msg: 'Número longo de matrícula detectado dentro do seletor' }
+  ]
+
+  const checkValue = (val: any, path: string) => {
+    if (typeof val === 'string') {
+      FORBIDDEN_PATTERNS.forEach(pat => {
+        if (pat.regex.test(val)) {
+          violations.push(`${path}: ${pat.msg} ("${val.slice(0, 40)}")`)
+        }
+      })
+    } else if (val && typeof val === 'object') {
+      Object.entries(val).forEach(([k, v]) => {
+        checkValue(v, `${path}.${k}`)
+      })
+    }
+  }
+
+  if (map.discovered_selectors) {
+    checkValue(map.discovered_selectors, 'discovered_selectors')
+  }
+  if (map.pagination_strategy) {
+    checkValue(map.pagination_strategy, 'pagination_strategy')
   }
 
   return { valid: violations.length === 0, violations }

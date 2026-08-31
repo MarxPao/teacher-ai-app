@@ -115,6 +115,20 @@ class PortalMapStore:
         if confidence not in ("high", "medium", "low"):
             raise ValueError(f"Confiança inválida: {confidence}")
 
+        # Guard de PII estrito antes de persistir mapa compartilhado
+        import re
+        FORBIDDEN_PII_PATTERNS = [
+            re.compile(r"[0-9]{3}\.?[0-9]{3}\.?[0-9]{3}-?[0-9]{2}"),
+            re.compile(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"),
+            re.compile(r"\(?\d{2}\)?\s?9?\d{4}-?\d{4}"),
+            re.compile(r"(maria|joao|pedro|lucas|gabriel|ana|julia|bruno|carla|diego|eduarda|felipe)", re.IGNORECASE),
+            re.compile(r"[0-9]{7,}"),
+        ]
+        selectors_str = str(selectors) + " " + str(pagination or "")
+        for pat in FORBIDDEN_PII_PATTERNS:
+            if pat.search(selectors_str):
+                raise ValueError("Violação de segurança LGPD: PII detectada nos seletores ou estrutura do mapa.")
+
         row = {
             "portal_domain": domain,
             "portal_display_name": display_name,

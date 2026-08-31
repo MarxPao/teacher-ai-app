@@ -16,9 +16,10 @@ import {
   saveLocalDiscoveredPortalMap
 } from '@/lib/portalActionsEngine'
 import { createBrowserTask, BrowserAutomationTask } from '@/lib/browserAutomationClient'
-import { sanitizeOutboundPayload } from '@/lib/portalSanitizer'
+import { sanitizeOutboundPayload, hasActivePortalConsent } from '@/lib/portalSanitizer'
 import { reconcileRosterBatch, RosterReconciliationResult, LocalStudentRecord } from '@/lib/rosterReconciler'
 import RosterReconciliationModal from '@/components/modules/RosterReconciliationModal'
+import PortalConsentModal from '@/components/PortalConsentModal'
 
 export interface ConnectedPortalsPanelProps {
   onNavigateToAiSettings?: () => void
@@ -64,6 +65,10 @@ export default function ConnectedPortalsPanel({
   const [reconcilePortalName, setReconcilePortalName] = useState('')
   const [reconcileMapSource, setReconcileMapSource] = useState<'known_map' | 'discovered' | 'fallback_rediscovered' | undefined>()
   const [reconcileWarnTeacher, setReconcileWarnTeacher] = useState<'new_portal' | 'layout_changed' | undefined>()
+
+  // Termo Único de Consentimento
+  const [showConsentModal, setShowConsentModal] = useState(false)
+  const [pendingReadParams, setPendingReadParams] = useState<{ portalName: string; portalUrl: string; existingProfile?: PortalProfileDef } | null>(null)
 
   // Status de Visão do BYOK
   const visionStatus = useMemo(() => getTeacherVisionModelStatus(), [])
@@ -148,6 +153,12 @@ export default function ConnectedPortalsPanel({
 
   // Inicia leitura de portal (do zero ou re-leitura)
   const handleStartPortalRead = async (portalName: string, portalUrl: string, existingProfile?: PortalProfileDef) => {
+    if (!hasActivePortalConsent()) {
+      setPendingReadParams({ portalName, portalUrl, existingProfile })
+      setShowConsentModal(true)
+      return
+    }
+
     if (!portalUrl.trim()) {
       toast.error('Informe a URL do portal antes de iniciar a leitura.')
       return
@@ -741,6 +752,23 @@ export default function ConnectedPortalsPanel({
           </div>
         </div>
       )}
+
+      {/* ─── TERMO ÚNICO DE CONSENTIMENTO LGPD (PORTAL AGENCY) ─────────────── */}
+      <PortalConsentModal
+        isOpen={showConsentModal}
+        onConsented={() => {
+          setShowConsentModal(false)
+          if (pendingReadParams) {
+            const { portalName, portalUrl, existingProfile } = pendingReadParams
+            setPendingReadParams(null)
+            handleStartPortalRead(portalName, portalUrl, existingProfile)
+          }
+        }}
+        onCancel={() => {
+          setShowConsentModal(false)
+          setPendingReadParams(null)
+        }}
+      />
 
       {/* ─── MODAL DE RECONCILIAÇÃO DE ROSTER (RESULTADO DO SCRAPE) ──────── */}
       {reconciliationResult && (

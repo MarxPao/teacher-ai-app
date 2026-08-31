@@ -10,6 +10,8 @@
  * ============================================================================
  */
 
+import { validateDiscoveredPortalMapNoPII } from '@/lib/portalSanitizer'
+
 export interface FieldMappingDef {
   fieldId: string
   label: string
@@ -317,6 +319,14 @@ export async function saveDiscoveredPortalMap(
   supabase: any
 ): Promise<string | null> {
   if (!supabase || !map.discovered_selectors?.roster_table) return null
+
+  // Guard de PII estrito: impede salvamento de mapa com nomes próprios, CPFs ou e-mails
+  const piiCheck = validateDiscoveredPortalMapNoPII(map)
+  if (!piiCheck.valid) {
+    console.error('[Security/LGPD] Tentativa de salvar mapa com violação de PII bloqueada:', piiCheck.violations)
+    return null
+  }
+
   try {
     const { data, error } = await supabase
       .from('discovered_portal_maps')
@@ -342,6 +352,14 @@ export function saveLocalDiscoveredPortalMap(
   map: Omit<DiscoveredPortalMap, 'id' | 'discovered_at' | 'last_validated_at' | 'validation_failures' | 'superseded_by'>
 ): string | null {
   if (!map.discovered_selectors?.roster_table) return null
+
+  // Guard de PII estrito
+  const piiCheck = validateDiscoveredPortalMapNoPII(map)
+  if (!piiCheck.valid) {
+    console.error('[Security/LGPD] Tentativa de salvar mapa local com violação de PII bloqueada:', piiCheck.violations)
+    return null
+  }
+
   if (typeof localStorage === 'undefined') return null
   const newId = `map_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
   const record: DiscoveredPortalMap = {

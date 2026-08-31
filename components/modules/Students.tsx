@@ -8,8 +8,9 @@ import StudentTimeline from '@/components/charts/StudentTimeline'
 import RosterReconciliationModal from '@/components/modules/RosterReconciliationModal'
 import { reconcileRosterBatch, RosterReconciliationResult, LocalStudentRecord } from '@/lib/rosterReconciler'
 import { createBrowserTask, BrowserAutomationTask, DiffItem } from '@/lib/browserAutomationClient'
-import { sanitizeOutboundPayload } from '@/lib/portalSanitizer'
+import { sanitizeOutboundPayload, hasActivePortalConsent } from '@/lib/portalSanitizer'
 import AutomationDiffModal from '@/components/modules/AutomationDiffModal'
+import PortalConsentModal from '@/components/PortalConsentModal'
 
 /* ─── Tipos ─────────────────────────────────────────────────────────────────── */
 interface School    { id: string; name: string; color: string }
@@ -167,6 +168,7 @@ export default function Students() {
   const [reconcilePortal, setReconcilePortal] = useState<string>('Machado Sobrinho')
   const [reconcileMapSource, setReconcileMapSource] = useState<'known_map' | 'discovered' | 'fallback_rediscovered' | undefined>()
   const [reconcileWarnTeacher, setReconcileWarnTeacher] = useState<'new_portal' | 'layout_changed' | undefined>()
+  const [showPortalConsentModal, setShowPortalConsentModal] = useState(false)
   const [showPortalSelectModal, setShowPortalSelectModal] = useState(false)
   const [importPortalName, setImportPortalName] = useState('Machado Sobrinho')
   const [importPortalUrl, setImportPortalUrl] = useState('https://machadosobrinho.paineldoaluno.com.br/professor_notas')
@@ -370,7 +372,13 @@ export default function Students() {
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
           <button
-            onClick={() => setShowPortalSelectModal(true)}
+            onClick={() => {
+              if (!hasActivePortalConsent()) {
+                setShowPortalConsentModal(true)
+              } else {
+                setShowPortalSelectModal(true)
+              }
+            }}
             disabled={isImportingRoster}
             style={{
               ...S.btn,
@@ -1214,6 +1222,16 @@ export default function Students() {
           </div>
         </div>
       )}
+
+      {/* ─── TERMO ÚNICO DE CONSENTIMENTO LGPD (PORTAL AGENCY) ─────────────── */}
+      <PortalConsentModal
+        isOpen={showPortalConsentModal}
+        onConsented={() => {
+          setShowPortalConsentModal(false)
+          setShowPortalSelectModal(true)
+        }}
+        onCancel={() => setShowPortalConsentModal(false)}
+      />
 
       {/* ─── MODAL DE RECONCILIAÇÃO DE ROSTER (PORTAL ESCOLAR) ─────────────── */}
       {reconciliationResult && (

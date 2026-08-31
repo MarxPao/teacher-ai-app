@@ -28,6 +28,7 @@ import {
   hasActivePortalConsent,
   recordPortalConsent,
   validateCommunityPortalMap,
+  validateDiscoveredPortalMapNoPII,
   logPortalActionRecord,
   getPortalActionLogs,
   purgePortalActionLogs,
@@ -102,5 +103,37 @@ describe('portalSanitizer & LGPD Compliance Suite', () => {
     await purgePortalActionLogs()
     const purged = await getPortalActionLogs()
     expect(purged.length).toBe(0)
+  })
+
+  it('validateDiscoveredPortalMapNoPII bloqueia mapas contendo nomes de alunos, CPFs ou matrículas', () => {
+    const cleanMap = {
+      portal_domain: 'paineldoaluno.com.br',
+      discovered_selectors: {
+        roster_table: 'table.grid-alunos',
+        name_column: 1,
+        id_column: 0
+      }
+    }
+    expect(validateDiscoveredPortalMapNoPII(cleanMap).valid).toBe(true)
+
+    const dirtyMapName = {
+      portal_domain: 'paineldoaluno.com.br',
+      discovered_selectors: {
+        roster_table: 'table tr[data-student="mariana_silva"]'
+      }
+    }
+    const nameCheck = validateDiscoveredPortalMapNoPII(dirtyMapName)
+    expect(nameCheck.valid).toBe(false)
+    expect(nameCheck.violations.length).toBeGreaterThan(0)
+
+    const dirtyMapCPF = {
+      portal_domain: 'paineldoaluno.com.br',
+      discovered_selectors: {
+        roster_table: 'table',
+        custom_query: 'input[name="123.456.789-00"]'
+      }
+    }
+    const cpfCheck = validateDiscoveredPortalMapNoPII(dirtyMapCPF)
+    expect(cpfCheck.valid).toBe(false)
   })
 })
