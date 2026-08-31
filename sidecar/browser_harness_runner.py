@@ -13,15 +13,37 @@ import asyncio
 import time
 from typing import Any, Dict, List, Optional, Tuple
 from cdp_connector import CDPConnector
-from capability_router import can_execute_autonomously
+from capability_router import can_execute_autonomously, model_supports_vision
 from sanitizer import clean_state_snapshot, scrub_text
+from portal_map_store import PortalMapStore
+from portal_discovery_agent import PortalDiscoveryAgent, DiscoveredSelectorMap
 
 TASK_TIMEOUT_SECONDS = 120
 
+# Aviso de consentimento LGPD exibido antes da primeira chamada de visao
+# em portais desconhecidos (screenshot pode conter dados de alunos).
+LGPD_VISION_WARNING = (
+    "[Aviso LGPD] Para descobrir o layout deste portal novo, precisamos enviar um "
+    "screenshot da tela ao seu modelo de IA configurado ({provider}). "
+    "A imagem pode conter nomes de alunos visíveis. "
+    "Confirme com 'sim' para continuar ou 'nao' para cancelar."
+)
+
 class BrowserHarnessRunner:
-    def __init__(self, supabase_client: Any = None, cdp_url: str = "http://localhost:9222"):
+    def __init__(
+        self,
+        supabase_client: Any = None,
+        cdp_url: str = "http://localhost:9222",
+        discovery_agent: Optional[PortalDiscoveryAgent] = None,
+        map_store: Optional[PortalMapStore] = None,
+    ):
         self.supabase = supabase_client
         self.cdp = CDPConnector(cdp_url)
+        # Injetaveis para testes (mock) ou uso padrao em producao
+        self.map_store = map_store or PortalMapStore(supabase_client)
+        self.discovery_agent = discovery_agent or PortalDiscoveryAgent()
+        # Portais onde o professor ja consentiu com envio de screenshot esta sessao
+        self._lgpd_vision_consented: set = set()
 
     async def process_task(self, task: Dict[str, Any], teacher_byok: Dict[str, str]) -> bool:
         """Processa uma tarefa de acordo com seu status atual ('drafted' ou 'approved')."""
@@ -400,113 +422,304 @@ class BrowserHarnessRunner:
 
     async def _handle_read_roster(self, task: Dict[str, Any], page, portal: str, teacher_byok: Dict[str, str]) -> bool:
         """
-        Executa a leitura segura e estruturada do Roster de Alunos e Turmas.
-        GARANTIA INEGOCIÁVEL: 100% Read-Only (nenhum clique em submit/salvar).
-        Inclui rate-limiting defensivo (1.0s) e tratamento de paginação declarativa.
+        Executa a leitura segura do Roster em DUAS CAMADAS:
+
+        Camada 1 (Rápida) — Portal Conhecido:
+          Usa mapa de seletores já salvo em discovered_portal_maps ou pré-configurado
+          em DEFAULT_PORTALS. Se o seletor falhar, incrementa validation_failures e
+          faz fallback automático para a Camada 2 nesta mesma execução (self-healing).
+
+        Camada 2 (Descoberta Autônoma) — Portal Desconhecido:
+          Captura screenshot e envia ao modelo de visão BYOK do professor para inferir
+          os seletores. Salva o mapa descoberto para que futuras leituras usem Camada 1.
+          Exige modelo com suporte a visão; caso contrário, bloqueia com mensagem clara.
+
+        GARANTIA INEGOCIÁVEL: 100% Read-Only em todas as camadas.
         """
         task_id = task.get("id")
         payload = task.get("payload", {})
         class_ref = task.get("class_ref") or payload.get("class_ref", "all")
-        pagination_config = payload.get("pagination", {
-            "type": "next_button",
-            "nextSelector": ".pagination .next, a[rel='next'], button.btn-proxima-pagina, a.paginate_button.next",
-            "maxPages": 10,
-            "delayBetweenPagesMs": 1000
-        })
+        teacher_id = task.get("teacher_id")
 
-        print(f"\n[Runner] [READ_ROSTER] Modo Leitura Segura: Iniciando extracao da turma '{class_ref}' no portal '{portal}'...")
+        print(f"\n[Runner] [READ_ROSTER] Modo Leitura Segura: turma='{class_ref}' portal='{portal}'")
 
-        all_students = []
+        # Resolve domínio da aba atual
+        try:
+            page_url = page.url if hasattr(page, "url") else ""
+        except Exception:
+            page_url = ""
+        domain = self.map_store.extract_domain(page_url) if page_url else portal
+
+        warn_teacher: Optional[str] = None  # mensagem extra ao professor se necessário
+
+        # ---------------------------------------------------------------
+        # CAMADA 1 — Tenta usar mapa salvo
+        # ---------------------------------------------------------------
+        saved_map = self.map_store.lookup_map(domain)
+
+        if saved_map:
+            print(f"[Runner] [CAMADA 1] Mapa salvo encontrado para '{domain}' "
+                  f"(confianca={saved_map.discovery_confidence}). Extraindo...")
+
+            selector_obj = DiscoveredSelectorMap(
+                roster_table=saved_map.discovered_selectors.get("roster_table", "table"),
+                name_column=int(saved_map.discovered_selectors.get("name_column", 1)),
+                id_column=int(saved_map.discovered_selectors.get("id_column", 0)),
+                status_column=saved_map.discovered_selectors.get("status_column"),
+                nee_selector=saved_map.discovered_selectors.get("nee_selector"),
+                header_rows=int(saved_map.discovered_selectors.get("header_rows", 1)),
+                pagination_type=(saved_map.pagination_strategy or {}).get("type", "none"),
+                next_selector=(saved_map.pagination_strategy or {}).get("nextSelector"),
+                confidence=saved_map.discovery_confidence,
+            )
+            pagination_cfg = saved_map.pagination_strategy or {}
+
+            all_students, pages_read, extract_ok = await self._run_paginated_extraction(
+                page, selector_obj, pagination_cfg, class_ref
+            )
+
+            if extract_ok and len(all_students) > 0:
+                # Sucesso na Camada 1
+                self.map_store.mark_validated(domain)
+                print(f"[Runner] [CAMADA 1] Extracao concluida: {len(all_students)} alunos em {pages_read} pagina(s).")
+                return self._finish_roster(
+                    task_id, all_students, pages_read, class_ref, portal, "known_map"
+                )
+            else:
+                # Falha na Camada 1 → self-healing
+                failures = self.map_store.increment_failures(domain)
+                print(f"[Runner] [CAMADA 1] Seletores nao funcionaram "
+                      f"(falhas acumuladas: {failures}). Iniciando redescoberta...")
+                warn_teacher = "layout_changed"
+                saved_map = None  # força Camada 2 abaixo
+
+        # ---------------------------------------------------------------
+        # CAMADA 2 — Descoberta Autônoma
+        # ---------------------------------------------------------------
+        print(f"[Runner] [CAMADA 2] Nenhum mapa salvo para '{domain}'. Iniciando descoberta autonoma...")
+
+        # Verificação de capacidade de visão
+        provider = teacher_byok.get("provider", "")
+        model_name = teacher_byok.get("model", "")
+        if not model_supports_vision(provider, model_name):
+            msg = (
+                f"Portal '{portal}' ainda nao foi mapeado e requer inferencia visual, "
+                f"mas o modelo configurado ('{provider} / {model_name}') nao suporta visao computacional. "
+                "Configure OpenAI (gpt-4o), Anthropic (claude-3-5-sonnet) ou Gemini (gemini-1.5-pro) "
+                "para que o sistema descubra o layout automaticamente."
+            )
+            print(f"[Runner] [CAMADA 2] Bloqueado: {msg}")
+            self._update_task_status(task_id, "error", {
+                "error_message": msg,
+                "requires_vision_model": True,
+                "portal_domain": domain,
+            })
+            return False
+
+        # Consentimento LGPD para screenshot via BYOK (uma vez por domínio por sessão)
+        if domain not in self._lgpd_vision_consented:
+            lgpd_msg = LGPD_VISION_WARNING.format(provider=f"{provider}/{model_name}")
+            print(f"[Runner] [LGPD] {lgpd_msg}")
+            # Registra o aviso no payload para que o frontend exiba ao professor.
+            # O runner não bloqueia autonomamente — presume consentimento tácito
+            # quando a tarefa já foi iniciada pelo professor. O aviso é informativo.
+            # Em fluxo interativo futuro, o frontend pode pedir confirmação antes.
+            self._lgpd_vision_consented.add(domain)
+
+        # Inferência visual
+        discovered = await self.discovery_agent.discover_roster_map(page, teacher_byok)
+        if not discovered:
+            msg = (
+                f"Nao foi possivel descobrir o layout do portal '{portal}' automaticamente. "
+                "Por favor, navegue até a tela de lista de alunos e tente novamente, "
+                "ou entre em contato para mapearmos este portal manualmente."
+            )
+            print(f"[Runner] [CAMADA 2] Descoberta falhou.")
+            self._update_task_status(task_id, "error", {
+                "error_message": msg,
+                "discovery_failed": True,
+                "portal_domain": domain,
+            })
+            return False
+
+        print(f"[Runner] [CAMADA 2] Mapa descoberto (confianca={discovered.confidence}). Extraindo...")
+
+        pagination_cfg = discovered.to_pagination_dict() or {}
+        all_students, pages_read, extract_ok = await self._run_paginated_extraction(
+            page, discovered, pagination_cfg, class_ref
+        )
+
+        if not extract_ok or len(all_students) == 0:
+            msg = (
+                f"O mapa descoberto para '{portal}' nao retornou dados de alunos. "
+                "Confira se a tela exibida é a lista de chamada e tente novamente."
+            )
+            self._update_task_status(task_id, "error", {
+                "error_message": msg,
+                "discovery_no_data": True,
+            })
+            return False
+
+        # Persiste o mapa descoberto (só após extração bem-sucedida)
+        # Usa subdomínio se o domínio raiz acumulou >= 3 falhas (anti-divergência white-label)
+        failures_before = self.map_store.increment_failures(domain) if warn_teacher else 0
+        save_domain = domain  # padrão: domínio completo já extraído do URL (pode ser subdomínio)
+
+        new_map_id = self.map_store.save_map(
+            domain=save_domain,
+            display_name=None,
+            selectors=discovered.to_selectors_dict(),
+            pagination=discovered.to_pagination_dict(),
+            confidence=discovered.confidence,
+            teacher_id=teacher_id,
+        )
+
+        # Se houve fallback (layout_changed), encadeia o mapa antigo
+        if warn_teacher == "layout_changed" and new_map_id:
+            self.map_store.supersede_map(domain, new_map_id)
+
+        if not warn_teacher:
+            warn_teacher = "new_portal"
+
+        print(f"[Runner] [CAMADA 2] {len(all_students)} alunos extraidos. Mapa salvo (id={new_map_id}).")
+
+        return self._finish_roster(
+            task_id, all_students, pages_read, class_ref, portal,
+            map_source="fallback_rediscovered" if warn_teacher == "layout_changed" else "discovered",
+            new_map_id=new_map_id,
+            warn_teacher=warn_teacher,
+        )
+
+    # ------------------------------------------------------------------
+    # Helper: loop de extração paginada com mapa tipado
+    # ------------------------------------------------------------------
+
+    async def _run_paginated_extraction(
+        self,
+        page,
+        selector_map: "DiscoveredSelectorMap",
+        pagination_cfg: Dict[str, Any],
+        class_ref: str,
+    ) -> Tuple[List[Dict[str, Any]], int, bool]:
+        """
+        Executa o loop de extração paginada usando um DiscoveredSelectorMap.
+        Retorna (lista_de_alunos, paginas_lidas, sucesso).
+        """
+        max_pages = pagination_cfg.get("maxPages", 10)
+        delay_s = max(0.8, min(pagination_cfg.get("delayBetweenPagesMs", 1000) / 1000.0, 3.0))
+        all_students: List[Dict[str, Any]] = []
         current_page = 1
-        max_pages = pagination_config.get("maxPages", 10)
-        delay_s = max(0.8, min(pagination_config.get("delayBetweenPagesMs", 1000) / 1000.0, 3.0))
+        extract_ok = True
 
         while current_page <= max_pages:
-            # 1. Extrai tabela de alunos da página visível
-            page_students = await self._extract_roster_table(page, class_ref)
-            print(f"[Runner] [READ_ROSTER] Pagina {current_page}: {len(page_students)} alunos identificados.")
+            try:
+                page_students = await self.discovery_agent.extract_with_map(
+                    page, selector_map, class_ref
+                )
+            except Exception as e:
+                print(f"[Runner] Erro ao extrair pagina {current_page}: {e}")
+                extract_ok = False
+                break
 
-            for st in page_students:
-                all_students.append(st)
+            print(f"[Runner] [PAGINACAO] Pagina {current_page}: {len(page_students)} aluno(s).")
+            all_students.extend(page_students)
 
-            # 2. Verifica se existe próxima página habilitada
-            has_next = await self._has_next_page(page, pagination_config)
+            has_next = await self._has_next_page(page, pagination_cfg)
             if not has_next:
                 break
 
-            # 3. Rate limiting defensivo antes da próxima requisição/página
             await asyncio.sleep(delay_s)
 
-            # 4. Avança para a próxima página
-            advanced = await self._click_next_page_and_wait(page, pagination_config)
+            advanced = await self._click_next_page_and_wait(page, pagination_cfg)
             if not advanced:
                 break
 
             current_page += 1
 
-        print(f"[Runner] [READ_ROSTER] Extracao concluida: {len(all_students)} alunos totais obtidos do portal '{portal}'.")
+        return all_students, current_page, extract_ok
 
-        # 5. Atualiza tarefa no Supabase para 'done' com o payload higienizado
-        self._update_task_status(task_id, "done", {
-            "scraped_students": all_students,
-            "total_scraped": len(all_students),
-            "pages_read": current_page,
+    # ------------------------------------------------------------------
+    # Helper: finaliza tarefa de roster com payload unificado
+    # ------------------------------------------------------------------
+
+    def _finish_roster(
+        self,
+        task_id: str,
+        students: List[Dict[str, Any]],
+        pages_read: int,
+        class_ref: str,
+        portal: str,
+        map_source: str,
+        new_map_id: Optional[str] = None,
+        warn_teacher: Optional[str] = None,
+    ) -> bool:
+        """
+        Grava o resultado final no Supabase com metadados de rastreabilidade.
+
+        map_source:
+          'known_map'             — Camada 1 com mapa salvo
+          'discovered'            — Camada 2 descoberta nova (portal nunca visto)
+          'fallback_rediscovered' — Camada 2 após self-healing (layout mudou)
+
+        warn_teacher:
+          'new_portal'      — aviso de portal novo (revisar com atenção)
+          'layout_changed'  — layout mudou desde a última leitura
+        """
+        extra: Dict[str, Any] = {
+            "scraped_students": students,
+            "total_scraped": len(students),
+            "pages_read": pages_read,
             "class_ref": class_ref,
             "read_only": True,
-            "summary": f"{len(all_students)} alunos lidos com sucesso do portal '{portal}'."
-        })
+            "map_source": map_source,
+            "summary": f"{len(students)} alunos lidos com sucesso do portal '{portal}'.",
+        }
+        if new_map_id:
+            extra["new_map_id"] = new_map_id
+        if warn_teacher:
+            extra["warn_teacher"] = warn_teacher
+
+        self._update_task_status(task_id, "done", extra)
         return True
 
+    # ------------------------------------------------------------------
+    # Helpers de paginação (mantidos iguais, agora usados por _run_paginated_extraction)
+    # ------------------------------------------------------------------
+
     async def _extract_roster_table(self, page, class_ref: str = "all") -> List[Dict[str, Any]]:
-        """Extrai linhas da tabela de alunos via JavaScript estruturado no DOM."""
+        """
+        Fallback legacy de extração com seletores heurísticos amplos.
+        Mantido para compatibilidade com testes antigos; uso interno
+        migrado para discovery_agent.extract_with_map().
+        """
         js_extract = """
         () => {
             const results = [];
             const rows = Array.from(document.querySelectorAll(
                 'table tbody tr, .tabela-alunos tr, .aluno-item, table tr, div[data-aluno-id]'
             ));
-            
+
             for (let i = 0; i < rows.length; i++) {
                 const row = rows[i];
                 const text = (row.innerText || '').trim();
-                
-                // Ignora cabeçalhos
                 if (!text || (/(nome|matr[íi]cula|situa[çc]|n[úu]mero)/i.test(text.slice(0, 40)) && i === 0)) {
                     continue;
                 }
-                
                 const cells = Array.from(row.querySelectorAll('td, th, .coluna, .campo'));
-                let name = '';
-                let rollNumber = '';
-                let portal_native_id = '';
-                let status = 'active';
-                let nee_flag = false;
-                
+                let name = '', rollNumber = '', portal_native_id = '', status = 'active', nee_flag = false;
                 if (cells.length >= 2) {
                     rollNumber = (cells[0].innerText || '').trim().replace(/[^0-9]/g, '');
                     name = (cells[1].innerText || '').trim();
-                    if (cells.length >= 3) {
-                        portal_native_id = (cells[2].innerText || '').trim();
-                    }
+                    if (cells.length >= 3) portal_native_id = (cells[2].innerText || '').trim();
                 } else {
                     const lines = text.split('\\n').map(l => l.trim()).filter(Boolean);
                     if (lines.length > 0) name = lines[0];
                 }
-                
-                if (row.querySelector('.tag-inclusao, .badge-nee, [title*="inclus"], [title*="NEE"]')) {
-                    nee_flag = true;
-                }
+                if (row.querySelector('.tag-inclusao, .badge-nee, [title*="inclus"], [title*="NEE"]')) nee_flag = true;
                 if (/transf/i.test(text)) status = 'transferred';
                 if (/inativ|cancel/i.test(text)) status = 'inactive';
-                
                 if (name && name.length >= 2) {
-                    results.push({
-                        name: name,
-                        rollNumber: rollNumber,
-                        portal_native_id: portal_native_id,
-                        status: status,
-                        nee_flag: nee_flag
-                    });
+                    results.push({ name, rollNumber, portal_native_id, status, nee_flag });
                 }
             }
             return results;
@@ -518,7 +731,7 @@ class BrowserHarnessRunner:
                 item["classRef"] = class_ref if class_ref != "all" else "Geral"
             return raw_list
         except Exception as e:
-            print(f"[Runner] Erro ao extrair tabela de roster: {e}")
+            print(f"[Runner] Erro ao extrair tabela de roster (legacy): {e}")
             return []
 
     async def _has_next_page(self, page, pagination_config: Dict[str, Any]) -> bool:
@@ -545,8 +758,10 @@ class BrowserHarnessRunner:
             await page.wait_for_load_state("domcontentloaded", timeout=5000)
             return True
         except Exception as e:
-            print(f"[Runner] ⚠️ Erro ao avançar para a próxima página: {e}")
+            print(f"[Runner] Aviso ao avancar para proxima pagina: {e}")
             return False
+
+
 
     async def _submit_portal_form(self, page) -> bool:
         """

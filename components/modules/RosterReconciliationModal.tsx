@@ -17,6 +17,10 @@ interface RosterReconciliationModalProps {
   result: RosterReconciliationResult
   onClose: () => void
   onSuccess: (updatedCount: number) => void
+  /** Origem do mapa usado na leitura: 'known_map' | 'discovered' | 'fallback_rediscovered' */
+  mapSource?: 'known_map' | 'discovered' | 'fallback_rediscovered'
+  /** Aviso contextual gerado pelo runner: 'new_portal' | 'layout_changed' */
+  warnTeacher?: 'new_portal' | 'layout_changed'
 }
 
 export default function RosterReconciliationModal({
@@ -25,7 +29,9 @@ export default function RosterReconciliationModal({
   classRef,
   result: initialResult,
   onClose,
-  onSuccess
+  onSuccess,
+  mapSource,
+  warnTeacher,
 }: RosterReconciliationModalProps) {
   const [items, setItems] = useState<ReconciliationItem[]>(initialResult.items)
   const [isApplying, setIsApplying] = useState(false)
@@ -137,6 +143,48 @@ export default function RosterReconciliationModal({
             ×
           </button>
         </div>
+
+        {/* Banners Contextuais de Descoberta Automática */}
+        {warnTeacher === 'layout_changed' && (
+          <div style={{
+            display: 'flex', alignItems: 'flex-start', gap: 10,
+            padding: '12px 14px', borderRadius: 8,
+            background: '#fffbeb', border: '1px solid #fde68a',
+          }}>
+            <i className="ti ti-refresh-alert" style={{ fontSize: 18, color: '#b45309', flexShrink: 0, marginTop: 1 }} />
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#92400e', marginBottom: 2 }}>
+                Layout do portal atualizado automaticamente
+              </div>
+              <div style={{ fontSize: 12, color: '#78350f', lineHeight: 1.5 }}>
+                O layout do portal parece ter mudado desde a última leitura.
+                O sistema redescobriu o mapeamento automaticamente e usou o novo layout.
+                <strong> Revise os dados abaixo com atenção extra antes de confirmar.</strong>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {warnTeacher === 'new_portal' && (
+          <div style={{
+            display: 'flex', alignItems: 'flex-start', gap: 10,
+            padding: '12px 14px', borderRadius: 8,
+            background: '#eff6ff', border: '1px solid #bfdbfe',
+          }}>
+            <i className="ti ti-map-search" style={{ fontSize: 18, color: '#2563eb', flexShrink: 0, marginTop: 1 }} />
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#1e40af', marginBottom: 2 }}>
+                Portal descoberto pela primeira vez 🔍
+              </div>
+              <div style={{ fontSize: 12, color: '#1e3a8a', lineHeight: 1.5 }}>
+                Este é um portal novo para o sistema. O mapeamento foi descoberto automaticamente
+                e salvo para acelerar futuras leituras.
+                <strong> Revise se os dados (nomes, matrículas) foram lidos corretamente antes de confirmar.</strong>
+                {' '}Nas próximas vezes, a leitura usará o mapa salvo — sem precisar de inferência visual.
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* 5 Contadores Estratégicos */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>

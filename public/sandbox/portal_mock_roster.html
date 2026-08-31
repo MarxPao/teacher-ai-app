@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Portal Escolar Sandbox — Lista de Alunos (Roster)</title>
+  <!--
+    portal_mock_roster.html
+    Sandbox para testar o Engine Universal de Leitura de Portal (Camada 2).
+    Propositalmente NÃO tem mapa pré-configurado no portalActionsEngine.ts —
+    o agente deve descobrir os seletores autonomamente.
+
+    Atributo data-portal-version: altere de "v1" para "v2" para simular
+    mudança de layout (Cenário C — Self-Healing).
+  -->
+  <style>
+    body { font-family: 'Segoe UI', sans-serif; background: #f1f5f9; margin: 0; padding: 24px; }
+    .card { background: #fff; max-width: 900px; margin: 0 auto; padding: 24px; border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.08); }
+    h2 { color: #1e293b; margin-top: 0; display: flex; align-items: center; gap: 10px; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; }
+    .badge-version { background: #dbeafe; color: #1d4ed8; }
+    .badge-nee { background: #fef9c3; color: #92400e; }
+    .badge-transferred { background: #fee2e2; color: #991b1b; }
+    .badge-inactive { background: #f1f5f9; color: #64748b; }
+
+    table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+    thead tr { background: #f8fafc; }
+    th { padding: 10px 14px; text-align: left; font-size: 12px; color: #64748b; font-weight: 700;
+         text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 2px solid #e2e8f0; }
+    td { padding: 10px 14px; font-size: 14px; border-bottom: 1px solid #f1f5f9; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #f8fafc; }
+
+    .pagination { display: flex; align-items: center; gap: 8px; margin-top: 20px; }
+    .pagination a { display: inline-flex; align-items: center; justify-content: center;
+                    padding: 6px 14px; border-radius: 6px; font-size: 13px; font-weight: 600;
+                    text-decoration: none; border: 1px solid #e2e8f0; color: #334155; background: #fff; }
+    .pagination a:hover { background: #f8fafc; }
+    .pagination a.next { background: #2563eb; color: #fff; border-color: #2563eb; }
+    .pagination a.next.disabled { background: #94a3b8; border-color: #94a3b8; pointer-events: none; }
+    .pagination .page-info { font-size: 13px; color: #64748b; margin: 0 8px; }
+
+    .info-bar { font-size: 12px; color: #64748b; margin-top: 6px; }
+  </style>
+</head>
+<body data-portal-version="v1">
+  <div class="card">
+    <h2>
+      🏫 Portal Escolar — Lista de Alunos
+      <span class="badge badge-version" id="version-badge">Layout v1</span>
+    </h2>
+    <p style="color: #64748b; font-size: 14px; margin-top: 0;">
+      Sandbox para testes do Engine Universal (Descoberta Autônoma de Portal).
+      <strong>Nenhum mapa pré-configurado</strong> — o agente deve descobrir os seletores automaticamente.
+    </p>
+
+    <!-- TABELA PRINCIPAL DE ALUNOS — seletor alvo: table#roster-alunos -->
+    <table id="roster-alunos">
+      <thead>
+        <tr>
+          <th>Matrícula</th>
+          <th>Nome do Aluno</th>
+          <th>Turma</th>
+          <th>Situação</th>
+        </tr>
+      </thead>
+      <tbody id="tbody-alunos">
+        <!-- Página 1: 8 alunos (populada por JS) -->
+      </tbody>
+    </table>
+
+    <div class="info-bar" id="info-bar">Exibindo página <strong id="page-display">1</strong> de 2</div>
+
+    <div class="pagination">
+      <a href="#" id="btn-prev" class="prev disabled" onclick="changePage(-1); return false;">← Anterior</a>
+      <span class="page-info" id="page-info">Página 1 / 2</span>
+      <a href="#" id="btn-next" class="next" rel="next" onclick="changePage(1); return false;">Próxima →</a>
+    </div>
+  </div>
+
+  <script>
+    const PAGES = [
+      // Página 1 — 8 alunos
+      [
+        { mat: '2024001', nome: 'Ana Júlia Ferreira',    turma: '8A', sit: 'Cursando',    nee: true  },
+        { mat: '2024002', nome: 'Bruno Henrique Lima',   turma: '8A', sit: 'Cursando',    nee: false },
+        { mat: '2024003', nome: 'Carla Beatriz Santos',  turma: '8A', sit: 'Cursando',    nee: false },
+        { mat: '2024004', nome: 'Diego Alves Costa',     turma: '8A', sit: 'Transferido', nee: false },
+        { mat: '2024005', nome: 'Eduarda Melo Pires',    turma: '8A', sit: 'Cursando',    nee: true  },
+        { mat: '2024006', nome: 'Felipe Rocha Torres',   turma: '8A', sit: 'Cursando',    nee: false },
+        { mat: '2024007', nome: 'Giovana Luz Barbosa',   turma: '8A', sit: 'Inativo',     nee: false },
+        { mat: '2024008', nome: 'Henrique Dias Pereira', turma: '8A', sit: 'Cursando',    nee: false },
+      ],
+      // Página 2 — 5 alunos
+      [
+        { mat: '2024009', nome: 'Isabela Nunes Castro',  turma: '8A', sit: 'Cursando',    nee: false },
+        { mat: '2024010', nome: 'João Pedro Oliveira',   turma: '8A', sit: 'Cursando',    nee: true  },
+        { mat: '2024011', nome: 'Karen Souza Martins',   turma: '8A', sit: 'Cursando',    nee: false },
+        { mat: '2024012', nome: 'Lucas Almeida Ramos',   turma: '8A', sit: 'Cursando',    nee: false },
+        { mat: '2024013', nome: 'Mariana Costa Teixeira',turma: '8A', sit: 'Cursando',    nee: false },
+      ]
+    ];
+
+    let currentPage = 0;
+
+    function renderPage(idx) {
+      const tbody = document.getElementById('tbody-alunos');
+      tbody.innerHTML = '';
+
+      PAGES[idx].forEach(aluno => {
+        const tr = document.createElement('tr');
+        tr.setAttribute('data-aluno-id', aluno.mat);
+
+        const sitBadge = aluno.sit === 'Transferido'
+          ? `<span class="badge badge-transferred">${aluno.sit}</span>`
+          : aluno.sit === 'Inativo'
+            ? `<span class="badge badge-inactive">${aluno.sit}</span>`
+            : aluno.sit;
+
+        const neeBadge = aluno.nee
+          ? `&nbsp;<span class="badge badge-nee" title="NEE">NEE</span>`
+          : '';
+
+        tr.innerHTML = `
+          <td>${aluno.mat}</td>
+          <td>${aluno.nome}${neeBadge}</td>
+          <td>${aluno.turma}</td>
+          <td>${sitBadge}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      document.getElementById('page-info').textContent = `Página ${idx + 1} / ${PAGES.length}`;
+      document.getElementById('page-display').textContent = String(idx + 1);
+
+      document.getElementById('btn-prev').className = 'prev' + (idx === 0 ? ' disabled' : '');
+      document.getElementById('btn-next').className = 'next' + (idx === PAGES.length - 1 ? ' disabled' : '');
+      if (idx < PAGES.length - 1) {
+        document.getElementById('btn-next').setAttribute('rel', 'next');
+      } else {
+        document.getElementById('btn-next').removeAttribute('rel');
+      }
+    }
+
+    function changePage(delta) {
+      const next = currentPage + delta;
+      if (next < 0 || next >= PAGES.length) return;
+      currentPage = next;
+      renderPage(currentPage);
+    }
+
+    // Init
+    renderPage(0);
+  </script>
+</body>
+</html>

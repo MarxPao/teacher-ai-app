@@ -58,6 +58,103 @@ export interface PortalProfileDef {
   actions: PortalActionDef[]
 }
 
+// ============================================================================
+// Engine Universal — Mapas Descobertos Automaticamente
+// ============================================================================
+
+/**
+ * Representa um mapa de seletores CSS descoberto autonomamente pelo engine
+ * de leitura de portal (Camada 2). Espelha a tabela discovered_portal_maps.
+ *
+ * discovery_confidence:
+ *   'high'   — seletor por ID, validado com >= 5 alunos encontrados
+ *   'medium' — seletor por classe, validado com >= 1 aluno
+ *   'low'    — heurística fraca, precisa de revisão
+ *
+ * map_source (no payload da tarefa):
+ *   'known_map'             — Camada 1 (mapa pré-configurado ou salvo)
+ *   'discovered'            — Camada 2 descoberta inicial (portal novo)
+ *   'fallback_rediscovered' — Camada 2 auto-cura (layout mudou)
+ */
+export interface DiscoveredPortalMap {
+  id?: string
+  portal_domain: string
+  portal_display_name?: string
+  discovered_selectors: {
+    roster_table: string
+    name_column: number
+    id_column: number
+    status_column?: number
+    nee_selector?: string
+    header_rows?: number
+  }
+  pagination_strategy?: {
+    type: 'next_button' | 'page_numbers' | 'infinite_scroll' | 'none'
+    nextSelector?: string
+    maxPages?: number
+    delayBetweenPagesMs?: number
+  }
+  discovery_confidence: 'high' | 'medium' | 'low'
+  discovered_by_teacher_id?: string
+  discovered_at?: string
+  last_validated_at?: string
+  validation_failures?: number
+  superseded_by?: string
+}
+
+/**
+ * Busca o mapa ativo mais recente para um domínio.
+ * Retorna null se não encontrado ou se o supabase não estiver disponível.
+ */
+export async function getDiscoveredPortalMap(
+  domain: string,
+  supabase: any
+): Promise<DiscoveredPortalMap | null> {
+  if (!supabase || !domain) return null
+  try {
+    const { data, error } = await supabase
+      .from('discovered_portal_maps')
+      .select('*')
+      .eq('portal_domain', domain)
+      .is('superseded_by', null)
+      .limit(1)
+      .single()
+
+    if (error || !data) return null
+    return data as DiscoveredPortalMap
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Persiste um mapa descoberto no banco.
+ * Retorna o ID gerado ou null em caso de erro.
+ * Nunca persiste sem selectors.roster_table definido.
+ */
+export async function saveDiscoveredPortalMap(
+  map: Omit<DiscoveredPortalMap, 'id' | 'discovered_at' | 'last_validated_at' | 'validation_failures' | 'superseded_by'>,
+  supabase: any
+): Promise<string | null> {
+  if (!supabase || !map.discovered_selectors?.roster_table) return null
+  try {
+    const { data, error } = await supabase
+      .from('discovered_portal_maps')
+      .insert({
+        ...map,
+        last_validated_at: new Date().toISOString(),
+        validation_failures: 0,
+      })
+      .select('id')
+      .single()
+
+    if (error || !data) return null
+    return data.id as string
+  } catch {
+    return null
+  }
+}
+
 export const DEFAULT_PORTALS: PortalProfileDef[] = [
   {
     id: 'machado',
