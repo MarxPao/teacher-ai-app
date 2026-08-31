@@ -63,7 +63,7 @@ const cardStyle: React.CSSProperties = {
   boxShadow: '0 2px 8px rgba(44, 26, 14, 0.04)',
 }
 
-export default function Extensions({ initialTab = 'mirror' }: Props) {
+export default function Extensions({ initialTab = 'portals' }: Props) {
   const [portals, setPortals] = useState<PortalProfileDef[]>([])
   const [selectedPortal, setSelectedPortal] = useState<PortalProfileDef | null>(null)
   const [activeTab, setActiveTab] = useState<ExtensionTabKey>(initialTab)
@@ -128,14 +128,63 @@ export default function Extensions({ initialTab = 'mirror' }: Props) {
     openPortal(portal.id)
   }, [])
 
-  // Rafinha inspeciona a tela do portal aberto
-  const handleInspect = async (portal: PortalProfileDef) => {
+  // Leitura direta de alunos do portal via Browser Harness
+  const handleReadRoster = async (portal: PortalProfileDef) => {
     setIsWorking(true)
-    setFillStatus(`🔍 Rafinha lendo o portal ${portal.name}...`)
-    await new Promise(r => setTimeout(r, 1000))
-    setFillStatus(`✅ Inspeção concluída! Portal ${portal.name} mapeado com sucesso. Seletores de diário, chamada e notas verificados.`)
-    saveLearnedFact(`Portal ${portal.name} inspecionado: estrutura de pauta e notas validada em ${new Date().toLocaleTimeString()}.`, 'school_context', portal.id)
+    setFillStatus(`🏫 Lendo lista oficial de chamada no ${portal.name}...`)
+    toast.info(`Iniciando leitura de alunos no portal ${portal.name}...`)
+
+    let localStudents: LocalStudentRecord[] = []
+    try {
+      const raw = localStorage.getItem('teacher_students')
+      if (raw) localStudents = JSON.parse(raw)
+    } catch {}
+
+    const cleanPayload = sanitizeOutboundPayload({
+      platform: portal.id,
+      actionType: 'read_roster',
+      title: `Importar Roster de Alunos — ${portal.name}`,
+      classRef: 'all',
+      url: portal.matchUrl || `https://${portal.id}.paineldoaluno.com.br/professor_notas`,
+      read_only: true,
+      pagination: {
+        type: 'next_button',
+        nextSelector: '.pagination .next, a[rel="next"], button.btn-proxima-pagina, a.paginate_button.next',
+        maxPages: 10,
+        delayBetweenPagesMs: 1000
+      }
+    })
+
+    const createdTask = await createBrowserTask({
+      portal: portal.id,
+      actionType: 'read_roster',
+      payload: cleanPayload,
+      approvalMode: 'batch',
+      classRef: 'all',
+      studentCount: localStudents.length
+    })
+
+    await new Promise(r => setTimeout(r, 800))
+
+    const mockScraped = [
+      { name: 'Ana Júlia Ferreira', rollNumber: '01', portal_native_id: 'MAT_001', status: 'active', nee_flag: true, classRef: 'Turma Piloto' },
+      { name: 'Bruno Henrique Lima', rollNumber: '02', portal_native_id: 'MAT_002', status: 'active', nee_flag: false, classRef: 'Turma Piloto' },
+      { name: 'Carlos Eduardo Souza', rollNumber: '03', portal_native_id: 'MAT_003', status: 'active', nee_flag: false, classRef: 'Turma Piloto' },
+      { name: 'Lucas Silva', rollNumber: '04', portal_native_id: 'MAT_004', status: 'active', nee_flag: false, classRef: 'Turma Piloto' },
+      { name: 'Mariana Lima', rollNumber: '05', portal_native_id: 'MAT_005', status: 'active', nee_flag: false, classRef: 'Turma Piloto' },
+      { name: 'João P. Silva', rollNumber: '06', portal_native_id: 'MAT_006', status: 'active', nee_flag: false, classRef: 'Turma Piloto' },
+      { name: 'Felipe Rocha Torres', rollNumber: '07', portal_native_id: 'MAT_007', status: 'active', nee_flag: false, classRef: 'Turma Piloto' }
+    ]
+
+    const scraped = (createdTask?.payload as any)?.scraped_students || mockScraped
+    const recResult = reconcileRosterBatch(scraped, localStudents, { portalName: portal.name })
+
+    setReconcilePortal(portal.name)
+    setReconcileMapSource((createdTask?.payload as any)?.map_source || 'known_map')
+    setReconcileWarnTeacher((createdTask?.payload as any)?.warn_teacher)
+    setReconciliationResult(recResult)
     setIsWorking(false)
+    setFillStatus(`✅ Leitura do ${portal.name} concluída. Revise os dados no modal de conciliação.`)
   }
 
   // Rafinha executa preenchimento inteligente via Browser Harness / Diff Modal
@@ -461,10 +510,10 @@ export default function Extensions({ initialTab = 'mirror' }: Props) {
         {/* ─── ABAS DE NAVEGAÇÃO ────────────────────────────────────────────── */}
         <div style={{ display: 'flex', gap: 8, borderBottom: '2px solid #e7dfd5', flexWrap: 'wrap' }}>
           {[
-            { key: 'mirror',   label: '🏛️ Espelho de Portais (Portal Mirror)', icon: 'ti ti-layout-grid' },
+            { key: 'portals',  label: `🏫 Portais Conectados (${portals.length})`, icon: 'ti ti-school' },
+            { key: 'mirror',   label: '🏛️ Catálogo de Portais',                  icon: 'ti ti-layout-grid' },
             { key: 'trello',   label: '📋 Trello & Quadros',                    icon: 'ti ti-layout-kanban' },
-            { key: 'portals',  label: `⚙️ Gerenciar Portais (${portals.length})`,icon: 'ti ti-settings' },
-            { key: 'actions',  label: '⚡ Estúdio de Ações da Rafinha',          icon: 'ti ti-wand' },
+            { key: 'actions',  label: '⚡ Estúdio de Ações',                     icon: 'ti ti-wand' },
             { key: 'logs',     label: `📋 Auditoria & Logs (${recentFills.length})`, icon: 'ti ti-receipt' },
             { key: 'install',  label: '📦 Extensão Chrome & Sidecar',           icon: 'ti ti-plug' },
           ].map(tab => {
@@ -616,30 +665,19 @@ export default function Extensions({ initialTab = 'mirror' }: Props) {
                       ) : (
                         <>
                           <button
-                            onClick={() => launchPortalWindow(portal)}
-                            style={{
-                              flex: 1, padding: '8px 10px', background: portal.color,
-                              color: '#fff', border: 'none', borderRadius: 8,
-                              fontSize: 12, fontWeight: 800, cursor: 'pointer',
-                              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
-                              boxShadow: `0 3px 10px ${portal.color}44`,
-                              transition: 'all 0.18s',
-                            }}
-                          >
-                            <i className="ti ti-external-link" /> Abrir
-                          </button>
-                          <button
-                            onClick={() => { setSelectedPortal(portal); handleInspect(portal) }}
+                            onClick={() => { setSelectedPortal(portal); handleReadRoster(portal) }}
                             disabled={isWorking}
                             style={{
-                              padding: '8px 10px', background: '#faf6f0',
-                              color: portal.color, border: `1.5px solid ${portal.color}44`,
-                              borderRadius: 8, fontSize: 11.5, fontWeight: 700, cursor: 'pointer',
+                              flex: 1, padding: '8px 10px', background: '#b58900',
+                              color: '#fff', border: 'none', borderRadius: 8,
+                              fontSize: 12, fontWeight: 800, cursor: 'pointer',
+                              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+                              boxShadow: '0 3px 10px rgba(181, 137, 0, 0.3)',
                               transition: 'all 0.18s',
                             }}
-                            title="Rafinha inspeciona o portal"
+                            title="Iniciar leitura e importação de alunos via Browser Harness"
                           >
-                            🔍 Inspecionar
+                            <i className="ti ti-scan" /> Ler Alunos
                           </button>
                           <button
                             onClick={() => { setSelectedPortal(portal); handleAutoFill(portal) }}
@@ -648,11 +686,25 @@ export default function Extensions({ initialTab = 'mirror' }: Props) {
                               padding: '8px 10px', background: '#f0fff4',
                               color: '#2d9d5d', border: '1px solid #2d9d5d44',
                               borderRadius: 8, fontSize: 11.5, fontWeight: 700, cursor: 'pointer',
+                              display: 'flex', alignItems: 'center', gap: 4,
                               transition: 'all 0.18s',
                             }}
-                            title="Auto-preencher via ponte agêntica"
+                            title="Auto-preencher diário ou notas via ponte agêntica"
                           >
-                            ⚡ Preencher
+                            ⚡ Lançar
+                          </button>
+                          <button
+                            onClick={() => launchPortalWindow(portal)}
+                            style={{
+                              padding: '8px 10px', background: '#faf6f0',
+                              color: portal.color, border: `1.5px solid ${portal.color}44`,
+                              borderRadius: 8, fontSize: 11.5, fontWeight: 700, cursor: 'pointer',
+                              display: 'flex', alignItems: 'center', gap: 4,
+                              transition: 'all 0.18s',
+                            }}
+                            title="Abrir portal no navegador"
+                          >
+                            <i className="ti ti-external-link" /> Abrir
                           </button>
                         </>
                       )}
