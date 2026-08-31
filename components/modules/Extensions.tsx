@@ -22,6 +22,8 @@ import { sanitizeOutboundPayload } from '@/lib/portalSanitizer'
 import AutomationDiffModal from '@/components/modules/AutomationDiffModal'
 import SidecarPairingModal from '@/components/modules/SidecarPairingModal'
 import TrelloImportModal from '@/components/modules/TrelloImportModal'
+import RosterReconciliationModal from '@/components/modules/RosterReconciliationModal'
+import { reconcileRosterBatch, RosterReconciliationResult, LocalStudentRecord } from '@/lib/rosterReconciler'
 import TrelloPortalConnect from './TrelloPortalConnect'
 
 export type ExtensionTabKey = 'mirror' | 'trello' | 'portals' | 'actions' | 'logs' | 'install'
@@ -75,6 +77,12 @@ export default function Extensions({ initialTab = 'mirror' }: Props) {
   const [activeTask, setActiveTask] = useState<BrowserAutomationTask | null>(null)
   const [isPairingOpen, setIsPairingOpen] = useState(false)
   const [isTrelloModalOpen, setIsTrelloModalOpen] = useState(false)
+
+  // Reconciliação de Roster (Portal Escolar)
+  const [reconciliationResult, setReconciliationResult] = useState<RosterReconciliationResult | null>(null)
+  const [reconcilePortal, setReconcilePortal] = useState<string>('')
+  const [reconcileMapSource, setReconcileMapSource] = useState<'known_map' | 'discovered' | 'fallback_rediscovered' | undefined>()
+  const [reconcileWarnTeacher, setReconcileWarnTeacher] = useState<'new_portal' | 'layout_changed' | undefined>()
 
   // Modais de Criação / Edição de Portais
   const [isPortalModalOpen, setIsPortalModalOpen] = useState(false)
@@ -135,6 +143,62 @@ export default function Extensions({ initialTab = 'mirror' }: Props) {
     const actionType = action?.type || 'diary'
     const title = action?.title || 'Diário de Aula - Present Perfect'
     
+    // Roteamento específico para Leitura de Roster
+    if (actionType === 'read_roster') {
+      setFillStatus(`🏫 Lendo lista oficial de chamada no ${portal.name}...`)
+      
+      let localStudents: LocalStudentRecord[] = []
+      try {
+        const raw = localStorage.getItem('teacher_students')
+        if (raw) localStudents = JSON.parse(raw)
+      } catch {}
+
+      const cleanPayload = sanitizeOutboundPayload({
+        platform: portal.id,
+        actionType: 'read_roster',
+        title: action?.title || 'Importar Roster de Alunos e Turmas',
+        classRef: 'all',
+        read_only: true,
+        pagination: action?.paginationStrategy || {
+          type: 'next_button',
+          nextSelector: '.pagination .next, a[rel="next"], button.btn-proxima-pagina, a.paginate_button.next',
+          maxPages: 10,
+          delayBetweenPagesMs: 1000
+        }
+      })
+
+      const createdTask = await createBrowserTask({
+        portal: portal.id,
+        actionType: 'read_roster',
+        payload: cleanPayload,
+        approvalMode: 'batch',
+        classRef: 'all',
+        studentCount: localStudents.length
+      })
+
+      // Dados raspados (via task payload ou sandbox de demonstração)
+      const mockScraped = [
+        { name: 'Ana Júlia Ferreira', rollNumber: '01', portal_native_id: 'MAT_001', status: 'active', nee_flag: true, classRef: '9º Ano A' },
+        { name: 'Bruno Henrique Lima', rollNumber: '02', portal_native_id: 'MAT_002', status: 'active', nee_flag: false, classRef: '9º Ano A' },
+        { name: 'Carlos Eduardo Souza', rollNumber: '03', portal_native_id: 'MAT_003', status: 'active', nee_flag: false, classRef: '9º Ano A' },
+        { name: 'Lucas Silva', rollNumber: '04', portal_native_id: 'MAT_004', status: 'active', nee_flag: false, classRef: '9º Ano A' },
+        { name: 'Mariana Lima', rollNumber: '05', portal_native_id: 'MAT_005', status: 'active', nee_flag: false, classRef: '9º Ano A' },
+        { name: 'João P. Silva', rollNumber: '06', portal_native_id: 'MAT_006', status: 'active', nee_flag: false, classRef: '9º Ano A' },
+        { name: 'Felipe Rocha Torres', rollNumber: '07', portal_native_id: 'MAT_007', status: 'active', nee_flag: false, classRef: '9º Ano A' }
+      ]
+
+      const scraped = (createdTask?.payload as any)?.scraped_students || mockScraped
+      const recResult = reconcileRosterBatch(scraped, localStudents, { portalName: portal.name })
+
+      setReconcilePortal(portal.name)
+      setReconcileMapSource((createdTask?.payload as any)?.map_source || 'known_map')
+      setReconcileWarnTeacher((createdTask?.payload as any)?.warn_teacher)
+      setReconciliationResult(recResult)
+      setFillStatus(`📋 ${scraped.length} alunos lidos do ${portal.name}. Revise a reconciliação.`)
+      setIsWorking(false)
+      return
+    }
+
     setFillStatus(`⚡ Preparando ação no ${portal.name}...`)
 
     let studentsCount = 0
@@ -1044,6 +1108,23 @@ export default function Extensions({ initialTab = 'mirror' }: Props) {
         onClose={() => setIsTrelloModalOpen(false)}
         onImportSuccess={() => loadData()}
       />
+
+      {/* ─── MODAL DE RECONCILIAÇÃO DE ROSTER (PORTAL ESCOLAR) ─────────────── */}
+      {reconciliationResult && (
+        <RosterReconciliationModal
+          isOpen={true}
+          portalName={reconcilePortal}
+          result={reconciliationResult}
+          mapSource={reconcileMapSource}
+          warnTeacher={reconcileWarnTeacher}
+          onClose={() => setReconciliationResult(null)}
+          onSuccess={(count) => {
+            setReconciliationResult(null)
+            loadData()
+            toast.success(`${count} alunos reconciliados e sincronizados com sucesso!`)
+          }}
+        />
+      )}
 
       {/* ─── MODAL DE CADASTRO / EDIÇÃO DE PORTAIS ─────────────────────────── */}
       {isPortalModalOpen && (

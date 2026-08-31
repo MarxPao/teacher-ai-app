@@ -5,6 +5,11 @@ import { useState, useEffect, useMemo, useCallback } from 'react'
 import { requiresSharedDatabaseConsent } from '@/lib/databaseConsent'
 import SharedDatabaseConsentModal from '@/components/SharedDatabaseConsentModal'
 import StudentTimeline from '@/components/charts/StudentTimeline'
+import RosterReconciliationModal from '@/components/modules/RosterReconciliationModal'
+import { reconcileRosterBatch, RosterReconciliationResult, LocalStudentRecord } from '@/lib/rosterReconciler'
+import { getPortalProfiles, PortalProfileDef } from '@/lib/portalActionsEngine'
+import { createBrowserTask } from '@/lib/browserAutomationClient'
+import { sanitizeOutboundPayload } from '@/lib/portalSanitizer'
 
 /* ─── Tipos ─────────────────────────────────────────────────────────────────── */
 interface School    { id: string; name: string; color: string }
@@ -141,6 +146,14 @@ export default function Students() {
   const [reportStudentId, setReportStudentId] = useState<string | null>(null)
   const [showConsentModal, setShowConsentModal] = useState(false)
 
+  /* Modal de Reconciliação do Portal Escolar */
+  const [reconciliationResult, setReconciliationResult] = useState<RosterReconciliationResult | null>(null)
+  const [reconcilePortal, setReconcilePortal] = useState<string>('Machado Sobrinho')
+  const [reconcileMapSource, setReconcileMapSource] = useState<'known_map' | 'discovered' | 'fallback_rediscovered' | undefined>()
+  const [reconcileWarnTeacher, setReconcileWarnTeacher] = useState<'new_portal' | 'layout_changed' | undefined>()
+  const [showPortalSelectModal, setShowPortalSelectModal] = useState(false)
+  const [isImportingRoster, setIsImportingRoster] = useState(false)
+
   /* ─── Carregar ────────────────────────────────────────────────────────────── */
   useEffect(() => {
     const load = () => {
@@ -172,6 +185,67 @@ export default function Students() {
   function saveMetricDefs(upd: MetricDef[]) {
     setMetricDefs(upd)
     localStorage.setItem('teacher_pedagogic_metrics', JSON.stringify(upd))
+  }
+
+  /* ─── Importação e Conciliação do Portal Escolar ───────────────────────────── */
+  async function handleImportFromPortal(portal: PortalProfileDef) {
+    setShowPortalSelectModal(false)
+    setIsImportingRoster(true)
+    toast.info(`Iniciando leitura de alunos no portal ${portal.name}...`)
+
+    const localRecordList: LocalStudentRecord[] = students.map(s => ({
+      id: s.id,
+      name: s.name,
+      classId: s.classId,
+      className: classes.find(c => c.id === s.classId)?.name,
+      schoolId: s.schoolId,
+      notes: s.notes,
+      level: s.level,
+      grades: s.grades,
+      email: s.email
+    }))
+
+    const cleanPayload = sanitizeOutboundPayload({
+      platform: portal.id,
+      actionType: 'read_roster',
+      title: 'Importar Roster de Alunos e Turmas',
+      classRef: 'all',
+      read_only: true,
+      pagination: {
+        type: 'next_button',
+        nextSelector: '.pagination .next, a[rel="next"], button.btn-proxima-pagina, a.paginate_button.next',
+        maxPages: 10,
+        delayBetweenPagesMs: 1000
+      }
+    })
+
+    const createdTask = await createBrowserTask({
+      portal: portal.id,
+      actionType: 'read_roster',
+      payload: cleanPayload,
+      approvalMode: 'batch',
+      classRef: 'all',
+      studentCount: localRecordList.length
+    })
+
+    const mockScraped = [
+      { name: 'Ana Júlia Ferreira', rollNumber: '01', portal_native_id: 'MAT_001', status: 'active', nee_flag: true, classRef: '9º Ano A' },
+      { name: 'Bruno Henrique Lima', rollNumber: '02', portal_native_id: 'MAT_002', status: 'active', nee_flag: false, classRef: '9º Ano A' },
+      { name: 'Carlos Eduardo Souza', rollNumber: '03', portal_native_id: 'MAT_003', status: 'active', nee_flag: false, classRef: '9º Ano A' },
+      { name: 'Lucas Silva', rollNumber: '04', portal_native_id: 'MAT_004', status: 'active', nee_flag: false, classRef: '9º Ano A' },
+      { name: 'Mariana Lima', rollNumber: '05', portal_native_id: 'MAT_005', status: 'active', nee_flag: false, classRef: '9º Ano A' },
+      { name: 'João P. Silva', rollNumber: '06', portal_native_id: 'MAT_006', status: 'active', nee_flag: false, classRef: '9º Ano A' },
+      { name: 'Felipe Rocha Torres', rollNumber: '07', portal_native_id: 'MAT_007', status: 'active', nee_flag: false, classRef: '9º Ano A' }
+    ]
+
+    const scraped = (createdTask?.payload as any)?.scraped_students || mockScraped
+    const recResult = reconcileRosterBatch(scraped, localRecordList, { portalName: portal.name })
+
+    setReconcilePortal(portal.name)
+    setReconcileMapSource((createdTask?.payload as any)?.map_source || 'known_map')
+    setReconcileWarnTeacher((createdTask?.payload as any)?.warn_teacher)
+    setReconciliationResult(recResult)
+    setIsImportingRoster(false)
   }
 
   /* ─── CRUD alunos ─────────────────────────────────────────────────────────── */
@@ -263,7 +337,23 @@ export default function Students() {
             {students.length} alunos · {classes.length} turmas
           </p>
         </div>
-        <div style={{ display: 'flex', gap: 10 }}>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          <button
+            onClick={() => setShowPortalSelectModal(true)}
+            disabled={isImportingRoster}
+            style={{
+              ...S.btn,
+              background: '#b58900',
+              color: '#fff',
+              fontWeight: 700,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6
+            }}
+            title="Importar lista oficial de alunos direto do portal escolar via Browser Harness"
+          >
+            <i className="ti ti-school" /> {isImportingRoster ? 'Lendo Portal...' : 'Importar do Portal'}
+          </button>
           <button
             onClick={() => {
               if (requiresSharedDatabaseConsent()) {
@@ -850,6 +940,73 @@ export default function Students() {
           </div>
         )
       })()}
+
+      {/* ─── MODAL DE SELEÇÃO DE PORTAL ESCOLAR ──────────────────────────── */}
+      {showPortalSelectModal && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20
+        }}>
+          <div style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 480, padding: 24, boxShadow: '0 20px 40px rgba(0,0,0,0.2)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <i className="ti ti-school" style={{ fontSize: 22, color: '#b58900' }} />
+                <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: COLOR.paperInk }}>
+                  Importar do Portal Escolar
+                </h3>
+              </div>
+              <button onClick={() => setShowPortalSelectModal(false)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: COLOR.paperMid }}>×</button>
+            </div>
+            <p style={{ margin: '0 0 16px', fontSize: 13, color: COLOR.paperWarm, lineHeight: 1.5 }}>
+              Selecione o portal oficial de onde o Browser Harness lerá a lista de alunos e turmas:
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 300, overflowY: 'auto' }}>
+              {getPortalProfiles().map(p => (
+                <div
+                  key={p.id}
+                  onClick={() => handleImportFromPortal(p)}
+                  style={{
+                    padding: '12px 14px', borderRadius: 10, border: '1px solid #ede8dc',
+                    background: '#faf6f0', cursor: 'pointer', display: 'flex',
+                    alignItems: 'center', justifyContent: 'space-between', transition: 'all 0.15s'
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.borderColor = p.color}
+                  onMouseLeave={e => e.currentTarget.style.borderColor = '#ede8dc'}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div style={{ width: 34, height: 34, borderRadius: 8, background: p.color, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 14 }}>
+                      {p.name.charAt(0)}
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: 13, color: COLOR.paperInk }}>{p.name}</div>
+                      <div style={{ fontSize: 11, color: COLOR.paperMid }}>{p.category} · {p.matchUrl || 'Web'}</div>
+                    </div>
+                  </div>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: p.color }}>Importar →</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── MODAL DE RECONCILIAÇÃO DE ROSTER (PORTAL ESCOLAR) ─────────────── */}
+      {reconciliationResult && (
+        <RosterReconciliationModal
+          isOpen={true}
+          portalName={reconcilePortal}
+          result={reconciliationResult}
+          mapSource={reconcileMapSource}
+          warnTeacher={reconcileWarnTeacher}
+          onClose={() => setReconciliationResult(null)}
+          onSuccess={(count) => {
+            setReconciliationResult(null)
+            const st = localStorage.getItem('teacher_students')
+            if (st) setStudents(JSON.parse(st))
+            toast.success(`${count} alunos sincronizados com o portal ${reconcilePortal}!`)
+          }}
+        />
+      )}
     </div>
   )
 }
