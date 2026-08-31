@@ -1,3 +1,10 @@
+import {
+  createExamSheetLayout,
+  evaluateOMRSheet,
+  OMRSheetResult,
+  OMRQuestionResult,
+  ImageBuffer
+} from '@/lib/omr'
 'use client'
 import { toast, showConfirm } from '@/components/Toast'
 
@@ -94,12 +101,15 @@ export default function OmniGrader({ initialTab = 'photo' }: OmniGraderProps) {
   const [students, setStudents] = useState<StudentRecord[]>([])
   const [classes, setClasses] = useState<ClassRecord[]>([])
 
-  // State: Aba 1 (Foto / OCR)
+  // State: Aba 1 (Foto / OCR & OMR)
   const [selectedStudentPhoto, setSelectedStudentPhoto] = useState('')
   const [examTitlePhoto, setExamTitlePhoto] = useState('Prova Bimestral de Inglês')
   const [answerKeyPhoto, setAnswerKeyPhoto] = useState('1:A, 2:B, 3:C, 4:D, 5:A, 6:C, 7:B, 8:D, 9:A, 10:B')
   const [imageUri, setImageUri] = useState<string | null>(null)
+  const [gradingScenario, setGradingScenario] = useState<'scenario_a_omr' | 'scenario_b_external'>('scenario_a_omr')
   const [isGradingPhoto, setIsGradingPhoto] = useState(false)
+  const [omrResult, setOmrResult] = useState<OMRSheetResult | null>(null)
+  const [inspectingQuestionIndex, setInspectingQuestionIndex] = useState<number | null>(null)
   const [photoGradeResult, setPhotoGradeResult] = useState<{
     score: number
     totalQuestions: number
@@ -155,46 +165,164 @@ export default function OmniGrader({ initialTab = 'photo' }: OmniGraderProps) {
     }
   }
 
+  // Helper para converter imagem base64 em ImageBuffer no navegador
+  async function loadImageBufferFromBase64(base64: string): Promise<ImageBuffer> {
+    return new Promise((resolve, reject) => {
+      const img = new Image()
+      img.crossOrigin = 'anonymous'
+      img.onload = () => {
+        const canvas = document.createElement('canvas')
+        canvas.width = img.naturalWidth || img.width
+        canvas.height = img.naturalHeight || img.height
+        const ctx = canvas.getContext('2d', { willReadFrequently: true })
+        if (!ctx) return reject(new Error('Canvas 2D indisponível.'))
+        ctx.drawImage(img, 0, 0)
+        const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+        resolve({
+          width: imgData.width,
+          height: imgData.height,
+          data: imgData.data
+        })
+      }
+      img.onerror = () => reject(new Error('Falha ao carregar a imagem da folha de respostas.'))
+      img.src = base64
+    })
+  }
+
   async function handleGradePhoto() {
-    if (!imageUri) { toast.success('Selecione ou tire a foto da prova primeiro.'); return }
-    const apis = JSON.parse(localStorage.getItem('teacher_apis') || '[]')
-    const activeApi = apis.find((a: any) => a.active && a.key) || { id: 'auto', provider: 'gemini', key: 'auto' }
+    if (!imageUri) { toast.error('Selecione ou tire a foto da prova primeiro.'); return }
+
+    // Parsing do gabarito oficial informado
+    const keyPairs = answerKeyPhoto.split(',').map(s => s.trim().split(':')).filter(arr => arr.length === 2)
+    const parsedKey: Record<number, string> = {}
+    keyPairs.forEach(([qNum, ans]) => {
+      parsedKey[parseInt(qNum)] = ans.trim().toUpperCase()
+    })
+    const totalQ = Object.keys(parsedKey).length || 10
 
     setIsGradingPhoto(true)
+
     try {
-      const ocr = await extractContentFromImage(imageUri, activeApi)
-      const keyPairs = answerKeyPhoto.split(',').map(s => s.trim().split(':')).filter(arr => arr.length === 2)
-      const parsedKey: Record<number, string> = {}
-      keyPairs.forEach(([qNum, ans]) => {
-        parsedKey[parseInt(qNum)] = ans.trim().toUpperCase()
-      })
+      if (gradingScenario === 'scenario_a_omr') {
+        // ─── CENÁRIO A: OMR DETERMINÍSTICO DE ALTA PRECISÃO (< 100ms) ───────────
+        const imgBuffer = await loadImageBufferFromBase64(imageUri)
+        const layout = createExamSheetLayout({
+          id: 'exam_omr_sheet',
+          title: examTitlePhoto,
+          version: 'Form_A',
+          totalQuestions: totalQ,
+          optionsPerQuestion: 4,
+          answerKey: parsedKey
+        })
 
-      const totalQ = Object.keys(parsedKey).length || 10
-      const results: QuestionGradeResult[] = []
-      let correct = 0
+        const omrEval = evaluateOMRSheet(imgBuffer, layout)
+        setOmrResult(omrEval)
 
-      for (let i = 1; i <= totalQ; i++) {
-        const expected = parsedKey[i] || 'A'
-        const match = ocr.rawText.match(new RegExp(`${i}\\s*[:\\-\\)]\\s*([A-Da-d])`))
-        const found = match ? match[1].toUpperCase() : (i <= (ocr.questions?.length || 0) ? ocr.questions?.[i-1]?.answer?.toUpperCase() || '' : '')
-        const isOk = found === expected
-        if (isOk) correct++
-        results.push({ num: i, studentAnswer: found || '?', correctAnswer: expected, isCorrect: isOk, points: isOk ? 1 : 0 })
+        const mappedQuestions: QuestionGradeResult[] = omrEval.questions.map(q => ({
+          num: q.questionNumber,
+          studentAnswer: q.detectedAnswer || '?',
+          correctAnswer: q.correctAnswer || 'A',
+          isCorrect: Boolean(q.isCorrect),
+          points: q.pointsAwarded || 0
+        }))
+
+        setPhotoGradeResult({
+          score: omrEval.score || 0,
+          totalQuestions: totalQ,
+          correctCount: omrEval.correctCount || 0,
+          questions: mappedQuestions,
+          rawText: `OMR Determinístico Concluído em ${omrEval.processingTimeMs}ms. Confiança Geral: ${omrEval.overallConfidence.toUpperCase()}.`
+        })
+
+        if (omrEval.fallbackCount > 0) {
+          toast.info(`${omrEval.fallbackCount} questão(ões) com marcação ambígua ou rasura identificada(s). Confira os cards destacados.`)
+        } else {
+          toast.success(`Leitura OMR 100% determinística concluída em ${omrEval.processingTimeMs}ms!`)
+        }
+      } else {
+        // ─── CENÁRIO B: PROVA EXTERNA (LEITURA POR VISÃO IA GENERATIVA) ──────────
+        const apis = JSON.parse(localStorage.getItem('teacher_apis') || '[]')
+        const activeApi = apis.find((a: any) => a.active && a.key) || { id: 'auto', provider: 'gemini', key: 'auto' }
+
+        const ocr = await extractContentFromImage(imageUri, activeApi)
+        const results: QuestionGradeResult[] = []
+        let correct = 0
+
+        for (let i = 1; i <= totalQ; i++) {
+          const expected = parsedKey[i] || 'A'
+          const match = ocr.rawText.match(new RegExp(`${i}\\s*[:\\-\\)]\\s*([A-Da-d])`))
+          const found = match ? match[1].toUpperCase() : (i <= (ocr.questions?.length || 0) ? ocr.questions?.[i-1]?.answer?.toUpperCase() || '' : '')
+          const isOk = found === expected
+          if (isOk) correct++
+          results.push({ num: i, studentAnswer: found || '?', correctAnswer: expected, isCorrect: isOk, points: isOk ? 1 : 0 })
+        }
+
+        const finalScore = Number(((correct / totalQ) * 10).toFixed(1))
+        setOmrResult(null)
+        setPhotoGradeResult({
+          score: finalScore,
+          totalQuestions: totalQ,
+          correctCount: correct,
+          questions: results,
+          rawText: ocr.rawText
+        })
+        toast.info('Prova externa lida via IA. Por favor, confira as alternativas antes de salvar.')
       }
-
-      const finalScore = Number(((correct / totalQ) * 10).toFixed(1))
-      setPhotoGradeResult({
-        score: finalScore,
-        totalQuestions: totalQ,
-        correctCount: correct,
-        questions: results,
-        rawText: ocr.rawText
-      })
     } catch (err: any) {
-      toast.success(`Erro no processamento OCR: ${err.message || 'Verifique sua chave de IA'}`)
+      toast.error(`Falha no processamento: ${err.message || 'Verifique a foto'}`)
     } finally {
       setIsGradingPhoto(false)
     }
+  }
+
+  // Permite ao professor corrigir uma resposta com 1 clique no painel de inspeção
+  function handleManualOverrideQuestion(qNum: number, newOption: string | null) {
+    if (!photoGradeResult) return
+    const updatedQs = [...photoGradeResult.questions]
+    const idx = updatedQs.findIndex(q => q.num === qNum)
+    if (idx === -1) return
+
+    const q = updatedQs[idx]
+    const isOk = newOption ? newOption.toUpperCase() === q.correctAnswer.toUpperCase() : false
+    updatedQs[idx] = {
+      ...q,
+      studentAnswer: newOption ? newOption.toUpperCase() : '?',
+      isCorrect: isOk,
+      points: isOk ? 1 : 0
+    }
+
+    const newCorrect = updatedQs.filter(q => q.isCorrect).length
+    const newScore = Number(((newCorrect / photoGradeResult.totalQuestions) * 10).toFixed(1))
+
+    setPhotoGradeResult({
+      ...photoGradeResult,
+      score: newScore,
+      correctCount: newCorrect,
+      questions: updatedQs
+    })
+
+    if (omrResult) {
+      const updatedOmrQs = [...omrResult.questions]
+      const oIdx = updatedOmrQs.findIndex(q => q.questionNumber === qNum)
+      if (oIdx > -1) {
+        updatedOmrQs[oIdx] = {
+          ...updatedOmrQs[oIdx],
+          detectedAnswer: newOption,
+          confidence: 'high',
+          isAmbiguous: false,
+          needsAiFallback: false,
+          visualEvidence: `Ajustado manualmente pelo professor para alternativa ${newOption || 'Anulado'}.`
+        }
+        setOmrResult({
+          ...omrResult,
+          score: newScore,
+          correctCount: newCorrect,
+          questions: updatedOmrQs
+        })
+      }
+    }
+
+    toast.success(`Questão ${qNum} atualizada para ${newOption || 'Anulada'}!`)
   }
 
   function handleSavePhotoToGradebook() {
@@ -959,70 +1087,300 @@ ${essayEvaluation.studentActionPlan}
         </div>
       )}
 
-      {/* ─── CONTEÚDO DA ABA 1: FOTO / OCR ──────────────────────────────── */}
+      {/* ─── CONTEÚDO DA ABA 1: FOTO / OCR & OMR ──────────────────────── */}
       {activeTab === 'photo' && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(320px, 420px) 1fr', gap: 24 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(340px, 440px) 1fr', gap: 24 }}>
+          {/* Coluna Esquerda: Configuração e Captura */}
           <div style={S.card}>
-            <h3 style={{ margin: '0 0 16px 0', fontSize: 16, color: '#2c1a0e' }}>Gabarito & Foto</h3>
+            <h3 style={{ margin: '0 0 14px 0', fontSize: 16, color: '#2c1a0e', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <i className="ti ti-scan" style={{ color: '#8b5e3c' }} /> Gabarito & Folha de Respostas
+            </h3>
+
+            {/* SELETOR DE CENÁRIO (A vs B) */}
+            <div style={{ marginBottom: 16, padding: '10px 12px', background: '#faf6f0', borderRadius: 10, border: '1px solid #e8decb' }}>
+              <label style={{ ...S.label, marginBottom: 8, fontSize: 11.5 }}>
+                Tipo de Folha / Mecanismo de Reconhecimento:
+              </label>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                <button
+                  type="button"
+                  onClick={() => setGradingScenario('scenario_a_omr')}
+                  style={{
+                    padding: '8px 10px',
+                    borderRadius: 8,
+                    fontSize: 11.5,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: 3,
+                    border: gradingScenario === 'scenario_a_omr' ? '2px solid #2d9d5d' : '1px solid #d5c0b0',
+                    background: gradingScenario === 'scenario_a_omr' ? '#eef9f2' : '#fff',
+                    color: gradingScenario === 'scenario_a_omr' ? '#2d9d5d' : '#7a6552'
+                  }}
+                >
+                  <span>🟢 Folha Oficial</span>
+                  <span style={{ fontSize: 9.5, fontWeight: 500, opacity: 0.85 }}>OMR Alta Precisão</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setGradingScenario('scenario_b_external')}
+                  style={{
+                    padding: '8px 10px',
+                    borderRadius: 8,
+                    fontSize: 11.5,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: 3,
+                    border: gradingScenario === 'scenario_b_external' ? '2px solid #b58900' : '1px solid #d5c0b0',
+                    background: gradingScenario === 'scenario_b_external' ? '#fffdf0' : '#fff',
+                    color: gradingScenario === 'scenario_b_external' ? '#b58900' : '#7a6552'
+                  }}
+                >
+                  <span>⚠️ Prova Externa</span>
+                  <span style={{ fontSize: 9.5, fontWeight: 500, opacity: 0.85 }}>Leitura Visão IA</span>
+                </button>
+              </div>
+
+              <div style={{ marginTop: 8, fontSize: 11, color: '#7a6552', lineHeight: 1.35 }}>
+                {gradingScenario === 'scenario_a_omr' ? (
+                  <span><strong>Cenário A:</strong> Cartão gerado pelo Teacher AI com marcadores nos 4 cantos. Processamento determinístico em <strong>&lt; 50ms</strong>.</span>
+                ) : (
+                  <span><strong>Cenário B:</strong> Prova feita fora do app. Utiliza IA generativa com revisão visual recomendada.</span>
+                )}
+              </div>
+            </div>
+
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div>
-                <label style={S.label}>Aluno</label>
+                <label style={S.label}>Aluno Avaliado</label>
                 <select value={selectedStudentPhoto} onChange={e => setSelectedStudentPhoto(e.target.value)} style={S.input}>
                   {students.map(s => (
                     <option key={s.id} value={s.id}>{s.name}</option>
                   ))}
                 </select>
               </div>
+
               <div>
-                <label style={S.label}>Gabarito Correto</label>
+                <label style={S.label}>Título da Avaliação</label>
+                <input value={examTitlePhoto} onChange={e => setExamTitlePhoto(e.target.value)} style={S.input} />
+              </div>
+
+              <div>
+                <label style={S.label}>Gabarito Oficial (1:A, 2:B, 3:C...)</label>
                 <input value={answerKeyPhoto} onChange={e => setAnswerKeyPhoto(e.target.value)} style={S.input} />
               </div>
+
               <div>
                 <label style={S.label}>Foto da Folha de Respostas</label>
                 <button onClick={handleCapturePhoto} style={{ ...S.btnSecondary, width: '100%', justifyContent: 'center' }}>
-                  <i className="ti ti-camera"></i> {imageUri ? 'Alterar Imagem' : 'Capturar / Carregar Imagem'}
+                  <i className="ti ti-camera"></i> {imageUri ? 'Alterar Foto da Folha' : 'Tirar Foto / Carregar Imagem'}
                 </button>
               </div>
+
               {imageUri && (
-                <div style={{ marginTop: 8, textAlign: 'center' }}>
-                  <img src={imageUri} style={{ maxWidth: '100%', maxHeight: 180, borderRadius: 8, border: '1px solid #ccc' }} />
+                <div style={{ textAlign: 'center', background: '#faf6f0', padding: 8, borderRadius: 8, border: '1px solid #e8decb' }}>
+                  <img src={imageUri} style={{ maxWidth: '100%', maxHeight: 180, borderRadius: 6, objectFit: 'contain' }} />
                 </div>
               )}
-              <button onClick={handleGradePhoto} disabled={isGradingPhoto} style={{ ...S.btnPrimary, justifyContent: 'center', marginTop: 8 }}>
+
+              <button
+                onClick={handleGradePhoto}
+                disabled={isGradingPhoto || !imageUri}
+                style={{
+                  ...S.btnPrimary,
+                  justifyContent: 'center',
+                  marginTop: 6,
+                  background: isGradingPhoto ? '#a08060' : (gradingScenario === 'scenario_a_omr' ? '#2d9d5d' : '#8b5e3c')
+                }}
+              >
                 <i className={isGradingPhoto ? 'ti ti-loader ti-spin' : 'ti ti-scan'}></i>
-                {isGradingPhoto ? 'Processando OCR...' : 'Corrigir Gabarito por Foto'}
+                {isGradingPhoto
+                  ? (gradingScenario === 'scenario_a_omr' ? 'Processando OMR Instantâneo...' : 'Processando com IA...')
+                  : (gradingScenario === 'scenario_a_omr' ? '⚡ Corrigir com OMR Instantâneo' : '🔍 Corrigir Prova Externa (IA)')
+                }
               </button>
             </div>
           </div>
 
+          {/* Coluna Direita: Resultados & Inspeção */}
           <div style={S.card}>
             {!photoGradeResult ? (
-              <div style={{ textAlign: 'center', padding: '60px 20px', color: '#a08060' }}>
-                <i className="ti ti-camera" style={{ fontSize: 48, opacity: 0.4, marginBottom: 12 }}></i>
-                <p>Faça upload da folha de respostas para ver a correção questão a questão.</p>
+              <div style={{ textAlign: 'center', padding: '80px 20px', color: '#a08060' }}>
+                <i className="ti ti-scan" style={{ fontSize: 52, opacity: 0.35, marginBottom: 12 }}></i>
+                <h3 style={{ margin: '0 0 6px 0', color: '#4a382a' }}>Aguardando Folha de Respostas</h3>
+                <p style={{ margin: 0, fontSize: 13 }}>
+                  Carregue a foto da folha de respostas ao lado e clique em corrigir para visualizar o espelho de notas.
+                </p>
               </div>
             ) : (
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                {/* Header de Desempenho e Lançamento */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, borderBottom: '1px solid #d5c0b0', paddingBottom: 14 }}>
                   <div>
-                    <span style={{ fontSize: 12, color: '#7a6552' }}>Nota Calculada</span>
-                    <div style={{ fontSize: 32, fontWeight: 800, color: '#2d9d5d' }}>{photoGradeResult.score.toFixed(1)} / 10</div>
-                  </div>
-                  <button onClick={handleSavePhotoToGradebook} disabled={launchedPhoto} style={S.btnPrimary}>
-                    <i className={launchedPhoto ? 'ti ti-check' : 'ti ti-database-export'}></i>
-                    {launchedPhoto ? 'Lançado!' : 'Lançar Nota'}
-                  </button>
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: 8 }}>
-                  {photoGradeResult.questions.map(q => (
-                    <div key={q.num} style={{ padding: '8px 10px', borderRadius: 8, background: q.isCorrect ? '#eef9f8' : '#fdf2f2', border: `1px solid ${q.isCorrect ? '#2aa198' : '#dc322f'}` }}>
-                      <div style={{ fontSize: 11, fontWeight: 700 }}>Q{q.num}</div>
-                      <div style={{ fontSize: 13, fontWeight: 800, color: q.isCorrect ? '#2aa198' : '#dc322f' }}>
-                        {q.studentAnswer} {q.isCorrect ? '✓' : `(Gabarito: ${q.correctAnswer})`}
-                      </div>
+                    <span style={{ fontSize: 12, color: '#7a6552', fontWeight: 600 }}>Nota Final Calculada</span>
+                    <div style={{ fontSize: 32, fontWeight: 800, color: '#2d9d5d', fontFamily: 'Fraunces, Georgia, serif' }}>
+                      {photoGradeResult.score.toFixed(1)} <span style={{ fontSize: 16, color: '#a08060' }}>/ 10,0</span>
                     </div>
-                  ))}
+                    <div style={{ fontSize: 12, color: '#7a6552', marginTop: 2 }}>
+                      Acertos: <strong>{photoGradeResult.correctCount}</strong> de {photoGradeResult.totalQuestions} questões ({((photoGradeResult.correctCount / photoGradeResult.totalQuestions) * 100).toFixed(0)}%)
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <button
+                      onClick={handleSavePhotoToGradebook}
+                      disabled={launchedPhoto}
+                      style={{ ...S.btnPrimary, background: launchedPhoto ? '#2d9d5d' : '#8b5e3c' }}
+                    >
+                      <i className={launchedPhoto ? 'ti ti-check' : 'ti ti-database-export'}></i>
+                      {launchedPhoto ? 'Lançado no Gradebook!' : 'Lançar Nota'}
+                    </button>
+                  </div>
                 </div>
+
+                {/* Badge Informativo do Mecanismo Utilizado */}
+                {omrResult ? (
+                  <div style={{ padding: '8px 12px', borderRadius: 8, background: '#eef9f2', border: '1px solid #c0ebd0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#2d9d5d', fontWeight: 700 }}>
+                      <i className="ti ti-circle-check" /> OMR Determinístico: {omrResult.processingTimeMs}ms &bull; Inclinação: {omrResult.skewAngleDegrees}°
+                    </div>
+                    <span style={{ color: '#555', fontSize: 11 }}>
+                      {omrResult.fallbackCount === 0 ? '✅ 100% Alta Confiança' : `⚠️ ${omrResult.fallbackCount} questão(ões) em revisão`}
+                    </span>
+                  </div>
+                ) : (
+                  <div style={{ padding: '8px 12px', borderRadius: 8, background: '#fffdf0', border: '1px solid #ffe58f', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#b58900' }}>
+                    <i className="ti ti-alert-triangle" /> Prova Externa (Visão IA). Clique em qualquer questão abaixo para inspecionar ou ajustar.
+                  </div>
+                )}
+
+                {/* Grid das Questões com Badges de Confiança */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 10 }}>
+                  {photoGradeResult.questions.map(q => {
+                    const omrQ = omrResult?.questions.find(item => item.questionNumber === q.num)
+                    const isSelected = inspectingQuestionIndex === q.num
+                    const isAmbiguous = omrQ?.isAmbiguous || omrQ?.classification === 'multiple_marks'
+                    const isBlank = omrQ?.classification === 'blank' || q.studentAnswer === '?'
+
+                    let cardBg = q.isCorrect ? '#eef9f8' : '#fdf2f2'
+                    let cardBorder = q.isCorrect ? '#2aa198' : '#dc322f'
+
+                    if (isAmbiguous) {
+                      cardBg = '#fffdf0'
+                      cardBorder = '#b58900'
+                    } else if (isBlank) {
+                      cardBg = '#f5f5f5'
+                      cardBorder = '#d0d0d0'
+                    }
+
+                    return (
+                      <div
+                        key={q.num}
+                        onClick={() => setInspectingQuestionIndex(isSelected ? null : q.num)}
+                        style={{
+                          padding: '10px 12px',
+                          borderRadius: 8,
+                          background: cardBg,
+                          border: `1.5px solid ${cardBorder}`,
+                          cursor: 'pointer',
+                          boxShadow: isSelected ? '0 0 0 2px #8b5e3c' : 'none',
+                          transition: 'all 0.15s ease'
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                          <span style={{ fontSize: 11, fontWeight: 800, color: '#2c1a0e' }}>Q{String(q.num).padStart(2, '0')}</span>
+                          <span style={{ fontSize: 10, fontWeight: 700, color: q.isCorrect ? '#2d9d5d' : '#dc322f' }}>
+                            {q.isCorrect ? '1.0 pt' : '0.0 pt'}
+                          </span>
+                        </div>
+
+                        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+                          <span style={{ fontSize: 15, fontWeight: 900, color: q.isCorrect ? '#2aa198' : (isAmbiguous ? '#b58900' : '#dc322f') }}>
+                            {q.studentAnswer || '—'}
+                          </span>
+                          <span style={{ fontSize: 11, color: '#7a6552' }}>
+                            (Gabarito: <strong>{q.correctAnswer}</strong>)
+                          </span>
+                        </div>
+
+                        {omrQ && (
+                          <div style={{ marginTop: 4, fontSize: 9.5, color: '#7a6552', display: 'flex', justifyContent: 'space-between' }}>
+                            <span>Fill: {((omrQ.optionsDetail.find(o => o.option === q.studentAnswer)?.fillRatio || 0) * 100).toFixed(0)}%</span>
+                            <span style={{ fontWeight: 600, color: omrQ.confidence === 'high' ? '#2d9d5d' : '#b58900' }}>
+                              {omrQ.confidence === 'high' ? 'Alta' : 'Revisão'}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+
+                {/* PAINEL DE INSPEÇÃO & OVERRIDE DE 1 CLIQUE */}
+                {inspectingQuestionIndex !== null && (
+                  <div style={{ marginTop: 10, padding: 14, background: '#faf6f0', borderRadius: 10, border: '1.5px solid #8b5e3c' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                      <strong style={{ fontSize: 13, color: '#2c1a0e' }}>
+                        🔍 Inspeção da Questão {inspectingQuestionIndex}
+                      </strong>
+                      <span style={{ fontSize: 12, color: '#7a6552' }}>
+                        Gabarito Oficial: <strong>{photoGradeResult.questions.find(q => q.num === inspectingQuestionIndex)?.correctAnswer}</strong>
+                      </span>
+                    </div>
+
+                    <p style={{ margin: '0 0 10px 0', fontSize: 12, color: '#555' }}>
+                      Clique na alternativa correta abaixo para atualizar a nota instantaneamente caso tenha havido rasura ou ajuste do professor:
+                    </p>
+
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      {['A', 'B', 'C', 'D', 'E'].map(opt => {
+                        const currentAns = photoGradeResult.questions.find(q => q.num === inspectingQuestionIndex)?.studentAnswer
+                        const isCurrent = currentAns === opt
+                        return (
+                          <button
+                            key={opt}
+                            type="button"
+                            onClick={() => handleManualOverrideQuestion(inspectingQuestionIndex, opt)}
+                            style={{
+                              padding: '8px 16px',
+                              borderRadius: 8,
+                              fontSize: 13,
+                              fontWeight: 800,
+                              cursor: 'pointer',
+                              border: isCurrent ? '2px solid #2d9d5d' : '1px solid #d5c0b0',
+                              background: isCurrent ? '#2d9d5d' : '#fff',
+                              color: isCurrent ? '#fff' : '#2c1a0e'
+                            }}
+                          >
+                            Opção {opt}
+                          </button>
+                        )
+                      })}
+                      <button
+                        type="button"
+                        onClick={() => handleManualOverrideQuestion(inspectingQuestionIndex, null)}
+                        style={{
+                          padding: '8px 14px',
+                          borderRadius: 8,
+                          fontSize: 12,
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          border: '1px solid #dc322f',
+                          background: '#fff',
+                          color: '#dc322f'
+                        }}
+                      >
+                        ✕ Anular / Branco
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>

@@ -5,6 +5,7 @@ import DocumentCanvas from '@/components/DocumentCanvas'
 import EditableQuestionBoxes, { EditableQuestionItem, parseContentToQuestions } from '@/components/EditableQuestionBoxes'
 import AudioPlayerCard from '@/components/AudioPlayerCard'
 import { exportToPdf, exportToWord } from '@/lib/exportUtils'
+import { createExamSheetLayout, generatePrintableOmrSheetHtml } from '@/lib/omr'
 import { DEFAULT_BNCC_SKILLS, PORTUGUESE_BNCC_SKILLS, BnccSkill } from '@/lib/bnccData'
 import { SourceItem } from '@/components/SourceKnowledgeHub'
 import { QuestionTypeCountMap, computeTotalQuestions } from '@/components/QuestionCountByTypeList'
@@ -366,6 +367,46 @@ export default function ExamResultThreeTabs({
                     }}
                   >
                     🚀 Testar Prova Online
+                  </button>
+                )}
+
+                {mode === 'exam' && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const totalQ = parsedQuestions.length || 10
+                      const layout = createExamSheetLayout({
+                        id: `exam_${Date.now().toString(36)}`,
+                        title: header.title || topic || 'Avaliação Oficial',
+                        version: 'Form_A',
+                        totalQuestions: totalQ,
+                        optionsPerQuestion: 4
+                      })
+                      const html = generatePrintableOmrSheetHtml(layout, header.school || 'TEACHER AI — SISTEMA DE AVALIAÇÃO')
+                      const win = window.open('', '_blank')
+                      if (win) {
+                        win.document.write(html)
+                        win.document.close()
+                        setTimeout(() => win.print(), 350)
+                      }
+                    }}
+                    style={{
+                      padding: '8px 14px',
+                      borderRadius: RADIUS.md,
+                      border: '1.5px solid #8b5e3c',
+                      background: '#fffcf8',
+                      color: '#8b5e3c',
+                      fontSize: 12.5,
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      boxShadow: '0 2px 6px rgba(139,94,60,0.1)',
+                    }}
+                    title="Gera a folha oficial de respostas padronizada com 4 marcadores fiduciais para correção instantânea por OMR"
+                  >
+                    <i className="ti ti-scan" /> 📄 Cartão OMR (Fiduciais)
                   </button>
                 )}
               </div>
