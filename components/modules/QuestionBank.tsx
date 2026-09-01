@@ -9,6 +9,8 @@ import {
   extractQuestionsFromBookText, 
   UnifiedQuestion 
 } from '@/lib/questionBankService'
+import { evaluateItemPsychometrics, EmpiricalPsychometrics } from '@/lib/psychometricsEngine'
+
 
 /* Tipos */
 interface School { id: string; name: string; color: string }
@@ -73,29 +75,34 @@ function getActiveApi() {
 /* 
  COMPONENTE PRINCIPAL
  */
-function calculateItemStats(item: { responseHistory?: Array<{ studentId: string; correct: boolean; timestamp: number }> }): {
-  p: number; D: number; classification: string; classColor: string
+function calculateItemStats(item: { responseHistory?: Array<{ studentId: string; correct: boolean; totalExamScore?: number; timestamp: number }>, level?: string }): {
+  p: number; D: number | null; classification: string; classColor: string; divergenceMessage?: string; discriminationWarning?: string
 } {
   const history = item.responseHistory || []
-  if (history.length < 3) return { p: -1, D: -1, classification: 'Sem dados', classColor: 'text-gray-400' }
+  if (history.length < 3) return { p: -1, D: null, classification: 'Sem dados', classColor: 'text-gray-400' }
   
-  const p = history.filter(r => r.correct).length / history.length
-  const sorted = [...history]
-  const cutoff = Math.max(1, Math.floor(history.length * 0.27))
-  const bottom27 = sorted.filter(r => !r.correct).slice(0, cutoff)
-  const top27 = sorted.filter(r => r.correct).slice(-cutoff)
-  const pHigh = top27.length > 0 ? top27.filter(r => r.correct).length / top27.length : 0
-  const pLow = bottom27.length > 0 ? bottom27.filter(r => r.correct).length / bottom27.length : 1
-  const D = pHigh - pLow
+  const psychometrics = evaluateItemPsychometrics(history as any, item.level)
+  const p = psychometrics.pValue
+  const D = psychometrics.discriminationIndex
   
   let classification = ''
   let classColor = ''
-  if (p < 0.3) { classification = 'Muito Dificil'; classColor = 'text-red-600' }
-  else if (p > 0.7) { classification = 'Muito Facil'; classColor = 'text-yellow-600' }
-  else { classification = 'Ideal'; classColor = 'text-green-600' }
+  if (p < 0.25) { classification = `Muito Difícil (p=${p.toFixed(2)})`; classColor = 'text-red-600' }
+  else if (p < 0.50) { classification = `Difícil (p=${p.toFixed(2)})`; classColor = 'text-orange-600' }
+  else if (p > 0.85) { classification = `Muito Fácil (p=${p.toFixed(2)})`; classColor = 'text-yellow-600' }
+  else if (p > 0.65) { classification = `Fácil (p=${p.toFixed(2)})`; classColor = 'text-blue-600' }
+  else { classification = `Ideal (p=${p.toFixed(2)})`; classColor = 'text-green-600' }
   
-  return { p, D, classification, classColor }
+  return {
+    p,
+    D,
+    classification,
+    classColor,
+    divergenceMessage: psychometrics.divergenceMessage,
+    discriminationWarning: psychometrics.discriminationWarning
+  }
 }
+
 
 export default function QuestionBank() {
  const [schools, setSchools] = useState<School[]>([])
@@ -729,42 +736,38 @@ Para questões dissertativas ou V/F, omita "options". Para V/F, o "answer" deve 
                     {(q as any).responseHistory && (q as any).responseHistory.length >= 3 && (() => {
                       const stats = calculateItemStats(q as any)
                       return (
-                        <span className={`text-xs px-2 py-0.5 rounded-full bg-gray-100 ${stats.classColor}`}
-                          title={`Dificuldade: p=${stats.p.toFixed(2)} | Discriminacao: D=${stats.D.toFixed(2)}`}>
-                          {stats.p < 0.3 ? '🔴' : stats.p > 0.7 ? '🟡' : '🟢'} {stats.classification}
-                        </span>
+                        <>
+                          <span className={`text-xs px-2 py-0.5 rounded-full bg-gray-100 font-bold ${stats.classColor}`}
+                            title={`Dificuldade Empírica: p=${stats.p.toFixed(2)}${stats.D !== null ? ` | Discriminação D=${stats.D.toFixed(2)}` : ''}`}>
+                            {stats.p < 0.35 ? '🔴' : stats.p > 0.75 ? '🟡' : '🟢'} {stats.classification}
+                            {stats.D !== null && ` · D=${stats.D > 0 ? '+' : ''}${stats.D.toFixed(2)}`}
+                          </span>
+                          {stats.divergenceMessage && (
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 font-medium"
+                              title={stats.divergenceMessage}>
+                              ⚠️ Divergência Calibrada
+                            </span>
+                          )}
+                          {stats.discriminationWarning && (
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-800 border border-red-300 font-medium"
+                              title={stats.discriminationWarning}>
+                              ⚠️ Revisar Gabarito/Item
+                            </span>
+                          )}
+                        </>
                       )
                     })()}
                     {(q as any).bloomLevel && (
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-purple-50 text-purple-600">
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-purple-50 text-purple-600 font-semibold">
                         {({ remember: '👁️', understand: '💡', apply: '🔧', analyze: '🔍', evaluate: '⚖️', create: '✨' } as Record<string, string>)[(q as any).bloomLevel] ?? ''} {(q as any).bloomLevel}
                       </span>
                     )}
                     {(q as any).difficultyLevel && (
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-orange-50 text-orange-600">
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-orange-50 text-orange-600 font-semibold">
                         {({ easy: '🟢', medium: '🟡', hard: '🔴', challenge: '⭐' } as Record<string, string>)[(q as any).difficultyLevel] ?? ''} {(q as any).difficultyLevel}
                       </span>
                     )}
 
-                    {(q as any).responseHistory && (q as any).responseHistory.length >= 3 && (() => {
-                      const stats = calculateItemStats(q as any)
-                      return (
-                        <span className={`text-xs px-2 py-0.5 rounded-full bg-gray-100 ${stats.classColor}`}
-                          title={`Dificuldade: p=${stats.p.toFixed(2)} | Discriminacao: D=${stats.D.toFixed(2)}`}>
-                          {stats.p < 0.3 ? '🔴' : stats.p > 0.7 ? '🟡' : '🟢'} {stats.classification}
-                        </span>
-                      )
-                    })()}
-                    {(q as any).bloomLevel && (
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-purple-50 text-purple-600">
-                        {({ remember: '👁️', understand: '💡', apply: '🔧', analyze: '🔍', evaluate: '⚖️', create: '✨' } as any)[(q as any).bloomLevel]} {(q as any).bloomLevel}
-                      </span>
-                    )}
-                    {(q as any).difficultyLevel && (
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-orange-50 text-orange-600">
-                        {({ easy: '🟢', medium: '🟡', hard: '🔴', challenge: '⭐' } as any)[(q as any).difficultyLevel]} {(q as any).difficultyLevel}
-                      </span>
-                    )}
 
  {sc && <span style={{ ...S.badge, background: '#f5efe6', color: '#7a5c42' }}>{sc.name}</span>}
  <span style={{ ...S.badge, background: '#f5efe6', color: '#7a5c42' }}>{q.year}</span>
@@ -821,6 +824,39 @@ Para questões dissertativas ou V/F, omita "options". Para V/F, o "answer" deve 
  <div style={{ fontSize: 13, color: '#2c1a0e' }}>{selectedQ.explanation}</div>
  </div>
  )}
+
+ {((selectedQ as any).responseHistory && (selectedQ as any).responseHistory.length >= 3) && (() => {
+   const stats = calculateItemStats(selectedQ as any)
+   return (
+     <div style={{ background: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: RADIUS.md, padding: '12px', marginBottom: 12 }}>
+       <div style={{ fontSize: 11, color: '#475569', fontWeight: 800, textTransform: 'uppercase', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 5 }}>
+         <span>📊</span> Calibração Psicométrica Real
+       </div>
+       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, fontSize: 12, marginBottom: 6 }}>
+         <div style={{ background: '#fff', padding: '6px 8px', borderRadius: 6, border: '1px solid #e2e8f0' }}>
+           <span style={{ color: '#64748b', fontSize: 10, display: 'block' }}>Índice de Facilidade (p)</span>
+           <b style={{ color: '#0f172a' }}>{stats.p.toFixed(2)} ({stats.classification})</b>
+         </div>
+         <div style={{ background: '#fff', padding: '6px 8px', borderRadius: 6, border: '1px solid #e2e8f0' }}>
+           <span style={{ color: '#64748b', fontSize: 10, display: 'block' }}>Discriminação (D)</span>
+           <b style={{ color: stats.D !== null && stats.D < 0 ? '#dc2626' : '#0f172a' }}>
+             {stats.D !== null ? `${stats.D > 0 ? '+' : ''}${stats.D.toFixed(2)}` : 'N < 6'}
+           </b>
+         </div>
+       </div>
+       {stats.divergenceMessage && (
+         <div style={{ fontSize: 11.5, color: '#92400e', background: '#fef3c7', border: '1px solid #fde68a', padding: '6px 8px', borderRadius: 6, marginTop: 4, lineHeight: 1.4 }}>
+           {stats.divergenceMessage}
+         </div>
+       )}
+       {stats.discriminationWarning && (
+         <div style={{ fontSize: 11.5, color: '#991b1b', background: '#fee2e2', border: '1px solid #fca5a5', padding: '6px 8px', borderRadius: 6, marginTop: 4, lineHeight: 1.4 }}>
+           {stats.discriminationWarning}
+         </div>
+       )}
+     </div>
+   )
+ })()}
 
  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
  {selectedQ.tags.map(t => <span key={t} style={{ ...S.badge, background: '#f0e8d8', color: '#7a5c42' }}>{t}</span>)}

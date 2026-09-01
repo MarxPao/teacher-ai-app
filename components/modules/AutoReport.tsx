@@ -4,6 +4,8 @@ import { COLOR, RADIUS, TEXT, SHADOW, FONT } from '@/styles/tokens';
 import React, { useState, useEffect } from 'react';
 import { validateReportGrounding } from '@/lib/reportGroundingValidator';
 import { logAiCall, summarize } from '@/lib/aiAuditLog';
+import { buildTeacherStyleSystemPrompt } from '@/lib/teacherStyleProfile';
+
 
 // Tipagens baseadas nos dados do app
 interface ClassData {
@@ -110,7 +112,10 @@ Estrutura requerida no parecer:
 4. RECOMENDAÇÕES E PLANO DE AÇÃO PARA O PRÓXIMO MÊS
 
 REGRA CRÍTICA: Use EXATAMENTE os dados fornecidos acima. Não invente frequências, nomes ou métricas diferentes das fornecidas.
-Utilize tom formal, embasado e respeitoso em português.`;
+Utilize tom formal, embasado e respeitoso em português.
+
+${buildTeacherStyleSystemPrompt()}`;
+
 
       let text = '';
       let rawAiResponse = '';

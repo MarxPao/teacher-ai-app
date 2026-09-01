@@ -4,6 +4,12 @@
  * Unifica teacher_questions e teacher_question_bank com migração transparente.
  */
 
+import {
+  EmpiricalPsychometrics,
+  StudentItemResponse,
+  evaluateItemPsychometrics
+} from './psychometricsEngine'
+
 export type ActivityKind = 'lesson' | 'exercise' | 'exam' | 'question'
 export type QuestionType = 'mc' | 'essay' | 'tf' | 'fill'
 
@@ -29,7 +35,8 @@ export interface UnifiedQuestion {
   sourceBookUnit?: string
   createdAt: number
   source?: 'manual' | 'ai' | 'library_extraction'
-  responseHistory?: Array<{ studentId: string; correct: boolean; timestamp: number }>
+  responseHistory?: Array<{ studentId: string; correct: boolean; totalExamScore?: number; timestamp: number }>
+  psychometrics?: EmpiricalPsychometrics
 }
 
 const STORAGE_KEY_PRIMARY = 'teacher_unified_questions'
@@ -40,6 +47,9 @@ const STORAGE_KEY_LEGACY_BANK = 'teacher_question_bank'
  * Normaliza e migra itens legados para o formato unificado
  */
 function normalizeLegacyItem(item: any): UnifiedQuestion {
+  const history = Array.isArray(item.responseHistory) ? item.responseHistory : []
+  const psychometrics = item.psychometrics || (history.length > 0 ? evaluateItemPsychometrics(history, item.level) : undefined)
+
   return {
     id: item.id || `q_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
     statement: item.statement || item.title || item.question || item.text || 'Questão sem enunciado',
@@ -62,9 +72,11 @@ function normalizeLegacyItem(item: any): UnifiedQuestion {
     sourceBookUnit: item.sourceBookUnit || item.unit,
     createdAt: item.createdAt || Date.now(),
     source: item.source || 'manual',
-    responseHistory: Array.isArray(item.responseHistory) ? item.responseHistory : []
+    responseHistory: history,
+    psychometrics
   }
 }
+
 
 /**
  * Recupera todas as questões unificadas do armazenamento
@@ -238,3 +250,55 @@ export function extractQuestionsFromBookText(
 
   return extracted
 }
+
+/**
+ * Registra respostas de alunos para uma questão e recalibra seus parâmetros psicométricos
+ */
+export function recordQuestionResponsesInBank(
+  questionId: string,
+  newResponses: Array<{ studentId: string; correct: boolean; totalExamScore?: number }>
+): UnifiedQuestion | null {
+  const all = getStoredQuestions()
+  const idx = all.findIndex(q => q.id === questionId)
+  if (idx === -1) return null
+
+  const q = all[idx]
+  const existingHistory = Array.isArray(q.responseHistory) ? [...q.responseHistory] : []
+  const now = Date.now()
+
+  // Adiciona novas respostas
+  newResponses.forEach(r => {
+    existingHistory.push({
+      studentId: r.studentId,
+      correct: r.correct,
+      totalExamScore: r.totalExamScore,
+      timestamp: now
+    })
+  })
+
+  // Recalcula psicometria
+  const psychometrics = evaluateItemPsychometrics(existingHistory, q.level)
+
+  const updated: UnifiedQuestion = {
+    ...q,
+    responseHistory: existingHistory,
+    psychometrics
+  }
+
+  all[idx] = updated
+  saveStoredQuestions(all)
+  return updated
+}
+
+/**
+ * Retorna questões com aviso de calibração empírica e divergência em relação ao nominal
+ */
+export function getCalibratedQuestionWarning(q: UnifiedQuestion): string | null {
+  if (!q.psychometrics) return null
+  if (q.psychometrics.discriminationWarning) return q.psychometrics.discriminationWarning
+  if (q.psychometrics.isDivergentFromNominal && q.psychometrics.divergenceMessage) {
+    return q.psychometrics.divergenceMessage
+  }
+  return null
+}
+

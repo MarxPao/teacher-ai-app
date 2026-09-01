@@ -3,6 +3,8 @@ import { COLOR, RADIUS, TEXT, SHADOW, FONT } from '@/styles/tokens'
 import { toast, showConfirm } from '@/components/Toast'
 
 import { useState, useEffect, useMemo, useRef } from 'react'
+import { buildTeacherStyleSystemPrompt } from '@/lib/teacherStyleProfile'
+
 
 export interface SequenceUnit {
   id: string
@@ -446,7 +448,10 @@ ${units.map(u => `- ${u.title}: Previsto (${u.plannedMonthStart}-${u.plannedMont
 Gere um diagnóstico estruturado com:
 1. Análise comparativa entre o Conteúdo Programático Previsto vs. o Conteúdo Realmente Ministrado.
 2. Identificação precisa de onde ocorreu o gargalo temporal (ex: por que atrasou na Unit 3 ou 4).
-3. Três recomendações táticas práticas para o professor recuperar o cronograma sem sacrificar o domínio e a fluência dos alunos.`
+3. Três recomendações táticas práticas para o professor recuperar o cronograma sem sacrificar o domínio e a fluência dos alunos.
+
+${buildTeacherStyleSystemPrompt()}`
+
 
       const r = await fetch('/api/agent', {
         method: 'POST',

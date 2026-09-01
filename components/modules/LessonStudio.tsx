@@ -10,7 +10,9 @@ import { ApiConfig } from '@/components/modules/ApiManager'
 import { exportToPdf, exportToWord, exportToExcel } from '@/lib/exportUtils'
 import { getStoredBnccSkills, getBnccSkillsForGrade, getClassPostponedSkills, saveClassPostponedSkills, BnccSkill } from '@/lib/bnccData'
 import { buildTeacherStylePromptDirective, updateTeacherProfileFromLessonPlan } from '@/lib/teacherProfile'
+import { buildTeacherStyleSystemPrompt } from '@/lib/teacherStyleProfile'
 import { getStoredQuestions } from '@/lib/questionBankService'
+
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 interface ClassRecord {
@@ -398,6 +400,8 @@ DADOS DA AULA:
 - Habilidades BNCC: ${selectedSkills.map(s => s.code).join(', ') || 'Geral'}
 
 ${promptDirective}
+${buildTeacherStyleSystemPrompt()}
+
 
 Retorne ESTRITAMENTE um objeto JSON no formato:
 {

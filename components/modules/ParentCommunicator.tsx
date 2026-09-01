@@ -2,6 +2,7 @@
 import { COLOR, RADIUS, TEXT, SHADOW, FONT } from '@/styles/tokens'
 
 import { useState, useEffect } from 'react'
+import { buildTeacherStyleSystemPrompt } from '@/lib/teacherStyleProfile'
 
 interface StudentItem {
  id: string
@@ -51,9 +52,12 @@ O texto deve conter:
 3. Pontos de atenção ou recomendações pedagógicas suaves para praticar em casa.
 4. Mensagem final de encorajamento e disponibilidade da professora.
 
+${buildTeacherStyleSystemPrompt()}
+
 Formate de modo ideal para envio direto via WhatsApp!`
 
  const r = await fetch('/api/agent', {
+
  method: 'POST',
  headers: { 'Content-Type': 'application/json' },
  body: JSON.stringify({ messages: [{ role: 'user', content: prompt }] })
