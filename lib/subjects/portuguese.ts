@@ -139,61 +139,71 @@ const portugueseProfile: SubjectProfile = {
       id: 'conc_verbal_composto',
       pattern: 'Concordância verbal com sujeito composto anteposto ao verbo',
       examples: ['"João e Maria foi à escola"', '"O professor e a aluna chegou cedo"'],
-      pedagogicNote: 'Sujeito composto antes do verbo exige plural. Distrator: usar singular (erro frequente).'
+      pedagogicNote: 'Sujeito composto antes do verbo exige plural. Distrator: usar singular (erro frequente).',
+      contrastsWith: ['conc_partitivo']
     },
     {
       id: 'conc_partitivo',
       pattern: 'Concordância com sujeito partitivo (maioria, metade, parte)',
       examples: ['"A maioria dos alunos estavam ausentes"', '"Metade dos livros foram doados"'],
-      pedagogicNote: 'Com partitivos, o verbo pode concordar com o núcleo do sujeito ou com o complemento. Distrator: apresentar apenas uma forma como correta quando ambas são aceitas.'
+      pedagogicNote: 'Com partitivos, o verbo pode concordar com o núcleo do sujeito ou com o complemento. Distrator: apresentar apenas uma forma como correta quando ambas são aceitas.',
+      contrastsWith: ['conc_verbal_composto']
     },
     {
       id: 'regencia_assistir',
       pattern: 'Regência do verbo assistir',
       examples: ['"Assisti o filme" (errado)', '"Assisti ao filme" (correto — bitransitivo, regência com preposição A)'],
-      pedagogicNote: '"Assistir" como ver/presenciar é bitransitivo e exige preposição A. Distrator: omitir a preposição.'
+      pedagogicNote: '"Assistir" como ver/presenciar é bitransitivo e exige preposição A. Distrator: omitir a preposição.',
+      contrastsWith: ['regencia_chegar']
     },
     {
       id: 'regencia_chegar',
       pattern: 'Regência do verbo chegar/ir (preposições A vs EM)',
       examples: ['"Cheguei em casa" (informal)', '"Cheguei a casa" (norma culta)'],
-      pedagogicNote: 'Na norma culta, chegar e ir regem preposição A, não EM. Distrator: usar EM como alternativa correta.'
+      pedagogicNote: 'Na norma culta, chegar e ir regem preposição A, não EM. Distrator: usar EM como alternativa correta.',
+      contrastsWith: ['regencia_assistir', 'onde_aonde']
     },
     {
       id: 'colocacao_negacao',
       pattern: 'Próclise obrigatória após palavras de negação',
       examples: ['"Não me disse nada" (correto)', '"Não disse-me nada" (errado)'],
-      pedagogicNote: 'Após advérbio de negação, o pronome deve ser proclítico. Distrator: apresentar ênclise como correta.'
+      pedagogicNote: 'Após advérbio de negação, o pronome deve ser proclítico. Distrator: apresentar ênclise como correta.',
+      contrastsWith: ['colocacao_inicio']
     },
     {
       id: 'colocacao_inicio',
       pattern: 'Ênclise em início de oração (proibida)',
       examples: ['"Me disseram a verdade" (informal/errado na norma culta)', '"Disseram-me a verdade" (correto)'],
-      pedagogicNote: 'Em início de oração, a próclise é proibida na norma culta, mas o distrator frequente é apresentar o pronome antes do verbo.'
+      pedagogicNote: 'Em início de oração, a próclise é proibida na norma culta, mas o distrator frequente é apresentar o pronome antes do verbo.',
+      contrastsWith: ['colocacao_negacao']
     },
     {
       id: 'crase_feminino',
       pattern: 'Crase obrigatória antes de substantivo feminino precedido de preposição A',
       examples: ['"Fui a escola" (errado)', '"Fui à escola" (correto)'],
-      pedagogicNote: 'Antes de feminino que aceita artigo definido e após verbo que rege preposição A. Distrator: omitir o acento.'
+      pedagogicNote: 'Antes de feminino que aceita artigo definido e após verbo que rege preposição A. Distrator: omitir o acento.',
+      contrastsWith: ['crase_proibida']
     },
     {
       id: 'crase_proibida',
       pattern: 'Crase proibida antes de substantivos masculinos e verbos',
       examples: ['"Fui à pé" (errado)', '"Fui a pé" (correto)'],
-      pedagogicNote: 'Não há crase antes de masculino sem artigo ou antes de verbos. Distrator: inserir o acento.'
+      pedagogicNote: 'Não há crase antes de masculino sem artigo ou antes de verbos. Distrator: inserir o acento.',
+      contrastsWith: ['crase_feminino']
     },
     {
       id: 'mas_mais',
       pattern: 'Distinção entre "mas" (conjunção adversativa) e "mais" (advérbio/adjetivo de quantidade)',
       examples: ['"Quero mais, mas não posso"', '"Quero mas não posso" (errado — falta mais)'],
-      pedagogicNote: '"Mas" = porém/contudo; "mais" = quantidade/grau. Distrator frequente em questões de completar lacunas.'
+      pedagogicNote: '"Mas" = porém/contudo; "mais" = quantidade/grau. Distrator frequente em questões de completar lacunas.',
+      contrastsWith: ['porque_formas']
     },
     {
       id: 'onde_aonde',
       pattern: 'Uso de "onde" (lugar estático) vs "aonde" (movimento/destino)',
       examples: ['"A escola onde estudo fica perto"', '"A escola aonde vou fica perto" (correto — movimento)'],
-      pedagogicNote: '"Onde" = localização estática; "aonde" = destino de movimento. Distrator: usar "onde" indistintamente.'
+      pedagogicNote: '"Onde" = localização estática; "aonde" = destino de movimento. Distrator: usar "onde" indistintamente.',
+      contrastsWith: ['regencia_chegar']
     },
     {
       id: 'porque_formas',
@@ -204,10 +214,12 @@ const portugueseProfile: SubjectProfile = {
         '"Porquê" (s.) = o motivo',
         '"Por quê" = fim de frase interrogativa'
       ],
-      pedagogicNote: 'Erro de alta frequência. Distratores: trocar as quatro formas em contextos específicos.'
+      pedagogicNote: 'Erro de alta frequência. Distratores: trocar as quatro formas em contextos específicos.',
+      contrastsWith: ['mas_mais']
     },
     {
       id: 'virgula_adverbial',
+
       pattern: 'Vírgula obrigatória após adjunto adverbial anteposto longo',
       examples: ['"No próximo bimestre, os alunos farão prova."', '"No próximo bimestre os alunos farão prova" (ausência aceitável para curtos)'],
       pedagogicNote: 'Adjuntos adverbiais antepostos longos exigem vírgula. Para curtos, é facultativa. Distrator: apresentar a versão sem vírgula como errada.'

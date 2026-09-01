@@ -14,6 +14,8 @@ export interface BlueprintItemSpec {
   questionType: 'multiple_choice' | 'discursive' | 'reading_text' | 'gap_fill'
   isSpacedRetrieval?: boolean
   spacedOriginTopic?: string
+  isContrastPair?: boolean
+  contrastPartnerTopic?: string
 }
 
 export interface TestBlueprint {
@@ -23,8 +25,11 @@ export interface TestBlueprint {
   hasSpacedRetrieval?: boolean
   spacedRetrievalCount?: number
   spacedNotice?: string
+  hasInterleaving?: boolean
+  contrastPairsCount?: number
   items: BlueprintItemSpec[]
 }
+
 
 /**
  * Recupera tópicos lecionados anteriormente para a turma (2 a 4 semanas atrás)
@@ -72,8 +77,38 @@ export function getPastTopicsForClass(classRef?: string, currentTopic?: string):
 }
 
 /**
- * Constrói uma Matriz de Especificação balanceada a partir de tópicos, habilidades, percentuais de Bloom
- * e espiral de recuperação espaçada (Spaced Retrieval Practice).
+ * Verifica se dois tópicos possuem relação declarada de contraste pedagógico (Interleaving Effect)
+ */
+export function checkTopicsAreContrastPairs(t1: string, t2: string): boolean {
+  const a = (t1 || '').toLowerCase().trim()
+  const b = (t2 || '').toLowerCase().trim()
+  if (!a || !b || a === b) return false
+
+  const pairs: Array<[string, string]> = [
+    ['present perfect', 'simple past'],
+    ['present perfect', 'past simple'],
+    ['first conditional', 'second conditional'],
+    ['since', 'for'],
+    ['comparative', 'superlative'],
+    ['some', 'any'],
+    ['much', 'many'],
+    ['crase', 'crase'],
+    ['mas', 'mais'],
+    ['onde', 'aonde'],
+    ['porque', 'por que'],
+    ['assistir', 'chegar'],
+    ['próclise', 'ênclise'],
+    ['concordância', 'concordância']
+  ]
+
+  return pairs.some(([p1, p2]) => {
+    return (a.includes(p1) && b.includes(p2)) || (a.includes(p2) && b.includes(p1))
+  })
+}
+
+/**
+ * Constrói uma Matriz de Especificação balanceada a partir de tópicos, habilidades, percentuais de Bloom,
+ * espiral de recuperação espaçada (Spaced Retrieval) e intercalação contrastante (Interleaving Effect).
  */
 export function createBalancedBlueprint(opts: {
   title: string
@@ -107,6 +142,20 @@ export function createBalancedBlueprint(opts: {
 
   while (bloomSeq.length < total) bloomSeq.push('apply')
 
+  // ─── Detecção de Pares de Contraste Pedagógico (Interleaving) ───────────────
+  let hasInterleaving = false
+  let contrastPairsCount = 0
+  if (currentTopics.length >= 2) {
+    for (let i = 0; i < currentTopics.length; i++) {
+      for (let j = i + 1; j < currentTopics.length; j++) {
+        if (checkTopicsAreContrastPairs(currentTopics[i], currentTopics[j])) {
+          hasInterleaving = true
+          contrastPairsCount++
+        }
+      }
+    }
+  }
+
   // ─── Espiral de Recuperação Espaçada (Spaced Retrieval) ─────────────────────
   let spacedCount = 0
   let pastTopicsList: string[] = []
@@ -117,11 +166,10 @@ export function createBalancedBlueprint(opts: {
       ? opts.pastTopics 
       : getPastTopicsForClass(undefined, currentTopics[0])
 
-    // Filtra tópicos passados que não sejam idênticos ao tópico atual
     pastTopicsList = rawPast.filter(pt => !currentTopics.some(ct => ct.toLowerCase() === pt.toLowerCase()))
 
     if (pastTopicsList.length > 0 && total >= 3) {
-      const ratio = opts.spacedRatio || 0.25 // 25% por padrão
+      const ratio = opts.spacedRatio || 0.25
       spacedCount = Math.max(1, Math.round(total * ratio))
     } else {
       spacedNotice = 'Sem tópicos anteriores suficientes registrados para recuperação espaçada: 100% dos itens alocados no conteúdo atual.'
@@ -145,6 +193,17 @@ export function createBalancedBlueprint(opts: {
       ? pastTopicsList[(i - currentCount) % pastTopicsList.length]
       : currentTopics[i % currentTopics.length]
 
+    // Verifica se este item faz parte de um par contrastante intercalado
+    let isContrast = false
+    let partnerTopic: string | undefined = undefined
+    if (!isSpaced && hasInterleaving && currentTopics.length >= 2) {
+      const otherTopic = currentTopics[(i + 1) % currentTopics.length]
+      if (checkTopicsAreContrastPairs(topic, otherTopic)) {
+        isContrast = true
+        partnerTopic = otherTopic
+      }
+    }
+
     items.push({
       itemNumber: i + 1,
       topic,
@@ -153,7 +212,9 @@ export function createBalancedBlueprint(opts: {
       bnccCode: skill || undefined,
       questionType: i === 0 && topic.toLowerCase().includes('leitura') ? 'reading_text' : 'multiple_choice',
       isSpacedRetrieval: isSpaced ? true : undefined,
-      spacedOriginTopic: isSpaced ? topic : undefined
+      spacedOriginTopic: isSpaced ? topic : undefined,
+      isContrastPair: isContrast ? true : undefined,
+      contrastPartnerTopic: partnerTopic
     })
   }
 
@@ -164,10 +225,11 @@ export function createBalancedBlueprint(opts: {
     hasSpacedRetrieval: spacedCount > 0,
     spacedRetrievalCount: spacedCount,
     spacedNotice,
+    hasInterleaving,
+    contrastPairsCount,
     items
   }
 }
-
 
 /**
  * Converte a Matriz de Especificação em instrução detalhada item a item para o prompt da IA
@@ -180,15 +242,20 @@ export function generateBlueprintPromptSection(blueprint: TestBlueprint): string
     const diffLabel = item.difficulty === 'easy' ? 'Fácil' : item.difficulty === 'medium' ? 'Médio' : item.difficulty === 'hard' ? 'Difícil' : '⭐ Desafio'
     const skillText = item.bnccCode ? ` | BNCC: ${item.bnccCode}` : ''
     const spacedTag = item.isSpacedRetrieval ? ` [🔄 REVISÃO ESPAÇADA / CONSOLIDAÇÃO]` : ''
-    return `• Questão ${item.itemNumber}${spacedTag}: [Tópico: ${item.topic}] × [Cognição: ${bloomLabel}] × [Dificuldade: ${diffLabel}]${skillText}`
+    const contrastTag = item.isContrastPair && item.contrastPartnerTopic ? ` [🔀 PAR CONTRASTANTE ↔ ${item.contrastPartnerTopic}]` : ''
+    return `• Questão ${item.itemNumber}${spacedTag}${contrastTag}: [Tópico: ${item.topic}] × [Cognição: ${bloomLabel}] × [Dificuldade: ${diffLabel}]${skillText}`
   }).join('\n')
 
   let header = `=== MATRIZ DE ESPECIFICAÇÃO DA PROVA (TEST BLUEPRINT PSICOMÉTRICO) ===\n`
   if (blueprint.hasSpacedRetrieval && blueprint.spacedRetrievalCount) {
     header += `🔄 ESPIRAL DE RECUPERAÇÃO ESPAÇADA (SPACED RETRIEVAL): ${blueprint.spacedRetrievalCount} de ${blueprint.totalItems} itens revisam ativamente tópicos anteriores para retenção de longo prazo.\n`
   }
+  if (blueprint.hasInterleaving) {
+    header += `🔀 INTERCALAÇÃO CONTRASTANTE (INTERLEAVING EFFECT): Itens de tópicos contrastantes foram intercalados propositalmente para forçar a discriminação ativa de regras pelo aluno.\n`
+  }
   header += `Cada uma das ${blueprint.totalItems} questões DEVE obedecer rigorosamente à sua célula designada na matriz:\n${lines}\n`
 
   return header
 }
+
 

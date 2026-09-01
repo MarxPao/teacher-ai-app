@@ -44,7 +44,9 @@ export interface DistractorPattern {
   pattern: string      // nome do erro diagnóstico
   examples: string[]   // 2-4 exemplos concretos
   pedagogicNote: string  // instrução para o gerador de distratores
+  contrastsWith?: string[] // IDs de outros padrões com os quais é frequentemente confundido (Interleaving)
 }
+
 
 export interface EssayRubricCriterion {
   id: string

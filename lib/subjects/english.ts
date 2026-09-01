@@ -160,51 +160,60 @@ const englishProfile: SubjectProfile = {
       id: 'l1_syntax',
       pattern: 'Interferência Sintática de L1 (Português)',
       examples: ['"I have 15 years"', '"I am agree"', '"She said me that..."', '"Is raining today"'],
-      pedagogicNote: 'Crie distratores que espelham estrutura do português aplicada diretamente ao inglês.'
+      pedagogicNote: 'Crie distratores que espelham estrutura do português aplicada diretamente ao inglês.',
+      contrastsWith: ['false_friends', 'question_formation']
     },
     {
       id: 'false_friends',
       pattern: 'Falsos Cognatos Reais (False Friends)',
       examples: ['"pretend" (confundido com pretender)', '"attend" (atender vs frequentar)', '"actually" (atualmente vs na verdade)'],
-      pedagogicNote: 'Use palavras com grafia/som similar em PT mas significado diferente em EN.'
+      pedagogicNote: 'Use palavras com grafia/som similar em PT mas significado diferente em EN.',
+      contrastsWith: ['l1_syntax']
     },
     {
       id: 'overgeneralization',
       pattern: 'Super-generalização de Regras',
       examples: ['"goed"', '"buyed"', '"I have seen him yesterday"'],
-      pedagogicNote: 'Crie distratores aplicando regra regular a irregular ou Present Perfect com data específica.'
+      pedagogicNote: 'Crie distratores aplicando regra regular a irregular ou Present Perfect com data específica.',
+      contrastsWith: ['aspect_preposition', 'verb_agreement']
     },
     {
       id: 'aspect_preposition',
       pattern: 'Aspecto Verbal & Preposições',
       examples: ['"depend of"', '"since 3 years"', '"I am here since Monday"'],
-      pedagogicNote: 'Confusão entre Simple Past vs Past Continuous e preposições típicas de português.'
+      pedagogicNote: 'Confusão entre Simple Past vs Past Continuous e preposições típicas de português.',
+      contrastsWith: ['overgeneralization']
     },
     {
       id: 'uncountable_plural',
       pattern: 'Pluralização de Incontáveis',
       examples: ['"informations"', '"advices"', '"homeworks"'],
-      pedagogicNote: 'Distratores com plural de substantivos incontáveis (padrão do português).'
+      pedagogicNote: 'Distratores com plural de substantivos incontáveis (padrão do português).',
+      contrastsWith: ['article_confusion']
     },
     {
       id: 'verb_agreement',
       pattern: 'Concordância Verbal L1',
       examples: ['"He go to school"', '"She don\'t like"'],
-      pedagogicNote: 'Ausência de -s na 3ª pessoa por influência do padrão morfológico do português.'
+      pedagogicNote: 'Ausência de -s na 3ª pessoa por influência do padrão morfológico do português.',
+      contrastsWith: ['question_formation', 'overgeneralization']
     },
     {
       id: 'article_confusion',
       pattern: 'Uso do Artigo Definido',
       examples: ['"I love the soccer"', '"The life is beautiful"'],
-      pedagogicNote: 'Inserção de artigo definido onde o inglês não usa (influência do português).'
+      pedagogicNote: 'Inserção de artigo definido onde o inglês não usa (influência do português).',
+      contrastsWith: ['uncountable_plural']
     },
     {
       id: 'question_formation',
       pattern: 'Formação de Perguntas sem Auxiliar',
       examples: ['"Where you live?"', '"What she does?"'],
-      pedagogicNote: 'Omissão de do/does/did na formação de perguntas (padrão SVO direto do português).'
+      pedagogicNote: 'Omissão de do/does/did na formação de perguntas (padrão SVO direto do português).',
+      contrastsWith: ['verb_agreement', 'l1_syntax']
     }
   ],
+
 
   // ─── Rubrica Cambridge 4D (para OmniGrader) ───────────────────────────────
   essayRubric: [
