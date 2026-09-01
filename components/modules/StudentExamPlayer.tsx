@@ -10,6 +10,8 @@ export interface OnlineQuestion {
   type: 'multiple_choice' | 'text' | 'true_false'
   options?: string[]
   answer?: string
+  explanation?: string
+  distractorExplanations?: Record<string, string>
   bloomLevel?: string
   difficultyLevel?: string
   dataset?: {
@@ -21,10 +23,12 @@ export interface OnlineExamProps {
   title: string
   schoolName?: string
   className?: string
+  mode?: 'exam' | 'exercise' | 'practice'
   questions: OnlineQuestion[]
   onClose: () => void
   onComplete?: (studentName: string, score: number, total: number) => void
 }
+
 
 function hashCode(str: string): number {
   let hash = 0
@@ -83,10 +87,68 @@ function scoreGapFill(student: string, correct: string): 0 | 0.5 | 1 {
   return 0
 }
 
+export function getDiagnosticFeedbackForOption(
+  q: { answer?: string; explanation?: string; distractorExplanations?: Record<string, string>; stem?: string },
+  selectedOption: string
+): { isCorrect: boolean; feedbackText: string; ruleHint?: string } {
+  if (!q.answer) {
+    return { isCorrect: true, feedbackText: 'Resposta registrada com sucesso.' }
+  }
+
+  const cleanSel = selectedOption.trim().toLowerCase()
+  const cleanAns = q.answer.trim().toLowerCase()
+  const isCorrect = cleanSel === cleanAns || cleanSel.startsWith(cleanAns) || cleanAns.startsWith(cleanSel)
+
+  if (isCorrect) {
+    return {
+      isCorrect: true,
+      feedbackText: q.explanation || 'Excelente! Você aplicou o conceito corretamente.',
+      ruleHint: 'Domínio conceitual consolidado neste item.'
+    }
+  }
+
+  // 1. Explicação explícita do distrator se cadastrada
+  if (q.distractorExplanations && q.distractorExplanations[selectedOption]) {
+    return {
+      isCorrect: false,
+      feedbackText: q.distractorExplanations[selectedOption],
+      ruleHint: `Gabarito esperado: ${q.answer}`
+    }
+  }
+
+  // 2. Explicação geral da questão se cadastrada
+  if (q.explanation) {
+    return {
+      isCorrect: false,
+      feedbackText: `A alternativa "${selectedOption}" está incorreta. ${q.explanation}`,
+      ruleHint: `Gabarito correto: ${q.answer}`
+    }
+  }
+
+  // 3. Diagnóstico heurístico padrão de distratores
+  let diagnostic = `A alternativa "${selectedOption}" não atende à regra exigida pelo enunciado.`
+  const optLow = selectedOption.toLowerCase()
+  
+  if (optLow.includes("don't") || optLow.includes('doesnt') || optLow.includes("doesn't")) {
+    diagnostic = `Atenção à concordância de 3ª pessoa do singular (He/She/It) com o verbo auxiliar correto.`
+  } else if (optLow.includes('went') || optLow.includes('gone') || optLow.includes('goed')) {
+    diagnostic = `Atenção à distinção entre Past Simple (ação pontual concluída) e Particípio Passado (Present Perfect).`
+  } else if (optLow.includes('more') || optLow.includes('er')) {
+    diagnostic = `Atenção à regra de comparativos para adjetivos curtos (-er) vs. longos (more + adj).`
+  }
+
+  return {
+    isCorrect: false,
+    feedbackText: diagnostic,
+    ruleHint: `Gabarito esperado: ${q.answer}`
+  }
+}
+
 export default function StudentExamPlayer({
   title,
   schoolName = 'ESCOLA / INSTITUTO DE ENSINO',
   className = 'Turma 8º Ano',
+  mode = 'exam',
   questions,
   onClose,
   onComplete
@@ -102,9 +164,10 @@ export default function StudentExamPlayer({
   const [kioskMode, setKioskMode] = useState(false)
   const [tabSwitchCount, setTabSwitchCount] = useState(0)
   
-  const [examMode, setExamMode] = useState<'exam' | 'practice'>('exam')
+  const [examMode, setExamMode] = useState<'exam' | 'practice'>(mode === 'exercise' || mode === 'practice' ? 'practice' : 'exam')
   
   const formRef = useRef<HTMLFormElement>(null)
+
 
   useEffect(() => {
     const examContainer = document.querySelector('[data-duration-minutes]') as HTMLElement
@@ -314,8 +377,8 @@ export default function StudentExamPlayer({
           </div>
           <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
             <div className="flex gap-2 text-sm" style={{ display: 'flex', gap: '8px', fontSize: '0.875rem' }}>
-              <button type="button" onClick={() => setExamMode('exam')} style={{ padding: '4px 12px', borderRadius: 6, cursor: 'pointer', border: '1px solid #ccc', background: examMode === 'exam' ? '#2563eb' : '#f3f4f6', color: examMode === 'exam' ? '#fff' : '#000' }}>📝 Prova</button>
-              <button type="button" onClick={() => setExamMode('practice')} style={{ padding: '4px 12px', borderRadius: 6, cursor: 'pointer', border: '1px solid #ccc', background: examMode === 'practice' ? '#16a34a' : '#f3f4f6', color: examMode === 'practice' ? '#fff' : '#000' }}>🎯 Prática</button>
+              <button type="button" onClick={() => setExamMode('exam')} style={{ padding: '6px 14px', borderRadius: 8, cursor: 'pointer', border: examMode === 'exam' ? '1.5px solid #1d4ed8' : '1px solid #d1d5db', background: examMode === 'exam' ? '#2563eb' : '#f9fafb', color: examMode === 'exam' ? '#fff' : '#374151', fontWeight: 700 }}>📝 Prova Oficial</button>
+              <button type="button" onClick={() => setExamMode('practice')} style={{ padding: '6px 14px', borderRadius: 8, cursor: 'pointer', border: examMode === 'practice' ? '1.5px solid #15803d' : '1px solid #d1d5db', background: examMode === 'practice' ? '#16a34a' : '#f9fafb', color: examMode === 'practice' ? '#fff' : '#374151', fontWeight: 700 }}>🎯 Treino & Exercício</button>
             </div>
             <button
               onClick={onClose}
@@ -325,6 +388,33 @@ export default function StudentExamPlayer({
             </button>
           </div>
         </div>
+
+        {/* Banner Informativo de Modo Pedagógico */}
+        <div style={{
+          background: examMode === 'practice' ? '#f0fdf4' : '#f8fafc',
+          border: `1px solid ${examMode === 'practice' ? '#bbf7d0' : '#e2e8f0'}`,
+          borderRadius: RADIUS.md,
+          padding: '10px 16px',
+          marginBottom: 20,
+          fontSize: 13,
+          color: examMode === 'practice' ? '#166534' : '#475569',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8
+        }}>
+          {examMode === 'practice' ? (
+            <>
+              <span style={{ fontSize: 16 }}>🎯</span>
+              <span><b>Modo Treino & Aprendizagem Formativa:</b> Ao selecionar uma opção, você recebe feedback imediato e explicação do raciocínio/erro para auto-correção.</span>
+            </>
+          ) : (
+            <>
+              <span style={{ fontSize: 16 }}>🛡️</span>
+              <span><b>Modo Prova Oficial:</b> Suas respostas ficam gravadas e o gabarito completo com nota final será liberado somente após o envio.</span>
+            </>
+          )}
+        </div>
+
 
         {!submitted ? (
           <form ref={formRef} onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
@@ -352,15 +442,43 @@ export default function StudentExamPlayer({
               let practiceFeedback = null
               if (examMode === 'practice' && answers[q.id] !== undefined && q.answer) {
                 if (q.type === 'multiple_choice') {
-                   const isCorrect = answers[q.id]?.trim().toLowerCase() === q.answer.trim().toLowerCase()
-                   if (isCorrect) practiceFeedback = <div style={{marginTop: 8, padding: 8, background: '#dcfce7', color: '#166534', borderRadius: 6, fontSize: 13}}>✅ Correto!</div>
-                   else practiceFeedback = <div style={{marginTop: 8, padding: 8, background: '#fee2e2', color: '#991b1b', borderRadius: 6, fontSize: 13}}>❌ Incorreto. A resposta correta era: {q.answer}</div>
+                  const diag = getDiagnosticFeedbackForOption(q, answers[q.id])
+                  if (diag.isCorrect) {
+                    practiceFeedback = (
+                      <div style={{ marginTop: 10, padding: 12, background: '#dcfce7', color: '#166534', borderRadius: 8, fontSize: 13, border: '1px solid #86efac' }}>
+                        <div style={{ fontWeight: 800, display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                          <span>✅</span> Resposta Correta!
+                        </div>
+                        <div>{diag.feedbackText}</div>
+                      </div>
+                    )
+                  } else {
+                    practiceFeedback = (
+                      <div style={{ marginTop: 10, padding: 12, background: '#fef2f2', color: '#991b1b', borderRadius: 8, fontSize: 13, border: '1px solid #fca5a5' }}>
+                        <div style={{ fontWeight: 800, display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                          <span>❌</span> Alternativa Incorreta — Análise Conceitual:
+                        </div>
+                        <div style={{ marginBottom: 6, lineHeight: 1.4 }}>{diag.feedbackText}</div>
+                        {diag.ruleHint && (
+                          <div style={{ fontSize: 12, color: '#7f1d1d', fontWeight: 600, background: '#fee2e2', padding: '4px 8px', borderRadius: 4, display: 'inline-block' }}>
+                            💡 {diag.ruleHint}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  }
                 } else if (q.type === 'text') {
-                   const gapScore = scoreGapFill(answers[q.id], q.answer)
-                   if (gapScore === 1) practiceFeedback = <div style={{marginTop: 8, padding: 8, background: '#dcfce7', color: '#166534', borderRadius: 6, fontSize: 13}}>✅ Correto!</div>
-                   else if (gapScore === 0.5) practiceFeedback = <div style={{marginTop: 8, padding: 8, background: '#fef9c3', color: '#854d0e', borderRadius: 6, fontSize: 13}}>⚠️ Quase! (Erro de digitação). Esperado: {q.answer}</div>
+                  const gapScore = scoreGapFill(answers[q.id], q.answer)
+                  if (gapScore === 1) {
+                    practiceFeedback = <div style={{ marginTop: 10, padding: 10, background: '#dcfce7', color: '#166534', borderRadius: 8, fontSize: 13, border: '1px solid #86efac' }}>✅ Resposta Correta! {q.explanation || ''}</div>
+                  } else if (gapScore === 0.5) {
+                    practiceFeedback = <div style={{ marginTop: 10, padding: 10, background: '#fef9c3', color: '#854d0e', borderRadius: 8, fontSize: 13, border: '1px solid #fde047' }}>⚠️ Quase correto! (Pequeno deslize ortográfico). Resposta esperada: <b>{q.answer}</b></div>
+                  } else {
+                    practiceFeedback = <div style={{ marginTop: 10, padding: 10, background: '#fef2f2', color: '#991b1b', borderRadius: 8, fontSize: 13, border: '1px solid #fca5a5' }}>❌ Incorreto. {q.explanation ? q.explanation : `Gabarito esperado: "${q.answer}"`}</div>
+                  }
                 }
               }
+
 
               return (
                 <div key={q.id || idx} style={{ background: '#fff', padding: 20, borderRadius: RADIUS.xl, border: '1.5px solid #ede8dc' }}>

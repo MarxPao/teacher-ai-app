@@ -131,9 +131,11 @@ function buildPrompt(opts: {
   diffMedium?: number
   diffHard?: number
   diffChallenge?: number
+  includeWorkedExample?: boolean
   subjectProfile?: SubjectProfile
 }) {
   const profile = opts.subjectProfile ?? getSubjectProfile()
+
   const levelFrameworkName = profile.levelFramework.name
   const levelGatingRule = getLevelGatingRule(profile, opts.cefr) || ''
   const distractorBlock = getDistractorBlock(profile)
@@ -213,7 +215,23 @@ ${distractorBlock ? `${distractorBlock}\n` : `=== 3. DESIGN DIAGNÓSTICO DE DIST
 - ANTI-CUEING: Proibido repetir palavras exclusivas do enunciado na alternativa correta.
 - HOMOGENEIDADE: Alternativas com tamanho balanceado (±25% caracteres) e paralelismo sintático.
 - SEM DUPLAS NEGATIVAS: Se usar negação no enunciado, use **NÃO**, **EXCETO**, **INCORRETA**.
-- INDEPENDÊNCIA: Questões 100% autônomas.
+${opts.includeWorkedExample ? `
+=== EXEMPLO RESOLVIDO MODELADO PASSO A PASSO (WORKED EXAMPLE) ===
+INSTRUÇÃO OBRIGATÓRIA DA CIÊNCIA DA APRENDIZAGEM:
+Antes da Questão 1, insira um bloco visual completo de exemplo resolvido para guiar os alunos e reduzir a sobrecarga cognitiva inicial, no seguinte formato HTML exato:
+<div style="background: #f0f9ff; border: 1.5px solid #0284c7; border-radius: 12px; padding: 16px 20px; margin-bottom: 24px;">
+  <h3 style="color: #0369a1; margin-top: 0; display: flex; align-items: center; gap: 8px;">💡 Exemplo Resolvido Passo a Passo (Worked Example)</h3>
+  <p><strong>Problema-Modelo:</strong> [Enunciado de exemplo no mesmo nível e formato dos exercícios]</p>
+  <p><strong>Alternativas / Opções:</strong> A) ... | B) ... | C) ... | D) ...</p>
+  <p><strong>Raciocínio Passo a Passo:</strong></p>
+  <ol>
+    <li><strong>Passo 1 (Identificação):</strong> [Identifique a regra ou conceito essencial]</li>
+    <li><strong>Passo 2 (Eliminação de Distratores):</strong> [Explique o motivo de descarte das opções incorretas]</li>
+    <li><strong>Passo 3 (Solução):</strong> [Confirme a alternativa correta com a justificativa]</li>
+  </ol>
+  <p style="margin-bottom: 0; background: #e0f2fe; padding: 8px 12px; border-radius: 6px; font-size: 13px; color: #075985;"><strong>Dica Prática de Fixação:</strong> [Dica acionável para o aluno aplicar nas questões a seguir]</p>
+</div>
+` : ''}
 
 ${buildTeacherStyleSystemPrompt()}
 
@@ -222,6 +240,7 @@ ESTRUTURA OBRIGATÓRIA DO EXERCÍCIO:
 2. Cada questão deve ter enunciado rico e contextualizado. Questões de múltipla escolha: exatamente 4 alternativas (A, B, C, D).
 3. Ao final, inclua um <h2>Gabarito Comentado</h2> cobrindo todas as ${opts.qtCount} questões com as respostas e diagnósticos pedagógicos de erro para cada distrator.
 4. Inclua as habilidades BNCC ao final no formato: <p><strong>Habilidades BNCC:</strong> ${defaultBnccExample}</p>
+
 
 REGRAS ABSOLUTAS DE SAÍDA:
 1. Retorne APENAS HTML limpo. PROIBIDO usar markdown, blocos \`\`\`, asteriscos ou qualquer outra sintaxe que não seja HTML.
@@ -261,6 +280,11 @@ export default function QuickGenerate() {
   const [showNeePanel, setShowNeePanel] = useState(false)
   const [selectedSchoolTemplate, setSelectedSchoolTemplate] = useState<string>('')
   const [registeredSchools, setRegisteredSchools] = useState<Array<{ id: string; name: string }>>([])
+  const [includeWorkedExample, setIncludeWorkedExample] = useState<boolean>(() => {
+    const isBeginner = ['A1', 'A2', 'Básico', '1º Fund.', '2º Fund.', '3º Fund.', '4º Fund.', '5º Fund.', '6º Fund.'].some(l => (cefr || '').includes(l) || (grade || '').includes(l))
+    return isBeginner
+  })
+
 
   const [bloomRemember, setBloomRemember] = useState(25)
   const [bloomApply, setBloomApply] = useState(30)
@@ -397,8 +421,10 @@ export default function QuickGenerate() {
         header: { ...header, title: header.title || effectiveTitle },
         libraryContext: libContext,
         bloomRemember, bloomApply, bloomAnalyze, bloomEvaluate,
-        diffEasy, diffMedium, diffHard, diffChallenge
+        diffEasy, diffMedium, diffHard, diffChallenge,
+        includeWorkedExample
       })
+
 
       const raw = await callApi(selectedApi, prompt)
       const html = cleanHtml(raw)
@@ -810,6 +836,40 @@ Retorne a questão reformulada no formato padrão (Enunciado, Alternativas se ap
             }}
           />
 
+          {/* Exemplo Resolvido Passo a Passo (Worked Example — Sweller CLT) */}
+          {(() => {
+            const isBeginner = ['A1', 'A2', 'Básico', '1º Fund.', '2º Fund.', '3º Fund.', '4º Fund.', '5º Fund.', '6º Fund.'].some(l => (cefr || '').includes(l) || (grade || '').includes(l))
+            return (
+              <div style={{ ...CARD, background: isBeginner ? '#f0f9ff' : '#fff', border: `1.5px solid ${isBeginner ? '#0284c7' : '#ede8dc'}` }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <label style={{ ...SL, marginBottom: 0, color: isBeginner ? '#0369a1' : '#7a5c42' }}>
+                    <i className="ti ti-bulb" style={{ marginRight: 6, color: '#0284c7' }} />
+                    Exemplo Resolvido Passo a Passo (Worked Example)
+                  </label>
+                  {isBeginner && (
+                    <span style={{ fontSize: 11, background: '#e0f2fe', color: '#0369a1', padding: '2px 8px', borderRadius: 12, fontWeight: 700 }}>
+                      ⭐ Recomendado (Iniciante)
+                    </span>
+                  )}
+                </div>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, color: '#2c1a0e', fontWeight: 600, marginTop: 4 }}>
+                  <input
+                    type="checkbox"
+                    checked={includeWorkedExample}
+                    onChange={e => setIncludeWorkedExample(e.target.checked)}
+                    style={{ accentColor: '#0284c7', width: 16, height: 16 }}
+                  />
+                  <span>Gerar modelo resolvido antes da lista (Reduz sobrecarga cognitiva)</span>
+                </label>
+                {isBeginner && (
+                  <div style={{ fontSize: 11.5, color: '#075985', lineHeight: 1.4, marginTop: 2 }}>
+                    A Ciência da Aprendizagem comprova que alunos em níveis iniciais assimilam melhor novos conceitos quando analisam um exemplo modelado antes da prática autônoma.
+                  </div>
+                )}
+              </div>
+            )
+          })()}
+
           {/* Caixas Retráteis de Metodologias (Científicas & do Inglês), Abordagens, Marcos e Taxonomia */}
           <PedagogicalMethodologiesAccordion
             selectedIds={methodology}
@@ -823,6 +883,7 @@ Retorne a questão reformulada no formato padrão (Enunciado, Alternativas se ap
             bloomEvaluate={bloomEvaluate}
             setBloomEvaluate={setBloomEvaluate}
           />
+
 
           {/* NEE */}
           <div style={CARD}>

@@ -122,9 +122,12 @@ function buildExamPrompt(opts: {
   kioskMode?: boolean
   formVariant?: 'A' | 'B'
   bankContextSnippet?: string
+  includeSpacedRetrieval?: boolean
+  pastTopics?: string[]
   /** SubjectProfile ativo — se não fornecido, usa inglês (comportamento original) */
   subjectProfile?: SubjectProfile
 }): string {
+
   const methInstructions = buildMethodologyInstructions(opts.approach)
   const profile = opts.subjectProfile ?? getSubjectProfile()
 
@@ -169,8 +172,11 @@ function buildExamPrompt(opts: {
     totalQuestions: Number(opts.questionCount) || 10,
     topics: opts.topic ? opts.topic.split(/[,;\n]+/).map(t => t.trim()).filter(Boolean) : [opts.topic || 'Conteúdo Central'],
     bloomDistribution: { remember: bRemember, apply: bApply, analyze: bAnalyze, evaluate: bEvaluate },
-    difficultyDistribution: { easy: dEasy, medium: dMedium, hard: dHard, challenge: dChallenge }
+    difficultyDistribution: { easy: dEasy, medium: dMedium, hard: dHard, challenge: dChallenge },
+    includeSpacedRetrieval: opts.includeSpacedRetrieval,
+    pastTopics: opts.pastTopics
   })
+
   const blueprintSection = generateBlueprintPromptSection(blueprint)
 
   return `Você é um examinador sênior especialista em Psicometria Educacional e elaboração científica de itens de avaliação (Item Writing) para ${profile.name}. Crie uma PROVA COMPLETA de altíssimo rigor psicométrico e pedagógico, formatada em HTML limpo, pronta para impressão.
@@ -335,6 +341,8 @@ export default function ExamBuilder() {
   const [stemLanguage, setStemLanguage] = useState<'pt' | 'en'>(() => cal.defaultStemLanguage || 'pt')
   const [optionLanguage, setOptionLanguage] = useState<'en' | 'pt'>(() => cal.defaultOptionLanguage || 'en')
   const [approach, setApproach] = useState<string[]>(() => cal.defaultApproach || ['Cambridge'])
+  const [includeSpacedRetrieval, setIncludeSpacedRetrieval] = useState<boolean>(true)
+
 
   // Matéria ativa — alimenta perfil dinâmico de taxonomia, níveis e distratores
   const [subjectId, setSubjectId] = useState<string>(() => {
@@ -563,8 +571,10 @@ export default function ExamBuilder() {
         diffEasy, diffMedium, diffHard, diffChallenge,
         totalScore, examDurationMinutes: examDuration, kioskMode,
         formVariant: 'A',
+        includeSpacedRetrieval,
         subjectProfile: activeProfile,
       })
+
 
       const raw = await callApi(selectedApi!, prompt)
       const html = cleanHtml(raw)
@@ -1061,7 +1071,12 @@ Retorne a questão reformulada no formato padrão (Enunciado, Alternativas se ap
                   <input type="checkbox" checked={generateFormB} onChange={e => setGenerateFormB(e.target.checked)} style={{ accentColor: '#8b5e3c' }} />
                   <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><i className="ti ti-copy" style={{ fontSize: 14 }} /> Gerar Forma B (questões e alternativas embaralhadas)</span>
                 </label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                  <input type="checkbox" checked={includeSpacedRetrieval} onChange={e => setIncludeSpacedRetrieval(e.target.checked)} style={{ accentColor: '#8b5e3c' }} />
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><i className="ti ti-history" style={{ fontSize: 14, color: '#b58900' }} /> 🔄 Espiral de Recuperação Espaçada (reservar 20–30% dos itens para retenção de tópicos anteriores)</span>
+                </label>
               </div>
+
 
               <hr style={{ border: 'none', borderTop: '1px solid #ede8dc', margin: '4px 0' }} />
               <div>
