@@ -25,9 +25,11 @@ export default function ServiceWorkerRegister() {
       }
     } else {
       // In production, register the service worker cleanly
-      window.addEventListener('load', () => {
+      const onLoad = () => {
         navigator.serviceWorker.register('/sw.js').catch(() => {})
-      })
+      }
+      window.addEventListener('load', onLoad)
+      return () => window.removeEventListener('load', onLoad)
     }
   }, [])
 

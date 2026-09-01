@@ -5,6 +5,24 @@ export const maxDuration = 60
 
 export async function POST(req: NextRequest) {
   try {
+    // ── Auth Guard ──────────────────────────────────────────────────────────────
+    // Require a valid session token or localhost origin.
+    // This prevents public bots from consuming AI credits via this endpoint.
+    const authHeader  = req.headers.get('authorization') || ''
+    const cookieHeader = req.headers.get('cookie') || ''
+    const host        = req.headers.get('host') || ''
+
+    const isLocalhost = host.includes('localhost') || host.includes('127.0.0.1')
+    const hasToken    = authHeader.startsWith('Bearer ') || cookieHeader.includes('teacher_token_')
+
+    if (!hasToken && !isLocalhost) {
+      return NextResponse.json(
+        { error: 'Não autorizado. Faça login para usar o OCR.' },
+        { status: 401 }
+      )
+    }
+    // ────────────────────────────────────────────────────────────────────────────
+
     const formData = await req.formData()
     const file = formData.get('file') as File | null
 
@@ -14,12 +32,12 @@ export async function POST(req: NextRequest) {
 
     const fileNameLower = file.name.toLowerCase()
     const isImage = file.type.startsWith('image/') || /\.(jpg|jpeg|png|webp|gif|bmp)$/i.test(fileNameLower)
-    const isPdf = file.type === 'application/pdf' || fileNameLower.endsWith('.pdf')
+    const isPdf   = file.type === 'application/pdf' || fileNameLower.endsWith('.pdf')
 
     const geminiKey = process.env.GEMINI_API_KEY || process.env.GEMINI_KEY || ''
 
     if (geminiKey && (isImage || isPdf)) {
-      const bytes = await file.arrayBuffer()
+      const bytes  = await file.arrayBuffer()
       const base64 = Buffer.from(bytes).toString('base64')
       const mimeType = isImage ? (file.type || 'image/jpeg') : 'application/pdf'
 
@@ -43,16 +61,16 @@ export async function POST(req: NextRequest) {
               })
             }
           )
-          if (res.ok) {
-            geminiRes = res
-            break
-          }
-        } catch {}
+          if (res.ok) { geminiRes = res; break }
+        } catch { /* try next model */ }
       }
 
       if (!geminiRes || !geminiRes.ok) {
         const errBody = geminiRes ? await geminiRes.json().catch(() => ({})) : {}
-        return NextResponse.json({ error: `Erro na API Gemini: ${errBody?.error?.message || 'Falha ao processar OCR'}` }, { status: 500 })
+        return NextResponse.json(
+          { error: `Erro na API Gemini: ${errBody?.error?.message || 'Falha ao processar OCR'}` },
+          { status: 500 }
+        )
       }
 
       const geminiData = await geminiRes.json()
@@ -70,10 +88,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ text: text.trim(), source: 'plaintext' })
     }
 
-    return NextResponse.json({ error: 'GEMINI_API_KEY nao configurada. Nao e possivel fazer OCR de imagens.' }, { status: 503 })
+    return NextResponse.json(
+      { error: 'GEMINI_API_KEY nao configurada. Nao e possivel fazer OCR de imagens.' },
+      { status: 503 }
+    )
 
   } catch (err: unknown) {
     console.error('[OCR] Unexpected error:', err)
-    return NextResponse.json({ error: err instanceof Error ? err.message : 'Erro interno no servidor.' }, { status: 500 })
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : 'Erro interno no servidor.' },
+      { status: 500 }
+    )
   }
 }

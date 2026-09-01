@@ -1186,7 +1186,7 @@ ${essayEvaluation.studentActionPlan}
 
               {imageUri && (
                 <div style={{ textAlign: 'center', background: '#faf6f0', padding: 8, borderRadius: RADIUS.md, border: '1px solid #e8decb' }}>
-                  <img src={imageUri} style={{ maxWidth: '100%', maxHeight: 180, borderRadius: 6, objectFit: 'contain' }} />
+                  <img src={imageUri} alt="Imagem da prova do aluno" style={{ maxWidth: '100%', maxHeight: 180, borderRadius: 6, objectFit: 'contain' }} />
                 </div>
               )}
 

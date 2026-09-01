@@ -41,7 +41,7 @@ export function useSpeechInput(
       if (shouldRestartRef.current) {
         setTimeout(() => {
           if (shouldRestartRef.current && recRef.current) {
-            try { recRef.current.start() } catch (e) {}
+            try { recRef.current.start() } catch { /* browser API — restart can fail briefly after stop, expected */ }
           }
         }, 250)
       }
@@ -86,13 +86,13 @@ export function useSpeechInput(
     }
 
     recRef.current = rec
-    try { rec.start() } catch (e) {}
+    try { rec.start() } catch { /* browser API — initial start can fail if mic permission not yet granted */ }
   }, [onFinalResult, onInterimResult])
 
   const stop = useCallback(() => {
     shouldRestartRef.current = false
     if (recRef.current) {
-      try { recRef.current.stop() } catch (e) {}
+      try { recRef.current.stop() } catch { /* browser API — stop can fail if recognition already stopped */ }
     }
     setIsListening(false)
   }, [])

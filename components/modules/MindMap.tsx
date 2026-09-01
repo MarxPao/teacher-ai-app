@@ -58,7 +58,7 @@ export default function MindMap() {
  try {
  const p = JSON.parse(saved)
  if (p?.length > 0) { setMaps(p); setActiveMapId(p[0].id); return }
- } catch {}
+ } catch { /* localStorage parse error — fall through to initDefault() */ }
  }
  initDefault()
  }, [])
@@ -114,7 +114,7 @@ export default function MindMap() {
  } catch (e) {}
  }
  }
- } catch {}
+ } catch { /* mindmap_prefill event parse error — non-fatal, ignore malformed payload */ }
  }
  window.addEventListener('teacher:mindmap_prefill', handleMindmapPrefill)
  return () => window.removeEventListener('teacher:mindmap_prefill', handleMindmapPrefill)
