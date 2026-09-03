@@ -77,7 +77,22 @@ export function getPastTopicsForClass(classRef?: string, currentTopic?: string):
 }
 
 /**
- * Verifica se dois tópicos possuem relação declarada de contraste pedagógico (Interleaving Effect)
+ * Verifica se dois tópicos possuem relação declarada de contraste pedagógico (Interleaving Effect).
+ * 
+ * Justificativas Pedagógicas dos Pares (Ciência da Aprendizagem / Kornell & Bjork):
+ * 1. Present Perfect ↔ Simple Past: Discriminação entre tempo indefinido/relevância presente vs tempo pontual concluído no passado.
+ * 2. First Conditional ↔ Second Conditional: Discriminação entre condição real/provável (presente+will) vs condição hipotética/irreal (passado+would).
+ * 3. Since ↔ For: Discriminação entre ponto inicial no tempo (since Monday) vs duração do período (for 3 days).
+ * 4. Comparative ↔ Superlative: Discriminação entre comparação binária (-er/more than) vs destaque de grupo (-est/the most).
+ * 5. Some ↔ Any: Discriminação de quantificadores indefinidos em orações afirmativas vs negativas/interrogativas.
+ * 6. Much ↔ Many: Discriminação entre substantivos incontáveis (much water) vs contáveis no plural (many books).
+ * 7. Crase Obrigatória ↔ Crase Proibida: Discriminação entre regência com preposição 'a' + artigo feminino vs antes de masculino/verbo.
+ * 8. Mas ↔ Mais: Discriminação homófona entre conjunção adversativa (oposição/porém) vs advérbio/adjetivo de intensidade e quantidade.
+ * 9. Onde ↔ Aonde: Discriminação entre localização física estática (verbo em repouso) vs destino com movimento (verbo com prep. a).
+ * 10. Porque ↔ Por que: Discriminação entre conjunção explicativa/causal (resposta) vs locução interrogativa (motivo/pergunta).
+ * 11. Regência Assistir ↔ Regência Chegar: Discriminação de transitividade culta com preposição 'a' (assistir ao filme / chegar a casa).
+ * 12. Próclise ↔ Ênclise: Discriminação entre atração obrigatória por palavras negativas/relativos vs proibição no início absoluto de período.
+ * 13. Concordância Sujeito Composto ↔ Sujeito Partitivo: Discriminação de regra obrigatória de plural anteposto vs faculdade atrativa com partitivos.
  */
 export function checkTopicsAreContrastPairs(t1: string, t2: string): boolean {
   const a = (t1 || '').toLowerCase().trim()

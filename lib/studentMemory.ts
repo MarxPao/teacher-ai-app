@@ -453,37 +453,62 @@ export function buildMemoryContext(): string {
   return `\n[Memória Pedagógica dos Alunos]: ${alerts.slice(0, 8).join(' | ')}`
 }
 
-/**
- * Diagnostica o desempenho consolidado de uma turma
- */
-export function diagnoseClassPerformance(classId?: string): {
+export interface ClassRiskDiagnosis {
   averageScore: number
   totalExams: number
   frequentDifficulties: string[]
-} {
+  riskDistribution: {
+    stable: number
+    attention: number
+    moderate: number
+    critical: number
+  }
+}
+
+/**
+ * Diagnostica o desempenho consolidado de uma turma com análise de risco composta
+ */
+export function diagnoseClassPerformance(classId?: string, passingScore = 6.0): ClassRiskDiagnosis {
   const all = loadAll()
   let totalScore = 0
   let examCount = 0
   const difficulties: Record<string, number> = {}
+  const riskDistribution = { stable: 0, attention: 0, moderate: 0, critical: 0 }
 
   all.forEach(mem => {
     mem.examHistory.forEach(ex => {
       totalScore += ex.score
       examCount++
-      if (ex.score < 6.0) {
+      if (ex.score < passingScore) {
         difficulties[ex.topic] = (difficulties[ex.topic] || 0) + 1
       }
     })
+
+    // Avaliação de risco composta simplificada
+    const recent = mem.examHistory.slice(0, 3)
+    const recentAvg = recent.length > 0 ? recent.reduce((a, b) => a + b.score, 0) / recent.length : passingScore
+    const trajectory = calculateStudentTrajectory(mem)
+
+    if (recentAvg < passingScore - 1.5 || trajectory.status === 'queda_recente' && recentAvg < passingScore) {
+      riskDistribution.critical++
+    } else if (recentAvg < passingScore || trajectory.status === 'queda_recente') {
+      riskDistribution.moderate++
+    } else if (recentAvg < passingScore + 1.0) {
+      riskDistribution.attention++
+    } else {
+      riskDistribution.stable++
+    }
   })
 
   const topDifficulties = Object.entries(difficulties)
     .sort((a, b) => b[1] - a[1])
     .slice(0, 5)
-    .map(([topic, count]) => `${topic} (${count} alunos com nota < 6.0)`)
+    .map(([topic, count]) => `${topic} (${count} avaliações < ${passingScore})`)
 
   return {
     averageScore: examCount > 0 ? Number((totalScore / examCount).toFixed(1)) : 0,
     totalExams: examCount,
-    frequentDifficulties: topDifficulties
+    frequentDifficulties: topDifficulties,
+    riskDistribution
   }
 }

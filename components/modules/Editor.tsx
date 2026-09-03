@@ -193,7 +193,19 @@ export default function Editor() {
  </span>
  )}
  {active.headerSchoolId && !activeHeader && (
- <span style={{ fontSize: 11, color: '#b58900', fontWeight: 600, cursor: 'pointer' }} onClick={() => { setEditingHeader({ ...DEFAULT_HEADER, schoolId: active.headerSchoolId }); setShowHeaderConfig(true) }}>
+ <span
+   role="button"
+   tabIndex={0}
+   style={{ fontSize: 11, color: '#945710', fontWeight: 600, cursor: 'pointer' }}
+   onClick={() => { setEditingHeader({ ...DEFAULT_HEADER, schoolId: active.headerSchoolId }); setShowHeaderConfig(true) }}
+   onKeyDown={(e) => {
+     if (e.key === 'Enter' || e.key === ' ') {
+       e.preventDefault()
+       setEditingHeader({ ...DEFAULT_HEADER, schoolId: active.headerSchoolId })
+       setShowHeaderConfig(true)
+     }
+   }}
+ >
  <i className="ti ti-exclamation-circle" /> Perfil não configurado clique para configurar
  </span>
  )}
@@ -206,8 +218,12 @@ export default function Editor() {
  {showDocs && (
  <div style={{ width: 240, flexShrink: 0, background: '#fff', borderRight: '1px solid #ede8dc', display: 'flex', flexDirection: 'column' }}>
  <div style={{ padding: '12px 16px', borderBottom: '1px solid #ede8dc', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
- <span style={{ fontSize: 11, fontWeight: 700, color: '#a08060', textTransform: 'uppercase' }}>Meus Arquivos</span>
- <button onClick={() => setShowDocs(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#a08060' }}>
+ <span style={{ fontSize: 11, fontWeight: 700, color: '#71553d', textTransform: 'uppercase' }}>Meus Arquivos</span>
+ <button
+   onClick={() => setShowDocs(false)}
+   aria-label="Fechar painel de arquivos"
+   style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#71553d' }}
+ >
  <i className="ti ti-panel-left-close" />
  </button>
  </div>
@@ -216,21 +232,38 @@ export default function Editor() {
  const isActive = activeId === doc.id
  const sc = schools.find(s => s.id === doc.headerSchoolId)
  return (
- <div key={doc.id} onClick={() => setActiveId(doc.id)} style={{
- padding: '12px 16px', borderBottom: '1px solid #fdf8f2', cursor: 'pointer',
- background: isActive ? '#fdf8f2' : 'transparent',
- borderLeft: isActive ? '3px solid #2c1a0e' : '3px solid transparent',
- }}>
+ <div
+   key={doc.id}
+   role="button"
+   tabIndex={0}
+   aria-pressed={isActive}
+   onClick={() => setActiveId(doc.id)}
+   onKeyDown={(e) => {
+     if (e.key === 'Enter' || e.key === ' ') {
+       e.preventDefault()
+       setActiveId(doc.id)
+     }
+   }}
+   style={{
+     padding: '12px 16px', borderBottom: '1px solid #fdf8f2', cursor: 'pointer',
+     background: isActive ? '#fdf8f2' : 'transparent',
+     borderLeft: isActive ? '3px solid #2c1a0e' : '3px solid transparent',
+   }}
+ >
  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
  <div style={{ fontSize: 13, fontWeight: isActive ? 700 : 500, color: '#2c1a0e', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
  {doc.title}
  </div>
- <button onClick={e => deleteDoc(doc.id, e)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#dc322f', fontSize: 13, flexShrink: 0, marginLeft: 4 }}>
+ <button
+   onClick={e => deleteDoc(doc.id, e)}
+   aria-label={`Excluir documento ${doc.title}`}
+   style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#dc322f', fontSize: 13, flexShrink: 0, marginLeft: 4 }}
+ >
  <i className="ti ti-trash" />
  </button>
  </div>
  {sc && <div style={{ fontSize: 10, color: '#2aa198', marginTop: 3 }}><i className="ti ti-building-community" style={{ marginRight: 2 }} />{sc.name}</div>}
- <div style={{ fontSize: 10, color: '#a08060', marginTop: 2 }}>{doc.updatedAt}</div>
+ <div style={{ fontSize: 10, color: '#71553d', marginTop: 2 }}>{doc.updatedAt}</div>
  </div>
  )
  })}

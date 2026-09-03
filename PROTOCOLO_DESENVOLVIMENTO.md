@@ -92,3 +92,27 @@ As seguintes decisões foram discutidas, deliberadas e formalmente aprovadas. **
 - **Modelo:** O preenchimento dos campos do portal (`_apply_diff_to_dom`) é executado de forma autônoma pelo runner após a criação da tarefa. A pausa de segurança e a confirmação humana do professor ocorrem estritamente antes do clique no botão irreversível de submissão final (`_submit_portal_form`).
 - **Status:** Decisão fechada e implementada no runner (`sidecar/browser_harness_runner.py`). Testes contra portais reais continuam bloqueados aguardando definição do portal piloto prioritário.
 
+### 4. Intercalação Contrastante Forçada no Blueprint (Item D — Concluído Definitivamente)
+- **Fundamentação:** Baseado na ciência da aprendizagem (Kornell & Bjork / Interleaving Effect) e nas evidências de que o estudo em bloco (*blocking*) gera ilusão de domínio temporário, enquanto a alternância sistemática de conceitos opostos/concorrentes força a discriminação ativa e consolidação de longo prazo.
+- **Mecanismo:** A matriz de especificação (`lib/testBlueprintEngine.ts`) detecta pares de contraste pedagógico (ex: *Present Perfect* ↔ *Simple Past*, *First* ↔ *Second Conditional*, *Crase Obrigatória* ↔ *Crase Proibida*, *Mas* ↔ *Mais*, *Onde* ↔ *Aonde*, *Regência Assistir* ↔ *Chegar*) e impõe alternância estrita entre itens designados na prova, injetando tags de par contrastante no prompt de geração da IA.
+- **Resiliência:** Quando os tópicos selecionados não possuem relação de contraste declarada, a matriz mantém a distribuição balanceada padrão sem alteração forçada.
+- **Status:** ✅ Definitivamente concluído, documentado com justificativa pedagógica por par em `lib/subjects/english.ts`, `lib/subjects/portuguese.ts` e `lib/testBlueprintEngine.ts`, com 100% dos testes verdes (`__tests__/contrastiveInterleaving.test.ts`).
+
+### 5. Testes Adaptativos Computadorizados (CAT / Item E — Decisões E.2 Aprovadas & Gatilho de Prontidão)
+- **Pré-requisito Psicométrico Estatístico (E.1):** Algoritmos adaptativos de seleção dinâmica de itens exigem estabilidade empírica de dificuldade ($p$-value) e discriminação ($D$ de Kelley). Como o banco de dados inicial parte de $0$ respostas de alunos, **nenhum código de seleção adaptativa (CAT) deve ser implementado prematuramente** antes do acúmulo de dados reais.
+- **Gatilho de Prontidão (E.1 implementado):** Monitor automático (`lib/catReadinessTrigger.ts` e `components/CatReadinessCard.tsx`) que acompanha o contador de questões com $N \ge 10$ respostas e dispara alerta automático de prontidão ao atingir o limiar de **40 questões calibradas** cobrindo pelo menos 3 tópicos.
+- **Decisões de Design de E.2 (Aprovadas Conceitualmente para Implementação Futura):**
+  1. **Escada Adaptativa de 4 Degraus por $p$-value:**
+     - Nível 1 (Muito Fácil): $p > 0.85$
+     - Nível 2 (Fácil): $0.65 \le p \le 0.85$
+     - Nível 3 (Médio): $0.35 \le p < 0.65$
+     - Nível 4 (Difícil): $p < 0.35$
+  2. **Regra de Transição Dinâmica:**
+     - Resposta correta $\rightarrow$ sobe 1 degrau (apresenta item do próximo nível).
+     - Resposta incorreta $\rightarrow$ desce 1 degrau (apresenta item de reforço).
+  3. **Critérios de Parada:**
+     - Limite máximo fixo de 8 a 10 itens por sessão.
+     - OU Convergência precoce por 3 acertos consecutivos no nível máximo (4) ou 3 erros consecutivos no nível mínimo (1).
+  4. **Escopo Restrito:** Estritamente para o **Modo Treino / Diagnóstico Formativo do Aluno** (`StudentExamPlayer`), nunca aplicado a avaliações somativas oficiais da turma (que devem manter matriz uniforme de itens para equidade).
+- **Status:** Gatilho e decisões conceituais aprovadas e registradas. Implementação do algoritmo bloqueada até o gatilho sinalizar prontidão estatística.
+

@@ -140,6 +140,7 @@ const portugueseProfile: SubjectProfile = {
       pattern: 'Concordância verbal com sujeito composto anteposto ao verbo',
       examples: ['"João e Maria foi à escola"', '"O professor e a aluna chegou cedo"'],
       pedagogicNote: 'Sujeito composto antes do verbo exige plural. Distrator: usar singular (erro frequente).',
+      // Contraste: Discrimina a regra rígida de plural em sujeito composto vs a dupla possibilidade facultativa em partitivos
       contrastsWith: ['conc_partitivo']
     },
     {
@@ -147,6 +148,7 @@ const portugueseProfile: SubjectProfile = {
       pattern: 'Concordância com sujeito partitivo (maioria, metade, parte)',
       examples: ['"A maioria dos alunos estavam ausentes"', '"Metade dos livros foram doados"'],
       pedagogicNote: 'Com partitivos, o verbo pode concordar com o núcleo do sujeito ou com o complemento. Distrator: apresentar apenas uma forma como correta quando ambas são aceitas.',
+      // Contraste: Força o aluno a discernir concordância lógica/atrativa em partitivos vs concordância gramatical obrigatória
       contrastsWith: ['conc_verbal_composto']
     },
     {
@@ -154,6 +156,7 @@ const portugueseProfile: SubjectProfile = {
       pattern: 'Regência do verbo assistir',
       examples: ['"Assisti o filme" (errado)', '"Assisti ao filme" (correto — bitransitivo, regência com preposição A)'],
       pedagogicNote: '"Assistir" como ver/presenciar é bitransitivo e exige preposição A. Distrator: omitir a preposição.',
+      // Contraste: Discrimina verbos transitivos indiretos com 'a' fixo vs verbos de movimento (chegar/ir)
       contrastsWith: ['regencia_chegar']
     },
     {
@@ -161,6 +164,7 @@ const portugueseProfile: SubjectProfile = {
       pattern: 'Regência do verbo chegar/ir (preposições A vs EM)',
       examples: ['"Cheguei em casa" (informal)', '"Cheguei a casa" (norma culta)'],
       pedagogicNote: 'Na norma culta, chegar e ir regem preposição A, não EM. Distrator: usar EM como alternativa correta.',
+      // Contraste: Discrimina preposição de destino em verbos de movimento vs pronomes interrogativos de lugar (onde/aonde)
       contrastsWith: ['regencia_assistir', 'onde_aonde']
     },
     {
@@ -168,6 +172,7 @@ const portugueseProfile: SubjectProfile = {
       pattern: 'Próclise obrigatória após palavras de negação',
       examples: ['"Não me disse nada" (correto)', '"Não disse-me nada" (errado)'],
       pedagogicNote: 'Após advérbio de negação, o pronome deve ser proclítico. Distrator: apresentar ênclise como correta.',
+      // Contraste: Discrimina atração proclítica mandatória vs proibição de ênclise em início absoluto de frase
       contrastsWith: ['colocacao_inicio']
     },
     {
@@ -175,6 +180,7 @@ const portugueseProfile: SubjectProfile = {
       pattern: 'Ênclise em início de oração (proibida)',
       examples: ['"Me disseram a verdade" (informal/errado na norma culta)', '"Disseram-me a verdade" (correto)'],
       pedagogicNote: 'Em início de oração, a próclise é proibida na norma culta, mas o distrator frequente é apresentar o pronome antes do verbo.',
+      // Contraste: Força a diferenciação entre uso coloquial (próclise inicial) e exigência culta (ênclise inicial)
       contrastsWith: ['colocacao_negacao']
     },
     {
@@ -182,6 +188,7 @@ const portugueseProfile: SubjectProfile = {
       pattern: 'Crase obrigatória antes de substantivo feminino precedido de preposição A',
       examples: ['"Fui a escola" (errado)', '"Fui à escola" (correto)'],
       pedagogicNote: 'Antes de feminino que aceita artigo definido e após verbo que rege preposição A. Distrator: omitir o acento.',
+      // Contraste: Discrimina fusão preposição+artigo feminino vs condições impeditivas de crase
       contrastsWith: ['crase_proibida']
     },
     {
@@ -189,6 +196,7 @@ const portugueseProfile: SubjectProfile = {
       pattern: 'Crase proibida antes de substantivos masculinos e verbos',
       examples: ['"Fui à pé" (errado)', '"Fui a pé" (correto)'],
       pedagogicNote: 'Não há crase antes de masculino sem artigo ou antes de verbos. Distrator: inserir o acento.',
+      // Contraste: Discrimina regra impeditiva absoluta vs contexto feminino regular
       contrastsWith: ['crase_feminino']
     },
     {
@@ -196,6 +204,7 @@ const portugueseProfile: SubjectProfile = {
       pattern: 'Distinção entre "mas" (conjunção adversativa) e "mais" (advérbio/adjetivo de quantidade)',
       examples: ['"Quero mais, mas não posso"', '"Quero mas não posso" (errado — falta mais)'],
       pedagogicNote: '"Mas" = porém/contudo; "mais" = quantidade/grau. Distrator frequente em questões de completar lacunas.',
+      // Contraste: Discrimina oposição conectiva homófona vs relações explicativas/causais de "porque"
       contrastsWith: ['porque_formas']
     },
     {
@@ -203,6 +212,7 @@ const portugueseProfile: SubjectProfile = {
       pattern: 'Uso de "onde" (lugar estático) vs "aonde" (movimento/destino)',
       examples: ['"A escola onde estudo fica perto"', '"A escola aonde vou fica perto" (correto — movimento)'],
       pedagogicNote: '"Onde" = localização estática; "aonde" = destino de movimento. Distrator: usar "onde" indistintamente.',
+      // Contraste: Discrimina verbos de localização estática (onde) vs verbos de movimento com regência 'a' (aonde / chegar a)
       contrastsWith: ['regencia_chegar']
     },
     {
@@ -215,6 +225,7 @@ const portugueseProfile: SubjectProfile = {
         '"Por quê" = fim de frase interrogativa'
       ],
       pedagogicNote: 'Erro de alta frequência. Distratores: trocar as quatro formas em contextos específicos.',
+      // Contraste: Discrimina emprego das 4 grafias causais/interrogativas vs conectivos adversativos (mas/mais)
       contrastsWith: ['mas_mais']
     },
     {

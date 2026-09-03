@@ -100,7 +100,12 @@ export default function AudioPlayerCard({ audioUrl, title = 'Listening Audio Tra
             <i className="ti ti-download" />
           </a>
           {onDelete && (
-            <button onClick={onDelete} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#dc322f', fontSize: 18 }} title="Excluir áudio">
+            <button
+              onClick={onDelete}
+              aria-label="Excluir gravação de áudio"
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#dc322f', fontSize: 18 }}
+              title="Excluir áudio"
+            >
               <i className="ti ti-trash" />
             </button>
           )}
@@ -110,10 +115,14 @@ export default function AudioPlayerCard({ audioUrl, title = 'Listening Audio Tra
       {/* Controls Bar */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         {/* Play/Pause Button */}
-        <button onClick={togglePlay} style={{
-          width: 40, height: 40, borderRadius: '50%', background: '#b58900', border: 'none',
-          color: '#fff', fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-        }}>
+        <button
+          onClick={togglePlay}
+          aria-label={isPlaying ? 'Pausar áudio' : 'Reproduzir áudio'}
+          style={{
+            width: 40, height: 40, borderRadius: '50%', background: '#8b5e3c', border: 'none',
+            color: '#fff', fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+          }}
+        >
           <i className={`ti ${isPlaying ? 'ti-pause' : 'ti-player-play-filled'}`} />
         </button>
 
@@ -121,6 +130,7 @@ export default function AudioPlayerCard({ audioUrl, title = 'Listening Audio Tra
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
           <input
             type="range"
+            aria-label="Controle de progresso do áudio"
             min={0}
             max={duration || 100}
             value={currentTime}

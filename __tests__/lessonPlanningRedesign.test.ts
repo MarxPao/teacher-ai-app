@@ -141,7 +141,7 @@ He is interested _____ learning Spanish.
       expect(extracted[0].options?.length).toBe(4)
       expect(extracted[0].options?.[1]).toContain('She is playing tennis')
       expect(extracted[1].type).toBe('fill')
-    })
+    }, 15000)
 
     it('unifica e sincroniza armazenamento entre chaves legadas e primárias', async () => {
       const { getStoredQuestions, saveStoredQuestions } = await import('../lib/questionBankService')

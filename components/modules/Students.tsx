@@ -1,7 +1,8 @@
 'use client'
 import { toast, showConfirm } from '@/components/Toast'
 import { COLOR, TEXT, RADIUS, SPACE } from '@/styles/tokens'
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { useModalA11y } from '@/hooks/useModalA11y'
 import { requiresSharedDatabaseConsent } from '@/lib/databaseConsent'
 import SharedDatabaseConsentModal from '@/components/SharedDatabaseConsentModal'
 import StudentTimeline from '@/components/charts/StudentTimeline'
@@ -11,6 +12,7 @@ import { createBrowserTask, BrowserAutomationTask, DiffItem } from '@/lib/browse
 import { sanitizeOutboundPayload, hasActivePortalConsent } from '@/lib/portalSanitizer'
 import AutomationDiffModal from '@/components/modules/AutomationDiffModal'
 import PortalConsentModal from '@/components/PortalConsentModal'
+import { getPortalProfiles } from '@/lib/portalActionsEngine'
 
 /* ─── Tipos ─────────────────────────────────────────────────────────────────── */
 interface School    { id: string; name: string; color: string }
@@ -175,6 +177,36 @@ export default function Students() {
   const [importClassRef, setImportClassRef] = useState('all')
   const [isImportingRoster, setIsImportingRoster] = useState(false)
   const [activeAutomationTask, setActiveAutomationTask] = useState<BrowserAutomationTask | null>(null)
+
+  /* Modal Accessibility Refs & Hooks (WCAG 2.1 AA) */
+  const addModalRef = useRef<HTMLDivElement>(null)
+  const editModalRef = useRef<HTMLDivElement>(null)
+  const reportModalRef = useRef<HTMLDivElement>(null)
+  const portalSelectModalRef = useRef<HTMLDivElement>(null)
+
+  useModalA11y({
+    isOpen: addModal,
+    onClose: () => setAddModal(false),
+    modalRef: addModalRef
+  })
+
+  useModalA11y({
+    isOpen: !!editingStudent,
+    onClose: () => setEditingStudent(null),
+    modalRef: editModalRef
+  })
+
+  useModalA11y({
+    isOpen: !!reportStudentId,
+    onClose: () => setReportStudentId(null),
+    modalRef: reportModalRef
+  })
+
+  useModalA11y({
+    isOpen: showPortalSelectModal,
+    onClose: () => setShowPortalSelectModal(false),
+    modalRef: portalSelectModalRef
+  })
 
   /* ─── Carregar ────────────────────────────────────────────────────────────── */
   useEffect(() => {
@@ -947,7 +979,7 @@ export default function Students() {
       {/* ─── Modal Adicionar Aluno ─────────────────────────────────────────── */}
       {addModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(44,26,14,0.4)', zIndex: 9998, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div style={{ ...S.card, width: 440, maxWidth: '95vw', animation: 'modalIn 0.2s ease' }}>
+          <div ref={addModalRef} role="dialog" aria-modal="true" aria-label="Novo Aluno" style={{ ...S.card, width: 440, maxWidth: '95vw', animation: 'modalIn 0.2s ease' }}>
             <style>{`@keyframes modalIn { from { opacity:0; transform:scale(0.97) } to { opacity:1; transform:none } }`}</style>
             <h2 style={{ fontSize: 18, fontWeight: 700, color: COLOR.paperInk, margin: '0 0 20px' }}>Novo Aluno</h2>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -988,7 +1020,7 @@ export default function Students() {
       {/* ─── Modal Editar Aluno ─────────────────────────────────────────── */}
       {editingStudent && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(44,26,14,0.4)', zIndex: 9998, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div style={{ ...S.card, width: 440, maxWidth: '95vw', animation: 'modalIn 0.2s ease' }}>
+          <div ref={editModalRef} role="dialog" aria-modal="true" aria-label="Editar Aluno" style={{ ...S.card, width: 440, maxWidth: '95vw', animation: 'modalIn 0.2s ease' }}>
             <h2 style={{ fontSize: 18, fontWeight: 700, color: COLOR.paperInk, margin: '0 0 20px' }}>Editar Aluno</h2>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div>
@@ -1027,7 +1059,7 @@ export default function Students() {
 
         return (
           <div style={{ position: 'fixed', inset: 0, background: 'rgba(44,26,14,0.5)', zIndex: 9999, display: 'flex', justifyContent: 'center', alignItems: 'flex-start', paddingTop: 20, overflowY: 'auto' }}>
-            <div style={{ background: '#fff', width: 780, maxWidth: '95vw', borderRadius: RADIUS.lg, padding: '36px 44px', boxShadow: '0 12px 48px rgba(0,0,0,0.2)', marginBottom: 40, position: 'relative' }}>
+            <div ref={reportModalRef} role="dialog" aria-modal="true" aria-label={`Relatório pedagógico de ${stu.name}`} style={{ background: '#fff', width: 780, maxWidth: '95vw', borderRadius: RADIUS.lg, padding: '36px 44px', boxShadow: '0 12px 48px rgba(0,0,0,0.2)', marginBottom: 40, position: 'relative' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, borderBottom: '2px solid #2c1a0e', paddingBottom: 16 }}>
                 <div>
                   <div style={{ fontSize: 22, fontWeight: 800, color: COLOR.paperInk, fontFamily: 'Georgia, serif' }}>{sc?.name || 'Escola Padrão'}</div>
@@ -1098,7 +1130,7 @@ export default function Students() {
           position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(3px)', zIndex: 1000,
           display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20
         }}>
-          <div style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 500, padding: 24, boxShadow: '0 20px 40px rgba(0,0,0,0.2)', border: '1px solid #ede8dc' }}>
+          <div ref={portalSelectModalRef} role="dialog" aria-modal="true" aria-label="Importar Alunos do Portal" style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 500, padding: 24, boxShadow: '0 20px 40px rgba(0,0,0,0.2)', border: '1px solid #ede8dc' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <i className="ti ti-school" style={{ fontSize: 22, color: '#b58900' }} />

@@ -787,22 +787,45 @@ ${item.studyTips ? `## 5. Roteiro e Dicas de Estudo\n${item.studyTips}\n` : ''}
 
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <div style={{ display: 'flex', gap: 4 }}>
-                        <button onClick={() => { setSelectedSyllabusId(item.id); setActiveSubTab('document') }} style={{ padding: '5px 8px', borderRadius: 6, border: '1px solid #d0c8b8', background: '#fff', color: '#2c1a0e', fontSize: 11.5, cursor: 'pointer' }}>
+                        <button
+                          onClick={() => { setSelectedSyllabusId(item.id); setActiveSubTab('document') }}
+                          style={{ padding: '5px 8px', borderRadius: 6, border: '1px solid #d0c8b8', background: '#fff', color: '#2c1a0e', fontSize: 11.5, cursor: 'pointer' }}
+                        >
                           <i className="ti ti-eye" /> Ver Documento
                         </button>
-                        <button onClick={() => handleCopyForWhatsApp(item)} style={{ padding: '5px 8px', borderRadius: 6, border: '1px solid #25d366', background: '#f0fdf4', color: '#16a34a', fontSize: 11.5, cursor: 'pointer' }} title="Copiar para WhatsApp/Classroom">
+                        <button
+                          onClick={() => handleCopyForWhatsApp(item)}
+                          aria-label={`Copiar planejamento ${item.title} para WhatsApp/Classroom`}
+                          style={{ padding: '5px 8px', borderRadius: 6, border: '1px solid #25d366', background: '#f0fdf4', color: '#16a34a', fontSize: 11.5, cursor: 'pointer' }}
+                          title="Copiar para WhatsApp/Classroom"
+                        >
                           <i className="ti ti-brand-whatsapp" />
                         </button>
-                        <button onClick={() => handlePushToClassLog(item)} style={{ padding: '5px 8px', borderRadius: 6, border: '1px solid #d0c8b8', background: '#fff', color: '#268bd2', fontSize: 11.5, cursor: 'pointer' }} title="Lançar no Diário">
+                        <button
+                          onClick={() => handlePushToClassLog(item)}
+                          aria-label={`Lançar ${item.title} no Diário de Classe`}
+                          style={{ padding: '5px 8px', borderRadius: 6, border: '1px solid #d0c8b8', background: '#fff', color: '#268bd2', fontSize: 11.5, cursor: 'pointer' }}
+                          title="Lançar no Diário"
+                        >
                           <i className="ti ti-timeline" />
                         </button>
                       </div>
 
                       <div style={{ display: 'flex', gap: 4 }}>
-                        <button onClick={() => handleOpenEdit(item)} style={{ padding: '5px 7px', borderRadius: 6, border: '1px solid #d0c8b8', background: '#fff', color: '#7a5c42', fontSize: 11.5, cursor: 'pointer' }}>
+                        <button
+                          onClick={() => handleOpenEdit(item)}
+                          aria-label={`Editar planejamento ${item.title}`}
+                          style={{ padding: '5px 7px', borderRadius: 6, border: '1px solid #d0c8b8', background: '#fff', color: '#7a5c42', fontSize: 11.5, cursor: 'pointer' }}
+                          title="Editar"
+                        >
                           <i className="ti ti-pencil" />
                         </button>
-                        <button onClick={() => handleDelete(item.id)} style={{ padding: '5px 7px', borderRadius: 6, border: '1px solid #fecdd3', background: '#fff1f2', color: '#e11d48', fontSize: 11.5, cursor: 'pointer' }}>
+                        <button
+                          onClick={() => handleDelete(item.id)}
+                          aria-label={`Excluir planejamento ${item.title}`}
+                          style={{ padding: '5px 7px', borderRadius: 6, border: '1px solid #fecdd3', background: '#fff1f2', color: '#e11d48', fontSize: 11.5, cursor: 'pointer' }}
+                          title="Excluir"
+                        >
                           <i className="ti ti-trash" />
                         </button>
                       </div>

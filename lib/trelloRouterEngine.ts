@@ -632,11 +632,14 @@ export async function executeTrelloDecisions(
             decision.checkItems.length > 0 ? `Itens: ` + decision.checkItems.map(c => c.name).join(', ') : ''
           ].filter(Boolean).join(' | ')
 
-          addObservation(studentId, {
-            date: new Date().toISOString().split('T')[0],
-            text: note,
-            category: (decision.suggestedPayload.category as any) || 'general'
-          })
+          addObservation(
+            studentId,
+            studentName,
+            note,
+            (decision.suggestedPayload.category as any) || 'general',
+            undefined,
+            'system'
+          )
           executedCount++
           recordsToMark.push({ cardId: decision.cardId, targetTool: 'record_student_observation' })
           break

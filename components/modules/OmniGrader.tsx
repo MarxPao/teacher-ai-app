@@ -12,9 +12,10 @@ import { toast, showConfirm } from '@/components/Toast'
 import { useState, useEffect } from 'react'
 import { captureImageFile, extractContentFromImage } from '@/lib/ocrCapture'
 import { exportToPdf } from '@/lib/exportUtils'
-import { recordStudentGrade, addObservation } from '@/lib/studentMemory'
+import { recordStudentGrade, addObservation, getStudentMemory } from '@/lib/studentMemory'
 import { getSubjectProfile, SubjectProfile } from '@/lib/subjectProfile'
 import { getAnchorExemplarsPrompt } from '@/lib/rubrics/anchorExemplars'
+import { screenEssayStylometrics, StylometricAdvisory } from '@/lib/stylometricScreening'
 import ModelCapabilityBanner from '@/components/ModelCapabilityBanner'
 import '@/lib/subjects/english'
 import '@/lib/subjects/portuguese'
@@ -61,6 +62,7 @@ interface CambridgeEssayEvaluation {
     type: 'grammar' | 'spelling' | 'vocabulary' | 'l1_interference'
   }>
   phantomErrorsFiltered?: number
+  stylometricAdvisory?: StylometricAdvisory
 }
 
 
@@ -651,6 +653,15 @@ Retorne ESTRITAMENTE um objeto JSON no seguinte formato (sem markdown, sem bloco
       }
 
 
+      // ── Triagem Estilométrica Formativa (Não-Punitiva / Impacto Zero na Nota) ──
+      const mem = selectedStudentEssay ? getStudentMemory(selectedStudentEssay) : null
+      const stylometricAdvisory = screenEssayStylometrics({
+        essayText: studentEssayText,
+        targetLevel,
+        studentMemory: mem,
+        language: isPortuguese ? 'pt-BR' : 'en'
+      })
+
       const combinedEvaluation = {
         overallScore,
         content: pass1.content || { score: contentScore, justification: '', strengths: [], improvements: [] },
@@ -660,7 +671,8 @@ Retorne ESTRITAMENTE um objeto JSON no seguinte formato (sem markdown, sem bloco
         overallSummary: pass1.macroSummary || 'Redação avaliada com rigor psicométrico em dupla passada independente.',
         studentActionPlan: pass2.studentActionPlan || 'Praticar o uso variado de linkers e vocabulário avançado.',
         detectedErrors: validErrors,
-        phantomErrorsFiltered: phantomErrors.length // Quantidade de erros hallucinated removidos
+        phantomErrorsFiltered: phantomErrors.length, // Quantidade de erros hallucinated removidos
+        stylometricAdvisory
       }
 
       setEssayEvaluation(combinedEvaluation)
@@ -1079,6 +1091,32 @@ ${essayEvaluation.studentActionPlan}
                           <span style={{ color: '#7a6552', marginLeft: 8 }}>({err.explanation})</span>
                         </div>
                       ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Sinalizador Pedagógico de Triagem Estilométrica (Não-Punitivo / Nota Blindada) */}
+                {essayEvaluation.stylometricAdvisory?.hasAnomaly && essayEvaluation.stylometricAdvisory.teacherAdvisoryNotice && (
+                  <div style={{
+                    background: '#fefce8',
+                    border: '1px solid #fde047',
+                    borderRadius: RADIUS.lg,
+                    padding: '12px 16px',
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: 12
+                  }}>
+                    <i className="ti ti-bulb" style={{ fontSize: 20, color: '#854d0e', marginTop: 2, flexShrink: 0 }} />
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: '#854d0e', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                        Triagem Estilométrica Formativa (Aviso ao Professor)
+                      </div>
+                      <p style={{ margin: '4px 0 6px 0', fontSize: 12.5, color: '#713f12', lineHeight: 1.45 }}>
+                        {essayEvaluation.stylometricAdvisory.teacherAdvisoryNotice}
+                      </p>
+                      <span style={{ fontSize: 11, color: '#a16207' }}>
+                        * Nota oficial blindada. Este sinalizador serve exclusivamente como apoio à mediação e arguição dialógica do professor.
+                      </span>
                     </div>
                   </div>
                 )}

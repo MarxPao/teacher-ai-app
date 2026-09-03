@@ -4,6 +4,21 @@ import { toast, showConfirm } from '@/components/Toast'
 
 import React, { useState, useEffect, useRef } from 'react'
 
+import {
+  CatSessionState,
+  startCatSession,
+  recordCatAnswer,
+  selectNextCatQuestion,
+  interpretCatResult,
+  getQuestionRung
+} from '@/lib/catEngine'
+import {
+  QuestionScaffolding,
+  StudentHintStatus,
+  buildQuestionScaffolding,
+  requestNextHint
+} from '@/lib/scaffoldingEngine'
+
 export interface OnlineQuestion {
   id: string
   stem: string
@@ -14,6 +29,7 @@ export interface OnlineQuestion {
   distractorExplanations?: Record<string, string>
   bloomLevel?: string
   difficultyLevel?: string
+  pValue?: number
   dataset?: {
     weight?: string
   }
@@ -23,7 +39,7 @@ export interface OnlineExamProps {
   title: string
   schoolName?: string
   className?: string
-  mode?: 'exam' | 'exercise' | 'practice'
+  mode?: 'exam' | 'exercise' | 'practice' | 'adaptive'
   questions: OnlineQuestion[]
   onClose: () => void
   onComplete?: (studentName: string, score: number, total: number) => void
@@ -164,8 +180,23 @@ export default function StudentExamPlayer({
   const [kioskMode, setKioskMode] = useState(false)
   const [tabSwitchCount, setTabSwitchCount] = useState(0)
   
-  const [examMode, setExamMode] = useState<'exam' | 'practice'>(mode === 'exercise' || mode === 'practice' ? 'practice' : 'exam')
-  
+  const [examMode, setExamMode] = useState<'exam' | 'practice' | 'adaptive'>(
+    mode === 'adaptive' ? 'adaptive' : mode === 'exercise' || mode === 'practice' ? 'practice' : 'exam'
+  )
+
+  // ─── Estados para CAT (Computerized Adaptive Testing) ─────────────
+  const [catSession, setCatSession] = useState<CatSessionState | null>(null)
+  const [currentCatQuestion, setCurrentCatQuestion] = useState<OnlineQuestion | null>(null)
+  const [catFinalReport, setCatFinalReport] = useState<{
+    score0to10: number
+    levelLabel: string
+    cefrEquivalent: string
+    diagnosticDescription: string
+  } | null>(null)
+
+  // ─── Estados para Scaffolding de Dicas em 3 Camadas ───────────────
+  const [hintsMap, setHintsMap] = useState<Record<string, StudentHintStatus>>({})
+
   const formRef = useRef<HTMLFormElement>(null)
 
 
@@ -219,6 +250,78 @@ export default function StudentExamPlayer({
 
   const handleSelectOption = (qId: string, opt: string) => {
     setAnswers(prev => ({ ...prev, [qId]: opt }))
+  }
+
+  // ─── Manipulador de Dica Progressiva (Scaffolding em 3 Camadas) ───
+  const handleRequestHint = (question: OnlineQuestion) => {
+    const current = hintsMap[question.id] || {
+      questionId: question.id,
+      currentTier: 0,
+      scoreMultiplier: 1.0,
+      eliminatedOptions: [],
+    }
+    if (current.currentTier >= 3) {
+      toast.info('Você já utilizou todas as 3 camadas de ajuda para esta questão.')
+      return
+    }
+    const scaffolding = buildQuestionScaffolding(question)
+    const updated = requestNextHint(current, scaffolding)
+    setHintsMap(prev => ({ ...prev, [question.id]: updated }))
+  }
+
+  // ─── Inicializador do Modo CAT (Adaptativo) ───────────────────────
+  const handleStartCat = () => {
+    if (!studentName.trim()) {
+      toast.info('Por favor, informe seu nome para iniciar o teste adaptativo.')
+      return
+    }
+    const session = startCatSession(studentName.trim().toLowerCase(), studentName.trim(), title)
+    const firstQ = selectNextCatQuestion(session, questions)
+    if (!firstQ) {
+      toast.error('Nenhuma questão disponível no banco para teste adaptativo.')
+      return
+    }
+    setCatSession(session)
+    setCurrentCatQuestion(firstQ)
+  }
+
+  // ─── Submissão de Resposta no Modo CAT ─────────────────────────────
+  const handleCatAnswerSubmit = () => {
+    if (!catSession || !currentCatQuestion) return
+    const sel = answers[currentCatQuestion.id]
+    if (!sel) {
+      toast.info('Selecione uma resposta antes de avançar.')
+      return
+    }
+
+    let isCorrect = false
+    if (currentCatQuestion.type === 'multiple_choice' && currentCatQuestion.answer) {
+      isCorrect = sel.trim().toLowerCase() === currentCatQuestion.answer.trim().toLowerCase()
+    } else if (currentCatQuestion.type === 'text' && currentCatQuestion.answer) {
+      isCorrect = scoreGapFill(sel, currentCatQuestion.answer) >= 0.5
+    }
+
+    const updatedSession = recordCatAnswer(catSession, currentCatQuestion, isCorrect)
+    setCatSession(updatedSession)
+
+    if (updatedSession.isTerminated) {
+      const report = interpretCatResult(updatedSession.currentTheta)
+      setCatFinalReport(report)
+      setScore(report.score0to10)
+      setSubmitted(true)
+      if (onComplete) onComplete(studentName, report.score0to10, 10)
+    } else {
+      const nextQ = selectNextCatQuestion(updatedSession, questions)
+      if (!nextQ) {
+        const report = interpretCatResult(updatedSession.currentTheta)
+        setCatFinalReport(report)
+        setScore(report.score0to10)
+        setSubmitted(true)
+        if (onComplete) onComplete(studentName, report.score0to10, 10)
+      } else {
+        setCurrentCatQuestion(nextQ)
+      }
+    }
   }
 
   const handleSubmit = (e: React.FormEvent | Event) => {
@@ -378,7 +481,8 @@ export default function StudentExamPlayer({
           <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
             <div className="flex gap-2 text-sm" style={{ display: 'flex', gap: '8px', fontSize: '0.875rem' }}>
               <button type="button" onClick={() => setExamMode('exam')} style={{ padding: '6px 14px', borderRadius: 8, cursor: 'pointer', border: examMode === 'exam' ? '1.5px solid #1d4ed8' : '1px solid #d1d5db', background: examMode === 'exam' ? '#2563eb' : '#f9fafb', color: examMode === 'exam' ? '#fff' : '#374151', fontWeight: 700 }}>📝 Prova Oficial</button>
-              <button type="button" onClick={() => setExamMode('practice')} style={{ padding: '6px 14px', borderRadius: 8, cursor: 'pointer', border: examMode === 'practice' ? '1.5px solid #15803d' : '1px solid #d1d5db', background: examMode === 'practice' ? '#16a34a' : '#f9fafb', color: examMode === 'practice' ? '#fff' : '#374151', fontWeight: 700 }}>🎯 Treino & Exercício</button>
+              <button type="button" onClick={() => setExamMode('practice')} style={{ padding: '6px 14px', borderRadius: 8, cursor: 'pointer', border: examMode === 'practice' ? '1.5px solid #15803d' : '1px solid #d1d5db', background: examMode === 'practice' ? '#16a34a' : '#f9fafb', color: examMode === 'practice' ? '#fff' : '#374151', fontWeight: 700 }}>🎯 Treino & Dicas</button>
+              <button type="button" onClick={() => setExamMode('adaptive')} style={{ padding: '6px 14px', borderRadius: 8, cursor: 'pointer', border: examMode === 'adaptive' ? '1.5px solid #7c3aed' : '1px solid #d1d5db', background: examMode === 'adaptive' ? '#8b5cf6' : '#f9fafb', color: examMode === 'adaptive' ? '#fff' : '#374151', fontWeight: 700 }}>⚡ Adaptativo (CAT)</button>
             </div>
             <button
               onClick={onClose}
@@ -391,21 +495,26 @@ export default function StudentExamPlayer({
 
         {/* Banner Informativo de Modo Pedagógico */}
         <div style={{
-          background: examMode === 'practice' ? '#f0fdf4' : '#f8fafc',
-          border: `1px solid ${examMode === 'practice' ? '#bbf7d0' : '#e2e8f0'}`,
+          background: examMode === 'adaptive' ? '#faf5ff' : examMode === 'practice' ? '#f0fdf4' : '#f8fafc',
+          border: `1px solid ${examMode === 'adaptive' ? '#e9d5ff' : examMode === 'practice' ? '#bbf7d0' : '#e2e8f0'}`,
           borderRadius: RADIUS.md,
           padding: '10px 16px',
           marginBottom: 20,
           fontSize: 13,
-          color: examMode === 'practice' ? '#166534' : '#475569',
+          color: examMode === 'adaptive' ? '#6b21a8' : examMode === 'practice' ? '#166534' : '#475569',
           display: 'flex',
           alignItems: 'center',
           gap: 8
         }}>
-          {examMode === 'practice' ? (
+          {examMode === 'adaptive' ? (
+            <>
+              <span style={{ fontSize: 16 }}>⚡</span>
+              <span><b>Teste Adaptativo Computadorizado (CAT):</b> As questões se adaptam ao seu desempenho em tempo real. Cada acerto eleva a dificuldade e cada erro recalibra a escada para estimar sua proficiência com máxima precisão.</span>
+            </>
+          ) : examMode === 'practice' ? (
             <>
               <span style={{ fontSize: 16 }}>🎯</span>
-              <span><b>Modo Treino & Aprendizagem Formativa:</b> Ao selecionar uma opção, você recebe feedback imediato e explicação do raciocínio/erro para auto-correção.</span>
+              <span><b>Modo Treino com Scaffolding (Andaime Cognitivo):</b> Peça até 3 camadas de dicas progressivas (Conceito → Eliminação de Distrator → Roteiro) para destravar o raciocínio sem entregar a resposta.</span>
             </>
           ) : (
             <>
@@ -417,23 +526,115 @@ export default function StudentExamPlayer({
 
 
         {!submitted ? (
-          <form ref={formRef} onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-            <div style={{ background: '#fdf8f2', padding: 16, borderRadius: RADIUS.lg, border: '1px solid #ede8dc' }}>
-              <label style={{ fontSize: 13, fontWeight: 700, color: '#2c1a0e', display: 'block', marginBottom: 6 }}>
-                Digite seu Nome Completo:
-              </label>
-              <input
-                value={studentName}
-                onChange={e => setStudentName(e.target.value)}
-                placeholder="Ex: Maria Clara Silva"
-                required
-                style={{
-                  width: '100%', padding: '10px 14px', borderRadius: RADIUS.md,
-                  border: '1.5px solid #cb4b16', fontSize: 14, outline: 'none',
-                  background: '#fff', color: '#2c1a0e', fontWeight: 600
-                }}
-              />
+          examMode === 'adaptive' ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+              {!catSession ? (
+                <div style={{ background: '#fdf8f2', padding: 24, borderRadius: RADIUS.xl, border: '1px solid #ede8dc', textAlign: 'center' }}>
+                  <div style={{ fontSize: 36, marginBottom: 8 }}>⚡</div>
+                  <h3 style={{ fontSize: 18, fontWeight: 800, color: '#2c1a0e', margin: '0 0 8px' }}>Iniciar Bateria Adaptativa</h3>
+                  <p style={{ fontSize: 13, color: '#7a5c42', maxWidth: 460, margin: '0 auto 16px' }}>
+                    O teste adaptativo ajusta a dificuldade das questões a cada resposta para mapear sua proficiência exata com o menor número de itens possível.
+                  </p>
+                  <div style={{ maxWidth: 360, margin: '0 auto 16px', textAlign: 'left' }}>
+                    <label style={{ fontSize: 12, fontWeight: 700, color: '#2c1a0e', display: 'block', marginBottom: 4 }}>Nome do Aluno:</label>
+                    <input
+                      value={studentName}
+                      onChange={e => setStudentName(e.target.value)}
+                      placeholder="Ex: Lucas Mendes"
+                      style={{ width: '100%', padding: '10px 14px', borderRadius: RADIUS.md, border: '1.5px solid #8b5cf6', fontSize: 14, outline: 'none' }}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleStartCat}
+                    style={{ padding: '10px 24px', borderRadius: RADIUS.md, background: '#7c3aed', color: '#fff', border: 'none', fontWeight: 800, fontSize: 14, cursor: 'pointer', boxShadow: '0 4px 14px rgba(124,58,237,0.3)' }}
+                  >
+                    Iniciar Teste Adaptativo
+                  </button>
+                </div>
+              ) : currentCatQuestion ? (
+                <div style={{ background: '#fff', padding: 24, borderRadius: RADIUS.xl, border: '2px solid #e9d5ff', boxShadow: '0 4px 20px rgba(139,92,246,0.1)' }}>
+                  {/* Status Bar do CAT */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, paddingBottom: 12, borderBottom: '1px solid #f3e8ff' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ background: '#7c3aed', color: '#fff', padding: '3px 10px', borderRadius: 8, fontSize: 12, fontWeight: 800 }}>
+                        Item {catSession.history.length + 1} de ~{Math.min(12, questions.length)}
+                      </span>
+                      <span style={{ fontSize: 12, color: '#6b21a8', fontWeight: 700 }}>
+                        Degrau Atual: {catSession.currentRung}/4 ({catSession.currentRung === 1 ? 'Fácil' : catSession.currentRung === 2 ? 'Médio-Baixo' : catSession.currentRung === 3 ? 'Médio-Alto' : 'Desafio'})
+                      </span>
+                    </div>
+                    <div style={{ fontSize: 12, color: '#7c3aed', fontWeight: 600 }}>
+                      Margem de Erro (SE): ±{catSession.standardError.toFixed(2)}
+                    </div>
+                  </div>
+
+                  <div style={{ fontSize: 15, fontWeight: 700, color: '#2c1a0e', marginBottom: 16, lineHeight: 1.5 }}>
+                    {currentCatQuestion.stem}
+                  </div>
+
+                  {currentCatQuestion.options && currentCatQuestion.options.length > 0 ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                      {currentCatQuestion.options.map((opt, oIdx) => {
+                        const isSelected = answers[currentCatQuestion.id] === opt
+                        return (
+                          <button
+                            key={oIdx}
+                            type="button"
+                            onClick={() => handleSelectOption(currentCatQuestion.id, opt)}
+                            style={{
+                              textAlign: 'left', padding: '12px 16px', borderRadius: RADIUS.md,
+                              border: `2px solid ${isSelected ? '#7c3aed' : '#ede8dc'}`,
+                              background: isSelected ? '#faf5ff' : '#fff',
+                              color: isSelected ? '#6b21a8' : '#2c1a0e',
+                              fontSize: TEXT.body, fontWeight: isSelected ? 700 : 500,
+                              cursor: 'pointer', transition: 'all 0.15s'
+                            }}
+                          >
+                            {String.fromCharCode(65 + oIdx)}) {opt}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  ) : (
+                    <input
+                      value={answers[currentCatQuestion.id] || ''}
+                      onChange={e => handleSelectOption(currentCatQuestion.id, e.target.value)}
+                      placeholder="Sua resposta..."
+                      style={{ width: '100%', padding: '12px 16px', borderRadius: RADIUS.md, border: '1px solid #ede8dc', fontSize: 14 }}
+                    />
+                  )}
+
+                  <div style={{ marginTop: 24, display: 'flex', justifyContent: 'flex-end' }}>
+                    <button
+                      type="button"
+                      onClick={handleCatAnswerSubmit}
+                      style={{ padding: '12px 28px', background: '#7c3aed', color: '#fff', border: 'none', borderRadius: RADIUS.md, fontWeight: 800, fontSize: 14, cursor: 'pointer', boxShadow: '0 4px 14px rgba(124,58,237,0.3)' }}
+                    >
+                      Confirmar Resposta e Próximo Item →
+                    </button>
+                  </div>
+                </div>
+              ) : null}
             </div>
+          ) : (
+            <form ref={formRef} onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+              <div style={{ background: '#fdf8f2', padding: 16, borderRadius: RADIUS.lg, border: '1px solid #ede8dc' }}>
+                <label style={{ fontSize: 13, fontWeight: 700, color: '#2c1a0e', display: 'block', marginBottom: 6 }}>
+                  Digite seu Nome Completo:
+                </label>
+                <input
+                  value={studentName}
+                  onChange={e => setStudentName(e.target.value)}
+                  placeholder="Ex: Maria Clara Silva"
+                  required
+                  style={{
+                    width: '100%', padding: '10px 14px', borderRadius: RADIUS.md,
+                    border: '1.5px solid #cb4b16', fontSize: 14, outline: 'none',
+                    background: '#fff', color: '#2c1a0e', fontWeight: 600
+                  }}
+                />
+              </div>
 
             {questions.map((q, idx) => {
               const isEssay = /Write|Essay|Rediga|Escreva|Writing Task/i.test(q.stem)
@@ -491,23 +692,82 @@ export default function StudentExamPlayer({
 
                   {q.options && q.options.length > 0 ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {/* Botão de Scaffolding (Dicas em 3 Camadas) em modo treino/exercício */}
+                      {examMode === 'practice' && (
+                        <div style={{ marginBottom: 6, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <span style={{ fontSize: 12, color: '#7a5c42', fontWeight: 600 }}>
+                            {hintsMap[q.id]?.currentTier
+                              ? `💡 Camada ${hintsMap[q.id].currentTier}/3 ativa (Peso: ${Math.round(hintsMap[q.id].scoreMultiplier * 100)}%)`
+                              : '💡 Precisa de apoio cognitivo?'}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleRequestHint(q)}
+                            disabled={(hintsMap[q.id]?.currentTier || 0) >= 3}
+                            style={{
+                              padding: '4px 10px',
+                              borderRadius: RADIUS.md,
+                              border: '1px solid #d97706',
+                              background: (hintsMap[q.id]?.currentTier || 0) >= 3 ? '#f5f0e8' : '#fef3c7',
+                              color: '#92400e',
+                              fontSize: 12,
+                              fontWeight: 700,
+                              cursor: (hintsMap[q.id]?.currentTier || 0) >= 3 ? 'not-allowed' : 'pointer'
+                            }}
+                          >
+                            {(hintsMap[q.id]?.currentTier || 0) === 0 ? '✨ Pedir Dica 1 (Conceito)' : (hintsMap[q.id]?.currentTier || 0) === 1 ? '✨ Dica 2 (Eliminar Distrator)' : '✨ Dica 3 (Resolução)'}
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Exibição da Dica Ativa */}
+                      {hintsMap[q.id]?.currentTier && (() => {
+                        const scaff = buildQuestionScaffolding(q)
+                        const tier = hintsMap[q.id].currentTier
+                        return (
+                          <div style={{ padding: '10px 14px', borderRadius: RADIUS.md, background: '#fffbeb', border: '1px solid #fde68a', fontSize: 13, color: '#92400e', marginBottom: 8 }}>
+                            {tier >= 1 && (
+                              <div style={{ marginBottom: tier > 1 ? 6 : 0 }}>
+                                <b>🧠 {scaff.tier1_concept.title}:</b> {scaff.tier1_concept.content}
+                              </div>
+                            )}
+                            {tier >= 2 && (
+                              <div style={{ marginBottom: tier > 2 ? 6 : 0, color: '#b45309' }}>
+                                <b>🚫 Distrator Eliminado:</b> {scaff.tier2_elimination.rationale}
+                              </div>
+                            )}
+                            {tier >= 3 && (
+                              <div style={{ color: '#78350f' }}>
+                                <b>🧭 Roteiro Guiado:</b>
+                                <ul style={{ margin: '4px 0 0 16px', padding: 0 }}>
+                                  {scaff.tier3_walkthrough.steps.map((st, sIdx) => <li key={sIdx}>{st}</li>)}
+                                </ul>
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })()}
+
                       {shuffled.map((opt, oIdx) => {
                         const isSelected = answers[q.id] === opt
+                        const isEliminated = hintsMap[q.id]?.eliminatedOptions?.includes(opt)
                         return (
                           <button
                             key={oIdx}
                             type="button"
+                            disabled={isEliminated}
                             onClick={() => handleSelectOption(q.id, opt)}
                             style={{
                               textAlign: 'left', padding: '10px 14px', borderRadius: RADIUS.md,
-                              border: `1.5px solid ${isSelected ? '#8b5e3c' : '#ede8dc'}`,
-                              background: isSelected ? '#fdf8f2' : '#faf8f5',
-                              color: isSelected ? '#8b5e3c' : '#2c1a0e',
+                              border: `1.5px solid ${isEliminated ? '#d1d5db' : isSelected ? '#8b5e3c' : '#ede8dc'}`,
+                              background: isEliminated ? '#f3f4f6' : isSelected ? '#fdf8f2' : '#faf8f5',
+                              color: isEliminated ? '#9ca3af' : isSelected ? '#8b5e3c' : '#2c1a0e',
+                              textDecoration: isEliminated ? 'line-through' : 'none',
                               fontSize: TEXT.body, fontWeight: isSelected ? 700 : 500,
-                              cursor: 'pointer', transition: 'all 0.15s'
+                              cursor: isEliminated ? 'not-allowed' : 'pointer', transition: 'all 0.15s'
                             }}
                           >
-                            {String.fromCharCode(65 + oIdx)}) {opt}
+                            {String.fromCharCode(65 + oIdx)}) {opt} {isEliminated && '❌ (Distrator Descartado)'}
                           </button>
                         )
                       })}
@@ -598,6 +858,31 @@ export default function StudentExamPlayer({
               }}>
                 <div style={{ fontSize: 12, fontWeight: 800, color: '#2d9d5d', textTransform: 'uppercase' }}>Sua Nota:</div>
                 <div style={{ fontSize: 36, fontWeight: 900, color: '#2d9d5d' }}>{score} / 10</div>
+              </div>
+            )}
+
+            {catFinalReport && (
+              <div style={{
+                marginTop: 20, padding: 20, borderRadius: RADIUS.xl,
+                background: '#faf5ff', border: '2px solid #d8b4fe', textAlign: 'left', maxWidth: 500, margin: '20px auto 0'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                  <span style={{ fontSize: 20 }}>⚡</span>
+                  <strong style={{ fontSize: 16, color: '#6b21a8' }}>Resultado Diagnóstico Adaptativo (CAT)</strong>
+                </div>
+                <div style={{ display: 'flex', gap: 12, margin: '10px 0' }}>
+                  <div style={{ background: '#fff', padding: '8px 14px', borderRadius: 8, border: '1px solid #e9d5ff' }}>
+                    <span style={{ fontSize: 11, color: '#7c3aed', display: 'block' }}>Nível Estimado:</span>
+                    <strong style={{ fontSize: 14, color: '#2c1a0e' }}>{catFinalReport.levelLabel}</strong>
+                  </div>
+                  <div style={{ background: '#fff', padding: '8px 14px', borderRadius: 8, border: '1px solid #e9d5ff' }}>
+                    <span style={{ fontSize: 11, color: '#7c3aed', display: 'block' }}>Equivalência:</span>
+                    <strong style={{ fontSize: 14, color: '#2c1a0e' }}>{catFinalReport.cefrEquivalent}</strong>
+                  </div>
+                </div>
+                <p style={{ fontSize: 13, color: '#581c87', margin: 0, lineHeight: 1.5 }}>
+                  {catFinalReport.diagnosticDescription}
+                </p>
               </div>
             )}
 

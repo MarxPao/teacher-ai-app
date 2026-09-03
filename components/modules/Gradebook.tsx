@@ -69,15 +69,47 @@ export default function Gradebook() {
     sync(updated)
   }
 
-  const updateGrade = (sid: string, col: string, val: string) => {
+  const updateGrade = async (sid: string, col: string, val: string) => {
+    let cleanVal = val.trim()
+    if (cleanVal !== '') {
+      const parsedNum = parseFloat(cleanVal.replace(',', '.'))
+      if (!isNaN(parsedNum)) {
+        if (parsedNum < 0 || parsedNum > 10) {
+          // ─── BLOQUEIO COM CONFIRMAÇÃO EXPLÍCITA (NÃO GRAVA AUTOMATICAMENTE) ───
+          if (parsedNum > 10 && parsedNum <= 100 && !cleanVal.includes('.') && !cleanVal.includes(',')) {
+            const autoFixed = (parsedNum / 10).toFixed(1)
+            const confirmed = await showConfirm({
+              title: 'Nota Fora da Escala Padrão (0 a 10)',
+              message: `Você digitou "${cleanVal}" — isso está fora da escala de 0.0 a 10.0. Você quis dizer "${autoFixed}"?`,
+              confirmLabel: `Sim, usar ${autoFixed}`,
+              cancelLabel: 'Não, quero redigitar',
+              danger: false
+            })
+
+            if (confirmed) {
+              cleanVal = autoFixed
+            } else {
+              toast.info('Gravação cancelada pelo professor. Nada foi alterado.')
+              setStudents([...students])
+              return
+            }
+          } else {
+            toast.error(`Nota inválida (${cleanVal}). O valor deve ser um número entre 0.0 e 10.0.`)
+            setStudents([...students])
+            return
+          }
+        }
+      }
+    }
+
     const updated = students.map(s => {
       if (s.id === sid) {
-        const numVal = parseFloat(val.replace(',', '.'))
+        const numVal = parseFloat(cleanVal.replace(',', '.'))
         if (!isNaN(numVal)) {
           const className = classes.find(c => c.id === s.classId)?.name || ''
           recordStudentGrade(s.id, s.name, col, numVal, 10, className)
         }
-        return { ...s, grades: { ...s.grades, [col]: val } }
+        return { ...s, grades: { ...s.grades, [col]: cleanVal } }
       }
       return s
     })

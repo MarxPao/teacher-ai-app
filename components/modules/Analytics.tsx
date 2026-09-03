@@ -5,11 +5,32 @@ import { COLOR, TEXT, RADIUS } from '@/styles/tokens'
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { getBnccSkillsForGrade, getStoredBnccSkills, BnccSkill } from '@/lib/bnccData'
 import { exportToPdf, exportToExcel } from '@/lib/exportUtils'
+import { calculateStudentCompositeRisk, evaluateMlReadiness, CompositeRiskAnalysis } from '@/lib/predictiveAnalytics'
+import { saveRiskSnapshot, getRiskHistory, getRiskTrajectoryLabel, getTrajectoryColor, RiskSnapshot } from '@/lib/riskHistory'
+import type { StudentMemory } from '@/lib/studentMemory'
 
 /* Tipos */
 interface School { id: string; name: string; color: string }
 interface ClassRecord { id: string; name: string; schoolId: string; description: string; subject?: string; year?: string }
-interface StudentRecord { id: string; name: string; classId: string; schoolId: string; notes: string; level: string; grades?: Record<string, string> }
+interface StudentRecord {
+  id: string
+  name: string
+  classId: string
+  schoolId: string
+  notes: string
+  level: string
+  grades?: Record<string, string>
+  nee?: boolean
+  nee_description?: string
+  neeDescription?: string
+  /** Registro de acompanhamento ativo pelo professor — persiste após o alerta disparar */
+  followUp?: {
+    active: boolean
+    note: string       // ex: "Reunião com pais realizada em 28/08"
+    startedAt: string  // ISO date string
+    updatedAt: string  // ISO date string
+  }
+}
 
 interface MetricDef {
   key: string; label: string; icon: string; desc: string; auto: boolean; weight: number
@@ -213,6 +234,8 @@ export default function Analytics() {
   const [stuClass, setStuClass] = useState('')
   const [stuLevel, setStuLevel] = useState('A2')
   const [stuNotes, setStuNotes] = useState('')
+  const [stuNee, setStuNee] = useState(false)
+  const [stuNeeDesc, setStuNeeDesc] = useState('')
 
   // Evolução do Aluno & Diagnóstico IA
   const [studentSearch, setStudentSearch] = useState('')
@@ -225,6 +248,19 @@ export default function Analytics() {
   } | null>(null)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
 
+  // ── Índice de Risco & Histórico Temporal ──────────────────────────────────
+  /** Memorias brutas lidas de teacher_student_memory para alimentar o motor de risco */
+  const [studentMemories, setStudentMemories] = useState<StudentMemory[]>([])
+  /** Cache: risco calculado por studentId para evitar recálculo em cada render */
+  const [riskCache, setRiskCache] = useState<Record<string, CompositeRiskAnalysis>>({})
+  /** Histórico de snapshots por studentId — carregado do localStorage */
+  const [riskHistoryMap, setRiskHistoryMap] = useState<Record<string, RiskSnapshot[]>>({})
+
+  // ── Follow-up (Acompanhamento Pedagógico) ────────────────────────────────
+  const [showFollowUpModal, setShowFollowUpModal] = useState(false)
+  const [followUpTargetId, setFollowUpTargetId] = useState<string | null>(null)
+  const [followUpNote, setFollowUpNote] = useState('')
+
   // Carregar Dados
   useEffect(() => {
     const load = () => {
@@ -235,6 +271,8 @@ export default function Analytics() {
       const sm = localStorage.getItem('teacher_school_metrics')
       const cm = localStorage.getItem('teacher_class_metrics')
       const stm = localStorage.getItem('teacher_student_metrics')
+      // Bridge: memória viva dos alunos → alimenta o motor de risco
+      const mem = localStorage.getItem('teacher_student_memory')
 
       if (sc) {
         const parsedSc = JSON.parse(sc)
@@ -258,16 +296,60 @@ export default function Analytics() {
       if (sm) setSchoolMetrics(JSON.parse(sm))
       if (cm) setClassMetrics(JSON.parse(cm))
       if (stm) setStudentMetrics(JSON.parse(stm))
+      if (mem) {
+        try { setStudentMemories(JSON.parse(mem)) } catch { /* ignore */ }
+      }
     }
     load()
     window.addEventListener('storage', load)
-    return () => window.removeEventListener('storage', load)
+    const custom = () => load()
+    window.addEventListener('teacher:data_changed', custom)
+    return () => {
+      window.removeEventListener('storage', load)
+      window.removeEventListener('teacher:data_changed', custom)
+    }
   }, [])
 
-  // Auto-cálculo de Nota Acadêmica
+  /**
+   * Calcula (ou recupera do cache) o risco composto de um aluno,
+   * faz o bridge entre StudentRecord e StudentMemory, e persiste o snapshot.
+   */
+  const getStudentRisk = useCallback((studentId: string, studentName: string): CompositeRiskAnalysis => {
+    if (riskCache[studentId]) return riskCache[studentId]
+
+    // Montar uma StudentMemory mínima a partir dos dados disponíveis
+    const existing = studentMemories.find(m => m.studentId === studentId)
+    const memory: StudentMemory = existing ?? {
+      studentId,
+      studentName,
+      observations: [],
+      examHistory: [],
+      updatedAt: new Date().toISOString(),
+    }
+
+    const analysis = calculateStudentCompositeRisk(memory, {
+      passingScore: 6.0,
+      consecutiveAbsences: 0,
+      overallAttendancePercentage: 100,
+    })
+
+    // Persistir snapshot temporal (deduplica internamente)
+    saveRiskSnapshot(studentId, analysis)
+    const history = getRiskHistory(studentId)
+
+    setRiskCache(prev => ({ ...prev, [studentId]: analysis }))
+    setRiskHistoryMap(prev => ({ ...prev, [studentId]: history }))
+
+    return analysis
+  }, [riskCache, studentMemories])
+
+
+  // Auto-cálculo de Nota Acadêmica com filtro de segurança [0, 10]
   const autoGradeOfStudent = useCallback((student: StudentRecord): number | null => {
     if (!student.grades || Object.keys(student.grades).length === 0) return null
-    const vals = Object.values(student.grades).map(v => parseFloat(String(v).replace(',', '.'))).filter(n => !isNaN(n))
+    const vals = Object.values(student.grades)
+      .map(v => parseFloat(String(v).replace(',', '.')))
+      .filter(n => !isNaN(n) && n >= 0 && n <= 10)
     if (!vals.length) return null
     return vals.reduce((a, b) => a + b, 0) / vals.length
   }, [])
@@ -288,22 +370,50 @@ export default function Analytics() {
   const handleGenerateAIDiagnosis = async (student: StudentRecord, scores: Record<string, number>, autoG: number | null) => {
     setIsAnalyzing(true)
     try {
-      const prompt = `Você é a Rafinha IA especialista em diagnóstico pedagógico e evolução escolar de alunos de idiomas.
-Analise a evolução pedagógica detalhada do aluno ${student.name} (Nível: ${student.level}):
+      // Obter o índice de risco real para ancorar as intervenções no vetor dominante
+      const risk = getStudentRisk(student.id, student.name)
+      const primaryComponent = risk.componentContributions.find(c => c.isPrimary)
+      const trajLabel = getRiskTrajectoryLabel(riskHistoryMap[student.id] || [])
 
-Métricas e Habilidades:
+      const riskContext = risk.riskScore >= 25 ? `
+ÍNDICE DE RISCO COMPOSTO: ${risk.riskBadge} (Score: ${risk.riskScore}/100)
+Trajetória Temporal: ${trajLabel}
+
+Decomposição por Vetor ABC + Qualitativo:
+${risk.componentContributions.map(c =>
+  `  - ${c.label}: ${c.rawScore.toFixed(0)} pts brutos × ${(c.weight * 100).toFixed(0)}% = ${c.weightedPts.toFixed(1)} pts ponderados${c.isPrimary ? ' ← FATOR DOMINANTE' : ''}`
+).join('\n')}
+
+Dados de Frequência: ${risk.consecutiveAbsences} falta(s) consecutiva(s)
+Alertas Qualitativos: ${risk.qualitativeAlertsCount} observação(ões) de alerta pedagógico
+Trajetória Acadêmica: ${risk.trajectoryStatus}
+Protocolo Recomendado pelo Motor: ${risk.actionRecommendation}
+` : ''
+
+      const prompt = `Você é a Rafinha IA especialista em diagnóstico pedagógico e elaboração de planos de ação para alunos em risco escolar.
+Analise o perfil completo do aluno ${student.name} (Nível CEFR: ${student.level}) e gere um plano de ação ESPECÍFICO para este aluno.
+
+MÉTRICAS PEDAGÓGICAS (habilidades de idioma, 0–10):
 ${metricDefs.map(m => `- ${m.label}: ${(m.auto ? (autoG || 0) : (scores[m.key] || 0)).toFixed(1)}/10`).join('\n')}
+${riskContext}
+${student.notes ? `\nNOTAS DO PROFESSOR: "${student.notes}"` : ''}
+${student.nee ? `\nADAPTAÇÃO CURRICULAR (NEE): ${student.nee_description || 'Ativo — considere adaptações pedagógicas'}` : ''}
+
+${risk.riskScore >= 50
+  ? `INSTRUÇÃO CRÍTICA: Este aluno está em ${risk.riskBadge}. O FATOR DOMINANTE é "${primaryComponent?.label || 'combinação de fatores'}". As intervenções DEVEM ser ESPECÍFICAS para endereçar esse fator — não genéricas. Se o fator é frequência, proponha ações de engajamento com família. Se é queda acadêmica, proponha reforço temático imediato. Se é qualitativo, proponha observação dirigida e conversa individual.`
+  : 'Gere um diagnóstico pedagógico equilibrado com ações de melhoria contínua.'
+}
 
 Responda APENAS um objeto JSON no formato:
 {
-  "warningTitle": "Área de Maior Atenção / Dificuldade",
-  "warningText": "Descrição precisa do ponto crítico de atenção e comportamento observado",
-  "strengthTitle": "Ponto Forte & Destaque de Crescimento",
-  "strengthText": "Descrição da habilidade ou atitude com melhor evolução",
+  "warningTitle": "Principal Fator de Risco / Dificuldade",
+  "warningText": "Descrição precisa ancorada no vetor de risco dominante e comportamento observado",
+  "strengthTitle": "Ponto Forte & Destaque",
+  "strengthText": "Habilidade ou atitude com melhor evolução — ou potencial a ser explorado",
   "interventions": [
-    "Ação prática 1 imediata para o professor aplicar em aula",
-    "Ação prática 2 de reforço ou desafio personalizado",
-    "Ação prática 3 de acompanhamento com a família ou autoavaliação"
+    "Ação 1 — imediata e específica para o fator dominante de risco",
+    "Ação 2 — reforço pedagógico personalizado ao nível ${student.level}",
+    "Ação 3 — envolvimento de família/responsáveis ou autoavaliação do aluno"
   ]
 }`
 
@@ -320,8 +430,8 @@ Responda APENAS um objeto JSON no formato:
       if (jsonMatch) {
         const parsed = JSON.parse(jsonMatch[0])
         setAiDiagnosis({
-          warning: `${parsed.warningTitle || 'Atenção'}: ${parsed.warningText || 'Reforço recomendado em estruturas e vocabulário.'}`,
-          strength: `${parsed.strengthTitle || 'Ponto Forte'}: ${parsed.strengthText || 'Excelente participação oral e autonomia.'}`,
+          warning: `${parsed.warningTitle || 'Atenção'}: ${parsed.warningText || 'Reforço recomendado.'}`,
+          strength: `${parsed.strengthTitle || 'Ponto Forte'}: ${parsed.strengthText || 'Boa participação e autonomia.'}`,
           interventions: parsed.interventions || []
         })
         setToastMessage('Diagnóstico da Rafinha IA gerado com sucesso!')
@@ -333,6 +443,46 @@ Responda APENAS um objeto JSON no formato:
       setIsAnalyzing(false)
     }
   }
+
+  /** Abre o modal de registro de acompanhamento para um aluno */
+  function openFollowUp(studentId: string) {
+    const st = students.find(s => s.id === studentId)
+    setFollowUpTargetId(studentId)
+    setFollowUpNote(st?.followUp?.note || '')
+    setShowFollowUpModal(true)
+  }
+
+  /** Salva o registro de acompanhamento no StudentRecord */
+  function saveFollowUp() {
+    if (!followUpTargetId) return
+    const now = new Date().toISOString()
+    saveStudents(students.map(st => {
+      if (st.id !== followUpTargetId) return st
+      const alreadyActive = st.followUp?.active
+      return {
+        ...st,
+        followUp: {
+          active: true,
+          note: followUpNote.trim(),
+          startedAt: alreadyActive ? (st.followUp!.startedAt) : now,
+          updatedAt: now,
+        }
+      }
+    }))
+    setShowFollowUpModal(false)
+    setFollowUpTargetId(null)
+    setFollowUpNote('')
+    setToastMessage('Acompanhamento registrado com sucesso!')
+    setTimeout(() => setToastMessage(null), 3500)
+  }
+
+  /** Remove o acompanhamento ativo de um aluno */
+  function clearFollowUp(studentId: string) {
+    saveStudents(students.map(st =>
+      st.id === studentId ? { ...st, followUp: { ...st.followUp!, active: false, updatedAt: new Date().toISOString() } } : st
+    ))
+  }
+
 
   // Funções de Persistência
   function saveSchools(arr: School[]) { setSchools(arr); localStorage.setItem('teacher_schools', JSON.stringify(arr)) }
@@ -405,15 +555,15 @@ Responda APENAS um objeto JSON no formato:
     if (selectedClassId === id) setSelectedClassId(null)
   }
 
-  function openAddStudent() { setStuName(''); setStuClass(classes[0]?.id || ''); setStuLevel('A2'); setStuNotes(''); setStudentModal('add') }
-  function openEditStudent(st: StudentRecord) { setStuName(st.name); setStuClass(st.classId); setStuLevel(st.level); setStuNotes(st.notes); setSelectedStudentId(st.id); setStudentModal('edit') }
+  function openAddStudent() { setStuName(''); setStuClass(classes[0]?.id || ''); setStuLevel('A2'); setStuNotes(''); setStuNee(false); setStuNeeDesc(''); setStudentModal('add') }
+  function openEditStudent(st: StudentRecord) { setStuName(st.name); setStuClass(st.classId); setStuLevel(st.level); setStuNotes(st.notes); setStuNee(!!st.nee); setStuNeeDesc(st.nee_description || st.neeDescription || ''); setSelectedStudentId(st.id); setStudentModal('edit') }
   function saveStudentForm() {
     if (!stuName.trim()) return
     const scId = classes.find(c => c.id === stuClass)?.schoolId || ''
     if (studentModal === 'edit' && selectedStudentId) {
-      saveStudents(students.map(st => st.id === selectedStudentId ? { ...st, name: stuName.trim(), classId: stuClass, schoolId: scId, level: stuLevel, notes: stuNotes } : st))
+      saveStudents(students.map(st => st.id === selectedStudentId ? { ...st, name: stuName.trim(), classId: stuClass, schoolId: scId, level: stuLevel, notes: stuNotes, nee: stuNee, nee_description: stuNeeDesc } : st))
     } else {
-      const newSt: StudentRecord = { id: `stu_${Date.now()}`, name: stuName.trim(), classId: stuClass, schoolId: scId, level: stuLevel, notes: stuNotes, grades: {} }
+      const newSt: StudentRecord = { id: `stu_${Date.now()}`, name: stuName.trim(), classId: stuClass, schoolId: scId, level: stuLevel, notes: stuNotes, nee: stuNee, nee_description: stuNeeDesc, grades: {} }
       saveStudents([...students, newSt])
     }
     setStudentModal(null)
@@ -433,7 +583,9 @@ Responda APENAS um objeto JSON no formato:
 
     students.forEach((s) => {
       if (!s.grades) return
-      const vals = Object.values(s.grades).map((v) => parseFloat(String(v).replace(',', '.'))).filter(n => !isNaN(n))
+      const vals = Object.values(s.grades)
+        .map((v) => parseFloat(String(v).replace(',', '.')))
+        .filter(n => !isNaN(n) && n >= 0 && n <= 10)
       allGrades.push(...vals)
 
       if (!classGrades[s.classId]) classGrades[s.classId] = []
@@ -744,6 +896,58 @@ Responda APENAS um objeto JSON no formato:
               <p style={{ fontSize: TEXT.micro, color: COLOR.paperMid, textAlign: 'center', margin: 0 }}>Distribuição de 1 a 10</p>
             </div>
           </div>
+
+          {/* ML Readiness — Prontidão para Analytics Preditivo Avançado */}
+          {(() => {
+            const mlStatus = evaluateMlReadiness(studentMemories)
+            return (
+              <div style={{
+                ...S.card,
+                background: mlStatus.isReadyForMlTraining
+                  ? 'linear-gradient(135deg, #f0faf0 0%, #e8f7e8 100%)'
+                  : 'linear-gradient(135deg, #fffcf8 0%, #fbf4ea 100%)',
+                border: `1px solid ${mlStatus.isReadyForMlTraining ? 'rgba(45,122,0,0.2)' : 'rgba(139,115,85,0.18)'}`,
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700, fontSize: TEXT.body, color: COLOR.paperInk }}>
+                      <i className="ti ti-brain" style={{ color: mlStatus.isReadyForMlTraining ? '#2d7a00' : COLOR.accentGold }} />
+                      Base de Dados para Analytics Preditivo
+                    </div>
+                    <div style={{ fontSize: TEXT.caption, color: COLOR.paperWarm, marginTop: 2 }}>
+                      {mlStatus.isReadyForMlTraining
+                        ? 'Limiar atingido — base longitudinal suficiente para modelos preditivos avançados.'
+                        : `Aguardando dados longitudinais — Índice Composto Multidimensional ativo (regras interpretáveis, sem ML supervisionado).`
+                      }
+                    </div>
+                  </div>
+                  <span style={{
+                    fontSize: TEXT.micro, fontWeight: 700, padding: '4px 10px', borderRadius: RADIUS.full,
+                    background: mlStatus.isReadyForMlTraining ? '#e8f7e8' : '#f5f0e8',
+                    color: mlStatus.isReadyForMlTraining ? '#2d7a00' : COLOR.paperWarm,
+                    border: `1px solid ${mlStatus.isReadyForMlTraining ? 'rgba(45,122,0,0.25)' : 'rgba(139,115,85,0.2)'}`,
+                  }}>
+                    {mlStatus.studentsWithSufficientPoints}/{mlStatus.threshold} alunos qualificados
+                  </span>
+                </div>
+                <div style={{ marginTop: 12 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: TEXT.micro, color: COLOR.paperWarm, marginBottom: 4 }}>
+                    <span>Progresso até ML Avançado</span>
+                    <span style={{ fontWeight: 700 }}>{mlStatus.progressPercentage}%</span>
+                  </div>
+                  <div style={{ height: 8, background: 'rgba(139,115,85,0.14)', borderRadius: 4, overflow: 'hidden' }}>
+                    <div style={{
+                      height: '100%', width: `${mlStatus.progressPercentage}%`,
+                      background: mlStatus.isReadyForMlTraining
+                        ? 'linear-gradient(90deg, #2d7a00, #4caf50)'
+                        : 'linear-gradient(90deg, #8b5e3c, #b58900)',
+                      borderRadius: 4, transition: 'width 0.6s ease',
+                    }} />
+                  </div>
+                </div>
+              </div>
+            )
+          })()}
         </div>
       )}
 
@@ -768,20 +972,41 @@ Responda APENAS um objeto JSON no formato:
                 const overall = computeScore(scores, metricDefs, null)
                 const isActive = selectedSchoolId === sc.id
                 return (
-                  <div key={sc.id} onClick={() => setSelectedSchoolId(isActive ? null : sc.id)} style={{
-                    ...S.card, cursor: 'pointer', transition: 'all 0.15s',
-                    borderColor: isActive ? '#2c1a0e' : '#ede8dc',
-                    background: isActive ? '#f0f6fa' : '#fff',
-                  }}>
+                  <div
+                    key={sc.id}
+                    role="button"
+                    tabIndex={0}
+                    aria-pressed={isActive}
+                    onClick={() => setSelectedSchoolId(isActive ? null : sc.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        setSelectedSchoolId(isActive ? null : sc.id)
+                      }
+                    }}
+                    style={{
+                      ...S.card, cursor: 'pointer', transition: 'all 0.15s',
+                      borderColor: isActive ? '#2c1a0e' : '#ede8dc',
+                      background: isActive ? '#f0f6fa' : '#fff',
+                    }}
+                  >
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
                       <div style={{ width: 40, height: 40, borderRadius: RADIUS.md, background: sc.color, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                         <i className="ti ti-building-community" style={{ color: '#fff', fontSize: 20 }} />
                       </div>
                       <div style={{ display: 'flex', gap: 6 }}>
-                        <button onClick={e => { e.stopPropagation(); openEditSchool(sc) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLOR.paperMid, fontSize: TEXT.subtitle }}>
+                        <button
+                          onClick={e => { e.stopPropagation(); openEditSchool(sc) }}
+                          aria-label={`Editar escola ${sc.name}`}
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLOR.paperMid, fontSize: TEXT.subtitle }}
+                        >
                           <i className="ti ti-pencil" />
                         </button>
-                        <button onClick={e => { e.stopPropagation(); deleteSchool(sc.id) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#dc322f', fontSize: TEXT.subtitle }}>
+                        <button
+                          onClick={e => { e.stopPropagation(); deleteSchool(sc.id) }}
+                          aria-label={`Excluir escola ${sc.name}`}
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#dc322f', fontSize: TEXT.subtitle }}
+                        >
                           <i className="ti ti-trash" />
                         </button>
                       </div>
@@ -864,18 +1089,39 @@ Responda APENAS um objeto JSON no formato:
                 const overall = computeScore(scores, metricDefs, null)
                 const isActive = selectedClassId === cls.id
                 return (
-                  <div key={cls.id} onClick={() => setSelectedClassId(isActive ? null : cls.id)} style={{
-                    ...S.card, cursor: 'pointer', transition: 'all 0.15s',
-                    borderColor: isActive ? '#2c1a0e' : '#ede8dc',
-                    background: isActive ? '#f0f6fa' : '#fff',
-                  }}>
+                  <div
+                    key={cls.id}
+                    role="button"
+                    tabIndex={0}
+                    aria-pressed={isActive}
+                    onClick={() => setSelectedClassId(isActive ? null : cls.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        setSelectedClassId(isActive ? null : cls.id)
+                      }
+                    }}
+                    style={{
+                      ...S.card, cursor: 'pointer', transition: 'all 0.15s',
+                      borderColor: isActive ? '#2c1a0e' : '#ede8dc',
+                      background: isActive ? '#f0f6fa' : '#fff',
+                    }}
+                  >
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
                       <div style={{ fontWeight: 700, fontSize: TEXT.subtitle, color: COLOR.paperInk }}>{cls.name}</div>
                       <div style={{ display: 'flex', gap: 6 }}>
-                        <button onClick={e => { e.stopPropagation(); openEditClass(cls) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLOR.paperMid, fontSize: TEXT.subtitle }}>
+                        <button
+                          onClick={e => { e.stopPropagation(); openEditClass(cls) }}
+                          aria-label={`Editar turma ${cls.name}`}
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLOR.paperMid, fontSize: TEXT.subtitle }}
+                        >
                           <i className="ti ti-pencil" />
                         </button>
-                        <button onClick={e => { e.stopPropagation(); deleteClass(cls.id) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#dc322f', fontSize: TEXT.subtitle }}>
+                        <button
+                          onClick={e => { e.stopPropagation(); deleteClass(cls.id) }}
+                          aria-label={`Excluir turma ${cls.name}`}
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#dc322f', fontSize: TEXT.subtitle }}
+                        >
                           <i className="ti ti-trash" />
                         </button>
                       </div>
@@ -1009,9 +1255,19 @@ Responda APENAS um objeto JSON no formato:
                   return (
                     <div
                       key={st.id}
+                      role="button"
+                      tabIndex={0}
+                      aria-pressed={isActive}
                       onClick={() => {
                         setSelectedStudentId(st.id)
                         setAiDiagnosis(null)
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          setSelectedStudentId(st.id)
+                          setAiDiagnosis(null)
+                        }
                       }}
                       style={{
                         ...S.card, cursor: 'pointer', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12,
@@ -1029,11 +1285,38 @@ Responda APENAS um objeto JSON no formato:
                         {st.name.charAt(0).toUpperCase()}
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontWeight: 600, color: COLOR.paperInk, fontSize: TEXT.body, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {st.name}
+                        <div style={{ fontWeight: 600, color: COLOR.paperInk, fontSize: TEXT.body, display: 'flex', alignItems: 'center', gap: 6, overflow: 'hidden' }}>
+                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{st.name}</span>
+                          {st.nee && (
+                            <span
+                              role="note"
+                              tabIndex={0}
+                              aria-label={`Aluno com adaptação curricular (NEE)${st.nee_description || st.neeDescription ? ': ' + (st.nee_description || st.neeDescription) : ''}`}
+                              title={st.nee_description || st.neeDescription || 'Adaptação curricular (NEE)'}
+                              style={{
+                                display: 'inline-flex', alignItems: 'center', gap: 3,
+                                padding: '1px 6px', borderRadius: RADIUS.full,
+                                background: 'rgba(148,87,34,0.12)', color: COLOR.accentGold,
+                                fontSize: 10, fontWeight: 700, flexShrink: 0, cursor: 'help',
+                              }}
+                            >
+                              <i className="ti ti-sparkles" style={{ fontSize: 9 }} />
+                              <span>Adaptado</span>
+                            </span>
+                          )}
                         </div>
-                        <div style={{ fontSize: TEXT.caption, color: COLOR.paperWarm }}>
-                          {cls?.name || 'Sem turma'} · Nível {st.level}
+                        <div style={{ fontSize: TEXT.caption, color: COLOR.paperWarm, display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
+                          <span>{cls?.name || 'Sem turma'} · Nível {st.level}</span>
+                          {st.followUp?.active && (
+                            <span style={{
+                              display: 'inline-flex', alignItems: 'center', gap: 3,
+                              padding: '1px 5px', borderRadius: RADIUS.full, fontSize: 9, fontWeight: 700,
+                              background: 'rgba(38,139,210,0.12)', color: '#268bd2',
+                              border: '1px solid rgba(38,139,210,0.2)',
+                            }}>
+                              <i className="ti ti-checks" style={{ fontSize: 8 }} /> Acompanhado
+                            </span>
+                          )}
                         </div>
                       </div>
                       <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
@@ -1044,14 +1327,18 @@ Responda APENAS um objeto JSON no formato:
                           {overall.toFixed(1)}
                         </span>
                         <button
+                          type="button"
                           onClick={e => { e.stopPropagation(); openEditStudent(st) }}
+                          aria-label={`Editar aluno ${st.name}`}
                           style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLOR.paperMid, fontSize: TEXT.body }}
                           title="Editar Aluno"
                         >
                           <i className="ti ti-pencil" />
                         </button>
                         <button
+                          type="button"
                           onClick={e => { e.stopPropagation(); deleteStudent(st.id) }}
+                          aria-label={`Excluir aluno ${st.name}`}
                           style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#dc322f', fontSize: TEXT.body }}
                           title="Excluir Aluno"
                         >
@@ -1062,6 +1349,24 @@ Responda APENAS um objeto JSON no formato:
                   )
                 })
               })()}
+              {/* Nota de Rodapé Pedagógica — Exibida quando houver alunos com NEE */}
+              {students.some(s => s.nee) && (
+                <div style={{
+                  marginTop: 6,
+                  padding: '8px 12px',
+                  borderRadius: RADIUS.md,
+                  background: 'rgba(148,87,34,0.06)',
+                  border: '1px solid rgba(148,87,34,0.18)',
+                  fontSize: 11,
+                  color: COLOR.paperWarm,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6
+                }}>
+                  <i className="ti ti-info-circle" style={{ color: COLOR.accentGold, fontSize: 13, flexShrink: 0 }} />
+                  <span>Alunos com <strong>Adaptado</strong> possuem adaptação curricular — compare com cautela pedagógica.</span>
+                </div>
+              )}
             </div>
 
             {/* Painel Central e Detalhado da Evolução do Aluno */}
@@ -1102,10 +1407,34 @@ Responda APENAS um objeto JSON no formato:
                           {st.name.charAt(0).toUpperCase()}
                         </div>
                         <div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                             <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: COLOR.paperInk, fontFamily: "'Fraunces', Georgia, serif" }}>
                               {st.name}
                             </h2>
+                            {st.nee && (
+                              <span
+                                role="note"
+                                tabIndex={0}
+                                aria-label={`Aluno com adaptação curricular (NEE)${st.nee_description || st.neeDescription ? ': ' + (st.nee_description || st.neeDescription) : ''}`}
+                                title={st.nee_description || st.neeDescription || 'Adaptação curricular (NEE)'}
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: 4,
+                                  padding: '2px 8px',
+                                  borderRadius: RADIUS.full,
+                                  background: 'rgba(148,87,34,0.12)',
+                                  color: COLOR.accentGold,
+                                  fontSize: TEXT.micro,
+                                  fontWeight: 700,
+                                  border: '1px solid rgba(148,87,34,0.25)',
+                                  cursor: 'help',
+                                }}
+                              >
+                                <i className="ti ti-sparkles" style={{ fontSize: 11 }} />
+                                <span>Adaptação Curricular (NEE)</span>
+                              </span>
+                            )}
                             <span style={{ ...S.badge, background: '#e8f4fd', color: '#268bd2', border: '1px solid rgba(38,139,210,0.2)' }}>
                               Nível {st.level}
                             </span>
@@ -1186,6 +1515,250 @@ Responda APENAS um objeto JSON no formato:
                         </div>
                       </div>
                     </div>
+
+                    {/* 2b. Índice de Risco ABC — Breakdown por Componente (Early Warning System) */}
+                    {(() => {
+                      const risk = getStudentRisk(st.id, st.name)
+                      const history = riskHistoryMap[st.id] || []
+                      const trajLabel = getRiskTrajectoryLabel(history)
+                      const trajColor = getTrajectoryColor(trajLabel)
+                      const riskColors: Record<string, string> = {
+                        stable: '#2d7a00', attention: '#854d00',
+                        moderate_risk: '#b05a00', critical_risk: '#9b1c1c'
+                      }
+                      const riskBg: Record<string, string> = {
+                        stable: '#f0faf0', attention: '#fefce8',
+                        moderate_risk: '#fff7ed', critical_risk: '#fef2f2'
+                      }
+                      const riskBorder: Record<string, string> = {
+                        stable: 'rgba(45,122,0,0.2)', attention: 'rgba(133,77,0,0.25)',
+                        moderate_risk: 'rgba(176,90,0,0.3)', critical_risk: 'rgba(155,28,28,0.3)'
+                      }
+                      const severityColor = (sev: string) => {
+                        if (sev === 'critical') return '#9b1c1c'
+                        if (sev === 'high')     return '#b05a00'
+                        if (sev === 'medium')   return '#854d00'
+                        if (sev === 'low')      return '#2d7a00'
+                        return '#71553d'
+                      }
+                      const isAtRisk = risk.riskScore >= 25
+
+                      return (
+                        <div style={{
+                          ...S.card,
+                          background: riskBg[risk.riskLevel],
+                          border: `1px solid ${riskBorder[risk.riskLevel]}`,
+                          padding: '18px 22px',
+                        }}>
+                          {/* Header do Card de Risco */}
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
+                            <div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700, fontSize: TEXT.subtitle, color: COLOR.paperInk }}>
+                                <i className="ti ti-shield-exclamation" style={{ color: riskColors[risk.riskLevel] }} />
+                                Índice de Alerta Precoce (EWS)
+                              </div>
+                              <div style={{ fontSize: TEXT.caption, color: COLOR.paperWarm, marginTop: 2 }}>
+                                Framework ABC — Acadêmico · Comportamento · Comparecimento + Qualitativo
+                              </div>
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+                              <span style={{
+                                fontSize: 18, fontWeight: 800,
+                                color: riskColors[risk.riskLevel],
+                                background: 'rgba(255,255,255,0.7)',
+                                padding: '3px 10px',
+                                borderRadius: RADIUS.full,
+                                border: `1px solid ${riskBorder[risk.riskLevel]}`,
+                              }}>
+                                {risk.riskBadge} · {risk.riskScore}/100
+                              </span>
+                              {/* Trajetória Temporal */}
+                              {history.length >= 2 && (
+                                <span style={{
+                                  fontSize: TEXT.micro,
+                                  fontWeight: 700,
+                                  color: trajColor,
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: 4,
+                                }}>
+                                  {trajLabel}
+                                  {history.length > 0 && (
+                                    <span style={{ color: COLOR.paperMid, fontWeight: 400 }}>
+                                      ({history.length} snapshots)
+                                    </span>
+                                  )}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Mini-histórico de Snapshots Temporais */}
+                          {history.length >= 2 && (
+                            <div style={{
+                              display: 'flex', alignItems: 'center', gap: 6, marginBottom: 14,
+                              background: 'rgba(255,255,255,0.5)', borderRadius: RADIUS.md,
+                              padding: '6px 12px', flexWrap: 'wrap'
+                            }}>
+                              <span style={{ fontSize: 10, fontWeight: 700, color: COLOR.paperWarm, textTransform: 'uppercase', letterSpacing: '0.5px', marginRight: 4 }}>
+                                Histórico:
+                              </span>
+                              {history.map((snap, idx) => {
+                                const snapColors: Record<string, string> = {
+                                  stable: '#2d7a00', attention: '#854d00',
+                                  moderate_risk: '#b05a00', critical_risk: '#9b1c1c'
+                                }
+                                return (
+                                  <span
+                                    key={idx}
+                                    title={`${snap.riskBadge} — ${new Date(snap.calculatedAt).toLocaleDateString('pt-BR')} · ${snap.primaryFactor}`}
+                                    style={{
+                                      display: 'inline-flex', alignItems: 'center', gap: 3,
+                                      padding: '2px 7px', borderRadius: RADIUS.full, fontSize: 11, fontWeight: 700,
+                                      background: `${snapColors[snap.riskLevel]}18`,
+                                      color: snapColors[snap.riskLevel],
+                                      border: `1px solid ${snapColors[snap.riskLevel]}40`,
+                                      cursor: 'help',
+                                    }}
+                                  >
+                                    {snap.riskScore}
+                                  </span>
+                                )
+                              })}
+                              {history.length >= 2 && (
+                                <span style={{ fontSize: 11, color: trajColor, fontWeight: 700, marginLeft: 4 }}>{trajLabel}</span>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Decomposição por Componente — A, B, C, Q */}
+                          {isAtRisk && (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
+                              <div style={{ fontSize: TEXT.micro, fontWeight: 700, color: COLOR.paperWarm, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 2 }}>
+                                Decomposição — por que está neste nível:
+                              </div>
+                              {risk.componentContributions.map(comp => (
+                                <div key={comp.key} style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: TEXT.caption }}>
+                                    <span style={{
+                                      display: 'flex', alignItems: 'center', gap: 5,
+                                      fontWeight: comp.isPrimary ? 800 : 600,
+                                      color: comp.isPrimary ? severityColor(comp.severity) : COLOR.paperInk,
+                                    }}>
+                                      <i className={`ti ${comp.icon}`} style={{ color: severityColor(comp.severity), fontSize: 13 }} />
+                                      {comp.label}
+                                      {comp.isPrimary && (
+                                        <span style={{
+                                          fontSize: 9, fontWeight: 800, padding: '1px 5px',
+                                          borderRadius: RADIUS.full,
+                                          background: `${severityColor(comp.severity)}20`,
+                                          color: severityColor(comp.severity),
+                                          border: `1px solid ${severityColor(comp.severity)}40`,
+                                        }}>
+                                          FATOR PRINCIPAL
+                                        </span>
+                                      )}
+                                    </span>
+                                    <span style={{
+                                      fontWeight: 700, fontSize: TEXT.bodyCompact,
+                                      color: comp.severity === 'none' ? '#2d7a00' : severityColor(comp.severity)
+                                    }}>
+                                      {comp.weightedPts.toFixed(1)} pts
+                                    </span>
+                                  </div>
+                                  <div style={{ height: 5, background: 'rgba(139,115,85,0.12)', borderRadius: 3, overflow: 'hidden' }}>
+                                    <div style={{
+                                      height: '100%',
+                                      width: `${Math.min((comp.rawScore / 100) * 100, 100)}%`,
+                                      background: comp.severity === 'none' ? '#2d7a00' : severityColor(comp.severity),
+                                      borderRadius: 3,
+                                      transition: 'width 0.5s ease',
+                                      opacity: comp.rawScore === 0 ? 0.2 : 1,
+                                    }} />
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Protocolo de Ação + Follow-up */}
+                          <div style={{
+                            background: 'rgba(255,255,255,0.65)', borderRadius: RADIUS.md,
+                            padding: '10px 14px', border: '1px solid rgba(139,115,85,0.12)',
+                            display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
+                            gap: 12, flexWrap: 'wrap'
+                          }}>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontSize: TEXT.micro, fontWeight: 700, color: COLOR.paperWarm, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>
+                                Protocolo de Ação Recomendado
+                              </div>
+                              <div style={{ fontSize: TEXT.bodyCompact, color: COLOR.paperInk, lineHeight: 1.5 }}>
+                                {risk.actionRecommendation}
+                              </div>
+                            </div>
+                            {isAtRisk && (
+                              <div style={{ flexShrink: 0 }}>
+                                {st.followUp?.active ? (
+                                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+                                    <span style={{
+                                      display: 'inline-flex', alignItems: 'center', gap: 5,
+                                      padding: '5px 10px', borderRadius: RADIUS.full, fontSize: TEXT.micro, fontWeight: 700,
+                                      background: '#e8f4fd', color: '#268bd2', border: '1px solid rgba(38,139,210,0.25)',
+                                    }}>
+                                      <i className="ti ti-checks" /> Em Acompanhamento
+                                    </span>
+                                    <span style={{ fontSize: 10, color: COLOR.paperMid }}>
+                                      desde {new Date(st.followUp.startedAt).toLocaleDateString('pt-BR')}
+                                    </span>
+                                    <div style={{ display: 'flex', gap: 6 }}>
+                                      <button
+                                        onClick={() => openFollowUp(st.id)}
+                                        style={{ ...S.btn, padding: '4px 8px', fontSize: 11, background: '#f0f6fa', color: '#268bd2', border: '1px solid rgba(38,139,210,0.2)' }}
+                                      >
+                                        <i className="ti ti-edit" /> Atualizar
+                                      </button>
+                                      <button
+                                        onClick={() => clearFollowUp(st.id)}
+                                        style={{ ...S.btn, padding: '4px 8px', fontSize: 11, background: '#f0e8d8', color: COLOR.paperWarm }}
+                                      >
+                                        <i className="ti ti-x" /> Encerrar
+                                      </button>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <button
+                                    onClick={() => openFollowUp(st.id)}
+                                    style={{
+                                      ...S.btn,
+                                      background: riskColors[risk.riskLevel],
+                                      color: '#fff',
+                                      fontSize: TEXT.bodyCompact,
+                                      boxShadow: `0 2px 8px ${riskBorder[risk.riskLevel]}`,
+                                    }}
+                                  >
+                                    <i className="ti ti-clipboard-check" /> Registrar Acompanhamento
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Nota de acompanhamento registrada */}
+                          {st.followUp?.active && st.followUp.note && (
+                            <div style={{
+                              marginTop: 10, padding: '8px 12px',
+                              borderRadius: RADIUS.md, background: 'rgba(38,139,210,0.07)',
+                              border: '1px solid rgba(38,139,210,0.18)',
+                              fontSize: TEXT.caption, color: COLOR.paperInk,
+                              display: 'flex', alignItems: 'flex-start', gap: 6
+                            }}>
+                              <i className="ti ti-notes" style={{ color: '#268bd2', flexShrink: 0, marginTop: 1 }} />
+                              <span><strong>Ação registrada:</strong> {st.followUp.note}</span>
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })()}
 
                     {/* 3. Duplo Painel Visual: Radar de Competências + Linha do Tempo */}
                     <div style={{ display: 'grid', gridTemplateColumns: 'minmax(300px, 1fr) minmax(360px, 1.4fr)', gap: 20 }}>
@@ -1580,6 +2153,31 @@ ${gradeSkills.map(s => `- **[${s.code}]** (${s.axis}) ${s.description}`).join('\
               <div>
                 <label style={S.label}>Notas / Perfil Pedagógico</label>
                 <textarea style={{ ...S.input, minHeight: 60, resize: 'vertical' }} value={stuNotes} onChange={e => setStuNotes(e.target.value)} placeholder="Ex: Boa participação oral, precisa reforçar escrita e preposições." />
+              </div>
+              <div>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: TEXT.bodyCompact, fontWeight: 600, color: COLOR.paperInk }}>
+                  <input
+                    type="checkbox"
+                    checked={stuNee}
+                    onChange={e => setStuNee(e.target.checked)}
+                    style={{ accentColor: COLOR.accent }}
+                  />
+                  <span>Possui Necessidades Educacionais Específicas (NEE / Adaptação)</span>
+                </label>
+                {stuNee && (
+                  <div style={{ marginTop: 8 }}>
+                    <label style={S.label}>Detalhamento da Adaptação / Laudo (Privado)</label>
+                    <input
+                      style={S.input}
+                      value={stuNeeDesc}
+                      onChange={e => setStuNeeDesc(e.target.value)}
+                      placeholder="Ex: Dislexia, TDAH — tempo estendido em avaliações"
+                    />
+                    <span style={{ fontSize: 11, color: COLOR.paperMid, marginTop: 3, display: 'block' }}>
+                      * Detalhe sensível acessível apenas sob demanda (hover/foco), nunca exposto como texto aberto no ranking.
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
             <div style={{ display: 'flex', gap: 10, marginTop: 20, justifyContent: 'flex-end' }}>

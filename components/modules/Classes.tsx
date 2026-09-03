@@ -188,23 +188,44 @@ export default function Classes() {
                 const avg    = avgGrade(cls.id)
                 const isActive = detailId === cls.id
                 return (
-                  <div key={cls.id} onClick={() => setDetailId(isActive ? null : cls.id)} style={{
-                    ...S.card, cursor: 'pointer', transition: 'all 0.15s',
-                    borderColor: isActive ? '#2c1a0e' : '#ede8dc',
-                    boxShadow: isActive ? '0 4px 20px rgba(44,26,14,0.14)' : undefined,
-                    transform: isActive ? 'translateY(-2px)' : undefined,
-                  }}>
+                  <div
+                    key={cls.id}
+                    role="button"
+                    tabIndex={0}
+                    aria-pressed={isActive}
+                    onClick={() => setDetailId(isActive ? null : cls.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        setDetailId(isActive ? null : cls.id)
+                      }
+                    }}
+                    style={{
+                      ...S.card, cursor: 'pointer', transition: 'all 0.15s',
+                      borderColor: isActive ? '#2c1a0e' : '#ede8dc',
+                      boxShadow: isActive ? '0 4px 20px rgba(44,26,14,0.14)' : undefined,
+                      transform: isActive ? 'translateY(-2px)' : undefined,
+                    }}
+                  >
                     <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 12 }}>
                       <div style={{ width: 44, height: 44, borderRadius: RADIUS.lg, background: school?.color || '#268bd2', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                         <i className="ti ti-school" style={{ color: '#fff', fontSize: 20 }} />
                       </div>
                       <div style={{ display: 'flex', gap: 6 }}>
-                        <button onClick={e => { e.stopPropagation(); openEdit(cls) }}
-                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#a08060', fontSize: 16 }} title="Editar">
+                        <button
+                          onClick={e => { e.stopPropagation(); openEdit(cls) }}
+                          aria-label={`Editar turma ${cls.name}`}
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#a08060', fontSize: 16 }}
+                          title="Editar"
+                        >
                           <i className="ti ti-pencil" />
                         </button>
-                        <button onClick={e => { e.stopPropagation(); deleteClass(cls.id) }}
-                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#dc322f', fontSize: 16 }} title="Excluir">
+                        <button
+                          onClick={e => { e.stopPropagation(); deleteClass(cls.id) }}
+                          aria-label={`Excluir turma ${cls.name}`}
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#dc322f', fontSize: 16 }}
+                          title="Excluir"
+                        >
                           <i className="ti ti-trash" />
                         </button>
                       </div>

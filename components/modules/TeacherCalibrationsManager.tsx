@@ -9,6 +9,7 @@ import {
   TeacherAppCalibrations,
   DEFAULT_CALIBRATIONS
 } from '@/lib/teacherCalibrations'
+import CatReadinessCard from '@/components/CatReadinessCard'
 
 export default function TeacherCalibrationsManager() {
   const [calibrations, setCalibrations] = useState<TeacherAppCalibrations>(getTeacherCalibrations())
@@ -187,6 +188,10 @@ export default function TeacherCalibrationsManager() {
               onChange={e => handleSave({ exam: { ...calibrations.exam, defaultDurationMinutes: Number(e.target.value) } })}
               style={{ width: '100%', padding: '10px 12px', borderRadius: RADIUS.md, border: '1px solid #d5c8bb', background: '#faf6f0', fontSize: 13 }}
             />
+          </div>
+
+          <div style={{ gridColumn: '1 / -1' }}>
+            <CatReadinessCard />
           </div>
         </div>
       )}

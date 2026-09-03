@@ -373,7 +373,7 @@ export default function RosterReconciliationModal({
               padding: '9px 24px',
               borderRadius: RADIUS.md,
               border: 'none',
-              background: summary.ambiguous === 0 ? '#2d9d5d' : COLOR.accent,
+              background: stats.ambiguous === 0 ? '#2d9d5d' : COLOR.accent,
               color: '#fff',
               fontSize: TEXT.bodyCompact,
               fontWeight: 800,
@@ -389,10 +389,10 @@ export default function RosterReconciliationModal({
                 <i className="ti ti-loader-2 ti-spin" />
                 <span>Atualizando Base...</span>
               </>
-            ) : summary.ambiguous === 0 ? (
+            ) : stats.ambiguous === 0 ? (
               <>
                 <i className="ti ti-bolt" />
-                <span>⚡ Aprovar Tudo e Importar ({summary.total} Alunos)</span>
+                <span>⚡ Aprovar Tudo e Importar ({stats.totalPortal} Alunos)</span>
               </>
             ) : (
               <>

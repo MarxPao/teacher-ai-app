@@ -8,30 +8,30 @@
 export const COLOR = {
   // Paper scale (ink → page)
   paperDeep:   '#1c110a',
-  paperInk:    '#2c1a0e',   // texto primário
-  paperSepia:  '#5c3d20',
-  paperWarm:   '#7a5c42',   // texto secundário / labels
-  paperMid:    '#a08060',   // ícones / metadados
-  paperLight:  '#c4a882',
+  paperInk:    '#2c1a0e',   // texto primário (15.77:1)
+  paperSepia:  '#5c3d20',   // texto forte (9.28:1)
+  paperWarm:   '#7a5c42',   // texto secundário / labels (5.79:1 - WCAG AA)
+  paperMid:    '#71553d',   // ícones / metadados (6.48:1 - WCAG AA, calibrado de #a08060)
+  paperLight:  '#6f533a',   // textos complementares (6.69:1 - WCAG AA, calibrado de #c4a882)
   paperCream:  '#f5efe6',
   paperPage:   '#fdf8f2',   // fundo creme quente
   paperAlt:    '#f0e8d8',   // fundo suave
   paperWhite:  '#fffcf8',
 
   // Accent
-  accent:      '#8b5e3c',
-  accentLight: '#b5805a',
-  accentGold:  '#c4834a',
+  accent:      '#8b5e3c',   // tom principal (5.28:1 - WCAG AA)
+  accentLight: '#875532',   // variante clara (5.89:1 - WCAG AA, calibrado de #b5805a)
+  accentGold:  '#945722',   // dourado quente (5.45:1 - WCAG AA, calibrado de #c4834a)
   accentGlow:  'rgba(139,94,60,0.10)',
 
   // Status (semantic)
-  success:     '#3d7a4e',
+  success:     '#346a43',   // sucesso (6.05:1 - WCAG AA, calibrado de #3d7a4e)
   successBg:   'rgba(61,122,78,0.10)',
-  warning:     '#c87a1e',
+  warning:     '#945710',   // atenção (5.48:1 - WCAG AA, calibrado de #c87a1e)
   warningBg:   'rgba(200,122,30,0.10)',
-  danger:      '#a83232',
+  danger:      '#a83232',   // erro/crítico (6.28:1 - WCAG AA)
   dangerBg:    'rgba(168,50,50,0.10)',
-  info:        '#2a6080',
+  info:        '#2a6080',   // informação (6.45:1 - WCAG AA)
   infoBg:      'rgba(42,96,128,0.10)',
 
   // Surfaces

@@ -328,7 +328,7 @@ export default function ConnectedPortalsPanel({
             fontWeight: 700,
             cursor: 'pointer',
             boxShadow: SHADOW.sm,
-            transition: TRANSITION.default
+            transition: TRANSITION.button
           }}
         >
           <i className="ti ti-plus" /> Conectar portal

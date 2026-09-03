@@ -1,7 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { setSharedDatabaseConsent } from '@/lib/databaseConsent'
+import { useModalA11y } from '@/hooks/useModalA11y'
 
 interface Props {
   isOpen: boolean
@@ -11,6 +12,13 @@ interface Props {
 
 export default function SharedDatabaseConsentModal({ isOpen, onConsented, onConfigureCustom }: Props) {
   const [submitting, setSubmitting] = useState(false)
+  const modalRef = useRef<HTMLDivElement>(null)
+
+  useModalA11y({
+    isOpen,
+    onClose: onConfigureCustom,
+    modalRef
+  })
 
   if (!isOpen) return null
 
@@ -23,6 +31,10 @@ export default function SharedDatabaseConsentModal({ isOpen, onConsented, onConf
 
   return (
     <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="shared-db-consent-title"
+      ref={modalRef}
       style={{
         position: 'fixed',
         inset: 0,

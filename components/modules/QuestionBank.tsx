@@ -1,7 +1,8 @@
 'use client'
 import { COLOR, RADIUS, TEXT, SHADOW, FONT } from '@/styles/tokens'
 import { toast, showConfirm } from '@/components/Toast'
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
+import { useModalA11y } from '@/hooks/useModalA11y'
 import { ELT_TAXONOMY, getSubcategoriesForCategory } from '@/lib/englishTaxonomy'
 import { 
   getStoredQuestions, 
@@ -10,6 +11,7 @@ import {
   UnifiedQuestion 
 } from '@/lib/questionBankService'
 import { evaluateItemPsychometrics, EmpiricalPsychometrics } from '@/lib/psychometricsEngine'
+import CatReadinessCard from '@/components/CatReadinessCard'
 
 
 /* Tipos */
@@ -161,6 +163,36 @@ export default function QuestionBank() {
  /* Rubricas & Gabaritos State (Auto-Sync) */
  const [rubrics, setRubrics] = useState<any[]>([])
  const [previewRubric, setPreviewRubric] = useState<any | null>(null)
+
+  /* Modal Accessibility Refs & Hooks (WCAG 2.1 AA) */
+  const addModalRef = useRef<HTMLDivElement>(null)
+  const aiModalRef = useRef<HTMLDivElement>(null)
+  const extractModalRef = useRef<HTMLDivElement>(null)
+  const previewRubricModalRef = useRef<HTMLDivElement>(null)
+
+  useModalA11y({
+    isOpen: modal === 'add',
+    onClose: () => setModal(null),
+    modalRef: addModalRef
+  })
+
+  useModalA11y({
+    isOpen: modal === 'ai',
+    onClose: () => setModal(null),
+    modalRef: aiModalRef
+  })
+
+  useModalA11y({
+    isOpen: showExtractModal,
+    onClose: () => setShowExtractModal(false),
+    modalRef: extractModalRef
+  })
+
+  useModalA11y({
+    isOpen: !!previewRubric,
+    onClose: () => setPreviewRubric(null),
+    modalRef: previewRubricModalRef
+  })
 
  const autoSyncRubrics = async () => {
  try {
@@ -548,6 +580,11 @@ Para questões dissertativas ou V/F, omita "options". Para V/F, o "answer" deve 
  })}
  </div>
 
+  {/* GATILHO DE PRONTIDÃO PSICOMÉTRICA (CAT / E.1 / E.2) */}
+  <div style={{ marginBottom: 20 }}>
+    <CatReadinessCard />
+  </div>
+
  {/* EXIBIÇÃO DA ABA EXCLUSIVA DE RUBRICAS & GABARITOS */}
  {fKind === ('rubric_key' as any) ? (
  <div>
@@ -615,7 +652,7 @@ Para questões dissertativas ou V/F, omita "options". Para V/F, o "answer" deve 
  {/* Modal de Pré-visualização da Rubrica / Gabarito */}
  {previewRubric && (
  <div style={{ position: 'fixed', inset: 0, background: 'rgba(44,26,14,0.5)', backdropFilter: 'blur(4px)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
- <div style={{ ...S.card, width: '100%', maxWidth: 840, maxHeight: '90vh', padding: 24, display: 'flex', flexDirection: 'column' }}>
+ <div ref={previewRubricModalRef} role="dialog" aria-modal="true" aria-label={`Pré-visualização da rubrica ${previewRubric.title}`} style={{ ...S.card, width: '100%', maxWidth: 840, maxHeight: '90vh', padding: 24, display: 'flex', flexDirection: 'column' }}>
  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
  <div>
  <h3 style={{ fontSize: 18, fontWeight: 800, color: '#2c1a0e', margin: 0 }}>{previewRubric.title}</h3>
@@ -871,7 +908,7 @@ Para questões dissertativas ou V/F, omita "options". Para V/F, o "answer" deve 
  {/* Modal: Adicionar Manualmente */}
  {modal === 'add' && (
  <div style={{ position: 'fixed', inset: 0, background: 'rgba(44,26,14,0.45)', zIndex: 9998, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', paddingTop: 40, overflowY: 'auto' }}>
- <div style={{ ...S.card, width: 580, maxWidth: '95vw', marginBottom: 40 }}>
+ <div ref={addModalRef} role="dialog" aria-modal="true" aria-label="Nova Atividade Pedagógica" style={{ ...S.card, width: 580, maxWidth: '95vw', marginBottom: 40 }}>
  <h2 style={{ fontFamily: "'Fraunces', 'Fraunces', Georgia, serif", fontSize: 20, fontWeight: 700, color: '#2c1a0e', margin: '0 0 20px' }}>Nova Atividade Pedagógica</h2>
  <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
  <div>
@@ -966,7 +1003,7 @@ Para questões dissertativas ou V/F, omita "options". Para V/F, o "answer" deve 
  {/* Modal: Gerar com IA */}
  {modal === 'ai' && (
  <div style={{ position: 'fixed', inset: 0, background: 'rgba(44,26,14,0.45)', zIndex: 9998, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
- <div style={{ ...S.card, width: 480, maxWidth: '95vw' }}>
+ <div ref={aiModalRef} role="dialog" aria-modal="true" aria-label="Gerar Atividades com IA" style={{ ...S.card, width: 480, maxWidth: '95vw' }}>
  <h2 style={{ fontFamily: "'Fraunces', 'Fraunces', Georgia, serif", fontSize: 20, fontWeight: 700, color: '#2c1a0e', margin: '0 0 6px' }}> Gerar Atividades com IA</h2>
  <p style={{ color: '#a08060', fontSize: 13, marginBottom: 20 }}>A IA gera o material pedagógico e armazena automaticamente no seu banco.</p>
  <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -1034,7 +1071,7 @@ Para questões dissertativas ou V/F, omita "options". Para V/F, o "answer" deve 
  {/* Modal: Assistente de Extração Inteligente de Livros / PDF */}
  {showExtractModal && (
  <div style={{ position: 'fixed', inset: 0, background: 'rgba(44,26,14,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
- <div style={{ ...S.card, width: 720, maxWidth: '95vw', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
+ <div ref={extractModalRef} role="dialog" aria-modal="true" aria-label="Assistente de Extração de Exercícios da Biblioteca" style={{ ...S.card, width: 720, maxWidth: '95vw', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, borderBottom: '1px solid #ede8dc', paddingBottom: 10 }}>
  <div>
  <h2 style={{ fontFamily: "'Fraunces', Georgia, serif", fontSize: 20, fontWeight: 700, color: '#2c1a0e', margin: 0 }}>

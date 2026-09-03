@@ -7,26 +7,26 @@
 
 /* ───── Design Tokens & Elevation System ───── */
 :root {
-  /* Palette — Paper & Ink Warm Leather */
+  /* Palette — Paper & Ink Warm Leather (Calibrated for WCAG 2.1 AA) */
   --paper-deep:   #1c110a;
   --paper-ink:    #2c1a0e;
   --paper-sepia:  #5c3d20;
   --paper-warm:   #7a5c42;
-  --paper-mid:    #a08060;
-  --paper-light:  #c4a882;
+  --paper-mid:    #71553d;
+  --paper-light:  #6f533a;
   --paper-cream:  #f5efe6;
   --paper-page:   #fdf8f2;
   --paper-white:  #fffcf8;
 
   /* Accent — Âmbar Amadeirado */
   --accent:       #8b5e3c;
-  --accent-light: #b5805a;
-  --accent-gold:  #c4834a;
+  --accent-light: #875532;
+  --accent-gold:  #945722;
   --accent-glow:  rgba(139,94,60,0.10);
 
-  /* Status Colors */
-  --success:  #3d7a4e;
-  --warning:  #c87a1e;
+  /* Status Colors (WCAG AA compliant) */
+  --success:  #346a43;
+  --warning:  #945710;
   --danger:   #a83232;
   --info:     #2a6080;
 
@@ -69,6 +69,13 @@
   margin: 0;
   padding: 0;
   box-sizing: border-box;
+}
+
+/* ───── Acessibilidade WCAG 2.1 AA: Anel de Foco Visível para Teclado ───── */
+*:focus-visible {
+  outline: 2px solid #8b5e3c !important;
+  outline-offset: 2px !important;
+  border-radius: 4px;
 }
 
 html {
