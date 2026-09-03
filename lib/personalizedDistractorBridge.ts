@@ -27,19 +27,21 @@ export function extractStudentDeficitProfile(studentId: string): StudentDeficitP
   const profile = getSubjectProfile()
   const patterns = profile.distractorPatterns || []
 
+
   const vulnerabilities: StudentDeficitItem[] = []
   const focusSet = new Set<string>()
+
 
   memory.observations.forEach(obs => {
     const text = obs.note.toLowerCase()
     patterns.forEach(pat => {
-      if (text.includes(pat.name.toLowerCase()) || text.includes(pat.id.toLowerCase()) || text.includes('dificuldade') || text.includes('bloqueio')) {
+      if (text.includes(pat.pattern.toLowerCase()) || text.includes(pat.id.toLowerCase()) || text.includes('dificuldade') || text.includes('bloqueio')) {
         vulnerabilities.push({
-          category: obs.category || pat.name,
-          description: pat.description,
+          category: obs.category || pat.pattern,
+          description: pat.pedagogicNote,
           exampleSnippet: obs.note,
         })
-        focusSet.add(pat.name)
+        focusSet.add(pat.pattern)
       }
     })
   })
@@ -56,17 +58,17 @@ export function extractStudentDeficitProfile(studentId: string): StudentDeficitP
 
   if (vulnerabilities.length === 0 && patterns.length > 0) {
     vulnerabilities.push({
-      category: patterns[0].name,
-      description: patterns[0].description,
+      category: patterns[0].pattern,
+      description: patterns[0].pedagogicNote,
     })
-    focusSet.add(patterns[0].name)
+    focusSet.add(patterns[0].pattern)
   }
 
 
   return {
     studentId: memory.studentId,
     studentName: memory.studentName,
-    subject: profile.subjectName,
+    subject: profile.name,
     vulnerabilities: vulnerabilities.slice(0, 3),
     recommendedFocus: Array.from(focusSet).slice(0, 3),
   }
