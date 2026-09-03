@@ -837,6 +837,7 @@ export default function StudentExamPlayer({
               Finalizar e Enviar Respostas
             </button>
           </form>
+          )
         ) : (
           <div style={{ textAlign: 'center', padding: '30px 0' }}>
             <div style={{ fontSize: 48, marginBottom: 12 }}></div>
