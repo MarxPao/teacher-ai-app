@@ -26,7 +26,7 @@ export interface ConnectedPortalsPanelProps {
   onPortalConnected?: (portalName: string) => void
 }
 
-type PortalCardStatus = 'ready' | 'review' | 'configure' | 'unconnected'
+type PortalCardStatus = 'ready' | 'review' | 'configure' | 'unconnected' | 'pending_approval'
 
 interface PortalCardItem {
   id: string
@@ -111,7 +111,11 @@ export default function ConnectedPortalsPanel({
       let statusLabel = 'Conectar portal'
       let statusReason: string | undefined
 
-      if (foundMap) {
+      if (p.statusOverride === 'pending_approval' || p.id === 'google_classroom') {
+        status = 'pending_approval'
+        statusLabel = 'Em breve / Aguardando aprovação Google'
+        statusReason = 'Integração oficial via API OAuth 2.0 estruturada no código, aguardando registro de Client ID e homologação no Google Cloud Console. Acesso pausado para evitar erros de autenticação.'
+      } else if (foundMap) {
         if (foundMap.validation_failures && foundMap.validation_failures > 0) {
           status = 'review'
           statusLabel = 'Revisar'
@@ -153,6 +157,11 @@ export default function ConnectedPortalsPanel({
 
   // Inicia leitura de portal (do zero ou re-leitura)
   const handleStartPortalRead = async (portalName: string, portalUrl: string, existingProfile?: PortalProfileDef) => {
+    if (existingProfile?.statusOverride === 'pending_approval' || existingProfile?.id === 'google_classroom' || portalName.toLowerCase().includes('google classroom')) {
+      toast.info('A integração com o Google Classroom está aguardando registro e aprovação de credenciais OAuth no Google Cloud Console.')
+      return
+    }
+
     if (!hasActivePortalConsent()) {
       setPendingReadParams({ portalName, portalUrl, existingProfile })
       setShowConsentModal(true)
@@ -441,6 +450,12 @@ export default function ConnectedPortalsPanel({
                 color: '#2563eb',
                 border: '#bfdbfe',
                 icon: 'ti-sparkles'
+              },
+              pending_approval: {
+                bg: '#fef3c7',
+                color: '#92400e',
+                border: '#fcd34d',
+                icon: 'ti-clock-hour-4'
               }
             }
 
@@ -540,7 +555,28 @@ export default function ConnectedPortalsPanel({
                   </div>
 
                   <div style={{ display: 'flex', gap: 6 }}>
-                    {card.status === 'configure' ? (
+                    {card.status === 'pending_approval' ? (
+                      <button
+                        disabled
+                        title="Integração aguardando aprovação e registro do aplicativo no Google Cloud Console"
+                        style={{
+                          background: '#fef3c7',
+                          color: '#92400e',
+                          border: '1px solid #fcd34d',
+                          borderRadius: RADIUS.sm,
+                          padding: '5px 10px',
+                          fontSize: TEXT.micro,
+                          fontWeight: 700,
+                          cursor: 'not-allowed',
+                          opacity: 0.85,
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 4
+                        }}
+                      >
+                        <i className="ti ti-lock" /> Em breve (Aguardando Google)
+                      </button>
+                    ) : card.status === 'configure' ? (
                       <button
                         onClick={onNavigateToAiSettings}
                         style={{

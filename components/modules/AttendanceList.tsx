@@ -1263,7 +1263,7 @@ export default function AttendanceList() {
                     <option value="plural">Plurall (SOMOS Educação)</option>
                     <option value="machado">Portal Machado Sobrinho</option>
                     <option value="santacatarina">Rede Santa Catarina</option>
-                    <option value="google_classroom">Google Classroom</option>
+                    <option value="google_classroom" disabled>Google Classroom (Em breve / Aguardando aprovação Google)</option>
                   </select>
                 </div>
 

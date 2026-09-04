@@ -704,6 +704,35 @@ export default function StudentExamPlayer({
                     </div>
                   </div>
 
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+                    {(() => {
+                      const count = (currentCatQuestion as any).responseHistory?.length || 0
+                      const isEmpirical = count >= 10
+                      return (
+                        <span
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 5,
+                            padding: '3px 10px',
+                            borderRadius: RADIUS.full,
+                            fontSize: 11,
+                            fontWeight: 700,
+                            background: isEmpirical ? '#ecfdf5' : '#fffbeb',
+                            color: isEmpirical ? '#047857' : '#b45309',
+                            border: `1px solid ${isEmpirical ? '#a7f3d0' : '#fde68a'}`
+                          }}
+                          title={isEmpirical
+                            ? `Item com calibração empírica estável baseada em ${count} respostas reais de alunos.`
+                            : 'Item operando sob estimativa curricular inicial (Seed baseada em BNCC/CEFR). Passará ao status empírico após acumular N >= 10 respostas de alunos reais.'}
+                        >
+                          <i className={`ti ${isEmpirical ? 'ti-chart-dots' : 'ti-plant'}`} style={{ fontSize: 12 }} />
+                          {isEmpirical ? `[Calibrado Empiricamente (N=${count})]` : '[Estimativa Curricular Inicial (Seed)]'}
+                        </span>
+                      )
+                    })()}
+                  </div>
+
                   <div style={{ fontSize: 15, fontWeight: 700, color: '#2c1a0e', marginBottom: 16, lineHeight: 1.5 }}>
                     {currentCatQuestion.stem}
                   </div>
@@ -818,10 +847,38 @@ export default function StudentExamPlayer({
 
               return (
                 <div key={q.id || idx} style={{ background: '#fff', padding: 20, borderRadius: RADIUS.xl, border: '1.5px solid #ede8dc' }}>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: '#2c1a0e', marginBottom: 12, lineHeight: 1.5 }}>
-                    <span style={{ background: '#8b5e3c', color: '#fff', padding: '2px 8px', borderRadius: 6, marginRight: 8, fontSize: 12 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+                    <span style={{ background: '#8b5e3c', color: '#fff', padding: '2px 8px', borderRadius: 6, fontSize: 12, fontWeight: 700 }}>
                       Questão {idx + 1}
                     </span>
+                    {(() => {
+                      const count = (q as any).responseHistory?.length || 0
+                      const isEmpirical = count >= 10
+                      return (
+                        <span
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 5,
+                            padding: '2px 8px',
+                            borderRadius: RADIUS.full,
+                            fontSize: 10.5,
+                            fontWeight: 700,
+                            background: isEmpirical ? '#ecfdf5' : '#fffbeb',
+                            color: isEmpirical ? '#047857' : '#b45309',
+                            border: `1px solid ${isEmpirical ? '#a7f3d0' : '#fde68a'}`
+                          }}
+                          title={isEmpirical
+                            ? `Item com calibração empírica estável baseada em ${count} respostas reais.`
+                            : 'Item com estimativa curricular inicial (Seed). Atingirá status empírico após N >= 10 respostas reais.'}
+                        >
+                          <i className={`ti ${isEmpirical ? 'ti-chart-dots' : 'ti-plant'}`} style={{ fontSize: 11 }} />
+                          {isEmpirical ? `[Calibrado Empiricamente (N=${count})]` : '[Estimativa Curricular Inicial (Seed)]'}
+                        </span>
+                      )
+                    })()}
+                  </div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: '#2c1a0e', marginBottom: 12, lineHeight: 1.5 }}>
                     {q.stem}
                   </div>
 

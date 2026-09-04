@@ -775,6 +775,26 @@ Para questões dissertativas ou V/F, omita "options". Para V/F, o "answer" deve 
  </span>
  )}
  {q.bnccCode && <span style={{ ...S.badge, background: '#e0f2fe', color: '#0369a1' }}> BNCC: {q.bnccCode}</span>}
+                    {(() => {
+                      const history = (q as any).responseHistory || []
+                      const count = history.length
+                      const isEmpirical = count >= 10
+                      return (
+                        <span
+                          className={`text-xs px-2.5 py-0.5 rounded-full font-bold border inline-flex items-center gap-1 ${
+                            isEmpirical
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
+                              : 'bg-amber-50 text-amber-800 border-amber-300'
+                          }`}
+                          title={isEmpirical
+                            ? `Calibração psicométrica empírica estável com ${count} respostas de alunos reais registradas.`
+                            : 'Estimativa curricular preliminar (Seed). O item passará ao status empírico após acumular N >= 10 respostas de alunos reais.'}
+                        >
+                          <span>{isEmpirical ? '📊' : '🌱'}</span>
+                          {isEmpirical ? `[Calibrado Empiricamente (N=${count})]` : '[Estimativa Curricular Inicial (Seed)]'}
+                        </span>
+                      )
+                    })()}
                     {(q as any).responseHistory && (q as any).responseHistory.length >= 3 && (() => {
                       const stats = calculateItemStats(q as any)
                       return (
@@ -867,38 +887,54 @@ Para questões dissertativas ou V/F, omita "options". Para V/F, o "answer" deve 
  </div>
  )}
 
- {((selectedQ as any).responseHistory && (selectedQ as any).responseHistory.length >= 3) && (() => {
-   const stats = calculateItemStats(selectedQ as any)
-   return (
-     <div style={{ background: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: RADIUS.md, padding: '12px', marginBottom: 12 }}>
-       <div style={{ fontSize: 11, color: '#475569', fontWeight: 800, textTransform: 'uppercase', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 5 }}>
-         <span>📊</span> Calibração Psicométrica Real
-       </div>
-       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, fontSize: 12, marginBottom: 6 }}>
-         <div style={{ background: '#fff', padding: '6px 8px', borderRadius: 6, border: '1px solid #e2e8f0' }}>
-           <span style={{ color: '#64748b', fontSize: 10, display: 'block' }}>Índice de Facilidade (p)</span>
-           <b style={{ color: '#0f172a' }}>{stats.p.toFixed(2)} ({stats.classification})</b>
-         </div>
-         <div style={{ background: '#fff', padding: '6px 8px', borderRadius: 6, border: '1px solid #e2e8f0' }}>
-           <span style={{ color: '#64748b', fontSize: 10, display: 'block' }}>Discriminação (D)</span>
-           <b style={{ color: stats.D !== null && stats.D < 0 ? '#dc2626' : '#0f172a' }}>
-             {stats.D !== null ? `${stats.D > 0 ? '+' : ''}${stats.D.toFixed(2)}` : 'N < 6'}
-           </b>
-         </div>
-       </div>
-       {stats.divergenceMessage && (
-         <div style={{ fontSize: 11.5, color: '#92400e', background: '#fef3c7', border: '1px solid #fde68a', padding: '6px 8px', borderRadius: 6, marginTop: 4, lineHeight: 1.4 }}>
-           {stats.divergenceMessage}
-         </div>
-       )}
-       {stats.discriminationWarning && (
-         <div style={{ fontSize: 11.5, color: '#991b1b', background: '#fee2e2', border: '1px solid #fca5a5', padding: '6px 8px', borderRadius: 6, marginTop: 4, lineHeight: 1.4 }}>
-           {stats.discriminationWarning}
-         </div>
-       )}
-     </div>
-   )
- })()}
+  {(() => {
+    const history = (selectedQ as any).responseHistory || []
+    const count = history.length
+    const isEmpirical = count >= 10
+    if (count >= 3) {
+      const stats = calculateItemStats(selectedQ as any)
+      return (
+        <div style={{ background: isEmpirical ? '#f0fdf4' : '#fffbeb', border: `1px solid ${isEmpirical ? '#bbf7d0' : '#fde68a'}`, borderRadius: RADIUS.md, padding: '12px', marginBottom: 12 }}>
+          <div style={{ fontSize: 11, color: isEmpirical ? '#166534' : '#92400e', fontWeight: 800, textTransform: 'uppercase', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 5 }}>
+            <span>{isEmpirical ? '📊' : '🌱'}</span> {isEmpirical ? `[Calibrado Empiricamente (N=${count})]` : `[Em Calibração Preliminar (N=${count}/10)]`}
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, fontSize: 12, marginBottom: 6 }}>
+            <div style={{ background: '#fff', padding: '6px 8px', borderRadius: 6, border: '1px solid #e2e8f0' }}>
+              <span style={{ color: '#64748b', fontSize: 10, display: 'block' }}>Índice de Facilidade (p)</span>
+              <b style={{ color: '#0f172a' }}>{stats.p.toFixed(2)} ({stats.classification})</b>
+            </div>
+            <div style={{ background: '#fff', padding: '6px 8px', borderRadius: 6, border: '1px solid #e2e8f0' }}>
+              <span style={{ color: '#64748b', fontSize: 10, display: 'block' }}>Discriminação (D)</span>
+              <b style={{ color: stats.D !== null && stats.D < 0 ? '#dc2626' : '#0f172a' }}>
+                {stats.D !== null ? `${stats.D > 0 ? '+' : ''}${stats.D.toFixed(2)}` : 'N < 6'}
+              </b>
+            </div>
+          </div>
+          {stats.divergenceMessage && (
+            <div style={{ fontSize: 11.5, color: '#92400e', background: '#fef3c7', border: '1px solid #fde68a', padding: '6px 8px', borderRadius: 6, marginTop: 4, lineHeight: 1.4 }}>
+              {stats.divergenceMessage}
+            </div>
+          )}
+          {stats.discriminationWarning && (
+            <div style={{ fontSize: 11.5, color: '#991b1b', background: '#fee2e2', border: '1px solid #fca5a5', padding: '6px 8px', borderRadius: 6, marginTop: 4, lineHeight: 1.4 }}>
+              {stats.discriminationWarning}
+            </div>
+          )}
+        </div>
+      )
+    }
+
+    return (
+      <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: RADIUS.md, padding: '10px 12px', marginBottom: 12, fontSize: 12, color: '#92400e', lineHeight: 1.45 }}>
+        <div style={{ fontWeight: 800, fontSize: 11, textTransform: 'uppercase', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 5 }}>
+          <span>🌱</span> [Estimativa Curricular Inicial (Seed)]
+        </div>
+        <div>
+          Esta questão opera sob estimativa teórica preliminar (alinhada à BNCC e CEFR). Passará ao status <b>[Calibrado Empiricamente]</b> assim que acumular N ≥ 10 respostas reais de alunos em avaliações.
+        </div>
+      </div>
+    )
+  })()}
 
  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
  {selectedQ.tags.map(t => <span key={t} style={{ ...S.badge, background: '#f0e8d8', color: '#7a5c42' }}>{t}</span>)}

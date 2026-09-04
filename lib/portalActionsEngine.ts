@@ -57,6 +57,7 @@ export interface PortalProfileDef {
   category: string
   description: string
   isCustom: boolean
+  statusOverride?: 'pending_approval' | 'active' | 'deprecated'
   actions: PortalActionDef[]
 }
 
@@ -713,6 +714,22 @@ export const DEFAULT_PORTALS: PortalProfileDef[] = [
         ]
       }
     ]
+  },
+  {
+    id: 'google_classroom',
+    name: 'Google Classroom',
+    shortName: 'GClassroom',
+    url: 'https://classroom.google.com/',
+    matchUrl: 'classroom.google.com',
+    icon: 'ti-brand-google',
+    color: '#0f9d58',
+    bg: '#e8f5e9',
+    border: '#c8e6c9',
+    category: 'LMS & Google Workspace',
+    description: 'Sincronização de turmas e publicação direta de atividades via Google Classroom API.',
+    isCustom: false,
+    statusOverride: 'pending_approval',
+    actions: []
   }
 ]
 
