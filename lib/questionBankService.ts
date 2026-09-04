@@ -9,6 +9,7 @@ import {
   StudentItemResponse,
   evaluateItemPsychometrics
 } from './psychometricsEngine'
+import { seedQuestionBankIfNeeded } from './seeds/curricularQuestionBankSeed'
 
 export type ActivityKind = 'lesson' | 'exercise' | 'exam' | 'question'
 export type QuestionType = 'mc' | 'essay' | 'tf' | 'fill'
@@ -87,7 +88,13 @@ export function getStoredQuestions(): UnifiedQuestion[] {
     const rawPrimary = localStorage.getItem(STORAGE_KEY_PRIMARY)
     if (rawPrimary) {
       const parsed = JSON.parse(rawPrimary)
-      if (Array.isArray(parsed)) return parsed
+      if (Array.isArray(parsed)) {
+        const seeded = seedQuestionBankIfNeeded(parsed)
+        if (seeded.length !== parsed.length) {
+          saveStoredQuestions(seeded)
+        }
+        return seeded
+      }
     }
 
     // Se a chave primária não existir, faz a migração de ambas as chaves legadas
@@ -118,11 +125,12 @@ export function getStoredQuestions(): UnifiedQuestion[] {
     })
 
     const unifiedList = Array.from(combinedMap.values())
-    if (unifiedList.length > 0) {
-      saveStoredQuestions(unifiedList)
+    const finalSeeded = seedQuestionBankIfNeeded(unifiedList)
+    if (finalSeeded.length > 0) {
+      saveStoredQuestions(finalSeeded)
     }
 
-    return unifiedList
+    return finalSeeded
   } catch (err) {
     console.error('Erro ao ler questões do storage:', err)
     return []

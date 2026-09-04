@@ -29,7 +29,20 @@ export default function Gradebook() {
   const [filterSchool, setFilterSchool] = useState<string>('all')
   const [filterClass, setFilterClass] = useState<string>('all')
   const [searchTerm, setSearchTerm] = useState('')
-  const [viewMode, setViewMode] = useState<'table' | 'cards' | 'heatmap'>('table')
+  const [viewMode, setViewMode] = useState<'table' | 'cards' | 'heatmap'>(() => {
+    if (typeof window !== 'undefined' && window.innerWidth <= 480) return 'cards'
+    return 'table'
+  })
+
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth <= 480 && viewMode === 'table') {
+        setViewMode('cards')
+      }
+    }
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [viewMode])
 
   // Modal de Espelhamento no Portal Escolar
   const [isMirrorModalOpen, setIsMirrorModalOpen] = useState(false)

@@ -18,6 +18,13 @@ import {
   buildQuestionScaffolding,
   requestNextHint
 } from '@/lib/scaffoldingEngine'
+import {
+  getGamificationProfile,
+  recordQuestionResult,
+  AVAILABLE_BADGES,
+  StudentGamificationProfile,
+  StudentBadge
+} from '@/lib/studentGamification'
 
 export interface OnlineQuestion {
   id: string
@@ -197,6 +204,16 @@ export default function StudentExamPlayer({
   // ─── Estados para Scaffolding de Dicas em 3 Camadas ───────────────
   const [hintsMap, setHintsMap] = useState<Record<string, StudentHintStatus>>({})
 
+  // ─── Estados para Gamificação (Streaks, Badges e XP — Item 16) ────
+  const [gamification, setGamification] = useState<StudentGamificationProfile | null>(null)
+  const [newBadgeNotification, setNewBadgeNotification] = useState<StudentBadge | null>(null)
+
+  useEffect(() => {
+    if (studentName.trim()) {
+      setGamification(getGamificationProfile(studentName.trim().toLowerCase()))
+    }
+  }, [studentName])
+
   const formRef = useRef<HTMLFormElement>(null)
 
 
@@ -303,6 +320,19 @@ export default function StudentExamPlayer({
 
     const updatedSession = recordCatAnswer(catSession, currentCatQuestion, isCorrect)
     setCatSession(updatedSession)
+
+    const hintTier = hintsMap[currentCatQuestion.id]?.currentTier || 0
+    const gamResult = recordQuestionResult(
+      studentName.trim().toLowerCase(),
+      isCorrect,
+      currentCatQuestion.difficultyLevel || 'B1',
+      hintTier
+    )
+    setGamification(gamResult.profile)
+    if (gamResult.newBadges.length > 0) {
+      setNewBadgeNotification(gamResult.newBadges[0])
+      toast.success(`🎉 Conquista: ${gamResult.newBadges[0].title}!`)
+    }
 
     if (updatedSession.isTerminated) {
       const report = interpretCatResult(updatedSession.currentTheta)
@@ -428,6 +458,33 @@ export default function StudentExamPlayer({
       window.dispatchEvent(new Event('storage'))
     } catch (err) {}
 
+    try {
+      let finalProfile: StudentGamificationProfile | null = null
+      let latestBadges: StudentBadge[] = []
+      questions.forEach((q) => {
+        let isCorrect = false
+        if (q.type === 'multiple_choice' && q.answer) {
+          isCorrect = answers[q.id]?.trim().toLowerCase() === q.answer.trim().toLowerCase()
+        } else if (q.type === 'text' && q.answer) {
+          isCorrect = scoreGapFill(answers[q.id] || '', q.answer) === 1
+        }
+        const hintTier = hintsMap[q.id]?.currentTier || 0
+        const res = recordQuestionResult(
+          studentName.trim().toLowerCase(),
+          isCorrect,
+          q.difficultyLevel || 'B1',
+          hintTier
+        )
+        finalProfile = res.profile
+        if (res.newBadges.length > 0) latestBadges.push(...res.newBadges)
+      })
+      if (finalProfile) setGamification(finalProfile)
+      if (latestBadges.length > 0) {
+        setNewBadgeNotification(latestBadges[0])
+        toast.success(`🎉 Conquista: ${latestBadges[0].title}!`)
+      }
+    } catch {}
+
     if (onComplete) {
       onComplete(studentName, roundedScore, questions.length)
     }
@@ -524,6 +581,84 @@ export default function StudentExamPlayer({
           )}
         </div>
 
+        {/* Barra de Gamificação do Aluno (Item 16) */}
+        {studentName.trim() && (
+          <div style={{
+            background: 'linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)',
+            border: '1.5px solid #fde68a',
+            borderRadius: RADIUS.md,
+            padding: '10px 16px',
+            marginBottom: 20,
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            boxShadow: '0 2px 6px rgba(245, 158, 11, 0.1)'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{
+                background: '#f59e0b', color: '#fff', borderRadius: RADIUS.full,
+                padding: '4px 10px', fontSize: 12, fontWeight: 800, display: 'flex', alignItems: 'center', gap: 4
+              }}>
+                <span>🔥</span>
+                <span>{gamification?.currentStreak || 0} seguidas</span>
+              </div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#92400e' }}>
+                ⚡ {gamification?.xp || 0} XP • Nível {gamification?.level || 1}
+              </div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: '#78350f' }}>Conquistas:</span>
+              <span style={{ fontSize: 14 }}>
+                {gamification && gamification.unlockedBadges.length > 0 ? (
+                  gamification.unlockedBadges.map(bId => {
+                    const badge = AVAILABLE_BADGES.find(b => b.id === bId)
+                    return badge ? (
+                      <span key={bId} title={`${badge.title}: ${badge.description}`} style={{ marginLeft: 3 }}>
+                        {badge.icon}
+                      </span>
+                    ) : null
+                  })
+                ) : (
+                  <span style={{ fontSize: 12, color: '#a1a1aa' }}>Nenhuma ainda</span>
+                )}
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Banner de Nova Conquista Desbloqueada */}
+        {newBadgeNotification && (
+          <div style={{
+            background: '#ecfdf5',
+            border: '2px solid #10b981',
+            borderRadius: RADIUS.lg,
+            padding: '12px 18px',
+            marginBottom: 20,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            animation: 'bounce 0.5s ease'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <span style={{ fontSize: 28 }}>{newBadgeNotification.icon}</span>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 800, color: '#065f46' }}>
+                  🎉 Nova Conquista Desbloqueada: {newBadgeNotification.title}!
+                </div>
+                <div style={{ fontSize: 12, color: '#047857' }}>
+                  {newBadgeNotification.description}
+                </div>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setNewBadgeNotification(null)}
+              style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 16, color: '#065f46' }}
+            >
+              ✕
+            </button>
+          </div>
+        )}
 
         {!submitted ? (
           examMode === 'adaptive' ? (

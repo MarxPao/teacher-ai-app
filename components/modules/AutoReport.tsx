@@ -84,8 +84,11 @@ export default function AutoReport() {
     setGroundingViolations([]);
     setExportBlocked(false);
     
-    const selectedClass = classes.find(c => c.id === selectedClassId);
-    const classStudents = students.filter(s => s.classId === selectedClassId);
+    const isMultiClass = selectedClassId === 'ALL_COORDINATION_AGGREGATED';
+    const selectedClass = isMultiClass 
+      ? { id: 'all', name: 'Consolidado Institucional (Todas as Turmas)', level: 'Multi-Nível' } 
+      : classes.find(c => c.id === selectedClassId);
+    const classStudents = isMultiClass ? students : students.filter(s => s.classId === selectedClassId);
     
     const avgAttendance = classStudents.length > 0 
       ? classStudents.reduce((acc, s) => acc + (s.attendance || 85), 0) / classStudents.length 
@@ -301,6 +304,7 @@ ${buildTeacherStyleSystemPrompt()}`;
                 }}
               >
                 <option value="">Selecione uma turma...</option>
+                <option value="ALL_COORDINATION_AGGREGATED">🏛️ Relatório Geral de Coordenação (Visão Agregada Multi-Turma)</option>
                 {classes.map(c => (
                   <option key={c.id} value={c.id}>{c.name}</option>
                 ))}

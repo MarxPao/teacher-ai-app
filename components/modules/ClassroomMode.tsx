@@ -4,6 +4,7 @@ import { toast, showConfirm } from '@/components/Toast'
 
 import React, { useState, useEffect, CSSProperties, useRef, useCallback } from 'react';
 import { fillPortal, logPortalFill } from '@/lib/portalBridge';
+import BehaviorPointsModal from '@/components/BehaviorPointsModal';
 
 // --- Types ---
 interface Student {
@@ -313,6 +314,7 @@ export default function ClassroomMode() {
   // Portal Mirroring State
   const [isMirrorModalOpen, setIsMirrorModalOpen] = useState(false);
   const [selectedMirrorPortal, setSelectedMirrorPortal] = useState('plural');
+  const [behaviorStudent, setBehaviorStudent] = useState<Student | null>(null);
 
   // Toast
   const [toastMessage, setToastMessage] = useState('');
@@ -714,9 +716,23 @@ export default function ClassroomMode() {
                   <div key={student.id} style={styles.participationCard}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <strong style={{ fontSize: '14px', color: '#2c1a0e' }}>{student.name}</strong>
-                      <span style={{ fontSize: '12px', background: '#8b5e3c', color: '#fffcf8', padding: '2px 6px', borderRadius: '10px' }}>
-                        {participation[student.id]?.participated || 0}
-                      </span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <button
+                          onClick={() => setBehaviorStudent(student)}
+                          title="Lançar Pontos Comportamentais (ClassDojo)"
+                          style={{
+                            background: '#2d9d5d', color: '#fff', border: 'none',
+                            borderRadius: '50%', width: 22, height: 22, display: 'flex',
+                            alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+                            fontSize: 12
+                          }}
+                        >
+                          <i className="ti ti-award" />
+                        </button>
+                        <span style={{ fontSize: '12px', background: '#8b5e3c', color: '#fffcf8', padding: '2px 6px', borderRadius: '10px' }}>
+                          {participation[student.id]?.participated || 0}
+                        </span>
+                      </div>
                     </div>
                     <div style={styles.participationActions}>
                       <button style={{ ...styles.actionBtn }} onClick={() => handleParticipation(student.id, 'participated')}>
@@ -863,6 +879,18 @@ export default function ClassroomMode() {
           <i className="ti ti-check" style={{ marginRight: '8px' }}></i>
           {toastMessage}
         </div>
+      )}
+
+
+      {/* ClassDojo Behavior Points Modal */}
+      {behaviorStudent && (
+        <BehaviorPointsModal
+          isOpen={true}
+          studentId={behaviorStudent.id}
+          studentName={behaviorStudent.name}
+          classId={selectedClass}
+          onClose={() => setBehaviorStudent(null)}
+        />
       )}
     </div>
   );

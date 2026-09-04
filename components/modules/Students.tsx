@@ -11,8 +11,10 @@ import { reconcileRosterBatch, RosterReconciliationResult, LocalStudentRecord } 
 import { createBrowserTask, BrowserAutomationTask, DiffItem } from '@/lib/browserAutomationClient'
 import { sanitizeOutboundPayload, hasActivePortalConsent } from '@/lib/portalSanitizer'
 import AutomationDiffModal from '@/components/modules/AutomationDiffModal'
-import PortalConsentModal from '@/components/PortalConsentModal'
 import { getPortalProfiles } from '@/lib/portalActionsEngine'
+import PeiManagementModal from '@/components/PeiManagementModal'
+import BehaviorPointsModal from '@/components/BehaviorPointsModal'
+import PortalConsentModal from '@/components/PortalConsentModal'
 
 /* ─── Tipos ─────────────────────────────────────────────────────────────────── */
 interface School    { id: string; name: string; color: string }
@@ -175,8 +177,10 @@ export default function Students() {
   const [importPortalName, setImportPortalName] = useState('Machado Sobrinho')
   const [importPortalUrl, setImportPortalUrl] = useState('https://machadosobrinho.paineldoaluno.com.br/professor_notas')
   const [importClassRef, setImportClassRef] = useState('all')
-  const [isImportingRoster, setIsImportingRoster] = useState(false)
   const [activeAutomationTask, setActiveAutomationTask] = useState<BrowserAutomationTask | null>(null)
+  const [isImportingRoster, setIsImportingRoster] = useState(false)
+  const [peiStudent, setPeiStudent] = useState<StudentRecord | null>(null)
+  const [behaviorStudent, setBehaviorStudent] = useState<StudentRecord | null>(null)
 
   /* Modal Accessibility Refs & Hooks (WCAG 2.1 AA) */
   const addModalRef = useRef<HTMLDivElement>(null)
@@ -677,6 +681,20 @@ export default function Students() {
                     <i className="ti ti-upload" /> Lançar Notas no Portal
                   </button>
                 )}
+
+                {/* Botões de Ação Comportamental e PEI */}
+                <button
+                  onClick={() => setBehaviorStudent(selectedStudent)}
+                  style={{ ...S.btn, width: '100%', justifyContent: 'center', background: '#2d9d5d', color: '#fff', marginBottom: 8 }}
+                >
+                  <i className="ti ti-award" /> Pontos Comportamentais (Dojo)
+                </button>
+                <button
+                  onClick={() => setPeiStudent(selectedStudent)}
+                  style={{ ...S.btn, width: '100%', justifyContent: 'center', background: '#6d28d9', color: '#fff', marginBottom: 8 }}
+                >
+                  <i className="ti ti-accessible" /> Plano Individualizado (PEI / IEP)
+                </button>
 
                 {/* Botão de Relatório Pedagógico */}
                 <button onClick={() => setReportStudentId(selectedStudent.id)}
@@ -1292,6 +1310,25 @@ export default function Students() {
             setActiveAutomationTask(null)
             toast.success('Notas lançadas com sucesso no portal oficial!')
           }}
+        />
+      )}
+
+      {/* ─── MODAIS PEI & COMPORTAMENTO (DOJO) ────────────────────────────────── */}
+      {peiStudent && (
+        <PeiManagementModal
+          isOpen={true}
+          studentId={peiStudent.id}
+          studentName={peiStudent.name}
+          onClose={() => setPeiStudent(null)}
+        />
+      )}
+      {behaviorStudent && (
+        <BehaviorPointsModal
+          isOpen={true}
+          studentId={behaviorStudent.id}
+          studentName={behaviorStudent.name}
+          classId={behaviorStudent.classId}
+          onClose={() => setBehaviorStudent(null)}
         />
       )}
     </div>

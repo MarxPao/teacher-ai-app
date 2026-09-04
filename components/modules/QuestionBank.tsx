@@ -11,6 +11,7 @@ import {
   UnifiedQuestion 
 } from '@/lib/questionBankService'
 import { evaluateItemPsychometrics, EmpiricalPsychometrics } from '@/lib/psychometricsEngine'
+import { analyzeBankCrossTurmas, QuestionBankAnalyticsSummary } from '@/lib/questionBankAnalytics'
 import CatReadinessCard from '@/components/CatReadinessCard'
 
 
@@ -119,6 +120,7 @@ export default function QuestionBank() {
  const [extractBooks, setExtractBooks] = useState<Array<{ id: any; title: string; content?: string; type?: string; category?: string }>>([])
  const [selectedExtractBookId, setSelectedExtractBookId] = useState<string>('')
  const [extractedList, setExtractedList] = useState<Array<UnifiedQuestion & { selected: boolean }>>([])
+ const [showAnalyticsModal, setShowAnalyticsModal] = useState(false)
 
  /* Filtros */
  const [fKind, setFKind] = useState<'all' | ActivityKind>('all')
@@ -530,6 +532,9 @@ Para questões dissertativas ou V/F, omita "options". Para V/F, o "answer" deve 
           </p>
         </div>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <button onClick={() => setShowAnalyticsModal(true)} style={{ ...S.btn, background: '#2563eb', color: '#fffcf8' }}>
+            <i className="ti ti-chart-bar" /> Analytics Cross-Turma
+          </button>
           <button onClick={openExtractModal} style={{ ...S.btn, background: '#27ae60', color: '#fffcf8' }}>
             <i className="ti ti-book" /> Extrair Exercícios de Livro (RAG)
           </button>
@@ -1188,6 +1193,75 @@ Para questões dissertativas ou V/F, omita "options". Para V/F, o "answer" deve 
  </div>
  </div>
  )}
+
+  {/* Modal de Analytics Cross-Turma do Banco de Questões (Item 15) */}
+  {showAnalyticsModal && (() => {
+    const summary = analyzeBankCrossTurmas(questions as any)
+    return (
+      <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+        <div style={{ background: '#fffcf8', borderRadius: RADIUS.xl, width: '100%', maxWidth: 720, maxHeight: '90vh', overflowY: 'auto', padding: 28, boxShadow: SHADOW.lg, border: '1px solid rgba(139,115,85,0.2)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, borderBottom: '1px solid rgba(139,115,85,0.12)', paddingBottom: 14 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <i className="ti ti-chart-bar" style={{ fontSize: 24, color: '#2563eb' }} />
+              <div>
+                <h2 style={{ fontSize: 18, fontWeight: 800, color: '#2c1a0e', margin: 0 }}>Analytics Psicométrico Cross-Turma</h2>
+                <p style={{ fontSize: 12, color: '#a08060', margin: 0 }}>Análise empírica consolidada baseada em TCT (Teoria Clássica dos Testes)</p>
+              </div>
+            </div>
+            <button onClick={() => setShowAnalyticsModal(false)} style={{ background: 'transparent', border: 'none', fontSize: 20, cursor: 'pointer', color: '#7a5c42' }}>✕</button>
+          </div>
+
+          {/* Grid de KPIs do Banco */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 20 }}>
+            <div style={{ background: '#fdf8f2', padding: '12px 14px', borderRadius: RADIUS.lg, border: '1px solid rgba(139,115,85,0.15)' }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#a08060', textTransform: 'uppercase' }}>Total / Calibradas</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: '#2c1a0e', marginTop: 4 }}>{summary.totalQuestions} <span style={{ fontSize: 12, color: '#2563eb' }}>({summary.calibratedCount} cal.)</span></div>
+            </div>
+            <div style={{ background: '#fdf8f2', padding: '12px 14px', borderRadius: RADIUS.lg, border: '1px solid rgba(139,115,85,0.15)' }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#a08060', textTransform: 'uppercase' }}>Taxa Acerto Mediana (p)</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: '#2c1a0e', marginTop: 4 }}>{(summary.medianPValue * 100).toFixed(0)}%</div>
+            </div>
+            <div style={{ background: '#fdf8f2', padding: '12px 14px', borderRadius: RADIUS.lg, border: '1px solid rgba(139,115,85,0.15)' }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#a08060', textTransform: 'uppercase' }}>Discriminação Média (D)</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: summary.averageDiscrimination >= 0.30 ? '#16a34a' : '#2c1a0e', marginTop: 4 }}>{summary.averageDiscrimination.toFixed(2)}</div>
+            </div>
+            <div style={{ background: '#fdf8f2', padding: '12px 14px', borderRadius: RADIUS.lg, border: '1px solid rgba(139,115,85,0.15)' }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#a08060', textTransform: 'uppercase' }}>Score de Saúde</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: summary.qualityScore >= 70 ? '#16a34a' : '#d97706', marginTop: 4 }}>{summary.qualityScore}/100</div>
+            </div>
+          </div>
+
+          {/* Lista de Alertas / Itens Críticos */}
+          <h3 style={{ fontSize: 14, fontWeight: 800, color: '#2c1a0e', marginBottom: 10 }}>Itens com Anomalias Psicométricas ({summary.issues.length})</h3>
+          {summary.issues.length === 0 ? (
+            <div style={{ background: '#f0fdf4', padding: 16, borderRadius: RADIUS.md, border: '1px solid #bbf7d0', color: '#166534', fontSize: 13 }}>
+              ✅ Excelente! Nenhuma questão apresentou discriminação negativa ou distratores mortos. O banco está saudável para avaliações somativas e CAT.
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {summary.issues.map((issue, idx) => (
+                <div key={idx} style={{ background: issue.severity === 'high' ? '#fef2f2' : '#fffbeb', border: `1px solid ${issue.severity === 'high' ? '#fecaca' : '#fde68a'}`, borderRadius: RADIUS.md, padding: 12 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
+                    <span style={{ fontSize: 11, fontWeight: 800, color: issue.severity === 'high' ? '#dc2626' : '#b45309', textTransform: 'uppercase' }}>
+                      {issue.issueType === 'negative_discrimination' ? '⚠️ Discriminação Negativa' : issue.issueType === 'dead_distractor' ? 'ℹ️ Distrator Ineficaz' : '⚠️ Dificuldade Extrema'}
+                    </span>
+                    <span style={{ fontSize: 11, color: '#7a5c42' }}>ID: {issue.questionId}</span>
+                  </div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: '#2c1a0e', marginBottom: 4 }}>{issue.statement}</div>
+                  <div style={{ fontSize: 12, color: '#7a5c42', marginBottom: 4 }}>{issue.message}</div>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: '#2563eb' }}>💡 Ação sugerida: {issue.suggestedAction}</div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div style={{ marginTop: 20, display: 'flex', justifyContent: 'flex-end' }}>
+            <button onClick={() => setShowAnalyticsModal(false)} style={{ ...S.btn, background: '#8b5e3c', color: '#fff' }}>Fechar</button>
+          </div>
+        </div>
+      </div>
+    )
+  })()}
 
  <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
  </div>
