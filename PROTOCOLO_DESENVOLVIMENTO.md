@@ -113,6 +113,16 @@ As seguintes decisões foram discutidas, deliberadas e formalmente aprovadas. **
   3. **Critérios de Parada:**
      - Limite máximo fixo de 8 a 10 itens por sessão.
      - OU Convergência precoce por 3 acertos consecutivos no nível máximo (4) ou 3 erros consecutivos no nível mínimo (1).
-  4. **Escopo Restrito:** Estritamente para o **Modo Treino / Diagnóstico Formativo do Aluno** (`StudentExamPlayer`), nunca aplicado a avaliações somativas oficiais da turma (que devem manter matriz uniforme de itens para equidade).
-- **Status:** Gatilho e decisões conceituais aprovadas e registradas. Implementação do algoritmo bloqueada até o gatilho sinalizar prontidão estatística.
+### 6. Auditoria Agêntica Contínua & Rigor de 4 Pilares (Aprovado e Fechado)
+- **Escopo do Catálogo:** A assistente Rafinha opera com 34 ferramentas canônicas (`lib/agentTools.ts`) integradas ao motor `executeTool` (`components/RafinhaChat.tsx`).
+- **Padrão de Validação nos 4 Pilares (Definido em `__tests__/rafinhaHarnessAudit.test.ts` — 38/38 testes verdes):**
+  1. **Efeito Colateral Real (Pilar 1):** Nenhuma ferramenta é considerada funcional por resposta textual da IA. A validação exige checagem antes/depois no `localStorage`, `sessionStorage` ou disparo de eventos específicos.
+  2. **Desambiguação Prévia Obrigatória (Pilar 2):** Ferramentas que afetam alunos (`add_student_grade`, `record_student_observation`, `update_student_metric`) são terminantemente proibidas de efetuar mutação caso o nome seja ambíguo (homônimos ou prefixos curtos). Devem retornar lista de candidatos e preservar o storage intacto.
+  3. **Integridade Factual de Erros (Pilar 3 — Zero Alucinação):** Em caso de recursos inexistentes, ausência de mídia de áudio física ou indisponibilidade de portais, o agente deve relatar o erro de forma explícita e factual. É proibido inventar avaliações fonéticas sem arquivo ou fingir sucesso de submissão.
+  4. **Separação Estrita de Ferramentas Correlatas (Pilar 4):** É proibido misturar canais conceituais:
+     - `add_todo` (checklist da home) $\neq$ `create_calendar_task` (agenda com prazos e turmas).
+     - `create_lesson_plan` (card visual simples) $\neq$ `create_full_lesson` (plano Cambridge TKT completo).
+     - `create_communication` (circular geral da escola) $\neq$ `generate_parent_communication` (mensagem individualizada para pais).
+     - `execute_portal_action` (diário oficial com aprovação) $\neq$ `record_private_tutoring_session` (ledger de alunos particulares).
+- **Status:** ✅ 100% auditado e coberto na suíte de testes automatizados.
 

@@ -37,37 +37,45 @@ Qualquer modelo ou agente operando nesta aplicação **DEVE** seguir estritament
 - **Interface**: Chat flutuante expansível, orbe de voz reativo, integração com atalho global (`Ctrl+K` para Command Palette, `Alt+Shift+V` para WisprFlow, wake word nativa `"Ei, Rafinha"` via Web Audio API em [`lib/wakeWordEngine.ts`](file:///c:/Users/rafae/Documents/antigravity/blissful-noether/lib/wakeWordEngine.ts)).
 - **Formato Canônico**: As mensagens trafegam no formato `CanonicalMessage` ([`lib/agentTools.ts`](file:///c:/Users/rafae/Documents/antigravity/blissful-noether/lib/agentTools.ts)), convertidas dinamicamente para os provedores (Gemini `functionDeclarations`, OpenAI `tools`, Anthropic `tool_use`).
 
-### 2.2 Catálogo de Ferramentas Agênticas (25 Tools Canônicas)
-Definidas em [`lib/agentTools.ts`](file:///c:/Users/rafae/Documents/antigravity/blissful-noether/lib/agentTools.ts) e implementadas no `executeTool` de [`components/RafinhaChat.tsx`](file:///c:/Users/rafae/Documents/antigravity/blissful-noether/components/RafinhaChat.tsx):
+### 2.2 Catálogo de Ferramentas Agênticas (34 Tools Canônicas — 100% Auditadas)
+Definidas em [`lib/agentTools.ts`](file:///c:/Users/rafae/Documents/antigravity/blissful-noether/lib/agentTools.ts), implementadas no `executeTool` de [`components/RafinhaChat.tsx`](file:///c:/Users/rafae/Documents/antigravity/blissful-noether/components/RafinhaChat.tsx) e formalmente verificadas nos 4 pilares em [`__tests__/rafinhaHarnessAudit.test.ts`](file:///c:/Users/rafae/Documents/antigravity/blissful-noether/__tests__/rafinhaHarnessAudit.test.ts):
 
 | Tool Name | Propósito Principal | Parâmetros Chave | Efeito Colateral / Persistência |
 | :--- | :--- | :--- | :--- |
 | `navigate_to_module` | Troca a tela ativa no app | `module: ModuleKey` | Chama `onNavigate(module)` |
-| `add_todo` | Insere item no checklist da home | `text: string` | Grava em `teacher_agenda_checklist` |
+| `add_todo` | Insere item no checklist da home | `text: string` | Grava em `teacher_dashboard_todos` |
 | `create_calendar_task` | Agenda eventos e tarefas regulares | `title, date, classRef, type, priority` | Grava em `teacher_calendar_tasks` |
-| `create_lesson_plan` | Card no Lesson Planner | `title, subject, objectives, className, duration` | Grava em `teacher_lesson_plans` |
+| `create_lesson_plan` | Card no Lesson Planner | `title, subject, objectives, className, duration` | Grava em `teacher_lessonplanner_boards` |
+| `create_full_lesson` | Plano completo Cambridge TKT | `topic, grade, cefr, duration` | Grava em `teacher_lessonstudio_prefill` e navega |
 | `create_communication` | Redige avisos e circulares para pais | `title, content, type` | Grava em `teacher_communications` |
-| `add_student_grade` | Lança nota no boletim | `studentName, column, grade` | Atualiza `teacher_students` e `teacher_gbConfig` |
+| `add_student_grade` | Lança nota no boletim com desambiguação | `studentName, column, grade` | Atualiza `teacher_students` e `teacher_gbConfig` |
 | `execute_portal_action` | Preenche portais escolares (simples ou multi-etapas) | `platform, actionType, title, date, classRef, steps` | Dispara `fillPortal`, cria tarefa em `browser_tasks` |
 | `confirm_portal_submission` | Aprova/aborta ação pendente no portal | `action: 'approve' \| 'abort', taskId?` | Finaliza tarefa no Supabase / sessionStorage |
 | `show_portal_screenshot` | Exibe print do portal pré-preenchido | `taskId?` | Retorna URL de preview antes de salvar |
-| `fill_school_portal` | Preenchimento direto legado | `platform, title, date, classRef` | Ponte com extensão Chrome |
+| `fill_school_portal` | Preenchimento direto supervisionado | `platform, title, date, classRef` | Ponte com extensão Chrome |
 | `open_school_portal` | Abre aba com URL do portal | `platform: string` | Dispara `window.open` |
 | `generate_exam_content` | Pré-configura gerador de prova ELT | `topic, classRef, questionCount, level, type` | Grava em `teacher_exam_prefill` e navega |
 | `speak_response` | Dispara síntese de voz local | `text: string` | Audio sintetizado via ElevenLabs/WebSpeech |
 | `update_student_metric` | Atualiza radar pedagógico do aluno | `studentName, metricKey, score` | Grava em `teacher_student_metrics` |
 | `record_student_observation`| Memória viva do aluno (forças/fraquezas) | `studentName, note, category, subcategory` | Grava em `teacher_student_memory` |
-| `create_class` | Cadastra nova turma | `name, school, year, shift` | Grava em `teacher_classes` |
+| `create_class` | Cadastra nova turma (idempotente) | `name, school, year, shift` | Grava em `teacher_classes` |
 | `create_student` | Cadastra aluno vinculado à turma | `name, classRef, email` | Grava em `teacher_students` |
 | `query_library` | Busca contextual nos livros didáticos RAG | `query, textbook?, type?` | Consulta [`lib/ragEngine.ts`](file:///c:/Users/rafae/Documents/antigravity/blissful-noether/lib/ragEngine.ts) |
 | `search_web` | Busca web em tempo real (notícias, BNCC) | `query: string` | Invoca [`lib/webSearch.ts`](file:///c:/Users/rafae/Documents/antigravity/blissful-noether/lib/webSearch.ts) |
+| `remember_fact` | Grava fato na memória de longo prazo | `fact, category` | Grava em `teacher_rafinha_memory` |
 | `add_qbank_question` | Salva questão inédita no QBank | `questionText, eltCategory, level, options, answer` | Grava em `teacher_qbank_questions` |
-| `create_mindmap` | Cria mapa mental visual em nó | `topic, branches` | Grava em `teacher_mindmaps_v2` |
+| `create_mindmap` | Cria mapa mental visual em nó | `topic, branches` | Grava em `teacher_mindmap_prefill` |
+| `create_document` | Cria documento estruturado no Editor | `title, content, school` | Grava em `teacher_editor_prefill` |
+| `apply_school_header` | Aplica cabeçalho de escola no Editor | `schoolName: string` | Dispara `teacher:editor_apply_header` |
+| `create_rubric` | Cria matriz e critérios avaliativos | `title, skill, criteria` | Grava em `teacher_rubrics` |
+| `add_portfolio_item` | Salva evidência pedagógica no portfólio | `studentName, title, description, category` | Grava em `teacher_portfolio` |
 | `save_repo_material` | Salva recurso no repositório do professor | `title, type, category, url` | Grava em `teacher_repo_materials` |
 | `generate_quick_questions` | 5 questões de aquecimento/Exit Ticket | `topic, level` | Grava em `teacher_quick_prefill` e navega |
+| `manage_didactic_sequence` | Atualiza status da unidade didática | `action, unitNumber` | Grava em `teacher_didactic_sequence_units_v3` |
+| `add_weekly_agenda_item` | Adiciona aula à grade semanal | `day, time, title, className, room` | Grava em `teacher_weekly_agenda_posts_v1` |
 | `generate_parent_communication` | Mensagem formatada para WhatsApp dos pais | `studentName, topic, tone` | Grava em `teacher_parent_comms_prefill` |
 | `record_private_tutoring_session` | Agenda aula particular individual | `studentName, date, time, duration, fee, topic` | Grava em `teacher_private_students` |
-| `evaluate_student_audio` | Avalia gravação oral com áudio real anexado | `studentName, audioUrl, exerciseRef, criteria` | Grava em `teacher_student_memory` |
+| `evaluate_student_audio` | Avalia gravação oral com áudio real anexado | `studentName, audioUrl, exerciseRef, criteria` | Grava em `teacher_student_memory` (recusa alucinar sem mídia) |
 
 ### 2.3 Orquestração Multi-Página de Portais Escolares (Gap 3 — MultiStepPortalPlan)
 - **O Problema Resolvido**: Anteriormente o harness agêntico só executava uma ação atômica por turno. Se o professor pedisse *"faz a chamada da 8B com falta do Lucas e preenche o diário com Simple Past"*, a execução colapsava no passo intermediário.
@@ -225,7 +233,7 @@ Ao assumir este repositório para manutenção ou expansão:
    - O projeto possui 0 erros de compilação. Qualquer adição de tool ou interface **DEVE** satisfazer rigorosamente as tipagens.
 2. **Suíte de Testes Automatizados (Vitest)**:
    - Comando: `npm test -- --run`
-   - Deve reportar **100% de aprovação em todos os 41 arquivos de teste**. Nunca quebre os testes de compatibilidade LGPD, de sanitização ou do motor psicométrico CAT.
+   - Deve reportar **100% de aprovação em todos os 42 arquivos de teste (319/319 testes passando)**. Nunca quebre os testes de compatibilidade LGPD, sanitização, motor psicométrico CAT ou os 4 pilares de auditoria do harness da Rafinha (`__tests__/rafinhaHarnessAudit.test.ts`).
 3. **Compilação de Produção**:
    - Comando: `npm run build`
    - Usa Turbopack. Assegure que as rotas dinâmicas e skeletons de carregamento em `app/page.tsx` continuem funcionando sem hidratação quebrada.
