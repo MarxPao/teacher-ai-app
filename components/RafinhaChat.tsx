@@ -183,7 +183,7 @@ function getAppContext(): string {
 }
 
 // Tool executor 
-async function executeTool(
+export async function executeTool(
  name: string,
  input: Record<string, unknown>,
  onNavigate?: (m: ModuleKey) => void,

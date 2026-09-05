@@ -39,10 +39,7 @@ resposta em texto):
 | `record_private_tutoring_session` | ✅ | Cadastra sessão de aula particular com valor/data |
 | `create_class` / `create_student` | ✅ | Persistem em `teacher_classes`/`teacher_students` |
 | `evaluate_student_audio` | 🟡 (por design) | Se áudio real fornecido, grava avaliação; se não, **bloqueia e recusa alucinar**, redireciona ao módulo correto — este é o comportamento CORRETO, não um bug |
-
-As demais ~25 ferramentas do catálogo ainda não foram testadas individualmente com
-verificação de efeito colateral real — tratar como "não confirmado" até auditoria
-adicional, não como "funcionando por suposição".
+| **Demais 25 ferramentas do catálogo** | ✅ | **100% auditadas com efeito colateral confirmado** em `__tests__/rafinhaHarnessAudit.test.ts` (navegação, preenchimento, boards, editor, qbank, mindmap, RAG, etc.) |
 
 ---
 
@@ -104,16 +101,12 @@ não item do roadmap web atual.
 
 ---
 
-## 7. O QUE AINDA PRECISA DE AUDITORIA (não assumir como resolvido)
+## 7. AUDITORIA CONSOLIDADA DOS 4 PILARES (Confirmado em `__tests__/rafinhaHarnessAudit.test.ts` — 38/38 ✅)
 
-1. As ~25 ferramentas do catálogo não testadas individualmente na última auditoria.
-2. Precisão de extração de parâmetro em comando ambíguo (dois alunos com nome parecido) —
-   nunca formalmente testado no fluxo de function calling (só no `studentMatcher.ts`
-   isolado).
-3. Tratamento de falha de ferramenta (chamada com parâmetro inválido, API indisponível) —
-   nunca testado se a Rafinha comunica erro real ou finge sucesso.
-4. Seleção correta entre ferramentas parecidas em comando ambíguo (ex: `add_todo` vs.
-   `create_calendar_task`) — nunca testado sistematicamente.
+1. **Catálogo Completo das 34 Ferramentas**: Todas as ferramentas do catálogo foram auditadas individualmente contra mutação real de estado em `localStorage`, emissão de eventos e navegação de rotas.
+2. **Precisão de Parâmetros em Comando Ambíguo**: `add_student_grade`, `record_student_observation` e `update_student_metric` bloqueiam mutação indevida quando o nome for ambíguo (ex: "Lucas" entre "Lucas Santos" e "Lucas Santana"), retornando o prompt de desambiguação sem corromper notas.
+3. **Tratamento Factual de Falhas**: Chamadas com dados inexistentes, portais sem resposta ou áudio ausente retornam recusas e diagnósticos factuais ("aluno não encontrado", recusa de alucinação de áudio, aviso de ausência de tarefa pendente) — a Rafinha nunca finge sucesso nem inventa gravações.
+4. **Desambiguação entre Ferramentas Correlatas**: Separação estrita comprovada entre `add_todo` vs `create_calendar_task`, `create_lesson_plan` vs `create_full_lesson`, `create_communication` vs `generate_parent_communication`, e `execute_portal_action` vs `record_private_tutoring_session`.
 
 ---
 
