@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import ModuleShell from '@/components/ModuleShell'
 import ModuleCard from '@/components/ModuleCard'
 import { syncToSupabase, loadFromSupabase, testSupabaseConnection } from '@/lib/supabaseClient'
+import { validateProviderApiKey, validateSupabaseCredentials } from '@/lib/byokValidator'
 import { TASK_DESCRIPTIONS, TaskType } from '@/lib/autoApiSelector'
 import { ApiConfig, DEFAULT_APIS, API_GUIDE, ELEVEN_VOICES } from './api-manager/types'
 import { ApiGuideCard } from './api-manager/ApiGuideCard'
@@ -195,65 +196,49 @@ export default function ApiManager() {
  }
 
  async function testSupabase() {
- if (!sbUrl || !sbAnonKey) { setSbStatus(' Preencha a URL e a anon key primeiro.'); return }
- setSbStatus(' Testando conexão...')
- const result = await testSupabaseConnection(sbUrl, sbAnonKey)
- setSbStatus(result.ok ? ' Conexão com Supabase bem-sucedida!' : ` ${result.error}`)
- }
+    if (!sbUrl || !sbAnonKey) { setSbStatus('⚠️ Preencha a URL e a Anon Key primeiro.'); return }
+    setSbStatus('⏳ Testando conexão em tempo real...')
+    const result = await validateSupabaseCredentials(sbUrl, sbAnonKey)
+    setSbStatus(result.ok ? `✅ ${result.message}` : `❌ ${result.message}`)
+  }
 
- async function syncNow() {
- setSbSyncing(true)
- setSbStatus(' Sincronizando para a nuvem...')
- const payload: Record<string, unknown> = {}
- const KEYS = ['teacher_apis', 'teacher_students', 'teacher_lessons', 'teacher_gradebook', 'teacher_repo', 'teacher_auto_mode']
- for (const k of KEYS) {
- const v = localStorage.getItem(k)
- if (v) { try { payload[k] = JSON.parse(v) } catch { payload[k] = v } }
- }
- const res = await syncToSupabase(payload)
- setSbStatus(res.ok ? ' Dados sincronizados com Supabase!' : ` ${res.error}`)
- setSbSyncing(false)
- }
+  async function syncNow() {
+    setSbSyncing(true)
+    setSbStatus('⏳ Sincronizando para a nuvem...')
+    const payload: Record<string, unknown> = {}
+    const KEYS = ['teacher_apis', 'teacher_students', 'teacher_lessons', 'teacher_gradebook', 'teacher_repo', 'teacher_auto_mode']
+    for (const k of KEYS) {
+      const v = localStorage.getItem(k)
+      if (v) { try { payload[k] = JSON.parse(v) } catch { payload[k] = v } }
+    }
+    const res = await syncToSupabase(payload)
+    setSbStatus(res.ok ? '✅ Dados sincronizados com Supabase!' : `❌ ${res.error}`)
+    setSbSyncing(false)
+  }
 
- async function loadFromCloud() {
- setSbLoading(true)
- setSbStatus(' Restaurando dados da nuvem...')
- const res = await loadFromSupabase()
- if (res.ok) {
- setSbStatus(` ${res.count} itens restaurados. Recarregando...`)
- setTimeout(() => window.location.reload(), 1500)
- } else {
- setSbStatus(` ${res.error}`)
- }
- setSbLoading(false)
- }
+  async function loadFromCloud() {
+    setSbLoading(true)
+    setSbStatus('⏳ Restaurando dados da nuvem...')
+    const res = await loadFromSupabase()
+    if (res.ok) {
+      setSbStatus(`✅ ${res.count} itens restaurados. Recarregando...`)
+      setTimeout(() => window.location.reload(), 1500)
+    } else {
+      setSbStatus(`❌ ${res.error}`)
+    }
+    setSbLoading(false)
+  }
 
- async function testConnection(api: ApiConfig) {
- if (!api.key) { setTestResult(r => ({ ...r, [api.id]: ' Insira a chave primeiro' })); return }
- setTesting(api.id)
- try {
- let ok = false
- if (api.provider === 'groq') {
- const r = await fetch('https://api.groq.com/openai/v1/models', { headers: { Authorization: `Bearer ${api.key}` } })
- ok = r.ok
- } else if (api.provider === 'gemini') {
- const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${api.key}`)
- ok = r.ok
- } else if (api.provider === 'openai') {
- const r = await fetch('https://api.openai.com/v1/models', { headers: { Authorization: `Bearer ${api.key}` } })
- ok = r.ok
- } else if (api.provider === 'anthropic') {
- const r = await fetch('https://api.anthropic.com/v1/models', { headers: { 'x-api-key': api.key, 'anthropic-version': '2023-06-01' } })
- ok = r.ok
- } else if (api.provider === 'elevenlabs') {
- const r = await fetch('https://api.elevenlabs.io/v1/user', { headers: { 'xi-api-key': api.key } })
- ok = r.ok
- }
- setTestResult(r => ({ ...r, [api.id]: ok ? ' Conexão bem-sucedida!' : ' Chave inválida ou sem acesso' }))
- } catch {
- setTestResult(r => ({ ...r, [api.id]: ' Erro de rede' }))
- } finally { setTesting(null) }
- }
+  async function testConnection(api: ApiConfig) {
+    if (!api.key) { setTestResult(r => ({ ...r, [api.id]: '⚠️ Insira a chave primeiro' })); return }
+    setTesting(api.id)
+    try {
+      const result = await validateProviderApiKey(api.provider, api.key)
+      setTestResult(r => ({ ...r, [api.id]: result.ok ? `✅ ${result.message}` : `❌ ${result.message}` }))
+    } catch (err: any) {
+      setTestResult(r => ({ ...r, [api.id]: `❌ Erro de rede: ${err?.message || 'Falha de conexão'}` }))
+    } finally { setTesting(null) }
+  }
 
  const providerIcon: Record<string, string> = {
  manual: 'ti-copy', anthropic: 'ti-brain', openai: 'ti-sparkles',
@@ -761,7 +746,15 @@ export default function ApiManager() {
  </div>
 
  {sbStatus && (
- <div style={{ padding: '10px 16px', borderRadius: RADIUS.md, background: sbStatus.includes('') ? 'rgba(45,157,93,0.1)' : sbStatus.includes('') ? 'rgba(220,50,47,0.08)' : 'rgba(88,110,117,0.08)', border: `1px solid ${sbStatus.includes('') ? '#2d9d5d' : sbStatus.includes('') ? '#dc322f' : '#a08060'}`, fontSize: 13, fontWeight: 600, color: '#2c1a0e' }}>
+ <div style={{
+ padding: '10px 16px',
+ borderRadius: RADIUS.md,
+ background: sbStatus.startsWith('✅') ? 'rgba(45,157,93,0.1)' : sbStatus.startsWith('❌') ? 'rgba(220,50,47,0.08)' : 'rgba(88,110,117,0.08)',
+ border: `1px solid ${sbStatus.startsWith('✅') ? '#2d9d5d' : sbStatus.startsWith('❌') ? '#dc322f' : '#a08060'}`,
+ fontSize: 13,
+ fontWeight: 600,
+ color: sbStatus.startsWith('✅') ? '#15803d' : sbStatus.startsWith('❌') ? '#b91c1c' : '#2c1a0e'
+ }}>
  {sbStatus}
  </div>
  )}
@@ -829,7 +822,7 @@ export default function ApiManager() {
  </div>
  </div>
  {testResult[api.id] && (
- <span style={{ fontSize: 13, fontWeight: 600, color: testResult[api.id].includes('') ? '#2d7a00' : '#dc322f' }}>
+ <span style={{ fontSize: 13, fontWeight: 600, color: testResult[api.id].startsWith('✅') ? '#2d7a00' : '#dc322f' }}>
  {testResult[api.id]}
  </span>
  )}

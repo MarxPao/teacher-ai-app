@@ -121,19 +121,34 @@ export const AGENT_TOOLS: ToolDefinition[] = [
   // 7. PORTAIS ESCOLARES (INTEGRAÇÃO EXTENSÃO & AUTOMAÇÃO AGÊNTICA - SEGURANÇA 0-TESTER)
   {
     name: 'execute_portal_action',
-    description: 'Preenche autonomamente ações operacionais em portais escolares (Machado Sobrinho, Plurall, Rede Santa Catarina, Cambridge One, etc.) para diários de classe, frequências/chamadas e notas de boletim. Preenche todos os campos no DOM e deixa o formulário pronto para confirmação final.',
+    description: 'Preenche autonomamente ações operacionais em portais escolares (Machado Sobrinho, Plurall, Rede Santa Catarina, Cambridge One, etc.) para diários de classe, frequências/chamadas e notas de boletim. Preenche todos os campos no DOM e deixa o formulário pronto para confirmação final. Suporta orquestração multi-página contínua (ex: chamada + diário encadeados) via parâmetro steps.',
     input_schema: {
       type: 'object',
       properties: {
         platform:       { type: 'string', description: 'ID do portal, ex: machado, santacatarina, plural, cambridge, ou nome da escola' },
-        actionType:     { type: 'string', enum: ['diary', 'attendance', 'grades', 'assignment', 'custom'], description: 'Tipo da ação: diário, chamada, notas, tarefa' },
+        actionType:     { type: 'string', enum: ['diary', 'attendance', 'grades', 'assignment', 'custom'], description: 'Tipo da ação: diário, chamada, notas, tarefa (ou omitir se fornecer steps)' },
         title:          { type: 'string', description: 'Título da aula, diário ou avaliação' },
         date:           { type: 'string', description: 'Data YYYY-MM-DD' },
         classRef:       { type: 'string', description: 'Turma vinculada, ex: 9º Ano A, 8B' },
         description:    { type: 'string', description: 'Conteúdo programático, pauta, metodologia ou instruções da tarefa' },
         mode:           { type: 'string', enum: ['supervised'], description: 'Modo supervisionado com preenchimento autônomo e confirmação final' },
         absentStudents: { type: 'array', items: { type: 'string' }, description: 'Lista de nomes de alunos ausentes/faltas na chamada' },
-        evaluationName: { type: 'string', description: 'Nome da avaliação para lançamento de notas (ex: Prova 1, Simulado)' }
+        evaluationName: { type: 'string', description: 'Nome da avaliação para lançamento de notas (ex: Prova 1, Simulado)' },
+        steps: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              actionType:     { type: 'string', enum: ['diary', 'attendance', 'grades', 'assignment', 'custom'] },
+              title:          { type: 'string' },
+              description:    { type: 'string' },
+              absentStudents: { type: 'array', items: { type: 'string' } },
+              evaluationName: { type: 'string' }
+            },
+            required: ['actionType']
+          },
+          description: 'Lista ordenada de sub-tarefas para execução encadeada multi-página no mesmo contexto de sessão do portal (ex: [Passo 1: attendance(8B), Passo 2: diary(8B)]).'
+        }
       },
       required: ['platform', 'title']
     }
@@ -503,6 +518,42 @@ export const AGENT_TOOLS: ToolDefinition[] = [
       },
       required: ['studentName', 'topic']
     }
+  },
+
+  // 24. AULAS PARTICULARES (PRIVATE TUTORING) [NOVO]
+  {
+    name: 'record_private_tutoring_session',
+    description: 'Agenda e registra uma aula particular no módulo Private Tutoring (aulas particulares individuais ou turmas particulares fora da escola regular), gravando data, horário, matéria, tópico trabalhado e honorários da aula.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        studentName: { type: 'string', description: 'Nome do aluno particular' },
+        date:        { type: 'string', description: 'Data da aula em formato YYYY-MM-DD' },
+        time:        { type: 'string', description: 'Horário de início da aula, ex: 10:00 ou 14:30' },
+        duration:    { type: 'number', description: 'Duração da aula em minutos (padrão: 60)' },
+        fee:         { type: 'number', description: 'Valor cobrado por esta aula em R$ (ex: 80, 100, 120)' },
+        subject:     { type: 'string', description: 'Matéria da aula particular (ex: Inglês, Matemática, Redação)' },
+        topic:       { type: 'string', description: 'Conteúdo ou tópico planejado para a aula' },
+        notes:       { type: 'string', description: 'Observações pedagógicas ou tarefas para casa' }
+      },
+      required: ['studentName', 'date', 'topic']
+    }
+  },
+
+  // 25. AVALIAÇÃO DE ÁUDIO & PRONÚNCIA (AUDIO PRONUNCIATION) [NOVO]
+  {
+    name: 'evaluate_student_audio',
+    description: 'Avalia a pronúncia, fonética ou fluência oral de um aluno a partir de uma gravação de áudio real anexada. ATENÇÃO ESTRITA: NUNCA invoque esta ferramenta se o professor NÃO tiver anexado um arquivo ou link de áudio real. É terminantemente proibido passar "N/A", URLs falsas ou strings vazias para forçar chamada. Se o professor pedir avaliação oral sem fornecer arquivo de áudio, NÃO chame ferramenta alguma — responda exclusivamente em texto admitindo honestamente que você precisa da gravação e ofereça navegar para o módulo de Pronúncia Oral.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        studentName: { type: 'string', description: 'Nome do aluno' },
+        audioUrl:    { type: 'string', description: 'URL ou identificador do arquivo de áudio anexado' },
+        exerciseRef: { type: 'string', description: 'Referência do exercício de pronúncia (ex: Exercício 4)' },
+        criteria:    { type: 'array', items: { type: 'string' }, description: 'Critérios fonéticos avaliados (ex: entonação, vogais longas, linking sounds)' }
+      },
+      required: ['studentName', 'audioUrl']
+    }
   }
 ]
 
@@ -547,5 +598,7 @@ export const TOOL_DISPLAY_NAMES: Record<string, { label: string; icon: string; c
   manage_didactic_sequence:       { label: 'Sequência Didática',      icon: 'ti-timeline',           color: '#8b5e3c' },
   add_weekly_agenda_item:         { label: 'Agenda Semanal',          icon: 'ti-calendar-event',     color: '#268bd2' },
   generate_parent_communication:  { label: 'Mensagem para Pais',      icon: 'ti-brand-whatsapp',     color: '#25d366' },
+  record_private_tutoring_session:{ label: 'Aula Particular',         icon: 'ti-user-check',         color: '#b58900' },
+  evaluate_student_audio:         { label: 'Avaliando Áudio',         icon: 'ti-microphone',         color: '#d33682' },
 }
 

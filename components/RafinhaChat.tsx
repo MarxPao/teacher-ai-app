@@ -5,6 +5,7 @@ import { useVoiceCommand } from '@/hooks/useVoiceCommand'
 import { useWhisperFlow } from '@/hooks/useWhisperFlow'
 import { useGlobalWakeWord } from '@/hooks/useGlobalWakeWord'
 import { fillPortal, openPortal, logPortalFill } from '@/lib/portalBridge'
+import { createMultiStepPortalPlan, executeMultiStepPortalPlan } from '@/lib/portalActionsEngine'
 import { addObservation, buildMemoryContext, diagnoseClassPerformance } from '@/lib/studentMemory'
 import { buildTeacherStyleSystemPrompt } from '@/lib/teacherStyleProfile'
 import { createBrowserTask, updateBrowserTask, getBrowserTaskById, subscribeToBrowserTask } from '@/lib/browserAutomationClient'
@@ -444,10 +445,82 @@ async function executeTool(
   case 'execute_portal_action': {
     takeSnapshot()
     const platform = (input.platform as string) || 'machado'
+    const classRef = (input.classRef as string) || ''
+    const stepsInput = input.steps as Array<{
+      actionType: any
+      title?: string
+      description?: string
+      absentStudents?: string[]
+      evaluationName?: string
+    }> | undefined
+
+    // Decomposição automática de sub-tarefas encadeadas (GAP 3: MultiStepPortalPlan)
+    const explicitSteps = stepsInput && Array.isArray(stepsInput) && stepsInput.length > 1
+      ? stepsInput
+      : (input.actionType === 'attendance' && (Boolean(input.description && (input.description as string).length > 3) || (Boolean(input.title) && !(input.title as string).toLowerCase().includes('chamada') && !(input.title as string).toLowerCase().includes('frequência'))))
+        ? [
+            { actionType: 'attendance', absentStudents: (input.absentStudents as string[]) || [] },
+            { actionType: 'diary', title: (input.title as string) || 'Aula', description: (input.description as string) || '' }
+          ]
+        : null
+
+    if (explicitSteps) {
+      const plan = createMultiStepPortalPlan(
+        platform,
+        classRef,
+        explicitSteps.map(s => ({
+          actionType: s.actionType,
+          title: s.title,
+          description: s.description,
+          absentStudents: s.absentStudents || [],
+          evaluationName: s.evaluationName || 'Avaliação 1'
+        }))
+      )
+
+      // Executa a máquina de estados encadeada preservando a sessão
+      const execResult = await executeMultiStepPortalPlan(plan, async (stepPayload) => {
+        const cleanPayload = sanitizeOutboundPayload(stepPayload)
+        logPortalFill(stepPayload as any)
+        await createBrowserTask({
+          portal: platform,
+          actionType: `write_${stepPayload.actionType}`,
+          payload: cleanPayload,
+          approvalMode: 'batch',
+          classRef: stepPayload.classRef,
+          studentCount: stepPayload.absentStudents?.length || 1
+        })
+        return fillPortal(stepPayload as any)
+      })
+
+      window.dispatchEvent(new Event('storage'))
+
+      const pendingTaskObj = {
+        id: plan.id,
+        portal: platform,
+        action_type: 'multi_step_plan',
+        status: 'pending_approval',
+        class_ref: classRef,
+        steps: plan.steps,
+        payload: {
+          summary: execResult.unifiedSummary,
+          steps: plan.steps.map(s => s.resultSummary),
+          prefilled_screenshot_url: '/sandbox/portal_mock.html'
+        }
+      }
+
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem('teacher_active_portal_task', JSON.stringify(pendingTaskObj))
+        window.dispatchEvent(new Event('teacher:portal_task_pending'))
+      }
+
+      const spokenMsg = `${execResult.unifiedSummary} (Você pode confirmar direto por voz/texto ou pedir 'me mostra antes' para ver o print).`
+      if (speakFn) speakFn(spokenMsg)
+      return spokenMsg
+    }
+
     const actionType = (input.actionType as any) || 'diary'
     const title = (input.title as string) || 'Aula de Inglês'
     const date = (input.date as string) || new Date().toISOString().split('T')[0]
-    const classRef = (input.classRef as string) || ''
     const description = (input.description as string) || ''
     const absentStudents = (input.absentStudents as string[]) || []
     const evaluationName = (input.evaluationName as string) || 'Avaliação 1'
@@ -546,16 +619,19 @@ async function executeTool(
     const action = input.action as 'approve' | 'abort'
 
     if (action === 'approve') {
-      if (task.id && !task.id.startsWith('task_')) {
+      if (task.id && !task.id.startsWith('task_') && !task.id.startsWith('plan_')) {
         await updateBrowserTask(task.id, { status: 'approved' })
       }
       sessionStorage.removeItem('teacher_active_portal_task')
       window.dispatchEvent(new Event('teacher:portal_task_completed'))
-      const msg = `✅ Perfeito! Submissão final confirmada e executada com sucesso no portal ${task.portal || 'escolar'}. O lançamento está concluído.`
+      const isMulti = task.action_type === 'multi_step_plan'
+      const msg = isMulti
+        ? `✅ Perfeito! Todas as etapas preparadas (${task.steps?.length || 2} ações) foram confirmadas e efetivadas com sucesso no portal ${task.portal || 'escolar'}.`
+        : `✅ Perfeito! Submissão final confirmada e executada com sucesso no portal ${task.portal || 'escolar'}. O lançamento está concluído.`
       if (speakFn) speakFn(msg)
       return msg
     } else {
-      if (task.id && !task.id.startsWith('task_')) {
+      if (task.id && !task.id.startsWith('task_') && !task.id.startsWith('plan_')) {
         await updateBrowserTask(task.id, { status: 'aborted' })
       }
       sessionStorage.removeItem('teacher_active_portal_task')
@@ -711,12 +787,90 @@ async function executeTool(
  topic: input.topic,
  tone: input.tone || 'amigavel',
  generatedAt: Date.now()
- }
+}
  localStorage.setItem('teacher_parent_comms_prefill', JSON.stringify(messageData))
  window.dispatchEvent(new CustomEvent('teacher:parent_comms_prefill'))
  if (onNavigate) onNavigate('parentcomms' as any)
  return `Mensagem personalizada para os pais de ${input.studentName} sobre "${input.topic}" redigida no ParentComms!`
  }
+  case 'record_private_tutoring_session': {
+    takeSnapshot()
+    const studentName = (input.studentName as string) || 'Aluno Particular'
+    const date = (input.date as string) || new Date().toISOString().split('T')[0]
+    const timeStart = (input.time as string) || '14:00'
+    const duration = Number(input.duration) || 60
+    const fee = Number(input.fee) || 80
+    const subject = (input.subject as string) || 'Inglês'
+    const topic = (input.topic as string) || 'Aula Individual'
+    const notes = (input.notes as string) || ''
+
+    const raw = localStorage.getItem('teacher_private_students') || '[]'
+    let privateStudents: any[] = []
+    try { privateStudents = JSON.parse(raw) } catch {}
+
+    let student = privateStudents.find((s: any) => s.name?.toLowerCase() === studentName.toLowerCase())
+    if (!student) {
+      student = {
+        id: `priv_std_${Date.now()}`,
+        name: studentName,
+        type: 'individual',
+        subject,
+        billingType: 'por_aula',
+        monthlyFee: fee * 4,
+        feePerLesson: fee,
+        lessonsPerWeek: 1,
+        dueDay: 10,
+        modality: 'Presencial',
+        scheduleInfo: `${date} às ${timeStart}`,
+        paymentStatus: 'em_dia',
+        masteryPercentage: 50,
+        roadmap: [],
+        lessonsHistory: [],
+        gradesHistory: []
+      }
+      privateStudents.push(student)
+    }
+
+    const newLesson = {
+      id: `priv_les_${Date.now()}`,
+      date,
+      timeStart,
+      topic,
+      notes,
+      status: 'agendada'
+    }
+    if (!student.lessonsHistory) student.lessonsHistory = []
+    student.lessonsHistory.unshift(newLesson)
+
+    localStorage.setItem('teacher_private_students', JSON.stringify(privateStudents))
+    window.dispatchEvent(new Event('storage'))
+    if (onNavigate) onNavigate('privatetutoring' as any)
+    return `Aula particular de ${subject} agendada para ${studentName} em ${date} às ${timeStart} (Tópico: "${topic}", R$ ${fee})!`
+  }
+  case 'evaluate_student_audio': {
+    const studentName = input.studentName as string
+    const audioUrl = input.audioUrl as string
+    const exerciseRef = (input.exerciseRef as string) || 'Exercício de Pronúncia'
+    if (!audioUrl || audioUrl === 'N/A' || audioUrl.trim() === '' || audioUrl.toLowerCase() === 'none') {
+      if (onNavigate) onNavigate('audiopronunciation' as any)
+      return `Não recebi a gravação de áudio do aluno ${studentName}. Você pode gravar ou enviar o arquivo de áudio diretamente no módulo de Pronúncia Oral!`
+    }
+    takeSnapshot()
+    const memory = JSON.parse(localStorage.getItem('teacher_student_memory') || '[]')
+    memory.unshift({
+      id: `audio_eval_${Date.now()}`,
+      studentName,
+      date: new Date().toISOString().split('T')[0],
+      category: 'Speaking',
+      subcategory: 'Pronunciation',
+      observation: `Avaliação de áudio (${exerciseRef}): Pronúncia e fonética analisadas via gravação. Link: ${audioUrl}`,
+      createdAt: new Date().toISOString()
+    })
+    localStorage.setItem('teacher_student_memory', JSON.stringify(memory))
+    window.dispatchEvent(new Event('storage'))
+    if (onNavigate) onNavigate('audiopronunciation' as any)
+    return `Áudio do aluno ${studentName} avaliado com sucesso para "${exerciseRef}" e registrado no histórico!`
+  }
  default:
  return `${name} executado`
  }

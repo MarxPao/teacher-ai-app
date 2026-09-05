@@ -26,7 +26,7 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   icon?:     ReactNode
   iconRight?: ReactNode
   fullWidth?: boolean
-  children:  ReactNode
+  children?:  ReactNode
 }
 
 // CSS injetado uma única vez no head
@@ -194,7 +194,7 @@ export default function Button({
         <span style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>{icon}</span>
       ) : null}
 
-      <span>{children}</span>
+      {children !== undefined && children !== null && <span>{children}</span>}
 
       {!loading && iconRight && (
         <span style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>{iconRight}</span>

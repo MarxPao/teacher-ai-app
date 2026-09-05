@@ -62,6 +62,159 @@ export interface PortalProfileDef {
 }
 
 // ============================================================================
+// GAP 3: Máquina de Estados de Sub-Tarefas Encadeadas (MultiStepPortalPlan)
+// Permite decomposição e orquestração de trajetórias multi-página contínuas
+// no mesmo contexto de sessão do portal (ex: Chamada -> Diário na mesma solicitação).
+// ============================================================================
+
+export interface PortalStepDef {
+  stepIndex: number
+  actionType: PortalActionType
+  title: string
+  payload: {
+    platform: string
+    actionType: PortalActionType
+    title: string
+    date?: string
+    classRef?: string
+    description?: string
+    absentStudents?: string[]
+    presentStudents?: string[]
+    studentGrades?: Array<{ name: string; grade: number; id?: string }>
+    evaluationName?: string
+    mode?: 'supervised'
+    customFields?: Record<string, any>
+  }
+  status: 'pending' | 'in_progress' | 'completed' | 'failed'
+  resultSummary?: string
+}
+
+export interface MultiStepPortalPlan {
+  id: string
+  platform: string
+  classRef: string
+  steps: PortalStepDef[]
+  currentStepIndex: number
+  status: 'idle' | 'executing' | 'awaiting_approval' | 'completed' | 'failed'
+  createdAt: number
+  unifiedSummary?: string
+}
+
+/**
+ * Cria um plano de execução multi-passo a partir de sub-tarefas decompostas.
+ */
+export function createMultiStepPortalPlan(
+  platform: string,
+  classRef: string,
+  subTasks: Array<{
+    actionType: PortalActionType
+    title?: string
+    date?: string
+    description?: string
+    absentStudents?: string[]
+    presentStudents?: string[]
+    studentGrades?: Array<{ name: string; grade: number; id?: string }>
+    evaluationName?: string
+  }>
+): MultiStepPortalPlan {
+  const planId = `plan_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
+  const steps: PortalStepDef[] = subTasks.map((t, idx) => ({
+    stepIndex: idx + 1,
+    actionType: t.actionType,
+    title: t.title || (t.actionType === 'attendance' ? `Chamada ${classRef}` : t.actionType === 'diary' ? `Diário ${classRef}` : `Lançamento ${classRef}`),
+    status: 'pending',
+    payload: {
+      platform,
+      actionType: t.actionType,
+      title: t.title || (t.actionType === 'attendance' ? `Chamada ${classRef}` : t.actionType === 'diary' ? `Diário ${classRef}` : `Lançamento ${classRef}`),
+      date: t.date || new Date().toISOString().split('T')[0],
+      classRef,
+      description: t.description || '',
+      absentStudents: t.absentStudents || [],
+      presentStudents: t.presentStudents || [],
+      studentGrades: t.studentGrades || [],
+      evaluationName: t.evaluationName || 'Avaliação 1',
+      mode: 'supervised'
+    }
+  }))
+
+  return {
+    id: planId,
+    platform,
+    classRef,
+    steps,
+    currentStepIndex: 0,
+    status: 'idle',
+    createdAt: Date.now()
+  }
+}
+
+/**
+ * Executa a máquina de estados encadeada do plano multi-passo:
+ * 1. Transita sequencialmente por cada step mantendo o contexto de sessão
+ * 2. Preenche os campos de cada sub-tarefa em modo supervisionado
+ * 3. Gera o resumo unificado consolidando todas as ações preparadas
+ * 4. Para em 'awaiting_approval' aguardando a confirmação final do professor
+ */
+export async function executeMultiStepPortalPlan(
+  plan: MultiStepPortalPlan,
+  fillFn?: (payload: any) => Promise<{ success: boolean; message?: string }>
+): Promise<{ success: boolean; plan: MultiStepPortalPlan; unifiedSummary: string }> {
+  plan.status = 'executing'
+  const summaries: string[] = []
+
+  for (let i = 0; i < plan.steps.length; i++) {
+    const step = plan.steps[i]
+    plan.currentStepIndex = i
+    step.status = 'in_progress'
+
+    try {
+      if (fillFn) {
+        await fillFn(step.payload)
+      }
+      step.status = 'completed'
+
+      let stepSummary = ''
+      if (step.actionType === 'attendance') {
+        const absCount = step.payload.absentStudents?.length || 0
+        stepSummary = absCount > 0
+          ? `Chamada da ${plan.classRef || 'turma'} preparada (${absCount} falta${absCount > 1 ? 's' : ''}${step.payload.absentStudents && step.payload.absentStudents.length > 0 ? ': ' + step.payload.absentStudents.join(', ') : ''})`
+          : `Chamada da ${plan.classRef || 'turma'} preparada (100% presentes)`
+      } else if (step.actionType === 'diary') {
+        const t = step.payload.title || step.payload.description || 'Aula'
+        stepSummary = `Diário preparado ('${t}')`
+      } else if (step.actionType === 'grades') {
+        stepSummary = `Notas de ${step.payload.studentGrades?.length || 0} alunos preparadas`
+      } else {
+        stepSummary = `${step.title} preparada`
+      }
+      step.resultSummary = stepSummary
+      summaries.push(stepSummary)
+    } catch (err: any) {
+      step.status = 'failed'
+      step.resultSummary = `Falha: ${err?.message || 'Erro desconhecido'}`
+      plan.status = 'failed'
+      return {
+        success: false,
+        plan,
+        unifiedSummary: `Falha no passo ${i + 1} (${step.title}): ${err?.message || 'Erro desconhecido'}`
+      }
+    }
+  }
+
+  plan.status = 'awaiting_approval'
+  const unifiedSummary = `${summaries.join(' + ')}. Confirmar ambos?`
+  plan.unifiedSummary = unifiedSummary
+
+  return {
+    success: true,
+    plan,
+    unifiedSummary
+  }
+}
+
+
+// ============================================================================
 // Engine Universal — Mapas Descobertos Automaticamente
 // ============================================================================
 

@@ -3,6 +3,7 @@ import { COLOR, RADIUS, TEXT, SHADOW, FONT } from '@/styles/tokens'
 import { toast, showConfirm } from '@/components/Toast'
 
 import React, { useState, useEffect, useCallback } from 'react'
+import Button from '@/components/Button'
 import ModuleShell from '@/components/ModuleShell'
 import ModuleCard from '@/components/ModuleCard'
 import { syncToSupabase } from '@/lib/supabaseClient'
@@ -260,51 +261,56 @@ export default function Organization() {
  fontSize: 13, outline: 'none', background: '#fff'
  }}
  />
- {activeTab === 'schools' && (
- <button onClick={openNewSchool} style={AddBtn}>+ Nova Escola</button>
- )}
- {activeTab === 'classes' && (
- <button onClick={openNewClass} style={AddBtn}>+ Nova Turma</button>
- )}
- {activeTab === 'students' && (
- <button onClick={openNewStudent} style={AddBtn}>+ Novo Aluno</button>
- )}
- </div>
- }
- >
- {/* Tabs da Central de Organização */}
- <div style={{ display: 'flex', gap: 10, marginBottom: 24, borderBottom: '2px solid rgba(139,115,85,0.12)', paddingBottom: 10 }}>
- <button
- onClick={() => setActiveTab('schools')}
- style={activeTab === 'schools' ? ActiveTabS : InactiveTabS}
- >
- Minhas Escolas ({schools.length})
- </button>
- <button
- onClick={() => setActiveTab('classes')}
- style={activeTab === 'classes' ? ActiveTabS : InactiveTabS}
- >
- Minhas Turmas ({classes.length})
- </button>
- <button
- onClick={() => setActiveTab('students')}
- style={activeTab === 'students' ? ActiveTabS : InactiveTabS}
- >
- Meus Alunos ({students.length})
- </button>
- <button
- onClick={() => setActiveTab('privatetutoring')}
- style={activeTab === 'privatetutoring' ? ActiveTabS : InactiveTabS}
- >
- Alunos Particulares
- </button>
- <button
- onClick={() => setActiveTab('checklist')}
- style={activeTab === 'checklist' ? ActiveTabS : InactiveTabS}
- >
- 📋 Checklist & Histórico
- </button>
- </div>
+          {activeTab === 'schools' && (
+            <Button variant="primary" size="sm" icon={<i className="ti ti-plus" />} onClick={openNewSchool}>Nova Escola</Button>
+          )}
+          {activeTab === 'classes' && (
+            <Button variant="primary" size="sm" icon={<i className="ti ti-plus" />} onClick={openNewClass}>Nova Turma</Button>
+          )}
+          {activeTab === 'students' && (
+            <Button variant="primary" size="sm" icon={<i className="ti ti-plus" />} onClick={openNewStudent}>Novo Aluno</Button>
+          )}
+        </div>
+      }
+    >
+      {/* Tabs da Central de Organização */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 24, borderBottom: '2px solid rgba(139,115,85,0.12)', paddingBottom: 10, flexWrap: 'wrap' }}>
+        <Button
+          variant={activeTab === 'schools' ? 'primary' : 'ghost'}
+          size="sm"
+          onClick={() => setActiveTab('schools')}
+        >
+          Minhas Escolas ({schools.length})
+        </Button>
+        <Button
+          variant={activeTab === 'classes' ? 'primary' : 'ghost'}
+          size="sm"
+          onClick={() => setActiveTab('classes')}
+        >
+          Minhas Turmas ({classes.length})
+        </Button>
+        <Button
+          variant={activeTab === 'students' ? 'primary' : 'ghost'}
+          size="sm"
+          onClick={() => setActiveTab('students')}
+        >
+          Meus Alunos ({students.length})
+        </Button>
+        <Button
+          variant={activeTab === 'privatetutoring' ? 'primary' : 'ghost'}
+          size="sm"
+          onClick={() => setActiveTab('privatetutoring')}
+        >
+          Alunos Particulares
+        </Button>
+        <Button
+          variant={activeTab === 'checklist' ? 'primary' : 'ghost'}
+          size="sm"
+          onClick={() => setActiveTab('checklist')}
+        >
+          📋 Checklist & Histórico
+        </Button>
+      </div>
 
  {/* ABA 1: ESCOLAS */}
  {activeTab === 'schools' && (
@@ -319,8 +325,8 @@ export default function Organization() {
  <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: '#2c1a0e' }}>{sch.name}</h3>
  </div>
  <div style={{ display: 'flex', gap: 6 }}>
- <button onClick={() => openEditSchool(sch)} style={ActionIconButton} title="Editar"></button>
- <button onClick={() => deleteSchool(sch.id)} style={ActionIconButton} title="Excluir"></button>
+ <Button variant="ghost" size="sm" icon={<i className="ti ti-pencil" />} onClick={() => openEditSchool(sch)} title="Editar" />
+ <Button variant="danger" size="sm" icon={<i className="ti ti-trash" />} onClick={() => deleteSchool(sch.id)} title="Excluir" />
  </div>
  </div>
  <div style={{ fontSize: 12, color: '#665c54', display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -350,10 +356,10 @@ export default function Organization() {
  <div>
  <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: '#2c1a0e' }}>{cls.name}</h3>
  <span style={{ fontSize: 11, color: '#8b5e3c', fontWeight: 600 }}>{schObj ? schObj.name : 'Sem Escola'}</span>
- </div>
- <div style={{ display: 'flex', gap: 6 }}>
- <button onClick={() => openEditClass(cls)} style={ActionIconButton} title="Editar"></button>
- <button onClick={() => deleteClass(cls.id)} style={ActionIconButton} title="Excluir"></button>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <Button variant="ghost" size="sm" icon={<i className="ti ti-pencil" />} onClick={() => openEditClass(cls)} title="Editar" />
+                <Button variant="danger" size="sm" icon={<i className="ti ti-trash" />} onClick={() => deleteClass(cls.id)} title="Excluir" />
+              </div>
  </div>
  </div>
  <div style={{ fontSize: 12, color: '#665c54', display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -396,8 +402,10 @@ export default function Organization() {
  <td style={{ padding: '12px 16px', color: '#8b5e3c', fontWeight: 600 }}>{clsObj ? clsObj.name : (st.class || 'Sem Turma')}</td>
  <td style={{ padding: '12px 16px', color: '#665c54' }}>{schObj ? schObj.name : ''}</td>
  <td style={{ padding: '12px 16px', textAlign: 'right' }}>
- <button onClick={() => openEditStudent(st)} style={ActionIconButton} title="Editar"></button>
- <button onClick={() => deleteStudent(st.id)} style={ActionIconButton} title="Excluir"></button>
+   <div style={{ display: 'inline-flex', gap: 6 }}>
+     <Button variant="ghost" size="sm" icon={<i className="ti ti-pencil" />} onClick={() => openEditStudent(st)} title="Editar" />
+     <Button variant="danger" size="sm" icon={<i className="ti ti-trash" />} onClick={() => deleteStudent(st.id)} title="Excluir" />
+   </div>
  </td>
  </tr>
  )
@@ -429,8 +437,8 @@ export default function Organization() {
  <input type="color" value={schoolColor} onChange={e => setSchoolColor(e.target.value)} style={{ width: '100%', height: 38, border: 'none', borderRadius: RADIUS.md, cursor: 'pointer', marginBottom: 16 }} />
 
  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 10 }}>
- <button onClick={() => setShowSchoolModal(false)} style={CancelBtn}>Cancelar</button>
- <button onClick={saveSchool} style={SaveBtn}>Salvar</button>
+ <Button variant="secondary" size="sm" onClick={() => setShowSchoolModal(false)}>Cancelar</Button>
+ <Button variant="primary" size="sm" onClick={saveSchool}>Salvar</Button>
  </div>
  </div>
  </div>
@@ -457,8 +465,8 @@ export default function Organization() {
  <input value={classYear} onChange={e => setClassYear(e.target.value)} placeholder="2026" style={InputStyle} />
 
  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 10 }}>
- <button onClick={() => setShowClassModal(false)} style={CancelBtn}>Cancelar</button>
- <button onClick={saveClass} style={SaveBtn}>Salvar</button>
+ <Button variant="secondary" size="sm" onClick={() => setShowClassModal(false)}>Cancelar</Button>
+ <Button variant="primary" size="sm" onClick={saveClass}>Salvar</Button>
  </div>
  </div>
  </div>
@@ -482,8 +490,8 @@ export default function Organization() {
  </select>
 
  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 10 }}>
- <button onClick={() => setShowStudentModal(false)} style={CancelBtn}>Cancelar</button>
- <button onClick={saveStudent} style={SaveBtn}>Salvar</button>
+ <Button variant="secondary" size="sm" onClick={() => setShowStudentModal(false)}>Cancelar</Button>
+ <Button variant="primary" size="sm" onClick={saveStudent}>Salvar</Button>
  </div>
  </div>
  </div>
@@ -502,41 +510,18 @@ export default function Organization() {
  )
 }
 
-const AddBtn: React.CSSProperties = {
- padding: '8px 16px', borderRadius: RADIUS.lg, border: 'none', background: '#8b5e3c', color: '#fff',
- fontSize: 13, fontWeight: 700, cursor: 'pointer'
-}
-const ActiveTabS: React.CSSProperties = {
- padding: '8px 16px', borderRadius: RADIUS.md, border: 'none', background: '#8b5e3c', color: '#fff',
- fontSize: 13, fontWeight: 700, cursor: 'pointer'
-}
-const InactiveTabS: React.CSSProperties = {
- padding: '8px 16px', borderRadius: RADIUS.md, border: 'none', background: 'transparent', color: '#665c54',
- fontSize: 13, fontWeight: 600, cursor: 'pointer'
-}
-const ActionIconButton: React.CSSProperties = {
- background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, padding: 4
-}
 const OverlayStyle: React.CSSProperties = {
- position: 'fixed', inset: 0, background: 'rgba(44,26,14,0.45)', zIndex: 9999,
- display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20
+  position: 'fixed', inset: 0, background: 'rgba(44,26,14,0.45)', zIndex: 9999,
+  display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20
 }
 const ModalStyle: React.CSSProperties = {
- background: '#fffcf8', border: '1px solid rgba(139,115,85,0.2)', borderRadius: 20,
- padding: 24, width: 440, maxWidth: '95vw', boxShadow: '0 20px 60px rgba(44,26,14,0.15)'
+  background: '#fffcf8', border: '1px solid rgba(139,115,85,0.2)', borderRadius: 20,
+  padding: 24, width: 440, maxWidth: '95vw', boxShadow: '0 20px 60px rgba(44,26,14,0.15)'
 }
 const LabelStyle: React.CSSProperties = {
- fontSize: 12, fontWeight: 700, color: '#7a5c42', display: 'block', marginBottom: 4
+  fontSize: 12, fontWeight: 700, color: '#7a5c42', display: 'block', marginBottom: 4
 }
 const InputStyle: React.CSSProperties = {
- width: '100%', padding: '9px 12px', borderRadius: RADIUS.md, border: '1px solid rgba(139,115,85,0.2)',
- background: '#fff', outline: 'none', fontSize: 13, color: '#2c1a0e', marginBottom: 14
-}
-const CancelBtn: React.CSSProperties = {
- padding: '9px 16px', background: '#f5efe6', border: '1px solid rgba(139,115,85,0.2)', borderRadius: RADIUS.md,
- fontSize: 13, cursor: 'pointer', color: '#7a5c42'
-}
-const SaveBtn: React.CSSProperties = {
- padding: '9px 18px', background: '#8b5e3c', color: '#fff', border: 'none', borderRadius: RADIUS.md,
- fontSize: 13, fontWeight: 700, cursor: 'pointer'
+  width: '100%', padding: '9px 12px', borderRadius: RADIUS.md, border: '1px solid rgba(139,115,85,0.2)',
+  background: '#fff', outline: 'none', fontSize: 13, color: '#2c1a0e', marginBottom: 14
 }

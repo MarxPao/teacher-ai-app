@@ -26,6 +26,9 @@ import SharedDatabaseConsentModal from '@/components/SharedDatabaseConsentModal'
 import { isCustomSupabaseConfigured } from '@/lib/databaseConsent'
 import TeacherCalibrationsManager from '@/components/modules/TeacherCalibrationsManager'
 import ConnectedPortalsPanel from '@/components/modules/ConnectedPortalsPanel'
+import Button from '@/components/Button'
+import { validateSupabaseCredentials, ByokValidationResult } from '@/lib/byokValidator'
+import { exportTeacherDataAsJson, exportTeacherStudentsCsv } from '@/lib/dataPortability'
 import '@/lib/subjects/english'
 import '@/lib/subjects/portuguese'
 
@@ -40,7 +43,9 @@ const STORAGE_KEYS = [
   'teacher_editor_docs_v2',
   'teacher_school_headers',
   'teacher_calendar_tasks',
+  'teacher_calendar_events',
   'teacher_dashboard_todos',
+  'teacher_dashboard_postits',
   'teacher_communications',
   'teacher_pedagogic_metrics',
   'teacher_school_metrics',
@@ -51,7 +56,18 @@ const STORAGE_KEYS = [
   'teacher_portal_action_logs_v1',
   'teacher_portal_consent_v1',
   'teacher_app_calibrations_v1',
-  'teacher_discovered_portal_maps'
+  'teacher_discovered_portal_maps',
+  'teacher_lesson_plans',
+  'teacher_lesson_plans_bank',
+  'teacher_saved_exams',
+  'teacher_exam_drafts',
+  'teacher_rubrics',
+  'teacher_gbConfig',
+  'teacher_attendance_records_v1',
+  'teacher_class_logs_v1',
+  'teacher_student_memory',
+  'teacher_portfolio',
+  'teacher_didactic_sequence_units_v3'
 ]
 
 export default function Settings() {
@@ -64,6 +80,8 @@ export default function Settings() {
 
   // Supabase BYOK & Transparência
   const [showTransparencyModal, setShowTransparencyModal] = useState(false)
+  const [validatingSupabase, setValidatingSupabase] = useState(false)
+  const [supabaseValidation, setSupabaseValidation] = useState<ByokValidationResult | null>(null)
   const [supabaseCustomUrl, setSupabaseCustomUrl] = useState(() => {
     try {
       const s = typeof window !== 'undefined' ? localStorage.getItem('teacher_supabase_config') : null
@@ -242,12 +260,57 @@ export default function Settings() {
       if (res.ok) {
         setSyncStatus(' Sincronizado com sucesso!')
       } else {
-        setSyncStatus(' Servidor retornou erro')
+        setSyncStatus('❌ Servidor retornou erro')
       }
     } catch {
-      setSyncStatus(' Erro de conexão com o servidor')
+      setSyncStatus('❌ Erro de conexão com o servidor')
     } finally {
       setSyncing(false)
+    }
+  }
+
+  /* Testar & Salvar Conexão BYOK com Supabase em Tempo Real */
+  async function handleTestAndSaveSupabase() {
+    if (!supabaseCustomUrl.trim() || !supabaseCustomKey.trim()) {
+      setSupabaseValidation({
+        ok: false,
+        provider: 'supabase',
+        errorType: 'empty_credentials',
+        message: 'Preencha a URL e a Anon Key do seu projeto Supabase antes de testar.'
+      })
+      toast.error('Preencha a URL e a Anon Key do seu projeto Supabase.')
+      return
+    }
+
+    setValidatingSupabase(true)
+    setSupabaseValidation(null)
+
+    try {
+      const result = await validateSupabaseCredentials(supabaseCustomUrl, supabaseCustomKey)
+      setSupabaseValidation(result)
+
+      if (result.ok) {
+        localStorage.setItem('teacher_supabase_config', JSON.stringify({
+          url: supabaseCustomUrl.trim(),
+          anonKey: supabaseCustomKey.trim()
+        }))
+        window.dispatchEvent(new CustomEvent('teacher:data_changed'))
+        toast.success(result.message)
+        setSaved(true)
+        setTimeout(() => setSaved(false), 2000)
+      } else {
+        toast.error(result.message)
+      }
+    } catch (err: any) {
+      setSupabaseValidation({
+        ok: false,
+        provider: 'supabase',
+        errorType: 'network_error',
+        message: `Erro na validação: ${err?.message || 'Falha de conexão'}`
+      })
+      toast.error('Falha de conexão com o Supabase.')
+    } finally {
+      setValidatingSupabase(false)
     }
   }
 
@@ -350,22 +413,19 @@ export default function Settings() {
                       </div>
                     </div>
 
-                    <button
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      icon={<i className="ti ti-logout" />}
                       onClick={async () => {
                         if ((await showConfirm({ message: 'Deseja realmente sair da sua conta?' }))) {
                           await signOut()
                           window.location.reload()
                         }
                       }}
-                      style={{
-                        padding: '6px 14px', borderRadius: RADIUS.md, border: '1px solid #dc322f',
-                        background: '#fff', color: '#dc322f', fontSize: 12, fontWeight: 700, cursor: 'pointer',
-                        display: 'flex', alignItems: 'center', gap: 6
-                      }}
                     >
-                      <i className="ti ti-logout" />
-                      <span>Sair da Conta</span>
-                    </button>
+                      Sair da Conta
+                    </Button>
                   </div>
 
                   <div>
@@ -416,25 +476,15 @@ export default function Settings() {
                       : 'Utilizando o banco compartilhado padrão da plataforma com isolamento por usuário. Você pode conectar seu próprio banco Supabase a qualquer momento.'}
                   </p>
                 </div>
-                <button
+                <Button
                   type="button"
+                  variant="secondary"
+                  size="sm"
+                  icon={<i className="ti ti-info-circle" />}
                   onClick={() => setShowTransparencyModal(true)}
-                  style={{
-                    padding: '6px 12px',
-                    borderRadius: RADIUS.md,
-                    border: '1px solid #d5c0b0',
-                    background: '#fff',
-                    color: '#2c1a0e',
-                    fontSize: 12,
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 6
-                  }}
                 >
-                  <i className="ti ti-info-circle" /> Ver Termos de Transparência
-                </button>
+                  Ver Termos de Transparência
+                </Button>
               </div>
 
               <div style={{ borderTop: '1px solid #ede8dc', paddingTop: 14 }}>
@@ -467,44 +517,63 @@ export default function Settings() {
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+                {validatingSupabase && (
+                  <div style={{ marginBottom: 12, padding: '10px 14px', borderRadius: RADIUS.md, background: 'rgba(139,94,60,0.08)', color: '#7a5c42', fontSize: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <i className="ti ti-loader-2" style={{ animation: 'spin 1s linear infinite' }} />
+                    <span>Testando conexão com seu projeto Supabase em tempo real...</span>
+                  </div>
+                )}
+                {supabaseValidation && (
+                  <div style={{
+                    marginBottom: 12,
+                    padding: '10px 14px',
+                    borderRadius: RADIUS.md,
+                    background: supabaseValidation.ok ? 'rgba(22,163,74,0.1)' : 'rgba(220,50,47,0.1)',
+                    border: `1px solid ${supabaseValidation.ok ? 'rgba(22,163,74,0.3)' : 'rgba(220,50,47,0.3)'}`,
+                    color: supabaseValidation.ok ? '#15803d' : '#b91c1c',
+                    fontSize: 12,
+                    fontWeight: 600,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8
+                  }}>
+                    <i className={`ti ${supabaseValidation.ok ? 'ti-circle-check' : 'ti-alert-circle'}`} style={{ fontSize: 16 }} />
+                    <span>{supabaseValidation.message}</span>
+                  </div>
+                )}
+
+                <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', alignItems: 'center' }}>
                   {isCustomSupabaseConfigured() && (
-                    <button
+                    <Button
                       type="button"
+                      variant="danger"
+                      size="sm"
                       onClick={async () => {
                         if ((await showConfirm({ message: 'Deseja remover sua conexão personalizada e voltar ao banco compartilhado padrão?' }))) {
                           localStorage.removeItem('teacher_supabase_config')
                           setSupabaseCustomUrl('')
                           setSupabaseCustomKey('')
+                          setSupabaseValidation(null)
                           window.dispatchEvent(new CustomEvent('teacher:data_changed'))
+                          toast.success('Banco padrão restaurado.')
                           setSaved(true)
                           setTimeout(() => setSaved(false), 2000)
                         }
                       }}
-                      style={{ padding: '8px 14px', borderRadius: RADIUS.md, border: '1px solid #dc322f', background: '#fff', color: '#dc322f', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
                     >
                       Restaurar Banco Padrão
-                    </button>
+                    </Button>
                   )}
-                  <button
+                  <Button
                     type="button"
-                    onClick={() => {
-                      if (!supabaseCustomUrl.trim() || !supabaseCustomKey.trim()) {
-                        toast.success('Preencha a URL e a Anon Key do seu projeto Supabase.')
-                        return
-                      }
-                      localStorage.setItem('teacher_supabase_config', JSON.stringify({
-                        url: supabaseCustomUrl.trim(),
-                        anonKey: supabaseCustomKey.trim()
-                      }))
-                      window.dispatchEvent(new CustomEvent('teacher:data_changed'))
-                      setSaved(true)
-                      setTimeout(() => setSaved(false), 2000)
-                    }}
-                    style={{ padding: '8px 18px', borderRadius: RADIUS.md, border: 'none', background: '#2c1a0e', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+                    variant="primary"
+                    size="sm"
+                    loading={validatingSupabase}
+                    icon={<i className="ti ti-plug-connected" />}
+                    onClick={handleTestAndSaveSupabase}
                   >
-                    <i className="ti ti-check" /> Salvar Conexão BYOK
-                  </button>
+                    {validatingSupabase ? 'Testando conexão...' : 'Testar & Salvar Conexão BYOK'}
+                  </Button>
                 </div>
               </div>
             </div>
@@ -552,19 +621,15 @@ export default function Settings() {
             </div>
           </ModuleCard>
 
-          <button
+          <Button
+            variant="primary"
+            size="lg"
+            fullWidth
+            icon={<i className={`ti ${saved ? 'ti-check' : 'ti-device-floppy'} text-xl`} />}
             onClick={save}
-            style={{
-              width: '100%', padding: '15px 32px', borderRadius: RADIUS.lg, border: 'none',
-              background: saved ? '#859900' : '#8b5e3c', color: '#fff',
-              fontSize: 15, fontWeight: 700, cursor: 'pointer',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, transition: 'all 0.2s',
-              boxShadow: saved ? '0 8px 20px rgba(133,153,0,0.2)' : '0 8px 20px rgba(139,94,60,0.15)'
-            }}
           >
-            <i className={`ti ${saved ? 'ti-check' : 'ti-device-floppy'} text-xl`} />
             {saved ? 'Configurações Salvas!' : 'Salvar Identidade'}
-          </button>
+          </Button>
         </>
       )}
 
@@ -663,22 +728,21 @@ export default function Settings() {
               </div>
             </div>
 
-            <button
-              onClick={() => {
-                saveGlobalDocumentPrefs(docPrefs)
-                setSaved(true)
-                setTimeout(() => setSaved(false), 2000)
-              }}
-              style={{
-                marginTop: 20, width: '100%', padding: '14px 28px', borderRadius: RADIUS.lg, border: 'none',
-                background: saved ? '#859900' : '#8b5e3c', color: '#fff',
-                fontSize: 14, fontWeight: 700, cursor: 'pointer',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, transition: 'all 0.2s'
-              }}
-            >
-              <i className={`ti ${saved ? 'ti-check' : 'ti-device-floppy'} text-lg`} />
-              {saved ? 'Padrão Visual Salvo!' : 'Salvar Padrão Visual de Documentos'}
-            </button>
+            <div style={{ marginTop: 20 }}>
+              <Button
+                variant="primary"
+                size="lg"
+                fullWidth
+                icon={<i className={`ti ${saved ? 'ti-check' : 'ti-device-floppy'} text-lg`} />}
+                onClick={() => {
+                  saveGlobalDocumentPrefs(docPrefs)
+                  setSaved(true)
+                  setTimeout(() => setSaved(false), 2000)
+                }}
+              >
+                {saved ? 'Padrão Visual Salvo!' : 'Salvar Padrão Visual de Documentos'}
+              </Button>
+            </div>
           </ModuleCard>
         </>
       )}
@@ -703,20 +767,24 @@ export default function Settings() {
               </p>
             </div>
 
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={<i className="ti ti-file-spreadsheet" />}
                 onClick={handleExportAuditCSV}
-                style={{ padding: '8px 14px', borderRadius: RADIUS.md, border: '1px solid #16a34a', background: '#fff', color: '#16a34a', fontSize: TEXT.bodyCompact, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
               >
-                <i className="ti ti-file-spreadsheet" /> Exportar CSV
-              </button>
-              <button
+                Exportar CSV
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                icon={<i className="ti ti-refresh" />}
                 onClick={loadAuditData}
-                style={{ padding: '8px 12px', borderRadius: RADIUS.md, border: '1px solid #bbf7d0', background: '#fff', color: '#15803d', fontSize: TEXT.bodyCompact, cursor: 'pointer' }}
                 title="Atualizar lista"
               >
-                🔄
-              </button>
+                Atualizar
+              </Button>
             </div>
           </div>
 
@@ -896,19 +964,23 @@ export default function Settings() {
             <p style={{ fontSize: TEXT.bodyCompact, color: '#7a5c42', margin: '0 0 12px', lineHeight: 1.5 }}>
               <strong>Política Ativa:</strong> Retenção permanente local e no Supabase pessoal (BYOK) até exclusão manual pelo professor. Você pode limpar a trilha a qualquer momento.
             </p>
-            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-              <button
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+              <Button
+                variant="danger"
+                size="sm"
+                icon={<i className="ti ti-trash" />}
                 onClick={handlePurgeAudit}
-                style={{ padding: '9px 16px', borderRadius: RADIUS.md, border: '1px solid #dc2626', background: '#fee2e2', color: '#dc2626', fontSize: TEXT.bodyCompact, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
               >
-                <i className="ti ti-trash" /> Limpar Auditoria de Portais
-              </button>
-              <button
+                Limpar Auditoria de Portais
+              </Button>
+              <Button
+                variant="danger"
+                size="sm"
+                icon={<i className="ti ti-trash" />}
                 onClick={handlePurgeAiAudit}
-                style={{ padding: '9px 16px', borderRadius: RADIUS.md, border: '1px solid #b45309', background: '#fef3c7', color: '#92400e', fontSize: TEXT.bodyCompact, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
               >
-                <i className="ti ti-trash" /> Limpar Auditoria IA
-              </button>
+                Limpar Auditoria IA
+              </Button>
             </div>
           </ModuleCard>
         </div>
@@ -918,17 +990,49 @@ export default function Settings() {
       {/* -- ABA 3: PRIVACIDADE, LGPD & BACKUP -- */}
       {activeTab === 'privacy' && (
         <>
-          <ModuleCard title="Backup & Transferência de Dados (.JSON)" icon="ti-database" style={{ marginBottom: 20 }}>
-            <p style={{ fontSize: 13, color: '#7a5c42', margin: '0 0 16px' }}>
-              Baixe um arquivo de backup completo com todas as suas escolas, turmas, alunos, notas, questões, provas e logs de auditoria.
+          <ModuleCard title="Portabilidade Integral & Backup de Dados" icon="ti-database" style={{ marginBottom: 20 }}>
+            <p style={{ fontSize: 13, color: '#7a5c42', margin: '0 0 16px', lineHeight: 1.5 }}>
+              Seus dados pedagógicos pertencem a você. Exporte a qualquer momento seu backup completo estruturado em <strong>JSON</strong> (para restauração e migração entre sistemas) ou gere uma planilha <strong>CSV</strong> legível com alunos, turmas e desempenho consolidado para abrir diretamente no Excel ou Google Sheets.
             </p>
-            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-              <button onClick={exportBackup} style={{ padding: '10px 20px', borderRadius: RADIUS.md, border: 'none', background: '#2c1a0e', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
-                <i className="ti ti-download" /> Exportar Backup Completo (.JSON)
-              </button>
-              <button onClick={importBackup} style={{ padding: '10px 20px', borderRadius: RADIUS.md, border: '1px solid #8b5e3c', background: '#f0e8d8', color: '#2c1a0e', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
-                <i className="ti ti-upload" /> Restaurar Backup (.JSON)
-              </button>
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+              <Button
+                variant="primary"
+                size="md"
+                icon={<i className="ti ti-download" />}
+                onClick={() => {
+                  const res = exportTeacherDataAsJson()
+                  if (res.success) {
+                    toast.success(`Backup completo (${res.filename}) exportado com sucesso!`)
+                  } else {
+                    toast.error('Falha ao gerar arquivo de download.')
+                  }
+                }}
+              >
+                Exportar Backup Completo (.JSON)
+              </Button>
+              <Button
+                variant="secondary"
+                size="md"
+                icon={<i className="ti ti-file-spreadsheet" />}
+                onClick={() => {
+                  const res = exportTeacherStudentsCsv()
+                  if (res.success) {
+                    toast.success(`Planilha (${res.filename}) exportada com sucesso!`)
+                  } else {
+                    toast.error('Falha ao gerar planilha.')
+                  }
+                }}
+              >
+                Exportar Alunos e Notas (.CSV)
+              </Button>
+              <Button
+                variant="ghost"
+                size="md"
+                icon={<i className="ti ti-upload" />}
+                onClick={importBackup}
+              >
+                Restaurar Backup (.JSON)
+              </Button>
             </div>
           </ModuleCard>
 
@@ -936,13 +1040,26 @@ export default function Settings() {
             <p style={{ fontSize: 13, color: '#7a5c42', margin: '0 0 14px', lineHeight: 1.5 }}>
               Conforme a Lei Geral de Proteção de Dados (Lei 13.709/2018), você tem controle total sobre a portabilidade e eliminação dos seus dados pessoais e de seus alunos.
             </p>
-            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-              <button onClick={exportBackup} style={{ padding: '9px 16px', borderRadius: 9, borderWidth: '1px', borderStyle: 'solid', borderColor: '#2b6cb0', background: '#ebf8ff', color: '#2b6cb0', fontSize: TEXT.bodyCompact, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
-                <i className="ti ti-file-export" /> Portabilidade LGPD (Exportar JSON)
-              </button>
-              <button onClick={eraseAllDataLGPD} style={{ padding: '9px 16px', borderRadius: 9, borderWidth: '1px', borderStyle: 'solid', borderColor: '#e53e3e', background: '#fff5f5', color: '#e53e3e', fontSize: TEXT.bodyCompact, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
-                <i className="ti ti-trash" /> Excluir Todos os Dados (Esquecimento LGPD)
-              </button>
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={<i className="ti ti-file-export" />}
+                onClick={() => {
+                  const res = exportTeacherDataAsJson()
+                  toast.success(`Portabilidade LGPD (${res.filename}) gerada!`)
+                }}
+              >
+                Portabilidade LGPD (Exportar JSON)
+              </Button>
+              <Button
+                variant="danger"
+                size="sm"
+                icon={<i className="ti ti-trash" />}
+                onClick={eraseAllDataLGPD}
+              >
+                Excluir Todos os Dados (Esquecimento LGPD)
+              </Button>
             </div>
           </ModuleCard>
 
@@ -957,9 +1074,15 @@ export default function Settings() {
                 placeholder="https://seu-servidor.com/api/sync"
                 style={{ flex: 1, minWidth: 240, border: '1px solid rgba(88,110,117,0.2)', borderRadius: 9, padding: '9px 12px', fontSize: 13, background: '#fdf8f2', color: '#2c1a0e', outline: 'none' }}
               />
-              <button onClick={triggerCloudSync} disabled={syncing} style={{ padding: '9px 18px', borderRadius: 9, border: 'none', background: '#8b5e3c', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
-                {syncing ? <><i className="ti ti-loader-2" style={{ animation: 'spin 1s linear infinite' }} /> Sincronizando...</> : <><i className="ti ti-cloud-upload" /> Sincronizar Agora</>}
-              </button>
+              <Button
+                variant="primary"
+                size="sm"
+                loading={syncing}
+                icon={<i className="ti ti-cloud-upload" />}
+                onClick={triggerCloudSync}
+              >
+                {syncing ? 'Sincronizando...' : 'Sincronizar Agora'}
+              </Button>
             </div>
             {syncStatus && <div style={{ fontSize: 12, fontWeight: 600, marginTop: 8, color: '#2c1a0e' }}>{syncStatus}</div>}
           </ModuleCard>
