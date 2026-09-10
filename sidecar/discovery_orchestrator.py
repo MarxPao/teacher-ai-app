@@ -34,6 +34,9 @@ from browser_use_agent import BrowserUseAgent, BrowserUseTaskResult
 from skyvern_fallback import SkyvernFallbackClient, SkyvernTaskResult
 
 
+MAX_ORCHESTRATION_DEPTH = 3
+
+
 class DiscoveryOrchestrator:
     """
     Orquestrador central de escalonamento entre Motor Local, Browser-use e Skyvern.
@@ -79,14 +82,16 @@ class DiscoveryOrchestrator:
         parametros: Dict[str, Any],
         portal_url: Optional[str] = None,
         on_progress: Optional[Callable[[Dict[str, Any]], None]] = None,
+        depth: int = 0,
     ) -> Dict[str, Any]:
-        """Alias para discover_or_execute conforme especificação."""
+        """Alias para discover_or_execute conforme especificação com suporte a profundidade de orquestração."""
         return await self.discover_or_execute(
             portal_id=portal_id,
             acao=acao,
             parametros=parametros,
             portal_url=portal_url,
             on_progress=on_progress,
+            depth=depth,
         )
 
     async def discover_or_execute(
@@ -96,171 +101,218 @@ class DiscoveryOrchestrator:
         parametros: Dict[str, Any],
         portal_url: Optional[str] = None,
         on_progress: Optional[Callable[[Dict[str, Any]], None]] = None,
+        depth: int = 0,
     ) -> Dict[str, Any]:
         """
         Função central da escada de escalonamento.
-        Garante exclusão mútua por portal_id.
+        Garante exclusão mútua por portal_id e limite de recursão via Anti-Recursion Guard.
         """
-        lock = self._get_portal_lock(portal_id)
-
-        async with lock:
-            start_time = time.time()
-            domain = self.map_store.extract_domain(portal_url or portal_id)
-            print(f"\n[Orchestrator] ════════════════════════════════════════════════════════════════")
-            print(f"[Orchestrator] Recebida solicitação: portal='{portal_id}', acao='{acao}'")
-            print(f"[Orchestrator] ════════════════════════════════════════════════════════════════")
-
-            # ------------------------------------------------------------------
-            # CAMADA 1: Motor Local Determinístico (SkillGraph existente & sem drift)
-            # ------------------------------------------------------------------
-            is_drifted = self.map_store.is_drifted(domain, acao)
-            existing_graph = None
-
-            if not is_drifted:
-                try:
-                    existing_graph = load_skill(portal_id, acao, version=None, base_dir=self.skills_dir) if self.skills_dir else load_skill(portal_id, acao, version=None)
-                except SkillNotFoundError:
-                    existing_graph = None
-
-            if existing_graph and not is_drifted:
-                self._notify_progress(on_progress, {
-                    "engine": "local_motor",
-                    "status": "executing",
-                    "message": "Executando via Motor Local determinístico (CDP porta 9222)...",
-                    "cost_usd": 0.0
-                })
-
-                local_res = await self._execute_local_graph(existing_graph, parametros)
-                elapsed = time.time() - start_time
-                print(f"[Orchestrator] ✅ Motor Local concluído em {elapsed:.2f}s (Custo: $0.00).")
-                return {
-                    "success": local_res.get("success", True),
-                    "engine_used": "local_motor",
-                    "skill_graph": existing_graph,
-                    "trace": local_res.get("trace", []),
-                    "execution_time": elapsed,
-                    "estimated_cost": 0.0,
-                    "error": local_res.get("error")
-                }
-
-            # ------------------------------------------------------------------
-            # CAMADA 2: Descoberta Leve via Browser-use (DOM / Acessibilidade)
-            # ------------------------------------------------------------------
-            if is_drifted:
-                print(f"[Orchestrator] ⚠️ Portal '{portal_id}' possui flag de drift para '{acao}'. Forçando nova descoberta.")
-            else:
-                print(f"[Orchestrator] 🔍 Nenhum mapa prévio encontrado para '{portal_id}/{acao}'. Iniciando descoberta leve.")
-
-            self._notify_progress(on_progress, {
-                "engine": "browser_use",
-                "status": "discovering",
-                "message": "Mapeando portal via Browser-use (árvore de acessibilidade/DOM)...",
-                "cost_usd": 0.0005
-            })
-
-            # Anexa o contexto Playwright compartilhado do runner, se disponível
-            if self.runner and hasattr(self.runner, "get_browser_context"):
-                try:
-                    ctx = await self.runner.get_browser_context()
-                    self.browser_use_agent.attach_to_existing_context(ctx)
-                except Exception as e:
-                    print(f"[Orchestrator] Aviso ao anexar contexto do runner: {e}")
-
-            bu_task = {
-                "acao": acao,
-                "portal_id": portal_id,
-                "parametros": parametros
-            }
-            bu_res: BrowserUseTaskResult = await self.browser_use_agent.execute_discovery_task(bu_task)
-
-            # Se o Browser-use teve sucesso e confiança >= threshold, compila e salva
-            if bu_res.sucesso and not bu_res.requires_escalation:
-                new_graph = self._compile_trace_to_skill_graph(
-                    portal_id=portal_id,
-                    task_id=acao,
-                    trace=bu_res.trace_de_acoes,
-                    discovery_engine="browser_use_dom",
-                    confidence=bu_res.confianca
-                )
-                save_path = save_skill(new_graph, base_dir=self.skills_dir) if self.skills_dir else save_skill(new_graph)
-                self.map_store.clear_drift(domain, acao)
-                self.map_store.mark_validated(domain)
-
-                elapsed = time.time() - start_time
-                print(f"[Orchestrator] 💾 Novo SkillGraph v{new_graph.version} compilado e salvo via Browser-use em {save_path}.")
-                return {
-                    "success": True,
-                    "engine_used": "browser_use_llama",
-                    "skill_graph": new_graph,
-                    "trace": bu_res.trace_de_acoes,
-                    "execution_time": elapsed,
-                    "estimated_cost": 0.0005,
-                    "error": None
-                }
-
-            # ------------------------------------------------------------------
-            # CAMADA 3: Escalonamento Visual via Skyvern (Docker Self-Hosted)
-            # ------------------------------------------------------------------
-            conf_str = f"{bu_res.confianca:.2f}" if isinstance(getattr(bu_res, "confianca", None), (int, float)) else str(getattr(bu_res, "confianca", "0.0"))
-            print(f"[Orchestrator] ⚠️ Browser-use insuficiente (confiança: {conf_str}, erro: {bu_res.erro}).")
-            self._notify_progress(on_progress, {
-                "engine": "skyvern",
-                "status": "escalating",
-                "message": "Baixa confiança no DOM. Escalonando para Skyvern (fallback visual)...",
-                "cost_usd": 0.08
-            })
-
-            target_url = portal_url or (
-                bu_res.trace_de_acoes[0]["url"]
-                if bu_res.trace_de_acoes and "url" in bu_res.trace_de_acoes[0]
-                else f"https://{domain}"
+        # CAMADA 2: Limite explícito de profundidade de orquestração
+        if depth >= MAX_ORCHESTRATION_DEPTH:
+            err = (
+                f"RecursionDepthExceeded: profundidade máxima de orquestração ({MAX_ORCHESTRATION_DEPTH}) "
+                f"excedida para portal '{portal_id}' e ação '{acao}' (depth={depth}). "
+                f"Execução abortada com segurança pelo Anti-Recursion Guard."
             )
+            print(f"[Orchestrator] 🛑 {err}")
+            return {
+                "success": False,
+                "engine_used": "recursion_guard",
+                "skill_graph": None,
+                "trace": [],
+                "execution_time": 0.0,
+                "estimated_cost": 0.0,
+                "error": err
+            }
 
-            sky_res: SkyvernTaskResult = await self.skyvern_client.execute_visual_task(
-                url=target_url,
+        if depth > 0:
+            return await self._run_discovery_or_execution(
                 portal_id=portal_id,
                 acao=acao,
                 parametros=parametros,
-                is_authenticated_session=True  # Conforme Ponto 4: assume sessão ativa
+                portal_url=portal_url,
+                on_progress=on_progress,
+                depth=depth,
             )
 
-            if not sky_res.sucesso:
-                elapsed = time.time() - start_time
-                err = f"Falha no escalonamento Skyvern: {sky_res.erro}"
-                print(f"[Orchestrator] ❌ {err}")
-                return {
-                    "success": False,
-                    "engine_used": "skyvern_vision",
-                    "skill_graph": None,
-                    "trace": [],
-                    "execution_time": elapsed,
-                    "estimated_cost": 0.08,
-                    "error": err
-                }
+        lock = self._get_portal_lock(portal_id)
+        async with lock:
+            return await self._run_discovery_or_execution(
+                portal_id=portal_id,
+                acao=acao,
+                parametros=parametros,
+                portal_url=portal_url,
+                on_progress=on_progress,
+                depth=depth,
+            )
 
-            # Compilação do trace retornado pelo Skyvern
+    async def _run_discovery_or_execution(
+        self,
+        portal_id: str,
+        acao: str,
+        parametros: Dict[str, Any],
+        portal_url: Optional[str] = None,
+        on_progress: Optional[Callable[[Dict[str, Any]], None]] = None,
+        depth: int = 0,
+    ) -> Dict[str, Any]:
+        """Corpo da execução da escada, chamado sob lock do portal ou por sub-tarefa interna."""
+        start_time = time.time()
+        domain = self.map_store.extract_domain(portal_url or portal_id)
+        print(f"\n[Orchestrator] ════════════════════════════════════════════════════════════════")
+        print(f"[Orchestrator] Recebida solicitação: portal='{portal_id}', acao='{acao}' (depth={depth})")
+        print(f"[Orchestrator] ════════════════════════════════════════════════════════════════")
+
+        # ------------------------------------------------------------------
+        # CAMADA 1: Motor Local Determinístico (SkillGraph existente & sem drift)
+        # ------------------------------------------------------------------
+        is_drifted = self.map_store.is_drifted(domain, acao)
+        existing_graph = None
+
+        if not is_drifted:
+            try:
+                existing_graph = load_skill(portal_id, acao, version=None, base_dir=self.skills_dir) if self.skills_dir else load_skill(portal_id, acao, version=None)
+            except SkillNotFoundError:
+                existing_graph = None
+
+        if existing_graph and not is_drifted:
+            self._notify_progress(on_progress, {
+                "engine": "local_motor",
+                "status": "executing",
+                "message": "Executando via Motor Local determinístico (CDP porta 9222)...",
+                "cost_usd": 0.0
+            })
+
+            local_res = await self._execute_local_graph(existing_graph, parametros, depth=depth)
+            elapsed = time.time() - start_time
+            print(f"[Orchestrator] ✅ Motor Local concluído em {elapsed:.2f}s (Custo: $0.00).")
+            return {
+                "success": local_res.get("success", True),
+                "engine_used": "local_motor",
+                "skill_graph": existing_graph,
+                "trace": local_res.get("trace", []),
+                "execution_time": elapsed,
+                "estimated_cost": 0.0,
+                "error": local_res.get("error")
+            }
+
+        # ------------------------------------------------------------------
+        # CAMADA 2: Descoberta Leve via Browser-use (DOM / Acessibilidade)
+        # ------------------------------------------------------------------
+        if is_drifted:
+            print(f"[Orchestrator] ⚠️ Portal '{portal_id}' possui flag de drift para '{acao}'. Forçando nova descoberta.")
+        else:
+            print(f"[Orchestrator] 🔍 Nenhum mapa prévio encontrado para '{portal_id}/{acao}'. Iniciando descoberta leve.")
+
+        self._notify_progress(on_progress, {
+            "engine": "browser_use",
+            "status": "discovering",
+            "message": "Mapeando portal via Browser-use (árvore de acessibilidade/DOM)...",
+            "cost_usd": 0.0005
+        })
+
+        # Anexa o contexto Playwright compartilhado do runner, se disponível
+        if self.runner and hasattr(self.runner, "get_browser_context"):
+            try:
+                ctx = await self.runner.get_browser_context()
+                self.browser_use_agent.attach_to_existing_context(ctx)
+            except Exception as e:
+                print(f"[Orchestrator] Aviso ao anexar contexto do runner: {e}")
+
+        bu_task = {
+            "acao": acao,
+            "portal_id": portal_id,
+            "parametros": parametros
+        }
+        bu_res: BrowserUseTaskResult = await self.browser_use_agent.execute_discovery_task(bu_task)
+
+        # Se o Browser-use teve sucesso e confiança >= threshold, compila e salva
+        if bu_res.sucesso and not bu_res.requires_escalation:
             new_graph = self._compile_trace_to_skill_graph(
                 portal_id=portal_id,
                 task_id=acao,
-                trace=sky_res.trace_de_acoes,
-                discovery_engine="skyvern_vision",
-                confidence=sky_res.confianca
+                trace=bu_res.trace_de_acoes,
+                discovery_engine="browser_use_dom",
+                confidence=bu_res.confianca
             )
             save_path = save_skill(new_graph, base_dir=self.skills_dir) if self.skills_dir else save_skill(new_graph)
             self.map_store.clear_drift(domain, acao)
             self.map_store.mark_validated(domain)
 
             elapsed = time.time() - start_time
-            print(f"[Orchestrator] 🎯 Novo SkillGraph v{new_graph.version} compilado e salvo via Skyvern em {save_path}.")
+            print(f"[Orchestrator] 💾 Novo SkillGraph v{new_graph.version} compilado e salvo via Browser-use em {save_path}.")
             return {
                 "success": True,
-                "engine_used": "skyvern_vision",
+                "engine_used": "browser_use_llama",
                 "skill_graph": new_graph,
-                "trace": sky_res.trace_de_acoes,
+                "trace": bu_res.trace_de_acoes,
                 "execution_time": elapsed,
-                "estimated_cost": 0.08,
+                "estimated_cost": 0.0005,
                 "error": None
             }
+
+        # ------------------------------------------------------------------
+        # CAMADA 3: Escalonamento Visual via Skyvern (Docker Self-Hosted)
+        # ------------------------------------------------------------------
+        conf_str = f"{bu_res.confianca:.2f}" if isinstance(getattr(bu_res, "confianca", None), (int, float)) else str(getattr(bu_res, "confianca", "0.0"))
+        print(f"[Orchestrator] ⚠️ Browser-use insuficiente (confiança: {conf_str}, erro: {bu_res.erro}).")
+        self._notify_progress(on_progress, {
+            "engine": "skyvern",
+            "status": "escalating",
+            "message": "Baixa confiança no DOM. Escalonando para Skyvern (fallback visual)...",
+            "cost_usd": 0.08
+        })
+
+        target_url = portal_url or (
+            bu_res.trace_de_acoes[0]["url"]
+            if bu_res.trace_de_acoes and "url" in bu_res.trace_de_acoes[0]
+            else f"https://{domain}"
+        )
+
+        sky_res: SkyvernTaskResult = await self.skyvern_client.execute_visual_task(
+            url=target_url,
+            portal_id=portal_id,
+            acao=acao,
+            parametros=parametros,
+            is_authenticated_session=True  # Conforme Ponto 4: assume sessão ativa
+        )
+
+        if not sky_res.sucesso:
+            elapsed = time.time() - start_time
+            err = f"Falha no escalonamento Skyvern: {sky_res.erro}"
+            print(f"[Orchestrator] ❌ {err}")
+            return {
+                "success": False,
+                "engine_used": "skyvern_vision",
+                "skill_graph": None,
+                "trace": [],
+                "execution_time": elapsed,
+                "estimated_cost": 0.08,
+                "error": err
+            }
+
+        # Compilação do trace retornado pelo Skyvern
+        new_graph = self._compile_trace_to_skill_graph(
+            portal_id=portal_id,
+            task_id=acao,
+            trace=sky_res.trace_de_acoes,
+            discovery_engine="skyvern_vision",
+            confidence=sky_res.confianca
+        )
+        save_path = save_skill(new_graph, base_dir=self.skills_dir) if self.skills_dir else save_skill(new_graph)
+        self.map_store.clear_drift(domain, acao)
+        self.map_store.mark_validated(domain)
+
+        elapsed = time.time() - start_time
+        print(f"[Orchestrator] 🎯 Novo SkillGraph v{new_graph.version} compilado e salvo via Skyvern em {save_path}.")
+        return {
+            "success": True,
+            "engine_used": "skyvern_vision",
+            "skill_graph": new_graph,
+            "trace": sky_res.trace_de_acoes,
+            "execution_time": elapsed,
+            "estimated_cost": 0.08,
+            "error": None
+        }
 
     def _compile_trace_to_skill_graph(
         self,
@@ -415,7 +467,7 @@ class DiscoveryOrchestrator:
 
         return graph
 
-    async def _execute_local_graph(self, graph: SkillGraph, parametros: Dict[str, Any]) -> Dict[str, Any]:
+    async def _execute_local_graph(self, graph: SkillGraph, parametros: Dict[str, Any], depth: int = 0) -> Dict[str, Any]:
         """Executa um SkillGraph existente através do motor local BrowserHarnessRunner."""
         if self.runner and hasattr(self.runner, "process_task"):
             task_mock = {
@@ -424,7 +476,8 @@ class DiscoveryOrchestrator:
                 "portal": graph.portal_id,
                 "action_type": graph.task_id,
                 "payload": parametros,
-                "_orchestrated": True
+                "_orchestrated": True,
+                "_orchestration_depth": depth + 1
             }
             res = await self.runner.process_task(task_mock, {"provider": "local"})
             return {"success": res, "trace": [{"node": graph.entry_node, "status": "SUCCESS"}]}

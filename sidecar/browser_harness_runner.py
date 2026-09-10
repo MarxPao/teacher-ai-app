@@ -107,6 +107,19 @@ class BrowserHarnessRunner:
 
             return await self._handle_read_page_content(task, page, teacher_byok)
 
+        current_depth = int(task.get("_orchestration_depth", 0))
+
+        # CAMADA DE SEGURANÇA 2 (Runner): Limite rígido de profundidade contra sub-tarefas malformadas
+        from discovery_orchestrator import MAX_ORCHESTRATION_DEPTH
+        if current_depth >= MAX_ORCHESTRATION_DEPTH:
+            err = (
+                f"RecursionDepthExceeded: tarefa {task_id} atingiu profundidade de orquestração "
+                f"{current_depth} >= {MAX_ORCHESTRATION_DEPTH}. Execução abortada pelo Anti-Recursion Guard."
+            )
+            print(f"[Runner] 🛑 {err}")
+            self._update_task_status(task_id, "error", {"error_message": err})
+            return False
+
         if status == "drafted":
             # Chamada interna orquestrada (Camada 1 do motor local) ou read_roster
             if task.get("_orchestrated") or action_type == "read_roster":
@@ -124,7 +137,8 @@ class BrowserHarnessRunner:
                 portal_id=domain,
                 acao=action_type,
                 parametros=payload,
-                portal_url=portal_url
+                portal_url=portal_url,
+                depth=current_depth
             )
 
             if res.get("success"):
