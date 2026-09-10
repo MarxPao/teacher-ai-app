@@ -15,6 +15,7 @@ import {
   toggleTodoSubtask,
   recordChecklistHistory,
   formatRecurrenceText,
+  parseTodoHierarchy,
   ChecklistTodo,
   RecurrenceRule,
 } from '@/lib/checklistManager'
@@ -34,6 +35,8 @@ export interface DashboardTodo {
   createdAt?: number
   time?: string
   tag?: string
+  topic?: string
+  subtopic?: string
   actionLabel?: string
   actionTarget?: ModuleKey | string
   lastResetDate?: string
@@ -140,6 +143,11 @@ export default function Dashboard() {
   const [todoFilter, setTodoFilter] = useState<TodoCategory>('all')
   const [isTrelloImportModalOpen, setIsTrelloImportModalOpen] = useState(false)
   const [editingChecklistTodo, setEditingChecklistTodo] = useState<ChecklistTodo | null>(null)
+  const [expandedDashboardSubtasks, setExpandedDashboardSubtasks] = useState<Record<string, boolean>>({})
+
+  const toggleDashboardSubtasks = (id: string) => {
+    setExpandedDashboardSubtasks(prev => ({ ...prev, [id]: !prev[id] }))
+  }
 
   // 3. Aulas do Dia & Grade (Unificada: Escola + Particular)
   const [classesList, setClassesList] = useState<TodayClassItem[]>([])
@@ -365,13 +373,21 @@ export default function Dashboard() {
     e.preventDefault()
     if (!newTodoText.trim()) return
     const todayKey = formatDateKey(new Date())
+    const defaultTag = newTodoCategory === 'recurrent' ? 'Rotina Diária' : 'Pontual'
+    const hierarchy = parseTodoHierarchy({
+      text: newTodoText.trim(),
+      category: newTodoCategory,
+      tag: defaultTag,
+    })
     const newTodo: DashboardTodo = {
       id: `${newTodoCategory === 'recurrent' ? 'rec' : 'todo'}_${Date.now()}`,
       text: newTodoText.trim(),
       done: false,
       category: newTodoCategory,
       priority: newTodoCategory === 'recurrent' ? 'high' : 'medium',
-      tag: newTodoCategory === 'recurrent' ? 'Rotina Diária' : 'Pontual',
+      tag: defaultTag,
+      topic: hierarchy.topic,
+      subtopic: hierarchy.subtopic,
       createdAt: Date.now(),
       lastResetDate: newTodoCategory === 'recurrent' ? todayKey : undefined,
     }
@@ -1367,6 +1383,11 @@ export default function Dashboard() {
                   filteredTodos.map(todo => {
                     const isRecurrent = todo.category === 'recurrent'
                     const isSystem = todo.category === 'system_ai'
+                    const subtasks: any[] = (todo as any).subtasks || []
+                    const hasSubtasks = subtasks.length > 0
+                    const completedSubtasks = hasSubtasks ? subtasks.filter(s => s.done).length : 0
+                    const isSubtasksOpen = !!expandedDashboardSubtasks[todo.id]
+                    const hierarchy = parseTodoHierarchy(todo as any)
 
                     return (
                       <div
@@ -1416,13 +1437,43 @@ export default function Dashboard() {
                             >
                               {todo.text}
                             </span>
-                            {todo.tag && (
-                              <span style={{ fontSize: 10.5, color: '#8b5e3c', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                                {isRecurrent && <><i className="ti ti-repeat" style={{ fontSize: 11 }} /> {formatRecurrenceText(todo.recurrence || { type: 'daily' })} · </>}
-                                {isSystem && <><i className="ti ti-bolt" style={{ fontSize: 11 }} /> Ação Recomendada · </>}
-                                {todo.tag}
-                              </span>
-                            )}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                              {(hierarchy.topic || todo.tag) && (
+                                <span style={{ fontSize: 10.5, color: '#8b5e3c', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                  {isRecurrent && <><i className="ti ti-repeat" style={{ fontSize: 11 }} /> {formatRecurrenceText(todo.recurrence || { type: 'daily' })} · </>}
+                                  {isSystem && <><i className="ti ti-bolt" style={{ fontSize: 11 }} /> Ação Recomendada · </>}
+                                  <i className="ti ti-folder" style={{ fontSize: 11 }} />
+                                  {hierarchy.topic} {hierarchy.subtopic ? `› ${hierarchy.subtopic}` : ''}
+                                </span>
+                              )}
+                              {hasSubtasks && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    toggleDashboardSubtasks(todo.id)
+                                  }}
+                                  style={{
+                                    fontSize: 10.5,
+                                    fontWeight: 700,
+                                    padding: '1px 6px',
+                                    borderRadius: 4,
+                                    background: isSubtasksOpen ? 'rgba(34,197,94,0.2)' : 'rgba(34,197,94,0.1)',
+                                    color: '#15803d',
+                                    border: '1px solid rgba(34,197,94,0.25)',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 3,
+                                    cursor: 'pointer',
+                                  }}
+                                  title={isSubtasksOpen ? 'Recolher subtarefas' : 'Expandir subtarefas'}
+                                >
+                                  <i className="ti ti-list-check" style={{ fontSize: 10 }} />
+                                  {completedSubtasks}/{subtasks.length} subtarefas
+                                  <i className={isSubtasksOpen ? 'ti ti-chevron-up' : 'ti ti-chevron-down'} style={{ fontSize: 9 }} />
+                                </button>
+                              )}
+                            </div>
                           </div>
                         </div>
 
@@ -1472,8 +1523,8 @@ export default function Dashboard() {
                           )}
                         </div>
 
-                        {/* Subtarefas / Checklists se existirem */}
-                        {(todo as any).subtasks && (todo as any).subtasks.length > 0 && (
+                        {/* Subtarefas / Checklists se existirem (Colapsável) */}
+                        {hasSubtasks && isSubtasksOpen && (
                           <div style={{
                             width: '100%',
                             marginLeft: 30,
@@ -1486,7 +1537,7 @@ export default function Dashboard() {
                             flexDirection: 'column',
                             gap: 3,
                           }}>
-                            {(todo as any).subtasks.map((st: any) => (
+                            {subtasks.map((st: any) => (
                               <div
                                 key={st.id}
                                 onClick={(e) => {

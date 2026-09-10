@@ -76,51 +76,26 @@ export async function extractContentFromImage(base64: string, api: ApiConfig): P
     throw new Error('Configure uma API com suporte a visão (GPT-4o ou Gemini) para usar o OCR.')
   }
 
-  // Strip data URL prefix for some APIs
-  const imageData = base64.split(',')[1] || base64
-  const mimeType = base64.startsWith('data:image/png') ? 'image/png' : 'image/jpeg'
-
   try {
-    let raw = ''
+    const res = await fetch('/api/agent', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        messages: [{
+          role: 'user',
+          content: `${OCR_PROMPT}\n\n[IMAGEM_BASE64]: ${base64}`
+        }],
+        provider: api.provider,
+        userKey: api.key,
+        model: api.model,
+        temperatureMode: 'deterministic'
+      })
+    })
 
-    if (api.provider === 'openai') {
-      const r = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${api.key}` },
-        body: JSON.stringify({
-          model: api.model || 'gpt-4o',
-          messages: [{
-            role: 'user',
-            content: [
-              { type: 'text', text: OCR_PROMPT },
-              { type: 'image_url', image_url: { url: base64 } }
-            ]
-          }]
-        })
-      })
-      const d = await r.json()
-      if (d.error) throw new Error(d.error.message)
-      raw = d.choices?.[0]?.message?.content || '{}'
-    } else if (api.provider === 'gemini') {
-      const modelName = api.model || 'gemini-2.0-flash'
-      const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${api.key}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{
-            parts: [
-              { text: OCR_PROMPT },
-              { inline_data: { mime_type: mimeType, data: imageData } }
-            ]
-          }]
-        })
-      })
-      const d = await r.json()
-      if (d.error) throw new Error(d.error.message)
-      raw = d.candidates?.[0]?.content?.parts?.[0]?.text || '{}'
-    } else {
-      throw new Error('OCR requer GPT-4o (OpenAI) ou Gemini. Configure uma dessas APIs.')
-    }
+    const data = await res.json()
+    if (data.error) throw new Error(data.error)
+    let raw = data.content?.find((c: { type: string; text?: string }) => c.type === 'text')?.text ||
+      (Array.isArray(data.content) && data.content[0]?.text ? data.content[0].text : '') || '{}'
 
     // F2: robust JSON extraction — handles conversational text, markdown fences
     raw = raw

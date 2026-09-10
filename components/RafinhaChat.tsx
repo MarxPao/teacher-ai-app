@@ -20,6 +20,8 @@ import { ActiveVoiceSession } from '@/lib/wakeWordEngine'
 import { audioFeedback } from '@/lib/audioFeedback'
 import ContinuousListeningConsentModal from '@/components/ContinuousListeningConsentModal'
 import { requiresContinuousListeningConsent } from '@/lib/wakeWordConsent'
+import RosterReconciliationModal from '@/components/modules/RosterReconciliationModal'
+import { toast } from '@/components/Toast'
 import '@/lib/subjects/english'
 import '@/lib/subjects/portuguese'
 
@@ -76,6 +78,7 @@ const TOOL_LABELS: Record<string, string> = {
   manage_didactic_sequence:       ' Atualizando sequência didática',
   add_weekly_agenda_item:         ' Adicionando à agenda semanal',
   generate_parent_communication:  ' Gerando mensagem para pais',
+  import_data_from_url:           ' Importando planilha/CSV',
 }
 
 const TOOL_EST_SECONDS: Record<string, number> = {
@@ -109,6 +112,7 @@ const TOOL_EST_SECONDS: Record<string, number> = {
   manage_didactic_sequence:       2,
   add_weekly_agenda_item:         2,
   generate_parent_communication:  3,
+  import_data_from_url:           4,
 }
 
 import TeacherLogo, { TeacherOwlAvatar } from '@/components/TeacherLogo'
@@ -871,15 +875,173 @@ export async function executeTool(
     if (onNavigate) onNavigate('audiopronunciation' as any)
     return `Áudio do aluno ${studentName} avaliado com sucesso para "${exerciseRef}" e registrado no histórico!`
   }
- default:
- return `${name} executado`
- }
+  case 'import_data_from_url': {
+    const rawUrl = (input.url as string) || ''
+    const targetClass = (input.targetClass as string) || ''
+
+    if (!rawUrl || typeof rawUrl !== 'string' || !rawUrl.trim()) {
+      return 'Por favor, forneça uma URL válida de planilha do Google Sheets ou arquivo CSV.'
+    }
+
+    const trimmedUrl = rawUrl.trim()
+
+    // 1. Chamar a rota server-side segura /api/import-url
+    let json: any
+    try {
+      const fetchRes = await fetch('/api/import-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: trimmedUrl, targetClass })
+      })
+      json = await fetchRes.json()
+    } catch (err: any) {
+      return `Erro de conexão ao acessar a URL: ${err?.message || 'não foi possível conectar ao servidor'}`
+    }
+
+    if (!json || !json.success || !json.csvContent) {
+      return json?.error || 'Não foi possível ler os dados dessa planilha. Verifique se o link está acessível publicamente.'
+    }
+
+    // 2. Parse real do CSV e mapeamento de colunas com PapaParse
+    const { parseCsvToStudents } = await import('@/lib/urlDataImporter')
+    const parsedResult = parseCsvToStudents(json.csvContent, targetClass)
+
+    if (!parsedResult.students || parsedResult.students.length === 0) {
+      return 'Nenhum aluno identificado na planilha. Verifique se o arquivo possui cabeçalhos de coluna (ex: Nome, Turma) e dados preenchidos.'
+    }
+
+    // 3. Reconciliação em 4 vias com os alunos locais
+    const { reconcileRosterBatch } = await import('@/lib/rosterReconciler')
+    let localStudents: any[] = []
+    try {
+      const raw = localStorage.getItem('teacher_students')
+      if (raw) localStudents = JSON.parse(raw)
+    } catch {}
+
+    const reconciliationResult = reconcileRosterBatch(
+      parsedResult.students,
+      localStudents,
+      {
+        portalName: json.isGoogleSheets ? 'Google Sheets' : 'Arquivo CSV',
+        targetClassRef: targetClass || undefined
+      }
+    )
+
+    if (reconciliationResult.completenessCheck?.isPartial && reconciliationResult.completenessCheck.warningMessage) {
+      toast.warning(reconciliationResult.completenessCheck.warningMessage, 8000)
+    }
+
+    // 4. Dispara evento para abrir o modal de reconciliação
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('teacher:open_roster_reconcile', {
+        detail: {
+          portalName: json.isGoogleSheets ? 'Google Sheets' : 'Arquivo CSV',
+          classRef: targetClass || 'Geral',
+          result: reconciliationResult
+        }
+      }))
+    }
+
+    return `Planilha processada com sucesso: ${reconciliationResult.totalPortalCount} alunos identificados (${reconciliationResult.autoMergedCount} mesclados automaticamente, ${reconciliationResult.ambiguousCount} com nomes semelhantes, ${reconciliationResult.newImportedCount} novos). Abrindo modal de conciliação para sua revisão!`
+  }
+
+  // 27. CONNECTOR ENGINE: INVOCAÇÃO DINÂMICA DE CAPACIDADE (FASE 3)
+  case 'invoke_teacher_capability': {
+    const capability = (input.capability as any) || 'read_roster'
+    const connectorHint = (input.connector_hint as string) || ''
+    const params = (input.params as Record<string, unknown>) || {}
+
+    // Garante que o engine está inicializado e sincronizado com os dados atuais de conexão
+    const { resolveAndInvokeCapability, initConnectorEngine } = await import('@/lib/connectorEngine')
+    await initConnectorEngine()
+
+    const resolution = await resolveAndInvokeCapability({
+      capability,
+      connector_hint: connectorHint,
+      invocation_params: params
+    })
+
+    if (resolution.status === 'ambiguous') {
+      return resolution.message
+    }
+
+    if (resolution.status === 'no_connector' || resolution.status === 'error') {
+      return resolution.message
+    }
+
+    // resolution.status === 'resolved'
+    const result = resolution.result
+    if (!result || !result.success) {
+      return result?.error || resolution.message || 'Não foi possível completar a operação no conector.'
+    }
+
+    // Tratamento de read_roster (com reconciliação e abertura de modal)
+    if (capability === 'read_roster') {
+      const students = ((result.data as any)?.students as any[]) || []
+      const connectorName = resolution.connector?.display_name || 'Portal Conectado'
+
+      if (students.length > 0) {
+        const { reconcileRosterBatch } = await import('@/lib/rosterReconciler')
+        let localStudents: any[] = []
+        try {
+          const raw = localStorage.getItem('teacher_students')
+          if (raw) localStudents = JSON.parse(raw)
+        } catch {}
+
+        const portalStatus = resolution.connector?.status
+        const isUntestedMap = result.requires_review
+
+        const reconciliationResult = reconcileRosterBatch(students, localStudents, {
+          portalName: connectorName,
+          targetClassRef: (params.classRef as string) || undefined,
+          portalStatus,
+          isUntestedMap
+        })
+
+        if (reconciliationResult.completenessCheck?.isPartial && reconciliationResult.completenessCheck.warningMessage) {
+          toast.warning(reconciliationResult.completenessCheck.warningMessage, 8000)
+        }
+
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('teacher:open_roster_reconcile', {
+            detail: {
+              portalName: connectorName,
+              classRef: (params.classRef as string) || 'Geral',
+              result: reconciliationResult,
+            }
+          }))
+        }
+
+        return `✅ ${students.length} alunos identificados em "${connectorName}" (${reconciliationResult.autoMergedCount} mesclados, ${reconciliationResult.newImportedCount} novos). Abrindo tela de revisão para sua conferência!`
+      }
+
+      return `A leitura em "${connectorName}" foi concluída, mas nenhum registro de aluno foi retornado.`
+    }
+
+    // Tratamento de read_board
+    if (capability === 'read_board') {
+      const data = result.data as any
+      if (data?.boards) {
+        return `✅ ${data.total_boards || data.boards.length} quadros encontrados no Trello:\n${data.boards.map((b: any) => `• ${b.name}`).join('\n')}`
+      }
+      if (data?.lists) {
+        return `✅ Quadro carregado com ${data.total_lists} listas e ${data.total_cards} cartões.`
+      }
+    }
+
+    return `Operação concluída com sucesso em "${resolution.connector?.display_name}".`
+  }
+
+  default:
+    return `${name} executado`
+  }
 }
+
 
 // Execution Timer Component 
 function ExecutionTimer({
- entry,
- onSkip,
+  entry,
+  onSkip,
 }: {
  entry: LogEntry
  onSkip: () => void
@@ -1016,6 +1178,16 @@ export default function RafinhaChat({ onNavigate, onCommandReady }: RafinhaChatP
  const [canUndo, setCanUndo] = useState(false)
  const [showLog, setShowLog] = useState(false)
  const [showWakeConsentModal, setShowWakeConsentModal] = useState(false)
+  const [reconciliationModalState, setReconciliationModalState] = useState<{
+    isOpen: boolean
+    portalName: string
+    classRef?: string
+    result: any
+  }>({
+    isOpen: false,
+    portalName: 'Google Sheets',
+    result: null
+  })
 
  const toggleLiveMode = () => {
     if (!isLiveMode && requiresContinuousListeningConsent()) {
@@ -1103,6 +1275,22 @@ export default function RafinhaChat({ onNavigate, onCommandReady }: RafinhaChatP
       window.removeEventListener('rafinha:wake', handleWake)
       window.removeEventListener('rafinha:send_text', handleSendText)
     }
+  }, [])
+
+  useEffect(() => {
+    const handleOpenReconcile = (e: Event) => {
+      const detail = (e as CustomEvent).detail
+      if (detail && detail.result) {
+        setReconciliationModalState({
+          isOpen: true,
+          portalName: detail.portalName || 'Google Sheets',
+          classRef: detail.classRef,
+          result: detail.result
+        })
+      }
+    }
+    window.addEventListener('teacher:open_roster_reconcile', handleOpenReconcile)
+    return () => window.removeEventListener('teacher:open_roster_reconcile', handleOpenReconcile)
   }, [])
 
  useEffect(() => {
@@ -1903,6 +2091,26 @@ export default function RafinhaChat({ onNavigate, onCommandReady }: RafinhaChatP
    }}
    onCancel={() => setShowWakeConsentModal(false)}
  />
+
+ {/* Modal de Reconciliação de Roster (Importação de Planilha/CSV via URL) */}
+ {reconciliationModalState.isOpen && reconciliationModalState.result && (
+   <RosterReconciliationModal
+     isOpen={true}
+     portalName={reconciliationModalState.portalName}
+     classRef={reconciliationModalState.classRef}
+     result={reconciliationModalState.result}
+     isUntestedMap={reconciliationModalState.result?.isUntestedMap}
+     portalStatus={reconciliationModalState.result?.isBrokenMap ? 'broken_needs_rediscovery' : (reconciliationModalState.result?.isUntestedMap ? 'mapped_untested' : 'mapped_validated')}
+     onClose={() => setReconciliationModalState(prev => ({ ...prev, isOpen: false, result: null }))}
+     onSuccess={(count) => {
+       setReconciliationModalState(prev => ({ ...prev, isOpen: false, result: null }))
+       toast.success(`🎉 ${count} alunos sincronizados com sucesso a partir da planilha!`)
+       setTimeout(() => {
+         toast.info('🔒 Importação concluída! Não esqueça de voltar o compartilhamento da planilha para privado, se quiser.', 7000)
+       }, 1200)
+     }}
+   />
+ )}
  </div>
  )
 }

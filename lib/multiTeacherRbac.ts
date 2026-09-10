@@ -110,7 +110,7 @@ export function shareClassWithTeacher(
 
   shared.collaborators = shared.collaborators.filter(c => c.teacherEmail !== collaboratorEmail)
   shared.collaborators.push({
-    teacherId: 'tch_' + Math.random().toString(36).slice(2, 8),
+    teacherId: `tch_${typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID().slice(0, 8) : Date.now().toString(36)}`,
     teacherEmail: collaboratorEmail,
     role,
     sharedAt: new Date().toISOString(),

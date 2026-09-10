@@ -1,0 +1,71 @@
+{
+  "manifest_version": 3,
+  "name": "TeacherAI - Assistente Agêntico",
+  "version": "3.0",
+  "description": "Extensão inteligente que conecta aos portais escolares e ao painel TeacherAI.",
+  "icons": {
+    "16": "icon16.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  },
+  "action": {
+    "default_title": "TeacherAI Agente",
+    "default_icon": {
+      "16": "icon16.png",
+      "48": "icon48.png"
+    }
+  },
+  "side_panel": {
+    "default_path": "side_panel.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "permissions": [
+    "activeTab",
+    "storage",
+    "tabs",
+    "sidePanel",
+    "scripting"
+  ],
+  "host_permissions": [
+    "http://localhost:3000/*",
+    "http://localhost:3001/*",
+    "https://*.plural.net/*",
+    "https://*.cambridgeone.org/*",
+    "https://*.paineldoaluno.com.br/*",
+    "https://portaleducacao.redesantacatarina.org.br/*",
+    "https://teams.microsoft.com/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "http://localhost:3000/*",
+        "http://localhost:3001/*",
+        "https://*.plural.net/*",
+        "https://*.cambridgeone.org/*",
+        "https://*.paineldoaluno.com.br/*",
+        "https://portaleducacao.redesantacatarina.org.br/*",
+        "https://teams.microsoft.com/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_idle",
+      "all_frames": true,
+      "match_about_blank": true
+    }
+  ],
+  "externally_connectable": {
+    "matches": [
+      "http://localhost:3000/*",
+      "http://localhost:3001/*"
+    ]
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["side_panel.html", "side_panel.js"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}

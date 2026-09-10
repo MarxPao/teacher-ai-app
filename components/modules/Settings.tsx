@@ -26,6 +26,7 @@ import SharedDatabaseConsentModal from '@/components/SharedDatabaseConsentModal'
 import { isCustomSupabaseConfigured } from '@/lib/databaseConsent'
 import TeacherCalibrationsManager from '@/components/modules/TeacherCalibrationsManager'
 import ConnectedPortalsPanel from '@/components/modules/ConnectedPortalsPanel'
+import PortalSkillsModule from '@/components/modules/PortalSkillsModule'
 import Button from '@/components/Button'
 import { validateSupabaseCredentials, ByokValidationResult } from '@/lib/byokValidator'
 import { exportTeacherDataAsJson, exportTeacherStudentsCsv } from '@/lib/dataPortability'
@@ -71,7 +72,7 @@ const STORAGE_KEYS = [
 ]
 
 export default function Settings() {
-  const [activeTab, setActiveTab] = useState<'general' | 'portals' | 'calibrations' | 'formatting' | 'audit' | 'privacy'>('general')
+  const [activeTab, setActiveTab] = useState<'general' | 'portals' | 'skills' | 'calibrations' | 'formatting' | 'audit' | 'privacy'>('general')
   const [cfg, setCfg] = useState<Config>({ school: '', teacher: '', apikey: '', instructions: '', cloudSyncUrl: '' })
   const [docPrefs, setDocPrefs] = useState<DocumentStylePrefs>(getGlobalDocumentPrefs())
   const [saved, setSaved] = useState(false)
@@ -180,10 +181,10 @@ export default function Settings() {
           })
 
           window.dispatchEvent(new Event('storage'))
-          toast.success(' Backup restaurado com sucesso! Recarregando dados...')
+          toast.success('Backup restaurado com sucesso! Recarregando dados...')
           window.location.reload()
         } catch (err) {
-          toast.success(` Falha ao restaurar backup: ${err instanceof Error ? err.message : String(err)}`)
+          toast.error(`Falha ao restaurar backup: ${err instanceof Error ? err.message : String(err)}`)
         }
       }
       reader.readAsText(file)
@@ -240,7 +241,7 @@ export default function Settings() {
   /* Sincronização Cloud Opcional */
   async function triggerCloudSync() {
     if (!cfg.cloudSyncUrl) {
-      toast.success('Insira a URL do seu servidor/endpoint Cloud Sync ou Supabase.')
+      toast.warning('Insira a URL do seu servidor/endpoint Cloud Sync ou Supabase.')
       return
     }
     setSyncing(true)
@@ -342,6 +343,7 @@ export default function Settings() {
         {[
           { key: 'general', label: '⚙️ Geral & Identidade', icon: 'ti-settings' },
           { key: 'portals', label: '🏫 Portais Conectados', icon: 'ti-plug-connected' },
+          { key: 'skills', label: '✨ Skills dos Portais', icon: 'ti-sparkles' },
           { key: 'calibrations', label: '🎛️ Calibrações & Padrões', icon: 'ti-adjustments-horizontal' },
           { key: 'formatting', label: '🎨 Formatação de Documentos', icon: 'ti-typography' },
           { key: 'audit', label: '🛡️ Auditoria de Ações', icon: 'ti-shield-check', badge: auditLogs.length },
@@ -382,6 +384,11 @@ export default function Settings() {
             setActiveTab('general')
           }}
         />
+      )}
+
+      {/* -- ABA: SKILLS DOS PORTAIS -- */}
+      {activeTab === 'skills' && (
+        <PortalSkillsModule />
       )}
 
       {/* -- ABA 1: GERAL & IDENTIDADE -- */}

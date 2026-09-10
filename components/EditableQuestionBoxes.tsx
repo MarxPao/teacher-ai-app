@@ -5,6 +5,7 @@ import { toast, showConfirm } from '@/components/Toast'
 import React, { useState, useEffect, useCallback } from 'react'
 import { checkOptionParallelism } from '@/lib/itemQualityChecker'
 import { auditReadingLoad } from '@/lib/readingLoadAuditor'
+import { auditHaladynaGuidelines } from '@/lib/haladynaLinter'
 
 export interface QuestionOption {
   letter: string
@@ -23,6 +24,7 @@ export interface EditableQuestionItem {
   answerKey?: string
   parallelismWarning?: string
   readingLoadWarning?: string
+  haladynaWarnings?: string[]
 }
 
 interface EditableQuestionBoxesProps {
@@ -94,6 +96,12 @@ export function parseContentToQuestions(raw: string): EditableQuestionItem[] {
       }
     }
 
+    let haladynaWarnings: string[] | undefined
+    const haladynaCheck = auditHaladynaGuidelines(currentStem, currentOpts)
+    if (haladynaCheck.hasViolations) {
+      haladynaWarnings = haladynaCheck.violations.map(v => v.message)
+    }
+
     questions.push({
       id: `q_${Date.now()}_${questions.length + 1}_${Math.random().toString(36).slice(2, 6)}`,
       number: questions.length + 1,
@@ -105,7 +113,8 @@ export function parseContentToQuestions(raw: string): EditableQuestionItem[] {
       options: currentOpts.length > 0 ? [...currentOpts] : undefined,
       answerKey: currentAnswer.trim() || undefined,
       parallelismWarning,
-      readingLoadWarning
+      readingLoadWarning,
+      haladynaWarnings
     })
 
     currentStem = ''
@@ -267,8 +276,18 @@ export default function EditableQuestionBoxes({
 
   // Emite alterações de volta
   const triggerUpdate = useCallback((updated: EditableQuestionItem[]) => {
-    setQuestions(updated)
-    const compiled = compileQuestionsToHtml(updated)
+    const reAudited = updated.map(q => {
+      let haladynaWarnings: string[] | undefined
+      if (q.stem || (q.options && q.options.length > 0)) {
+        const audit = auditHaladynaGuidelines(q.stem, q.options)
+        if (audit.hasViolations) {
+          haladynaWarnings = audit.violations.map(v => v.message)
+        }
+      }
+      return { ...q, haladynaWarnings }
+    })
+    setQuestions(reAudited)
+    const compiled = compileQuestionsToHtml(reAudited)
     onContentChange(compiled)
   }, [onContentChange])
 
@@ -377,7 +396,7 @@ export default function EditableQuestionBoxes({
   // Chamar Rafinha para Reformular Questão
   const handleCallRafinha = async (index: number) => {
     if (!onAskRafinhaForQuestion) {
-      toast.success('Assistente Rafinha IA não disponível neste modo.')
+      toast.warning('Assistente Rafinha IA não disponível neste modo.')
       return
     }
     setRafinhaLoading(true)
@@ -725,6 +744,30 @@ export default function EditableQuestionBoxes({
                 {/* Alternativas de Múltipla Escolha */}
                 {(q.type === 'multiple_choice' || q.type === 'true_false' || (q.options && q.options.length > 0)) && (
                   <div style={{ background: '#faf6f0', padding: 12, borderRadius: RADIUS.md, border: '1px solid #ede8dc' }}>
+                    {q.haladynaWarnings && q.haladynaWarnings.length > 0 && (
+                      <div style={{
+                        background: '#fef2f2',
+                        border: '1px solid #fecaca',
+                        borderRadius: RADIUS.md,
+                        padding: '8px 12px',
+                        marginBottom: 10,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 4,
+                        fontSize: TEXT.caption,
+                        color: '#991b1b',
+                        fontWeight: 600,
+                        lineHeight: 1.4
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 800 }}>
+                          <i className="ti ti-certificate" style={{ fontSize: 16, color: '#dc2626', flexShrink: 0 }} />
+                          <span>Diretrizes Psicométricas de Haladyna:</span>
+                        </div>
+                        {q.haladynaWarnings.map((w, wi) => (
+                          <span key={wi} style={{ paddingLeft: 22 }}>&bull; {w}</span>
+                        ))}
+                      </div>
+                    )}
                     {q.parallelismWarning && (
                       <div style={{
                         background: '#fef3c7',

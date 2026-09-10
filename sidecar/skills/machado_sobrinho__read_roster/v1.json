@@ -1,0 +1,115 @@
+{
+  "id": "skill_read_roster_mtrhx9fp",
+  "name": "Leitura de read_roster — machado_sobrinho",
+  "portal_id": "machado_sobrinho",
+  "task_id": "read_roster",
+  "version": "1.0.0",
+  "entry_node": "nav_0",
+  "nodes": {
+    "nav_0": {
+      "id": "nav_0",
+      "type": "NAVIGATE",
+      "anchor": {
+        "strategy": "css_selector",
+        "value": "https://machadosobrinho.paineldoaluno.com.br/professor_painel",
+        "description": "Navegar para https://machadosobrinho.paineldoaluno.com.br/professor_painel"
+      },
+      "params": {},
+      "on_success": "locate_0",
+      "on_fail": null,
+      "retry_policy": {
+        "max_attempts": 2,
+        "backoff_ms": 500
+      }
+    },
+    "locate_0": {
+      "id": "locate_0",
+      "type": "LOCATE",
+      "anchor": {
+        "strategy": "css_selector",
+        "value": "table tbody tr",
+        "description": "Linhas dos alunos"
+      },
+      "params": {},
+      "on_success": "locate_aluno_row",
+      "on_fail": null,
+      "retry_policy": {
+        "max_attempts": 2,
+        "backoff_ms": 500
+      }
+    },
+    "read_0": {
+      "id": "read_0",
+      "type": "READ",
+      "anchor": {
+        "strategy": "css_selector",
+        "value": "td:nth-child(1)",
+        "scope": "row_current",
+        "description": "Coluna 1 (Nome do Aluno)"
+      },
+      "params": {
+        "variable_bindings": [
+          "aluno_nome"
+        ],
+        "description": "Ler coluna Nome do Aluno -> {aluno_nome}"
+      },
+      "on_success": "loop_proxima_linha",
+      "on_fail": null,
+      "retry_policy": {
+        "max_attempts": 2,
+        "backoff_ms": 500
+      }
+    },
+    "locate_aluno_row": {
+      "id": "locate_aluno_row",
+      "type": "LOCATE",
+      "anchor": {
+        "strategy": "css_selector",
+        "value": "table tbody tr",
+        "description": "Linhas dos alunos na tabela"
+      },
+      "params": {
+        "multiplicity": "all",
+        "description": "Localizar todas as linhas de alunos na tabela"
+      },
+      "on_success": "read_0",
+      "on_fail": null,
+      "retry_policy": {
+        "max_attempts": 2,
+        "backoff_ms": 500
+      }
+    },
+    "loop_proxima_linha": {
+      "id": "loop_proxima_linha",
+      "type": "LOOP",
+      "params": {
+        "loop_target": "read_0",
+        "collection_node": "locate_aluno_row",
+        "description": "Repetir para cada aluno na tabela"
+      },
+      "on_success": null,
+      "on_fail": null,
+      "retry_policy": {
+        "max_attempts": 2,
+        "backoff_ms": 500
+      }
+    }
+  },
+  "metadata": {
+    "task_name": "Tarefa read_roster",
+    "skill_type": "reading",
+    "description": "",
+    "turma_id": null,
+    "success_rate": 100,
+    "total_executions": 0,
+    "created_at": "2026-09-07T17:09:49.957Z",
+    "updated_at": "2026-09-07T17:09:49.958Z",
+    "last_verified_at": null,
+    "has_self_healed": false,
+    "author": "teacher_ai_recorder_nextjs",
+    "source_url": "https://machadosobrinho.paineldoaluno.com.br/professor_painel",
+    "variable_bindings_discovered": [
+      "aluno_nome"
+    ]
+  }
+}

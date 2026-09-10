@@ -148,7 +148,7 @@ Use formatação leve com emojis adequados e negritos para leitura dinâmica.`
       const text = await callApi(selectedApi, prompt)
       setParentMessage(text)
     } catch (e: any) {
-      toast.success(`Erro ao gerar mensagem: ${e?.message || 'Falha na IA'}`)
+      toast.error(`Erro ao gerar mensagem: ${e?.message || 'Falha na IA'}`)
     } finally {
       setGeneratingParent(false)
     }
@@ -182,7 +182,7 @@ Gere o documento completo em HTML agora:`
         setFactCheck(fc)
       } catch {}
     } catch (e: any) {
-      toast.success(`Erro: ${e?.message || 'Falha na geração'}`)
+      toast.error(`Erro: ${e?.message || 'Falha na geração'}`)
     } finally {
       setLoadingOfficial(false)
     }

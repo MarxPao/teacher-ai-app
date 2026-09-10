@@ -123,7 +123,7 @@ export default function MindMap() {
  async function handleGenerateAiMindMap(overrideTopic?: string | React.MouseEvent) {
  const topic = typeof overrideTopic === 'string' ? overrideTopic : aiTopic
  if (!topic.trim() && !customPrompt.trim()) {
- toast.success('Digite um tema ou um prompt para a IA.')
+ toast.warning('Digite um tema ou um prompt para a IA.')
  return
  }
  setAiLoading(true)
@@ -170,7 +170,7 @@ Retorne estritamente um JSON no formato:
  setCustomPrompt('')
  }
  } catch (e: any) {
- toast.success(`Erro ao gerar mapa mental: ${e.message}`)
+ toast.error(`Erro ao gerar mapa mental: ${e.message}`)
  } finally {
  setAiLoading(false)
  }

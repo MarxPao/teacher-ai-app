@@ -5,6 +5,8 @@ import { toast, showConfirm } from '@/components/Toast'
 import { useState, useEffect, useMemo } from 'react'
 import DocumentCanvas from '@/components/DocumentCanvas'
 import { ApiConfig } from '@/components/modules/ApiManager'
+import { safeGet, safeSet, KEYS } from '@/lib/localDB'
+import Button from '@/components/Button'
 
 interface StudentRecord { id: string; name: string; classId: string; schoolId: string; grades?: Record<string, string> }
 
@@ -22,6 +24,74 @@ const CAMBRIDGE_SPEAKING_CRITERIA = [
  { key: 'Pronunciation', icon: 'ti-volume', sub: 'Intonação, acentuação e clareza de sons individuais (0-5)' },
  { key: 'Interactive Communication',icon: 'ti-users', sub: 'Capacidade de iniciar, manter e concluir discussões (0-5)' },
 ]
+
+const BAND_DESCRIPTORS: Record<string, Record<number, string>> = {
+  // Writing
+  'Content': {
+    5: 'Todas as tarefas cumpridas com relevância e riqueza de detalhes.',
+    4: 'Tarefas cumpridas com clareza; pequenos desvios secundários.',
+    3: 'Maioria das tarefas cumprida de forma satisfatória.',
+    2: 'Cumprimento parcial; lacunas significativas de conteúdo.',
+    1: 'Conteúdo quase totalmente não abordado ou irrelevante.'
+  },
+  'Communicative Achievement': {
+    5: 'Domínio pleno do registro formal/informal e engajamento natural.',
+    4: 'Registro adequado e consistente com boa clareza de tom.',
+    3: 'Convenções comunicativas satisfatórias para o propósito.',
+    2: 'Registro inconsistente; dificuldade em manter tom adequado.',
+    1: 'Comunicação prejudicada; registro inadequado à proposta.'
+  },
+  'Organisation': {
+    5: 'Texto coeso e fluido; parágrafos lógicos e conectivos variados.',
+    4: 'Boa organização com parágrafos claros e conectivos adequados.',
+    3: 'Organização satisfatória; conectivos simples e pontuação básica.',
+    2: 'Parágrafos desconexos; uso limitado ou incorreto de conectivos.',
+    1: 'Ausência de estrutura lógica e desorganização textual.'
+  },
+  'Language': {
+    5: 'Amplo vocabulário e estruturas complexas com alta precisão.',
+    4: 'Bom repertório lexical e gramatical; erros menores não impedem clareza.',
+    3: 'Léxico e gramática suficientes para ideias básicas; erros pontuais.',
+    2: 'Estruturas gramaticais muito restritas; erros frequentes.',
+    1: 'Léxico e gramática rudimentares com severo prejuízo à compreensão.'
+  },
+  // Speaking
+  'Grammatical Range': {
+    5: 'Uso flexível e preciso de estruturas simples e complexas.',
+    4: 'Boa variedade de estruturas gramaticais com controle adequado.',
+    3: 'Controle satisfatório de estruturas simples; hesita em complexas.',
+    2: 'Uso limitado a estruturas básicas com erros recorrentes.',
+    1: 'Erros gramaticais severos que impedem a compreensão.'
+  },
+  'Lexical Resource': {
+    5: 'Vocabulário variado, idiomático e preciso para nuances de ideias.',
+    4: 'Repertório lexical amplo com poucas paráfrases inadequadas.',
+    3: 'Vocabulário adequado para temas comuns; repetição frequente.',
+    2: 'Léxico insuficiente para tópicos além do imediato.',
+    1: 'Repertório muito restrito; pausas longas para buscar palavras.'
+  },
+  'Discourse Management': {
+    5: 'Fluência contínua, respostas extensas e coesas com pouco esforço.',
+    4: 'Respostas bem desenvolvidas com hesitações naturais mínimas.',
+    3: 'Produz enunciados conexos, mas com hesitação perceptível.',
+    2: 'Respostas curtas e fragmentadas; hesitações prolongadas.',
+    1: 'Dificuldade em manter o turno de fala; respostas monossilábicas.'
+  },
+  'Pronunciation': {
+    5: 'Intonação e acentuação naturais; pronúncia cristalina e fluida.',
+    4: 'Facilmente inteligível; fonemas claros com sotaque não-intrusivo.',
+    3: 'Geralmente inteligível; alguns sons individuais exigem esforço.',
+    2: 'Frequentemente ininteligível; problemas de acentuação e ritmo.',
+    1: 'Severamente incompreensível; sotaque e fonemas distorcidos.'
+  },
+  'Interactive Communication': {
+    5: 'Inicia, sustenta e conclui interações com naturalidade e escuta ativa.',
+    4: 'Interage ativamente com o interlocutor sem necessidade de suporte.',
+    3: 'Mantém a interação, embora por vezes dependa do interlocutor.',
+    2: 'Dificuldade em manter diálogo; requer incentivo constante.',
+    1: 'Não consegue sustentar interação simples com o interlocutor.'
+  }
+}
 
 const BANDS = ['Band 5 (Excelente)', 'Band 4 (Bom)', 'Band 3 (Regular)', 'Band 2 (Suficiente)', 'Band 1 (Insuficiente)']
 
@@ -107,64 +177,74 @@ export default function Rubric() {
  }, [preset])
 
  useEffect(() => {
- const a = localStorage.getItem('teacher_apis')
- if (a) { const p: ApiConfig[] = JSON.parse(a); const act = p.filter(x=>x.active); setApis(act); if(act.length>0) setSelectedApi(act[0].id) }
- 
- const st = localStorage.getItem('teacher_students')
- if (st) {
- const parsed = JSON.parse(st)
- setStudents(parsed)
- if (parsed.length > 0) setEvalStudentId(parsed[0].id)
- }
- }, [])
+    const act = safeGet<ApiConfig[]>(KEYS.APIS, []).filter(x => x.active)
+    setApis(act)
+    if (act.length > 0) setSelectedApi(act[0].id)
 
- // Inicializa scores da calculadora
- useEffect(() => {
- const initial: Record<string, number> = {}
- activeCriteria.forEach(c => { initial[c.key] = 4 }) // Band 4 default
- setEvalScores(initial)
- setLaunched(false)
- }, [activeCriteria])
+    const parsed = safeGet<StudentRecord[]>(KEYS.STUDENTS, [])
+    setStudents(parsed)
+    if (parsed.length > 0) setEvalStudentId(parsed[0].id)
+  }, [])
 
- const totalPossible = activeCriteria.length * 5
- const rawSum = Object.values(evalScores).reduce((a, b) => a + b, 0)
- const finalGrade = Number(((rawSum / totalPossible) * 10).toFixed(1))
+  // Inicializa scores da calculadora
+  useEffect(() => {
+    const initial: Record<string, number> = {}
+    activeCriteria.forEach(c => { initial[c.key] = 4 }) // Band 4 default
+    setEvalScores(initial)
+    setLaunched(false)
+  }, [activeCriteria])
 
- function setScore(key: string, val: number) {
- setEvalScores(prev => ({ ...prev, [key]: val }))
- setLaunched(false)
- }
+  const totalPossible = activeCriteria.length * 5
+  const rawSum = Object.values(evalScores).reduce((a, b) => a + b, 0)
+  const finalGrade = (totalPossible > 0 && !Number.isNaN(rawSum))
+    ? Number(((rawSum / totalPossible) * 10).toFixed(1))
+    : 0
+  const isGradeValid = activeCriteria.length > 0 && totalPossible > 0 && !Number.isNaN(finalGrade)
 
- function launchGradeToStudent() {
- if (!evalStudentId) return
- const idx = students.findIndex(s => s.id === evalStudentId)
- if (idx === -1) return
+  function setScore(key: string, val: number) {
+    setEvalScores(prev => ({ ...prev, [key]: val }))
+    setLaunched(false)
+  }
 
- const upd = [...students]
- const colName = `${evalTitle} (${preset === 'writing' ? 'Writing' : 'Speaking'})`
- upd[idx].grades = { ...(upd[idx].grades || {}), [colName]: String(finalGrade) }
+  function launchGradeToStudent() {
+    if (!evalStudentId) {
+      toast.warning('Selecione um aluno para lançar a nota.')
+      return
+    }
+    if (!isGradeValid) {
+      toast.error('Não é possível lançar a nota: nenhum critério válido configurado.')
+      return
+    }
+    const idx = students.findIndex(s => s.id === evalStudentId)
+    if (idx === -1) {
+      toast.error('Aluno não encontrado no banco de dados.')
+      return
+    }
 
- setStudents(upd)
- localStorage.setItem('teacher_students', JSON.stringify(upd))
+    const upd = [...students]
+    const colName = `${evalTitle} (${preset === 'writing' ? 'Writing' : 'Speaking'})`
+    upd[idx].grades = { ...(upd[idx].grades || {}), [colName]: String(finalGrade) }
 
- // Atualiza gbConfig
- const gbConfig = JSON.parse(localStorage.getItem('teacher_gbConfig') || '{"cols":[]}')
- if (!gbConfig.cols.includes(colName)) {
- gbConfig.cols.push(colName)
- localStorage.setItem('teacher_gbConfig', JSON.stringify(gbConfig))
- }
+    setStudents(upd)
+    safeSet(KEYS.STUDENTS, upd)
 
- window.dispatchEvent(new Event('storage'))
- setLaunched(true)
- }
+    // Atualiza gbConfig
+    const gbConfig = safeGet<{ cols: string[] }>(KEYS.GRADEBOOK_CONFIG, { cols: [] })
+    if (!gbConfig.cols.includes(colName)) {
+      gbConfig.cols.push(colName)
+      safeSet(KEYS.GRADEBOOK_CONFIG, gbConfig)
+    }
 
- async function generate() {
- const api = apis.find(a => a.id === selectedApi)
- if (!api) { toast.success('Nenhuma API configurada.'); return }
- setLoading(true); setResult(''); setManualPrompt('')
+    window.dispatchEvent(new Event('storage'))
+    setLaunched(true)
+    toast.success(`Nota ${finalGrade} lançada com sucesso no boletim!`)
+  }
 
- const criteriaList = activeCriteria.map(c => `${c.key}: ${c.sub}`).join('\n')
- const prompt = `Act as an official Cambridge Assessment English Examiner.
+  async function generate() {
+    setLoading(true); setResult(''); setManualPrompt('')
+
+    const criteriaList = activeCriteria.map(c => `${c.key}: ${c.sub}`).join('\n')
+    const prompt = `Act as an official Cambridge Assessment English Examiner.
 Create an official Assessment Rubric Matrix for ${preset.toUpperCase()} (${level} CEFR).
 Task Context: ${taskDesc || 'Official Assessment Task'}.
 ${customPrompt ? `\nCUSTOM TEACHER PROMPT / GUIDELINES:\n"${customPrompt}"\n` : ''}
@@ -176,32 +256,52 @@ Bands: Band 5 (Substantial / Full Mastery), Band 4 (Good / High Competence), Ban
 Output ONLY as clean HTML table (table, tr, th, td, h1, p, span).
 Style the table with professional Cambridge Assessment styling (border-collapse:collapse, dark teal header #2c1a0e, alternating light row backgrounds, padded cells).`
 
- if (api.provider === 'manual') { setManualPrompt(prompt); setResult('<p style="text-align:center;color:#a08060;font-style:italic;padding:40px">Cole aqui a rubrica gerada...</p>'); setLoading(false); return }
- if (!api.key) { toast.success('Configure a API Key.'); setLoading(false); return }
- try {
- let out = ''
- if (api.provider==='anthropic') { const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':api.key,'anthropic-version':'2023-06-01','anthropic-dangerously-allow-browser':'true'},body:JSON.stringify({model:api.model||'claude-3-5-sonnet-20240620',max_tokens:2500,messages:[{role:'user',content:prompt}]})}); const d=await r.json(); out=d.content?.map((c:{text:string})=>c.text).join('\n')||'' }
- else if (api.provider==='openai') { const r=await fetch('https://api.openai.com/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${api.key}`},body:JSON.stringify({model:api.model||'gpt-4o',messages:[{role:'user',content:prompt}]})}); const d=await r.json(); out=d.choices?.[0]?.message?.content||'' }
- else if (api.provider==='gemini') { const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${api.model||'gemini-1.5-pro'}:generateContent?key=${api.key}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{parts:[{text:prompt}]}]})}); const d=await r.json(); out=d.candidates?.[0]?.content?.parts?.[0]?.text||'' }
- setResult(out.replace(/^```html\n?/,'').replace(/```$/,'').trim())
- } catch(e:any) { setResult(`<p style="color:#dc322f">Erro: ${e.message}</p>`) }
- setLoading(false)
- }
+    if (selectedApi === 'manual') {
+      setManualPrompt(prompt)
+      setResult('<p style="text-align:center;color:#a08060;font-style:italic;padding:40px">Cole aqui a rubrica gerada...</p>')
+      setLoading(false)
+      return
+    }
 
- const evalStu = students.find(s => s.id === evalStudentId)
+    try {
+      const res = await fetch('/api/agent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: [{ role: 'user', content: prompt }]
+        })
+      })
 
- async function handleSaveRubricToDatabase() {
- if (!result) { toast.success('Gere uma matriz de rubrica primeiro.'); return }
- const { saveRubricToSupabase } = await import('@/lib/supabaseClient')
- await saveRubricToSupabase({
- title: `Matriz de Rubrica Cambridge ${preset.toUpperCase()} (${level})`,
- type: 'rubric',
- grade: level,
- criteria: activeCriteria,
- content: result
- })
- toast.success(' Rubrica salva com sucesso no Banco de Dados!')
- }
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}))
+        throw new Error(errData.error || errData.message || 'Falha ao processar requisição com a IA.')
+      }
+
+      const data = await res.json()
+      const out = data?.reply || data?.content || ''
+      setResult(out.replace(/^```html\n?/i, '').replace(/^```\n?/, '').replace(/```$/i, '').trim())
+    } catch(e: any) {
+      setResult(`<p style="color:#dc322f">Erro: ${e.message}</p>`)
+      toast.error(`Erro ao gerar rubrica: ${e.message}`)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const evalStu = students.find(s => s.id === evalStudentId)
+
+  async function handleSaveRubricToDatabase() {
+    if (!result) { toast.warning('Gere uma matriz de rubrica primeiro.'); return }
+    const { saveRubricToSupabase } = await import('@/lib/supabaseClient')
+    await saveRubricToSupabase({
+      title: `Matriz de Rubrica Cambridge ${preset.toUpperCase()} (${level})`,
+      type: 'rubric',
+      grade: level,
+      criteria: activeCriteria,
+      content: result
+    })
+    toast.success('Rubrica salva com sucesso no Banco de Dados!')
+  }
 
  return (
  <div style={{ padding: '32px 44px', height: '100%', display: 'flex', flexDirection: 'column', maxWidth: 1600, margin: '0 auto', boxSizing: 'border-box', width: '100%' }}>
@@ -213,19 +313,16 @@ Style the table with professional Cambridge Assessment styling (border-collapse:
  Rubricas Pedagógicas (Cambridge Assessment)
  </h1>
  </div>
- {result && (
- <button
- onClick={handleSaveRubricToDatabase}
- style={{
- padding: '9px 16px', borderRadius: RADIUS.lg, border: '1px solid #8b5e3c',
- background: '#8b5e3c', color: '#fff', fontSize: 13,
- fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
- boxShadow: '0 2px 8px rgba(139,94,60,0.2)'
- }}
- >
- <i className="ti ti-database" /> Salvar no Banco de Dados
- </button>
- )}
+  {result && (
+    <Button
+      variant="primary"
+      size="md"
+      icon={<i className="ti ti-database" />}
+      onClick={handleSaveRubricToDatabase}
+    >
+      Salvar no Banco de Dados
+    </Button>
+  )}
  </div>
 
  <div style={{ display: 'grid', gridTemplateColumns: 'minmax(340px, 420px) 1fr', gap: 32, flex: 1, minHeight: 0 }}>
@@ -296,32 +393,63 @@ Style the table with professional Cambridge Assessment styling (border-collapse:
 
  {/* Matriz de Escolha de Bands */}
  <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 16 }}>
- {activeCriteria.map(c => (
- <div key={c.key} style={{ background: '#fdf9f3', borderRadius: RADIUS.lg, padding: '10px 12px', border: '1px solid #ede8dc' }}>
- <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: 700, color: '#2c1a0e', marginBottom: 6 }}>
- <span><i className={`ti ${c.icon}`} style={{ marginRight: 6, color: '#268bd2' }} />{c.key}</span>
- <span style={{ color: '#268bd2' }}>Band {evalScores[c.key] || 4} / 5</span>
- </div>
- <div style={{ display: 'flex', gap: 4 }}>
- {[1, 2, 3, 4, 5].map(b => (
- <button key={b} onClick={() => setScore(c.key, b)} style={{
- flex: 1, padding: '6px 0', borderRadius: 6, border: 'none', fontSize: 11, fontWeight: 700,
- background: (evalScores[c.key] || 4) === b ? '#2c1a0e' : '#f0e8d8',
- color: (evalScores[c.key] || 4) === b ? '#fff' : '#7a5c42', cursor: 'pointer',
- }}>
- {b}
- </button>
- ))}
- </div>
- </div>
- ))}
- </div>
+  {activeCriteria.map(c => {
+    const currentScore = evalScores[c.key] || 4
+    const descriptor = BAND_DESCRIPTORS[c.key]?.[currentScore] || ''
+    return (
+      <div key={c.key} style={{ background: '#fdf9f3', borderRadius: RADIUS.lg, padding: '12px 14px', border: '1px solid #ede8dc' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: 700, color: '#2c1a0e', marginBottom: 4 }}>
+          <span><i className={`ti ${c.icon}`} style={{ marginRight: 6, color: '#268bd2' }} />{c.key}</span>
+          <span style={{ color: '#268bd2', fontWeight: 800 }}>Band {currentScore} / 5</span>
+        </div>
+        {/* Descritor de Desempenho Explicativo */}
+        <p style={{ fontSize: 11, color: '#664d36', margin: '0 0 8px 0', lineHeight: 1.4, fontStyle: 'italic' }}>
+          <strong>Band {currentScore}:</strong> {descriptor}
+        </p>
+        <div style={{ display: 'flex', gap: 6 }}>
+          {[1, 2, 3, 4, 5].map(b => {
+            const bDesc = BAND_DESCRIPTORS[c.key]?.[b] || ''
+            return (
+              <button
+                key={b}
+                type="button"
+                onClick={() => setScore(c.key, b)}
+                title={`Band ${b}: ${bDesc}`}
+                aria-label={`${c.key} Band ${b}: ${bDesc}`}
+                style={{
+                  flex: 1,
+                  padding: '7px 0',
+                  borderRadius: RADIUS.sm,
+                  border: 'none',
+                  fontSize: 12,
+                  fontWeight: 700,
+                  background: currentScore === b ? '#2c1a0e' : '#f0e8d8',
+                  color: currentScore === b ? '#fff' : '#7a5c42',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                {b}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+    )
+  })}
+  </div>
 
- <button onClick={launchGradeToStudent} disabled={launched || !evalStudentId}
- style={{ ...S.btn, width: '100%', justifyContent: 'center', background: launched ? '#859900' : '#268bd2', color: '#fff' }}>
- <i className={`ti ${launched ? 'ti-check' : 'ti-report-analytics'}`} />
- {launched ? 'Nota Lançada no Gradebook!' : 'Lançar Nota no Gradebook'}
- </button>
+  <Button
+    variant={launched ? "secondary" : "primary"}
+    size="md"
+    fullWidth
+    onClick={launchGradeToStudent}
+    disabled={launched || !evalStudentId || !isGradeValid}
+    icon={<i className={`ti ${launched ? 'ti-check' : 'ti-report-analytics'}`} />}
+    aria-label="Lançar nota no boletim"
+  >
+    {launched ? 'Nota Lançada no Gradebook!' : 'Lançar Nota no Gradebook'}
+  </Button>
  </div>
 
  {/* Detalhes para a IA */}
@@ -346,10 +474,18 @@ Style the table with professional Cambridge Assessment styling (border-collapse:
  </select>
  </div>
 
- <button onClick={generate} disabled={loading} style={{ padding: '14px', borderRadius: RADIUS.lg, background: loading ? '#a08060' : '#2c1a0e', color: '#fff', fontSize: 15, fontWeight: 700, border: 'none', cursor: loading ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, boxShadow: '0 4px 16px rgba(7,54,66,0.2)', fontFamily: 'inherit' }}>
- <i className={loading ? 'ti ti-loader' : 'ti ti-table'} style={{ fontSize: 18 }} />
- {loading ? 'Gerando Matriz Cambridge...' : 'Gerar Matriz Completa de Rubrica'}
- </button>
+ <Button
+   variant="primary"
+   size="lg"
+   fullWidth
+   loading={loading}
+   disabled={loading}
+   icon={<i className="ti ti-table" style={{ fontSize: 18 }} />}
+   onClick={generate}
+   aria-label="Gerar Matriz Completa de Rubrica"
+ >
+   {loading ? 'Gerando Matriz Cambridge...' : 'Gerar Matriz Completa de Rubrica'}
+ </Button>
  </div>
 
  {/* RIGHT PANEL: Canvas do Documento */}

@@ -147,4 +147,87 @@ describe('Roster Reconciliation Engine Suite (Portal Escolar como Fonte de Verda
     expect(logSummary.created).toBe(21)
     expect(logSummary.preserved).toBe(1)
   })
+
+  it('rejeita ruídos óbvios de interface como "Página 1 de 2", "Total", "Próximo" e números puros', () => {
+    const rawWithNoise = [
+      { name: 'Ana Júlia Ferreira', matricula: '2024001' },
+      { name: 'Página 1 de 2', matricula: '' },
+      { name: 'Total', matricula: '' },
+      { name: 'Próxima Página', matricula: '' },
+      { name: '123456', matricula: '' },
+      { name: 'Carlos Eduardo Souza', matricula: '2024002' }
+    ]
+
+    const result = reconcileRosterBatch(rawWithNoise, [])
+
+    // Apenas os 2 alunos legítimos devem ser aceitos; os 4 ruídos devem ser filtrados
+    expect(result.totalPortalCount).toBe(2)
+    const names = result.items.map(i => i.portalStudent?.name)
+    expect(names).toContain('Ana Júlia Ferreira')
+    expect(names).toContain('Carlos Eduardo Souza')
+    expect(names).not.toContain('Página 1 de 2')
+    expect(names).not.toContain('Total')
+    expect(names).not.toContain('Próxima Página')
+    expect(names).not.toContain('123456')
+  })
+
+  it('atribui confiança 0.30 e bloqueia auto-create para nomes mononômicos ou suspeitos', () => {
+    const rawSuspicious = [
+      { name: 'Lucas', matricula: 'MAT_998' }
+    ]
+
+    const result = reconcileRosterBatch(rawSuspicious, [])
+
+    expect(result.totalPortalCount).toBe(1)
+    const item = result.items[0]
+    expect(item.status).toBe('new_from_portal')
+    expect(item.confidence).toBe(0.3)
+    expect(item.resolvedAction).toBeUndefined() // NUNCA auto-create
+    expect(item.reason).toContain('Atenção')
+  })
+
+  it('atribui confiança 0.85 (nunca 1.0) para novos alunos legítimos com nome composto', () => {
+    const rawLegit = [
+      { name: 'Mariana Lima Rocha', matricula: 'MAT_888' }
+    ]
+
+    const result = reconcileRosterBatch(rawLegit, [])
+
+    expect(result.totalPortalCount).toBe(1)
+    const item = result.items[0]
+    expect(item.status).toBe('new_from_portal')
+    expect(item.confidence).toBe(0.85) // 0.85, estritamente < 1.0
+    expect(item.resolvedAction).toBe('create_new')
+  })
+
+  it('aciona o gate de contagem quando a leitura for parcial (< 80% do esperado), bloqueando auto-conciliação', () => {
+    // 30 alunos esperados no cadastro local, mas o portal retornou apenas 7 (23.3%)
+    const local30: LocalStudentRecord[] = Array.from({ length: 30 }, (_, i) => ({
+      id: `loc_${i + 1}`,
+      name: `Aluno Local ${i + 1}`,
+      className: '8º Ano B',
+      portal_native_id: `MAT_${100 + i}`
+    }))
+
+    const scraped7 = [
+      { name: 'Aluno Local 1', matricula: 'MAT_100', classRef: '8º Ano B' },
+      { name: 'Aluno Local 2', matricula: 'MAT_101', classRef: '8º Ano B' },
+      { name: 'Aluno Local 3', matricula: 'MAT_102', classRef: '8º Ano B' },
+      { name: 'Novo Aluno Legítimo', matricula: 'MAT_999', classRef: '8º Ano B' }
+    ]
+
+    const result = reconcileRosterBatch(scraped7, local30, {
+      expectedCount: 30,
+      targetClassRef: '8º Ano B'
+    })
+
+    expect(result.completenessCheck).toBeDefined()
+    expect(result.completenessCheck?.isPartial).toBe(true)
+    expect(result.completenessCheck?.ratio).toBeLessThan(0.8)
+    expect(result.completenessCheck?.warningMessage).toContain('Leitura parcial detectada')
+
+    // Como é leitura parcial, NENHUM item deve ter resolvedAction automática pré-aprovada
+    const autoResolved = result.items.filter(i => i.resolvedAction !== undefined && i.status !== 'unmatched_local')
+    expect(autoResolved.length).toBe(0)
+  })
 })

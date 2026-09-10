@@ -1,7 +1,11 @@
 'use client'
 import { COLOR, RADIUS, TEXT, SHADOW, FONT } from '@/styles/tokens'
 import { toast, showConfirm } from '@/components/Toast'
-import { useState, useEffect, useMemo } from 'react'
+import Button from '@/components/Button'
+import { useState, useEffect, useMemo, useRef } from 'react'
+import { useModalA11y } from '@/hooks/useModalA11y'
+import { getSubjectProfile } from '@/lib/subjectProfile'
+import { safeGet, safeSet } from '@/lib/localDB'
 
 /* ─── Tipos ─────────────────────────────────────────────────────────────────── */
 interface School { id: string; name: string; color: string }
@@ -32,7 +36,7 @@ export default function Classes() {
   const [editId,    setEditId]    = useState<string | null>(null)
   const [formName,  setFormName]  = useState('')
   const [formSchool,setFormSchool]= useState('')
-  const [formSubj,  setFormSubj]  = useState('Inglês')
+  const [formSubj,  setFormSubj]  = useState(() => getSubjectProfile()?.name || 'Inglês')
   const [formYear,  setFormYear]  = useState(new Date().getFullYear().toString())
   const [formGradeYear, setFormGradeYear] = useState('9º Fund.')
   const [formDesc,  setFormDesc]  = useState('')
@@ -41,20 +45,20 @@ export default function Classes() {
   /* Detalhe de turma */
   const [detailId, setDetailId] = useState<string | null>(null)
 
+  const modalRef = useRef<HTMLDivElement>(null)
+  useModalA11y({
+    isOpen: modal !== null,
+    onClose: () => setModal(null),
+    modalRef
+  })
+
   /* ─── Carregar dados ─────────────────────────────────────────────────────── */
   useEffect(() => {
     const load = () => {
-      const sc = localStorage.getItem('teacher_schools')
-      const cl = localStorage.getItem('teacher_classes')
-      const st = localStorage.getItem('teacher_students')
-      if (sc) {
-        const parsed = JSON.parse(sc)
-        setSchools(Array.isArray(parsed) ? parsed.filter((s: any) => s.name !== 'Colégio Integral' && s.name !== 'Escola Modelo') : [])
-      } else {
-        setSchools([])
-      }
-      if (cl) setClasses(JSON.parse(cl))
-      if (st) setStudents(JSON.parse(st))
+      const sc = safeGet<any[]>('teacher_schools', [])
+      setSchools(Array.isArray(sc) ? sc.filter((s: any) => s.name !== 'Colégio Integral' && s.name !== 'Escola Modelo') : [])
+      setClasses(safeGet<ClassRecord[]>('teacher_classes', []))
+      setStudents(safeGet<StudentRecord[]>('teacher_students', []))
     }
     load()
     window.addEventListener('storage', load)
@@ -63,18 +67,18 @@ export default function Classes() {
 
   function saveClasses(updated: ClassRecord[]) {
     setClasses(updated)
-    localStorage.setItem('teacher_classes', JSON.stringify(updated))
+    safeSet('teacher_classes', updated)
     window.dispatchEvent(new Event('storage'))
   }
 
   /* ─── CRUD ───────────────────────────────────────────────────────────────── */
   function openAdd() {
-    setFormName(''); setFormSchool(schools[0]?.id || ''); setFormSubj('Inglês')
+    setFormName(''); setFormSchool(schools[0]?.id || ''); setFormSubj(getSubjectProfile()?.name || 'Inglês')
     setFormYear(new Date().getFullYear().toString()); setFormGradeYear('9º Fund.'); setFormDesc(''); setFormColor('#268bd2')
     setEditId(null); setModal('add')
   }
   function openEdit(cls: ClassRecord) {
-    setFormName(cls.name); setFormSchool(cls.schoolId); setFormSubj(cls.subject || 'Inglês')
+    setFormName(cls.name); setFormSchool(cls.schoolId); setFormSubj(cls.subject || getSubjectProfile()?.name || 'Inglês')
     setFormYear(cls.year || ''); setFormGradeYear(cls.gradeYear || '9º Fund.'); setFormDesc(cls.description); setFormColor('#268bd2')
     setEditId(cls.id); setModal('edit')
   }
@@ -87,7 +91,7 @@ export default function Classes() {
       const newSchool: School = { id: `sch_${Date.now()}`, name: formSchool.trim(), color: formColor }
       const upd = [...schools, newSchool]
       setSchools(upd)
-      localStorage.setItem('teacher_schools', JSON.stringify(upd))
+      safeSet('teacher_schools', upd)
       schoolId = newSchool.id
     } else if (match) { schoolId = match.id }
 
@@ -110,7 +114,7 @@ export default function Classes() {
     
     const updatedStudents = students.map(s => s.classId === id ? { ...s, classId: 'Sem Turma' } : s)
     setStudents(updatedStudents)
-    localStorage.setItem('teacher_students', JSON.stringify(updatedStudents))
+    safeSet('teacher_students', updatedStudents)
     window.dispatchEvent(new Event('storage'))
 
     if (detailId === id) setDetailId(null)
@@ -152,9 +156,9 @@ export default function Classes() {
             {classes.length} turmas cadastradas · {students.length} alunos total
           </p>
         </div>
-        <button onClick={openAdd} style={{ ...S.btn, background: '#2c1a0e', color: '#fff' }}>
-          <i className="ti ti-plus" /> Nova Turma
-        </button>
+        <Button variant="primary" icon="ti-plus" onClick={openAdd}>
+          Nova Turma
+        </Button>
       </div>
 
       {/* Filtros */}
@@ -307,7 +311,7 @@ export default function Classes() {
       {/* ─── Modal Turma ─────────────────────────────────────────────────────── */}
       {modal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(44,26,14,0.4)', zIndex: 9998, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div style={{ ...S.card, width: 460, maxWidth: '95vw', animation: 'modalIn 0.2s ease' }}>
+          <div ref={modalRef} role="dialog" aria-modal="true" style={{ ...S.card, width: 460, maxWidth: '95vw', animation: 'modalIn 0.2s ease' }}>
             <style>{`@keyframes modalIn { from { opacity:0; transform:scale(0.97) } to { opacity:1; transform:none } }`}</style>
             <h2 style={{ fontSize: 18, fontWeight: 700, color: '#2c1a0e', margin: '0 0 20px' }}>
               {modal === 'add' ? 'Nova Turma' : 'Editar Turma'}
@@ -363,10 +367,10 @@ export default function Classes() {
             </div>
 
             <div style={{ display: 'flex', gap: 10, marginTop: 20, justifyContent: 'flex-end' }}>
-              <button onClick={() => setModal(null)} style={{ ...S.btn, background: '#f0e8d8', color: '#7a5c42' }}>Cancelar</button>
-              <button onClick={saveForm} style={{ ...S.btn, background: '#2c1a0e', color: '#fff' }}>
-                <i className="ti ti-check" /> {modal === 'add' ? 'Criar Turma' : 'Salvar'}
-              </button>
+              <Button variant="secondary" onClick={() => setModal(null)}>Cancelar</Button>
+              <Button variant="primary" icon="ti-check" onClick={saveForm}>
+                {modal === 'add' ? 'Criar Turma' : 'Salvar'}
+              </Button>
             </div>
           </div>
         </div>

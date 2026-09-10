@@ -1,5 +1,7 @@
 'use client'
 import { toast, showConfirm } from '@/components/Toast'
+import Button from '@/components/Button'
+import { safeGet, safeSet } from '@/lib/localDB'
 import { COLOR, TEXT, RADIUS, SPACE } from '@/styles/tokens'
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useModalA11y } from '@/hooks/useModalA11y'
@@ -11,7 +13,16 @@ import { reconcileRosterBatch, RosterReconciliationResult, LocalStudentRecord } 
 import { createBrowserTask, BrowserAutomationTask, DiffItem } from '@/lib/browserAutomationClient'
 import { sanitizeOutboundPayload, hasActivePortalConsent } from '@/lib/portalSanitizer'
 import AutomationDiffModal from '@/components/modules/AutomationDiffModal'
-import { getPortalProfiles } from '@/lib/portalActionsEngine'
+import { getPortalProfiles, extractDomain } from '@/lib/portalActionsEngine'
+import {
+  listPortalConnections,
+  getPortalConnection,
+  startDiscovery,
+  abortDiscovery,
+  validateConnection,
+  recordSyncSuccess,
+  recordSyncFailure
+} from '@/lib/portalConnectionService'
 import PeiManagementModal from '@/components/PeiManagementModal'
 import BehaviorPointsModal from '@/components/BehaviorPointsModal'
 import PortalConsentModal from '@/components/PortalConsentModal'
@@ -177,6 +188,8 @@ export default function Students() {
   const [importPortalName, setImportPortalName] = useState('Machado Sobrinho')
   const [importPortalUrl, setImportPortalUrl] = useState('https://machadosobrinho.paineldoaluno.com.br/professor_notas')
   const [importClassRef, setImportClassRef] = useState('all')
+  const [importTab, setImportTab] = useState<'portal' | 'manual'>('portal')
+  const [manualStudentListText, setManualStudentListText] = useState('')
   const [activeAutomationTask, setActiveAutomationTask] = useState<BrowserAutomationTask | null>(null)
   const [isImportingRoster, setIsImportingRoster] = useState(false)
   const [peiStudent, setPeiStudent] = useState<StudentRecord | null>(null)
@@ -215,16 +228,11 @@ export default function Students() {
   /* ─── Carregar ────────────────────────────────────────────────────────────── */
   useEffect(() => {
     const load = () => {
-      const sc = localStorage.getItem('teacher_schools')
-      const cl = localStorage.getItem('teacher_classes')
-      const st = localStorage.getItem('teacher_students')
-      const sm = localStorage.getItem('teacher_student_metrics')
-      const md = localStorage.getItem('teacher_pedagogic_metrics')
-      if (sc) setSchools(JSON.parse(sc))
-      if (cl) setClasses(JSON.parse(cl))
-      if (st) setStudents(JSON.parse(st))
-      if (sm) setAllMetrics(JSON.parse(sm))
-      if (md) setMetricDefs(JSON.parse(md))
+      setSchools(safeGet<School[]>('teacher_schools', []))
+      setClasses(safeGet<ClassRecord[]>('teacher_classes', []))
+      setStudents(safeGet<StudentRecord[]>('teacher_students', []))
+      setAllMetrics(safeGet<StudentMetrics[]>('teacher_student_metrics', []))
+      setMetricDefs(safeGet<MetricDef[]>('teacher_pedagogic_metrics', []))
     }
     load()
     window.addEventListener('storage', load)
@@ -233,20 +241,20 @@ export default function Students() {
 
   function saveStudents(upd: StudentRecord[]) {
     setStudents(upd)
-    localStorage.setItem('teacher_students', JSON.stringify(upd))
+    safeSet('teacher_students', upd)
     window.dispatchEvent(new Event('storage'))
   }
   function saveMetrics(upd: StudentMetrics[]) {
     setAllMetrics(upd)
-    localStorage.setItem('teacher_student_metrics', JSON.stringify(upd))
+    safeSet('teacher_student_metrics', upd)
   }
   function saveMetricDefs(upd: MetricDef[]) {
     setMetricDefs(upd)
-    localStorage.setItem('teacher_pedagogic_metrics', JSON.stringify(upd))
+    safeSet('teacher_pedagogic_metrics', upd)
   }
 
   /* ─── Importação e Conciliação do Portal Escolar ───────────────────────────── */
-  async function handleStartPortalRosterImport(portalName: string, portalUrl: string, classRef: string) {
+  async function handleStartPortalRosterImport(portalName: string, portalUrl: string, classRef: string, forceSample = false) {
     setShowPortalSelectModal(false)
     setIsImportingRoster(true)
     setReconcilePortal(portalName)
@@ -269,6 +277,7 @@ export default function Students() {
     }))
 
     const domain = portalUrl.replace(/^https?:\/\//i, '').split('/')[0] || 'machadosobrinho.paineldoaluno.com.br'
+    startDiscovery(portalName || domain)
 
     const cleanPayload = sanitizeOutboundPayload({
       platform: domain,
@@ -294,27 +303,120 @@ export default function Students() {
       studentCount: localRecordList.length
     })
 
-    // Simulação robusta para ambiente / espera do harness
-    await new Promise(r => setTimeout(r, 700))
+    let scraped: any[] = []
+    try {
+      const res = await fetch('/api/sidecar-task', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'read_page_content',
+          goal: `lista de alunos da turma no portal ${portalName}`,
+          pageHint: portalName,
+          outputFormat: 'students'
+        })
+      })
+      const data = await res.json()
+      if (res.ok && data.success && Array.isArray(data.students) && data.students.length > 0) {
+        scraped = data.students
+      } else {
+        const connDomain = extractDomain(portalName) || domain
+        const conn = getPortalConnection(portalName) || (connDomain ? getPortalConnection(connDomain) : undefined)
+        if (data?.status === 'broken_needs_rediscovery' || conn?.status === 'broken_needs_rediscovery' || data?.requires_manual_rediscovery) {
+          try { recordSyncFailure(conn?.id || portalName, data?.error) } catch {}
+          const brokenResult = reconcileRosterBatch([], localRecordList, {
+            portalName,
+            portalStatus: 'broken_needs_rediscovery'
+          })
+          setReconcilePortal(portalName)
+          setReconcileMapSource('known_map')
+          setReconciliationResult(brokenResult)
+          setIsImportingRoster(false)
+          toast.error('Leitura não realizada: portal precisa de redescoberta manual.', 6000)
+          return
+        }
+        abortDiscovery(portalName || domain, data.error)
+        setIsImportingRoster(false)
+        toast.error(data.error || 'Nenhum aluno identificado na página aberta no navegador. Verifique se o Chrome está aberto na turma correta.')
+        return
+      }
+    } catch (err: any) {
+      abortDiscovery(portalName || domain, err.message)
+      setIsImportingRoster(false)
+      toast.error('Erro ao ler lista do portal. Verifique se o navegador está aberto na turma correta.')
+      return
+    }
 
-    const mockScraped = [
-      { name: 'Ana Júlia Ferreira', rollNumber: '01', portal_native_id: 'MAT_001', status: 'active', nee_flag: true, classRef: 'Turma Piloto' },
-      { name: 'Bruno Henrique Lima', rollNumber: '02', portal_native_id: 'MAT_002', status: 'active', nee_flag: false, classRef: 'Turma Piloto' },
-      { name: 'Carlos Eduardo Souza', rollNumber: '03', portal_native_id: 'MAT_003', status: 'active', nee_flag: false, classRef: 'Turma Piloto' },
-      { name: 'Lucas Silva', rollNumber: '04', portal_native_id: 'MAT_004', status: 'active', nee_flag: false, classRef: 'Turma Piloto' },
-      { name: 'Mariana Lima', rollNumber: '05', portal_native_id: 'MAT_005', status: 'active', nee_flag: false, classRef: 'Turma Piloto' },
-      { name: 'João P. Silva', rollNumber: '06', portal_native_id: 'MAT_006', status: 'active', nee_flag: false, classRef: 'Turma Piloto' },
-      { name: 'Felipe Rocha Torres', rollNumber: '07', portal_native_id: 'MAT_007', status: 'active', nee_flag: false, classRef: 'Turma Piloto' }
-    ]
+    const connDomain = extractDomain(portalName) || domain
+    const conn = getPortalConnection(portalName) || (connDomain ? getPortalConnection(connDomain) : undefined)
+    const portalStatus = conn?.status
+    const isUntestedMap = Boolean(conn && conn.status !== 'mapped_validated')
 
-    const scraped = (createdTask?.payload as any)?.scraped_students || mockScraped
-    const recResult = reconcileRosterBatch(scraped, localRecordList, { portalName })
+    const recResult = reconcileRosterBatch(scraped, localRecordList, {
+      portalName,
+      portalStatus,
+      isUntestedMap
+    })
+    if (recResult.completenessCheck?.isPartial && recResult.completenessCheck.warningMessage) {
+      toast.warning(recResult.completenessCheck.warningMessage, 8000)
+    }
 
     setReconcilePortal(portalName)
     setReconcileMapSource((createdTask?.payload as any)?.map_source || 'known_map')
     setReconcileWarnTeacher((createdTask?.payload as any)?.warn_teacher)
     setReconciliationResult(recResult)
     setIsImportingRoster(false)
+  }
+
+  function handleImportPastedRoster() {
+    const lines = manualStudentListText
+      .split(/\r?\n/)
+      .map(l => l.trim())
+      .filter(Boolean)
+
+    if (lines.length === 0) {
+      toast.warning('Cole ao menos o nome de um aluno para importar.')
+      return
+    }
+
+    const localRecordList: LocalStudentRecord[] = students.map(s => ({
+      id: s.id,
+      name: s.name,
+      classId: s.classId,
+      className: classes.find(c => c.id === s.classId)?.name,
+      schoolId: s.schoolId,
+      notes: s.notes,
+      level: s.level,
+      grades: s.grades,
+      email: s.email,
+      portal_native_id: s.portal_native_id,
+      source_type: s.source_type,
+      source_portal: s.source_portal,
+      sync_status: s.sync_status
+    }))
+
+    const targetClassObj = classes.find(c => c.name === importClassRef || c.id === importClassRef)
+    const targetClassName = targetClassObj?.name || (importClassRef !== 'all' ? importClassRef : 'Geral')
+
+    const parsedStudents = lines.map((line, idx) => {
+      const cleanName = line.replace(/^(\d+[\s\.\-\)\:]+|\d+\t+)/, '').trim()
+      const rollMatch = line.match(/^(\d+)/)
+      const rollNumber = rollMatch ? rollMatch[1] : String(idx + 1).padStart(2, '0')
+      return {
+        name: cleanName || line,
+        rollNumber,
+        portal_native_id: `MAT_MANUAL_${Date.now()}_${idx + 1}`,
+        status: 'active' as const,
+        nee_flag: false,
+        classRef: targetClassName
+      }
+    })
+
+    const recResult = reconcileRosterBatch(parsedStudents, localRecordList, { portalName: 'Lista Manual / CSV' })
+    setReconcilePortal('Lista Manual / CSV')
+    setReconcileMapSource('known_map')
+    setReconciliationResult(recResult)
+    setShowPortalSelectModal(false)
+    setManualStudentListText('')
   }
 
   /* ─── CRUD alunos ─────────────────────────────────────────────────────────── */
@@ -407,7 +509,9 @@ export default function Students() {
           </p>
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-          <button
+          <Button
+            variant="secondary"
+            size="md"
             onClick={() => {
               if (!hasActivePortalConsent()) {
                 setShowPortalConsentModal(true)
@@ -416,20 +520,15 @@ export default function Students() {
               }
             }}
             disabled={isImportingRoster}
-            style={{
-              ...S.btn,
-              background: '#b58900',
-              color: '#fff',
-              fontWeight: 700,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6
-            }}
+            loading={isImportingRoster}
+            icon={!isImportingRoster ? <i className="ti ti-school" /> : undefined}
             title="Importar lista oficial de alunos direto do portal escolar via Browser Harness"
           >
-            <i className="ti ti-school" /> {isImportingRoster ? 'Lendo Portal...' : 'Importar do Portal'}
-          </button>
-          <button
+            {isImportingRoster ? 'Lendo Portal...' : 'Importar do Portal'}
+          </Button>
+          <Button
+            variant="primary"
+            size="md"
             onClick={() => {
               if (requiresSharedDatabaseConsent()) {
                 setShowConsentModal(true)
@@ -437,10 +536,10 @@ export default function Students() {
                 setAddModal(true)
               }
             }}
-            style={{ ...S.btn, background: '#2c1a0e', color: '#fff' }}
+            icon={<i className="ti ti-user-plus" />}
           >
-            <i className="ti ti-user-plus" /> Novo Aluno
-          </button>
+            Novo Aluno
+          </Button>
         </div>
       </div>
 
@@ -1148,90 +1247,249 @@ export default function Students() {
           position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(3px)', zIndex: 1000,
           display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20
         }}>
-          <div ref={portalSelectModalRef} role="dialog" aria-modal="true" aria-label="Importar Alunos do Portal" style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 500, padding: 24, boxShadow: '0 20px 40px rgba(0,0,0,0.2)', border: '1px solid #ede8dc' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <div ref={portalSelectModalRef} role="dialog" aria-modal="true" aria-label="Importar Alunos" style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 520, padding: 24, boxShadow: '0 20px 40px rgba(0,0,0,0.2)', border: '1px solid #ede8dc' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <i className="ti ti-school" style={{ fontSize: 22, color: '#b58900' }} />
                 <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: COLOR.paperInk }}>
-                  Importar Alunos do Portal
+                  Importar Alunos para o Sistema
                 </h3>
               </div>
               <button onClick={() => setShowPortalSelectModal(false)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: COLOR.paperMid }}>×</button>
             </div>
 
-            <form onSubmit={(e) => {
-              e.preventDefault()
-              handleStartPortalRosterImport(importPortalName, importPortalUrl, importClassRef)
-            }}>
+            {/* Alternador de Modo de Importação */}
+            <div style={{ display: 'flex', gap: 6, marginBottom: 16, borderBottom: '1px solid #ede8dc', paddingBottom: 10 }}>
+              <button
+                type="button"
+                onClick={() => setImportTab('portal')}
+                style={{
+                  padding: '7px 14px',
+                  borderRadius: RADIUS.sm,
+                  border: 'none',
+                  background: importTab === 'portal' ? '#b58900' : 'rgba(44,26,14,0.06)',
+                  color: importTab === 'portal' ? '#fff' : COLOR.paperInk,
+                  fontWeight: 700,
+                  fontSize: 12,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  transition: 'all 0.15s'
+                }}
+              >
+                <i className="ti ti-school" /> Automação Portal Escolar
+              </button>
+              <button
+                type="button"
+                onClick={() => setImportTab('manual')}
+                style={{
+                  padding: '7px 14px',
+                  borderRadius: RADIUS.sm,
+                  border: 'none',
+                  background: importTab === 'manual' ? '#b58900' : 'rgba(44,26,14,0.06)',
+                  color: importTab === 'manual' ? '#fff' : COLOR.paperInk,
+                  fontWeight: 700,
+                  fontSize: 12,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  transition: 'all 0.15s'
+                }}
+              >
+                <i className="ti ti-clipboard-list" /> Colar Lista / CSV
+              </button>
+            </div>
+
+            {importTab === 'portal' ? (
+              <form onSubmit={(e) => {
+                e.preventDefault()
+                handleStartPortalRosterImport(importPortalName, importPortalUrl, importClassRef)
+              }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: 11.5, fontWeight: 700, textTransform: 'uppercase', color: COLOR.paperWarm, marginBottom: 4 }}>
+                      Portal / Escola
+                    </label>
+                    <select
+                      value={importPortalName}
+                      onChange={e => {
+                        const sel = e.target.value
+                        setImportPortalName(sel)
+                        const conn = listPortalConnections().find(c => c.portal_name === sel || c.id === sel)
+                        if (conn && conn.url) {
+                          setImportPortalUrl(conn.url)
+                        } else if (sel === 'Machado Sobrinho') {
+                          setImportPortalUrl('https://machadosobrinho.paineldoaluno.com.br/professor_notas')
+                        }
+                      }}
+                      style={{ ...S.input }}
+                    >
+                      {listPortalConnections().map(c => {
+                        const badge = c.status === 'mapped_validated' ? ' (✓ Mapeado)' : c.status === 'broken_needs_rediscovery' ? ' (⚠ Requer Redescoberta)' : ''
+                        return (
+                          <option key={c.id} value={c.portal_name}>
+                            {c.portal_name} ({c.domain || 'Web'}){badge}
+                          </option>
+                        )
+                      })}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: 11.5, fontWeight: 700, textTransform: 'uppercase', color: COLOR.paperWarm, marginBottom: 4 }}>
+                      URL da tela de chamada / notas
+                    </label>
+                    <input
+                      type="url"
+                      value={importPortalUrl}
+                      onChange={e => setImportPortalUrl(e.target.value)}
+                      placeholder="https://machadosobrinho.paineldoaluno.com.br/professor_notas"
+                      required
+                      style={{ ...S.input }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: 11.5, fontWeight: 700, textTransform: 'uppercase', color: COLOR.paperWarm, marginBottom: 4 }}>
+                      Turma a importar
+                    </label>
+                    <select
+                      value={importClassRef}
+                      onChange={e => setImportClassRef(e.target.value)}
+                      style={{ ...S.input }}
+                    >
+                      <option value="all">Todas as turmas vinculadas (Global em lote)</option>
+                      {classes.map(c => (
+                        <option key={c.id} value={c.name}>{c.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Aviso amigável com Chrome */}
+                  <div style={{
+                    padding: '12px 14px',
+                    borderRadius: RADIUS.md,
+                    background: '#eff6ff',
+                    border: '1px solid #bfdbfe',
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: 10
+                  }}>
+                    <i className="ti ti-brand-chrome" style={{ fontSize: 20, color: '#2563eb', flexShrink: 0, marginTop: 1 }} />
+                    <div style={{ fontSize: 12, color: '#1e40af', lineHeight: 1.5 }}>
+                      <strong>Automação Ativa:</strong> Deixe o Google Chrome aberto nessa página do {importPortalName}. Se o Sidecar Desktop não estiver rodando no momento, use o botão de demonstração abaixo para homologar a conciliação.
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      onClick={() => handleStartPortalRosterImport(importPortalName, importPortalUrl, importClassRef, true)}
+                      style={{
+                        padding: '9px 12px',
+                        borderRadius: RADIUS.sm,
+                        border: '1px dashed #b58900',
+                        background: '#fffbeb',
+                        color: '#92400e',
+                        fontSize: 11.5,
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 4
+                      }}
+                      title="Carrega a lista do Machado Sobrinho para testar a reconciliação e preencher a turma"
+                    >
+                      <i className="ti ti-sparkles" /> Carregar Turma do Machado Sobrinho
+                    </button>
+
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button
+                        type="button"
+                        onClick={() => setShowPortalSelectModal(false)}
+                        style={{
+                          padding: '9px 14px',
+                          borderRadius: RADIUS.sm,
+                          border: '1px solid #ede8dc',
+                          background: '#fff',
+                          color: COLOR.paperWarm,
+                          fontSize: TEXT.bodyCompact,
+                          fontWeight: 700,
+                          cursor: 'pointer'
+                        }}
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        type="submit"
+                        style={{
+                          padding: '9px 16px',
+                          borderRadius: RADIUS.sm,
+                          border: 'none',
+                          background: '#b58900',
+                          color: '#fff',
+                          fontSize: TEXT.bodyCompact,
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 6
+                        }}
+                      >
+                        <i className="ti ti-scan" /> Iniciar leitura
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </form>
+            ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: 11.5, fontWeight: 700, textTransform: 'uppercase', color: COLOR.paperWarm, marginBottom: 4 }}>
-                    Portal / Escola
-                  </label>
-                  <select
-                    value={importPortalName}
-                    onChange={e => {
-                      setImportPortalName(e.target.value)
-                      if (e.target.value === 'Machado Sobrinho') {
-                        setImportPortalUrl('https://machadosobrinho.paineldoaluno.com.br/professor_notas')
-                      }
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                    <label style={{ fontSize: 11.5, fontWeight: 700, textTransform: 'uppercase', color: COLOR.paperWarm }}>
+                      Cole a lista de alunos (um por linha)
+                    </label>
+                    <span style={{ fontSize: 11, color: COLOR.paperMid }}>
+                      {manualStudentListText.split(/\r?\n/).filter(l => l.trim()).length} aluno(s) identificado(s)
+                    </span>
+                  </div>
+                  <textarea
+                    rows={8}
+                    value={manualStudentListText}
+                    onChange={e => setManualStudentListText(e.target.value)}
+                    placeholder={'Exemplo:\n01. Ana Júlia Ferreira\n02. Bruno Henrique Lima\n03. Carlos Eduardo Souza\nLucas Silva\nMariana Lima'}
+                    style={{
+                      ...S.input,
+                      fontFamily: 'monospace',
+                      fontSize: 12,
+                      lineHeight: 1.6,
+                      resize: 'vertical'
                     }}
-                    style={{ ...S.input }}
-                  >
-                    <option value="Machado Sobrinho">Machado Sobrinho (paineldoaluno.com.br)</option>
-                    {getPortalProfiles().filter(p => p.name !== 'Machado Sobrinho').map(p => (
-                      <option key={p.id} value={p.name}>{p.name} ({p.matchUrl || 'Web'})</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label style={{ display: 'block', fontSize: 11.5, fontWeight: 700, textTransform: 'uppercase', color: COLOR.paperWarm, marginBottom: 4 }}>
-                    URL da tela de chamada / notas
-                  </label>
-                  <input
-                    type="url"
-                    value={importPortalUrl}
-                    onChange={e => setImportPortalUrl(e.target.value)}
-                    placeholder="https://machadosobrinho.paineldoaluno.com.br/professor_notas"
-                    required
-                    style={{ ...S.input }}
                   />
+                  <div style={{ fontSize: 11, color: COLOR.paperWarm, marginTop: 4 }}>
+                    Dica: Você pode copiar direto do Excel, Word, PDF do portal ou WhatsApp. Números de chamada são detectados automaticamente.
+                  </div>
                 </div>
 
                 <div>
                   <label style={{ display: 'block', fontSize: 11.5, fontWeight: 700, textTransform: 'uppercase', color: COLOR.paperWarm, marginBottom: 4 }}>
-                    Turma a importar
+                    Vincular à Turma
                   </label>
                   <select
                     value={importClassRef}
                     onChange={e => setImportClassRef(e.target.value)}
                     style={{ ...S.input }}
                   >
-                    <option value="all">Todas as turmas vinculadas (Global em lote)</option>
+                    <option value="all">Todas / Sem turma fixa</option>
                     {classes.map(c => (
                       <option key={c.id} value={c.name}>{c.name}</option>
                     ))}
                   </select>
                 </div>
 
-                {/* Aviso amigável com Chrome */}
-                <div style={{
-                  padding: '12px 14px',
-                  borderRadius: RADIUS.md,
-                  background: '#eff6ff',
-                  border: '1px solid #bfdbfe',
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  gap: 10
-                }}>
-                  <i className="ti ti-brand-chrome" style={{ fontSize: 20, color: '#2563eb', flexShrink: 0, marginTop: 1 }} />
-                  <div style={{ fontSize: 12, color: '#1e40af', lineHeight: 1.5 }}>
-                    <strong>Instrução:</strong> Deixe o Google Chrome aberto e logado nessa página do Machado Sobrinho antes de continuar.
-                  </div>
-                </div>
-
-                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8 }}>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 4 }}>
                   <button
                     type="button"
                     onClick={() => setShowPortalSelectModal(false)}
@@ -1249,26 +1507,29 @@ export default function Students() {
                     Cancelar
                   </button>
                   <button
-                    type="submit"
+                    type="button"
+                    onClick={handleImportPastedRoster}
+                    disabled={manualStudentListText.split(/\r?\n/).filter(l => l.trim()).length === 0}
                     style={{
                       padding: '9px 18px',
                       borderRadius: RADIUS.sm,
                       border: 'none',
-                      background: '#b58900',
+                      background: '#2c1a0e',
                       color: '#fff',
                       fontSize: TEXT.bodyCompact,
                       fontWeight: 700,
                       cursor: 'pointer',
                       display: 'flex',
                       alignItems: 'center',
-                      gap: 6
+                      gap: 6,
+                      opacity: manualStudentListText.split(/\r?\n/).filter(l => l.trim()).length === 0 ? 0.6 : 1
                     }}
                   >
-                    <i className="ti ti-scan" /> Iniciar leitura
+                    <i className="ti ti-check" /> Processar e Conciliar Alunos
                   </button>
                 </div>
               </div>
-            </form>
+            )}
           </div>
         </div>
       )}
@@ -1291,11 +1552,36 @@ export default function Students() {
           result={reconciliationResult}
           mapSource={reconcileMapSource}
           warnTeacher={reconcileWarnTeacher}
+          isUntestedMap={reconciliationResult.isUntestedMap}
+          portalStatus={reconciliationResult.isBrokenMap ? 'broken_needs_rediscovery' : (reconciliationResult.isUntestedMap ? 'mapped_untested' : 'mapped_validated')}
           onClose={() => setReconciliationResult(null)}
           onSuccess={(count) => {
+            const isPartial = Boolean(reconciliationResult?.completenessCheck?.isPartial)
+            const conn = getPortalConnection(reconcilePortal)
+            if (conn) {
+              if (conn.status === 'mapped_validated' && !isPartial) {
+                recordSyncSuccess(conn.id, {
+                  students_read: count,
+                  students_expected: reconciliationResult?.totalPortalCount || count,
+                  was_partial: false,
+                  layer_used: (reconcileMapSource === 'known_map' ? 'layer_1_deterministic' : 'layer_2_vision')
+                })
+              } else {
+                validateConnection(conn.id, {
+                  humanApproved: true,
+                  wasPartial: isPartial,
+                  syncData: {
+                    students_read: count,
+                    students_expected: reconciliationResult?.totalPortalCount || count,
+                    layer_used: (reconcileMapSource === 'known_map' ? 'layer_1_deterministic' : 'layer_2_vision')
+                  }
+                })
+              }
+            }
+
             setReconciliationResult(null)
-            const st = localStorage.getItem('teacher_students')
-            if (st) setStudents(JSON.parse(st))
+            const st = safeGet<StudentRecord[]>('teacher_students', [])
+            if (st.length > 0) setStudents(st)
             toast.success(`${count} alunos sincronizados com o portal ${reconcilePortal}!`)
           }}
         />

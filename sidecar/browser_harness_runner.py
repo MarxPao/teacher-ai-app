@@ -17,6 +17,7 @@ from capability_router import can_execute_autonomously, model_supports_vision
 from sanitizer import clean_state_snapshot, scrub_text
 from portal_map_store import PortalMapStore
 from portal_discovery_agent import PortalDiscoveryAgent, DiscoveredSelectorMap
+from page_reader_engine import PageReaderEngine, default_llm_caller as reader_llm_caller
 
 TASK_TIMEOUT_SECONDS = 120
 
@@ -45,16 +46,56 @@ class BrowserHarnessRunner:
         # Portais onde o professor ja consentiu com envio de screenshot esta sessao
         self._lgpd_vision_consented: set = set()
 
+    async def get_browser_context(self) -> Any:
+        """
+        Retorna o Playwright BrowserContext ativo conectado via CDP.
+        Permite que discovery_orchestrator e browser_use_agent compartilhem
+        a mesma sessão de navegação autenticada sem recriar janelas.
+        """
+        return await self.cdp.connect()
+
+    def flag_possible_drift(self, portal: str, action_type: str = "write", details: Optional[Dict[str, Any]] = None) -> None:
+        """
+        Sinaliza possível drift no layout ou no comportamento do formulário do portal.
+        Força redescoberta na próxima execução dessa ação.
+        """
+        domain = self.map_store.extract_domain(portal)
+        self.map_store.mark_drift(domain, action_type, details)
+        print(f"[Runner] 🚨 Possível drift registrado para '{domain}' ({action_type}). Próxima execução exigirá redescoberta.")
+
     async def process_task(self, task: Dict[str, Any], teacher_byok: Dict[str, str]) -> bool:
         """Processa uma tarefa de acordo com seu status atual ('drafted' ou 'approved')."""
         task_id = task.get("id")
         status = task.get("status")
+        # Ação de preparação / reconexão do Google Chrome com restauração de abas
+        if action_type in ("prepare_chrome", "connect_browser", "reconnect_chrome"):
+            return await self._handle_prepare_chrome(task)
+
+        # Ação de leitura generalista via PageReaderEngine (SeeAct/WebChallenger)
+        if action_type == "read_page_content":
+            portal = task.get("portal", "any")
+            page = await self.cdp.find_portal_page(portal)
+            if not page:
+                # Tenta a aba ativa se nenhuma aba específica encontrada
+                try:
+                    ctx = await self.cdp.connect()
+                    page = ctx.pages[0] if ctx.pages else None
+                except Exception:
+                    page = None
+
+            if not page:
+                self._update_task_status(task_id, "error", {
+                    "error_message": "Nenhuma aba encontrada no Chrome. Abra o portal ou a página desejada no navegador e tente novamente."
+                })
+                return False
+
+            return await self._handle_read_page_content(task, page, teacher_byok)
 
         if status == "drafted":
             return await self._handle_draft_phase(task, teacher_byok)
         elif status == "approved":
             return await self._handle_execution_phase(task)
-        
+
         return True
 
     async def _handle_draft_phase(self, task: Dict[str, Any], teacher_byok: Dict[str, str]) -> bool:
@@ -327,7 +368,16 @@ class BrowserHarnessRunner:
                                             await input_elem.first.fill(str(val))
                                             await input_elem.first.dispatch_event("input")
                                             await input_elem.first.dispatch_event("change")
-                                            found = True
+                                            # CHECKPOINT de Leitura Pós-Escrita
+                                            read_back = await input_elem.first.input_value()
+                                            expected = str(val).strip()
+                                            if read_back.strip() != expected:
+                                                drift_detail = {"field": field, "student": student_name, "expected": expected, "read_back": read_back}
+                                                self.flag_possible_drift(portal=getattr(page, "url", ""), action_type="write_grade", details=drift_detail)
+                                                failed.append(f"{student_name} (possível drift: esperado '{expected}', lido '{read_back.strip()}')")
+                                                found = False
+                                            else:
+                                                found = True
                                             break
                                 if found:
                                     break
@@ -342,14 +392,23 @@ class BrowserHarnessRunner:
                                     await input_elem.first.fill(str(val))
                                     await input_elem.first.dispatch_event("input")
                                     await input_elem.first.dispatch_event("change")
-                                    found = True
+                                    # CHECKPOINT de Leitura Pós-Escrita
+                                    read_back = await input_elem.first.input_value()
+                                    expected = str(val).strip()
+                                    if read_back.strip() != expected:
+                                        drift_detail = {"field": field, "student": student_name, "expected": expected, "read_back": read_back}
+                                        self.flag_possible_drift(portal=getattr(page, "url", ""), action_type="write_grade", details=drift_detail)
+                                        failed.append(f"{student_name or field} (possível drift: esperado '{expected}', lido '{read_back.strip()}')")
+                                        found = False
+                                    else:
+                                        found = True
                                     break
                             except Exception:
                                 continue
 
                     if found:
                         filled.append(f"{student_name} -> {field}: {val}")
-                    else:
+                    elif not any(f"{student_name}" in f_item for f_item in failed):
                         failed.append(f"{student_name} (campo de nota não localizado)")
 
                 # 2. Se for frequência / presença
@@ -370,7 +429,16 @@ class BrowserHarnessRunner:
                                             else:
                                                 await chk.first.check()
                                             await chk.first.dispatch_event("change")
-                                            found = True
+                                            # CHECKPOINT de Leitura Pós-Escrita
+                                            is_checked = await chk.first.is_checked()
+                                            expected_checked = not is_absent
+                                            if is_checked != expected_checked:
+                                                drift_detail = {"field": field, "student": student_name, "expected_checked": expected_checked, "read_back_checked": is_checked}
+                                                self.flag_possible_drift(portal=getattr(page, "url", ""), action_type="write_attendance", details=drift_detail)
+                                                failed.append(f"{student_name} (possível drift: checkbox não assumiu estado esperado)")
+                                                found = False
+                                            else:
+                                                found = True
                                             break
                                 if found:
                                     break
@@ -386,14 +454,23 @@ class BrowserHarnessRunner:
                                         await chk.first.uncheck()
                                     else:
                                         await chk.first.check()
-                                    found = True
+                                    # CHECKPOINT de Leitura Pós-Escrita
+                                    is_checked = await chk.first.is_checked()
+                                    expected_checked = not is_absent
+                                    if is_checked != expected_checked:
+                                        drift_detail = {"field": field, "expected_checked": expected_checked, "read_back_checked": is_checked}
+                                        self.flag_possible_drift(portal=getattr(page, "url", ""), action_type="write_attendance", details=drift_detail)
+                                        failed.append(f"{field} (possível drift: checkbox não assumiu estado esperado)")
+                                        found = False
+                                    else:
+                                        found = True
                                     break
                             except Exception:
                                 continue
 
                     if found:
                         filled.append(f"{student_name} -> {'Falta' if is_absent else 'Presente'}")
-                    else:
+                    elif not any(f"{student_name}" in f_item for f_item in failed):
                         failed.append(f"{student_name} (campo de frequência não localizado)")
 
                 # 3. Se for diário / conteúdo / texto geral
@@ -406,12 +483,21 @@ class BrowserHarnessRunner:
                                 await textarea.first.fill(str(val))
                                 await textarea.first.dispatch_event("input")
                                 await textarea.first.dispatch_event("change")
-                                filled.append(f"{field}: {val}")
-                                found = True
+                                # CHECKPOINT de Leitura Pós-Escrita
+                                read_back = await textarea.first.input_value()
+                                expected = str(val).strip()
+                                if read_back.strip() != expected:
+                                    drift_detail = {"field": field, "expected": expected, "read_back": read_back}
+                                    self.flag_possible_drift(portal=getattr(page, "url", ""), action_type="write_text", details=drift_detail)
+                                    failed.append(f"{field} (possível drift: esperado '{expected}', lido '{read_back.strip()}')")
+                                    found = False
+                                else:
+                                    filled.append(f"{field}: {val}")
+                                    found = True
                                 break
                         except Exception:
                             continue
-                    if not found:
+                    if not found and not any(f"{field}" in f_item for f_item in failed):
                         failed.append(f"{field} (campo de texto não localizado)")
 
                 await asyncio.sleep(0.05)
@@ -797,6 +883,108 @@ class BrowserHarnessRunner:
                 self.supabase.table("browser_automation_audit_logs").insert(kwargs).execute()
             except Exception as e:
                 print(f"[Runner] Erro ao gravar log de auditoria: {e}")
+
+    # ------------------------------------------------------------------
+    # Handler: Leitura Generalista de Página (SeeAct/WebChallenger)
+    # ------------------------------------------------------------------
+
+    async def _handle_read_page_content(
+        self,
+        task: Dict[str, Any],
+        page: Any,
+        teacher_byok: Dict[str, str],
+    ) -> bool:
+        """
+        Executa a leitura generalista de qualquer página via PageReaderEngine.
+
+        Usa os três pilares:
+          - PageMem: DOM estruturado deterministicamente
+          - Set-of-Mark: screenshot com elementos numerados (Pillow)
+          - SeeAct: Percepção LLM (cita seção) + Ancoragem determinística (código)
+
+        100% Read-Only. Nunca modifica o DOM.
+        """
+        task_id = task.get("id")
+        payload = task.get("payload", {})
+        goal = payload.get("extraction_goal", "lista de alunos")
+        output_format = payload.get("output_format", "students")
+        class_ref = task.get("class_ref") or payload.get("class_ref", "all")
+        portal = task.get("portal", "any")
+
+        print(f"\n[Runner] [READ_PAGE_CONTENT] goal='{goal}' portal='{portal}'")
+
+        # Verifica desafios de segurança (CAPTCHA, 2FA)
+        is_blocked, challenge = await self.cdp.detect_security_challenge(page)
+        if is_blocked:
+            self._update_task_status(task_id, "error", {
+                "error_message": f"Página bloqueada por desafio de segurança: {challenge}. Por favor, resolva no Chrome e tente novamente."
+            })
+            return False
+
+        # Instancia o engine com o chamador LLM do professor
+        engine = PageReaderEngine(llm_caller=self._make_llm_caller(teacher_byok))
+
+        result = await engine.run(page, goal, teacher_byok, output_format)
+
+        if not result.success:
+            self._update_task_status(task_id, "error", {
+                "error_message": result.failure_reason or "Falha ao extrair dados da página.",
+                "page_title": result.page_title,
+                "page_url": result.page_url,
+            })
+            return False
+
+        # Normaliza dados para o schema de student se aplicável
+        students = result.data
+        if output_format == "students":
+            # Adiciona classRef se disponível
+            for s in students:
+                if "classRef" not in s:
+                    s["classRef"] = class_ref if class_ref != "all" else "Geral"
+
+        self._update_task_status(task_id, "done", {
+            "scraped_students": students,
+            "total_scraped": len(students),
+            "page_title": result.page_title,
+            "page_url": result.page_url,
+            "section_used": result.section_used,
+            "output_format": output_format,
+            "raw_text": result.raw_text if output_format == "raw_text" else "",
+            "read_only": True,
+            "summary": f"{len(students)} registro(s) extraídos de '{result.page_title}' via engine generalista.",
+        })
+        print(f"[Runner] [READ_PAGE_CONTENT] ✅ {len(students)} registros extraídos.")
+        return True
+
+    async def _handle_prepare_chrome(self, task: Dict[str, Any]) -> bool:
+        """Reinicia o Chrome suavemente com --restore-last-session e flag CDP ativada."""
+        task_id = task.get("id")
+        profile_name = task.get("payload", {}).get("profile_directory") or "Profile 1"
+        print(f"\n[Runner] 🔄 Preparando navegador Google Chrome (Perfil: {profile_name})...")
+        success, message = CDPConnector.relaunch_chrome_with_cdp(profile_name=profile_name)
+        if success:
+            self._update_task_status(task_id, "done", {
+                "success": True,
+                "message": message,
+                "status": "ready"
+            })
+            print(f"[Runner] ✅ Navegador preparado com sucesso: {message}")
+            return True
+        else:
+            self._update_task_status(task_id, "error", {
+                "error_message": message
+            })
+            print(f"[Runner] ❌ Falha ao preparar navegador: {message}")
+            return False
+
+    def _make_llm_caller(self, byok: Dict[str, str]):
+        """Retorna um callable compatível com PageReaderEngine.llm_caller."""
+        from page_reader_engine import default_llm_caller
+
+        def caller(b64: str, prompt: str, _byok: Dict) -> str:
+            return default_llm_caller(b64, prompt, byok)
+
+        return caller
 
     def _update_task_status(self, task_id: str, status: str, extra_payload: Dict[str, Any]):
         """Atualiza o status da tarefa no Supabase."""

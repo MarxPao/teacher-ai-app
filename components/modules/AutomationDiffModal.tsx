@@ -113,7 +113,7 @@ export default function AutomationDiffModal({
         <div className="flex items-center gap-3 p-4 rounded-xl mb-5" style={{ background: '#dbeafe', border: '1px solid #bfdbfe' }}>
           <div className="w-4 h-4 rounded-full border-2 border-blue-600 border-t-transparent animate-spin" />
           <span className="text-sm font-semibold text-blue-900">
-            Executando automação no navegador via CDP... Por favor, não feche o Chrome.
+            Executando automação no navegador com segurança... Por favor, não feche o Chrome.
           </span>
         </div>
       )

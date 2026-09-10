@@ -1,0 +1,41 @@
+{
+  "id": "skill_entrar_em_inicio_mtqh07b0",
+  "name": "entrar em Inicio",
+  "portal_id": "machado_sobrinho",
+  "task_id": "entrar_em_inicio",
+  "version": 1,
+  "entry_node": "nav_0",
+  "nodes": {
+    "nav_0": {
+      "id": "nav_0",
+      "type": "NAVIGATE",
+      "anchor": {
+        "strategy": "css_selector",
+        "value": "https://machadosobrinho.paineldoaluno.com.br/professor_painel",
+        "description": "Navegar para https://machadosobrinho.paineldoaluno.com.br/professor_painel"
+      },
+      "params": {},
+      "on_success": null,
+      "on_fail": null,
+      "retry_policy": {
+        "max_attempts": 2,
+        "backoff_ms": 500
+      }
+    }
+  },
+  "metadata": {
+    "task_name": "entrar em Inicio",
+    "skill_type": "reading",
+    "description": "",
+    "turma_id": "cls_1785639332496",
+    "success_rate": 100,
+    "total_executions": 0,
+    "created_at": "2026-09-06T23:56:21.374Z",
+    "updated_at": "2026-09-06T23:56:21.375Z",
+    "last_verified_at": null,
+    "has_self_healed": false,
+    "author": "teacher_ai_recorder_nextjs",
+    "source_url": "https://machadosobrinho.paineldoaluno.com.br/professor_painel",
+    "variable_bindings_discovered": []
+  }
+}

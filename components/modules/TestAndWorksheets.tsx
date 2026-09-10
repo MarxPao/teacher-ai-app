@@ -460,7 +460,7 @@ Retorne a questão reformulada no formato estruturado:`
       const res = await generateListeningAudio({ text: cleanText, accent })
       setAudioUrl(res.audioUrl)
     } catch (e: any) {
-      toast.success(`Falha ao gerar áudio: ${e?.message || 'Erro'}`)
+      toast.error(`Falha ao gerar áudio: ${e?.message || 'Erro'}`)
     } finally {
       setAudioLoading(false)
     }

@@ -8,8 +8,10 @@ import {
 'use client'
 import { COLOR, RADIUS, TEXT, SHADOW, FONT } from '@/styles/tokens'
 import { toast, showConfirm } from '@/components/Toast'
+import Button from '@/components/Button'
 
 import { useState, useEffect } from 'react'
+import { safeGet, safeSet } from '@/lib/localDB'
 import { captureImageFile, extractContentFromImage } from '@/lib/ocrCapture'
 import { exportToPdf } from '@/lib/exportUtils'
 import { recordStudentGrade, addObservation, getStudentMemory } from '@/lib/studentMemory'
@@ -142,17 +144,16 @@ export default function OmniGrader({ initialTab = 'photo' }: OmniGraderProps) {
 
   useEffect(() => {
     try {
-      const st = localStorage.getItem('teacher_students')
-      const cl = localStorage.getItem('teacher_classes')
-      if (st) {
-        const parsed = JSON.parse(st)
+      const parsed = safeGet<StudentRecord[]>('teacher_students', [])
+      const cl = safeGet<ClassRecord[]>('teacher_classes', [])
+      if (parsed.length > 0) {
         setStudents(parsed)
-        if (parsed.length > 0) {
-          setSelectedStudentPhoto(parsed[0].id)
-          setSelectedStudentEssay(parsed[0].id)
-        }
+        setSelectedStudentPhoto(parsed[0].id)
+        setSelectedStudentEssay(parsed[0].id)
+      } else {
+        setStudents([])
       }
-      if (cl) setClasses(JSON.parse(cl))
+      setClasses(cl)
     } catch {}
   }, [])
 
@@ -164,7 +165,7 @@ export default function OmniGrader({ initialTab = 'photo' }: OmniGraderProps) {
       setPhotoGradeResult(null)
       setLaunchedPhoto(false)
     } catch (e) {
-      toast.success(`Falha ao selecionar imagem: ${String(e)}`)
+      toast.error(`Falha ao selecionar imagem: ${String(e)}`)
     }
   }
 
@@ -244,7 +245,7 @@ export default function OmniGrader({ initialTab = 'photo' }: OmniGraderProps) {
         }
       } else {
         // ─── CENÁRIO B: PROVA EXTERNA (LEITURA POR VISÃO IA GENERATIVA) ──────────
-        const apis = JSON.parse(localStorage.getItem('teacher_apis') || '[]')
+        const apis = safeGet<any[]>('teacher_apis', [])
         const activeApi = apis.find((a: any) => a.active && a.key) || { id: 'auto', provider: 'gemini', key: 'auto' }
 
         const ocr = await extractContentFromImage(imageUri, activeApi)
@@ -337,7 +338,7 @@ export default function OmniGrader({ initialTab = 'photo' }: OmniGraderProps) {
       const examKey = `ocr_${Date.now().toString().slice(-4)}`
       g[examKey] = photoGradeResult.score
       updated[idx].grades = g
-      localStorage.setItem('teacher_students', JSON.stringify(updated))
+      safeSet('teacher_students', updated)
       setStudents(updated)
       setLaunchedPhoto(true)
       
@@ -364,17 +365,17 @@ export default function OmniGrader({ initialTab = 'photo' }: OmniGraderProps) {
       setEssayImageUri(base64)
       setOcrWarning(null)
     } catch (e) {
-      toast.success(`Falha ao selecionar imagem: ${String(e)}`)
+      toast.error(`Falha ao selecionar imagem: ${String(e)}`)
     }
   }
 
   async function handleExtractEssayOcr() {
     if (!essayImageUri) {
-      toast.success('Selecione ou tire a foto da redação manuscrita primeiro.')
+      toast.warning('Selecione ou tire a foto da redação manuscrita primeiro.')
       return
     }
 
-    const apis = JSON.parse(localStorage.getItem('teacher_apis') || '[]')
+    const apis = safeGet<any[]>('teacher_apis', [])
     const activeApi = apis.find((a: any) => a.active && a.key) || { id: 'auto', provider: 'gemini', key: 'auto' }
 
     setIsOcrExtracting(true)
@@ -403,7 +404,7 @@ export default function OmniGrader({ initialTab = 'photo' }: OmniGraderProps) {
   }
   async function handleEvaluateCambridgeEssay() {
     if (!studentEssayText.trim()) {
-      toast.success('Cole ou digite a redação do aluno para iniciar a avaliação.')
+      toast.warning('Cole ou digite a redação do aluno para iniciar a avaliação.')
       return
     }
 
@@ -678,7 +679,7 @@ Retorne ESTRITAMENTE um objeto JSON no seguinte formato (sem markdown, sem bloco
       setEssayEvaluation(combinedEvaluation)
 
     } catch (err: any) {
-      toast.success(`Erro na avaliação da redação: ${err.message || 'Tente novamente'}`)
+      toast.error(`Erro na avaliação da redação: ${err.message || 'Tente novamente'}`)
     } finally {
       setIsEvaluatingEssay(false)
     }
@@ -693,7 +694,7 @@ Retorne ESTRITAMENTE um objeto JSON no seguinte formato (sem markdown, sem bloco
       const examKey = `essay_${Date.now().toString().slice(-4)}`
       g[examKey] = essayEvaluation.overallScore
       updated[idx].grades = g
-      localStorage.setItem('teacher_students', JSON.stringify(updated))
+      safeSet('teacher_students', updated)
       setStudents(updated)
       setLaunchedEssay(true)
 
@@ -978,14 +979,18 @@ ${essayEvaluation.studentActionPlan}
                 />
               </div>
 
-              <button
+              <Button
+                variant="primary"
+                fullWidth
+                size="md"
                 onClick={handleEvaluateCambridgeEssay}
+                loading={isEvaluatingEssay}
                 disabled={isEvaluatingEssay || !studentEssayText.trim()}
-                style={{ ...S.btnPrimary, justifyContent: 'center', marginTop: 8, opacity: !studentEssayText.trim() ? 0.6 : 1 }}
+                icon={!isEvaluatingEssay ? <i className="ti ti-bolt" /> : undefined}
+                style={{ marginTop: 8 }}
               >
-                <i className={isEvaluatingEssay ? 'ti ti-loader ti-spin' : 'ti ti-bolt'}></i>
                 {isEvaluatingEssay ? 'Avaliando com Rubrica Cambridge...' : 'Avaliar Redação com IA'}
-              </button>
+              </Button>
             </div>
           </div>
 
@@ -1023,17 +1028,23 @@ ${essayEvaluation.studentActionPlan}
                   </div>
 
                   <div style={{ display: 'flex', gap: 8 }}>
-                    <button onClick={handleExportEssayPdf} style={S.btnSecondary}>
-                      <i className="ti ti-printer"></i> Baixar PDF
-                    </button>
-                    <button
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={handleExportEssayPdf}
+                      icon={<i className="ti ti-printer" />}
+                    >
+                      Baixar PDF
+                    </Button>
+                    <Button
+                      variant="primary"
+                      size="sm"
                       onClick={handleSaveEssayToGradebook}
                       disabled={launchedEssay}
-                      style={{ ...S.btnPrimary, background: launchedEssay ? '#2d9d5d' : '#8b5e3c' }}
+                      icon={<i className={launchedEssay ? 'ti ti-check' : 'ti ti-database-export'} />}
                     >
-                      <i className={launchedEssay ? 'ti ti-check' : 'ti ti-database-export'}></i>
                       {launchedEssay ? 'Lançado no Gradebook!' : 'Lançar Nota'}
-                    </button>
+                    </Button>
                   </div>
                 </div>
 

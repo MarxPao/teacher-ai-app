@@ -232,7 +232,7 @@ export default function SourceKnowledgeHub({
       setUploadStatus('')
     } catch (err: unknown) {
       setUploadStatus('')
-      toast.success(`Falha ao ler arquivo: ${err instanceof Error ? err.message : 'Erro na extração.'}`)
+      toast.error(`Falha ao ler arquivo: ${err instanceof Error ? err.message : 'Erro na extração.'}`)
     }
   }
 
@@ -245,7 +245,7 @@ export default function SourceKnowledgeHub({
       setWebResults(res)
       setSelectedWebIndexes(res.map((_, idx) => idx))
     } catch (e) {
-      toast.success('Não foi possível realizar a pesquisa na web no momento.')
+      toast.error('Não foi possível realizar a pesquisa na web no momento.')
     } finally {
       setWebSearching(false)
     }
@@ -254,7 +254,7 @@ export default function SourceKnowledgeHub({
   // Adiciona Resultados da Web selecionados como Fontes
   const handleAddWebResultsToSources = () => {
     if (selectedWebIndexes.length === 0) {
-      toast.success('Selecione pelo menos um resultado da web.')
+      toast.warning('Selecione pelo menos um resultado da web.')
       return
     }
 
@@ -886,7 +886,7 @@ export default function SourceKnowledgeHub({
                 type="button"
                 onClick={() => {
                   if (!noteTitle.trim() || !noteContent.trim()) {
-                    toast.success('Preencha o título e o texto da nota.')
+                    toast.warning('Preencha o título e o texto da nota.')
                     return
                   }
                   const item: SourceItem = {

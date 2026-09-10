@@ -1,6 +1,8 @@
 'use client'
 import { COLOR, RADIUS, TEXT, SHADOW, FONT } from '@/styles/tokens'
 import { toast, showConfirm } from '@/components/Toast'
+import Button from '@/components/Button'
+import { safeGet, safeSet } from '@/lib/localDB'
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { useModalA11y } from '@/hooks/useModalA11y'
 import { ELT_TAXONOMY, getSubcategoriesForCategory } from '@/lib/englishTaxonomy'
@@ -72,7 +74,7 @@ const S: Record<string, React.CSSProperties> = {
 }
 
 function getActiveApi() {
- try { const a = JSON.parse(localStorage.getItem('teacher_apis') || '[]'); return a.find((x: { active: boolean; provider: string }) => x.active && x.provider !== 'manual') || null } catch { return null }
+  try { const a = safeGet<any[]>('teacher_apis', []); return a.find((x: { active: boolean; provider: string }) => x.active && x.provider !== 'manual') || null } catch { return null }
 }
 
 /* 
@@ -196,59 +198,54 @@ export default function QuestionBank() {
     modalRef: previewRubricModalRef
   })
 
- const autoSyncRubrics = async () => {
- try {
- const local = JSON.parse(localStorage.getItem('teacher_rubrics') || '[]')
- const { fetchSupabaseActivitiesAndRubrics } = await import('@/lib/supabaseClient')
- const cloud = await fetchSupabaseActivitiesAndRubrics()
- const cloudRubrics = cloud.filter(c => c.sourceTable === 'rubrics_and_answer_keys' || c.type === 'rubric' || c.type === 'answer_key')
+  const autoSyncRubrics = async () => {
+    try {
+      const local = safeGet<any[]>('teacher_rubrics', [])
+      const { fetchSupabaseActivitiesAndRubrics } = await import('@/lib/supabaseClient')
+      const cloud = await fetchSupabaseActivitiesAndRubrics()
+      const cloudRubrics = cloud.filter(c => c.sourceTable === 'rubrics_and_answer_keys' || c.type === 'rubric' || c.type === 'answer_key')
 
- const map = new Map<string, any>()
- for (const item of [...local, ...cloudRubrics]) {
- if (item.id) map.set(item.id, item)
- }
- setRubrics(Array.from(map.values()))
- } catch {
- try {
- const local = JSON.parse(localStorage.getItem('teacher_rubrics') || '[]')
- setRubrics(local)
- } catch {}
- }
- }
+      const map = new Map<string, any>()
+      for (const item of [...local, ...cloudRubrics]) {
+        if (item.id) map.set(item.id, item)
+      }
+      setRubrics(Array.from(map.values()))
+    } catch {
+      setRubrics(safeGet<any[]>('teacher_rubrics', []))
+    }
+  }
 
- useEffect(() => {
- autoSyncRubrics()
- window.addEventListener('storage', autoSyncRubrics)
- return () => window.removeEventListener('storage', autoSyncRubrics)
- }, [])
+  useEffect(() => {
+    autoSyncRubrics()
+    window.addEventListener('storage', autoSyncRubrics)
+    return () => window.removeEventListener('storage', autoSyncRubrics)
+  }, [])
 
- const handleDeleteRubric = async (item: any) => {
- if (!(await showConfirm({ message: `Deseja excluir a rubrica/gabarito "${item.title}"?` }))) return
- try {
- const { deleteSupabaseActivity } = await import('@/lib/supabaseClient')
- await deleteSupabaseActivity(item.id, 'rubrics_and_answer_keys')
- } catch {}
+  const handleDeleteRubric = async (item: any) => {
+    if (!(await showConfirm({ message: `Deseja excluir a rubrica/gabarito "${item.title}"?` }))) return
+    try {
+      const { deleteSupabaseActivity } = await import('@/lib/supabaseClient')
+      await deleteSupabaseActivity(item.id, 'rubrics_and_answer_keys')
+    } catch {}
 
- const updated = rubrics.filter(r => r.id !== item.id)
- setRubrics(updated)
- localStorage.setItem('teacher_rubrics', JSON.stringify(updated))
- window.dispatchEvent(new Event('storage'))
- }
+    const updated = rubrics.filter(r => r.id !== item.id)
+    setRubrics(updated)
+    safeSet('teacher_rubrics', updated)
+    window.dispatchEvent(new Event('storage'))
+  }
 
- /* Carregar dados */
- useEffect(() => {
- const load = () => {
- const sc = localStorage.getItem('teacher_schools')
- const cl = localStorage.getItem('teacher_classes')
- if (sc) setSchools(JSON.parse(sc))
- if (cl) setClasses(JSON.parse(cl))
- const qList = getStoredQuestions()
- setQuestions(qList as any)
- }
- load()
- window.addEventListener('storage', load)
- return () => window.removeEventListener('storage', load)
- }, [])
+  /* Carregar dados */
+  useEffect(() => {
+    const load = () => {
+      setSchools(safeGet<School[]>('teacher_schools', []))
+      setClasses(safeGet<ClassRecord[]>('teacher_classes', []))
+      const qList = getStoredQuestions()
+      setQuestions(qList as any)
+    }
+    load()
+    window.addEventListener('storage', load)
+    return () => window.removeEventListener('storage', load)
+  }, [])
 
  function saveQs(upd: Question[]) {
  setQuestions(upd)
@@ -298,106 +295,70 @@ export default function QuestionBank() {
  setFLevel2('B1'); setFYear2('2025'); setFSchool2(''); setFClass2(''); setFTags('')
  }
 
-async function callApiDirect(api: { provider: string; key?: string; model?: string }, prompt: string): Promise<string> {
- if (!api.key) throw new Error(`Chave de API não configurada para ${api.provider}.`)
- if (api.provider === 'anthropic') {
- const r = await fetch('https://api.anthropic.com/v1/messages', {
- method: 'POST',
- headers: { 'Content-Type': 'application/json', 'x-api-key': api.key, 'anthropic-version': '2023-06-01', 'anthropic-dangerously-allow-browser': 'true' },
- body: JSON.stringify({ model: api.model || 'claude-3-5-sonnet-20241022', max_tokens: 4096, messages: [{ role: 'user', content: prompt }] })
- })
- const d = await r.json()
- if (d.error) throw new Error(d.error.message || JSON.stringify(d.error))
- return d.content?.map((c: { text: string }) => c.text).join('\n') || ''
- }
- if (api.provider === 'openai' || api.provider === 'deepseek') {
- const baseUrl = api.provider === 'deepseek' ? 'https://api.deepseek.com/v1/chat/completions' : 'https://api.openai.com/v1/chat/completions'
- const r = await fetch(baseUrl, {
- method: 'POST',
- headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${api.key}` },
- body: JSON.stringify({ model: api.model || (api.provider === 'deepseek' ? 'deepseek-chat' : 'gpt-4o-mini'), messages: [{ role: 'user', content: prompt }], max_tokens: 4096 })
- })
- const d = await r.json()
- if (d.error) throw new Error(d.error.message || JSON.stringify(d.error))
- return d.choices?.[0]?.message?.content || ''
- }
- if (api.provider === 'gemini') {
- const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${api.model || 'gemini-1.5-flash'}:generateContent?key=${api.key}`, {
- method: 'POST',
- headers: { 'Content-Type': 'application/json' },
- body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
- })
- const d = await r.json()
- if (d.error) throw new Error(d.error.message || JSON.stringify(d.error))
- return d.candidates?.[0]?.content?.parts?.[0]?.text || ''
- }
- throw new Error('Provedor não suportado para chamada direta.')
-}
-
 function parseJsonFromAI(text: string): Array<{ statement: string; options?: string[]; answer?: string; explanation?: string }> {
- if (!text || !text.trim()) {
- throw new Error('A IA não retornou nenhuma resposta.')
- }
+  if (!text || !text.trim()) {
+    throw new Error('A IA não retornou nenhuma resposta.')
+  }
 
- let cleaned = text.trim()
- .replace(/^```json\s*/gi, '')
- .replace(/^```\s*/gi, '')
- .replace(/\s*```$/gi, '')
- .trim()
+  let cleaned = text.trim()
+  .replace(/^```json\s*/gi, '')
+  .replace(/^```\s*/gi, '')
+  .replace(/\s*```$/gi, '')
+  .trim()
 
- try {
- const parsed = JSON.parse(cleaned)
- return Array.isArray(parsed) ? parsed : [parsed]
- } catch {
- // Continue to substring extraction
- }
+  try {
+    const parsed = JSON.parse(cleaned)
+    return Array.isArray(parsed) ? parsed : [parsed]
+  } catch {
+    // Continue to substring extraction
+  }
 
- const startIdx = cleaned.indexOf('[')
- const endIdx = cleaned.lastIndexOf(']')
+  const startIdx = cleaned.indexOf('[')
+  const endIdx = cleaned.lastIndexOf(']')
 
- if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
- const candidate = cleaned.slice(startIdx, endIdx + 1)
- try {
- const parsed = JSON.parse(candidate)
- return Array.isArray(parsed) ? parsed : [parsed]
- } catch {
- try {
- const sanitized = candidate
- .replace(/,\s*([\]}])/g, '$1')
- .replace(/[\u0000-\u001F\u007F-\u009F]/g, ' ')
- const parsed = JSON.parse(sanitized)
- return Array.isArray(parsed) ? parsed : [parsed]
- } catch {
- throw new Error('A resposta da IA não pôde ser convertida em formato JSON.')
- }
- }
- }
+  if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+    const candidate = cleaned.slice(startIdx, endIdx + 1)
+    try {
+      const parsed = JSON.parse(candidate)
+      return Array.isArray(parsed) ? parsed : [parsed]
+    } catch {
+      try {
+        const sanitized = candidate
+        .replace(/,\s*([\]}])/g, '$1')
+        .replace(/[\u0000-\u001F\u007F-\u009F]/g, ' ')
+        const parsed = JSON.parse(sanitized)
+        return Array.isArray(parsed) ? parsed : [parsed]
+      } catch {
+        throw new Error('A resposta da IA não pôde ser convertida em formato JSON.')
+      }
+    }
+  }
 
- const objStart = cleaned.indexOf('{')
- const objEnd = cleaned.lastIndexOf('}')
+  const objStart = cleaned.indexOf('{')
+  const objEnd = cleaned.lastIndexOf('}')
 
- if (objStart !== -1 && objEnd !== -1 && objEnd > objStart) {
- const candidate = cleaned.slice(objStart, objEnd + 1)
- try {
- const parsed = JSON.parse(candidate)
- return [parsed]
- } catch {
- throw new Error('A resposta da IA continha um objeto malformado.')
- }
- }
+  if (objStart !== -1 && objEnd !== -1 && objEnd > objStart) {
+    const candidate = cleaned.slice(objStart, objEnd + 1)
+    try {
+      const parsed = JSON.parse(candidate)
+      return [parsed]
+    } catch {
+      throw new Error('A resposta da IA continha um objeto malformado.')
+    }
+  }
 
- throw new Error('IA não retornou um formato JSON válido. Tente novamente.')
+  throw new Error('IA não retornou um formato JSON válido. Tente novamente.')
 }
 
  /* Gerar com IA */
  async function generateWithAI() {
- const api = getActiveApi()
- if (!api) { toast.success('Configure uma API ativa em APIs & Modelos.'); return }
- if (!aiTopic.trim()) { toast.success('Informe o tópico ou assunto.'); return }
+  const api = getActiveApi()
+  if (!api) { toast.warning('Configure uma API ativa em APIs & Modelos.'); return }
+  if (!aiTopic.trim()) { toast.warning('Informe o tópico ou assunto.'); return }
 
- setIsGen(true)
- try {
- const prompt = `Você é um gerador automatizado de atividades e questões pedagógicas. Sua resposta DEVE ser EXCLUSIVAMENTE um JSON VÁLIDO sem markdown, sem cumprimentos e sem explicações fora do JSON.
+  setIsGen(true)
+  try {
+    const prompt = `Você é um gerador automatizado de atividades e questões pedagógicas. Sua resposta DEVE ser EXCLUSIVAMENTE um JSON VÁLIDO sem markdown, sem cumprimentos e sem explicações fora do JSON.
 
 Gere exatamente ${aiCount} itens de ${KIND_LABELS[aiKind].label} (${aiType === 'mc' ? 'múltipla escolha' : aiType === 'essay' ? 'dissertativa' : aiType === 'tf' ? 'verdadeiro ou falso' : 'preencher lacuna'}) sobre "${aiTopic}" para a disciplina ${aiSubject}, nível ${aiLevel}, ano letivo ${aiYear}.
 
@@ -413,32 +374,22 @@ FORMATO OBRIGATÓRIO (retorne SOMENTE este array JSON):
 
 Para questões dissertativas ou V/F, omita "options". Para V/F, o "answer" deve ser "Verdadeiro" ou "Falso". Retorne APENAS o JSON puro.`
 
- let rawText = ''
-
- if (api.key && api.provider !== 'manual') {
- try {
- rawText = await callApiDirect(api, prompt)
- } catch (err) {
- console.warn('Chamada direta de API falhou, tentando /api/agent:', err)
- }
- }
-
- if (!rawText) {
- const res = await fetch('/api/agent', {
- method: 'POST',
- headers: { 'Content-Type': 'application/json' },
- body: JSON.stringify({
- messages: [{ role: 'user', content: prompt }],
- context: '', provider: api.provider, userKey: api.key, model: api.model,
- }),
- })
- const data = await res.json()
- if (data.error) throw new Error(data.error)
- rawText = data.content?.find((c: { type: string; text?: string }) => c.type === 'text')?.text || ''
- if (!rawText && Array.isArray(data.content) && data.content[0]?.text) {
- rawText = data.content[0].text
- }
- }
+    const res = await fetch('/api/agent', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        messages: [{ role: 'user', content: prompt }],
+        context: '',
+        provider: api.provider,
+        userKey: api.key,
+        model: api.model,
+        temperatureMode: 'deterministic'
+      }),
+    })
+    const data = await res.json()
+    if (data.error) throw new Error(data.error)
+    const rawText = data.content?.find((c: { type: string; text?: string }) => c.type === 'text')?.text ||
+      (Array.isArray(data.content) && data.content[0]?.text ? data.content[0].text : '') || ''
 
  const parsed = parseJsonFromAI(rawText)
 
@@ -464,16 +415,15 @@ Para questões dissertativas ou V/F, omita "options". Para V/F, o "answer" deve 
  saveQs([...newQs, ...questions])
  setModal(null)
  } catch (e) {
- toast.success(`Erro ao gerar: ${e instanceof Error ? e.message : 'desconhecido'}`)
+ toast.error(`Erro ao gerar: ${e instanceof Error ? e.message : 'desconhecido'}`)
  } finally { setIsGen(false) }
  }
 
  function openExtractModal() {
     try {
-      const raw = localStorage.getItem('teacher_repo') || localStorage.getItem('teacher_repository') || '[]'
-      const items = JSON.parse(raw)
+      const items = safeGet<any[]>('teacher_repo', safeGet<any[]>('teacher_repository', []))
       if (!items.length) {
-        toast.success('Nenhum livro encontrado na Biblioteca. Acesse o módulo "Biblioteca Digital" e adicione seus livros/materiais em PDF.')
+        toast.warning('Nenhum livro encontrado na Biblioteca. Acesse o módulo "Biblioteca Digital" e adicione seus livros/materiais em PDF.')
         return
       }
       setExtractBooks(items)
@@ -482,7 +432,7 @@ Para questões dissertativas ou V/F, omita "options". Para V/F, o "answer" deve 
       setExtractedList(questionsExt.map(q => ({ ...q, selected: true })))
       setShowExtractModal(true)
     } catch {
-      toast.success('Erro ao carregar livros da biblioteca.')
+      toast.error('Erro ao carregar livros da biblioteca.')
     }
   }
 
@@ -500,7 +450,7 @@ Para questões dissertativas ou V/F, omita "options". Para V/F, o "answer" deve 
   function handleSaveExtractedQuestions() {
     const toSave = extractedList.filter(q => q.selected).map(({ selected, ...q }) => q)
     if (toSave.length === 0) {
-      toast.success('Selecione ao menos um exercício para importar.')
+      toast.warning('Selecione ao menos um exercício para importar.')
       return
     }
     const updated = [...(toSave as any), ...questions]
@@ -532,18 +482,18 @@ Para questões dissertativas ou V/F, omita "options". Para V/F, o "answer" deve 
           </p>
         </div>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-          <button onClick={() => setShowAnalyticsModal(true)} style={{ ...S.btn, background: '#2563eb', color: '#fffcf8' }}>
-            <i className="ti ti-chart-bar" /> Analytics Cross-Turma
-          </button>
-          <button onClick={openExtractModal} style={{ ...S.btn, background: '#27ae60', color: '#fffcf8' }}>
-            <i className="ti ti-book" /> Extrair Exercícios de Livro (RAG)
-          </button>
-          <button onClick={() => setModal('ai')} style={{ ...S.btn, background: '#d4944a', color: '#fffcf8' }}>
-            <i className="ti ti-sparkles" /> Gerar com IA
-          </button>
-          <button onClick={() => setModal('add')} style={{ ...S.btn, background: '#8b5e3c', color: '#fffcf8' }}>
-            <i className="ti ti-plus" /> Adicionar Atividade
-          </button>
+          <Button variant="secondary" icon="ti-chart-bar" onClick={() => setShowAnalyticsModal(true)}>
+            Analytics Cross-Turma
+          </Button>
+          <Button variant="secondary" icon="ti-book" onClick={openExtractModal}>
+            Extrair Exercícios de Livro (RAG)
+          </Button>
+          <Button variant="secondary" icon="ti-sparkles" onClick={() => setModal('ai')}>
+            Gerar com IA
+          </Button>
+          <Button variant="primary" icon="ti-plus" onClick={() => setModal('add')}>
+            Adicionar Atividade
+          </Button>
         </div>
       </div>
 
@@ -1032,10 +982,10 @@ Para questões dissertativas ou V/F, omita "options". Para V/F, o "answer" deve 
  </div>
  </div>
  <div style={{ display: 'flex', gap: 10, marginTop: 20, justifyContent: 'flex-end' }}>
- <button onClick={() => { resetForm(); setModal(null) }} style={{ ...S.btn, background: '#f0e8d8', color: '#7a5c42' }}>Cancelar</button>
- <button onClick={addManual} style={{ ...S.btn, background: '#2c1a0e', color: '#fff' }}>
- <i className="ti ti-check" /> Salvar Questão
- </button>
+ <Button variant="secondary" onClick={() => { resetForm(); setModal(null) }}>Cancelar</Button>
+ <Button variant="primary" icon="ti-check" onClick={addManual}>
+ Salvar Questão
+ </Button>
  </div>
  </div>
  </div>
@@ -1100,10 +1050,10 @@ Para questões dissertativas ou V/F, omita "options". Para V/F, o "answer" deve 
  </div>
  </div>
  <div style={{ display: 'flex', gap: 10, marginTop: 20, justifyContent: 'flex-end' }}>
- <button onClick={() => setModal(null)} style={{ ...S.btn, background: '#f5efe6', color: '#7a5c42' }}>Cancelar</button>
- <button onClick={generateWithAI} disabled={isGen || !aiTopic.trim()} style={{ ...S.btn, background: '#d4944a', color: '#fffcf8', opacity: isGen || !aiTopic.trim() ? 0.6 : 1 }}>
- {isGen ? <><i className="ti ti-loader-2" style={{ animation: 'spin 1s linear infinite' }} /> Criando...</> : <><i className="ti ti-sparkles" /> Gerar {aiCount} Itens</>}
- </button>
+    <Button variant="secondary" onClick={() => setModal(null)}>Cancelar</Button>
+    <Button variant="primary" loading={isGen} icon="ti-sparkles" disabled={isGen || !aiTopic.trim()} onClick={generateWithAI}>
+      Gerar {aiCount} Itens
+    </Button>
  </div>
  </div>
  </div>

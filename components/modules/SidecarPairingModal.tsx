@@ -90,13 +90,13 @@ export default function SidecarPairingModal({ isOpen, onClose, onPaired }: Sidec
               Vincular Sidecar Desktop
             </h3>
             <p style={{ margin: 0, fontSize: 12, color: '#8b5e3c' }}>
-              Conexão local e segura via Chrome DevTools Protocol (CDP)
+              Conexão local e segura direto no seu navegador
             </p>
           </div>
         </div>
 
         <p style={{ fontSize: 13, color: '#7a5c42', lineHeight: 1.6, marginBottom: 20 }}>
-          Ao iniciar o Sidecar no terminal (<code>iniciar-sidecar.bat</code>), um código de pareamento de 6 dígitos será gerado. Digite-o abaixo para autorizar o daemon a operar localmente.
+          Ao abrir o aplicativo de apoio (Sidecar Desktop), um código de vinculação de 6 dígitos é exibido na tela ou no ícone da bandeja. Digite-o abaixo para autorizar a conexão com a sua conta.
         </p>
 
         <div style={{ marginBottom: 20 }}>

@@ -100,7 +100,7 @@ export default function PortalConsentModal({
               <span>🔒</span> Sanitização Local Estrita (Zero Vazamento de PII)
             </div>
             <p style={{ margin: 0, fontSize: 12.5, color: '#665c54', lineHeight: 1.5 }}>
-              A leitura de chamadas e notas ocorre 100% no seu navegador local via Chrome Debugging (CDP). Nenhum dado pessoal identificável (nomes completos de alunos, CPFs, e-mails) é enviado para servidores de IA externos para descoberta estrutural.
+              A leitura de chamadas e notas ocorre 100% no seu navegador local no seu computador. Nenhum dado pessoal identificável (nomes completos de alunos, CPFs, e-mails) é enviado para servidores de IA externos para descoberta estrutural.
             </p>
           </div>
 

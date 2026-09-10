@@ -26,11 +26,11 @@ SUPABASE_KEY = os.getenv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "eyJhbGciOiJIUzI1NiIsI
 
 def print_banner():
     print("=" * 68)
-    print(" 🦉 TEACHER AI APP — SIDECAR DESKTOP (BROWSER HARNESS / CDP)")
+    print(" 🦉 TEACHER AI APP — APLICATIVO DE APOIO (SIDECAR DESKTOP)")
     print("=" * 68)
-    print(" • Modo: 100% Local (Playwright + Chrome DevTools Protocol)")
-    print(" • Porta de Depuração CDP: http://localhost:9222")
-    print(" • Segurança: Sessão criptografada no OS Keychain")
+    print(" • Modo: Leitura Local Segura no Navegador do Professor")
+    print(" • Integração: Conexão de 1 Clique com Restauração de Abas")
+    print(" • Segurança: Credenciais protegidas no OS Keychain")
     print("=" * 68)
 
 def init_supabase(token: Optional[str] = None):
@@ -80,19 +80,22 @@ async def main():
     # 2. Inicialização do Supabase
     supabase = init_supabase(token)
 
-    # 3. Inicialização da Bandeja do Sistema (Tray Icon)
-    tray = TrayApp()
-    tray.run_in_background()
-    tray.update_status("idle", "Ocioso")
-
-    # 4. Verificação de Saúde do Chrome CDP
+    # 3. Verificação e Conexão com o Navegador
     cdp = CDPConnector("http://localhost:9222")
+
+    # 4. Inicialização da Bandeja do Sistema (Tray Icon com Watchdog)
+    tray = TrayApp(
+        on_prepare_browser=lambda: CDPConnector.relaunch_chrome_with_cdp("Profile 1"),
+        cdp_connector=cdp
+    )
+    tray.run_in_background()
+
     is_cdp_ok, cdp_msg = cdp.check_health()
     if is_cdp_ok:
         print(f"✅ {cdp_msg}")
     else:
-        print(f"⚠️  [ATENÇÃO] {cdp_msg}")
-        print("   Inicie o Chrome com: chrome.exe --remote-debugging-port=9222\n")
+        print(f"ℹ️  [STATUS] {cdp_msg}")
+        print("   Dica: Você pode clicar em 'Preparar Navegador' na bandeja ou no aplicativo a qualquer momento.\n")
 
     # 5. Inicialização do Task Listener
     listener = TaskListener(supabase_client=supabase, teacher_id=teacher_id)

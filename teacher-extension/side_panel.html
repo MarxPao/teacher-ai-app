@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TEACHER AI — Portal Operator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Outfit', system-ui, sans-serif;
+      background: #fdf6e3;
+      color: #073642;
+      min-height: 100vh;
+      font-size: 13px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── Header ── */
+    .header {
+      background: #073642;
+      color: #fdf6e3;
+      padding: 14px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .brand { font-size: 16px; font-weight: 700; }
+    .brand span { color: #b58900; }
+    
+    .status-badge {
+      font-size: 11px; font-weight: 600;
+      padding: 4px 10px; border-radius: 20px;
+      display: flex; align-items: center; gap: 6px;
+      background: rgba(255,255,255,0.1); color: #93a1a1;
+    }
+    .status-badge.online { background: rgba(133,153,0,0.25); color: #a6e22e; }
+    .status-badge.scanning { background: rgba(181,137,0,0.25); color: #ffd866; }
+
+    .pulse-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: #859900; display: inline-block;
+      animation: pulse 1.5s infinite;
+    }
+    @keyframes pulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(0.85); } }
+
+    /* ── Body ── */
+    .body { padding: 14px; display: flex; flex-direction: column; gap: 12px; }
+
+    /* ── Cards ── */
+    .card {
+      background: #fff;
+      border: 1px solid rgba(88,110,117,0.15);
+      border-radius: 12px;
+      padding: 14px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    }
+    .card-title {
+      font-size: 11px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.8px;
+      color: #586e75; margin-bottom: 8px;
+      display: flex; align-items: center; gap: 6px;
+    }
+
+    /* ── Buttons ── */
+    .btn-main {
+      width: 100%; padding: 12px 14px; border: none; border-radius: 10px;
+      background: #0284c7; color: #fff;
+      font-size: 14px; font-weight: 700; font-family: 'Outfit', sans-serif;
+      cursor: pointer; display: flex; align-items: center;
+      justify-content: center; gap: 8px; transition: all 0.2s;
+    }
+    .btn-main:hover { background: #0369a1; transform: translateY(-1px); }
+    .btn-main:disabled { background: #94a3b8; cursor: not-allowed; transform: none; }
+    .btn-main.recording { background: #dc2626; animation: pulse 1.2s infinite; }
+    .btn-main.success { background: #16a34a; }
+
+    .btn-sub {
+      width: 100%; padding: 9px 12px; border: 1px solid rgba(88,110,117,0.25);
+      border-radius: 8px; background: transparent; color: #586e75;
+      font-size: 12px; font-weight: 600; font-family: 'Outfit', sans-serif;
+      cursor: pointer; display: flex; align-items: center;
+      justify-content: center; gap: 6px; transition: all 0.15s; margin-top: 8px;
+    }
+    .btn-sub:hover { background: rgba(88,110,117,0.08); color: #073642; }
+
+    /* ── Student List Preview ── */
+    .student-preview {
+      margin-top: 12px; padding: 10px; border-radius: 8px;
+      background: #f8fafc; border: 1px solid #e2e8f0;
+      max-height: 220px; overflow-y: auto;
+    }
+    .student-item {
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 8px; border-bottom: 1px solid #edf2f7;
+      font-size: 12px; color: #1e293b;
+    }
+    .student-item:last-child { border-bottom: none; }
+    .student-idx {
+      font-size: 10px; font-weight: 700; color: #64748b;
+      width: 20px; text-align: right;
+    }
+
+    /* ── Live Banner Feedback ── */
+    .live-banner {
+      padding: 10px 12px; border-radius: 8px; font-size: 12px;
+      display: flex; align-items: center; gap: 8px; margin-top: 10px;
+      background: #f0fdf4; border: 1px solid #bbf7d0; color: #15803d;
+    }
+    .live-banner.loading {
+      background: #eff6ff; border-color: #bfdbfe; color: #1d4ed8;
+    }
+    .live-banner.error {
+      background: #fef2f2; border-color: #fecaca; color: #b91c1c;
+    }
+
+    /* ── Spinner ── */
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner {
+      width: 16px; height: 16px; border: 2px solid #cbd5e1;
+      border-top-color: #0284c7; border-radius: 50%;
+      animation: spin 0.6s linear infinite; display: inline-block;
+    }
+
+    /* ── Platform selector ── */
+    .platform-grid {
+      display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px;
+    }
+    .platform-btn {
+      padding: 6px 8px; border-radius: 6px; border: 1px solid #cbd5e1;
+      background: #fff; cursor: pointer; font-size: 11px; font-weight: 600;
+      font-family: 'Outfit', sans-serif; text-align: center; color: #64748b;
+    }
+    .platform-btn.active { border-color: #0284c7; background: #e0f2fe; color: #0369a1; }
+  
+    /* ── Item 1: Card de Turma Ativa ── */
+    .class-card {
+      background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px;
+      padding: 10px 12px; margin-top: 6px;
+    }
+    .class-badge {
+      display: inline-block; font-size: 10px; font-weight: 700;
+      color: #0284c7; background: #e0f2fe; padding: 2px 6px; border-radius: 4px;
+    }
+    .class-chip {
+      font-size: 11px; padding: 4px 8px; border-radius: 6px; border: 1px solid #cbd5e1;
+      background: #fff; cursor: pointer; color: #334155; font-weight: 600;
+    }
+    .class-chip.active {
+      border-color: #0284c7; background: #0284c7; color: #fff;
+    }
+
+    /* ── Item 2: Free Command ── */
+    .interpret-box {
+      margin-top: 8px; padding: 10px; border-radius: 8px; font-size: 12px;
+      border: 1px solid #cbd5e1; display: none;
+    }
+    .interpret-box.match {
+      display: block;
+      background: #f0fdf4; border-color: #bbf7d0; color: #166534;
+    }
+    .interpret-box.teach {
+      display: block;
+      background: #fffbeb; border-color: #fef3c7; color: #92400e;
+    }
+
+    /* ── Item 3: Modal Define Skill ── */
+    .modal-overlay {
+      display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.7);
+      z-index: 9999; padding: 14px; align-items: center; justify-content: center;
+    }
+    .modal-card {
+      background: #fff; border-radius: 12px; padding: 16px; width: 100%; max-width: 320px;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+    }
+
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <div class="header">
+    <div class="brand">TEACHER<span>AI</span></div>
+    <div id="status-badge" class="status-badge online">
+      <span class="pulse-dot"></span>
+      <span id="status-portal-name">Machado Sobrinho</span>
+    </div>
+  </div>
+
+  <div class="body">
+
+    
+    <!-- CARD: TURMA ATIVA VIA SUPABASE (ITEM 1) -->
+    <div class="card" id="card-turma-container" style="border-left: 4px solid #0284c7;">
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <div class="card-title" style="margin-bottom: 0;">
+          <i class="ti ti-school"></i> Turma Ativa
+        </div>
+        <span class="class-badge" id="turma-source-badge">Supabase (via Backend)</span>
+      </div>
+
+      <!-- Card Populado -->
+      <div id="active-class-card" class="class-card" style="display: none;">
+        <div style="display: flex; justify-content: space-between; align-items: baseline;">
+          <span id="active-class-name" style="font-size: 14px; font-weight: 700; color: #0f172a;">—</span>
+          <span id="active-class-year" style="font-size: 11px; color: #64748b; font-weight: 600;">2026</span>
+        </div>
+        <div style="font-size: 11px; color: #64748b; margin-top: 3px;" id="active-class-id">ID: —</div>
+        <div id="classes-chips" style="display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px;"></div>
+      </div>
+
+      <!-- Estado Vazio Mandatório -->
+      <div id="empty-class-card" style="display: none; background: #fffbeb; border: 1px solid #fef3c7; border-radius: 8px; padding: 10px; color: #b45309; font-size: 12px; font-weight: 600; margin-top: 6px;">
+        ⚠️ Nenhuma turma encontrada — cadastre no app
+      </div>
+    </div>
+
+    <!-- CARD: COMANDO LIVRE COM INTERPRETADOR DE INTENÇÃO (ITEM 2.1) -->
+    <div class="card" style="border: 1px solid #cbd5e1;">
+      <div class="card-title">
+        <i class="ti ti-sparkles" style="color: #6366f1;"></i> O que você quer que eu faça nesta página?
+      </div>
+      <p style="font-size: 11px; color: #64748b; margin-bottom: 8px;">
+        Digite em linguagem natural. A IA interpretará sua intenção via BYOK antes de executar.
+      </p>
+      <input type="text" id="input-free-command" placeholder="Ex: Ler lista de notas dos alunos..."
+             style="width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid #94a3b8; font-size: 12px; outline: none;" />
+      <button class="btn-main" id="btn-interpret-command" style="margin-top: 8px; background: #6366f1;">
+        <i class="ti ti-wand"></i>
+        <span id="interpret-btn-text">Interpretar Comando</span>
+      </button>
+
+      <!-- Feedback de Interpretação -->
+      <div id="interpret-response-container" class="interpret-box"></div>
+    </div>
+
+      <!-- Feedback de Processamento e Resultados -->
+      <div id="read-feedback" style="display:none;"></div>
+
+      <!-- Prévia dos Alunos Encontrados e Vinculação de Turma -->
+      <div id="student-list-container" style="display:none; margin-top:14px; background:#fff; border:1px solid #cbd5e1; padding:12px; border-radius:10px;">
+        
+        <!-- Bloco de Seleção / Nome da Turma -->
+        <div style="background:#f1f5f9; padding:12px; border-radius:10px; border:1px solid #cbd5e1; margin-bottom:12px;">
+          <label style="display:block; font-size:11px; font-weight:700; color:#334155; margin-bottom:5px;">
+            🏷️ NOME DA TURMA NO TEACHER AI:
+          </label>
+          <input type="text" id="input-class-name" value="Turma 9A" placeholder="Ex: 9º Ano A, 8B, 3º Médio..."
+                 style="width:100%; padding:9px 12px; border-radius:6px; border:1px solid #94a3b8; font-size:13px; font-weight:600; color:#0f172a; background:#fff; outline:none;" />
+          
+          <button class="btn-main" id="btn-send-to-app" style="margin-top:10px; background:#16a34a;">
+            <i class="ti ti-send"></i>
+            <span id="send-btn-text">Enviar para "Alunos" no Teacher AI</span>
+          </button>
+        </div>
+
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+          <span style="font-weight:700; font-size:12px; color:#0f172a;" id="student-count-label">0 Alunos</span>
+          <span id="validation-badge" style="font-size:10px; color:#16a34a; font-weight:700;">● Prontos para envio</span>
+        </div>
+        <div class="student-preview" id="student-preview-list"></div>
+
+        <!-- Botão de Acesso Rápido ao App -->
+        <button class="btn-sub" id="btn-open-app-students" style="display:none; margin-top:10px; background:#e0f2fe; color:#0369a1; border-color:#7dd3fc;">
+          <i class="ti ti-external-link"></i>
+          <span>Abrir tela "Alunos" no Teacher AI</span>
+        </button>
+      </div>
+    <div class="card" id="card-saved-skills-container" style="border-left: 4px solid #16a34a;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+        <div class="card-title" style="margin-bottom: 0;">
+          <i class="ti ti-sparkles" style="color: #16a34a;"></i> Skills Gravadas
+        </div>
+        <span class="class-badge" style="background: #dcfce7; color: #15803d;" id="skills-count-badge">0 salvas</span>
+      </div>
+      <p style="font-size: 11px; color: #64748b; margin-bottom: 8px;">
+        Ações ensinadas no portal, salvas no Supabase e prontas para uso.
+      </p>
+      
+      <div id="saved-skills-list" style="display: flex; flex-direction: column; gap: 6px; max-height: 200px; overflow-y: auto;">
+        <div style="font-size: 11px; color: #94a3b8; text-align: center; padding: 10px;">Carregando skills...</div>
+      </div>
+    </div>
+
+    <!-- CARD 2: GRAVAÇÃO PASSO-A-PASSO (ROTA ALTERNATIVA) -->
+    <div class="card">
+      <div class="card-title">
+        <i class="ti ti-route"></i> Ensinar Novo Caminho
+      </div>
+      <p style="font-size: 11px; color: #64748b; margin-bottom: 10px;">
+        Se a lista estiver em uma subpágina ou exigir cliques específicos, grave seu caminho até ela.
+      </p>
+
+      <button class="btn-sub" id="btn-record-route">
+        <i class="ti ti-player-record-filled" style="color:#dc2626;"></i>
+        <span id="route-btn-text">Iniciar Gravação do Trajeto</span>
+      </button>
+      <div id="route-counter" style="display:none; font-size:11px; color:#dc2626; font-weight:600; text-align:center; margin-top:6px;">
+        🔴 Gravando ações... (clique nos menus do portal)
+      </div>
+    </div>
+
+    <!-- CARD 3: PORTAL ATIVO -->
+    <div class="card">
+      <div class="card-title">Portal Escolar Selecionado</div>
+      <div class="platform-grid" id="platform-grid">
+        <button class="platform-btn active" data-platform="machado">Machado Sobrinho</button>
+        <button class="platform-btn" data-platform="santacatarina">Rede SC</button>
+        <button class="platform-btn" data-platform="plural">Plurall</button>
+        <button class="platform-btn" data-platform="cambridge">Cambridge One</button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- MODAL: NOMEAR / DEFINIR SKILL AO PARAR GRAVAÇÃO (ITEM 3) -->
+  <div id="modal-define-skill" class="modal-overlay">
+    <div class="modal-card">
+      <div style="font-size: 14px; font-weight: 700; color: #0f172a; margin-bottom: 10px;">
+        📝 Definir e Salvar Nova Skill
+      </div>
+
+      <label style="display: block; font-size: 11px; font-weight: 700; color: #475569; margin-bottom: 4px;">
+        NOME DA TAREFA *
+      </label>
+      <input type="text" id="modal-task-name" placeholder="Ex: Lançar falta, Ler boletim..."
+             style="width: 100%; padding: 7px 10px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 12px; margin-bottom: 10px; outline: none;" />
+
+      <label style="display: block; font-size: 11px; font-weight: 700; color: #475569; margin-bottom: 4px;">
+        TIPO DE OPERAÇÃO *
+      </label>
+      <div style="display: flex; gap: 14px; margin-bottom: 10px; font-size: 12px; font-weight: 600;">
+        <label style="display: flex; align-items: center; gap: 5px; cursor: pointer;">
+          <input type="radio" name="modal-skill-type" value="reading" checked />
+          <span>Leitura</span>
+        </label>
+        <label style="display: flex; align-items: center; gap: 5px; cursor: pointer;">
+          <input type="radio" name="modal-skill-type" value="writing" />
+          <span style="color: #dc2626;">Escrita (Exige Checkpoint)</span>
+        </label>
+      </div>
+
+      <label style="display: block; font-size: 11px; font-weight: 700; color: #475569; margin-bottom: 4px;">
+        DESCRIÇÃO CURTA (OPCIONAL)
+      </label>
+      <input type="text" id="modal-task-desc" placeholder="Ex: Lança falta na chamada escolar..."
+             style="width: 100%; padding: 7px 10px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 12px; margin-bottom: 12px; outline: none;" />
+
+      <!-- NOVO: Naming Box de Colunas Semânticas (Item 1.3) -->
+      <div id="modal-columns-container" style="display: none; margin-bottom: 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+          <label style="font-size: 11px; font-weight: 700; color: #0284c7; text-transform: uppercase;">
+            <i class="ti ti-table"></i> Colunas Detectadas (Schema Semântico)
+          </label>
+          <span id="columns-infer-status" style="font-size: 10px; color: #64748b;">Analisando...</span>
+        </div>
+        <p style="font-size: 11px; color: #64748b; margin-bottom: 8px;">
+          Revise os tipos semânticos sugeridos antes de salvar. Desmarque colunas desnecessárias.
+        </p>
+        <div id="modal-columns-list" style="display: flex; flex-direction: column; gap: 6px; max-height: 180px; overflow-y: auto;">
+          <!-- Linhas de colunas geradas dinamicamente -->
+        </div>
+      </div>
+
+      <div id="modal-error-msg" style="display: none; color: #dc2626; font-size: 11px; font-weight: 600; margin-bottom: 10px;"></div>
+
+      <div style="display: flex; gap: 8px;">
+        <button id="modal-btn-cancel" style="flex: 1; padding: 8px; border-radius: 6px; border: 1px solid #cbd5e1; background: #f8fafc; font-size: 12px; font-weight: 600; cursor: pointer;">
+          Cancelar
+        </button>
+        <button id="modal-btn-save" class="btn-main" style="flex: 2; margin-top: 0; background: #0284c7;">
+          Salvar Skill
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: CHECKPOINT / CONFIRMAÇÃO HUMANA OBRIGATÓRIA (HUMAN-IN-THE-LOOP) -->
+  <div id="modal-checkpoint" class="modal-overlay" style="display: none;">
+    <div class="modal-card" style="max-width: 340px; border-top: 4px solid #dc2626;">
+      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+        <span style="font-size: 20px;">⚠️</span>
+        <div>
+          <div style="font-size: 13px; font-weight: 800; color: #991b1b; text-transform: uppercase; letter-spacing: 0.5px;">
+            Ponto de Controle (Checkpoint)
+          </div>
+          <div style="font-size: 10px; font-weight: 700; color: #dc2626;">
+            Aprovação Humana Obrigatória
+          </div>
+        </div>
+      </div>
+
+      <div style="background: #fef2f2; border: 1px solid #fee2e2; border-radius: 8px; padding: 10px; margin-bottom: 12px;">
+        <div id="checkpoint-title" style="font-weight: 700; font-size: 12px; color: #0f172a; margin-bottom: 4px;">
+          Aprovação de Ação no Portal
+        </div>
+        <div id="checkpoint-desc" style="font-size: 11px; color: #475569; line-height: 1.4; margin-bottom: 6px;">
+          Esta skill requer confirmação humana antes de prosseguir com alterações no portal.
+        </div>
+        <div id="checkpoint-preview-data" style="font-size: 10px; color: #334155; background: #fff; border: 1px solid #cbd5e1; border-radius: 6px; padding: 6px; max-height: 100px; overflow-y: auto; font-family: monospace; word-break: break-all;">
+        </div>
+      </div>
+
+      <p style="font-size: 11px; color: #64748b; margin-bottom: 12px; line-height: 1.3;">
+        Revise as informações acima antes de autorizar. Nenhuma alteração de risco é submetida sem sua aprovação explícita.
+      </p>
+
+      <div style="display: flex; gap: 8px;">
+        <button id="modal-checkpoint-btn-abort" class="btn-sub" style="flex: 1; margin-top: 0; background: #f8fafc; color: #475569; border-color: #cbd5e1; font-weight: 600;">
+          <i class="ti ti-x"></i> Cancelar
+        </button>
+        <button id="modal-checkpoint-btn-approve" class="btn-main" style="flex: 1.3; margin-top: 0; background: #dc2626; color: #fff; font-weight: 700;">
+          <i class="ti ti-check"></i> Aprovar e Gravar
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script src="side_panel.js"></script>
+</body>
+</html>

@@ -95,6 +95,12 @@ function saveLocalTask(task: BrowserAutomationTask): void {
   } catch {}
 }
 
+function isValidRemoteJwt(token: string | null): boolean {
+  if (!token) return false
+  if (token === 'authenticated_user_token' || token.startsWith('stub_') || token.startsWith('local_')) return false
+  return token.split('.').length === 3
+}
+
 /**
  * Cria uma nova tarefa de automação (salva localmente e sincroniza com o Supabase quando disponível)
  */
@@ -131,7 +137,7 @@ export async function createBrowserTask(params: {
   const config = getSupabaseUrlAndKey()
   const token = await getValidAccessToken()
 
-  if (config && token && user?.id) {
+  if (config && token && isValidRemoteJwt(token) && user?.id) {
     const row = {
       teacher_id: user.id,
       portal: params.portal,
@@ -203,7 +209,7 @@ export async function updateBrowserTask(
   const config = getSupabaseUrlAndKey()
   const token = await getValidAccessToken()
 
-  if (config && token) {
+  if (config && token && isValidRemoteJwt(token)) {
     const body: Record<string, unknown> = {
       updated_at: new Date().toISOString()
     }
@@ -312,7 +318,7 @@ export function subscribeToBrowserTask(
     try {
       const config = getSupabaseUrlAndKey()
       const token = await getValidAccessToken()
-      if (!config || !token) {
+      if (!config || !token || !isValidRemoteJwt(token)) {
         isRemotePollingDisabled = true
         return
       }
@@ -382,7 +388,7 @@ export async function getBrowserAuditLogs(taskId: string): Promise<BrowserAutoma
   const config = getSupabaseUrlAndKey()
   const token = await getValidAccessToken()
 
-  if (config && token) {
+  if (config && token && isValidRemoteJwt(token)) {
     try {
       const res = await fetch(`${config.url}/rest/v1/browser_automation_audit_logs?task_id=eq.${taskId}&select=*&order=created_at.desc`, {
         method: 'GET',
@@ -444,7 +450,7 @@ export async function createBrowserAuditLog(params: {
   const config = getSupabaseUrlAndKey()
   const token = await getValidAccessToken()
 
-  if (config && token && user?.id) {
+  if (config && token && isValidRemoteJwt(token) && user?.id) {
     try {
       await fetch(`${config.url}/rest/v1/browser_automation_audit_logs`, {
         method: 'POST',

@@ -1,0 +1,87 @@
+{
+  "id": "skill_lancar_falta_lote3_mtrjwhm2",
+  "name": "Lançar Falta na Chamada",
+  "portal_id": "machado_sobrinho",
+  "task_id": "lancar_falta_lote3",
+  "version": "1.0.0",
+  "entry_node": "nav_0",
+  "nodes": {
+    "nav_0": {
+      "id": "nav_0",
+      "type": "NAVIGATE",
+      "anchor": {
+        "strategy": "css_selector",
+        "value": "https://machadosobrinho.paineldoaluno.com.br/professor_chamada",
+        "description": "Navegar para https://machadosobrinho.paineldoaluno.com.br/professor_chamada"
+      },
+      "params": {},
+      "on_success": "locate_0",
+      "on_fail": null,
+      "retry_policy": {
+        "max_attempts": 2,
+        "backoff_ms": 500
+      }
+    },
+    "locate_0": {
+      "id": "locate_0",
+      "type": "LOCATE",
+      "anchor": {
+        "strategy": "css_selector",
+        "value": "table tbody tr"
+      },
+      "params": {},
+      "on_success": "checkpoint_seguranca",
+      "on_fail": null,
+      "retry_policy": {
+        "max_attempts": 2,
+        "backoff_ms": 500
+      }
+    },
+    "click_0": {
+      "id": "click_0",
+      "type": "CLICK",
+      "anchor": {
+        "strategy": "css_selector",
+        "value": "button.btn-gravar"
+      },
+      "params": {
+        "is_submit_action": true
+      },
+      "on_success": null,
+      "on_fail": null,
+      "retry_policy": {
+        "max_attempts": 2,
+        "backoff_ms": 500
+      }
+    },
+    "checkpoint_seguranca": {
+      "id": "checkpoint_seguranca",
+      "type": "CHECKPOINT",
+      "params": {
+        "description": "Confirmação humana obrigatória antes de gravar/submeter dados no portal",
+        "requires_confirmation": true
+      },
+      "on_success": "click_0",
+      "on_fail": "ABORT",
+      "retry_policy": {
+        "max_attempts": 1,
+        "backoff_ms": 0
+      }
+    }
+  },
+  "metadata": {
+    "task_name": "Lançar Falta na Chamada",
+    "skill_type": "writing",
+    "description": "Lança ausência dos alunos na chamada do portal Machado Sobrinho",
+    "turma_id": "cls_1785639505494",
+    "success_rate": 100,
+    "total_executions": 0,
+    "created_at": "2026-09-07T18:05:13.130Z",
+    "updated_at": "2026-09-07T18:05:13.130Z",
+    "last_verified_at": null,
+    "has_self_healed": false,
+    "author": "teacher_ai_recorder_nextjs",
+    "source_url": "",
+    "variable_bindings_discovered": []
+  }
+}

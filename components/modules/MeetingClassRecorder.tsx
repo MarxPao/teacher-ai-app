@@ -212,7 +212,7 @@ export default function MeetingClassRecorder() {
     } else {
       rawText = currentTranscription.map(t => t.text).join(' ');
       if (!rawText && !interimText) {
-        toast.success('Nenhum áudio foi capturado.');
+        toast.warning('Nenhum áudio foi capturado.');
         setIsProcessing(false);
         return;
       }
@@ -267,7 +267,7 @@ export default function MeetingClassRecorder() {
       
     } catch (error) {
       console.error('Error generating report', error);
-      toast.success('Erro ao processar o relatório.');
+      toast.error('Erro ao processar o relatório.');
     } finally {
       setIsProcessing(false);
     }

@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { ChecklistTodo, RecurrenceRule, RecurrenceType, formatRecurrenceText } from '@/lib/checklistManager'
+import { ChecklistTodo, RecurrenceRule, RecurrenceType, formatRecurrenceText, parseTodoHierarchy } from '@/lib/checklistManager'
 import { COLOR, FONT, TEXT, RADIUS, SHADOW, BORDER, TRANSITION } from '@/styles/tokens'
 
 interface ChecklistEditModalProps {
@@ -21,11 +21,13 @@ const DAYS_SHORT = [
   { id: 6, label: 'Sáb', full: 'Sábado' },
 ]
 
-const TAG_SUGGESTIONS = ['Rotina Diária', 'Planejamento', 'Coordenação', 'Avaliação', 'Turma', 'Geral']
+const TOPIC_SUGGESTIONS = ['Rotina Diária', 'Planejamento', 'Coordenação', 'Avaliações', 'Aulas Particulares', 'Geral']
+const SUBTOPIC_SUGGESTIONS = ['Turma 9A', 'Turma 8B', 'Conselho', 'Gabaritos', 'Materiais', 'Tarefas Gerais']
 
 export default function ChecklistEditModal({ isOpen, todo, onClose, onSave }: ChecklistEditModalProps) {
   const [text, setText] = useState('')
-  const [tag, setTag] = useState('')
+  const [topic, setTopic] = useState('')
+  const [subtopic, setSubtopic] = useState('')
   const [priority, setPriority] = useState<ChecklistTodo['priority']>('medium')
   
   // Recurrence State
@@ -36,8 +38,10 @@ export default function ChecklistEditModal({ isOpen, todo, onClose, onSave }: Ch
 
   useEffect(() => {
     if (todo) {
+      const hierarchy = parseTodoHierarchy(todo)
       setText(todo.text || '')
-      setTag(todo.tag || '')
+      setTopic(todo.topic || hierarchy.topic)
+      setSubtopic(todo.subtopic || hierarchy.subtopic)
       setPriority(todo.priority || 'medium')
 
       if (todo.recurrence) {
@@ -93,10 +97,15 @@ export default function ChecklistEditModal({ isOpen, todo, onClose, onSave }: Ch
       }
     }
 
+    const finalTopic = topic.trim() || 'Geral'
+    const finalSubtopic = subtopic.trim() || 'Tarefas Gerais'
+
     const updated: ChecklistTodo = {
       ...todo,
       text: text.trim(),
-      tag: tag.trim() || (category === 'recurrent' ? 'Rotina Diária' : 'Geral'),
+      topic: finalTopic,
+      subtopic: finalSubtopic,
+      tag: `${finalTopic} / ${finalSubtopic}`,
       priority,
       category,
       recurrence: recurrenceRule
@@ -189,30 +198,29 @@ export default function ChecklistEditModal({ isOpen, todo, onClose, onSave }: Ch
           />
         </div>
 
-        {/* 2. Tag & Prioridade */}
+        {/* 2. Camadas Hierárquicas: Tópico e Subtópico */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
           <div>
-            <label style={LabelStyle}>Tag / Contexto</label>
+            <label style={LabelStyle}>Tópico Principal (Camada 1) *</label>
             <input
               type="text"
-              value={tag}
-              onChange={e => setTag(e.target.value)}
-              placeholder="Ex: Rotina, Turma 8A..."
+              value={topic}
+              onChange={e => setTopic(e.target.value)}
+              placeholder="Ex: Colégio Machado, Rotina Diária..."
               style={InputStyle}
             />
-            {/* Sugestões rápidas de Tag */}
-            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 6 }}>
-              {TAG_SUGGESTIONS.map(s => (
+            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 4 }}>
+              {TOPIC_SUGGESTIONS.map(s => (
                 <button
                   key={s}
                   type="button"
-                  onClick={() => setTag(s)}
+                  onClick={() => setTopic(s)}
                   style={{
                     padding: '2px 8px',
                     borderRadius: RADIUS.sm,
                     border: `1px solid ${BORDER.soft}`,
-                    background: tag === s ? 'rgba(139,94,60,0.15)' : COLOR.surface2,
-                    color: tag === s ? COLOR.accent : COLOR.paperWarm,
+                    background: topic === s ? 'rgba(139,94,60,0.15)' : COLOR.surface2,
+                    color: topic === s ? COLOR.accent : COLOR.paperWarm,
                     fontSize: 11,
                     fontWeight: 600,
                     cursor: 'pointer'
@@ -223,6 +231,39 @@ export default function ChecklistEditModal({ isOpen, todo, onClose, onSave }: Ch
               ))}
             </div>
           </div>
+
+          <div>
+            <label style={LabelStyle}>Subtópico (Camada 2)</label>
+            <input
+              type="text"
+              value={subtopic}
+              onChange={e => setSubtopic(e.target.value)}
+              placeholder="Ex: Turma 9A, Gabaritos, Reunião..."
+              style={InputStyle}
+            />
+            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 4 }}>
+              {SUBTOPIC_SUGGESTIONS.map(s => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setSubtopic(s)}
+                  style={{
+                    padding: '2px 8px',
+                    borderRadius: RADIUS.sm,
+                    border: `1px solid ${BORDER.soft}`,
+                    background: subtopic === s ? 'rgba(139,94,60,0.15)' : COLOR.surface2,
+                    color: subtopic === s ? COLOR.accent : COLOR.paperWarm,
+                    fontSize: 11,
+                    fontWeight: 600,
+                    cursor: 'pointer'
+                  }}
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
 
           <div>
             <label style={LabelStyle}>Prioridade</label>
@@ -256,7 +297,6 @@ export default function ChecklistEditModal({ isOpen, todo, onClose, onSave }: Ch
               ))}
             </div>
           </div>
-        </div>
 
         {/* 3. A Pergunta de Recorrência (Excelente UX) */}
         <div style={{

@@ -12,6 +12,8 @@ Regra de subdomínio (anti-divergência white-label):
   "contaminem" o mapa de outras escolas no mesmo produto.
 """
 
+import json
+import os
 import time
 from dataclasses import dataclass, field, asdict
 from typing import Any, Dict, List, Optional
@@ -41,12 +43,41 @@ class PortalMapStore:
     Camada de acesso a discovered_portal_maps.
     - Com supabase_client: persiste no banco.
     - Sem (supabase_client=None): opera em dicionário em memória (testes/offline).
+    - Com storage_path: persiste em cache JSON local para sobrevivência entre execuções CLI.
     """
 
-    def __init__(self, supabase_client: Any = None):
+    def __init__(self, supabase_client: Any = None, storage_path: Optional[str] = None):
         self._sb = supabase_client
+        self._storage_path = storage_path
         # Store em memória usado quando não há Supabase
         self._memory: Dict[str, PortalSelectorMap] = {}
+        if self._storage_path and os.path.exists(self._storage_path):
+            self._load_from_storage()
+
+    def _load_from_storage(self) -> None:
+        if not self._storage_path:
+            return
+        try:
+            with open(self._storage_path, "r", encoding="utf-8") as f:
+                raw_data = json.load(f)
+                if isinstance(raw_data, dict):
+                    for domain, map_dict in raw_data.items():
+                        self._memory[domain] = PortalSelectorMap(**map_dict)
+        except Exception as e:
+            print(f"[MapStore] Aviso ao carregar cache local de mapas: {e}")
+
+    def _save_to_storage(self) -> None:
+        if not self._storage_path:
+            return
+        try:
+            dir_name = os.path.dirname(os.path.abspath(self._storage_path))
+            if dir_name:
+                os.makedirs(dir_name, exist_ok=True)
+            serializable = {domain: asdict(m) for domain, m in self._memory.items()}
+            with open(self._storage_path, "w", encoding="utf-8") as f:
+                json.dump(serializable, f, indent=2, ensure_ascii=False)
+        except Exception as e:
+            print(f"[MapStore] Aviso ao persistir cache local de mapas: {e}")
 
     # ------------------------------------------------------------------
     # Lookup — Camada 1
@@ -165,6 +196,7 @@ class PortalMapStore:
                 validation_failures=0,
             )
             self._memory[domain] = m
+            self._save_to_storage()
             print(f"[MapStore] [MEM] Mapa salvo para '{domain}' (id={new_id}, confianca={confidence}).")
             return new_id
 
@@ -187,6 +219,7 @@ class PortalMapStore:
             if m:
                 m.last_validated_at = self._now_iso()
                 m.validation_failures = 0
+                self._save_to_storage()
 
     # ------------------------------------------------------------------
     # Incrementar Falhas (Self-Healing)
@@ -224,9 +257,47 @@ class PortalMapStore:
             m = self._memory.get(domain)
             if m:
                 m.validation_failures += 1
+                self._save_to_storage()
                 print(f"[MapStore] [MEM] Falhas para '{domain}': {m.validation_failures}.")
                 return m.validation_failures
             return 0
+
+    # ------------------------------------------------------------------
+    # Gestão de Drift (Divergência Pós-Escrita)
+    # ------------------------------------------------------------------
+
+    def mark_drift(self, domain: str, action_type: Optional[str] = None, details: Optional[Dict[str, Any]] = None) -> None:
+        """
+        Marca que um mapa ou ação sofreu drift (ex: falha no read-back pós-escrita).
+        Força o discovery_orchestrator a realizar nova descoberta na próxima execução.
+        """
+        if not hasattr(self, "_drift_flags"):
+            self._drift_flags: Dict[str, Dict[str, Any]] = {}
+        key = f"{domain}:{action_type or '*'}"
+        self._drift_flags[key] = {
+            "drifted_at": self._now_iso(),
+            "details": details or {}
+        }
+        self.increment_failures(domain)
+        print(f"[MapStore] ⚠️ Drift registrado para '{key}'. Redescoberta será exigida.")
+
+    def is_drifted(self, domain: str, action_type: Optional[str] = None) -> bool:
+        """Verifica se há sinalização ativa de drift para o domínio e ação."""
+        if not hasattr(self, "_drift_flags"):
+            self._drift_flags = {}
+        key_specific = f"{domain}:{action_type or '*'}"
+        key_global = f"{domain}:*"
+        return key_specific in self._drift_flags or key_global in self._drift_flags
+
+    def clear_drift(self, domain: str, action_type: Optional[str] = None) -> None:
+        """Limpa a sinalização de drift após nova descoberta e validação."""
+        if not hasattr(self, "_drift_flags"):
+            self._drift_flags = {}
+        key_specific = f"{domain}:{action_type or '*'}"
+        key_global = f"{domain}:*"
+        self._drift_flags.pop(key_specific, None)
+        self._drift_flags.pop(key_global, None)
+        print(f"[MapStore] ✅ Drift limpo para '{domain}' ({action_type or '*'}).")
 
     # ------------------------------------------------------------------
     # Encadear Mapa Obsoleto (superseded_by)
@@ -251,6 +322,7 @@ class PortalMapStore:
             m = self._memory.get(old_domain)
             if m:
                 m.superseded_by = new_map_id
+                self._save_to_storage()
                 print(f"[MapStore] [MEM] Mapa de '{old_domain}' marcado como substituido por {new_map_id}.")
                 return True
             return False

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * lib/behaviorPoints.ts — Sistema de Pontos Comportamentais e Engajamento (Estilo ClassDojo)
  */
 

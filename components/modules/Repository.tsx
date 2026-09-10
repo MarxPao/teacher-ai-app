@@ -772,7 +772,7 @@ export default function Repository() {
       showToast('Arquivo avulso adicionado e indexado no Supabase!')
     } catch (err: unknown) {
       setUploadingStatus('')
-      toast.success(`Erro ao processar arquivo: ${err instanceof Error ? err.message : 'Falha na leitura.'}`)
+      toast.error(`Erro ao processar arquivo: ${err instanceof Error ? err.message : 'Falha na leitura.'}`)
     }
   }
 
@@ -794,7 +794,7 @@ export default function Repository() {
   // Add New School Header
   function handleAddSchoolHeader() {
     if (!newSchoolName.trim()) {
-      toast.success('Preencha o nome da escola para cadastrar o cabeçalho.')
+      toast.warning('Preencha o nome da escola para cadastrar o cabeçalho.')
       return
     }
     const newHeader: SchoolHeaderModel = {
@@ -1018,7 +1018,7 @@ export default function Repository() {
       showToast(`Cabeçalho "${newHeader.name}" injetado com sucesso!`)
     } catch (err: unknown) {
       setUploadingStatus('')
-      toast.success(`Erro ao processar o cabeçalho: ${err instanceof Error ? err.message : 'Falha ao ler arquivo.'}`)
+      toast.error(`Erro ao processar o cabeçalho: ${err instanceof Error ? err.message : 'Falha ao ler arquivo.'}`)
     }
   }
 
@@ -1063,7 +1063,7 @@ export default function Repository() {
   // Add Item (Bibliografia) 
   function addItem() {
     if (!editTitle.trim() || !editContent.trim()) {
-      toast.success('Preencha o título e o conteúdo para continuar.')
+      toast.warning('Preencha o título e o conteúdo para continuar.')
       return
     }
     const item: RepositoryItem = {
@@ -1179,7 +1179,7 @@ export default function Repository() {
       showToast('item salvo')
     } catch (err: unknown) {
       setUploadingStatus('')
-      toast.success(` Falha na importação: ${err instanceof Error ? err.message : 'Não foi possível extrair o texto do arquivo.'}`)
+      toast.error(`Falha na importação: ${err instanceof Error ? err.message : 'Não foi possível extrair o texto do arquivo.'}`)
     }
   }
 
@@ -1233,7 +1233,7 @@ export default function Repository() {
       showToast('🔍 OCR concluído e imagem salva na biblioteca!')
     } catch (err: unknown) {
       setUploadingStatus('')
-      toast.success(` Falha no OCR da Imagem: ${err instanceof Error ? err.message : 'Erro ao ler texto da imagem.'}`)
+      toast.error(`Falha no OCR da Imagem: ${err instanceof Error ? err.message : 'Erro ao ler texto da imagem.'}`)
     }
   }
 
@@ -1562,7 +1562,7 @@ export default function Repository() {
                     }
                     showToast(`${files.length} imagem(ns) adicionada(s) à biblioteca!`)
                   } catch (err: any) {
-                    toast.success('Erro ao enviar imagem: ' + err.message)
+                    toast.error('Erro ao enviar imagem: ' + err.message)
                   } finally {
                     setIsUploadingMedia(false)
                     if (mediaFileInputRef.current) mediaFileInputRef.current.value = ''

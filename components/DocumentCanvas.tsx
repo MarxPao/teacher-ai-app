@@ -763,7 +763,7 @@ export default function DocumentCanvas({
                         setSelectedImageForInsert(tempItem)
                       }
                     } catch (err: any) {
-                      toast.success('Erro ao carregar arquivo: ' + err.message)
+                      toast.error('Erro ao carregar arquivo: ' + err.message)
                     } finally {
                       setIsUploadingImage(false)
                     }

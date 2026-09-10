@@ -347,7 +347,7 @@ export default function ClassroomMode() {
       showToast(`✅ Chamada espelhada no portal ${selectedMirrorPortal}!`);
       setIsMirrorModalOpen(false);
     } else {
-      toast.success(`⚠️ Não foi possível comunicar com a aba do portal "${selectedMirrorPortal}". Certifique-se de que a página de chamada do portal está aberta no navegador Chrome.`);
+      toast.warning(`Não foi possível comunicar com a aba do portal "${selectedMirrorPortal}". Certifique-se de que a página de chamada do portal está aberta no navegador Chrome.`);
     }
   };
 

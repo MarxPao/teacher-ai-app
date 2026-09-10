@@ -1,0 +1,45 @@
+{
+  "localhost": {
+    "portal_domain": "localhost",
+    "portal_display_name": "Portal Escolar Sandbox â€” Lista de Alunos (Roster)",
+    "discovered_selectors": {
+      "roster_table": "#roster-alunos",
+      "strategy": "table_rows",
+      "header_rows": 1
+    },
+    "pagination_strategy": null,
+    "discovery_confidence": "high",
+    "discovered_by_teacher_id": null,
+    "discovered_at": "2026-09-06T03:36:15.972768Z",
+    "last_validated_at": "2026-09-06T12:18:04.422981Z",
+    "validation_failures": 0,
+    "superseded_by": null,
+    "id": "4086160f-6fbc-462c-8b0a-f89cf71567fd"
+  },
+  "machadosobrinho.paineldoaluno.com.br": {
+    "portal_domain": "machadosobrinho.paineldoaluno.com.br",
+    "portal_display_name": "Machado Sobrinho | Painel do Professor",
+    "discovered_selectors": {
+      "roster_table": "table",
+      "strategy": "table_rows",
+      "header_rows": 1,
+      "id_column": 0,
+      "name_column": 1,
+      "status_column": 3,
+      "nee_selector": ".badge-nee"
+    },
+    "pagination_strategy": {
+      "type": "next_button",
+      "maxPages": 10,
+      "nextSelector": ".pagination .next, a[rel=\"next\"]",
+      "delayBetweenPagesMs": 1000
+    },
+    "discovery_confidence": "high",
+    "discovered_by_teacher_id": null,
+    "discovered_at": "2026-09-06T12:11:51.976Z",
+    "last_validated_at": "2026-09-06T12:11:51.977Z",
+    "validation_failures": 0,
+    "superseded_by": null,
+    "id": "map_machado_sobrinho"
+  }
+}

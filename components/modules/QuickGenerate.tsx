@@ -1,7 +1,9 @@
 'use client'
 import { COLOR, RADIUS, TEXT, SHADOW, FONT } from '@/styles/tokens'
 import { toast, showConfirm } from '@/components/Toast'
+import Button from '@/components/Button'
 import AiProgressStepper from '@/components/AiProgressStepper'
+import { safeGet, safeSet } from '@/lib/localDB'
 
 import { useState, useEffect, useCallback } from 'react'
 import { AssessmentPreset, BloomDistribution, QuestionWeights, DifficultyDistribution, getDefaultPreset, getStoredPresets, savePreset } from "@/lib/assessmentPresets"
@@ -92,7 +94,7 @@ function loadApis(): ApiConfig[] {
 }
 
 function loadConfig(): { school: string; teacher: string } {
-  try { return JSON.parse(localStorage.getItem('teacher_cfg') || '{}') } catch { return { school: '', teacher: '' } }
+  return safeGet<{ school: string; teacher: string }>('teacher_cfg', { school: '', teacher: '' })
 }
 
 async function callApi(api: ApiConfig, prompt: string): Promise<string> {
@@ -322,7 +324,7 @@ export default function QuickGenerate() {
   const [hideHeader, setHideHeader] = useState(false)
 
   const updateSavedCount = () => {
-    try { setSavedCount(JSON.parse(localStorage.getItem('teacher_saved_quicks') || '[]').length) } catch { setSavedCount(0) }
+    setSavedCount(safeGet<any[]>('teacher_saved_quicks', []).length)
   }
 
   useEffect(() => {
@@ -340,15 +342,12 @@ export default function QuickGenerate() {
 
     // Carrega estritamente as escolas cadastradas pelo professor em Organização
     try {
-      const sStr = localStorage.getItem('teacher_schools')
-      if (sStr) {
-        const parsed = JSON.parse(sStr)
-        if (Array.isArray(parsed)) {
-          setRegisteredSchools(parsed)
-          if (parsed.length > 0 && !cfg.school) {
-            setHeader(h => ({ ...h, school: parsed[0].name }))
-            setSelectedSchoolTemplate(parsed[0].id)
-          }
+      const parsed = safeGet<any[]>('teacher_schools', [])
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        setRegisteredSchools(parsed)
+        if (!cfg.school) {
+          setHeader(h => ({ ...h, school: parsed[0].name }))
+          setSelectedSchoolTemplate(parsed[0].id)
         }
       }
     } catch {}
@@ -357,16 +356,15 @@ export default function QuickGenerate() {
   useEffect(() => {
     const handleQuickPrefill = () => {
       try {
-        const raw = localStorage.getItem('teacher_quick_prefill')
-        if (raw) {
-          const prefill = JSON.parse(raw)
+        const prefill = safeGet<any>('teacher_quick_prefill', null)
+        if (prefill) {
           if (prefill.topic) {
             setTopic(prefill.topic)
             setTimeout(() => {
               document.getElementById('quick-generate-btn')?.click()
             }, 600)
           }
-          localStorage.removeItem('teacher_quick_prefill')
+          safeSet('teacher_quick_prefill', null)
         }
       } catch { /* ignore */ }
     }
@@ -433,14 +431,14 @@ export default function QuickGenerate() {
 
       // Auto-save no Banco de Atividades (Zero-Leakage)
       try {
-        const qbRaw = localStorage.getItem('teacher_question_bank') || '[]'
-        const qbList = JSON.parse(qbRaw)
+        const qbList = safeGet<any[]>('teacher_question_bank', [])
+        const currentProfile = getSubjectProfile()
         const newQuickItem = {
           id: `quick_auto_${Date.now()}`,
           statement: html.slice(0, 300) + '...',
           type: types[0] === 'mc' ? 'mc' : 'fill',
           activityKind: 'exercise',
-          subject: 'Inglês',
+          subject: currentProfile?.name || 'Inglês',
           topic: topic || skill || 'Exercício Rápido',
           level: cefr,
           year: new Date().getFullYear().toString(),
@@ -451,7 +449,7 @@ export default function QuickGenerate() {
           source: 'ai',
           fullContent: html
         }
-        localStorage.setItem('teacher_question_bank', JSON.stringify([newQuickItem, ...qbList]))
+        safeSet('teacher_question_bank', [newQuickItem, ...qbList])
         window.dispatchEvent(new Event('storage'))
       } catch {}
 
@@ -497,7 +495,7 @@ Retorne a questão reformulada no formato padrão (Enunciado, Alternativas se ap
   }
 
   function handleSave() {
-    if (!result) { toast.success('Gere um exercício primeiro.'); return }
+    if (!result) { toast.warning('Gere um exercício primeiro.'); return }
     const saved = saveItemToStorage('teacher_saved_quicks', {
       title: header.title || (topic ? `Exercício ${topic}` : `Atividade (${skill})`),
       subtitle: `${cefr} · ${grade} · ${types.slice(0, 2).join(', ')}`,
@@ -507,7 +505,7 @@ Retorne a questão reformulada no formato padrão (Enunciado, Alternativas se ap
   }
 
   async function handleSaveToActivitiesBank() {
-    if (!result) { toast.success('Gere um exercício primeiro.'); return }
+    if (!result) { toast.warning('Gere um exercício primeiro.'); return }
     const { saveActivityToSupabase } = await import('@/lib/supabaseClient')
     const title = header.title || (topic ? `Exercício ${topic}` : `Atividade (${skill})`)
     await saveActivityToSupabase({
@@ -555,13 +553,23 @@ Retorne a questão reformulada no formato padrão (Enunciado, Alternativas se ap
         </div>
         <div style={{ display: "flex", justifyContent: "center", flexWrap: "wrap", gap: 10 }}>
           {result && (
-            <button onClick={handleSaveToActivitiesBank} style={{ padding: '9px 16px', borderRadius: RADIUS.lg, border: '1px solid #8b5e3c', background: '#8b5e3c', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, boxShadow: '0 2px 8px rgba(139,94,60,0.2)' }}>
-              <i className="ti ti-database" /> Salvar no Banco de Dados
-            </button>
+            <Button
+              variant="primary"
+              size="md"
+              onClick={handleSaveToActivitiesBank}
+              icon={<i className="ti ti-database" />}
+            >
+              Salvar no Banco de Dados
+            </Button>
           )}
-          <button onClick={() => setShowSaved(true)} style={{ padding: '9px 16px', borderRadius: RADIUS.lg, border: '1px solid #8b5e3c', background: '#fdf9f3', color: '#2c1a0e', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
-            <i className="ti ti-bookmark" style={{ color: '#b58900' }} /> Exercícios Salvos ({savedCount})
-          </button>
+          <Button
+            variant="secondary"
+            size="md"
+            onClick={() => setShowSaved(true)}
+            icon={<i className="ti ti-bookmark" style={{ color: '#b58900' }} />}
+          >
+            Exercícios Salvos ({savedCount})
+          </Button>
         </div>
       </div>
 
@@ -586,24 +594,18 @@ Retorne a questão reformulada no formato padrão (Enunciado, Alternativas se ap
         <div style={{ overflowY: 'auto', paddingRight: 8, paddingBottom: 32, display: 'flex', flexDirection: 'column', gap: 16 }}>
 
           {/* Generate Button (Top) */}
-          <button
+          <Button
             id="quick-generate-btn"
             onClick={handleGenerate}
             disabled={loading}
-            style={{
-              padding: '14px 24px',
-              background: loading ? '#a08060' : 'linear-gradient(135deg, #8b5e3c, #5c3a21)',
-              color: '#fff',
-              border: 'none', borderRadius: RADIUS.lg, fontSize: 15, fontWeight: 700,
-              cursor: loading ? 'not-allowed' : 'pointer',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
-              boxShadow: !loading ? '0 4px 16px rgba(139,94,60,0.35)' : 'none',
-              transition: 'all 0.2s',
-            }}
+            loading={loading}
+            variant="primary"
+            size="lg"
+            fullWidth
+            icon={!loading ? <i className="ti ti-sparkles" style={{ fontSize: 18 }} /> : undefined}
           >
-            <i className={`ti ${loading ? 'ti-loader-2' : 'ti-sparkles'}`} style={{ fontSize: 18, animation: loading ? 'spin 1s linear infinite' : 'none' }} />
-            {loading ? 'Gerando exercício...' : ' Gerar Exercício Completo'}
-          </button>
+            {loading ? 'Gerando exercício...' : 'Gerar Exercício Completo'}
+          </Button>
 
           {/* API Selector */}
           {apis.length > 0 && (

@@ -84,7 +84,7 @@ Retorne APENAS um JSON válido no seguinte formato:
         })
       }
     } catch (e: any) {
-      toast.success(`Erro ao gerar pacote de substituto: ${e?.message || 'Falha na IA'}`)
+      toast.error(`Erro ao gerar pacote de substituto: ${e?.message || 'Falha na IA'}`)
     } finally {
       setIsGenerating(false)
     }

@@ -60,7 +60,7 @@ const ClassLog              = dynamic(() => import('@/components/modules/ClassLo
 const DidacticSequence      = dynamic(() => import('@/components/modules/DidacticSequence'),      { loading: () => <ModuleSkeleton />, ssr: false })
 const LiveQuizModule        = dynamic(() => import('@/components/modules/LiveQuizModule'),        { loading: () => <ModuleSkeleton />, ssr: false })
 const ParentCommunicator    = dynamic(() => import('@/components/modules/ParentCommunicator'),    { loading: () => <ModuleSkeleton />, ssr: false })
-const Extensions            = dynamic(() => import('@/components/modules/Extensions'),            { loading: () => <ModuleSkeleton />, ssr: false })
+const ConnectionsHub        = dynamic(() => import('@/components/modules/ConnectionsHub'),        { loading: () => <ModuleSkeleton />, ssr: false })
 const PortalMirrorModule    = dynamic(() => import('@/components/modules/PortalMirrorModule'),    { loading: () => <ModuleSkeleton />, ssr: false })
 const ClassroomMode         = dynamic(() => import('@/components/modules/ClassroomMode'),         { loading: () => <ModuleSkeleton />, ssr: false })
 const FlashcardMode         = dynamic(() => import('@/components/modules/FlashcardMode'),         { loading: () => <ModuleSkeleton />, ssr: false })
@@ -79,6 +79,7 @@ const Eventos               = dynamic(() => import('@/components/modules/Eventos
 const VisualStudio          = dynamic(() => import('@/components/modules/VisualStudio'),          { loading: () => <ModuleSkeleton />, ssr: false })
 const Insights              = dynamic(() => import('@/components/modules/Insights'),              { loading: () => <ModuleSkeleton />, ssr: false })
 const ChecklistHistoryModule = dynamic(() => import('@/components/modules/ChecklistHistoryModule'), { loading: () => <ModuleSkeleton />, ssr: false })
+const PortalSkillsModule    = dynamic(() => import('@/components/modules/PortalSkillsModule'),    { loading: () => <ModuleSkeleton />, ssr: false })
 
 // ─── Module Key type ───────────────────────────────────────────────────────────
 export type ModuleKey =
@@ -90,7 +91,7 @@ export type ModuleKey =
   | 'classlog' | 'didacticsequence' | 'livequiz' | 'parentcomms'
   | 'classroommode' | 'attendancelist' | 'flashcardmode' | 'audiopronunciation'
   | 'reflectivepractice' | 'meetingclassrecorder' | 'weeklyagenda' | 'batchgrader'
-  | 'progresstracker' | 'autoreport'
+  | 'progresstracker' | 'autoreport' | 'skills'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const MODULES: Record<ModuleKey, React.ComponentType<any>> = {
@@ -123,7 +124,7 @@ const MODULES: Record<ModuleKey, React.ComponentType<any>> = {
   wellbeing:          Wellbeing,
   settings:           Settings,
   api:                ApiManager,
-  extensions:         Extensions,
+  extensions:         ConnectionsHub,
   portalmirror:       PortalMirrorModule,
   maestro:            Maestro,
   classlog:           ClassLog,
@@ -140,6 +141,7 @@ const MODULES: Record<ModuleKey, React.ComponentType<any>> = {
   batchgrader:        () => <OmniGrader initialTab="batch" />,
   progresstracker:    Analytics,
   autoreport:         AutoReport,
+  skills:             PortalSkillsModule,
 }
 
 // ─── App ───────────────────────────────────────────────────────────────────────

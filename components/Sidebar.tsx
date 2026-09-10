@@ -58,6 +58,7 @@ const NAV: Section[] = [
   ]},
   { label: 'Configurações', items: [
     { key: 'settings',   label: 'Preferências',               icon: 'ti-settings' },
+    { key: 'skills',     label: 'Skills dos Portais',         icon: 'ti-sparkles' },
     { key: 'api',        label: 'Modelos de IA',              icon: 'ti-brain' },
     { key: 'extensions', label: 'Portais Conectados & Extensões', icon: 'ti-plug-connected' },
   ]},

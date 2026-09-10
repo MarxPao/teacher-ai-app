@@ -554,6 +554,60 @@ export const AGENT_TOOLS: ToolDefinition[] = [
       },
       required: ['studentName', 'audioUrl']
     }
+  },
+
+  // 26. IMPORTAÇÃO DE PLANILHA / CSV VIA URL (GOOGLE SHEETS / CSV)
+  {
+    name: 'import_data_from_url',
+    description: 'Importa e reconcilia dados de alunos ou turmas a partir de uma URL de planilha do Google Sheets pública/compartilhada ou de um arquivo CSV hospedado na web. NUNCA invente ou alucine dados de uma URL sem invocar esta ferramenta. Se a planilha for privada, a ferramenta reportará explicitamente erro de acesso.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        url: {
+          type: 'string',
+          description: 'URL completa do Google Sheets (ex: https://docs.google.com/spreadsheets/d/.../edit?gid=0) ou URL direta de um arquivo CSV'
+        },
+        targetClass: {
+          type: 'string',
+          description: 'Nome da turma de destino opcional (ex: "8º Ano B", "9A")'
+        }
+      },
+      required: ['url']
+    }
+  },
+
+  // 27. CONNECTOR ENGINE: INVOCAÇÃO DINÂMICA DE CAPACIDADE (FASE 3)
+  {
+    name: 'invoke_teacher_capability',
+    description: `Executa uma capacidade ou ação em um sistema externo ou portal conectado da professora (portais escolares, Trello, etc.) através do Connector Engine.
+Descobre automaticamente qual conector ativo oferece a capacidade. Se o professor mencionar uma plataforma específica (ex: "no Machado", "no Trello"), informe 'connector_hint'.
+Capacidades suportadas:
+- 'read_roster': lê a lista de alunos/turma de um portal ou quadro
+- 'read_grades': lê notas lançadas
+- 'post_grade': lança notas (sempre supervisionado)
+- 'read_assignments': lê tarefas e atividades
+- 'read_calendar': lê calendário ou datas
+- 'read_board': lê quadros e listas do Trello`,
+    input_schema: {
+      type: 'object',
+      properties: {
+        capability: {
+          type: 'string',
+          enum: ['read_roster', 'read_grades', 'post_grade', 'read_assignments', 'read_calendar', 'read_board'],
+          description: 'A capacidade a ser executada no conector externo.'
+        },
+        connector_hint: {
+          type: 'string',
+          description: 'Nome, domínio ou identificador da plataforma citada pelo professor (ex: "machado", "trello", "plurall"). Se não citado, deixe vazio para descoberta automática.'
+        },
+        params: {
+          type: 'object',
+          description: 'Parâmetros específicos da execução (ex: { classRef: "8A", boardId: "..." }).',
+          additionalProperties: true
+        }
+      },
+      required: ['capability']
+    }
   }
 ]
 
@@ -600,5 +654,7 @@ export const TOOL_DISPLAY_NAMES: Record<string, { label: string; icon: string; c
   generate_parent_communication:  { label: 'Mensagem para Pais',      icon: 'ti-brand-whatsapp',     color: '#25d366' },
   record_private_tutoring_session:{ label: 'Aula Particular',         icon: 'ti-user-check',         color: '#b58900' },
   evaluate_student_audio:         { label: 'Avaliando Áudio',         icon: 'ti-microphone',         color: '#d33682' },
+  import_data_from_url:           { label: 'Importando Planilha/CSV', icon: 'ti-table-import',       color: '#2aa198' },
+  invoke_teacher_capability:      { label: 'Acessando Plataforma',    icon: 'ti-plug-connected',     color: '#8b5e3c' },
 }
 

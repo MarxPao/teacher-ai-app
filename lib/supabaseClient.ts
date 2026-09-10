@@ -54,7 +54,7 @@ export async function syncToSupabase(payload?: Record<string, unknown>): Promise
     if (typeof window !== 'undefined') {
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i)
-        if (key && key.startsWith('teacher_') && key !== 'teacher_supabase_config' && !key.endsWith('_lastModified')) {
+        if (key && key.startsWith('teacher_') && key !== 'teacher_supabase_config' && key !== 'teacher_auth_session' && !key.endsWith('_lastModified')) {
           try {
             const val = localStorage.getItem(key)
             if (val) syncPayload[key] = JSON.parse(val)
@@ -233,7 +233,7 @@ export async function loadFromSupabase(): Promise<{ ok: boolean; count?: number;
     const rows: Array<{ key: string; value: unknown }> = await res.json()
     let count = 0
     for (const row of rows) {
-      if (row.key && row.value !== undefined) {
+      if (row.key && row.value !== undefined && row.key !== 'teacher_auth_session' && row.key !== 'teacher_supabase_config') {
         localStorage.setItem(row.key, typeof row.value === 'string' ? row.value : JSON.stringify(row.value))
         count++
       }

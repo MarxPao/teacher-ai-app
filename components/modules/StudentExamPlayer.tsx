@@ -241,7 +241,7 @@ export default function StudentExamPlayer({
         if (document.hidden) {
           setTabSwitchCount(prev => {
             const next = prev + 1
-            toast.success(`Atenção: troca de aba detectada! Ocorrências: ${next}`)
+            toast.warning(`Atenção: troca de aba detectada! Ocorrências: ${next}`)
             return next
           })
         }

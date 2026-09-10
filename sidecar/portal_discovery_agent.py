@@ -2,11 +2,14 @@
 portal_discovery_agent.py — Motor de Descoberta Autônoma de Layout de Portal (Camada 2)
 
 Quando nenhum mapa está salvo para um portal, este agente:
-1. Captura screenshot da aba atual via CDP.
-2. Envia o screenshot ao modelo de visão configurado pelo professor (BYOK).
-3. Parseia a resposta para um DiscoveredSelectorMap.
-4. Valida o mapa executando os seletores inferidos contra o DOM real.
-5. Retorna o mapa validado (ou None se a descoberta falhar).
+1. Usa PageReaderEngine (SeeAct/WebChallenger) como Camada 2a:
+   - PageMem: mapeia DOM deterministicamente (sem LLM)
+   - Set-of-Mark: elementos numerados no screenshot
+   - SeeAct: LLM percebe qual seção tem alunos; código ancora no seletor real
+2. Fallback (Camada 2b): Se PageReaderEngine falhar, usa o fluxo legado de
+   screenshot → VISION_PROMPT → seletor CSS direto (mantido para compatibilidade).
+3. Valida o mapa executando os seletores inferidos contra o DOM real.
+4. Retorna o mapa validado (ou None se a descoberta falhar).
 
 Garantias:
 - Nunca persiste um mapa sem ao menos 1 linha de aluno encontrada.
@@ -26,6 +29,13 @@ import re
 import time
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Tuple
+
+# Import do engine generalista — disponível se page_reader_engine.py estiver no path
+try:
+    from page_reader_engine import PageReaderEngine, default_llm_caller as reader_default_llm
+    PAGE_READER_AVAILABLE = True
+except ImportError:
+    PAGE_READER_AVAILABLE = False
 
 
 # ------------------------------------------------------------------
@@ -228,14 +238,64 @@ class PortalDiscoveryAgent:
         """
         Tenta descobrir o mapa de seletores da página atual.
 
-        Fluxo:
-        1. Screenshot da aba.
-        2. Inferência visual via LLM.
-        3. Parse da resposta JSON.
-        4. Validação contra o DOM real (extrai >= 1 linha de aluno).
-        5. Retorna mapa se válido, None caso contrário.
+        Camada 2a (PageReaderEngine — SeeAct/WebChallenger):
+          Se PageReaderEngine estiver disponível, usa o ciclo:
+          PageMem → Set-of-Mark → Percepção LLM → Ancoragem determinística → validação.
+          O LLM nunca inventa seletor CSS — apenas cita o número da seção.
+
+        Camada 2b (Fallback legado):
+          Screenshot → VISION_PROMPT → seletor CSS direto do LLM.
+          Mantido para compatibilidade quando PageReaderEngine não está disponível
+          ou falha por qualquer razão.
         """
         print("[Discovery] Iniciando descoberta autonoma de layout de portal...")
+
+        # -------------------------------------------------------
+        # Camada 2a: PageReaderEngine (SeeAct/WebChallenger)
+        # -------------------------------------------------------
+        if PAGE_READER_AVAILABLE:
+            try:
+                print("[Discovery] [CAMADA 2a] Usando PageReaderEngine (SeeAct/WebChallenger)...")
+
+                # Adapta o llm_caller do PortalDiscoveryAgent para o formato do PageReaderEngine
+                # O legacy llm_caller tem assinatura (b64, byok); o engine usa (b64, prompt, byok)
+                def adapted_llm(b64: str, prompt: str, byok: dict) -> str:
+                    return reader_default_llm(b64, prompt, byok)
+
+                engine = PageReaderEngine(llm_caller=adapted_llm)
+                engine_result = await engine.run(page, "lista de alunos", teacher_byok, "students")
+
+                if engine_result.success and engine_result.section_used:
+                    # Converte o resultado do engine para DiscoveredSelectorMap
+                    # usando o seletor ancorado deterministicamente
+                    confidence_map = {"high": "high", "medium": "medium", "low": "low"}
+                    confidence = "medium"  # default, engine não expõe diretamente
+
+                    discovered_via_engine = DiscoveredSelectorMap(
+                        roster_table=engine_result.section_used,
+                        name_column=1,    # será inferido via heurística de coluna
+                        id_column=0,
+                        header_rows=1,
+                        confidence=confidence,
+                        llm_raw_response=f"PageReaderEngine: {engine_result.section_used}",
+                    )
+
+                    # Valida com a amostra de dados já extraída
+                    valid_rows = len(engine_result.data)
+                    if valid_rows >= 1:
+                        print(f"[Discovery] [CAMADA 2a] ✅ Engine descobriu '{engine_result.section_used}' com {valid_rows} alunos.")
+                        return discovered_via_engine
+                    else:
+                        print("[Discovery] [CAMADA 2a] Engine sem dados de aluno. Tentando fallback legado...")
+                else:
+                    print(f"[Discovery] [CAMADA 2a] Engine falhou: {engine_result.failure_reason}. Fallback legado...")
+            except Exception as e:
+                print(f"[Discovery] [CAMADA 2a] Exceção no engine: {e}. Fallback legado...")
+
+        # -------------------------------------------------------
+        # Camada 2b: Fluxo legado (VISION_PROMPT → seletor CSS direto)
+        # -------------------------------------------------------
+        print("[Discovery] [CAMADA 2b] Usando fluxo legado de descoberta visual...")
 
         # 1. Captura screenshot
         try:
@@ -245,7 +305,7 @@ class PortalDiscoveryAgent:
             print(f"[Discovery] Falha ao capturar screenshot: {e}")
             return None
 
-        # 2. Inferência visual
+        # 2. Inferência visual via VISION_PROMPT legado
         try:
             raw_response = self._llm(screenshot_b64, teacher_byok)
             print(f"[Discovery] Resposta LLM recebida ({len(raw_response)} chars).")
@@ -265,7 +325,7 @@ class PortalDiscoveryAgent:
             print(f"[Discovery] Validacao falhou: seletores nao encontraram dados de alunos no DOM.")
             return None
 
-        print(f"[Discovery] Mapa validado com sucesso: {found_rows} aluno(s) encontrado(s). Confianca: {discovered.confidence}.")
+        print(f"[Discovery] [CAMADA 2b] Mapa validado: {found_rows} aluno(s). Confianca: {discovered.confidence}.")
         return discovered
 
     # ------------------------------------------------------------------

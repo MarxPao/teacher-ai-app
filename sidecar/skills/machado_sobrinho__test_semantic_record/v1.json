@@ -1,0 +1,113 @@
+{
+  "id": "skill_test_semantic_record_mtr5duyi",
+  "name": "Teste Gravação Semântica",
+  "portal_id": "machado_sobrinho",
+  "task_id": "test_semantic_record",
+  "version": "1.0.0",
+  "entry_node": "nav_0",
+  "nodes": {
+    "nav_0": {
+      "id": "nav_0",
+      "type": "NAVIGATE",
+      "anchor": {
+        "strategy": "css_selector",
+        "value": "https://machadosobrinho.paineldoaluno.com.br/professor_notas",
+        "description": "Navegar para https://machadosobrinho.paineldoaluno.com.br/professor_notas"
+      },
+      "params": {},
+      "on_success": "locate_aluno_row",
+      "on_fail": null,
+      "retry_policy": {
+        "max_attempts": 2,
+        "backoff_ms": 500
+      }
+    },
+    "read_0": {
+      "id": "read_0",
+      "type": "READ",
+      "anchor": {
+        "strategy": "css_selector",
+        "value": "td:nth-child(1)",
+        "scope": "row_current",
+        "description": "Coluna 1 (Nota Prova Bimestre 1)"
+      },
+      "params": {
+        "variable_bindings": [
+          "nota_prova_bimestre_1"
+        ],
+        "description": "Ler coluna Nota Prova Bimestre 1 -> {nota_prova_bimestre_1}"
+      },
+      "on_success": "loop_proxima_linha",
+      "on_fail": null,
+      "retry_policy": {
+        "max_attempts": 2,
+        "backoff_ms": 500
+      }
+    },
+    "locate_aluno_row": {
+      "id": "locate_aluno_row",
+      "type": "LOCATE",
+      "anchor": {
+        "strategy": "css_selector",
+        "value": "table tbody tr",
+        "description": "Linhas dos alunos na tabela"
+      },
+      "params": {
+        "multiplicity": "all",
+        "description": "Localizar todas as linhas de alunos na tabela"
+      },
+      "on_success": "read_0",
+      "on_fail": null,
+      "retry_policy": {
+        "max_attempts": 2,
+        "backoff_ms": 500
+      }
+    },
+    "loop_proxima_linha": {
+      "id": "loop_proxima_linha",
+      "type": "LOOP",
+      "params": {
+        "loop_target": "read_0",
+        "collection_node": "locate_aluno_row",
+        "description": "Repetir para cada aluno na tabela"
+      },
+      "on_success": null,
+      "on_fail": null,
+      "retry_policy": {
+        "max_attempts": 2,
+        "backoff_ms": 500
+      }
+    }
+  },
+  "metadata": {
+    "task_name": "Teste Gravação Semântica",
+    "skill_type": "reading",
+    "description": "Skill de teste com schema semântico",
+    "turma_id": null,
+    "columns": [
+      {
+        "original_header": "Nota Prova Bimestre 1",
+        "semantic_type": "numeric_grade",
+        "variable_name": "nota_prova_bimestre_1",
+        "sample_values": [
+          "8.5",
+          "9.0"
+        ],
+        "confidence": 0.95,
+        "reasoning": "Classificado como numeric_grade via Groq LLM",
+        "included": true
+      }
+    ],
+    "success_rate": 100,
+    "total_executions": 0,
+    "created_at": "2026-09-07T11:18:49.340Z",
+    "updated_at": "2026-09-07T11:18:49.340Z",
+    "last_verified_at": null,
+    "has_self_healed": false,
+    "author": "teacher_ai_recorder_nextjs",
+    "source_url": "",
+    "variable_bindings_discovered": [
+      "nota_prova_bimestre_1"
+    ]
+  }
+}

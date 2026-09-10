@@ -533,7 +533,7 @@ export default function ExamBuilder() {
   const toggleApproach = (s: string) => setApproach(p => p.includes(s) ? p.filter(x => x !== s) : [...p, s])
 
   async function generate() {
-    if (!sections.length) { toast.success('Selecione pelo menos uma seção.'); return }
+    if (!sections.length) { toast.warning('Selecione pelo menos uma seção.'); return }
     if (!hasApi) { setError('Configure uma API com chave válida em "APIs & Modelos" para gerar automaticamente.'); return }
 
     setLoading(true); setResult(''); setError('')
@@ -638,21 +638,21 @@ Retorne a questão reformulada no formato padrão (Enunciado, Alternativas se ap
   }
 
   async function handleGenerateAudio() {
-    if (!result) { toast.success('Gere a prova primeiro para extrair o texto de listening.'); return }
+    if (!result) { toast.warning('Gere a prova primeiro para extrair o texto de listening.'); return }
     setAudioLoading(true)
     try {
       const cleanText = result.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').slice(0, 800)
       const res = await generateListeningAudio({ text: cleanText, accent })
       setAudioUrl(res.audioUrl)
     } catch (e: unknown) {
-      toast.success(`Falha ao gerar áudio: ${e instanceof Error ? e.message : 'Erro'}`)
+      toast.error(`Falha ao gerar áudio: ${e instanceof Error ? e.message : 'Erro'}`)
     } finally {
       setAudioLoading(false)
     }
   }
 
   function handleSave() {
-    if (!result) { toast.success('Gere ou cole uma prova primeiro.'); return }
+    if (!result) { toast.warning('Gere ou cole uma prova primeiro.'); return }
     const saved = saveItemToStorage('teacher_saved_exams', {
       title: header.title || (topic ? `Prova ${topic}` : `Exam (${cefr})`),
       subtitle: `${cefr} · ${grade} · ${sections.slice(0, 2).join(', ')}`,
@@ -676,7 +676,7 @@ Retorne a questão reformulada no formato padrão (Enunciado, Alternativas se ap
   }
 
   async function handleSaveToActivitiesBank() {
-    if (!result) { toast.success('Gere ou cole uma prova primeiro.'); return }
+    if (!result) { toast.warning('Gere ou cole uma prova primeiro.'); return }
     const { saveActivityToSupabase } = await import('@/lib/supabaseClient')
     const title = header.title || (topic ? `Prova ${topic}` : `Prova (${cefr})`)
     await saveActivityToSupabase({

@@ -21,9 +21,12 @@ import {
   getTodayKey,
   isDateInPeriod,
   formatRecurrenceText,
+  parseTodoHierarchy,
+  groupTodosByHierarchy,
 } from '@/lib/checklistManager'
 import TrelloImportModal from '@/components/modules/TrelloImportModal'
 import ChecklistEditModal from '@/components/modules/ChecklistEditModal'
+import Button from '@/components/Button'
 import { COLOR, FONT, TEXT, RADIUS, SHADOW, BORDER, TRANSITION } from '@/styles/tokens'
 
 const PERIOD_LABELS: { id: ChecklistPeriod; label: string; icon: string; desc: string }[] = [
@@ -48,12 +51,20 @@ export default function ChecklistHistoryModule() {
   const [searchTerm, setSearchTerm] = useState('')
   const [isTrelloModalOpen, setIsTrelloModalOpen] = useState(false)
 
-  // Formulário de Nova Tarefa
+  // Formulário de Nova Tarefa com Camadas (Tópico & Subtópico)
   const [newText, setNewText] = useState('')
   const [newCategory, setNewCategory] = useState<'one_off' | 'recurrent'>('one_off')
-  const [newTag, setNewTag] = useState('')
+  const [newTopic, setNewTopic] = useState('')
+  const [newSubtopic, setNewSubtopic] = useState('')
 
-  // Estado para rápida criação dentro de uma coluna do Kanban
+  // Estados de Expansão (Camada 1: Tópicos, Camada 2: Subtópicos, Camada 3: Subtarefas)
+  const [expandedTopics, setExpandedTopics] = useState<Record<string, boolean>>({})
+  const [expandedSubtopics, setExpandedSubtopics] = useState<Record<string, boolean>>({})
+  const [expandedTaskSubtasks, setExpandedTaskSubtasks] = useState<Record<string, boolean>>({})
+
+  // Estado para rápida criação dentro de um subtópico ou coluna
+  const [quickAddSubtopicKey, setQuickAddSubtopicKey] = useState<string | null>(null)
+  const [quickAddSubtopicText, setQuickAddSubtopicText] = useState('')
   const [quickAddColumnTag, setQuickAddColumnTag] = useState<string | null>(null)
   const [quickAddText, setQuickAddText] = useState('')
 
@@ -83,13 +94,17 @@ export default function ChecklistHistoryModule() {
     e.preventDefault()
     if (!newText.trim()) return
     const todayKey = getTodayKey()
+    const finalTopic = newTopic.trim() || 'Geral'
+    const finalSubtopic = newSubtopic.trim() || 'Tarefas Gerais'
     const newTodo: ChecklistTodo = {
       id: `${newCategory === 'recurrent' ? 'rec' : 'todo'}_${Date.now()}`,
       text: newText.trim(),
       done: false,
       category: newCategory,
       priority: newCategory === 'recurrent' ? 'high' : 'medium',
-      tag: newTag.trim() || (newCategory === 'recurrent' ? 'Rotina Diária' : 'Geral'),
+      topic: finalTopic,
+      subtopic: finalSubtopic,
+      tag: `${finalTopic} / ${finalSubtopic}`,
       createdAt: Date.now(),
       lastResetDate: newCategory === 'recurrent' ? todayKey : undefined,
     }
@@ -98,8 +113,31 @@ export default function ChecklistHistoryModule() {
     setTodos(updated)
     saveChecklistTodos(updated)
     setNewText('')
-    setNewTag('')
     toast.success('Tarefa adicionada com sucesso!')
+  }
+
+  const handleQuickAddInSubtopic = (topic: string, subtopic: string) => {
+    if (!quickAddSubtopicText.trim()) return
+    const todayKey = getTodayKey()
+    const newTodo: ChecklistTodo = {
+      id: `todo_${Date.now()}`,
+      text: quickAddSubtopicText.trim(),
+      done: false,
+      category: 'one_off',
+      priority: 'medium',
+      topic,
+      subtopic,
+      tag: `${topic} / ${subtopic}`,
+      createdAt: Date.now(),
+      lastResetDate: todayKey,
+    }
+
+    const updated = [newTodo, ...todos]
+    setTodos(updated)
+    saveChecklistTodos(updated)
+    setQuickAddSubtopicText('')
+    setQuickAddSubtopicKey(null)
+    toast.success(`Tarefa adicionada em "${subtopic}"!`)
   }
 
   const handleQuickAddInColumn = (tag: string) => {
@@ -112,6 +150,8 @@ export default function ChecklistHistoryModule() {
       category: 'one_off',
       priority: 'medium',
       tag: tag,
+      topic: tag,
+      subtopic: 'Tarefas Gerais',
       createdAt: Date.now(),
       lastResetDate: todayKey,
     }
@@ -206,26 +246,89 @@ export default function ChecklistHistoryModule() {
     })
   }, [todos, filterCategory, searchTerm])
 
-  // Agrupamento por Tópicos / Listas
-  const groupedTodosByTopic = useMemo(() => {
-    const map: Record<string, ChecklistTodo[]> = {}
-    filteredTodos.forEach(t => {
-      const topic = t.tag?.trim() || 'Geral'
-      if (!map[topic]) map[topic] = []
-      map[topic].push(t)
-    })
-    return map
+  // Agrupamento Hierárquico em Camadas: Tópico (Camada 1) -> Subtópico (Camada 2) -> Tarefas (Camada 3)
+  const hierarchicalTodos = useMemo(() => {
+    return groupTodosByHierarchy(filteredTodos)
   }, [filteredTodos])
 
-  // Lista única de todos os tópicos/tags existentes para o Kanban
-  const allUniqueTopics = useMemo(() => {
-    const set = new Set<string>()
+  // Lista única de todos os tópicos e subtópicos para autocomplete/sugestões e Kanban
+  const { existingTopics, existingSubtopics } = useMemo(() => {
+    const topicsSet = new Set<string>()
+    const subtopicsSet = new Set<string>()
     todos.forEach(t => {
-      if (t.tag?.trim()) set.add(t.tag.trim())
+      const h = parseTodoHierarchy(t)
+      topicsSet.add(h.topic)
+      subtopicsSet.add(h.subtopic)
     })
-    if (set.size === 0) set.add('Geral')
-    return Array.from(set)
+    if (topicsSet.size === 0) topicsSet.add('Rotina Diária')
+    if (subtopicsSet.size === 0) subtopicsSet.add('Tarefas Gerais')
+    return {
+      existingTopics: Array.from(topicsSet),
+      existingSubtopics: Array.from(subtopicsSet)
+    }
   }, [todos])
+
+  const allUniqueTopics = existingTopics
+
+  const isTopicExpanded = useCallback((topicName: string, isFirst: boolean) => {
+    if (searchTerm.trim()) return true
+    if (expandedTopics[topicName] !== undefined) {
+      return expandedTopics[topicName]
+    }
+    return isFirst
+  }, [searchTerm, expandedTopics])
+
+  const toggleTopic = (topicName: string, isFirst: boolean) => {
+    setExpandedTopics(prev => ({
+      ...prev,
+      [topicName]: !isTopicExpanded(topicName, isFirst)
+    }))
+  }
+
+  const isSubtopicExpanded = useCallback((topicName: string, subtopicName: string) => {
+    if (searchTerm.trim()) return true
+    const key = `${topicName}:::${subtopicName}`
+    if (expandedSubtopics[key] !== undefined) {
+      return expandedSubtopics[key]
+    }
+    return true
+  }, [searchTerm, expandedSubtopics])
+
+  const toggleSubtopic = (topicName: string, subtopicName: string) => {
+    const key = `${topicName}:::${subtopicName}`
+    setExpandedSubtopics(prev => ({
+      ...prev,
+      [key]: !isSubtopicExpanded(topicName, subtopicName)
+    }))
+  }
+
+  const toggleTaskSubtasks = (todoId: string) => {
+    setExpandedTaskSubtasks(prev => ({
+      ...prev,
+      [todoId]: !prev[todoId]
+    }))
+  }
+
+  const expandAllTopics = () => {
+    const nextT: Record<string, boolean> = {}
+    const nextSt: Record<string, boolean> = {}
+    Object.entries(hierarchicalTodos).forEach(([top, stMap]) => {
+      nextT[top] = true
+      Object.keys(stMap).forEach(sub => {
+        nextSt[`${top}:::${sub}`] = true
+      })
+    })
+    setExpandedTopics(nextT)
+    setExpandedSubtopics(nextSt)
+  }
+
+  const collapseAllTopics = () => {
+    const nextT: Record<string, boolean> = {}
+    Object.keys(hierarchicalTodos).forEach(top => {
+      nextT[top] = false
+    })
+    setExpandedTopics(nextT)
+  }
 
   // Filtragem de Histórico no Período
   const filteredHistory = useMemo(() => {
@@ -621,20 +724,99 @@ export default function ChecklistHistoryModule() {
         </div>
       </div>
 
-      {/* ─── SUB-ABA 1: TAREFAS ATIVAS (COM SUPORTE A POST-IT & TÓPICOS) ─── */}
+      {/* ─── SUB-ABA 1: TAREFAS ATIVAS (COM SUPORTE A HIERARQUIA & COMPACIDADE) ─── */}
       {viewMode === 'active' && (
-        <ModuleCard padding={20}>
-          {/* Formulário de Criação de Tarefas */}
-          <form onSubmit={handleAddTodo} style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
+        <ModuleCard padding={18}>
+          {/* Barra de Controles Rápidos: Expandir/Recolher Todos e Estatísticas Gerais */}
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: 10,
+            marginBottom: 16,
+            paddingBottom: 12,
+            borderBottom: `1px solid ${BORDER.soft}`
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <button
+                type="button"
+                onClick={collapseAllTopics}
+                style={{
+                  padding: '5px 12px',
+                  borderRadius: RADIUS.sm,
+                  border: `1px solid ${BORDER.medium}`,
+                  background: COLOR.surface1,
+                  color: COLOR.paperInk,
+                  fontSize: TEXT.caption,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 5
+                }}
+                title="Recolhe todos os tópicos para uma visão ultra compacta"
+              >
+                <i className="ti ti-layout-sidebar-left-collapse" />
+                <span>Recolher Todos</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={expandAllTopics}
+                style={{
+                  padding: '5px 12px',
+                  borderRadius: RADIUS.sm,
+                  border: `1px solid ${BORDER.medium}`,
+                  background: COLOR.surface1,
+                  color: COLOR.paperInk,
+                  fontSize: TEXT.caption,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 5
+                }}
+                title="Expande todos os tópicos e subtópicos"
+              >
+                <i className="ti ti-arrows-maximize" />
+                <span>Expandir Todos</span>
+              </button>
+            </div>
+
+            {/* Progresso Geral Compacto */}
+            {filteredTodos.length > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: TEXT.caption, fontWeight: 700, color: COLOR.paperWarm }}>
+                  Progresso: <strong>{filteredTodos.filter(t => t.done).length}/{filteredTodos.length}</strong> ({Math.round((filteredTodos.filter(t => t.done).length / filteredTodos.length) * 100)}%)
+                </span>
+                <div style={{ width: 90, height: 6, background: 'rgba(139,94,60,0.15)', borderRadius: 99, overflow: 'hidden' }}>
+                  <div style={{
+                    height: '100%',
+                    width: `${Math.round((filteredTodos.filter(t => t.done).length / filteredTodos.length) * 100)}%`,
+                    background: COLOR.success,
+                    borderRadius: 99
+                  }} />
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Formulário de Criação de Tarefas com Camadas (Tópico & Subtópico) */}
+          <form onSubmit={handleAddTodo} style={{
+            display: 'grid',
+            gridTemplateColumns: 'minmax(220px, 2fr) minmax(130px, 1fr) minmax(130px, 1fr) auto auto',
+            gap: 8,
+            marginBottom: 20,
+            alignItems: 'center'
+          }}>
             <input
               type="text"
               value={newText}
               onChange={e => setNewText(e.target.value)}
-              placeholder={newCategory === 'recurrent' ? 'Nova rotina diária (ex: Conferir frequência, Aquecimento)...' : 'Nova tarefa pontual da rotina...'}
+              placeholder={newCategory === 'recurrent' ? 'Nova rotina (ex: Aquecimento, Chamada)...' : 'Nova tarefa pontual...'}
               style={{
-                flex: 2,
-                minWidth: 260,
-                padding: '9px 14px',
+                padding: '9px 12px',
                 borderRadius: RADIUS.md,
                 border: `1px solid ${BORDER.medium}`,
                 background: COLOR.paperPage,
@@ -645,31 +827,65 @@ export default function ChecklistHistoryModule() {
               }}
             />
 
-            <input
-              type="text"
-              value={newTag}
-              onChange={e => setNewTag(e.target.value)}
-              placeholder="Tópico / Lista (ex: Santa Catarina, Machado Sobrinho, Provas)"
-              style={{
-                flex: 1,
-                minWidth: 160,
-                padding: '9px 14px',
-                borderRadius: RADIUS.md,
-                border: `1px solid ${BORDER.medium}`,
-                background: COLOR.paperPage,
-                fontSize: TEXT.bodyCompact,
-                outline: 'none',
-                color: COLOR.paperInk,
-                fontFamily: FONT.sans,
-              }}
-            />
+            {/* Input de Tópico (Camada 1) com Datalist */}
+            <div style={{ position: 'relative' }}>
+              <input
+                type="text"
+                list="checklist-topics-datalist"
+                value={newTopic}
+                onChange={e => setNewTopic(e.target.value)}
+                placeholder="Tópico (ex: Escola, Provas)"
+                style={{
+                  width: '100%',
+                  boxSizing: 'border-box',
+                  padding: '9px 12px',
+                  borderRadius: RADIUS.md,
+                  border: `1px solid ${BORDER.medium}`,
+                  background: COLOR.paperPage,
+                  fontSize: TEXT.bodyCompact,
+                  outline: 'none',
+                  color: COLOR.paperInk,
+                  fontFamily: FONT.sans,
+                }}
+              />
+              <datalist id="checklist-topics-datalist">
+                {existingTopics.map(t => <option key={t} value={t} />)}
+              </datalist>
+            </div>
 
+            {/* Input de Subtópico (Camada 2) com Datalist */}
+            <div style={{ position: 'relative' }}>
+              <input
+                type="text"
+                list="checklist-subtopics-datalist"
+                value={newSubtopic}
+                onChange={e => setNewSubtopic(e.target.value)}
+                placeholder="Subtópico (ex: Turma 9A)"
+                style={{
+                  width: '100%',
+                  boxSizing: 'border-box',
+                  padding: '9px 12px',
+                  borderRadius: RADIUS.md,
+                  border: `1px solid ${BORDER.medium}`,
+                  background: COLOR.paperPage,
+                  fontSize: TEXT.bodyCompact,
+                  outline: 'none',
+                  color: COLOR.paperInk,
+                  fontFamily: FONT.sans,
+                }}
+              />
+              <datalist id="checklist-subtopics-datalist">
+                {existingSubtopics.map(st => <option key={st} value={st} />)}
+              </datalist>
+            </div>
+
+            {/* Botões Categoria */}
             <div style={{ display: 'flex', background: COLOR.paperPage, padding: 3, borderRadius: RADIUS.md, border: `1px solid ${BORDER.medium}`, gap: 2 }}>
               <button
                 type="button"
                 onClick={() => setNewCategory('one_off')}
                 style={{
-                  padding: '6px 12px',
+                  padding: '6px 10px',
                   borderRadius: RADIUS.sm,
                   border: 'none',
                   background: newCategory === 'one_off' ? COLOR.paperInk : 'transparent',
@@ -689,7 +905,7 @@ export default function ChecklistHistoryModule() {
                 type="button"
                 onClick={() => setNewCategory('recurrent')}
                 style={{
-                  padding: '6px 12px',
+                  padding: '6px 10px',
                   borderRadius: RADIUS.sm,
                   border: 'none',
                   background: newCategory === 'recurrent' ? COLOR.accent : 'transparent',
@@ -707,77 +923,321 @@ export default function ChecklistHistoryModule() {
               </button>
             </div>
 
-            <button
+            <Button
               type="submit"
-              style={{
-                padding: '9px 18px',
-                borderRadius: RADIUS.md,
-                border: 'none',
-                background: COLOR.accent,
-                color: '#fff',
-                fontSize: TEXT.bodyCompact,
-                fontWeight: 700,
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-                boxShadow: '0 2px 8px rgba(139,94,60,0.25)',
-                fontFamily: FONT.sans,
-              }}
+              variant="primary"
+              size="md"
+              icon={<i className="ti ti-plus" />}
             >
-              <i className="ti ti-plus" /> Adicionar
-            </button>
+              Adicionar
+            </Button>
           </form>
 
-          {/* Listagem com Agrupamento por Tópicos / Listas */}
+          {/* Renderização Hierárquica em Árvore Sanfonada */}
           {groupByTopic ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-              {Object.keys(groupedTodosByTopic).length === 0 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {Object.keys(hierarchicalTodos).length === 0 ? (
                 <div style={{ padding: '36px 0', textAlign: 'center', color: COLOR.paperMid, fontSize: TEXT.bodyCompact }}>
                   <i className="ti ti-circle-check" style={{ fontSize: 32, display: 'block', marginBottom: 8, color: COLOR.success }} />
                   Nenhuma tarefa ativa. Todas as pendências estão em dia!
                 </div>
               ) : (
-                Object.entries(groupedTodosByTopic).map(([topicName, topicTodos]) => {
-                  const doneInTopic = topicTodos.filter(t => t.done).length
+                Object.entries(hierarchicalTodos).map(([topicName, subtopicsMap], topicIdx) => {
+                  const allTodosInTopic = Object.values(subtopicsMap).flat()
+                  const doneInTopic = allTodosInTopic.filter(t => t.done).length
+                  const totalInTopic = allTodosInTopic.length
+                  const subtopicsCount = Object.keys(subtopicsMap).length
+                  const isExpanded = isTopicExpanded(topicName, topicIdx === 0)
+                  const progressPct = totalInTopic > 0 ? Math.round((doneInTopic / totalInTopic) * 100) : 0
+
+                  const lowerName = topicName.toLowerCase()
+                  const topicIcon = lowerName.includes('rotina')
+                    ? 'ti-repeat'
+                    : lowerName.includes('escola') || lowerName.includes('colegio')
+                    ? 'ti-school'
+                    : lowerName.includes('prova') || lowerName.includes('avalia')
+                    ? 'ti-file-certificate'
+                    : lowerName.includes('particular') || lowerName.includes('tutor')
+                    ? 'ti-user-star'
+                    : 'ti-folder'
+
                   return (
                     <div
                       key={topicName}
                       style={{
-                        background: 'rgba(253, 248, 242, 0.65)',
-                        border: `1px solid ${BORDER.medium}`,
+                        background: '#fff',
+                        border: `1px solid ${isExpanded ? COLOR.accent : BORDER.medium}`,
                         borderRadius: RADIUS.lg,
-                        padding: '14px 16px',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: 10,
-                        boxShadow: SHADOW.sm,
+                        overflow: 'hidden',
+                        boxShadow: isExpanded ? '0 2px 8px rgba(44,26,14,0.05)' : SHADOW.sm,
+                        transition: 'all 0.15s ease',
                       }}
                     >
-                      {/* Header do Tópico / Post-it Container */}
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${BORDER.soft}`, paddingBottom: 8 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <div style={{ width: 8, height: 18, background: COLOR.accent, borderRadius: 4 }} />
-                          <span style={{ fontSize: 14, fontWeight: 800, color: COLOR.paperInk }}>
+                      {/* Accordion Header da Camada 1: TÓPICO */}
+                      <div
+                        onClick={() => toggleTopic(topicName, topicIdx === 0)}
+                        style={{
+                          padding: '9px 14px',
+                          background: isExpanded ? 'rgba(139,94,60,0.07)' : 'rgba(253,248,242,0.85)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          cursor: 'pointer',
+                          userSelect: 'none',
+                          borderBottom: isExpanded ? `1px solid ${BORDER.soft}` : 'none',
+                          gap: 12
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
+                          <i
+                            className="ti ti-chevron-right"
+                            style={{
+                              fontSize: 13,
+                              color: COLOR.paperWarm,
+                              transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
+                              transition: 'transform 0.15s ease',
+                              flexShrink: 0
+                            }}
+                          />
+                          <div style={{
+                            width: 26,
+                            height: 26,
+                            borderRadius: RADIUS.md,
+                            background: isExpanded ? COLOR.accent : 'rgba(139,94,60,0.15)',
+                            color: isExpanded ? '#fff' : COLOR.accent,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: 14,
+                            flexShrink: 0
+                          }}>
+                            <i className={`ti ${topicIcon}`} />
+                          </div>
+                          <span style={{ fontSize: 13.5, fontWeight: 800, color: COLOR.paperInk, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             {topicName}
                           </span>
                           <span style={{
-                            fontSize: 11,
+                            fontSize: 10.5,
                             fontWeight: 700,
-                            padding: '2px 8px',
+                            padding: '1px 7px',
                             borderRadius: RADIUS.sm,
-                            background: 'rgba(139,94,60,0.12)',
-                            color: COLOR.accent
+                            background: 'rgba(44,26,14,0.06)',
+                            color: COLOR.paperWarm,
+                            flexShrink: 0
                           }}>
-                            {doneInTopic}/{topicTodos.length} concluídas
+                            {subtopicsCount} subtópico{subtopicsCount > 1 ? 's' : ''}
                           </span>
+                        </div>
+
+                        {/* Progresso Compacto do Tópico */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <div style={{ width: 60, height: 5, background: 'rgba(139,94,60,0.15)', borderRadius: 99, overflow: 'hidden' }}>
+                              <div style={{ height: '100%', width: `${progressPct}%`, background: progressPct === 100 ? COLOR.success : COLOR.accent, borderRadius: 99 }} />
+                            </div>
+                            <span style={{
+                              fontSize: 11,
+                              fontWeight: 800,
+                              color: progressPct === 100 ? COLOR.success : COLOR.accent,
+                              minWidth: 46
+                            }}>
+                              {doneInTopic}/{totalInTopic}
+                            </span>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setNewTopic(topicName)
+                              setNewSubtopic('')
+                            }}
+                            title={`Adicionar tarefa em "${topicName}"`}
+                            style={{
+                              background: 'transparent',
+                              border: `1px dashed ${BORDER.medium}`,
+                              borderRadius: RADIUS.sm,
+                              padding: '2px 7px',
+                              fontSize: 11,
+                              fontWeight: 700,
+                              color: COLOR.paperWarm,
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 3
+                            }}
+                          >
+                            <i className="ti ti-plus" style={{ fontSize: 10 }} /> Subtópico
+                          </button>
                         </div>
                       </div>
 
-                      {/* Cartões dentro do Tópico */}
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                        {topicTodos.map(todo => renderTodoCardItem(todo))}
-                      </div>
+                      {/* Corpo do Tópico: Gavetas da Camada 2 (SUBTÓPICOS) */}
+                      {isExpanded && (
+                        <div style={{ padding: '8px 12px', display: 'flex', flexDirection: 'column', gap: 8, background: '#faf6f0' }}>
+                          {Object.entries(subtopicsMap).map(([subtopicName, subtopicTodos]) => {
+                            const doneInSubtopic = subtopicTodos.filter(t => t.done).length
+                            const isSubExpanded = isSubtopicExpanded(topicName, subtopicName)
+                            const subtopicKey = `${topicName}:::${subtopicName}`
+                            const isAddingInSubtopic = quickAddSubtopicKey === subtopicKey
+
+                            return (
+                              <div
+                                key={subtopicName}
+                                style={{
+                                  background: '#fff',
+                                  border: `1px solid ${BORDER.soft}`,
+                                  borderRadius: RADIUS.md,
+                                  overflow: 'hidden',
+                                  boxShadow: '0 1px 3px rgba(44,26,14,0.02)'
+                                }}
+                              >
+                                {/* Header do Subtópico */}
+                                <div
+                                  onClick={() => toggleSubtopic(topicName, subtopicName)}
+                                  style={{
+                                    padding: '6px 10px',
+                                    background: isSubExpanded ? 'rgba(44,26,14,0.02)' : '#fff',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    cursor: 'pointer',
+                                    borderBottom: isSubExpanded ? `1px dashed ${BORDER.soft}` : 'none',
+                                    userSelect: 'none'
+                                  }}
+                                >
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                                    <i
+                                      className="ti ti-chevron-right"
+                                      style={{
+                                        fontSize: 11,
+                                        color: COLOR.paperWarm,
+                                        transform: isSubExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
+                                        transition: 'transform 0.15s ease'
+                                      }}
+                                    />
+                                    <i
+                                      className={`ti ${isSubExpanded ? 'ti-folder-open' : 'ti-folder'}`}
+                                      style={{ color: '#b58900', fontSize: 13 }}
+                                    />
+                                    <span style={{ fontSize: 12.5, fontWeight: 700, color: COLOR.paperInk }}>
+                                      {subtopicName}
+                                    </span>
+                                    <span style={{
+                                      fontSize: 10,
+                                      fontWeight: 600,
+                                      padding: '1px 5px',
+                                      borderRadius: RADIUS.sm,
+                                      background: doneInSubtopic === subtopicTodos.length ? '#e8f5e9' : 'rgba(44,26,14,0.06)',
+                                      color: doneInSubtopic === subtopicTodos.length ? '#2e7d32' : COLOR.paperWarm
+                                    }}>
+                                      {doneInSubtopic}/{subtopicTodos.length}
+                                    </span>
+                                  </div>
+
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      setQuickAddSubtopicKey(isAddingInSubtopic ? null : subtopicKey)
+                                      setQuickAddSubtopicText('')
+                                    }}
+                                    title={`Adicionar tarefa direta em "${subtopicName}"`}
+                                    style={{
+                                      background: 'none',
+                                      border: 'none',
+                                      color: COLOR.accent,
+                                      fontSize: 11,
+                                      fontWeight: 700,
+                                      cursor: 'pointer',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: 3,
+                                      padding: '2px 5px'
+                                    }}
+                                  >
+                                    <i className="ti ti-plus" /> Tarefa
+                                  </button>
+                                </div>
+
+                                {/* Conteúdo do Subtópico (Camada 3: TAREFAS) */}
+                                {isSubExpanded && (
+                                  <div style={{ padding: '6px 8px', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                    {/* Formulário Inline Rápido do Subtópico */}
+                                    {isAddingInSubtopic && (
+                                      <form
+                                        onSubmit={(e) => {
+                                          e.preventDefault()
+                                          handleQuickAddInSubtopic(topicName, subtopicName)
+                                        }}
+                                        style={{
+                                          display: 'flex',
+                                          gap: 6,
+                                          padding: 6,
+                                          background: '#fdf8f2',
+                                          borderRadius: RADIUS.sm,
+                                          border: `1px solid ${BORDER.soft}`,
+                                          marginBottom: 4
+                                        }}
+                                      >
+                                        <input
+                                          type="text"
+                                          autoFocus
+                                          value={quickAddSubtopicText}
+                                          onChange={e => setQuickAddSubtopicText(e.target.value)}
+                                          placeholder={`Nova tarefa em ${subtopicName}...`}
+                                          style={{
+                                            flex: 1,
+                                            padding: '5px 8px',
+                                            borderRadius: RADIUS.sm,
+                                            border: `1px solid ${BORDER.medium}`,
+                                            fontSize: 12,
+                                            outline: 'none',
+                                            color: COLOR.paperInk
+                                          }}
+                                        />
+                                        <button
+                                          type="submit"
+                                          style={{
+                                            padding: '4px 10px',
+                                            borderRadius: RADIUS.sm,
+                                            background: COLOR.accent,
+                                            color: '#fff',
+                                            border: 'none',
+                                            fontSize: 11,
+                                            fontWeight: 700,
+                                            cursor: 'pointer'
+                                          }}
+                                        >
+                                          Salvar
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => setQuickAddSubtopicKey(null)}
+                                          style={{
+                                            padding: '4px 8px',
+                                            borderRadius: RADIUS.sm,
+                                            background: 'transparent',
+                                            color: COLOR.paperWarm,
+                                            border: 'none',
+                                            fontSize: 11,
+                                            cursor: 'pointer'
+                                          }}
+                                        >
+                                          Cancelar
+                                        </button>
+                                      </form>
+                                    )}
+
+                                    {/* Tarefas Compactas dentro do Subtópico */}
+                                    {subtopicTodos.map(todo => renderTodoCardItem(todo))}
+                                  </div>
+                                )}
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
                     </div>
                   )
                 })
@@ -785,7 +1245,7 @@ export default function ChecklistHistoryModule() {
             </div>
           ) : (
             /* Lista Corrida Simples */
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {filteredTodos.length === 0 ? (
                 <div style={{ padding: '36px 0', textAlign: 'center', color: COLOR.paperMid, fontSize: TEXT.bodyCompact }}>
                   <i className="ti ti-circle-check" style={{ fontSize: 32, display: 'block', marginBottom: 8, color: COLOR.success }} />
@@ -1091,20 +1551,31 @@ export default function ChecklistHistoryModule() {
                 </span>
 
                 {hasSubtasks && (
-                  <span style={{
-                    fontSize: TEXT.micro,
-                    fontWeight: 700,
-                    padding: '2px 8px',
-                    borderRadius: RADIUS.sm,
-                    background: 'rgba(34,197,94,0.12)',
-                    color: '#15803d',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 4,
-                  }}>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      toggleTaskSubtasks(todo.id)
+                    }}
+                    style={{
+                      fontSize: TEXT.micro,
+                      fontWeight: 700,
+                      padding: '2px 8px',
+                      borderRadius: RADIUS.sm,
+                      background: expandedTaskSubtasks[todo.id] ? 'rgba(34,197,94,0.22)' : 'rgba(34,197,94,0.12)',
+                      color: '#15803d',
+                      border: '1px solid rgba(34,197,94,0.3)',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 4,
+                      cursor: 'pointer',
+                    }}
+                    title={expandedTaskSubtasks[todo.id] ? 'Recolher subtarefas' : 'Ver subtarefas'}
+                  >
                     <i className="ti ti-list-check" style={{ fontSize: 11 }} />
                     {completedSubtasks}/{todo.subtasks!.length} subtarefas
-                  </span>
+                    <i className={expandedTaskSubtasks[todo.id] ? 'ti ti-chevron-up' : 'ti ti-chevron-down'} style={{ fontSize: 10 }} />
+                  </button>
                 )}
 
                 {todo.attachments && todo.attachments.length > 0 && (
@@ -1142,8 +1613,8 @@ export default function ChecklistHistoryModule() {
           </div>
         </div>
 
-        {/* Subtarefas do Cartão com Checkboxes Clicáveis */}
-        {hasSubtasks && (
+        {/* Subtarefas do Cartão com Checkboxes Clicáveis (Colapsável) */}
+        {hasSubtasks && expandedTaskSubtasks[todo.id] && (
           <div style={{
             marginLeft: 34,
             padding: '8px 12px',
@@ -1248,8 +1719,24 @@ export default function ChecklistHistoryModule() {
             flexDirection: 'column',
             gap: 4,
           }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, fontWeight: 700, color: COLOR.paperWarm }}>
-              <span>Checklist</span>
+            <div
+              onClick={() => toggleTaskSubtasks(todo.id)}
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                fontSize: 11,
+                fontWeight: 700,
+                color: COLOR.paperWarm,
+                cursor: 'pointer',
+              }}
+              title={expandedTaskSubtasks[todo.id] ? 'Recolher itens' : 'Expandir itens'}
+            >
+              <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <i className="ti ti-list-check" style={{ fontSize: 11 }} />
+                Checklist
+                <i className={expandedTaskSubtasks[todo.id] ? 'ti ti-chevron-up' : 'ti ti-chevron-down'} style={{ fontSize: 10 }} />
+              </span>
               <span>{completedSubtasks}/{todo.subtasks!.length}</span>
             </div>
 
@@ -1264,11 +1751,12 @@ export default function ChecklistHistoryModule() {
             </div>
 
             {/* Itens do Checklist */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginTop: 4 }}>
-              {todo.subtasks!.map(st => (
-                <div
-                  key={st.id}
-                  onClick={() => handleToggleSubtask(todo.id, st.id)}
+            {expandedTaskSubtasks[todo.id] && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginTop: 4 }}>
+                {todo.subtasks!.map(st => (
+                  <div
+                    key={st.id}
+                    onClick={() => handleToggleSubtask(todo.id, st.id)}
                   style={{
                     display: 'flex',
                     alignItems: 'center',
@@ -1296,6 +1784,7 @@ export default function ChecklistHistoryModule() {
                 </div>
               ))}
             </div>
+            )}
           </div>
         )}
 

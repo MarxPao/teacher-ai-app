@@ -1,0 +1,84 @@
+{
+  "id": "skill_escola_com_drift_lancar_nota_v1",
+  "name": "Habilidade lancar_nota (escola_com_drift)",
+  "portal_id": "escola_com_drift",
+  "task_id": "lancar_nota",
+  "version": 1,
+  "entry_node": "locate_0",
+  "nodes": {
+    "locate_0": {
+      "id": "locate_0",
+      "type": "LOCATE",
+      "anchor": {
+        "strategy": "css_selector",
+        "value": "table.novo-layout",
+        "scope": null,
+        "description": null
+      },
+      "params": {
+        "variable_bindings": [],
+        "action_value": null,
+        "condition": null,
+        "is_submit_action": null,
+        "description": null,
+        "multiplicity": "single"
+      },
+      "on_success": "checkpoint_seguranca",
+      "on_fail": null,
+      "retry_policy": {
+        "max_attempts": 2,
+        "backoff_ms": 500
+      }
+    },
+    "checkpoint_seguranca": {
+      "id": "checkpoint_seguranca",
+      "type": "CHECKPOINT",
+      "anchor": null,
+      "params": {
+        "variable_bindings": [],
+        "action_value": null,
+        "condition": "requires_human_confirmation",
+        "is_submit_action": null,
+        "description": "Confirmação humana obrigatória antes de gravar/submeter dados descobertos no portal"
+      },
+      "on_success": "write_1",
+      "on_fail": "ABORT",
+      "retry_policy": {
+        "max_attempts": 1,
+        "backoff_ms": 0
+      }
+    },
+    "write_1": {
+      "id": "write_1",
+      "type": "WRITE",
+      "anchor": {
+        "strategy": "css_selector",
+        "value": "input.nova-nota",
+        "scope": null,
+        "description": null
+      },
+      "params": {
+        "variable_bindings": [],
+        "action_value": "10",
+        "condition": null,
+        "is_submit_action": null,
+        "description": null
+      },
+      "on_success": null,
+      "on_fail": null,
+      "retry_policy": {
+        "max_attempts": 2,
+        "backoff_ms": 500
+      }
+    }
+  },
+  "metadata": {
+    "success_rate": 100.0,
+    "total_executions": 0,
+    "created_at": "2026-09-09T02:04:24.434503+00:00",
+    "updated_at": "2026-09-09T02:04:24.434517+00:00",
+    "last_verified_at": null,
+    "has_self_healed": false,
+    "author": "teacher_ai_recorder"
+  }
+}

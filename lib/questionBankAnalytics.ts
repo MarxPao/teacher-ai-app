@@ -1,4 +1,4 @@
-﻿/**
+/**
  * lib/questionBankAnalytics.ts - Motor de Analytics Cross-Turma do Banco de Questoes (Item 15)
  */
 

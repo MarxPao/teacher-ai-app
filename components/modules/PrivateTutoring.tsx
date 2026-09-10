@@ -1,6 +1,7 @@
 'use client'
 import { COLOR, RADIUS, TEXT, SHADOW, FONT } from '@/styles/tokens'
 import { toast, showConfirm } from '@/components/Toast'
+import { safeGet, safeSet } from '@/lib/localDB'
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import ModuleShell from '@/components/ModuleShell'
@@ -261,58 +262,38 @@ export default function PrivateTutoring() {
       const cloudStudents = await fetchPrivateStudentsFromSupabase()
       if (Array.isArray(cloudStudents) && cloudStudents.length > 0) {
         setStudents(cloudStudents)
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(cloudStudents))
+        safeSet(STORAGE_KEY, cloudStudents)
       } else {
-        const rawLocal = localStorage.getItem(STORAGE_KEY)
-        if (rawLocal) setStudents(JSON.parse(rawLocal))
-        else setStudents([])
+        const localStudents = safeGet<PrivateStudent[]>(STORAGE_KEY, [])
+        setStudents(localStudents)
       }
 
       // 2. Carregar Livros de Tutoria
       const cloudBooks = await fetchPrivateBooksFromSupabase()
       if (Array.isArray(cloudBooks) && cloudBooks.length > 0) {
         setBooks(cloudBooks)
-        localStorage.setItem(BOOKS_STORAGE_KEY, JSON.stringify(cloudBooks))
+        safeSet(BOOKS_STORAGE_KEY, cloudBooks)
       } else {
-        const rawBooks = localStorage.getItem(BOOKS_STORAGE_KEY)
-        if (rawBooks) {
-          setBooks(JSON.parse(rawBooks))
-        } else {
-          const defaultBooks: PrivateBook[] = [
-            { id: 'pb1', title: 'English File 4th Edition - Intermediate', author: 'Oxford University Press', subject: 'Inglês', level: 'B1-B2', unitsCount: 10, notes: 'Livro base para conversação e gramática estruturada.' },
-            { id: 'pb2', title: 'Grammar in Use Intermediate', author: 'Raymond Murphy', subject: 'Gramática', level: 'B1', unitsCount: 145, notes: 'Exercícios práticos e reforço gramatical.' }
-          ]
-          setBooks(defaultBooks)
-          localStorage.setItem(BOOKS_STORAGE_KEY, JSON.stringify(defaultBooks))
-        }
+        const localBooks = safeGet<PrivateBook[]>(BOOKS_STORAGE_KEY, [])
+        setBooks(localBooks)
       }
 
       // 3. Carregar Sequência Didática da Tutoria
       const cloudDidactic = await fetchPrivateDidacticUnitsFromSupabase()
       if (Array.isArray(cloudDidactic) && cloudDidactic.length > 0) {
         setDidacticUnits(cloudDidactic)
-        localStorage.setItem(DIDACTIC_STORAGE_KEY, JSON.stringify(cloudDidactic))
+        safeSet(DIDACTIC_STORAGE_KEY, cloudDidactic)
       } else {
-        const rawDidactic = localStorage.getItem(DIDACTIC_STORAGE_KEY)
-        if (rawDidactic) {
-          setDidacticUnits(JSON.parse(rawDidactic))
-        } else {
-          const defaultUnits: PrivateDidacticUnit[] = [
-            { id: 'pdu1', unitNumber: 1, unitTitle: 'Unit 1: Introductions & Socializing', topic: 'Present Simple vs Continuous, Social Expressions', grammarFocus: 'State verbs, Questions without auxiliaries', estimatedHours: 4, status: 'completed' },
-            { id: 'pdu2', unitNumber: 2, unitTitle: 'Unit 2: Life Experiences & Travel', topic: 'Present Perfect vs Past Simple', grammarFocus: 'Ever, Never, Just, Already, Yet', estimatedHours: 6, status: 'current' },
-            { id: 'pdu3', unitNumber: 3, unitTitle: 'Unit 3: Professional Goals & Career', topic: 'Future forms (Will, Going to, Present Continuous)', grammarFocus: 'Predictions vs Intentions vs Arrangements', estimatedHours: 4, status: 'upcoming' }
-          ]
-          setDidacticUnits(defaultUnits)
-          localStorage.setItem(DIDACTIC_STORAGE_KEY, JSON.stringify(defaultUnits))
-        }
+        const localDidactic = safeGet<PrivateDidacticUnit[]>(DIDACTIC_STORAGE_KEY, [])
+        setDidacticUnits(localDidactic)
       }
 
       // 4. Post-its e Todos
-      const storedPostIts = localStorage.getItem('teacher_private_postits')
-      if (storedPostIts) setPostIts(JSON.parse(storedPostIts))
+      const storedPostIts = safeGet<PrivatePostIt[]>('teacher_private_postits', [])
+      if (storedPostIts.length) setPostIts(storedPostIts)
       
-      const storedTodos = localStorage.getItem('teacher_private_todos')
-      if (storedTodos) setTodos(JSON.parse(storedTodos))
+      const storedTodos = safeGet<PrivateTodo[]>('teacher_private_todos', [])
+      if (storedTodos.length) setTodos(storedTodos)
 
     } catch (e) {
       console.error('Erro ao carregar dados de aulas particulares:', e)
@@ -325,18 +306,17 @@ export default function PrivateTutoring() {
 
     // Verifica se veio de redirecionamento da Home ("Lançar Aula")
     try {
-      const requestedStudentId = sessionStorage.getItem('teacher_private_selected_student_id') || localStorage.getItem('teacher_private_selected_student_id')
+      const requestedStudentId = sessionStorage.getItem('teacher_private_selected_student_id') || safeGet<string | null>('teacher_private_selected_student_id', null)
       if (requestedStudentId) {
         setSelectedStudentId(requestedStudentId)
         sessionStorage.removeItem('teacher_private_selected_student_id')
-        localStorage.removeItem('teacher_private_selected_student_id')
+        safeSet('teacher_private_selected_student_id', null)
 
         const shouldOpenLesson = sessionStorage.getItem('teacher_private_open_new_lesson') === 'true'
         if (shouldOpenLesson) {
           sessionStorage.removeItem('teacher_private_open_new_lesson')
           setTimeout(() => {
-            const raw = localStorage.getItem(STORAGE_KEY)
-            const currentList: PrivateStudent[] = raw ? JSON.parse(raw) : students
+            const currentList: PrivateStudent[] = safeGet<PrivateStudent[]>(STORAGE_KEY, students)
             const targetStudent = currentList.find(s => s.id === requestedStudentId) || currentList[0]
             if (targetStudent) {
               openNewLessonModal(targetStudent)
@@ -351,7 +331,7 @@ export default function PrivateTutoring() {
 
   const saveStudentsAndSync = (updated: PrivateStudent[]) => {
     setStudents(updated)
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated))
+    safeSet(STORAGE_KEY, updated)
     window.dispatchEvent(new Event('storage'))
     window.dispatchEvent(new CustomEvent('teacher:data_changed'))
     syncToSupabase().catch(() => {})
@@ -363,14 +343,14 @@ export default function PrivateTutoring() {
 
   const saveBooksAndSync = (updated: PrivateBook[]) => {
     setBooks(updated)
-    localStorage.setItem(BOOKS_STORAGE_KEY, JSON.stringify(updated))
+    safeSet(BOOKS_STORAGE_KEY, updated)
     window.dispatchEvent(new Event('storage'))
     syncToSupabase().catch(() => {})
   }
 
   const saveDidacticAndSync = (updated: PrivateDidacticUnit[]) => {
     setDidacticUnits(updated)
-    localStorage.setItem(DIDACTIC_STORAGE_KEY, JSON.stringify(updated))
+    safeSet(DIDACTIC_STORAGE_KEY, updated)
     window.dispatchEvent(new Event('storage'))
     syncToSupabase().catch(() => {})
   }
@@ -387,20 +367,20 @@ export default function PrivateTutoring() {
     }
     const updated = [newTodo, ...todos]
     setTodos(updated)
-    localStorage.setItem('teacher_private_todos', JSON.stringify(updated))
+    safeSet('teacher_private_todos', updated)
     setNewTodoText('')
   }
 
   const handleToggleTodo = (id: string) => {
     const updated = todos.map(t => t.id === id ? { ...t, done: !t.done } : t)
     setTodos(updated)
-    localStorage.setItem('teacher_private_todos', JSON.stringify(updated))
+    safeSet('teacher_private_todos', updated)
   }
 
   const handleDeleteTodo = (id: string) => {
     const updated = todos.filter(t => t.id !== id)
     setTodos(updated)
-    localStorage.setItem('teacher_private_todos', JSON.stringify(updated))
+    safeSet('teacher_private_todos', updated)
   }
 
   // --- Handlers de Post-its ---
@@ -417,7 +397,7 @@ export default function PrivateTutoring() {
         date: newPostItDate,
       } : p)
       setPostIts(updated)
-      localStorage.setItem('teacher_private_postits', JSON.stringify(updated))
+      safeSet('teacher_private_postits', updated)
     } else {
       const newNote: PrivatePostIt = {
         id: `postit_${Date.now()}`,
@@ -428,7 +408,7 @@ export default function PrivateTutoring() {
       }
       const updated = [newNote, ...postIts]
       setPostIts(updated)
-      localStorage.setItem('teacher_private_postits', JSON.stringify(updated))
+      safeSet('teacher_private_postits', updated)
     }
 
     setShowNewPostItModal(false)
@@ -441,7 +421,7 @@ export default function PrivateTutoring() {
   const handleDeletePostIt = (id: string) => {
     const updated = postIts.filter(p => p.id !== id)
     setPostIts(updated)
-    localStorage.setItem('teacher_private_postits', JSON.stringify(updated))
+    safeSet('teacher_private_postits', updated)
   }
 
   // --- Calendário com Pins ---
@@ -719,7 +699,7 @@ export default function PrivateTutoring() {
         saveStudentsAndSync(updated)
       }
     } catch {
-      toast.success('Não foi possível gerar o diagnóstico no momento.')
+      toast.error('Não foi possível gerar o diagnóstico no momento.')
     } finally {
       setAiDiagnosticLoading(false)
     }
@@ -1458,12 +1438,12 @@ export default function PrivateTutoring() {
                   </button>
                   <button
                     onClick={() => {
-                      localStorage.setItem('teacher_lesson_studio_student_prefill', JSON.stringify({
+                      safeSet('teacher_lesson_studio_student_prefill', {
                         studentId: activeStudent.id,
                         studentName: activeStudent.name,
                         subject: activeStudent.subject,
                         level: 'B1'
-                      }))
+                      })
                       window.dispatchEvent(new CustomEvent('teacher:navigate', { detail: 'lessonstudio' }))
                     }}
                     style={{

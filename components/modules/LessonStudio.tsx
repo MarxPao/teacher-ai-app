@@ -12,6 +12,9 @@ import { getStoredBnccSkills, getBnccSkillsForGrade, getClassPostponedSkills, sa
 import { buildTeacherStylePromptDirective, updateTeacherProfileFromLessonPlan } from '@/lib/teacherProfile'
 import { buildTeacherStyleSystemPrompt } from '@/lib/teacherStyleProfile'
 import { getStoredQuestions } from '@/lib/questionBankService'
+import { getSubjectProfile, getAllSubjectProfiles, SubjectProfile } from '@/lib/subjectProfile'
+import '@/lib/subjects/portuguese'
+import Button from '@/components/Button'
 
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
@@ -60,6 +63,8 @@ export interface LessonPlanDocument {
   guidingQuestions: string[]
   homework: string
   postLessonNotes: string
+  targetDurationMinutes?: number
+  assessmentEvidence?: string
   savedInBank?: boolean
   savedInCalendar?: boolean
   createdAt: number
@@ -96,6 +101,21 @@ export default function LessonStudio() {
 
   // Form & Document State
   const [selectedClassId, setSelectedClassId] = useState('')
+  const [subjectId, setSubjectId] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const activeClass = localStorage.getItem('teacher_active_class_subject')
+        if (activeClass) return activeClass
+        const settings = JSON.parse(localStorage.getItem('teacher_settings') || '{}')
+        if (settings.defaultSubject) return settings.defaultSubject
+      } catch {}
+    }
+    return 'english'
+  })
+  const availableSubjects = useMemo(() => getAllSubjectProfiles(), [])
+  const activeProfile = useMemo(() => getSubjectProfile(subjectId), [subjectId])
+  const [targetDurationMinutes, setTargetDurationMinutes] = useState<number>(50)
+  const [assessmentEvidence, setAssessmentEvidence] = useState<string>('')
   const [lessonDate, setLessonDate] = useState(new Date().toISOString().slice(0, 10))
   const [roomSpace, setRoomSpace] = useState('Sala de Aula')
   const [topic, setTopic] = useState('')
@@ -380,7 +400,7 @@ Verifique: 1) Timing realista? 2) Bloom bem distribuído? 3) Transições claras
   // ─── Geração de Conteúdo e Roteiro com IA ─────────────────────────────────
   const handleGenerateWithAi = async () => {
     if (!topic.trim()) {
-      toast.success('Digite o Tópico ou Conteúdo Central antes de gerar com IA.')
+      toast.warning('Digite o Tópico ou Conteúdo Central antes de gerar com IA.')
       return
     }
 
@@ -389,13 +409,15 @@ Verifique: 1) Timing realista? 2) Bloom bem distribuído? 3) Transições claras
       const meth = METHODOLOGY_PRESETS.find(m => m.id === selectedMethodology)?.name || 'TBLT'
       const promptDirective = buildTeacherStylePromptDirective()
 
-      const prompt = `Você é um coordenador pedagógico sênior de Ensino de Língua Inglesa.
+      const prompt = `Você é um coordenador pedagógico sênior de Ensino de ${activeProfile.name}.
 Elabore um Plano de Aula estruturado em blocos para a seguinte configuração:
 
 DADOS DA AULA:
+- Disciplina: ${activeProfile.name}
 - Turma: ${currentClass?.name || 'Turma'} (${currentClass?.gradeYear || 'Ensino Fundamental'})
 - Tópico Central: "${topic}"
 - Metodologia Ativa: ${meth}
+- Duração Total da Aula: ${targetDurationMinutes} minutos (a soma de durationMin de todas as etapas DEVE totalizar exatamente ${targetDurationMinutes} min)
 - Material de Apoio: ${bookTitle || 'Livro Didático'} ${unitChapter ? `(${unitChapter})` : ''}
 - Habilidades BNCC: ${selectedSkills.map(s => s.code).join(', ') || 'Geral'}
 
@@ -406,33 +428,34 @@ ${buildTeacherStyleSystemPrompt()}
 Retorne ESTRITAMENTE um objeto JSON no formato:
 {
   "guidingQuestions": ["Pergunta 1", "Pergunta 2"],
+  "assessmentEvidence": "Critério e evidência observável de avaliação formativa (UbD - Wiggins & McTighe)",
   "stages": [
     {
-      "name": "Warm-up",
+      "name": "Warm-up / Ativação",
       "durationMin": 5,
       "teacherAction": "Ação do professor",
       "studentAction": "Ação do aluno"
     },
     {
-      "name": "Core Task / Presentation",
-      "durationMin": 20,
+      "name": "Apresentação / Task Cycle",
+      "durationMin": 25,
       "teacherAction": "Ação do professor",
       "studentAction": "Ação do aluno"
     },
     {
-      "name": "Guided Practice",
+      "name": "Prática Guiada / Consolidação",
       "durationMin": 15,
       "teacherAction": "Ação do professor",
       "studentAction": "Ação do aluno"
     },
     {
-      "name": "Wrap-up & Feedback",
-      "durationMin": 10,
+      "name": "Fechamento & Feedback",
+      "durationMin": 5,
       "teacherAction": "Ação do professor",
       "studentAction": "Ação do aluno"
     }
   ],
-  "homework": "Sugestão concisa de dever de casa comunicativo"
+  "homework": "Sugestão concisa de atividade para casa"
 }`
 
       const res = await fetch('/api/agent', {
@@ -449,10 +472,11 @@ Retorne ESTRITAMENTE um objeto JSON no formato:
         if (Array.isArray(parsed.stages)) setStages(parsed.stages)
         if (Array.isArray(parsed.guidingQuestions)) setGuidingQuestions(parsed.guidingQuestions)
         if (parsed.homework) setHomework(parsed.homework)
-        showNotification('Roteiro e Perguntas-Guia gerados com sucesso pela IA!')
+        if (parsed.assessmentEvidence) setAssessmentEvidence(parsed.assessmentEvidence)
+        showNotification('Roteiro, Perguntas-Guia e Evidências UbD gerados com sucesso!')
       }
     } catch (err: any) {
-      toast.success(`Erro na geração: ${err.message || 'Tente novamente'}`)
+      toast.error(`Erro na geração: ${err.message || 'Tente novamente'}`)
     } finally {
       setIsGenerating(false)
     }
@@ -463,7 +487,7 @@ Retorne ESTRITAMENTE um objeto JSON no formato:
     if (!currentClass) return
     const calendarTask = {
       id: `task_${Date.now()}`,
-      title: `Aula de Inglês: ${topic || 'Planejamento'} (${currentClass.name})`,
+      title: `Aula de ${activeProfile.nameShort || activeProfile.name}: ${topic || 'Planejamento'} (${currentClass.name})`,
       date: lessonDate,
       time: '08:00',
       classId: currentClass.id,
@@ -490,7 +514,7 @@ Retorne ESTRITAMENTE um objeto JSON no formato:
       classId: currentClass.id,
       className: currentClass.name,
       schoolName: currentSchool?.name || 'Escola',
-      subject: currentClass.subject || 'Inglês',
+      subject: currentClass.subject || activeProfile.name,
       topic: topic || 'Plano de Aula Sem Título',
       roomSpace,
       selectedSkills,
@@ -500,6 +524,8 @@ Retorne ESTRITAMENTE um objeto JSON no formato:
       guidingQuestions,
       homework,
       postLessonNotes,
+      targetDurationMinutes,
+      assessmentEvidence,
       savedInBank: true,
       createdAt: Date.now()
     }
@@ -540,12 +566,18 @@ Retorne ESTRITAMENTE um objeto JSON no formato:
   // ─── Exportações & Folha de Planejamento Limpa ────────────────────────────
   const generatePlanMarkdown = () => {
     return `
-# PLANO DE AULA: ${topic.toUpperCase() || 'LÍNGUA INGLESA'}
+# PLANO DE AULA: ${topic.toUpperCase() || activeProfile.name.toUpperCase()}
 
-**Escola:** ${currentSchool?.name || 'Escola'} &bull; **Turma:** ${currentClass?.name || 'Turma'} (${currentClass?.gradeYear || '9º Ano'})
-**Data:** ${new Date(lessonDate).toLocaleDateString('pt-BR')} &bull; **Espaço Utilizado:** ${roomSpace}
+**Disciplina:** ${activeProfile.name} &bull; **Escola:** ${currentSchool?.name || 'Escola'} &bull; **Turma:** ${currentClass?.name || 'Turma'} (${currentClass?.gradeYear || '9º Ano'})
+**Duração:** Planejada: ${targetDurationMinutes} min (Total Roteiro: ${totalTiming} min) &bull; **Data:** ${new Date(lessonDate).toLocaleDateString('pt-BR')} &bull; **Espaço Utilizado:** ${roomSpace}
 **Metodologia:** ${METHODOLOGY_PRESETS.find(m => m.id === selectedMethodology)?.name || 'TBLT'}
 ${bookTitle ? `**Material Didático:** ${bookTitle} ${unitChapter ? `(${unitChapter})` : ''} ${pages ? `[${pages}]` : ''}` : ''}
+
+${assessmentEvidence ? `---
+
+## 🎯 Evidências de Avaliação (UbD — Understanding by Design)
+${assessmentEvidence}
+` : ''}
 
 ---
 
@@ -683,6 +715,34 @@ ${postLessonNotes}
                 </div>
 
                 <div>
+                  <label style={{ display: 'block', fontSize: TEXT.caption, fontWeight: 700, color: '#7a6552', marginBottom: 4 }}>Disciplina / Matéria</label>
+                  <select
+                    value={subjectId}
+                    onChange={e => setSubjectId(e.target.value)}
+                    style={{ width: '100%', padding: '9px 12px', borderRadius: RADIUS.md, border: '1px solid #d5c0b0', background: '#fdf8f2', fontSize: 13, outline: 'none' }}
+                  >
+                    {availableSubjects.map(s => (
+                      <option key={s.id} value={s.id}>{s.name} ({s.nameShort})</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: TEXT.caption, fontWeight: 700, color: '#7a6552', marginBottom: 4 }}>Duração Planejada</label>
+                  <select
+                    value={targetDurationMinutes}
+                    onChange={e => setTargetDurationMinutes(Number(e.target.value))}
+                    style={{ width: '100%', padding: '9px 12px', borderRadius: RADIUS.md, border: '1px solid #d5c0b0', background: '#fdf8f2', fontSize: 13, outline: 'none' }}
+                  >
+                    <option value={45}>45 minutos</option>
+                    <option value={50}>50 minutos (Padrão)</option>
+                    <option value={60}>60 minutos (1 hora)</option>
+                    <option value={90}>90 minutos (Aula Dupla)</option>
+                    <option value={100}>100 minutos (Bloco Duplo)</option>
+                  </select>
+                </div>
+
+                <div>
                   <label style={{ display: 'block', fontSize: TEXT.caption, fontWeight: 700, color: '#7a6552', marginBottom: 4 }}>Data da Aula</label>
                   <input
                     type="date"
@@ -712,16 +772,18 @@ ${postLessonNotes}
             <div style={{ background: '#fffcf8', border: '1px solid rgba(139,115,85,0.16)', borderRadius: RADIUS.xl, padding: 20 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                 <span style={{ fontSize: 12, fontWeight: 800, color: '#8b5e3c', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                  📦 Box 2: Conteúdo & Tópico Central
+                  📦 Box 2: Conteúdo & Tópico Central ({activeProfile.name})
                 </span>
-                <button
-                  onClick={handleGenerateWithAi}
+                <Button
+                  variant="primary"
+                  size="sm"
+                  loading={isGenerating}
                   disabled={isGenerating}
-                  style={{ background: '#8b5e3c', color: '#fff', border: 'none', borderRadius: RADIUS.md, padding: '6px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+                  icon={<i className="ti ti-sparkles" />}
+                  onClick={handleGenerateWithAi}
                 >
-                  <i className={isGenerating ? 'ti ti-loader ti-spin' : 'ti ti-sparkles'}></i>
                   {isGenerating ? 'Elaborando Roteiro...' : 'Gerar Roteiro com IA'}
-                </button>
+                </Button>
               </div>
 
               <input
@@ -982,12 +1044,72 @@ ${postLessonNotes}
                 </span>
                 <span style={{
                   padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 800,
-                  background: totalTiming === 50 ? '#dcfce7' : '#fef3c7',
-                  color: totalTiming === 50 ? '#15803d' : '#b45309'
+                  background: totalTiming === targetDurationMinutes ? '#dcfce7' : (totalTiming > targetDurationMinutes ? '#fee2e2' : '#fef3c7'),
+                  color: totalTiming === targetDurationMinutes ? '#15803d' : (totalTiming > targetDurationMinutes ? '#b91c1c' : '#b45309'),
+                  border: totalTiming > targetDurationMinutes ? '1px solid #fca5a5' : 'none'
                 }}>
-                  {totalTiming} / 50 min
+                  {totalTiming} / {targetDurationMinutes} min
                 </span>
               </div>
+
+              {/* Alerta de Carga Horária e Estouro de Tempo */}
+              {totalTiming > targetDurationMinutes && (
+                <div style={{
+                  background: '#fef2f2',
+                  border: '1px solid #fecaca',
+                  borderRadius: RADIUS.md,
+                  padding: '10px 14px',
+                  marginBottom: 14,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                  color: '#991b1b',
+                  fontSize: TEXT.bodyCompact
+                }}>
+                  <i className="ti ti-clock-exclamation" style={{ fontSize: 20, color: '#dc2626', flexShrink: 0 }} />
+                  <div>
+                    <strong>⚠️ Estouro de Carga Horária:</strong> A soma das etapas ({totalTiming} min) ultrapassa a duração planejada da aula ({targetDurationMinutes} min) em <strong>{totalTiming - targetDurationMinutes} minutos</strong>. Reduza o tempo das etapas para manter a aula dentro do período escolar.
+                  </div>
+                </div>
+              )}
+              {totalTiming < targetDurationMinutes && (
+                <div style={{
+                  background: '#eff6ff',
+                  border: '1px solid #bfdbfe',
+                  borderRadius: RADIUS.md,
+                  padding: '8px 12px',
+                  marginBottom: 14,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  color: '#1e40af',
+                  fontSize: TEXT.caption
+                }}>
+                  <i className="ti ti-info-circle" style={{ fontSize: 16, color: '#2563eb', flexShrink: 0 }} />
+                  <span>
+                    <strong>Carga Horária Disponível:</strong> Restam <strong>{targetDurationMinutes - totalTiming} minutos</strong> livres no planejamento desta aula de {targetDurationMinutes} min.
+                  </span>
+                </div>
+              )}
+              {totalTiming === targetDurationMinutes && (
+                <div style={{
+                  background: '#f0fdf4',
+                  border: '1px solid #bbf7d0',
+                  borderRadius: RADIUS.md,
+                  padding: '8px 12px',
+                  marginBottom: 14,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  color: '#166534',
+                  fontSize: TEXT.caption
+                }}>
+                  <i className="ti ti-circle-check" style={{ fontSize: 16, color: '#16a34a', flexShrink: 0 }} />
+                  <span>
+                    <strong>✓ Cronograma Balanceado:</strong> O somatório das etapas totaliza exatamente a carga horária planejada ({targetDurationMinutes} min).
+                  </span>
+                </div>
+              )}
 
               {/* Widget Consolidado de Pendências do Checklist */}
               {(() => {
@@ -1137,6 +1259,26 @@ ${postLessonNotes}
               </button>
             </div>
 
+            {/* Box UbD: Evidências de Avaliação Formativa */}
+            <div style={{ background: '#fffcf8', border: '1px solid rgba(139,115,85,0.16)', borderRadius: RADIUS.xl, padding: 20 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <span style={{ fontSize: 12, fontWeight: 800, color: '#8b5e3c', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                  🎯 Evidências de Avaliação Formativa (UbD — Understanding by Design)
+                </span>
+                <span style={{ fontSize: 11, color: '#7a6552' }}>Wiggins & McTighe</span>
+              </div>
+              <p style={{ margin: '0 0 8px 0', fontSize: 11, color: '#7a6552', lineHeight: 1.4 }}>
+                Como o professor observará e verificará se os alunos alcançaram os objetivos da aula de {activeProfile.name}?
+              </p>
+              <textarea
+                value={assessmentEvidence}
+                onChange={e => setAssessmentEvidence(e.target.value)}
+                placeholder="Ex: Produção textual curta aplicando as estruturas aprendidas, checagem oral individual ou desempenho na tarefa final comunicativa..."
+                rows={2}
+                style={{ width: '100%', padding: '10px 12px', borderRadius: RADIUS.md, border: '1px solid #d5c0b0', background: '#fdf8f2', fontSize: 13, outline: 'none', resize: 'vertical' }}
+              />
+            </div>
+
             {/* Box 7: Tarefa de Casa & Anotações */}
             <div style={{ background: '#fffcf8', border: '1px solid rgba(139,115,85,0.16)', borderRadius: RADIUS.xl, padding: 20 }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
@@ -1217,40 +1359,32 @@ ${postLessonNotes}
                 >
                   🤖 Sugestão da Rafinha
                 </button>
-                <button
+                <Button
+                  variant="secondary"
+                  size="md"
+                  icon={<i className="ti ti-calendar-plus" />}
                   onClick={handleSaveToCalendar}
-                  style={{
-                    padding: '9px 16px', borderRadius: RADIUS.md, border: '1.5px solid #8b5e3c',
-                    background: '#fff', color: '#8b5e3c', fontSize: TEXT.bodyCompact,
-                    fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6
-                  }}
                 >
-                  <i className="ti ti-calendar-plus"></i> Salvar no Calendário
-                </button>
+                  Salvar no Calendário
+                </Button>
 
-                <button
+                <Button
+                  variant="secondary"
+                  size="md"
+                  icon={<i className="ti ti-database" />}
                   onClick={handleSaveToBank}
-                  style={{
-                    padding: '9px 16px', borderRadius: RADIUS.md, border: '1.5px solid #8b5e3c',
-                    background: '#fff', color: '#8b5e3c', fontSize: TEXT.bodyCompact,
-                    fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6
-                  }}
                 >
-                  <i className="ti ti-database"></i> Salvar no Banco
-                </button>
+                  Salvar no Banco
+                </Button>
 
-                <button
+                <Button
+                  variant="primary"
+                  size="md"
+                  icon={<i className="ti ti-device-floppy" />}
                   onClick={handleSaveBoth}
-                  style={{
-                    padding: '9px 18px', borderRadius: RADIUS.md, border: 'none',
-                    background: 'linear-gradient(135deg, #8b5e3c 0%, #6f4728 100%)',
-                    color: '#fff', fontSize: 13, fontWeight: 700,
-                    cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
-                    boxShadow: '0 3px 10px rgba(139,94,60,0.3)'
-                  }}
                 >
-                  <i className="ti ti-sparkles"></i> Salvar em Ambos
-                </button>
+                  Salvar em Ambos
+                </Button>
               </div>
             </div>
 

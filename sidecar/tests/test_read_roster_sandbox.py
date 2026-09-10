@@ -67,6 +67,14 @@ class MockPage:
 class TestReadRosterSandbox(unittest.TestCase):
     def setUp(self):
         self.runner = BrowserHarnessRunner(supabase_client=None)
+        self.runner.map_store.save_map(
+            domain="machadosobrinho.paineldoaluno.com.br",
+            display_name="Machado Sobrinho",
+            selectors={"roster_table": "table", "name_column": 1, "id_column": 0, "status_column": 3, "nee_selector": ".badge-nee"},
+            pagination={"type": "next_button", "nextSelector": ".pagination .next", "maxPages": 5, "delayBetweenPagesMs": 50},
+            confidence="high",
+            teacher_id="test_teacher"
+        )
 
     def test_capability_router_read_roster(self):
         can_run, complexity, reason = can_execute_autonomously(

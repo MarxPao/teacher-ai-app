@@ -44,6 +44,8 @@ export interface ChecklistTodo {
   category?: 'recurrent' | 'one_off' | 'system_ai'
   priority?: TodoPriority
   tag?: string
+  topic?: string
+  subtopic?: string
   createdAt?: number
   time?: string
   lastResetDate?: string
@@ -134,6 +136,86 @@ export function cleanCorruptedText(str: string | undefined): string {
     .trim()
 }
 
+export interface TodoHierarchyInfo {
+  topic: string
+  subtopic: string
+}
+
+/**
+ * Resolve hierarquia em camadas para uma tarefa:
+ * - Se já possui topic e subtopic explícitos, normaliza e retorna.
+ * - Se a tag/topic contiver separador '/' ou ':', divide em Tópico e Subtópico.
+ * - Se não houver subtópico, adota 'Tarefas Gerais'.
+ * - Garante 100% de compatibilidade com tags legadas e histórico existente.
+ */
+export function parseTodoHierarchy(todo: Partial<ChecklistTodo>): TodoHierarchyInfo {
+  const explicitTopic = todo.topic?.trim()
+  const explicitSubtopic = todo.subtopic?.trim()
+
+  if (explicitTopic && explicitSubtopic) {
+    return {
+      topic: cleanCorruptedText(explicitTopic),
+      subtopic: cleanCorruptedText(explicitSubtopic),
+    }
+  }
+
+  const rawTag = (explicitTopic || todo.tag || '').trim()
+
+  if (rawTag.includes('/')) {
+    const [t, ...stParts] = rawTag.split('/')
+    return {
+      topic: cleanCorruptedText(t.trim()) || 'Geral',
+      subtopic: cleanCorruptedText(stParts.join('/').trim()) || 'Tarefas Gerais',
+    }
+  }
+
+  if (rawTag.includes(':')) {
+    const [t, ...stParts] = rawTag.split(':')
+    return {
+      topic: cleanCorruptedText(t.trim()) || 'Geral',
+      subtopic: cleanCorruptedText(stParts.join(':').trim()) || 'Tarefas Gerais',
+    }
+  }
+
+  if (rawTag) {
+    return {
+      topic: cleanCorruptedText(rawTag),
+      subtopic: explicitSubtopic ? cleanCorruptedText(explicitSubtopic) : 'Tarefas Gerais',
+    }
+  }
+
+  const defaultTopic = todo.category === 'recurrent'
+    ? 'Rotina Diária'
+    : todo.category === 'system_ai'
+    ? 'Sugestões da IA'
+    : 'Geral'
+
+  return {
+    topic: defaultTopic,
+    subtopic: explicitSubtopic ? cleanCorruptedText(explicitSubtopic) : 'Tarefas Gerais',
+  }
+}
+
+/**
+ * Agrupa tarefas ativas na árvore hierárquica multinível: Tópico -> Subtópico -> Lista de Tarefas
+ */
+export function groupTodosByHierarchy(todos: ChecklistTodo[]): Record<string, Record<string, ChecklistTodo[]>> {
+  const grouped: Record<string, Record<string, ChecklistTodo[]>> = {}
+
+  todos.forEach(todo => {
+    const { topic, subtopic } = parseTodoHierarchy(todo)
+    if (!grouped[topic]) {
+      grouped[topic] = {}
+    }
+    if (!grouped[topic][subtopic]) {
+      grouped[topic][subtopic] = []
+    }
+    grouped[topic][subtopic].push(todo)
+  })
+
+  return grouped
+}
+
 /**
  * Carrega todos os To-Dos ativos do Dashboard/Organização:
  * - Tarefas pendentes (done: false) permanecem indefinidamente.
@@ -155,12 +237,15 @@ export function loadChecklistTodos(): ChecklistTodo[] {
     const activeTodos: ChecklistTodo[] = []
 
     for (const rawItem of parsed) {
+      const hierarchy = parseTodoHierarchy(rawItem)
       const t: ChecklistTodo = {
         ...rawItem,
         text: cleanCorruptedText(rawItem.text),
         tag: cleanCorruptedText(rawItem.tag),
+        topic: rawItem.topic ? cleanCorruptedText(rawItem.topic) : hierarchy.topic,
+        subtopic: rawItem.subtopic ? cleanCorruptedText(rawItem.subtopic) : hierarchy.subtopic,
       }
-      if (t.text !== rawItem.text || t.tag !== rawItem.tag) {
+      if (t.text !== rawItem.text || t.tag !== rawItem.tag || t.topic !== rawItem.topic || t.subtopic !== rawItem.subtopic) {
         needsSave = true
       }
 

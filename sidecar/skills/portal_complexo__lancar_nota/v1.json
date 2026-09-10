@@ -1,0 +1,130 @@
+{
+  "id": "skill_portal_complexo_lancar_nota_v1",
+  "name": "Habilidade lancar_nota (portal_complexo)",
+  "portal_id": "portal_complexo",
+  "task_id": "lancar_nota",
+  "version": 1,
+  "entry_node": "navigate_0",
+  "nodes": {
+    "navigate_0": {
+      "id": "navigate_0",
+      "type": "NAVIGATE",
+      "anchor": {
+        "strategy": "css_selector",
+        "value": "https://portalcomplexo.com/diario",
+        "scope": null,
+        "description": null
+      },
+      "params": {
+        "variable_bindings": [],
+        "action_value": null,
+        "condition": null,
+        "is_submit_action": null,
+        "description": null
+      },
+      "on_success": "locate_1",
+      "on_fail": null,
+      "retry_policy": {
+        "max_attempts": 2,
+        "backoff_ms": 500
+      }
+    },
+    "locate_1": {
+      "id": "locate_1",
+      "type": "LOCATE",
+      "anchor": {
+        "strategy": "css_selector",
+        "value": "div.grid-notas",
+        "scope": null,
+        "description": null
+      },
+      "params": {
+        "variable_bindings": [],
+        "action_value": null,
+        "condition": null,
+        "is_submit_action": null,
+        "description": null,
+        "multiplicity": "single"
+      },
+      "on_success": "checkpoint_seguranca",
+      "on_fail": null,
+      "retry_policy": {
+        "max_attempts": 2,
+        "backoff_ms": 500
+      }
+    },
+    "checkpoint_seguranca": {
+      "id": "checkpoint_seguranca",
+      "type": "CHECKPOINT",
+      "anchor": null,
+      "params": {
+        "variable_bindings": [],
+        "action_value": null,
+        "condition": "requires_human_confirmation",
+        "is_submit_action": null,
+        "description": "Confirmação humana obrigatória antes de gravar/submeter dados descobertos no portal"
+      },
+      "on_success": "write_2",
+      "on_fail": "ABORT",
+      "retry_policy": {
+        "max_attempts": 1,
+        "backoff_ms": 0
+      }
+    },
+    "write_2": {
+      "id": "write_2",
+      "type": "WRITE",
+      "anchor": {
+        "strategy": "css_selector",
+        "value": "input#aluno_1",
+        "scope": null,
+        "description": null
+      },
+      "params": {
+        "variable_bindings": [],
+        "action_value": "10",
+        "condition": null,
+        "is_submit_action": null,
+        "description": null
+      },
+      "on_success": "click_3",
+      "on_fail": null,
+      "retry_policy": {
+        "max_attempts": 2,
+        "backoff_ms": 500
+      }
+    },
+    "click_3": {
+      "id": "click_3",
+      "type": "CLICK",
+      "anchor": {
+        "strategy": "css_selector",
+        "value": "button.submit",
+        "scope": null,
+        "description": null
+      },
+      "params": {
+        "variable_bindings": [],
+        "action_value": null,
+        "condition": null,
+        "is_submit_action": true,
+        "description": null
+      },
+      "on_success": null,
+      "on_fail": null,
+      "retry_policy": {
+        "max_attempts": 2,
+        "backoff_ms": 500
+      }
+    }
+  },
+  "metadata": {
+    "success_rate": 100.0,
+    "total_executions": 0,
+    "created_at": "2026-09-09T02:04:24.421314+00:00",
+    "updated_at": "2026-09-09T02:04:24.421329+00:00",
+    "last_verified_at": null,
+    "has_self_healed": false,
+    "author": "teacher_ai_recorder"
+  }
+}

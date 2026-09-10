@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Teacher AI</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      width: 260px;
+      background: #fff;
+      color: #1e293b;
+      user-select: none;
+    }
+
+    .screen { display: none; flex-direction: column; align-items: center; padding: 28px 24px 24px; gap: 16px; }
+    .screen.active { display: flex; }
+
+    .icon { font-size: 48px; line-height: 1; }
+
+    h2 { font-size: 15px; font-weight: 700; color: #0f172a; text-align: center; }
+    p  { font-size: 12px; color: #64748b; text-align: center; line-height: 1.55; }
+
+    .btn {
+      width: 100%;
+      padding: 13px;
+      border-radius: 10px;
+      border: none;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: opacity .15s, transform .1s;
+    }
+    .btn:hover  { opacity: .88; transform: translateY(-1px); }
+    .btn:active { transform: translateY(0); }
+    .btn-blue  { background: #0ea5e9; color: #fff; }
+    .btn-red   { background: #ef4444; color: #fff; }
+    .btn-green { background: #22c55e; color: #fff; }
+    .btn-gray  { background: #f1f5f9; color: #475569; font-size: 12px; padding: 10px; }
+
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.35} }
+    .rec-dot {
+      display: inline-block;
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      background: #ef4444;
+      animation: pulse 1.2s ease-in-out infinite;
+      margin-right: 5px;
+      vertical-align: middle;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner {
+      width: 36px; height: 36px;
+      border: 3px solid #e2e8f0;
+      border-top-color: #0ea5e9;
+      border-radius: 50%;
+      animation: spin .75s linear infinite;
+    }
+
+    .error-box {
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-size: 12px;
+      color: #b91c1c;
+      text-align: center;
+      line-height: 1.5;
+      width: 100%;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- TELA 1: Pronto -->
+  <div class="screen active" id="screen-idle">
+    <div class="icon">🎙️</div>
+    <h2>Gravar lista de alunos</h2>
+    <p>Clique em "Iniciar" e navegue até a lista de alunos no portal.<br>Depois volte aqui para finalizar.</p>
+    <button class="btn btn-blue" id="btn-start">Iniciar gravação</button>
+  </div>
+
+  <!-- TELA 2: Gravando -->
+  <div class="screen" id="screen-recording">
+    <div class="icon">📋</div>
+    <h2><span class="rec-dot"></span>Gravando…</h2>
+    <p>Navegue até a página com a lista de alunos da turma.<br>Quando estiver lá, clique em "Pronto".</p>
+    <button class="btn btn-red" id="btn-stop">Pronto, parar gravação</button>
+  </div>
+
+  <!-- TELA 3: Enviando -->
+  <div class="screen" id="screen-sending">
+    <div class="spinner"></div>
+    <h2>Salvando…</h2>
+    <p>Só um momento.</p>
+  </div>
+
+  <!-- TELA 4: Sucesso -->
+  <div class="screen" id="screen-done">
+    <div class="icon">✅</div>
+    <h2>Tudo certo!</h2>
+    <p>A lista foi salva com sucesso.<br>Você já pode fechar esta janelinha.</p>
+    <button class="btn btn-green" id="btn-again">Gravar outra turma</button>
+  </div>
+
+  <!-- TELA 5: Erro -->
+  <div class="screen" id="screen-error">
+    <div class="icon">⚠️</div>
+    <h2>Algo deu errado</h2>
+    <div class="error-box" id="error-msg">Erro desconhecido.</div>
+    <button class="btn btn-gray" id="btn-retry">Tentar novamente</button>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
