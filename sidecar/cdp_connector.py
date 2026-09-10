@@ -98,13 +98,20 @@ class CDPConnector:
         """
         Inicia ou conecta à janela dedicada do Google Chrome do Teacher AI com perfil persistente.
         Zero conflito com o Chrome pessoal da professora (não fecha abas pessoais nem disputa processos).
+        Delega para chrome_launcher.launch_dedicated_chrome() que é a fonte canônica de lançamento.
         """
+        try:
+            from chrome_launcher import launch_dedicated_chrome
+            ok, msg = launch_dedicated_chrome()
+            return (ok, msg)
+        except ImportError:
+            pass
+
+        # Fallback inline (caso o módulo não seja encontrado — compatibilidade)
         import subprocess
         import time
         import os
-        import shutil
 
-        # 1. Verifica se a conexão já está ativa
         conn = cls("http://localhost:9222")
         is_ok, _ = conn.check_health()
         if is_ok:
@@ -117,45 +124,14 @@ class CDPConnector:
         profile_dir = os.path.expandvars(r"%LOCALAPPDATA%\TeacherAI\browser_profile")
         os.makedirs(profile_dir, exist_ok=True)
 
-        # 2. Inicialização amigável de sessão: copia cookies existentes de Profile 1 se for primeira vez
-        try:
-            default_dst = os.path.join(profile_dir, "Default")
-            user_data_src = os.path.expandvars(r"%LOCALAPPDATA%\Google\Chrome\User Data\Profile 1")
-            root_user_data_src = os.path.expandvars(r"%LOCALAPPDATA%\Google\Chrome\User Data")
-            
-            # Copia Local State (contém a chave AES protegida por DPAPI necessária para descriptografar cookies)
-            local_state_src = os.path.join(root_user_data_src, "Local State")
-            local_state_dst = os.path.join(profile_dir, "Local State")
-            if os.path.exists(local_state_src) and not os.path.exists(local_state_dst):
-                try:
-                    shutil.copy2(local_state_src, local_state_dst)
-                except Exception:
-                    pass
-
-            if os.path.exists(user_data_src) and not os.path.exists(default_dst):
-                os.makedirs(default_dst, exist_ok=True)
-                for item in ["Network", "Login Data", "Web Data", "Preferences"]:
-                    s = os.path.join(user_data_src, item)
-                    d = os.path.join(default_dst, item)
-                    if os.path.exists(s) and not os.path.exists(d):
-                        try:
-                            if os.path.isdir(s):
-                                shutil.copytree(s, d)
-                            else:
-                                shutil.copy2(s, d)
-                        except Exception:
-                            pass
-        except Exception:
-            pass
-
-        # 3. Inicia o Chrome com perfil dedicado do app e porta de comunicação ativada
         cmd = [
             chrome_exe,
             f"--user-data-dir={profile_dir}",
             "--remote-debugging-port=9222",
             "--no-first-run",
             "--no-default-browser-check",
-            "https://machadosobrinho.paineldoaluno.com.br/"
+            "--restore-last-session",
+            "--disable-sync",
         ]
 
         try:
@@ -163,13 +139,12 @@ class CDPConnector:
         except Exception as e:
             return (False, f"Falha ao iniciar o Google Chrome: {e}")
 
-        # 4. Aguarda a inicialização e confirmação de prontidão
         deadline = time.time() + timeout_sec
         while time.time() < deadline:
             time.sleep(0.5)
             is_ok, msg = conn.check_health()
             if is_ok:
-                return (True, "Navegador do Teacher AI conectado com sucesso! Suas abas pessoais continuam intactas.")
+                return (True, "Navegador do Teacher AI conectado! Suas abas pessoais continuam intactas.")
 
         return (True, "Navegador iniciado. Se for o primeiro acesso, faça login no portal da sua escola.")
 

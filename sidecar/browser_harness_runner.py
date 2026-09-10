@@ -18,6 +18,7 @@ from sanitizer import clean_state_snapshot, scrub_text
 from portal_map_store import PortalMapStore
 from portal_discovery_agent import PortalDiscoveryAgent, DiscoveredSelectorMap
 from page_reader_engine import PageReaderEngine, default_llm_caller as reader_llm_caller
+from safe_writer import SafeWriter
 
 TASK_TIMEOUT_SECONDS = 120
 
@@ -37,14 +38,27 @@ class BrowserHarnessRunner:
         cdp_url: str = "http://localhost:9222",
         discovery_agent: Optional[PortalDiscoveryAgent] = None,
         map_store: Optional[PortalMapStore] = None,
+        orchestrator: Optional[Any] = None,
     ):
         self.supabase = supabase_client
         self.cdp = CDPConnector(cdp_url)
         # Injetaveis para testes (mock) ou uso padrao em producao
         self.map_store = map_store or PortalMapStore(supabase_client)
         self.discovery_agent = discovery_agent or PortalDiscoveryAgent()
+        self.safe_writer = SafeWriter()
+        self._orchestrator = orchestrator
         # Portais onde o professor ja consentiu com envio de screenshot esta sessao
         self._lgpd_vision_consented: set = set()
+
+    def get_orchestrator(self) -> Any:
+        """Retorna ou inicializa sob demanda a instância de DiscoveryOrchestrator."""
+        if getattr(self, "_orchestrator", None) is None:
+            from discovery_orchestrator import DiscoveryOrchestrator
+            self._orchestrator = DiscoveryOrchestrator(
+                runner=self,
+                map_store=self.map_store
+            )
+        return self._orchestrator
 
     async def get_browser_context(self) -> Any:
         """
@@ -67,6 +81,8 @@ class BrowserHarnessRunner:
         """Processa uma tarefa de acordo com seu status atual ('drafted' ou 'approved')."""
         task_id = task.get("id")
         status = task.get("status")
+        action_type = task.get("action_type")
+
         # Ação de preparação / reconexão do Google Chrome com restauração de abas
         if action_type in ("prepare_chrome", "connect_browser", "reconnect_chrome"):
             return await self._handle_prepare_chrome(task)
@@ -92,7 +108,39 @@ class BrowserHarnessRunner:
             return await self._handle_read_page_content(task, page, teacher_byok)
 
         if status == "drafted":
-            return await self._handle_draft_phase(task, teacher_byok)
+            # Chamada interna orquestrada (Camada 1 do motor local) ou read_roster
+            if task.get("_orchestrated") or action_type == "read_roster":
+                return await self._handle_draft_phase(task, teacher_byok)
+
+            # Roteia pela Escada de Descoberta Agêntica (DiscoveryOrchestrator: Motor Local -> Browser-use -> Skyvern)
+            portal = task.get("portal", "")
+            domain = self.map_store.extract_domain(portal) or portal
+            orchestrator = self.get_orchestrator()
+
+            payload = task.get("payload", {})
+            portal_url = portal if portal.startswith("http") else (f"https://{portal}" if portal else None)
+
+            res = await orchestrator.execute(
+                portal_id=domain,
+                acao=action_type,
+                parametros=payload,
+                portal_url=portal_url
+            )
+
+            if res.get("success"):
+                engine_used = res.get("engine_used")
+                print(f"[Runner] 🎯 Tarefa processada pelo DiscoveryOrchestrator via '{engine_used}'.")
+                if engine_used != "local_motor":
+                    task_draft = dict(task)
+                    task_draft["_orchestrated"] = True
+                    return await self._handle_draft_phase(task_draft, teacher_byok)
+                return True
+            else:
+                err = res.get("error") or f"Falha na execução orquestrada da ação '{action_type}'"
+                print(f"[Runner] ❌ Falha no DiscoveryOrchestrator: {err}")
+                self._update_task_status(task_id, "error", {"error_message": err})
+                return False
+
         elif status == "approved":
             return await self._handle_execution_phase(task)
 
@@ -365,16 +413,17 @@ class BrowserHarnessRunner:
                                     if student_name.lower() in text.lower():
                                         input_elem = row.locator("input[type='number'], input[type='text']")
                                         if await input_elem.count() > 0:
-                                            await input_elem.first.fill(str(val))
-                                            await input_elem.first.dispatch_event("input")
-                                            await input_elem.first.dispatch_event("change")
-                                            # CHECKPOINT de Leitura Pós-Escrita
-                                            read_back = await input_elem.first.input_value()
-                                            expected = str(val).strip()
-                                            if read_back.strip() != expected:
-                                                drift_detail = {"field": field, "student": student_name, "expected": expected, "read_back": read_back}
+                                            write_res = await self.safe_writer.write_input(input_elem.first, val)
+                                            if not write_res.success or write_res.drift_detected:
+                                                drift_detail = {
+                                                    "field": field,
+                                                    "student": student_name,
+                                                    "expected": write_res.expected_value,
+                                                    "read_back": write_res.actual_value,
+                                                    "error": write_res.error_message
+                                                }
                                                 self.flag_possible_drift(portal=getattr(page, "url", ""), action_type="write_grade", details=drift_detail)
-                                                failed.append(f"{student_name} (possível drift: esperado '{expected}', lido '{read_back.strip()}')")
+                                                failed.append(f"{student_name} (possível drift: esperado '{write_res.expected_value}', lido '{write_res.actual_value}')")
                                                 found = False
                                             else:
                                                 found = True
@@ -389,16 +438,17 @@ class BrowserHarnessRunner:
                             try:
                                 input_elem = ctx.locator("input[name*='nota'], input[id*='nota'], input[type='number']")
                                 if await input_elem.count() > 0:
-                                    await input_elem.first.fill(str(val))
-                                    await input_elem.first.dispatch_event("input")
-                                    await input_elem.first.dispatch_event("change")
-                                    # CHECKPOINT de Leitura Pós-Escrita
-                                    read_back = await input_elem.first.input_value()
-                                    expected = str(val).strip()
-                                    if read_back.strip() != expected:
-                                        drift_detail = {"field": field, "student": student_name, "expected": expected, "read_back": read_back}
+                                    write_res = await self.safe_writer.write_input(input_elem.first, val)
+                                    if not write_res.success or write_res.drift_detected:
+                                        drift_detail = {
+                                            "field": field,
+                                            "student": student_name,
+                                            "expected": write_res.expected_value,
+                                            "read_back": write_res.actual_value,
+                                            "error": write_res.error_message
+                                        }
                                         self.flag_possible_drift(portal=getattr(page, "url", ""), action_type="write_grade", details=drift_detail)
-                                        failed.append(f"{student_name or field} (possível drift: esperado '{expected}', lido '{read_back.strip()}')")
+                                        failed.append(f"{student_name or field} (possível drift: esperado '{write_res.expected_value}', lido '{write_res.actual_value}')")
                                         found = False
                                     else:
                                         found = True
@@ -424,16 +474,15 @@ class BrowserHarnessRunner:
                                     if student_name.lower() in text.lower():
                                         chk = row.locator("input[type='checkbox']")
                                         if await chk.count() > 0:
-                                            if is_absent:
-                                                await chk.first.uncheck()
-                                            else:
-                                                await chk.first.check()
-                                            await chk.first.dispatch_event("change")
-                                            # CHECKPOINT de Leitura Pós-Escrita
-                                            is_checked = await chk.first.is_checked()
-                                            expected_checked = not is_absent
-                                            if is_checked != expected_checked:
-                                                drift_detail = {"field": field, "student": student_name, "expected_checked": expected_checked, "read_back_checked": is_checked}
+                                            chk_res = await self.safe_writer.set_checkbox(chk.first, checked=(not is_absent))
+                                            if not chk_res.success or chk_res.drift_detected:
+                                                drift_detail = {
+                                                    "field": field,
+                                                    "student": student_name,
+                                                    "expected_checked": chk_res.expected_checked,
+                                                    "read_back_checked": chk_res.actual_checked,
+                                                    "error": chk_res.error_message
+                                                }
                                                 self.flag_possible_drift(portal=getattr(page, "url", ""), action_type="write_attendance", details=drift_detail)
                                                 failed.append(f"{student_name} (possível drift: checkbox não assumiu estado esperado)")
                                                 found = False
@@ -450,15 +499,14 @@ class BrowserHarnessRunner:
                             try:
                                 chk = ctx.locator("input[type='checkbox']")
                                 if await chk.count() > 0:
-                                    if is_absent:
-                                        await chk.first.uncheck()
-                                    else:
-                                        await chk.first.check()
-                                    # CHECKPOINT de Leitura Pós-Escrita
-                                    is_checked = await chk.first.is_checked()
-                                    expected_checked = not is_absent
-                                    if is_checked != expected_checked:
-                                        drift_detail = {"field": field, "expected_checked": expected_checked, "read_back_checked": is_checked}
+                                    chk_res = await self.safe_writer.set_checkbox(chk.first, checked=(not is_absent))
+                                    if not chk_res.success or chk_res.drift_detected:
+                                        drift_detail = {
+                                            "field": field,
+                                            "expected_checked": chk_res.expected_checked,
+                                            "read_back_checked": chk_res.actual_checked,
+                                            "error": chk_res.error_message
+                                        }
                                         self.flag_possible_drift(portal=getattr(page, "url", ""), action_type="write_attendance", details=drift_detail)
                                         failed.append(f"{field} (possível drift: checkbox não assumiu estado esperado)")
                                         found = False
@@ -480,16 +528,16 @@ class BrowserHarnessRunner:
                         try:
                             textarea = ctx.locator("textarea, input[name*='conteudo'], input[id*='conteudo'], input[name*='titulo'], input[type='text']")
                             if await textarea.count() > 0:
-                                await textarea.first.fill(str(val))
-                                await textarea.first.dispatch_event("input")
-                                await textarea.first.dispatch_event("change")
-                                # CHECKPOINT de Leitura Pós-Escrita
-                                read_back = await textarea.first.input_value()
-                                expected = str(val).strip()
-                                if read_back.strip() != expected:
-                                    drift_detail = {"field": field, "expected": expected, "read_back": read_back}
+                                write_res = await self.safe_writer.write_input(textarea.first, val)
+                                if not write_res.success or write_res.drift_detected:
+                                    drift_detail = {
+                                        "field": field,
+                                        "expected": write_res.expected_value,
+                                        "read_back": write_res.actual_value,
+                                        "error": write_res.error_message
+                                    }
                                     self.flag_possible_drift(portal=getattr(page, "url", ""), action_type="write_text", details=drift_detail)
-                                    failed.append(f"{field} (possível drift: esperado '{expected}', lido '{read_back.strip()}')")
+                                    failed.append(f"{field} (possível drift: esperado '{write_res.expected_value}', lido '{write_res.actual_value}')")
                                     found = False
                                 else:
                                     filled.append(f"{field}: {val}")

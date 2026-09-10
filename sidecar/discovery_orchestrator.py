@@ -72,6 +72,23 @@ class DiscoveryOrchestrator:
             self._portal_locks[portal_id] = asyncio.Lock()
         return self._portal_locks[portal_id]
 
+    async def execute(
+        self,
+        portal_id: str,
+        acao: str,
+        parametros: Dict[str, Any],
+        portal_url: Optional[str] = None,
+        on_progress: Optional[Callable[[Dict[str, Any]], None]] = None,
+    ) -> Dict[str, Any]:
+        """Alias para discover_or_execute conforme especificação."""
+        return await self.discover_or_execute(
+            portal_id=portal_id,
+            acao=acao,
+            parametros=parametros,
+            portal_url=portal_url,
+            on_progress=on_progress,
+        )
+
     async def discover_or_execute(
         self,
         portal_id: str,
@@ -406,7 +423,8 @@ class DiscoveryOrchestrator:
                 "status": "drafted",
                 "portal": graph.portal_id,
                 "action_type": graph.task_id,
-                "payload": parametros
+                "payload": parametros,
+                "_orchestrated": True
             }
             res = await self.runner.process_task(task_mock, {"provider": "local"})
             return {"success": res, "trace": [{"node": graph.entry_node, "status": "SUCCESS"}]}

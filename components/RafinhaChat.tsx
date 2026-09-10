@@ -21,6 +21,7 @@ import { audioFeedback } from '@/lib/audioFeedback'
 import ContinuousListeningConsentModal from '@/components/ContinuousListeningConsentModal'
 import { requiresContinuousListeningConsent } from '@/lib/wakeWordConsent'
 import RosterReconciliationModal from '@/components/modules/RosterReconciliationModal'
+import { PortalApprovalCard } from '@/components/PortalApprovalCard'
 import { toast } from '@/components/Toast'
 import '@/lib/subjects/english'
 import '@/lib/subjects/portuguese'
@@ -1188,6 +1189,7 @@ export default function RafinhaChat({ onNavigate, onCommandReady }: RafinhaChatP
     portalName: 'Google Sheets',
     result: null
   })
+  const [pendingPortalTask, setPendingPortalTask] = useState<any>(null)
 
  const toggleLiveMode = () => {
     if (!isLiveMode && requiresContinuousListeningConsent()) {
@@ -1291,6 +1293,32 @@ export default function RafinhaChat({ onNavigate, onCommandReady }: RafinhaChatP
     }
     window.addEventListener('teacher:open_roster_reconcile', handleOpenReconcile)
     return () => window.removeEventListener('teacher:open_roster_reconcile', handleOpenReconcile)
+  }, [])
+
+  // Sincronização do Card de Aprovação Human-in-the-Loop (Etapa 5)
+  useEffect(() => {
+    const syncPendingTask = () => {
+      try {
+        const raw = typeof window !== 'undefined' ? sessionStorage.getItem('teacher_active_portal_task') : null
+        if (raw) {
+          setPendingPortalTask(JSON.parse(raw))
+        } else {
+          setPendingPortalTask(null)
+        }
+      } catch {
+        setPendingPortalTask(null)
+      }
+    }
+
+    syncPendingTask()
+    window.addEventListener('teacher:portal_task_pending', syncPendingTask)
+    window.addEventListener('teacher:portal_task_completed', syncPendingTask)
+    window.addEventListener('storage', syncPendingTask)
+    return () => {
+      window.removeEventListener('teacher:portal_task_pending', syncPendingTask)
+      window.removeEventListener('teacher:portal_task_completed', syncPendingTask)
+      window.removeEventListener('storage', syncPendingTask)
+    }
   }, [])
 
  useEffect(() => {
@@ -1983,6 +2011,31 @@ export default function RafinhaChat({ onNavigate, onCommandReady }: RafinhaChatP
  )}
  </div>
  ))}
+
+  {/* Card Interativo de Aprovação Human-in-the-Loop (Etapa 5) */}
+  {pendingPortalTask && (
+    <PortalApprovalCard
+      taskId={pendingPortalTask.id}
+      portal={pendingPortalTask.portal || 'Portal Escolar'}
+      actionType={pendingPortalTask.action_type || 'lancar_nota'}
+      classRef={pendingPortalTask.class_ref}
+      summary={pendingPortalTask.payload?.summary}
+      diff={pendingPortalTask.payload?.diff}
+      screenshotUrl={pendingPortalTask.payload?.prefilled_screenshot_url}
+      onApproved={() => {
+        setPendingPortalTask(null)
+        const replyText = `✅ Perfeito! Submissão final aprovada e executada com sucesso no portal ${pendingPortalTask.portal || 'escolar'}. O lançamento foi concluído.`
+        setMessages(prev => [...prev, { role: 'assistant', content: replyText }])
+        speak(replyText)
+      }}
+      onRejected={() => {
+        setPendingPortalTask(null)
+        const replyText = `Operação cancelada com segurança. Nenhuma alteração permanente foi submetida no portal.`
+        setMessages(prev => [...prev, { role: 'assistant', content: replyText }])
+        speak(replyText)
+      }}
+    />
+  )}
 
  {/* Execution timers inline, clicáveis para pular */}
  {runningTools.length > 0 && (
