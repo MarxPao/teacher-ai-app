@@ -1,16 +1,21 @@
 @echo off
-title Teacher AI — Sidecar Desktop
-cd /d "%~dp0\sidecar"
+title Teacher AI — Servidor Sidecar Manual
+echo.
+echo  =====================================================
+echo   Teacher AI — Iniciando Sidecar de Homologacao Manual
+echo  =====================================================
+echo.
 
-echo ============================================================
-echo   🦉 INICIANDO TEACHER AI SIDECAR DESKTOP
-echo ============================================================
-
-set PYTHON_EXE="%LOCALAPPDATA%\Python\pythoncore-3.14-64\python.exe"
-if exist %PYTHON_EXE% (
-    %PYTHON_EXE% main.py
-) else (
-    python main.py
+where python >nul 2>&1
+if %ERRORLEVEL% NEQ 0 (
+    echo  [ERRO] Python nao encontrado no PATH.
+    pause
+    exit /b 1
 )
 
+echo  Abrindo painel web em http://localhost:8765...
+start http://localhost:8765
+
+echo  Iniciando servidor HTTP e conector CDP...
+python sidecar\manual_runner.py
 pause
