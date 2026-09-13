@@ -8,53 +8,23 @@ import { exportToPdf, exportToExcel } from '@/lib/exportUtils'
 import { calculateStudentCompositeRisk, evaluateMlReadiness, CompositeRiskAnalysis } from '@/lib/predictiveAnalytics'
 import { saveRiskSnapshot, getRiskHistory, getRiskTrajectoryLabel, getTrajectoryColor, RiskSnapshot } from '@/lib/riskHistory'
 import type { StudentMemory } from '@/lib/studentMemory'
-
-/* Tipos */
-interface School { id: string; name: string; color: string }
-interface ClassRecord { id: string; name: string; schoolId: string; description: string; subject?: string; year?: string }
-interface StudentRecord {
-  id: string
-  name: string
-  classId: string
-  schoolId: string
-  notes: string
-  level: string
-  grades?: Record<string, string>
-  nee?: boolean
-  nee_description?: string
-  neeDescription?: string
-  /** Registro de acompanhamento ativo pelo professor — persiste após o alerta disparar */
-  followUp?: {
-    active: boolean
-    note: string       // ex: "Reunião com pais realizada em 28/08"
-    startedAt: string  // ISO date string
-    updatedAt: string  // ISO date string
-  }
-}
-
-interface MetricDef {
-  key: string; label: string; icon: string; desc: string; auto: boolean; weight: number
-}
-interface EntityMetrics { entityId: string; scores: Record<string, number> }
+import {
+  loadUnifiedAnalyticsData,
+  runControlledMockDataPurge,
+  autoGradeOfStudent as calcAutoGrade,
+  DEFAULT_METRICS,
+  School,
+  ClassRecord,
+  MetricDef,
+  EntityMetrics,
+  StudentRecord,
+} from '@/lib/analyticsData'
 
 export interface TimelinePoint {
   month: string
   grade: number
   participation: number
 }
-
-const DEFAULT_METRICS: MetricDef[] = [
-  { key: 'academic', label: 'Desempenho Acadêmico', icon: 'ti-star', desc: 'Média geral das notas avaliativas', auto: true, weight: 20 },
-  { key: 'progression', label: 'Progressão', icon: 'ti-trending-up', desc: 'Evolução e crescimento ao longo do período', auto: false, weight: 10 },
-  { key: 'regularity', label: 'Regularidade', icon: 'ti-calendar-check',desc: 'Consistência e pontualidade nas entregas', auto: false, weight: 10 },
-  { key: 'engagement', label: 'Engajamento', icon: 'ti-flame', desc: 'Participação ativa nas atividades', auto: false, weight: 10 },
-  { key: 'oral', label: 'Compreensão Oral', icon: 'ti-ear', desc: 'Desempenho em atividades e práticas orais', auto: false, weight: 10 },
-  { key: 'writing', label: 'Produção Escrita', icon: 'ti-writing', desc: 'Qualidade e fluência textual', auto: false, weight: 10 },
-  { key: 'vocabulary', label: 'Vocabulário', icon: 'ti-abc', desc: 'Riqueza e precisão lexical', auto: false, weight: 10 },
-  { key: 'grammar', label: 'Gramática', icon: 'ti-grammar', desc: 'Correção e domínio gramatical', auto: false, weight: 10 },
-  { key: 'autonomy', label: 'Autonomia', icon: 'ti-bulb', desc: 'Independência no processo de aprendizado', auto: false, weight: 5 },
-  { key: 'behavior', label: 'Comportamento', icon: 'ti-heart', desc: 'Postura, respeito e colaboração em sala', auto: false, weight: 5 },
-]
 
 const COLORS = [
   { name: 'Azul', hex: '#268bd2' },
@@ -264,38 +234,20 @@ export default function Analytics() {
   // Carregar Dados
   useEffect(() => {
     const load = () => {
-      const sc = localStorage.getItem('teacher_schools')
-      const cl = localStorage.getItem('teacher_classes')
-      const st = localStorage.getItem('teacher_students')
-      const md = localStorage.getItem('teacher_pedagogic_metrics')
-      const sm = localStorage.getItem('teacher_school_metrics')
-      const cm = localStorage.getItem('teacher_class_metrics')
-      const stm = localStorage.getItem('teacher_student_metrics')
-      // Bridge: memória viva dos alunos → alimenta o motor de risco
-      const mem = localStorage.getItem('teacher_student_memory')
+      runControlledMockDataPurge()
+      const data = loadUnifiedAnalyticsData()
+      setSchools(data.schools)
+      if (data.schools.length > 0) setPanelSchoolId(prev => prev || data.schools[0].id)
+      setClasses(data.classes)
+      if (data.classes.length > 0) setPanelClassId(prev => prev || data.classes[0].id)
+      setStudents(data.regularStudents)
+      if (data.regularStudents.length > 0) setPanelStudentId(prev => prev || data.regularStudents[0].id)
+      setMetricDefs(data.metricDefs)
+      setSchoolMetrics(data.schoolMetrics)
+      setClassMetrics(data.classMetrics)
+      setStudentMetrics(data.studentMetrics)
 
-      if (sc) {
-        const parsedSc = JSON.parse(sc)
-        const realSchools = Array.isArray(parsedSc) ? parsedSc.filter((s: any) => s.name !== 'Colégio Integral' && s.name !== 'Escola Modelo') : []
-        setSchools(realSchools)
-        if (realSchools.length > 0) setPanelSchoolId(prev => prev || realSchools[0].id)
-      } else {
-        setSchools([])
-      }
-      if (cl) {
-        const parsedCl = JSON.parse(cl)
-        setClasses(parsedCl)
-        if (parsedCl.length > 0) setPanelClassId(prev => prev || parsedCl[0].id)
-      }
-      if (st) {
-        const parsedSt = JSON.parse(st)
-        setStudents(parsedSt)
-        if (parsedSt.length > 0) setPanelStudentId(prev => prev || parsedSt[0].id)
-      }
-      if (md) setMetricDefs(JSON.parse(md))
-      if (sm) setSchoolMetrics(JSON.parse(sm))
-      if (cm) setClassMetrics(JSON.parse(cm))
-      if (stm) setStudentMetrics(JSON.parse(stm))
+      const mem = localStorage.getItem('teacher_student_memory')
       if (mem) {
         try { setStudentMemories(JSON.parse(mem)) } catch { /* ignore */ }
       }
@@ -346,12 +298,7 @@ export default function Analytics() {
 
   // Auto-cálculo de Nota Acadêmica com filtro de segurança [0, 10]
   const autoGradeOfStudent = useCallback((student: StudentRecord): number | null => {
-    if (!student.grades || Object.keys(student.grades).length === 0) return null
-    const vals = Object.values(student.grades)
-      .map(v => parseFloat(String(v).replace(',', '.')))
-      .filter(n => !isNaN(n) && n >= 0 && n <= 10)
-    if (!vals.length) return null
-    return vals.reduce((a, b) => a + b, 0) / vals.length
+    return calcAutoGrade(student.grades)
   }, [])
 
   // Gerador de Timeline Mês a Mês do Aluno
@@ -538,7 +485,7 @@ Responda APENAS um objeto JSON no formato:
   }
 
   function openAddClass() { setClsName(''); setClsSchool(schools[0]?.id || ''); setClsSubj(''); setClsYear('2025'); setClsDesc(''); setClassModal('add') }
-  function openEditClass(c: ClassRecord) { setClsName(c.name); setClsSchool(c.schoolId); setClsSubj(c.subject || ''); setClsYear(c.year || '2025'); setClsDesc(c.description); setSelectedClassId(c.id); setClassModal('edit') }
+  function openEditClass(c: ClassRecord) { setClsName(c.name); setClsSchool(c.schoolId || ''); setClsSubj(c.subject || ''); setClsYear(c.year || '2025'); setClsDesc(c.description || ''); setSelectedClassId(c.id); setClassModal('edit') }
   function saveClassForm() {
     if (!clsName.trim()) return
     if (classModal === 'edit' && selectedClassId) {
@@ -556,7 +503,7 @@ Responda APENAS um objeto JSON no formato:
   }
 
   function openAddStudent() { setStuName(''); setStuClass(classes[0]?.id || ''); setStuLevel('A2'); setStuNotes(''); setStuNee(false); setStuNeeDesc(''); setStudentModal('add') }
-  function openEditStudent(st: StudentRecord) { setStuName(st.name); setStuClass(st.classId); setStuLevel(st.level); setStuNotes(st.notes); setStuNee(!!st.nee); setStuNeeDesc(st.nee_description || st.neeDescription || ''); setSelectedStudentId(st.id); setStudentModal('edit') }
+  function openEditStudent(st: StudentRecord) { setStuName(st.name); setStuClass(st.classId || ''); setStuLevel(st.level || 'A2'); setStuNotes(st.notes || ''); setStuNee(!!st.nee); setStuNeeDesc(st.nee_description || st.neeDescription || ''); setSelectedStudentId(st.id); setStudentModal('edit') }
   function saveStudentForm() {
     if (!stuName.trim()) return
     const scId = classes.find(c => c.id === stuClass)?.schoolId || ''
@@ -588,11 +535,15 @@ Responda APENAS um objeto JSON no formato:
         .filter(n => !isNaN(n) && n >= 0 && n <= 10)
       allGrades.push(...vals)
 
-      if (!classGrades[s.classId]) classGrades[s.classId] = []
-      classGrades[s.classId].push(...vals)
+      if (s.classId) {
+        if (!classGrades[s.classId]) classGrades[s.classId] = []
+        classGrades[s.classId].push(...vals)
+      }
 
-      if (!schoolGrades[s.schoolId]) schoolGrades[s.schoolId] = []
-      schoolGrades[s.schoolId].push(...vals)
+      if (s.schoolId) {
+        if (!schoolGrades[s.schoolId]) schoolGrades[s.schoolId] = []
+        schoolGrades[s.schoolId].push(...vals)
+      }
 
       vals.forEach(v => {
         const idx = Math.min(Math.floor(v), 9)

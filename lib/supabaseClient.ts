@@ -1147,12 +1147,18 @@ export function purgeMockDataFromStorage(): void {
  */
 export async function savePedagogicalInsightToSupabase(insight: {
   schoolId?: string
+  school?: string
   classId?: string
-  overallMastery: number
-  totalStudents: number
-  atRiskCount: number
-  topCount: number
-  criticalTopics: any[]
+  className?: string
+  subject?: string
+  overallAverage?: number | null
+  overallMastery?: number
+  totalStudents?: number
+  criticalCount?: number
+  atRiskCount?: number
+  moderateCount?: number
+  topCount?: number
+  criticalTopics?: any[]
   aiReport?: string
 }): Promise<{ ok: boolean; error?: string }> {
   const cfg = getSupabaseConfig()
@@ -1160,14 +1166,19 @@ export async function savePedagogicalInsightToSupabase(insight: {
   const apiKey = getActiveKey(cfg)
   if (!apiKey) return { ok: true }
 
+  const overallAvg = insight.overallAverage !== undefined
+    ? insight.overallAverage
+    : (insight.overallMastery !== undefined ? Number((insight.overallMastery / 10).toFixed(1)) : null)
+
   const payload = {
     id: 'ins_' + Date.now(),
-    school_id: insight.schoolId || null,
-    class_id: insight.classId || null,
-    overall_mastery: insight.overallMastery,
-    total_students: insight.totalStudents,
-    at_risk_count: insight.atRiskCount,
-    top_count: insight.topCount,
+    school: insight.school || insight.schoolId || '',
+    class_name: insight.className || insight.classId || '',
+    subject: insight.subject || 'Inglês',
+    overall_average: overallAvg,
+    critical_count: insight.criticalCount ?? insight.atRiskCount ?? 0,
+    moderate_count: insight.moderateCount ?? 0,
+    top_count: insight.topCount ?? 0,
     critical_topics: insight.criticalTopics || [],
     ai_report: insight.aiReport || null,
     updated_at: new Date().toISOString()

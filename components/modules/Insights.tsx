@@ -4,7 +4,13 @@ import { COLOR, RADIUS, TEXT, SHADOW, FONT } from '@/styles/tokens'
 import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import ModuleShell from '@/components/ModuleShell'
 import TeacherLogo from '@/components/TeacherLogo'
-import { fetchSupabaseInsightsData, purgeMockDataFromStorage, SupabaseInsightsDataset } from '@/lib/supabaseClient'
+import {
+  loadUnifiedAnalyticsData,
+  runControlledMockDataPurge,
+  UnifiedStudent,
+  UnifiedAnalyticsDataset,
+} from '@/lib/analyticsData'
+import { savePedagogicalInsightToSupabase } from '@/lib/supabaseClient'
 
 export interface PedagogicalHint {
   id: string
@@ -20,28 +26,6 @@ export interface PedagogicalHint {
   recommendedLevel: string
   urgency: 'high' | 'medium' | 'low'
   sourceKey: 'krashen' | 'nation' | 'vygotsky' | 'scrivener' | 'field' | 'bloom' | 'bncc'
-}
-
-interface StudentNormalized {
-  id: string
-  name: string
-  className: string
-  schoolName: string
-  avgGrade: number
-  masteryPercentage: number
-  grades: Record<string, number | string>
-  metrics?: {
-    attendance?: number
-    homeworkRate?: number
-    participation?: number
-    oral?: number
-    writing?: number
-    grammar?: number
-    vocabulary?: number
-  }
-  atRisk: boolean
-  topPerformer: boolean
-  subject?: string
 }
 
 const THEORETICAL_FRAMEWORKS = [
@@ -104,15 +88,16 @@ const THEORETICAL_FRAMEWORKS = [
 ]
 
 export default function Insights() {
-  const [dataset, setDataset] = useState<SupabaseInsightsDataset>({
+  const [dataset, setDataset] = useState<UnifiedAnalyticsDataset>({
     schools: [],
     classes: [],
-    students: [],
+    regularStudents: [],
     privateStudents: [],
-    documents: [],
-    exams: [],
-    questions: [],
-    isCloudConnected: false
+    allStudents: [],
+    metricDefs: [],
+    schoolMetrics: [],
+    classMetrics: [],
+    studentMetrics: []
   })
   const [isLoading, setIsLoading] = useState(true)
   const [isSyncing, setIsSyncing] = useState(false)
@@ -120,17 +105,22 @@ export default function Insights() {
   const [selectedStudent, setSelectedStudent] = useState<string>('all')
   const [activeFilterCategory, setActiveFilterCategory] = useState<string>('all')
   const [searchQuery, setSearchQuery] = useState('')
-  const [customAiDiagnostic, setCustomAiDiagnostic] = useState<string>('')
+  const [customAiDiagnostic, setCustomAiDiagnostic] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('teacher_insights_ai_report') || ''
+    }
+    return ''
+  })
   const [isGeneratingAi, setIsGeneratingAi] = useState(false)
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [actionToast, setActionToast] = useState<string | null>(null)
 
-  // ─── Carregamento de Dados ───────────────────────────────────────────────
-  const loadData = useCallback(async () => {
+  // ─── Carregamento de Dados Unificado ──────────────────────────────────────
+  const loadData = useCallback(() => {
     try {
       setIsSyncing(true)
-      purgeMockDataFromStorage()
-      const data = await fetchSupabaseInsightsData()
+      runControlledMockDataPurge()
+      const data = loadUnifiedAnalyticsData()
       setDataset(data)
     } catch (e) {
       console.error('Erro ao carregar dados de Insights:', e)
@@ -151,40 +141,19 @@ export default function Insights() {
     }
   }, [loadData])
 
-  // ─── Normalização de Alunos ──────────────────────────────────────────────
-  const normalizedStudents = useMemo<StudentNormalized[]>(() => {
-    return dataset.students.map(s => {
-      const rawGrades = Object.values(s.grades || {})
-        .map(v => Number(v))
-        .filter(n => !isNaN(n))
-
-      const avg = rawGrades.length > 0 ? rawGrades.reduce((a, b) => a + b, 0) / rawGrades.length : 0
-      const mastery = Math.round(Math.min(100, Math.max(0, avg * 10)))
-
-      return {
-        id: s.id,
-        name: s.name,
-        className: s.class || (s as any).className || 'Turma Regular',
-        schoolName: s.school || 'Geral',
-        avgGrade: Number(avg.toFixed(1)),
-        masteryPercentage: mastery,
-        grades: s.grades || {},
-        metrics: (s as any).metrics || {},
-        atRisk: avg > 0 && avg < 6.0,
-        topPerformer: avg >= 8.5
-      }
-    })
-  }, [dataset.students])
+  // ─── Normalização Compartilhada (Regulares + Particulares) ────────────────
+  const normalizedStudents = useMemo<UnifiedStudent[]>(() => {
+    return dataset.allStudents
+  }, [dataset.allStudents])
 
   // ─── Motor de Geração de Hints Pedagógicos Baseados em Teoria ─────────────
   const theoreticalHints = useMemo<PedagogicalHint[]>(() => {
     const hints: PedagogicalHint[] = []
 
     normalizedStudents.forEach(st => {
-      const gradesCount = Object.keys(st.grades).length
-
       // 1. Caso: Aluno em Risco com Média Baixa (< 6.0)
-      if (st.avgGrade > 0 && st.avgGrade < 6.0) {
+      // IMPORTANTE: Só gera se o aluno REALMENTE possui notas cadastradas (hasGrades === true)
+      if (st.hasGrades && st.avgGrade !== null && st.avgGrade < 6.0) {
         hints.push({
           id: `hint_krashen_${st.id}`,
           targetType: 'student',
@@ -200,16 +169,19 @@ export default function Insights() {
             'Forneça insumo compreensível no nível i+1 (textos e diálogos com 95%+ de palavras compreendidas).',
             'Substitua a correção imediata explícita por "Recast" positivo (reformulação natural da frase pelo professor).'
           ],
-          recommendedLevel: 'A1/A2',
+          recommendedLevel: st.level || 'A1/A2',
           urgency: 'high',
           sourceKey: 'krashen'
         })
       }
 
       // 2. Caso: Aluno com Dificuldade em Produção Escrita / Gramática
-      const scores = (st.metrics as any)?.scores || st.metrics || {}
-      const grammarScore = scores.grammar !== undefined ? scores.grammar : st.avgGrade
-      if (grammarScore > 0 && grammarScore < 6.5) {
+      // Utiliza a nota real de gramática do radar (teacher_student_metrics)
+      const grammarScore = st.metrics?.grammar !== undefined
+        ? st.metrics.grammar
+        : (st.hasGrades && st.avgGrade !== null ? st.avgGrade : null)
+
+      if (grammarScore !== null && grammarScore < 6.5) {
         hints.push({
           id: `hint_vygotsky_${st.id}`,
           targetType: 'student',
@@ -225,21 +197,21 @@ export default function Insights() {
             'Crie pares de trabalho colaborativo com colegas de nível intermediário alto (Peer Tutoring).',
             'Forneça um checklist de autoavaliação com no máximo 3 itens-chave (ex: sujeito + verbo no passado).'
           ],
-          recommendedLevel: 'A2/B1',
+          recommendedLevel: st.level || 'A2/B1',
           urgency: 'medium',
           sourceKey: 'vygotsky'
         })
       }
 
       // 3. Caso: Aluno de Alto Desempenho (>= 8.5) — Risco de Desengajamento por Subdesafio
-      if (st.topPerformer) {
+      if (st.hasGrades && st.topPerformer) {
         hints.push({
           id: `hint_bloom_${st.id}`,
           targetType: 'student',
           targetName: st.name,
           targetId: st.id,
           topic: 'Extensão de Pensamento Crítico & Desafio Cognitivo',
-          challenge: `Média de ${st.avgGrade.toFixed(1)}/10. Realiza tarefas mecânicas com facilidade e demanda aprofundamento.`,
+          challenge: `Média de ${st.avgGrade?.toFixed(1) || '8.5'}/10. Realiza tarefas mecânicas com facilidade e demanda aprofundamento.`,
           author: 'Benjamin Bloom / Anderson',
           theory: 'Habilidades de Pensamento de Ordem Superior (HOTS - Higher-Order Thinking Skills)',
           prescription: `De acordo com a Taxonomia de Bloom, alunos em domínio pleno estagnam quando retidos nos níveis de "Lembrar/Entender". Eleve as tarefas para "Analisar, Avaliar e Criar".`,
@@ -248,26 +220,27 @@ export default function Insights() {
             'Designe o aluno como mediador de grupos ou co-criador de desafios de quiz para a turma.',
             'Adicione questões bônus com inferência textual complexa e vocabulário C1 de leitura extensiva.'
           ],
-          recommendedLevel: 'B2/C1',
+          recommendedLevel: st.level || 'B2/C1',
           urgency: 'low',
           sourceKey: 'bloom'
         })
       }
     })
 
-    // 4. Hints Coletivos para as Turmas
+    // 4. Hints Coletivos para as Turmas (Apenas turmas com alunos com notas avaliadas)
     const classes = Array.from(new Set(normalizedStudents.map(s => s.className).filter(Boolean)))
     classes.forEach(cls => {
       const classStudents = normalizedStudents.filter(s => s.className === cls)
-      if (classStudents.length >= 2) {
-        const classAvg = classStudents.reduce((a, b) => a + b.avgGrade, 0) / classStudents.length
+      const studentsWithGrades = classStudents.filter(s => s.hasGrades && s.avgGrade !== null)
+      if (studentsWithGrades.length >= 2) {
+        const classAvg = studentsWithGrades.reduce((a, b) => a + (b.avgGrade || 0), 0) / studentsWithGrades.length
 
         hints.push({
           id: `hint_nation_${cls}`,
           targetType: 'class',
           targetName: `Turma: ${cls}`,
           topic: 'Equilíbrio Pedagógico das 4 Vertentes (The 4 Strands)',
-          challenge: `Média coletiva da turma em ${classAvg.toFixed(1)}/10 com ${classStudents.length} alunos cadastrados.`,
+          challenge: `Média coletiva da turma em ${classAvg.toFixed(1)}/10 com ${studentsWithGrades.length} alunos avaliados.`,
           author: 'Paul Nation',
           theory: 'The Four Strands of Language Learning (2007)',
           prescription: `Paul Nation demonstra que o aprendizado equilibrado de idiomas exige 25% do tempo dedicado a cada uma das 4 vertentes: Meaning-Focused Input, Meaning-Focused Output, Language-Focused Learning e Fluency Development.`,
@@ -332,7 +305,10 @@ export default function Insights() {
   // ─── Geração de Diagnóstico Sob Demanda com IA ───────────────────────────
   const handleGenerateAiDiagnostic = async () => {
     setIsGeneratingAi(true)
-    const avg = (normalizedStudents.reduce((a, b) => a + b.avgGrade, 0) / (normalizedStudents.length || 1)).toFixed(1)
+    const studentsWithAvg = normalizedStudents.filter(s => s.avgGrade !== null)
+    const avg = studentsWithAvg.length > 0
+      ? (studentsWithAvg.reduce((a, b) => a + (b.avgGrade ?? 0), 0) / studentsWithAvg.length).toFixed(1)
+      : '0.0'
     const atRisk = normalizedStudents.filter(s => s.atRisk)
     const topPerf = normalizedStudents.filter(s => s.topPerformer)
 
@@ -423,6 +399,14 @@ Referência: ${new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'nu
       setCustomAiDiagnostic(generated)
       try {
         localStorage.setItem('teacher_insights_ai_report', generated)
+        savePedagogicalInsightToSupabase({
+          overallMastery: Number(avg) ? Math.round(Number(avg) * 10) : 75,
+          totalStudents: normalizedStudents.length,
+          atRiskCount: atRisk.length,
+          topCount: topPerf.length,
+          criticalTopics: atRisk.map(s => `${s.name} (${s.className})`),
+          aiReport: generated
+        }).catch(err => console.warn('[Insights] Falha ao salvar snapshot no Supabase:', err))
       } catch {}
     } catch (err) {
       console.error('Erro ao gerar diagnóstico IA:', err)
