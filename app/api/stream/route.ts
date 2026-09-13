@@ -29,20 +29,30 @@ export async function POST(req: NextRequest) {
     // 1. Tentar streaming real com Gemini se chave estiver configurada
     if (geminiKey) {
       try {
-        const model = 'gemini-2.0-flash'
-        const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?key=${geminiKey}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ role: 'user', parts: [{ text: (systemPrompt ? systemPrompt + '\n\n' : '') + prompt }] }],
-            generationConfig: { temperature: 0.7 }
-          })
-        })
+        const streamModels = ['gemini-3.6-flash', 'gemini-3.5-flash-lite', 'gemini-flash-lite-latest', 'gemini-flash-latest']
+        let geminiRes: Response | null = null
+        for (const model of streamModels) {
+          try {
+            const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?key=${geminiKey}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                contents: [{ role: 'user', parts: [{ text: (systemPrompt ? systemPrompt + '\n\n' : '') + prompt }] }],
+                generationConfig: { temperature: 0.7 }
+              })
+            })
+            if (res.ok && res.body) {
+              geminiRes = res
+              break
+            }
+          } catch { /* try next model */ }
+        }
 
-        if (geminiRes.ok && geminiRes.body) {
+        if (geminiRes && geminiRes.ok && geminiRes.body) {
+          const body = geminiRes.body
           const stream = new ReadableStream({
             async start(controller) {
-              const reader = geminiRes.body!.getReader()
+              const reader = body.getReader()
               const decoder = new TextDecoder()
               let buffer = ''
 

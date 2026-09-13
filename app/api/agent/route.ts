@@ -347,7 +347,7 @@ async function callProviderWithFallback(
       }
 
       if (p === 'gemini') {
-        const geminiModels = ['gemini-flash-latest', 'gemini-2.5-flash', 'gemini-pro-latest', 'gemini-flash-lite-latest', 'gemini-2.0-flash', 'gemini-1.5-flash']
+        const geminiModels = ['gemini-3.6-flash', 'gemini-3.5-flash-lite', 'gemini-3.5-flash', 'gemini-flash-lite-latest', 'gemini-flash-latest', 'gemini-pro-latest']
         let geminiSuccess = false
         for (const gModel of geminiModels) {
           try {

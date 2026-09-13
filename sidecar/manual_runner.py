@@ -17,7 +17,7 @@ if hasattr(sys.stdout, "reconfigure"):
 if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 import time
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 from typing import Any, Dict, Optional
 import urllib.request
@@ -615,7 +615,7 @@ class ManualServerHandler(BaseHTTPRequestHandler):
                 self.wfile.write(json.dumps(resp).encode("utf-8"))
                 return
 
-            is_ok, msg = check_cdp_health()
+            is_ok, msg = check_cdp_health(timeout=0.3)
             if not is_ok:
                 resp = {
                     "state": "offline",
@@ -719,7 +719,7 @@ class ManualServerHandler(BaseHTTPRequestHandler):
 
 def start_server(port: int = SERVER_PORT, enable_tray: bool = False):
     bridge_instance.start_background()
-    server = HTTPServer(("127.0.0.1", port), ManualServerHandler)
+    server = ThreadingHTTPServer(("127.0.0.1", port), ManualServerHandler)
 
     tray_instance = None
     if enable_tray:

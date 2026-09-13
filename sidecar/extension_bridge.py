@@ -211,7 +211,7 @@ class ExtensionBridge:
             }
 
     def start_background(self):
-        """Inicia o servidor WebSocket em thread dedicada caso websockets esteja disponível."""
+        """Inicia o servidor WebSocket em thread dedicada com retry resiliente."""
         if ws_serve is None:
             logger.warning("[ExtensionBridge] Pacote 'websockets' não disponível. Operando apenas com CDP fallback.")
             return
@@ -221,12 +221,19 @@ class ExtensionBridge:
             asyncio.set_event_loop(self._loop)
 
             async def _start():
-                try:
-                    self.server = await ws_serve(self._handle_connection, "127.0.0.1", self.port)
-                    logger.info(f"[ExtensionBridge] ✅ Servidor WebSocket ativo em ws://127.0.0.1:{self.port}")
-                    await self.server.wait_closed()
-                except Exception as se:
-                    logger.warning(f"[ExtensionBridge] Não foi possível iniciar WebSocket na porta {self.port}: {se}")
+                max_retries = 5
+                for attempt in range(1, max_retries + 1):
+                    try:
+                        self.server = await ws_serve(self._handle_connection, "127.0.0.1", self.port)
+                        logger.info(f"[ExtensionBridge] ✅ Servidor WebSocket ativo em ws://127.0.0.1:{self.port}")
+                        await self.server.wait_closed()
+                        break
+                    except Exception as se:
+                        logger.warning(f"[ExtensionBridge] Tentativa {attempt}/{max_retries} falhou na porta {self.port}: {se}")
+                        if attempt < max_retries:
+                            await asyncio.sleep(1.0)
+                        else:
+                            logger.error(f"[ExtensionBridge] Falha definitiva ao iniciar WebSocket na porta {self.port}.")
 
             try:
                 self._loop.run_until_complete(_start())

@@ -1,5 +1,5 @@
 {
-  "id": "skill_lancar_falta_lote3_mtzqyh0n",
+  "id": "skill_lancar_falta_lote3_mtzsdvlp",
   "name": "Lançar Falta na Chamada",
   "portal_id": "machado_sobrinho",
   "task_id": "lancar_falta_lote3",
@@ -76,8 +76,8 @@
     "turma_id": "cls_1785639505494",
     "success_rate": 100,
     "total_executions": 0,
-    "created_at": "2026-09-13T11:44:52.391Z",
-    "updated_at": "2026-09-13T11:44:52.391Z",
+    "created_at": "2026-09-13T12:24:50.749Z",
+    "updated_at": "2026-09-13T12:24:50.749Z",
     "last_verified_at": null,
     "has_self_healed": false,
     "author": "teacher_ai_recorder_nextjs",

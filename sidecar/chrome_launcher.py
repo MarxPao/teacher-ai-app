@@ -48,6 +48,7 @@ EXTENSION_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "t
 
 CHROME_FLAGS = [
     f"--remote-debugging-port={CDP_PORT}",
+    "--remote-allow-origins=*",
     "--no-first-run",
     "--no-default-browser-check",
     "--restore-last-session",

@@ -16,7 +16,7 @@ export const DEFAULT_APIS: ApiConfig[] = [
   { id: 'siliconflow', name: 'SiliconFlow (Qwen2.5 / DeepSeek - Grátis)', provider: 'siliconflow', key: '', model: 'Qwen/Qwen2.5-72B-Instruct', active: false },
   { id: 'openrouter', name: 'OpenRouter (Rota Gratuita Permanente)', provider: 'openrouter', key: '', model: 'google/gemma-2-9b-it:free', active: false },
   { id: 'groq', name: 'Groq Llama-3 (Rápido)', provider: 'groq', key: '', model: 'llama-3.3-70b-versatile', active: false },
-  { id: 'gemini', name: 'Google Gemini Flash', provider: 'gemini', key: '', model: 'gemini-2.0-flash', active: false },
+  { id: 'gemini', name: 'Google Gemini Flash', provider: 'gemini', key: '', model: 'gemini-3.6-flash', active: false },
   { id: 'gpt', name: 'OpenAI GPT-4o', provider: 'openai', key: '', model: 'gpt-4o-mini', active: false },
   { id: 'claude', name: 'Anthropic Claude', provider: 'anthropic', key: '', model: 'claude-opus-4-5', active: false },
   { id: 'elevenlabs', name: 'ElevenLabs (Voz Ultra-Natural)', provider: 'elevenlabs', key: '', model: 'eleven_multilingual_v2', active: false, voiceId: 'MF3mGyEYCl7XYWbV9V6O' },
@@ -69,7 +69,7 @@ export const API_GUIDE: ApiGuideItem[] = [
     usage: 'Geração de questões ELT, planos de aula, análise de áudio/imagem',
     steps: ['Acesse aistudio.google.com','Faça login com sua conta Google','Clique em "Get API key" no painel','Clique em "Create API key in new project"','Copie e cole no campo'],
     link: 'https://aistudio.google.com/app/apikey', linkLabel: 'Acessar Google AI Studio',
-    tip: 'Modelo recomendado: gemini-2.0-flash. 15 req/min gratuito.',
+    tip: 'Modelo recomendado: gemini-3.6-flash. 15 req/min gratuito.',
   },
   {
     id: 'gpt', icon: 'ti-sparkles', color: '#268bd2', label: 'OpenAI GPT-4o', cost: 'PAGO',

@@ -50,12 +50,20 @@ export function seedApiKeysIfNeeded(userProvidedKeys: Record<string, string>) {
     { id: 'openrouter',  name: 'OpenRouter (Rota Gratuita Permanente)', provider: 'openrouter',  key: '', model: 'google/gemma-2-9b-it:free', active: false },
     { id: 'groq',        name: 'Groq Llama-3 (Rápido)',                 provider: 'groq',        key: '', model: 'llama-3.3-70b-versatile',  active: false },
     { id: 'deepseek',    name: 'DeepSeek AI (V3 / R1)',                 provider: 'deepseek',    key: '', model: 'deepseek-chat',            active: false },
-    { id: 'gemini',      name: 'Google Gemini Flash',                   provider: 'gemini',      key: '', model: 'gemini-2.0-flash',         active: false },
+    { id: 'gemini',      name: 'Google Gemini Flash',                   provider: 'gemini',      key: '', model: 'gemini-3.6-flash',         active: false },
     { id: 'gpt',         name: 'OpenAI GPT-4o',                        provider: 'openai',      key: '', model: 'gpt-4o-mini',              active: false },
     { id: 'claude',      name: 'Anthropic Claude',                      provider: 'anthropic',   key: '', model: 'claude-opus-4-5',          active: false },
     { id: 'elevenlabs',  name: 'ElevenLabs (Voz Ultra-Natural)',        provider: 'elevenlabs',  key: '', model: 'eleven_multilingual_v2',   active: false, voiceId: 'MF3mGyEYCl7XYWbV9V6O' },
   ]
 
+  // Auto-migra modelos depreciados do Gemini salvos anteriormente
+  let migrationNeeded = false
+  for (const api of updated) {
+    if (api.provider === 'gemini' && (!api.model || api.model.includes('gemini-2.0') || api.model.includes('gemini-1.5') || api.model.includes('gemini-2.5'))) {
+      api.model = 'gemini-3.6-flash'
+      migrationNeeded = true
+    }
+  }
 
   // Aplica as chaves fornecidas
   let anyKeySet = false
@@ -70,7 +78,7 @@ export function seedApiKeysIfNeeded(userProvidedKeys: Record<string, string>) {
     }
   }
 
-  if (anyKeySet) {
+  if (anyKeySet || migrationNeeded) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(updated))
     window.postMessage({ action: 'SYNC_APIS', apis: updated }, '*')
   }

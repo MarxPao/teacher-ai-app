@@ -137,7 +137,7 @@ export function getAvailableApisForSelect(): ApiConfig[] {
   const defaultList: ApiConfig[] = [
     autoOption,
     { id: 'groq',        name: '⚡ Groq Llama-3.3 70B (Latência Ultrabaixa - Grátis)', provider: 'groq',        key: '', model: 'llama-3.3-70b-versatile',   active: true },
-    { id: 'gemini',      name: '✨ Google Gemini 2.0 Flash',                             provider: 'gemini',      key: '', model: 'gemini-2.0-flash',          active: true },
+    { id: 'gemini',      name: '✨ Google Gemini 3.6 Flash',                             provider: 'gemini',      key: '', model: 'gemini-3.6-flash',          active: true },
     { id: 'zhipu',       name: '🚀 Zhipu AI (GLM-4-Flash - Grátis)',                     provider: 'zhipu',       key: '', model: 'glm-4-flash',               active: true },
     { id: 'siliconflow',  name: '🔷 SiliconFlow (Qwen2.5-72B - Grátis)',                  provider: 'siliconflow', key: '', model: 'Qwen/Qwen2.5-72B-Instruct', active: true },
     { id: 'openrouter',  name: '🌐 OpenRouter (Rota Gratuita Permanente)',              provider: 'openrouter',  key: '', model: 'google/gemma-2-9b-it:free', active: true },
@@ -236,7 +236,8 @@ export async function executeUnifiedAiCall(api: ApiConfig | null, prompt: string
 
   // 3. Google Gemini
   else if (p === 'gemini') {
-    const modelsToTry = [model || 'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash']
+    const validModel = model && !model.includes('gemini-2.0') && !model.includes('gemini-1.5') && !model.includes('gemini-2.5') ? model : 'gemini-3.6-flash'
+    const modelsToTry = [validModel, 'gemini-3.5-flash-lite', 'gemini-3.5-flash', 'gemini-flash-lite-latest', 'gemini-flash-latest']
     let lastErr = ''
     for (const m of modelsToTry) {
       try {

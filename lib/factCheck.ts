@@ -70,7 +70,7 @@ export async function runFactCheck(
       raw = d.choices?.[0]?.message?.content || '{}'
     } else if (api.provider === 'gemini') {
       // F1: garantir modelo padrão para não gerar URL inválida
-      const model = api.model || 'gemini-2.0-flash'
+      const model = api.model && !api.model.includes('gemini-2.0') && !api.model.includes('gemini-1.5') && !api.model.includes('gemini-2.5') ? api.model : 'gemini-3.6-flash'
       const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${api.key}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

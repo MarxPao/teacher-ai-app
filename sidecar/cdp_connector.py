@@ -154,6 +154,7 @@ class CDPConnector:
             chrome_exe,
             f"--user-data-dir={profile_dir}",
             "--remote-debugging-port=9222",
+            "--remote-allow-origins=*",
             "--no-first-run",
             "--no-default-browser-check",
             "--restore-last-session",

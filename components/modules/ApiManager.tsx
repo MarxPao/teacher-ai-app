@@ -348,7 +348,7 @@ export default function ApiManager() {
  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
  {[
  { provider: 'groq', label: ' Groq Llama-3.3 70B' },
- { provider: 'gemini', label: ' Google Gemini 2.0 Flash' },
+ { provider: 'gemini', label: ' Google Gemini 3.6 Flash' },
  { provider: 'zhipu', label: ' Zhipu AI GLM-4-Flash' },
  { provider: 'siliconflow', label: ' SiliconFlow Qwen2.5' },
  { provider: 'openrouter', label: ' OpenRouter (Rota Grátis)' },

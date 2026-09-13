@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
         ? `Extraia TODO o texto deste documento PDF, preservando a estrutura: titulos, subtitulos, paragrafos numerados, listas e tabelas. Retorne apenas o texto puro, sem comentarios.`
         : `Voce e um sistema de OCR especializado. Extraia TODO o texto visivel nesta imagem com maxima fidelidade. Preserve: numeracao de questoes, opcoes (a, b, c, d, e), enunciados, instrucoes, dialogos e qualquer texto impresso. Retorne apenas o texto extraido, sem comentarios adicionais.`
 
-      const models = ['gemini-flash-latest', 'gemini-2.5-flash', 'gemini-1.5-flash']
+      const models = ['gemini-3.6-flash', 'gemini-3.5-flash-lite', 'gemini-flash-lite-latest', 'gemini-flash-latest']
       let geminiRes: Response | null = null
 
       for (const m of models) {

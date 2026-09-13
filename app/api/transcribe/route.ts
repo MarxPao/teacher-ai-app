@@ -117,23 +117,31 @@ export async function POST(req: NextRequest) {
         const base64Audio = Buffer.from(arrayBuffer).toString('base64')
         const mimeType    = file.type || 'audio/webm'
 
-        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${activeGeminiKey}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{
-              parts: [
-                { inline_data: { mime_type: mimeType, data: base64Audio } },
-                { text: 'Transcreva com exatidão este áudio em português do Brasil. Retorne apenas o texto transcrito, sem introduções ou comentários.' }
-              ]
-            }]
-          }),
-        })
+        const audioModels = ['gemini-3.6-flash', 'gemini-3.5-transcribe', 'gemini-3.5-flash-lite']
+        for (const am of audioModels) {
+          try {
+            const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${am}:generateContent?key=${activeGeminiKey}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                contents: [{
+                  parts: [
+                    { inline_data: { mime_type: mimeType, data: base64Audio } },
+                    { text: 'Transcreva com exatidão este áudio em português do Brasil. Retorne apenas o texto transcrito, sem introduções ou comentários.' }
+                  ]
+                }]
+              }),
+            })
 
-        if (res.ok) {
-          const data = await res.json()
-          rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
-          providerUsed = 'Gemini 2.0 Flash Audio'
+            if (res.ok) {
+              const data = await res.json()
+              rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
+              if (rawText) {
+                providerUsed = `Gemini (${am}) Audio`
+                break
+              }
+            }
+          } catch { /* try next audio model */ }
         }
       } catch (err) {
         console.warn('[Transcribe API] Gemini audio failed:', err)
