@@ -272,14 +272,12 @@ function resolveAutoProvider(
   userKeys: Record<string, string>
 ): { provider: string; key: string } | null {
   const PRIORITY_MAP: Record<string, string[]> = {
-    // B4: action/chat — Groq é rápido e suficiente para navegação e tools simples
-    action:      ['groq', 'deepseek', 'zhipu', 'siliconflow', 'openrouter', 'anthropic', 'gemini', 'openai'],
-    chat:        ['groq', 'deepseek', 'zhipu', 'siliconflow', 'openrouter', 'gemini', 'openai', 'anthropic'],
-    // B4: Para exam/lesson_plan/reasoning, Claude é muito superior em qualidade e function calling
-    exam:        ['anthropic', 'openai', 'gemini', 'groq', 'deepseek', 'zhipu', 'siliconflow', 'openrouter'],
-    lesson_plan: ['anthropic', 'openai', 'gemini', 'groq', 'deepseek', 'zhipu', 'siliconflow', 'openrouter'],
-    reasoning:   ['anthropic', 'openai', 'gemini', 'groq', 'deepseek', 'zhipu', 'siliconflow', 'openrouter'],
-    vision:      ['openai',   'gemini',  'anthropic'],
+    action:      ['gemini', 'groq', 'deepseek', 'zhipu', 'siliconflow', 'openrouter', 'anthropic', 'openai'],
+    chat:        ['gemini', 'groq', 'deepseek', 'zhipu', 'siliconflow', 'openrouter', 'gemini', 'openai', 'anthropic'],
+    exam:        ['gemini', 'anthropic', 'openai', 'groq', 'deepseek', 'zhipu', 'siliconflow', 'openrouter'],
+    lesson_plan: ['gemini', 'anthropic', 'openai', 'groq', 'deepseek', 'zhipu', 'siliconflow', 'openrouter'],
+    reasoning:   ['gemini', 'anthropic', 'openai', 'groq', 'deepseek', 'zhipu', 'siliconflow', 'openrouter'],
+    vision:      ['gemini', 'openai', 'anthropic'],
     tts:         ['openai',   'groq'],
     stt:         ['groq',     'openai'],
   }
@@ -317,7 +315,7 @@ async function callProviderWithFallback(
 ): Promise<Response> {
 
   const errorLogs: string[] = []
-  const providersToTry = [provider, 'groq', 'deepseek', 'zhipu', 'siliconflow', 'openrouter', 'gemini', 'openai', 'anthropic'].filter((v, i, a) => a && a.indexOf(v) === i)
+  const providersToTry = [provider, 'gemini', 'groq', 'deepseek', 'zhipu', 'siliconflow', 'openrouter', 'openai', 'anthropic'].filter((v, i, a) => a && a.indexOf(v) === i)
 
 
   for (const p of providersToTry) {

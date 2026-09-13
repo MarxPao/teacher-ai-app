@@ -365,7 +365,11 @@ export default function Dashboard() {
     setMounted(true)
     loadDashboardData()
     window.addEventListener('storage', loadDashboardData)
-    return () => window.removeEventListener('storage', loadDashboardData)
+    window.addEventListener('teacher:data_changed', loadDashboardData)
+    return () => {
+      window.removeEventListener('storage', loadDashboardData)
+      window.removeEventListener('teacher:data_changed', loadDashboardData)
+    }
   }, [])
 
   // --- Handlers de Checklist Unificado ---

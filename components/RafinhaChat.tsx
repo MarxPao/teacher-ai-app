@@ -200,12 +200,46 @@ export async function executeTool(
  return `Naveguei para ${input.module}`
  }
  case 'add_todo': {
- takeSnapshot()
- const todos = JSON.parse(localStorage.getItem('teacher_dashboard_todos') || '[]')
- todos.push({ id: Date.now().toString(), text: input.text, done: false })
- localStorage.setItem('teacher_dashboard_todos', JSON.stringify(todos))
- window.dispatchEvent(new Event('storage'))
- return `Tarefa "${input.text}" adicionada`
+    takeSnapshot()
+    const rawText = String(input.text || input.task || input.todo || input.title || '').trim()
+    const taskText = rawText || 'Nova tarefa'
+    const category = (input.category === 'recurrent' ? 'recurrent' : 'one_off') as 'one_off' | 'recurrent'
+    const topic = String(input.topic || (category === 'recurrent' ? 'Rotina Diária' : 'Geral')).trim()
+    const subtopic = String(input.subtopic || 'Tarefas Gerais').trim()
+    const todayKey = new Date().toISOString().split('T')[0]
+
+    let existingTodos: any[] = []
+    try {
+      const rawStored = localStorage.getItem('teacher_dashboard_todos')
+      existingTodos = rawStored ? JSON.parse(rawStored) : []
+      if (!Array.isArray(existingTodos)) existingTodos = []
+    } catch {
+      existingTodos = []
+    }
+
+    const newTodo = {
+      id: `${category === 'recurrent' ? 'rec' : 'todo'}_${Date.now()}`,
+      text: taskText,
+      done: false,
+      category,
+      priority: category === 'recurrent' ? 'high' : 'medium',
+      topic,
+      subtopic,
+      tag: `${topic} / ${subtopic}`,
+      createdAt: Date.now(),
+      lastResetDate: category === 'recurrent' ? todayKey : undefined,
+    }
+
+    // Prepend: coloca a nova tarefa no início para visualização imediata
+    const updated = [newTodo, ...existingTodos]
+    localStorage.setItem('teacher_dashboard_todos', JSON.stringify(updated))
+
+    // Dispara eventos para que Dashboard e ChecklistHistoryModule atualizem em tempo real
+    window.dispatchEvent(new Event('storage'))
+    window.dispatchEvent(new CustomEvent('teacher:data_changed', { detail: { key: 'teacher_dashboard_todos', value: updated } }))
+    window.dispatchEvent(new CustomEvent('teacher:checklist_history_changed'))
+
+    return `Tarefa "${taskText}" adicionada com sucesso no topo do seu checklist!`
  }
  case 'create_calendar_task': {
  takeSnapshot()
