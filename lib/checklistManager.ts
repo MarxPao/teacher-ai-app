@@ -4,7 +4,7 @@
  * Suporta tarefas recorrentes, pontuais, pendências de IA e histórico persistente de conclusões.
  */
 
-export type TodoCategory = 'all' | 'recurrent' | 'one_off' | 'system_ai'
+export type TodoCategory = 'all' | 'recurrent' | 'one_off' | 'system_ai' | 'imported'
 export type TodoPriority = 'high' | 'medium' | 'low'
 
 export type RecurrenceType = 'none' | 'daily' | 'weekdays' | 'specific_day' | 'custom_days' | 'monthly'
@@ -41,7 +41,8 @@ export interface ChecklistTodo {
   id: string
   text: string
   done: boolean
-  category?: 'recurrent' | 'one_off' | 'system_ai'
+  category?: 'recurrent' | 'one_off' | 'system_ai' | 'imported'
+  source?: string
   priority?: TodoPriority
   tag?: string
   topic?: string
@@ -62,7 +63,7 @@ export interface ChecklistHistoryItem {
   id: string
   todoId: string
   text: string
-  category: 'recurrent' | 'one_off' | 'system_ai'
+  category: 'recurrent' | 'one_off' | 'system_ai' | 'imported'
   tag?: string
   completedAt: string
   dateKey: string
@@ -134,6 +135,132 @@ export function cleanCorruptedText(str: string | undefined): string {
     .replace(/[\uFFFD]/g, '')
     .replace(/^[^\w\sÀ-ÿ]+\s*/, '') // remove trailing broken symbol prefix if any
     .trim()
+}
+
+/**
+ * Identifica se uma tarefa é de origem externa/importada (ex: Trello, importação em lote).
+ * Suporta retrocompatibilidade com IDs legados (trello_*, import_*) e tags.
+ */
+export function isImportedTodo(todo?: Partial<ChecklistTodo> | null): boolean {
+  if (!todo) return false
+  if (todo.category === 'imported') return true
+  if (todo.source === 'trello' || todo.source === 'imported') return true
+  const id = todo.id || ''
+  if (id.startsWith('trello_') || id.startsWith('import_') || id.startsWith('comm_trello_')) return true
+  const tag = (todo.tag || '').toLowerCase()
+  const topic = (todo.topic || '').toLowerCase()
+  if (tag.includes('trello') || topic.includes('trello')) return true
+  return false
+}
+
+export type TimelineBucket = 'today' | 'yesterday' | 'this_week' | 'older'
+
+/**
+ * Categoriza o momento de postagem de uma tarefa em baldes cronológicos
+ */
+export function getTimelineBucket(createdAt?: number | string, now: Date = new Date()): TimelineBucket {
+  if (!createdAt) return 'older'
+  const ts = typeof createdAt === 'string' ? new Date(createdAt).getTime() : createdAt
+  if (isNaN(ts) || ts <= 0) return 'older'
+
+  const createdDate = new Date(ts)
+  const isSameYear = createdDate.getFullYear() === now.getFullYear()
+  const isSameMonth = createdDate.getMonth() === now.getMonth()
+
+  if (isSameYear && isSameMonth && createdDate.getDate() === now.getDate()) {
+    return 'today'
+  }
+
+  const yesterday = new Date(now)
+  yesterday.setDate(now.getDate() - 1)
+  if (
+    yesterday.getFullYear() === createdDate.getFullYear() &&
+    yesterday.getMonth() === createdDate.getMonth() &&
+    yesterday.getDate() === createdDate.getDate()
+  ) {
+    return 'yesterday'
+  }
+
+  const diffMs = now.getTime() - ts
+  const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000
+  if (diffMs > 0 && diffMs <= SEVEN_DAYS) {
+    return 'this_week'
+  }
+
+  return 'older'
+}
+
+/**
+ * Formata o momento de postagem de forma humanizada e elegante para a Timeline
+ * Exemplos: "Hoje às 10:45", "Ontem às 16:30", "12/09 às 14:15"
+ */
+export function formatTimelineTime(createdAt?: number | string): string {
+  if (!createdAt) return 'Data não informada'
+  const ts = typeof createdAt === 'string' ? new Date(createdAt).getTime() : createdAt
+  if (isNaN(ts) || ts <= 0) return 'Data não informada'
+
+  const date = new Date(ts)
+  const hours = String(date.getHours()).padStart(2, '0')
+  const minutes = String(date.getMinutes()).padStart(2, '0')
+  const timeStr = `${hours}:${minutes}`
+
+  const bucket = getTimelineBucket(ts)
+  if (bucket === 'today') {
+    return `Hoje às ${timeStr}`
+  }
+  if (bucket === 'yesterday') {
+    return `Ontem às ${timeStr}`
+  }
+  const day = String(date.getDate()).padStart(2, '0')
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  return `${day}/${month} às ${timeStr}`
+}
+
+export interface TimelineGroup {
+  key: TimelineBucket
+  label: string
+  sublabel: string
+  icon: string
+  todos: ChecklistTodo[]
+}
+
+/**
+ * Agrupa tarefas para visualização em Timeline Cronológica (ordenadas do mais recente para o mais antigo)
+ */
+export function groupTodosByTimeline(todos: ChecklistTodo[]): TimelineGroup[] {
+  const sorted = [...todos].sort((a, b) => {
+    const timeA = a.createdAt || 0
+    const timeB = b.createdAt || 0
+    return timeB - timeA
+  })
+
+  const groups: Record<TimelineBucket, ChecklistTodo[]> = {
+    today: [],
+    yesterday: [],
+    this_week: [],
+    older: [],
+  }
+
+  sorted.forEach(t => {
+    const bucket = getTimelineBucket(t.createdAt)
+    groups[bucket].push(t)
+  })
+
+  const result: TimelineGroup[] = []
+  if (groups.today.length > 0) {
+    result.push({ key: 'today', label: 'Hoje', sublabel: 'Postadas Recentemente', icon: 'ti-sparkles', todos: groups.today })
+  }
+  if (groups.yesterday.length > 0) {
+    result.push({ key: 'yesterday', label: 'Ontem', sublabel: 'Últimas 48 Horas', icon: 'ti-calendar-event', todos: groups.yesterday })
+  }
+  if (groups.this_week.length > 0) {
+    result.push({ key: 'this_week', label: 'Esta Semana', sublabel: 'Últimos 7 dias', icon: 'ti-calendar-week', todos: groups.this_week })
+  }
+  if (groups.older.length > 0) {
+    result.push({ key: 'older', label: 'Anteriores', sublabel: 'Postadas há mais tempo', icon: 'ti-history', todos: groups.older })
+  }
+
+  return result
 }
 
 export interface TodoHierarchyInfo {
@@ -238,18 +365,38 @@ export function loadChecklistTodos(): ChecklistTodo[] {
 
     for (const rawItem of parsed) {
       const hierarchy = parseTodoHierarchy(rawItem)
+      const isImported = isImportedTodo(rawItem)
+
+      // Determina createdAt se estiver ausente (extrai do ID ou fallback)
+      let fallbackCreatedAt = rawItem.createdAt
+      if (!fallbackCreatedAt) {
+        const parts = (rawItem.id || '').split('_')
+        const lastPart = parts[parts.length - 1]
+        const parsedTs = parseInt(lastPart, 10)
+        if (!isNaN(parsedTs) && parsedTs > 1600000000000) {
+          fallbackCreatedAt = parsedTs
+        } else if (rawItem.completedAt) {
+          fallbackCreatedAt = new Date(rawItem.completedAt).getTime()
+        } else {
+          fallbackCreatedAt = now
+        }
+      }
+
       const t: ChecklistTodo = {
         ...rawItem,
         text: cleanCorruptedText(rawItem.text),
         tag: cleanCorruptedText(rawItem.tag),
         topic: rawItem.topic ? cleanCorruptedText(rawItem.topic) : hierarchy.topic,
         subtopic: rawItem.subtopic ? cleanCorruptedText(rawItem.subtopic) : hierarchy.subtopic,
+        createdAt: fallbackCreatedAt,
       }
-      if (t.text !== rawItem.text || t.tag !== rawItem.tag || t.topic !== rawItem.topic || t.subtopic !== rawItem.subtopic) {
+      if (t.text !== rawItem.text || t.tag !== rawItem.tag || t.topic !== rawItem.topic || t.subtopic !== rawItem.subtopic || t.createdAt !== rawItem.createdAt) {
         needsSave = true
       }
 
-      const cat = t.category || (t.id.startsWith('rec_') ? 'recurrent' : 'one_off')
+      const cat: ChecklistTodo['category'] = isImported
+        ? 'imported'
+        : (t.category || (t.id.startsWith('rec_') ? 'recurrent' : 'one_off'))
 
       if (cat === 'recurrent') {
         // Rotina diária: se concluiu e o dia mudou, reseta para hoje pendente
@@ -260,7 +407,7 @@ export function loadChecklistTodos(): ChecklistTodo[] {
           activeTodos.push({ ...t, category: cat, lastResetDate: t.lastResetDate || today })
         }
       } else {
-        // Tarefa pontual:
+        // Tarefa pontual ou importada:
         // Se estiver concluída há mais de 24h, expira da lista ativa (preservada no histórico permanente)
         if (t.done && t.completedAt) {
           const completedTime = new Date(t.completedAt).getTime()
@@ -269,7 +416,7 @@ export function loadChecklistTodos(): ChecklistTodo[] {
             continue
           }
         }
-        activeTodos.push({ ...t, category: cat })
+        activeTodos.push({ ...t, category: cat, source: isImported ? (t.source || 'trello') : t.source })
       }
     }
 
@@ -354,7 +501,7 @@ export function loadChecklistHistory(): ChecklistHistoryItem[] {
 export function recordChecklistHistory(item: {
   todoId: string
   text: string
-  category: 'recurrent' | 'one_off' | 'system_ai'
+  category: 'recurrent' | 'one_off' | 'system_ai' | 'imported'
   tag?: string
 }): void {
   if (typeof window === 'undefined') return
@@ -463,7 +610,13 @@ export function exportChecklistHistoryCSV(items: ChecklistHistoryItem[]): string
   const headers = ['Data / Hora', 'Data (YYYY-MM-DD)', 'Categoria', 'Tag / Matéria', 'Tarefa Realizada']
   const rows = items.map(item => {
     const formattedDate = new Date(item.completedAt).toLocaleString('pt-BR')
-    const catLabel = item.category === 'recurrent' ? 'Rotina Diária' : item.category === 'system_ai' ? 'Pendência da IA' : 'Pontual'
+    const catLabel = item.category === 'recurrent'
+      ? 'Rotina Diária'
+      : item.category === 'system_ai'
+      ? 'Pendência da IA'
+      : item.category === 'imported'
+      ? 'Importada (Trello)'
+      : 'Pontual'
     const tag = (item.tag || '').replace(/"/g, '""')
     const text = (item.text || '').replace(/"/g, '""')
     return `"${formattedDate}","${item.dateKey}","${catLabel}","${tag}","${text}"`

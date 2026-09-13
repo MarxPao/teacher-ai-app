@@ -16,6 +16,8 @@ import {
   recordChecklistHistory,
   formatRecurrenceText,
   parseTodoHierarchy,
+  isImportedTodo,
+  formatTimelineTime,
   ChecklistTodo,
   RecurrenceRule,
 } from '@/lib/checklistManager'
@@ -24,13 +26,14 @@ import ChecklistEditModal from '@/components/modules/ChecklistEditModal'
 
 // --- Tipos & Interfaces ---
 
-export type TodoCategory = 'all' | 'recurrent' | 'one_off' | 'system_ai'
+export type TodoCategory = 'all' | 'recurrent' | 'one_off' | 'system_ai' | 'imported'
 
 export interface DashboardTodo {
   id: string
   text: string
   done: boolean
-  category?: 'recurrent' | 'one_off' | 'system_ai'
+  category?: 'recurrent' | 'one_off' | 'system_ai' | 'imported'
+  source?: string
   priority?: 'high' | 'medium' | 'low'
   createdAt?: number
   time?: string
@@ -636,22 +639,30 @@ export default function Dashboard() {
   }, [classesForSelectedDay, pedagogicalAlerts, pendingActivities, completedSysIds])
 
   // Contadores e listas por categoria
-  const recurrentTodos = useMemo(() => todos.filter(t => t.category === 'recurrent'), [todos])
-  const oneOffTodos = useMemo(() => todos.filter(t => t.category === 'one_off' || (!t.category && !t.id.startsWith('rec_'))), [todos])
+  const recurrentTodos = useMemo(() => todos.filter(t => !isImportedTodo(t) && t.category === 'recurrent'), [todos])
+  const oneOffTodos = useMemo(() => todos.filter(t => !isImportedTodo(t) && (t.category === 'one_off' || (!t.category && !t.id.startsWith('rec_')))), [todos])
+  const importedTodos = useMemo(() => todos.filter(t => isImportedTodo(t)), [todos])
   const aiTodos = systemAiPendencies
 
-  // Lista consolidada
-  const allUnifiedTodos = useMemo(() => {
-    return [...todos, ...systemAiPendencies]
-  }, [todos, systemAiPendencies])
+  // Lista regular (exclui itens importados do Trello para manter a rotina diária limpa)
+  const regularTodos = useMemo(() => todos.filter(t => !isImportedTodo(t)), [todos])
 
-  // Itens filtrados para exibição
+  // Lista consolidada padrão para 'Todas as Tarefas'
+  const allUnifiedTodos = useMemo(() => {
+    return [...regularTodos, ...systemAiPendencies]
+  }, [regularTodos, systemAiPendencies])
+
+  // Itens filtrados para exibição (ordenados por postagem na timeline: mais recentes primeiro)
   const filteredTodos = useMemo(() => {
-    if (todoFilter === 'recurrent') return recurrentTodos
-    if (todoFilter === 'one_off') return oneOffTodos
-    if (todoFilter === 'system_ai') return aiTodos
-    return allUnifiedTodos
-  }, [todoFilter, recurrentTodos, oneOffTodos, aiTodos, allUnifiedTodos])
+    let list: DashboardTodo[]
+    if (todoFilter === 'imported') list = importedTodos
+    else if (todoFilter === 'recurrent') list = recurrentTodos
+    else if (todoFilter === 'one_off') list = oneOffTodos
+    else if (todoFilter === 'system_ai') list = aiTodos
+    else list = allUnifiedTodos
+
+    return [...list].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
+  }, [todoFilter, importedTodos, recurrentTodos, oneOffTodos, aiTodos, allUnifiedTodos])
 
   // Estatísticas do Checklist Unificado
   const totalTodosCount = allUnifiedTodos.length
@@ -1238,39 +1249,50 @@ export default function Dashboard() {
                   { id: 'recurrent', label: 'Rotinas Recorrentes', count: recurrentTodos.length, icon: 'ti-repeat' },
                   { id: 'one_off', label: 'Pontuais do Dia', count: oneOffTodos.length, icon: 'ti-pin' },
                   { id: 'system_ai', label: 'Pendências da IA', count: aiTodos.length, icon: 'ti-sparkles' },
-                ].map(tab => (
-                  <button
-                    key={tab.id}
-                    onClick={() => setTodoFilter(tab.id as TodoCategory)}
-                    style={{
-                      padding: '5px 12px',
-                      borderRadius: 20,
-                      border: todoFilter === tab.id ? '1px solid #2c1a0e' : '1px solid #ede8dc',
-                      background: todoFilter === tab.id ? '#2c1a0e' : '#faf6f0',
-                      color: todoFilter === tab.id ? '#fff' : '#665c54',
-                      fontSize: TEXT.caption,
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 5,
-                      transition: 'all 0.15s ease',
-                    }}
-                  >
-                    <i className={`ti ${tab.icon}`} style={{ fontSize: 13, color: todoFilter === tab.id ? '#fdf8f2' : '#8b5e3c' }} />
-                    <span>{tab.label}</span>
-                    <span style={{
-                      fontSize: 10,
-                      fontWeight: 800,
-                      padding: '1px 6px',
-                      borderRadius: 99,
-                      background: todoFilter === tab.id ? 'rgba(255,255,255,0.2)' : '#e8e0d0',
-                      color: todoFilter === tab.id ? '#fff' : '#7a5c42',
-                    }}>
-                      {tab.count}
-                    </span>
-                  </button>
-                ))}
+                  { id: 'imported', label: 'Importadas (Trello)', count: importedTodos.length, icon: 'ti-brand-trello', isTrello: true },
+                ].map(tab => {
+                  const isSelected = todoFilter === tab.id
+                  const isTrello = tab.isTrello
+                  return (
+                    <button
+                      key={tab.id}
+                      onClick={() => setTodoFilter(tab.id as TodoCategory)}
+                      style={{
+                        padding: '5px 12px',
+                        borderRadius: 20,
+                        border: isSelected
+                          ? (isTrello ? '1px solid #0079bf' : '1px solid #2c1a0e')
+                          : (isTrello ? '1px solid rgba(0,121,191,0.3)' : '1px solid #ede8dc'),
+                        background: isSelected
+                          ? (isTrello ? '#0079bf' : '#2c1a0e')
+                          : (isTrello ? 'rgba(0,121,191,0.06)' : '#faf6f0'),
+                        color: isSelected
+                          ? '#fff'
+                          : (isTrello ? '#0079bf' : '#665c54'),
+                        fontSize: TEXT.caption,
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 5,
+                        transition: 'all 0.15s ease',
+                      }}
+                    >
+                      <i className={`ti ${tab.icon}`} style={{ fontSize: 13, color: isSelected ? '#fdf8f2' : (isTrello ? '#0079bf' : '#8b5e3c') }} />
+                      <span>{tab.label}</span>
+                      <span style={{
+                        fontSize: 10,
+                        fontWeight: 800,
+                        padding: '1px 6px',
+                        borderRadius: 99,
+                        background: isSelected ? 'rgba(255,255,255,0.25)' : (isTrello ? 'rgba(0,121,191,0.15)' : '#e8e0d0'),
+                        color: isSelected ? '#fff' : (isTrello ? '#0079bf' : '#7a5c42'),
+                      }}>
+                        {tab.count}
+                      </span>
+                    </button>
+                  )
+                })}
 
                 <button
                   type="button"
@@ -1442,7 +1464,20 @@ export default function Dashboard() {
                               {todo.text}
                             </span>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                              {(hierarchy.topic || todo.tag) && (
+                              {/* Origem Trello */}
+                              {isImportedTodo(todo) && (
+                                <span style={{ fontSize: 10, color: '#0079bf', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 3, background: 'rgba(0,121,191,0.1)', padding: '1px 6px', borderRadius: 4 }}>
+                                  <i className="ti ti-brand-trello" style={{ fontSize: 10 }} /> Trello: {todo.tag || 'Importada'}
+                                </span>
+                              )}
+
+                              {/* Horário de postagem na timeline */}
+                              <span style={{ fontSize: 10, color: '#8b5e3c', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 3 }} title="Momento em que foi postada">
+                                <i className="ti ti-clock" style={{ fontSize: 10 }} />
+                                {formatTimelineTime(todo.createdAt)}
+                              </span>
+
+                              {(hierarchy.topic || todo.tag) && !isImportedTodo(todo) && (
                                 <span style={{ fontSize: 10.5, color: '#8b5e3c', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                                   {isRecurrent && <><i className="ti ti-repeat" style={{ fontSize: 11 }} /> {formatRecurrenceText(todo.recurrence || { type: 'daily' })} · </>}
                                   {isSystem && <><i className="ti ti-bolt" style={{ fontSize: 11 }} /> Ação Recomendada · </>}

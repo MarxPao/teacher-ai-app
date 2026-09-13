@@ -23,6 +23,10 @@ import {
   formatRecurrenceText,
   parseTodoHierarchy,
   groupTodosByHierarchy,
+  isImportedTodo,
+  formatTimelineTime,
+  groupTodosByTimeline,
+  TimelineGroup,
 } from '@/lib/checklistManager'
 import TrelloImportModal from '@/components/modules/TrelloImportModal'
 import ChecklistEditModal from '@/components/modules/ChecklistEditModal'
@@ -43,9 +47,11 @@ export default function ChecklistHistoryModule() {
   const [completedSysIds, setCompletedSysIds] = useState<string[]>([])
   const [editingTodo, setEditingTodo] = useState<ChecklistTodo | null>(null)
 
-  // Filtros de Período e Visualização: Ativas | Visual Trello (Kanban) | Histórico
+  // Filtros de Período e Visualização: Ativas | Importadas (Trello) | Visual Trello (Kanban) | Histórico
   const [selectedPeriod, setSelectedPeriod] = useState<ChecklistPeriod>('dia')
-  const [viewMode, setViewMode] = useState<'active' | 'trello' | 'history'>('active')
+  const [viewMode, setViewMode] = useState<'active' | 'imported' | 'trello' | 'history'>('active')
+  const [activeViewStyle, setActiveViewStyle] = useState<'timeline' | 'hierarchy' | 'flat'>('timeline')
+  const [importedViewStyle, setImportedViewStyle] = useState<'timeline' | 'hierarchy' | 'flat'>('timeline')
   const [groupByTopic, setGroupByTopic] = useState(true)
   const [filterCategory, setFilterCategory] = useState<'all' | 'recurrent' | 'one_off' | 'system_ai'>('all')
   const [searchTerm, setSearchTerm] = useState('')
@@ -231,9 +237,18 @@ export default function ChecklistHistoryModule() {
     toast.success('Relatório CSV exportado com sucesso!')
   }
 
-  // Filtragem de Tarefas Ativas
+  // Contagens para badges das abas
+  const regularTodosCount = useMemo(() => todos.filter(t => !isImportedTodo(t)).length, [todos])
+  const importedTodosCount = useMemo(() => todos.filter(t => isImportedTodo(t)).length, [todos])
+
+  // Filtragem de Tarefas Ativas ou Importadas
   const filteredTodos = useMemo(() => {
     return todos.filter(t => {
+      // Aba 'active' mostra exclusivamente tarefas regulares (sem Trello/importadas)
+      if (viewMode === 'active' && isImportedTodo(t)) return false
+      // Aba 'imported' mostra exclusivamente tarefas importadas (Trello)
+      if (viewMode === 'imported' && !isImportedTodo(t)) return false
+
       if (filterCategory !== 'all' && t.category !== filterCategory) return false
       if (searchTerm.trim()) {
         const term = searchTerm.toLowerCase()
@@ -244,7 +259,7 @@ export default function ChecklistHistoryModule() {
       }
       return true
     })
-  }, [todos, filterCategory, searchTerm])
+  }, [todos, viewMode, filterCategory, searchTerm])
 
   // Agrupamento Hierárquico em Camadas: Tópico (Camada 1) -> Subtópico (Camada 2) -> Tarefas (Camada 3)
   const hierarchicalTodos = useMemo(() => {
@@ -474,7 +489,7 @@ export default function ChecklistHistoryModule() {
         </div>
       </div>
 
-      {/* ─── CONTROLES DE SUB-ABA: TAREFAS ATIVAS vs VISUAL TRELLO (KANBAN) vs HISTÓRICO ─── */}
+      {/* ─── CONTROLES DE SUB-ABA: TAREFAS ATIVAS vs IMPORTADAS (TRELLO) vs VISUAL TRELLO (KANBAN) vs HISTÓRICO ─── */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
         <div style={{ display: 'flex', gap: 6, background: COLOR.surface2, padding: 3, borderRadius: RADIUS.md, border: `1px solid ${BORDER.soft}` }}>
           <button
@@ -496,7 +511,30 @@ export default function ChecklistHistoryModule() {
             }}
           >
             <i className="ti ti-list-check" />
-            <span>Tarefas Ativas ({todos.length})</span>
+            <span>Tarefas Ativas ({regularTodosCount})</span>
+          </button>
+
+          <button
+            onClick={() => setViewMode('imported')}
+            style={{
+              padding: '8px 16px',
+              borderRadius: RADIUS.sm,
+              border: 'none',
+              background: viewMode === 'imported' ? '#0079bf' : 'transparent',
+              color: viewMode === 'imported' ? '#fff' : COLOR.paperWarm,
+              fontSize: TEXT.bodyCompact,
+              fontWeight: 700,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              transition: TRANSITION.button,
+              fontFamily: FONT.sans,
+              boxShadow: viewMode === 'imported' ? '0 2px 6px rgba(0,121,191,0.3)' : 'none',
+            }}
+          >
+            <i className="ti ti-brand-trello" />
+            <span>Importadas (Trello) ({importedTodosCount})</span>
           </button>
 
           <button
@@ -505,7 +543,7 @@ export default function ChecklistHistoryModule() {
               padding: '8px 16px',
               borderRadius: RADIUS.sm,
               border: 'none',
-              background: viewMode === 'trello' ? '#0079bf' : 'transparent',
+              background: viewMode === 'trello' ? COLOR.paperInk : 'transparent',
               color: viewMode === 'trello' ? '#fff' : COLOR.paperWarm,
               fontSize: TEXT.bodyCompact,
               fontWeight: 700,
@@ -515,7 +553,6 @@ export default function ChecklistHistoryModule() {
               gap: 6,
               transition: TRANSITION.button,
               fontFamily: FONT.sans,
-              boxShadow: viewMode === 'trello' ? '0 2px 6px rgba(0,121,191,0.3)' : 'none',
             }}
           >
             <i className="ti ti-layout-kanban" />
@@ -545,29 +582,79 @@ export default function ChecklistHistoryModule() {
           </button>
         </div>
 
-        {/* Filtros de Categoria, Busca e Ações */}
+        {/* Filtros de Visualização, Categoria, Busca e Ações */}
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          {viewMode === 'active' && (
-            <button
-              type="button"
-              onClick={() => setGroupByTopic(!groupByTopic)}
-              style={{
-                padding: '6px 12px',
-                borderRadius: RADIUS.sm,
-                border: groupByTopic ? `1px solid ${COLOR.accent}` : `1px solid ${BORDER.medium}`,
-                background: groupByTopic ? 'rgba(139,94,60,0.12)' : COLOR.surface1,
-                color: groupByTopic ? COLOR.accent : COLOR.paperWarm,
-                fontSize: TEXT.caption,
-                fontWeight: 700,
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 5,
-              }}
-            >
-              <i className="ti ti-category" />
-              <span>{groupByTopic ? 'Agrupado por Tópicos' : 'Lista Corrida'}</span>
-            </button>
+          {(viewMode === 'active' || viewMode === 'imported') && (
+            <div style={{ display: 'flex', gap: 2, background: COLOR.surface2, padding: 2, borderRadius: RADIUS.md, border: `1px solid ${BORDER.soft}` }}>
+              <button
+                type="button"
+                onClick={() => (viewMode === 'active' ? setActiveViewStyle('timeline') : setImportedViewStyle('timeline'))}
+                style={{
+                  padding: '5px 10px',
+                  borderRadius: RADIUS.sm,
+                  border: 'none',
+                  background: (viewMode === 'active' ? activeViewStyle === 'timeline' : importedViewStyle === 'timeline') ? COLOR.accent : 'transparent',
+                  color: (viewMode === 'active' ? activeViewStyle === 'timeline' : importedViewStyle === 'timeline') ? '#fff' : COLOR.paperWarm,
+                  fontSize: TEXT.caption,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  fontFamily: FONT.sans,
+                }}
+                title="Exibir tarefas na linha do tempo cronológica de quando foram postadas"
+              >
+                <i className="ti ti-clock-hour-4" />
+                <span>Timeline</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => (viewMode === 'active' ? setActiveViewStyle('hierarchy') : setImportedViewStyle('hierarchy'))}
+                style={{
+                  padding: '5px 10px',
+                  borderRadius: RADIUS.sm,
+                  border: 'none',
+                  background: (viewMode === 'active' ? activeViewStyle === 'hierarchy' : importedViewStyle === 'hierarchy') ? COLOR.accent : 'transparent',
+                  color: (viewMode === 'active' ? activeViewStyle === 'hierarchy' : importedViewStyle === 'hierarchy') ? '#fff' : COLOR.paperWarm,
+                  fontSize: TEXT.caption,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  fontFamily: FONT.sans,
+                }}
+                title="Exibir agrupado por Tópicos e Subtópicos"
+              >
+                <i className="ti ti-category" />
+                <span>Tópicos</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => (viewMode === 'active' ? setActiveViewStyle('flat') : setImportedViewStyle('flat'))}
+                style={{
+                  padding: '5px 10px',
+                  borderRadius: RADIUS.sm,
+                  border: 'none',
+                  background: (viewMode === 'active' ? activeViewStyle === 'flat' : importedViewStyle === 'flat') ? COLOR.accent : 'transparent',
+                  color: (viewMode === 'active' ? activeViewStyle === 'flat' : importedViewStyle === 'flat') ? '#fff' : COLOR.paperWarm,
+                  fontSize: TEXT.caption,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  fontFamily: FONT.sans,
+                }}
+                title="Exibir como lista corrida direta"
+              >
+                <i className="ti ti-list" />
+                <span>Lista</span>
+              </button>
+            </div>
           )}
 
           {/* Seletor de Categoria */}
@@ -675,7 +762,7 @@ export default function ChecklistHistoryModule() {
             </>
           )}
 
-          {(viewMode === 'active' || viewMode === 'trello') && (
+          {(viewMode === 'active' || viewMode === 'imported' || viewMode === 'trello') && (
             <>
               <button
                 onClick={() => setIsTrelloModalOpen(true)}
@@ -738,51 +825,63 @@ export default function ChecklistHistoryModule() {
             paddingBottom: 12,
             borderBottom: `1px solid ${BORDER.soft}`
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <button
-                type="button"
-                onClick={collapseAllTopics}
-                style={{
-                  padding: '5px 12px',
-                  borderRadius: RADIUS.sm,
-                  border: `1px solid ${BORDER.medium}`,
-                  background: COLOR.surface1,
-                  color: COLOR.paperInk,
-                  fontSize: TEXT.caption,
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 5
-                }}
-                title="Recolhe todos os tópicos para uma visão ultra compacta"
-              >
-                <i className="ti ti-layout-sidebar-left-collapse" />
-                <span>Recolher Todos</span>
-              </button>
+            {activeViewStyle === 'timeline' ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: TEXT.caption, color: COLOR.paperWarm, fontWeight: 600 }}>
+                <i className="ti ti-clock-hour-4" style={{ color: COLOR.accent, fontSize: 16 }} />
+                <span>Linha do Tempo: ordenada cronologicamente pelas tarefas postadas mais recentemente</span>
+              </div>
+            ) : activeViewStyle === 'hierarchy' ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <button
+                  type="button"
+                  onClick={collapseAllTopics}
+                  style={{
+                    padding: '5px 12px',
+                    borderRadius: RADIUS.sm,
+                    border: `1px solid ${BORDER.medium}`,
+                    background: COLOR.surface1,
+                    color: COLOR.paperInk,
+                    fontSize: TEXT.caption,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 5
+                  }}
+                  title="Recolhe todos os tópicos para uma visão ultra compacta"
+                >
+                  <i className="ti ti-layout-sidebar-left-collapse" />
+                  <span>Recolher Todos</span>
+                </button>
 
-              <button
-                type="button"
-                onClick={expandAllTopics}
-                style={{
-                  padding: '5px 12px',
-                  borderRadius: RADIUS.sm,
-                  border: `1px solid ${BORDER.medium}`,
-                  background: COLOR.surface1,
-                  color: COLOR.paperInk,
-                  fontSize: TEXT.caption,
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 5
-                }}
-                title="Expande todos os tópicos e subtópicos"
-              >
-                <i className="ti ti-arrows-maximize" />
-                <span>Expandir Todos</span>
-              </button>
-            </div>
+                <button
+                  type="button"
+                  onClick={expandAllTopics}
+                  style={{
+                    padding: '5px 12px',
+                    borderRadius: RADIUS.sm,
+                    border: `1px solid ${BORDER.medium}`,
+                    background: COLOR.surface1,
+                    color: COLOR.paperInk,
+                    fontSize: TEXT.caption,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 5
+                  }}
+                  title="Expande todos os tópicos e subtópicos"
+                >
+                  <i className="ti ti-arrows-maximize" />
+                  <span>Expandir Todos</span>
+                </button>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: TEXT.caption, color: COLOR.paperWarm, fontWeight: 600 }}>
+                <i className="ti ti-list" style={{ color: COLOR.accent, fontSize: 16 }} />
+                <span>Lista corrida simples de tarefas</span>
+              </div>
+            )}
 
             {/* Progresso Geral Compacto */}
             {filteredTodos.length > 0 && (
@@ -933,8 +1032,10 @@ export default function ChecklistHistoryModule() {
             </Button>
           </form>
 
-          {/* Renderização Hierárquica em Árvore Sanfonada */}
-          {groupByTopic ? (
+          {/* Renderização Conforme activeViewStyle (Timeline, Tópicos ou Lista) */}
+          {activeViewStyle === 'timeline' ? (
+            renderTimelineView(filteredTodos)
+          ) : activeViewStyle === 'hierarchy' ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {Object.keys(hierarchicalTodos).length === 0 ? (
                 <div style={{ padding: '36px 0', textAlign: 'center', color: COLOR.paperMid, fontSize: TEXT.bodyCompact }}>
@@ -1259,6 +1360,188 @@ export default function ChecklistHistoryModule() {
         </ModuleCard>
       )}
 
+      {/* ─── SUB-ABA: TAREFAS IMPORTADAS (TRELLO & EXTERNAS) ─── */}
+      {viewMode === 'imported' && (
+        <ModuleCard padding={18}>
+          {/* Banner de Isolamento do Trello */}
+          <div style={{
+            background: 'linear-gradient(135deg, rgba(0, 121, 191, 0.08) 0%, rgba(0, 121, 191, 0.02) 100%)',
+            border: '1px solid rgba(0, 121, 191, 0.25)',
+            borderRadius: RADIUS.lg,
+            padding: '16px 20px',
+            marginBottom: 20,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: 14,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+              <div style={{
+                width: 44,
+                height: 44,
+                borderRadius: RADIUS.md,
+                background: '#0079bf',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#fff',
+                boxShadow: '0 2px 8px rgba(0, 121, 191, 0.3)',
+                flexShrink: 0
+              }}>
+                <i className="ti ti-brand-trello" style={{ fontSize: 24 }} />
+              </div>
+              <div>
+                <div style={{ fontSize: TEXT.subtitle, fontWeight: 800, color: COLOR.paperInk, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span>Tarefas Importadas do Trello</span>
+                  <span style={{
+                    fontSize: 11,
+                    fontWeight: 700,
+                    padding: '2px 8px',
+                    borderRadius: 99,
+                    background: '#0079bf',
+                    color: '#fff'
+                  }}>
+                    {filteredTodos.length} cartões
+                  </span>
+                </div>
+                <div style={{ fontSize: TEXT.bodyCompact, color: COLOR.paperWarm, maxWidth: 650, marginTop: 2 }}>
+                  Estas tarefas foram importadas do Trello e ficam separadas nesta aba exclusiva para manter sua rotina de aula e checklist regular limpos.
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                onClick={() => setIsTrelloModalOpen(true)}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: RADIUS.md,
+                  border: 'none',
+                  background: '#0079bf',
+                  color: '#fff',
+                  fontSize: TEXT.caption,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  boxShadow: '0 2px 6px rgba(0, 121, 191, 0.3)',
+                }}
+              >
+                <i className="ti ti-plus" />
+                <span>Importar Mais do Trello</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setViewMode('trello')}
+                style={{
+                  padding: '8px 14px',
+                  borderRadius: RADIUS.md,
+                  border: `1px solid ${BORDER.medium}`,
+                  background: COLOR.surface1,
+                  color: COLOR.paperInk,
+                  fontSize: TEXT.caption,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                }}
+              >
+                <i className="ti ti-layout-kanban" />
+                <span>Ver no Kanban</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Renderização de Acordo com importedViewStyle */}
+          {filteredTodos.length === 0 ? (
+            <div style={{ padding: '48px 20px', textAlign: 'center', color: COLOR.paperMid }}>
+              <div style={{
+                width: 56,
+                height: 56,
+                borderRadius: '50%',
+                background: 'rgba(0, 121, 191, 0.1)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginBottom: 12,
+                color: '#0079bf'
+              }}>
+                <i className="ti ti-brand-trello" style={{ fontSize: 28 }} />
+              </div>
+              <div style={{ fontSize: TEXT.subtitle, fontWeight: 700, color: COLOR.paperInk, marginBottom: 4 }}>
+                Nenhuma tarefa importada no momento
+              </div>
+              <p style={{ fontSize: TEXT.bodyCompact, color: COLOR.paperWarm, maxWidth: 450, margin: '0 auto 16px' }}>
+                Conecte seu Trello para importar cartões, checklists e anexos diretamente para esta aba dedicada.
+              </p>
+              <button
+                type="button"
+                onClick={() => setIsTrelloModalOpen(true)}
+                style={{
+                  padding: '9px 18px',
+                  borderRadius: RADIUS.md,
+                  border: 'none',
+                  background: '#0079bf',
+                  color: '#fff',
+                  fontSize: TEXT.bodyCompact,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  boxShadow: '0 2px 6px rgba(0, 121, 191, 0.3)',
+                }}
+              >
+                <i className="ti ti-layout-kanban" />
+                <span>Conectar e Importar do Trello</span>
+              </button>
+            </div>
+          ) : importedViewStyle === 'timeline' ? (
+            renderTimelineView(filteredTodos)
+          ) : importedViewStyle === 'hierarchy' ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {Object.entries(hierarchicalTodos).map(([topicName, subtopicsMap], topicIdx) => {
+                const allTodosInTopic = Object.values(subtopicsMap).flat()
+                const doneInTopic = allTodosInTopic.filter(t => t.done).length
+                const totalInTopic = allTodosInTopic.length
+                const isExpanded = isTopicExpanded(topicName, topicIdx === 0)
+                return (
+                  <div key={topicName} style={{ background: '#fff', borderRadius: RADIUS.lg, border: `1px solid ${BORDER.medium}`, overflow: 'hidden' }}>
+                    <div
+                      onClick={() => toggleTopic(topicName, topicIdx === 0)}
+                      style={{ padding: '10px 14px', background: 'rgba(0, 121, 191, 0.05)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <i className="ti ti-brand-trello" style={{ color: '#0079bf', fontSize: 16 }} />
+                        <span style={{ fontSize: 14, fontWeight: 800, color: COLOR.paperInk }}>{topicName}</span>
+                        <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 99, background: 'rgba(0, 121, 191, 0.15)', color: '#0079bf' }}>
+                          {doneInTopic}/{totalInTopic}
+                        </span>
+                      </div>
+                      <i className={`ti ${isExpanded ? 'ti-chevron-up' : 'ti-chevron-down'}`} style={{ color: COLOR.paperWarm, fontSize: 14 }} />
+                    </div>
+                    {isExpanded && (
+                      <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        {allTodosInTopic.map(todo => renderTodoCardItem(todo))}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {filteredTodos.map(todo => renderTodoCardItem(todo))}
+            </div>
+          )}
+        </ModuleCard>
+      )}
+
       {/* ─── SUB-ABA 2: VISUAL TRELLO (QUADRO KANBAN COM COLUNAS POR TÓPICO) ─── */}
       {viewMode === 'trello' && (
         <div style={{
@@ -1478,6 +1761,111 @@ export default function ChecklistHistoryModule() {
     </div>
   )
 
+  // Helper para renderizar itens em Timeline Cronológica (ordenada por momento de postagem)
+  function renderTimelineView(todoList: ChecklistTodo[]) {
+    const groups = groupTodosByTimeline(todoList)
+
+    if (groups.length === 0) {
+      return (
+        <div style={{ padding: '36px 0', textAlign: 'center', color: COLOR.paperMid, fontSize: TEXT.bodyCompact }}>
+          <i className="ti ti-circle-check" style={{ fontSize: 32, display: 'block', marginBottom: 8, color: COLOR.success }} />
+          Nenhuma tarefa nesta categoria no momento. Tudo em dia!
+        </div>
+      )
+    }
+
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 24, padding: '8px 4px' }}>
+        {groups.map(group => {
+          const groupDone = group.todos.filter(t => t.done).length
+          const groupTotal = group.todos.length
+
+          return (
+            <div key={group.key} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {/* Cabeçalho do Bloco Temporal na Linha do Tempo */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '6px 12px',
+                background: group.key === 'today' ? 'rgba(139,94,60,0.08)' : 'rgba(44,26,14,0.04)',
+                borderRadius: RADIUS.md,
+                border: `1px solid ${group.key === 'today' ? 'rgba(139,94,60,0.2)' : BORDER.soft}`
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{
+                    width: 28,
+                    height: 28,
+                    borderRadius: RADIUS.sm,
+                    background: group.key === 'today' ? COLOR.accent : 'rgba(44,26,14,0.1)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: group.key === 'today' ? '#fff' : COLOR.paperInk,
+                  }}>
+                    <i className={`ti ${group.icon}`} style={{ fontSize: 15 }} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: TEXT.bodyCompact, fontWeight: 800, color: COLOR.paperInk, display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span>{group.label}</span>
+                      <span style={{ fontSize: TEXT.micro, color: COLOR.paperWarm, fontWeight: 600 }}>
+                        — {group.sublabel}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <span style={{
+                  fontSize: 11,
+                  fontWeight: 700,
+                  padding: '2px 8px',
+                  borderRadius: 99,
+                  background: groupDone === groupTotal ? '#e8f5e9' : 'rgba(44,26,14,0.08)',
+                  color: groupDone === groupTotal ? '#2e7d32' : COLOR.paperWarm
+                }}>
+                  {groupDone}/{groupTotal} concluídas
+                </span>
+              </div>
+
+              {/* Trilha da Linha do Tempo com Indicadores e Linha Vertical */}
+              <div style={{
+                position: 'relative',
+                paddingLeft: 22,
+                marginLeft: 14,
+                borderLeft: `2px dashed ${group.key === 'today' ? COLOR.accent : BORDER.medium}`,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 10,
+              }}>
+                {group.todos.map(todo => (
+                  <div key={todo.id} style={{ position: 'relative' }}>
+                    {/* Nó da Timeline com status */}
+                    <div
+                      title={todo.done ? 'Concluída' : 'Pendente'}
+                      style={{
+                        position: 'absolute',
+                        left: -29,
+                        top: 18,
+                        width: 14,
+                        height: 14,
+                        borderRadius: '50%',
+                        background: todo.done ? COLOR.success : isImportedTodo(todo) ? '#0079bf' : COLOR.accent,
+                        border: '2.5px solid #fff',
+                        boxShadow: '0 1px 4px rgba(44,26,14,0.2)',
+                        zIndex: 2,
+                      }}
+                    />
+                    {renderTodoCardItem(todo)}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    )
+  }
+
   // Helper para renderizar item na Visualização em Lista / Tópicos
   function renderTodoCardItem(todo: ChecklistTodo) {
     const isRecurrent = todo.category === 'recurrent'
@@ -1535,19 +1923,51 @@ export default function ChecklistHistoryModule() {
               </span>
 
               <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                {/* Badge de Categoria ou Origem (Trello) */}
+                {isImportedTodo(todo) ? (
+                  <span style={{
+                    fontSize: TEXT.micro,
+                    fontWeight: 700,
+                    padding: '2px 8px',
+                    borderRadius: RADIUS.sm,
+                    background: '#0079bf',
+                    color: '#fff',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 4,
+                    boxShadow: '0 1px 3px rgba(0,121,191,0.2)'
+                  }}>
+                    <i className="ti ti-brand-trello" style={{ fontSize: 11 }} />
+                    Trello: {todo.tag || 'Importada'}
+                  </span>
+                ) : (
+                  <span style={{
+                    fontSize: TEXT.micro,
+                    fontWeight: 700,
+                    padding: '2px 8px',
+                    borderRadius: RADIUS.sm,
+                    background: isRecurrent ? 'rgba(139,94,60,0.12)' : COLOR.warningBg,
+                    color: isRecurrent ? COLOR.accent : COLOR.warning,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 4,
+                  }}>
+                    <i className={isRecurrent ? 'ti ti-repeat' : 'ti ti-pin'} style={{ fontSize: 11 }} />
+                    {isRecurrent ? formatRecurrenceText(todo.recurrence || { type: 'daily' }) : 'Pontual'}
+                  </span>
+                )}
+
+                {/* Badge de Horário / Momento de Postagem na Timeline */}
                 <span style={{
                   fontSize: TEXT.micro,
-                  fontWeight: 700,
-                  padding: '2px 8px',
-                  borderRadius: RADIUS.sm,
-                  background: isRecurrent ? 'rgba(139,94,60,0.12)' : COLOR.warningBg,
-                  color: isRecurrent ? COLOR.accent : COLOR.warning,
+                  color: COLOR.paperWarm,
+                  fontWeight: 600,
                   display: 'inline-flex',
                   alignItems: 'center',
                   gap: 4,
-                }}>
-                  <i className={isRecurrent ? 'ti ti-repeat' : 'ti ti-pin'} style={{ fontSize: 11 }} />
-                  {isRecurrent ? formatRecurrenceText(todo.recurrence || { type: 'daily' }) : 'Pontual'}
+                }} title="Momento em que a tarefa foi postada">
+                  <i className="ti ti-clock" style={{ fontSize: 11, color: COLOR.accent }} />
+                  {formatTimelineTime(todo.createdAt)}
                 </span>
 
                 {hasSubtasks && (
@@ -1585,10 +2005,10 @@ export default function ChecklistHistoryModule() {
                   </span>
                 )}
 
-                {todo.tag && !groupByTopic && (
+                {(todo.topic || todo.tag) && !isImportedTodo(todo) && (
                   <span style={{ fontSize: TEXT.micro, color: COLOR.paperWarm, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-                    <i className="ti ti-tag" style={{ fontSize: 11 }} />
-                    {todo.tag}
+                    <i className="ti ti-folder" style={{ fontSize: 11 }} />
+                    {todo.topic || todo.tag}
                   </span>
                 )}
               </div>

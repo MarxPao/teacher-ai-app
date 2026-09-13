@@ -16,6 +16,10 @@ import {
   getTodayKey,
   isDateInPeriod,
   formatRecurrenceText,
+  isImportedTodo,
+  getTimelineBucket,
+  formatTimelineTime,
+  groupTodosByTimeline,
   ChecklistTodo,
 } from '../lib/checklistManager'
 
@@ -225,5 +229,79 @@ describe('Checklist & History Manager', () => {
     const updated = updateTodoTag('todo_mov', 'Machado Sobrinho')
 
     expect(updated[0].tag).toBe('Machado Sobrinho')
+  })
+
+  it('identifica corretamente tarefas importadas do Trello e fontes externas via isImportedTodo', () => {
+    // 1. Categoria explícita 'imported'
+    expect(isImportedTodo({ id: 'todo_1', text: 'Tarefa', done: false, category: 'imported' })).toBe(true)
+
+    // 2. Origem explícita 'trello' ou 'imported'
+    expect(isImportedTodo({ id: 'todo_2', text: 'Tarefa', done: false, source: 'trello' })).toBe(true)
+    expect(isImportedTodo({ id: 'todo_3', text: 'Tarefa', done: false, source: 'imported' })).toBe(true)
+
+    // 3. ID legado de importação (trello_* ou import_*)
+    expect(isImportedTodo({ id: 'trello_card99_1710000000', text: 'Card Trello', done: false })).toBe(true)
+    expect(isImportedTodo({ id: 'import_csv_123', text: 'Card CSV', done: false })).toBe(true)
+
+    // 4. Tag ou tópico contendo 'trello'
+    expect(isImportedTodo({ id: 'card_x', text: 'Card', done: false, tag: 'Quadro Trello' })).toBe(true)
+    expect(isImportedTodo({ id: 'card_y', text: 'Card', done: false, topic: 'Importadas (Trello)' })).toBe(true)
+
+    // 5. Tarefas regulares da rotina NÃO são importadas
+    expect(isImportedTodo({ id: 'rec_1', text: 'Fazer chamada', done: false, category: 'recurrent' })).toBe(false)
+    expect(isImportedTodo({ id: 'todo_123', text: 'Comprar cartolina', done: false, category: 'one_off' })).toBe(false)
+    expect(isImportedTodo({ id: 'sys_plan_1', text: 'Gerar plano', done: false, category: 'system_ai' })).toBe(false)
+  })
+
+  it('classifica tarefas em baldes cronológicos de timeline e formata horários', () => {
+    const now = new Date('2026-09-13T14:30:00')
+    const todayTs = new Date('2026-09-13T10:15:00').getTime()
+    const yesterdayTs = new Date('2026-09-12T16:00:00').getTime()
+    const threeDaysAgoTs = new Date('2026-09-10T09:00:00').getTime()
+    const twoMonthsAgoTs = new Date('2026-07-01T12:00:00').getTime()
+
+    expect(getTimelineBucket(todayTs, now)).toBe('today')
+    expect(getTimelineBucket(yesterdayTs, now)).toBe('yesterday')
+    expect(getTimelineBucket(threeDaysAgoTs, now)).toBe('this_week')
+    expect(getTimelineBucket(twoMonthsAgoTs, now)).toBe('older')
+
+    // Formatação humanizada
+    expect(formatTimelineTime(todayTs)).toContain('Hoje às')
+    expect(formatTimelineTime(yesterdayTs)).toContain('Ontem às')
+    expect(formatTimelineTime(twoMonthsAgoTs)).toMatch(/\d{2}\/\d{2} às \d{2}:\d{2}/)
+  })
+
+  it('agrupa tarefas na timeline cronológica ordenadas do mais recente para o mais antigo', () => {
+    const now = Date.now()
+    const tRecent: ChecklistTodo = { id: 't_rec', text: 'Postada agora', done: false, createdAt: now }
+    const tYesterday: ChecklistTodo = { id: 't_yest', text: 'Postada ontem', done: false, createdAt: now - 86400000 }
+    const tWeek: ChecklistTodo = { id: 't_week', text: 'Postada há 3 dias', done: false, createdAt: now - 3 * 86400000 }
+
+    // Enviar fora de ordem
+    const groups = groupTodosByTimeline([tWeek, tRecent, tYesterday])
+
+    expect(groups.length).toBeGreaterThanOrEqual(2)
+    // O primeiro grupo deve ser o mais recente (Hoje)
+    expect(groups[0].key).toBe('today')
+    expect(groups[0].todos[0].id).toBe('t_rec')
+  })
+
+  it('loadChecklistTodos marca retroativamente tarefas do Trello como category: imported sem corromper dados', () => {
+    const rawSaved = [
+      { id: 'trello_card_abc_171000', text: 'Card vindo do Trello', done: false, tag: 'Lista Trello' },
+      { id: 'rec_diario', text: 'Lançar frequência', done: false, category: 'recurrent' }
+    ]
+    localStorage.setItem('teacher_dashboard_todos', JSON.stringify(rawSaved))
+
+    const loaded = loadChecklistTodos()
+
+    expect(loaded.length).toBe(2)
+    const trelloItem = loaded.find(t => t.id === 'trello_card_abc_171000')
+    const recItem = loaded.find(t => t.id === 'rec_diario')
+
+    expect(trelloItem?.category).toBe('imported')
+    expect(isImportedTodo(trelloItem)).toBe(true)
+    expect(recItem?.category).toBe('recurrent')
+    expect(isImportedTodo(recItem)).toBe(false)
   })
 })

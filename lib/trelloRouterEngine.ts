@@ -670,9 +670,12 @@ export async function executeTrelloDecisions(
             id: `trello_${decision.cardId}_${Date.now()}`,
             text: decision.cardName,
             done: decision.dueComplete || false,
-            category: 'one_off',
+            category: 'imported',
+            source: 'trello',
             priority: 'medium',
             tag: decision.listName || 'Trello',
+            topic: 'Importadas (Trello)',
+            subtopic: decision.listName || 'Quadro Trello',
             createdAt: Date.now()
           })
           todosModified = true
