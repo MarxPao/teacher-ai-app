@@ -603,7 +603,10 @@ Capacidades suportadas:
         params: {
           type: 'object',
           description: 'Parâmetros específicos da execução (ex: { classRef: "8A", boardId: "..." }).',
-          additionalProperties: true
+          properties: {
+            classRef: { type: 'string', description: 'Referência da turma' },
+            boardId:  { type: 'string', description: 'ID do quadro ou lista' }
+          }
         }
       },
       required: ['capability']
@@ -611,13 +614,37 @@ Capacidades suportadas:
   }
 ]
 
+function sanitizeGeminiSchema(schema: Record<string, unknown>): Record<string, unknown> {
+  if (!schema || typeof schema !== 'object') return schema
+  if (Array.isArray(schema)) return schema.map(sanitizeGeminiSchema) as unknown as Record<string, unknown>
+
+  const copy = { ...schema }
+  delete copy.additionalProperties
+  delete copy['$schema']
+  delete copy.default
+
+  if (copy.properties && typeof copy.properties === 'object') {
+    const cleanProps: Record<string, unknown> = {}
+    for (const [k, v] of Object.entries(copy.properties as Record<string, unknown>)) {
+      cleanProps[k] = sanitizeGeminiSchema(v as Record<string, unknown>)
+    }
+    copy.properties = cleanProps
+  }
+
+  if (copy.items && typeof copy.items === 'object') {
+    copy.items = sanitizeGeminiSchema(copy.items as Record<string, unknown>)
+  }
+
+  return copy
+}
+
 // Converte tools para formato Gemini function_declarations
 export function toGeminiTools(tools: ToolDefinition[]) {
   return [{
     function_declarations: tools.map(t => ({
       name: t.name,
       description: t.description,
-      parameters: t.input_schema
+      parameters: sanitizeGeminiSchema(t.input_schema as Record<string, unknown>)
     }))
   }]
 }
