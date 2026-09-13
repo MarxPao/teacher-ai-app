@@ -128,7 +128,7 @@ export default function ApiManager() {
  const [apis, setApis] = useState<ApiConfig[]>([])
  const [saved, setSaved] = useState(false)
  const [showKeys, setShowKeys] = useState<Record<string, boolean>>({})
- const [tab, setTab] = useState<'hierarchy' | 'config' | 'auto' | 'supabase' | 'guide' | 'test'>('hierarchy')
+ const [tab, setTab] = useState<'config' | 'hierarchy' | 'auto' | 'supabase' | 'guide' | 'test'>('config')
  const [openGuide, setOpenGuide] = useState<string | null>(null)
  const [testResult, setTestResult] = useState<Record<string, string>>({})
  const [testing, setTesting] = useState<string | null>(null)
@@ -253,14 +253,14 @@ export default function ApiManager() {
  elevenlabs: '#6c71c4', manual: '#7a5c42',
  }
 
- const Tabs = [
- { key: 'hierarchy', label: ' Hierarquia & Gestão de Tokens', icon: 'ti-chart-donut' },
- { key: 'config', label: ' Configurar APIs', icon: 'ti-settings' },
- { key: 'auto', label: ' Modo AUTO', icon: 'ti-sparkles' },
- { key: 'supabase', label: ' Cloud Sync', icon: 'ti-cloud' },
- { key: 'guide', label: ' Como Obter', icon: 'ti-help-circle' },
- { key: 'test', label: ' Testar Conexão', icon: 'ti-plug-connected' },
- ] as const
+  const Tabs = [
+  { key: 'config', label: '🔑 Configurar APIs & Chaves', icon: 'ti-key' },
+  { key: 'hierarchy', label: '📊 Hierarquia & Gestão de Tokens', icon: 'ti-chart-donut' },
+  { key: 'auto', label: '✨ Modo AUTO', icon: 'ti-sparkles' },
+  { key: 'supabase', label: '☁️ Cloud Sync', icon: 'ti-cloud' },
+  { key: 'guide', label: '📖 Como Obter', icon: 'ti-help-circle' },
+  { key: 'test', label: '🔌 Testar Conexão', icon: 'ti-plug-connected' },
+  ] as const
 
  const activeCount = apis.filter(a => a.active && a.key && a.provider !== 'manual').length
 
@@ -538,27 +538,70 @@ export default function ApiManager() {
  </div>
  </div>
 
- {/* Formulário de configuração (só quando ativo e não é manual) */}
- {api.provider !== 'manual' && api.active && (
- <div style={{ padding: '0 22px 20px', borderTop: '1px dashed rgba(88,110,117,0.15)' }}>
- <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, paddingTop: 16 }}>
- <div>
- <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1.2px', color: '#a08060', marginBottom: 6 }}>API Key</div>
- <div style={{ position: 'relative' }}>
- <input type={showKeys[api.id] ? 'text' : 'password'} value={api.key}
- onChange={e => updateApi(api.id, 'key', e.target.value)}
- placeholder="Cole sua chave aqui..."
- style={{ width: '100%', border: `1.5px solid ${api.key ? '#2aa198' : 'rgba(88,110,117,0.2)'}`, borderRadius: 9, padding: '9px 40px 9px 12px', fontSize: TEXT.body, background: '#fdf8f2', color: '#2c1a0e', outline: 'none', fontFamily: 'monospace', letterSpacing: showKeys[api.id] ? 0 : '2px', boxSizing: 'border-box', transition: 'border-color 0.2s' }} />
- <button onClick={() => setShowKeys(p => ({ ...p, [api.id]: !p[api.id] }))} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'transparent', cursor: 'pointer', color: '#a08060' }}>
- <i className={`ti ${showKeys[api.id] ? 'ti-eye-off' : 'ti-eye'}`} />
- </button>
- </div>
- {api.id === 'groq' && <a href="https://console.groq.com/keys" target="_blank" rel="noreferrer" style={{ display: 'block', marginTop: 6, fontSize: 11, color: '#2aa198', fontWeight: 600 }}><i className="ti ti-external-link" /> Pegar chave grátis no Groq</a>}
- {api.id === 'gemini' && <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" style={{ display: 'block', marginTop: 6, fontSize: 11, color: '#2aa198', fontWeight: 600 }}><i className="ti ti-external-link" /> Pegar chave grátis no Google</a>}
- {api.id === 'claude' && <a href="https://console.anthropic.com" target="_blank" rel="noreferrer" style={{ display: 'block', marginTop: 6, fontSize: 11, color: '#b58900', fontWeight: 600 }}><i className="ti ti-external-link" /> Anthropic Console</a>}
- {api.id === 'gpt' && <a href="https://platform.openai.com/api-keys" target="_blank" rel="noreferrer" style={{ display: 'block', marginTop: 6, fontSize: 11, color: '#268bd2', fontWeight: 600 }}><i className="ti ti-external-link" /> OpenAI Platform</a>}
- {api.id === 'elevenlabs' && <a href="https://elevenlabs.io" target="_blank" rel="noreferrer" style={{ display: 'block', marginTop: 6, fontSize: 11, color: '#6c71c4', fontWeight: 600 }}><i className="ti ti-external-link" /> ElevenLabs</a>}
- </div>
+  {/* Formulário de configuração (sempre visível para permitir cadastrar/editar chave) */}
+  {api.provider !== 'manual' && (
+  <div style={{ padding: '0 22px 20px', borderTop: '1px dashed rgba(88,110,117,0.15)' }}>
+  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, paddingTop: 16 }}>
+  <div>
+  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+    <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1.2px', color: '#a08060' }}>API Key</span>
+    {!api.active && api.key && (
+      <span style={{ fontSize: 11, color: '#cb4b16', fontWeight: 600 }}>Ative o switch acima para usar</span>
+    )}
+  </div>
+  <div style={{ position: 'relative' }}>
+  <input type={showKeys[api.id] ? 'text' : 'password'} value={api.key}
+  onChange={e => {
+    const val = e.target.value
+    updateApi(api.id, 'key', val)
+    if (!api.active && val.trim().length > 0) {
+      updateApi(api.id, 'active', true)
+    }
+  }}
+  placeholder={`Cole sua chave ${api.name} aqui...`}
+  style={{ width: '100%', border: `1.5px solid ${api.key ? '#2aa198' : 'rgba(88,110,117,0.25)'}`, borderRadius: 9, padding: '9px 40px 9px 12px', fontSize: TEXT.body, background: '#fdf8f2', color: '#2c1a0e', outline: 'none', fontFamily: 'monospace', letterSpacing: showKeys[api.id] ? 0 : '2px', boxSizing: 'border-box', transition: 'border-color 0.2s' }} />
+  <button type="button" onClick={() => setShowKeys(p => ({ ...p, [api.id]: !p[api.id] }))} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'transparent', cursor: 'pointer', color: '#a08060' }}>
+  <i className={`ti ${showKeys[api.id] ? 'ti-eye-off' : 'ti-eye'}`} />
+  </button>
+  </div>
+  {/* Teste Rápido de Chave */}
+  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
+    <button
+      type="button"
+      onClick={() => testConnection(api)}
+      disabled={!api.key || testing === api.id}
+      style={{
+        fontSize: 11,
+        fontWeight: 700,
+        padding: '5px 12px',
+        borderRadius: RADIUS.sm,
+        background: api.key ? '#f5f0e8' : '#ede8dc',
+        color: api.key ? '#2c1a0e' : '#a08060',
+        border: '1px solid rgba(88,110,117,0.2)',
+        cursor: api.key && testing !== api.id ? 'pointer' : 'default',
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 5,
+        transition: 'all 0.2s',
+      }}
+    >
+      <i className={`ti ${testing === api.id ? 'ti-loader-2' : 'ti-plug-connected'}`} style={{ animation: testing === api.id ? 'rafSpin 1s linear infinite' : 'none' }} />
+      {testing === api.id ? 'Testando...' : 'Testar Conexão'}
+    </button>
+    {testResult[api.id] && (
+      <span style={{ fontSize: 11, fontWeight: 600 }}>{testResult[api.id]}</span>
+    )}
+  </div>
+  {/* Links diretos para obter a chave */}
+  {api.id === 'groq' && <a href="https://console.groq.com/keys" target="_blank" rel="noreferrer" style={{ display: 'block', marginTop: 8, fontSize: 11, color: '#dc322f', fontWeight: 600 }}><i className="ti ti-external-link" /> Obter chave grátis no Groq Console</a>}
+  {api.id === 'gemini' && <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" style={{ display: 'block', marginTop: 8, fontSize: 11, color: '#859900', fontWeight: 600 }}><i className="ti ti-external-link" /> Obter chave grátis no Google AI Studio</a>}
+  {api.id === 'zhipu' && <a href="https://open.bigmodel.cn/usercenter/apikeys" target="_blank" rel="noreferrer" style={{ display: 'block', marginTop: 8, fontSize: 11, color: '#cb4b16', fontWeight: 600 }}><i className="ti ti-external-link" /> Obter chave grátis no Zhipu AI BigModel</a>}
+  {api.id === 'siliconflow' && <a href="https://cloud.siliconflow.cn/account/ak" target="_blank" rel="noreferrer" style={{ display: 'block', marginTop: 8, fontSize: 11, color: '#268bd2', fontWeight: 600 }}><i className="ti ti-external-link" /> Obter chave no SiliconFlow Hub</a>}
+  {api.id === 'openrouter' && <a href="https://openrouter.ai/keys" target="_blank" rel="noreferrer" style={{ display: 'block', marginTop: 8, fontSize: 11, color: '#b58900', fontWeight: 600 }}><i className="ti ti-external-link" /> Obter chave grátis no OpenRouter</a>}
+  {api.id === 'claude' && <a href="https://console.anthropic.com" target="_blank" rel="noreferrer" style={{ display: 'block', marginTop: 8, fontSize: 11, color: '#b58900', fontWeight: 600 }}><i className="ti ti-external-link" /> Anthropic Console</a>}
+  {api.id === 'gpt' && <a href="https://platform.openai.com/api-keys" target="_blank" rel="noreferrer" style={{ display: 'block', marginTop: 8, fontSize: 11, color: '#268bd2', fontWeight: 600 }}><i className="ti ti-external-link" /> OpenAI Platform</a>}
+  {api.id === 'elevenlabs' && <a href="https://elevenlabs.io" target="_blank" rel="noreferrer" style={{ display: 'block', marginTop: 8, fontSize: 11, color: '#6c71c4', fontWeight: 600 }}><i className="ti ti-external-link" /> ElevenLabs Console</a>}
+  </div>
  <div>
  {api.provider === 'elevenlabs' ? (
  <>

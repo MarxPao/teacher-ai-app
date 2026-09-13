@@ -109,7 +109,8 @@ async def test_safe_writer_chosen_dropdown_handling():
         browser = await p.chromium.launch(channel="chrome", headless=True)
         page = await browser.new_page()
         try:
-            await page.goto(file_url, wait_until="domcontentloaded")
+            await page.route("**/*", lambda route: route.abort() if route.request.url.startswith("http") else route.continue_())
+            await page.goto(file_url, wait_until="domcontentloaded", timeout=15000)
 
             sel_locator = page.locator("select[name='ref_cod_escola']")
             assert await sel_locator.count() == 1

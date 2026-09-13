@@ -21,6 +21,8 @@ export interface PortalApprovalCardProps {
   summary?: string
   diff?: DiffItem[]
   screenshotUrl?: string
+  conflictDetected?: boolean
+  conflictWarning?: string
   onApproved?: () => void
   onRejected?: () => void
   isVoiceActive?: boolean
@@ -34,6 +36,8 @@ export const PortalApprovalCard: React.FC<PortalApprovalCardProps> = ({
   summary,
   diff = [],
   screenshotUrl,
+  conflictDetected,
+  conflictWarning,
   onApproved,
   onRejected
 }) => {
@@ -51,6 +55,24 @@ export const PortalApprovalCard: React.FC<PortalApprovalCardProps> = ({
     try {
       if (taskId && !taskId.startsWith('task_mock')) {
         await updateBrowserTask(taskId, { status: 'approved' })
+      }
+      // Sincronização Write-Through: Atualiza a tabela de negócio students no Supabase
+      if (diff && diff.length > 0) {
+        try {
+          await fetch('/api/students/write-through', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              taskId,
+              portal,
+              actionType,
+              classRef,
+              diff
+            })
+          })
+        } catch (syncErr) {
+          console.warn('[ApprovalCard] Falha na sincronização write-through:', syncErr)
+        }
       }
       if (typeof window !== 'undefined') {
         sessionStorage.removeItem('teacher_active_portal_task')
@@ -148,6 +170,33 @@ export const PortalApprovalCard: React.FC<PortalApprovalCardProps> = ({
           }}
         >
           {summary}
+        </div>
+      )}
+
+      {/* Alerta Visível de Divergência/Conflito contra o Portal Vivo */}
+      {(conflictDetected || conflictWarning) && (
+        <div
+          data-testid="conflict-warning-box"
+          style={{
+            padding: '10px 12px',
+            background: '#fffbeb',
+            borderRadius: '10px',
+            border: '1.5px solid #f59e0b',
+            color: '#92400e',
+            fontSize: '12px',
+            lineHeight: 1.4,
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: '8px'
+          }}
+        >
+          <span style={{ fontSize: '18px', lineHeight: 1 }}>⚠️</span>
+          <div>
+            <strong style={{ color: '#b45309', display: 'block', marginBottom: '2px' }}>
+              Divergência detectada com o portal escolar:
+            </strong>
+            {conflictWarning || 'O valor atual no portal escolar difere do histórico em cache do aplicativo. A operação foi calculada com base na página viva do portal.'}
+          </div>
         </div>
       )}
 

@@ -106,4 +106,23 @@ describe('PortalApprovalCard (Etapa 5: Human-in-the-Loop)', () => {
     expect(diffItems[0].afterValue).toBe('8.5')
     expect(diffItems[1].afterValue).toBe('Falta')
   })
+
+  it('suporta e valida tipagem de alerta visual quando conflictDetected=true ou conflictWarning fornecido', () => {
+    const props: PortalApprovalCardProps = {
+      taskId: 'task_conflict_123',
+      portal: 'portal.escola.com.br',
+      actionType: 'write_grades',
+      conflictDetected: true,
+      conflictWarning: 'O portal possui nota 7.0, mas o app esperava 6.5.',
+      diff: [
+        { studentName: 'João Silva', field: 'Nota P1', beforeValue: '7.0', afterValue: '7.5' }
+      ]
+    }
+
+    expect(props.conflictDetected).toBe(true)
+    expect(props.conflictWarning).toContain('O portal possui nota 7.0')
+    expect(props.diff?.[0].beforeValue).toBe('7.0')
+  })
 })
+
+

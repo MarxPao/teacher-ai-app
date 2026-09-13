@@ -1,5 +1,6 @@
 {
   "manifest_version": 3,
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAtLrU/nF7jpd/zVKX5NkEagXy2ZSXQHDEFy5JUJ7yCCIT720lbD27NSm9O6nORJCtuF+clhHNhDGZv8v4dsnzcaNYWd6TuzwjN4soPN7Ml57dg9AvnL78b9JpGOJyyFqtuJClyUo5+fLimOh4SCQs4Fu4fUK1h0EnEblkqwlMSsXUQSb9ZHiL5wBKjSdHI/by6/AX4+Y8yK9OkzbCfM8lURSdi4dNCgIFuCj9xc+u3wT9fSRK78sN52qq15zmWLF0LBi6bePpf56wO+6XebBF0zunEvyssUIq43ZmYxiWJiiNeOkl3l7vhCHbPtyaAlH8hYkP4Iw3J8musiIjhzjp5QIDAQAB",
   "name": "TeacherAI - Assistente Agêntico",
   "version": "3.0",
   "description": "Extensão inteligente que conecta aos portais escolares e ao painel TeacherAI.",
@@ -9,10 +10,11 @@
     "128": "icon128.png"
   },
   "action": {
-    "default_title": "TeacherAI Agente",
+    "default_title": "Teacher AI — Assistente no Portal",
     "default_icon": {
-      "16": "icon16.png",
-      "48": "icon48.png"
+      "16": "icons/icon_red_16.png",
+      "48": "icons/icon_red_48.png",
+      "128": "icons/icon_red_128.png"
     }
   },
   "side_panel": {
@@ -26,27 +28,17 @@
     "storage",
     "tabs",
     "sidePanel",
-    "scripting"
+    "scripting",
+    "debugger",
+    "nativeMessaging"
   ],
   "host_permissions": [
-    "http://localhost:3000/*",
-    "http://localhost:3001/*",
-    "https://*.plural.net/*",
-    "https://*.cambridgeone.org/*",
-    "https://*.paineldoaluno.com.br/*",
-    "https://portaleducacao.redesantacatarina.org.br/*",
-    "https://teams.microsoft.com/*"
+    "<all_urls>"
   ],
   "content_scripts": [
     {
       "matches": [
-        "http://localhost:3000/*",
-        "http://localhost:3001/*",
-        "https://*.plural.net/*",
-        "https://*.cambridgeone.org/*",
-        "https://*.paineldoaluno.com.br/*",
-        "https://portaleducacao.redesantacatarina.org.br/*",
-        "https://teams.microsoft.com/*"
+        "<all_urls>"
       ],
       "js": [
         "content.js"
@@ -58,8 +50,8 @@
   ],
   "externally_connectable": {
     "matches": [
-      "http://localhost:3000/*",
-      "http://localhost:3001/*"
+      "http://localhost/*",
+      "http://127.0.0.1/*"
     ]
   },
   "web_accessible_resources": [

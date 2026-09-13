@@ -16,7 +16,13 @@
     .btn:hover { background: #1d4ed8; }
     .status-msg { margin-top: 16px; padding: 12px; background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 6px; color: #065f46; display: none; }
     .badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; background: #e2e8f0; color: #334155; }
-    .metrics-bar { display: flex; gap: 16px; margin-top: 12px; font-size: 13px; color: #64748b; }
+    .metrics-bar { display: flex; gap: 16px; margin-top: 12px; margin-bottom: 16px; font-size: 13px; color: #64748b; }
+    .tab-btn {
+      background: none; border: none; padding: 8px 14px; font-size: 13px; font-weight: 600;
+      color: #64748b; border-bottom: 2px solid transparent; cursor: pointer; transition: all 0.2s; font-family: inherit;
+    }
+    .tab-btn:hover { color: #2563eb; }
+    .tab-btn.active { color: #2563eb; border-bottom-color: #2563eb; }
   </style>
 </head>
 <body>
@@ -29,16 +35,72 @@
       <span>Estado do Formulário: <strong id="form_state" class="badge">Aberto (Não Submetido)</strong></span>
     </div>
 
-    <div style="margin-top: 16px; margin-bottom: 16px; display: grid; grid-template-columns: 1fr 2fr; gap: 12px;">
-      <div>
-        <label><strong>Data da Aula:</strong></label>
-        <input type="date" name="data_aula" id="data_aula" value="2026-08-23" style="width: 100%; margin-top: 4px;">
-      </div>
-      <div>
-        <label><strong>Conteúdo / Pauta da Aula:</strong></label>
-        <input type="text" name="conteudo_aula" id="conteudo_aula" placeholder="Ex: Simple Past vs Present Perfect" style="width: 100%; margin-top: 4px;">
+    <!-- Barra de Abas do Portal -->
+    <div class="tabs-bar" style="display: flex; gap: 8px; border-bottom: 2px solid #e2e8f0; margin-bottom: 16px;">
+      <button class="tab-btn active" id="tab-diario" onclick="switchTab('diario')">📋 Diário de Classe</button>
+      <button class="tab-btn" id="tab-chamada" onclick="switchTab('chamada')">✋ Chamada</button>
+      <button class="tab-btn" id="tab-arquivos" onclick="switchTab('arquivos')">📁 Arquivos</button>
+      <button class="tab-btn" id="tab-cadastro" onclick="switchTab('cadastro')">👤 Cadastro de Alunos</button>
+      <button class="tab-btn" id="tab-config" onclick="switchTab('config')">⚙️ Configurações</button>
+    </div>
+
+    <!-- Aba Arquivos (Oculta por padrão) -->
+    <div id="pane-arquivos" style="display: none; padding: 20px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 16px;">
+      <h3 style="margin-top: 0; color: #1e293b; display: flex; align-items: center; gap: 8px;">
+        <span>📁</span> Arquivos e Materiais da Turma
+      </h3>
+      <p style="font-size: 13px; color: #64748b; margin-bottom: 16px;">
+        Repositório de documentos compartilhados com o 9º Ano B.
+      </p>
+      <div style="display: flex; flex-direction: column; gap: 8px;">
+        <div style="padding: 10px 14px; background: #fff; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; display: flex; justify-content: space-between; align-items: center;">
+          <span>📄 Plano_de_Aula_Unidade_1.pdf</span>
+          <span class="badge">PDF • 1.2 MB</span>
+        </div>
+        <div style="padding: 10px 14px; background: #fff; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; display: flex; justify-content: space-between; align-items: center;">
+          <span>📝 Atividade_Simple_Past_Exercicios.docx</span>
+          <span class="badge">DOCX • 340 KB</span>
+        </div>
       </div>
     </div>
+ 
+    <!-- Aba Cadastro de Alunos (Matrícula e Turmas) -->
+    <div id="pane-cadastro" style="display: none; padding: 20px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 16px;">
+      <h3 style="margin-top: 0; color: #1e293b; display: flex; align-items: center; gap: 8px;">
+        <span>👤</span> Cadastro e Enturmação de Estudantes
+      </h3>
+      <p style="font-size: 13px; color: #64748b; margin-bottom: 16px;">
+        Gerenciamento de dados cadastrais, turmas e enturmação da escola.
+      </p>
+      <div style="max-width: 480px; display: flex; flex-direction: column; gap: 14px;">
+        <div>
+          <label><strong>Estudante Selecionado:</strong></label>
+          <input type="text" id="aluno_cadastro" name="aluno_cadastro" value="Hugo Henrique Lima" readonly style="width: 100%; margin-top: 4px; background: #e2e8f0;">
+        </div>
+        <div>
+          <label for="turma_aluno"><strong>Turma / Enturmação do Estudante:</strong></label>
+          <select id="turma_aluno" name="turma_aluno" style="width: 100%; margin-top: 4px; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px;">
+            <option value="9º B">9º Ano B (Atual)</option>
+            <option value="6º B">6º Ano B</option>
+            <option value="7º A">7º Ano A</option>
+          </select>
+        </div>
+        <button type="button" class="btn" id="btn_salvar_turma" onclick="salvarDiario()">Salvar Alteração de Turma</button>
+      </div>
+    </div>
+
+    <!-- Aba Diário Principal -->
+    <div id="pane-diario">
+      <div style="margin-top: 16px; margin-bottom: 16px; display: grid; grid-template-columns: 1fr 2fr; gap: 12px;">
+        <div>
+          <label><strong>Data da Aula:</strong></label>
+          <input type="date" name="data_aula" id="data_aula" value="2026-08-23" style="width: 100%; margin-top: 4px;">
+        </div>
+        <div>
+          <label><strong>Conteúdo / Pauta da Aula:</strong></label>
+          <input type="text" name="conteudo_aula" id="conteudo_aula" placeholder="Ex: Simple Past vs Present Perfect" style="width: 100%; margin-top: 4px;">
+        </div>
+      </div>
 
     <table id="grades_table">
       <thead>
@@ -74,12 +136,37 @@
           <td><input type="checkbox" name="presenca_4" id="presenca_4" checked></td>
           <td><input type="number" name="nota_4" id="nota_4" step="0.1" min="0" max="10" value="9.5" oninput="applyGradeMask(this)"></td>
         </tr>
+        <tr data-student-id="5">
+          <td>5</td>
+          <td class="student-name">João Silva</td>
+          <td><input type="checkbox" name="presenca_5" id="presenca_5" checked></td>
+          <td><input type="number" name="nota_5" id="nota_5" step="0.1" min="0" max="10" value="6.0" oninput="applyGradeMask(this)"></td>
+        </tr>
+        <tr data-student-id="6">
+          <td>6</td>
+          <td class="student-name">João Santos</td>
+          <td><input type="checkbox" name="presenca_6" id="presenca_6" checked></td>
+          <td><input type="number" name="nota_6" id="nota_6" step="0.1" min="0" max="10" value="7.5" oninput="applyGradeMask(this)"></td>
+        </tr>
+        <tr data-student-id="7">
+          <td>7</td>
+          <td class="student-name">Hugo Ribeiro</td>
+          <td><input type="checkbox" name="presenca_7" id="presenca_7" checked></td>
+          <td><input type="number" name="nota_7" id="nota_7" step="0.1" min="0" max="10" value="8.0" oninput="applyGradeMask(this)"></td>
+        </tr>
       </tbody>
     </table>
 
+      <!-- Campo de Observação Geral / Ocorrências Pedagógicas -->
+      <div style="margin-top: 16px; margin-bottom: 16px;">
+        <label for="observacao_pedagogica"><strong>Observações Pedagógicas / Ocorrências da Aula:</strong></label>
+        <textarea name="observacao_pedagogica" id="observacao_pedagogica" rows="3" placeholder="Registre observações sobre acompanhamento pedagógico, comportamento dos alunos ou ocorrências da aula..." style="width: 100%; margin-top: 4px; box-sizing: border-box;"></textarea>
+      </div>
+
     <button type="button" class="btn" id="btn_salvar" onclick="salvarDiario()">Salvar Lançamentos</button>
     <div id="status_msg" class="status-msg">✅ Lançamento gravado com sucesso no diário eletrônico!</div>
-  </div>
+    </div> <!-- /pane-diario -->
+  </div> <!-- /card -->
 
   <script>
     window.__submission_count = 0;
@@ -89,6 +176,30 @@
       if (isNaN(val)) return;
       if (val < 0) input.value = 0;
       if (val > 10) input.value = 10;
+    }
+
+    function switchTab(tab) {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      const activeBtn = document.getElementById('tab-' + tab);
+      if (activeBtn) activeBtn.classList.add('active');
+
+      const paneDiario = document.getElementById('pane-diario');
+      const paneArquivos = document.getElementById('pane-arquivos');
+      const paneCadastro = document.getElementById('pane-cadastro');
+
+      if (tab === 'arquivos') {
+        if (paneDiario) paneDiario.style.display = 'none';
+        if (paneArquivos) paneArquivos.style.display = 'block';
+        if (paneCadastro) paneCadastro.style.display = 'none';
+      } else if (tab === 'cadastro') {
+        if (paneDiario) paneDiario.style.display = 'none';
+        if (paneArquivos) paneArquivos.style.display = 'none';
+        if (paneCadastro) paneCadastro.style.display = 'block';
+      } else {
+        if (paneDiario) paneDiario.style.display = 'block';
+        if (paneArquivos) paneArquivos.style.display = 'none';
+        if (paneCadastro) paneCadastro.style.display = 'none';
+      }
     }
 
     function salvarDiario() {

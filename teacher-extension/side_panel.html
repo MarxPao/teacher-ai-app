@@ -166,26 +166,301 @@
       background: #fffbeb; border-color: #fef3c7; color: #92400e;
     }
 
-    /* ── Item 3: Modal Define Skill ── */
-    .modal-overlay {
-      display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.7);
-      z-index: 9999; padding: 14px; align-items: center; justify-content: center;
+    /* ── Card de Aprovação Agêntico & Voz ── */
+    .agent-card {
+      background: #ffffff; border: 1.5px solid #6366f1; border-radius: 12px;
+      padding: 14px; box-shadow: 0 4px 12px rgba(99, 102, 241, 0.12);
+      margin-bottom: 12px;
     }
-    .modal-card {
-      background: #fff; border-radius: 12px; padding: 16px; width: 100%; max-width: 320px;
-      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+    .voice-btn {
+      width: 36px; height: 36px; border-radius: 50%; border: none;
+      background: #6366f1; color: #fff; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px; transition: all 0.2s; flex-shrink: 0;
+    }
+    .voice-btn:hover { background: #4f46e5; }
+    .voice-btn.listening {
+      background: #dc2626; animation: micPulse 1.2s infinite;
+    }
+    @keyframes micPulse {
+      0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.4); }
+      50% { transform: scale(1.08); box-shadow: 0 0 0 8px rgba(220, 38, 38, 0); }
+    }
+    .before-after-pill {
+      display: flex; align-items: center; justify-content: space-around;
+      background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;
+      padding: 10px; margin: 10px 0;
+    }
+    .val-box {
+      text-align: center;
+    }
+    .val-label {
+      font-size: 10px; font-weight: 700; text-transform: uppercase; color: #64748b;
+    }
+    .val-num {
+      font-size: 16px; font-weight: 800; margin-top: 2px;
+    }
+    .val-before { color: #64748b; }
+    .val-after { color: #10b981; }
+    .candidate-chip {
+      background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 6px;
+      padding: 6px 10px; font-size: 12px; font-weight: 600; color: #1e293b;
+      cursor: pointer; transition: all 0.15s; margin: 4px 0; display: block;
+      width: 100%; text-align: left;
+    }
+    .candidate-chip:hover {
+      background: #e0f2fe; border-color: #0284c7; color: #0369a1;
     }
 
+    /* ── Modais ── */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(15, 23, 42, 0.65);
+      backdrop-filter: blur(2px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 99999;
+      padding: 16px;
+      box-sizing: border-box;
+    }
+    .modal-card {
+      background: #fff;
+      border-radius: 12px;
+      padding: 16px;
+      width: 100%;
+      max-width: 360px;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+    }
+
+    /* ── Chat Stream & Histórico de Conversa ── */
+    .chat-history-container {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      max-height: 380px;
+      min-height: 180px;
+      overflow-y: auto;
+      padding: 8px 4px 12px 4px;
+      scroll-behavior: smooth;
+    }
+    .chat-history-container::-webkit-scrollbar {
+      width: 5px;
+    }
+    .chat-history-container::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 4px;
+    }
+
+    .chat-msg {
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+      max-width: 90%;
+      animation: fadeInMsg 0.2s ease-out;
+    }
+    @keyframes fadeInMsg {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .chat-msg.user {
+      align-self: flex-end;
+      flex-direction: row-reverse;
+    }
+    .chat-msg.assistant {
+      align-self: flex-start;
+    }
+
+    .chat-avatar {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: #e0e7ff;
+      color: #4338ca;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      flex-shrink: 0;
+      border: 1px solid #c7d2fe;
+    }
+    .chat-msg.user .chat-avatar {
+      background: #3b82f6;
+      color: #fff;
+    }
+
+    .chat-bubble {
+      padding: 9px 13px;
+      border-radius: 12px;
+      font-size: 12px;
+      line-height: 1.45;
+      word-break: break-word;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+    }
+    .chat-msg.user .chat-bubble {
+      background: #4f46e5;
+      color: #ffffff;
+      border-bottom-right-radius: 3px;
+    }
+    .chat-msg.assistant .chat-bubble {
+      background: #ffffff;
+      color: #1e293b;
+      border: 1px solid #e2e8f0;
+      border-bottom-left-radius: 3px;
+    }
+
+    /* ── Indicador de Processando (Typing Dots) ── */
+    .chat-typing-indicator {
+      display: none;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 20px;
+      font-size: 11px;
+      color: #64748b;
+      align-self: flex-start;
+      margin-bottom: 6px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+    }
+    .typing-dots {
+      display: flex;
+      gap: 4px;
+      align-items: center;
+    }
+    .typing-dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: #6366f1;
+      animation: typingBounce 1.4s infinite ease-in-out;
+    }
+    .typing-dot:nth-child(1) { animation-delay: 0s; }
+    .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+    .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+    @keyframes typingBounce {
+      0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+      40% { transform: scale(1.1); opacity: 1; }
+    }
+
+    /* ── Seção Ações Rápidas (Chips Pré-definidos e Promovidos) ── */
+    .quick-actions-bar {
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      padding: 4px 2px 8px 2px;
+      margin-bottom: 8px;
+      scrollbar-width: none;
+    }
+    .quick-actions-bar::-webkit-scrollbar {
+      display: none;
+    }
+    .quick-action-chip {
+      background: #ffffff;
+      border: 1px solid #cbd5e1;
+      border-radius: 16px;
+      font-size: 11px;
+      font-weight: 600;
+      color: #334155;
+      padding: 5px 10px;
+      cursor: pointer;
+      white-space: nowrap;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      transition: all 0.15s ease;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+      user-select: none;
+      font-family: inherit;
+    }
+    .quick-action-chip:hover {
+      background: #eef2ff;
+      border-color: #818cf8;
+      color: #4338ca;
+      transform: translateY(-1px);
+    }
+    .quick-action-chip.promoted {
+      background: #f0fdf4;
+      border-color: #86efac;
+      color: #166534;
+    }
+    .quick-action-chip.promoted:hover {
+      background: #dcfce7;
+      border-color: #4ade80;
+    }
+
+    /* ── Card de Sugestão de Atalho Proativo (Promoção Automática) ── */
+    .shortcut-promotion-box {
+      margin-top: 8px;
+      padding: 10px 12px;
+      background: #fdf4ff;
+      border: 1.5px solid #f0abfc;
+      border-radius: 10px;
+      font-size: 11px;
+      color: #86198f;
+    }
+    .shortcut-promotion-title {
+      font-weight: 700;
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      color: #701a75;
+    }
+    .shortcut-promotion-actions {
+      display: flex;
+      gap: 6px;
+      margin-top: 8px;
+    }
+    .btn-shortcut-accept {
+      background: #c026d3;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      padding: 5px 10px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      transition: background 0.15s;
+    }
+    .btn-shortcut-accept:hover {
+      background: #a21caf;
+    }
+    .btn-shortcut-dismiss {
+      background: transparent;
+      color: #701a75;
+      border: 1px solid #f0abfc;
+      border-radius: 6px;
+      padding: 5px 8px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .btn-shortcut-dismiss:hover {
+      background: rgba(240, 171, 252, 0.2);
+    }
   </style>
 </head>
 <body>
 
   <!-- Header -->
   <div class="header">
-    <div class="brand">TEACHER<span>AI</span></div>
-    <div id="status-badge" class="status-badge online">
-      <span class="pulse-dot"></span>
-      <span id="status-portal-name">Machado Sobrinho</span>
+    <div class="brand" id="brand-logo" style="cursor: pointer; user-select: none;" title="Teacher AI (Clique 3x para Modo Dev/QA)">TEACHER<span>AI</span></div>
+    <div style="display: flex; align-items: center; gap: 6px;">
+      <span id="dev-mode-badge" style="display: none; font-size: 10px; font-weight: 700; background: #fef08a; color: #854d0e; padding: 2px 6px; border-radius: 4px; border: 1px solid #fde047;">🛠️ DEV/QA</span>
+      <div id="status-badge" class="status-badge online">
+        <span class="pulse-dot"></span>
+        <span id="status-portal-name">Machado Sobrinho</span>
+      </div>
     </div>
   </div>
 
@@ -217,24 +492,175 @@
       </div>
     </div>
 
-    <!-- CARD: COMANDO LIVRE COM INTERPRETADOR DE INTENÇÃO (ITEM 2.1) -->
-    <div class="card" style="border: 1px solid #cbd5e1;">
-      <div class="card-title">
-        <i class="ti ti-sparkles" style="color: #6366f1;"></i> O que você quer que eu faça nesta página?
+    <!-- CARD PRINCIPAL: ASSISTENTE NO PORTAL (100% CONVERSACIONAL) -->
+    <div class="agent-card" id="agentic-action-card">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; border-bottom: 1px solid #f1f5f9; padding-bottom: 8px;">
+        <div style="font-size: 13px; font-weight: 700; color: #4338ca; display: flex; align-items: center; gap: 6px;">
+          <i class="ti ti-sparkles"></i> Assistente no Portal
+        </div>
+        <span id="agentic-portal-tag" style="font-size: 10px; font-weight: 600; background: #e0e7ff; color: #4338ca; padding: 2px 8px; border-radius: 12px;">Ativo</span>
       </div>
-      <p style="font-size: 11px; color: #64748b; margin-bottom: 8px;">
-        Digite em linguagem natural. A IA interpretará sua intenção via BYOK antes de executar.
-      </p>
-      <input type="text" id="input-free-command" placeholder="Ex: Ler lista de notas dos alunos..."
-             style="width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid #94a3b8; font-size: 12px; outline: none;" />
-      <button class="btn-main" id="btn-interpret-command" style="margin-top: 8px; background: #6366f1;">
-        <i class="ti ti-wand"></i>
-        <span id="interpret-btn-text">Interpretar Comando</span>
-      </button>
 
-      <!-- Feedback de Interpretação -->
-      <div id="interpret-response-container" class="interpret-box"></div>
+      <!-- 3. [NOVO] Área de Histórico de Conversa (Chat Stream) -->
+      <div id="chat-history-container" class="chat-history-container">
+        <!-- Mensagem de Boas-Vindas da Rafinha -->
+        <div class="chat-msg assistant" id="chat-welcome-msg">
+          <div class="chat-avatar">🦉</div>
+          <div class="chat-bubble">
+            Olá! Sou a <strong>Rafinha</strong>. Em que posso te ajudar no portal hoje? Você pode falar ou digitar abaixo.
+          </div>
+        </div>
+
+        <!-- 1b. Card de Progresso Natural (Aprendizado ao Vivo Transparente) -->
+        <div id="card-natural-progress" style="display: none; margin-top: 6px; background: #f0fdf4; border: 1.5px solid #86efac; border-radius: 10px; padding: 12px;">
+          <div style="display: flex; align-items: center; gap: 8px; color: #166534; font-size: 12px; font-weight: 600;">
+            <span class="pulse-dot" style="background: #16a34a;"></span>
+            <span id="natural-progress-text">Isso pode levar um minutinho na primeira vez, já estou vendo como funciona aqui...</span>
+          </div>
+        </div>
+
+        <!-- 2. Card de Desambiguação (Homônimos) -->
+        <div id="card-disambiguation" style="display: none; margin-top: 6px; background: #fffbeb; border: 1px solid #fef3c7; border-radius: 8px; padding: 12px;">
+          <div style="font-size: 12px; font-weight: 700; color: #b45309; display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+            <i class="ti ti-alert-triangle"></i> Mais de um aluno encontrado
+          </div>
+          <p id="disambiguation-text" style="font-size: 11px; color: #92400e; margin-bottom: 8px;">
+            Encontrei mais de um aluno com este nome na turma. A quem você se refere?
+          </p>
+          <div id="disambiguation-candidates" style="display: flex; flex-direction: column; gap: 4px;"></div>
+        </div>
+
+        <!-- 3. Card de Aprovação com Preview Antes e Depois -->
+        <div id="card-approval-preview" style="display: none; margin-top: 6px; background: #f8fafc; border: 1.5px solid #0284c7; border-radius: 10px; padding: 12px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+            <span style="font-size: 11px; font-weight: 700; color: #0369a1; text-transform: uppercase;">
+              📋 Prévia de Lançamento
+            </span>
+            <span style="font-size: 10px; color: #64748b; font-weight: 600;" id="approval-checkpoint-id">chk_ready</span>
+          </div>
+
+          <div style="font-size: 13px; font-weight: 700; color: #0f172a; margin-bottom: 2px;" id="approval-student-name">
+            João Silva
+          </div>
+          <div style="font-size: 11px; color: #64748b;" id="approval-action-desc">
+            Lançamento de Nota
+          </div>
+
+          <!-- Alerta Visível de Divergência/Conflito contra o Portal Vivo -->
+          <div id="approval-conflict-alert" style="display: none; background: #fffbeb; border: 1.5px solid #f59e0b; border-radius: 8px; padding: 8px 10px; margin: 8px 0; color: #92400e; font-size: 11px; line-height: 1.4;">
+            <div style="font-weight: 700; display: flex; align-items: center; gap: 4px; margin-bottom: 2px;">
+              <span>⚠️</span> <span>Divergência detectada com o portal</span>
+            </div>
+            <span id="approval-conflict-text">O valor no portal difere do cache do app. Ação calculada com base no portal ao vivo.</span>
+          </div>
+
+          <!-- Pill Antes e Depois -->
+          <div class="before-after-pill">
+            <div class="val-box">
+              <div class="val-label">Nota Atual</div>
+              <div class="val-num val-before" id="approval-before-val">—</div>
+            </div>
+            <div style="font-size: 18px; color: #94a3b8; font-weight: 700;">→</div>
+            <div class="val-box">
+              <div class="val-label">Nova Nota</div>
+              <div class="val-num val-after" id="approval-after-val">8.5</div>
+            </div>
+          </div>
+
+          <!-- Botões de Ação do Card -->
+          <div style="display: flex; gap: 8px; margin-top: 10px;">
+            <button id="btn-confirm-approval" class="btn-main" style="background: #10b981; flex: 2; padding: 9px 12px; font-size: 13px;">
+              <i class="ti ti-check"></i>
+              <span>Confirmar</span>
+            </button>
+            <button id="btn-cancel-approval" class="btn-sub" style="flex: 1; margin-top: 0; padding: 9px;">
+              <span>Cancelar</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- 4. Card de Feedback Pós-Gravação (Sucesso Confirmado) -->
+        <div id="card-execution-success" style="display: none; margin-top: 6px; background: #ecfdf5; border: 1.5px solid #10b981; border-radius: 10px; padding: 12px;">
+          <div style="display: flex; align-items: center; gap: 6px; color: #065f46; font-weight: 700; font-size: 12px;">
+            <i class="ti ti-circle-check" style="font-size: 16px; color: #10b981;"></i>
+            <span>Gravado com Sucesso no Portal!</span>
+          </div>
+          <p id="success-detail-text" style="font-size: 11px; color: #047857; margin-top: 4px; line-height: 1.4;">
+            A nota foi preenchida no portal e confirmada no DOM oficial.
+          </p>
+        </div>
+
+        <!-- 5. Card de Esclarecimento Natural com Apontamento Mínimo -->
+        <div id="card-clarification-point-click" style="display: none; margin-top: 6px; background: #fffbeb; border: 1.5px solid #fcd34d; border-radius: 10px; padding: 12px;">
+          <div style="font-size: 12px; font-weight: 700; color: #92400e; display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+            <i class="ti ti-help-circle"></i> Preciso de uma dica rápida
+          </div>
+          <p id="clarification-question-text" style="font-size: 11px; color: #78350f; line-height: 1.4; margin-bottom: 8px;">
+            Não encontrei onde lançar falta nesta tela, você pode me mostrar clicando no lugar certo?
+          </p>
+          <button id="btn-point-and-click" class="btn-main" style="background: #d97706; padding: 8px 10px; font-size: 11px; width: 100%;">
+            <i class="ti ti-hand-click"></i> Apontar campo no portal
+          </button>
+        </div>
+
+        <!-- 6. Card de Falha Honesta -->
+        <div id="card-honest-error" style="display: none; margin-top: 6px; background: #fef2f2; border: 1.5px solid #ef4444; border-radius: 10px; padding: 12px;">
+          <div style="display: flex; align-items: center; gap: 6px; color: #991b1b; font-weight: 700; font-size: 12px;">
+            <i class="ti ti-alert-circle" style="font-size: 16px; color: #ef4444;"></i>
+            <span id="error-title">Não foi possível realizar a ação</span>
+          </div>
+          <p id="error-detail-text" style="font-size: 11px; color: #b91c1c; margin-top: 4px; line-height: 1.4;">
+            Aluno não encontrado ou pauta não editável.
+          </p>
+        </div>
+      </div>
+
+      <!-- 7. [NOVO] Indicador de Processando em Tempo Real -->
+      <div id="chat-typing-indicator" class="chat-typing-indicator">
+        <span class="typing-dots">
+          <span class="typing-dot"></span>
+          <span class="typing-dot"></span>
+          <span class="typing-dot"></span>
+        </span>
+        <span id="typing-indicator-text">Rafinha pensando...</span>
+      </div>
+
+      <!-- 4 & 5. [NOVO] Seção Ações Rápidas (Chips Pré-definidos de Fábrica + Promovidos) -->
+      <div id="quick-actions-bar" class="quick-actions-bar">
+        <button class="quick-action-chip" data-template="Lança nota ___ para o aluno ___">📝 Lançar nota</button>
+        <button class="quick-action-chip" data-template="Lança falta para o aluno ___">✋ Lançar falta</button>
+        <button class="quick-action-chip" data-command="Ver notas da turma">📊 Ver notas da turma</button>
+        <button class="quick-action-chip" data-command="Ler lista de alunos desta tela">📋 Ler lista de alunos</button>
+        <span id="promoted-chips-slot" style="display: flex; gap: 6px;"></span>
+      </div>
+
+      <!-- 6. Barra de Entrada Única: Mic de Voz + Campo de Texto + Enviar -->
+      <div style="display: flex; gap: 6px; align-items: center;">
+        <button id="btn-voice-input" class="voice-btn" title="Falar comando (ex: 'Lança nota 8.5 para o João')">
+          <i class="ti ti-microphone" id="voice-icon"></i>
+        </button>
+        <input type="text" id="input-agent-command" placeholder="Fale ou digite seu pedido para o portal..."
+               style="flex: 1; padding: 8px 10px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 12px; font-family: 'Outfit', sans-serif; outline: none;" />
+        <button id="btn-send-agent-command" style="background: #6366f1; color: white; border: none; border-radius: 8px; padding: 8px 12px; font-weight: 600; font-size: 12px; cursor: pointer;">
+          Enviar
+        </button>
+      </div>
+
+      <!-- Estado de Escuta por Voz -->
+      <div id="voice-listening-indicator" style="display: none; margin-top: 8px; font-size: 11px; color: #dc2626; font-weight: 600; align-items: center; gap: 6px;">
+        <span class="pulse-dot" style="background: #dc2626;"></span> Ouvindo professora... (fale agora)
+      </div>
+
     </div>
+
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <!-- MODO DESENVOLVEDOR / QA (OCULTO POR PADRÃO — ATALHO: CTRL+SHIFT+D OU CLIQUE 3X NO LOGO) -->
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <div id="dev-mode-panel" style="display: none; margin-top: 14px; padding: 12px; background: #f8fafc; border: 1.5px dashed #94a3b8; border-radius: 10px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+        <span style="font-size: 11px; font-weight: 800; color: #475569; letter-spacing: 0.5px;">🛠️ PAINEL DESENVOLVEDOR / QA</span>
+        <button id="btn-close-dev-mode" style="background: none; border: none; color: #64748b; cursor: pointer; font-size: 12px; font-weight: 700;">✕ Fechar</button>
+      </div>
 
       <!-- Feedback de Processamento e Resultados -->
       <div id="read-feedback" style="display:none;"></div>
@@ -313,69 +739,69 @@
       </div>
     </div>
 
-  </div>
+    <!-- MODAL: NOMEAR / DEFINIR SKILL AO PARAR GRAVAÇÃO (MODO DEV/QA) -->
+    <div id="modal-define-skill" class="modal-overlay" style="display: none;">
+      <div class="modal-card">
+        <div style="font-size: 14px; font-weight: 700; color: #0f172a; margin-bottom: 10px;">
+          📝 Definir e Salvar Nova Skill
+        </div>
 
-  <!-- MODAL: NOMEAR / DEFINIR SKILL AO PARAR GRAVAÇÃO (ITEM 3) -->
-  <div id="modal-define-skill" class="modal-overlay">
-    <div class="modal-card">
-      <div style="font-size: 14px; font-weight: 700; color: #0f172a; margin-bottom: 10px;">
-        📝 Definir e Salvar Nova Skill
-      </div>
-
-      <label style="display: block; font-size: 11px; font-weight: 700; color: #475569; margin-bottom: 4px;">
-        NOME DA TAREFA *
-      </label>
-      <input type="text" id="modal-task-name" placeholder="Ex: Lançar falta, Ler boletim..."
-             style="width: 100%; padding: 7px 10px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 12px; margin-bottom: 10px; outline: none;" />
-
-      <label style="display: block; font-size: 11px; font-weight: 700; color: #475569; margin-bottom: 4px;">
-        TIPO DE OPERAÇÃO *
-      </label>
-      <div style="display: flex; gap: 14px; margin-bottom: 10px; font-size: 12px; font-weight: 600;">
-        <label style="display: flex; align-items: center; gap: 5px; cursor: pointer;">
-          <input type="radio" name="modal-skill-type" value="reading" checked />
-          <span>Leitura</span>
+        <label style="display: block; font-size: 11px; font-weight: 700; color: #475569; margin-bottom: 4px;">
+          NOME DA TAREFA *
         </label>
-        <label style="display: flex; align-items: center; gap: 5px; cursor: pointer;">
-          <input type="radio" name="modal-skill-type" value="writing" />
-          <span style="color: #dc2626;">Escrita (Exige Checkpoint)</span>
+        <input type="text" id="modal-task-name" placeholder="Ex: Lançar falta, Ler boletim..."
+               style="width: 100%; padding: 7px 10px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 12px; margin-bottom: 10px; outline: none;" />
+
+        <label style="display: block; font-size: 11px; font-weight: 700; color: #475569; margin-bottom: 4px;">
+          TIPO DE OPERAÇÃO *
         </label>
-      </div>
-
-      <label style="display: block; font-size: 11px; font-weight: 700; color: #475569; margin-bottom: 4px;">
-        DESCRIÇÃO CURTA (OPCIONAL)
-      </label>
-      <input type="text" id="modal-task-desc" placeholder="Ex: Lança falta na chamada escolar..."
-             style="width: 100%; padding: 7px 10px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 12px; margin-bottom: 12px; outline: none;" />
-
-      <!-- NOVO: Naming Box de Colunas Semânticas (Item 1.3) -->
-      <div id="modal-columns-container" style="display: none; margin-bottom: 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-          <label style="font-size: 11px; font-weight: 700; color: #0284c7; text-transform: uppercase;">
-            <i class="ti ti-table"></i> Colunas Detectadas (Schema Semântico)
+        <div style="display: flex; gap: 14px; margin-bottom: 10px; font-size: 12px; font-weight: 600;">
+          <label style="display: flex; align-items: center; gap: 5px; cursor: pointer;">
+            <input type="radio" name="modal-skill-type" value="reading" checked />
+            <span>Leitura</span>
           </label>
-          <span id="columns-infer-status" style="font-size: 10px; color: #64748b;">Analisando...</span>
+          <label style="display: flex; align-items: center; gap: 5px; cursor: pointer;">
+            <input type="radio" name="modal-skill-type" value="writing" />
+            <span style="color: #dc2626;">Escrita (Exige Checkpoint)</span>
+          </label>
         </div>
-        <p style="font-size: 11px; color: #64748b; margin-bottom: 8px;">
-          Revise os tipos semânticos sugeridos antes de salvar. Desmarque colunas desnecessárias.
-        </p>
-        <div id="modal-columns-list" style="display: flex; flex-direction: column; gap: 6px; max-height: 180px; overflow-y: auto;">
-          <!-- Linhas de colunas geradas dinamicamente -->
+
+        <label style="display: block; font-size: 11px; font-weight: 700; color: #475569; margin-bottom: 4px;">
+          DESCRIÇÃO CURTA (OPCIONAL)
+        </label>
+        <input type="text" id="modal-task-desc" placeholder="Ex: Lança falta na chamada escolar..."
+               style="width: 100%; padding: 7px 10px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 12px; margin-bottom: 12px; outline: none;" />
+
+        <!-- Naming Box de Colunas Semânticas -->
+        <div id="modal-columns-container" style="display: none; margin-bottom: 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+            <label style="font-size: 11px; font-weight: 700; color: #0284c7; text-transform: uppercase;">
+              <i class="ti ti-table"></i> Colunas Detectadas (Schema Semântico)
+            </label>
+            <span id="columns-infer-status" style="font-size: 10px; color: #64748b;">Analisando...</span>
+          </div>
+          <p style="font-size: 11px; color: #64748b; margin-bottom: 8px;">
+            Revise os tipos semânticos sugeridos antes de salvar. Desmarque colunas desnecessárias.
+          </p>
+          <div id="modal-columns-list" style="display: flex; flex-direction: column; gap: 6px; max-height: 180px; overflow-y: auto;">
+            <!-- Linhas de colunas geradas dinamicamente -->
+          </div>
         </div>
-      </div>
 
-      <div id="modal-error-msg" style="display: none; color: #dc2626; font-size: 11px; font-weight: 600; margin-bottom: 10px;"></div>
+        <div id="modal-error-msg" style="display: none; color: #dc2626; font-size: 11px; font-weight: 600; margin-bottom: 10px;"></div>
 
-      <div style="display: flex; gap: 8px;">
-        <button id="modal-btn-cancel" style="flex: 1; padding: 8px; border-radius: 6px; border: 1px solid #cbd5e1; background: #f8fafc; font-size: 12px; font-weight: 600; cursor: pointer;">
-          Cancelar
-        </button>
-        <button id="modal-btn-save" class="btn-main" style="flex: 2; margin-top: 0; background: #0284c7;">
-          Salvar Skill
-        </button>
+        <div style="display: flex; gap: 8px;">
+          <button id="modal-btn-cancel" style="flex: 1; padding: 8px; border-radius: 6px; border: 1px solid #cbd5e1; background: #f8fafc; font-size: 12px; font-weight: 600; cursor: pointer;">
+            Cancelar
+          </button>
+          <button id="modal-btn-save" class="btn-main" style="flex: 2; margin-top: 0; background: #0284c7;">
+            Salvar Skill
+          </button>
+        </div>
       </div>
     </div>
-  </div>
+
+  </div> <!-- /dev-mode-panel -->
 
   <!-- MODAL: CHECKPOINT / CONFIRMAÇÃO HUMANA OBRIGATÓRIA (HUMAN-IN-THE-LOOP) -->
   <div id="modal-checkpoint" class="modal-overlay" style="display: none;">

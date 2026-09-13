@@ -62,4 +62,41 @@ describe('studentMatcher — Fuzzy Matching & Ambiguity Handling (0-Tester Direc
     expect(result.status).toBe('not_found')
     expect(result.student).toBeNull()
   })
+
+  it('7. Homônimos com mesmo nome exato em turmas diferentes: "Hugo Henrique" exige desambiguação sem turma ou matrícula', () => {
+    const homonimos = [
+      { id: '101', name: 'Hugo Henrique', class_name: '9º Ano A', matricula: '2026-001' },
+      { id: '102', name: 'Hugo Henrique', class_name: '9º Ano B', matricula: '2026-002' },
+    ]
+    const result = matchStudentByName('Hugo Henrique', homonimos)
+    expect(result.status).toBe('ambiguous')
+    expect(result.student).toBeNull()
+    expect(result.candidates.length).toBe(2)
+
+    // Com turma desempata
+    const resultWithClass = matchStudentByName('Hugo Henrique', homonimos, { class_ref: '9º Ano A' })
+    expect(resultWithClass.status).toBe('exact')
+    expect(resultWithClass.student?.id).toBe('101')
+  })
+
+  it('8. Matrícula prioritária (Via 1): Desempata deterministamente homônimos mesmo sem turma', () => {
+    const homonimos = [
+      { id: '101', name: 'Hugo Henrique', class_name: '9º Ano A', matricula: '2026-001' },
+      { id: '102', name: 'Hugo Henrique', class_name: '9º Ano B', matricula: '2026-002' },
+    ]
+    const result = matchStudentByName('Hugo Henrique', homonimos, { matricula: '2026-002' })
+    expect(result.status).toBe('exact')
+    expect(result.student?.id).toBe('102')
+    expect(result.student?.matricula).toBe('2026-002')
+  })
+
+  it('9. Matrícula digitada diretamente no campo de busca: resolve com certeza', () => {
+    const students = [
+      { id: '101', name: 'Hugo Henrique Lima', class_name: '9º Ano A', matricula: 'MAT-9988' },
+    ]
+    const result = matchStudentByName('MAT-9988', students)
+    expect(result.status).toBe('exact')
+    expect(result.student?.name).toBe('Hugo Henrique Lima')
+  })
 })
+

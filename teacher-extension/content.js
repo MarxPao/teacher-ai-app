@@ -19,7 +19,7 @@ const PLATFORM_PROFILES = {
       date:        ['input[type="date"]', 'input[name*="data"]', 'input[id*="data"]'],
       description: ['textarea[name*="conteudo"]', 'textarea[name*="descricao"]', 'textarea[name*="pauta"]', 'div[contenteditable="true"]'],
       classRef:    ['select[name*="turma"]', 'select[id*="turma"]', 'input[name*="turma"]'],
-      submit:      ['button[type="submit"]', 'input[type="submit"]', 'button:has-text("Salvar")', 'button:has-text("Gravar")', '.btn-salvar']
+      submit:      ['button[type="submit"]', 'input[type="submit"]', '.btn-salvar', '#btn-salvar']
     }
   },
   santacatarina: {
@@ -30,7 +30,7 @@ const PLATFORM_PROFILES = {
       date:        ['input[type="date"]', 'input[name*="data"]'],
       description: ['textarea', 'div[contenteditable="true"]', 'input[name*="pauta"]'],
       classRef:    ['select[name*="turma"]', 'select[name*="classe"]'],
-      submit:      ['button[type="submit"]', 'button:has-text("Salvar")', 'input[type="submit"]']
+      submit:      ['button[type="submit"]', 'input[type="submit"]', '.btn-salvar']
     }
   },
   plural: {
@@ -41,7 +41,7 @@ const PLATFORM_PROFILES = {
       date:        ['input[type="date"]', 'input[name*="datalimite"]', 'input[name*="prazo"]'],
       description: ['textarea[name*="descricao"]', 'div[contenteditable="true"]'],
       classRef:    ['select[name*="turma"]', 'select[name*="grupo"]'],
-      submit:      ['button[type="submit"]', 'button:has-text("Publicar")', 'button:has-text("Criar")']
+      submit:      ['button[type="submit"]', '.btn-salvar']
     }
   },
   cambridge: {
@@ -52,7 +52,7 @@ const PLATFORM_PROFILES = {
       date:        ['input[type="date"]', 'input[name*="due"]'],
       description: ['textarea', 'div[contenteditable="true"]'],
       classRef:    ['select[name*="class"]', 'select[name*="group"]'],
-      submit:      ['button:has-text("Assign")', 'button[type="submit"]']
+      submit:      ['button[type="submit"]', '.btn-submit']
     }
   },
   teams: {
@@ -63,7 +63,7 @@ const PLATFORM_PROFILES = {
       date:        ['input[type="date"]', 'input[aria-label*="data"]', 'input[aria-label*="Due"]'],
       description: ['div[contenteditable="true"]', 'textarea[placeholder*="instrucoes"]'],
       classRef:    [],
-      submit:      ['button:has-text("Assign")', 'button:has-text("Atribuir")']
+      submit:      ['button[type="submit"]']
     }
   }
 };
@@ -808,8 +808,263 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     const res = handleInspectAndScrape();
     sendResponse(res);
     return true;
+  } else if (message.action === 'ENABLE_POINT_AND_CLICK') {
+    enablePointAndClickMode((selectedData) => {
+      sendResponse({ ok: true, selected: true, ...selectedData });
+    });
+    return true;
+  } else if (message.action === 'HIGHLIGHT_ELEMENT') {
+    const ok = highlightElementTemporarily(message.target || message.selector, message.label, message.durationMs);
+    sendResponse({ ok, highlighted: ok });
+    return true;
+  } else if (message.action === 'CLEAR_HIGHLIGHT') {
+    clearAgentVisualFocus();
+    sendResponse({ ok: true });
+    return true;
   }
 });
+
+// ══════════════════════════════════════════════════════════════════════════════
+// DESTAQUE VISUAL EM TEMPO REAL DO AGENTE (ESTILO PERPLEXITY COMET / CLAUDE)
+// Desenha um contorno visual suave com glow (#38bdf8) ao redor do elemento
+// sendo lido ou preenchido pela Rafinha, com fade-out automático suave (~300ms).
+// ══════════════════════════════════════════════════════════════════════════════
+
+let agentFocusOverlay = null;
+let agentFocusBadge = null;
+let agentFocusTimer = null;
+
+function clearAgentVisualFocus() {
+  if (agentFocusTimer) {
+    clearTimeout(agentFocusTimer);
+    agentFocusTimer = null;
+  }
+  if (agentFocusOverlay) {
+    agentFocusOverlay.style.opacity = '0';
+    setTimeout(() => {
+      if (agentFocusOverlay && agentFocusOverlay.parentNode) {
+        agentFocusOverlay.parentNode.removeChild(agentFocusOverlay);
+      }
+      agentFocusOverlay = null;
+      agentFocusBadge = null;
+    }, 300);
+  }
+}
+
+function highlightElementTemporarily(target, label = 'Inspecionando...', durationMs = 1200) {
+  try {
+    let el = null;
+    if (typeof target === 'string') {
+      el = document.querySelector(target);
+    } else if (target && target.nodeType === Node.ELEMENT_NODE) {
+      el = target;
+    }
+
+    if (!el && (!target || typeof target.x === 'undefined')) {
+      return false;
+    }
+
+    let rect = el ? el.getBoundingClientRect() : target;
+    if (!rect || (rect.width === 0 && rect.height === 0)) {
+      return false;
+    }
+
+    if (!agentFocusOverlay || !agentFocusOverlay.parentNode) {
+      agentFocusOverlay = document.createElement('div');
+      agentFocusOverlay.id = 'teacher-agent-focus-outline';
+      agentFocusOverlay.style.cssText = [
+        'position: fixed',
+        'pointer-events: none',
+        'z-index: 2147483646',
+        'border: 2px solid #38bdf8',
+        'background: rgba(56, 189, 248, 0.08)',
+        'box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.2), 0 0 16px rgba(56, 189, 248, 0.45)',
+        'border-radius: 6px',
+        'transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease',
+        'opacity: 0'
+      ].join(';');
+
+      agentFocusBadge = document.createElement('div');
+      agentFocusBadge.id = 'teacher-agent-focus-badge';
+      agentFocusBadge.style.cssText = [
+        'position: absolute',
+        'top: -24px',
+        'left: 0',
+        'background: #0284c7',
+        'color: #ffffff',
+        'font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+        'font-size: 11px',
+        'font-weight: 600',
+        'padding: 2px 8px',
+        'border-radius: 4px',
+        'box-shadow: 0 2px 6px rgba(0,0,0,0.2)',
+        'white-space: nowrap',
+        'pointer-events: none',
+        'display: flex',
+        'align-items: center',
+        'gap: 4px'
+      ].join(';');
+
+      agentFocusOverlay.appendChild(agentFocusBadge);
+      document.body.appendChild(agentFocusOverlay);
+    }
+
+    const pad = 3;
+    const top = Math.max(0, rect.top - pad);
+    const left = Math.max(0, rect.left - pad);
+    const width = rect.width + (pad * 2);
+    const height = rect.height + (pad * 2);
+
+    agentFocusOverlay.style.top = `${top}px`;
+    agentFocusOverlay.style.left = `${left}px`;
+    agentFocusOverlay.style.width = `${width}px`;
+    agentFocusOverlay.style.height = `${height}px`;
+    agentFocusOverlay.style.opacity = '1';
+
+    if (agentFocusBadge) {
+      agentFocusBadge.textContent = `🦉 Rafinha: ${label}`;
+      if (top < 26) {
+        agentFocusBadge.style.top = '4px';
+        agentFocusBadge.style.left = '4px';
+      } else {
+        agentFocusBadge.style.top = '-24px';
+        agentFocusBadge.style.left = '0';
+      }
+    }
+
+    if (agentFocusTimer) clearTimeout(agentFocusTimer);
+    agentFocusTimer = setTimeout(() => {
+      clearAgentVisualFocus();
+    }, durationMs);
+
+    return true;
+  } catch (err) {
+    console.warn('[TeacherAI Content] Erro ao destacar elemento visualmente:', err);
+    return false;
+  }
+}
+
+// Expõe para uso em página e bridge
+window.__teacherAiHighlight = highlightElementTemporarily;
+window.__teacherAiClearHighlight = clearAgentVisualFocus;
+
+window.addEventListener('message', (ev) => {
+  if (ev.data && ev.data.type === 'TEACHER_AI_HIGHLIGHT') {
+    highlightElementTemporarily(ev.data.target, ev.data.label, ev.data.durationMs);
+  } else if (ev.data && ev.data.type === 'TEACHER_AI_CLEAR_HIGHLIGHT') {
+    clearAgentVisualFocus();
+  }
+});
+
+function enablePointAndClickMode(callback) {
+  // 1. Overlay transparente em tela cheia que INTERCEPTA fisicamente todos os cliques
+  // impedindo que qualquer evento chegue aos botões/formulários reais do portal
+  const overlay = document.createElement('div');
+  overlay.id = 'teacher-point-click-overlay';
+  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:2147483640;cursor:crosshair;background:rgba(15,23,42,0.03);pointer-events:auto;user-select:none;';
+
+  // 2. Box visual de highlight sobreposto (sem pointer-events)
+  const highlightBox = document.createElement('div');
+  highlightBox.id = 'teacher-point-click-highlight';
+  highlightBox.style.cssText = 'position:fixed;pointer-events:none;z-index:2147483641;border:3px solid #38bdf8;background:rgba(56,189,248,0.12);border-radius:4px;display:none;transition:top 0.05s,left 0.05s,width 0.05s,height 0.05s;';
+
+  // 3. Banner flutuante explicativo com botão cancelar
+  const toast = document.createElement('div');
+  toast.id = 'teacher-point-click-banner';
+  toast.style.cssText = 'position:fixed;top:16px;left:50%;transform:translateX(-50%);background:#1e293b;color:#f8fafc;padding:12px 20px;border-radius:10px;font-family:sans-serif;font-size:13px;font-weight:600;box-shadow:0 8px 24px rgba(0,0,0,0.3);z-index:2147483642;border:2px solid #38bdf8;display:flex;align-items:center;gap:10px;pointer-events:auto;';
+  toast.innerHTML = '<span>👉 Clique no campo ou botão do portal onde deve ser feita a ação</span><button style="background:none;border:none;color:#94a3b8;cursor:pointer;font-size:16px;padding:2px 6px;" id="btn-cancel-point-click" title="Cancelar">✕</button>';
+
+  document.body.appendChild(overlay);
+  document.body.appendChild(highlightBox);
+  document.body.appendChild(toast);
+
+  function cleanup() {
+    if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+    if (highlightBox.parentNode) highlightBox.parentNode.removeChild(highlightBox);
+    if (toast.parentNode) toast.parentNode.removeChild(toast);
+    overlay.removeEventListener('mousemove', onMouseMove);
+    overlay.removeEventListener('click', onOverlayClick);
+  }
+
+  function getUnderlyingElement(x, y) {
+    overlay.style.pointerEvents = 'none';
+    const el = document.elementFromPoint(x, y);
+    overlay.style.pointerEvents = 'auto';
+    return el;
+  }
+
+  function onMouseMove(e) {
+    const target = getUnderlyingElement(e.clientX, e.clientY);
+    if (target && !toast.contains(target) && target !== document.documentElement && target !== document.body) {
+      const rect = target.getBoundingClientRect();
+      highlightBox.style.top = `${rect.top}px`;
+      highlightBox.style.left = `${rect.left}px`;
+      highlightBox.style.width = `${rect.width}px`;
+      highlightBox.style.height = `${rect.height}px`;
+      highlightBox.style.display = 'block';
+    } else {
+      highlightBox.style.display = 'none';
+    }
+  }
+
+  function onOverlayClick(e) {
+    // Intercepta e anula completamente o clique antes de qualquer propagação
+    e.preventDefault();
+    e.stopPropagation();
+    e.stopImmediatePropagation();
+
+    const target = getUnderlyingElement(e.clientX, e.clientY);
+    cleanup();
+
+    if (target && !toast.contains(target)) {
+      const tag = target.tagName ? target.tagName.toLowerCase() : '';
+      const val = target.value || target.innerText || '';
+      
+      let sel = '';
+      if (target.id) sel = `#${target.id}`;
+      else if (target.name) sel = `${tag}[name="${target.name}"]`;
+      else if (target.className && typeof target.className === 'string') {
+        const first = target.className.trim().split(/\s+/)[0];
+        sel = first ? `${tag}.${first}` : tag;
+      } else {
+        sel = tag;
+      }
+
+      callback({
+        selected: true,
+        tagName: tag,
+        currentValue: val.trim(),
+        id: target.id || '',
+        name: target.name || '',
+        className: target.className || '',
+        selector: sel
+      });
+    } else {
+      callback({ selected: false });
+    }
+  }
+
+  // Cancelar pelo botão do toast
+  toast.addEventListener('click', (e) => {
+    if (e.target && (e.target.id === 'btn-cancel-point-click' || e.target.closest('#btn-cancel-point-click'))) {
+      e.preventDefault();
+      e.stopPropagation();
+      cleanup();
+      callback({ selected: false });
+    }
+  });
+
+  overlay.addEventListener('mousemove', onMouseMove);
+  overlay.addEventListener('click', onOverlayClick);
+  // Bloqueia outros eventos de mouse de atingirem a página durante o modo
+  overlay.addEventListener('mousedown', (e) => { e.preventDefault(); e.stopPropagation(); });
+  overlay.addEventListener('mouseup', (e) => { e.preventDefault(); e.stopPropagation(); });
+}
+
+// Expõe globalmente para testes e automação
+if (typeof window !== 'undefined') {
+  window.__enablePointAndClickMode = enablePointAndClickMode;
+}
 
 
 

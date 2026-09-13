@@ -148,3 +148,97 @@ def assert_graph_safe(graph: Dict[str, Any]) -> None:
     is_valid, errors = validate_skill_graph(graph)
     if not is_valid:
         raise UnsafeGraphError("Grafo rejeitado por violar regras de segurança: " + " | ".join(errors))
+
+
+class PoisonedMemoryDetectedError(UnsafeGraphError):
+    """Lançada quando ações do grafo violam o alinhamento semântico com a intenção original."""
+    pass
+
+
+def verify_skillgraph_alignment(
+    task_id: str,
+    actions_or_nodes: Union[List[Dict[str, Any]], Dict[str, Any]],
+    original_intent: Optional[Dict[str, Any]] = None
+) -> Tuple[bool, Optional[str]]:
+    """
+    Verifica se o trace descoberto ou nós do grafo correspondem fielmente à intenção
+    pedida pela professora. Protege contra envenenamento de memória (Poisoned Memory)
+    por Prompt Injection Indireto vindo de páginas do portal.
+    """
+    import re
+    actions: List[Dict[str, Any]] = []
+    if isinstance(actions_or_nodes, list):
+        actions = actions_or_nodes
+    elif isinstance(actions_or_nodes, dict):
+        for nid, n in actions_or_nodes.items():
+            if isinstance(n, dict):
+                act_type = n.get("type")
+                params = n.get("params", {}) or {}
+                actions.append({
+                    "action_type": act_type,
+                    "selector": params.get("selector", ""),
+                    "value": params.get("value", ""),
+                    "description": n.get("description", "")
+                })
+
+    orig = original_intent or {}
+    params = orig.get("parametros") or {}
+    objeto_alvo = str(orig.get("objeto_alvo") or params.get("objeto_alvo") or task_id or "").lower()
+    clean_task = str(task_id or "").lower()
+    target_student = str(orig.get("aluno") or params.get("aluno") or "").lower().strip()
+
+    # Identifica o domínio da intenção original
+    is_nota_intent = any(k in clean_task or k in objeto_alvo for k in ["nota", "grade", "avaliacao", "pontuacao"])
+    is_falta_intent = any(k in clean_task or k in objeto_alvo for k in ["falta", "ausencia", "frequencia"])
+    is_presenca_intent = any(k in clean_task or k in objeto_alvo for k in ["presenca", "chamada"])
+    is_read_intent = clean_task == "read_roster" or any(k in clean_task or k in objeto_alvo for k in ["ler", "roster", "alunos", "estudantes", "consultar"])
+
+    write_actions = [a for a in actions if a.get("action_type") in ("WRITE", "CHECKBOX")]
+    click_actions = [a for a in actions if a.get("action_type") == "CLICK"]
+
+    # 1. Regra de Conflito: Intenção de NOTA não pode executar escrita em FALTAS ou PRESENÇAS
+    if is_nota_intent and not (is_falta_intent or is_presenca_intent):
+        for act in write_actions + click_actions:
+            sel = str(act.get("selector", "")).lower()
+            desc = str(act.get("description", "")).lower()
+            if any(k in sel or k in desc for k in ["presenca_", "falta_", "ausencia", "presenca", "falta"]) and not ("nota" in sel or "nota" in desc):
+                if act.get("action_type") == "WRITE" or ("presenca" in sel or "falta" in sel):
+                    return False, f"Ação anômala '{sel}' (modificação de frequência/falta) conflita com a intenção original de lançamento de nota."
+
+    # 2. Regra de Conflito: Intenção de FALTA/PRESENÇA não pode escrever em NOTA
+    if (is_falta_intent or is_presenca_intent) and not is_nota_intent:
+        for act in write_actions:
+            sel = str(act.get("selector", "")).lower()
+            desc = str(act.get("description", "")).lower()
+            if any(k in sel or k in desc for k in ["nota_", "grade_", "avaliacao"]) and not "falta" in sel:
+                return False, f"Ação anômala '{sel}' (lançamento de nota) conflita com a intenção original de registro de frequência."
+
+    # 3. Regra de Isolamento de Aluno: Tarefa individual não pode manipular múltiplos alunos em massa
+    if target_student:
+        modified_ids = []
+        for act in write_actions:
+            sel = str(act.get("selector", "")).lower()
+            matches = re.findall(r"(?:presenca|nota)_(\d+)", sel)
+            if matches:
+                modified_ids.extend(matches)
+        if len(set(modified_ids)) > 2:
+            return False, f"Ação em massa detectada ({len(set(modified_ids))} alunos atingidos) para uma tarefa destinada exclusivamente a '{target_student}'."
+
+    # 4. Regra de Operações de Leitura
+    if is_read_intent:
+        if len(write_actions) > 0:
+            return False, f"Ações de escrita ({len(write_actions)}) detectadas em uma intenção estritamente de leitura ('{clean_task}')."
+
+    return True, None
+
+
+def assert_skillgraph_aligned(
+    task_id: str,
+    actions_or_nodes: Union[List[Dict[str, Any]], Dict[str, Any]],
+    original_intent: Optional[Dict[str, Any]] = None
+) -> None:
+    """Levanta PoisonedMemoryDetectedError se o trace ou grafo não passar no alinhamento de intenção."""
+    is_aligned, error_msg = verify_skillgraph_alignment(task_id, actions_or_nodes, original_intent)
+    if not is_aligned:
+        raise PoisonedMemoryDetectedError(error_msg or "Violação de alinhamento de intenção (memória envenenada).")
+

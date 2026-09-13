@@ -1155,9 +1155,29 @@ function LogDrawer({ logs, onClose }: { logs: LogEntry[]; onClose: () => void })
  )
 }
 
+function formatRafinhaContent(text: string): string {
+  if (!text) return ''
+  let formatted = text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+
+  formatted = formatted.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+  formatted = formatted.replace(/`([^`]+)`/g, '<code style="background:rgba(139,94,60,0.1);color:#8b5e3c;padding:1px 5px;border-radius:4px;font-family:monospace;font-size:12px">$1</code>')
+  formatted = formatted.replace(/\[(.*?)\]\((https?:\/\/[^\s\)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" style="color:#2aa198;text-decoration:underline;font-weight:600">$1</a>')
+  formatted = formatted.replace(/^### (.*$)/gim, '<div style="font-size:14px;font-weight:700;color:#2c1a0e;margin:6px 0 2px">$1</div>')
+  formatted = formatted.replace(/^## (.*$)/gim, '<div style="font-size:15px;font-weight:800;color:#2c1a0e;margin:8px 0 3px">$1</div>')
+  formatted = formatted.replace(/^[*-] (.*$)/gim, '<div style="display:flex;align-items:flex-start;gap:6px;margin:2px 0"><span style="color:#8b5e3c;line-height:1.4">•</span><span>$1</span></div>')
+  formatted = formatted.replace(/^(\d+)\. (.*$)/gim, '<div style="display:flex;align-items:flex-start;gap:6px;margin:2px 0"><span style="color:#8b5e3c;font-weight:700;font-size:11px;min-width:14px;line-height:1.6">$1.</span><span>$2</span></div>')
+  formatted = formatted.replace(/\n/g, '<br/>')
+
+  return formatted
+}
+
 // Main component 
 export default function RafinhaChat({ onNavigate, onCommandReady }: RafinhaChatProps) {
  const [isOpen, setIsOpen] = useState(false)
+ const [isMinimized, setIsMinimized] = useState(false)
  const [messages, setMessages] = useState<Message[]>([{
  role: 'assistant',
  content: 'Oi! Sou a Rafinha Pode falar: "vá para alunos", "crie uma prova de Present Perfect", "lance nota 9 para o Pedro" eu executo na hora!'
@@ -1190,6 +1210,56 @@ export default function RafinhaChat({ onNavigate, onCommandReady }: RafinhaChatP
     result: null
   })
   const [pendingPortalTask, setPendingPortalTask] = useState<any>(null)
+  const [portalStatus, setPortalStatus] = useState<{
+    state: 'ready' | 'needs_login' | 'offline' | 'checking'
+    label: string
+  }>({
+    state: 'checking',
+    label: 'Verificando...'
+  })
+
+  // Monitoramento Simples do Status do Portal Escolar para a Professora (sem jargões)
+  useEffect(() => {
+    let isMounted = true
+    const checkStatus = async () => {
+      try {
+        const res = await fetch('/api/portal/status')
+        if (res.ok && isMounted) {
+          const data = await res.json()
+          setPortalStatus({
+            state: data.state || 'offline',
+            label: data.label || 'Navegador Desconectado'
+          })
+        }
+      } catch {
+        if (isMounted) {
+          setPortalStatus({
+            state: 'offline',
+            label: 'Navegador Desconectado'
+          })
+        }
+      }
+    }
+
+    checkStatus()
+    const interval = setInterval(checkStatus, 8000)
+    return () => {
+      isMounted = false
+      clearInterval(interval)
+    }
+  }, [])
+
+  const handleConnectBrowser = async () => {
+    toast.info('Iniciando navegador da escola...')
+    try {
+      await fetch('/api/sidecar-task', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'connect_browser' })
+      })
+      setPortalStatus({ state: 'checking', label: 'Verificando...' })
+    } catch {}
+  }
 
  const toggleLiveMode = () => {
     if (!isLiveMode && requiresContinuousListeningConsent()) {
@@ -1259,6 +1329,7 @@ export default function RafinhaChat({ onNavigate, onCommandReady }: RafinhaChatP
  useEffect(() => {
     const handleWake = () => {
       setIsOpen(true)
+      setIsMinimized(false)
       activeSessionRef.current?.activate()
       audioFeedback.playListenStartChime()
       setTimeout(() => voiceStartRef.current(), 200)
@@ -1267,6 +1338,7 @@ export default function RafinhaChat({ onNavigate, onCommandReady }: RafinhaChatP
       const text = (e as CustomEvent<string>).detail
       if (text) {
         setIsOpen(true)
+        setIsMinimized(false)
         activeSessionRef.current?.activate()
         setTimeout(() => dispatchSend(text), 200)
       }
@@ -1511,11 +1583,12 @@ export default function RafinhaChat({ onNavigate, onCommandReady }: RafinhaChatP
  noiseGateThreshold: 3,
  minConfidence: 0.1,
  onBargeIn: handleBargeIn,
- onWakePhrase: () => {
-   setIsOpen(true)
-   audioFeedback.playWakeChime()
-   activeSessionRef.current?.activate()
- },
+  onWakePhrase: () => {
+    setIsOpen(true)
+    setIsMinimized(false)
+    audioFeedback.playWakeChime()
+    activeSessionRef.current?.activate()
+  },
  onVolumeUpdate: (vol: number) => {
  window.dispatchEvent(new CustomEvent('rafinha:orb_volume', { detail: vol }))
  },
@@ -1651,6 +1724,56 @@ export default function RafinhaChat({ onNavigate, onCommandReady }: RafinhaChatP
  console.error('Erro ao processar confirmação de portal task:', e)
  }
  }
+
+  // ─── INTERCEPTOR DE AÇÃO DE PORTAL ESCOLAR (CAMADA DE SUPERFÍCIE NATURAL) ───────────
+  const isPortalAction =
+    /(?:lan[çc][a|e|ar]|coloc[a|e|ar]|bot[a|e|ar]|registr[a|e|ar]|marc[a|e|ar])\s+(?:a\s+)?(?:nota|falta)/i.test(trimmed) ||
+    /^(?:o\s+)?portal\s+(?:t[áa]|est[áa])\s+aberto/i.test(trimmed) ||
+    /(?:quem\s+s[ãa]o\s+os\s+alunos|lista\s+de\s+alunos|ler\s+(?:a\s+)?turma)/i.test(trimmed) ||
+    /^[a-zA-ZÀ-ÿ\s]+\s+nota\s+\d+(?:[.,]\d+)?$/i.test(trimmed)
+
+  if (isPortalAction) {
+    try {
+      const portalRes = await fetch('/api/portal/intent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: trimmed })
+      })
+
+      if (portalRes.ok) {
+        const portalData = await portalRes.json()
+        const replyMsg = portalData.mensagem || 'Operação processada no portal.'
+        setMessages(prev => [...prev, { role: 'assistant', content: replyMsg }])
+        speak(replyMsg)
+
+        if (portalData.card) {
+          const cardData = portalData.card
+          const newTask = {
+            id: cardData.taskId || `task_${Date.now()}`,
+            portal: cardData.portal || 'Portal Escolar',
+            action_type: cardData.actionType || 'lancar_nota',
+            class_ref: cardData.classRef || '',
+            payload: {
+              summary: cardData.summary,
+              diff: cardData.diff,
+              prefilled_screenshot_url: cardData.screenshotUrl
+            }
+          }
+          setPendingPortalTask(newTask)
+          try {
+            sessionStorage.setItem('teacher_active_portal_task', JSON.stringify(newTask))
+            window.dispatchEvent(new Event('teacher:portal_task_pending'))
+          } catch {}
+        }
+
+        setIsLoading(false)
+        isLoadingRef.current = false
+        return
+      }
+    } catch (portalErr) {
+      console.warn('[RafinhaChat] Erro ao despachar ação de portal natural:', portalErr)
+    }
+  }
 
  const autoMode = localStorage.getItem('teacher_auto_mode') === 'true'
  let provider = 'gemini', userKey = ''
@@ -1830,8 +1953,19 @@ export default function RafinhaChat({ onNavigate, onCommandReady }: RafinhaChatP
 
  // Listener de eventos para abrir Rafinha a partir do topo / Dashboard
  useEffect(() => {
-   const handleOpen = () => setIsOpen(true)
-   const handleToggle = () => setIsOpen(prev => !prev)
+   const handleOpen = () => {
+     setIsOpen(true)
+     setIsMinimized(false)
+   }
+   const handleToggle = () => {
+     setIsOpen(prev => {
+       if (!prev) {
+         setIsMinimized(false)
+         return true
+       }
+       return false
+     })
+   }
    window.addEventListener('teacher:open_rafinha', handleOpen)
    window.addEventListener('teacher:toggle_rafinha', handleToggle)
    return () => {
@@ -1848,287 +1982,452 @@ export default function RafinhaChat({ onNavigate, onCommandReady }: RafinhaChatP
  }
  }, [speak])
 
- // Se fechado, não renderiza botão flutuante para manter o layout da tela limpo
- if (!isOpen) return null
+  // Se fechado, não renderiza botão flutuante para manter o layout da tela limpo
+  if (!isOpen) return null
 
- // Render: chat 
- return (
- <div style={{
- position: 'fixed', bottom: 24, right: 24, zIndex: 9999,
- width: 400, maxHeight: '80vh', background: '#fff', borderRadius: 20,
- boxShadow: '0 12px 48px rgba(44,26,14,0.18)', border: '1px solid #ede8dc',
- display: 'flex', flexDirection: 'column', overflow: 'hidden',
- animation: 'rafSlideUp 0.3s cubic-bezier(0.16,1,0.3,1)',
- }}>
- <style>{`
- @keyframes rafSlideUp { from { opacity:0; transform:translateY(20px) scale(0.95); } to { opacity:1; transform:none; } }
- @keyframes rafPulse { from { opacity:0.3 } to { opacity:1 } }
- @keyframes rafSpin { to { transform:rotate(360deg); } }
- @keyframes rafPing { 0%,100%{box-shadow:0 0 0 0 rgba(220,50,47,.4)} 70%{box-shadow:0 0 0 10px rgba(220,50,47,0)} }
- @keyframes rafListen { 0%,100%{box-shadow:0 0 0 0 rgba(42,161,152,.5)} 70%{box-shadow:0 0 0 8px rgba(42,161,152,0)} }
- `}</style>
-
- {/* Header */}
- <div style={{ padding: '13px 16px', background: '#2c1a0e', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
- <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
- <div style={{ width: 38, height: 38, borderRadius: '50%', background: '#fbf7f0', border: '1.5px solid rgba(255,255,255,0.4)', overflow: 'hidden', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
- <AvatarSVG size={32} />
- </div>
- <div>
- <div style={{ fontSize: 14, fontWeight: 700, color: '#fdf8f2' }}>Rafinha</div>
- <div style={{ fontSize: 10, color: '#a08060', display: 'flex', alignItems: 'center', gap: 4 }}>
- <div style={{
- width: 5, height: 5, borderRadius: '50%',
- background: isLoading ? '#b58900' : isSpeaking ? '#268bd2' : isListening ? '#2aa198' : '#859900',
- animation: isListening ? 'rafListen 1.5s infinite' : 'none',
- }} />
- {isLoading ? 'Executando...'
- : isSpeaking ? 'Falando...'
- : isListening ? ' Ouvindo...'
- : 'Online · Pronta'}
- {isHDVoice && !isLoading && <span style={{ color: '#b58900', marginLeft: 4 }}>· HD</span>}
- </div>
- </div>
- </div>
- <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
- {/* Log button */}
- <button
- onClick={() => setShowLog(v => !v)}
- title="Ver log de ações"
- style={{
- background: showLog ? 'rgba(42,161,152,0.2)' : 'rgba(255,255,255,0.08)',
- border: 'none', color: showLog ? '#2aa198' : '#a08060',
- padding: '5px 8px', borderRadius: RADIUS.md, cursor: 'pointer', fontSize: 13,
- display: 'flex', alignItems: 'center', gap: 4, position: 'relative',
- }}
- >
- <i className="ti ti-list" />
- {allLogs.length > 0 && (
- <span style={{ position: 'absolute', top: -4, right: -4, background: '#2aa198', color: '#fff', fontSize: 9, borderRadius: 9, padding: '1px 4px', fontWeight: 700 }}>
- {allLogs.length}
- </span>
- )}
- </button>
- {/* Undo */}
- {canUndo && (
- <button onClick={handleUndo} title="Desfazer" style={{
- background: 'rgba(203,75,22,0.2)', border: '1px solid rgba(203,75,22,0.5)',
- color: '#cb4b16', padding: '4px 8px', borderRadius: RADIUS.md, cursor: 'pointer', fontSize: 12,
- }}>
- <i className="ti ti-arrow-back-up" style={{ fontSize: 13 }} />
- </button>
- )}
- {/* Modo Alexa 24/7 */}
- <button
- onClick={toggleLiveMode}
- title={isLiveMode ? 'Modo Alexa Ativo (Mãos Livres Contínuo). Clique para desligar.' : 'Ativar Modo Alexa 24/7 (Requer consentimento de privacidade)'}
- style={{
- background: isLiveMode ? '#dc322f' : 'rgba(255,255,255,0.12)', border: 'none', color: '#fff',
- padding: '5px 10px', borderRadius: RADIUS.md, cursor: 'pointer', fontSize: 12, fontWeight: 700,
- display: 'flex', alignItems: 'center', gap: 4,
- animation: isLiveMode ? 'rafPing 2s ease-in-out infinite' : 'none',
- }}
- >
- <i className="ti ti-headset" />
- <span>{isLiveMode ? ' ALEXA ON' : ' Modo Alexa'}</span>
- </button>
- {/* Voz / Modo Silencioso */}
- <button
- onClick={toggleVoiceOut}
- title={voiceOut ? '🔊 Voz Ativada (Rafinha fala as respostas). Clique para alternar para Modo Silencioso.' : '🔇 Modo Silencioso Ativo (Apenas texto, sem áudio). Clique para ativar a voz.'}
- style={{
- background: voiceOut ? 'rgba(133,153,0,0.25)' : 'rgba(255,255,255,0.08)',
- border: `1px solid ${voiceOut ? 'rgba(133,153,0,0.4)' : 'rgba(255,255,255,0.15)'}`,
- color: voiceOut ? '#859900' : '#a08060',
- padding: '4px 8px',
- borderRadius: RADIUS.md,
- cursor: 'pointer',
- fontSize: 12,
- fontWeight: 700,
- display: 'flex',
- alignItems: 'center',
- gap: 4,
- }}
- >
- <i className={voiceOut ? 'ti ti-volume' : 'ti ti-volume-off'} style={{ fontSize: 13 }} />
- <span>{voiceOut ? 'Voz' : 'Mudo'}</span>
- </button>
- <button onClick={() => setIsOpen(false)} style={{ background: 'none', border: 'none', color: '#a08060', fontSize: 20, cursor: 'pointer', lineHeight: 1 }}>×</button>
- </div>
- </div>
-
- {/* Indicador Visual Permanente de Escuta Contínua (Transparência Google STT) */}
- {isLiveMode && (
-    <div style={{
-      background: '#fef2f2',
-      borderBottom: '1px solid #fecaca',
-      padding: '6px 14px',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      fontSize: 11,
-      color: '#991b1b',
-      fontWeight: 700,
-      flexShrink: 0
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#dc322f', display: 'inline-block', animation: 'rafPing 1.5s infinite' }} />
-        <span>🎙️ ESCUTA CONTÍNUA ATIVA (Google STT)</span>
-      </div>
-      <button
-        onClick={toggleLiveMode}
+  // Se minimizado, renderiza dock bar compacto e elegante no canto inferior direito
+  if (isMinimized) {
+    return (
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={() => setIsMinimized(false)}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setIsMinimized(false) }}
         style={{
-          background: '#dc322f',
-          color: '#fff',
-          border: 'none',
-          borderRadius: 6,
-          padding: '2px 8px',
-          fontSize: 10,
-          fontWeight: 700,
-          cursor: 'pointer'
+          position: 'fixed',
+          bottom: 24,
+          right: 24,
+          zIndex: 9999,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 10,
+          padding: '8px 14px 8px 10px',
+          background: '#2c1a0e',
+          color: '#fdf8f2',
+          borderRadius: 30,
+          boxShadow: '0 8px 28px rgba(44,26,14,0.28)',
+          border: '1px solid rgba(255,255,255,0.15)',
+          cursor: 'pointer',
+          transition: 'all 0.2s ease',
+          userSelect: 'none',
         }}
+        title="Clique para expandir o chat da Rafinha"
       >
-        Desligar
-      </button>
+        <div style={{ position: 'relative', width: 32, height: 32, borderRadius: '50%', background: '#fbf7f0', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <AvatarSVG size={26} />
+          <span style={{
+            position: 'absolute',
+            bottom: 0,
+            right: 0,
+            width: 8,
+            height: 8,
+            borderRadius: '50%',
+            background: isLoading ? '#b58900' : isSpeaking ? '#268bd2' : isListening ? '#2aa198' : '#859900',
+            border: '1.5px solid #2c1a0e',
+          }} />
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          <span style={{ fontSize: 13, fontWeight: 700, lineHeight: 1.2 }}>Rafinha AI</span>
+          <span style={{ fontSize: 10, color: '#a08060', lineHeight: 1.1 }}>
+            {isLoading ? 'Executando...' : isSpeaking ? 'Falando...' : isListening ? 'Ouvindo...' : 'Minimizada · Clique para abrir'}
+          </span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 6 }}>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); setIsMinimized(false) }}
+            title="Expandir"
+            style={{ background: 'rgba(255,255,255,0.12)', border: 'none', color: '#fdf8f2', width: 26, height: 26, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+          >
+            <i className="ti ti-chevron-up" style={{ fontSize: 14 }} />
+          </button>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); setIsOpen(false) }}
+            title="Fechar"
+            style={{ background: 'none', border: 'none', color: '#a08060', width: 22, height: 22, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: 16 }}
+          >
+            ×
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // Render: chat 
+  return (
+  <div style={{
+  position: 'fixed', bottom: 24, right: 24, zIndex: 9999,
+  width: 420, maxWidth: 'calc(100vw - 32px)', height: '600px', maxHeight: '85vh',
+  background: '#fdfbf7', borderRadius: 20,
+  boxShadow: '0 16px 48px rgba(44,26,14,0.22), 0 0 0 1px rgba(139,94,60,0.12)', border: '1px solid #ede8dc',
+  display: 'flex', flexDirection: 'column', overflow: 'hidden',
+  animation: 'rafSlideUp 0.3s cubic-bezier(0.16,1,0.3,1)',
+  }}>
+  <style>{`
+  @keyframes rafSlideUp { from { opacity:0; transform:translateY(20px) scale(0.95); } to { opacity:1; transform:none; } }
+  @keyframes rafPulse { from { opacity:0.3 } to { opacity:1 } }
+  @keyframes rafSpin { to { transform:rotate(360deg); } }
+  @keyframes rafPing { 0%,100%{box-shadow:0 0 0 0 rgba(220,50,47,.4)} 70%{box-shadow:0 0 0 10px rgba(220,50,47,0)} }
+  @keyframes rafListen { 0%,100%{box-shadow:0 0 0 0 rgba(42,161,152,.5)} 70%{box-shadow:0 0 0 8px rgba(42,161,152,0)} }
+  `}</style>
+
+  {/* Header */}
+  <div style={{ padding: '12px 16px', background: '#2c1a0e', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+  <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#fbf7f0', border: '1.5px solid rgba(255,255,255,0.4)', overflow: 'hidden', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+  <AvatarSVG size={30} />
+  </div>
+  <div>
+  <div style={{ fontSize: 14, fontWeight: 700, color: '#fdf8f2', display: 'flex', alignItems: 'center', gap: 6 }}>
+    <span>Rafinha AI</span>
+    {isHDVoice && !isLoading && <span style={{ fontSize: 9, color: '#b58900', background: 'rgba(181,137,0,0.18)', padding: '1px 5px', borderRadius: 4, fontWeight: 700 }}>HD</span>}
+  </div>
+  <div style={{ fontSize: 10, color: '#a08060', display: 'flex', alignItems: 'center', gap: 4 }}>
+  <div style={{
+  width: 5, height: 5, borderRadius: '50%',
+  background: isLoading ? '#b58900' : isSpeaking ? '#268bd2' : isListening ? '#2aa198' : '#859900',
+  animation: isListening ? 'rafListen 1.5s infinite' : 'none',
+  }} />
+  {isLoading ? 'Executando ação...'
+  : isSpeaking ? 'Falando...'
+  : isListening ? 'Ouvindo...'
+  : 'Online · Pronta'}
+  </div>
+  </div>
+  </div>
+  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+     {/* Indicador Visual de Status do Portal Escolar para a Professora */}
+     <div
+       onClick={portalStatus.state === 'offline' ? handleConnectBrowser : undefined}
+       title={portalStatus.state === 'offline' ? 'Navegador da escola desconectado - Clique para conectar' : `Portal Escolar: ${portalStatus.label}`}
+       style={{
+         display: 'flex',
+         alignItems: 'center',
+         gap: 4,
+         padding: '4px 8px',
+         borderRadius: 12,
+         fontSize: 10,
+         fontWeight: 600,
+         cursor: portalStatus.state === 'offline' ? 'pointer' : 'default',
+         background: portalStatus.state === 'ready'
+           ? 'rgba(133, 153, 0, 0.2)'
+           : portalStatus.state === 'needs_login'
+           ? 'rgba(181, 137, 0, 0.2)'
+           : 'rgba(255, 255, 255, 0.08)',
+         border: `1px solid ${
+           portalStatus.state === 'ready'
+             ? '#859900'
+             : portalStatus.state === 'needs_login'
+             ? '#b58900'
+             : 'rgba(255, 255, 255, 0.15)'
+         }`,
+         color: portalStatus.state === 'ready'
+           ? '#a6e22e'
+           : portalStatus.state === 'needs_login'
+           ? '#e6db74'
+           : '#c7b299',
+         transition: 'all 0.2s',
+       }}
+     >
+       <span style={{
+         width: 5,
+         height: 5,
+         borderRadius: '50%',
+         background: portalStatus.state === 'ready'
+           ? '#859900'
+           : portalStatus.state === 'needs_login'
+           ? '#b58900'
+           : '#888',
+         boxShadow: portalStatus.state === 'ready' ? '0 0 6px #859900' : 'none'
+       }} />
+       <span>Portal</span>
+       {portalStatus.state === 'offline' && (
+         <i className="ti ti-plug" style={{ fontSize: 9, marginLeft: 1 }} />
+       )}
+     </div>
+
+  {/* Undo */}
+  {canUndo && (
+  <button onClick={handleUndo} title="Desfazer última alteração" style={{
+  background: 'rgba(203,75,22,0.2)', border: '1px solid rgba(203,75,22,0.5)',
+  color: '#cb4b16', padding: '4px 7px', borderRadius: RADIUS.md, cursor: 'pointer', fontSize: 12,
+  }}>
+  <i className="ti ti-arrow-back-up" style={{ fontSize: 13 }} />
+  </button>
+  )}
+
+  {/* Voz / Modo Silencioso */}
+  <button
+  type="button"
+  onClick={toggleVoiceOut}
+  title={voiceOut ? 'Voz ativada (clique para silenciar)' : 'Voz desativada (clique para ativar)'}
+  style={{
+  background: voiceOut ? 'rgba(133,153,0,0.2)' : 'rgba(255,255,255,0.08)',
+  border: `1px solid ${voiceOut ? 'rgba(133,153,0,0.4)' : 'rgba(255,255,255,0.15)'}`,
+  color: voiceOut ? '#a6e22e' : '#a08060',
+  padding: '4px 8px',
+  borderRadius: RADIUS.md,
+  cursor: 'pointer',
+  fontSize: 12,
+  display: 'flex',
+  alignItems: 'center',
+  gap: 4,
+  }}
+  >
+  <i className={voiceOut ? 'ti ti-volume' : 'ti ti-volume-off'} style={{ fontSize: 13 }} />
+  </button>
+
+  {/* Log button */}
+  <button
+  type="button"
+  onClick={() => setShowLog(v => !v)}
+  title="Histórico de Ações"
+  style={{
+  background: showLog ? 'rgba(42,161,152,0.2)' : 'rgba(255,255,255,0.08)',
+  border: `1px solid ${showLog ? 'rgba(42,161,152,0.4)' : 'transparent'}`,
+  color: showLog ? '#2aa198' : '#a08060',
+  padding: '4px 7px', borderRadius: RADIUS.md, cursor: 'pointer', fontSize: 13,
+  display: 'flex', alignItems: 'center', position: 'relative',
+  }}
+  >
+  <i className="ti ti-list" />
+  {allLogs.length > 0 && (
+  <span style={{ position: 'absolute', top: -3, right: -3, background: '#2aa198', color: '#fff', fontSize: 8, borderRadius: 8, padding: '1px 3px', fontWeight: 700 }}>
+  {allLogs.length}
+  </span>
+  )}
+  </button>
+
+  {/* Botão Minimizar */}
+  <button
+  type="button"
+  onClick={() => setIsMinimized(true)}
+  title="Minimizar chat"
+  style={{
+    background: 'rgba(255,255,255,0.08)',
+    border: 'none',
+    color: '#fdf8f2',
+    width: 26,
+    height: 26,
+    borderRadius: RADIUS.md,
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    transition: 'background 0.2s',
+  }}
+  >
+  <i className="ti ti-minus" style={{ fontSize: 13 }} />
+  </button>
+
+  {/* Botão Fechar */}
+  <button
+  type="button"
+  onClick={() => setIsOpen(false)}
+  title="Fechar chat"
+  style={{
+    background: 'none',
+    border: 'none',
+    color: '#a08060',
+    fontSize: 18,
+    cursor: 'pointer',
+    lineHeight: 1,
+    padding: '2px 4px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  }}
+  >
+  ×
+  </button>
+  </div>
+  </div>
+
+  {/* Messages (CLEAN diagrama elegante) */}
+  <div style={{ flex: 1, padding: '16px 14px', overflowY: 'auto', background: '#fdfbf7', display: 'flex', flexDirection: 'column', gap: 14 }}>
+  {messages.map((m, i) => {
+  const isUser = m.role === 'user'
+
+  if (isUser) {
+    return (
+      <div key={i} style={{ display: 'flex', justifyContent: 'flex-end', width: '100%' }}>
+        <div style={{
+          maxWidth: '85%',
+          padding: '10px 14px',
+          borderRadius: '16px 16px 4px 16px',
+          background: 'linear-gradient(135deg, #8b5e3c, #6d4628)',
+          color: '#ffffff',
+          fontSize: 13.5,
+          lineHeight: 1.5,
+          boxShadow: '0 2px 8px rgba(109,70,40,0.18)',
+          wordBreak: 'break-word',
+        }}>
+          {m.content}
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, width: '100%' }}>
+      <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#fff', border: '1.5px solid rgba(139,94,60,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2, boxShadow: '0 1px 4px rgba(44,26,14,0.06)' }}>
+        <AvatarSVG size={22} />
+      </div>
+      {m.content ? (
+        <div style={{
+          maxWidth: '85%',
+          padding: '11px 15px',
+          borderRadius: '16px 16px 16px 4px',
+          background: '#ffffff',
+          color: '#2c1a0e',
+          border: '1px solid #ede8dc',
+          boxShadow: '0 2px 10px rgba(44,26,14,0.04)',
+          fontSize: 13.5,
+          lineHeight: 1.6,
+          wordBreak: 'break-word',
+        }}>
+          <span dangerouslySetInnerHTML={{ __html: formatRafinhaContent(m.content) }} />
+        </div>
+      ) : (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '10px 14px', background: '#fff', borderRadius: '16px 16px 16px 4px', border: '1px solid #ede8dc', boxShadow: '0 2px 8px rgba(44,26,14,0.04)' }}>
+          {[0, 0.2, 0.4].map((d, idx) => (
+            <div key={idx} style={{ width: 6, height: 6, borderRadius: '50%', background: '#b58900', animation: `rafPulse 1s infinite alternate ${d}s` }} />
+          ))}
+        </div>
+      )}
     </div>
+  )
+  })}
+
+   {/* Card Interativo de Aprovação Human-in-the-Loop (Etapa 5) */}
+   {pendingPortalTask && (
+     <div style={{ marginLeft: 36 }}>
+     <PortalApprovalCard
+       taskId={pendingPortalTask.id}
+       portal={pendingPortalTask.portal || 'Portal Escolar'}
+       actionType={pendingPortalTask.action_type || 'lancar_nota'}
+       classRef={pendingPortalTask.class_ref}
+       summary={pendingPortalTask.payload?.summary}
+       diff={pendingPortalTask.payload?.diff}
+       screenshotUrl={pendingPortalTask.payload?.prefilled_screenshot_url}
+       onApproved={() => {
+         setPendingPortalTask(null)
+         const replyText = `✅ Perfeito! Submissão final aprovada e executada com sucesso no portal ${pendingPortalTask.portal || 'escolar'}. O lançamento foi concluído.`
+         setMessages(prev => [...prev, { role: 'assistant', content: replyText }])
+         speak(replyText)
+       }}
+       onRejected={() => {
+         setPendingPortalTask(null)
+         const replyText = `Operação cancelada com segurança. Nenhuma alteração permanente foi submetida no portal.`
+         setMessages(prev => [...prev, { role: 'assistant', content: replyText }])
+         speak(replyText)
+       }}
+     />
+     </div>
+   )}
+
+  {/* Execution timers inline, clicáveis para pular */}
+  {runningTools.length > 0 && (
+  <div style={{ marginLeft: 36, display: 'flex', flexDirection: 'column', gap: 6, maxWidth: '85%' }}>
+  {runningTools.map((entry, i) => (
+  <ExecutionTimer
+  key={`${entry.id}-${i}`}
+  entry={entry}
+  onSkip={() => { skipSignalRef.current = true }}
+  />
+  ))}
+  </div>
   )}
 
- {/* Messages (CLEAN só texto) */}
- <div style={{ flex: 1, padding: '14px', overflowY: 'auto', background: '#fdf8f2', display: 'flex', flexDirection: 'column', gap: 12 }}>
- {messages.map((m, i) => (
- <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: m.role === 'user' ? 'flex-end' : 'flex-start' }}>
- {m.content && (
- <div style={{
- maxWidth: '88%', padding: '10px 14px', borderRadius: RADIUS.xl,
- background: m.role === 'user' ? '#2c1a0e' : '#fff',
- color: m.role === 'user' ? '#fdf8f2' : '#2c1a0e',
- border: m.role === 'user' ? 'none' : '1px solid #ede8dc',
- boxShadow: m.role === 'user' ? 'none' : '0 1px 6px rgba(0,0,0,0.05)',
- fontSize: TEXT.body, lineHeight: 1.55,
- }}>
- <span dangerouslySetInnerHTML={{ __html: m.content.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>').replace(/\n/g, '<br/>') }} />
- </div>
- )}
- </div>
- ))}
-
-  {/* Card Interativo de Aprovação Human-in-the-Loop (Etapa 5) */}
-  {pendingPortalTask && (
-    <PortalApprovalCard
-      taskId={pendingPortalTask.id}
-      portal={pendingPortalTask.portal || 'Portal Escolar'}
-      actionType={pendingPortalTask.action_type || 'lancar_nota'}
-      classRef={pendingPortalTask.class_ref}
-      summary={pendingPortalTask.payload?.summary}
-      diff={pendingPortalTask.payload?.diff}
-      screenshotUrl={pendingPortalTask.payload?.prefilled_screenshot_url}
-      onApproved={() => {
-        setPendingPortalTask(null)
-        const replyText = `✅ Perfeito! Submissão final aprovada e executada com sucesso no portal ${pendingPortalTask.portal || 'escolar'}. O lançamento foi concluído.`
-        setMessages(prev => [...prev, { role: 'assistant', content: replyText }])
-        speak(replyText)
-      }}
-      onRejected={() => {
-        setPendingPortalTask(null)
-        const replyText = `Operação cancelada com segurança. Nenhuma alteração permanente foi submetida no portal.`
-        setMessages(prev => [...prev, { role: 'assistant', content: replyText }])
-        speak(replyText)
-      }}
-    />
+  {/* Loading dots (sem tools rodando) */}
+  {isLoading && runningTools.length === 0 && messages[messages.length - 1]?.content !== '' && (
+  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, width: '100%' }}>
+    <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#fff', border: '1.5px solid rgba(139,94,60,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+      <AvatarSVG size={22} />
+    </div>
+    <div style={{ display: 'flex', gap: 5, padding: '10px 14px', background: '#fff', borderRadius: '16px 16px 16px 4px', border: '1px solid #ede8dc', boxShadow: '0 2px 8px rgba(44,26,14,0.04)' }}>
+    {[0, 0.2, 0.4].map((d, idx) => (
+      <div key={idx} style={{ width: 6, height: 6, borderRadius: '50%', background: '#b58900', animation: `rafPulse 1s infinite alternate ${d}s` }} />
+    ))}
+    </div>
+  </div>
   )}
 
- {/* Execution timers inline, clicáveis para pular */}
- {runningTools.length > 0 && (
- <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
- {runningTools.map((entry, i) => (
- <ExecutionTimer
- key={`${entry.id}-${i}`}
- entry={entry}
- onSkip={() => { skipSignalRef.current = true }}
- />
- ))}
- </div>
- )}
+  {/* Interim voice text */}
+  {interimText && !isLoading && (
+  <div style={{
+  alignSelf: 'flex-end', maxWidth: '85%', padding: '8px 14px',
+  borderRadius: '16px 16px 4px 16px', background: 'rgba(42,161,152,0.08)',
+  border: '1px dashed rgba(42,161,152,0.3)',
+  fontSize: 12.5, color: '#2aa198', fontStyle: 'italic',
+  display: 'flex', alignItems: 'center', gap: 6,
+  }}>
+  <i className="ti ti-microphone" style={{ animation: 'rafPulse 1s infinite' }} />
+  <span>{interimText}...</span>
+  </div>
+  )}
 
- {/* Loading dots (sem tools rodando) */}
- {isLoading && runningTools.length === 0 && (
- <div style={{ display: 'flex', gap: 5, padding: '10px 14px', background: '#fff', borderRadius: RADIUS.lg, width: 'fit-content', border: '1px solid #ede8dc' }}>
- {[0, 0.2, 0.4].map((d, i) => (
- <div key={i} style={{ width: 6, height: 6, borderRadius: '50%', background: '#b58900', animation: `rafPulse 1s infinite alternate ${d}s` }} />
- ))}
- </div>
- )}
+  <div ref={messagesEndRef} />
+  </div>
 
- {/* Interim voice text */}
- {interimText && !isLoading && (
- <div style={{
- alignSelf: 'flex-end', maxWidth: '85%', padding: '8px 14px',
- borderRadius: RADIUS.lg, background: 'rgba(7,54,66,0.06)',
- border: '1px dashed rgba(7,54,66,0.2)',
- fontSize: 13, color: '#a08060', fontStyle: 'italic',
- }}>
- {interimText}...
- </div>
- )}
+  {/* Input */}
+  <div style={{ padding: '10px 14px', background: '#fff', borderTop: '1px solid #ede8dc', display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
+  <button
+  type="button"
+  onClick={() => isListening ? voiceStop() : voiceStart()}
+  disabled={isLoading || isSpeaking}
+  title={isListening ? 'Parar gravação' : 'Falar com a Rafinha'}
+  style={{
+  width: 38, height: 38, borderRadius: '50%', border: 'none', flexShrink: 0,
+  background: isListening ? '#dc322f' : '#f5f0e8',
+  color: isListening ? '#fff' : '#8b5e3c',
+  cursor: isLoading || isSpeaking ? 'not-allowed' : 'pointer',
+  display: 'flex', alignItems: 'center', justifyContent: 'center',
+  animation: isListening ? 'rafListen 1.5s ease-in-out infinite' : 'none',
+  opacity: isLoading || isSpeaking ? 0.5 : 1,
+  transition: 'all 0.2s',
+  }}
+  >
+  <i className={isListening ? 'ti ti-microphone-off' : 'ti ti-microphone'} style={{ fontSize: 18 }} />
+  </button>
 
- <div ref={messagesEndRef} />
- </div>
+  <input
+  value={inputText}
+  onChange={e => setInputText(e.target.value)}
+  onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); dispatchSend(inputText) } }}
+  placeholder={isListening ? 'Ouvindo... pode falar!' : 'Peça algo ou dê um comando...'}
+  disabled={isLoading}
+  style={{
+  flex: 1, padding: '10px 14px', borderRadius: 20,
+  border: `1.5px solid ${isListening ? '#2aa198' : '#ede8dc'}`,
+  background: isListening ? 'rgba(42,161,152,0.06)' : '#fdfbf7',
+  outline: 'none', fontSize: 13.5, color: '#2c1a0e',
+  fontFamily: "'Outfit', sans-serif",
+  transition: 'border 0.2s, background 0.2s',
+  }}
+  />
 
- {/* Input */}
- <div style={{ padding: '10px 12px', background: '#fff', borderTop: '1px solid #ede8dc', display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
- <button
- type="button"
- onClick={() => isListening ? voiceStop() : voiceStart()}
- disabled={isLoading || isSpeaking || isLiveMode}
- style={{
- width: 40, height: 40, borderRadius: '50%', border: 'none', flexShrink: 0,
- background: isListening ? '#dc322f' : '#f5f0e8',
- color: isListening ? '#fff' : '#2c1a0e',
- cursor: isLoading || isSpeaking || isLiveMode ? 'not-allowed' : 'pointer',
- display: 'flex', alignItems: 'center', justifyContent: 'center',
- animation: isListening ? 'rafListen 1.5s ease-in-out infinite' : 'none',
- opacity: isLoading || isSpeaking || isLiveMode ? 0.5 : 1,
- }}
- >
- <i className={isListening ? 'ti ti-microphone-off' : 'ti ti-microphone'} style={{ fontSize: 17 }} />
- </button>
-
- <input
- value={inputText}
- onChange={e => setInputText(e.target.value)}
- onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); dispatchSend(inputText) } }}
- placeholder={isLiveMode ? ' Mãos Livres ativo...' : isListening ? ' Ouvindo pode falar!' : 'Digite ou fale...'}
- disabled={isLoading || isLiveMode}
- style={{
- flex: 1, padding: '10px 14px', borderRadius: 20,
- border: `1px solid ${isListening ? '#2aa198' : '#ede8dc'}`,
- background: isLiveMode ? '#f0e8d8' : isListening ? 'rgba(42,161,152,0.06)' : '#f5f0e8',
- outline: 'none', fontSize: TEXT.body, color: '#2c1a0e',
- fontFamily: "'Outfit', sans-serif",
- transition: 'border 0.2s, background 0.2s',
- }}
- />
-
- {!isLiveMode && (
- <button
- onClick={() => dispatchSend(inputText)}
- disabled={isLoading || !inputText.trim()}
- style={{
- width: 40, height: 40, borderRadius: '50%', border: 'none',
- background: inputText.trim() && !isLoading ? '#b58900' : '#ede8dc',
- color: '#fff', flexShrink: 0,
- cursor: inputText.trim() && !isLoading ? 'pointer' : 'default',
- display: 'flex', alignItems: 'center', justifyContent: 'center',
- transition: 'background 0.2s',
- }}
- >
- {isLoading
- ? <i className="ti ti-loader-2" style={{ fontSize: 15, animation: 'rafSpin 1s linear infinite' }} />
- : <i className="ti ti-send" style={{ fontSize: 15 }} />
- }
- </button>
- )}
- </div>
+  <button
+  type="button"
+  onClick={() => dispatchSend(inputText)}
+  disabled={isLoading || !inputText.trim()}
+  title="Enviar mensagem"
+  style={{
+  width: 38, height: 38, borderRadius: '50%', border: 'none',
+  background: inputText.trim() && !isLoading ? '#8b5e3c' : '#ede8dc',
+  color: '#fff', flexShrink: 0,
+  cursor: inputText.trim() && !isLoading ? 'pointer' : 'default',
+  display: 'flex', alignItems: 'center', justifyContent: 'center',
+  transition: 'background 0.2s',
+  }}
+  >
+  {isLoading
+  ? <i className="ti ti-loader-2" style={{ fontSize: 16, animation: 'rafSpin 1s linear infinite' }} />
+  : <i className="ti ti-send" style={{ fontSize: 16 }} />
+  }
+  </button>
+  </div>
 
  {/* Log Drawer (overlay) */}
  {showLog && (

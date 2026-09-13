@@ -1,0 +1,14 @@
+{
+  "timestamp": "2026-09-11 13:31:50",
+  "target_command": "\"C:\\Users\\rafae\\AppData\\Local\\Python\\pythoncore-3.14-64\\pythonw.exe\" \"C:\\Users\\rafae\\Documents\\antigravity\\blissful-noether\\sidecar\\manual_runner.py\" --tray",
+  "pythonw_path": "C:\\Users\\rafae\\AppData\\Local\\Python\\pythoncore-3.14-64\\pythonw.exe",
+  "scheduled_task_attempted": true,
+  "scheduled_task_active": false,
+  "scheduled_task_status": "blocked_or_permission_denied",
+  "scheduled_task_details": "ERRO: Acesso negado.",
+  "run_key_active": true,
+  "run_key_status": "active",
+  "primary_mechanism": "hkcu_run_key",
+  "desktop_shortcut_active": true,
+  "desktop_shortcut_details": "Atalho criado com sucesso na Área de Trabalho: C:\\Users\\rafae\\Desktop\\Teacher AI.lnk"
+}

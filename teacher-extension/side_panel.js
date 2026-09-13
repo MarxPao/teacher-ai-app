@@ -51,10 +51,14 @@ async function ensureScriptInjected(tabId) {
  */
 
 const PLATFORMS = {
-  machado:       { name: 'Machado Sobrinho', domain: 'paineldoaluno.com.br' },
-  santacatarina: { name: 'Rede Santa Catarina', domain: 'redesantacatarina.org.br' },
-  plural:        { name: 'Plurall', domain: 'plural.net' },
-  cambridge:     { name: 'Cambridge One', domain: 'cambridgeone.org' },
+  machado:       { name: 'Machado Sobrinho', domains: ['paineldoaluno.com.br', 'machadosobrinho', 'paineldoprofessor'] },
+  santacatarina: { name: 'Rede Santa Catarina', domains: ['redesantacatarina.org.br'] },
+  plural:        { name: 'Plurall (SOMOS)', domains: ['plural.net', 'plurall.net'] },
+  cambridge:     { name: 'Cambridge One', domains: ['cambridgeone.org'] },
+  ieducar:       { name: 'i-Educar', domains: ['ieducar.com.br', 'comunidade.ieducar'] },
+  teams:         { name: 'Microsoft Teams', domains: ['teams.microsoft.com'] },
+  sed_sp:        { name: 'SED São Paulo', domains: ['sed.educacao.sp.gov.br'] },
+  sandbox:       { name: 'Portal de Teste (Sandbox)', domains: ['localhost', '127.0.0.1', 'portal_mock', 'portal_real'] }
 }
 
 let activePlatform = 'machado'
@@ -86,32 +90,33 @@ async function updatePortalConnection() {
     }
     const [portalTab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!portalTab?.url) {
-      statusBadge.className = 'status-badge';
-      statusPortalName.textContent = 'Aguardando portal...';
+      if (statusBadge) statusBadge.className = 'status-badge';
+      if (statusPortalName) statusPortalName.textContent = 'Aguardando portal escolar';
       return;
     }
 
     const url = portalTab.url.toLowerCase();
     let found = false
     for (const [key, p] of Object.entries(PLATFORMS)) {
-      if (url.includes(p.domain)) {
-        activePlatform = key
-        statusBadge.className = 'status-badge online'
-        statusPortalName.textContent = p.name
+      const domains = p.domains || [p.domain];
+      if (domains.some(d => url.includes(d))) {
+        activePlatform = key;
+        if (statusBadge) statusBadge.className = 'status-badge online';
+        if (statusPortalName) statusPortalName.textContent = p.name;
         document.querySelectorAll('.platform-btn').forEach(b => {
-          b.classList.toggle('active', b.dataset.platform === key)
-        })
-        found = true
-        break
+          b.classList.toggle('active', b.dataset.platform === key);
+        });
+        found = true;
+        break;
       }
     }
 
     if (!found) {
-      statusBadge.className = 'status-badge'
-      statusPortalName.textContent = 'Portal não detectado'
+      if (statusBadge) statusBadge.className = 'status-badge';
+      if (statusPortalName) statusPortalName.textContent = 'Aguardando portal escolar';
     }
   } catch (e) {
-    console.error('Erro ao detectar portal:', e)
+    console.error('Erro ao detectar portal:', e);
   }
 }
 
@@ -1096,6 +1101,1048 @@ async function loadSavedSkills() {
         Não foi possível conectar com o backend de skills.
       </div>
     `;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 5. MOTOR AGÊNTICO DE CARD DE APROVAÇÃO (VOZ / TEXTO / DESAMBIGUAÇÃO / SAFEWRITE)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+let activePendingApproval = null;
+
+function normalizeStudentName(name) {
+  return (name || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
+function matchStudentByName(queryName, roster, queryMatricula) {
+  const qClean = normalizeStudentName(queryName);
+  const cleanMat = String(queryMatricula || '').trim();
+
+  if (!roster || roster.length === 0 || (!qClean && !cleanMat)) {
+    return { status: 'not_found', student: null, candidates: [] };
+  }
+
+  // VIA 1: Match Direto por Matrícula / portal_native_id (Determinístico)
+  if (cleanMat) {
+    const matMatches = roster.filter(s => {
+      const sMat = String(s.matricula || s.portal_native_id || s.rollNumber || s.id || '').trim();
+      return sMat && sMat === cleanMat;
+    });
+    if (matMatches.length === 1) {
+      return { status: 'exact', student: matMatches[0], candidates: matMatches };
+    }
+  }
+
+  // Match direto caso queryName seja puramente a matrícula
+  const directMat = roster.filter(s => {
+    const sMat = String(s.matricula || s.portal_native_id || s.rollNumber || '').trim();
+    return sMat && sMat.toLowerCase() === qClean;
+  });
+  if (directMat.length === 1) {
+    return { status: 'exact', student: directMat[0], candidates: directMat };
+  }
+
+  // VIA 2: Correspondência exata por Nome
+  const exact = roster.filter(s => normalizeStudentName(s.name) === qClean);
+  if (exact.length === 1) {
+    return { status: 'exact', student: exact[0], candidates: exact };
+  }
+  if (exact.length > 1) {
+    return { status: 'ambiguous', student: null, candidates: exact };
+  }
+
+  // VIA 3: Prefixo ou contém nome completo
+  const substringMatches = roster.filter(s => {
+    const sNorm = normalizeStudentName(s.name);
+    return sNorm.includes(qClean) || qClean.includes(sNorm);
+  });
+  if (substringMatches.length === 1) {
+    return { status: 'confident_match', student: substringMatches[0], candidates: substringMatches };
+  }
+  if (substringMatches.length > 1) {
+    return { status: 'ambiguous', student: null, candidates: substringMatches };
+  }
+
+  // VIA 4: Primeiro nome (ex: "João" quando na lista temos "João Silva" e "João Santos")
+  const firstWord = qClean.split(' ')[0];
+  if (firstWord.length >= 2) {
+    const firstNameMatches = roster.filter(s => {
+      const sFirst = normalizeStudentName(s.name).split(' ')[0];
+      return sFirst === firstWord;
+    });
+    if (firstNameMatches.length > 1) {
+      return { status: 'ambiguous', student: null, candidates: firstNameMatches };
+    }
+    if (firstNameMatches.length === 1) {
+      return { status: 'confident_match', student: firstNameMatches[0], candidates: firstNameMatches };
+    }
+  }
+
+  return { status: 'not_found', student: null, candidates: [] };
+}
+
+function extractNavigationTarget(text) {
+  if (!text) return null;
+  let clean = text.toLowerCase()
+    .replace(/^(?:ol[áa]|oi|ei|rafinha|por\s+favor|pfv|ajuda|ajude)\s*[,:]?\s*/gi, '')
+    .replace(/\b(?:no\s+site|no\s+portal|no\s+sistema|via\s+chat|no\s+app).*$/gi, '')
+    .trim();
+  
+  const m = clean.match(/(?:entre|entra|entrar|vai|v[áa]|ir|navegue|navega|navegar|acesse|acessa|acessar|abra|abre|abrir|clique|clica|clicar|mostre|mostra)\s+(?:\b(?:em|no|na|nos|nas|para|pra|pro|pela|pelo)\b\s+)?(?:\b(?:a|o|os|as)\b\s+)?(?:\b(?:aba|menu|se[çc][ãa]o|guia|link|tela|pasta)\b\s+)?(?:\b(?:de|do|da|dos|das)\b\s+)?([a-zA-ZÀ-ÿ0-9_-]+(?:\s+[a-zA-ZÀ-ÿ0-9_-]+)?)/i);
+  if (m) {
+    let target = m[1].trim()
+      .replace(/^(?:a|o|os|as|de|do|da|dos|das)\s+/i, '')
+      .replace(/\s+(?:no|na|do|da|de|pra|para|no\s+site|no\s+portal|do\s+portal|na\s+aba|via\s+chat).*$/i, '')
+      .trim();
+    if (target && !['aluno', 'nota', 'falta', 'a nota', 'uma nota', 'site', 'portal'].includes(target.toLowerCase())) {
+      return target;
+    }
+  }
+
+  const m2 = clean.match(/(?:aba|menu|se[çc][ãa]o|guia)\s+([a-zA-ZÀ-ÿ0-9_-]+)/i);
+  if (m2) {
+    let target = m2[1].trim().replace(/^(?:de|do|da)\s+/i, '').trim();
+    if (target) return target;
+  }
+  return null;
+}
+
+async function parseNaturalIntent(text) {
+  try {
+    const res = await fetch('http://localhost:8765/natural_intent', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, parse_only: true })
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.intencao) return data.intencao;
+      if (data.intent) return data.intent;
+      if (data.acao) return data;
+    }
+  } catch (e) {
+    console.warn('[SidePanel] Endpoint natural_intent offline, usando parser heurístico local:', e);
+  }
+
+  // Heurística local de fallback resiliente
+  const navTarget = extractNavigationTarget(text);
+  if (navTarget) {
+    return {
+      acao: 'navegar_aba',
+      destino: navTarget,
+      aluno: null,
+      nota: null,
+      disciplina: 'Geral'
+    };
+  }
+
+  const isFalta = /falta|presen[çc]a|aus[êe]ncia/i.test(text);
+  const notaMatch = text.match(/(?:nota|grau|avalia[çc][ãa]o)\s+(\d+[.,]?\d*)/i) || text.match(/(\d+[.,]?\d*)\s+(?:para|pro|ao)/i);
+  const notaVal = notaMatch ? parseFloat(notaMatch[1].replace(',', '.')) : 8.5;
+  
+  let alunoName = '';
+  const alunoMatch = text.match(/(?:para|pro|ao|aluno|aluna)\s+([A-ZÁ-Úa-zá-ú\s]+)/i);
+  if (alunoMatch) {
+    alunoName = alunoMatch[1].trim().replace(/\s+(nota|falta|\d+).*/i, '');
+  } else {
+    alunoName = text.replace(/(?:lan[çc]ar?|lan[çc]a|nota|falta|\d+[.,]?\d*)/gi, '').trim();
+  }
+
+  if (isFalta) {
+    const faltaMatch = text.match(/(\d+)\s+falta/i) || text.match(/falta\s+(\d+)/i);
+    const faltasVal = faltaMatch ? parseInt(faltaMatch[1], 10) : 1;
+    return {
+      acao: 'lancar_falta',
+      aluno: alunoName || 'João Silva',
+      faltas: faltasVal,
+      disciplina: 'Geral'
+    };
+  }
+
+  return {
+    acao: 'lancar_nota',
+    aluno: alunoName || 'João Silva',
+    nota: notaVal,
+    disciplina: 'Geral'
+  };
+}
+
+// ── Utilitários do Chat Stream & Interface Conversacional ────────────────────
+
+function escapeHtml(str) {
+  if (!str) return '';
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+function scrollChatToBottom() {
+  const container = document.getElementById('chat-history-container');
+  if (container) {
+    container.scrollTop = container.scrollHeight;
+  }
+}
+
+function appendUserChatMessage(text) {
+  const container = document.getElementById('chat-history-container');
+  if (!container) return;
+  const msgEl = document.createElement('div');
+  msgEl.className = 'chat-msg user';
+  msgEl.innerHTML = `
+    <div class="chat-avatar">👩‍🏫</div>
+    <div class="chat-bubble">${escapeHtml(text)}</div>
+  `;
+  container.appendChild(msgEl);
+  scrollChatToBottom();
+  return msgEl;
+}
+
+function appendAssistantChatMessage(content, isHtml = false) {
+  const container = document.getElementById('chat-history-container');
+  if (!container) return;
+  const msgEl = document.createElement('div');
+  msgEl.className = 'chat-msg assistant';
+  msgEl.innerHTML = `
+    <div class="chat-avatar">🦉</div>
+    <div class="chat-bubble">${isHtml ? content : escapeHtml(content)}</div>
+  `;
+  container.appendChild(msgEl);
+  scrollChatToBottom();
+  return msgEl;
+}
+
+function setProcessingState(isProcessing, message = 'Rafinha pensando...') {
+  const indicator = document.getElementById('chat-typing-indicator');
+  const textEl = document.getElementById('typing-indicator-text');
+  if (!indicator) return;
+  if (isProcessing) {
+    if (textEl) textEl.textContent = message;
+    indicator.style.display = 'flex';
+    scrollChatToBottom();
+  } else {
+    indicator.style.display = 'none';
+  }
+}
+
+function fillCommandTemplate(template) {
+  const input = document.getElementById('input-agent-command');
+  if (!input) return;
+  input.value = template;
+  input.focus();
+  const idx = template.indexOf('___');
+  if (idx !== -1) {
+    input.setSelectionRange(idx, idx + 3);
+  }
+}
+
+// ── Promoção Automática de Atalhos por Frequência de Uso (Zero Setup) ────────
+
+function getActionTrackingKey(actionType, turmaName) {
+  const a = (actionType || 'acao').trim().toLowerCase();
+  const t = (turmaName || 'geral').trim().toLowerCase().replace(/\s+/g, '_');
+  return `${a}__${t}`;
+}
+
+function trackActionUsage(actionType, turmaName, commandText) {
+  try {
+    const key = getActionTrackingKey(actionType, turmaName);
+
+    // Se já promovido ou dispensado pela professora, ignora
+    const promoted = JSON.parse(localStorage.getItem('teacher_promoted_shortcuts') || '[]');
+    if (promoted.some(p => p.actionKey === key)) return;
+
+    const dismissed = JSON.parse(localStorage.getItem('teacher_dismissed_promotions') || '{}');
+    if (dismissed[key]) return;
+
+    // Incrementa contador de uso no localStorage
+    const freqs = JSON.parse(localStorage.getItem('teacher_action_frequencies') || '{}');
+    freqs[key] = (freqs[key] || 0) + 1;
+    localStorage.setItem('teacher_action_frequencies', JSON.stringify(freqs));
+
+    console.log(`[SidePanel] Frequência de ação: ${key} = ${freqs[key]} execuções`);
+
+    // Atingiu 3 execuções -> sugere promoção proativa no chat
+    if (freqs[key] >= 3) {
+      promptShortcutPromotion(key, { actionType, turmaName, commandText });
+    }
+  } catch (e) {
+    console.warn('[SidePanel] Erro ao rastrear uso de ação:', e);
+  }
+}
+
+function promptShortcutPromotion(actionKey, info) {
+  const container = document.getElementById('chat-history-container');
+  if (!container) return;
+
+  const turmaDisplay = info.turmaName || 'nesta turma';
+  const actionLabel = info.actionType === 'lancar_falta' ? 'Falta' : 'Nota';
+  const actionVerb = info.actionType === 'lancar_falta' ? 'lançar falta' : 'lançar nota';
+  const shortcutTitle = `⚡ ${actionLabel} ${info.turmaName || 'Turma'}`;
+  const defaultCommand = info.actionType === 'lancar_falta' 
+    ? 'Lança falta para o aluno ___' 
+    : 'Lança nota ___ para o aluno ___';
+  const sanitizedId = actionKey.replace(/[^a-zA-Z0-9_-]/g, '_');
+
+  const promoDiv = document.createElement('div');
+  promoDiv.className = 'chat-msg assistant';
+  promoDiv.id = `promo-${sanitizedId}`;
+  promoDiv.innerHTML = `
+    <div class="chat-avatar">🦉</div>
+    <div class="chat-bubble">
+      <div class="shortcut-promotion-box">
+        <div class="shortcut-promotion-title">
+          <i class="ti ti-sparkles"></i> Sugestão da Rafinha
+        </div>
+        Percebi que você costuma <strong>${actionVerb}</strong> com frequência (${escapeHtml(turmaDisplay)}). Gostaria de fixar um atalho rápido na barra acima para agilizar?
+        <div class="shortcut-promotion-actions">
+          <button class="btn-shortcut-accept" id="btn-accept-${sanitizedId}">
+            ⭐ Sim, criar atalho
+          </button>
+          <button class="btn-shortcut-dismiss" id="btn-dismiss-${sanitizedId}">
+            Agora não
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+  container.appendChild(promoDiv);
+  scrollChatToBottom();
+
+  const btnAccept = document.getElementById(`btn-accept-${sanitizedId}`);
+  const btnDismiss = document.getElementById(`btn-dismiss-${sanitizedId}`);
+
+  if (btnAccept) {
+    btnAccept.addEventListener('click', () => {
+      promoDiv.remove();
+      savePromotedShortcut({
+        id: 'sc_' + Date.now(),
+        actionKey,
+        label: `${actionLabel} ${info.turmaName || 'Turma'}`,
+        command: defaultCommand
+      });
+      appendAssistantChatMessage(`Pronto! Adicionei o atalho **${shortcutTitle}** na sua barra de Ações Rápidas acima. Basta clicar nele para preencher rapidamente quando quiser! ✨`, true);
+    });
+  }
+
+  if (btnDismiss) {
+    btnDismiss.addEventListener('click', () => {
+      promoDiv.remove();
+      dismissShortcutPromotion(actionKey);
+      appendAssistantChatMessage('Combinado! Se você continuar usando bastante no futuro, posso sugerir novamente.');
+    });
+  }
+}
+
+function savePromotedShortcut(shortcut) {
+  try {
+    const list = JSON.parse(localStorage.getItem('teacher_promoted_shortcuts') || '[]');
+    list.push(shortcut);
+    localStorage.setItem('teacher_promoted_shortcuts', JSON.stringify(list));
+    renderPromotedChips();
+  } catch (e) {
+    console.warn('[SidePanel] Erro ao salvar atalho promovido:', e);
+  }
+}
+
+function dismissShortcutPromotion(actionKey) {
+  try {
+    const dismissed = JSON.parse(localStorage.getItem('teacher_dismissed_promotions') || '{}');
+    dismissed[actionKey] = true;
+    localStorage.setItem('teacher_dismissed_promotions', JSON.stringify(dismissed));
+  } catch (e) {
+    console.warn('[SidePanel] Erro ao dispensar promoção:', e);
+  }
+}
+
+function renderPromotedChips() {
+  const slot = document.getElementById('promoted-chips-slot');
+  if (!slot) return;
+  slot.innerHTML = '';
+
+  try {
+    const list = JSON.parse(localStorage.getItem('teacher_promoted_shortcuts') || '[]');
+    list.forEach(sc => {
+      const chip = document.createElement('button');
+      chip.className = 'quick-action-chip promoted';
+      chip.title = `Atalho rápido frequente: ${sc.label}`;
+      chip.innerHTML = `⚡ ${escapeHtml(sc.label)}`;
+      chip.addEventListener('click', () => {
+        if (sc.command && sc.command.includes('___')) {
+          fillCommandTemplate(sc.command);
+        } else if (sc.command) {
+          handleProcessCommand(sc.command);
+        }
+      });
+      slot.appendChild(chip);
+    });
+  } catch (e) {
+    console.warn('[SidePanel] Erro ao renderizar chips promovidos:', e);
+  }
+}
+
+function setupQuickActions() {
+  const chips = document.querySelectorAll('.quick-action-chip:not(.promoted)');
+  chips.forEach(chip => {
+    chip.addEventListener('click', () => {
+      const template = chip.dataset.template;
+      const command = chip.dataset.command;
+      if (template) {
+        fillCommandTemplate(template);
+      } else if (command) {
+        const inputCommand = document.getElementById('input-agent-command');
+        if (inputCommand) inputCommand.value = command;
+        handleProcessCommand(command);
+      }
+    });
+  });
+  renderPromotedChips();
+}
+
+let progressTimer = null;
+
+function hideAllApprovalCards() {
+  if (progressTimer) {
+    clearTimeout(progressTimer);
+    progressTimer = null;
+  }
+  const disambig = document.getElementById('card-disambiguation');
+  const preview = document.getElementById('card-approval-preview');
+  const success = document.getElementById('card-execution-success');
+  const err = document.getElementById('card-honest-error');
+  const progress = document.getElementById('card-natural-progress');
+  const clarify = document.getElementById('card-clarification-point-click');
+
+  if (disambig) disambig.style.display = 'none';
+  if (preview) preview.style.display = 'none';
+  if (success) success.style.display = 'none';
+  if (err) err.style.display = 'none';
+  if (progress) progress.style.display = 'none';
+  if (clarify) clarify.style.display = 'none';
+}
+
+function showNaturalProgressCard(message) {
+  hideAllApprovalCards();
+  const card = document.getElementById('card-natural-progress');
+  const txt = document.getElementById('natural-progress-text');
+  const initialText = message || "Isso pode levar um minutinho na primeira vez, já estou vendo como funciona aqui...";
+  if (txt) txt.textContent = initialText;
+  if (card) card.style.display = 'block';
+  scrollChatToBottom();
+
+  // Gerenciamento de expectativa: após 18s exibe mensagem de acompanhamento
+  if (progressTimer) clearTimeout(progressTimer);
+  progressTimer = setTimeout(() => {
+    if (card && card.style.display !== 'none' && txt) {
+      txt.textContent = "Ainda trabalhando nisso...";
+    }
+  }, 18000);
+}
+
+function showClarificationPointClickCard(question) {
+  hideAllApprovalCards();
+  setProcessingState(false);
+  const card = document.getElementById('card-clarification-point-click');
+  const txt = document.getElementById('clarification-question-text');
+  if (txt && question) txt.textContent = question;
+  if (card) card.style.display = 'block';
+  scrollChatToBottom();
+}
+
+function showDisambiguationCard(intent, candidates) {
+  hideAllApprovalCards();
+  setProcessingState(false);
+  const card = document.getElementById('card-disambiguation');
+  const container = document.getElementById('disambiguation-candidates');
+  if (!card || !container) return;
+  container.innerHTML = '';
+
+  candidates.forEach(cand => {
+    const btn = document.createElement('button');
+    btn.className = 'candidate-chip';
+    btn.innerHTML = `<strong>👤 ${cand.name}</strong> <span style="color:#64748b; font-size:10px;">(Nota atual: ${cand.currentValue || 'vazio'})</span>`;
+    btn.onclick = () => {
+      showApprovalPreviewCard(cand, intent);
+    };
+    container.appendChild(btn);
+  });
+
+  card.style.display = 'block';
+  scrollChatToBottom();
+}
+
+function showApprovalPreviewCard(student, intent) {
+  hideAllApprovalCards();
+  setProcessingState(false);
+  activePendingApproval = {
+    student,
+    intent,
+    checkpointId: 'chk_' + Math.random().toString(36).substring(2, 9)
+  };
+
+  const nameEl = document.getElementById('approval-student-name');
+  const descEl = document.getElementById('approval-action-desc');
+  const beforeEl = document.getElementById('approval-before-val');
+  const afterEl = document.getElementById('approval-after-val');
+  const chkEl = document.getElementById('approval-checkpoint-id');
+  const card = document.getElementById('card-approval-preview');
+
+  const actionLabel = intent.acao === 'lancar_falta' ? 'Lançamento de Falta' : 'Lançamento de Nota';
+  const targetVal = intent.acao === 'lancar_falta' ? String(intent.faltas || 1) : String(intent.nota || '8.5');
+
+  if (nameEl) nameEl.textContent = student.name;
+  if (descEl) descEl.textContent = `${actionLabel} • ${intent.disciplina || 'Portal Oficial'}`;
+  if (beforeEl) beforeEl.textContent = student.currentValue ? student.currentValue : 'Vazio';
+  if (afterEl) afterEl.textContent = targetVal;
+  if (chkEl) chkEl.textContent = activePendingApproval.checkpointId;
+
+  if (card) card.style.display = 'block';
+
+  // Exibição visível de divergência/conflito com o portal vivo
+  const alertEl = document.getElementById('approval-conflict-alert');
+  const alertTextEl = document.getElementById('approval-conflict-text');
+  const hasConflict = !!(intent?.conflict_detected || student?.conflict_detected || intent?.warning || student?.warning);
+  if (alertEl) {
+    if (hasConflict) {
+      alertEl.style.display = 'block';
+      const warnMsg = intent?.warning || student?.warning || 'O valor no portal difere do cache do app. Ação calculada com base no portal ao vivo.';
+      if (alertTextEl) alertTextEl.textContent = warnMsg;
+      appendAssistantChatMessage(`⚠️ **Atenção à divergência**: ${escapeHtml(warnMsg)}`, false);
+    } else {
+      alertEl.style.display = 'none';
+    }
+  }
+
+  scrollChatToBottom();
+}
+
+function showApprovalPreviewCardDirect(data) {
+  hideAllApprovalCards();
+  setProcessingState(false);
+  activePendingApproval = {
+    student: { name: data.studentName, currentValue: data.beforeVal },
+    intent: { acao: data.actionType, aluno: data.studentName, nota: data.afterVal, faltas: data.afterVal },
+    checkpointId: data.taskId || ('chk_' + Math.random().toString(36).substring(2, 9))
+  };
+
+  const nameEl = document.getElementById('approval-student-name');
+  const descEl = document.getElementById('approval-action-desc');
+  const beforeEl = document.getElementById('approval-before-val');
+  const afterEl = document.getElementById('approval-after-val');
+  const chkEl = document.getElementById('approval-checkpoint-id');
+  const card = document.getElementById('card-approval-preview');
+
+  if (nameEl) nameEl.textContent = data.studentName;
+  if (descEl) descEl.textContent = data.actionDesc || 'Lançamento • Portal Oficial';
+  if (beforeEl) beforeEl.textContent = data.beforeVal && data.beforeVal !== '' ? data.beforeVal : 'Vazio';
+  if (afterEl) afterEl.textContent = String(data.afterVal);
+  if (chkEl) chkEl.textContent = activePendingApproval.checkpointId;
+
+  if (card) card.style.display = 'block';
+
+  // Exibição visível de divergência/conflito em preview direto
+  const directAlertEl = document.getElementById('approval-conflict-alert');
+  const directAlertTextEl = document.getElementById('approval-conflict-text');
+  const hasDirectConflict = !!(data.conflict_detected || data.conflictWarning || data.warning);
+  if (directAlertEl) {
+    if (hasDirectConflict) {
+      directAlertEl.style.display = 'block';
+      const warnMsg = data.conflictWarning || data.warning || 'O valor no portal difere do cache do app. Ação calculada com base no portal ao vivo.';
+      if (directAlertTextEl) directAlertTextEl.textContent = warnMsg;
+      appendAssistantChatMessage(`⚠️ **Atenção à divergência**: ${escapeHtml(warnMsg)}`, false);
+    } else {
+      directAlertEl.style.display = 'none';
+    }
+  }
+
+  scrollChatToBottom();
+}
+
+function showHonestErrorCard(title, message) {
+  hideAllApprovalCards();
+  setProcessingState(false);
+  const card = document.getElementById('card-honest-error');
+  const titleEl = document.getElementById('error-title');
+  const textEl = document.getElementById('error-detail-text');
+
+  if (titleEl) titleEl.textContent = title;
+  if (textEl) textEl.textContent = message;
+  if (card) card.style.display = 'block';
+  scrollChatToBottom();
+}
+
+function showSuccessCard(studentName, beforeVal, afterVal) {
+  hideAllApprovalCards();
+  setProcessingState(false);
+  const card = document.getElementById('card-execution-success');
+  const textEl = document.getElementById('success-detail-text');
+
+  if (textEl) {
+    textEl.innerHTML = `
+      <strong>${studentName}</strong>: Alteração de <code>${beforeVal || 'vazio'}</code> para <strong><code>${afterVal}</code></strong>.<br>
+      <span style="font-size:10px; color:#059669; font-weight:600;">✓ Valor verificado e persistido no DOM oficial às ${new Date().toLocaleTimeString()}.</span>
+    `;
+  }
+  if (card) card.style.display = 'block';
+  scrollChatToBottom();
+}
+
+function dispatchPortalBridgeMessage(msg, callback) {
+  if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
+    try {
+      chrome.runtime.sendMessage(msg, (resp) => {
+        if (!chrome.runtime.lastError && resp) {
+          callback(resp);
+          return;
+        }
+        if (window.__portalBridge) {
+          window.__portalBridge(msg, callback);
+          return;
+        }
+        callback(resp);
+      });
+      return;
+    } catch (e) {
+      if (window.__portalBridge) {
+        window.__portalBridge(msg, callback);
+        return;
+      }
+    }
+  }
+  if (window.__portalBridge) {
+    window.__portalBridge(msg, callback);
+    return;
+  }
+  callback(null);
+}
+
+async function handleProcessCommand(commandText) {
+  if (!commandText || !commandText.trim()) return;
+  const textClean = commandText.trim();
+
+  // 1. Adiciona a mensagem da professora no histórico de conversa
+  appendUserChatMessage(textClean);
+
+  // Limpa o input de comando
+  const inputCmd = document.getElementById('input-agent-command');
+  if (inputCmd) inputCmd.value = '';
+
+  // 2. Aciona indicador de processando dinâmico
+  setProcessingState(true, 'Rafinha pensando...');
+
+  // Caso especial: comandos de leitura direta ("Ler lista de alunos", "Ver notas da turma")
+  const isReadCommand = /^(?:ler\s+lista|ver\s+notas|mostrar\s+alunos|listar\s+alunos)/i.test(textClean);
+  if (isReadCommand) {
+    setProcessingState(true, 'Lendo dados do portal escolar...');
+    dispatchPortalBridgeMessage({ action: 'READ_ACTIVE_PORTAL_ROSTER' }, (resp) => {
+      setProcessingState(false);
+      const students = (resp && resp.students) || [];
+      if (students.length > 0) {
+        // Read-Through automático para o Supabase
+        try {
+          const activeTurmaEl = document.getElementById('active-class-name');
+          const currentTurma = (activeTurmaEl && activeTurmaEl.textContent !== '—') ? activeTurmaEl.textContent : 'Turma Importada';
+          fetch('http://localhost:3000/api/students/import', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              className: currentTurma,
+              portalName: 'Portal Escolar Ativo',
+              students: students,
+              pageUrl: window.location.href
+            })
+          }).catch(err => console.warn('[Read-Through] Falha ao sincronizar roster:', err));
+        } catch (e) {}
+
+        const studentNames = students.map(s => s.name).slice(0, 5).join(', ');
+        const extraCount = students.length > 5 ? ` e mais ${students.length - 5} alunos` : '';
+        appendAssistantChatMessage(`Encontrei **${students.length} alunos** nesta tela do portal:<br><span style="color:#475569; font-size:11px;">📋 ${studentNames}${extraCount}</span>`, true);
+        if (typeof renderStudentListWithValidation === 'function') {
+          renderStudentListWithValidation(students, { valid: true, confidence: 1.0 }, 'dom', 'Lista de Alunos');
+        }
+      } else {
+        showHonestErrorCard('Lista de Alunos', 'Não encontrei registros de alunos nesta tela do portal. Certifique-se de estar na pauta ou diário.');
+      }
+    });
+    return;
+  }
+
+  // Caso especial: Navegação para abas ou seções ("entre nos arquivos", "entre na aba arquivos", "ir para diário", etc.)
+  const navTarget = extractNavigationTarget(textClean);
+  if (navTarget) {
+    setProcessingState(true, `Acessando ${navTarget} no portal...`);
+    dispatchPortalBridgeMessage({ action: 'NAVIGATE_PORTAL_TAB', target: navTarget }, (resp) => {
+      setProcessingState(false);
+      if (resp && resp.sucesso) {
+        const foundLabel = resp.elementText || navTarget;
+        appendAssistantChatMessage(`Prontinho! Entrei na aba **${escapeHtml(foundLabel)}** no portal para você. 📂✨`, true);
+      } else {
+        appendAssistantChatMessage(`Procurei pela aba ou seção **${escapeHtml(navTarget)}** no portal, mas não encontrei nenhum botão ou menu correspondente nesta tela. Você pode navegar manualmente até lá ou me mostrar onde fica? 🔍`, true);
+      }
+    });
+    return;
+  }
+
+  const intent = await parseNaturalIntent(textClean);
+
+  setProcessingState(true, 'Olhando o portal...');
+
+  // 1. Prioridade 1: Verifica a aba ativa no navegador para desambiguação de homônimos ou match direto
+  dispatchPortalBridgeMessage({ action: 'READ_ACTIVE_PORTAL_ROSTER' }, async (resp) => {
+    let roster = (resp && resp.students) || [];
+    if (roster && roster.length > 0) {
+      // Read-Through automático em background
+      try {
+        const activeTurmaEl = document.getElementById('active-class-name');
+        const currentTurma = (activeTurmaEl && activeTurmaEl.textContent !== '—') ? activeTurmaEl.textContent : 'Turma Ativa';
+        fetch('http://localhost:3000/api/students/import', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            className: currentTurma,
+            portalName: 'Portal Escolar Ativo',
+            students: roster,
+            pageUrl: window.location.href
+          })
+        }).catch(err => console.warn('[Read-Through] Falha background:', err));
+      } catch (e) {}
+
+      const matchResult = matchStudentByName(intent.aluno, roster, intent.matricula || intent.portal_native_id);
+      if (matchResult.status === 'ambiguous') {
+        setProcessingState(false);
+        showDisambiguationCard(intent, matchResult.candidates);
+        return;
+      }
+      if (matchResult.status === 'exact' || matchResult.status === 'confident_match') {
+        setProcessingState(false);
+        showApprovalPreviewCard(matchResult.student, intent);
+        return;
+      }
+      if (matchResult.status === 'not_found') {
+        setProcessingState(false);
+        showHonestErrorCard(
+          'Aluno não encontrado',
+          `Não encontrei o aluno "${intent.aluno}" na lista desta turma. Verifique o nome ou selecione outra turma.`
+        );
+        return;
+      }
+    }
+
+    // 2. Se a ação for inédita ou não houver match direto, aciona o aprendizado autônomo no backend
+    showNaturalProgressCard("Isso pode levar um minutinho na primeira vez, já estou vendo como funciona aqui...");
+    setProcessingState(true, 'Aprendendo navegação no portal...');
+
+    try {
+      const res = await fetch('http://localhost:8765/natural_intent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: textClean,
+          parse_only: false,
+          history: []
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        console.log('[SidePanel] Resposta do backend:', data);
+        setProcessingState(false);
+
+        // Caso A: Pergunta de esclarecimento sobre parâmetros (ex: faltou nome do aluno)
+        if (data.needs_clarification && data.mensagem) {
+          showHonestErrorCard('Preciso de uma informação', data.mensagem);
+          return;
+        }
+
+        // Caso B: Falha na descoberta autônoma -> Pergunta natural de esclarecimento com apontamento
+        if (data.status === 'point_and_click_required' || data.action_required === 'point_and_click') {
+          showClarificationPointClickCard(
+            data.mensagem || "Não encontrei onde lançar nesta tela, você pode me mostrar clicando no lugar certo?"
+          );
+          return;
+        }
+
+        // Caso Navegação: Backend retornou intenção de navegar para aba/seção
+        if (data.acao === 'navegar_aba' || data.action_required === 'navigate_tab') {
+          const target = data.destino || 'Arquivos';
+          dispatchPortalBridgeMessage({ action: 'NAVIGATE_PORTAL_TAB', target }, (navResp) => {
+            setProcessingState(false);
+            if (navResp && navResp.sucesso) {
+              appendAssistantChatMessage(`Prontinho! Entrei na aba **${escapeHtml(navResp.elementText || target)}** no portal para você. 📂✨`, true);
+            } else {
+              appendAssistantChatMessage(data.mensagem || `Naveguei até **${escapeHtml(target)}** no portal escolar.`, true);
+            }
+          });
+          return;
+        }
+
+        // Caso C: Descoberta bem-sucedida ou ação já mapeada -> Exibe PortalApprovalCard diretamente!
+        if (data.card && (data.sucesso || data.needs_approval)) {
+          const c = data.card;
+          const diffItem = (c.diff && c.diff[0]) || {};
+          const studentName = diffItem.studentName || data.intent?.aluno || 'Aluno';
+          const fieldName = diffItem.field || (c.actionType === 'lancar_falta' ? 'Falta' : 'Nota');
+          const beforeVal = diffItem.beforeValue || '—';
+          const afterVal = diffItem.afterValue || (c.actionType === 'lancar_falta' ? '1' : '8.5');
+
+          showApprovalPreviewCardDirect({
+            studentName,
+            actionDesc: `${fieldName} • ${c.portal || 'Portal Oficial'}`,
+            beforeVal,
+            afterVal,
+            actionType: c.actionType || 'lancar_nota',
+            taskId: c.taskId
+          });
+          return;
+        }
+
+        // Caso D: Operação concluída diretamente com sucesso
+        if (data.sucesso) {
+          showSuccessCard(data.aluno || 'Aluno', '', data.valor || 'OK');
+          const activeTurmaEl = document.getElementById('active-class-name');
+          const currentTurma = (activeTurmaEl && activeTurmaEl.textContent !== '—') ? activeTurmaEl.textContent : 'Turma 9A';
+          trackActionUsage(intent.acao || 'lancar_nota', currentTurma, textClean);
+          return;
+        }
+      }
+    } catch (err) {
+      console.warn('[SidePanel] Backend /natural_intent inacessível:', err);
+    }
+
+    setProcessingState(false);
+    // Se não encontrou no backend nem na tela, exibe esclarecimento
+    showClarificationPointClickCard(
+      `Não encontrei onde lançar ${intent.acao === 'lancar_falta' ? 'falta' : 'nota'} para "${intent.aluno}" nesta tela. Você pode me mostrar clicando no lugar certo?`
+    );
+  });
+}
+
+// Inicialização dos Listeners de Interface
+document.addEventListener('DOMContentLoaded', () => {
+  const btnVoice = document.getElementById('btn-voice-input');
+  const inputCommand = document.getElementById('input-agent-command');
+  const btnSend = document.getElementById('btn-send-agent-command');
+  const listeningIndicator = document.getElementById('voice-listening-indicator');
+  const btnConfirm = document.getElementById('btn-confirm-approval');
+  const btnCancel = document.getElementById('btn-cancel-approval');
+
+  let isSpeechListening = false;
+  let speechRec = null;
+
+  if (window.webkitSpeechRecognition || window.SpeechRecognition) {
+    const SpeechClass = window.SpeechRecognition || window.webkitSpeechRecognition;
+    speechRec = new SpeechClass();
+    speechRec.lang = 'pt-BR';
+    speechRec.continuous = false;
+    speechRec.interimResults = false;
+
+    speechRec.onstart = () => {
+      isSpeechListening = true;
+      if (btnVoice) btnVoice.classList.add('listening');
+      if (listeningIndicator) listeningIndicator.style.display = 'flex';
+    };
+
+    speechRec.onresult = (evt) => {
+      const spokenText = evt.results[0][0].transcript;
+      if (inputCommand) inputCommand.value = spokenText;
+      stopSpeechListening();
+      handleProcessCommand(spokenText);
+    };
+
+    speechRec.onerror = () => {
+      stopSpeechListening();
+    };
+
+    speechRec.onend = () => {
+      stopSpeechListening();
+    };
+  }
+
+  function stopSpeechListening() {
+    isSpeechListening = false;
+    if (btnVoice) btnVoice.classList.remove('listening');
+    if (listeningIndicator) listeningIndicator.style.display = 'none';
+  }
+
+  if (btnVoice) {
+    btnVoice.addEventListener('click', () => {
+      if (!speechRec) {
+        alert('Reconhecimento de voz não suportado neste navegador. Digite no campo de texto.');
+        return;
+      }
+      if (isSpeechListening) {
+        speechRec.stop();
+        stopSpeechListening();
+      } else {
+        try {
+          speechRec.start();
+        } catch (e) {
+          stopSpeechListening();
+        }
+      }
+    });
+  }
+
+  if (btnSend && inputCommand) {
+    btnSend.addEventListener('click', () => {
+      const text = inputCommand.value.trim();
+      if (text) {
+        handleProcessCommand(text);
+      }
+    });
+
+    inputCommand.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        const text = inputCommand.value.trim();
+        if (text) {
+          handleProcessCommand(text);
+        }
+      }
+    });
+  }
+
+  if (btnConfirm) {
+    btnConfirm.addEventListener('click', () => {
+      if (!activePendingApproval) return;
+      const { student, intent } = activePendingApproval;
+
+      btnConfirm.disabled = true;
+      btnConfirm.innerHTML = `<span class="spinner" style="width:12px;height:12px;border-width:2px;display:inline-block;margin-right:4px;"></span> Gravando no portal...`;
+
+      dispatchPortalBridgeMessage({
+        action: 'EXECUTE_SAFE_WRITE',
+        studentName: student.name,
+        targetValue: intent.nota || intent.faltas || '1',
+        actionType: intent.acao
+      }, (response) => {
+        btnConfirm.disabled = false;
+        btnConfirm.innerHTML = `<i class="ti ti-check"></i> <span>Confirmar</span>`;
+
+        if (response && response.sucesso && response.verified) {
+          showSuccessCard(student.name, response.before_val, response.after_val);
+          student.currentValue = response.after_val;
+          const activeTurmaEl = document.getElementById('active-class-name');
+          const currentTurma = (activeTurmaEl && activeTurmaEl.textContent !== '—') ? activeTurmaEl.textContent : 'Turma 9A';
+          trackActionUsage(intent.acao, currentTurma, `Lançar ${intent.acao === 'lancar_falta' ? 'falta' : 'nota'} ${currentTurma}`);
+
+          // Sincronização Write-Through: Persiste alteração na tabela de negócio students no Supabase
+          try {
+            fetch('http://localhost:3000/api/students/write-through', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                studentName: student.name,
+                matricula: student.matricula || student.portal_native_id || student.rollNumber || '',
+                classRef: currentTurma,
+                field: intent.acao === 'lancar_falta' ? 'faltas' : (intent.campo || 'nota'),
+                value: response.after_val,
+                actionType: intent.acao,
+                portal: window.location.hostname || 'Portal Escolar'
+              })
+            }).catch(err => console.warn('[Write-Through] Falha de sincronização com Supabase:', err));
+          } catch (e) {}
+        } else {
+          showHonestErrorCard(
+            'Falha na gravação',
+            (response && response.mensagem) || 'O portal não confirmou a gravação do valor no campo.'
+          );
+        }
+      });
+    });
+  }
+
+  if (btnCancel) {
+    btnCancel.addEventListener('click', () => {
+      activePendingApproval = null;
+      hideAllApprovalCards();
+    });
+  }
+
+  // Listener para Apontar/Clicar no portal quando o aprendizado pedir ajuda
+  const btnPointAndClick = document.getElementById('btn-point-and-click');
+  if (btnPointAndClick) {
+    btnPointAndClick.addEventListener('click', () => {
+      btnPointAndClick.innerHTML = `<span class="spinner" style="width:10px;height:10px;display:inline-block;margin-right:4px;"></span> Clique no campo no portal...`;
+      dispatchPortalBridgeMessage({ action: 'ENABLE_POINT_AND_CLICK' }, (resp) => {
+        btnPointAndClick.innerHTML = `<i class="ti ti-hand-click"></i> Apontar campo no portal`;
+        if (resp && resp.selected) {
+          const intent = activePendingApproval ? activePendingApproval.intent : { acao: 'lancar_falta', aluno: 'Hugo', faltas: 1 };
+          showApprovalPreviewCard({ name: intent.aluno || 'Hugo', currentValue: resp.currentValue || '' }, intent);
+        }
+      });
+    });
+  }
+
+  // Inicialização das Ações Rápidas (Chips Pré-definidos e Promovidos)
+  setupQuickActions();
+
+  // Inicialização do Modo Desenvolvedor / QA (Oculto por Padrão)
+  setupDevModeToggle();
+});
+
+if (typeof window !== 'undefined') {
+  window.__teacherSidePanelChat = {
+    appendUserChatMessage,
+    appendAssistantChatMessage,
+    setProcessingState,
+    fillCommandTemplate,
+    extractNavigationTarget,
+    trackActionUsage,
+    promptShortcutPromotion,
+    savePromotedShortcut,
+    renderPromotedChips,
+    setupQuickActions
+  };
+}
+
+function setupDevModeToggle() {
+  const devPanel = document.getElementById('dev-mode-panel');
+  const devBadge = document.getElementById('dev-mode-badge');
+  const brandLogo = document.getElementById('brand-logo');
+  const btnClose = document.getElementById('btn-close-dev-mode');
+
+  function setDevMode(active) {
+    if (devPanel) devPanel.style.display = active ? 'block' : 'none';
+    if (devBadge) devBadge.style.display = active ? 'inline-block' : 'none';
+    try { localStorage.setItem('teacher_dev_mode', active ? 'true' : 'false'); } catch {}
+  }
+
+  // Restaura estado se desenvolvedor já tiver ativado
+  const savedDev = (typeof localStorage !== 'undefined') && localStorage.getItem('teacher_dev_mode') === 'true';
+  setDevMode(savedDev);
+
+  // Atalho 1: Teclado Ctrl + Shift + D
+  window.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'd') {
+      e.preventDefault();
+      const isCurrentlyActive = devPanel && devPanel.style.display !== 'none';
+      setDevMode(!isCurrentlyActive);
+    }
+  });
+
+  // Atalho 2: Clique triplo no logo TEACHER AI
+  let clickCount = 0;
+  let clickTimer = null;
+  if (brandLogo) {
+    brandLogo.addEventListener('click', () => {
+      clickCount++;
+      clearTimeout(clickTimer);
+      clickTimer = setTimeout(() => { clickCount = 0; }, 600);
+      if (clickCount >= 3) {
+        clickCount = 0;
+        const isCurrentlyActive = devPanel && devPanel.style.display !== 'none';
+        setDevMode(!isCurrentlyActive);
+      }
+    });
+  }
+
+  if (btnClose) {
+    btnClose.addEventListener('click', () => {
+      setDevMode(false);
+    });
   }
 }
 

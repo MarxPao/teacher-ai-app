@@ -1,0 +1,10 @@
+{
+  "name": "com.teacherai.host",
+  "description": "Teacher AI Native Messaging Host para Chrome",
+  "path": "teacherai_native_host.bat",
+  "type": "stdio",
+  "allowed_origins": [
+    "chrome-extension://phahliidgjidilhkcllbhfjmjcefdfci/",
+    "chrome-extension://hcipkopllembahnaldeohahnmedgpjna/"
+  ]
+}

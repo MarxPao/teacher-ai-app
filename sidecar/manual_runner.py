@@ -27,6 +27,20 @@ _SIDECAR_DIR = Path(__file__).resolve().parent
 if str(_SIDECAR_DIR) not in sys.path:
     sys.path.insert(0, str(_SIDECAR_DIR))
 
+# Auto-carregamento robusto de variáveis de ambiente (.env.local e .env da raiz do projeto)
+try:
+    from dotenv import load_dotenv
+    _root_dir = _SIDECAR_DIR.parent
+    _env_local = _root_dir / ".env.local"
+    _env_file = _root_dir / ".env"
+    if _env_local.exists():
+        load_dotenv(str(_env_local), override=False)
+    if _env_file.exists():
+        load_dotenv(str(_env_file), override=False)
+except Exception:
+    pass
+
+
 from chrome_launcher import (
     launch_dedicated_chrome,
     check_cdp_health,
@@ -37,6 +51,7 @@ from chrome_launcher import (
 from cdp_connector import CDPConnector
 from navigation_state_machine import NavigationStateMachine, NavState
 from safe_writer import SafeWriter
+from extension_bridge import bridge_instance
 
 SERVER_PORT = 8765
 
@@ -85,8 +100,12 @@ HTML_DASHBOARD = """<!DOCTYPE html>
 <body>
     <div class="container">
         <div class="header">
-            <h1>🦉 Teacher AI — Console Manual de Homologação</h1>
+            <h1>🛠️ Teacher AI — Console Técnico (Modo Debug / QA Interno)</h1>
             <span id="cdp-badge" class="badge badge-offline">Verificando Chrome...</span>
+        </div>
+
+        <div style="background: rgba(234, 179, 8, 0.12); border: 1px solid #ca8a04; color: #fef08a; padding: 12px 16px; border-radius: 8px; font-size: 13px; line-height: 1.5;">
+            ⚠️ <strong>Aviso de Isolamento Arquitetural:</strong> Este console em <code>http://localhost:8765</code> é restrito a desenvolvedores e testes técnicos de QA. A professora opera o sistema exclusivamente em linguagem natural pelo Chat da Rafinha com aprovação por cards visuais.
         </div>
 
         <div class="card">
@@ -223,7 +242,139 @@ async def execute_task_intent(intent: Dict[str, Any]) -> Dict[str, Any]:
     trace = []
     trace.append(f"Recebida intencao: acao='{acao}', aluno='{aluno}', nota='{nota}', portal='{portal}'")
 
-    # 1. Checa conectividade CDP
+    # 0. Prioridade 1: Extensão no Chrome Normal da Professora (mesma aba aberta)
+    if bridge_instance.has_active_portal_tab():
+        tab_id = bridge_instance.active_tab_state.get("tabId")
+        portal_name = bridge_instance.active_tab_state.get("portalName")
+        trace.append(f"Prioridade 1 acionada: Executando via Extensão no Chrome normal (portal={portal_name}, tabId={tab_id})")
+        ext_result = await bridge_instance.execute_task_on_tab(intent)
+        if ext_result is not None and ext_result.get("sucesso"):
+            ext_result["trace"] = trace + ext_result.get("trace", [])
+            ext_result["tempo_ms"] = (time.time() - t0) * 1000
+            return ext_result
+        if ext_result is not None:
+            trace.append(f"Extensão não concluiu diretamente ({ext_result.get('status')}): escalonando para aprendizado/orquestrador.")
+
+    # 1. Aprendizado Autônomo ao Vivo (DiscoveryOrchestrator: Browser-use -> Skyvern)
+    # Se não existe SkillGraph salvo para (portal, acao), inicia descoberta automaticamente!
+    from portal_map_store import PortalMapStore
+    from skill_store import load_skill, SkillNotFoundError
+    from discovery_orchestrator import DiscoveryOrchestrator
+
+    map_store = PortalMapStore()
+    tab_url = bridge_instance.active_tab_state.get("url", "") if bridge_instance.has_active_portal_tab() else ""
+    domain = portal or map_store.extract_domain(tab_url) or bridge_instance.active_tab_state.get("portalName") or "portal"
+
+    has_saved_skill = False
+    if domain:
+        try:
+            load_skill(domain, acao)
+            has_saved_skill = True
+        except SkillNotFoundError:
+            p_simple = domain.replace(".", "_").replace("-", "_")
+            try:
+                load_skill(p_simple, acao)
+                has_saved_skill = True
+            except SkillNotFoundError:
+                has_saved_skill = False
+
+    if not has_saved_skill and acao != "detect_state":
+        # REGRA DE EXPLORAÇÃO ESTRITAMENTE SOMENTE-LEITURA:
+        # A descoberta agêntica via DiscoveryOrchestrator é somente-leitura e não-destrutiva.
+        # Ela apenas localiza o caminho e prepara o preenchimento em rascunho.
+        # A submissão definitiva é bloqueada até aprovação no PortalApprovalCard.
+        trace.append(f"[LiveLearning] Ação inédita '{acao}' para portal '{domain}'. Disparando DiscoveryOrchestrator automaticamente...")
+        print(f"\n[LiveLearning] 🚀 Iniciando aprendizado ao vivo para '{acao}' em '{domain}'...")
+        
+        orchestrator = DiscoveryOrchestrator(map_store=map_store)
+        params = {
+            "aluno": aluno,
+            "nota": nota,
+            "faltas": intent.get("faltas", 1),
+            "turma": turma
+        }
+        if intent.get("objeto_alvo"):
+            params["objeto_alvo"] = intent.get("objeto_alvo")
+        if intent.get("verbo_acao"):
+            params["verbo_acao"] = intent.get("verbo_acao")
+        if intent.get("tipo_operacao"):
+            params["tipo_operacao"] = intent.get("tipo_operacao")
+        if intent.get("valor") is not None:
+            params["valor"] = intent.get("valor")
+        if intent.get("descricao_tarefa"):
+            params["descricao_tarefa"] = intent.get("descricao_tarefa")
+
+        portal_url = intent.get("portal_url") or (f"https://{domain}" if domain and not domain.startswith("http") else domain)
+
+        disc_res = await orchestrator.discover_or_execute(
+            portal_id=domain,
+            acao=acao,
+            parametros=params,
+            portal_url=portal_url
+        )
+
+        if disc_res.get("status") == "ambiguous":
+            return {
+                "sucesso": False,
+                "status": "ambiguous",
+                "acao": acao,
+                "portal": domain,
+                "aluno": aluno,
+                "candidates": disc_res.get("candidates", []),
+                "mensagem": disc_res.get("disambiguation_prompt") or f"Ambiguidade: múltiplos alunos encontrados com o nome '{aluno}'.",
+                "trace": trace + disc_res.get("trace", []),
+                "tempo_ms": (time.time() - t0) * 1000
+            }
+
+        if disc_res.get("success"):
+            engine_used = disc_res.get("engine_used", "discovery")
+            trace.append(f"[LiveLearning] Descoberta concluída com sucesso via '{engine_used}'. SkillGraph salvo automaticamente.")
+            tipo_op = intent.get("tipo_operacao")
+            if tipo_op == "leitura" or acao == "read_roster":
+                return {
+                    "sucesso": True,
+                    "status": "read_completed",
+                    "acao": acao,
+                    "portal": domain,
+                    "aluno": aluno,
+                    "mensagem": f"Leitura de {intent.get('objeto_alvo') or acao} realizada com sucesso.",
+                    "trace": trace + disc_res.get("trace", []),
+                    "tempo_ms": (time.time() - t0) * 1000
+                }
+
+            target_val = str(params.get("valor") if params.get("valor") is not None else (nota if nota is not None else intent.get("faltas", 1)))
+            field_name = "nota" if acao == "lancar_nota" else ("falta" if acao == "lancar_falta" else (intent.get("objeto_alvo") or acao))
+            return {
+                "sucesso": True,
+                "status": "draft_completed_pending_submit",
+                "acao": acao,
+                "portal": domain,
+                "aluno": aluno,
+                "diff": {
+                    "aluno": aluno,
+                    "campo": field_name,
+                    "antes": "",
+                    "depois": target_val
+                },
+                "screenshot": disc_res.get("screenshot_path"),
+                "mensagem": f"Preenchimento de {field_name} para {aluno or 'o registro'} preparado com sucesso.",
+                "trace": trace + disc_res.get("trace", []),
+                "tempo_ms": (time.time() - t0) * 1000
+            }
+        else:
+            trace.append(f"[LiveLearning] DiscoveryOrchestrator não encontrou com confiança: {disc_res.get('error')}")
+            return {
+                "sucesso": False,
+                "status": "discovery_failed",
+                "acao": acao,
+                "aluno": aluno,
+                "portal": domain,
+                "mensagem": f"Não encontrei onde executar {intent.get('objeto_alvo') or acao} nesta tela.",
+                "trace": trace,
+                "tempo_ms": (time.time() - t0) * 1000
+            }
+
+    # 1. Fallback: Checa conectividade CDP (:9222 / launcher dedicado)
     cdp = CDPConnector(f"http://localhost:{CDP_PORT}")
     is_ok, msg = cdp.check_health()
     if not is_ok:
@@ -300,17 +451,28 @@ async def execute_task_intent(intent: Dict[str, Any]) -> Dict[str, Any]:
         diff = {}
         screenshot_path = None
 
-        # Localiza linha do aluno por texto semântico
+        # Localiza linha do aluno por texto semântico (no documento principal ou em iframes)
         if aluno:
-            row_locator = page.locator(f"table tr:has-text('{aluno}')")
-            row_count = await row_locator.count()
-            if row_count == 0:
-                # Tenta primeiro nome
-                first_name = aluno.split()[0]
-                row_locator = page.locator(f"table tr:has-text('{first_name}')")
-                row_count = await row_locator.count()
+            contexts = [page]
+            if hasattr(page, "frames") and isinstance(page.frames, (list, tuple)):
+                contexts.extend([f for f in page.frames if f != getattr(page, "main_frame", page)])
 
-            if row_count == 0:
+            target_row = None
+            target_ctx = page
+            for ctx in contexts:
+                row_locator = ctx.locator(f"table tr:has-text('{aluno}')")
+                if await row_locator.count() > 0:
+                    target_row = row_locator.first
+                    target_ctx = ctx
+                    break
+                first_name = aluno.split()[0]
+                row_locator = ctx.locator(f"table tr:has-text('{first_name}')")
+                if await row_locator.count() > 0:
+                    target_row = row_locator.first
+                    target_ctx = ctx
+                    break
+
+            if not target_row:
                 return {
                     "sucesso": False,
                     "status": "student_not_found",
@@ -319,10 +481,11 @@ async def execute_task_intent(intent: Dict[str, Any]) -> Dict[str, Any]:
                     "tempo_ms": (time.time() - t0) * 1000
                 }
 
-            row = row_locator.first
-            trace.append(f"Linha do aluno '{aluno}' localizada com sucesso.")
+            row = target_row
+            frame_info = f" (frame='{getattr(target_ctx, 'name', '')}')" if target_ctx != getattr(page, "main_frame", page) else ""
+            trace.append(f"Linha do aluno '{aluno}' localizada com sucesso{frame_info}.")
 
-            # Identifica inputs na linha
+            # Identifica inputs na linha e seleciona o mais adequado
             inputs = await row.locator("input:not([type='hidden'])").all()
             if not inputs:
                 return {
@@ -334,6 +497,19 @@ async def execute_task_intent(intent: Dict[str, Any]) -> Dict[str, Any]:
                 }
 
             target_input = inputs[0]
+            if len(inputs) > 1:
+                for inp in inputs:
+                    inp_type = (await inp.get_attribute("type") or "text").lower()
+                    inp_id = (await inp.get_attribute("id") or "").lower()
+                    inp_name = (await inp.get_attribute("name") or "").lower()
+                    if "nota" in (acao or "") or "grade" in (acao or "") or nota is not None:
+                        if inp_type in ("number", "text") or "nota" in inp_id or "nota" in inp_name:
+                            target_input = inp
+                            break
+                    elif inp_type not in ("checkbox", "radio", "submit", "button"):
+                        target_input = inp
+                        break
+
             val_before = await target_input.input_value()
             target_value = str(nota) if nota is not None else "1"
 
@@ -397,10 +573,18 @@ async def execute_task_intent(intent: Dict[str, Any]) -> Dict[str, Any]:
 
 
 class ManualServerHandler(BaseHTTPRequestHandler):
+    def do_OPTIONS(self):
+        self.send_response(200)
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+        self.end_headers()
+
     def do_GET(self):
         if self.path == "/" or self.path == "/index.html":
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Access-Control-Allow-Origin", "*")
             self.end_headers()
             self.wfile.write(HTML_DASHBOARD.encode("utf-8"))
             return
@@ -416,11 +600,52 @@ class ManualServerHandler(BaseHTTPRequestHandler):
             }
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            self.wfile.write(json.dumps(resp).encode("utf-8"))
+            return
+
+        if self.path == "/portal_status":
+            if bridge_instance.is_connected():
+                resp = bridge_instance.get_status_summary()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(json.dumps(resp).encode("utf-8"))
+                return
+
+            is_ok, msg = check_cdp_health()
+            if not is_ok:
+                resp = {
+                    "state": "offline",
+                    "label": "Navegador Desconectado",
+                    "requires_login": False
+                }
+            else:
+                tabs = get_open_tabs()
+                has_login_tab = any("login" in t.get("url", "").lower() or "login" in t.get("title", "").lower() for t in tabs)
+                if has_login_tab:
+                    resp = {
+                        "state": "needs_login",
+                        "label": "Preciso de Login no Portal",
+                        "requires_login": True
+                    }
+                else:
+                    resp = {
+                        "state": "ready",
+                        "label": "Portal Pronto",
+                        "requires_login": False
+                    }
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Access-Control-Allow-Origin", "*")
             self.end_headers()
             self.wfile.write(json.dumps(resp).encode("utf-8"))
             return
 
         self.send_response(404)
+        self.send_header("Access-Control-Allow-Origin", "*")
         self.end_headers()
 
     def do_POST(self):
@@ -432,6 +657,7 @@ class ManualServerHandler(BaseHTTPRequestHandler):
             except Exception as e:
                 self.send_response(400)
                 self.send_header("Content-Type", "application/json")
+                self.send_header("Access-Control-Allow-Origin", "*")
                 self.end_headers()
                 self.wfile.write(json.dumps({"error": "JSON invalido", "details": str(e)}).encode("utf-8"))
                 return
@@ -441,22 +667,94 @@ class ManualServerHandler(BaseHTTPRequestHandler):
 
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
+            self.send_header("Access-Control-Allow-Origin", "*")
             self.end_headers()
             self.wfile.write(json.dumps(result, indent=2).encode("utf-8"))
             return
 
+        if self.path == "/natural_intent":
+            content_length = int(self.headers.get("Content-Length", 0))
+            body_bytes = self.rfile.read(content_length)
+            try:
+                payload = json.loads(body_bytes.decode("utf-8"))
+            except Exception as e:
+                self.send_response(400)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": "JSON invalido", "details": str(e)}).encode("utf-8"))
+                return
+
+            user_text = payload.get("text") or payload.get("message") or ""
+            history = payload.get("history") or []
+            groq_key = payload.get("groq_key")
+            gemini_key = payload.get("gemini_key")
+            parse_only = payload.get("parse_only", False)
+
+            print(f"\n[ManualServer] Recebida instrucao natural: '{user_text}' (parse_only={parse_only})")
+            from intent_parser import dispatch_and_execute_task, extract_intent
+            if parse_only:
+                intent = extract_intent(user_text, history, groq_key, gemini_key)
+                result = {
+                    "ok": True,
+                    "sucesso": True,
+                    "intencao": intent,
+                    "intent": intent
+                }
+            else:
+                result = asyncio.run(dispatch_and_execute_task(user_text, history, groq_key, gemini_key))
+
+
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            self.wfile.write(json.dumps(result, ensure_ascii=False, indent=2).encode("utf-8"))
+            return
+
         self.send_response(404)
+        self.send_header("Access-Control-Allow-Origin", "*")
         self.end_headers()
 
 
-def start_server(port: int = SERVER_PORT):
+def start_server(port: int = SERVER_PORT, enable_tray: bool = False):
+    bridge_instance.start_background()
     server = HTTPServer(("127.0.0.1", port), ManualServerHandler)
+
+    tray_instance = None
+    if enable_tray:
+        try:
+            import threading
+            from tray_app import TrayApp
+            def exit_from_tray():
+                print("[ManualServer] Encerramento solicitado pela bandeja do sistema.")
+                if tray_instance:
+                    tray_instance.stop()
+                threading.Thread(target=server.shutdown, daemon=True).start()
+
+            tray_instance = TrayApp(on_exit=exit_from_tray)
+            tray_instance.run_in_background()
+            tray_instance.update_status("ready", "Assistente Ativo")
+            print(" [Tray] Ícone de bandeja do sistema ativo com sucesso.")
+        except Exception as e:
+            print(f" [Tray] Não foi possível iniciar bandeja: {e}")
+
+    # Checa status da inicialização automática (Caminho A / Fallback)
+    try:
+        from setup_scheduled_task import check_startup_status
+        st = check_startup_status()
+        startup_msg = f"Ativo via {st.get('active_mechanism')}" if st.get("is_configured") else "Não configurado"
+    except Exception:
+        startup_msg = "Desconhecido"
+
     print("=" * 72)
     print(" 🦉 TEACHER AI — SERVIDOR DE HOMOLOGAÇÃO MANUAL LOCAL")
     print("=" * 72)
     print(f" • Painel Web Local:   👉 http://localhost:{port} 👈")
     print(f" • Endpoint REST:      👉 POST http://localhost:{port}/task 👈")
+    print(f" • Ponte Extensão (WS): 👉 ws://localhost:{bridge_instance.port} 👈")
     print(f" • Chrome Dedicado:    👉 http://localhost:{CDP_PORT} (perfil: {PROFILE_DIR})")
+    print(f" • Autostart (Boot):   {startup_msg}")
     print("=" * 72)
     is_ok, msg = check_cdp_health()
     if is_ok:
@@ -469,8 +767,11 @@ def start_server(port: int = SERVER_PORT):
 
     try:
         server.serve_forever()
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, SystemExit):
         print("\n[ManualServer] Encerrando servidor local.")
+    finally:
+        if tray_instance:
+            tray_instance.stop()
         server.server_close()
 
 
@@ -493,6 +794,7 @@ if __name__ == "__main__":
     parser.add_argument("--port", type=int, default=SERVER_PORT, help="Porta do servidor HTTP (padrao: 8765)")
     parser.add_argument("--task", type=str, help="JSON da intencao estruturada para executar via CLI e sair")
     parser.add_argument("--launch", action="store_true", help="Abre o Chrome com perfil dedicado antes de iniciar")
+    parser.add_argument("--tray", action="store_true", help="Inicia o ícone na bandeja do sistema (system tray)")
 
     args = parser.parse_args()
 
@@ -502,4 +804,4 @@ if __name__ == "__main__":
     if args.task:
         run_cli_intent(args.task)
     else:
-        start_server(args.port)
+        start_server(args.port, enable_tray=args.tray)

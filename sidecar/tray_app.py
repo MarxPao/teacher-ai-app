@@ -119,7 +119,6 @@ class TrayApp:
                 pystray.MenuItem(lambda text: f"● {self.status_text}", None, enabled=False),
                 pystray.Menu.SEPARATOR,
                 pystray.MenuItem("🔄 Preparar Navegador (1 clique)", lambda: self._trigger_prepare_browser()),
-                pystray.MenuItem("🌐 Abrir Painel do Professor", lambda: self._open_portal_panel()),
                 pystray.Menu.SEPARATOR,
                 pystray.MenuItem("Sair do Teacher AI", lambda: self.on_exit() if self.on_exit else self.stop())
             )

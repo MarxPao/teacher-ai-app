@@ -47,14 +47,40 @@ class CDPConnector:
 
     @staticmethod
     def _is_chrome_process_running() -> bool:
-        """Verifica se há algum processo chrome.exe ativo no Windows."""
+        """Verifica se há algum processo chrome.exe ativo no Windows de forma 100% silenciosa (Win32 API pura)."""
         try:
-            import subprocess
-            out = subprocess.check_output(
-                ["powershell", "-NoProfile", "-Command", "Get-Process chrome -ErrorAction SilentlyContinue | Measure-Object | Select-Object -ExpandProperty Count"],
-                text=True, timeout=3
-            ).strip()
-            return int(out) > 0
+            import ctypes
+            from ctypes import wintypes
+
+            TH32CS_SNAPPROCESS = 0x00000002
+            class PROCESSENTRY32W(ctypes.Structure):
+                _fields_ = [
+                    ('dwSize', wintypes.DWORD),
+                    ('cntUsage', wintypes.DWORD),
+                    ('th32ProcessID', wintypes.DWORD),
+                    ('th32DefaultHeapID', ctypes.c_size_t),
+                    ('th32ModuleID', wintypes.DWORD),
+                    ('cntThreads', wintypes.DWORD),
+                    ('th32ParentProcessID', wintypes.DWORD),
+                    ('pcPriClassBase', wintypes.LONG),
+                    ('dwFlags', wintypes.DWORD),
+                    ('szExeFile', wintypes.WCHAR * 260)
+                ]
+
+            hSnapshot = ctypes.windll.kernel32.CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)
+            if hSnapshot == -1:
+                return False
+            entry = PROCESSENTRY32W()
+            entry.dwSize = ctypes.sizeof(PROCESSENTRY32W)
+            res = ctypes.windll.kernel32.Process32FirstW(hSnapshot, ctypes.byref(entry))
+            running = False
+            while res:
+                if entry.szExeFile.lower() == "chrome.exe":
+                    running = True
+                    break
+                res = ctypes.windll.kernel32.Process32NextW(hSnapshot, ctypes.byref(entry))
+            ctypes.windll.kernel32.CloseHandle(hSnapshot)
+            return running
         except Exception:
             return False
 

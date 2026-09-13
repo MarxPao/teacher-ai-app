@@ -1,4 +1,4 @@
-﻿"""
+"""
 sidecar/skyvern_fallback.py — Cliente de Fallback Visual Skyvern (Camada 3)
 
 RASTREABILIDADE (Passo 0):
@@ -100,10 +100,12 @@ class SkyvernFallbackClient:
                 )
 
         # 3. Construção do Payload REST (conforme API v2 / v1 descoberta no Passo 0)
+        # REGRA ESTRITAMENTE SOMENTE-LEITURA: Proíbe cliques em elementos destrutivos e envio de forms
         prompt = (
-            f"Navegue na página já aberta em '{url}', identifique a tabela e campos relativos a '{acao}'. "
+            f"MODO ESTRITAMENTE SOMENTE-LEITURA: Navegue na página já aberta em '{url}', identifique a tabela e campos relativos a '{acao}'. "
             f"Parâmetros a considerar: {json.dumps(parametros, ensure_ascii=False)}. "
-            f"NÃO tente realizar login nem submeter formulários sem autorização. Mapeie apenas os seletores."
+            f"NUNCA clique em elementos com ação destrutiva ou de exclusão (ex: 'excluir', 'remover', 'cancelar matrícula', 'deletar', 'apagar'). "
+            f"NÃO tente realizar login nem submeter formulários com submit. Mapeie apenas os seletores para preenchimento em rascunho."
         )
 
         payload = {
@@ -251,16 +253,23 @@ class SkyvernFallbackClient:
                 "multiplicity": "all",
                 "description": "Localizar lista de dados no portal (inferido via Skyvern)"
             })
-            if "nota" in acao.lower() or "grade" in acao.lower():
+            val = parametros.get("valor") or parametros.get("nota") or parametros.get("faltas")
+            objeto_alvo = parametros.get("objeto_alvo") or acao
+            is_write = (
+                parametros.get("tipo_operacao") == "escrita"
+                or val is not None
+                or any(w in acao.lower() for w in ["lancar", "marcar", "preencher", "anotar", "mudar", "salvar", "write", "set"])
+            )
+            if is_write:
                 trace.append({
                     "action_type": "WRITE",
-                    "selector": "input[type='number'], input.nota",
-                    "value": str(parametros.get("nota", "10")),
-                    "description": "Preencher valor descoberto"
+                    "selector": "input:not([type='hidden']), textarea, select",
+                    "value": str(val if val is not None else "1"),
+                    "description": f"Preencher {objeto_alvo}"
                 })
                 trace.append({
                     "action_type": "CLICK",
-                    "selector": "button.btn-gravar, button[type='submit']",
+                    "selector": "button.btn-gravar, button[type='submit'], button:not([type='button'])",
                     "is_submit_action": True,
                     "description": "Submeter formulário"
                 })

@@ -8,6 +8,9 @@ export interface StudentMatchCandidate {
   school_name?: string
   schoolName?: string
   score?: number
+  matricula?: string
+  portal_native_id?: string
+  rollNumber?: string
 }
 
 export type MatchResultStatus = 'exact' | 'confident_match' | 'ambiguous' | 'not_found'
@@ -33,7 +36,12 @@ export function normalizeStudentName(name: string): string {
 
 /**
  * Resolve o aluno correto a partir de um nome digitado ou falado.
- * Implementa threshold estrito e NUNCA escolhe silenciosamente quando há ambiguidade.
+ * Implementa matching em 4 vias:
+ * 1. Matrícula prioritária (portal_native_id)
+ * 2. Nome exato (+ Turma se disponível)
+ * 3. Substring / Token Overlap
+ * 4. Primeiro Nome / Prefixo
+ * NUNCA escolhe silenciosamente quando há ambiguidade.
  */
 export function matchStudentByName(
   queryName: string,
@@ -41,10 +49,14 @@ export function matchStudentByName(
   options?: {
     threshold?: number
     ambiguityDelta?: number
+    matricula?: string
+    class_ref?: string
   }
 ): StudentMatchResult {
   const qClean = normalizeStudentName(queryName)
-  if (!qClean || !students || students.length === 0) {
+  const cleanMat = String(options?.matricula || '').trim()
+
+  if ((!qClean && !cleanMat) || !students || students.length === 0) {
     return {
       status: 'not_found',
       student: null,
@@ -54,7 +66,37 @@ export function matchStudentByName(
     }
   }
 
-  // 1. Verificação de correspondência exata (100% confiável)
+  // 1. VIA 1: Match Direto por Matrícula / portal_native_id (Determinístico)
+  if (cleanMat) {
+    const matMatches = students.filter(s => {
+      const sMat = String(s.matricula || s.portal_native_id || s.rollNumber || s.id || '').trim()
+      return sMat && sMat === cleanMat
+    })
+    if (matMatches.length === 1) {
+      return {
+        status: 'exact',
+        student: matMatches[0],
+        candidates: matMatches,
+        confidence: 1.0
+      }
+    }
+  }
+
+  // Match se queryName for a própria matrícula
+  const directMatMatches = students.filter(s => {
+    const sMat = String(s.matricula || s.portal_native_id || s.rollNumber || '').trim()
+    return sMat && sMat.toLowerCase() === qClean
+  })
+  if (directMatMatches.length === 1) {
+    return {
+      status: 'exact',
+      student: directMatMatches[0],
+      candidates: directMatMatches,
+      confidence: 1.0
+    }
+  }
+
+  // 2. VIA 2: Verificação de correspondência exata por Nome
   const exactMatches = students.filter(s => normalizeStudentName(s.name) === qClean)
   if (exactMatches.length === 1) {
     return {
@@ -65,7 +107,22 @@ export function matchStudentByName(
     }
   }
   if (exactMatches.length > 1) {
-    // Mesmo nome exato em turmas diferentes! Exige desambiguação
+    if (options?.class_ref) {
+      const cleanCls = normalizeStudentName(options.class_ref)
+      const classFiltered = exactMatches.filter(s => {
+        const cls = normalizeStudentName(s.class_name || s.className || '')
+        return cls.includes(cleanCls)
+      })
+      if (classFiltered.length === 1) {
+        return {
+          status: 'exact',
+          student: classFiltered[0],
+          candidates: classFiltered,
+          confidence: 1.0
+        }
+      }
+    }
+    // Mesmo nome exato em turmas diferentes ou sem filtro! Exige desambiguação
     const candidates = exactMatches.map(s => ({ ...s, score: 0 }))
     const candidateLabels = candidates.map(s => `"${s.name}" (${s.class_name || s.className || 'Turma não especificada'})`).join(' ou ')
     return {
@@ -122,6 +179,22 @@ export function matchStudentByName(
         school_name: r.item.school_name || r.item.schoolName,
         score: r.score
       }))
+
+      if (options?.class_ref) {
+        const cleanCls = normalizeStudentName(options.class_ref)
+        const classFiltered = topCandidates.filter(c => {
+          const cls = normalizeStudentName(c.class_name || c.className || '')
+          return cls.includes(cleanCls)
+        })
+        if (classFiltered.length === 1) {
+          return {
+            status: 'exact',
+            student: classFiltered[0],
+            candidates: classFiltered,
+            confidence: 1.0
+          }
+        }
+      }
 
       const candidateLabels = topCandidates
         .map(c => `"${c.name}"${c.class_name ? ` (${c.class_name})` : ''}`)

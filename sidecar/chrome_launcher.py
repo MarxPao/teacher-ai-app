@@ -44,6 +44,8 @@ FIRST_LAUNCH_URL = "about:blank"
 #   --no-default-browser-check -> suprime popup "tornar padrão"
 #   --restore-last-session   -> restaura abas da sessão anterior (persistência de sessão)
 #   --disable-sync           -> evita sincronização com conta Google pessoal
+EXTENSION_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "teacher-extension"))
+
 CHROME_FLAGS = [
     f"--remote-debugging-port={CDP_PORT}",
     "--no-first-run",
@@ -51,6 +53,8 @@ CHROME_FLAGS = [
     "--restore-last-session",
     "--disable-sync",
     "--disable-background-networking",
+    f"--disable-extensions-except={EXTENSION_DIR}",
+    f"--load-extension={EXTENSION_DIR}",
 ]
 
 
@@ -126,14 +130,17 @@ def _write_pid_lock(pid: int) -> None:
 
 
 def _process_alive(pid: int) -> bool:
-    """Verifica se o processo PID ainda existe (Windows via PowerShell)."""
+    """Verifica se o processo PID ainda existe de forma silenciosa (Win32 API pura)."""
     try:
-        out = subprocess.check_output(
-            ["powershell", "-NoProfile", "-Command",
-             f"Get-Process -Id {pid} -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Id"],
-            text=True, timeout=3
-        ).strip()
-        return out == str(pid)
+        import ctypes
+        PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+        handle = ctypes.windll.kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+        if not handle:
+            return False
+        exit_code = ctypes.c_ulong()
+        ctypes.windll.kernel32.GetExitCodeProcess(handle, ctypes.byref(exit_code))
+        ctypes.windll.kernel32.CloseHandle(handle)
+        return exit_code.value == 259  # STILL_ACTIVE
     except Exception:
         return False
 
@@ -300,12 +307,14 @@ def kill_dedicated_chrome() -> Tuple[bool, str]:
         return True, f"Chrome (PID {pid}) ja havia encerrado. Lock removido. (Comportamento normal do Chrome multi-processo)"
 
     try:
-        subprocess.run(
-            ["powershell", "-NoProfile", "-Command", f"Stop-Process -Id {pid} -Force"],
-            timeout=5
-        )
-        time.sleep(0.8)
-        # Verifica se saiu (seja por Stop-Process ou auto-exit durante o comando)
+        import ctypes
+        PROCESS_TERMINATE = 0x0001
+        handle = ctypes.windll.kernel32.OpenProcess(PROCESS_TERMINATE, False, pid)
+        if handle:
+            ctypes.windll.kernel32.TerminateProcess(handle, 0)
+            ctypes.windll.kernel32.CloseHandle(handle)
+        time.sleep(0.5)
+        # Verifica se saiu (seja por TerminateProcess ou auto-exit)
         if not _process_alive(pid):
             try:
                 os.remove(PID_LOCK_FILE)
@@ -313,7 +322,7 @@ def kill_dedicated_chrome() -> Tuple[bool, str]:
                 pass
             return True, f"Chrome dedicado (PID {pid}) encerrado com sucesso."
         else:
-            return False, f"Processo {pid} nao respondeu ao Stop-Process apos 0.8s."
+            return False, f"Processo {pid} nao respondeu ao encerramento apos 0.5s."
     except Exception as e:
         return False, f"Erro ao encerrar Chrome: {e}"
 

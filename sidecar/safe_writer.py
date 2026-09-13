@@ -23,6 +23,38 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 
+# Helper JavaScript para destaque visual em tempo real (Estilo Comet/Perplexity)
+HIGHLIGHT_JS_HELPER = r"""
+(el, label) => {
+    try {
+        if (window.__teacherAiHighlight) {
+            window.__teacherAiHighlight(el, label, 1500);
+            return;
+        }
+        let box = document.getElementById('teacher-agent-focus-outline');
+        if (!box) {
+            box = document.createElement('div');
+            box.id = 'teacher-agent-focus-outline';
+            box.style.cssText = 'position:fixed;pointer-events:none;z-index:2147483646;border:2px solid #38bdf8;background:rgba(56,189,248,0.08);box-shadow:0 0 16px rgba(56,189,248,0.45);border-radius:6px;transition:all 0.2s ease, opacity 0.3s ease;';
+            const badge = document.createElement('div');
+            badge.id = 'teacher-agent-focus-badge';
+            badge.style.cssText = 'position:absolute;top:-24px;left:0;background:#0284c7;color:#fff;font-family:sans-serif;font-size:11px;font-weight:600;padding:2px 8px;border-radius:4px;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,0.2);';
+            box.appendChild(badge);
+            document.body.appendChild(box);
+        }
+        const rect = el.getBoundingClientRect();
+        box.style.top = Math.max(0, rect.top - 3) + 'px';
+        box.style.left = Math.max(0, rect.left - 3) + 'px';
+        box.style.width = (rect.width + 6) + 'px';
+        box.style.height = (rect.height + 6) + 'px';
+        box.style.opacity = '1';
+        const b = box.querySelector('#teacher-agent-focus-badge');
+        if (b) b.textContent = '🦉 Rafinha: ' + label;
+        setTimeout(() => { if (box) box.style.opacity = '0'; }, 1500);
+    } catch (e) {}
+}
+"""
+
 # Script JavaScript executado no browser para controlled inputs do React/Vue/Angular
 NATIVE_SETTER_AND_DISPATCH_JS = r"""
 (element, value) => {
@@ -120,8 +152,13 @@ class SafeWriter:
         """
         expected_str = str(value).strip()
         try:
-            # 1. Foca o elemento
+            # 1. Foca o elemento e aciona destaque visual em tempo real (Estilo Comet/Perplexity)
             await locator.focus()
+            try:
+                if hasattr(locator, "evaluate"):
+                    await locator.evaluate(HIGHLIGHT_JS_HELPER, "Preenchendo...")
+            except Exception:
+                pass
 
             # 2. Limpeza segura
             if clear_first:
@@ -221,6 +258,11 @@ class SafeWriter:
             # 2. Cenário A: <select> nativo
             if is_native_select:
                 try:
+                    try:
+                        if hasattr(container_or_locator, "evaluate"):
+                            await container_or_locator.evaluate(HIGHLIGHT_JS_HELPER, "Selecionando...")
+                    except Exception:
+                        pass
                     # Tenta selecionar por label ou por value
                     try:
                         await container_or_locator.select_option(label=expected_str)
@@ -261,6 +303,13 @@ class SafeWriter:
                     )
 
             # 3. Cenário B: Componente customizado (div, button, role=combobox, role=listbox)
+            # Destaque visual no menu dropdown
+            try:
+                if hasattr(container_or_locator, "evaluate"):
+                    await container_or_locator.evaluate(HIGHLIGHT_JS_HELPER, "Selecionando...")
+            except Exception:
+                pass
+
             # Clica no trigger para abrir as opções
             await container_or_locator.click()
             await asyncio.sleep(0.15)  # Pequeno delay para animação de abertura
@@ -369,7 +418,13 @@ class SafeWriter:
                     drift_detected=False
                 )
 
-            # 2. Executa a alternância de estado
+            # 2. Executa a alternância de estado com destaque visual
+            try:
+                if hasattr(locator, "evaluate"):
+                    await locator.evaluate(HIGHLIGHT_JS_HELPER, "Marcando..." if checked else "Desmarcando...")
+            except Exception:
+                pass
+
             if hasattr(locator, "check") and hasattr(locator, "uncheck"):
                 if checked:
                     await locator.check()
@@ -433,3 +488,60 @@ class SafeWriter:
             pass
 
         return False
+
+    async def read_current_value(self, locator: Any) -> str:
+        """
+        Lê o valor atual do DOM em tempo real diretamente do elemento no navegador.
+        Fonte primária da verdade: o DOM vivo da página, nunca o cache do banco.
+        """
+        try:
+            if hasattr(locator, "input_value"):
+                return (await locator.input_value() or "").strip()
+            elif hasattr(locator, "evaluate"):
+                val = await locator.evaluate("el => el.value !== undefined ? el.value : (el.innerText || '')")
+                return (str(val) if val is not None else "").strip()
+        except Exception:
+            pass
+        return ""
+
+    async def compute_and_write_relative_value(
+        self,
+        locator: Any,
+        delta: float,
+        expected_cached_base: Optional[float] = None
+    ) -> Tuple[WriteResult, Dict[str, Any]]:
+        """
+        PRIORIDADE 2: Regra explícita para escrita relativa (ex: 'aumenta nota em +0.5'):
+        1. SEMPRE relê o valor atual no DOM da página em tempo real.
+        2. Detecta conflito se expected_cached_base for informado e diferir do DOM vivo.
+        3. Calcula o novo valor baseado no DOM vivo (portal é a fonte da verdade).
+        4. Executa a escrita segura com checkpoint imediato.
+        """
+        dom_val_str = await self.read_current_value(locator)
+        clean_dom_str = dom_val_str.replace(",", ".").strip()
+        try:
+            current_dom_num = float(clean_dom_str) if clean_dom_str else 0.0
+        except ValueError:
+            current_dom_num = 0.0
+
+        conflict_info: Dict[str, Any] = {
+            "conflict_detected": False,
+            "dom_value_at_write": current_dom_num,
+            "cached_base": expected_cached_base,
+            "warning": None
+        }
+
+        if expected_cached_base is not None:
+            if abs(current_dom_num - expected_cached_base) > 1e-4:
+                conflict_info["conflict_detected"] = True
+                conflict_info["warning"] = (
+                    f"Aviso de conflito externo: o banco em cache esperava base {expected_cached_base}, "
+                    f"mas o portal real possui {current_dom_num}. "
+                    f"A operação relativa foi aplicada sobre a fonte primária real ({current_dom_num} + {delta})."
+                )
+
+        new_val_num = current_dom_num + delta
+        new_val_str = f"{new_val_num:.1f}" if new_val_num % 1 != 0 else str(int(new_val_num))
+
+        write_res = await self.write_input(locator, new_val_str)
+        return write_res, conflict_info

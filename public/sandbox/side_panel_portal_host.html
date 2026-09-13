@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>Teacher AI — Validação Visual Side Panel + Portal Escolar</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; font-family: system-ui, sans-serif; background: #e2e8f0; }
+    
+    /* Chrome-like top mock header */
+    .browser-bar {
+      height: 38px;
+      background: #0f172a;
+      color: #94a3b8;
+      display: flex;
+      align-items: center;
+      padding: 0 16px;
+      font-size: 12px;
+      font-weight: 500;
+      gap: 12px;
+      border-bottom: 1px solid #334155;
+    }
+    .browser-tab {
+      background: #1e293b;
+      color: #f8fafc;
+      padding: 6px 14px;
+      border-radius: 8px 8px 0 0;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .side-panel-toggle {
+      margin-left: auto;
+      background: #334155;
+      color: #f8fafc;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* Workspace: Split Portal on Left, Side Panel on Right */
+    .workspace {
+      display: flex;
+      width: 100%;
+      height: calc(100% - 38px);
+    }
+    .portal-pane {
+      flex: 1;
+      height: 100%;
+      position: relative;
+      background: #f4f6f9;
+    }
+    .portal-pane iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+    .side-panel-pane {
+      width: 400px;
+      height: 100%;
+      border-left: 2px solid #cbd5e1;
+      box-shadow: -4px 0 16px rgba(0,0,0,0.06);
+      background: #fdf6e3;
+      position: relative;
+    }
+    .side-panel-pane iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="browser-bar">
+    <div class="browser-tab">
+      <span>🏫 Diário Online — 9º Ano B (Portal Escolar)</span>
+    </div>
+    <div class="side-panel-toggle">
+      <span>TEACHER AI Side Panel [Ativo]</span>
+    </div>
+  </div>
+
+  <div class="workspace">
+    <div class="portal-pane">
+      <iframe id="portal-frame" src="portal_mock.html"></iframe>
+    </div>
+    <div class="side-panel-pane">
+      <iframe id="side-panel-frame" src="/teacher-extension/side_panel.html"></iframe>
+    </div>
+  </div>
+
+  <script>
+    // Inicialização do Bridge entre o Side Panel e o Portal Mock
+    window.addEventListener('DOMContentLoaded', () => {
+      const portalIframe = document.getElementById('portal-frame');
+      const sidePanelIframe = document.getElementById('side-panel-frame');
+
+      function setupBridge() {
+        try {
+          const spWin = sidePanelIframe.contentWindow;
+          const pDoc = portalIframe.contentDocument;
+
+          if (!spWin || !pDoc) {
+            setTimeout(setupBridge, 200);
+            return;
+          }
+
+          // Injeta a ponte no escopo do Side Panel
+          spWin.__portalBridge = (msg, callback) => {
+            console.log('[HostBridge] Recebida mensagem do SidePanel:', msg);
+
+            if (msg.action === 'READ_ACTIVE_PORTAL_ROSTER') {
+              const rows = Array.from(pDoc.querySelectorAll('table tr'));
+              const roster = [];
+              rows.forEach((row, idx) => {
+                const cells = Array.from(row.querySelectorAll('td, th'));
+                if (cells.length < 2) return;
+                const inputs = Array.from(row.querySelectorAll('input:not([type="hidden"]):not([type="checkbox"])'));
+                if (inputs.length > 0) {
+                  let nameCandidate = '';
+                  for (const c of cells) {
+                    const txt = c.innerText.trim();
+                    if (txt && !/^\d+$/.test(txt) && !c.querySelector('input')) {
+                      nameCandidate = txt;
+                      break;
+                    }
+                  }
+                  if (!nameCandidate) nameCandidate = cells[0].innerText.trim();
+                  const lower = nameCandidate.toLowerCase();
+                  if (lower.includes('aluno') || lower.includes('nome') || lower.includes('estudante')) return;
+
+                  roster.push({
+                    rowIndex: idx,
+                    name: nameCandidate,
+                    currentValue: inputs[0].value || '',
+                    inputId: inputs[0].id || inputs[0].name || `input_row_${idx}`
+                  });
+                }
+              });
+              console.log('[HostBridge] Roster lido do DOM:', roster);
+              callback({ sucesso: true, students: roster });
+              return;
+            }
+
+            if (msg.action === 'EXECUTE_SAFE_WRITE') {
+              const { studentName, targetValue, actionType } = msg;
+              const rows = Array.from(pDoc.querySelectorAll('table tr'));
+              const cleanTarget = (studentName || '').trim().toLowerCase();
+              let targetRow = null;
+
+              for (const r of rows) {
+                if (r.innerText.toLowerCase().includes(cleanTarget)) {
+                  targetRow = r;
+                  break;
+                }
+              }
+
+              if (!targetRow) {
+                const firstName = cleanTarget.split(' ')[0];
+                if (firstName.length > 2) {
+                  for (const r of rows) {
+                    if (r.innerText.toLowerCase().includes(firstName)) {
+                      targetRow = r;
+                      break;
+                    }
+                  }
+                }
+              }
+
+              if (!targetRow) {
+                callback({ sucesso: false, status: 'student_not_found', mensagem: `Aluno '${studentName}' não encontrado no portal.` });
+                return;
+              }
+
+              const inputs = Array.from(targetRow.querySelectorAll('input:not([type="hidden"]):not([type="checkbox"])'));
+              if (inputs.length === 0) {
+                callback({ sucesso: false, status: 'no_inputs', mensagem: 'Nenhum campo editável de nota na linha deste aluno.' });
+                return;
+              }
+
+              const targetInput = inputs[0];
+              const beforeVal = targetInput.value || '';
+              const valStr = String(targetValue);
+
+              // 1. Destaque Visual (Animação/Highlight verde pulsante)
+              targetInput.style.transition = 'all 0.3s ease';
+              targetInput.style.outline = '3px solid #10b981';
+              targetInput.style.backgroundColor = '#ecfdf5';
+              targetInput.style.boxShadow = '0 0 16px rgba(16, 185, 129, 0.6)';
+
+              // 2. Escrita Segura via Descritor Nativo e Disparo de Eventos
+              try {
+                const proto = Object.getPrototypeOf(targetInput);
+                const desc = Object.getOwnPropertyDescriptor(proto, 'value') || Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+                if (desc && desc.set) {
+                  desc.set.call(targetInput, valStr);
+                } else {
+                  targetInput.value = valStr;
+                }
+              } catch (e) {
+                targetInput.value = valStr;
+              }
+
+              targetInput.focus();
+              targetInput.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+              targetInput.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+
+              // 3. Re-leitura pós-gravação no DOM oficial
+              const afterVal = targetInput.value;
+              const isVerified = (afterVal === valStr);
+
+              // Restaura outline suavemente após 2.5s
+              setTimeout(() => {
+                targetInput.style.transition = 'all 0.5s ease';
+                targetInput.style.outline = '';
+                targetInput.style.backgroundColor = '';
+                targetInput.style.boxShadow = '';
+              }, 2500);
+
+              callback({
+                sucesso: isVerified,
+                status: isVerified ? 'verified_persisted' : 'verification_failed',
+                studentName,
+                before_val: beforeVal,
+                after_val: afterVal,
+                expected_val: valStr,
+                verified: isVerified
+              });
+              return;
+            }
+
+            if (msg.action === 'NAVIGATE_PORTAL_TAB') {
+              const targetKeyword = (msg.target || '').trim().toLowerCase();
+              const cleanKey = targetKeyword.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+              const candidates = Array.from(pDoc.querySelectorAll('a, button, [role="tab"], [role="menuitem"], [role="button"], .tab, .tab-btn, .nav-link, li, span'));
+              
+              let bestElement = null;
+              let bestScore = -1;
+
+              for (const el of candidates) {
+                const text = (el.innerText || el.textContent || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                const id = (el.id || '').toLowerCase();
+                let score = 0;
+                if (text === cleanKey) score = 100;
+                else if (text.startsWith(cleanKey)) score = 80;
+                else if (text.includes(cleanKey)) score = 60;
+                else if (id.includes(cleanKey)) score = 40;
+
+                if (score > bestScore && score >= 40) {
+                  bestScore = score;
+                  bestElement = el;
+                }
+              }
+
+              if (!bestElement) {
+                callback({ sucesso: false, mensagem: `Não encontrei aba ou menu correspondente a '${targetKeyword}'.` });
+                return;
+              }
+
+              // Destaque visual temporário da Rafinha
+              bestElement.style.transition = 'all 0.3s ease';
+              bestElement.style.outline = '2px solid #38bdf8';
+              bestElement.style.boxShadow = '0 0 16px rgba(56, 189, 248, 0.6)';
+
+              setTimeout(() => {
+                try {
+                  bestElement.click();
+                } catch (e) {
+                  bestElement.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+                }
+              }, 200);
+
+              setTimeout(() => {
+                try {
+                  bestElement.style.outline = '';
+                  bestElement.style.boxShadow = '';
+                } catch {}
+              }, 1800);
+
+              callback({
+                sucesso: true,
+                elementText: (bestElement.innerText || bestElement.textContent || targetKeyword).trim(),
+                target: targetKeyword
+              });
+              return;
+            }
+
+            callback({ sucesso: false, error: 'Ação desconhecida no bridge' });
+          };
+
+          console.log('[HostBridge] Ponte estabelecida com sucesso!');
+        } catch (e) {
+          console.warn('[HostBridge] Aguardando carregamento dos frames...', e);
+          setTimeout(setupBridge, 300);
+        }
+      }
+
+      portalIframe.addEventListener('load', setupBridge);
+      sidePanelIframe.addEventListener('load', setupBridge);
+      setupBridge();
+    });
+  </script>
+</body>
+</html>

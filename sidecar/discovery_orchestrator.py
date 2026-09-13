@@ -27,7 +27,7 @@ import time
 from typing import Any, Callable, Dict, List, Optional
 
 from skill_graph_schema import SkillGraph, SkillNode, SkillAnchor, SkillNodeParams, RetryPolicy
-from graph_validator import assert_graph_safe
+from graph_validator import assert_graph_safe, verify_skillgraph_alignment, assert_skillgraph_aligned, PoisonedMemoryDetectedError
 from skill_store import save_skill, load_skill, list_skills, SkillNotFoundError
 from portal_map_store import PortalMapStore
 from browser_use_agent import BrowserUseAgent, BrowserUseTaskResult
@@ -35,6 +35,35 @@ from skyvern_fallback import SkyvernFallbackClient, SkyvernTaskResult
 
 
 MAX_ORCHESTRATION_DEPTH = 3
+
+# REGRA DE EXPLORAÇÃO ESTRITAMENTE SOMENTE-LEITURA:
+# Durante a descoberta agêntica (Browser-use / Skyvern), o agente opera em modo
+# estritamente não-destrutivo. É expressamente proibido clicar em qualquer elemento
+# que contenha termos de remoção/cancelamento. Apenas a descoberta de seletores ocorre,
+# e o preenchimento de rascunho fica condicionado ao PortalApprovalCard.
+DESTRUCTIVE_TERMS = [
+    "excluir", "remover", "deletar", "cancelar", "apagar", 
+    "desmatricular", "delete", "remove", "cancel", "drop", "expel", "limpar"
+]
+
+
+def is_destructive_action(action: Dict[str, Any]) -> bool:
+    """
+    Verifica se uma ação, seletor ou descrição possui termos potencialmente destrutivos.
+    Durante a exploração do DiscoveryOrchestrator, ações destrutivas são vetadas.
+    """
+    text_to_check = " ".join([
+        str(action.get("description", "")),
+        str(action.get("selector", "")),
+        str(action.get("text", "")),
+        str(action.get("label", "")),
+        str(action.get("value", "")) if action.get("action_type") == "CLICK" else ""
+    ]).lower()
+
+    for term in DESTRUCTIVE_TERMS:
+        if term in text_to_check:
+            return True
+    return False
 
 
 class DiscoveryOrchestrator:
@@ -221,18 +250,61 @@ class DiscoveryOrchestrator:
         bu_task = {
             "acao": acao,
             "portal_id": portal_id,
-            "parametros": parametros
+            "parametros": parametros,
+            "objeto_alvo": parametros.get("objeto_alvo"),
+            "verbo_acao": parametros.get("verbo_acao"),
+            "aluno": parametros.get("aluno"),
+            "valor": parametros.get("valor"),
+            "tipo_operacao": parametros.get("tipo_operacao"),
+            "descricao_tarefa": parametros.get("descricao_tarefa")
         }
         bu_res: BrowserUseTaskResult = await self.browser_use_agent.execute_discovery_task(bu_task)
 
+        # Se o Browser-use detectou ambiguidade, NUNCA escala para Skyvern nem escolhe silenciosamente!
+        if getattr(bu_res, "status", "") == "ambiguous":
+            print(f"[Orchestrator] ⚠️ Ambiguidade detectada pelo Browser-use ({len(bu_res.candidates)} alunos correspondentes).")
+            return {
+                "success": False,
+                "status": "ambiguous",
+                "engine_used": bu_res.engine_used,
+                "skill_graph": None,
+                "candidates": bu_res.candidates,
+                "disambiguation_prompt": bu_res.disambiguation_prompt,
+                "trace": bu_res.trace_de_acoes,
+                "execution_time": time.time() - start_time,
+                "estimated_cost": 0.0005,
+                "error": bu_res.erro or "Ambiguidade: múltiplos alunos correspondem ao termo buscado."
+            }
+
         # Se o Browser-use teve sucesso e confiança >= threshold, compila e salva
         if bu_res.sucesso and not bu_res.requires_escalation:
+            orig_intent = {"acao": acao, "parametros": parametros, "aluno": parametros.get("aluno"), "objeto_alvo": parametros.get("objeto_alvo")}
+            is_aligned, alignment_err = verify_skillgraph_alignment(
+                task_id=acao,
+                actions_or_nodes=bu_res.trace_de_acoes,
+                original_intent=orig_intent
+            )
+            if not is_aligned:
+                err_msg = f"Gravação de SkillGraph bloqueada por segurança: {alignment_err}"
+                print(f"[Orchestrator] 🚨 ANOMALIA DE SEGURANÇA (Memória Envenenada Detectada): {err_msg}")
+                return {
+                    "success": False,
+                    "engine_used": "browser_use_llama",
+                    "skill_graph": None,
+                    "trace": bu_res.trace_de_acoes,
+                    "execution_time": time.time() - start_time,
+                    "estimated_cost": 0.0005,
+                    "error": err_msg,
+                    "security_anomaly": True
+                }
+
             new_graph = self._compile_trace_to_skill_graph(
                 portal_id=portal_id,
                 task_id=acao,
                 trace=bu_res.trace_de_acoes,
                 discovery_engine="browser_use_dom",
-                confidence=bu_res.confianca
+                confidence=bu_res.confianca,
+                original_intent=orig_intent
             )
             save_path = save_skill(new_graph, base_dir=self.skills_dir) if self.skills_dir else save_skill(new_graph)
             self.map_store.clear_drift(domain, acao)
@@ -290,13 +362,35 @@ class DiscoveryOrchestrator:
                 "error": err
             }
 
+        # 1. Proteção de Memória Envenenada (Anti-Prompt Injection Indireto):
+        orig_intent = {"acao": acao, "parametros": parametros, "aluno": parametros.get("aluno"), "objeto_alvo": parametros.get("objeto_alvo")}
+        is_aligned, alignment_err = verify_skillgraph_alignment(
+            task_id=acao,
+            actions_or_nodes=sky_res.trace_de_acoes,
+            original_intent=orig_intent
+        )
+        if not is_aligned:
+            err_msg = f"Gravação de SkillGraph bloqueada por segurança: {alignment_err}"
+            print(f"[Orchestrator] 🚨 ANOMALIA DE SEGURANÇA (Memória Envenenada Detectada): {err_msg}")
+            return {
+                "success": False,
+                "engine_used": "skyvern_vision",
+                "skill_graph": None,
+                "trace": sky_res.trace_de_acoes,
+                "execution_time": time.time() - start_time,
+                "estimated_cost": 0.08,
+                "error": err_msg,
+                "security_anomaly": True
+            }
+
         # Compilação do trace retornado pelo Skyvern
         new_graph = self._compile_trace_to_skill_graph(
             portal_id=portal_id,
             task_id=acao,
             trace=sky_res.trace_de_acoes,
             discovery_engine="skyvern_vision",
-            confidence=sky_res.confianca
+            confidence=sky_res.confianca,
+            original_intent=orig_intent
         )
         save_path = save_skill(new_graph, base_dir=self.skills_dir) if self.skills_dir else save_skill(new_graph)
         self.map_store.clear_drift(domain, acao)
@@ -320,13 +414,18 @@ class DiscoveryOrchestrator:
         task_id: str,
         trace: List[Dict[str, Any]],
         discovery_engine: str,
-        confidence: float
+        confidence: float,
+        original_intent: Optional[Dict[str, Any]] = None
     ) -> SkillGraph:
         """
         Compila o trace de ações descobertas (Browser-use ou Skyvern) em um SkillGraph
         válido e seguro, inserindo obrigatoriamente um nó CHECKPOINT antes de qualquer
         ação de escrita (WRITE) ou submissão (CLICK de submit) para aprovação em assert_graph_safe.
+        Aplica também validação estrita anti-envenenamento de memória (assert_skillgraph_aligned).
         """
+        # Validação estrita de alinhamento pré-compilação
+        if original_intent:
+            assert_skillgraph_aligned(task_id, trace, original_intent)
         # 1. Determina a próxima versão para não sobrescrever histórico
         current_version = 0
         try:
@@ -338,6 +437,13 @@ class DiscoveryOrchestrator:
         except Exception:
             current_version = 0
         next_version = current_version + 1
+
+        # REGRA MANDATÓRIA DE EXPLORAÇÃO ESTRITAMENTE SOMENTE-LEITURA:
+        # Filtra e elimina sumariamente qualquer ação que sugira exclusão ou impacto irreversível
+        safe_trace = [act for act in trace if not is_destructive_action(act)]
+        if len(safe_trace) < len(trace):
+            print(f"[Orchestrator] 🛡️ {len(trace) - len(safe_trace)} ação(ões) com termos destrutivos foram bloqueadas.")
+        trace = safe_trace
 
         nodes: Dict[str, SkillNode] = {}
         node_ids: List[str] = []
@@ -441,7 +547,8 @@ class DiscoveryOrchestrator:
                     retry_policy=RetryPolicy(max_attempts=2, backoff_ms=500)
                 )
 
-            node_ids.append(nid)
+            if nid in nodes:
+                node_ids.append(nid)
 
         # 3. Encadeia as arestas on_success em sequência
         for i in range(len(node_ids) - 1):

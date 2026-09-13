@@ -340,26 +340,33 @@ class NavigationStateMachine:
         except Exception:
             pass
 
-        # ── Camada 4: Tabela-alvo com inputs editáveis ───────────────────────
-
-        for sel in profile.target_table_selectors:
-            try:
-                count_result = await page.evaluate(_COUNT_TABLE_INPUTS_JS, sel)
-                if count_result.get("editable") and count_result.get("rows", 0) >= 2:
-                    trace.append(f"Camada4: tabela editável encontrada em '{sel}' ({count_result['rows']} linhas, {count_result['inputs']} inputs)")
-                    return NavResult(
-                        state=NavState.TABELA_ALVO_ENCONTRADA,
-                        requires_human=False,
-                        details={
-                            "selector": sel,
-                            "rows": count_result["rows"],
-                            "inputs": count_result["inputs"],
-                        },
-                        trace=trace,
-                        elapsed_ms=(time.monotonic() - t0) * 1000,
-                    )
-            except Exception:
-                continue
+        # ── Camada 4: Tabela-alvo com inputs editáveis (busca recursiva no documento e em iframes) ──
+        if hasattr(page, "frames") and isinstance(page.frames, (list, tuple)) and len(page.frames) > 0:
+            frames_to_check = page.frames
+        else:
+            frames_to_check = [page]
+        for f in frames_to_check:
+            for sel in profile.target_table_selectors:
+                try:
+                    count_result = await f.evaluate(_COUNT_TABLE_INPUTS_JS, sel)
+                    if count_result.get("editable") and count_result.get("rows", 0) >= 2:
+                        frame_info = f" (frame='{getattr(f, 'name', '')}')" if f != getattr(page, "main_frame", None) else ""
+                        trace.append(f"Camada4: tabela editável encontrada em '{sel}'{frame_info} ({count_result['rows']} linhas, {count_result['inputs']} inputs)")
+                        return NavResult(
+                            state=NavState.TABELA_ALVO_ENCONTRADA,
+                            requires_human=False,
+                            details={
+                                "selector": sel,
+                                "rows": count_result["rows"],
+                                "inputs": count_result["inputs"],
+                                "frame_name": getattr(f, "name", None),
+                                "is_iframe": (f != getattr(page, "main_frame", None))
+                            },
+                            trace=trace,
+                            elapsed_ms=(time.monotonic() - t0) * 1000,
+                        )
+                except Exception:
+                    continue
 
         # ── Camada 5: Contexto de lançamento presente, mas sem tabela editável ──
         # Deve ter precedência sobre MENU_PRINCIPAL para evitar falso positivo.
