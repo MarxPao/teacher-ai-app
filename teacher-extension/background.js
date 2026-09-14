@@ -169,7 +169,7 @@ function connectWebSocket() {
 
 async function checkHttpFallbackAndReconnect() {
   try {
-    const res = await fetch(HTTP_STATUS_FALLBACK, { signal: AbortSignal.timeout(1000) });
+    const res = await fetch(HTTP_STATUS_FALLBACK, { signal: AbortSignal.timeout(3000) });
     if (res.ok) {
       isSidecarOnline = true;
       evaluateActiveTab();
@@ -178,7 +178,7 @@ async function checkHttpFallbackAndReconnect() {
     }
   } catch {}
   isSidecarOnline = false;
-  updateToolbarBadge('offline');
+  evaluateActiveTab();
 }
 
 // ─── ANÁLISE DA ABA ATIVA & DETECÇÃO DE PORTAL ────────────────────────────────
@@ -350,35 +350,36 @@ async function evaluateActiveTab(preferredTabId = null) {
   currentTabState.tabId = activeTab.id;
   currentTabState.url = url;
   currentTabState.title = title;
+  currentTabState.isMappedPortal = !!portal;
+  currentTabState.portalName = portal ? portal.name : null;
+
+  if (portal) {
+    const authInfo = await checkTabAuthentication(activeTab.id);
+    currentTabState.isAuthenticated = authInfo.isAuthenticated;
+    currentTabState.pageKind = authInfo.pageKind || (authInfo.isAuthenticated ? 'authenticated' : 'login');
+    currentTabState.friendlyPageName = authInfo.pageKind === 'login'
+      ? 'Tela de Login'
+      : (authInfo.friendlyPageName || title || 'Painel do Professor');
+  } else {
+    currentTabState.isAuthenticated = false;
+    currentTabState.pageKind = 'external';
+    currentTabState.friendlyPageName = title || 'Página Externa';
+  }
 
   if (!isSidecarOnline) {
-    currentTabState.isMappedPortal = !!portal;
-    currentTabState.portalName = portal ? portal.name : null;
-    currentTabState.isAuthenticated = false;
-    currentTabState.friendlyPageName = title;
-    updateToolbarBadge('offline');
+    if (portal) {
+      updateToolbarBadge('portal_active_sidecar_connecting');
+    } else {
+      updateToolbarBadge('offline');
+    }
     return;
   }
 
   if (!portal) {
-    currentTabState.isMappedPortal = false;
-    currentTabState.portalName = null;
-    currentTabState.isAuthenticated = false;
-    currentTabState.friendlyPageName = title || 'Página Externa';
     updateToolbarBadge('unrecognized_portal');
     sendTabStatusToSidecar();
     return;
   }
-
-  currentTabState.isMappedPortal = true;
-  currentTabState.portalName = portal.name;
-
-  const authInfo = await checkTabAuthentication(activeTab.id);
-  currentTabState.isAuthenticated = authInfo.isAuthenticated;
-  currentTabState.pageKind = authInfo.pageKind || (authInfo.isAuthenticated ? 'authenticated' : 'login');
-  currentTabState.friendlyPageName = authInfo.pageKind === 'login'
-    ? 'Tela de Login'
-    : (authInfo.friendlyPageName || title || 'Painel do Professor');
 
   if (currentTabState.pageKind === 'context_selection') {
     updateToolbarBadge('context_selection');
@@ -425,6 +426,20 @@ function updateToolbarBadge(state) {
     }).catch(() => {});
     chrome.action.setTitle({
       title: `Teacher AI: Selecione a Turma/Ano e avance no portal (${currentTabState.portalName || 'Portal'})`
+    });
+  } else if (state === 'portal_active_sidecar_connecting') {
+    // 🌐 Ciano/Verde: Portal escolar detectado!
+    chrome.action.setBadgeText({ text: 'WEB' });
+    chrome.action.setBadgeBackgroundColor({ color: '#0284c7' });
+    chrome.action.setIcon({
+      path: {
+        '16': 'icons/icon_green_16.png',
+        '48': 'icons/icon_green_48.png',
+        '128': 'icons/icon_green_128.png'
+      }
+    }).catch(() => {});
+    chrome.action.setTitle({
+      title: `Teacher AI: Portal ${currentTabState.portalName || ''} ativo. Conectando com assistente local...`
     });
   } else if (state === 'ready') {
     // 🟢 Verde: Conectado e pronto no portal

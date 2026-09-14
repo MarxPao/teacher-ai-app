@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Portal Mock — 6 Campos em Ordem Invertida (Disciplina antes de Turma)</title>
+  <style>
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f8fafc; margin: 0; padding: 30px; }
+    .card { background: #fff; max-width: 950px; margin: 0 auto; padding: 24px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+    h2 { color: #0f172a; margin-top: 0; }
+    .filter-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 16px; margin-bottom: 20px; }
+    .filter-group { display: flex; flex-direction: column; gap: 4px; }
+    label { font-size: 13px; font-weight: 600; color: #334155; }
+    select { padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; background: #fff; }
+    select:disabled { background: #f1f5f9; cursor: not-allowed; opacity: 0.6; }
+    .btn { background: #0284c7; color: #fff; border: none; padding: 10px 20px; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 14px; transition: all 0.2s; }
+    .btn:hover:not(:disabled) { background: #0369a1; }
+    .btn:disabled, .btn.btn-disabled { background: #94a3b8; cursor: not-allowed; opacity: 0.65; }
+    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+    th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #e2e8f0; font-size: 14px; }
+    th { background: #f1f5f9; color: #334155; }
+    .badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; }
+    .badge-disabled { background: #fee2e2; color: #991b1b; }
+    .badge-enabled { background: #dcfce7; color: #166534; }
+    #tabela_diario_container { display: none; margin-top: 20px; border-top: 2px solid #e2e8f0; padding-top: 16px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>Diário de Classe Eletrônico — Consulta de Notas (6 Filtros em Cascata)</h2>
+    <p style="color: #64748b; font-size: 14px;">Ordem invertida de filtros: Ano &rarr; Unidade &rarr; Disciplina &rarr; Turma &rarr; Etapa &rarr; Bimestre.</p>
+
+    <div style="margin-bottom: 14px; font-size: 13px;">
+      Status do Botão: <span id="btn_status_badge" class="badge badge-disabled">Desabilitado (disabled)</span>
+      &nbsp;|&nbsp; Tentativas de Clique Inválido: <strong id="invalid_click_count">0</strong>
+      &nbsp;|&nbsp; Diário Carregado: <strong id="diario_carregado">Não</strong>
+    </div>
+
+    <!-- Grade com 6 Filtros em Cascata Invertida -->
+    <div class="filter-grid">
+      <!-- 1. Ano Letivo -->
+      <div class="filter-group">
+        <label for="filtro_ano">1. Ano Letivo *</label>
+        <select id="filtro_ano" name="filtro_ano" onchange="onAnoChange()">
+          <option value="">-- Selecione o Ano --</option>
+          <option value="2025">2025</option>
+          <option value="2026">2026</option>
+        </select>
+      </div>
+
+      <!-- 2. Unidade Escolar -->
+      <div class="filter-group">
+        <label for="filtro_unidade">2. Unidade Escolar *</label>
+        <select id="filtro_unidade" name="filtro_unidade" disabled onchange="onUnidadeChange()">
+          <option value="">-- Selecione primeiro o ano --</option>
+        </select>
+      </div>
+
+      <!-- 3. Disciplina (VEM ANTES DE TURMA) -->
+      <div class="filter-group">
+        <label for="filtro_disciplina">3. Disciplina / Componente Curricular *</label>
+        <select id="filtro_disciplina" name="filtro_disciplina" disabled onchange="onDisciplinaChange()">
+          <option value="">-- Selecione primeiro a unidade --</option>
+        </select>
+      </div>
+
+      <!-- 4. Turma (VEM DEPOIS DE DISCIPLINA) -->
+      <div class="filter-group">
+        <label for="filtro_turma">4. Turma / Classe *</label>
+        <select id="filtro_turma" name="filtro_turma" disabled onchange="onTurmaChange()">
+          <option value="">-- Selecione primeiro a disciplina --</option>
+        </select>
+      </div>
+
+      <!-- 5. Etapa / Segmento -->
+      <div class="filter-group">
+        <label for="filtro_etapa">5. Etapa / Segmento de Ensino *</label>
+        <select id="filtro_etapa" name="filtro_etapa" disabled onchange="onEtapaChange()">
+          <option value="">-- Selecione primeiro a turma --</option>
+        </select>
+      </div>
+
+      <!-- 6. Bimestre -->
+      <div class="filter-group">
+        <label for="filtro_bimestre">6. Bimestre / Período Avaliativo *</label>
+        <select id="filtro_bimestre" name="filtro_bimestre" disabled onchange="onBimestreChange()">
+          <option value="">-- Selecione primeiro a etapa --</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Botão Condicionalmente Habilitado -->
+    <div>
+      <button
+        type="button"
+        id="btn_carregar_diario"
+        name="btn_carregar_diario"
+        class="btn btn-disabled"
+        disabled
+        aria-disabled="true"
+        onclick="carregarDiario()"
+      >
+        Carregar Diário
+      </button>
+    </div>
+
+    <!-- Tabela do Diário (Só surge após carregar com sucesso) -->
+    <div id="tabela_diario_container">
+      <h3 style="color: #0f172a; margin-top: 0;">Planilha de Notas — <span id="label_contexto">Turma 6º Ano A (Matemática - 3º Bimestre)</span></h3>
+      <table id="tabela_diario">
+        <thead>
+          <tr>
+            <th>Matrícula</th>
+            <th>Nome do Aluno</th>
+            <th>Nota Parcial</th>
+            <th>Nota Avaliação</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr data-student-id="701">
+            <td>701</td>
+            <td class="student-name">Mariana Costa</td>
+            <td>8.0</td>
+            <td><input type="text" id="nota_701" name="nota_701" value="8.5" style="width:60px;" /></td>
+          </tr>
+          <tr data-student-id="702">
+            <td>702</td>
+            <td class="student-name">Lucas Silva</td>
+            <td>7.0</td>
+            <td><input type="text" id="nota_702" name="nota_702" value="" placeholder="Nota" style="width:60px;" /></td>
+          </tr>
+          <tr data-student-id="703">
+            <td>703</td>
+            <td class="student-name">Beatriz Ramos</td>
+            <td>9.0</td>
+            <td><input type="text" id="nota_703" name="nota_703" value="9.5" style="width:60px;" /></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div style="margin-top: 16px;">
+        <button type="button" id="btn_salvar_diario" class="btn" onclick="salvarDiarioFinal()">Gravar Diário</button>
+        <span id="save_confirm_msg" style="display:none; color: #166534; font-weight:600; margin-left: 12px;">✅ Diário gravado com sucesso!</span>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    window.__invalidClicks = 0;
+    window.__diarioCarregado = false;
+    window.__diarioGravado = false;
+
+    // Monitora cliques mesmo se desabilitado para rastrear tentativas de clique cego
+    document.getElementById('btn_carregar_diario').addEventListener('click', function(e) {
+      if (this.disabled || this.getAttribute('aria-disabled') === 'true') {
+        window.__invalidClicks++;
+        document.getElementById('invalid_click_count').innerText = window.__invalidClicks;
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    }, true);
+
+    function checkEnableButton() {
+      const a = document.getElementById('filtro_ano').value;
+      const u = document.getElementById('filtro_unidade').value;
+      const d = document.getElementById('filtro_disciplina').value;
+      const t = document.getElementById('filtro_turma').value;
+      const e = document.getElementById('filtro_etapa').value;
+      const b = document.getElementById('filtro_bimestre').value;
+      const btn = document.getElementById('btn_carregar_diario');
+      const badge = document.getElementById('btn_status_badge');
+
+      if (a && u && d && t && e && b) {
+        btn.disabled = false;
+        btn.removeAttribute('disabled');
+        btn.setAttribute('aria-disabled', 'false');
+        btn.classList.remove('btn-disabled');
+        badge.className = 'badge badge-enabled';
+        badge.innerText = 'Habilitado (Pronto para Clique)';
+      } else {
+        btn.disabled = true;
+        btn.setAttribute('disabled', 'disabled');
+        btn.setAttribute('aria-disabled', 'true');
+        btn.classList.add('btn-disabled');
+        badge.className = 'badge badge-disabled';
+        badge.innerText = 'Desabilitado (disabled)';
+      }
+    }
+
+    function onAnoChange() {
+      const val = document.getElementById('filtro_ano').value;
+      const u = document.getElementById('filtro_unidade');
+      u.innerHTML = '';
+      if (val) {
+        u.disabled = false;
+        u.options.add(new Option('-- Selecione a Unidade --', ''));
+        u.options.add(new Option('Sede Centro', 'Sede Centro'));
+        u.options.add(new Option('Polo Sul', 'Polo Sul'));
+      } else {
+        u.disabled = true;
+        u.options.add(new Option('-- Selecione primeiro o ano --', ''));
+      }
+      resetFromUnidade();
+    }
+
+    function onUnidadeChange() {
+      const val = document.getElementById('filtro_unidade').value;
+      const d = document.getElementById('filtro_disciplina');
+      d.innerHTML = '';
+      if (val) {
+        d.disabled = false;
+        d.options.add(new Option('-- Selecione a Disciplina --', ''));
+        d.options.add(new Option('Matemática', 'Matemática'));
+        d.options.add(new Option('Ciências', 'Ciências'));
+        d.options.add(new Option('História', 'História'));
+      } else {
+        d.disabled = true;
+        d.options.add(new Option('-- Selecione primeiro a unidade --', ''));
+      }
+      resetFromDisciplina();
+    }
+
+    function onDisciplinaChange() {
+      const val = document.getElementById('filtro_disciplina').value;
+      const t = document.getElementById('filtro_turma');
+      t.innerHTML = '';
+      if (val) {
+        t.disabled = false;
+        t.options.add(new Option('-- Selecione a Turma --', ''));
+        t.options.add(new Option('6º Ano A', '6º Ano A'));
+        t.options.add(new Option('7º Ano B', '7º Ano B'));
+      } else {
+        t.disabled = true;
+        t.options.add(new Option('-- Selecione primeiro a disciplina --', ''));
+      }
+      resetFromTurma();
+    }
+
+    function onTurmaChange() {
+      const val = document.getElementById('filtro_turma').value;
+      const e = document.getElementById('filtro_etapa');
+      e.innerHTML = '';
+      if (val) {
+        e.disabled = false;
+        e.options.add(new Option('-- Selecione a Etapa --', ''));
+        e.options.add(new Option('Ensino Fundamental II', 'Ensino Fundamental II'));
+        e.options.add(new Option('Ensino Médio', 'Ensino Médio'));
+      } else {
+        e.disabled = true;
+        e.options.add(new Option('-- Selecione primeiro a turma --', ''));
+      }
+      resetFromEtapa();
+    }
+
+    function onEtapaChange() {
+      const val = document.getElementById('filtro_etapa').value;
+      const b = document.getElementById('filtro_bimestre');
+      b.innerHTML = '';
+      if (val) {
+        b.disabled = false;
+        b.options.add(new Option('-- Selecione o Bimestre --', ''));
+        b.options.add(new Option('1º Bimestre', '1º Bimestre'));
+        b.options.add(new Option('2º Bimestre', '2º Bimestre'));
+        b.options.add(new Option('3º Bimestre', '3º Bimestre'));
+        b.options.add(new Option('4º Bimestre', '4º Bimestre'));
+      } else {
+        b.disabled = true;
+        b.options.add(new Option('-- Selecione primeiro a etapa --', ''));
+      }
+      checkEnableButton();
+    }
+
+    function onBimestreChange() {
+      checkEnableButton();
+    }
+
+    function resetFromUnidade() {
+      const d = document.getElementById('filtro_disciplina');
+      d.disabled = true;
+      d.innerHTML = '<option value="">-- Selecione primeiro a unidade --</option>';
+      resetFromDisciplina();
+    }
+
+    function resetFromDisciplina() {
+      const t = document.getElementById('filtro_turma');
+      t.disabled = true;
+      t.innerHTML = '<option value="">-- Selecione primeiro a disciplina --</option>';
+      resetFromTurma();
+    }
+
+    function resetFromTurma() {
+      const e = document.getElementById('filtro_etapa');
+      e.disabled = true;
+      e.innerHTML = '<option value="">-- Selecione primeiro a turma --</option>';
+      resetFromEtapa();
+    }
+
+    function resetFromEtapa() {
+      const b = document.getElementById('filtro_bimestre');
+      b.disabled = true;
+      b.innerHTML = '<option value="">-- Selecione primeiro a etapa --</option>';
+      checkEnableButton();
+    }
+
+    function carregarDiario() {
+      const btn = document.getElementById('btn_carregar_diario');
+      if (btn.disabled || btn.getAttribute('aria-disabled') === 'true') {
+        window.__invalidClicks++;
+        document.getElementById('invalid_click_count').innerText = window.__invalidClicks;
+        return;
+      }
+      window.__diarioCarregado = true;
+      document.getElementById('diario_carregado').innerText = 'Sim';
+      const container = document.getElementById('tabela_diario_container');
+      container.style.display = 'block';
+    }
+
+    function salvarDiarioFinal() {
+      window.__diarioGravado = true;
+      document.getElementById('save_confirm_msg').style.display = 'inline';
+    }
+  </script>
+</body>
+</html>

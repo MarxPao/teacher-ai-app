@@ -291,13 +291,15 @@ def test_side_panel_runtime_chat_and_promotion_via_node():
     }
 
     console.log('SUCCESS_NODE_SIDE_PANEL_VERIFICATION');
+    process.exit(0);
     """
 
     res = subprocess.run(
         ["node", "-e", node_harness],
         cwd=os.path.abspath(os.path.join(EXTENSION_DIR, "..")),
         capture_output=True,
-        text=True
+        text=True,
+        timeout=15
     )
     assert res.returncode == 0, f"Node verification falhou:\nStdout: {res.stdout}\nStderr: {res.stderr}"
     assert "SUCCESS_NODE_SIDE_PANEL_VERIFICATION" in res.stdout

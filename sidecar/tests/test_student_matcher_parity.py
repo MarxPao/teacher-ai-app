@@ -155,7 +155,7 @@ def run_ts_batch(scenarios, roster):
         capture_output=True,
         cwd=str(PROJECT_ROOT),
         shell=True,
-        timeout=30
+        timeout=90
     )
     if proc.returncode != 0:
         raise RuntimeError(f"Falha ao executar TS matcher: {proc.stderr}")

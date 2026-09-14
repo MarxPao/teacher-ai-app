@@ -120,7 +120,7 @@ describe('Browser Harness & Automação de Navegador — Testes Unitários', () 
   describe('3. Cliente de Automação de Tarefas (Supabase)', () => {
     it('cria tarefa de automação com status drafted', async () => {
       const session: AuthSession = {
-        accessToken: 'valid_jwt_token',
+        accessToken: 'valid.jwt.token',
         refreshToken: 'refresh_tok',
         expiresAt: Date.now() + 3600000,
         user: { id: 'usr_teacher_123', email: 'prof@escola.com' }
@@ -154,7 +154,7 @@ describe('Browser Harness & Automação de Navegador — Testes Unitários', () 
 
     it('atualiza status da tarefa para approved', async () => {
       const session: AuthSession = {
-        accessToken: 'valid_jwt_token',
+        accessToken: 'valid.jwt.token',
         refreshToken: 'refresh_tok',
         expiresAt: Date.now() + 3600000,
         user: { id: 'usr_teacher_123', email: 'prof@escola.com' }
@@ -181,7 +181,7 @@ describe('Browser Harness & Automação de Navegador — Testes Unitários', () 
 
     it('rejeição do professor atualiza status para aborted com motivo gravado no payload', async () => {
       const session: AuthSession = {
-        accessToken: 'valid_jwt_token',
+        accessToken: 'valid.jwt.token',
         refreshToken: 'refresh_tok',
         expiresAt: Date.now() + 3600000,
         user: { id: 'usr_teacher_123', email: 'prof@escola.com' }

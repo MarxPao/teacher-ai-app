@@ -29,6 +29,8 @@ def is_risk_node(node: Dict[str, Any]) -> bool:
     params = node.get("params", {}) or {}
     
     if node_type == "WRITE":
+        if params.get("is_filter") is True or params.get("is_submit_action") is False:
+            return False
         return True
     if node_type == "CLICK":
         # Fail-safe: apenas False explícito isenta o CLICK do checkpoint

@@ -179,6 +179,14 @@ class BrowserUseAgent:
             # Passo C: Inspeção semântica de elementos conforme a ação solicitada
             found_elements = await self._inspect_semantic_dom(page, task_spec, ax_snapshot=ax_snapshot)
 
+            # Se não encontrou o input na tela atual e há filtros em cascata ou formulário sequencial:
+            if not found_elements.get("success"):
+                casc_res = await self._try_resolve_cascading_filters(page, task_spec)
+                if casc_res.get("resolved"):
+                    trace_de_acoes.extend(casc_res.get("actions", []))
+                    # Reinspeciona a nova tela revelada pela resolução reativa dos filtros
+                    found_elements = await self._inspect_semantic_dom(page, task_spec, ax_snapshot=ax_snapshot)
+
             # Se não encontrou o input na tela atual e há indicação de navegação ou aba:
             if not found_elements.get("success"):
                 nav_target = (
@@ -195,7 +203,10 @@ class BrowserUseAgent:
                             "selector": nav_res.get("selector"),
                             "description": f"Navegar para seção {nav_target}"
                         })
-                        await asyncio.sleep(0.3)
+                        try:
+                            await page.wait_for_load_state("domcontentloaded", timeout=2000)
+                        except Exception:
+                            pass
                         # Reinspeciona a nova tela revelada
                         found_elements = await self._inspect_semantic_dom(page, task_spec, ax_snapshot=ax_snapshot)
 
@@ -349,6 +360,9 @@ class BrowserUseAgent:
             
             const candidates = Array.from(document.querySelectorAll('button, a, .tab-btn, [role="tab"]'));
             for (const el of candidates) {
+                if (el.disabled || el.getAttribute('aria-disabled') === 'true' || el.classList.contains('disabled') || el.classList.contains('btn-disabled') || el.getAttribute('disabled') !== null) {
+                    continue;
+                }
                 const text = norm(el.innerText || el.textContent || el.getAttribute('aria-label') || el.id);
                 for (const tok of tokens) {
                     if (text.includes(tok)) {
@@ -422,6 +436,348 @@ class BrowserUseAgent:
             except Exception:
                 continue
         return False
+
+    async def _try_resolve_cascading_filters(self, page: Any, task_spec: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        RESOLUÇÃO GENERALISTA DE PRÉ-FILTROS EM CASCATA COM ESPERA REATIVA NO DOM:
+
+        1. Generalização Semântica Completa:
+           - Agnóstica à ordem dos selects e à quantidade de campos (opera com 2, 4, 6 ou N selects).
+           - Resolução guiada por dicionário conceitual aberto (SEMANTIC_SYNONYMS) mapeando
+             sinônimos em labels, IDs, names e aria-labels, complementado por casamento de opções.
+           - Preenche os selects na ordem natural em que são expostos e habilitados no DOM.
+
+        2. Mecanismo de Espera Reativa (Sem Sleeps Fixos Arbitrários):
+           - A cada seleção, captura o fingerprint reativo do DOM (selects, disabled, optionsCount, botões).
+           - Utiliza `page.wait_for_function` via requestAnimationFrame para aguardar mutações reais do DOM
+             (desbloqueio de selects dependentes, injeção de novas options ou habilitação de botão de ação).
+           - Aguarda a renderização final da tabela de dados via `page.wait_for_function` observando
+             a presença efetiva de linhas preenchidas no DOM, sem polling cego com sleep.
+
+        3. Proteção contra Cliques Cegos:
+           - Botões intermediários e finais são validados contra [disabled], [aria-disabled='true'],
+             e classes CSS (.disabled, .btn-disabled). Nunca clica em botões desabilitados.
+        """
+        try:
+            import unicodedata
+            def strip_accents(s: Any) -> str:
+                if not s:
+                    return ""
+                n = unicodedata.normalize("NFD", str(s)).replace("º", "o").replace("ª", "a")
+                return "".join(c for c in n if not unicodedata.combining(c)).lower().strip()
+
+            params = task_spec.get("parametros", {}) or {}
+            combined = {**params, **task_spec}
+            ignore_keys = {
+                "aluno", "student", "student_name", "nome", "matricula", "portal_native_id",
+                "faltas", "falta", "nota", "notas", "valor", "value", "objeto_alvo",
+                "tipo_operacao", "max_pages", "destino_navegacao", "acao", "portal_id",
+                "parametros", "descricao_tarefa"
+            }
+            candidate_params = {}
+            for k, v in combined.items():
+                if k.lower() not in ignore_keys and v is not None:
+                    candidate_params[k.lower()] = str(v).strip()
+
+            if not candidate_params:
+                return {"resolved": False, "actions": []}
+
+            SEMANTIC_SYNONYMS = {
+                "turma": ["turma", "classe", "class", "group", "grupo", "ano_turma", "turmas"],
+                "disciplina": ["disciplina", "materia", "componente", "componente curricular", "subject", "curriculo", "conteudo", "disciplinas"],
+                "mes": ["mes", "mês", "periodo", "mes_letivo", "month", "meses"],
+                "data": ["data", "dia", "date", "day", "data_aula", "dia_aula", "calendario"],
+                "ano": ["ano", "ano_letivo", "exercicio", "year", "ano_escolar"],
+                "etapa": ["etapa", "segmento", "ciclo", "grau", "ensino", "stage", "nivel", "modalidade_etapa"],
+                "bimestre": ["bimestre", "trimestre", "semestre", "periodo_letivo", "term", "quarter"],
+                "unidade": ["unidade", "escola", "colegio", "polo", "campus", "unit", "estabelecimento", "unidade_escolar"],
+                "curso": ["curso", "grau", "modalidade", "course", "programa"],
+                "turno": ["turno", "periodo_turno", "horario", "shift"]
+            }
+
+            js_inspect_filters = """
+            () => {
+                const norm = (s) => (s || '').toLowerCase().replace(/º/g, 'o').replace(/ª/g, 'a').normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').trim();
+                const isButtonDisabled = (b) => {
+                    if (!b) return false;
+                    return b.disabled === true ||
+                           b.getAttribute('disabled') !== null ||
+                           b.getAttribute('aria-disabled') === 'true' ||
+                           b.classList.contains('disabled') ||
+                           b.classList.contains('btn-disabled');
+                };
+
+                const selects = Array.from(document.querySelectorAll('select')).filter(s => {
+                    return s.offsetParent !== null || s.offsetWidth > 0 || s.offsetHeight > 0;
+                }).map(s => {
+                    const isDis = s.disabled || s.getAttribute('disabled') !== null || s.getAttribute('aria-disabled') === 'true';
+                    let labelText = '';
+                    if (s.id) {
+                        const lbl = document.querySelector(`label[for="${s.id}"]`);
+                        if (lbl) labelText = norm(lbl.innerText || lbl.textContent);
+                    }
+                    if (!labelText && s.closest('label')) {
+                        labelText = norm(s.closest('label').innerText || s.closest('label').textContent);
+                    }
+                    const name = norm(s.name);
+                    const id = norm(s.id);
+                    const aria = norm(s.getAttribute('aria-label'));
+                    const options = Array.from(s.options).map(o => ({
+                        value: o.value,
+                        text: (o.innerText || o.textContent || '').trim(),
+                        normText: norm(o.innerText || o.textContent),
+                        normValue: norm(o.value),
+                        disabled: o.disabled
+                    }));
+                    const currentVal = s.value;
+                    const selector = s.id ? '#' + s.id : (s.name ? `select[name="${s.name}"]` : 'select');
+                    return {
+                        id: s.id,
+                        name: s.name,
+                        selector: selector,
+                        disabled: isDis,
+                        label: labelText,
+                        aria: aria,
+                        options: options,
+                        currentValue: currentVal
+                    };
+                });
+
+                const buttons = Array.from(document.querySelectorAll('button, input[type="button"], input[type="submit"], a.btn')).filter(b => {
+                    return b.offsetParent !== null || b.offsetWidth > 0 || b.offsetHeight > 0;
+                }).map(b => {
+                    const t = norm(b.innerText || b.value || b.getAttribute('aria-label'));
+                    const isDis = isButtonDisabled(b);
+                    const selector = b.id ? '#' + b.id : (b.className ? '.' + b.className.split(' ').filter(Boolean)[0] : 'button');
+                    const isFilterAction = /lancar|lançar|buscar|filtrar|listar|carregar|consultar|pesquisar|avancar|continuar|abrir|gerar|exibir/i.test(t);
+                    return {
+                        id: b.id,
+                        text: (b.innerText || b.value || '').trim(),
+                        normText: t,
+                        selector: selector,
+                        disabled: isDis,
+                        isFilterAction: isFilterAction
+                    };
+                });
+
+                return { selects, buttons };
+            }
+            """
+
+            js_set_select = """
+            (args) => {
+                const { selector, value, text } = args;
+                const norm = (s) => (s || '').toLowerCase().replace(/º/g, 'o').replace(/ª/g, 'a').normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').trim();
+                const sel = document.querySelector(selector);
+                if (!sel) return { success: false, error: 'Element not found' };
+                let opt = null;
+                if (value) {
+                    opt = Array.from(sel.options).find(o => norm(o.value) === norm(value));
+                }
+                if (!opt && text) {
+                    opt = Array.from(sel.options).find(o => norm(o.innerText || o.textContent).includes(norm(text)));
+                }
+                if (!opt && value) {
+                    opt = Array.from(sel.options).find(o => norm(o.value).includes(norm(value)));
+                }
+                if (opt) {
+                    sel.value = opt.value;
+                    sel.dispatchEvent(new Event('input', { bubbles: true }));
+                    sel.dispatchEvent(new Event('change', { bubbles: true }));
+                    if (typeof sel.onchange === 'function') {
+                        try { sel.onchange(); } catch(e) {}
+                    }
+                    return { success: true, selectedValue: opt.value, selectedText: (opt.innerText || opt.textContent || '').trim() };
+                }
+                return { success: false, error: 'Option not found' };
+            }
+            """
+
+            js_get_fingerprint = """
+            () => {
+                const selects = Array.from(document.querySelectorAll('select')).map(s => `${s.id || s.name}:${s.disabled || s.getAttribute('disabled') !== null}:${s.options.length}:${s.value}`).join('|');
+                const buttons = Array.from(document.querySelectorAll('button, input[type="button"], input[type="submit"], a.btn')).map(b => {
+                    const isDis = b.disabled || b.getAttribute('disabled') !== null || b.getAttribute('aria-disabled') === 'true' || b.classList.contains('disabled') || b.classList.contains('btn-disabled');
+                    return `${b.id || b.className}:${isDis}`;
+                }).join('|');
+                const tableRows = document.querySelectorAll('table tbody tr, table tr').length;
+                return `${selects}#${buttons}#${tableRows}`;
+            }
+            """
+
+            consumed_keys = set()
+            actions = []
+            max_iterations = max(12, len(candidate_params) * 2)
+
+            for _ in range(max_iterations):
+                state = await page.evaluate(js_inspect_filters)
+                if not isinstance(state, dict):
+                    break
+                selects = state.get("selects", [])
+
+                unfilled_selects = [
+                    s for s in selects
+                    if not s["disabled"] and (not s["currentValue"] or s["currentValue"] == "" or "selecione" in (s["currentValue"] or "").lower())
+                ]
+
+                if not unfilled_selects:
+                    break
+
+                matched_any = False
+                for sel in unfilled_selects:
+                    best_param_key = None
+                    best_match_option = None
+                    best_score = 0
+
+                    for p_key, p_val in candidate_params.items():
+                        if p_key in consumed_keys:
+                            continue
+
+                        score = 0
+                        p_norm = strip_accents(p_val)
+                        p_key_norm = strip_accents(p_key)
+                        context_str = strip_accents(f"{sel['label']} {sel['name']} {sel['id']} {sel['aria']}")
+
+                        if p_key_norm in context_str:
+                            score += 40
+                        else:
+                            for concept, syns in SEMANTIC_SYNONYMS.items():
+                                if p_key_norm == concept or p_key_norm in syns or any(s in p_key_norm for s in syns):
+                                    if any(s in context_str for s in syns):
+                                        score += 40
+                                        break
+
+                        matched_opt = None
+                        for opt in sel["options"]:
+                            if not opt["value"] and "selecione" in opt["normText"]:
+                                continue
+                            if p_norm == opt["normValue"] or p_norm == opt["normText"]:
+                                matched_opt = opt
+                                score += 50
+                                break
+                            elif p_norm in opt["normValue"] or p_norm in opt["normText"] or opt["normValue"] in p_norm or opt["normText"] in p_norm:
+                                matched_opt = opt
+                                score += 35
+                                break
+
+                        if score > best_score and matched_opt:
+                            best_score = score
+                            best_param_key = p_key
+                            best_match_option = matched_opt
+
+                    if best_param_key and best_match_option:
+                        # Captura fingerprint reativo antes da mutação
+                        initial_fp = await page.evaluate(js_get_fingerprint)
+
+                        await page.evaluate(
+                            js_set_select,
+                            {
+                                "selector": sel["selector"],
+                                "value": best_match_option["value"],
+                                "text": best_match_option["text"]
+                            }
+                        )
+                        try:
+                            loc = page.locator(sel["selector"])
+                            if hasattr(loc, "select_option"):
+                                try:
+                                    await loc.select_option(value=best_match_option["value"])
+                                except Exception:
+                                    pass
+                        except Exception:
+                            pass
+
+                        actions.append({
+                            "action_type": "WRITE",
+                            "selector": sel["selector"],
+                            "value": best_match_option["value"] or best_match_option["text"],
+                            "is_filter": True,
+                            "is_submit_action": False,
+                            "description": f"Selecionar {best_param_key}: {best_match_option['text']}"
+                        })
+                        consumed_keys.add(best_param_key)
+                        matched_any = True
+
+                        # MECANISMO DE ESPERA REATIVA NO DOM (MUTATION-BASED):
+                        # Aguarda observação real de mutação do DOM disparada pelo select:
+                        # - Desbloqueio ou alteração de options.length em selects subsequentes
+                        # - Habilitação do botão de ação intermediário
+                        # - Inserção de linhas de dados no DOM
+                        # Utiliza page.wait_for_function sob requestAnimationFrame, sem sleep fixo.
+                        try:
+                            await page.wait_for_function(
+                                """(initialFp) => {
+                                    const selects = Array.from(document.querySelectorAll('select')).map(s => `${s.id || s.name}:${s.disabled || s.getAttribute('disabled') !== null}:${s.options.length}:${s.value}`).join('|');
+                                    const buttons = Array.from(document.querySelectorAll('button, input[type="button"], input[type="submit"], a.btn')).map(b => {
+                                        const isDis = b.disabled || b.getAttribute('disabled') !== null || b.getAttribute('aria-disabled') === 'true' || b.classList.contains('disabled') || b.classList.contains('btn-disabled');
+                                        return `${b.id || b.className}:${isDis}`;
+                                    }).join('|');
+                                    const tableRows = document.querySelectorAll('table tbody tr, table tr').length;
+                                    const currentFp = `${selects}#${buttons}#${tableRows}`;
+                                    return currentFp !== initialFp;
+                                }""",
+                                arg=initial_fp,
+                                timeout=1500
+                            )
+                        except Exception:
+                            # Caso o select seja nó terminal ou a mutação tenha sido instantânea
+                            pass
+                        break
+
+                if not matched_any:
+                    break
+
+            # 2. Após preencher todos os selects possíveis, verifica se há botão de ação intermediário
+            state_after = await page.evaluate(js_inspect_filters)
+            if isinstance(state_after, dict):
+                buttons_after = state_after.get("buttons", [])
+                filter_buttons = [b for b in buttons_after if b.get("isFilterAction")]
+
+                if filter_buttons:
+                    for btn in filter_buttons:
+                        if not btn["disabled"]:
+                            print(f"[BrowserUseAgent] 🎯 Clicando em botão de filtro habilitado: {btn['selector']} ('{btn['text']}')")
+                            try:
+                                loc = page.locator(btn["selector"])
+                                if hasattr(loc, "click"):
+                                    await loc.click()
+                                else:
+                                    await page.evaluate(f"() => document.querySelector('{btn['selector']}').click()")
+                            except Exception:
+                                await page.evaluate(f"() => document.querySelector('{btn['selector']}').click()")
+
+                            actions.append({
+                                "action_type": "CLICK",
+                                "selector": btn["selector"],
+                                "is_filter": True,
+                                "is_submit_action": False,
+                                "description": f"Carregar dados intermediários ({btn['text']})"
+                            })
+                            break
+                        else:
+                            print(f"[BrowserUseAgent] ⚠️ Botão de ação '{btn['text']}' ainda desabilitado. Clique cego evitado.")
+
+            # 3. MECANISMO DE ESPERA REATIVA PARA RENDERIZAÇÃO DE DADOS:
+            # Aguarda a renderização da tabela / dados no DOM via page.wait_for_function,
+            # sem polling cego com sleep arbitrário.
+            try:
+                await page.wait_for_function("""
+                    () => {
+                        const tables = Array.from(document.querySelectorAll('table')).filter(t => t.offsetParent !== null || t.offsetWidth > 0 || t.offsetHeight > 0);
+                        if (tables.length === 0) return false;
+                        const rows = Array.from(tables[0].querySelectorAll('tbody tr, tr')).filter(r => r.querySelectorAll('td').length > 0);
+                        return rows.length > 0;
+                    }
+                """, timeout=3500)
+                print("[BrowserUseAgent] ✅ Cascata resolvida com sucesso: tabela de dados renderizada no DOM.")
+                return {"resolved": True, "actions": actions}
+            except Exception:
+                pass
+
+            return {"resolved": len(actions) > 0, "actions": actions}
+        except Exception as e:
+            print(f"[BrowserUseAgent] Erro ao resolver filtros em cascata: {e}")
+            return {"resolved": False, "actions": []}
 
     async def _inspect_semantic_dom(
         self,
@@ -673,14 +1029,30 @@ class BrowserUseAgent:
                 bestScore = 0;
             }
 
+            // Detecção robusta de botões desabilitados (HTML attribute, aria, classes CSS)
+            const isButtonDisabled = (b) => {
+                if (!b) return false;
+                return b.disabled === true ||
+                       b.getAttribute('disabled') !== null ||
+                       b.getAttribute('aria-disabled') === 'true' ||
+                       b.classList.contains('disabled') ||
+                       b.classList.contains('btn-disabled');
+            };
+
             // Botão de submissão/salvar
             const buttons = Array.from(document.querySelectorAll('button, input[type="submit"], input[type="button"], a.btn'));
             const submitBtn = buttons.find(b => {
                 const t = norm(b.innerText || b.value || b.getAttribute('aria-label'));
                 const isDestructive = /excluir|remover|deletar|cancelar|apagar|desmatricular|delete|remove|cancel/i.test(t);
                 if (isDestructive) return false;
-                return t.includes('gravar') || t.includes('salvar') || t.includes('confirmar') || t.includes('enviar') || t.includes('concluir');
+                return t.includes('gravar') || t.includes('salvar') || t.includes('confirmar') || t.includes('enviar') || t.includes('concluir') || t.includes('finalizar');
+            }) || buttons.find(b => {
+                const t = norm(b.innerText || b.value || b.getAttribute('aria-label'));
+                const isDestructive = /excluir|remover|deletar|cancelar|apagar|desmatricular|delete|remove|cancel/i.test(t);
+                if (isDestructive) return false;
+                return t.includes('lancar') || t.includes('lançar') || t.includes('registrar');
             });
+            const submitBtnDisabled = submitBtn ? isButtonDisabled(submitBtn) : false;
 
             // Destaque visual
             if (bestInput && window.__teacherAiHighlight) {
@@ -719,6 +1091,7 @@ class BrowserUseAgent:
                 isAmbiguous: isAmbiguous,
                 ambiguousCandidates: ambiguousCandidates,
                 submitButtonFound: !!submitBtn,
+                submitButtonDisabled: submitBtnDisabled,
                 submitSelector: submitBtn ? (submitBtn.id ? '#' + submitBtn.id : (submitBtn.className ? '.' + submitBtn.className.split(' ').filter(Boolean)[0] : 'button[type="submit"]')) : null,
                 bestScore: bestScore,
                 confidence: isAmbiguous ? 0.40 : calculatedConfidence
@@ -791,15 +1164,29 @@ class BrowserUseAgent:
                 js_submit = """
                 () => {
                     const norm = (s) => (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+                    const isButtonDisabled = (b) => {
+                        if (!b) return false;
+                        return b.disabled === true ||
+                               b.getAttribute('disabled') !== null ||
+                               b.getAttribute('aria-disabled') === 'true' ||
+                               b.classList.contains('disabled') ||
+                               b.classList.contains('btn-disabled');
+                    };
                     const buttons = Array.from(document.querySelectorAll('button, input[type="submit"], input[type="button"], a.btn'));
                     const submitBtn = buttons.find(b => {
                         const t = norm(b.innerText || b.value || b.getAttribute('aria-label'));
                         const isDestructive = /excluir|remover|deletar|cancelar|apagar|desmatricular|delete|remove|cancel/i.test(t);
                         if (isDestructive) return false;
-                        return t.includes('gravar') || t.includes('salvar') || t.includes('confirmar') || t.includes('enviar') || t.includes('concluir');
+                        return t.includes('gravar') || t.includes('salvar') || t.includes('confirmar') || t.includes('enviar') || t.includes('concluir') || t.includes('finalizar');
+                    }) || buttons.find(b => {
+                        const t = norm(b.innerText || b.value || b.getAttribute('aria-label'));
+                        const isDestructive = /excluir|remover|deletar|cancelar|apagar|desmatricular|delete|remove|cancel/i.test(t);
+                        if (isDestructive) return false;
+                        return t.includes('lancar') || t.includes('lançar') || t.includes('registrar');
                     });
                     return {
                         found: !!submitBtn,
+                        disabled: isButtonDisabled(submitBtn),
                         selector: submitBtn ? (submitBtn.id ? '#' + submitBtn.id : (submitBtn.className ? '.' + submitBtn.className.split(' ').filter(Boolean)[0] : 'button[type="submit"]')) : null
                     };
                 }
@@ -807,6 +1194,7 @@ class BrowserUseAgent:
                 main_submit = await page.evaluate(js_submit)
                 if main_submit.get("found"):
                     info["submitButtonFound"] = True
+                    info["submitButtonDisabled"] = main_submit.get("disabled", False)
                     info["submitSelector"] = main_submit.get("selector")
                     submit_in_parent = True
             except Exception:
@@ -840,6 +1228,8 @@ class BrowserUseAgent:
                         "target_row_found": True,
                         "cell_value": info.get("targetCellValue"),
                         "rows_count": info.get("rowsCount", 0),
+                        "submit_button_found": info.get("submitButtonFound", False),
+                        "submit_button_disabled": info.get("submitButtonDisabled", False),
                         "is_iframe": is_iframe,
                         "frame_name": frame_name,
                         "target_frame": best_frame
@@ -850,6 +1240,8 @@ class BrowserUseAgent:
                         "reason": f"Aluno '{aluno}' não encontrado na página atual.",
                         "confidence": 0.2,
                         "target_row_found": False,
+                        "submit_button_found": info.get("submitButtonFound", False),
+                        "submit_button_disabled": info.get("submitButtonDisabled", False),
                         "is_iframe": is_iframe,
                         "frame_name": frame_name
                     }
@@ -876,12 +1268,20 @@ class BrowserUseAgent:
                         "actions": actions,
                         "confidence": 0.90,
                         "rows_count": info.get("rowsCount", 0),
+                        "submit_button_found": info.get("submitButtonFound", False),
+                        "submit_button_disabled": info.get("submitButtonDisabled", False),
                         "is_iframe": is_iframe,
                         "frame_name": frame_name,
                         "target_frame": best_frame
                     }
                 else:
-                    return {"success": False, "reason": f"Dados de {objeto_alvo} não encontrados na página atual.", "confidence": 0.3}
+                    return {
+                        "success": False,
+                        "reason": f"Dados de {objeto_alvo} não encontrados na página atual.",
+                        "confidence": 0.3,
+                        "submit_button_found": info.get("submitButtonFound", False),
+                        "submit_button_disabled": info.get("submitButtonDisabled", False)
+                    }
 
         # Operação de Escrita
         if info.get("foundInput"):
@@ -925,13 +1325,15 @@ class BrowserUseAgent:
                 })
 
             if info.get("submitButtonFound"):
+                is_sub_disabled = info.get("submitButtonDisabled", False)
                 actions.append({
                     "action_type": "CLICK",
                     "selector": info.get("submitSelector") or "button[type='submit']",
                     "is_submit_action": True,
+                    "is_disabled": is_sub_disabled,
                     "is_iframe": (is_iframe and not submit_in_parent),
                     "frame_name": ("" if submit_in_parent else frame_name),
-                    "description": "Gravar alterações no portal"
+                    "description": "Gravar alterações no portal" + (" (desabilitado até preenchimento)" if is_sub_disabled else "")
                 })
 
             return {
@@ -941,6 +1343,8 @@ class BrowserUseAgent:
                 "best_score": info.get("bestScore", 0),
                 "target_row_found": info.get("targetRowFound", False),
                 "rows_count": info.get("rowsCount", 0),
+                "submit_button_found": info.get("submitButtonFound", False),
+                "submit_button_disabled": info.get("submitButtonDisabled", False),
                 "is_iframe": is_iframe,
                 "frame_name": frame_name,
                 "target_frame": best_frame
@@ -952,6 +1356,8 @@ class BrowserUseAgent:
                 "confidence": info.get("confidence", 0.2),
                 "best_score": 0,
                 "rows_count": info.get("rowsCount", 0),
+                "submit_button_found": info.get("submitButtonFound", False),
+                "submit_button_disabled": info.get("submitButtonDisabled", False),
                 "is_iframe": is_iframe,
                 "frame_name": frame_name
             }

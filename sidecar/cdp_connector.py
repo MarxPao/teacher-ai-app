@@ -209,20 +209,10 @@ class CDPConnector:
             if not kw and any(mk in url or mk in title for mk in machado_keywords):
                 return p
 
-        # Fallback: retorna a página ativa ou navega se estiver em branco
+        # Fallback de segurança: retorna a página ativa existente sem navegar para domínios de terceiros
         if context.pages:
-            page = context.pages[0]
-            if page.url == "about:blank":
-                try:
-                    await page.goto("https://machadosobrinho.paineldoaluno.com.br/", timeout=15000)
-                except Exception:
-                    pass
-            return page
+            return context.pages[0]
         page = await context.new_page()
-        try:
-            await page.goto("https://machadosobrinho.paineldoaluno.com.br/", timeout=15000)
-        except Exception:
-            pass
         return page
 
     async def detect_security_challenge(self, page: Page) -> Tuple[bool, str]:

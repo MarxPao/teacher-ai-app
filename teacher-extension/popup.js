@@ -42,19 +42,31 @@ document.addEventListener('DOMContentLoaded', () => {
         btnReconnect.textContent = '🔄 Tentar Iniciar Novamente';
         detailAuth.textContent = 'Aguardando Início';
         detailAuth.style.color = '#94a3b8';
-      } else {
-        indicator.classList.add('offline');
-        icon.textContent = '✕';
-        title.textContent = 'Desconectada';
-        title.style.color = '#ef4444';
-        desc.textContent = 'Não estou conectada ainda. Verifique se o aplicativo Teacher AI está aberto no computador.';
+        const tab = (data && data.tabState) || {};
+        if (tab.isMappedPortal) {
+          indicator.classList.remove('offline');
+          indicator.classList.add('needs_login');
+          icon.textContent = '🌐';
+          title.textContent = `Portal ${tab.portalName || ''} Detectado`;
+          title.style.color = '#0284c7';
+          desc.textContent = 'Portal identificado! Conectando com o assistente Teacher AI no computador...';
+          detailPortal.textContent = tab.portalName || 'Portal Escolar';
+          detailPage.textContent = tab.friendlyPageName || tab.title || 'Página do Portal';
+          detailAuth.textContent = tab.isAuthenticated ? 'Sessão Ativa ✓' : 'Aguardando Assistente';
+          detailAuth.style.color = tab.isAuthenticated ? '#10b981' : '#f59e0b';
+        } else {
+          indicator.classList.add('offline');
+          icon.textContent = '✕';
+          title.textContent = 'Desconectada';
+          title.style.color = '#ef4444';
+          desc.textContent = 'Não estou conectada ainda. Verifique se o aplicativo Teacher AI está aberto no computador.';
+          detailPortal.textContent = '—';
+          detailPage.textContent = '—';
+          detailAuth.textContent = 'Desconectada';
+          detailAuth.style.color = '#ef4444';
+        }
         btnReconnect.textContent = '🔄 Atualizar Conexão';
-        detailAuth.textContent = 'Desconectada';
-        detailAuth.style.color = '#ef4444';
       }
-
-      detailPortal.textContent = '—';
-      detailPage.textContent = '—';
       return;
     }
 

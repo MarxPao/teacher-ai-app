@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Portal Escolar Sandbox — Frequência e Chamada com Filtros Sequenciais</title>
+  <style>
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f4f6f9; margin: 0; padding: 30px; }
+    .card { background: #fff; max-width: 850px; margin: 0 auto; padding: 24px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+    h2 { color: #1e293b; margin-top: 0; }
+    .filter-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 16px; margin-bottom: 20px; }
+    .filter-group { display: flex; flex-direction: column; gap: 4px; }
+    label { font-size: 13px; font-weight: 600; color: #475569; }
+    select { padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; background: #fff; }
+    select:disabled { background: #f1f5f9; cursor: not-allowed; opacity: 0.6; }
+    .btn { background: #2563eb; color: #fff; border: none; padding: 10px 20px; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 14px; transition: all 0.2s; }
+    .btn:hover:not(:disabled) { background: #1d4ed8; }
+    .btn:disabled, .btn.btn-disabled { background: #94a3b8; cursor: not-allowed; opacity: 0.65; }
+    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+    th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #e2e8f0; font-size: 14px; }
+    th { background: #f8fafc; color: #475569; }
+    .badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; }
+    .badge-disabled { background: #fee2e2; color: #991b1b; }
+    .badge-enabled { background: #dcfce7; color: #166534; }
+    #tabela_chamada_container { display: none; margin-top: 20px; border-top: 2px solid #e2e8f0; padding-top: 16px; }
+    .status-alert { margin-top: 16px; padding: 12px; border-radius: 6px; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>Lançamento de Frequência / Chamada Diária</h2>
+    <p style="color: #64748b; font-size: 14px;">Selecione os filtros obrigatórios na ordem necessária para habilitar a chamada.</p>
+
+    <div style="margin-bottom: 14px; font-size: 13px;">
+      Status do Botão: <span id="btn_status_badge" class="badge badge-disabled">Desabilitado (disabled)</span>
+      &nbsp;|&nbsp; Tentativas de Clique Inválido: <strong id="invalid_click_count">0</strong>
+      &nbsp;|&nbsp; Chamada Carregada: <strong id="chamada_carregada">Não</strong>
+    </div>
+
+    <!-- Filtros Sequenciais Condicionais -->
+    <div class="filter-grid">
+      <div class="filter-group">
+        <label for="filtro_turma">1. Turma *</label>
+        <select id="filtro_turma" name="filtro_turma" onchange="onTurmaChange()">
+          <option value="">-- Selecione --</option>
+          <option value="6º Ano A">6º Ano A</option>
+          <option value="9º Ano B">9º Ano B</option>
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <label for="filtro_mes">2. Mês *</label>
+        <select id="filtro_mes" name="filtro_mes" disabled onchange="onMesChange()">
+          <option value="">-- Selecione --</option>
+          <option value="Agosto">Agosto</option>
+          <option value="Setembro">Setembro</option>
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <label for="filtro_disciplina">3. Disciplina *</label>
+        <select id="filtro_disciplina" name="filtro_disciplina" disabled onchange="onDisciplinaChange()">
+          <option value="">-- Selecione --</option>
+          <option value="Matemática">Matemática</option>
+          <option value="Língua Portuguesa">Língua Portuguesa</option>
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <label for="filtro_dia">4. Dia / Data *</label>
+        <select id="filtro_dia" name="filtro_dia" disabled onchange="onDiaChange()">
+          <option value="">-- Selecione primeiro a disciplina --</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Botão Condicionalmente Habilitado -->
+    <div>
+      <button
+        type="button"
+        id="btn_lancar_faltas"
+        name="btn_lancar_faltas"
+        class="btn btn-disabled"
+        disabled
+        aria-disabled="true"
+        onclick="carregarChamada()"
+      >
+        Lançar faltas
+      </button>
+    </div>
+
+    <!-- Tabela de Chamada (Só surge após carregar com sucesso) -->
+    <div id="tabela_chamada_container">
+      <h3 style="color: #1e293b; margin-top: 0;">Lista de Chamada — <span id="label_turma_data">6º Ano A (Hoje)</span></h3>
+      <table id="tabela_frequencia">
+        <thead>
+          <tr>
+            <th>Matrícula</th>
+            <th>Nome do Aluno</th>
+            <th>Frequência</th>
+            <th>Faltas</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr data-student-id="1">
+            <td>601</td>
+            <td class="student-name">Lucas Silva</td>
+            <td><input type="checkbox" id="presenca_601" name="presenca_601" checked /></td>
+            <td><input type="number" id="falta_601" name="falta_601" min="0" max="5" value="0" style="width:60px;" /></td>
+          </tr>
+          <tr data-student-id="2">
+            <td>602</td>
+            <td class="student-name">Carlos Eduardo Souza</td>
+            <td><input type="checkbox" id="presenca_602" name="presenca_602" checked /></td>
+            <td><input type="number" id="falta_602" name="falta_602" min="0" max="5" value="0" style="width:60px;" /></td>
+          </tr>
+          <tr data-student-id="3">
+            <td>603</td>
+            <td class="student-name">Ana Júlia Santos</td>
+            <td><input type="checkbox" id="presenca_603" name="presenca_603" checked /></td>
+            <td><input type="number" id="falta_603" name="falta_603" min="0" max="5" value="0" style="width:60px;" /></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div style="margin-top: 16px;">
+        <button type="button" id="btn_salvar_chamada" class="btn" onclick="salvarChamadaFinal()">Gravar Chamada</button>
+        <span id="save_confirm_msg" style="display:none; color: #166534; font-weight:600; margin-left: 12px;">✅ Chamada gravada com sucesso!</span>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    window.__invalidClicks = 0;
+    window.__chamadaCarregada = false;
+    window.__chamadaGravada = false;
+
+    // Monitora cliques mesmo se desabilitado para rastrear tentativas de clique cego
+    document.getElementById('btn_lancar_faltas').addEventListener('click', function(e) {
+      if (this.disabled || this.getAttribute('aria-disabled') === 'true') {
+        window.__invalidClicks++;
+        document.getElementById('invalid_click_count').innerText = window.__invalidClicks;
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    }, true);
+
+    function checkEnableButton() {
+      const t = document.getElementById('filtro_turma').value;
+      const m = document.getElementById('filtro_mes').value;
+      const d = document.getElementById('filtro_disciplina').value;
+      const dia = document.getElementById('filtro_dia').value;
+      const btn = document.getElementById('btn_lancar_faltas');
+      const badge = document.getElementById('btn_status_badge');
+
+      if (t && m && d && dia) {
+        btn.disabled = false;
+        btn.removeAttribute('disabled');
+        btn.setAttribute('aria-disabled', 'false');
+        btn.classList.remove('btn-disabled');
+        badge.className = 'badge badge-enabled';
+        badge.innerText = 'Habilitado (Pronto para Clique)';
+      } else {
+        btn.disabled = true;
+        btn.setAttribute('disabled', 'disabled');
+        btn.setAttribute('aria-disabled', 'true');
+        btn.classList.add('btn-disabled');
+        badge.className = 'badge badge-disabled';
+        badge.innerText = 'Desabilitado (disabled)';
+      }
+    }
+
+    function onTurmaChange() {
+      const val = document.getElementById('filtro_turma').value;
+      const mesSelect = document.getElementById('filtro_mes');
+      if (val) {
+        mesSelect.disabled = false;
+      } else {
+        mesSelect.disabled = true;
+        mesSelect.value = '';
+        resetFromMes();
+      }
+      checkEnableButton();
+    }
+
+    function onMesChange() {
+      const val = document.getElementById('filtro_mes').value;
+      const discSelect = document.getElementById('filtro_disciplina');
+      if (val) {
+        discSelect.disabled = false;
+      } else {
+        discSelect.disabled = true;
+        discSelect.value = '';
+        resetFromDisciplina();
+      }
+      checkEnableButton();
+    }
+
+    function onDisciplinaChange() {
+      const val = document.getElementById('filtro_disciplina').value;
+      const diaSelect = document.getElementById('filtro_dia');
+      diaSelect.innerHTML = '';
+      if (val) {
+        // Cascata reativa: popula opções simulando agenda
+        diaSelect.disabled = false;
+        diaSelect.options.add(new Option('-- Selecione o dia --', ''));
+        diaSelect.options.add(new Option('01/09/2026', '01'));
+        diaSelect.options.add(new Option('08/09/2026', '08'));
+        diaSelect.options.add(new Option('Hoje (13/09/2026)', 'hoje'));
+      } else {
+        diaSelect.disabled = true;
+        diaSelect.options.add(new Option('-- Selecione primeiro a disciplina --', ''));
+      }
+      checkEnableButton();
+    }
+
+    function onDiaChange() {
+      checkEnableButton();
+    }
+
+    function resetFromMes() {
+      document.getElementById('filtro_disciplina').disabled = true;
+      document.getElementById('filtro_disciplina').value = '';
+      resetFromDisciplina();
+    }
+
+    function resetFromDisciplina() {
+      const diaSelect = document.getElementById('filtro_dia');
+      diaSelect.disabled = true;
+      diaSelect.innerHTML = '<option value="">-- Selecione primeiro a disciplina --</option>';
+      checkEnableButton();
+    }
+
+    function carregarChamada() {
+      const btn = document.getElementById('btn_lancar_faltas');
+      if (btn.disabled || btn.getAttribute('aria-disabled') === 'true') {
+        window.__invalidClicks++;
+        document.getElementById('invalid_click_count').innerText = window.__invalidClicks;
+        return;
+      }
+      window.__chamadaCarregada = true;
+      document.getElementById('chamada_carregada').innerText = 'Sim';
+      const container = document.getElementById('tabela_chamada_container');
+      container.style.display = 'block';
+    }
+
+    function salvarChamadaFinal() {
+      window.__chamadaGravada = true;
+      document.getElementById('save_confirm_msg').style.display = 'inline';
+    }
+  </script>
+</body>
+</html>

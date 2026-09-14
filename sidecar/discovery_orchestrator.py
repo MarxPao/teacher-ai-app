@@ -413,8 +413,8 @@ class DiscoveryOrchestrator:
         portal_id: str,
         task_id: str,
         trace: List[Dict[str, Any]],
-        discovery_engine: str,
-        confidence: float,
+        discovery_engine: str = "browser_use_llama",
+        confidence: float = 0.85,
         original_intent: Optional[Dict[str, Any]] = None
     ) -> SkillGraph:
         """
@@ -451,17 +451,23 @@ class DiscoveryOrchestrator:
         # 2. Converte as ações em nós tipados
         step_idx = 0
         has_risk_ahead = any(
-            act.get("action_type") in ("WRITE", "CLICK") and act.get("is_submit_action", True)
+            (act.get("action_type") == "WRITE" and not act.get("is_filter", False) and act.get("is_submit_action") is not False)
+            or (act.get("action_type") == "CLICK" and act.get("is_submit_action", True) is not False)
             for act in trace
         )
         checkpoint_inserted = False
 
         for act in trace:
             act_type = act.get("action_type", "LOCATE").upper()
+            is_filter_act = act.get("is_filter", False) or (act.get("is_submit_action") is False and act_type == "WRITE")
+            is_risk = (
+                (act_type == "WRITE" and not is_filter_act)
+                or (act_type == "CLICK" and act.get("is_submit_action", True) is not False)
+            )
 
             # REGRA MANDATÓRIA DE SEGURANÇA:
-            # Se a próxima ação for WRITE ou CLICK de submit, insere um nó CHECKPOINT antes
-            if has_risk_ahead and not checkpoint_inserted and act_type in ("WRITE", "CLICK"):
+            # Se a próxima ação for WRITE irreversível ou CLICK de submit, insere um nó CHECKPOINT antes
+            if has_risk_ahead and not checkpoint_inserted and is_risk:
                 chk_id = "checkpoint_seguranca"
                 nodes[chk_id] = SkillNode(
                     id=chk_id,
@@ -507,6 +513,7 @@ class DiscoveryOrchestrator:
                     retry_policy=RetryPolicy(max_attempts=2, backoff_ms=500)
                 )
             elif act_type == "WRITE":
+                is_filter = act.get("is_filter", False) or act.get("is_submit_action") is False
                 nodes[nid] = SkillNode(
                     id=nid,
                     type="WRITE",
@@ -516,7 +523,9 @@ class DiscoveryOrchestrator:
                         description=act.get("description")
                     ),
                     params=SkillNodeParams(
-                        action_value=act.get("value", "")
+                        action_value=str(act.get("value", "")) if act.get("value") is not None else "",
+                        is_submit_action=False if is_filter else None,
+                        is_filter=is_filter
                     ),
                     retry_policy=RetryPolicy(max_attempts=2, backoff_ms=500)
                 )

@@ -71,9 +71,10 @@ function getSupabaseUrlAndKey(): { url: string; anonKey: string } | null {
 }
 
 function getLocalTasks(): BrowserAutomationTask[] {
-  if (typeof window === 'undefined') return []
+  if (typeof window === 'undefined' && typeof localStorage === 'undefined') return []
   try {
-    const raw = localStorage.getItem(LOCAL_TASKS_KEY)
+    const storage = typeof localStorage !== 'undefined' ? localStorage : window?.localStorage
+    const raw = storage?.getItem(LOCAL_TASKS_KEY)
     return raw ? JSON.parse(raw) : []
   } catch {
     return []
@@ -81,7 +82,7 @@ function getLocalTasks(): BrowserAutomationTask[] {
 }
 
 function saveLocalTask(task: BrowserAutomationTask): void {
-  if (typeof window === 'undefined') return
+  if (typeof window === 'undefined' && typeof localStorage === 'undefined') return
   try {
     const list = getLocalTasks()
     const idx = list.findIndex(t => t.id === task.id)
@@ -90,8 +91,11 @@ function saveLocalTask(task: BrowserAutomationTask): void {
     } else {
       list.unshift(task)
     }
-    localStorage.setItem(LOCAL_TASKS_KEY, JSON.stringify(list))
-    window.dispatchEvent(new CustomEvent('teacher:browser_task_updated', { detail: task }))
+    const storage = typeof localStorage !== 'undefined' ? localStorage : window?.localStorage
+    storage?.setItem(LOCAL_TASKS_KEY, JSON.stringify(list))
+    if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function' && typeof CustomEvent !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('teacher:browser_task_updated', { detail: task }))
+    }
   } catch {}
 }
 

@@ -201,6 +201,55 @@ def _parse_with_regex_rules(text: str) -> Dict[str, Any]:
             "clarification_question": None
         }
 
+    # Padrão: "marca o Hugo como ausente" ou "registra o Hugo ausente"
+    m_ausente = re.search(r"(?:marca|marcar|registrar|registre|coloca|coloque)\s+(?:o|a)?\s*([a-zA-ZÀ-ÿ\s]+?)\s+(?:como\s+)?(?:ausente|com\s+falta)", lower)
+    if m_ausente:
+        aluno_raw = m_ausente.group(1).strip()
+        aluno_clean = re.sub(r"^(?:o|a|os|as)\s+", "", aluno_raw, flags=re.IGNORECASE).strip().title()
+        return {
+            "verbo_acao": "lançar",
+            "objeto_alvo": "falta",
+            "tipo_operacao": "escrita",
+            "valor": "1",
+            "descricao_tarefa": f"Registrar 1 falta(s) para {aluno_clean}",
+            "destino_navegacao": None,
+            "parametros_extras": {},
+            "acao": "lancar_falta",
+            "aluno": aluno_clean,
+            "nota": None,
+            "faltas": 1,
+            "turma": None,
+            "disciplina": None,
+            "portal": None,
+            "is_complete": True,
+            "clarification_question": None
+        }
+
+    # Padrão: "o Hugo faltou hoje" ou "Hugo faltou"
+    m_faltou = re.search(r"(?:o|a)?\s*([a-zA-ZÀ-ÿ\s]+?)\s+faltou(?:\s+hoje|\s+ontem|\s+na\s+aula|\s+na\s+data\s+de\s+hoje)?", lower)
+    if m_faltou:
+        aluno_raw = m_faltou.group(1).strip()
+        aluno_clean = re.sub(r"^(?:o|a|os|as)\s+", "", aluno_raw, flags=re.IGNORECASE).strip().title()
+        if aluno_clean and aluno_clean.lower() not in ["que", "quem", "ele", "ela"]:
+            return {
+                "verbo_acao": "lançar",
+                "objeto_alvo": "falta",
+                "tipo_operacao": "escrita",
+                "valor": "1",
+                "descricao_tarefa": f"Registrar 1 falta(s) para {aluno_clean}",
+                "destino_navegacao": None,
+                "parametros_extras": {},
+                "acao": "lancar_falta",
+                "aluno": aluno_clean,
+                "nota": None,
+                "faltas": 1,
+                "turma": None,
+                "disciplina": None,
+                "portal": None,
+                "is_complete": True,
+                "clarification_question": None
+            }
+
     if "falta" in lower and any(v in lower for v in ["lançar", "lança", "lance", "marcar", "marca", "registrar"]):
         return {
             "verbo_acao": "lançar",
@@ -351,20 +400,58 @@ def _parse_with_regex_rules(text: str) -> Dict[str, Any]:
             "clarification_question": f"Qual é a nota que devo lançar para {aluno_clean}?"
         }
 
-    # Padrão: Tarefas de preenchimento/escrita aberta ("preenche X como Y", "preenche a data da aula como 2026-09-15")
-    m_preenche = re.search(r"(?:preenche|preencher|anota|anotar|escreve|escrever|digita|digitar|registra|registrar|coloca|colocar)\s+(?:o|a|os|as)?\s*(.*?)\s+(?:como|com|para|de|=)\s*(.+)$", lower)
-    if m_preenche and m_preenche.group(1) and m_preenche.group(2):
-        obj = m_preenche.group(1).strip()
-        val = m_preenche.group(2).strip()
+    # Padrão: Ocorrência disciplinar / anotação de aluno ("anota uma ocorrência disciplinar pro Hugo: conversa paralela")
+    m_ocorr = re.search(r"(?:anota|anotar|registra|registrar)\s+(?:uma\s+)?ocorr[êe]ncia(?:\s+disciplinar)?\s+(?:para|pra|pro|de|do|da)\s+([a-zA-ZÀ-ÿ\s]+?)(?::|\s+-|\s+com\s+texto\s+|\s+como\s+)\s*(.+)$", lower)
+    if m_ocorr:
+        aluno_raw = m_ocorr.group(1).strip()
+        aluno_clean = re.sub(r"^(?:o|a|os|as)\s+", "", aluno_raw, flags=re.IGNORECASE).strip().title()
+        val = m_ocorr.group(2).strip()
         return {
-            "verbo_acao": "preencher",
+            "verbo_acao": "anotar",
+            "objeto_alvo": "ocorrência disciplinar",
+            "tipo_operacao": "escrita",
+            "valor": val,
+            "descricao_tarefa": f"Anotar ocorrência disciplinar para {aluno_clean}: {val}",
+            "destino_navegacao": None,
+            "parametros_extras": {},
+            "acao": "anotar_ocorrencia_disciplinar",
+            "aluno": aluno_clean,
+            "nota": None,
+            "faltas": None,
+            "turma": None,
+            "disciplina": None,
+            "portal": None,
+            "is_complete": True,
+            "clarification_question": None
+        }
+
+    # Padrão: Tarefas de preenchimento/escrita aberta ("preenche X como Y", "preenche a data da aula como 2026-09-15")
+    m_preenche = re.search(r"\b(preenche|preencher|anota|anotar|escreve|escrever|digita|digitar|registra|registrar|coloca|colocar)\s+(?:o|a|os|as)?\s*(.*?)\s+\b(?:como|com|para|de|=)\b\s*(.+)$", lower)
+    if m_preenche and m_preenche.group(2) and m_preenche.group(3):
+        raw_verb = m_preenche.group(1).lower()
+        canonical_verb = "preencher"
+        if raw_verb in ["anota", "anotar"]:
+            canonical_verb = "anotar"
+        elif raw_verb in ["escreve", "escrever"]:
+            canonical_verb = "escrever"
+        elif raw_verb in ["digita", "digitar"]:
+            canonical_verb = "digitar"
+        elif raw_verb in ["registra", "registrar"]:
+            canonical_verb = "registrar"
+        elif raw_verb in ["coloca", "colocar"]:
+            canonical_verb = "colocar"
+
+        obj = m_preenche.group(2).strip()
+        val = m_preenche.group(3).strip()
+        return {
+            "verbo_acao": canonical_verb,
             "objeto_alvo": obj,
             "tipo_operacao": "escrita",
             "valor": val,
-            "descricao_tarefa": f"Preencher {obj} como {val}",
+            "descricao_tarefa": f"{canonical_verb.capitalize()} {obj} como {val}",
             "destino_navegacao": None,
             "parametros_extras": {},
-            "acao": f"preencher_{obj.replace(' ', '_')}",
+            "acao": f"{canonical_verb}_{obj.replace(' ', '_')}",
             "aluno": None,
             "nota": None,
             "faltas": None,
@@ -399,6 +486,68 @@ def _parse_with_regex_rules(text: str) -> Dict[str, Any]:
             "clarification_question": None
         }
 
+    # Padrão: Observação/anotação pedagógica livre com conteúdo após ":"
+    # "anota uma observação: Hugo não trouxe o material hoje"
+    m_obs = re.search(
+        r"(?:anota|anotar|registra|registrar|escreve|escrever)\s+"
+        r"(?:uma\s+)?(?:observa[çc][aã]o|anotação|anotacao|nota\s+pedagógica|nota\s+pedagogica)"
+        r"(?:\s+(?:para|pra|pro|de|do|da)\s+([a-zA-ZÀ-ÿ\s]+?))?[:\s-]+(.+)$",
+        lower
+    )
+    if m_obs:
+        aluno_raw = (m_obs.group(1) or "").strip()
+        aluno_clean = re.sub(r"^(?:o|a|os|as)\s+", "", aluno_raw, flags=re.IGNORECASE).strip().title() or None
+        val = m_obs.group(2).strip()
+        return {
+            "verbo_acao": "anotar",
+            "objeto_alvo": "observação pedagógica",
+            "tipo_operacao": "escrita",
+            "valor": val,
+            "descricao_tarefa": f"Anotar observação pedagógica: {val}",
+            "destino_navegacao": None,
+            "parametros_extras": {},
+            "acao": "anotar_observacao_pedagogica",
+            "aluno": aluno_clean,
+            "nota": None,
+            "faltas": None,
+            "turma": None,
+            "disciplina": None,
+            "portal": None,
+            "is_complete": True,
+            "clarification_question": None
+        }
+
+    # Padrão: Mudança de turma do aluno
+    # "muda a turma do Hugo para 6º B"
+    m_muda_turma = re.search(
+        r"(?:muda|mudar|altera|alterar|transfere|transferir|move|mover)\s+"
+        r"(?:a\s+)?turma\s+(?:do|da|de|o|a)?\s*([a-zA-ZÀ-ÿ\s]+?)\s+"
+        r"(?:para|pro|pra)\s+(.+)$",
+        lower
+    )
+    if m_muda_turma:
+        aluno_raw = m_muda_turma.group(1).strip()
+        aluno_clean = re.sub(r"^(?:o|a|os|as)\s+", "", aluno_raw, flags=re.IGNORECASE).strip().title()
+        nova_turma = m_muda_turma.group(2).strip()
+        return {
+            "verbo_acao": "mudar",
+            "objeto_alvo": "turma",
+            "tipo_operacao": "escrita",
+            "valor": nova_turma,
+            "descricao_tarefa": f"Mudar turma de {aluno_clean} para {nova_turma}",
+            "destino_navegacao": "Cadastro",
+            "parametros_extras": {},
+            "acao": "mudar_turma",
+            "aluno": aluno_clean,
+            "nota": None,
+            "faltas": None,
+            "turma": nova_turma,
+            "disciplina": None,
+            "portal": None,
+            "is_complete": True,
+            "clarification_question": None
+        }
+
     return {
         "verbo_acao": "outro",
         "objeto_alvo": "geral",
@@ -418,6 +567,135 @@ def _parse_with_regex_rules(text: str) -> Dict[str, Any]:
         "clarification_question": None
     }
 
+
+
+
+# ---------------------------------------------------------------------------
+# ROTEADOR DE PRIVACIDADE — Camada de Segregação PII / Não-PII
+# ---------------------------------------------------------------------------
+# Qualquer intenção que referencie dados pessoais de alunos específicos
+# (nome, nota, falta, presença, diário individual) é considerada "PII" e
+# NUNCA deve ser enviada a provedores de nuvem em contas gratuitas (Free Tier).
+# Tais intenções devem ser processadas exclusivamente pela camada local:
+#   1. Ollama local (http://localhost:11434) — modelo leve tipo llama3.2:3b
+#   2. Fallback: heurística regex determinística (_parse_with_regex_rules)
+#
+# Intenções sem PII (geração de provas, sugestões pedagógicas, analytics
+# agregados, navegação) podem ser enviadas livremente para Groq/Gemini,
+# incluindo tiers gratuitos, porque nenhum dado pessoal de aluno trafega.
+# ---------------------------------------------------------------------------
+
+# Verbos e substantivos que indicam operação sobre dado pessoal de aluno
+_PII_ACTION_VERBS = {
+    "lança", "lance", "lançar", "coloca", "colocar", "registra", "registrar",
+    "registre", "marca", "marcar", "anota", "anotar", "preenche", "preencher",
+    "corrige", "corrigir", "atualiza", "atualizar", "remove", "remover",
+    "apaga", "apagar", "inclui", "incluir", "exclui", "excluir",
+    "muda", "mudar", "altera", "alterar", "transfere", "transferir",
+    "tirou", "tirar", "obteve", "obter", "ficou", "ficar",
+    "faltou", "faltar", "faltaram",
+}
+
+_PII_OBJECT_NOUNS = {
+    "nota", "notas", "falta", "faltas", "presença", "presenca",
+    "frequência", "frequencia", "diário", "diario", "ocorrência",
+    "ocorrencia", "observação", "observacao", "boletim",
+    "aluno", "aluna", "alunos", "estudante", "estudantes",
+    "turma", "turmas", "matrícula", "matricula",
+    "ausente", "ausentes", "ausência", "ausencia",
+    "presente", "presentes", "avaliação", "avaliacao",
+}
+
+_ABSENCE_PRESENCE_WORDS = {
+    "falta", "faltas", "faltou", "faltaram", "ausente", "ausentes",
+    "ausência", "ausencia", "presença", "presenca", "presente", "presentes",
+}
+
+def _contains_student_pii(text: str) -> bool:
+    """
+    Detecta se o texto do comando contém referência a dado pessoal
+    de aluno que requeira processamento estritamente local.
+
+    A heurística é deliberadamente conservadora (falsos positivos são
+    aceitos — mandam para local quando poderiam ir para nuvem):
+    melhor que o contrário (falso negativo = dado pessoal na nuvem gratuita).
+
+    Retorna True se o texto DEVE ser processado apenas localmente.
+    Retorna False se é seguro enviar para provedores de nuvem.
+    """
+    lower = text.lower().strip()
+    tokens = set(re.split(r"\W+", lower))
+
+    has_pii_verb = bool(tokens & _PII_ACTION_VERBS)
+    has_pii_noun = bool(tokens & _PII_OBJECT_NOUNS)
+    has_absence_presence = bool(tokens & _ABSENCE_PRESENCE_WORDS)
+
+    # 1. Qualquer verbo de ação + substantivo de dado pessoal → local
+    if has_pii_verb and has_pii_noun:
+        return True
+
+    # 2. Padrão de número decimal de nota com contexto escolar ou verbo de nota
+    if re.search(r"\b\d+[.,]\d+\b", lower):
+        if has_pii_noun or has_pii_verb or bool(tokens & {"tirou", "obteve", "ficou", "media", "média"}):
+            return True
+
+    # 3. Presença/Ausência direta com indicação temporal ou verbo
+    if has_absence_presence and (has_pii_verb or bool(tokens & {"hoje", "ontem", "aula", "aulas"})):
+        return True
+
+    # 4. Indicador de aluno/nome próprio + qualquer ação ou dado escolar
+    # Detecta nomes como 'Hugo', 'João', 'o Hugo', 'pra Ana'
+    has_student_name = bool(re.search(r"(?:^|\b(?:para|pra|pro|do|da|de|no|na|o|a)\s+)[A-ZÁÉÍÓÚÂÊÎÔÛÃÕÇ][a-záéíóúâêîôûãõç]+", text))
+    if has_student_name and (has_pii_noun or has_pii_verb or has_absence_presence):
+        return True
+
+    return False
+
+
+def _call_local_llm(
+    prompt_text: str,
+    model: str = "llama3.2:3b",
+    ollama_url: str = "http://localhost:11434"
+) -> Optional[Tuple[str, str]]:
+    """
+    Chama um modelo local via Ollama (http://localhost:11434/api/chat).
+    Retorna (raw_json_str, model_name) ou None se Ollama não estiver disponível.
+
+    O modelo local processa PII de alunos sem que nenhum dado saia da máquina.
+    Compatível com qualquer modelo Ollama que suporte JSON output:
+    - llama3.2:3b   (~2.5 GB RAM, velocidade muito alta)
+    - phi3:mini     (~3 GB RAM, ótimo para extração estruturada)
+    - gemma2:2b     (~2 GB RAM, alternativa leve)
+    - mistral:7b    (~5 GB RAM, maior capacidade se disponível)
+    """
+    payload = json.dumps({
+        "model": model,
+        "messages": [
+            {"role": "system", "content": SYSTEM_PROMPT_INTENT},
+            {"role": "user", "content": prompt_text}
+        ],
+        "format": "json",   # Ollama native JSON mode
+        "stream": False,
+        "options": {
+            "temperature": 0.1,
+            "num_predict": 400
+        }
+    }).encode("utf-8")
+
+    headers = {"Content-Type": "application/json"}
+    req = urllib.request.Request(
+        f"{ollama_url}/api/chat",
+        data=payload,
+        headers=headers,
+        method="POST"
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            content = data["message"]["content"]
+            return content, model
+    except Exception:
+        return None
 
 
 def _call_groq_llm(prompt_text: str, api_key: str, candidate_models: Optional[List[str]] = None) -> Optional[Tuple[str, str]]:
@@ -499,62 +777,109 @@ def extract_intent(
     history: Optional[List[Dict[str, str]]] = None,
     groq_key: Optional[str] = None,
     gemini_key: Optional[str] = None,
-    page_content: Optional[str] = None
+    page_content: Optional[str] = None,
+    ollama_model: Optional[str] = None,
+    ollama_url: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
-    Ponto de entrada de interpretação de intenção pedagógica (Camada 1 - NLU):
-    1. Primário: Groq LLM (openai/gpt-oss-120b / qwen/qwen3.6-27b)
-    2. Secundário: Google Gemini Flash (gemini-3.1-flash-lite / gemini-3.6-flash) caso Groq atinja 429 ou falhe
-    3. Terciário: Fallback determinístico (Regex) para contingência estritamente offline
-    
+    Ponto de entrada de interpretação de intenção pedagógica (Camada 1 - NLU).
+
+    ROTEAMENTO POR PRIVACIDADE (LGPD):
+    ─────────────────────────────────
+    Antes de chamar qualquer LLM, o texto é inspecionado por _contains_student_pii().
+
+    ► Intenções com PII de aluno (notas, faltas, presença, nome de aluno):
+       1. Ollama local (llama3.2:3b ou similar) — dado nunca sai da máquina.
+       2. Fallback offline: heurística Regex determinística.
+       → Cloud LLMs (Groq/Gemini) são BLOQUEADOS neste caminho, independente
+         do tier ou chave configurada. Isso é correto mesmo para tiers pagos:
+         o modelo local é suficiente para slot-filling e é zero-latência.
+
+    ► Intenções sem PII (geração de provas, sugestões pedagógicas, analytics
+       agregados, navegação sem dado pessoal de aluno):
+       1. Groq LLM (openai/gpt-oss-120b / qwen/qwen3.6-27b) — tier livre OK.
+       2. Google Gemini Flash (gemini-3.1-flash-lite) — tier livre OK.
+       3. Fallback offline: heurística Regex determinística.
+
     Aplica isolamento estrutural com tags XML (<comando_usuario> e <conteudo_da_pagina>)
     para imunizar contra Prompt Injection Indireto vindo do DOM ou de dados externos.
     """
     g_key = groq_key or os.getenv("GROQ_API_KEY") or os.getenv("GROQ_KEY") or ""
     gem_key = gemini_key or os.getenv("GEMINI_API_KEY") or os.getenv("NEXT_PUBLIC_GEMINI_KEY") or ""
+    local_model = ollama_model or os.getenv("OLLAMA_MODEL") or "llama3.2:3b"
+    local_url = ollama_url or os.getenv("OLLAMA_URL") or "http://localhost:11434"
 
     parsed: Optional[Dict[str, Any]] = None
     provider_used = "regex"
     model_used = "deterministic_regex_rules"
 
-    # Encapsulamento XML estruturado estrito
+    # Encapsulamento XML estruturado estrito (anti-prompt injection)
     isolated_prompt = f"<comando_usuario>\n{user_text}\n</comando_usuario>"
     if page_content:
         isolated_prompt += f"\n<conteudo_da_pagina>\n{page_content}\n</conteudo_da_pagina>"
 
-    # 1. Provedor Primário: Groq LLM
-    if g_key and len(g_key) > 10:
-        res = _call_groq_llm(isolated_prompt, g_key)
+    # ─── ROTEAMENTO POR PRIVACIDADE ────────────────────────────────────────────
+    is_pii = _contains_student_pii(user_text)
+
+    if is_pii:
+        # ── CAMINHO PII: apenas local → regex. Cloud bloqueado. ──────────────
+        # 1. Ollama local (nenhum dado sai da máquina)
+        res = _call_local_llm(isolated_prompt, model=local_model, ollama_url=local_url)
         if res:
             raw_json, model_name = res
             try:
                 parsed = json.loads(raw_json)
-                provider_used = "groq"
+                provider_used = "ollama_local"
                 model_used = model_name
             except Exception:
                 parsed = None
 
-    # 2. Provedor Secundário (Fallback Imediato): Google Gemini Flash
-    if not parsed and gem_key and len(gem_key) > 10:
-        res = _call_gemini_llm(isolated_prompt, gem_key)
-        if res:
-            raw_json, model_name = res
-            try:
-                parsed = json.loads(raw_json)
-                provider_used = "gemini"
-                model_used = model_name
-            except Exception:
-                parsed = None
+        # 2. Fallback offline: regex determinístico
+        if not parsed:
+            parsed = _parse_with_regex_rules(user_text)
+            provider_used = "regex"
+            model_used = "deterministic_regex_rules"
 
-    # 3. Provedor Terciário (Contingência pura offline): Heurística Regex
-    if not parsed:
-        parsed = _parse_with_regex_rules(user_text)
-        provider_used = "regex"
-        model_used = "deterministic_regex_rules"
+        parsed["pii_routed_local"] = True
 
-    # Metadados de telemetria da Camada 1
+    else:
+        # ── CAMINHO NÃO-PII: cloud (tier livre OK) → regex ──────────────────
+        # 1. Provedor Primário: Groq LLM
+        if g_key and len(g_key) > 10:
+            res = _call_groq_llm(isolated_prompt, g_key)
+            if res:
+                raw_json, model_name = res
+                try:
+                    parsed = json.loads(raw_json)
+                    provider_used = "groq"
+                    model_used = model_name
+                except Exception:
+                    parsed = None
+
+        # 2. Provedor Secundário: Google Gemini Flash
+        if not parsed and gem_key and len(gem_key) > 10:
+            res = _call_gemini_llm(isolated_prompt, gem_key)
+            if res:
+                raw_json, model_name = res
+                try:
+                    parsed = json.loads(raw_json)
+                    provider_used = "gemini"
+                    model_used = model_name
+                except Exception:
+                    parsed = None
+
+        # 3. Fallback offline: regex determinístico
+        if not parsed:
+            parsed = _parse_with_regex_rules(user_text)
+            provider_used = "regex"
+            model_used = "deterministic_regex_rules"
+
+        parsed["pii_routed_local"] = False
+
+    # ─── METADADOS DE TELEMETRIA ────────────────────────────────────────────────
     parsed["provider_used"] = provider_used
     parsed["model_used"] = model_used
+    parsed["pii_detected"] = is_pii
 
     # -------------------------------------------------------------
     # DERIVAÇÃO DE COMPATIBILIDADE DESCENDENTE (Downstream Adapter)

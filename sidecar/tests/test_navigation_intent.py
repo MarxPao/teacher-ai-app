@@ -99,13 +99,15 @@ def test_side_panel_js_extract_navigation_target_via_node():
     }
 
     console.log('SUCCESS_NODE_NAV_EXTRACTION');
+    process.exit(0);
     """
 
     res = subprocess.run(
         ["node", "-e", node_script],
         cwd=os.path.abspath(os.path.join(EXTENSION_DIR, "..")),
         capture_output=True,
-        text=True
+        text=True,
+        timeout=15
     )
     assert res.returncode == 0, f"Node extraction falhou:\nStdout: {res.stdout}\nStderr: {res.stderr}"
     assert "SUCCESS_NODE_NAV_EXTRACTION" in res.stdout

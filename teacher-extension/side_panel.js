@@ -80,45 +80,154 @@ const routeCounter     = document.getElementById('route-counter')
 const statusBadge      = document.getElementById('status-badge')
 const statusPortalName = document.getElementById('status-portal-name')
 
-// ── Atualização do Status de Conexão ──────────────────────────────────────────
+// ── Elementos do Visor de Conexão ──────────────────────────────────────────
+const visorOverallBadge = document.getElementById('visor-overall-badge')
+const visorPortalName   = document.getElementById('visor-portal-name')
+const visorPageName     = document.getElementById('visor-page-name')
+const visorAuthStatus   = document.getElementById('visor-auth-status')
+const visorSidecarStatus= document.getElementById('visor-sidecar-status')
+const btnVisorRefresh   = document.getElementById('btn-visor-refresh')
+
+async function getActivePortalTab() {
+  if (typeof chrome === 'undefined' || !chrome.tabs?.query) return null;
+  try {
+    const tabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+    if (tabs && tabs.length > 0 && tabs[0].url && !tabs[0].url.startsWith('chrome-extension://')) return tabs[0];
+  } catch {}
+  try {
+    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tabs && tabs.length > 0 && tabs[0].url && !tabs[0].url.startsWith('chrome-extension://')) return tabs[0];
+  } catch {}
+  try {
+    const allTabs = await chrome.tabs.query({});
+    const candidate = allTabs.find(t => t.active && t.url && !t.url.startsWith('chrome-extension://')) ||
+                      allTabs.find(t => t.url && (t.url.includes('paineldoaluno') || t.url.includes('redesantacatarina') || t.url.includes('plural') || t.url.includes('localhost')));
+    if (candidate) return candidate;
+  } catch {}
+  return null;
+}
+
+// ── Atualização do Status de Conexão & Visor ────────────────────────────────
 async function updatePortalConnection() {
   try {
-    if (typeof chrome === 'undefined' || !chrome.tabs?.query) {
-      if (statusBadge) statusBadge.className = 'status-badge online';
-      if (statusPortalName) statusPortalName.textContent = PLATFORMS[activePlatform]?.name || 'Machado Sobrinho';
-      return;
-    }
-    const [portalTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!portalTab?.url) {
-      if (statusBadge) statusBadge.className = 'status-badge';
-      if (statusPortalName) statusPortalName.textContent = 'Aguardando portal escolar';
-      return;
-    }
+    const portalTab = await getActivePortalTab();
+    let detectedPortalKey = null;
+    let detectedPortalName = null;
 
-    const url = portalTab.url.toLowerCase();
-    let found = false
-    for (const [key, p] of Object.entries(PLATFORMS)) {
-      const domains = p.domains || [p.domain];
-      if (domains.some(d => url.includes(d))) {
-        activePlatform = key;
-        if (statusBadge) statusBadge.className = 'status-badge online';
-        if (statusPortalName) statusPortalName.textContent = p.name;
-        document.querySelectorAll('.platform-btn').forEach(b => {
-          b.classList.toggle('active', b.dataset.platform === key);
-        });
-        found = true;
-        break;
+    if (portalTab?.url) {
+      const url = portalTab.url.toLowerCase();
+      for (const [key, p] of Object.entries(PLATFORMS)) {
+        const domains = p.domains || [p.domain];
+        if (domains.some(d => url.includes(d))) {
+          detectedPortalKey = key;
+          detectedPortalName = p.name;
+          activePlatform = key;
+          break;
+        }
       }
     }
 
-    if (!found) {
-      if (statusBadge) statusBadge.className = 'status-badge';
-      if (statusPortalName) statusPortalName.textContent = 'Aguardando portal escolar';
+    if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+      chrome.runtime.sendMessage({ action: 'GET_POPUP_STATE' }, (resp) => {
+        const isSidecar = Boolean(resp && resp.isSidecarOnline);
+        const tabState = (resp && resp.tabState) || {};
+        const portalName = detectedPortalName || tabState.portalName || (detectedPortalKey ? PLATFORMS[detectedPortalKey].name : null);
+        const isMapped = Boolean(detectedPortalKey || tabState.isMappedPortal);
+        const pageTitle = portalTab?.title || tabState.friendlyPageName || tabState.title || 'Página do Portal';
+        const isAuth = Boolean(tabState.isAuthenticated);
+
+        // 1. Atualiza Badge do Header
+        if (isMapped) {
+          if (statusBadge) statusBadge.className = 'status-badge online';
+          if (statusPortalName) statusPortalName.textContent = portalName;
+          document.querySelectorAll('.platform-btn').forEach(b => {
+            b.classList.toggle('active', b.dataset.platform === detectedPortalKey);
+          });
+        } else {
+          if (statusBadge) statusBadge.className = 'status-badge';
+          if (statusPortalName) statusPortalName.textContent = 'Aguardando portal escolar';
+        }
+
+        // 2. Atualiza Visor de Conexão
+        if (visorPortalName) {
+          visorPortalName.textContent = isMapped ? portalName : 'Nenhum portal ativo';
+          visorPortalName.style.color = isMapped ? '#0f172a' : '#94a3b8';
+        }
+
+        if (visorPageName) {
+          visorPageName.textContent = isMapped ? pageTitle : (portalTab ? (portalTab.title || 'Aba Externa') : '—');
+          visorPageName.title = portalTab?.url || '';
+        }
+
+        if (visorAuthStatus) {
+          if (!isMapped) {
+            visorAuthStatus.textContent = '—';
+            visorAuthStatus.style.color = '#94a3b8';
+          } else if (tabState.pageKind === 'context_selection') {
+            visorAuthStatus.textContent = 'Selecionar Turma ⏳';
+            visorAuthStatus.style.color = '#0284c7';
+          } else if (isAuth) {
+            visorAuthStatus.textContent = 'Sessão Ativa ✓';
+            visorAuthStatus.style.color = '#15803d';
+          } else {
+            visorAuthStatus.textContent = 'Requer Login ⚠️';
+            visorAuthStatus.style.color = '#b45309';
+          }
+        }
+
+        if (visorSidecarStatus) {
+          if (isSidecar) {
+            visorSidecarStatus.textContent = 'Ativo (:8766)';
+            visorSidecarStatus.style.color = '#15803d';
+          } else {
+            visorSidecarStatus.textContent = 'Conectando...';
+            visorSidecarStatus.style.color = '#0284c7';
+          }
+        }
+
+        if (visorOverallBadge) {
+          if (isMapped && isAuth && isSidecar) {
+            visorOverallBadge.className = 'visor-badge ready';
+            visorOverallBadge.innerHTML = '🟢 Conectado';
+          } else if (isMapped && !isAuth) {
+            visorOverallBadge.className = 'visor-badge needs_login';
+            visorOverallBadge.innerHTML = '🟡 Requer Login';
+          } else if (isMapped && !isSidecar) {
+            visorOverallBadge.className = 'visor-badge connecting';
+            visorOverallBadge.innerHTML = '🌐 Portal Ativo (Conectando)';
+          } else {
+            visorOverallBadge.className = 'visor-badge offline';
+            visorOverallBadge.innerHTML = '⚪ Aguardando Portal';
+          }
+        }
+      });
     }
+
   } catch (e) {
-    console.error('Erro ao detectar portal:', e);
+    console.error('Erro ao atualizar visor de conexão:', e);
   }
 }
+
+if (btnVisorRefresh) {
+  btnVisorRefresh.addEventListener('click', () => {
+    btnVisorRefresh.innerHTML = '<i class="ti ti-loader-2 spin"></i> Atualizando...';
+    if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+      chrome.runtime.sendMessage({ action: 'RECONNECT_SIDECAR' }, () => {
+        setTimeout(() => {
+          btnVisorRefresh.innerHTML = '<i class="ti ti-refresh"></i> Atualizar Estado';
+          updatePortalConnection();
+        }, 800);
+      });
+    } else {
+      setTimeout(() => {
+        btnVisorRefresh.innerHTML = '<i class="ti ti-refresh"></i> Atualizar Estado';
+        updatePortalConnection();
+      }, 400);
+    }
+  });
+}
+
+setInterval(updatePortalConnection, 3000);
 
 // ── 1. Executor Unificado por Intenção (Lote 3) ──────────────────────────────
 function executeMatchedSkill(skillGraph, taskName) {
@@ -1115,6 +1224,7 @@ function normalizeStudentName(name) {
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
+    .replace(/^(?:o|a|os|as|do|da|de|pro|pra|para)\s+/i, '')
     .trim();
 }
 
@@ -1251,6 +1361,7 @@ async function parseNaturalIntent(text) {
   } else {
     alunoName = text.replace(/(?:lan[çc]ar?|lan[çc]a|nota|falta|\d+[.,]?\d*)/gi, '').trim();
   }
+  alunoName = alunoName.replace(/^(?:o|a|os|as|do|da|de|pro|pra|para)\s+/i, '').trim();
 
   if (isFalta) {
     const faltaMatch = text.match(/(\d+)\s+falta/i) || text.match(/falta\s+(\d+)/i);

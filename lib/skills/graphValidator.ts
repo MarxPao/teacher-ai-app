@@ -29,7 +29,12 @@ export interface GraphValidationResult {
  *   esteja expressamente declarado como `false`.
  */
 export function isRiskNode(node: SkillNode): boolean {
-  if (node.type === 'WRITE') return true
+  if (node.type === 'WRITE') {
+    if (node.params?.is_filter === true || (node.params as any)?.is_submit_action === false) {
+      return false
+    }
+    return true
+  }
   if (node.type === 'CLICK') {
     // Fail-safe: apenas false explícito descaracteriza risco de submissão
     return node.params?.is_submit_action !== false

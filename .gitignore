@@ -53,3 +53,10 @@ __pycache__/
 *$py.class
 .pytest_cache/
 sidecar/screenshots/
+
+# distribution & audit scratch
+/dist/
+*.crx
+audit_experiments_output.json
+scratch_report.txt
+student_real_data.json

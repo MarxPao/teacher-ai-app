@@ -27,7 +27,7 @@ from typing import Optional, Tuple
 # ─────────────────────────────────────────────────────────────────────────────
 
 CDP_PORT = 9222
-CDP_URL  = f"http://localhost:{CDP_PORT}"
+CDP_URL  = f"http://127.0.0.1:{CDP_PORT}"
 
 # Pasta do perfil dedicado — NUNCA aponta para o Chrome pessoal da professora
 PROFILE_DIR = os.path.expandvars(r"%LOCALAPPDATA%\TeacherAI\browser_profile")
