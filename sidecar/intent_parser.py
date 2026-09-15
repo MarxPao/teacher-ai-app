@@ -93,7 +93,7 @@ def _parse_with_regex_rules(text: str) -> Dict[str, Any]:
     lower = cleaned.lower()
 
     # 1. Leitura de Alunos / Roster
-    if any(p in lower for p in ["ler alunos", "lista de alunos", "quem são os alunos", "quais alunos", "ver alunos", "ler turma", "roster da turma"]):
+    if any(p in lower for p in ["ler alunos", "lista de alunos", "quem são os alunos", "quem são os estudantes", "estudantes matriculados", "quais alunos", "ver alunos", "ler turma", "roster da turma"]):
         return {
             "verbo_acao": "ler",
             "objeto_alvo": "alunos",
@@ -140,7 +140,7 @@ def _parse_with_regex_rules(text: str) -> Dict[str, Any]:
     clean_nav = re.sub(r"\b(?:no\s+site|no\s+portal|no\s+sistema|via\s+chat|no\s+app).*$", "", clean_nav).strip()
 
     nav_match = re.search(
-        r"(?:entre|entra|entrar|vai|vá|ir|navegue|navega|navegar|acesse|acessa|acessar|abra|abre|abrir|clique|clica|clicar|mostre|mostra)\s+(?:\b(?:em|no|na|nos|nas|para|pra|pro|pela|pelo)\b\s+)?(?:\b(?:a|o|os|as)\b\s+)?(?:\b(?:aba|menu|seção|secao|guia|link|tela|pasta)\b\s+)?(?:\b(?:de|do|da|dos|das)\b\s+)?([a-zA-ZÀ-ÿ0-9_-]+(?:\s+[a-zA-ZÀ-ÿ0-9_-]+)?)",
+        r"(?:entre|entra|entrar|vai|vá|ir|navegue|navega|navegar|acesse|acessa|acessar|abra|abre|abrir|clique|clica|clicar|mostre|mostra|quero\s+ver|ver)\s+(?:\b(?:em|no|na|nos|nas|para|pra|pro|pela|pelo)\b\s+)?(?:\b(?:a|o|os|as)\b\s+)?(?:\b(?:aba|menu|seção|secao|guia|link|tela|pasta)\b\s+)?(?:\b(?:de|do|da|dos|das)\b\s+)?([a-zA-ZÀ-ÿ0-9_-]+(?:\s+[a-zA-ZÀ-ÿ0-9_-]+)?)",
         clean_nav
     )
     if nav_match:
@@ -294,10 +294,12 @@ def _parse_with_regex_rules(text: str) -> Dict[str, Any]:
             "clarification_question": f"Para qual aluno você gostaria de lançar a nota {nota_val}?"
         }
 
-    # Padrão: "Hugo tirou 9.5 na avaliação" ou "Hugo ficou com 9.5"
+    # Padrão: "Hugo tirou 9.5 na avaliação" ou "Hugo ficou com 9.5" ou "anota que lucas tirou 7"
     m_tirou = re.search(r"([a-zA-ZÀ-ÿ\s]+?)\s+(?:tirou|ficou com|obteve)\s+(?:nota\s+)?(\d+(?:[.,]\d+)?)", lower)
     if m_tirou:
-        aluno_clean = re.sub(r"^(?:o|a|os|as|do|da|de|pro|para|pra)\s+", "", m_tirou.group(1), flags=re.IGNORECASE).strip().title()
+        aluno_raw = m_tirou.group(1).strip()
+        aluno_clean = re.sub(r"^(?:anota\s+que|anotar\s+que|registra\s+que|registrar\s+que|marca\s+que|marcar\s+que|coloca\s+que|colocar\s+que)\s+", "", aluno_raw, flags=re.IGNORECASE).strip()
+        aluno_clean = re.sub(r"^(?:o|a|os|as|do|da|de|pro|para|pra)\s+", "", aluno_clean, flags=re.IGNORECASE).strip().title()
         nota_val = float(m_tirou.group(2).replace(",", "."))
         return {
             "verbo_acao": "lançar",
@@ -318,8 +320,8 @@ def _parse_with_regex_rules(text: str) -> Dict[str, Any]:
             "clarification_question": None
         }
 
-    # Padrão A: "lança nota 9.5 para o Hugo Henrique"
-    m_a = re.search(r"(?:lança|lance|lançar|coloca|colocar|bota|botar|registra|registrar|nota)\s+(?:nota\s+)?(\d+(?:[.,]\d+)?)\s+(?:para|pra|pro|do|da|de)\s+([a-zA-ZÀ-ÿ\s]+)", lower)
+    # Padrão A: "lança nota 9.5 para o Hugo Henrique" ou "coloca nota 6 no boletim da Maria"
+    m_a = re.search(r"(?:lança|lance|lançar|coloca|colocar|bota|botar|registra|registrar|nota)\s+(?:nota\s+)?(\d+(?:[.,]\d+)?)\s+(?:no\s+boletim\s+(?:da|do|de)\s+|para|pra|pro|do|da|de|no|na)\s+([a-zA-ZÀ-ÿ\s]+)", lower)
     if m_a:
         nota_val = float(m_a.group(1).replace(",", "."))
         aluno_raw = m_a.group(2).strip()
@@ -486,6 +488,54 @@ def _parse_with_regex_rules(text: str) -> Dict[str, Any]:
             "clarification_question": None
         }
 
+    # Padrão: Falta ou Ausência direta ("pedro nao veio hoje", "Hugo faltou hoje", "marca falta pro Carlos")
+    m_falta_direta = re.match(r"^([a-zA-ZÀ-ÿ\s]+?)\s+(?:n[aã]o\s+(?:veio|compareceu)|faltou)(?:\s+(?:hoje|ontem|na\s+aula))?$", lower)
+    if m_falta_direta and not any(p in lower for p in ["quem", "lista", "quantos"]):
+        aluno_raw = m_falta_direta.group(1).strip()
+        aluno_clean = re.sub(r"^(?:o|a|os|as|do|da|de|pro|para|pra)\s+", "", aluno_raw, flags=re.IGNORECASE).strip().title()
+        return {
+            "verbo_acao": "lançar",
+            "objeto_alvo": "falta",
+            "tipo_operacao": "escrita",
+            "valor": "ausente",
+            "descricao_tarefa": f"Lançar falta para {aluno_clean}",
+            "destino_navegacao": None,
+            "parametros_extras": {},
+            "acao": "lancar_falta",
+            "aluno": aluno_clean,
+            "nota": None,
+            "faltas": 1,
+            "turma": None,
+            "disciplina": None,
+            "portal": None,
+            "is_complete": True,
+            "clarification_question": None
+        }
+
+    # Padrão: Ocorrência comportamental livre ("mariana brigou no recreio")
+    m_incidente = re.match(r"^([a-zA-ZÀ-ÿ\s]+?)\s+(?:brigou|bateu|conversou|atrapalhou|fez\s+bagun[çc]a|usou\s+celular|sem\s+material)(?:\s+(?:no|na|com|durante)\s+(.+))?$", lower)
+    if m_incidente:
+        aluno_raw = m_incidente.group(1).strip()
+        aluno_clean = re.sub(r"^(?:o|a|os|as|do|da|de|pro|para|pra)\s+", "", aluno_raw, flags=re.IGNORECASE).strip().title()
+        return {
+            "verbo_acao": "anotar",
+            "objeto_alvo": "ocorrência disciplinar",
+            "tipo_operacao": "escrita",
+            "valor": lower,
+            "descricao_tarefa": f"Anotar ocorrência disciplinar para {aluno_clean}: {lower}",
+            "destino_navegacao": None,
+            "parametros_extras": {},
+            "acao": "anotar_ocorrencia_disciplinar",
+            "aluno": aluno_clean,
+            "nota": None,
+            "faltas": None,
+            "turma": None,
+            "disciplina": None,
+            "portal": None,
+            "is_complete": True,
+            "clarification_question": None
+        }
+
     # Padrão: Observação/anotação pedagógica livre com conteúdo após ":"
     # "anota uma observação: Hugo não trouxe o material hoje"
     m_obs = re.search(
@@ -585,6 +635,19 @@ def _parse_with_regex_rules(text: str) -> Dict[str, Any]:
 # incluindo tiers gratuitos, porque nenhum dado pessoal de aluno trafega.
 # ---------------------------------------------------------------------------
 
+# Lista de palavras comuns em português que não são nomes de alunos mesmo após preposições
+_COMMON_NON_STUDENT_WORDS = {
+    "aula", "classe", "turma", "turmas", "escola", "prova", "provas", "teste", "testes",
+    "materia", "matéria", "exercicio", "exercício", "exercicios", "exercícios", "casa",
+    "reuniao", "reunião", "recuperacao", "recuperação", "relatorio", "relatório", "relatorios",
+    "arquivos", "configuracoes", "configurações", "redacao", "redação", "duvida", "dúvida",
+    "conteudo", "conteúdo", "chamada", "diario", "diário", "presenca", "presença", "falta",
+    "faltas", "nota", "notas", "boletim", "boletins", "quadro", "horario", "horário", "recreio",
+    "hoje", "ontem", "amanha", "amanhã", "tarde", "manha", "manhã", "noite", "geral", "tudo",
+    "todos", "todas", "grupo", "alunos", "alunas", "estudantes", "livro", "caderno", "atividade",
+    "atividades", "seção", "secao", "aba", "portal", "sistema"
+}
+
 # Verbos e substantivos que indicam operação sobre dado pessoal de aluno
 _PII_ACTION_VERBS = {
     "lança", "lance", "lançar", "coloca", "colocar", "registra", "registrar",
@@ -593,7 +656,7 @@ _PII_ACTION_VERBS = {
     "apaga", "apagar", "inclui", "incluir", "exclui", "excluir",
     "muda", "mudar", "altera", "alterar", "transfere", "transferir",
     "tirou", "tirar", "obteve", "obter", "ficou", "ficar",
-    "faltou", "faltar", "faltaram",
+    "faltou", "faltar", "faltaram", "veio", "compareceu", "brigou", "bateu"
 }
 
 _PII_OBJECT_NOUNS = {
@@ -609,44 +672,126 @@ _PII_OBJECT_NOUNS = {
 _ABSENCE_PRESENCE_WORDS = {
     "falta", "faltas", "faltou", "faltaram", "ausente", "ausentes",
     "ausência", "ausencia", "presença", "presenca", "presente", "presentes",
+    "nao veio", "não veio", "nao compareceu", "não compareceu", "sem presença", "sem presenca"
 }
 
-def _contains_student_pii(text: str) -> bool:
+_INCIDENT_WORDS = {
+    "brigou", "bateu", "xingou", "gritou", "conversando", "conversa", "bagunça",
+    "bagunca", "recreio", "atrapalhou", "celular", "dormiu", "ocorrência", "ocorrencia",
+    "advertência", "advertencia", "sem material", "sem tarefa", "comportamento"
+}
+
+def _is_generic_non_pii(text: str) -> bool:
+    """Identifica requisições pedagógicas/instrucionais ou de navegação pura que não contêm dados de aluno."""
+    lower = text.lower().strip()
+    if any(lower.startswith(p) for p in ["crie ", "criar ", "gere ", "gerar ", "elabore ", "sugira ", "proponha ", "monte "]):
+        if any(w in lower for w in ["questões", "questoes", "prova", "plano", "rubrica", "resumo", "atividade", "exercício", "exercicio"]):
+            return True
+    if any(lower.startswith(p) for p in ["quais ", "qual ", "como ", "quem "]):
+        if any(w in lower for w in ["estratégia", "estrategia", "desempenho médio", "desempenho medio", "média", "media", "ensinar", "estudante", "estudantes", "alunos", "turma"]):
+            return True
+    if any(lower.startswith(p) for p in ["navegue ", "navega ", "navegar ", "ir para ", "vá para ", "va para ", "abra ", "abrir ", "quero ver ", "ver "]):
+        if any(w in lower for w in ["aba", "seção", "secao", "relatório", "relatorio", "arquivo", "arquivos", "diário", "diario", "configurações", "configuracoes"]):
+            return True
+    return False
+
+def get_active_roster_students(supabase_client: Any = None, teacher_id: Optional[str] = None) -> List[str]:
+    """
+    Recupera a lista de nomes de alunos cadastrados na turma ativa
+    via Supabase ou cache local para validação cruzada de PII.
+    """
+    students: List[str] = []
+    if supabase_client:
+        try:
+            query = supabase_client.table("students").select("name")
+            if teacher_id:
+                query = query.eq("teacher_id", teacher_id)
+            res = query.execute()
+            if res.data:
+                for row in res.data:
+                    name = row.get("name")
+                    if name:
+                        students.append(name)
+        except Exception:
+            pass
+
+    if not students:
+        try:
+            cache_file = Path(__file__).resolve().parent / "discovered_maps_cache.json"
+            if cache_file.exists():
+                with open(cache_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    for k, v in data.items():
+                        if isinstance(v, dict) and "students" in v and isinstance(v["students"], list):
+                            students.extend(v["students"])
+        except Exception:
+            pass
+
+    return students
+
+def _contains_student_pii(text: str, known_students: Optional[Iterable[str]] = None) -> bool:
     """
     Detecta se o texto do comando contém referência a dado pessoal
-    de aluno que requeira processamento estritamente local.
+    de aluno que requeira processamento estritamente local (Trilho 1).
 
-    A heurística é deliberadamente conservadora (falsos positivos são
-    aceitos — mandam para local quando poderiam ir para nuvem):
-    melhor que o contrário (falso negativo = dado pessoal na nuvem gratuita).
+    FILOSOFIA FAIL-CLOSED:
+    Qualquer comando com ação operacional escolar, número 0-10, ausência,
+    ocorrência disciplinar ou candidato a nome é tratado como PII por padrão,
+    a menos que seja comprovadamente uma consulta pedagógica genérica (ex: gerar prova).
 
     Retorna True se o texto DEVE ser processado apenas localmente.
-    Retorna False se é seguro enviar para provedores de nuvem.
+    Retorna False se é comprovadamente seguro enviar para provedores de nuvem.
     """
     lower = text.lower().strip()
     tokens = set(re.split(r"\W+", lower))
 
-    has_pii_verb = bool(tokens & _PII_ACTION_VERBS)
-    has_pii_noun = bool(tokens & _PII_OBJECT_NOUNS)
-    has_absence_presence = bool(tokens & _ABSENCE_PRESENCE_WORDS)
+    # 1. Validação cruzada estrita contra a lista real de alunos (Supabase/localDB/passada)
+    if known_students:
+        for s in known_students:
+            s_clean = s.strip().lower()
+            if not s_clean:
+                continue
+            s_parts = s_clean.split()
+            # Nome completo ou primeiro nome
+            if re.search(rf"\b{re.escape(s_clean)}\b", lower):
+                return True
+            if len(s_parts[0]) >= 3 and s_parts[0] not in _COMMON_NON_STUDENT_WORDS:
+                if re.search(rf"\b{re.escape(s_parts[0])}\b", lower):
+                    return True
 
-    # 1. Qualquer verbo de ação + substantivo de dado pessoal → local
-    if has_pii_verb and has_pii_noun:
+    # 2. Se for consulta/instrução comprovadamente genérica sem vínculo individual -> Seguro para nuvem
+    if _is_generic_non_pii(text):
+        return False
+
+    # 3. Indicadores de ausência ou falta coloquial ('nao veio', 'não compareceu', etc.)
+    if any(ab in lower for ab in ["nao veio", "não veio", "nao compareceu", "não compareceu", "faltou", "faltaram", "ausente", "ausentes"]):
         return True
 
-    # 2. Padrão de número decimal de nota com contexto escolar ou verbo de nota
-    if re.search(r"\b\d+[.,]\d+\b", lower):
-        if has_pii_noun or has_pii_verb or bool(tokens & {"tirou", "obteve", "ficou", "media", "média"}):
+    # 4. Indicadores de ocorrência disciplinar ou comportamental ('brigou', 'conversa', etc.)
+    if bool(tokens & _INCIDENT_WORDS):
+        return True
+
+    # 5. Candidato a nome de aluno após preposição (ex: 'pro hugo', 'pra ana', 'para carlos', 'da maria')
+    prep_match = re.search(r"(?:^|\b(?:para|pra|pro|do|da|de|no|na|ao|à|com|o|a)\s+)([a-záéíóúâêîôûãõç]{2,})", lower)
+    if prep_match:
+        cand = prep_match.group(1)
+        if cand not in _COMMON_NON_STUDENT_WORDS and not cand.isdigit():
             return True
 
-    # 3. Presença/Ausência direta com indicação temporal ou verbo
-    if has_absence_presence and (has_pii_verb or bool(tokens & {"hoje", "ontem", "aula", "aulas"})):
-        return True
+    # 6. Candidato a nome no início da frase seguido de verbo escolar/ação/incidente
+    init_match = re.match(r"^([a-záéíóúâêîôûãõç]{2,})\s+", lower)
+    if init_match:
+        cand = init_match.group(1)
+        if cand not in _COMMON_NON_STUDENT_WORDS and (bool(tokens & _PII_ACTION_VERBS) or bool(tokens & _INCIDENT_WORDS)):
+            return True
 
-    # 4. Indicador de aluno/nome próprio + qualquer ação ou dado escolar
-    # Detecta nomes como 'Hugo', 'João', 'o Hugo', 'pra Ana'
-    has_student_name = bool(re.search(r"(?:^|\b(?:para|pra|pro|do|da|de|no|na|o|a)\s+)[A-ZÁÉÍÓÚÂÊÎÔÛÃÕÇ][a-záéíóúâêîôûãõç]+", text))
-    if has_student_name and (has_pii_noun or has_pii_verb or has_absence_presence):
+    # 7. Números de 0 a 10 (inteiros ou decimais) em contexto avaliativo ou verbo de nota
+    if re.search(r"\b(?:10|[0-9](?:[.,][0-9]+)?)\b", lower):
+        if bool(tokens & _PII_ACTION_VERBS) or any(w in lower for w in ["nota", "notas", "teste", "prova", "trabalho", "avaliacao", "avaliação", "boletim"]):
+            return True
+
+    # 8. FAIL-CLOSED: Qualquer verbo de ação operacional escolar restante é considerado PII
+    if bool(tokens & _PII_ACTION_VERBS):
         return True
 
     return False
@@ -690,7 +835,7 @@ def _call_local_llm(
         method="POST"
     )
     try:
-        with urllib.request.urlopen(req, timeout=15) as resp:
+        with urllib.request.urlopen(req, timeout=2) as resp:
             data = json.loads(resp.read().decode("utf-8"))
             content = data["message"]["content"]
             return content, model
@@ -780,6 +925,8 @@ def extract_intent(
     page_content: Optional[str] = None,
     ollama_model: Optional[str] = None,
     ollama_url: Optional[str] = None,
+    known_students: Optional[Iterable[str]] = None,
+    supabase_client: Optional[Any] = None,
 ) -> Dict[str, Any]:
     """
     Ponto de entrada de interpretação de intenção pedagógica (Camada 1 - NLU).
@@ -819,7 +966,12 @@ def extract_intent(
         isolated_prompt += f"\n<conteudo_da_pagina>\n{page_content}\n</conteudo_da_pagina>"
 
     # ─── ROTEAMENTO POR PRIVACIDADE ────────────────────────────────────────────
-    is_pii = _contains_student_pii(user_text)
+    # Se known_students não foi passado, tenta carregar do Supabase se fornecido ou do cache
+    active_roster = known_students
+    if active_roster is None and supabase_client is not None:
+        active_roster = get_active_roster_students(supabase_client)
+
+    is_pii = _contains_student_pii(user_text, known_students=active_roster)
 
     if is_pii:
         # ── CAMINHO PII: apenas local → regex. Cloud bloqueado. ──────────────
@@ -898,10 +1050,16 @@ def extract_intent(
             legacy_acao = "lancar_nota"
         elif any(k in objeto for k in ["presenca", "presença", "frequencia", "frequência"]):
             legacy_acao = "marcar_presenca"
+        elif any(k in objeto for k in ["ocorrencia", "ocorrência", "disciplinar"]):
+            legacy_acao = "anotar_ocorrencia_disciplinar"
+        elif any(k in objeto for k in ["observacao", "observação"]):
+            legacy_acao = "anotar_observacao_pedagogica"
         else:
             v_clean = re.sub(r"[^\w\s]", "", verbo).strip().replace(" ", "_")
             o_clean = re.sub(r"[^\w\s]", "", objeto).strip().replace(" ", "_")
-            legacy_acao = f"{v_clean}_{o_clean}".strip("_") or "acao_geral"
+            raw_slug = f"{v_clean}_{o_clean}".strip("_") or "acao_geral"
+            import unicodedata
+            legacy_acao = "".join(c for c in unicodedata.normalize('NFD', raw_slug) if unicodedata.category(c) != 'Mn')
 
     # 2. Operações de LEITURA / NAVEGAÇÃO
     else:
