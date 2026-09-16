@@ -40,8 +40,41 @@
       <button class="tab-btn active" id="tab-diario" onclick="switchTab('diario')">📋 Diário de Classe</button>
       <button class="tab-btn" id="tab-chamada" onclick="switchTab('chamada')">✋ Chamada</button>
       <button class="tab-btn" id="tab-arquivos" onclick="switchTab('arquivos')">📁 Arquivos</button>
+      <button class="tab-btn" id="tab-recados" onclick="switchTab('recados')">💬 Recados</button>
       <button class="tab-btn" id="tab-cadastro" onclick="switchTab('cadastro')">👤 Cadastro de Alunos</button>
       <button class="tab-btn" id="tab-config" onclick="switchTab('config')">⚙️ Configurações</button>
+    </div>
+
+    <!-- Aba Recados (Oculta por padrão) -->
+    <div id="pane-recados" style="display: none; padding: 20px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 16px;">
+      <h3 style="margin-top: 0; color: #1e293b; display: flex; align-items: center; gap: 8px;">
+        <span>💬</span> Mural de Recados e Comunicações com Famílias
+      </h3>
+      <p style="font-size: 13px; color: #64748b; margin-bottom: 16px;">
+        Mensagens recebidas de pais, responsáveis e coordenação pedagógica.
+      </p>
+      <div id="lista-recados" style="display: flex; flex-direction: column; gap: 12px;">
+        <div class="recado-card" id="recado-1" style="padding: 14px; background: #fff; border: 1px solid #cbd5e1; border-radius: 8px;">
+          <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+            <strong>Mãe do aluno Hugo Ribeiro (Dona Patrícia)</strong>
+            <span class="badge">Hoje, 09:30</span>
+          </div>
+          <p style="font-size: 13px; color: #334155; margin: 0 0 10px 0;">
+            Olá professora, gostaria de saber se o Hugo precisa de reforço para a prova de recuperação de amanhã.
+          </p>
+          <button type="button" class="btn-reply" id="btn_responder_hugo" onclick="document.getElementById('form-resposta-hugo').style.display='block'" style="background: #2563eb; color: #fff; border: none; padding: 6px 12px; border-radius: 6px; font-size: 13px; cursor: pointer;">
+            💬 Responder à mãe do aluno
+          </button>
+          <div id="form-resposta-hugo" style="display: none; margin-top: 10px; padding-top: 10px; border-top: 1px dashed #cbd5e1;">
+            <label for="campo_resposta_hugo" style="font-size: 12px; font-weight: bold; color: #475569;">Sua Resposta:</label>
+            <textarea id="campo_resposta_hugo" name="campo_resposta_hugo" rows="2" style="width: 100%; margin-top: 4px; padding: 6px; font-size: 13px; border: 1px solid #cbd5e1; border-radius: 6px;" placeholder="Digite a resposta para a mãe..."></textarea>
+            <button type="button" id="btn_enviar_resposta_hugo" onclick="document.getElementById('status-resposta-hugo').innerText='Resposta enviada com sucesso!'; document.getElementById('status-resposta-hugo').style.display='block';" style="margin-top: 6px; background: #16a34a; color: white; border: none; padding: 6px 12px; border-radius: 6px; font-size: 12px; cursor: pointer;">
+              Enviar Resposta
+            </button>
+            <div id="status-resposta-hugo" style="display:none; margin-top: 6px; font-size: 12px; color: #166534; font-weight: bold;"></div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Aba Arquivos (Oculta por padrão) -->
@@ -195,20 +228,12 @@
       const paneDiario = document.getElementById('pane-diario');
       const paneArquivos = document.getElementById('pane-arquivos');
       const paneCadastro = document.getElementById('pane-cadastro');
+      const paneRecados = document.getElementById('pane-recados');
 
-      if (tab === 'arquivos') {
-        if (paneDiario) paneDiario.style.display = 'none';
-        if (paneArquivos) paneArquivos.style.display = 'block';
-        if (paneCadastro) paneCadastro.style.display = 'none';
-      } else if (tab === 'cadastro') {
-        if (paneDiario) paneDiario.style.display = 'none';
-        if (paneArquivos) paneArquivos.style.display = 'none';
-        if (paneCadastro) paneCadastro.style.display = 'block';
-      } else {
-        if (paneDiario) paneDiario.style.display = 'block';
-        if (paneArquivos) paneArquivos.style.display = 'none';
-        if (paneCadastro) paneCadastro.style.display = 'none';
-      }
+      if (paneDiario) paneDiario.style.display = (tab === 'diario' ? 'block' : 'none');
+      if (paneArquivos) paneArquivos.style.display = (tab === 'arquivos' ? 'block' : 'none');
+      if (paneCadastro) paneCadastro.style.display = (tab === 'cadastro' ? 'block' : 'none');
+      if (paneRecados) paneRecados.style.display = (tab === 'recados' ? 'block' : 'none');
     }
 
     function salvarDiario() {
