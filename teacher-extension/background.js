@@ -1014,6 +1014,206 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     })();
     return true;
   }
+
+  if (message.action === 'DISCOVERY_SELECT_FILTER') {
+    (async () => {
+      let targetTabId = message.tabId;
+      if (!targetTabId) {
+        try {
+          const activeTabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+          if (activeTabs && activeTabs.length > 0 && activeTabs[0].url && !activeTabs[0].url.startsWith('chrome')) {
+            targetTabId = activeTabs[0].id;
+          }
+        } catch {}
+      }
+      if (!targetTabId) {
+        const tabs = await chrome.tabs.query({});
+        const portalTab = tabs.find(t => t.url && (t.url.includes('portal_mock') || t.url.includes('portal_real'))) ||
+                          tabs.find(t => t.url && !t.url.startsWith('chrome') && !t.url.endsWith(':3000/') && !t.url.endsWith(':3000') && identifyPortal(t.url)) ||
+                          tabs.find(t => t.url && (t.url.startsWith('http') || t.url.startsWith('file')) && !t.url.includes('side_panel') && !t.url.endsWith(':3000/') && !t.url.endsWith(':3000'));
+        targetTabId = portalTab ? portalTab.id : currentTabState.tabId;
+      }
+      if (!targetTabId) {
+        sendResponse({ sucesso: false, mensagem: 'Nenhuma aba ativa do portal identificada para seleção.' });
+        return;
+      }
+
+      const rawTerm = (message.filterTerm || message.target || '').trim();
+      if (!rawTerm) {
+        sendResponse({ sucesso: false, mensagem: 'Termo de filtro não especificado.' });
+        return;
+      }
+
+      try {
+        const results = await chrome.scripting.executeScript({
+          target: { tabId: targetTabId },
+          args: [rawTerm],
+          func: (term) => {
+            const cleanStr = (s) => (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+            const normTerm = cleanStr(term);
+
+            // Mapeamento semântico de ordinais (ex: sexto -> 6, 6º, 6ª)
+            const ordinalMap = {
+              'primeiro': '1', 'segundo': '2', 'terceiro': '3', 'quarto': '4',
+              'quinto': '5', 'sexto': '6', 'setimo': '7', 'oitavo': '8', 'nono': '9'
+            };
+
+            const searchVariants = [normTerm];
+            for (const [word, num] of Object.entries(ordinalMap)) {
+              if (normTerm.includes(word)) {
+                searchVariants.push(normTerm.replace(word, num));
+                searchVariants.push(normTerm.replace(word, `${num}o`));
+                searchVariants.push(normTerm.replace(word, `${num}º`));
+                searchVariants.push(num);
+                searchVariants.push(`${num}o`);
+                searchVariants.push(`${num}º`);
+              } else if (normTerm.includes(num)) {
+                searchVariants.push(normTerm.replace(num, word));
+                searchVariants.push(word);
+              }
+            }
+
+            // Remove duplicatas
+            const uniqueVariants = Array.from(new Set(searchVariants.filter(Boolean)));
+
+            // 1. Procura em dropdowns (<select>)
+            const selects = Array.from(document.querySelectorAll('select'));
+            for (const sel of selects) {
+              if (sel.offsetParent === null && sel.offsetWidth === 0 && sel.offsetHeight === 0) continue;
+              for (let i = 0; i < sel.options.length; i++) {
+                const opt = sel.options[i];
+                const optText = cleanStr(opt.text);
+                const optVal = cleanStr(opt.value);
+                const isMatch = uniqueVariants.some(v => optText.includes(v) || optVal === v || optVal.includes(v));
+                if (isMatch) {
+                  sel.selectedIndex = i;
+                  sel.value = opt.value;
+
+                  const origTransition = sel.style.transition;
+                  const origOutline = sel.style.outline;
+                  sel.style.transition = 'all 0.3s ease';
+                  sel.style.outline = '3px solid #10b981';
+                  sel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+                  sel.dispatchEvent(new Event('input', { bubbles: true }));
+                  sel.dispatchEvent(new Event('change', { bubbles: true }));
+
+                  setTimeout(() => {
+                    try {
+                      sel.style.transition = origTransition;
+                      sel.style.outline = origOutline;
+                    } catch {}
+                  }, 1800);
+
+                  return {
+                    sucesso: true,
+                    matchedType: 'select_option',
+                    elementText: opt.text.trim(),
+                    target: term
+                  };
+                }
+              }
+            }
+
+            // 2. Procura em botões, abas, pílulas de filtro, links, radios e checkboxes
+            const clickableCandidates = Array.from(document.querySelectorAll(
+              'button, [role="button"], [role="option"], [role="radio"], .pill, .filter-btn, .badge, a, label, input[type="radio"], input[type="checkbox"]'
+            ));
+
+            let bestClickable = null;
+            let bestScore = -1;
+
+            for (const el of clickableCandidates) {
+              if (el.offsetParent === null && el.offsetWidth === 0 && el.offsetHeight === 0) continue;
+              const text = cleanStr(el.innerText || el.textContent);
+              const aria = cleanStr(el.getAttribute('aria-label'));
+              const title = cleanStr(el.getAttribute('title'));
+              const val = cleanStr(el.getAttribute('value'));
+
+              for (const v of uniqueVariants) {
+                let score = 0;
+                if (text === v) score = 100;
+                else if (text.startsWith(v)) score = 85;
+                else if (text.includes(v)) score = 70;
+                else if (aria.includes(v)) score = 60;
+                else if (title.includes(v)) score = 50;
+                else if (val === v) score = 65;
+
+                if (score > bestScore && score >= 50) {
+                  bestScore = score;
+                  bestClickable = el;
+                }
+              }
+            }
+
+            if (bestClickable) {
+              const origTransition = bestClickable.style.transition;
+              const origOutline = bestClickable.style.outline;
+              bestClickable.style.transition = 'all 0.3s ease';
+              bestClickable.style.outline = '3px solid #10b981';
+              bestClickable.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+              if (bestClickable.tagName === 'INPUT' && (bestClickable.type === 'radio' || bestClickable.type === 'checkbox')) {
+                bestClickable.checked = true;
+                bestClickable.dispatchEvent(new Event('change', { bubbles: true }));
+              } else {
+                try {
+                  bestClickable.click();
+                } catch (e) {
+                  bestClickable.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+                }
+              }
+
+              setTimeout(() => {
+                try {
+                  bestClickable.style.transition = origTransition;
+                  bestClickable.style.outline = origOutline;
+                } catch {}
+              }, 1800);
+
+              return {
+                sucesso: true,
+                matchedType: 'button_or_pill',
+                elementText: (bestClickable.innerText || bestClickable.textContent || term).trim(),
+                target: term
+              };
+            }
+
+            // 3. Procura em inputs de busca/filtro
+            const filterInputs = Array.from(document.querySelectorAll('input[type="search"], input[type="text"]'));
+            for (const inp of filterInputs) {
+              if (inp.offsetParent === null && inp.offsetWidth === 0 && inp.offsetHeight === 0) continue;
+              const meta = cleanStr(`${inp.placeholder || ''} ${inp.name || ''} ${inp.id || ''} ${inp.getAttribute('aria-label') || ''}`);
+              if (meta.includes('filtro') || meta.includes('busca') || meta.includes('search') || meta.includes('turma') || meta.includes('ano')) {
+                inp.focus();
+                inp.value = term;
+                inp.dispatchEvent(new Event('input', { bubbles: true }));
+                inp.dispatchEvent(new Event('change', { bubbles: true }));
+                return {
+                  sucesso: true,
+                  matchedType: 'search_input',
+                  elementText: inp.placeholder || term,
+                  target: term
+                };
+              }
+            }
+
+            return {
+              sucesso: false,
+              status: 'element_not_found',
+              mensagem: `Não encontrei nenhum filtro, menu ou opção correspondente a '${term}' nesta tela.`
+            };
+          }
+        });
+
+        const res = (results && results[0] && results[0].result) || { sucesso: false, mensagem: 'Script de seleção falhou.' };
+        sendResponse(res);
+      } catch (err) {
+        sendResponse({ sucesso: false, mensagem: err.message });
+      }
+    })();
+    return true;
+  }
 });
 
 // Inicialização imediata com estado visual "Conectando..." durante a verificação inicial

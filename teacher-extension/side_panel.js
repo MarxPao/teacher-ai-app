@@ -1314,28 +1314,92 @@ function matchStudentByName(queryName, roster, queryMatricula) {
   return { status: 'not_found', student: null, candidates: [] };
 }
 
-function extractNavigationTarget(text) {
-  if (!text) return null;
-  let clean = text.toLowerCase()
-    .replace(/^(?:ol[áa]|oi|ei|rafinha|por\s+favor|pfv|ajuda|ajude)\s*[,:]?\s*/gi, '')
-    .replace(/\b(?:no\s+site|no\s+portal|no\s+sistema|via\s+chat|no\s+app).*$/gi, '')
-    .trim();
-  
-  const m = clean.match(/(?:entre|entra|entrar|vai|v[áa]|ir|navegue|navega|navegar|acesse|acessa|acessar|abra|abre|abrir|clique|clica|clicar|mostre|mostra)\s+(?:\b(?:em|no|na|nos|nas|para|pra|pro|pela|pelo)\b\s+)?(?:\b(?:a|o|os|as)\b\s+)?(?:\b(?:aba|menu|se[çc][ãa]o|guia|link|tela|pasta)\b\s+)?(?:\b(?:de|do|da|dos|das)\b\s+)?([a-zA-ZÀ-ÿ0-9_-]+(?:\s+[a-zA-ZÀ-ÿ0-9_-]+)?)/i);
-  if (m) {
-    let target = m[1].trim()
-      .replace(/^(?:a|o|os|as|de|do|da|dos|das)\s+/i, '')
-      .replace(/\s+(?:no|na|do|da|de|pra|para|no\s+site|no\s+portal|do\s+portal|na\s+aba|via\s+chat).*$/i, '')
-      .trim();
-    if (target && !['aluno', 'nota', 'falta', 'a nota', 'uma nota', 'site', 'portal'].includes(target.toLowerCase())) {
-      return target;
-    }
+function splitCompoundCommand(text) {
+  if (!text || typeof text !== 'string') {
+    return { hasNavigation: false, navTarget: null, conjunction: null, remainingCommand: null, isCompound: false };
   }
 
-  const m2 = clean.match(/(?:aba|menu|se[çc][ãa]o|guia)\s+([a-zA-ZÀ-ÿ0-9_-]+)/i);
-  if (m2) {
-    let target = m2[1].trim().replace(/^(?:de|do|da)\s+/i, '').trim();
-    if (target) return target;
+  let clean = text.toLowerCase()
+    .replace(/^(?:ol[áa]|oi|ei|rafinha|por\s+favor|pfv|ajuda|ajude|\s+)+[,:]?\s*/gi, '')
+    .replace(/\b(?:no\s+site|no\s+portal|no\s+sistema|via\s+chat|no\s+app).*$/gi, '')
+    .trim();
+
+  // Prefixos de verbos de navegação
+  const navPrefixRegex = /(?:^|\b)(?:entre|entra|entrar|vai|v[áa]|ir|navegue|navega|navegar|acesse|acessa|acessar|abra|abre|abrir|clique|clica|clicar|mostre|mostra|quero\s+ver|ver)\s+(?:\b(?:em|no|na|nos|nas|para|pra|pro|pela|pelo)\b\s+)?(?:\b(?:a|o|os|as)\b\s+)?(?:\b(?:aba|menu|se[çc][ãa]o|guia|link|tela|pasta)\b\s+)?(?:\b(?:de|do|da|dos|das)\b\s+)?/i;
+
+  const prefixMatch = clean.match(navPrefixRegex);
+  if (!prefixMatch) {
+    // Tenta padrão secundário: "aba/menu/seção/guia X"
+    const m2 = clean.match(/^(?:aba|menu|se[çc][ãa]o|guia)\s+([a-zA-ZÀ-ÿ0-9_-]+(?:\s+[a-zA-ZÀ-ÿ0-9_-]+)?)/i);
+    if (m2) {
+      let target = m2[1].trim().replace(/^(?:de|do|da)\s+/i, '').trim();
+      const rest = clean.substring(m2[0].length).trim();
+      return {
+        hasNavigation: true,
+        navTarget: target,
+        conjunction: null,
+        remainingCommand: rest || null,
+        isCompound: Boolean(rest)
+      };
+    }
+    return { hasNavigation: false, navTarget: null, conjunction: null, remainingCommand: null, isCompound: false };
+  }
+
+  // O texto após o verbo/prefixo de navegação
+  const afterPrefix = clean.substring(prefixMatch.index + prefixMatch[0].length).trim();
+  if (!afterPrefix) {
+    return { hasNavigation: false, navTarget: null, conjunction: null, remainingCommand: null, isCompound: false };
+  }
+
+  // Divisores: conjunções e conectivos ou verbos de ação subsequentes
+  const conjunctionRegex = /\s*(?:,\s*|\s*;\s*|\s+(?:e\s+depois|pra\s+depois|para\s+depois|em\s+seguida|logo\s+em\s+seguida|e\s+ent[ãa]o|ent[ãa]o|depois|a[íi]|e)\s+|\s+(?:selecionar|seleciona|selecione|escolher|escolha|escolhe|filtrar|filtra|filtre|marcar|marca|marque|lan[çc]ar|lanca|lance|lancar|colocar|coloca|coloque|botar|bota|bote|anotar|anota|anote|registrar|registra|registre|ver|olhar|olhe|buscar|busca|busque|procurar|procura|procure|mostrar|mostra|mostre|baixar|baixa|baixe|enviar|envia|envie|responder|responda|responde|escrever|escreve|escreva|preencher|preencha|preenche)\b\s*)/i;
+
+  const conjMatch = afterPrefix.match(conjunctionRegex);
+  let navTarget = '';
+  let remainingCommand = null;
+  let conjunction = null;
+
+  if (conjMatch && conjMatch.index !== undefined) {
+    navTarget = afterPrefix.substring(0, conjMatch.index).trim();
+    const matchedDivider = conjMatch[0].trim().toLowerCase();
+    const rawRest = afterPrefix.substring(conjMatch.index + conjMatch[0].length).trim();
+
+    const isActionVerb = /^(?:selecionar|seleciona|selecione|escolher|escolha|escolhe|filtrar|filtra|filtre|marcar|marca|marque|lan[çc]ar|lanca|lance|lancar|colocar|coloca|coloque|botar|bota|bote|anotar|anota|anote|registrar|registra|registre|ver|olhar|olhe|buscar|busca|busque|procurar|procura|procure|mostrar|mostra|mostre|baixar|baixa|baixe|enviar|envia|envie|responder|responda|responde|escrever|escreve|escreva|preencher|preencha|preenche)$/i.test(matchedDivider);
+
+    if (isActionVerb) {
+      conjunction = null;
+      remainingCommand = `${matchedDivider} ${rawRest}`.trim();
+    } else {
+      conjunction = matchedDivider;
+      remainingCommand = rawRest || null;
+    }
+  } else {
+    navTarget = afterPrefix.trim();
+  }
+
+  // Limpa ruídos comuns no final do target preservando nomes compostos legítimos (diário de classe, plano de aula)
+  navTarget = navTarget
+    .replace(/^(?:a|o|os|as)\s+/i, '')
+    .replace(/\s+(?:no\s+site|no\s+portal|do\s+portal|no\s+sistema|na\s+aba|via\s+chat|no\s+app).*$/i, '')
+    .trim();
+
+  if (!navTarget || ['aluno', 'nota', 'falta', 'a nota', 'uma nota', 'site', 'portal'].includes(navTarget.toLowerCase())) {
+    return { hasNavigation: false, navTarget: null, conjunction: null, remainingCommand: null, isCompound: false };
+  }
+
+  return {
+    hasNavigation: true,
+    navTarget: navTarget,
+    conjunction: conjunction,
+    remainingCommand: remainingCommand || null,
+    isCompound: Boolean(remainingCommand && remainingCommand.trim().length > 0)
+  };
+}
+
+function extractNavigationTarget(text) {
+  const compound = splitCompoundCommand(text);
+  if (compound && compound.hasNavigation && compound.navTarget) {
+    return compound.navTarget;
   }
   return null;
 }
@@ -1910,18 +1974,68 @@ async function handleProcessCommand(commandText) {
     return;
   }
 
-  // Caso especial: Navegação para abas ou seções ("entre nos arquivos", "entre na aba arquivos", "ir para diário", etc.)
-  const navTarget = extractNavigationTarget(textClean);
-  if (navTarget) {
+  // Caso Navegação e Comandos Compostos (ex: "abrir arquivos e selecionar sexto ano", "ir para diário e lançar nota")
+  const compound = splitCompoundCommand(textClean);
+  if (compound.hasNavigation && compound.navTarget) {
+    const navTarget = compound.navTarget;
+    const remainingCommand = compound.remainingCommand;
+
     setProcessingState(true, `Acessando ${navTarget} no portal...`);
-    dispatchPortalBridgeMessage({ action: 'NAVIGATE_PORTAL_TAB', target: navTarget }, (resp) => {
-      setProcessingState(false);
-      if (resp && resp.sucesso) {
-        const foundLabel = resp.elementText || navTarget;
-        appendAssistantChatMessage(`Prontinho! Entrei na aba **${escapeHtml(foundLabel)}** no portal para você. 📂✨`, true);
-      } else {
-        appendAssistantChatMessage(`Procurei pela aba ou seção **${escapeHtml(navTarget)}** no portal, mas não encontrei nenhum botão ou menu correspondente nesta tela. Você pode navegar manualmente até lá ou me mostrar onde fica? 🔍`, true);
+    dispatchPortalBridgeMessage({ action: 'NAVIGATE_PORTAL_TAB', target: navTarget }, (navResp) => {
+      if (!navResp || !navResp.sucesso) {
+        setProcessingState(false);
+        appendAssistantChatMessage(
+          `Procurei pela aba ou seção **${escapeHtml(navTarget)}** no portal, mas não encontrei nenhum botão ou menu correspondente nesta tela. Você pode navegar manualmente até lá ou me mostrar onde fica? 🔍`,
+          true
+        );
+        showHonestErrorCard(
+          'Aba não encontrada',
+          `Não encontrei a aba ou seção '${navTarget}' no portal. Clique manualmente no menu correspondente.`
+        );
+        return;
       }
+
+      const foundLabel = navResp.elementText || navTarget;
+
+      // Se NÃO houver segunda instrução no comando composto, conclui a tarefa com sucesso:
+      if (!remainingCommand) {
+        setProcessingState(false);
+        appendAssistantChatMessage(`Prontinho! Entrei na aba **${escapeHtml(foundLabel)}** no portal para você. 📂✨`, true);
+        return;
+      }
+
+      // Se HOUVER segunda instrução, NUNCA descarta silenciosamente — executa a etapa 2 via Discovery!
+      appendAssistantChatMessage(`Prontinho! Entrei na aba **${escapeHtml(foundLabel)}** no portal. Agora estou procurando **${escapeHtml(remainingCommand)}**... 📂🔍`, true);
+      setProcessingState(true, `Executando: ${remainingCommand}...`);
+
+      const isSelectionCommand = /^(?:selecionar|seleciona|selecione|escolher|escolha|escolhe|filtrar|filtra|filtre|marcar|marca|marque)\s+/i.test(remainingCommand);
+      if (isSelectionCommand) {
+        const filterTerm = remainingCommand
+          .replace(/^(?:selecionar|seleciona|selecione|escolher|escolha|escolhe|filtrar|filtra|filtre|marcar|marca|marque)\s+(?:por\s+|a\s+|o\s+|pelo\s+|pela\s+|turma\s+|ano\s+)?/i, '')
+          .trim();
+
+        dispatchPortalBridgeMessage({ action: 'DISCOVERY_SELECT_FILTER', filterTerm }, (selResp) => {
+          setProcessingState(false);
+          if (selResp && selResp.sucesso) {
+            const selectedLabel = selResp.elementText || filterTerm;
+            appendAssistantChatMessage(`✅ Entrei na aba **${escapeHtml(foundLabel)}** e selecionei **${escapeHtml(selectedLabel)}** com sucesso! ✨`, true);
+          } else {
+            appendAssistantChatMessage(
+              `📂 Entrei na aba **${escapeHtml(foundLabel)}**, mas não encontrei a opção **${escapeHtml(filterTerm)}** para selecionar nesta tela. Você pode me mostrar onde fica ou selecionar manualmente? 🔍`,
+              true
+            );
+            showClarificationPointClickCard(
+              `Não encontrei onde selecionar "${filterTerm}" na aba ${foundLabel}. Você pode me mostrar clicando no lugar certo?`
+            );
+          }
+        });
+        return;
+      }
+
+      // Outras ações subsequentes (ex: responder recado, lançar nota na nova aba)
+      setTimeout(() => {
+        executeSubsequentCommand(remainingCommand, foundLabel);
+      }, 500);
     });
     return;
   }
@@ -2008,11 +2122,34 @@ async function handleProcessCommand(commandText) {
         // Caso Navegação: Backend retornou intenção de navegar para aba/seção
         if (data.acao === 'navegar_aba' || data.action_required === 'navigate_tab') {
           const target = data.destino || 'Arquivos';
+          const remaining = data.remaining_command || data.segunda_instrucao || null;
           dispatchPortalBridgeMessage({ action: 'NAVIGATE_PORTAL_TAB', target }, (navResp) => {
-            setProcessingState(false);
             if (navResp && navResp.sucesso) {
-              appendAssistantChatMessage(`Prontinho! Entrei na aba **${escapeHtml(navResp.elementText || target)}** no portal para você. 📂✨`, true);
+              const foundLabel = navResp.elementText || target;
+              if (remaining) {
+                appendAssistantChatMessage(`Prontinho! Entrei na aba **${escapeHtml(foundLabel)}** no portal. Agora estou procurando **${escapeHtml(remaining)}**... 📂🔍`, true);
+                setProcessingState(true, `Executando: ${remaining}...`);
+                const isSelection = /^(?:selecionar|seleciona|selecione|escolher|escolha|escolhe|filtrar|filtra|filtre|marcar|marca|marque)\s+/i.test(remaining);
+                if (isSelection) {
+                  const filterTerm = remaining.replace(/^(?:selecionar|seleciona|selecione|escolher|escolha|escolhe|filtrar|filtra|filtre|marcar|marca|marque)\s+(?:por\s+|a\s+|o\s+|pelo\s+|pela\s+|turma\s+|ano\s+)?/i, '').trim();
+                  dispatchPortalBridgeMessage({ action: 'DISCOVERY_SELECT_FILTER', filterTerm }, (selResp) => {
+                    setProcessingState(false);
+                    if (selResp && selResp.sucesso) {
+                      appendAssistantChatMessage(`✅ Entrei na aba **${escapeHtml(foundLabel)}** e selecionei **${escapeHtml(selResp.elementText || filterTerm)}** com sucesso! ✨`, true);
+                    } else {
+                      appendAssistantChatMessage(`📂 Entrei na aba **${escapeHtml(foundLabel)}**, mas não encontrei a opção **${escapeHtml(filterTerm)}** para selecionar nesta tela. Você pode me mostrar onde fica? 🔍`, true);
+                      showClarificationPointClickCard(`Não encontrei onde selecionar "${filterTerm}" na aba ${foundLabel}. Você pode me mostrar clicando no lugar certo?`);
+                    }
+                  });
+                  return;
+                }
+                setTimeout(() => executeSubsequentCommand(remaining, foundLabel), 500);
+                return;
+              }
+              setProcessingState(false);
+              appendAssistantChatMessage(`Prontinho! Entrei na aba **${escapeHtml(foundLabel)}** no portal para você. 📂✨`, true);
             } else {
+              setProcessingState(false);
               appendAssistantChatMessage(data.mensagem || `Naveguei até **${escapeHtml(target)}** no portal escolar.`, true);
             }
           });
@@ -2057,6 +2194,56 @@ async function handleProcessCommand(commandText) {
     showClarificationPointClickCard(
       `Não encontrei onde lançar ${intent.acao === 'lancar_falta' ? 'falta' : 'nota'} para "${intent.aluno}" nesta tela. Você pode me mostrar clicando no lugar certo?`
     );
+  });
+}
+
+function executeSubsequentCommand(remainingCommand, contextLabel) {
+  if (!remainingCommand) return;
+  const cleanCmd = remainingCommand.trim();
+
+  // 1. Se for comando de nota ou falta (ex: "lançar 8 pro Hugo", "colocar falta pro Pedro")
+  const isNotaOrFalta = /(?:nota|grau|ponto|falta|presen[çc]a|aus[êe]ncia)/i.test(cleanCmd);
+  if (isNotaOrFalta) {
+    handleProcessCommand(cleanCmd);
+    return;
+  }
+
+  // 2. Se for comando de recado / mensagem (ex: "responder recado da mãe", "responder mensagem")
+  const isRecado = /(?:responder|recado|mensagem|comunicado|aviso)/i.test(cleanCmd);
+  if (isRecado) {
+    setProcessingState(true, 'Localizando recado para responder...');
+    dispatchPortalBridgeMessage({ action: 'DISCOVERY_SELECT_FILTER', filterTerm: cleanCmd }, (resp) => {
+      setProcessingState(false);
+      if (resp && resp.sucesso) {
+        appendAssistantChatMessage(`Localizei o recado na aba **${escapeHtml(contextLabel)}**! Digite sua resposta para eu enviar. 💬✨`, true);
+      } else {
+        appendAssistantChatMessage(
+          `Entrei na aba **${escapeHtml(contextLabel)}**, mas não encontrei uma mensagem ou campo aberto para **${escapeHtml(cleanCmd)}**. Qual recado você deseja responder? 💬`,
+          true
+        );
+        showHonestErrorCard(
+          'Recado não localizado',
+          `Não encontrei o recado para "${cleanCmd}" na tela. Você pode abrir o recado desejado manualmente?`
+        );
+      }
+    });
+    return;
+  }
+
+  // 3. Caso geral: tenta discovery genérico na página ou pede esclarecimento honesto
+  dispatchPortalBridgeMessage({ action: 'DISCOVERY_SELECT_FILTER', filterTerm: cleanCmd }, (resp) => {
+    setProcessingState(false);
+    if (resp && resp.sucesso) {
+      appendAssistantChatMessage(`✅ Localizei e selecionei **${escapeHtml(resp.elementText || cleanCmd)}** na aba **${escapeHtml(contextLabel)}**! ✨`, true);
+    } else {
+      appendAssistantChatMessage(
+        `Entrei na aba **${escapeHtml(contextLabel)}**, mas não encontrei como executar **${escapeHtml(cleanCmd)}** nesta tela. Você pode me mostrar onde fica? 🔍`,
+        true
+      );
+      showClarificationPointClickCard(
+        `Não encontrei como fazer "${cleanCmd}" na aba ${contextLabel}. Você pode me mostrar clicando no lugar certo?`
+      );
+    }
   });
 }
 
@@ -2230,6 +2417,7 @@ if (typeof window !== 'undefined') {
     setProcessingState,
     fillCommandTemplate,
     extractNavigationTarget,
+    splitCompoundCommand,
     trackActionUsage,
     promptShortcutPromotion,
     savePromotedShortcut,

@@ -84,6 +84,86 @@ DIRETRIZ MANDATÓRIA DE SEGURANÇA E ISOLAMENTO DE DADOS (ANTI-PROMPT INJECTION)
 
 
 
+def split_compound_command(text: str) -> Dict[str, Any]:
+    """
+    Divide um comando composto em destino de navegação e instrução restante.
+    Garante que:
+    1. O destino NUNCA inclui conjunções (e, então, depois, em seguida, etc.) nem verbos subsequentes.
+    2. O resto do comando é preservado com exatidão para execução em cascata.
+    """
+    if not text or not isinstance(text, str):
+        return {"has_navigation": False, "nav_target": None, "conjunction": None, "remaining_command": None, "is_compound": False}
+
+    clean = text.lower().strip()
+    clean = re.sub(r"^(?:ol[áa]|oi|ei|rafinha|por\s+favor|pfv|ajuda|ajude|\s+)+[,:]?\s*", "", clean)
+    clean = re.sub(r"\b(?:no\s+site|no\s+portal|no\s+sistema|via\s+chat|no\s+app).*$", "", clean).strip()
+
+    nav_prefix_regex = r"(?:^|\b)(?:entre|entra|entrar|vai|vá|ir|navegue|navega|navegar|acesse|acessa|acessar|abra|abre|abrir|clique|clica|clicar|mostre|mostra|quero\s+ver|ver)\s+(?:\b(?:em|no|na|nos|nas|para|pra|pro|pela|pelo)\b\s+)?(?:\b(?:a|o|os|as)\b\s+)?(?:\b(?:aba|menu|seção|secao|guia|link|tela|pasta)\b\s+)?(?:\b(?:de|do|da|dos|das)\b\s+)?"
+    prefix_match = re.search(nav_prefix_regex, clean)
+    if not prefix_match:
+        m2 = re.search(r"^(?:aba|menu|seção|secao|guia)\s+([a-zA-ZÀ-ÿ0-9_-]+(?:\s+[a-zA-ZÀ-ÿ0-9_-]+)?)", clean)
+        if m2:
+            target = re.sub(r"^(?:de|do|da)\s+", "", m2.group(1).strip()).strip()
+            rest = clean[m2.end():].strip()
+            return {
+                "has_navigation": True,
+                "nav_target": target,
+                "conjunction": None,
+                "remaining_command": rest or None,
+                "is_compound": bool(rest)
+            }
+        return {"has_navigation": False, "nav_target": None, "conjunction": None, "remaining_command": None, "is_compound": False}
+
+    after_prefix = clean[prefix_match.end():].strip()
+    if not after_prefix:
+        return {"has_navigation": False, "nav_target": None, "conjunction": None, "remaining_command": None, "is_compound": False}
+
+    # Divisores: conjunções e conectivos ou verbos subsequentes
+    conjunction_regex = r"\s*(?:,\s*|\s*;\s*|\s+(?:e\s+depois|pra\s+depois|para\s+depois|em\s+seguida|logo\s+em\s+seguida|e\s+ent[ãa]o|ent[ãa]o|depois|a[íi]|e)\s+|\s+(?:selecionar|seleciona|selecione|escolher|escolha|escolhe|filtrar|filtra|filtre|marcar|marca|marque|lan[çc]ar|lanca|lance|lancar|colocar|coloca|coloque|botar|bota|bote|anotar|anota|anote|registrar|registra|registre|ver|olhar|olhe|buscar|busca|busque|procurar|procura|procure|mostrar|mostra|mostre|baixar|baixa|baixe|enviar|envia|envie|responder|responda|responde|escrever|escreve|escreva|preencher|preencha|preenche)\b\s*)"
+    conj_match = re.search(conjunction_regex, after_prefix)
+
+    if conj_match:
+        nav_target = after_prefix[:conj_match.start()].strip()
+        matched_divider = conj_match.group(0).strip().lower()
+        raw_rest = after_prefix[conj_match.end():].strip()
+
+        action_verbs = [
+            "selecionar", "seleciona", "selecione", "escolher", "escolha", "escolhe",
+            "filtrar", "filtra", "filtre", "marcar", "marca", "marque",
+            "lançar", "lanca", "lance", "lancar", "colocar", "coloca", "coloque",
+            "botar", "bota", "bote", "anotar", "anota", "anote",
+            "registrar", "registra", "registre", "ver", "olhar", "olhe",
+            "buscar", "busca", "busque", "procurar", "procura", "procure",
+            "mostrar", "mostra", "mostre", "baixar", "baixa", "baixe",
+            "enviar", "envia", "envie", "responder", "responda", "responde",
+            "escrever", "escreve", "escreva", "preencher", "preencha", "preenche"
+        ]
+        if matched_divider in action_verbs:
+            conjunction = None
+            remaining_command = f"{matched_divider} {raw_rest}".strip()
+        else:
+            conjunction = matched_divider
+            remaining_command = raw_rest or None
+    else:
+        nav_target = after_prefix.strip()
+        conjunction = None
+        remaining_command = None
+
+    nav_target = re.sub(r"^(?:a|o|os|as)\s+", "", nav_target, flags=re.IGNORECASE)
+    nav_target = re.sub(r"\s+(?:no\s+site|no\s+portal|do\s+portal|no\s+sistema|na\s+aba|via\s+chat|no\s+app).*$", "", nav_target, flags=re.IGNORECASE).strip()
+
+    if not nav_target or nav_target.lower() in ["aluno", "nota", "falta", "a nota", "uma nota", "site", "portal"]:
+        return {"has_navigation": False, "nav_target": None, "conjunction": None, "remaining_command": None, "is_compound": False}
+
+    return {
+        "has_navigation": True,
+        "nav_target": nav_target,
+        "conjunction": conjunction,
+        "remaining_command": remaining_command or None,
+        "is_compound": bool(remaining_command and remaining_command.strip())
+    }
+
+
 def _parse_with_regex_rules(text: str) -> Dict[str, Any]:
     """
     Fallback determinístico baseado em regex para quando não houver conexão com LLM
@@ -135,38 +215,33 @@ def _parse_with_regex_rules(text: str) -> Dict[str, Any]:
         }
 
     # 2.5. Navegação para Abas, Menus ou Seções ("entre nos arquivos", "entre na aba arquivos", "ir para diário", etc.)
-    clean_nav = lower
-    clean_nav = re.sub(r"^(?:ol[áa]|oi|ei|rafinha|por\s+favor|pfv|ajuda|ajude)\s*[,:]?\s*", "", clean_nav)
-    clean_nav = re.sub(r"\b(?:no\s+site|no\s+portal|no\s+sistema|via\s+chat|no\s+app).*$", "", clean_nav).strip()
-
-    nav_match = re.search(
-        r"(?:entre|entra|entrar|vai|vá|ir|navegue|navega|navegar|acesse|acessa|acessar|abra|abre|abrir|clique|clica|clicar|mostre|mostra|quero\s+ver|ver)\s+(?:\b(?:em|no|na|nos|nas|para|pra|pro|pela|pelo)\b\s+)?(?:\b(?:a|o|os|as)\b\s+)?(?:\b(?:aba|menu|seção|secao|guia|link|tela|pasta)\b\s+)?(?:\b(?:de|do|da|dos|das)\b\s+)?([a-zA-ZÀ-ÿ0-9_-]+(?:\s+[a-zA-ZÀ-ÿ0-9_-]+)?)",
-        clean_nav
-    )
-    if nav_match:
-        cand = nav_match.group(1).strip()
-        cand = re.sub(r"^(?:a|o|os|as|de|do|da|dos|das)\s+", "", cand, flags=re.IGNORECASE)
-        cand = re.sub(r"\s+(?:no|na|do|da|de|pra|para|no\s+site|no\s+portal|do\s+portal|na\s+aba|via\s+chat).*$", "", cand, flags=re.IGNORECASE).strip()
-        if cand and cand.lower() not in ["aluno", "nota", "falta", "a nota", "uma nota", "site", "portal"]:
-            return {
-                "verbo_acao": "navegar",
-                "objeto_alvo": cand.title(),
-                "tipo_operacao": "leitura",
-                "valor": None,
-                "descricao_tarefa": f"Navegar para a aba {cand.title()}",
-                "destino_navegacao": cand.title(),
-                "parametros_extras": {},
-                "acao": "navegar_aba",
-                "destino": cand.title(),
-                "aluno": None,
-                "nota": None,
-                "faltas": None,
-                "turma": None,
-                "disciplina": None,
-                "portal": None,
-                "is_complete": True,
-                "clarification_question": None
-            }
+    compound_nav = split_compound_command(lower)
+    if compound_nav["has_navigation"] and compound_nav["nav_target"]:
+        cand = compound_nav["nav_target"]
+        target_display = cand.title()
+        remaining = compound_nav["remaining_command"]
+        return {
+            "verbo_acao": "navegar",
+            "objeto_alvo": target_display,
+            "tipo_operacao": "leitura",
+            "valor": None,
+            "descricao_tarefa": f"Navegar para a aba {target_display}",
+            "destino_navegacao": target_display,
+            "parametros_extras": {},
+            "acao": "navegar_aba",
+            "destino": target_display,
+            "aluno": None,
+            "nota": None,
+            "faltas": None,
+            "turma": None,
+            "disciplina": None,
+            "portal": None,
+            "is_complete": True,
+            "clarification_question": None,
+            "remaining_command": remaining,
+            "segunda_instrucao": remaining,
+            "is_compound": compound_nav["is_compound"]
+        }
 
     # 3. Lançamento de Falta
     falta_match = re.search(r"(?:coloca|lança|lance|lançar|marca|marcar|bota|registrar|registre)\s+(?:(\d+)\s+)?faltas?\s+(?:para|pra|pro|do|da|no|na)\s+([a-zA-ZÀ-ÿ\s]+)", lower)
@@ -1104,7 +1179,15 @@ def extract_intent(
     elif legacy_acao == "navegar_aba":
         raw_dest = str(parsed.get("destino_navegacao") or parsed.get("objeto_alvo") or "")
         dest_clean = re.sub(r"^(?:a\s+|o\s+)?(?:aba|seção|secao|menu|página|pagina)?\s*", "", raw_dest, flags=re.IGNORECASE).strip()
+        dest_clean = re.sub(r"\s+(?:e\s+depois|em\s+seguida|depois|ent[ãa]o|e)$", "", dest_clean, flags=re.IGNORECASE).strip()
         parsed["destino"] = dest_clean.title() if dest_clean else raw_dest.title()
+
+        if not parsed.get("remaining_command"):
+            compound_check = split_compound_command(user_text)
+            if compound_check.get("remaining_command"):
+                parsed["remaining_command"] = compound_check["remaining_command"]
+                parsed["segunda_instrucao"] = compound_check["remaining_command"]
+                parsed["is_compound"] = True
 
     # Validação de integridade de slots em ações comuns
     if legacy_acao == "lancar_nota":
@@ -1169,11 +1252,14 @@ async def dispatch_and_execute_task(
     if intent.get("acao") == "navegar_aba":
         destino = intent.get("destino") or intent.get("destino_navegacao") or "aba solicitada"
         destino_display = destino.title() if isinstance(destino, str) else str(destino)
+        remaining = intent.get("remaining_command") or intent.get("segunda_instrucao")
         return {
             "sucesso": True,
             "needs_clarification": False,
             "acao": "navegar_aba",
             "destino": destino_display,
+            "remaining_command": remaining,
+            "segunda_instrucao": remaining,
             "mensagem": f"Acessando a aba {destino_display} no portal para você! 📂",
             "status": "navigating_tab",
             "card": None,
