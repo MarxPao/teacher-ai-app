@@ -697,9 +697,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     (async () => {
       let targetTabId = message.tabId;
       if (!targetTabId) {
+        try {
+          const activeTabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+          if (activeTabs && activeTabs.length > 0 && activeTabs[0].url && !activeTabs[0].url.startsWith('chrome')) {
+            targetTabId = activeTabs[0].id;
+          }
+        } catch {}
+      }
+      if (!targetTabId) {
         const tabs = await chrome.tabs.query({});
-        const portalTab = tabs.find(t => t.url && !t.url.startsWith('chrome') && identifyPortal(t.url)) ||
-                          tabs.find(t => t.url && (t.url.startsWith('http') || t.url.startsWith('file')) && !t.url.includes('side_panel'));
+        const portalTab = tabs.find(t => t.url && (t.url.includes('portal_mock') || t.url.includes('portal_real'))) ||
+                          tabs.find(t => t.url && !t.url.startsWith('chrome') && !t.url.endsWith(':3000/') && !t.url.endsWith(':3000') && identifyPortal(t.url)) ||
+                          tabs.find(t => t.url && (t.url.startsWith('http') || t.url.startsWith('file')) && !t.url.includes('side_panel') && !t.url.endsWith(':3000/') && !t.url.endsWith(':3000'));
         targetTabId = portalTab ? portalTab.id : currentTabState.tabId;
       }
       if (!targetTabId) {
@@ -757,9 +766,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     (async () => {
       let targetTabId = message.tabId;
       if (!targetTabId) {
+        try {
+          const activeTabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+          if (activeTabs && activeTabs.length > 0 && activeTabs[0].url && !activeTabs[0].url.startsWith('chrome')) {
+            targetTabId = activeTabs[0].id;
+          }
+        } catch {}
+      }
+      if (!targetTabId) {
         const tabs = await chrome.tabs.query({});
-        const portalTab = tabs.find(t => t.url && !t.url.startsWith('chrome') && identifyPortal(t.url)) ||
-                          tabs.find(t => t.url && (t.url.startsWith('http') || t.url.startsWith('file')) && !t.url.includes('side_panel'));
+        const portalTab = tabs.find(t => t.url && (t.url.includes('portal_mock') || t.url.includes('portal_real'))) ||
+                          tabs.find(t => t.url && !t.url.startsWith('chrome') && !t.url.endsWith(':3000/') && !t.url.endsWith(':3000') && identifyPortal(t.url)) ||
+                          tabs.find(t => t.url && (t.url.startsWith('http') || t.url.startsWith('file')) && !t.url.includes('side_panel') && !t.url.endsWith(':3000/') && !t.url.endsWith(':3000'));
         targetTabId = portalTab ? portalTab.id : currentTabState.tabId;
       }
       if (!targetTabId) {
@@ -886,9 +904,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     (async () => {
       let targetTabId = message.tabId;
       if (!targetTabId) {
+        try {
+          const activeTabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+          if (activeTabs && activeTabs.length > 0 && activeTabs[0].url && !activeTabs[0].url.startsWith('chrome')) {
+            targetTabId = activeTabs[0].id;
+          }
+        } catch {}
+      }
+      if (!targetTabId) {
         const tabs = await chrome.tabs.query({});
-        const portalTab = tabs.find(t => t.url && !t.url.startsWith('chrome') && identifyPortal(t.url)) ||
-                          tabs.find(t => t.url && (t.url.startsWith('http') || t.url.startsWith('file')) && !t.url.includes('side_panel'));
+        const portalTab = tabs.find(t => t.url && (t.url.includes('portal_mock') || t.url.includes('portal_real'))) ||
+                          tabs.find(t => t.url && !t.url.startsWith('chrome') && !t.url.endsWith(':3000/') && !t.url.endsWith(':3000') && identifyPortal(t.url)) ||
+                          tabs.find(t => t.url && (t.url.startsWith('http') || t.url.startsWith('file')) && !t.url.includes('side_panel') && !t.url.endsWith(':3000/') && !t.url.endsWith(':3000'));
         targetTabId = portalTab ? portalTab.id : currentTabState.tabId;
       }
       if (!targetTabId) {

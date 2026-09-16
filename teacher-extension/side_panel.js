@@ -1,4 +1,57 @@
 
+async function checkPortalAuthorization(url) {
+  if (!url) return { authorized: false, isThirdPartyPortal: false, reason: 'Nenhuma URL informada' };
+  const lower = url.toLowerCase();
+
+  // 1. Ambientes de Teste e Sandbox locais são 100% autorizados
+  const isLocalSandbox = lower.startsWith('http://localhost') ||
+                         lower.startsWith('http://127.0.0.1') ||
+                         lower.startsWith('file://') ||
+                         lower.includes('portal_mock') ||
+                         lower.includes('portal_real');
+  if (isLocalSandbox) {
+    return { authorized: true, isThirdPartyPortal: false, reason: 'Ambiente local de testes homologado' };
+  }
+
+  // 2. Portais de Terceiros (Produção externa sem anuência formal do DPO - POLITICA_PORTAIS_TERCEIROS.md)
+  const thirdPartyDomains = [
+    'paineldoaluno.com.br', 'machadosobrinho', 'paineldoprofessor',
+    'redesantacatarina.org.br',
+    'plural.net', 'plurall.net',
+    'cambridgeone.org',
+    'ieducar.com.br', 'comunidade.ieducar',
+    'teams.microsoft.com',
+    'sed.educacao.sp.gov.br'
+  ];
+
+  const matchedDomain = thirdPartyDomains.find(d => lower.includes(d));
+  if (matchedDomain) {
+    // Verifica se há token de anuência institucional configurado no ambiente
+    let hasPilotToken = false;
+    try {
+      hasPilotToken = Boolean(localStorage.getItem('teacher_dpo_pilot_authorized') === 'true' || localStorage.getItem('teacher_institutional_pilot_token'));
+    } catch {}
+
+    if (hasPilotToken) {
+      return { authorized: true, isThirdPartyPortal: true, domain: matchedDomain, reason: 'Homologado via termo piloto institucional' };
+    }
+
+    return {
+      authorized: false,
+      isThirdPartyPortal: true,
+      domain: matchedDomain,
+      reason: 'Este portal ainda não está liberado para automação. É necessária autorização formal da escola antes de habilitar ações nesta página.'
+    };
+  }
+
+  // 3. Qualquer outro domínio externo não mapeado
+  return {
+    authorized: false,
+    isThirdPartyPortal: false,
+    reason: 'Página externa não reconhecida como portal escolar.'
+  };
+}
+
 async function ensureScriptInjected(tabId) {
   try {
     let tabUrl = '';
@@ -7,15 +60,11 @@ async function ensureScriptInjected(tabId) {
       tabUrl = tab?.url || '';
     } catch {}
 
-    // Injeta apenas em hosts com permissão (portais suportados e localhost)
+    // Não injeta em URLs internas do navegador
     if (tabUrl) {
-      const isPortalHost = tabUrl.startsWith('http://localhost') ||
-                           tabUrl.includes('paineldoaluno.com.br') ||
-                           tabUrl.includes('redesantacatarina.org.br') ||
-                           tabUrl.includes('plural.net') ||
-                           tabUrl.includes('cambridgeone.org') ||
-                           tabUrl.includes('teams.microsoft.com');
-      if (!isPortalHost) return false;
+      if (tabUrl.startsWith('chrome://') || tabUrl.startsWith('chrome-extension://') || tabUrl.startsWith('about:')) {
+        return false;
+      }
     }
 
     const ping = await new Promise((resolve) => {
@@ -37,7 +86,7 @@ async function ensureScriptInjected(tabId) {
         target: { tabId, allFrames: true },
         files: ['content.js']
       });
-      await new Promise(r => setTimeout(r, 250));
+      await new Promise(r => setTimeout(r, 200));
     }
     return true;
   } catch (e) {
@@ -101,7 +150,8 @@ async function getActivePortalTab() {
   try {
     const allTabs = await chrome.tabs.query({});
     const candidate = allTabs.find(t => t.active && t.url && !t.url.startsWith('chrome-extension://')) ||
-                      allTabs.find(t => t.url && (t.url.includes('paineldoaluno') || t.url.includes('redesantacatarina') || t.url.includes('plural') || t.url.includes('localhost')));
+                      allTabs.find(t => t.url && (t.url.includes('portal_mock') || t.url.includes('portal_real'))) ||
+                      allTabs.find(t => t.url && (t.url.includes('paineldoaluno') || t.url.includes('redesantacatarina') || t.url.includes('plural') || t.url.includes('localhost') || t.url.includes('127.0.0.1')));
     if (candidate) return candidate;
   } catch {}
   return null;
@@ -113,9 +163,11 @@ async function updatePortalConnection() {
     const portalTab = await getActivePortalTab();
     let detectedPortalKey = null;
     let detectedPortalName = null;
+    let authCheck = { authorized: true, isThirdPartyPortal: false };
 
     if (portalTab?.url) {
       const url = portalTab.url.toLowerCase();
+      authCheck = await checkPortalAuthorization(url);
       for (const [key, p] of Object.entries(PLATFORMS)) {
         const domains = p.domains || [p.domain];
         if (domains.some(d => url.includes(d))) {
@@ -135,10 +187,22 @@ async function updatePortalConnection() {
         const isMapped = Boolean(detectedPortalKey || tabState.isMappedPortal);
         const pageTitle = portalTab?.title || tabState.friendlyPageName || tabState.title || 'Página do Portal';
         const isAuth = Boolean(tabState.isAuthenticated);
+        const isBlockedByPolicy = Boolean(authCheck.isThirdPartyPortal && !authCheck.authorized);
 
         // 1. Atualiza Badge do Header
-        if (isMapped) {
-          if (statusBadge) statusBadge.className = 'status-badge online';
+        if (isBlockedByPolicy) {
+          if (statusBadge) {
+            statusBadge.className = 'status-badge scanning';
+            statusBadge.style.background = 'rgba(239,68,68,0.2)';
+            statusBadge.style.color = '#ef4444';
+          }
+          if (statusPortalName) statusPortalName.textContent = `${portalName || 'Portal'} (Sem Anuência DPO)`;
+        } else if (isMapped) {
+          if (statusBadge) {
+            statusBadge.className = 'status-badge online';
+            statusBadge.style.background = '';
+            statusBadge.style.color = '';
+          }
           if (statusPortalName) statusPortalName.textContent = portalName;
           document.querySelectorAll('.platform-btn').forEach(b => {
             b.classList.toggle('active', b.dataset.platform === detectedPortalKey);
@@ -160,7 +224,10 @@ async function updatePortalConnection() {
         }
 
         if (visorAuthStatus) {
-          if (!isMapped) {
+          if (isBlockedByPolicy) {
+            visorAuthStatus.textContent = 'Requer Anuência DPO ⚠️';
+            visorAuthStatus.style.color = '#dc2626';
+          } else if (!isMapped) {
             visorAuthStatus.textContent = '—';
             visorAuthStatus.style.color = '#94a3b8';
           } else if (tabState.pageKind === 'context_selection') {
@@ -186,17 +253,35 @@ async function updatePortalConnection() {
         }
 
         if (visorOverallBadge) {
-          if (isMapped && isAuth && isSidecar) {
+          if (isBlockedByPolicy) {
+            visorOverallBadge.className = 'visor-badge needs_login';
+            visorOverallBadge.style.background = '#fef2f2';
+            visorOverallBadge.style.color = '#991b1b';
+            visorOverallBadge.style.borderColor = '#fecaca';
+            visorOverallBadge.innerHTML = '🛡️ Bloqueado (LGPD/DPO)';
+          } else if (isMapped && isAuth && isSidecar) {
             visorOverallBadge.className = 'visor-badge ready';
+            visorOverallBadge.style.background = '';
+            visorOverallBadge.style.color = '';
+            visorOverallBadge.style.borderColor = '';
             visorOverallBadge.innerHTML = '🟢 Conectado';
           } else if (isMapped && !isAuth) {
             visorOverallBadge.className = 'visor-badge needs_login';
+            visorOverallBadge.style.background = '';
+            visorOverallBadge.style.color = '';
+            visorOverallBadge.style.borderColor = '';
             visorOverallBadge.innerHTML = '🟡 Requer Login';
           } else if (isMapped && !isSidecar) {
             visorOverallBadge.className = 'visor-badge connecting';
+            visorOverallBadge.style.background = '';
+            visorOverallBadge.style.color = '';
+            visorOverallBadge.style.borderColor = '';
             visorOverallBadge.innerHTML = '🌐 Portal Ativo (Conectando)';
           } else {
             visorOverallBadge.className = 'visor-badge offline';
+            visorOverallBadge.style.background = '';
+            visorOverallBadge.style.color = '';
+            visorOverallBadge.style.borderColor = '';
             visorOverallBadge.innerHTML = '⚪ Aguardando Portal';
           }
         }
@@ -233,10 +318,27 @@ setInterval(updatePortalConnection, 3000);
 function executeMatchedSkill(skillGraph, taskName) {
   return new Promise(async (resolve) => {
     console.log('[SidePanel] executeMatchedSkill INICIANDO -> Task:', taskName, 'HasGraph:', Boolean(skillGraph));
-    const [targetTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    const targetTab = await getActivePortalTab();
     if (!targetTab?.id) {
       showFeedback('error', 'Abra a aba do portal da escola no Chrome.');
       resolve({ ok: false, error: 'Sem aba ativa' });
+      return;
+    }
+
+    const portalAuth = await checkPortalAuthorization(targetTab.url || '');
+    if (!portalAuth.authorized && portalAuth.isThirdPartyPortal) {
+      appendAssistantChatMessage(
+        `⚠️ **Este portal ainda não está liberado para automação.**<br><br>` +
+        `Conforme a Política de Governança e LGPD, ações no portal de terceiros requerem autorização formal do DPO.<br><br>` +
+        `💡 *Para testes com o GraphExecutor, utilize o portal de testes (Sandbox).*`,
+        true
+      );
+      if (interpretBox) {
+        interpretBox.style.display = 'block';
+        interpretBox.className = 'interpret-box teach';
+        interpretBox.innerHTML = `🛡️ <b>Bloqueado por Política (DPO):</b> ${portalAuth.reason}`;
+      }
+      resolve({ ok: false, error: 'Portal de terceiros não autorizado pelo DPO' });
       return;
     }
 
@@ -507,8 +609,14 @@ if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
 
 if (btnRecordRoute) {
   btnRecordRoute.addEventListener('click', async () => {
-    const [recordTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    const recordTab = await getActivePortalTab();
     if (!recordTab?.id) return;
+
+    const portalAuth = await checkPortalAuthorization(recordTab.url || '');
+    if (!portalAuth.authorized && portalAuth.isThirdPartyPortal) {
+      alert('Gravação bloqueada por Política de Governança e LGPD. Este portal de terceiros ainda não possui autorização formal da escola.');
+      return;
+    }
 
     if (!isRecordingRoute) {
       // Inicia nova gravação
@@ -802,7 +910,17 @@ if (btnInterpret) {
       return;
     }
 
-    const [cmdTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    const cmdTab = await getActivePortalTab();
+    const portalAuth = await checkPortalAuthorization(cmdTab?.url || '');
+    if (!portalAuth.authorized && portalAuth.isThirdPartyPortal) {
+      if (interpretBox) {
+        interpretBox.style.display = 'block';
+        interpretBox.className = 'interpret-box teach';
+        interpretBox.innerHTML = `🛡️ <b>Bloqueado por Política (DPO):</b> ${portalAuth.reason}`;
+      }
+      return;
+    }
+
     btnInterpret.disabled = true;
     if (interpretText) interpretText.textContent = 'Interpretando intenção...';
     if (interpretBox) {
@@ -1801,7 +1919,17 @@ function showSuccessCard(studentName, beforeVal, afterVal) {
   scrollChatToBottom();
 }
 
-function dispatchPortalBridgeMessage(msg, callback) {
+async function dispatchPortalBridgeMessage(msg, callback) {
+  try {
+    if (!msg.tabId) {
+      const portalTab = await getActivePortalTab();
+      if (portalTab?.id) {
+        msg.tabId = portalTab.id;
+        msg.tabUrl = portalTab.url;
+      }
+    }
+  } catch {}
+
   if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
     try {
       chrome.runtime.sendMessage(msg, (resp) => {
@@ -1841,7 +1969,27 @@ async function handleProcessCommand(commandText) {
   const inputCmd = document.getElementById('input-agent-command');
   if (inputCmd) inputCmd.value = '';
 
-  // 2. Aciona indicador de processando dinâmico
+  // 2. Trava de Política LGPD/DPO (POLITICA_PORTAIS_TERCEIROS.md)
+  const portalTab = await getActivePortalTab();
+  const portalUrl = portalTab?.url || '';
+  const portalAuth = await checkPortalAuthorization(portalUrl);
+
+  if (!portalAuth.authorized && portalAuth.isThirdPartyPortal) {
+    setProcessingState(false);
+    appendAssistantChatMessage(
+      `⚠️ **Este portal ainda não está liberado para automação.**<br><br>` +
+      `Conforme a Política de Privacidade e Governança da Escola (LGPD), ações automatizadas neste portal de terceiros requerem autorização formal prévia da direção / DPO.<br><br>` +
+      `💡 *Para testar o fluxo de aprovação e gravação com total segurança, utilize o portal de testes (Sandbox).*`,
+      true
+    );
+    showHonestErrorCard(
+      'Portal Aguardando Homologação',
+      'Este portal ainda não está liberado para automação. É necessária autorização formal da escola antes de habilitar ações nesta página.'
+    );
+    return;
+  }
+
+  // 3. Aciona indicador de processando dinâmico
   setProcessingState(true, 'Rafinha pensando...');
 
   // Caso especial: comandos de leitura direta ("Ler lista de alunos", "Ver notas da turma")

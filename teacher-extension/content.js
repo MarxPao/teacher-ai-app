@@ -5,12 +5,26 @@
  * Supports: Supervised Mode & Autonomous Mode (with auto-submit & voice feedback)
  */
 
-console.log("%c🔌 TEACHER??? Agente v3.0 (Rafinha Web Operator) Ativado!", "color: #b58900; font-weight: bold; font-size: 14px;");
+console.log("%c🔌 TEACHER AI Agente v3.0 (Rafinha Web Operator) Ativado!", "color: #b58900; font-weight: bold; font-size: 14px;");
+
+if (!window.__teacherAgentLoaded) {
+window.__teacherAgentLoaded = true;
 
 // ——— Platform Detection ———
 const CURRENT_URL = window.location.href;
 
 const PLATFORM_PROFILES = {
+  sandbox: {
+    match: () => CURRENT_URL.includes('localhost') || CURRENT_URL.includes('127.0.0.1') || CURRENT_URL.includes('portal_mock') || CURRENT_URL.includes('portal_real'),
+    name: 'Portal de Testes (Sandbox)',
+    selectors: {
+      title:       ['input[name*="conteudo"]', 'input[name*="titulo"]', 'input[id*="conteudo"]'],
+      date:        ['input[type="date"]', 'input[name*="data"]'],
+      description: ['textarea', 'div[contenteditable="true"]', '#observacao_pedagogica'],
+      classRef:    ['select[name*="turma"]', '#turma_aluno'],
+      submit:      ['button[type="submit"]', '#btn_salvar', '.btn']
+    }
+  },
   machado: {
     match: () => CURRENT_URL.includes('paineldoaluno.com.br'),
     name: 'Machado Sobrinho',
@@ -2326,3 +2340,5 @@ window.addEventListener('message', async (event) => {
     }
   }
 });
+
+} // end if (!window.__teacherAgentLoaded)
