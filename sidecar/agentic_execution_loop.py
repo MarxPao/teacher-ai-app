@@ -41,6 +41,11 @@ from skill_graph_schema import SkillGraph, SkillNode, SkillAnchor, SkillNodePara
 from graph_validator import assert_graph_safe
 from skill_store import save_skill, DEFAULT_SKILLS_DIR
 
+try:
+    from intent_parser import _contains_student_pii, get_active_roster_students
+except ImportError:
+    from sidecar.intent_parser import _contains_student_pii, get_active_roster_students
+
 
 TOOL_DEFINITIONS = [
     {
@@ -147,11 +152,15 @@ class AgenticExecutionLoop:
         self.history: List[Dict[str, Any]] = []
 
     def _contains_pii(self, text: str) -> bool:
-        """Verifica se há indícios de PII (nomes próprios, notas específicas) no turno."""
-        lower = text.lower()
-        if any(term in lower for term in ["nota", "presenca", "falta", "reprovado", "recuperacao", "hugo", "lucas", "mariana", "pedro"]):
-            return True
-        return False
+        """
+        Aplica a taxonomia oficial fail-closed e Modo Suspeita de PII validada no intent_parser.py.
+        Usa validação cruzada contra lista de alunos da turma ativa (Supabase/localDB).
+        """
+        try:
+            known = get_active_roster_students()
+        except Exception:
+            known = []
+        return _contains_student_pii(text, known_students=known)
 
     async def read_current_screen(self) -> Dict[str, Any]:
         """Extrai um snapshot compacto e semântico da tela visível."""
@@ -187,7 +196,7 @@ class AgenticExecutionLoop:
                 .map(p => ({
                     id: p.id,
                     headings: Array.from(p.querySelectorAll('h1,h2,h3,strong')).map(h => h.innerText.trim()).slice(0, 5),
-                    cards: Array.from(p.querySelectorAll('.recado-card, .student-name')).map(c => c.innerText.trim()).slice(0, 5)
+                    cards: Array.from(p.querySelectorAll('.recado-card')).map(c => c.innerText.trim()).slice(0, 5)
                 }));
 
             return {
@@ -392,7 +401,11 @@ class AgenticExecutionLoop:
                     lat = (time.time() - t0) * 1000
                     return json.loads(raw), lat, "ollama_local"
             except Exception:
-                raise PermissionError("Turno contém dados de estudantes (PII) e o Ollama local está indisponível.")
+                return {
+                    "pensamento": "Esta etapa requer processamento local seguro (Trilho 1 / LGPD), mas o Ollama local está offline.",
+                    "tool": "ask_clarification",
+                    "args": {"pergunta": "⚠️ Esta etapa envolve dados pessoais de estudantes (Trilho 1 / LGPD). Para continuar com segurança, inicie o Ollama local ou confirme a operação manualmente."}
+                }, (time.time() - t0) * 1000, "privacy_guard"
 
         # 3. Trilho 2: Sem PII -> Nuvem ultrarrápida (Groq / Gemini)
         if self.groq_api_key:
@@ -542,10 +555,16 @@ class AgenticExecutionLoop:
             print(f"[AgenticExecutionLoop] Aviso ao compilar SkillGraph: {e}")
             return None
 
-    async def run_loop(self, goal: str, max_turns: int = 6) -> Dict[str, Any]:
+    async def run_loop(
+        self,
+        goal: str,
+        max_turns: int = 6,
+        on_progress: Optional[Callable[[Dict[str, Any]], None]] = None
+    ) -> Dict[str, Any]:
         """
         Executa o Loop ReAct completo:
         Observa -> Constrói Contexto -> LLM Step -> Executa Tool -> Verifica Parada.
+        Emite atualizações de progresso dinâmicas turno a turno via on_progress.
         """
         start_time = time.time()
         turns_log: List[Dict[str, Any]] = []
@@ -553,9 +572,30 @@ class AgenticExecutionLoop:
         summary = ""
         compiled_skill_id: Optional[str] = None
 
+        if on_progress:
+            on_progress({
+                "engine": "react_agentic_loop",
+                "status": "starting",
+                "message": "Isso pode levar um minutinho, já estou vendo como funciona aqui... 🦉",
+                "turn": 0
+            })
+
         for turn in range(1, max_turns + 1):
             turn_t0 = time.time()
             screen_state = await self.read_current_screen()
+
+            if on_progress:
+                if turn == 1:
+                    msg = "Analisando a tela inicial do portal..."
+                else:
+                    last_obs = self.history[-1]["observation"] if self.history else ""
+                    msg = f"{last_obs}... agora decidindo o próximo passo..."
+                on_progress({
+                    "engine": "react_agentic_loop",
+                    "status": "reasoning",
+                    "message": msg,
+                    "turn": turn
+                })
 
             history_summary = [f"- Ação: {h['action']} -> Resultado: {h['observation']}" for h in self.history]
             history_str = "\n".join(history_summary) if history_summary else "Nenhuma ação tomada ainda. Este é o primeiro turno."
@@ -570,7 +610,7 @@ ESTADO ATUAL DA TELA:
 
 Decida a próxima ação necessária para cumprir o objetivo."""
 
-            is_pii = self._contains_pii(goal) or self._contains_pii(json.dumps(screen_state))
+            is_pii = self._contains_pii(goal)
 
             llm_step, llm_lat, provider = self._call_llm_step(user_prompt, is_pii_turn=is_pii)
 
@@ -579,6 +619,15 @@ Decida a próxima ação necessária para cumprir o objetivo."""
             thought = llm_step.get("pensamento", "")
 
             tool_res = await self.execute_tool(tool, args)
+
+            if on_progress:
+                on_progress({
+                    "engine": "react_agentic_loop",
+                    "status": "action_executed",
+                    "message": f"Executado: {tool_res['output']}",
+                    "turn": turn,
+                    "tool": tool
+                })
 
             turn_data = {
                 "turn": turn,
