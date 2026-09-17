@@ -2247,33 +2247,49 @@ function synthesizeScreenAnswer(query, pageData) {
 
   // 1. Horários / Aulas / Grade Semanal
   const isHorarioQuery = /horario|aula|dias|quando|grade|semana|disciplina|materia|quinta|segunda|terca|quarta|sexta|sabado|leciono/i.test(q);
-  if (isHorarioQuery && pageData.tables && pageData.tables.length > 0) {
-    for (const table of pageData.tables) {
-      const isSchedule = table.headers.some(h => {
-        const normH = h.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-        return /segunda|terca|quarta|quinta|sexta/i.test(normH);
-      }) || (table.id && table.id.includes('horario'));
+  if (isHorarioQuery) {
+    // TRAVA DE SEGURANÇA ESTRUTURAL (PARTE 3):
+    // Só prossegue se houver uma tabela que GENUINAMENTE seja uma grade semanal
+    // (deve conter pelo menos 3 dias da semana reconhecíveis nos cabeçalhos)
+    let scheduleTable = null;
+    let dayCols = [];
 
-      if (isSchedule) {
-        const dayCols = [];
+    if (pageData.tables && pageData.tables.length > 0) {
+      for (const table of pageData.tables) {
+        const detectedDays = [];
         table.headers.forEach((h, idx) => {
           const normH = h.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-          if (/segunda|terca|quarta|quinta|sexta/i.test(normH)) {
-            dayCols.push({ name: h, idx });
+          if (/segunda|terca|quarta|quinta|sexta|sabado/i.test(normH)) {
+            detectedDays.push({ name: h, idx });
           }
         });
 
-        const byDay = {};
-        for (const row of table.rows) {
-          const timeSlot = row[0] || 'Horário';
-          for (const col of dayCols) {
-            const cell = (row[col.idx] || '').trim();
-            if (cell && !['-', '—', '', 'livre', 'folga', 'sem aula'].includes(cell.toLowerCase())) {
-              if (!byDay[col.name]) byDay[col.name] = [];
-              byDay[col.name].push({ timeSlot, info: cell });
-            }
-          }
+        // Validação estrita: grade semanal legítima precisa ter no mínimo 3 dias úteis nos cabeçalhos
+        if (detectedDays.length >= 3) {
+          scheduleTable = table;
+          dayCols = detectedDays;
+          break;
         }
+      }
+    }
+
+    // Se NÃO houver tabela com assinatura inequívoca de grade semanal:
+    if (!scheduleTable) {
+      const currentLoc = pageData.activeTab || pageData.pageTitle || 'tela atual';
+      return `Não consegui confirmar que estou na tela de Horários/Grade de Aulas (a tela aberta no portal parece ser: **${escapeHtml(currentLoc)}**).<br><br>👉 **Por favor, navegue manualmente até a tela de Horários no portal** e pergunte novamente para que eu possa ler a grade oficial com precisão! 🧭`;
+    }
+
+    const byDay = {};
+    for (const row of scheduleTable.rows) {
+      const timeSlot = row[0] || 'Horário';
+      for (const col of dayCols) {
+        const cell = (row[col.idx] || '').trim();
+        if (cell && !['-', '—', '', 'livre', 'folga', 'sem aula'].includes(cell.toLowerCase())) {
+          if (!byDay[col.name]) byDay[col.name] = [];
+          byDay[col.name].push({ timeSlot, info: cell });
+        }
+      }
+    }
 
         // Se a professora pediu um dia específico (ex: "quinta-feira", "quinta", "segunda", etc.)
         const dayKeys = ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'];
@@ -2309,8 +2325,6 @@ function synthesizeScreenAnswer(query, pageData) {
           return `Não há nenhuma aula agendada na grade de horários do portal.`;
         }
       }
-    }
-  }
 
   // 2. Notas / Avaliações / Alunos
   const isGradeQuery = /nota|avalia|boletim|desempenho/i.test(q);

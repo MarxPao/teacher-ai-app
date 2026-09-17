@@ -1270,9 +1270,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
               .filter(Boolean)
               .slice(0, 10);
 
+            const pageHeadings = Array.from(document.querySelectorAll('h1, h2, h3, .page-title, .titulo-pagina, header, nav'))
+              .filter(visibleText)
+              .map(h => h.innerText.trim())
+              .filter(Boolean)
+              .slice(0, 10);
+
             return {
               sucesso: true,
               activeTab,
+              pageTitle: document.title || '',
+              pageHeadings,
               tables,
               cards,
               url: window.location.href
