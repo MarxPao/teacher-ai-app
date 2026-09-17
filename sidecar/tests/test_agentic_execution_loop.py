@@ -174,3 +174,76 @@ def test_pii_detection_per_turn():
     assert loop._contains_pii("abrir arquivos de planejamento") is False
     assert loop._contains_pii("aluno Mariana com falta") is True
     assert loop._contains_pii("navegar para aba de configurações") is False
+
+
+# ─── PARTE 3: Auditoria de Cobertura de Ferramentas ─────────────────────────
+
+@pytest.mark.asyncio
+async def test_fill_field_marca_checkbox():
+    """fill_field com valor 'sim' deve marcar checkbox e relatar 'marcado ✓'."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    page = MagicMock()
+    # Simula o retorno do evaluate para um checkbox marcado com sucesso
+    page.evaluate = AsyncMock(return_value={"success": True, "id": "ch_presenca", "tipo": "checkbox", "checked": True})
+
+    loop = AgenticExecutionLoop(page=page, portal_id="test", custom_llm_caller=lambda x: {})
+    res = await loop.execute_tool("fill_field", {"campo": "presenca", "valor": "sim"})
+
+    assert res["success"] is True, f"Esperado sucesso, obteve: {res}"
+    assert "marcado ✓" in res["output"]
+
+
+@pytest.mark.asyncio
+async def test_fill_field_desmarca_checkbox():
+    """fill_field com valor 'não' deve desmarcar checkbox e relatar 'desmarcado ☐'."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    page = MagicMock()
+    page.evaluate = AsyncMock(return_value={"success": True, "id": "ch_falta", "tipo": "checkbox", "checked": False})
+
+    loop = AgenticExecutionLoop(page=page, portal_id="test", custom_llm_caller=lambda x: {})
+    res = await loop.execute_tool("fill_field", {"campo": "falta", "valor": "não"})
+
+    assert res["success"] is True
+    assert "desmarcado ☐" in res["output"]
+
+
+@pytest.mark.asyncio
+async def test_fill_field_seleciona_radio():
+    """fill_field deve relatar sucesso ao selecionar radio button."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    page = MagicMock()
+    page.evaluate = AsyncMock(return_value={"success": True, "id": "r2", "tipo": "radio", "value": "tarde"})
+
+    loop = AgenticExecutionLoop(page=page, portal_id="test", custom_llm_caller=lambda x: {})
+    res = await loop.execute_tool("fill_field", {"campo": "turno", "valor": "tarde"})
+
+    assert res["success"] is True
+    assert "tarde" in res["output"] or "Campo" in res["output"]  # output confirma o valor
+
+
+@pytest.mark.asyncio
+async def test_fill_field_file_upload_retorna_mensagem_clara():
+    """fill_field com input[type=file] deve retornar success=False e mensagem clara de limitação."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    page = MagicMock()
+    page.evaluate = AsyncMock(return_value={"success": False, "motivo": "file_upload_not_supported"})
+
+    loop = AgenticExecutionLoop(page=page, portal_id="test", custom_llm_caller=lambda x: {})
+    res = await loop.execute_tool("fill_field", {"campo": "upload_arquivo", "valor": "relatorio.pdf"})
+
+    assert res["success"] is False
+    assert "upload de arquivo" in res["output"].lower()
+    assert "intervenção manual" in res["output"]
+
+
+def test_fill_field_descricao_menciona_checkbox_e_radio():
+    """A definição de fill_field no TOOL_DEFINITIONS deve mencionar checkbox e radio."""
+    fill_def = next(t for t in TOOL_DEFINITIONS if t["name"] == "fill_field")
+    desc = fill_def["description"].lower()
+    assert "checkbox" in desc
+    assert "radio" in desc
+    assert "file" in desc or "upload" in desc

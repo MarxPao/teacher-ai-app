@@ -83,7 +83,13 @@ TOOL_DEFINITIONS = [
     },
     {
         "name": "fill_field",
-        "description": "Preenche um campo de texto, input ou textarea com um valor específico.",
+        "description": (
+            "Preenche um campo de formulário com um valor. "
+            "Suporta: input texto/número/data, textarea, checkbox e radio button. "
+            "Para checkbox: use valor 'sim'/'true'/'marcado'/'presente' para marcar, qualquer outro para desmarcar. "
+            "Para radio: passe o texto ou value da opção desejada. "
+            "Não suporta upload de arquivo (type=file) — isso exige intervenção manual."
+        ),
         "parameters": {"campo": "string", "valor": "string"}
     },
     {
@@ -377,30 +383,85 @@ class AgenticExecutionLoop:
             valor = args.get("valor", "")
             fill_res = await self.page.evaluate("""
             ({ campo, valor }) => {
+                const norm = (s) => (s || '').toLowerCase().normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').trim();
+                const normCampo = norm(campo);
+                const normValor = norm(valor);
+                // Valores que indicam "marcar" um checkbox
+                const checkValues = new Set(['sim', 'true', '1', 'x', 'checked', 'marcado', 'presente', 'yes', 'on']);
+
                 const inputs = Array.from(document.querySelectorAll('input, textarea')).filter(i => {
                     const style = window.getComputedStyle(i);
                     return style.display !== 'none' && i.offsetParent !== null;
                 });
+
                 for (const i of inputs) {
-                    if (i.id.includes(campo) || i.name.includes(campo) || (i.placeholder && i.placeholder.toLowerCase().includes(campo.toLowerCase()))) {
-                        i.value = valor;
-                        i.dispatchEvent(new Event('input', { bubbles: true }));
-                        i.dispatchEvent(new Event('change', { bubbles: true }));
-                        return { success: true, id: i.id };
+                    const matchId = norm(i.id).includes(normCampo);
+                    const matchName = norm(i.name).includes(normCampo);
+                    const matchPlaceholder = i.placeholder && norm(i.placeholder).includes(normCampo);
+                    // Para checkboxes, também tenta por label associada
+                    const label = i.id ? document.querySelector(`label[for="${i.id}"]`) : null;
+                    const matchLabel = label && norm(label.innerText).includes(normCampo);
+
+                    if (matchId || matchName || matchPlaceholder || matchLabel) {
+                        if (i.type === 'checkbox') {
+                            const deveMarcar = checkValues.has(normValor);
+                            if (i.checked !== deveMarcar) {
+                                i.checked = deveMarcar;
+                                i.dispatchEvent(new Event('change', { bubbles: true }));
+                            }
+                            return { success: true, id: i.id, tipo: 'checkbox', checked: i.checked };
+                        } else if (i.type === 'radio') {
+                            // Para radio, busca o botão com value ou label que bata com o valor
+                            const radios = Array.from(document.querySelectorAll(`input[type="radio"][name="${i.name}"]`));
+                            for (const r of radios) {
+                                const rLabel = document.querySelector(`label[for="${r.id}"]`);
+                                if (norm(r.value) === normValor || (rLabel && norm(rLabel.innerText).includes(normValor))) {
+                                    r.checked = true;
+                                    r.dispatchEvent(new Event('change', { bubbles: true }));
+                                    return { success: true, id: r.id, tipo: 'radio', value: r.value };
+                                }
+                            }
+                            return { success: false, motivo: 'radio option not found' };
+                        } else if (i.type === 'file') {
+                            // Upload de arquivo: não suportado automaticamente — requer intervenção humana
+                            return { success: false, motivo: 'file_upload_not_supported' };
+                        } else {
+                            i.value = valor;
+                            i.dispatchEvent(new Event('input', { bubbles: true }));
+                            i.dispatchEvent(new Event('change', { bubbles: true }));
+                            return { success: true, id: i.id, tipo: i.type || 'text' };
+                        }
                     }
                 }
+
+                // Fallback: primeiro textarea visível sem campo específico
                 const textareas = inputs.filter(i => i.tagName.toLowerCase() === 'textarea');
-                if (textareas.length > 0) {
+                if (textareas.length > 0 && normCampo === '') {
                     textareas[0].value = valor;
                     textareas[0].dispatchEvent(new Event('input', { bubbles: true }));
                     textareas[0].dispatchEvent(new Event('change', { bubbles: true }));
-                    return { success: true, id: textareas[0].id };
+                    return { success: true, id: textareas[0].id, tipo: 'textarea' };
                 }
-                return { success: false };
+                return { success: false, motivo: 'field not found' };
             }
             """, {"campo": campo, "valor": valor})
-            res["success"] = fill_res.get("success", False)
-            res["output"] = f"Campo preenchido com: '{valor}'" if res["success"] else f"Campo '{campo}' não encontrado."
+            motivo = fill_res.get("motivo", "")
+            if motivo == "file_upload_not_supported":
+                res["success"] = False
+                res["output"] = (
+                    f"⚠️ O campo '{campo}' é do tipo upload de arquivo, que não pode ser preenchido "
+                    f"automaticamente. Esta ação requer intervenção manual da professora."
+                )
+            else:
+                res["success"] = fill_res.get("success", False)
+                tipo = fill_res.get("tipo", "text")
+                if res["success"] and tipo == "checkbox":
+                    estado = "marcado ✓" if fill_res.get("checked") else "desmarcado ☐"
+                    res["output"] = f"Checkbox '{campo}' {estado}."
+                elif res["success"]:
+                    res["output"] = f"Campo '{campo}' preenchido com: '{valor}'"
+                else:
+                    res["output"] = f"Campo '{campo}' não encontrado."
 
         elif tool_name == "ask_clarification":
             res["success"] = True
