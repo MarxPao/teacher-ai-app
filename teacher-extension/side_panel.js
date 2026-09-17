@@ -2268,38 +2268,45 @@ function synthesizeScreenAnswer(query, pageData) {
           const timeSlot = row[0] || 'Horário';
           for (const col of dayCols) {
             const cell = (row[col.idx] || '').trim();
-            if (cell && !['-', '—', ''].includes(cell)) {
+            if (cell && !['-', '—', '', 'livre', 'folga', 'sem aula'].includes(cell.toLowerCase())) {
               if (!byDay[col.name]) byDay[col.name] = [];
               byDay[col.name].push({ timeSlot, info: cell });
             }
           }
         }
 
-        if (Object.keys(byDay).length > 0) {
-          // Se a professora pediu um dia específico (ex: "quinta-feira", "quinta", "segunda", etc.)
-          const dayKeys = ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'];
-          const targetDay = dayKeys.find(d => q.includes(d));
+        // Se a professora pediu um dia específico (ex: "quinta-feira", "quinta", "segunda", etc.)
+        const dayKeys = ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'];
+        const targetDay = dayKeys.find(d => q.includes(d));
 
-          let entries = Object.entries(byDay);
-          if (targetDay) {
-            const specificEntries = entries.filter(([day]) => {
-              const normDay = day.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-              return normDay.includes(targetDay);
-            });
-            if (specificEntries.length > 0) {
-              entries = specificEntries;
+        if (targetDay) {
+          const matchedCol = dayCols.find(col => {
+            const normName = col.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+            return normName.includes(targetDay);
+          });
+
+          if (matchedCol) {
+            const classesForDay = byDay[matchedCol.name] || [];
+            const dayDisplayName = matchedCol.name;
+
+            if (classesForDay.length === 0) {
+              return `Você **não tem nenhuma aula** cadastrada na **${escapeHtml(dayDisplayName)}**! 🎉✨`;
             }
+
+            const lines = classesForDay.map(c => `• **${escapeHtml(c.timeSlot)}**: ${escapeHtml(c.info)}`).join('<br>');
+            return `Aqui está a sua grade para **${escapeHtml(dayDisplayName)}**: 🗓️✨<br><br>📅 **${escapeHtml(dayDisplayName)}**:<br>${lines}`;
           }
+        }
 
-          let output = targetDay
-            ? `Aqui está a sua grade para **${targetDay}**: 🗓️✨<br><br>`
-            : `Encontrei seus horários de aula no portal! 🗓️✨<br><br>`;
-
-          for (const [day, classes] of entries) {
+        if (Object.keys(byDay).length > 0) {
+          let output = `Encontrei seus horários de aula no portal! 🗓️✨<br><br>`;
+          for (const [day, classes] of Object.entries(byDay)) {
             const lines = classes.map(c => `• **${escapeHtml(c.timeSlot)}**: ${escapeHtml(c.info)}`).join('<br>');
             output += `📅 **${escapeHtml(day)}**:<br>${lines}<br><br>`;
           }
           return output.trim();
+        } else {
+          return `Não há nenhuma aula agendada na grade de horários do portal.`;
         }
       }
     }
