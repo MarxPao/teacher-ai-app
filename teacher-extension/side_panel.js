@@ -1938,6 +1938,24 @@ async function handleProcessCommand(commandText) {
   setProcessingState(true, 'Rafinha pensando...');
 
   // Caso especial: comandos de leitura direta ("Ler lista de alunos", "Ver notas da turma")
+  const isDirectReading = /^(?:me\s+diga|diga|diz|liste|listar|mostre|mostrar|ver|veja|quais|qual|quantos|quantas|quando|consultar|resumir)\b/i.test(textClean) ||
+                          /(?:quais\s+dias|quais\s+hor[aá]rios|que\s+aulas|quantas\s+aulas|me\s+diga|me\s+mostre|me\s+fale)/i.test(textClean);
+
+  const compoundCheck = splitCompoundCommand(textClean);
+  if (isDirectReading && !compoundCheck.hasNavigation) {
+    setProcessingState(true, 'Lendo dados da tela atual...');
+    dispatchPortalBridgeMessage({ action: 'READ_PAGE_DATA' }, (pageData) => {
+      setProcessingState(false);
+      if (pageData && pageData.sucesso) {
+        const answer = synthesizeScreenAnswer(textClean, pageData);
+        appendAssistantChatMessage(answer, true);
+      } else {
+        appendAssistantChatMessage('Não consegui ler os dados da tela atual. Certifique-se de estar na aba correta do portal.', true);
+      }
+    });
+    return;
+  }
+
   const isReadCommand = /^(?:ler\s+lista|ver\s+notas|mostrar\s+alunos|listar\s+alunos)/i.test(textClean);
   if (isReadCommand) {
     setProcessingState(true, 'Lendo dados do portal escolar...');
@@ -2197,6 +2215,105 @@ async function handleProcessCommand(commandText) {
   });
 }
 
+function synthesizeScreenAnswer(query, pageData) {
+  if (!pageData) return 'Não foi possível extrair os dados da tela.';
+  const q = (query || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+  // 1. Horários / Aulas / Grade Semanal
+  const isHorarioQuery = /horario|aula|dias|quando|grade|semana/i.test(q);
+  if (isHorarioQuery && pageData.tables && pageData.tables.length > 0) {
+    for (const table of pageData.tables) {
+      const isSchedule = table.headers.some(h => {
+        const normH = h.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        return /segunda|terca|quarta|quinta|sexta/i.test(normH);
+      }) || (table.id && table.id.includes('horario'));
+
+      if (isSchedule) {
+        const dayCols = [];
+        table.headers.forEach((h, idx) => {
+          const normH = h.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+          if (/segunda|terca|quarta|quinta|sexta/i.test(normH)) {
+            dayCols.push({ name: h, idx });
+          }
+        });
+
+        const byDay = {};
+        for (const row of table.rows) {
+          const timeSlot = row[0] || 'Horário';
+          for (const col of dayCols) {
+            const cell = (row[col.idx] || '').trim();
+            if (cell && !['-', '—', ''].includes(cell)) {
+              if (!byDay[col.name]) byDay[col.name] = [];
+              byDay[col.name].push({ timeSlot, info: cell });
+            }
+          }
+        }
+
+        if (Object.keys(byDay).length > 0) {
+          let output = `Encontrei seus horários de aula no portal! 🗓️✨<br><br>`;
+          for (const [day, classes] of Object.entries(byDay)) {
+            const lines = classes.map(c => `• **${escapeHtml(c.timeSlot)}**: ${escapeHtml(c.info)}`).join('<br>');
+            output += `📅 **${escapeHtml(day)}**:<br>${lines}<br><br>`;
+          }
+          return output.trim();
+        }
+      }
+    }
+  }
+
+  // 2. Notas / Avaliações / Alunos
+  const isGradeQuery = /nota|avalia|boletim|desempenho/i.test(q);
+  if (isGradeQuery && pageData.tables && pageData.tables.length > 0) {
+    for (const table of pageData.tables) {
+      const nameColIdx = table.headers.findIndex(h => /nome|aluno|estudante/i.test(h.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')));
+      const gradeColIdx = table.headers.findIndex(h => /nota|avalia/i.test(h.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')));
+
+      if (nameColIdx !== -1 && gradeColIdx !== -1) {
+        let threshold = null;
+        let comp = null;
+        const threshMatch = q.match(/(?:acima|maior|superior|mais que|>=|>)\s*(?:de\s+)?(\d+(?:[.,]\d+)?)/i);
+        const belowMatch = q.match(/(?:abaixo|menor|inferior|menos que|<=|<)\s*(?:de\s+)?(\d+(?:[.,]\d+)?)/i);
+        if (threshMatch) {
+          threshold = parseFloat(threshMatch[1].replace(',', '.'));
+          comp = 'above';
+        } else if (belowMatch) {
+          threshold = parseFloat(belowMatch[1].replace(',', '.'));
+          comp = 'below';
+        }
+
+        const matches = [];
+        for (const row of table.rows) {
+          const student = row[nameColIdx];
+          const gradeVal = parseFloat(String(row[gradeColIdx] || '').replace(',', '.'));
+          if (!student || isNaN(gradeVal)) continue;
+
+          if (comp === 'above' && gradeVal >= threshold) {
+            matches.push(`• **${escapeHtml(student)}**: nota **${gradeVal.toFixed(1)}**`);
+          } else if (comp === 'below' && gradeVal <= threshold) {
+            matches.push(`• **${escapeHtml(student)}**: nota **${gradeVal.toFixed(1)}**`);
+          } else if (!comp) {
+            matches.push(`• **${escapeHtml(student)}**: nota **${gradeVal.toFixed(1)}**`);
+          }
+        }
+
+        if (matches.length > 0) {
+          const condText = comp === 'above' ? `com nota igual ou superior a ${threshold}` : (comp === 'below' ? `com nota igual ou inferior a ${threshold}` : 'da turma');
+          return `Encontrei **${matches.length} alunos** ${condText}:<br><br>${matches.join('<br>')}`;
+        }
+      }
+    }
+  }
+
+  // 3. Fallback Geral Tabular
+  if (pageData.tables && pageData.tables.length > 0) {
+    const t = pageData.tables[0];
+    const preview = t.rows.slice(0, 6).map(r => r.filter(Boolean).map(escapeHtml).join(' | ')).join('<br>');
+    return `Encontrei os seguintes dados na tela:<br><br>${preview}`;
+  }
+
+  return `Não encontrei dados suficientes na tela atual para responder "${escapeHtml(query)}". Certifique-se de estar na aba correspondente no portal. 🔍`;
+}
+
 function executeSubsequentCommand(remainingCommand, contextLabel) {
   if (!remainingCommand) return;
   const cleanCmd = remainingCommand.trim();
@@ -2230,7 +2347,24 @@ function executeSubsequentCommand(remainingCommand, contextLabel) {
     return;
   }
 
-  // 3. Caso geral: tenta discovery genérico na página ou pede esclarecimento honesto
+  // 3. Se for comando de consulta / leitura / pergunta (ex: "me diga quais dias e horarios eu tenho aula", "quais dias tenho aula", "listar horários")
+  const isReadingQuery = /^(?:me\s+diga|diga|diz|liste|listar|mostre|mostrar|ver|veja|quais|qual|quantos|quantas|quando|onde|consultar|consulta|resumir|resumo|informe|informar)\b/i.test(cleanCmd) ||
+                         /(?:quais\s+dias|quais\s+hor[aá]rios|que\s+aulas|quantas\s+aulas|me\s+diga|me\s+mostre|me\s+fale)/i.test(cleanCmd);
+  if (isReadingQuery) {
+    setProcessingState(true, 'Lendo e organizando dados do portal...');
+    dispatchPortalBridgeMessage({ action: 'READ_PAGE_DATA' }, (pageData) => {
+      setProcessingState(false);
+      if (pageData && pageData.sucesso) {
+        const answer = synthesizeScreenAnswer(cleanCmd, pageData);
+        appendAssistantChatMessage(answer, true);
+      } else {
+        appendAssistantChatMessage(`Não consegui ler os dados da tela na aba **${escapeHtml(contextLabel)}**. Tente atualizar a página.`, true);
+      }
+    });
+    return;
+  }
+
+  // 4. Caso geral de ação/filtro: tenta discovery genérico na página ou pede esclarecimento honesto
   dispatchPortalBridgeMessage({ action: 'DISCOVERY_SELECT_FILTER', filterTerm: cleanCmd }, (resp) => {
     setProcessingState(false);
     if (resp && resp.sucesso) {

@@ -1214,6 +1214,80 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     })();
     return true;
   }
+
+  if (message.action === 'READ_PAGE_DATA') {
+    (async () => {
+      let targetTabId = message.tabId;
+      if (!targetTabId) {
+        try {
+          const activeTabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+          if (activeTabs && activeTabs.length > 0 && activeTabs[0].url && !activeTabs[0].url.startsWith('chrome')) {
+            targetTabId = activeTabs[0].id;
+          }
+        } catch {}
+      }
+      if (!targetTabId) {
+        const tabs = await chrome.tabs.query({});
+        const portalTab = tabs.find(t => t.url && (t.url.includes('portal_mock') || t.url.includes('portal_real'))) ||
+                          tabs.find(t => t.url && !t.url.startsWith('chrome') && !t.url.endsWith(':3000/') && !t.url.endsWith(':3000') && identifyPortal(t.url)) ||
+                          tabs.find(t => t.url && (t.url.startsWith('http') || t.url.startsWith('file')) && !t.url.includes('side_panel') && !t.url.endsWith(':3000/') && !t.url.endsWith(':3000'));
+        targetTabId = portalTab ? portalTab.id : currentTabState.tabId;
+      }
+      if (!targetTabId) {
+        sendResponse({ sucesso: false, mensagem: 'Nenhuma aba ativa do portal identificada para leitura.' });
+        return;
+      }
+
+      try {
+        const results = await chrome.scripting.executeScript({
+          target: { tabId: targetTabId },
+          func: () => {
+            const visibleText = (el) => {
+              const style = window.getComputedStyle(el);
+              return style.display !== 'none' && style.visibility !== 'hidden' && el.offsetParent !== null;
+            };
+
+            const activeTab = document.querySelector('.tab-btn.active')?.innerText?.trim() || '';
+
+            const tables = Array.from(document.querySelectorAll('table')).filter(visibleText).map(t => {
+              const headers = Array.from(t.querySelectorAll('th')).map(th => th.innerText.trim()).filter(Boolean);
+              const rows = Array.from(t.querySelectorAll('tbody tr, tr')).map(tr => {
+                return Array.from(tr.querySelectorAll('td')).map(td => {
+                  const inp = td.querySelector('input, select');
+                  if (inp) {
+                    if (inp.type === 'checkbox') return inp.checked ? '[X]' : '[ ]';
+                    return inp.value || td.innerText.trim();
+                  }
+                  return td.innerText.trim();
+                });
+              }).filter(r => r.length > 0);
+              return { id: t.id || 'tabela', headers, rows };
+            });
+
+            const cards = Array.from(document.querySelectorAll('.recado-card, .card, [class*="card"]'))
+              .filter(visibleText)
+              .map(c => c.innerText.trim())
+              .filter(Boolean)
+              .slice(0, 10);
+
+            return {
+              sucesso: true,
+              activeTab,
+              tables,
+              cards,
+              url: window.location.href
+            };
+          }
+        });
+
+        const res = (results && results[0] && results[0].result) || { sucesso: false, mensagem: 'Falha ao ler dados da página.' };
+        sendResponse(res);
+      } catch (err) {
+        sendResponse({ sucesso: false, mensagem: err.message });
+      }
+    })();
+    return true;
+  }
 });
 
 // Inicialização imediata com estado visual "Conectando..." durante a verificação inicial
