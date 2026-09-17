@@ -234,4 +234,47 @@ describe('Composite command response rules (Bug 2 regression)', () => {
       expect(message).toContain('Prontinho!');
     });
   });
+
+  describe('extractNavigationTarget — clean extraction without trailing conjunctions', () => {
+    function simulateExtractNavTarget(text: string): string | null {
+      const normInput = text.normalize('NFD').toLowerCase().replace(/[\u0300-\u036f]/g, '');
+      let clean = normInput
+        .replace(/^(?:ola|oi|ei|rafinha|por\s+favor|pfv|ajuda|ajude)\s*[,:]?\s*/gi, '')
+        .replace(/\b(?:no\s+site|no\s+portal|no\s+sistema|via\s+chat|no\s+app).*$/gi, '')
+        .trim();
+
+      clean = clean.replace(/\s+\b(?:e|e\s+depois|depois|em\s+seguida|a[ií])\s+(?:enviar|mandar|mande|responder|responda|lan[çc]ar|lance|marcar|marque|colocar|coloque|escrever|escreva|digitar|digite|registrar|registre|anotar|anote|editar|excluir|deletar|salvar|confirmar|submeter|aprovar|baixar|baixe|abrir|abra|ver)\b.*$/i, '').trim();
+
+      const m = clean.match(/(?:entre|entra|entrar|vai|va|ir|navegue|navega|navegar|acesse|acessa|acessar|abra|abre|abrir|clique|clica|clicar|mostre|mostra)\s+(?:\b(?:em|no|na|nos|nas|para|pra|pro|pela|pelo)\b\s+)?(?:\b(?:a|o|os|as)\b\s+)?(?:\b(?:aba|menu|secao|guia|link|tela|pasta)\b\s+)?(?:\b(?:de|do|da|dos|das)\b\s+)?([a-zA-Z0-9_-]+(?:\s+[a-zA-Z0-9_-]+)?)/i);
+      if (m) {
+        let target = m[1].trim()
+          .replace(/^(?:a|o|os|as|de|do|da|dos|das)\s+/i, '')
+          .replace(/\s+(?:no|na|do|da|de|pra|para|no\s+site|no\s+portal|do\s+portal|na\s+aba|via\s+chat).*$/i, '')
+          .replace(/\s+\b(?:e|e\s+depois|depois|em\s+seguida|a[ií])\b.*$/i, '')
+          .replace(/\s+e$/i, '')
+          .trim();
+        if (target && !['aluno', 'nota', 'falta', 'a nota', 'uma nota', 'site', 'portal'].includes(target.toLowerCase())) {
+          return target;
+        }
+      }
+      return null;
+    }
+
+    it('extracts "recados" and NEVER "recados e" from "entrar em Recados e enviar recado para Alice"', () => {
+      const target = simulateExtractNavTarget('entrar em Recados e enviar recado para Alice');
+      expect(target).toBe('recados');
+      expect(target).not.toBe('recados e');
+    });
+
+    it('extracts "frequencia" from "va para frequencia e lance falta pro Hugo"', () => {
+      const target = simulateExtractNavTarget('va para frequencia e lance falta pro Hugo');
+      expect(target).toBe('frequencia');
+      expect(target).not.toContain(' e');
+    });
+
+    it('detects primaryAction "enviar" in "entrar em Recados e enviar recado para Alice"', () => {
+      const action = extractPrimaryAction('entrar em Recados e enviar recado para Alice');
+      expect(action).toBe('enviar');
+    });
+  });
 });

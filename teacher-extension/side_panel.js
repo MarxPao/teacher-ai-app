@@ -1381,12 +1381,17 @@ function extractNavigationTarget(text) {
     .replace(/\b(?:no\s+site|no\s+portal|no\s+sistema|via\s+chat|no\s+app).*$/gi, '')
     .trim();
 
+  // Isola a navegação se houver conectivo com ação composta (ex: "entrar em recados e enviar...", "ir para diario e depois anotar...")
+  clean = clean.replace(/\s+\b(?:e|e\s+depois|depois|em\s+seguida|a[ií])\s+(?:enviar|mandar|mande|responder|responda|lan[çc]ar|lance|marcar|marque|colocar|coloque|escrever|escreva|digitar|digite|registrar|registre|anotar|anote|editar|excluir|deletar|salvar|confirmar|submeter|aprovar|baixar|baixe|abrir|abra|ver)\b.*$/i, '').trim();
+
   // BUG 1 FIX: regex sem classes de acento pois a entrada já foi normalizada
   const m = clean.match(/(?:entre|entra|entrar|vai|va|ir|navegue|navega|navegar|acesse|acessa|acessar|abra|abre|abrir|clique|clica|clicar|mostre|mostra)\s+(?:\b(?:em|no|na|nos|nas|para|pra|pro|pela|pelo)\b\s+)?(?:\b(?:a|o|os|as)\b\s+)?(?:\b(?:aba|menu|secao|guia|link|tela|pasta)\b\s+)?(?:\b(?:de|do|da|dos|das)\b\s+)?([a-zA-Z0-9_-]+(?:\s+[a-zA-Z0-9_-]+)?)/i);
   if (m) {
     let target = m[1].trim()
       .replace(/^(?:a|o|os|as|de|do|da|dos|das)\s+/i, '')
       .replace(/\s+(?:no|na|do|da|de|pra|para|no\s+site|no\s+portal|do\s+portal|na\s+aba|via\s+chat).*$/i, '')
+      .replace(/\s+\b(?:e|e\s+depois|depois|em\s+seguida|a[ií])\b.*$/i, '')
+      .replace(/\s+e$/i, '')
       .trim();
     if (target && !['aluno', 'nota', 'falta', 'a nota', 'uma nota', 'site', 'portal'].includes(target.toLowerCase())) {
       return target;
@@ -1395,7 +1400,11 @@ function extractNavigationTarget(text) {
 
   const m2 = clean.match(/(?:aba|menu|secao|guia)\s+([a-zA-Z0-9_-]+)/i);
   if (m2) {
-    let target = m2[1].trim().replace(/^(?:de|do|da)\s+/i, '').trim();
+    let target = m2[1].trim()
+      .replace(/^(?:de|do|da)\s+/i, '')
+      .replace(/\s+\b(?:e|e\s+depois|depois|em\s+seguida|a[ií])\b.*$/i, '')
+      .replace(/\s+e$/i, '')
+      .trim();
     if (target) return target;
   }
   return null;

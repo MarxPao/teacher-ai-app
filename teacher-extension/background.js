@@ -974,7 +974,10 @@ async function resolveActivePortalTab(explicitTabId) {
         return;
       }
 
-      const targetKeyword = (message.target || '').trim().toLowerCase();
+      const targetKeyword = (message.target || '').trim().toLowerCase()
+        .replace(/\s+\b(?:e|e\s+depois|depois|em\s+seguida|a[ií])\b.*$/i, '')
+        .replace(/\s+e$/i, '')
+        .trim();
 
       try {
         const results = await chrome.scripting.executeScript({

@@ -144,20 +144,25 @@ def _parse_with_regex_rules(text: str) -> Dict[str, Any]:
         }
 
     # 2.3. Ações Genéricas sobre Itens (Recados / Mensagens / Arquivos / Agenda)
-    # Padrão A: Responder recado / mensagem de responsável ou aluno
-    # Ex: "responder Rodrigo (responsável) na aba início nos últimos recados"
-    # Ex: "responder Rodrigo dizendo que o aluno melhorou"
+    # Padrão A: Responder / Enviar recado ou mensagem (direto ou composto pós-navegação)
+    # Ex 1: "responder Rodrigo (responsável) na aba início nos últimos recados"
+    # Ex 2: "entrar em Recados e enviar recado para Alice"
+    # Ex 3: "enviar recado para Alice dizendo que não haverá aula"
+    # Ex 4: "mandar mensagem pro Rodrigo falando que o aluno melhorou"
     m_responder = re.search(
-        r"(?:responder|responda|responde|enviar\s+resposta|mande\s+resposta)\s+(?:a|ao|para|pro|pra)?\s*([a-zA-ZÀ-ÿ\s\(\)]+?)"
+        r"(?:(?:entre|entra|entrar|vai|vá|ir|acesse|acessa|acessar)\s+(?:em|no|na|nos|nas|para|pra|pro)\s+([a-zA-ZÀ-ÿ0-9_-]+)\s+e\s+)?"
+        r"(?:responder|responda|responde|enviar\s+resposta|mande\s+resposta|enviar|envie|envia|mandar|mande|manda|escrever|escreva|escreve)"
+        r"(?:\s+(?:um\s+|uma\s+)?(?:recado|mensagem|aviso|resposta))?"
+        r"\s+(?:a|ao|para|pro|pra)?\s*([a-zA-ZÀ-ÿ0-9_\s\(\)]+?)"
         r"(?:\s+(?:na|no|pela|pelo)\s+aba\s+([a-zA-ZÀ-ÿ0-9_-]+))?"
-        r"(?:\s+(?:nos?|nas?)\s+(?:últimos?|ultimos?)\s+([a-zA-ZÀ-ÿ0-9_-]+))?"
-        r"(?:\s+(?:dizendo\s*(?:que)?|com\s+a\s+mensagem|com\s+o\s+texto|falando\s*(?:que)?)\s*[:\"']?\s*(.+?))?$",
+        r"(?:\s+(?:nos?|nas?)\s+(?:últimos?|ultimos?)?\s*([a-zA-ZÀ-ÿ0-9_-]+))?"
+        r"(?:\s+(?:dizendo\s*(?:que)?|com\s+a\s+mensagem|com\s+o\s+texto|falando\s*(?:que)?|:\s*)\s*[:\"']?\s*(.+?))?$",
         cleaned,
         re.IGNORECASE
     )
-    if not m_responder and ("responder" in lower or "responda" in lower):
-        # Fallback mais permissivo para comando com "responder"
-        m_resp_simple = re.search(r"(?:responder|responda|responde)\s+(?:a|ao|para|pro|pra)?\s*([a-zA-ZÀ-ÿ0-9_\-\s\(\)]+)", cleaned, re.IGNORECASE)
+    if not m_responder and any(k in lower for k in ["responder", "responda", "enviar recado", "mandar recado", "enviar mensagem", "mandar mensagem"]):
+        # Fallback mais permissivo para comandos de resposta/comunicação
+        m_resp_simple = re.search(r"(?:responder|responda|responde|enviar|envie|mandar|mande)\s+(?:um\s+|uma\s+)?(?:recado|mensagem|resposta)?\s*(?:a|ao|para|pro|pra)?\s*([a-zA-ZÀ-ÿ0-9_\-\s\(\)]+)", cleaned, re.IGNORECASE)
         if m_resp_simple:
             raw_target = m_resp_simple.group(1).strip()
             # Separa possível menção a aba
@@ -175,17 +180,21 @@ def _parse_with_regex_rules(text: str) -> Dict[str, Any]:
             alvo_nome = re.sub(r"\s+(?:nos?|nas?)\s+.*$", "", alvo_nome, flags=re.IGNORECASE).strip()
             alvo_nome = re.sub(r"^(?:o|a|os|as|do|da|de|ao|pro|pra|para)\s+", "", alvo_nome, flags=re.IGNORECASE).strip()
 
+            is_enviar = any(k in lower for k in ["enviar", "envie", "mandar", "mande", "escrever"])
+            canonical_verb = "enviar" if is_enviar else "responder"
+            action_name = "enviar_recado" if is_enviar else "responder_recado"
+
             is_comp = bool(resp_content and len(resp_content) > 1)
-            clarif = None if is_comp else f"O que você gostaria de responder para {alvo_nome or 'o responsável'} no recado?"
+            clarif = None if is_comp else f"O que você gostaria de {canonical_verb} para {alvo_nome or 'o destinatário'} no recado?"
             return {
-                "verbo_acao": "responder",
+                "verbo_acao": canonical_verb,
                 "objeto_alvo": "recado",
                 "tipo_operacao": "escrita",
                 "valor": resp_content,
-                "descricao_tarefa": f"Responder recado de {alvo_nome or 'responsável'}" + (f": {resp_content}" if resp_content else ""),
+                "descricao_tarefa": f"{canonical_verb.capitalize()} recado para {alvo_nome or 'destinatário'}" + (f": {resp_content}" if resp_content else ""),
                 "destino_navegacao": aba_dest,
                 "parametros_extras": {},
-                "acao": "responder_recado",
+                "acao": action_name,
                 "destino": aba_dest,
                 "aluno": alvo_nome or None,
                 "nota": None,
@@ -198,25 +207,30 @@ def _parse_with_regex_rules(text: str) -> Dict[str, Any]:
             }
 
     if m_responder:
-        alvo_raw = m_responder.group(1).strip()
-        aba_dest = m_responder.group(2).strip().title() if m_responder.group(2) else None
-        conteudo_resp = m_responder.group(4).strip() if len(m_responder.groups()) >= 4 and m_responder.group(4) else None
+        prefix_nav = m_responder.group(1).strip().title() if m_responder.group(1) else None
+        alvo_raw = m_responder.group(2).strip()
+        aba_dest = m_responder.group(3).strip().title() if m_responder.group(3) else prefix_nav
+        conteudo_resp = m_responder.group(5).strip() if len(m_responder.groups()) >= 5 and m_responder.group(5) else None
 
         # Limpa conectivos e artigos do alvo
         alvo_clean = re.sub(r"^(?:o|a|os|as|do|da|de|ao|pro|pra|para)\s+", "", alvo_raw, flags=re.IGNORECASE).strip()
         alvo_clean = re.sub(r"\s+(?:nos?|nas?)\s+.*$", "", alvo_clean, flags=re.IGNORECASE).strip()
 
+        is_enviar = any(k in lower for k in ["enviar", "envie", "mandar", "mande", "escrever"])
+        canonical_verb = "enviar" if is_enviar else "responder"
+        action_name = "enviar_recado" if is_enviar else "responder_recado"
+
         is_comp = bool(conteudo_resp and len(conteudo_resp) > 1)
-        clarif = None if is_comp else f"O que você gostaria de responder para {alvo_clean or 'o responsável'} no recado?"
+        clarif = None if is_comp else f"O que você gostaria de {canonical_verb} para {alvo_clean or 'o destinatário'} no recado?"
         return {
-            "verbo_acao": "responder",
+            "verbo_acao": canonical_verb,
             "objeto_alvo": "recado",
             "tipo_operacao": "escrita",
             "valor": conteudo_resp,
-            "descricao_tarefa": f"Responder recado de {alvo_clean or 'responsável'}" + (f": {conteudo_resp}" if conteudo_resp else ""),
+            "descricao_tarefa": f"{canonical_verb.capitalize()} recado para {alvo_clean or 'destinatário'}" + (f": {conteudo_resp}" if conteudo_resp else ""),
             "destino_navegacao": aba_dest,
             "parametros_extras": {},
-            "acao": "responder_recado",
+            "acao": action_name,
             "destino": aba_dest,
             "aluno": alvo_clean or None,
             "nota": None,
@@ -257,6 +271,7 @@ def _parse_with_regex_rules(text: str) -> Dict[str, Any]:
     clean_nav = lower
     clean_nav = re.sub(r"^(?:ol[áa]|oi|ei|rafinha|por\s+favor|pfv|ajuda|ajude)\s*[,:]?\s*", "", clean_nav)
     clean_nav = re.sub(r"\b(?:no\s+site|no\s+portal|no\s+sistema|via\s+chat|no\s+app).*$", "", clean_nav).strip()
+    clean_nav = re.sub(r"\s+\b(?:e|depois|em\s+seguida|a[ií])\s+(?:enviar|mandar|mande|responder|responda|lan[çc]ar|lance|marcar|marque|colocar|coloque|escrever|escreva|digitar|digite|registrar|registre|anotar|anote|editar|excluir|deletar|salvar|confirmar|submeter|aprovar|baixar|baixe|abrir|abra|ver)\b.*$", "", clean_nav, flags=re.IGNORECASE).strip()
 
     nav_match = re.search(
         r"(?:entre|entra|entrar|vai|vá|ir|navegue|navega|navegar|acesse|acessa|acessar|abra|abre|abrir|clique|clica|clicar|mostre|mostra|ver|quero\s+ver)\s+(?:\b(?:em|no|na|nos|nas|para|pra|pro|pela|pelo)\b\s+)?(?:\b(?:a|o|os|as)\b\s+)?(?:\b(?:aba|menu|seção|secao|guia|link|tela|pasta)\b\s+)?(?:\b(?:de|do|da|dos|das)\b\s+)?([a-zA-ZÀ-ÿ0-9_-]+(?:\s+[a-zA-ZÀ-ÿ0-9_-]+)?)",
@@ -266,6 +281,8 @@ def _parse_with_regex_rules(text: str) -> Dict[str, Any]:
         cand = nav_match.group(1).strip()
         cand = re.sub(r"^(?:a|o|os|as|de|do|da|dos|das)\s+", "", cand, flags=re.IGNORECASE)
         cand = re.sub(r"\s+(?:no|na|do|da|de|pra|para|no\s+site|no\s+portal|do\s+portal|na\s+aba|via\s+chat).*$", "", cand, flags=re.IGNORECASE).strip()
+        cand = re.sub(r"\s+\b(?:e|e\s+depois|depois|em\s+seguida|a[ií])\b.*$", "", cand, flags=re.IGNORECASE).strip()
+        cand = re.sub(r"\s+e$", "", cand, flags=re.IGNORECASE).strip()
         if cand and cand.lower() not in ["aluno", "nota", "falta", "a nota", "uma nota", "site", "portal"]:
             return {
                 "verbo_acao": "navegar",
