@@ -285,6 +285,31 @@ function executeMatchedSkill(skillGraph, taskName) {
       action: 'EXECUTE_SKILL_GRAPH',
       skillGraph: skillGraph || null
     }, async (resp) => {
+      const isOk = !chrome.runtime.lastError && Boolean(resp?.ok);
+      const status = resp?.status || (isOk ? 'COMPLETED' : 'FAILED');
+      const trace = resp?.trace || [];
+      const verifiedNode = trace.find(t => t.verified === true);
+      const isVerified = Boolean(isOk && verifiedNode);
+      const verificationMethod = verifiedNode?.verification_method || (isOk ? 'implicit_dom_success' : 'unverified_failure');
+      const errorDetails = resp?.error || chrome.runtime.lastError?.message || null;
+
+      // ── Persistência de Histórico Honesto (Item 1) ──
+      try {
+        fetch('http://localhost:3000/api/skills/log-execution', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            skill_id: skillGraph?.id || skillGraph?.task_id || taskName,
+            portal_id: skillGraph?.portal_id || 'machado_sobrinho',
+            task_name: skillGraph?.name || taskName,
+            status,
+            verified: isVerified,
+            verification_method: verificationMethod,
+            error_details: errorDetails
+          })
+        }).catch(err => console.warn('[LogExecution] Erro ao gravar:', err));
+      } catch (e) {}
+
       if (chrome.runtime.lastError || !resp?.ok) {
         if (interpretBox) {
           interpretBox.className = 'interpret-box teach';
@@ -1295,14 +1320,69 @@ function matchStudentByName(queryName, roster, queryMatricula) {
   return { status: 'not_found', student: null, candidates: [] };
 }
 
+/**
+ * Normaliza texto removendo acentos (NFD), caixa alta e pontuação — usado nas comparações de navegação.
+ * BUG 1 FIX: garante que "frequencia" e "Frequência" produzem o mesmo token.
+ */
+function _normNav(str) {
+  return (str || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * BUG 2 FIX: Detecta se o texto contém uma ação primária sobre conteúdo além da navegação.
+ * Retorna o verbo+objeto da ação principal, ou null se for puramente navegação.
+ * Exemplos:
+ *   "responder Rodrigo na aba início" → "responder recado de Rodrigo"
+ *   "ir para frequência" → null (pura navegação)
+ *   "abrir diário e lançar nota do Hugo" → "lançar nota"
+ */
+function extractPrimaryAction(text) {
+  if (!text) return null;
+  const norm = _normNav(text);
+
+  // Verbos de ação sobre conteúdo do portal (não são puramente de navegação)
+  const ACTION_VERBS = [
+    { pattern: /\brespond[ea]r?\b/, label: 'responder' },
+    { pattern: /\benviar?\b/, label: 'enviar' },
+    { pattern: /\bescrever?\b/, label: 'escrever' },
+    { pattern: /\blan[cç]ar?\b/, label: 'lançar' },
+    { pattern: /\bmarcar?\b/, label: 'marcar' },
+    { pattern: /\bregistrar?\b/, label: 'registrar' },
+    { pattern: /\bpreencher?\b/, label: 'preencher' },
+    { pattern: /\banot(ar?)?\b/, label: 'anotar' },
+    { pattern: /\beditar?\b/, label: 'editar' },
+    { pattern: /\bexcluir?\b/, label: 'excluir' },
+    { pattern: /\bdeletar?\b/, label: 'deletar' },
+    { pattern: /\bsalvar?\b/, label: 'salvar' },
+    { pattern: /\bconfirmar?\b/, label: 'confirmar' },
+    { pattern: /\bsubmeter?\b/, label: 'submeter' },
+    { pattern: /\baprov(ar?)?\b/, label: 'aprovar' },
+  ];
+
+  // Verbos que SÃO puramente de navegação (não devem ser tratados como ação primária)
+  const NAV_ONLY = /^(?:entre?|entrar?|vai|va|ir|navegue?|navegar?|acesse?|acessar?|abra?|abrir?|clique?|clicar?|mostre?|mostrar?|ver?|veja|quero\s+ver)\s/;
+
+  for (const { pattern, label } of ACTION_VERBS) {
+    if (pattern.test(norm)) {
+      // Confirma que não é somente um verbo de navegação no contexto
+      // (ex: "abrir" pode ser nav, mas "abrir e responder" tem ação primária)
+      return label;
+    }
+  }
+  return null;
+}
+
 function extractNavigationTarget(text) {
   if (!text) return null;
-  let clean = text.toLowerCase()
-    .replace(/^(?:ol[áa]|oi|ei|rafinha|por\s+favor|pfv|ajuda|ajude)\s*[,:]?\s*/gi, '')
+  // BUG 1 FIX: normalizar entrada com NFD antes de aplicar regex de navegação
+  const normInput = _normNav(text);
+  let clean = normInput
+    .replace(/^(?:ola|oi|ei|rafinha|por\s+favor|pfv|ajuda|ajude)\s*[,:]?\s*/gi, '')
     .replace(/\b(?:no\s+site|no\s+portal|no\s+sistema|via\s+chat|no\s+app).*$/gi, '')
     .trim();
-  
-  const m = clean.match(/(?:entre|entra|entrar|vai|v[áa]|ir|navegue|navega|navegar|acesse|acessa|acessar|abra|abre|abrir|clique|clica|clicar|mostre|mostra)\s+(?:\b(?:em|no|na|nos|nas|para|pra|pro|pela|pelo)\b\s+)?(?:\b(?:a|o|os|as)\b\s+)?(?:\b(?:aba|menu|se[çc][ãa]o|guia|link|tela|pasta)\b\s+)?(?:\b(?:de|do|da|dos|das)\b\s+)?([a-zA-ZÀ-ÿ0-9_-]+(?:\s+[a-zA-ZÀ-ÿ0-9_-]+)?)/i);
+
+  // BUG 1 FIX: regex sem classes de acento pois a entrada já foi normalizada
+  const m = clean.match(/(?:entre|entra|entrar|vai|va|ir|navegue|navega|navegar|acesse|acessa|acessar|abra|abre|abrir|clique|clica|clicar|mostre|mostra)\s+(?:\b(?:em|no|na|nos|nas|para|pra|pro|pela|pelo)\b\s+)?(?:\b(?:a|o|os|as)\b\s+)?(?:\b(?:aba|menu|secao|guia|link|tela|pasta)\b\s+)?(?:\b(?:de|do|da|dos|das)\b\s+)?([a-zA-Z0-9_-]+(?:\s+[a-zA-Z0-9_-]+)?)/i);
   if (m) {
     let target = m[1].trim()
       .replace(/^(?:a|o|os|as|de|do|da|dos|das)\s+/i, '')
@@ -1313,7 +1393,7 @@ function extractNavigationTarget(text) {
     }
   }
 
-  const m2 = clean.match(/(?:aba|menu|se[çc][ãa]o|guia)\s+([a-zA-ZÀ-ÿ0-9_-]+)/i);
+  const m2 = clean.match(/(?:aba|menu|secao|guia)\s+([a-zA-Z0-9_-]+)/i);
   if (m2) {
     let target = m2[1].trim().replace(/^(?:de|do|da)\s+/i, '').trim();
     if (target) return target;
@@ -1882,20 +1962,96 @@ async function handleProcessCommand(commandText) {
   }
 
   // Caso especial: Navegação para abas ou seções ("entre nos arquivos", "entre na aba arquivos", "ir para diário", etc.)
+  // BUG 2 & REQ 5: detectar comando composto (navegar + agir). Navega até a aba e tenta resolver a ação via Discovery!
   const navTarget = extractNavigationTarget(textClean);
   if (navTarget) {
+    const primaryAction = extractPrimaryAction(textClean); // null = navegação pura; string = ação composta
     setProcessingState(true, `Acessando ${navTarget} no portal...`);
-    dispatchPortalBridgeMessage({ action: 'NAVIGATE_PORTAL_TAB', target: navTarget }, (resp) => {
+    dispatchPortalBridgeMessage({ action: 'NAVIGATE_PORTAL_TAB', target: navTarget }, async (resp) => {
       setProcessingState(false);
       if (resp && resp.sucesso) {
         const foundLabel = resp.elementText || navTarget;
-        appendAssistantChatMessage(`Prontinho! Entrei na aba **${escapeHtml(foundLabel)}** no portal para você. 📂✨`, true);
+        if (primaryAction) {
+          // Comando composto: informa que navegou e agora tenta executar a ação associada
+          appendAssistantChatMessage(`Entrei na aba **${escapeHtml(foundLabel)}**! Analisando como executar **${escapeHtml(primaryAction)}**... 🔎`, true);
+          setProcessingState(true, `Executando ${primaryAction} no portal...`);
+
+          try {
+            const res = await fetch('http://localhost:8765/natural_intent', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                text: textClean,
+                parse_only: false,
+                history: []
+              })
+            });
+
+            if (res.ok) {
+              const data = await res.json();
+              setProcessingState(false);
+
+              // Caso 1: Pergunta de esclarecimento (ex: faltou o texto da resposta do recado)
+              if (data.needs_clarification && data.mensagem) {
+                showHonestErrorCard('Preciso de uma informação', data.mensagem);
+                return;
+              }
+
+              // Caso 2: Falha na descoberta -> aciona o modo honesto de apontar/clicar
+              if (data.status === 'point_and_click_required' || data.action_required === 'point_and_click') {
+                showClarificationPointClickCard(
+                  data.mensagem || `Não encontrei onde ${primaryAction} nesta tela. Você pode me mostrar onde fica o elemento correto?`
+                );
+                return;
+              }
+
+              // Caso 3: Descoberta bem-sucedida com aprovação necessária (PortalApprovalCard)
+              if (data.card && (data.sucesso || data.needs_approval)) {
+                const c = data.card;
+                const diffItem = (c.diff && c.diff[0]) || {};
+                const studentName = diffItem.studentName || data.intent?.aluno || 'Item';
+                const fieldName = diffItem.field || primaryAction;
+                showApprovalPreviewCardDirect({
+                  studentName,
+                  actionDesc: `${fieldName} • ${c.portal || 'Portal Oficial'}`,
+                  beforeVal: diffItem.beforeValue || '—',
+                  afterVal: diffItem.afterValue || 'OK',
+                  actionType: c.actionType || primaryAction,
+                  taskId: c.taskId
+                });
+                return;
+              }
+
+              // Caso 4: Resposta conversacional / instrução sem falso positivo
+              if (data.mensagem) {
+                appendAssistantChatMessage(data.mensagem, true);
+                return;
+              }
+            }
+          } catch (err) {
+            console.warn('[SidePanel] Falha ao acionar discovery pós-navegação:', err);
+          }
+
+          setProcessingState(false);
+          // Fallback honesto: reporta o que fez e pede ajuda para o elemento
+          appendAssistantChatMessage(
+            `Naveguei até a aba **${escapeHtml(foundLabel)}**, mas não consegui executar a ação de **${escapeHtml(primaryAction)}** automaticamente nesta tela. Você pode me mostrar onde fica o elemento correto para eu aprender? 🔍`,
+            true
+          );
+          showClarificationPointClickCard(
+            `Não encontrei onde executar ${primaryAction} nesta tela. Você pode me mostrar clicando no lugar certo?`
+          );
+        } else {
+          // Navegação pura: "Prontinho!" é legítimo
+          appendAssistantChatMessage(`Prontinho! Entrei na aba **${escapeHtml(foundLabel)}** no portal para você. 📂✨`, true);
+        }
       } else {
         appendAssistantChatMessage(`Procurei pela aba ou seção **${escapeHtml(navTarget)}** no portal, mas não encontrei nenhum botão ou menu correspondente nesta tela. Você pode navegar manualmente até lá ou me mostrar onde fica? 🔍`, true);
       }
     });
     return;
   }
+
 
   const intent = await parseNaturalIntent(textClean);
 
@@ -1962,8 +2118,19 @@ async function handleProcessCommand(commandText) {
         console.log('[SidePanel] Resposta do backend:', data);
         setProcessingState(false);
 
-        // Caso A: Pergunta de esclarecimento sobre parâmetros (ex: faltou nome do aluno)
+
+
+        // Caso A: Pergunta de esclarecimento sobre parâmetros (ex: faltou texto da resposta)
         if (data.needs_clarification && data.mensagem) {
+          const navDest = data.intent?.destino_navegacao || data.intent?.destino || data.destino;
+          if (navDest) {
+            dispatchPortalBridgeMessage({ action: 'NAVIGATE_PORTAL_TAB', target: navDest }, (navResp) => {
+              setProcessingState(false);
+              const tabLabel = (navResp && navResp.sucesso && navResp.elementText) ? navResp.elementText : navDest;
+              appendAssistantChatMessage(`Naveguei até a aba **${escapeHtml(tabLabel)}**! ${escapeHtml(data.mensagem)}`, true);
+            });
+            return;
+          }
           showHonestErrorCard('Preciso de uma informação', data.mensagem);
           return;
         }
@@ -1977,18 +2144,30 @@ async function handleProcessCommand(commandText) {
         }
 
         // Caso Navegação: Backend retornou intenção de navegar para aba/seção
+        // BUG 2 FIX: se o texto original continha uma ação primária (ex: responder), reportar sucesso PARCIAL
         if (data.acao === 'navegar_aba' || data.action_required === 'navigate_tab') {
           const target = data.destino || 'Arquivos';
+          const primaryActionFromText = extractPrimaryAction(textClean);
           dispatchPortalBridgeMessage({ action: 'NAVIGATE_PORTAL_TAB', target }, (navResp) => {
             setProcessingState(false);
             if (navResp && navResp.sucesso) {
-              appendAssistantChatMessage(`Prontinho! Entrei na aba **${escapeHtml(navResp.elementText || target)}** no portal para você. 📂✨`, true);
+              const foundLabel = escapeHtml(navResp.elementText || target);
+              if (primaryActionFromText) {
+                // Comando composto: sucesso parcial honesto
+                appendAssistantChatMessage(
+                  `Naveguei até a aba **${foundLabel}**, mas não consegui executar a ação de **${escapeHtml(primaryActionFromText)}** automaticamente nesta tela. Você pode me mostrar onde fica o elemento correto para eu aprender? 🔍`,
+                  true
+                );
+              } else {
+                appendAssistantChatMessage(`Prontinho! Entrei na aba **${foundLabel}** no portal para você. 📂✨`, true);
+              }
             } else {
-              appendAssistantChatMessage(data.mensagem || `Naveguei até **${escapeHtml(target)}** no portal escolar.`, true);
+              appendAssistantChatMessage(data.mensagem || `Procurei pela aba **${escapeHtml(target)}** no portal, mas não encontrei o menu correspondente nesta tela. 🔍`, true);
             }
           });
           return;
         }
+
 
         // Caso C: Descoberta bem-sucedida ou ação já mapeada -> Exibe PortalApprovalCard diretamente!
         if (data.card && (data.sucesso || data.needs_approval)) {
@@ -2010,12 +2189,25 @@ async function handleProcessCommand(commandText) {
           return;
         }
 
-        // Caso D: Operação concluída diretamente com sucesso
-        if (data.sucesso) {
-          showSuccessCard(data.aluno || 'Aluno', '', data.valor || 'OK');
-          const activeTurmaEl = document.getElementById('active-class-name');
-          const currentTurma = (activeTurmaEl && activeTurmaEl.textContent !== '—') ? activeTurmaEl.textContent : 'Turma 9A';
-          trackActionUsage(intent.acao || 'lancar_nota', currentTurma, textClean);
+        // Caso D: Intenção executável confirmada -> Exibe card de aprovação para conferência da professora antes de gravar
+        if (data.sucesso && intent && intent.aluno) {
+          const studentName = data.aluno || intent.aluno;
+          const isFalta = (intent.acao === 'lancar_falta');
+          const targetVal = String(data.valor || intent.nota || intent.faltas || (isFalta ? '1' : '8.5'));
+          showApprovalPreviewCardDirect({
+            studentName,
+            actionDesc: `${isFalta ? 'Falta' : 'Nota'} • Portal Oficial`,
+            beforeVal: '—',
+            afterVal: targetVal,
+            actionType: intent.acao || 'lancar_nota',
+            taskId: data.taskId || ('chk_' + Math.random().toString(36).substring(2, 9))
+          });
+          return;
+        }
+
+        // Caso E: Resposta explicativa do backend
+        if (data.mensagem) {
+          appendAssistantChatMessage(data.mensagem, true);
           return;
         }
       }

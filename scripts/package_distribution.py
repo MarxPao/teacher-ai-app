@@ -3,13 +3,13 @@ import shutil
 import zipfile
 from pathlib import Path
 
-root = Path(r"C:\Users\rafae\Documents\antigravity\blissful-noether")
+root = Path(__file__).resolve().parent.parent
 dist_dir = root / "dist" / "TeacherAI_Dist"
 scripts_dir = root / "scripts"
 scripts_dir.mkdir(exist_ok=True)
 
 if dist_dir.exists():
-    shutil.rmtree(dist_dir)
+    shutil.rmtree(dist_dir, ignore_errors=True)
 dist_dir.mkdir(parents=True, exist_ok=True)
 
 # 1. Copia sidecar essencial
@@ -18,17 +18,17 @@ sidecar_dst = dist_dir / "sidecar"
 sidecar_dst.mkdir(exist_ok=True)
 
 for item in sidecar_src.iterdir():
-    if item.name in (".git", "__pycache__", ".pytest_cache", "tests", "screenshots", ".env"):
+    if item.name in (".git", "__pycache__", ".pytest_cache", "tests", "screenshots", ".env", "venv", ".venv"):
         continue
     if item.is_file():
         shutil.copy2(item, sidecar_dst / item.name)
     elif item.is_dir():
-        shutil.copytree(item, sidecar_dst / item.name, ignore=shutil.ignore_patterns("__pycache__", "*.log"))
+        shutil.copytree(item, sidecar_dst / item.name, ignore=shutil.ignore_patterns("__pycache__", "*.log", "venv*", ".venv*"), dirs_exist_ok=True)
 
 # 2. Copia teacher-extension
 ext_src = root / "teacher-extension"
 ext_dst = dist_dir / "teacher-extension"
-shutil.copytree(ext_src, ext_dst, ignore=shutil.ignore_patterns(".git", "test_*"))
+shutil.copytree(ext_src, ext_dst, ignore=shutil.ignore_patterns(".git", "test_*"), dirs_exist_ok=True)
 
 # 3. Cria scripts de launcher
 (dist_dir / "iniciar_teacher_ai.bat").write_text(
@@ -81,10 +81,11 @@ shutil.copytree(ext_src, ext_dst, ignore=shutil.ignore_patterns(".git", "test_*"
     encoding="utf-8"
 )
 
-# Copia para scripts/package_distribution.py também
-shutil.copy2(Path(__file__), root / "scripts" / "package_distribution.py")
+# Copia para scripts/package_distribution.py se não for o mesmo arquivo
+if Path(__file__).resolve() != (root / "scripts" / "package_distribution.py").resolve():
+    shutil.copy2(Path(__file__), root / "scripts" / "package_distribution.py")
 
-# 4. Gera o arquivo ZIP
+# 4. Gera o arquivo ZIP completo de distribuição
 zip_path = root / "dist" / "TeacherAI_Dist.zip"
 if zip_path.exists():
     zip_path.unlink()
@@ -95,6 +96,24 @@ with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
             arcname = file.relative_to(dist_dir)
             zipf.write(file, arcname)
 
+# 5. Gera o arquivo ZIP isolado da extensão e publica em public/downloads
+downloads_dir = root / "public" / "downloads"
+downloads_dir.mkdir(parents=True, exist_ok=True)
+ext_zip_path = root / "dist" / "teacher-extension.zip"
+if ext_zip_path.exists():
+    ext_zip_path.unlink()
+
+with zipfile.ZipFile(ext_zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
+    for file in ext_src.rglob("*"):
+        if file.is_file() and not any(part in (".git", "__pycache__") for part in file.parts):
+            arcname = file.relative_to(ext_src)
+            zipf.write(file, arcname)
+
+shutil.copy2(ext_zip_path, downloads_dir / "teacher-extension.zip")
+shutil.copy2(zip_path, downloads_dir / "TeacherAI_Dist.zip")
+
 print("Empacotamento concluido com sucesso!")
 print(f"Diretório: {dist_dir}")
-print(f"Arquivo ZIP: {zip_path} ({zip_path.stat().st_size} bytes)")
+print(f"Arquivo ZIP Completo: {zip_path} ({zip_path.stat().st_size} bytes)")
+print(f"Arquivo ZIP Extensão: {ext_zip_path} ({ext_zip_path.stat().st_size} bytes)")
+print(f"Disponível em: http://localhost:3000/downloads/teacher-extension.zip")

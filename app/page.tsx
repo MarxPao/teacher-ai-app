@@ -146,7 +146,13 @@ const MODULES: Record<ModuleKey, React.ComponentType<any>> = {
 
 // ─── App ───────────────────────────────────────────────────────────────────────
 export default function Home() {
-  const [active, setActive] = useState<ModuleKey>('dashboard')
+  const [active, setActive] = useState<ModuleKey>(() => {
+    if (typeof window !== 'undefined') {
+      const p = new URLSearchParams(window.location.search).get('module') as ModuleKey
+      if (p && MODULES[p]) return p
+    }
+    return 'dashboard'
+  })
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false)
   const [showLangMenu, setShowLangMenu] = useState(false)
   const Module = MODULES[active]

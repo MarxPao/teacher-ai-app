@@ -5,7 +5,7 @@ Garante que nenhum grafo contendo ações de escrita (WRITE) ou submissão (CLIC
 possa ser salvo ou executado sem um nó de CHECKPOINT humano mandatório que o preceda.
 """
 
-from typing import Dict, List, Set, Tuple, Any
+from typing import Dict, List, Set, Tuple, Any, Union, Optional
 
 class UnsafeGraphError(Exception):
     """Lançada quando um grafo viola regras inegociáveis de segurança."""

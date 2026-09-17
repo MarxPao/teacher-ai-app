@@ -22,9 +22,18 @@ import json
 import os
 import re
 import sys
+import unicodedata
 import urllib.request
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
+
+# ─── Cadeado de Segurança Final: classificação de risco e pseudonimização ─────
+try:
+    from data_classification import DataClass, classify_command
+    from pseudonymizer import PseudonymizationError, depseudonymize, pseudonymize
+    _SECURITY_LOCK_AVAILABLE = True
+except ImportError:
+    _SECURITY_LOCK_AVAILABLE = False
 
 _SIDECAR_DIR = Path(__file__).resolve().parent
 if str(_SIDECAR_DIR) not in sys.path:
@@ -93,7 +102,7 @@ def _parse_with_regex_rules(text: str) -> Dict[str, Any]:
     lower = cleaned.lower()
 
     # 1. Leitura de Alunos / Roster
-    if any(p in lower for p in ["ler alunos", "lista de alunos", "quem são os alunos", "quem são os estudantes", "estudantes matriculados", "quais alunos", "ver alunos", "ler turma", "roster da turma"]):
+    if any(p in lower for p in ["ler alunos", "lista de alunos", "quem são os alunos", "quais alunos", "ver alunos", "ler turma", "roster da turma", "estudantes matriculados", "quem são os estudantes", "lista de estudantes"]):
         return {
             "verbo_acao": "ler",
             "objeto_alvo": "alunos",
@@ -134,13 +143,123 @@ def _parse_with_regex_rules(text: str) -> Dict[str, Any]:
             "clarification_question": None
         }
 
+    # 2.3. Ações Genéricas sobre Itens (Recados / Mensagens / Arquivos / Agenda)
+    # Padrão A: Responder recado / mensagem de responsável ou aluno
+    # Ex: "responder Rodrigo (responsável) na aba início nos últimos recados"
+    # Ex: "responder Rodrigo dizendo que o aluno melhorou"
+    m_responder = re.search(
+        r"(?:responder|responda|responde|enviar\s+resposta|mande\s+resposta)\s+(?:a|ao|para|pro|pra)?\s*([a-zA-ZÀ-ÿ\s\(\)]+?)"
+        r"(?:\s+(?:na|no|pela|pelo)\s+aba\s+([a-zA-ZÀ-ÿ0-9_-]+))?"
+        r"(?:\s+(?:nos?|nas?)\s+(?:últimos?|ultimos?)\s+([a-zA-ZÀ-ÿ0-9_-]+))?"
+        r"(?:\s+(?:dizendo\s*(?:que)?|com\s+a\s+mensagem|com\s+o\s+texto|falando\s*(?:que)?)\s*[:\"']?\s*(.+?))?$",
+        cleaned,
+        re.IGNORECASE
+    )
+    if not m_responder and ("responder" in lower or "responda" in lower):
+        # Fallback mais permissivo para comando com "responder"
+        m_resp_simple = re.search(r"(?:responder|responda|responde)\s+(?:a|ao|para|pro|pra)?\s*([a-zA-ZÀ-ÿ0-9_\-\s\(\)]+)", cleaned, re.IGNORECASE)
+        if m_resp_simple:
+            raw_target = m_resp_simple.group(1).strip()
+            # Separa possível menção a aba
+            aba_match = re.search(r"\b(?:na|no)\s+aba\s+([a-zA-ZÀ-ÿ0-9_-]+)", raw_target, re.IGNORECASE)
+            aba_dest = aba_match.group(1).title() if aba_match else None
+            # Separa conteúdo após "dizendo" ou ":"
+            dizendo_match = re.search(r"(?:dizendo\s*(?:que)?|com\s+a\s+mensagem|:)\s*(.+)$", raw_target, re.IGNORECASE)
+            resp_content = dizendo_match.group(1).strip() if dizendo_match else None
+
+            alvo_nome = raw_target
+            if aba_match:
+                alvo_nome = alvo_nome[:aba_match.start()].strip()
+            if dizendo_match and dizendo_match.start() < len(alvo_nome):
+                alvo_nome = alvo_nome[:dizendo_match.start()].strip()
+            alvo_nome = re.sub(r"\s+(?:nos?|nas?)\s+.*$", "", alvo_nome, flags=re.IGNORECASE).strip()
+            alvo_nome = re.sub(r"^(?:o|a|os|as|do|da|de|ao|pro|pra|para)\s+", "", alvo_nome, flags=re.IGNORECASE).strip()
+
+            is_comp = bool(resp_content and len(resp_content) > 1)
+            clarif = None if is_comp else f"O que você gostaria de responder para {alvo_nome or 'o responsável'} no recado?"
+            return {
+                "verbo_acao": "responder",
+                "objeto_alvo": "recado",
+                "tipo_operacao": "escrita",
+                "valor": resp_content,
+                "descricao_tarefa": f"Responder recado de {alvo_nome or 'responsável'}" + (f": {resp_content}" if resp_content else ""),
+                "destino_navegacao": aba_dest,
+                "parametros_extras": {},
+                "acao": "responder_recado",
+                "destino": aba_dest,
+                "aluno": alvo_nome or None,
+                "nota": None,
+                "faltas": None,
+                "turma": None,
+                "disciplina": None,
+                "portal": None,
+                "is_complete": is_comp,
+                "clarification_question": clarif
+            }
+
+    if m_responder:
+        alvo_raw = m_responder.group(1).strip()
+        aba_dest = m_responder.group(2).strip().title() if m_responder.group(2) else None
+        conteudo_resp = m_responder.group(4).strip() if len(m_responder.groups()) >= 4 and m_responder.group(4) else None
+
+        # Limpa conectivos e artigos do alvo
+        alvo_clean = re.sub(r"^(?:o|a|os|as|do|da|de|ao|pro|pra|para)\s+", "", alvo_raw, flags=re.IGNORECASE).strip()
+        alvo_clean = re.sub(r"\s+(?:nos?|nas?)\s+.*$", "", alvo_clean, flags=re.IGNORECASE).strip()
+
+        is_comp = bool(conteudo_resp and len(conteudo_resp) > 1)
+        clarif = None if is_comp else f"O que você gostaria de responder para {alvo_clean or 'o responsável'} no recado?"
+        return {
+            "verbo_acao": "responder",
+            "objeto_alvo": "recado",
+            "tipo_operacao": "escrita",
+            "valor": conteudo_resp,
+            "descricao_tarefa": f"Responder recado de {alvo_clean or 'responsável'}" + (f": {conteudo_resp}" if conteudo_resp else ""),
+            "destino_navegacao": aba_dest,
+            "parametros_extras": {},
+            "acao": "responder_recado",
+            "destino": aba_dest,
+            "aluno": alvo_clean or None,
+            "nota": None,
+            "faltas": None,
+            "turma": None,
+            "disciplina": None,
+            "portal": None,
+            "is_complete": is_comp,
+            "clarification_question": clarif
+        }
+
+    # Padrão B: Baixar arquivo / documento na lista
+    m_baixar = re.search(r"(?:baixar|baixe|download)\s+(?:o\s+|a\s+)?(?:arquivo|documento|relat[oó]rio|anexo)?\s*([a-zA-ZÀ-ÿ0-9_\-\.\s]+)", lower)
+    if m_baixar and not any(k in lower for k in ["nota", "falta", "alunos"]):
+        arq_nome = m_baixar.group(1).strip()
+        return {
+            "verbo_acao": "baixar",
+            "objeto_alvo": "arquivo",
+            "tipo_operacao": "leitura",
+            "valor": None,
+            "descricao_tarefa": f"Baixar arquivo {arq_nome}",
+            "destino_navegacao": None,
+            "parametros_extras": {},
+            "acao": "baixar_arquivo",
+            "destino": None,
+            "aluno": arq_nome,
+            "nota": None,
+            "faltas": None,
+            "turma": None,
+            "disciplina": None,
+            "portal": None,
+            "is_complete": True,
+            "clarification_question": None
+        }
+
     # 2.5. Navegação para Abas, Menus ou Seções ("entre nos arquivos", "entre na aba arquivos", "ir para diário", etc.)
+
     clean_nav = lower
     clean_nav = re.sub(r"^(?:ol[áa]|oi|ei|rafinha|por\s+favor|pfv|ajuda|ajude)\s*[,:]?\s*", "", clean_nav)
     clean_nav = re.sub(r"\b(?:no\s+site|no\s+portal|no\s+sistema|via\s+chat|no\s+app).*$", "", clean_nav).strip()
 
     nav_match = re.search(
-        r"(?:entre|entra|entrar|vai|vá|ir|navegue|navega|navegar|acesse|acessa|acessar|abra|abre|abrir|clique|clica|clicar|mostre|mostra|quero\s+ver|ver)\s+(?:\b(?:em|no|na|nos|nas|para|pra|pro|pela|pelo)\b\s+)?(?:\b(?:a|o|os|as)\b\s+)?(?:\b(?:aba|menu|seção|secao|guia|link|tela|pasta)\b\s+)?(?:\b(?:de|do|da|dos|das)\b\s+)?([a-zA-ZÀ-ÿ0-9_-]+(?:\s+[a-zA-ZÀ-ÿ0-9_-]+)?)",
+        r"(?:entre|entra|entrar|vai|vá|ir|navegue|navega|navegar|acesse|acessa|acessar|abra|abre|abrir|clique|clica|clicar|mostre|mostra|ver|quero\s+ver)\s+(?:\b(?:em|no|na|nos|nas|para|pra|pro|pela|pelo)\b\s+)?(?:\b(?:a|o|os|as)\b\s+)?(?:\b(?:aba|menu|seção|secao|guia|link|tela|pasta)\b\s+)?(?:\b(?:de|do|da|dos|das)\b\s+)?([a-zA-ZÀ-ÿ0-9_-]+(?:\s+[a-zA-ZÀ-ÿ0-9_-]+)?)",
         clean_nav
     )
     if nav_match:
@@ -225,8 +344,8 @@ def _parse_with_regex_rules(text: str) -> Dict[str, Any]:
             "clarification_question": None
         }
 
-    # Padrão: "o Hugo faltou hoje" ou "Hugo faltou"
-    m_faltou = re.search(r"(?:o|a)?\s*([a-zA-ZÀ-ÿ\s]+?)\s+faltou(?:\s+hoje|\s+ontem|\s+na\s+aula|\s+na\s+data\s+de\s+hoje)?", lower)
+    # Padrão: "o Hugo faltou hoje", "Hugo faltou" ou "Pedro nao veio hoje"
+    m_faltou = re.search(r"(?:o|a)?\s*([a-zA-ZÀ-ÿ\s]+?)\s+(?:faltou|n[aã]o\s+veio)(?:\s+hoje|\s+ontem|\s+na\s+aula|\s+na\s+data\s+de\s+hoje)?", lower)
     if m_faltou:
         aluno_raw = m_faltou.group(1).strip()
         aluno_clean = re.sub(r"^(?:o|a|os|as)\s+", "", aluno_raw, flags=re.IGNORECASE).strip().title()
@@ -294,12 +413,11 @@ def _parse_with_regex_rules(text: str) -> Dict[str, Any]:
             "clarification_question": f"Para qual aluno você gostaria de lançar a nota {nota_val}?"
         }
 
-    # Padrão: "Hugo tirou 9.5 na avaliação" ou "Hugo ficou com 9.5" ou "anota que lucas tirou 7"
-    m_tirou = re.search(r"([a-zA-ZÀ-ÿ\s]+?)\s+(?:tirou|ficou com|obteve)\s+(?:nota\s+)?(\d+(?:[.,]\d+)?)", lower)
+    # Padrão: "Hugo tirou 9.5 na avaliação", "o Hugo tirou 10 no teste" ou "anota que Lucas tirou 7"
+    m_tirou = re.search(r"([a-zA-ZÀ-ÿ\s]+?)\s+(?:tirou|ficou\s+com|obteve)\s+(?:a\s+nota\s+|nota\s+)?(\d+(?:[.,]\d+)?)", lower)
     if m_tirou:
-        aluno_raw = m_tirou.group(1).strip()
-        aluno_clean = re.sub(r"^(?:anota\s+que|anotar\s+que|registra\s+que|registrar\s+que|marca\s+que|marcar\s+que|coloca\s+que|colocar\s+que)\s+", "", aluno_raw, flags=re.IGNORECASE).strip()
-        aluno_clean = re.sub(r"^(?:o|a|os|as|do|da|de|pro|para|pra)\s+", "", aluno_clean, flags=re.IGNORECASE).strip().title()
+        aluno_raw = m_tirou.group(1)
+        aluno_clean = re.sub(r"^(?:anota\s+que|registra\s+que|marca\s+que|coloca\s+que|o|a|os|as|do|da|de|pro|para|pra)\s+", "", aluno_raw, flags=re.IGNORECASE).strip().title()
         nota_val = float(m_tirou.group(2).replace(",", "."))
         return {
             "verbo_acao": "lançar",
@@ -320,8 +438,8 @@ def _parse_with_regex_rules(text: str) -> Dict[str, Any]:
             "clarification_question": None
         }
 
-    # Padrão A: "lança nota 9.5 para o Hugo Henrique" ou "coloca nota 6 no boletim da Maria"
-    m_a = re.search(r"(?:lança|lance|lançar|coloca|colocar|bota|botar|registra|registrar|nota)\s+(?:nota\s+)?(\d+(?:[.,]\d+)?)\s+(?:no\s+boletim\s+(?:da|do|de)\s+|para|pra|pro|do|da|de|no|na)\s+([a-zA-ZÀ-ÿ\s]+)", lower)
+    # Padrão A: "lança nota 9.5 para o Hugo Henrique"
+    m_a = re.search(r"(?:lança|lance|lançar|coloca|colocar|bota|botar|registra|registrar|nota)\s+(?:nota\s+)?(\d+(?:[.,]\d+)?)\s+(?:para|pra|pro|do|da|de)\s+([a-zA-ZÀ-ÿ\s]+)", lower)
     if m_a:
         nota_val = float(m_a.group(1).replace(",", "."))
         aluno_raw = m_a.group(2).strip()
@@ -427,6 +545,33 @@ def _parse_with_regex_rules(text: str) -> Dict[str, Any]:
             "clarification_question": None
         }
 
+    # Padrão: Ocorrência comportamental direta ("Mariana brigou no recreio")
+    m_comport = re.search(r"(?:o|a)?\s*([a-zA-ZÀ-ÿ\s]+?)\s+(brigou|conversou|atrapalhou|bateu|reclamou|saiu)(?:\s+(?:no|na|durante)\s+(.+))?$", lower)
+    if m_comport:
+        aluno_raw = m_comport.group(1).strip()
+        aluno_clean = re.sub(r"^(?:anota\s+que|registra\s+que|marca\s+que|o|a|os|as)\s+", "", aluno_raw, flags=re.IGNORECASE).strip().title()
+        verbo_comp = m_comport.group(2)
+        local_comp = (m_comport.group(3) or "").strip()
+        desc = f"{verbo_comp} {local_comp}".strip()
+        return {
+            "verbo_acao": "anotar",
+            "objeto_alvo": "ocorrência disciplinar",
+            "tipo_operacao": "escrita",
+            "valor": desc,
+            "descricao_tarefa": f"Anotar ocorrência disciplinar para {aluno_clean}: {desc}",
+            "destino_navegacao": None,
+            "parametros_extras": {},
+            "acao": "anotar_ocorrencia_disciplinar",
+            "aluno": aluno_clean,
+            "nota": None,
+            "faltas": None,
+            "turma": None,
+            "disciplina": None,
+            "portal": None,
+            "is_complete": True,
+            "clarification_question": None
+        }
+
     # Padrão: Tarefas de preenchimento/escrita aberta ("preenche X como Y", "preenche a data da aula como 2026-09-15")
     m_preenche = re.search(r"\b(preenche|preencher|anota|anotar|escreve|escrever|digita|digitar|registra|registrar|coloca|colocar)\s+(?:o|a|os|as)?\s*(.*?)\s+\b(?:como|com|para|de|=)\b\s*(.+)$", lower)
     if m_preenche and m_preenche.group(2) and m_preenche.group(3):
@@ -478,54 +623,6 @@ def _parse_with_regex_rules(text: str) -> Dict[str, Any]:
             "destino_navegacao": None,
             "parametros_extras": {},
             "acao": "marcar_presenca",
-            "aluno": aluno_clean,
-            "nota": None,
-            "faltas": None,
-            "turma": None,
-            "disciplina": None,
-            "portal": None,
-            "is_complete": True,
-            "clarification_question": None
-        }
-
-    # Padrão: Falta ou Ausência direta ("pedro nao veio hoje", "Hugo faltou hoje", "marca falta pro Carlos")
-    m_falta_direta = re.match(r"^([a-zA-ZÀ-ÿ\s]+?)\s+(?:n[aã]o\s+(?:veio|compareceu)|faltou)(?:\s+(?:hoje|ontem|na\s+aula))?$", lower)
-    if m_falta_direta and not any(p in lower for p in ["quem", "lista", "quantos"]):
-        aluno_raw = m_falta_direta.group(1).strip()
-        aluno_clean = re.sub(r"^(?:o|a|os|as|do|da|de|pro|para|pra)\s+", "", aluno_raw, flags=re.IGNORECASE).strip().title()
-        return {
-            "verbo_acao": "lançar",
-            "objeto_alvo": "falta",
-            "tipo_operacao": "escrita",
-            "valor": "ausente",
-            "descricao_tarefa": f"Lançar falta para {aluno_clean}",
-            "destino_navegacao": None,
-            "parametros_extras": {},
-            "acao": "lancar_falta",
-            "aluno": aluno_clean,
-            "nota": None,
-            "faltas": 1,
-            "turma": None,
-            "disciplina": None,
-            "portal": None,
-            "is_complete": True,
-            "clarification_question": None
-        }
-
-    # Padrão: Ocorrência comportamental livre ("mariana brigou no recreio")
-    m_incidente = re.match(r"^([a-zA-ZÀ-ÿ\s]+?)\s+(?:brigou|bateu|conversou|atrapalhou|fez\s+bagun[çc]a|usou\s+celular|sem\s+material)(?:\s+(?:no|na|com|durante)\s+(.+))?$", lower)
-    if m_incidente:
-        aluno_raw = m_incidente.group(1).strip()
-        aluno_clean = re.sub(r"^(?:o|a|os|as|do|da|de|pro|para|pra)\s+", "", aluno_raw, flags=re.IGNORECASE).strip().title()
-        return {
-            "verbo_acao": "anotar",
-            "objeto_alvo": "ocorrência disciplinar",
-            "tipo_operacao": "escrita",
-            "valor": lower,
-            "descricao_tarefa": f"Anotar ocorrência disciplinar para {aluno_clean}: {lower}",
-            "destino_navegacao": None,
-            "parametros_extras": {},
-            "acao": "anotar_ocorrencia_disciplinar",
             "aluno": aluno_clean,
             "nota": None,
             "faltas": None,
@@ -635,28 +732,16 @@ def _parse_with_regex_rules(text: str) -> Dict[str, Any]:
 # incluindo tiers gratuitos, porque nenhum dado pessoal de aluno trafega.
 # ---------------------------------------------------------------------------
 
-# Lista de palavras comuns em português que não são nomes de alunos mesmo após preposições
-_COMMON_NON_STUDENT_WORDS = {
-    "aula", "classe", "turma", "turmas", "escola", "prova", "provas", "teste", "testes",
-    "materia", "matéria", "exercicio", "exercício", "exercicios", "exercícios", "casa",
-    "reuniao", "reunião", "recuperacao", "recuperação", "relatorio", "relatório", "relatorios",
-    "arquivos", "configuracoes", "configurações", "redacao", "redação", "duvida", "dúvida",
-    "conteudo", "conteúdo", "chamada", "diario", "diário", "presenca", "presença", "falta",
-    "faltas", "nota", "notas", "boletim", "boletins", "quadro", "horario", "horário", "recreio",
-    "hoje", "ontem", "amanha", "amanhã", "tarde", "manha", "manhã", "noite", "geral", "tudo",
-    "todos", "todas", "grupo", "alunos", "alunas", "estudantes", "livro", "caderno", "atividade",
-    "atividades", "seção", "secao", "aba", "portal", "sistema"
-}
-
 # Verbos e substantivos que indicam operação sobre dado pessoal de aluno
 _PII_ACTION_VERBS = {
-    "lança", "lance", "lançar", "coloca", "colocar", "registra", "registrar",
-    "registre", "marca", "marcar", "anota", "anotar", "preenche", "preencher",
-    "corrige", "corrigir", "atualiza", "atualizar", "remove", "remover",
-    "apaga", "apagar", "inclui", "incluir", "exclui", "excluir",
+    "lança", "lance", "lançar", "coloca", "colocar", "bota", "botar",
+    "registra", "registrar", "registre", "marca", "marcar", "anota", "anotar",
+    "preenche", "preencher", "corrige", "corrigir", "atualiza", "atualizar",
+    "remove", "remover", "apaga", "apagar", "inclui", "incluir", "exclui", "excluir",
     "muda", "mudar", "altera", "alterar", "transfere", "transferir",
     "tirou", "tirar", "obteve", "obter", "ficou", "ficar",
-    "faltou", "faltar", "faltaram", "veio", "compareceu", "brigou", "bateu"
+    "faltou", "faltar", "faltaram", "veio", "vir", "brigou", "brigar",
+    "conversou", "conversar", "atrapalhou", "atrapalhar", "atrasou", "atrasar",
 }
 
 _PII_OBJECT_NOUNS = {
@@ -667,131 +752,121 @@ _PII_OBJECT_NOUNS = {
     "turma", "turmas", "matrícula", "matricula",
     "ausente", "ausentes", "ausência", "ausencia",
     "presente", "presentes", "avaliação", "avaliacao",
+    "teste", "testes", "prova", "provas", "simulado", "simulados",
+    "recreio", "intervalo", "comportamento", "chamada",
 }
 
 _ABSENCE_PRESENCE_WORDS = {
     "falta", "faltas", "faltou", "faltaram", "ausente", "ausentes",
     "ausência", "ausencia", "presença", "presenca", "presente", "presentes",
-    "nao veio", "não veio", "nao compareceu", "não compareceu", "sem presença", "sem presenca"
+    "veio", "vir", "atrasado", "atrasada", "atrasou",
 }
 
-_INCIDENT_WORDS = {
-    "brigou", "bateu", "xingou", "gritou", "conversando", "conversa", "bagunça",
-    "bagunca", "recreio", "atrapalhou", "celular", "dormiu", "ocorrência", "ocorrencia",
-    "advertência", "advertencia", "sem material", "sem tarefa", "comportamento"
+# Nomes próprios comuns no contexto escolar brasileiro para detecção case-insensitive
+_COMMON_BRAZILIAN_FIRST_NAMES = {
+    "hugo", "lucas", "pedro", "mariana", "ana", "joao", "joão", "maria", "carlos",
+    "beatriz", "enzo", "gabriel", "guilherme", "gustavo", "felipe", "mateus", "matheus",
+    "julia", "júlia", "larissa", "leticia", "letícia", "luiza", "luísa", "marina",
+    "manuela", "rafael", "rafaela", "rodrigo", "samuel", "sophia", "sofia", "thiago",
+    "tiago", "vinicius", "vinícius", "vitor", "vítor", "vitoria", "vitória", "arthur",
+    "artur", "bernardo", "davi", "heitor", "henrique", "isabela", "isabella", "laura",
+    "lorena", "miguel", "nicolas", "nícolas", "otavio", "otávio", "yasmin", "yasmim",
+    "daniel", "daniela", "eduardo", "eduarda", "fernando", "fernanda", "leonardo",
+    "marcos", "paulo", "paula", "andre", "andré", "andressa", "bruno", "bruna",
+    "caio", "camila", "diego", "fabio", "fábio", "fabiana", "giovanna", "giovana",
+    "igor", "jessica", "jéssica", "leandro", "marcela", "marcelo", "natalia", "natália",
+    "priscila", "renan", "renata", "ricardo", "sabrina", "tatiane", "tatiana", "vanessa",
+    "milena", "milenna", "elisa", "clarice", "alice", "antonio", "antônio", "francisco",
+    "clara", "heloisa", "heloísa", "cecilia", "cecília", "valentina", "benjamin"
 }
 
-def _is_generic_non_pii(text: str) -> bool:
-    """Identifica requisições pedagógicas/instrucionais ou de navegação pura que não contêm dados de aluno."""
-    lower = text.lower().strip()
-    if any(lower.startswith(p) for p in ["crie ", "criar ", "gere ", "gerar ", "elabore ", "sugira ", "proponha ", "monte "]):
-        if any(w in lower for w in ["questões", "questoes", "prova", "plano", "rubrica", "resumo", "atividade", "exercício", "exercicio"]):
-            return True
-    if any(lower.startswith(p) for p in ["quais ", "qual ", "como ", "quem "]):
-        if any(w in lower for w in ["estratégia", "estrategia", "desempenho médio", "desempenho medio", "média", "media", "ensinar", "estudante", "estudantes", "alunos", "turma"]):
-            return True
-    if any(lower.startswith(p) for p in ["navegue ", "navega ", "navegar ", "ir para ", "vá para ", "va para ", "abra ", "abrir ", "quero ver ", "ver "]):
-        if any(w in lower for w in ["aba", "seção", "secao", "relatório", "relatorio", "arquivo", "arquivos", "diário", "diario", "configurações", "configuracoes"]):
-            return True
-    return False
+_STOPWORDS_AFTER_PREP = {
+    "que", "o", "a", "os", "as", "um", "uma", "uns", "umas", "classe", "turma",
+    "aula", "diario", "diário", "prova", "sistema", "escola", "colegio", "colégio",
+    "pagina", "página", "aba", "arquivo", "arquivos", "conteudo", "conteúdo", "secao", "seção"
+}
 
-def get_active_roster_students(supabase_client: Any = None, teacher_id: Optional[str] = None) -> List[str]:
-    """
-    Recupera a lista de nomes de alunos cadastrados na turma ativa
-    via Supabase ou cache local para validação cruzada de PII.
-    """
-    students: List[str] = []
-    if supabase_client:
-        try:
-            query = supabase_client.table("students").select("name")
-            if teacher_id:
-                query = query.eq("teacher_id", teacher_id)
-            res = query.execute()
-            if res.data:
-                for row in res.data:
-                    name = row.get("name")
-                    if name:
-                        students.append(name)
-        except Exception:
-            pass
-
-    if not students:
-        try:
-            cache_file = Path(__file__).resolve().parent / "discovered_maps_cache.json"
-            if cache_file.exists():
-                with open(cache_file, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                    for k, v in data.items():
-                        if isinstance(v, dict) and "students" in v and isinstance(v["students"], list):
-                            students.extend(v["students"])
-        except Exception:
-            pass
-
-    return students
-
-def _contains_student_pii(text: str, known_students: Optional[Iterable[str]] = None) -> bool:
+def _contains_student_pii(text: str, known_students: Optional[List[str]] = None) -> bool:
     """
     Detecta se o texto do comando contém referência a dado pessoal
     de aluno que requeira processamento estritamente local (Trilho 1).
 
-    FILOSOFIA FAIL-CLOSED:
-    Qualquer comando com ação operacional escolar, número 0-10, ausência,
-    ocorrência disciplinar ou candidato a nome é tratado como PII por padrão,
-    a menos que seja comprovadamente uma consulta pedagógica genérica (ex: gerar prova).
+    ARQUITETURA FAIL-CLOSED:
+    ───────────────────────
+    A regra fundamental é: assume que tem PII, a menos que se comprove
+    que é uma instrução puramente conceitual/pedagógica ou de navegação.
 
-    Retorna True se o texto DEVE ser processado apenas localmente.
-    Retorna False se é comprovadamente seguro enviar para provedores de nuvem.
+    Critérios mandatórios de bloqueio (forçam Local):
+    0. Validação Cruzada: Qualquer correspondência com a lista de alunos da turma ativa.
+    1. Nome Próprio Brasileiro: Qualquer nome próprio comum identificado (case-insensitive).
+    2. Indicadores Pessoais: Contração pessoal ('pro', 'pra', 'aluno X') seguido de nome.
+    3. Frequência / Presença / Ausência: 'não veio', 'faltou', 'ausente', 'presença', etc.
+    4. Candidato a Nota: Números 0-10 associados a nota/avaliação/verbo de registro.
+    5. Ocorrências e Comportamento: 'brigou', 'conversou', 'atrapalhou', etc.
+    6. Boletim ou Diário de Turma.
     """
     lower = text.lower().strip()
     tokens = set(re.split(r"\W+", lower))
+    tokens.discard("")
 
-    # 1. Validação cruzada estrita contra a lista real de alunos (Supabase/localDB/passada)
+    # ── CAMADA 0: Validação Cruzada contra lista real de alunos cadastrados ───
     if known_students:
-        for s in known_students:
-            s_clean = s.strip().lower()
-            if not s_clean:
+        for st in known_students:
+            if not st:
                 continue
-            s_parts = s_clean.split()
-            # Nome completo ou primeiro nome
-            if re.search(rf"\b{re.escape(s_clean)}\b", lower):
-                return True
-            if len(s_parts[0]) >= 3 and s_parts[0] not in _COMMON_NON_STUDENT_WORDS:
-                if re.search(rf"\b{re.escape(s_parts[0])}\b", lower):
+            st_norm = unicodedata.normalize("NFD", str(st))
+            st_clean = "".join([c for c in st_norm if not unicodedata.combining(c)]).lower()
+            st_parts = [p for p in re.split(r"\W+", st_clean) if len(p) >= 3]
+            for part in st_parts:
+                if part in tokens or part in lower:
                     return True
 
-    # 2. Se for consulta/instrução comprovadamente genérica sem vínculo individual -> Seguro para nuvem
-    if _is_generic_non_pii(text):
-        return False
-
-    # 3. Indicadores de ausência ou falta coloquial ('nao veio', 'não compareceu', etc.)
-    if any(ab in lower for ab in ["nao veio", "não veio", "nao compareceu", "não compareceu", "faltou", "faltaram", "ausente", "ausentes"]):
+    # ── CAMADA 1: Nomes Próprios Brasileiros Comuns (Case-Insensitive) ────────
+    if tokens & _COMMON_BRAZILIAN_FIRST_NAMES:
         return True
 
-    # 4. Indicadores de ocorrência disciplinar ou comportamental ('brigou', 'conversa', etc.)
-    if bool(tokens & _INCIDENT_WORDS):
+    # ── CAMADA 2: Indicadores Pessoais de Aluno (pro, pra, para o, para a, ao, à, aluno X) ──
+    for m in re.finditer(r"\b(?:pro|pra|para\s+o|para\s+a|ao|à)\s+([a-záéíóúâêîôûãõç]{3,})\b", lower):
+        cand = m.group(1)
+        if cand not in _STOPWORDS_AFTER_PREP and cand not in {"que", "dia", "bimestre", "ano", "semestre", "turma", "escola", "colegio", "recreio", "teste", "portal", "painel", "sistema", "diario", "conteudo", "conteúdo", "professor", "professora", "relatorio", "relatório", "tabela", "tela"}:
+            return True
+    if re.search(r"\b(?:aluno|aluna|estudante)\s+[a-záéíóúâêîôûãõç]{3,}\b", lower):
         return True
 
-    # 5. Candidato a nome de aluno após preposição (ex: 'pro hugo', 'pra ana', 'para carlos', 'da maria')
-    prep_match = re.search(r"(?:^|\b(?:para|pra|pro|do|da|de|no|na|ao|à|com|o|a)\s+)([a-záéíóúâêîôûãõç]{2,})", lower)
-    if prep_match:
-        cand = prep_match.group(1)
-        if cand not in _COMMON_NON_STUDENT_WORDS and not cand.isdigit():
+    # ── CAMADA 3: Frequência / Presença / Ausência ────────────────────────────
+    if "nao veio" in lower or "não veio" in lower or "faltou" in lower or "ausente" in lower:
+        return True
+    if "presenca" in lower or "presença" in lower or "frequencia" in lower or "frequência" in lower:
+        if any(v in lower for v in ["marca", "marcar", "registra", "registrar", "coloca", "preenche"]):
+            return True
+    if re.search(r"\b\d+\s+faltas?\b", lower):
+        return True
+    if "falta" in tokens and any(v in tokens for v in ["marca", "marcar", "registra", "registrar", "coloca", "lançar", "lança", "remove", "inclui"]):
+        return True
+
+    # ── CAMADA 4: Candidato a Nota Escolar (0 a 10 ou por extenso) ───────────
+    # Remove quantidades de questões/itens da análise
+    cleaned_grades = re.sub(r"\b\d+\s*(?:quest[õo]es|perguntas|itens|exerc[íi]cios|atividades|pontos|minutos|min|horas|dias|ano|anos)\b", "", lower)
+    grade_pat = r"(?:10|[0-9](?:[.,][0-9]+)?|zero|um|dois|tr[eê]s|quatro|cinco|seis|sete|oito|nove|dez|m[aá]xim[ao]|m[ií]nim[ao])"
+    if re.search(rf"\b(?:nota\s+{grade_pat}|{grade_pat}\s*(?:no\s+teste|na\s+prova|na\s+avaliacao|na\s+avaliação))\b", cleaned_grades):
+        return True
+    if any(v in tokens for v in ["tirou", "obteve", "ficou"]):
+        if re.search(rf"\b{grade_pat}\b", cleaned_grades):
+            return True
+    if any(v in tokens for v in ["lança", "lançar", "lance", "coloca", "colocar", "bota", "registra", "atribua", "atribuir"]):
+        if "nota" in tokens and re.search(rf"\b{grade_pat}\b", cleaned_grades):
+            return True
+        if "conceito" in tokens:
             return True
 
-    # 6. Candidato a nome no início da frase seguido de verbo escolar/ação/incidente
-    init_match = re.match(r"^([a-záéíóúâêîôûãõç]{2,})\s+", lower)
-    if init_match:
-        cand = init_match.group(1)
-        if cand not in _COMMON_NON_STUDENT_WORDS and (bool(tokens & _PII_ACTION_VERBS) or bool(tokens & _INCIDENT_WORDS)):
-            return True
+    # ── CAMADA 5: Ocorrências e Comportamento ─────────────────────────────────
+    if any(t in tokens for t in ["brigou", "conversou", "atrapalhou", "bateu", "ocorrencia", "ocorrência"]):
+        return True
 
-    # 7. Números de 0 a 10 (inteiros ou decimais) em contexto avaliativo ou verbo de nota
-    if re.search(r"\b(?:10|[0-9](?:[.,][0-9]+)?)\b", lower):
-        if bool(tokens & _PII_ACTION_VERBS) or any(w in lower for w in ["nota", "notas", "teste", "prova", "trabalho", "avaliacao", "avaliação", "boletim"]):
-            return True
-
-    # 8. FAIL-CLOSED: Qualquer verbo de ação operacional escolar restante é considerado PII
-    if bool(tokens & _PII_ACTION_VERBS):
+    # ── CAMADA 6: Boletim / Diário da Turma ───────────────────────────────────
+    if "boletim" in tokens:
+        return True
+    if re.search(r"di[aá]rio\s+da\s+turma", lower):
         return True
 
     return False
@@ -835,7 +910,7 @@ def _call_local_llm(
         method="POST"
     )
     try:
-        with urllib.request.urlopen(req, timeout=2) as resp:
+        with urllib.request.urlopen(req, timeout=15) as resp:
             data = json.loads(resp.read().decode("utf-8"))
             content = data["message"]["content"]
             return content, model
@@ -925,8 +1000,7 @@ def extract_intent(
     page_content: Optional[str] = None,
     ollama_model: Optional[str] = None,
     ollama_url: Optional[str] = None,
-    known_students: Optional[Iterable[str]] = None,
-    supabase_client: Optional[Any] = None,
+    known_students: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     """
     Ponto de entrada de interpretação de intenção pedagógica (Camada 1 - NLU).
@@ -965,16 +1039,37 @@ def extract_intent(
     if page_content:
         isolated_prompt += f"\n<conteudo_da_pagina>\n{page_content}\n</conteudo_da_pagina>"
 
-    # ─── ROTEAMENTO POR PRIVACIDADE ────────────────────────────────────────────
-    # Se known_students não foi passado, tenta carregar do Supabase se fornecido ou do cache
-    active_roster = known_students
-    if active_roster is None and supabase_client is not None:
-        active_roster = get_active_roster_students(supabase_client)
+    # ─── ROTEAMENTO POR PRIVACIDADE — CADEADO DE SEGURANÇA FINAL ─────────────
+    # Classificação de 5 classes (C0..C4). Fail-closed: na dúvida → mais restritivo.
+    if _SECURITY_LOCK_AVAILABLE:
+        data_class = classify_command(user_text, known_students=known_students)
+    else:
+        # Fallback de importação: usa o roteador binário legado
+        data_class = None  # type: ignore
+    is_pii = _contains_student_pii(user_text, known_students=known_students)
 
-    is_pii = _contains_student_pii(user_text, known_students=active_roster)
+    # ── CLASSE 0: Dado de Saúde / LGPD Especial — BLOQUEIO ABSOLUTO ──────────
+    if _SECURITY_LOCK_AVAILABLE and data_class is not None and data_class.value == 0:
+        # Nenhum LLM (local ou cloud) recebe este texto sem consentimento explícito.
+        # Retorna recusa informativa para a professora.
+        parsed = _parse_with_regex_rules(user_text)
+        provider_used = "regex"
+        model_used = "deterministic_regex_rules"
+        parsed["pii_routed_local"] = True
+        parsed["security_block"] = "CLASSE_0_SAUDE_LGPD_ESPECIAL"
+        parsed["security_message"] = (
+            "⚠️ Dado sensível detectado (saúde, condição médica ou LGPD especial). "
+            "Este tipo de informação não pode ser processado por assistente de IA. "
+            "Registre diretamente no sistema do colégio ou consulte a equipe pedagógica."
+        )
 
-    if is_pii:
-        # ── CAMINHO PII: apenas local → regex. Cloud bloqueado. ──────────────
+    # ── CLASSE 1: Texto livre com aluno — Local somente ──────────────────────
+    elif is_pii and (
+        not _SECURITY_LOCK_AVAILABLE
+        or data_class is None
+        or data_class.value == 1
+    ):
+        # ── CAMINHO PII C1: apenas local → regex. Cloud bloqueado. ───────────
         # 1. Ollama local (nenhum dado sai da máquina)
         res = _call_local_llm(isolated_prompt, model=local_model, ollama_url=local_url)
         if res:
@@ -994,8 +1089,77 @@ def extract_intent(
 
         parsed["pii_routed_local"] = True
 
+    # ── CLASSES 2/3: Desempenho estruturado / Identificação — Pseudonimiza ───
+    elif _SECURITY_LOCK_AVAILABLE and data_class is not None and data_class.value in (2, 3):
+        token_map: Dict[str, str] = {}
+        pseudo_prompt = isolated_prompt  # fallback sem pseudonimização
+
+        # Pseudonimizar ANTES de qualquer chamada cloud
+        try:
+            masked_text, token_map = pseudonymize(user_text, known_students)
+            pseudo_isolated = f"<comando_usuario>\n{masked_text}\n</comando_usuario>"
+            if page_content:
+                pseudo_isolated += f"\n<conteudo_da_pagina>\n{page_content}\n</conteudo_da_pagina>"
+            pseudo_prompt = pseudo_isolated
+        except PseudonymizationError:
+            # Pseudonimização falhou → tratar como C1 (local somente)
+            res = _call_local_llm(isolated_prompt, model=local_model, ollama_url=local_url)
+            if res:
+                raw_json, model_name = res
+                try:
+                    parsed = json.loads(raw_json)
+                    provider_used = "ollama_local"
+                    model_used = model_name
+                except Exception:
+                    parsed = None
+            if not parsed:
+                parsed = _parse_with_regex_rules(user_text)
+                provider_used = "regex"
+                model_used = "deterministic_regex_rules"
+            parsed["pii_routed_local"] = True
+            parsed["pseudonymization_degraded"] = True
+
+        if not parsed:
+            # Pseudonimização bem-sucedida → chamar cloud com prompt mascarado
+            if g_key and len(g_key) > 10:
+                res = _call_groq_llm(pseudo_prompt, g_key)
+                if res:
+                    raw_json, model_name = res
+                    try:
+                        parsed = json.loads(raw_json)
+                        # Restaurar nomes reais na resposta
+                        if "aluno" in parsed and token_map:
+                            parsed["aluno"] = depseudonymize(str(parsed["aluno"]), token_map)
+                        provider_used = "groq"
+                        model_used = model_name
+                    except Exception:
+                        parsed = None
+
+            if not parsed and gem_key and len(gem_key) > 10:
+                res = _call_gemini_llm(pseudo_prompt, gem_key)
+                if res:
+                    raw_json, model_name = res
+                    try:
+                        parsed = json.loads(raw_json)
+                        if "aluno" in parsed and token_map:
+                            parsed["aluno"] = depseudonymize(str(parsed["aluno"]), token_map)
+                        provider_used = "gemini"
+                        model_used = model_name
+                    except Exception:
+                        parsed = None
+
+            if not parsed:
+                parsed = _parse_with_regex_rules(user_text)
+                provider_used = "regex"
+                model_used = "deterministic_regex_rules"
+
+            # token_map destruído ao sair do escopo — sem gravação em disco
+            del token_map
+            parsed["pii_routed_local"] = False
+            parsed["pseudonymized"] = True
+
     else:
-        # ── CAMINHO NÃO-PII: cloud (tier livre OK) → regex ──────────────────
+        # ── CLASSE 4: Pedagógico genérico — Cloud livre ───────────────────────
         # 1. Provedor Primário: Groq LLM
         if g_key and len(g_key) > 10:
             res = _call_groq_llm(isolated_prompt, g_key)
@@ -1032,6 +1196,10 @@ def extract_intent(
     parsed["provider_used"] = provider_used
     parsed["model_used"] = model_used
     parsed["pii_detected"] = is_pii
+    if _SECURITY_LOCK_AVAILABLE and data_class is not None:
+        parsed["data_class"] = data_class.value
+        parsed["data_class_label"] = data_class.label
+
 
     # -------------------------------------------------------------
     # DERIVAÇÃO DE COMPATIBILIDADE DESCENDENTE (Downstream Adapter)
@@ -1050,16 +1218,10 @@ def extract_intent(
             legacy_acao = "lancar_nota"
         elif any(k in objeto for k in ["presenca", "presença", "frequencia", "frequência"]):
             legacy_acao = "marcar_presenca"
-        elif any(k in objeto for k in ["ocorrencia", "ocorrência", "disciplinar"]):
-            legacy_acao = "anotar_ocorrencia_disciplinar"
-        elif any(k in objeto for k in ["observacao", "observação"]):
-            legacy_acao = "anotar_observacao_pedagogica"
         else:
             v_clean = re.sub(r"[^\w\s]", "", verbo).strip().replace(" ", "_")
             o_clean = re.sub(r"[^\w\s]", "", objeto).strip().replace(" ", "_")
-            raw_slug = f"{v_clean}_{o_clean}".strip("_") or "acao_geral"
-            import unicodedata
-            legacy_acao = "".join(c for c in unicodedata.normalize('NFD', raw_slug) if unicodedata.category(c) != 'Mn')
+            legacy_acao = f"{v_clean}_{o_clean}".strip("_") or "acao_geral"
 
     # 2. Operações de LEITURA / NAVEGAÇÃO
     else:
@@ -1144,7 +1306,8 @@ async def dispatch_and_execute_task(
     user_text: str,
     history: Optional[List[Dict[str, str]]] = None,
     groq_key: Optional[str] = None,
-    gemini_key: Optional[str] = None
+    gemini_key: Optional[str] = None,
+    known_students: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     """
     Pipeline Completo de Superfície com Schema Aberto:
@@ -1153,7 +1316,7 @@ async def dispatch_and_execute_task(
     3. Se completo: despacha a descrição aberta para execute_task_intent do manual_runner.
     4. Traduz a resposta técnica para linguagem acolhedora e formata o approval_card.
     """
-    intent = extract_intent(user_text, history, groq_key, gemini_key)
+    intent = extract_intent(user_text, history, groq_key, gemini_key, known_students=known_students)
 
     if not intent.get("is_complete"):
         clarification = intent.get("clarification_question") or "Poderia fornecer mais detalhes sobre o que deseja fazer no portal?"

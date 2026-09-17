@@ -32,6 +32,8 @@ import {
 import PortalConnectionWizardModal from '@/components/modules/PortalConnectionWizardModal'
 import RosterReconciliationModal from '@/components/modules/RosterReconciliationModal'
 import { type RosterReconciliationResult, reconcileRosterBatch } from '@/lib/rosterReconciler'
+import PortalCard from '@/components/modules/PortalCard'
+import PortalDetailsModal, { type PortalData } from '@/components/modules/PortalDetailsModal'
 
 export interface ConnectionsHubProps {
   embedded?: boolean
@@ -53,6 +55,11 @@ export default function ConnectionsHub({
   const [showTelemetry, setShowTelemetry] = useState(false)
   const [telemetryMetrics, setTelemetryMetrics] = useState<TelemetryMetrics | null>(null)
 
+  // Portais Escolares com Status Honesto (Itens 2, 3 e 4)
+  const [portalsStatus, setPortalsStatus] = useState<PortalData[]>([])
+  const [selectedPortalModal, setSelectedPortalModal] = useState<PortalData | null>(null)
+  const [loadingPortals, setLoadingPortals] = useState(false)
+
   // Reconciliação de Alunos
   const [reconcileData, setReconcileData] = useState<{
     portalName: string
@@ -67,6 +74,28 @@ export default function ConnectionsHub({
     setConnectors(all)
   }, [])
 
+  // Carrega status honesto dos portais escolares
+  const refreshPortalsStatus = useCallback(async () => {
+    setLoadingPortals(true)
+    try {
+      const res = await fetch('/api/portals/status')
+      if (res.ok) {
+        const data = await res.json()
+        if (data.portals) {
+          setPortalsStatus(data.portals)
+          setSelectedPortalModal(prev => {
+            if (!prev) return null
+            return data.portals.find((p: PortalData) => p.id === prev.id) || prev
+          })
+        }
+      }
+    } catch (err) {
+      console.warn('[ConnectionsHub] Erro ao carregar status dos portais:', err)
+    } finally {
+      setLoadingPortals(false)
+    }
+  }, [])
+
   // Carrega métricas de telemetria
   const refreshTelemetry = useCallback(() => {
     setTelemetryMetrics(getTelemetryMetrics())
@@ -74,10 +103,14 @@ export default function ConnectionsHub({
 
   useEffect(() => {
     refreshConnectors()
+    refreshPortalsStatus()
     refreshTelemetry()
 
     // Ouve eventos de alteração de portais, Trello e telemetria
-    const handlePortalChange = () => refreshConnectors()
+    const handlePortalChange = () => {
+      refreshConnectors()
+      refreshPortalsStatus()
+    }
     const handleTrelloChange = () => refreshConnectors()
     const handleTelemetryChange = () => refreshTelemetry()
     const handleReconcileOpen = (e: any) => {
@@ -511,54 +544,81 @@ export default function ConnectionsHub({
       )}
 
       {/* ─── FILTROS DE PLATAFORMA ─────────────────────────────────────────── */}
-      <div style={{ display: 'flex', gap: 8, borderBottom: '1.5px solid #e7dfd5', paddingBottom: 12 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1.5px solid #e7dfd5', paddingBottom: 12, flexWrap: 'wrap', gap: 10 }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button
+            onClick={() => setFilterTier('all')}
+            style={{
+              padding: '8px 16px',
+              borderRadius: RADIUS.md,
+              border: filterTier === 'all' ? '1.5px solid #8b5e3c' : '1px solid #e7dfd5',
+              background: filterTier === 'all' ? '#8b5e3c' : '#ffffff',
+              color: filterTier === 'all' ? '#ffffff' : '#665c54',
+              fontSize: 13,
+              fontWeight: 700,
+              cursor: 'pointer',
+              transition: TRANSITION.fast,
+            }}
+          >
+            Todas as Conexões ({portalsStatus.length + connectors.filter(c => c.tier === 'api').length})
+          </button>
+          <button
+            onClick={() => setFilterTier('portal')}
+            style={{
+              padding: '8px 16px',
+              borderRadius: RADIUS.md,
+              border: filterTier === 'portal' ? '1.5px solid #8b5e3c' : '1px solid #e7dfd5',
+              background: filterTier === 'portal' ? '#8b5e3c' : '#ffffff',
+              color: filterTier === 'portal' ? '#ffffff' : '#665c54',
+              fontSize: 13,
+              fontWeight: 700,
+              cursor: 'pointer',
+              transition: TRANSITION.fast,
+            }}
+          >
+            🏫 Portais Escolares ({portalsStatus.length})
+          </button>
+          <button
+            onClick={() => setFilterTier('api')}
+            style={{
+              padding: '8px 16px',
+              borderRadius: RADIUS.md,
+              border: filterTier === 'api' ? '1.5px solid #8b5e3c' : '1px solid #e7dfd5',
+              background: filterTier === 'api' ? '#8b5e3c' : '#ffffff',
+              color: filterTier === 'api' ? '#ffffff' : '#665c54',
+              fontSize: 13,
+              fontWeight: 700,
+              cursor: 'pointer',
+              transition: TRANSITION.fast,
+            }}
+          >
+            📋 Trello & APIs ({connectors.filter(c => c.tier === 'api').length})
+          </button>
+        </div>
+
         <button
-          onClick={() => setFilterTier('all')}
+          onClick={() => {
+            refreshPortalsStatus()
+            refreshConnectors()
+          }}
+          disabled={loadingPortals}
+          title="Recarregar status e auditoria"
           style={{
-            padding: '8px 16px',
+            background: '#ffffff',
+            border: '1px solid #d5c8bb',
             borderRadius: RADIUS.md,
-            border: filterTier === 'all' ? '1.5px solid #8b5e3c' : '1px solid #e7dfd5',
-            background: filterTier === 'all' ? '#8b5e3c' : '#ffffff',
-            color: filterTier === 'all' ? '#ffffff' : '#665c54',
-            fontSize: 13,
+            padding: '7px 14px',
+            fontSize: 12,
             fontWeight: 700,
-            cursor: 'pointer',
-            transition: TRANSITION.fast,
+            color: '#665c54',
+            cursor: loadingPortals ? 'wait' : 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
           }}
         >
-          Todas as Conexões ({connectors.length})
-        </button>
-        <button
-          onClick={() => setFilterTier('portal')}
-          style={{
-            padding: '8px 16px',
-            borderRadius: RADIUS.md,
-            border: filterTier === 'portal' ? '1.5px solid #8b5e3c' : '1px solid #e7dfd5',
-            background: filterTier === 'portal' ? '#8b5e3c' : '#ffffff',
-            color: filterTier === 'portal' ? '#ffffff' : '#665c54',
-            fontSize: 13,
-            fontWeight: 700,
-            cursor: 'pointer',
-            transition: TRANSITION.fast,
-          }}
-        >
-          🏫 Portais Escolares ({connectors.filter(c => c.tier === 'agentic_browser').length})
-        </button>
-        <button
-          onClick={() => setFilterTier('api')}
-          style={{
-            padding: '8px 16px',
-            borderRadius: RADIUS.md,
-            border: filterTier === 'api' ? '1.5px solid #8b5e3c' : '1px solid #e7dfd5',
-            background: filterTier === 'api' ? '#8b5e3c' : '#ffffff',
-            color: filterTier === 'api' ? '#ffffff' : '#665c54',
-            fontSize: 13,
-            fontWeight: 700,
-            cursor: 'pointer',
-            transition: TRANSITION.fast,
-          }}
-        >
-          📋 Trello & APIs ({connectors.filter(c => c.tier === 'api').length})
+          <i className={loadingPortals ? 'ti ti-loader' : 'ti ti-refresh'} />
+          {loadingPortals ? 'Atualizando...' : 'Atualizar Status'}
         </button>
       </div>
 
@@ -568,162 +628,171 @@ export default function ConnectionsHub({
         gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))',
         gap: 20,
       }}>
-        {filteredConnectors.map(connector => {
-          const statusInfo = getStatusDisplay(connector.status)
-          const isSyncing = syncingId === connector.id
-          const isPortal = connector.tier === 'agentic_browser'
+        {/* 1. Cards de Portais Escolares com Status Honesto (Itens 2, 3 e 4) */}
+        {(filterTier === 'all' || filterTier === 'portal') &&
+          portalsStatus.map(portal => (
+            <PortalCard
+              key={portal.id}
+              portal={portal}
+              onOpenDetails={p => setSelectedPortalModal(p)}
+            />
+          ))}
 
-          return (
-            <div
-              key={connector.id}
-              style={{
-                background: '#ffffff',
-                border: '1.5px solid #e7dfd5',
-                borderRadius: RADIUS.lg,
-                padding: '20px 24px',
-                boxShadow: SHADOW.sm,
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'space-between',
-                gap: 16,
-                transition: TRANSITION.fast,
-              }}
-            >
-              {/* Header do Card */}
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <div style={{
-                      width: 44,
-                      height: 44,
+        {/* 2. Cards de Integrações Diretas / APIs (Trello, Teams, etc.) */}
+        {(filterTier === 'all' || filterTier === 'api') &&
+          filteredConnectors.filter(c => c.tier === 'api').map(connector => {
+            const statusInfo = getStatusDisplay(connector.status)
+            const isSyncing = syncingId === connector.id
+
+            return (
+              <div
+                key={connector.id}
+                style={{
+                  background: '#ffffff',
+                  border: '1.5px solid #e7dfd5',
+                  borderRadius: RADIUS.lg,
+                  padding: '20px 24px',
+                  boxShadow: SHADOW.sm,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'space-between',
+                  gap: 16,
+                  transition: TRANSITION.fast,
+                }}
+              >
+                {/* Header do Card */}
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <div style={{
+                        width: 44,
+                        height: 44,
+                        borderRadius: RADIUS.md,
+                        background: '#faf6f0',
+                        border: '1px solid #d5c8bb',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: '#8b5e3c',
+                        fontSize: 22,
+                      }}>
+                        <i className="ti ti-brand-trello" />
+                      </div>
+                      <div>
+                        <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#2c1a0e' }}>
+                          {connector.display_name}
+                        </h3>
+                        <span style={{ fontSize: 12, color: '#8c7e73' }}>
+                          Integração Oficial
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Badge de Tipo */}
+                    <span style={{
+                      fontSize: 11,
+                      fontWeight: 700,
+                      padding: '3px 8px',
+                      borderRadius: 6,
+                      background: '#f0fdf4',
+                      border: '1px solid #bbf7d0',
+                      color: '#16a34a',
+                    }}>
+                      Integração Direta
+                    </span>
+                  </div>
+
+                  {/* Status */}
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    padding: '8px 12px',
+                    borderRadius: RADIUS.md,
+                    background: statusInfo.bg,
+                    border: `1px solid ${statusInfo.border}`,
+                    color: statusInfo.color,
+                    fontSize: 12,
+                    fontWeight: 700,
+                    marginBottom: 12,
+                  }}>
+                    <i className={`ti ${statusInfo.icon}`} style={{ fontSize: 14 }} />
+                    {statusInfo.label}
+                  </div>
+
+                  {/* Capacidades Oferecidas */}
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
+                    {connector.capabilities.map(cap => (
+                      <span
+                        key={cap.name}
+                        style={{
+                          fontSize: 11,
+                          padding: '2px 8px',
+                          borderRadius: 4,
+                          background: '#faf6f0',
+                          color: '#665c54',
+                          border: '1px solid #e7dfd5',
+                        }}
+                      >
+                        {cap.name === 'read_roster' && '👥 Alunos'}
+                        {cap.name === 'read_board' && '📋 Quadros'}
+                        {cap.name === 'read_calendar' && '📅 Calendário'}
+                        {cap.name === 'read_assignments' && '📝 Atividades'}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Botões de Ação do Card */}
+                <div style={{
+                  display: 'flex',
+                  gap: 8,
+                  paddingTop: 14,
+                  borderTop: '1px solid #f2ede4',
+                }}>
+                  <button
+                    onClick={() => handleSyncStudents(connector)}
+                    disabled={isSyncing}
+                    style={{
+                      flex: 1,
+                      background: '#8b5e3c',
+                      color: '#ffffff',
+                      border: 'none',
                       borderRadius: RADIUS.md,
-                      background: '#faf6f0',
-                      border: '1px solid #d5c8bb',
+                      padding: '8px 14px',
+                      fontSize: 13,
+                      fontWeight: 700,
+                      cursor: isSyncing ? 'wait' : 'pointer',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      color: '#8b5e3c',
-                      fontSize: 22,
-                    }}>
-                      <i className={isPortal ? 'ti ti-school' : 'ti ti-brand-trello'} />
-                    </div>
-                    <div>
-                      <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#2c1a0e' }}>
-                        {connector.display_name}
-                      </h3>
-                      <span style={{ fontSize: 12, color: '#8c7e73' }}>
-                        {isPortal ? (connector.browser_config?.domain || 'Portal Escolar') : 'Integração Oficial'}
-                      </span>
-                    </div>
-                  </div>
+                      gap: 6,
+                      opacity: isSyncing ? 0.7 : 1,
+                    }}
+                  >
+                    <i className={isSyncing ? 'ti ti-loader' : 'ti ti-refresh'} />
+                    {isSyncing ? 'Lendo...' : 'Sincronizar Alunos'}
+                  </button>
 
-                  {/* Badge de Tipo */}
-                  <span style={{
-                    fontSize: 11,
-                    fontWeight: 700,
-                    padding: '3px 8px',
-                    borderRadius: 6,
-                    background: isPortal ? '#faf6f0' : '#f0fdf4',
-                    border: `1px solid ${isPortal ? '#e7dfd5' : '#bbf7d0'}`,
-                    color: isPortal ? '#8b5e3c' : '#16a34a',
-                  }}>
-                    {isPortal ? 'Portal Escolar' : 'Integração Direta'}
-                  </span>
-                </div>
-
-                {/* Status em Linguagem Não-Técnica */}
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  padding: '8px 12px',
-                  borderRadius: RADIUS.md,
-                  background: statusInfo.bg,
-                  border: `1px solid ${statusInfo.border}`,
-                  color: statusInfo.color,
-                  fontSize: 12,
-                  fontWeight: 700,
-                  marginBottom: 12,
-                }}>
-                  <i className={`ti ${statusInfo.icon}`} style={{ fontSize: 14 }} />
-                  {statusInfo.label}
-                </div>
-
-                {/* Capacidades Oferecidas */}
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
-                  {connector.capabilities.map(cap => (
-                    <span
-                      key={cap.name}
-                      style={{
-                        fontSize: 11,
-                        padding: '2px 8px',
-                        borderRadius: 4,
-                        background: '#faf6f0',
-                        color: '#665c54',
-                        border: '1px solid #e7dfd5',
-                      }}
-                    >
-                      {cap.name === 'read_roster' && '👥 Alunos'}
-                      {cap.name === 'read_grades' && '📊 Notas'}
-                      {cap.name === 'post_grade' && '✍️ Lançar Nota'}
-                      {cap.name === 'read_board' && '📋 Quadros'}
-                      {cap.name === 'read_calendar' && '📅 Calendário'}
-                      {cap.name === 'read_assignments' && '📝 Atividades'}
-                    </span>
-                  ))}
+                  <button
+                    onClick={() => handleDisconnect(connector)}
+                    title="Desconectar ou redefinir conexão"
+                    style={{
+                      background: '#ffffff',
+                      color: '#dc2626',
+                      border: '1px solid #fecaca',
+                      borderRadius: RADIUS.md,
+                      padding: '8px 12px',
+                      fontSize: 13,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <i className="ti ti-trash" />
+                  </button>
                 </div>
               </div>
-
-              {/* Botões de Ação do Card */}
-              <div style={{
-                display: 'flex',
-                gap: 8,
-                paddingTop: 14,
-                borderTop: '1px solid #f2ede4',
-              }}>
-                <button
-                  onClick={() => handleSyncStudents(connector)}
-                  disabled={isSyncing}
-                  style={{
-                    flex: 1,
-                    background: '#8b5e3c',
-                    color: '#ffffff',
-                    border: 'none',
-                    borderRadius: RADIUS.md,
-                    padding: '8px 14px',
-                    fontSize: 13,
-                    fontWeight: 700,
-                    cursor: isSyncing ? 'wait' : 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 6,
-                    opacity: isSyncing ? 0.7 : 1,
-                  }}
-                >
-                  <i className={isSyncing ? 'ti ti-loader' : 'ti ti-refresh'} />
-                  {isSyncing ? 'Lendo...' : 'Sincronizar Alunos'}
-                </button>
-
-                <button
-                  onClick={() => handleDisconnect(connector)}
-                  title="Desconectar ou redefinir conexão"
-                  style={{
-                    background: '#ffffff',
-                    color: '#dc2626',
-                    border: '1px solid #fecaca',
-                    borderRadius: RADIUS.md,
-                    padding: '8px 12px',
-                    fontSize: 13,
-                    cursor: 'pointer',
-                  }}
-                >
-                  <i className="ti ti-trash" />
-                </button>
-              </div>
-            </div>
-          )
-        })}
+            )
+          })}
 
         {/* Card Vazio para Conectar Nova Plataforma */}
         <div
@@ -794,6 +863,16 @@ export default function ConnectionsHub({
             toast.success(`🎉 ${count} alunos gravados com sucesso na sua turma!`)
             setReconcileData(null)
           }}
+        />
+      )}
+
+      {/* ─── MODAL EXPANDIDO DE DETALHES DO PORTAL (ITEM 3) ────────────────── */}
+      {selectedPortalModal && (
+        <PortalDetailsModal
+          portal={selectedPortalModal}
+          isOpen={Boolean(selectedPortalModal)}
+          onClose={() => setSelectedPortalModal(null)}
+          onRefresh={refreshPortalsStatus}
         />
       )}
     </div>

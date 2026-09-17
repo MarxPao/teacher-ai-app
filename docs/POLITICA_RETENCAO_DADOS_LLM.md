@@ -114,3 +114,78 @@ Informamos aos gestores escolares e aos encarregados de proteção de dados que:
 
 A equipe do Teacher AI permanece à disposição para apresentação de relatórios técnicos de segurança e auditorias de código aberto.
 ```
+
+---
+
+### 3.3. Taxonomia de Risco de Dados — Cadeado de Segurança Final (5 Classes)
+
+A partir da versão com pseudonimização ativa, o classificador binário (PII / não-PII) foi substituído por uma taxonomia de **5 classes de severidade** implementada em `sidecar/data_classification.py`. O princípio de roteamento permanece **FAIL-CLOSED**: na dúvida, a classe mais restritiva prevalece.
+
+| Classe | Nome | Exemplos de Dado | Destino | Pseudonimização |
+|:---:|---|---|---|:---:|
+| **C0** | Saúde / LGPD Especial | TDAH, laudo, psicólogo, remédio, bolsa família, CPF | Bloqueio absoluto — nenhum LLM | ❌ N/A |
+| **C1** | Texto Livre com Aluno | Observação comportamental narrativa, ocorrência disciplinar | Trilho 1 local (Ollama → regex) | ❌ N/A |
+| **C2** | Desempenho Estruturado | "coloca 8 pro Hugo", "Mariana faltou" | Cloud com pseudonimização | ✅ Obrigatório |
+| **C3** | Identificação Pura | "qual a nota do Pedro", "quantas faltas o Lucas tem" | Cloud com pseudonimização | ✅ Obrigatório |
+| **C4** | Pedagógico Genérico | Criar prova, sugestão de plano de aula, rubrica | Cloud livre (Groq / Gemini) | ❌ N/A |
+
+**Regras de degradação automática (Fail-Closed):**
+- Se `known_students` for `None` (Supabase offline): C2/C3 degradam para **C1** (bloqueio cloud imediato).
+- Se a pseudonimização falhar por qualquer motivo: `PseudonymizationError` → tratamento como **C1**.
+- Classe 0 é detectada **independentemente do roster** (via JSON de configuração `config/class0_triggers.json`).
+
+**Proteção contra Nomes Não Catalogados (Modo Suspeita — Fail-Closed):**
+A ausência de reconhecimento de um nome próprio nunca é tratada como 'não é nome'. Qualquer termo em posição sintática de referência pessoal (após preposições como 'pra', 'pro', 'para o', 'para a', 'ao') ou em contexto de ação escolar (nota, falta, presença) que não pertença a um vocabulário estrito de termos escolares comprovadamente neutros é classificado preventivamente como **C1** (bloqueio local). Casos adversariais como apelidos não catalogados ('kinha'), erros de digitação ('peedro'), nomes raros capitalizados ('Weverton') e comandos coletivos de lançamento ('coloca nota máxima a todos') são retidos no Trilho 1 e terminantemente impedidos de trafegar para o C4 (Cloud livre).
+
+---
+
+### 3.4. Diagrama do Pipeline Pós-Cadeado de Segurança Final
+
+```
+Texto do usuário
+      │
+      ▼
+[class0_triggers.json] ──── match de saúde/LGPD?
+      │                                    │
+      │ Não                               Sim ──────► C0: BLOQUEIO ABSOLUTO
+      ▼                                              (regex offline + mensagem informativa)
+[classify_command() — data_classification.py]
+      │
+      ├── C0 ──► Regex local + security_message para professora
+      │
+      ├── C1 ──► Ollama local → regex (cloud PROIBIDO)
+      │
+      ├── C2 ──► pseudonymize() → Cloud (Groq/Gemini) → depseudonymize()
+      │          Se pseudonimização falhar → degrada C1
+      │
+      ├── C3 ──► pseudonymize() → Cloud (Groq/Gemini) → depseudonymize()
+      │          Se pseudonimização falhar → degrada C1
+      │
+      └── C4 ──► Cloud livre (Groq → Gemini → regex)
+```
+
+**Motor de Pseudonimização (`sidecar/pseudonymizer.py`):**
+- Tokens: `ALUNO_<6 hex chars>` gerados por `secrets.token_hex(3)` — nunca derivados do nome
+- Mapa `{token → nome_real}` vive **exclusivamente em RAM** e é destruído após cada requisição
+- Nenhuma gravação em disco do mapa de tokens
+- Verificação empírica de payload: `verify_no_real_names_in_payload()` confirma ausência de nomes reais em 100% dos casos C2/C3 nos testes automatizados
+
+---
+
+## 5. Tabela-Resumo — Cadeado de Segurança: Estado Atual
+
+| Camada | Componente | Status | Evidência |
+|---|---|:---:|---|
+| Binário PII/não-PII (7 camadas) | `_contains_student_pii()` | ✅ Ativo | 45/45 testes `test_pii_router.py` |
+| Taxonomia 5 classes (C0–C4) | `data_classification.py` | ✅ Ativo | 59 novos testes passando |
+| Pseudonimização C2/C3 | `pseudonymizer.py` | ✅ Ativo | Payload verificado empiricamente: 0 leaks |
+| Gatilhos Classe 0 (saúde/LGPD) | `config/class0_triggers.json` | ✅ Ativo | 10 casos C0 passando incl. sem roster |
+| Falha segura Supabase offline | Degradação automática C2→C1 | ✅ Ativo | 7 casos `TestFailSafeOffline` passando |
+| Verificação de payload de rede | `verify_no_real_names_in_payload()` | ✅ Ativo | 6 payloads HTTP interceptados e verificados |
+| Casos adversariais testados | `TestAdversarial` (Modo Suspeita) | ✅ Ativo | 0 escapes (asserts rígidos C1/C0 em 100% dos 7 casos) |
+| Integração na regressão padrão | `pytest sidecar/tests/` | ✅ Ativo | 104/104 passando em 37.40s |
+
+> **Critério de Aceite Confirmado:**
+> a) ✅ Todos os 104 testes passam
+> b) ✅ Verificação empírica de payload: 0 nomes reais em 100% dos casos C2/C3
+> c) ✅ Falha segura: Supabase offline → bloqueio total (nunca vazamento por omissão)

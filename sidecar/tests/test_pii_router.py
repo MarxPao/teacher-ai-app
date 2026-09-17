@@ -42,7 +42,7 @@ class TestPIIHeuristic:
         "lançar 2 faltas pro Henrique",
         "nota 6.0 pra turma do 7B",
         "registre a frequência do Enzo",
-        # As 5 frases auditas com termos coloquiais, minúsculas e inteiros 0-10:
+        # As 5 frases coloquiais em minúsculas que antes vazavam (Audit Remediation):
         "coloca 8 pro hugo",
         "o hugo tirou 10 no teste",
         "pedro nao veio hoje",
@@ -74,6 +74,39 @@ class TestPIIHeuristic:
         assert _contains_student_pii(phrase) is False, (
             f"Esperava PII=False para: {phrase!r}"
         )
+
+    def test_five_critical_fail_closed_phrases(self):
+        """As 5 frases coloquiais em minúsculas que antes vazavam agora são bloqueadas com segurança."""
+        critical = [
+            "coloca 8 pro hugo",
+            "o hugo tirou 10 no teste",
+            "pedro nao veio hoje",
+            "mariana brigou no recreio",
+            "anota que lucas tirou 7"
+        ]
+        for phrase in critical:
+            assert _contains_student_pii(phrase) is True, f"Falso negativo detectado para: {phrase}"
+
+    def test_known_students_cross_validation(self):
+        """Validação cruzada contra lista de alunos força PII mesmo para padrões atípicos."""
+        roster = ["Hugo Ribeiro", "Mariana Lima", "Pedro Souza", "Lucas Santos"]
+        assert _contains_student_pii("hugo saiu mais cedo", known_students=roster) is True
+        assert _contains_student_pii("atendimento com o ribeiro", known_students=roster) is True
+        assert _contains_student_pii("exercicio sobre verbos", known_students=roster) is False
+
+    def test_adversarial_phrases_fail_closed(self):
+        """Testes adversariais com apelidos fora do dicionário, erros de digitação e notas por extenso."""
+        adversarial = [
+            "atribua nota sete para o Juninho",
+            "atribua conceito maximo ao Bruninho",
+            "Juninho tirou oito na prova",
+            "coloca 8 pro Zezinho",
+            "Hugoo tirou 9 no teste",
+            "atendimento individual com o aluno Welingtton",
+            "nota dez para o Wanderson"
+        ]
+        for phrase in adversarial:
+            assert _contains_student_pii(phrase) is True, f"Falso negativo adversarial detectado para: {phrase}"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -199,88 +232,3 @@ class TestPIICloudBlock:
         assert intent["pii_detected"] is False
         assert intent["pii_routed_local"] is False
         assert intent["provider_used"] == "groq"
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# 4. Auditoria Rigorosa: As 5 Frases Críticas que Vazaram Anteriormente
-# ─────────────────────────────────────────────────────────────────────────────
-
-class TestAuditedFivePhrases:
-    """
-    Testa especificamente as 5 frases identificadas na auditoria como
-    falsos negativos anteriores devido a minúsculas, inteiros isolados ou ausências coloquiais.
-    """
-
-    def test_frase_1_coloca_8_pro_hugo(self):
-        intent = extract_intent("coloca 8 pro hugo", groq_key="gsk_fake", gemini_key="gem_fake")
-        assert intent["pii_detected"] is True
-        assert intent["pii_routed_local"] is True
-        assert intent["provider_used"] in ("regex", "ollama_local")
-        assert intent["acao"] == "lancar_nota"
-        assert intent["aluno"] == "Hugo"
-        assert intent["nota"] == 8.0
-        assert intent["is_complete"] is True
-
-    def test_frase_2_o_hugo_tirou_10_no_teste(self):
-        intent = extract_intent("o hugo tirou 10 no teste", groq_key="gsk_fake", gemini_key="gem_fake")
-        assert intent["pii_detected"] is True
-        assert intent["pii_routed_local"] is True
-        assert intent["provider_used"] in ("regex", "ollama_local")
-        assert intent["acao"] == "lancar_nota"
-        assert intent["aluno"] == "Hugo"
-        assert intent["nota"] == 10.0
-        assert intent["is_complete"] is True
-
-    def test_frase_3_pedro_nao_veio_hoje(self):
-        intent = extract_intent("pedro nao veio hoje", groq_key="gsk_fake", gemini_key="gem_fake")
-        assert intent["pii_detected"] is True
-        assert intent["pii_routed_local"] is True
-        assert intent["provider_used"] in ("regex", "ollama_local")
-        assert intent["acao"] == "lancar_falta"
-        assert intent["aluno"] == "Pedro"
-        assert intent["faltas"] == 1
-        assert intent["is_complete"] is True
-
-    def test_frase_4_mariana_brigou_no_recreio(self):
-        intent = extract_intent("mariana brigou no recreio", groq_key="gsk_fake", gemini_key="gem_fake")
-        assert intent["pii_detected"] is True
-        assert intent["pii_routed_local"] is True
-        assert intent["provider_used"] in ("regex", "ollama_local")
-        assert intent["acao"] == "anotar_ocorrencia_disciplinar"
-        assert intent["aluno"] == "Mariana"
-        assert intent["is_complete"] is True
-
-    def test_frase_5_anota_que_lucas_tirou_7(self):
-        intent = extract_intent("anota que lucas tirou 7", groq_key="gsk_fake", gemini_key="gem_fake")
-        assert intent["pii_detected"] is True
-        assert intent["pii_routed_local"] is True
-        assert intent["provider_used"] in ("regex", "ollama_local")
-        assert intent["acao"] == "lancar_nota"
-        assert intent["aluno"] == "Lucas"
-        assert intent["nota"] == 7.0
-        assert intent["is_complete"] is True
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# 5. Validação Cruzada com Lista Real de Alunos da Turma Ativa (Roster)
-# ─────────────────────────────────────────────────────────────────────────────
-
-class TestActiveRosterCrossValidation:
-    """Testa a validação cruzada contra o roster ativo do Supabase/localDB."""
-
-    ROSTER = ["Hugo Henrique Lima", "Pedro Alvares", "Mariana Rios", "Lucas Gabriel", "Enzo Ribeiro"]
-
-    def test_roster_detecta_nome_minusculo_em_frase_atipica(self):
-        # Frase atípica onde o nome do aluno da turma ativa é citado
-        assert _contains_student_pii("atribui 9 pro enzo", known_students=self.ROSTER) is True
-
-    def test_roster_desempata_comando_com_aluno_matriculado(self):
-        intent = extract_intent("registra 1 para o lucas", known_students=self.ROSTER, groq_key="fake")
-        assert intent["pii_detected"] is True
-        assert intent["pii_routed_local"] is True
-        assert intent["provider_used"] in ("regex", "ollama_local")
-
-    def test_termo_sem_aluno_matriculado_nao_dispara_falso_positivo_de_roster(self):
-        # "árvore" não é aluno
-        assert _contains_student_pii("crie questões sobre árvore genealógica", known_students=self.ROSTER) is False
-

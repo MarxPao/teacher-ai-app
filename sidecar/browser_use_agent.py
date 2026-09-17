@@ -921,6 +921,90 @@ class BrowserUseAgent:
                 }
             }
 
+            // 2.2. Scoping Genérico de Itens (Cards, Feeds, Mensagens, Listas não-tabelares)
+            let targetItemContainer = targetRow || null;
+            let targetActionElement = null;
+            let targetActionSelector = null;
+            let actionElementFound = false;
+
+            if (!targetItemContainer && cleanStudent) {
+                const candidateContainers = Array.from(document.querySelectorAll(
+                    'li, [role="listitem"], article, .card, .item, .message, .recado, .feed-item, .post, .row, .notif, ' +
+                    '[class*="card"], [class*="message"], [class*="recado"], [class*="item"], [class*="post"], [class*="feed"], [class*="entry"]'
+                )).filter(el => {
+                    if (el.tagName === 'TABLE' || el.tagName === 'TBODY') return false;
+                    if (el.offsetParent === null && el.offsetWidth === 0 && el.offsetHeight === 0) return false;
+                    if (el.children.length > 25) return false;
+                    const txt = norm(el.innerText || el.textContent);
+                    return txt.length > 0 && txt.length < 2500;
+                });
+
+                const matchedContainers = [];
+                for (const c of candidateContainers) {
+                    const cText = norm(c.innerText || c.textContent);
+                    const matchByName = cText.includes(cleanStudent);
+                    const matchByMat = cleanMatricula && cText.includes(cleanMatricula);
+                    if (matchByName || matchByMat) {
+                        matchedContainers.push(c);
+                    }
+                }
+
+                // Mantém apenas os nós mais específicos (folhas que contêm o termo)
+                const specificContainers = matchedContainers.filter(c => {
+                    return !matchedContainers.some(other => other !== c && c.contains(other));
+                });
+
+                if (specificContainers.length === 1) {
+                    targetItemContainer = specificContainers[0];
+                } else if (specificContainers.length > 1) {
+                    isAmbiguous = true;
+                    ambiguousCandidates = specificContainers.slice(0, 5).map((sc, idx) => ({
+                        index: idx + 1,
+                        name: cleanStudent,
+                        details: (sc.innerText || sc.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 80)
+                    }));
+                }
+            }
+
+            // Se encontrou item contêiner (linha ou card), procura ação associada dentro dele (ex: botão Responder, Baixar, Ver)
+            if (targetItemContainer) {
+                const actionCandidates = Array.from(targetItemContainer.querySelectorAll('button, a, input[type="button"], input[type="submit"], [role="button"], span.btn, div.btn'));
+                const actionTokens = [norm(actionName), cleanTarget].filter(t => t && t.length >= 3);
+                if (cleanTarget.includes('responder') || norm(actionName).includes('responder')) {
+                    actionTokens.push('responder', 'resposta', 'reply');
+                } else if (cleanTarget.includes('baixar') || norm(actionName).includes('baixar')) {
+                    actionTokens.push('baixar', 'download', 'salvar');
+                } else if (cleanTarget.includes('ver') || norm(actionName).includes('ver')) {
+                    actionTokens.push('ver', 'detalhes', 'abrir', 'visualizar');
+                }
+
+                let bestActScore = 0;
+                for (const actEl of actionCandidates) {
+                    if (actEl.offsetParent === null && actEl.offsetWidth === 0 && actEl.offsetHeight === 0) continue;
+                    const actText = norm(actEl.innerText || actEl.value || actEl.getAttribute('aria-label') || actEl.getAttribute('title') || actEl.className);
+                    let aScore = 0;
+                    for (const tok of actionTokens) {
+                        if (actText === tok) aScore += 80;
+                        else if (actText.includes(tok)) aScore += 50;
+                    }
+                    if (aScore > bestActScore && aScore >= 40) {
+                        bestActScore = aScore;
+                        targetActionElement = actEl;
+                    }
+                }
+
+                if (targetActionElement) {
+                    actionElementFound = true;
+                    if (targetActionElement.id) {
+                        targetActionSelector = '#' + targetActionElement.id;
+                    } else {
+                        const cClass = targetItemContainer.className ? '.' + targetItemContainer.className.split(' ').filter(Boolean)[0] : targetItemContainer.tagName.toLowerCase();
+                        const aClass = targetActionElement.className ? '.' + targetActionElement.className.split(' ').filter(Boolean)[0] : targetActionElement.tagName.toLowerCase();
+                        targetActionSelector = `${cClass} ${aClass}`;
+                    }
+                }
+            }
+
             // 3. Coleta campos de entrada visíveis na página (sem limitar apenas à linha do aluno, para permitir campos fora da tabela)
             const allInputs = Array.from(document.querySelectorAll('input, select, textarea'));
 
@@ -936,12 +1020,19 @@ class BrowserUseAgent:
                 const compStyle = window.getComputedStyle(input);
                 if (compStyle.display === 'none' || compStyle.visibility === 'hidden') continue;
 
-                // Se houver linha de aluno identificada na tabela:
-                // Se o input estiver dentro de uma linha de tabela, mas pertencer a OUTRO aluno, ignora
-                if (targetRow) {
-                    const row = input.closest('tr');
-                    if (row && row.querySelectorAll('td').length > 0 && row !== targetRow) {
-                        continue;
+                // Se houver item identificado (linha ou card):
+                // Se o input estiver dentro de outro item container que não seja o alvo, ignora
+                if (targetItemContainer) {
+                    if (targetItemContainer.tagName === 'TR') {
+                        const row = input.closest('tr');
+                        if (row && row.querySelectorAll('td').length > 0 && row !== targetItemContainer) {
+                            continue;
+                        }
+                    } else {
+                        const parentItem = input.closest('li, article, .card, .item, .message, .recado');
+                        if (parentItem && parentItem !== targetItemContainer) {
+                            continue;
+                        }
                     }
                 }
 
@@ -1012,8 +1103,8 @@ class BrowserUseAgent:
                     }
                 }
 
-                // Bônus se estiver na linha do estudante pesquisado E houver alguma pertinência semântica
-                if (targetRow && targetRow.contains(input) && (tokenMatchesCount > 0 || formatMatched)) {
+                // Bônus se estiver no item pesquisado (linha de tabela ou card/feed) E houver alguma pertinência semântica
+                if (targetItemContainer && targetItemContainer.contains(input) && (tokenMatchesCount > 0 || formatMatched || input.tagName === 'TEXTAREA' || cleanTarget.includes('recado') || cleanTarget.includes('responder'))) {
                     score += 35;
                 }
 
@@ -1057,11 +1148,15 @@ class BrowserUseAgent:
             // Destaque visual
             if (bestInput && window.__teacherAiHighlight) {
                 try { window.__teacherAiHighlight(bestInput, 'Inspecionando campo...', 1500); } catch(e) {}
+            } else if (targetActionElement && window.__teacherAiHighlight) {
+                try { window.__teacherAiHighlight(targetActionElement, 'Inspecionando ação...', 1500); } catch(e) {}
             }
 
             // Cálculo contínuo e individual de confiança baseado no score semântico real
             let calculatedConfidence = 0.20;
-            if (bestInput && bestScore >= 30) {
+            if (actionElementFound && !bestInput) {
+                calculatedConfidence = 0.88;
+            } else if (bestInput && bestScore >= 30) {
                 calculatedConfidence = Math.min(0.95, Math.round((0.72 + (bestScore / 350) * 0.23) * 100) / 100);
             } else if (bestInput && bestScore > 0) {
                 calculatedConfidence = Math.round((0.40 + (bestScore / 30) * 0.25) * 100) / 100;
@@ -1086,6 +1181,11 @@ class BrowserUseAgent:
                 inputType: bestInput ? (bestInput.type || bestInput.tagName.toLowerCase()) : null,
                 targetRowFound: !!targetRow,
                 targetRowSelector: targetRowSelector,
+                targetItemFound: !!targetItemContainer,
+                actionElementFound: actionElementFound,
+                actionSelector: targetActionSelector,
+                actionText: targetActionElement ? (targetActionElement.innerText || targetActionElement.value || '').trim() : null,
+                actionTagName: targetActionElement ? targetActionElement.tagName.toLowerCase() : null,
                 targetCellValue: targetCellValue,
                 targetCellSelector: targetCellSelector,
                 isAmbiguous: isAmbiguous,
@@ -1093,7 +1193,7 @@ class BrowserUseAgent:
                 submitButtonFound: !!submitBtn,
                 submitButtonDisabled: submitBtnDisabled,
                 submitSelector: submitBtn ? (submitBtn.id ? '#' + submitBtn.id : (submitBtn.className ? '.' + submitBtn.className.split(' ').filter(Boolean)[0] : 'button[type="submit"]')) : null,
-                bestScore: bestScore,
+                bestScore: Math.max(bestScore, actionElementFound ? 75 : 0),
                 confidence: isAmbiguous ? 0.40 : calculatedConfidence
             };
         }
@@ -1282,6 +1382,53 @@ class BrowserUseAgent:
                         "submit_button_found": info.get("submitButtonFound", False),
                         "submit_button_disabled": info.get("submitButtonDisabled", False)
                     }
+
+        # Operação baseada em Ação Associada ao Item (ex: botão "Responder", link "Baixar", botão "Ver detalhes")
+        if info.get("actionElementFound"):
+            act_text = info.get("actionText") or objeto_alvo or acao
+            actions.append({
+                "action_type": "CLICK",
+                "selector": info.get("actionSelector"),
+                "is_iframe": is_iframe,
+                "frame_name": frame_name,
+                "description": f"Clicar em {act_text} para {aluno or 'o item'}"
+            })
+
+            # Se houver valor para preencher e também houver campo de entrada localizado:
+            if info.get("foundInput") and valor:
+                val_to_set = str(valor)
+                actions.append({
+                    "action_type": "WRITE",
+                    "selector": info.get("inputSelector"),
+                    "value": val_to_set,
+                    "is_iframe": is_iframe,
+                    "frame_name": frame_name,
+                    "description": f"Preencher {objeto_alvo} com {val_to_set}"
+                })
+                if info.get("submitButtonFound"):
+                    actions.append({
+                        "action_type": "CLICK",
+                        "selector": info.get("submitSelector") or "button[type='submit']",
+                        "is_submit_action": True,
+                        "is_disabled": info.get("submitButtonDisabled", False),
+                        "description": "Confirmar ação no portal"
+                    })
+
+            return {
+                "success": True,
+                "actions": actions,
+                "confidence": info.get("confidence", 0.88),
+                "best_score": info.get("bestScore", 75),
+                "target_row_found": info.get("targetRowFound", False),
+                "target_item_found": info.get("targetItemFound", True),
+                "action_element_found": True,
+                "rows_count": info.get("rowsCount", 0),
+                "submit_button_found": info.get("submitButtonFound", False),
+                "submit_button_disabled": info.get("submitButtonDisabled", False),
+                "is_iframe": is_iframe,
+                "frame_name": frame_name,
+                "target_frame": best_frame
+            }
 
         # Operação de Escrita
         if info.get("foundInput"):
