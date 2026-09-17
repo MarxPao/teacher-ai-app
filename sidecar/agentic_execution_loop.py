@@ -46,6 +46,14 @@ try:
 except ImportError:
     from sidecar.intent_parser import _contains_student_pii, get_active_roster_students
 
+try:
+    from portal_structure_mapper import PortalStructureMapper
+except ImportError:
+    try:
+        from sidecar.portal_structure_mapper import PortalStructureMapper
+    except ImportError:
+        PortalStructureMapper = None  # type: ignore
+
 
 TOOL_DEFINITIONS = [
     {
@@ -163,6 +171,14 @@ class AgenticExecutionLoop:
         self.custom_llm_caller = custom_llm_caller
         self.skills_dir = Path(skills_dir) if skills_dir else DEFAULT_SKILLS_DIR
         self.history: List[Dict[str, Any]] = []
+
+        # Mapeamento estrutural passivo — carrega contexto do portal se já foi mapeado
+        if PortalStructureMapper is not None:
+            self._structure_mapper = PortalStructureMapper(page=page, portal_id=portal_id)
+            self._portal_structure_summary: str = self._structure_mapper.build_llm_context_summary()
+        else:
+            self._structure_mapper = None
+            self._portal_structure_summary = ""
 
     def _contains_pii(self, text: str) -> bool:
         """
@@ -636,8 +652,13 @@ class AgenticExecutionLoop:
             history_summary = [f"- Ação: {h['action']} -> Resultado: {h['observation']}" for h in self.history]
             history_str = "\n".join(history_summary) if history_summary else "Nenhuma ação tomada ainda. Este é o primeiro turno."
 
-            user_prompt = f"""OBJETIVO: "{goal}"
+            # Injeta contexto estrutural do portal no turno 1 (se mapa disponível)
+            estrutura_portal = ""
+            if turn == 1 and self._portal_structure_summary:
+                estrutura_portal = f"\n{self._portal_structure_summary}\n"
 
+            user_prompt = f"""OBJETIVO: "{goal}"
+{estrutura_portal}
 HISTÓRICO DE AÇÕES ANTERIORES:
 {history_str}
 
