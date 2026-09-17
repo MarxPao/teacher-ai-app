@@ -217,11 +217,10 @@ class PortalStructureMapper:
         """
         click_script = """
         (args) => {
-            const { tab_id, tab_text } = args;
-            const norm = s => (s || '').toLowerCase().normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').trim();
-            const targets = Array.from(document.querySelectorAll('.tab-btn, [role="tab"]'));
+            const targets = Array.from(document.querySelectorAll('.tab-btn, [role="tab"], nav a, .nav-link, a, button'));
             for (const t of targets) {
-                if ((tab_id && t.id === tab_id) || norm(t.innerText) === norm(tab_text)) {
+                const textMatch = norm(t.innerText) === norm(tab_text) || (norm(tab_text) && norm(t.innerText).includes(norm(tab_text)));
+                if ((tab_id && t.id === tab_id) || textMatch) {
                     t.click();
                     return true;
                 }

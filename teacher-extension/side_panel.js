@@ -1945,11 +1945,37 @@ async function handleProcessCommand(commandText) {
   if (isDirectReading && !compoundCheck.hasNavigation) {
     setProcessingState(true, 'Lendo dados da tela atual...');
     dispatchPortalBridgeMessage({ action: 'READ_PAGE_DATA' }, (pageData) => {
-      setProcessingState(false);
       if (pageData && pageData.sucesso) {
         const answer = synthesizeScreenAnswer(textClean, pageData);
+        // Se a resposta foi negativa mas a intenção era claramente de horários, tenta navegar para a aba Horários
+        const isScheduleIntent = /horario|aula|disciplina|materia|grade|quinta|segunda|terca|quarta|sexta/i.test(textClean.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''));
+        if (answer.includes('Não encontrei dados suficientes') && isScheduleIntent) {
+          setProcessingState(true, 'Acessando a aba Horários no portal...');
+          dispatchPortalBridgeMessage({ action: 'NAVIGATE_PORTAL_TAB', target: 'horários' }, (navResp) => {
+            if (navResp && navResp.sucesso) {
+              setTimeout(() => {
+                dispatchPortalBridgeMessage({ action: 'READ_PAGE_DATA' }, (newPageData) => {
+                  setProcessingState(false);
+                  if (newPageData && newPageData.sucesso) {
+                    const newAnswer = synthesizeScreenAnswer(textClean, newPageData);
+                    appendAssistantChatMessage(newAnswer, true);
+                  } else {
+                    appendAssistantChatMessage(answer, true);
+                  }
+                });
+              }, 400);
+            } else {
+              setProcessingState(false);
+              appendAssistantChatMessage(answer, true);
+            }
+          });
+          return;
+        }
+
+        setProcessingState(false);
         appendAssistantChatMessage(answer, true);
       } else {
+        setProcessingState(false);
         appendAssistantChatMessage('Não consegui ler os dados da tela atual. Certifique-se de estar na aba correta do portal.', true);
       }
     });
@@ -2220,7 +2246,7 @@ function synthesizeScreenAnswer(query, pageData) {
   const q = (query || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
   // 1. Horários / Aulas / Grade Semanal
-  const isHorarioQuery = /horario|aula|dias|quando|grade|semana/i.test(q);
+  const isHorarioQuery = /horario|aula|dias|quando|grade|semana|disciplina|materia|quinta|segunda|terca|quarta|sexta|sabado|leciono/i.test(q);
   if (isHorarioQuery && pageData.tables && pageData.tables.length > 0) {
     for (const table of pageData.tables) {
       const isSchedule = table.headers.some(h => {
@@ -2250,8 +2276,26 @@ function synthesizeScreenAnswer(query, pageData) {
         }
 
         if (Object.keys(byDay).length > 0) {
-          let output = `Encontrei seus horários de aula no portal! 🗓️✨<br><br>`;
-          for (const [day, classes] of Object.entries(byDay)) {
+          // Se a professora pediu um dia específico (ex: "quinta-feira", "quinta", "segunda", etc.)
+          const dayKeys = ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'];
+          const targetDay = dayKeys.find(d => q.includes(d));
+
+          let entries = Object.entries(byDay);
+          if (targetDay) {
+            const specificEntries = entries.filter(([day]) => {
+              const normDay = day.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+              return normDay.includes(targetDay);
+            });
+            if (specificEntries.length > 0) {
+              entries = specificEntries;
+            }
+          }
+
+          let output = targetDay
+            ? `Aqui está a sua grade para **${targetDay}**: 🗓️✨<br><br>`
+            : `Encontrei seus horários de aula no portal! 🗓️✨<br><br>`;
+
+          for (const [day, classes] of entries) {
             const lines = classes.map(c => `• **${escapeHtml(c.timeSlot)}**: ${escapeHtml(c.info)}`).join('<br>');
             output += `📅 **${escapeHtml(day)}**:<br>${lines}<br><br>`;
           }
