@@ -84,6 +84,11 @@ TOOL_DEFINITIONS = [
         "parameters": {"pergunta": "string"}
     },
     {
+        "name": "answer_from_screen_data",
+        "description": "Sintetiza uma resposta direta em linguagem natural a partir de dados, tabelas ou textos visíveis na tela atual, sem realizar cliques ou mutações no portal. Encerra a tarefa respondendo à professora.",
+        "parameters": {"pergunta": "string", "resposta": "string"}
+    },
+    {
         "name": "finish_task",
         "description": "Declara que o objetivo da professora foi totalmente concluído.",
         "parameters": {"resumo": "string"}
@@ -96,7 +101,7 @@ Você opera o portal escolar através de um loop ReAct (Raciocínio + Ação).
 A cada turno, você receberá:
 1. O objetivo da professora.
 2. O histórico de ações já tomadas e seus resultados.
-3. O estado atual da tela (elementos visíveis).
+3. O estado atual da tela (elementos interativos e dados tabulares visíveis).
 
 Sua resposta DEVE ser EXCLUSIVAMENTE um objeto JSON no formato:
 {
@@ -106,22 +111,30 @@ Sua resposta DEVE ser EXCLUSIVAMENTE um objeto JSON no formato:
 }
 
 Ferramentas disponíveis:
-- navigate_to_tab(nome_da_aba)
-- find_item_in_list(descricao)
-- read_current_screen()
-- select_option(campo, valor)
-- click_element(descricao)
-- fill_field(campo, valor)
-- ask_clarification(pergunta)
-- finish_task(resumo)
+- navigate_to_tab(nome_da_aba): Navega para uma aba ou seção principal.
+- read_current_screen(): Reinspeciona os elementos e dados da tela atual.
+- find_item_in_list(descricao): Localiza um item ou registro em listas.
+- select_option(campo, valor): Seleciona uma opção em <select> ou dropdown.
+- click_element(descricao): Clica em um botão, link ou elemento clicável.
+- fill_field(campo, valor): Preenche um campo de input ou textarea.
+- ask_clarification(pergunta): Pausa e pede esclarecimento honesto à professora quando faltam dados essenciais.
+- answer_from_screen_data(pergunta, resposta): Lê os dados da tela (tabelas, células, textos) e gera a resposta em linguagem natural diretamente para a professora. Encerra a tarefa.
+- finish_task(resumo): Declara que o objetivo de mutação/ação foi concluído.
+
+CLASSIFICAÇÃO COGNITIVA MANDATÓRIA (AÇÃO vs. PERGUNTA/LEITURA):
+Antes de escolher uma ferramenta, determine se a instrução da professora ou o passo atual é:
+a) Uma AÇÃO operacional no portal (navegar, clicar, preencher, selecionar) -> use as ferramentas de ação (navigate_to_tab, click_element, fill_field, select_option).
+b) Uma PERGUNTA/LEITURA/SÍNTESE sobre dados visíveis na tela (listar, quantos, qual, quando, quais, resumir, horários, notas, faltas) -> use answer_from_screen_data(pergunta, resposta).
+   ATENÇÃO: Se os dados necessários já constam nas tabelas ("tables") ou textos visíveis na tela atual, NUNCA tente procurar um botão, link ou menu inexistente para "listar" ou "responder". Sintetize os dados da tela diretamente com answer_from_screen_data.
+
+COMANDOS COMPOSTOS (NAVEGAÇÃO + PERGUNTA):
+Se o comando for ex: "vá em [aba] e liste [dados]":
+- Turno 1: Execute a AÇÃO de navegação (navigate_to_tab(nome_da_aba='[aba]')).
+- Turno 2 (após a aba carregar com a tabela/dados): Reconheça que a 2ª instrução é uma PERGUNTA/LEITURA e use answer_from_screen_data com a resposta sintetizada a partir dos dados da tela.
 
 Regras Mandatórias:
 1. Execute APENAS UMA ação por turno.
-2. Se a tarefa exige ir para uma seção antes de agir, primeiro navegue para a aba.
-3. Após a tela mudar, analise a nova tela e execute a segunda ação.
-4. Quando a meta estiver cumprida, chame finish_task(resumo).
-5. Se faltar informação essencial (ex: o conteúdo de uma mensagem de resposta ou nota não informada), chame ask_clarification(pergunta).
-6. NUNCA gere markdown ao redor do JSON (responda apenas o JSON puro).
+2. NUNCA gere markdown ao redor do JSON (responda apenas o JSON puro).
 """
 
 
@@ -199,10 +212,28 @@ class AgenticExecutionLoop:
                     cards: Array.from(p.querySelectorAll('.recado-card')).map(c => c.innerText.trim()).slice(0, 5)
                 }));
 
+            const tables = Array.from(document.querySelectorAll('table'))
+                .filter(visibleText)
+                .map(t => ({
+                    id: t.id || 'table',
+                    headers: Array.from(t.querySelectorAll('th')).map(th => th.innerText.trim()).filter(Boolean),
+                    rows: Array.from(t.querySelectorAll('tbody tr')).slice(0, 30).map(tr =>
+                        Array.from(tr.querySelectorAll('td')).map(td => {
+                            const input = td.querySelector('input, select');
+                            if (input) {
+                                if (input.type === 'checkbox') return input.checked ? '[X]' : '[ ]';
+                                return input.value || td.innerText.trim();
+                            }
+                            return td.innerText.trim();
+                        })
+                    )
+                }));
+
             return {
                 activeTab,
                 availableTabs: tabs,
                 visiblePanes: activePanes,
+                tables,
                 selects,
                 buttons,
                 inputs
@@ -358,6 +389,11 @@ class AgenticExecutionLoop:
         elif tool_name == "ask_clarification":
             res["success"] = True
             res["output"] = f"Pausado para esclarecimento: {args.get('pergunta')}"
+
+        elif tool_name == "answer_from_screen_data":
+            resposta = args.get("resposta") or args.get("resumo") or f"Informação sintetizada a partir dos dados da tela: {args.get('pergunta', '')}"
+            res["success"] = True
+            res["output"] = resposta
 
         elif tool_name == "finish_task":
             res["success"] = True
@@ -646,12 +682,13 @@ Decida a próxima ação necessária para cumprir o objetivo."""
                 "observation": tool_res["output"]
             })
 
-            if tool == "finish_task":
+            if tool in ("finish_task", "answer_from_screen_data"):
                 status = "completed"
-                summary = args.get("resumo", tool_res["output"])
-                graph = self._compile_trace_to_skill_graph(goal, turns_log)
-                if graph:
-                    compiled_skill_id = graph.id
+                summary = args.get("resposta") or args.get("resumo") or tool_res["output"]
+                if tool == "finish_task":
+                    graph = self._compile_trace_to_skill_graph(goal, turns_log)
+                    if graph:
+                        compiled_skill_id = graph.id
                 break
             elif tool == "ask_clarification":
                 status = "paused_for_clarification"

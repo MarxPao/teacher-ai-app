@@ -717,10 +717,11 @@ _COMMON_NON_STUDENT_WORDS = {
     "reuniao", "reunião", "recuperacao", "recuperação", "relatorio", "relatório", "relatorios",
     "arquivos", "configuracoes", "configurações", "redacao", "redação", "duvida", "dúvida",
     "conteudo", "conteúdo", "chamada", "diario", "diário", "presenca", "presença", "falta",
-    "faltas", "nota", "notas", "boletim", "boletins", "quadro", "horario", "horário", "recreio",
+    "faltas", "nota", "notas", "boletim", "boletins", "quadro", "horario", "horário", "horarios", "horários", "grade", "recreio",
     "hoje", "ontem", "amanha", "amanhã", "tarde", "manha", "manhã", "noite", "geral", "tudo",
     "todos", "todas", "grupo", "alunos", "alunas", "estudantes", "livro", "caderno", "atividade",
-    "atividades", "seção", "secao", "aba", "portal", "sistema"
+    "atividades", "seção", "secao", "aba", "portal", "sistema",
+    "vá", "va", "vai", "ir", "liste", "listar", "mostre", "mostrar", "ver", "quais", "qual", "quantos", "quantas", "dias", "semana", "aulas", "tenho"
 }
 
 # Verbos e substantivos que indicam operação sobre dado pessoal de aluno
@@ -765,8 +766,8 @@ def _is_generic_non_pii(text: str) -> bool:
     if any(lower.startswith(p) for p in ["quais ", "qual ", "como ", "quem "]):
         if any(w in lower for w in ["estratégia", "estrategia", "desempenho médio", "desempenho medio", "média", "media", "ensinar", "estudante", "estudantes", "alunos", "turma"]):
             return True
-    if any(lower.startswith(p) for p in ["navegue ", "navega ", "navegar ", "ir para ", "vá para ", "va para ", "abra ", "abrir ", "quero ver ", "ver "]):
-        if any(w in lower for w in ["aba", "seção", "secao", "relatório", "relatorio", "arquivo", "arquivos", "diário", "diario", "configurações", "configuracoes"]):
+    if any(lower.startswith(p) for p in ["navegue ", "navega ", "navegar ", "ir para ", "vá para ", "va para ", "vá em ", "va em ", "abra ", "abrir ", "quero ver ", "ver ", "liste ", "listar ", "mostre ", "mostrar "]):
+        if any(w in lower for w in ["aba", "seção", "secao", "relatório", "relatorio", "arquivo", "arquivos", "diário", "diario", "configurações", "configuracoes", "horário", "horários", "horario", "horarios", "grade"]):
             return True
     return False
 

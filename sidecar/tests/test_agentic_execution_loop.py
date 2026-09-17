@@ -23,7 +23,7 @@ except ImportError:
 PORTAL_MOCK_PATH = Path(__file__).resolve().parent.parent.parent / "public" / "sandbox" / "portal_mock.html"
 
 
-def test_tool_definitions_has_all_8_tools():
+def test_tool_definitions_has_all_9_tools():
     names = [t["name"] for t in TOOL_DEFINITIONS]
     expected = [
         "navigate_to_tab",
@@ -33,15 +33,16 @@ def test_tool_definitions_has_all_8_tools():
         "click_element",
         "fill_field",
         "ask_clarification",
+        "answer_from_screen_data",
         "finish_task"
     ]
     for exp in expected:
         assert exp in names, f"Ferramenta '{exp}' ausente nas definições de tools."
-    assert len(names) == 8
+    assert len(names) == 9
 
 
 def test_system_prompt_react_guidelines():
-    for tool_name in ["navigate_to_tab", "finish_task", "ask_clarification", "select_option"]:
+    for tool_name in ["navigate_to_tab", "finish_task", "ask_clarification", "select_option", "answer_from_screen_data"]:
         assert tool_name in SYSTEM_PROMPT_REACT
 
 
