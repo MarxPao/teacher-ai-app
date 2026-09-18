@@ -1135,6 +1135,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 if (text === v) score = 100;
                 else if (text.startsWith(v)) score = 85;
                 else if (text.includes(v)) score = 70;
+                else if (v.includes(text) && text.length >= 4) score = 75;
                 else if (aria.includes(v)) score = 60;
                 else if (title.includes(v)) score = 50;
                 else if (val === v) score = 65;

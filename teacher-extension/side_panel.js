@@ -2052,6 +2052,32 @@ async function handleProcessCommand(commandText) {
       appendAssistantChatMessage(`Prontinho! Entrei na aba **${escapeHtml(foundLabel)}** no portal. Agora estou procurando **${escapeHtml(remainingCommand)}**... 📂🔍`, true);
       setProcessingState(true, `Executando: ${remainingCommand}...`);
 
+      // 1. Caso Sub-Navegação (ex: "abra recados e abra recados recebidos", "ir para notas e entrar em 1º bimestre")
+      const isSubNavCommand = /^(?:abrir|abra|abre|ir\s+para|ir\s+pra|ir\s+pro|vai\s+para|v[áa]\s+para|v[áa]\s+em|vai\s+em|clicar\s+em|clique\s+em|clica\s+em|acessar|acesse|acessa|entrar\s+em|entre\s+em|entra\s+em|mostrar|mostre|ver)\s+/i.test(remainingCommand);
+      if (isSubNavCommand) {
+        const subNavTerm = remainingCommand
+          .replace(/^(?:abrir|abra|abre|ir\s+para|ir\s+pra|ir\s+pro|vai\s+para|v[áa]\s+para|v[áa]\s+em|vai\s+em|clicar\s+em|clique\s+em|clica\s+em|acessar|acesse|acessa|entrar\s+em|entre\s+em|entra\s+em|mostrar|mostre|ver)\s+(?:a\s+|o\s+|as\s+|os\s+|sub-?aba\s+|aba\s+|guia\s+|se[çc][ãa]o\s+|bot[ãa]o\s+)?/i, '')
+          .trim();
+
+        dispatchPortalBridgeMessage({ action: 'DISCOVERY_SELECT_FILTER', filterTerm: subNavTerm }, (subResp) => {
+          setProcessingState(false);
+          if (subResp && subResp.sucesso) {
+            const selectedLabel = subResp.elementText || subNavTerm;
+            appendAssistantChatMessage(`✅ Entrei na aba **${escapeHtml(foundLabel)}** e acessei **${escapeHtml(selectedLabel)}** com sucesso! ✨`, true);
+          } else {
+            appendAssistantChatMessage(
+              `📂 Entrei na aba **${escapeHtml(foundLabel)}**, mas não encontrei o botão ou sub-aba **${escapeHtml(subNavTerm)}** nesta tela. Você pode me mostrar onde fica ou clicar manualmente? 🔍`,
+              true
+            );
+            showClarificationPointClickCard(
+              `Não encontrei o botão ou sub-aba "${subNavTerm}" na aba ${foundLabel}. Você pode me mostrar clicando nele?`
+            );
+          }
+        });
+        return;
+      }
+
+      // 2. Caso Filtro / Seleção (ex: "selecionar sexto ano", "filtrar por turma 9B")
       const isSelectionCommand = /^(?:selecionar|seleciona|selecione|escolher|escolha|escolhe|filtrar|filtra|filtre|marcar|marca|marque)\s+/i.test(remainingCommand);
       if (isSelectionCommand) {
         const filterTerm = remainingCommand
@@ -2390,9 +2416,35 @@ function executeSubsequentCommand(remainingCommand, contextLabel) {
     return;
   }
 
-  // 2. Se for comando de recado / mensagem (ex: "responder recado da mãe", "responder mensagem")
-  const isRecado = /(?:responder|recado|mensagem|comunicado|aviso)/i.test(cleanCmd);
-  if (isRecado) {
+  // 2. Se for comando de sub-navegação / sub-aba (ex: "abra recados recebidos", "ver notas do 1º bimestre")
+  const isSubNav = /^(?:abrir|abra|abre|ir\s+para|ir\s+pra|ir\s+pro|vai\s+para|v[áa]\s+para|v[áa]\s+em|vai\s+em|clicar\s+em|clique\s+em|clica\s+em|acessar|acesse|acessa|entrar\s+em|entre\s+em|entra\s+em|mostrar|mostre|ver)\s+/i.test(cleanCmd);
+  if (isSubNav) {
+    const subTarget = cleanCmd
+      .replace(/^(?:abrir|abra|abre|ir\s+para|ir\s+pra|ir\s+pro|vai\s+para|v[áa]\s+para|v[áa]\s+em|vai\s+em|clicar\s+em|clique\s+em|clica\s+em|acessar|acesse|acessa|entrar\s+em|entre\s+em|entra\s+em|mostrar|mostre|ver)\s+(?:a\s+|o\s+|as\s+|os\s+|sub-?aba\s+|aba\s+|guia\s+|se[çc][ãa]o\s+|bot[ãa]o\s+)?/i, '')
+      .trim();
+
+    setProcessingState(true, `Acessando ${subTarget}...`);
+    dispatchPortalBridgeMessage({ action: 'DISCOVERY_SELECT_FILTER', filterTerm: subTarget }, (resp) => {
+      setProcessingState(false);
+      if (resp && resp.sucesso) {
+        appendAssistantChatMessage(`✅ Localizei e acessei **${escapeHtml(resp.elementText || subTarget)}** na aba **${escapeHtml(contextLabel)}**! ✨`, true);
+      } else {
+        appendAssistantChatMessage(
+          `📂 Entrei na aba **${escapeHtml(contextLabel)}**, mas não encontrei o botão ou sub-aba **${escapeHtml(subTarget)}** nesta tela. Você pode me mostrar onde fica ou clicar manualmente? 🔍`,
+          true
+        );
+        showClarificationPointClickCard(
+          `Não encontrei o botão "${subTarget}" na aba ${contextLabel}. Você pode me mostrar clicando nele?`
+        );
+      }
+    });
+    return;
+  }
+
+  // 3. Se for comando de responder recado / mensagem (ex: "responder recado da mãe", "responder mensagem")
+  const isResponderRecado = /^(?:responder|responda|responde|enviar\s+resposta|escrever\s+resposta)\b.*(?:recado|mensagem|comunicado|aviso|m[ãa]e|pai|fam[íi]lia)?/i.test(cleanCmd) ||
+                            /(?:responder\s+(?:ao|à|o|a)?\s*(?:recado|mensagem|m[ãa]e|pai|fam[íi]lia))/i.test(cleanCmd);
+  if (isResponderRecado) {
     setProcessingState(true, 'Localizando recado para responder...');
     dispatchPortalBridgeMessage({ action: 'DISCOVERY_SELECT_FILTER', filterTerm: cleanCmd }, (resp) => {
       setProcessingState(false);
