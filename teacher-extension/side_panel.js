@@ -1324,6 +1324,43 @@ function splitCompoundCommand(text) {
     .replace(/\b(?:no\s+site|no\s+portal|no\s+sistema|via\s+chat|no\s+app).*$/gi, '')
     .trim();
 
+  // Padrão Especial 1: "<ação/entidade> [de/do/da] <alvo> em/no/na <seção>"
+  // Ex: "acesse o perfil de alice almeida em meus alunos", "ver dados de joão em diário"
+  const entitySectionRegex = /^(?:acesse|acessa|acessar|abra|abre|abrir|ver|veja|olhe|olhar|mostrar|mostre)?\s*(?:o|a)?\s*(?:perfil|dados|detalhes|ficha|cadastro|historico)\s+(?:de|do|da)\s+([a-zA-ZÀ-ÿ\s]+?)\s+(?:em|no|na|nos|nas)\s+([a-zA-ZÀ-ÿ0-9_\s-]+)$/i;
+  const mEntitySection = clean.match(entitySectionRegex);
+  if (mEntitySection) {
+    const entityName = mEntitySection[1].trim();
+    let sectionName = mEntitySection[2].trim();
+    sectionName = sectionName.replace(/^(?:a|o|os|as)?\s*(?:aba|menu|se[çc][ãa]o|guia|tela)\s+/i, '').trim();
+    sectionName = sectionName.replace(/^(?:de|do|da)\s+/i, '').trim();
+    return {
+      hasNavigation: true,
+      navTarget: sectionName,
+      conjunction: 'em',
+      remainingCommand: `acessar perfil de ${entityName}`,
+      isCompound: true,
+      aluno: entityName,
+      acaoSecundaria: 'abrir_perfil'
+    };
+  }
+
+  // Padrão Especial 2: "<ação/entidade> [de/do/da] <alvo>" sem seção (ex: "acesse o perfil de alice almeida")
+  // NUNCA deve ser interpretado como nome de aba literal!
+  const entityDirectRegex = /^(?:acesse|acessa|acessar|abra|abre|abrir|ver|veja|olhe|olhar|mostrar|mostre)?\s*(?:o|a)?\s*(?:perfil|dados|detalhes|ficha|cadastro|historico)\s+(?:de|do|da)\s+([a-zA-ZÀ-ÿ\s]+)$/i;
+  const mEntityDirect = clean.match(entityDirectRegex);
+  if (mEntityDirect && !/(?:turma|escola|professor|professora)/i.test(clean)) {
+    const entityName = mEntityDirect[1].trim();
+    return {
+      hasNavigation: false,
+      navTarget: null,
+      conjunction: null,
+      remainingCommand: `acessar perfil de ${entityName}`,
+      isCompound: false,
+      aluno: entityName,
+      acaoSecundaria: 'abrir_perfil'
+    };
+  }
+
   // Prefixos de verbos de navegação
   const navPrefixRegex = /(?:^|\b)(?:entre|entra|entrar|vai|v[áa]|ir|navegue|navega|navegar|acesse|acessa|acessar|abra|abre|abrir|clique|clica|clicar|mostre|mostra|quero\s+ver|ver)\s+(?:\b(?:em|no|na|nos|nas|para|pra|pro|pela|pelo)\b\s+)?(?:\b(?:a|o|os|as)\b\s+)?(?:\b(?:aba|menu|se[çc][ãa]o|guia|link|tela|pasta)\b\s+)?(?:\b(?:de|do|da|dos|das)\b\s+)?/i;
 
@@ -2052,6 +2089,37 @@ async function handleProcessCommand(commandText) {
       appendAssistantChatMessage(`Prontinho! Entrei na aba **${escapeHtml(foundLabel)}** no portal. Agora estou procurando **${escapeHtml(remainingCommand)}**... 📂🔍`, true);
       setProcessingState(true, `Executando: ${remainingCommand}...`);
 
+      // 0. Caso Acesso a Perfil de Aluno / Cartão de Aluno (ex: "acessar perfil de alice almeida", "ver perfil de joão", "aluno alice almeida")
+      const studentProfileMatch = remainingCommand.match(/(?:acessar\s+perfil|abrir\s+perfil|ver\s+perfil|perfil\s+de|aluno\s+|acessar\s+aluno)\s+(?:de\s+|do\s+|da\s+)?([a-zA-ZÀ-ÿ\s]+)/i);
+      if (studentProfileMatch || compound.acaoSecundaria === 'abrir_perfil' || compound.aluno) {
+        const studentTarget = (studentProfileMatch ? studentProfileMatch[1] : (compound.aluno || remainingCommand)).trim();
+        dispatchPortalBridgeMessage({ action: 'DISCOVERY_FIND_AND_CLICK_STUDENT', studentName: studentTarget }, (stdResp) => {
+          setProcessingState(false);
+          if (stdResp && stdResp.sucesso) {
+            const foundName = stdResp.elementText || studentTarget;
+            appendAssistantChatMessage(`✅ Entrei na aba **${escapeHtml(foundLabel)}** e acessei o perfil de **${escapeHtml(foundName)}** com sucesso! 👤✨`, true);
+          } else if (stdResp && stdResp.status === 'ambiguous') {
+            appendAssistantChatMessage(
+              `⚠️ Encontrei mais de um aluno com o nome **${escapeHtml(studentTarget)}** nesta tela. Por favor, escolha qual deles você deseja acessar: 🔍`,
+              true
+            );
+            if (typeof showDisambiguationCard === 'function') {
+              showDisambiguationCard({ aluno: studentTarget, acao: 'abrir_perfil' }, stdResp.candidates || []);
+            }
+          } else {
+            appendAssistantChatMessage(
+              `📂 Entrei na aba **${escapeHtml(foundLabel)}**, mas não encontrei o perfil do aluno **${escapeHtml(studentTarget)}** nesta tela. Você pode me mostrar onde fica ou clicar manualmente? 🔍`,
+              true
+            );
+            showHonestErrorCard(
+              'Aluno não encontrado',
+              `Não encontrei o aluno '${studentTarget}' na tela atual do portal.`
+            );
+          }
+        });
+        return;
+      }
+
       // 1. Caso Sub-Navegação (ex: "abra recados e abra recados recebidos", "ir para notas e entrar em 1º bimestre")
       const isSubNavCommand = /^(?:abrir|abra|abre|ir\s+para|ir\s+pra|ir\s+pro|vai\s+para|v[áa]\s+para|v[áa]\s+em|vai\s+em|clicar\s+em|clique\s+em|clica\s+em|acessar|acesse|acessa|entrar\s+em|entre\s+em|entra\s+em|mostrar|mostre|ver)\s+/i.test(remainingCommand);
       if (isSubNavCommand) {
@@ -2111,6 +2179,40 @@ async function handleProcessCommand(commandText) {
   }
 
   const intent = await parseNaturalIntent(textClean);
+
+  // Caso de Acesso a Perfil Direto (sem navegação explícita ou já na tela)
+  const isProfileDirect = (intent && intent.acao === 'abrir_perfil') ||
+                          /(?:^|\b)(?:acesse|acessa|acessar|abra|abre|abrir|ver|veja|olhe|olhar|mostrar|mostre)?\s*(?:o|a)?\s*(?:perfil|dados|detalhes|ficha|cadastro)\s+(?:de|do|da)\s+([a-zA-ZÀ-ÿ\s]+)/i.test(textClean);
+  if (isProfileDirect) {
+    const profileMatch = textClean.match(/(?:perfil|dados|detalhes|ficha|cadastro)\s+(?:de|do|da)\s+([a-zA-ZÀ-ÿ\s]+)/i);
+    const studentTarget = (profileMatch ? profileMatch[1] : (intent && intent.aluno ? intent.aluno : textClean)).trim();
+    setProcessingState(true, `Acessando perfil de ${studentTarget}...`);
+    dispatchPortalBridgeMessage({ action: 'DISCOVERY_FIND_AND_CLICK_STUDENT', studentName: studentTarget }, (stdResp) => {
+      setProcessingState(false);
+      if (stdResp && stdResp.sucesso) {
+        const foundName = stdResp.elementText || studentTarget;
+        appendAssistantChatMessage(`✅ Acessei o perfil de **${escapeHtml(foundName)}** com sucesso! 👤✨`, true);
+      } else if (stdResp && stdResp.status === 'ambiguous') {
+        appendAssistantChatMessage(
+          `⚠️ Encontrei mais de um aluno com o nome **${escapeHtml(studentTarget)}** nesta tela. Por favor, escolha qual deles você deseja acessar: 🔍`,
+          true
+        );
+        if (typeof showDisambiguationCard === 'function') {
+          showDisambiguationCard({ aluno: studentTarget, acao: 'abrir_perfil' }, stdResp.candidates || []);
+        }
+      } else {
+        appendAssistantChatMessage(
+          `📂 Não encontrei o perfil do aluno **${escapeHtml(studentTarget)}** na tela atual. Você pode me mostrar onde fica ou clicar manualmente? 🔍`,
+          true
+        );
+        showHonestErrorCard(
+          'Aluno não encontrado',
+          `Não encontrei o aluno '${studentTarget}' na tela atual do portal.`
+        );
+      }
+    });
+    return;
+  }
 
   setProcessingState(true, 'Olhando o portal...');
 

@@ -98,6 +98,47 @@ def split_compound_command(text: str) -> Dict[str, Any]:
     clean = re.sub(r"^(?:ol[áa]|oi|ei|rafinha|por\s+favor|pfv|ajuda|ajude|\s+)+[,:]?\s*", "", clean)
     clean = re.sub(r"\b(?:no\s+site|no\s+portal|no\s+sistema|via\s+chat|no\s+app).*$", "", clean).strip()
 
+    # Padrão Especial 1: "<ação/entidade> [de/do/da] <alvo> em/no/na <seção>"
+    # Ex: "acesse o perfil de alice almeida em meus alunos", "ver dados de joão em diário"
+    m_entity_section = re.search(
+        r"^(?:acesse|acessa|acessar|abra|abre|abrir|ver|veja|olhe|olhar|mostrar|mostre)?\s*(?:o|a)?\s*(?:perfil|dados|detalhes|ficha|cadastro|historico)\s+(?:de|do|da)\s+([a-zA-ZÀ-ÿ\s]+?)\s+(?:em|no|na|nos|nas)\s+([a-zA-ZÀ-ÿ0-9_\s-]+)$",
+        clean,
+        flags=re.IGNORECASE
+    )
+    if m_entity_section:
+        entity_name = m_entity_section.group(1).strip()
+        section_name = m_entity_section.group(2).strip()
+        section_clean = re.sub(r"^(?:a|o|os|as)?\s*(?:aba|menu|seção|secao|guia|tela)\s+", "", section_name, flags=re.IGNORECASE).strip()
+        section_clean = re.sub(r"^(?:de|do|da)\s+", "", section_clean, flags=re.IGNORECASE).strip()
+        return {
+            "has_navigation": True,
+            "nav_target": section_clean,
+            "conjunction": "em",
+            "remaining_command": f"acessar perfil de {entity_name}",
+            "is_compound": True,
+            "aluno": entity_name.title(),
+            "acao_secundaria": "abrir_perfil"
+        }
+
+    # Padrão Especial 2: "<ação/entidade> [de/do/da] <alvo>" sem seção (ex: "acesse o perfil de alice almeida")
+    # NUNCA deve ser interpretado como nome de aba literal!
+    m_entity_direct = re.search(
+        r"^(?:acesse|acessa|acessar|abra|abre|abrir|ver|veja|olhe|olhar|mostrar|mostre)?\s*(?:o|a)?\s*(?:perfil|dados|detalhes|ficha|cadastro|historico)\s+(?:de|do|da)\s+([a-zA-ZÀ-ÿ\s]+)$",
+        clean,
+        flags=re.IGNORECASE
+    )
+    if m_entity_direct and not any(w in clean for w in ["turma", "escola", "professor", "professora"]):
+        entity_name = m_entity_direct.group(1).strip()
+        return {
+            "has_navigation": False,
+            "nav_target": None,
+            "conjunction": None,
+            "remaining_command": f"acessar perfil de {entity_name}",
+            "is_compound": False,
+            "aluno": entity_name.title(),
+            "acao_secundaria": "abrir_perfil"
+        }
+
     nav_prefix_regex = r"(?:^|\b)(?:entre|entra|entrar|vai|vá|ir|navegue|navega|navegar|acesse|acessa|acessar|abra|abre|abrir|clique|clica|clicar|mostre|mostra|quero\s+ver|ver)\s+(?:\b(?:em|no|na|nos|nas|para|pra|pro|pela|pelo)\b\s+)?(?:\b(?:a|o|os|as)\b\s+)?(?:\b(?:aba|menu|seção|secao|guia|link|tela|pasta)\b\s+)?(?:\b(?:de|do|da|dos|das)\b\s+)?"
     prefix_match = re.search(nav_prefix_regex, clean)
     if not prefix_match:
@@ -214,23 +255,80 @@ def _parse_with_regex_rules(text: str) -> Dict[str, Any]:
             "clarification_question": None
         }
 
+    # 2.4. Acesso a Perfil de Aluno ou Ficha Cadastral ("acesse o perfil de Alice Almeida em meus alunos", "ver perfil de João", etc.)
+    m_perfil_loc = re.search(r"(?:perfil|dados|detalhes|ficha|cadastro|historico)\s+(?:de|do|da)\s+([a-zA-ZÀ-ÿ\s]+?)\s+(?:em|no|na|nos|nas)\s+([a-zA-ZÀ-ÿ0-9_\s-]+)", lower)
+    if m_perfil_loc:
+        aluno_clean = m_perfil_loc.group(1).strip().title()
+        secao_clean = re.sub(r"^(?:a|o|os|as)?\s*(?:aba|menu|seção|secao|guia|tela)\s+", "", m_perfil_loc.group(2).strip(), flags=re.IGNORECASE).strip()
+        secao_clean = re.sub(r"^(?:de|do|da)\s+", "", secao_clean, flags=re.IGNORECASE).strip().title()
+        return {
+            "verbo_acao": "acessar",
+            "objeto_alvo": f"Perfil de {aluno_clean}",
+            "tipo_operacao": "leitura",
+            "valor": None,
+            "descricao_tarefa": f"Acessar perfil de {aluno_clean} na seção {secao_clean}",
+            "destino_navegacao": secao_clean,
+            "parametros_extras": {"secao": secao_clean},
+            "acao": "abrir_perfil",
+            "destino": secao_clean,
+            "aluno": aluno_clean,
+            "nota": None,
+            "faltas": None,
+            "turma": None,
+            "disciplina": None,
+            "portal": None,
+            "is_complete": True,
+            "clarification_question": None,
+            "remaining_command": f"acessar perfil de {aluno_clean}",
+            "segunda_instrucao": f"acessar perfil de {aluno_clean}",
+            "is_compound": True
+        }
+
+    m_perfil_direto = re.search(r"(?:perfil|dados|detalhes|ficha|cadastro|historico)\s+(?:de|do|da)\s+([a-zA-ZÀ-ÿ\s]+)", lower)
+    if m_perfil_direto and not any(w in lower for w in ["turma", "escola", "professor", "professora"]):
+        aluno_clean = m_perfil_direto.group(1).strip().title()
+        return {
+            "verbo_acao": "acessar",
+            "objeto_alvo": f"Perfil de {aluno_clean}",
+            "tipo_operacao": "leitura",
+            "valor": None,
+            "descricao_tarefa": f"Acessar perfil de {aluno_clean}",
+            "destino_navegacao": None,
+            "parametros_extras": {},
+            "acao": "abrir_perfil",
+            "destino": None,
+            "aluno": aluno_clean,
+            "nota": None,
+            "faltas": None,
+            "turma": None,
+            "disciplina": None,
+            "portal": None,
+            "is_complete": True,
+            "clarification_question": None,
+            "remaining_command": None,
+            "segunda_instrucao": None,
+            "is_compound": False
+        }
+
     # 2.5. Navegação para Abas, Menus ou Seções ("entre nos arquivos", "entre na aba arquivos", "ir para diário", etc.)
     compound_nav = split_compound_command(lower)
     if compound_nav["has_navigation"] and compound_nav["nav_target"]:
         cand = compound_nav["nav_target"]
         target_display = cand.title()
         remaining = compound_nav["remaining_command"]
+        aluno_val = compound_nav.get("aluno")
+        acao_val = "abrir_perfil" if aluno_val else "navegar_aba"
         return {
-            "verbo_acao": "navegar",
-            "objeto_alvo": target_display,
+            "verbo_acao": "acessar" if aluno_val else "navegar",
+            "objeto_alvo": f"Perfil de {aluno_val}" if aluno_val else target_display,
             "tipo_operacao": "leitura",
             "valor": None,
-            "descricao_tarefa": f"Navegar para a aba {target_display}",
+            "descricao_tarefa": f"Acessar perfil de {aluno_val} na seção {target_display}" if aluno_val else f"Navegar para a aba {target_display}",
             "destino_navegacao": target_display,
             "parametros_extras": {},
-            "acao": "navegar_aba",
+            "acao": acao_val,
             "destino": target_display,
-            "aluno": None,
+            "aluno": aluno_val,
             "nota": None,
             "faltas": None,
             "turma": None,
@@ -1142,7 +1240,10 @@ def extract_intent(
         # A. Detecção de estado do portal
         if any(k in verbo for k in ["detectar", "verificar", "consultar", "checar", "ver", "saber", "olhar"]) and any(k in objeto for k in ["portal", "status", "estado", "tela"]):
             legacy_acao = "detect_state"
-        # B. Leitura de Alunos / Roster (quando pede a lista/relação de alunos/turma)
+        # B.1. Acesso a Perfil de Aluno ou Cartão
+        elif any(k in objeto for k in ["perfil", "ficha", "detalhe", "cadastro"]) or parsed.get("acao") == "abrir_perfil":
+            legacy_acao = "abrir_perfil"
+        # B.2. Leitura de Alunos / Roster (quando pede a lista/relação de alunos/turma)
         elif any(k in objeto for k in ["aluno", "estudante", "roster"]) or (any(k in verbo for k in ["ler", "consultar", "quem"]) and any(k in objeto for k in ["turma", "chamada"])):
             legacy_acao = "read_roster"
         # C. Navegação entre abas / telas
@@ -1208,7 +1309,7 @@ def extract_intent(
         else:
             parsed["is_complete"] = False
             parsed["clarification_question"] = "Para qual aluno devo registrar a falta?"
-    elif legacy_acao in ("read_roster", "detect_state", "navegar_aba"):
+    elif legacy_acao in ("read_roster", "detect_state", "navegar_aba", "abrir_perfil"):
         parsed["is_complete"] = True
         parsed["clarification_question"] = None
     elif parsed.get("valor") and not any(k in objeto for k in ["nota", "falta", "presenca"]):
@@ -1248,6 +1349,26 @@ async def dispatch_and_execute_task(
             "intent": intent,
             "card": None,
             "status": "needs_clarification"
+        }
+
+    if intent.get("acao") == "abrir_perfil":
+        aluno_nome = intent.get("aluno") or "aluno"
+        destino = intent.get("destino") or intent.get("destino_navegacao")
+        msg = f"Acessando o perfil de {aluno_nome} no portal para você! 👤✨"
+        if destino:
+            msg = f"Acessando a seção {destino} para abrir o perfil de {aluno_nome}! 👤✨"
+        return {
+            "sucesso": True,
+            "needs_clarification": False,
+            "acao": "abrir_perfil",
+            "aluno": aluno_nome,
+            "destino": destino,
+            "remaining_command": intent.get("remaining_command"),
+            "segunda_instrucao": intent.get("segunda_instrucao"),
+            "mensagem": msg,
+            "status": "accessing_student_profile",
+            "card": None,
+            "action_required": "find_and_click_student"
         }
 
     if intent.get("acao") == "navegar_aba":

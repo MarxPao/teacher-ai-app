@@ -210,6 +210,39 @@ class BrowserUseAgent:
                         # Reinspeciona a nova tela revelada
                         found_elements = await self._inspect_semantic_dom(page, task_spec, ax_snapshot=ax_snapshot)
 
+            # Se ainda não encontrou: loop de rolagem exploratória progressiva de contêineres roláveis
+            if not found_elements.get("success"):
+                js_scroll_explore = """
+                () => {
+                    const scrollables = Array.from(document.querySelectorAll('*')).filter(el => {
+                        const style = window.getComputedStyle(el);
+                        return (el.scrollHeight > el.clientHeight + 40 && el.clientHeight > 100 && ['auto', 'scroll'].includes(style.overflowY));
+                    });
+                    if (scrollables.length > 0) {
+                        scrollables[0].scrollBy({ top: 250, behavior: 'smooth' });
+                        return true;
+                    }
+                    window.scrollBy({ top: 250, behavior: 'smooth' });
+                    return true;
+                }
+                """
+                for scroll_step in range(4):
+                    try:
+                        if hasattr(page, "evaluate"):
+                            await page.evaluate(js_scroll_explore)
+                            await asyncio.sleep(0.2)
+                            found_elements = await self._inspect_semantic_dom(page, task_spec, ax_snapshot=ax_snapshot)
+                            if found_elements.get("success"):
+                                print(f"[BrowserUseAgent] 🎯 Alvo encontrado após rolagem exploratória (passo {scroll_step + 1})!")
+                                trace_de_acoes.append({
+                                    "action_type": "SCROLL",
+                                    "description": f"Rolar contêiner para revelar elementos ocultos (passo {scroll_step + 1})"
+                                })
+                                break
+                    except Exception as e:
+                        print(f"[BrowserUseAgent] Aviso durante rolagem exploratória: {e}")
+                        break
+
             # Se ainda não encontrou e há paginação ativa: avanço exploratório de páginas
             pages_checked_count = 1
             hit_pagination_limit = False
@@ -918,6 +951,40 @@ class BrowserUseAgent:
                         matricula: m.matricula,
                         details: m.fullText
                     }));
+                }
+            }
+
+            // 2.1. Se não encontrou aluno em tabelas, busca em CARDS / GRIDS / LISTAS de alunos
+            if (cleanStudent && !targetRow && !isAmbiguous) {
+                const cardCandidates = Array.from(document.querySelectorAll(
+                    '.card, [class*="card"], [class*="aluno"], [class*="student"], [data-aluno-id], [data-aluno], .aluno-item, .item-aluno, li, .grid-item, div'
+                )).filter(el => {
+                    if (el.offsetWidth < 50 || el.offsetHeight < 30) return false;
+                    const txt = norm(el.innerText || el.textContent);
+                    if (!txt || txt.length > 500) return false;
+                    const firstName = cleanStudent.split(' ')[0] || '';
+                    return (cleanMatricula && txt.includes(cleanMatricula)) || txt.includes(cleanStudent) || (firstName.length >= 3 && txt.includes(firstName));
+                });
+
+                if (cardCandidates.length === 1) {
+                    targetRow = cardCandidates[0];
+                    targetRowSelector = targetRow.id ? '#' + targetRow.id : (targetRow.className ? '.' + targetRow.className.split(' ').filter(Boolean)[0] : 'div');
+                    targetCellValue = (targetRow.innerText || targetRow.textContent || '').trim();
+                } else if (cardCandidates.length > 1) {
+                    const exact = cardCandidates.filter(c => norm(c.innerText || c.textContent).includes(cleanStudent));
+                    if (exact.length === 1) {
+                        targetRow = exact[0];
+                        targetRowSelector = targetRow.id ? '#' + targetRow.id : (targetRow.className ? '.' + targetRow.className.split(' ').filter(Boolean)[0] : 'div');
+                        targetCellValue = (targetRow.innerText || targetRow.textContent || '').trim();
+                    } else {
+                        isAmbiguous = true;
+                        ambiguousCandidates = (exact.length > 1 ? exact : cardCandidates).map((c, idx) => ({
+                            index: idx + 1,
+                            name: (c.innerText || c.textContent || '').split('\n')[0].slice(0, 40),
+                            matricula: '',
+                            details: (c.innerText || c.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 80)
+                        }));
+                    }
                 }
             }
 

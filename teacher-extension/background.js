@@ -1216,6 +1216,206 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  if (message.action === 'DISCOVERY_FIND_AND_CLICK_STUDENT') {
+    (async () => {
+      let targetTabId = message.tabId;
+      if (!targetTabId) {
+        try {
+          const activeTabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+          if (activeTabs && activeTabs.length > 0 && activeTabs[0].url && !activeTabs[0].url.startsWith('chrome')) {
+            targetTabId = activeTabs[0].id;
+          }
+        } catch {}
+      }
+      if (!targetTabId) {
+        const tabs = await chrome.tabs.query({});
+        const portalTab = tabs.find(t => t.url && (t.url.includes('portal_mock') || t.url.includes('portal_real'))) ||
+                          tabs.find(t => t.url && !t.url.startsWith('chrome') && !t.url.endsWith(':3000/') && !t.url.endsWith(':3000') && identifyPortal(t.url)) ||
+                          tabs.find(t => t.url && (t.url.startsWith('http') || t.url.startsWith('file')) && !t.url.includes('side_panel') && !t.url.endsWith(':3000/') && !t.url.endsWith(':3000'));
+        targetTabId = portalTab ? portalTab.id : currentTabState.tabId;
+      }
+      if (!targetTabId) {
+        sendResponse({ sucesso: false, mensagem: 'Nenhuma aba ativa do portal identificada.' });
+        return;
+      }
+
+      const targetStudent = (message.studentName || message.target || '').trim();
+      if (!targetStudent) {
+        sendResponse({ sucesso: false, mensagem: 'Nome do aluno não informado.' });
+        return;
+      }
+
+      try {
+        const results = await chrome.scripting.executeScript({
+          target: { tabId: targetTabId },
+          args: [targetStudent],
+          func: async (studentName) => {
+            const cleanStr = (s) => (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+            const normTarget = cleanStr(studentName);
+            const targetTokens = normTarget.split(/\s+/).filter(Boolean);
+            const firstName = targetTokens[0] || '';
+
+            // Termos destrutivos estritamente bloqueados
+            const DESTRUCTIVE_TERMS = ['excluir', 'remover', 'deletar', 'cancelar', 'apagar', 'desmatricular'];
+            const isDestructive = (el) => {
+              const txt = cleanStr(el.innerText || el.textContent || el.getAttribute('aria-label') || el.title || '');
+              return DESTRUCTIVE_TERMS.some(term => txt.includes(term));
+            };
+
+            // Função interna para coletar candidatos a elemento do aluno na tela
+            const scanCandidates = () => {
+              let cardCandidates = Array.from(document.querySelectorAll(
+                '.card, [class*="card"], [class*="aluno"], [class*="student"], [data-aluno-id], [data-aluno], .aluno-item, .item-aluno, li, .grid-item'
+              )).filter(el => {
+                if (el.offsetWidth < 50 || el.offsetHeight < 30) return false;
+                const txt = cleanStr(el.innerText || el.textContent);
+                if (!txt || txt.length > 500) return false;
+                return txt.includes(normTarget) || (firstName.length >= 3 && txt.includes(firstName));
+              });
+
+              if (cardCandidates.length === 0) {
+                cardCandidates = Array.from(document.querySelectorAll('div')).filter(el => {
+                  if (el.offsetWidth < 50 || el.offsetHeight < 30) return false;
+                  const txt = cleanStr(el.innerText || el.textContent);
+                  if (!txt || txt.length > 300) return false;
+                  return txt.includes(normTarget) || (firstName.length >= 3 && txt.includes(firstName));
+                });
+              }
+
+              // 2. Linhas de tabela (<tr>)
+              const rowCandidates = Array.from(document.querySelectorAll('table tr, tbody tr')).filter(r => {
+                if (r.offsetWidth < 50 || r.offsetHeight < 20) return false;
+                const txt = cleanStr(r.innerText || r.textContent);
+                return txt.includes(normTarget) || (firstName.length >= 3 && txt.includes(firstName));
+              });
+
+              const all = [...cardCandidates, ...rowCandidates];
+              // Remove qualquer elemento que seja ancestral (contêiner) de outro candidato na lista
+              const leaves = all.filter(c => !all.some(other => other !== c && c.contains(other)));
+              return leaves;
+            };
+
+            // Detecta contêiner rolável
+            const getScrollContainer = () => {
+              const allEls = Array.from(document.querySelectorAll('*'));
+              for (const el of allEls) {
+                if (el.scrollHeight > el.clientHeight + 40 && el.clientHeight > 100) {
+                  const style = window.getComputedStyle(el);
+                  if (['auto', 'scroll'].includes(style.overflowY)) {
+                    return el;
+                  }
+                }
+              }
+              return window;
+            };
+
+            const scrollContainer = getScrollContainer();
+
+            // Loop de busca exploratória com scroll progressivo
+            let matchedElements = [];
+            const MAX_SCROLL_STEPS = 6;
+            const SCROLL_STEP_PX = 250;
+
+            for (let step = 0; step < MAX_SCROLL_STEPS; step++) {
+              const currentFound = scanCandidates();
+              if (currentFound.length > 0) {
+                matchedElements = currentFound;
+                break;
+              }
+              if (scrollContainer === window) {
+                window.scrollBy({ top: SCROLL_STEP_PX, behavior: 'smooth' });
+              } else if (scrollContainer && scrollContainer.scrollBy) {
+                scrollContainer.scrollBy({ top: SCROLL_STEP_PX, behavior: 'smooth' });
+              }
+              await new Promise(r => setTimeout(r, 150));
+            }
+
+            if (matchedElements.length === 0) {
+              return { sucesso: false, status: 'not_found', mensagem: `Aluno '${studentName}' não encontrado no DOM.` };
+            }
+
+            // Separa os matches entre exatos (nome completo) e parciais (primeiro nome)
+            const exactMatches = matchedElements.filter(el => cleanStr(el.innerText || el.textContent).includes(normTarget));
+            const pool = exactMatches.length > 0 ? exactMatches : matchedElements;
+
+            // Se houver mais de um match mesmo após filtrar: AMBIGUIDADE HONESTA!
+            if (pool.length > 1) {
+              const candidates = pool.map((el, idx) => {
+                const img = el.querySelector('img');
+                const cleanTxt = (el.innerText || el.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 80);
+                return {
+                  id: el.getAttribute('data-aluno-id') || el.id || `candidate_${idx + 1}`,
+                  name: cleanTxt.split('\n')[0] || studentName,
+                  photoUrl: img ? img.src : null,
+                  details: cleanTxt,
+                  index: idx + 1
+                };
+              });
+
+              return {
+                sucesso: false,
+                status: 'ambiguous',
+                candidates,
+                studentName
+              };
+            }
+
+            const targetEl = pool[0];
+
+            if (isDestructive(targetEl)) {
+              return { sucesso: false, status: 'blocked_destructive', mensagem: 'Ação bloqueada: elemento destrutivo detectado.' };
+            }
+
+            let clickable = targetEl.querySelector('a, button, [role="button"], .btn-perfil, [class*="perfil"], [class*="profile"]');
+            if (!clickable || isDestructive(clickable)) {
+              clickable = targetEl;
+            }
+
+            // Destaque visual Rafinha (verde #10b981)
+            const origTransition = clickable.style.transition;
+            const origOutline = clickable.style.outline;
+            const origBoxShadow = clickable.style.boxShadow;
+
+            clickable.style.transition = 'all 0.3s ease';
+            clickable.style.outline = '3px solid #10b981';
+            clickable.style.boxShadow = '0 0 16px rgba(16, 185, 129, 0.7)';
+
+            clickable.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+            await new Promise(r => setTimeout(r, 200));
+
+            try {
+              clickable.click();
+            } catch (e) {
+              clickable.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+            }
+
+            setTimeout(() => {
+              try {
+                clickable.style.transition = origTransition;
+                clickable.style.outline = origOutline;
+                clickable.style.boxShadow = origBoxShadow;
+              } catch {}
+            }, 1800);
+
+            return {
+              sucesso: true,
+              status: 'success',
+              elementText: (clickable.innerText || clickable.textContent || studentName).trim().slice(0, 50),
+              studentName
+            };
+          }
+        });
+
+        const res = (results && results[0] && results[0].result) || { sucesso: false, mensagem: 'Script de busca falhou.' };
+        sendResponse(res);
+      } catch (err) {
+        sendResponse({ sucesso: false, mensagem: err.message });
+      }
+    })();
+    return true;
+  }
+
   if (message.action === 'READ_PAGE_DATA') {
     (async () => {
       let targetTabId = message.tabId;
