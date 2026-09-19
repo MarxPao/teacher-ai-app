@@ -1,12 +1,13 @@
-﻿# Regras de Desenvolvimento e Diretrizes do Projeto (Teacher AI)
+# Regras de Desenvolvimento e Diretrizes do Projeto (Teacher AI)
 
 ## 1. Princípio Fundamental de Rigor e Evidência
 - **Nunca afirmar sem provar:** Nenhuma correção de bug, nova funcionalidade ou refatoração deve ser dada como "concluída" sem uma execução real de teste colando o output literal do terminal (código de saída, stdout e stderr).
 - **Fim da Validação Circular:** Testes automatizados contra mocks locais em memória (como `page.set_content()`) devem **sempre declarar explicitamente** sua origem como mock estático. Jamais apresentar um teste em mock local como prova de funcionamento contra o portal real de produção (`machadosobrinho.paineldoaluno.com.br` ou outros). A validação final de portais reais exige observação ao vivo ou HTML real capturado pelo usuário.
-- **Auditoria de Testes (Pytest vs Unittest):** A suíte de testes do sidecar (`sidecar/tests/`) utiliza convenções do **Pytest** (`def test_*`, testes assíncronos e fixtures) totalizando mais de 290 testes. **Nunca** use `python -m unittest discover` como métrica de contagem total da suíte, pois o runner padrão do unittest descobre apenas as 5 classes herdadas de `unittest.TestCase` (46 testes). O comando canônico é:
+- **Auditoria de Testes (Pytest vs Unittest):** A suíte de testes do sidecar (`sidecar/tests/`) utiliza convenções do **Pytest** (`def test_*`, testes assíncronos e fixtures) totalizando mais de 400 testes. **Nunca** use `python -m unittest discover` como métrica de contagem total da suíte, pois o runner padrão do unittest descobre apenas as 5 classes herdadas de `unittest.TestCase` (46 testes). O comando canônico é:
   ```powershell
   python -m pytest sidecar/tests -q
   ```
+- **Proibição Absoluta de Evidência Fabricada ou Prematura:** Nenhum resultado de execução de comando (código de saída, contagem de testes passados/falhos, tempos de execução em ms, stdout ou stacktraces) pode ser escrito ou reportado antes de o processo correspondente ter de fato terminado e retornado seu código de saída. Se um comando foi enviado para background (ex.: suítes longas do sidecar, testes E2E com Playwright ou builds do Next.js), o agente deve obrigatoriamente aguardar a notificação do sistema ou consultar seu status real via `manage_task`, sendo estritamente vedado simular, prever ou estimar o resultado em blocos formatados como se fossem saídas literais do terminal. Caso uma expectativa preliminar precise ser mencionada, deve ser explicitamente rotulada como "estimativa não confirmada (processo ainda em execução)".
 
 ## 2. Privacidade, LGPD e Roteamento de PII
 - **Arquitetura de Dois Trilhos:**

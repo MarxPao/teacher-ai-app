@@ -98,6 +98,11 @@ class CDPConnector:
             return "needs_activation"
         return "closed"
 
+    def get_harness_engine(self) -> Any:
+        """Retorna uma instância de HarnessEngine configurada para este endpoint CDP."""
+        from harness_engine import HarnessEngine
+        return HarnessEngine(cdp_url=self.cdp_url)
+
     def check_health(self) -> Tuple[bool, str]:
         """Verifica se o Chrome está pronto para leitura de portais (sem jargões na mensagem)."""
         try:
@@ -108,6 +113,22 @@ class CDPConnector:
                 return (True, f"Navegador conectado ({browser_ver}) e pronto para leitura.")
             return (False, "Navegador não respondeu à tentativa de conexão.")
         except Exception:
+            # Auto-descoberta via DevToolsActivePort do Browser Harness
+            try:
+                import os
+                from pathlib import Path
+                local = Path(os.environ.get("LOCALAPPDATA") or Path.home() / "AppData/Local")
+                for p in ["Google/Chrome/User Data", "Google/Chrome Beta/User Data", "Microsoft/Edge/User Data"]:
+                    dt_file = local / p / "DevToolsActivePort"
+                    if dt_file.exists():
+                        port = int(dt_file.read_text().splitlines()[0].strip())
+                        import socket
+                        with socket.create_connection(("127.0.0.1", port), timeout=0.5):
+                            self.cdp_url = f"http://127.0.0.1:{port}"
+                            return (True, f"Navegador conectado via porta DevTools dinâmica ({port}).")
+            except Exception:
+                pass
+
             if self._is_chrome_process_running():
                 return (
                     False,

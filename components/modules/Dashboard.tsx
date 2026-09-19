@@ -23,6 +23,7 @@ import {
 } from '@/lib/checklistManager'
 import TrelloImportModal from '@/components/modules/TrelloImportModal'
 import ChecklistEditModal from '@/components/modules/ChecklistEditModal'
+import DailyMorningBriefing from '@/components/DailyMorningBriefing'
 
 // --- Tipos & Interfaces ---
 
@@ -704,6 +705,23 @@ export default function Dashboard() {
     }
   }, [classesList])
 
+  // Informações da próxima aula para o Briefing Matinal
+  const nextClassData = useMemo(() => {
+    if (!classesList.length) return null
+    const now = new Date()
+    const currentHourMin = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
+    const currentDay = now.getDay() === 0 ? 7 : now.getDay()
+    const todayClasses = classesList.filter(c => c.dayOfWeek === currentDay)
+    if (!todayClasses.length) return null
+    const upcoming = todayClasses.find(c => c.timeStart >= currentHourMin) || todayClasses[0]
+    return {
+      className: upcoming.className,
+      time: `${upcoming.timeStart} - ${upcoming.timeEnd}`,
+      room: upcoming.room,
+      topic: upcoming.topic,
+    }
+  }, [classesList])
+
   // Abre o Planejamento Completo da Aula ou Formulário Pré-preenchido
   const handleOpenLessonPlan = (item: TodayClassItem) => {
     if (item.type === 'private') {
@@ -819,6 +837,15 @@ export default function Dashboard() {
               </div>
             </div>
           )}
+
+          {/* ══════════════════════════════════════════════════════════════════════
+              DAILY PEDAGOGICAL MORNING BRIEFING DA RAFINHA
+             ══════════════════════════════════════════════════════════════════════ */}
+          <DailyMorningBriefing
+            onNavigate={navigateTo}
+            currentClassesCount={classesList.length}
+            nextClassInfo={nextClassData}
+          />
 
           {/* ══════════════════════════════════════════════════════════════════════
               ALERTAS PEDAGÓGICOS DA IA (#22, #52)

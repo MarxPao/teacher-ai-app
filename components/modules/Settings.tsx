@@ -67,6 +67,8 @@ const STORAGE_KEYS = [
   'teacher_attendance_records_v1',
   'teacher_class_logs_v1',
   'teacher_student_memory',
+  'teacher_pending_unresolved_observations',
+  'teacher_pending_ambiguous_mentions',
   'teacher_portfolio',
   'teacher_didactic_sequence_units_v3'
 ]

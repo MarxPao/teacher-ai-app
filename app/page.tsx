@@ -18,6 +18,7 @@ import WisprFlowOverlay from '@/components/WisprFlowOverlay'
 import { getCurrentSession, saveSession, AuthSession } from '@/lib/supabaseAuth'
 import { ToastProvider, ConfirmProvider } from '@/components/Toast'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
+import '@/lib/extensionSyncBus'
 
 // ─── Module Skeleton (shown while lazy chunk loads) ────────────────────────────
 function ModuleSkeleton() {

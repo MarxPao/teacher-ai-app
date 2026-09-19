@@ -89,6 +89,113 @@ const visorAuthStatus   = document.getElementById('visor-auth-status')
 const visorSidecarStatus= document.getElementById('visor-sidecar-status')
 const btnVisorRefresh   = document.getElementById('btn-visor-refresh')
 
+// ── Keep-Alive Duplex Port com Background Service Worker (MV3) ────────────────
+let keepAlivePort = null;
+function initKeepAlivePort() {
+  try {
+    if (typeof chrome !== 'undefined' && chrome.runtime?.connect) {
+      keepAlivePort = chrome.runtime.connect({ name: 'keepAliveSidePanel' });
+      keepAlivePort.onDisconnect.addListener(() => {
+        keepAlivePort = null;
+        setTimeout(initKeepAlivePort, 2000);
+      });
+    }
+  } catch (e) {}
+}
+initKeepAlivePort();
+
+// ── Card de Conferência com Diff Visual (Human-in-the-Loop) ──────────────────
+function renderApprovalDiffCard(data) {
+  let container = document.getElementById('diff-approval-card');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'diff-approval-card';
+    container.className = 'card';
+    container.style.border = '2px solid #0284c7';
+    container.style.backgroundColor = '#f0f9ff';
+    container.style.marginTop = '12px';
+    const mainBody = document.querySelector('.body') || document.body;
+    mainBody.prepend(container);
+  }
+
+  const entries = data?.entries || [];
+  const portalName = data?.portal_name || 'Portal Escolar';
+  const taskId = data?.task_id || 'task_pending';
+
+  let rowsHtml = entries.map(e => `
+    <tr style="border-bottom: 1px solid #e2e8f0; font-size: 11px;">
+      <td style="padding: 6px 4px; font-weight: 600; color: #1e293b;">${e.student || 'Aluno'}</td>
+      <td style="padding: 6px 4px; color: #64748b;">${e.previous_value ?? '-'}</td>
+      <td style="padding: 6px 4px; font-weight: 700; color: #0284c7;">${e.new_value ?? e.value ?? '-'}</td>
+    </tr>
+  `).join('');
+
+  container.innerHTML = `
+    <div class="card-title" style="color: #0369a1; font-size: 12px; margin-bottom: 4px;">
+      📝 Conferência de Lançamento (${entries.length} registros)
+    </div>
+    <div style="font-size: 11px; color: #475569; margin-bottom: 8px;">
+      Confira os valores antes de salvar no <b>${portalName}</b>:
+    </div>
+    <div style="max-height: 180px; overflow-y: auto; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; margin-bottom: 10px;">
+      <table style="width: 100%; border-collapse: collapse; text-align: left;">
+        <thead>
+          <tr style="background: #e2e8f0; font-size: 10px; text-transform: uppercase; color: #475569;">
+            <th style="padding: 4px;">Aluno</th>
+            <th style="padding: 4px;">Atual</th>
+            <th style="padding: 4px;">Novo</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rowsHtml || '<tr><td colspan="3" style="padding: 8px; text-align: center;">Nenhum dado</td></tr>'}
+        </tbody>
+      </table>
+    </div>
+    <div style="display: flex; gap: 8px;">
+      <button id="btn-approve-diff" style="flex: 1; padding: 8px; background: #16a34a; color: #fff; border: none; border-radius: 6px; font-weight: 700; cursor: pointer;">
+        ✅ Confirmar e Gravar
+      </button>
+      <button id="btn-cancel-diff" style="flex: 1; padding: 8px; background: #ef4444; color: #fff; border: none; border-radius: 6px; font-weight: 700; cursor: pointer;">
+        ❌ Cancelar
+      </button>
+    </div>
+  `;
+
+  const btnApprove = document.getElementById('btn-approve-diff');
+  if (btnApprove) {
+    btnApprove.onclick = () => {
+      container.remove();
+      if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+        chrome.runtime.sendMessage({ action: 'APPROVAL_DECISION', approved: true, task_id: taskId });
+      }
+    };
+  }
+
+  const btnCancel = document.getElementById('btn-cancel-diff');
+  if (btnCancel) {
+    btnCancel.onclick = () => {
+      container.remove();
+      if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+        chrome.runtime.sendMessage({ action: 'APPROVAL_DECISION', approved: false, task_id: taskId });
+      }
+    };
+  }
+}
+
+// Listener para receber atualizações de telemetria/status do content script e sidecar
+if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
+  chrome.runtime.onMessage.addListener((msg) => {
+    if (msg?.action === 'STATUS_TOAST_UPDATE') {
+      if (visorPortalName && msg.platformName) {
+        visorPortalName.textContent = msg.platformName;
+      }
+    }
+    if (msg?.action === 'SHOW_DIFF_APPROVAL_CARD') {
+      renderApprovalDiffCard(msg.payload || msg);
+    }
+  });
+}
+
 async function getActivePortalTab() {
   if (typeof chrome === 'undefined' || !chrome.tabs?.query) return null;
   try {
@@ -776,6 +883,7 @@ async function loadActiveTurma(forceEmpty = false) {
     if (nameEl) nameEl.textContent = activeClass.name;
     if (yearEl) yearEl.textContent = activeClass.year ? `Ano ${activeClass.year}` : 'Ativa';
     if (idEl) idEl.textContent = `ID: ${activeClass.id}`;
+    postToEntityBus('REQUEST_ACTIVE_CLASS_TODOS', { className: activeClass.name });
 
     // Renderiza seletor de chips
     if (chipsEl) {
@@ -794,6 +902,7 @@ async function loadActiveTurma(forceEmpty = false) {
           if (yearEl) yearEl.textContent = btn.dataset.year ? `Ano ${btn.dataset.year}` : 'Ativa';
           if (idEl) idEl.textContent = `ID: ${activeTurmaId}`;
           console.log('[SidePanel] Turma ativa alterada para:', btn.dataset.name, activeTurmaId);
+          postToEntityBus('REQUEST_ACTIVE_CLASS_TODOS', { className: btn.dataset.name });
         });
       });
     }
@@ -1312,6 +1421,64 @@ function matchStudentByName(queryName, roster, queryMatricula) {
   }
 
   return { status: 'not_found', student: null, candidates: [] };
+}
+
+/**
+ * Decompõe um comando em múltiplos sub-objetivos sequenciais (PPAV Goal Queue).
+ * Trata vírgulas, conectivos temporais ("e depois", "em seguida") e "e" seguido de verbo de comando.
+ * Ex: "abrir turmas, selecionar sexto ano e acessar o perfil de João"
+ *   -> ["abrir turmas", "selecionar sexto ano", "acessar perfil de João"]
+ */
+function decomposeGoalJS(text) {
+  if (!text || typeof text !== 'string') return [];
+  let clean = text.toLowerCase()
+    .replace(/^(?:ol[áa]|oi|ei|rafinha|por\s+favor|pfv|ajuda|ajude|\s+)+[,:]?\s*/gi, '')
+    .replace(/\b(?:no\s+site|no\s+portal|no\s+sistema|via\s+chat|no\s+app).*$/gi, '')
+    .trim();
+
+  if (!clean) return [];
+
+  // Padrão Especial: "acesse o perfil de <aluno> em <secao>"
+  const entitySectionRegex = /^(?:acesse|acessa|acessar|abra|abre|abrir|ver|veja|olhe|olhar|mostrar|mostre)?\s*(?:o|a)?\s*(?:perfil|dados|detalhes|ficha|cadastro|historico)\s+(?:de|do|da)\s+([a-zA-ZÀ-ÿ\s]+?)\s+(?:em|no|na|nos|nas)\s+([a-zA-ZÀ-ÿ0-9_\s-]+)$/i;
+  const mEntitySection = clean.match(entitySectionRegex);
+  if (mEntitySection) {
+    const student = mEntitySection[1].trim();
+    let section = mEntitySection[2].trim().replace(/^(?:a|o|os|as)?\s*(?:aba|menu|se[çc][ãa]o|guia|tela)\s+/i, '').replace(/^(?:de|do|da)\s+/i, '').trim();
+    return [
+      `navegar até ${section}`,
+      `acessar perfil de ${student}`
+    ];
+  }
+
+  // 1. Normaliza conectivos temporais para delimitador uniforme
+  let normalized = clean
+    .replace(/\s*(?:e\s+depois|pra\s+depois|para\s+depois|em\s+seguida|logo\s+em\s+seguida|e\s+ent[ãa]o|depois|logo\s+ap[óo]s|e\s+logo\s+ap[óo]s|a[íi])\s+/gi, ' || ')
+    .replace(/\s*;\s*/g, ' || ');
+
+  // 2. Separa por vírgula ou " e " quando preceder verbo de ação ou comando
+  const actionVerbs = '(?:selecionar|seleciona|selecione|escolher|escolha|escolhe|filtrar|filtra|filtre|marcar|marca|marque|lançar|lanca|lance|lancar|colocar|coloca|coloque|botar|bota|bote|anotar|anota|anote|registrar|registra|registre|ver|olhar|olhe|buscar|busca|busque|procurar|procura|procure|mostrar|mostra|mostre|baixar|baixa|baixe|enviar|envia|envie|responder|responda|responde|escrever|escreve|escreva|preencher|preencha|preenche|abrir|abra|abre|acessar|acesse|acessa|entrar|entre|entra|navegar|navegue|vai|v[áa]|ir|ler|liste|listar|perfil)';
+  normalized = normalized.replace(new RegExp(`,\\s*(?=${actionVerbs}\\b)`, 'gi'), ' || ');
+  normalized = normalized.replace(new RegExp(`\\s+e\\s+(?=${actionVerbs}\\b)`, 'gi'), ' || ');
+
+  // 4. Se ainda não separou mas tem vírgulas com orações completas (>= 2 palavras de cada lado)
+  if (!normalized.includes(' || ') && clean.includes(',')) {
+    const commaParts = clean.split(',').map(s => s.trim()).filter(Boolean);
+    if (commaParts.length > 1 && commaParts.every(p => p.split(/\s+/).length >= 2)) {
+      normalized = commaParts.join(' || ');
+    }
+  }
+
+  const rawSteps = normalized.split(' || ').map(s => s.trim()).filter(Boolean);
+  if (rawSteps.length === 0) return [clean];
+
+  const steps = rawSteps.map(step => {
+    return step
+      .replace(/^(?:e\s+|a[íi]\s+|ent[ãa]o\s+)+/i, '')
+      .replace(/\s+(?:no\s+site|no\s+portal|no\s+sistema|via\s+chat|no\s+app).*$/i, '')
+      .trim();
+  }).filter(Boolean);
+
+  return steps.length > 0 ? steps : [clean];
 }
 
 function splitCompoundCommand(text) {
@@ -1983,34 +2150,44 @@ async function handleProcessCommand(commandText) {
     setProcessingState(true, 'Lendo dados da tela atual...');
     dispatchPortalBridgeMessage({ action: 'READ_PAGE_DATA' }, (pageData) => {
       if (pageData && pageData.sucesso) {
-        const answer = synthesizeScreenAnswer(textClean, pageData);
-        // Se a resposta foi negativa mas a intenção era claramente de horários, tenta navegar para a aba Horários
-        const isScheduleIntent = /horario|aula|disciplina|materia|grade|quinta|segunda|terca|quarta|sexta/i.test(textClean.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''));
-        if (answer.includes('Não encontrei dados suficientes') && isScheduleIntent) {
-          setProcessingState(true, 'Acessando a aba Horários no portal...');
-          dispatchPortalBridgeMessage({ action: 'NAVIGATE_PORTAL_TAB', target: 'horários' }, (navResp) => {
-            if (navResp && navResp.sucesso) {
-              setTimeout(() => {
-                dispatchPortalBridgeMessage({ action: 'READ_PAGE_DATA' }, (newPageData) => {
-                  setProcessingState(false);
-                  if (newPageData && newPageData.sucesso) {
-                    const newAnswer = synthesizeScreenAnswer(textClean, newPageData);
-                    appendAssistantChatMessage(newAnswer, true);
-                  } else {
-                    appendAssistantChatMessage(answer, true);
-                  }
-                });
-              }, 400);
-            } else {
-              setProcessingState(false);
-              appendAssistantChatMessage(answer, true);
-            }
-          });
-          return;
-        }
+        // 1. Tenta resposta semântica com o backend/LLM (perguntas abertas, agregações e sínteses)
+        dispatchPortalBridgeMessage({ action: 'ASK_PAGE_QUESTION', query: textClean, pageData }, (aiResp) => {
+          if (aiResp && aiResp.sucesso && aiResp.answer) {
+            setProcessingState(false);
+            appendAssistantChatMessage(aiResp.answer, true);
+            return;
+          }
 
-        setProcessingState(false);
-        appendAssistantChatMessage(answer, true);
+          // 2. Fallback: Motor Determinístico Local Estruturado
+          const answer = synthesizeScreenAnswer(textClean, pageData);
+          // Se a resposta foi negativa mas a intenção era claramente de horários, tenta navegar para a aba Horários
+          const isScheduleIntent = /horario|aula|disciplina|materia|grade|quinta|segunda|terca|quarta|sexta/i.test(textClean.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''));
+          if (answer.includes('Não encontrei dados suficientes') && isScheduleIntent) {
+            setProcessingState(true, 'Acessando a aba Horários no portal...');
+            dispatchPortalBridgeMessage({ action: 'NAVIGATE_PORTAL_TAB', target: 'horários' }, (navResp) => {
+              if (navResp && navResp.sucesso) {
+                setTimeout(() => {
+                  dispatchPortalBridgeMessage({ action: 'READ_PAGE_DATA' }, (newPageData) => {
+                    setProcessingState(false);
+                    if (newPageData && newPageData.sucesso) {
+                      const newAnswer = synthesizeScreenAnswer(textClean, newPageData);
+                      appendAssistantChatMessage(newAnswer, true);
+                    } else {
+                      appendAssistantChatMessage(answer, true);
+                    }
+                  });
+                }, 400);
+              } else {
+                setProcessingState(false);
+                appendAssistantChatMessage(answer, true);
+              }
+            });
+            return;
+          }
+
+          setProcessingState(false);
+          appendAssistantChatMessage(answer, true);
+        });
       } else {
         setProcessingState(false);
         appendAssistantChatMessage('Não consegui ler os dados da tela atual. Certifique-se de estar na aba correta do portal.', true);
@@ -2026,20 +2203,29 @@ async function handleProcessCommand(commandText) {
       setProcessingState(false);
       const students = (resp && resp.students) || [];
       if (students.length > 0) {
-        // Read-Through automático para o Supabase
+        // Read-Through e Livre Intercâmbio para o Teacher AI App
         try {
           const activeTurmaEl = document.getElementById('active-class-name');
           const currentTurma = (activeTurmaEl && activeTurmaEl.textContent !== '—') ? activeTurmaEl.textContent : 'Turma Importada';
-          fetch('http://localhost:3000/api/students/import', {
+          const portalName = (PLATFORMS && PLATFORMS[activePlatform]?.name) || 'Portal Escolar';
+
+          postToEntityBus('PORTAL_ROSTER_SYNC', {
+            className: currentTurma,
+            portalName: portalName,
+            students: students,
+            pageUrl: window.location.href
+          });
+
+          fetch('http://localhost:3000/api/portal/roster-sync', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               className: currentTurma,
-              portalName: 'Portal Escolar Ativo',
+              portalName: portalName,
               students: students,
               pageUrl: window.location.href
             })
-          }).catch(err => console.warn('[Read-Through] Falha ao sincronizar roster:', err));
+          }).catch(err => console.warn('[RosterSync] Falha ao sincronizar via API:', err));
         } catch (e) {}
 
         const studentNames = students.map(s => s.name).slice(0, 5).join(', ');
@@ -2055,126 +2241,16 @@ async function handleProcessCommand(commandText) {
     return;
   }
 
-  // Caso Navegação e Comandos Compostos (ex: "abrir arquivos e selecionar sexto ano", "ir para diário e lançar nota")
+  // Caso 4: Comandos Multi-Passo e Navegação Encadeada (PPAV Goal Queue)
+  const subGoals = decomposeGoalJS(textClean);
   const compound = splitCompoundCommand(textClean);
-  if (compound.hasNavigation && compound.navTarget) {
-    const navTarget = compound.navTarget;
-    const remainingCommand = compound.remainingCommand;
 
-    setProcessingState(true, `Acessando ${navTarget} no portal...`);
-    dispatchPortalBridgeMessage({ action: 'NAVIGATE_PORTAL_TAB', target: navTarget }, (navResp) => {
-      if (!navResp || !navResp.sucesso) {
-        setProcessingState(false);
-        appendAssistantChatMessage(
-          `Procurei pela aba ou seção **${escapeHtml(navTarget)}** no portal, mas não encontrei nenhum botão ou menu correspondente nesta tela. Você pode navegar manualmente até lá ou me mostrar onde fica? 🔍`,
-          true
-        );
-        showHonestErrorCard(
-          'Aba não encontrada',
-          `Não encontrei a aba ou seção '${navTarget}' no portal. Clique manualmente no menu correspondente.`
-        );
-        return;
-      }
+  if (subGoals.length > 1 || (compound.hasNavigation && compound.navTarget)) {
+    const queueToRun = (subGoals.length > 1)
+      ? subGoals
+      : (compound.remainingCommand ? [`abrir ${compound.navTarget}`, compound.remainingCommand] : [`abrir ${compound.navTarget}`]);
 
-      const foundLabel = navResp.elementText || navTarget;
-
-      // Se NÃO houver segunda instrução no comando composto, conclui a tarefa com sucesso:
-      if (!remainingCommand) {
-        setProcessingState(false);
-        appendAssistantChatMessage(`Prontinho! Entrei na aba **${escapeHtml(foundLabel)}** no portal para você. 📂✨`, true);
-        return;
-      }
-
-      // Se HOUVER segunda instrução, NUNCA descarta silenciosamente — executa a etapa 2 via Discovery!
-      appendAssistantChatMessage(`Prontinho! Entrei na aba **${escapeHtml(foundLabel)}** no portal. Agora estou procurando **${escapeHtml(remainingCommand)}**... 📂🔍`, true);
-      setProcessingState(true, `Executando: ${remainingCommand}...`);
-
-      // 0. Caso Acesso a Perfil de Aluno / Cartão de Aluno (ex: "acessar perfil de alice almeida", "ver perfil de joão", "aluno alice almeida")
-      const studentProfileMatch = remainingCommand.match(/(?:acessar\s+perfil|abrir\s+perfil|ver\s+perfil|perfil\s+de|aluno\s+|acessar\s+aluno)\s+(?:de\s+|do\s+|da\s+)?([a-zA-ZÀ-ÿ\s]+)/i);
-      if (studentProfileMatch || compound.acaoSecundaria === 'abrir_perfil' || compound.aluno) {
-        const studentTarget = (studentProfileMatch ? studentProfileMatch[1] : (compound.aluno || remainingCommand)).trim();
-        dispatchPortalBridgeMessage({ action: 'DISCOVERY_FIND_AND_CLICK_STUDENT', studentName: studentTarget }, (stdResp) => {
-          setProcessingState(false);
-          if (stdResp && stdResp.sucesso) {
-            const foundName = stdResp.elementText || studentTarget;
-            appendAssistantChatMessage(`✅ Entrei na aba **${escapeHtml(foundLabel)}** e acessei o perfil de **${escapeHtml(foundName)}** com sucesso! 👤✨`, true);
-          } else if (stdResp && stdResp.status === 'ambiguous') {
-            appendAssistantChatMessage(
-              `⚠️ Encontrei mais de um aluno com o nome **${escapeHtml(studentTarget)}** nesta tela. Por favor, escolha qual deles você deseja acessar: 🔍`,
-              true
-            );
-            if (typeof showDisambiguationCard === 'function') {
-              showDisambiguationCard({ aluno: studentTarget, acao: 'abrir_perfil' }, stdResp.candidates || []);
-            }
-          } else {
-            appendAssistantChatMessage(
-              `📂 Entrei na aba **${escapeHtml(foundLabel)}**, mas não encontrei o perfil do aluno **${escapeHtml(studentTarget)}** nesta tela. Você pode me mostrar onde fica ou clicar manualmente? 🔍`,
-              true
-            );
-            showHonestErrorCard(
-              'Aluno não encontrado',
-              `Não encontrei o aluno '${studentTarget}' na tela atual do portal.`
-            );
-          }
-        });
-        return;
-      }
-
-      // 1. Caso Sub-Navegação (ex: "abra recados e abra recados recebidos", "ir para notas e entrar em 1º bimestre")
-      const isSubNavCommand = /^(?:abrir|abra|abre|ir\s+para|ir\s+pra|ir\s+pro|vai\s+para|v[áa]\s+para|v[áa]\s+em|vai\s+em|clicar\s+em|clique\s+em|clica\s+em|acessar|acesse|acessa|entrar\s+em|entre\s+em|entra\s+em|mostrar|mostre|ver)\s+/i.test(remainingCommand);
-      if (isSubNavCommand) {
-        const subNavTerm = remainingCommand
-          .replace(/^(?:abrir|abra|abre|ir\s+para|ir\s+pra|ir\s+pro|vai\s+para|v[áa]\s+para|v[áa]\s+em|vai\s+em|clicar\s+em|clique\s+em|clica\s+em|acessar|acesse|acessa|entrar\s+em|entre\s+em|entra\s+em|mostrar|mostre|ver)\s+(?:a\s+|o\s+|as\s+|os\s+|sub-?aba\s+|aba\s+|guia\s+|se[çc][ãa]o\s+|bot[ãa]o\s+)?/i, '')
-          .trim();
-
-        dispatchPortalBridgeMessage({ action: 'DISCOVERY_SELECT_FILTER', filterTerm: subNavTerm }, (subResp) => {
-          setProcessingState(false);
-          if (subResp && subResp.sucesso) {
-            const selectedLabel = subResp.elementText || subNavTerm;
-            appendAssistantChatMessage(`✅ Entrei na aba **${escapeHtml(foundLabel)}** e acessei **${escapeHtml(selectedLabel)}** com sucesso! ✨`, true);
-          } else {
-            appendAssistantChatMessage(
-              `📂 Entrei na aba **${escapeHtml(foundLabel)}**, mas não encontrei o botão ou sub-aba **${escapeHtml(subNavTerm)}** nesta tela. Você pode me mostrar onde fica ou clicar manualmente? 🔍`,
-              true
-            );
-            showClarificationPointClickCard(
-              `Não encontrei o botão ou sub-aba "${subNavTerm}" na aba ${foundLabel}. Você pode me mostrar clicando nele?`
-            );
-          }
-        });
-        return;
-      }
-
-      // 2. Caso Filtro / Seleção (ex: "selecionar sexto ano", "filtrar por turma 9B")
-      const isSelectionCommand = /^(?:selecionar|seleciona|selecione|escolher|escolha|escolhe|filtrar|filtra|filtre|marcar|marca|marque)\s+/i.test(remainingCommand);
-      if (isSelectionCommand) {
-        const filterTerm = remainingCommand
-          .replace(/^(?:selecionar|seleciona|selecione|escolher|escolha|escolhe|filtrar|filtra|filtre|marcar|marca|marque)\s+(?:por\s+|a\s+|o\s+|pelo\s+|pela\s+|turma\s+|ano\s+)?/i, '')
-          .trim();
-
-        dispatchPortalBridgeMessage({ action: 'DISCOVERY_SELECT_FILTER', filterTerm }, (selResp) => {
-          setProcessingState(false);
-          if (selResp && selResp.sucesso) {
-            const selectedLabel = selResp.elementText || filterTerm;
-            appendAssistantChatMessage(`✅ Entrei na aba **${escapeHtml(foundLabel)}** e selecionei **${escapeHtml(selectedLabel)}** com sucesso! ✨`, true);
-          } else {
-            appendAssistantChatMessage(
-              `📂 Entrei na aba **${escapeHtml(foundLabel)}**, mas não encontrei a opção **${escapeHtml(filterTerm)}** para selecionar nesta tela. Você pode me mostrar onde fica ou selecionar manualmente? 🔍`,
-              true
-            );
-            showClarificationPointClickCard(
-              `Não encontrei onde selecionar "${filterTerm}" na aba ${foundLabel}. Você pode me mostrar clicando no lugar certo?`
-            );
-          }
-        });
-        return;
-      }
-
-      // Outras ações subsequentes (ex: responder recado, lançar nota na nova aba)
-      setTimeout(() => {
-        executeSubsequentCommand(remainingCommand, foundLabel);
-      }, 500);
-    });
+    executeGoalQueue(queueToRun, 0, {});
     return;
   }
 
@@ -2369,103 +2445,338 @@ async function handleProcessCommand(commandText) {
   });
 }
 
+function normalizeBrazilianWeekday(headerText) {
+  if (!headerText) return null;
+  const raw = String(headerText).trim();
+  if (raw.length > 30) return null;
+  const norm = raw.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+  // Descarta termos de tempo/período para evitar falsos positivos (ex: "1º horário", "2º tempo")
+  if (/hor[aá]rio|tempo|per[ií]odo|aula|disciplina|turma|sala|prof/i.test(norm)) return null;
+
+  if (/(?:^|\b)(?:2\s*[\u00AAªa](?:-?\s*feira)?|segunda(?:-feira)?|seg\b)/i.test(norm) ||
+      /(?:^|\b)2\s*[\u00AAªa](?:-?\s*feira)?/i.test(raw)) {
+    return { name: '2ª-feira (Segunda)', key: 'segunda' };
+  }
+  if (/(?:^|\b)(?:3\s*[\u00AAªa](?:-?\s*feira)?|ter[çc]a(?:-feira)?|ter\b)/i.test(norm) ||
+      /(?:^|\b)3\s*[\u00AAªa](?:-?\s*feira)?/i.test(raw)) {
+    return { name: '3ª-feira (Terça)', key: 'terca' };
+  }
+  if (/(?:^|\b)(?:4\s*[\u00AAªa](?:-?\s*feira)?|quarta(?:-feira)?|qua\b)/i.test(norm) ||
+      /(?:^|\b)4\s*[\u00AAªa](?:-?\s*feira)?/i.test(raw)) {
+    return { name: '4ª-feira (Quarta)', key: 'quarta' };
+  }
+  if (/(?:^|\b)(?:5\s*[\u00AAªa](?:-?\s*feira)?|quinta(?:-feira)?|qui\b)/i.test(norm) ||
+      /(?:^|\b)5\s*[\u00AAªa](?:-?\s*feira)?/i.test(raw)) {
+    return { name: '5ª-feira (Quinta)', key: 'quinta' };
+  }
+  if (/(?:^|\b)(?:6\s*[\u00AAªa](?:-?\s*feira)?|sexta(?:-feira)?|sex\b)/i.test(norm) ||
+      /(?:^|\b)6\s*[\u00AAªa](?:-?\s*feira)?/i.test(raw)) {
+    return { name: '6ª-feira (Sexta)', key: 'sexta' };
+  }
+  if (/(?:^|\b)(?:s[aá]bado|sab\b)/i.test(norm)) {
+    return { name: 'Sábado', key: 'sabado' };
+  }
+  if (/(?:^|\b)(?:domingo|dom\b)/i.test(norm)) {
+    return { name: 'Domingo', key: 'domingo' };
+  }
+  return null;
+}
+
+function extractWeekdayFromText(text) {
+  if (!text) return null;
+  const raw = String(text).trim();
+  const norm = raw.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+  if (/(?:2\s*[\u00AAªa](?:-?\s*feira)?|segunda(?:-feira)?)/i.test(norm)) return { name: '2ª-feira (Segunda)', key: 'segunda' };
+  if (/(?:3\s*[\u00AAªa](?:-?\s*feira)?|ter[çc]a(?:-feira)?)/i.test(norm)) return { name: '3ª-feira (Terça)', key: 'terca' };
+  if (/(?:4\s*[\u00AAªa](?:-?\s*feira)?|quarta(?:-feira)?)/i.test(norm)) return { name: '4ª-feira (Quarta)', key: 'quarta' };
+  if (/(?:5\s*[\u00AAªa](?:-?\s*feira)?|quinta(?:-feira)?)/i.test(norm)) return { name: '5ª-feira (Quinta)', key: 'quinta' };
+  if (/(?:6\s*[\u00AAªa](?:-?\s*feira)?|sexta(?:-feira)?)/i.test(norm)) return { name: '6ª-feira (Sexta)', key: 'sexta' };
+  if (/s[aá]bado/i.test(norm)) return { name: 'Sábado', key: 'sabado' };
+  if (/domingo/i.test(norm)) return { name: 'Domingo', key: 'domingo' };
+  return null;
+}
+
 function synthesizeScreenAnswer(query, pageData) {
   if (!pageData) return 'Não foi possível extrair os dados da tela.';
   const q = (query || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
+  const CANONICAL_DAYS_ORDER = [
+    '2ª-feira (Segunda)',
+    '3ª-feira (Terça)',
+    '4ª-feira (Quarta)',
+    '5ª-feira (Quinta)',
+    '6ª-feira (Sexta)',
+    'Sábado',
+    'Domingo'
+  ];
+
+  const formatClassBadge = (raw) => {
+    if (!raw) return '';
+    let text = String(raw).trim();
+    text = text.replace(/ENSINO FUNDAMENTAL(?:\s+II)?\s*-\s*/i, '');
+    text = text.replace(/\(LING\.?\s*ING\.?\)/i, '(Língua Inglesa)');
+    text = text.replace(/\(MAT\.?\)/i, '(Matemática)');
+    text = text.replace(/\(PORT\.?\)/i, '(Língua Portuguesa)');
+    text = text.replace(/\(HIST\.?\)/i, '(História)');
+    text = text.replace(/\(GEO\.?\)/i, '(Geografia)');
+    text = text.replace(/\(CIEN\.?\)/i, '(Ciências)');
+    return text;
+  };
+
+  const parseStartTimeMinutes = (slotStr) => {
+    const m = (slotStr || '').match(/(\d{1,2}):(\d{2})/);
+    return m ? parseInt(m[1], 10) * 60 + parseInt(m[2], 10) : 9999;
+  };
+
   // 1. Horários / Aulas / Grade Semanal
-  const isHorarioQuery = /horario|aula|dias|quando|grade|semana|disciplina|materia|quinta|segunda|terca|quarta|sexta|sabado|leciono/i.test(q);
+  const isHorarioPage = /horario/i.test(pageData.activeTab || '') || /horario/i.test(pageData.url || '');
+  const isHorarioQuery = isHorarioPage || /horario|aula|dias|quando|grade|semana|disciplina|materia|quinta|segunda|terca|quarta|sexta|sabado|leciono|[2-6]\s*[\u00AAªa]/i.test(q);
   if (isHorarioQuery) {
-    // TRAVA DE SEGURANÇA ESTRUTURAL (PARTE 3):
-    // Só prossegue se houver uma tabela que GENUINAMENTE seja uma grade semanal
-    // (deve conter pelo menos 3 dias da semana reconhecíveis nos cabeçalhos)
     let scheduleTable = null;
     let dayCols = [];
 
     if (pageData.tables && pageData.tables.length > 0) {
       for (const table of pageData.tables) {
-        const detectedDays = [];
-        table.headers.forEach((h, idx) => {
-          const normH = h.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-          if (/segunda|terca|quarta|quinta|sexta|sabado/i.test(normH)) {
-            detectedDays.push({ name: h, idx });
+        let headers = table.headers || [];
+        let rows = table.rows || [];
+
+        // 1. Tenta identificar dias nos headers
+        let detectedDays = [];
+        headers.forEach((h, idx) => {
+          const matchedDay = normalizeBrazilianWeekday(h);
+          if (matchedDay) {
+            detectedDays.push({ ...matchedDay, originalHeader: h, idx });
           }
         });
 
-        // Validação estrita: grade semanal legítima precisa ter no mínimo 3 dias úteis nos cabeçalhos
-        if (detectedDays.length >= 3) {
-          scheduleTable = table;
+        // 2. Se os headers tiverem menos de 2 dias identificados, verifica se rows[0] contém os dias
+        if (detectedDays.length < 2 && rows.length > 0) {
+          const firstRowDays = [];
+          rows[0].forEach((cell, idx) => {
+            const matchedDay = normalizeBrazilianWeekday(cell);
+            if (matchedDay) {
+              firstRowDays.push({ ...matchedDay, originalHeader: cell, idx });
+            }
+          });
+          if (firstRowDays.length >= 2) {
+            headers = rows[0];
+            rows = rows.slice(1);
+            detectedDays = firstRowDays;
+          }
+        }
+
+        // 3. Grade horizontal (dias nas colunas)
+        if (detectedDays.length >= 2) {
+          scheduleTable = { ...table, headers, rows, isVertical: false };
           dayCols = detectedDays;
           break;
         }
-      }
-    }
 
-    // Se NÃO houver tabela com assinatura inequívoca de grade semanal:
-    if (!scheduleTable) {
-      const currentLoc = pageData.activeTab || pageData.pageTitle || 'tela atual';
-      return `Não consegui confirmar que estou na tela de Horários/Grade de Aulas (a tela aberta no portal parece ser: **${escapeHtml(currentLoc)}**).<br><br>👉 **Por favor, navegue manualmente até a tela de Horários no portal** e pergunte novamente para que eu possa ler a grade oficial com precisão! 🧭`;
-    }
-
-    const byDay = {};
-    for (const row of scheduleTable.rows) {
-      const timeSlot = row[0] || 'Horário';
-      for (const col of dayCols) {
-        const cell = (row[col.idx] || '').trim();
-        if (cell && !['-', '—', '', 'livre', 'folga', 'sem aula'].includes(cell.toLowerCase())) {
-          if (!byDay[col.name]) byDay[col.name] = [];
-          byDay[col.name].push({ timeSlot, info: cell });
-        }
-      }
-    }
-
-        // Se a professora pediu um dia específico (ex: "quinta-feira", "quinta", "segunda", etc.)
-        const dayKeys = ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'];
-        const targetDay = dayKeys.find(d => q.includes(d));
-
-        if (targetDay) {
-          const matchedCol = dayCols.find(col => {
-            const normName = col.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-            return normName.includes(targetDay);
-          });
-
-          if (matchedCol) {
-            const classesForDay = byDay[matchedCol.name] || [];
-            const dayDisplayName = matchedCol.name;
-
-            if (classesForDay.length === 0) {
-              return `Você **não tem nenhuma aula** cadastrada na **${escapeHtml(dayDisplayName)}**! 🎉✨`;
+        // 4. Grade vertical (dias na primeira coluna de cada linha)
+        if (rows.length >= 2) {
+          const verticalDays = [];
+          rows.forEach((r, rIdx) => {
+            const cell0 = r[0] || '';
+            const matchedDay = normalizeBrazilianWeekday(cell0);
+            if (matchedDay) {
+              verticalDays.push({ ...matchedDay, rowIdx: rIdx, cells: r.slice(1) });
             }
-
-            const lines = classesForDay.map(c => `• **${escapeHtml(c.timeSlot)}**: ${escapeHtml(c.info)}`).join('<br>');
-            return `Aqui está a sua grade para **${escapeHtml(dayDisplayName)}**: 🗓️✨<br><br>📅 **${escapeHtml(dayDisplayName)}**:<br>${lines}`;
+          });
+          if (verticalDays.length >= 2) {
+            scheduleTable = { ...table, headers, rows, isVertical: true, verticalDays };
+            break;
           }
         }
+      }
+    }
 
-        if (Object.keys(byDay).length > 0) {
-          let output = `Encontrei seus horários de aula no portal! 🗓️✨<br><br>`;
-          for (const [day, classes] of Object.entries(byDay)) {
-            const lines = classes.map(c => `• **${escapeHtml(c.timeSlot)}**: ${escapeHtml(c.info)}`).join('<br>');
-            output += `📅 **${escapeHtml(day)}**:<br>${lines}<br><br>`;
+    // Fallback: se não encontrou em tabelas, verifica se há cards com dias e horários
+    const byDay = {};
+    if (!scheduleTable && pageData.cards && pageData.cards.length > 0) {
+      for (const card of pageData.cards) {
+        const matchedDay = extractWeekdayFromText(card);
+        const timeMatch = card.match(/(\d{1,2}:\d{2}\s*(?:às|as|-|a)\s*\d{1,2}:\d{2})/i);
+        if (matchedDay && timeMatch) {
+          if (!byDay[matchedDay.name]) byDay[matchedDay.name] = { key: matchedDay.key, items: [] };
+          byDay[matchedDay.name].items.push({ timeSlot: timeMatch[1], info: card.replace(timeMatch[1], '').replace(/^[–—: -]+/, '').trim() });
+          scheduleTable = { id: 'cards', isVertical: false, rows: [] };
+        }
+      }
+    }
+
+    // Se NÃO houver tabela identificada:
+    if (!scheduleTable) {
+      const currentLoc = pageData.activeTab || (pageData.pageHeadings && pageData.pageHeadings[0]) || pageData.pageTitle || 'tela atual';
+      const isActuallyOnSchedulePage = /horario/i.test(currentLoc) || /horario/i.test(pageData.url || '');
+      if (isActuallyOnSchedulePage) {
+        return `Estou na tela de **Horários**, mas a grade de aulas ainda não está visível ou não há aulas cadastradas para o período selecionado. 🗓️`;
+      }
+      return `Não consegui confirmar que estou na tela de Horários/Grade de Aulas (a tela aberta no portal parece ser: **${escapeHtml(currentLoc)}**).<br><br>👉 **Por favor, navegue até a tela de Horários no portal** e pergunte novamente para que eu possa ler a grade oficial com precisão! 🧭`;
+    }
+
+    // Popula byDay a partir da tabela
+    if (scheduleTable && !scheduleTable.isVertical && scheduleTable.rows) {
+      for (const row of scheduleTable.rows) {
+        const rawSlot = row[0] || '';
+        const cleanSlot = rawSlot.replace(/\s+/g, ' ').trim();
+        const timeMatch = cleanSlot.match(/(\d{1,2}:\d{2}\s*(?:às|as|-|a)\s*\d{1,2}:\d{2})/i);
+        const slotNumMatch = cleanSlot.match(/(\d+[ºoªa]?\s*hor[aá]rio)/i);
+        let timeLabel = cleanSlot;
+        if (timeMatch && slotNumMatch) {
+          timeLabel = `${timeMatch[1]} (${slotNumMatch[1]})`;
+        } else if (timeMatch) {
+          timeLabel = timeMatch[1];
+        }
+
+        for (const col of dayCols) {
+          const cell = (row[col.idx] || '').replace(/\s+/g, ' ').trim();
+          if (cell && !['-', '—', '', 'livre', 'folga', 'sem aula'].includes(cell.toLowerCase())) {
+            if (!byDay[col.name]) byDay[col.name] = { key: col.key, items: [] };
+            byDay[col.name].items.push({ timeSlot: timeLabel, info: cell });
           }
-          return output.trim();
-        } else {
-          return `Não há nenhuma aula agendada na grade de horários do portal.`;
+        }
+      }
+    } else if (scheduleTable && scheduleTable.isVertical && scheduleTable.verticalDays) {
+      for (const d of scheduleTable.verticalDays) {
+        if (!byDay[d.name]) byDay[d.name] = { key: d.key, items: [] };
+        for (const cell of d.cells) {
+          const cleanCell = (cell || '').replace(/\s+/g, ' ').trim();
+          if (cleanCell && !['-', '—', '', 'livre', 'folga', 'sem aula'].includes(cleanCell.toLowerCase())) {
+            const timeMatch = cleanCell.match(/(\d{1,2}:\d{2}\s*(?:às|as|-|a)\s*\d{1,2}:\d{2})/i);
+            const slotNumMatch = cleanCell.match(/(\d+[ºoªa]?\s*hor[aá]rio)/i);
+            let timeLabel = '';
+            if (timeMatch && slotNumMatch) timeLabel = `${timeMatch[1]} (${slotNumMatch[1]})`;
+            else if (timeMatch) timeLabel = timeMatch[1];
+            else timeLabel = 'Horário letivo';
+            byDay[d.name].items.push({ timeSlot: timeLabel, info: cleanCell });
+          }
+        }
+      }
+    }
+
+    // ORDENAÇÃO CRONOLÓGICA DOS HORÁRIOS DENTRO DE CADA DIA
+    for (const dName in byDay) {
+      byDay[dName].items.sort((a, b) => parseStartTimeMinutes(a.timeSlot) - parseStartTimeMinutes(b.timeSlot));
+    }
+
+    // ── SUB-PERGUNTA A: Contagem ou Total de Aulas ──
+    if (/quantas\s+aulas|total\s+de\s+aulas|quantidade\s+de\s+aulas|carga\s+hor[aá]ria/i.test(q)) {
+      let totalCount = 0;
+      for (const d in byDay) totalCount += byDay[d].items.length;
+      const sortedActiveDays = CANONICAL_DAYS_ORDER.filter(d => byDay[d] && byDay[d].items.length > 0);
+      const dayList = sortedActiveDays.map(d => d.split(' ')[0]).join(', ');
+      return `Você tem um total de **${totalCount} aulas semanais** distribuídas em **${sortedActiveDays.length} dias letivos** (${escapeHtml(dayList)})! 🗓️✨`;
+    }
+
+    // ── SUB-PERGUNTA B: Filtragem por Turma Específica (ex: 7º ano, 6º ano) ──
+    const turmaQueryMatch = q.match(/([1-9]|6º|7º|8º|9º|1º|2º|3º)\s*(?:º|o|°)?\s*(?:ano|turma|serie)/i) ||
+                            q.match(/(?:turma|ano|serie)\s+([1-9]|6|7|8|9|1|2|3)[a-z]?/i);
+    const isTurmaFiltering = turmaQueryMatch && /quando|quais\s+dias|quais\s+aulas|horarios?\s+(?:do|da|com|pro|para)|aula\s+com/i.test(q);
+    if (isTurmaFiltering) {
+      const numTurma = turmaQueryMatch[1].replace(/\D/g, '');
+      const matchingItems = [];
+      for (const dayName of CANONICAL_DAYS_ORDER) {
+        if (!byDay[dayName]) continue;
+        for (const it of byDay[dayName].items) {
+          if (it.info.includes(`${numTurma}º`) || it.info.includes(`${numTurma}o`) || it.info.includes(`${numTurma}°`) || it.info.toLowerCase().includes(`${numTurma} ano`)) {
+            matchingItems.push({ day: dayName, ...it });
+          }
+        }
+      }
+      if (matchingItems.length > 0) {
+        const lines = matchingItems.map(m => `• **${escapeHtml(m.day)}** às **${escapeHtml(m.timeSlot)}**: ${escapeHtml(formatClassBadge(m.info))}`).join('<br>');
+        return `Encontrei as seguintes aulas para o **${numTurma}º ano**: 📚✨<br><br>${lines}`;
+      } else {
+        return `Não encontrei nenhuma aula cadastrada para o **${numTurma}º ano** na sua grade atual. 🔍`;
+      }
+    }
+
+    // ── SUB-PERGUNTA C: Dia Específico (ex: "quarta", "quarta-feira", "segunda", etc.) ──
+    const dayKeys = ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo'];
+    let targetDayKey = null;
+    for (const dk of dayKeys) {
+      if (q.includes(dk) || (dk === 'segunda' && /2\s*[\u00AAªa]/i.test(q)) || (dk === 'terca' && /3\s*[\u00AAªa]/i.test(q)) || (dk === 'quarta' && /4\s*[\u00AAªa]/i.test(q)) || (dk === 'quinta' && /5\s*[\u00AAªa]/i.test(q)) || (dk === 'sexta' && /6\s*[\u00AAªa]/i.test(q))) {
+        targetDayKey = dk;
+        break;
+      }
+    }
+
+    if (targetDayKey) {
+      const foundDayEntry = Object.entries(byDay).find(([_, data]) => data.key === targetDayKey);
+      const dayCol = dayCols.find(c => c.key === targetDayKey);
+      const dayDisplayName = (foundDayEntry && foundDayEntry[0]) || (dayCol ? dayCol.name : targetDayKey);
+
+      if (!foundDayEntry || foundDayEntry[1].items.length === 0) {
+        return `Você **não tem nenhuma aula** cadastrada na **${escapeHtml(dayDisplayName)}**! 🎉✨`;
+      }
+
+      const lines = foundDayEntry[1].items.map(c => `• **${escapeHtml(c.timeSlot)}** ➔ ${escapeHtml(formatClassBadge(c.info))}`).join('<br>');
+      return `Aqui está a sua grade para **${escapeHtml(dayDisplayName)}**: 🗓️✨<br><br>📅 **${escapeHtml(dayDisplayName)}**:<br>${lines}`;
+    }
+
+    // ── SUB-PERGUNTA D: Grade Semanal Completa — ESTRITAMENTE CRONOLÓGICA ──
+    const sortedActiveDays = CANONICAL_DAYS_ORDER.filter(d => byDay[d] && byDay[d].items.length > 0);
+    if (sortedActiveDays.length > 0) {
+      let totalCount = 0;
+      for (const d of sortedActiveDays) totalCount += byDay[d].items.length;
+      const diasLetivos = sortedActiveDays.length;
+
+      let output = `🗓️ **Grade Semanal do Professor** (${totalCount} aulas em ${diasLetivos} dias letivos)<br><br>`;
+      for (const dayName of sortedActiveDays) {
+        output += `📅 **${escapeHtml(dayName)}**:<br>`;
+        for (const item of byDay[dayName].items) {
+          output += `• **${escapeHtml(item.timeSlot)}** ➔ ${escapeHtml(formatClassBadge(item.info))}<br>`;
+        }
+        output += `<br>`;
+      }
+      return output.trim();
+    } else {
+      return `Não há nenhuma aula agendada na grade de horários do portal.`;
+    }
+  }
+
+  // 2. Motor Tabular Universal (Notas, Boletim, Faltas, Avaliações, Alunos)
+  if (pageData.tables && pageData.tables.length > 0) {
+    for (const table of pageData.tables) {
+      const headers = table.headers || [];
+      const rows = table.rows || [];
+      if (rows.length === 0) continue;
+
+      const normHeaders = headers.map(h => String(h || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''));
+      const nameColIdx = normHeaders.findIndex(h => /nome|aluno|estudante/i.test(h));
+      let gradeColIdx = normHeaders.findIndex(h => /nota|avalia|media|ponto|bimestre|trimestre|etapa|grau|exame|prova/i.test(h));
+      const faltasColIdx = normHeaders.findIndex(h => /falta|ausencia|presenca/i.test(h));
+
+      // Detecção inteligente agnóstica de coluna de notas se não houver cabeçalho explícito
+      if (gradeColIdx === -1) {
+        for (let cIdx = 0; cIdx < headers.length; cIdx++) {
+          if (cIdx === nameColIdx || cIdx === faltasColIdx) continue;
+          if (/n[uú]mero|num|id|matricula|ra|chamada|falta/i.test(normHeaders[cIdx])) continue;
+          const vals = rows.map(r => parseFloat(String(r[cIdx] || '').replace(',', '.'))).filter(v => !isNaN(v));
+          if (vals.length >= rows.length * 0.7 && vals.length > 0) {
+            gradeColIdx = cIdx;
+            break;
+          }
         }
       }
 
-  // 2. Notas / Avaliações / Alunos
-  const isGradeQuery = /nota|avalia|boletim|desempenho/i.test(q);
-  if (isGradeQuery && pageData.tables && pageData.tables.length > 0) {
-    for (const table of pageData.tables) {
-      const nameColIdx = table.headers.findIndex(h => /nome|aluno|estudante/i.test(h.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')));
-      const gradeColIdx = table.headers.findIndex(h => /nota|avalia/i.test(h.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')));
+      // Pergunta de média da turma
+      if (/m[eé]dia/i.test(q) && gradeColIdx !== -1) {
+        const grades = rows.map(r => parseFloat(String(r[gradeColIdx] || '').replace(',', '.'))).filter(g => !isNaN(g));
+        if (grades.length > 0) {
+          const avg = grades.reduce((a, b) => a + b, 0) / grades.length;
+          return `A média da turma é de **${avg.toFixed(1)}** (calculada com base em ${grades.length} avaliações). 📊✨`;
+        }
+      }
 
-      if (nameColIdx !== -1 && gradeColIdx !== -1) {
+      // Pergunta de notas com threshold (acima de / abaixo de)
+      if (gradeColIdx !== -1 && nameColIdx !== -1) {
         let threshold = null;
         let comp = null;
         const threshMatch = q.match(/(?:acima|maior|superior|mais que|>=|>)\s*(?:de\s+)?(\d+(?:[.,]\d+)?)/i);
-        const belowMatch = q.match(/(?:abaixo|menor|inferior|menos que|<=|<)\s*(?:de\s+)?(\d+(?:[.,]\d+)?)/i);
+        const belowMatch = q.match(/(?:abaixo|menor|inferior|menos que|recupera|<=|<)\s*(?:de\s+)?(\d+(?:[.,]\d+)?)/i);
         if (threshMatch) {
           threshold = parseFloat(threshMatch[1].replace(',', '.'));
           comp = 'above';
@@ -2474,33 +2785,44 @@ function synthesizeScreenAnswer(query, pageData) {
           comp = 'below';
         }
 
-        const matches = [];
-        for (const row of table.rows) {
-          const student = row[nameColIdx];
-          const gradeVal = parseFloat(String(row[gradeColIdx] || '').replace(',', '.'));
-          if (!student || isNaN(gradeVal)) continue;
+        if (comp !== null) {
+          const matches = [];
+          for (const row of rows) {
+            const student = row[nameColIdx];
+            const gradeVal = parseFloat(String(row[gradeColIdx] || '').replace(',', '.'));
+            if (!student || isNaN(gradeVal)) continue;
 
-          if (comp === 'above' && gradeVal >= threshold) {
-            matches.push(`• **${escapeHtml(student)}**: nota **${gradeVal.toFixed(1)}**`);
-          } else if (comp === 'below' && gradeVal <= threshold) {
-            matches.push(`• **${escapeHtml(student)}**: nota **${gradeVal.toFixed(1)}**`);
-          } else if (!comp) {
-            matches.push(`• **${escapeHtml(student)}**: nota **${gradeVal.toFixed(1)}**`);
+            if (comp === 'above' && gradeVal >= threshold) {
+              matches.push(`• **${escapeHtml(student)}**: nota **${gradeVal.toFixed(1)}**`);
+            } else if (comp === 'below' && gradeVal <= threshold) {
+              matches.push(`• **${escapeHtml(student)}**: nota **${gradeVal.toFixed(1)}**`);
+            }
+          }
+
+          if (matches.length > 0) {
+            const condText = comp === 'above' ? `com nota igual ou superior a ${threshold}` : `com nota igual ou inferior a ${threshold}`;
+            return `Encontrei **${matches.length} alunos** ${condText}:<br><br>${matches.join('<br>')}`;
+          } else {
+            return `Nenhum aluno encontrado com nota ${comp === 'above' ? 'acima' : 'abaixo'} de ${threshold}.`;
           }
         }
+      }
 
-        if (matches.length > 0) {
-          const condText = comp === 'above' ? `com nota igual ou superior a ${threshold}` : (comp === 'below' ? `com nota igual ou inferior a ${threshold}` : 'da turma');
-          return `Encontrei **${matches.length} alunos** ${condText}:<br><br>${matches.join('<br>')}`;
-        }
+      // Pergunta de contagem de alunos
+      if (/quantos\s+alunos|total\s+de\s+alunos/i.test(q) && nameColIdx !== -1) {
+        return `Há um total de **${rows.length} alunos** listados nesta tela do portal. 📋✨`;
       }
     }
-  }
 
-  // 3. Fallback Geral Tabular
-  if (pageData.tables && pageData.tables.length > 0) {
+    // 3. Fallback Tabular Formatado em Markdown Limpo
     const t = pageData.tables[0];
-    const preview = t.rows.slice(0, 6).map(r => r.filter(Boolean).map(escapeHtml).join(' | ')).join('<br>');
+    const headers = t.headers && t.headers.length > 0 ? t.headers : null;
+    const rows = (t.rows || []).slice(0, 6);
+    let preview = '';
+    if (headers) {
+      preview += `**${headers.map(escapeHtml).join(' | ')}**<br>`;
+    }
+    preview += rows.map(r => r.filter(Boolean).map(escapeHtml).join(' | ')).join('<br>');
     return `Encontrei os seguintes dados na tela:<br><br>${preview}`;
   }
 
@@ -2595,6 +2917,212 @@ function executeSubsequentCommand(remainingCommand, contextLabel) {
       );
       showClarificationPointClickCard(
         `Não encontrei como fazer "${cleanCmd}" na aba ${contextLabel}. Você pode me mostrar clicando no lugar certo?`
+      );
+    }
+  });
+}
+
+/**
+ * Executa uma fila de sub-objetivos sequenciais (PPAV Multi-Step Queue Runner).
+ * Cada sub-objetivo é executado, aguarda a estabilização da aba/DOM no portal real,
+ * e passa o bastão para o próximo passo na nova tela resultante.
+ */
+async function executeGoalQueue(subGoals, index = 0, context = {}) {
+  if (!subGoals || index >= subGoals.length) {
+    setProcessingState(false);
+    return;
+  }
+
+  const currentGoal = subGoals[index].trim();
+  const isFirstStep = (index === 0);
+  const isLastStep = (index === subGoals.length - 1);
+  const totalSteps = subGoals.length;
+  const stepNumber = index + 1;
+
+  // 1. Perfil ou Cartão de Aluno (ex: "acessar perfil de joão", "ver o perfil de alice almeida", "aluno bruno")
+  const studentProfileMatch = currentGoal.match(/(?:acessar\s+(?:o\s+|a\s+)?perfil|abrir\s+(?:o\s+|a\s+)?perfil|ver\s+(?:o\s+|a\s+)?perfil|perfil\s+de|perfil\s+do|perfil\s+da|aluno\s+|acessar\s+aluno)\s+(?:de\s+|do\s+|da\s+)?([a-zA-ZÀ-ÿ\s]+)/i);
+
+  // 2. Filtro / Seleção (ex: "selecionar sexto ano", "filtrar por 6A", "escolher 1º bimestre")
+  const isSelectionCommand = /^(?:selecionar|seleciona|selecione|escolher|escolha|escolhe|filtrar|filtra|filtre|marcar|marca|marque)\s+/i.test(currentGoal);
+
+  // 3. Navegação de Aba / Seção do Portal (ex: "abrir turmas", "ir para diário", "acessar arquivos")
+  const isNavCommand = /^(?:abrir|abra|abre|ir\s+para|ir\s+pra|ir\s+pro|vai\s+para|v[áa]\s+para|v[áa]\s+em|vai\s+em|clicar\s+em|clique\s+em|clica\s+em|acessar|acesse|acessa|entrar\s+em|entre\s+em|entra\s+em|navegar\s+at[ée])\s+/i.test(currentGoal) && !studentProfileMatch;
+
+  // 4. Lançamento de Nota ou Falta (Ação de Escrita com Aprovação Prévia)
+  const isNotaOrFalta = /(?:nota|grau|ponto|falta|presen[çc]a|aus[êe]ncia)/i.test(currentGoal);
+
+  // 5. Responder Recado / Mensagem
+  const isResponderRecado = /^(?:responder|responda|responde|enviar\s+resposta|escrever\s+resposta)\b/i.test(currentGoal);
+
+  // 6. Leitura / Pergunta da tela
+  const isReadingQuery = /^(?:me\s+diga|diga|diz|liste|listar|mostre|mostrar|ver|veja|quais|qual|quantos|quantas|quando|consultar|resumir)\b/i.test(currentGoal);
+
+  // ── EXECUÇÃO 1: Navegação de Aba / Menu ──
+  if (isNavCommand) {
+    let navTarget = currentGoal
+      .replace(/^(?:abrir|abra|abre|ir\s+para|ir\s+pra|ir\s+pro|vai\s+para|v[áa]\s+para|v[áa]\s+em|vai\s+em|clicar\s+em|clique\s+em|clica\s+em|acessar|acesse|acessa|entrar\s+em|entre\s+em|entra\s+em|navegar\s+at[ée])\s+(?:a\s+|o\s+|as\s+|os\s+|aba\s+|menu\s+|se[çc][ãa]o\s+|guia\s+|tela\s+)?/i, '')
+      .replace(/^(?:de|do|da)\s+/i, '')
+      .trim();
+    if (!navTarget) navTarget = currentGoal;
+
+    setProcessingState(true, `[Passo ${stepNumber}/${totalSteps}] Acessando ${navTarget} no portal...`);
+
+    dispatchPortalBridgeMessage({ action: 'NAVIGATE_PORTAL_TAB', target: navTarget }, (navResp) => {
+      if (!navResp || !navResp.sucesso) {
+        setProcessingState(false);
+        appendAssistantChatMessage(
+          `Procurei pela aba ou seção **${escapeHtml(navTarget)}** no portal, mas não encontrei nenhum botão ou menu correspondente nesta tela. Você pode navegar manualmente até lá ou me mostrar onde fica? 🔍`,
+          true
+        );
+        showHonestErrorCard(
+          'Aba não encontrada',
+          `Não encontrei a aba ou seção '${navTarget}' no portal. Clique manualmente no menu correspondente.`
+        );
+        return;
+      }
+
+      const foundLabel = navResp.elementText || navTarget;
+      context.lastTab = foundLabel;
+
+      if (isLastStep) {
+        setProcessingState(false);
+        appendAssistantChatMessage(`Prontinho! Entrei na aba **${escapeHtml(foundLabel)}** no portal para você. 📂✨`, true);
+      } else {
+        appendAssistantChatMessage(`Prontinho! Entrei na aba **${escapeHtml(foundLabel)}** no portal. Agora vou executar: **${escapeHtml(subGoals[index + 1])}**... 📂🔍`, true);
+        executeGoalQueue(subGoals, index + 1, context);
+      }
+    });
+    return;
+  }
+
+  // ── EXECUÇÃO 2: Seleção de Filtro (Turma / Ano / Opção) ──
+  if (isSelectionCommand) {
+    const filterTerm = currentGoal
+      .replace(/^(?:selecionar|seleciona|selecione|escolher|escolha|escolhe|filtrar|filtra|filtre|marcar|marca|marque)\s+(?:por\s+|a\s+|o\s+|pelo\s+|pela\s+|turma\s+|ano\s+)?/i, '')
+      .trim();
+
+    setProcessingState(true, `[Passo ${stepNumber}/${totalSteps}] Selecionando ${filterTerm}...`);
+
+    dispatchPortalBridgeMessage({ action: 'DISCOVERY_SELECT_FILTER', filterTerm }, (selResp) => {
+      if (!selResp || !selResp.sucesso) {
+        setProcessingState(false);
+        const loc = context.lastTab ? ` na aba ${context.lastTab}` : '';
+        appendAssistantChatMessage(
+          `📂 Não encontrei a opção **${escapeHtml(filterTerm)}** para selecionar nesta tela${escapeHtml(loc)}. Você pode me mostrar onde fica ou selecionar manualmente? 🔍`,
+          true
+        );
+        showClarificationPointClickCard(
+          `Não encontrei onde selecionar "${filterTerm}"${loc}. Você pode me mostrar clicando no lugar certo?`
+        );
+        return;
+      }
+
+      const selectedLabel = selResp.elementText || filterTerm;
+      context.lastFilter = selectedLabel;
+
+      if (isLastStep) {
+        setProcessingState(false);
+        const locMsg = context.lastTab ? ` na aba **${escapeHtml(context.lastTab)}**` : '';
+        appendAssistantChatMessage(`✅ Selecionei **${escapeHtml(selectedLabel)}**${locMsg} com sucesso! ✨`, true);
+      } else {
+        appendAssistantChatMessage(`✅ Selecionei **${escapeHtml(selectedLabel)}**. Agora vou executar: **${escapeHtml(subGoals[index + 1])}**... 🔍`, true);
+        executeGoalQueue(subGoals, index + 1, context);
+      }
+    });
+    return;
+  }
+
+  // ── EXECUÇÃO 3: Perfil ou Ficha de Aluno ──
+  if (studentProfileMatch) {
+    const studentTarget = studentProfileMatch[1].trim();
+    setProcessingState(true, `[Passo ${stepNumber}/${totalSteps}] Acessando perfil de ${studentTarget}...`);
+
+    dispatchPortalBridgeMessage({ action: 'DISCOVERY_FIND_AND_CLICK_STUDENT', studentName: studentTarget }, (stdResp) => {
+      if (stdResp && stdResp.sucesso) {
+        const foundName = stdResp.elementText || studentTarget;
+        context.lastStudent = foundName;
+        if (isLastStep) {
+          setProcessingState(false);
+          const locMsg = context.lastTab ? ` na aba **${escapeHtml(context.lastTab)}**` : '';
+          appendAssistantChatMessage(`✅ Acessei o perfil de **${escapeHtml(foundName)}**${locMsg} com sucesso! 👤✨`, true);
+        } else {
+          appendAssistantChatMessage(`✅ Acessei o perfil de **${escapeHtml(foundName)}**. Agora vou executar: **${escapeHtml(subGoals[index + 1])}**... 🔍`, true);
+          executeGoalQueue(subGoals, index + 1, context);
+        }
+      } else if (stdResp && stdResp.status === 'ambiguous') {
+        setProcessingState(false);
+        appendAssistantChatMessage(
+          `⚠️ Encontrei mais de um aluno com o nome **${escapeHtml(studentTarget)}** nesta tela. Por favor, escolha qual deles você deseja acessar: 🔍`,
+          true
+        );
+        if (typeof showDisambiguationCard === 'function') {
+          showDisambiguationCard({ aluno: studentTarget, acao: 'abrir_perfil' }, stdResp.candidates || []);
+        }
+      } else {
+        setProcessingState(false);
+        const locMsg = context.lastTab ? ` na aba ${context.lastTab}` : '';
+        appendAssistantChatMessage(
+          `📂 Não encontrei o perfil do aluno **${escapeHtml(studentTarget)}** na tela atual${escapeHtml(locMsg)}. Você pode me mostrar onde fica ou clicar manualmente? 🔍`,
+          true
+        );
+        showHonestErrorCard(
+          'Aluno não encontrado',
+          `Não encontrei o aluno '${studentTarget}' na tela atual do portal.`
+        );
+      }
+    });
+    return;
+  }
+
+  // ── EXECUÇÃO 4: Lançamento de Nota ou Falta (Aprovação Obrigatória) ──
+  if (isNotaOrFalta) {
+    executeSubsequentCommand(currentGoal, context.lastTab || 'Portal');
+    return;
+  }
+
+  // ── EXECUÇÃO 5: Responder Recado ──
+  if (isResponderRecado) {
+    executeSubsequentCommand(currentGoal, context.lastTab || 'Recados');
+    return;
+  }
+
+  // ── EXECUÇÃO 6: Leitura de Tela ──
+  if (isReadingQuery) {
+    setProcessingState(true, `[Passo ${stepNumber}/${totalSteps}] Lendo e organizando dados do portal...`);
+    dispatchPortalBridgeMessage({ action: 'READ_PAGE_DATA' }, (pageData) => {
+      setProcessingState(false);
+      if (pageData && pageData.sucesso) {
+        const answer = synthesizeScreenAnswer(currentGoal, pageData);
+        appendAssistantChatMessage(answer, true);
+        if (!isLastStep) {
+          executeGoalQueue(subGoals, index + 1, context);
+        }
+      } else {
+        appendAssistantChatMessage(`Não consegui ler os dados da tela atual.`, true);
+      }
+    });
+    return;
+  }
+
+  // ── EXECUÇÃO 7: Fallback Genérico via Discovery ──
+  setProcessingState(true, `[Passo ${stepNumber}/${totalSteps}] Executando: ${currentGoal}...`);
+  dispatchPortalBridgeMessage({ action: 'DISCOVERY_SELECT_FILTER', filterTerm: currentGoal }, (resp) => {
+    if (resp && resp.sucesso) {
+      if (isLastStep) {
+        setProcessingState(false);
+        appendAssistantChatMessage(`✅ Localizei e selecionei **${escapeHtml(resp.elementText || currentGoal)}** com sucesso! ✨`, true);
+      } else {
+        appendAssistantChatMessage(`✅ Executado: **${escapeHtml(resp.elementText || currentGoal)}**. Continuando para: **${escapeHtml(subGoals[index + 1])}**...`, true);
+        executeGoalQueue(subGoals, index + 1, context);
+      }
+    } else {
+      setProcessingState(false);
+      appendAssistantChatMessage(
+        `Não encontrei como executar **${escapeHtml(currentGoal)}** nesta tela. Você pode me mostrar onde fica? 🔍`,
+        true
+      );
+      showClarificationPointClickCard(
+        `Não encontrei como fazer "${currentGoal}". Você pode me mostrar clicando no lugar certo?`
       );
     }
   });
@@ -2771,11 +3299,22 @@ if (typeof window !== 'undefined') {
     fillCommandTemplate,
     extractNavigationTarget,
     splitCompoundCommand,
+    decomposeGoalJS,
+    executeGoalQueue,
     trackActionUsage,
     promptShortcutPromotion,
     savePromotedShortcut,
     renderPromotedChips,
     setupQuickActions
+  };
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = {
+    decomposeGoalJS,
+    splitCompoundCommand,
+    extractNavigationTarget,
+    executeGoalQueue
   };
 }
 
@@ -2826,4 +3365,131 @@ function setupDevModeToggle() {
     });
   }
 }
+
+// ════════════════════════════════════════════════════════════════════════════════
+// LOTE 6: LIVRE INTERCÂMBIO EXTENSÃO ↔ APP (ENTITY BUS, CHECKLIST & DOSSIÊ)
+// ════════════════════════════════════════════════════════════════════════════════
+
+let entityBus = null;
+try {
+  if (typeof BroadcastChannel !== 'undefined') {
+    entityBus = new BroadcastChannel('teacher_entity_bus');
+    entityBus.onmessage = (ev) => {
+      handleEntityBusIncoming(ev.data);
+    };
+  }
+} catch (e) {
+  console.warn('[SidePanel] BroadcastChannel indisponível:', e);
+}
+
+function postToEntityBus(type, payload) {
+  if (entityBus) {
+    try {
+      entityBus.postMessage({ bus: 'teacher_entity_bus', type, payload, timestamp: Date.now() });
+    } catch (e) {}
+  }
+}
+
+function handleEntityBusIncoming(msg) {
+  if (!msg || !msg.type) return;
+
+  if (msg.type === 'ACTIVE_CLASS_TODOS_RESPONSE' || msg.type === 'ACTIVE_CLASS_TODOS_UPDATED') {
+    renderClassTodosWidget(msg.payload?.todos || []);
+  }
+
+  if (msg.type === 'STUDENT_DOSSIER_RESPONSE') {
+    renderStudentDossier(msg.payload);
+  }
+
+  if (msg.type === 'PORTAL_ROSTER_SYNC_ACK') {
+    if (msg.payload?.success) {
+      appendAssistantChatMessage(`✅ **${msg.payload.className}**: ${msg.payload.totalClassStudents || ''} alunos conciliados com o Teacher AI App! ✨`, true);
+    }
+  }
+}
+
+function renderClassTodosWidget(todos) {
+  const container = document.getElementById('turma-checklist-items');
+  const countBadge = document.getElementById('turma-checklist-count');
+  if (!container) return;
+
+  const pendingCount = (todos || []).filter(t => !t.done).length;
+  if (countBadge) {
+    countBadge.textContent = `${pendingCount} pendente${pendingCount !== 1 ? 's' : ''}`;
+    countBadge.style.background = pendingCount > 0 ? '#fee2e2' : '#dcfce7';
+    countBadge.style.color = pendingCount > 0 ? '#991b1b' : '#15803d';
+  }
+
+  if (!todos || todos.length === 0) {
+    container.innerHTML = `<div style="font-size: 11px; color: #64748b; font-style: italic;">Nenhuma tarefa pendente para esta turma no Checklist. 🎉</div>`;
+    return;
+  }
+
+  container.innerHTML = todos.map(t => `
+    <div style="display: flex; align-items: center; gap: 6px; padding: 4px 6px; background: #fff; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 11px;">
+      <input type="checkbox" id="chk_${t.id}" ${t.done ? 'checked' : ''} style="cursor: pointer;" />
+      <span style="flex: 1; ${t.done ? 'text-decoration: line-through; color: #94a3b8;' : 'color: #1e293b;'}">${escapeHtml(t.text)}</span>
+    </div>
+  `).join('');
+
+  container.querySelectorAll('input[type="checkbox"]').forEach(chk => {
+    chk.addEventListener('change', (e) => {
+      const todoId = e.target.id.replace('chk_', '');
+      postToEntityBus('TOGGLE_TODO_FROM_EXTENSION', { todoId, done: e.target.checked });
+      const span = e.target.nextElementSibling;
+      if (span) {
+        span.style.textDecoration = e.target.checked ? 'line-through' : 'none';
+        span.style.color = e.target.checked ? '#94a3b8' : '#1e293b';
+      }
+    });
+  });
+}
+
+function renderStudentDossier(payload) {
+  const card = document.getElementById('card-student-dossier');
+  const content = document.getElementById('dossier-content');
+  if (!card || !content) return;
+
+  if (!payload || !payload.found) {
+    content.innerHTML = `<div style="color: #64748b;">Nenhum histórico pedagógico encontrado para ${escapeHtml(payload?.studentName || 'este aluno')}.</div>`;
+    card.style.display = 'block';
+    return;
+  }
+
+  const stu = payload.student || {};
+  const mem = payload.memory || {};
+  const obsList = mem.observations || [];
+
+  content.innerHTML = `
+    <div style="font-weight: 700; font-size: 13px; color: #581c87; margin-bottom: 4px;">${escapeHtml(stu.name)}</div>
+    <div style="font-size: 11px; color: #7e22ce; margin-bottom: 6px;">Turma: ${escapeHtml(stu.className || stu.class_name || '—')} | Matrícula: ${escapeHtml(stu.rollNumber || stu.portal_native_id || '—')}</div>
+    ${mem.summary ? `<div style="background: #f3e8ff; border-radius: 6px; padding: 6px; font-size: 11px; margin-bottom: 6px;"><b>Síntese:</b> ${escapeHtml(mem.summary)}</div>` : ''}
+    <div style="font-weight: 600; font-size: 11px; margin-bottom: 4px;">Observações Recentes:</div>
+    ${obsList.length > 0 ? obsList.map(o => `
+      <div style="font-size: 11px; border-bottom: 1px solid #f3e8ff; padding: 3px 0;">• <span style="color:#6b21a8;">[${escapeHtml(o.category || 'Geral')}]</span> ${escapeHtml(o.note)}</div>
+    `).join('') : '<div style="font-size: 11px; color: #94a3b8;">Nenhuma observação registrada.</div>'}
+  `;
+
+  card.style.display = 'block';
+
+  const btnClose = document.getElementById('btn-close-dossier');
+  if (btnClose) btnClose.onclick = () => { card.style.display = 'none'; };
+
+  const btnSave = document.getElementById('btn-save-quick-obs');
+  const inputObs = document.getElementById('input-quick-observation');
+  if (btnSave && inputObs) {
+    btnSave.onclick = () => {
+      const text = inputObs.value.trim();
+      if (!text) return;
+      postToEntityBus('RECORD_STUDENT_OBSERVATION_FROM_EXTENSION', {
+        studentName: stu.name,
+        note: text,
+        category: 'Portal Escolar'
+      });
+      inputObs.value = '';
+      appendAssistantChatMessage(`📝 Observação salva para **${escapeHtml(stu.name)}** no Teacher AI!`, true);
+    };
+  }
+}
+
 

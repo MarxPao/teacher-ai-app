@@ -6,7 +6,7 @@ import { useWhisperFlow } from '@/hooks/useWhisperFlow'
 import { useGlobalWakeWord } from '@/hooks/useGlobalWakeWord'
 import { fillPortal, openPortal, logPortalFill } from '@/lib/portalBridge'
 import { createMultiStepPortalPlan, executeMultiStepPortalPlan } from '@/lib/portalActionsEngine'
-import { addObservation, buildMemoryContext, diagnoseClassPerformance } from '@/lib/studentMemory'
+import { addObservation, buildMemoryContext, diagnoseClassPerformance, savePendingObservation } from '@/lib/studentMemory'
 import { buildTeacherStyleSystemPrompt } from '@/lib/teacherStyleProfile'
 import { createBrowserTask, updateBrowserTask, getBrowserTaskById, subscribeToBrowserTask } from '@/lib/browserAutomationClient'
 import { sanitizeOutboundPayload } from '@/lib/portalSanitizer'
@@ -23,6 +23,7 @@ import { requiresContinuousListeningConsent } from '@/lib/wakeWordConsent'
 import RosterReconciliationModal from '@/components/modules/RosterReconciliationModal'
 import { PortalApprovalCard } from '@/components/PortalApprovalCard'
 import { toast } from '@/components/Toast'
+import { maskPii, unmaskPii, MaskingSession } from '@/lib/piiMasking'
 import '@/lib/subjects/english'
 import '@/lib/subjects/portuguese'
 
@@ -298,21 +299,34 @@ export async function executeTool(
  return `Comunicado "${input.title}" criado`
  }
  case 'record_student_observation': {
-    const students = JSON.parse(localStorage.getItem('teacher_students') || '[]')
-    const match = matchStudentByName(input.studentName as string, students)
-    if (match.status === 'ambiguous' || match.status === 'not_found' || !match.student) {
-      return match.disambiguationPrompt || `Aluno "${input.studentName}" não encontrado.`
-    }
-    const found = students.find((s: { id: string }) => s.id === match.student!.id) || match.student
-    addObservation(
-      found.id,
-      found.name,
-      input.note as string,
-      input.category as string | undefined,
-      input.subcategory as string | undefined,
-      'rafinha'
-    )
-    return `Observação registrada para ${found.name}: "${input.note}"`
+     const students = JSON.parse(localStorage.getItem('teacher_students') || '[]')
+     const match = matchStudentByName(input.studentName as string, students)
+     if (match.status === 'ambiguous' && match.candidates && match.candidates.length > 1) {
+       return `Identifiquei mais de uma aluna com esse nome na turma: ${match.candidates.map((c: any) => c.name).join(' e ')}. De qual delas estamos falando?`
+     }
+     if (match.status === 'not_found' || !match.student) {
+       savePendingObservation({
+         studentName: input.studentName as string,
+         note: input.note as string,
+         category: input.category as string | undefined,
+         subcategory: input.subcategory as string | undefined,
+         source: 'rafinha'
+       })
+       return `Anotei como observação pendente, pois não encontrei "${input.studentName}" na lista de alunos cadastrados. Você pode cadastrá-lo(a) na aba de Alunos para vincular essa anotação.`
+     }
+     const found = students.find((s: { id: string }) => s.id === match.student!.id) || match.student
+     const res = addObservation(
+       found.id,
+       found.name,
+       input.note as string,
+       input.category as string | undefined,
+       input.subcategory as string | undefined,
+       'rafinha'
+     )
+     if (res.status === 'ambiguous') {
+       return `Identifiquei mais de um registro para "${found.name}". Deixei a anotação na lista de pendências para você confirmar.`
+     }
+     return `Observação registrada para ${found.name}: "${input.note}"`
  }
  case 'create_class': {
  takeSnapshot()
@@ -1824,91 +1838,159 @@ export default function RafinhaChat({ onNavigate, onCommandReady }: RafinhaChatP
  }
  } catch {}
 
- const canonicalHistory: CanonicalMessage[] = [
- ...messages.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })),
- { role: 'user', content: trimmed },
- ]
+  const knownStudentNames = new Set<string>()
+  try {
+    const rawStu = localStorage.getItem('teacher_students')
+    if (rawStu) {
+      const parsed = JSON.parse(rawStu)
+      if (Array.isArray(parsed)) {
+        parsed.forEach((s: { name?: string }) => {
+          if (s.name && s.name.trim()) {
+            knownStudentNames.add(s.name.trim())
+            const parts = s.name.trim().split(/\s+/)
+            if (parts.length > 1 && parts[0].length >= 4) knownStudentNames.add(parts[0])
+          }
+        })
+      }
+    }
+    const rawMem = localStorage.getItem('teacher_student_memory')
+    if (rawMem) {
+      const parsedMem = JSON.parse(rawMem)
+      if (Array.isArray(parsedMem)) {
+        parsedMem.forEach((m: { studentName?: string }) => {
+          if (m.studentName && m.studentName.trim()) {
+            knownStudentNames.add(m.studentName.trim())
+            const parts = m.studentName.trim().split(/\s+/)
+            if (parts.length > 1 && parts[0].length >= 4) knownStudentNames.add(parts[0])
+          }
+        })
+      }
+    }
+  } catch {}
 
- let accumulatedText = ''
- // Placeholder da resposta da assistente (sem toolCalls visíveis no chat)
- setMessages(prev => [...prev, { role: 'assistant', content: '' }])
+  const studentEntities = Array.from(knownStudentNames).map(name => ({ name }))
+  const combinedMapping: Record<string, string> = {}
 
- // A1: Removido speak(thinkingLine) causava duplicação de áudio (thinkingLine + resposta final)
- // O indicador visual de loading já comunica que a Rafinha está pensando
+  const canonicalHistory: CanonicalMessage[] = [
+    ...messages.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })),
+    { role: 'user', content: trimmed },
+  ]
 
- try {
- // B1: Limitar iterations por tipo de task com profundidade suficiente para encadeamento de ferramentas
- const taskLower = trimmed.toLowerCase()
- const isActionTask = /vá|va |abra|abrir|naveg|adicione|crie turma|crie aluno|lance|lançar|registre/i.test(taskLower)
- const isGenerationTask = /prova|exercício|plano de aula|questão|atividade|sequência didática/i.test(taskLower)
- const maxIterations = isActionTask ? 4 : isGenerationTask ? 6 : 5
+  let accumulatedText = ''
+  // Placeholder da resposta da assistente (sem toolCalls visíveis no chat)
+  setMessages(prev => [...prev, { role: 'assistant', content: '' }])
 
- for (let iteration = 0; iteration < maxIterations; iteration++) {
- const res = await fetch('/api/agent', {
- method: 'POST',
- headers: { 'Content-Type': 'application/json' },
- body: JSON.stringify({
- messages: canonicalHistory, context: getAppContext(),
- teacherStyle: buildTeacherStyleSystemPrompt(),
- subject: getSubjectProfile().id,
- provider, userKey, autoMode, userKeys,
- temperatureMode: isActionTask ? 'deterministic' : isGenerationTask ? 'creative' : 'balanced',
- }),
- })
+  // A1: Removido speak(thinkingLine) causava duplicação de áudio (thinkingLine + resposta final)
+  // O indicador visual de loading já comunica que a Rafinha está pensando
 
- if (!res.ok) throw new Error((await res.json()).error || `HTTP ${res.status}`)
- const data = await res.json()
- const content = (data.content || []) as Array<{ type: string; text?: string; id?: string; name?: string; input?: Record<string, unknown> }>
+  try {
+    // B1: Limitar iterations por tipo de task com profundidade suficiente para encadeamento de ferramentas
+    const taskLower = trimmed.toLowerCase()
+    const isActionTask = /vá|va |abra|abrir|naveg|adicione|crie turma|crie aluno|lance|lançar|registre/i.test(taskLower)
+    const isGenerationTask = /prova|exercício|plano de aula|questão|atividade|sequência didática/i.test(taskLower)
+    const maxIterations = isActionTask ? 4 : isGenerationTask ? 6 : 5
 
- const textParts = content.filter(c => c.type === 'text')
- const toolParts = content.filter(c => c.type === 'tool_use')
+    for (let iteration = 0; iteration < maxIterations; iteration++) {
+      // Zero-PII Gateway: Mascaramento LGPD/FERPA ativo pré-LLM
+      const maskedHistory = canonicalHistory.map(m => {
+        if (!m.content) return m
+        const maskRes = maskPii(m.content, studentEntities)
+        Object.assign(combinedMapping, maskRes.mapping)
+        return { ...m, content: maskRes.maskedText }
+      })
 
- const newText = textParts.map(b => b.text).join('\n').trim()
- if (newText) accumulatedText = newText
+      const rawContext = getAppContext()
+      const ctxMaskRes = maskPii(rawContext, studentEntities)
+      Object.assign(combinedMapping, ctxMaskRes.mapping)
+      const maskedContext = ctxMaskRes.maskedText
 
- setMessages(prev => {
- const last = { ...prev[prev.length - 1], content: accumulatedText }
- return [...prev.slice(0, -1), last]
- })
 
- if (toolParts.length === 0) break
+      const res = await fetch('/api/agent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: maskedHistory,
+          context: maskedContext,
+          teacherStyle: buildTeacherStyleSystemPrompt(),
+          subject: getSubjectProfile().id,
+          provider, userKey, autoMode, userKeys,
+          temperatureMode: isActionTask ? 'deterministic' : isGenerationTask ? 'creative' : 'balanced',
+        }),
+      })
 
- // Build running entries 
- const newEntries: LogEntry[] = toolParts.map(tc => ({
- id: tc.id!, name: tc.name!, input: tc.input!,
- status: 'running', startedAt: Date.now(),
- }))
+      if (!res.ok) throw new Error((await res.json()).error || `HTTP ${res.status}`)
+      const data = await res.json()
+      const content = (data.content || []) as Array<{ type: string; text?: string; id?: string; name?: string; input?: Record<string, unknown> }>
 
- setRunningTools(newEntries)
+      const textParts = content.filter(c => c.type === 'text')
+      const toolParts = content.filter(c => c.type === 'tool_use')
 
- canonicalHistory.push({
- role: 'assistant', content: newText,
- toolUse: toolParts.map(tc => ({ id: tc.id!, name: tc.name!, input: tc.input! })),
- })
+      const rawNewText = textParts.map(b => b.text).join('\n').trim()
+      const newText = unmaskPii(rawNewText, combinedMapping)
+      if (newText) accumulatedText = newText
 
- const toolResults: Array<{ id: string; name: string; result: string }> = []
+      setMessages(prev => {
+        const last = { ...prev[prev.length - 1], content: accumulatedText }
+        return [...prev.slice(0, -1), last]
+      })
 
- for (let i = 0; i < toolParts.length; i++) {
- const tc = toolParts[i]
- const est = TOOL_EST_SECONDS[tc.name!] || 2
+      if (toolParts.length === 0) break
 
- // Wait for estimated time or until user taps skip
- if (!skipSignalRef.current) {
- const startWait = Date.now()
- await new Promise<void>(resolve => {
- const check = setInterval(() => {
- if (skipSignalRef.current || Date.now() - startWait >= est * 1000) {
- clearInterval(check)
- resolve()
- }
- }, 50)
- })
- }
- skipSignalRef.current = false
+      // Build running entries com inputs desmascarados para execução local real
+      const unmaskObj = (obj: unknown): unknown => {
+        if (typeof obj === 'string') return unmaskPii(obj, combinedMapping)
+        if (Array.isArray(obj)) return obj.map(unmaskObj)
+        if (obj && typeof obj === 'object') {
+          const r: Record<string, unknown> = {}
+          for (const [k, v] of Object.entries(obj as Record<string, unknown>)) {
+            r[k] = unmaskObj(v)
+          }
+          return r
+        }
+        return obj
+      }
 
- try {
- const result = await executeTool(tc.name!, tc.input!, onNavigate, speak)
- const elapsed = (Date.now() - newEntries[i].startedAt) / 1000
+
+      const newEntries: LogEntry[] = toolParts.map(tc => ({
+        id: tc.id!,
+        name: tc.name!,
+        input: (unmaskObj(tc.input) || {}) as Record<string, unknown>,
+        status: 'running',
+        startedAt: Date.now(),
+      }))
+
+      setRunningTools(newEntries)
+
+      canonicalHistory.push({
+        role: 'assistant',
+        content: newText,
+        toolUse: toolParts.map(tc => ({ id: tc.id!, name: tc.name!, input: tc.input! })),
+      })
+
+      const toolResults: Array<{ id: string; name: string; result: string }> = []
+
+      for (let i = 0; i < toolParts.length; i++) {
+        const tc = toolParts[i]
+        const est = TOOL_EST_SECONDS[tc.name!] || 2
+
+        // Wait for estimated time or until user taps skip
+        if (!skipSignalRef.current) {
+          const startWait = Date.now()
+          await new Promise<void>(resolve => {
+            const check = setInterval(() => {
+              if (skipSignalRef.current || Date.now() - startWait >= est * 1000) {
+                clearInterval(check)
+                resolve()
+              }
+            }, 50)
+          })
+        }
+        skipSignalRef.current = false
+
+        try {
+          const effectiveInput = newEntries[i].input
+          const result = await executeTool(tc.name!, effectiveInput, onNavigate, speak)
+          const elapsed = (Date.now() - newEntries[i].startedAt) / 1000
 
  setRunningTools(prev =>
  prev.map((e, idx) => idx === i ? { ...e, status: 'done', result, elapsed } : e)

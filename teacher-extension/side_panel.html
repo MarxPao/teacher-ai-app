@@ -634,6 +634,34 @@
       </div>
     </div>
 
+    <!-- ── CARD: CHECKLIST DA TURMA ATIVA (LIVRE INTERCÂMBIO EXTENSÃO ↔ APP) ── -->
+    <div class="card" id="card-turma-checklist-container" style="border-left: 4px solid #10b981;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+        <div class="card-title" style="margin-bottom: 0;">
+          <i class="ti ti-list-check"></i> Tarefas desta Turma
+        </div>
+        <span class="class-badge" id="turma-checklist-count" style="background:#dcfce7; color:#15803d;">0 pendentes</span>
+      </div>
+      <div id="turma-checklist-items" style="display: flex; flex-direction: column; gap: 6px; margin-top: 6px;">
+        <div style="font-size: 11px; color: #64748b; font-style: italic;">Selecione uma turma para carregar as tarefas do Checklist do Teacher AI.</div>
+      </div>
+    </div>
+
+    <!-- ── CARD: DOSSIÊ PEDAGÓGICO DO ALUNO (MEMÓRIA DO ALUNO) ── -->
+    <div class="card" id="card-student-dossier" style="display: none; border-left: 4px solid #8b5cf6; background: #faf5ff;">
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <div class="card-title" style="margin-bottom: 0; color: #6b21a8;">
+          <i class="ti ti-user-circle"></i> Dossiê Pedagógico
+        </div>
+        <button type="button" id="btn-close-dossier" style="background: none; border: none; cursor: pointer; color: #9333ea; font-size: 14px;">✕</button>
+      </div>
+      <div id="dossier-content" style="margin-top: 8px; font-size: 12px; color: #3b0764;"></div>
+      <div style="margin-top: 8px; display: flex; gap: 4px;">
+        <input type="text" id="input-quick-observation" placeholder="Registrar observação rápida..." style="flex: 1; padding: 6px 8px; font-size: 11px; border: 1px solid #d8b4fe; border-radius: 6px;" />
+        <button type="button" id="btn-save-quick-obs" style="padding: 6px 10px; background: #9333ea; color: white; border: none; border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer;">Salvar</button>
+      </div>
+    </div>
+
     <!-- CARD PRINCIPAL: ASSISTENTE NO PORTAL (100% CONVERSACIONAL) -->
     <div class="agent-card" id="agentic-action-card">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; border-bottom: 1px solid #f1f5f9; padding-bottom: 8px;">

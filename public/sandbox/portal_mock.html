@@ -37,11 +37,14 @@
 
     <!-- Barra de Abas do Portal -->
     <div class="tabs-bar" style="display: flex; gap: 8px; border-bottom: 2px solid #e2e8f0; margin-bottom: 16px;">
+      <button class="tab-btn" id="tab-inicio" onclick="switchTab('inicio')">🏠 Início</button>
       <button class="tab-btn active" id="tab-diario" onclick="switchTab('diario')">📋 Diário de Classe</button>
-      <button class="tab-btn" id="tab-chamada" onclick="switchTab('chamada')">✋ Chamada</button>
+      <button class="tab-btn" id="tab-notas" onclick="switchTab('notas')">📊 Notas</button>
+      <button class="tab-btn" id="tab-chamada" onclick="switchTab('chamada')">✋ Frequência / Chamada</button>
       <button class="tab-btn" id="tab-arquivos" onclick="switchTab('arquivos')">📁 Arquivos</button>
       <button class="tab-btn" id="tab-recados" onclick="switchTab('recados')">💬 Recados</button>
       <button class="tab-btn" id="tab-horarios" onclick="switchTab('horarios')">📅 Horários</button>
+      <button class="tab-btn" id="tab-alunos" onclick="switchTab('cadastro')">👥 Meus Alunos</button>
       <button class="tab-btn" id="tab-cadastro" onclick="switchTab('cadastro')">👤 Cadastro de Alunos</button>
       <button class="tab-btn" id="tab-config" onclick="switchTab('config')">⚙️ Configurações</button>
     </div>
@@ -54,6 +57,13 @@
       <p style="font-size: 13px; color: #64748b; margin-bottom: 16px;">
         Mensagens recebidas de pais, responsáveis e coordenação pedagógica.
       </p>
+
+      <!-- Barra de Sub-abas de Recados -->
+      <div class="subtabs-bar" style="display: flex; gap: 8px; border-bottom: 1px solid #cbd5e1; margin-bottom: 14px; padding-bottom: 8px;">
+        <button type="button" class="subtab-btn active" id="subtab-recados-recebidos" onclick="switchSubTabRecados('recebidos')" style="padding: 6px 12px; border: 1px solid #2563eb; background: #eff6ff; color: #1e40af; border-radius: 6px; font-weight: 600; cursor: pointer;">📥 Recados recebidos</button>
+        <button type="button" class="subtab-btn" id="subtab-recados-enviados" onclick="switchSubTabRecados('enviados')" style="padding: 6px 12px; border: 1px solid #cbd5e1; background: #fff; color: #475569; border-radius: 6px; cursor: pointer;">📤 Recados enviados</button>
+        <button type="button" class="subtab-btn" id="subtab-novo-recado" onclick="switchSubTabRecados('novo')" style="padding: 6px 12px; border: 1px solid #cbd5e1; background: #fff; color: #475569; border-radius: 6px; cursor: pointer;">✍️ Novo recado</button>
+      </div>
       <div id="lista-recados" style="display: flex; flex-direction: column; gap: 12px;">
         <div class="recado-card" id="recado-1" style="padding: 14px; background: #fff; border: 1px solid #cbd5e1; border-radius: 8px;">
           <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
@@ -202,10 +212,54 @@
         </div>
         <button type="button" class="btn" id="btn_salvar_turma" onclick="salvarDiario()">Salvar Alteração de Turma</button>
       </div>
+
+      <!-- Lista / Grid de Alunos com Rolagem (Meus Alunos) -->
+      <h4 style="margin-top: 24px; margin-bottom: 8px; color: #1e293b;">Lista de Alunos da Turma (Cards com Rolagem)</h4>
+      <div id="grid-meus-alunos" style="max-height: 220px; overflow-y: auto; padding: 8px; border: 1px solid #cbd5e1; border-radius: 8px; display: flex; flex-direction: column; gap: 8px; background: #fff;">
+        <div class="card-aluno" id="card-aluno-1" style="padding: 10px; border: 1px solid #e2e8f0; border-radius: 6px; display: flex; justify-content: space-between; align-items: center;">
+          <span>Ana Júlia Santos</span>
+          <button type="button" class="btn-perfil" id="btn-perfil-ana" style="background: #2563eb; color: #fff; border: none; padding: 5px 12px; border-radius: 4px; font-size: 12px; cursor: pointer;">Ver perfil</button>
+        </div>
+        <div class="card-aluno" id="card-aluno-2" style="padding: 10px; border: 1px solid #e2e8f0; border-radius: 6px; display: flex; justify-content: space-between; align-items: center;">
+          <span>Bernardo Costa</span>
+          <button type="button" class="btn-perfil" id="btn-perfil-bernardo" style="background: #2563eb; color: #fff; border: none; padding: 5px 12px; border-radius: 4px; font-size: 12px; cursor: pointer;">Ver perfil</button>
+        </div>
+        <div class="card-aluno" id="card-aluno-3" style="padding: 10px; border: 1px solid #e2e8f0; border-radius: 6px; display: flex; justify-content: space-between; align-items: center;">
+          <span>Carlos Eduardo</span>
+          <button type="button" class="btn-perfil" id="btn-perfil-carlos" style="background: #2563eb; color: #fff; border: none; padding: 5px 12px; border-radius: 4px; font-size: 12px; cursor: pointer;">Ver perfil</button>
+        </div>
+        <div class="card-aluno" id="card-aluno-4" style="padding: 10px; border: 1px solid #e2e8f0; border-radius: 6px; display: flex; justify-content: space-between; align-items: center;">
+          <span>Daniel Faria</span>
+          <button type="button" class="btn-perfil" id="btn-perfil-daniel" style="background: #2563eb; color: #fff; border: none; padding: 5px 12px; border-radius: 4px; font-size: 12px; cursor: pointer;">Ver perfil</button>
+        </div>
+        <div class="card-aluno" id="card-aluno-5" style="padding: 10px; border: 1px solid #e2e8f0; border-radius: 6px; display: flex; justify-content: space-between; align-items: center;">
+          <span>Eduardo Lima</span>
+          <button type="button" class="btn-perfil" id="btn-perfil-eduardo" style="background: #2563eb; color: #fff; border: none; padding: 5px 12px; border-radius: 4px; font-size: 12px; cursor: pointer;">Ver perfil</button>
+        </div>
+        <!-- Aluna Alice Almeida no final do contêiner para validar scroll progressivo -->
+        <div class="card-aluno" id="card-aluno-alice" style="padding: 10px; border: 1px solid #93c5fd; background: #eff6ff; border-radius: 6px; display: flex; justify-content: space-between; align-items: center;">
+          <span class="aluno-nome" style="font-weight: 600; color: #1e40af;">Alice Almeida</span>
+          <button type="button" class="btn-perfil" id="btn-perfil-alice" onclick="abrirPerfilAluno('Alice Almeida')" style="background: #2563eb; color: #fff; border: none; padding: 5px 12px; border-radius: 4px; font-size: 12px; cursor: pointer;">Ver perfil</button>
+        </div>
+      </div>
+      <div id="modal-perfil-aluno" style="display: none; margin-top: 12px; padding: 12px; background: #f0fdf4; border: 1px solid #86efac; border-radius: 6px; color: #166534; font-weight: bold;">
+        ✅ Perfil aberto com sucesso: <span id="nome-aluno-perfil"></span> (Matrícula 408 • 9º Ano B)
+      </div>
     </div>
 
     <!-- Aba Diário Principal -->
     <div id="pane-diario">
+      <!-- Sub-abas do Diário / Notas -->
+      <div class="subtabs-bar" style="display: flex; gap: 8px; border-bottom: 1px solid #cbd5e1; margin-top: 8px; margin-bottom: 14px; padding-bottom: 8px;">
+        <button type="button" class="subtab-btn active" id="subtab-diario-aulas" onclick="switchSubTabDiario('aulas')" style="padding: 6px 12px; border: 1px solid #2563eb; background: #eff6ff; color: #1e40af; border-radius: 6px; font-weight: 600; cursor: pointer;">Aulas e Frequência</button>
+        <button type="button" class="subtab-btn" id="subtab-diario-avaliacoes" onclick="switchSubTabDiario('avaliacoes')" style="padding: 6px 12px; border: 1px solid #cbd5e1; background: #fff; color: #475569; border-radius: 6px; cursor: pointer;">Avaliações</button>
+        <button type="button" class="subtab-btn" id="subtab-diario-medias" onclick="switchSubTabDiario('medias')" style="padding: 6px 12px; border: 1px solid #cbd5e1; background: #fff; color: #475569; border-radius: 6px; cursor: pointer;">Médias</button>
+      </div>
+
+      <div id="subpane-avaliacoes-msg" style="display: none; padding: 12px; background: #f0fdf4; border: 1px solid #86efac; border-radius: 6px; color: #166534; font-weight: bold; margin-bottom: 12px;">
+        📊 Sub-aba Avaliações aberta com sucesso! (Notas de Provas e Trabalhos)
+      </div>
+
       <div style="margin-top: 16px; margin-bottom: 16px; display: grid; grid-template-columns: 1fr 2fr; gap: 12px;">
         <div>
           <label><strong>Data da Aula:</strong></label>
@@ -295,7 +349,7 @@
 
     function switchTab(tab) {
       document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-      const activeBtn = document.getElementById('tab-' + tab);
+      const activeBtn = document.getElementById('tab-' + tab) || (tab === 'cadastro' ? document.getElementById('tab-alunos') : null) || (tab === 'alunos' ? document.getElementById('tab-alunos') : null);
       if (activeBtn) activeBtn.classList.add('active');
 
       const paneDiario = document.getElementById('pane-diario');
@@ -304,11 +358,60 @@
       const paneRecados = document.getElementById('pane-recados');
       const paneHorarios = document.getElementById('pane-horarios');
 
-      if (paneDiario) paneDiario.style.display = (tab === 'diario' ? 'block' : 'none');
+      const isCadastro = (tab === 'cadastro' || tab === 'alunos');
+      const isDiario = (tab === 'diario' || tab === 'inicio' || tab === 'notas' || tab === 'chamada');
+      if (paneDiario) paneDiario.style.display = (isDiario ? 'block' : 'none');
       if (paneArquivos) paneArquivos.style.display = (tab === 'arquivos' ? 'block' : 'none');
-      if (paneCadastro) paneCadastro.style.display = (tab === 'cadastro' ? 'block' : 'none');
+      if (paneCadastro) paneCadastro.style.display = (isCadastro ? 'block' : 'none');
       if (paneRecados) paneRecados.style.display = (tab === 'recados' ? 'block' : 'none');
       if (paneHorarios) paneHorarios.style.display = (tab === 'horarios' ? 'block' : 'none');
+    }
+
+    function switchSubTabRecados(subtab) {
+      document.querySelectorAll('#pane-recados .subtab-btn').forEach(b => {
+        b.classList.remove('active');
+        b.style.background = '#fff';
+        b.style.color = '#475569';
+        b.style.borderColor = '#cbd5e1';
+      });
+      const fromEvt = (typeof event !== 'undefined' && event && event.target) ? (event.target.closest ? event.target.closest('.subtab-btn') : event.target) : null;
+      const activeBtn = fromEvt || document.getElementById('subtab-recados-' + subtab) || document.getElementById('subtab-' + subtab);
+      if (activeBtn) {
+        activeBtn.classList.add('active');
+        activeBtn.style.background = '#eff6ff';
+        activeBtn.style.color = '#1e40af';
+        activeBtn.style.borderColor = '#2563eb';
+      }
+      window.__subtab_recados = subtab;
+    }
+
+    function switchSubTabDiario(subtab) {
+      document.querySelectorAll('#pane-diario .subtab-btn').forEach(b => {
+        b.classList.remove('active');
+        b.style.background = '#fff';
+        b.style.color = '#475569';
+        b.style.borderColor = '#cbd5e1';
+      });
+      const activeBtn = document.getElementById('subtab-diario-' + subtab);
+      if (activeBtn) {
+        activeBtn.classList.add('active');
+        activeBtn.style.background = '#eff6ff';
+        activeBtn.style.color = '#1e40af';
+        activeBtn.style.borderColor = '#2563eb';
+      }
+      const msg = document.getElementById('subpane-avaliacoes-msg');
+      if (msg) {
+        msg.style.display = (subtab === 'avaliacoes' ? 'block' : 'none');
+      }
+      window.__subtab_diario = subtab;
+    }
+
+    function abrirPerfilAluno(nome) {
+      const modal = document.getElementById('modal-perfil-aluno');
+      const spanNome = document.getElementById('nome-aluno-perfil');
+      if (spanNome) spanNome.innerText = nome;
+      if (modal) modal.style.display = 'block';
+      window.__perfil_aluno_aberto = nome;
     }
 
     function salvarDiario() {

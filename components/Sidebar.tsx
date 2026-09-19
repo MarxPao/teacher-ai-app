@@ -64,18 +64,53 @@ const NAV: Section[] = [
   ]},
 ]
 
+export type WorkspaceMode = 'all' | 'prep' | 'classroom' | 'admin' | 'insights'
+
+const WORKSPACE_TABS: Array<{ mode: WorkspaceMode; label: string; icon: string }> = [
+  { mode: 'all',       label: 'Todos',       icon: 'ti-layout-grid' },
+  { mode: 'prep',      label: 'Preparação',  icon: 'ti-chalkboard' },
+  { mode: 'classroom', label: 'Sala de Aula',icon: 'ti-presentation' },
+  { mode: 'admin',     label: 'Portais',     icon: 'ti-plug-connected' },
+  { mode: 'insights',  label: 'Alunos',      icon: 'ti-chart-line' },
+]
+
+const WORKSPACE_MODULES: Record<WorkspaceMode, ModuleKey[]> = {
+  all: [],
+  prep: ['dashboard', 'lessonstudio', 'test_and_worksheets', 'qbank', 'repo', 'rubric', 'editor', 'settings'],
+  classroom: ['dashboard', 'classroommode', 'attendancelist', 'flashcardmode', 'livequiz'],
+  admin: ['dashboard', 'gradebook', 'omnigrader', 'extensions', 'checklist', 'communications', 'autoreport'],
+  insights: ['dashboard', 'students', 'classes', 'analytics', 'insights', 'portfolio', 'privatetutoring'],
+}
+
 interface Props { active: ModuleKey; onNavigate: (k: ModuleKey) => void }
 
 export default function Sidebar({ active, onNavigate }: Props) {
   const [isHovered, setIsHovered] = useState(false)
   const [isPinned, setIsPinned] = useState(false)
+  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('all')
 
   useEffect(() => {
     try {
       const savedPin = localStorage.getItem('teacher_sidebar_pinned')
       if (savedPin === 'true') setIsPinned(true)
+      const savedMode = localStorage.getItem('teacher_workspace_mode') as WorkspaceMode
+      if (savedMode && WORKSPACE_MODULES[savedMode]) setWorkspaceMode(savedMode)
     } catch {}
   }, [])
+
+  const handleSetWorkspaceMode = (mode: WorkspaceMode) => {
+    setWorkspaceMode(mode)
+    try { localStorage.setItem('teacher_workspace_mode', mode) } catch {}
+  }
+
+  const filteredNav = React.useMemo(() => {
+    if (workspaceMode === 'all') return NAV
+    const allowed = WORKSPACE_MODULES[workspaceMode]
+    return NAV.map(sec => ({
+      ...sec,
+      items: sec.items.filter(it => allowed.includes(it.key))
+    })).filter(sec => sec.items.length > 0)
+  }, [workspaceMode])
 
   const togglePin = () => {
     setIsPinned(prev => {
@@ -194,9 +229,51 @@ export default function Sidebar({ active, onNavigate }: Props) {
         )}
       </div>
 
+      {/* Seletor de Modo de Trabalho (Adaptive Workspaces) */}
+      {isExpanded && (
+        <div style={{
+          display: 'flex',
+          gap: 4,
+          padding: '4px 14px 10px',
+          overflowX: 'auto',
+          scrollbarWidth: 'none',
+          borderBottom: '1px solid rgba(255,255,255,0.06)',
+          marginBottom: 6,
+        }}>
+          {WORKSPACE_TABS.map(tab => {
+            const isTabActive = workspaceMode === tab.mode
+            return (
+              <button
+                key={tab.mode}
+                onClick={() => handleSetWorkspaceMode(tab.mode)}
+                title={tab.label}
+                style={{
+                  background: isTabActive ? '#8b5e3c' : 'rgba(255,255,255,0.05)',
+                  color: isTabActive ? '#fff' : 'rgba(196,160,120,0.7)',
+                  border: isTabActive ? '1px solid rgba(196,131,74,0.5)' : '1px solid rgba(255,255,255,0.06)',
+                  borderRadius: 14,
+                  padding: '4px 8px',
+                  fontSize: 11,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                <i className={`ti ${tab.icon}`} style={{ fontSize: 11 }} />
+                <span>{tab.label}</span>
+              </button>
+            )
+          })}
+        </div>
+      )}
+
       {/* Nav sections */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
-        {NAV.map((section) => (
+        {filteredNav.map((section) => (
           <div key={section.label} style={{ marginBottom: section.label ? 4 : 0 }}>
             {section.label && isExpanded && (
               <div style={{

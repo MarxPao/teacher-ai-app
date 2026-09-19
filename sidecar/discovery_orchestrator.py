@@ -32,6 +32,28 @@ from skill_store import save_skill, load_skill, list_skills, SkillNotFoundError
 from portal_map_store import PortalMapStore
 from browser_use_agent import BrowserUseAgent, BrowserUseTaskResult
 from skyvern_fallback import SkyvernFallbackClient, SkyvernTaskResult
+from ppav_orchestrator import (
+    PPAVOrchestrator,
+    PerceptionSnapshot,
+    SessionState,
+    NextAction,
+    AttemptRecord,
+    VerificationStatus,
+    VerificationResult,
+    decompose_goal,
+    plan_next_action,
+    verify_action_effect,
+    capture_perception_snapshot,
+)
+
+try:
+    from skills.state_graph_skill import ScreenStateFingerprinter, PortalStateGraph
+except ImportError:
+    try:
+        from sidecar.skills.state_graph_skill import ScreenStateFingerprinter, PortalStateGraph
+    except ImportError:
+        ScreenStateFingerprinter = None  # type: ignore
+        PortalStateGraph = None  # type: ignore
 
 
 MAX_ORCHESTRATION_DEPTH = 3
@@ -94,15 +116,37 @@ class DiscoveryOrchestrator:
             confidence_threshold=self.confidence_threshold
         )
         self.skyvern_client = skyvern_client or SkyvernFallbackClient()
+        self.ppav_orchestrator = PPAVOrchestrator(max_attempts_per_subgoal=5)
 
         # Mutex por portal_id para eliminar condições de corrida no CDP compartilhado
         self._portal_locks: Dict[str, asyncio.Lock] = {}
+        self.state_graphs: Dict[str, Any] = {}
+
+    def get_state_graph(self, portal_id: str) -> Optional[Any]:
+        """Retorna ou inicializa a FSM do grafo de estados para o portal."""
+        if not PortalStateGraph:
+            return None
+        if portal_id not in self.state_graphs:
+            self.state_graphs[portal_id] = PortalStateGraph(portal_id=portal_id)
+        return self.state_graphs[portal_id]
 
     def _get_portal_lock(self, portal_id: str) -> asyncio.Lock:
         """Garante uma instância única de lock para cada portal_id."""
         if portal_id not in self._portal_locks:
             self._portal_locks[portal_id] = asyncio.Lock()
         return self._portal_locks[portal_id]
+
+    async def execute_ppav_loop(
+        self,
+        goal: str,
+        page: Optional[Any] = None
+    ) -> Dict[str, Any]:
+        """
+        Executa um objetivo através do Loop Real PPAV de 4 passos
+        (Perceber -> Planejar -> Agir -> Verificar) com decomposição de sub-objetivos,
+        anti-loop infinito e verificação real de efeito pós-ação.
+        """
+        return await self.ppav_orchestrator.execute_goal(goal, page=page)
 
     async def execute(
         self,

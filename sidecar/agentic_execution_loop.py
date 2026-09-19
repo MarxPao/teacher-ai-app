@@ -520,53 +520,57 @@ class AgenticExecutionLoop:
                     "args": {"pergunta": "⚠️ Esta etapa envolve dados pessoais de estudantes (Trilho 1 / LGPD). Para continuar com segurança, inicie o Ollama local ou confirme a operação manualmente."}
                 }, (time.time() - t0) * 1000, "privacy_guard"
 
-        # 3. Trilho 2: Sem PII -> Nuvem ultrarrápida (Groq / Gemini)
-        if self.groq_api_key:
-            headers = {
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {self.groq_api_key}",
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) TeacherAI-IntentParser/2.0"
-            }
-            for model in ["openai/gpt-oss-120b", "groq/compound", "qwen/qwen3.8-27b"]:
-                payload = json.dumps({
-                    "model": model,
-                    "messages": [
-                        {"role": "system", "content": SYSTEM_PROMPT_REACT},
-                        {"role": "user", "content": user_prompt}
-                    ],
-                    "temperature": 0.0,
-                    "response_format": {"type": "json_object"}
-                }).encode("utf-8")
-                req = urllib.request.Request("https://api.groq.com/openai/v1/chat/completions", data=payload, headers=headers, method="POST")
-                try:
-                    with urllib.request.urlopen(req, timeout=10) as resp:
-                        data = json.loads(resp.read().decode("utf-8"))
-                        raw = data["choices"][0]["message"]["content"]
-                        lat = (time.time() - t0) * 1000
-                        return json.loads(raw), lat, f"groq:{model}"
-                except Exception:
-                    continue
-
-        if self.gemini_api_key:
-            for model in ["gemini-2.5-flash", "gemini-flash-latest", "gemini-2.5-flash-lite"]:
-                url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={self.gemini_api_key}"
-                payload = json.dumps({
-                    "system_instruction": {"parts": [{"text": SYSTEM_PROMPT_REACT}]},
-                    "contents": [{"parts": [{"text": user_prompt}]}],
-                    "generationConfig": {
+        # 3. Trilho 2: Sem PII -> Nuvem ultrarrápida (Groq / Gemini) com resiliência a rate-limit
+        for attempt in range(2):
+            if self.groq_api_key:
+                headers = {
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {self.groq_api_key}",
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) TeacherAI-IntentParser/2.0"
+                }
+                for model in ["openai/gpt-oss-120b", "groq/compound", "qwen/qwen3.8-27b"]:
+                    payload = json.dumps({
+                        "model": model,
+                        "messages": [
+                            {"role": "system", "content": SYSTEM_PROMPT_REACT},
+                            {"role": "user", "content": user_prompt}
+                        ],
                         "temperature": 0.0,
-                        "response_mime_type": "application/json"
-                    }
-                }).encode("utf-8")
-                req = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/json"}, method="POST")
-                try:
-                    with urllib.request.urlopen(req, timeout=10) as resp:
-                        data = json.loads(resp.read().decode("utf-8"))
-                        raw = data["candidates"][0]["content"]["parts"][0]["text"]
-                        lat = (time.time() - t0) * 1000
-                        return json.loads(raw), lat, f"gemini:{model}"
-                except Exception:
-                    continue
+                        "response_format": {"type": "json_object"}
+                    }).encode("utf-8")
+                    req = urllib.request.Request("https://api.groq.com/openai/v1/chat/completions", data=payload, headers=headers, method="POST")
+                    try:
+                        with urllib.request.urlopen(req, timeout=10) as resp:
+                            data = json.loads(resp.read().decode("utf-8"))
+                            raw = data["choices"][0]["message"]["content"]
+                            lat = (time.time() - t0) * 1000
+                            return json.loads(raw), lat, f"groq:{model}"
+                    except Exception:
+                        continue
+
+            if self.gemini_api_key:
+                for model in ["gemini-2.5-flash", "gemini-flash-latest", "gemini-2.5-flash-lite"]:
+                    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={self.gemini_api_key}"
+                    payload = json.dumps({
+                        "system_instruction": {"parts": [{"text": SYSTEM_PROMPT_REACT}]},
+                        "contents": [{"parts": [{"text": user_prompt}]}],
+                        "generationConfig": {
+                            "temperature": 0.0,
+                            "response_mime_type": "application/json"
+                        }
+                    }).encode("utf-8")
+                    req = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/json"}, method="POST")
+                    try:
+                        with urllib.request.urlopen(req, timeout=10) as resp:
+                            data = json.loads(resp.read().decode("utf-8"))
+                            raw = data["candidates"][0]["content"]["parts"][0]["text"]
+                            lat = (time.time() - t0) * 1000
+                            return json.loads(raw), lat, f"gemini:{model}"
+                    except Exception:
+                        continue
+
+            if attempt == 0:
+                time.sleep(1.0)
 
         raise RuntimeError("Nenhum provedor de inferência disponível para este turno.")
 

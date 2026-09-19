@@ -84,6 +84,40 @@ DIRETRIZ MANDATÓRIA DE SEGURANÇA E ISOLAMENTO DE DADOS (ANTI-PROMPT INJECTION)
 
 
 
+_INJECTION_PATTERNS = [
+    # 1. Tentativa de sobrescrever ou anular instruções de sistema
+    r"(?i)\b(?:ignore|desconsidere|esque[çc]a|delete)\b.*?\b(?:instru[çc][õo]es|orienta[çc][õo]es|regras|diretrizes|comandos)\b",
+    r"(?i)\b(?:ignore|disregard|forget|override)\b.*?\b(?:previous|system|all)\b.*?\b(?:instructions|prompts|rules)\b",
+    r"(?i)\b(?:voc[êe]\s+agora\s+[ée]|you\s+are\s+now|nova\s+identidade|new\s+role)\b",
+    r"(?i)\b(?:system\s+override|system\s+prompt|<system>|\[system\]|sistema:)\b",
+    # 2. Exfiltração não autorizada de dados de alunos / turmas
+    r"(?i)\b(?:envie|mande|encaminhe|transfira|exporte|dispare|send|exfiltrate)\b.*?\b(?:lista|dados|alunos|turma|telefones|emails|notas)\b.*?\b(?:para|to)\b.*?[@\w\.-]+",
+    # 3. Ações destrutivas ou mutações em massa não autorizadas
+    r"(?i)\b(?:marque|lance|registre)\b.*?\b(?:presen[çc]a|falta|nota)\b.*?\b(?:de\s+todos|para\s+todos|da\s+turma\s+toda)\b",
+    r"(?i)\b(?:exclua|delete|apague|remova|drop|limpar)\b.*?\b(?:todos|alunos|turma|banco|notas|registros|tabela)\b",
+    # 4. Injeção de SQL ou código estrutural
+    r"(?i)(?:\bdrop\s+table\b|\bdelete\s+from\b|\btruncate\s+table\b|;\s*drop\b|\balter\s+table\b|union\s+select)",
+    r"(?i)(?:<script\b|javascript:|eval\s*\(|window\.location|document\.cookie)",
+]
+
+def detect_prompt_injection(text: str) -> Tuple[bool, List[str]]:
+    """
+    Detecta padrões de prompt injection, override de instruções, exfiltração de dados
+    ou injeção de código em textos vindos de páginas do portal ou mensagens de terceiros.
+    Retorna (True, lista_de_ameaças) se detectar algum padrão malicioso.
+    """
+    if not text or not isinstance(text, str):
+        return False, []
+    
+    detected: List[str] = []
+    for pattern in _INJECTION_PATTERNS:
+        match = re.search(pattern, text)
+        if match:
+            detected.append(match.group(0))
+            
+    return bool(detected), detected
+
+
 def split_compound_command(text: str) -> Dict[str, Any]:
     """
     Divide um comando composto em destino de navegação e instrução restante.
@@ -926,11 +960,11 @@ def _contains_student_pii(text: str, known_students: Optional[Iterable[str]] = N
             if not s_clean:
                 continue
             s_parts = s_clean.split()
-            # Nome completo ou primeiro nome
-            if re.search(rf"\b{re.escape(s_clean)}\b", lower):
+            # Nome completo ou primeiro nome (suporta caracteres especiais e literais)
+            if s_clean in lower or re.search(rf"\b{re.escape(s_clean)}\b", lower):
                 return True
             if len(s_parts[0]) >= 3 and s_parts[0] not in _COMMON_NON_STUDENT_WORDS:
-                if re.search(rf"\b{re.escape(s_parts[0])}\b", lower):
+                if s_parts[0] in lower or re.search(rf"\b{re.escape(s_parts[0])}\b", lower):
                     return True
 
     # 2. Se for consulta/instrução comprovadamente genérica sem vínculo individual -> Seguro para nuvem
@@ -1139,6 +1173,15 @@ def extract_intent(
     if page_content:
         isolated_prompt += f"\n<conteudo_da_pagina>\n{page_content}\n</conteudo_da_pagina>"
 
+    # Detecção ativa de injeção em dados de terceiros (page_content) e entrada do usuário
+    page_injection_detected, page_injection_threats = detect_prompt_injection(page_content) if page_content else (False, [])
+    if page_injection_detected:
+        print(f"[SEGURANÇA] Tentativa de prompt injection detectada em conteúdo do portal/terceiros: {page_injection_threats}")
+
+    user_injection_detected, user_injection_threats = detect_prompt_injection(user_text)
+    if user_injection_detected:
+        print(f"[SEGURANÇA] Tentativa de prompt injection ou SQLi detectada no texto do comando: {user_injection_threats}")
+
     # ─── ROTEAMENTO POR PRIVACIDADE ────────────────────────────────────────────
     # Se known_students não foi passado, tenta carregar do Supabase se fornecido ou do cache
     active_roster = known_students
@@ -1202,10 +1245,21 @@ def extract_intent(
 
         parsed["pii_routed_local"] = False
 
-    # ─── METADADOS DE TELEMETRIA ────────────────────────────────────────────────
+    # ─── METADADOS DE TELEMETRIA & SEGURANÇA ────────────────────────────────────
     parsed["provider_used"] = provider_used
     parsed["model_used"] = model_used
     parsed["pii_detected"] = is_pii
+    parsed["page_injection_detected"] = page_injection_detected
+    if page_injection_detected:
+        parsed["security_warning"] = (
+            "Aviso de Segurança: Foi detectada uma tentativa de instrução maliciosa ou prompt injection "
+            "nos dados externos do portal escolar. O Teacher AI manteve a regra de ouro: comandos em dados de terceiros "
+            "foram ignorados e nenhuma ação real foi executada a partir deles."
+        )
+        parsed["page_injection_threats"] = page_injection_threats
+    if user_injection_detected:
+        parsed["user_injection_detected"] = True
+        parsed["user_injection_threats"] = user_injection_threats
 
     # -------------------------------------------------------------
     # DERIVAÇÃO DE COMPATIBILIDADE DESCENDENTE (Downstream Adapter)
@@ -1309,12 +1363,62 @@ def extract_intent(
         else:
             parsed["is_complete"] = False
             parsed["clarification_question"] = "Para qual aluno devo registrar a falta?"
-    elif legacy_acao in ("read_roster", "detect_state", "navegar_aba", "abrir_perfil"):
+    elif legacy_acao in ("navegar_aba", "abrir_perfil"):
+        try:
+            try:
+                from navigation_state_machine import decompose_hierarchical_command
+            except ImportError:
+                from sidecar.navigation_state_machine import decompose_hierarchical_command
+
+            seq = decompose_hierarchical_command(user_text)
+            if getattr(seq, "is_possibly_truncated", False):
+                parsed["is_complete"] = False
+                parsed["needs_clarification"] = True
+                parsed["clarification_question"] = seq.message_to_teacher
+                parsed["is_possibly_truncated"] = True
+                parsed["understood_nodes"] = seq.understood_nodes
+                parsed["unparsed_remainder"] = seq.unparsed_remainder
+            else:
+                parsed["is_complete"] = True
+                parsed["clarification_question"] = None
+        except Exception:
+            parsed["is_complete"] = True
+            parsed["clarification_question"] = None
+    elif legacy_acao in ("read_roster", "detect_state"):
         parsed["is_complete"] = True
         parsed["clarification_question"] = None
     elif parsed.get("valor") and not any(k in objeto for k in ["nota", "falta", "presenca"]):
         parsed["is_complete"] = True
         parsed["clarification_question"] = None
+
+    # ─── CERTIFICAÇÃO DE PROVENIÊNCIA (INSTRUCTION ORIGIN CERTIFICATION) ────────
+    # Garante que a origem da instrução seja declarada com rigor estrutural.
+    # Se page_content estiver presente e a intenção resultante for de escrita/mutação,
+    # valida se o comando do usuário (user_text) de fato solicitou escrita.
+    # Se user_text for apenas leitura/consulta/navegação, a instrução de escrita
+    # proveio indevidamente de page_content (erro de classificação do parser ou prompt injection).
+    user_lower = (user_text or "").lower()
+    user_requests_mutation = any(
+        kw in user_lower for kw in [
+            "lanca", "lança", "marcar", "marca", "marque", "coloca", "coloque",
+            "inserir", "insere", "anotar", "anota", "anote", "salvar", "salve",
+            "apagar", "apaga", "excluir", "exclui", "cadastrar", "cadastra",
+            "enviar", "envie", "manda", "mande", "exportar", "exporta", "deletar"
+        ]
+    )
+
+    if parsed.get("tipo_operacao") == "escrita" or legacy_acao in [
+        "lancar_nota", "lancar_falta", "marcar_presenca", "marcar_presenca_massa",
+        "anotar_ocorrencia_disciplinar", "anotar_observacao_pedagogica", "excluir_dado"
+    ]:
+        if page_content and not user_requests_mutation:
+            # Desacoplamento Seguro: O comando do usuário era passivo, mas o intent foi classificado como escrita.
+            parsed["instruction_origin"] = "page_content"
+            parsed["provenance_alert"] = "Ação de mutação originada de conteúdo de terceiros (page_content), sem ordem no comando do usuário."
+        else:
+            parsed["instruction_origin"] = "user_command"
+    else:
+        parsed["instruction_origin"] = "user_command"
 
     # Telemetria no console do sidecar (compatível com cp1252 no Windows)
     if provider_used in ["groq", "gemini"]:
@@ -1396,6 +1500,7 @@ async def dispatch_and_execute_task(
         "verbo_acao": intent.get("verbo_acao"),
         "objeto_alvo": intent.get("objeto_alvo"),
         "tipo_operacao": intent.get("tipo_operacao", "escrita"),
+        "instruction_origin": intent.get("instruction_origin", "user_command"),
         "valor": intent.get("valor"),
         "descricao_tarefa": intent.get("descricao_tarefa"),
         "aluno": intent.get("aluno"),

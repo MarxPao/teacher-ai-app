@@ -641,6 +641,15 @@ function jsonStr(obj) {
 
 // ─── LISTENERS DO NAVEGADOR (ABAS & MENSAGENS INTERNAS) ──────────────────────
 
+// Keep-Alive Duplex Port com Side Panel (evita suspensão MV3 aos 30s)
+chrome.runtime.onConnect.addListener((port) => {
+  if (port.name === 'keepAliveSidePanel') {
+    port.onDisconnect.addListener(() => {
+      // Porta desconectada (side panel fechado)
+    });
+  }
+});
+
 chrome.tabs.onActivated.addListener(() => {
   evaluateActiveTab();
 });
@@ -900,6 +909,31 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  // ─── HELPER DE ESTABILIZAÇÃO DE PÁGINA (PPAV DOM SETTLEMENT) ───────────────────
+  async function waitForPageSettled(tabId, maxWaitMs = 2500) {
+    if (!tabId) return;
+    // Pequena pausa inicial para o navegador iniciar o processo de requisição/navegação
+    await new Promise(r => setTimeout(r, 200));
+    try {
+      const tab = await chrome.tabs.get(tabId);
+      if (tab && tab.status === 'loading') {
+        await new Promise((resolve) => {
+          const timeout = setTimeout(resolve, maxWaitMs);
+          const onUpdated = (tid, info) => {
+            if (tid === tabId && info.status === 'complete') {
+              chrome.tabs.onUpdated.removeListener(onUpdated);
+              clearTimeout(timeout);
+              resolve();
+            }
+          };
+          chrome.tabs.onUpdated.addListener(onUpdated);
+        });
+      }
+    } catch (e) {}
+    // Pausa adicional para reatividade de SPA, renderização do DOM e execução de frameworks
+    await new Promise(r => setTimeout(r, 350));
+  }
+
   if (message.action === 'NAVIGATE_PORTAL_TAB') {
     (async () => {
       let targetTabId = message.tabId;
@@ -929,7 +963,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         const results = await chrome.scripting.executeScript({
           target: { tabId: targetTabId },
           args: [targetKeyword],
-          func: (keyword) => {
+          func: async (keyword) => {
             const cleanKey = keyword.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
             const candidates = Array.from(document.querySelectorAll('a, button, [role="tab"], [role="menuitem"], [role="button"], .tab, .tab-btn, .nav-link, li, span'));
             
@@ -981,13 +1015,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             bestElement.style.boxShadow = '0 0 16px rgba(56, 189, 248, 0.6)';
 
             bestElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            setTimeout(() => {
-              try {
-                bestElement.click();
-              } catch (e) {
-                bestElement.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
-              }
-            }, 300);
+            
+            // Pausa curta para scroll e percepção visual
+            await new Promise(r => setTimeout(r, 120));
+
+            try {
+              bestElement.click();
+            } catch (e) {
+              bestElement.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+            }
+
+            // Aguarda o DOM reagir / disparar transição inicial
+            await new Promise(r => setTimeout(r, 350));
 
             setTimeout(() => {
               try {
@@ -995,7 +1034,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 bestElement.style.outline = origOutline;
                 bestElement.style.boxShadow = origBoxShadow;
               } catch {}
-            }, 1800);
+            }, 1500);
 
             return {
               sucesso: true,
@@ -1005,6 +1044,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             };
           }
         });
+
+        // Aguarda estabilização completa da página ou SPA
+        await waitForPageSettled(targetTabId, 3000);
 
         const res = (results && results[0] && results[0].result) || { sucesso: false, mensagem: 'Script de navegação falhou.' };
         sendResponse(res);
@@ -1048,7 +1090,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         const results = await chrome.scripting.executeScript({
           target: { tabId: targetTabId },
           args: [rawTerm],
-          func: (term) => {
+          func: async (term) => {
             const cleanStr = (s) => (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
             const normTerm = cleanStr(term);
 
@@ -1097,6 +1139,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
                   sel.dispatchEvent(new Event('input', { bubbles: true }));
                   sel.dispatchEvent(new Event('change', { bubbles: true }));
+
+                  await new Promise(r => setTimeout(r, 250));
 
                   setTimeout(() => {
                     try {
@@ -1165,6 +1209,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 }
               }
 
+              await new Promise(r => setTimeout(r, 250));
+
               setTimeout(() => {
                 try {
                   bestClickable.style.transition = origTransition;
@@ -1190,6 +1236,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 inp.value = term;
                 inp.dispatchEvent(new Event('input', { bubbles: true }));
                 inp.dispatchEvent(new Event('change', { bubbles: true }));
+                await new Promise(r => setTimeout(r, 250));
                 return {
                   sucesso: true,
                   matchedType: 'search_input',
@@ -1206,6 +1253,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             };
           }
         });
+
+        // Aguarda estabilização das mutações do DOM e AJAX
+        await waitForPageSettled(targetTabId, 2000);
 
         const res = (results && results[0] && results[0].result) || { sucesso: false, mensagem: 'Script de seleção falhou.' };
         sendResponse(res);
@@ -1390,6 +1440,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
               clickable.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
             }
 
+            await new Promise(r => setTimeout(r, 250));
+
             setTimeout(() => {
               try {
                 clickable.style.transition = origTransition;
@@ -1406,6 +1458,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             };
           }
         });
+
+        // Aguarda estabilização da abertura do perfil / modal / navegação
+        await waitForPageSettled(targetTabId, 2000);
 
         const res = (results && results[0] && results[0].result) || { sucesso: false, mensagem: 'Script de busca falhou.' };
         sendResponse(res);
@@ -1441,19 +1496,70 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
       try {
         const results = await chrome.scripting.executeScript({
-          target: { tabId: targetTabId },
+          target: { tabId: targetTabId, allFrames: true },
           func: () => {
-            const visibleText = (el) => {
+            const isVisible = (el) => {
+              if (!el) return false;
               const style = window.getComputedStyle(el);
-              return style.display !== 'none' && style.visibility !== 'hidden' && el.offsetParent !== null;
+              if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') return false;
+              const rect = el.getBoundingClientRect();
+              return (rect.width > 0 && rect.height > 0) || (el.getClientRects && el.getClientRects().length > 0);
             };
 
-            const activeTab = document.querySelector('.tab-btn.active')?.innerText?.trim() || '';
+            const activeNavEl = document.querySelector(
+              '.tab-btn.active, .nav-link.active, .menu-item.active, nav a.active, aside a.active, [aria-current="page"], .selected, a[class*="active"], li.active a, .sidebar a.active'
+            );
+            const activeNavText = activeNavEl ? activeNavEl.innerText.trim() : '';
 
-            const tables = Array.from(document.querySelectorAll('table')).filter(visibleText).map(t => {
-              const headers = Array.from(t.querySelectorAll('th')).map(th => th.innerText.trim()).filter(Boolean);
-              const rows = Array.from(t.querySelectorAll('tbody tr, tr')).map(tr => {
-                return Array.from(tr.querySelectorAll('td')).map(td => {
+            const pageHeadings = Array.from(document.querySelectorAll('h1, h2, h3, .page-title, .titulo-pagina, .titulo, .header-title'))
+              .filter(isVisible)
+              .map(h => h.innerText.trim())
+              .filter(Boolean)
+              .slice(0, 10);
+
+            // Resolução inteligente da seção ativa a partir da URL e do DOM
+            let inferredSection = activeNavText;
+            const urlLower = window.location.href.toLowerCase();
+            if (!inferredSection) {
+              if (pageHeadings.length > 0 && pageHeadings[0].length < 40) {
+                inferredSection = pageHeadings[0];
+              } else if (/horario/i.test(urlLower)) {
+                inferredSection = 'Horários';
+              } else if (/frequencia|chamada/i.test(urlLower)) {
+                inferredSection = 'Frequência';
+              } else if (/nota|boletim/i.test(urlLower)) {
+                inferredSection = 'Notas';
+              } else if (/aluno|estudante/i.test(urlLower)) {
+                inferredSection = 'Alunos';
+              } else if (/recado|comunicado/i.test(urlLower)) {
+                inferredSection = 'Recados';
+              } else if (/diario|conteudo/i.test(urlLower)) {
+                inferredSection = 'Conteúdo ministrado';
+              }
+            }
+
+            const activeTab = inferredSection || activeNavText || (pageHeadings[0] || '');
+
+            const tables = Array.from(document.querySelectorAll('table')).filter(isVisible).map(t => {
+              // 1. Tenta extrair headers de tags <th>
+              let headers = Array.from(t.querySelectorAll('thead th, th')).map(th => th.innerText.trim()).filter(Boolean);
+
+              // 2. Se vazio, tenta extrair da primeira linha do thead (mesmo usando <td>)
+              if (headers.length === 0) {
+                const theadTds = Array.from(t.querySelectorAll('thead tr:first-child td')).map(td => td.innerText.trim()).filter(Boolean);
+                if (theadTds.length > 0) headers = theadTds;
+              }
+
+              // 3. Extrai linhas da tabela
+              const trElements = Array.from(t.querySelectorAll('tr'));
+              let rows = [];
+              const seenTrs = new Set();
+
+              for (const tr of trElements) {
+                if (seenTrs.has(tr)) continue;
+                seenTrs.add(tr);
+
+                const cells = Array.from(tr.querySelectorAll('th, td')).map(td => {
                   const inp = td.querySelector('input, select');
                   if (inp) {
                     if (inp.type === 'checkbox') return inp.checked ? '[X]' : '[ ]';
@@ -1461,19 +1567,46 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                   }
                   return td.innerText.trim();
                 });
-              }).filter(r => r.length > 0);
+                if (cells.length > 0 && cells.some(c => c.length > 0)) {
+                  rows.push(cells);
+                }
+              }
+
+              // 4. Se headers ainda estiver vazio e tivermos linhas, promove rows[0] se houver mais de 1 linha
+              if (headers.length === 0 && rows.length > 1) {
+                headers = rows[0];
+                rows = rows.slice(1);
+              } else if (headers.length > 0 && rows.length > 0) {
+                // Se a primeira linha de rows for idêntica aos headers, remove a redundância
+                const matchesHeader = headers.length === rows[0].length &&
+                  headers.every((h, i) => h.toLowerCase() === (rows[0][i] || '').toLowerCase());
+                if (matchesHeader) {
+                  rows = rows.slice(1);
+                }
+              }
+
               return { id: t.id || 'tabela', headers, rows };
             });
 
-            const cards = Array.from(document.querySelectorAll('.recado-card, .card, [class*="card"]'))
-              .filter(visibleText)
-              .map(c => c.innerText.trim())
-              .filter(Boolean)
-              .slice(0, 10);
+            // Se nenhuma tag <table> estiver presente, verifica containers com role="table" ou grids
+            if (tables.length === 0) {
+              const gridContainers = Array.from(document.querySelectorAll('[role="table"], [role="grid"], .grade-horarios, .tabela-horarios')).filter(isVisible);
+              for (const gc of gridContainers) {
+                const rowEls = Array.from(gc.querySelectorAll('[role="row"], .linha, .row')).filter(isVisible);
+                if (rowEls.length > 1) {
+                  const gridRows = rowEls.map(r => {
+                    return Array.from(r.querySelectorAll('[role="cell"], [role="columnheader"], .col, .celula')).map(c => c.innerText.trim());
+                  }).filter(r => r.length > 0);
+                  if (gridRows.length > 1) {
+                    tables.push({ id: gc.id || 'grid', headers: gridRows[0], rows: gridRows.slice(1) });
+                  }
+                }
+              }
+            }
 
-            const pageHeadings = Array.from(document.querySelectorAll('h1, h2, h3, .page-title, .titulo-pagina, header, nav'))
-              .filter(visibleText)
-              .map(h => h.innerText.trim())
+            const cards = Array.from(document.querySelectorAll('.recado-card, .card, [class*="card"]'))
+              .filter(isVisible)
+              .map(c => c.innerText.trim())
               .filter(Boolean)
               .slice(0, 10);
 
@@ -1489,11 +1622,94 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           }
         });
 
-        const res = (results && results[0] && results[0].result) || { sucesso: false, mensagem: 'Falha ao ler dados da página.' };
-        sendResponse(res);
+        // Agregação multi-frame: combina dados de todos os frames (se houver iframes)
+        const validResults = (results || []).map(r => r.result).filter(r => r && r.sucesso);
+        if (validResults.length === 0) {
+          sendResponse({ sucesso: false, mensagem: 'Falha ao ler dados da página.' });
+          return;
+        }
+
+        // Encontra o frame principal ou o frame com maior riqueza de dados
+        let primaryResult = validResults.find(r => r.tables && r.tables.length > 0) || validResults[0];
+
+        // Se múltiplos frames tiverem tabelas, mescla todas sem duplicatas
+        const allTables = [];
+        const seenSignatures = new Set();
+        for (const frameRes of validResults) {
+          if (frameRes.tables) {
+            for (const tbl of frameRes.tables) {
+              const sig = (tbl.headers || []).join('|') + '::' + (tbl.rows ? tbl.rows.length : 0);
+              if (!seenSignatures.has(sig)) {
+                seenSignatures.add(sig);
+                allTables.push(tbl);
+              }
+            }
+          }
+        }
+        primaryResult.tables = allTables;
+        sendResponse(primaryResult);
       } catch (err) {
         sendResponse({ sucesso: false, mensagem: err.message });
       }
+    })();
+    return true;
+  }
+
+  if (message.action === 'ASK_PAGE_QUESTION') {
+    (async () => {
+      const { query, pageData } = message;
+      const reqId = 'ask_' + Date.now();
+
+      async function tryHttpFallback() {
+        try {
+          const res = await fetch('http://127.0.0.1:8765/ask_page', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query, pageData }),
+            signal: AbortSignal.timeout(2000)
+          });
+          if (res.ok) {
+            const json = await res.json();
+            if (json && json.sucesso && json.answer) {
+              sendResponse({ sucesso: true, answer: json.answer });
+              return;
+            }
+          }
+        } catch {}
+        sendResponse({ sucesso: false, fallbackLocal: true });
+      }
+
+      // 1. Tenta WebSocket (:8766) se conectado
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        let responded = false;
+        const wsHandler = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            if (data.type === 'PAGE_QUESTION_ANSWER' && data.requestId === reqId) {
+              responded = true;
+              ws.removeEventListener('message', wsHandler);
+              sendResponse({ sucesso: true, answer: data.answer });
+            }
+          } catch {}
+        };
+        ws.addEventListener('message', wsHandler);
+        ws.send(JSON.stringify({
+          type: 'ASK_PAGE_QUESTION',
+          requestId: reqId,
+          query,
+          pageData
+        }));
+
+        setTimeout(() => {
+          if (!responded) {
+            ws.removeEventListener('message', wsHandler);
+            tryHttpFallback();
+          }
+        }, 2500);
+        return;
+      }
+
+      tryHttpFallback();
     })();
     return true;
   }

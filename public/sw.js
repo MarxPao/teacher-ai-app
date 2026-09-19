@@ -47,7 +47,7 @@ self.addEventListener('fetch', (event) => {
   )
 })
 
-// Sync em background (quando reconectar)
+// Sync em background (quando reconectar à internet)
 self.addEventListener('sync', (event) => {
   if (event.tag === 'sync-grades') {
     event.waitUntil(syncPendingGrades())
@@ -56,9 +56,23 @@ self.addEventListener('sync', (event) => {
 
 async function syncPendingGrades() {
   try {
-    const pending = JSON.parse(localStorage.getItem('pending_sync') || '[]')
-    if (!pending.length) return
-    // Em produção: POST para API de sincronização
-    console.log('[SW] Sync:', pending.length, 'items pendentes')
-  } catch {}
+    // No ServiceWorker, localStorage não existe; usamos IndexedDB seguro se disponível
+    if (!('indexedDB' in self)) return
+    const dbReq = indexedDB.open('teacher_ai_resilient_db', 1)
+    dbReq.onsuccess = () => {
+      const db = dbReq.result
+      if (db.objectStoreNames.contains('storage_guard_kv')) {
+        const tx = db.transaction('storage_guard_kv', 'readonly')
+        const req = tx.objectStore('storage_guard_kv').get('pending_sync')
+        req.onsuccess = () => {
+          if (req.result) {
+            console.log('[SW] Sync pendente encontrado para transmissão offline.')
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[SW] Falha durante background sync:', err)
+  }
 }
+

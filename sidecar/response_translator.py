@@ -126,6 +126,22 @@ def translate_task_response(task_result: Dict[str, Any]) -> Dict[str, Any]:
             "sucesso": False
         }
 
+    # 2.5 Bloqueio por proveniência não autorizada (Origin Verification Gate)
+    if status == "blocked_untrusted_origin":
+        msg = (
+            "Aviso de Segurança: Uma solicitação de alteração no portal foi recusada porque sua "
+            "origem partiu de dados lidos da página e não de uma ordem direta sua no chat. "
+            "Para sua segurança, ações de escrita exigem seu comando explícito."
+        )
+        return {
+            "human_message": msg,
+            "needs_approval": False,
+            "approval_card_data": None,
+            "action_required": "security_origin_blocked",
+            "status": status,
+            "sucesso": False
+        }
+
     # 3. Aluno não encontrado na tabela
     if status == "student_not_found":
         msg = f"Não encontrei o aluno '{aluno}' na turma aberta. Pode conferir se o nome está certinho ou se estamos na turma correta?"

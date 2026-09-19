@@ -242,6 +242,71 @@ async def execute_task_intent(intent: Dict[str, Any]) -> Dict[str, Any]:
     trace = []
     trace.append(f"Recebida intencao: acao='{acao}', aluno='{aluno}', nota='{nota}', portal='{portal}'")
 
+    # -------------------------------------------------------------------------
+    # SEGURANÇA: ORIGIN VERIFICATION GATE (Trava Estrutural de Proveniência)
+    # -------------------------------------------------------------------------
+    # Regra de Ouro da Rafinha: Nenhuma ação com efeito colateral (mutação, escrita,
+    # exclusão ou exfiltração) pode ser disparada se a instrução não se originou
+    # de um comando legítimo digitado pela professora (<comando_usuario>).
+    #
+    # Se o classificador de intenção errar ou a LLM alucinar que conteúdo do
+    # portal (page_content / terceiros) pediu escrita, o executor RECUSA a ação.
+    # -------------------------------------------------------------------------
+    MUTATION_ACTIONS = {
+        "lancar_nota",
+        "lancar_falta",
+        "marcar_presenca",
+        "marcar_presenca_massa",
+        "anotar_ocorrencia_disciplinar",
+        "anotar_observacao_pedagogica",
+        "salvar_diario",
+        "excluir_dado",
+        "apagar_notas",
+        "exportar_dados",
+        "enviar_email"
+    }
+
+    tipo_op = intent.get("tipo_operacao") or intent.get("risco") or "leitura"
+    is_mutation = (
+        tipo_op == "escrita"
+        or acao in MUTATION_ACTIONS
+        or any(m in acao for m in ["lancar", "marcar", "apagar", "excluir", "salvar", "enviar"])
+    )
+
+    instruction_origin = intent.get("instruction_origin") or intent.get("origem") or "user_command"
+
+    if is_mutation and instruction_origin != "user_command":
+        msg_bloqueio = (
+            f"BLOQUEIO DE SEGURANÇA [Origin Verification Gate]: Ação de mutação '{acao}' "
+            f"foi recusada porque sua proveniência ({instruction_origin}) não é autorizada. "
+            f"Ações com efeito colateral no portal exigem autoridade exclusiva de '<comando_usuario>'."
+        )
+        print(f"\n🚨 [OriginGate] {msg_bloqueio}")
+        trace.append(f"[OriginGate] Origem: '{instruction_origin}', Operacao: '{tipo_op}', Acao: '{acao}'")
+        trace.append("[OriginGate] Veredito: BLOQUEADO - Conteúdo de terceiros não possui autoridade para disparar mutações.")
+        return {
+            "sucesso": False,
+            "status": "blocked_untrusted_origin",
+            "acao": acao,
+            "instruction_origin": instruction_origin,
+            "error": msg_bloqueio,
+            "mensagem": msg_bloqueio,
+            "trace": trace,
+            "tempo_ms": (time.time() - t0) * 1000
+        }
+
+    # Bloqueio preventivo de comando truncado (Rede de Segurança Imediata)
+    if intent.get("is_possibly_truncated"):
+        msg_trunc = intent.get("clarification_question") or "Comando parece incompleto ou truncado."
+        trace.append("[SafetyGuard] Bloqueio preventivo: comando identificado como truncado. Solicitando esclarecimento.")
+        return {
+            "sucesso": False,
+            "status": "needs_clarification",
+            "mensagem": msg_trunc,
+            "trace": trace,
+            "tempo_ms": (time.time() - t0) * 1000
+        }
+
     # 0. Prioridade 1: Extensão no Chrome Normal da Professora (mesma aba aberta)
     if bridge_instance.has_active_portal_tab():
         tab_id = bridge_instance.active_tab_state.get("tabId")
@@ -710,6 +775,33 @@ class ManualServerHandler(BaseHTTPRequestHandler):
             self.send_header("Access-Control-Allow-Origin", "*")
             self.end_headers()
             self.wfile.write(json.dumps(result, ensure_ascii=False, indent=2).encode("utf-8"))
+            return
+
+        if self.path == "/ask_page":
+            content_length = int(self.headers.get("Content-Length", 0))
+            body_bytes = self.rfile.read(content_length)
+            try:
+                payload = json.loads(body_bytes.decode("utf-8"))
+            except Exception as e:
+                self.send_response(400)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": "JSON invalido", "details": str(e)}).encode("utf-8"))
+                return
+
+            user_query = payload.get("query") or payload.get("text") or ""
+            page_data = payload.get("page_data") or payload.get("pageData") or {}
+
+            # Tenta LLM semântico primeiro; faz fallback para local estruturado
+            llm_ans = bridge_instance._call_llm_for_page(user_query, page_data)
+            final_ans = llm_ans or bridge_instance._synthesize_page_answer_local(user_query, page_data)
+
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            self.wfile.write(json.dumps({"sucesso": True, "answer": final_ans}, ensure_ascii=False).encode("utf-8"))
             return
 
         self.send_response(404)

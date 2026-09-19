@@ -26,6 +26,14 @@ import {
 import PeiManagementModal from '@/components/PeiManagementModal'
 import BehaviorPointsModal from '@/components/BehaviorPointsModal'
 import PortalConsentModal from '@/components/PortalConsentModal'
+import {
+  deleteStudentMemory,
+  getStudentMemoryStats,
+  getPendingMemoryItems,
+  resolvePendingMemoryItem,
+  dismissPendingMemoryItem,
+  type PendingMemoryItem
+} from '@/lib/studentMemory'
 
 /* ─── Tipos ─────────────────────────────────────────────────────────────────── */
 interface School    { id: string; name: string; color: string }
@@ -194,6 +202,9 @@ export default function Students() {
   const [isImportingRoster, setIsImportingRoster] = useState(false)
   const [peiStudent, setPeiStudent] = useState<StudentRecord | null>(null)
   const [behaviorStudent, setBehaviorStudent] = useState<StudentRecord | null>(null)
+  const [pendingMemory, setPendingMemory] = useState<{ unresolved: PendingMemoryItem[]; ambiguous: PendingMemoryItem[]; total: number }>({ unresolved: [], ambiguous: [], total: 0 })
+  const [showPendingModal, setShowPendingModal] = useState(false)
+  const [pendingTargetStudent, setPendingTargetStudent] = useState<Record<string, string>>({})
 
   /* Modal Accessibility Refs & Hooks (WCAG 2.1 AA) */
   const addModalRef = useRef<HTMLDivElement>(null)
@@ -233,6 +244,7 @@ export default function Students() {
       setStudents(safeGet<StudentRecord[]>('teacher_students', []))
       setAllMetrics(safeGet<StudentMetrics[]>('teacher_student_metrics', []))
       setMetricDefs(safeGet<MetricDef[]>('teacher_pedagogic_metrics', []))
+      setPendingMemory(getPendingMemoryItems())
     }
     load()
     window.addEventListener('storage', load)
@@ -432,10 +444,21 @@ export default function Students() {
     setAddModal(false)
   }
   async function removeStudent(id: string) {
-    if (!(await showConfirm({ message: 'Excluir este aluno?' }))) return
+    const stats = getStudentMemoryStats(id)
+    const extraMsg = (stats.totalObservations > 0 || stats.totalExams > 0)
+      ? ` O histórico cadastral, as notas e ${stats.totalObservations} observação(ões) pedagógica(s) registradas serão permanentemente apagados (LGPD Art. 18).`
+      : ''
+
+    if (!(await showConfirm({ message: `Excluir este aluno?${extraMsg}` }))) return
+
     saveStudents(students.filter(s => s.id !== id))
     saveMetrics(allMetrics.filter(m => m.studentId !== id))
+    // Exclusão definitiva da memória pedagógica e histórico frio (Direito ao Esquecimento)
+    deleteStudentMemory(id)
+    // TODO: Supabase - deletar também na tabela student_memory remota quando migrado para nuvem (LGPD Art. 18)
+
     if (selectedId === id) setSelectedId(null)
+    toast.success('Aluno e registros pedagógicos excluídos com sucesso.')
   }
 
   function saveEdit() {
@@ -590,6 +613,36 @@ export default function Students() {
                 <span style={{ fontSize: 11, fontWeight: 700, padding: '4px 8px', borderRadius: 4, background: '#fef08a', color: '#854d0e' }}>
                   100% Leitura
                 </span>
+              </div>
+            )}
+
+            {/* Banner Discreto de Anotações Pendentes de Revisão (Homônimos / Não Vinculados) */}
+            {pendingMemory.total > 0 && (
+              <div style={{
+                background: '#eff6ff',
+                border: '1px solid #bfdbfe',
+                borderRadius: RADIUS.md,
+                padding: '12px 18px',
+                marginBottom: 16,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 12
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <i className="ti ti-bell-ringing" style={{ fontSize: 20, color: '#2563eb' }} />
+                  <div>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: '#1e40af' }}>
+                      {pendingMemory.total} anotação(ões) pendente(s) de revisão
+                    </span>
+                    <div style={{ fontSize: 11.5, color: '#3b82f6' }}>
+                      Menções em atas com homônimos ou alunos ainda não vinculados aguardando revisão.
+                    </div>
+                  </div>
+                </div>
+                <Button variant="ghost" size="sm" onClick={() => setShowPendingModal(true)}>
+                  Revisar Pendências
+                </Button>
               </div>
             )}
 
@@ -1616,6 +1669,156 @@ export default function Students() {
           classId={behaviorStudent.classId}
           onClose={() => setBehaviorStudent(null)}
         />
+      )}
+
+      {/* ─── MODAL DE REVISÃO DE PENDÊNCIAS PEDAGÓGICAS (HOMÔNIMOS & NÃO VINCULADOS) ─── */}
+      {showPendingModal && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 9999,
+          background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          backdropFilter: 'blur(3px)', padding: 16
+        }}>
+          <div style={{
+            background: '#fff', borderRadius: RADIUS.lg, width: '100%', maxWidth: 640,
+            maxHeight: '85vh', display: 'flex', flexDirection: 'column',
+            boxShadow: '0 20px 25px -5px rgba(0,0,0,0.2)', overflow: 'hidden'
+          }}>
+            <div style={{
+              padding: '16px 20px', borderBottom: '1px solid #ede8dc',
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#faf8f5'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <i className="ti ti-bell-ringing" style={{ fontSize: 20, color: '#2563eb' }} />
+                <div>
+                  <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#2c1a0e' }}>
+                    Revisão de Anotações Pendentes
+                  </h3>
+                  <span style={{ fontSize: 12, color: '#888' }}>
+                    Vincule menções ambíguas ao aluno correto sem misturar prontuários.
+                  </span>
+                </div>
+              </div>
+              <button onClick={() => setShowPendingModal(false)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: '#888' }}>
+                <i className="ti ti-x" />
+              </button>
+            </div>
+
+            <div style={{ padding: 20, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {[...pendingMemory.ambiguous, ...pendingMemory.unresolved].length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '30px 20px', color: '#888' }}>
+                  <i className="ti ti-circle-check" style={{ fontSize: 36, color: '#10b981', display: 'block', marginBottom: 8 }} />
+                  Nenhuma anotação pendente no momento.
+                </div>
+              ) : (
+                [...pendingMemory.ambiguous, ...pendingMemory.unresolved].map(item => (
+                  <div key={item.id} style={{
+                    border: '1px solid #e5e7eb', borderRadius: RADIUS.md, padding: 14,
+                    background: item.type === 'ambiguous' ? '#fdf8f6' : '#f9fafb'
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+                      <span style={{
+                        fontSize: 11, fontWeight: 700, textTransform: 'uppercase',
+                        padding: '2px 8px', borderRadius: 4,
+                        background: item.type === 'ambiguous' ? '#fee2e2' : '#e0e7ff',
+                        color: item.type === 'ambiguous' ? '#991b1b' : '#3730a3'
+                      }}>
+                        {item.type === 'ambiguous' ? '⚠️ Homônimo Ambíguo' : 'ℹ️ Aluno Não Vinculado'}
+                      </span>
+                      <span style={{ fontSize: 11, color: '#9ca3af' }}>
+                        {item.createdAt ? new Date(item.createdAt).toLocaleDateString('pt-BR') : ''}
+                      </span>
+                    </div>
+
+                    <div style={{ fontSize: 13, fontWeight: 600, color: '#1f2937', marginBottom: 4 }}>
+                      Menção: "{item.studentName}" {item.contextHint ? `— ${item.contextHint}` : ''}
+                    </div>
+                    <div style={{ fontSize: 12.5, color: '#4b5563', fontStyle: 'italic', marginBottom: 12, background: '#fff', padding: 8, borderRadius: 6, border: '1px solid #f3f4f6' }}>
+                      {item.note}
+                    </div>
+
+                    {item.candidates && item.candidates.length > 0 && (
+                      <div style={{ marginBottom: 10 }}>
+                        <div style={{ fontSize: 11.5, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
+                          Candidatos identificados na turma:
+                        </div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                          {item.candidates.map(cand => (
+                            <button
+                              key={cand.id}
+                              onClick={() => {
+                                resolvePendingMemoryItem(item.id, cand.id, cand.name)
+                                setPendingMemory(getPendingMemoryItems())
+                                toast.success(`Observação atribuída a ${cand.name}!`)
+                              }}
+                              style={{
+                                padding: '6px 12px', fontSize: 12, fontWeight: 600,
+                                background: '#2563eb', color: '#fff', border: 'none',
+                                borderRadius: RADIUS.sm, cursor: 'pointer'
+                              }}
+                            >
+                              ✓ Vincular a {cand.name}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 8, paddingTop: 8, borderTop: '1px solid #eee' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1 }}>
+                        <select
+                          value={pendingTargetStudent[item.id] || ''}
+                          onChange={e => setPendingTargetStudent({ ...pendingTargetStudent, [item.id]: e.target.value })}
+                          style={{ ...S.input, fontSize: 12, padding: '4px 8px', height: 32 }}
+                        >
+                          <option value="">Outro aluno cadastrado...</option>
+                          {students.map(s => (
+                            <option key={s.id} value={s.id}>{s.name}</option>
+                          ))}
+                        </select>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          disabled={!pendingTargetStudent[item.id]}
+                          onClick={() => {
+                            const targetId = pendingTargetStudent[item.id]
+                            const s = students.find(x => x.id === targetId)
+                            if (s) {
+                              resolvePendingMemoryItem(item.id, s.id, s.name)
+                              setPendingMemory(getPendingMemoryItems())
+                              toast.success(`Observação atribuída a ${s.name}!`)
+                            }
+                          }}
+                        >
+                          Atribuir
+                        </Button>
+                      </div>
+                      <button
+                        onClick={() => {
+                          dismissPendingMemoryItem(item.id, item.type)
+                          setPendingMemory(getPendingMemoryItems())
+                          toast.info('Pendência descartada.')
+                        }}
+                        style={{
+                          background: 'none', border: 'none', color: '#9ca3af',
+                          cursor: 'pointer', fontSize: 12, textDecoration: 'underline'
+                        }}
+                      >
+                        Descartar
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div style={{ padding: '12px 20px', borderTop: '1px solid #ede8dc', textAlign: 'right', background: '#faf8f5' }}>
+              <Button variant="ghost" size="sm" onClick={() => setShowPendingModal(false)}>
+                Fechar
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

@@ -154,8 +154,21 @@ export default function OmniGrader({ initialTab = 'photo' }: OmniGraderProps) {
         setStudents([])
       }
       setClasses(cl)
+
+      // Auto-carregamento do Cartão OMR gerado no ExamBuilder (via safeGet / safeSet da arquitetura Onda 2)
+      const parsedLayout = safeGet<{ title?: string; answerKeyString?: string } | null>('teacher_omr_active_layout', null)
+      if (parsedLayout) {
+        if (parsedLayout.title) setExamTitlePhoto(parsedLayout.title)
+        if (parsedLayout.answerKeyString) setAnswerKeyPhoto(parsedLayout.answerKeyString)
+        setGradingScenario('scenario_a_omr')
+        setActiveTab('photo')
+        safeSet('teacher_omr_active_layout', null)
+        toast.info('Gabarito da avaliação carregado automaticamente para correção rápida!')
+      }
     } catch {}
   }, [])
+
+
 
   // ─── ABA 1: Foto / OCR ──────────────────────────────────────────────────
   async function handleCapturePhoto() {

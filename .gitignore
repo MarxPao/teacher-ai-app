@@ -60,3 +60,5 @@ sidecar/screenshots/
 audit_experiments_output.json
 scratch_report.txt
 student_real_data.json
+sidecar/skills/generic__*
+sidecar/skills/cache/

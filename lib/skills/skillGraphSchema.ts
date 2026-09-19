@@ -71,7 +71,7 @@ export type SkillAnchor = z.infer<typeof SkillAnchorSchema>
 
 // Parâmetros do nó
 export const SkillNodeParamsSchema = z.object({
-  variable_bindings: z.array(z.string()).default([]),
+  variable_bindings: z.array(z.string()).optional(),
   action_value: z.string().nullable().optional(),
   condition: z.string().nullable().optional(),
   /**

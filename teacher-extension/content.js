@@ -91,62 +91,41 @@ for (const [key, profile] of Object.entries(PLATFORM_PROFILES)) {
   }
 }
 
-// Show status badge
-if (portalPlatformProfile) {
+// Show status badge only in top frame and NOT in auth/login/transition screens
+const isAuthOrTransitionUrl = () => {
+  const p = (window.location.pathname || '').toLowerCase();
+  return p.includes('/auth') || p.includes('/login') || p.includes('/logoff') || 
+         p.includes('/selecionar-contexto') || p.includes('/carregar-parametros') || 
+         p.includes('/signin') || p.includes('/entrar');
+};
+
+const isTopFrame = window.self === window.top;
+
+if (portalPlatformProfile && isTopFrame && !isAuthOrTransitionUrl()) {
   showStatusToast(portalPlatformProfile.name, 'connected');
 }
 
-// ——— Toast UI com Identidade Rafinha ———
+// ——— Zero-Footprint Telemetria & Status (Sem poluição do DOM) ———
 function showStatusToast(platformName, state = 'connected', customText) {
+  // Limpa resquícios no DOM se existirem de versões antigas
   const existing = document.getElementById('teacher-agent-status');
   if (existing) existing.remove();
+  const existingStyle = document.getElementById('teacher-agent-status-style');
+  if (existingStyle) existingStyle.remove();
 
-  const colors = {
-    connected: { bg: '#2c1a0e', border: '#8b5e3c', dot: '#16a34a', text: '#faf6f0' },
-    filling:   { bg: '#2c1a0e', border: '#d97706', dot: '#d97706', text: '#faf6f0' },
-    success:   { bg: '#2c1a0e', border: '#16a34a', dot: '#16a34a', text: '#faf6f0' },
-    error:     { bg: '#3d0000', border: '#dc2626', dot: '#dc2626', text: '#faf6f0' },
-  };
-
-  const c = colors[state] || colors.connected;
-
-  const div = document.createElement('div');
-  div.id = 'teacher-agent-status';
-  div.style.cssText = `
-    position: fixed; bottom: 20px; right: 20px;
-    background: ${c.bg}; color: ${c.text};
-    padding: 12px 18px; border-radius: 12px;
-    font-family: system-ui, -apple-system, sans-serif; font-size: 13px; font-weight: 700;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.4); border: 2px solid ${c.border};
-    z-index: 9999999; display: flex; align-items: center; gap: 10px;
-    transition: all 0.3s ease; animation: teacherSlideIn 0.3s ease;
-  `;
-
-  const style = document.createElement('style');
-  style.textContent = `@keyframes teacherSlideIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }`;
-  document.head.appendChild(style);
-
-  const label = customText || {
-    connected: `👩‍🏫 Rafinha Conectada · ${platformName}`,
-    filling:   `⚡ Preenchendo campos em ${platformName}...`,
-    success:   `🎯 Preenchimento concluído com sucesso!`,
-    error:     `❌ Campos não encontrados no portal`,
-  }[state] || platformName;
-
-  div.innerHTML = `
-    <span style="width:10px;height:10px;border-radius:50%;background:${c.dot};box-shadow:0 0 10px ${c.dot};display:inline-block;flex-shrink:0;"></span>
-    <span>${label}</span>
-  `;
-
-  document.body.appendChild(div);
-
-  // Auto-dismiss
-  if (state !== 'connected') {
-    setTimeout(() => {
-      div.style.opacity = '0';
-      div.style.transform = 'translateY(10px)';
-      setTimeout(() => { div.remove(); style.remove(); }, 300);
-    }, 6000);
+  try {
+    if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+      chrome.runtime.sendMessage({
+        action: 'STATUS_TOAST_UPDATE',
+        platformName,
+        state,
+        customText: customText || null,
+        url: window.location.href,
+        timestamp: Date.now()
+      }).catch(() => {});
+    }
+  } catch (e) {
+    // Silently ignore if port is closed
   }
 }
 
@@ -456,6 +435,15 @@ try {
       handleExecutePortalAction(event.data.payload || event.data);
     } else if (event.data?.action === 'INSPECT_PAGE' || event.data?.action === 'EXTRACT_PAGE_DATA') {
       handleInspectAndScrape();
+    }
+  };
+} catch {}
+
+try {
+  const entityBus = new BroadcastChannel('teacher_entity_bus');
+  entityBus.onmessage = (event) => {
+    if (event.data && typeof event.data === 'object') {
+      window.postMessage(event.data, '*');
     }
   };
 } catch {}

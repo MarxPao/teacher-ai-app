@@ -310,7 +310,7 @@ export function syncConnectorsFromStorage(): void {
       api_config: {
         base_url: 'https://graph.microsoft.com/v1.0',
         auth_type: 'oauth2',
-        credentials: getTeamsConfig() || undefined,
+        credentials: (getTeamsConfig() as unknown as Record<string, unknown>) || undefined,
       }
     })
   } catch {}

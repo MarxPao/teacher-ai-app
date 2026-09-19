@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAtLrU/nF7jpd/zVKX5NkEagXy2ZSXQHDEFy5JUJ7yCCIT720lbD27NSm9O6nORJCtuF+clhHNhDGZv8v4dsnzcaNYWd6TuzwjN4soPN7Ml57dg9AvnL78b9JpGOJyyFqtuJClyUo5+fLimOh4SCQs4Fu4fUK1h0EnEblkqwlMSsXUQSb9ZHiL5wBKjSdHI/by6/AX4+Y8yK9OkzbCfM8lURSdi4dNCgIFuCj9xc+u3wT9fSRK78sN52qq15zmWLF0LBi6bePpf56wO+6XebBF0zunEvyssUIq43ZmYxiWJiiNeOkl3l7vhCHbPtyaAlH8hYkP4Iw3J8musiIjhzjp5QIDAQAB",
   "name": "TeacherAI - Assistente Agêntico",
-  "version": "3.0",
+  "version": "3.1",
   "description": "Extensão inteligente que conecta aos portais escolares e ao painel TeacherAI.",
   "icons": {
     "16": "icon16.png",
