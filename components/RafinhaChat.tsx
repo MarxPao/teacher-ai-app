@@ -84,6 +84,7 @@ const TOOL_LABELS: Record<string, string> = {
   query_library:                  ' Consultando biblioteca RAG',
   search_web:                     ' Pesquisando na internet',
   remember_fact:                  ' Gravando aprendizado',
+  salvar_memoria:                 ' Gravando memória',
   add_qbank_question:             ' Salvando no QBank',
   create_mindmap:                 ' Gerando mapa mental',
   create_document:                ' Abrindo no Editor',
@@ -113,6 +114,7 @@ const TOOL_EST_SECONDS: Record<string, number> = {
   speak_response:                 1,
   update_student_metric:          2,
   record_student_observation:     2,
+  salvar_memoria:                 1,
   create_class:                   2,
   create_student:                 2,
   query_library:                  3,
@@ -823,11 +825,43 @@ export async function executeTool(
  return `Encontrados ${webResults.length} resultados na internet para "${input.query}":\n` +
  webResults.map(r => ` **${r.title}**: ${r.snippet}`).join('\n\n')
  }
- case 'remember_fact': {
- const { saveLearnedFact } = await import('@/lib/longTermMemory')
- saveLearnedFact(input.fact as string, (input.category as any) || 'teacher_preference', 'rafinha_tool')
- return `Fato gravado na memória de longo prazo: "${input.fact}"`
- }
+  case 'salvar_memoria': {
+    const { resolveSemanticCandidate } = await import('@/lib/semanticConflictResolver')
+    const result = resolveSemanticCandidate({
+      category: (input.categoria as any) || (input.category as any) || 'teacher_preference',
+      factText: String(input.conteudo || input.factText || input.fact || '').trim(),
+      importanceScore: typeof input.importancia === 'number' ? input.importancia : typeof input.importanceScore === 'number' ? input.importanceScore : 0.85,
+      scope: (input.escopo as any) || (input.scope as any) || 'private',
+      schoolId: (input.escola_id as string) || (input.schoolId as string),
+      source: 'rafinha_tool'
+    })
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('storage'))
+      window.dispatchEvent(new CustomEvent('teacher:memory_changed', { detail: result }))
+    }
+    if (result.action === 'CONTRADICTION' && result.clarificationPrompt) {
+      return result.clarificationPrompt
+    }
+    return result.details
+  }
+  case 'remember_fact': {
+    const { resolveSemanticCandidate } = await import('@/lib/semanticConflictResolver')
+    const result = resolveSemanticCandidate({
+      category: (input.category as any) || (input.categoria as any) || 'teacher_preference',
+      factText: String(input.fact || input.conteudo || '').trim(),
+      importanceScore: 0.85,
+      scope: 'private',
+      source: 'rafinha_tool'
+    })
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('storage'))
+      window.dispatchEvent(new CustomEvent('teacher:memory_changed', { detail: result }))
+    }
+    if (result.action === 'CONTRADICTION' && result.clarificationPrompt) {
+      return result.clarificationPrompt
+    }
+    return `Fato gravado na memória de longo prazo: "${input.fact || input.conteudo}"`
+  }
  case 'manage_didactic_sequence': {
  takeSnapshot()
  const rawUnits = localStorage.getItem('teacher_didactic_sequence_units_v3') || localStorage.getItem('teacher_didactic_sequence_units_v2') || '[]'

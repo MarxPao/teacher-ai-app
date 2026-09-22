@@ -266,9 +266,9 @@ describe('Checklist & History Manager', () => {
     expect(getTimelineBucket(twoMonthsAgoTs, now)).toBe('older')
 
     // Formatação humanizada
-    expect(formatTimelineTime(todayTs)).toContain('Hoje às')
-    expect(formatTimelineTime(yesterdayTs)).toContain('Ontem às')
-    expect(formatTimelineTime(twoMonthsAgoTs)).toMatch(/\d{2}\/\d{2} às \d{2}:\d{2}/)
+    expect(formatTimelineTime(todayTs, now)).toContain('Hoje às')
+    expect(formatTimelineTime(yesterdayTs, now)).toContain('Ontem às')
+    expect(formatTimelineTime(twoMonthsAgoTs, now)).toMatch(/\d{2}\/\d{2} às \d{2}:\d{2}/)
   })
 
   it('agrupa tarefas na timeline cronológica ordenadas do mais recente para o mais antigo', () => {
