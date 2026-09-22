@@ -1241,6 +1241,7 @@ def extract_intent(
     ollama_model: Optional[str] = None,
     ollama_url: Optional[str] = None,
     known_students: Optional[List[str]] = None,
+    supabase_client: Optional[Any] = None,
 ) -> Dict[str, Any]:
     """
     Ponto de entrada de interpretação de intenção pedagógica (Camada 1 - NLU).
