@@ -168,17 +168,23 @@
 
     /* ── Card de Aprovação Agêntico & Voz ── */
     .agent-card {
-      background: #ffffff; border: 1.5px solid #6366f1; border-radius: 12px;
-      padding: 14px; box-shadow: 0 4px 12px rgba(99, 102, 241, 0.12);
+      background: #ffffff;
+      border: 1.5px solid #6366f1;
+      border-radius: 14px;
+      padding: 14px;
+      box-shadow: 0 4px 16px rgba(99, 102, 241, 0.08);
       margin-bottom: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
     }
     .voice-btn {
-      width: 36px; height: 36px; border-radius: 50%; border: none;
+      width: 32px; height: 32px; border-radius: 50%; border: none;
       background: #6366f1; color: #fff; cursor: pointer;
       display: flex; align-items: center; justify-content: center;
-      font-size: 16px; transition: all 0.2s; flex-shrink: 0;
+      font-size: 15px; transition: all 0.2s; flex-shrink: 0;
     }
-    .voice-btn:hover { background: #4f46e5; }
+    .voice-btn:hover { background: #4f46e5; transform: scale(1.05); }
     .voice-btn.listening {
       background: #dc2626; animation: micPulse 1.2s infinite;
     }
@@ -245,8 +251,14 @@
       max-height: 380px;
       min-height: 180px;
       overflow-y: auto;
-      padding: 8px 4px 12px 4px;
+      overflow-x: hidden;
+      padding: 10px 8px;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
       scroll-behavior: smooth;
+      box-sizing: border-box;
+      width: 100%;
     }
     .chat-history-container::-webkit-scrollbar {
       width: 5px;
@@ -254,6 +266,57 @@
     .chat-history-container::-webkit-scrollbar-thumb {
       background: #cbd5e1;
       border-radius: 4px;
+    }
+
+    /* ── Barra de Entrada de Chat Diagramada ── */
+    .chat-input-bar {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      background: #f8fafc;
+      border: 1.5px solid #cbd5e1;
+      border-radius: 12px;
+      padding: 4px 6px;
+      transition: all 0.2s ease;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+    }
+    .chat-input-bar:focus-within {
+      background: #ffffff;
+      border-color: #6366f1;
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+    }
+    .chat-input-field {
+      flex: 1;
+      border: none;
+      background: transparent;
+      font-size: 12px;
+      font-family: inherit;
+      color: #0f172a;
+      padding: 6px 4px;
+      outline: none;
+      min-width: 0;
+    }
+    .chat-send-btn {
+      background: #6366f1;
+      color: #ffffff;
+      border: none;
+      border-radius: 8px;
+      padding: 7px 12px;
+      font-weight: 700;
+      font-size: 12px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      transition: all 0.15s ease;
+      flex-shrink: 0;
+      font-family: inherit;
+    }
+    .chat-send-btn:hover {
+      background: #4f46e5;
+    }
+    .chat-send-btn:active {
+      transform: scale(0.97);
     }
 
     .chat-msg {
@@ -639,12 +702,14 @@
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; border-bottom: 1px solid #f1f5f9; padding-bottom: 8px;">
         <div style="font-size: 13px; font-weight: 700; color: #4338ca; display: flex; align-items: center; gap: 6px;">
           <i class="ti ti-sparkles"></i> Assistente no Portal
+        </div>
         <div style="display: flex; gap: 6px; align-items: center;">
           <button id="btn-clear-ext-chat" title="Iniciar nova conversa e limpar histórico" style="background: #fff; border: 1px solid #c7d2fe; color: #4338ca; border-radius: 6px; padding: 2px 6px; font-size: 10px; cursor: pointer; display: flex; align-items: center; gap: 3px; font-weight: 600;">
             <i class="ti ti-plus"></i> Nova Conversa
           </button>
           <span id="agentic-portal-tag" style="font-size: 10px; font-weight: 600; background: #e0e7ff; color: #4338ca; padding: 2px 8px; border-radius: 12px;">Ativo</span>
         </div>
+      </div>
 
       <!-- 3. [NOVO] Área de Histórico de Conversa (Chat Stream) -->
       <div id="chat-history-container" class="chat-history-container">
@@ -780,14 +845,14 @@
       </div>
 
       <!-- 6. Barra de Entrada Única: Mic de Voz + Campo de Texto + Enviar -->
-      <div style="display: flex; gap: 6px; align-items: center;">
+      <div class="chat-input-bar">
         <button id="btn-voice-input" class="voice-btn" title="Falar comando (ex: 'Lança nota 8.5 para o João')">
           <i class="ti ti-microphone" id="voice-icon"></i>
         </button>
-        <input type="text" id="input-agent-command" placeholder="Fale ou digite seu pedido para o portal..."
-               style="flex: 1; padding: 8px 10px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 12px; font-family: 'Outfit', sans-serif; outline: none;" />
-        <button id="btn-send-agent-command" style="background: #6366f1; color: white; border: none; border-radius: 8px; padding: 8px 12px; font-weight: 600; font-size: 12px; cursor: pointer;">
-          Enviar
+        <input type="text" id="input-agent-command" class="chat-input-field" placeholder="Fale ou digite seu pedido para a Rafinha..." />
+        <button id="btn-send-agent-command" class="chat-send-btn" title="Enviar comando para o portal">
+          <span>Enviar</span>
+          <i class="ti ti-send" style="font-size: 12px;"></i>
         </button>
       </div>
 
@@ -947,6 +1012,7 @@
     </div>
 
   </div> <!-- /dev-mode-panel -->
+  </div> <!-- /body -->
 
   <!-- MODAL: CHECKPOINT / CONFIRMAÇÃO HUMANA OBRIGATÓRIA (HUMAN-IN-THE-LOOP) -->
   <div id="modal-checkpoint" class="modal-overlay" style="display: none;">

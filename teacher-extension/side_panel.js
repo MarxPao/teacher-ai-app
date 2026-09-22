@@ -1585,14 +1585,20 @@ function clearExtChatHistory() {
     localStorage.removeItem(EXT_CHAT_STORAGE_KEY);
     const container = document.getElementById('chat-history-container');
     if (container) {
-      container.innerHTML = `
-        <div class="chat-msg assistant" id="chat-welcome-msg">
-          <div class="chat-avatar">🦉</div>
-          <div class="chat-bubble">
-            Olá! Sou a <strong>Rafinha</strong>. Nova conversa iniciada! Em que posso te ajudar no portal hoje?
-          </div>
+      // Remove apenas balões de chat (.chat-msg), preservando os cards de aprovação e alerta
+      const msgs = container.querySelectorAll('.chat-msg');
+      msgs.forEach(m => m.remove());
+
+      const welcomeMsg = document.createElement('div');
+      welcomeMsg.className = 'chat-msg assistant';
+      welcomeMsg.id = 'chat-welcome-msg';
+      welcomeMsg.innerHTML = `
+        <div class="chat-avatar">🦉</div>
+        <div class="chat-bubble">
+          Olá! Sou a <strong>Rafinha</strong>. Nova conversa iniciada! Em que posso te ajudar no portal hoje?
         </div>
       `;
+      container.prepend(welcomeMsg);
     }
   } catch (e) {}
 }
