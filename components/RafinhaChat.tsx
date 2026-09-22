@@ -30,13 +30,15 @@ import {
   clearCurrentSession,
   DEFAULT_WELCOME_MESSAGE
 } from '@/lib/chatMemory'
-import { buildCuratedSystemPromptContext } from '@/lib/curatedMemory'
+import { buildCuratedSystemPromptContext, getCuratedTeacherProfile } from '@/lib/curatedMemory'
 import {
   getUpcomingTasks,
   extractTaskCommitment,
   createAgentTask,
   AgentTask
 } from '@/lib/taskMemory'
+import { buildStudentDossierContext } from '@/lib/studentDossier'
+import { retrieveRelevantMemories, MemoryNode } from '@/lib/hybridRetriever'
 import '@/lib/subjects/english'
 import '@/lib/subjects/portuguese'
 
@@ -169,8 +171,8 @@ function undoLastAction(): boolean {
  return true
 }
 
-// App context (enriquecido com memória de alunos) 
-function getAppContext(): string {
+// App context (enriquecido com memória de alunos, dossiês e busca híbrida) 
+function getAppContext(userQuery?: string): string {
   try {
     const students = JSON.parse(localStorage.getItem('teacher_students') || '[]')
     const classes = JSON.parse(localStorage.getItem('teacher_classes') || '[]')
@@ -199,7 +201,37 @@ function getAppContext(): string {
       try { longTermCtx = buildLongTermMemoryContext() } catch {}
     }
 
-    return base + buildMemoryContext() + longTermCtx
+    // Dossiê do aluno em foco se mencionado na mensagem
+    let focusedDossierCtx = ''
+    let hybridRagSnippet = ''
+
+    if (userQuery) {
+      for (const s of students) {
+        if (s.name && userQuery.toLowerCase().includes(s.name.toLowerCase())) {
+          const dossier = buildStudentDossierContext(s.name)
+          if (dossier) {
+            focusedDossierCtx = `\n${dossier}`
+            break
+          }
+        }
+      }
+
+      try {
+        const profile = getCuratedTeacherProfile()
+        const nodes: MemoryNode[] = (profile.learnedFacts || []).map(f => ({
+          id: f.id,
+          text: f.fact,
+          category: f.category,
+          importanceScore: f.confidence || 0.8
+        }))
+        const rag = retrieveRelevantMemories(userQuery, nodes, undefined, { topK: 3 })
+        if (rag.triggered && rag.contextSnippet) {
+          hybridRagSnippet = `\n${rag.contextSnippet}`
+        }
+      } catch {}
+    }
+
+    return base + buildMemoryContext() + longTermCtx + focusedDossierCtx + hybridRagSnippet
   } catch { return 'Dados indisponíveis' }
 }
 
@@ -1899,7 +1931,7 @@ export default function RafinhaChat({ onNavigate, onCommandReady }: RafinhaChatP
  method: 'POST',
  headers: { 'Content-Type': 'application/json' },
  body: JSON.stringify({
- messages: canonicalHistory, context: getAppContext(),
+ messages: canonicalHistory, context: getAppContext(trimmed),
  teacherStyle: buildTeacherStyleSystemPrompt(),
  subject: getSubjectProfile().id,
  provider, userKey, autoMode, userKeys,

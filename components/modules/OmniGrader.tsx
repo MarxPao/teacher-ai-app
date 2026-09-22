@@ -19,6 +19,7 @@ import { getSubjectProfile, SubjectProfile } from '@/lib/subjectProfile'
 import { recordApprovedCorrection } from '@/lib/curatedMemory'
 import { getAnchorExemplarsPrompt } from '@/lib/rubrics/anchorExemplars'
 import { screenEssayStylometrics, StylometricAdvisory } from '@/lib/stylometricScreening'
+import { ingestOmniGraderEvaluation } from '@/lib/studentDossier'
 import ModelCapabilityBanner from '@/components/ModelCapabilityBanner'
 import '@/lib/subjects/english'
 import '@/lib/subjects/portuguese'
@@ -719,6 +720,22 @@ Retorne ESTRITAMENTE um objeto JSON no seguinte formato (sem markdown, sem bloco
           undefined,
           'teacher'
         )
+      }
+
+      // Ingestão contínua no Dossiê Longitudinal do Aluno (Memory Engine Fase 2)
+      if (updated[idx]?.name) {
+        try {
+          ingestOmniGraderEvaluation({
+            studentName: updated[idx].name,
+            score: essayEvaluation.overallScore,
+            feedback: essayEvaluation.overallSummary || essayEvaluation.studentActionPlan,
+            topic: textGenre || (isPortuguese ? 'Redação Português' : 'English Essay'),
+            strengths: essayEvaluation.rubricFeedback?.filter(r => (r.score || 0) >= 8).map(r => r.criterionName) || [],
+            difficulties: essayEvaluation.rubricFeedback?.filter(r => (r.score || 0) < 6).map(r => r.criterionName) || []
+          })
+        } catch (err) {
+          console.warn('[OmniGrader] Falha ao atualizar dossiê do aluno:', err)
+        }
       }
 
       window.dispatchEvent(new Event('storage'))
