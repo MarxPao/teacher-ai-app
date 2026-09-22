@@ -120,7 +120,7 @@ class CDPConnector:
             )
 
     @classmethod
-    def relaunch_chrome_with_cdp(cls, profile_name: str = "Profile 1", timeout_sec: float = 6.0) -> Tuple[bool, str]:
+    def relaunch_chrome_with_cdp(cls, profile_name: str = "Profile 1", timeout_sec: float = 6.0, target_url: str = "") -> Tuple[bool, str]:
         """
         Inicia ou conecta à janela dedicada do Google Chrome do Teacher AI com perfil persistente.
         Zero conflito com o Chrome pessoal da professora (não fecha abas pessoais nem disputa processos).
@@ -128,7 +128,7 @@ class CDPConnector:
         """
         try:
             from chrome_launcher import launch_dedicated_chrome
-            ok, msg = launch_dedicated_chrome()
+            ok, msg = launch_dedicated_chrome(url=target_url or "about:blank")
             return (ok, msg)
         except ImportError:
             pass

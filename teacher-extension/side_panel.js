@@ -2045,8 +2045,8 @@ async function handleProcessCommand(commandText) {
   // 2. Aciona indicador de processando dinâmico
   setProcessingState(true, 'Rafinha pensando...');
 
-  // Caso especial: comandos de leitura direta ("Ler lista de alunos", "Ver notas da turma")
-  const isReadCommand = /^(?:ler\s+lista|ver\s+notas|mostrar\s+alunos|listar\s+alunos)/i.test(textClean);
+  // Caso especial: comandos de leitura direta ("Ler lista de alunos", "Ler alunos", "Importar alunos", "Ver notas da turma", etc.)
+  const isReadCommand = /^(?:ler\s+(?:lista|alunos|turma|pauta|di[aá]rio|chamada)|ver\s+(?:notas|alunos|turma|pauta|di[aá]rio|chamada)|mostrar\s+(?:alunos|lista|turma|pauta|di[aá]rio|chamada)|listar\s+(?:alunos|turma|nomes)|importar\s+(?:alunos|lista|turma|pauta)|puxar\s+(?:alunos|lista))/i.test(textClean);
   if (isReadCommand) {
     setProcessingState(true, 'Lendo dados do portal escolar...');
     dispatchPortalBridgeMessage({ action: 'READ_ACTIVE_PORTAL_ROSTER' }, (resp) => {

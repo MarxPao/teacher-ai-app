@@ -238,6 +238,15 @@ def launch_dedicated_chrome(url: str = FIRST_LAUNCH_URL) -> Tuple[bool, str]:
     # 1. Verificação rápida: CDP já pronto com nosso processo?
     already_running, pid = dedicated_chrome_is_running()
     if already_running:
+        if url and url != FIRST_LAUNCH_URL and (url.startswith("http://") or url.startswith("https://")):
+            try:
+                import urllib.parse
+                tabs = get_open_tabs()
+                has_portal = any(url.lower() in t.get("url", "").lower() for t in tabs)
+                if not has_portal:
+                    urllib.request.urlopen(f"{CDP_URL}/json/new?{urllib.parse.quote(url, safe=':/?&=%')}", timeout=3.0)
+            except Exception:
+                pass
         return True, f"Navegador Teacher AI ja estava em execucao (PID {pid}). Sessao ativa."
 
     # 2. Localiza o Chrome

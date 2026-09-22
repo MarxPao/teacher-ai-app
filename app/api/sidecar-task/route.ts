@@ -108,7 +108,8 @@ export async function POST(req: NextRequest) {
       try {
         const sidecarDir = path.resolve(process.cwd(), 'sidecar')
         const pyBinary = getPythonCommand()
-        const pyCmd = `${pyBinary} -c "import sys; sys.path.insert(0, r'${sidecarDir}'); from cdp_connector import CDPConnector; ok, msg = CDPConnector.relaunch_chrome_with_cdp('Profile 1'); print(msg); sys.exit(0 if ok else 1)"`
+        const portalUrl = (body.portalUrl || body.pageHint || '').replace(/"/g, '\\"')
+        const pyCmd = `${pyBinary} -c "import sys; sys.path.insert(0, r'${sidecarDir}'); from cdp_connector import CDPConnector; ok, msg = CDPConnector.relaunch_chrome_with_cdp('Profile 1', target_url=r'${portalUrl}'); print(msg); sys.exit(0 if ok else 1)"`
 
         const { stdout } = await execAsync(pyCmd, { cwd: sidecarDir, timeout: 15000 })
         const outputMsg = stdout.trim() || 'Navegador preparado com sucesso! Todas as suas abas foram restauradas.'

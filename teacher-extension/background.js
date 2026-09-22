@@ -750,21 +750,21 @@ async function resolveActivePortalTab(explicitTabId) {
               if (cells.length < 2) return;
               // Detecta inputs de texto, número, checkbox ou selects
               const inputs = Array.from(row.querySelectorAll('input:not([type="hidden"]), select, [contenteditable="true"]'));
-              if (inputs.length > 0) {
-                // Heurística de célula de nome: geralmente célula 0, 1 ou com link/span
-                let nameCandidate = '';
-                for (const c of cells) {
-                  const txt = c.innerText.trim();
-                  // Ignora células puramente numéricas (matrícula/índice) ou com controles
-                  if (txt && !/^\d+$/.test(txt) && !c.querySelector('input, select')) {
-                    nameCandidate = txt;
-                    break;
-                  }
+              // Heurística de célula de nome: geralmente célula 0, 1 ou com link/span
+              let nameCandidate = '';
+              for (const c of cells) {
+                const txt = c.innerText.trim();
+                // Ignora células puramente numéricas (matrícula/índice) ou com controles
+                if (txt && !/^\d+$/.test(txt) && !c.querySelector('input, select')) {
+                  nameCandidate = txt;
+                  break;
                 }
-                if (!nameCandidate) nameCandidate = cells[0].innerText.trim();
-                const lower = nameCandidate.toLowerCase();
-                if (lower.includes('aluno') || lower.includes('nome') || lower.includes('estudante') || lower.includes('matrícula') || lower.includes('matricula')) return;
+              }
+              if (!nameCandidate) nameCandidate = cells[0].innerText.trim();
+              const lower = nameCandidate.toLowerCase();
+              if (lower.includes('aluno') || lower.includes('nome') || lower.includes('estudante') || lower.includes('matrícula') || lower.includes('matricula')) return;
 
+              if (inputs.length > 0) {
                 const firstInput = inputs[0];
                 let currentVal = '';
                 if (firstInput.tagName === 'SELECT') {
@@ -781,6 +781,14 @@ async function resolveActivePortalTab(explicitTabId) {
                   currentValue: currentVal,
                   inputId: firstInput.id || firstInput.name || `input_row_${idx}`,
                   inputType: firstInput.type || firstInput.tagName.toLowerCase()
+                });
+              } else if (nameCandidate && nameCandidate.length >= 3 && !/^\d+$/.test(nameCandidate)) {
+                roster.push({
+                  rowIndex: idx,
+                  name: nameCandidate,
+                  currentValue: '',
+                  inputId: null,
+                  inputType: 'static_roster'
                 });
               }
             });
