@@ -49,7 +49,7 @@ CREATE POLICY "meeting_diaries_teacher_isolation"
   USING (teacher_id = auth.uid())
   WITH CHECK (teacher_id = auth.uid());
 
--- 4.2. POLÍTICA DE QUARENTENA: Administradores visualizam órfãos para auditoria
+-- 4.2. POLÍTICA DE QUARENTENA: Administradores auditam e visualizam registros órfãos
 CREATE POLICY "meeting_diaries_admin_quarantine"
   ON public.meeting_diaries FOR SELECT
   TO authenticated
@@ -61,14 +61,23 @@ CREATE POLICY "meeting_diaries_admin_quarantine"
     )
   );
 
--- 4.3. POLÍTICA DE REIVINDICAÇÃO (Self-Healing Claim):
--- Permite que o professor autenticado reivindique o registro órfão existente,
--- atrelando-o ao seu teacher_id na próxima sincronização do cliente.
-CREATE POLICY "meeting_diaries_self_healing_claim"
+-- 4.3. POLÍTICA DE GESTÃO ADMIN: Administradores podem retificar ou atribuir órfãos
+CREATE POLICY "meeting_diaries_admin_triage"
   ON public.meeting_diaries FOR UPDATE
   TO authenticated
-  USING (teacher_id IS NULL)
-  WITH CHECK (teacher_id = auth.uid());
+  USING (
+    teacher_id IS NULL 
+    AND EXISTS (
+      SELECT 1 FROM public.profiles 
+      WHERE profiles.id = auth.uid() AND profiles.role = 'admin'
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.profiles 
+      WHERE profiles.id = auth.uid() AND profiles.role = 'admin'
+    )
+  );
 
 -- 5. Revogação explícita de privilégios para role anônima (Proteção LGPD)
 REVOKE ALL ON public.meeting_diaries FROM anon;

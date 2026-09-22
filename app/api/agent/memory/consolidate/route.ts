@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { runNightlyConsolidation } from '@/lib/memoryConsolidation'
+import { purgeExpiredClassroomAudio } from '@/lib/classroomAudioPurge'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -26,9 +27,13 @@ export async function GET(request: NextRequest) {
       maxSupersededAgeDays
     })
 
+    // Executa simulação de purga de áudios expirados de aula
+    const audioPurgeReport = await purgeExpiredClassroomAudio({ dryRun }).catch(() => null)
+
     return NextResponse.json({
       ok: true,
-      report
+      report,
+      audioPurgeReport
     }, { headers: corsHeaders })
   } catch (error: any) {
     return NextResponse.json({
@@ -53,9 +58,13 @@ export async function POST(request: NextRequest) {
       maxSupersededAgeDays
     })
 
+    // Executa descarte físico de áudios de aula com retenção expirada (LGPD 7 dias)
+    const audioPurgeReport = await purgeExpiredClassroomAudio({ dryRun }).catch(() => null)
+
     return NextResponse.json({
       ok: true,
-      report
+      report,
+      audioPurgeReport
     }, { headers: corsHeaders })
   } catch (error: any) {
     return NextResponse.json({
