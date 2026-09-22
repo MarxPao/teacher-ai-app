@@ -1,13 +1,30 @@
 import { describe, it, expect } from 'vitest'
+import { GET as getPortalsStatus } from '../app/api/portals/status/route'
+import { NextRequest } from 'next/server'
 
 describe('Central de Portais Conectados — Honestidade de Status & Grid (Itens 2, 3 e 4)', () => {
   const BASE_URL = 'http://localhost:3000'
 
-  it('1. GET /api/portals/status retorna portais com mapeamento e métricas de honestidade', async () => {
-    const res = await fetch(`${BASE_URL}/api/portals/status`)
-    expect(res.ok).toBe(true)
+  async function fetchStatus() {
+    try {
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 1500)
+      const res = await fetch(`${BASE_URL}/api/portals/status`, { signal: controller.signal })
+      clearTimeout(timeoutId)
+      if (res.ok) {
+        return { ok: true, data: await res.json() }
+      }
+    } catch {}
 
-    const data = await res.json()
+    const req = new NextRequest(`${BASE_URL}/api/portals/status`)
+    const res = await getPortalsStatus(req)
+    return { ok: res.ok, data: await res.json() }
+  }
+
+  it('1. GET /api/portals/status retorna portais com mapeamento e métricas de honestidade', async () => {
+    const { ok, data } = await fetchStatus()
+    expect(ok).toBe(true)
+
     expect(data.ok).toBe(true)
     expect(Array.isArray(data.portals)).toBe(true)
     expect(data.portals.length).toBeGreaterThanOrEqual(4)
@@ -30,8 +47,7 @@ describe('Central de Portais Conectados — Honestidade de Status & Grid (Itens 
   })
 
   it('2. Portais não mapeados exibem isMapped=false e contagem zerada', async () => {
-    const res = await fetch(`${BASE_URL}/api/portals/status`)
-    const data = await res.json()
+    const { data } = await fetchStatus()
 
     const redeSc = data.portals.find((p: any) => p.id === 'redesantacatarina')
     expect(redeSc).toBeDefined()
@@ -51,8 +67,7 @@ describe('Central de Portais Conectados — Honestidade de Status & Grid (Itens 
   })
 
   it('3. Regra de Honestidade (Item 4): Skills sem execução ou com falha NUNCA são "proven"', async () => {
-    const res = await fetch(`${BASE_URL}/api/portals/status`)
-    const data = await res.json()
+    const { data } = await fetchStatus()
 
     const machado = data.portals.find((p: any) => p.id === 'machado_sobrinho')
     expect(machado.skills.length).toBeGreaterThan(0)
@@ -82,8 +97,7 @@ describe('Central de Portais Conectados — Honestidade de Status & Grid (Itens 
   })
 
   it('4. Histórico cronológico reverso do portal possui metadados exigidos (Item 3)', async () => {
-    const res = await fetch(`${BASE_URL}/api/portals/status`)
-    const data = await res.json()
+    const { data } = await fetchStatus()
 
     const machado = data.portals.find((p: any) => p.id === 'machado_sobrinho')
     expect(machado.history.length).toBeGreaterThanOrEqual(2)

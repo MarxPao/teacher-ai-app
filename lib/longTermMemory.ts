@@ -7,9 +7,34 @@
  * 3. Semantic Memory Engine: Extração e síntese contínua de fatos, insights de alunos e regras aprendidas.
  */
 
+export const VALID_TASK_BINDINGS = [
+  'omnigrader',
+  'exam_generator',
+  'lesson_planner',
+  'gradebook',
+  'attendance',
+  'parent_comms',
+  'didactic_sequence',
+  'qbank',
+  'portfolio',
+  'mindmap',
+  'general'
+] as const
+
+export type TaskBindingModule = typeof VALID_TASK_BINDINGS[number]
+
+export function sanitizeTaskBinding(raw?: string | null): TaskBindingModule | null {
+  if (!raw) return null
+  const normalized = raw.toLowerCase().trim()
+  if (VALID_TASK_BINDINGS.includes(normalized as TaskBindingModule)) {
+    return normalized as TaskBindingModule
+  }
+  return null
+}
+
 export interface LearnedFact {
   id: string
-  category: 'teacher_preference' | 'class_insight' | 'pedagogical_rule' | 'student_fact' | 'school_context' | 'grading_rigor' | 'teaching_style' | 'communication_rule' | 'school_policy' | 'subject_matter' | 'personal_convention'
+  category: 'teacher_preference' | 'class_insight' | 'pedagogical_rule' | 'student_fact' | 'school_context' | 'grading_rigor' | 'teaching_style' | 'communication_rule' | 'school_policy' | 'subject_matter' | 'personal_convention' | 'procedural' | 'task'
   fact: string
   confidence: number // 0.0 - 1.0
   source: string
@@ -21,6 +46,11 @@ export interface LearnedFact {
   schoolId?: string
   accessCount?: number
   lastAccessedAt?: string
+  taskBinding?: TaskBindingModule | null
+  sourceType?: string
+  sourceRef?: string
+  studentId?: string
+  studentName?: string
   createdAt: string
   updatedAt: string
 }

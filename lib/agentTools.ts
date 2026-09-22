@@ -288,7 +288,7 @@ export const AGENT_TOOLS: ToolDefinition[] = [
       properties: {
         categoria: {
           type: 'string',
-          enum: ['grading_rigor', 'school_policy', 'communication_rule', 'teacher_preference', 'student_trait'],
+          enum: ['grading_rigor', 'school_policy', 'communication_rule', 'teacher_preference', 'student_trait', 'procedural'],
           description: 'Categoria do fato ou preferência aprendida'
         },
         conteudo: {
@@ -307,6 +307,11 @@ export const AGENT_TOOLS: ToolDefinition[] = [
         escola_id: {
           type: 'string',
           description: 'Identificador da escola se o escopo for institucional (opcional)'
+        },
+        task_binding: {
+          type: 'string',
+          enum: ['omnigrader', 'exam_generator', 'lesson_planner', 'gradebook', 'attendance', 'parent_comms', 'didactic_sequence', 'qbank', 'portfolio', 'mindmap', 'general'],
+          description: 'Módulo ao qual a regra ou procedimento está vinculado (opcional)'
         }
       },
       required: ['categoria', 'conteudo']

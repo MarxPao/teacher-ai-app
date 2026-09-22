@@ -11,18 +11,56 @@
 
 import {
   LearnedFact,
-  getLongTermMemories
+  getLongTermMemories,
+  TaskBindingModule
 } from './longTermMemory'
 import {
   getCuratedTeacherProfile,
   saveCuratedTeacherProfile
 } from './curatedMemory'
 
+export interface ProceduralCandidateInput {
+  signature: string
+  taskBinding: TaskBindingModule
+  summary: string
+  timestamps: string[]
+}
+
+export interface ProceduralConvergenceResult {
+  shouldSynthesize: boolean
+  validTimestamps: string[]
+}
+
+/**
+ * Avalia a convergência de rotinas em memória procedural com janela deslizante de 60 dias (W_proc)
+ * Exige N >= 3 ocorrências nos últimos 60 dias para consolidar um nó procedural formal.
+ */
+export function evaluateProceduralConvergence(
+  candidate: ProceduralCandidateInput,
+  now: Date = new Date(),
+  slidingWindowDays = 60
+): ProceduralConvergenceResult {
+  const windowMs = slidingWindowDays * 24 * 3600 * 1000
+  const nowMs = now.getTime()
+
+  // Filtra ocorrências que caem estritamente dentro da janela deslizante [now - 60d, now]
+  const validTimestamps = candidate.timestamps.filter(iso => {
+    const t = new Date(iso).getTime()
+    return (nowMs - t) >= 0 && (nowMs - t) <= windowMs
+  })
+
+  return {
+    shouldSynthesize: validTimestamps.length >= 3,
+    validTimestamps
+  }
+}
+
 export interface ConsolidationOptions {
   decayDaysThreshold?: number // Padrão: 14 dias
   pruneConfidenceFloor?: number // Padrão: 0.35
   maxSupersededAgeDays?: number // Padrão: 30 dias
   dryRun?: boolean // Se true, apenas calcula sem persistir
+  proceduralCandidates?: ProceduralCandidateInput[]
 }
 
 export interface ConsolidationReport {
@@ -158,6 +196,30 @@ export function runNightlyConsolidation(
       }
     }
     finalActiveFacts.push(...facts)
+  }
+
+  // 4. Síntese de Candidatos a Memória Procedural com Janela Deslizante de 60 dias (W_proc)
+  if (options.proceduralCandidates && options.proceduralCandidates.length > 0) {
+    for (const cand of options.proceduralCandidates) {
+      const { shouldSynthesize, validTimestamps } = evaluateProceduralConvergence(cand, referenceNow, 60)
+      if (shouldSynthesize) {
+        mergedCount++
+        const procFact: LearnedFact = {
+          id: `proc_${referenceNow.getTime()}_${cand.signature.replace(/[^a-zA-Z0-9_]/g, '_').slice(0, 24)}`,
+          category: 'procedural',
+          fact: `Procedimento Consolidado (${cand.taskBinding.toUpperCase()}): ${cand.summary}`,
+          confidence: 0.95,
+          source: 'dream_consolidation',
+          status: 'ativo',
+          taskBinding: cand.taskBinding,
+          accessCount: validTimestamps.length,
+          createdAt: referenceNow.toISOString(),
+          updatedAt: referenceNow.toISOString()
+        }
+        finalActiveFacts.push(procFact)
+        actions.push(`[PROCEDURAL] Rotina "${cand.signature}" consolidada (${cand.taskBinding}) com ${validTimestamps.length} ocorrências na janela de 60 dias.`)
+      }
+    }
   }
 
   const consolidatedList = [...finalActiveFacts, ...supersededOnly]

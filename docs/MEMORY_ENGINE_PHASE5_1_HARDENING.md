@@ -340,4 +340,43 @@ export function evaluateProceduralConvergence(
 
 ## 7. Status e Validação
 
-Todas as alterações da **Fase 5.1** foram desenhadas para preservar integralmente a cobertura de **668 testes em 85 arquivos** já aprovados no repositório, fortalecendo a robustez do motor sob condições de alta carga e evitando degradação de performance semântica ao longo dos semestres letivos.
+Todas as alterações da **Fase 5.1** foram desenhadas para preservar integralmente a cobertura de testes no repositório, fortalecendo a robustez do motor sob condições de alta carga e evitando degradação de performance semântica ao longo dos semestres letivos.
+
+---
+
+## 8. Refinamentos Técnicos & Considerações Operacionais (Auditoria de Engenharia)
+
+### 8.1 Incomparabilidade Transversal de Scores (Cross-Query Incomparability)
+A Partição Dinâmica de Unidade altera a distribuição ponderada do score conforme `hasTaskMatch` varia:
+- **Com Task Match Ativo:** $\text{Score} = 0.35 S_{\text{sem}} + 0.20 S_{\text{rec}} + 0.15 S_{\text{imp}} + 0.15 S_{\text{freq}} + 0.15(1.0)$
+- **Sem Task Match Ativo:** $\text{Score} = 0.40 S_{\text{sem}} + 0.25 S_{\text{rec}} + 0.20 S_{\text{imp}} + 0.15 S_{\text{freq}} + 0.00(1.0)$
+
+> [!WARNING]
+> **Escopo Restrito a Ranqueamento Intra-Query:**
+> O score resultante é matematicamente consistente e monótono para ordenar candidatos **dentro da mesma consulta**. No entanto, ele **NUNCA deve ser comparado transversalmente entre consultas distintas** (ex.: ordenar fatos globais em um dashboard analítico do tipo "fatos mais relevantes de todo o sistema"). Fatos idênticos avaliados em consultas com contextos de tarefas distintos produzirão magnitudes numéricas em escalas diferentes.
+
+### 8.2 Ortogonalidade entre Categoria (`category`) e Vínculo de Tarefa (`taskBinding`)
+A arquitetura do Memory Engine desacopla explicitamente a natureza do conhecimento da sua aplicação situacional:
+1. **Eixo Temporal Intrínseco (`category`):** Governa exclusivamente a meia-vida do esquecimento ($\tau_{1/2}$) via `resolveCategoryLambda(category, scope)` no modelo de decaimento contínuo de Ebbinghaus.
+2. **Eixo Situacional de Execução (`taskBinding`):** Governa o bônus de ativação imediata ($\omega_{\text{task}} = 0.15$) apenas quando a professora está operando no módulo correspondente.
+
+Ambos os eixos operam de forma ortogonal: uma diretriz pode ter categoria `procedural` ($\tau_{1/2} = 90\text{ dias}$) e estar vinculada ao módulo `omnigrader`. Quando a professora estiver corrigindo redações, ela recebe tanto a preservação semestral quanto o impulso de tarefa simultaneamente.
+
+### 8.3 Espaço Amostral Discreto de $\text{Precision}@K$
+Para instâncias pequenas de avaliação no benchmark de retrieval, a métrica:
+$$\text{Precision}@K = \frac{|R_K \cap E|}{\min(K, |E|)}$$
+opera sobre um **espaço amostral estritamente discreto**, pois a cardinalidade da interseção $|R_K \cap E|$ é um número natural $m \in \{0, 1, \dots, \min(K, |E|)\}$.
+
+- Para $\min(K, |E|) = 1 \implies \text{Precision}@K \in \{0.00, 1.00\}$
+- Para $\min(K, |E|) = 2 \implies \text{Precision}@K \in \{0.00, 0.50, 1.00\}$
+- Para $\min(K, |E|) = 3 \implies \text{Precision}@K \in \{0.00, 0.33, 0.67, 1.00\}$
+
+Portanto, pisos nominais contínuos arbitrários (como $0.66$ para $\min=2$) na prática correspondem a exigir $2/2 = 1.00$ ($100\%$ de recall). O benchmark no CI adota asserção de piso individual $\ge 0.50$ para assegurar que cada cenário obrigatório atinja no mínimo match parcial aprovado.
+
+### 8.4 Média Micro-Ponderada contra Mascaramento Estatístico
+Para evitar que consultas com grande número de itens esperados e precisão perfeita mascarem falhas em consultas binárias mais críticas (ou vice-versa), o CI avalia duas métricas agregadas complementares:
+1. **Macro-Média:** $\text{MacroPrecision} = \frac{1}{N} \sum_{i=1}^N \text{Precision}_i@K$ (peso uniforme por cenário).
+2. **Micro-Média Ponderada:** $\text{MicroPrecision} = \frac{\sum_{i=1}^N |R_{K, i} \cap E_i|}{\sum_{i=1}^N \min(K_i, |E_i|)}$ (ponderada pelo volume real de oportunidades de recuperação).
+
+Ambas devem atingir $\ge 70\%$, com tolerância zero ($0\%$) de violações em `forbiddenIncludeIds`.
+

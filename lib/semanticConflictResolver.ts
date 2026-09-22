@@ -10,7 +10,9 @@
 
 import {
   LearnedFact,
-  getLongTermMemories
+  getLongTermMemories,
+  TaskBindingModule,
+  sanitizeTaskBinding
 } from './longTermMemory'
 import {
   getCuratedTeacherProfile,
@@ -27,6 +29,11 @@ export interface SemanticCandidate {
   scope?: 'private' | 'institutional'
   schoolId?: string
   source?: string
+  taskBinding?: TaskBindingModule | string | null
+  sourceType?: string
+  sourceRef?: string
+  studentId?: string
+  studentName?: string
 }
 
 export interface ResolutionResult {
@@ -173,6 +180,11 @@ export function resolveSemanticCandidate(candidate: SemanticCandidate): Resoluti
       previousVersionId: bestMatch.id,
       scope: candidate.scope || 'private',
       schoolId: candidate.schoolId,
+      taskBinding: sanitizeTaskBinding(candidate.taskBinding),
+      sourceType: candidate.sourceType,
+      sourceRef: candidate.sourceRef,
+      studentId: candidate.studentId,
+      studentName: candidate.studentName,
       accessCount: 1,
       lastAccessedAt: now,
       createdAt: now,
@@ -215,6 +227,11 @@ export function resolveSemanticCandidate(candidate: SemanticCandidate): Resoluti
       conflictDetails: `Conflita diretamente com a regra anterior "${bestMatch.fact}"`,
       scope: candidate.scope || 'private',
       schoolId: candidate.schoolId,
+      taskBinding: sanitizeTaskBinding(candidate.taskBinding),
+      sourceType: candidate.sourceType,
+      sourceRef: candidate.sourceRef,
+      studentId: candidate.studentId,
+      studentName: candidate.studentName,
       createdAt: now,
       updatedAt: now
     }
@@ -256,6 +273,11 @@ export function resolveSemanticCandidate(candidate: SemanticCandidate): Resoluti
     status: 'ativo',
     scope: candidate.scope || 'private',
     schoolId: candidate.schoolId,
+    taskBinding: sanitizeTaskBinding(candidate.taskBinding),
+    sourceType: candidate.sourceType,
+    sourceRef: candidate.sourceRef,
+    studentId: candidate.studentId,
+    studentName: candidate.studentName,
     accessCount: 1,
     lastAccessedAt: now,
     createdAt: now,
