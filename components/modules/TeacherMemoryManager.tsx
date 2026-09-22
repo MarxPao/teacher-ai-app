@@ -97,7 +97,7 @@ export default function TeacherMemoryManager() {
     toast.success('Compromisso agendado com sucesso!')
   }
 
-  /* Criação de Fato Semântico */
+  /* Criação de Fato Semântico com Resolução de Conflitos */
   function handleCreateFact(e: React.FormEvent) {
     e.preventDefault()
     if (!newFactText.trim()) {
@@ -105,26 +105,36 @@ export default function TeacherMemoryManager() {
       return
     }
 
-    if (!memory) return
-
-    const newFact: LearnedFact = {
-      id: `fact_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-      category: newFactCategory,
-      fact: newFactText.trim(),
-      learnedAt: new Date().toISOString(),
-      confidence: newFactImportance
+    try {
+      const { resolveSemanticCandidate } = require('@/lib/semanticConflictResolver')
+      const result = resolveSemanticCandidate({
+        category: newFactCategory,
+        factText: newFactText.trim(),
+        importanceScore: newFactImportance,
+        scope: 'private'
+      })
+      setNewFactText('')
+      refreshData()
+      if (result.action === 'CONTRADICTION') {
+        toast.warning(result.details)
+      } else {
+        toast.success(result.details)
+      }
+    } catch (err: any) {
+      toast.error('Erro ao salvar fato na memória')
     }
+  }
 
-    const updated: CuratedTeacherMemory = {
-      ...memory,
-      learnedFacts: [newFact, ...memory.learnedFacts],
-      lastUpdated: new Date().toISOString()
+  /* Consolidação Noturna (Dream Phase) */
+  async function handleConsolidateMemory() {
+    try {
+      const { runNightlyConsolidation } = await import('@/lib/memoryConsolidation')
+      const report = runNightlyConsolidation({ dryRun: false })
+      refreshData()
+      toast.success(report.summary)
+    } catch {
+      toast.error('Erro ao executar consolidação noturna')
     }
-
-    saveCuratedMemory(updated)
-    setNewFactText('')
-    refreshData()
-    toast.success('Nova preferência salva no cérebro da Rafinha!')
   }
 
   /* Exclusão de Fato */
@@ -227,6 +237,9 @@ export default function TeacherMemoryManager() {
           </Button>
           <Button variant="secondary" size="sm" icon={<i className="ti ti-copy" />} onClick={handleCopyMarkdown}>
             Copiar MEMORY.md
+          </Button>
+          <Button variant="secondary" size="sm" icon={<i className="ti ti-moon-stars" />} onClick={handleConsolidateMemory}>
+            🌙 Consolidação Noturna (Dream Phase)
           </Button>
         </div>
       </ModuleCard>
@@ -476,6 +489,19 @@ export default function TeacherMemoryManager() {
                       }}>
                         {fact.category.toUpperCase()}
                       </span>
+                      {fact.status === 'superseded' ? (
+                        <span style={{ padding: '2px 6px', borderRadius: 6, fontSize: 10, fontWeight: 700, background: '#f1f5f9', color: '#64748b' }}>
+                          SUBSTITUÍDA
+                        </span>
+                      ) : fact.status === 'conflitante' ? (
+                        <span style={{ padding: '2px 6px', borderRadius: 6, fontSize: 10, fontWeight: 700, background: '#fef3c7', color: '#b45309' }}>
+                          ⚠️ CONFLITANTE
+                        </span>
+                      ) : (
+                        <span style={{ padding: '2px 6px', borderRadius: 6, fontSize: 10, fontWeight: 700, background: '#dcfce7', color: '#15803d' }}>
+                          ATIVA
+                        </span>
+                      )}
                       <span style={{ fontSize: 11, color: '#a08060' }}>
                         Confiança: {Math.round((fact.confidence || 0.8) * 100)}%
                       </span>
