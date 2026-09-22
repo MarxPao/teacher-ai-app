@@ -219,10 +219,35 @@ def translate_task_response(task_result: Dict[str, Any]) -> Dict[str, Any]:
             "sucesso": True
         }
 
-    # 9. Falha no aprendizado ao vivo (DiscoveryOrchestrator não encontrou campo)
+    # 9. Falha no aprendizado ao vivo (DiscoveryOrchestrator não encontrou elemento com confiança)
     if status in ("discovery_failed", "orchestration_failed"):
-        campo_label = "falta" if "falta" in str(acao).lower() else "nota"
-        msg = f"Não encontrei onde lançar {campo_label} nesta tela, você pode me mostrar clicando no lugar certo?"
+        alvo = task_result.get("objeto_alvo") or task_result.get("campo")
+        if not alvo:
+            if "falta" in str(acao).lower():
+                alvo = "falta"
+            elif "nota" in str(acao).lower():
+                alvo = "nota"
+            elif "recado" in str(acao).lower() or "responder" in str(acao).lower():
+                alvo = "recado"
+            elif "arquivo" in str(acao).lower() or "baixar" in str(acao).lower():
+                alvo = "arquivo"
+            else:
+                alvo = acao or "a ação"
+
+        item_alvo = task_result.get("aluno") or task_result.get("item") or ""
+        item_str = f" para {item_alvo}" if item_alvo else ""
+        
+        # Verbo de ação correspondente
+        if "responder" in str(acao).lower():
+            verbo = "responder"
+        elif "baixar" in str(acao).lower():
+            verbo = "baixar"
+        elif "ver" in str(acao).lower() or "consultar" in str(acao).lower():
+            verbo = "ver"
+        else:
+            verbo = "lançar"
+
+        msg = f"Não encontrei onde {verbo} {alvo}{item_str} nesta tela, você pode me mostrar clicando no lugar certo?"
         return {
             "human_message": msg,
             "needs_approval": False,

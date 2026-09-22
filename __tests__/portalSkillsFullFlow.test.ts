@@ -111,7 +111,7 @@ describe('Portal Skills — Persistência Supabase, API e Extensão', () => {
   })
 
   it('4. Validação estática dos scripts da extensão Chrome', () => {
-    const extDir = path.join('C:', 'Users', 'rafae', '.gemini', 'antigravity', 'scratch', 'teacher-extension')
+    const extDir = path.resolve(__dirname, '..', 'teacher-extension')
     const sideJs = path.join(extDir, 'side_panel.js')
     const contentJs = path.join(extDir, 'content.js')
 

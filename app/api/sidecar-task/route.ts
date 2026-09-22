@@ -2,8 +2,38 @@ import { NextRequest, NextResponse } from 'next/server'
 import { exec } from 'child_process'
 import { promisify } from 'util'
 import path from 'path'
+import fs from 'fs'
 
 const execAsync = promisify(exec)
+
+/**
+ * Resolve o executável do Python de forma resiliente no Windows/Linux,
+ * contornando o falso positivo do alias vazio do Microsoft Store ("Python não foi encontrado").
+ */
+function getPythonCommand(): string {
+  if (process.env.PYTHON_PATH && fs.existsSync(process.env.PYTHON_PATH)) {
+    return `"${process.env.PYTHON_PATH}"`
+  }
+
+  const localAppData = process.env.LOCALAPPDATA || ''
+  const candidates = [
+    path.join(localAppData, 'Programs', 'Python', 'Python312', 'python.exe'),
+    path.join(localAppData, 'Programs', 'Python', 'Python311', 'python.exe'),
+    path.join(localAppData, 'Programs', 'Python', 'Python310', 'python.exe'),
+    path.join(localAppData, 'Programs', 'Python', 'Launcher', 'py.exe'),
+    'C:\\Python312\\python.exe',
+    'C:\\Python311\\python.exe',
+  ]
+
+  for (const candidate of candidates) {
+    if (candidate && fs.existsSync(candidate)) {
+      return `"${candidate}"`
+    }
+  }
+
+  // Se py.exe estiver no PATH (padrão de instaladores oficiais), usa o Launcher
+  return 'py'
+}
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
 const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
@@ -77,7 +107,8 @@ export async function POST(req: NextRequest) {
     if (action === 'prepare_chrome' || action === 'connect_browser' || action === 'reconnect_chrome') {
       try {
         const sidecarDir = path.resolve(process.cwd(), 'sidecar')
-        const pyCmd = `python -c "import sys; sys.path.insert(0, r'${sidecarDir}'); from cdp_connector import CDPConnector; ok, msg = CDPConnector.relaunch_chrome_with_cdp('Profile 1'); print(msg); sys.exit(0 if ok else 1)"`
+        const pyBinary = getPythonCommand()
+        const pyCmd = `${pyBinary} -c "import sys; sys.path.insert(0, r'${sidecarDir}'); from cdp_connector import CDPConnector; ok, msg = CDPConnector.relaunch_chrome_with_cdp('Profile 1'); print(msg); sys.exit(0 if ok else 1)"`
 
         const { stdout } = await execAsync(pyCmd, { cwd: sidecarDir, timeout: 15000 })
         const outputMsg = stdout.trim() || 'Navegador preparado com sucesso! Todas as suas abas foram restauradas.'
@@ -105,7 +136,8 @@ export async function POST(req: NextRequest) {
         const safeFormat = (outputFormat || 'students').replace(/"/g, '\\"')
         const safeForce = (body.forceDiscovery || action === 'rediscover_portal') ? 'true' : 'false'
 
-        const pyCmd = `python "${scriptPath}" "${safeGoal}" "${safeHint}" "${safeFormat}" "${safeForce}"`
+        const pyBinary = getPythonCommand()
+        const pyCmd = `${pyBinary} "${scriptPath}" "${safeGoal}" "${safeHint}" "${safeFormat}" "${safeForce}"`
         const { stdout } = await execAsync(pyCmd, {
           cwd: sidecarDir,
           timeout: 45000,

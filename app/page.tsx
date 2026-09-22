@@ -80,8 +80,8 @@ const Eventos               = dynamic(() => import('@/components/modules/Eventos
 const VisualStudio          = dynamic(() => import('@/components/modules/VisualStudio'),          { loading: () => <ModuleSkeleton />, ssr: false })
 const Insights              = dynamic(() => import('@/components/modules/Insights'),              { loading: () => <ModuleSkeleton />, ssr: false })
 const ChecklistHistoryModule = dynamic(() => import('@/components/modules/ChecklistHistoryModule'), { loading: () => <ModuleSkeleton />, ssr: false })
-const PortalSkillsModule    = dynamic(() => import('@/components/modules/PortalSkillsModule'),    { loading: () => <ModuleSkeleton />, ssr: false })
 const BnccModule            = dynamic(() => import('@/components/modules/BnccModule'),            { loading: () => <ModuleSkeleton />, ssr: false })
+const ClassroomAnalytics    = dynamic(() => import('@/components/modules/ClassroomAnalytics'),    { loading: () => <ModuleSkeleton />, ssr: false })
 
 // ─── Module Key type ───────────────────────────────────────────────────────────
 export type ModuleKey =
@@ -93,7 +93,7 @@ export type ModuleKey =
   | 'classlog' | 'didacticsequence' | 'livequiz' | 'parentcomms'
   | 'classroommode' | 'attendancelist' | 'flashcardmode' | 'audiopronunciation'
   | 'reflectivepractice' | 'meetingclassrecorder' | 'weeklyagenda' | 'batchgrader'
-  | 'progresstracker' | 'autoreport' | 'skills' | 'bncc'
+  | 'progresstracker' | 'autoreport' | 'skills' | 'bncc' | 'classroomanalytics'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const MODULES: Record<ModuleKey, React.ComponentType<any>> = {
@@ -145,11 +145,18 @@ const MODULES: Record<ModuleKey, React.ComponentType<any>> = {
   autoreport:         AutoReport,
   skills:             PortalSkillsModule,
   bncc:               BnccModule,
+  classroomanalytics: ClassroomAnalytics,
 }
 
 // ─── App ───────────────────────────────────────────────────────────────────────
 export default function Home() {
-  const [active, setActive] = useState<ModuleKey>('dashboard')
+  const [active, setActive] = useState<ModuleKey>(() => {
+    if (typeof window !== 'undefined') {
+      const p = new URLSearchParams(window.location.search).get('module') as ModuleKey
+      if (p && MODULES[p]) return p
+    }
+    return 'dashboard'
+  })
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false)
   const [showLangMenu, setShowLangMenu] = useState(false)
   const Module = MODULES[active]

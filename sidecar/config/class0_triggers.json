@@ -1,0 +1,65 @@
+{
+  "_comment": "Termos-gatilho de Classe 0 — Dado Sensível LGPD Especial. Qualquer match força bloqueio absoluto (sem cloud, sem pseudonimização). Carregado em runtime pelo data_classification.py. Manter em minúsculas sem acento para comparação normalizada.",
+  "saude_fisica": [
+    "tdah", "tea", "autismo", "autista", "epilepsia", "epilético", "epiletico",
+    "laudo", "laudos", "laudada", "laudado", "cid", "cid10",
+    "medicacao", "medicação", "medicado", "medicada", "medica", "medicamento",
+    "remedio", "remédio", "remedios", "remedios", "toma remedio", "toma remédio",
+    "comprimido", "ritalina", "concerta", "vyvanse", "quetiapina",
+    "diabetes", "diabetico", "diabética",
+    "asma", "asmatico", "asmatica",
+    "paralisia", "paralisia cerebral", "pc", "down", "sindrome de down", "síndrome de down",
+    "cadeirante", "deficiência", "deficiencia", "deficiente",
+    "dislexia", "dislexico", "dislexica", "discalculia", "tdah",
+    "hiperatividade", "hiperativo", "hiperativa",
+    "fonoaudiologo", "fonoaudióloga", "fonoaudiologia",
+    "fisioterapia", "fisioterapeuta",
+    "neuropediatra", "neurologista", "neuro",
+    "atendimento especializado", "sala de recursos"
+  ],
+  "saude_mental": [
+    "psicologo", "psicólogo", "psicóloga", "psicologia",
+    "psiquiatra", "psiquiatria",
+    "terapeuta", "terapia",
+    "ansiedade", "ansioso", "ansiosa",
+    "depressao", "depressão", "deprimido", "deprimida",
+    "transtorno", "transtornado", "transtornada",
+    "bipolar", "esquizofrenia", "esquizofrenico",
+    "acompanhamento psicologico", "acompanhamento psicológico",
+    "saude mental", "saúde mental",
+    "tentativa", "autolesao", "autolesão", "autoflagelacao",
+    "suicidio", "suicídio", "suicida",
+    "crise", "crise de ansiedade", "crise de panico", "crise de pânico",
+    "laudo psicologico", "laudo psicológico",
+    "avaliacao psicologica", "avaliação psicológica"
+  ],
+  "vulnerabilidade_socioeconomica": [
+    "bolsa familia", "bolsa família", "beneficio", "benefício", "cras", "creas",
+    "assistencia social", "assistência social", "assistente social",
+    "conselho tutelar", "conselho tutelar",
+    "situacao de rua", "situação de rua", "sem moradia", "desabrigado", "desabrigada",
+    "acolhimento", "abrigo", "lar substituto", "familia acolhedora", "família acolhedora",
+    "necessidade economica", "necessidade econômica", "carencia", "carência",
+    "fome", "desnutricao", "desnutrição", "desnutrido",
+    "violencia domestica", "violência doméstica",
+    "maus tratos", "maus-tratos", "negligencia", "negligência"
+  ],
+  "situacao_familiar": [
+    "adocao", "adoção", "adotado", "adotada", "adotivo", "adotiva",
+    "tutela", "tutelado", "tutelada",
+    "guarda", "guarda compartilhada", "responsável legal",
+    "pais separados", "pais divorciados", "familia desestruturada",
+    "orfao", "órfão", "orfa", "órfã",
+    "pai faleceu", "mae faleceu", "falecimento", "luto",
+    "situacao familiar", "situação familiar"
+  ],
+  "lgpd_amplo": [
+    "cpf", "rg", "rg do aluno", "cpf do aluno",
+    "endereco residencial", "endereço residencial", "endereco", "endereço",
+    "telefone residencial", "celular do responsavel", "celular do responsável",
+    "biometrico", "biométrico", "biometria",
+    "foto do aluno", "imagem do aluno",
+    "dados pessoais", "informacoes pessoais", "informações pessoais",
+    "prontuario", "prontuário"
+  ]
+}

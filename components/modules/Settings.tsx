@@ -25,6 +25,7 @@ import DatabaseStatusBadge from '@/components/DatabaseStatusBadge'
 import SharedDatabaseConsentModal from '@/components/SharedDatabaseConsentModal'
 import { isCustomSupabaseConfigured } from '@/lib/databaseConsent'
 import TeacherCalibrationsManager from '@/components/modules/TeacherCalibrationsManager'
+import TeacherMemoryManager from '@/components/modules/TeacherMemoryManager'
 import ConnectedPortalsPanel from '@/components/modules/ConnectedPortalsPanel'
 import PortalSkillsModule from '@/components/modules/PortalSkillsModule'
 import Button from '@/components/Button'
@@ -74,7 +75,7 @@ const STORAGE_KEYS = [
 ]
 
 export default function Settings() {
-  const [activeTab, setActiveTab] = useState<'general' | 'portals' | 'skills' | 'calibrations' | 'formatting' | 'audit' | 'privacy'>('general')
+  const [activeTab, setActiveTab] = useState<'general' | 'portals' | 'skills' | 'calibrations' | 'memory' | 'formatting' | 'audit' | 'privacy'>('general')
   const [cfg, setCfg] = useState<Config>({ school: '', teacher: '', apikey: '', instructions: '', cloudSyncUrl: '' })
   const [docPrefs, setDocPrefs] = useState<DocumentStylePrefs>(getGlobalDocumentPrefs())
   const [saved, setSaved] = useState(false)
@@ -347,6 +348,7 @@ export default function Settings() {
           { key: 'portals', label: '🏫 Portais Conectados', icon: 'ti-plug-connected' },
           { key: 'skills', label: '✨ Skills dos Portais', icon: 'ti-sparkles' },
           { key: 'calibrations', label: '🎛️ Calibrações & Padrões', icon: 'ti-adjustments-horizontal' },
+          { key: 'memory', label: '🧠 Cérebro & Memória', icon: 'ti-brain' },
           { key: 'formatting', label: '🎨 Formatação de Documentos', icon: 'ti-typography' },
           { key: 'audit', label: '🛡️ Auditoria de Ações', icon: 'ti-shield-check', badge: auditLogs.length },
           { key: 'privacy', label: '🔒 Privacidade, LGPD & Backup', icon: 'ti-lock' }
@@ -645,6 +647,11 @@ export default function Settings() {
       {/* -- ABA DE CALIBRAÇÕES E PADRÕES DOS MÓDULOS -- */}
       {activeTab === 'calibrations' && (
         <TeacherCalibrationsManager />
+      )}
+
+      {/* -- ABA DE CÉREBRO & MEMÓRIA DA ASSISTENTE (MEMORY ENGINE) -- */}
+      {activeTab === 'memory' && (
+        <TeacherMemoryManager />
       )}
 
       {/* -- ABA DE FORMATAÇÃO DE DOCUMENTOS (BLOCO E) -- */}

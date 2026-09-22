@@ -534,6 +534,31 @@ function executeMatchedSkill(skillGraph, taskName) {
       action: 'EXECUTE_SKILL_GRAPH',
       skillGraph: skillGraph || null
     }, async (resp) => {
+      const isOk = !chrome.runtime.lastError && Boolean(resp?.ok);
+      const status = resp?.status || (isOk ? 'COMPLETED' : 'FAILED');
+      const trace = resp?.trace || [];
+      const verifiedNode = trace.find(t => t.verified === true);
+      const isVerified = Boolean(isOk && verifiedNode);
+      const verificationMethod = verifiedNode?.verification_method || (isOk ? 'implicit_dom_success' : 'unverified_failure');
+      const errorDetails = resp?.error || chrome.runtime.lastError?.message || null;
+
+      // ── Persistência de Histórico Honesto (Item 1) ──
+      try {
+        fetch('http://localhost:3000/api/skills/log-execution', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            skill_id: skillGraph?.id || skillGraph?.task_id || taskName,
+            portal_id: skillGraph?.portal_id || 'machado_sobrinho',
+            task_name: skillGraph?.name || taskName,
+            status,
+            verified: isVerified,
+            verification_method: verificationMethod,
+            error_details: errorDetails
+          })
+        }).catch(err => console.warn('[LogExecution] Erro ao gravar:', err));
+      } catch (e) {}
+
       if (chrome.runtime.lastError || !resp?.ok) {
         if (interpretBox) {
           interpretBox.className = 'interpret-box teach';
@@ -827,11 +852,65 @@ if (btnRecordRoute) {
   });
 }
 
+async function syncTeacherMemory() {
+  try {
+    const res = await fetch('http://localhost:3000/api/agent/memory', { signal: AbortSignal.timeout(3000) });
+    if (res.ok) {
+      const data = await res.json();
+      if (data?.ok && data.data) {
+        localStorage.setItem('teacher_synced_profile', JSON.stringify(data.data));
+        console.log('[SidePanel] Perfil e memória curada sincronizados do Teacher AI:', data.data.teacherName);
+      }
+    }
+  } catch (e) {
+    // Silencioso se o servidor Next.js não estiver rodando
+  }
+}
+
+async function syncUpcomingTasks() {
+  try {
+    const res = await fetch('http://localhost:3000/api/agent/tasks?upcoming=true', { signal: AbortSignal.timeout(3000) });
+    if (res.ok) {
+      const data = await res.json();
+      if (data?.ok && Array.isArray(data.tasks) && data.tasks.length > 0) {
+        renderTasksBanner(data.tasks[0]);
+      } else {
+        hideTasksBanner();
+      }
+    }
+  } catch (e) {
+    // Silencioso se o servidor Next.js não estiver rodando
+  }
+}
+
+function renderTasksBanner(task) {
+  let banner = document.getElementById('ext-task-reminder-banner');
+  if (!banner) {
+    banner = document.createElement('div');
+    banner.id = 'ext-task-reminder-banner';
+    banner.style.cssText = 'background: #fef3c7; border: 1px solid #fde68a; border-radius: 8px; padding: 6px 10px; margin: 8px 12px; font-size: 11px; color: #92400e; display: flex; align-items: center; justify-content: space-between;';
+    const chatContainer = document.getElementById('chatContainer') || document.body;
+    chatContainer.insertBefore(banner, chatContainer.firstChild);
+  }
+  banner.innerHTML = `<div style="display:flex;align-items:center;gap:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+    <span style="font-size:12px;">⏰</span>
+    <span><strong>Lembrete:</strong> ${task.title}</span>
+  </div>`;
+  banner.style.display = 'flex';
+}
+
+function hideTasksBanner() {
+  const banner = document.getElementById('ext-task-reminder-banner');
+  if (banner) banner.style.display = 'none';
+}
+
 // ── Inicialização e Watchers ──────────────────────────────────────────────────
 function initSidePanel() {
   updatePortalConnection();
   loadActiveTurma();
   loadSavedSkills();
+  syncTeacherMemory();
+  syncUpcomingTasks();
   document.querySelectorAll('.platform-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       activePlatform = btn.dataset.platform;
@@ -1572,37 +1651,73 @@ function decomposeGoalJS(text) {
     ];
   }
 
-  // 1. Normaliza conectivos temporais para delimitador uniforme
-  let normalized = clean
-    .replace(/\s*(?:e\s+depois|pra\s+depois|para\s+depois|em\s+seguida|logo\s+em\s+seguida|e\s+ent[ãa]o|depois|logo\s+ap[óo]s|e\s+logo\s+ap[óo]s|a[íi])\s+/gi, ' || ')
-    .replace(/\s*;\s*/g, ' || ');
+  // Divisores de sequência: vírgula, ponto e vírgula, conectivos temporais ("e depois", "em seguida") ou "e" seguido de verbo
+  const stepSplitterRegex = /\s*(?:,\s*|\s*;\s*|\s+(?:e\s+depois|pra\s+depois|para\s+depois|em\s+seguida|logo\s+em\s+seguida|e\s+ent[ãa]o|ent[ãa]o|depois|a[íi])\s+|\s+e\s+(?=(?:selecionar|seleciona|selecione|escolher|escolha|escolhe|filtrar|filtra|filtre|marcar|marca|marque|lan[çc]ar|lanca|lance|lancar|colocar|coloca|coloque|botar|bota|bote|anotar|anota|anote|registrar|registra|registre|ver|olhar|olhe|buscar|busca|busque|procurar|procura|procure|mostrar|mostra|mostre|baixar|baixa|baixe|enviar|envia|envie|responder|responda|responde|escrever|escreve|escreva|preencher|preencha|preenche|abrir|abra|abre|acesse|acessa|acessar|navegue|navega|navegar|ir|vai|v[áa])\b))/i;
 
-  // 2. Separa por vírgula ou " e " quando preceder verbo de ação ou comando
-  const actionVerbs = '(?:selecionar|seleciona|selecione|escolher|escolha|escolhe|filtrar|filtra|filtre|marcar|marca|marque|lançar|lanca|lance|lancar|colocar|coloca|coloque|botar|bota|bote|anotar|anota|anote|registrar|registra|registre|ver|olhar|olhe|buscar|busca|busque|procurar|procura|procure|mostrar|mostra|mostre|baixar|baixa|baixe|enviar|envia|envie|responder|responda|responde|escrever|escreve|escreva|preencher|preencha|preenche|abrir|abra|abre|acessar|acesse|acessa|entrar|entre|entra|navegar|navegue|vai|v[áa]|ir|ler|liste|listar|perfil)';
-  normalized = normalized.replace(new RegExp(`,\\s*(?=${actionVerbs}\\b)`, 'gi'), ' || ');
-  normalized = normalized.replace(new RegExp(`\\s+e\\s+(?=${actionVerbs}\\b)`, 'gi'), ' || ');
-
-  // 4. Se ainda não separou mas tem vírgulas com orações completas (>= 2 palavras de cada lado)
-  if (!normalized.includes(' || ') && clean.includes(',')) {
-    const commaParts = clean.split(',').map(s => s.trim()).filter(Boolean);
-    if (commaParts.length > 1 && commaParts.every(p => p.split(/\s+/).length >= 2)) {
-      normalized = commaParts.join(' || ');
-    }
+  const rawSteps = clean.split(stepSplitterRegex).map(s => s.trim()).filter(Boolean);
+  if (rawSteps.length <= 1) {
+    return [clean];
   }
 
-  const rawSteps = normalized.split(' || ').map(s => s.trim()).filter(Boolean);
-  if (rawSteps.length === 0) return [clean];
-
-  const steps = rawSteps.map(step => {
+  return rawSteps.map(step => {
     return step
-      .replace(/^(?:e\s+|a[íi]\s+|ent[ãa]o\s+)+/i, '')
-      .replace(/\s+(?:no\s+site|no\s+portal|no\s+sistema|via\s+chat|no\s+app).*$/i, '')
+      .replace(/^(?:e\s+|depois\s+|em\s+seguida\s+|a[íi]\s+)/i, '')
       .trim();
   }).filter(Boolean);
-
-  return steps.length > 0 ? steps : [clean];
 }
 
+/**
+ * Normaliza texto removendo acentos (NFD), caixa alta e pontuação — usado nas comparações de navegação.
+ * BUG 1 FIX: garante que "frequencia" e "Frequência" produzem o mesmo token.
+ */
+function _normNav(str) {
+  return (str || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * BUG 2 FIX: Detecta se o texto contém uma ação primária sobre conteúdo além da navegação.
+ * Retorna o verbo+objeto da ação principal, ou null se for puramente navegação.
+ * Exemplos:
+ *   "responder Rodrigo na aba início" → "responder recado de Rodrigo"
+ *   "ir para frequência" → null (pura navegação)
+ *   "abrir diário e lançar nota do Hugo" → "lançar nota"
+ */
+function extractPrimaryAction(text) {
+  if (!text) return null;
+  const norm = _normNav(text);
+
+  // Verbos de ação sobre conteúdo do portal (não são puramente de navegação)
+  const ACTION_VERBS = [
+    { pattern: /\brespond[ea]r?\b/, label: 'responder' },
+    { pattern: /\benviar?\b/, label: 'enviar' },
+    { pattern: /\bescrever?\b/, label: 'escrever' },
+    { pattern: /\blan[cç]ar?\b/, label: 'lançar' },
+    { pattern: /\bmarcar?\b/, label: 'marcar' },
+    { pattern: /\bregistrar?\b/, label: 'registrar' },
+    { pattern: /\bpreencher?\b/, label: 'preencher' },
+    { pattern: /\banot(ar?)?\b/, label: 'anotar' },
+    { pattern: /\beditar?\b/, label: 'editar' },
+    { pattern: /\bexcluir?\b/, label: 'excluir' },
+    { pattern: /\bdeletar?\b/, label: 'deletar' },
+    { pattern: /\bsalvar?\b/, label: 'salvar' },
+    { pattern: /\bconfirmar?\b/, label: 'confirmar' },
+    { pattern: /\bsubmeter?\b/, label: 'submeter' },
+    { pattern: /\baprov(ar?)?\b/, label: 'aprovar' },
+  ];
+
+  for (const { pattern, label } of ACTION_VERBS) {
+    if (pattern.test(norm)) {
+      return label;
+    }
+  }
+  return null;
+}
+
+/**
+ * Analisa comandos compostos de navegação e extrai o destino inicial e a ação secundária/remanescente.
+ * Ex: "entra nos arquivos e depois seleciona a turma 6A"
+ *     -> { hasNavigation: true, navTarget: "arquivos", conjunction: "depois", remainingCommand: "seleciona a turma 6A", isCompound: true }
+ */
 function splitCompoundCommand(text) {
   if (!text || typeof text !== 'string') {
     return { hasNavigation: false, navTarget: null, conjunction: null, remainingCommand: null, isCompound: false };
@@ -1613,8 +1728,7 @@ function splitCompoundCommand(text) {
     .replace(/\b(?:no\s+site|no\s+portal|no\s+sistema|via\s+chat|no\s+app).*$/gi, '')
     .trim();
 
-  // Padrão Especial 1: "<ação/entidade> [de/do/da] <alvo> em/no/na <seção>"
-  // Ex: "acesse o perfil de alice almeida em meus alunos", "ver dados de joão em diário"
+  // Padrão Especial: "acesse o perfil de <aluno> em <secao>"
   const entitySectionRegex = /^(?:acesse|acessa|acessar|abra|abre|abrir|ver|veja|olhe|olhar|mostrar|mostre)?\s*(?:o|a)?\s*(?:perfil|dados|detalhes|ficha|cadastro|historico)\s+(?:de|do|da)\s+([a-zA-ZÀ-ÿ\s]+?)\s+(?:em|no|na|nos|nas)\s+([a-zA-ZÀ-ÿ0-9_\s-]+)$/i;
   const mEntitySection = clean.match(entitySectionRegex);
   if (mEntitySection) {
@@ -1634,7 +1748,6 @@ function splitCompoundCommand(text) {
   }
 
   // Padrão Especial 2: "<ação/entidade> [de/do/da] <alvo>" sem seção (ex: "acesse o perfil de alice almeida")
-  // NUNCA deve ser interpretado como nome de aba literal!
   const entityDirectRegex = /^(?:acesse|acessa|acessar|abra|abre|abrir|ver|veja|olhe|olhar|mostrar|mostre)?\s*(?:o|a)?\s*(?:perfil|dados|detalhes|ficha|cadastro|historico)\s+(?:de|do|da)\s+([a-zA-ZÀ-ÿ\s]+)$/i;
   const mEntityDirect = clean.match(entityDirectRegex);
   if (mEntityDirect && !/(?:turma|escola|professor|professora)/i.test(clean)) {
@@ -1655,7 +1768,6 @@ function splitCompoundCommand(text) {
 
   const prefixMatch = clean.match(navPrefixRegex);
   if (!prefixMatch) {
-    // Tenta padrão secundário: "aba/menu/seção/guia X"
     const m2 = clean.match(/^(?:aba|menu|se[çc][ãa]o|guia)\s+([a-zA-ZÀ-ÿ0-9_-]+(?:\s+[a-zA-ZÀ-ÿ0-9_-]+)?)/i);
     if (m2) {
       let target = m2[1].trim().replace(/^(?:de|do|da)\s+/i, '').trim();
@@ -1671,7 +1783,6 @@ function splitCompoundCommand(text) {
     return { hasNavigation: false, navTarget: null, conjunction: null, remainingCommand: null, isCompound: false };
   }
 
-  // O texto após o verbo/prefixo de navegação
   const afterPrefix = clean.substring(prefixMatch.index + prefixMatch[0].length).trim();
   if (!afterPrefix) {
     return { hasNavigation: false, navTarget: null, conjunction: null, remainingCommand: null, isCompound: false };
@@ -1703,7 +1814,6 @@ function splitCompoundCommand(text) {
     navTarget = afterPrefix.trim();
   }
 
-  // Limpa ruídos comuns no final do target preservando nomes compostos legítimos (diário de classe, plano de aula)
   navTarget = navTarget
     .replace(/^(?:a|o|os|as)\s+/i, '')
     .replace(/\s+(?:no\s+site|no\s+portal|do\s+portal|no\s+sistema|na\s+aba|via\s+chat|no\s+app).*$/i, '')
@@ -1723,9 +1833,41 @@ function splitCompoundCommand(text) {
 }
 
 function extractNavigationTarget(text) {
+  if (!text) return null;
   const compound = splitCompoundCommand(text);
   if (compound && compound.hasNavigation && compound.navTarget) {
     return compound.navTarget;
+  }
+
+  const normInput = _normNav(text);
+  let clean = normInput
+    .replace(/^(?:ola|oi|ei|rafinha|por\s+favor|pfv|ajuda|ajude)\s*[,:]?\s*/gi, '')
+    .replace(/\b(?:no\s+site|no\s+portal|no\s+sistema|via\s+chat|no\s+app).*$/gi, '')
+    .trim();
+
+  clean = clean.replace(/\s+\b(?:e|e\s+depois|depois|em\s+seguida|a[ií])\s+(?:enviar|mandar|mande|responder|responda|lan[çc]ar|lance|marcar|marque|colocar|coloque|escrever|escreva|digitar|digite|registrar|registre|anotar|anote|editar|excluir|deletar|salvar|confirmar|submeter|aprovar|baixar|baixe|abrir|abra|ver)\b.*$/i, '').trim();
+
+  const m = clean.match(/(?:entre|entra|entrar|vai|va|ir|navegue|navega|navegar|acesse|acessa|acessar|abra|abre|abrir|clique|clica|clicar|mostre|mostra)\s+(?:\b(?:em|no|na|nos|nas|para|pra|pro|pela|pelo)\b\s+)?(?:\b(?:a|o|os|as)\b\s+)?(?:\b(?:aba|menu|secao|guia|link|tela|pasta)\b\s+)?(?:\b(?:de|do|da|dos|das)\b\s+)?([a-zA-Z0-9_-]+(?:\s+[a-zA-Z0-9_-]+)?)/i);
+  if (m) {
+    let target = m[1].trim()
+      .replace(/^(?:a|o|os|as|de|do|da|dos|das)\s+/i, '')
+      .replace(/\s+(?:no|na|do|da|de|pra|para|no\s+site|no\s+portal|do\s+portal|na\s+aba|via\s+chat).*$/i, '')
+      .replace(/\s+\b(?:e|e\s+depois|depois|em\s+seguida|a[ií])\b.*$/i, '')
+      .replace(/\s+e$/i, '')
+      .trim();
+    if (target && !['aluno', 'nota', 'falta', 'a nota', 'uma nota', 'site', 'portal'].includes(target.toLowerCase())) {
+      return target;
+    }
+  }
+
+  const m2 = clean.match(/(?:aba|menu|secao|guia)\s+([a-zA-Z0-9_-]+)/i);
+  if (m2) {
+    let target = m2[1].trim()
+      .replace(/^(?:de|do|da)\s+/i, '')
+      .replace(/\s+\b(?:e|e\s+depois|depois|em\s+seguida|a[ií])\b.*$/i, '')
+      .replace(/\s+e$/i, '')
+      .trim();
+    if (target) return target;
   }
   return null;
 }
@@ -1807,7 +1949,63 @@ function scrollChatToBottom() {
   }
 }
 
-function appendUserChatMessage(text) {
+const EXT_CHAT_STORAGE_KEY = 'teacher_extension_chat_history_v1';
+const MAX_EXT_CHAT_MESSAGES = 30;
+
+function saveExtChatMessage(role, content, isHtml = false) {
+  try {
+    const history = JSON.parse(localStorage.getItem(EXT_CHAT_STORAGE_KEY) || '[]');
+    history.push({ role, content, isHtml, timestamp: new Date().toISOString() });
+    const trimmed = history.slice(-MAX_EXT_CHAT_MESSAGES);
+    localStorage.setItem(EXT_CHAT_STORAGE_KEY, JSON.stringify(trimmed));
+  } catch (e) {}
+}
+
+function restoreExtChatHistory() {
+  try {
+    const history = JSON.parse(localStorage.getItem(EXT_CHAT_STORAGE_KEY) || '[]');
+    if (!history || history.length === 0) return;
+    const container = document.getElementById('chat-history-container');
+    if (!container) return;
+
+    // Remove mensagem estática inicial antes de restaurar o histórico persistido
+    const welcome = document.getElementById('chat-welcome-msg');
+    if (welcome) welcome.remove();
+
+    history.forEach(m => {
+      const msgEl = document.createElement('div');
+      msgEl.className = `chat-msg ${m.role}`;
+      const avatar = m.role === 'user' ? '👩‍🏫' : '🦉';
+      msgEl.innerHTML = `
+        <div class="chat-avatar">${avatar}</div>
+        <div class="chat-bubble">${m.isHtml ? m.content : escapeHtml(m.content)}</div>
+      `;
+      container.appendChild(msgEl);
+    });
+    scrollChatToBottom();
+  } catch (e) {
+    console.warn('[SidePanel] Erro ao restaurar histórico de chat:', e);
+  }
+}
+
+function clearExtChatHistory() {
+  try {
+    localStorage.removeItem(EXT_CHAT_STORAGE_KEY);
+    const container = document.getElementById('chat-history-container');
+    if (container) {
+      container.innerHTML = `
+        <div class="chat-msg assistant" id="chat-welcome-msg">
+          <div class="chat-avatar">🦉</div>
+          <div class="chat-bubble">
+            Olá! Sou a <strong>Rafinha</strong>. Nova conversa iniciada! Em que posso te ajudar no portal hoje?
+          </div>
+        </div>
+      `;
+    }
+  } catch (e) {}
+}
+
+function appendUserChatMessage(text, persist = true) {
   const container = document.getElementById('chat-history-container');
   if (!container) return;
   const msgEl = document.createElement('div');
@@ -1818,10 +2016,11 @@ function appendUserChatMessage(text) {
   `;
   container.appendChild(msgEl);
   scrollChatToBottom();
+  if (persist) saveExtChatMessage('user', text, false);
   return msgEl;
 }
 
-function appendAssistantChatMessage(content, isHtml = false) {
+function appendAssistantChatMessage(content, isHtml = false, persist = true) {
   const container = document.getElementById('chat-history-container');
   if (!container) return;
   const msgEl = document.createElement('div');
@@ -1832,6 +2031,7 @@ function appendAssistantChatMessage(content, isHtml = false) {
   `;
   container.appendChild(msgEl);
   scrollChatToBottom();
+  if (persist) saveExtChatMessage('assistant', content, isHtml);
   return msgEl;
 }
 
@@ -2461,14 +2661,106 @@ async function handleProcessCommand(commandText) {
   const subGoals = decomposeGoalJS(textClean);
   const compound = splitCompoundCommand(textClean);
 
-  if (subGoals.length > 1 || (compound.hasNavigation && compound.navTarget)) {
+  if (subGoals.length > 1 || (compound.hasNavigation && compound.navTarget && compound.remainingCommand)) {
     const queueToRun = (subGoals.length > 1)
       ? subGoals
-      : (compound.remainingCommand ? [`abrir ${compound.navTarget}`, compound.remainingCommand] : [`abrir ${compound.navTarget}`]);
+      : [`abrir ${compound.navTarget}`, compound.remainingCommand];
 
     executeGoalQueue(queueToRun, 0, {});
     return;
   }
+
+  // Caso especial: Navegação para abas ou seções ("entre nos arquivos", "entre na aba arquivos", "ir para diário", etc.)
+  // BUG 2 & REQ 5: detectar comando composto (navegar + agir). Navega até a aba e tenta resolver a ação via Discovery!
+  const navTarget = extractNavigationTarget(textClean);
+  if (navTarget) {
+    const primaryAction = extractPrimaryAction(textClean); // null = navegação pura; string = ação composta
+    setProcessingState(true, `Acessando ${navTarget} no portal...`);
+    dispatchPortalBridgeMessage({ action: 'NAVIGATE_PORTAL_TAB', target: navTarget }, async (resp) => {
+      setProcessingState(false);
+      if (resp && resp.sucesso) {
+        const foundLabel = resp.elementText || navTarget;
+        if (primaryAction) {
+          // Comando composto: informa que navegou e agora tenta executar a ação associada
+          appendAssistantChatMessage(`Entrei na aba **${escapeHtml(foundLabel)}**! Analisando como executar **${escapeHtml(primaryAction)}**... 🔎`, true);
+          setProcessingState(true, `Executando ${primaryAction} no portal...`);
+
+          try {
+            const res = await fetch('http://localhost:8765/natural_intent', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                text: textClean,
+                parse_only: false,
+                history: []
+              })
+            });
+
+            if (res.ok) {
+              const data = await res.json();
+              setProcessingState(false);
+
+              // Caso 1: Pergunta de esclarecimento (ex: faltou o texto da resposta do recado)
+              if (data.needs_clarification && data.mensagem) {
+                showHonestErrorCard('Preciso de uma informação', data.mensagem);
+                return;
+              }
+
+              // Caso 2: Falha na descoberta -> aciona o modo honesto de apontar/clicar
+              if (data.status === 'point_and_click_required' || data.action_required === 'point_and_click') {
+                showClarificationPointClickCard(
+                  data.mensagem || `Não encontrei onde ${primaryAction} nesta tela. Você pode me mostrar onde fica o elemento correto?`
+                );
+                return;
+              }
+
+              // Caso 3: Descoberta bem-sucedida com aprovação necessária (PortalApprovalCard)
+              if (data.card && (data.sucesso || data.needs_approval)) {
+                const c = data.card;
+                const diffItem = (c.diff && c.diff[0]) || {};
+                const studentName = diffItem.studentName || data.intent?.aluno || 'Item';
+                const fieldName = diffItem.field || primaryAction;
+                showApprovalPreviewCardDirect({
+                  studentName,
+                  actionDesc: `${fieldName} • ${c.portal || 'Portal Oficial'}`,
+                  beforeVal: diffItem.beforeValue || '—',
+                  afterVal: diffItem.afterValue || 'OK',
+                  actionType: c.actionType || primaryAction,
+                  taskId: c.taskId
+                });
+                return;
+              }
+
+              // Caso 4: Resposta conversacional / instrução sem falso positivo
+              if (data.mensagem) {
+                appendAssistantChatMessage(data.mensagem, true);
+                return;
+              }
+            }
+          } catch (err) {
+            console.warn('[SidePanel] Falha ao acionar discovery pós-navegação:', err);
+          }
+
+          setProcessingState(false);
+          // Fallback honesto: reporta o que fez e pede ajuda para o elemento
+          appendAssistantChatMessage(
+            `Naveguei até a aba **${escapeHtml(foundLabel)}**, mas não consegui executar a ação de **${escapeHtml(primaryAction)}** automaticamente nesta tela. Você pode me mostrar onde fica o elemento correto para eu aprender? 🔍`,
+            true
+          );
+          showClarificationPointClickCard(
+            `Não encontrei onde executar ${primaryAction} nesta tela. Você pode me mostrar clicando no lugar certo?`
+          );
+        } else {
+          // Navegação pura: "Prontinho!" é legítimo
+          appendAssistantChatMessage(`Prontinho! Entrei na aba **${escapeHtml(foundLabel)}** no portal para você. 📂✨`, true);
+        }
+      } else {
+        appendAssistantChatMessage(`Procurei pela aba ou seção **${escapeHtml(navTarget)}** no portal, mas não encontrei nenhum botão ou menu correspondente nesta tela. Você pode navegar manualmente até lá ou me mostrar onde fica? 🔍`, true);
+      }
+    });
+    return;
+  }
+
 
   const intent = await parseNaturalIntent(textClean);
 
@@ -2569,8 +2861,19 @@ async function handleProcessCommand(commandText) {
         console.log('[SidePanel] Resposta do backend:', data);
         setProcessingState(false);
 
-        // Caso A: Pergunta de esclarecimento sobre parâmetros (ex: faltou nome do aluno)
+
+
+        // Caso A: Pergunta de esclarecimento sobre parâmetros (ex: faltou texto da resposta)
         if (data.needs_clarification && data.mensagem) {
+          const navDest = data.intent?.destino_navegacao || data.intent?.destino || data.destino;
+          if (navDest) {
+            dispatchPortalBridgeMessage({ action: 'NAVIGATE_PORTAL_TAB', target: navDest }, (navResp) => {
+              setProcessingState(false);
+              const tabLabel = (navResp && navResp.sucesso && navResp.elementText) ? navResp.elementText : navDest;
+              appendAssistantChatMessage(`Naveguei até a aba **${escapeHtml(tabLabel)}**! ${escapeHtml(data.mensagem)}`, true);
+            });
+            return;
+          }
           showHonestErrorCard('Preciso de uma informação', data.mensagem);
           return;
         }
@@ -2584,18 +2887,22 @@ async function handleProcessCommand(commandText) {
         }
 
         // Caso Navegação: Backend retornou intenção de navegar para aba/seção
+        // BUG 2 FIX: se o texto original continha uma ação primária (ex: responder), reportar sucesso PARCIAL
         if (data.acao === 'navegar_aba' || data.action_required === 'navigate_tab') {
           const target = data.destino || 'Arquivos';
           const remaining = data.remaining_command || data.segunda_instrucao || null;
+          const primaryActionFromText = extractPrimaryAction(textClean);
+          const nextAction = remaining || primaryActionFromText;
+
           dispatchPortalBridgeMessage({ action: 'NAVIGATE_PORTAL_TAB', target }, (navResp) => {
             if (navResp && navResp.sucesso) {
               const foundLabel = navResp.elementText || target;
-              if (remaining) {
-                appendAssistantChatMessage(`Prontinho! Entrei na aba **${escapeHtml(foundLabel)}** no portal. Agora estou procurando **${escapeHtml(remaining)}**... 📂🔍`, true);
-                setProcessingState(true, `Executando: ${remaining}...`);
-                const isSelection = /^(?:selecionar|seleciona|selecione|escolher|escolha|escolhe|filtrar|filtra|filtre|marcar|marca|marque)\s+/i.test(remaining);
+              if (nextAction) {
+                appendAssistantChatMessage(`Prontinho! Entrei na aba **${escapeHtml(foundLabel)}** no portal. Agora estou procurando **${escapeHtml(nextAction)}**... 📂🔍`, true);
+                setProcessingState(true, `Executando: ${nextAction}...`);
+                const isSelection = /^(?:selecionar|seleciona|selecione|escolher|escolha|escolhe|filtrar|filtra|filtre|marcar|marca|marque)\s+/i.test(nextAction);
                 if (isSelection) {
-                  const filterTerm = remaining.replace(/^(?:selecionar|seleciona|selecione|escolher|escolha|escolhe|filtrar|filtra|filtre|marcar|marca|marque)\s+(?:por\s+|a\s+|o\s+|pelo\s+|pela\s+|turma\s+|ano\s+)?/i, '').trim();
+                  const filterTerm = nextAction.replace(/^(?:selecionar|seleciona|selecione|escolher|escolha|escolhe|filtrar|filtra|filtre|marcar|marca|marque)\s+(?:por\s+|a\s+|o\s+|pelo\s+|pela\s+|turma\s+|ano\s+)?/i, '').trim();
                   dispatchPortalBridgeMessage({ action: 'DISCOVERY_SELECT_FILTER', filterTerm }, (selResp) => {
                     setProcessingState(false);
                     if (selResp && selResp.sucesso) {
@@ -2607,18 +2914,19 @@ async function handleProcessCommand(commandText) {
                   });
                   return;
                 }
-                setTimeout(() => executeSubsequentCommand(remaining, foundLabel), 500);
+                setTimeout(() => executeSubsequentCommand(nextAction, foundLabel), 500);
                 return;
               }
               setProcessingState(false);
               appendAssistantChatMessage(`Prontinho! Entrei na aba **${escapeHtml(foundLabel)}** no portal para você. 📂✨`, true);
             } else {
               setProcessingState(false);
-              appendAssistantChatMessage(data.mensagem || `Naveguei até **${escapeHtml(target)}** no portal escolar.`, true);
+              appendAssistantChatMessage(data.mensagem || `Procurei pela aba **${escapeHtml(target)}** no portal, mas não encontrei o menu correspondente nesta tela. 🔍`, true);
             }
           });
           return;
         }
+
 
         // Caso C: Descoberta bem-sucedida ou ação já mapeada -> Exibe PortalApprovalCard diretamente!
         if (data.card && (data.sucesso || data.needs_approval)) {
@@ -2640,12 +2948,25 @@ async function handleProcessCommand(commandText) {
           return;
         }
 
-        // Caso D: Operação concluída diretamente com sucesso
-        if (data.sucesso) {
-          showSuccessCard(data.aluno || 'Aluno', '', data.valor || 'OK');
-          const activeTurmaEl = document.getElementById('active-class-name');
-          const currentTurma = (activeTurmaEl && activeTurmaEl.textContent !== '—') ? activeTurmaEl.textContent : 'Turma 9A';
-          trackActionUsage(intent.acao || 'lancar_nota', currentTurma, textClean);
+        // Caso D: Intenção executável confirmada -> Exibe card de aprovação para conferência da professora antes de gravar
+        if (data.sucesso && intent && intent.aluno) {
+          const studentName = data.aluno || intent.aluno;
+          const isFalta = (intent.acao === 'lancar_falta');
+          const targetVal = String(data.valor || intent.nota || intent.faltas || (isFalta ? '1' : '8.5'));
+          showApprovalPreviewCardDirect({
+            studentName,
+            actionDesc: `${isFalta ? 'Falta' : 'Nota'} • Portal Oficial`,
+            beforeVal: '—',
+            afterVal: targetVal,
+            actionType: intent.acao || 'lancar_nota',
+            taskId: data.taskId || ('chk_' + Math.random().toString(36).substring(2, 9))
+          });
+          return;
+        }
+
+        // Caso E: Resposta explicativa do backend
+        if (data.mensagem) {
+          appendAssistantChatMessage(data.mensagem, true);
           return;
         }
       }
@@ -3346,6 +3667,16 @@ async function executeGoalQueue(subGoals, index = 0, context = {}) {
 
 // Inicialização dos Listeners de Interface
 document.addEventListener('DOMContentLoaded', () => {
+  // Restaura histórico de conversas anteriores
+  restoreExtChatHistory();
+
+  const btnClearChat = document.getElementById('btn-clear-ext-chat');
+  if (btnClearChat) {
+    btnClearChat.addEventListener('click', () => {
+      clearExtChatHistory();
+    });
+  }
+
   const btnVoice = document.getElementById('btn-voice-input');
   const inputCommand = document.getElementById('input-agent-command');
   const btnSend = document.getElementById('btn-send-agent-command');

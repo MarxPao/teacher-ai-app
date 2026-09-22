@@ -433,6 +433,7 @@ async def execute_task_intent(intent: Dict[str, Any]) -> Dict[str, Any]:
                 "sucesso": False,
                 "status": "discovery_failed",
                 "acao": acao,
+                "objeto_alvo": intent.get("objeto_alvo"),
                 "aluno": aluno,
                 "portal": domain,
                 "mensagem": f"Não encontrei onde executar {intent.get('objeto_alvo') or acao} nesta tela.",
@@ -862,11 +863,14 @@ class ManualServerHandler(BaseHTTPRequestHandler):
             groq_key = payload.get("groq_key")
             gemini_key = payload.get("gemini_key")
             parse_only = payload.get("parse_only", False)
+            known_students = payload.get("known_students") or payload.get("students") or []
+            if isinstance(known_students, list) and known_students and isinstance(known_students[0], dict):
+                known_students = [s.get("name") or s.get("nome") for s in known_students if s.get("name") or s.get("nome")]
 
-            print(f"\n[ManualServer] Recebida instrucao natural: '{user_text}' (parse_only={parse_only})")
+            print(f"\n[ManualServer] Recebida instrucao natural: '{user_text}' (parse_only={parse_only}, known_students={len(known_students)})")
             from intent_parser import dispatch_and_execute_task, extract_intent
             if parse_only:
-                intent = extract_intent(user_text, history, groq_key, gemini_key)
+                intent = extract_intent(user_text, history, groq_key, gemini_key, known_students=known_students)
                 result = {
                     "ok": True,
                     "sucesso": True,
@@ -874,7 +878,7 @@ class ManualServerHandler(BaseHTTPRequestHandler):
                     "intent": intent
                 }
             else:
-                result = asyncio.run(dispatch_and_execute_task(user_text, history, groq_key, gemini_key))
+                result = asyncio.run(dispatch_and_execute_task(user_text, history, groq_key, gemini_key, known_students=known_students))
 
             self.send_response(200)
             self.send_header("Content-Type", "application/json; charset=utf-8")

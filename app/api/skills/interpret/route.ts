@@ -196,8 +196,10 @@ Responda ESTRITAMENTE em formato JSON com esses campos.`
 
     // Validação determinística de comando composto (ex: menção ao Teams + portal)
     const mentionsTeams = /teams|microsoft teams/i.test(commandText)
-    const isWritingOrMutation = /lan[çc]ar|digitar|inserir|preencher|escrever|alterar|atribuir|cadastrar/i.test(commandText)
-    const mentionsRead = !isWritingOrMutation && (/ler|consultar|ver|mostrar|pegar|buscar|listar/i.test(commandText) || (/notas?|boletim|alunos?|chamada|faltas?/i.test(commandText) && !isWritingOrMutation && !/lan[çc]ar/i.test(commandText)))
+    const isExplicitRead = /\b(ler|consulte|consultar|ver|visualizar|listar|extrair)\b/i.test(commandText)
+    const isExplicitWrite = /\b(lan[çc]ar|gravar|inserir|salvar|alterar|preencher|digitar|escrever|atribuir|cadastrar)\b/i.test(commandText)
+    const mentionsRosterTopics = /notas?|boletim|alunos?|chamada|faltas?/i.test(commandText)
+    const mentionsRead = !isExplicitWrite && (isExplicitRead || mentionsRosterTopics || /ler lista|leitura/i.test(commandText))
 
     if (!llmResponseJson) {
       if (mentionsTeams && mentionsRead) {

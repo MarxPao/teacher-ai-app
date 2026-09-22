@@ -22,8 +22,10 @@ import { captureImageFile, extractContentFromImage } from '@/lib/ocrCapture'
 import { exportToPdf } from '@/lib/exportUtils'
 import { recordStudentGrade, addObservation, getStudentMemory } from '@/lib/studentMemory'
 import { getSubjectProfile, SubjectProfile } from '@/lib/subjectProfile'
+import { recordApprovedCorrection } from '@/lib/curatedMemory'
 import { getAnchorExemplarsPrompt } from '@/lib/rubrics/anchorExemplars'
 import { screenEssayStylometrics, StylometricAdvisory } from '@/lib/stylometricScreening'
+import { ingestOmniGraderEvaluation } from '@/lib/studentDossier'
 import ModelCapabilityBanner from '@/components/ModelCapabilityBanner'
 import '@/lib/subjects/english'
 import '@/lib/subjects/portuguese'
@@ -143,6 +145,7 @@ export default function OmniGrader({ initialTab = 'photo' }: OmniGraderProps) {
   const [isEvaluatingEssay, setIsEvaluatingEssay] = useState(false)
   const [essayEvaluation, setEssayEvaluation] = useState<CambridgeEssayEvaluation | null>(null)
   const [launchedEssay, setLaunchedEssay] = useState(false)
+  const [isFewShotSaved, setIsFewShotSaved] = useState(false)
 
   // State: Aba 3 (Lote OMR & Psicotracking BKT/DINA/DIF)
   const [batchOmrResult, setBatchOmrResult] = useState<OMRPsychometricsBatchResult | null>(null)
@@ -870,10 +873,40 @@ Retorne ESTRITAMENTE um objeto JSON no seguinte formato (sem markdown, sem bloco
           undefined,
           'teacher'
         )
+      // Ingestão contínua no Dossiê Longitudinal do Aluno (Memory Engine Fase 2)
+      if (updated[idx]?.name) {
+        try {
+          ingestOmniGraderEvaluation({
+            studentName: updated[idx].name,
+            score: essayEvaluation.overallScore,
+            feedback: essayEvaluation.overallSummary || essayEvaluation.studentActionPlan,
+            topic: textGenre || (isPortuguese ? 'Redação Português' : 'English Essay'),
+            strengths: essayEvaluation.rubricFeedback?.filter(r => (r.score || 0) >= 8).map(r => r.criterionName) || [],
+            difficulties: essayEvaluation.rubricFeedback?.filter(r => (r.score || 0) < 6).map(r => r.criterionName) || []
+          })
+        } catch (err) {
+          console.warn('[OmniGrader] Falha ao atualizar dossiê do aluno:', err)
+        }
       }
 
       window.dispatchEvent(new Event('storage'))
       toast.success(`Nota ${essayEvaluation.overallScore}/10 lançada com sucesso no Gradebook de ${updated[idx].name}!`)
+    }
+  }
+
+  function handleSaveAsFewShotExample() {
+    if (!essayEvaluation || !studentEssayText) return
+    try {
+      recordApprovedCorrection({
+        studentWorkExcerpt: studentEssayText.slice(0, 280),
+        correctionFeedback: essayEvaluation.overallSummary || essayEvaluation.studentActionPlan || 'Feedback validado pela professora.',
+        scoreGiven: essayEvaluation.overallScore,
+        category: textGenre || (isPortuguese ? 'Redação PT' : 'Cambridge Essay')
+      })
+      setIsFewShotSaved(true)
+      toast.success('⭐ Exemplo salvo com sucesso! A Rafinha aprendeu este padrão de correção como exemplar Few-Shot.')
+    } catch (e: any) {
+      toast.error(`Erro ao salvar exemplo: ${e.message || 'Tente novamente'}`)
     }
   }
 
@@ -1186,7 +1219,16 @@ ${essayEvaluation.studentActionPlan}
                     </div>
                   </div>
 
-                  <div style={{ display: 'flex', gap: 8 }}>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={handleSaveAsFewShotExample}
+                      disabled={isFewShotSaved}
+                      icon={<i className={isFewShotSaved ? 'ti ti-check' : 'ti ti-sparkles'} style={{ color: '#d97706' }} />}
+                    >
+                      {isFewShotSaved ? 'Estilo Salvo!' : '⭐ Ensinar à IA'}
+                    </Button>
                     <Button
                       variant="secondary"
                       size="sm"

@@ -256,17 +256,47 @@ class DiscoveryOrchestrator:
             })
 
             local_res = await self._execute_local_graph(existing_graph, parametros, depth=depth)
-            elapsed = time.time() - start_time
-            print(f"[Orchestrator] ✅ Motor Local concluído em {elapsed:.2f}s (Custo: $0.00).")
-            return {
-                "success": local_res.get("success", True),
-                "engine_used": "local_motor",
-                "skill_graph": existing_graph,
-                "trace": local_res.get("trace", []),
-                "execution_time": elapsed,
-                "estimated_cost": 0.0,
-                "error": local_res.get("error")
-            }
+            if local_res.get("success", True):
+                elapsed = time.time() - start_time
+                print(f"[Orchestrator] ✅ Motor Local concluído em {elapsed:.2f}s (Custo: $0.00).")
+                return {
+                    "success": True,
+                    "engine_used": "local_motor",
+                    "skill_graph": existing_graph,
+                    "trace": local_res.get("trace", []),
+                    "execution_time": elapsed,
+                    "estimated_cost": 0.0,
+                    "error": None
+                }
+            else:
+                err_msg = str(local_res.get("error") or "")
+                is_drift_error = any(kw in err_msg.lower() for kw in [
+                    "não encontrado", "nao encontrado", "seletor", "selector", 
+                    "elemento", "drift", "not found", "não clicável", "nao clicavel"
+                ])
+                if is_drift_error and depth == 0:
+                    print(f"[Orchestrator] 🚨 Falha no Motor Local por drift de seletor para '{portal_id}/{acao}': {err_msg}.")
+                    print(f"[Orchestrator] 🔄 Registrando drift no MapStore e escalando para Camada 2 (Browser-use Self-Healing)...")
+                    self.map_store.mark_drift(domain, acao, details={"error": err_msg, "source": "local_graph_failure"})
+                    is_drifted = True
+                    self._notify_progress(on_progress, {
+                        "engine": "browser_use",
+                        "status": "healing",
+                        "message": f"Drift detectado no portal ({err_msg}). Auto-recuperando via Browser-use...",
+                        "cost_usd": 0.0005
+                    })
+                else:
+                    print(f"[Orchestrator] 🛑 Falha terminal no Motor Local ({err_msg or 'rejeitado por política/recursão'}). Abortando sem escalar.")
+                    return {
+                        "success": False,
+                        "engine_used": "local_motor",
+                        "skill_graph": existing_graph,
+                        "trace": local_res.get("trace", []),
+                        "execution_time": time.time() - start_time,
+                        "estimated_cost": 0.0,
+                        "error": err_msg or "Falha na execução do grafo local"
+                    }
+
 
         # ------------------------------------------------------------------
         # CAMADA 2: Descoberta Leve via Browser-use (DOM / Acessibilidade)

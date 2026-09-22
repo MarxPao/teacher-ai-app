@@ -24,6 +24,7 @@ export interface PortalSkillRecord {
 
 export default function PortalSkillsModule() {
   const [skills, setSkills] = useState<PortalSkillRecord[]>([])
+  const [executionsMap, setExecutionsMap] = useState<Record<string, any>>({})
   const [loading, setLoading] = useState(true)
   const [source, setSource] = useState<'supabase' | 'local_disk'>('supabase')
   const [selectedPortal, setSelectedPortal] = useState<string>('all')
@@ -34,11 +35,29 @@ export default function PortalSkillsModule() {
   const fetchSkills = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch('/api/skills')
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const data = await res.json()
+      const [skillsRes, logsRes] = await Promise.all([
+        fetch('/api/skills'),
+        fetch('/api/skills/log-execution?limit=100').catch(() => null),
+      ])
+
+      if (!skillsRes.ok) throw new Error(`HTTP ${skillsRes.status}`)
+      const data = await skillsRes.json()
       setSkills(data.skills || [])
       if (data.source) setSource(data.source)
+
+      if (logsRes && logsRes.ok) {
+        const logsData = await logsRes.json()
+        const map: Record<string, any> = {}
+        for (const log of (logsData.logs || [])) {
+          if (log.skill_id && !map[log.skill_id]) {
+            map[log.skill_id] = log
+          }
+          if (log.task_name && !map[log.task_name]) {
+            map[log.task_name] = log
+          }
+        }
+        setExecutionsMap(map)
+      }
     } catch (err: any) {
       console.error('Erro ao buscar skills:', err)
       toast.error('Não foi possível carregar as skills dos portais.')
@@ -258,6 +277,16 @@ export default function PortalSkillsModule() {
             const nodeCount = skill.graph?.nodes ? Object.keys(skill.graph.nodes).length : 0
             const hasCheckpoint = skill.graph?.nodes && Object.values(skill.graph.nodes).some((n: any) => n.type === 'CHECKPOINT')
 
+            const latestExec = executionsMap[skill.id] || executionsMap[skill.task_id] || executionsMap[skill.task_name]
+            let honestBadge = { label: 'Nunca executada', bg: '#f5f5f4', color: '#78716c', border: '#d6d3d1', icon: 'ti-minus' }
+            if (latestExec) {
+              if (latestExec.status === 'COMPLETED' && latestExec.verified) {
+                honestBadge = { label: 'Comprovada', bg: '#f0fdf4', color: '#16a34a', border: '#bbf7d0', icon: 'ti-shield-check' }
+              } else {
+                honestBadge = { label: 'Falhando', bg: '#fef2f2', color: '#dc2626', border: '#fecaca', icon: 'ti-alert-triangle' }
+              }
+            }
+
             return (
               <div
                 key={skill.id}
@@ -275,6 +304,23 @@ export default function PortalSkillsModule() {
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                       <span style={{ fontSize: 15, fontWeight: 700, color: '#0f172a' }}>
                         {skill.task_name}
+                      </span>
+                      {/* Badge de Honestidade de Execução (Item 4) */}
+                      <span
+                        style={{
+                          fontSize: 10,
+                          fontWeight: 800,
+                          padding: '2px 8px',
+                          borderRadius: RADIUS.full,
+                          background: honestBadge.bg,
+                          color: honestBadge.color,
+                          border: `1px solid ${honestBadge.border}`,
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 4,
+                        }}
+                      >
+                        <i className={`ti ${honestBadge.icon}`} /> {honestBadge.label}
                       </span>
                       <span
                         style={{

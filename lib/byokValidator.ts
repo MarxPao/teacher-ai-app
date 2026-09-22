@@ -87,12 +87,27 @@ export async function validateProviderApiKey(provider: string, rawKey: string): 
     }
 
     if (res.status === 401 || res.status === 403 || res.status === 400) {
+      let detailMsg = ''
+      try {
+        const errJson = await res.json()
+        if (errJson?.detail?.message) {
+          detailMsg = ` (${errJson.detail.message})`
+        } else if (errJson?.error?.message) {
+          detailMsg = ` (${errJson.error.message})`
+        }
+      } catch {}
+
+      let customMsg = `Chave inválida ou não autorizada para ${prov.toUpperCase()} (HTTP ${res.status}).${detailMsg} Verifique o token digitado.`
+      if (detailMsg.toLowerCase().includes('missing the permission')) {
+        customMsg = `Chave do ELEVENLABS reconhecida, porém faltam permissões${detailMsg}. No painel da ElevenLabs, crie a chave marcando "Full Access" ou inclua a permissão "user_read".`
+      }
+
       return {
         ok: false,
         provider: prov,
         latencyMs,
         errorType: 'invalid_key',
-        message: `Chave inválida ou não autorizada para ${prov.toUpperCase()} (HTTP ${res.status}). Verifique o token digitado.`
+        message: customMsg
       }
     }
 

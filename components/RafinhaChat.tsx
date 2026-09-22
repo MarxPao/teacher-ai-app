@@ -24,6 +24,22 @@ import RosterReconciliationModal from '@/components/modules/RosterReconciliation
 import { PortalApprovalCard } from '@/components/PortalApprovalCard'
 import { toast } from '@/components/Toast'
 import { maskPii, unmaskPii, MaskingSession } from '@/lib/piiMasking'
+import {
+  getChatHistory,
+  saveChatMessage,
+  createNewChatSession,
+  clearCurrentSession,
+  DEFAULT_WELCOME_MESSAGE
+} from '@/lib/chatMemory'
+import { buildCuratedSystemPromptContext, getCuratedTeacherProfile } from '@/lib/curatedMemory'
+import {
+  getUpcomingTasks,
+  extractTaskCommitment,
+  createAgentTask,
+  AgentTask
+} from '@/lib/taskMemory'
+import { buildStudentDossierContext } from '@/lib/studentDossier'
+import { retrieveRelevantMemories, MemoryNode } from '@/lib/hybridRetriever'
 import '@/lib/subjects/english'
 import '@/lib/subjects/portuguese'
 
@@ -69,6 +85,7 @@ const TOOL_LABELS: Record<string, string> = {
   query_library:                  ' Consultando biblioteca RAG',
   search_web:                     ' Pesquisando na internet',
   remember_fact:                  ' Gravando aprendizado',
+  salvar_memoria:                 ' Gravando memória',
   add_qbank_question:             ' Salvando no QBank',
   create_mindmap:                 ' Gerando mapa mental',
   create_document:                ' Abrindo no Editor',
@@ -98,6 +115,7 @@ const TOOL_EST_SECONDS: Record<string, number> = {
   speak_response:                 1,
   update_student_metric:          2,
   record_student_observation:     2,
+  salvar_memoria:                 1,
   create_class:                   2,
   create_student:                 2,
   query_library:                  3,
@@ -156,8 +174,8 @@ function undoLastAction(): boolean {
  return true
 }
 
-// App context (enriquecido com memória de alunos) 
-function getAppContext(): string {
+// App context (enriquecido com memória de alunos, dossiês e busca híbrida) 
+function getAppContext(userQuery?: string): string {
   try {
     const students = JSON.parse(localStorage.getItem('teacher_students') || '[]')
     const classes = JSON.parse(localStorage.getItem('teacher_classes') || '[]')
@@ -181,10 +199,42 @@ function getAppContext(): string {
 
     let longTermCtx = ''
     try {
-      longTermCtx = buildLongTermMemoryContext()
-    } catch {}
+      longTermCtx = buildCuratedSystemPromptContext()
+    } catch {
+      try { longTermCtx = buildLongTermMemoryContext() } catch {}
+    }
 
-    return base + buildMemoryContext() + longTermCtx
+    // Dossiê do aluno em foco se mencionado na mensagem
+    let focusedDossierCtx = ''
+    let hybridRagSnippet = ''
+
+    if (userQuery) {
+      for (const s of students) {
+        if (s.name && userQuery.toLowerCase().includes(s.name.toLowerCase())) {
+          const dossier = buildStudentDossierContext(s.name)
+          if (dossier) {
+            focusedDossierCtx = `\n${dossier}`
+            break
+          }
+        }
+      }
+
+      try {
+        const profile = getCuratedTeacherProfile()
+        const nodes: MemoryNode[] = (profile.learnedFacts || []).map(f => ({
+          id: f.id,
+          text: f.fact,
+          category: f.category,
+          importanceScore: f.confidence || 0.8
+        }))
+        const rag = retrieveRelevantMemories(userQuery, nodes, undefined, { topK: 3 })
+        if (rag.triggered && rag.contextSnippet) {
+          hybridRagSnippet = `\n${rag.contextSnippet}`
+        }
+      } catch {}
+    }
+
+    return base + buildMemoryContext() + longTermCtx + focusedDossierCtx + hybridRagSnippet
   } catch { return 'Dados indisponíveis' }
 }
 
@@ -817,11 +867,43 @@ export async function executeTool(
  return `Encontrados ${webResults.length} resultados na internet para "${input.query}":\n` +
  webResults.map(r => ` **${r.title}**: ${r.snippet}`).join('\n\n')
  }
- case 'remember_fact': {
- const { saveLearnedFact } = await import('@/lib/longTermMemory')
- saveLearnedFact(input.fact as string, (input.category as any) || 'teacher_preference', 'rafinha_tool')
- return `Fato gravado na memória de longo prazo: "${input.fact}"`
- }
+  case 'salvar_memoria': {
+    const { resolveSemanticCandidate } = await import('@/lib/semanticConflictResolver')
+    const result = resolveSemanticCandidate({
+      category: (input.categoria as any) || (input.category as any) || 'teacher_preference',
+      factText: String(input.conteudo || input.factText || input.fact || '').trim(),
+      importanceScore: typeof input.importancia === 'number' ? input.importancia : typeof input.importanceScore === 'number' ? input.importanceScore : 0.85,
+      scope: (input.escopo as any) || (input.scope as any) || 'private',
+      schoolId: (input.escola_id as string) || (input.schoolId as string),
+      source: 'rafinha_tool'
+    })
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('storage'))
+      window.dispatchEvent(new CustomEvent('teacher:memory_changed', { detail: result }))
+    }
+    if (result.action === 'CONTRADICTION' && result.clarificationPrompt) {
+      return result.clarificationPrompt
+    }
+    return result.details
+  }
+  case 'remember_fact': {
+    const { resolveSemanticCandidate } = await import('@/lib/semanticConflictResolver')
+    const result = resolveSemanticCandidate({
+      category: (input.category as any) || (input.categoria as any) || 'teacher_preference',
+      factText: String(input.fact || input.conteudo || '').trim(),
+      importanceScore: 0.85,
+      scope: 'private',
+      source: 'rafinha_tool'
+    })
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('storage'))
+      window.dispatchEvent(new CustomEvent('teacher:memory_changed', { detail: result }))
+    }
+    if (result.action === 'CONTRADICTION' && result.clarificationPrompt) {
+      return result.clarificationPrompt
+    }
+    return `Fato gravado na memória de longo prazo: "${input.fact || input.conteudo}"`
+  }
  case 'manage_didactic_sequence': {
  takeSnapshot()
  const rawUnits = localStorage.getItem('teacher_didactic_sequence_units_v3') || localStorage.getItem('teacher_didactic_sequence_units_v2') || '[]'
@@ -1300,10 +1382,32 @@ function formatRafinhaContent(text: string): string {
 export default function RafinhaChat({ onNavigate, onCommandReady }: RafinhaChatProps) {
  const [isOpen, setIsOpen] = useState(false)
  const [isMinimized, setIsMinimized] = useState(false)
- const [messages, setMessages] = useState<Message[]>([{
- role: 'assistant',
- content: 'Oi! Sou a Rafinha Pode falar: "vá para alunos", "crie uma prova de Present Perfect", "lance nota 9 para o Pedro" eu executo na hora!'
- }])
+  const [messages, setMessages] = useState<Message[]>(() => {
+    if (typeof window === 'undefined') {
+      return [{ role: 'assistant', content: DEFAULT_WELCOME_MESSAGE.content }]
+    }
+    try {
+      const history = getChatHistory()
+      return history.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }))
+    } catch {
+      return [{ role: 'assistant', content: DEFAULT_WELCOME_MESSAGE.content }]
+    }
+  })
+  const [upcomingTasks, setUpcomingTasks] = useState<AgentTask[]>([])
+
+  useEffect(() => {
+    const loadUpcoming = () => {
+      try {
+        setUpcomingTasks(getUpcomingTasks(24))
+      } catch {
+        setUpcomingTasks([])
+      }
+    }
+    loadUpcoming()
+    window.addEventListener('teacher:tasks_changed', loadUpcoming)
+    return () => window.removeEventListener('teacher:tasks_changed', loadUpcoming)
+  }, [])
+
  const [interimText, setInterimText] = useState('')
  const [isLoading, setIsLoading] = useState(false)
  const [voiceOut, setVoiceOut] = useState<boolean>(() => {
@@ -1783,10 +1887,23 @@ export default function RafinhaChat({ onNavigate, onCommandReady }: RafinhaChatP
  setInterimText('')
  setInputText('')
 
- const userMsg: Message = { role: 'user', content: trimmed }
- setMessages(prev => [...prev, userMsg])
- setIsLoading(true)
- isLoadingRef.current = true
+  const userMsg: Message = { role: 'user', content: trimmed }
+  saveChatMessage(userMsg)
+  setMessages(prev => [...prev, userMsg])
+
+  // Extração e registro de compromisso temporal no Memory Engine
+  const taskExtract = extractTaskCommitment(trimmed)
+  if (taskExtract.isTask && taskExtract.task) {
+    try {
+      const createdTask = createAgentTask(taskExtract.task)
+      toast.info(`⏰ Lembrete agendado: "${createdTask.title}"`)
+    } catch (e) {
+      console.warn('Falha ao registrar tarefa a partir do chat:', e)
+    }
+  }
+
+  setIsLoading(true)
+  isLoadingRef.current = true
  setRunningTools([])
  skipSignalRef.current = false
 
@@ -1975,7 +2092,7 @@ export default function RafinhaChat({ onNavigate, onCommandReady }: RafinhaChatP
         return { ...m, content: maskRes.maskedText }
       })
 
-      const rawContext = getAppContext()
+      const rawContext = getAppContext(trimmed)
       const ctxMaskRes = maskPii(rawContext, studentEntities)
       Object.assign(combinedMapping, ctxMaskRes.mapping)
       const maskedContext = ctxMaskRes.maskedText
@@ -2104,6 +2221,7 @@ export default function RafinhaChat({ onNavigate, onCommandReady }: RafinhaChatP
  const last = { ...prev[prev.length - 1], content: finalText }
  return [...prev.slice(0, -1), last]
  })
+ saveChatMessage({ role: 'assistant', content: finalText })
 
  // Motor de Aprendizado & Memória de Longo Prazo Contínua
  try {
@@ -2133,6 +2251,7 @@ export default function RafinhaChat({ onNavigate, onCommandReady }: RafinhaChatP
  return [...prev.slice(0, -1), { role: 'assistant', content: cleanMsg }]
  return [...prev, { role: 'assistant', content: cleanMsg }]
  })
+ saveChatMessage({ role: 'assistant', content: cleanMsg })
  speak('Ops, verifique as configurações de API no menu lateral.')
  } finally {
  setIsLoading(false)
@@ -2391,6 +2510,32 @@ export default function RafinhaChat({ onNavigate, onCommandReady }: RafinhaChatP
   )}
   </button>
 
+  {/* Botão Nova Conversa */}
+  <button
+  type="button"
+  onClick={() => {
+    createNewChatSession()
+    setMessages([{ role: 'assistant', content: DEFAULT_WELCOME_MESSAGE.content }])
+    toast.success('✨ Nova conversa iniciada!')
+  }}
+  title="Iniciar nova conversa (arquiva histórico)"
+  style={{
+    background: 'rgba(255,255,255,0.08)',
+    border: 'none',
+    color: '#fdf8f2',
+    width: 26,
+    height: 26,
+    borderRadius: RADIUS.md,
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    transition: 'background 0.2s',
+  }}
+  >
+  <i className="ti ti-plus" style={{ fontSize: 13 }} />
+  </button>
+
   {/* Botão Minimizar */}
   <button
   type="button"
@@ -2438,6 +2583,36 @@ export default function RafinhaChat({ onNavigate, onCommandReady }: RafinhaChatP
 
   {/* Messages (CLEAN diagrama elegante) */}
   <div style={{ flex: 1, padding: '16px 14px', overflowY: 'auto', background: '#fdfbf7', display: 'flex', flexDirection: 'column', gap: 14 }}>
+    {/* Banner Proativo de Lembretes do Dia */}
+    {upcomingTasks.length > 0 && (
+      <div style={{
+        padding: '8px 12px',
+        background: '#fef3c7',
+        borderRadius: RADIUS.md,
+        border: '1px solid #fde68a',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        fontSize: 11,
+        color: '#92400e',
+        flexShrink: 0
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <i className="ti ti-alarm" style={{ color: '#b45309', fontSize: 13, flexShrink: 0 }} />
+          <span><strong>Lembrete:</strong> {upcomingTasks[0].title}</span>
+        </div>
+        {onNavigate && (
+          <button
+            type="button"
+            onClick={() => onNavigate('settings')}
+            style={{ background: 'none', border: 'none', color: '#b45309', fontWeight: 700, cursor: 'pointer', fontSize: 11, textDecoration: 'underline', flexShrink: 0 }}
+          >
+            Ver
+          </button>
+        )}
+      </div>
+    )}
+
   {messages.map((m, i) => {
   const isUser = m.role === 'user'
 

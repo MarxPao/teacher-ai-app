@@ -917,7 +917,7 @@ class BrowserHarnessRunner:
         Verifica no documento principal e nos frames por botões de submit válidos e habilitados.
         """
         for ctx in [page] + list(page.frames):
-            submit_btn = ctx.locator("#btn_salvar, button.btn, button:has-text('Salvar'), button:has-text('Confirmar'), input[type='submit']")
+            submit_btn = ctx.locator("#btn_salvar_chamada, #btn_salvar, button:has-text('Gravar Chamada'), button:has-text('Gravar'), button:has-text('Salvar'), button:has-text('Confirmar'), button:has-text('Finalizar'), button.btn-gravar, button.btn-salvar, input[type='submit'][value*='Gravar'], input[type='submit'][value*='Salvar'], input[type='submit'], button.btn")
             if await submit_btn.count() > 0:
                 is_disabled = await submit_btn.first.is_disabled()
                 if not is_disabled:

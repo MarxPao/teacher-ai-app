@@ -7,12 +7,50 @@
  * 3. Semantic Memory Engine: Extração e síntese contínua de fatos, insights de alunos e regras aprendidas.
  */
 
+export const VALID_TASK_BINDINGS = [
+  'omnigrader',
+  'exam_generator',
+  'lesson_planner',
+  'gradebook',
+  'attendance',
+  'parent_comms',
+  'didactic_sequence',
+  'qbank',
+  'portfolio',
+  'mindmap',
+  'general'
+] as const
+
+export type TaskBindingModule = typeof VALID_TASK_BINDINGS[number]
+
+export function sanitizeTaskBinding(raw?: string | null): TaskBindingModule | null {
+  if (!raw) return null
+  const normalized = raw.toLowerCase().trim()
+  if (VALID_TASK_BINDINGS.includes(normalized as TaskBindingModule)) {
+    return normalized as TaskBindingModule
+  }
+  return null
+}
+
 export interface LearnedFact {
   id: string
-  category: 'teacher_preference' | 'class_insight' | 'pedagogical_rule' | 'student_fact' | 'school_context'
+  category: 'teacher_preference' | 'class_insight' | 'pedagogical_rule' | 'student_fact' | 'school_context' | 'grading_rigor' | 'teaching_style' | 'communication_rule' | 'school_policy' | 'subject_matter' | 'personal_convention' | 'procedural' | 'task'
   fact: string
   confidence: number // 0.0 - 1.0
   source: string
+  status?: 'ativo' | 'superseded' | 'conflitante'
+  previousVersionId?: string
+  supersededBy?: string
+  conflictDetails?: string
+  scope?: 'private' | 'institutional'
+  schoolId?: string
+  accessCount?: number
+  lastAccessedAt?: string
+  taskBinding?: TaskBindingModule | null
+  sourceType?: string
+  sourceRef?: string
+  studentId?: string
+  studentName?: string
   createdAt: string
   updatedAt: string
 }
@@ -38,6 +76,8 @@ export function getLongTermMemories(): LearnedFact[] {
     return JSON.parse(localStorage.getItem(MEMORY_STORAGE_KEY) || '[]')
   } catch { return [] }
 }
+
+export const getTeacherMemoryFacts = getLongTermMemories
 
 /**
  * Salva e persiste novos fatos aprendidos pela Rafinha
@@ -127,7 +167,7 @@ export function updateTeacherProfile(patch: Partial<TeacherProfile>): TeacherPro
  * Resolve o problema de "janela de contexto pequena" injetando apenas a sabedoria acumulada necessária.
  */
 export function buildLongTermMemoryContext(currentQuery: string = ''): string {
-  const memories = getLongTermMemories()
+  const memories = getLongTermMemories().filter(m => m.status !== 'superseded')
   let styleSnippet = ''
   try {
     const { buildTeacherStyleSystemPrompt } = require('./teacherStyleProfile')
@@ -148,7 +188,16 @@ export function buildLongTermMemoryContext(currentQuery: string = ''): string {
     relevantFacts = memories.slice(-8)
   }
 
-  const factLines = relevantFacts.map(f => `- [${f.category.toUpperCase()}] ${f.fact}`).join('\n')
+  const factLines = relevantFacts.map(f => {
+    const conflictTag = f.status === 'conflitante' ? ' [⚠️ REQUER CLARIFICAÇÃO]' : ''
+    return `- [${f.category.toUpperCase()}] ${f.fact}${conflictTag}`
+  }).join('\n')
+
+  let episodicSnippet = ''
+  try {
+    const { buildEpisodicMemorySnippet } = require('./chatMemory')
+    episodicSnippet = buildEpisodicMemorySnippet()
+  } catch {}
 
   return `
 === MEMÓRIA VIVA & APRENDIZADO DE LONGO PRAZO DA RAFINHA ===
@@ -156,6 +205,7 @@ ${styleSnippet}
 
 FATOS E REGRAS APRENDIDAS PELA RAFINHA ACUMULADAS AO LONGO DO TEMPO:
 ${factLines || '- Nenhuma regra customizada gravada ainda (aprendendo ativamente a cada interação)'}
+${episodicSnippet}
 `
 }
 
@@ -163,22 +213,105 @@ ${factLines || '- Nenhuma regra customizada gravada ainda (aprendendo ativamente
  * Motor de Auto-Reflexão: Analisa a conversa e aprende fatos e preferências novos automaticamente
  */
 export function autoReflectAndLearn(userMessage: string, assistantReply: string): void {
-  if (!userMessage || userMessage.length < 10) return
+  if (!userMessage || userMessage.length < 8) return
 
   const lower = userMessage.toLowerCase()
 
-  // Detecta preferências explícitas do professor
-  if (/gosto de|prefiro|sempre fa[çc]o|minha escola|usamos o livro|uso o livro|no 9º ano|na minha turma/.test(lower)) {
-    saveLearnedFact(`Preferência/Hábito do Professor: "${userMessage.trim()}"`, 'teacher_preference', 'auto_reflection')
+  // 1. Extração estruturada de diretrizes com resolução de conflitos e superseding
+  try {
+    const { extractSemanticCandidatesFromDialogue, resolveSemanticCandidate } = require('./semanticConflictResolver')
+    const candidates = extractSemanticCandidatesFromDialogue(userMessage)
+    for (const cand of candidates) {
+      resolveSemanticCandidate(cand)
+    }
+  } catch {}
+
+  // 2. Detecta preferências de tom e estilo de resposta
+  if (/seja mais direto|respostas curtas|seja conciso|resuma mais/.test(lower)) {
+    try {
+      const { saveTeacherStyleProfile } = require('./teacherStyleProfile')
+      saveTeacherStyleProfile({ feedbackLength: 'conciso', preferredTone: 'direto_tecnico' })
+    } catch {}
+    try {
+      const { resolveSemanticCandidate } = require('./semanticConflictResolver')
+      resolveSemanticCandidate({
+        category: 'teacher_preference',
+        factText: 'A professora prefere respostas curtas, diretas e objetivas.',
+        confidence: 0.9,
+        source: 'auto_reflection'
+      })
+    } catch {
+      saveLearnedFact('A professora prefere respostas curtas, diretas e objetivas.', 'teacher_preference', 'auto_reflection')
+    }
+    return
+  }
+  if (/em t[oó]picos|organize em t[oó]picos|responda em tópicos/.test(lower)) {
+    try {
+      const { saveTeacherStyleProfile } = require('./teacherStyleProfile')
+      saveTeacherStyleProfile({ feedbackLength: 'em_topicos' })
+    } catch {}
+    try {
+      const { resolveSemanticCandidate } = require('./semanticConflictResolver')
+      resolveSemanticCandidate({
+        category: 'teacher_preference',
+        factText: 'A professora prefere feedbacks e explicações estruturadas em tópicos.',
+        confidence: 0.9,
+        source: 'auto_reflection'
+      })
+    } catch {
+      saveLearnedFact('A professora prefere feedbacks e explicações estruturadas em tópicos.', 'teacher_preference', 'auto_reflection')
+    }
+    return
   }
 
-  // Detecta regras pedagógicas ou de provas
+  // 3. Detecta preferências explícitas do professor
+  if (/gosto de|prefiro|sempre fa[çc]o|minha escola|usamos o livro|uso o livro|no 9º ano|na minha turma/.test(lower)) {
+    try {
+      const { resolveSemanticCandidate } = require('./semanticConflictResolver')
+      resolveSemanticCandidate({
+        category: 'teacher_preference',
+        factText: `Preferência/Hábito do Professor: "${userMessage.trim()}"`,
+        confidence: 0.85,
+        source: 'auto_reflection'
+      })
+    } catch {
+      saveLearnedFact(`Preferência/Hábito do Professor: "${userMessage.trim()}"`, 'teacher_preference', 'auto_reflection')
+    }
+  }
+
+  // 4. Detecta contexto escolar
+  if (/trabalho no|minha escola [eé]|aqui no col[eé]gio|aqui na escola/.test(lower)) {
+    try {
+      const { resolveSemanticCandidate } = require('./semanticConflictResolver')
+      resolveSemanticCandidate({
+        category: 'school_context',
+        factText: `Contexto Escolar: "${userMessage.trim()}"`,
+        confidence: 0.85,
+        source: 'auto_reflection'
+      })
+    } catch {
+      saveLearnedFact(`Contexto Escolar: "${userMessage.trim()}"`, 'school_context', 'auto_reflection')
+    }
+  }
+
+  // 5. Detecta regras pedagógicas ou de provas
   if (/na prova coloque|monte as provas com|gabarito ao final|sempre inclua listening|prefiro inglês britânico|prefiro inglês americano/.test(lower)) {
     if (lower.includes('britânico') || lower.includes('british')) {
       updateTeacherProfile({ preferredDialect: 'UK' })
     } else if (lower.includes('americano') || lower.includes('american')) {
       updateTeacherProfile({ preferredDialect: 'US' })
     }
-    saveLearnedFact(`Instrução de Formato: "${userMessage.trim()}"`, 'pedagogical_rule', 'auto_reflection')
+    try {
+      const { resolveSemanticCandidate } = require('./semanticConflictResolver')
+      resolveSemanticCandidate({
+        category: 'pedagogical_rule',
+        factText: `Instrução de Formato: "${userMessage.trim()}"`,
+        confidence: 0.85,
+        source: 'auto_reflection'
+      })
+    } catch {
+      saveLearnedFact(`Instrução de Formato: "${userMessage.trim()}"`, 'pedagogical_rule', 'auto_reflection')
+    }
   }
 }
+

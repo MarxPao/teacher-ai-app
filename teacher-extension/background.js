@@ -808,6 +808,44 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   }
 });
 
+async function resolveActivePortalTab(explicitTabId) {
+  if (explicitTabId) {
+    try {
+      const tab = await chrome.tabs.get(explicitTabId);
+      if (tab && tab.id) return tab.id;
+    } catch {}
+  }
+  // 1. Prioridade máxima: aba ativa na janela com foco / janela atual
+  try {
+    const activeTabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+    const currentActive = activeTabs.find(t => t.url && (t.url.startsWith('http') || t.url.startsWith('file')) && !t.url.includes('side_panel'));
+    if (currentActive && currentActive.id) return currentActive.id;
+  } catch {}
+
+  try {
+    const activeTabsCurrent = await chrome.tabs.query({ active: true, currentWindow: true });
+    const currentActive = activeTabsCurrent.find(t => t.url && (t.url.startsWith('http') || t.url.startsWith('file')) && !t.url.includes('side_panel'));
+    if (currentActive && currentActive.id) return currentActive.id;
+  } catch {}
+
+  // 2. Se a aba ativa não for página web, busca portais conhecidos em qualquer aba ativa
+  try {
+    const activeAny = await chrome.tabs.query({ active: true });
+    const portalActive = activeAny.find(t => t.url && identifyPortal(t.url));
+    if (portalActive && portalActive.id) return portalActive.id;
+  } catch {}
+
+  // 3. Fallback: qualquer aba de portal aberta
+  try {
+    const allTabs = await chrome.tabs.query({});
+    const portalTab = allTabs.find(t => t.url && identifyPortal(t.url)) ||
+                      allTabs.find(t => t.url && (t.url.startsWith('http') || t.url.startsWith('file')) && !t.url.includes('side_panel') && !t.url.startsWith('chrome'));
+    if (portalTab && portalTab.id) return portalTab.id;
+  } catch {}
+
+  return currentTabState.tabId || null;
+}
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'RELOAD_EXTENSION') {
     try {
@@ -857,21 +895,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       const { tool, params, portalId } = payload;
 
       // 1. Localiza aba ativa de portal conectado
-      let targetTabId = null;
-      try {
-        const activeTabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-        if (activeTabs && activeTabs.length > 0 && isAuthorizedPortalTab(activeTabs[0])) {
-          targetTabId = activeTabs[0].id;
-        }
-      } catch {}
-
-      if (!targetTabId) {
-        try {
-          const tabs = await chrome.tabs.query({});
-          const portalTab = tabs.find(t => isAuthorizedPortalTab(t));
-          targetTabId = portalTab ? portalTab.id : (isAuthorizedPortalTab(currentTabState) ? currentTabState.tabId : null);
-        } catch {}
-      }
+      const targetTabId = await resolveActivePortalTab(params?.tabId);
 
       // Caso desconectado: recusa honesta e transparente à professora
       if (!targetTabId) {
@@ -1005,20 +1029,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   if (message.action === 'READ_ACTIVE_PORTAL_ROSTER') {
     (async () => {
-      let targetTabId = message.tabId;
-      if (!targetTabId) {
-        try {
-          const activeTabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-          if (activeTabs && activeTabs.length > 0 && isAuthorizedPortalTab(activeTabs[0])) {
-            targetTabId = activeTabs[0].id;
-          }
-        } catch {}
-      }
-      if (!targetTabId) {
-        const tabs = await chrome.tabs.query({});
-        const portalTab = tabs.find(t => isAuthorizedPortalTab(t));
-        targetTabId = portalTab ? portalTab.id : (isAuthorizedPortalTab(currentTabState) ? currentTabState.tabId : null);
-      }
+      const targetTabId = await resolveActivePortalTab(message.tabId);
       if (!targetTabId) {
         sendResponse({ sucesso: false, mensagem: 'Nenhuma aba ativa do portal identificada.' });
         return;
@@ -1033,27 +1044,39 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             rows.forEach((row, idx) => {
               const cells = Array.from(row.querySelectorAll('td, th'));
               if (cells.length < 2) return;
-              const inputs = Array.from(row.querySelectorAll('input:not([type="hidden"]):not([type="checkbox"])'));
+              // Detecta inputs de texto, número, checkbox ou selects
+              const inputs = Array.from(row.querySelectorAll('input:not([type="hidden"]), select, [contenteditable="true"]'));
               if (inputs.length > 0) {
                 // Heurística de célula de nome: geralmente célula 0, 1 ou com link/span
                 let nameCandidate = '';
                 for (const c of cells) {
                   const txt = c.innerText.trim();
-                  // Ignora células puramente numéricas (matrícula/índice) ou com inputs
-                  if (txt && !/^\d+$/.test(txt) && !c.querySelector('input')) {
+                  // Ignora células puramente numéricas (matrícula/índice) ou com controles
+                  if (txt && !/^\d+$/.test(txt) && !c.querySelector('input, select')) {
                     nameCandidate = txt;
                     break;
                   }
                 }
                 if (!nameCandidate) nameCandidate = cells[0].innerText.trim();
                 const lower = nameCandidate.toLowerCase();
-                if (lower.includes('aluno') || lower.includes('nome') || lower.includes('estudante')) return;
+                if (lower.includes('aluno') || lower.includes('nome') || lower.includes('estudante') || lower.includes('matrícula') || lower.includes('matricula')) return;
+
+                const firstInput = inputs[0];
+                let currentVal = '';
+                if (firstInput.tagName === 'SELECT') {
+                  currentVal = firstInput.options[firstInput.selectedIndex]?.text || firstInput.value || '';
+                } else if (firstInput.type === 'checkbox') {
+                  currentVal = firstInput.checked ? 'Falta' : 'Presença';
+                } else {
+                  currentVal = firstInput.value || '';
+                }
 
                 roster.push({
                   rowIndex: idx,
                   name: nameCandidate,
-                  currentValue: inputs[0].value || '',
-                  inputId: inputs[0].id || inputs[0].name || `input_row_${idx}`
+                  currentValue: currentVal,
+                  inputId: firstInput.id || firstInput.name || `input_row_${idx}`,
+                  inputType: firstInput.type || firstInput.tagName.toLowerCase()
                 });
               }
             });
@@ -1072,20 +1095,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   if (message.action === 'EXECUTE_SAFE_WRITE') {
     (async () => {
-      let targetTabId = message.tabId;
-      if (!targetTabId) {
-        try {
-          const activeTabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-          if (activeTabs && activeTabs.length > 0 && isAuthorizedPortalTab(activeTabs[0])) {
-            targetTabId = activeTabs[0].id;
-          }
-        } catch {}
-      }
-      if (!targetTabId) {
-        const tabs = await chrome.tabs.query({});
-        const portalTab = tabs.find(t => isAuthorizedPortalTab(t));
-        targetTabId = portalTab ? portalTab.id : (isAuthorizedPortalTab(currentTabState) ? currentTabState.tabId : null);
-      }
+      const targetTabId = await resolveActivePortalTab(message.tabId);
       if (!targetTabId) {
         sendResponse({ sucesso: false, mensagem: 'Nenhuma aba ativa do portal para escrita.' });
         return;
@@ -1119,11 +1129,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           args: [studentName, String(targetValue), actionType || 'lancar_nota'],
           func: (targetName, valStr, actType) => {
             const rows = Array.from(document.querySelectorAll('table tr'));
-            const cleanTarget = targetName.trim().toLowerCase();
+            const norm = (s) => (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+            const cleanTarget = norm(targetName);
             let targetRow = null;
 
             for (const r of rows) {
-              if (r.innerText.toLowerCase().includes(cleanTarget)) {
+              const rowText = norm(r.innerText);
+              if (rowText.includes(cleanTarget)) {
                 targetRow = r;
                 break;
               }
@@ -1133,7 +1145,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
               const firstName = cleanTarget.split(' ')[0];
               if (firstName.length > 2) {
                 for (const r of rows) {
-                  if (r.innerText.toLowerCase().includes(firstName)) {
+                  const rowText = norm(r.innerText);
+                  if (rowText.includes(firstName)) {
                     targetRow = r;
                     break;
                   }
@@ -1145,15 +1158,27 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
               return { sucesso: false, status: 'student_not_found', mensagem: `Aluno '${targetName}' não encontrado no portal.` };
             }
 
-            const inputs = Array.from(targetRow.querySelectorAll('input:not([type="hidden"]):not([type="checkbox"])'));
-            if (inputs.length === 0) {
-              return { sucesso: false, status: 'no_inputs', mensagem: 'Nenhum campo editável de nota na linha deste aluno.' };
+            const isFalta = (actType === 'lancar_falta');
+            const checkboxes = Array.from(targetRow.querySelectorAll('input[type="checkbox"]'));
+            const textInputs = Array.from(targetRow.querySelectorAll('input:not([type="hidden"]):not([type="checkbox"])'));
+            const selects = Array.from(targetRow.querySelectorAll('select'));
+
+            let targetInput = null;
+            if (isFalta && checkboxes.length > 0) {
+              targetInput = checkboxes[0];
+            } else if (textInputs.length > 0) {
+              targetInput = textInputs[0];
+            } else if (checkboxes.length > 0) {
+              targetInput = checkboxes[0];
+            } else if (selects.length > 0) {
+              targetInput = selects[0];
             }
 
-            const targetInput = inputs[0];
-            const beforeVal = targetInput.value || '';
+            if (!targetInput) {
+              return { sucesso: false, status: 'no_inputs', mensagem: `Nenhum campo editável (${isFalta ? 'falta/frequência' : 'nota'}) na linha deste aluno.` };
+            }
 
-            // 1. Aplica destaque visual (animação verde de preenchimento seguro)
+            // 1. Aplica destaque visual seguro
             const origTransition = targetInput.style.transition;
             const origOutline = targetInput.style.outline;
             const origBg = targetInput.style.backgroundColor;
@@ -1163,29 +1188,60 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             targetInput.style.backgroundColor = '#ecfdf5';
             targetInput.style.boxShadow = '0 0 16px rgba(16, 185, 129, 0.6)';
 
-            // 2. Escrita via descritor nativo e despacho de eventos (Anti-React-drift)
-            try {
-              const proto = Object.getPrototypeOf(targetInput);
-              const descriptor = Object.getOwnPropertyDescriptor(proto, 'value') ||
-                                 Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
-              if (descriptor && descriptor.set) {
-                descriptor.set.call(targetInput, valStr);
-              } else {
+            let beforeVal = '';
+            let afterVal = '';
+            let isVerified = false;
+
+            // 2. Escrita por tipo de controle
+            if (targetInput.type === 'checkbox') {
+              beforeVal = targetInput.checked ? 'Marcado' : 'Desmarcado';
+              const shouldBeChecked = isFalta ? (valStr !== '0' && valStr.toLowerCase() !== 'false') : true;
+
+              if (targetInput.checked !== shouldBeChecked) {
+                targetInput.checked = shouldBeChecked;
+                targetInput.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+                targetInput.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+                targetInput.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+              }
+              targetInput.focus();
+              afterVal = targetInput.checked ? 'Marcado' : 'Desmarcado';
+              isVerified = (targetInput.checked === shouldBeChecked);
+            } else if (targetInput.tagName === 'SELECT') {
+              beforeVal = targetInput.options[targetInput.selectedIndex]?.text || targetInput.value || '';
+              let opt = Array.from(targetInput.options).find(o => norm(o.value) === norm(valStr) || norm(o.text).includes(norm(valStr)));
+              if (!opt && isFalta) {
+                opt = Array.from(targetInput.options).find(o => norm(o.value) === 'f' || norm(o.text).includes('falta'));
+              }
+              if (opt) {
+                targetInput.value = opt.value;
+              }
+              targetInput.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+              targetInput.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+              afterVal = targetInput.options[targetInput.selectedIndex]?.text || targetInput.value;
+              isVerified = opt ? (targetInput.value === opt.value) : true;
+            } else {
+              beforeVal = targetInput.value || '';
+              try {
+                const proto = Object.getPrototypeOf(targetInput);
+                const descriptor = Object.getOwnPropertyDescriptor(proto, 'value') ||
+                                   Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+                if (descriptor && descriptor.set) {
+                  descriptor.set.call(targetInput, valStr);
+                } else {
+                  targetInput.value = valStr;
+                }
+              } catch (e) {
                 targetInput.value = valStr;
               }
-            } catch (e) {
-              targetInput.value = valStr;
+
+              targetInput.focus();
+              targetInput.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+              targetInput.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+              afterVal = targetInput.value;
+              isVerified = (afterVal === valStr);
             }
 
-            targetInput.focus();
-            targetInput.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
-            targetInput.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
-
-            // 3. Re-leitura para confirmação no DOM (after_state)
-            const afterVal = targetInput.value;
-            const isVerified = (afterVal === valStr);
-
-            // Restaura estilo gradualmente após 2 segundos
+            // Restaura estilo gradualmente após 2.5s
             setTimeout(() => {
               try {
                 targetInput.style.transition = 'all 0.5s ease';
@@ -1253,26 +1309,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   if (message.action === 'NAVIGATE_PORTAL_TAB') {
     (async () => {
-      let targetTabId = message.tabId;
-      if (!targetTabId) {
-        try {
-          const activeTabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-          if (activeTabs && activeTabs.length > 0 && isAuthorizedPortalTab(activeTabs[0])) {
-            targetTabId = activeTabs[0].id;
-          }
-        } catch {}
-      }
-      if (!targetTabId) {
-        const tabs = await chrome.tabs.query({});
-        const portalTab = tabs.find(t => isAuthorizedPortalTab(t));
-        targetTabId = portalTab ? portalTab.id : (isAuthorizedPortalTab(currentTabState) ? currentTabState.tabId : null);
-      }
+      const targetTabId = await resolveActivePortalTab(message.tabId);
       if (!targetTabId) {
         sendResponse({ sucesso: false, mensagem: 'Nenhuma aba ativa do portal identificada.' });
         return;
       }
 
-      const targetKeyword = (message.target || '').trim().toLowerCase();
+      const targetKeyword = (message.target || '').trim().toLowerCase()
+        .replace(/\s+\b(?:e|e\s+depois|depois|em\s+seguida|a[ií])\b.*$/i, '')
+        .replace(/\s+e$/i, '')
+        .trim();
 
       try {
         const results = await chrome.scripting.executeScript({

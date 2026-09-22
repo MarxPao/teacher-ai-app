@@ -31,7 +31,7 @@ export const AGENT_TOOLS: ToolDefinition[] = [
       properties: {
         module: {
           type: 'string',
-          enum: ['dashboard', 'quick', 'exam', 'lessonstudio', 'plan', 'rubric', 'gradebook', 'omnigrader', 'students', 'classes', 'analytics', 'calendar', 'communications', 'repo', 'qbank', 'mindmap', 'editor', 'portfolio', 'extensions', 'settings', 'api', 'maestro', 'classlog', 'didacticsequence', 'livequiz', 'parentcomms', 'classroommode', 'flashcardmode', 'audiopronunciation', 'wellbeing', 'reflectivepractice', 'meetingclassrecorder', 'weeklyagenda', 'batchgrader', 'progresstracker', 'autoreport'],
+          enum: ['dashboard', 'quick', 'exam', 'lessonstudio', 'plan', 'rubric', 'gradebook', 'omnigrader', 'students', 'classes', 'analytics', 'calendar', 'communications', 'repo', 'qbank', 'mindmap', 'editor', 'portfolio', 'extensions', 'settings', 'api', 'maestro', 'classlog', 'didacticsequence', 'livequiz', 'parentcomms', 'classroommode', 'flashcardmode', 'audiopronunciation', 'wellbeing', 'reflectivepractice', 'meetingclassrecorder', 'weeklyagenda', 'batchgrader', 'progresstracker', 'autoreport', 'classroomanalytics'],
           description: 'Módulo para navegar'
         }
       },
@@ -276,6 +276,45 @@ export const AGENT_TOOLS: ToolDefinition[] = [
         subcategory:  { type: 'string' }
       },
       required: ['studentName', 'note']
+    }
+  },
+
+  // 11.1 MEMÓRIA DE LONGO PRAZO & REGRAS (MEMORY ENGINE FASE 3)
+  {
+    name: 'salvar_memoria',
+    description: 'Salva ou atualiza um fato, preferência ou diretriz pedagógica da professora na memória de longo prazo, com resolução inteligente de conflitos e superseding de regras anteriores.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        categoria: {
+          type: 'string',
+          enum: ['grading_rigor', 'school_policy', 'communication_rule', 'teacher_preference', 'student_trait', 'procedural'],
+          description: 'Categoria do fato ou preferência aprendida'
+        },
+        conteudo: {
+          type: 'string',
+          description: 'Texto do fato, regra pedagógica, diretriz ou preferência a ser memorizada'
+        },
+        importancia: {
+          type: 'number',
+          description: 'Score de importância de 0.0 a 1.0 (opcional, padrão 0.85)'
+        },
+        escopo: {
+          type: 'string',
+          enum: ['private', 'institutional'],
+          description: 'Escopo do fato: privado da professora ou institucional da escola (opcional, padrão private)'
+        },
+        escola_id: {
+          type: 'string',
+          description: 'Identificador da escola se o escopo for institucional (opcional)'
+        },
+        task_binding: {
+          type: 'string',
+          enum: ['omnigrader', 'exam_generator', 'lesson_planner', 'gradebook', 'attendance', 'parent_comms', 'didactic_sequence', 'qbank', 'portfolio', 'mindmap', 'general'],
+          description: 'Módulo ao qual a regra ou procedimento está vinculado (opcional)'
+        }
+      },
+      required: ['categoria', 'conteudo']
     }
   },
 
@@ -671,6 +710,7 @@ export const TOOL_DISPLAY_NAMES: Record<string, { label: string; icon: string; c
   speak_response:                 { label: 'Falando',                 icon: 'ti-volume',             color: '#7a5c42' },
   update_student_metric:          { label: 'Métrica de aluno',        icon: 'ti-chart-radar',        color: '#859900' },
   record_student_observation:     { label: 'Registrando memória',     icon: 'ti-brain',              color: '#b58900' },
+  salvar_memoria:                 { label: 'Gravando Memória',        icon: 'ti-brain',              color: '#8b5cf6' },
   create_class:                   { label: 'Criando turma',           icon: 'ti-school',             color: '#268bd2' },
   create_student:                 { label: 'Cadastrando aluno',       icon: 'ti-user-plus',          color: '#2aa198' },
   add_qbank_question:             { label: 'Salvando no QBank',       icon: 'ti-database-plus',      color: '#d33682' },
