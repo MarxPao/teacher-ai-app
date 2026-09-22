@@ -81,6 +81,7 @@ const VisualStudio          = dynamic(() => import('@/components/modules/VisualS
 const Insights              = dynamic(() => import('@/components/modules/Insights'),              { loading: () => <ModuleSkeleton />, ssr: false })
 const ChecklistHistoryModule = dynamic(() => import('@/components/modules/ChecklistHistoryModule'), { loading: () => <ModuleSkeleton />, ssr: false })
 const PortalSkillsModule    = dynamic(() => import('@/components/modules/PortalSkillsModule'),    { loading: () => <ModuleSkeleton />, ssr: false })
+const BnccModule            = dynamic(() => import('@/components/modules/BnccModule'),            { loading: () => <ModuleSkeleton />, ssr: false })
 
 // ─── Module Key type ───────────────────────────────────────────────────────────
 export type ModuleKey =
@@ -92,7 +93,7 @@ export type ModuleKey =
   | 'classlog' | 'didacticsequence' | 'livequiz' | 'parentcomms'
   | 'classroommode' | 'attendancelist' | 'flashcardmode' | 'audiopronunciation'
   | 'reflectivepractice' | 'meetingclassrecorder' | 'weeklyagenda' | 'batchgrader'
-  | 'progresstracker' | 'autoreport' | 'skills'
+  | 'progresstracker' | 'autoreport' | 'skills' | 'bncc'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const MODULES: Record<ModuleKey, React.ComponentType<any>> = {
@@ -129,7 +130,7 @@ const MODULES: Record<ModuleKey, React.ComponentType<any>> = {
   portalmirror:       PortalMirrorModule,
   maestro:            Maestro,
   classlog:           ClassLog,
-  didacticsequence:   LessonStudio,
+  didacticsequence:   DidacticSequence,
   livequiz:           LiveQuizModule,
   parentcomms:        () => <Communications initialTab="parents" />,
   classroommode:      ClassroomMode,
@@ -143,6 +144,7 @@ const MODULES: Record<ModuleKey, React.ComponentType<any>> = {
   progresstracker:    Analytics,
   autoreport:         AutoReport,
   skills:             PortalSkillsModule,
+  bncc:               BnccModule,
 }
 
 // ─── App ───────────────────────────────────────────────────────────────────────
@@ -299,7 +301,7 @@ export default function Home() {
         style={{ transition: 'all 0.28s cubic-bezier(0.16, 1, 0.3, 1)', width: '100%' }}
       >
         <Topbar module={active} isAiLoading={false} onNavigate={setActive} />
-        <div key={active} className="module-enter flex-1 min-h-0 min-w-0 h-full overflow-y-auto overflow-x-hidden">
+        <div key={active} className="module-enter flex-1 min-h-0 min-w-0 h-full overflow-y-auto overflow-x-hidden prominent-scrollbar">
           {/* ErrorBoundary prevents one module crash from taking down the whole app */}
           <ErrorBoundary moduleName={active}>
             <Module />

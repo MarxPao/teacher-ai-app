@@ -614,13 +614,14 @@ export default function ExamBuilder() {
 
     try {
       let libContext = ''
-      const compiled = compileSourcesPrompt(sources, knowledgeMode)
+      const queryTopic = topic || sections.join(' ') || 'English'
+      const compiled = compileSourcesPrompt(sources, knowledgeMode, queryTopic)
       if (compiled.activeCount > 0) {
         libContext = compiled.promptContext
       } else {
         // Fallback RAG automático se não houver fontes manuais selecionadas no Hub
         const { searchLibraryContext, buildRagPromptContext } = await import('@/lib/ragEngine')
-        const chunks = searchLibraryContext(topic || sections.join(' ') || 'English', { limit: 3 })
+        const chunks = searchLibraryContext(queryTopic, { limit: 8 })
         if (chunks.length > 0) {
           libContext = buildRagPromptContext(chunks)
         }

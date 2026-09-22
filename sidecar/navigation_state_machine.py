@@ -629,14 +629,16 @@ class HierarchicalNavNode:
     heuristic: Optional[str] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
 
-    def matches(self, text: str) -> bool:
-        """Verifica se um texto coincide com o rótulo ou algum sinônimo do nó."""
+    def matches(self, text: str, extra_synonyms: Optional[Iterable[str]] = None) -> bool:
+        """Verifica se um texto coincide com o rótulo ou algum sinônimo do nó (incluindo sinônimos herdados)."""
         def norm(s: str) -> str:
             clean = re.sub(r"[\s_]+", " ", (s or "").lower().strip())
             return re.sub(r"[àáâãä]", "a", re.sub(r"[éêë]", "e", re.sub(r"[íï]", "i", re.sub(r"[óôõö]", "o", re.sub(r"[úü]", "u", re.sub(r"[ç]", "c", clean))))))
 
         target = norm(text)
         candidates = [norm(self.label)] + [norm(s) for s in self.synonyms]
+        if extra_synonyms:
+            candidates.extend([norm(s) for s in extra_synonyms if s])
         return any(c == target or (len(c) >= 3 and (c in target or target in c)) for c in candidates)
 
 
@@ -657,24 +659,139 @@ class HierarchicalNavigationModel:
     def get_node(self, node_id: str) -> Optional[HierarchicalNavNode]:
         return self.nodes.get(node_id)
 
-    def find_node_by_label(self, label: str, parent_id: Optional[str] = None) -> Optional[HierarchicalNavNode]:
+    def get_inherited_synonyms(self, node_id: str) -> List[str]:
+        """
+        Retorna sinônimos e rótulos herdados dos subnós diretos de um nó pai.
+
+        Regra de Propagação Arquitetural:
+        - Propagação direta de 1 nível (SUB_NIVEL -> NIVEL_1):
+          Nós de nível 1 herdam automaticamente o rótulo e os sinônimos de seus subnós
+          estruturais diretos.
+        - Exclusão Estrita de Dados (ITEM_LISTA):
+          Itens de lista/folhas de dados (alunos, turmas dinâmicas) NUNCA propagam
+          termos para cima, prevenindo poluição semântica no catálogo e falsos positivos
+          na navegação de nível superior.
+        """
+        inherited = []
         for n in self.nodes.values():
-            if parent_id and n.parent_id != parent_id:
-                continue
-            if n.matches(label):
+            if n.parent_id == node_id and n.node_type == NavNodeType.SUB_NIVEL:
+                inherited.extend(n.synonyms)
+        return inherited
+
+    def find_node_by_label(self, label: str, parent_id: Optional[str] = None) -> Optional[HierarchicalNavNode]:
+        self.last_ambiguous_candidates = []
+        candidate_nodes = [
+            n for n in self.nodes.values()
+            if not (parent_id and n.parent_id != parent_id)
+        ]
+
+        if not candidate_nodes:
+            return None
+
+        def norm(s: str) -> str:
+            clean = re.sub(r"[\s_]+", " ", (s or "").lower().strip())
+            return re.sub(r"[àáâãä]", "a", re.sub(r"[éêë]", "e", re.sub(r"[íï]", "i", re.sub(r"[óôõö]", "o", re.sub(r"[úü]", "u", re.sub(r"[ç]", "c", clean))))))
+
+        target = norm(label)
+
+        # 1.0 CORRESPONDÊNCIA EXATA DE RÓTULO (Prioridade Absoluta)
+        # Se a query for exatamente o rótulo de um nó (ex: 'Avaliações', 'Médias'), ele tem precedência imediata
+        for n in candidate_nodes:
+            if norm(n.label) == target:
                 return n
+
+        if parent_id:
+            # Busca restrita aos filhos de um nó específico
+            child_direct = [n for n in candidate_nodes if n.matches(label)]
+            if len(child_direct) == 1:
+                return child_direct[0]
+            elif len(child_direct) > 1:
+                self.last_ambiguous_candidates = child_direct
+                return None
+
+            for n in candidate_nodes:
+                inherited = self.get_inherited_synonyms(n.node_id)
+                if inherited and n.matches(label, extra_synonyms=inherited):
+                    return n
+        else:
+            # 1.1 ETAPA LÉXICA DIRETA EM NÍVEL 1 (Rótulo Próprio + Sinônimos Próprios)
+            direct_l1 = [n for n in candidate_nodes if n.node_type == NavNodeType.NIVEL_1 and n.matches(label)]
+            if len(direct_l1) == 1:
+                return direct_l1[0]
+            elif len(direct_l1) > 1:
+                self.last_ambiguous_candidates = direct_l1
+                return None
+
+            # 1.2 ETAPA LÉXICA HERDADA EM NÍVEL 1 (Herança Estrutural SUB_NIVEL -> NIVEL_1)
+            # Decisão de Arquitetura (Opção B - Honestidade e Não-Arbitrariedade):
+            # Se dois ou mais nós de nível 1 disputam o mesmo termo herdado (ex: 'provas' herdado
+            # tanto por 'Diário de Classe' quanto por 'Notas'), o motor NUNCA escolhe silenciosamente
+            # por ordem de declaração no catálogo. Ele registra ambiguidade honesta para confirmação.
+            inherited_l1 = []
+            for n in candidate_nodes:
+                if n.node_type == NavNodeType.NIVEL_1:
+                    inherited = self.get_inherited_synonyms(n.node_id)
+                    if inherited and n.matches(label, extra_synonyms=inherited):
+                        inherited_l1.append(n)
+
+            if len(inherited_l1) == 1:
+                return inherited_l1[0]
+            elif len(inherited_l1) > 1:
+                self.last_ambiguous_candidates = inherited_l1
+                return None
+
+            # 1.3 ETAPA LÉXICA GERAL (Subnós diretos caso nenhum nível 1 tenha casado)
+            direct_general = [n for n in candidate_nodes if n.matches(label)]
+            if len(direct_general) == 1:
+                return direct_general[0]
+            elif len(direct_general) > 1:
+                unique_labels = set(norm(n.label) for n in direct_general)
+                if len(unique_labels) == 1:
+                    return direct_general[0]
+                self.last_ambiguous_candidates = direct_general
+                return None
+
+        # 2. ETAPA SEMÂNTICA (Fallback Vetorial via LocalSemanticMatcher)
+        try:
+            from sidecar.local_semantic_matcher import LocalSemanticMatcher
+        except ImportError:
+            try:
+                from local_semantic_matcher import LocalSemanticMatcher
+            except ImportError:
+                LocalSemanticMatcher = None
+
+        if LocalSemanticMatcher is not None:
+            matcher = LocalSemanticMatcher.get_instance()
+            candidate_nodes = [
+                n for n in self.nodes.values()
+                if not (parent_id and n.parent_id != parent_id)
+            ]
+            if candidate_nodes:
+                candidate_labels = [n.label for n in candidate_nodes]
+                candidate_meta = [{"node": n} for n in candidate_nodes]
+                match_res = matcher.match_best_candidate(
+                    label,
+                    candidate_labels,
+                    candidate_meta,
+                    similarity_threshold=0.50
+                )
+                if match_res:
+                    _, score, meta = match_res
+                    if meta and "node" in meta:
+                        return meta["node"]
+
         return None
 
     def _load_default_catalog(self) -> None:
         # Nós de nível 1 padrão
-        self.add_node(HierarchicalNavNode("inicio", "Início", NavNodeType.NIVEL_1, synonyms=["home", "dashboard", "principal"]))
-        self.add_node(HierarchicalNavNode("diario", "Diário de Classe", NavNodeType.NIVEL_1, synonyms=["diário", "diario", "classe"]))
-        self.add_node(HierarchicalNavNode("frequencia", "Frequência", NavNodeType.NIVEL_1, synonyms=["chamada", "presença", "presenca", "faltas"]))
-        self.add_node(HierarchicalNavNode("notas", "Notas", NavNodeType.NIVEL_1, synonyms=["lançamento de notas", "boletim"]))
-        self.add_node(HierarchicalNavNode("recados", "Recados", NavNodeType.NIVEL_1, synonyms=["mural de recados", "mensagens", "comunicações"]))
-        self.add_node(HierarchicalNavNode("meus_alunos", "Meus Alunos", NavNodeType.NIVEL_1, synonyms=["alunos", "turmas", "cadastro de alunos", "estudantes"]))
-        self.add_node(HierarchicalNavNode("arquivos", "Arquivos", NavNodeType.NIVEL_1, synonyms=["documentos", "materiais", "anexos"]))
-        self.add_node(HierarchicalNavNode("horarios", "Horários", NavNodeType.NIVEL_1, synonyms=["grade horária", "aulas"]))
+        self.add_node(HierarchicalNavNode("inicio", "Início", NavNodeType.NIVEL_1, synonyms=["home", "dashboard", "principal", "painel", "painel principal", "tela inicial", "página inicial", "pagina inicial"]))
+        self.add_node(HierarchicalNavNode("diario", "Diário de Classe", NavNodeType.NIVEL_1, synonyms=["diário", "diario", "classe", "diário de classe", "diario de classe", "caderneta"]))
+        self.add_node(HierarchicalNavNode("frequencia", "Frequência", NavNodeType.NIVEL_1, synonyms=["chamada", "presença", "presenca", "faltas", "ausências", "ausencias", "ausência", "ausencia", "registro de ausências", "registro de ausencias", "registro de faltas"]))
+        self.add_node(HierarchicalNavNode("notas", "Notas", NavNodeType.NIVEL_1, synonyms=["lançamento de notas", "boletim", "conceitos", "pautas", "quadro de notas"]))
+        self.add_node(HierarchicalNavNode("recados", "Recados", NavNodeType.NIVEL_1, synonyms=["mural de recados", "mensagens", "comunicações", "comunicados", "avisos", "notificações", "notificacoes"]))
+        self.add_node(HierarchicalNavNode("meus_alunos", "Meus Alunos", NavNodeType.NIVEL_1, synonyms=["alunos", "turmas", "cadastro de alunos", "estudantes", "lista de alunos"]))
+        self.add_node(HierarchicalNavNode("arquivos", "Arquivos", NavNodeType.NIVEL_1, synonyms=["documentos", "materiais", "anexos", "conteúdos", "conteudos", "downloads"]))
+        self.add_node(HierarchicalNavNode("horarios", "Horários", NavNodeType.NIVEL_1, synonyms=["grade horária", "grade horaria", "aulas", "quadro de horários", "quadro de horarios", "grade de aulas"]))
 
         # Sub-níveis de Recados
         self.add_node(HierarchicalNavNode("recados_recebidos", "Recados recebidos", NavNodeType.SUB_NIVEL, parent_id="recados", synonyms=["recebidos", "caixa de entrada", "mensagens recebidas"]))
@@ -691,7 +808,7 @@ class HierarchicalNavigationModel:
         self.add_node(HierarchicalNavNode("justificativas", "Justificativas", NavNodeType.SUB_NIVEL, parent_id="frequencia", synonyms=["justificativa", "atestados", "atestado"]))
         self.add_node(HierarchicalNavNode("historico", "Histórico", NavNodeType.SUB_NIVEL, parent_id="meus_alunos", synonyms=["histórico escolar", "ficha histórica", "historico escolar"]))
         self.add_node(HierarchicalNavNode("turmas", "Turmas", NavNodeType.SUB_NIVEL, parent_id="meus_alunos", synonyms=["classes", "minhas turmas"]))
-        self.add_node(HierarchicalNavNode("configuracoes", "Configurações", NavNodeType.NIVEL_1, synonyms=["configuracao", "configurações do portal", "ajustes", "perfil"]))
+        self.add_node(HierarchicalNavNode("configuracoes", "Configurações", NavNodeType.NIVEL_1, synonyms=["configuracao", "configurações do portal", "ajustes", "perfil", "minha conta", "preferências", "preferencias"]))
 
 
 class DecomposedSequence(list):
@@ -1038,6 +1155,12 @@ def decompose_hierarchical_command(
         flags=re.IGNORECASE
     ).strip()
     single_clean = re.sub(r"^(?:de|do|da)\s+", "", single_clean, flags=re.IGNORECASE).strip()
+
+    # Higieniza modificadores de discurso e cortesia do final antes da busca
+    for m in COURTESY_AND_DISCOURSE_MODIFIERS:
+        if m.lower() in single_clean.lower():
+            single_clean = re.sub(re.escape(m), "", single_clean, flags=re.IGNORECASE).strip()
+    single_clean = re.sub(r"\s+(?:com\s+calma|rapidinho|por\s+favor|pfv)$", "", single_clean, flags=re.IGNORECASE).strip()
 
     single_node = model.find_node_by_label(single_clean)
     if not single_node and single_clean:

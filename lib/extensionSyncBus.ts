@@ -149,6 +149,11 @@ class ExtensionSyncBus {
         this.handleRecordObservation(msg.payload)
         break
       }
+
+      case 'EXECUTE_APP_TOOL': {
+        this.handleExecuteAppTool(msg.payload)
+        break
+      }
     }
   }
 
@@ -424,6 +429,80 @@ class ExtensionSyncBus {
       studentName: payload.studentName,
       success: true
     })
+  }
+
+  /**
+   * Executa ferramenta Tipo (a) delegada pelo Side Panel da Extensão (Arquitetura Unificada)
+   */
+  public handleExecuteAppTool(payload: { tool: string; params: Record<string, unknown>; source?: string }): void {
+    if (!payload || !payload.tool) return
+
+    const { tool, params } = payload
+
+    if (tool === 'add_todo' && params?.text) {
+      const currentTodos = loadChecklistTodos()
+      const newTodo: ChecklistTodo = {
+        id: `todo_${Date.now()}`,
+        text: String(params.text),
+        done: false,
+        category: 'one_off',
+        source: 'extension_relay',
+        createdAt: Date.now()
+      }
+      currentTodos.unshift(newTodo)
+      saveChecklistTodos(currentTodos)
+      this.broadcast('ACTIVE_CLASS_TODOS_UPDATED', { todos: currentTodos })
+      if (typeof window !== 'undefined') window.dispatchEvent(new Event('storage'))
+      return
+    }
+
+    if (tool === 'create_calendar_task' && params?.title && params?.date) {
+      try {
+        const raw = localStorage.getItem('teacher_calendar_tasks')
+        const tasks = raw ? JSON.parse(raw) : []
+        tasks.push({
+          id: `task_${Date.now()}`,
+          title: params.title,
+          date: params.date,
+          classRef: params.classRef || '',
+          type: params.type || 'tarefa',
+          description: params.description || '',
+          createdAt: new Date().toISOString()
+        })
+        localStorage.setItem('teacher_calendar_tasks', JSON.stringify(tasks))
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new Event('storage'))
+          window.dispatchEvent(new CustomEvent('teacher:calendar_task_created'))
+        }
+      } catch {}
+      return
+    }
+
+    if (tool === 'create_lesson_plan' && params?.title && params?.subject) {
+      try {
+        const raw = localStorage.getItem('teacher_lesson_plans')
+        const plans = raw ? JSON.parse(raw) : []
+        plans.push({
+          id: `plan_${Date.now()}`,
+          title: params.title,
+          subject: params.subject,
+          objectives: params.objectives || '',
+          className: params.className || '',
+          school: params.school || '',
+          duration: params.duration || '50',
+          createdAt: new Date().toISOString()
+        })
+        localStorage.setItem('teacher_lesson_plans', JSON.stringify(plans))
+        if (typeof window !== 'undefined') window.dispatchEvent(new Event('storage'))
+      } catch {}
+      return
+    }
+
+    // Dispara evento para qualquer outra ferramenta Tipo (a)
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('teacher:execute_agent_tool', { detail: payload }))
+      window.dispatchEvent(new Event('storage'))
+    }
   }
 }
 

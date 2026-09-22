@@ -52,6 +52,9 @@ export interface PlannerCalibrations {
   defaultDurationMinutes: number // Ex: 50 ou 100
   defaultMethodology: 'TBL' | 'Flipped Classroom' | 'CLIL' | 'PBL' | 'Gamificação' | 'Tradicional'
   autoIncludeBncc: boolean
+  autoSuggestMaterials?: boolean // Sugestão automática de materiais (padrão: false - manual first)
+  detailSpeechBalanceByStage?: boolean // Equilíbrio de fala detalhado por etapa (padrão: true)
+  suggestInteractionPerStage?: boolean // Permitir tipo de interação por etapa (padrão: true)
 }
 
 export interface CommunicationCalibrations {
@@ -129,7 +132,10 @@ export const DEFAULT_CALIBRATIONS: TeacherAppCalibrations = {
   planner: {
     defaultDurationMinutes: 50,
     defaultMethodology: 'TBL',
-    autoIncludeBncc: true
+    autoIncludeBncc: true,
+    autoSuggestMaterials: false,
+    detailSpeechBalanceByStage: true,
+    suggestInteractionPerStage: true
   },
   communication: {
     preferredChannel: 'whatsapp',

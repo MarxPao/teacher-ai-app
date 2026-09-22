@@ -178,14 +178,29 @@ export function getLevelGatingRule(profile: SubjectProfile, levelId: string): st
   return `=== REGRAS DE NÍVEL — ${level.label} (${profile.levelFramework.name}) ===\n${level.gatingRules}`
 }
 
+import { MISCONCEPTION_CATALOG } from './misconceptionCatalog'
+
 /**
- * Retorna o bloco de distratores diagnósticos formatado para o prompt da prova
+ * Retorna o bloco de distratores diagnósticos formatado para o prompt da prova,
+ * integrando padrões do perfil e vinculação a concepções alternativas (Misconceptions).
  */
-export function getDistractorBlock(profile: SubjectProfile): string {
-  if (!profile.distractorPatterns.length) return ''
-  const lines = profile.distractorPatterns
-    .slice(0, 8)  // limite para não inflar o prompt
+export function getDistractorBlock(profile: SubjectProfile, topic?: string): string {
+  const profileLines = profile.distractorPatterns
+    .slice(0, 6)
     .map((d, i) => `${i + 1}. ${d.pattern}: ${d.examples.slice(0, 2).join(' / ')}`)
-    .join('\n')
-  return `=== DESIGN DIAGNÓSTICO DE DISTRATORES — ${profile.nameShort.toUpperCase()} ===\nCada alternativa incorreta DEVE representar um erro diagnóstico real e documentado:\n${lines}`
+
+  const matchingMisconceptions = MISCONCEPTION_CATALOG.filter(m => 
+    m.subject === profile.id || profile.id.includes(m.subject) ||
+    (topic && m.topic.toLowerCase().includes(topic.toLowerCase()))
+  )
+
+  const misLines = matchingMisconceptions.slice(0, 4).map(m => 
+    `- [${m.code}] ${m.name}: ${m.distractorExamples.slice(0, 2).join('; ')}`
+  )
+
+  return `=== DESIGN DIAGNÓSTICO DE DISTRATORES — ${profile.nameShort.toUpperCase()} ===
+Cada alternativa incorreta DEVE representar um erro diagnóstico real e documentado:
+${profileLines.join('\n')}
+${misLines.length > 0 ? `\nMISCONCEPTIONS CATALOGADAS VINCULADAS (Alternativa_k ⟺ Misconception_k):\n${misLines.join('\n')}` : ''}
+No Gabarito Comentado, explicite qual misconception ou padrão cada alternativa incorreta representou.`
 }

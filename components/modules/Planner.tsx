@@ -13,6 +13,14 @@ import {
   getPostItStyles,
   getExactTimeRemaining,
 } from '@/lib/calendarUtils'
+import { getUnifiedClasses, subscribeToClassUpdates } from '@/lib/classService'
+import {
+  getLessonPlansFromBank,
+  BridgedLessonPlan,
+  getFullLessonPlanDocument,
+  buildFallbackLessonPlanDocument,
+} from '@/lib/calendarPlanBridge'
+import LessonPlanDocumentModal from '@/components/LessonPlanDocumentModal'
 
 const DAYS_SHORT = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
 const MONTHS = [
@@ -100,6 +108,7 @@ export const AGENDA_PALETTE = ['#8b5e3c', '#268bd2', '#859900', '#b58900', '#d33
 
 export default function Planner() {
   const [tasks, setTasks] = useState<CalendarTask[]>([])
+  const [bankPlans, setBankPlans] = useState<BridgedLessonPlan[]>([])
   const [activeTab, setActiveTab] = useState<'calendar' | 'week' | 'postits' | 'countdown' | 'table'>('calendar')
   const [currentDate, setCurrentDate] = useState(new Date())
   
@@ -134,6 +143,34 @@ export default function Planner() {
   const [selectedDay, setSelectedDay] = useState<string | null>(null) // YYYY-MM-DD
   const [showAddEditModal, setShowAddEditModal] = useState(false)
   const [editingTask, setEditingTask] = useState<CalendarTask | null>(null)
+
+  // Lesson Plan Document Box Modal State & Handler
+  const [isLessonDocModalOpen, setIsLessonDocModalOpen] = useState(false)
+  const [selectedLessonPlanDoc, setSelectedLessonPlanDoc] = useState<any>(null)
+
+  const handleOpenLessonPlanDoc = (target: any) => {
+    if (!target) return
+    const fullDoc = getFullLessonPlanDocument({
+      id: target.id,
+      lessonPlanId: target.lessonPlanId,
+      topic: target.topic || target.title,
+      date: target.date,
+      className: target.className || target.classRef
+    })
+    if (fullDoc) {
+      setSelectedLessonPlanDoc(fullDoc)
+    } else {
+      const fallback = buildFallbackLessonPlanDocument({
+        id: target.id,
+        topic: target.topic || target.title || 'Plano de Aula',
+        className: target.className || target.classRef || 'Turma Geral',
+        date: target.date || new Date().toISOString().split('T')[0],
+        description: target.description || target.shortDescription
+      })
+      setSelectedLessonPlanDoc(fallback)
+    }
+    setIsLessonDocModalOpen(true)
+  }
   
   // Custom Toast State
   const [toastMessage, setToastMessage] = useState<string | null>(null)
@@ -157,15 +194,14 @@ export default function Planner() {
     return () => clearInterval(interval)
   }, [])
 
-  // Load and migrate tasks
-  useEffect(() => {
+  // Load and migrate tasks & bank lesson plans
+  const reloadCalendarData = () => {
     try {
       const savedTasks = localStorage.getItem('teacher_calendar_tasks')
       if (savedTasks) {
         const parsed = JSON.parse(savedTasks)
         const realTasks = Array.isArray(parsed) ? parsed.filter(t => !t.id?.startsWith('demo-') && !t.id?.startsWith('suggest-')) : []
         setTasks(realTasks)
-        localStorage.setItem('teacher_calendar_tasks', JSON.stringify(realTasks))
       } else {
         setTasks([])
       }
@@ -174,10 +210,28 @@ export default function Planner() {
       setTasks([])
     }
 
+    try {
+      setBankPlans(getLessonPlansFromBank())
+    } catch (e) {
+      setBankPlans([])
+    }
+  }
+
+  useEffect(() => {
+    reloadCalendarData()
+    window.addEventListener('storage', reloadCalendarData)
+    window.addEventListener('teacher:calendar-sync', reloadCalendarData)
+    return () => {
+      window.removeEventListener('storage', reloadCalendarData)
+      window.removeEventListener('teacher:calendar-sync', reloadCalendarData)
+    }
+  }, [])
+
+  useEffect(() => {
+
     // Load Agenda Data (Classes, Schedule, Checklist) - Only 100% real data
     try {
-      const sc = localStorage.getItem('teacher_classes')
-      if (sc) setClasses(JSON.parse(sc))
+      setClasses(getUnifiedClasses())
       const sch = localStorage.getItem('teacher_agenda_schedule')
       if (sch) {
         const parsedSch = JSON.parse(sch)
@@ -193,6 +247,14 @@ export default function Planner() {
     } catch (e) {
       console.error('Error loading agenda items:', e)
     }
+  }, [])
+
+  // Escuta atualizações de turmas em tempo real (Fase 6)
+  useEffect(() => {
+    const unsubscribe = subscribeToClassUpdates((updatedClasses) => {
+      setClasses(updatedClasses)
+    })
+    return () => unsubscribe()
   }, [])
 
   const persistSchedule = (newSchedule: ScheduleItem[]) => {
@@ -314,13 +376,59 @@ export default function Planner() {
   }
 
   const handlePlanInStudio = (item: ScheduleItem) => {
+    let existingPlanId: string | undefined = undefined
+    try {
+      const rawBank = localStorage.getItem('teacher_lesson_plans_bank')
+      if (rawBank) {
+        const bank = JSON.parse(rawBank)
+        if (Array.isArray(bank)) {
+          const found = bank.find((p: any) =>
+            (p.classId === item.classId && p.topic?.toLowerCase() === item.topic?.toLowerCase()) ||
+            (p.className?.toLowerCase() === item.className?.toLowerCase() && p.topic?.toLowerCase() === item.topic?.toLowerCase())
+          )
+          if (found) existingPlanId = found.id
+        }
+      }
+    } catch {}
+
     const prefill = {
+      planId: existingPlanId,
       classId: item.classId,
       className: item.className,
       topic: item.topic,
       date: new Date().toISOString().split('T')[0],
     }
     localStorage.setItem('teacher_lesson_studio_prefill', JSON.stringify(prefill))
+    window.dispatchEvent(new CustomEvent('teacher:navigate', { detail: 'lessonstudio' }))
+  }
+
+  const handleOpenTaskInStudio = () => {
+    const classRef = formState.classRef || ''
+    const targetClass = classes.find(c => (classRef && c.name.toLowerCase() === classRef.toLowerCase()) || c.id === classRef)
+    let existingPlanId: string | undefined = undefined
+    try {
+      const rawBank = localStorage.getItem('teacher_lesson_plans_bank')
+      if (rawBank) {
+        const bank = JSON.parse(rawBank)
+        if (Array.isArray(bank)) {
+          const found = bank.find((p: any) =>
+            (p.date === formState.date && (p.classId === targetClass?.id || (classRef && p.className?.toLowerCase() === classRef.toLowerCase()))) ||
+            (formState.title && p.topic?.toLowerCase() === formState.title.toLowerCase())
+          )
+          if (found) existingPlanId = found.id
+        }
+      }
+    } catch {}
+
+    const prefill = {
+      planId: existingPlanId,
+      classId: targetClass?.id || undefined,
+      className: formState.classRef || targetClass?.name || 'Turma Geral',
+      topic: formState.title,
+      date: formState.date,
+    }
+    localStorage.setItem('teacher_lesson_studio_prefill', JSON.stringify(prefill))
+    setShowAddEditModal(false)
     window.dispatchEvent(new CustomEvent('teacher:navigate', { detail: 'lessonstudio' }))
   }
 
@@ -754,12 +862,23 @@ export default function Planner() {
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gridAutoRows: 'minmax(110px, 1fr)', gap: 6 }}>
                 {gridDays.map((dayInfo, idx) => {
                   const dayTasks = tasks.filter(t => t.date === dayInfo.dateStr)
+                  const dayBankPlans = bankPlans.filter(p => p.date === dayInfo.dateStr)
+                  const unrepresentedBankPlans = dayBankPlans.filter(p => !dayTasks.some(t => (t as any).lessonPlanId === p.id || t.id === `lesson_plan_${p.id}`))
+                  const totalCellItems = dayTasks.length + unrepresentedBankPlans.length
                   const isToday = dayInfo.dateStr === new Date().toISOString().split('T')[0]
                   
                   return (
                     <div
                       key={`${dayInfo.dateStr}-${idx}`}
-                      onClick={() => handleOpenAddModal(dayInfo.dateStr)}
+                      onClick={() => {
+                        const firstPlan = dayBankPlans[0]
+                        const firstLessonTask = dayTasks.find(t => (t.type as string) === 'aula' || t.title.toLowerCase().includes('aula') || Boolean((t as any).lessonPlanId))
+                        if (firstPlan || firstLessonTask) {
+                          handleOpenLessonPlanDoc(firstPlan || firstLessonTask)
+                        } else {
+                          handleOpenAddModal(dayInfo.dateStr)
+                        }
+                      }}
                       style={{
                         background: dayInfo.isCurrentMonth ? '#fff' : '#fcfaf2',
                         border: '1px solid rgba(88,110,117,0.06)',
@@ -784,28 +903,94 @@ export default function Planner() {
                         e.currentTarget.style.borderColor = 'rgba(88,110,117,0.06)'
                       }}
                     >
-                      {/* Day number */}
-                      <span style={{
-                        fontSize: 13, fontWeight: 700,
-                        color: !dayInfo.isCurrentMonth ? '#cbd5e1' : isToday ? '#b58900' : '#7a5c42',
-                        background: isToday ? 'rgba(181,137,0,0.1)' : 'transparent',
-                        borderRadius: RADIUS.md, padding: '2px 6px', alignSelf: 'flex-start'
-                      }}>
-                        {dayInfo.day} {isToday && '📅'}
-                      </span>
+                      {/* Day number & Pin */}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                        <span style={{
+                          fontSize: 13, fontWeight: 700,
+                          color: !dayInfo.isCurrentMonth ? '#cbd5e1' : isToday ? '#b58900' : '#7a5c42',
+                          background: isToday ? 'rgba(181,137,0,0.1)' : 'transparent',
+                          borderRadius: RADIUS.md, padding: '2px 6px', alignSelf: 'flex-start'
+                        }}>
+                          {dayInfo.day} {isToday && '🗓️'}
+                        </span>
 
-                      {/* Tasks List inside cell */}
+                        {(dayBankPlans.length > 0 || dayTasks.some(t => (t.type as string) === 'aula' || t.title.toLowerCase().includes('aula') || Boolean((t as any).lessonPlanId))) && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              const firstPlan = dayBankPlans[0]
+                              const firstLessonTask = dayTasks.find(t => (t.type as string) === 'aula' || t.title.toLowerCase().includes('aula') || Boolean((t as any).lessonPlanId))
+                              handleOpenLessonPlanDoc(firstPlan || firstLessonTask)
+                            }}
+                            title="Ver documento do planejamento de aula"
+                            style={{
+                              background: '#faf5f0',
+                              border: '1px solid #e8d8c8',
+                              borderRadius: 4,
+                              padding: '1px 3px',
+                              fontSize: 11,
+                              cursor: 'pointer',
+                              lineHeight: 1
+                            }}
+                          >
+                            📚
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Tasks & Lesson Plans List inside cell */}
                       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 3, marginTop: 6, overflow: 'hidden' }}>
+                        {unrepresentedBankPlans.map(plan => (
+                          <div
+                            key={`plan_${plan.id}`}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleOpenLessonPlanDoc(plan)
+                            }}
+                            style={{
+                              fontSize: 10,
+                              fontWeight: 700,
+                              padding: '3px 6px',
+                              borderRadius: 6,
+                              borderLeft: '3px solid #8b5e3c',
+                              border: plan.status === 'draft' ? '1px dashed #d97706' : '1px solid rgba(139,94,60,0.2)',
+                              background: '#fffcf8',
+                              color: '#2c1a0e',
+                              whiteSpace: 'nowrap',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              transition: 'all 0.15s',
+                              cursor: 'pointer'
+                            }}
+                            title={`Aula: ${plan.topic} (${plan.className}) - Clique para ver o documento`}
+                          >
+                            <span style={{ marginRight: 3 }}>📚</span>
+                            <span>{plan.topic}</span>
+                            <span style={{ marginLeft: 3, fontSize: 9, color: '#8b5e3c' }}>({plan.className})</span>
+                          </div>
+                        ))}
                         {dayTasks.slice(0, 3).map(task => {
                           const config = getTaskTypeConfig(task.type)
                           const days = getDaysUntil(task.date)
                           const group = getTaskUrgencyGroup(task)
                           const postIt = getPostItStyles(group, 0)
+                          const isLesson = (task.type as string) === 'aula' ||
+                            task.title.toLowerCase().includes('aula') ||
+                            task.id.startsWith('lesson_plan_') ||
+                            Boolean((task as any).lessonPlanId)
                           
                           return (
                             <div
                               key={task.id}
-                              onClick={(e) => handleOpenEditModal(task, e)}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                if (isLesson) {
+                                  handleOpenLessonPlanDoc(task)
+                                } else {
+                                  handleOpenEditModal(task, e)
+                                }
+                              }}
                               style={{
                                 fontSize: 10,
                                 fontWeight: 600,
@@ -818,7 +1003,8 @@ export default function Planner() {
                                 whiteSpace: 'nowrap',
                                 overflow: 'hidden',
                                 textOverflow: 'ellipsis',
-                                transition: 'all 0.15s'
+                                transition: 'all 0.15s',
+                                cursor: 'pointer'
                               }}
                               onMouseEnter={(e) => {
                                 e.stopPropagation()
@@ -837,9 +1023,9 @@ export default function Planner() {
                             </div>
                           )
                         })}
-                        {dayTasks.length > 3 && (
+                        {totalCellItems > 3 && (
                           <div style={{ fontSize: 9, color: '#b58900', fontWeight: 700, paddingLeft: 4 }}>
-                            + {dayTasks.length - 3} mais...
+                            + {totalCellItems - 3} mais...
                           </div>
                         )}
                       </div>
@@ -1034,7 +1220,7 @@ export default function Planner() {
                                   <button
                                     onClick={() => handlePlanInStudio(item)}
                                     style={{ background: 'none', border: 'none', color: '#8b5e3c', fontSize: 11, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 3, padding: 0 }}
-                                    title="Abrir no Planejamento de Aula"
+                                    title="Abrir no Planejamento"
                                   >
                                     <i className="ti ti-sparkles" /> Planejar Aula
                                   </button>
@@ -1805,6 +1991,19 @@ export default function Planner() {
                 )}
                 <button
                   type="button"
+                  onClick={handleOpenTaskInStudio}
+                  style={{
+                    background: '#8b5e3c', color: '#fff', border: 'none', borderRadius: RADIUS.lg,
+                    padding: '10px 18px', fontWeight: 700, cursor: 'pointer', fontSize: 13,
+                    display: 'flex', alignItems: 'center', gap: 6,
+                    marginRight: editingTask ? '0' : 'auto'
+                  }}
+                  title="Abrir ou criar plano completo no Planejamento (LessonStudio)"
+                >
+                  <i className="ti ti-sparkles" /> Planejar no Studio
+                </button>
+                <button
+                  type="button"
                   onClick={() => setShowAddEditModal(false)}
                   style={{ background: 'none', border: 'none', color: '#7a5c42', fontWeight: 600, cursor: 'pointer', fontSize: 14 }}
                 >
@@ -1990,6 +2189,13 @@ export default function Planner() {
           </div>
         </div>
       )}
+
+      {/* ==================== LESSON PLAN DOCUMENT MODAL BOX ==================== */}
+      <LessonPlanDocumentModal
+        isOpen={isLessonDocModalOpen}
+        onClose={() => setIsLessonDocModalOpen(false)}
+        plan={selectedLessonPlanDoc}
+      />
     </div>
   )
 }

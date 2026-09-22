@@ -382,6 +382,201 @@ async function postChatMessageHandler(
   }
 }
 
+import { checkDataSufficiency } from '@/lib/dataSufficiencyGate'
+
+// ─── HANDLER: grade_exam ─────────────────────────────────────────────────────
+
+async function gradeExamHandler(
+  connector: Connector,
+  params: Record<string, unknown>
+): Promise<CapabilityResult> {
+  try {
+    const { processOMRBatchAndUpdatePsychometrics } = await import('@/lib/omrPsychometricsBridge')
+    const { generateExecutivePedagogicalSummary } = await import('@/lib/executivePedagogicalSummary')
+    const sheets = (params.sheets as any[]) || []
+    const examId = (params.examId as string) || 'exam_default'
+    const examTitle = (params.examTitle as string) || 'Avaliação'
+    const topic = (params.topic as string) || 'Geral'
+    const answerKey = (params.answerKey as Record<number, string>) || { 1: 'A', 2: 'B', 3: 'C', 4: 'D', 5: 'A' }
+
+    const sufficiency = checkDataSufficiency(sheets, {
+      minRequired: 1,
+      entityName: 'folhas de resposta',
+      contextLabel: examTitle
+    })
+
+    let finalSheets = sheets
+    if (!sufficiency.isSufficient) {
+      if (params.simulation === true && typeof params.studentCount === 'number' && params.studentCount > 0) {
+        const count = params.studentCount as number
+        finalSheets = Array.from({ length: count }, (_, i) => ({
+          studentId: `student_${i + 1}`,
+          studentName: `Aluno ${i + 1}`,
+          group: i % 2 === 0 ? 'reference' : 'focus',
+          detectedAnswers: { ...answerKey }
+        }))
+      } else {
+        return {
+          success: false,
+          hasData: false,
+          requires_review: false,
+          layer_used: 'api',
+          error: sufficiency.message,
+          data: null
+        }
+      }
+    }
+
+    const batchResult = processOMRBatchAndUpdatePsychometrics(finalSheets, {
+      examId,
+      examTitle,
+      topic,
+      answerKey,
+      totalQuestions: Object.keys(answerKey).length
+    })
+
+    const questionMetadata = Object.keys(answerKey).map(qStr => {
+      const qNum = parseInt(qStr, 10)
+      return {
+        questionNumber: qNum,
+        correctAnswer: answerKey[qNum],
+        topic
+      }
+    })
+
+    const executiveSummary = generateExecutivePedagogicalSummary({
+      examTitle,
+      topic,
+      studentBKTUpdates: batchResult.studentBKTUpdates,
+      questionMetadata
+    })
+
+    return {
+      success: true,
+      hasData: true,
+      requires_review: false,
+      layer_used: 'api',
+      data: {
+        ...batchResult,
+        totalStudents: batchResult.totalSheetsProcessed,
+        averageScore: executiveSummary.classroomProfile.averageMasteryPercentage,
+        executiveSummary
+      }
+    }
+  } catch (err: unknown) {
+    return {
+      success: false,
+      requires_review: false,
+      error: `[ApiConnector:grade_exam] Falha ao processar lote de avaliação: ${err instanceof Error ? err.message : String(err)}`
+    }
+  }
+}
+
+// ─── HANDLER: get_exam_summary ───────────────────────────────────────────────
+
+async function getExamSummaryHandler(
+  connector: Connector,
+  params: Record<string, unknown>
+): Promise<CapabilityResult> {
+  try {
+    const { generateExecutivePedagogicalSummary } = await import('@/lib/executivePedagogicalSummary')
+    const examTitle = (params.examTitle as string) || 'Avaliação Bimestral'
+    const topic = (params.topic as string) || 'Geral'
+    const classRef = (params.classRef as string) || ''
+    let studentBKTUpdates = (params.studentBKTUpdates as any[]) || []
+
+    // Se não forneceu updates explícitos, busca no histórico real de provas do professor
+    if (studentBKTUpdates.length === 0 && (typeof window !== 'undefined' || typeof localStorage !== 'undefined')) {
+      try {
+        const rawHistory = localStorage.getItem('teacher_exam_history')
+        if (rawHistory) {
+          const history = JSON.parse(rawHistory)
+          if (Array.isArray(history)) {
+            const match = history.find((e: any) =>
+              (!classRef || e.classRef === classRef || (e.classRef && String(e.classRef).toLowerCase().includes(classRef.toLowerCase()))) &&
+              (!topic || topic === 'Geral' || (e.topic && String(e.topic).toLowerCase().includes(topic.toLowerCase())))
+            )
+            if (match && Array.isArray(match.results) && match.results.length > 0) {
+              studentBKTUpdates = match.results.map((r: any) => ({
+                studentId: r.studentId || 'std',
+                studentName: r.studentName,
+                topic: match.topic || topic,
+                previousMastery: 0.30,
+                newMastery: (r.totalScore / (r.maxScore || 10)),
+                isMastered: (r.totalScore / (r.maxScore || 10)) >= 0.70,
+                responses: (r.questionResults || []).map((qr: any, idx: number) => ({
+                  questionNumber: idx + 1,
+                  detectedAnswer: null,
+                  correctAnswer: '',
+                  isCorrect: Boolean(qr.correct || qr.isCorrect)
+                }))
+              }))
+            }
+          }
+        }
+      } catch {}
+    }
+
+    const sufficiency = checkDataSufficiency(studentBKTUpdates, {
+      minRequired: 1,
+      entityName: 'simulados ou avaliações registradas',
+      contextLabel: classRef ? `a turma ${classRef}` : undefined
+    })
+
+    if (!sufficiency.isSufficient) {
+      if (params.simulation === true && typeof params.studentCount === 'number' && params.studentCount > 0) {
+        const count = params.studentCount as number
+        studentBKTUpdates = Array.from({ length: count }, (_, i) => ({
+          studentId: `student_${i + 1}`,
+          studentName: `Aluno ${i + 1}`,
+          topic,
+          previousMastery: 0.20,
+          newMastery: i % 3 === 0 ? 0.45 : 0.85,
+          isMastered: i % 3 !== 0,
+          responses: [
+            { questionNumber: 1, detectedAnswer: 'A', correctAnswer: 'A', isCorrect: true },
+            { questionNumber: 2, detectedAnswer: i % 3 === 0 ? 'B' : 'C', correctAnswer: 'C', isCorrect: i % 3 !== 0 }
+          ]
+        }))
+      } else {
+        // Retorno honesto sem fabricação
+        return {
+          success: true,
+          hasData: false,
+          requires_review: false,
+          layer_used: 'api',
+          data: null,
+          message: sufficiency.message
+        }
+      }
+    }
+
+    const summary = generateExecutivePedagogicalSummary({
+      examTitle,
+      topic,
+      studentBKTUpdates,
+      questionMetadata: (params.questionMetadata as any[]) || [
+        { questionNumber: 1, correctAnswer: 'A', topic: `${topic} - Fundamentos` },
+        { questionNumber: 2, correctAnswer: 'C', topic: `${topic} - Aplicação` }
+      ]
+    })
+
+    return {
+      success: true,
+      hasData: true,
+      requires_review: false,
+      layer_used: 'api',
+      data: summary
+    }
+  } catch (err: unknown) {
+    return {
+      success: false,
+      requires_review: false,
+      error: `[ApiConnector:get_exam_summary] Falha ao gerar sumário executivo: ${err instanceof Error ? err.message : String(err)}`
+    }
+  }
+}
+
 // ─── REGISTRO NO ENGINE ───────────────────────────────────────────────────────
 
 /**
@@ -396,6 +591,8 @@ export function registerApiHandlers(): void {
   registerCapabilityHandler('api', 'list_channels', listChannelsHandler)
   registerCapabilityHandler('api', 'post_channel_message', postChannelMessageHandler)
   registerCapabilityHandler('api', 'post_chat_message', postChatMessageHandler)
+  registerCapabilityHandler('api', 'grade_exam', gradeExamHandler)
+  registerCapabilityHandler('api', 'get_exam_summary', getExamSummaryHandler)
 }
 
 /**
@@ -409,4 +606,7 @@ export const _handlers = {
   listChannels: listChannelsHandler,
   postChannelMessage: postChannelMessageHandler,
   postChatMessage: postChatMessageHandler,
+  gradeExam: gradeExamHandler,
+  getExamSummary: getExamSummaryHandler,
 } as const
+

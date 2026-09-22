@@ -34,7 +34,25 @@ let currentTabState = {
   isAuthenticated: false
 };
 
-// ─── CONFIGURAÇÃO DO CHROME SIDE PANEL (FIXO NA LATERAL) ───────────────────────
+// ─── COORDENAÇÃO MULTI-ABA VIA BROADCAST CHANNEL (ANTI-COLISÃO) ───────────────
+let sessionBroadcastChannel = null;
+try {
+  sessionBroadcastChannel = new BroadcastChannel('teacher_ai_session_coordination');
+  sessionBroadcastChannel.onmessage = (event) => {
+    const { action, activeTabId, portalId } = event.data || {};
+    if (action === 'ACQUIRE_TAB_LOCK') {
+      console.log(`[MultiTabCoordination] 🔒 Trava adquirida pela aba ${activeTabId} (${portalId || ''})`);
+      currentTabState.lockedTabId = activeTabId;
+    } else if (action === 'RELEASE_TAB_LOCK') {
+      if (currentTabState.lockedTabId === activeTabId) {
+        currentTabState.lockedTabId = null;
+      }
+    }
+  };
+} catch (e) {
+  console.warn('[TeacherAI] BroadcastChannel não disponível:', e);
+}
+
 if (typeof chrome !== 'undefined' && chrome.sidePanel && chrome.sidePanel.setPanelBehavior) {
   chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true })
     .catch((err) => console.warn('[TeacherAI Extension] Erro ao configurar openPanelOnActionClick:', err));
@@ -194,7 +212,39 @@ function identifyPortal(url) {
   return null;
 }
 
+function isAuthorizedPortalTab(tab) {
+  if (!tab || !tab.url) return false;
+  const url = tab.url.toLowerCase();
+  // Nunca autoriza páginas internas do navegador ou do próprio side panel
+  if (url.startsWith('chrome://') || url.startsWith('chrome-extension://') || url.startsWith('about:') || url.includes('side_panel')) {
+    return false;
+  }
+  // Mocks e sandboxes locais autorizados para desenvolvimento e testes
+  if (url.includes('portal_mock') || url.includes('portal_real')) {
+    return true;
+  }
+  if (url.includes('localhost:8000') || url.includes('127.0.0.1:8000') || url.includes('localhost:8080') || url.includes('127.0.0.1:8080')) {
+    return true;
+  }
+  // Portais catalogados em KNOWN_PORTALS
+  return Boolean(identifyPortal(url));
+}
+
+async function isAuthorizedPortalTabId(tabId) {
+  if (!tabId) return false;
+  try {
+    const tab = await chrome.tabs.get(tabId);
+    return isAuthorizedPortalTab(tab);
+  } catch {
+    return false;
+  }
+}
+
 async function checkTabAuthentication(tabId) {
+  const isAuthTab = await isAuthorizedPortalTabId(tabId);
+  if (!isAuthTab) {
+    return { isAuthenticated: false, userRole: 'unknown', reason: 'Aba não é portal escolar' };
+  }
   try {
     const results = await chrome.scripting.executeScript({
       target: { tabId },
@@ -519,89 +569,168 @@ function updateToolbarBadge(state) {
 async function handleExecutePortalAction(msg) {
   const { actionId, tabId, intent } = msg;
   const targetTabId = tabId || currentTabState.tabId;
+  const isAuthTab = await isAuthorizedPortalTabId(targetTabId);
 
-  if (!targetTabId) {
+  if (!targetTabId || !isAuthTab) {
     sendActionResult(actionId, {
       sucesso: false,
-      status: 'no_active_tab',
-      mensagem: 'Nenhuma aba ativa do portal foi encontrada no Chrome.'
+      status: 'no_authorized_portal_tab',
+      mensagem: 'Ação cancelada: a aba selecionada não é um portal escolar reconhecido.'
     });
     return;
   }
 
   const acao = intent.acao || 'lancar_nota';
   const aluno = intent.aluno || '';
-  const nota = intent.nota;
+  let nota = intent.nota;
   const faltas = intent.faltas || 1;
 
+  // Guardião Pedagógico de Validação e Normalização de Notas
+  if (acao === 'lancar_nota' && nota !== undefined && nota !== null) {
+    const rawNota = parseFloat(String(nota).replace(',', '.'));
+    if (!isNaN(rawNota)) {
+      if (rawNota > 10 && rawNota <= 100) {
+        nota = parseFloat((rawNota / 10).toFixed(1));
+        console.log(`[SafeWriter] 💡 Guardião Pedagógico: nota ${rawNota} normalizada para ${nota}`);
+      } else if (rawNota < 0 || rawNota > 100) {
+        sendActionResult(actionId, {
+          sucesso: false,
+          status: 'invalid_grade_range',
+          mensagem: `A nota ${rawNota} está fora da escala permitida (0 a 10). Por favor, confira o valor informado. ✨`
+        });
+        return;
+      } else {
+        nota = rawNota;
+      }
+    }
+  }
+
   try {
-    // 1. Executa o preenchimento seguro injetando na aba ativa
-    const results = await chrome.scripting.executeScript({
-      target: { tabId: targetTabId },
-      args: [acao, aluno, nota, faltas],
-      func: (acaoParam, alunoParam, notaParam, faltasParam) => {
-        // Localiza linha do aluno na tabela
-        const rows = Array.from(document.querySelectorAll('table tr'));
-        let targetRow = null;
+    let execResult = null;
 
-        const cleanTarget = alunoParam.trim().toLowerCase();
-        const firstName = cleanTarget.split(' ')[0];
-
-        for (const r of rows) {
-          const txt = r.innerText.toLowerCase();
-          if (txt.includes(cleanTarget)) {
-            targetRow = r;
-            break;
+    // 1. Tenta envio direto para o content.js da aba ativa (motor completo com Shadow DOM, React/Vue setters e ancoragem espacial)
+    try {
+      execResult = await new Promise((resolve, reject) => {
+        chrome.tabs.sendMessage(
+          targetTabId,
+          {
+            action: 'EXECUTE_PORTAL_ACTION',
+            actionId,
+            intent,
+            acao,
+            aluno,
+            nota,
+            faltas,
+            payload: {
+              type: acao === 'lancar_nota' ? 'grades' : (acao === 'lancar_falta' ? 'attendance' : acao),
+              studentGrades: acao === 'lancar_nota' ? [{ name: aluno, grade: nota }] : [],
+              absentStudents: acao === 'lancar_falta' ? [aluno] : [],
+              aluno,
+              nota,
+              faltas,
+              ...intent
+            }
+          },
+          (response) => {
+            if (chrome.runtime.lastError) {
+              reject(chrome.runtime.lastError);
+            } else {
+              resolve(response);
+            }
           }
-        }
+        );
+      });
+    } catch (msgErr) {
+      console.warn('[Background] content.js não respondeu diretamente via sendMessage; tentando injeção segura de fallback:', msgErr);
+    }
 
-        if (!targetRow && firstName.length > 2) {
+    // 2. Fallback caso content.js não estivesse presente ou não tenha tratado a mensagem
+    if (!execResult || (!execResult.sucesso && !execResult.success && execResult.filledCount === undefined)) {
+      const results = await chrome.scripting.executeScript({
+        target: { tabId: targetTabId },
+        args: [acao, aluno, nota, faltas],
+        func: (acaoParam, alunoParam, notaParam, faltasParam) => {
+          // Localiza linha do aluno na tabela
+          const rows = Array.from(document.querySelectorAll('table tr, tr, div.student-row, li'));
+          let targetRow = null;
+
+          const cleanTarget = alunoParam.trim().toLowerCase();
+          const firstName = cleanTarget.split(' ')[0];
+
           for (const r of rows) {
             const txt = r.innerText.toLowerCase();
-            if (txt.includes(firstName)) {
+            if (txt.includes(cleanTarget)) {
               targetRow = r;
               break;
             }
           }
-        }
 
-        if (!targetRow) {
-          return { sucesso: false, status: 'student_not_found', aluno: alunoParam };
-        }
-
-        // Busca input na linha
-        const inputs = Array.from(targetRow.querySelectorAll('input:not([type="hidden"]):not([type="checkbox"])'));
-        if (inputs.length === 0) {
-          return { sucesso: false, status: 'no_editable_inputs', aluno: alunoParam };
-        }
-
-        const input = inputs[0];
-        const valBefore = input.value || '';
-        const targetValue = (acaoParam === 'lancar_nota') ? String(notaParam) : String(faltasParam);
-
-        // Preenche com disparo de eventos seguros
-        input.focus();
-        input.value = targetValue;
-        input.dispatchEvent(new Event('input', { bubbles: true }));
-        input.dispatchEvent(new Event('change', { bubbles: true }));
-
-        return {
-          sucesso: true,
-          status: 'draft_completed_pending_submit',
-          diff: {
-            aluno: alunoParam,
-            campo: acaoParam === 'lancar_nota' ? 'nota' : 'falta',
-            antes: valBefore,
-            depois: targetValue,
-            drift_detectado: false
+          if (!targetRow && firstName.length > 2) {
+            for (const r of rows) {
+              const txt = r.innerText.toLowerCase();
+              if (txt.includes(firstName)) {
+                targetRow = r;
+                break;
+              }
+            }
           }
-        };
-      }
-    });
 
-    const execResult = (results && results[0] && results[0].result) || {
-      sucesso: false,
-      status: 'execution_failed'
+          if (!targetRow) {
+            return { sucesso: false, status: 'student_not_found', aluno: alunoParam };
+          }
+
+          // Busca input na linha
+          const inputs = Array.from(targetRow.querySelectorAll('input:not([type="hidden"]):not([type="checkbox"])'));
+          if (inputs.length === 0) {
+            return { sucesso: false, status: 'no_editable_inputs', aluno: alunoParam };
+          }
+
+          const input = inputs[0];
+          const valBefore = input.value || '';
+          const targetValue = (acaoParam === 'lancar_nota') ? String(notaParam) : String(faltasParam);
+
+          // Preenche com disparo de eventos seguros e compatibilidade com React/Vue
+          input.focus();
+          const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
+          if (nativeSetter) {
+            nativeSetter.set.call(input, targetValue);
+          } else {
+            input.value = targetValue;
+          }
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+          input.dispatchEvent(new Event('change', { bubbles: true }));
+          input.dispatchEvent(new Event('blur', { bubbles: true }));
+
+          return {
+            sucesso: true,
+            status: 'draft_completed_pending_submit',
+            diff: {
+              aluno: alunoParam,
+              campo: acaoParam === 'lancar_nota' ? 'nota' : 'falta',
+              antes: valBefore,
+              depois: targetValue,
+              drift_detectado: false
+            }
+          };
+        }
+      });
+
+      execResult = (results && results[0] && results[0].result) || {
+        sucesso: false,
+        status: 'execution_failed'
+      };
+    }
+
+    const isSuccess = Boolean(execResult.sucesso || execResult.success || (execResult.filledCount > 0));
+    const normalizedResult = {
+      sucesso: isSuccess,
+      status: execResult.status || (isSuccess ? 'draft_completed_pending_submit' : 'execution_failed'),
+      diff: execResult.diff || {
+        aluno,
+        campo: acao === 'lancar_nota' ? 'nota' : 'falta',
+        depois: String(nota ?? faltas)
+      },
+      ...execResult
     };
 
     // 2. Captura screenshot da aba visível para evidência e card de aprovação
@@ -643,12 +772,31 @@ function jsonStr(obj) {
 
 // Keep-Alive Duplex Port com Side Panel (evita suspensão MV3 aos 30s)
 chrome.runtime.onConnect.addListener((port) => {
-  if (port.name === 'keepAliveSidePanel') {
+  if (port.name === 'keepAliveSidePanel' || port.name === 'teacher_ai_keepalive') {
+    port.onMessage.addListener((msg) => {
+      if (msg?.type === 'KEEPALIVE_PING') {
+        try {
+          port.postMessage({ type: 'KEEPALIVE_PONG', timestamp: Date.now() });
+        } catch (e) {}
+      }
+    });
     port.onDisconnect.addListener(() => {
       // Porta desconectada (side panel fechado)
     });
   }
 });
+
+// Alarme de retaguarda para Service Worker MV3 (mantém liveness periódico de 25s)
+try {
+  if (typeof chrome !== 'undefined' && chrome.alarms) {
+    chrome.alarms.create('teacher_ai_sw_heartbeat', { periodInMinutes: 0.4 }); // ~24s
+    chrome.alarms.onAlarm.addListener((alarm) => {
+      if (alarm.name === 'teacher_ai_sw_heartbeat') {
+        // Heartbeat silencioso para evitar inatividade do Service Worker
+      }
+    });
+  }
+} catch (e) {}
 
 chrome.tabs.onActivated.addListener(() => {
   evaluateActiveTab();
@@ -702,23 +850,174 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  // ─── RELAY DE FERRAMENTAS DO APP PARA A EXTENSÃO (ARQUITETURA UNIFICADA) ───
+  if (message.action === 'RELAY_TOOL_EXECUTION') {
+    (async () => {
+      const payload = message.payload || {};
+      const { tool, params, portalId } = payload;
+
+      // 1. Localiza aba ativa de portal conectado
+      let targetTabId = null;
+      try {
+        const activeTabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+        if (activeTabs && activeTabs.length > 0 && isAuthorizedPortalTab(activeTabs[0])) {
+          targetTabId = activeTabs[0].id;
+        }
+      } catch {}
+
+      if (!targetTabId) {
+        try {
+          const tabs = await chrome.tabs.query({});
+          const portalTab = tabs.find(t => isAuthorizedPortalTab(t));
+          targetTabId = portalTab ? portalTab.id : (isAuthorizedPortalTab(currentTabState) ? currentTabState.tabId : null);
+        } catch {}
+      }
+
+      // Caso desconectado: recusa honesta e transparente à professora
+      if (!targetTabId) {
+        sendResponse({
+          success: false,
+          status: 'extension_disconnected',
+          verified: false,
+          error: 'A extensão não encontrou nenhuma aba aberta do portal escolar conectado. Abra o portal no navegador para que a Rafinha possa executar a ação.'
+        });
+        return;
+      }
+
+      // 2. Roteia execução de acordo com o tipo de ferramenta
+      try {
+        if (tool === 'read_roster' || (tool === 'invoke_teacher_capability' && params?.capability === 'read_roster')) {
+          chrome.tabs.sendMessage(targetTabId, {
+            action: 'EXECUTE_SKILL_GRAPH',
+            skillGraph: null
+          }, (graphResp) => {
+            if (chrome.runtime.lastError || !graphResp?.ok) {
+              // Fallback gracioso para leitura direta de tabela no DOM
+              chrome.tabs.sendMessage(targetTabId, { action: 'READ_ACTIVE_PORTAL_ROSTER' }, (rosterResp) => {
+                const students = rosterResp?.students || [];
+                sendResponse({
+                  success: Boolean(rosterResp && rosterResp.sucesso),
+                  verified: Boolean(students.length > 0),
+                  verification_method: 'dom_roster_table',
+                  students,
+                  data: { students },
+                  error: rosterResp?.mensagem
+                });
+              });
+            } else {
+              const students = graphResp.records || graphResp.students || [];
+              sendResponse({
+                success: true,
+                verified: true,
+                verification_method: 'graph_executor_dom',
+                students,
+                data: { students, trace: graphResp.trace },
+                trace: graphResp.trace
+              });
+            }
+          });
+          return;
+        }
+
+        if (tool === 'execute_portal_action' || tool === 'fill_school_portal') {
+          chrome.tabs.sendMessage(targetTabId, {
+            action: 'EXECUTE_PORTAL_ACTION',
+            payload: params
+          }, async (actionResp) => {
+            if (chrome.runtime.lastError) {
+              sendResponse({
+                success: false,
+                verified: false,
+                error: chrome.runtime.lastError.message
+              });
+              return;
+            }
+
+            let screenshot = null;
+            try {
+              screenshot = await chrome.tabs.captureVisibleTab(null, { format: 'png' });
+            } catch {}
+
+            sendResponse({
+              success: Boolean(actionResp?.ok || actionResp?.success || actionResp?.sucesso),
+              verified: Boolean(actionResp?.verified || actionResp?.ok || actionResp?.sucesso),
+              verification_method: 'dom_readback',
+              status: actionResp?.status || 'success',
+              screenshot,
+              data: actionResp,
+              message: actionResp?.mensagem || actionResp?.message || 'Campos preenchidos com sucesso no DOM do portal.'
+            });
+          });
+          return;
+        }
+
+        if (tool === 'confirm_portal_submission') {
+          chrome.tabs.sendMessage(targetTabId, {
+            action: 'RESUME_EXECUTION',
+            approved: params?.action === 'approve'
+          }, (resResp) => {
+            sendResponse({
+              success: true,
+              verified: true,
+              verification_method: 'checkpoint_approval',
+              action: params?.action
+            });
+          });
+          return;
+        }
+
+        if (tool === 'show_portal_screenshot') {
+          let screenshot = null;
+          try {
+            screenshot = await chrome.tabs.captureVisibleTab(null, { format: 'png' });
+          } catch {}
+          sendResponse({
+            success: Boolean(screenshot),
+            verified: true,
+            screenshot,
+            message: screenshot ? 'Screenshot capturada da tela do portal.' : 'Não foi possível capturar a tela.'
+          });
+          return;
+        }
+
+        // Caso genérico
+        chrome.tabs.sendMessage(targetTabId, {
+          action: 'EXECUTE_PORTAL_ACTION',
+          payload: params
+        }, (resp) => {
+          sendResponse({
+            success: Boolean(resp?.ok || resp?.success || resp?.sucesso),
+            verified: Boolean(resp?.verified),
+            data: resp
+          });
+        });
+
+      } catch (err) {
+        sendResponse({
+          success: false,
+          verified: false,
+          error: err.message
+        });
+      }
+    })();
+    return true;
+  }
+
   if (message.action === 'READ_ACTIVE_PORTAL_ROSTER') {
     (async () => {
       let targetTabId = message.tabId;
       if (!targetTabId) {
         try {
           const activeTabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-          if (activeTabs && activeTabs.length > 0 && activeTabs[0].url && !activeTabs[0].url.startsWith('chrome')) {
+          if (activeTabs && activeTabs.length > 0 && isAuthorizedPortalTab(activeTabs[0])) {
             targetTabId = activeTabs[0].id;
           }
         } catch {}
       }
       if (!targetTabId) {
         const tabs = await chrome.tabs.query({});
-        const portalTab = tabs.find(t => t.url && (t.url.includes('portal_mock') || t.url.includes('portal_real'))) ||
-                          tabs.find(t => t.url && !t.url.startsWith('chrome') && !t.url.endsWith(':3000/') && !t.url.endsWith(':3000') && identifyPortal(t.url)) ||
-                          tabs.find(t => t.url && (t.url.startsWith('http') || t.url.startsWith('file')) && !t.url.includes('side_panel') && !t.url.endsWith(':3000/') && !t.url.endsWith(':3000'));
-        targetTabId = portalTab ? portalTab.id : currentTabState.tabId;
+        const portalTab = tabs.find(t => isAuthorizedPortalTab(t));
+        targetTabId = portalTab ? portalTab.id : (isAuthorizedPortalTab(currentTabState) ? currentTabState.tabId : null);
       }
       if (!targetTabId) {
         sendResponse({ sucesso: false, mensagem: 'Nenhuma aba ativa do portal identificada.' });
@@ -777,24 +1076,42 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       if (!targetTabId) {
         try {
           const activeTabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-          if (activeTabs && activeTabs.length > 0 && activeTabs[0].url && !activeTabs[0].url.startsWith('chrome')) {
+          if (activeTabs && activeTabs.length > 0 && isAuthorizedPortalTab(activeTabs[0])) {
             targetTabId = activeTabs[0].id;
           }
         } catch {}
       }
       if (!targetTabId) {
         const tabs = await chrome.tabs.query({});
-        const portalTab = tabs.find(t => t.url && (t.url.includes('portal_mock') || t.url.includes('portal_real'))) ||
-                          tabs.find(t => t.url && !t.url.startsWith('chrome') && !t.url.endsWith(':3000/') && !t.url.endsWith(':3000') && identifyPortal(t.url)) ||
-                          tabs.find(t => t.url && (t.url.startsWith('http') || t.url.startsWith('file')) && !t.url.includes('side_panel') && !t.url.endsWith(':3000/') && !t.url.endsWith(':3000'));
-        targetTabId = portalTab ? portalTab.id : currentTabState.tabId;
+        const portalTab = tabs.find(t => isAuthorizedPortalTab(t));
+        targetTabId = portalTab ? portalTab.id : (isAuthorizedPortalTab(currentTabState) ? currentTabState.tabId : null);
       }
       if (!targetTabId) {
         sendResponse({ sucesso: false, mensagem: 'Nenhuma aba ativa do portal para escrita.' });
         return;
       }
 
-      const { studentName, targetValue, actionType } = message;
+      let { studentName, targetValue, actionType } = message;
+
+      // Guardião Pedagógico de Validação e Normalização de Notas
+      if ((actionType === 'lancar_nota' || !actionType) && targetValue !== undefined && targetValue !== null) {
+        const rawNota = parseFloat(String(targetValue).replace(',', '.'));
+        if (!isNaN(rawNota)) {
+          if (rawNota > 10 && rawNota <= 100) {
+            targetValue = String(parseFloat((rawNota / 10).toFixed(1)));
+            console.log(`[SafeWriter] 💡 Guardião Pedagógico: nota normalizada para ${targetValue}`);
+          } else if (rawNota < 0 || rawNota > 100) {
+            sendResponse({
+              sucesso: false,
+              status: 'invalid_grade_range',
+              mensagem: `A nota ${rawNota} está fora da escala permitida (0 a 10). Por favor, confira o valor informado. ✨`
+            });
+            return;
+          } else {
+            targetValue = String(rawNota);
+          }
+        }
+      }
 
       try {
         const results = await chrome.scripting.executeScript({
@@ -940,17 +1257,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       if (!targetTabId) {
         try {
           const activeTabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-          if (activeTabs && activeTabs.length > 0 && activeTabs[0].url && !activeTabs[0].url.startsWith('chrome')) {
+          if (activeTabs && activeTabs.length > 0 && isAuthorizedPortalTab(activeTabs[0])) {
             targetTabId = activeTabs[0].id;
           }
         } catch {}
       }
       if (!targetTabId) {
         const tabs = await chrome.tabs.query({});
-        const portalTab = tabs.find(t => t.url && (t.url.includes('portal_mock') || t.url.includes('portal_real'))) ||
-                          tabs.find(t => t.url && !t.url.startsWith('chrome') && !t.url.endsWith(':3000/') && !t.url.endsWith(':3000') && identifyPortal(t.url)) ||
-                          tabs.find(t => t.url && (t.url.startsWith('http') || t.url.startsWith('file')) && !t.url.includes('side_panel') && !t.url.endsWith(':3000/') && !t.url.endsWith(':3000'));
-        targetTabId = portalTab ? portalTab.id : currentTabState.tabId;
+        const portalTab = tabs.find(t => isAuthorizedPortalTab(t));
+        targetTabId = portalTab ? portalTab.id : (isAuthorizedPortalTab(currentTabState) ? currentTabState.tabId : null);
       }
       if (!targetTabId) {
         sendResponse({ sucesso: false, mensagem: 'Nenhuma aba ativa do portal identificada.' });
@@ -1063,17 +1378,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       if (!targetTabId) {
         try {
           const activeTabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-          if (activeTabs && activeTabs.length > 0 && activeTabs[0].url && !activeTabs[0].url.startsWith('chrome')) {
+          if (activeTabs && activeTabs.length > 0 && isAuthorizedPortalTab(activeTabs[0])) {
             targetTabId = activeTabs[0].id;
           }
         } catch {}
       }
       if (!targetTabId) {
         const tabs = await chrome.tabs.query({});
-        const portalTab = tabs.find(t => t.url && (t.url.includes('portal_mock') || t.url.includes('portal_real'))) ||
-                          tabs.find(t => t.url && !t.url.startsWith('chrome') && !t.url.endsWith(':3000/') && !t.url.endsWith(':3000') && identifyPortal(t.url)) ||
-                          tabs.find(t => t.url && (t.url.startsWith('http') || t.url.startsWith('file')) && !t.url.includes('side_panel') && !t.url.endsWith(':3000/') && !t.url.endsWith(':3000'));
-        targetTabId = portalTab ? portalTab.id : currentTabState.tabId;
+        const portalTab = tabs.find(t => isAuthorizedPortalTab(t));
+        targetTabId = portalTab ? portalTab.id : (isAuthorizedPortalTab(currentTabState) ? currentTabState.tabId : null);
       }
       if (!targetTabId) {
         sendResponse({ sucesso: false, mensagem: 'Nenhuma aba ativa do portal identificada para seleção.' });
@@ -1272,17 +1585,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       if (!targetTabId) {
         try {
           const activeTabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-          if (activeTabs && activeTabs.length > 0 && activeTabs[0].url && !activeTabs[0].url.startsWith('chrome')) {
+          if (activeTabs && activeTabs.length > 0 && isAuthorizedPortalTab(activeTabs[0])) {
             targetTabId = activeTabs[0].id;
           }
         } catch {}
       }
       if (!targetTabId) {
         const tabs = await chrome.tabs.query({});
-        const portalTab = tabs.find(t => t.url && (t.url.includes('portal_mock') || t.url.includes('portal_real'))) ||
-                          tabs.find(t => t.url && !t.url.startsWith('chrome') && !t.url.endsWith(':3000/') && !t.url.endsWith(':3000') && identifyPortal(t.url)) ||
-                          tabs.find(t => t.url && (t.url.startsWith('http') || t.url.startsWith('file')) && !t.url.includes('side_panel') && !t.url.endsWith(':3000/') && !t.url.endsWith(':3000'));
-        targetTabId = portalTab ? portalTab.id : currentTabState.tabId;
+        const portalTab = tabs.find(t => isAuthorizedPortalTab(t));
+        targetTabId = portalTab ? portalTab.id : (isAuthorizedPortalTab(currentTabState) ? currentTabState.tabId : null);
       }
       if (!targetTabId) {
         sendResponse({ sucesso: false, mensagem: 'Nenhuma aba ativa do portal identificada.' });
@@ -1477,17 +1788,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       if (!targetTabId) {
         try {
           const activeTabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-          if (activeTabs && activeTabs.length > 0 && activeTabs[0].url && !activeTabs[0].url.startsWith('chrome')) {
+          if (activeTabs && activeTabs.length > 0 && isAuthorizedPortalTab(activeTabs[0])) {
             targetTabId = activeTabs[0].id;
           }
         } catch {}
       }
       if (!targetTabId) {
         const tabs = await chrome.tabs.query({});
-        const portalTab = tabs.find(t => t.url && (t.url.includes('portal_mock') || t.url.includes('portal_real'))) ||
-                          tabs.find(t => t.url && !t.url.startsWith('chrome') && !t.url.endsWith(':3000/') && !t.url.endsWith(':3000') && identifyPortal(t.url)) ||
-                          tabs.find(t => t.url && (t.url.startsWith('http') || t.url.startsWith('file')) && !t.url.includes('side_panel') && !t.url.endsWith(':3000/') && !t.url.endsWith(':3000'));
-        targetTabId = portalTab ? portalTab.id : currentTabState.tabId;
+        const portalTab = tabs.find(t => isAuthorizedPortalTab(t));
+        targetTabId = portalTab ? portalTab.id : (isAuthorizedPortalTab(currentTabState) ? currentTabState.tabId : null);
       }
       if (!targetTabId) {
         sendResponse({ sucesso: false, mensagem: 'Nenhuma aba ativa do portal identificada para leitura.' });

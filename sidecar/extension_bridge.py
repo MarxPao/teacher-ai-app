@@ -14,6 +14,7 @@ import logging
 import threading
 import time
 from typing import Any, Dict, Optional, Set
+from urllib.parse import urlparse
 
 try:
     import websockets
@@ -107,10 +108,72 @@ class ExtensionBridge:
             "is_authenticated": False
         }
 
+    ALLOWED_ORIGIN_SCHEMES = ("http", "https")
+    ALLOWED_ORIGIN_HOSTNAMES = ("127.0.0.1", "localhost", "testserver")
+
+    @classmethod
+    def _is_origin_allowed(cls, origin: Optional[str]) -> bool:
+        """
+        Valida a origem da conexão WebSocket (Proteção contra Cross-Site WebSocket Hijacking).
+        Permite:
+        - None / vazio: ferramentas locais, testes automatizados e scripts CLI locais.
+        - chrome-extension://*: extensão legítima no Chrome.
+        - http(s)://localhost / http(s)://127.0.0.1: painel local de QA/harness.
+        Rejeita:
+        - 'null': sandboxed iframes.
+        - Qualquer domínio web externo (ex: https://malicious.com).
+        """
+        if origin is None or origin == "":
+            return True
+
+        if origin == "null":
+            return False
+
+        if origin.startswith("chrome-extension://"):
+            return True
+
+        try:
+            parsed = urlparse(origin)
+            if parsed.scheme in cls.ALLOWED_ORIGIN_SCHEMES and parsed.hostname in cls.ALLOWED_ORIGIN_HOSTNAMES:
+                return True
+        except Exception:
+            return False
+
+        return False
+
+    @staticmethod
+    def _extract_origin(websocket: Any) -> Optional[str]:
+        """Extrai o cabeçalho Origin da requisição WebSocket de forma resiliente a diferentes versões da biblioteca websockets."""
+        # websockets 13+ (websocket.request.headers)
+        req = getattr(websocket, "request", None)
+        if req is not None and hasattr(req, "headers"):
+            return req.headers.get("Origin") or req.headers.get("origin")
+
+        # websockets < 13 (websocket.request_headers)
+        req_headers = getattr(websocket, "request_headers", None)
+        if req_headers is not None:
+            return req_headers.get("Origin") or req_headers.get("origin")
+
+        # Fallback para dicionário/objeto headers direto
+        headers = getattr(websocket, "headers", None)
+        if headers is not None and hasattr(headers, "get"):
+            return headers.get("Origin") or headers.get("origin")
+
+        return None
+
     async def _handle_connection(self, websocket: Any):
         """Gerencia o ciclo de vida da conexão WebSocket da extensão."""
+        origin = self._extract_origin(websocket)
+        if not self._is_origin_allowed(origin):
+            logger.warning(f"[ExtensionBridge] ⛔ Conexão WebSocket rejeitada de origem não autorizada: '{origin}'")
+            try:
+                await websocket.close(1008, "Policy Violation: Untrusted Origin")
+            except Exception:
+                pass
+            return
+
         self.active_sockets.add(websocket)
-        logger.info("[ExtensionBridge] 🔌 Extensão do Chrome conectada via WebSocket.")
+        logger.info(f"[ExtensionBridge] 🔌 Conexão WebSocket autorizada (Origem: {origin or 'local'}).")
         try:
             # Envia mensagem inicial de boas-vindas
             await websocket.send(json.dumps({

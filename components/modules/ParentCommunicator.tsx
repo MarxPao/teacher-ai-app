@@ -29,10 +29,25 @@ export default function ParentCommunicator() {
 
  const [generatedReport, setGeneratedReport] = useState('')
  const [generating, setGenerating] = useState(false)
+ const [packageNotice, setPackageNotice] = useState<string | null>(null)
 
  const selectedStudent = students.find(s => s.id === selectedStudentId) || students[0]
 
  useEffect(() => {
+ try {
+ const prefillRaw = localStorage.getItem('teacher_parent_comms_prefill')
+ if (prefillRaw) {
+ const prefill = JSON.parse(prefillRaw)
+ if (prefill.draftMessage) {
+ setGeneratedReport(prefill.draftMessage)
+ if (prefill.tone && ['acolhedor', 'formal', 'direto'].includes(prefill.tone)) {
+ setTone(prefill.tone)
+ }
+ setPackageNotice(`📦 Rascunho da aula "${prefill.topic || 'Plano de Aula'}" (${prefill.className || 'Turma'}) carregado do Pacote de Aula. Aguardando sua revisão manual (nenhum envio automático realizado).`)
+ return
+ }
+ }
+ } catch {}
  handleGenerateReport()
  }, [selectedStudentId, period, tone])
 
@@ -143,6 +158,18 @@ Formate de modo ideal para envio direto via WhatsApp!`
  </span>
  {generating && <span style={{ fontSize: 12, color: '#b58900' }}><i className="ti ti-loader" style={{ animation: 'spin 1s linear infinite' }} /> Gerando com IA...</span>}
  </div>
+
+ {packageNotice && (
+ <div style={{ background: '#ecfdf5', border: '1.5px solid #10b981', borderRadius: RADIUS.md, padding: '10px 14px', marginBottom: 12, color: '#065f46', fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+ <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+ <i className="ti ti-shield-check" style={{ fontSize: 18, color: '#059669' }} />
+ <span>{packageNotice}</span>
+ </div>
+ <span style={{ fontSize: 10.5, background: '#d1fae5', color: '#047857', padding: '3px 8px', borderRadius: 4, fontWeight: 800, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
+ 🔒 Rascunho Seguro
+ </span>
+ </div>
+ )}
 
  <textarea
  value={generatedReport}

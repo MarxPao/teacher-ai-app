@@ -587,25 +587,30 @@ Capacidades suportadas:
 - 'post_grade': lança notas (sempre supervisionado)
 - 'read_assignments': lê tarefas e atividades
 - 'read_calendar': lê calendário ou datas
-- 'read_board': lê quadros e listas do Trello`,
+- 'read_board': lê quadros e listas do Trello
+- 'grade_exam': realiza a correção OMR/gabarito de provas, atualiza BKT/DINA/DIF e gera diagnóstico
+- 'get_exam_summary': gera o sumário executivo pedagógico de 1 página sem jargões da avaliação`,
     input_schema: {
       type: 'object',
       properties: {
         capability: {
           type: 'string',
-          enum: ['read_roster', 'read_grades', 'post_grade', 'read_assignments', 'read_calendar', 'read_board'],
+          enum: ['read_roster', 'read_grades', 'post_grade', 'read_assignments', 'read_calendar', 'read_board', 'grade_exam', 'get_exam_summary'],
           description: 'A capacidade a ser executada no conector externo.'
         },
         connector_hint: {
           type: 'string',
-          description: 'Nome, domínio ou identificador da plataforma citada pelo professor (ex: "machado", "trello", "plurall"). Se não citado, deixe vazio para descoberta automática.'
+          description: 'Nome, domínio ou identificador da plataforma citada pelo professor (ex: "machado", "trello", "plurall", "assessment"). Se não citado, deixe vazio para descoberta automática.'
         },
         params: {
           type: 'object',
-          description: 'Parâmetros específicos da execução (ex: { classRef: "8A", boardId: "..." }).',
+          description: 'Parâmetros específicos da execução (ex: { classRef: "8A", examId: "...", topic: "..." }).',
           properties: {
             classRef: { type: 'string', description: 'Referência da turma' },
-            boardId:  { type: 'string', description: 'ID do quadro ou lista' }
+            boardId:  { type: 'string', description: 'ID do quadro ou lista' },
+            examId:   { type: 'string', description: 'ID da avaliação' },
+            examTitle:{ type: 'string', description: 'Título da avaliação' },
+            topic:    { type: 'string', description: 'Tópico ou habilidade avaliada' }
           }
         }
       },

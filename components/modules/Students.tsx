@@ -24,6 +24,11 @@ import {
   recordSyncFailure
 } from '@/lib/portalConnectionService'
 import PeiManagementModal from '@/components/PeiManagementModal'
+import EditableDocumentModal from '@/components/editableDocument/EditableDocumentModal'
+import StudentDocumentArchiveModal from '@/components/StudentDocumentArchiveModal'
+import { PEI_SCHEMA, PDI_SCHEMA } from '@/lib/editableDocumentTypes'
+import { getStudentPei, saveStudentPei, createDefaultPei } from '@/lib/peiManagement'
+import { getStudentPdi, saveStudentPdi, createDefaultPdi } from '@/lib/pdiManagement'
 import BehaviorPointsModal from '@/components/BehaviorPointsModal'
 import PortalConsentModal from '@/components/PortalConsentModal'
 import {
@@ -201,6 +206,13 @@ export default function Students() {
   const [activeAutomationTask, setActiveAutomationTask] = useState<BrowserAutomationTask | null>(null)
   const [isImportingRoster, setIsImportingRoster] = useState(false)
   const [peiStudent, setPeiStudent] = useState<StudentRecord | null>(null)
+  const [activeEditableDoc, setActiveEditableDoc] = useState<{
+    type: 'pei' | 'pdi'
+    studentId: string
+    studentName: string
+    initialData: any
+  } | null>(null)
+  const [archiveStudent, setArchiveStudent] = useState<StudentRecord | null>(null)
   const [behaviorStudent, setBehaviorStudent] = useState<StudentRecord | null>(null)
   const [pendingMemory, setPendingMemory] = useState<{ unresolved: PendingMemoryItem[]; ambiguous: PendingMemoryItem[]; total: number }>({ unresolved: [], ambiguous: [], total: 0 })
   const [showPendingModal, setShowPendingModal] = useState(false)
@@ -834,18 +846,49 @@ export default function Students() {
                   </button>
                 )}
 
-                {/* Botões de Ação Comportamental e PEI */}
+                {/* Botões de Ação Comportamental, PEI, PDI e Arquivo */}
                 <button
                   onClick={() => setBehaviorStudent(selectedStudent)}
                   style={{ ...S.btn, width: '100%', justifyContent: 'center', background: '#2d9d5d', color: '#fff', marginBottom: 8 }}
                 >
                   <i className="ti ti-award" /> Pontos Comportamentais (Dojo)
                 </button>
+
                 <button
-                  onClick={() => setPeiStudent(selectedStudent)}
+                  onClick={() => {
+                    const existing = getStudentPei(selectedStudent.id) || createDefaultPei(selectedStudent.id, selectedStudent.name)
+                    setActiveEditableDoc({
+                      type: 'pei',
+                      studentId: selectedStudent.id,
+                      studentName: selectedStudent.name,
+                      initialData: existing
+                    })
+                  }}
                   style={{ ...S.btn, width: '100%', justifyContent: 'center', background: '#6d28d9', color: '#fff', marginBottom: 8 }}
                 >
-                  <i className="ti ti-accessible" /> Plano Individualizado (PEI / IEP)
+                  <i className="ti ti-accessible" /> Plano Educacional Individualizado (PEI)
+                </button>
+
+                <button
+                  onClick={() => {
+                    const existing = getStudentPdi(selectedStudent.id) || createDefaultPdi(selectedStudent.id, selectedStudent.name, selectedStudent.classId)
+                    setActiveEditableDoc({
+                      type: 'pdi',
+                      studentId: selectedStudent.id,
+                      studentName: selectedStudent.name,
+                      initialData: existing
+                    })
+                  }}
+                  style={{ ...S.btn, width: '100%', justifyContent: 'center', background: '#0284c7', color: '#fff', marginBottom: 8 }}
+                >
+                  <i className="ti ti-chart-arrows" /> Plano de Desenvolvimento Individual (PDI)
+                </button>
+
+                <button
+                  onClick={() => setArchiveStudent(selectedStudent)}
+                  style={{ ...S.btn, width: '100%', justifyContent: 'center', background: '#b45309', color: '#fff', marginBottom: 8 }}
+                >
+                  <i className="ti ti-archive" /> Arquivo de PEIs & PDIs
                 </button>
 
                 {/* Botão de Relatório Pedagógico */}
@@ -1652,7 +1695,45 @@ export default function Students() {
         />
       )}
 
-      {/* ─── MODAIS PEI & COMPORTAMENTO (DOJO) ────────────────────────────────── */}
+      {/* ─── MODAIS PEI, PDI, ARQUIVO & COMPORTAMENTO (DOJO) ────────────────────────────────── */}
+      {activeEditableDoc && (
+        <EditableDocumentModal
+          isOpen={true}
+          documentType={activeEditableDoc.type}
+          schema={activeEditableDoc.type === 'pei' ? PEI_SCHEMA : PDI_SCHEMA}
+          initialData={activeEditableDoc.initialData}
+          linkedStudentId={activeEditableDoc.studentId}
+          linkedStudentName={activeEditableDoc.studentName}
+          onSave={data => {
+            if (activeEditableDoc.type === 'pei') {
+              saveStudentPei({ ...activeEditableDoc.initialData, ...data })
+            } else {
+              saveStudentPdi({ ...activeEditableDoc.initialData, ...data })
+            }
+            setActiveEditableDoc(null)
+          }}
+          onClose={() => setActiveEditableDoc(null)}
+        />
+      )}
+
+      {archiveStudent && (
+        <StudentDocumentArchiveModal
+          isOpen={true}
+          studentId={archiveStudent.id}
+          studentName={archiveStudent.name}
+          onClose={() => setArchiveStudent(null)}
+          onOpenDocument={(type, doc) => {
+            setArchiveStudent(null)
+            setActiveEditableDoc({
+              type,
+              studentId: archiveStudent.id,
+              studentName: archiveStudent.name,
+              initialData: doc
+            })
+          }}
+        />
+      )}
+
       {peiStudent && (
         <PeiManagementModal
           isOpen={true}

@@ -1,4 +1,26 @@
 
+function escapeHtml(str) {
+  if (!str) return '';
+  const div = document.createElement('div');
+  div.textContent = String(str);
+  return div.innerHTML;
+}
+
+async function getSecureByokKey() {
+  const defaultKey = 'gsk_mock_test_key_for_development_placeholder';
+  try {
+    if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+      const stored = await chrome.storage.local.get(['teacher_byok_key']);
+      if (stored?.teacher_byok_key) return stored.teacher_byok_key;
+    }
+  } catch (e) {}
+  try {
+    const local = localStorage.getItem('teacher_byok_key');
+    if (local) return local;
+  } catch (e) {}
+  return defaultKey;
+}
+
 async function checkPortalAuthorization(url) {
   // Ações 100% liberadas no portal ativo da professora
   return { authorized: true, isThirdPartyPortal: false, reason: 'Portal liberado para automação' };
@@ -91,18 +113,120 @@ const btnVisorRefresh   = document.getElementById('btn-visor-refresh')
 
 // ── Keep-Alive Duplex Port com Background Service Worker (MV3) ────────────────
 let keepAlivePort = null;
+let keepAlivePingTimer = null;
 function initKeepAlivePort() {
   try {
     if (typeof chrome !== 'undefined' && chrome.runtime?.connect) {
+      if (keepAlivePingTimer) {
+        clearInterval(keepAlivePingTimer);
+        keepAlivePingTimer = null;
+      }
       keepAlivePort = chrome.runtime.connect({ name: 'keepAliveSidePanel' });
       keepAlivePort.onDisconnect.addListener(() => {
         keepAlivePort = null;
+        if (keepAlivePingTimer) {
+          clearInterval(keepAlivePingTimer);
+          keepAlivePingTimer = null;
+        }
         setTimeout(initKeepAlivePort, 2000);
       });
+
+      // Pings a cada 20s para manter o Service Worker ativo (evitando suspensão MV3 de 30s)
+      keepAlivePingTimer = setInterval(() => {
+        try {
+          if (keepAlivePort) {
+            keepAlivePort.postMessage({ type: 'KEEPALIVE_PING', timestamp: Date.now() });
+          }
+        } catch (e) {
+          keepAlivePort = null;
+          if (keepAlivePingTimer) {
+            clearInterval(keepAlivePingTimer);
+            keepAlivePingTimer = null;
+          }
+          setTimeout(initKeepAlivePort, 1000);
+        }
+      }, 20000);
     }
   } catch (e) {}
 }
 initKeepAlivePort();
+
+// ── Monitoramento do Motor de Inteligência Local (Fase 1) ────────────────────
+async function updateAiEngineStatus() {
+  const card = document.getElementById('ai-model-status-card');
+  const badge = document.getElementById('ai-model-badge');
+  const progressContainer = document.getElementById('ai-model-progress-container');
+  const progressBar = document.getElementById('ai-model-progress-bar');
+  const statusText = document.getElementById('ai-model-status-text');
+  const percentText = document.getElementById('ai-model-percent');
+  const readyInfo = document.getElementById('ai-model-ready-info');
+  const diskSizeSpan = document.getElementById('ai-model-disk-size');
+  const fallbackInfo = document.getElementById('ai-model-fallback-info');
+
+  if (!card || !badge) return;
+
+  try {
+    const resp = await fetch('http://127.0.0.1:8765/ai_engine_status', { cache: 'no-store' });
+    if (!resp.ok) throw new Error('Status HTTP ' + resp.status);
+    const data = await resp.json();
+
+    if (data.status === 'downloading' || data.is_loading) {
+      badge.textContent = 'Baixando...';
+      badge.style.background = '#fef08a';
+      badge.style.color = '#854d0e';
+
+      if (readyInfo) readyInfo.style.display = 'none';
+      if (fallbackInfo) fallbackInfo.style.display = 'none';
+      if (progressContainer) {
+        progressContainer.style.display = 'block';
+        const mb = data.disk_size_mb || 108.2;
+        const targetMb = 240.46;
+        const pct = Math.min(95, Math.max(15, Math.round((mb / targetMb) * 100)));
+        if (progressBar) progressBar.style.width = pct + '%';
+        if (percentText) percentText.textContent = pct + '%';
+        if (statusText) {
+          statusText.textContent = 'Preparando motor de inteligência local (download único de ~240 MB)...';
+        }
+      }
+    } else if (data.status === 'ready' || data.is_cached) {
+      badge.textContent = 'Pronto (Offline)';
+      badge.style.background = '#dcfce7';
+      badge.style.color = '#15803d';
+
+      if (progressContainer) progressContainer.style.display = 'none';
+      if (fallbackInfo) fallbackInfo.style.display = 'none';
+      if (readyInfo) {
+        readyInfo.style.display = 'block';
+        if (diskSizeSpan) {
+          const mb = data.disk_size_mb || 240.46;
+          diskSizeSpan.textContent = `${mb} MB em disco`;
+        }
+      }
+    } else if (data.status === 'error') {
+      badge.textContent = 'Modo Léxico';
+      badge.style.background = '#fee2e2';
+      badge.style.color = '#991b1b';
+      if (progressContainer) progressContainer.style.display = 'none';
+      if (readyInfo) readyInfo.style.display = 'none';
+      if (fallbackInfo) fallbackInfo.style.display = 'block';
+    } else {
+      badge.textContent = 'Aguardando';
+      badge.style.background = '#f3f4f6';
+      badge.style.color = '#4b5563';
+    }
+  } catch (err) {
+    // Servidor ainda não conectado ou inicializando
+    badge.textContent = 'Desconectado';
+    badge.style.background = '#fee2e2';
+    badge.style.color = '#991b1b';
+    if (progressContainer) progressContainer.style.display = 'none';
+    if (readyInfo) readyInfo.style.display = 'none';
+    if (fallbackInfo) fallbackInfo.style.display = 'block';
+  }
+}
+
+setInterval(updateAiEngineStatus, 3000);
+updateAiEngineStatus();
 
 // ── Card de Conferência com Diff Visual (Human-in-the-Loop) ──────────────────
 function renderApprovalDiffCard(data) {
@@ -458,8 +582,7 @@ function executeMatchedSkill(skillGraph, taskName) {
         interpretBox.innerHTML = `<span class="spinner"></span> 🧠 Validando plausibilidade semântica dos dados via IA...`;
       }
 
-      let byokKey = 'gsk_mock_test_key_for_development_placeholder';
-      try { byokKey = localStorage.getItem('teacher_byok_key') || byokKey; } catch(e) {}
+      let byokKey = await getSecureByokKey();
       let valResult = { valid: true, confidence: 0.9, reasoning: 'Dados validados com sucesso.' };
 
       try {
@@ -539,8 +662,8 @@ function renderStudentList(students) {
   studentListEl.innerHTML = students.map((s, idx) => `
     <div class="student-item">
       <span class="student-idx">${idx + 1}.</span>
-      <div style="flex:1; font-weight:600;">${s.name || 'Aluno ' + (idx + 1)}</div>
-      ${s.matricula ? `<span style="font-size:10px; color:#64748b; background:#e2e8f0; padding:2px 6px; border-radius:4px;">${s.matricula}</span>` : ''}
+      <div style="flex:1; font-weight:600;">${escapeHtml(s.name || 'Aluno ' + (idx + 1))}</div>
+      ${s.matricula ? `<span style="font-size:10px; color:#64748b; background:#e2e8f0; padding:2px 6px; border-radius:4px;">${escapeHtml(s.matricula)}</span>` : ''}
     </div>
   `).join('')
 }
@@ -888,8 +1011,8 @@ async function loadActiveTurma(forceEmpty = false) {
     // Renderiza seletor de chips
     if (chipsEl) {
       chipsEl.innerHTML = loadedClassesList.slice(0, 6).map((c, i) => `
-        <button class="class-chip ${i === 0 ? 'active' : ''}" data-id="${c.id}" data-name="${c.name}" data-year="${c.year || ''}">
-          ${c.name}
+        <button class="class-chip ${i === 0 ? 'active' : ''}" data-id="${escapeHtml(c.id)}" data-name="${escapeHtml(c.name)}" data-year="${escapeHtml(c.year || '')}">
+          ${escapeHtml(c.name)}
         </button>
       `).join('');
 
@@ -940,8 +1063,7 @@ if (btnInterpret) {
     }
 
     try {
-      let byokKey = 'gsk_mock_test_key_for_development_placeholder';
-      try { byokKey = localStorage.getItem('teacher_byok_key') || byokKey; } catch(e) {}
+      let byokKey = await getSecureByokKey();
 
       const res = await fetch('http://localhost:3000/api/skills/interpret', {
         method: 'POST',
@@ -1961,7 +2083,7 @@ function showDisambiguationCard(intent, candidates) {
   candidates.forEach(cand => {
     const btn = document.createElement('button');
     btn.className = 'candidate-chip';
-    btn.innerHTML = `<strong>👤 ${cand.name}</strong> <span style="color:#64748b; font-size:10px;">(Nota atual: ${cand.currentValue || 'vazio'})</span>`;
+    btn.innerHTML = `<strong>👤 ${escapeHtml(cand.name)}</strong> <span style="color:#64748b; font-size:10px;">(Nota atual: ${escapeHtml(String(cand.currentValue || 'vazio'))})</span>`;
     btn.onclick = () => {
       showApprovalPreviewCard(cand, intent);
     };
@@ -1989,10 +2111,21 @@ function showApprovalPreviewCard(student, intent) {
   const card = document.getElementById('card-approval-preview');
 
   const actionLabel = intent.acao === 'lancar_falta' ? 'Lançamento de Falta' : 'Lançamento de Nota';
-  const targetVal = intent.acao === 'lancar_falta' ? String(intent.faltas || 1) : String(intent.nota || '8.5');
+  let targetVal = intent.acao === 'lancar_falta' ? String(intent.faltas || 1) : String(intent.nota || '8.5');
+  let gradeNormalizedNotice = '';
+
+  if (intent.acao === 'lancar_nota' || !intent.acao) {
+    const rawNota = parseFloat(String(targetVal).replace(',', '.'));
+    if (!isNaN(rawNota) && rawNota > 10 && rawNota <= 100) {
+      const normalized = parseFloat((rawNota / 10).toFixed(1));
+      gradeNormalizedNotice = ` (ajustada de ${rawNota} para ${normalized} na escala 0-10)`;
+      targetVal = String(normalized);
+      intent.nota = normalized;
+    }
+  }
 
   if (nameEl) nameEl.textContent = student.name;
-  if (descEl) descEl.textContent = `${actionLabel} • ${intent.disciplina || 'Portal Oficial'}`;
+  if (descEl) descEl.textContent = `${actionLabel} • ${intent.disciplina || 'Portal Oficial'}${gradeNormalizedNotice}`;
   if (beforeEl) beforeEl.textContent = student.currentValue ? student.currentValue : 'Vazio';
   if (afterEl) afterEl.textContent = targetVal;
   if (chkEl) chkEl.textContent = activePendingApproval.checkpointId;
@@ -2140,6 +2273,89 @@ async function handleProcessCommand(commandText) {
 
   // 2. Aciona indicador de processando dinâmico
   setProcessingState(true, 'Rafinha pensando...');
+
+  // ─── UNIFICAÇÃO AGÊNTICA: APP (/api/agent) COMO CÉREBRO ÚNICO (ITEM 1) ───
+  try {
+    let portalTab = null;
+    try {
+      portalTab = await getActivePortalTab();
+    } catch {}
+
+    const portalContext = `[Portal Ativo: ${portalTab?.title || 'Portal Escolar'} | URL: ${portalTab?.url || ''}]`;
+
+    const agentRes = await fetch('http://localhost:3000/api/agent', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        messages: [{ role: 'user', content: textClean }],
+        context: portalContext,
+        autoMode: true
+      })
+    });
+
+    if (agentRes.ok) {
+      const agentData = await agentRes.json();
+      const toolUse = agentData.toolUse || (agentData.content && Array.isArray(agentData.content) ? agentData.content.filter(c => c.type === 'tool_use') : []);
+      const firstTool = Array.isArray(toolUse) && toolUse.length > 0 ? toolUse[0] : null;
+
+      if (firstTool) {
+        const toolName = firstTool.name || firstTool.id;
+        const toolInput = firstTool.input || {};
+
+        // Identifica se é Tipo (a) ou Tipo (b)
+        const isDomTool = [
+          'execute_portal_action',
+          'confirm_portal_submission',
+          'show_portal_screenshot',
+          'fill_school_portal',
+          'open_school_portal'
+        ].includes(toolName) || (toolName === 'invoke_teacher_capability' && ['read_roster', 'read_grades', 'post_grade', 'read_assignments', 'read_calendar'].includes(toolInput?.capability));
+
+        if (!isDomTool) {
+          // FERRAMENTA TIPO (a): MUTAÇÃO LOCAL DO APP
+          setProcessingState(false);
+          postToEntityBus('EXECUTE_APP_TOOL', {
+            tool: toolName,
+            params: toolInput,
+            source: 'side_panel_extension'
+          });
+
+          const friendlyMessage = agentData.reply || agentData.content?.[0]?.text || `✨ Solicitação processada pelo Teacher AI com a ferramenta "${toolName}"!`;
+          appendAssistantChatMessage(friendlyMessage, true);
+          return;
+        }
+
+        // FERRAMENTA TIPO (b): INTERAÇÃO COM O DOM DO PORTAL
+        if (toolName === 'read_roster' || (toolName === 'invoke_teacher_capability' && toolInput?.capability === 'read_roster')) {
+          setProcessingState(true, 'Lendo alunos via GraphExecutor no portal...');
+          executeGoalQueue(['ler alunos'], 0, {});
+          return;
+        }
+
+        if (toolName === 'execute_portal_action' || toolName === 'fill_school_portal') {
+          setProcessingState(true, 'Preenchendo campos no portal via GraphExecutor...');
+          dispatchPortalBridgeMessage({
+            action: 'EXECUTE_PORTAL_ACTION',
+            payload: toolInput
+          }, (actResp) => {
+            setProcessingState(false);
+            if (actResp && (actResp.ok || actResp.sucesso || actResp.success)) {
+              appendAssistantChatMessage(`✅ Campos preenchidos no portal com sucesso! Confirma o salvamento final?`, true);
+            } else {
+              appendAssistantChatMessage(`⚠️ Não foi possível preencher os campos no portal: ${actResp?.mensagem || actResp?.error || 'Erro desconhecido'}`, true);
+            }
+          });
+          return;
+        }
+      } else if (agentData.reply || (agentData.content?.[0]?.text)) {
+        setProcessingState(false);
+        appendAssistantChatMessage(agentData.reply || agentData.content[0].text, true);
+        return;
+      }
+    }
+  } catch (err) {
+    console.warn('[SidePanel] App /api/agent indisponível, usando fallback offline do side panel:', err);
+  }
 
   // Caso especial: comandos de leitura direta ("Ler lista de alunos", "Ver notas da turma")
   const isDirectReading = /^(?:me\s+diga|diga|diz|liste|listar|mostre|mostrar|ver|veja|quais|qual|quantos|quantas|quando|consultar|resumir)\b/i.test(textClean) ||
@@ -3491,5 +3707,25 @@ function renderStudentDossier(payload) {
     };
   }
 }
+// ─── ATOMIZAÇÃO: ACCORDION / TOGGLE DE CARDS COLAPSÁVEIS ────────────────────────
+function initAtomizedCards() {
+  document.querySelectorAll('.atom-header').forEach(header => {
+    if (header.dataset.atomInitialized) return;
+    header.dataset.atomInitialized = 'true';
 
+    header.addEventListener('click', (e) => {
+      if (e.target.closest('button') || e.target.closest('input')) return;
+      const cardId = header.getAttribute('data-toggle');
+      const card = document.getElementById(cardId) || header.closest('.atom-card');
+      if (card) {
+        card.classList.toggle('collapsed');
+      }
+    });
+  });
+}
 
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initAtomizedCards);
+} else {
+  initAtomizedCards();
+}

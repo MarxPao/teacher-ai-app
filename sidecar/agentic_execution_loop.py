@@ -528,7 +528,7 @@ class AgenticExecutionLoop:
                     "Authorization": f"Bearer {self.groq_api_key}",
                     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) TeacherAI-IntentParser/2.0"
                 }
-                for model in ["openai/gpt-oss-120b", "groq/compound", "qwen/qwen3.8-27b"]:
+                for model in ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "openai/gpt-oss-120b", "groq/compound", "qwen/qwen3.8-27b"]:
                     payload = json.dumps({
                         "model": model,
                         "messages": [

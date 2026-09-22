@@ -17,6 +17,7 @@ interface PedagogicalMethodologiesAccordionProps {
   setBloomAnalyze?: (v: number) => void
   bloomEvaluate?: number
   setBloomEvaluate?: (v: number) => void
+  forceOpen?: boolean
 }
 
 export default function PedagogicalMethodologiesAccordion({
@@ -30,6 +31,7 @@ export default function PedagogicalMethodologiesAccordion({
   setBloomAnalyze,
   bloomEvaluate = 20,
   setBloomEvaluate,
+  forceOpen,
 }: PedagogicalMethodologiesAccordionProps) {
   const [methodologySubFilter, setMethodologySubFilter] = useState<'all' | 'elt' | 'scientific'>('all')
 
@@ -111,6 +113,7 @@ export default function PedagogicalMethodologiesAccordion({
         badgeText={selectedMethodologiesCount > 0 ? `${selectedMethodologiesCount} selecionada(s)` : undefined}
         badgeColor="#268bd2"
         defaultOpen={false}
+        isOpen={forceOpen}
       >
         <div style={{ display: 'flex', gap: 6, marginBottom: 12, borderBottom: '1px solid #ede8dc', paddingBottom: 8 }}>
           <button
@@ -176,6 +179,7 @@ export default function PedagogicalMethodologiesAccordion({
         badgeText={selectedApproachesCount > 0 ? `${selectedApproachesCount} selecionada(s)` : undefined}
         badgeColor="#cb4b16"
         defaultOpen={false}
+        isOpen={forceOpen}
       >
         {renderChipList(approaches)}
       </CollapsibleAccordion>
@@ -188,6 +192,7 @@ export default function PedagogicalMethodologiesAccordion({
         badgeText={selectedFrameworksCount > 0 ? `${selectedFrameworksCount} selecionado(s)` : undefined}
         badgeColor="#859900"
         defaultOpen={false}
+        isOpen={forceOpen}
       >
         {renderChipList(frameworks)}
       </CollapsibleAccordion>
@@ -200,6 +205,7 @@ export default function PedagogicalMethodologiesAccordion({
         badgeText={selectedTaxonomiesCount > 0 ? `${selectedTaxonomiesCount} selecionada(s)` : undefined}
         badgeColor="#d33682"
         defaultOpen={false}
+        isOpen={forceOpen}
       >
         <div style={{ marginBottom: 14 }}>
           {renderChipList(taxonomies)}

@@ -383,7 +383,7 @@ export default function TeacherCalibrationsManager() {
             />
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, gridColumn: '1 / -1' }}>
             <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#2c1a0e', cursor: 'pointer' }}>
               <input
                 type="checkbox"
@@ -392,6 +392,36 @@ export default function TeacherCalibrationsManager() {
                 style={{ width: 18, height: 18 }}
               />
               Vincular códigos de habilidades da BNCC automaticamente aos planos de aula
+            </label>
+
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#2c1a0e', cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={Boolean(calibrations.planner.detailSpeechBalanceByStage ?? true)}
+                onChange={e => handleSave({ planner: { ...calibrations.planner, detailSpeechBalanceByStage: e.target.checked } })}
+                style={{ width: 18, height: 18 }}
+              />
+              Exibir equilíbrio de fala estimado (Talk Time Ratio) detalhado por etapa no roteiro
+            </label>
+
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#2c1a0e', cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={Boolean(calibrations.planner.suggestInteractionPerStage ?? true)}
+                onChange={e => handleSave({ planner: { ...calibrations.planner, suggestInteractionPerStage: e.target.checked } })}
+                style={{ width: 18, height: 18 }}
+              />
+              Permitir tipo de interação predominante individual por etapa da aula
+            </label>
+
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#2c1a0e', cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={Boolean(calibrations.planner.autoSuggestMaterials ?? false)}
+                onChange={e => handleSave({ planner: { ...calibrations.planner, autoSuggestMaterials: e.target.checked } })}
+                style={{ width: 18, height: 18 }}
+              />
+              Sugerir materiais necessários automaticamente com IA (desmarcado = manual por padrão)
             </label>
           </div>
         </div>

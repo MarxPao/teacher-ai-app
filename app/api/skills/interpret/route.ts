@@ -196,7 +196,8 @@ Responda ESTRITAMENTE em formato JSON com esses campos.`
 
     // Validação determinística de comando composto (ex: menção ao Teams + portal)
     const mentionsTeams = /teams|microsoft teams/i.test(commandText)
-    const mentionsRead = /ler|nota|boletim|aluno|chamada|falta/i.test(commandText)
+    const isWritingOrMutation = /lan[çc]ar|digitar|inserir|preencher|escrever|alterar|atribuir|cadastrar/i.test(commandText)
+    const mentionsRead = !isWritingOrMutation && (/ler|consultar|ver|mostrar|pegar|buscar|listar/i.test(commandText) || (/notas?|boletim|alunos?|chamada|faltas?/i.test(commandText) && !isWritingOrMutation && !/lan[çc]ar/i.test(commandText)))
 
     if (!llmResponseJson) {
       if (mentionsTeams && mentionsRead) {
@@ -206,7 +207,7 @@ Responda ESTRITAMENTE em formato JSON com esses campos.`
           taskName: 'Leitura de Notas e Notificação no Teams',
           previewText: 'Vou extrair as notas do portal, gerar a síntese com IA e solicitar sua aprovação antes de qualquer envio ao Microsoft Teams.'
         }
-      } else if (/in[íi]cio|home|painel/i.test(commandText)) {
+      } else if (!isWritingOrMutation && /in[íi]cio|home|painel/i.test(commandText)) {
         llmResponseJson = {
           matched: true,
           isCompound: false,
@@ -215,7 +216,7 @@ Responda ESTRITAMENTE em formato JSON com esses campos.`
           skillType: 'reading',
           previewText: 'A Skill irá navegar para a página de início do portal.'
         }
-      } else if (mentionsRead) {
+      } else if (!isWritingOrMutation && mentionsRead) {
         llmResponseJson = {
           matched: true,
           isCompound: false,

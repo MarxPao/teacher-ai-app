@@ -33,3 +33,74 @@
 - `sidecar/`: Backend Python com `manual_runner.py` (porta HTTP 8000 e WebSocket 8765), `agentic_execution_loop.py`, `intent_parser.py`, `portal_structure_mapper.py`, `portal_map_store.py`.
 - `teacher-extension/`: Extensão Google Chrome Manifest V3 (`side_panel.html`, `side_panel.js`, `background.js`, `content.js`).
 - `.agents/skills/`: Skills especializadas para orquestração, testes e automação do agente.
+
+
+## 6. Modo Econômico de Relatório (Padrão) vs. Modo Detalhado (Sob Pedido)
+
+Por padrão, toda resposta de implementação segue o MODO ECONÔMICO abaixo.
+O modo detalhado (relatório completo com narrativa, diagramas e trace verbose)
+só é usado quando explicitamente pedido ("modo detalhado", "quero o walkthrough completo").
+
+### Modo Econômico — Estrutura Obrigatória de Resposta
+
+1. **TL;DR (5-8 linhas máximo):** o que mudou, qual teste prova, número final
+   da suíte (ex.: "413 passed, 0 failed"), qualquer risco residual conhecido.
+2. **Diff do código** (ou trecho modificado com caminho + linha) — sem prosa
+   explicativa ao redor além de 1 linha de contexto por bloco, se necessário.
+3. **Comando de teste exato usado.**
+4. **Output do teste em formato compacto:**
+   - Use `pytest -q` (pontos), nunca `-v`/`-s` por padrão.
+   - Para testes em TypeScript/Vitest, use formato compacto (apenas resumo final de contagem e traceback de falhas).
+   - Nunca cole lista de testes que passaram. Cole apenas: (a) o resumo final
+     de contagem, e (b) o traceback completo de qualquer teste que falhou.
+   - Se precisar mostrar um teste específico passando como prova de um
+     comportamento específico (ex.: prova de bloqueio de segurança), cole
+     SÓ esse teste isolado, não a suíte inteira em modo verbose.
+
+### Proibições no Modo Econômico
+
+- Sem diagramas mermaid, ASCII art, ou tabelas decorativas de "arquitetura",
+  a menos que pedido explicitamente.
+- Sem seções como "Visão Geral", "Contexto", "Conclusão Definitiva",
+  "Veredito Final" repetindo o que já foi dito no TL;DR.
+- Sem recapitular a arquitetura do projeto (3 camadas, SkillGraph, Origin
+  Gate, etc.) — isso já vive em `ARCHITECTURE.md`/`GEMINI.md`; referencie
+  por nome de seção, não copie o conteúdo de novo.
+- Sem colar de volta relatórios anteriores inteiros para "reconfirmar" —
+  se algo já foi provado em uma rodada anterior e não mudou, apenas cite
+  "inalterado, ver rodada anterior", não repita a evidência.
+
+### Quando o Modo Detalhado é justificado (usar sem economia)
+
+- Mudanças que tocam: dados de aluno/LGPD, segurança de rede (CORS/CSRF/
+  auth), defesa contra prompt injection, qualquer ação com efeito colateral
+  real no portal escolar (mutações, exclusões).
+- Quando explicitamente solicitado pelo auditor/usuário.
+- Nesses casos, o rigor de evidência não muda — continue exigindo trace
+  literal completo, reexecução da suíte inteira, e testes de caso-limite,
+  como já é prática estabelecida no projeto.
+
+### Arquivo Único de Arquitetura
+
+- Toda decisão de arquitetura (diagrama do loop de 8 passos, camadas de
+  honestidade em cascata, modelo de nós hierárquicos, etc.) deve viver em
+  um único arquivo (`ARCHITECTURE.md` ou seção correspondente de
+  `GEMINI.md`), atualizado quando a arquitetura muda de verdade — nunca
+  reproduzido por extenso dentro de uma resposta de implementação.
+
+### Redução de Ida-e-Volta
+
+- Ao final de uma implementação, a prova completa (trace, testes, diffs)
+  fica salva em `walkthrough.md` (já é prática do projeto). A resposta
+  para o usuário/auditor não precisa colar esse arquivo inteiro de volta —
+  aponte o caminho do arquivo e cole apenas o TL;DR.
+- Acumule pontos de dúvida/ajuste antes de pedir nova rodada de auditoria,
+  em vez de uma rodada por descoberta individual, quando isso não atrasar
+  uma correção de segurança urgente.
+
+### Escolha de Ferramenta/Modelo (quando aplicável)
+
+- Tarefas mecânicas e repetitivas (rodar suíte completa, aplicar diff já
+  decidido, checar regressão) podem usar um modelo/execução mais barata.
+- Reserve o modelo de raciocínio mais caro para decisão de arquitetura e
+  auditoria de segurança, não para formatar output de terminal.

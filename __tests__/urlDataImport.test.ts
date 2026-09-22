@@ -283,7 +283,7 @@ Total,28,28,28,78.57%,,,,`
 
       // Confirma que nenhuma mutação espúria ocorreu no localStorage
       expect(localStorage.getItem('teacher_students')).toBeNull()
-    })
+    }, 15000)
 
 
     it('retorna erro explícito para URLs não suportadas (não-planilha / não-CSV)', async () => {

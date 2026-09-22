@@ -90,14 +90,14 @@ export function calculateDynamicTokens(
 ): { maxTokens: number; temperature: number } {
   if (temperatureMode) {
     const lower = lastUserMessage.toLowerCase()
-    const maxTokens = /crie|gere|monte|prova|exame|plano|exercício|rubrica|questão/.test(lower) ? 2500 : 1024
+    const maxTokens = /crie|gere|monte|elabore|prova|exame|plano|roteiro|exercício|rubrica|questão|backward|ubd/.test(lower) ? 4096 : 1024
     return { maxTokens, temperature: resolveTemperature(temperatureMode) }
   }
 
   const lower = lastUserMessage.toLowerCase()
   // Geração de provas, planos ou exercícios
-  if (/crie|gere|monte|prova|exame|plano de aula|exercício|rubrica|questão|exam|exercise/.test(lower)) {
-    return { maxTokens: 2500, temperature: 0.7 }
+  if (/crie|gere|monte|elabore|prova|exame|plano|roteiro|exercício|rubrica|questão|exam|exercise|backward|ubd/.test(lower)) {
+    return { maxTokens: 4096, temperature: 0.7 }
   }
   // Comandos curtos ou ações simples
   if (/^adicion[ae]|naveg[ue]|vái para|cri[ae] tarefa|abra|limp[ae]|marqu[ae]/.test(lower) || lower.length < 30) {

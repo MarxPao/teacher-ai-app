@@ -6,6 +6,13 @@ import React, { useState, useEffect, useRef } from 'react'
 import { RepositoryItem } from '@/components/modules/Repository'
 import { LooseFileItem } from '@/lib/supabaseClient'
 import { searchWeb, WebSearchResult } from '@/lib/webSearch'
+import {
+  getEmbeddingMode,
+  getEmbeddingModeNotice,
+  searchVectorChunksSync,
+  type VectorChunk
+} from '@/lib/vectorSearch'
+import { indexDocumentContent } from '@/lib/ragEngine'
 
 export interface SourceItem {
   id: string
@@ -32,26 +39,122 @@ interface SourceKnowledgeHubProps {
   description?: string
 }
 
-export function compileSourcesPrompt(sources: SourceItem[], mode: KnowledgeMode): {
+export interface CompileSourcesOptions {
+  topicQuery?: string
+  topKPerSource?: number
+  maxCharsPerSource?: number
+}
+
+export function compileSourcesPrompt(
+  sources: SourceItem[],
+  mode: KnowledgeMode,
+  options?: string | CompileSourcesOptions
+): {
   promptContext: string
   activeCount: number
   totalWords: number
+  retrievedChunksCount?: number
+  primaryPageNumber?: number
+  primaryUnitTitle?: string
+  primaryChunkId?: string
 } {
   const activeSources = sources.filter(s => s.active)
   if (activeSources.length === 0) {
-    return { promptContext: '', activeCount: 0, totalWords: 0 }
+    return { promptContext: '', activeCount: 0, totalWords: 0, retrievedChunksCount: 0 }
   }
 
+  const topic = typeof options === 'string' ? options : options?.topicQuery || ''
+  const topK = (typeof options === 'object' && options?.topKPerSource) || 5
+  const maxChars = (typeof options === 'object' && options?.maxCharsPerSource) || 12000
+
   let totalWords = 0
+  let retrievedChunksCount = 0
+  let primaryPageNumber: number | undefined = undefined
+  let primaryUnitTitle: string | undefined = undefined
+  let primaryChunkId: string | undefined = undefined
+
   const formattedSources = activeSources.map((s, idx) => {
     const words = s.wordCount || (s.content ? s.content.trim().split(/\s+/).length : 0)
     totalWords += words
     const scopeNote = s.scopeInfo ? `\nRecorte / Capítulo / Páginas: ${s.scopeInfo}` : ''
     const urlNote = s.url ? `\nLink da Fonte: ${s.url}` : ''
+
+    let sourceContent = ''
+
+    // Se o conteúdo for curto (<= 4000 caracteres), usa integralmente
+    if (s.content.length <= 4000) {
+      sourceContent = s.content
+      retrievedChunksCount += 1
+      const pageMatch = s.content.match(/--- Página\s*(\d+)/i)
+      if (pageMatch && primaryPageNumber === undefined) primaryPageNumber = parseInt(pageMatch[1], 10)
+      const unitMatch = s.content.match(/(?:\[(UNIT\s*\d+[^\]]*)\]|(Capítulo\s*\d+[^:\n]*:[^\n]+)|(UNIDADE\s*\d+[^:\n]*:[^\n]+))/i)
+      if (unitMatch && !primaryUnitTitle) primaryUnitTitle = (unitMatch[1] || unitMatch[2] || unitMatch[3]).trim()
+    } else {
+      // Para documentos longos (ex: livros didáticos completos), fatia em unidades/capítulos/páginas
+      // via indexDocumentContent e busca os trechos semanticamente mais relevantes ao invés do corte cego de 7.000 chars
+      const docChunks = indexDocumentContent(
+        s.id,
+        s.title,
+        s.sourceType,
+        s.category || 'Fonte',
+        s.content
+      )
+
+      const vectorChunks: VectorChunk[] = docChunks.length > 0
+        ? docChunks.map(dc => {
+            const separator = dc.content.startsWith(':') || dc.content.startsWith(' -') ? '' : '\n'
+            return {
+              id: dc.id,
+              content: `${dc.unitTitle}${separator}${dc.content}`,
+              embedding: dc.embedding,
+              pageNumber: dc.pageNumber,
+              unitTitle: dc.unitTitle
+            }
+          })
+        : (s.content.match(/[\s\S]{1,1500}/g) || [s.content]).map((chunkText, cIdx) => ({
+            id: `${s.id}_chunk_${cIdx}`,
+            content: chunkText
+          }))
+
+      if (topic && topic.trim().length > 0) {
+        const topChunks = searchVectorChunksSync(topic.trim(), vectorChunks, topK)
+        retrievedChunksCount += topChunks.length
+        if (topChunks.length > 0 && primaryPageNumber === undefined) {
+          const topC = topChunks[0]
+          primaryChunkId = topC.id
+          if (topC.pageNumber) primaryPageNumber = topC.pageNumber
+          else {
+            const pageMatch = topC.content.match(/--- Página\s*(\d+)/i)
+            if (pageMatch) primaryPageNumber = parseInt(pageMatch[1], 10)
+          }
+          if (topC.unitTitle && !topC.unitTitle.startsWith('--- Página')) {
+            primaryUnitTitle = topC.unitTitle
+          } else {
+            const unitMatch = topC.content.match(/(?:\[(UNIT\s*\d+[^\]]*)\]|(Capítulo\s*\d+[^:\n]*:[^\n]+)|(UNIDADE\s*\d+[^:\n]*:[^\n]+))/i)
+            if (unitMatch) primaryUnitTitle = (unitMatch[1] || unitMatch[2] || unitMatch[3]).trim()
+          }
+        }
+        sourceContent = `[TRECHOS RECUPERADOS VIA BUSCA SEMÂNTICA PARA O TÓPICO: "${topic}"]\n` +
+          topChunks.map((c, i) => `--- Trecho Relevante #${i + 1} ---\n${c.content}`).join('\n\n')
+      } else {
+        // Sem tópico especificado: extrai uma amostra equilibrada até maxChars
+        const sampleChunks = vectorChunks.slice(0, topK)
+        retrievedChunksCount += sampleChunks.length
+        if (sampleChunks.length > 0 && primaryPageNumber === undefined) {
+          const topC = sampleChunks[0]
+          primaryChunkId = topC.id
+          if (topC.pageNumber) primaryPageNumber = topC.pageNumber
+          const unitMatch = topC.content.match(/(?:\[(UNIT\s*\d+[^\]]*)\]|(Capítulo\s*\d+[^:\n]*:[^\n]+)|(UNIDADE\s*\d+[^:\n]*:[^\n]+))/i)
+          if (unitMatch) primaryUnitTitle = (unitMatch[1] || unitMatch[2] || unitMatch[3]).trim()
+        }
+        sourceContent = sampleChunks.map((c, i) => `--- Trecho #${i + 1} ---\n${c.content}`).join('\n\n')
+      }
+    }
+
     return `[FONTE ${idx + 1}: ${s.title}]
 Tipo: ${s.sourceType.toUpperCase()} | Formato: ${s.fileType || 'texto'}${scopeNote}${urlNote}
 Conteúdo da Fonte:
-${s.content.slice(0, 7000)}`
+${sourceContent}`
   }).join('\n----------------------------------------\n')
 
   let modeInstruction = ''
@@ -78,7 +181,11 @@ ${formattedSources}
   return {
     promptContext,
     activeCount: activeSources.length,
-    totalWords
+    totalWords,
+    retrievedChunksCount,
+    primaryPageNumber,
+    primaryUnitTitle,
+    primaryChunkId
   }
 }
 
@@ -355,6 +462,23 @@ export default function SourceKnowledgeHub({
             </button>
           ))}
         </div>
+      </div>
+
+      {/* Banner de Transparência Semântica / Modo de Busca */}
+      <div style={{
+        padding: '7px 12px',
+        borderRadius: RADIUS.md,
+        fontSize: 11,
+        fontWeight: 600,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        background: getEmbeddingMode() === 'gemini' ? '#f0fdf4' : '#fffbeb',
+        border: getEmbeddingMode() === 'gemini' ? '1px solid #bbf7d0' : '1px solid #fde68a',
+        color: getEmbeddingMode() === 'gemini' ? '#15803d' : '#92400e'
+      }}>
+        <i className={getEmbeddingMode() === 'gemini' ? 'ti ti-sparkles' : 'ti ti-info-circle'} style={{ fontSize: 13 }} />
+        <span>{getEmbeddingModeNotice()}</span>
       </div>
 
       {/* Botões de Adicionar Fontes */}

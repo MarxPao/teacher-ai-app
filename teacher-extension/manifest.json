@@ -30,7 +30,8 @@
     "sidePanel",
     "scripting",
     "debugger",
-    "nativeMessaging"
+    "nativeMessaging",
+    "alarms"
   ],
   "host_permissions": [
     "<all_urls>"
@@ -41,6 +42,8 @@
         "<all_urls>"
       ],
       "js": [
+        "transaction_manager.js",
+        "session_guardian.js",
         "content.js"
       ],
       "run_at": "document_idle",
@@ -57,7 +60,7 @@
   "web_accessible_resources": [
     {
       "resources": ["side_panel.html", "side_panel.js"],
-      "matches": ["<all_urls>"]
+      "matches": ["http://localhost/*", "http://127.0.0.1/*"]
     }
   ]
 }

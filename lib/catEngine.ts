@@ -239,3 +239,92 @@ export function interpretCatResult(theta: number): {
      diagnosticDescription: 'Identificada necessidade de reforço em conceitos Âncora da base curricular.',
   }
 }
+
+// ─── RE-EXPORTS DE MIRT E CONTROLE DE EXPOSIÇÃO SYMPSON-HETTER (PILAR IV) ─────
+
+export {
+  calculateMirtProbability,
+  calculateMirtFisherInformation,
+  evaluateDOptimality,
+  applySympsonHetterGate,
+  updateSympsonHetterParameter,
+  selectAdaptiveMirtQuestion,
+  type MirtItemParameters,
+  type ExposureControlConfig,
+  type SympsonHetterDecision,
+  DEFAULT_EXPOSURE_CONFIG
+} from './mirtAndExposureEngine'
+
+import {
+  applySympsonHetterGate,
+  type MirtItemParameters,
+  type SympsonHetterDecision
+} from './mirtAndExposureEngine'
+
+/**
+ * Seleciona a próxima questão para CAT aplicando o Gate de Controle de Exposição
+ * Sympson-Hetter (1985). Se a melhor questão for sorteada para descarte, seleciona
+ * a próxima disponível no pool.
+ */
+export function selectNextCatQuestionWithSympsonHetter(
+  session: CatSessionState,
+  pool: Array<OnlineQuestion & { pValue?: number; exposureControl_k?: number }>,
+  forcedRandomRolls?: Record<string, number>
+): {
+  question: (OnlineQuestion & { pValue?: number; exposureControl_k?: number }) | null
+  decision: SympsonHetterDecision | null
+} {
+  const answeredIds = new Set(session.history.map(h => h.questionId))
+  const available = pool.filter(q => !answeredIds.has(q.id))
+
+  if (available.length === 0) return { question: null, decision: null }
+
+  const targetRung = session.currentRung
+  const ranked = [...available].sort((a, bItem) => {
+    const isExactA = getQuestionRung(a) === targetRung ? 1 : 0
+    const isExactB = getQuestionRung(bItem) === targetRung ? 1 : 0
+    if (isExactA !== isExactB) return isExactB - isExactA
+
+    const bA = RUNG_DIFFICULTY_B[getQuestionRung(a)]
+    const bB = RUNG_DIFFICULTY_B[getQuestionRung(bItem)]
+    const distA = Math.abs(bA - session.currentTheta)
+    const distB = Math.abs(bB - session.currentTheta)
+    return distA - distB
+  })
+
+  // Itera aplicando Sympson-Hetter
+  for (const candidate of ranked) {
+    const mirtAdapted: MirtItemParameters = {
+      itemId: candidate.id,
+      dimensionNames: ['Geral'],
+      discriminations_a: [1.0],
+      intercept_d: -RUNG_DIFFICULTY_B[getQuestionRung(candidate)],
+      exposureControl_k: candidate.exposureControl_k ?? 1.0
+    }
+
+    const forcedRoll = forcedRandomRolls?.[candidate.id]
+    const decision = applySympsonHetterGate(mirtAdapted, forcedRoll)
+
+    if (decision.isApprovedForAdministration) {
+      return { question: candidate, decision }
+    }
+  }
+
+  // Fallback caso todos sejam rejeitados pelo sorteio
+  return {
+    question: ranked[0],
+    decision: {
+      selectedItem: {
+        itemId: ranked[0].id,
+        dimensionNames: ['Geral'],
+        discriminations_a: [1.0],
+        intercept_d: -RUNG_DIFFICULTY_B[getQuestionRung(ranked[0])],
+        exposureControl_k: ranked[0].exposureControl_k ?? 1.0
+      },
+      isApprovedForAdministration: true,
+      randomRoll: 0,
+      controlParameter_k: 1.0,
+      rejectionReason: undefined
+    }
+  }
+}

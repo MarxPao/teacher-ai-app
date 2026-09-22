@@ -51,8 +51,18 @@ class PortalMapStore:
         self._storage_path = storage_path
         # Store em memória usado quando não há Supabase
         self._memory: Dict[str, PortalSelectorMap] = {}
+        # Cache L1 em memória de alta performance com TTL (evita queries remotas redundantes ao Supabase)
+        self._l1_cache: Dict[str, Tuple[float, Optional[PortalSelectorMap]]] = {}
+        self._l1_cache_ttl: float = 300.0  # 5 minutos
         if self._storage_path and os.path.exists(self._storage_path):
             self._load_from_storage()
+
+    def _invalidate_l1_cache(self, domain: str) -> None:
+        """Invalida a entrada no cache L1 para o domínio e seu domínio raiz."""
+        self._l1_cache.pop(domain, None)
+        root = self._root_domain(domain)
+        if root != domain:
+            self._l1_cache.pop(root, None)
 
     def _load_from_storage(self) -> None:
         if not self._storage_path:
@@ -102,6 +112,13 @@ class PortalMapStore:
         return None
 
     def _lookup_exact(self, domain: str) -> Optional[PortalSelectorMap]:
+        now = time.monotonic()
+        if domain in self._l1_cache:
+            ts, cached_map = self._l1_cache[domain]
+            if now - ts < self._l1_cache_ttl:
+                return cached_map
+
+        result: Optional[PortalSelectorMap] = None
         if self._sb:
             try:
                 res = (
@@ -113,15 +130,16 @@ class PortalMapStore:
                     .execute()
                 )
                 if res.data:
-                    return self._row_to_map(res.data[0])
+                    result = self._row_to_map(res.data[0])
             except Exception as e:
                 print(f"[MapStore] Aviso ao buscar mapa para '{domain}': {e}")
-            return None
         else:
             m = self._memory.get(domain)
             if m and m.superseded_by is None:
-                return m
-            return None
+                result = m
+
+        self._l1_cache[domain] = (now, result)
+        return result
 
     # ------------------------------------------------------------------
     # Salvar Mapa Descoberto
@@ -130,11 +148,11 @@ class PortalMapStore:
     def save_map(
         self,
         domain: str,
-        display_name: Optional[str],
         selectors: Dict[str, Any],
-        pagination: Optional[Dict[str, Any]],
-        confidence: str,
-        teacher_id: Optional[str],
+        display_name: Optional[str] = None,
+        pagination: Optional[Dict[str, Any]] = None,
+        confidence: str = "high",
+        teacher_id: Optional[str] = None,
     ) -> str:
         """
         Persiste um novo mapa. Retorna o ID gerado.
@@ -171,6 +189,8 @@ class PortalMapStore:
             "validation_failures": 0,
         }
 
+        self._invalidate_l1_cache(domain)
+
         if self._sb:
             try:
                 res = self._sb.table("discovered_portal_maps").insert(row).execute()
@@ -206,6 +226,7 @@ class PortalMapStore:
 
     def mark_validated(self, domain: str) -> None:
         """Atualiza last_validated_at quando o mapa funcionou com sucesso."""
+        self._invalidate_l1_cache(domain)
         if self._sb:
             try:
                 self._sb.table("discovered_portal_maps").update({
@@ -230,6 +251,7 @@ class PortalMapStore:
         Incrementa validation_failures do mapa ativo.
         Retorna o novo total de falhas.
         """
+        self._invalidate_l1_cache(domain)
         if self._sb:
             try:
                 # Busca o atual
@@ -298,6 +320,60 @@ class PortalMapStore:
         self._drift_flags.pop(key_specific, None)
         self._drift_flags.pop(key_global, None)
         print(f"[MapStore] ✅ Drift limpo para '{domain}' ({action_type or '*'}).")
+
+    # ------------------------------------------------------------------
+    # Auto-Cura de Seletores (Self-Healing)
+    # ------------------------------------------------------------------
+
+    def record_selector_failure(self, domain: str, action_key: str) -> int:
+        """Contabiliza falha de um seletor específico e registra sinal de drift."""
+        self.mark_drift(domain, action_type=action_key)
+        m = self.lookup_map(domain)
+        return m.validation_failures if m else 1
+
+    def heal_selector(self, domain: str, action_key: str, new_selector_data: Dict[str, Any]) -> bool:
+        """
+        Auto-cura atômica de seletor degradado.
+        Atualiza o seletor no mapa ativo, zera o contador de falhas e limpa a flag de drift.
+        """
+        self._invalidate_l1_cache(domain)
+        if self._sb:
+            try:
+                map_obj = self.lookup_map(domain)
+                if not map_obj:
+                    return False
+                selectors = map_obj.discovered_selectors.copy()
+                selectors[action_key] = new_selector_data
+                self._sb.table("discovered_portal_maps").update({
+                    "discovered_selectors": selectors,
+                    "validation_failures": 0,
+                    "last_validated_at": self._now_iso(),
+                }).eq("id", map_obj.id).execute()
+                self.clear_drift(domain, action_type=action_key)
+                print(f"[MapStore] 🩺 Auto-cura realizada para '{domain}:{action_key}'.")
+                return True
+            except Exception as e:
+                print(f"[MapStore] Erro na auto-cura para '{domain}:{action_key}': {e}")
+                return False
+        else:
+            m = self._memory.get(domain)
+            if not m:
+                # Se não existir mapa em memória, cria um novo
+                self.save_map(
+                    domain=domain,
+                    selectors={action_key: new_selector_data},
+                    confidence="high"
+                )
+                self.clear_drift(domain, action_type=action_key)
+                return True
+
+            m.discovered_selectors[action_key] = new_selector_data
+            m.validation_failures = 0
+            m.last_validated_at = self._now_iso()
+            self.clear_drift(domain, action_type=action_key)
+            self._save_to_storage()
+            print(f"[MapStore] [MEM] 🩺 Auto-cura realizada para '{domain}:{action_key}'.")
+            return True
 
     # ------------------------------------------------------------------
     # Encadear Mapa Obsoleto (superseded_by)

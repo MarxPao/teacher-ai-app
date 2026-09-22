@@ -17,6 +17,7 @@ Uso direto:
 import argparse
 import json
 import os
+import socket
 import subprocess
 import sys
 import time
@@ -48,7 +49,7 @@ EXTENSION_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "t
 
 CHROME_FLAGS = [
     f"--remote-debugging-port={CDP_PORT}",
-    "--remote-allow-origins=*",
+    f"--remote-allow-origins=http://localhost:{CDP_PORT},http://127.0.0.1:{CDP_PORT}",
     "--no-first-run",
     "--no-default-browser-check",
     "--restore-last-session",
@@ -80,12 +81,20 @@ def find_chrome() -> Optional[str]:
 # Verificação de saúde do CDP
 # ─────────────────────────────────────────────────────────────────────────────
 
-def check_cdp_health(timeout: float = 2.0) -> Tuple[bool, str]:
+def check_cdp_health(timeout: float = 2.0, probe_timeout: float = 0.15) -> Tuple[bool, str]:
     """
-    Consulta http://localhost:9222/json/version.
+    Verifica conectividade TCP rápida (probe_timeout=150ms) e depois consulta http://localhost:9222/json/version.
     Retorna (pronto, mensagem).
-    Não depende de nenhuma biblioteca externa — usa apenas urllib da stdlib.
+    Não depende de nenhuma biblioteca externa — usa apenas socket e urllib da stdlib.
     """
+    # 1. Probing rápido via TCP socket (detecta porta fechada em <15ms sem timeout longo de HTTP)
+    try:
+        with socket.create_connection(("127.0.0.1", CDP_PORT), timeout=probe_timeout):
+            pass
+    except Exception as e:
+        return False, f"Porta CDP {CDP_PORT} fechada ou inacessivel ({e})"
+
+    # 2. Consulta HTTP do endpoint /json/version
     try:
         import urllib.request
         req = urllib.request.Request(
@@ -100,11 +109,11 @@ def check_cdp_health(timeout: float = 2.0) -> Tuple[bool, str]:
         return False, f"CDP nao respondeu: {e}"
 
 
-def wait_for_cdp(timeout_sec: float = 12.0, poll_interval: float = 0.5) -> Tuple[bool, str]:
-    """Aguarda a porta CDP subir até `timeout_sec` segundos."""
+def wait_for_cdp(timeout_sec: float = 12.0, poll_interval: float = 0.25) -> Tuple[bool, str]:
+    """Aguarda a porta CDP subir até `timeout_sec` segundos com probing TCP acelerado."""
     deadline = time.monotonic() + timeout_sec
     while time.monotonic() < deadline:
-        ok, msg = check_cdp_health(timeout=1.0)
+        ok, msg = check_cdp_health(timeout=1.0, probe_timeout=0.15)
         if ok:
             return True, msg
         time.sleep(poll_interval)

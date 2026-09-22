@@ -1,5 +1,5 @@
 import { COLOR, RADIUS, TEXT, SHADOW, FONT } from '@/styles/tokens'
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import ModuleShell from '@/components/ModuleShell'
 import type { ModuleKey } from '@/app/page'
 import SubstituteMode from '@/components/SubstituteMode'
@@ -24,6 +24,18 @@ import {
 import TrelloImportModal from '@/components/modules/TrelloImportModal'
 import ChecklistEditModal from '@/components/modules/ChecklistEditModal'
 import DailyMorningBriefing from '@/components/DailyMorningBriefing'
+import {
+  getLessonPlansFromBank,
+  BridgedLessonPlan,
+  getFullLessonPlanDocument,
+  buildFallbackLessonPlanDocument,
+  normalizeDateToKey,
+  getWeekDates,
+  formatWeekRange,
+  resolvePinScheduleTime
+} from '@/lib/calendarPlanBridge'
+import { CalendarTask, getTaskTypeConfig, getTaskUrgencyGroup, getPostItStyles } from '@/lib/calendarUtils'
+import LessonPlanDocumentModal from '@/components/LessonPlanDocumentModal'
 
 // --- Tipos & Interfaces ---
 
@@ -138,6 +150,7 @@ export default function Dashboard() {
   const [newPostItContent, setNewPostItContent] = useState('')
   const [newPostItColor, setNewPostItColor] = useState<DashboardPostIt['color']>('yellow')
   const [newPostItDate, setNewPostItDate] = useState<string>(() => formatDateKey(new Date()))
+  const [lessonPlans, setLessonPlans] = useState<BridgedLessonPlan[]>([])
 
   // 2. Checklist do Dia & Rotina Unificada
   const [todos, setTodos] = useState<DashboardTodo[]>([])
@@ -172,6 +185,36 @@ export default function Dashboard() {
   const [isOnboardingOpen, setIsOnboardingOpen] = useState(false)
   const [pedagogicalAlerts, setPedagogicalAlerts] = useState<PedagogicalAlert[]>([])
 
+  // 7. Tarefas do Calendário & Modal do Documento do Plano de Aula
+  const [calendarTasks, setCalendarTasks] = useState<CalendarTask[]>([])
+  const [isLessonDocModalOpen, setIsLessonDocModalOpen] = useState(false)
+  const [selectedLessonPlanDoc, setSelectedLessonPlanDoc] = useState<any | null>(null)
+
+  const openLessonPlanDocModal = (target: any) => {
+    if (!target) return
+    const fullDoc = getFullLessonPlanDocument({
+      id: target.id,
+      lessonPlanId: target.lessonPlanId,
+      topic: target.topic || target.title,
+      date: target.date,
+      className: target.className || target.classRef
+    })
+
+    if (fullDoc) {
+      setSelectedLessonPlanDoc(fullDoc)
+    } else {
+      const fallback = buildFallbackLessonPlanDocument({
+        id: target.id,
+        topic: target.topic || target.title || 'Plano de Aula',
+        className: target.className || target.classRef || 'Turma Geral',
+        date: target.date || selectedDateKey,
+        description: target.description || target.shortDescription
+      })
+      setSelectedLessonPlanDoc(fallback)
+    }
+    setIsLessonDocModalOpen(true)
+  }
+
   // Helper de Navegação Global
   const navigateTo = (module: ModuleKey) => {
     window.dispatchEvent(new CustomEvent('teacher:navigate', { detail: module }))
@@ -192,6 +235,25 @@ export default function Dashboard() {
       const alerts = generatePedagogicalInsights(storedStudents)
       setPedagogicalAlerts(alerts)
     } catch {}
+
+    // 0. Planos de Aula (Banco de Aulas) e Tarefas do Calendário
+    try {
+      const plans = getLessonPlansFromBank()
+      setLessonPlans(plans)
+    } catch {}
+
+    try {
+      const rawTasks = localStorage.getItem('teacher_calendar_tasks')
+      if (rawTasks) {
+        const parsed = JSON.parse(rawTasks)
+        const real = Array.isArray(parsed) ? parsed.filter(t => !t.id?.startsWith('demo-') && !t.id?.startsWith('suggest-')) : []
+        setCalendarTasks(real)
+      } else {
+        setCalendarTasks([])
+      }
+    } catch {
+      setCalendarTasks([])
+    }
 
     // 1. Post-its
     try {
@@ -370,9 +432,11 @@ export default function Dashboard() {
     loadDashboardData()
     window.addEventListener('storage', loadDashboardData)
     window.addEventListener('teacher:data_changed', loadDashboardData)
+    window.addEventListener('teacher:calendar-sync', loadDashboardData)
     return () => {
       window.removeEventListener('storage', loadDashboardData)
       window.removeEventListener('teacher:data_changed', loadDashboardData)
+      window.removeEventListener('teacher:calendar-sync', loadDashboardData)
     }
   }, [])
 
@@ -499,67 +563,291 @@ export default function Dashboard() {
     localStorage.setItem('teacher_post_its_v1', JSON.stringify(updated))
   }
 
-  // --- Calendário com Pins Unificados (Post-its + Aulas Particulares) ---
+  const selectedDateKey = useMemo(() => formatDateKey(selectedDate), [selectedDate])
+  const todayDateKey = useMemo(() => formatDateKey(new Date()), [])
+
+  // --- Calendário com Pins Unificados & Itens de Aula (Post-its + Aulas + Planos de Aula) ---
+  // --- Construtor Unificado de Entrada do Dia (Usado na Grade Mensal e Grade Semanal) ---
+  const buildDayEntry = useCallback((d: Date, isCurrent: boolean) => {
+    const k = formatDateKey(d)
+    const dayWeek = d.getDay() === 0 ? 7 : d.getDay()
+    const hasPriv = classesList.some(c => c.type === 'private' && c.dayOfWeek === dayWeek)
+    const dayPostIts = postIts.filter(p => p.date === k || (p.date === 'Hoje' && k === todayDateKey))
+    const count = dayPostIts.length
+    const dayPlans = lessonPlans.filter(p => p.date === k)
+    const dayTasks = calendarTasks.filter(t => t.date === k)
+
+    const matchedPlanIds = new Set<string>()
+    const dayLessonTasks = dayTasks.filter(t => {
+      const isLesson = (t.type as string) === 'aula' ||
+        t.title.toLowerCase().includes('aula') ||
+        t.id?.startsWith('lesson_plan_') ||
+        Boolean((t as any).lessonPlanId)
+      if ((t as any).lessonPlanId) matchedPlanIds.add((t as any).lessonPlanId)
+      if (t.id?.startsWith('lesson_plan_')) matchedPlanIds.add(t.id.replace('lesson_plan_', ''))
+      return isLesson
+    })
+
+    const unrepresentedBankPlans = dayPlans.filter(p => !matchedPlanIds.has(p.id) && !dayTasks.some(t => (t as any).lessonPlanId === p.id || t.id === `lesson_plan_${p.id}`))
+    const otherTasks = dayTasks.filter(t => !dayLessonTasks.includes(t))
+
+    const dayLessonItems: Array<{ isPlan?: boolean; isTask?: boolean; plan?: any; task?: any; title: string; className: string; id: string; date: string }> = [
+      ...unrepresentedBankPlans.map(p => ({ isPlan: true, plan: p, title: p.topic, className: p.className, id: p.id, date: p.date })),
+      ...dayLessonTasks.map(t => ({ isTask: true, task: t, title: t.title, className: t.classRef || '', id: t.id, date: t.date }))
+    ]
+
+    const hasProvas = dayTasks.some(t => t.type === 'prova' || t.title.toLowerCase().includes('prova') || t.title.toLowerCase().includes('avaliação'))
+    const hasProjetos = dayTasks.some(t => (t.type as string) === 'projeto' || t.title.toLowerCase().includes('projeto'))
+    const hasLessonPlan = dayLessonItems.length > 0 || dayPlans.length > 0
+    const hasTasks = dayTasks.length > 0
+    const hasNotes = count > 0
+
+    const hasPin = hasNotes || hasPriv || hasLessonPlan || hasProvas || hasProjetos || hasTasks
+
+    // Aulas regulares/particulares da grade neste dia da semana
+    const dayClasses = classesList
+      .filter(c => c.dayOfWeek === dayWeek)
+      .sort((a, b) => (a.timeStart || '').localeCompare(b.timeStart || ''))
+
+    return {
+      date: d,
+      dateKey: k,
+      isCurrentMonth: isCurrent,
+      hasPin,
+      hasProvas,
+      hasProjetos,
+      hasPrivateClass: hasPriv,
+      hasLessonPlan,
+      dayClasses,
+      dayLessonPlans: dayPlans,
+      dayLessonItems,
+      dayTasks,
+      otherTasks,
+      dayPostIts,
+      pinCount: count
+    }
+  }, [postIts, classesList, lessonPlans, calendarTasks, todayDateKey])
+
+  // Grade Mensal Compacta
   const calendarGrid = useMemo(() => {
     const year = currentMonthDate.getFullYear()
     const month = currentMonthDate.getMonth()
     const totalDays = new Date(year, month + 1, 0).getDate()
     const firstDayIndex = new Date(year, month, 1).getDay()
 
-    const days: {
-      date: Date;
-      dateKey: string;
-      isCurrentMonth: boolean;
-      hasPin: boolean;
-      hasPrivateClass: boolean;
-      pinCount: number;
-    }[] = []
+    const days: ReturnType<typeof buildDayEntry>[] = []
 
     const prevMonthTotalDays = new Date(year, month, 0).getDate()
     for (let i = firstDayIndex - 1; i >= 0; i--) {
-      const d = new Date(year, month - 1, prevMonthTotalDays - i)
-      const k = formatDateKey(d)
-      const dayWeek = d.getDay() === 0 ? 7 : d.getDay()
-      const hasPriv = classesList.some(c => c.type === 'private' && c.dayOfWeek === dayWeek)
-      const count = postIts.filter(p => p.date === k).length
-      days.push({ date: d, dateKey: k, isCurrentMonth: false, hasPin: count > 0 || hasPriv, hasPrivateClass: hasPriv, pinCount: count })
+      days.push(buildDayEntry(new Date(year, month - 1, prevMonthTotalDays - i), false))
     }
 
-    const todayKey = formatDateKey(new Date())
     for (let day = 1; day <= totalDays; day++) {
-      const d = new Date(year, month, day)
-      const k = formatDateKey(d)
-      const dayWeek = d.getDay() === 0 ? 7 : d.getDay()
-      const hasPriv = classesList.some(c => c.type === 'private' && c.dayOfWeek === dayWeek)
-      const count = postIts.filter(p => p.date === k || (p.date === 'Hoje' && k === todayKey)).length
-      days.push({ date: d, dateKey: k, isCurrentMonth: true, hasPin: count > 0 || hasPriv, hasPrivateClass: hasPriv, pinCount: count })
+      days.push(buildDayEntry(new Date(year, month, day), true))
     }
 
     const remaining = (7 - (days.length % 7)) % 7
     for (let day = 1; day <= remaining; day++) {
-      const d = new Date(year, month + 1, day)
-      const k = formatDateKey(d)
-      const dayWeek = d.getDay() === 0 ? 7 : d.getDay()
-      const hasPriv = classesList.some(c => c.type === 'private' && c.dayOfWeek === dayWeek)
-      const count = postIts.filter(p => p.date === k).length
-      days.push({ date: d, dateKey: k, isCurrentMonth: false, hasPin: count > 0 || hasPriv, hasPrivateClass: hasPriv, pinCount: count })
+      days.push(buildDayEntry(new Date(year, month + 1, day), false))
     }
 
     return days
-  }, [currentMonthDate, postIts, classesList])
+  }, [currentMonthDate, buildDayEntry])
 
-  const selectedDateKey = useMemo(() => formatDateKey(selectedDate), [selectedDate])
-  const todayDateKey = useMemo(() => formatDateKey(new Date()), [])
+  // Grade Semanal (7 dias da semana alinhados com selectedDate)
+  const weekGrid = useMemo(() => {
+    const dates = getWeekDates(selectedDate, true)
+    return dates.map(d => buildDayEntry(d, true))
+  }, [selectedDate, buildDayEntry])
 
   const postItsForSelectedDay = useMemo(() => {
     return postIts.filter(p => p.date === selectedDateKey || (p.date === 'Hoje' && selectedDateKey === todayDateKey))
   }, [postIts, selectedDateKey, todayDateKey])
 
+  const lessonPlansForSelectedDay = useMemo(() => {
+    return lessonPlans.filter(p => p.date === selectedDateKey)
+  }, [lessonPlans, selectedDateKey])
+
+  // Tarefas e eventos do calendário para o dia selecionado (Provas, Projetos, etc.)
+  const calendarTasksForSelectedDay = useMemo(() => {
+    return calendarTasks.filter(t => t.date === selectedDateKey)
+  }, [calendarTasks, selectedDateKey])
+
+  const provasForSelectedDay = useMemo(() => {
+    return calendarTasksForSelectedDay.filter(t => t.type === 'prova' || t.title.toLowerCase().includes('prova') || t.title.toLowerCase().includes('avaliação'))
+  }, [calendarTasksForSelectedDay])
+
+  const projetosForSelectedDay = useMemo(() => {
+    return calendarTasksForSelectedDay.filter(t => (t.type as string) === 'projeto' || t.title.toLowerCase().includes('projeto'))
+  }, [calendarTasksForSelectedDay])
+
+  const otherTasksForSelectedDay = useMemo(() => {
+    return calendarTasksForSelectedDay.filter(t => 
+      !provasForSelectedDay.includes(t) && 
+      !projetosForSelectedDay.includes(t) && 
+      (t.type as string) !== 'aula' && 
+      !t.title.toLowerCase().includes('aula') && 
+      !Boolean((t as any).lessonPlanId)
+    )
+  }, [calendarTasksForSelectedDay, provasForSelectedDay, projetosForSelectedDay])
+
+  // Aulas do dia selecionado (unindo banco de planos e tarefas de aula)
+  const unifiedLessonsForSelectedDay = useMemo(() => {
+    const fromBank = lessonPlansForSelectedDay.map(p => ({
+      id: p.id,
+      topic: p.topic,
+      className: p.className,
+      date: p.date,
+      status: p.status,
+      shortDescription: p.shortDescription || p.description,
+      rawPlan: p,
+      isBank: true
+    }))
+    const matchedBankIds = new Set(fromBank.map(b => b.id))
+
+    const fromTasks = calendarTasksForSelectedDay
+      .filter(t => (t.type as string) === 'aula' || t.title.toLowerCase().includes('aula') || Boolean((t as any).lessonPlanId))
+      .filter(t => !(t as any).lessonPlanId || !matchedBankIds.has((t as any).lessonPlanId))
+      .map(t => ({
+        id: t.id,
+        topic: t.title.replace(/^(📚\s*aula:\s*|🏷️\s*|aula(\s+de\s+[^:]+)?:\s*)/i, '').trim() || t.title,
+        className: t.classRef || 'Turma Geral',
+        date: t.date,
+        status: t.done ? 'delivered' : 'confirmed',
+        shortDescription: t.description,
+        rawPlan: t,
+        isBank: false
+      }))
+
+    return [...fromBank, ...fromTasks]
+  }, [lessonPlansForSelectedDay, calendarTasksForSelectedDay])
+
   // Aulas do dia selecionado no calendário
   const classesForSelectedCalendarDate = useMemo(() => {
     const dayOfWeek = selectedDate.getDay() === 0 ? 7 : selectedDate.getDay()
-    return classesList.filter(c => c.dayOfWeek === dayOfWeek)
+    return classesList
+      .filter(c => c.dayOfWeek === dayOfWeek)
+      .sort((a, b) => (a.timeStart || '').localeCompare(b.timeStart || ''))
   }, [classesList, selectedDate])
+
+  // Cronograma consolidado do dia com horários e pins integrados (elimina o horário avulso)
+  const dayScheduleTimeline = useMemo(() => {
+    type TimelineItem = {
+      id: string
+      timeDisplay: string
+      timeSort: string
+      title: string
+      subtitle?: string
+      type: 'class' | 'prova' | 'projeto' | 'aula_plan' | 'task'
+      badgeLabel: string
+      badgeBg: string
+      badgeColor: string
+      lessonPlan?: any
+      classItem?: TodayClassItem
+      rawItem?: any
+    }
+
+    const items: TimelineItem[] = []
+
+    // 1. Aulas da Grade do Dia
+    classesForSelectedCalendarDate.forEach(cls => {
+      // Procura plano de aula associado
+      const matchingPlan = unifiedLessonsForSelectedDay.find(l => 
+        l.className?.toLowerCase().trim() === cls.className?.toLowerCase().trim() ||
+        cls.className?.toLowerCase().includes(l.className?.toLowerCase() || '') ||
+        (cls.lessonPlanId && l.id === cls.lessonPlanId)
+      )
+
+      items.push({
+        id: `cls_${cls.id}`,
+        timeDisplay: `${cls.timeStart} - ${cls.timeEnd}`,
+        timeSort: cls.timeStart,
+        title: cls.className,
+        subtitle: matchingPlan ? `📚 Plano: ${matchingPlan.topic}` : (cls.topic || cls.room),
+        type: 'class',
+        badgeLabel: cls.type === 'private' ? '👤 Particular' : '🏫 Grade',
+        badgeBg: cls.type === 'private' ? '#f3e8ff' : '#f5efe6',
+        badgeColor: cls.type === 'private' ? '#6b21a8' : '#8b5e3c',
+        lessonPlan: matchingPlan?.rawPlan || (cls.lessonPlanId ? { id: cls.lessonPlanId, topic: cls.topic, className: cls.className, date: selectedDateKey } : null),
+        classItem: cls,
+      })
+    })
+
+    // 2. Provas do Dia
+    provasForSelectedDay.forEach(p => {
+      const schedule = resolvePinScheduleTime(p, classesForSelectedCalendarDate)
+      items.push({
+        id: `prova_${p.id}`,
+        timeDisplay: schedule.formattedTime !== 'Horário a definir' ? schedule.formattedTime : (p.timeStart ? p.timeStart : 'Horário da Prova'),
+        timeSort: schedule.timeStart || p.timeStart || '08:00',
+        title: p.title,
+        subtitle: p.classRef ? `Turma: ${p.classRef}${p.description ? ` • ${p.description}` : ''}` : p.description,
+        type: 'prova',
+        badgeLabel: '📝 Prova',
+        badgeBg: '#fee2e2',
+        badgeColor: '#991b1b',
+        rawItem: p
+      })
+    })
+
+    // 3. Projetos do Dia
+    projetosForSelectedDay.forEach(proj => {
+      const schedule = resolvePinScheduleTime(proj, classesForSelectedCalendarDate)
+      items.push({
+        id: `proj_${proj.id}`,
+        timeDisplay: schedule.formattedTime !== 'Horário a definir' ? schedule.formattedTime : (proj.timeStart ? proj.timeStart : 'Turno do Projeto'),
+        timeSort: schedule.timeStart || proj.timeStart || '09:00',
+        title: proj.title,
+        subtitle: proj.classRef ? `Turma: ${proj.classRef}${proj.description ? ` • ${proj.description}` : ''}` : proj.description,
+        type: 'projeto',
+        badgeLabel: '🎯 Projeto',
+        badgeBg: '#f3e8ff',
+        badgeColor: '#6b21a8',
+        rawItem: proj
+      })
+    })
+
+    // 4. Planos de Aula não casados com aula da grade
+    unifiedLessonsForSelectedDay.forEach(plan => {
+      const alreadyInTimeline = items.some(it => it.type === 'class' && it.lessonPlan?.id === plan.id)
+      if (!alreadyInTimeline) {
+        const schedule = resolvePinScheduleTime(plan, classesForSelectedCalendarDate)
+        items.push({
+          id: `plan_${plan.id}`,
+          timeDisplay: schedule.formattedTime !== 'Horário a definir' ? schedule.formattedTime : '07:30 - 08:20',
+          timeSort: schedule.timeStart || '07:30',
+          title: `Aula: ${plan.topic}`,
+          subtitle: `Turma: ${plan.className}`,
+          type: 'aula_plan',
+          badgeLabel: '📚 Plano de Aula',
+          badgeBg: '#fef3c7',
+          badgeColor: '#b45309',
+          lessonPlan: plan.rawPlan
+        })
+      }
+    })
+
+    // 5. Outras Tarefas com horário
+    otherTasksForSelectedDay.forEach(t => {
+      const schedule = resolvePinScheduleTime(t, classesForSelectedCalendarDate)
+      if (t.timeStart || schedule.timeStart) {
+        items.push({
+          id: `task_${t.id}`,
+          timeDisplay: schedule.formattedTime,
+          timeSort: schedule.timeStart || t.timeStart || '12:00',
+          title: t.title,
+          subtitle: t.classRef ? `Turma: ${t.classRef}` : undefined,
+          type: 'task',
+          badgeLabel: '📋 Tarefa',
+          badgeBg: '#f5efe6',
+          badgeColor: '#7a5c42',
+          rawItem: t
+        })
+      }
+    })
+
+    return items.sort((a, b) => a.timeSort.localeCompare(b.timeSort))
+  }, [classesForSelectedCalendarDate, unifiedLessonsForSelectedDay, provasForSelectedDay, projetosForSelectedDay, otherTasksForSelectedDay, selectedDateKey])
 
   // Aulas do Dia da Semana Selecionado (com filtro Escola vs Particular)
   const classesForSelectedDay = useMemo(() => {
@@ -954,28 +1242,46 @@ export default function Dashboard() {
                   </div>
                 </div>
 
-                {/* Navegação de Mês */}
+                {/* Navegação de Mês / Semana */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <button
                     onClick={() => {
-                      const prev = new Date(currentMonthDate)
-                      prev.setMonth(prev.getMonth() - 1)
-                      setCurrentMonthDate(prev)
+                      if (calendarView === 'semana') {
+                        const prev = new Date(selectedDate)
+                        prev.setDate(prev.getDate() - 7)
+                        setSelectedDate(prev)
+                        setCurrentMonthDate(prev)
+                      } else {
+                        const prev = new Date(currentMonthDate)
+                        prev.setMonth(prev.getMonth() - 1)
+                        setCurrentMonthDate(prev)
+                      }
                     }}
                     style={{ background: '#faf6f0', border: '1px solid #d5c8bb', borderRadius: 6, width: 26, height: 26, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11 }}
+                    title={calendarView === 'semana' ? 'Semana anterior' : 'Mês anterior'}
                   >
                     ◀
                   </button>
-                  <span style={{ fontSize: 13, fontWeight: 800, color: '#2c1a0e', minWidth: 110, textAlign: 'center' }}>
-                    {MONTH_NAMES[currentMonthDate.getMonth()]} {currentMonthDate.getFullYear()}
+                  <span style={{ fontSize: 13, fontWeight: 800, color: '#2c1a0e', minWidth: calendarView === 'semana' ? 170 : 110, textAlign: 'center' }}>
+                    {calendarView === 'semana'
+                      ? formatWeekRange(getWeekDates(selectedDate, true))
+                      : `${MONTH_NAMES[currentMonthDate.getMonth()]} ${currentMonthDate.getFullYear()}`}
                   </span>
                   <button
                     onClick={() => {
-                      const next = new Date(currentMonthDate)
-                      next.setMonth(next.getMonth() + 1)
-                      setCurrentMonthDate(next)
+                      if (calendarView === 'semana') {
+                        const next = new Date(selectedDate)
+                        next.setDate(next.getDate() + 7)
+                        setSelectedDate(next)
+                        setCurrentMonthDate(next)
+                      } else {
+                        const next = new Date(currentMonthDate)
+                        next.setMonth(next.getMonth() + 1)
+                        setCurrentMonthDate(next)
+                      }
                     }}
                     style={{ background: '#faf6f0', border: '1px solid #d5c8bb', borderRadius: 6, width: 26, height: 26, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11 }}
+                    title={calendarView === 'semana' ? 'Próxima semana' : 'Próximo mês'}
                   >
                     ▶
                   </button>
@@ -1045,80 +1351,296 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              {/* Grade Mensal Proporcional (Tamanho Ideal) */}
-              <div style={{ background: '#faf6f0', borderRadius: RADIUS.lg, padding: '10px 14px', border: '1px solid #ede8dc' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', textAlign: 'center', marginBottom: 4, fontSize: 11, fontWeight: 800, color: '#8b5e3c' }}>
-                  {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map((d, i) => (
-                    <div key={i} style={{ padding: '2px 0' }}>{d}</div>
-                  ))}
+              {/* =========================================================================
+                  VISÃO 1: CALENDÁRIO DA SEMANA COM HORÁRIOS E PINS
+                 ========================================================================= */}
+              {calendarView === 'semana' ? (
+                <div style={{ background: '#faf6f0', borderRadius: RADIUS.lg, padding: '12px 14px', border: '1px solid #ede8dc' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 8 }}>
+                    {weekGrid.map((item, idx) => {
+                      const isSelected = mounted ? item.dateKey === selectedDateKey : false
+                      const isToday = mounted ? item.dateKey === todayDateKey : false
+                      const dayClasses = item.dayClasses || []
+                      const dayTasks = item.dayTasks || []
+
+                      // Itens resumidos com horário para o card da semana
+                      const summaryItems: Array<{ time: string; label: string; icon?: string; color: string }> = []
+                      
+                      dayClasses.forEach(cls => {
+                        summaryItems.push({
+                          time: cls.timeStart,
+                          label: cls.className,
+                          icon: cls.type === 'private' ? '👤' : '🏫',
+                          color: cls.type === 'private' ? '#6b21a8' : '#8b5e3c'
+                        })
+                      })
+
+                      dayTasks.forEach(t => {
+                        const sched = resolvePinScheduleTime(t, dayClasses)
+                        const isPrv = t.type === 'prova' || t.title.toLowerCase().includes('prova') || t.title.toLowerCase().includes('avaliação')
+                        const isPrj = (t.type as string) === 'projeto' || t.title.toLowerCase().includes('projeto')
+                        if (isPrv) {
+                          summaryItems.push({
+                            time: sched.timeStart || (t.timeStart ? t.timeStart : '08:00'),
+                            label: t.title,
+                            icon: '📝',
+                            color: '#991b1b'
+                          })
+                        } else if (isPrj) {
+                          summaryItems.push({
+                            time: sched.timeStart || (t.timeStart ? t.timeStart : '09:00'),
+                            label: t.title,
+                            icon: '🎯',
+                            color: '#6b21a8'
+                          })
+                        }
+                      })
+
+                      summaryItems.sort((a, b) => a.time.localeCompare(b.time))
+                      const weekdayShort = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'][item.date.getDay()]
+
+                      return (
+                        <div
+                          key={idx}
+                          onClick={() => {
+                            setSelectedDate(item.date)
+                            setIsPostItViewerOpen(true)
+                          }}
+                          style={{
+                            background: isSelected ? '#fffdfa' : '#fff',
+                            border: isSelected ? '2px solid #2c1a0e' : isToday ? '2px solid #b58900' : '1px solid #ede8dc',
+                            borderRadius: RADIUS.md,
+                            padding: '8px 10px',
+                            minHeight: 140,
+                            cursor: 'pointer',
+                            position: 'relative',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            justifyContent: 'space-between',
+                            transition: 'all 0.15s ease',
+                            boxShadow: isSelected ? '0 4px 12px rgba(44,26,14,0.12)' : 'none',
+                          }}
+                          onMouseEnter={(e) => {
+                            if (!isSelected) {
+                              e.currentTarget.style.borderColor = '#b58900'
+                              e.currentTarget.style.transform = 'translateY(-1px)'
+                            }
+                          }}
+                          onMouseLeave={(e) => {
+                            if (!isSelected) {
+                              e.currentTarget.style.borderColor = isToday ? '#b58900' : '#ede8dc'
+                              e.currentTarget.style.transform = 'none'
+                            }
+                          }}
+                        >
+                          {/* Header do Dia na Semana: Nome, Número e Pin */}
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6, borderBottom: '1px solid #f5efe6', paddingBottom: 4 }}>
+                            <div>
+                              <span style={{ fontSize: 11, fontWeight: 800, color: isToday ? '#b58900' : '#8b5e3c', textTransform: 'uppercase' }}>
+                                {weekdayShort}
+                              </span>
+                              <div style={{ fontSize: 16, fontWeight: 800, color: '#2c1a0e', lineHeight: 1 }}>
+                                {item.date.getDate()}
+                              </div>
+                            </div>
+
+                            {item.hasPin && (
+                              <span
+                                style={{
+                                  fontSize: 12,
+                                  lineHeight: 1,
+                                  filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.15))'
+                                }}
+                                title={
+                                  item.hasProvas ? 'Possui Prova/Avaliação' :
+                                  item.hasProjetos ? 'Possui Projeto' :
+                                  item.hasLessonPlan ? 'Possui Aula / Plano de Aula' :
+                                  'Possui Anotações / Post-its'
+                                }
+                              >
+                                📌
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Lista com Horários Claros do Dia */}
+                          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4, overflow: 'hidden' }}>
+                            {summaryItems.length === 0 ? (
+                              <div style={{ fontSize: 10.5, color: '#a08060', textAlign: 'center', padding: '16px 0', opacity: 0.6 }}>
+                                Sem horários
+                              </div>
+                            ) : (
+                              summaryItems.slice(0, 4).map((entry, eIdx) => (
+                                <div
+                                  key={eIdx}
+                                  style={{
+                                    background: '#faf6f0',
+                                    borderLeft: `3px solid ${entry.color}`,
+                                    borderRadius: 4,
+                                    padding: '2px 5px',
+                                    fontSize: 10,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 4,
+                                    overflow: 'hidden'
+                                  }}
+                                >
+                                  <span style={{ fontWeight: 800, color: '#2c1a0e', whiteSpace: 'nowrap', fontSize: 9.5 }}>
+                                    {entry.time}
+                                  </span>
+                                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#5c4838' }}>
+                                    {entry.icon} {entry.label}
+                                  </span>
+                                </div>
+                              ))
+                            )}
+                            {summaryItems.length > 4 && (
+                              <span style={{ fontSize: 9.5, color: '#8b5e3c', fontWeight: 700, textAlign: 'center' }}>
+                                +{summaryItems.length - 4} mais...
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Dica de Abertura do Box */}
+                          <div style={{ fontSize: 9.5, color: '#b58900', fontWeight: 700, marginTop: 4, textAlign: 'right' }}>
+                            Ver box ➔
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
                 </div>
+              ) : (
+                /* =========================================================================
+                   VISÃO 2: GRADE MENSAL COMPACTA (Tamanho Original com Pins nos cantos)
+                   ========================================================================= */
+                <div style={{ background: '#faf6f0', borderRadius: RADIUS.lg, padding: '12px 14px', border: '1px solid #ede8dc' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', textAlign: 'center', marginBottom: 8, fontSize: 12, fontWeight: 800, color: '#8b5e3c' }}>
+                    {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map((d, i) => (
+                      <div key={i} style={{ padding: '2px 0' }}>{d}</div>
+                    ))}
+                  </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4 }}>
-                  {calendarGrid.map((item, idx) => {
-                    const isSelected = mounted ? item.dateKey === selectedDateKey : false
-                    const isToday = mounted ? item.dateKey === todayDateKey : false
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 6 }}>
+                    {calendarGrid.map((item, idx) => {
+                      const isSelected = mounted ? item.dateKey === selectedDateKey : false
+                      const isToday = mounted ? item.dateKey === todayDateKey : false
 
-                    return (
-                      <button
-                        key={idx}
-                        onClick={() => {
-                          setSelectedDate(item.date)
-                          setIsPostItViewerOpen(true)
-                        }}
-                        style={{
-                          height: 32,
-                          borderRadius: RADIUS.md,
-                          border: isSelected ? '2px solid #2c1a0e' : isToday ? '1.5px solid #b58900' : '1px solid transparent',
-                          background: isSelected ? '#2c1a0e' : isToday ? '#fef3c7' : item.isCurrentMonth ? '#fff' : 'rgba(255,255,255,0.4)',
-                          color: isSelected ? '#fff' : item.isCurrentMonth ? '#2c1a0e' : '#b0a69a',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          position: 'relative',
-                          transition: 'all 0.15s',
-                        }}
-                      >
-                        <span style={{ fontSize: 12, fontWeight: isSelected || isToday ? 800 : 600 }}>
+                      return (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => {
+                            setSelectedDate(item.date)
+                            setIsPostItViewerOpen(true)
+                          }}
+                          style={{
+                            height: 38,
+                            borderRadius: RADIUS.md,
+                            border: isSelected ? 'none' : isToday ? '2px solid #b58900' : '1px solid rgba(88,110,117,0.1)',
+                            background: isSelected ? '#2c1a0e' : item.isCurrentMonth ? '#fff' : '#fcfaf2',
+                            color: isSelected ? '#fff' : !item.isCurrentMonth ? '#cbd5e1' : '#2c1a0e',
+                            fontSize: 13,
+                            fontWeight: isSelected || isToday ? 800 : 700,
+                            cursor: 'pointer',
+                            position: 'relative',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            transition: 'all 0.15s ease',
+                            boxShadow: isSelected ? '0 3px 8px rgba(44,26,14,0.2)' : 'none',
+                            padding: 0
+                          }}
+                          onMouseEnter={(e) => {
+                            if (!isSelected) {
+                              e.currentTarget.style.transform = 'translateY(-1px)'
+                              e.currentTarget.style.borderColor = '#b58900'
+                            }
+                          }}
+                          onMouseLeave={(e) => {
+                            if (!isSelected) {
+                              e.currentTarget.style.transform = 'none'
+                              e.currentTarget.style.borderColor = isToday ? '#b58900' : '1px solid rgba(88,110,117,0.1)'
+                            }
+                          }}
+                        >
                           {item.date.getDate()}
-                        </span>
-
-                        {/* Pin no Dia */}
-                        {item.hasPin && (
-                          <span
-                            title={item.hasPrivateClass ? 'Possui Aula Particular e/ou Post-its' : `${item.pinCount} Post-it(s)`}
-                            style={{
-                              position: 'absolute',
-                              top: 1,
-                              right: 2,
-                              fontSize: 9,
-                              lineHeight: 1,
-                            }}
-                          >
-                            📌
-                          </span>
-                        )}
-                      </button>
-                    )
-                  })}
+                          
+                          {/* Pin do Dia: Referenda Prova, Projeto, Aula, Post-it ou Tarefa */}
+                          {item.hasPin && (
+                            <span
+                              style={{
+                                position: 'absolute',
+                                top: 2,
+                                right: 3,
+                                fontSize: 10,
+                                lineHeight: 1,
+                                filter: isSelected ? 'drop-shadow(0 1px 2px rgba(0,0,0,0.4))' : 'none'
+                              }}
+                              title={
+                                item.hasProvas ? 'Possui Prova/Avaliação' :
+                                item.hasProjetos ? 'Possui Projeto' :
+                                item.hasLessonPlan ? 'Possui Aula / Plano de Aula' :
+                                'Possui Anotações / Post-its'
+                              }
+                            >
+                              📌
+                            </span>
+                          )}
+                        </button>
+                      )
+                    })}
+                  </div>
                 </div>
-              </div>
+              )}
 
-              {/* Painel Dinâmico de Post-its e Aulas do Dia Clicado */}
+              {/* =========================================================================
+                  CARD DETALHADO DO DIA SELECIONADO (Provas, Projetos, Aulas, Post-its, etc.)
+                 ========================================================================= */}
               {isPostItViewerOpen && (
                 <div style={{
                   marginTop: 12,
                   background: '#faf6f0',
                   borderRadius: RADIUS.lg,
                   border: '1px solid #ede8dc',
-                  padding: '12px 16px',
+                  padding: '14px 18px',
                   animation: 'rafSlideUp 0.2s ease-out',
                 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span style={{ fontSize: TEXT.bodyCompact, fontWeight: 800, color: '#2c1a0e' }}>
-                        📅 Dia {selectedDate.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })} — Agenda & Post-its:
+                  {/* Header do Card com Data e Resumo */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: TEXT.body, fontWeight: 800, color: '#2c1a0e' }}>
+                        📅 Dia {selectedDate.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })} ({selectedDate.toLocaleDateString('pt-BR', { weekday: 'long' })})
                       </span>
+
+                      {/* Badges de Resumo */}
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                        {provasForSelectedDay.length > 0 && (
+                          <span style={{ fontSize: 11, background: '#fee2e2', padding: '2px 8px', borderRadius: 6, border: '1px solid #fca5a5', color: '#991b1b', fontWeight: 800 }}>
+                            📝 {provasForSelectedDay.length} Prova(s)
+                          </span>
+                        )}
+                        {projetosForSelectedDay.length > 0 && (
+                          <span style={{ fontSize: 11, background: '#f3e8ff', padding: '2px 8px', borderRadius: 6, border: '1px solid #d8b4fe', color: '#6b21a8', fontWeight: 800 }}>
+                            🎯 {projetosForSelectedDay.length} Projeto(s)
+                          </span>
+                        )}
+                        {unifiedLessonsForSelectedDay.length > 0 && (
+                          <span style={{ fontSize: 11, background: '#fef3c7', padding: '2px 8px', borderRadius: 6, border: '1px solid #fde68a', color: '#b45309', fontWeight: 800 }}>
+                            📚 {unifiedLessonsForSelectedDay.length} Aula(s) Planejada(s)
+                          </span>
+                        )}
+                        {postItsForSelectedDay.length > 0 && (
+                          <span style={{ fontSize: 11, background: '#fef9c3', padding: '2px 8px', borderRadius: 6, border: '1px solid #fef08a', color: '#854d0e', fontWeight: 700 }}>
+                            📌 {postItsForSelectedDay.length} Post-it(s)
+                          </span>
+                        )}
+                        {classesForSelectedCalendarDate.length > 0 && (
+                          <span style={{ fontSize: 11, background: '#fff', padding: '2px 8px', borderRadius: 6, border: '1px solid #ede8dc', color: '#5c4838', fontWeight: 600 }}>
+                            🏫 {classesForSelectedCalendarDate.length} Aula(s) na Grade
+                          </span>
+                        )}
+                      </div>
                     </div>
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -1137,92 +1659,519 @@ export default function Dashboard() {
                       </button>
                       <button
                         onClick={() => setIsPostItViewerOpen(false)}
-                        style={{ background: 'none', border: 'none', color: '#a08060', fontSize: 14, cursor: 'pointer', padding: '0 4px' }}
-                        title="Fechar"
+                        style={{ background: 'none', border: 'none', color: '#a08060', fontSize: 16, cursor: 'pointer', padding: '0 4px', lineHeight: 1 }}
+                        title="Fechar Card"
                       >
                         ✕
                       </button>
                     </div>
                   </div>
 
-                  {/* Resumo de Aulas do Dia Selecionado */}
-                  <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: 11, background: '#fff', padding: '3px 8px', borderRadius: 6, border: '1px solid #ede8dc', color: '#2c1a0e', fontWeight: 700 }}>
-                      🏫 {classesForSelectedCalendarDate.filter(c => c.type === 'school').length} aula(s) escolar(es)
-                    </span>
-                    <span style={{ fontSize: 11, background: '#fff', padding: '3px 8px', borderRadius: 6, border: '1px solid #ede8dc', color: '#8b5e3c', fontWeight: 700 }}>
-                      🎓 {classesForSelectedCalendarDate.filter(c => c.type === 'private').length} aula(s) particular(es)
-                    </span>
-                  </div>
-
-                  {postItsForSelectedDay.length === 0 ? (
-                    <div style={{ padding: '6px 0', color: '#665c54', fontSize: TEXT.caption }}>
-                      Nenhum post-it para este dia.{' '}
-                      <span
-                        onClick={() => {
-                          setEditingPostIt(null)
-                          setNewPostItTitle('')
-                          setNewPostItContent('')
-                          setNewPostItColor('yellow')
-                          setNewPostItDate(selectedDateKey)
-                          setShowNewPostItModal(true)
-                        }}
-                        style={{ color: '#b58900', fontWeight: 800, cursor: 'pointer', textDecoration: 'underline' }}
-                      >
-                        Criar anotação
+                  {/* CRONOGRAMA & HORÁRIOS DO DIA (TIMELINE COMPLETA) */}
+                  <div style={{ marginBottom: 14, background: '#fff', borderRadius: RADIUS.md, border: '1px solid #ede8dc', padding: '12px 14px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, borderBottom: '1px solid #f5efe6', paddingBottom: 6 }}>
+                      <span style={{ fontSize: 12.5, fontWeight: 800, color: '#2c1a0e', display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <i className="ti ti-clock" style={{ color: '#b58900', fontSize: 14 }} />
+                        Cronograma & Horários do Dia ({classesForSelectedCalendarDate.length} aula{classesForSelectedCalendarDate.length !== 1 ? 's' : ''} na grade)
+                      </span>
+                      <span style={{ fontSize: 11, color: '#8b5e3c', fontWeight: 700 }}>
+                        {selectedDate.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long' })}
                       </span>
                     </div>
-                  ) : (
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 8 }}>
-                      {postItsForSelectedDay.map(note => {
-                        const style = POSTIT_COLORS[note.color] || POSTIT_COLORS.yellow
-                        return (
+
+                    {dayScheduleTimeline.length === 0 ? (
+                      <div style={{ padding: '10px 0', textAlign: 'center', color: '#a08060', fontSize: 12 }}>
+                        Nenhum horário ou aula registrada na grade para este dia da semana.
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        {dayScheduleTimeline.map((item, itIdx) => (
                           <div
-                            key={note.id}
+                            key={itIdx}
                             style={{
-                              background: style.bg,
-                              border: `1px solid ${style.border}`,
-                              borderRadius: RADIUS.md,
-                              padding: '8px 12px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              padding: '6px 10px',
+                              background: '#faf6f0',
+                              borderRadius: RADIUS.sm,
+                              borderLeft: `4px solid ${item.badgeColor}`,
+                              gap: 10,
+                              flexWrap: 'wrap'
                             }}
                           >
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
-                              <span style={{ fontSize: 9, fontWeight: 800, color: style.text, opacity: 0.8 }}>
-                                📌 {note.date}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', flex: 1, minWidth: 200 }}>
+                              <span style={{
+                                fontSize: 11,
+                                fontWeight: 800,
+                                color: '#2c1a0e',
+                                background: '#fff',
+                                padding: '2px 8px',
+                                borderRadius: 4,
+                                border: '1px solid #ede8dc',
+                                whiteSpace: 'nowrap',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 3
+                              }}>
+                                <i className="ti ti-clock" style={{ fontSize: 10, color: item.badgeColor }} />
+                                {item.timeDisplay}
                               </span>
-                              <div style={{ display: 'flex', gap: 4 }}>
+
+                              <span style={{
+                                fontSize: 10.5,
+                                fontWeight: 800,
+                                color: item.badgeColor,
+                                background: item.badgeBg,
+                                padding: '2px 6px',
+                                borderRadius: 4,
+                                whiteSpace: 'nowrap'
+                              }}>
+                                {item.badgeLabel}
+                              </span>
+
+                              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                <span style={{ fontSize: 12.5, fontWeight: 800, color: '#2c1a0e' }}>
+                                  {item.title}
+                                </span>
+                                {item.subtitle && (
+                                  <span style={{ fontSize: 11, color: '#665c54' }}>
+                                    {item.subtitle}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Ações Rápidas na Linha do Tempo */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              {item.lessonPlan ? (
                                 <button
-                                  onClick={() => {
-                                    setEditingPostIt(note)
-                                    setNewPostItTitle(note.title)
-                                    setNewPostItContent(note.content)
-                                    setNewPostItColor(note.color)
-                                    setNewPostItDate(note.date || selectedDateKey)
-                                    setShowNewPostItModal(true)
+                                  type="button"
+                                  onClick={() => openLessonPlanDocModal(item.lessonPlan)}
+                                  style={{
+                                    padding: '4px 10px',
+                                    borderRadius: RADIUS.sm,
+                                    border: '1px solid #d5c8bb',
+                                    background: '#fff',
+                                    color: '#8b5e3c',
+                                    fontSize: 11,
+                                    fontWeight: 700,
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 4
                                   }}
-                                  style={{ background: 'none', border: 'none', color: style.text, cursor: 'pointer', opacity: 0.7, fontSize: 11 }}
                                 >
-                                  <i className="ti ti-pencil" />
+                                  <i className="ti ti-file-text" />
+                                  <span>Ver Documento</span>
+                                </button>
+                              ) : item.classItem ? (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    localStorage.setItem('teacher_lesson_studio_prefill', JSON.stringify({
+                                      className: item.classItem?.className,
+                                      topic: item.classItem?.topic,
+                                      date: selectedDateKey
+                                    }))
+                                    window.dispatchEvent(new CustomEvent('teacher:navigate', { detail: 'lesson-studio' }))
+                                    window.dispatchEvent(new CustomEvent('teacher:navigate', { detail: 'lessonstudio' }))
+                                  }}
+                                  style={{
+                                    padding: '4px 10px',
+                                    borderRadius: RADIUS.sm,
+                                    border: 'none',
+                                    background: '#8b5e3c',
+                                    color: '#fff',
+                                    fontSize: 11,
+                                    fontWeight: 700,
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 4
+                                  }}
+                                >
+                                  <i className="ti ti-plus" />
+                                  <span>Planejar Aula</span>
+                                </button>
+                              ) : null}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* SEÇÃO 1: PROVAS E AVALIAÇÕES DO DIA (SE HOUVER) */}
+                  {provasForSelectedDay.length > 0 && (
+                    <div style={{ marginBottom: 12 }}>
+                      <div style={{ fontSize: 12, fontWeight: 800, color: '#991b1b', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 5 }}>
+                        <span>📝 Provas & Avaliações Marcadas ({provasForSelectedDay.length}):</span>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        {provasForSelectedDay.map(prova => {
+                          const sched = resolvePinScheduleTime(prova, classesForSelectedCalendarDate)
+                          return (
+                            <div
+                              key={prova.id}
+                              style={{
+                                background: '#fff',
+                                border: '1px solid #fca5a5',
+                                borderLeft: '4px solid #ef4444',
+                                borderRadius: RADIUS.md,
+                                padding: '10px 14px',
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                gap: 12,
+                                boxShadow: '0 1px 3px rgba(239,68,68,0.08)'
+                              }}
+                            >
+                              <div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                  <span style={{ fontSize: 13, fontWeight: 800, color: '#2c1a0e' }}>
+                                    {prova.title}
+                                  </span>
+                                  {prova.classRef && (
+                                    <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: RADIUS.full, background: '#fee2e2', color: '#991b1b', fontWeight: 700 }}>
+                                      {prova.classRef}
+                                    </span>
+                                  )}
+                                  <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 4, background: '#fee2e2', color: '#991b1b', fontWeight: 800, border: '1px solid #fca5a5', display: 'flex', alignItems: 'center', gap: 3 }}>
+                                    <i className="ti ti-clock" style={{ fontSize: 10 }} />
+                                    {sched.formattedTime !== 'Horário a definir' ? sched.formattedTime : 'Horário da Prova'}
+                                  </span>
+                                  <span style={{ fontSize: 10.5, padding: '2px 6px', borderRadius: 4, background: '#fef2f2', color: '#dc2626', fontWeight: 700, border: '1px solid #fecaca' }}>
+                                    Prioridade {prova.priority === 'high' ? 'Alta' : 'Média'}
+                                  </span>
+                                </div>
+                                {prova.description && (
+                                  <p style={{ margin: '4px 0 0 0', fontSize: 11.5, color: '#665c54', lineHeight: 1.4 }}>
+                                    {prova.description}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* SEÇÃO 2: PROJETOS & ATIVIDADES ESPECIAIS (SE HOUVER) */}
+                  {projetosForSelectedDay.length > 0 && (
+                    <div style={{ marginBottom: 12 }}>
+                      <div style={{ fontSize: 12, fontWeight: 800, color: '#6b21a8', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 5 }}>
+                        <span>🎯 Projetos & Atividades ({projetosForSelectedDay.length}):</span>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        {projetosForSelectedDay.map(proj => {
+                          const sched = resolvePinScheduleTime(proj, classesForSelectedCalendarDate)
+                          return (
+                            <div
+                              key={proj.id}
+                              style={{
+                                background: '#fff',
+                                border: '1px solid #d8b4fe',
+                                borderLeft: '4px solid #a855f7',
+                                borderRadius: RADIUS.md,
+                                padding: '10px 14px',
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                gap: 12,
+                                boxShadow: '0 1px 3px rgba(168,85,247,0.08)'
+                              }}
+                            >
+                              <div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                  <span style={{ fontSize: 13, fontWeight: 800, color: '#2c1a0e' }}>
+                                    {proj.title}
+                                  </span>
+                                  {proj.classRef && (
+                                    <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: RADIUS.full, background: '#f3e8ff', color: '#6b21a8', fontWeight: 700 }}>
+                                      {proj.classRef}
+                                    </span>
+                                  )}
+                                  <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 4, background: '#f3e8ff', color: '#6b21a8', fontWeight: 800, border: '1px solid #d8b4fe', display: 'flex', alignItems: 'center', gap: 3 }}>
+                                    <i className="ti ti-clock" style={{ fontSize: 10 }} />
+                                    {sched.formattedTime !== 'Horário a definir' ? sched.formattedTime : 'Turno do Projeto'}
+                                  </span>
+                                </div>
+                                {proj.description && (
+                                  <p style={{ margin: '4px 0 0 0', fontSize: 11.5, color: '#665c54', lineHeight: 1.4 }}>
+                                    {proj.description}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* SEÇÃO 3: AULAS E PLANOS DE AULA DO DIA (COM BOTÃO "VER DOCUMENTO") */}
+                  {unifiedLessonsForSelectedDay.length > 0 && (
+                    <div style={{ marginBottom: 12 }}>
+                      <div style={{ fontSize: 12, fontWeight: 800, color: '#8b5e3c', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 5 }}>
+                        <span>📚 Aulas & Planos de Aula Registrados ({unifiedLessonsForSelectedDay.length}):</span>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        {unifiedLessonsForSelectedDay.map(plan => {
+                          const sched = resolvePinScheduleTime(plan, classesForSelectedCalendarDate)
+                          return (
+                            <div
+                              key={plan.id}
+                              style={{
+                                background: '#fff',
+                                border: '1px solid #d5c8bb',
+                                borderLeft: '4px solid #8b5e3c',
+                                borderRadius: RADIUS.md,
+                                padding: '10px 14px',
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                gap: 12,
+                                boxShadow: '0 1px 3px rgba(44,26,14,0.05)'
+                              }}
+                            >
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                  <span style={{ fontSize: 13, fontWeight: 800, color: '#2c1a0e' }}>
+                                    {plan.topic}
+                                  </span>
+                                  <span style={{
+                                    fontSize: 11,
+                                    padding: '2px 8px',
+                                    borderRadius: RADIUS.full,
+                                    background: '#f5efe6',
+                                    color: '#8b5e3c',
+                                    fontWeight: 700
+                                  }}>
+                                    {plan.className}
+                                  </span>
+                                  <span style={{
+                                    fontSize: 11,
+                                    padding: '2px 8px',
+                                    borderRadius: 4,
+                                    background: '#fef3c7',
+                                    color: '#b45309',
+                                    fontWeight: 800,
+                                    border: '1px solid #fde68a',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 3
+                                  }}>
+                                    <i className="ti ti-clock" style={{ fontSize: 10 }} />
+                                    {sched.formattedTime !== 'Horário a definir' ? sched.formattedTime : '07:30 - 08:20'}
+                                  </span>
+                                  <span style={{
+                                    fontSize: 10.5,
+                                    padding: '2px 8px',
+                                    borderRadius: RADIUS.full,
+                                    fontWeight: 700,
+                                    border: plan.status === 'draft' ? '1px dashed #d97706' : '1px solid transparent',
+                                    background: plan.status === 'delivered' ? '#dcfce7' : plan.status === 'confirmed' ? '#e0e7ff' : '#fef3c7',
+                                    color: plan.status === 'delivered' ? '#15803d' : plan.status === 'confirmed' ? '#4338ca' : '#b45309'
+                                  }}>
+                                    {plan.status === 'delivered' ? '✓ Ministrada' : plan.status === 'confirmed' ? 'Confirmada' : 'Rascunho'}
+                                  </span>
+                                </div>
+                                {plan.shortDescription && (
+                                  <p style={{ fontSize: 11.5, color: '#665c54', margin: '4px 0 0 0', lineHeight: 1.4 }}>
+                                    {plan.shortDescription}
+                                  </p>
+                                )}
+                              </div>
+
+                              {/* Botões: Ver Documento no Box Modal e Editar no Estúdio */}
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                                <button
+                                  type="button"
+                                  onClick={() => openLessonPlanDocModal(plan.rawPlan)}
+                                  style={{
+                                    padding: '6px 12px',
+                                    borderRadius: RADIUS.sm,
+                                    border: '1px solid #d5c8bb',
+                                    background: '#faf6f0',
+                                    color: '#5c4838',
+                                    fontSize: 11.5,
+                                    fontWeight: 700,
+                                    cursor: 'pointer',
+                                    whiteSpace: 'nowrap',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 5
+                                  }}
+                                >
+                                  <i className="ti ti-file-text" style={{ color: '#8b5e3c', fontSize: 13 }} />
+                                  <span>Ver Documento</span>
                                 </button>
                                 <button
-                                  onClick={() => handleDeletePostIt(note.id)}
-                                  style={{ background: 'none', border: 'none', color: style.text, cursor: 'pointer', opacity: 0.7, fontSize: 11 }}
+                                  type="button"
+                                  onClick={() => {
+                                    localStorage.setItem('teacher_lesson_studio_prefill', JSON.stringify({
+                                      planId: plan.id,
+                                      className: plan.className,
+                                      topic: plan.topic,
+                                      date: plan.date
+                                    }))
+                                    window.dispatchEvent(new CustomEvent('teacher:navigate', { detail: 'lesson-studio' }))
+                                    window.dispatchEvent(new CustomEvent('teacher:navigate', { detail: 'lessonstudio' }))
+                                  }}
+                                  style={{
+                                    padding: '6px 12px',
+                                    borderRadius: RADIUS.sm,
+                                    border: 'none',
+                                    background: '#8b5e3c',
+                                    color: '#fff',
+                                    fontSize: 11.5,
+                                    fontWeight: 700,
+                                    cursor: 'pointer',
+                                    whiteSpace: 'nowrap',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 4
+                                  }}
                                 >
-                                  <i className="ti ti-trash" />
+                                  <span>Abrir no Estúdio</span> ➔
                                 </button>
                               </div>
                             </div>
-                            <div style={{ fontSize: 12, fontWeight: 800, color: style.text }}>
-                              {note.title}
-                            </div>
-                            <p style={{ margin: 0, fontSize: 11, color: style.text, lineHeight: 1.35, opacity: 0.9 }}>
-                              {note.content}
-                            </p>
-                          </div>
-                        )
-                      })}
+                          )
+                        })}
+                      </div>
                     </div>
                   )}
+
+                  {/* SEÇÃO 4: OUTRAS TAREFAS / PRAZOS DO CALENDÁRIO */}
+                  {otherTasksForSelectedDay.length > 0 && (
+                    <div style={{ marginBottom: 12 }}>
+                      <div style={{ fontSize: 12, fontWeight: 800, color: '#5c4838', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 5 }}>
+                        <span>📋 Outras Tarefas & Prazos ({otherTasksForSelectedDay.length}):</span>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        {otherTasksForSelectedDay.map(t => {
+                          const cfg = getTaskTypeConfig(t.type)
+                          const sched = resolvePinScheduleTime(t, classesForSelectedCalendarDate)
+                          return (
+                            <div
+                              key={t.id}
+                              style={{
+                                background: '#fff',
+                                border: '1px solid #ede8dc',
+                                borderLeft: `4px solid ${cfg.color}`,
+                                borderRadius: RADIUS.md,
+                                padding: '8px 12px',
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center'
+                              }}
+                            >
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                <i className={`ti ${cfg.icon}`} style={{ color: cfg.color }} />
+                                <span style={{ fontSize: 12.5, fontWeight: 700, color: '#2c1a0e' }}>
+                                  {t.title}
+                                </span>
+                                {t.classRef && (
+                                  <span style={{ fontSize: 11, color: '#7a5c42' }}>({t.classRef})</span>
+                                )}
+                                {sched.formattedTime !== 'Horário a definir' && (
+                                  <span style={{ fontSize: 10.5, padding: '2px 6px', borderRadius: 4, background: '#f5efe6', color: '#7a5c42', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 3 }}>
+                                    <i className="ti ti-clock" style={{ fontSize: 10 }} />
+                                    {sched.formattedTime}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* SEÇÃO 5: POST-ITS DO DIA */}
+                  {postItsForSelectedDay.length > 0 && (
+                    <div style={{ marginBottom: 8 }}>
+                      <div style={{ fontSize: 12, fontWeight: 800, color: '#854d0e', marginBottom: 6 }}>
+                        📌 Post-its & Anotações ({postItsForSelectedDay.length}):
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 8 }}>
+                        {postItsForSelectedDay.map(note => {
+                          const style = POSTIT_COLORS[note.color] || POSTIT_COLORS.yellow
+                          return (
+                            <div
+                              key={note.id}
+                              style={{
+                                background: style.bg,
+                                border: `1px solid ${style.border}`,
+                                borderRadius: RADIUS.md,
+                                padding: '8px 12px',
+                              }}
+                            >
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
+                                <span style={{ fontSize: 9, fontWeight: 800, color: style.text, opacity: 0.8 }}>
+                                  📌 {note.date}
+                                </span>
+                                <div style={{ display: 'flex', gap: 4 }}>
+                                  <button
+                                    onClick={() => {
+                                      setEditingPostIt(note)
+                                      setNewPostItTitle(note.title)
+                                      setNewPostItContent(note.content)
+                                      setNewPostItColor(note.color)
+                                      setNewPostItDate(note.date || selectedDateKey)
+                                      setShowNewPostItModal(true)
+                                    }}
+                                    style={{ background: 'none', border: 'none', color: style.text, cursor: 'pointer', opacity: 0.7, fontSize: 11 }}
+                                  >
+                                    <i className="ti ti-pencil" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeletePostIt(note.id)}
+                                    style={{ background: 'none', border: 'none', color: style.text, cursor: 'pointer', opacity: 0.7, fontSize: 11 }}
+                                  >
+                                    <i className="ti ti-trash" />
+                                  </button>
+                                </div>
+                              </div>
+                              <div style={{ fontSize: 12, fontWeight: 800, color: style.text }}>
+                                {note.title}
+                              </div>
+                              <p style={{ margin: 0, fontSize: 11, color: style.text, lineHeight: 1.35, opacity: 0.9 }}>
+                                {note.content}
+                              </p>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* CASO VAZIO: NENHUM ITEM CADASTRADO PARA O DIA */}
+                  {provasForSelectedDay.length === 0 &&
+                    projetosForSelectedDay.length === 0 &&
+                    unifiedLessonsForSelectedDay.length === 0 &&
+                    otherTasksForSelectedDay.length === 0 &&
+                    postItsForSelectedDay.length === 0 && (
+                      <div style={{ padding: '8px 0', color: '#7a5c42', fontSize: 12 }}>
+                        Nenhuma prova, projeto ou post-it para este dia.{' '}
+                        <span
+                          onClick={() => {
+                            setEditingPostIt(null)
+                            setNewPostItTitle('')
+                            setNewPostItContent('')
+                            setNewPostItColor('yellow')
+                            setNewPostItDate(selectedDateKey)
+                            setShowNewPostItModal(true)
+                          }}
+                          style={{ color: '#b58900', fontWeight: 800, cursor: 'pointer', textDecoration: 'underline' }}
+                        >
+                          + Criar anotação
+                        </span>
+                      </div>
+                    )}
                 </div>
               )}
             </div>
@@ -2239,6 +3188,13 @@ export default function Dashboard() {
             todo={editingChecklistTodo}
             onClose={() => setEditingChecklistTodo(null)}
             onSave={handleSaveEditedChecklistTodo}
+          />
+
+          {/* Modal do Documento do Plano de Aula (Box do Planejamento ao clicar no Calendário/Pin) */}
+          <LessonPlanDocumentModal
+            isOpen={isLessonDocModalOpen}
+            onClose={() => setIsLessonDocModalOpen(false)}
+            plan={selectedLessonPlanDoc}
           />
 
         </ModuleShell>

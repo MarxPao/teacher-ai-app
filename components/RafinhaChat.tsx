@@ -557,7 +557,7 @@ export async function executeTool(
         payload: {
           summary: execResult.unifiedSummary,
           steps: plan.steps.map(s => s.resultSummary),
-          prefilled_screenshot_url: '/sandbox/portal_mock.html'
+          prefilled_screenshot_url: null
         }
       }
 
@@ -589,11 +589,19 @@ export async function executeTool(
               .filter((s: any) => !classRef || s.class === classRef || (s.className && s.className.includes(classRef)))
               .map((s: any) => {
                 const gradesList = Object.values(s.grades || {}).map(Number).filter(n => !isNaN(n))
-                const avg = gradesList.length > 0 ? gradesList.reduce((a, b) => a + b, 0) / gradesList.length : 8.5
-                return { name: s.name, grade: Number(avg.toFixed(1)), id: s.id }
+                if (gradesList.length === 0) {
+                  return { name: s.name, grade: null, hasGrade: false, id: s.id }
+                }
+                const avg = gradesList.reduce((a, b) => a + b, 0) / gradesList.length
+                return { name: s.name, grade: Number(avg.toFixed(1)), hasGrade: true, id: s.id }
               })
+              .filter((s: any) => s.hasGrade)
           }
         } catch {}
+      }
+
+      if (studentGrades.length === 0) {
+        return `Não há notas registradas para os alunos da turma ${classRef || 'selecionada'}. Lance as notas no Gradebook antes de preencher o portal.`
       }
     }
 
@@ -614,6 +622,7 @@ export async function executeTool(
     logPortalFill(payload as any)
 
     // Cria a tarefa assíncrona no Supabase
+    // Cria a tarefa assíncrona no Supabase
     const createdTask = await createBrowserTask({
       portal: platform,
       actionType: `write_${actionType}`,
@@ -623,8 +632,15 @@ export async function executeTool(
       studentCount: studentGrades.length || absentStudents.length || 1
     })
 
-    // Executa preenchimento imediato dos campos no DOM
-    await fillPortal(payload as any)
+    // Executa preenchimento imediato dos campos no DOM via Relay para a Extensão Chrome
+    const { relayToolToExtension } = await import('@/lib/portalRelayBridge')
+    const relayResult = await relayToolToExtension('execute_portal_action', cleanPayload, { portalId: platform })
+
+    if (!relayResult.success && relayResult.status === 'extension_disconnected') {
+      return `A extensão Teacher AI não encontrou nenhuma aba aberta do portal ${PORTAL_NAMES[platform] || platform}. Abra a página do portal no navegador para que eu possa preencher os campos.`
+    }
+
+    const realScreenshot = relayResult?.screenshot || null
     window.dispatchEvent(new Event('storage'))
 
     const pendingTaskObj = createdTask || {
@@ -640,7 +656,7 @@ export async function executeTool(
           : actionType === 'grades'
           ? `${studentGrades.length} notas preenchidas`
           : `Diário '${title}' preenchido`,
-        prefilled_screenshot_url: '/sandbox/portal_mock.html'
+        prefilled_screenshot_url: realScreenshot
       }
     }
 
@@ -671,6 +687,9 @@ export async function executeTool(
     const task = JSON.parse(raw)
     const action = input.action as 'approve' | 'abort'
 
+    const { relayToolToExtension } = await import('@/lib/portalRelayBridge')
+    await relayToolToExtension('confirm_portal_submission', { action, taskId: task.id }, { portalId: task.portal })
+
     if (action === 'approve') {
       if (task.id && !task.id.startsWith('task_') && !task.id.startsWith('plan_')) {
         await updateBrowserTask(task.id, { status: 'approved' })
@@ -698,33 +717,42 @@ export async function executeTool(
     const raw = typeof window !== 'undefined' ? sessionStorage.getItem('teacher_active_portal_task') : null
     if (!raw) return 'Não há nenhuma tarefa pré-preenchida no momento para exibir print.'
     const task = JSON.parse(raw)
-    const previewUrl = task.payload?.prefilled_screenshot_url || '/sandbox/portal_mock.html'
-    return `[Captura de Tela do Portal Preenchido](${previewUrl})\n\nAqui está o print do portal com os campos já preenchidos! Confirma o salvamento definitivo?`
+    const previewUrl = task.payload?.prefilled_screenshot_url
+    if (previewUrl && previewUrl !== '/sandbox/portal_mock.html') {
+      return `[Captura de Tela do Portal Preenchido](${previewUrl})\n\nAqui está o print real capturado da aba do portal com os campos preenchidos! Confirma o salvamento definitivo?`
+    }
+    return 'Os campos foram destacados no portal oficial, mas nenhuma captura estática foi gerada. Você pode conferir os valores diretamente na aba aberta do portal antes de confirmar.'
   }
- case 'fill_school_portal': {
- takeSnapshot()
- const result = await fillPortal({ 
- platform: input.platform as never, 
- title: input.title as string, 
- date: input.date as string || '', 
- classRef: input.classRef as string || '', 
- description: input.description as string || '',
- mode: 'supervised'
- }) as any
- if (result && result.success === false) {
- return `Portal ${PORTAL_NAMES[input.platform as string] || input.platform} não respondeu. Verifique se o portal está aberto no Chrome.`
- }
- logPortalFill({ 
- platform: input.platform as never, 
- title: input.title as string, 
- date: input.date as string || '', 
- classRef: input.classRef as string || '',
- mode: 'supervised'
- })
- window.dispatchEvent(new Event('storage'))
- return `Campos preenchidos visualmente no ${PORTAL_NAMES[input.platform as string] || input.platform}. Revise e clique em Salvar no portal.`
- }
- case 'open_school_portal': {
+  case 'fill_school_portal': {
+    takeSnapshot()
+    const { relayToolToExtension } = await import('@/lib/portalRelayBridge')
+    const relayResult = await relayToolToExtension('fill_school_portal', { 
+      platform: input.platform, 
+      title: input.title, 
+      date: input.date || '', 
+      classRef: input.classRef || '', 
+      description: input.description || '',
+      mode: 'supervised'
+    }, { portalId: input.platform as string })
+
+    if (!relayResult.success) {
+      if (relayResult.status === 'extension_disconnected') {
+        return `A extensão Teacher AI não encontrou nenhuma aba aberta do portal ${PORTAL_NAMES[input.platform as string] || input.platform}. Abra a página do portal no Chrome para prosseguir.`
+      }
+      return `Portal ${PORTAL_NAMES[input.platform as string] || input.platform} não respondeu: ${relayResult.error || 'Erro na extensão.'}`
+    }
+
+    logPortalFill({ 
+      platform: input.platform as never, 
+      title: input.title as string, 
+      date: input.date as string || '', 
+      classRef: input.classRef as string || '',
+      mode: 'supervised'
+    })
+    window.dispatchEvent(new Event('storage'))
+    return `Campos preenchidos visualmente no ${PORTAL_NAMES[input.platform as string] || input.platform}! Revise e confirme o salvamento.`
+  }
+  case 'open_school_portal': {
  openPortal(input.platform as string)
  return `Abrindo ${PORTAL_NAMES[input.platform as string] || input.platform}...`
  }
@@ -1076,6 +1104,52 @@ export async function executeTool(
       if (data?.lists) {
         return `✅ Quadro carregado com ${data.total_lists} listas e ${data.total_cards} cartões.`
       }
+    }
+
+    // Tratamento de grade_exam (Fase A3: Correção OMR + BKT/DINA/DIF)
+    if (capability === 'grade_exam') {
+      if ((result as any).hasData === false || !result.data) {
+        return result.error || (result as any).message || 'Nenhuma folha de resposta foi fornecida para processamento.'
+      }
+      const data = result.data as any
+      const totalStudents = data?.totalStudents || data?.totalSheetsProcessed || 0
+      const averageScore = data?.averageScore !== undefined ? data.averageScore : (data?.executiveSummary?.classroomProfile?.averageMasteryPercentage ?? 0)
+      const summaryText = data?.executiveSummary?.formattedPageText || data?.executiveSummary?.classroomProfile?.headline || ''
+      const growthAreas = data?.executiveSummary?.growthAreas || []
+      const alertSnippet = growthAreas.length > 0 ? `\n\n🎯 Ponto de atenção prioritário: ${growthAreas[0].topic} (${growthAreas[0].masteryPercentage}% de domínio).` : ''
+
+      return `✅ Correção concluída para ${totalStudents} aluno(s)! Média da turma: ${averageScore.toFixed(1)}%.${alertSnippet}\n\n${summaryText ? `📄 Sumário Executivo:\n${summaryText}` : 'Os dados psicométricos foram atualizados com sucesso.'}`
+    }
+
+    // Tratamento de get_exam_summary (Fase A3: Sumário Executivo Pedagógico de 1 página)
+    if (capability === 'get_exam_summary') {
+      if ((result as any).hasData === false || !result.data) {
+        const classRef = (params.classRef as string) || ''
+        const classLabel = classRef ? ` para a turma ${classRef}` : ''
+        return `Não encontrei simulados ou avaliações registradas${classLabel}. Quer que eu ajude a criar uma prova no Gerador de Avaliações?`
+      }
+      const data = result.data as any
+      const formatted = data?.formattedPageText
+      if (formatted) {
+        return `📄 **Sumário Executivo Pedagógico**\n\n${formatted}`
+      }
+
+      const headline = data?.classroomProfile?.headline || ''
+      const strengths = data?.strengths || []
+      const growthAreas = data?.growthAreas || []
+      const interventions = data?.pedagogicalInterventions || []
+
+      let response = `📄 **Sumário Pedagógico da Avaliação**\n\n${headline}`
+      if (strengths.length > 0) {
+        response += `\n\n🌟 **Pontos Fortes:**\n${strengths.map((s: any) => `• ${s.topic || s}: ${s.masteryPercentage || ''}%`).join('\n')}`
+      }
+      if (growthAreas.length > 0) {
+        response += `\n\n🎯 **Áreas que Precisam de Atenção:**\n${growthAreas.map((a: any) => `• ${a.topic || a}: ${a.masteryPercentage || ''}%`).join('\n')}`
+      }
+      if (interventions.length > 0) {
+        response += `\n\n💡 **Sugestões Pedagógicas:**\n${interventions.map((sg: string) => `• ${sg}`).join('\n')}`
+      }
+      return response
     }
 
     return `Operação concluída com sucesso em "${resolution.connector?.display_name}".`
@@ -1723,15 +1797,17 @@ export default function RafinhaChat({ onNavigate, onCommandReady }: RafinhaChatP
  const pendingTask = JSON.parse(rawPending)
  const parsed = parseConfirmationIntent(trimmed)
 
- if (parsed.decision === 'show_screenshot') {
- const previewUrl = pendingTask.payload?.prefilled_screenshot_url || '/sandbox/portal_mock.html'
- const replyText = `Aqui está o print do portal com os campos já preenchidos no formulário:\n\n[Captura do Portal Preenchido](${previewUrl})\n\nConfirma o salvamento definitivo? (Diga 'sim, pode salvar' ou 'cancelar')`
- setMessages(prev => [...prev, { role: 'assistant', content: replyText }])
- setIsLoading(false)
- isLoadingRef.current = false
- speak(replyText)
- return
- }
+        if (parsed.decision === 'show_screenshot') {
+          const previewUrl = pendingTask.payload?.prefilled_screenshot_url
+          const replyText = previewUrl && previewUrl !== '/sandbox/portal_mock.html'
+            ? `Aqui está a captura real do portal com os campos destacados:\n\n[Captura Real do Portal Preenchido](${previewUrl})\n\nConfirma o salvamento definitivo? (Diga 'sim, pode salvar' ou 'cancelar')`
+            : `Os campos foram destacados na aba aberta do portal escolar no Chrome. Você pode conferir diretamente na tela. Confirma o salvamento definitivo? (Diga 'sim, pode salvar' ou 'cancelar')`
+          setMessages(prev => [...prev, { role: 'assistant', content: replyText }])
+          setIsLoading(false)
+          isLoadingRef.current = false
+          speak(replyText)
+          return
+        }
 
  if (parsed.decision === 'approve') {
  if (pendingTask.id && !pendingTask.id.startsWith('task_')) {

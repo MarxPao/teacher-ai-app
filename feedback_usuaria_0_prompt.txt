@@ -1,0 +1,91 @@
+<USER_REQUEST>
+# PROMPT: Arquitetura de Melhorias — Feedback Real da Usuária 0 (Planejamento de Aula)
+
+## Contexto
+Feedback consolidado de uma professora beta real, usando o produto em
+condição de trabalho real. Este prompt organiza as demandas em FASES com
+prioridade clara. NÃO implemente tudo de uma vez — siga a ordem, valide
+cada fase com evidência real antes de avançar para a próxima, seguindo o
+protocolo já estabelecido no projeto (PROTOCOLO_DESENVOLVIMENTO.md).
+
+Se qualquer fase abaixo tiver escopo genuinamente ambíguo, pare e pergunte
+antes de decidir sozinho — não presuma.
+
+---
+
+## FASE 0 (CRÍTICA, BLOQUEANTE) — Bug de Perda de Dados
+
+### Problema Reportado
+"A usuária modificou um elemento e os outros sumiram" — ao editar um campo
+do plano de aula, outros campos/boxes perderam seu conteúdo.
+
+### Investigação Obrigatória
+1. Reproduza o bug: preencha múltiplos campos do plano (Box 1, 2, 3, roteiro
+   de etapas), edite UM campo específico, e confirme se outros campos são
+   apagados. Identifique exatamente qual ação dispara a perda.
+2. Hipóteses prováveis a investigar: (a) o estado do formulário está sendo
+   RESETADO/recriado do zero a cada edição em vez de atualizado
+   incrementalmente (ex: `setState(novoObjetoCompleto)` sobrescrevendo tudo
+   em vez de spread `{...state, campoEditado: novoValor}`); (b) a
+   persistência em `localStorage` está salvando um snapshot parcial que
+   sobrescreve o completo; (c) condição de corrida entre autosave e edição
+   manual.
+3. Corrija a causa raiz identificada — não um patch superficial.
+
+### Validação (Bloqueante — nada mais avança sem isso)
+Preencha TODOS os campos do plano, edite um único campo (ex: mude a duração
+de uma etapa), e confirme com screenshot antes/depois que absolutamente
+nada mais foi perdido. Repita esse teste em pelo menos 3 cenários de edição
+diferentes (editar texto, editar dropdown, editar checkbox).
+
+---
+
+## FASE 1 — Reorganização da Arquitetura 
+<truncated 7790 bytes>
+omo opção selecionável em algum ponto do fluxo de Planejamento.
+
+### Investigação
+Liste todas as turmas cadastradas do professor de teste, percorra todo o
+fluxo do Planejamento (incluindo Sequência Didática quando implementada) e
+confirme se TODAS aparecem disponíveis em cada seletor de turma relevante.
+Reporte qualquer turma ausente e a causa (filtro incorreto, bug de
+carregamento, etc.).
+
+---
+
+## FASE 7 — Editor de Documento Tipo Word
+
+### Escopo
+Adicionar uma aba "Doc" dentro do Planejamento permitindo editar o
+conteúdo do plano em formato de documento livre (like Word), não só
+campos estruturados de formulário — para professoras que preferem
+redigir/ajustar em prosa contínua em vez de preencher boxes.
+
+### Perguntas a Resolver Antes de Implementar
+1. Essa edição em modo "Doc" precisa sincronizar de volta com os campos
+   estruturados (Box 1, 2, 3...), ou é uma visualização/edição paralela
+   independente? Se for a primeira opção, isso é tecnicamente complexo
+   (parsing bidirecional) — confirmar com o usuário antes de construir.
+2. Reaproveitar algum editor rich-text já usado em outro módulo do
+   projeto (ex: `Editor.tsx`, já mencionado em auditorias anteriores),
+   em vez de criar um novo do zero.
+
+**NÃO implementar esta fase sem resposta às 2 perguntas acima.**
+
+---
+
+## Ordem de Execução Obrigatória
+Fase 0 (bloqueante) → Fase 1 → Fase 2 → Fase 6 (cobertura de turmas, rápido
+de verificar) → Fase 5 (exportação) → Fase 4 (calendário/banco) → Fase 3
+(sequência didática, maior escopo) → Fase 7 (editor doc, só após
+esclarecimento).
+
+## Formato de Saída por Fase
+Comando/execução real + evidência (screenshot, JSON, ou output de teste) +
+veredito PASSOU/FALHOU. Não avançar de fase sem a anterior validada com
+evidência real colada — mesmo padrão de rigor já estabelecido neste
+projeto inteiro.
+</USER_REQUEST>
+<ADDITIONAL_METADATA>
+The current local time is: 2026-09-20T13:42:33-03:00.
+</ADDITIONAL_METADATA>

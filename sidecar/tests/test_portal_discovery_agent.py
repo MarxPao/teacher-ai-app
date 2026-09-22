@@ -503,7 +503,7 @@ class TestPortalMapStore(unittest.TestCase):
 
     def test_incrementa_falhas(self):
         store = PortalMapStore(supabase_client=None)
-        store.save_map("escola.com.br", None, {"roster_table": "t", "name_column": 1, "id_column": 0, "header_rows": 1}, None, "low", None)
+        store.save_map("escola.com.br", {"roster_table": "t", "name_column": 1, "id_column": 0, "header_rows": 1}, None, None, "low", None)
         c1 = store.increment_failures("escola.com.br")
         c2 = store.increment_failures("escola.com.br")
         self.assertEqual(c1, 1)
@@ -511,7 +511,7 @@ class TestPortalMapStore(unittest.TestCase):
 
     def test_supersede(self):
         store = PortalMapStore(supabase_client=None)
-        id1 = store.save_map("portal.com.br", None, {"roster_table": "t", "name_column": 1, "id_column": 0, "header_rows": 1}, None, "low", None)
+        id1 = store.save_map("portal.com.br", {"roster_table": "t", "name_column": 1, "id_column": 0, "header_rows": 1}, None, None, "low", None)
         store.supersede_map("portal.com.br", "new-uuid-999")
         # Mapa marcado como substituído não deve ser retornado pelo lookup
         m = store.lookup_map("portal.com.br")
@@ -519,7 +519,7 @@ class TestPortalMapStore(unittest.TestCase):
 
     def test_lookup_por_dominio_raiz(self):
         store = PortalMapStore(supabase_client=None)
-        store.save_map("paineldoaluno.com.br", None, {"roster_table": "t", "name_column": 1, "id_column": 0, "header_rows": 1}, None, "high", None)
+        store.save_map("paineldoaluno.com.br", {"roster_table": "t", "name_column": 1, "id_column": 0, "header_rows": 1}, None, None, "high", None)
         # Lookup por subdomínio deve cair no domínio raiz
         m = store.lookup_map("machadosobrinho.paineldoaluno.com.br")
         self.assertIsNotNone(m, "Lookup por subdomínio deve encontrar mapa do domínio raiz")
@@ -527,7 +527,7 @@ class TestPortalMapStore(unittest.TestCase):
     def test_save_sem_selectors_levanta_excecao(self):
         store = PortalMapStore(supabase_client=None)
         with self.assertRaises(ValueError):
-            store.save_map("invalido.com.br", None, {}, None, "low", None)
+            store.save_map("invalido.com.br", {}, None, None, "low", None)
 
 
 if __name__ == "__main__":

@@ -896,3 +896,247 @@ export function diagnoseClassPerformance(classId?: string, passingScore = 6.0): 
     riskDistribution
   }
 }
+
+export interface ClassPedagogicalProfile {
+  className: string
+  studentCount: number
+  monitoredGapsCount: number
+  topGaps: string[]
+  trajectoryRiskCount: number
+  collectiveStrengths: string[]
+  promptSnippet: string
+}
+
+/**
+ * Agrega a memória longitudinal dos alunos de uma turma específica
+ * gerando um diagnóstico pedagógico coletivo LGPD-compliant para o LessonStudio.
+ */
+export function getClassPedagogicalProfile(className: string, passingScore = 6.0): ClassPedagogicalProfile {
+  const official = getOfficialStudents()
+  const allMemories = loadAll()
+
+  // 1. Filtrar alunos que pertencem a esta turma
+  const cleanClassName = (className || '').trim().toLowerCase()
+  const classStudents = official.filter(s => {
+    if (!s.className) return false
+    const scLower = s.className.trim().toLowerCase()
+    return scLower === cleanClassName || scLower.includes(cleanClassName) || cleanClassName.includes(scLower)
+  })
+
+  const studentIdsInClass = new Set<string>(classStudents.map(s => s.id))
+
+  // Se officialStudents não tiver alunos associados à className, busca nas memórias por exam.classRef
+  if (studentIdsInClass.size === 0) {
+    allMemories.forEach(mem => {
+      const hasExamInClass = mem.examHistory.some(e => (e.classRef || '').trim().toLowerCase() === cleanClassName)
+      if (hasExamInClass) {
+        studentIdsInClass.add(mem.studentId)
+      }
+    })
+  }
+
+  // Se ainda assim for vazio, utiliza as memórias disponíveis se cleanClassName for genérico ou retorna vazio
+  const targetMemories = studentIdsInClass.size > 0
+    ? allMemories.filter(m => studentIdsInClass.has(m.studentId))
+    : (allMemories.length > 0 && cleanClassName ? allMemories : [])
+
+  const studentCount = targetMemories.length || classStudents.length
+
+  if (targetMemories.length === 0) {
+    return {
+      className,
+      studentCount: 0,
+      monitoredGapsCount: 0,
+      topGaps: [],
+      trajectoryRiskCount: 0,
+      collectiveStrengths: [],
+      promptSnippet: ''
+    }
+  }
+
+  const difficultiesMap: Record<string, number> = {}
+  const strengthsSet = new Set<string>()
+  let trajectoryRiskCount = 0
+
+  targetMemories.forEach(mem => {
+    const trajectory = calculateStudentTrajectory(mem)
+    if (trajectory.status === 'queda_recente') {
+      trajectoryRiskCount++
+    }
+
+    // Exames com nota baixa
+    mem.examHistory.forEach(ex => {
+      if (ex.score < passingScore) {
+        difficultiesMap[ex.topic] = (difficultiesMap[ex.topic] || 0) + 1
+      } else if (ex.score >= 8.5) {
+        strengthsSet.add(ex.topic)
+      }
+    })
+
+    // Observações ativas
+    mem.observations.forEach(obs => {
+      const noteLower = obs.note.toLowerCase()
+      if (/dificuldade|confunde|erro|lacuna|reforço|atenção|hesitação|interferência/i.test(noteLower)) {
+        const cat = obs.category ? `${obs.category}: ` : ''
+        const shortNote = obs.note.replace(/\[CONTEÚDO SUSPEITO NEUTRALIZADO\]/g, '').slice(0, 80).trim()
+        if (shortNote) {
+          difficultiesMap[`${cat}${shortNote}`] = (difficultiesMap[`${cat}${shortNote}`] || 0) + 1
+        }
+      } else if (/excelente|domínio|superou|evolução|destaque|fluência/i.test(noteLower)) {
+        if (obs.category) strengthsSet.add(obs.category)
+      }
+    })
+  })
+
+  const sortedGaps = Object.entries(difficultiesMap)
+    .sort((a, b) => b[1] - a[1])
+    .map(([gap, count]) => count > 1 ? `${gap} (${count} ocorrências)` : gap)
+    .slice(0, 5)
+
+  const strengthsList = Array.from(strengthsSet).slice(0, 3)
+
+  // Geração do promptSnippet higienizado (LGPD compliant — sem PII)
+  const parts: string[] = []
+  parts.push(`[MEMÓRIA LONGITUDINAL DA TURMA — DIAGNÓSTICO COLETIVO]:`)
+  parts.push(`- Turma: "${className}" (${studentCount} alunos monitorados no histórico).`)
+  if (sortedGaps.length > 0) {
+    parts.push(`- Lacunas cognitivas e pontos de atenção recorrentes identificados no histórico desta turma: ${sortedGaps.join('; ')}.`)
+    parts.push(`- DIRETIVA PEDAGÓGICA: O professor deve antecipar essas dificuldades nas etapas da aula, fornecendo andaimes conceituais (scaffolding) e checagens formativas dirigidas.`)
+  }
+  if (trajectoryRiskCount > 0) {
+    parts.push(`- Alerta de Trajetória: ${trajectoryRiskCount} aluno(s) apresentaram oscilação/queda de rendimento recente — preveja tarefas com diferenciação/apoio em duplas.`)
+  }
+  if (strengthsList.length > 0) {
+    parts.push(`- Pontos fortes consolidados da turma: ${strengthsList.join(', ')}.`)
+  }
+
+  const promptSnippet = parts.join('\n')
+
+  return {
+    className,
+    studentCount,
+    monitoredGapsCount: sortedGaps.length,
+    topGaps: sortedGaps,
+    trajectoryRiskCount,
+    collectiveStrengths: strengthsList,
+    promptSnippet
+  }
+}
+
+// ─── 8. RECUPERAÇÃO ESPAÇADA AUTOMÁTICA (SPACED RETRIEVAL HOOK) ────────────────
+
+export interface SpacedRetrievalSuggestion {
+  topic: string
+  daysAgo: number
+  avgScore: number
+  reason: string
+  warmupActivity: string
+  promptHook: string
+}
+
+/**
+ * Consulta avaliações passadas da turma e identifica tópicos que necessitam
+ * de recuperação ativa espaçada (Ebbinghaus / Roediger & Karpicke) no Warm-up da aula.
+ */
+export function getSpacedRetrievalTopic(className: string, daysThreshold = 14): SpacedRetrievalSuggestion | null {
+  const official = getOfficialStudents()
+  const allMemories = loadAll()
+
+  const cleanClassName = (className || '').trim().toLowerCase()
+  const classStudents = official.filter(s => {
+    if (!s.className) return false
+    const scLower = s.className.trim().toLowerCase()
+    return scLower === cleanClassName || scLower.includes(cleanClassName) || cleanClassName.includes(scLower)
+  })
+
+  const studentIdsInClass = new Set<string>(classStudents.map(s => s.id))
+  if (studentIdsInClass.size === 0) {
+    allMemories.forEach(mem => {
+      const hasExamInClass = mem.examHistory.some(e => (e.classRef || '').trim().toLowerCase() === cleanClassName)
+      if (hasExamInClass) studentIdsInClass.add(mem.studentId)
+    })
+  }
+
+  const targetMemories = studentIdsInClass.size > 0
+    ? allMemories.filter(m => studentIdsInClass.has(m.studentId))
+    : (allMemories.length > 0 && cleanClassName ? allMemories : [])
+
+  if (targetMemories.length === 0) return null
+
+  // Mapeia tópicos com notas e datas
+  const topicStats: Record<string, { totalScore: number; count: number; oldestTimestamp: number }> = {}
+
+  const now = Date.now()
+  targetMemories.forEach(mem => {
+    mem.examHistory.forEach(ex => {
+      const exTime = new Date(ex.date).getTime()
+      if (isNaN(exTime)) return
+
+      if (!topicStats[ex.topic]) {
+        topicStats[ex.topic] = { totalScore: 0, count: 0, oldestTimestamp: exTime }
+      }
+      topicStats[ex.topic].totalScore += ex.score
+      topicStats[ex.topic].count += 1
+      if (exTime < topicStats[ex.topic].oldestTimestamp) {
+        topicStats[ex.topic].oldestTimestamp = exTime
+      }
+    })
+  })
+
+  // Procura tópicos com nota média < 7.0 avaliados há pelo menos daysThreshold dias (ou o mais antigo com nota baixa)
+  const candidateTopics = Object.entries(topicStats)
+    .map(([top, stat]) => {
+      const avg = stat.totalScore / stat.count
+      const daysAgo = Math.max(1, Math.round((now - stat.oldestTimestamp) / (1000 * 60 * 60 * 24)))
+      return { topic: top, avgScore: Math.round(avg * 10) / 10, daysAgo }
+    })
+    .filter(t => t.avgScore < 7.0)
+    .sort((a, b) => b.daysAgo - a.daysAgo || a.avgScore - b.avgScore)
+
+  if (candidateTopics.length === 0) return null
+
+  const chosen = candidateTopics[0]
+  return {
+    topic: chosen.topic,
+    daysAgo: chosen.daysAgo,
+    avgScore: chosen.avgScore,
+    reason: `Avaliado há ~${chosen.daysAgo} dia(s) com média ${chosen.avgScore}/10. Risco de decaimento na curva do esquecimento.`,
+    warmupActivity: `Mini-Desafio de 3 Minutos: 2 perguntas rápidas de revisão ativa sobre "${chosen.topic}" antes de introduzir o novo conteúdo.`,
+    promptHook: `[RECUPERAÇÃO ESPAÇADA ATIVA]: Injetar 3 minutos no Warm-up revisitando o tópico "${chosen.topic}" (média histórica da turma: ${chosen.avgScore}/10 há ${chosen.daysAgo} dias).`
+  }
+}
+
+// ─── 9. ERROS FÉRTEIS E CADERNO COLETIVO DE NOTICING (SPOT & FIX) ─────────────
+
+export interface FertileErrorChallenge {
+  topicRef: string
+  commonMistake: string
+  explanation: string
+  spotAndFixChallenge: string
+}
+
+/**
+ * Coleta padrões de erros autênticos e recorrentes na turma de forma desidentificada (LGPD compliant)
+ * e gera um desafio pedagógico de "Spot and Fix the Bug" para aprendizagem colaborativa.
+ */
+export function getFertileErrorsForClass(className: string): FertileErrorChallenge | null {
+  const profile = getClassPedagogicalProfile(className)
+  if (!profile || profile.topGaps.length === 0) {
+    return {
+      topicRef: 'Grammar & Vocabulary',
+      commonMistake: 'I have seen him yesterday / She don\'t like',
+      explanation: 'Decalque sintático do português e ausência de auxiliar ou concordância.',
+      spotAndFixChallenge: 'Desafio em Duplas: "Encontre e Corrija o Bug" nas 2 frases projetadas na lousa antes de iniciar a prática.'
+    }
+  }
+
+  const primaryGap = profile.topGaps[0].replace(/\s*\(\d+ ocorrências\)/, '')
+  return {
+    topicRef: primaryGap,
+    commonMistake: `Erro frequente registrado no histórico da turma relacionado a: "${primaryGap}"`,
+    explanation: 'Dificuldade recorrente mapeada no diagnóstico coletivo da turma.',
+    spotAndFixChallenge: `Micro-etapa "Spot & Fix": Apresente um exemplo anônimo com o erro típico de "${primaryGap}" e peça para os alunos identificarem e corrigirem em 2 minutos.`
+  }
+}
+
+
