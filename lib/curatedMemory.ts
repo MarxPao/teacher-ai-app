@@ -40,8 +40,11 @@ export interface CuratedProfile {
   methodologyWeights: Record<string, number>
   fewShotExamples: ApprovedCorrectionExample[]
   facts: LearnedFact[]
+  learnedFacts: LearnedFact[]
   updatedAt: string
 }
+
+export type CuratedTeacherMemory = CuratedProfile
 
 /**
  * Obtém o perfil unificado e reconciliado da professora
@@ -69,9 +72,12 @@ export function getCuratedTeacherProfile(): CuratedProfile {
     methodologyWeights: style.methodologyWeights || { 'TBLT': 5, 'Guided Discovery': 4, 'PPP': 3 },
     fewShotExamples: style.fewShotExamples || [],
     facts,
+    learnedFacts: facts,
     updatedAt: new Date().toISOString()
   }
 }
+
+export const getCuratedMemory = getCuratedTeacherProfile
 
 /**
  * Salva atualizações sincronizando simultaneamente calibrações e perfil de estilo
@@ -104,12 +110,22 @@ export function saveCuratedTeacherProfile(updates: Partial<CuratedProfile>): Cur
     methodologyWeights: updates.methodologyWeights
   })
 
+  // 3. Atualiza fatos se fornecido explicitamente
+  const newFacts = updates.learnedFacts || updates.facts
+  if (Array.isArray(newFacts)) {
+    try {
+      localStorage.setItem('teacher_rafinha_memory', JSON.stringify(newFacts))
+    } catch {}
+  }
+
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('teacher:curated_memory_updated'))
   }
 
   return getCuratedTeacherProfile()
 }
+
+export const saveCuratedMemory = saveCuratedTeacherProfile
 
 /**
  * Registra um fato curado com garantia anti-duplicação e reforço de confiança

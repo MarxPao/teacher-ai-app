@@ -619,12 +619,50 @@ async function syncTeacherMemory() {
   }
 }
 
+async function syncUpcomingTasks() {
+  try {
+    const res = await fetch('http://localhost:3000/api/agent/tasks?upcoming=true', { signal: AbortSignal.timeout(3000) });
+    if (res.ok) {
+      const data = await res.json();
+      if (data?.ok && Array.isArray(data.tasks) && data.tasks.length > 0) {
+        renderTasksBanner(data.tasks[0]);
+      } else {
+        hideTasksBanner();
+      }
+    }
+  } catch (e) {
+    // Silencioso se o servidor Next.js não estiver rodando
+  }
+}
+
+function renderTasksBanner(task) {
+  let banner = document.getElementById('ext-task-reminder-banner');
+  if (!banner) {
+    banner = document.createElement('div');
+    banner.id = 'ext-task-reminder-banner';
+    banner.style.cssText = 'background: #fef3c7; border: 1px solid #fde68a; border-radius: 8px; padding: 6px 10px; margin: 8px 12px; font-size: 11px; color: #92400e; display: flex; align-items: center; justify-content: space-between;';
+    const chatContainer = document.getElementById('chatContainer') || document.body;
+    chatContainer.insertBefore(banner, chatContainer.firstChild);
+  }
+  banner.innerHTML = `<div style="display:flex;align-items:center;gap:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+    <span style="font-size:12px;">⏰</span>
+    <span><strong>Lembrete:</strong> ${task.title}</span>
+  </div>`;
+  banner.style.display = 'flex';
+}
+
+function hideTasksBanner() {
+  const banner = document.getElementById('ext-task-reminder-banner');
+  if (banner) banner.style.display = 'none';
+}
+
 // ── Inicialização e Watchers ──────────────────────────────────────────────────
 function initSidePanel() {
   updatePortalConnection();
   loadActiveTurma();
   loadSavedSkills();
   syncTeacherMemory();
+  syncUpcomingTasks();
   document.querySelectorAll('.platform-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       activePlatform = btn.dataset.platform;

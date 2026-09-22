@@ -31,6 +31,12 @@ import {
   DEFAULT_WELCOME_MESSAGE
 } from '@/lib/chatMemory'
 import { buildCuratedSystemPromptContext } from '@/lib/curatedMemory'
+import {
+  getUpcomingTasks,
+  extractTaskCommitment,
+  createAgentTask,
+  AgentTask
+} from '@/lib/taskMemory'
 import '@/lib/subjects/english'
 import '@/lib/subjects/portuguese'
 
@@ -1233,6 +1239,21 @@ export default function RafinhaChat({ onNavigate, onCommandReady }: RafinhaChatP
       return [{ role: 'assistant', content: DEFAULT_WELCOME_MESSAGE.content }]
     }
   })
+  const [upcomingTasks, setUpcomingTasks] = useState<AgentTask[]>([])
+
+  useEffect(() => {
+    const loadUpcoming = () => {
+      try {
+        setUpcomingTasks(getUpcomingTasks(24))
+      } catch {
+        setUpcomingTasks([])
+      }
+    }
+    loadUpcoming()
+    window.addEventListener('teacher:tasks_changed', loadUpcoming)
+    return () => window.removeEventListener('teacher:tasks_changed', loadUpcoming)
+  }, [])
+
  const [interimText, setInterimText] = useState('')
  const [isLoading, setIsLoading] = useState(false)
  const [voiceOut, setVoiceOut] = useState<boolean>(() => {
@@ -1712,11 +1733,23 @@ export default function RafinhaChat({ onNavigate, onCommandReady }: RafinhaChatP
  setInterimText('')
  setInputText('')
 
- const userMsg: Message = { role: 'user', content: trimmed }
- saveChatMessage(userMsg)
- setMessages(prev => [...prev, userMsg])
- setIsLoading(true)
- isLoadingRef.current = true
+  const userMsg: Message = { role: 'user', content: trimmed }
+  saveChatMessage(userMsg)
+  setMessages(prev => [...prev, userMsg])
+
+  // Extração e registro de compromisso temporal no Memory Engine
+  const taskExtract = extractTaskCommitment(trimmed)
+  if (taskExtract.isTask && taskExtract.task) {
+    try {
+      const createdTask = createAgentTask(taskExtract.task)
+      toast.info(`⏰ Lembrete agendado: "${createdTask.title}"`)
+    } catch (e) {
+      console.warn('Falha ao registrar tarefa a partir do chat:', e)
+    }
+  }
+
+  setIsLoading(true)
+  isLoadingRef.current = true
  setRunningTools([])
  skipSignalRef.current = false
 
@@ -2326,6 +2359,36 @@ export default function RafinhaChat({ onNavigate, onCommandReady }: RafinhaChatP
 
   {/* Messages (CLEAN diagrama elegante) */}
   <div style={{ flex: 1, padding: '16px 14px', overflowY: 'auto', background: '#fdfbf7', display: 'flex', flexDirection: 'column', gap: 14 }}>
+    {/* Banner Proativo de Lembretes do Dia */}
+    {upcomingTasks.length > 0 && (
+      <div style={{
+        padding: '8px 12px',
+        background: '#fef3c7',
+        borderRadius: RADIUS.md,
+        border: '1px solid #fde68a',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        fontSize: 11,
+        color: '#92400e',
+        flexShrink: 0
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <i className="ti ti-alarm" style={{ color: '#b45309', fontSize: 13, flexShrink: 0 }} />
+          <span><strong>Lembrete:</strong> {upcomingTasks[0].title}</span>
+        </div>
+        {onNavigate && (
+          <button
+            type="button"
+            onClick={() => onNavigate('settings')}
+            style={{ background: 'none', border: 'none', color: '#b45309', fontWeight: 700, cursor: 'pointer', fontSize: 11, textDecoration: 'underline', flexShrink: 0 }}
+          >
+            Ver
+          </button>
+        )}
+      </div>
+    )}
+
   {messages.map((m, i) => {
   const isUser = m.role === 'user'
 
