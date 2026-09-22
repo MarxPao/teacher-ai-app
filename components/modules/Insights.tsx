@@ -266,7 +266,8 @@ export default function Insights() {
           practicalSteps: [
             'Substitua a explicação da regra por perguntas condutoras para que os próprios alunos descubram o padrão.',
             'Adote comandos com "Instruções Claras e Modeladas" em vez de longos discursos explicativos.',
-            'Cronometre a fala do professor para ocupar no máximo 30% do tempo de aula.'
+            'Cronometre a fala do professor para ocupar no máximo 30% do tempo de aula.',
+            'Monitore métricas reais de TTT vs STT e Wait-Time no módulo Classroom Analytics.'
           ],
           recommendedLevel: 'Geral',
           urgency: 'low',

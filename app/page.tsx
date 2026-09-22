@@ -80,6 +80,7 @@ const VisualStudio          = dynamic(() => import('@/components/modules/VisualS
 const Insights              = dynamic(() => import('@/components/modules/Insights'),              { loading: () => <ModuleSkeleton />, ssr: false })
 const ChecklistHistoryModule = dynamic(() => import('@/components/modules/ChecklistHistoryModule'), { loading: () => <ModuleSkeleton />, ssr: false })
 const PortalSkillsModule    = dynamic(() => import('@/components/modules/PortalSkillsModule'),    { loading: () => <ModuleSkeleton />, ssr: false })
+const ClassroomAnalytics    = dynamic(() => import('@/components/modules/ClassroomAnalytics'),    { loading: () => <ModuleSkeleton />, ssr: false })
 
 // ─── Module Key type ───────────────────────────────────────────────────────────
 export type ModuleKey =
@@ -91,7 +92,7 @@ export type ModuleKey =
   | 'classlog' | 'didacticsequence' | 'livequiz' | 'parentcomms'
   | 'classroommode' | 'attendancelist' | 'flashcardmode' | 'audiopronunciation'
   | 'reflectivepractice' | 'meetingclassrecorder' | 'weeklyagenda' | 'batchgrader'
-  | 'progresstracker' | 'autoreport' | 'skills'
+  | 'progresstracker' | 'autoreport' | 'skills' | 'classroomanalytics'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const MODULES: Record<ModuleKey, React.ComponentType<any>> = {
@@ -142,6 +143,7 @@ const MODULES: Record<ModuleKey, React.ComponentType<any>> = {
   progresstracker:    Analytics,
   autoreport:         AutoReport,
   skills:             PortalSkillsModule,
+  classroomanalytics: ClassroomAnalytics,
 }
 
 // ─── App ───────────────────────────────────────────────────────────────────────

@@ -77,6 +77,8 @@ export function getLongTermMemories(): LearnedFact[] {
   } catch { return [] }
 }
 
+export const getTeacherMemoryFacts = getLongTermMemories
+
 /**
  * Salva e persiste novos fatos aprendidos pela Rafinha
  */

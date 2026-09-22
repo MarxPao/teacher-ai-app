@@ -182,3 +182,186 @@ export class AudioRecorder {
     this.mediaRecorder = null
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LongSessionAudioRecorder — Gravador Contínuo com Chunking Resiliente (Aulas)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface AudioChunkPayload {
+  chunkIndex: number
+  blob: Blob
+  startMs: number
+  endMs: number
+  durationMs: number
+  isLastChunk: boolean
+}
+
+export interface LongSessionRecorderOptions {
+  chunkDurationMs?: number // Padrão: 180.000 ms (3 minutos)
+  onChunkReady: (chunk: AudioChunkPayload) => Promise<void> | void
+  onVolumeUpdate?: (volume: number) => void
+  onStatusChange?: (status: 'recording' | 'paused' | 'stopped') => void
+}
+
+export class LongSessionAudioRecorder {
+  private mediaRecorder: MediaRecorder | null = null
+  private stream: MediaStream | null = null
+  private currentChunkIndex = 0
+  private chunkDurationMs: number
+  private sessionStartMs = 0
+  private lastChunkEndMs = 0
+  private chunkTimer: ReturnType<typeof setInterval> | null = null
+  private accumulatedBlobs: Blob[] = []
+  private options: LongSessionRecorderOptions
+  private isPaused = false
+
+  constructor(options: LongSessionRecorderOptions) {
+    this.options = options
+    this.chunkDurationMs = options.chunkDurationMs || 180000 // 3 min
+  }
+
+  public async startSession(): Promise<void> {
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
+      throw new Error('Navegador não suporta captura de microfone (getUserMedia).')
+    }
+
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+        sampleRate: 48000
+      },
+      video: false
+    })
+
+    this.stream = stream
+    this.currentChunkIndex = 0
+    this.accumulatedBlobs = []
+    this.sessionStartMs = Date.now()
+    this.lastChunkEndMs = 0
+    this.isPaused = false
+
+    const mimeType = AudioRecorder.getSupportedMimeType()
+    const recOptions: MediaRecorderOptions = mimeType ? { mimeType } : {}
+    const recorder = new MediaRecorder(stream, recOptions)
+
+    recorder.ondataavailable = (e) => {
+      if (e.data && e.data.size > 0) {
+        this.accumulatedBlobs.push(e.data)
+      }
+    }
+
+    this.mediaRecorder = recorder
+    recorder.start(1000) // Coleta slices a cada 1s para o buffer
+
+    // Disparador de corte periódico a cada chunkDurationMs
+    this.chunkTimer = setInterval(async () => {
+      if (!this.isPaused) {
+        await this.flushCurrentChunk(false)
+      }
+    }, this.chunkDurationMs)
+
+    this.options.onStatusChange?.('recording')
+  }
+
+  public async flushCurrentChunk(isLast: boolean): Promise<AudioChunkPayload | null> {
+    if (!this.mediaRecorder || this.mediaRecorder.state === 'inactive') {
+      return null
+    }
+
+    // Força o gravador a despejar os dados pendentes no buffer
+    try {
+      this.mediaRecorder.requestData()
+    } catch {}
+
+    // Aguarda um pequeno ciclo para garantir o evento dataavailable
+    await new Promise(r => setTimeout(r, 50))
+
+    if (this.accumulatedBlobs.length === 0 && !isLast) {
+      return null
+    }
+
+    const mimeType = this.mediaRecorder.mimeType || 'audio/webm'
+    const chunkBlob = new Blob(this.accumulatedBlobs, { type: mimeType })
+    this.accumulatedBlobs = []
+
+    const nowRelMs = Date.now() - this.sessionStartMs
+    const startMs = this.lastChunkEndMs
+    const endMs = nowRelMs
+    const durationMs = Math.max(0, endMs - startMs)
+    this.lastChunkEndMs = endMs
+
+    const payload: AudioChunkPayload = {
+      chunkIndex: this.currentChunkIndex++,
+      blob: chunkBlob,
+      startMs,
+      endMs,
+      durationMs,
+      isLastChunk: isLast
+    }
+
+    try {
+      await this.options.onChunkReady(payload)
+    } catch (err) {
+      console.warn('[LongSessionAudioRecorder] Erro no callback onChunkReady:', err)
+    }
+
+    return payload
+  }
+
+  public async stopSession(): Promise<AudioChunkPayload | null> {
+    if (this.chunkTimer) {
+      clearInterval(this.chunkTimer)
+      this.chunkTimer = null
+    }
+
+    const finalChunk = await this.flushCurrentChunk(true)
+
+    if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
+      try { this.mediaRecorder.stop() } catch {}
+    }
+
+    if (this.stream) {
+      this.stream.getTracks().forEach(t => t.stop())
+      this.stream = null
+    }
+
+    this.mediaRecorder = null
+    this.options.onStatusChange?.('stopped')
+    return finalChunk
+  }
+
+  public pause(): void {
+    if (this.mediaRecorder && this.mediaRecorder.state === 'recording') {
+      this.mediaRecorder.pause()
+      this.isPaused = true
+      this.options.onStatusChange?.('paused')
+    }
+  }
+
+  public resume(): void {
+    if (this.mediaRecorder && this.mediaRecorder.state === 'paused') {
+      this.mediaRecorder.resume()
+      this.isPaused = false
+      this.options.onStatusChange?.('recording')
+    }
+  }
+
+  public cancel(): void {
+    if (this.chunkTimer) {
+      clearInterval(this.chunkTimer)
+      this.chunkTimer = null
+    }
+    if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
+      try { this.mediaRecorder.stop() } catch {}
+    }
+    if (this.stream) {
+      this.stream.getTracks().forEach(t => t.stop())
+      this.stream = null
+    }
+    this.mediaRecorder = null
+    this.accumulatedBlobs = []
+    this.options.onStatusChange?.('stopped')
+  }
+}

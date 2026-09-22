@@ -41,10 +41,11 @@ const NAV: Section[] = [
     { key: 'audiopronunciation',  label: 'Pronúncia & Áudio',     icon: 'ti-microphone' },
   ]},
   { label: 'Em Sala de Aula', items: [
-    { key: 'flashcardmode',  label: 'Flashcards',           icon: 'ti-cards' },
-    { key: 'livequiz',       label: 'Quiz ao Vivo',         icon: 'ti-device-gamepad-2' },
-    { key: 'classroommode',  label: 'Auxiliar de Sala',     icon: 'ti-layout-dashboard' },
-    { key: 'attendancelist', label: 'Lista de Presença',    icon: 'ti-list-check' },
+    { key: 'flashcardmode',      label: 'Flashcards',           icon: 'ti-cards' },
+    { key: 'livequiz',           label: 'Quiz ao Vivo',         icon: 'ti-device-gamepad-2' },
+    { key: 'classroommode',      label: 'Auxiliar de Sala',     icon: 'ti-layout-dashboard' },
+    { key: 'attendancelist',     label: 'Lista de Presença',    icon: 'ti-list-check' },
+    { key: 'classroomanalytics', label: 'Classroom Analytics',  icon: 'ti-device-analytics' },
   ]},
   { label: 'Alunos & Avaliação', items: [
     { key: 'omnigrader',     label: 'OmniCorretor',          icon: 'ti-camera' },
