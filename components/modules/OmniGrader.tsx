@@ -16,6 +16,7 @@ import { captureImageFile, extractContentFromImage } from '@/lib/ocrCapture'
 import { exportToPdf } from '@/lib/exportUtils'
 import { recordStudentGrade, addObservation, getStudentMemory } from '@/lib/studentMemory'
 import { getSubjectProfile, SubjectProfile } from '@/lib/subjectProfile'
+import { recordApprovedCorrection } from '@/lib/curatedMemory'
 import { getAnchorExemplarsPrompt } from '@/lib/rubrics/anchorExemplars'
 import { screenEssayStylometrics, StylometricAdvisory } from '@/lib/stylometricScreening'
 import ModelCapabilityBanner from '@/components/ModelCapabilityBanner'
@@ -137,6 +138,7 @@ export default function OmniGrader({ initialTab = 'photo' }: OmniGraderProps) {
   const [isEvaluatingEssay, setIsEvaluatingEssay] = useState(false)
   const [essayEvaluation, setEssayEvaluation] = useState<CambridgeEssayEvaluation | null>(null)
   const [launchedEssay, setLaunchedEssay] = useState(false)
+  const [isFewShotSaved, setIsFewShotSaved] = useState(false)
 
   // State: Aba 3 (Batch Grader)
   const [batchSubmissions, setBatchSubmissions] = useState<BatchSubmission[]>([])
@@ -724,6 +726,22 @@ Retorne ESTRITAMENTE um objeto JSON no seguinte formato (sem markdown, sem bloco
     }
   }
 
+  function handleSaveAsFewShotExample() {
+    if (!essayEvaluation || !studentEssayText) return
+    try {
+      recordApprovedCorrection({
+        studentWorkExcerpt: studentEssayText.slice(0, 280),
+        correctionFeedback: essayEvaluation.overallSummary || essayEvaluation.studentActionPlan || 'Feedback validado pela professora.',
+        scoreGiven: essayEvaluation.overallScore,
+        category: textGenre || (isPortuguese ? 'Redação PT' : 'Cambridge Essay')
+      })
+      setIsFewShotSaved(true)
+      toast.success('⭐ Exemplo salvo com sucesso! A Rafinha aprendeu este padrão de correção como exemplar Few-Shot.')
+    } catch (e: any) {
+      toast.error(`Erro ao salvar exemplo: ${e.message || 'Tente novamente'}`)
+    }
+  }
+
   function handleExportEssayPdf() {
     if (!essayEvaluation) return
     const st = students.find(s => s.id === selectedStudentEssay)
@@ -1027,7 +1045,16 @@ ${essayEvaluation.studentActionPlan}
                     </div>
                   </div>
 
-                  <div style={{ display: 'flex', gap: 8 }}>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={handleSaveAsFewShotExample}
+                      disabled={isFewShotSaved}
+                      icon={<i className={isFewShotSaved ? 'ti ti-check' : 'ti ti-sparkles'} style={{ color: '#d97706' }} />}
+                    >
+                      {isFewShotSaved ? 'Estilo Salvo!' : '⭐ Ensinar à IA'}
+                    </Button>
                     <Button
                       variant="secondary"
                       size="sm"

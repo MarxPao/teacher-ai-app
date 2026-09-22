@@ -150,12 +150,19 @@ export function buildLongTermMemoryContext(currentQuery: string = ''): string {
 
   const factLines = relevantFacts.map(f => `- [${f.category.toUpperCase()}] ${f.fact}`).join('\n')
 
+  let episodicSnippet = ''
+  try {
+    const { buildEpisodicMemorySnippet } = require('./chatMemory')
+    episodicSnippet = buildEpisodicMemorySnippet()
+  } catch {}
+
   return `
 === MEMÓRIA VIVA & APRENDIZADO DE LONGO PRAZO DA RAFINHA ===
 ${styleSnippet}
 
 FATOS E REGRAS APRENDIDAS PELA RAFINHA ACUMULADAS AO LONGO DO TEMPO:
 ${factLines || '- Nenhuma regra customizada gravada ainda (aprendendo ativamente a cada interação)'}
+${episodicSnippet}
 `
 }
 
@@ -163,13 +170,36 @@ ${factLines || '- Nenhuma regra customizada gravada ainda (aprendendo ativamente
  * Motor de Auto-Reflexão: Analisa a conversa e aprende fatos e preferências novos automaticamente
  */
 export function autoReflectAndLearn(userMessage: string, assistantReply: string): void {
-  if (!userMessage || userMessage.length < 10) return
+  if (!userMessage || userMessage.length < 8) return
 
   const lower = userMessage.toLowerCase()
+
+  // Detecta preferências de tom e estilo de resposta
+  if (/seja mais direto|respostas curtas|seja conciso|resuma mais/.test(lower)) {
+    try {
+      const { saveTeacherStyleProfile } = require('./teacherStyleProfile')
+      saveTeacherStyleProfile({ feedbackLength: 'conciso', preferredTone: 'direto_tecnico' })
+    } catch {}
+    saveLearnedFact('A professora prefere respostas curtas, diretas e objetivas.', 'teacher_preference', 'auto_reflection')
+    return
+  }
+  if (/em t[oó]picos|organize em t[oó]picos|responda em tópicos/.test(lower)) {
+    try {
+      const { saveTeacherStyleProfile } = require('./teacherStyleProfile')
+      saveTeacherStyleProfile({ feedbackLength: 'em_topicos' })
+    } catch {}
+    saveLearnedFact('A professora prefere feedbacks e explicações estruturadas em tópicos.', 'teacher_preference', 'auto_reflection')
+    return
+  }
 
   // Detecta preferências explícitas do professor
   if (/gosto de|prefiro|sempre fa[çc]o|minha escola|usamos o livro|uso o livro|no 9º ano|na minha turma/.test(lower)) {
     saveLearnedFact(`Preferência/Hábito do Professor: "${userMessage.trim()}"`, 'teacher_preference', 'auto_reflection')
+  }
+
+  // Detecta contexto escolar
+  if (/trabalho no|minha escola [eé]|aqui no col[eé]gio|aqui na escola/.test(lower)) {
+    saveLearnedFact(`Contexto Escolar: "${userMessage.trim()}"`, 'school_context', 'auto_reflection')
   }
 
   // Detecta regras pedagógicas ou de provas
@@ -182,3 +212,4 @@ export function autoReflectAndLearn(userMessage: string, assistantReply: string)
     saveLearnedFact(`Instrução de Formato: "${userMessage.trim()}"`, 'pedagogical_rule', 'auto_reflection')
   }
 }
+

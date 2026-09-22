@@ -104,6 +104,27 @@ export function saveTeacherStyleProfile(profile: Partial<TeacherStyleProfile>): 
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new Event('teacher:style_profile_changed'))
       window.dispatchEvent(new Event('storage'))
+      try {
+        const { getTeacherCalibrations, saveTeacherCalibrations } = require('./teacherCalibrations')
+        const currentCal = getTeacherCalibrations()
+        let hasCalChange = false
+        const calUpdates: any = {}
+        if (profile.teacherName && profile.teacherName !== currentCal.teacherName) {
+          calUpdates.teacherName = profile.teacherName
+          hasCalChange = true
+        }
+        if (profile.gradingRigor && profile.gradingRigor !== currentCal.grading.gradingRigor) {
+          calUpdates.grading = { ...currentCal.grading, gradingRigor: profile.gradingRigor }
+          hasCalChange = true
+        }
+        if (profile.typicalLessonDurationMin && profile.typicalLessonDurationMin !== currentCal.planner.defaultDurationMinutes) {
+          calUpdates.planner = { ...currentCal.planner, defaultDurationMinutes: profile.typicalLessonDurationMin }
+          hasCalChange = true
+        }
+        if (hasCalChange) {
+          saveTeacherCalibrations(calUpdates)
+        }
+      } catch {}
     }
     return updated
   } catch {

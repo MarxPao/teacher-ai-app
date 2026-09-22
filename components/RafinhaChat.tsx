@@ -23,6 +23,14 @@ import { requiresContinuousListeningConsent } from '@/lib/wakeWordConsent'
 import RosterReconciliationModal from '@/components/modules/RosterReconciliationModal'
 import { PortalApprovalCard } from '@/components/PortalApprovalCard'
 import { toast } from '@/components/Toast'
+import {
+  getChatHistory,
+  saveChatMessage,
+  createNewChatSession,
+  clearCurrentSession,
+  DEFAULT_WELCOME_MESSAGE
+} from '@/lib/chatMemory'
+import { buildCuratedSystemPromptContext } from '@/lib/curatedMemory'
 import '@/lib/subjects/english'
 import '@/lib/subjects/portuguese'
 
@@ -180,8 +188,10 @@ function getAppContext(): string {
 
     let longTermCtx = ''
     try {
-      longTermCtx = buildLongTermMemoryContext()
-    } catch {}
+      longTermCtx = buildCuratedSystemPromptContext()
+    } catch {
+      try { longTermCtx = buildLongTermMemoryContext() } catch {}
+    }
 
     return base + buildMemoryContext() + longTermCtx
   } catch { return 'Dados indisponíveis' }
@@ -1212,10 +1222,17 @@ function formatRafinhaContent(text: string): string {
 export default function RafinhaChat({ onNavigate, onCommandReady }: RafinhaChatProps) {
  const [isOpen, setIsOpen] = useState(false)
  const [isMinimized, setIsMinimized] = useState(false)
- const [messages, setMessages] = useState<Message[]>([{
- role: 'assistant',
- content: 'Oi! Sou a Rafinha Pode falar: "vá para alunos", "crie uma prova de Present Perfect", "lance nota 9 para o Pedro" eu executo na hora!'
- }])
+  const [messages, setMessages] = useState<Message[]>(() => {
+    if (typeof window === 'undefined') {
+      return [{ role: 'assistant', content: DEFAULT_WELCOME_MESSAGE.content }]
+    }
+    try {
+      const history = getChatHistory()
+      return history.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }))
+    } catch {
+      return [{ role: 'assistant', content: DEFAULT_WELCOME_MESSAGE.content }]
+    }
+  })
  const [interimText, setInterimText] = useState('')
  const [isLoading, setIsLoading] = useState(false)
  const [voiceOut, setVoiceOut] = useState<boolean>(() => {
@@ -1696,6 +1713,7 @@ export default function RafinhaChat({ onNavigate, onCommandReady }: RafinhaChatP
  setInputText('')
 
  const userMsg: Message = { role: 'user', content: trimmed }
+ saveChatMessage(userMsg)
  setMessages(prev => [...prev, userMsg])
  setIsLoading(true)
  isLoadingRef.current = true
@@ -1946,6 +1964,7 @@ export default function RafinhaChat({ onNavigate, onCommandReady }: RafinhaChatP
  const last = { ...prev[prev.length - 1], content: finalText }
  return [...prev.slice(0, -1), last]
  })
+ saveChatMessage({ role: 'assistant', content: finalText })
 
  // Motor de Aprendizado & Memória de Longo Prazo Contínua
  try {
@@ -1975,6 +1994,7 @@ export default function RafinhaChat({ onNavigate, onCommandReady }: RafinhaChatP
  return [...prev.slice(0, -1), { role: 'assistant', content: cleanMsg }]
  return [...prev, { role: 'assistant', content: cleanMsg }]
  })
+ saveChatMessage({ role: 'assistant', content: cleanMsg })
  speak('Ops, verifique as configurações de API no menu lateral.')
  } finally {
  setIsLoading(false)
@@ -2231,6 +2251,32 @@ export default function RafinhaChat({ onNavigate, onCommandReady }: RafinhaChatP
   {allLogs.length}
   </span>
   )}
+  </button>
+
+  {/* Botão Nova Conversa */}
+  <button
+  type="button"
+  onClick={() => {
+    createNewChatSession()
+    setMessages([{ role: 'assistant', content: DEFAULT_WELCOME_MESSAGE.content }])
+    toast.success('✨ Nova conversa iniciada!')
+  }}
+  title="Iniciar nova conversa (arquiva histórico)"
+  style={{
+    background: 'rgba(255,255,255,0.08)',
+    border: 'none',
+    color: '#fdf8f2',
+    width: 26,
+    height: 26,
+    borderRadius: RADIUS.md,
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    transition: 'background 0.2s',
+  }}
+  >
+  <i className="ti ti-plus" style={{ fontSize: 13 }} />
   </button>
 
   {/* Botão Minimizar */}

@@ -604,11 +604,27 @@ if (btnRecordRoute) {
   });
 }
 
+async function syncTeacherMemory() {
+  try {
+    const res = await fetch('http://localhost:3000/api/agent/memory', { signal: AbortSignal.timeout(3000) });
+    if (res.ok) {
+      const data = await res.json();
+      if (data?.ok && data.data) {
+        localStorage.setItem('teacher_synced_profile', JSON.stringify(data.data));
+        console.log('[SidePanel] Perfil e memória curada sincronizados do Teacher AI:', data.data.teacherName);
+      }
+    }
+  } catch (e) {
+    // Silencioso se o servidor Next.js não estiver rodando
+  }
+}
+
 // ── Inicialização e Watchers ──────────────────────────────────────────────────
 function initSidePanel() {
   updatePortalConnection();
   loadActiveTurma();
   loadSavedSkills();
+  syncTeacherMemory();
   document.querySelectorAll('.platform-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       activePlatform = btn.dataset.platform;
@@ -1487,7 +1503,63 @@ function scrollChatToBottom() {
   }
 }
 
-function appendUserChatMessage(text) {
+const EXT_CHAT_STORAGE_KEY = 'teacher_extension_chat_history_v1';
+const MAX_EXT_CHAT_MESSAGES = 30;
+
+function saveExtChatMessage(role, content, isHtml = false) {
+  try {
+    const history = JSON.parse(localStorage.getItem(EXT_CHAT_STORAGE_KEY) || '[]');
+    history.push({ role, content, isHtml, timestamp: new Date().toISOString() });
+    const trimmed = history.slice(-MAX_EXT_CHAT_MESSAGES);
+    localStorage.setItem(EXT_CHAT_STORAGE_KEY, JSON.stringify(trimmed));
+  } catch (e) {}
+}
+
+function restoreExtChatHistory() {
+  try {
+    const history = JSON.parse(localStorage.getItem(EXT_CHAT_STORAGE_KEY) || '[]');
+    if (!history || history.length === 0) return;
+    const container = document.getElementById('chat-history-container');
+    if (!container) return;
+
+    // Remove mensagem estática inicial antes de restaurar o histórico persistido
+    const welcome = document.getElementById('chat-welcome-msg');
+    if (welcome) welcome.remove();
+
+    history.forEach(m => {
+      const msgEl = document.createElement('div');
+      msgEl.className = `chat-msg ${m.role}`;
+      const avatar = m.role === 'user' ? '👩‍🏫' : '🦉';
+      msgEl.innerHTML = `
+        <div class="chat-avatar">${avatar}</div>
+        <div class="chat-bubble">${m.isHtml ? m.content : escapeHtml(m.content)}</div>
+      `;
+      container.appendChild(msgEl);
+    });
+    scrollChatToBottom();
+  } catch (e) {
+    console.warn('[SidePanel] Erro ao restaurar histórico de chat:', e);
+  }
+}
+
+function clearExtChatHistory() {
+  try {
+    localStorage.removeItem(EXT_CHAT_STORAGE_KEY);
+    const container = document.getElementById('chat-history-container');
+    if (container) {
+      container.innerHTML = `
+        <div class="chat-msg assistant" id="chat-welcome-msg">
+          <div class="chat-avatar">🦉</div>
+          <div class="chat-bubble">
+            Olá! Sou a <strong>Rafinha</strong>. Nova conversa iniciada! Em que posso te ajudar no portal hoje?
+          </div>
+        </div>
+      `;
+    }
+  } catch (e) {}
+}
+
+function appendUserChatMessage(text, persist = true) {
   const container = document.getElementById('chat-history-container');
   if (!container) return;
   const msgEl = document.createElement('div');
@@ -1498,10 +1570,11 @@ function appendUserChatMessage(text) {
   `;
   container.appendChild(msgEl);
   scrollChatToBottom();
+  if (persist) saveExtChatMessage('user', text, false);
   return msgEl;
 }
 
-function appendAssistantChatMessage(content, isHtml = false) {
+function appendAssistantChatMessage(content, isHtml = false, persist = true) {
   const container = document.getElementById('chat-history-container');
   if (!container) return;
   const msgEl = document.createElement('div');
@@ -1512,6 +1585,7 @@ function appendAssistantChatMessage(content, isHtml = false) {
   `;
   container.appendChild(msgEl);
   scrollChatToBottom();
+  if (persist) saveExtChatMessage('assistant', content, isHtml);
   return msgEl;
 }
 
@@ -2234,6 +2308,16 @@ async function handleProcessCommand(commandText) {
 
 // Inicialização dos Listeners de Interface
 document.addEventListener('DOMContentLoaded', () => {
+  // Restaura histórico de conversas anteriores
+  restoreExtChatHistory();
+
+  const btnClearChat = document.getElementById('btn-clear-ext-chat');
+  if (btnClearChat) {
+    btnClearChat.addEventListener('click', () => {
+      clearExtChatHistory();
+    });
+  }
+
   const btnVoice = document.getElementById('btn-voice-input');
   const inputCommand = document.getElementById('input-agent-command');
   const btnSend = document.getElementById('btn-send-agent-command');

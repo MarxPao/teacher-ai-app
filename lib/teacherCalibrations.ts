@@ -199,6 +199,15 @@ export function saveTeacherCalibrations(
     localStorage.setItem(STORAGE_KEY, JSON.stringify(updated))
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('teacher:calibrations_changed', { detail: updated }))
+      try {
+        const { saveTeacherStyleProfile } = require('./teacherStyleProfile')
+        saveTeacherStyleProfile({
+          teacherName: updated.teacherName || undefined,
+          defaultSubject: updated.exam.defaultSubject || undefined,
+          gradingRigor: updated.grading.gradingRigor || undefined,
+          typicalLessonDurationMin: updated.planner.defaultDurationMinutes || undefined
+        })
+      } catch {}
     }
     return updated
   } catch {
