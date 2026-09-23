@@ -417,6 +417,9 @@ async function handleExecutePortalAction(data) {
     sucesso: success,
     success,
     status: success ? 'draft_completed_pending_submit' : 'no_matching_field_found',
+    mensagem: success
+      ? `Preenchimento de ${actionType} realizado com sucesso (${filledCount} campo(s) preenchido(s)).`
+      : `Não encontrei campos de formulário para ${actionType} na tela atual do portal. Certifique-se de estar na aba correspondente.`,
     filledCount,
     diff: {
       aluno: p.aluno || data.aluno || (p.studentGrades?.[0]?.name) || '',

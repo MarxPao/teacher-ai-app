@@ -2539,16 +2539,49 @@ async function handleProcessCommand(commandText) {
         }
 
         if (toolName === 'execute_portal_action' || toolName === 'fill_school_portal') {
-          setProcessingState(true, 'Preenchendo campos no portal via GraphExecutor...');
+          setProcessingState(true, 'Executando no portal escolar...');
           dispatchPortalBridgeMessage({
             action: 'EXECUTE_PORTAL_ACTION',
             payload: toolInput
           }, (actResp) => {
             setProcessingState(false);
             if (actResp && (actResp.ok || actResp.sucesso || actResp.success)) {
-              appendAssistantChatMessage(`✅ Campos preenchidos no portal com sucesso! Confirma o salvamento final?`, true);
+              const students = actResp.students || actResp.data?.students || [];
+              if (students.length > 0) {
+                try {
+                  const activeTurmaEl = document.getElementById('active-class-name');
+                  const currentTurma = toolInput?.classRef || (activeTurmaEl && activeTurmaEl.textContent !== '—' ? activeTurmaEl.textContent : 'Turma Importada');
+                  const portalName = (PLATFORMS && PLATFORMS[activePlatform]?.name) || 'Portal Escolar';
+
+                  postToEntityBus('PORTAL_ROSTER_SYNC', {
+                    className: currentTurma,
+                    portalName: portalName,
+                    students: students,
+                    pageUrl: window.location.href
+                  });
+
+                  fetch('http://localhost:3000/api/portal/roster-sync', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      className: currentTurma,
+                      portalName: portalName,
+                      students: students,
+                      pageUrl: window.location.href
+                    })
+                  }).catch(err => console.warn('[RosterSync] Falha ao sincronizar via API:', err));
+                } catch (e) {}
+
+                if (typeof renderStudentListWithValidation === 'function') {
+                  renderStudentListWithValidation(students, { valid: true, confidence: 1.0 }, 'dom', `Alunos - ${toolInput?.classRef || 'Turma'}`);
+                }
+              }
+
+              const msg = actResp.mensagem || actResp.message || '✅ Ação executada no portal com sucesso!';
+              appendAssistantChatMessage(msg, true);
             } else {
-              appendAssistantChatMessage(`⚠️ Não foi possível preencher os campos no portal: ${actResp?.mensagem || actResp?.error || 'Erro desconhecido'}`, true);
+              const errMsg = actResp?.mensagem || actResp?.message || actResp?.error || (actResp?.status === 'no_matching_field_found' ? 'Não encontrei os campos correspondentes na tela atual do portal. Certifique-se de estar na aba correta.' : 'Não foi possível completar a ação no portal. Verifique se o portal escolar está com a aba aberta e logado.');
+              appendAssistantChatMessage(`⚠️ ${errMsg}`, true);
             }
           });
           return;
@@ -3513,15 +3546,31 @@ async function executeGoalQueue(subGoals, index = 0, context = {}) {
 
     dispatchPortalBridgeMessage({ action: 'NAVIGATE_PORTAL_TAB', target: navTarget }, (navResp) => {
       if (!navResp || !navResp.sucesso) {
-        setProcessingState(false);
-        appendAssistantChatMessage(
-          `Procurei pela aba ou seção **${escapeHtml(navTarget)}** no portal, mas não encontrei nenhum botão ou menu correspondente nesta tela. Você pode navegar manualmente até lá ou me mostrar onde fica? 🔍`,
-          true
-        );
-        showHonestErrorCard(
-          'Aba não encontrada',
-          `Não encontrei a aba ou seção '${navTarget}' no portal. Clique manualmente no menu correspondente.`
-        );
+        // Fallback gracioso: pode ser um filtro de turma ou dropdown em vez de uma aba (ex: "acesse 6 ano")
+        dispatchPortalBridgeMessage({ action: 'DISCOVERY_SELECT_FILTER', filterTerm: navTarget }, (selResp) => {
+          if (selResp && selResp.sucesso) {
+            const foundLabel = selResp.elementText || navTarget;
+            context.lastFilter = foundLabel;
+            if (isLastStep) {
+              setProcessingState(false);
+              appendAssistantChatMessage(`Prontinho! Selecionei **${escapeHtml(foundLabel)}** no portal para você. 📂✨`, true);
+            } else {
+              appendAssistantChatMessage(`Prontinho! Selecionei **${escapeHtml(foundLabel)}**. Agora vou executar: **${escapeHtml(subGoals[index + 1])}**... 🔍`, true);
+              executeGoalQueue(subGoals, index + 1, context);
+            }
+            return;
+          }
+
+          setProcessingState(false);
+          appendAssistantChatMessage(
+            `Procurei pela aba ou seção **${escapeHtml(navTarget)}** no portal, mas não encontrei nenhum botão ou menu correspondente nesta tela. Você pode navegar manualmente até lá ou me mostrar onde fica? 🔍`,
+            true
+          );
+          showHonestErrorCard(
+            'Aba ou filtro não encontrado',
+            `Não encontrei a aba ou filtro '${navTarget}' no portal. Clique manualmente no elemento correspondente.`
+          );
+        });
         return;
       }
 

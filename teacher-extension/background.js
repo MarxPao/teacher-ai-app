@@ -846,6 +846,369 @@ async function resolveActivePortalTab(explicitTabId) {
   return currentTabState.tabId || null;
 }
 
+// ─── HELPER DE ESTABILIZAÇÃO DE PÁGINA (PPAV DOM SETTLEMENT) ───────────────────
+async function waitForPageSettled(tabId, maxWaitMs = 2500) {
+  if (!tabId) return;
+  await new Promise(r => setTimeout(r, 200));
+  try {
+    const tab = await chrome.tabs.get(tabId);
+    if (tab && tab.status === 'loading') {
+      await new Promise((resolve) => {
+        const timeout = setTimeout(resolve, maxWaitMs);
+        const onUpdated = (tid, info) => {
+          if (tid === tabId && info.status === 'complete') {
+            chrome.tabs.onUpdated.removeListener(onUpdated);
+            clearTimeout(timeout);
+            resolve();
+          }
+        };
+        chrome.tabs.onUpdated.addListener(onUpdated);
+      });
+    }
+  } catch (e) {}
+  await new Promise(r => setTimeout(r, 350));
+}
+
+async function internalNavigatePortalTab(targetTabId, targetKeyword) {
+  const keyword = (targetKeyword || '').trim().toLowerCase()
+    .replace(/\s+\b(?:e|e\s+depois|depois|em\s+seguida|a[ií])\b.*$/i, '')
+    .replace(/\s+e$/i, '')
+    .trim();
+
+  try {
+    const results = await chrome.scripting.executeScript({
+      target: { tabId: targetTabId },
+      args: [keyword],
+      func: async (kw) => {
+        const cleanKey = kw.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        const candidates = Array.from(document.querySelectorAll('a, button, [role="tab"], [role="menuitem"], [role="button"], .tab, .tab-btn, .nav-link, li, span'));
+        
+        let bestElement = null;
+        let bestScore = -1;
+
+        for (const el of candidates) {
+          if (el.offsetParent === null && el.offsetWidth === 0 && el.offsetHeight === 0) continue;
+          
+          const text = (el.innerText || el.textContent || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+          const aria = (el.getAttribute('aria-label') || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+          const title = (el.getAttribute('title') || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+          const href = (el.getAttribute('href') || '').toLowerCase();
+          const id = (el.id || '').toLowerCase();
+
+          let score = 0;
+          if (text === cleanKey) score = 100;
+          else if (text.startsWith(cleanKey)) score = 80;
+          else if (text.includes(cleanKey)) score = 60;
+          else if (aria.includes(cleanKey)) score = 50;
+          else if (title.includes(cleanKey)) score = 40;
+          else if (id.includes(cleanKey)) score = 30;
+          else if (href.includes(cleanKey)) score = 20;
+
+          if (el.getAttribute('role') === 'tab' || el.classList.contains('tab') || el.classList.contains('nav-link')) {
+            score += 15;
+          }
+          if (el.tagName === 'A' || el.tagName === 'BUTTON') {
+            score += 10;
+          }
+
+          if (score > bestScore && score >= 20) {
+            bestScore = score;
+            bestElement = el;
+          }
+        }
+
+        if (!bestElement) {
+          return { sucesso: false, mensagem: `Não encontrei nenhuma aba ou link correspondente a '${kw}'.` };
+        }
+
+        const origTransition = bestElement.style.transition;
+        const origOutline = bestElement.style.outline;
+        const origBoxShadow = bestElement.style.boxShadow;
+
+        bestElement.style.transition = 'all 0.3s ease';
+        bestElement.style.outline = '2px solid #38bdf8';
+        bestElement.style.boxShadow = '0 0 16px rgba(56, 189, 248, 0.6)';
+
+        bestElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        await new Promise(r => setTimeout(r, 120));
+
+        try {
+          bestElement.click();
+        } catch (e) {
+          bestElement.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+        }
+
+        await new Promise(r => setTimeout(r, 350));
+
+        setTimeout(() => {
+          try {
+            bestElement.style.transition = origTransition;
+            bestElement.style.outline = origOutline;
+            bestElement.style.boxShadow = origBoxShadow;
+          } catch {}
+        }, 1500);
+
+        return {
+          sucesso: true,
+          elementText: (bestElement.innerText || bestElement.textContent || kw).trim(),
+          tag: bestElement.tagName,
+          target: kw
+        };
+      }
+    });
+
+    await waitForPageSettled(targetTabId, 3000);
+    return (results && results[0] && results[0].result) || { sucesso: false, mensagem: 'Script de navegação falhou.' };
+  } catch (err) {
+    return { sucesso: false, mensagem: err.message };
+  }
+}
+
+async function internalSelectPortalFilter(targetTabId, rawTerm) {
+  const term = (rawTerm || '').trim();
+  if (!term) return { sucesso: false, mensagem: 'Termo de filtro não especificado.' };
+
+  try {
+    const results = await chrome.scripting.executeScript({
+      target: { tabId: targetTabId },
+      args: [term],
+      func: async (t) => {
+        const cleanStr = (s) => (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+        const normTerm = cleanStr(t);
+
+        const ordinalMap = {
+          'primeiro': '1', 'segundo': '2', 'terceiro': '3', 'quarto': '4',
+          'quinto': '5', 'sexto': '6', 'setimo': '7', 'oitavo': '8', 'nono': '9'
+        };
+
+        const searchVariants = [normTerm];
+        for (const [word, num] of Object.entries(ordinalMap)) {
+          if (normTerm.includes(word)) {
+            searchVariants.push(normTerm.replace(word, num));
+            searchVariants.push(normTerm.replace(word, `${num}o`));
+            searchVariants.push(normTerm.replace(word, `${num}º`));
+            searchVariants.push(num);
+            searchVariants.push(`${num}o`);
+            searchVariants.push(`${num}º`);
+          } else if (normTerm.includes(num)) {
+            searchVariants.push(normTerm.replace(num, word));
+            searchVariants.push(word);
+          }
+        }
+
+        const uniqueVariants = Array.from(new Set(searchVariants.filter(Boolean)));
+
+        // 1. Procura em dropdowns (<select>)
+        const selects = Array.from(document.querySelectorAll('select'));
+        for (const sel of selects) {
+          if (sel.offsetParent === null && sel.offsetWidth === 0 && sel.offsetHeight === 0) continue;
+          for (let i = 0; i < sel.options.length; i++) {
+            const opt = sel.options[i];
+            const optText = cleanStr(opt.text);
+            const optVal = cleanStr(opt.value);
+            const isMatch = uniqueVariants.some(v => optText.includes(v) || optVal === v || optVal.includes(v));
+            if (isMatch) {
+              sel.selectedIndex = i;
+              sel.value = opt.value;
+
+              const origTransition = sel.style.transition;
+              const origOutline = sel.style.outline;
+              sel.style.transition = 'all 0.3s ease';
+              sel.style.outline = '3px solid #10b981';
+              sel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+              sel.dispatchEvent(new Event('input', { bubbles: true }));
+              sel.dispatchEvent(new Event('change', { bubbles: true }));
+
+              await new Promise(r => setTimeout(r, 250));
+
+              setTimeout(() => {
+                try {
+                  sel.style.transition = origTransition;
+                  sel.style.outline = origOutline;
+                } catch {}
+              }, 1800);
+
+              return {
+                sucesso: true,
+                matchedType: 'select_option',
+                elementText: opt.text.trim(),
+                target: t
+              };
+            }
+          }
+        }
+
+        // 2. Procura em botões, abas, pílulas de filtro, links, radios e checkboxes
+        const clickableCandidates = Array.from(document.querySelectorAll(
+          'button, [role="button"], [role="option"], [role="radio"], .pill, .filter-btn, .badge, a, label, input[type="radio"], input[type="checkbox"]'
+        ));
+
+        let bestClickable = null;
+        let bestScore = -1;
+
+        for (const el of clickableCandidates) {
+          if (el.offsetParent === null && el.offsetWidth === 0 && el.offsetHeight === 0) continue;
+          const text = cleanStr(el.innerText || el.textContent);
+          const aria = cleanStr(el.getAttribute('aria-label'));
+          const title = cleanStr(el.getAttribute('title'));
+          const val = cleanStr(el.getAttribute('value'));
+
+          for (const v of uniqueVariants) {
+            let score = 0;
+            if (text === v) score = 100;
+            else if (text.startsWith(v)) score = 85;
+            else if (text.includes(v)) score = 70;
+            else if (v.includes(text) && text.length >= 4) score = 75;
+            else if (aria.includes(v)) score = 60;
+            else if (title.includes(v)) score = 50;
+            else if (val === v) score = 65;
+
+            if (score > bestScore && score >= 50) {
+              bestScore = score;
+              bestClickable = el;
+            }
+          }
+        }
+
+        if (bestClickable) {
+          const origTransition = bestClickable.style.transition;
+          const origOutline = bestClickable.style.outline;
+          bestClickable.style.transition = 'all 0.3s ease';
+          bestClickable.style.outline = '3px solid #10b981';
+          bestClickable.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+          await new Promise(r => setTimeout(r, 120));
+
+          try {
+            bestClickable.click();
+          } catch (e) {
+            bestClickable.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+          }
+
+          await new Promise(r => setTimeout(r, 250));
+
+          setTimeout(() => {
+            try {
+              bestClickable.style.transition = origTransition;
+              bestClickable.style.outline = origOutline;
+            } catch {}
+          }, 1800);
+
+          return {
+            sucesso: true,
+            matchedType: 'clickable_element',
+            elementText: (bestClickable.innerText || bestClickable.textContent || t).trim(),
+            target: t
+          };
+        }
+
+        return { sucesso: false, mensagem: `Não encontrei filtro para '${t}'.` };
+      }
+    });
+
+    await waitForPageSettled(targetTabId, 1500);
+    return (results && results[0] && results[0].result) || { sucesso: false, mensagem: 'Falha ao selecionar filtro.' };
+  } catch (err) {
+    return { sucesso: false, mensagem: err.message };
+  }
+}
+
+async function internalClickConfirmOrViewButton(targetTabId) {
+  try {
+    const results = await chrome.scripting.executeScript({
+      target: { tabId: targetTabId },
+      func: async () => {
+        const cleanStr = (s) => (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+        const actionPatterns = [
+          'visualizar frequencia', 'visualizar chamada', 'visualizar',
+          'consultar', 'filtrar', 'carregar', 'buscar', 'pesquisar', 'exibir', 'listar', 'aplicar'
+        ];
+
+        const buttons = Array.from(document.querySelectorAll('button, input[type="submit"], input[type="button"], a.btn, [role="button"]'));
+        for (const btn of buttons) {
+          if (btn.offsetParent === null && btn.offsetWidth === 0 && btn.offsetHeight === 0) continue;
+          const text = cleanStr(btn.innerText || btn.value || btn.getAttribute('aria-label') || btn.getAttribute('title'));
+          const match = actionPatterns.some(p => text === p || text.startsWith(p) || text.includes(p));
+          if (match) {
+            btn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            await new Promise(r => setTimeout(r, 100));
+            try {
+              btn.click();
+            } catch (e) {
+              btn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+            }
+            return { sucesso: true, buttonText: text };
+          }
+        }
+        return { sucesso: false };
+      }
+    });
+    return (results && results[0] && results[0].result) || { sucesso: false };
+  } catch (err) {
+    return { sucesso: false, error: err.message };
+  }
+}
+
+async function internalReadRoster(targetTabId) {
+  try {
+    const results = await chrome.scripting.executeScript({
+      target: { tabId: targetTabId },
+      func: () => {
+        const rows = Array.from(document.querySelectorAll('table tr, tr, div.student-row, li'));
+        const roster = [];
+        rows.forEach((row, idx) => {
+          const cells = Array.from(row.querySelectorAll('td, th'));
+          if (cells.length < 2) return;
+          const inputs = Array.from(row.querySelectorAll('input:not([type="hidden"]), select, [contenteditable="true"]'));
+          let nameCandidate = '';
+          for (const c of cells) {
+            const txt = c.innerText.trim();
+            if (txt && !/^\d+$/.test(txt) && !c.querySelector('input, select')) {
+              nameCandidate = txt;
+              break;
+            }
+          }
+          if (!nameCandidate && cells[0]) nameCandidate = cells[0].innerText.trim();
+          const lower = nameCandidate.toLowerCase();
+          if (lower.includes('aluno') || lower.includes('nome') || lower.includes('estudante') || lower.includes('matrícula') || lower.includes('matricula')) return;
+
+          if (inputs.length > 0) {
+            const firstInput = inputs[0];
+            let currentVal = '';
+            if (firstInput.tagName === 'SELECT') {
+              currentVal = firstInput.options[firstInput.selectedIndex]?.text || firstInput.value || '';
+            } else if (firstInput.type === 'checkbox') {
+              currentVal = firstInput.checked ? 'Falta' : 'Presença';
+            } else {
+              currentVal = firstInput.value || '';
+            }
+            roster.push({
+              rowIndex: idx,
+              name: nameCandidate,
+              currentValue: currentVal,
+              inputId: firstInput.id || firstInput.name || `input_row_${idx}`,
+              inputType: firstInput.type || firstInput.tagName.toLowerCase()
+            });
+          } else if (nameCandidate && nameCandidate.length >= 3 && !/^\d+$/.test(nameCandidate)) {
+            roster.push({
+              rowIndex: idx,
+              name: nameCandidate,
+              currentValue: '',
+              inputId: null,
+              inputType: 'static_roster'
+            });
+          }
+        });
+        return roster;
+      }
+    });
+    return { sucesso: true, students: (results && results[0] && results[0].result) || [] };
+  } catch (err) {
+    return { sucesso: false, students: [], error: err.message };
+  }
+}
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'RELOAD_EXTENSION') {
     try {
@@ -1027,6 +1390,170 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  if (message.action === 'EXECUTE_PORTAL_ACTION') {
+    (async () => {
+      const targetTabId = await resolveActivePortalTab(message.tabId);
+      if (!targetTabId) {
+        sendResponse({
+          ok: false,
+          sucesso: false,
+          success: false,
+          status: 'no_authorized_portal_tab',
+          error: 'Portal desconectado',
+          mensagem: 'A extensão não encontrou nenhuma aba aberta do portal escolar conectado. Abra o portal no navegador para que a Rafinha possa executar a ação.'
+        });
+        return;
+      }
+
+      const p = message.payload || message.params || {};
+      const actionType = p.actionType || p.type || p.acao || 'attendance';
+      const classRef = p.classRef || p.turma || '';
+      const title = p.title || p.titulo || '';
+      const trace = [];
+
+      try {
+        // 1. Pré-Navegação de Aba (se indicada por actionType ou title)
+        let tabTarget = null;
+        const normTitle = (title || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        if (actionType === 'attendance' || normTitle.includes('frequencia') || normTitle.includes('chamada')) {
+          tabTarget = 'frequência';
+        } else if (actionType === 'grades' || normTitle.includes('nota') || normTitle.includes('avaliacao') || normTitle.includes('boletim')) {
+          tabTarget = 'notas';
+        } else if (actionType === 'diary' || normTitle.includes('diario') || normTitle.includes('aula')) {
+          tabTarget = 'diário';
+        }
+
+        if (tabTarget) {
+          console.log(`[EXECUTE_PORTAL_ACTION] Tentando pré-navegação para aba '${tabTarget}'...`);
+          const navRes = await internalNavigatePortalTab(targetTabId, tabTarget);
+          if (navRes && navRes.sucesso) {
+            trace.push(`Navegou para aba '${navRes.elementText || tabTarget}'`);
+            await new Promise(r => setTimeout(r, 400));
+          }
+        }
+
+        // 2. Seleção de Turma / Filtro (classRef)
+        let turmaSelected = false;
+        if (classRef) {
+          console.log(`[EXECUTE_PORTAL_ACTION] Selecionando filtro de turma '${classRef}'...`);
+          const filterRes = await internalSelectPortalFilter(targetTabId, classRef);
+          if (filterRes && filterRes.sucesso) {
+            turmaSelected = true;
+            trace.push(`Filtro de turma selecionado: '${filterRes.elementText || classRef}'`);
+            await new Promise(r => setTimeout(r, 300));
+          }
+        }
+
+        // 3. Seleção de Disciplina (se houver na mensagem/título)
+        const commonSubjects = [
+          'lingua inglesa', 'ingles', 'lingua portuguesa', 'portugues',
+          'matematica', 'historia', 'geografia', 'ciencias', 'fisica',
+          'quimica', 'biologia', 'artes', 'educacao fisica', 'filosofia', 'sociologia',
+          'redacao', 'literatura', 'espanhol'
+        ];
+        let subjectFound = null;
+        for (const subj of commonSubjects) {
+          if (normTitle.includes(subj)) {
+            subjectFound = subj;
+            break;
+          }
+        }
+        if (subjectFound) {
+          console.log(`[EXECUTE_PORTAL_ACTION] Selecionando filtro de disciplina '${subjectFound}'...`);
+          const subjRes = await internalSelectPortalFilter(targetTabId, subjectFound);
+          if (subjRes && subjRes.sucesso) {
+            trace.push(`Disciplina selecionada: '${subjRes.elementText || subjectFound}'`);
+            await new Promise(r => setTimeout(r, 300));
+          }
+        }
+
+        // 4. Se houver botão de consulta/confirmação (ex: "Visualizar Frequência", "Consultar", "Filtrar")
+        const clickRes = await internalClickConfirmOrViewButton(targetTabId);
+        if (clickRes && clickRes.sucesso) {
+          trace.push(`Clicou em '${clickRes.buttonText}' para carregar grade`);
+          await new Promise(r => setTimeout(r, 600));
+        }
+
+        // 5. Preenchimento de Campos no DOM (se houver notas ou faltas a marcar)
+        const hasGrades = (p.studentGrades && p.studentGrades.length > 0) || Boolean(p.nota);
+        const hasAbsences = (p.absentStudents && p.absentStudents.length > 0) || (p.aluno && actionType === 'attendance');
+        const hasDiaryContent = Boolean(p.description || p.methodology);
+
+        let domActionRes = null;
+        if (hasGrades || hasAbsences || hasDiaryContent) {
+          domActionRes = await new Promise((resolve) => {
+            chrome.tabs.sendMessage(targetTabId, {
+              action: 'EXECUTE_PORTAL_ACTION',
+              payload: p
+            }, (res) => {
+              if (chrome.runtime.lastError) {
+                resolve({ ok: false, mensagem: chrome.runtime.lastError.message });
+              } else {
+                resolve(res || { ok: false });
+              }
+            });
+          });
+        }
+
+        // 6. Leitura e verificação factual dos alunos na tela atual
+        const rosterRes = await internalReadRoster(targetTabId);
+        const students = rosterRes?.students || [];
+
+        // 7. Screenshot da tela
+        let screenshot = null;
+        try {
+          screenshot = await chrome.tabs.captureVisibleTab(null, { format: 'png' });
+        } catch {}
+
+        // 8. Síntese do resultado
+        const isDomFilled = Boolean(domActionRes?.sucesso || domActionRes?.success || domActionRes?.ok);
+        const isScreenReady = Boolean(students.length > 0 || turmaSelected || clickRes?.sucesso);
+        const isSuccess = isDomFilled || isScreenReady || Boolean(trace.length > 0);
+
+        let mensagemFinal = '';
+        if (isDomFilled) {
+          mensagemFinal = domActionRes?.mensagem || 'Campos preenchidos com sucesso no DOM do portal!';
+        } else if (students.length > 0) {
+          const classLabel = classRef ? `da turma ${classRef}` : '';
+          const subjMsg = subjectFound ? ` (${subjectFound})` : '';
+          mensagemFinal = `Acessei a aba Frequência ${classLabel}${subjMsg}. Encontrei ${students.length} alunos na tela prontos para visualização e chamada! ✨`;
+        } else if (turmaSelected) {
+          mensagemFinal = `Filtros selecionados no portal com sucesso (${trace.join(' → ')}). Tela pronta para visualização!`;
+        } else {
+          mensagemFinal = 'Ação executada no portal. Verifique os campos na tela.';
+        }
+
+        sendResponse({
+          ok: isSuccess,
+          sucesso: isSuccess,
+          success: isSuccess,
+          verified: true,
+          verification_method: 'graph_executor_dom',
+          status: isSuccess ? 'success' : 'no_matching_field_found',
+          mensagem: mensagemFinal,
+          message: mensagemFinal,
+          students,
+          screenshot,
+          trace,
+          data: {
+            trace,
+            students,
+            domActionRes
+          }
+        });
+      } catch (err) {
+        sendResponse({
+          ok: false,
+          sucesso: false,
+          success: false,
+          error: err.message,
+          mensagem: `Não foi possível completar a operação no portal: ${err.message}`
+        });
+      }
+    })();
+    return true;
+  }
+
   if (message.action === 'READ_ACTIVE_PORTAL_ROSTER') {
     (async () => {
       const targetTabId = await resolveActivePortalTab(message.tabId);
@@ -1034,69 +1561,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sendResponse({ sucesso: false, mensagem: 'Nenhuma aba ativa do portal identificada.' });
         return;
       }
-
-      try {
-        const results = await chrome.scripting.executeScript({
-          target: { tabId: targetTabId },
-          func: () => {
-            const rows = Array.from(document.querySelectorAll('table tr'));
-            const roster = [];
-            rows.forEach((row, idx) => {
-              const cells = Array.from(row.querySelectorAll('td, th'));
-              if (cells.length < 2) return;
-              // Detecta inputs de texto, número, checkbox ou selects
-              const inputs = Array.from(row.querySelectorAll('input:not([type="hidden"]), select, [contenteditable="true"]'));
-              // Heurística de célula de nome: geralmente célula 0, 1 ou com link/span
-              let nameCandidate = '';
-              for (const c of cells) {
-                const txt = c.innerText.trim();
-                // Ignora células puramente numéricas (matrícula/índice) ou com controles
-                if (txt && !/^\d+$/.test(txt) && !c.querySelector('input, select')) {
-                  nameCandidate = txt;
-                  break;
-                }
-              }
-              if (!nameCandidate) nameCandidate = cells[0].innerText.trim();
-              const lower = nameCandidate.toLowerCase();
-              if (lower.includes('aluno') || lower.includes('nome') || lower.includes('estudante') || lower.includes('matrícula') || lower.includes('matricula')) return;
-
-              if (inputs.length > 0) {
-                const firstInput = inputs[0];
-                let currentVal = '';
-                if (firstInput.tagName === 'SELECT') {
-                  currentVal = firstInput.options[firstInput.selectedIndex]?.text || firstInput.value || '';
-                } else if (firstInput.type === 'checkbox') {
-                  currentVal = firstInput.checked ? 'Falta' : 'Presença';
-                } else {
-                  currentVal = firstInput.value || '';
-                }
-
-                roster.push({
-                  rowIndex: idx,
-                  name: nameCandidate,
-                  currentValue: currentVal,
-                  inputId: firstInput.id || firstInput.name || `input_row_${idx}`,
-                  inputType: firstInput.type || firstInput.tagName.toLowerCase()
-                });
-              } else if (nameCandidate && nameCandidate.length >= 3 && !/^\d+$/.test(nameCandidate)) {
-                roster.push({
-                  rowIndex: idx,
-                  name: nameCandidate,
-                  currentValue: '',
-                  inputId: null,
-                  inputType: 'static_roster'
-                });
-              }
-            });
-            return roster;
-          }
-        });
-
-        const students = (results && results[0] && results[0].result) || [];
-        sendResponse({ sucesso: true, students });
-      } catch (err) {
-        sendResponse({ sucesso: false, mensagem: err.message });
-      }
+      const res = await internalReadRoster(targetTabId);
+      sendResponse(res);
     })();
     return true;
   }
@@ -1290,31 +1756,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
-  // ─── HELPER DE ESTABILIZAÇÃO DE PÁGINA (PPAV DOM SETTLEMENT) ───────────────────
-  async function waitForPageSettled(tabId, maxWaitMs = 2500) {
-    if (!tabId) return;
-    // Pequena pausa inicial para o navegador iniciar o processo de requisição/navegação
-    await new Promise(r => setTimeout(r, 200));
-    try {
-      const tab = await chrome.tabs.get(tabId);
-      if (tab && tab.status === 'loading') {
-        await new Promise((resolve) => {
-          const timeout = setTimeout(resolve, maxWaitMs);
-          const onUpdated = (tid, info) => {
-            if (tid === tabId && info.status === 'complete') {
-              chrome.tabs.onUpdated.removeListener(onUpdated);
-              clearTimeout(timeout);
-              resolve();
-            }
-          };
-          chrome.tabs.onUpdated.addListener(onUpdated);
-        });
-      }
-    } catch (e) {}
-    // Pausa adicional para reatividade de SPA, renderização do DOM e execução de frameworks
-    await new Promise(r => setTimeout(r, 350));
-  }
-
   if (message.action === 'NAVIGATE_PORTAL_TAB') {
     (async () => {
       const targetTabId = await resolveActivePortalTab(message.tabId);
@@ -1322,313 +1763,22 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sendResponse({ sucesso: false, mensagem: 'Nenhuma aba ativa do portal identificada.' });
         return;
       }
-
-      const targetKeyword = (message.target || '').trim().toLowerCase()
-        .replace(/\s+\b(?:e|e\s+depois|depois|em\s+seguida|a[ií])\b.*$/i, '')
-        .replace(/\s+e$/i, '')
-        .trim();
-
-      try {
-        const results = await chrome.scripting.executeScript({
-          target: { tabId: targetTabId },
-          args: [targetKeyword],
-          func: async (keyword) => {
-            const cleanKey = keyword.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-            const candidates = Array.from(document.querySelectorAll('a, button, [role="tab"], [role="menuitem"], [role="button"], .tab, .tab-btn, .nav-link, li, span'));
-            
-            let bestElement = null;
-            let bestScore = -1;
-
-            for (const el of candidates) {
-              if (el.offsetParent === null && el.offsetWidth === 0 && el.offsetHeight === 0) continue;
-              
-              const text = (el.innerText || el.textContent || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-              const aria = (el.getAttribute('aria-label') || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-              const title = (el.getAttribute('title') || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-              const href = (el.getAttribute('href') || '').toLowerCase();
-              const id = (el.id || '').toLowerCase();
-
-              let score = 0;
-              if (text === cleanKey) score = 100;
-              else if (text.startsWith(cleanKey)) score = 80;
-              else if (text.includes(cleanKey)) score = 60;
-              else if (aria.includes(cleanKey)) score = 50;
-              else if (title.includes(cleanKey)) score = 40;
-              else if (id.includes(cleanKey)) score = 30;
-              else if (href.includes(cleanKey)) score = 20;
-
-              if (el.getAttribute('role') === 'tab' || el.classList.contains('tab') || el.classList.contains('nav-link')) {
-                score += 15;
-              }
-              if (el.tagName === 'A' || el.tagName === 'BUTTON') {
-                score += 10;
-              }
-
-              if (score > bestScore && score >= 20) {
-                bestScore = score;
-                bestElement = el;
-              }
-            }
-
-            if (!bestElement) {
-              return { sucesso: false, mensagem: `Não encontrei nenhuma aba ou link correspondente a '${keyword}'.` };
-            }
-
-            // Destaque visual temporário da Rafinha antes do clique
-            const origTransition = bestElement.style.transition;
-            const origOutline = bestElement.style.outline;
-            const origBoxShadow = bestElement.style.boxShadow;
-
-            bestElement.style.transition = 'all 0.3s ease';
-            bestElement.style.outline = '2px solid #38bdf8';
-            bestElement.style.boxShadow = '0 0 16px rgba(56, 189, 248, 0.6)';
-
-            bestElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            
-            // Pausa curta para scroll e percepção visual
-            await new Promise(r => setTimeout(r, 120));
-
-            try {
-              bestElement.click();
-            } catch (e) {
-              bestElement.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
-            }
-
-            // Aguarda o DOM reagir / disparar transição inicial
-            await new Promise(r => setTimeout(r, 350));
-
-            setTimeout(() => {
-              try {
-                bestElement.style.transition = origTransition;
-                bestElement.style.outline = origOutline;
-                bestElement.style.boxShadow = origBoxShadow;
-              } catch {}
-            }, 1500);
-
-            return {
-              sucesso: true,
-              elementText: (bestElement.innerText || bestElement.textContent || keyword).trim(),
-              tag: bestElement.tagName,
-              target: keyword
-            };
-          }
-        });
-
-        // Aguarda estabilização completa da página ou SPA
-        await waitForPageSettled(targetTabId, 3000);
-
-        const res = (results && results[0] && results[0].result) || { sucesso: false, mensagem: 'Script de navegação falhou.' };
-        sendResponse(res);
-      } catch (err) {
-        sendResponse({ sucesso: false, mensagem: err.message });
-      }
+      const res = await internalNavigatePortalTab(targetTabId, message.target);
+      sendResponse(res);
     })();
     return true;
   }
 
   if (message.action === 'DISCOVERY_SELECT_FILTER') {
     (async () => {
-      let targetTabId = message.tabId;
-      if (!targetTabId) {
-        try {
-          const activeTabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-          if (activeTabs && activeTabs.length > 0 && isAuthorizedPortalTab(activeTabs[0])) {
-            targetTabId = activeTabs[0].id;
-          }
-        } catch {}
-      }
-      if (!targetTabId) {
-        const tabs = await chrome.tabs.query({});
-        const portalTab = tabs.find(t => isAuthorizedPortalTab(t));
-        targetTabId = portalTab ? portalTab.id : (isAuthorizedPortalTab(currentTabState) ? currentTabState.tabId : null);
-      }
+      const targetTabId = await resolveActivePortalTab(message.tabId);
       if (!targetTabId) {
         sendResponse({ sucesso: false, mensagem: 'Nenhuma aba ativa do portal identificada para seleção.' });
         return;
       }
-
       const rawTerm = (message.filterTerm || message.target || '').trim();
-      if (!rawTerm) {
-        sendResponse({ sucesso: false, mensagem: 'Termo de filtro não especificado.' });
-        return;
-      }
-
-      try {
-        const results = await chrome.scripting.executeScript({
-          target: { tabId: targetTabId },
-          args: [rawTerm],
-          func: async (term) => {
-            const cleanStr = (s) => (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
-            const normTerm = cleanStr(term);
-
-            // Mapeamento semântico de ordinais (ex: sexto -> 6, 6º, 6ª)
-            const ordinalMap = {
-              'primeiro': '1', 'segundo': '2', 'terceiro': '3', 'quarto': '4',
-              'quinto': '5', 'sexto': '6', 'setimo': '7', 'oitavo': '8', 'nono': '9'
-            };
-
-            const searchVariants = [normTerm];
-            for (const [word, num] of Object.entries(ordinalMap)) {
-              if (normTerm.includes(word)) {
-                searchVariants.push(normTerm.replace(word, num));
-                searchVariants.push(normTerm.replace(word, `${num}o`));
-                searchVariants.push(normTerm.replace(word, `${num}º`));
-                searchVariants.push(num);
-                searchVariants.push(`${num}o`);
-                searchVariants.push(`${num}º`);
-              } else if (normTerm.includes(num)) {
-                searchVariants.push(normTerm.replace(num, word));
-                searchVariants.push(word);
-              }
-            }
-
-            // Remove duplicatas
-            const uniqueVariants = Array.from(new Set(searchVariants.filter(Boolean)));
-
-            // 1. Procura em dropdowns (<select>)
-            const selects = Array.from(document.querySelectorAll('select'));
-            for (const sel of selects) {
-              if (sel.offsetParent === null && sel.offsetWidth === 0 && sel.offsetHeight === 0) continue;
-              for (let i = 0; i < sel.options.length; i++) {
-                const opt = sel.options[i];
-                const optText = cleanStr(opt.text);
-                const optVal = cleanStr(opt.value);
-                const isMatch = uniqueVariants.some(v => optText.includes(v) || optVal === v || optVal.includes(v));
-                if (isMatch) {
-                  sel.selectedIndex = i;
-                  sel.value = opt.value;
-
-                  const origTransition = sel.style.transition;
-                  const origOutline = sel.style.outline;
-                  sel.style.transition = 'all 0.3s ease';
-                  sel.style.outline = '3px solid #10b981';
-                  sel.scrollIntoView({ behavior: 'smooth', block: 'center' });
-
-                  sel.dispatchEvent(new Event('input', { bubbles: true }));
-                  sel.dispatchEvent(new Event('change', { bubbles: true }));
-
-                  await new Promise(r => setTimeout(r, 250));
-
-                  setTimeout(() => {
-                    try {
-                      sel.style.transition = origTransition;
-                      sel.style.outline = origOutline;
-                    } catch {}
-                  }, 1800);
-
-                  return {
-                    sucesso: true,
-                    matchedType: 'select_option',
-                    elementText: opt.text.trim(),
-                    target: term
-                  };
-                }
-              }
-            }
-
-            // 2. Procura em botões, abas, pílulas de filtro, links, radios e checkboxes
-            const clickableCandidates = Array.from(document.querySelectorAll(
-              'button, [role="button"], [role="option"], [role="radio"], .pill, .filter-btn, .badge, a, label, input[type="radio"], input[type="checkbox"]'
-            ));
-
-            let bestClickable = null;
-            let bestScore = -1;
-
-            for (const el of clickableCandidates) {
-              if (el.offsetParent === null && el.offsetWidth === 0 && el.offsetHeight === 0) continue;
-              const text = cleanStr(el.innerText || el.textContent);
-              const aria = cleanStr(el.getAttribute('aria-label'));
-              const title = cleanStr(el.getAttribute('title'));
-              const val = cleanStr(el.getAttribute('value'));
-
-              for (const v of uniqueVariants) {
-                let score = 0;
-                if (text === v) score = 100;
-                else if (text.startsWith(v)) score = 85;
-                else if (text.includes(v)) score = 70;
-                else if (v.includes(text) && text.length >= 4) score = 75;
-                else if (aria.includes(v)) score = 60;
-                else if (title.includes(v)) score = 50;
-                else if (val === v) score = 65;
-
-                if (score > bestScore && score >= 50) {
-                  bestScore = score;
-                  bestClickable = el;
-                }
-              }
-            }
-
-            if (bestClickable) {
-              const origTransition = bestClickable.style.transition;
-              const origOutline = bestClickable.style.outline;
-              bestClickable.style.transition = 'all 0.3s ease';
-              bestClickable.style.outline = '3px solid #10b981';
-              bestClickable.scrollIntoView({ behavior: 'smooth', block: 'center' });
-
-              if (bestClickable.tagName === 'INPUT' && (bestClickable.type === 'radio' || bestClickable.type === 'checkbox')) {
-                bestClickable.checked = true;
-                bestClickable.dispatchEvent(new Event('change', { bubbles: true }));
-              } else {
-                try {
-                  bestClickable.click();
-                } catch (e) {
-                  bestClickable.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
-                }
-              }
-
-              await new Promise(r => setTimeout(r, 250));
-
-              setTimeout(() => {
-                try {
-                  bestClickable.style.transition = origTransition;
-                  bestClickable.style.outline = origOutline;
-                } catch {}
-              }, 1800);
-
-              return {
-                sucesso: true,
-                matchedType: 'button_or_pill',
-                elementText: (bestClickable.innerText || bestClickable.textContent || term).trim(),
-                target: term
-              };
-            }
-
-            // 3. Procura em inputs de busca/filtro
-            const filterInputs = Array.from(document.querySelectorAll('input[type="search"], input[type="text"]'));
-            for (const inp of filterInputs) {
-              if (inp.offsetParent === null && inp.offsetWidth === 0 && inp.offsetHeight === 0) continue;
-              const meta = cleanStr(`${inp.placeholder || ''} ${inp.name || ''} ${inp.id || ''} ${inp.getAttribute('aria-label') || ''}`);
-              if (meta.includes('filtro') || meta.includes('busca') || meta.includes('search') || meta.includes('turma') || meta.includes('ano')) {
-                inp.focus();
-                inp.value = term;
-                inp.dispatchEvent(new Event('input', { bubbles: true }));
-                inp.dispatchEvent(new Event('change', { bubbles: true }));
-                await new Promise(r => setTimeout(r, 250));
-                return {
-                  sucesso: true,
-                  matchedType: 'search_input',
-                  elementText: inp.placeholder || term,
-                  target: term
-                };
-              }
-            }
-
-            return {
-              sucesso: false,
-              status: 'element_not_found',
-              mensagem: `Não encontrei nenhum filtro, menu ou opção correspondente a '${term}' nesta tela.`
-            };
-          }
-        });
-
-        // Aguarda estabilização das mutações do DOM e AJAX
-        await waitForPageSettled(targetTabId, 2000);
-
-        const res = (results && results[0] && results[0].result) || { sucesso: false, mensagem: 'Script de seleção falhou.' };
-        sendResponse(res);
-      } catch (err) {
-        sendResponse({ sucesso: false, mensagem: err.message });
-      }
+      const res = await internalSelectPortalFilter(targetTabId, rawTerm);
+      sendResponse(res);
     })();
     return true;
   }
