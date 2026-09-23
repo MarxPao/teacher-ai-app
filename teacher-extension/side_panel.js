@@ -2490,6 +2490,35 @@ async function dispatchPortalBridgeMessage(msg, callback) {
   callback(null);
 }
 
+function handlePendingConfirmation(commandText) {
+  try {
+    const rawPending = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('teacher_sidepanel_pending_action') : null;
+    if (!rawPending) return { handled: false };
+
+    const textClean = (commandText || '').trim();
+    const isConfirm = /^(?:sim|s|yes|y|ok|confirmo|confirmar|confirmado|pode\s+salvar|salvar|pode\s+gravar|gravar|salva|grava|pode\s+ir|manda\s+ver|claro|com\s+certeza|positivo|aprovar|aprovado)\b/i.test(textClean);
+    const isCancel = /^(?:n[ãa]o|n|no|cancela|cancelar|cancelado|esquece|deixa\s+pra\s+l[áa]|abortar)\b/i.test(textClean);
+
+    if (isConfirm) {
+      if (typeof sessionStorage !== 'undefined') sessionStorage.removeItem('teacher_sidepanel_pending_action');
+      const pendingAction = JSON.parse(rawPending);
+      return { handled: true, action: 'confirmed', pendingAction };
+    }
+
+    if (isCancel) {
+      if (typeof sessionStorage !== 'undefined') sessionStorage.removeItem('teacher_sidepanel_pending_action');
+      return { handled: true, action: 'cancelled' };
+    }
+
+    // Se o usuário digitou outro comando independente, limpa a pendência
+    if (typeof sessionStorage !== 'undefined') sessionStorage.removeItem('teacher_sidepanel_pending_action');
+    return { handled: false };
+  } catch (e) {
+    console.warn('[SidePanel] Erro ao processar pending action:', e);
+    return { handled: false };
+  }
+}
+
 async function handleProcessCommand(commandText) {
   if (!commandText || !commandText.trim()) return;
   const textClean = commandText.trim();
@@ -2500,6 +2529,29 @@ async function handleProcessCommand(commandText) {
   // Limpa o input de comando
   const inputCmd = document.getElementById('input-agent-command');
   if (inputCmd) inputCmd.value = '';
+
+  // Interceptor de Ação Pendente de Confirmação (HITL)
+  const pendingCheck = handlePendingConfirmation(textClean);
+  if (pendingCheck.handled) {
+    setProcessingState(false);
+    if (pendingCheck.action === 'confirmed') {
+      const p = pendingCheck.pendingAction;
+      postToEntityBus('EXECUTE_APP_TOOL', {
+        tool: p?.tool || 'sync_portal_data_to_app',
+        params: p?.params || {
+          dataType: 'calendar_events',
+          destination: 'calendar',
+          data: p?.data || []
+        },
+        source: 'side_panel_extension'
+      });
+      appendAssistantChatMessage('✅ Perfeito! Horários gravados com sucesso no seu Calendário do app! 📅✨', true);
+      return;
+    } else if (pendingCheck.action === 'cancelled') {
+      appendAssistantChatMessage('Operação cancelada. Nenhum dado foi salvo no calendário.', false);
+      return;
+    }
+  }
 
   // 2. Aciona indicador de processando dinâmico
   setProcessingState(true, 'Rafinha pensando...');
@@ -2513,11 +2565,29 @@ async function handleProcessCommand(commandText) {
 
     const portalContext = `[Portal Ativo: ${portalTab?.title || 'Portal Escolar'} | URL: ${portalTab?.url || ''}]`;
 
+    // Constrói histórico contextual com as últimas mensagens para o backend manter coerência
+    let chatHistory = [];
+    try {
+      const stored = JSON.parse(localStorage.getItem(EXT_CHAT_STORAGE_KEY) || '[]');
+      if (Array.isArray(stored) && stored.length > 0) {
+        chatHistory = stored.slice(-6).map(m => ({
+          role: m.role === 'assistant' ? 'assistant' : 'user',
+          content: typeof m.content === 'string' ? m.content.replace(/<[^>]*>/g, '').trim() : String(m.content || '')
+        })).filter(m => m.content.length > 0);
+      }
+    } catch (e) {
+      console.warn('[SidePanel] Erro ao recuperar histórico para /api/agent:', e);
+    }
+
+    if (chatHistory.length === 0 || chatHistory[chatHistory.length - 1].content !== textClean) {
+      chatHistory.push({ role: 'user', content: textClean });
+    }
+
     const agentRes = await fetch('http://localhost:3000/api/agent', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        messages: [{ role: 'user', content: textClean }],
+        messages: chatHistory,
         context: portalContext,
         autoMode: true
       })
@@ -3677,14 +3747,23 @@ async function executeGoalQueue(subGoals, index = 0, context = {}) {
   // ── EXECUÇÃO 0D: Transferência / Gravação de Dados no App (ex: "cole no meu calendário no app") ──
   if (isDataPasteCommand) {
     setProcessingState(false);
-    postToEntityBus('EXECUTE_APP_TOOL', {
-      tool: 'sync_portal_data_to_app',
-      params: {
-        dataType: 'calendar_events',
-        destination: 'calendar',
-        data: context.copiedData?.events || [{ title: 'Horário Escolar', date: new Date().toISOString().split('T')[0] }]
+    const eventsData = context.copiedData?.events || [{ title: 'Horário Escolar', date: new Date().toISOString().split('T')[0] }];
+    try {
+      if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.setItem('teacher_sidepanel_pending_action', JSON.stringify({
+          tool: 'sync_portal_data_to_app',
+          params: {
+            dataType: 'calendar_events',
+            destination: 'calendar',
+            data: eventsData
+          },
+          data: eventsData
+        }));
       }
-    });
+    } catch (e) {
+      console.warn('[SidePanel] Erro ao salvar pending action no sessionStorage:', e);
+    }
+
     appendAssistantChatMessage(
       `📅 Identifiquei os horários copiados do portal. Preparei o agendamento no seu **Calendário** do app. Confirma a gravação definitiva? (Diga "sim, pode salvar" ou "cancelar")`,
       true
@@ -4077,7 +4156,8 @@ if (typeof module !== 'undefined' && module.exports) {
     decomposeGoalJS,
     splitCompoundCommand,
     extractNavigationTarget,
-    executeGoalQueue
+    executeGoalQueue,
+    handlePendingConfirmation
   };
 }
 

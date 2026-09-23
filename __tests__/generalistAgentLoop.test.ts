@@ -9,7 +9,7 @@
  * 5. Teste E: Compressão Ativa de Observação (Economia de Tokens)
  */
 
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, beforeAll } from 'vitest'
 import {
   evaluateConfirmationPolicy,
   buildHonestDiagnostic,
@@ -291,6 +291,92 @@ describe('Loop Agêntico Generalista da Rafinha (Observe-Decide-Act)', () => {
       const pasteStep = subGoals.find((s: string) => s.includes('cole'))
       expect(pasteStep).toBeDefined()
       expect(pasteStep).toContain('calendario')
+    })
+  })
+
+  // ─── TESTE G: INTERCEPTOR DE CONFIRMAÇÃO PENDENTE (PREVENÇÃO DE ALUCINAÇÃO) ──
+  describe('Teste G: Interceptor de Confirmação Pendente e Guarda Anti-Alucinação', () => {
+    const {
+      handlePendingConfirmation
+    } = require('../teacher-extension/side_panel.js')
+
+    beforeAll(() => {
+      if (typeof globalThis.sessionStorage === 'undefined') {
+        let store: Record<string, string> = {}
+        globalThis.sessionStorage = {
+          getItem: (k: string) => store[k] ?? null,
+          setItem: (k: string, v: string) => { store[k] = String(v) },
+          removeItem: (k: string) => { delete store[k] },
+          clear: () => { store = {} },
+          key: (i: number) => Object.keys(store)[i] ?? null,
+          get length() { return Object.keys(store).length }
+        } as Storage
+      }
+    })
+
+    beforeEach(() => {
+      if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.clear()
+      }
+    })
+
+    it('intercepta "sim" e recupera a ação pendente de sincronização para o calendário', () => {
+      const mockPending = {
+        tool: 'sync_portal_data_to_app',
+        params: {
+          dataType: 'calendar_events',
+          destination: 'calendar',
+          data: [{ title: 'Matemática 6A', time: '07:30' }]
+        },
+        data: [{ title: 'Matemática 6A', time: '07:30' }]
+      }
+
+      sessionStorage.setItem('teacher_sidepanel_pending_action', JSON.stringify(mockPending))
+
+      const result = handlePendingConfirmation('sim')
+      expect(result.handled).toBe(true)
+      expect(result.action).toBe('confirmed')
+      expect(result.pendingAction?.tool).toBe('sync_portal_data_to_app')
+      expect(result.pendingAction?.params?.destination).toBe('calendar')
+      // Garante que o item pendente foi consumido e removido
+      expect(sessionStorage.getItem('teacher_sidepanel_pending_action')).toBeNull()
+    })
+
+    it('intercepta variações de confirmação ("sim, pode salvar", "confirmo", "pode gravar")', () => {
+      const mockPending = { tool: 'sync_portal_data_to_app', data: [] }
+
+      sessionStorage.setItem('teacher_sidepanel_pending_action', JSON.stringify(mockPending))
+      expect(handlePendingConfirmation('sim, pode salvar').action).toBe('confirmed')
+
+      sessionStorage.setItem('teacher_sidepanel_pending_action', JSON.stringify(mockPending))
+      expect(handlePendingConfirmation('confirmo').action).toBe('confirmed')
+
+      sessionStorage.setItem('teacher_sidepanel_pending_action', JSON.stringify(mockPending))
+      expect(handlePendingConfirmation('pode gravar').action).toBe('confirmed')
+    })
+
+    it('intercepta cancelamento ("cancelar", "não") sem executar mutação', () => {
+      const mockPending = { tool: 'sync_portal_data_to_app', data: [] }
+      sessionStorage.setItem('teacher_sidepanel_pending_action', JSON.stringify(mockPending))
+
+      const result = handlePendingConfirmation('cancelar')
+      expect(result.handled).toBe(true)
+      expect(result.action).toBe('cancelled')
+      expect(sessionStorage.getItem('teacher_sidepanel_pending_action')).toBeNull()
+    })
+
+    it('limpa pendência e retorna handled: false se o usuário mandar outro comando novo', () => {
+      const mockPending = { tool: 'sync_portal_data_to_app', data: [] }
+      sessionStorage.setItem('teacher_sidepanel_pending_action', JSON.stringify(mockPending))
+
+      const result = handlePendingConfirmation('acesse recados')
+      expect(result.handled).toBe(false)
+      expect(sessionStorage.getItem('teacher_sidepanel_pending_action')).toBeNull()
+    })
+
+    it('retorna handled: false se não houver ação pendente em sessionStorage', () => {
+      const result = handlePendingConfirmation('sim')
+      expect(result.handled).toBe(false)
     })
   })
 })
