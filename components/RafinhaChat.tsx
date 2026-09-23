@@ -42,6 +42,11 @@ import { buildStudentDossierContext } from '@/lib/studentDossier'
 import { retrieveRelevantMemories, MemoryNode } from '@/lib/hybridRetriever'
 import '@/lib/subjects/english'
 import '@/lib/subjects/portuguese'
+import {
+  evaluateConfirmationPolicy,
+  buildHonestDiagnostic,
+  summarizeObservationData
+} from '@/lib/agentLoopEngine'
 
 // Types 
 interface Message {
@@ -150,9 +155,9 @@ const PORTAL_NAMES: Record<string, string> = {
 
 // Snapshot / Undo 
 const SNAPSHOT_KEYS = [
- 'teacher_students', 'teacher_calendar_tasks', 'teacher_dashboard_todos',
- 'teacher_lessonplanner_boards', 'teacher_communications',
- 'teacher_gbConfig', 'teacher_classes',
+  'teacher_students', 'teacher_calendar_tasks', 'teacher_dashboard_todos',
+  'teacher_lessonplanner_boards', 'teacher_communications',
+  'teacher_gbConfig', 'teacher_classes', 'teacher_class_logs', 'teacher_messages',
 ]
 function takeSnapshot() {
  const snapshot: Record<string, string | null> = {}
@@ -921,6 +926,35 @@ export async function executeTool(
     }
 
     return `Tipo de dado desconhecido: "${dataType}". Use students, grades, calendar_events ou messages.`
+  }
+  case 'record_class_log_entry': {
+    takeSnapshot()
+    const classRef = (input.classRef as string) || 'Geral'
+    const note = (input.note as string) || (input.text as string) || ''
+    const topic = (input.topic as string) || 'Anotação Pedagógica'
+    const type = (input.type as string) || 'pedagogico'
+    const date = (input.date as string) || new Date().toISOString().split('T')[0]
+
+    const rawLogs = localStorage.getItem('teacher_class_logs') || '[]'
+    let logs: any[] = []
+    try { logs = JSON.parse(rawLogs) } catch { logs = [] }
+
+    const newLog = {
+      id: `log_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      classRef,
+      date,
+      topic,
+      note,
+      type,
+      createdAt: Date.now()
+    }
+
+    logs.unshift(newLog)
+    localStorage.setItem('teacher_class_logs', JSON.stringify(logs))
+    window.dispatchEvent(new CustomEvent('teacher_classlog_updated', { detail: newLog }))
+    window.dispatchEvent(new Event('storage'))
+
+    return `✅ Registro salvo no Diário de Bordo da turma ${classRef}: "${topic}" (${date}).`
   }
  case 'generate_exam_content': {
  const topic = input.topic as string
@@ -2018,10 +2052,55 @@ export default function RafinhaChat({ onNavigate, onCommandReady }: RafinhaChatP
     }
   }
 
+  // Interceptor de Desfazer de 1 Ação (60s snapshot)
+  if (/^(?:desfazer|desfaz|desfaça|cancelar ação anterior|undo)$/i.test(trimmed)) {
+    if (undoLastAction()) {
+      const reply = '↩️ Ação anterior desfeita com sucesso! Os dados foram restaurados ao estado anterior.'
+      setMessages(prev => [...prev, { role: 'assistant', content: reply }])
+      speak('Ação desfeita!')
+      return
+    } else {
+      const reply = 'Não há nenhuma ação recente gravada no histórico para desfazer.'
+      setMessages(prev => [...prev, { role: 'assistant', content: reply }])
+      speak(reply)
+      return
+    }
+  }
+
+  // Interceptor de Confirmação para Mutações Staged no App (Human-in-the-Loop)
+  const rawStagedApp = typeof window !== 'undefined' ? sessionStorage.getItem('teacher_staged_app_mutation') : null
+  if (rawStagedApp) {
+    try {
+      const staged = JSON.parse(rawStagedApp)
+      const parsed = parseConfirmationIntent(trimmed)
+      if (parsed.decision === 'approve') {
+        sessionStorage.removeItem('teacher_staged_app_mutation')
+        setIsLoading(true)
+        isLoadingRef.current = true
+        const resultMsg = await executeTool(staged.toolName, staged.toolInput, onNavigate, speak)
+        const replyText = `✅ Confirmação recebida! ${resultMsg}`
+        setMessages(prev => [...prev, { role: 'assistant', content: replyText }])
+        setIsLoading(false)
+        isLoadingRef.current = false
+        speak(replyText)
+        return
+      }
+      if (parsed.decision === 'abort') {
+        sessionStorage.removeItem('teacher_staged_app_mutation')
+        const replyText = 'Operação cancelada com segurança. Nenhuma informação foi gravada no app.'
+        setMessages(prev => [...prev, { role: 'assistant', content: replyText }])
+        speak(replyText)
+        return
+      }
+    } catch (e) {
+      console.error('Erro ao processar confirmação de staged app mutation:', e)
+    }
+  }
+
   setIsLoading(true)
   isLoadingRef.current = true
- setRunningTools([])
- skipSignalRef.current = false
+  setRunningTools([])
+  skipSignalRef.current = false
 
  // Interceptor de Confirmação Final Flexível para Tarefas de Portal em pending_approval
  const rawPending = typeof window !== 'undefined' ? sessionStorage.getItem('teacher_active_portal_task') : null
@@ -2298,29 +2377,60 @@ export default function RafinhaChat({ onNavigate, onCommandReady }: RafinhaChatP
 
         try {
           const effectiveInput = newEntries[i].input
+
+          // Avaliação de Política Human-in-the-Loop (HITL) para escritas/mutações
+          const policy = evaluateConfirmationPolicy(tc.name!, effectiveInput, {
+            isExplicitUserCommand: iteration === 0
+          })
+
+          if (policy.requiresPriorApproval && tc.name !== 'execute_portal_action' && tc.name !== 'confirm_portal_submission') {
+            sessionStorage.setItem('teacher_staged_app_mutation', JSON.stringify({
+              toolName: tc.name,
+              toolInput: effectiveInput,
+              reason: policy.reason,
+              previewSummary: policy.previewSummary
+            }))
+            const stagedMsg = `Identifiquei os dados: **${policy.previewSummary}**.\n\nPor segurança (${policy.reason}), confirma a gravação no app? (Diga "sim, pode salvar" ou "cancelar")`
+            setRunningTools(prev =>
+              prev.map((e, idx) => idx === i ? { ...e, status: 'done', result: 'Aguardando confirmação prévia', elapsed: 0.2 } : e)
+            )
+            setMessages(prev => [...prev, { role: 'assistant', content: stagedMsg }])
+            setIsLoading(false)
+            isLoadingRef.current = false
+            speak(stagedMsg)
+            return
+          }
+
           const result = await executeTool(tc.name!, effectiveInput, onNavigate, speak)
           const elapsed = (Date.now() - newEntries[i].startedAt) / 1000
 
- setRunningTools(prev =>
- prev.map((e, idx) => idx === i ? { ...e, status: 'done', result, elapsed } : e)
- )
- setAllLogs(prev => {
- const updated = prev.map(e => e.id === tc.id ? { ...e, status: 'done' as const, result, elapsed } : e)
- const exists = prev.some(e => e.id === tc.id)
- return exists ? updated : [...prev, { ...newEntries[i], status: 'done', result, elapsed }]
- })
- toolResults.push({ id: tc.id!, name: tc.name!, result })
- } catch (err) {
- const errMsg = err instanceof Error ? err.message : 'Erro'
- setRunningTools(prev =>
- prev.map((e, idx) => idx === i ? { ...e, status: 'error', result: errMsg } : e)
- )
- setAllLogs(prev => {
- const exists = prev.some(e => e.id === tc.id)
- return exists ? prev.map(e => e.id === tc.id ? { ...e, status: 'error' as const, result: errMsg } : e)
- : [...prev, { ...newEntries[i], status: 'error', result: errMsg }]
- })
- toolResults.push({ id: tc.id!, name: tc.name!, result: `Erro: ${errMsg}` })
+          setRunningTools(prev =>
+            prev.map((e, idx) => idx === i ? { ...e, status: 'done', result, elapsed } : e)
+          )
+          setAllLogs(prev => {
+            const updated = prev.map(e => e.id === tc.id ? { ...e, status: 'done' as const, result, elapsed } : e)
+            const exists = prev.some(e => e.id === tc.id)
+            return exists ? updated : [...prev, { ...newEntries[i], status: 'done', result, elapsed }]
+          })
+
+          // Compacta a observação para não sobrecarregar os tokens da próxima iteração
+          const compactData = summarizeObservationData(result)
+          const observationStr = typeof compactData === 'string' ? compactData : JSON.stringify(compactData)
+          toolResults.push({ id: tc.id!, name: tc.name!, result: observationStr })
+        } catch (err) {
+          const diag = buildHonestDiagnostic(tc.name!, newEntries[i].input, err)
+          const diagnosticStr = `${diag.rootCauseAnalysis} Opções: ${diag.remedialOptions.join('; ')}`
+
+          setRunningTools(prev =>
+            prev.map((e, idx) => idx === i ? { ...e, status: 'error', result: diag.rootCauseAnalysis } : e)
+          )
+          setAllLogs(prev => {
+            const exists = prev.some(e => e.id === tc.id)
+            return exists ? prev.map(e => e.id === tc.id ? { ...e, status: 'error' as const, result: diag.rootCauseAnalysis } : e)
+              : [...prev, { ...newEntries[i], status: 'error', result: diag.rootCauseAnalysis }]
+          })
+          toolResults.push({ id: tc.id!, name: tc.name!, result: diagnosticStr })
+        }
  }
  }
 

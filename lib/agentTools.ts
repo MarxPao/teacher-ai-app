@@ -218,6 +218,21 @@ export const AGENT_TOOLS: ToolDefinition[] = [
       required: ['dataType', 'data']
     }
   },
+  {
+    name: 'record_class_log_entry',
+    description: 'Registra ocorrência pedagógica, pauta de aula, observação disciplinar ou anotação no Diário de Bordo da turma (ClassLog). Use quando houver informações pedagógicas que não sejam tarefas de calendário nem notas puras.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        classRef:    { type: 'string', description: 'Turma de referência, ex: 6º Ano A, 8B' },
+        topic:       { type: 'string', description: 'Assunto ou título da anotação' },
+        note:        { type: 'string', description: 'Texto da ocorrência, pauta ou observação' },
+        type:        { type: 'string', enum: ['pedagogico', 'ocorrencia', 'pauta', 'recado_coordenacao'], description: 'Categoria do registro' },
+        date:        { type: 'string', description: 'Data YYYY-MM-DD' },
+      },
+      required: ['classRef', 'note']
+    }
+  },
 
   // 8. GERADOR DE PROVAS ELT
   {
@@ -724,6 +739,7 @@ export const TOOL_DISPLAY_NAMES: Record<string, { label: string; icon: string; c
   fill_school_portal:             { label: 'Preenchendo portal',      icon: 'ti-plug-connected',     color: '#cb4b16' },
   open_school_portal:             { label: 'Abrindo portal',          icon: 'ti-external-link',      color: '#268bd2' },
   sync_portal_data_to_app:        { label: 'Sincronizando para app',  icon: 'ti-arrows-transfer-up', color: '#2aa198' },
+  record_class_log_entry:         { label: 'Diário de Bordo',         icon: 'ti-notes',              color: '#6c71c4' },
   generate_exam_content:          { label: 'Gerando prova',           icon: 'ti-file-certificate',   color: '#d33682' },
   speak_response:                 { label: 'Falando',                 icon: 'ti-volume',             color: '#7a5c42' },
   update_student_metric:          { label: 'Métrica de aluno',        icon: 'ti-chart-radar',        color: '#859900' },
