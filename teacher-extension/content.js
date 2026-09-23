@@ -249,14 +249,19 @@ function setFieldValue(el, value) {
 
 // ——— Preenchimento Estruturado de Notas (Grades Table) ———
 function normalizeName(str) {
-  return String(str || '')
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .trim();
+  return (typeof PortalNormalizer !== 'undefined' && PortalNormalizer.cleanNormalizeString)
+    ? PortalNormalizer.cleanNormalizeString(str)
+    : String(str || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .trim();
 }
 
 function matchStudentName(portalText, studentName) {
+  if (typeof PortalNormalizer !== 'undefined' && PortalNormalizer.matchStudentName) {
+    return PortalNormalizer.matchStudentName(portalText, studentName);
+  }
   const normPortal = normalizeName(portalText);
   const normStudent = normalizeName(studentName);
   

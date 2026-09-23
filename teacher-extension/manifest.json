@@ -42,6 +42,7 @@
         "<all_urls>"
       ],
       "js": [
+        "portal_normalizer.js",
         "transaction_manager.js",
         "session_guardian.js",
         "content.js"

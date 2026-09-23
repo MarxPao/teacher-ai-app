@@ -1,6 +1,17 @@
 // background.js — Service Worker TeacherAI v3.1
 // WebSocket Bridge + Monitor de Status de Portais Escolares (Toolbar Icon) + Automação na Mesma Aba
 
+let PortalNormalizer = typeof globalThis !== 'undefined' ? globalThis.PortalNormalizer : null;
+try {
+  if (!PortalNormalizer && typeof importScripts === 'function') {
+    importScripts('portal_normalizer.js');
+    PortalNormalizer = globalThis.PortalNormalizer;
+  }
+} catch (e) {}
+if (!PortalNormalizer && typeof require === 'function') {
+  try { PortalNormalizer = require('./portal_normalizer.js'); } catch (e) {}
+}
+
 const WS_URL_PRIMARY = 'ws://127.0.0.1:8766';
 const WS_URL_FALLBACK = 'ws://127.0.0.1:8765/status_stream';
 const HTTP_STATUS_FALLBACK = 'http://127.0.0.1:8765/portal_status';
@@ -1424,7 +1435,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       const trace = [];
 
       // Normalização prévia de título / texto da ação para uso em todo o ciclo de execução
-      const normTitle = (title || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      const normTitle = (PortalNormalizer && PortalNormalizer.cleanNormalizeString)
+        ? PortalNormalizer.cleanNormalizeString(title)
+        : (title || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
 
       try {
         // 1. Pré-Navegação de Aba — prioridade: navTarget explícito > heurística
@@ -1476,17 +1489,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         }
 
         // 3. Seleção de Disciplina (se houver na mensagem/título)
-        const commonSubjects = [
+        const commonSubjects = (PortalNormalizer && PortalNormalizer.COMMON_CURRICULUM_SUBJECTS) || [
           'lingua inglesa', 'ingles', 'lingua portuguesa', 'portugues',
           'matematica', 'historia', 'geografia', 'ciencias', 'fisica',
           'quimica', 'biologia', 'artes', 'educacao fisica', 'filosofia', 'sociologia',
           'redacao', 'literatura', 'espanhol'
         ];
-        let subjectFound = null;
-        for (const subj of commonSubjects) {
-          if (normTitle.includes(subj)) {
-            subjectFound = subj;
-            break;
+        let subjectFound = (PortalNormalizer && PortalNormalizer.identifyCurriculumSubject)
+          ? PortalNormalizer.identifyCurriculumSubject(normTitle)
+          : null;
+        if (!subjectFound) {
+          for (const subj of commonSubjects) {
+            if (normTitle.includes(subj)) {
+              subjectFound = subj;
+              break;
+            }
           }
         }
         if (subjectFound) {

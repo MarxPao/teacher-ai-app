@@ -1,4 +1,9 @@
 
+let PortalNormalizer = typeof globalThis !== 'undefined' ? globalThis.PortalNormalizer : null;
+if (!PortalNormalizer && typeof require === 'function') {
+  try { PortalNormalizer = require('./portal_normalizer.js'); } catch (e) {}
+}
+
 function escapeHtml(str) {
   if (!str) return '';
   const div = document.createElement('div');
@@ -3123,12 +3128,14 @@ async function handleProcessCommand(commandText) {
 }
 
 function normalizeBrazilianWeekday(headerText) {
+  if (typeof PortalNormalizer !== 'undefined' && PortalNormalizer && PortalNormalizer.normalizeBrazilianWeekday) {
+    return PortalNormalizer.normalizeBrazilianWeekday(headerText);
+  }
   if (!headerText) return null;
   const raw = String(headerText).trim();
   if (raw.length > 30) return null;
   const norm = raw.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
-  // Descarta termos de tempo/período para evitar falsos positivos (ex: "1º horário", "2º tempo")
   if (/hor[aá]rio|tempo|per[ií]odo|aula|disciplina|turma|sala|prof/i.test(norm)) return null;
 
   if (/(?:^|\b)(?:2\s*[\u00AAªa](?:-?\s*feira)?|segunda(?:-feira)?|seg\b)/i.test(norm) ||
@@ -3161,6 +3168,9 @@ function normalizeBrazilianWeekday(headerText) {
 }
 
 function extractWeekdayFromText(text) {
+  if (typeof PortalNormalizer !== 'undefined' && PortalNormalizer && PortalNormalizer.extractWeekdayFromText) {
+    return PortalNormalizer.extractWeekdayFromText(text);
+  }
   if (!text) return null;
   const raw = String(text).trim();
   const norm = raw.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
