@@ -383,13 +383,23 @@ async function callProviderWithFallback(
       }
 
       if (p === 'gemini') {
-        const geminiModels = ['gemini-3.6-flash', 'gemini-3.5-flash-lite', 'gemini-3.5-flash', 'gemini-flash-lite-latest', 'gemini-flash-latest', 'gemini-pro-latest']
+        // Modelos ordenados do mais rápido ao mais capaz — evitar round-trips em modelos inexistentes
+        const geminiModels = [
+          'gemini-2.0-flash',
+          'gemini-2.0-flash-lite',
+          'gemini-1.5-flash',
+          'gemini-1.5-flash-8b',
+          'gemini-1.5-pro',
+        ]
         let geminiSuccess = false
         for (const gModel of geminiModels) {
           try {
+            const ctrl = new AbortController()
+            const tid = setTimeout(() => ctrl.abort(), 9000)
             const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${gModel}:generateContent?key=${key}`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
+              signal: ctrl.signal,
               body: JSON.stringify({
                 system_instruction: { parts: [{ text: systemPrompt }] },
                 tools: toGeminiTools(AGENT_TOOLS),
@@ -397,6 +407,7 @@ async function callProviderWithFallback(
                 generationConfig: { maxOutputTokens: maxTokens, temperature },
               }),
             })
+            clearTimeout(tid)
 
             if (response.ok) {
               const data = await response.json()

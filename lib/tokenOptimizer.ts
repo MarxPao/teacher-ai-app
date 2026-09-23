@@ -90,7 +90,8 @@ export function calculateDynamicTokens(
 ): { maxTokens: number; temperature: number } {
   if (temperatureMode) {
     const lower = lastUserMessage.toLowerCase()
-    const maxTokens = /crie|gere|monte|elabore|prova|exame|plano|roteiro|exercício|rubrica|questão|backward|ubd/.test(lower) ? 4096 : 1024
+    const isGeneration = /crie|gere|monte|elabore|prova|exame|plano|roteiro|exercício|rubrica|questão|backward|ubd/.test(lower)
+    const maxTokens = isGeneration ? 4096 : lower.length < 60 ? 256 : 512
     return { maxTokens, temperature: resolveTemperature(temperatureMode) }
   }
 
@@ -99,11 +100,12 @@ export function calculateDynamicTokens(
   if (/crie|gere|monte|elabore|prova|exame|plano|roteiro|exercício|rubrica|questão|exam|exercise|backward|ubd/.test(lower)) {
     return { maxTokens: 4096, temperature: 0.7 }
   }
-  // Comandos curtos ou ações simples
+  // Comandos curtos ou ações simples de portal/navegação
   if (/^adicion[ae]|naveg[ue]|vái para|cri[ae] tarefa|abra|limp[ae]|marqu[ae]/.test(lower) || lower.length < 30) {
-    return { maxTokens: 512, temperature: 0.3 }
+    return { maxTokens: 256, temperature: 0.2 }
   }
-  return { maxTokens: 1024, temperature: 0.6 }
+  // Chat padrão — resposta concisa suficiente para ações + confirmações
+  return { maxTokens: 512, temperature: 0.5 }
 }
 
 
