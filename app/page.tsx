@@ -80,6 +80,7 @@ const Eventos               = dynamic(() => import('@/components/modules/Eventos
 const VisualStudio          = dynamic(() => import('@/components/modules/VisualStudio'),          { loading: () => <ModuleSkeleton />, ssr: false })
 const Insights              = dynamic(() => import('@/components/modules/Insights'),              { loading: () => <ModuleSkeleton />, ssr: false })
 const ChecklistHistoryModule = dynamic(() => import('@/components/modules/ChecklistHistoryModule'), { loading: () => <ModuleSkeleton />, ssr: false })
+const PortalSkillsModule    = dynamic(() => import('@/components/modules/PortalSkillsModule'),    { loading: () => <ModuleSkeleton />, ssr: false })
 const BnccModule            = dynamic(() => import('@/components/modules/BnccModule'),            { loading: () => <ModuleSkeleton />, ssr: false })
 const ClassroomAnalytics    = dynamic(() => import('@/components/modules/ClassroomAnalytics'),    { loading: () => <ModuleSkeleton />, ssr: false })
 

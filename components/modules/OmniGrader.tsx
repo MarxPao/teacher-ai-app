@@ -877,13 +877,23 @@ Retorne ESTRITAMENTE um objeto JSON no seguinte formato (sem markdown, sem bloco
       // Ingestão contínua no Dossiê Longitudinal do Aluno (Memory Engine Fase 2)
       if (updated[idx]?.name) {
         try {
+          const profile = getSubjectProfile()
+          const isPt = profile.id === 'portuguese'
+          const criteria = [
+            essayEvaluation.content,
+            essayEvaluation.communicativeAchievement,
+            essayEvaluation.organisation,
+            essayEvaluation.language
+          ].filter(Boolean)
+          const strengths = criteria.flatMap(c => c.strengths || [])
+          const difficulties = criteria.flatMap(c => c.improvements || [])
           ingestOmniGraderEvaluation({
             studentName: updated[idx].name,
             score: essayEvaluation.overallScore,
             feedback: essayEvaluation.overallSummary || essayEvaluation.studentActionPlan,
-            topic: textGenre || (isPortuguese ? 'Redação Português' : 'English Essay'),
-            strengths: essayEvaluation.rubricFeedback?.filter(r => (r.score || 0) >= 8).map(r => r.criterionName) || [],
-            difficulties: essayEvaluation.rubricFeedback?.filter(r => (r.score || 0) < 6).map(r => r.criterionName) || []
+            topic: textGenre || (isPt ? 'Redação Português' : 'English Essay'),
+            strengths: strengths.length > 0 ? strengths : ['Geral'],
+            difficulties: difficulties
           })
         } catch (err) {
           console.warn('[OmniGrader] Falha ao atualizar dossiê do aluno:', err)
@@ -898,11 +908,13 @@ Retorne ESTRITAMENTE um objeto JSON no seguinte formato (sem markdown, sem bloco
   function handleSaveAsFewShotExample() {
     if (!essayEvaluation || !studentEssayText) return
     try {
+      const profile = getSubjectProfile()
+      const isPt = profile.id === 'portuguese'
       recordApprovedCorrection({
         studentWorkExcerpt: studentEssayText.slice(0, 280),
         correctionFeedback: essayEvaluation.overallSummary || essayEvaluation.studentActionPlan || 'Feedback validado pela professora.',
         scoreGiven: essayEvaluation.overallScore,
-        category: textGenre || (isPortuguese ? 'Redação PT' : 'Cambridge Essay')
+        category: textGenre || (isPt ? 'Redação PT' : 'Cambridge Essay')
       })
       setIsFewShotSaved(true)
       toast.success('⭐ Exemplo salvo com sucesso! A Rafinha aprendeu este padrão de correção como exemplar Few-Shot.')

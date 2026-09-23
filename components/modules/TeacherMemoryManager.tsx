@@ -144,7 +144,7 @@ export default function TeacherMemoryManager() {
     saveCuratedMemory({
       ...memory,
       learnedFacts: filtered,
-      lastUpdated: new Date().toISOString()
+      updatedAt: new Date().toISOString()
     })
     refreshData()
     toast.success('Fato removido da memória.')
@@ -160,7 +160,7 @@ export default function TeacherMemoryManager() {
     saveCuratedMemory({
       ...memory,
       learnedFacts: updatedFacts,
-      lastUpdated: new Date().toISOString()
+      updatedAt: new Date().toISOString()
     })
     refreshData()
     toast.success('Fato atualizado com sucesso!')
