@@ -126,8 +126,8 @@ export const AGENT_TOOLS: ToolDefinition[] = [
       type: 'object',
       properties: {
         platform:       { type: 'string', description: 'ID do portal, ex: machado, santacatarina, plural, cambridge, ou nome da escola' },
-        actionType:     { type: 'string', enum: ['diary', 'attendance', 'grades', 'assignment', 'custom'], description: 'Tipo da ação: diário, chamada, notas, tarefa, ou "custom" para navegação/visualização sem preenchimento de formulário' },
-        navTarget:      { type: 'string', description: 'Aba, seção ou menu do portal para navegar. Ex: "recados", "frequencia", "recados enviados". Use quando o professor pedir para "acessar", "entrar em", "abrir" uma seção do portal.' },
+        actionType:     { type: 'string', enum: ['diary', 'attendance', 'grades', 'assignment', 'schedule', 'calendar', 'custom'], description: 'Tipo da ação: diário, chamada, notas, tarefa, horário/grade semanal, ou "custom" para navegação/visualização sem preenchimento de formulário' },
+        navTarget:      { type: 'string', description: 'Aba, seção ou menu do portal para navegar. Ex: "recados", "frequencia", "recados enviados", "horários". Use quando o professor pedir para "acessar", "entrar em", "abrir" uma seção do portal.' },
         subNavTarget:   { type: 'string', description: 'Sub-aba ou sub-seção dentro do navTarget. Ex: se navTarget="recados" e o professor pediu "recados enviados", coloque subNavTarget="enviados".' },
         title:          { type: 'string', description: 'Título da aula, diário ou avaliação' },
         date:           { type: 'string', description: 'Data YYYY-MM-DD' },
@@ -141,7 +141,7 @@ export const AGENT_TOOLS: ToolDefinition[] = [
           items: {
             type: 'object',
             properties: {
-              actionType:     { type: 'string', enum: ['diary', 'attendance', 'grades', 'assignment', 'custom'] },
+              actionType:     { type: 'string', enum: ['diary', 'attendance', 'grades', 'assignment', 'schedule', 'calendar', 'custom'] },
               title:          { type: 'string' },
               description:    { type: 'string' },
               absentStudents: { type: 'array', items: { type: 'string' } },
@@ -153,6 +153,16 @@ export const AGENT_TOOLS: ToolDefinition[] = [
         }
       },
       required: ['platform', 'title']
+    }
+  },
+  {
+    name: 'inspect_portal_page',
+    description: 'Lê e inspeciona dados da tela aberta no portal escolar (grade de horários semanais, lista de alunos/frequência, notas ou comunicados). Retorna as tabelas e dados estruturados para que você observe o conteúdo da tela antes de responder ou sincronizar com o app.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        targetDomain: { type: 'string', enum: ['schedule', 'roster', 'grades', 'general'], description: 'Foco da leitura: schedule (horários de aula), roster (alunos), grades (notas), ou general (tudo visível)' }
+      }
     }
   },
   {

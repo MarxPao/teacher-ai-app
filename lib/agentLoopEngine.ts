@@ -72,6 +72,8 @@ const READ_NAV_TOOLS = new Set([
   'search_web',
   'read_page_content',
   'read_active_portal_roster',
+  'inspect_portal_page',
+  'read_page_data',
   'show_portal_screenshot',
   'speak_response',
   'diagnose_class_performance'

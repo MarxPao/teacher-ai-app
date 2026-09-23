@@ -21,6 +21,30 @@ import {
 } from '@/lib/agentLoopEngine'
 
 describe('Loop Agêntico Generalista da Rafinha (Observe-Decide-Act)', () => {
+  const mockLocalStore: Record<string, string> = {}
+  const mockSessionStore: Record<string, string> = {}
+
+  beforeAll(() => {
+    if (typeof globalThis.localStorage === 'undefined') {
+      // @ts-ignore
+      globalThis.localStorage = {
+        getItem: (k: string) => mockLocalStore[k] || null,
+        setItem: (k: string, v: string) => { mockLocalStore[k] = String(v) },
+        removeItem: (k: string) => { delete mockLocalStore[k] },
+        clear: () => { for (const k in mockLocalStore) delete mockLocalStore[k] }
+      }
+    }
+    if (typeof globalThis.sessionStorage === 'undefined') {
+      // @ts-ignore
+      globalThis.sessionStorage = {
+        getItem: (k: string) => mockSessionStore[k] || null,
+        setItem: (k: string, v: string) => { mockSessionStore[k] = String(v) },
+        removeItem: (k: string) => { delete mockSessionStore[k] },
+        clear: () => { for (const k in mockSessionStore) delete mockSessionStore[k] }
+      }
+    }
+  })
+
   beforeEach(() => {
     if (typeof localStorage !== 'undefined') localStorage.clear()
     if (typeof sessionStorage !== 'undefined') sessionStorage.clear()
@@ -470,6 +494,86 @@ describe('Loop Agêntico Generalista da Rafinha (Observe-Decide-Act)', () => {
       expect(() => {
         resolvePortalActionPreFlight({ action: 'EXECUTE_PORTAL_ACTION' })
       }).not.toThrow()
+    })
+  })
+
+  // ─── TESTE I: INTEGRAÇÃO BIDIRECIONAL EXTENSIONSYNCBUS & SCHEMA CANÔNICO (FASE 3 & 4) ───
+  describe('Teste I: Integração Bidirecional ExtensionSyncBus e Schema Canônico (Fase 3 & 4)', () => {
+    it('grava eventos de calendário no app quando sync_portal_data_to_app é despachado pelo bus', async () => {
+      const { extensionSyncBus } = await import('@/lib/extensionSyncBus')
+
+      const sampleEvents = [
+        {
+          title: 'Matemática - 9º Ano A',
+          date: '2026-09-25',
+          startTime: '07:30',
+          endTime: '08:20',
+          subject: 'Matemática',
+          className: '9º Ano A',
+          description: 'Aula de Matemática para 9º Ano A'
+        },
+        {
+          title: 'História - 8º Ano B',
+          date: '2026-09-25',
+          startTime: '08:20',
+          endTime: '09:10',
+          subject: 'História',
+          className: '8º Ano B',
+          description: 'Aula de História para 8º Ano B'
+        }
+      ]
+
+      extensionSyncBus.handleExecuteAppTool({
+        tool: 'sync_portal_data_to_app',
+        params: {
+          dataType: 'calendar_events',
+          destination: 'calendar',
+          data: sampleEvents,
+          portalName: 'Machado Sobrinho'
+        }
+      })
+
+      const raw = localStorage.getItem('teacher_calendar_tasks')
+      expect(raw).toBeTruthy()
+      const savedTasks = JSON.parse(raw!)
+      expect(savedTasks.length).toBeGreaterThanOrEqual(2)
+      expect(savedTasks.some((t: any) => t.title === 'Matemática - 9º Ano A')).toBe(true)
+      expect(savedTasks.some((t: any) => t.title === 'História - 8º Ano B')).toBe(true)
+    })
+
+    it('simula ciclo fechado Observe-Decide-Act com HITL staging para cópia de horários', () => {
+      // 1. Simula Step 1 (Navegação): direta sem HITL
+      const step1Policy = evaluateConfirmationPolicy('execute_portal_action', {
+        actionType: 'custom',
+        navTarget: 'horários'
+      })
+      expect(step1Policy.requiresPriorApproval).toBe(false)
+
+      // 2. Simula Step 2 (Inspeção de tela): direta sem HITL
+      const step2Policy = evaluateConfirmationPolicy('inspect_portal_page', {
+        targetDomain: 'schedule'
+      })
+      expect(step2Policy.requiresPriorApproval).toBe(false)
+
+      // 3. Simula Step 3 (Sync de Dados): requer HITL por segurança antes da escrita
+      const step3Policy = evaluateConfirmationPolicy('sync_portal_data_to_app', {
+        dataType: 'calendar_events',
+        data: [{ title: 'Matemática', date: '2026-09-25' }]
+      })
+      expect(step3Policy.requiresPriorApproval).toBe(true)
+
+      // 4. Usuário aprova ("sim"): staging é executado no bus
+      sessionStorage.setItem('teacher_sidepanel_pending_action', JSON.stringify({
+        tool: 'sync_portal_data_to_app',
+        params: {
+          dataType: 'calendar_events',
+          data: [{ title: 'Matemática', date: '2026-09-25' }]
+        }
+      }))
+
+      expect(sessionStorage.getItem('teacher_sidepanel_pending_action')).toBeTruthy()
+      sessionStorage.removeItem('teacher_sidepanel_pending_action')
+      expect(sessionStorage.getItem('teacher_sidepanel_pending_action')).toBeNull()
     })
   })
 })

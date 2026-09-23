@@ -2541,6 +2541,13 @@ async function handleProcessCommand(commandText) {
     setProcessingState(false);
     if (pendingCheck.action === 'confirmed') {
       const p = pendingCheck.pendingAction;
+      if (p?.tool === 'execute_portal_action' || p?.tool === 'confirm_portal_submission') {
+        dispatchPortalBridgeMessage({ action: 'EXECUTE_PORTAL_ACTION', payload: p.params }, (res) => {
+          appendAssistantChatMessage(res?.mensagem || '✅ Lançamento oficial concluído com sucesso no portal escolar! ✨', true);
+        });
+        return;
+      }
+
       postToEntityBus('EXECUTE_APP_TOOL', {
         tool: p?.tool || 'sync_portal_data_to_app',
         params: p?.params || {
@@ -2550,10 +2557,13 @@ async function handleProcessCommand(commandText) {
         },
         source: 'side_panel_extension'
       });
-      appendAssistantChatMessage('✅ Perfeito! Horários gravados com sucesso no seu Calendário do app! 📅✨', true);
+
+      const dest = p?.params?.destination || p?.params?.dataType || 'calendário';
+      const label = dest === 'students' ? 'Alunos' : dest === 'grades' ? 'Notas' : 'Calendário';
+      appendAssistantChatMessage(`✅ Perfeito! Dados gravados com sucesso no seu **${label}** do app! 📅✨`, true);
       return;
     } else if (pendingCheck.action === 'cancelled') {
-      appendAssistantChatMessage('Operação cancelada. Nenhum dado foi salvo no calendário.', false);
+      appendAssistantChatMessage('Operação cancelada. Nenhum dado foi salvo.', false);
       return;
     }
   }
@@ -2588,108 +2598,142 @@ async function handleProcessCommand(commandText) {
       chatHistory.push({ role: 'user', content: textClean });
     }
 
-    const agentRes = await fetch('http://localhost:3000/api/agent', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        messages: chatHistory,
-        context: portalContext,
-        autoMode: true
-      })
-    });
+    const dispatchPortalBridgePromise = (msg) => {
+      return new Promise((resolve) => {
+        dispatchPortalBridgeMessage(msg, (resp) => resolve(resp));
+      });
+    };
 
-    if (agentRes.ok) {
+    let currentTurn = 0;
+    const MAX_AGENTIC_TURNS = 4;
+    let loopCompleted = false;
+
+    while (currentTurn < MAX_AGENTIC_TURNS && !loopCompleted) {
+      currentTurn++;
+      const agentRes = await fetch('http://localhost:3000/api/agent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: chatHistory,
+          context: portalContext,
+          autoMode: true
+        })
+      });
+
+      if (!agentRes.ok) {
+        throw new Error(`HTTP ${agentRes.status} from /api/agent`);
+      }
+
       const agentData = await agentRes.json();
       const toolUse = agentData.toolUse || (agentData.content && Array.isArray(agentData.content) ? agentData.content.filter(c => c.type === 'tool_use') : []);
       const firstTool = Array.isArray(toolUse) && toolUse.length > 0 ? toolUse[0] : null;
 
-      if (firstTool) {
-        const toolName = firstTool.name || firstTool.id;
-        const toolInput = firstTool.input || {};
-
-        // Identifica se é Tipo (a) ou Tipo (b)
-        const isDomTool = [
-          'execute_portal_action',
-          'confirm_portal_submission',
-          'show_portal_screenshot',
-          'fill_school_portal',
-          'open_school_portal'
-        ].includes(toolName) || (toolName === 'invoke_teacher_capability' && ['read_roster', 'read_grades', 'post_grade', 'read_assignments', 'read_calendar'].includes(toolInput?.capability));
-
-        if (!isDomTool) {
-          // FERRAMENTA TIPO (a): MUTAÇÃO LOCAL DO APP
-          setProcessingState(false);
-          postToEntityBus('EXECUTE_APP_TOOL', {
-            tool: toolName,
-            params: toolInput,
-            source: 'side_panel_extension'
-          });
-
-          const friendlyMessage = agentData.reply || agentData.content?.[0]?.text || `✨ Solicitação processada pelo Teacher AI com a ferramenta "${toolName}"!`;
-          appendAssistantChatMessage(friendlyMessage, true);
-          return;
-        }
-
-        // FERRAMENTA TIPO (b): INTERAÇÃO COM O DOM DO PORTAL
-        if (toolName === 'read_roster' || (toolName === 'invoke_teacher_capability' && toolInput?.capability === 'read_roster')) {
-          setProcessingState(true, 'Lendo alunos via GraphExecutor no portal...');
-          executeGoalQueue(['ler alunos'], 0, {});
-          return;
-        }
-
-        if (toolName === 'execute_portal_action' || toolName === 'fill_school_portal') {
-          setProcessingState(true, 'Executando no portal escolar...');
-          dispatchPortalBridgeMessage({
-            action: 'EXECUTE_PORTAL_ACTION',
-            payload: toolInput
-          }, (actResp) => {
-            setProcessingState(false);
-            if (actResp && (actResp.ok || actResp.sucesso || actResp.success)) {
-              const students = actResp.students || actResp.data?.students || [];
-              if (students.length > 0) {
-                try {
-                  const activeTurmaEl = document.getElementById('active-class-name');
-                  const currentTurma = toolInput?.classRef || (activeTurmaEl && activeTurmaEl.textContent !== '—' ? activeTurmaEl.textContent : 'Turma Importada');
-                  const portalName = (PLATFORMS && PLATFORMS[activePlatform]?.name) || 'Portal Escolar';
-
-                  postToEntityBus('PORTAL_ROSTER_SYNC', {
-                    className: currentTurma,
-                    portalName: portalName,
-                    students: students,
-                    pageUrl: window.location.href
-                  });
-
-                  fetch('http://localhost:3000/api/portal/roster-sync', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                      className: currentTurma,
-                      portalName: portalName,
-                      students: students,
-                      pageUrl: window.location.href
-                    })
-                  }).catch(err => console.warn('[RosterSync] Falha ao sincronizar via API:', err));
-                } catch (e) {}
-
-                if (typeof renderStudentListWithValidation === 'function') {
-                  renderStudentListWithValidation(students, { valid: true, confidence: 1.0 }, 'dom', `Alunos - ${toolInput?.classRef || 'Turma'}`);
-                }
-              }
-
-              const msg = actResp.mensagem || actResp.message || '✅ Ação executada no portal com sucesso!';
-              appendAssistantChatMessage(msg, true);
-            } else {
-              const errMsg = actResp?.mensagem || actResp?.message || actResp?.error || (actResp?.status === 'no_matching_field_found' ? 'Não encontrei os campos correspondentes na tela atual do portal. Certifique-se de estar na aba correta.' : 'Não foi possível completar a ação no portal. Verifique se o portal escolar está com a aba aberta e logado.');
-              appendAssistantChatMessage(`⚠️ ${errMsg}`, true);
-            }
-          });
-          return;
-        }
-      } else if (agentData.reply || (agentData.content?.[0]?.text)) {
+      if (!firstTool) {
         setProcessingState(false);
-        appendAssistantChatMessage(agentData.reply || agentData.content[0].text, true);
+        const finalReply = agentData.reply || (agentData.content?.[0]?.text) || 'Prontinho! ✨';
+        appendAssistantChatMessage(finalReply, true);
+        loopCompleted = true;
         return;
       }
+
+      const toolName = firstTool.name || firstTool.id;
+      const toolInput = firstTool.input || {};
+
+      // 1. Guardião Pedagógico HITL para mutações e sync em lote
+      const requiresHITL = toolName === 'sync_portal_data_to_app' ||
+                           toolName === 'confirm_portal_submission' ||
+                           (toolName === 'execute_portal_action' && (toolInput.absentStudents || toolInput.studentGrades));
+
+      if (requiresHITL) {
+        setProcessingState(false);
+        try {
+          if (typeof sessionStorage !== 'undefined') {
+            sessionStorage.setItem('teacher_sidepanel_pending_action', JSON.stringify({
+              tool: toolName,
+              params: toolInput,
+              data: toolInput.data
+            }));
+          }
+        } catch (e) {}
+
+        let hitlMessage = '';
+        if (toolName === 'sync_portal_data_to_app') {
+          const count = Array.isArray(toolInput.data) ? toolInput.data.length : 1;
+          const dest = toolInput.destination || toolInput.dataType || 'app';
+          hitlMessage = `📅 Identifiquei **${count} registro(s)** do portal preparados para o seu **${escapeHtml(dest)}** do app. Confirma a gravação definitiva? (Diga "sim, pode salvar" ou "cancelar")`;
+        } else {
+          hitlMessage = `Preparei o lançamento supervisionado no portal escolar. Confirma a gravação definitiva? (Diga "sim" ou "cancelar")`;
+        }
+        appendAssistantChatMessage(hitlMessage, true);
+        loopCompleted = true;
+        return;
+      }
+
+      // 2. Classificação: DOM Tool vs App Tool
+      const isDomTool = [
+        'execute_portal_action',
+        'confirm_portal_submission',
+        'show_portal_screenshot',
+        'fill_school_portal',
+        'open_school_portal',
+        'inspect_portal_page',
+        'read_page_data'
+      ].includes(toolName) || (toolName === 'invoke_teacher_capability' && ['read_roster', 'read_grades', 'post_grade', 'read_assignments', 'read_calendar'].includes(toolInput?.capability));
+
+      setProcessingState(true, `[Passo ${currentTurn}] Executando: ${toolName}...`);
+      let executionResult = null;
+
+      if (isDomTool) {
+        if (toolName === 'inspect_portal_page' || toolName === 'read_page_data' || (toolName === 'invoke_teacher_capability' && toolInput?.capability === 'read_calendar')) {
+          executionResult = await dispatchPortalBridgePromise({ action: 'READ_PAGE_DATA' });
+        } else if (toolName === 'read_roster' || (toolName === 'invoke_teacher_capability' && toolInput?.capability === 'read_roster')) {
+          executionResult = await dispatchPortalBridgePromise({ action: 'READ_ACTIVE_PORTAL_ROSTER' });
+        } else {
+          executionResult = await dispatchPortalBridgePromise({ action: 'EXECUTE_PORTAL_ACTION', payload: toolInput });
+        }
+      } else {
+        // App Tool (Tipo a)
+        postToEntityBus('EXECUTE_APP_TOOL', {
+          tool: toolName,
+          params: toolInput,
+          source: 'side_panel_extension'
+        });
+        executionResult = { sucesso: true, message: `Ferramenta ${toolName} executada no app.` };
+      }
+
+      // 3. Compressão de observação para economia de tokens no próximo turno
+      let compressedResult = executionResult || { sucesso: true };
+      if (executionResult && executionResult.events) {
+        compressedResult = {
+          sucesso: true,
+          events_count: executionResult.events.length,
+          events: executionResult.events,
+          sample: executionResult.events.slice(0, 3)
+        };
+      } else if (executionResult && executionResult.students) {
+        compressedResult = {
+          sucesso: true,
+          students_count: executionResult.students.length,
+          students: executionResult.students,
+          sample: executionResult.students.slice(0, 3)
+        };
+      }
+
+      // 4. Re-alimenta o histórico para o próximo ciclo de decisão (Observe-Decide)
+      chatHistory.push({
+        role: 'assistant',
+        content: agentData.reply || '',
+        toolUse: [firstTool]
+      });
+      chatHistory.push({
+        role: 'user',
+        content: '',
+        toolResults: [{
+          id: firstTool.id || `tool_${Date.now()}`,
+          name: toolName,
+          result: JSON.stringify(compressedResult)
+        }]
+      });
     }
   } catch (err) {
     console.warn('[SidePanel] App /api/agent indisponível, usando fallback offline do side panel:', err);

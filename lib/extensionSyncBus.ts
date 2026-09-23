@@ -49,7 +49,7 @@ export interface PortalActionExecutedPayload {
   details?: Record<string, any>
 }
 
-class ExtensionSyncBus {
+export class ExtensionSyncBus {
   private channel: BroadcastChannel | null = null
   private isInitialized = false
 
@@ -496,6 +496,46 @@ class ExtensionSyncBus {
         if (typeof window !== 'undefined') window.dispatchEvent(new Event('storage'))
       } catch {}
       return
+    }
+
+    if (tool === 'sync_portal_data_to_app' && params?.dataType && Array.isArray(params?.data)) {
+      const { dataType, data, classRef, portalName } = params as any;
+      if (dataType === 'calendar_events') {
+        try {
+          const raw = localStorage.getItem('teacher_calendar_tasks') || '[]';
+          const tasks = JSON.parse(raw);
+          for (const ev of data) {
+            const title = ev.title || ev.nome || ev.name || ev.subject || 'Aula';
+            const date = ev.date || ev.data || new Date().toISOString().split('T')[0];
+            tasks.push({
+              id: `portal_ev_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+              title,
+              date,
+              description: ev.description || ev.descricao || '',
+              classRef: classRef || ev.classRef || ev.className || '',
+              type: ev.type || 'aula',
+              priority: 'medium',
+              done: false,
+              source: portalName || 'portal_escolar'
+            });
+          }
+          localStorage.setItem('teacher_calendar_tasks', JSON.stringify(tasks));
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new Event('storage'));
+            window.dispatchEvent(new CustomEvent('teacher:calendar_task_created'));
+          }
+        } catch (e) {}
+        return;
+      }
+
+      if (dataType === 'students') {
+        this.handlePortalRosterSync({
+          className: classRef || 'Turma do Portal',
+          portalName: portalName || 'Portal Escolar',
+          students: data
+        });
+        return;
+      }
     }
 
     // Dispara evento para qualquer outra ferramenta Tipo (a)
