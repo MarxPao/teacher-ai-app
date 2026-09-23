@@ -1418,10 +1418,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       const p = message.payload || message.params || {};
       const actionType = p.actionType || p.type || p.acao || 'attendance';
       const classRef = p.classRef || p.turma || '';
-      const title = p.title || p.titulo || '';
+      const title = p.title || p.titulo || p.description || p.text || '';
       const navTargetRaw    = p.navTarget    || '';
       const subNavTargetRaw = p.subNavTarget || '';
       const trace = [];
+
+      // Normalização prévia de título / texto da ação para uso em todo o ciclo de execução
+      const normTitle = (title || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
       try {
         // 1. Pré-Navegação de Aba — prioridade: navTarget explícito > heurística
@@ -1429,13 +1432,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         if (navTargetRaw) {
           tabTarget = navTargetRaw;
         } else {
-          const normTitle = (title || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
           if (actionType === 'attendance' || normTitle.includes('frequencia') || normTitle.includes('chamada')) {
             tabTarget = 'frequência';
           } else if (actionType === 'grades' || normTitle.includes('nota') || normTitle.includes('avaliacao') || normTitle.includes('boletim')) {
             tabTarget = 'notas';
           } else if (actionType === 'diary' || normTitle.includes('diario') || normTitle.includes('aula')) {
             tabTarget = 'diário';
+          } else if (actionType === 'calendar' || actionType === 'schedule' || normTitle.includes('horario') || normTitle.includes('calendario') || normTitle.includes('agenda')) {
+            tabTarget = 'horários';
           }
         }
 

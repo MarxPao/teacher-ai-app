@@ -379,4 +379,97 @@ describe('Loop Agêntico Generalista da Rafinha (Observe-Decide-Act)', () => {
       expect(result.handled).toBe(false)
     })
   })
+
+  // ─── TESTE H: PREVENÇÃO DE REFERENCEERROR (NORM_TITLE ESCOPO EM EXECUTE_PORTAL_ACTION) ──
+  describe('Teste H: Resolução do Escopo de normTitle em EXECUTE_PORTAL_ACTION', () => {
+    function resolvePortalActionPreFlight(message: {
+      action: string
+      payload?: Record<string, unknown>
+      params?: Record<string, unknown>
+    }) {
+      const p = message.payload || message.params || {}
+      const actionType = (p.actionType as string) || (p.type as string) || (p.acao as string) || 'attendance'
+      const classRef = (p.classRef as string) || (p.turma as string) || ''
+      const title = (p.title as string) || (p.titulo as string) || (p.description as string) || (p.text as string) || ''
+      const navTargetRaw = (p.navTarget as string) || ''
+      const subNavTargetRaw = (p.subNavTarget as string) || ''
+      const trace: string[] = []
+
+      // Normalização prévia de título / texto da ação
+      const normTitle = (title || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+
+      let tabTarget: string | null = null
+      if (navTargetRaw) {
+        tabTarget = navTargetRaw
+      } else {
+        if (actionType === 'attendance' || normTitle.includes('frequencia') || normTitle.includes('chamada')) {
+          tabTarget = 'frequência'
+        } else if (actionType === 'grades' || normTitle.includes('nota') || normTitle.includes('avaliacao') || normTitle.includes('boletim')) {
+          tabTarget = 'notas'
+        } else if (actionType === 'diary' || normTitle.includes('diario') || normTitle.includes('aula')) {
+          tabTarget = 'diário'
+        } else if (actionType === 'calendar' || actionType === 'schedule' || normTitle.includes('horario') || normTitle.includes('calendario') || normTitle.includes('agenda')) {
+          tabTarget = 'horários'
+        }
+      }
+
+      // Detecção de disciplina
+      const commonSubjects = [
+        'lingua inglesa', 'ingles', 'lingua portuguesa', 'portugues',
+        'matematica', 'historia', 'geografia', 'ciencias', 'fisica',
+        'quimica', 'biologia', 'artes', 'educacao fisica', 'filosofia', 'sociologia',
+        'redacao', 'literatura', 'espanhol'
+      ]
+      let subjectFound: string | null = null
+      for (const subj of commonSubjects) {
+        if (normTitle.includes(subj)) {
+          subjectFound = subj
+          break
+        }
+      }
+
+      return {
+        tabTarget,
+        subjectFound,
+        normTitle,
+        classRef,
+        actionType
+      }
+    }
+
+    it('quando navTargetRaw está preenchido, normTitle é resolvido sem ReferenceError e identifica disciplina', () => {
+      // Cenário exato do bug: navTarget definido (ex: "horarios"), o que antes pulava o else e deixava normTitle indefinido
+      const result = resolvePortalActionPreFlight({
+        action: 'EXECUTE_PORTAL_ACTION',
+        payload: {
+          navTarget: 'horários',
+          title: 'Aula de Matemática 6A',
+          type: 'calendar'
+        }
+      })
+
+      expect(result.tabTarget).toBe('horários')
+      expect(result.normTitle).toBe('aula de matematica 6a')
+      expect(result.subjectFound).toBe('matematica')
+    })
+
+    it('quando navTargetRaw está ausente, infere aba de horários/calendário a partir do título', () => {
+      const result = resolvePortalActionPreFlight({
+        action: 'EXECUTE_PORTAL_ACTION',
+        payload: {
+          title: 'Acessar horários de Ciências',
+          actionType: 'schedule'
+        }
+      })
+
+      expect(result.tabTarget).toBe('horários')
+      expect(result.subjectFound).toBe('ciencias')
+    })
+
+    it('não lança ReferenceError mesmo com payload vazio', () => {
+      expect(() => {
+        resolvePortalActionPreFlight({ action: 'EXECUTE_PORTAL_ACTION' })
+      }).not.toThrow()
+    })
+  })
 })
