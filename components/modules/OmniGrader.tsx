@@ -873,6 +873,7 @@ Retorne ESTRITAMENTE um objeto JSON no seguinte formato (sem markdown, sem bloco
           undefined,
           'teacher'
         )
+      }
       // Ingestão contínua no Dossiê Longitudinal do Aluno (Memory Engine Fase 2)
       if (updated[idx]?.name) {
         try {
