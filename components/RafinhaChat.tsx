@@ -844,7 +844,7 @@ export async function executeTool(
       const reconciliationResult = reconcileRosterBatch(rawData, localStudents, {
         portalName,
         targetClassRef: classRef || undefined,
-        portalStatus: 'active',
+        portalStatus: 'mapped_validated' as const,
         isUntestedMap: false
       })
       if (typeof window !== 'undefined') {
