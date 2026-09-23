@@ -1,0 +1,20 @@
+{
+  "inherits": [
+    {
+      "path": "~/.gemini/config/skills.json"
+    }
+  ],
+  "exclude": [
+    "arduino-hardware-debugger",
+    "arduino-nonblocking-architect",
+    "arduino-silent-compiler",
+    "arduino-smooth-servo",
+    "iot-serial-dashboard",
+    "mechatronics-motor-driver",
+    "tesc-arduino-bridge",
+    "tesc-empacotadora-debugger",
+    "tesc-fermentador-debugger",
+    "tesc-resilience-architect",
+    "tesc-scada-fullstack-architect"
+  ]
+}
