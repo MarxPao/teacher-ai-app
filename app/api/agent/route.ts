@@ -394,13 +394,12 @@ async function callProviderWithFallback(
       }
 
       if (p === 'gemini') {
-        // Modelos ordenados do mais rápido ao mais capaz — evitar round-trips em modelos inexistentes
+        // Modelos Gemini 3.x ativos e validados na API (200 OK)
         const geminiModels = [
-          'gemini-2.0-flash',
-          'gemini-2.0-flash-lite',
-          'gemini-1.5-flash',
-          'gemini-1.5-flash-8b',
-          'gemini-1.5-pro',
+          'gemini-3.6-flash',
+          'gemini-3.5-flash-lite',
+          'gemini-3.5-flash',
+          'gemini-3.1-flash-lite',
         ]
         let geminiSuccess = false
         for (const gModel of geminiModels) {
