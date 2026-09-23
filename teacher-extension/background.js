@@ -1419,18 +1419,24 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       const actionType = p.actionType || p.type || p.acao || 'attendance';
       const classRef = p.classRef || p.turma || '';
       const title = p.title || p.titulo || '';
+      const navTargetRaw    = p.navTarget    || '';
+      const subNavTargetRaw = p.subNavTarget || '';
       const trace = [];
 
       try {
-        // 1. Pré-Navegação de Aba (se indicada por actionType ou title)
+        // 1. Pré-Navegação de Aba — prioridade: navTarget explícito > heurística
         let tabTarget = null;
-        const normTitle = (title || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-        if (actionType === 'attendance' || normTitle.includes('frequencia') || normTitle.includes('chamada')) {
-          tabTarget = 'frequência';
-        } else if (actionType === 'grades' || normTitle.includes('nota') || normTitle.includes('avaliacao') || normTitle.includes('boletim')) {
-          tabTarget = 'notas';
-        } else if (actionType === 'diary' || normTitle.includes('diario') || normTitle.includes('aula')) {
-          tabTarget = 'diário';
+        if (navTargetRaw) {
+          tabTarget = navTargetRaw;
+        } else {
+          const normTitle = (title || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+          if (actionType === 'attendance' || normTitle.includes('frequencia') || normTitle.includes('chamada')) {
+            tabTarget = 'frequência';
+          } else if (actionType === 'grades' || normTitle.includes('nota') || normTitle.includes('avaliacao') || normTitle.includes('boletim')) {
+            tabTarget = 'notas';
+          } else if (actionType === 'diary' || normTitle.includes('diario') || normTitle.includes('aula')) {
+            tabTarget = 'diário';
+          }
         }
 
         if (tabTarget) {
@@ -1439,6 +1445,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           if (navRes && navRes.sucesso) {
             trace.push(`Navegou para aba '${navRes.elementText || tabTarget}'`);
             await new Promise(r => setTimeout(r, 400));
+          }
+        }
+
+        // 1b. Sub-navegação (subNavTarget — ex: "enviados" dentro de "recados")
+        if (subNavTargetRaw) {
+          console.log(`[EXECUTE_PORTAL_ACTION] Sub-navegação para '${subNavTargetRaw}'...`);
+          await new Promise(r => setTimeout(r, 300));
+          const subNavRes = await internalNavigatePortalTab(targetTabId, subNavTargetRaw);
+          if (subNavRes && subNavRes.sucesso) {
+            trace.push(`Sub-navegou para '${subNavRes.elementText || subNavTargetRaw}'`);
+            await new Promise(r => setTimeout(r, 300));
           }
         }
 
@@ -1523,6 +1540,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         let mensagemFinal = '';
         if (isDomFilled) {
           mensagemFinal = domActionRes?.mensagem || 'Campos preenchidos com sucesso no DOM do portal!';
+        } else if (navTargetRaw && trace.length > 0) {
+          const subLabel = subNavTargetRaw ? ` › ${subNavTargetRaw}` : '';
+          mensagemFinal = `Acessei "${navTargetRaw}${subLabel}" no portal! ${trace.join(' → ')} ✅`;
         } else if (students.length > 0) {
           const classLabel = classRef ? `da turma ${classRef}` : '';
           const subjMsg = subjectFound ? ` (${subjectFound})` : '';

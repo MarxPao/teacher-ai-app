@@ -126,7 +126,9 @@ export const AGENT_TOOLS: ToolDefinition[] = [
       type: 'object',
       properties: {
         platform:       { type: 'string', description: 'ID do portal, ex: machado, santacatarina, plural, cambridge, ou nome da escola' },
-        actionType:     { type: 'string', enum: ['diary', 'attendance', 'grades', 'assignment', 'custom'], description: 'Tipo da ação: diário, chamada, notas, tarefa (ou omitir se fornecer steps)' },
+        actionType:     { type: 'string', enum: ['diary', 'attendance', 'grades', 'assignment', 'custom'], description: 'Tipo da ação: diário, chamada, notas, tarefa, ou "custom" para navegação/visualização sem preenchimento de formulário' },
+        navTarget:      { type: 'string', description: 'Aba, seção ou menu do portal para navegar. Ex: "recados", "frequencia", "recados enviados". Use quando o professor pedir para "acessar", "entrar em", "abrir" uma seção do portal.' },
+        subNavTarget:   { type: 'string', description: 'Sub-aba ou sub-seção dentro do navTarget. Ex: se navTarget="recados" e o professor pediu "recados enviados", coloque subNavTarget="enviados".' },
         title:          { type: 'string', description: 'Título da aula, diário ou avaliação' },
         date:           { type: 'string', description: 'Data YYYY-MM-DD' },
         classRef:       { type: 'string', description: 'Turma vinculada, ex: 9º Ano A, 8B' },

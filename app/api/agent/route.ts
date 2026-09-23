@@ -130,6 +130,7 @@ dashboard, quick (gerar questões), exam (montar provas), plan (Lesson Planner),
 - PORTAIS ESCOLARES / TRELLO / SISTEMAS EXTERNOS: INVOQUE IMEDIATAMENTE 'invoke_teacher_capability'.
 - OPERAR OU PREENCHER PORTAIS ESCOLARES (ou lançar falta/chamada de aluno): USE 'execute_portal_action'.
 - MANDAR MENSAGEM OU COMUNICADO AOS PAIS: USE 'create_communication' ou 'generate_parent_communication'.
+- NAVEGAR PARA UMA SEÇÃO, ABA OU MENU DENTRO DO PORTAL ESCOLAR (ex: "acesse recados", "entre em frequência", "abra recados enviados", "vá em notas"): USE 'execute_portal_action' com actionType='custom', navTarget='<seção>' e, se houver sub-aba, subNavTarget='<sub-seção>'. NUNCA use 'navigate_to_module' para destinos dentro do portal — esse comando só navega nos módulos internos do APP Teacher AI.
 - QUANDO O PROFESSOR PEDIR MÚLTIPLAS AÇÕES NO PORTAL NA MESMA SOLICITAÇÃO (ex: "faz a chamada da 8B e depois preenche o diário", "lance a frequência marcando falta e lance o conteúdo da aula"):
   Invoque 'execute_portal_action' com o campo 'steps' preenchido como uma lista encadeada das sub-tarefas (ex: [ { actionType: "attendance", absentStudents: [...] }, { actionType: "diary", title: "...", description: "..." } ]), permitindo a orquestração contínua multi-página e o resumo unificado!
 - Se for uma pergunta teórica, dúvida pedagógica, consulta de opinião ou pergunta sobre notas/alunos já existentes no contexto, responda diretamente em texto explicativo útil sem chamar ferramentas de navegação desnecessárias.

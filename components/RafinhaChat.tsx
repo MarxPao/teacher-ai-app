@@ -549,6 +549,8 @@ export async function executeTool(
     takeSnapshot()
     const platform = (input.platform as string) || 'machado'
     const classRef = (input.classRef as string) || ''
+    const navTarget    = (input.navTarget    as string) || ''
+    const subNavTarget = (input.subNavTarget as string) || ''
     const stepsInput = input.steps as Array<{
       actionType: any
       title?: string
@@ -556,6 +558,23 @@ export async function executeTool(
       absentStudents?: string[]
       evaluationName?: string
     }> | undefined
+
+    // Fast-path: pure navigation command (no form filling)
+    if ((input.actionType === 'custom' || !input.actionType) && navTarget && !input.title) {
+      const { relayToolToExtension } = await import('@/lib/portalRelayBridge')
+      const navResult = await relayToolToExtension('execute_portal_action', {
+        platform,
+        actionType: 'custom',
+        navTarget,
+        subNavTarget,
+        mode: 'supervised'
+      }, { portalId: platform })
+      if (!navResult.success && navResult.status === 'extension_disconnected') {
+        return `A extensão Teacher AI não encontrou nenhuma aba aberta do portal ${PORTAL_NAMES[platform] || platform}. Abra a página do portal no Chrome para prosseguir.`
+      }
+      const label = subNavTarget ? `${navTarget} › ${subNavTarget}` : navTarget
+      return `Naveguei para "${label}" no portal${!navResult.success ? ' (extensão não confirmou — verifique a aba do portal)' : ''}. ✅`
+    }
 
     // Decomposição automática de sub-tarefas encadeadas (GAP 3: MultiStepPortalPlan)
     const explicitSteps = stepsInput && Array.isArray(stepsInput) && stepsInput.length > 1
