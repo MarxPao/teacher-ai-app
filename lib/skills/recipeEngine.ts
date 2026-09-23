@@ -77,7 +77,7 @@ export async function executeLlmTransform(params: {
   const userPrompt = `${promptTemplate}\n\nDados brutos extraídos do portal:\n${recordsStr}`
 
   // 1. Tentar Groq (se disponível)
-  if (groqKey && (byokProvider === 'groq' || !byokProvider || byokKey.startsWith('gsk_'))) {
+  if (groqKey && (byokProvider === 'groq' || !byokProvider || byokKey?.startsWith('gsk_'))) {
     try {
       const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',

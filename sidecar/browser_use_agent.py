@@ -210,6 +210,39 @@ class BrowserUseAgent:
                         # Reinspeciona a nova tela revelada
                         found_elements = await self._inspect_semantic_dom(page, task_spec, ax_snapshot=ax_snapshot)
 
+            # Se ainda não encontrou: loop de rolagem exploratória progressiva de contêineres roláveis
+            if not found_elements.get("success"):
+                js_scroll_explore = """
+                () => {
+                    const scrollables = Array.from(document.querySelectorAll('*')).filter(el => {
+                        const style = window.getComputedStyle(el);
+                        return (el.scrollHeight > el.clientHeight + 40 && el.clientHeight > 100 && ['auto', 'scroll'].includes(style.overflowY));
+                    });
+                    if (scrollables.length > 0) {
+                        scrollables[0].scrollBy({ top: 250, behavior: 'smooth' });
+                        return true;
+                    }
+                    window.scrollBy({ top: 250, behavior: 'smooth' });
+                    return true;
+                }
+                """
+                for scroll_step in range(4):
+                    try:
+                        if hasattr(page, "evaluate"):
+                            await page.evaluate(js_scroll_explore)
+                            await asyncio.sleep(0.2)
+                            found_elements = await self._inspect_semantic_dom(page, task_spec, ax_snapshot=ax_snapshot)
+                            if found_elements.get("success"):
+                                print(f"[BrowserUseAgent] 🎯 Alvo encontrado após rolagem exploratória (passo {scroll_step + 1})!")
+                                trace_de_acoes.append({
+                                    "action_type": "SCROLL",
+                                    "description": f"Rolar contêiner para revelar elementos ocultos (passo {scroll_step + 1})"
+                                })
+                                break
+                    except Exception as e:
+                        print(f"[BrowserUseAgent] Aviso durante rolagem exploratória: {e}")
+                        break
+
             # Se ainda não encontrou e há paginação ativa: avanço exploratório de páginas
             pages_checked_count = 1
             hit_pagination_limit = False
@@ -921,7 +954,7 @@ class BrowserUseAgent:
                 }
             }
 
-            // 2.2. Scoping Genérico de Itens (Cards, Feeds, Mensagens, Listas não-tabelares)
+            // 2.2. Scoping Genérico de Itens (Cards, Feeds, Mensagens, Listas de Alunos)
             let targetItemContainer = targetRow || null;
             let targetActionElement = null;
             let targetActionSelector = null;
@@ -930,7 +963,8 @@ class BrowserUseAgent:
             if (!targetItemContainer && cleanStudent) {
                 const candidateContainers = Array.from(document.querySelectorAll(
                     'li, [role="listitem"], article, .card, .item, .message, .recado, .feed-item, .post, .row, .notif, ' +
-                    '[class*="card"], [class*="message"], [class*="recado"], [class*="item"], [class*="post"], [class*="feed"], [class*="entry"]'
+                    '[class*="card"], [class*="aluno"], [class*="student"], [data-aluno-id], [data-aluno], .aluno-item, .item-aluno, .grid-item, ' +
+                    '[class*="message"], [class*="recado"], [class*="item"], [class*="post"], [class*="feed"], [class*="entry"]'
                 )).filter(el => {
                     if (el.tagName === 'TABLE' || el.tagName === 'TBODY') return false;
                     if (el.offsetParent === null && el.offsetWidth === 0 && el.offsetHeight === 0) return false;
@@ -956,6 +990,9 @@ class BrowserUseAgent:
 
                 if (specificContainers.length === 1) {
                     targetItemContainer = specificContainers[0];
+                    targetRow = targetItemContainer;
+                    targetRowSelector = targetRow.id ? '#' + targetRow.id : (targetRow.className ? '.' + targetRow.className.split(' ').filter(Boolean)[0] : targetRow.tagName.toLowerCase());
+                    targetCellValue = (targetRow.innerText || targetRow.textContent || '').trim();
                 } else if (specificContainers.length > 1) {
                     isAmbiguous = true;
                     ambiguousCandidates = specificContainers.slice(0, 5).map((sc, idx) => ({
@@ -1001,6 +1038,9 @@ class BrowserUseAgent:
                         const cClass = targetItemContainer.className ? '.' + targetItemContainer.className.split(' ').filter(Boolean)[0] : targetItemContainer.tagName.toLowerCase();
                         const aClass = targetActionElement.className ? '.' + targetActionElement.className.split(' ').filter(Boolean)[0] : targetActionElement.tagName.toLowerCase();
                         targetActionSelector = `${cClass} ${aClass}`;
+                    }
+                }
+            }
                     }
                 }
             }

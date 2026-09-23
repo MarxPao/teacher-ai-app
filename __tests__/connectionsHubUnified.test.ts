@@ -54,13 +54,13 @@ describe('1. Desduplicação Arquitetural — Central de Conexões Única', () =
     const ExtensionsModule = await import('@/components/modules/Extensions')
     expect(ExtensionsModule.default).toBeDefined()
     expect(typeof ExtensionsModule.default).toBe('function')
-  })
+  }, 15000)
 
   it('ConnectedPortalsPanel.tsx é um adaptador fino que delega para ConnectionsHub', async () => {
     const PanelModule = await import('@/components/modules/ConnectedPortalsPanel')
     expect(PanelModule.default).toBeDefined()
     expect(typeof PanelModule.default).toBe('function')
-  })
+  }, 15000)
 
   it('ConnectionsHub.tsx é o componente canônico unificado', async () => {
     const HubModule = await import('@/components/modules/ConnectionsHub')

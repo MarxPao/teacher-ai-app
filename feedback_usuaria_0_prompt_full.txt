@@ -1,0 +1,255 @@
+<USER_REQUEST>
+# PROMPT: Arquitetura de Melhorias — Feedback Real da Usuária 0 (Planejamento de Aula)
+
+## Contexto
+Feedback consolidado de uma professora beta real, usando o produto em
+condição de trabalho real. Este prompt organiza as demandas em FASES com
+prioridade clara. NÃO implemente tudo de uma vez — siga a ordem, valide
+cada fase com evidência real antes de avançar para a próxima, seguindo o
+protocolo já estabelecido no projeto (PROTOCOLO_DESENVOLVIMENTO.md).
+
+Se qualquer fase abaixo tiver escopo genuinamente ambíguo, pare e pergunte
+antes de decidir sozinho — não presuma.
+
+---
+
+## FASE 0 (CRÍTICA, BLOQUEANTE) — Bug de Perda de Dados
+
+### Problema Reportado
+"A usuária modificou um elemento e os outros sumiram" — ao editar um campo
+do plano de aula, outros campos/boxes perderam seu conteúdo.
+
+### Investigação Obrigatória
+1. Reproduza o bug: preencha múltiplos campos do plano (Box 1, 2, 3, roteiro
+   de etapas), edite UM campo específico, e confirme se outros campos são
+   apagados. Identifique exatamente qual ação dispara a perda.
+2. Hipóteses prováveis a investigar: (a) o estado do formulário está sendo
+   RESETADO/recriado do zero a cada edição em vez de atualizado
+   incrementalmente (ex: `setState(novoObjetoCompleto)` sobrescrevendo tudo
+   em vez de spread `{...state, campoEditado: novoValor}`); (b) a
+   persistência em `localStorage` está salvando um snapshot parcial que
+   sobrescreve o completo; (c) condição de corrida entre autosave e edição
+   manual.
+3. Corrija a causa raiz identificada — não um patch superficial.
+
+### Validação (Bloqueante — nada mais avança sem isso)
+Preencha TODOS os campos do plano, edite um único campo (ex: mude a duração
+de uma etapa), e confirme com screenshot antes/depois que absolutamente
+nada mais foi perdido. Repita esse teste em pelo menos 3 cenários de edição
+diferentes (editar texto, editar dropdown, editar checkbox).
+
+---
+
+## FASE 1 — Reorganização da Arquitetura de Informação do Plano de Aula
+
+### 1.1 Renomeação
+"Planejamento de Aula" → "Planejamento" (nome mais genérico, já que vai
+englobar mais tipos de conteúdo pedagógico conforme fases seguintes).
+
+### 1.2 Cabeçalho com Suporte a PDI/PEI
+Adicionar ao cabeçalho do plano (Box 1) uma seção opcional para vincular o
+plano a um **PDI (Plano de Desenvolvimento Individual)** ou **PEI (Plano
+Educacional Individualizado)** quando a turma/aula envolver aluno com
+adaptação — reaproveitando os metadados de NEE já existentes no sistema
+(`student.nee`, já usado no Analytics). Objetivo: tornar mais intuitivo
+preencher plano para aluno com necessidade específica, sem exigir que a
+professora saia do Planejamento para configurar isso em outro módulo.
+
+### 1.3 Novas Boxes / Reorganização de Campos
+Reorganizar (não apenas adicionar soltas) as seguintes informações em boxes
+coerentes:
+- **Descrição** da aula (resumo geral).
+- **Habilidades** (BNCC, já existente).
+- **Objetivos**: separar em Objetivo Geral, Objetivos Específicos, e
+  Objetivo(s) Pessoal(is)/socioemocional(is) — 3 campos distintos, não um
+  bloco único de texto.
+- **Meta da aula** (o que define sucesso, distinto de "objetivo").
+- **Problemas antecipados**: campo para a professora antecipar dificuldades
+  prováveis da turma (ex: "alunos podem confundir Present Perfect com
+  Simple Past").
+- **Conhecimento prévio / "O que eles já sabem"**: novo box de pré-requisito
+  — o que a turma já domina antes desta aula (ligado à FASE 3, Sequência
+  Didática, quando disponível).
+- **Área de conteúdo utilizado**: livro, capítulo, página (reaproveitar o
+  que já existe parcialmente no "Box 5: Material de Referência" identificado
+  na auditoria anterior — não duplicar).
+- **Tipo de interação**: campo de seleção (aluno-aluno em dupla, em grupo,
+  turma toda, professor-aluno) por etapa do roteiro, não só global.
+- **Onde a aula se encaixa na Sequência Didática**: campo de referência
+  cruzada (implementado de fato na FASE 3 — aqui só reservar o espaço/campo
+  no schema).
+
+### 1.4 Validação
+Screenshot da tela reorganizada + confirmação de que nenhum campo
+pré-existente foi perdido na reestruturação (todos os dados dos planos já
+salvos continuam acessíveis/migrados corretamente).
+
+---
+
+## FASE 2 — Melhorias no Roteiro da Aula
+
+### 2.1 Opções de Tempo Mais Flexíveis
+Hoje a duração é tratada como aula única de tempo fixo. Adicionar opção
+explícita: aula simples, **aula dupla** (tempo geminado), ou aula que faz
+parte de uma **sequência didática multi-aula** (ligado à FASE 3) — cada
+opção ajustando a distribuição de tempo do roteiro de forma adequada (não
+só multiplicar a duração cegamente).
+
+### 2.2 Andaimes (Scaffolds) Editáveis
+Hoje os "Andaimes UDL (3 Níveis)" aparecem como chip informativo. Tornar
+editável: permitir que a professora ajuste o texto de cada nível de andaime
+gerado pela IA, preservando a estrutura de 3 níveis.
+
+### 2.3 Perguntas de Checagem (CCQ/ICQ) Editáveis
+Mesma lógica: permitir edição direta do texto das perguntas de checagem
+geradas, não só exibição fixa.
+
+### 2.4 Referência de Exercício do Livro
+Ao vincular atividade/exercício a uma etapa, permitir que a professora
+registre o número exato do exercício no livro didático (ex: "Workbook p.28,
+exercícios 3-5"), não só o nome do livro.
+
+### 2.5 Box de Pré-Teach
+Novo box/etapa opcional no roteiro: "Pre-Teach" — vocabulário ou conceito
+que precisa ser ensinado ANTES do warm-up, distinto das etapas principais.
+
+### 2.6 Validação
+Gere um roteiro completo, edite manualmente um andaime e uma pergunta CCQ,
+recarregue a página, e confirme que as edições persistiram (não foram
+sobrescritas por uma nova geração da IA).
+
+---
+
+## FASE 3 — Novo Módulo: Sequência Didática (em Organização)
+
+### 3.1 Escopo (Confirmar Antes de Implementar)
+Este é o item de maior escopo do feedback — antes de codificar, responda
+com uma proposta de arquitetura (schema de dados, tela, integração) para
+aprovação, cobrindo:
+- Estrutura de uma Sequência Didática: conjunto ordenado de aulas/unidades
+  com objetivo comum de médio prazo (ex: "Unit 4: Present Perfect — 6 aulas
+  ao longo de 3 semanas").
+- **Linha do tempo de ritmo curricular**: visualização mostrando ONDE a
+  matéria DEVERIA estar (ritmo planejado) vs. ONDE ela ESTÁ de fato
+  (aulas já dadas/registradas) — alerta visual se a turma está atrasada
+  ou adiantada em relação ao planejado.
+- Onde essa tela vive na navegação (dentro de "Organização", conforme
+  pedido pela usuária).
+
+### 3.2 Integração (Não Construir Isolado)
+A Sequência Didática deve DIALOGAR com:
+- **Planejamento de Aula**: cada aula do Planejamento pode ser vinculada a
+  uma posição específica dentro de uma Sequência Didática (campo reservado
+  na FASE 1.3).
+- **Analytics**: o progresso real da turma (notas, frequência) deveria
+  poder ser cruzado com a posição na linha do tempo da sequência.
+- **Exercícios e Provas**: avaliações vinculadas a uma sequência didática
+  específica, não soltas.
+
+### 3.3 Validação
+Após aprovação do desenho, implementar incrementalmente (não tudo de uma
+vez) e validar cada ponto de integração com teste real: criar uma
+sequência de 3 aulas, vincular planos reais a cada uma, confirmar que a
+linha do tempo reflete corretamente o que foi/não foi dado.
+
+---
+
+## FASE 4 — Integração com Calendário e Banco de Planos
+
+### 4.1 Calendário Principal (Home)
+Quando uma aula é planejada (Planejamento salvo com data), isso deve
+aparecer visualmente no calendário principal da Home — não só dentro do
+módulo de Planejamento.
+
+### 4.2 Abrir Artefatos Direto do Calendário
+Do calendário, clicar num dia com aula planejada deve permitir abrir o
+plano, o exercício ou a prova vinculada DIRETAMENTE ali (modal ou painel
+inline), sem navegar para o módulo completo toda vez.
+
+### 4.3 Banco de Planos — Edição Inline
+Hoje, ao clicar num card no Banco de Planos, o comportamento não permite
+edição na mesma tela. Corrigir para: clicar no card abre o plano
+EDITÁVEL na mesma página (não navega para outro lugar nem exige
+reconfigurar do zero).
+
+### 4.4 Validação
+Fluxo real: salvar um plano com data → verificar que aparece no calendário
+Home → clicar nele no calendário → confirmar que abre o conteúdo correto
+sem sair da tela → ir ao Banco de Planos → clicar no card → confirmar
+edição inline funcionando.
+
+---
+
+## FASE 5 — Correção de Exportação/Impressão
+
+### Problema Reportado
+Documentos para impressão/visualização externa (PDF etc.) estão com
+emojis e mal diagramados.
+
+### Correção
+1. Remover emojis de QUALQUER documento gerado para impressão/exportação
+   externa (manter emojis só na UI interna do app, nunca em PDF/Word que
+   sai para pais/coordenação).
+2. Revisar o layout de exportação usando como referência o padrão visual
+   já estabelecido nos documentos oficiais BNCC do próprio sistema (ou o
+   layout mais limpo já usado em outro módulo de exportação do projeto,
+   se houver um exemplo melhor) — tipografia profissional, hierarquia
+   clara, sem elementos decorativos de interface vazando pro documento
+   impresso.
+3. Validação: gerar PDF real de um plano completo, abrir o arquivo, e
+   confirmar visualmente ausência de emoji e diagramação profissional
+   (screenshot do PDF real).
+
+---
+
+## FASE 6 — Cobertura de Turmas
+
+### Problema Reportado
+"As turmas não estão todas endereçadas" — investigar se há turmas que não
+aparecem como opção selecionável em algum ponto do fluxo de Planejamento.
+
+### Investigação
+Liste todas as turmas cadastradas do professor de teste, percorra todo o
+fluxo do Planejamento (incluindo Sequência Didática quando implementada) e
+confirme se TODAS aparecem disponíveis em cada seletor de turma relevante.
+Reporte qualquer turma ausente e a causa (filtro incorreto, bug de
+carregamento, etc.).
+
+---
+
+## FASE 7 — Editor de Documento Tipo Word
+
+### Escopo
+Adicionar uma aba "Doc" dentro do Planejamento permitindo editar o
+conteúdo do plano em formato de documento livre (like Word), não só
+campos estruturados de formulário — para professoras que preferem
+redigir/ajustar em prosa contínua em vez de preencher boxes.
+
+### Perguntas a Resolver Antes de Implementar
+1. Essa edição em modo "Doc" precisa sincronizar de volta com os campos
+   estruturados (Box 1, 2, 3...), ou é uma visualização/edição paralela
+   independente? Se for a primeira opção, isso é tecnicamente complexo
+   (parsing bidirecional) — confirmar com o usuário antes de construir.
+2. Reaproveitar algum editor rich-text já usado em outro módulo do
+   projeto (ex: `Editor.tsx`, já mencionado em auditorias anteriores),
+   em vez de criar um novo do zero.
+
+**NÃO implementar esta fase sem resposta às 2 perguntas acima.**
+
+---
+
+## Ordem de Execução Obrigatória
+Fase 0 (bloqueante) → Fase 1 → Fase 2 → Fase 6 (cobertura de turmas, rápido
+de verificar) → Fase 5 (exportação) → Fase 4 (calendário/banco) → Fase 3
+(sequência didática, maior escopo) → Fase 7 (editor doc, só após
+esclarecimento).
+
+## Formato de Saída por Fase
+Comando/execução real + evidência (screenshot, JSON, ou output de teste) +
+veredito PASSOU/FALHOU. Não avançar de fase sem a anterior validada com
+evidência real colada — mesmo padrão de rigor já estabelecido neste
+projeto inteiro.
+</USER_REQUEST>
+<ADDITIONAL_METADATA>
+The current local time is: 2026-09-20T13:42:33-03:00.
+</ADDITIONAL_METADATA>

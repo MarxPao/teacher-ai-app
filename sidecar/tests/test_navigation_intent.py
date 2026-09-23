@@ -84,7 +84,11 @@ def test_side_panel_js_extract_navigation_target_via_node():
       ['entre na aba arquivos', 'arquivos'],
       ['abrir notas', 'notas'],
       ['clica em chamadas', 'chamadas'],
-      ['lança nota 8.5 para o João', null]
+      ['lança nota 8.5 para o João', null],
+      ['abrir arquivos e selecionar sexto ano', 'arquivos'],
+      ['abrir recados e responder à mãe do aluno', 'recados'],
+      ['ir para o diário e lançar nota 8 pro Hugo', 'diário'],
+      ['abrir diário de classe e selecionar sexto ano', 'diário de classe']
     ];
 
     for (const [input, expected] of testInputs) {
@@ -92,9 +96,65 @@ def test_side_panel_js_extract_navigation_target_via_node():
       if (expected === null) {
         if (res !== null) throw new Error(`Input '${input}' deveria ser null, obtido: '${res}'`);
       } else {
-        if (!res || !res.toLowerCase().includes(expected.toLowerCase())) {
-          throw new Error(`Input '${input}' deveria extrair '${expected}', obtido: '${res}'`);
+        if (!res || res.toLowerCase() !== expected.toLowerCase()) {
+          throw new Error(`Input '${input}' deveria extrair exatamente '${expected}', obtido: '${res}'`);
         }
+      }
+    }
+
+    // Valida splitCompoundCommand diretamente
+    if (typeof chat.splitCompoundCommand !== 'function') {
+      throw new Error('splitCompoundCommand não foi exposto em __teacherSidePanelChat');
+    }
+
+    const compoundCases = [
+      {
+        input: 'abrir arquivos e selecionar sexto ano',
+        target: 'arquivos',
+        conjunction: 'e',
+        remaining: 'selecionar sexto ano',
+        isCompound: true
+      },
+      {
+        input: 'abrir recados e responder à mãe do aluno',
+        target: 'recados',
+        conjunction: 'e',
+        remaining: 'responder à mãe do aluno',
+        isCompound: true
+      },
+      {
+        input: 'ir para o diário e lançar nota 8 pro Hugo',
+        target: 'diário',
+        conjunction: 'e',
+        remaining: 'lançar nota 8 pro hugo',
+        isCompound: true
+      },
+      {
+        input: 'abrir diário de classe e selecionar sexto ano',
+        target: 'diário de classe',
+        conjunction: 'e',
+        remaining: 'selecionar sexto ano',
+        isCompound: true
+      },
+      {
+        input: 'abrir arquivos',
+        target: 'arquivos',
+        conjunction: null,
+        remaining: null,
+        isCompound: false
+      }
+    ];
+
+    for (const tc of compoundCases) {
+      const sp = chat.splitCompoundCommand(tc.input);
+      if (sp.navTarget !== tc.target) {
+        throw new Error(`[${tc.input}] navTarget esperado '${tc.target}', obtido '${sp.navTarget}'`);
+      }
+      if (sp.isCompound !== tc.isCompound) {
+        throw new Error(`[${tc.input}] isCompound esperado '${tc.isCompound}', obtido '${sp.isCompound}'`);
+      }
+      if (tc.remaining && sp.remainingCommand.toLowerCase() !== tc.remaining.toLowerCase()) {
+        throw new Error(`[${tc.input}] remainingCommand esperado '${tc.remaining}', obtido '${sp.remainingCommand}'`);
       }
     }
 
@@ -113,12 +173,62 @@ def test_side_panel_js_extract_navigation_target_via_node():
     assert "SUCCESS_NODE_NAV_EXTRACTION" in res.stdout
 
 
-def test_portal_mock_html_has_arquivos_tab():
-    """Valida que o portal_mock.html possui a aba de arquivos e o respectivo painel de conteúdo."""
+def test_compound_navigation_commands_in_python():
+    """
+    TESTE DE REGRESSÃO PERMANENTE:
+    Valida que comandos compostos nunca contaminam o destino com conjunções ('e', 'então', 'depois')
+    e sempre extraem a segunda instrução para os 3 casos identificados na auditoria:
+    1. 'abrir arquivos e selecionar sexto ano'
+    2. 'abrir recados e responder à mãe do aluno'
+    3. 'ir para o diário e lançar nota 8 pro Hugo'
+    """
+    from sidecar.intent_parser import split_compound_command
+
+    # Caso 1: abrir arquivos e selecionar sexto ano
+    res1 = split_compound_command("abrir arquivos e selecionar sexto ano")
+    assert res1["has_navigation"] is True
+    assert res1["nav_target"] == "arquivos"
+    assert "e" not in res1["nav_target"].split()
+    assert res1["conjunction"] == "e"
+    assert res1["remaining_command"] == "selecionar sexto ano"
+    assert res1["is_compound"] is True
+
+    # Caso 2: abrir recados e responder à mãe do aluno
+    res2 = split_compound_command("abrir recados e responder à mãe do aluno")
+    assert res2["has_navigation"] is True
+    assert res2["nav_target"] == "recados"
+    assert res2["remaining_command"] == "responder à mãe do aluno"
+    assert res2["is_compound"] is True
+
+    # Caso 3: ir para o diário e lançar nota 8 pro Hugo
+    res3 = split_compound_command("ir para o diário e lançar nota 8 pro Hugo")
+    assert res3["has_navigation"] is True
+    assert res3["nav_target"] == "diário"
+    assert "lançar" in res3["remaining_command"]
+    assert res3["is_compound"] is True
+
+    # Caso 4: Alvo multi-palavra legítimo ('diário de classe')
+    res4 = split_compound_command("abrir diário de classe e selecionar sexto ano")
+    assert res4["has_navigation"] is True
+    assert res4["nav_target"] == "diário de classe"
+    assert res4["remaining_command"] == "selecionar sexto ano"
+
+    # Caso 5: extract_intent determinístico com dispatch_and_execute_task
+    intent = extract_intent("abrir arquivos e selecionar sexto ano", groq_key="none", gemini_key="none")
+    assert intent["acao"] == "navegar_aba"
+    assert intent["destino"] == "Arquivos"
+    assert intent["remaining_command"] == "selecionar sexto ano"
+
+
+def test_portal_mock_html_has_arquivos_tab_and_turma_filter():
+    """Valida que o portal_mock.html possui a aba de arquivos e o filtro de turma para seleção de 'Sexto Ano'."""
     with open(PORTAL_MOCK_PATH, "r", encoding="utf-8") as f:
         html = f.read()
 
     assert 'id="tab-arquivos"' in html, "portal_mock.html deve conter botão de aba tab-arquivos"
     assert "Arquivos" in html
     assert 'id="pane-arquivos"' in html, "portal_mock.html deve conter container pane-arquivos"
+    assert 'id="filtro_turma_arquivos"' in html, "portal_mock.html deve conter select filtro_turma_arquivos"
+    assert "Sexto Ano" in html, "portal_mock.html deve conter opção Sexto Ano no filtro de arquivos"
     assert "switchTab('arquivos')" in html or 'switchTab("arquivos")' in html
+

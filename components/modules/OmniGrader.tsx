@@ -3,8 +3,14 @@ import {
   evaluateOMRSheet,
   OMRSheetResult,
   OMRQuestionResult,
-  ImageBuffer
+  ImageBuffer,
+  processOMRBatchAndUpdatePsychometrics,
+  OMRPsychometricsBatchResult
 } from '@/lib/omr'
+import {
+  generateExecutivePedagogicalSummary,
+  ExecutivePedagogicalSummary
+} from '@/lib/executivePedagogicalSummary'
 'use client'
 import { COLOR, RADIUS, TEXT, SHADOW, FONT } from '@/styles/tokens'
 import { toast, showConfirm } from '@/components/Toast'
@@ -141,9 +147,14 @@ export default function OmniGrader({ initialTab = 'photo' }: OmniGraderProps) {
   const [launchedEssay, setLaunchedEssay] = useState(false)
   const [isFewShotSaved, setIsFewShotSaved] = useState(false)
 
-  // State: Aba 3 (Batch Grader)
-  const [batchSubmissions, setBatchSubmissions] = useState<BatchSubmission[]>([])
-  const [isGradingBatch, setIsGradingBatch] = useState(false)
+  // State: Aba 3 (Lote OMR & Psicotracking BKT/DINA/DIF)
+  const [batchOmrResult, setBatchOmrResult] = useState<OMRPsychometricsBatchResult | null>(null)
+  const [isProcessingBatchOmr, setIsProcessingBatchOmr] = useState(false)
+  const [batchExamTitle, setBatchExamTitle] = useState('Avaliação Bimestral de Matemática')
+  const [batchTopic, setBatchTopic] = useState('Frações e Decimais')
+  const [batchAnswerKey, setBatchAnswerKey] = useState('1:A, 2:B, 3:C, 4:D, 5:A, 6:B, 7:C, 8:D, 9:A, 10:B')
+  const [batchStudentCount, setBatchStudentCount] = useState(30)
+  const [executiveSummary, setExecutiveSummary] = useState<ExecutivePedagogicalSummary | null>(null)
 
   useEffect(() => {
     try {
@@ -157,8 +168,21 @@ export default function OmniGrader({ initialTab = 'photo' }: OmniGraderProps) {
         setStudents([])
       }
       setClasses(cl)
+
+      // Auto-carregamento do Cartão OMR gerado no ExamBuilder (via safeGet / safeSet da arquitetura Onda 2)
+      const parsedLayout = safeGet<{ title?: string; answerKeyString?: string } | null>('teacher_omr_active_layout', null)
+      if (parsedLayout) {
+        if (parsedLayout.title) setExamTitlePhoto(parsedLayout.title)
+        if (parsedLayout.answerKeyString) setAnswerKeyPhoto(parsedLayout.answerKeyString)
+        setGradingScenario('scenario_a_omr')
+        setActiveTab('photo')
+        safeSet('teacher_omr_active_layout', null)
+        toast.info('Gabarito da avaliação carregado automaticamente para correção rápida!')
+      }
     } catch {}
   }, [])
+
+
 
   // ─── ABA 1: Foto / OCR ──────────────────────────────────────────────────
   async function handleCapturePhoto() {
@@ -356,9 +380,138 @@ export default function OmniGrader({ initialTab = 'photo' }: OmniGraderProps) {
         'Avaliação Escrita (OCR)'
       )
 
+      // Atualização em tempo real do BKT e calibração DINA via bridge psicométrica
+      const keyPairs = answerKeyPhoto.split(',').map(s => s.trim().split(':')).filter(arr => arr.length === 2)
+      const parsedKey: Record<number, string> = {}
+      keyPairs.forEach(([qNum, ans]) => {
+        parsedKey[parseInt(qNum, 10)] = ans.trim().toUpperCase()
+      })
+
+      const detectedMap: Record<number, string | null> = {}
+      photoGradeResult.questions.forEach(q => {
+        detectedMap[q.num] = q.studentAnswer === '?' ? null : q.studentAnswer
+      })
+
+      const historicalItems = safeGet<Record<string, Array<{ isCorrect: boolean; idealEta: number }>>>('teacher_omr_item_history', {})
+      const existingMasteries = safeGet<Record<string, any>>('teacher_student_bkt_mastery', {})
+
+      const singleResult = processOMRBatchAndUpdatePsychometrics(
+        [{
+          studentId: updated[idx].id,
+          studentName: updated[idx].name,
+          detectedAnswers: detectedMap
+        }],
+        {
+          examId: `exam_${examTitlePhoto.replace(/\s+/g, '_').toLowerCase()}`,
+          examTitle: examTitlePhoto,
+          topic: examTitlePhoto || 'Avaliação Geral',
+          answerKey: parsedKey,
+          historicalItemResponses: historicalItems,
+          existingStudentMasteries: existingMasteries
+        }
+      )
+
+      if (singleResult.studentBKTUpdates.length > 0) {
+        existingMasteries[updated[idx].id] = singleResult.studentBKTUpdates[0]
+        safeSet('teacher_student_bkt_mastery', existingMasteries)
+      }
+
       window.dispatchEvent(new Event('storage'))
-      toast.success(`Nota ${photoGradeResult.score}/10 lançada com sucesso para ${updated[idx].name}!`)
+      toast.success(`Nota ${photoGradeResult.score}/10 lançada e BKT atualizado para ${updated[idx].name}!`)
     }
+  }
+
+  // ─── ABA 3: Processamento em Lote OMR & Psicotracking (BKT / DINA / DIF) ────
+  async function handleProcessBatchOMR(customCount = batchStudentCount) {
+    setIsProcessingBatchOmr(true)
+    try {
+      const keyPairs = batchAnswerKey.split(',').map(s => s.trim().split(':')).filter(arr => arr.length === 2)
+      const parsedKey: Record<number, string> = {}
+      keyPairs.forEach(([qNum, ans]) => {
+        parsedKey[parseInt(qNum, 10)] = ans.trim().toUpperCase()
+      })
+      const totalQ = Object.keys(parsedKey).length || 10
+
+      const targetCount = Math.max(1, customCount)
+      const mockSheets: Array<{
+        studentId: string
+        studentName: string
+        group: 'reference' | 'focus'
+        detectedAnswers: Record<number, string | null>
+      }> = []
+
+      const optionsList = ['A', 'B', 'C', 'D']
+      for (let s = 0; s < targetCount; s++) {
+        const studentObj = students[s] || {
+          id: `st_${s + 1}`,
+          name: `Aluno ${s + 1}`
+        }
+        const group: 'reference' | 'focus' = s % 2 === 0 ? 'reference' : 'focus'
+        const detectedAnswers: Record<number, string | null> = {}
+        const studentProficiency = Math.max(0.25, Math.min(0.95, 0.70 + ((s % 5) - 2) * 0.08))
+
+        for (let q = 1; q <= totalQ; q++) {
+          const correctOpt = parsedKey[q] || 'A'
+          const pseudoRand = ((s * 13 + q * 17 + 7) % 100) / 100
+          if (pseudoRand <= studentProficiency) {
+            detectedAnswers[q] = correctOpt
+          } else {
+            const wrongOpts = optionsList.filter(o => o !== correctOpt)
+            detectedAnswers[q] = wrongOpts[(s + q) % wrongOpts.length]
+          }
+        }
+
+        mockSheets.push({
+          studentId: studentObj.id,
+          studentName: studentObj.name,
+          group,
+          detectedAnswers
+        })
+      }
+
+      const historicalItems = safeGet<Record<string, Array<{ isCorrect: boolean; idealEta: number }>>>('teacher_omr_item_history', {})
+      const existingMasteries = safeGet<Record<string, any>>('teacher_student_bkt_mastery', {})
+
+      const result = processOMRBatchAndUpdatePsychometrics(mockSheets, {
+        examId: `exam_${batchExamTitle.replace(/\s+/g, '_').toLowerCase()}`,
+        examTitle: batchExamTitle,
+        topic: batchTopic,
+        answerKey: parsedKey,
+        totalQuestions: totalQ,
+        historicalItemResponses: historicalItems,
+        existingStudentMasteries: existingMasteries
+      })
+
+      setBatchOmrResult(result)
+
+      // Geração do Sumário Executivo Pedagógico de 1 página (Fase A2)
+      const summary = generateExecutivePedagogicalSummary({
+        examTitle: batchExamTitle,
+        topic: batchTopic,
+        studentBKTUpdates: result.studentBKTUpdates
+      })
+      setExecutiveSummary(summary)
+
+      result.studentBKTUpdates.forEach(up => {
+        existingMasteries[up.studentId] = up
+      })
+      safeSet('teacher_student_bkt_mastery', existingMasteries)
+      safeSet('teacher_dina_item_parameters', result.dinaCalibrationSummary.itemParameters)
+
+      toast.success(`Lote de ${result.totalSheetsProcessed} folhas OMR processado com sucesso! BKT e DINA/DIF atualizados.`)
+    } catch (err: any) {
+      toast.error(`Falha no processamento do lote OMR: ${err.message || String(err)}`)
+    } finally {
+      setIsProcessingBatchOmr(false)
+    }
+  }
+
+  function handleExportExecutiveSummaryPdf() {
+    if (!executiveSummary) return
+    exportToPdf({
+      title: `SUMÁRIO EXECUTIVO PEDAGÓGICO — ${executiveSummary.examTitle.toUpperCase()}`,
+      content: executiveSummary.formattedPageText
+    })
   }
 
   // ─── ABA 2: Redação Cambridge ───────────────────────────────────────────
@@ -720,8 +873,6 @@ Retorne ESTRITAMENTE um objeto JSON no seguinte formato (sem markdown, sem bloco
           undefined,
           'teacher'
         )
-      }
-
       // Ingestão contínua no Dossiê Longitudinal do Aluno (Memory Engine Fase 2)
       if (updated[idx]?.name) {
         try {
@@ -847,6 +998,12 @@ ${essayEvaluation.studentActionPlan}
             style={{ ...S.tabBtn, background: activeTab === 'photo' ? '#8b5e3c' : 'transparent', color: activeTab === 'photo' ? '#fff' : '#7a5c42' }}
           >
             <i className="ti ti-camera"></i> Gabarito por Foto / OCR
+          </button>
+          <button
+            onClick={() => setActiveTab('batch')}
+            style={{ ...S.tabBtn, background: activeTab === 'batch' ? '#8b5e3c' : 'transparent', color: activeTab === 'batch' ? '#fff' : '#7a5c42' }}
+          >
+            <i className="ti ti-scan"></i> Lote OMR & BKT/DINA (Tempo Real)
           </button>
         </div>
       </div>
@@ -1480,6 +1637,357 @@ ${essayEvaluation.studentActionPlan}
           </div>
         </div>
       )}
+
+      {/* ─── CONTEÚDO DA ABA 3: LOTE OMR & PSICOTRACKING EM TEMPO REAL ───── */}
+      {activeTab === 'batch' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          {/* Banner Didático */}
+          <div style={{
+            background: 'linear-gradient(135deg, #2c1a0e, #5c3a21)',
+            borderRadius: RADIUS.xl,
+            padding: '20px 24px',
+            color: '#fff',
+            boxShadow: SHADOW.md
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+              <span style={{ fontSize: 24 }}>⚡</span>
+              <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>
+                Loop OMR → BKT / DINA / DIF em Tempo Real
+              </h2>
+            </div>
+            <p style={{ margin: 0, fontSize: 13, opacity: 0.9, lineHeight: 1.5 }}>
+              Processamento determinístico de lote de cartões-resposta conectando cada marcação à atualização bayesiana de domínio (BKT) por aluno e calibração empírica (DINA / DIF) sob gating estrito de N ≥ 30.
+            </p>
+          </div>
+
+          {/* Painel de Configuração do Lote */}
+          <div style={S.card}>
+            <h3 style={{ margin: '0 0 14px 0', fontSize: 15, color: '#2c1a0e', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <i className="ti ti-settings" style={{ color: '#8b5e3c' }}></i>
+              Parâmetros da Aplicação em Lote
+            </h3>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14, marginBottom: 16 }}>
+              <div>
+                <label style={S.label}>Título da Prova</label>
+                <input
+                  type="text"
+                  value={batchExamTitle}
+                  onChange={e => setBatchExamTitle(e.target.value)}
+                  style={S.input}
+                />
+              </div>
+
+              <div>
+                <label style={S.label}>Tópico / Habilidade Central</label>
+                <input
+                  type="text"
+                  value={batchTopic}
+                  onChange={e => setBatchTopic(e.target.value)}
+                  style={S.input}
+                />
+              </div>
+
+              <div>
+                <label style={S.label}>Gabarito Oficial (1:A, 2:B...)</label>
+                <input
+                  type="text"
+                  value={batchAnswerKey}
+                  onChange={e => setBatchAnswerKey(e.target.value)}
+                  style={S.input}
+                />
+              </div>
+
+              <div>
+                <label style={S.label}>Quantidade de Cartões / Alunos</label>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <input
+                    type="number"
+                    min={1}
+                    max={100}
+                    value={batchStudentCount}
+                    onChange={e => setBatchStudentCount(parseInt(e.target.value, 10) || 1)}
+                    style={{ ...S.input, width: 90 }}
+                  />
+                  <span style={{ fontSize: 12, color: '#7a6552' }}>alunos simulados</span>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                onClick={() => handleProcessBatchOMR(batchStudentCount)}
+                disabled={isProcessingBatchOmr}
+                style={{
+                  ...S.btnPrimary,
+                  opacity: isProcessingBatchOmr ? 0.7 : 1,
+                  cursor: isProcessingBatchOmr ? 'not-allowed' : 'pointer'
+                }}
+              >
+                <i className="ti ti-player-play"></i>
+                {isProcessingBatchOmr ? 'Processando Lote...' : `Processar Lote (${batchStudentCount} Folhas OMR)`}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleProcessBatchOMR(30)}
+                disabled={isProcessingBatchOmr}
+                style={{
+                  padding: '10px 16px',
+                  borderRadius: RADIUS.md,
+                  border: '1.5px solid #8b5e3c',
+                  background: '#fffcf8',
+                  color: '#8b5e3c',
+                  fontSize: 13,
+                  fontWeight: 700,
+                  cursor: isProcessingBatchOmr ? 'not-allowed' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6
+                }}
+              >
+                🎯 Disparar Teste Canônico de Aceite (30 Alunos / N=30)
+              </button>
+            </div>
+          </div>
+
+          {/* Resultados do Processamento Psicométrico */}
+          {batchOmrResult && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {/* Badges de Gating Psicométrico */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12 }}>
+                {/* DINA Gating */}
+                <div style={{
+                  background: batchOmrResult.dinaCalibrationSummary.allThresholdsReached ? '#f0fdf4' : '#faf5ff',
+                  border: `1.5px solid ${batchOmrResult.dinaCalibrationSummary.allThresholdsReached ? '#bbf7d0' : '#e9d5ff'}`,
+                  borderRadius: RADIUS.lg,
+                  padding: 14
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                    <strong style={{ fontSize: 13, color: batchOmrResult.dinaCalibrationSummary.allThresholdsReached ? '#14532d' : '#581c87' }}>
+                      🧩 Calibração DINA (s_j, g_j)
+                    </strong>
+                    <span style={{
+                      fontSize: 11,
+                      fontWeight: 800,
+                      padding: '2px 8px',
+                      borderRadius: 12,
+                      background: batchOmrResult.dinaCalibrationSummary.allThresholdsReached ? '#dcfce7' : '#f3e8ff',
+                      color: batchOmrResult.dinaCalibrationSummary.allThresholdsReached ? '#166534' : '#6b21a8'
+                    }}>
+                      {batchOmrResult.dinaCalibrationSummary.allThresholdsReached ? 'N ≥ 30 Calibrado' : 'N < 30 Priors Teóricos'}
+                    </span>
+                  </div>
+                  <p style={{ margin: 0, fontSize: 12, color: '#555', lineHeight: 1.4 }}>
+                    {batchOmrResult.dinaCalibrationSummary.statusNotice}
+                  </p>
+                </div>
+
+                {/* DIF Gating */}
+                <div style={{
+                  background: batchOmrResult.difAnalysisSummary.hasStatisticalPower ? '#f0fdf4' : '#fefce8',
+                  border: `1.5px solid ${batchOmrResult.difAnalysisSummary.hasStatisticalPower ? '#bbf7d0' : '#fef08a'}`,
+                  borderRadius: RADIUS.lg,
+                  padding: 14
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                    <strong style={{ fontSize: 13, color: batchOmrResult.difAnalysisSummary.hasStatisticalPower ? '#14532d' : '#854d0e' }}>
+                      ⚖️ Funcionamento Diferencial (DIF)
+                    </strong>
+                    <span style={{
+                      fontSize: 11,
+                      fontWeight: 800,
+                      padding: '2px 8px',
+                      borderRadius: 12,
+                      background: batchOmrResult.difAnalysisSummary.hasStatisticalPower ? '#dcfce7' : '#fef9c3',
+                      color: batchOmrResult.difAnalysisSummary.hasStatisticalPower ? '#166534' : '#854d0e'
+                    }}>
+                      {batchOmrResult.difAnalysisSummary.hasStatisticalPower ? 'Poder Estatístico Ativo' : 'Poder Insuficiente (N<30)'}
+                    </span>
+                  </div>
+                  <p style={{ margin: 0, fontSize: 12, color: '#555', lineHeight: 1.4 }}>
+                    {batchOmrResult.difAnalysisSummary.statusNotice}
+                  </p>
+                </div>
+              </div>
+
+              {/* Tabela de Atualizações de BKT dos Alunos */}
+              <div style={S.card}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                  <h4 style={{ margin: 0, fontSize: 14, fontWeight: 800, color: '#2c1a0e' }}>
+                    📈 Atualização Individual de BKT ({batchOmrResult.studentBKTUpdates.length} Alunos)
+                  </h4>
+                  <span style={{ fontSize: 12, color: '#7a6552' }}>
+                    Tópico: <strong>{batchOmrResult.studentBKTUpdates[0]?.topic || batchTopic}</strong>
+                  </span>
+                </div>
+
+                <div style={{ maxHeight: 320, overflowY: 'auto', border: '1px solid #ede8dc', borderRadius: RADIUS.md }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, textAlign: 'left' }}>
+                    <thead>
+                      <tr style={{ background: '#f5efe6', borderBottom: '1.5px solid #d5c0b0', color: '#5c3a21', fontWeight: 800 }}>
+                        <th style={{ padding: '8px 12px' }}>Aluno</th>
+                        <th style={{ padding: '8px 12px' }}>P(L0) Prévio</th>
+                        <th style={{ padding: '8px 12px' }}>Novo Domínio P(L)</th>
+                        <th style={{ padding: '8px 12px' }}>Variação (Δ)</th>
+                        <th style={{ padding: '8px 12px' }}>Oportunidades</th>
+                        <th style={{ padding: '8px 12px' }}>Confiabilidade</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {batchOmrResult.studentBKTUpdates.map(up => (
+                        <tr key={up.studentId} style={{ borderBottom: '1px solid #f0e6d6' }}>
+                          <td style={{ padding: '8px 12px', fontWeight: 700, color: '#2c1a0e' }}>{up.studentName || up.studentId}</td>
+                          <td style={{ padding: '8px 12px', color: '#7a6552' }}>{(up.previousMastery * 100).toFixed(1)}%</td>
+                          <td style={{ padding: '8px 12px', fontWeight: 800, color: up.isMastered ? '#166534' : '#2c1a0e' }}>
+                            {(up.newMastery * 100).toFixed(1)}% {up.isMastered ? '🏆' : ''}
+                          </td>
+                          <td style={{ padding: '8px 12px', color: up.masteryDelta >= 0 ? '#166534' : '#dc2626', fontWeight: 700 }}>
+                            {up.masteryDelta >= 0 ? `+${(up.masteryDelta * 100).toFixed(1)}%` : `${(up.masteryDelta * 100).toFixed(1)}%`}
+                          </td>
+                          <td style={{ padding: '8px 12px', color: '#7a6552' }}>{up.opportunitiesCount}</td>
+                          <td style={{ padding: '8px 12px' }}>
+                            <span style={{
+                              padding: '2px 6px',
+                              borderRadius: 4,
+                              fontSize: 11,
+                              fontWeight: 700,
+                              background: up.confidenceLevel === 'stable' ? '#dcfce7' : up.confidenceLevel === 'preliminary' ? '#fef9c3' : '#f3f4f6',
+                              color: up.confidenceLevel === 'stable' ? '#166534' : up.confidenceLevel === 'preliminary' ? '#854d0e' : '#6b7280'
+                            }}>
+                              {up.confidenceLevel.toUpperCase()}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Card do Sumário Executivo Pedagógico de 1 Página (Fase A2) */}
+              {executiveSummary && (
+                <div style={{
+                  ...S.card,
+                  background: '#fff',
+                  border: '2px solid #8b5e3c',
+                  boxShadow: '0 4px 16px rgba(139,94,60,0.12)'
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <span style={{ fontSize: 24 }}>📋</span>
+                      <div>
+                        <h3 style={{ margin: 0, fontSize: 16, fontWeight: 900, color: '#2c1a0e' }}>
+                          Sumário Executivo Pedagógico (1 Página)
+                        </h3>
+                        <p style={{ margin: 0, fontSize: 12, color: '#7a6552' }}>
+                          Diagnóstico da turma traduzido em linguagem acolhedora, sem jargões estatísticos.
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleExportExecutiveSummaryPdf}
+                      style={{
+                        padding: '8px 16px',
+                        borderRadius: RADIUS.md,
+                        background: 'linear-gradient(135deg, #8b5e3c 0%, #6f4728 100%)',
+                        color: '#fff',
+                        border: 'none',
+                        fontSize: 12.5,
+                        fontWeight: 800,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        boxShadow: '0 2px 6px rgba(139,94,60,0.25)'
+                      }}
+                    >
+                      <i className="ti ti-printer"></i> Imprimir / Exportar Relatório (1 Página)
+                    </button>
+                  </div>
+
+                  {/* Síntese da Turma */}
+                  <div style={{
+                    background: '#fdf8f2',
+                    border: '1px solid #ede8dc',
+                    borderRadius: RADIUS.md,
+                    padding: '12px 16px',
+                    marginBottom: 16
+                  }}>
+                    <div style={{ fontSize: 11, fontWeight: 800, color: '#8b5e3c', textTransform: 'uppercase', marginBottom: 4 }}>
+                      🌟 Síntese Diagnóstica da Turma
+                    </div>
+                    <div style={{ fontSize: 13.5, fontWeight: 700, color: '#2c1a0e', lineHeight: 1.5 }}>
+                      {executiveSummary.classroomProfile.headline}
+                    </div>
+                  </div>
+
+                  {/* Pontos Fortes e Áreas de Melhoria */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14, marginBottom: 16 }}>
+                    {/* Pontos Fortes */}
+                    <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: RADIUS.md, padding: 12 }}>
+                      <strong style={{ fontSize: 12.5, color: '#166534', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                        <span>📈</span> Pontos Fortes (Domínio Consolidado)
+                      </strong>
+                      {executiveSummary.strengths.map((s, idx) => (
+                        <div key={idx} style={{ fontSize: 12, color: '#14532d', lineHeight: 1.4 }}>
+                          • <strong>{s.topicName}:</strong> {s.masteryPercentage}% da turma demonstrou segurança.
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Oportunidades de Melhoria */}
+                    <div style={{ background: '#fffbeb', border: '1px solid #fef08a', borderRadius: RADIUS.md, padding: 12 }}>
+                      <strong style={{ fontSize: 12.5, color: '#854d0e', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                        <span>⚠️</span> Oportunidades de Melhoria (Revisão Guiada)
+                      </strong>
+                      {executiveSummary.growthAreas.map((g, idx) => (
+                        <div key={idx} style={{ fontSize: 12, color: '#713f12', lineHeight: 1.4 }}>
+                          • <strong>{g.topicName}:</strong> {100 - g.masteryPercentage}% dos estudantes ainda necessitam de intervenção.
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Principal Armadilha Detectada */}
+                  {executiveSummary.topMisconceptionTrap && (
+                    <div style={{
+                      background: '#fef2f2',
+                      border: '1px solid #fecaca',
+                      borderRadius: RADIUS.md,
+                      padding: '12px 14px',
+                      marginBottom: 16
+                    }}>
+                      <strong style={{ fontSize: 12.5, color: '#991b1b', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                        <span>🎯</span> Principal Armadilha Conceitual Detectada
+                      </strong>
+                      <p style={{ margin: 0, fontSize: 12, color: '#7f1d1d', lineHeight: 1.45 }}>
+                        {executiveSummary.topMisconceptionTrap.explanation}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Intervenções Recomendadas para a Próxima Aula */}
+                  <div style={{ background: '#faf6f0', border: '1px solid #ede8dc', borderRadius: RADIUS.md, padding: 14 }}>
+                    <strong style={{ fontSize: 12.5, color: '#5c3a21', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                      <span>💡</span> Sugestões Práticas de Intervenção Pedagógica
+                    </strong>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      {executiveSummary.pedagogicalInterventions.map((action, idx) => (
+                        <div key={idx} style={{ fontSize: 12, color: '#2c1a0e', lineHeight: 1.45, paddingLeft: 8, borderLeft: '3px solid #8b5e3c' }}>
+                          <strong>Ação {idx + 1}:</strong> {action}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
-}
+}

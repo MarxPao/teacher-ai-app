@@ -243,11 +243,18 @@ export function exportToPdf(options: ExportHeaderOptions) {
     <head>
       <meta charset="UTF-8">
       <title>${title}</title>
-      <style>
         @page { size: A4; margin: ${prefs.marginMm}mm; }
         body { margin: 0; padding: 0; }
         .header-table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
-        .content { margin-top: 10px; white-space: pre-wrap; }
+        .content { margin-top: 10px; }
+        .content-table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 10pt; }
+        .content-table th, .content-table td { border: 1px solid #94a3b8; padding: 6px 10px; text-align: left; vertical-align: top; }
+        .content-table th { background-color: #f1f5f9; font-weight: bold; color: #0f172a; }
+        .content-table tr:nth-child(even) { background-color: #f8fafc; }
+        .content-divider { border: 0; border-top: 1px solid #cbd5e1; margin: 16px 0; }
+        .content ul { margin: 6px 0 10px 20px; padding: 0; }
+        .content li { margin-bottom: 4px; }
+        .content p { margin: 6px 0; }
         .footer { margin-top: 30px; font-size: 8.5pt; text-align: center; border-top: 1px solid #888; padding-top: 5px; color: #444; }
         @media print { .no-print { display: none; } }
         ${neeCss}
@@ -342,6 +349,12 @@ export function exportToWord(options: ExportHeaderOptions) {
         h1, h2 { font-size: ${prefs.fontSizePt + 2}pt; text-align: center; text-transform: uppercase; margin-top: 12pt; }
         .instructions { border: 1pt solid #666; padding: 6pt; font-size: ${prefs.fontSizePt - 2}pt; margin-bottom: 10pt; }
         p { margin-bottom: 6pt; }
+        .content-table { width: 100%; border-collapse: collapse; margin-bottom: 12pt; }
+        .content-table th, .content-table td { border: 1pt solid #666; padding: 5pt; text-align: left; vertical-align: top; }
+        .content-table th { background-color: #f2f2f2; font-weight: bold; }
+        .content-divider { border: 0; border-top: 1pt solid #999; margin: 14pt 0; }
+        ul { margin: 6pt 0 10pt 18pt; padding: 0; }
+        li { margin-bottom: 4pt; }
       </style>
     </head>
     <body>
@@ -461,17 +474,24 @@ export function generateSvgQRCode(dataUrl: string, size: number = 200): string {
 }
 
 /**
- * 6. Formata markdown em HTML com suporte a NEE
+ * Remove emojis e pictogramas para documentos formais (coordenação, direção, impressão oficial)
  */
-function formatMarkdownToHtml(text: string, nee: string = 'standard'): string {
+export function sanitizeTextForFormalDoc(text: string): string {
+  if (!text) return ''
+  return text
+    .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE00}-\u{FE0F}\u{1F600}-\u{1F64F}\u{1F680}-\u{1F6FF}]/gu, '')
+    .trim()
+}
+
+/**
+ * Formata inline markdown (negrito, itálico/ênfase e escapes)
+ */
+export function formatInlineMarkdown(text: string, nee: string = 'standard'): string {
   if (!text) return ''
   let formatted = text
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
-    .replace(/^### (.*$)/gim, '<h3>$1</h3>')
-    .replace(/^## (.*$)/gim, '<h2>$1</h2>')
-    .replace(/^# (.*$)/gim, '<h1>$1</h1>')
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
 
   if (nee === 'dyslexia') {
@@ -480,7 +500,79 @@ function formatMarkdownToHtml(text: string, nee: string = 'standard'): string {
     formatted = formatted.replace(/\*(.*?)\*/g, '<em>$1</em>')
   }
 
-  return formatted.replace(/\n/g, '<br/>')
+  return formatted
+}
+
+/**
+ * 6. Formata markdown em HTML profissional com suporte a tabelas, divisores e NEE
+ */
+export function formatMarkdownToHtml(text: string, nee: string = 'standard'): string {
+  if (!text) return ''
+  const clean = sanitizeTextForFormalDoc(text)
+  const lines = clean.split('\n')
+  const result: string[] = []
+  let inTable = false
+  let tableHeaderDone = false
+  let tableHtml = ''
+
+  for (let i = 0; i < lines.length; i++) {
+    const rawLine = lines[i].trim()
+
+    if (rawLine.startsWith('|') && rawLine.endsWith('|')) {
+      const cells = rawLine.split('|').map(c => c.trim()).slice(1, -1)
+
+      // Linha separadora do cabeçalho da tabela | :--- | :--- |
+      if (cells.every(c => /^:?-+:?$/.test(c))) {
+        continue
+      }
+
+      if (!inTable) {
+        inTable = true
+        tableHeaderDone = false
+        tableHtml = '<table class="content-table">\n'
+      }
+
+      if (!tableHeaderDone) {
+        tableHtml += '  <thead>\n    <tr>\n' + cells.map(c => `      <th>${formatInlineMarkdown(c, nee)}</th>\n`).join('') + '    </tr>\n  </thead>\n  <tbody>\n'
+        tableHeaderDone = true
+      } else {
+        tableHtml += '    <tr>\n' + cells.map(c => `      <td>${formatInlineMarkdown(c, nee)}</td>\n`).join('') + '    </tr>\n'
+      }
+    } else {
+      if (inTable) {
+        tableHtml += '  </tbody>\n</table>'
+        result.push(tableHtml)
+        inTable = false
+        tableHeaderDone = false
+        tableHtml = ''
+      }
+
+      if (!rawLine) {
+        continue
+      }
+
+      if (rawLine === '---') {
+        result.push('<hr class="content-divider" />')
+      } else if (/^### (.*$)/i.test(rawLine)) {
+        result.push(`<h3>${formatInlineMarkdown(rawLine.replace(/^### /i, ''), nee)}</h3>`)
+      } else if (/^## (.*$)/i.test(rawLine)) {
+        result.push(`<h2>${formatInlineMarkdown(rawLine.replace(/^## /i, ''), nee)}</h2>`)
+      } else if (/^# (.*$)/i.test(rawLine)) {
+        result.push(`<h1>${formatInlineMarkdown(rawLine.replace(/^# /i, ''), nee)}</h1>`)
+      } else if (/^-\s+(.*$)/i.test(rawLine)) {
+        result.push(`<ul><li>${formatInlineMarkdown(rawLine.replace(/^-\s+/i, ''), nee)}</li></ul>`)
+      } else {
+        result.push(`<p>${formatInlineMarkdown(rawLine, nee)}</p>`)
+      }
+    }
+  }
+
+  if (inTable) {
+    tableHtml += '  </tbody>\n</table>'
+    result.push(tableHtml)
+  }
+
+  return result.join('\n')
 }
 
 /**

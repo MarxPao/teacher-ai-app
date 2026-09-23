@@ -623,9 +623,8 @@ export async function executeTrelloDecisions(
 
         case 'record_student_observation': {
           const studentName = decision.suggestedPayload.studentName || 'Aluno'
-          let studentId = 'inferred'
           const found = students.find(s => s.name.toLowerCase() === studentName.toLowerCase())
-          if (found) studentId = found.id
+          const studentId = found ? found.id : ''
 
           const note = [
             decision.suggestedPayload.note || decision.cardDesc || decision.cardName,

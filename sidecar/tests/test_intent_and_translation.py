@@ -294,8 +294,8 @@ class TestManualServerHTTP(unittest.TestCase):
         import urllib.request
 
         url = f"http://127.0.0.1:{self.port}/natural_intent"
-        req = urllib.request.Request(url, method="OPTIONS")
+        req = urllib.request.Request(url, headers={"Origin": "http://localhost:3000"}, method="OPTIONS")
         with urllib.request.urlopen(req, timeout=5) as resp:
             assert resp.status == 200
-            assert resp.headers.get("Access-Control-Allow-Origin") == "*"
+            assert resp.headers.get("Access-Control-Allow-Origin") == "http://localhost:3000"
 

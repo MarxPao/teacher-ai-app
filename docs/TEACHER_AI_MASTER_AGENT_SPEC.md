@@ -245,4 +245,18 @@ Ao assumir este repositório para manutenção ou expansão:
      4. Handler de execução com persistência real no `switch (toolName)` de [`components/RafinhaChat.tsx`](file:///c:/Users/rafae/Documents/antigravity/blissful-noether/components/RafinhaChat.tsx).
 
 ---
+
+## 7. Catálogo de Limitações Estatísticas Conhecidas de Modelos de IA & Backlog
+
+### 7.1 Limitação Estatística da Raiz "Registro" (`paraphrase-multilingual-MiniLM-L12-v2`)
+- **Evidência Empírica & Causa Raiz:** O modelo de embeddings multilíngue ONNX possui uma forte coocorrência estatística da palavra *"registro"* com termos de avaliação, documentação de notas e secretaria escolar (*"Notas"*, *"registro de notas"*).
+- **Caso Documentado:** Para a query descontextualizada `"registro de ausências"` contra candidatos isolados de palavra única (`['Frequência', 'Notas', 'Recados', 'Início']`), o cálculo de similaridade de cosseno vetorial puro atribui:
+  - `Notas`: **0.6146** (acima do limiar 0.50)
+  - `Frequência`: **0.4195** (abaixo do limiar 0.50)
+- **Salvaguarda em Produção:** Precedência Estrita da Camada Léxica sobre a Camada Semântica em `NavigationStateMachine.find_node_by_label`. O nó canônico `frequencia` declara explicitamente os sinônimos `["ausências", "ausencia", "faltas"]`, interceptando o comando com prioridade máxima antes de qualquer consulta à camada vetorial.
+- **Item de Backlog Técnico (`TASK-SEMANTIC-REGISTRO-01`):**
+  1. Caso surjam novos jargões regionais docentes envolvendo *"registro"* não cobertos no catálogo léxico (ex.: *"registro de faltas escolares"* em portais não mapeados), a causa já está mapeada e não deve disparar investigação do zero.
+  2. Implementar enriquecimento semântico contextual nos rótulos de candidatos quando a query contiver termos com viés conhecido (ex.: enriquecer `"Frequência"` com `"Frequência de Alunos / Ausências / Chamada"` para elevar a similaridade vetorial).
+
+---
 *Este documento é a especificação formal e viva da inteligência do Teacher AI. Preserve-o e atualize-o a cada nova iteração arquitetural.*

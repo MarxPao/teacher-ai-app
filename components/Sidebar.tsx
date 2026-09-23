@@ -19,8 +19,10 @@ const NAV: Section[] = [
     { key: 'insights',       label: 'Insights',              icon: 'ti-bulb' },
     { key: 'checklist',      label: 'Checklist',             icon: 'ti-list-check' },
     { key: 'repo',           label: 'Biblioteca',            icon: 'ti-books' },
+    { key: 'bncc',           label: 'Central BNCC',          icon: 'ti-certificate' },
     { key: 'privatetutoring',label: 'Alunos Particulares',   icon: 'ti-user-dollar' },
-    { key: 'lessonstudio',   label: 'Planejamento de Aula',  icon: 'ti-chalkboard' },
+    { key: 'lessonstudio',   label: 'Planejamento',          icon: 'ti-chalkboard' },
+    { key: 'didacticsequence', label: 'Sequência Didática',  icon: 'ti-layers-linked' },
   ]},
   { label: 'Área do Professor', items: [
     { key: 'maestro',             label: 'Maestro',                 icon: 'ti-subtask' },
@@ -65,18 +67,53 @@ const NAV: Section[] = [
   ]},
 ]
 
+export type WorkspaceMode = 'all' | 'prep' | 'classroom' | 'admin' | 'insights'
+
+const WORKSPACE_TABS: Array<{ mode: WorkspaceMode; label: string; icon: string }> = [
+  { mode: 'all',       label: 'Todos',       icon: 'ti-layout-grid' },
+  { mode: 'prep',      label: 'Preparação',  icon: 'ti-chalkboard' },
+  { mode: 'classroom', label: 'Sala de Aula',icon: 'ti-presentation' },
+  { mode: 'admin',     label: 'Portais',     icon: 'ti-plug-connected' },
+  { mode: 'insights',  label: 'Alunos',      icon: 'ti-chart-line' },
+]
+
+const WORKSPACE_MODULES: Record<WorkspaceMode, ModuleKey[]> = {
+  all: [],
+  prep: ['dashboard', 'bncc', 'lessonstudio', 'didacticsequence', 'test_and_worksheets', 'qbank', 'repo', 'rubric', 'editor', 'settings'],
+  classroom: ['dashboard', 'classroommode', 'attendancelist', 'flashcardmode', 'livequiz'],
+  admin: ['dashboard', 'gradebook', 'omnigrader', 'extensions', 'checklist', 'communications', 'autoreport'],
+  insights: ['dashboard', 'bncc', 'students', 'classes', 'analytics', 'insights', 'portfolio', 'privatetutoring'],
+}
+
 interface Props { active: ModuleKey; onNavigate: (k: ModuleKey) => void }
 
 export default function Sidebar({ active, onNavigate }: Props) {
   const [isHovered, setIsHovered] = useState(false)
   const [isPinned, setIsPinned] = useState(false)
+  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('all')
 
   useEffect(() => {
     try {
       const savedPin = localStorage.getItem('teacher_sidebar_pinned')
       if (savedPin === 'true') setIsPinned(true)
+      const savedMode = localStorage.getItem('teacher_workspace_mode') as WorkspaceMode
+      if (savedMode && WORKSPACE_MODULES[savedMode]) setWorkspaceMode(savedMode)
     } catch {}
   }, [])
+
+  const handleSetWorkspaceMode = (mode: WorkspaceMode) => {
+    setWorkspaceMode(mode)
+    try { localStorage.setItem('teacher_workspace_mode', mode) } catch {}
+  }
+
+  const filteredNav = React.useMemo(() => {
+    if (workspaceMode === 'all') return NAV
+    const allowed = WORKSPACE_MODULES[workspaceMode]
+    return NAV.map(sec => ({
+      ...sec,
+      items: sec.items.filter(it => allowed.includes(it.key))
+    })).filter(sec => sec.items.length > 0)
+  }, [workspaceMode])
 
   const togglePin = () => {
     setIsPinned(prev => {
@@ -87,6 +124,30 @@ export default function Sidebar({ active, onNavigate }: Props) {
   }
 
   const isExpanded = isPinned || isHovered
+
+  // Controle de seções colapsáveis (acordeão atomizado)
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>(() => {
+    const activeSection = NAV.find(sec => sec.items.some(it => it.key === active))
+    if (activeSection && activeSection.label) {
+      return { [activeSection.label]: true }
+    }
+    return {}
+  })
+
+  // Garante que a seção do item ativo abra automaticamente ao navegar
+  useEffect(() => {
+    const activeSection = NAV.find(sec => sec.items.some(it => it.key === active))
+    if (activeSection && activeSection.label) {
+      setOpenSections(prev => ({ ...prev, [activeSection.label]: true }))
+    }
+  }, [active])
+
+  const toggleSection = (label: string) => {
+    setOpenSections(prev => ({
+      ...prev,
+      [label]: !prev[label]
+    }))
+  }
 
   return (
     <nav
@@ -195,50 +256,134 @@ export default function Sidebar({ active, onNavigate }: Props) {
         )}
       </div>
 
+      {/* Seletor de Modo de Trabalho (Adaptive Workspaces) */}
+      {isExpanded && (
+        <div style={{
+          display: 'flex',
+          gap: 4,
+          padding: '4px 14px 10px',
+          overflowX: 'auto',
+          scrollbarWidth: 'none',
+          borderBottom: '1px solid rgba(255,255,255,0.06)',
+          marginBottom: 6,
+        }}>
+          {WORKSPACE_TABS.map(tab => {
+            const isTabActive = workspaceMode === tab.mode
+            return (
+              <button
+                key={tab.mode}
+                onClick={() => handleSetWorkspaceMode(tab.mode)}
+                title={tab.label}
+                style={{
+                  background: isTabActive ? '#8b5e3c' : 'rgba(255,255,255,0.05)',
+                  color: isTabActive ? '#fff' : 'rgba(196,160,120,0.7)',
+                  border: isTabActive ? '1px solid rgba(196,131,74,0.5)' : '1px solid rgba(255,255,255,0.06)',
+                  borderRadius: 14,
+                  padding: '4px 8px',
+                  fontSize: 11,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                <i className={`ti ${tab.icon}`} style={{ fontSize: 11 }} />
+                <span>{tab.label}</span>
+              </button>
+            )
+          })}
+        </div>
+      )}
+
       {/* Nav sections */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
-        {NAV.map((section) => (
-          <div key={section.label} style={{ marginBottom: section.label ? 4 : 0 }}>
-            {section.label && isExpanded && (
-              <div style={{
-                fontSize: 11,
-                fontWeight: 700,
-                textTransform: 'uppercase',
-                letterSpacing: '1.8px',
-                color: 'rgba(196,160,120,0.42)',
-                padding: '14px 10px 6px',
-                fontFamily: "var(--font-sans, 'Plus Jakarta Sans', sans-serif)",
-                whiteSpace: 'nowrap',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-              }}>
-                <span style={{ fontSize: 13, opacity: 0.7 }}>
-                  {section.label === 'Organização' ? '🏢' :
-                   section.label === 'Área do Professor' ? '👨‍🏫' :
-                   section.label === 'Criação' ? '✨' :
-                   section.label === 'Em Sala de Aula' ? '🎓' :
-                   section.label === 'Alunos & Avaliação' ? '📊' :
-                   section.label === 'Comunicação' ? '💬' :
-                   section.label === 'Configurações' ? '⚙️' : ''}
-                </span>
-                {section.label}
-              </div>
-            )}
-            {section.items.map((item) => {
-              const isActive = active === item.key
-              return (
-                <SidebarItem
-                  key={item.key}
-                  item={item}
-                  isActive={isActive}
-                  isExpanded={isExpanded}
-                  onNavigate={onNavigate}
-                />
-              )
-            })}
-          </div>
-        ))}
+        {filteredNav.map((section) => {
+          const isSectionOpen = !section.label || !!openSections[section.label]
+
+          return (
+            <div key={section.label || 'inicio'} style={{ marginBottom: section.label ? 4 : 0 }}>
+              {section.label && isExpanded && (
+                <button
+                  type="button"
+                  onClick={() => toggleSection(section.label)}
+                  style={{
+                    width: '100%',
+                    background: 'transparent',
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontSize: 11,
+                    fontWeight: 700,
+                    textTransform: 'uppercase',
+                    letterSpacing: '1.8px',
+                    color: isSectionOpen ? 'rgba(196,160,120,0.85)' : 'rgba(196,160,120,0.45)',
+                    padding: '10px 10px 6px',
+                    fontFamily: "var(--font-sans, 'Plus Jakarta Sans', sans-serif)",
+                    whiteSpace: 'nowrap',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    borderRadius: RADIUS.md,
+                    transition: 'all 0.15s ease',
+                    textAlign: 'left',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.color = 'rgba(253,248,242,0.95)'
+                    e.currentTarget.style.background = 'rgba(255,255,255,0.04)'
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.color = isSectionOpen ? 'rgba(196,160,120,0.85)' : 'rgba(196,160,120,0.45)'
+                    e.currentTarget.style.background = 'transparent'
+                  }}
+                >
+                  <span style={{ fontSize: 13, opacity: 0.85 }}>
+                    {section.label === 'Organização' ? '🏢' :
+                     section.label === 'Área do Professor' ? '👨‍🏫' :
+                     section.label === 'Criação' ? '✨' :
+                     section.label === 'Em Sala de Aula' ? '🎓' :
+                     section.label === 'Alunos & Avaliação' ? '📊' :
+                     section.label === 'Comunicação' ? '💬' :
+                     section.label === 'Configurações' ? '⚙️' : ''}
+                  </span>
+                  <span style={{ flex: 1 }}>{section.label}</span>
+                  <i
+                    className={`ti ${isSectionOpen ? 'ti-chevron-down' : 'ti-chevron-right'}`}
+                    style={{
+                      fontSize: 11,
+                      opacity: 0.7,
+                      transition: 'transform 0.2s ease',
+                    }}
+                  />
+                </button>
+              )}
+
+              {/* Funcionalidades da seção (visíveis quando aberta ou quando a barra estiver contraída em ícones) */}
+              {(isSectionOpen || !isExpanded) && (
+                <div style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 2,
+                  marginTop: section.label && isExpanded ? 2 : 0,
+                }}>
+                  {section.items.map((item) => {
+                    const isActive = active === item.key
+                    return (
+                      <SidebarItem
+                        key={item.key}
+                        item={item}
+                        isActive={isActive}
+                        isExpanded={isExpanded}
+                        onNavigate={onNavigate}
+                      />
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )
+        })}
       </div>
 
       {/* Footer */}

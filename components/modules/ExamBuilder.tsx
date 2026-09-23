@@ -43,6 +43,7 @@ import {
 import { buildTeacherStyleSystemPrompt } from '@/lib/teacherStyleProfile'
 import { createBalancedBlueprint, generateBlueprintPromptSection } from '@/lib/testBlueprintEngine'
 import { generateIsomorphicFormB } from '@/lib/examFormTransformer'
+import { createExamSheetLayout, generatePrintableOmrSheetHtml, ExamSheetLayout } from '@/lib/omr'
 // Auto-registra os perfis disponíveis ao carregar o módulo
 import '@/lib/subjects/english'
 import '@/lib/subjects/portuguese'
@@ -280,9 +281,79 @@ export default function ExamBuilder() {
   const [activePresetName, setActivePresetName] = useState('Padrão Cambridge')
   const [calibrationSavedToast, setCalibrationSavedToast] = useState(false)
 
+  // ─── Estados do Cartão-Resposta OMR ───
+  const [showOmrModal, setShowOmrModal] = useState(false)
+  const [omrQuestionsCount, setOmrQuestionsCount] = useState(10)
+  const [omrAnswerKeyInput, setOmrAnswerKeyInput] = useState('1:A, 2:B, 3:C, 4:D, 5:A, 6:B, 7:C, 8:D, 9:A, 10:B')
+  const [omrSchoolName, setOmrSchoolName] = useState('TEACHER AI — SISTEMA OFICIAL DE AVALIAÇÃO')
+
+  const handleOpenOmrModal = () => {
+    const totalFromCounts = computeTotalQuestions(questionCounts)
+    const questionsList = result ? parseContentToQuestions(result) : []
+    const effectiveCount = questionsList.length > 0 ? questionsList.length : (totalFromCounts > 0 ? totalFromCounts : 10)
+    setOmrQuestionsCount(effectiveCount)
+
+    const derivedKeys: string[] = []
+    questionsList.forEach((q: EditableQuestionItem, idx: number) => {
+      const qNum = idx + 1
+      const keyLetter = q.answerKey ? q.answerKey.trim().toUpperCase().charAt(0) : ['A', 'B', 'C', 'D'][idx % 4]
+      derivedKeys.push(`${qNum}:${keyLetter}`)
+    })
+    if (derivedKeys.length > 0) {
+      setOmrAnswerKeyInput(derivedKeys.join(', '))
+    }
+    setShowOmrModal(true)
+  }
+
+
+  const handlePrintOmrSheet = () => {
+    const parsedKey: Record<number, string> = {}
+    omrAnswerKeyInput.split(',').forEach(pair => {
+      const [numStr, optStr] = pair.trim().split(':')
+      if (numStr && optStr) {
+        parsedKey[parseInt(numStr.trim(), 10)] = optStr.trim().toUpperCase()
+      }
+    })
+
+    const layout = createExamSheetLayout({
+      id: `exam_${Date.now()}`,
+      title: topic || 'Avaliação Oficial',
+      version: 'Form_A',
+      totalQuestions: omrQuestionsCount,
+      optionsPerQuestion: 4,
+      answerKey: parsedKey,
+    })
+
+    const htmlContent = generatePrintableOmrSheetHtml(layout, omrSchoolName)
+    const printWin = window.open('', '_blank', 'width=900,height=1100')
+    if (printWin) {
+      printWin.document.open()
+      printWin.document.write(htmlContent)
+      printWin.document.close()
+      printWin.focus()
+      setTimeout(() => {
+        printWin.print()
+      }, 500)
+    }
+  }
+
+  const handleSaveOmrForOmniGrader = () => {
+    const layout = {
+      title: topic || 'Avaliação Oficial',
+      totalQuestions: omrQuestionsCount,
+      answerKeyString: omrAnswerKeyInput,
+      timestamp: Date.now()
+    }
+    localStorage.setItem('teacher_omr_active_layout', JSON.stringify(layout))
+    toast.success('Gabarito salvo! Redirecionando para o OmniGrader...')
+    setShowOmrModal(false)
+    window.dispatchEvent(new CustomEvent('teacher:navigate', { detail: 'omnigrader' }))
+  }
+
   useEffect(() => {
     setSavedPresets(getStoredPresets())
   }, [])
+
 
   const applyPreset = (preset: AssessmentPreset) => {
     setBloomRemember(preset.bloomDistribution.remember)
@@ -543,13 +614,14 @@ export default function ExamBuilder() {
 
     try {
       let libContext = ''
-      const compiled = compileSourcesPrompt(sources, knowledgeMode)
+      const queryTopic = topic || sections.join(' ') || 'English'
+      const compiled = compileSourcesPrompt(sources, knowledgeMode, queryTopic)
       if (compiled.activeCount > 0) {
         libContext = compiled.promptContext
       } else {
         // Fallback RAG automático se não houver fontes manuais selecionadas no Hub
         const { searchLibraryContext, buildRagPromptContext } = await import('@/lib/ragEngine')
-        const chunks = searchLibraryContext(topic || sections.join(' ') || 'English', { limit: 3 })
+        const chunks = searchLibraryContext(queryTopic, { limit: 8 })
         if (chunks.length > 0) {
           libContext = buildRagPromptContext(chunks)
         }
@@ -711,8 +783,12 @@ Retorne a questão reformulada no formato padrão (Enunciado, Alternativas se ap
               <button onClick={handleSaveToActivitiesBank} style={{ padding: '9px 16px', borderRadius: RADIUS.lg, border: '1px solid #8b5e3c', background: '#8b5e3c', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, boxShadow: '0 2px 8px rgba(139,94,60,0.2)' }}>
                 <i className="ti ti-database" /> Salvar no Banco de Dados
               </button>
+              <button onClick={handleOpenOmrModal} style={{ padding: '9px 16px', borderRadius: RADIUS.lg, border: '1px solid #2563eb', background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, boxShadow: '0 2px 8px rgba(37,99,235,0.25)' }}>
+                <i className="ti ti-scan" /> Folha de Respostas OMR (A4)
+              </button>
             </>
           )}
+
           <button onClick={() => setShowSaved(true)} style={{ padding: '9px 16px', borderRadius: RADIUS.lg, border: '1px solid #8b5e3c', background: '#fdf9f3', color: '#2c1a0e', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
             <i className="ti ti-bookmark" style={{ color: '#b58900' }} /> Provas Salvas ({savedCount})
           </button>
@@ -1232,6 +1308,117 @@ Retorne a questão reformulada no formato padrão (Enunciado, Alternativas se ap
           </div>
         </div>
       )}
+
+      {/* ─── Modal de Folha de Respostas OMR (A4) ─── */}
+      {showOmrModal && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(44,26,14,0.6)', backdropFilter: 'blur(4px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: 20
+        }}>
+          <div style={{
+            background: '#fff', borderRadius: RADIUS.xl, padding: 28, width: '100%', maxWidth: 640,
+            boxShadow: SHADOW.lg, border: '1px solid #d5c8bb', maxHeight: '90vh', overflowY: 'auto'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ width: 36, height: 36, borderRadius: RADIUS.md, background: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <i className="ti ti-scan" style={{ fontSize: 20, color: '#2563eb' }} />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#2c1a0e' }}>
+                    Folha de Respostas OMR (Cartão-Resposta A4)
+                  </h3>
+                  <p style={{ margin: 0, fontSize: 12, color: '#7a5c42' }}>
+                    Cartão padronizado com 4 marcadores fiduciais e QR Code de calibração milimétrica
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowOmrModal(false)}
+                style={{ background: 'none', border: 'none', fontSize: 22, color: '#8b5e3c', cursor: 'pointer', lineHeight: 1 }}
+              >
+                &times;
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginBottom: 20 }}>
+              <div>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#4a2f17', marginBottom: 4 }}>
+                  Nome da Instituição / Cabeçalho da Folha:
+                </label>
+                <input
+                  type="text"
+                  value={omrSchoolName}
+                  onChange={e => setOmrSchoolName(e.target.value)}
+                  style={{ width: '100%', padding: '8px 12px', borderRadius: RADIUS.md, border: '1px solid #d5c8bb', fontSize: 13, boxSizing: 'border-box' }}
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#4a2f17', marginBottom: 4 }}>
+                    Quantidade de Questões:
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={50}
+                    value={omrQuestionsCount}
+                    onChange={e => setOmrQuestionsCount(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                    style={{ width: '100%', padding: '8px 12px', borderRadius: RADIUS.md, border: '1px solid #d5c8bb', fontSize: 13, boxSizing: 'border-box' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#4a2f17', marginBottom: 4 }}>
+                    Formato de Alternativas:
+                  </label>
+                  <div style={{ padding: '8px 12px', background: '#fdfbf7', border: '1px solid #ede4d8', borderRadius: RADIUS.md, fontSize: 13, fontWeight: 700, color: '#2c1a0e' }}>
+                    A, B, C, D (4 opções)
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#4a2f17', marginBottom: 4 }}>
+                  Gabarito Oficial da Prova:
+                </label>
+                <textarea
+                  rows={3}
+                  value={omrAnswerKeyInput}
+                  onChange={e => setOmrAnswerKeyInput(e.target.value)}
+                  placeholder="Ex: 1:A, 2:B, 3:C, 4:D..."
+                  style={{ width: '100%', padding: '8px 12px', borderRadius: RADIUS.md, border: '1px solid #d5c8bb', fontSize: 12, fontFamily: 'monospace', boxSizing: 'border-box' }}
+                />
+                <span style={{ fontSize: 11, color: '#8b5e3c' }}>
+                  💡 O gabarito será embutido no QR Code da folha e transmitido para o OmniGrader.
+                </span>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, flexWrap: 'wrap', paddingTop: 14, borderTop: '1px solid #ede4d8' }}>
+              <button
+                onClick={() => setShowOmrModal(false)}
+                style={{ padding: '9px 16px', borderRadius: RADIUS.md, border: '1px solid #d5c8bb', background: '#fff', color: '#5c3d20', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handlePrintOmrSheet}
+                style={{ padding: '9px 18px', borderRadius: RADIUS.md, border: '1px solid #8b5e3c', background: '#faf6f0', color: '#8b5e3c', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+              >
+                <i className="ti ti-printer" /> Imprimir Cartão A4
+              </button>
+              <button
+                onClick={handleSaveOmrForOmniGrader}
+                style={{ padding: '9px 18px', borderRadius: RADIUS.md, border: 'none', background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, boxShadow: '0 2px 8px rgba(37,99,235,0.25)' }}
+              >
+                <i className="ti ti-arrow-right" /> Salvar & Abrir no OmniGrader
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
 
       {/* Smart Insights Panel */}
       {showSmartInsights && (

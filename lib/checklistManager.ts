@@ -194,7 +194,7 @@ export function getTimelineBucket(createdAt?: number | string, now: Date = new D
  * Formata o momento de postagem de forma humanizada e elegante para a Timeline
  * Exemplos: "Hoje às 10:45", "Ontem às 16:30", "12/09 às 14:15"
  */
-export function formatTimelineTime(createdAt?: number | string, referenceDate?: Date): string {
+export function formatTimelineTime(createdAt?: number | string, referenceDate: Date = new Date()): string {
   if (!createdAt) return 'Data não informada'
   const ts = typeof createdAt === 'string' ? new Date(createdAt).getTime() : createdAt
   if (isNaN(ts) || ts <= 0) return 'Data não informada'

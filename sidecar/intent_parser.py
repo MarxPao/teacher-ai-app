@@ -93,6 +93,161 @@ DIRETRIZ MANDATÓRIA DE SEGURANÇA E ISOLAMENTO DE DADOS (ANTI-PROMPT INJECTION)
 
 
 
+_INJECTION_PATTERNS = [
+    # 1. Tentativa de sobrescrever ou anular instruções de sistema
+    r"(?i)\b(?:ignore|desconsidere|esque[çc]a|delete)\b.*?\b(?:instru[çc][õo]es|orienta[çc][õo]es|regras|diretrizes|comandos)\b",
+    r"(?i)\b(?:ignore|disregard|forget|override)\b.*?\b(?:previous|system|all)\b.*?\b(?:instructions|prompts|rules)\b",
+    r"(?i)\b(?:voc[êe]\s+agora\s+[ée]|you\s+are\s+now|nova\s+identidade|new\s+role)\b",
+    r"(?i)\b(?:system\s+override|system\s+prompt|<system>|\[system\]|sistema:)\b",
+    # 2. Exfiltração não autorizada de dados de alunos / turmas
+    r"(?i)\b(?:envie|mande|encaminhe|transfira|exporte|dispare|send|exfiltrate)\b.*?\b(?:lista|dados|alunos|turma|telefones|emails|notas)\b.*?\b(?:para|to)\b.*?[@\w\.-]+",
+    # 3. Ações destrutivas ou mutações em massa não autorizadas
+    r"(?i)\b(?:marque|lance|registre)\b.*?\b(?:presen[çc]a|falta|nota)\b.*?\b(?:de\s+todos|para\s+todos|da\s+turma\s+toda)\b",
+    r"(?i)\b(?:exclua|delete|apague|remova|drop|limpar)\b.*?\b(?:todos|alunos|turma|banco|notas|registros|tabela)\b",
+    # 4. Injeção de SQL ou código estrutural
+    r"(?i)(?:\bdrop\s+table\b|\bdelete\s+from\b|\btruncate\s+table\b|;\s*drop\b|\balter\s+table\b|union\s+select)",
+    r"(?i)(?:<script\b|javascript:|eval\s*\(|window\.location|document\.cookie)",
+]
+
+def detect_prompt_injection(text: str) -> Tuple[bool, List[str]]:
+    """
+    Detecta padrões de prompt injection, override de instruções, exfiltração de dados
+    ou injeção de código em textos vindos de páginas do portal ou mensagens de terceiros.
+    Retorna (True, lista_de_ameaças) se detectar algum padrão malicioso.
+    """
+    if not text or not isinstance(text, str):
+        return False, []
+    
+    detected: List[str] = []
+    for pattern in _INJECTION_PATTERNS:
+        match = re.search(pattern, text)
+        if match:
+            detected.append(match.group(0))
+            
+    return bool(detected), detected
+
+
+def split_compound_command(text: str) -> Dict[str, Any]:
+    """
+    Divide um comando composto em destino de navegação e instrução restante.
+    Garante que:
+    1. O destino NUNCA inclui conjunções (e, então, depois, em seguida, etc.) nem verbos subsequentes.
+    2. O resto do comando é preservado com exatidão para execução em cascata.
+    """
+    if not text or not isinstance(text, str):
+        return {"has_navigation": False, "nav_target": None, "conjunction": None, "remaining_command": None, "is_compound": False}
+
+    clean = text.lower().strip()
+    clean = re.sub(r"^(?:ol[áa]|oi|ei|rafinha|por\s+favor|pfv|ajuda|ajude|\s+)+[,:]?\s*", "", clean)
+    clean = re.sub(r"\b(?:no\s+site|no\s+portal|no\s+sistema|via\s+chat|no\s+app).*$", "", clean).strip()
+
+    # Padrão Especial 1: "<ação/entidade> [de/do/da] <alvo> em/no/na <seção>"
+    # Ex: "acesse o perfil de alice almeida em meus alunos", "ver dados de joão em diário"
+    m_entity_section = re.search(
+        r"^(?:acesse|acessa|acessar|abra|abre|abrir|ver|veja|olhe|olhar|mostrar|mostre)?\s*(?:o|a)?\s*(?:perfil|dados|detalhes|ficha|cadastro|historico)\s+(?:de|do|da)\s+([a-zA-ZÀ-ÿ\s]+?)\s+(?:em|no|na|nos|nas)\s+([a-zA-ZÀ-ÿ0-9_\s-]+)$",
+        clean,
+        flags=re.IGNORECASE
+    )
+    if m_entity_section:
+        entity_name = m_entity_section.group(1).strip()
+        section_name = m_entity_section.group(2).strip()
+        section_clean = re.sub(r"^(?:a|o|os|as)?\s*(?:aba|menu|seção|secao|guia|tela)\s+", "", section_name, flags=re.IGNORECASE).strip()
+        section_clean = re.sub(r"^(?:de|do|da)\s+", "", section_clean, flags=re.IGNORECASE).strip()
+        return {
+            "has_navigation": True,
+            "nav_target": section_clean,
+            "conjunction": "em",
+            "remaining_command": f"acessar perfil de {entity_name}",
+            "is_compound": True,
+            "aluno": entity_name.title(),
+            "acao_secundaria": "abrir_perfil"
+        }
+
+    # Padrão Especial 2: "<ação/entidade> [de/do/da] <alvo>" sem seção (ex: "acesse o perfil de alice almeida")
+    # NUNCA deve ser interpretado como nome de aba literal!
+    m_entity_direct = re.search(
+        r"^(?:acesse|acessa|acessar|abra|abre|abrir|ver|veja|olhe|olhar|mostrar|mostre)?\s*(?:o|a)?\s*(?:perfil|dados|detalhes|ficha|cadastro|historico)\s+(?:de|do|da)\s+([a-zA-ZÀ-ÿ\s]+)$",
+        clean,
+        flags=re.IGNORECASE
+    )
+    if m_entity_direct and not any(w in clean for w in ["turma", "escola", "professor", "professora"]):
+        entity_name = m_entity_direct.group(1).strip()
+        return {
+            "has_navigation": False,
+            "nav_target": None,
+            "conjunction": None,
+            "remaining_command": f"acessar perfil de {entity_name}",
+            "is_compound": False,
+            "aluno": entity_name.title(),
+            "acao_secundaria": "abrir_perfil"
+        }
+
+    nav_prefix_regex = r"(?:^|\b)(?:entre|entra|entrar|vai|vá|ir|navegue|navega|navegar|acesse|acessa|acessar|abra|abre|abrir|clique|clica|clicar|mostre|mostra|quero\s+ver|ver)\s+(?:\b(?:em|no|na|nos|nas|para|pra|pro|pela|pelo)\b\s+)?(?:\b(?:a|o|os|as)\b\s+)?(?:\b(?:aba|menu|seção|secao|guia|link|tela|pasta)\b\s+)?(?:\b(?:de|do|da|dos|das)\b\s+)?"
+    prefix_match = re.search(nav_prefix_regex, clean)
+    if not prefix_match:
+        m2 = re.search(r"^(?:aba|menu|seção|secao|guia)\s+([a-zA-ZÀ-ÿ0-9_-]+(?:\s+[a-zA-ZÀ-ÿ0-9_-]+)?)", clean)
+        if m2:
+            target = re.sub(r"^(?:de|do|da)\s+", "", m2.group(1).strip()).strip()
+            rest = clean[m2.end():].strip()
+            return {
+                "has_navigation": True,
+                "nav_target": target,
+                "conjunction": None,
+                "remaining_command": rest or None,
+                "is_compound": bool(rest)
+            }
+        return {"has_navigation": False, "nav_target": None, "conjunction": None, "remaining_command": None, "is_compound": False}
+
+    after_prefix = clean[prefix_match.end():].strip()
+    if not after_prefix:
+        return {"has_navigation": False, "nav_target": None, "conjunction": None, "remaining_command": None, "is_compound": False}
+
+    # Divisores: conjunções e conectivos ou verbos subsequentes
+    conjunction_regex = r"\s*(?:,\s*|\s*;\s*|\s+(?:e\s+depois|pra\s+depois|para\s+depois|em\s+seguida|logo\s+em\s+seguida|e\s+ent[ãa]o|ent[ãa]o|depois|a[íi]|e)\s+|\s+(?:selecionar|seleciona|selecione|escolher|escolha|escolhe|filtrar|filtra|filtre|marcar|marca|marque|lan[çc]ar|lanca|lance|lancar|colocar|coloca|coloque|botar|bota|bote|anotar|anota|anote|registrar|registra|registre|ver|olhar|olhe|buscar|busca|busque|procurar|procura|procure|mostrar|mostra|mostre|baixar|baixa|baixe|enviar|envia|envie|responder|responda|responde|escrever|escreve|escreva|preencher|preencha|preenche)\b\s*)"
+    conj_match = re.search(conjunction_regex, after_prefix)
+
+    if conj_match:
+        nav_target = after_prefix[:conj_match.start()].strip()
+        matched_divider = conj_match.group(0).strip().lower()
+        raw_rest = after_prefix[conj_match.end():].strip()
+
+        action_verbs = [
+            "selecionar", "seleciona", "selecione", "escolher", "escolha", "escolhe",
+            "filtrar", "filtra", "filtre", "marcar", "marca", "marque",
+            "lançar", "lanca", "lance", "lancar", "colocar", "coloca", "coloque",
+            "botar", "bota", "bote", "anotar", "anota", "anote",
+            "registrar", "registra", "registre", "ver", "olhar", "olhe",
+            "buscar", "busca", "busque", "procurar", "procura", "procure",
+            "mostrar", "mostra", "mostre", "baixar", "baixa", "baixe",
+            "enviar", "envia", "envie", "responder", "responda", "responde",
+            "escrever", "escreve", "escreva", "preencher", "preencha", "preenche"
+        ]
+        if matched_divider in action_verbs:
+            conjunction = None
+            remaining_command = f"{matched_divider} {raw_rest}".strip()
+        else:
+            conjunction = matched_divider
+            remaining_command = raw_rest or None
+    else:
+        nav_target = after_prefix.strip()
+        conjunction = None
+        remaining_command = None
+
+    nav_target = re.sub(r"^(?:a|o|os|as)\s+", "", nav_target, flags=re.IGNORECASE)
+    nav_target = re.sub(r"\s+(?:no\s+site|no\s+portal|do\s+portal|no\s+sistema|na\s+aba|via\s+chat|no\s+app).*$", "", nav_target, flags=re.IGNORECASE).strip()
+
+    if not nav_target or nav_target.lower() in ["aluno", "nota", "falta", "a nota", "uma nota", "site", "portal"]:
+        return {"has_navigation": False, "nav_target": None, "conjunction": None, "remaining_command": None, "is_compound": False}
+
+    return {
+        "has_navigation": True,
+        "nav_target": nav_target,
+        "conjunction": conjunction,
+        "remaining_command": remaining_command or None,
+        "is_compound": bool(remaining_command and remaining_command.strip())
+    }
+
+
 def _parse_with_regex_rules(text: str) -> Dict[str, Any]:
     """
     Fallback determinístico baseado em regex para quando não houver conexão com LLM
@@ -145,10 +300,6 @@ def _parse_with_regex_rules(text: str) -> Dict[str, Any]:
 
     # 2.3. Ações Genéricas sobre Itens (Recados / Mensagens / Arquivos / Agenda)
     # Padrão A: Responder / Enviar recado ou mensagem (direto ou composto pós-navegação)
-    # Ex 1: "responder Rodrigo (responsável) na aba início nos últimos recados"
-    # Ex 2: "entrar em Recados e enviar recado para Alice"
-    # Ex 3: "enviar recado para Alice dizendo que não haverá aula"
-    # Ex 4: "mandar mensagem pro Rodrigo falando que o aluno melhorou"
     m_responder = re.search(
         r"(?:(?:entre|entra|entrar|vai|vá|ir|acesse|acessa|acessar)\s+(?:em|no|na|nos|nas|para|pra|pro)\s+([a-zA-ZÀ-ÿ0-9_-]+)\s+e\s+)?"
         r"(?:responder|responda|responde|enviar\s+resposta|mande\s+resposta|enviar|envie|envia|mandar|mande|manda|escrever|escreva|escreve)"
@@ -165,10 +316,8 @@ def _parse_with_regex_rules(text: str) -> Dict[str, Any]:
         m_resp_simple = re.search(r"(?:responder|responda|responde|enviar|envie|mandar|mande)\s+(?:um\s+|uma\s+)?(?:recado|mensagem|resposta)?\s*(?:a|ao|para|pro|pra)?\s*([a-zA-ZÀ-ÿ0-9_\-\s\(\)]+)", cleaned, re.IGNORECASE)
         if m_resp_simple:
             raw_target = m_resp_simple.group(1).strip()
-            # Separa possível menção a aba
             aba_match = re.search(r"\b(?:na|no)\s+aba\s+([a-zA-ZÀ-ÿ0-9_-]+)", raw_target, re.IGNORECASE)
             aba_dest = aba_match.group(1).title() if aba_match else None
-            # Separa conteúdo após "dizendo" ou ":"
             dizendo_match = re.search(r"(?:dizendo\s*(?:que)?|com\s+a\s+mensagem|:)\s*(.+)$", raw_target, re.IGNORECASE)
             resp_content = dizendo_match.group(1).strip() if dizendo_match else None
 
@@ -212,7 +361,6 @@ def _parse_with_regex_rules(text: str) -> Dict[str, Any]:
         aba_dest = m_responder.group(3).strip().title() if m_responder.group(3) else prefix_nav
         conteudo_resp = m_responder.group(5).strip() if len(m_responder.groups()) >= 5 and m_responder.group(5) else None
 
-        # Limpa conectivos e artigos do alvo
         alvo_clean = re.sub(r"^(?:o|a|os|as|do|da|de|ao|pro|pra|para)\s+", "", alvo_raw, flags=re.IGNORECASE).strip()
         alvo_clean = re.sub(r"\s+(?:nos?|nas?)\s+.*$", "", alvo_clean, flags=re.IGNORECASE).strip()
 
@@ -266,43 +414,91 @@ def _parse_with_regex_rules(text: str) -> Dict[str, Any]:
             "clarification_question": None
         }
 
+    # 2.4. Acesso a Perfil de Aluno ou Ficha Cadastral ("acesse o perfil de Alice Almeida em meus alunos", "ver perfil de João", etc.)
+    m_perfil_loc = re.search(r"(?:perfil|dados|detalhes|ficha|cadastro|historico)\s+(?:de|do|da)\s+([a-zA-ZÀ-ÿ\s]+?)\s+(?:em|no|na|nos|nas)\s+([a-zA-ZÀ-ÿ0-9_\s-]+)", lower)
+    if m_perfil_loc:
+        aluno_clean = m_perfil_loc.group(1).strip().title()
+        secao_clean = re.sub(r"^(?:a|o|os|as)?\s*(?:aba|menu|seção|secao|guia|tela)\s+", "", m_perfil_loc.group(2).strip(), flags=re.IGNORECASE).strip()
+        secao_clean = re.sub(r"^(?:de|do|da)\s+", "", secao_clean, flags=re.IGNORECASE).strip().title()
+        return {
+            "verbo_acao": "acessar",
+            "objeto_alvo": f"Perfil de {aluno_clean}",
+            "tipo_operacao": "leitura",
+            "valor": None,
+            "descricao_tarefa": f"Acessar perfil de {aluno_clean} na seção {secao_clean}",
+            "destino_navegacao": secao_clean,
+            "parametros_extras": {"secao": secao_clean},
+            "acao": "abrir_perfil",
+            "destino": secao_clean,
+            "aluno": aluno_clean,
+            "nota": None,
+            "faltas": None,
+            "turma": None,
+            "disciplina": None,
+            "portal": None,
+            "is_complete": True,
+            "clarification_question": None,
+            "remaining_command": f"acessar perfil de {aluno_clean}",
+            "segunda_instrucao": f"acessar perfil de {aluno_clean}",
+            "is_compound": True
+        }
+
+    m_perfil_direto = re.search(r"(?:perfil|dados|detalhes|ficha|cadastro|historico)\s+(?:de|do|da)\s+([a-zA-ZÀ-ÿ\s]+)", lower)
+    if m_perfil_direto and not any(w in lower for w in ["turma", "escola", "professor", "professora"]):
+        aluno_clean = m_perfil_direto.group(1).strip().title()
+        return {
+            "verbo_acao": "acessar",
+            "objeto_alvo": f"Perfil de {aluno_clean}",
+            "tipo_operacao": "leitura",
+            "valor": None,
+            "descricao_tarefa": f"Acessar perfil de {aluno_clean}",
+            "destino_navegacao": None,
+            "parametros_extras": {},
+            "acao": "abrir_perfil",
+            "destino": None,
+            "aluno": aluno_clean,
+            "nota": None,
+            "faltas": None,
+            "turma": None,
+            "disciplina": None,
+            "portal": None,
+            "is_complete": True,
+            "clarification_question": None,
+            "remaining_command": None,
+            "segunda_instrucao": None,
+            "is_compound": False
+        }
+
     # 2.5. Navegação para Abas, Menus ou Seções ("entre nos arquivos", "entre na aba arquivos", "ir para diário", etc.)
-
-    clean_nav = lower
-    clean_nav = re.sub(r"^(?:ol[áa]|oi|ei|rafinha|por\s+favor|pfv|ajuda|ajude)\s*[,:]?\s*", "", clean_nav)
-    clean_nav = re.sub(r"\b(?:no\s+site|no\s+portal|no\s+sistema|via\s+chat|no\s+app).*$", "", clean_nav).strip()
-    clean_nav = re.sub(r"\s+\b(?:e|depois|em\s+seguida|a[ií])\s+(?:enviar|mandar|mande|responder|responda|lan[çc]ar|lance|marcar|marque|colocar|coloque|escrever|escreva|digitar|digite|registrar|registre|anotar|anote|editar|excluir|deletar|salvar|confirmar|submeter|aprovar|baixar|baixe|abrir|abra|ver)\b.*$", "", clean_nav, flags=re.IGNORECASE).strip()
-
-    nav_match = re.search(
-        r"(?:entre|entra|entrar|vai|vá|ir|navegue|navega|navegar|acesse|acessa|acessar|abra|abre|abrir|clique|clica|clicar|mostre|mostra|ver|quero\s+ver)\s+(?:\b(?:em|no|na|nos|nas|para|pra|pro|pela|pelo)\b\s+)?(?:\b(?:a|o|os|as)\b\s+)?(?:\b(?:aba|menu|seção|secao|guia|link|tela|pasta)\b\s+)?(?:\b(?:de|do|da|dos|das)\b\s+)?([a-zA-ZÀ-ÿ0-9_-]+(?:\s+[a-zA-ZÀ-ÿ0-9_-]+)?)",
-        clean_nav
-    )
-    if nav_match:
-        cand = nav_match.group(1).strip()
-        cand = re.sub(r"^(?:a|o|os|as|de|do|da|dos|das)\s+", "", cand, flags=re.IGNORECASE)
-        cand = re.sub(r"\s+(?:no|na|do|da|de|pra|para|no\s+site|no\s+portal|do\s+portal|na\s+aba|via\s+chat).*$", "", cand, flags=re.IGNORECASE).strip()
-        cand = re.sub(r"\s+\b(?:e|e\s+depois|depois|em\s+seguida|a[ií])\b.*$", "", cand, flags=re.IGNORECASE).strip()
-        cand = re.sub(r"\s+e$", "", cand, flags=re.IGNORECASE).strip()
-        if cand and cand.lower() not in ["aluno", "nota", "falta", "a nota", "uma nota", "site", "portal"]:
-            return {
-                "verbo_acao": "navegar",
-                "objeto_alvo": cand.title(),
-                "tipo_operacao": "leitura",
-                "valor": None,
-                "descricao_tarefa": f"Navegar para a aba {cand.title()}",
-                "destino_navegacao": cand.title(),
-                "parametros_extras": {},
-                "acao": "navegar_aba",
-                "destino": cand.title(),
-                "aluno": None,
-                "nota": None,
-                "faltas": None,
-                "turma": None,
-                "disciplina": None,
-                "portal": None,
-                "is_complete": True,
-                "clarification_question": None
-            }
+    compound_nav = split_compound_command(lower)
+    if compound_nav["has_navigation"] and compound_nav["nav_target"]:
+        cand = compound_nav["nav_target"]
+        target_display = cand.title()
+        remaining = compound_nav["remaining_command"]
+        aluno_val = compound_nav.get("aluno")
+        acao_val = "abrir_perfil" if aluno_val else "navegar_aba"
+        return {
+            "verbo_acao": "acessar" if aluno_val else "navegar",
+            "objeto_alvo": f"Perfil de {aluno_val}" if aluno_val else target_display,
+            "tipo_operacao": "leitura",
+            "valor": None,
+            "descricao_tarefa": f"Acessar perfil de {aluno_val} na seção {target_display}" if aluno_val else f"Navegar para a aba {target_display}",
+            "destino_navegacao": target_display,
+            "parametros_extras": {},
+            "acao": acao_val,
+            "destino": target_display,
+            "aluno": aluno_val,
+            "nota": None,
+            "faltas": None,
+            "turma": None,
+            "disciplina": None,
+            "portal": None,
+            "is_complete": True,
+            "clarification_question": None,
+            "remaining_command": remaining,
+            "segunda_instrucao": remaining,
+            "is_compound": compound_nav["is_compound"]
+        }
 
     # 3. Lançamento de Falta
     falta_match = re.search(r"(?:coloca|lança|lance|lançar|marca|marcar|bota|registrar|registre)\s+(?:(\d+)\s+)?faltas?\s+(?:para|pra|pro|do|da|no|na)\s+([a-zA-ZÀ-ÿ\s]+)", lower)
@@ -749,6 +945,19 @@ def _parse_with_regex_rules(text: str) -> Dict[str, Any]:
 # incluindo tiers gratuitos, porque nenhum dado pessoal de aluno trafega.
 # ---------------------------------------------------------------------------
 
+# Lista de palavras comuns em português que não são nomes de alunos mesmo após preposições
+_COMMON_NON_STUDENT_WORDS = {
+    "aula", "classe", "turma", "turmas", "escola", "prova", "provas", "teste", "testes",
+    "materia", "matéria", "exercicio", "exercício", "exercicios", "exercícios", "casa",
+    "reuniao", "reunião", "recuperacao", "recuperação", "relatorio", "relatório", "relatorios",
+    "arquivos", "configuracoes", "configurações", "redacao", "redação", "duvida", "dúvida",
+    "conteudo", "conteúdo", "chamada", "diario", "diário", "presenca", "presença", "falta",
+    "faltas", "nota", "notas", "boletim", "boletins", "quadro", "horario", "horário", "horarios", "horários", "grade", "recreio",
+    "hoje", "ontem", "amanha", "amanhã", "tarde", "manha", "manhã", "noite", "geral", "tudo",
+    "todos", "todas", "grupo", "alunos", "alunas", "estudantes", "livro", "caderno", "atividade",
+    "atividades", "seção", "secao", "aba", "portal", "sistema",
+    "vá", "va", "vai", "ir", "liste", "listar", "mostre", "mostrar", "ver", "quais", "qual", "quantos", "quantas", "dias", "semana", "aulas", "tenho"
+}
 # Verbos e substantivos que indicam operação sobre dado pessoal de aluno
 _PII_ACTION_VERBS = {
     "lança", "lance", "lançar", "coloca", "colocar", "bota", "botar",
@@ -797,6 +1006,20 @@ _COMMON_BRAZILIAN_FIRST_NAMES = {
     "clara", "heloisa", "heloísa", "cecilia", "cecília", "valentina", "benjamin"
 }
 
+def _is_generic_non_pii(text: str) -> bool:
+    """Identifica requisições pedagógicas/instrucionais ou de navegação pura que não contêm dados de aluno."""
+    lower = text.lower().strip()
+    if any(lower.startswith(p) for p in ["crie ", "criar ", "gere ", "gerar ", "elabore ", "sugira ", "proponha ", "monte "]):
+        if any(w in lower for w in ["questões", "questoes", "prova", "plano", "rubrica", "resumo", "atividade", "exercício", "exercicio"]):
+            return True
+    if any(lower.startswith(p) for p in ["quais ", "qual ", "como ", "quem "]):
+        if any(w in lower for w in ["estratégia", "estrategia", "desempenho médio", "desempenho medio", "média", "media", "ensinar", "estudante", "estudantes", "alunos", "turma"]):
+            return True
+    if any(lower.startswith(p) for p in ["navegue ", "navega ", "navegar ", "ir para ", "vá para ", "va para ", "vá em ", "va em ", "abra ", "abrir ", "quero ver ", "ver ", "liste ", "listar ", "mostre ", "mostrar "]):
+        if any(w in lower for w in ["aba", "seção", "secao", "relatório", "relatorio", "arquivo", "arquivos", "diário", "diario", "configurações", "configuracoes", "horário", "horários", "horario", "horarios", "grade"]):
+            return True
+    return False
+
 _STOPWORDS_AFTER_PREP = {
     "que", "o", "a", "os", "as", "um", "uma", "uns", "umas", "classe", "turma",
     "aula", "diario", "diário", "prova", "sistema", "escola", "colegio", "colégio",
@@ -833,7 +1056,7 @@ def _contains_student_pii(text: str, known_students: Optional[List[str]] = None)
                 continue
             st_norm = unicodedata.normalize("NFD", str(st))
             st_clean = "".join([c for c in st_norm if not unicodedata.combining(c)]).lower()
-            st_parts = [p for p in re.split(r"\W+", st_clean) if len(p) >= 3]
+            st_parts = [p for p in re.split(r"\W+", st_clean) if len(p) >= 3 and p not in _COMMON_NON_STUDENT_WORDS]
             for part in st_parts:
                 if part in tokens or part in lower:
                     return True
@@ -1018,6 +1241,7 @@ def extract_intent(
     ollama_model: Optional[str] = None,
     ollama_url: Optional[str] = None,
     known_students: Optional[List[str]] = None,
+    supabase_client: Optional[Any] = None,
 ) -> Dict[str, Any]:
     """
     Ponto de entrada de interpretação de intenção pedagógica (Camada 1 - NLU).
@@ -1056,14 +1280,29 @@ def extract_intent(
     if page_content:
         isolated_prompt += f"\n<conteudo_da_pagina>\n{page_content}\n</conteudo_da_pagina>"
 
+    # Detecção ativa de injeção em dados de terceiros (page_content) e entrada do usuário
+    page_injection_detected, page_injection_threats = detect_prompt_injection(page_content) if page_content else (False, [])
+    if page_injection_detected:
+        print(f"[SEGURANÇA] Tentativa de prompt injection detectada em conteúdo do portal/terceiros: {page_injection_threats}")
+
+    user_injection_detected, user_injection_threats = detect_prompt_injection(user_text)
+    if user_injection_detected:
+        print(f"[SEGURANÇA] Tentativa de prompt injection ou SQLi detectada no texto do comando: {user_injection_threats}")
+
+    # ─── ROTEAMENTO POR PRIVACIDADE ────────────────────────────────────────────
+    # Se known_students não foi passado, tenta carregar do Supabase se fornecido ou do cache
+    active_roster = known_students
+    if active_roster is None and supabase_client is not None:
+        active_roster = get_active_roster_students(supabase_client)
+
     # ─── ROTEAMENTO POR PRIVACIDADE — CADEADO DE SEGURANÇA FINAL ─────────────
     # Classificação de 5 classes (C0..C4). Fail-closed: na dúvida → mais restritivo.
     if _SECURITY_LOCK_AVAILABLE:
-        data_class = classify_command(user_text, known_students=known_students)
+        data_class = classify_command(user_text, known_students=active_roster)
     else:
         # Fallback de importação: usa o roteador binário legado
         data_class = None  # type: ignore
-    is_pii = _contains_student_pii(user_text, known_students=known_students)
+    is_pii = _contains_student_pii(user_text, known_students=active_roster)
 
     # ── CLASSE 0: Dado de Saúde / LGPD Especial — BLOQUEIO ABSOLUTO ──────────
     if _SECURITY_LOCK_AVAILABLE and data_class is not None and data_class.value == 0:
@@ -1209,14 +1448,24 @@ def extract_intent(
 
         parsed["pii_routed_local"] = False
 
-    # ─── METADADOS DE TELEMETRIA ────────────────────────────────────────────────
+    # ─── METADADOS DE TELEMETRIA & SEGURANÇA ────────────────────────────────────
     parsed["provider_used"] = provider_used
     parsed["model_used"] = model_used
     parsed["pii_detected"] = is_pii
+    parsed["page_injection_detected"] = page_injection_detected
+    if page_injection_detected:
+        parsed["security_warning"] = (
+            "Aviso de Segurança: Foi detectada uma tentativa de instrução maliciosa ou prompt injection "
+            "nos dados externos do portal escolar. O Teacher AI manteve a regra de ouro: comandos em dados de terceiros "
+            "foram ignorados e nenhuma ação real foi executada a partir deles."
+        )
+        parsed["page_injection_threats"] = page_injection_threats
+    if user_injection_detected:
+        parsed["user_injection_detected"] = True
+        parsed["user_injection_threats"] = user_injection_threats
     if _SECURITY_LOCK_AVAILABLE and data_class is not None:
         parsed["data_class"] = data_class.value
         parsed["data_class_label"] = data_class.label
-
 
     # -------------------------------------------------------------
     # DERIVAÇÃO DE COMPATIBILIDADE DESCENDENTE (Downstream Adapter)
@@ -1245,7 +1494,10 @@ def extract_intent(
         # A. Detecção de estado do portal
         if any(k in verbo for k in ["detectar", "verificar", "consultar", "checar", "ver", "saber", "olhar"]) and any(k in objeto for k in ["portal", "status", "estado", "tela"]):
             legacy_acao = "detect_state"
-        # B. Leitura de Alunos / Roster (quando pede a lista/relação de alunos/turma)
+        # B.1. Acesso a Perfil de Aluno ou Cartão
+        elif any(k in objeto for k in ["perfil", "ficha", "detalhe", "cadastro"]) or parsed.get("acao") == "abrir_perfil":
+            legacy_acao = "abrir_perfil"
+        # B.2. Leitura de Alunos / Roster (quando pede a lista/relação de alunos/turma)
         elif any(k in objeto for k in ["aluno", "estudante", "roster"]) or (any(k in verbo for k in ["ler", "consultar", "quem"]) and any(k in objeto for k in ["turma", "chamada"])):
             legacy_acao = "read_roster"
         # C. Navegação entre abas / telas
@@ -1283,7 +1535,15 @@ def extract_intent(
     elif legacy_acao == "navegar_aba":
         raw_dest = str(parsed.get("destino_navegacao") or parsed.get("objeto_alvo") or "")
         dest_clean = re.sub(r"^(?:a\s+|o\s+)?(?:aba|seção|secao|menu|página|pagina)?\s*", "", raw_dest, flags=re.IGNORECASE).strip()
+        dest_clean = re.sub(r"\s+(?:e\s+depois|em\s+seguida|depois|ent[ãa]o|e)$", "", dest_clean, flags=re.IGNORECASE).strip()
         parsed["destino"] = dest_clean.title() if dest_clean else raw_dest.title()
+
+        if not parsed.get("remaining_command"):
+            compound_check = split_compound_command(user_text)
+            if compound_check.get("remaining_command"):
+                parsed["remaining_command"] = compound_check["remaining_command"]
+                parsed["segunda_instrucao"] = compound_check["remaining_command"]
+                parsed["is_compound"] = True
 
     # Validação de integridade de slots em ações comuns
     if legacy_acao == "lancar_nota":
@@ -1303,12 +1563,62 @@ def extract_intent(
         else:
             parsed["is_complete"] = False
             parsed["clarification_question"] = "Para qual aluno devo registrar a falta?"
-    elif legacy_acao in ("read_roster", "detect_state", "navegar_aba"):
+    elif legacy_acao in ("navegar_aba", "abrir_perfil"):
+        try:
+            try:
+                from navigation_state_machine import decompose_hierarchical_command
+            except ImportError:
+                from sidecar.navigation_state_machine import decompose_hierarchical_command
+
+            seq = decompose_hierarchical_command(user_text)
+            if getattr(seq, "is_possibly_truncated", False):
+                parsed["is_complete"] = False
+                parsed["needs_clarification"] = True
+                parsed["clarification_question"] = seq.message_to_teacher
+                parsed["is_possibly_truncated"] = True
+                parsed["understood_nodes"] = seq.understood_nodes
+                parsed["unparsed_remainder"] = seq.unparsed_remainder
+            else:
+                parsed["is_complete"] = True
+                parsed["clarification_question"] = None
+        except Exception:
+            parsed["is_complete"] = True
+            parsed["clarification_question"] = None
+    elif legacy_acao in ("read_roster", "detect_state"):
         parsed["is_complete"] = True
         parsed["clarification_question"] = None
     elif parsed.get("valor") and not any(k in objeto for k in ["nota", "falta", "presenca"]):
         parsed["is_complete"] = True
         parsed["clarification_question"] = None
+
+    # ─── CERTIFICAÇÃO DE PROVENIÊNCIA (INSTRUCTION ORIGIN CERTIFICATION) ────────
+    # Garante que a origem da instrução seja declarada com rigor estrutural.
+    # Se page_content estiver presente e a intenção resultante for de escrita/mutação,
+    # valida se o comando do usuário (user_text) de fato solicitou escrita.
+    # Se user_text for apenas leitura/consulta/navegação, a instrução de escrita
+    # proveio indevidamente de page_content (erro de classificação do parser ou prompt injection).
+    user_lower = (user_text or "").lower()
+    user_requests_mutation = any(
+        kw in user_lower for kw in [
+            "lanca", "lança", "marcar", "marca", "marque", "coloca", "coloque",
+            "inserir", "insere", "anotar", "anota", "anote", "salvar", "salve",
+            "apagar", "apaga", "excluir", "exclui", "cadastrar", "cadastra",
+            "enviar", "envie", "manda", "mande", "exportar", "exporta", "deletar"
+        ]
+    )
+
+    if parsed.get("tipo_operacao") == "escrita" or legacy_acao in [
+        "lancar_nota", "lancar_falta", "marcar_presenca", "marcar_presenca_massa",
+        "anotar_ocorrencia_disciplinar", "anotar_observacao_pedagogica", "excluir_dado"
+    ]:
+        if page_content and not user_requests_mutation:
+            # Desacoplamento Seguro: O comando do usuário era passivo, mas o intent foi classificado como escrita.
+            parsed["instruction_origin"] = "page_content"
+            parsed["provenance_alert"] = "Ação de mutação originada de conteúdo de terceiros (page_content), sem ordem no comando do usuário."
+        else:
+            parsed["instruction_origin"] = "user_command"
+    else:
+        parsed["instruction_origin"] = "user_command"
 
     # Telemetria no console do sidecar (compatível com cp1252 no Windows)
     if provider_used in ["groq", "gemini"]:
@@ -1346,14 +1656,37 @@ async def dispatch_and_execute_task(
             "status": "needs_clarification"
         }
 
+    if intent.get("acao") == "abrir_perfil":
+        aluno_nome = intent.get("aluno") or "aluno"
+        destino = intent.get("destino") or intent.get("destino_navegacao")
+        msg = f"Acessando o perfil de {aluno_nome} no portal para você! 👤✨"
+        if destino:
+            msg = f"Acessando a seção {destino} para abrir o perfil de {aluno_nome}! 👤✨"
+        return {
+            "sucesso": True,
+            "needs_clarification": False,
+            "acao": "abrir_perfil",
+            "aluno": aluno_nome,
+            "destino": destino,
+            "remaining_command": intent.get("remaining_command"),
+            "segunda_instrucao": intent.get("segunda_instrucao"),
+            "mensagem": msg,
+            "status": "accessing_student_profile",
+            "card": None,
+            "action_required": "find_and_click_student"
+        }
+
     if intent.get("acao") == "navegar_aba":
         destino = intent.get("destino") or intent.get("destino_navegacao") or "aba solicitada"
         destino_display = destino.title() if isinstance(destino, str) else str(destino)
+        remaining = intent.get("remaining_command") or intent.get("segunda_instrucao")
         return {
             "sucesso": True,
             "needs_clarification": False,
             "acao": "navegar_aba",
             "destino": destino_display,
+            "remaining_command": remaining,
+            "segunda_instrucao": remaining,
             "mensagem": f"Acessando a aba {destino_display} no portal para você! 📂",
             "status": "navigating_tab",
             "card": None,
@@ -1368,6 +1701,7 @@ async def dispatch_and_execute_task(
         "verbo_acao": intent.get("verbo_acao"),
         "objeto_alvo": intent.get("objeto_alvo"),
         "tipo_operacao": intent.get("tipo_operacao", "escrita"),
+        "instruction_origin": intent.get("instruction_origin", "user_command"),
         "valor": intent.get("valor"),
         "descricao_tarefa": intent.get("descricao_tarefa"),
         "aluno": intent.get("aluno"),

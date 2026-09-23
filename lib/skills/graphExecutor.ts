@@ -205,11 +205,12 @@ function setElementValueNative(el: any, valToWrite: string): void {
   let setterFound = false
   try {
     const proto = Object.getPrototypeOf(el)
-    const descriptor = Object.getOwnPropertyDescriptor(proto, 'value') ||
-                       (typeof HTMLInputElement !== 'undefined' && Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')) ||
-                       (typeof HTMLTextAreaElement !== 'undefined' && Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')) ||
-                       (typeof HTMLSelectElement !== 'undefined' && Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value'))
-    if (descriptor?.set) {
+    const protoDesc = proto ? Object.getOwnPropertyDescriptor(proto, 'value') : null
+    const inputDesc = typeof HTMLInputElement !== 'undefined' ? Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value') : null
+    const textDesc = typeof HTMLTextAreaElement !== 'undefined' ? Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value') : null
+    const selectDesc = typeof HTMLSelectElement !== 'undefined' ? Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value') : null
+    const descriptor = protoDesc || inputDesc || textDesc || selectDesc
+    if (descriptor && descriptor.set) {
       descriptor.set.call(el, valToWrite)
       setterFound = true
     }
@@ -385,7 +386,7 @@ export async function executeSkillGraph(
 
       case 'WRITE': {
         const valToWrite = interpolateBindings(node.params?.action_value || '', context.bindings)
-        const el = findTargetElement(node.anchor?.value || '', context, node.anchor?.description)
+        const el = findTargetElement(node.anchor?.value || '', context, node.anchor?.description || undefined)
 
         if (!el) {
           trace.push({
@@ -451,7 +452,7 @@ export async function executeSkillGraph(
       }
 
       case 'CLICK': {
-        const el = findTargetElement(node.anchor?.value || '', context, node.anchor?.description)
+        const el = findTargetElement(node.anchor?.value || '', context, node.anchor?.description || undefined)
 
         if (!el) {
           trace.push({
@@ -521,7 +522,7 @@ export async function executeSkillGraph(
           verificationMethod = 'element_removed_from_dom'
           changeDetails = { elementRemoved: true }
         } else if (node.params?.expected_target) {
-          const expectedEl = findTargetElement(node.params.expected_target, context)
+          const expectedEl = findTargetElement(String(node.params.expected_target), context)
           if (expectedEl) {
             clickVerified = true
             verificationMethod = 'expected_target_appeared'
@@ -749,7 +750,7 @@ export async function executeSkillGraph(
 
         if (loopState.currentIndex < loopState.rows.length) {
           // Ainda há linhas a processar: salta para o loop_target
-          let targetNodeId = node.params?.loop_target
+          let targetNodeId = node.params?.loop_target as string | undefined
           // Suporte resiliente: se loop_target apontar para o nó LOCATE anterior, salta para o on_success dele (primeiro READ)
           if (targetNodeId && graph.nodes[targetNodeId]?.type === 'LOCATE') {
             targetNodeId = graph.nodes[targetNodeId]?.on_success || targetNodeId
@@ -807,7 +808,7 @@ export async function executeSkillGraph(
       }
 
       case 'NAVIGATE': {
-        const targetUrl = interpolateBindings(node.anchor?.value || node.params?.url || '', context.bindings)
+        const targetUrl = interpolateBindings(node.anchor?.value || (node.params?.url as string) || '', context.bindings)
         const preUrl = getCurrentPageUrl(context)
 
         if (!targetUrl) {
@@ -900,7 +901,7 @@ export async function executeSkillGraph(
 
       case 'WAIT': {
         const delayMs = Number(node.params?.duration_ms) || 500
-        const waitSelector = node.anchor?.value || node.params?.wait_until
+        const waitSelector = node.anchor?.value || (node.params?.wait_until as string | undefined)
 
         if (waitSelector) {
           // Espera assíncrona real por condição/presença no DOM

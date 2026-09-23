@@ -182,7 +182,7 @@ export default function PortalSkillsModule() {
 
           <div style={{ display: 'flex', gap: 8 }}>
             <Button
-              variant="outline"
+              variant="secondary"
               size="sm"
               onClick={fetchSkills}
               disabled={loading}
@@ -383,7 +383,7 @@ export default function PortalSkillsModule() {
 
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                     <Button
-                      variant="outline"
+                      variant="secondary"
                       size="sm"
                       onClick={() => setExpandedSkillId(isExpanded ? null : skill.id)}
                       icon={isExpanded ? 'ti-chevron-up' : 'ti-code'}

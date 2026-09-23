@@ -19,11 +19,14 @@ import { AssessmentPreset, getStoredPresets, savePreset } from '@/lib/assessment
 import { getTeacherCalibrations, saveModuleCalibration } from '@/lib/teacherCalibrations'
 import { addQuestionsBatch } from '@/lib/questionBankService'
 import { runFactCheck, FactCheckResult } from '@/lib/factCheck'
+import { auditExamDistractors } from '@/lib/distractorQualityAuditor'
+import { checkGenerationCompleteness } from '@/lib/assessmentGates'
 import VoiceButton from '@/components/VoiceButton'
 import EditableQuestionBoxes, {
   EditableQuestionItem,
   parseContentToQuestions,
-  compileQuestionsToHtml
+  compileQuestionsToHtml,
+  Provenance
 } from '@/components/EditableQuestionBoxes'
 import QuestionCountByTypeList, {
   QuestionTypeCountMap,
@@ -32,6 +35,12 @@ import QuestionCountByTypeList, {
   buildQuestionDistributionPrompt
 } from '@/components/QuestionCountByTypeList'
 import PedagogicalMethodologiesAccordion from '@/components/PedagogicalMethodologiesAccordion'
+import {
+  createBalancedBlueprint,
+  generateBlueprintPromptSection,
+  getPastTopicsForClass,
+  TestBlueprint
+} from '@/lib/testBlueprintEngine'
 import {
   getSubjectProfile,
   getExamSections,
@@ -169,9 +178,10 @@ export default function TestAndWorksheets({ initialMode = 'exam' }: TestAndWorks
   const [selectedSchoolTemplate, setSelectedSchoolTemplate] = useState<string>('')
   const [hideHeader, setHideHeader] = useState(false)
 
-  // Multi-Source Hub
+  // Multi-Source Hub & Referência Manual (Fase 1 - Honestidade de Proveniência)
   const [sources, setSources] = useState<SourceItem[]>([])
   const [knowledgeMode, setKnowledgeMode] = useState<KnowledgeMode>('hybrid')
+  const [teacherReference, setTeacherReference] = useState('')
 
   // Visualização & Documento
   const [result, setResult] = useState('')
@@ -180,6 +190,12 @@ export default function TestAndWorksheets({ initialMode = 'exam' }: TestAndWorks
   const [activeViewTab, setActiveViewTab] = useState<'boxes' | 'canvas'>('boxes')
   const [factCheck, setFactCheck] = useState<FactCheckResult | null>(null)
   const [checkingFact, setCheckingFact] = useState(false)
+
+  // Fase 2 & 4: Gate de Contagem e Recuperação Espaçada
+  const [includeSpacedRetrieval, setIncludeSpacedRetrieval] = useState(false)
+  const [spacedWarning, setSpacedWarning] = useState<string | null>(null)
+  const [countMismatchWarning, setCountMismatchWarning] = useState<{ requested: number; received: number } | null>(null)
+  const [includeUDL, setIncludeUDL] = useState(false)
 
   // APIs
   const [apis, setApis] = useState<ApiConfig[]>([])
@@ -289,13 +305,50 @@ export default function TestAndWorksheets({ initialMode = 'exam' }: TestAndWorks
 
     try {
       let libContext = ''
-      const compiled = compileSourcesPrompt(sources, knowledgeMode)
+      let activeProvenance: Provenance = {
+        type: 'general_knowledge',
+        sourceLabel: 'Conhecimento Geral da IA (Sem fonte direta)',
+        confidence: 'unverified'
+      }
+
+      const activeSources = sources.filter(s => s.active)
+      const queryTopic = topic || sections.join(' ') || 'English'
+      const compiled = compileSourcesPrompt(sources, knowledgeMode, queryTopic)
+
       if (compiled.activeCount > 0) {
         libContext = compiled.promptContext
+        activeProvenance = {
+          type: 'uploaded_source',
+          sourceLabel: activeSources.map(s => s.title).join(', ') || 'Documento Carregado',
+          confidence: 'verified',
+          pageNumber: compiled.primaryPageNumber,
+          unitTitle: compiled.primaryUnitTitle,
+          chunkId: compiled.primaryChunkId
+        }
+      } else if (teacherReference.trim()) {
+        libContext = `=== REFERÊNCIA MANUAL FORNECIDA PELO PROFESSOR ===\n${teacherReference.trim()}\n`
+        const isUrl = teacherReference.trim().startsWith('http')
+        activeProvenance = {
+          type: 'teacher_reference',
+          sourceUrl: isUrl ? teacherReference.trim() : undefined,
+          sourceLabel: teacherReference.trim(),
+          confidence: 'verified'
+        }
       } else {
         const { searchLibraryContext, buildRagPromptContext } = await import('@/lib/ragEngine')
-        const chunks = searchLibraryContext(topic || sections.join(' ') || 'English', { limit: 3 })
-        if (chunks.length > 0) libContext = buildRagPromptContext(chunks)
+        const chunks = searchLibraryContext(queryTopic, { limit: 8 })
+        if (chunks.length > 0) {
+          libContext = buildRagPromptContext(chunks)
+          const topChunk = chunks[0]
+          activeProvenance = {
+            type: 'uploaded_source',
+            sourceLabel: topChunk.docTitle || 'Biblioteca RAG Local',
+            confidence: 'verified',
+            pageNumber: topChunk.pageNumber,
+            unitTitle: topChunk.unitTitle,
+            chunkId: topChunk.id
+          }
+        }
       }
 
       const librarySection = libContext
@@ -309,6 +362,43 @@ export default function TestAndWorksheets({ initialMode = 'exam' }: TestAndWorks
       const optionInstruction = optionLanguage === 'pt' || activeProfile.examLanguage === 'pt-BR'
         ? 'IDIOMA DAS ALTERNATIVAS: As opções e respostas devem ser em PORTUGUÊS.'
         : 'IDIOMA DAS ALTERNATIVAS: As opções e respostas devem ser estritamente em INGLÊS.'
+
+      // Fase 4: Integração com Matriz de Especificação (Test Blueprint) e Recuperação Espaçada
+      let pastTopics: string[] = []
+      if (includeSpacedRetrieval) {
+        pastTopics = getPastTopicsForClass(header.classGroup || grade, topic)
+        if (pastTopics.length === 0) {
+          setSpacedWarning(`Sem histórico de aulas registrado nas últimas 4 semanas para a turma "${header.classGroup || grade}" — recuperação espaçada desativada (100% das questões alocadas no tema atual).`)
+        } else {
+          setSpacedWarning(null)
+        }
+      } else {
+        setSpacedWarning(null)
+      }
+
+      const testBlueprint = createBalancedBlueprint({
+        title: effectiveTitle,
+        subject: activeProfile.name,
+        totalQuestions,
+        topics: topic ? [topic] : ['Conteúdo Geral'],
+        bnccCodes: [],
+        bloomDistribution: {
+          remember: bloomRemember,
+          apply: bloomApply,
+          analyze: bloomAnalyze,
+          evaluate: bloomEvaluate,
+        },
+        difficultyDistribution: {
+          easy: diffEasy,
+          medium: diffMedium,
+          hard: diffHard,
+          challenge: diffChallenge,
+        },
+        includeSpacedRetrieval: includeSpacedRetrieval && pastTopics.length > 0,
+        pastTopics,
+      })
+
+      const blueprintSection = generateBlueprintPromptSection(testBlueprint)
 
       let prompt = ''
 
@@ -332,10 +422,16 @@ ${customPrompt ? `\nDIRETRIZES DO PROFESSOR:\n"${customPrompt}"\n` : ''}
 ${methInstructions}
 ${levelGatingRule}
 
+${blueprintSection}
+
 === DISTRIBUIÇÃO COGNITIVA & DIFICULDADE (BLOOM) ===
 - LEMBRAR/COMPREENDER (${bloomRemember}%) | APLICAR (${bloomApply}%) | ANALISAR (${bloomAnalyze}%) | AVALIAR/CRIAR (${bloomEvaluate}%)
 - Dificuldade: Fácil (${diffEasy}%), Médio (${diffMedium}%), Difícil (${diffHard}%), Desafio (${diffChallenge}%)
 ${distractorBlock}
+${includeUDL ? `\n=== ACESSIBILIDADE UNIVERSAL & UDL (ISO 24495-1 / CAST 2018) ===
+Para cada questão, gere também dentro do container da questão:
+- <div class="udl-plain-language" style="display:none;" data-udl="plain">Versão em Linguagem Simples/Clara (frases curtas, ordem direta, sem rebuscamento)</div>
+- <div class="udl-audio-descriptive" style="display:none;" data-udl="audio">Transcrição descritiva acessível para leitor de tela</div>\n` : ''}
 
 ESTRUTURA OBRIGATÓRIA:
 1. Container: <div class="exam-document" data-total-score="${totalScore}" data-duration-minutes="${examDuration}">
@@ -363,6 +459,8 @@ ${customPrompt ? `\nDIRETRIZES DO PROFESSOR:\n"${customPrompt}"\n` : ''}
 ${neeProfile ? `\nADAPTAÇÃO ESPECIAL (NEE): Adaptar para perfil ${neeProfile}.` : ''}
 ${methInstructions}
 
+${blueprintSection}
+
 ESTRUTURA OBRIGATÓRIA:
 1. Comece com <h2>${effectiveTitle}</h2>
 2. Cada questão numerada de 1 a ${totalQuestions} com enunciado claro e contextualizado.
@@ -372,38 +470,49 @@ Gere agora todas as ${totalQuestions} questões completas em HTML limpo:`
       }
 
       const raw = await callApi(selectedApi, prompt)
-      const html = cleanHtml(raw)
+      // Processa questões vinculando a proveniência auditada (Fase 1)
+      const parsed = parseContentToQuestions(cleanHtml(raw), activeProvenance)
+      const html = compileQuestionsToHtml(parsed)
       setResult(html)
 
-      // Auto-save no Repositório Unificado (Zero-Leakage)
-      try {
-        const itemType = mode === 'exam' ? 'exam' : 'exercise'
-        const storageKey = mode === 'exam' ? 'teacher_saved_exams' : 'teacher_saved_quicks'
-        saveItemToStorage(storageKey, {
-          title: effectiveTitle,
-          subtitle: `${cefr} · ${grade} · ${mode === 'exam' ? sections.slice(0, 2).join(', ') : skill}`,
-          content: html,
-        })
-        updateCounts()
+      // Auditoria de qualidade psicométrica dos distratores (Fase 2 - distractorQualityAuditor)
+      const distractorAudit = auditExamDistractors(parsed, activeProfile)
 
-        // Sincroniza com o banco de itens da escola
-        addQuestionsBatch([{
-          id: `${mode}_auto_${Date.now()}`,
-          statement: html.slice(0, 300) + '...',
-          type: 'mc',
-          activityKind: itemType,
-          subject: activeProfile.nameShort || 'Inglês',
-          topic: topic || 'Conteúdo',
-          level: cefr,
-          year: new Date().getFullYear().toString(),
-          schoolId: header.school || '',
-          classRef: grade || '',
-          tags: [mode === 'exam' ? 'Prova Oficial' : 'Lista de Exercícios', `${activeProfile.levelFramework.name} ${cefr}`],
-          createdAt: Date.now(),
-          source: 'ai',
-          fullContent: html
-        } as any])
-      } catch {}
+      // Fase 2: Gate de Contagem (Truncamento por Limite de Tokens)
+      const completeness = checkGenerationCompleteness(totalQuestions, parsed)
+      setCountMismatchWarning(completeness.warning)
+
+      if (completeness.canAutoSave) {
+        // Auto-save no Repositório Unificado (Zero-Leakage) apenas com lote íntegro
+        try {
+          const itemType = mode === 'exam' ? 'exam' : 'exercise'
+          const storageKey = mode === 'exam' ? 'teacher_saved_exams' : 'teacher_saved_quicks'
+          saveItemToStorage(storageKey, {
+            title: effectiveTitle,
+            subtitle: `${cefr} · ${grade} · ${mode === 'exam' ? sections.slice(0, 2).join(', ') : skill}`,
+            content: html,
+          })
+          updateCounts()
+
+          // Sincroniza com o banco de itens da escola
+          addQuestionsBatch([{
+            id: `${mode}_auto_${Date.now()}`,
+            statement: html.slice(0, 300) + '...',
+            type: 'mc',
+            activityKind: itemType,
+            subject: activeProfile.nameShort || 'Inglês',
+            topic: topic || 'Conteúdo',
+            level: cefr,
+            year: new Date().getFullYear().toString(),
+            schoolId: header.school || '',
+            classRef: grade || '',
+            tags: [mode === 'exam' ? 'Prova Oficial' : 'Lista de Exercícios', `${activeProfile.levelFramework.name} ${cefr}`],
+            createdAt: Date.now(),
+            source: 'ai',
+            fullContent: html
+          } as any])
+        } catch {}
+      }
 
       // Executa Fact-Check no modo Worksheet
       if (mode === 'worksheet') {
@@ -419,6 +528,22 @@ Gere agora todas as ${totalQuestions} questões completas em HTML limpo:`
     } finally {
       setLoading(false)
     }
+  }
+
+  // Salvamento manual com confirmação quando há truncamento detectado
+  const handleManualSaveDespiteMismatch = () => {
+    if (!result) return
+    const effectiveTitle = header.title || (topic ? `${mode === 'exam' ? 'PROVA' : 'ATIVIDADE'}: ${topic.toUpperCase()}` : 'AVALIAÇÃO')
+    const itemType = mode === 'exam' ? 'exam' : 'exercise'
+    const storageKey = mode === 'exam' ? 'teacher_saved_exams' : 'teacher_saved_quicks'
+    saveItemToStorage(storageKey, {
+      title: effectiveTitle,
+      subtitle: `${cefr} · ${grade} · ${mode === 'exam' ? sections.slice(0, 2).join(', ') : skill} (Incompleto)`,
+      content: result,
+    })
+    updateCounts()
+    setCountMismatchWarning(null)
+    toast.success('Avaliação salva no repositório.')
   }
 
   // Assistente Rafinha para Ajustar Questão Individual
@@ -598,6 +723,21 @@ Retorne a questão reformulada no formato estruturado:`
             description="Selecione livros, PDFs, anotações ou pesquise na Web para embasar as questões."
           />
 
+          {/* Referência Manual de Conteúdo / Web (Fase 1 - Pilar 1) */}
+          <div style={CARD}>
+            <label style={SL}>🔗 Referência Manual de Conteúdo (URL ou Texto)</label>
+            <input
+              type="text"
+              value={teacherReference}
+              onChange={e => setTeacherReference(e.target.value)}
+              placeholder="Cole uma URL ou citação de referência (ex: https://... ou Artigo X)"
+              style={SI}
+            />
+            <span style={{ fontSize: 11, color: '#a08060', marginTop: 5, display: 'block', lineHeight: 1.4 }}>
+              Caso não utilize arquivos na biblioteca acima, indique o link ou citação que servirá de embasamento. A proveniência verificada será registrada em cada questão gerada.
+            </span>
+          </div>
+
           {/* Numerador por Tipo de Exercício */}
           <QuestionCountByTypeList
             counts={questionCounts}
@@ -642,6 +782,42 @@ Retorne a questão reformulada no formato estruturado:`
                 </select>
               </div>
             )}
+          </div>
+
+          {/* Recuperação Espaçada (Spaced Retrieval - Fase 4) */}
+          <div style={CARD}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+              <div>
+                <label style={{ ...SL, margin: '0 0 2px' }}>🔄 Recuperação Espaçada (Spaced Retrieval)</label>
+                <span style={{ fontSize: 11.5, color: '#7a5c42', lineHeight: 1.4, display: 'block' }}>
+                  Resgata tópicos lecionados há 2 a 4 semanas para a turma ({header.classGroup || grade}) via Diário de Classe ou Maestro.
+                </span>
+              </div>
+              <input
+                type="checkbox"
+                checked={includeSpacedRetrieval}
+                onChange={e => setIncludeSpacedRetrieval(e.target.checked)}
+                style={{ width: 18, height: 18, cursor: 'pointer', accentColor: '#8b5e3c', flexShrink: 0 }}
+              />
+            </div>
+          </div>
+
+          {/* Acessibilidade Universal & UDL (Pilar V) */}
+          <div style={CARD}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+              <div>
+                <label style={{ ...SL, margin: '0 0 2px' }}>♿ Acessibilidade Universal (UDL & Linguagem Simples)</label>
+                <span style={{ fontSize: 11.5, color: '#7a5c42', lineHeight: 1.4, display: 'block' }}>
+                  Gera representações em Linguagem Simples (ISO 24495-1) e Áudio-Descritiva para alunos com NEE (TDAH, TEA, dislexia ou baixa visão).
+                </span>
+              </div>
+              <input
+                type="checkbox"
+                checked={includeUDL}
+                onChange={e => setIncludeUDL(e.target.checked)}
+                style={{ width: 18, height: 18, cursor: 'pointer', accentColor: '#8b5e3c', flexShrink: 0 }}
+              />
+            </div>
           </div>
 
           {/* Seções da Prova (Apenas no Modo Exame) */}
@@ -741,6 +917,90 @@ Retorne a questão reformulada no formato estruturado:`
 
         {/* COLUNA DIREITA: 3 TELAS / ABAS (DOCUMENTO, TÓPICOS & FONTES, RACIOCÍNIO PEDAGÓGICO) */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, minHeight: 0, height: '100%' }}>
+          {/* Alerta de Recuperação Espaçada sem Histórico (Fase 4) */}
+          {spacedWarning && (
+            <div style={{
+              background: '#fffbe6',
+              border: '1px solid #ffe58f',
+              borderRadius: RADIUS.md,
+              padding: '10px 14px',
+              color: '#8c6b3e',
+              fontSize: 12.5,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              lineHeight: 1.45,
+              flexShrink: 0
+            }}>
+              <span style={{ fontSize: 18 }}>⚠️</span>
+              <span><strong>Aviso de Recuperação Espaçada:</strong> {spacedWarning}</span>
+            </div>
+          )}
+
+          {/* Gate de Contagem: Bloqueio de Auto-Save por Truncamento de Tokens (Fase 2) */}
+          {countMismatchWarning && (
+            <div style={{
+              background: '#fef2f2',
+              border: '1.5px solid #fca5a5',
+              borderRadius: RADIUS.md,
+              padding: '12px 16px',
+              color: '#991b1b',
+              fontSize: 13,
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              gap: 12,
+              flexWrap: 'wrap',
+              boxShadow: '0 2px 8px rgba(220,38,38,0.06)',
+              flexShrink: 0
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: 22 }}>⚠️</span>
+                <div>
+                  <strong>Truncamento Detectado:</strong> O modelo gerou {countMismatchWarning.received} de {countMismatchWarning.requested} questões solicitadas (possível limite de tokens da IA).
+                  <br />
+                  <span style={{ fontSize: 12, color: '#7f1d1d' }}>
+                    O salvamento automático no repositório foi bloqueado para proteger a integridade do banco de itens.
+                  </span>
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  type="button"
+                  onClick={handleManualSaveDespiteMismatch}
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: RADIUS.sm,
+                    border: '1px solid #dc2626',
+                    background: '#fff',
+                    color: '#dc2626',
+                    fontSize: 12,
+                    fontWeight: 700,
+                    cursor: 'pointer'
+                  }}
+                >
+                  Salvar Mesmo Assim
+                </button>
+                <button
+                  type="button"
+                  onClick={handleGenerateContent}
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: RADIUS.sm,
+                    border: 'none',
+                    background: '#dc2626',
+                    color: '#fff',
+                    fontSize: 12,
+                    fontWeight: 700,
+                    cursor: 'pointer'
+                  }}
+                >
+                  Regerar
+                </button>
+              </div>
+            </div>
+          )}
+
           {loading ? (
             <div
               style={{

@@ -163,6 +163,32 @@ body {
   background: rgba(200,160,100,0.60);
 }
 
+/* ───── Barra de Rolagem de Alta Visibilidade (Prominent Scrollbar) ───── */
+.prominent-scrollbar {
+  scrollbar-width: auto;
+  scrollbar-color: #8b5e3c #f5efe6;
+}
+.prominent-scrollbar::-webkit-scrollbar {
+  width: 14px;
+  height: 14px;
+}
+.prominent-scrollbar::-webkit-scrollbar-track {
+  background: #f5efe6;
+  border-radius: 8px;
+  border: 1px solid rgba(139, 115, 85, 0.18);
+}
+.prominent-scrollbar::-webkit-scrollbar-thumb {
+  background: #8b5e3c;
+  border-radius: 8px;
+  border: 3px solid #f5efe6;
+}
+.prominent-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #6f4727;
+}
+.prominent-scrollbar::-webkit-scrollbar-thumb:active {
+  background: #5c3d20;
+}
+
 /* ───── Tipografia ───── */
 h1, h2, .heading-serif {
   font-family: var(--font-display) !important;

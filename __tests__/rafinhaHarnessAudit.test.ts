@@ -35,12 +35,14 @@ describe('RAFINHA AGENT HARNESS AUDIT — SUÍTE DE 4 PILARES (Seção 7)', () =
       clear: () => { sessionStorageMock = {} },
     })
 
+    const messageListeners: Array<(e: any) => void> = []
+
     vi.stubGlobal('window', {
       location: { origin: 'http://localhost:3000' },
-      postMessage: vi.fn(),
       open: vi.fn(),
       addEventListener: vi.fn((type: string, handler: any) => {
         if (type === 'message') {
+          messageListeners.push(handler)
           setTimeout(() => {
             handler({
               origin: 'http://localhost:3000',
@@ -49,7 +51,31 @@ describe('RAFINHA AGENT HARNESS AUDIT — SUÍTE DE 4 PILARES (Seção 7)', () =
           }, 10)
         }
       }),
-      removeEventListener: vi.fn(),
+      removeEventListener: vi.fn((type: string, handler: any) => {
+        if (type === 'message') {
+          const idx = messageListeners.indexOf(handler)
+          if (idx !== -1) messageListeners.splice(idx, 1)
+        }
+      }),
+      postMessage: vi.fn((data: any) => {
+        if (data?.type === 'TEACHER_RELAY_TO_EXTENSION') {
+          setTimeout(() => {
+            messageListeners.forEach(h => h({
+              origin: 'http://localhost:3000',
+              data: {
+                type: 'TEACHER_RELAY_RESPONSE',
+                requestId: data.requestId,
+                payload: {
+                  success: true,
+                  verified: true,
+                  verification_method: 'graph_executor_dom',
+                  screenshot: '/sandbox/preview_portal.html'
+                }
+              }
+            }))
+          }, 5)
+        }
+      }),
       dispatchEvent: (evt: Event) => {
         dispatchedEvents.push({
           type: evt.type,

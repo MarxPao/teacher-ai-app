@@ -45,7 +45,7 @@ import re
 import time
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -605,3 +605,570 @@ class NavigationStateMachine:
             trace=trace,
             elapsed_ms=(time.monotonic() - t0) * 1000,
         )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Camada A — Modelo de Navegação Hierárquica e Decomposição em Nós
+# ─────────────────────────────────────────────────────────────────────────────
+
+class NavNodeType(str, Enum):
+    NIVEL_1 = "nivel_1"       # Abas e seções principais (Recados, Diário, Início, Frequência, etc.)
+    SUB_NIVEL = "sub_nivel"   # Sub-abas e sub-seções internas (Recados recebidos, Avaliações, etc.)
+    ITEM_LISTA = "item_lista" # Itens individuais, cards de aluno, linhas ou mensagens (Alice Almeida, etc.)
+
+
+@dataclass
+class HierarchicalNavNode:
+    """Nó da hierarquia de navegação de um portal escolar."""
+    node_id: str
+    label: str
+    node_type: NavNodeType
+    synonyms: List[str] = field(default_factory=list)
+    parent_id: Optional[str] = None
+    selector: Optional[str] = None
+    heuristic: Optional[str] = None
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+    def matches(self, text: str, extra_synonyms: Optional[Iterable[str]] = None) -> bool:
+        """Verifica se um texto coincide com o rótulo ou algum sinônimo do nó (incluindo sinônimos herdados)."""
+        def norm(s: str) -> str:
+            clean = re.sub(r"[\s_]+", " ", (s or "").lower().strip())
+            return re.sub(r"[àáâãä]", "a", re.sub(r"[éêë]", "e", re.sub(r"[íï]", "i", re.sub(r"[óôõö]", "o", re.sub(r"[úü]", "u", re.sub(r"[ç]", "c", clean))))))
+
+        target = norm(text)
+        candidates = [norm(self.label)] + [norm(s) for s in self.synonyms]
+        if extra_synonyms:
+            candidates.extend([norm(s) for s in extra_synonyms if s])
+        return any(c == target or (len(c) >= 3 and (c in target or target in c)) for c in candidates)
+
+
+class HierarchicalNavigationModel:
+    """
+    Catálogo estruturado e grafo de nós hierárquicos de navegação.
+    Suporta busca por rótulo, rastreamento de nós ativos e decomposição de comandos.
+    """
+    def __init__(self, portal_id: str = "generic"):
+        self.portal_id = portal_id
+        self.nodes: Dict[str, HierarchicalNavNode] = {}
+        self.active_path: List[str] = []
+        self._load_default_catalog()
+
+    def add_node(self, node: HierarchicalNavNode) -> None:
+        self.nodes[node.node_id] = node
+
+    def get_node(self, node_id: str) -> Optional[HierarchicalNavNode]:
+        return self.nodes.get(node_id)
+
+    def get_inherited_synonyms(self, node_id: str) -> List[str]:
+        """
+        Retorna sinônimos e rótulos herdados dos subnós diretos de um nó pai.
+
+        Regra de Propagação Arquitetural:
+        - Propagação direta de 1 nível (SUB_NIVEL -> NIVEL_1):
+          Nós de nível 1 herdam automaticamente o rótulo e os sinônimos de seus subnós
+          estruturais diretos.
+        - Exclusão Estrita de Dados (ITEM_LISTA):
+          Itens de lista/folhas de dados (alunos, turmas dinâmicas) NUNCA propagam
+          termos para cima, prevenindo poluição semântica no catálogo e falsos positivos
+          na navegação de nível superior.
+        """
+        inherited = []
+        for n in self.nodes.values():
+            if n.parent_id == node_id and n.node_type == NavNodeType.SUB_NIVEL:
+                inherited.extend(n.synonyms)
+        return inherited
+
+    def find_node_by_label(self, label: str, parent_id: Optional[str] = None) -> Optional[HierarchicalNavNode]:
+        self.last_ambiguous_candidates = []
+        candidate_nodes = [
+            n for n in self.nodes.values()
+            if not (parent_id and n.parent_id != parent_id)
+        ]
+
+        if not candidate_nodes:
+            return None
+
+        def norm(s: str) -> str:
+            clean = re.sub(r"[\s_]+", " ", (s or "").lower().strip())
+            return re.sub(r"[àáâãä]", "a", re.sub(r"[éêë]", "e", re.sub(r"[íï]", "i", re.sub(r"[óôõö]", "o", re.sub(r"[úü]", "u", re.sub(r"[ç]", "c", clean))))))
+
+        target = norm(label)
+
+        # 1.0 CORRESPONDÊNCIA EXATA DE RÓTULO (Prioridade Absoluta)
+        # Se a query for exatamente o rótulo de um nó (ex: 'Avaliações', 'Médias'), ele tem precedência imediata
+        for n in candidate_nodes:
+            if norm(n.label) == target:
+                return n
+
+        if parent_id:
+            # Busca restrita aos filhos de um nó específico
+            child_direct = [n for n in candidate_nodes if n.matches(label)]
+            if len(child_direct) == 1:
+                return child_direct[0]
+            elif len(child_direct) > 1:
+                self.last_ambiguous_candidates = child_direct
+                return None
+
+            for n in candidate_nodes:
+                inherited = self.get_inherited_synonyms(n.node_id)
+                if inherited and n.matches(label, extra_synonyms=inherited):
+                    return n
+        else:
+            # 1.1 ETAPA LÉXICA DIRETA EM NÍVEL 1 (Rótulo Próprio + Sinônimos Próprios)
+            direct_l1 = [n for n in candidate_nodes if n.node_type == NavNodeType.NIVEL_1 and n.matches(label)]
+            if len(direct_l1) == 1:
+                return direct_l1[0]
+            elif len(direct_l1) > 1:
+                self.last_ambiguous_candidates = direct_l1
+                return None
+
+            # 1.2 ETAPA LÉXICA HERDADA EM NÍVEL 1 (Herança Estrutural SUB_NIVEL -> NIVEL_1)
+            # Decisão de Arquitetura (Opção B - Honestidade e Não-Arbitrariedade):
+            # Se dois ou mais nós de nível 1 disputam o mesmo termo herdado (ex: 'provas' herdado
+            # tanto por 'Diário de Classe' quanto por 'Notas'), o motor NUNCA escolhe silenciosamente
+            # por ordem de declaração no catálogo. Ele registra ambiguidade honesta para confirmação.
+            inherited_l1 = []
+            for n in candidate_nodes:
+                if n.node_type == NavNodeType.NIVEL_1:
+                    inherited = self.get_inherited_synonyms(n.node_id)
+                    if inherited and n.matches(label, extra_synonyms=inherited):
+                        inherited_l1.append(n)
+
+            if len(inherited_l1) == 1:
+                return inherited_l1[0]
+            elif len(inherited_l1) > 1:
+                self.last_ambiguous_candidates = inherited_l1
+                return None
+
+            # 1.3 ETAPA LÉXICA GERAL (Subnós diretos caso nenhum nível 1 tenha casado)
+            direct_general = [n for n in candidate_nodes if n.matches(label)]
+            if len(direct_general) == 1:
+                return direct_general[0]
+            elif len(direct_general) > 1:
+                unique_labels = set(norm(n.label) for n in direct_general)
+                if len(unique_labels) == 1:
+                    return direct_general[0]
+                self.last_ambiguous_candidates = direct_general
+                return None
+
+        # 2. ETAPA SEMÂNTICA (Fallback Vetorial via LocalSemanticMatcher)
+        try:
+            from sidecar.local_semantic_matcher import LocalSemanticMatcher
+        except ImportError:
+            try:
+                from local_semantic_matcher import LocalSemanticMatcher
+            except ImportError:
+                LocalSemanticMatcher = None
+
+        if LocalSemanticMatcher is not None:
+            matcher = LocalSemanticMatcher.get_instance()
+            candidate_nodes = [
+                n for n in self.nodes.values()
+                if not (parent_id and n.parent_id != parent_id)
+            ]
+            if candidate_nodes:
+                candidate_labels = [n.label for n in candidate_nodes]
+                candidate_meta = [{"node": n} for n in candidate_nodes]
+                match_res = matcher.match_best_candidate(
+                    label,
+                    candidate_labels,
+                    candidate_meta,
+                    similarity_threshold=0.50
+                )
+                if match_res:
+                    _, score, meta = match_res
+                    if meta and "node" in meta:
+                        return meta["node"]
+
+        return None
+
+    def _load_default_catalog(self) -> None:
+        # Nós de nível 1 padrão
+        self.add_node(HierarchicalNavNode("inicio", "Início", NavNodeType.NIVEL_1, synonyms=["home", "dashboard", "principal", "painel", "painel principal", "tela inicial", "página inicial", "pagina inicial"]))
+        self.add_node(HierarchicalNavNode("diario", "Diário de Classe", NavNodeType.NIVEL_1, synonyms=["diário", "diario", "classe", "diário de classe", "diario de classe", "caderneta"]))
+        self.add_node(HierarchicalNavNode("frequencia", "Frequência", NavNodeType.NIVEL_1, synonyms=["chamada", "presença", "presenca", "faltas", "ausências", "ausencias", "ausência", "ausencia", "registro de ausências", "registro de ausencias", "registro de faltas"]))
+        self.add_node(HierarchicalNavNode("notas", "Notas", NavNodeType.NIVEL_1, synonyms=["lançamento de notas", "boletim", "conceitos", "pautas", "quadro de notas"]))
+        self.add_node(HierarchicalNavNode("recados", "Recados", NavNodeType.NIVEL_1, synonyms=["mural de recados", "mensagens", "comunicações", "comunicados", "avisos", "notificações", "notificacoes"]))
+        self.add_node(HierarchicalNavNode("meus_alunos", "Meus Alunos", NavNodeType.NIVEL_1, synonyms=["alunos", "turmas", "cadastro de alunos", "estudantes", "lista de alunos"]))
+        self.add_node(HierarchicalNavNode("arquivos", "Arquivos", NavNodeType.NIVEL_1, synonyms=["documentos", "materiais", "anexos", "conteúdos", "conteudos", "downloads"]))
+        self.add_node(HierarchicalNavNode("horarios", "Horários", NavNodeType.NIVEL_1, synonyms=["grade horária", "grade horaria", "aulas", "quadro de horários", "quadro de horarios", "grade de aulas"]))
+
+        # Sub-níveis de Recados
+        self.add_node(HierarchicalNavNode("recados_recebidos", "Recados recebidos", NavNodeType.SUB_NIVEL, parent_id="recados", synonyms=["recebidos", "caixa de entrada", "mensagens recebidas"]))
+        self.add_node(HierarchicalNavNode("recados_enviados", "Recados enviados", NavNodeType.SUB_NIVEL, parent_id="recados", synonyms=["enviados", "mensagens enviadas"]))
+        self.add_node(HierarchicalNavNode("novo_recado", "Novo recado", NavNodeType.SUB_NIVEL, parent_id="recados", synonyms=["escrever recado", "enviar recado"]))
+
+        # Sub-níveis de Notas / Diário
+        self.add_node(HierarchicalNavNode("avaliacoes", "Avaliações", NavNodeType.SUB_NIVEL, parent_id="notas", synonyms=["provas", "trabalhos"]))
+        self.add_node(HierarchicalNavNode("medias", "Médias", NavNodeType.SUB_NIVEL, parent_id="notas", synonyms=["médias finais", "fechamento"]))
+        self.add_node(HierarchicalNavNode("diario_avaliacoes", "Avaliações", NavNodeType.SUB_NIVEL, parent_id="diario", synonyms=["provas", "trabalhos"]))
+        self.add_node(HierarchicalNavNode("diario_medias", "Médias", NavNodeType.SUB_NIVEL, parent_id="diario", synonyms=["médias finais", "fechamento"]))
+        self.add_node(HierarchicalNavNode("aulas", "Aulas e Frequência", NavNodeType.SUB_NIVEL, parent_id="diario", synonyms=["aulas", "frequência", "frequencia"]))
+        self.add_node(HierarchicalNavNode("faltas", "Faltas", NavNodeType.SUB_NIVEL, parent_id="frequencia", synonyms=["registro de faltas", "ausências", "ausencias"]))
+        self.add_node(HierarchicalNavNode("justificativas", "Justificativas", NavNodeType.SUB_NIVEL, parent_id="frequencia", synonyms=["justificativa", "atestados", "atestado"]))
+        self.add_node(HierarchicalNavNode("historico", "Histórico", NavNodeType.SUB_NIVEL, parent_id="meus_alunos", synonyms=["histórico escolar", "ficha histórica", "historico escolar"]))
+        self.add_node(HierarchicalNavNode("turmas", "Turmas", NavNodeType.SUB_NIVEL, parent_id="meus_alunos", synonyms=["classes", "minhas turmas"]))
+        self.add_node(HierarchicalNavNode("configuracoes", "Configurações", NavNodeType.NIVEL_1, synonyms=["configuracao", "configurações do portal", "ajustes", "perfil", "minha conta", "preferências", "preferencias"]))
+
+
+class DecomposedSequence(list):
+    """
+    Subclasse de list para armazenar sequências ordenadas de nós de navegação hierárquica
+    com metadados de integridade e detecção de truncamento linguístico.
+    Garante 100% de retrocompatibilidade com código existente que espera list[HierarchicalNavNode].
+    """
+    def __init__(
+        self,
+        nodes: Optional[Iterable[HierarchicalNavNode]] = None,
+        is_possibly_truncated: bool = False,
+        unparsed_remainder: Optional[str] = None,
+        indicators_found: Optional[List[str]] = None,
+        understood_nodes: Optional[List[str]] = None,
+        message_to_teacher: Optional[str] = None,
+    ):
+        super().__init__(nodes or [])
+        self.is_possibly_truncated = is_possibly_truncated
+        self.unparsed_remainder = unparsed_remainder
+        self.indicators_found = indicators_found or []
+        self.understood_nodes = understood_nodes or [n.label for n in self]
+        self.message_to_teacher = message_to_teacher
+
+
+# =============================================================================
+# Marcadores e Verbos para Detecção de Truncamento Linguístico (Rede de Segurança)
+# =============================================================================
+
+# NOTA DE MANUTENÇÃO DE ENGENHARIA:
+# A lista COURTESY_AND_DISCOURSE_MODIFIERS é uma LISTA VIVA, NÃO EXAUSTIVA.
+# Deve ser revisada e expandida periodicamente conforme novos comandos reais de professoras
+# revelarem gírias regionais e variações coloquiais (ex: "manda ver", "dá uma checada").
+# Eventos de truncamento emitem telemetria estruturada '[TELEMETRY_TRUNCATION_TRIGGERED]'
+# para alimentar ativamente a expansão desta lista sem necessidade de adivinhação.
+
+STRICT_ACTION_VERBS = [
+    "abra", "abrir", "abre", "acesse", "acessa", "acessar",
+    "vá para", "va para", "vai para", "ir para", "navegue ate", "navegue até",
+    "navega até", "navega ate", "clique em", "clica em", "clicar em",
+    "selecione", "selecionar", "seleciona", "lance", "lancar", "lançar",
+    "marque", "marcar", "marca", "cadastre", "cadastrar", "ache", "achar",
+    "procure", "procurar"
+]
+
+COURTESY_AND_DISCOURSE_MODIFIERS = [
+    "veja como ele está indo", "veja como ela está indo",
+    "veja como ele esta indo", "veja como ela esta indo",
+    "me mostrar rapidinho", "me mostra rapidinho", "mostrar rapidinho",
+    "olhe se tem falta demais", "veja se tem falta demais", "olhe se tem faltas",
+    "se tem falta demais", "se tem faltas", "tem falta demais", "tem faltas",
+    "para eu ver", "pra eu ver", "para eu dar uma olhada", "pra eu dar uma olhada",
+    "dar uma olhada na turma", "dar uma olhada", "dar uma checada", "dar uma olhadinha",
+    "desse uma olhada na turma", "desse uma olhada", "der uma olhada na turma", "der uma olhada",
+    "conferisse as mensagens de hoje", "conferir as mensagens de hoje",
+    "conferir as mensagens", "conferisse as mensagens",
+    "para eu conferir as mensagens de hoje", "pra eu conferir as mensagens de hoje",
+    "se o documento subiu", "só pra ver se o documento subiu", "so pra ver se o documento subiu",
+    "dá uma checada", "da uma checada",
+    "por favor", "pfv", "por gentileza", "por favorzinho",
+    "vou querer que você", "vou querer que voce", "vou querer que",
+    "gostaria que você", "gostaria que voce", "gostaria que",
+    "pode abrir", "pode acessar", "pode", "dá pra", "da pra",
+    "preciso que você", "preciso que voce", "preciso que",
+    "com calma", "bem rápido", "bem rapido", "rapidinho", "só pra ver", "so pra ver",
+    "tá certo", "ta certo", "se o cadastro do carlos tá certo", "se o cadastro do carlos ta certo"
+]
+
+_COMMON_NON_TARGET_WORDS = {
+    "aula", "classe", "turma", "turmas", "escola", "prova", "provas", "teste", "testes",
+    "materia", "matéria", "exercicio", "exercício", "exercicios", "exercícios", "casa",
+    "reuniao", "reunião", "recuperacao", "recuperação", "relatorio", "relatório", "relatorios",
+    "arquivos", "configuracoes", "configurações", "redacao", "redação", "duvida", "dúvida",
+    "conteudo", "conteúdo", "chamada", "diario", "diário", "presenca", "presença", "falta",
+    "faltas", "nota", "notas", "boletim", "boletins", "quadro", "horario", "horário", "grade",
+    "hoje", "ontem", "amanha", "amanhã", "tarde", "manha", "manhã", "noite", "geral", "tudo",
+    "todos", "todas", "grupo", "alunos", "alunas", "estudantes", "livro", "caderno", "atividade",
+    "atividades", "seção", "secao", "aba", "portal", "sistema", "dele", "dela", "deles", "delas",
+    "meu", "minha", "seus", "suas", "ele", "ela", "eles", "elas", "você", "voce", "favor"
+}
+
+
+def _finalize_decomposed_sequence(
+    command: str,
+    nodes: List[HierarchicalNavNode],
+    model: HierarchicalNavigationModel
+) -> DecomposedSequence:
+    if not command or not isinstance(command, str) or not nodes:
+        return DecomposedSequence(nodes)
+
+    clean = command.strip()
+    clean_no_greet = re.sub(
+        r"^(?:ol[áa]|oi|ei|rafinha|por\s+favor|pfv|ajuda|ajude|\s+)+[,:]?\s*",
+        "",
+        clean,
+        flags=re.IGNORECASE
+    ).strip()
+    lower_cmd = clean_no_greet.lower()
+
+    # 1. Sanitiza expressões de cortesia e observação passiva (lista viva)
+    sanitized = lower_cmd
+    for modifier in COURTESY_AND_DISCOURSE_MODIFIERS:
+        sanitized = re.sub(rf"\b{re.escape(modifier)}\b", " ", sanitized, flags=re.IGNORECASE)
+
+    # 2. Divide em orações por conectores de sequência
+    clause_regex = r",|\b(?:e\s+depois|em\s+seguida|e\s+em\s+seguida|e\s+ent[ãa]o|e\s+v[áa]\s+at[ée]|e)\b"
+    raw_clauses = re.split(clause_regex, sanitized)
+
+    # 3. Analisa cláusulas que contêm intenção de ação estrita ou alvos substantivos
+    action_clauses: List[str] = []
+    catalog_labels = set()
+    for n in model.nodes.values():
+        catalog_labels.add(n.label.lower())
+        for syn in n.synonyms:
+            catalog_labels.add(syn.lower())
+
+    for cl in raw_clauses:
+        cl_clean = cl.strip()
+        cl_words = re.findall(r"\b[a-zA-ZÀ-ÿ0-9_-]+\b", cl_clean)
+        if not cl_words:
+            continue
+
+        has_strict_verb = any(v in cl_clean for v in STRICT_ACTION_VERBS)
+        has_catalog_target = any(lbl in cl_clean for lbl in catalog_labels)
+        has_structural_target = any(
+            re.search(rf"\b{term}\b", cl_clean)
+            for term in [
+                "aba", "seção", "secao", "menu", "guia", "tela", "ficha", "perfil",
+                "dados", "cadastro", "diário", "diario", "notas", "faltas",
+                "frequencia", "frequência", "recados", "aluno", "alunos", "turma",
+                "histórico", "historico", "justificativa", "justificativas", "atestado"
+            ]
+        )
+        has_entity = any(len(w) >= 3 and w not in _COMMON_NON_TARGET_WORDS and w not in STRICT_ACTION_VERBS for w in cl_words)
+
+        if has_strict_verb or has_catalog_target or has_structural_target or has_entity:
+            action_clauses.append(cl_clean)
+
+    step_count = len(action_clauses)
+    is_truncated = False
+    indicators = []
+    unparsed_remainder = None
+    msg = None
+
+    if step_count > len(nodes):
+        is_truncated = True
+        indicators = action_clauses[len(nodes):]
+        unparsed_remainder = ", ".join(indicators)
+        last_understood = nodes[-1].label if nodes else "o início"
+        msg = (
+            f"Entendi até '{last_understood}', mas seu comando parece ter mais passos "
+            f"que não consegui identificar com certeza. Pode dividir em comandos mais simples "
+            f"ou confirmar o que falta? ✨"
+        )
+
+        # TELEMETRIA ESTRUTURADA DE TRUNCAMENTO (sem PII de aluno)
+        sanitized_telemetry = re.sub(r"\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\b", "[ENTIDADE]", command)
+        try:
+            print(f"[TELEMETRY_TRUNCATION_TRIGGERED] Comando sanitizado: '{sanitized_telemetry}' | Nós compreendidos: {[n.label for n in nodes]} | Indicadores: {indicators}")
+        except Exception:
+            pass
+
+    return DecomposedSequence(
+        nodes=nodes,
+        is_possibly_truncated=is_truncated,
+        unparsed_remainder=unparsed_remainder,
+        indicators_found=indicators,
+        understood_nodes=[n.label for n in nodes],
+        message_to_teacher=msg
+    )
+
+
+def decompose_hierarchical_command(
+    command: str,
+    model: Optional[HierarchicalNavigationModel] = None
+) -> DecomposedSequence:
+    """
+    Decompõe um comando de linguagem natural em uma sequência ordenada de nós-alvo hierárquicos.
+    Gera:
+      - 2 nós para sub-navegação: ["Recados" (nivel_1), "Recados recebidos" (sub_nivel)]
+      - 2 nós para perfil/item:   ["Meus Alunos" (nivel_1), "Alice Almeida" (item_lista)]
+      - 1 nó para nível único:     ["Início" (nivel_1)] ou ["Notas" (nivel_1)]
+      - Nós dinâmicos para padrões arbitrários inéditos (ex: "em notas veja avaliações").
+    Retorna DecomposedSequence (subclasse de list) com salvaguarda permanente is_possibly_truncated.
+    """
+    if not command or not isinstance(command, str):
+        return DecomposedSequence([])
+
+    if model is None:
+        model = HierarchicalNavigationModel()
+
+    clean = command.strip()
+    clean_no_greet = re.sub(
+        r"^(?:ol[áa]|oi|ei|rafinha|por\s+favor|pfv|ajuda|ajude|gostaria\s+que\s+voc[êe]\s+(?:acessasse|abrisse|fosse|entrasse)?|gostaria\s+que\s+voc[êe]|preciso\s+que\s+voc[êe]|vou\s+querer\s+que\s+voc[êe]|pode\s+abrir|pode\s+acessar|pode|poderia|\s+)+[,:]?\s*",
+        "",
+        clean,
+        flags=re.IGNORECASE
+    ).strip()
+
+    # ── Padrão 1: "acesse o perfil de <aluno> em <secao>" ou "ver perfil de <aluno> em <secao>"
+    m_profile_sec = re.search(
+        r"^(?:acesse|acessa|acessar|abra|abre|abrir|ver|veja|olhe|olhar|mostrar|mostre)?\s*(?:o|a)?\s*(?:perfil|dados|detalhes|ficha|cadastro|historico)\s+(?:de|do|da)\s+([a-zA-ZÀ-ÿ\s]+?)\s+(?:em|no|na|nos|nas)\s+([a-zA-ZÀ-ÿ0-9_\s-]+)$",
+        clean_no_greet,
+        flags=re.IGNORECASE
+    )
+    if m_profile_sec:
+        aluno_raw = m_profile_sec.group(1).strip()
+        secao_raw = m_profile_sec.group(2).strip()
+        secao_clean = re.sub(r"^(?:a|o|os|as)?\s*(?:aba|menu|seção|secao|guia|tela)\s+", "", secao_raw, flags=re.IGNORECASE).strip()
+
+        parent_node = model.find_node_by_label(secao_clean)
+        if not parent_node:
+            p_id = re.sub(r"\W+", "_", secao_clean.lower()).strip("_")
+            parent_node = HierarchicalNavNode(node_id=p_id, label=secao_clean.title(), node_type=NavNodeType.NIVEL_1)
+
+        item_id = re.sub(r"\W+", "_", aluno_raw.lower()).strip("_")
+        child_node = HierarchicalNavNode(
+            node_id=item_id,
+            label=aluno_raw.title(),
+            node_type=NavNodeType.ITEM_LISTA,
+            parent_id=parent_node.node_id,
+            metadata={"action": "abrir_perfil", "aluno": aluno_raw.title()}
+        )
+        return _finalize_decomposed_sequence(command, [parent_node, child_node], model)
+
+    # ── Padrão 1B: "acesse/abra a ficha/perfil de <aluno>" (sem especificação de seção)
+    m_profile_direct = re.search(
+        r"^(?:acesse|acessa|acessar|abra|abre|abrir|ver|veja|olhe|olhar|mostrar|mostre)?\s*(?:o|a)?\s*(?:perfil|dados|detalhes|ficha|cadastro|historico)\s+(?:de|do|da)\s+([a-zA-ZÀ-ÿ\s]+?)(?:\s+(?:e\s+.*|por\s+favor.*|\?.*))?$",
+        clean_no_greet,
+        flags=re.IGNORECASE
+    )
+    if m_profile_direct and not any(w in clean_no_greet.lower() for w in ["turma", "escola", "professor", "professora"]):
+        aluno_raw = m_profile_direct.group(1).strip()
+        parent_node = model.find_node_by_label("meus alunos")
+        if not parent_node:
+            parent_node = HierarchicalNavNode(node_id="meus_alunos", label="Meus Alunos", node_type=NavNodeType.NIVEL_1)
+
+        item_id = re.sub(r"\W+", "_", aluno_raw.lower()).strip("_")
+        child_node = HierarchicalNavNode(
+            node_id=item_id,
+            label=aluno_raw.title(),
+            node_type=NavNodeType.ITEM_LISTA,
+            parent_id=parent_node.node_id,
+            metadata={"action": "abrir_perfil", "aluno": aluno_raw.title()}
+        )
+        return _finalize_decomposed_sequence(command, [parent_node, child_node], model)
+
+    # ── Padrão 2: "abra <aba> e abra <sub-aba>" / "vá para <aba> e acesse <sub-aba>" / "abra <aba> e <sub-aba>"
+    verb_regex = r"(?:abra|abrir|abre|acesse|acessa|acessar|acessasse|va\s+para|vá\s+para|ir\s+para|v[áa]\s+at[ée]|navegue\s+ate|navegar\s+até|clique\s+em|clicar\s+em|ver|veja|olhar|olhe|dar\s+uma\s+olhada|d[áa]\s+uma\s+olhada|selecione|selecionar|me\s+mostrar|me\s+mostra|mostrar|mostre|entre\s+em|entrar\s+em|entre)"
+    m_compound = re.search(
+        rf"^(?:{verb_regex}\s+)?(?:\b(?:a|o|os|as|aba|seção|secao|guia)\b\s+)?([a-zA-ZÀ-ÿ0-9_\s-]+?)\s+(?:e\s+depois|em\s+seguida|e\s+em\s+seguida|e\s+ent[ãa]o|e)\s+(?:{verb_regex}\s+)?(?:\b(?:a|o|os|as|sub-?aba|aba|guia|seção|secao)\b\s+)?([a-zA-ZÀ-ÿ0-9_\s-]+)$",
+        clean_no_greet,
+        flags=re.IGNORECASE
+    )
+    if m_compound:
+        target1_raw = m_compound.group(1).strip()
+        target2_raw = m_compound.group(2).strip()
+
+        node1 = model.find_node_by_label(target1_raw)
+        if not node1:
+            n1_id = re.sub(r"\W+", "_", target1_raw.lower()).strip("_")
+            node1 = HierarchicalNavNode(node_id=n1_id, label=target1_raw.title(), node_type=NavNodeType.NIVEL_1)
+
+        # Se target2 referenciar o perfil/cadastro de um aluno
+        m_aluno_sub = re.search(r"(?:d[áa]\s+uma\s+checada\s+se\s+o\s+|dar\s+uma\s+checada\s+se\s+o\s+|verificar\s+se\s+o\s+)?(?:cadastro|perfil|ficha|dados)\s+(?:de|do|da)\s+([a-zA-ZÀ-ÿ\s]+)", target2_raw, flags=re.IGNORECASE)
+        if m_aluno_sub:
+            aluno_nm = re.sub(r"\s+t[áa]\s+certo.*", "", m_aluno_sub.group(1), flags=re.IGNORECASE).strip().title()
+            n2_id = re.sub(r"\W+", "_", aluno_nm.lower()).strip("_")
+            node2 = HierarchicalNavNode(
+                node_id=n2_id,
+                label=aluno_nm,
+                node_type=NavNodeType.ITEM_LISTA,
+                parent_id=node1.node_id,
+                metadata={"action": "abrir_perfil", "aluno": aluno_nm}
+            )
+            return _finalize_decomposed_sequence(command, [node1, node2], model)
+
+        # Higieniza termos secundários de exibição antes da busca no catálogo
+        target2_clean = re.sub(
+            r"^(?:me\s+mostrar|me\s+mostra|mostrar|mostre|olhar|olhe|ver|veja|dar\s+uma\s+olhada|d[áa]\s+uma\s+olhada)?\s*(?:rapidinho|com\s+calma)?\s*(?:\b(?:as|os|a|o)\b)?\s*",
+            "",
+            target2_raw,
+            flags=re.IGNORECASE
+        ).strip()
+        target2_clean = re.sub(r"\s+(?:com\s+calma|rapidinho|por\s+favor|pfv)$", "", target2_clean, flags=re.IGNORECASE).strip()
+
+        # Se target2 for apenas um modificador de cortesia ou observação passiva
+        t2_stripped = target2_raw.lower()
+        for m in COURTESY_AND_DISCOURSE_MODIFIERS:
+            t2_stripped = t2_stripped.replace(m.lower(), " ")
+        t2_words = [w for w in re.findall(r"\b[a-zA-ZÀ-ÿ0-9_-]+\b", t2_stripped) if w not in _COMMON_NON_TARGET_WORDS]
+        if not t2_words or not target2_clean:
+            return _finalize_decomposed_sequence(command, [node1], model)
+
+        node2 = model.find_node_by_label(target2_clean, parent_id=node1.node_id)
+        if not node2:
+            node2 = model.find_node_by_label(target2_clean)
+        if not node2:
+            n2_id = re.sub(r"\W+", "_", target2_clean.lower()).strip("_")
+            node2 = HierarchicalNavNode(
+                node_id=n2_id,
+                label=target2_clean.title(),
+                node_type=NavNodeType.SUB_NIVEL,
+                parent_id=node1.node_id
+            )
+        else:
+            if not node2.parent_id:
+                node2.parent_id = node1.node_id
+
+        return _finalize_decomposed_sequence(command, [node1, node2], model)
+
+    # ── Padrão 3: "em <aba> abra/veja <sub-aba>"
+    m_in_sec = re.search(
+        rf"^(?:em|no|na|nos|nas)\s+([a-zA-ZÀ-ÿ0-9_\s-]+?)\s+(?:{verb_regex}\s+)?(?:a|o|os|as|sub-?aba|aba|guia|seção|secao)?\s*([a-zA-ZÀ-ÿ0-9_\s-]+)$",
+        clean_no_greet,
+        flags=re.IGNORECASE
+    )
+    if m_in_sec:
+        target1_raw = m_in_sec.group(1).strip()
+        target2_raw = m_in_sec.group(2).strip()
+
+        node1 = model.find_node_by_label(target1_raw)
+        if not node1:
+            n1_id = re.sub(r"\W+", "_", target1_raw.lower()).strip("_")
+            node1 = HierarchicalNavNode(node_id=n1_id, label=target1_raw.title(), node_type=NavNodeType.NIVEL_1)
+
+        node2 = model.find_node_by_label(target2_raw, parent_id=node1.node_id)
+        if not node2:
+            n2_id = re.sub(r"\W+", "_", target2_raw.lower()).strip("_")
+            node2 = HierarchicalNavNode(
+                node_id=n2_id,
+                label=target2_raw.title(),
+                node_type=NavNodeType.SUB_NIVEL,
+                parent_id=node1.node_id
+            )
+
+        return _finalize_decomposed_sequence(command, [node1, node2], model)
+
+    # ── Padrão 4: Navegação simples de nível único (1 passo)
+    single_clean = re.sub(
+        rf"^(?:{verb_regex}\s+)?(?:a\s+|o\s+|as\s+|os\s+|aba\s+|seção\s+|secao\s+|guia\s+|tela\s+)?",
+        "",
+        clean_no_greet,
+        flags=re.IGNORECASE
+    ).strip()
+    single_clean = re.sub(r"^(?:de|do|da)\s+", "", single_clean, flags=re.IGNORECASE).strip()
+
+    # Higieniza modificadores de discurso e cortesia do final antes da busca
+    for m in COURTESY_AND_DISCOURSE_MODIFIERS:
+        if m.lower() in single_clean.lower():
+            single_clean = re.sub(re.escape(m), "", single_clean, flags=re.IGNORECASE).strip()
+    single_clean = re.sub(r"\s+(?:com\s+calma|rapidinho|por\s+favor|pfv)$", "", single_clean, flags=re.IGNORECASE).strip()
+
+    single_node = model.find_node_by_label(single_clean)
+    if not single_node and single_clean:
+        s_id = re.sub(r"\W+", "_", single_clean.lower()).strip("_")
+        single_node = HierarchicalNavNode(node_id=s_id, label=single_clean.title(), node_type=NavNodeType.NIVEL_1)
+
+    if single_node:
+        return _finalize_decomposed_sequence(command, [single_node], model)
+
+    return DecomposedSequence([])
+

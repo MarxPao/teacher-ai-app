@@ -21,6 +21,7 @@ from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 from typing import Any, Dict, Optional
 import urllib.request
+from urllib.parse import urlparse
 
 # Garante sidecar no sys.path
 _SIDECAR_DIR = Path(__file__).resolve().parent
@@ -241,6 +242,71 @@ async def execute_task_intent(intent: Dict[str, Any]) -> Dict[str, Any]:
 
     trace = []
     trace.append(f"Recebida intencao: acao='{acao}', aluno='{aluno}', nota='{nota}', portal='{portal}'")
+
+    # -------------------------------------------------------------------------
+    # SEGURANÇA: ORIGIN VERIFICATION GATE (Trava Estrutural de Proveniência)
+    # -------------------------------------------------------------------------
+    # Regra de Ouro da Rafinha: Nenhuma ação com efeito colateral (mutação, escrita,
+    # exclusão ou exfiltração) pode ser disparada se a instrução não se originou
+    # de um comando legítimo digitado pela professora (<comando_usuario>).
+    #
+    # Se o classificador de intenção errar ou a LLM alucinar que conteúdo do
+    # portal (page_content / terceiros) pediu escrita, o executor RECUSA a ação.
+    # -------------------------------------------------------------------------
+    MUTATION_ACTIONS = {
+        "lancar_nota",
+        "lancar_falta",
+        "marcar_presenca",
+        "marcar_presenca_massa",
+        "anotar_ocorrencia_disciplinar",
+        "anotar_observacao_pedagogica",
+        "salvar_diario",
+        "excluir_dado",
+        "apagar_notas",
+        "exportar_dados",
+        "enviar_email"
+    }
+
+    tipo_op = intent.get("tipo_operacao") or intent.get("risco") or "leitura"
+    is_mutation = (
+        tipo_op == "escrita"
+        or acao in MUTATION_ACTIONS
+        or any(m in acao for m in ["lancar", "marcar", "apagar", "excluir", "salvar", "enviar"])
+    )
+
+    instruction_origin = intent.get("instruction_origin") or intent.get("origem") or "user_command"
+
+    if is_mutation and instruction_origin != "user_command":
+        msg_bloqueio = (
+            f"BLOQUEIO DE SEGURANÇA [Origin Verification Gate]: Ação de mutação '{acao}' "
+            f"foi recusada porque sua proveniência ({instruction_origin}) não é autorizada. "
+            f"Ações com efeito colateral no portal exigem autoridade exclusiva de '<comando_usuario>'."
+        )
+        print(f"\n🚨 [OriginGate] {msg_bloqueio}")
+        trace.append(f"[OriginGate] Origem: '{instruction_origin}', Operacao: '{tipo_op}', Acao: '{acao}'")
+        trace.append("[OriginGate] Veredito: BLOQUEADO - Conteúdo de terceiros não possui autoridade para disparar mutações.")
+        return {
+            "sucesso": False,
+            "status": "blocked_untrusted_origin",
+            "acao": acao,
+            "instruction_origin": instruction_origin,
+            "error": msg_bloqueio,
+            "mensagem": msg_bloqueio,
+            "trace": trace,
+            "tempo_ms": (time.time() - t0) * 1000
+        }
+
+    # Bloqueio preventivo de comando truncado (Rede de Segurança Imediata)
+    if intent.get("is_possibly_truncated"):
+        msg_trunc = intent.get("clarification_question") or "Comando parece incompleto ou truncado."
+        trace.append("[SafetyGuard] Bloqueio preventivo: comando identificado como truncado. Solicitando esclarecimento.")
+        return {
+            "sucesso": False,
+            "status": "needs_clarification",
+            "mensagem": msg_trunc,
+            "trace": trace,
+            "tempo_ms": (time.time() - t0) * 1000
+        }
 
     # 0. Prioridade 1: Extensão no Chrome Normal da Professora (mesma aba aberta)
     if bridge_instance.has_active_portal_tab():
@@ -574,18 +640,96 @@ async def execute_task_intent(intent: Dict[str, Any]) -> Dict[str, Any]:
 
 
 class ManualServerHandler(BaseHTTPRequestHandler):
+    ALLOWED_SCHEMES = ("http", "https")
+    ALLOWED_HOSTNAMES = ("127.0.0.1", "localhost", "testserver")
+
+    def _is_host_allowed(self) -> bool:
+        """Proteção contra DNS Rebinding e Host Header Spoofing."""
+        host = self.headers.get("Host", "")
+        if not host:
+            return True
+        hostname = host.split(":")[0].strip().lower()
+        return hostname in self.ALLOWED_HOSTNAMES
+
+    def _is_origin_allowed(self) -> bool:
+        """
+        Proteção contra Cross-Origin CSRF e requisições maliciosas de abas web.
+        Autoriza estritamente:
+        1. Extensões do Chrome autorizadas (chrome-extension://*)
+        2. Dashboard local de QA/Debug (http://127.0.0.1:* ou http://localhost:*)
+        3. Requisições locais sem Origin (Pytest, curl, scripts CLI locais)
+        Rejeita:
+        - Sites web externos (https://*, http://* não-localhost)
+        - Sandboxed iframes com Origin nula ('null')
+        - Sec-Fetch-Site: cross-site não proveniente de chrome-extension
+        """
+        sec_fetch_site = self.headers.get("Sec-Fetch-Site", "").strip().lower()
+        origin = self.headers.get("Origin")
+
+        if sec_fetch_site == "cross-site":
+            if origin and origin.startswith("chrome-extension://"):
+                return True
+            return False
+
+        if not origin:
+            return True
+
+        if origin == "null":
+            return False
+
+        if origin.startswith("chrome-extension://"):
+            return True
+
+        try:
+            parsed = urlparse(origin)
+            if parsed.scheme in self.ALLOWED_SCHEMES and parsed.hostname in self.ALLOWED_HOSTNAMES:
+                return True
+        except Exception:
+            return False
+
+        return False
+
+    def _send_cors_headers(self):
+        """Emite CORS restrito refletindo a origem autorizada (nunca wildcard '*')."""
+        origin = self.headers.get("Origin")
+        if origin and self._is_origin_allowed():
+            self.send_header("Access-Control-Allow-Origin", origin)
+            self.send_header("Vary", "Origin")
+
     def do_OPTIONS(self):
+        if not self._is_host_allowed() or not self._is_origin_allowed():
+            self.send_response(403)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.end_headers()
+            self.wfile.write(b'{"error": "Forbidden: Untrusted Origin or Host"}')
+            return
+
         self.send_response(200)
-        self.send_header("Access-Control-Allow-Origin", "*")
+        self._send_cors_headers()
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Teacher-AI-Source")
         self.end_headers()
 
     def do_GET(self):
+        if not self._is_host_allowed():
+            self.send_response(403)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.end_headers()
+            self.wfile.write(b'{"error": "Forbidden: Invalid Host header (DNS rebinding protection)"}')
+            return
+
+        if not self._is_origin_allowed():
+            self.send_response(403)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.end_headers()
+            origin = self.headers.get("Origin", "")
+            self.wfile.write(json.dumps({"error": f"Forbidden: Untrusted origin '{origin}'"}).encode("utf-8"))
+            return
+
         if self.path == "/" or self.path == "/index.html":
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
-            self.send_header("Access-Control-Allow-Origin", "*")
+            self._send_cors_headers()
             self.end_headers()
             self.wfile.write(HTML_DASHBOARD.encode("utf-8"))
             return
@@ -600,8 +744,8 @@ class ManualServerHandler(BaseHTTPRequestHandler):
                 "tabs": tabs[:5]
             }
             self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self._send_cors_headers()
             self.end_headers()
             self.wfile.write(json.dumps(resp).encode("utf-8"))
             return
@@ -610,8 +754,8 @@ class ManualServerHandler(BaseHTTPRequestHandler):
             if bridge_instance.is_connected():
                 resp = bridge_instance.get_status_summary()
                 self.send_response(200)
-                self.send_header("Content-Type", "application/json")
-                self.send_header("Access-Control-Allow-Origin", "*")
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self._send_cors_headers()
                 self.end_headers()
                 self.wfile.write(json.dumps(resp).encode("utf-8"))
                 return
@@ -639,17 +783,45 @@ class ManualServerHandler(BaseHTTPRequestHandler):
                         "requires_login": False
                     }
             self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self._send_cors_headers()
             self.end_headers()
             self.wfile.write(json.dumps(resp).encode("utf-8"))
             return
 
+        if self.path == "/ai_engine_status":
+            try:
+                from sidecar.local_semantic_matcher import LocalSemanticMatcher
+            except ImportError:
+                from local_semantic_matcher import LocalSemanticMatcher
+            status_dict = LocalSemanticMatcher.get_instance().get_status_dict()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self._send_cors_headers()
+            self.end_headers()
+            self.wfile.write(json.dumps(status_dict, ensure_ascii=False).encode("utf-8"))
+            return
+
         self.send_response(404)
-        self.send_header("Access-Control-Allow-Origin", "*")
+        self._send_cors_headers()
         self.end_headers()
 
     def do_POST(self):
+        if not self._is_host_allowed():
+            self.send_response(403)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.end_headers()
+            self.wfile.write(b'{"error": "Forbidden: Invalid Host header (DNS rebinding protection)"}')
+            return
+
+        if not self._is_origin_allowed():
+            self.send_response(403)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.end_headers()
+            origin = self.headers.get("Origin", "")
+            self.wfile.write(json.dumps({"error": f"Forbidden: Untrusted origin '{origin}'"}).encode("utf-8"))
+            return
+
         if self.path == "/task":
             content_length = int(self.headers.get("Content-Length", 0))
             body_bytes = self.rfile.read(content_length)
@@ -657,8 +829,8 @@ class ManualServerHandler(BaseHTTPRequestHandler):
                 intent = json.loads(body_bytes.decode("utf-8"))
             except Exception as e:
                 self.send_response(400)
-                self.send_header("Content-Type", "application/json")
-                self.send_header("Access-Control-Allow-Origin", "*")
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self._send_cors_headers()
                 self.end_headers()
                 self.wfile.write(json.dumps({"error": "JSON invalido", "details": str(e)}).encode("utf-8"))
                 return
@@ -667,8 +839,8 @@ class ManualServerHandler(BaseHTTPRequestHandler):
             result = asyncio.run(execute_task_intent(intent))
 
             self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self._send_cors_headers()
             self.end_headers()
             self.wfile.write(json.dumps(result, indent=2).encode("utf-8"))
             return
@@ -680,8 +852,8 @@ class ManualServerHandler(BaseHTTPRequestHandler):
                 payload = json.loads(body_bytes.decode("utf-8"))
             except Exception as e:
                 self.send_response(400)
-                self.send_header("Content-Type", "application/json")
-                self.send_header("Access-Control-Allow-Origin", "*")
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self._send_cors_headers()
                 self.end_headers()
                 self.wfile.write(json.dumps({"error": "JSON invalido", "details": str(e)}).encode("utf-8"))
                 return
@@ -708,22 +880,68 @@ class ManualServerHandler(BaseHTTPRequestHandler):
             else:
                 result = asyncio.run(dispatch_and_execute_task(user_text, history, groq_key, gemini_key, known_students=known_students))
 
-
             self.send_response(200)
             self.send_header("Content-Type", "application/json; charset=utf-8")
-            self.send_header("Access-Control-Allow-Origin", "*")
+            self._send_cors_headers()
             self.end_headers()
             self.wfile.write(json.dumps(result, ensure_ascii=False, indent=2).encode("utf-8"))
             return
 
+        if self.path == "/ask_page":
+            content_length = int(self.headers.get("Content-Length", 0))
+            body_bytes = self.rfile.read(content_length)
+            try:
+                payload = json.loads(body_bytes.decode("utf-8"))
+            except Exception as e:
+                self.send_response(400)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self._send_cors_headers()
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": "JSON invalido", "details": str(e)}).encode("utf-8"))
+                return
+
+            user_query = payload.get("query") or payload.get("text") or ""
+            page_data = payload.get("page_data") or payload.get("pageData") or {}
+
+            # Tenta LLM semântico primeiro; faz fallback para local estruturado
+            llm_ans = bridge_instance._call_llm_for_page(user_query, page_data)
+            final_ans = llm_ans or bridge_instance._synthesize_page_answer_local(user_query, page_data)
+
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self._send_cors_headers()
+            self.end_headers()
+            self.wfile.write(json.dumps({"sucesso": True, "answer": final_ans}, ensure_ascii=False).encode("utf-8"))
+            return
+
+        if self.path == "/ai_engine_preload":
+            try:
+                from local_semantic_matcher import LocalSemanticMatcher
+            except ImportError:
+                from sidecar.local_semantic_matcher import LocalSemanticMatcher
+            LocalSemanticMatcher.get_instance().start_background_preload()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self._send_cors_headers()
+            self.end_headers()
+            self.wfile.write(json.dumps({"ok": True, "message": "Preload do motor de IA iniciado em background"}).encode("utf-8"))
+            return
+
         self.send_response(404)
-        self.send_header("Access-Control-Allow-Origin", "*")
+        self._send_cors_headers()
         self.end_headers()
 
 
 def start_server(port: int = SERVER_PORT, enable_tray: bool = False):
     bridge_instance.start_background()
     server = ThreadingHTTPServer(("127.0.0.1", port), ManualServerHandler)
+
+    # Inicia pré-carregamento do motor semântico local em background (desacoplado do HTTP e UI)
+    try:
+        from local_semantic_matcher import LocalSemanticMatcher
+    except ImportError:
+        from sidecar.local_semantic_matcher import LocalSemanticMatcher
+    LocalSemanticMatcher.get_instance().start_background_preload()
 
     tray_instance = None
     if enable_tray:

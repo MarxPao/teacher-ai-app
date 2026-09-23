@@ -5,12 +5,53 @@
  * Supports: Supervised Mode & Autonomous Mode (with auto-submit & voice feedback)
  */
 
-console.log("%c🔌 TEACHER??? Agente v3.0 (Rafinha Web Operator) Ativado!", "color: #b58900; font-weight: bold; font-size: 14px;");
+console.log("%c🔌 TEACHER AI Agente v3.0 (Rafinha Web Operator) Ativado!", "color: #b58900; font-weight: bold; font-size: 14px;");
+
+if (!window.__teacherAgentLoaded) {
+window.__teacherAgentLoaded = true;
+
+// ─── DEEP DOM TRAVERSAL (Shadow DOM & Iframes) ────────────────────────────────
+function querySelectorAllDeep(selector, root = document) {
+  let results = [];
+  try {
+    if (root && root.querySelectorAll) {
+      results = results.concat(Array.from(root.querySelectorAll(selector)));
+    }
+  } catch (e) {}
+
+  try {
+    const all = (root && root.querySelectorAll) ? Array.from(root.querySelectorAll('*')) : [];
+    for (const el of all) {
+      if (el.shadowRoot) {
+        results = results.concat(querySelectorAllDeep(selector, el.shadowRoot));
+      }
+      if (el.tagName === 'IFRAME' && el.contentDocument) {
+        try {
+          results = results.concat(querySelectorAllDeep(selector, el.contentDocument));
+        } catch (e) {}
+      }
+    }
+  } catch (e) {}
+
+  return results;
+}
+window.querySelectorAllDeep = querySelectorAllDeep;
 
 // ——— Platform Detection ———
 const CURRENT_URL = window.location.href;
 
 const PLATFORM_PROFILES = {
+  sandbox: {
+    match: () => CURRENT_URL.includes('localhost') || CURRENT_URL.includes('127.0.0.1') || CURRENT_URL.includes('portal_mock') || CURRENT_URL.includes('portal_real'),
+    name: 'Portal de Testes (Sandbox)',
+    selectors: {
+      title:       ['input[name*="conteudo"]', 'input[name*="titulo"]', 'input[id*="conteudo"]'],
+      date:        ['input[type="date"]', 'input[name*="data"]'],
+      description: ['textarea', 'div[contenteditable="true"]', '#observacao_pedagogica'],
+      classRef:    ['select[name*="turma"]', '#turma_aluno'],
+      submit:      ['button[type="submit"]', '#btn_salvar', '.btn']
+    }
+  },
   machado: {
     match: () => CURRENT_URL.includes('paineldoaluno.com.br'),
     name: 'Machado Sobrinho',
@@ -77,62 +118,41 @@ for (const [key, profile] of Object.entries(PLATFORM_PROFILES)) {
   }
 }
 
-// Show status badge
-if (portalPlatformProfile) {
+// Show status badge only in top frame and NOT in auth/login/transition screens
+const isAuthOrTransitionUrl = () => {
+  const p = (window.location.pathname || '').toLowerCase();
+  return p.includes('/auth') || p.includes('/login') || p.includes('/logoff') || 
+         p.includes('/selecionar-contexto') || p.includes('/carregar-parametros') || 
+         p.includes('/signin') || p.includes('/entrar');
+};
+
+const isTopFrame = window.self === window.top;
+
+if (portalPlatformProfile && isTopFrame && !isAuthOrTransitionUrl()) {
   showStatusToast(portalPlatformProfile.name, 'connected');
 }
 
-// ——— Toast UI com Identidade Rafinha ———
+// ——— Zero-Footprint Telemetria & Status (Sem poluição do DOM) ———
 function showStatusToast(platformName, state = 'connected', customText) {
+  // Limpa resquícios no DOM se existirem de versões antigas
   const existing = document.getElementById('teacher-agent-status');
   if (existing) existing.remove();
+  const existingStyle = document.getElementById('teacher-agent-status-style');
+  if (existingStyle) existingStyle.remove();
 
-  const colors = {
-    connected: { bg: '#2c1a0e', border: '#8b5e3c', dot: '#16a34a', text: '#faf6f0' },
-    filling:   { bg: '#2c1a0e', border: '#d97706', dot: '#d97706', text: '#faf6f0' },
-    success:   { bg: '#2c1a0e', border: '#16a34a', dot: '#16a34a', text: '#faf6f0' },
-    error:     { bg: '#3d0000', border: '#dc2626', dot: '#dc2626', text: '#faf6f0' },
-  };
-
-  const c = colors[state] || colors.connected;
-
-  const div = document.createElement('div');
-  div.id = 'teacher-agent-status';
-  div.style.cssText = `
-    position: fixed; bottom: 20px; right: 20px;
-    background: ${c.bg}; color: ${c.text};
-    padding: 12px 18px; border-radius: 12px;
-    font-family: system-ui, -apple-system, sans-serif; font-size: 13px; font-weight: 700;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.4); border: 2px solid ${c.border};
-    z-index: 9999999; display: flex; align-items: center; gap: 10px;
-    transition: all 0.3s ease; animation: teacherSlideIn 0.3s ease;
-  `;
-
-  const style = document.createElement('style');
-  style.textContent = `@keyframes teacherSlideIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }`;
-  document.head.appendChild(style);
-
-  const label = customText || {
-    connected: `👩‍🏫 Rafinha Conectada · ${platformName}`,
-    filling:   `⚡ Preenchendo campos em ${platformName}...`,
-    success:   `🎯 Preenchimento concluído com sucesso!`,
-    error:     `❌ Campos não encontrados no portal`,
-  }[state] || platformName;
-
-  div.innerHTML = `
-    <span style="width:10px;height:10px;border-radius:50%;background:${c.dot};box-shadow:0 0 10px ${c.dot};display:inline-block;flex-shrink:0;"></span>
-    <span>${label}</span>
-  `;
-
-  document.body.appendChild(div);
-
-  // Auto-dismiss
-  if (state !== 'connected') {
-    setTimeout(() => {
-      div.style.opacity = '0';
-      div.style.transform = 'translateY(10px)';
-      setTimeout(() => { div.remove(); style.remove(); }, 300);
-    }, 6000);
+  try {
+    if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+      chrome.runtime.sendMessage({
+        action: 'STATUS_TOAST_UPDATE',
+        platformName,
+        state,
+        customText: customText || null,
+        url: window.location.href,
+        timestamp: Date.now()
+      }).catch(() => {});
+    }
+  } catch (e) {
+    // Silently ignore if port is closed
   }
 }
 
@@ -181,6 +201,12 @@ function fillField(platformSelectorList, semanticKeywords, value) {
 }
 
 function setFieldValue(el, value) {
+  const currentVal = el.contentEditable === 'true' ? (el.innerText || '').trim() : String(el.value || '').trim();
+  if (currentVal === String(value).trim()) {
+    console.log(`%c[TEACHER-AI Rafinha] Idempotência: ${el.name || el.id || el.tagName} já possui valor "${value}". Pulando escrita redundante.`, 'color: #3b82f6;');
+    return true;
+  }
+
   el.style.outline = '3px solid #16a34a';
   el.style.backgroundColor = 'rgba(22, 163, 74, 0.08)';
   el.style.transition = 'all 0.3s ease';
@@ -262,7 +288,8 @@ function fillGradesMatrix(studentGrades) {
     for (const row of rows) {
       const rowText = row.innerText;
       if (matchStudentName(rowText, studentName)) {
-        const gradeInput = row.querySelector('input[type="number"], input[type="text"], input[name*="nota"], input[id*="nota"], input[name*="grade"]');
+        const gradeInput = row.querySelector('input[type="number"], input[type="text"], input[name*="nota"], input[id*="nota"], input[name*="grade"]') ||
+                           row.querySelector('input:not([type="hidden"]):not([type="checkbox"])');
         if (gradeInput) {
           setFieldValue(gradeInput, grade);
           filledCount++;
@@ -301,10 +328,63 @@ function fillAttendanceMatrix(absentStudents = [], presentStudents = []) {
   return markedCount;
 }
 
+// ─── GAP 8: Detecção e Auto-Bypass de Overlays/Spinners em Portais Legados ──────
+async function waitForOverlaysToClear(maxWaitMs = 3000, pollIntervalMs = 100) {
+  const overlaySelectors = [
+    '.blockUI',
+    '.modal-backdrop.show',
+    '.ui-widget-overlay',
+    '[aria-busy="true"]',
+    '.loading-overlay',
+    '.spinner-overlay',
+    '.k-loading-mask',
+    '.dx-loadpanel-content',
+    'div[id*="loading"]:not([style*="display: none"]):not([style*="visibility: hidden"])',
+    'div[class*="loading"]:not([style*="display: none"]):not([style*="visibility: hidden"])',
+    'div[id*="carregando"]:not([style*="display: none"]):not([style*="visibility: hidden"])',
+    'div[class*="carregando"]:not([style*="display: none"]):not([style*="visibility: hidden"])'
+  ];
+
+  const startTime = Date.now();
+  while (Date.now() - startTime < maxWaitMs) {
+    let hasActiveOverlay = false;
+    for (const sel of overlaySelectors) {
+      try {
+        const elements = document.querySelectorAll(sel);
+        for (const el of elements) {
+          const rect = el.getBoundingClientRect();
+          const style = window.getComputedStyle(el);
+          if (
+            style.display !== 'none' &&
+            style.visibility !== 'hidden' &&
+            parseFloat(style.opacity || '1') > 0 &&
+            rect.width > 20 &&
+            rect.height > 20 &&
+            (rect.top < window.innerHeight && rect.bottom > 0)
+          ) {
+            hasActiveOverlay = true;
+            break;
+          }
+        }
+      } catch (e) {}
+      if (hasActiveOverlay) break;
+    }
+
+    if (!hasActiveOverlay) {
+      return true;
+    }
+    await new Promise(r => setTimeout(r, pollIntervalMs));
+  }
+  return false;
+}
+
 // ——— Execução de Ações Agênticas da Rafinha ———
-function handleExecutePortalAction(data) {
+async function handleExecutePortalAction(data) {
+  // Aguarda liberação de overlays e spinners antes de interagir (GAP 8)
+  await waitForOverlaysToClear(2000, 80);
+
   const p = data.payload || data.task || data;
-  const actionType = data.actionType || p.type || 'diary';
+  const actionType = data.actionType || p.type || p.acao || 'diary';
   const mode = data.mode || 'supervised';
 
   console.log(`⚡ Rafinha executando ação [${actionType}] no modo [${mode}]:`, p);
@@ -315,10 +395,12 @@ function handleExecutePortalAction(data) {
 
   let filledCount = 0;
 
-  if (actionType === 'grades') {
-    filledCount = fillGradesMatrix(p.studentGrades || []);
-  } else if (actionType === 'attendance') {
-    filledCount = fillAttendanceMatrix(p.absentStudents || [], p.presentStudents || []);
+  if (actionType === 'grades' || actionType === 'lancar_nota') {
+    const studentGrades = p.studentGrades?.length ? p.studentGrades : (p.aluno || data.aluno ? [{ name: p.aluno || data.aluno, grade: p.nota ?? data.nota }] : []);
+    filledCount = fillGradesMatrix(studentGrades);
+  } else if (actionType === 'attendance' || actionType === 'lancar_falta') {
+    const absentStudents = p.absentStudents?.length ? p.absentStudents : (p.aluno || data.aluno ? [p.aluno || data.aluno] : []);
+    filledCount = fillAttendanceMatrix(absentStudents, p.presentStudents || []);
   } else {
     // Diário / Tarefa / Pauta
     const results = {
@@ -331,6 +413,17 @@ function handleExecutePortalAction(data) {
   }
 
   const success = filledCount > 0;
+  const resultPayload = {
+    sucesso: success,
+    success,
+    status: success ? 'draft_completed_pending_submit' : 'no_matching_field_found',
+    filledCount,
+    diff: {
+      aluno: p.aluno || data.aluno || (p.studentGrades?.[0]?.name) || '',
+      campo: (actionType === 'grades' || actionType === 'lancar_nota') ? 'nota' : 'falta',
+      depois: String(p.nota ?? data.nota ?? p.studentGrades?.[0]?.grade ?? '')
+    }
+  };
 
   setTimeout(() => {
     if (success) {
@@ -374,20 +467,30 @@ function handleExecutePortalAction(data) {
     }
   }, 1000);
 
-  return { success, filledCount };
+  return resultPayload;
 }
 
-// ——— Inspeção e Raspagem de Dados do DOM (Zero Alucinação) ———
+// Cache do hash do último snapshot inspecionado para evitar tráfego de payloads redundantes (GAP 4)
+let lastScrapedPayloadHash = null;
+
+// ——— Inspeção e Raspagem de Dados do DOM (Zero Alucinação com Pruning Estrutural) ———
 function handleInspectAndScrape() {
+  // Pruning de tabelas: remove células vazias e tabelas sem dados tabulares reais
   const tables = Array.from(document.querySelectorAll('table')).map(table => {
-    const headers = Array.from(table.querySelectorAll('th')).map(th => th.innerText.trim());
+    const headers = Array.from(table.querySelectorAll('th')).map(th => th.innerText.trim()).filter(Boolean);
     const rows = Array.from(table.querySelectorAll('tr')).map(tr => 
       Array.from(tr.querySelectorAll('td')).map(td => td.innerText.trim()).filter(Boolean)
     ).filter(r => r.length > 0);
     return { headers, rows };
-  });
+  }).filter(t => t.headers.length > 0 || t.rows.length > 0);
 
-  const inputs = Array.from(document.querySelectorAll('input, select, textarea')).map(el => ({
+  // Pruning de inputs: filtra elementos ocultos sem identificação e sem relevância para automação
+  const inputs = Array.from(document.querySelectorAll('input, select, textarea')).filter(el => {
+    if (el.type === 'hidden' && !el.name && !el.id) return false;
+    const style = window.getComputedStyle(el);
+    if (style.display === 'none' && !el.name && !el.id) return false;
+    return true;
+  }).map(el => ({
     tagName: el.tagName,
     type: el.type,
     name: el.name,
@@ -396,13 +499,19 @@ function handleInspectAndScrape() {
     value: el.value
   }));
 
+  // Hash leve para identificação de snapshots idênticos
+  const snapshotSummary = `${tables.length}_${inputs.length}_${tables.reduce((acc, t) => acc + t.rows.length, 0)}`;
+  const isDuplicate = (lastScrapedPayloadHash === snapshotSummary);
+  lastScrapedPayloadHash = snapshotSummary;
+
   const payload = {
     url: window.location.href,
     title: document.title,
     platform: portalPlatformProfile?.id || 'unknown',
     tables,
     inputsCount: inputs.length,
-    timestamp: Date.now()
+    timestamp: Date.now(),
+    isDuplicate
   };
 
   showStatusToast(portalPlatformProfile?.name || 'Portal', 'success', `🔍 Tela inspecionada! ${tables.length} tabelas e ${inputs.length} campos mapeados.`);
@@ -442,6 +551,15 @@ try {
       handleExecutePortalAction(event.data.payload || event.data);
     } else if (event.data?.action === 'INSPECT_PAGE' || event.data?.action === 'EXTRACT_PAGE_DATA') {
       handleInspectAndScrape();
+    }
+  };
+} catch {}
+
+try {
+  const entityBus = new BroadcastChannel('teacher_entity_bus');
+  entityBus.onmessage = (event) => {
+    if (event.data && typeof event.data === 'object') {
+      window.postMessage(event.data, '*');
     }
   };
 } catch {}
@@ -801,8 +919,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message.action === 'EXECUTE_PORTAL_ACTION' || message.action === 'FILL_DEADLINE') {
-    const res = handleExecutePortalAction(message);
-    sendResponse(res);
+    handleExecutePortalAction(message).then(res => {
+      sendResponse(res);
+    }).catch(err => {
+      sendResponse({ sucesso: false, success: false, error: err?.message || String(err) });
+    });
     return true;
   } else if (message.action === 'INSPECT_PAGE' || message.action === 'EXTRACT_PAGE_DATA') {
     const res = handleInspectAndScrape();
@@ -2280,6 +2401,77 @@ window.addEventListener('message', async (event) => {
   // Ignora mensagens sem payload ou de fontes não estruturadas
   if (!event.data || typeof event.data !== 'object') return;
 
+  // ─── PING DE CONEXÃO DO RELAY ──────────────────────────────────────────────
+  if (event.data.type === 'TEACHER_RELAY_PING') {
+    if (!ALLOWED_APP_ORIGINS.includes(event.origin)) return;
+    window.postMessage({
+      type: 'TEACHER_RELAY_PONG',
+      requestId: event.data.requestId || null,
+      payload: { online: true, version: '3.1' }
+    }, event.origin);
+    return;
+  }
+
+  // ─── RELAY DE EXECUÇÃO DE FERRAMENTAS DO APP PARA A EXTENSÃO ───────────────
+  if (event.data.type === 'TEACHER_RELAY_TO_EXTENSION') {
+    if (!ALLOWED_APP_ORIGINS.includes(event.origin)) {
+      console.warn(`[TeacherRelayBridge] ⛔ Origem rejeitada: "${event.origin}"`);
+      return;
+    }
+
+    const { requestId, payload } = event.data;
+
+    try {
+      if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
+        chrome.runtime.sendMessage({
+          action: 'RELAY_TOOL_EXECUTION',
+          requestId,
+          payload
+        }, (resp) => {
+          if (chrome.runtime.lastError) {
+            window.postMessage({
+              type: 'TEACHER_RELAY_RESPONSE',
+              requestId,
+              payload: {
+                success: false,
+                status: 'extension_error',
+                error: chrome.runtime.lastError.message
+              }
+            }, event.origin);
+            return;
+          }
+
+          window.postMessage({
+            type: 'TEACHER_RELAY_RESPONSE',
+            requestId,
+            payload: resp || { success: false, error: 'Resposta vazia da extensão.' }
+          }, event.origin);
+        });
+      } else {
+        window.postMessage({
+          type: 'TEACHER_RELAY_RESPONSE',
+          requestId,
+          payload: {
+            success: false,
+            status: 'extension_unavailable',
+            error: 'API chrome.runtime não disponível no contexto da página.'
+          }
+        }, event.origin);
+      }
+    } catch (err) {
+      window.postMessage({
+        type: 'TEACHER_RELAY_RESPONSE',
+        requestId,
+        payload: {
+          success: false,
+          status: 'relay_exception',
+          error: err.message
+        }
+      }, event.origin);
+    }
+    return;
+  }
+
   if (event.data.type === 'TEACHER_BRIDGE_COMMAND') {
     // 1. VALIDAÇÃO DE ORIGEM OBRIGATÓRIA (Item 2.2)
     if (!ALLOWED_APP_ORIGINS.includes(event.origin)) {
@@ -2326,3 +2518,138 @@ window.addEventListener('message', async (event) => {
     }
   }
 });
+
+// ——— OTIMIZAÇÕES AVANÇADAS: DOM Settled, Spatial Anchoring e Auto-Draft ———
+
+/**
+ * Aguarda o DOM atingir o estado de repouso absoluto (zero mutações) após re-renders assíncronos.
+ */
+function isDomSettled(timeoutMs = 2000, debounceMs = 250) {
+  return new Promise((resolve) => {
+    let timer = null;
+    const maxTimeout = setTimeout(() => {
+      cleanup();
+      resolve(true);
+    }, timeoutMs);
+
+    const observer = new MutationObserver(() => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        cleanup();
+        resolve(true);
+      }, debounceMs);
+    });
+
+    function cleanup() {
+      if (timer) clearTimeout(timer);
+      clearTimeout(maxTimeout);
+      observer.disconnect();
+    }
+
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      characterData: true
+    });
+
+    timer = setTimeout(() => {
+      cleanup();
+      resolve(true);
+    }, debounceMs);
+  });
+}
+
+/**
+ * Localiza um input horizontalmente alinhado à direita de um elemento de rótulo (ex: nome do aluno).
+ * Imune a classes CSS efêmeras ou ausência de IDs.
+ */
+function findInputBySpatialAnchor(labelElement, maxDistanceX = 500, maxToleranceY = 20) {
+  if (!labelElement) return null;
+  const rectLabel = labelElement.getBoundingClientRect();
+  const labelRight = rectLabel.right;
+  const labelCenterY = rectLabel.top + rectLabel.height / 2;
+
+  const candidateInputs = Array.from(document.querySelectorAll('input:not([type="hidden"]), select, div[contenteditable="true"]'));
+  let bestMatch = null;
+  let minDistance = Infinity;
+
+  for (const input of candidateInputs) {
+    const rectInput = input.getBoundingClientRect();
+    if (rectInput.width === 0 || rectInput.height === 0) continue;
+
+    if (rectInput.left < rectLabel.left) continue;
+
+    const distX = rectInput.left - labelRight;
+    if (distX < -10 || distX > maxDistanceX) continue;
+
+    const inputCenterY = rectInput.top + rectInput.height / 2;
+    const diffY = Math.abs(inputCenterY - labelCenterY);
+
+    if (diffY <= maxToleranceY) {
+      if (distX < minDistance) {
+        minDistance = distX;
+        bestMatch = input;
+      }
+    }
+  }
+
+  return bestMatch;
+}
+
+/**
+ * Captura um snapshot leve de todos os campos preenchidos no formulário (Anti-perda de trabalho).
+ */
+function captureFormSnapshot(storageKey = 'teacher_ai_form_draft') {
+  try {
+    const inputs = Array.from(document.querySelectorAll('input:not([type="hidden"]), select, textarea'));
+    const draft = [];
+    inputs.forEach((el, idx) => {
+      const val = el.value;
+      if (val) {
+        draft.push({
+          idx,
+          id: el.id || null,
+          name: el.name || null,
+          value: val
+        });
+      }
+    });
+    sessionStorage.setItem(storageKey, JSON.stringify(draft));
+    return draft.length;
+  } catch (e) {
+    return 0;
+  }
+}
+
+/**
+ * Restaura o snapshot previamente salvo no sessionStorage.
+ */
+function restoreFormSnapshot(storageKey = 'teacher_ai_form_draft') {
+  try {
+    const raw = sessionStorage.getItem(storageKey);
+    if (!raw) return 0;
+    const draft = JSON.parse(raw);
+    let restored = 0;
+    draft.forEach(item => {
+      let el = null;
+      if (item.id) el = document.getElementById(item.id);
+      if (!el && item.name) el = document.querySelector(`[name="${item.name}"]`);
+      if (el) {
+        setFieldValue(el, item.value);
+        restored++;
+      }
+    });
+    return restored;
+  } catch (e) {
+    return 0;
+  }
+}
+
+window.isDomSettled = isDomSettled;
+window.findInputBySpatialAnchor = findInputBySpatialAnchor;
+window.captureFormSnapshot = captureFormSnapshot;
+window.restoreFormSnapshot = restoreFormSnapshot;
+
+} // end if (!window.__teacherAgentLoaded)
+

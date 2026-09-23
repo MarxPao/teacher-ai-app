@@ -4,6 +4,18 @@ import { toast, showConfirm } from '@/components/Toast'
 
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { buildTeacherStyleSystemPrompt } from '@/lib/teacherStyleProfile'
+import { getUnifiedClasses, subscribeToClassUpdates } from '@/lib/classService'
+import {
+  DidacticSequenceDocument,
+  SequenceLessonSlot,
+  getDidacticSequences,
+  getDidacticSequenceById,
+  saveDidacticSequence,
+  deleteDidacticSequence,
+  calculateCurricularPace,
+  subscribeToDidacticSequenceUpdates
+} from '@/lib/didacticSequenceService'
+import { indexDocumentContent } from '@/lib/ragEngine'
 
 
 export interface SequenceUnit {
@@ -69,7 +81,7 @@ const WEEKS_LIST = Array.from({ length: 44 }, (_, i) => {
   }
 })
 
-const INITIAL_UNITS: SequenceUnit[] = [
+export const INITIAL_UNITS: SequenceUnit[] = [
   {
     id: 'unit_1',
     unitNumber: 1,
@@ -234,6 +246,144 @@ const INITIAL_UNITS: SequenceUnit[] = [
   },
 ]
 
+/**
+ * Extrai dinamicamente as unidades didáticas a partir dos livros indexados no repositório.
+ * Se nenhum livro ou conteúdo válido for encontrado, retorna null para permitir fallback aos INITIAL_UNITS.
+ */
+export function extractUnitsFromRepository(rawRepo?: string | any[] | null): SequenceUnit[] | null {
+  try {
+    let raw = rawRepo
+    if (raw === undefined) {
+      if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+        raw = localStorage.getItem('teacher_repo') || localStorage.getItem('teacher_repository')
+      } else if (typeof localStorage !== 'undefined') {
+        raw = localStorage.getItem('teacher_repo') || localStorage.getItem('teacher_repository')
+      }
+    }
+    
+    if (!raw) return null
+    let items: any[] = []
+    if (typeof raw === 'string') {
+      try { items = JSON.parse(raw) } catch { return null }
+    } else if (Array.isArray(raw)) {
+      items = raw
+    }
+    if (!Array.isArray(items) || items.length === 0) return null
+
+    // Procura livro com conteúdo real
+    const bookWithContent = items.find((item: any) => typeof item.content === 'string' && item.content.trim().length > 50)
+    if (!bookWithContent) return null
+
+    const chunks = indexDocumentContent(
+      bookWithContent.id || 'repo_book_1',
+      bookWithContent.title || 'Livro Didático',
+      bookWithContent.type || "Student's Book",
+      bookWithContent.category || 'Geral',
+      bookWithContent.content,
+      bookWithContent.subjectId || 'english'
+    )
+
+    if (!chunks || chunks.length === 0) return null
+
+    // Agrupa chunks por título de unidade
+    const unitMap = new Map<string, typeof chunks>()
+    let hasRealUnitHeaders = false
+    for (const chunk of chunks) {
+      let uTitle = (chunk.unitTitle || '').trim()
+      if (!uTitle || uTitle.startsWith('--- Página')) continue
+      if (!uTitle.startsWith('Seção ')) {
+        hasRealUnitHeaders = true
+      }
+      if (!unitMap.has(uTitle)) {
+        unitMap.set(uTitle, [])
+      }
+      unitMap.get(uTitle)!.push(chunk)
+    }
+
+    if (!hasRealUnitHeaders || unitMap.size === 0) {
+      const singleUnit: SequenceUnit = {
+        id: 'unit_1',
+        unitNumber: 1,
+        title: `Unidade 1: ${bookWithContent.title}`,
+        bookRef: `${bookWithContent.title}`,
+        topics: [bookWithContent.title],
+        grammarFocus: 'Conteúdo programático principal',
+        vocabularyFocus: 'Vocabulário essencial',
+        status: 'current',
+        masteryPercentage: 0,
+        aiAssessment: 'Unidade importada do repositório de livros da escola.',
+        suggestedAction: 'Planejar aulas desta unidade no Lesson Studio.',
+        plannedMonthStart: 'Fev',
+        plannedMonthEnd: 'Mar',
+        plannedWeekStart: 1,
+        plannedWeekEnd: 8,
+        plannedQuarter: 'T1',
+        plannedLessons: 8,
+        actualMonthStart: 'Fev',
+        actualMonthEnd: 'Mar',
+        actualWeekStart: 1,
+        actualWeekEnd: 8,
+        actualQuarter: 'T1',
+        actualLessonsGiven: 0,
+        completionStatus: 'pending',
+        delayDays: 0
+      }
+      return [singleUnit]
+    }
+
+    const unitEntries = Array.from(unitMap.entries())
+    const totalUnits = unitEntries.length
+
+    const extractedUnits: SequenceUnit[] = unitEntries.map(([title, unitChunks], idx) => {
+      const firstChunk = unitChunks[0]
+      const allGrammar = Array.from(new Set(unitChunks.flatMap(c => c.grammarFocus || []))).filter(Boolean)
+      const allVocab = Array.from(new Set(unitChunks.flatMap(c => c.vocabFocus || []))).filter(Boolean)
+      
+      const weeksPerUnit = Math.max(2, Math.floor(40 / totalUnits))
+      const weekStart = Math.min(44, idx * weeksPerUnit + 1)
+      const weekEnd = Math.min(44, (idx + 1) * weeksPerUnit)
+      const startMonthObj = MONTHS_LIST.find(m => m.weeks.includes(weekStart)) || MONTHS_LIST[0]
+      const endMonthObj = MONTHS_LIST.find(m => m.weeks.includes(weekEnd)) || MONTHS_LIST[MONTHS_LIST.length - 1]
+      const quarter = startMonthObj.quarter || 'T1'
+
+      const pageRef = firstChunk.pageNumber ? ` (pág. ${firstChunk.pageNumber})` : ''
+
+      return {
+        id: `unit_${idx + 1}`,
+        unitNumber: idx + 1,
+        title,
+        bookRef: `${bookWithContent.title}${pageRef}`,
+        topics: [title],
+        grammarFocus: allGrammar.length > 0 ? allGrammar.slice(0, 4).join(', ') : 'Estruturas gramaticais da unidade',
+        vocabularyFocus: allVocab.length > 0 ? allVocab.slice(0, 6).join(', ') : 'Léxico e expressões temáticas',
+        status: idx === 0 ? 'current' : 'upcoming',
+        masteryPercentage: 0,
+        aiAssessment: 'Unidade extraída dinamicamente do livro da biblioteca.',
+        suggestedAction: 'Planejar aulas no Lesson Studio para esta unidade.',
+        plannedMonthStart: startMonthObj.key,
+        plannedMonthEnd: endMonthObj.key,
+        plannedWeekStart: weekStart,
+        plannedWeekEnd: weekEnd,
+        plannedQuarter: quarter,
+        plannedLessons: 8,
+        actualMonthStart: startMonthObj.key,
+        actualMonthEnd: endMonthObj.key,
+        actualWeekStart: weekStart,
+        actualWeekEnd: weekEnd,
+        actualQuarter: quarter,
+        actualLessonsGiven: 0,
+        completionStatus: 'pending',
+        delayDays: 0
+      }
+    })
+
+    return extractedUnits
+  } catch (err) {
+    console.error('[DidacticSequence] Erro ao extrair unidades do repositório:', err)
+    return null
+  }
+}
+
 export default function DidacticSequence() {
   const [activeTab, setActiveTab] = useState<'timeline' | 'units' | 'analytics'>('timeline')
   const [timeScale, setTimeScale] = useState<TimeScale>('month')
@@ -254,6 +404,109 @@ export default function DidacticSequence() {
   const [editModalUnit, setEditModalUnit] = useState<SequenceUnit | null>(null)
   const [isAddingNewUnit, setIsAddingNewUnit] = useState(false)
 
+  // ─── FASE 3: Sequência Didática & Ritmo Curricular ─────────────────────────
+  const [didacticSequences, setDidacticSequences] = useState<DidacticSequenceDocument[]>([])
+  const [selectedSequenceId, setSelectedSequenceId] = useState<string>('')
+  const [isCreatingSequence, setIsCreatingSequence] = useState(false)
+  const [newSeqTitle, setNewSeqTitle] = useState('')
+  const [newSeqGoal, setNewSeqGoal] = useState('')
+  const [newSeqLessonsCount, setNewSeqLessonsCount] = useState(4)
+
+  useEffect(() => {
+    const loadSeqs = () => {
+      const seqs = getDidacticSequences(selectedClass)
+      setDidacticSequences(seqs)
+      if (seqs.length > 0 && (!selectedSequenceId || !seqs.some(s => s.id === selectedSequenceId))) {
+        setSelectedSequenceId(seqs[0].id)
+      }
+    }
+    loadSeqs()
+    const unsubscribe = subscribeToDidacticSequenceUpdates(() => {
+      loadSeqs()
+    })
+    return () => unsubscribe()
+  }, [selectedClass])
+
+  const activeSequence = useMemo(() => {
+    return didacticSequences.find(s => s.id === selectedSequenceId) || didacticSequences[0] || null
+  }, [didacticSequences, selectedSequenceId])
+
+  const activeSequencePace = useMemo(() => {
+    if (!activeSequence) return null
+    return calculateCurricularPace(activeSequence)
+  }, [activeSequence])
+
+  const handlePlanSlotInStudio = (seq: DidacticSequenceDocument, slot: SequenceLessonSlot) => {
+    const prefill = {
+      planId: slot.lessonPlanId,
+      className: seq.className,
+      topic: slot.title,
+      date: slot.expectedDate || new Date().toISOString().split('T')[0],
+      didacticSequenceRef: {
+        sequenceId: seq.id,
+        sequenceTitle: seq.title,
+        lessonOrder: slot.order,
+        totalLessons: seq.lessons.length
+      }
+    }
+    localStorage.setItem('teacher_lesson_studio_prefill', JSON.stringify(prefill))
+    window.dispatchEvent(new CustomEvent('teacher:navigate', { detail: 'lessonstudio' }))
+  }
+
+  const handleOpenSlotPlanInStudio = (seq: DidacticSequenceDocument, slot: SequenceLessonSlot) => {
+    const prefill = {
+      planId: slot.lessonPlanId,
+      className: seq.className,
+      topic: slot.title,
+      date: slot.actualDate || slot.expectedDate,
+      didacticSequenceRef: {
+        sequenceId: seq.id,
+        sequenceTitle: seq.title,
+        lessonOrder: slot.order,
+        totalLessons: seq.lessons.length
+      }
+    }
+    localStorage.setItem('teacher_lesson_studio_prefill', JSON.stringify(prefill))
+    window.dispatchEvent(new CustomEvent('teacher:navigate', { detail: 'lessonstudio' }))
+  }
+
+  const handleCreateSequence = () => {
+    if (!newSeqTitle.trim()) {
+      showToast('Defina um título para a sequência didática.')
+      return
+    }
+    const count = Math.max(1, Math.min(20, newSeqLessonsCount))
+    const slots: SequenceLessonSlot[] = Array.from({ length: count }, (_, i) => ({
+      id: `slot_${Date.now()}_${i + 1}`,
+      order: i + 1,
+      title: `Aula ${i + 1}: Conteúdo de ${newSeqTitle}`,
+      status: 'pending' as const,
+      expectedDate: new Date(Date.now() + i * 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+    }))
+
+    const newDoc: DidacticSequenceDocument = {
+      id: `seq_${Date.now()}`,
+      title: newSeqTitle.trim(),
+      school: selectedSchool,
+      className: selectedClass,
+      subject: 'Inglês',
+      term: '2º Trimestre',
+      bookRef: 'Material Didático',
+      generalGoal: newSeqGoal.trim() || `Objetivo comum de médio prazo da sequência ${newSeqTitle}`,
+      lessons: slots,
+      currentLessonOrder: 1,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    }
+
+    saveDidacticSequence(newDoc)
+    setSelectedSequenceId(newDoc.id)
+    setIsCreatingSequence(false)
+    setNewSeqTitle('')
+    setNewSeqGoal('')
+    showToast(`Sequência Didática "${newDoc.title}" criada com ${count} aulas!`)
+  }
+
   // Scroll Container Ref for Lateral Infinite Scroll
   const timelineScrollRef = useRef<HTMLDivElement>(null)
 
@@ -265,9 +518,18 @@ export default function DidacticSequence() {
   // Load from Storage
   useEffect(() => {
     let currentUnits = INITIAL_UNITS
+    const repoRaw = localStorage.getItem('teacher_repo') || localStorage.getItem('teacher_repository')
+    const extractedFromRepo = extractUnitsFromRepository(repoRaw)
+
     const rawUnits = localStorage.getItem('teacher_didactic_sequence_units_v3')
     if (rawUnits) {
-      try { currentUnits = JSON.parse(rawUnits) } catch {}
+      try { 
+        currentUnits = JSON.parse(rawUnits) 
+      } catch {
+        currentUnits = extractedFromRepo || INITIAL_UNITS
+      }
+    } else if (extractedFromRepo && extractedFromRepo.length > 0) {
+      currentUnits = extractedFromRepo
     } else {
       const oldUnits = localStorage.getItem('teacher_didactic_sequence_units_v2')
       if (oldUnits) {
@@ -285,25 +547,35 @@ export default function DidacticSequence() {
     localStorage.setItem('teacher_didactic_sequence_units_v3', JSON.stringify(currentUnits))
 
     try {
-      const rawCl = localStorage.getItem('teacher_classes')
       const rawSc = localStorage.getItem('teacher_schools')
-      const rawPriv = localStorage.getItem('teacher_private_students')
       if (rawSc) setSchools(['Todas as Escolas', ...JSON.parse(rawSc).map((s: any) => s.name)])
-      let clList: string[] = ['9º Ano B', '8º Ano A', '3º Médio A', '7º Ano C']
-      if (rawCl) clList = JSON.parse(rawCl).map((c: any) => c.name)
-      if (rawPriv) {
-        const privs = JSON.parse(rawPriv)
-        const privNames = privs.map((p: any) => `🎓 Particular: ${p.name}`)
-        clList = [...clList, ...privNames]
-      }
-      setClasses(clList)
+      const unified = getUnifiedClasses()
+      setClasses(unified.map(c => c.name))
     } catch {}
+  }, [])
+
+  // Escuta atualizações de turmas em tempo real (Fase 6)
+  useEffect(() => {
+    const unsubscribe = subscribeToClassUpdates((updatedClasses) => {
+      setClasses(updatedClasses.map(c => c.name))
+    })
+    return () => unsubscribe()
   }, [])
 
   const saveUnits = (updated: SequenceUnit[]) => {
     setUnits(updated)
     localStorage.setItem('teacher_didactic_sequence_units_v3', JSON.stringify(updated))
     window.dispatchEvent(new Event('storage'))
+  }
+
+  const handleSyncWithBook = () => {
+    const extracted = extractUnitsFromRepository()
+    if (extracted && extracted.length > 0) {
+      saveUnits(extracted)
+      showToast(`✨ ${extracted.length} unidade(s) sincronizada(s) a partir do livro da biblioteca!`)
+    } else {
+      showToast('Nenhum livro com conteúdo encontrado no repositório para sincronizar.')
+    }
   }
 
   // Smooth Horizontal Scroll Handlers
@@ -569,6 +841,18 @@ ${buildTeacherStyleSystemPrompt()}`
         </div>
 
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          <button
+            onClick={handleSyncWithBook}
+            title="Importa e atualiza as unidades da sequência a partir do livro didático indexado no repositório"
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6, padding: '10px 18px',
+              borderRadius: RADIUS.md, border: '1px solid #8b5e3c', background: '#f5efe6', color: '#8b5e3c',
+              fontSize: 13, fontWeight: 700, cursor: 'pointer'
+            }}
+          >
+            <i className="ti ti-book" /> 📚 Sincronizar com Livro
+          </button>
+
           <button
             onClick={handleOpenAddModal}
             style={{
@@ -1146,6 +1430,171 @@ ${buildTeacherStyleSystemPrompt()}`
       {/* 2. ABA: SEQUÊNCIA CURRICULAR VERTICAL (VISÃO POR UNIDADE) */}
       {activeTab === 'units' && (
         <div style={{ flex: 1, overflowY: 'auto', background: '#fffcf8', padding: 32, borderRadius: 20, border: '1px solid rgba(139,115,85,0.14)', boxShadow: '0 2px 10px rgba(44,26,14,0.04)' }}>
+          {/* Bloco de Sequências Didáticas Modulares (Fase 3) */}
+          <div style={{ marginBottom: 32, background: '#fff', border: '1px solid #e2d9cc', borderRadius: RADIUS.xl, padding: 24, boxShadow: '0 4px 16px rgba(44,26,14,0.06)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ width: 36, height: 36, borderRadius: RADIUS.md, background: '#0284c7', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>
+                  <i className="ti ti-layers-linked" />
+                </div>
+                <div>
+                  <h3 style={{ fontSize: 16, fontWeight: 700, color: '#2c1a0e', margin: 0, fontFamily: "'Fraunces', Georgia, serif" }}>
+                    Sequências Didáticas da Turma ({selectedClass})
+                  </h3>
+                  <p style={{ margin: 0, fontSize: 12, color: '#7a5c42' }}>
+                    Conjunto ordenado de aulas integradas com ritmo curricular e planos de aula
+                  </p>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                {didacticSequences.length > 0 && (
+                  <select
+                    value={selectedSequenceId}
+                    onChange={e => setSelectedSequenceId(e.target.value)}
+                    style={{ padding: '8px 12px', borderRadius: RADIUS.md, border: '1px solid #cbd5e1', fontSize: 13, background: '#fff', fontWeight: 600, color: '#2c1a0e' }}
+                  >
+                    {didacticSequences.map(s => (
+                      <option key={s.id} value={s.id}>
+                        {s.title} ({s.lessons.length} aulas)
+                      </option>
+                    ))}
+                  </select>
+                )}
+                <button
+                  onClick={() => setIsCreatingSequence(true)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px',
+                    borderRadius: RADIUS.md, border: 'none', background: '#8b5e3c', color: '#fff',
+                    fontSize: 12, fontWeight: 700, cursor: 'pointer'
+                  }}
+                >
+                  <i className="ti ti-plus" /> Nova Sequência
+                </button>
+              </div>
+            </div>
+
+            {activeSequence ? (
+              <div>
+                {/* Banner de Ritmo Curricular da Sequência */}
+                {activeSequencePace && (
+                  <div style={{
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    background: activeSequencePace.badgeBg, border: `1px solid ${activeSequencePace.badgeBorder}`,
+                    borderRadius: RADIUS.lg, padding: '12px 16px', marginBottom: 20, flexWrap: 'wrap', gap: 10
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <span style={{ fontSize: 18 }}>
+                        {activeSequencePace.pace === 'on_track' ? '🟢' : activeSequencePace.pace === 'behind' ? '🔴' : '🔵'}
+                      </span>
+                      <div>
+                        <strong style={{ fontSize: 13, color: activeSequencePace.badgeColor, display: 'block' }}>
+                          {activeSequencePace.message}
+                        </strong>
+                        <span style={{ fontSize: 11.5, color: '#475569' }}>
+                          Objetivo: {activeSequence.generalGoal}
+                        </span>
+                      </div>
+                    </div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: '#334155' }}>
+                      Progresso: {activeSequencePace.completedCount} de {activeSequence.lessons.length} aulas ministradas ({Math.round((activeSequencePace.completedCount / activeSequence.lessons.length) * 100)}%)
+                    </div>
+                  </div>
+                )}
+
+                {/* Grid de Slots de Aula da Sequência */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14 }}>
+                  {activeSequence.lessons.map(slot => {
+                    const isSlotCompleted = slot.status === 'completed' || !!slot.actualDate
+                    const hasPlan = Boolean(slot.lessonPlanId)
+
+                    return (
+                      <div
+                        key={slot.id}
+                        style={{
+                          background: isSlotCompleted ? '#f0fdf4' : hasPlan ? '#eff6ff' : '#fdfaf6',
+                          border: `1px solid ${isSlotCompleted ? '#86efac' : hasPlan ? '#93c5fd' : '#e2d9cc'}`,
+                          borderRadius: RADIUS.lg, padding: 14, display: 'flex', flexDirection: 'column',
+                          justifyContent: 'space-between', gap: 10
+                        }}
+                      >
+                        <div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                            <span style={{
+                              fontSize: 10.5, fontWeight: 800, padding: '2px 8px', borderRadius: 4,
+                              background: isSlotCompleted ? '#dcfce7' : hasPlan ? '#dbeafe' : '#f1f5f9',
+                              color: isSlotCompleted ? '#166534' : hasPlan ? '#1e40af' : '#475569',
+                              textTransform: 'uppercase'
+                            }}>
+                              Aula {slot.order} de {activeSequence.lessons.length}
+                            </span>
+                            <span style={{
+                              fontSize: 10.5, fontWeight: 700,
+                              color: isSlotCompleted ? '#16a34a' : slot.status === 'delayed' ? '#dc2626' : '#64748b'
+                            }}>
+                              {isSlotCompleted ? '✓ Ministrada' : slot.status === 'planned' ? '📅 Planejada' : '⏳ Pendente'}
+                            </span>
+                          </div>
+
+                          <h4 style={{ fontSize: 13.5, fontWeight: 700, color: '#1e293b', margin: '0 0 6px 0', lineHeight: 1.3 }}>
+                            {slot.title}
+                          </h4>
+
+                          <div style={{ fontSize: 11, color: '#64748b', display: 'flex', flexDirection: 'column', gap: 2 }}>
+                            <div><strong>Previsto:</strong> {slot.expectedDate || 'A definir'}</div>
+                            {slot.actualDate && <div><strong>Realizado:</strong> {slot.actualDate}</div>}
+                          </div>
+                        </div>
+
+                        <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                          {hasPlan ? (
+                            <button
+                              onClick={() => handleOpenSlotPlanInStudio(activeSequence, slot)}
+                              style={{
+                                flex: 1, padding: '6px 10px', borderRadius: RADIUS.md, border: 'none',
+                                background: '#0284c7', color: '#fff', fontSize: 11.5, fontWeight: 700,
+                                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4
+                              }}
+                            >
+                              <i className="ti ti-file-text" /> Ver Plano no Studio
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => handlePlanSlotInStudio(activeSequence, slot)}
+                              style={{
+                                flex: 1, padding: '6px 10px', borderRadius: RADIUS.md, border: 'none',
+                                background: '#8b5e3c', color: '#fff', fontSize: 11.5, fontWeight: 700,
+                                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4
+                              }}
+                            >
+                              <i className="ti ti-sparkles" /> Planejar no Studio
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            ) : (
+              <div style={{ textAlign: 'center', padding: '24px 16px', color: '#94a3b8' }}>
+                <p style={{ margin: 0, fontSize: 13 }}>Nenhuma sequência didática cadastrada para {selectedClass}.</p>
+                <button
+                  onClick={() => setIsCreatingSequence(true)}
+                  style={{ marginTop: 8, padding: '6px 12px', borderRadius: RADIUS.md, border: '1px solid #cbd5e1', background: '#fff', color: '#8b5e3c', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+                >
+                  ➕ Criar Primeira Sequência
+                </button>
+              </div>
+            )}
+          </div>
+
+          <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 13, fontWeight: 800, color: '#8b5e3c', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+              📖 Visão Macro das Unidades Curriculares (Ano Letivo)
+            </span>
+          </div>
+
           <div style={{ display: 'flex', flexDirection: 'column', gap: 0, position: 'relative' }}>
             {/* Linha vertical central da timeline */}
             <div style={{ position: 'absolute', left: 40, top: 20, bottom: 40, width: 4, background: '#f0e8d8', zIndex: 1 }} />
@@ -1577,6 +2026,77 @@ ${buildTeacherStyleSystemPrompt()}`
                 style={{ flex: 1, padding: '12px', borderRadius: RADIUS.md, border: 'none', background: '#cb4b16', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
               >
                 Definir Como Conteúdo Atual da Turma
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL NOVA SEQUÊNCIA DIDÁTICA (FASE 3) */}
+      {isCreatingSequence && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(7,54,66,0.6)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div style={{ background: '#fff', borderRadius: 20, padding: 28, width: 480, maxWidth: '90vw', display: 'flex', flexDirection: 'column', gap: 16, boxShadow: '0 12px 40px rgba(44,26,14,0.2)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ fontSize: 18, fontWeight: 700, color: '#2c1a0e', margin: 0, fontFamily: "'Fraunces', Georgia, serif" }}>
+                Nova Sequência Didática ({selectedClass})
+              </h3>
+              <button onClick={() => setIsCreatingSequence(false)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: '#a08060' }}>×</button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#7a5c42', marginBottom: 4, textTransform: 'uppercase' }}>
+                  Título da Sequência
+                </label>
+                <input
+                  type="text"
+                  value={newSeqTitle}
+                  onChange={e => setNewSeqTitle(e.target.value)}
+                  placeholder="Ex: Unit 4: Narratives & Unfinished Actions"
+                  style={{ width: '100%', padding: '8px 12px', borderRadius: RADIUS.md, border: '1px solid #cbd5e1', fontSize: 13, outline: 'none' }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#7a5c42', marginBottom: 4, textTransform: 'uppercase' }}>
+                  Objetivo Comum de Médio Prazo
+                </label>
+                <textarea
+                  rows={3}
+                  value={newSeqGoal}
+                  onChange={e => setNewSeqGoal(e.target.value)}
+                  placeholder="Ex: Desenvolver a capacidade dos alunos de narrar histórias pessoais e eventos inacabados com Present Perfect..."
+                  style={{ width: '100%', padding: '8px 12px', borderRadius: RADIUS.md, border: '1px solid #cbd5e1', fontSize: 12.5, outline: 'none' }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#7a5c42', marginBottom: 4, textTransform: 'uppercase' }}>
+                  Quantidade de Aulas Planejadas
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  max={20}
+                  value={newSeqLessonsCount}
+                  onChange={e => setNewSeqLessonsCount(Number(e.target.value))}
+                  style={{ width: '100%', padding: '8px 12px', borderRadius: RADIUS.md, border: '1px solid #cbd5e1', fontSize: 13, outline: 'none' }}
+                />
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 10, marginTop: 10 }}>
+              <button
+                onClick={() => setIsCreatingSequence(false)}
+                style={{ flex: 1, padding: '10px', borderRadius: RADIUS.md, border: '1px solid #cbd5e1', background: '#f8fafc', color: '#64748b', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleCreateSequence}
+                style={{ flex: 1, padding: '10px', borderRadius: RADIUS.md, border: 'none', background: '#8b5e3c', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+              >
+                Salvar Sequência
               </button>
             </div>
           </div>

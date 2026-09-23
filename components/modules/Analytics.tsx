@@ -3,7 +3,7 @@ import { toast, showConfirm } from '@/components/Toast'
 import { COLOR, TEXT, RADIUS } from '@/styles/tokens'
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { getBnccSkillsForGrade, getStoredBnccSkills, BnccSkill } from '@/lib/bnccData'
+import { getCurriculumCoverageReport, normalizeGradeYear, BnccSkill } from '@/lib/bnccStore'
 import { exportToPdf, exportToExcel } from '@/lib/exportUtils'
 import { calculateStudentCompositeRisk, evaluateMlReadiness, CompositeRiskAnalysis } from '@/lib/predictiveAnalytics'
 import { saveRiskSnapshot, getRiskHistory, getRiskTrajectoryLabel, getTrajectoryColor, RiskSnapshot } from '@/lib/riskHistory'
@@ -226,6 +226,9 @@ export default function Analytics() {
   /** Histórico de snapshots por studentId — carregado do localStorage */
   const [riskHistoryMap, setRiskHistoryMap] = useState<Record<string, RiskSnapshot[]>>({})
 
+  // ── Planos de Aula (para Relatório Real de Cobertura BNCC) ───────────────
+  const [lessonPlans, setLessonPlans] = useState<any[]>([])
+
   // ── Follow-up (Acompanhamento Pedagógico) ────────────────────────────────
   const [showFollowUpModal, setShowFollowUpModal] = useState(false)
   const [followUpTargetId, setFollowUpTargetId] = useState<string | null>(null)
@@ -250,6 +253,11 @@ export default function Analytics() {
       const mem = localStorage.getItem('teacher_student_memory')
       if (mem) {
         try { setStudentMemories(JSON.parse(mem)) } catch { /* ignore */ }
+      }
+
+      const lp = localStorage.getItem('teacher_lesson_plans_bank')
+      if (lp) {
+        try { setLessonPlans(JSON.parse(lp)) } catch { /* ignore */ }
       }
     }
     load()
@@ -1868,107 +1876,171 @@ Responda APENAS um objeto JSON no formato:
       )}
 
       {/* ─── ABA 5: RELATÓRIO DE COBERTURA BNCC & MATRIZ CURRICULAR (BLOCO A) ─ */}
-      {tab === 'bncc_report' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-          {/* Header & Filtro de Turma */}
-          <div style={{ ...S.card, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 14 }}>
-            <div>
-              <span style={{ fontSize: TEXT.caption, fontWeight: 700, color: '#8b5e3c', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                Matriz Curricular Oficial
-              </span>
-              <h2 style={{ fontSize: 20, fontWeight: 700, color: COLOR.paperInk, margin: '4px 0 0' }}>
-                Relatório de Cobertura de Habilidades BNCC
-              </h2>
-            </div>
+      {tab === 'bncc_report' && (() => {
+        const targetClass = classes.find(c => c.id === (panelClassId || classes[0]?.id))
+        const rawGrade = targetClass?.name || targetClass?.year || ''
+        const effectiveGrade = normalizeGradeYear(rawGrade) || (rawGrade.includes('6') ? '6º Fund.' : rawGrade.includes('7') ? '7º Fund.' : rawGrade.includes('8') ? '8º Fund.' : rawGrade.includes('9') ? '9º Fund.' : rawGrade.includes('EM') || rawGrade.includes('Médio') ? '1º Médio' : '8º Fund.')
+        const report = getCurriculumCoverageReport(effectiveGrade, lessonPlans, targetClass?.id)
+        const hasSkills = report.totalSkills > 0
 
-            <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-              <select
-                value={panelClassId || (classes[0]?.id || '')}
-                onChange={e => setPanelClassId(e.target.value)}
-                style={{ ...S.input, width: 'auto', minWidth: 200 }}
-              >
-                {classes.map(c => (
-                  <option key={c.id} value={c.id}>{c.name} ({c.year || '2025'})</option>
-                ))}
-              </select>
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+            {/* Header & Filtro de Turma */}
+            <div style={{ ...S.card, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 14 }}>
+              <div>
+                <span style={{ fontSize: TEXT.caption, fontWeight: 700, color: '#8b5e3c', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                  Matriz Curricular Oficial da BNCC
+                </span>
+                <h2 style={{ fontSize: 20, fontWeight: 700, color: COLOR.paperInk, margin: '4px 0 0' }}>
+                  Relatório Real de Cobertura de Habilidades ({effectiveGrade})
+                </h2>
+              </div>
 
-              <button
-                onClick={() => {
-                  const targetClass = classes.find(c => c.id === (panelClassId || classes[0]?.id))
-                  const gradeSkills = getBnccSkillsForGrade('9º Fund.')
-                  exportToPdf({
-                    schoolName: schools[0]?.name || 'Escola',
-                    teacherName: 'Professor(a)',
-                    className: targetClass?.name || 'Turma',
-                    title: `RELATÓRIO DE COBERTURA CURRICULAR BNCC — ${targetClass?.name || 'TURMA'}`,
-                    content: `
-# RELATÓRIO DE COBERTURA BNCC
-**Turma:** ${targetClass?.name || 'Turma'} &bull; **Ano:** ${targetClass?.year || '2025'}
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                <select
+                  value={panelClassId || (classes[0]?.id || '')}
+                  onChange={e => setPanelClassId(e.target.value)}
+                  style={{ ...S.input, width: 'auto', minWidth: 200 }}
+                >
+                  {classes.map(c => {
+                    const g = normalizeGradeYear(c.name) || c.year || 'Geral'
+                    return (
+                      <option key={c.id} value={c.id}>{c.name} ({g})</option>
+                    )
+                  })}
+                </select>
+
+                {hasSkills && (
+                  <>
+                    <button
+                      onClick={() => {
+                        exportToPdf({
+                          schoolName: schools[0]?.name || 'Escola',
+                          teacherName: 'Professor(a)',
+                          className: targetClass?.name || 'Turma',
+                          title: `RELATÓRIO DE COBERTURA CURRICULAR BNCC — ${targetClass?.name || 'TURMA'} (${effectiveGrade})`,
+                          content: `
+# RELATÓRIO REAL DE COBERTURA BNCC
+**Turma:** ${targetClass?.name || 'Turma'} &bull; **Série:** ${effectiveGrade} &bull; **Cobertura Real:** ${report.coveragePercentage}% (${report.coveredCount}/${report.totalSkills})
 
 ---
 
-## 📋 Habilidades Trabalhadas no Período
-${gradeSkills.map(s => `- **[${s.code}]** (${s.axis}) ${s.description}`).join('\n')}
+## 📋 Detalhamento das Habilidades
+${report.skillsDetail.map(s => `- **[${s.code}]** (${s.axis}) ${s.description} — *Status: ${s.status === 'covered' ? `Coberta (${s.coveredCount}x)` : s.status === 'postponed' ? 'Adiada' : s.status === 'planned' ? 'Planejada' : 'Não Trabalhada'}*`).join('\n')}
 `
-                  })
-                }}
-                style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid #d5c0b0', background: '#fff', color: COLOR.paperInk, fontSize: TEXT.bodyCompact, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
-              >
-                <i className="ti ti-printer"></i> Exportar PDF
-              </button>
+                        })
+                      }}
+                      style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid #d5c0b0', background: '#fff', color: COLOR.paperInk, fontSize: TEXT.bodyCompact, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+                    >
+                      <i className="ti ti-printer"></i> Exportar PDF
+                    </button>
 
-              <button
-                onClick={() => {
-                  const targetClass = classes.find(c => c.id === (panelClassId || classes[0]?.id))
-                  const gradeSkills = getBnccSkillsForGrade('9º Fund.')
-                  exportToExcel({
-                    filename: `Cobertura_BNCC_${targetClass?.name || 'Turma'}`,
-                    headers: ['Código BNCC', 'Eixo Temático', 'Descrição da Habilidade', 'Status'],
-                    rows: gradeSkills.map((s, i) => [s.code, s.axis, s.description, i < 4 ? 'Coberta' : 'Planejada'])
-                  })
-                }}
-                style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid #d5c0b0', background: '#fff', color: COLOR.paperInk, fontSize: TEXT.bodyCompact, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
-              >
-                <i className="ti ti-table"></i> Exportar Excel
-              </button>
+                    <button
+                      onClick={() => {
+                        exportToExcel({
+                          filename: `Cobertura_BNCC_${targetClass?.name || 'Turma'}_${effectiveGrade}`,
+                          headers: ['Código BNCC', 'Eixo Temático', 'Descrição da Habilidade', 'Status Real', 'Aulas Ministradas', 'Última Aula'],
+                          rows: report.skillsDetail.map(s => [
+                            s.code,
+                            s.axis,
+                            s.description,
+                            s.status === 'covered' ? 'Coberta' : s.status === 'postponed' ? 'Adiada' : s.status === 'planned' ? 'Planejada' : 'Não Trabalhada',
+                            s.coveredCount,
+                            s.lastLessonDate || '—'
+                          ])
+                        })
+                      }}
+                      style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid #d5c0b0', background: '#fff', color: COLOR.paperInk, fontSize: TEXT.bodyCompact, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+                    >
+                      <i className="ti ti-table"></i> Exportar Excel
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
-          </div>
 
-          {/* Card de Progresso & Métricas da Turma */}
-          {(() => {
-            const targetClass = classes.find(c => c.id === (panelClassId || classes[0]?.id))
-            const gradeSkills = getBnccSkillsForGrade('9º Fund.')
-            const totalSkills = gradeSkills.length
-            const coveredCount = Math.min(Math.round(totalSkills * 0.6), totalSkills)
-            const coveredPct = Math.round((coveredCount / totalSkills) * 100)
-
-            return (
+            {/* Se a turma não tiver habilidades mapeadas no catálogo */}
+            {!hasSkills ? (
+              <div style={{ ...S.card, textAlign: 'center', padding: '40px 20px', background: '#fdf8f2' }}>
+                <i className="ti ti-info-circle" style={{ fontSize: 32, color: '#8b5e3c', marginBottom: 12, display: 'inline-block' }} />
+                <h3 style={{ fontSize: 16, fontWeight: 700, color: COLOR.paperInk, margin: '0 0 8px' }}>
+                  Matriz Curricular da BNCC em Mapeamento para {targetClass?.name || 'esta turma'}
+                </h3>
+                <p style={{ fontSize: 13, color: '#7a6552', maxWidth: 520, margin: '0 auto', lineHeight: 1.5 }}>
+                  A série identificada ({effectiveGrade || 'Série não especificada'}) ainda não possui competências mapeadas no catálogo local.
+                  O catálogo atual cobre do 6º ao 9º Ano do Ensino Fundamental e Ensino Médio.
+                </p>
+              </div>
+            ) : (
+              /* Card de Progresso & Métricas da Turma Reais */
               <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: 20 }}>
                 {/* Score Circular / Progresso */}
                 <div style={{ ...S.card, textAlign: 'center', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                  <div style={{ fontSize: 44, fontWeight: 800, color: '#2d9d5d', fontFamily: 'Fraunces, Georgia, serif' }}>
-                    {coveredPct}%
+                  <div style={{ fontSize: 44, fontWeight: 800, color: report.coveragePercentage > 0 ? '#2d9d5d' : '#8b5e3c', fontFamily: 'Fraunces, Georgia, serif' }}>
+                    {report.coveragePercentage}%
                   </div>
                   <strong style={{ fontSize: TEXT.body, color: COLOR.paperInk, marginTop: 4 }}>
-                    Progresso Curricular no Ano
+                    Cobertura Curricular Real
                   </strong>
                   <p style={{ fontSize: TEXT.bodyCompact, color: '#7a6552', margin: '4px 0 16px' }}>
-                    {coveredCount} de {totalSkills} habilidades da BNCC trabalhadas nesta turma.
+                    {report.coveredCount} de {report.totalSkills} habilidades da BNCC ({effectiveGrade}) já foram trabalhadas nos planos de aula desta turma.
                   </p>
                   <div style={{ height: 8, background: '#f0e8d8', borderRadius: 4, overflow: 'hidden' }}>
-                    <div style={{ height: '100%', width: `${coveredPct}%`, background: '#2d9d5d', borderRadius: 4 }} />
+                    <div style={{ height: '100%', width: `${report.coveragePercentage}%`, background: '#2d9d5d', borderRadius: 4 }} />
+                  </div>
+
+                  {/* Resumo por Status */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 18, textAlign: 'left', fontSize: 11 }}>
+                    <div style={{ background: '#f0fdf4', padding: '6px 8px', borderRadius: 6, border: '1px solid #bbf7d0', color: '#166534' }}>
+                      <strong>✓ Cobertas:</strong> {report.coveredCount}
+                    </div>
+                    <div style={{ background: '#eff6ff', padding: '6px 8px', borderRadius: 6, border: '1px solid #bfdbfe', color: '#1e40af' }}>
+                      <strong>📅 Planejadas:</strong> {report.plannedCount}
+                    </div>
+                    <div style={{ background: '#fffbeb', padding: '6px 8px', borderRadius: 6, border: '1px solid #fef3c7', color: '#b45309' }}>
+                      <strong>⏳ Adiadas:</strong> {report.postponedCount}
+                    </div>
+                    <div style={{ background: '#f5efe6', padding: '6px 8px', borderRadius: 6, border: '1px solid #d5c0b0', color: '#7a6552' }}>
+                      <strong>⚪ Não iniciadas:</strong> {report.uncoveredCount}
+                    </div>
                   </div>
                 </div>
 
                 {/* Lista de Habilidades por Eixo */}
                 <div style={S.card}>
-                  <h3 style={{ fontSize: 15, fontWeight: 700, color: COLOR.paperInk, margin: '0 0 14px' }}>
-                    Detalhamento de Habilidades por Eixo ({targetClass?.name || 'Turma'})
-                  </h3>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+                    <h3 style={{ fontSize: 15, fontWeight: 700, color: COLOR.paperInk, margin: 0 }}>
+                      Detalhamento de Habilidades ({targetClass?.name || 'Turma'} — {effectiveGrade})
+                    </h3>
+                    <span style={{ fontSize: 11.5, color: '#7a6552' }}>
+                      Total: {report.totalSkills} habilidades oficiais
+                    </span>
+                  </div>
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 420, overflowY: 'auto' }}>
-                    {gradeSkills.map((sk, idx) => {
-                      const isCovered = idx < coveredCount
+                    {report.skillsDetail.map((sk) => {
+                      const isCovered = sk.status === 'covered'
+                      const isPostponed = sk.status === 'postponed'
+                      const isPlanned = sk.status === 'planned'
+
+                      let badgeBg = '#f5efe6'
+                      let badgeColor = '#7a6552'
+                      let badgeText = '⚪ Não Trabalhada'
+
+                      if (isCovered) {
+                        badgeBg = '#dcfce7'
+                        badgeColor = '#15803d'
+                        badgeText = `✓ Coberta (${sk.coveredCount}x)`
+                      } else if (isPostponed) {
+                        badgeBg = '#fee2e2'
+                        badgeColor = '#b91c1c'
+                        badgeText = '⏳ Adiada'
+                      } else if (isPlanned) {
+                        badgeBg = '#dbeafe'
+                        badgeColor = '#1d4ed8'
+                        badgeText = '📅 Planejada'
+                      }
+
                       return (
                         <div key={sk.code} style={{ background: COLOR.paperPage, border: '1px solid #e8decb', borderRadius: RADIUS.md, padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
                           <div style={{ flex: 1 }}>
@@ -1977,6 +2049,11 @@ ${gradeSkills.map(s => `- **[${s.code}]** (${s.axis}) ${s.description}`).join('\
                               <span style={{ fontSize: TEXT.micro, background: 'rgba(139,94,60,0.12)', color: '#8b5e3c', padding: '1px 6px', borderRadius: 4, fontWeight: 700 }}>
                                 {sk.axis}
                               </span>
+                              {sk.lastLessonDate && (
+                                <span style={{ fontSize: 10.5, color: '#7a6552' }}>
+                                  Última aula: {sk.lastLessonDate}
+                                </span>
+                              )}
                             </div>
                             <div style={{ fontSize: TEXT.caption, color: '#4a382a' }}>
                               {sk.description}
@@ -1985,11 +2062,11 @@ ${gradeSkills.map(s => `- **[${s.code}]** (${s.axis}) ${s.description}`).join('\
 
                           <span style={{
                             fontSize: TEXT.micro, fontWeight: 800, padding: '3px 8px', borderRadius: 6,
-                            background: isCovered ? '#dcfce7' : '#fef3c7',
-                            color: isCovered ? '#15803d' : '#b45309',
+                            background: badgeBg,
+                            color: badgeColor,
                             whiteSpace: 'nowrap'
                           }}>
-                            {isCovered ? '✓ Coberta' : '⏳ Pendente'}
+                            {badgeText}
                           </span>
                         </div>
                       )
@@ -1997,10 +2074,10 @@ ${gradeSkills.map(s => `- **[${s.code}]** (${s.axis}) ${s.description}`).join('\
                   </div>
                 </div>
               </div>
-            )
-          })()}
-        </div>
-      )}
+            )}
+          </div>
+        )
+      })()}
 
       {/* MODAIS DE REGISTRO E EDIÇÃO */}
       {/* 1. Modal Escola */}

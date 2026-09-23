@@ -1,0 +1,88 @@
+{
+  "id": "mock_portal__navegue_para_a_aba_arquivos__s",
+  "name": "Habilidade autônoma: navegue para a aba arquivos, selecione a turma 7º Ano A e abra as configurações",
+  "portal_id": "mock_portal",
+  "task_id": "navegue_para_a_aba_arquivos__s",
+  "version": 1,
+  "entry_node": "node_1",
+  "nodes": {
+    "node_1": {
+      "id": "node_1",
+      "type": "NAVIGATE",
+      "anchor": {
+        "strategy": "text_match",
+        "value": "📁 Arquivos",
+        "scope": null,
+        "description": null
+      },
+      "params": {
+        "variable_bindings": [],
+        "action_value": "📁 Arquivos",
+        "condition": null,
+        "is_submit_action": false,
+        "description": null
+      },
+      "on_success": "node_2",
+      "on_fail": null,
+      "retry_policy": {
+        "max_attempts": 2,
+        "backoff_ms": 500
+      }
+    },
+    "node_2": {
+      "id": "node_2",
+      "type": "WRITE",
+      "anchor": {
+        "strategy": "css_selector",
+        "value": "filtro_turma_arquivos",
+        "scope": null,
+        "description": null
+      },
+      "params": {
+        "variable_bindings": [],
+        "action_value": "7",
+        "condition": null,
+        "is_submit_action": false,
+        "description": null
+      },
+      "on_success": "node_3",
+      "on_fail": null,
+      "retry_policy": {
+        "max_attempts": 2,
+        "backoff_ms": 500
+      }
+    },
+    "node_3": {
+      "id": "node_3",
+      "type": "CLICK",
+      "anchor": {
+        "strategy": "text_match",
+        "value": "⚙️ Configurações",
+        "scope": null,
+        "description": null
+      },
+      "params": {
+        "variable_bindings": [],
+        "action_value": "⚙️ Configurações",
+        "condition": null,
+        "is_submit_action": false,
+        "description": null
+      },
+      "on_success": null,
+      "on_fail": null,
+      "retry_policy": {
+        "max_attempts": 2,
+        "backoff_ms": 500
+      }
+    }
+  },
+  "metadata": {
+    "success_rate": 100.0,
+    "total_executions": 0,
+    "created_at": "2026-09-21T21:15:43.603370+00:00",
+    "updated_at": "2026-09-21T21:15:43.603475+00:00",
+    "last_verified_at": null,
+    "has_self_healed": false,
+    "author": "teacher_ai_recorder"
+  }
+}

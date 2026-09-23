@@ -34,7 +34,25 @@ let currentTabState = {
   isAuthenticated: false
 };
 
-// ─── CONFIGURAÇÃO DO CHROME SIDE PANEL (FIXO NA LATERAL) ───────────────────────
+// ─── COORDENAÇÃO MULTI-ABA VIA BROADCAST CHANNEL (ANTI-COLISÃO) ───────────────
+let sessionBroadcastChannel = null;
+try {
+  sessionBroadcastChannel = new BroadcastChannel('teacher_ai_session_coordination');
+  sessionBroadcastChannel.onmessage = (event) => {
+    const { action, activeTabId, portalId } = event.data || {};
+    if (action === 'ACQUIRE_TAB_LOCK') {
+      console.log(`[MultiTabCoordination] 🔒 Trava adquirida pela aba ${activeTabId} (${portalId || ''})`);
+      currentTabState.lockedTabId = activeTabId;
+    } else if (action === 'RELEASE_TAB_LOCK') {
+      if (currentTabState.lockedTabId === activeTabId) {
+        currentTabState.lockedTabId = null;
+      }
+    }
+  };
+} catch (e) {
+  console.warn('[TeacherAI] BroadcastChannel não disponível:', e);
+}
+
 if (typeof chrome !== 'undefined' && chrome.sidePanel && chrome.sidePanel.setPanelBehavior) {
   chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true })
     .catch((err) => console.warn('[TeacherAI Extension] Erro ao configurar openPanelOnActionClick:', err));
@@ -194,7 +212,39 @@ function identifyPortal(url) {
   return null;
 }
 
+function isAuthorizedPortalTab(tab) {
+  if (!tab || !tab.url) return false;
+  const url = tab.url.toLowerCase();
+  // Nunca autoriza páginas internas do navegador ou do próprio side panel
+  if (url.startsWith('chrome://') || url.startsWith('chrome-extension://') || url.startsWith('about:') || url.includes('side_panel')) {
+    return false;
+  }
+  // Mocks e sandboxes locais autorizados para desenvolvimento e testes
+  if (url.includes('portal_mock') || url.includes('portal_real')) {
+    return true;
+  }
+  if (url.includes('localhost:8000') || url.includes('127.0.0.1:8000') || url.includes('localhost:8080') || url.includes('127.0.0.1:8080')) {
+    return true;
+  }
+  // Portais catalogados em KNOWN_PORTALS
+  return Boolean(identifyPortal(url));
+}
+
+async function isAuthorizedPortalTabId(tabId) {
+  if (!tabId) return false;
+  try {
+    const tab = await chrome.tabs.get(tabId);
+    return isAuthorizedPortalTab(tab);
+  } catch {
+    return false;
+  }
+}
+
 async function checkTabAuthentication(tabId) {
+  const isAuthTab = await isAuthorizedPortalTabId(tabId);
+  if (!isAuthTab) {
+    return { isAuthenticated: false, userRole: 'unknown', reason: 'Aba não é portal escolar' };
+  }
   try {
     const results = await chrome.scripting.executeScript({
       target: { tabId },
@@ -519,89 +569,168 @@ function updateToolbarBadge(state) {
 async function handleExecutePortalAction(msg) {
   const { actionId, tabId, intent } = msg;
   const targetTabId = tabId || currentTabState.tabId;
+  const isAuthTab = await isAuthorizedPortalTabId(targetTabId);
 
-  if (!targetTabId) {
+  if (!targetTabId || !isAuthTab) {
     sendActionResult(actionId, {
       sucesso: false,
-      status: 'no_active_tab',
-      mensagem: 'Nenhuma aba ativa do portal foi encontrada no Chrome.'
+      status: 'no_authorized_portal_tab',
+      mensagem: 'Ação cancelada: a aba selecionada não é um portal escolar reconhecido.'
     });
     return;
   }
 
   const acao = intent.acao || 'lancar_nota';
   const aluno = intent.aluno || '';
-  const nota = intent.nota;
+  let nota = intent.nota;
   const faltas = intent.faltas || 1;
 
+  // Guardião Pedagógico de Validação e Normalização de Notas
+  if (acao === 'lancar_nota' && nota !== undefined && nota !== null) {
+    const rawNota = parseFloat(String(nota).replace(',', '.'));
+    if (!isNaN(rawNota)) {
+      if (rawNota > 10 && rawNota <= 100) {
+        nota = parseFloat((rawNota / 10).toFixed(1));
+        console.log(`[SafeWriter] 💡 Guardião Pedagógico: nota ${rawNota} normalizada para ${nota}`);
+      } else if (rawNota < 0 || rawNota > 100) {
+        sendActionResult(actionId, {
+          sucesso: false,
+          status: 'invalid_grade_range',
+          mensagem: `A nota ${rawNota} está fora da escala permitida (0 a 10). Por favor, confira o valor informado. ✨`
+        });
+        return;
+      } else {
+        nota = rawNota;
+      }
+    }
+  }
+
   try {
-    // 1. Executa o preenchimento seguro injetando na aba ativa
-    const results = await chrome.scripting.executeScript({
-      target: { tabId: targetTabId },
-      args: [acao, aluno, nota, faltas],
-      func: (acaoParam, alunoParam, notaParam, faltasParam) => {
-        // Localiza linha do aluno na tabela
-        const rows = Array.from(document.querySelectorAll('table tr'));
-        let targetRow = null;
+    let execResult = null;
 
-        const cleanTarget = alunoParam.trim().toLowerCase();
-        const firstName = cleanTarget.split(' ')[0];
-
-        for (const r of rows) {
-          const txt = r.innerText.toLowerCase();
-          if (txt.includes(cleanTarget)) {
-            targetRow = r;
-            break;
+    // 1. Tenta envio direto para o content.js da aba ativa (motor completo com Shadow DOM, React/Vue setters e ancoragem espacial)
+    try {
+      execResult = await new Promise((resolve, reject) => {
+        chrome.tabs.sendMessage(
+          targetTabId,
+          {
+            action: 'EXECUTE_PORTAL_ACTION',
+            actionId,
+            intent,
+            acao,
+            aluno,
+            nota,
+            faltas,
+            payload: {
+              type: acao === 'lancar_nota' ? 'grades' : (acao === 'lancar_falta' ? 'attendance' : acao),
+              studentGrades: acao === 'lancar_nota' ? [{ name: aluno, grade: nota }] : [],
+              absentStudents: acao === 'lancar_falta' ? [aluno] : [],
+              aluno,
+              nota,
+              faltas,
+              ...intent
+            }
+          },
+          (response) => {
+            if (chrome.runtime.lastError) {
+              reject(chrome.runtime.lastError);
+            } else {
+              resolve(response);
+            }
           }
-        }
+        );
+      });
+    } catch (msgErr) {
+      console.warn('[Background] content.js não respondeu diretamente via sendMessage; tentando injeção segura de fallback:', msgErr);
+    }
 
-        if (!targetRow && firstName.length > 2) {
+    // 2. Fallback caso content.js não estivesse presente ou não tenha tratado a mensagem
+    if (!execResult || (!execResult.sucesso && !execResult.success && execResult.filledCount === undefined)) {
+      const results = await chrome.scripting.executeScript({
+        target: { tabId: targetTabId },
+        args: [acao, aluno, nota, faltas],
+        func: (acaoParam, alunoParam, notaParam, faltasParam) => {
+          // Localiza linha do aluno na tabela
+          const rows = Array.from(document.querySelectorAll('table tr, tr, div.student-row, li'));
+          let targetRow = null;
+
+          const cleanTarget = alunoParam.trim().toLowerCase();
+          const firstName = cleanTarget.split(' ')[0];
+
           for (const r of rows) {
             const txt = r.innerText.toLowerCase();
-            if (txt.includes(firstName)) {
+            if (txt.includes(cleanTarget)) {
               targetRow = r;
               break;
             }
           }
-        }
 
-        if (!targetRow) {
-          return { sucesso: false, status: 'student_not_found', aluno: alunoParam };
-        }
-
-        // Busca input na linha
-        const inputs = Array.from(targetRow.querySelectorAll('input:not([type="hidden"]):not([type="checkbox"])'));
-        if (inputs.length === 0) {
-          return { sucesso: false, status: 'no_editable_inputs', aluno: alunoParam };
-        }
-
-        const input = inputs[0];
-        const valBefore = input.value || '';
-        const targetValue = (acaoParam === 'lancar_nota') ? String(notaParam) : String(faltasParam);
-
-        // Preenche com disparo de eventos seguros
-        input.focus();
-        input.value = targetValue;
-        input.dispatchEvent(new Event('input', { bubbles: true }));
-        input.dispatchEvent(new Event('change', { bubbles: true }));
-
-        return {
-          sucesso: true,
-          status: 'draft_completed_pending_submit',
-          diff: {
-            aluno: alunoParam,
-            campo: acaoParam === 'lancar_nota' ? 'nota' : 'falta',
-            antes: valBefore,
-            depois: targetValue,
-            drift_detectado: false
+          if (!targetRow && firstName.length > 2) {
+            for (const r of rows) {
+              const txt = r.innerText.toLowerCase();
+              if (txt.includes(firstName)) {
+                targetRow = r;
+                break;
+              }
+            }
           }
-        };
-      }
-    });
 
-    const execResult = (results && results[0] && results[0].result) || {
-      sucesso: false,
-      status: 'execution_failed'
+          if (!targetRow) {
+            return { sucesso: false, status: 'student_not_found', aluno: alunoParam };
+          }
+
+          // Busca input na linha
+          const inputs = Array.from(targetRow.querySelectorAll('input:not([type="hidden"]):not([type="checkbox"])'));
+          if (inputs.length === 0) {
+            return { sucesso: false, status: 'no_editable_inputs', aluno: alunoParam };
+          }
+
+          const input = inputs[0];
+          const valBefore = input.value || '';
+          const targetValue = (acaoParam === 'lancar_nota') ? String(notaParam) : String(faltasParam);
+
+          // Preenche com disparo de eventos seguros e compatibilidade com React/Vue
+          input.focus();
+          const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
+          if (nativeSetter) {
+            nativeSetter.set.call(input, targetValue);
+          } else {
+            input.value = targetValue;
+          }
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+          input.dispatchEvent(new Event('change', { bubbles: true }));
+          input.dispatchEvent(new Event('blur', { bubbles: true }));
+
+          return {
+            sucesso: true,
+            status: 'draft_completed_pending_submit',
+            diff: {
+              aluno: alunoParam,
+              campo: acaoParam === 'lancar_nota' ? 'nota' : 'falta',
+              antes: valBefore,
+              depois: targetValue,
+              drift_detectado: false
+            }
+          };
+        }
+      });
+
+      execResult = (results && results[0] && results[0].result) || {
+        sucesso: false,
+        status: 'execution_failed'
+      };
+    }
+
+    const isSuccess = Boolean(execResult.sucesso || execResult.success || (execResult.filledCount > 0));
+    const normalizedResult = {
+      sucesso: isSuccess,
+      status: execResult.status || (isSuccess ? 'draft_completed_pending_submit' : 'execution_failed'),
+      diff: execResult.diff || {
+        aluno,
+        campo: acao === 'lancar_nota' ? 'nota' : 'falta',
+        depois: String(nota ?? faltas)
+      },
+      ...execResult
     };
 
     // 2. Captura screenshot da aba visível para evidência e card de aprovação
@@ -641,6 +770,34 @@ function jsonStr(obj) {
 
 // ─── LISTENERS DO NAVEGADOR (ABAS & MENSAGENS INTERNAS) ──────────────────────
 
+// Keep-Alive Duplex Port com Side Panel (evita suspensão MV3 aos 30s)
+chrome.runtime.onConnect.addListener((port) => {
+  if (port.name === 'keepAliveSidePanel' || port.name === 'teacher_ai_keepalive') {
+    port.onMessage.addListener((msg) => {
+      if (msg?.type === 'KEEPALIVE_PING') {
+        try {
+          port.postMessage({ type: 'KEEPALIVE_PONG', timestamp: Date.now() });
+        } catch (e) {}
+      }
+    });
+    port.onDisconnect.addListener(() => {
+      // Porta desconectada (side panel fechado)
+    });
+  }
+});
+
+// Alarme de retaguarda para Service Worker MV3 (mantém liveness periódico de 25s)
+try {
+  if (typeof chrome !== 'undefined' && chrome.alarms) {
+    chrome.alarms.create('teacher_ai_sw_heartbeat', { periodInMinutes: 0.4 }); // ~24s
+    chrome.alarms.onAlarm.addListener((alarm) => {
+      if (alarm.name === 'teacher_ai_sw_heartbeat') {
+        // Heartbeat silencioso para evitar inatividade do Service Worker
+      }
+    });
+  }
+} catch (e) {}
+
 chrome.tabs.onActivated.addListener(() => {
   evaluateActiveTab();
 });
@@ -650,6 +807,44 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
     evaluateActiveTab();
   }
 });
+
+async function resolveActivePortalTab(explicitTabId) {
+  if (explicitTabId) {
+    try {
+      const tab = await chrome.tabs.get(explicitTabId);
+      if (tab && tab.id) return tab.id;
+    } catch {}
+  }
+  // 1. Prioridade máxima: aba ativa na janela com foco / janela atual
+  try {
+    const activeTabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+    const currentActive = activeTabs.find(t => t.url && (t.url.startsWith('http') || t.url.startsWith('file')) && !t.url.includes('side_panel'));
+    if (currentActive && currentActive.id) return currentActive.id;
+  } catch {}
+
+  try {
+    const activeTabsCurrent = await chrome.tabs.query({ active: true, currentWindow: true });
+    const currentActive = activeTabsCurrent.find(t => t.url && (t.url.startsWith('http') || t.url.startsWith('file')) && !t.url.includes('side_panel'));
+    if (currentActive && currentActive.id) return currentActive.id;
+  } catch {}
+
+  // 2. Se a aba ativa não for página web, busca portais conhecidos em qualquer aba ativa
+  try {
+    const activeAny = await chrome.tabs.query({ active: true });
+    const portalActive = activeAny.find(t => t.url && identifyPortal(t.url));
+    if (portalActive && portalActive.id) return portalActive.id;
+  } catch {}
+
+  // 3. Fallback: qualquer aba de portal aberta
+  try {
+    const allTabs = await chrome.tabs.query({});
+    const portalTab = allTabs.find(t => t.url && identifyPortal(t.url)) ||
+                      allTabs.find(t => t.url && (t.url.startsWith('http') || t.url.startsWith('file')) && !t.url.includes('side_panel') && !t.url.startsWith('chrome'));
+    if (portalTab && portalTab.id) return portalTab.id;
+  } catch {}
+
+  return currentTabState.tabId || null;
+}
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'RELOAD_EXTENSION') {
@@ -693,43 +888,144 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
-async function resolveActivePortalTab(explicitTabId) {
-  if (explicitTabId) {
-    try {
-      const tab = await chrome.tabs.get(explicitTabId);
-      if (tab && tab.id) return tab.id;
-    } catch {}
+  // ─── RELAY DE FERRAMENTAS DO APP PARA A EXTENSÃO (ARQUITETURA UNIFICADA) ───
+  if (message.action === 'RELAY_TOOL_EXECUTION') {
+    (async () => {
+      const payload = message.payload || {};
+      const { tool, params, portalId } = payload;
+
+      // 1. Localiza aba ativa de portal conectado
+      const targetTabId = await resolveActivePortalTab(params?.tabId);
+
+      // Caso desconectado: recusa honesta e transparente à professora
+      if (!targetTabId) {
+        sendResponse({
+          success: false,
+          status: 'extension_disconnected',
+          verified: false,
+          error: 'A extensão não encontrou nenhuma aba aberta do portal escolar conectado. Abra o portal no navegador para que a Rafinha possa executar a ação.'
+        });
+        return;
+      }
+
+      // 2. Roteia execução de acordo com o tipo de ferramenta
+      try {
+        if (tool === 'read_roster' || (tool === 'invoke_teacher_capability' && params?.capability === 'read_roster')) {
+          chrome.tabs.sendMessage(targetTabId, {
+            action: 'EXECUTE_SKILL_GRAPH',
+            skillGraph: null
+          }, (graphResp) => {
+            if (chrome.runtime.lastError || !graphResp?.ok) {
+              // Fallback gracioso para leitura direta de tabela no DOM
+              chrome.tabs.sendMessage(targetTabId, { action: 'READ_ACTIVE_PORTAL_ROSTER' }, (rosterResp) => {
+                const students = rosterResp?.students || [];
+                sendResponse({
+                  success: Boolean(rosterResp && rosterResp.sucesso),
+                  verified: Boolean(students.length > 0),
+                  verification_method: 'dom_roster_table',
+                  students,
+                  data: { students },
+                  error: rosterResp?.mensagem
+                });
+              });
+            } else {
+              const students = graphResp.records || graphResp.students || [];
+              sendResponse({
+                success: true,
+                verified: true,
+                verification_method: 'graph_executor_dom',
+                students,
+                data: { students, trace: graphResp.trace },
+                trace: graphResp.trace
+              });
+            }
+          });
+          return;
+        }
+
+        if (tool === 'execute_portal_action' || tool === 'fill_school_portal') {
+          chrome.tabs.sendMessage(targetTabId, {
+            action: 'EXECUTE_PORTAL_ACTION',
+            payload: params
+          }, async (actionResp) => {
+            if (chrome.runtime.lastError) {
+              sendResponse({
+                success: false,
+                verified: false,
+                error: chrome.runtime.lastError.message
+              });
+              return;
+            }
+
+            let screenshot = null;
+            try {
+              screenshot = await chrome.tabs.captureVisibleTab(null, { format: 'png' });
+            } catch {}
+
+            sendResponse({
+              success: Boolean(actionResp?.ok || actionResp?.success || actionResp?.sucesso),
+              verified: Boolean(actionResp?.verified || actionResp?.ok || actionResp?.sucesso),
+              verification_method: 'dom_readback',
+              status: actionResp?.status || 'success',
+              screenshot,
+              data: actionResp,
+              message: actionResp?.mensagem || actionResp?.message || 'Campos preenchidos com sucesso no DOM do portal.'
+            });
+          });
+          return;
+        }
+
+        if (tool === 'confirm_portal_submission') {
+          chrome.tabs.sendMessage(targetTabId, {
+            action: 'RESUME_EXECUTION',
+            approved: params?.action === 'approve'
+          }, (resResp) => {
+            sendResponse({
+              success: true,
+              verified: true,
+              verification_method: 'checkpoint_approval',
+              action: params?.action
+            });
+          });
+          return;
+        }
+
+        if (tool === 'show_portal_screenshot') {
+          let screenshot = null;
+          try {
+            screenshot = await chrome.tabs.captureVisibleTab(null, { format: 'png' });
+          } catch {}
+          sendResponse({
+            success: Boolean(screenshot),
+            verified: true,
+            screenshot,
+            message: screenshot ? 'Screenshot capturada da tela do portal.' : 'Não foi possível capturar a tela.'
+          });
+          return;
+        }
+
+        // Caso genérico
+        chrome.tabs.sendMessage(targetTabId, {
+          action: 'EXECUTE_PORTAL_ACTION',
+          payload: params
+        }, (resp) => {
+          sendResponse({
+            success: Boolean(resp?.ok || resp?.success || resp?.sucesso),
+            verified: Boolean(resp?.verified),
+            data: resp
+          });
+        });
+
+      } catch (err) {
+        sendResponse({
+          success: false,
+          verified: false,
+          error: err.message
+        });
+      }
+    })();
+    return true;
   }
-  // 1. Prioridade máxima: aba ativa na janela com foco / janela atual
-  try {
-    const activeTabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-    const currentActive = activeTabs.find(t => t.url && (t.url.startsWith('http') || t.url.startsWith('file')) && !t.url.includes('side_panel'));
-    if (currentActive && currentActive.id) return currentActive.id;
-  } catch {}
-
-  try {
-    const activeTabsCurrent = await chrome.tabs.query({ active: true, currentWindow: true });
-    const currentActive = activeTabsCurrent.find(t => t.url && (t.url.startsWith('http') || t.url.startsWith('file')) && !t.url.includes('side_panel'));
-    if (currentActive && currentActive.id) return currentActive.id;
-  } catch {}
-
-  // 2. Se a aba ativa não for página web, busca portais conhecidos em qualquer aba ativa
-  try {
-    const activeAny = await chrome.tabs.query({ active: true });
-    const portalActive = activeAny.find(t => t.url && identifyPortal(t.url));
-    if (portalActive && portalActive.id) return portalActive.id;
-  } catch {}
-
-  // 3. Fallback: qualquer aba de portal aberta
-  try {
-    const allTabs = await chrome.tabs.query({});
-    const portalTab = allTabs.find(t => t.url && identifyPortal(t.url)) ||
-                      allTabs.find(t => t.url && (t.url.startsWith('http') || t.url.startsWith('file')) && !t.url.includes('side_panel') && !t.url.startsWith('chrome'));
-    if (portalTab && portalTab.id) return portalTab.id;
-  } catch {}
-
-  return currentTabState.tabId || null;
-}
 
   if (message.action === 'READ_ACTIVE_PORTAL_ROSTER') {
     (async () => {
@@ -813,7 +1109,27 @@ async function resolveActivePortalTab(explicitTabId) {
         return;
       }
 
-      const { studentName, targetValue, actionType } = message;
+      let { studentName, targetValue, actionType } = message;
+
+      // Guardião Pedagógico de Validação e Normalização de Notas
+      if ((actionType === 'lancar_nota' || !actionType) && targetValue !== undefined && targetValue !== null) {
+        const rawNota = parseFloat(String(targetValue).replace(',', '.'));
+        if (!isNaN(rawNota)) {
+          if (rawNota > 10 && rawNota <= 100) {
+            targetValue = String(parseFloat((rawNota / 10).toFixed(1)));
+            console.log(`[SafeWriter] 💡 Guardião Pedagógico: nota normalizada para ${targetValue}`);
+          } else if (rawNota < 0 || rawNota > 100) {
+            sendResponse({
+              sucesso: false,
+              status: 'invalid_grade_range',
+              mensagem: `A nota ${rawNota} está fora da escala permitida (0 a 10). Por favor, confira o valor informado. ✨`
+            });
+            return;
+          } else {
+            targetValue = String(rawNota);
+          }
+        }
+      }
 
       try {
         const results = await chrome.scripting.executeScript({
@@ -974,6 +1290,31 @@ async function resolveActivePortalTab(explicitTabId) {
     return true;
   }
 
+  // ─── HELPER DE ESTABILIZAÇÃO DE PÁGINA (PPAV DOM SETTLEMENT) ───────────────────
+  async function waitForPageSettled(tabId, maxWaitMs = 2500) {
+    if (!tabId) return;
+    // Pequena pausa inicial para o navegador iniciar o processo de requisição/navegação
+    await new Promise(r => setTimeout(r, 200));
+    try {
+      const tab = await chrome.tabs.get(tabId);
+      if (tab && tab.status === 'loading') {
+        await new Promise((resolve) => {
+          const timeout = setTimeout(resolve, maxWaitMs);
+          const onUpdated = (tid, info) => {
+            if (tid === tabId && info.status === 'complete') {
+              chrome.tabs.onUpdated.removeListener(onUpdated);
+              clearTimeout(timeout);
+              resolve();
+            }
+          };
+          chrome.tabs.onUpdated.addListener(onUpdated);
+        });
+      }
+    } catch (e) {}
+    // Pausa adicional para reatividade de SPA, renderização do DOM e execução de frameworks
+    await new Promise(r => setTimeout(r, 350));
+  }
+
   if (message.action === 'NAVIGATE_PORTAL_TAB') {
     (async () => {
       const targetTabId = await resolveActivePortalTab(message.tabId);
@@ -991,7 +1332,7 @@ async function resolveActivePortalTab(explicitTabId) {
         const results = await chrome.scripting.executeScript({
           target: { tabId: targetTabId },
           args: [targetKeyword],
-          func: (keyword) => {
+          func: async (keyword) => {
             const cleanKey = keyword.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
             const candidates = Array.from(document.querySelectorAll('a, button, [role="tab"], [role="menuitem"], [role="button"], .tab, .tab-btn, .nav-link, li, span'));
             
@@ -1043,13 +1384,18 @@ async function resolveActivePortalTab(explicitTabId) {
             bestElement.style.boxShadow = '0 0 16px rgba(56, 189, 248, 0.6)';
 
             bestElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            setTimeout(() => {
-              try {
-                bestElement.click();
-              } catch (e) {
-                bestElement.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
-              }
-            }, 300);
+            
+            // Pausa curta para scroll e percepção visual
+            await new Promise(r => setTimeout(r, 120));
+
+            try {
+              bestElement.click();
+            } catch (e) {
+              bestElement.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+            }
+
+            // Aguarda o DOM reagir / disparar transição inicial
+            await new Promise(r => setTimeout(r, 350));
 
             setTimeout(() => {
               try {
@@ -1057,7 +1403,7 @@ async function resolveActivePortalTab(explicitTabId) {
                 bestElement.style.outline = origOutline;
                 bestElement.style.boxShadow = origBoxShadow;
               } catch {}
-            }, 1800);
+            }, 1500);
 
             return {
               sucesso: true,
@@ -1068,11 +1414,665 @@ async function resolveActivePortalTab(explicitTabId) {
           }
         });
 
+        // Aguarda estabilização completa da página ou SPA
+        await waitForPageSettled(targetTabId, 3000);
+
         const res = (results && results[0] && results[0].result) || { sucesso: false, mensagem: 'Script de navegação falhou.' };
         sendResponse(res);
       } catch (err) {
         sendResponse({ sucesso: false, mensagem: err.message });
       }
+    })();
+    return true;
+  }
+
+  if (message.action === 'DISCOVERY_SELECT_FILTER') {
+    (async () => {
+      let targetTabId = message.tabId;
+      if (!targetTabId) {
+        try {
+          const activeTabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+          if (activeTabs && activeTabs.length > 0 && isAuthorizedPortalTab(activeTabs[0])) {
+            targetTabId = activeTabs[0].id;
+          }
+        } catch {}
+      }
+      if (!targetTabId) {
+        const tabs = await chrome.tabs.query({});
+        const portalTab = tabs.find(t => isAuthorizedPortalTab(t));
+        targetTabId = portalTab ? portalTab.id : (isAuthorizedPortalTab(currentTabState) ? currentTabState.tabId : null);
+      }
+      if (!targetTabId) {
+        sendResponse({ sucesso: false, mensagem: 'Nenhuma aba ativa do portal identificada para seleção.' });
+        return;
+      }
+
+      const rawTerm = (message.filterTerm || message.target || '').trim();
+      if (!rawTerm) {
+        sendResponse({ sucesso: false, mensagem: 'Termo de filtro não especificado.' });
+        return;
+      }
+
+      try {
+        const results = await chrome.scripting.executeScript({
+          target: { tabId: targetTabId },
+          args: [rawTerm],
+          func: async (term) => {
+            const cleanStr = (s) => (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+            const normTerm = cleanStr(term);
+
+            // Mapeamento semântico de ordinais (ex: sexto -> 6, 6º, 6ª)
+            const ordinalMap = {
+              'primeiro': '1', 'segundo': '2', 'terceiro': '3', 'quarto': '4',
+              'quinto': '5', 'sexto': '6', 'setimo': '7', 'oitavo': '8', 'nono': '9'
+            };
+
+            const searchVariants = [normTerm];
+            for (const [word, num] of Object.entries(ordinalMap)) {
+              if (normTerm.includes(word)) {
+                searchVariants.push(normTerm.replace(word, num));
+                searchVariants.push(normTerm.replace(word, `${num}o`));
+                searchVariants.push(normTerm.replace(word, `${num}º`));
+                searchVariants.push(num);
+                searchVariants.push(`${num}o`);
+                searchVariants.push(`${num}º`);
+              } else if (normTerm.includes(num)) {
+                searchVariants.push(normTerm.replace(num, word));
+                searchVariants.push(word);
+              }
+            }
+
+            // Remove duplicatas
+            const uniqueVariants = Array.from(new Set(searchVariants.filter(Boolean)));
+
+            // 1. Procura em dropdowns (<select>)
+            const selects = Array.from(document.querySelectorAll('select'));
+            for (const sel of selects) {
+              if (sel.offsetParent === null && sel.offsetWidth === 0 && sel.offsetHeight === 0) continue;
+              for (let i = 0; i < sel.options.length; i++) {
+                const opt = sel.options[i];
+                const optText = cleanStr(opt.text);
+                const optVal = cleanStr(opt.value);
+                const isMatch = uniqueVariants.some(v => optText.includes(v) || optVal === v || optVal.includes(v));
+                if (isMatch) {
+                  sel.selectedIndex = i;
+                  sel.value = opt.value;
+
+                  const origTransition = sel.style.transition;
+                  const origOutline = sel.style.outline;
+                  sel.style.transition = 'all 0.3s ease';
+                  sel.style.outline = '3px solid #10b981';
+                  sel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+                  sel.dispatchEvent(new Event('input', { bubbles: true }));
+                  sel.dispatchEvent(new Event('change', { bubbles: true }));
+
+                  await new Promise(r => setTimeout(r, 250));
+
+                  setTimeout(() => {
+                    try {
+                      sel.style.transition = origTransition;
+                      sel.style.outline = origOutline;
+                    } catch {}
+                  }, 1800);
+
+                  return {
+                    sucesso: true,
+                    matchedType: 'select_option',
+                    elementText: opt.text.trim(),
+                    target: term
+                  };
+                }
+              }
+            }
+
+            // 2. Procura em botões, abas, pílulas de filtro, links, radios e checkboxes
+            const clickableCandidates = Array.from(document.querySelectorAll(
+              'button, [role="button"], [role="option"], [role="radio"], .pill, .filter-btn, .badge, a, label, input[type="radio"], input[type="checkbox"]'
+            ));
+
+            let bestClickable = null;
+            let bestScore = -1;
+
+            for (const el of clickableCandidates) {
+              if (el.offsetParent === null && el.offsetWidth === 0 && el.offsetHeight === 0) continue;
+              const text = cleanStr(el.innerText || el.textContent);
+              const aria = cleanStr(el.getAttribute('aria-label'));
+              const title = cleanStr(el.getAttribute('title'));
+              const val = cleanStr(el.getAttribute('value'));
+
+              for (const v of uniqueVariants) {
+                let score = 0;
+                if (text === v) score = 100;
+                else if (text.startsWith(v)) score = 85;
+                else if (text.includes(v)) score = 70;
+                else if (v.includes(text) && text.length >= 4) score = 75;
+                else if (aria.includes(v)) score = 60;
+                else if (title.includes(v)) score = 50;
+                else if (val === v) score = 65;
+
+                if (score > bestScore && score >= 50) {
+                  bestScore = score;
+                  bestClickable = el;
+                }
+              }
+            }
+
+            if (bestClickable) {
+              const origTransition = bestClickable.style.transition;
+              const origOutline = bestClickable.style.outline;
+              bestClickable.style.transition = 'all 0.3s ease';
+              bestClickable.style.outline = '3px solid #10b981';
+              bestClickable.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+              if (bestClickable.tagName === 'INPUT' && (bestClickable.type === 'radio' || bestClickable.type === 'checkbox')) {
+                bestClickable.checked = true;
+                bestClickable.dispatchEvent(new Event('change', { bubbles: true }));
+              } else {
+                try {
+                  bestClickable.click();
+                } catch (e) {
+                  bestClickable.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+                }
+              }
+
+              await new Promise(r => setTimeout(r, 250));
+
+              setTimeout(() => {
+                try {
+                  bestClickable.style.transition = origTransition;
+                  bestClickable.style.outline = origOutline;
+                } catch {}
+              }, 1800);
+
+              return {
+                sucesso: true,
+                matchedType: 'button_or_pill',
+                elementText: (bestClickable.innerText || bestClickable.textContent || term).trim(),
+                target: term
+              };
+            }
+
+            // 3. Procura em inputs de busca/filtro
+            const filterInputs = Array.from(document.querySelectorAll('input[type="search"], input[type="text"]'));
+            for (const inp of filterInputs) {
+              if (inp.offsetParent === null && inp.offsetWidth === 0 && inp.offsetHeight === 0) continue;
+              const meta = cleanStr(`${inp.placeholder || ''} ${inp.name || ''} ${inp.id || ''} ${inp.getAttribute('aria-label') || ''}`);
+              if (meta.includes('filtro') || meta.includes('busca') || meta.includes('search') || meta.includes('turma') || meta.includes('ano')) {
+                inp.focus();
+                inp.value = term;
+                inp.dispatchEvent(new Event('input', { bubbles: true }));
+                inp.dispatchEvent(new Event('change', { bubbles: true }));
+                await new Promise(r => setTimeout(r, 250));
+                return {
+                  sucesso: true,
+                  matchedType: 'search_input',
+                  elementText: inp.placeholder || term,
+                  target: term
+                };
+              }
+            }
+
+            return {
+              sucesso: false,
+              status: 'element_not_found',
+              mensagem: `Não encontrei nenhum filtro, menu ou opção correspondente a '${term}' nesta tela.`
+            };
+          }
+        });
+
+        // Aguarda estabilização das mutações do DOM e AJAX
+        await waitForPageSettled(targetTabId, 2000);
+
+        const res = (results && results[0] && results[0].result) || { sucesso: false, mensagem: 'Script de seleção falhou.' };
+        sendResponse(res);
+      } catch (err) {
+        sendResponse({ sucesso: false, mensagem: err.message });
+      }
+    })();
+    return true;
+  }
+
+  if (message.action === 'DISCOVERY_FIND_AND_CLICK_STUDENT') {
+    (async () => {
+      let targetTabId = message.tabId;
+      if (!targetTabId) {
+        try {
+          const activeTabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+          if (activeTabs && activeTabs.length > 0 && isAuthorizedPortalTab(activeTabs[0])) {
+            targetTabId = activeTabs[0].id;
+          }
+        } catch {}
+      }
+      if (!targetTabId) {
+        const tabs = await chrome.tabs.query({});
+        const portalTab = tabs.find(t => isAuthorizedPortalTab(t));
+        targetTabId = portalTab ? portalTab.id : (isAuthorizedPortalTab(currentTabState) ? currentTabState.tabId : null);
+      }
+      if (!targetTabId) {
+        sendResponse({ sucesso: false, mensagem: 'Nenhuma aba ativa do portal identificada.' });
+        return;
+      }
+
+      const targetStudent = (message.studentName || message.target || '').trim();
+      if (!targetStudent) {
+        sendResponse({ sucesso: false, mensagem: 'Nome do aluno não informado.' });
+        return;
+      }
+
+      try {
+        const results = await chrome.scripting.executeScript({
+          target: { tabId: targetTabId },
+          args: [targetStudent],
+          func: async (studentName) => {
+            const cleanStr = (s) => (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+            const normTarget = cleanStr(studentName);
+            const targetTokens = normTarget.split(/\s+/).filter(Boolean);
+            const firstName = targetTokens[0] || '';
+
+            // Termos destrutivos estritamente bloqueados
+            const DESTRUCTIVE_TERMS = ['excluir', 'remover', 'deletar', 'cancelar', 'apagar', 'desmatricular'];
+            const isDestructive = (el) => {
+              const txt = cleanStr(el.innerText || el.textContent || el.getAttribute('aria-label') || el.title || '');
+              return DESTRUCTIVE_TERMS.some(term => txt.includes(term));
+            };
+
+            // Função interna para coletar candidatos a elemento do aluno na tela
+            const scanCandidates = () => {
+              let cardCandidates = Array.from(document.querySelectorAll(
+                '.card, [class*="card"], [class*="aluno"], [class*="student"], [data-aluno-id], [data-aluno], .aluno-item, .item-aluno, li, .grid-item'
+              )).filter(el => {
+                if (el.offsetWidth < 50 || el.offsetHeight < 30) return false;
+                const txt = cleanStr(el.innerText || el.textContent);
+                if (!txt || txt.length > 500) return false;
+                return txt.includes(normTarget) || (firstName.length >= 3 && txt.includes(firstName));
+              });
+
+              if (cardCandidates.length === 0) {
+                cardCandidates = Array.from(document.querySelectorAll('div')).filter(el => {
+                  if (el.offsetWidth < 50 || el.offsetHeight < 30) return false;
+                  const txt = cleanStr(el.innerText || el.textContent);
+                  if (!txt || txt.length > 300) return false;
+                  return txt.includes(normTarget) || (firstName.length >= 3 && txt.includes(firstName));
+                });
+              }
+
+              // 2. Linhas de tabela (<tr>)
+              const rowCandidates = Array.from(document.querySelectorAll('table tr, tbody tr')).filter(r => {
+                if (r.offsetWidth < 50 || r.offsetHeight < 20) return false;
+                const txt = cleanStr(r.innerText || r.textContent);
+                return txt.includes(normTarget) || (firstName.length >= 3 && txt.includes(firstName));
+              });
+
+              const all = [...cardCandidates, ...rowCandidates];
+              // Remove qualquer elemento que seja ancestral (contêiner) de outro candidato na lista
+              const leaves = all.filter(c => !all.some(other => other !== c && c.contains(other)));
+              return leaves;
+            };
+
+            // Detecta contêiner rolável
+            const getScrollContainer = () => {
+              const allEls = Array.from(document.querySelectorAll('*'));
+              for (const el of allEls) {
+                if (el.scrollHeight > el.clientHeight + 40 && el.clientHeight > 100) {
+                  const style = window.getComputedStyle(el);
+                  if (['auto', 'scroll'].includes(style.overflowY)) {
+                    return el;
+                  }
+                }
+              }
+              return window;
+            };
+
+            const scrollContainer = getScrollContainer();
+
+            // Loop de busca exploratória com scroll progressivo
+            let matchedElements = [];
+            const MAX_SCROLL_STEPS = 6;
+            const SCROLL_STEP_PX = 250;
+
+            for (let step = 0; step < MAX_SCROLL_STEPS; step++) {
+              const currentFound = scanCandidates();
+              if (currentFound.length > 0) {
+                matchedElements = currentFound;
+                break;
+              }
+              if (scrollContainer === window) {
+                window.scrollBy({ top: SCROLL_STEP_PX, behavior: 'smooth' });
+              } else if (scrollContainer && scrollContainer.scrollBy) {
+                scrollContainer.scrollBy({ top: SCROLL_STEP_PX, behavior: 'smooth' });
+              }
+              await new Promise(r => setTimeout(r, 150));
+            }
+
+            if (matchedElements.length === 0) {
+              return { sucesso: false, status: 'not_found', mensagem: `Aluno '${studentName}' não encontrado no DOM.` };
+            }
+
+            // Separa os matches entre exatos (nome completo) e parciais (primeiro nome)
+            const exactMatches = matchedElements.filter(el => cleanStr(el.innerText || el.textContent).includes(normTarget));
+            const pool = exactMatches.length > 0 ? exactMatches : matchedElements;
+
+            // Se houver mais de um match mesmo após filtrar: AMBIGUIDADE HONESTA!
+            if (pool.length > 1) {
+              const candidates = pool.map((el, idx) => {
+                const img = el.querySelector('img');
+                const cleanTxt = (el.innerText || el.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 80);
+                return {
+                  id: el.getAttribute('data-aluno-id') || el.id || `candidate_${idx + 1}`,
+                  name: cleanTxt.split('\n')[0] || studentName,
+                  photoUrl: img ? img.src : null,
+                  details: cleanTxt,
+                  index: idx + 1
+                };
+              });
+
+              return {
+                sucesso: false,
+                status: 'ambiguous',
+                candidates,
+                studentName
+              };
+            }
+
+            const targetEl = pool[0];
+
+            if (isDestructive(targetEl)) {
+              return { sucesso: false, status: 'blocked_destructive', mensagem: 'Ação bloqueada: elemento destrutivo detectado.' };
+            }
+
+            let clickable = targetEl.querySelector('a, button, [role="button"], .btn-perfil, [class*="perfil"], [class*="profile"]');
+            if (!clickable || isDestructive(clickable)) {
+              clickable = targetEl;
+            }
+
+            // Destaque visual Rafinha (verde #10b981)
+            const origTransition = clickable.style.transition;
+            const origOutline = clickable.style.outline;
+            const origBoxShadow = clickable.style.boxShadow;
+
+            clickable.style.transition = 'all 0.3s ease';
+            clickable.style.outline = '3px solid #10b981';
+            clickable.style.boxShadow = '0 0 16px rgba(16, 185, 129, 0.7)';
+
+            clickable.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+            await new Promise(r => setTimeout(r, 200));
+
+            try {
+              clickable.click();
+            } catch (e) {
+              clickable.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+            }
+
+            await new Promise(r => setTimeout(r, 250));
+
+            setTimeout(() => {
+              try {
+                clickable.style.transition = origTransition;
+                clickable.style.outline = origOutline;
+                clickable.style.boxShadow = origBoxShadow;
+              } catch {}
+            }, 1800);
+
+            return {
+              sucesso: true,
+              status: 'success',
+              elementText: (clickable.innerText || clickable.textContent || studentName).trim().slice(0, 50),
+              studentName
+            };
+          }
+        });
+
+        // Aguarda estabilização da abertura do perfil / modal / navegação
+        await waitForPageSettled(targetTabId, 2000);
+
+        const res = (results && results[0] && results[0].result) || { sucesso: false, mensagem: 'Script de busca falhou.' };
+        sendResponse(res);
+      } catch (err) {
+        sendResponse({ sucesso: false, mensagem: err.message });
+      }
+    })();
+    return true;
+  }
+
+  if (message.action === 'READ_PAGE_DATA') {
+    (async () => {
+      let targetTabId = message.tabId;
+      if (!targetTabId) {
+        try {
+          const activeTabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+          if (activeTabs && activeTabs.length > 0 && isAuthorizedPortalTab(activeTabs[0])) {
+            targetTabId = activeTabs[0].id;
+          }
+        } catch {}
+      }
+      if (!targetTabId) {
+        const tabs = await chrome.tabs.query({});
+        const portalTab = tabs.find(t => isAuthorizedPortalTab(t));
+        targetTabId = portalTab ? portalTab.id : (isAuthorizedPortalTab(currentTabState) ? currentTabState.tabId : null);
+      }
+      if (!targetTabId) {
+        sendResponse({ sucesso: false, mensagem: 'Nenhuma aba ativa do portal identificada para leitura.' });
+        return;
+      }
+
+      try {
+        const results = await chrome.scripting.executeScript({
+          target: { tabId: targetTabId, allFrames: true },
+          func: () => {
+            const isVisible = (el) => {
+              if (!el) return false;
+              const style = window.getComputedStyle(el);
+              if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') return false;
+              const rect = el.getBoundingClientRect();
+              return (rect.width > 0 && rect.height > 0) || (el.getClientRects && el.getClientRects().length > 0);
+            };
+
+            const activeNavEl = document.querySelector(
+              '.tab-btn.active, .nav-link.active, .menu-item.active, nav a.active, aside a.active, [aria-current="page"], .selected, a[class*="active"], li.active a, .sidebar a.active'
+            );
+            const activeNavText = activeNavEl ? activeNavEl.innerText.trim() : '';
+
+            const pageHeadings = Array.from(document.querySelectorAll('h1, h2, h3, .page-title, .titulo-pagina, .titulo, .header-title'))
+              .filter(isVisible)
+              .map(h => h.innerText.trim())
+              .filter(Boolean)
+              .slice(0, 10);
+
+            // Resolução inteligente da seção ativa a partir da URL e do DOM
+            let inferredSection = activeNavText;
+            const urlLower = window.location.href.toLowerCase();
+            if (!inferredSection) {
+              if (pageHeadings.length > 0 && pageHeadings[0].length < 40) {
+                inferredSection = pageHeadings[0];
+              } else if (/horario/i.test(urlLower)) {
+                inferredSection = 'Horários';
+              } else if (/frequencia|chamada/i.test(urlLower)) {
+                inferredSection = 'Frequência';
+              } else if (/nota|boletim/i.test(urlLower)) {
+                inferredSection = 'Notas';
+              } else if (/aluno|estudante/i.test(urlLower)) {
+                inferredSection = 'Alunos';
+              } else if (/recado|comunicado/i.test(urlLower)) {
+                inferredSection = 'Recados';
+              } else if (/diario|conteudo/i.test(urlLower)) {
+                inferredSection = 'Conteúdo ministrado';
+              }
+            }
+
+            const activeTab = inferredSection || activeNavText || (pageHeadings[0] || '');
+
+            const tables = Array.from(document.querySelectorAll('table')).filter(isVisible).map(t => {
+              // 1. Tenta extrair headers de tags <th>
+              let headers = Array.from(t.querySelectorAll('thead th, th')).map(th => th.innerText.trim()).filter(Boolean);
+
+              // 2. Se vazio, tenta extrair da primeira linha do thead (mesmo usando <td>)
+              if (headers.length === 0) {
+                const theadTds = Array.from(t.querySelectorAll('thead tr:first-child td')).map(td => td.innerText.trim()).filter(Boolean);
+                if (theadTds.length > 0) headers = theadTds;
+              }
+
+              // 3. Extrai linhas da tabela
+              const trElements = Array.from(t.querySelectorAll('tr'));
+              let rows = [];
+              const seenTrs = new Set();
+
+              for (const tr of trElements) {
+                if (seenTrs.has(tr)) continue;
+                seenTrs.add(tr);
+
+                const cells = Array.from(tr.querySelectorAll('th, td')).map(td => {
+                  const inp = td.querySelector('input, select');
+                  if (inp) {
+                    if (inp.type === 'checkbox') return inp.checked ? '[X]' : '[ ]';
+                    return inp.value || td.innerText.trim();
+                  }
+                  return td.innerText.trim();
+                });
+                if (cells.length > 0 && cells.some(c => c.length > 0)) {
+                  rows.push(cells);
+                }
+              }
+
+              // 4. Se headers ainda estiver vazio e tivermos linhas, promove rows[0] se houver mais de 1 linha
+              if (headers.length === 0 && rows.length > 1) {
+                headers = rows[0];
+                rows = rows.slice(1);
+              } else if (headers.length > 0 && rows.length > 0) {
+                // Se a primeira linha de rows for idêntica aos headers, remove a redundância
+                const matchesHeader = headers.length === rows[0].length &&
+                  headers.every((h, i) => h.toLowerCase() === (rows[0][i] || '').toLowerCase());
+                if (matchesHeader) {
+                  rows = rows.slice(1);
+                }
+              }
+
+              return { id: t.id || 'tabela', headers, rows };
+            });
+
+            // Se nenhuma tag <table> estiver presente, verifica containers com role="table" ou grids
+            if (tables.length === 0) {
+              const gridContainers = Array.from(document.querySelectorAll('[role="table"], [role="grid"], .grade-horarios, .tabela-horarios')).filter(isVisible);
+              for (const gc of gridContainers) {
+                const rowEls = Array.from(gc.querySelectorAll('[role="row"], .linha, .row')).filter(isVisible);
+                if (rowEls.length > 1) {
+                  const gridRows = rowEls.map(r => {
+                    return Array.from(r.querySelectorAll('[role="cell"], [role="columnheader"], .col, .celula')).map(c => c.innerText.trim());
+                  }).filter(r => r.length > 0);
+                  if (gridRows.length > 1) {
+                    tables.push({ id: gc.id || 'grid', headers: gridRows[0], rows: gridRows.slice(1) });
+                  }
+                }
+              }
+            }
+
+            const cards = Array.from(document.querySelectorAll('.recado-card, .card, [class*="card"]'))
+              .filter(isVisible)
+              .map(c => c.innerText.trim())
+              .filter(Boolean)
+              .slice(0, 10);
+
+            return {
+              sucesso: true,
+              activeTab,
+              pageTitle: document.title || '',
+              pageHeadings,
+              tables,
+              cards,
+              url: window.location.href
+            };
+          }
+        });
+
+        // Agregação multi-frame: combina dados de todos os frames (se houver iframes)
+        const validResults = (results || []).map(r => r.result).filter(r => r && r.sucesso);
+        if (validResults.length === 0) {
+          sendResponse({ sucesso: false, mensagem: 'Falha ao ler dados da página.' });
+          return;
+        }
+
+        // Encontra o frame principal ou o frame com maior riqueza de dados
+        let primaryResult = validResults.find(r => r.tables && r.tables.length > 0) || validResults[0];
+
+        // Se múltiplos frames tiverem tabelas, mescla todas sem duplicatas
+        const allTables = [];
+        const seenSignatures = new Set();
+        for (const frameRes of validResults) {
+          if (frameRes.tables) {
+            for (const tbl of frameRes.tables) {
+              const sig = (tbl.headers || []).join('|') + '::' + (tbl.rows ? tbl.rows.length : 0);
+              if (!seenSignatures.has(sig)) {
+                seenSignatures.add(sig);
+                allTables.push(tbl);
+              }
+            }
+          }
+        }
+        primaryResult.tables = allTables;
+        sendResponse(primaryResult);
+      } catch (err) {
+        sendResponse({ sucesso: false, mensagem: err.message });
+      }
+    })();
+    return true;
+  }
+
+  if (message.action === 'ASK_PAGE_QUESTION') {
+    (async () => {
+      const { query, pageData } = message;
+      const reqId = 'ask_' + Date.now();
+
+      async function tryHttpFallback() {
+        try {
+          const res = await fetch('http://127.0.0.1:8765/ask_page', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query, pageData }),
+            signal: AbortSignal.timeout(2000)
+          });
+          if (res.ok) {
+            const json = await res.json();
+            if (json && json.sucesso && json.answer) {
+              sendResponse({ sucesso: true, answer: json.answer });
+              return;
+            }
+          }
+        } catch {}
+        sendResponse({ sucesso: false, fallbackLocal: true });
+      }
+
+      // 1. Tenta WebSocket (:8766) se conectado
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        let responded = false;
+        const wsHandler = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            if (data.type === 'PAGE_QUESTION_ANSWER' && data.requestId === reqId) {
+              responded = true;
+              ws.removeEventListener('message', wsHandler);
+              sendResponse({ sucesso: true, answer: data.answer });
+            }
+          } catch {}
+        };
+        ws.addEventListener('message', wsHandler);
+        ws.send(JSON.stringify({
+          type: 'ASK_PAGE_QUESTION',
+          requestId: reqId,
+          query,
+          pageData
+        }));
+
+        setTimeout(() => {
+          if (!responded) {
+            ws.removeEventListener('message', wsHandler);
+            tryHttpFallback();
+          }
+        }, 2500);
+        return;
+      }
+
+      tryHttpFallback();
     })();
     return true;
   }

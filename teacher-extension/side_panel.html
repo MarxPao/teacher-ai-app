@@ -64,6 +64,49 @@
       display: flex; align-items: center; gap: 6px;
     }
 
+    /* ── Atomized / Collapsible Cards (Compact Layout) ── */
+    .atom-card {
+      transition: all 0.2s ease;
+      overflow: hidden;
+    }
+    .atom-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+      user-select: none;
+      padding: 2px 0;
+      transition: opacity 0.15s ease;
+    }
+    .atom-header:hover {
+      opacity: 0.85;
+    }
+    .atom-chevron {
+      font-size: 14px;
+      color: #94a3b8;
+      transition: transform 0.25s ease;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .atom-card.collapsed .atom-chevron {
+      transform: rotate(-90deg);
+    }
+    .atom-card.collapsed .atom-body {
+      display: none !important;
+    }
+    .atom-card.collapsed {
+      padding-top: 10px;
+      padding-bottom: 10px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+    }
+    .atom-card.collapsed .atom-header {
+      margin-bottom: 0 !important;
+      border-bottom: none !important;
+      padding-bottom: 0 !important;
+    }
+
+
     /* ── Buttons ── */
     .btn-main {
       width: 100%; padding: 12px 14px; border: none; border-radius: 10px;
@@ -641,65 +684,154 @@
 
   <div class="body">
     <!-- ── VISOR DE CONEXÃO & ESTADO DO PORTAL ── -->
-    <div id="visor-conexao" class="visor-conexao">
-      <div class="visor-header">
+    <div id="visor-conexao" class="visor-conexao atom-card collapsed">
+      <div class="visor-header atom-header" data-toggle="visor-conexao">
         <span class="visor-title"><i class="ti ti-activity"></i> Visor de Conexão</span>
-        <span id="visor-overall-badge" class="visor-badge connecting">⏳ Verificando...</span>
-      </div>
-      <div class="visor-grid">
-        <div class="visor-item">
-          <span class="visor-label">Portal Escolar</span>
-          <span id="visor-portal-name" class="visor-value" title="Portal identificado">Detectando...</span>
-        </div>
-        <div class="visor-item">
-          <span class="visor-label">Página Ativa</span>
-          <span id="visor-page-name" class="visor-value" title="Página do navegador">Carregando...</span>
-        </div>
-        <div class="visor-item">
-          <span class="visor-label">Autenticação</span>
-          <span id="visor-auth-status" class="visor-value" title="Estado da sessão">Verificando...</span>
-        </div>
-        <div class="visor-item">
-          <span class="visor-label">Assistente PC</span>
-          <span id="visor-sidecar-status" class="visor-value" title="Conexão com Teacher AI local">Conectando...</span>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span id="visor-overall-badge" class="visor-badge connecting">⏳ Verificando...</span>
+          <i class="ti ti-chevron-down atom-chevron"></i>
         </div>
       </div>
-      <div class="visor-action">
-        <button type="button" id="btn-visor-refresh" class="visor-btn-refresh" title="Atualizar detecção da página e reconectar ao assistente">
-          <i class="ti ti-refresh"></i> Atualizar Estado
-        </button>
+      <div class="atom-body">
+        <div class="visor-grid">
+          <div class="visor-item">
+            <span class="visor-label">Portal Escolar</span>
+            <span id="visor-portal-name" class="visor-value" title="Portal identificado">Detectando...</span>
+          </div>
+          <div class="visor-item">
+            <span class="visor-label">Página Ativa</span>
+            <span id="visor-page-name" class="visor-value" title="Página do navegador">Carregando...</span>
+          </div>
+          <div class="visor-item">
+            <span class="visor-label">Autenticação</span>
+            <span id="visor-auth-status" class="visor-value" title="Estado da sessão">Verificando...</span>
+          </div>
+          <div class="visor-item">
+            <span class="visor-label">Assistente PC</span>
+            <span id="visor-sidecar-status" class="visor-value" title="Conexão com Teacher AI local">Conectando...</span>
+          </div>
+        </div>
+        <div class="visor-action">
+          <button type="button" id="btn-visor-refresh" class="visor-btn-refresh" title="Atualizar detecção da página e reconectar ao assistente">
+            <i class="ti ti-refresh"></i> Atualizar Estado
+          </button>
+        </div>
       </div>
     </div>
 
-    
+    <!-- ── CARD: MOTOR DE INTELIGÊNCIA LOCAL (FASE 1) ── -->
+    <div class="card atom-card collapsed" id="ai-model-status-card" style="border-left: 4px solid #8b5cf6;">
+      <div class="atom-header" data-toggle="ai-model-status-card">
+        <div class="card-title" style="margin-bottom: 0;">
+          <i class="ti ti-brain"></i> Motor de IA Local
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span class="class-badge" id="ai-model-badge" style="background: #ede9fe; color: #6d28d9; font-weight: 700;">
+            Verificando...
+          </span>
+          <i class="ti ti-chevron-down atom-chevron"></i>
+        </div>
+      </div>
+
+      <div class="atom-body">
+        <!-- Barra de progresso de download / inicialização (oculta quando pronto) -->
+        <div id="ai-model-progress-container" style="display: none; margin-top: 10px;">
+          <div style="font-size: 11px; color: #4b5563; margin-bottom: 4px; display: flex; justify-content: space-between;">
+            <span id="ai-model-status-text">Preparando motor de inteligência local (download único de ~240 MB)...</span>
+            <span id="ai-model-percent" style="font-weight: 700;">0%</span>
+          </div>
+          <div style="width: 100%; height: 6px; background: #e5e7eb; border-radius: 9999px; overflow: hidden;">
+            <div id="ai-model-progress-bar" style="width: 15%; height: 100%; background: linear-gradient(90deg, #8b5cf6, #3b82f6); border-radius: 9999px; transition: width 0.3s ease;"></div>
+          </div>
+          <div style="font-size: 10px; color: #6b7280; margin-top: 5px; font-style: italic;">
+            ✨ O download ocorre em segundo plano. Você pode continuar usando o app normalmente.
+          </div>
+        </div>
+
+        <!-- Detalhes do modelo pronto -->
+        <div id="ai-model-ready-info" style="display: none; margin-top: 8px; font-size: 11px; color: #4b5563;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-weight: 600; color: #1f2937;">Modelo Multilíngue ONNX:</span>
+            <span id="ai-model-disk-size" style="color: #059669; font-weight: 700;">240 MB em disco</span>
+          </div>
+          <div style="font-size: 10px; color: #6b7280; margin-top: 2px;">
+            Inferência 100% desconectada da nuvem • Suporte a termos regionais
+          </div>
+        </div>
+
+        <!-- Estado de fallback/offline -->
+        <div id="ai-model-fallback-info" style="display: none; margin-top: 8px; background: #fef3c7; border: 1px solid #fde68a; border-radius: 6px; padding: 6px 8px; font-size: 11px; color: #92400e;">
+          ⚠️ Modo Léxico Ativo (Modelo offline indisponível no momento).
+        </div>
+      </div>
+    </div>
+
     <!-- CARD: TURMA ATIVA VIA SUPABASE (ITEM 1) -->
-    <div class="card" id="card-turma-container" style="border-left: 4px solid #0284c7;">
-      <div style="display: flex; justify-content: space-between; align-items: center;">
+    <div class="card atom-card collapsed" id="card-turma-container" style="border-left: 4px solid #0284c7;">
+      <div class="atom-header" data-toggle="card-turma-container">
         <div class="card-title" style="margin-bottom: 0;">
           <i class="ti ti-school"></i> Turma Ativa
         </div>
-        <span class="class-badge" id="turma-source-badge">Supabase (via Backend)</span>
-      </div>
-
-      <!-- Card Populado -->
-      <div id="active-class-card" class="class-card" style="display: none;">
-        <div style="display: flex; justify-content: space-between; align-items: baseline;">
-          <span id="active-class-name" style="font-size: 14px; font-weight: 700; color: #0f172a;">—</span>
-          <span id="active-class-year" style="font-size: 11px; color: #64748b; font-weight: 600;">2026</span>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span class="class-badge" id="turma-source-badge">Supabase (via Backend)</span>
+          <i class="ti ti-chevron-down atom-chevron"></i>
         </div>
-        <div style="font-size: 11px; color: #64748b; margin-top: 3px;" id="active-class-id">ID: —</div>
-        <div id="classes-chips" style="display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px;"></div>
       </div>
 
-      <!-- Estado Vazio Mandatório -->
-      <div id="empty-class-card" style="display: none; background: #fffbeb; border: 1px solid #fef3c7; border-radius: 8px; padding: 10px; color: #b45309; font-size: 12px; font-weight: 600; margin-top: 6px;">
-        ⚠️ Nenhuma turma encontrada — cadastre no app
+      <div class="atom-body">
+        <!-- Card Populado -->
+        <div id="active-class-card" class="class-card" style="display: none;">
+          <div style="display: flex; justify-content: space-between; align-items: baseline;">
+            <span id="active-class-name" style="font-size: 14px; font-weight: 700; color: #0f172a;">—</span>
+            <span id="active-class-year" style="font-size: 11px; color: #64748b; font-weight: 600;">2026</span>
+          </div>
+          <div style="font-size: 11px; color: #64748b; margin-top: 3px;" id="active-class-id">ID: —</div>
+          <div id="classes-chips" style="display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px;"></div>
+        </div>
+
+        <!-- Estado Vazio Mandatório -->
+        <div id="empty-class-card" style="display: none; background: #fffbeb; border: 1px solid #fef3c7; border-radius: 8px; padding: 10px; color: #b45309; font-size: 12px; font-weight: 600; margin-top: 6px;">
+          ⚠️ Nenhuma turma encontrada — cadastre no app
+        </div>
+      </div>
+    </div>
+
+    <!-- ── CARD: CHECKLIST DA TURMA ATIVA (LIVRE INTERCÂMBIO EXTENSÃO ↔ APP) ── -->
+    <div class="card atom-card collapsed" id="card-turma-checklist-container" style="border-left: 4px solid #10b981;">
+      <div class="atom-header" data-toggle="card-turma-checklist-container">
+        <div class="card-title" style="margin-bottom: 0;">
+          <i class="ti ti-list-check"></i> Tarefas desta Turma
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span class="class-badge" id="turma-checklist-count" style="background:#dcfce7; color:#15803d;">0 pendentes</span>
+          <i class="ti ti-chevron-down atom-chevron"></i>
+        </div>
+      </div>
+      <div class="atom-body">
+        <div id="turma-checklist-items" style="display: flex; flex-direction: column; gap: 6px; margin-top: 6px;">
+          <div style="font-size: 11px; color: #64748b; font-style: italic;">Selecione uma turma para carregar as tarefas do Checklist do Teacher AI.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── CARD: DOSSIÊ PEDAGÓGICO DO ALUNO (MEMÓRIA DO ALUNO) ── -->
+    <div class="card" id="card-student-dossier" style="display: none; border-left: 4px solid #8b5cf6; background: #faf5ff;">
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <div class="card-title" style="margin-bottom: 0; color: #6b21a8;">
+          <i class="ti ti-user-circle"></i> Dossiê Pedagógico
+        </div>
+        <button type="button" id="btn-close-dossier" style="background: none; border: none; cursor: pointer; color: #9333ea; font-size: 14px;">✕</button>
+      </div>
+      <div id="dossier-content" style="margin-top: 8px; font-size: 12px; color: #3b0764;"></div>
+      <div style="margin-top: 8px; display: flex; gap: 4px;">
+        <input type="text" id="input-quick-observation" placeholder="Registrar observação rápida..." style="flex: 1; padding: 6px 8px; font-size: 11px; border: 1px solid #d8b4fe; border-radius: 6px;" />
+        <button type="button" id="btn-save-quick-obs" style="padding: 6px 10px; background: #9333ea; color: white; border: none; border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer;">Salvar</button>
       </div>
     </div>
 
     <!-- CARD PRINCIPAL: ASSISTENTE NO PORTAL (100% CONVERSACIONAL) -->
-    <div class="agent-card" id="agentic-action-card">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; border-bottom: 1px solid #f1f5f9; padding-bottom: 8px;">
+    <div class="agent-card atom-card" id="agentic-action-card">
+      <div class="atom-header" data-toggle="agentic-action-card" style="border-bottom: 1px solid #f1f5f9; padding-bottom: 8px; margin-bottom: 8px;">
         <div style="font-size: 13px; font-weight: 700; color: #4338ca; display: flex; align-items: center; gap: 6px;">
           <i class="ti ti-sparkles"></i> Assistente no Portal
         </div>
@@ -708,160 +840,166 @@
             <i class="ti ti-plus"></i> Nova Conversa
           </button>
           <span id="agentic-portal-tag" style="font-size: 10px; font-weight: 600; background: #e0e7ff; color: #4338ca; padding: 2px 8px; border-radius: 12px;">Ativo</span>
+          <i class="ti ti-chevron-down atom-chevron"></i>
         </div>
       </div>
 
-      <!-- 3. [NOVO] Área de Histórico de Conversa (Chat Stream) -->
-      <div id="chat-history-container" class="chat-history-container">
-        <!-- Mensagem de Boas-Vindas da Rafinha -->
-        <div class="chat-msg assistant" id="chat-welcome-msg">
-          <div class="chat-avatar">🦉</div>
-          <div class="chat-bubble">
-            Olá! Sou a <strong>Rafinha</strong>. Em que posso te ajudar no portal hoje? Você pode falar ou digitar abaixo.
-          </div>
-        </div>
+      <div class="atom-body">
+        <!-- Contêiner de Execução de Skill / Interpretação -->
+        <div id="interpret-response-container" class="interpret-box" style="display: none; margin-bottom: 8px;"></div>
 
-        <!-- 1b. Card de Progresso Natural (Aprendizado ao Vivo Transparente) -->
-        <div id="card-natural-progress" style="display: none; margin-top: 6px; background: #f0fdf4; border: 1.5px solid #86efac; border-radius: 10px; padding: 12px;">
-          <div style="display: flex; align-items: center; gap: 8px; color: #166534; font-size: 12px; font-weight: 600;">
-            <span class="pulse-dot" style="background: #16a34a;"></span>
-            <span id="natural-progress-text">Isso pode levar um minutinho na primeira vez, já estou vendo como funciona aqui...</span>
-          </div>
-        </div>
-
-        <!-- 2. Card de Desambiguação (Homônimos) -->
-        <div id="card-disambiguation" style="display: none; margin-top: 6px; background: #fffbeb; border: 1px solid #fef3c7; border-radius: 8px; padding: 12px;">
-          <div style="font-size: 12px; font-weight: 700; color: #b45309; display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
-            <i class="ti ti-alert-triangle"></i> Mais de um aluno encontrado
-          </div>
-          <p id="disambiguation-text" style="font-size: 11px; color: #92400e; margin-bottom: 8px;">
-            Encontrei mais de um aluno com este nome na turma. A quem você se refere?
-          </p>
-          <div id="disambiguation-candidates" style="display: flex; flex-direction: column; gap: 4px;"></div>
-        </div>
-
-        <!-- 3. Card de Aprovação com Preview Antes e Depois -->
-        <div id="card-approval-preview" style="display: none; margin-top: 6px; background: #f8fafc; border: 1.5px solid #0284c7; border-radius: 10px; padding: 12px;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-            <span style="font-size: 11px; font-weight: 700; color: #0369a1; text-transform: uppercase;">
-              📋 Prévia de Lançamento
-            </span>
-            <span style="font-size: 10px; color: #64748b; font-weight: 600;" id="approval-checkpoint-id">chk_ready</span>
-          </div>
-
-          <div style="font-size: 13px; font-weight: 700; color: #0f172a; margin-bottom: 2px;" id="approval-student-name">
-            João Silva
-          </div>
-          <div style="font-size: 11px; color: #64748b;" id="approval-action-desc">
-            Lançamento de Nota
-          </div>
-
-          <!-- Alerta Visível de Divergência/Conflito contra o Portal Vivo -->
-          <div id="approval-conflict-alert" style="display: none; background: #fffbeb; border: 1.5px solid #f59e0b; border-radius: 8px; padding: 8px 10px; margin: 8px 0; color: #92400e; font-size: 11px; line-height: 1.4;">
-            <div style="font-weight: 700; display: flex; align-items: center; gap: 4px; margin-bottom: 2px;">
-              <span>⚠️</span> <span>Divergência detectada com o portal</span>
-            </div>
-            <span id="approval-conflict-text">O valor no portal difere do cache do app. Ação calculada com base no portal ao vivo.</span>
-          </div>
-
-          <!-- Pill Antes e Depois -->
-          <div class="before-after-pill">
-            <div class="val-box">
-              <div class="val-label">Nota Atual</div>
-              <div class="val-num val-before" id="approval-before-val">—</div>
-            </div>
-            <div style="font-size: 18px; color: #94a3b8; font-weight: 700;">→</div>
-            <div class="val-box">
-              <div class="val-label">Nova Nota</div>
-              <div class="val-num val-after" id="approval-after-val">8.5</div>
+        <!-- 3. [NOVO] Área de Histórico de Conversa (Chat Stream) -->
+        <div id="chat-history-container" class="chat-history-container">
+          <!-- Mensagem de Boas-Vindas da Rafinha -->
+          <div class="chat-msg assistant" id="chat-welcome-msg">
+            <div class="chat-avatar">🦉</div>
+            <div class="chat-bubble">
+              Olá! Sou a <strong>Rafinha</strong>. Em que posso te ajudar no portal hoje? Você pode falar ou digitar abaixo.
             </div>
           </div>
 
-          <!-- Botões de Ação do Card -->
-          <div style="display: flex; gap: 8px; margin-top: 10px;">
-            <button id="btn-confirm-approval" class="btn-main" style="background: #10b981; flex: 2; padding: 9px 12px; font-size: 13px;">
-              <i class="ti ti-check"></i>
-              <span>Confirmar</span>
+          <!-- 1b. Card de Progresso Natural (Aprendizado ao Vivo Transparente) -->
+          <div id="card-natural-progress" style="display: none; margin-top: 6px; background: #f0fdf4; border: 1.5px solid #86efac; border-radius: 10px; padding: 12px;">
+            <div style="display: flex; align-items: center; gap: 8px; color: #166534; font-size: 12px; font-weight: 600;">
+              <span class="pulse-dot" style="background: #16a34a;"></span>
+              <span id="natural-progress-text">Isso pode levar um minutinho na primeira vez, já estou vendo como funciona aqui...</span>
+            </div>
+          </div>
+
+          <!-- 2. Card de Desambiguação (Homônimos) -->
+          <div id="card-disambiguation" style="display: none; margin-top: 6px; background: #fffbeb; border: 1px solid #fef3c7; border-radius: 8px; padding: 12px;">
+            <div style="font-size: 12px; font-weight: 700; color: #b45309; display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+              <i class="ti ti-alert-triangle"></i> Mais de um aluno encontrado
+            </div>
+            <p id="disambiguation-text" style="font-size: 11px; color: #92400e; margin-bottom: 8px;">
+              Encontrei mais de um aluno com este nome na turma. A quem você se refere?
+            </p>
+            <div id="disambiguation-candidates" style="display: flex; flex-direction: column; gap: 4px;"></div>
+          </div>
+
+          <!-- 3. Card de Aprovação com Preview Antes e Depois -->
+          <div id="card-approval-preview" style="display: none; margin-top: 6px; background: #f8fafc; border: 1.5px solid #0284c7; border-radius: 10px; padding: 12px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+              <span style="font-size: 11px; font-weight: 700; color: #0369a1; text-transform: uppercase;">
+                📋 Prévia de Lançamento
+              </span>
+              <span style="font-size: 10px; color: #64748b; font-weight: 600;" id="approval-checkpoint-id">chk_ready</span>
+            </div>
+
+            <div style="font-size: 13px; font-weight: 700; color: #0f172a; margin-bottom: 2px;" id="approval-student-name">
+              João Silva
+            </div>
+            <div style="font-size: 11px; color: #64748b;" id="approval-action-desc">
+              Lançamento de Nota
+            </div>
+
+            <!-- Alerta Visível de Divergência/Conflito contra o Portal Vivo -->
+            <div id="approval-conflict-alert" style="display: none; background: #fffbeb; border: 1.5px solid #f59e0b; border-radius: 8px; padding: 8px 10px; margin: 8px 0; color: #92400e; font-size: 11px; line-height: 1.4;">
+              <div style="font-weight: 700; display: flex; align-items: center; gap: 4px; margin-bottom: 2px;">
+                <span>⚠️</span> <span>Divergência detectada com o portal</span>
+              </div>
+              <span id="approval-conflict-text">O valor no portal difere do cache do app. Ação calculada com base no portal ao vivo.</span>
+            </div>
+
+            <!-- Pill Antes e Depois -->
+            <div class="before-after-pill">
+              <div class="val-box">
+                <div class="val-label">Nota Atual</div>
+                <div class="val-num val-before" id="approval-before-val">—</div>
+              </div>
+              <div style="font-size: 18px; color: #94a3b8; font-weight: 700;">→</div>
+              <div class="val-box">
+                <div class="val-label">Nova Nota</div>
+                <div class="val-num val-after" id="approval-after-val">8.5</div>
+              </div>
+            </div>
+
+            <!-- Botões de Ação do Card -->
+            <div style="display: flex; gap: 8px; margin-top: 10px;">
+              <button id="btn-confirm-approval" class="btn-main" style="background: #10b981; flex: 2; padding: 9px 12px; font-size: 13px;">
+                <i class="ti ti-check"></i>
+                <span>Confirmar</span>
+              </button>
+              <button id="btn-cancel-approval" class="btn-sub" style="flex: 1; margin-top: 0; padding: 9px;">
+                <span>Cancelar</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- 4. Card de Feedback Pós-Gravação (Sucesso Confirmado) -->
+          <div id="card-execution-success" style="display: none; margin-top: 6px; background: #ecfdf5; border: 1.5px solid #10b981; border-radius: 10px; padding: 12px;">
+            <div style="display: flex; align-items: center; gap: 6px; color: #065f46; font-weight: 700; font-size: 12px;">
+              <i class="ti ti-circle-check" style="font-size: 16px; color: #10b981;"></i>
+              <span>Gravado com Sucesso no Portal!</span>
+            </div>
+            <p id="success-detail-text" style="font-size: 11px; color: #047857; margin-top: 4px; line-height: 1.4;">
+              A nota foi preenchida no portal e confirmada no DOM oficial.
+            </p>
+          </div>
+
+          <!-- 5. Card de Esclarecimento Natural com Apontamento Mínimo -->
+          <div id="card-clarification-point-click" style="display: none; margin-top: 6px; background: #fffbeb; border: 1.5px solid #fcd34d; border-radius: 10px; padding: 12px;">
+            <div style="font-size: 12px; font-weight: 700; color: #92400e; display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+              <i class="ti ti-help-circle"></i> Preciso de uma dica rápida
+            </div>
+            <p id="clarification-question-text" style="font-size: 11px; color: #78350f; line-height: 1.4; margin-bottom: 8px;">
+              Não encontrei onde lançar falta nesta tela, você pode me mostrar clicando no lugar certo?
+            </p>
+            <button id="btn-point-and-click" class="btn-main" style="background: #d97706; padding: 8px 10px; font-size: 11px; width: 100%;">
+              <i class="ti ti-hand-click"></i> Apontar campo no portal
             </button>
-            <button id="btn-cancel-approval" class="btn-sub" style="flex: 1; margin-top: 0; padding: 9px;">
-              <span>Cancelar</span>
-            </button>
+          </div>
+
+          <!-- 6. Card de Falha Honesta -->
+          <div id="card-honest-error" style="display: none; margin-top: 6px; background: #fef2f2; border: 1.5px solid #ef4444; border-radius: 10px; padding: 12px;">
+            <div style="display: flex; align-items: center; gap: 6px; color: #991b1b; font-weight: 700; font-size: 12px;">
+              <i class="ti ti-alert-circle" style="font-size: 16px; color: #ef4444;"></i>
+              <span id="error-title">Não foi possível realizar a ação</span>
+            </div>
+            <p id="error-detail-text" style="font-size: 11px; color: #b91c1c; margin-top: 4px; line-height: 1.4;">
+              Aluno não encontrado ou pauta não editável.
+            </p>
           </div>
         </div>
 
-        <!-- 4. Card de Feedback Pós-Gravação (Sucesso Confirmado) -->
-        <div id="card-execution-success" style="display: none; margin-top: 6px; background: #ecfdf5; border: 1.5px solid #10b981; border-radius: 10px; padding: 12px;">
-          <div style="display: flex; align-items: center; gap: 6px; color: #065f46; font-weight: 700; font-size: 12px;">
-            <i class="ti ti-circle-check" style="font-size: 16px; color: #10b981;"></i>
-            <span>Gravado com Sucesso no Portal!</span>
-          </div>
-          <p id="success-detail-text" style="font-size: 11px; color: #047857; margin-top: 4px; line-height: 1.4;">
-            A nota foi preenchida no portal e confirmada no DOM oficial.
-          </p>
+        <!-- 7. [NOVO] Indicador de Processando em Tempo Real -->
+        <div id="chat-typing-indicator" class="chat-typing-indicator">
+          <span class="typing-dots">
+            <span class="typing-dot"></span>
+            <span class="typing-dot"></span>
+            <span class="typing-dot"></span>
+          </span>
+          <span id="typing-indicator-text">Rafinha pensando...</span>
         </div>
 
-        <!-- 5. Card de Esclarecimento Natural com Apontamento Mínimo -->
-        <div id="card-clarification-point-click" style="display: none; margin-top: 6px; background: #fffbeb; border: 1.5px solid #fcd34d; border-radius: 10px; padding: 12px;">
-          <div style="font-size: 12px; font-weight: 700; color: #92400e; display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
-            <i class="ti ti-help-circle"></i> Preciso de uma dica rápida
-          </div>
-          <p id="clarification-question-text" style="font-size: 11px; color: #78350f; line-height: 1.4; margin-bottom: 8px;">
-            Não encontrei onde lançar falta nesta tela, você pode me mostrar clicando no lugar certo?
-          </p>
-          <button id="btn-point-and-click" class="btn-main" style="background: #d97706; padding: 8px 10px; font-size: 11px; width: 100%;">
-            <i class="ti ti-hand-click"></i> Apontar campo no portal
+        <!-- 4 & 5. [NOVO] Seção Ações Rápidas (Chips Pré-definidos de Fábrica + Promovidos) -->
+        <div id="quick-actions-bar" class="quick-actions-bar">
+          <button class="quick-action-chip" data-template="Lança nota ___ para o aluno ___">📝 Lançar nota</button>
+          <button class="quick-action-chip" data-template="Lança falta para o aluno ___">✋ Lançar falta</button>
+          <button class="quick-action-chip" data-command="Ver notas da turma">📊 Ver notas da turma</button>
+          <button class="quick-action-chip" data-command="Ler lista de alunos desta tela">📋 Ler lista de alunos</button>
+          <span id="promoted-chips-slot" style="display: flex; gap: 6px;"></span>
+        </div>
+
+        <!-- 6. Barra de Entrada Única: Mic de Voz + Campo de Texto + Enviar -->
+        <div class="chat-input-bar">
+          <button id="btn-voice-input" class="voice-btn" title="Falar comando (ex: 'Lança nota 8.5 para o João')">
+            <i class="ti ti-microphone" id="voice-icon"></i>
+          </button>
+          <input type="text" id="input-agent-command" class="chat-input-field" placeholder="Fale ou digite seu pedido para a Rafinha..." />
+          <button id="btn-send-agent-command" class="chat-send-btn" title="Enviar comando para o portal">
+            <span>Enviar</span>
+            <i class="ti ti-send" style="font-size: 12px;"></i>
           </button>
         </div>
 
-        <!-- 6. Card de Falha Honesta -->
-        <div id="card-honest-error" style="display: none; margin-top: 6px; background: #fef2f2; border: 1.5px solid #ef4444; border-radius: 10px; padding: 12px;">
-          <div style="display: flex; align-items: center; gap: 6px; color: #991b1b; font-weight: 700; font-size: 12px;">
-            <i class="ti ti-alert-circle" style="font-size: 16px; color: #ef4444;"></i>
-            <span id="error-title">Não foi possível realizar a ação</span>
-          </div>
-          <p id="error-detail-text" style="font-size: 11px; color: #b91c1c; margin-top: 4px; line-height: 1.4;">
-            Aluno não encontrado ou pauta não editável.
-          </p>
+        <!-- Estado de Escuta por Voz -->
+        <div id="voice-listening-indicator" style="display: none; margin-top: 8px; font-size: 11px; color: #dc2626; font-weight: 600; align-items: center; gap: 6px;">
+          <span class="pulse-dot" style="background: #dc2626;"></span> Ouvindo professora... (fale agora)
         </div>
-      </div>
+      </div> <!-- /atom-body -->
 
-      <!-- 7. [NOVO] Indicador de Processando em Tempo Real -->
-      <div id="chat-typing-indicator" class="chat-typing-indicator">
-        <span class="typing-dots">
-          <span class="typing-dot"></span>
-          <span class="typing-dot"></span>
-          <span class="typing-dot"></span>
-        </span>
-        <span id="typing-indicator-text">Rafinha pensando...</span>
-      </div>
-
-      <!-- 4 & 5. [NOVO] Seção Ações Rápidas (Chips Pré-definidos de Fábrica + Promovidos) -->
-      <div id="quick-actions-bar" class="quick-actions-bar">
-        <button class="quick-action-chip" data-template="Lança nota ___ para o aluno ___">📝 Lançar nota</button>
-        <button class="quick-action-chip" data-template="Lança falta para o aluno ___">✋ Lançar falta</button>
-        <button class="quick-action-chip" data-command="Ver notas da turma">📊 Ver notas da turma</button>
-        <button class="quick-action-chip" data-command="Ler lista de alunos desta tela">📋 Ler lista de alunos</button>
-        <span id="promoted-chips-slot" style="display: flex; gap: 6px;"></span>
-      </div>
-
-      <!-- 6. Barra de Entrada Única: Mic de Voz + Campo de Texto + Enviar -->
-      <div class="chat-input-bar">
-        <button id="btn-voice-input" class="voice-btn" title="Falar comando (ex: 'Lança nota 8.5 para o João')">
-          <i class="ti ti-microphone" id="voice-icon"></i>
-        </button>
-        <input type="text" id="input-agent-command" class="chat-input-field" placeholder="Fale ou digite seu pedido para a Rafinha..." />
-        <button id="btn-send-agent-command" class="chat-send-btn" title="Enviar comando para o portal">
-          <span>Enviar</span>
-          <i class="ti ti-send" style="font-size: 12px;"></i>
-        </button>
-      </div>
-
-      <!-- Estado de Escuta por Voz -->
-      <div id="voice-listening-indicator" style="display: none; margin-top: 8px; font-size: 11px; color: #dc2626; font-weight: 600; align-items: center; gap: 6px;">
-        <span class="pulse-dot" style="background: #dc2626;"></span> Ouvindo professora... (fale agora)
-      </div>
-
-    </div>
+    </div> <!-- /agentic-action-card -->
 
     <!-- ══════════════════════════════════════════════════════════════ -->
     <!-- MODO DESENVOLVEDOR / QA (OCULTO POR PADRÃO — ATALHO: CTRL+SHIFT+D OU CLIQUE 3X NO LOGO) -->

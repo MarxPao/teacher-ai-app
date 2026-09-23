@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Teacher AI — Benchmark de Capacidade Máxima do Motor</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f8fafc; margin: 0; padding: 24px; color: #1e293b; }
+    .card { background: #fff; max-width: 900px; margin: 0 auto; padding: 20px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .tab-bar, .subtab-bar { display: flex; gap: 8px; border-bottom: 2px solid #e2e8f0; margin-bottom: 16px; padding-bottom: 8px; }
+    button { cursor: pointer; border-radius: 6px; font-weight: 600; font-size: 13px; padding: 8px 14px; border: 1px solid #cbd5e1; background: #fff; color: #334155; }
+    button.active { background: #eff6ff; border-color: #3b82f6; color: #1d4ed8; }
+    .pane { display: none; padding: 16px; background: #f1f5f9; border-radius: 8px; margin-top: 10px; }
+    .scroll-container { max-height: 220px; overflow-y: auto; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; padding: 8px; display: flex; flex-direction: column; gap: 8px; }
+    .student-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; border: 1px solid #e2e8f0; border-radius: 6px; background: #fff; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>Portal Escolar — Benchmark de Capacidade</h2>
+
+    <!-- DIMENSÃO 4.1: Elementos duplicados por acidente (Mobile header + Desktop navbar) -->
+    <header class="mobile-bar" style="display: block; margin-bottom: 8px;">
+      <button id="btn-recados-duplicate" class="tab-btn" onclick="showPane('recados')">💬 Recados</button>
+    </header>
+
+    <!-- NÍVEL 1: Barra Principal -->
+    <div class="tab-bar">
+      <button id="tab-inicio" onclick="showPane('inicio')">🏠 Início</button>
+      <button id="tab-notas" onclick="showPane('notas')">📊 Notas</button>
+      <button id="tab-chamada" onclick="showPane('chamada')">✋ Frequência / Chamada</button>
+      <button id="tab-recados" onclick="showPane('recados')">💬 Recados</button>
+      <button id="tab-alunos" onclick="showPane('alunos')">👥 Meus Alunos</button>
+    </div>
+
+    <!-- PANE INÍCIO -->
+    <div id="pane-inicio" class="pane" style="display: block;">
+      <h3>Painel Geral</h3>
+      <p>Bem-vinda, Professora.</p>
+    </div>
+
+    <!-- PANE NOTAS -->
+    <div id="pane-notas" class="pane">
+      <h3>Lançamento de Notas</h3>
+      <div class="subtab-bar">
+        <button id="subtab-diario-avaliacoes" onclick="showSubPane('avaliacoes')">Avaliações</button>
+        <button id="subtab-diario-medias" onclick="showSubPane('medias')">Médias</button>
+      </div>
+      <div id="pane-avaliacoes" style="display: none; padding: 10px; background: #fff;">
+        <p>Tabela de Avaliações Carregada.</p>
+      </div>
+    </div>
+
+    <!-- PANE FREQUÊNCIA (DIMENSÃO 3: Extração de faltas) -->
+    <div id="pane-chamada" class="pane">
+      <h3>Registro de Frequência da Turma</h3>
+      <table style="width: 100%; border-collapse: collapse; background: #fff;">
+        <thead>
+          <tr style="background: #e2e8f0;">
+            <th style="padding: 8px; text-align: left;">Aluno</th>
+            <th style="padding: 8px; text-align: left;">Total de Faltas</th>
+            <th style="padding: 8px; text-align: left;">Média Recente</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="padding: 8px;">Pedro Santos</td>
+            <td style="padding: 8px;"><span id="faltas-pedro">3</span> faltas</td>
+            <td style="padding: 8px;"><span id="media-pedro">5.2</span></td>
+          </tr>
+          <tr>
+            <td style="padding: 8px;">Maria Oliveira</td>
+            <td style="padding: 8px;"><span id="faltas-maria">0</span> faltas</td>
+            <td style="padding: 8px;"><span id="media-maria">8.0</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- PANE RECADOS (DIMENSÃO 4.2 e 4.3) -->
+    <div id="pane-recados" class="pane">
+      <h3>Mural de Recados</h3>
+      <div class="subtab-bar">
+        <!-- DIMENSÃO 4.3: Rótulo sem emoji para testar inconsistência de A/B testing -->
+        <button id="subtab-recados-recebidos-sem-emoji" onclick="showSubRecados('recebidos')">Recados recebidos</button>
+        <!-- Botão com renderização assíncrona atrasada em 1500ms (ultrapassa o cushion de fallback) -->
+        <button id="btn-carregar-anuncios-async" onclick="loadAsyncAnnouncements(1500)">Carregar Comunicados da Direção</button>
+      </div>
+      <div id="container-async-announcements" style="margin-top: 8px;"></div>
+    </div>
+
+    <!-- PANE MEUS ALUNOS (DIMENSÃO 1: Hierarquia profunda até 6 níveis; DIMENSÃO 4.4: 40 alunos) -->
+    <div id="pane-alunos" class="pane">
+      <h3>Lista de Alunos (40 Alunos com Scroll)</h3>
+
+      <div class="scroll-container" id="grid-alunos-40">
+        <!-- 40 alunos gerados via script -->
+      </div>
+
+      <!-- NÍVEL 2 A 6: Sub-páginas encadeadas de Carlos Eduardo -->
+      <div id="pane-perfil-carlos" style="display: none; margin-top: 14px; padding: 14px; background: #fff; border: 1px solid #3b82f6; border-radius: 8px;">
+        <h4 style="margin-top: 0;">Ficha Individual do Estudante</h4>
+        <div class="subtab-bar">
+          <button id="tab-historico-carlos" onclick="showCarlosStep('historico')">Histórico Escolar</button>
+          <button id="tab-observacoes-carlos" onclick="showCarlosStep('obs')">Observações Pedagógicas</button>
+        </div>
+
+        <!-- NÍVEL 3: Histórico Escolar -->
+        <div id="pane-historico-carlos" style="display: none; padding: 10px; background: #f8fafc;">
+          <h5>Histórico Escolar Completo</h5>
+          <button id="tab-faltas-carlos" onclick="showCarlosStep('faltas')">Aba de Faltas</button>
+
+          <!-- NÍVEL 4: Aba de Faltas -->
+          <div id="pane-faltas-carlos" style="display: none; margin-top: 8px; padding: 8px; background: #eff6ff;">
+            <p>Total de Faltas no Ano: 12</p>
+            <button id="btn-justificativas-carlos" onclick="showCarlosStep('justificativas')">Ver Justificativas</button>
+
+            <!-- NÍVEL 5: Justificativas -->
+            <div id="pane-justificativas-carlos" style="display: none; margin-top: 8px; padding: 8px; background: #fef2f2;">
+              <p>Justificativas enviadas: 2</p>
+              <button id="btn-anexo-atestado-carlos" onclick="showCarlosStep('anexo')">Atestado Médico Anexo</button>
+
+              <!-- NÍVEL 6: Atestado Anexo -->
+              <div id="pane-anexo-carlos" style="display: none; margin-top: 8px; padding: 8px; background: #ecfdf5; color: #065f46; font-weight: bold;">
+                <p style="margin: 0 0 6px 0;">📄 Atestado Médico Dr. Roberto — 3 dias (CID J06)</p>
+                <button id="btn-detalhes-cid-carlos" onclick="showCarlosStep('cid')">Detalhes do CID</button>
+
+                <!-- NÍVEL 7: Detalhes do CID -->
+                <div id="pane-cid-carlos" style="display: none; margin-top: 8px; padding: 8px; background: #fff; border: 1px solid #10b981; border-radius: 6px;">
+                  <p style="margin: 0 0 6px 0; color: #334155; font-weight: normal;">CID J06 — Infecções agudas das vias aéreas superiores</p>
+                  <button id="btn-parecer-medico-carlos" onclick="showCarlosStep('parecer')">Parecer Médico Final</button>
+
+                  <!-- NÍVEL 8: Parecer Médico Final -->
+                  <div id="pane-parecer-carlos" style="display: none; margin-top: 8px; padding: 8px; background: #f0fdf4; color: #15803d; font-weight: bold;">
+                    ✅ Parecer Homologado pelo Médico Escolar
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Observações de Pedro / Carlos (DIMENSÃO 3) -->
+        <div id="pane-obs-carlos" style="display: none; padding: 10px;">
+          <label><strong>Nova Observação Pedagógica:</strong></label>
+          <input type="text" id="campo-obs-pedro" style="width: 100%; margin: 8px 0; padding: 6px;" placeholder="Digite a observação...">
+          <button id="btn-salvar-obs-pedro" onclick="salvarObsPedro()">Salvar Observação</button>
+          <div id="status-obs-salva" style="display: none; color: #16a34a; font-weight: bold; margin-top: 6px;">Observação registrada com sucesso!</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function showPane(paneId) {
+      document.querySelectorAll('.pane').forEach(p => p.style.display = 'none');
+      const target = document.getElementById('pane-' + paneId);
+      if (target) target.style.display = 'block';
+    }
+
+    function showSubPane(subId) {
+      const p = document.getElementById('pane-' + subId);
+      if (p) p.style.display = 'block';
+    }
+
+    function showSubRecados(id) {
+      // Sub-aba
+    }
+
+    function loadAsyncAnnouncements(delayMs) {
+      // Simula resposta de rede lenta
+      setTimeout(() => {
+        const container = document.getElementById('container-async-announcements');
+        container.innerHTML = '<button id="btn-aviso-urgente" style="background: #ef4444; color: white;">🚨 Aviso Urgente: Reunião Pedagógica</button>';
+      }, delayMs || 1500);
+    }
+
+    function showCarlosStep(step) {
+      if (step === 'historico') document.getElementById('pane-historico-carlos').style.display = 'block';
+      if (step === 'faltas') document.getElementById('pane-faltas-carlos').style.display = 'block';
+      if (step === 'justificativas') document.getElementById('pane-justificativas-carlos').style.display = 'block';
+      if (step === 'anexo') document.getElementById('pane-anexo-carlos').style.display = 'block';
+      if (step === 'cid') document.getElementById('pane-cid-carlos').style.display = 'block';
+      if (step === 'parecer') document.getElementById('pane-parecer-carlos').style.display = 'block';
+      if (step === 'obs') document.getElementById('pane-obs-carlos').style.display = 'block';
+    }
+
+    function salvarObsPedro() {
+      document.getElementById('status-obs-salva').style.display = 'block';
+    }
+
+    // 40 Alunos com span isolado para nome limpo (matching exato)
+    const studentNames = [
+      "Ana Júlia", "Arthur Lima", "Bernardo Costa", "Beatriz Santos", "Caio Mendes",
+      "Carlos Eduardo", "Camila Rocha", "Daniel Faria", "Davi Souza", "Eduardo Lima",
+      "Enzo Gabriel", "Fabiana Dias", "Felipe Alves", "Gabriel Silva", "Giovanna Cruz",
+      "Guilherme Ramos", "Heitor Ferreira", "Helena Castro", "Igor Moreira", "Isabela Pires",
+      "João Pedro", "Julia Martins", "Kauê Ribeiro", "Larissa Duarte", "Leonardo Gomes",
+      "Lucas Silva", "Luiza Cardoso", "Manuela Neves", "Matheus Barbosa", "Milena Borges",
+      "Nicolas Freitas", "Otávio Moura", "Pedro Santos", "Rafaela Teixeira", "Rodrigo Nogueira",
+      "Samuel Correia", "Sofia Peixoto", "Thiago Guimarães", "Vinícius Carvalho", "Zélia Souza"
+    ];
+
+    const grid = document.getElementById('grid-alunos-40');
+    studentNames.forEach((name, idx) => {
+      const row = document.createElement('div');
+      row.className = 'student-row card-aluno';
+      row.id = 'aluno-row-' + (idx + 1);
+      
+      const span = document.createElement('span');
+      span.className = 'aluno-nome';
+      span.innerText = name;
+      row.appendChild(span);
+
+      const btn = document.createElement('button');
+      btn.className = 'btn-perfil';
+      btn.id = 'btn-perfil-' + name.toLowerCase().replace(/\s+/g, '-').normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      btn.innerText = 'Ver perfil';
+      btn.onclick = () => {
+        if (name === "Carlos Eduardo") {
+          document.getElementById('pane-perfil-carlos').style.display = 'block';
+        }
+      };
+      row.appendChild(btn);
+      grid.appendChild(row);
+    });
+  </script>
+</body>
+</html>

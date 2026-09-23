@@ -395,13 +395,14 @@ export default function QuickGenerate() {
 
     try {
       let libContext = ''
-      const compiled = compileSourcesPrompt(sources, knowledgeMode)
+      const queryTopic = topic || skill || 'English'
+      const compiled = compileSourcesPrompt(sources, knowledgeMode, queryTopic)
       if (compiled.activeCount > 0) {
         libContext = compiled.promptContext
       } else {
         // Fallback RAG se não houver fontes manuais selecionadas
         const { searchLibraryContext, buildRagPromptContext } = await import('@/lib/ragEngine')
-        const chunks = searchLibraryContext(topic || skill || 'English', { limit: 3 })
+        const chunks = searchLibraryContext(queryTopic, { limit: 8 })
         if (chunks.length > 0) {
           libContext = buildRagPromptContext(chunks)
         }

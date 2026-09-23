@@ -6,7 +6,7 @@ import { useWhisperFlow } from '@/hooks/useWhisperFlow'
 import { useGlobalWakeWord } from '@/hooks/useGlobalWakeWord'
 import { fillPortal, openPortal, logPortalFill } from '@/lib/portalBridge'
 import { createMultiStepPortalPlan, executeMultiStepPortalPlan } from '@/lib/portalActionsEngine'
-import { addObservation, buildMemoryContext, diagnoseClassPerformance } from '@/lib/studentMemory'
+import { addObservation, buildMemoryContext, diagnoseClassPerformance, savePendingObservation } from '@/lib/studentMemory'
 import { buildTeacherStyleSystemPrompt } from '@/lib/teacherStyleProfile'
 import { createBrowserTask, updateBrowserTask, getBrowserTaskById, subscribeToBrowserTask } from '@/lib/browserAutomationClient'
 import { sanitizeOutboundPayload } from '@/lib/portalSanitizer'
@@ -23,6 +23,7 @@ import { requiresContinuousListeningConsent } from '@/lib/wakeWordConsent'
 import RosterReconciliationModal from '@/components/modules/RosterReconciliationModal'
 import { PortalApprovalCard } from '@/components/PortalApprovalCard'
 import { toast } from '@/components/Toast'
+import { maskPii, unmaskPii, MaskingSession } from '@/lib/piiMasking'
 import {
   getChatHistory,
   saveChatMessage,
@@ -348,21 +349,34 @@ export async function executeTool(
  return `Comunicado "${input.title}" criado`
  }
  case 'record_student_observation': {
-    const students = JSON.parse(localStorage.getItem('teacher_students') || '[]')
-    const match = matchStudentByName(input.studentName as string, students)
-    if (match.status === 'ambiguous' || match.status === 'not_found' || !match.student) {
-      return match.disambiguationPrompt || `Aluno "${input.studentName}" não encontrado.`
-    }
-    const found = students.find((s: { id: string }) => s.id === match.student!.id) || match.student
-    addObservation(
-      found.id,
-      found.name,
-      input.note as string,
-      input.category as string | undefined,
-      input.subcategory as string | undefined,
-      'rafinha'
-    )
-    return `Observação registrada para ${found.name}: "${input.note}"`
+     const students = JSON.parse(localStorage.getItem('teacher_students') || '[]')
+     const match = matchStudentByName(input.studentName as string, students)
+     if (match.status === 'ambiguous' && match.candidates && match.candidates.length > 1) {
+       return `Identifiquei mais de uma aluna com esse nome na turma: ${match.candidates.map((c: any) => c.name).join(' e ')}. De qual delas estamos falando?`
+     }
+     if (match.status === 'not_found' || !match.student) {
+       savePendingObservation({
+         studentName: input.studentName as string,
+         note: input.note as string,
+         category: input.category as string | undefined,
+         subcategory: input.subcategory as string | undefined,
+         source: 'rafinha'
+       })
+       return `Anotei como observação pendente, pois não encontrei "${input.studentName}" na lista de alunos cadastrados. Você pode cadastrá-lo(a) na aba de Alunos para vincular essa anotação.`
+     }
+     const found = students.find((s: { id: string }) => s.id === match.student!.id) || match.student
+     const res = addObservation(
+       found.id,
+       found.name,
+       input.note as string,
+       input.category as string | undefined,
+       input.subcategory as string | undefined,
+       'rafinha'
+     )
+     if (res.status === 'ambiguous') {
+       return `Identifiquei mais de um registro para "${found.name}". Deixei a anotação na lista de pendências para você confirmar.`
+     }
+     return `Observação registrada para ${found.name}: "${input.note}"`
  }
  case 'create_class': {
  takeSnapshot()
@@ -593,7 +607,7 @@ export async function executeTool(
         payload: {
           summary: execResult.unifiedSummary,
           steps: plan.steps.map(s => s.resultSummary),
-          prefilled_screenshot_url: '/sandbox/portal_mock.html'
+          prefilled_screenshot_url: null
         }
       }
 
@@ -625,11 +639,19 @@ export async function executeTool(
               .filter((s: any) => !classRef || s.class === classRef || (s.className && s.className.includes(classRef)))
               .map((s: any) => {
                 const gradesList = Object.values(s.grades || {}).map(Number).filter(n => !isNaN(n))
-                const avg = gradesList.length > 0 ? gradesList.reduce((a, b) => a + b, 0) / gradesList.length : 8.5
-                return { name: s.name, grade: Number(avg.toFixed(1)), id: s.id }
+                if (gradesList.length === 0) {
+                  return { name: s.name, grade: null, hasGrade: false, id: s.id }
+                }
+                const avg = gradesList.reduce((a, b) => a + b, 0) / gradesList.length
+                return { name: s.name, grade: Number(avg.toFixed(1)), hasGrade: true, id: s.id }
               })
+              .filter((s: any) => s.hasGrade)
           }
         } catch {}
+      }
+
+      if (studentGrades.length === 0) {
+        return `Não há notas registradas para os alunos da turma ${classRef || 'selecionada'}. Lance as notas no Gradebook antes de preencher o portal.`
       }
     }
 
@@ -650,6 +672,7 @@ export async function executeTool(
     logPortalFill(payload as any)
 
     // Cria a tarefa assíncrona no Supabase
+    // Cria a tarefa assíncrona no Supabase
     const createdTask = await createBrowserTask({
       portal: platform,
       actionType: `write_${actionType}`,
@@ -659,8 +682,15 @@ export async function executeTool(
       studentCount: studentGrades.length || absentStudents.length || 1
     })
 
-    // Executa preenchimento imediato dos campos no DOM
-    await fillPortal(payload as any)
+    // Executa preenchimento imediato dos campos no DOM via Relay para a Extensão Chrome
+    const { relayToolToExtension } = await import('@/lib/portalRelayBridge')
+    const relayResult = await relayToolToExtension('execute_portal_action', cleanPayload, { portalId: platform })
+
+    if (!relayResult.success && relayResult.status === 'extension_disconnected') {
+      return `A extensão Teacher AI não encontrou nenhuma aba aberta do portal ${PORTAL_NAMES[platform] || platform}. Abra a página do portal no navegador para que eu possa preencher os campos.`
+    }
+
+    const realScreenshot = relayResult?.screenshot || null
     window.dispatchEvent(new Event('storage'))
 
     const pendingTaskObj = createdTask || {
@@ -676,7 +706,7 @@ export async function executeTool(
           : actionType === 'grades'
           ? `${studentGrades.length} notas preenchidas`
           : `Diário '${title}' preenchido`,
-        prefilled_screenshot_url: '/sandbox/portal_mock.html'
+        prefilled_screenshot_url: realScreenshot
       }
     }
 
@@ -707,6 +737,9 @@ export async function executeTool(
     const task = JSON.parse(raw)
     const action = input.action as 'approve' | 'abort'
 
+    const { relayToolToExtension } = await import('@/lib/portalRelayBridge')
+    await relayToolToExtension('confirm_portal_submission', { action, taskId: task.id }, { portalId: task.portal })
+
     if (action === 'approve') {
       if (task.id && !task.id.startsWith('task_') && !task.id.startsWith('plan_')) {
         await updateBrowserTask(task.id, { status: 'approved' })
@@ -734,33 +767,42 @@ export async function executeTool(
     const raw = typeof window !== 'undefined' ? sessionStorage.getItem('teacher_active_portal_task') : null
     if (!raw) return 'Não há nenhuma tarefa pré-preenchida no momento para exibir print.'
     const task = JSON.parse(raw)
-    const previewUrl = task.payload?.prefilled_screenshot_url || '/sandbox/portal_mock.html'
-    return `[Captura de Tela do Portal Preenchido](${previewUrl})\n\nAqui está o print do portal com os campos já preenchidos! Confirma o salvamento definitivo?`
+    const previewUrl = task.payload?.prefilled_screenshot_url
+    if (previewUrl && previewUrl !== '/sandbox/portal_mock.html') {
+      return `[Captura de Tela do Portal Preenchido](${previewUrl})\n\nAqui está o print real capturado da aba do portal com os campos preenchidos! Confirma o salvamento definitivo?`
+    }
+    return 'Os campos foram destacados no portal oficial, mas nenhuma captura estática foi gerada. Você pode conferir os valores diretamente na aba aberta do portal antes de confirmar.'
   }
- case 'fill_school_portal': {
- takeSnapshot()
- const result = await fillPortal({ 
- platform: input.platform as never, 
- title: input.title as string, 
- date: input.date as string || '', 
- classRef: input.classRef as string || '', 
- description: input.description as string || '',
- mode: 'supervised'
- }) as any
- if (result && result.success === false) {
- return `Portal ${PORTAL_NAMES[input.platform as string] || input.platform} não respondeu. Verifique se o portal está aberto no Chrome.`
- }
- logPortalFill({ 
- platform: input.platform as never, 
- title: input.title as string, 
- date: input.date as string || '', 
- classRef: input.classRef as string || '',
- mode: 'supervised'
- })
- window.dispatchEvent(new Event('storage'))
- return `Campos preenchidos visualmente no ${PORTAL_NAMES[input.platform as string] || input.platform}. Revise e clique em Salvar no portal.`
- }
- case 'open_school_portal': {
+  case 'fill_school_portal': {
+    takeSnapshot()
+    const { relayToolToExtension } = await import('@/lib/portalRelayBridge')
+    const relayResult = await relayToolToExtension('fill_school_portal', { 
+      platform: input.platform, 
+      title: input.title, 
+      date: input.date || '', 
+      classRef: input.classRef || '', 
+      description: input.description || '',
+      mode: 'supervised'
+    }, { portalId: input.platform as string })
+
+    if (!relayResult.success) {
+      if (relayResult.status === 'extension_disconnected') {
+        return `A extensão Teacher AI não encontrou nenhuma aba aberta do portal ${PORTAL_NAMES[input.platform as string] || input.platform}. Abra a página do portal no Chrome para prosseguir.`
+      }
+      return `Portal ${PORTAL_NAMES[input.platform as string] || input.platform} não respondeu: ${relayResult.error || 'Erro na extensão.'}`
+    }
+
+    logPortalFill({ 
+      platform: input.platform as never, 
+      title: input.title as string, 
+      date: input.date as string || '', 
+      classRef: input.classRef as string || '',
+      mode: 'supervised'
+    })
+    window.dispatchEvent(new Event('storage'))
+    return `Campos preenchidos visualmente no ${PORTAL_NAMES[input.platform as string] || input.platform}! Revise e confirme o salvamento.`
+  }
+  case 'open_school_portal': {
  openPortal(input.platform as string)
  return `Abrindo ${PORTAL_NAMES[input.platform as string] || input.platform}...`
  }
@@ -1144,6 +1186,52 @@ export async function executeTool(
       if (data?.lists) {
         return `✅ Quadro carregado com ${data.total_lists} listas e ${data.total_cards} cartões.`
       }
+    }
+
+    // Tratamento de grade_exam (Fase A3: Correção OMR + BKT/DINA/DIF)
+    if (capability === 'grade_exam') {
+      if ((result as any).hasData === false || !result.data) {
+        return result.error || (result as any).message || 'Nenhuma folha de resposta foi fornecida para processamento.'
+      }
+      const data = result.data as any
+      const totalStudents = data?.totalStudents || data?.totalSheetsProcessed || 0
+      const averageScore = data?.averageScore !== undefined ? data.averageScore : (data?.executiveSummary?.classroomProfile?.averageMasteryPercentage ?? 0)
+      const summaryText = data?.executiveSummary?.formattedPageText || data?.executiveSummary?.classroomProfile?.headline || ''
+      const growthAreas = data?.executiveSummary?.growthAreas || []
+      const alertSnippet = growthAreas.length > 0 ? `\n\n🎯 Ponto de atenção prioritário: ${growthAreas[0].topic} (${growthAreas[0].masteryPercentage}% de domínio).` : ''
+
+      return `✅ Correção concluída para ${totalStudents} aluno(s)! Média da turma: ${averageScore.toFixed(1)}%.${alertSnippet}\n\n${summaryText ? `📄 Sumário Executivo:\n${summaryText}` : 'Os dados psicométricos foram atualizados com sucesso.'}`
+    }
+
+    // Tratamento de get_exam_summary (Fase A3: Sumário Executivo Pedagógico de 1 página)
+    if (capability === 'get_exam_summary') {
+      if ((result as any).hasData === false || !result.data) {
+        const classRef = (params.classRef as string) || ''
+        const classLabel = classRef ? ` para a turma ${classRef}` : ''
+        return `Não encontrei simulados ou avaliações registradas${classLabel}. Quer que eu ajude a criar uma prova no Gerador de Avaliações?`
+      }
+      const data = result.data as any
+      const formatted = data?.formattedPageText
+      if (formatted) {
+        return `📄 **Sumário Executivo Pedagógico**\n\n${formatted}`
+      }
+
+      const headline = data?.classroomProfile?.headline || ''
+      const strengths = data?.strengths || []
+      const growthAreas = data?.growthAreas || []
+      const interventions = data?.pedagogicalInterventions || []
+
+      let response = `📄 **Sumário Pedagógico da Avaliação**\n\n${headline}`
+      if (strengths.length > 0) {
+        response += `\n\n🌟 **Pontos Fortes:**\n${strengths.map((s: any) => `• ${s.topic || s}: ${s.masteryPercentage || ''}%`).join('\n')}`
+      }
+      if (growthAreas.length > 0) {
+        response += `\n\n🎯 **Áreas que Precisam de Atenção:**\n${growthAreas.map((a: any) => `• ${a.topic || a}: ${a.masteryPercentage || ''}%`).join('\n')}`
+      }
+      if (interventions.length > 0) {
+        response += `\n\n💡 **Sugestões Pedagógicas:**\n${interventions.map((sg: string) => `• ${sg}`).join('\n')}`
+      }
+      return response
     }
 
     return `Operação concluída com sucesso em "${resolution.connector?.display_name}".`
@@ -1826,15 +1914,17 @@ export default function RafinhaChat({ onNavigate, onCommandReady }: RafinhaChatP
  const pendingTask = JSON.parse(rawPending)
  const parsed = parseConfirmationIntent(trimmed)
 
- if (parsed.decision === 'show_screenshot') {
- const previewUrl = pendingTask.payload?.prefilled_screenshot_url || '/sandbox/portal_mock.html'
- const replyText = `Aqui está o print do portal com os campos já preenchidos no formulário:\n\n[Captura do Portal Preenchido](${previewUrl})\n\nConfirma o salvamento definitivo? (Diga 'sim, pode salvar' ou 'cancelar')`
- setMessages(prev => [...prev, { role: 'assistant', content: replyText }])
- setIsLoading(false)
- isLoadingRef.current = false
- speak(replyText)
- return
- }
+        if (parsed.decision === 'show_screenshot') {
+          const previewUrl = pendingTask.payload?.prefilled_screenshot_url
+          const replyText = previewUrl && previewUrl !== '/sandbox/portal_mock.html'
+            ? `Aqui está a captura real do portal com os campos destacados:\n\n[Captura Real do Portal Preenchido](${previewUrl})\n\nConfirma o salvamento definitivo? (Diga 'sim, pode salvar' ou 'cancelar')`
+            : `Os campos foram destacados na aba aberta do portal escolar no Chrome. Você pode conferir diretamente na tela. Confirma o salvamento definitivo? (Diga 'sim, pode salvar' ou 'cancelar')`
+          setMessages(prev => [...prev, { role: 'assistant', content: replyText }])
+          setIsLoading(false)
+          isLoadingRef.current = false
+          speak(replyText)
+          return
+        }
 
  if (parsed.decision === 'approve') {
  if (pendingTask.id && !pendingTask.id.startsWith('task_')) {
@@ -1941,91 +2031,159 @@ export default function RafinhaChat({ onNavigate, onCommandReady }: RafinhaChatP
  }
  } catch {}
 
- const canonicalHistory: CanonicalMessage[] = [
- ...messages.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })),
- { role: 'user', content: trimmed },
- ]
+  const knownStudentNames = new Set<string>()
+  try {
+    const rawStu = localStorage.getItem('teacher_students')
+    if (rawStu) {
+      const parsed = JSON.parse(rawStu)
+      if (Array.isArray(parsed)) {
+        parsed.forEach((s: { name?: string }) => {
+          if (s.name && s.name.trim()) {
+            knownStudentNames.add(s.name.trim())
+            const parts = s.name.trim().split(/\s+/)
+            if (parts.length > 1 && parts[0].length >= 4) knownStudentNames.add(parts[0])
+          }
+        })
+      }
+    }
+    const rawMem = localStorage.getItem('teacher_student_memory')
+    if (rawMem) {
+      const parsedMem = JSON.parse(rawMem)
+      if (Array.isArray(parsedMem)) {
+        parsedMem.forEach((m: { studentName?: string }) => {
+          if (m.studentName && m.studentName.trim()) {
+            knownStudentNames.add(m.studentName.trim())
+            const parts = m.studentName.trim().split(/\s+/)
+            if (parts.length > 1 && parts[0].length >= 4) knownStudentNames.add(parts[0])
+          }
+        })
+      }
+    }
+  } catch {}
 
- let accumulatedText = ''
- // Placeholder da resposta da assistente (sem toolCalls visíveis no chat)
- setMessages(prev => [...prev, { role: 'assistant', content: '' }])
+  const studentEntities = Array.from(knownStudentNames).map(name => ({ name }))
+  const combinedMapping: Record<string, string> = {}
 
- // A1: Removido speak(thinkingLine) causava duplicação de áudio (thinkingLine + resposta final)
- // O indicador visual de loading já comunica que a Rafinha está pensando
+  const canonicalHistory: CanonicalMessage[] = [
+    ...messages.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })),
+    { role: 'user', content: trimmed },
+  ]
 
- try {
- // B1: Limitar iterations por tipo de task com profundidade suficiente para encadeamento de ferramentas
- const taskLower = trimmed.toLowerCase()
- const isActionTask = /vá|va |abra|abrir|naveg|adicione|crie turma|crie aluno|lance|lançar|registre/i.test(taskLower)
- const isGenerationTask = /prova|exercício|plano de aula|questão|atividade|sequência didática/i.test(taskLower)
- const maxIterations = isActionTask ? 4 : isGenerationTask ? 6 : 5
+  let accumulatedText = ''
+  // Placeholder da resposta da assistente (sem toolCalls visíveis no chat)
+  setMessages(prev => [...prev, { role: 'assistant', content: '' }])
 
- for (let iteration = 0; iteration < maxIterations; iteration++) {
- const res = await fetch('/api/agent', {
- method: 'POST',
- headers: { 'Content-Type': 'application/json' },
- body: JSON.stringify({
- messages: canonicalHistory, context: getAppContext(trimmed),
- teacherStyle: buildTeacherStyleSystemPrompt(),
- subject: getSubjectProfile().id,
- provider, userKey, autoMode, userKeys,
- temperatureMode: isActionTask ? 'deterministic' : isGenerationTask ? 'creative' : 'balanced',
- }),
- })
+  // A1: Removido speak(thinkingLine) causava duplicação de áudio (thinkingLine + resposta final)
+  // O indicador visual de loading já comunica que a Rafinha está pensando
 
- if (!res.ok) throw new Error((await res.json()).error || `HTTP ${res.status}`)
- const data = await res.json()
- const content = (data.content || []) as Array<{ type: string; text?: string; id?: string; name?: string; input?: Record<string, unknown> }>
+  try {
+    // B1: Limitar iterations por tipo de task com profundidade suficiente para encadeamento de ferramentas
+    const taskLower = trimmed.toLowerCase()
+    const isActionTask = /vá|va |abra|abrir|naveg|adicione|crie turma|crie aluno|lance|lançar|registre/i.test(taskLower)
+    const isGenerationTask = /prova|exercício|plano de aula|questão|atividade|sequência didática/i.test(taskLower)
+    const maxIterations = isActionTask ? 4 : isGenerationTask ? 6 : 5
 
- const textParts = content.filter(c => c.type === 'text')
- const toolParts = content.filter(c => c.type === 'tool_use')
+    for (let iteration = 0; iteration < maxIterations; iteration++) {
+      // Zero-PII Gateway: Mascaramento LGPD/FERPA ativo pré-LLM
+      const maskedHistory = canonicalHistory.map(m => {
+        if (!m.content) return m
+        const maskRes = maskPii(m.content, studentEntities)
+        Object.assign(combinedMapping, maskRes.mapping)
+        return { ...m, content: maskRes.maskedText }
+      })
 
- const newText = textParts.map(b => b.text).join('\n').trim()
- if (newText) accumulatedText = newText
+      const rawContext = getAppContext(trimmed)
+      const ctxMaskRes = maskPii(rawContext, studentEntities)
+      Object.assign(combinedMapping, ctxMaskRes.mapping)
+      const maskedContext = ctxMaskRes.maskedText
 
- setMessages(prev => {
- const last = { ...prev[prev.length - 1], content: accumulatedText }
- return [...prev.slice(0, -1), last]
- })
 
- if (toolParts.length === 0) break
+      const res = await fetch('/api/agent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: maskedHistory,
+          context: maskedContext,
+          teacherStyle: buildTeacherStyleSystemPrompt(),
+          subject: getSubjectProfile().id,
+          provider, userKey, autoMode, userKeys,
+          temperatureMode: isActionTask ? 'deterministic' : isGenerationTask ? 'creative' : 'balanced',
+        }),
+      })
 
- // Build running entries 
- const newEntries: LogEntry[] = toolParts.map(tc => ({
- id: tc.id!, name: tc.name!, input: tc.input!,
- status: 'running', startedAt: Date.now(),
- }))
+      if (!res.ok) throw new Error((await res.json()).error || `HTTP ${res.status}`)
+      const data = await res.json()
+      const content = (data.content || []) as Array<{ type: string; text?: string; id?: string; name?: string; input?: Record<string, unknown> }>
 
- setRunningTools(newEntries)
+      const textParts = content.filter(c => c.type === 'text')
+      const toolParts = content.filter(c => c.type === 'tool_use')
 
- canonicalHistory.push({
- role: 'assistant', content: newText,
- toolUse: toolParts.map(tc => ({ id: tc.id!, name: tc.name!, input: tc.input! })),
- })
+      const rawNewText = textParts.map(b => b.text).join('\n').trim()
+      const newText = unmaskPii(rawNewText, combinedMapping)
+      if (newText) accumulatedText = newText
 
- const toolResults: Array<{ id: string; name: string; result: string }> = []
+      setMessages(prev => {
+        const last = { ...prev[prev.length - 1], content: accumulatedText }
+        return [...prev.slice(0, -1), last]
+      })
 
- for (let i = 0; i < toolParts.length; i++) {
- const tc = toolParts[i]
- const est = TOOL_EST_SECONDS[tc.name!] || 2
+      if (toolParts.length === 0) break
 
- // Wait for estimated time or until user taps skip
- if (!skipSignalRef.current) {
- const startWait = Date.now()
- await new Promise<void>(resolve => {
- const check = setInterval(() => {
- if (skipSignalRef.current || Date.now() - startWait >= est * 1000) {
- clearInterval(check)
- resolve()
- }
- }, 50)
- })
- }
- skipSignalRef.current = false
+      // Build running entries com inputs desmascarados para execução local real
+      const unmaskObj = (obj: unknown): unknown => {
+        if (typeof obj === 'string') return unmaskPii(obj, combinedMapping)
+        if (Array.isArray(obj)) return obj.map(unmaskObj)
+        if (obj && typeof obj === 'object') {
+          const r: Record<string, unknown> = {}
+          for (const [k, v] of Object.entries(obj as Record<string, unknown>)) {
+            r[k] = unmaskObj(v)
+          }
+          return r
+        }
+        return obj
+      }
 
- try {
- const result = await executeTool(tc.name!, tc.input!, onNavigate, speak)
- const elapsed = (Date.now() - newEntries[i].startedAt) / 1000
+
+      const newEntries: LogEntry[] = toolParts.map(tc => ({
+        id: tc.id!,
+        name: tc.name!,
+        input: (unmaskObj(tc.input) || {}) as Record<string, unknown>,
+        status: 'running',
+        startedAt: Date.now(),
+      }))
+
+      setRunningTools(newEntries)
+
+      canonicalHistory.push({
+        role: 'assistant',
+        content: newText,
+        toolUse: toolParts.map(tc => ({ id: tc.id!, name: tc.name!, input: tc.input! })),
+      })
+
+      const toolResults: Array<{ id: string; name: string; result: string }> = []
+
+      for (let i = 0; i < toolParts.length; i++) {
+        const tc = toolParts[i]
+        const est = TOOL_EST_SECONDS[tc.name!] || 2
+
+        // Wait for estimated time or until user taps skip
+        if (!skipSignalRef.current) {
+          const startWait = Date.now()
+          await new Promise<void>(resolve => {
+            const check = setInterval(() => {
+              if (skipSignalRef.current || Date.now() - startWait >= est * 1000) {
+                clearInterval(check)
+                resolve()
+              }
+            }, 50)
+          })
+        }
+        skipSignalRef.current = false
+
+        try {
+          const effectiveInput = newEntries[i].input
+          const result = await executeTool(tc.name!, effectiveInput, onNavigate, speak)
+          const elapsed = (Date.now() - newEntries[i].startedAt) / 1000
 
  setRunningTools(prev =>
  prev.map((e, idx) => idx === i ? { ...e, status: 'done', result, elapsed } : e)

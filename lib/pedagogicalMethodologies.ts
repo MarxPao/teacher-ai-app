@@ -37,6 +37,31 @@ export const PEDAGOGICAL_METHODOLOGIES: MethodologyDefinition[] = [
     badgeColor: '#b58900',
   },
   {
+    id: 'tblt_willis',
+    name: 'TBLT Autêntico (Jane Willis Framework)',
+    category: 'Metodologias do Inglês (ELT)',
+    description: 'Framework canônico de Willis com 3 fases essenciais e subfases: Pre-Task, Task Cycle (Task, Planning, Report) e Language Focus (Analysis, Practice).',
+    promptInstruction: 'Siga ESTRITAMENTE a estrutura canônica de TBLT de Jane Willis (1996): (1) Pre-Task (introdução e modelo), (2) Task (execução em pequenos grupos com foco em significado), (3) Planning (preparação de relatório oral/escrito), (4) Report (apresentação dos relatórios), (5) Language Analysis (conscientização e Noticing de formas), (6) Language Practice (prática focada). Não comprima em etapas genéricas.',
+    badgeColor: '#d97706',
+  },
+  {
+    id: '5e_inquiry',
+    name: '5E Inquiry Model (Engage, Explore, Explain, Elaborate, Evaluate)',
+    category: 'Metodologias Científicas & Cognitivas',
+    description: 'Ciclo reflexivo e investigativo em 5 fases do BSCS (Rodger Bybee): Engage, Explore, Explain, Elaborate, Evaluate.',
+    promptInstruction: 'Estruture o plano ESTRITAMENTE em 5 fases investigativas do modelo 5E de Bybee: 1. Engage (gancho provocativo e questão investigativa), 2. Explore (trabalho autônomo/colaborativo com dados/textos sem instrução prévia), 3. Explain (alunos verbalizam hipóteses e professor esclarece conceitos/MFP), 4. Elaborate (aplicação dos conceitos em novo desafio comunicativo), 5. Evaluate (avaliação de desempenho formativa e autoavaliação).',
+    badgeColor: '#0284c7',
+  },
+  {
+    id: 'ubd_backward',
+    name: 'Backward Design / UbD (Wiggins & McTighe)',
+    category: 'Metodologias Científicas & Cognitivas',
+    description: 'Planejamento reverso em 3 estágios: Resultados Desejados & Evidências de Avaliação ANTES das etapas de ensino.',
+    promptInstruction: 'Aplique rigorosamente o Planejamento Reverso (Backward Design / UbD de Grant Wiggins & Jay McTighe). Inicie definindo o Estágio 1 (Resultados Desejados & Questões Essenciais) e o Estágio 2 (Evidência Observável de Avaliação / Performance Task). Somente após estabelecer a evidência de avaliação, derive as etapas do Estágio 3 (Plano de Aprendizagem orientado a WHERETO).',
+    badgeColor: '#7c3aed',
+  },
+
+  {
     id: 'clil',
     name: 'CLIL (Content & Language Integrated Learning)',
     category: 'Metodologias do Inglês (ELT)',

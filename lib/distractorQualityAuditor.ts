@@ -9,6 +9,7 @@
 import { EditableQuestionItem } from '@/components/EditableQuestionBoxes'
 import { SubjectProfile, getSubjectProfile } from '@/lib/subjectProfile'
 import { StudentDeficitProfile } from '@/lib/personalizedDistractorBridge'
+import { matchDistractorToCatalog, MisconceptionEntry } from '@/lib/misconceptionCatalog'
 
 export interface QuestionDistractorAudit {
   questionNumber: number
@@ -18,6 +19,9 @@ export interface QuestionDistractorAudit {
   isAlignedToStudentDeficit?: boolean
   rating: 'excelente' | 'adequado' | 'generico'
   feedback: string
+  unmappedDistractors?: string[]
+  hasUnmappedDistractors?: boolean
+  matchedMisconceptions?: MisconceptionEntry[]
 }
 
 export interface ExamDistractorAuditResult {
@@ -28,6 +32,8 @@ export interface ExamDistractorAuditResult {
   questions: QuestionDistractorAudit[]
   summaryLabel: string
   studentDeficitMatchedCount?: number
+  hasUnmappedDistractors: boolean
+  unmappedQuestionsCount: number
 }
 
 /**
@@ -53,7 +59,9 @@ export function auditExamDistractors(
       coverageRate: 1.0,
       coveragePercentage: 100,
       questions: [],
-      summaryLabel: 'Nenhuma questão de múltipla escolha para auditar'
+      summaryLabel: 'Nenhuma questão de múltipla escolha para auditar',
+      hasUnmappedDistractors: false,
+      unmappedQuestionsCount: 0
     }
   }
 
@@ -62,21 +70,59 @@ export function auditExamDistractors(
 
     const matchedIds: string[] = []
     const matchedNames: string[] = []
+    const matchedMisconceptions: MisconceptionEntry[] = []
+    const unmappedDistractors: string[] = []
 
+    // 1. Match por padrões do SubjectProfile contra o texto completo da questão
     patterns.forEach(pat => {
-      // 1. Match por palavras-chave do nome do padrão
       const patternTerms = pat.pattern.toLowerCase().split(/[\s—\-\/]+/).filter(t => t.length > 3)
       const hasTermMatch = patternTerms.some(t => fullText.includes(t))
-
-      // 2. Match por exemplos específicos cadastrados no perfil
       const hasExampleMatch = pat.examples.some(ex => {
         const cleanEx = ex.toLowerCase().replace(/[^a-záéíóúâêîôûãõç\s]/g, '').trim()
         return cleanEx.length > 4 && fullText.includes(cleanEx)
       })
-
       if (hasTermMatch || hasExampleMatch) {
-        matchedIds.push(pat.id)
-        matchedNames.push(pat.pattern)
+        if (!matchedIds.includes(pat.id)) {
+          matchedIds.push(pat.id)
+          matchedNames.push(pat.pattern)
+        }
+      }
+    })
+
+    // 2. Verificação rigorosa de cada distrator contra o Catálogo Pedagógico de Misconceptions
+    const options = q.options || []
+    const cleanAnswerKey = (q.answerKey || '').trim().toUpperCase()
+
+    options.forEach(opt => {
+      const optLetter = (opt.letter || '').toUpperCase()
+      const isCorrectKey = optLetter ? cleanAnswerKey.includes(optLetter) : false
+      if (!isCorrectKey) {
+        const mis = matchDistractorToCatalog(opt.text, activeProfile.id || activeProfile.nameShort)
+        if (mis) {
+          if (!matchedIds.includes(mis.id)) {
+            matchedIds.push(mis.id)
+            matchedNames.push(mis.name)
+            matchedMisconceptions.push(mis)
+          }
+        } else {
+          // Verifica fallback nos padrões do SubjectProfile
+          let matchedProfilePattern = false
+          patterns.forEach(pat => {
+            const patternTerms = pat.pattern.toLowerCase().split(/[\s—\-\/]+/).filter(t => t.length > 3)
+            const hasTerm = patternTerms.some(t => opt.text.toLowerCase().includes(t))
+            const hasEx = pat.examples.some(ex => opt.text.toLowerCase().includes(ex.toLowerCase()))
+            if (hasTerm || hasEx) {
+              matchedProfilePattern = true
+              if (!matchedIds.includes(pat.id)) {
+                matchedIds.push(pat.id)
+                matchedNames.push(pat.pattern)
+              }
+            }
+          })
+          if (!matchedProfilePattern) {
+            unmappedDistractors.push(`(${opt.letter || '?'}) ${opt.text}`)
+          }
+        }
       }
     })
 
@@ -89,6 +135,7 @@ export function auditExamDistractors(
     }
 
     const isAligned = matchedIds.length > 0 || isAlignedToStudentDeficit
+    const hasUnmappedDistractors = unmappedDistractors.length > 0
     let rating: QuestionDistractorAudit['rating'] = 'generico'
     let feedback = 'Distratores sem correspondência direta aos padrões diagnósticos catalogados.'
 
@@ -103,6 +150,10 @@ export function auditExamDistractors(
       feedback = `Alinhamento diagnóstico: ${matchedNames[0]}.`
     }
 
+    if (hasUnmappedDistractors) {
+      feedback += ` [Atenção: ${unmappedDistractors.length} distrator(es) sem misconception mapeada: ${unmappedDistractors.slice(0, 2).join('; ')}]`
+    }
+
     return {
       questionNumber: q.number,
       matchedPatternIds: matchedIds,
@@ -110,12 +161,16 @@ export function auditExamDistractors(
       isAligned,
       isAlignedToStudentDeficit,
       rating,
-      feedback
+      feedback,
+      unmappedDistractors,
+      hasUnmappedDistractors,
+      matchedMisconceptions
     }
   })
 
   const alignedCount = audits.filter(a => a.isAligned).length
   const studentDeficitMatchedCount = audits.filter(a => a.isAlignedToStudentDeficit).length
+  const unmappedQuestionsCount = audits.filter(a => a.hasUnmappedDistractors).length
   const coverageRate = mcQuestions.length > 0 ? Number((alignedCount / mcQuestions.length).toFixed(2)) : 1.0
   const coveragePercentage = Math.round(coverageRate * 100)
 
@@ -137,6 +192,30 @@ export function auditExamDistractors(
     coverageRate,
     coveragePercentage,
     questions: audits,
-    summaryLabel
+    summaryLabel,
+    hasUnmappedDistractors: unmappedQuestionsCount > 0,
+    unmappedQuestionsCount
+  }
+}
+
+/**
+ * Validação atômica de um único distrator contra o catálogo de misconceptions.
+ */
+export function isDistractorDiagnosticallyMapped(
+  optionText: string,
+  subject?: string,
+  topic?: string
+): { isMapped: boolean; misconception?: MisconceptionEntry; reason: string } {
+  const mis = matchDistractorToCatalog(optionText, subject, topic)
+  if (mis) {
+    return {
+      isMapped: true,
+      misconception: mis,
+      reason: `Mapeado à misconception diagnóstica: ${mis.name} (${mis.code})`
+    }
+  }
+  return {
+    isMapped: false,
+    reason: 'Distrator rejeitado pelo auditor: não corresponde a nenhuma concepção alternativa catalogada no banco pedagógico.'
   }
 }

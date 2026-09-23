@@ -39,6 +39,8 @@ export type CapabilityName =
   | 'post_chat_message'
   | 'list_joined_teams'
   | 'list_channels'
+  | 'grade_exam'
+  | 'get_exam_summary'
 
 export interface CapabilityDefinition {
   name: CapabilityName
@@ -78,6 +80,8 @@ export interface CapabilityResult {
   requires_review: boolean
   error?: string
   layer_used?: 'api' | 'layer_1_deterministic' | 'layer_2_vision'
+  hasData?: boolean
+  message?: string
 }
 
 export type CapabilityHandler = (
@@ -310,7 +314,25 @@ export function syncConnectorsFromStorage(): void {
       api_config: {
         base_url: 'https://graph.microsoft.com/v1.0',
         auth_type: 'oauth2',
-        credentials: getTeamsConfig() || undefined,
+        credentials: (getTeamsConfig() as unknown as Record<string, unknown>) || undefined,
+      }
+    })
+  } catch {}
+
+  // 4. Motor de Avaliação Psicométrica & OMR (Fase A3)
+  try {
+    registerConnector({
+      id: 'assessment_engine',
+      display_name: 'Motor de Avaliação & OMR',
+      tier: 'api',
+      status: 'mapped_validated',
+      capabilities: [
+        { name: 'grade_exam', direction: 'write', requires_human_approval: false, output_schema: 'OMRPsychometricsBatchResult' },
+        { name: 'get_exam_summary', direction: 'read', requires_human_approval: false, output_schema: 'ExecutivePedagogicalSummary' },
+      ],
+      api_config: {
+        base_url: 'local://assessment_engine',
+        auth_type: 'none'
       }
     })
   } catch {}
@@ -353,6 +375,8 @@ export function formatCapabilityName(cap: CapabilityName): string {
     case 'post_chat_message': return 'enviar mensagem no chat do Teams'
     case 'list_joined_teams': return 'listar equipes do Teams'
     case 'list_channels': return 'listar canais da equipe no Teams'
+    case 'grade_exam': return 'corrigir provas via OMR'
+    case 'get_exam_summary': return 'obter sumário executivo pedagógico da avaliação'
     default: return cap
   }
 }
@@ -381,7 +405,7 @@ export async function resolveAndInvokeCapability(params: {
       const id = c.id.toLowerCase()
       const name = c.display_name.toLowerCase()
       const domain = c.browser_config?.domain?.toLowerCase() || ''
-      return id === hint || name.includes(hint) || hint.includes(id) || hint.includes(name) || (domain && domain.includes(hint))
+      return id === hint || id.includes(hint) || name.includes(hint) || hint.includes(id) || hint.includes(name) || (domain && domain.includes(hint))
     })
 
     if (!matched) {

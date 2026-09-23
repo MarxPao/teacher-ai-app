@@ -14,7 +14,7 @@ import {
   deleteMediaItemFromSupabase,
   syncToSupabase 
 } from '@/lib/supabaseClient'
-import { BnccSkill, getStoredBnccSkills, saveStoredBnccSkills } from '@/lib/bnccData'
+import { BnccSkill, getBnccCatalog, saveBnccCatalog } from '@/lib/bnccStore'
 
 export interface RepositoryItem {
  id: number
@@ -26,6 +26,11 @@ export interface RepositoryItem {
  textbook?: string
  wordCount?: number
  chunkCount?: number
+ classGroupId?: string
+ gradeYear?: string
+ grade?: string
+ school?: string
+ className?: string
 }
 
 export interface SchoolHeaderModel {
@@ -339,6 +344,16 @@ for (const term of terms) if (lower.includes(term)) score += 3
  return results.sort((a, b) => b.score - a.score).slice(0, 4).map(r => r.text)
 }
 
+const AXIS_STYLE_MAP: Record<string, { bg: string; color: string; border: string }> = {
+  'Oralidade': { bg: '#e0f2fe', color: '#0369a1', border: '#bae6fd' },
+  'Leitura': { bg: '#ecfdf5', color: '#047857', border: '#a7f3d0' },
+  'Escrita': { bg: '#fef3c7', color: '#b45309', border: '#fde68a' },
+  'Conhecimentos Linguísticos': { bg: '#f3e8ff', color: '#7e22ce', border: '#e9d5ff' },
+  'Dimensão Intercultural': { bg: '#ffe4e6', color: '#be123c', border: '#fecdd3' },
+  'Análise Linguística': { bg: '#e0e7ff', color: '#4338ca', border: '#c7d2fe' },
+  'Produção de Textos': { bg: '#ffedd5', color: '#c2410c', border: '#fed7aa' }
+}
+
 export default function Repository() {
   // 6 PARTIÇÕES PRINCIPAIS 
   const [activePartition, setActivePartition] = useState<'headers' | 'exercises' | 'bibliography' | 'files' | 'images' | 'competencies'>('headers')
@@ -355,6 +370,8 @@ export default function Repository() {
   const [compAxis, setCompAxis] = useState<BnccSkill['axis']>('Conhecimentos Linguísticos')
   const [compDescription, setCompDescription] = useState('')
   const [compUnit, setCompUnit] = useState('')
+  const [showCompFilters, setShowCompFilters] = useState<boolean>(true)
+  const [compViewMode, setCompViewMode] = useState<'grid' | 'list'>('grid')
 
   // 5. Banco de Imagens & Mídias
   const [mediaItems, setMediaItems] = useState<MediaLibraryItem[]>([])
@@ -564,8 +581,8 @@ export default function Repository() {
     setSavedExercises(compiledExercises)
     if (!viewExercise && compiledExercises.length > 0) setViewExercise(compiledExercises[0])
 
-    // 6. Matriz Central de Competências & Habilidades (BNCC/ELT)
-    setCompetencies(getStoredBnccSkills())
+    // 6. Matriz Central de Competências & Habilidades (BNCC/ELT) via fonte única bnccStore
+    setCompetencies(getBnccCatalog())
 
     // Mescla com documentos reais do Supabase (assíncrono, não bloqueia UI)
     import('@/lib/supabaseClient').then(({ fetchDocumentsFromSupabase }) => {
@@ -1161,6 +1178,14 @@ export default function Repository() {
       const wCount = countWords(text)
       const cCount = countChunks(text)
 
+      // Detecção inteligente de série/turma a partir do nome do arquivo (ex: "Globalizers 6th", "Inglês 9º Ano")
+      const gradeMatch = fileNameLower.match(/(?:(?:6|7|8|9|1|2|3)(?:º|o|\.|\s*ano|\s*th|\s*grade|\s*serie)|ef0[6-9]|em0[1-3])/i)
+      let detectedGrade = ''
+      if (gradeMatch) {
+        const num = gradeMatch[0].match(/\d+/)
+        if (num) detectedGrade = num[0]
+      }
+
       const item: RepositoryItem = {
         id: Date.now(),
         title: file.name.replace(/\.[^/.]+$/, ''),
@@ -1170,6 +1195,8 @@ export default function Repository() {
         date: new Date().toLocaleDateString('pt-BR'),
         wordCount: wCount,
         chunkCount: cCount,
+        gradeYear: detectedGrade || undefined,
+        grade: detectedGrade || undefined,
       }
       const updated = [item, ...items]
       save(updated, item)
@@ -1432,7 +1459,7 @@ export default function Repository() {
       updated = [newComp, ...competencies]
     }
     setCompetencies(updated)
-    saveStoredBnccSkills(updated)
+    saveBnccCatalog(updated)
     setIsAddCompModalOpen(false)
     setEditingComp(null)
     setCompCode('')
@@ -1445,7 +1472,7 @@ export default function Repository() {
     if (!(await showConfirm({ message: 'Deseja realmente remover esta competência do repositório?' }))) return
     const updated = competencies.filter(c => c.id !== id)
     setCompetencies(updated)
-    saveStoredBnccSkills(updated)
+    saveBnccCatalog(updated)
     showToast('Competência removida do Repositório!')
   }
 
@@ -1468,7 +1495,7 @@ export default function Repository() {
   return (
     <ModuleShell
       title="📚 Biblioteca & Repositório Pedagógico"
-      subtitle="Organização centralizada em 5 partições: Cabeçalhos Oficiais, Exercícios & Provas, Livros Didáticos RAG, Arquivos Avulsos e Banco de Imagens & Mídias."
+      subtitle="Organização centralizada em 6 partições: Cabeçalhos Oficiais, Exercícios & Provas, Livros Didáticos RAG, Arquivos Avulsos, Banco de Imagens & Mídias e Matriz de Competências BNCC."
       isFullHeight
       maxWidth="100%"
       actions={
@@ -1709,7 +1736,7 @@ export default function Repository() {
  />
 
  <div style={{ display: 'grid', gridTemplateColumns: '350px 1fr', gap: 24, flex: 1, minHeight: 0 }}>
- <div style={{ background: '#fff', borderRadius: RADIUS.xl, border: '1px solid rgba(139,115,85,0.15)', padding: 18, display: 'flex', flexDirection: 'column', gap: 16, overflowY: 'auto' }}>
+ <div className="prominent-scrollbar" style={{ background: '#fff', borderRadius: RADIUS.xl, border: '1px solid rgba(139,115,85,0.15)', padding: 18, display: 'flex', flexDirection: 'column', gap: 16, overflowY: 'auto' }}>
  <div>
  <div style={{ fontSize: 14, fontWeight: 800, color: '#2c1a0e', display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
  <i className="ti ti-building-community" style={{ color: '#8b5e3c', fontSize: 20 }} />
@@ -2038,7 +2065,7 @@ export default function Repository() {
  </div>
  </div>
 
- <div style={{ flex: 1, overflowY: 'auto', padding: '10px' }}>
+ <div className="prominent-scrollbar" style={{ flex: 1, overflowY: 'auto', padding: '10px' }}>
  {filteredExercises.length === 0 ? (
  <div style={{ padding: '30px 16px', textAlign: 'center', color: '#8b5e3c', fontSize: TEXT.bodyCompact }}>
  Nenhum exercício encontrado. Gere uma prova no <strong>ExamBuilder</strong> para salvar aqui automaticamente.
@@ -2069,7 +2096,7 @@ export default function Repository() {
  </div>
 
  {/* Visualizador & Ações do Exercício */}
- <div style={{ background: '#fff', borderRadius: RADIUS.xl, border: '1px solid rgba(139,115,85,0.15)', padding: '24px', display: 'flex', flexDirection: 'column', gap: 16, overflowY: 'auto' }}>
+ <div className="prominent-scrollbar" style={{ background: '#fff', borderRadius: RADIUS.xl, border: '1px solid rgba(139,115,85,0.15)', padding: '24px', display: 'flex', flexDirection: 'column', gap: 16, overflowY: 'auto' }}>
  {viewExercise ? (
  <>
  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #ede8dc', paddingBottom: 14 }}>
@@ -2212,7 +2239,7 @@ export default function Repository() {
  </div>
 
  {/* Leitor Profissional do Livro / Artigo */}
- <div style={{ background: '#fff', borderRadius: RADIUS.xl, border: '1px solid rgba(139,115,85,0.15)', padding: '24px', display: 'flex', flexDirection: 'column', gap: 16, overflowY: 'auto' }}>
+ <div className="prominent-scrollbar" style={{ background: '#fff', borderRadius: RADIUS.xl, border: '1px solid rgba(139,115,85,0.15)', padding: '24px', display: 'flex', flexDirection: 'column', gap: 16, overflowY: 'auto' }}>
  {mode === 'add' || mode === 'edit' ? (
  <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
  <h3 style={{ margin: 0, color: '#8b5e3c' }}>{mode === 'add' ? 'Adicionar Novo Livro/Material' : 'Editar Material'}</h3>
@@ -2308,7 +2335,7 @@ export default function Repository() {
  {/* Split View: Lista de Arquivos (Esquerda) e Preview / Ações (Direita) */}
  <div style={{ display: 'grid', gridTemplateColumns: '420px 1fr', gap: 20, flex: 1, minHeight: 0 }}>
  {/* Coluna Esquerda: Cartões de Arquivos */}
- <div style={{ background: '#fff', borderRadius: RADIUS.xl, border: '1px solid rgba(139,115,85,0.15)', padding: 14, display: 'flex', flexDirection: 'column', gap: 10, overflowY: 'auto' }}>
+ <div className="prominent-scrollbar" style={{ background: '#fff', borderRadius: RADIUS.xl, border: '1px solid rgba(139,115,85,0.15)', padding: 14, display: 'flex', flexDirection: 'column', gap: 10, overflowY: 'auto' }}>
  {filteredLooseFiles.length === 0 ? (
  <div style={{ padding: '40px 20px', textAlign: 'center', color: '#8b5e3c' }}>
  <i className="ti ti-folder-off" style={{ fontSize: 36, opacity: 0.5, display: 'block', marginBottom: 10 }} />
@@ -2374,7 +2401,7 @@ export default function Repository() {
  </div>
 
  {/* Coluna Direita: Detalhes, Ações e Preview do Arquivo Selecionado */}
- <div style={{ background: '#fff', borderRadius: RADIUS.xl, border: '1px solid rgba(139,115,85,0.15)', padding: 24, display: 'flex', flexDirection: 'column', gap: 16, overflowY: 'auto' }}>
+ <div className="prominent-scrollbar" style={{ background: '#fff', borderRadius: RADIUS.xl, border: '1px solid rgba(139,115,85,0.15)', padding: 24, display: 'flex', flexDirection: 'column', gap: 16, overflowY: 'auto' }}>
  {selectedLooseFile ? (
  <>
  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px solid #ede8dc', paddingBottom: 16, gap: 16, flexWrap: 'wrap' }}>
@@ -2591,12 +2618,12 @@ export default function Repository() {
          </div>
        </div>
      ) : (
-       <div style={{
+       <div className="prominent-scrollbar" style={{
          display: 'grid',
          gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
          gap: 16,
          overflowY: 'auto',
-         paddingRight: 4,
+         paddingRight: 8,
          paddingBottom: 20
        }}>
          {filteredMediaItems.map(item => (
@@ -2750,6 +2777,506 @@ export default function Repository() {
      )}
    </div>
  )}
+
+  {/* ================================================================= */}
+  {/* PARTIÇÃO 6: COMPETÊNCIAS & HABILIDADES BNCC                        */}
+  {/* ================================================================= */}
+  {activePartition === 'competencies' && (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12, flex: 1, minHeight: 0 }}>
+      {/* Barra de Filtros e Busca */}
+      <div style={{
+        background: '#fff', borderRadius: RADIUS.xl, border: '1px solid rgba(139,115,85,0.15)',
+        padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 12,
+        boxShadow: '0 2px 10px rgba(44,26,14,0.03)'
+      }}>
+        {/* Linha Superior: Busca, Contadores, Toggle de Filtros e Alternador Grade/Lista */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 260 }}>
+            <div style={{ position: 'relative', flex: 1 }}>
+              <i className="ti ti-search" style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#8b7355', fontSize: 16 }} />
+              <input
+                type="text"
+                placeholder="Pesquisar por código (ex: EF09LI01), descrição, unidade ou eixo..."
+                value={compSearch}
+                onChange={e => setCompSearch(e.target.value)}
+                style={{
+                  ...inputStyle,
+                  paddingLeft: 38,
+                  paddingTop: 8,
+                  paddingBottom: 8,
+                  background: '#fdfbf7'
+                }}
+              />
+              {compSearch && (
+                <button
+                  onClick={() => setCompSearch('')}
+                  style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'transparent', border: 'none', color: '#8b7355', cursor: 'pointer', fontSize: 14 }}
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            {/* Botão de Toggle Filtros (Série / Eixo) */}
+            <button
+              type="button"
+              onClick={() => setShowCompFilters(prev => !prev)}
+              style={{
+                padding: '6px 12px',
+                borderRadius: RADIUS.md,
+                border: (compGradeFilter !== 'all' || compAxisFilter !== 'all') ? '1.5px solid #8b5e3c' : '1px solid rgba(139,115,85,0.25)',
+                background: (compGradeFilter !== 'all' || compAxisFilter !== 'all') ? '#fdf8f2' : '#fff',
+                color: '#8b5e3c',
+                fontSize: 12,
+                fontWeight: 700,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6
+              }}
+              title="Expandir ou recolher filtros de Série e Eixo"
+            >
+              <i className="ti ti-filter" />
+              <span>Filtros {((compGradeFilter !== 'all' ? 1 : 0) + (compAxisFilter !== 'all' ? 1 : 0)) > 0 ? `(${((compGradeFilter !== 'all' ? 1 : 0) + (compAxisFilter !== 'all' ? 1 : 0))})` : ''}</span>
+              <i className={`ti ti-chevron-${showCompFilters ? 'up' : 'down'}`} style={{ fontSize: 11 }} />
+            </button>
+
+            {/* Alternador Grade / Lista */}
+            <div style={{ display: 'flex', borderRadius: RADIUS.md, border: '1px solid rgba(139,115,85,0.25)', overflow: 'hidden' }}>
+              <button
+                type="button"
+                onClick={() => setCompViewMode('grid')}
+                title="Visualização em Grade (Cards)"
+                style={{
+                  padding: '6px 10px',
+                  border: 'none',
+                  background: compViewMode === 'grid' ? '#8b5e3c' : '#fff',
+                  color: compViewMode === 'grid' ? '#fff' : '#665c54',
+                  cursor: 'pointer',
+                  fontSize: 13,
+                  display: 'flex',
+                  alignItems: 'center'
+                }}
+              >
+                <i className="ti ti-layout-grid" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setCompViewMode('list')}
+                title="Visualização em Lista Compacta"
+                style={{
+                  padding: '6px 10px',
+                  border: 'none',
+                  borderLeft: '1px solid rgba(139,115,85,0.25)',
+                  background: compViewMode === 'list' ? '#8b5e3c' : '#fff',
+                  color: compViewMode === 'list' ? '#fff' : '#665c54',
+                  cursor: 'pointer',
+                  fontSize: 13,
+                  display: 'flex',
+                  alignItems: 'center'
+                }}
+              >
+                <i className="ti ti-list" />
+              </button>
+            </div>
+
+            <div style={{
+              fontSize: 12, fontWeight: 700, color: '#8b5e3c', background: '#fdf8f2',
+              padding: '6px 12px', borderRadius: RADIUS.md, border: '1px solid rgba(139,115,85,0.2)',
+              display: 'flex', alignItems: 'center', gap: 6
+            }}>
+              <i className="ti ti-target" />
+              <span>{filteredCompetencies.length} de {competencies.length} habilidades</span>
+            </div>
+
+            {(compGradeFilter !== 'all' || compAxisFilter !== 'all' || compSearch) && (
+              <button
+                onClick={() => {
+                  setCompGradeFilter('all')
+                  setCompAxisFilter('all')
+                  setCompSearch('')
+                }}
+                style={{
+                  background: 'transparent', border: 'none', color: '#dc3545',
+                  fontSize: 12, fontWeight: 700, cursor: 'pointer', textDecoration: 'underline'
+                }}
+              >
+                Limpar
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Linhas Expansíveis de Filtro (Série e Eixo) */}
+        {showCompFilters && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingTop: 10, borderTop: '1px solid #ede8dc' }}>
+            {/* Linha de Filtro por Série / Ano */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 11.5, fontWeight: 700, color: '#7a6552', marginRight: 4 }}>
+                Série / Ano:
+              </span>
+              {[
+                { id: 'all', label: 'Todas as Séries' },
+                { id: '6º Fund.', label: '6º Ano' },
+                { id: '7º Fund.', label: '7º Ano' },
+                { id: '8º Fund.', label: '8º Ano' },
+                { id: '9º Fund.', label: '9º Ano' },
+                { id: '1º Médio', label: '1º Médio' },
+                { id: '2º Médio', label: '2º Médio' },
+                { id: '3º Médio', label: '3º Médio' }
+              ].map(grade => {
+                const isActive = compGradeFilter === grade.id
+                return (
+                  <button
+                    key={grade.id}
+                    type="button"
+                    onClick={() => setCompGradeFilter(grade.id)}
+                    style={{
+                      padding: '3px 9px',
+                      borderRadius: 14,
+                      border: isActive ? '1px solid #8b5e3c' : '1px solid #d5c0b0',
+                      background: isActive ? '#8b5e3c' : '#fff',
+                      color: isActive ? '#fff' : '#5c4533',
+                      fontSize: 11,
+                      fontWeight: isActive ? 700 : 500,
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease'
+                    }}
+                  >
+                    {grade.label}
+                  </button>
+                )
+              })}
+            </div>
+
+            {/* Linha de Filtro por Eixo da BNCC */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 11.5, fontWeight: 700, color: '#7a6552', marginRight: 4 }}>
+                Eixo Temático:
+              </span>
+              {[
+                { id: 'all', label: 'Todos os Eixos', icon: '🌐' },
+                { id: 'Oralidade', label: 'Oralidade', icon: '🗣️' },
+                { id: 'Leitura', label: 'Leitura', icon: '📖' },
+                { id: 'Escrita', label: 'Escrita', icon: '✍️' },
+                { id: 'Conhecimentos Linguísticos', label: 'Conhecimentos Linguísticos', icon: '🔤' },
+                { id: 'Dimensão Intercultural', label: 'Dimensão Intercultural', icon: '🌍' }
+              ].map(axis => {
+                const isActive = compAxisFilter === axis.id
+                const styleInfo = AXIS_STYLE_MAP[axis.id] || { bg: '#ede9fe', color: '#5b21b6', border: '#7c3aed' }
+                return (
+                  <button
+                    key={axis.id}
+                    type="button"
+                    onClick={() => setCompAxisFilter(axis.id)}
+                    style={{
+                      padding: '3px 8px',
+                      borderRadius: 6,
+                      border: isActive ? `1.5px solid ${styleInfo.border || '#8b5e3c'}` : '1px solid #e2e8f0',
+                      background: isActive ? (styleInfo.bg || '#f5efe6') : '#f8fafc',
+                      color: isActive ? (styleInfo.color || '#2c1a0e') : '#64748b',
+                      fontSize: 11,
+                      fontWeight: isActive ? 700 : 500,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 4,
+                      transition: 'all 0.15s ease'
+                    }}
+                  >
+                    <span>{axis.icon}</span>
+                    <span>{axis.label}</span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Grid / Lista de Cards de Competências com Barra de Rolagem Larga */}
+      <div className="prominent-scrollbar" style={{ flex: 1, overflowY: 'auto', minHeight: 0, paddingRight: 10 }}>
+        {filteredCompetencies.length === 0 ? (
+          <div style={{
+            background: '#fff', borderRadius: RADIUS.xl, border: '1px dashed rgba(139,115,85,0.3)',
+            padding: 40, textAlign: 'center', color: '#8b7355', display: 'flex', flexDirection: 'column',
+            alignItems: 'center', gap: 12
+          }}>
+            <i className="ti ti-target-off" style={{ fontSize: 40, color: '#d5c0b0' }} />
+            <strong style={{ fontSize: 16, color: '#2c1a0e' }}>Nenhuma competência ou habilidade encontrada</strong>
+            <p style={{ margin: 0, fontSize: 13, maxWidth: 440 }}>
+              Tente ajustar o termo de pesquisa, remover os filtros por série/eixo ou cadastrar uma nova competência personalizada.
+            </p>
+            <button
+              onClick={() => {
+                setCompGradeFilter('all')
+                setCompAxisFilter('all')
+                setCompSearch('')
+              }}
+              style={btnSecondary}
+            >
+              Resetar Filtros
+            </button>
+          </div>
+        ) : compViewMode === 'grid' ? (
+          /* MODO GRADE (CARDS AMPLOS) */
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+            gap: 14,
+            paddingBottom: 24
+          }}>
+            {filteredCompetencies.map(comp => {
+              const axisStyle = AXIS_STYLE_MAP[comp.axis] || { bg: '#f1f5f9', color: '#475569', border: '#cbd5e1' }
+              return (
+                <div
+                  key={comp.id}
+                  style={{
+                    background: '#fff',
+                    borderRadius: RADIUS.lg,
+                    border: '1px solid rgba(139,115,85,0.18)',
+                    padding: 16,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 10,
+                    boxShadow: '0 2px 8px rgba(44,26,14,0.03)',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  {/* Topo do Card: Código, Série e Eixo */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                      <span style={{
+                        fontSize: 13, fontWeight: 800, color: '#8b5e3c',
+                        background: '#fdf8f2', border: '1px solid rgba(139,115,85,0.3)',
+                        padding: '2px 8px', borderRadius: 6
+                      }}>
+                        {comp.code}
+                      </span>
+                      <span style={{
+                        fontSize: 11, fontWeight: 700, color: '#7a5c42',
+                        background: '#f5efe6', padding: '2px 6px', borderRadius: 4
+                      }}>
+                        {comp.gradeYear}
+                      </span>
+                      {comp.isCustom && (
+                        <span style={{
+                          fontSize: 10, fontWeight: 700, color: '#b45309',
+                          background: '#fef3c7', border: '1px solid #fde68a',
+                          padding: '1px 6px', borderRadius: 4
+                        }}>
+                          Personalizada
+                        </span>
+                      )}
+                    </div>
+
+                    <span style={{
+                      fontSize: 11, fontWeight: 700,
+                      padding: '2px 8px', borderRadius: 4,
+                      background: axisStyle.bg, color: axisStyle.color,
+                      border: `1px solid ${axisStyle.border}`,
+                      whiteSpace: 'nowrap'
+                    }}>
+                      {comp.axis}
+                    </span>
+                  </div>
+
+                  {/* Unidade Temática */}
+                  {comp.unit && (
+                    <div style={{ fontSize: 11.5, color: '#6d28d9', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <i className="ti ti-bookmark" style={{ fontSize: 13 }} />
+                      <span>{comp.unit}</span>
+                    </div>
+                  )}
+
+                  {/* Descrição da Habilidade */}
+                  <p style={{
+                    margin: 0, fontSize: 12.5, color: '#2c1a0e', lineHeight: 1.45,
+                    flex: 1, wordBreak: 'break-word'
+                  }}>
+                    {comp.description}
+                  </p>
+
+                  {/* Barra de Ações do Card */}
+                  <div style={{
+                    display: 'flex', gap: 6, marginTop: 'auto', paddingTop: 8,
+                    borderTop: '1px solid rgba(139,115,85,0.12)', alignItems: 'center'
+                  }}>
+                    <button
+                      onClick={() => {
+                        const text = `${comp.code} (${comp.gradeYear}) - ${comp.description}`
+                        navigator.clipboard.writeText(text)
+                        showToast(`Código ${comp.code} copiado!`)
+                      }}
+                      title="Copiar Código e Descrição"
+                      style={{
+                        flex: 1, padding: '6px 10px', borderRadius: RADIUS.md,
+                        border: '1px solid rgba(139,115,85,0.25)', background: '#fdfbf7',
+                        color: '#8b5e3c', fontSize: 11.5, fontWeight: 700, cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4
+                      }}
+                    >
+                      <i className="ti ti-copy" /> Copiar Habilidade
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setEditingComp(comp)
+                        setCompCode(comp.code)
+                        setCompGradeYear(comp.gradeYear)
+                        setCompAxis(comp.axis)
+                        setCompDescription(comp.description)
+                        setCompUnit(comp.unit || '')
+                        setIsAddCompModalOpen(true)
+                      }}
+                      title="Editar Habilidade"
+                      style={{
+                        padding: '6px 10px', borderRadius: RADIUS.md,
+                        border: '1px solid rgba(139,115,85,0.25)', background: '#fdfbf7',
+                        color: '#665c54', fontSize: 12, cursor: 'pointer'
+                      }}
+                    >
+                      <i className="ti ti-edit" />
+                    </button>
+
+                    <button
+                      onClick={() => handleDeleteCompetency(comp.id)}
+                      title="Excluir do Repositório"
+                      style={{
+                        padding: '6px 10px', borderRadius: RADIUS.md,
+                        border: '1px solid rgba(220,53,69,0.2)', background: '#fff5f5',
+                        color: '#dc3545', fontSize: 12, cursor: 'pointer'
+                      }}
+                    >
+                      <i className="ti ti-trash" />
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        ) : (
+          /* MODO LISTA COMPACTA */
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingBottom: 24 }}>
+            {filteredCompetencies.map(comp => {
+              const axisStyle = AXIS_STYLE_MAP[comp.axis] || { bg: '#f1f5f9', color: '#475569', border: '#cbd5e1' }
+              return (
+                <div
+                  key={comp.id}
+                  style={{
+                    background: '#fff',
+                    borderRadius: RADIUS.md,
+                    border: '1px solid rgba(139,115,85,0.16)',
+                    padding: '10px 14px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 12,
+                    boxShadow: '0 1px 3px rgba(44,26,14,0.02)',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 150 }}>
+                    <span style={{
+                      fontSize: 12, fontWeight: 800, color: '#8b5e3c',
+                      background: '#fdf8f2', border: '1px solid rgba(139,115,85,0.3)',
+                      padding: '2px 7px', borderRadius: 5
+                    }}>
+                      {comp.code}
+                    </span>
+                    <span style={{
+                      fontSize: 11, fontWeight: 700, color: '#7a5c42',
+                      background: '#f5efe6', padding: '2px 5px', borderRadius: 4
+                    }}>
+                      {comp.gradeYear}
+                    </span>
+                  </div>
+
+                  <span style={{
+                    fontSize: 11, fontWeight: 700,
+                    padding: '2px 8px', borderRadius: 4,
+                    background: axisStyle.bg, color: axisStyle.color,
+                    border: `1px solid ${axisStyle.border}`,
+                    whiteSpace: 'nowrap', minWidth: 130, textAlign: 'center'
+                  }}>
+                    {comp.axis}
+                  </span>
+
+                  {comp.unit && (
+                    <span style={{
+                      fontSize: 11, color: '#6d28d9', fontWeight: 600,
+                      background: '#ede9fe', padding: '2px 7px', borderRadius: 4,
+                      whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 4
+                    }}>
+                      <i className="ti ti-bookmark" style={{ fontSize: 11 }} />
+                      {comp.unit}
+                    </span>
+                  )}
+
+                  <p style={{
+                    margin: 0, fontSize: 12, color: '#2c1a0e', lineHeight: 1.4,
+                    flex: 1, wordBreak: 'break-word'
+                  }}>
+                    {comp.description}
+                  </p>
+
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
+                    <button
+                      onClick={() => {
+                        const text = `${comp.code} (${comp.gradeYear}) - ${comp.description}`
+                        navigator.clipboard.writeText(text)
+                        showToast(`Código ${comp.code} copiado!`)
+                      }}
+                      title="Copiar Código e Descrição"
+                      style={{
+                        padding: '5px 8px', borderRadius: RADIUS.md,
+                        border: '1px solid rgba(139,115,85,0.25)', background: '#fdfbf7',
+                        color: '#8b5e3c', fontSize: 11.5, fontWeight: 700, cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', gap: 4
+                      }}
+                    >
+                      <i className="ti ti-copy" /> Copiar
+                    </button>
+                    <button
+                      onClick={() => {
+                        setEditingComp(comp)
+                        setCompCode(comp.code)
+                        setCompGradeYear(comp.gradeYear)
+                        setCompAxis(comp.axis)
+                        setCompDescription(comp.description)
+                        setCompUnit(comp.unit || '')
+                        setIsAddCompModalOpen(true)
+                      }}
+                      title="Editar Habilidade"
+                      style={{
+                        padding: '5px 8px', borderRadius: RADIUS.md,
+                        border: '1px solid rgba(139,115,85,0.25)', background: '#fdfbf7',
+                        color: '#665c54', fontSize: 11.5, cursor: 'pointer'
+                      }}
+                    >
+                      <i className="ti ti-edit" />
+                    </button>
+                    <button
+                      onClick={() => handleDeleteCompetency(comp.id)}
+                      title="Excluir do Repositório"
+                      style={{
+                        padding: '5px 8px', borderRadius: RADIUS.md,
+                        border: '1px solid rgba(220,53,69,0.2)', background: '#fff5f5',
+                        color: '#dc3545', fontSize: 11.5, cursor: 'pointer'
+                      }}
+                    >
+                      <i className="ti ti-trash" />
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  )}
 
 </div>
 
@@ -3219,6 +3746,146 @@ export default function Repository() {
  </div>
  </div>
  )}
+
+  {/* Modal de Adicionar / Editar Competência BNCC */}
+  {isAddCompModalOpen && (
+    <div style={{
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(6px)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99999, padding: 20
+    }}>
+      <div style={{
+        background: '#fffcf8', borderRadius: RADIUS.xl, border: '2px solid #8b5e3c',
+        maxWidth: 580, width: '100%', maxHeight: '90vh', overflowY: 'auto',
+        padding: 24, boxShadow: '0 20px 60px rgba(0,0,0,0.35)', display: 'flex', flexDirection: 'column', gap: 16
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #ede8dc', paddingBottom: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: 24 }}>🎯</span>
+            <div>
+              <h3 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: '#2c1a0e' }}>
+                {editingComp ? 'Editar Competência / Habilidade' : 'Nova Competência / Habilidade BNCC'}
+              </h3>
+              <span style={{ fontSize: 12, color: '#8b7355' }}>
+                Matriz curricular oficial e personalizada para planejamento de aulas
+              </span>
+            </div>
+          </div>
+          <button
+            onClick={() => { setIsAddCompModalOpen(false); setEditingComp(null) }}
+            style={{ background: '#f5efe6', border: 'none', width: 32, height: 32, borderRadius: '50%', cursor: 'pointer', fontWeight: 700 }}
+          >
+            ✕
+          </button>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#7a6552', marginBottom: 4 }}>
+                Código BNCC *
+              </label>
+              <input
+                type="text"
+                value={compCode}
+                onChange={e => setCompCode(e.target.value.toUpperCase())}
+                placeholder="Ex: EF09LI20 ou HAB_CUSTOM"
+                style={inputStyle}
+              />
+            </div>
+
+            <div>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#7a6552', marginBottom: 4 }}>
+                Série / Ano *
+              </label>
+              <select
+                value={compGradeYear}
+                onChange={e => setCompGradeYear(e.target.value)}
+                style={{ ...inputStyle, cursor: 'pointer' }}
+              >
+                <option value="6º Fund.">6º Ano do Ensino Fundamental</option>
+                <option value="7º Fund.">7º Ano do Ensino Fundamental</option>
+                <option value="8º Fund.">8º Ano do Ensino Fundamental</option>
+                <option value="9º Fund.">9º Ano do Ensino Fundamental</option>
+                <option value="1º Médio">1ª Série do Ensino Médio</option>
+                <option value="2º Médio">2ª Série do Ensino Médio</option>
+                <option value="3º Médio">3ª Série do Ensino Médio</option>
+                <option value="Geral">Geral / Multissérie</option>
+              </select>
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#7a6552', marginBottom: 4 }}>
+                Eixo Temático *
+              </label>
+              <select
+                value={compAxis}
+                onChange={e => setCompAxis(e.target.value as BnccSkill['axis'])}
+                style={{ ...inputStyle, cursor: 'pointer' }}
+              >
+                <option value="Oralidade">Oralidade</option>
+                <option value="Leitura">Leitura</option>
+                <option value="Escrita">Escrita</option>
+                <option value="Conhecimentos Linguísticos">Conhecimentos Linguísticos</option>
+                <option value="Dimensão Intercultural">Dimensão Intercultural</option>
+                <option value="Análise Linguística">Análise Linguística</option>
+                <option value="Produção de Textos">Produção de Textos</option>
+              </select>
+            </div>
+
+            <div>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#7a6552', marginBottom: 4 }}>
+                Unidade Temática (Opcional)
+              </label>
+              <input
+                type="text"
+                value={compUnit}
+                onChange={e => setCompUnit(e.target.value)}
+                placeholder="Ex: Interação discursiva, Gramática"
+                style={inputStyle}
+              />
+            </div>
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#7a6552', marginBottom: 4 }}>
+              Descrição da Habilidade *
+            </label>
+            <textarea
+              value={compDescription}
+              onChange={e => setCompDescription(e.target.value)}
+              placeholder="Descreva o que o aluno deve ser capaz de fazer segundo a BNCC..."
+              rows={4}
+              style={{
+                ...inputStyle,
+                resize: 'vertical',
+                lineHeight: 1.45,
+                fontFamily: 'inherit'
+              }}
+            />
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, paddingTop: 10, borderTop: '1px solid #ede8dc' }}>
+          <button
+            type="button"
+            onClick={() => { setIsAddCompModalOpen(false); setEditingComp(null) }}
+            style={btnSecondary}
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={handleSaveCompetency}
+            style={btnPrimary}
+          >
+            {editingComp ? 'Salvar Alterações' : 'Adicionar Competência'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )}
 
  {/* Toast de Confirmação Flutuante (Auto-Dismiss) */}
  {toastMessage && (

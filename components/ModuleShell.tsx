@@ -10,6 +10,8 @@ interface Props {
   children: ReactNode
   maxWidth?: number | string
   isFullHeight?: boolean
+  padding?: string | number
+  headerMarginBottom?: string | number
 }
 
 export default function ModuleShell({ 
@@ -19,11 +21,16 @@ export default function ModuleShell({
   actions, 
   children, 
   maxWidth = 1200,
-  isFullHeight = false
+  isFullHeight = false,
+  padding,
+  headerMarginBottom
 }: Props) {
+  const effectivePadding = padding ?? (isFullHeight ? '20px 28px' : '40px 48px')
+  const effectiveHeaderMargin = headerMarginBottom ?? (isFullHeight ? 16 : 40)
+
   return (
     <div style={{ 
-      padding: '40px 48px', 
+      padding: effectivePadding, 
       maxWidth: maxWidth, 
       margin: '0 auto',
       height: isFullHeight ? '100%' : 'auto',
@@ -33,7 +40,7 @@ export default function ModuleShell({
       width: '100%'
     }}>
       {/* Header */}
-      <div style={{ marginBottom: 40, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+      <div style={{ marginBottom: effectiveHeaderMargin, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             {icon && <div>{icon}</div>}

@@ -183,7 +183,7 @@ export function matchStudentByName(
       if (options?.class_ref) {
         const cleanCls = normalizeStudentName(options.class_ref)
         const classFiltered = topCandidates.filter(c => {
-          const cls = normalizeStudentName(c.class_name || c.className || '')
+          const cls = normalizeStudentName(c.class_name || '')
           return cls.includes(cleanCls)
         })
         if (classFiltered.length === 1) {

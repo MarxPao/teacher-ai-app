@@ -98,26 +98,63 @@ class CDPConnector:
             return "needs_activation"
         return "closed"
 
+    def get_harness_engine(self) -> Any:
+        """Retorna uma instância de HarnessEngine configurada para este endpoint CDP."""
+        from harness_engine import HarnessEngine
+        return HarnessEngine(cdp_url=self.cdp_url)
+
     def check_health(self) -> Tuple[bool, str]:
         """Verifica se o Chrome está pronto para leitura de portais (sem jargões na mensagem)."""
+        # 1. Probing rápido de socket TCP (<15ms) para evitar timeout HTTP de 2s em porta fechada
+        socket_open = False
         try:
-            r = requests.get(f"{self.cdp_url}/json/version", timeout=2.0)
-            if r.status_code == 200:
-                data = r.json()
-                browser_ver = data.get("Browser", "Chrome")
-                return (True, f"Navegador conectado ({browser_ver}) e pronto para leitura.")
-            return (False, "Navegador não respondeu à tentativa de conexão.")
+            from urllib.parse import urlparse
+            u = urlparse(self.cdp_url)
+            port = u.port or 9222
+            host = u.hostname or "127.0.0.1"
+            import socket
+            with socket.create_connection((host, port), timeout=0.15):
+                socket_open = True
         except Exception:
-            if self._is_chrome_process_running():
-                return (
-                    False,
-                    "O Google Chrome está aberto, mas precisa ser preparado para que eu possa ler o portal da sua turma. "
-                    "Clique em 'Conectar Navegador' para ativar mantendo todas as suas abas abertas."
-                )
+            socket_open = False
+
+        if socket_open:
+            try:
+                r = requests.get(f"{self.cdp_url}/json/version", timeout=1.0)
+                if r.status_code == 200:
+                    data = r.json()
+                    browser_ver = data.get("Browser", "Chrome")
+                    return (True, f"Navegador conectado ({browser_ver}) e pronto para leitura.")
+                return (False, "Navegador não respondeu à tentativa de conexão.")
+            except Exception:
+                pass
+
+        # 2. Auto-descoberta via DevToolsActivePort do Browser Harness caso porta padrão não esteja ouvindo
+        try:
+            import os
+            from pathlib import Path
+            local = Path(os.environ.get("LOCALAPPDATA") or Path.home() / "AppData/Local")
+            for p in ["Google/Chrome/User Data", "Google/Chrome Beta/User Data", "Microsoft/Edge/User Data"]:
+                dt_file = local / p / "DevToolsActivePort"
+                if dt_file.exists():
+                    port = int(dt_file.read_text().splitlines()[0].strip())
+                    import socket
+                    with socket.create_connection(("127.0.0.1", port), timeout=0.15):
+                        self.cdp_url = f"http://127.0.0.1:{port}"
+                        return (True, f"Navegador conectado via porta DevTools dinâmica ({port}).")
+        except Exception:
+            pass
+
+        if self._is_chrome_process_running():
             return (
                 False,
-                "O Google Chrome não está aberto no momento. Abra o Chrome ou clique em 'Conectar Navegador' para iniciar."
+                "O Google Chrome está aberto, mas precisa ser preparado para que eu possa ler o portal da sua turma. "
+                "Clique em 'Conectar Navegador' para ativar mantendo todas as suas abas abertas."
             )
+        return (
+            False,
+            "O Google Chrome não está aberto no momento. Abra o Chrome ou clique em 'Conectar Navegador' para iniciar."
+        )
 
     @classmethod
     def relaunch_chrome_with_cdp(cls, profile_name: str = "Profile 1", timeout_sec: float = 6.0, target_url: str = "") -> Tuple[bool, str]:

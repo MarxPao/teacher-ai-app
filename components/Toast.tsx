@@ -280,12 +280,13 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
  * Substituto de confirm() nativo. Uso:
  *   const ok = await showConfirm({ title: 'Remover?', message: 'Não pode ser desfeito.', danger: true })
  */
-export async function showConfirm(opts: ConfirmOptions): Promise<boolean> {
+export async function showConfirm(opts: ConfirmOptions | string): Promise<boolean> {
+  const options: ConfirmOptions = typeof opts === 'string' ? { message: opts } : opts
   if (!_showConfirmModal) {
     // Fallback se o ConfirmProvider não estiver montado
-    return window.confirm(opts.message)
+    return window.confirm(options.message)
   }
-  return _showConfirmModal(opts)
+  return _showConfirmModal(options)
 }
 
 /**
