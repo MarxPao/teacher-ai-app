@@ -2431,14 +2431,13 @@ export default function RafinhaChat({ onNavigate, onCommandReady }: RafinhaChatP
           })
           toolResults.push({ id: tc.id!, name: tc.name!, result: diagnosticStr })
         }
- }
- }
+      }
 
- canonicalHistory.push({ role: 'user', content: '', toolResults })
+      canonicalHistory.push({ role: 'user', content: '', toolResults })
 
- // Pequena pausa para o modelo processar o resultado
- await new Promise(r => setTimeout(r, 300))
- }
+      // Pequena pausa para o modelo processar o resultado
+      await new Promise(r => setTimeout(r, 300))
+    }
 
  const finalText = accumulatedText ||
  (allLogs.filter(t => t.status === 'done').map(t => t.result).filter(Boolean).join('. ') + '!')
