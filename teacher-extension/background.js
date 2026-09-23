@@ -1114,16 +1114,26 @@ async function internalSelectPortalFilter(targetTabId, rawTerm) {
   }
 }
 
-async function internalClickConfirmOrViewButton(targetTabId) {
+async function internalClickConfirmOrViewButton(targetTabId, customPattern) {
   try {
     const results = await chrome.scripting.executeScript({
       target: { tabId: targetTabId },
-      func: async () => {
+      args: [customPattern || null],
+      func: async (patternArg) => {
         const cleanStr = (s) => (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
-        const actionPatterns = [
+        let actionPatterns = [
           'visualizar frequencia', 'visualizar chamada', 'visualizar',
           'consultar', 'filtrar', 'carregar', 'buscar', 'pesquisar', 'exibir', 'listar', 'aplicar'
         ];
+
+        if (patternArg) {
+          const cleanCustom = cleanStr(patternArg)
+            .replace(/^(?:pedir\s+pra|pedir\s+para|clicar\s+em|clique\s+em|clica\s+em|abrir|ver|mostrar)\s+/i, '')
+            .trim();
+          if (cleanCustom) {
+            actionPatterns.unshift(cleanCustom);
+          }
+        }
 
         const buttons = Array.from(document.querySelectorAll('button, input[type="submit"], input[type="button"], a.btn, [role="button"]'));
         for (const btn of buttons) {
@@ -1779,6 +1789,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       const rawTerm = (message.filterTerm || message.target || '').trim();
       const res = await internalSelectPortalFilter(targetTabId, rawTerm);
       sendResponse(res);
+    })();
+    return true;
+  }
+
+  if (message.action === 'CLICK_PORTAL_BUTTON') {
+    (async () => {
+      const targetTabId = await resolveActivePortalTab(message.tabId);
+      if (!targetTabId) {
+        sendResponse({ sucesso: false, mensagem: 'Nenhuma aba ativa do portal identificada para clique.' });
+        return;
+      }
+      const rawTerm = (message.buttonText || message.target || '').trim();
+      const res = await internalClickConfirmOrViewButton(targetTabId, rawTerm);
+      sendResponse(res || { sucesso: false, mensagem: 'Botão não encontrado.' });
     })();
     return true;
   }

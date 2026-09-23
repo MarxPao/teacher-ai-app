@@ -89,27 +89,28 @@ let isRecordingRoute = false
 let recordedRouteEvents = []
 
 // ── Elementos DOM ─────────────────────────────────────────────────────────────
-const btnReadNow       = document.getElementById('btn-read-now')
-const readBtnText      = document.getElementById('read-btn-text')
-const readIcon         = document.getElementById('read-icon')
-const readFeedback     = document.getElementById('read-feedback')
-const studentContainer = document.getElementById('student-list-container')
-const studentListEl    = document.getElementById('student-preview-list')
-const studentCountLbl  = document.getElementById('student-count-label')
+const docGet = (id) => (typeof document !== 'undefined' ? document.getElementById(id) : null);
+const btnReadNow       = docGet('btn-read-now')
+const readBtnText      = docGet('read-btn-text')
+const readIcon         = docGet('read-icon')
+const readFeedback     = docGet('read-feedback')
+const studentContainer = docGet('student-list-container')
+const studentListEl    = docGet('student-preview-list')
+const studentCountLbl  = docGet('student-count-label')
 
-const btnRecordRoute   = document.getElementById('btn-record-route')
-const routeBtnText     = document.getElementById('route-btn-text')
-const routeCounter     = document.getElementById('route-counter')
-const statusBadge      = document.getElementById('status-badge')
-const statusPortalName = document.getElementById('status-portal-name')
+const btnRecordRoute   = docGet('btn-record-route')
+const routeBtnText     = docGet('route-btn-text')
+const routeCounter     = docGet('route-counter')
+const statusBadge      = docGet('status-badge')
+const statusPortalName = docGet('status-portal-name')
 
 // ── Elementos do Visor de Conexão ──────────────────────────────────────────
-const visorOverallBadge = document.getElementById('visor-overall-badge')
-const visorPortalName   = document.getElementById('visor-portal-name')
-const visorPageName     = document.getElementById('visor-page-name')
-const visorAuthStatus   = document.getElementById('visor-auth-status')
-const visorSidecarStatus= document.getElementById('visor-sidecar-status')
-const btnVisorRefresh   = document.getElementById('btn-visor-refresh')
+const visorOverallBadge = docGet('visor-overall-badge')
+const visorPortalName   = docGet('visor-portal-name')
+const visorPageName     = docGet('visor-page-name')
+const visorAuthStatus   = docGet('visor-auth-status')
+const visorSidecarStatus= docGet('visor-sidecar-status')
+const btnVisorRefresh   = docGet('btn-visor-refresh')
 
 // ── Keep-Alive Duplex Port com Background Service Worker (MV3) ────────────────
 let keepAlivePort = null;
@@ -225,8 +226,10 @@ async function updateAiEngineStatus() {
   }
 }
 
-setInterval(updateAiEngineStatus, 3000);
-updateAiEngineStatus();
+if (typeof document !== 'undefined') {
+  setInterval(updateAiEngineStatus, 3000);
+  updateAiEngineStatus();
+}
 
 // ── Card de Conferência com Diff Visual (Human-in-the-Loop) ──────────────────
 function renderApprovalDiffCard(data) {
@@ -476,7 +479,9 @@ if (btnVisorRefresh) {
   });
 }
 
-setInterval(updatePortalConnection, 3000);
+if (typeof document !== 'undefined') {
+  setInterval(updatePortalConnection, 3000);
+}
 
 // ── 1. Executor Unificado por Intenção (Lote 3) ──────────────────────────────
 function executeMatchedSkill(skillGraph, taskName) {
@@ -922,11 +927,13 @@ function initSidePanel() {
   });
 }
 
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', initSidePanel);
-  setTimeout(initSidePanel, 300);
-} else {
-  initSidePanel();
+if (typeof document !== 'undefined') {
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initSidePanel);
+    setTimeout(initSidePanel, 300);
+  } else {
+    initSidePanel();
+  }
 }
 
 if (typeof chrome !== 'undefined' && chrome.tabs) {
@@ -958,10 +965,10 @@ if (typeof chrome !== 'undefined' && chrome.tabs) {
 
 
 // ── 3. Enviar Alunos para o Teacher AI (Funcionalidade de Aluno) ───────────────
-const btnSendToApp       = document.getElementById('btn-send-to-app');
-const sendBtnText        = document.getElementById('send-btn-text');
-const inputClassName     = document.getElementById('input-class-name');
-const btnOpenAppStudents = document.getElementById('btn-open-app-students');
+const btnSendToApp       = docGet('btn-send-to-app');
+const sendBtnText        = docGet('send-btn-text');
+const inputClassName     = docGet('input-class-name');
+const btnOpenAppStudents = docGet('btn-open-app-students');
 
 let currentLoadedStudents = [];
 
@@ -1118,10 +1125,10 @@ async function loadActiveTurma(forceEmpty = false) {
 }
 
 // ── 2. Origem A: Comando Livre com Interpretador de Intenção (Item 2.1) ────────
-const inputFreeCmd   = document.getElementById('input-free-command');
-const btnInterpret   = document.getElementById('btn-interpret-command');
-const interpretBox   = document.getElementById('interpret-response-container');
-const interpretText  = document.getElementById('interpret-btn-text');
+const inputFreeCmd   = docGet('input-free-command');
+const btnInterpret   = docGet('btn-interpret-command');
+const interpretBox   = docGet('interpret-response-container');
+const interpretText  = docGet('interpret-btn-text');
 
 if (btnInterpret) {
   btnInterpret.addEventListener('click', async () => {
@@ -1247,12 +1254,12 @@ if (btnInterpret) {
 }
 
 // ── 3. Mini-Formulário Modal ao Parar Gravação (Item 3) ────────────────────────
-const modalDefineSkill = document.getElementById('modal-define-skill');
-const modalTaskName    = document.getElementById('modal-task-name');
-const modalTaskDesc    = document.getElementById('modal-task-desc');
-const modalBtnSave     = document.getElementById('modal-btn-save');
-const modalBtnCancel   = document.getElementById('modal-btn-cancel');
-const modalErrorMsg    = document.getElementById('modal-error-msg');
+const modalDefineSkill = docGet('modal-define-skill');
+const modalTaskName    = docGet('modal-task-name');
+const modalTaskDesc    = docGet('modal-task-desc');
+const modalBtnSave     = docGet('modal-btn-save');
+const modalBtnCancel   = docGet('modal-btn-cancel');
+const modalErrorMsg    = docGet('modal-error-msg');
 
 let currentInferredColumns = [];
 
@@ -1652,26 +1659,28 @@ function decomposeGoalJS(text) {
   }
 
   // Divisores de sequência: vírgula, ponto e vírgula, conectivos temporais ("e depois", "em seguida") ou "e" seguido de verbo
-  const stepSplitterRegex = /\s*(?:,\s*|\s*;\s*|\s+(?:e\s+depois|pra\s+depois|para\s+depois|em\s+seguida|logo\s+em\s+seguida|e\s+ent[ãa]o|ent[ãa]o|depois|a[íi])\s+|\s+e\s+(?=(?:selecionar|seleciona|selecione|escolher|escolha|escolhe|filtrar|filtra|filtre|marcar|marca|marque|lan[çc]ar|lanca|lance|lancar|colocar|coloca|coloque|botar|bota|bote|anotar|anota|anote|registrar|registra|registre|ver|olhar|olhe|buscar|busca|busque|procurar|procura|procure|mostrar|mostra|mostre|baixar|baixa|baixe|enviar|envia|envie|responder|responda|responde|escrever|escreve|escreva|preencher|preencha|preenche|abrir|abra|abre|acesse|acessa|acessar|navegue|navega|navegar|ir|vai|v[áa])\b))/i;
+  // REQ FIX (Bug A): Suporte a comandos multi-cláusula com vírgula ou voz contínua sem conectivos explícitos
+  const stepSplitterRegex = /\s*(?:,\s*|\s*;\s*|\s+(?:e\s+depois|pra\s+depois|para\s+depois|em\s+seguida|logo\s+em\s+seguida|e\s+ent[ãa]o|ent[ãa]o|depois|a[íi])\s+|\s+e\s+(?=(?:selecionar|seleciona|selecione|escolher|escolha|escolhe|filtrar|filtra|filtre|marcar|marca|marque|lan[çc]ar|lanca|lance|lancar|colocar|coloca|coloque|botar|bota|bote|anotar|anota|anote|registrar|registra|registre|ver|olhar|olhe|buscar|busca|busque|procurar|procura|procure|mostrar|mostra|mostre|baixar|baixa|baixe|enviar|envia|envie|responder|responda|responde|escrever|escreve|escreva|preencher|preencha|preenche|abrir|abra|abre|acesse|acessa|acessar|navegue|navega|navegar|ir|vai|v[áa]|pedir|pe[çc]a|pegue|pegar|crie|criar|sincronizar)\b)|\s+(?=(?:acesse|acessa|acessar|abrir|abra|abre|navegue|navega|navegar|pedir\s+pra|pedir\s+para|consultar|carregar)\b|(?<!pedir\s+pra\s+|pedir\s+para\s+)visualizar\b)|\s+(?:vai\s+abrir\s+[^,]+?(?:voc[êe]\s+)?(?=pegue|pegar|ler|extrair|copie|copiar|crie|criar))|\s+(?=(?:voc[êe]\s+)?(?:pegue|pegar|ler|extrair|copie|copiar|crie|criar)\s+(?:todos\s+os\s+)?nomes))/i;
 
-  const rawSteps = clean.split(stepSplitterRegex).map(s => s.trim()).filter(Boolean);
+  const rawSteps = clean.split(stepSplitterRegex).map(s => {
+    return s.trim()
+      .replace(/^(?:e\s+|depois\s+|em\s+seguida\s+|a[íi]\s+|se\s+voc[êe]\s+for\s+em\s+|voc[êe]\s+)/i, (m) => m.toLowerCase().includes('for em') ? 'abrir ' : '')
+      .trim();
+  }).filter(Boolean);
+
   if (rawSteps.length <= 1) {
     return [clean];
   }
 
-  return rawSteps.map(step => {
-    return step
-      .replace(/^(?:e\s+|depois\s+|em\s+seguida\s+|a[íi]\s+)/i, '')
-      .trim();
-  }).filter(Boolean);
+  return rawSteps;
 }
 
 /**
- * Normaliza texto removendo acentos (NFD), caixa alta e pontuação — usado nas comparações de navegação.
- * BUG 1 FIX: garante que "frequencia" e "Frequência" produzem o mesmo token.
+ * Normaliza texto removendo acentos (NFD), caixa alta e pontuação não delimitadora — usado nas comparações de navegação.
+ * BUG 1 FIX & BUG A FIX: preserva pontuação delimitadora (vírgulas, ponto-e-vírgula e hífen).
  */
 function _normNav(str) {
-  return (str || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  return (str || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^\w\s,;-]/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
 /**
@@ -1763,8 +1772,8 @@ function splitCompoundCommand(text) {
     };
   }
 
-  // Prefixos de verbos de navegação
-  const navPrefixRegex = /(?:^|\b)(?:entre|entra|entrar|vai|v[áa]|ir|navegue|navega|navegar|acesse|acessa|acessar|abra|abre|abrir|clique|clica|clicar|mostre|mostra|quero\s+ver|ver)\s+(?:\b(?:em|no|na|nos|nas|para|pra|pro|pela|pelo)\b\s+)?(?:\b(?:a|o|os|as)\b\s+)?(?:\b(?:aba|menu|se[çc][ãa]o|guia|link|tela|pasta)\b\s+)?(?:\b(?:de|do|da|dos|das)\b\s+)?/i;
+  // Prefixos de verbos de navegação (inclui 'se você for em')
+  const navPrefixRegex = /(?:^|\b)(?:se\s+voc[êe]\s+for\s+(?:em|no|na|para|pra)|se\s+for\s+(?:em|no|na|para|pra)|entre|entra|entrar|vai|v[áa]|ir|navegue|navega|navegar|acesse|acessa|acessar|abra|abre|abrir|clique|clica|clicar|mostre|mostra|quero\s+ver|ver)\s+(?:\b(?:em|no|na|nos|nas|para|pra|pro|pela|pelo)\b\s+)?(?:\b(?:a|o|os|as)\b\s+)?(?:\b(?:aba|menu|se[çc][ãa]o|guia|link|tela|pasta)\b\s+)?(?:\b(?:de|do|da|dos|das)\b\s+)?/i;
 
   const prefixMatch = clean.match(navPrefixRegex);
   if (!prefixMatch) {
@@ -1788,8 +1797,8 @@ function splitCompoundCommand(text) {
     return { hasNavigation: false, navTarget: null, conjunction: null, remainingCommand: null, isCompound: false };
   }
 
-  // Divisores: conjunções e conectivos ou verbos de ação subsequentes
-  const conjunctionRegex = /\s*(?:,\s*|\s*;\s*|\s+(?:e\s+depois|pra\s+depois|para\s+depois|em\s+seguida|logo\s+em\s+seguida|e\s+ent[ãa]o|ent[ãa]o|depois|a[íi]|e)\s+|\s+(?:selecionar|seleciona|selecione|escolher|escolha|escolhe|filtrar|filtra|filtre|marcar|marca|marque|lan[çc]ar|lanca|lance|lancar|colocar|coloca|coloque|botar|bota|bote|anotar|anota|anote|registrar|registra|registre|ver|olhar|olhe|buscar|busca|busque|procurar|procura|procure|mostrar|mostra|mostre|baixar|baixa|baixe|enviar|envia|envie|responder|responda|responde|escrever|escreve|escreva|preencher|preencha|preenche)\b\s*)/i;
+  // Divisores: pontuação (vírgula, ponto-e-vírgula), conjunções ou verbos subsequentes (inclui acesse, abrir, entrar, pedir, etc.)
+  const conjunctionRegex = /\s*(?:,\s*|\s*;\s*|\s+(?:e\s+depois|pra\s+depois|para\s+depois|em\s+seguida|logo\s+em\s+seguida|e\s+ent[ãa]o|ent[ãa]o|depois|a[íi]|e)\s+|\s+(?:acesse|acessa|acessar|abra|abre|abrir|entre|entra|entrar|vai|v[áa]|ir|clique|clica|clicar|selecionar|seleciona|selecione|escolher|escolha|escolhe|filtrar|filtra|filtre|marcar|marca|marque|lan[çc]ar|lanca|lance|lancar|colocar|coloca|coloque|botar|bota|bote|anotar|anota|anote|registrar|registra|registre|ver|olhar|olhe|buscar|busca|busque|procurar|procura|procure|mostrar|mostra|mostre|baixar|baixa|baixe|enviar|envia|envie|responder|responda|responde|escrever|escreve|escreva|preencher|preencha|preenche|pedir|pe[çc]a|pegue|pegar|crie|criar|sincronizar|sincronize)\b\s*)/i;
 
   const conjMatch = afterPrefix.match(conjunctionRegex);
   let navTarget = '';
@@ -1801,7 +1810,7 @@ function splitCompoundCommand(text) {
     const matchedDivider = conjMatch[0].trim().toLowerCase();
     const rawRest = afterPrefix.substring(conjMatch.index + conjMatch[0].length).trim();
 
-    const isActionVerb = /^(?:selecionar|seleciona|selecione|escolher|escolha|escolhe|filtrar|filtra|filtre|marcar|marca|marque|lan[çc]ar|lanca|lance|lancar|colocar|coloca|coloque|botar|bota|bote|anotar|anota|anote|registrar|registra|registre|ver|olhar|olhe|buscar|busca|busque|procurar|procura|procure|mostrar|mostra|mostre|baixar|baixa|baixe|enviar|envia|envie|responder|responda|responde|escrever|escreve|escreva|preencher|preencha|preenche)$/i.test(matchedDivider);
+    const isActionVerb = /^(?:acesse|acessa|acessar|abra|abre|abrir|entre|entra|entrar|vai|v[áa]|ir|clique|clica|clicar|selecionar|seleciona|selecione|escolher|escolha|escolhe|filtrar|filtra|filtre|marcar|marca|marque|lan[çc]ar|lanca|lance|lancar|colocar|coloca|coloque|botar|bota|bote|anotar|anota|anote|registrar|registra|registre|ver|olhar|olhe|buscar|busca|busque|procurar|procura|procure|mostrar|mostra|mostre|baixar|baixa|baixe|enviar|envia|envie|responder|responda|responde|escrever|escreve|escreva|preencher|preencha|preenche|pedir|pe[çc]a|pegue|pegar|crie|criar|sincronizar|sincronize)$/i.test(matchedDivider);
 
     if (isActionVerb) {
       conjunction = null;
@@ -1817,6 +1826,7 @@ function splitCompoundCommand(text) {
   navTarget = navTarget
     .replace(/^(?:a|o|os|as)\s+/i, '')
     .replace(/\s+(?:no\s+site|no\s+portal|do\s+portal|no\s+sistema|na\s+aba|via\s+chat|no\s+app).*$/i, '')
+    .replace(/[,;]+$/, '')
     .trim();
 
   if (!navTarget || ['aluno', 'nota', 'falta', 'a nota', 'uma nota', 'site', 'portal'].includes(navTarget.toLowerCase())) {
@@ -1845,6 +1855,8 @@ function extractNavigationTarget(text) {
     .replace(/\b(?:no\s+site|no\s+portal|no\s+sistema|via\s+chat|no\s+app).*$/gi, '')
     .trim();
 
+  // Pára antes de pontuações ou conjunções
+  clean = clean.replace(/[,;].*$/, '').trim();
   clean = clean.replace(/\s+\b(?:e|e\s+depois|depois|em\s+seguida|a[ií])\s+(?:enviar|mandar|mande|responder|responda|lan[çc]ar|lance|marcar|marque|colocar|coloque|escrever|escreva|digitar|digite|registrar|registre|anotar|anote|editar|excluir|deletar|salvar|confirmar|submeter|aprovar|baixar|baixe|abrir|abra|ver)\b.*$/i, '').trim();
 
   const m = clean.match(/(?:entre|entra|entrar|vai|va|ir|navegue|navega|navegar|acesse|acessa|acessar|abra|abre|abrir|clique|clica|clicar|mostre|mostra)\s+(?:\b(?:em|no|na|nos|nas|para|pra|pro|pela|pelo)\b\s+)?(?:\b(?:a|o|os|as)\b\s+)?(?:\b(?:aba|menu|secao|guia|link|tela|pasta)\b\s+)?(?:\b(?:de|do|da|dos|das)\b\s+)?([a-zA-Z0-9_-]+(?:\s+[a-zA-Z0-9_-]+)?)/i);
@@ -1855,6 +1867,16 @@ function extractNavigationTarget(text) {
       .replace(/\s+\b(?:e|e\s+depois|depois|em\s+seguida|a[ií])\b.*$/i, '')
       .replace(/\s+e$/i, '')
       .trim();
+
+    // BUG A FIX: se o target capturou duas palavras e a segunda for verbo de comando subsequente (ex: 'frequencia acesse'), descarta a segunda
+    const words = target.split(/\s+/);
+    if (words.length > 1) {
+      const CLAUSE_BREAK_VERBS = /^(?:acesse|acessa|acessar|abra|abre|abrir|entre|entra|entrar|vai|va|ir|clique|clica|clicar|selecionar|seleciona|selecione|escolher|escolha|escolhe|filtrar|filtra|filtre|pedir|peca|pegue|pegar|crie|criar|ver|olhar|mostrar|baixar|enviar|responder|escrever|preencher|e|de|do|da|em|no|na|pra|para)$/i;
+      if (CLAUSE_BREAK_VERBS.test(words[1])) {
+        target = words[0];
+      }
+    }
+
     if (target && !['aluno', 'nota', 'falta', 'a nota', 'uma nota', 'site', 'portal'].includes(target.toLowerCase())) {
       return target;
     }
@@ -3522,8 +3544,14 @@ async function executeGoalQueue(subGoals, index = 0, context = {}) {
   // 2. Filtro / Seleção (ex: "selecionar sexto ano", "filtrar por 6A", "escolher 1º bimestre")
   const isSelectionCommand = /^(?:selecionar|seleciona|selecione|escolher|escolha|escolhe|filtrar|filtra|filtre|marcar|marca|marque)\s+/i.test(currentGoal);
 
-  // 3. Navegação de Aba / Seção do Portal (ex: "abrir turmas", "ir para diário", "acessar arquivos")
-  const isNavCommand = /^(?:abrir|abra|abre|ir\s+para|ir\s+pra|ir\s+pro|vai\s+para|v[áa]\s+para|v[áa]\s+em|vai\s+em|clicar\s+em|clique\s+em|clica\s+em|acessar|acesse|acessa|entrar\s+em|entre\s+em|entra\s+em|navegar\s+at[ée])\s+/i.test(currentGoal) && !studentProfileMatch;
+  // 3. Ação de Clique em Botão / Consulta / Confirmação de Grade
+  const isButtonClickCommand = /^(?:pedir\s+pra\s+|pedir\s+para\s+|clicar\s+em\s+|clique\s+em\s+|clica\s+em\s+)?(?:visualizar|consultar|carregar|pesquisar|buscar|aplicar|filtrar)(?:\s+frequ[êe]ncia|\s+chamada|\s+dados|\s+relat[óo]rio|\s+tabela)?\b/i.test(currentGoal);
+
+  // 3b. Extração de Alunos / Sincronização de Roster com o App
+  const isRosterExtractCommand = /(?:pegu?e\s+(?:todos\s+os\s+)?nomes|ler\s+alunos|listar\s+alunos|extrair\s+alunos|criar\s+alunos|salvar\s+alunos|sincronizar\s+alunos|alunos\s+no\s+app)/i.test(currentGoal);
+
+  // 3c. Navegação de Aba / Seção do Portal (ex: "abrir turmas", "ir para diário", "acessar arquivos")
+  const isNavCommand = /^(?:abrir|abra|abre|ir\s+para|ir\s+pra|ir\s+pro|vai\s+para|v[áa]\s+para|v[áa]\s+em|vai\s+em|clicar\s+em|clique\s+em|clica\s+em|acessar|acesse|acessa|entrar\s+em|entre\s+em|entra\s+em|navegar\s+at[ée])\s+/i.test(currentGoal) && !studentProfileMatch && !isButtonClickCommand && !isRosterExtractCommand;
 
   // 4. Lançamento de Nota ou Falta (Ação de Escrita com Aprovação Prévia)
   const isNotaOrFalta = /(?:nota|grau|ponto|falta|presen[çc]a|aus[êe]ncia)/i.test(currentGoal);
@@ -3533,6 +3561,88 @@ async function executeGoalQueue(subGoals, index = 0, context = {}) {
 
   // 6. Leitura / Pergunta da tela
   const isReadingQuery = /^(?:me\s+diga|diga|diz|liste|listar|mostre|mostrar|ver|veja|quais|qual|quantos|quantas|quando|consultar|resumir)\b/i.test(currentGoal);
+
+  // ── EXECUÇÃO 0A: Clique em Botão de Consulta / Visualização ──
+  if (isButtonClickCommand) {
+    setProcessingState(true, `[Passo ${stepNumber}/${totalSteps}] Carregando visualização no portal...`);
+    dispatchPortalBridgeMessage({ action: 'CLICK_PORTAL_BUTTON', buttonText: currentGoal }, (btnResp) => {
+      if (btnResp && btnResp.sucesso) {
+        if (isLastStep) {
+          setProcessingState(false);
+          appendAssistantChatMessage(`Prontinho! Acionei **${escapeHtml(btnResp.buttonText || currentGoal)}** no portal para você. 📂✨`, true);
+        } else {
+          appendAssistantChatMessage(`Prontinho! Acionei **${escapeHtml(btnResp.buttonText || currentGoal)}**. Agora vou executar: **${escapeHtml(subGoals[index + 1])}**... 🔍`, true);
+          executeGoalQueue(subGoals, index + 1, context);
+        }
+      } else {
+        dispatchPortalBridgeMessage({ action: 'DISCOVERY_SELECT_FILTER', filterTerm: currentGoal }, (selResp) => {
+          if (selResp && selResp.sucesso) {
+            if (isLastStep) {
+              setProcessingState(false);
+              appendAssistantChatMessage(`Prontinho! Selecionei **${escapeHtml(selResp.elementText || currentGoal)}** no portal. ✨`, true);
+            } else {
+              executeGoalQueue(subGoals, index + 1, context);
+            }
+          } else {
+            if (!isLastStep) {
+              executeGoalQueue(subGoals, index + 1, context);
+            } else {
+              setProcessingState(false);
+              appendAssistantChatMessage(
+                `Procurei pelo botão ou filtro **${escapeHtml(currentGoal)}** no portal, mas não encontrei nesta tela. Você pode clicar manualmente? 🔍`,
+                true
+              );
+            }
+          }
+        });
+      }
+    });
+    return;
+  }
+
+  // ── EXECUÇÃO 0B: Leitura e Sincronização de Alunos ──
+  if (isRosterExtractCommand) {
+    setProcessingState(true, `[Passo ${stepNumber}/${totalSteps}] Lendo alunos e sincronizando com o Teacher AI...`);
+    dispatchPortalBridgeMessage({ action: 'READ_ACTIVE_PORTAL_ROSTER' }, (rosterResp) => {
+      setProcessingState(false);
+      const students = (rosterResp && rosterResp.students) || [];
+      if (students.length > 0) {
+        try {
+          const currentTurma = context.lastFilter || 'Turma Sincronizada';
+          const portalName = (PLATFORMS && PLATFORMS[activePlatform]?.name) || 'Portal Escolar';
+          postToEntityBus('PORTAL_ROSTER_SYNC', {
+            className: currentTurma,
+            portalName: portalName,
+            students: students,
+            pageUrl: window.location.href
+          });
+          fetch('http://localhost:3000/api/portal/roster-sync', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              className: currentTurma,
+              portalName: portalName,
+              students: students,
+              pageUrl: window.location.href
+            })
+          }).catch(err => console.warn('[RosterSync] Falha ao sincronizar via API:', err));
+        } catch (e) {}
+
+        const studentNames = students.map(s => s.name).slice(0, 5).join(', ');
+        const extraCount = students.length > 5 ? ` e mais ${students.length - 5} alunos` : '';
+        appendAssistantChatMessage(
+          `Prontinho! Encontrei **${students.length} alunos** nesta tela e já enviei para a aba Alunos do app! 📋✨<br><span style="color:#475569; font-size:11px;">Alunos: ${studentNames}${extraCount}</span>`,
+          true
+        );
+      } else {
+        appendAssistantChatMessage(`Não encontrei registros de alunos nesta tela do portal. Certifique-se de que a lista de frequência está visível. 🔍`, true);
+      }
+      if (!isLastStep) {
+        executeGoalQueue(subGoals, index + 1, context);
+      }
+    });
+    return;
+  }
 
   // ── EXECUÇÃO 1: Navegação de Aba / Menu ──
   if (isNavCommand) {
@@ -3722,7 +3832,8 @@ async function executeGoalQueue(subGoals, index = 0, context = {}) {
 }
 
 // Inicialização dos Listeners de Interface
-document.addEventListener('DOMContentLoaded', () => {
+if (typeof document !== 'undefined') {
+  document.addEventListener('DOMContentLoaded', () => {
   // Restaura histórico de conversas anteriores
   restoreExtChatHistory();
 
@@ -3892,7 +4003,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Inicialização do Modo Desenvolvedor / QA (Oculto por Padrão)
   setupDevModeToggle();
-});
+  });
+}
 
 if (typeof window !== 'undefined') {
   window.__teacherSidePanelChat = {
@@ -4111,8 +4223,10 @@ function initAtomizedCards() {
   });
 }
 
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', initAtomizedCards);
-} else {
-  initAtomizedCards();
+if (typeof document !== 'undefined') {
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initAtomizedCards);
+  } else {
+    initAtomizedCards();
+  }
 }

@@ -38,7 +38,7 @@ export function relayToolToExtension(
   params: Record<string, unknown> = {},
   options: { timeoutMs?: number; portalId?: string } = {}
 ): Promise<RelayResponsePayload> {
-  const timeoutMs = options.timeoutMs ?? 4000
+  const timeoutMs = options.timeoutMs ?? (typeof process !== 'undefined' && process.env?.NODE_ENV === 'test' ? 300 : 4000)
 
   // Se não estiver rodando no navegador (SSR / Node / Testes)
   if (typeof window === 'undefined') {
