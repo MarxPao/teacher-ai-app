@@ -825,6 +825,103 @@ export async function executeTool(
  openPortal(input.platform as string)
  return `Abrindo ${PORTAL_NAMES[input.platform as string] || input.platform}...`
  }
+  case 'sync_portal_data_to_app': {
+    takeSnapshot()
+    const dataType  = (input.dataType  as string) || 'students'
+    const portalName = (input.portalName as string) || 'Portal'
+    const classRef   = (input.classRef  as string) || ''
+    const rawData    = (input.data as any[]) || []
+
+    if (!rawData || rawData.length === 0) {
+      return `Não recebi dados para sincronizar. Leia os dados do portal primeiro e tente novamente.`
+    }
+
+    // ── students ──────────────────────────────────────────────────────────────
+    if (dataType === 'students') {
+      const { reconcileRosterBatch } = await import('@/lib/rosterReconciler')
+      let localStudents: any[] = []
+      try { localStudents = JSON.parse(localStorage.getItem('teacher_students') || '[]') } catch {}
+      const reconciliationResult = reconcileRosterBatch(rawData, localStudents, {
+        portalName,
+        targetClassRef: classRef || undefined,
+        portalStatus: 'active',
+        isUntestedMap: false
+      })
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('teacher:open_roster_reconcile', {
+          detail: { portalName, classRef: classRef || 'Geral', result: reconciliationResult }
+        }))
+        window.dispatchEvent(new Event('storage'))
+      }
+      return `✅ ${rawData.length} alunos de "${portalName}" sincronizados com o app (${reconciliationResult.autoMergedCount} mesclados, ${reconciliationResult.newImportedCount} novos). Confira a tela de revisão!`
+    }
+
+    // ── calendar_events ───────────────────────────────────────────────────────
+    if (dataType === 'calendar_events') {
+      const tasks = JSON.parse(localStorage.getItem('teacher_calendar_tasks') || '[]')
+      const added: string[] = []
+      for (const ev of rawData) {
+        const title = ev.title || ev.nome || ev.name || ev.evento || 'Evento'
+        const date  = ev.date  || ev.data || new Date().toISOString().split('T')[0]
+        tasks.push({
+          id: `portal_ev_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+          title, date,
+          description: ev.description || ev.descricao || '',
+          classRef: classRef || ev.classRef || '',
+          type: ev.type || 'evento',
+          priority: 'medium',
+          done: false,
+          source: portalName,
+        })
+        added.push(title)
+      }
+      localStorage.setItem('teacher_calendar_tasks', JSON.stringify(tasks))
+      window.dispatchEvent(new Event('storage'))
+      if (onNavigate) onNavigate('calendar')
+      return `✅ ${added.length} evento(s) de "${portalName}" adicionados ao Calendário: ${added.slice(0, 3).join(', ')}${added.length > 3 ? `… (+${added.length - 3})` : ''}`
+    }
+
+    // ── grades ─────────────────────────────────────────────────────────────────
+    if (dataType === 'grades') {
+      let students: any[] = []
+      try { students = JSON.parse(localStorage.getItem('teacher_students') || '[]') } catch {}
+      let updated = 0
+      for (const g of rawData) {
+        const name  = (g.studentName || g.nome || '').toLowerCase().trim()
+        const col   = g.column || g.avaliacao || 'Nota Portal'
+        const value = g.grade ?? g.nota ?? g.value
+        const idx   = students.findIndex((s: any) => (s.name || '').toLowerCase().includes(name))
+        if (idx >= 0 && value !== undefined) {
+          students[idx].grades = students[idx].grades || {}
+          students[idx].grades[col] = value
+          updated++
+        }
+      }
+      localStorage.setItem('teacher_students', JSON.stringify(students))
+      window.dispatchEvent(new Event('storage'))
+      return `✅ Notas atualizadas para ${updated} aluno(s) a partir de "${portalName}".`
+    }
+
+    // ── messages ───────────────────────────────────────────────────────────────
+    if (dataType === 'messages') {
+      const msgs = JSON.parse(localStorage.getItem('teacher_messages') || '[]')
+      for (const m of rawData) {
+        msgs.unshift({
+          id: `portal_msg_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+          from: m.from || m.de || 'Portal',
+          text: m.text || m.mensagem || m.body || JSON.stringify(m),
+          date: m.date || m.data || new Date().toISOString(),
+          read: false,
+          source: portalName,
+        })
+      }
+      localStorage.setItem('teacher_messages', JSON.stringify(msgs))
+      window.dispatchEvent(new Event('storage'))
+      return `✅ ${rawData.length} mensagem(ns) de "${portalName}" salvas no app.`
+    }
+
+    return `Tipo de dado desconhecido: "${dataType}". Use students, grades, calendar_events ou messages.`
+  }
  case 'generate_exam_content': {
  const topic = input.topic as string
  const count = (input.questionCount as number) || 10

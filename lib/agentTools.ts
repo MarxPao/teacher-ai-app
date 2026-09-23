@@ -203,6 +203,21 @@ export const AGENT_TOOLS: ToolDefinition[] = [
       required: ['platform']
     }
   },
+  {
+    name: 'sync_portal_data_to_app',
+    description: 'Sincroniza dados lidos de um portal escolar para a área correta do app (alunos, notas, eventos de calendário, mensagens). Use SEMPRE que dados de portal precisam ser salvos no app após leitura — seja após invoke_teacher_capability, execute_portal_action ou quando o professor pedir "salva no app", "manda pro calendário", "adiciona os alunos", "joga no app". Infira o dataType a partir do contexto da conversa.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        dataType:    { type: 'string', enum: ['students', 'grades', 'calendar_events', 'messages'], description: 'Tipo dos dados: students (lista de alunos), grades (notas), calendar_events (eventos/agendamentos), messages (recados/comunicados)' },
+        destination: { type: 'string', description: 'Área do app de destino (opcional — inferida do dataType se omitida): students, gradebook, calendar, communications' },
+        data:        { type: 'array',  description: 'Array com os dados a sincronizar. Pode ser inferido do último toolResult se o professor não especificou' },
+        classRef:    { type: 'string', description: 'Turma de referência para filtrar/agrupar os dados' },
+        portalName:  { type: 'string', description: 'Nome do portal de origem para rastreabilidade' },
+      },
+      required: ['dataType', 'data']
+    }
+  },
 
   // 8. GERADOR DE PROVAS ELT
   {
@@ -708,6 +723,7 @@ export const TOOL_DISPLAY_NAMES: Record<string, { label: string; icon: string; c
   show_portal_screenshot:         { label: 'Exibindo Prévia',         icon: 'ti-photo',              color: '#2563eb' },
   fill_school_portal:             { label: 'Preenchendo portal',      icon: 'ti-plug-connected',     color: '#cb4b16' },
   open_school_portal:             { label: 'Abrindo portal',          icon: 'ti-external-link',      color: '#268bd2' },
+  sync_portal_data_to_app:        { label: 'Sincronizando para app',  icon: 'ti-arrows-transfer-up', color: '#2aa198' },
   generate_exam_content:          { label: 'Gerando prova',           icon: 'ti-file-certificate',   color: '#d33682' },
   speak_response:                 { label: 'Falando',                 icon: 'ti-volume',             color: '#7a5c42' },
   update_student_metric:          { label: 'Métrica de aluno',        icon: 'ti-chart-radar',        color: '#859900' },
