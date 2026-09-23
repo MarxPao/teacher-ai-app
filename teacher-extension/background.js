@@ -12,6 +12,17 @@ if (!PortalNormalizer && typeof require === 'function') {
   try { PortalNormalizer = require('./portal_normalizer.js'); } catch (e) {}
 }
 
+let PortalDOMReader = typeof globalThis !== 'undefined' ? globalThis.PortalDOMReader : null;
+try {
+  if (!PortalDOMReader && typeof importScripts === 'function') {
+    importScripts('portal_dom_reader.js');
+    PortalDOMReader = globalThis.PortalDOMReader;
+  }
+} catch (e) {}
+if (!PortalDOMReader && typeof require === 'function') {
+  try { PortalDOMReader = require('./portal_dom_reader.js'); } catch (e) {}
+}
+
 const WS_URL_PRIMARY = 'ws://127.0.0.1:8766';
 const WS_URL_FALLBACK = 'ws://127.0.0.1:8765/status_stream';
 const HTTP_STATUS_FALLBACK = 'http://127.0.0.1:8765/portal_status';
@@ -1176,6 +1187,11 @@ async function internalReadRoster(targetTabId) {
     const results = await chrome.scripting.executeScript({
       target: { tabId: targetTabId },
       func: () => {
+        if (typeof PortalDOMReader !== 'undefined' && PortalDOMReader.extractStudents) {
+          const res = PortalDOMReader.extractStudents(document);
+          if (res && res.length > 0) return res;
+        }
+
         const rows = Array.from(document.querySelectorAll('table tr, tr, div.student-row, li'));
         const roster = [];
         rows.forEach((row, idx) => {
@@ -2076,6 +2092,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         const results = await chrome.scripting.executeScript({
           target: { tabId: targetTabId, allFrames: true },
           func: () => {
+            if (typeof PortalDOMReader !== 'undefined' && PortalDOMReader.readPortalPage) {
+              try {
+                const parsed = PortalDOMReader.readPortalPage(document);
+                if (parsed && parsed.sucesso) return parsed;
+              } catch (e) {}
+            }
+
             const isVisible = (el) => {
               if (!el) return false;
               const style = window.getComputedStyle(el);
@@ -2205,6 +2228,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         if (validResults.length === 0) {
           sendResponse({ sucesso: false, mensagem: 'Falha ao ler dados da página.' });
           return;
+        }
+
+        if (typeof PortalDOMReader !== 'undefined' && PortalDOMReader.aggregateFrameResults) {
+          try {
+            const aggregated = PortalDOMReader.aggregateFrameResults(validResults);
+            if (aggregated && aggregated.sucesso) {
+              sendResponse(aggregated);
+              return;
+            }
+          } catch (e) {}
         }
 
         // Encontra o frame principal ou o frame com maior riqueza de dados

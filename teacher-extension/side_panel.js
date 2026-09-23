@@ -3757,7 +3757,16 @@ async function executeGoalQueue(subGoals, index = 0, context = {}) {
   // ── EXECUÇÃO 0D: Transferência / Gravação de Dados no App (ex: "cole no meu calendário no app") ──
   if (isDataPasteCommand) {
     setProcessingState(false);
-    const eventsData = context.copiedData?.events || [{ title: 'Horário Escolar', date: new Date().toISOString().split('T')[0] }];
+    let eventsData = context.copiedData?.events;
+    if ((!eventsData || eventsData.length === 0) && context.copiedData && typeof PortalDOMReader !== 'undefined' && PortalDOMReader.extractScheduleEvents) {
+      try {
+        eventsData = PortalDOMReader.extractScheduleEvents(context.copiedData);
+      } catch (e) {}
+    }
+    if (!eventsData || eventsData.length === 0) {
+      eventsData = [{ title: 'Horário Escolar', date: new Date().toISOString().split('T')[0] }];
+    }
+
     try {
       if (typeof sessionStorage !== 'undefined') {
         sessionStorage.setItem('teacher_sidepanel_pending_action', JSON.stringify({
@@ -3774,8 +3783,12 @@ async function executeGoalQueue(subGoals, index = 0, context = {}) {
       console.warn('[SidePanel] Erro ao salvar pending action no sessionStorage:', e);
     }
 
+    const count = eventsData.length;
+    const sample = eventsData.slice(0, 3).map(e => e.title || e.subject).filter(Boolean).join(', ');
+    const extra = count > 3 ? ` (+${count - 3} aulas)` : '';
+
     appendAssistantChatMessage(
-      `📅 Identifiquei os horários copiados do portal. Preparei o agendamento no seu **Calendário** do app. Confirma a gravação definitiva? (Diga "sim, pode salvar" ou "cancelar")`,
+      `📅 Identifiquei **${count} horário(s) de aula** ${sample ? `(${escapeHtml(sample)}${extra})` : ''} copiados do portal. Preparei o agendamento no seu **Calendário** do app. Confirma a gravação definitiva? (Diga "sim, pode salvar" ou "cancelar")`,
       true
     );
     return;

@@ -43,6 +43,7 @@
       ],
       "js": [
         "portal_normalizer.js",
+        "portal_dom_reader.js",
         "transaction_manager.js",
         "session_guardian.js",
         "content.js"
@@ -60,7 +61,7 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["side_panel.html", "side_panel.js"],
+      "resources": ["side_panel.html", "side_panel.js", "portal_normalizer.js", "portal_dom_reader.js"],
       "matches": ["http://localhost/*", "http://127.0.0.1/*"]
     }
   ]

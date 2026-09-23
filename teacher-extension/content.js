@@ -483,6 +483,34 @@ let lastScrapedPayloadHash = null;
 
 // ——— Inspeção e Raspagem de Dados do DOM (Zero Alucinação com Pruning Estrutural) ———
 function handleInspectAndScrape() {
+  if (typeof PortalDOMReader !== 'undefined' && PortalDOMReader.readPortalPage) {
+    try {
+      const pageData = PortalDOMReader.readPortalPage(document);
+      if (pageData && pageData.sucesso) {
+        const snapshotSummary = `${pageData.tables.length}_${pageData.inputsCount || 0}_${pageData.tables.reduce((acc, t) => acc + (t.rows ? t.rows.length : 0), 0)}`;
+        const isDuplicate = (lastScrapedPayloadHash === snapshotSummary);
+        lastScrapedPayloadHash = snapshotSummary;
+
+        const payload = {
+          ...pageData,
+          platform: portalPlatformProfile?.id || 'unknown',
+          title: document.title,
+          isDuplicate
+        };
+
+        showStatusToast(portalPlatformProfile?.name || 'Portal', 'success', `🔍 Tela inspecionada! ${pageData.tables.length} tabelas e ${pageData.inputsCount || 0} campos mapeados.`);
+        window.postMessage({ action: 'INSPECT_RESULT', payload }, '*');
+        try {
+          const channel = new BroadcastChannel('teacher_portal_bridge');
+          channel.postMessage({ action: 'INSPECT_RESULT', payload });
+        } catch {}
+        return payload;
+      }
+    } catch (e) {
+      console.warn('[handleInspectAndScrape] Fallback to legacy scraper:', e);
+    }
+  }
+
   // Pruning de tabelas: remove células vazias e tabelas sem dados tabulares reais
   const tables = Array.from(document.querySelectorAll('table')).map(table => {
     const headers = Array.from(table.querySelectorAll('th')).map(th => th.innerText.trim()).filter(Boolean);
@@ -2277,6 +2305,15 @@ async function executeSkillGraph(graph, context = {}) {
 // ——— EXTRATOR UNIVERSAL DE ALUNOS (TABELAS, CARDS, DIVS, GRIDS — FALLBACK BESPOKE) ———
 
 function universalExtractStudents() {
+  if (typeof PortalDOMReader !== 'undefined' && PortalDOMReader.extractStudents) {
+    try {
+      const extracted = PortalDOMReader.extractStudents(document);
+      if (extracted && extracted.length > 0) return extracted;
+    } catch (e) {
+      console.warn('[universalExtractStudents] Fallback to legacy extractor:', e);
+    }
+  }
+
   const students = [];
   const seenNames = new Set();
 
