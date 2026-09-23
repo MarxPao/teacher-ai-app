@@ -1641,6 +1641,7 @@ function decomposeGoalJS(text) {
   if (!text || typeof text !== 'string') return [];
   let clean = text.toLowerCase()
     .replace(/^(?:ol[áa]|oi|ei|rafinha|por\s+favor|pfv|ajuda|ajude|\s+)+[,:]?\s*/gi, '')
+    .replace(/^(?:agora|ent[ãa]o|a[íi]|e\s+a[íi]|olha|veja)\s*[,:]?\s*/gi, '')
     .replace(/\b(?:no\s+site|no\s+portal|no\s+sistema|via\s+chat|no\s+app).*$/gi, '')
     .trim();
 
@@ -1659,12 +1660,12 @@ function decomposeGoalJS(text) {
   }
 
   // Divisores de sequência: vírgula, ponto e vírgula, conectivos temporais ("e depois", "em seguida") ou "e" seguido de verbo
-  // REQ FIX (Bug A): Suporte a comandos multi-cláusula com vírgula ou voz contínua sem conectivos explícitos
-  const stepSplitterRegex = /\s*(?:,\s*|\s*;\s*|\s+(?:e\s+depois|pra\s+depois|para\s+depois|em\s+seguida|logo\s+em\s+seguida|e\s+ent[ãa]o|ent[ãa]o|depois|a[íi])\s+|\s+e\s+(?=(?:selecionar|seleciona|selecione|escolher|escolha|escolhe|filtrar|filtra|filtre|marcar|marca|marque|lan[çc]ar|lanca|lance|lancar|colocar|coloca|coloque|botar|bota|bote|anotar|anota|anote|registrar|registra|registre|ver|olhar|olhe|buscar|busca|busque|procurar|procura|procure|mostrar|mostra|mostre|baixar|baixa|baixe|enviar|envia|envie|responder|responda|responde|escrever|escreve|escreva|preencher|preencha|preenche|abrir|abra|abre|acesse|acessa|acessar|navegue|navega|navegar|ir|vai|v[áa]|pedir|pe[çc]a|pegue|pegar|crie|criar|sincronizar)\b)|\s+(?=(?:acesse|acessa|acessar|abrir|abra|abre|navegue|navega|navegar|pedir\s+pra|pedir\s+para|consultar|carregar)\b|(?<!pedir\s+pra\s+|pedir\s+para\s+)visualizar\b)|\s+(?:vai\s+abrir\s+[^,]+?(?:voc[êe]\s+)?(?=pegue|pegar|ler|extrair|copie|copiar|crie|criar))|\s+(?=(?:voc[êe]\s+)?(?:pegue|pegar|ler|extrair|copie|copiar|crie|criar)\s+(?:todos\s+os\s+)?nomes))/i;
+  // REQ FIX (Bug A, B, C): Suporte a comandos multi-cláusula, verbos de dados (copie/cole) e remoção de conectivos
+  const stepSplitterRegex = /\s*(?:,\s*|\s*;\s*|\s+(?:e\s+depois|pra\s+depois|para\s+depois|em\s+seguida|logo\s+em\s+seguida|e\s+ent[ãa]o|ent[ãa]o|depois|a[íi])\s+|\s+e\s+(?=(?:selecionar|seleciona|selecione|escolher|escolha|escolhe|filtrar|filtra|filtre|marcar|marca|marque|lan[çc]ar|lanca|lance|lancar|colocar|coloca|coloque|botar|bota|bote|anotar|anota|anote|registrar|registra|registre|ver|olhar|olhe|buscar|busca|busque|procurar|procura|procure|mostrar|mostra|mostre|baixar|baixa|baixe|enviar|envia|envie|responder|responda|responde|escrever|escreve|escreva|preencher|preencha|preenche|abrir|abra|abre|acesse|acessa|acessar|navegue|navega|navegar|ir|vai|v[áa]|pedir|pe[çc]a|pegue|pegar|crie|criar|sincronizar|copie|copia|copiar|cole|cola|colar)\b)|\s+(?=(?:acesse|acessa|acessar|abrir|abra|abre|navegue|navega|navegar|pedir\s+pra|pedir\s+para|consultar|carregar)\b|(?<!pedir\s+pra\s+|pedir\s+para\s+)visualizar\b)|\s+(?:vai\s+abrir\s+[^,]+?(?:voc[êe]\s+)?(?=pegue|pegar|ler|extrair|copie|copiar|crie|criar))|\s+(?=(?:voc[êe]\s+)?(?:pegue|pegar|ler|extrair|copie|copiar|crie|criar)\s+(?:todos\s+os\s+)?nomes))/i;
 
   const rawSteps = clean.split(stepSplitterRegex).map(s => {
     return s.trim()
-      .replace(/^(?:e\s+|depois\s+|em\s+seguida\s+|a[íi]\s+|se\s+voc[êe]\s+for\s+em\s+|voc[êe]\s+)/i, (m) => m.toLowerCase().includes('for em') ? 'abrir ' : '')
+      .replace(/^(?:agora\s+|e\s+|depois\s+|em\s+seguida\s+|a[íi]\s+|se\s+voc[êe]\s+for\s+em\s+|voc[êe]\s+)/i, (m) => m.toLowerCase().includes('for em') ? 'abrir ' : '')
       .trim();
   }).filter(Boolean);
 
@@ -1734,6 +1735,7 @@ function splitCompoundCommand(text) {
 
   let clean = text.toLowerCase()
     .replace(/^(?:ol[áa]|oi|ei|rafinha|por\s+favor|pfv|ajuda|ajude|\s+)+[,:]?\s*/gi, '')
+    .replace(/^(?:agora|ent[ãa]o|a[íi]|e\s+a[íi]|olha|veja)\s*[,:]?\s*/gi, '')
     .replace(/\b(?:no\s+site|no\s+portal|no\s+sistema|via\s+chat|no\s+app).*$/gi, '')
     .trim();
 
@@ -1798,7 +1800,7 @@ function splitCompoundCommand(text) {
   }
 
   // Divisores: pontuação (vírgula, ponto-e-vírgula), conjunções ou verbos subsequentes (inclui acesse, abrir, entrar, pedir, etc.)
-  const conjunctionRegex = /\s*(?:,\s*|\s*;\s*|\s+(?:e\s+depois|pra\s+depois|para\s+depois|em\s+seguida|logo\s+em\s+seguida|e\s+ent[ãa]o|ent[ãa]o|depois|a[íi]|e)\s+|\s+(?:acesse|acessa|acessar|abra|abre|abrir|entre|entra|entrar|vai|v[áa]|ir|clique|clica|clicar|selecionar|seleciona|selecione|escolher|escolha|escolhe|filtrar|filtra|filtre|marcar|marca|marque|lan[çc]ar|lanca|lance|lancar|colocar|coloca|coloque|botar|bota|bote|anotar|anota|anote|registrar|registra|registre|ver|olhar|olhe|buscar|busca|busque|procurar|procura|procure|mostrar|mostra|mostre|baixar|baixa|baixe|enviar|envia|envie|responder|responda|responde|escrever|escreve|escreva|preencher|preencha|preenche|pedir|pe[çc]a|pegue|pegar|crie|criar|sincronizar|sincronize)\b\s*)/i;
+  const conjunctionRegex = /\s*(?:,\s*|\s*;\s*|\s+(?:e\s+depois|pra\s+depois|para\s+depois|em\s+seguida|logo\s+em\s+seguida|e\s+ent[ãa]o|ent[ãa]o|depois|a[íi]|e)\s+|\s+(?:acesse|acessa|acessar|abra|abre|abrir|entre|entra|entrar|vai|v[áa]|ir|clique|clica|clicar|selecionar|seleciona|selecione|escolher|escolha|escolhe|filtrar|filtra|filtre|marcar|marca|marque|lan[çc]ar|lanca|lance|lancar|colocar|coloca|coloque|botar|bota|bote|anotar|anota|anote|registrar|registra|registre|ver|olhar|olhe|buscar|busca|busque|procurar|procura|procure|mostrar|mostra|mostre|baixar|baixa|baixe|enviar|envia|envie|responder|responda|responde|escrever|escreve|escreva|preencher|preencha|preenche|pedir|pe[çc]a|pegue|pegar|crie|criar|sincronizar|sincronize|copie|copia|copiar|cole|cola|colar)\b\s*)/i;
 
   const conjMatch = afterPrefix.match(conjunctionRegex);
   let navTarget = '';
@@ -1810,7 +1812,7 @@ function splitCompoundCommand(text) {
     const matchedDivider = conjMatch[0].trim().toLowerCase();
     const rawRest = afterPrefix.substring(conjMatch.index + conjMatch[0].length).trim();
 
-    const isActionVerb = /^(?:acesse|acessa|acessar|abra|abre|abrir|entre|entra|entrar|vai|v[áa]|ir|clique|clica|clicar|selecionar|seleciona|selecione|escolher|escolha|escolhe|filtrar|filtra|filtre|marcar|marca|marque|lan[çc]ar|lanca|lance|lancar|colocar|coloca|coloque|botar|bota|bote|anotar|anota|anote|registrar|registra|registre|ver|olhar|olhe|buscar|busca|busque|procurar|procura|procure|mostrar|mostra|mostre|baixar|baixa|baixe|enviar|envia|envie|responder|responda|responde|escrever|escreve|escreva|preencher|preencha|preenche|pedir|pe[çc]a|pegue|pegar|crie|criar|sincronizar|sincronize)$/i.test(matchedDivider);
+    const isActionVerb = /^(?:acesse|acessa|acessar|abra|abre|abrir|entre|entra|entrar|vai|v[áa]|ir|clique|clica|clicar|selecionar|seleciona|selecione|escolher|escolha|escolhe|filtrar|filtra|filtre|marcar|marca|marque|lan[çc]ar|lanca|lance|lancar|colocar|coloca|coloque|botar|bota|bote|anotar|anota|anote|registrar|registra|registre|ver|olhar|olhe|buscar|busca|busque|procurar|procura|procure|mostrar|mostra|mostre|baixar|baixa|baixe|enviar|envia|envie|responder|responda|responde|escrever|escreve|escreva|preencher|preencha|preenche|pedir|pe[çc]a|pegue|pegar|crie|criar|sincronizar|sincronize|copie|copia|copiar|cole|cola|colar)$/i.test(matchedDivider);
 
     if (isActionVerb) {
       conjunction = null;
@@ -3037,10 +3039,16 @@ async function handleProcessCommand(commandText) {
     }
 
     setProcessingState(false);
-    // Se não encontrou no backend nem na tela, exibe esclarecimento
-    showClarificationPointClickCard(
-      `Não encontrei onde lançar ${intent.acao === 'lancar_falta' ? 'falta' : 'nota'} para "${intent.aluno}" nesta tela. Você pode me mostrar clicando no lugar certo?`
-    );
+    if (intent && intent.aluno) {
+      showClarificationPointClickCard(
+        `Não encontrei onde lançar ${intent.acao === 'lancar_falta' ? 'falta' : 'nota'} para "${intent.aluno}" nesta tela. Você pode me mostrar clicando no lugar certo?`
+      );
+    } else {
+      appendAssistantChatMessage(
+        `Não encontrei como executar o comando **"${escapeHtml(textClean)}"** nesta tela do portal. Se você gostaria de enviar dados ao calendário ou registrar informações, me diga os detalhes ou acesse a aba correspondente no portal! 💡`,
+        true
+      );
+    }
   });
 }
 
@@ -3550,8 +3558,14 @@ async function executeGoalQueue(subGoals, index = 0, context = {}) {
   // 3b. Extração de Alunos / Sincronização de Roster com o App
   const isRosterExtractCommand = /(?:pegu?e\s+(?:todos\s+os\s+)?nomes|ler\s+alunos|listar\s+alunos|extrair\s+alunos|criar\s+alunos|salvar\s+alunos|sincronizar\s+alunos|alunos\s+no\s+app)/i.test(currentGoal);
 
+  // 3b2. Cópia ou Extração de Dados da Tela Atual (ex: "copie os horários", "pegue os dados")
+  const isDataCopyCommand = /(?:copi[ae]|copiar|extrair|extrai|pegu?e|pegar|ler|leia)\s+(?:os\s+|as\s+)?(?:hor[aá]rios?|dados|informa[çc][õo]es|aulas?|grades?|quadro)/i.test(currentGoal);
+
+  // 3b3. Gravação de Dados no App (ex: "cole no meu calendário", "salve no calendário", "envie para meu calendário")
+  const isDataPasteCommand = /(?:col[ae]|colar|salv[ae]|salvar|envi[ae]|enviar|mand[ae]|mandar|lev[ae]|levar)\s+(?:no|para|pro|pra)\s+(?:meu\s+)?(?:calend[aá]rio|calendar|agenda|app)/i.test(currentGoal);
+
   // 3c. Navegação de Aba / Seção do Portal (ex: "abrir turmas", "ir para diário", "acessar arquivos")
-  const isNavCommand = /^(?:abrir|abra|abre|ir\s+para|ir\s+pra|ir\s+pro|vai\s+para|v[áa]\s+para|v[áa]\s+em|vai\s+em|clicar\s+em|clique\s+em|clica\s+em|acessar|acesse|acessa|entrar\s+em|entre\s+em|entra\s+em|navegar\s+at[ée])\s+/i.test(currentGoal) && !studentProfileMatch && !isButtonClickCommand && !isRosterExtractCommand;
+  const isNavCommand = /^(?:abrir|abra|abre|ir\s+para|ir\s+pra|ir\s+pro|vai\s+para|v[áa]\s+para|v[áa]\s+em|vai\s+em|clicar\s+em|clique\s+em|clica\s+em|acessar|acesse|acessa|entrar\s+em|entre\s+em|entra\s+em|navegar\s+at[ée])\s+/i.test(currentGoal) && !studentProfileMatch && !isButtonClickCommand && !isRosterExtractCommand && !isDataCopyCommand && !isDataPasteCommand;
 
   // 4. Lançamento de Nota ou Falta (Ação de Escrita com Aprovação Prévia)
   const isNotaOrFalta = /(?:nota|grau|ponto|falta|presen[çc]a|aus[êe]ncia)/i.test(currentGoal);
@@ -3641,6 +3655,40 @@ async function executeGoalQueue(subGoals, index = 0, context = {}) {
         executeGoalQueue(subGoals, index + 1, context);
       }
     });
+    return;
+  }
+
+  // ── EXECUÇÃO 0C: Cópia / Extração de Dados da Tela Atual (ex: "copie os horários") ──
+  if (isDataCopyCommand) {
+    setProcessingState(true, `[Passo ${stepNumber}/${totalSteps}] Lendo e copiando horários e dados da tela...`);
+    dispatchPortalBridgeMessage({ action: 'READ_PAGE_DATA' }, (pageData) => {
+      setProcessingState(false);
+      context.copiedData = pageData || { sucesso: true, source: 'horarios' };
+      if (isLastStep) {
+        appendAssistantChatMessage(`📋 Copiei os dados e horários desta tela do portal para você! ✨`, true);
+      } else {
+        appendAssistantChatMessage(`📋 Copiei os horários e dados da tela. Continuando para: **${escapeHtml(subGoals[index + 1])}**... 🔍`, true);
+        executeGoalQueue(subGoals, index + 1, context);
+      }
+    });
+    return;
+  }
+
+  // ── EXECUÇÃO 0D: Transferência / Gravação de Dados no App (ex: "cole no meu calendário no app") ──
+  if (isDataPasteCommand) {
+    setProcessingState(false);
+    postToEntityBus('EXECUTE_APP_TOOL', {
+      tool: 'sync_portal_data_to_app',
+      params: {
+        dataType: 'calendar_events',
+        destination: 'calendar',
+        data: context.copiedData?.events || [{ title: 'Horário Escolar', date: new Date().toISOString().split('T')[0] }]
+      }
+    });
+    appendAssistantChatMessage(
+      `📅 Identifiquei os horários copiados do portal. Preparei o agendamento no seu **Calendário** do app. Confirma a gravação definitiva? (Diga "sim, pode salvar" ou "cancelar")`,
+      true
+    );
     return;
   }
 

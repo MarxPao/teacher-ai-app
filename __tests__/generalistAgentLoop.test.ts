@@ -232,4 +232,65 @@ describe('Loop Agêntico Generalista da Rafinha (Observe-Decide-Act)', () => {
       expect(modelStep3).toBe('gemini-3.6-flash')
     })
   })
+
+  // ─── TESTE F: PROBLEMAS REAIS DE PRODUÇÃO (A, B e C) ────────────────────────
+  describe('Problemas Reais de Produção: Casos de Teste Obrigatórios', () => {
+    // Importa analisadores do side_panel.js
+    const {
+      decomposeGoalJS,
+      splitCompoundCommand,
+      extractNavigationTarget
+    } = require('../teacher-extension/side_panel.js')
+
+    const LOG_ISOLATED_SEND = 'envie para meu calendario no app'
+    const LOG_WITH_CONNECTOR = 'agora acesse horarios, copie os horarios registrados lá e depois cole no meu calendario no app'
+    const LOG_DATA_TRANSFER = 'acesse horarios, copie os horarios registrados lá e depois cole no meu calendario no app'
+
+    it('Problema A: "envie para meu calendario no app" isolado nunca causa silêncio nem exceção', () => {
+      // Avalia política com comando isolado
+      const policy = evaluateConfirmationPolicy('sync_portal_data_to_app', {
+        dataType: 'calendar_events',
+        destination: 'calendar',
+        data: []
+      }, {
+        isExplicitUserCommand: true,
+        confidence: 0.9
+      })
+
+      // Deve responder de forma estruturada, exigindo aprovação ou pedindo dados, NUNCA gerando undefined
+      expect(policy).toBeDefined()
+      expect(policy.previewSummary).toBeDefined()
+      expect(policy.previewSummary.length).toBeGreaterThan(0)
+    })
+
+    it('Problema B: "agora" é ignorado como conector de discurso e navTarget é "horarios"', () => {
+      const navTarget = extractNavigationTarget(LOG_WITH_CONNECTOR)
+      expect(navTarget).toBe('horarios')
+      expect(navTarget).not.toBe('agora')
+      expect(navTarget).not.toContain('agora')
+
+      const compound = splitCompoundCommand(LOG_WITH_CONNECTOR)
+      expect(compound.hasNavigation).toBe(true)
+      expect(compound.navTarget).toBe('horarios')
+      expect(compound.navTarget).not.toBe('agora')
+    })
+
+    it('Problema C: "copie...cole" é decomposto em etapas de dados sem buscar botões literais no DOM', () => {
+      const subGoals = decomposeGoalJS(LOG_DATA_TRANSFER)
+      
+      expect(subGoals.length).toBeGreaterThanOrEqual(2)
+      // O primeiro passo é navegação até horários
+      expect(subGoals[0]).toContain('horarios')
+      
+      // O passo de cópia é preservado semanticamente
+      const copyStep = subGoals.find((s: string) => s.includes('copie'))
+      expect(copyStep).toBeDefined()
+      expect(copyStep).toContain('horarios')
+
+      // O passo de colar é preservado semanticamente
+      const pasteStep = subGoals.find((s: string) => s.includes('cole'))
+      expect(pasteStep).toBeDefined()
+      expect(pasteStep).toContain('calendario')
+    })
+  })
 })

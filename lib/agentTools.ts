@@ -211,7 +211,7 @@ export const AGENT_TOOLS: ToolDefinition[] = [
       properties: {
         dataType:    { type: 'string', enum: ['students', 'grades', 'calendar_events', 'messages'], description: 'Tipo dos dados: students (lista de alunos), grades (notas), calendar_events (eventos/agendamentos), messages (recados/comunicados)' },
         destination: { type: 'string', description: 'Área do app de destino (opcional — inferida do dataType se omitida): students, gradebook, calendar, communications' },
-        data:        { type: 'array',  description: 'Array com os dados a sincronizar. Pode ser inferido do último toolResult se o professor não especificou' },
+        data:        { type: 'array', items: { type: 'object' }, description: 'Array com os dados a sincronizar. Pode ser inferido do último toolResult se o professor não especificou' },
         classRef:    { type: 'string', description: 'Turma de referência para filtrar/agrupar os dados' },
         portalName:  { type: 'string', description: 'Nome do portal de origem para rastreabilidade' },
       },
