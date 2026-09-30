@@ -8,6 +8,8 @@
  * 4. Transparência para o professor: rotulagem honesta do modo de busca ativo.
  */
 
+import { guardEgressFetch } from '@/lib/piiMasking'
+
 export interface VectorChunk {
   id: string
   content: string
@@ -173,7 +175,7 @@ export async function generateGeminiEmbedding(text: string, apiKey?: string): Pr
   }
 
   try {
-    const response = await fetch(
+    const response = await guardEgressFetch(
       `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${key}`,
       {
         method: 'POST',
@@ -216,7 +218,7 @@ export async function batchGenerateGeminiEmbeddings(texts: string[], apiKey?: st
   }
 
   try {
-    const response = await fetch(
+    const response = await guardEgressFetch(
       `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:batchEmbedContents?key=${key}`,
       {
         method: 'POST',

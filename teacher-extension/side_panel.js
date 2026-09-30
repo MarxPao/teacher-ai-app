@@ -715,7 +715,7 @@ function updateRouteCounterUI() {
 if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
   chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     if (msg.action === 'CHECKPOINT_REQUEST') {
-      console.log('[SidePanel] Recebida solicitação de CHECKPOINT:', msg.preview);
+      console.log('[SidePanel] Recebida solicitação de CHECKPOINT.');
       const modal = document.getElementById('modal-checkpoint');
       const titleEl = document.getElementById('checkpoint-title');
       const descEl = document.getElementById('checkpoint-desc');
@@ -780,7 +780,7 @@ if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
         msg.event.eventId = recordedRouteEvents.length + 1;
         recordedRouteEvents.push(msg.event);
         updateRouteCounterUI();
-        console.log('[SidePanel] Ação gravada em tempo real:', msg.event);
+        console.log('[SidePanel] Ação gravada em tempo real:', msg.event?.action || 'ação');
       }
       sendResponse({ ok: true });
       return true;
@@ -1964,12 +1964,6 @@ async function parseNaturalIntent(text) {
 
 // ── Utilitários do Chat Stream & Interface Conversacional ────────────────────
 
-function escapeHtml(str) {
-  if (!str) return '';
-  const div = document.createElement('div');
-  div.textContent = str;
-  return div.innerHTML;
-}
 
 function scrollChatToBottom() {
   const container = document.getElementById('chat-history-container');
@@ -2543,7 +2537,7 @@ async function handleProcessCommand(commandText) {
       const p = pendingCheck.pendingAction;
       if (p?.tool === 'execute_portal_action' || p?.tool === 'confirm_portal_submission') {
         dispatchPortalBridgeMessage({ action: 'EXECUTE_PORTAL_ACTION', payload: p.params }, (res) => {
-          appendAssistantChatMessage(res?.mensagem || '✅ Lançamento oficial concluído com sucesso no portal escolar! ✨', true);
+          appendAssistantChatMessage(res?.mensagem || 'Operação de lançamento enviada ao portal escolar.', true);
         });
         return;
       }
@@ -2560,7 +2554,7 @@ async function handleProcessCommand(commandText) {
 
       const dest = p?.params?.destination || p?.params?.dataType || 'calendário';
       const label = dest === 'students' ? 'Alunos' : dest === 'grades' ? 'Notas' : 'Calendário';
-      appendAssistantChatMessage(`✅ Perfeito! Dados gravados com sucesso no seu **${label}** do app! 📅✨`, true);
+      appendAssistantChatMessage(`Dados salvos no seu **${label}** do app! 📅`, true);
       return;
     } else if (pendingCheck.action === 'cancelled') {
       appendAssistantChatMessage('Operação cancelada. Nenhum dado foi salvo.', false);
@@ -2579,6 +2573,13 @@ async function handleProcessCommand(commandText) {
     } catch {}
 
     const portalContext = `[Portal Ativo: ${portalTab?.title || 'Portal Escolar'} | URL: ${portalTab?.url || ''}]`;
+
+    // Sessão volátil de mascaramento LGPD para consistência de tokens durante a conversa
+    const piiSession = { mapping: {}, reverseMapping: {}, studentCounter: 1, phoneCounter: 1, cpfCounter: 1, emailCounter: 1 };
+    let knownStudents = [];
+    try {
+      knownStudents = JSON.parse(localStorage.getItem('teacher_students') || '[]');
+    } catch (e) {}
 
     // Constrói histórico contextual com as últimas mensagens para o backend manter coerência
     let chatHistory = [];
@@ -2605,20 +2606,30 @@ async function handleProcessCommand(commandText) {
     };
 
     let currentTurn = 0;
-    const MAX_AGENTIC_TURNS = 4;
+    const MAX_AGENTIC_TURNS = 12;
     let loopCompleted = false;
+    const executedSteps = [];
 
     while (currentTurn < MAX_AGENTIC_TURNS && !loopCompleted) {
       currentTurn++;
+      console.log(`[ROUTING_AUDIT] Ramo ativo: Tentando /api/agent (Turno ${currentTurn}/${MAX_AGENTIC_TURNS})`);
+
+      // Anonimização Pré-Egress: nenhum nome de aluno ou CPF trafega desprotegido para a nuvem
+      const safeChatHistory = (typeof maskChatHistory === 'function')
+        ? maskChatHistory(chatHistory, knownStudents, piiSession).maskedMessages
+        : chatHistory;
+
       const agentRes = await fetch('http://localhost:3000/api/agent', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          messages: chatHistory,
+          messages: safeChatHistory,
           context: portalContext,
           autoMode: true
         })
       });
+
+      console.log(`[ROUTING_AUDIT] Fetch localhost:3000/api/agent retornou HTTP ${agentRes.status} (${agentRes.statusText})`);
 
       if (!agentRes.ok) {
         throw new Error(`HTTP ${agentRes.status} from /api/agent`);
@@ -2626,14 +2637,30 @@ async function handleProcessCommand(commandText) {
 
       const agentData = await agentRes.json();
       const toolUse = agentData.toolUse || (agentData.content && Array.isArray(agentData.content) ? agentData.content.filter(c => c.type === 'tool_use') : []);
-      const firstTool = Array.isArray(toolUse) && toolUse.length > 0 ? toolUse[0] : null;
+      let firstTool = Array.isArray(toolUse) && toolUse.length > 0 ? toolUse[0] : null;
 
       if (!firstTool) {
         setProcessingState(false);
-        const finalReply = agentData.reply || (agentData.content?.[0]?.text) || 'Prontinho! ✨';
+        let finalReply = '';
+        if (executedSteps.length > 0) {
+          finalReply = typeof composeMultiStepReply === 'function'
+            ? composeMultiStepReply(executedSteps)
+            : 'Operações no portal finalizadas.';
+        } else {
+          finalReply = agentData.reply || (agentData.content?.[0]?.text) || 'Como posso te ajudar hoje?';
+        }
+        // Desmascara a resposta pedagógica antes de exibir à professora
+        if (typeof unmaskPii === 'function') {
+          finalReply = unmaskPii(finalReply, piiSession);
+        }
         appendAssistantChatMessage(finalReply, true);
         loopCompleted = true;
         return;
+      }
+
+      // Desmascara argumentos da ferramenta antes da execução no DOM
+      if (typeof unmaskToolUse === 'function') {
+        firstTool = unmaskToolUse([firstTool], piiSession)[0];
       }
 
       const toolName = firstTool.name || firstTool.id;
@@ -2671,6 +2698,11 @@ async function handleProcessCommand(commandText) {
 
       // 2. Classificação: DOM Tool vs App Tool
       const isDomTool = [
+        'portal_observe',
+        'portal_set_select',
+        'portal_click',
+        'portal_navigate',
+        'portal_finish',
         'execute_portal_action',
         'confirm_portal_submission',
         'show_portal_screenshot',
@@ -2680,16 +2712,72 @@ async function handleProcessCommand(commandText) {
         'read_page_data'
       ].includes(toolName) || (toolName === 'invoke_teacher_capability' && ['read_roster', 'read_grades', 'post_grade', 'read_assignments', 'read_calendar'].includes(toolInput?.capability));
 
-      setProcessingState(true, `[Passo ${currentTurn}] Executando: ${toolName}...`);
+      setProcessingState(true, `[Passo ${currentTurn}/${MAX_AGENTIC_TURNS}] Executando: ${toolName}...`);
       let executionResult = null;
 
       if (isDomTool) {
-        if (toolName === 'inspect_portal_page' || toolName === 'read_page_data' || (toolName === 'invoke_teacher_capability' && toolInput?.capability === 'read_calendar')) {
+        if (toolName === 'portal_observe') {
+          executionResult = await dispatchPortalBridgePromise({ action: 'PORTAL_OBSERVE', scope: toolInput?.scope });
+          const elements = executionResult?.elements || [];
+          const fieldsCount = elements.length;
+          const inFormCount = elements.filter(e => e.scope && e.scope.startsWith('form:')).length;
+          const globalNavCount = elements.filter(e => e.scope === 'global_nav').length;
+          console.log(`[agent] observe: fields=${fieldsCount} in_form=${inFormCount} global_nav=${globalNavCount}`);
+        } else if (toolName === 'portal_set_select') {
+          executionResult = await dispatchPortalBridgePromise({ action: 'PORTAL_SET_SELECT', ref: toolInput?.ref, option_index: toolInput?.option_index });
+          const reqIdx = toolInput?.option_index;
+          const rbIdx = executionResult?.read_back?.index ?? executionResult?.read_back?.selected_index ?? -1;
+          const ok = Boolean(executionResult?.ok);
+          console.log(`[agent] set_select: ref=${toolInput?.ref} requested_index=${reqIdx} read_back_index=${rbIdx} ok=${ok}`);
+          executedSteps.push({
+            verified: ok,
+            description: `Filtro "${toolInput?.ref}": opção #${toolInput?.option_index}`
+          });
+        } else if (toolName === 'portal_click') {
+          executionResult = await dispatchPortalBridgePromise({ action: 'PORTAL_CLICK', ref: toolInput?.ref });
+          const ok = Boolean(executionResult?.ok);
+          console.log(`[agent] click: ref=${toolInput?.ref} ok=${ok}`);
+          executedSteps.push({
+            verified: ok,
+            description: `Clique em "${toolInput?.ref}"`
+          });
+        } else if (toolName === 'portal_navigate') {
+          executionResult = await dispatchPortalBridgePromise({ action: 'NAVIGATE_PORTAL_TAB', target: toolInput?.target });
+          const ok = Boolean(executionResult?.sucesso || executionResult?.ok);
+          console.log(`[agent] navigate: target=${toolInput?.target} ok=${ok}`);
+          executedSteps.push({
+            verified: ok,
+            description: `Navegação para aba "${toolInput?.target}"`
+          });
+        } else if (toolName === 'portal_finish') {
+          loopCompleted = true;
+          setProcessingState(false);
+          const totalCount = executedSteps.length;
+          const verifiedCount = executedSteps.filter(s => s.verified).length;
+          console.log(`[agent] finish: verified=${verifiedCount}/${totalCount}`);
+          let summaryMsg = '';
+          if (executedSteps.length > 0 && typeof composeMultiStepReply === 'function') {
+            summaryMsg = composeMultiStepReply(executedSteps);
+          } else if (toolInput?.summary) {
+            summaryMsg = toolInput.summary;
+          } else {
+            summaryMsg = 'Ações no portal concluídas.';
+          }
+          if (typeof unmaskPii === 'function') {
+            summaryMsg = unmaskPii(summaryMsg, piiSession);
+          }
+          appendAssistantChatMessage(summaryMsg, true);
+          return;
+        } else if (toolName === 'inspect_portal_page' || toolName === 'read_page_data' || (toolName === 'invoke_teacher_capability' && toolInput?.capability === 'read_calendar')) {
           executionResult = await dispatchPortalBridgePromise({ action: 'READ_PAGE_DATA' });
         } else if (toolName === 'read_roster' || (toolName === 'invoke_teacher_capability' && toolInput?.capability === 'read_roster')) {
           executionResult = await dispatchPortalBridgePromise({ action: 'READ_ACTIVE_PORTAL_ROSTER' });
         } else {
           executionResult = await dispatchPortalBridgePromise({ action: 'EXECUTE_PORTAL_ACTION', payload: toolInput });
+          executedSteps.push({
+            verified: Boolean(executionResult?.sucesso || executionResult?.ok),
+            description: toolInput?.title || toolName
+          });
         }
       } else {
         // App Tool (Tipo a)
@@ -2701,9 +2789,18 @@ async function handleProcessCommand(commandText) {
         executionResult = { sucesso: true, message: `Ferramenta ${toolName} executada no app.` };
       }
 
-      // 3. Compressão de observação para economia de tokens no próximo turno
+      // 3. Compressão de observação com Defesa Estrutural contra vazamento
       let compressedResult = executionResult || { sucesso: true };
-      if (executionResult && executionResult.events) {
+      if (executionResult && executionResult.elements) {
+        const safeElements = (typeof structurallySanitizeElements === 'function')
+          ? structurallySanitizeElements(executionResult.elements)
+          : executionResult.elements;
+        compressedResult = {
+          ok: executionResult.ok,
+          elements_count: safeElements.length,
+          elements: safeElements
+        };
+      } else if (executionResult && executionResult.events) {
         compressedResult = {
           sucesso: true,
           events_count: executionResult.events.length,
@@ -2711,11 +2808,10 @@ async function handleProcessCommand(commandText) {
           sample: executionResult.events.slice(0, 3)
         };
       } else if (executionResult && executionResult.students) {
+        // Defesa Estrutural: nunca envia nomes de alunos de volta para o prompt em nuvem
         compressedResult = {
           sucesso: true,
-          students_count: executionResult.students.length,
-          students: executionResult.students,
-          sample: executionResult.students.slice(0, 3)
+          students_count: executionResult.students.length
         };
       }
 
@@ -2735,440 +2831,32 @@ async function handleProcessCommand(commandText) {
         }]
       });
     }
-  } catch (err) {
-    console.warn('[SidePanel] App /api/agent indisponível, usando fallback offline do side panel:', err);
-  }
 
-  // Caso especial: comandos de leitura direta ("Ler lista de alunos", "Ver notas da turma")
-  const isDirectReading = /^(?:me\s+diga|diga|diz|liste|listar|mostre|mostrar|ver|veja|quais|qual|quantos|quantas|quando|consultar|resumir)\b/i.test(textClean) ||
-                          /(?:quais\s+dias|quais\s+hor[aá]rios|que\s+aulas|quantas\s+aulas|me\s+diga|me\s+mostre|me\s+fale)/i.test(textClean);
-
-  const compoundCheck = splitCompoundCommand(textClean);
-  if (isDirectReading && !compoundCheck.hasNavigation) {
-    setProcessingState(true, 'Lendo dados da tela atual...');
-    dispatchPortalBridgeMessage({ action: 'READ_PAGE_DATA' }, (pageData) => {
-      if (pageData && pageData.sucesso) {
-        // 1. Tenta resposta semântica com o backend/LLM (perguntas abertas, agregações e sínteses)
-        dispatchPortalBridgeMessage({ action: 'ASK_PAGE_QUESTION', query: textClean, pageData }, (aiResp) => {
-          if (aiResp && aiResp.sucesso && aiResp.answer) {
-            setProcessingState(false);
-            appendAssistantChatMessage(aiResp.answer, true);
-            return;
-          }
-
-          // 2. Fallback: Motor Determinístico Local Estruturado
-          const answer = synthesizeScreenAnswer(textClean, pageData);
-          // Se a resposta foi negativa mas a intenção era claramente de horários, tenta navegar para a aba Horários
-          const isScheduleIntent = /horario|aula|disciplina|materia|grade|quinta|segunda|terca|quarta|sexta/i.test(textClean.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''));
-          if (answer.includes('Não encontrei dados suficientes') && isScheduleIntent) {
-            setProcessingState(true, 'Acessando a aba Horários no portal...');
-            dispatchPortalBridgeMessage({ action: 'NAVIGATE_PORTAL_TAB', target: 'horários' }, (navResp) => {
-              if (navResp && navResp.sucesso) {
-                setTimeout(() => {
-                  dispatchPortalBridgeMessage({ action: 'READ_PAGE_DATA' }, (newPageData) => {
-                    setProcessingState(false);
-                    if (newPageData && newPageData.sucesso) {
-                      const newAnswer = synthesizeScreenAnswer(textClean, newPageData);
-                      appendAssistantChatMessage(newAnswer, true);
-                    } else {
-                      appendAssistantChatMessage(answer, true);
-                    }
-                  });
-                }, 400);
-              } else {
-                setProcessingState(false);
-                appendAssistantChatMessage(answer, true);
-              }
-            });
-            return;
-          }
-
-          setProcessingState(false);
-          appendAssistantChatMessage(answer, true);
-        });
-      } else {
-        setProcessingState(false);
-        appendAssistantChatMessage('Não consegui ler os dados da tela atual. Certifique-se de estar na aba correta do portal.', true);
-      }
-    });
-    return;
-  }
-
-  // Caso especial: comandos de leitura direta ("Ler lista de alunos", "Ler alunos", "Importar alunos", "Ver notas da turma", etc.)
-  const isReadCommand = /^(?:ler\s+(?:lista|alunos|turma|pauta|di[aá]rio|chamada)|ver\s+(?:notas|alunos|turma|pauta|di[aá]rio|chamada)|mostrar\s+(?:alunos|lista|turma|pauta|di[aá]rio|chamada)|listar\s+(?:alunos|turma|nomes)|importar\s+(?:alunos|lista|turma|pauta)|puxar\s+(?:alunos|lista))/i.test(textClean);
-  if (isReadCommand) {
-    setProcessingState(true, 'Lendo dados do portal escolar...');
-    dispatchPortalBridgeMessage({ action: 'READ_ACTIVE_PORTAL_ROSTER' }, (resp) => {
+    // Se saiu do while sem loopCompleted, turnos foram esgotados
+    if (!loopCompleted) {
       setProcessingState(false);
-      const students = (resp && resp.students) || [];
-      if (students.length > 0) {
-        // Read-Through e Livre Intercâmbio para o Teacher AI App
-        try {
-          const activeTurmaEl = document.getElementById('active-class-name');
-          const currentTurma = (activeTurmaEl && activeTurmaEl.textContent !== '—') ? activeTurmaEl.textContent : 'Turma Importada';
-          const portalName = (PLATFORMS && PLATFORMS[activePlatform]?.name) || 'Portal Escolar';
-
-          postToEntityBus('PORTAL_ROSTER_SYNC', {
-            className: currentTurma,
-            portalName: portalName,
-            students: students,
-            pageUrl: window.location.href
-          });
-
-          fetch('http://localhost:3000/api/portal/roster-sync', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              className: currentTurma,
-              portalName: portalName,
-              students: students,
-              pageUrl: window.location.href
-            })
-          }).catch(err => console.warn('[RosterSync] Falha ao sincronizar via API:', err));
-        } catch (e) {}
-
-        const studentNames = students.map(s => s.name).slice(0, 5).join(', ');
-        const extraCount = students.length > 5 ? ` e mais ${students.length - 5} alunos` : '';
-        appendAssistantChatMessage(`Encontrei **${students.length} alunos** nesta tela do portal:<br><span style="color:#475569; font-size:11px;">📋 ${studentNames}${extraCount}</span>`, true);
-        if (typeof renderStudentListWithValidation === 'function') {
-          renderStudentListWithValidation(students, { valid: true, confidence: 1.0 }, 'dom', 'Lista de Alunos');
-        }
-      } else {
-        showHonestErrorCard('Lista de Alunos', 'Não encontrei registros de alunos nesta tela do portal. Certifique-se de estar na pauta ou diário.');
-      }
-    });
-    return;
-  }
-
-  // Caso 4: Comandos Multi-Passo e Navegação Encadeada (PPAV Goal Queue)
-  const subGoals = decomposeGoalJS(textClean);
-  const compound = splitCompoundCommand(textClean);
-
-  if (subGoals.length > 1 || (compound.hasNavigation && compound.navTarget && compound.remainingCommand)) {
-    const queueToRun = (subGoals.length > 1)
-      ? subGoals
-      : [`abrir ${compound.navTarget}`, compound.remainingCommand];
-
-    executeGoalQueue(queueToRun, 0, {});
-    return;
-  }
-
-  // Caso especial: Navegação para abas ou seções ("entre nos arquivos", "entre na aba arquivos", "ir para diário", etc.)
-  // BUG 2 & REQ 5: detectar comando composto (navegar + agir). Navega até a aba e tenta resolver a ação via Discovery!
-  const navTarget = extractNavigationTarget(textClean);
-  if (navTarget) {
-    const primaryAction = extractPrimaryAction(textClean); // null = navegação pura; string = ação composta
-    setProcessingState(true, `Acessando ${navTarget} no portal...`);
-    dispatchPortalBridgeMessage({ action: 'NAVIGATE_PORTAL_TAB', target: navTarget }, async (resp) => {
-      setProcessingState(false);
-      if (resp && resp.sucesso) {
-        const foundLabel = resp.elementText || navTarget;
-        if (primaryAction) {
-          // Comando composto: informa que navegou e agora tenta executar a ação associada
-          appendAssistantChatMessage(`Entrei na aba **${escapeHtml(foundLabel)}**! Analisando como executar **${escapeHtml(primaryAction)}**... 🔎`, true);
-          setProcessingState(true, `Executando ${primaryAction} no portal...`);
-
-          try {
-            const res = await fetch('http://localhost:8765/natural_intent', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                text: textClean,
-                parse_only: false,
-                history: []
-              })
-            });
-
-            if (res.ok) {
-              const data = await res.json();
-              setProcessingState(false);
-
-              // Caso 1: Pergunta de esclarecimento (ex: faltou o texto da resposta do recado)
-              if (data.needs_clarification && data.mensagem) {
-                showHonestErrorCard('Preciso de uma informação', data.mensagem);
-                return;
-              }
-
-              // Caso 2: Falha na descoberta -> aciona o modo honesto de apontar/clicar
-              if (data.status === 'point_and_click_required' || data.action_required === 'point_and_click') {
-                showClarificationPointClickCard(
-                  data.mensagem || `Não encontrei onde ${primaryAction} nesta tela. Você pode me mostrar onde fica o elemento correto?`
-                );
-                return;
-              }
-
-              // Caso 3: Descoberta bem-sucedida com aprovação necessária (PortalApprovalCard)
-              if (data.card && (data.sucesso || data.needs_approval)) {
-                const c = data.card;
-                const diffItem = (c.diff && c.diff[0]) || {};
-                const studentName = diffItem.studentName || data.intent?.aluno || 'Item';
-                const fieldName = diffItem.field || primaryAction;
-                showApprovalPreviewCardDirect({
-                  studentName,
-                  actionDesc: `${fieldName} • ${c.portal || 'Portal Oficial'}`,
-                  beforeVal: diffItem.beforeValue || '—',
-                  afterVal: diffItem.afterValue || 'OK',
-                  actionType: c.actionType || primaryAction,
-                  taskId: c.taskId
-                });
-                return;
-              }
-
-              // Caso 4: Resposta conversacional / instrução sem falso positivo
-              if (data.mensagem) {
-                appendAssistantChatMessage(data.mensagem, true);
-                return;
-              }
-            }
-          } catch (err) {
-            console.warn('[SidePanel] Falha ao acionar discovery pós-navegação:', err);
-          }
-
-          setProcessingState(false);
-          // Fallback honesto: reporta o que fez e pede ajuda para o elemento
-          appendAssistantChatMessage(
-            `Naveguei até a aba **${escapeHtml(foundLabel)}**, mas não consegui executar a ação de **${escapeHtml(primaryAction)}** automaticamente nesta tela. Você pode me mostrar onde fica o elemento correto para eu aprender? 🔍`,
-            true
-          );
-          showClarificationPointClickCard(
-            `Não encontrei onde executar ${primaryAction} nesta tela. Você pode me mostrar clicando no lugar certo?`
-          );
-        } else {
-          // Navegação pura: "Prontinho!" é legítimo
-          appendAssistantChatMessage(`Prontinho! Entrei na aba **${escapeHtml(foundLabel)}** no portal para você. 📂✨`, true);
-        }
-      } else {
-        appendAssistantChatMessage(`Procurei pela aba ou seção **${escapeHtml(navTarget)}** no portal, mas não encontrei nenhum botão ou menu correspondente nesta tela. Você pode navegar manualmente até lá ou me mostrar onde fica? 🔍`, true);
-      }
-    });
-    return;
-  }
-
-
-  const intent = await parseNaturalIntent(textClean);
-
-  // Caso de Acesso a Perfil Direto (sem navegação explícita ou já na tela)
-  const isProfileDirect = (intent && intent.acao === 'abrir_perfil') ||
-                          /(?:^|\b)(?:acesse|acessa|acessar|abra|abre|abrir|ver|veja|olhe|olhar|mostrar|mostre)?\s*(?:o|a)?\s*(?:perfil|dados|detalhes|ficha|cadastro)\s+(?:de|do|da)\s+([a-zA-ZÀ-ÿ\s]+)/i.test(textClean);
-  if (isProfileDirect) {
-    const profileMatch = textClean.match(/(?:perfil|dados|detalhes|ficha|cadastro)\s+(?:de|do|da)\s+([a-zA-ZÀ-ÿ\s]+)/i);
-    const studentTarget = (profileMatch ? profileMatch[1] : (intent && intent.aluno ? intent.aluno : textClean)).trim();
-    setProcessingState(true, `Acessando perfil de ${studentTarget}...`);
-    dispatchPortalBridgeMessage({ action: 'DISCOVERY_FIND_AND_CLICK_STUDENT', studentName: studentTarget }, (stdResp) => {
-      setProcessingState(false);
-      if (stdResp && stdResp.sucesso) {
-        const foundName = stdResp.elementText || studentTarget;
-        appendAssistantChatMessage(`✅ Acessei o perfil de **${escapeHtml(foundName)}** com sucesso! 👤✨`, true);
-      } else if (stdResp && stdResp.status === 'ambiguous') {
-        appendAssistantChatMessage(
-          `⚠️ Encontrei mais de um aluno com o nome **${escapeHtml(studentTarget)}** nesta tela. Por favor, escolha qual deles você deseja acessar: 🔍`,
-          true
-        );
-        if (typeof showDisambiguationCard === 'function') {
-          showDisambiguationCard({ aluno: studentTarget, acao: 'abrir_perfil' }, stdResp.candidates || []);
-        }
-      } else {
-        appendAssistantChatMessage(
-          `📂 Não encontrei o perfil do aluno **${escapeHtml(studentTarget)}** na tela atual. Você pode me mostrar onde fica ou clicar manualmente? 🔍`,
-          true
-        );
-        showHonestErrorCard(
-          'Aluno não encontrado',
-          `Não encontrei o aluno '${studentTarget}' na tela atual do portal.`
-        );
-      }
-    });
-    return;
-  }
-
-  setProcessingState(true, 'Olhando o portal...');
-
-  // 1. Prioridade 1: Verifica a aba ativa no navegador para desambiguação de homônimos ou match direto
-  dispatchPortalBridgeMessage({ action: 'READ_ACTIVE_PORTAL_ROSTER' }, async (resp) => {
-    let roster = (resp && resp.students) || [];
-    if (roster && roster.length > 0) {
-      // Read-Through automático em background
-      try {
-        const activeTurmaEl = document.getElementById('active-class-name');
-        const currentTurma = (activeTurmaEl && activeTurmaEl.textContent !== '—') ? activeTurmaEl.textContent : 'Turma Ativa';
-        fetch('http://localhost:3000/api/students/import', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            className: currentTurma,
-            portalName: 'Portal Escolar Ativo',
-            students: roster,
-            pageUrl: window.location.href
+      const partialMsg = typeof composeReply === 'function'
+        ? composeReply('partial', {
+            maxTurns: MAX_AGENTIC_TURNS,
+            completedSteps: executedSteps.filter(s => s.verified).length,
+            totalSteps: executedSteps.length
           })
-        }).catch(err => console.warn('[Read-Through] Falha background:', err));
-      } catch (e) {}
-
-      const matchResult = matchStudentByName(intent.aluno, roster, intent.matricula || intent.portal_native_id);
-      if (matchResult.status === 'ambiguous') {
-        setProcessingState(false);
-        showDisambiguationCard(intent, matchResult.candidates);
-        return;
-      }
-      if (matchResult.status === 'exact' || matchResult.status === 'confident_match') {
-        setProcessingState(false);
-        showApprovalPreviewCard(matchResult.student, intent);
-        return;
-      }
-      if (matchResult.status === 'not_found') {
-        setProcessingState(false);
-        showHonestErrorCard(
-          'Aluno não encontrado',
-          `Não encontrei o aluno "${intent.aluno}" na lista desta turma. Verifique o nome ou selecione outra turma.`
-        );
-        return;
-      }
+        : `Não consegui concluir todas as etapas em ${MAX_AGENTIC_TURNS} passos.`;
+      appendAssistantChatMessage(partialMsg, false);
+      return;
     }
-
-    // 2. Se a ação for inédita ou não houver match direto, aciona o aprendizado autônomo no backend
-    showNaturalProgressCard("Isso pode levar um minutinho na primeira vez, já estou vendo como funciona aqui...");
-    setProcessingState(true, 'Aprendendo navegação no portal...');
-
-    try {
-      const res = await fetch('http://localhost:8765/natural_intent', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          text: textClean,
-          parse_only: false,
-          history: []
-        })
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        console.log('[SidePanel] Resposta do backend:', data);
-        setProcessingState(false);
-
-
-
-        // Caso A: Pergunta de esclarecimento sobre parâmetros (ex: faltou texto da resposta)
-        if (data.needs_clarification && data.mensagem) {
-          const navDest = data.intent?.destino_navegacao || data.intent?.destino || data.destino;
-          if (navDest) {
-            dispatchPortalBridgeMessage({ action: 'NAVIGATE_PORTAL_TAB', target: navDest }, (navResp) => {
-              setProcessingState(false);
-              const tabLabel = (navResp && navResp.sucesso && navResp.elementText) ? navResp.elementText : navDest;
-              appendAssistantChatMessage(`Naveguei até a aba **${escapeHtml(tabLabel)}**! ${escapeHtml(data.mensagem)}`, true);
-            });
-            return;
-          }
-          showHonestErrorCard('Preciso de uma informação', data.mensagem);
-          return;
-        }
-
-        // Caso B: Falha na descoberta autônoma -> Pergunta natural de esclarecimento com apontamento
-        if (data.status === 'point_and_click_required' || data.action_required === 'point_and_click') {
-          showClarificationPointClickCard(
-            data.mensagem || "Não encontrei onde lançar nesta tela, você pode me mostrar clicando no lugar certo?"
-          );
-          return;
-        }
-
-        // Caso Navegação: Backend retornou intenção de navegar para aba/seção
-        // BUG 2 FIX: se o texto original continha uma ação primária (ex: responder), reportar sucesso PARCIAL
-        if (data.acao === 'navegar_aba' || data.action_required === 'navigate_tab') {
-          const target = data.destino || 'Arquivos';
-          const remaining = data.remaining_command || data.segunda_instrucao || null;
-          const primaryActionFromText = extractPrimaryAction(textClean);
-          const nextAction = remaining || primaryActionFromText;
-
-          dispatchPortalBridgeMessage({ action: 'NAVIGATE_PORTAL_TAB', target }, (navResp) => {
-            if (navResp && navResp.sucesso) {
-              const foundLabel = navResp.elementText || target;
-              if (nextAction) {
-                appendAssistantChatMessage(`Prontinho! Entrei na aba **${escapeHtml(foundLabel)}** no portal. Agora estou procurando **${escapeHtml(nextAction)}**... 📂🔍`, true);
-                setProcessingState(true, `Executando: ${nextAction}...`);
-                const isSelection = /^(?:selecionar|seleciona|selecione|escolher|escolha|escolhe|filtrar|filtra|filtre|marcar|marca|marque)\s+/i.test(nextAction);
-                if (isSelection) {
-                  const filterTerm = nextAction.replace(/^(?:selecionar|seleciona|selecione|escolher|escolha|escolhe|filtrar|filtra|filtre|marcar|marca|marque)\s+(?:por\s+|a\s+|o\s+|pelo\s+|pela\s+|turma\s+|ano\s+)?/i, '').trim();
-                  dispatchPortalBridgeMessage({ action: 'DISCOVERY_SELECT_FILTER', filterTerm }, (selResp) => {
-                    setProcessingState(false);
-                    if (selResp && selResp.sucesso) {
-                      appendAssistantChatMessage(`✅ Entrei na aba **${escapeHtml(foundLabel)}** e selecionei **${escapeHtml(selResp.elementText || filterTerm)}** com sucesso! ✨`, true);
-                    } else {
-                      appendAssistantChatMessage(`📂 Entrei na aba **${escapeHtml(foundLabel)}**, mas não encontrei a opção **${escapeHtml(filterTerm)}** para selecionar nesta tela. Você pode me mostrar onde fica? 🔍`, true);
-                      showClarificationPointClickCard(`Não encontrei onde selecionar "${filterTerm}" na aba ${foundLabel}. Você pode me mostrar clicando no lugar certo?`);
-                    }
-                  });
-                  return;
-                }
-                setTimeout(() => executeSubsequentCommand(nextAction, foundLabel), 500);
-                return;
-              }
-              setProcessingState(false);
-              appendAssistantChatMessage(`Prontinho! Entrei na aba **${escapeHtml(foundLabel)}** no portal para você. 📂✨`, true);
-            } else {
-              setProcessingState(false);
-              appendAssistantChatMessage(data.mensagem || `Procurei pela aba **${escapeHtml(target)}** no portal, mas não encontrei o menu correspondente nesta tela. 🔍`, true);
-            }
-          });
-          return;
-        }
-
-
-        // Caso C: Descoberta bem-sucedida ou ação já mapeada -> Exibe PortalApprovalCard diretamente!
-        if (data.card && (data.sucesso || data.needs_approval)) {
-          const c = data.card;
-          const diffItem = (c.diff && c.diff[0]) || {};
-          const studentName = diffItem.studentName || data.intent?.aluno || 'Aluno';
-          const fieldName = diffItem.field || (c.actionType === 'lancar_falta' ? 'Falta' : 'Nota');
-          const beforeVal = diffItem.beforeValue || '—';
-          const afterVal = diffItem.afterValue || (c.actionType === 'lancar_falta' ? '1' : '8.5');
-
-          showApprovalPreviewCardDirect({
-            studentName,
-            actionDesc: `${fieldName} • ${c.portal || 'Portal Oficial'}`,
-            beforeVal,
-            afterVal,
-            actionType: c.actionType || 'lancar_nota',
-            taskId: c.taskId
-          });
-          return;
-        }
-
-        // Caso D: Intenção executável confirmada -> Exibe card de aprovação para conferência da professora antes de gravar
-        if (data.sucesso && intent && intent.aluno) {
-          const studentName = data.aluno || intent.aluno;
-          const isFalta = (intent.acao === 'lancar_falta');
-          const targetVal = String(data.valor || intent.nota || intent.faltas || (isFalta ? '1' : '8.5'));
-          showApprovalPreviewCardDirect({
-            studentName,
-            actionDesc: `${isFalta ? 'Falta' : 'Nota'} • Portal Oficial`,
-            beforeVal: '—',
-            afterVal: targetVal,
-            actionType: intent.acao || 'lancar_nota',
-            taskId: data.taskId || ('chk_' + Math.random().toString(36).substring(2, 9))
-          });
-          return;
-        }
-
-        // Caso E: Resposta explicativa do backend
-        if (data.mensagem) {
-          appendAssistantChatMessage(data.mensagem, true);
-          return;
-        }
-      }
-    } catch (err) {
-      console.warn('[SidePanel] Backend /natural_intent inacessível:', err);
-    }
-
+  } catch (err) {
+    console.warn('[ROUTING_AUDIT] CAIU NO CATCH de /api/agent! Falha no processamento agêntico.');
     setProcessingState(false);
-    if (intent && intent.aluno) {
-      showClarificationPointClickCard(
-        `Não encontrei onde lançar ${intent.acao === 'lancar_falta' ? 'falta' : 'nota'} para "${intent.aluno}" nesta tela. Você pode me mostrar clicando no lugar certo?`
-      );
-    } else {
-      appendAssistantChatMessage(
-        `Não encontrei como executar o comando **"${escapeHtml(textClean)}"** nesta tela do portal. Se você gostaria de enviar dados ao calendário ou registrar informações, me diga os detalhes ou acesse a aba correspondente no portal! 💡`,
-        true
-      );
-    }
-  });
+    const errMsg = (err && err.message && err.message.includes('LGPD_EGRESS_BLOCKED'))
+      ? '⚠️ Operação pausada: dados de alunos protegidos pela diretiva LGPD.'
+      : (typeof composeReply === 'function'
+        ? composeReply('error', { message: 'Servidor Teacher AI indisponível para automação.', error: 'Falha de conexão com /api/agent' })
+        : 'Não foi possível concluir o processamento no servidor.');
+    appendAssistantChatMessage(errMsg, false);
+    return;
+  }
+
 }
 
 function normalizeBrazilianWeekday(headerText) {
@@ -3560,471 +3248,6 @@ function synthesizeScreenAnswer(query, pageData) {
   return `Não encontrei dados suficientes na tela atual para responder "${escapeHtml(query)}". Certifique-se de estar na aba correspondente no portal. 🔍`;
 }
 
-function executeSubsequentCommand(remainingCommand, contextLabel) {
-  if (!remainingCommand) return;
-  const cleanCmd = remainingCommand.trim();
-
-  // 1. Se for comando de nota ou falta (ex: "lançar 8 pro Hugo", "colocar falta pro Pedro")
-  const isNotaOrFalta = /(?:nota|grau|ponto|falta|presen[çc]a|aus[êe]ncia)/i.test(cleanCmd);
-  if (isNotaOrFalta) {
-    handleProcessCommand(cleanCmd);
-    return;
-  }
-
-  // 2. Se for comando de sub-navegação / sub-aba (ex: "abra recados recebidos", "ver notas do 1º bimestre")
-  const isSubNav = /^(?:abrir|abra|abre|ir\s+para|ir\s+pra|ir\s+pro|vai\s+para|v[áa]\s+para|v[áa]\s+em|vai\s+em|clicar\s+em|clique\s+em|clica\s+em|acessar|acesse|acessa|entrar\s+em|entre\s+em|entra\s+em|mostrar|mostre|ver)\s+/i.test(cleanCmd);
-  if (isSubNav) {
-    const subTarget = cleanCmd
-      .replace(/^(?:abrir|abra|abre|ir\s+para|ir\s+pra|ir\s+pro|vai\s+para|v[áa]\s+para|v[áa]\s+em|vai\s+em|clicar\s+em|clique\s+em|clica\s+em|acessar|acesse|acessa|entrar\s+em|entre\s+em|entra\s+em|mostrar|mostre|ver)\s+(?:a\s+|o\s+|as\s+|os\s+|sub-?aba\s+|aba\s+|guia\s+|se[çc][ãa]o\s+|bot[ãa]o\s+)?/i, '')
-      .trim();
-
-    setProcessingState(true, `Acessando ${subTarget}...`);
-    dispatchPortalBridgeMessage({ action: 'DISCOVERY_SELECT_FILTER', filterTerm: subTarget }, (resp) => {
-      setProcessingState(false);
-      if (resp && resp.sucesso) {
-        appendAssistantChatMessage(`✅ Localizei e acessei **${escapeHtml(resp.elementText || subTarget)}** na aba **${escapeHtml(contextLabel)}**! ✨`, true);
-      } else {
-        appendAssistantChatMessage(
-          `📂 Entrei na aba **${escapeHtml(contextLabel)}**, mas não encontrei o botão ou sub-aba **${escapeHtml(subTarget)}** nesta tela. Você pode me mostrar onde fica ou clicar manualmente? 🔍`,
-          true
-        );
-        showClarificationPointClickCard(
-          `Não encontrei o botão "${subTarget}" na aba ${contextLabel}. Você pode me mostrar clicando nele?`
-        );
-      }
-    });
-    return;
-  }
-
-  // 3. Se for comando de responder recado / mensagem (ex: "responder recado da mãe", "responder mensagem")
-  const isResponderRecado = /^(?:responder|responda|responde|enviar\s+resposta|escrever\s+resposta)\b.*(?:recado|mensagem|comunicado|aviso|m[ãa]e|pai|fam[íi]lia)?/i.test(cleanCmd) ||
-                            /(?:responder\s+(?:ao|à|o|a)?\s*(?:recado|mensagem|m[ãa]e|pai|fam[íi]lia))/i.test(cleanCmd);
-  if (isResponderRecado) {
-    setProcessingState(true, 'Localizando recado para responder...');
-    dispatchPortalBridgeMessage({ action: 'DISCOVERY_SELECT_FILTER', filterTerm: cleanCmd }, (resp) => {
-      setProcessingState(false);
-      if (resp && resp.sucesso) {
-        appendAssistantChatMessage(`Localizei o recado na aba **${escapeHtml(contextLabel)}**! Digite sua resposta para eu enviar. 💬✨`, true);
-      } else {
-        appendAssistantChatMessage(
-          `Entrei na aba **${escapeHtml(contextLabel)}**, mas não encontrei uma mensagem ou campo aberto para **${escapeHtml(cleanCmd)}**. Qual recado você deseja responder? 💬`,
-          true
-        );
-        showHonestErrorCard(
-          'Recado não localizado',
-          `Não encontrei o recado para "${cleanCmd}" na tela. Você pode abrir o recado desejado manualmente?`
-        );
-      }
-    });
-    return;
-  }
-
-  // 3. Se for comando de consulta / leitura / pergunta (ex: "me diga quais dias e horarios eu tenho aula", "quais dias tenho aula", "listar horários")
-  const isReadingQuery = /^(?:me\s+diga|diga|diz|liste|listar|mostre|mostrar|ver|veja|quais|qual|quantos|quantas|quando|onde|consultar|consulta|resumir|resumo|informe|informar)\b/i.test(cleanCmd) ||
-                         /(?:quais\s+dias|quais\s+hor[aá]rios|que\s+aulas|quantas\s+aulas|me\s+diga|me\s+mostre|me\s+fale)/i.test(cleanCmd);
-  if (isReadingQuery) {
-    setProcessingState(true, 'Lendo e organizando dados do portal...');
-    dispatchPortalBridgeMessage({ action: 'READ_PAGE_DATA' }, (pageData) => {
-      setProcessingState(false);
-      if (pageData && pageData.sucesso) {
-        const answer = synthesizeScreenAnswer(cleanCmd, pageData);
-        appendAssistantChatMessage(answer, true);
-      } else {
-        appendAssistantChatMessage(`Não consegui ler os dados da tela na aba **${escapeHtml(contextLabel)}**. Tente atualizar a página.`, true);
-      }
-    });
-    return;
-  }
-
-  // 4. Caso geral de ação/filtro: tenta discovery genérico na página ou pede esclarecimento honesto
-  dispatchPortalBridgeMessage({ action: 'DISCOVERY_SELECT_FILTER', filterTerm: cleanCmd }, (resp) => {
-    setProcessingState(false);
-    if (resp && resp.sucesso) {
-      appendAssistantChatMessage(`✅ Localizei e selecionei **${escapeHtml(resp.elementText || cleanCmd)}** na aba **${escapeHtml(contextLabel)}**! ✨`, true);
-    } else {
-      appendAssistantChatMessage(
-        `Entrei na aba **${escapeHtml(contextLabel)}**, mas não encontrei como executar **${escapeHtml(cleanCmd)}** nesta tela. Você pode me mostrar onde fica? 🔍`,
-        true
-      );
-      showClarificationPointClickCard(
-        `Não encontrei como fazer "${cleanCmd}" na aba ${contextLabel}. Você pode me mostrar clicando no lugar certo?`
-      );
-    }
-  });
-}
-
-/**
- * Executa uma fila de sub-objetivos sequenciais (PPAV Multi-Step Queue Runner).
- * Cada sub-objetivo é executado, aguarda a estabilização da aba/DOM no portal real,
- * e passa o bastão para o próximo passo na nova tela resultante.
- */
-async function executeGoalQueue(subGoals, index = 0, context = {}) {
-  if (!subGoals || index >= subGoals.length) {
-    setProcessingState(false);
-    return;
-  }
-
-  const currentGoal = subGoals[index].trim();
-  const isFirstStep = (index === 0);
-  const isLastStep = (index === subGoals.length - 1);
-  const totalSteps = subGoals.length;
-  const stepNumber = index + 1;
-
-  // 1. Perfil ou Cartão de Aluno (ex: "acessar perfil de joão", "ver o perfil de alice almeida", "aluno bruno")
-  const studentProfileMatch = currentGoal.match(/(?:acessar\s+(?:o\s+|a\s+)?perfil|abrir\s+(?:o\s+|a\s+)?perfil|ver\s+(?:o\s+|a\s+)?perfil|perfil\s+de|perfil\s+do|perfil\s+da|aluno\s+|acessar\s+aluno)\s+(?:de\s+|do\s+|da\s+)?([a-zA-ZÀ-ÿ\s]+)/i);
-
-  // 2. Filtro / Seleção (ex: "selecionar sexto ano", "filtrar por 6A", "escolher 1º bimestre")
-  const isSelectionCommand = /^(?:selecionar|seleciona|selecione|escolher|escolha|escolhe|filtrar|filtra|filtre|marcar|marca|marque)\s+/i.test(currentGoal);
-
-  // 3. Ação de Clique em Botão / Consulta / Confirmação de Grade
-  const isButtonClickCommand = /^(?:pedir\s+pra\s+|pedir\s+para\s+|clicar\s+em\s+|clique\s+em\s+|clica\s+em\s+)?(?:visualizar|consultar|carregar|pesquisar|buscar|aplicar|filtrar)(?:\s+frequ[êe]ncia|\s+chamada|\s+dados|\s+relat[óo]rio|\s+tabela)?\b/i.test(currentGoal);
-
-  // 3b. Extração de Alunos / Sincronização de Roster com o App
-  const isRosterExtractCommand = /(?:pegu?e\s+(?:todos\s+os\s+)?nomes|ler\s+alunos|listar\s+alunos|extrair\s+alunos|criar\s+alunos|salvar\s+alunos|sincronizar\s+alunos|alunos\s+no\s+app)/i.test(currentGoal);
-
-  // 3b2. Cópia ou Extração de Dados da Tela Atual (ex: "copie os horários", "pegue os dados")
-  const isDataCopyCommand = /(?:copi[ae]|copiar|extrair|extrai|pegu?e|pegar|ler|leia)\s+(?:os\s+|as\s+)?(?:hor[aá]rios?|dados|informa[çc][õo]es|aulas?|grades?|quadro)/i.test(currentGoal);
-
-  // 3b3. Gravação de Dados no App (ex: "cole no meu calendário", "salve no calendário", "envie para meu calendário")
-  const isDataPasteCommand = /(?:col[ae]|colar|salv[ae]|salvar|envi[ae]|enviar|mand[ae]|mandar|lev[ae]|levar)\s+(?:no|para|pro|pra)\s+(?:meu\s+)?(?:calend[aá]rio|calendar|agenda|app)/i.test(currentGoal);
-
-  // 3c. Navegação de Aba / Seção do Portal (ex: "abrir turmas", "ir para diário", "acessar arquivos")
-  const isNavCommand = /^(?:abrir|abra|abre|ir\s+para|ir\s+pra|ir\s+pro|vai\s+para|v[áa]\s+para|v[áa]\s+em|vai\s+em|clicar\s+em|clique\s+em|clica\s+em|acessar|acesse|acessa|entrar\s+em|entre\s+em|entra\s+em|navegar\s+at[ée])\s+/i.test(currentGoal) && !studentProfileMatch && !isButtonClickCommand && !isRosterExtractCommand && !isDataCopyCommand && !isDataPasteCommand;
-
-  // 4. Lançamento de Nota ou Falta (Ação de Escrita com Aprovação Prévia)
-  const isNotaOrFalta = /(?:nota|grau|ponto|falta|presen[çc]a|aus[êe]ncia)/i.test(currentGoal);
-
-  // 5. Responder Recado / Mensagem
-  const isResponderRecado = /^(?:responder|responda|responde|enviar\s+resposta|escrever\s+resposta)\b/i.test(currentGoal);
-
-  // 6. Leitura / Pergunta da tela
-  const isReadingQuery = /^(?:me\s+diga|diga|diz|liste|listar|mostre|mostrar|ver|veja|quais|qual|quantos|quantas|quando|consultar|resumir)\b/i.test(currentGoal);
-
-  // ── EXECUÇÃO 0A: Clique em Botão de Consulta / Visualização ──
-  if (isButtonClickCommand) {
-    setProcessingState(true, `[Passo ${stepNumber}/${totalSteps}] Carregando visualização no portal...`);
-    dispatchPortalBridgeMessage({ action: 'CLICK_PORTAL_BUTTON', buttonText: currentGoal }, (btnResp) => {
-      if (btnResp && btnResp.sucesso) {
-        if (isLastStep) {
-          setProcessingState(false);
-          appendAssistantChatMessage(`Prontinho! Acionei **${escapeHtml(btnResp.buttonText || currentGoal)}** no portal para você. 📂✨`, true);
-        } else {
-          appendAssistantChatMessage(`Prontinho! Acionei **${escapeHtml(btnResp.buttonText || currentGoal)}**. Agora vou executar: **${escapeHtml(subGoals[index + 1])}**... 🔍`, true);
-          executeGoalQueue(subGoals, index + 1, context);
-        }
-      } else {
-        dispatchPortalBridgeMessage({ action: 'DISCOVERY_SELECT_FILTER', filterTerm: currentGoal }, (selResp) => {
-          if (selResp && selResp.sucesso) {
-            if (isLastStep) {
-              setProcessingState(false);
-              appendAssistantChatMessage(`Prontinho! Selecionei **${escapeHtml(selResp.elementText || currentGoal)}** no portal. ✨`, true);
-            } else {
-              executeGoalQueue(subGoals, index + 1, context);
-            }
-          } else {
-            if (!isLastStep) {
-              executeGoalQueue(subGoals, index + 1, context);
-            } else {
-              setProcessingState(false);
-              appendAssistantChatMessage(
-                `Procurei pelo botão ou filtro **${escapeHtml(currentGoal)}** no portal, mas não encontrei nesta tela. Você pode clicar manualmente? 🔍`,
-                true
-              );
-            }
-          }
-        });
-      }
-    });
-    return;
-  }
-
-  // ── EXECUÇÃO 0B: Leitura e Sincronização de Alunos ──
-  if (isRosterExtractCommand) {
-    setProcessingState(true, `[Passo ${stepNumber}/${totalSteps}] Lendo alunos e sincronizando com o Teacher AI...`);
-    dispatchPortalBridgeMessage({ action: 'READ_ACTIVE_PORTAL_ROSTER' }, (rosterResp) => {
-      setProcessingState(false);
-      const students = (rosterResp && rosterResp.students) || [];
-      if (students.length > 0) {
-        try {
-          const currentTurma = context.lastFilter || 'Turma Sincronizada';
-          const portalName = (PLATFORMS && PLATFORMS[activePlatform]?.name) || 'Portal Escolar';
-          postToEntityBus('PORTAL_ROSTER_SYNC', {
-            className: currentTurma,
-            portalName: portalName,
-            students: students,
-            pageUrl: window.location.href
-          });
-          fetch('http://localhost:3000/api/portal/roster-sync', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              className: currentTurma,
-              portalName: portalName,
-              students: students,
-              pageUrl: window.location.href
-            })
-          }).catch(err => console.warn('[RosterSync] Falha ao sincronizar via API:', err));
-        } catch (e) {}
-
-        const studentNames = students.map(s => s.name).slice(0, 5).join(', ');
-        const extraCount = students.length > 5 ? ` e mais ${students.length - 5} alunos` : '';
-        appendAssistantChatMessage(
-          `Prontinho! Encontrei **${students.length} alunos** nesta tela e já enviei para a aba Alunos do app! 📋✨<br><span style="color:#475569; font-size:11px;">Alunos: ${studentNames}${extraCount}</span>`,
-          true
-        );
-      } else {
-        appendAssistantChatMessage(`Não encontrei registros de alunos nesta tela do portal. Certifique-se de que a lista de frequência está visível. 🔍`, true);
-      }
-      if (!isLastStep) {
-        executeGoalQueue(subGoals, index + 1, context);
-      }
-    });
-    return;
-  }
-
-  // ── EXECUÇÃO 0C: Cópia / Extração de Dados da Tela Atual (ex: "copie os horários") ──
-  if (isDataCopyCommand) {
-    setProcessingState(true, `[Passo ${stepNumber}/${totalSteps}] Lendo e copiando horários e dados da tela...`);
-    dispatchPortalBridgeMessage({ action: 'READ_PAGE_DATA' }, (pageData) => {
-      setProcessingState(false);
-      context.copiedData = pageData || { sucesso: true, source: 'horarios' };
-      if (isLastStep) {
-        appendAssistantChatMessage(`📋 Copiei os dados e horários desta tela do portal para você! ✨`, true);
-      } else {
-        appendAssistantChatMessage(`📋 Copiei os horários e dados da tela. Continuando para: **${escapeHtml(subGoals[index + 1])}**... 🔍`, true);
-        executeGoalQueue(subGoals, index + 1, context);
-      }
-    });
-    return;
-  }
-
-  // ── EXECUÇÃO 0D: Transferência / Gravação de Dados no App (ex: "cole no meu calendário no app") ──
-  if (isDataPasteCommand) {
-    setProcessingState(false);
-    let eventsData = context.copiedData?.events;
-    if ((!eventsData || eventsData.length === 0) && context.copiedData && typeof PortalDOMReader !== 'undefined' && PortalDOMReader.extractScheduleEvents) {
-      try {
-        eventsData = PortalDOMReader.extractScheduleEvents(context.copiedData);
-      } catch (e) {}
-    }
-    if (!eventsData || eventsData.length === 0) {
-      eventsData = [{ title: 'Horário Escolar', date: new Date().toISOString().split('T')[0] }];
-    }
-
-    try {
-      if (typeof sessionStorage !== 'undefined') {
-        sessionStorage.setItem('teacher_sidepanel_pending_action', JSON.stringify({
-          tool: 'sync_portal_data_to_app',
-          params: {
-            dataType: 'calendar_events',
-            destination: 'calendar',
-            data: eventsData
-          },
-          data: eventsData
-        }));
-      }
-    } catch (e) {
-      console.warn('[SidePanel] Erro ao salvar pending action no sessionStorage:', e);
-    }
-
-    const count = eventsData.length;
-    const sample = eventsData.slice(0, 3).map(e => e.title || e.subject).filter(Boolean).join(', ');
-    const extra = count > 3 ? ` (+${count - 3} aulas)` : '';
-
-    appendAssistantChatMessage(
-      `📅 Identifiquei **${count} horário(s) de aula** ${sample ? `(${escapeHtml(sample)}${extra})` : ''} copiados do portal. Preparei o agendamento no seu **Calendário** do app. Confirma a gravação definitiva? (Diga "sim, pode salvar" ou "cancelar")`,
-      true
-    );
-    return;
-  }
-
-  // ── EXECUÇÃO 1: Navegação de Aba / Menu ──
-  if (isNavCommand) {
-    let navTarget = currentGoal
-      .replace(/^(?:abrir|abra|abre|ir\s+para|ir\s+pra|ir\s+pro|vai\s+para|v[áa]\s+para|v[áa]\s+em|vai\s+em|clicar\s+em|clique\s+em|clica\s+em|acessar|acesse|acessa|entrar\s+em|entre\s+em|entra\s+em|navegar\s+at[ée])\s+(?:a\s+|o\s+|as\s+|os\s+|aba\s+|menu\s+|se[çc][ãa]o\s+|guia\s+|tela\s+)?/i, '')
-      .replace(/^(?:de|do|da)\s+/i, '')
-      .trim();
-    if (!navTarget) navTarget = currentGoal;
-
-    setProcessingState(true, `[Passo ${stepNumber}/${totalSteps}] Acessando ${navTarget} no portal...`);
-
-    dispatchPortalBridgeMessage({ action: 'NAVIGATE_PORTAL_TAB', target: navTarget }, (navResp) => {
-      if (!navResp || !navResp.sucesso) {
-        // Fallback gracioso: pode ser um filtro de turma ou dropdown em vez de uma aba (ex: "acesse 6 ano")
-        dispatchPortalBridgeMessage({ action: 'DISCOVERY_SELECT_FILTER', filterTerm: navTarget }, (selResp) => {
-          if (selResp && selResp.sucesso) {
-            const foundLabel = selResp.elementText || navTarget;
-            context.lastFilter = foundLabel;
-            if (isLastStep) {
-              setProcessingState(false);
-              appendAssistantChatMessage(`Prontinho! Selecionei **${escapeHtml(foundLabel)}** no portal para você. 📂✨`, true);
-            } else {
-              appendAssistantChatMessage(`Prontinho! Selecionei **${escapeHtml(foundLabel)}**. Agora vou executar: **${escapeHtml(subGoals[index + 1])}**... 🔍`, true);
-              executeGoalQueue(subGoals, index + 1, context);
-            }
-            return;
-          }
-
-          setProcessingState(false);
-          appendAssistantChatMessage(
-            `Procurei pela aba ou seção **${escapeHtml(navTarget)}** no portal, mas não encontrei nenhum botão ou menu correspondente nesta tela. Você pode navegar manualmente até lá ou me mostrar onde fica? 🔍`,
-            true
-          );
-          showHonestErrorCard(
-            'Aba ou filtro não encontrado',
-            `Não encontrei a aba ou filtro '${navTarget}' no portal. Clique manualmente no elemento correspondente.`
-          );
-        });
-        return;
-      }
-
-      const foundLabel = navResp.elementText || navTarget;
-      context.lastTab = foundLabel;
-
-      if (isLastStep) {
-        setProcessingState(false);
-        appendAssistantChatMessage(`Prontinho! Entrei na aba **${escapeHtml(foundLabel)}** no portal para você. 📂✨`, true);
-      } else {
-        appendAssistantChatMessage(`Prontinho! Entrei na aba **${escapeHtml(foundLabel)}** no portal. Agora vou executar: **${escapeHtml(subGoals[index + 1])}**... 📂🔍`, true);
-        executeGoalQueue(subGoals, index + 1, context);
-      }
-    });
-    return;
-  }
-
-  // ── EXECUÇÃO 2: Seleção de Filtro (Turma / Ano / Opção) ──
-  if (isSelectionCommand) {
-    const filterTerm = currentGoal
-      .replace(/^(?:selecionar|seleciona|selecione|escolher|escolha|escolhe|filtrar|filtra|filtre|marcar|marca|marque)\s+(?:por\s+|a\s+|o\s+|pelo\s+|pela\s+|turma\s+|ano\s+)?/i, '')
-      .trim();
-
-    setProcessingState(true, `[Passo ${stepNumber}/${totalSteps}] Selecionando ${filterTerm}...`);
-
-    dispatchPortalBridgeMessage({ action: 'DISCOVERY_SELECT_FILTER', filterTerm }, (selResp) => {
-      if (!selResp || !selResp.sucesso) {
-        setProcessingState(false);
-        const loc = context.lastTab ? ` na aba ${context.lastTab}` : '';
-        appendAssistantChatMessage(
-          `📂 Não encontrei a opção **${escapeHtml(filterTerm)}** para selecionar nesta tela${escapeHtml(loc)}. Você pode me mostrar onde fica ou selecionar manualmente? 🔍`,
-          true
-        );
-        showClarificationPointClickCard(
-          `Não encontrei onde selecionar "${filterTerm}"${loc}. Você pode me mostrar clicando no lugar certo?`
-        );
-        return;
-      }
-
-      const selectedLabel = selResp.elementText || filterTerm;
-      context.lastFilter = selectedLabel;
-
-      if (isLastStep) {
-        setProcessingState(false);
-        const locMsg = context.lastTab ? ` na aba **${escapeHtml(context.lastTab)}**` : '';
-        appendAssistantChatMessage(`✅ Selecionei **${escapeHtml(selectedLabel)}**${locMsg} com sucesso! ✨`, true);
-      } else {
-        appendAssistantChatMessage(`✅ Selecionei **${escapeHtml(selectedLabel)}**. Agora vou executar: **${escapeHtml(subGoals[index + 1])}**... 🔍`, true);
-        executeGoalQueue(subGoals, index + 1, context);
-      }
-    });
-    return;
-  }
-
-  // ── EXECUÇÃO 3: Perfil ou Ficha de Aluno ──
-  if (studentProfileMatch) {
-    const studentTarget = studentProfileMatch[1].trim();
-    setProcessingState(true, `[Passo ${stepNumber}/${totalSteps}] Acessando perfil de ${studentTarget}...`);
-
-    dispatchPortalBridgeMessage({ action: 'DISCOVERY_FIND_AND_CLICK_STUDENT', studentName: studentTarget }, (stdResp) => {
-      if (stdResp && stdResp.sucesso) {
-        const foundName = stdResp.elementText || studentTarget;
-        context.lastStudent = foundName;
-        if (isLastStep) {
-          setProcessingState(false);
-          const locMsg = context.lastTab ? ` na aba **${escapeHtml(context.lastTab)}**` : '';
-          appendAssistantChatMessage(`✅ Acessei o perfil de **${escapeHtml(foundName)}**${locMsg} com sucesso! 👤✨`, true);
-        } else {
-          appendAssistantChatMessage(`✅ Acessei o perfil de **${escapeHtml(foundName)}**. Agora vou executar: **${escapeHtml(subGoals[index + 1])}**... 🔍`, true);
-          executeGoalQueue(subGoals, index + 1, context);
-        }
-      } else if (stdResp && stdResp.status === 'ambiguous') {
-        setProcessingState(false);
-        appendAssistantChatMessage(
-          `⚠️ Encontrei mais de um aluno com o nome **${escapeHtml(studentTarget)}** nesta tela. Por favor, escolha qual deles você deseja acessar: 🔍`,
-          true
-        );
-        if (typeof showDisambiguationCard === 'function') {
-          showDisambiguationCard({ aluno: studentTarget, acao: 'abrir_perfil' }, stdResp.candidates || []);
-        }
-      } else {
-        setProcessingState(false);
-        const locMsg = context.lastTab ? ` na aba ${context.lastTab}` : '';
-        appendAssistantChatMessage(
-          `📂 Não encontrei o perfil do aluno **${escapeHtml(studentTarget)}** na tela atual${escapeHtml(locMsg)}. Você pode me mostrar onde fica ou clicar manualmente? 🔍`,
-          true
-        );
-        showHonestErrorCard(
-          'Aluno não encontrado',
-          `Não encontrei o aluno '${studentTarget}' na tela atual do portal.`
-        );
-      }
-    });
-    return;
-  }
-
-  // ── EXECUÇÃO 4: Lançamento de Nota ou Falta (Aprovação Obrigatória) ──
-  if (isNotaOrFalta) {
-    executeSubsequentCommand(currentGoal, context.lastTab || 'Portal');
-    return;
-  }
-
-  // ── EXECUÇÃO 5: Responder Recado ──
-  if (isResponderRecado) {
-    executeSubsequentCommand(currentGoal, context.lastTab || 'Recados');
-    return;
-  }
-
-  // ── EXECUÇÃO 6: Leitura de Tela ──
-  if (isReadingQuery) {
-    setProcessingState(true, `[Passo ${stepNumber}/${totalSteps}] Lendo e organizando dados do portal...`);
-    dispatchPortalBridgeMessage({ action: 'READ_PAGE_DATA' }, (pageData) => {
-      setProcessingState(false);
-      if (pageData && pageData.sucesso) {
-        const answer = synthesizeScreenAnswer(currentGoal, pageData);
-        appendAssistantChatMessage(answer, true);
-        if (!isLastStep) {
-          executeGoalQueue(subGoals, index + 1, context);
-        }
-      } else {
-        appendAssistantChatMessage(`Não consegui ler os dados da tela atual.`, true);
-      }
-    });
-    return;
-  }
-
-  // ── EXECUÇÃO 7: Fallback Genérico via Discovery ──
-  setProcessingState(true, `[Passo ${stepNumber}/${totalSteps}] Executando: ${currentGoal}...`);
-  dispatchPortalBridgeMessage({ action: 'DISCOVERY_SELECT_FILTER', filterTerm: currentGoal }, (resp) => {
-    if (resp && resp.sucesso) {
-      if (isLastStep) {
-        setProcessingState(false);
-        appendAssistantChatMessage(`✅ Localizei e selecionei **${escapeHtml(resp.elementText || currentGoal)}** com sucesso! ✨`, true);
-      } else {
-        appendAssistantChatMessage(`✅ Executado: **${escapeHtml(resp.elementText || currentGoal)}**. Continuando para: **${escapeHtml(subGoals[index + 1])}**...`, true);
-        executeGoalQueue(subGoals, index + 1, context);
-      }
-    } else {
-      setProcessingState(false);
-      appendAssistantChatMessage(
-        `Não encontrei como executar **${escapeHtml(currentGoal)}** nesta tela. Você pode me mostrar onde fica? 🔍`,
-        true
-      );
-      showClarificationPointClickCard(
-        `Não encontrei como fazer "${currentGoal}". Você pode me mostrar clicando no lugar certo?`
-      );
-    }
-  });
-}
-
 // Inicialização dos Listeners de Interface
 if (typeof document !== 'undefined') {
   document.addEventListener('DOMContentLoaded', () => {
@@ -4208,8 +3431,8 @@ if (typeof window !== 'undefined') {
     fillCommandTemplate,
     extractNavigationTarget,
     splitCompoundCommand,
+    extractPrimaryAction,
     decomposeGoalJS,
-    executeGoalQueue,
     trackActionUsage,
     promptShortcutPromotion,
     savePromotedShortcut,
@@ -4220,10 +3443,10 @@ if (typeof window !== 'undefined') {
 
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
+    extractPrimaryAction,
     decomposeGoalJS,
     splitCompoundCommand,
     extractNavigationTarget,
-    executeGoalQueue,
     handlePendingConfirmation
   };
 }
@@ -4282,7 +3505,7 @@ function setupDevModeToggle() {
 
 let entityBus = null;
 try {
-  if (typeof BroadcastChannel !== 'undefined') {
+  if (typeof window !== 'undefined' && typeof BroadcastChannel !== 'undefined') {
     entityBus = new BroadcastChannel('teacher_entity_bus');
     entityBus.onmessage = (ev) => {
       handleEntityBusIncoming(ev.data);

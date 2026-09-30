@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server'
+import { guardEgressFetch, EgressSecurityError } from '@/lib/piiMasking'
 
 export const dynamic = 'force-dynamic'
 
@@ -14,7 +15,7 @@ function getEnvKey(provider: string): string {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    const { prompt, systemPrompt } = body
+    const { prompt, systemPrompt, activeRoster } = body
 
     if (!prompt) {
       return new Response(JSON.stringify({ error: 'Prompt não fornecido.' }), { status: 400 })
@@ -33,14 +34,14 @@ export async function POST(req: NextRequest) {
         let geminiRes: Response | null = null
         for (const model of streamModels) {
           try {
-            const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?key=${geminiKey}`, {
+            const res = await guardEgressFetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?key=${geminiKey}`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 contents: [{ role: 'user', parts: [{ text: (systemPrompt ? systemPrompt + '\n\n' : '') + prompt }] }],
                 generationConfig: { temperature: 0.7 }
               })
-            })
+            }, activeRoster)
             if (res.ok && res.body) {
               geminiRes = res
               break
@@ -101,7 +102,7 @@ export async function POST(req: NextRequest) {
 
     if (activeKey) {
       try {
-        const aiRes = await fetch(`${activeBase}/chat/completions`, {
+        const aiRes = await guardEgressFetch(`${activeBase}/chat/completions`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -116,7 +117,7 @@ export async function POST(req: NextRequest) {
             stream: true,
             temperature: 0.7
           })
-        })
+        }, activeRoster)
 
         if (aiRes.ok && aiRes.body) {
           const stream = new ReadableStream({
@@ -189,6 +190,9 @@ export async function POST(req: NextRequest) {
       }
     })
   } catch (err: unknown) {
+    if (err instanceof EgressSecurityError) {
+      return new Response(JSON.stringify({ error: 'LGPD_EGRESS_BLOCKED', violations: err.violations }), { status: 422 })
+    }
     const msg = err instanceof Error ? err.message : 'Erro interno'
     return new Response(JSON.stringify({ error: msg }), { status: 500 })
   }

@@ -118,7 +118,62 @@ export const AGENT_TOOLS: ToolDefinition[] = [
     }
   },
 
-  // 7. PORTAIS ESCOLARES (INTEGRAÇÃO EXTENSÃO & AUTOMAÇÃO AGÊNTICA - SEGURANÇA 0-TESTER)
+  // 7. PORTAIS ESCOLARES (INTEGRAÇÃO EXTENSÃO & AUTOMAÇÃO AGÊNTICA UNIFICADA - F1)
+  {
+    name: 'portal_observe',
+    description: 'Inspeciona elementos interativos da tela atual do portal escolar (selects com opções e índices, botões, abas e links). Retorna as opções disponíveis com seus respectivos índices inteiros (index) e estado atual.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        scope: { type: 'string', description: 'Escopo opcional de observação (ex: "form:meu-form", "global_nav")' }
+      }
+    }
+  },
+  {
+    name: 'portal_set_select',
+    description: 'Seleciona uma opção em um elemento <select> do portal pelo seu índice (option_index) ou pelo ref estável obtido em portal_observe. Dispara os eventos input e change no DOM e verifica o selectedIndex lido de volta.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        ref: { type: 'string', description: 'Referência estável ou ID/seletor do select (ex: "ref_1" ou "#turma")' },
+        option_index: { type: 'number', description: 'Índice inteiro (0-indexed) da opção desejada no <select>' }
+      },
+      required: ['ref', 'option_index']
+    }
+  },
+  {
+    name: 'portal_click',
+    description: 'Aciona um elemento clicável no portal (botão de filtrar, consultar, aba de navegação ou link) pelo seu ref estável obtido em portal_observe.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        ref: { type: 'string', description: 'Referência estável do botão ou elemento (ex: "ref_5")' }
+      },
+      required: ['ref']
+    }
+  },
+  {
+    name: 'portal_navigate',
+    description: 'Navega para uma aba ou seção de navegação global do portal escolar (ex: "frequência", "diário", "notas", "recados").',
+    input_schema: {
+      type: 'object',
+      properties: {
+        target: { type: 'string', description: 'Nome da aba ou seção para navegar' }
+      },
+      required: ['target']
+    }
+  },
+  {
+    name: 'portal_finish',
+    description: 'Conclui a tarefa de automação após todos os passos terem sido executados e verificados no portal.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        summary: { type: 'string', description: 'Resumo estruturado objetivo das etapas concluídas' }
+      },
+      required: ['summary']
+    }
+  },
   {
     name: 'execute_portal_action',
     description: 'Preenche autonomamente ações operacionais em portais escolares (Machado Sobrinho, Plurall, Rede Santa Catarina, Cambridge One, etc.) para diários de classe, frequências/chamadas e notas de boletim. Preenche todos os campos no DOM e deixa o formulário pronto para confirmação final. Suporta orquestração multi-página contínua (ex: chamada + diário encadeados) via parâmetro steps.',

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { guardEgressFetch } from '@/lib/piiMasking'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -50,7 +51,7 @@ export async function POST(req: NextRequest) {
 
       for (const m of models) {
         try {
-          const res = await fetch(
+          const res = await guardEgressFetch(
             `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${geminiKey}`,
             {
               method: 'POST',

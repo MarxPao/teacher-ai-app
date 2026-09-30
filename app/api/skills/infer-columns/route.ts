@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { ColumnMetadata, SemanticType } from '@/lib/skills/skillGraphSchema'
+import { guardEgressFetch } from '@/lib/piiMasking'
 
 const VALID_SEMANTIC_TYPES: SemanticType[] = [
   'identifier',
@@ -102,7 +103,7 @@ Responda ESTRITAMENTE em formato JSON com o formato:
   ]
 }`
 
-        const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        const groqRes = await guardEgressFetch('https://api.groq.com/openai/v1/chat/completions', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -144,7 +145,7 @@ ${headers.map((h: string, i: number) => `${i + 1}. "${h}": [${(samplesPerCol[h] 
 
 Responda estritamente com JSON: { "classifications": [ { "header": string, "semantic_type": string } ] }`
 
-        const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${geminiKey}`, {
+        const geminiRes = await guardEgressFetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${geminiKey}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

@@ -5,6 +5,8 @@
  * para impedir que o professor salve credenciais incorretas ou incompletas.
  */
 
+import { guardEgressFetch } from '@/lib/piiMasking'
+
 export type ByokErrorType =
   | 'empty_credentials'
   | 'invalid_key'
@@ -43,26 +45,26 @@ export async function validateProviderApiKey(provider: string, rawKey: string): 
     let res: Response | null = null
 
     if (prov === 'gemini') {
-      res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(key)}`, {
+      res = await guardEgressFetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(key)}`, {
         method: 'GET'
       })
     } else if (prov === 'openai') {
-      res = await fetch('https://api.openai.com/v1/models', {
+      res = await guardEgressFetch('https://api.openai.com/v1/models', {
         method: 'GET',
         headers: { Authorization: `Bearer ${key}` }
       })
     } else if (prov === 'groq') {
-      res = await fetch('https://api.groq.com/openai/v1/models', {
+      res = await guardEgressFetch('https://api.groq.com/openai/v1/models', {
         method: 'GET',
         headers: { Authorization: `Bearer ${key}` }
       })
     } else if (prov === 'anthropic') {
-      res = await fetch('https://api.anthropic.com/v1/models', {
+      res = await guardEgressFetch('https://api.anthropic.com/v1/models', {
         method: 'GET',
         headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01' }
       })
     } else if (prov === 'elevenlabs') {
-      res = await fetch('https://api.elevenlabs.io/v1/user', {
+      res = await guardEgressFetch('https://api.elevenlabs.io/v1/user', {
         method: 'GET',
         headers: { 'xi-api-key': key }
       })

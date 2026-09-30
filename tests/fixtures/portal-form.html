@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Portal Escolar Mock Fixture</title>
+</head>
+<body>
+  <!-- Select fora de form: DEVE ser ignorado/excluído de qualquer resolução -->
+  <div class="top-nav-bar">
+    <label for="periodos">Período de Exercício:</label>
+    <select id="periodos" name="periodos">
+      <option value="2026">2026 - Ano Corrente</option>
+      <option value="2025">2025 - Ano Anterior</option>
+    </select>
+  </div>
+
+  <!-- Formulário principal do portal contendo os campos canônicos -->
+  <form id="form_diario_frequencia" name="form_diario_frequencia" method="post" action="/gravar">
+    <!-- 1. Turma (#turma) -->
+    <div class="form-group">
+      <label for="turma">Turma:</label>
+      <select id="turma" name="turma">
+        <option value="">Selecione uma turma</option>
+        <option value="101">6º Ano A - Fundamental II</option>
+        <option value="102">6º Ano B - Fundamental II</option>
+        <option value="103">7º Ano A - Fundamental II</option>
+      </select>
+    </div>
+
+    <!-- 2. Divisão / Mês / Bimestre (#divisao) -->
+    <div class="form-group">
+      <label for="divisao">Divisão / Bimestre:</label>
+      <select id="divisao" name="divisao">
+        <option value="">Selecione o bimestre</option>
+        <option value="b1">1º Bimestre</option>
+        <option value="b2">2º Bimestre</option>
+        <option value="b3">3º Bimestre</option>
+        <option value="b4">4º Bimestre</option>
+      </select>
+    </div>
+
+    <!-- 3. Disciplina (#disciplina) — Contém values duplicados intencionais -->
+    <div class="form-group">
+      <label for="disciplina">Disciplina / Componente:</label>
+      <select id="disciplina" name="disciplina">
+        <option value="">Selecione uma disciplina</option>
+        <!-- Values duplicados intencionais: mesmo value "disc_lp" para duas disciplinas distintas -->
+        <option value="disc_lp">Língua Portuguesa - Gramática</option>
+        <option value="disc_lp">Língua Portuguesa - Literatura</option>
+        <!-- Values duplicados intencionais: mesmo value "disc_ing" para duas séries distintas -->
+        <option value="disc_ing">Língua Inglesa - 6º Ano Regular</option>
+        <option value="disc_ing">Língua Inglesa - 7º Ano Avançado</option>
+        <option value="disc_mat">Matemática e Raciocínio Lógico</option>
+      </select>
+    </div>
+
+    <!-- 4. Dia (#dia) -->
+    <div class="form-group">
+      <label for="dia">Dia da Aula:</label>
+      <select id="dia" name="dia">
+        <option value="">Selecione o dia</option>
+        <option value="d15">15/09/2026 (Terça-feira)</option>
+        <option value="d16">16/09/2026 (Quarta-feira)</option>
+        <option value="d17">17/09/2026 (Quinta-feira)</option>
+      </select>
+    </div>
+
+    <!-- 5. Ordem (#ordem) -->
+    <div class="form-group">
+      <label for="ordem">Ordem de Listagem:</label>
+      <select id="ordem" name="ordem">
+        <option value="alfabetica" selected>Ordem Alfabética</option>
+        <option value="matricula">Ordem por Matrícula</option>
+        <option value="chamada">Número de Chamada</option>
+      </select>
+    </div>
+
+    <!-- 6. Ativos (#ativos) -->
+    <div class="form-group">
+      <label for="ativos">Situação dos Alunos:</label>
+      <select id="ativos" name="ativos">
+        <option value="todos">Todos os Alunos</option>
+        <option value="ativos" selected>Apenas Alunos Ativos</option>
+        <option value="inativos">Inativos e Transferidos</option>
+      </select>
+    </div>
+
+    <button type="submit" id="btn_consultar">Consultar Grade</button>
+  </form>
+</body>
+</html>

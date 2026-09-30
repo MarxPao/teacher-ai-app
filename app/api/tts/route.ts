@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server'
 import { optimizeTextForSpeech } from '@/lib/tokenOptimizer'
+import { guardEgressFetch } from '@/lib/piiMasking'
 
 export async function POST(req: NextRequest) {
   try {
@@ -53,7 +54,7 @@ export async function POST(req: NextRequest) {
     // 2. Fallback: OpenAI TTS-HD
     const apiKey = userKey || process.env.OPENAI_API_KEY || process.env.OPENAI_KEY || ''
     if (apiKey) {
-      const response = await fetch('https://api.openai.com/v1/audio/speech', {
+      const response = await guardEgressFetch('https://api.openai.com/v1/audio/speech', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${apiKey}`,

@@ -47,6 +47,7 @@ import {
   buildHonestDiagnostic,
   summarizeObservationData
 } from '@/lib/agentLoopEngine'
+import { composeReply } from '@/lib/portalComposer'
 
 // Types 
 interface Message {
@@ -770,10 +771,12 @@ export async function executeTool(
       }
       sessionStorage.removeItem('teacher_active_portal_task')
       window.dispatchEvent(new Event('teacher:portal_task_completed'))
-      const isMulti = task.action_type === 'multi_step_plan'
-      const msg = isMulti
-        ? `✅ Perfeito! Todas as etapas preparadas (${task.steps?.length || 2} ações) foram confirmadas e efetivadas com sucesso no portal ${task.portal || 'escolar'}.`
-        : `✅ Perfeito! Submissão final confirmada e executada com sucesso no portal ${task.portal || 'escolar'}. O lançamento está concluído.`
+      const portalName = task.portal || 'portal escolar'
+      const msg = composeReply('verified', {
+        action: 'portal',
+        requested: `Submissão no ${portalName}`,
+        read_back: `Submissão no ${portalName}`
+      })
       if (speakFn) speakFn(msg)
       return msg
     } else {
@@ -2127,7 +2130,12 @@ export default function RafinhaChat({ onNavigate, onCommandReady }: RafinhaChatP
  }
  sessionStorage.removeItem('teacher_active_portal_task')
  window.dispatchEvent(new Event('teacher:portal_task_completed'))
- const replyText = `✅ Perfeito! Submissão final aprovada e executada com sucesso no portal ${pendingTask.portal || 'escolar'}. O diário/chamada foi gravado e a evidência arquivada.`
+ const portalName = pendingTask.portal || 'portal escolar'
+ const replyText = composeReply('verified', {
+   action: 'portal',
+   requested: `Submissão no ${portalName}`,
+   read_back: `Submissão no ${portalName}`
+ })
  setMessages(prev => [...prev, { role: 'assistant', content: replyText }])
  setIsLoading(false)
  isLoadingRef.current = false
@@ -2905,7 +2913,12 @@ export default function RafinhaChat({ onNavigate, onCommandReady }: RafinhaChatP
        screenshotUrl={pendingPortalTask.payload?.prefilled_screenshot_url}
        onApproved={() => {
          setPendingPortalTask(null)
-         const replyText = `✅ Perfeito! Submissão final aprovada e executada com sucesso no portal ${pendingPortalTask.portal || 'escolar'}. O lançamento foi concluído.`
+          const portalName = pendingPortalTask.portal || 'portal escolar'
+          const replyText = composeReply('verified', {
+            action: 'portal',
+            requested: `Submissão no ${portalName}`,
+            read_back: `Submissão no ${portalName}`
+          })
          setMessages(prev => [...prev, { role: 'assistant', content: replyText }])
          speak(replyText)
        }}

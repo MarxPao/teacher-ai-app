@@ -16,6 +16,7 @@
  */
 
 import { ApiConfig } from '@/components/modules/ApiManager'
+import { guardEgressFetch } from '@/lib/piiMasking'
 
 export type TaskType =
   | 'chat'           // Chat agêntico geral (Rafinha)
@@ -201,7 +202,7 @@ export async function executeUnifiedAiCall(api: ApiConfig | null, prompt: string
 
   // 1. Anthropic Claude
   if (p === 'anthropic') {
-    const r = await fetch('https://api.anthropic.com/v1/messages', {
+    const r = await guardEgressFetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerously-allow-browser': 'true' },
       body: JSON.stringify({ model: model || 'claude-3-5-sonnet-20241022', max_tokens: 4096, messages: [{ role: 'user', content: prompt }] }),
@@ -220,7 +221,7 @@ export async function executeUnifiedAiCall(api: ApiConfig | null, prompt: string
     if (p === 'openrouter') baseUrl = 'https://openrouter.ai/api/v1/chat/completions'
     if (p === 'zhipu') baseUrl = 'https://open.bigmodel.cn/api/paas/v4/chat/completions'
 
-    const r = await fetch(baseUrl, {
+    const r = await guardEgressFetch(baseUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
       body: JSON.stringify({
@@ -241,7 +242,7 @@ export async function executeUnifiedAiCall(api: ApiConfig | null, prompt: string
     let lastErr = ''
     for (const m of modelsToTry) {
       try {
-        const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${key}`, {
+        const r = await guardEgressFetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${key}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),

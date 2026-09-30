@@ -1,4 +1,5 @@
 import { ApiConfig } from '@/components/modules/ApiManager'
+import { guardEgressFetch } from '@/lib/piiMasking'
 
 export interface FactCheckResult {
   score: number          // 0-100
@@ -45,7 +46,7 @@ export async function runFactCheck(
     let raw = ''
 
     if (api.provider === 'anthropic') {
-      const r = await fetch('https://api.anthropic.com/v1/messages', {
+      const r = await guardEgressFetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-api-key': api.key, 'anthropic-version': '2023-06-01', 'anthropic-dangerously-allow-browser': 'true' },
         body: JSON.stringify({ model: api.model || 'claude-3-5-sonnet-20241022', max_tokens: 800, messages: [{ role: 'user', content: prompt }] })
@@ -60,7 +61,7 @@ export async function runFactCheck(
         : api.provider === 'zhipu' ? 'https://open.bigmodel.cn/api/paas/v4/chat/completions'
         : api.provider === 'siliconflow' ? 'https://api.siliconflow.cn/v1/chat/completions'
         : 'https://api.openai.com/v1/chat/completions'
-      const r = await fetch(baseUrl, {
+      const r = await guardEgressFetch(baseUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${api.key}` },
         body: JSON.stringify({ model: api.model || (api.provider === 'groq' ? 'llama-3.3-70b-versatile' : 'gpt-4o-mini'), messages: [{ role: 'user', content: prompt }] })
@@ -71,7 +72,7 @@ export async function runFactCheck(
     } else if (api.provider === 'gemini') {
       // F1: garantir modelo padrão para não gerar URL inválida
       const model = api.model && !api.model.includes('gemini-2.0') && !api.model.includes('gemini-1.5') && !api.model.includes('gemini-2.5') ? api.model : 'gemini-3.6-flash'
-      const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${api.key}`, {
+      const r = await guardEgressFetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${api.key}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })

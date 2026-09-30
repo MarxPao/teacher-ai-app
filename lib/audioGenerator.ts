@@ -3,6 +3,8 @@
  * Suporta ElevenLabs e OpenAI TTS com vozes alternadas para diálogos e controle de sotaque.
  */
 
+import { guardEgressFetch } from '@/lib/piiMasking'
+
 export interface AudioGenOptions {
   text: string
   accent?: 'US' | 'UK'
@@ -74,7 +76,7 @@ export async function generateListeningAudio({ text, accent = 'US', mode = 'mono
   // 2. Fallback para OpenAI TTS HD no cliente ou servidor
   const voice = accent === 'UK' ? OPENAI_VOICES.UK_FEMALE : OPENAI_VOICES.US_FEMALE
   if (openaiApi?.key) {
-    const res = await fetch('https://api.openai.com/v1/audio/speech', {
+    const res = await guardEgressFetch('https://api.openai.com/v1/audio/speech', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${openaiApi.key}`,

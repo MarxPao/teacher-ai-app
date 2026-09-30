@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { guardEgressFetch } from '@/lib/piiMasking'
 
 /**
  * /api/image — Geração de Imagens Pedagógicas e Peças Visuais
@@ -16,7 +17,7 @@ export async function POST(req: NextRequest) {
     const apiKey = userKey || process.env.OPENAI_API_KEY
     if (apiKey && apiKey.startsWith('sk-')) {
       try {
-        const response = await fetch('https://api.openai.com/v1/images/generations', {
+        const response = await guardEgressFetch('https://api.openai.com/v1/images/generations', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

@@ -75,8 +75,8 @@ describe('Unificação da Rafinha: App como Cérebro Único, Extensão como Exec
 
   // ─── ITEM 0: DIAGNÓSTICO E CLASSIFICAÇÃO DAS 36 FERRAMENTAS ────────────────
   describe('Item 0 — Auditoria e Classificação das 36 Ferramentas em (a) Local ou (b) DOM', () => {
-    it('AGENT_TOOLS possui ferramentas catalogadas (37 ferramentas com salvar_memoria)', () => {
-      expect(AGENT_TOOLS).toHaveLength(37)
+    it('AGENT_TOOLS possui exatamente 45 ferramentas catalogadas (34 locais + 11 DOM)', () => {
+      expect(AGENT_TOOLS).toHaveLength(45)
     })
 
     it('Classifica as ferramentas em Tipo (a) mutação local e Tipo (b) DOM real do portal', () => {
@@ -86,7 +86,12 @@ describe('Unificação da Rafinha: App como Cérebro Único, Extensão como Exec
         'show_portal_screenshot',
         'fill_school_portal',
         'open_school_portal',
-        'invoke_teacher_capability'
+        'invoke_teacher_capability',
+        'portal_observe',
+        'portal_set_select',
+        'portal_click',
+        'portal_navigate',
+        'portal_finish'
       ]
 
       const classified = AGENT_TOOLS.map(tool => {
@@ -100,8 +105,8 @@ describe('Unificação da Rafinha: App como Cérebro Único, Extensão como Exec
       const typeA = classified.filter(c => c.type === 'a')
       const typeB = classified.filter(c => c.type === 'b')
 
-      expect(typeA.length).toBe(31)
-      expect(typeB.length).toBe(6)
+      expect(typeA.length).toBe(34)
+      expect(typeB.length).toBe(11)
 
       // Valida ferramentas emblemáticas de cada grupo
       expect(typeA.some(t => t.name === 'add_todo')).toBe(true)

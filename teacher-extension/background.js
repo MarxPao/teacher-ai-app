@@ -23,6 +23,20 @@ if (!PortalDOMReader && typeof require === 'function') {
   try { PortalDOMReader = require('./portal_dom_reader.js'); } catch (e) {}
 }
 
+let composeReply = typeof globalThis !== 'undefined' ? globalThis.composeReply : null;
+try {
+  if (!composeReply && typeof importScripts === 'function') {
+    importScripts('composeReply.js');
+    composeReply = globalThis.composeReply;
+  }
+} catch (e) {}
+if (!composeReply && typeof require === 'function') {
+  try {
+    const mod = require('./composeReply.js');
+    composeReply = mod.composeReply;
+  } catch (e) {}
+}
+
 const WS_URL_PRIMARY = 'ws://127.0.0.1:8766';
 const WS_URL_FALLBACK = 'ws://127.0.0.1:8765/status_stream';
 const HTTP_STATUS_FALLBACK = 'http://127.0.0.1:8765/portal_status';
@@ -78,6 +92,15 @@ try {
 if (typeof chrome !== 'undefined' && chrome.sidePanel && chrome.sidePanel.setPanelBehavior) {
   chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true })
     .catch((err) => console.warn('[TeacherAI Extension] Erro ao configurar openPanelOnActionClick:', err));
+}
+
+if (typeof chrome !== 'undefined' && chrome.runtime?.onInstalled) {
+  chrome.runtime.onInstalled.addListener(() => {
+    if (chrome.sidePanel?.setPanelBehavior) {
+      chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true })
+        .catch((err) => console.warn('[TeacherAI Extension] Erro ao configurar openPanelOnActionClick onInstalled:', err));
+    }
+  });
 }
 
 if (typeof chrome !== 'undefined' && chrome.action && chrome.action.onClicked) {
@@ -613,7 +636,7 @@ async function handleExecutePortalAction(msg) {
     if (!isNaN(rawNota)) {
       if (rawNota > 10 && rawNota <= 100) {
         nota = parseFloat((rawNota / 10).toFixed(1));
-        console.log(`[SafeWriter] 💡 Guardião Pedagógico: nota ${rawNota} normalizada para ${nota}`);
+        console.log('[SafeWriter] 💡 Guardião Pedagógico: valor de nota normalizado com sucesso.');
       } else if (rawNota < 0 || rawNota > 100) {
         sendActionResult(actionId, {
           sucesso: false,
@@ -986,155 +1009,7 @@ async function internalNavigatePortalTab(targetTabId, targetKeyword) {
   }
 }
 
-async function internalSelectPortalFilter(targetTabId, rawTerm) {
-  const term = (rawTerm || '').trim();
-  if (!term) return { sucesso: false, mensagem: 'Termo de filtro não especificado.' };
 
-  try {
-    const results = await chrome.scripting.executeScript({
-      target: { tabId: targetTabId },
-      args: [term],
-      func: async (t) => {
-        const cleanStr = (s) => (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
-        const normTerm = cleanStr(t);
-
-        const ordinalMap = {
-          'primeiro': '1', 'segundo': '2', 'terceiro': '3', 'quarto': '4',
-          'quinto': '5', 'sexto': '6', 'setimo': '7', 'oitavo': '8', 'nono': '9'
-        };
-
-        const searchVariants = [normTerm];
-        for (const [word, num] of Object.entries(ordinalMap)) {
-          if (normTerm.includes(word)) {
-            searchVariants.push(normTerm.replace(word, num));
-            searchVariants.push(normTerm.replace(word, `${num}o`));
-            searchVariants.push(normTerm.replace(word, `${num}º`));
-            searchVariants.push(num);
-            searchVariants.push(`${num}o`);
-            searchVariants.push(`${num}º`);
-          } else if (normTerm.includes(num)) {
-            searchVariants.push(normTerm.replace(num, word));
-            searchVariants.push(word);
-          }
-        }
-
-        const uniqueVariants = Array.from(new Set(searchVariants.filter(Boolean)));
-
-        // 1. Procura em dropdowns (<select>)
-        const selects = Array.from(document.querySelectorAll('select'));
-        for (const sel of selects) {
-          if (sel.offsetParent === null && sel.offsetWidth === 0 && sel.offsetHeight === 0) continue;
-          for (let i = 0; i < sel.options.length; i++) {
-            const opt = sel.options[i];
-            const optText = cleanStr(opt.text);
-            const optVal = cleanStr(opt.value);
-            const isMatch = uniqueVariants.some(v => optText.includes(v) || optVal === v || optVal.includes(v));
-            if (isMatch) {
-              sel.selectedIndex = i;
-              sel.value = opt.value;
-
-              const origTransition = sel.style.transition;
-              const origOutline = sel.style.outline;
-              sel.style.transition = 'all 0.3s ease';
-              sel.style.outline = '3px solid #10b981';
-              sel.scrollIntoView({ behavior: 'smooth', block: 'center' });
-
-              sel.dispatchEvent(new Event('input', { bubbles: true }));
-              sel.dispatchEvent(new Event('change', { bubbles: true }));
-
-              await new Promise(r => setTimeout(r, 250));
-
-              setTimeout(() => {
-                try {
-                  sel.style.transition = origTransition;
-                  sel.style.outline = origOutline;
-                } catch {}
-              }, 1800);
-
-              return {
-                sucesso: true,
-                matchedType: 'select_option',
-                elementText: opt.text.trim(),
-                target: t
-              };
-            }
-          }
-        }
-
-        // 2. Procura em botões, abas, pílulas de filtro, links, radios e checkboxes
-        const clickableCandidates = Array.from(document.querySelectorAll(
-          'button, [role="button"], [role="option"], [role="radio"], .pill, .filter-btn, .badge, a, label, input[type="radio"], input[type="checkbox"]'
-        ));
-
-        let bestClickable = null;
-        let bestScore = -1;
-
-        for (const el of clickableCandidates) {
-          if (el.offsetParent === null && el.offsetWidth === 0 && el.offsetHeight === 0) continue;
-          const text = cleanStr(el.innerText || el.textContent);
-          const aria = cleanStr(el.getAttribute('aria-label'));
-          const title = cleanStr(el.getAttribute('title'));
-          const val = cleanStr(el.getAttribute('value'));
-
-          for (const v of uniqueVariants) {
-            let score = 0;
-            if (text === v) score = 100;
-            else if (text.startsWith(v)) score = 85;
-            else if (text.includes(v)) score = 70;
-            else if (v.includes(text) && text.length >= 4) score = 75;
-            else if (aria.includes(v)) score = 60;
-            else if (title.includes(v)) score = 50;
-            else if (val === v) score = 65;
-
-            if (score > bestScore && score >= 50) {
-              bestScore = score;
-              bestClickable = el;
-            }
-          }
-        }
-
-        if (bestClickable) {
-          const origTransition = bestClickable.style.transition;
-          const origOutline = bestClickable.style.outline;
-          bestClickable.style.transition = 'all 0.3s ease';
-          bestClickable.style.outline = '3px solid #10b981';
-          bestClickable.scrollIntoView({ behavior: 'smooth', block: 'center' });
-
-          await new Promise(r => setTimeout(r, 120));
-
-          try {
-            bestClickable.click();
-          } catch (e) {
-            bestClickable.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
-          }
-
-          await new Promise(r => setTimeout(r, 250));
-
-          setTimeout(() => {
-            try {
-              bestClickable.style.transition = origTransition;
-              bestClickable.style.outline = origOutline;
-            } catch {}
-          }, 1800);
-
-          return {
-            sucesso: true,
-            matchedType: 'clickable_element',
-            elementText: (bestClickable.innerText || bestClickable.textContent || t).trim(),
-            target: t
-          };
-        }
-
-        return { sucesso: false, mensagem: `Não encontrei filtro para '${t}'.` };
-      }
-    });
-
-    await waitForPageSettled(targetTabId, 1500);
-    return (results && results[0] && results[0].result) || { sucesso: false, mensagem: 'Falha ao selecionar filtro.' };
-  } catch (err) {
-    return { sucesso: false, mensagem: err.message };
-  }
-}
 
 async function internalClickConfirmOrViewButton(targetTabId, customPattern) {
   try {
@@ -1369,7 +1244,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
               status: actionResp?.status || 'success',
               screenshot,
               data: actionResp,
-              message: actionResp?.mensagem || actionResp?.message || 'Campos preenchidos com sucesso no DOM do portal.'
+              message: actionResp?.mensagem || actionResp?.message || 'Campos preenchidos no DOM do portal.'
             });
           });
           return;
@@ -1445,88 +1320,28 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       const p = message.payload || message.params || {};
       const actionType = p.actionType || p.type || p.acao || 'attendance';
       const classRef = p.classRef || p.turma || '';
-      const title = p.title || p.titulo || p.description || p.text || '';
       const navTargetRaw    = p.navTarget    || '';
       const subNavTargetRaw = p.subNavTarget || '';
       const trace = [];
 
-      // Normalização prévia de título / texto da ação para uso em todo o ciclo de execução
-      const normTitle = (PortalNormalizer && PortalNormalizer.cleanNormalizeString)
-        ? PortalNormalizer.cleanNormalizeString(title)
-        : (title || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
-
       try {
-        // 1. Pré-Navegação de Aba — prioridade: navTarget explícito > heurística
-        let tabTarget = null;
+        // 1. Navegação explícita de aba (sem heurísticas ou inferências por título)
         if (navTargetRaw) {
-          tabTarget = navTargetRaw;
-        } else {
-          if (actionType === 'attendance' || normTitle.includes('frequencia') || normTitle.includes('chamada')) {
-            tabTarget = 'frequência';
-          } else if (actionType === 'grades' || normTitle.includes('nota') || normTitle.includes('avaliacao') || normTitle.includes('boletim')) {
-            tabTarget = 'notas';
-          } else if (actionType === 'diary' || normTitle.includes('diario') || normTitle.includes('aula')) {
-            tabTarget = 'diário';
-          } else if (actionType === 'calendar' || actionType === 'schedule' || normTitle.includes('horario') || normTitle.includes('calendario') || normTitle.includes('agenda')) {
-            tabTarget = 'horários';
-          }
-        }
-
-        if (tabTarget) {
-          console.log(`[EXECUTE_PORTAL_ACTION] Tentando pré-navegação para aba '${tabTarget}'...`);
-          const navRes = await internalNavigatePortalTab(targetTabId, tabTarget);
+          console.log(`[EXECUTE_PORTAL_ACTION] Navegando para aba explícita '${navTargetRaw}'...`);
+          const navRes = await internalNavigatePortalTab(targetTabId, navTargetRaw);
           if (navRes && navRes.sucesso) {
-            trace.push(`Navegou para aba '${navRes.elementText || tabTarget}'`);
+            trace.push(`Navegou para aba '${navRes.elementText || navTargetRaw}'`);
             await new Promise(r => setTimeout(r, 400));
           }
         }
 
-        // 1b. Sub-navegação (subNavTarget — ex: "enviados" dentro de "recados")
+        // 1b. Sub-navegação explícita
         if (subNavTargetRaw) {
-          console.log(`[EXECUTE_PORTAL_ACTION] Sub-navegação para '${subNavTargetRaw}'...`);
+          console.log(`[EXECUTE_PORTAL_ACTION] Sub-navegação explícita para '${subNavTargetRaw}'...`);
           await new Promise(r => setTimeout(r, 300));
           const subNavRes = await internalNavigatePortalTab(targetTabId, subNavTargetRaw);
           if (subNavRes && subNavRes.sucesso) {
             trace.push(`Sub-navegou para '${subNavRes.elementText || subNavTargetRaw}'`);
-            await new Promise(r => setTimeout(r, 300));
-          }
-        }
-
-        // 2. Seleção de Turma / Filtro (classRef)
-        let turmaSelected = false;
-        if (classRef) {
-          console.log(`[EXECUTE_PORTAL_ACTION] Selecionando filtro de turma '${classRef}'...`);
-          const filterRes = await internalSelectPortalFilter(targetTabId, classRef);
-          if (filterRes && filterRes.sucesso) {
-            turmaSelected = true;
-            trace.push(`Filtro de turma selecionado: '${filterRes.elementText || classRef}'`);
-            await new Promise(r => setTimeout(r, 300));
-          }
-        }
-
-        // 3. Seleção de Disciplina (se houver na mensagem/título)
-        const commonSubjects = (PortalNormalizer && PortalNormalizer.COMMON_CURRICULUM_SUBJECTS) || [
-          'lingua inglesa', 'ingles', 'lingua portuguesa', 'portugues',
-          'matematica', 'historia', 'geografia', 'ciencias', 'fisica',
-          'quimica', 'biologia', 'artes', 'educacao fisica', 'filosofia', 'sociologia',
-          'redacao', 'literatura', 'espanhol'
-        ];
-        let subjectFound = (PortalNormalizer && PortalNormalizer.identifyCurriculumSubject)
-          ? PortalNormalizer.identifyCurriculumSubject(normTitle)
-          : null;
-        if (!subjectFound) {
-          for (const subj of commonSubjects) {
-            if (normTitle.includes(subj)) {
-              subjectFound = subj;
-              break;
-            }
-          }
-        }
-        if (subjectFound) {
-          console.log(`[EXECUTE_PORTAL_ACTION] Selecionando filtro de disciplina '${subjectFound}'...`);
-          const subjRes = await internalSelectPortalFilter(targetTabId, subjectFound);
-          if (subjRes && subjRes.sucesso) {
-            trace.push(`Disciplina selecionada: '${subjRes.elementText || subjectFound}'`);
             await new Promise(r => setTimeout(r, 300));
           }
         }
@@ -1576,16 +1391,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
         let mensagemFinal = '';
         if (isDomFilled) {
-          mensagemFinal = domActionRes?.mensagem || 'Campos preenchidos com sucesso no DOM do portal!';
+          mensagemFinal = domActionRes?.mensagem || 'Campos preenchidos no DOM do portal.';
         } else if (navTargetRaw && trace.length > 0) {
           const subLabel = subNavTargetRaw ? ` › ${subNavTargetRaw}` : '';
-          mensagemFinal = `Acessei "${navTargetRaw}${subLabel}" no portal! ${trace.join(' → ')} ✅`;
+          mensagemFinal = `Aba "${navTargetRaw}${subLabel}" acessada: ${trace.join(' → ')}`;
         } else if (students.length > 0) {
           const classLabel = classRef ? `da turma ${classRef}` : '';
           const subjMsg = subjectFound ? ` (${subjectFound})` : '';
-          mensagemFinal = `Acessei a aba Frequência ${classLabel}${subjMsg}. Encontrei ${students.length} alunos na tela prontos para visualização e chamada! ✨`;
+          mensagemFinal = `Aba Frequência ${classLabel}${subjMsg}: ${students.length} alunos listados na tela.`;
         } else if (turmaSelected) {
-          mensagemFinal = `Filtros selecionados no portal com sucesso (${trace.join(' → ')}). Tela pronta para visualização!`;
+          mensagemFinal = `Filtros selecionados no portal: ${trace.join(' → ')}.`;
         } else {
           mensagemFinal = 'Ação executada no portal. Verifique os campos na tela.';
         }
@@ -1650,7 +1465,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         if (!isNaN(rawNota)) {
           if (rawNota > 10 && rawNota <= 100) {
             targetValue = String(parseFloat((rawNota / 10).toFixed(1)));
-            console.log(`[SafeWriter] 💡 Guardião Pedagógico: nota normalizada para ${targetValue}`);
+            console.log('[SafeWriter] 💡 Guardião Pedagógico: valor normalizado com sucesso.');
           } else if (rawNota < 0 || rawNota > 100) {
             sendResponse({
               sucesso: false,
@@ -1823,6 +1638,24 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  if (message.action === 'PORTAL_OBSERVE' || message.action === 'PORTAL_SET_SELECT' || message.action === 'PORTAL_CLICK') {
+    (async () => {
+      const targetTabId = await resolveActivePortalTab(message.tabId);
+      if (!targetTabId) {
+        sendResponse({ ok: false, error: 'Nenhuma aba ativa do portal identificada.' });
+        return;
+      }
+      chrome.tabs.sendMessage(targetTabId, message, (resp) => {
+        if (chrome.runtime.lastError) {
+          sendResponse({ ok: false, error: chrome.runtime.lastError.message });
+        } else {
+          sendResponse(resp);
+        }
+      });
+    })();
+    return true;
+  }
+
   if (message.action === 'NAVIGATE_PORTAL_TAB') {
     (async () => {
       const targetTabId = await resolveActivePortalTab(message.tabId);
@@ -1831,20 +1664,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return;
       }
       const res = await internalNavigatePortalTab(targetTabId, message.target);
-      sendResponse(res);
-    })();
-    return true;
-  }
-
-  if (message.action === 'DISCOVERY_SELECT_FILTER') {
-    (async () => {
-      const targetTabId = await resolveActivePortalTab(message.tabId);
-      if (!targetTabId) {
-        sendResponse({ sucesso: false, mensagem: 'Nenhuma aba ativa do portal identificada para seleção.' });
-        return;
-      }
-      const rawTerm = (message.filterTerm || message.target || '').trim();
-      const res = await internalSelectPortalFilter(targetTabId, rawTerm);
       sendResponse(res);
     })();
     return true;

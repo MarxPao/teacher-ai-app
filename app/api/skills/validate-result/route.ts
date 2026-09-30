@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { guardEgressFetch } from '@/lib/piiMasking'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -69,7 +70,7 @@ Responda ESTRITAMENTE em formato JSON com o seguinte schema:
     let llmResponseJson: any = null
 
     if (provider === 'groq' || byokKey.startsWith('gsk_')) {
-      const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      const groqRes = await guardEgressFetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -98,7 +99,7 @@ Responda ESTRITAMENTE em formato JSON com o seguinte schema:
     } else {
       const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${byokKey}`
       try {
-        const geminiRes = await fetch(geminiUrl, {
+        const geminiRes = await guardEgressFetch(geminiUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

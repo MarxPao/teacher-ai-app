@@ -778,7 +778,9 @@ def _call_groq(prompt: str, byok: Dict) -> str:
 
 
 def default_llm_caller(b64: str, prompt: str, byok: Dict, log_collector: Optional[List[Dict[str, Any]]] = None) -> str:
-    """Despacha para o provedor correto com retry e backoff exponencial para 429."""
+    if b64 or "screen_state" in prompt or "aluno" in prompt.lower() or "estudante" in prompt.lower():
+        raise PermissionError("Bloqueio de segurança F1b: Leitura de tela/dados de alunos bloqueada para provedores em nuvem até a conclusão da F1b-2.")
+
     provider = (byok.get("provider") or "").lower().strip()
 
     def _execute():

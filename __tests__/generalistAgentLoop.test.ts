@@ -300,19 +300,19 @@ describe('Loop Agêntico Generalista da Rafinha (Observe-Decide-Act)', () => {
     })
 
     it('Problema C: "copie...cole" é decomposto em etapas de dados sem buscar botões literais no DOM', () => {
-      const subGoals = decomposeGoalJS(LOG_DATA_TRANSFER)
+      const decomposedGoals = decomposeGoalJS(LOG_DATA_TRANSFER)
       
-      expect(subGoals.length).toBeGreaterThanOrEqual(2)
+      expect(decomposedGoals.length).toBeGreaterThanOrEqual(2)
       // O primeiro passo é navegação até horários
-      expect(subGoals[0]).toContain('horarios')
+      expect(decomposedGoals[0]).toContain('horarios')
       
       // O passo de cópia é preservado semanticamente
-      const copyStep = subGoals.find((s: string) => s.includes('copie'))
+      const copyStep = decomposedGoals.find((s: string) => s.includes('copie'))
       expect(copyStep).toBeDefined()
       expect(copyStep).toContain('horarios')
 
       // O passo de colar é preservado semanticamente
-      const pasteStep = subGoals.find((s: string) => s.includes('cole'))
+      const pasteStep = decomposedGoals.find((s: string) => s.includes('cole'))
       expect(pasteStep).toBeDefined()
       expect(pasteStep).toContain('calendario')
     })

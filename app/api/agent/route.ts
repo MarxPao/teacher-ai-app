@@ -5,6 +5,7 @@ import { getSubjectProfileById } from '@/lib/subjectProfile'
 import '@/lib/subjects/english'
 import '@/lib/subjects/portuguese'
 import { NextRequest } from 'next/server'
+import { guardEgressFetch, EgressSecurityError } from '@/lib/piiMasking'
 
 function getEnvKey(provider: string): string {
   if (provider === 'groq') return process.env.GROQ_API_KEY || process.env.GROQ_KEY || ''
@@ -137,11 +138,11 @@ dashboard, quick (gerar questões), exam (montar provas), plan (Lesson Planner),
   Invoque 'execute_portal_action' com o campo 'steps' preenchido como uma lista encadeada das sub-tarefas (ex: [ { actionType: "attendance", absentStudents: [...] }, { actionType: "diary", title: "...", description: "..." } ]), permitindo a orquestração contínua multi-página e o resumo unificado!
 - Se for uma pergunta teórica, dúvida pedagógica, consulta de opinião ou pergunta sobre notas/alunos já existentes no contexto, responda diretamente em texto explicativo útil sem chamar ferramentas de navegação desnecessárias.
 - NUNCA APENAS RESPONDA EM TEXTO DIZENDO QUE VAI FAZER UMA AÇÃO SUPORTADA — INVOQUE A FERRAMENTA IMEDIATAMENTE!
-- Após ferramentas serem executadas, use o resultado para confirmar com UMA frase curta, gentil e motivadora no tom acolhedor da Rafinha.
+- REGRA ESTRITA DE ZERO-STATUS: Quando ferramentas de portal forem invocadas ou executadas, NUNCA gere frases de status, confirmação ou sucesso ("Prontinho!", "Feito!", "Selecionei", "Preenchi", etc.). Toda mensagem de confirmação de status é gerada exclusivamente pelo verificador estruturado no cliente (composeReply). O LLM deve produzir texto livre APENAS em respostas conversacionais puras (sem ferramentas) ou perguntas de esclarecimento com ask_user.
 - Para datas relativas: hoje = ${todayDate}, amanhã = ${tomorrowDate}
 
 === PRINCÍPIO DE AÇÃO DIRETA (GENERALISMO — PRIORIDADE ALTA) ===
-- REGRA DE OURO DO GENERALISMO: Quando houver uma interpretação razoável do pedido e a ação NÃO for destrutiva (excluir, sobrescrever dados existentes, enviar para terceiros), EXECUTE IMEDIATAMENTE pela interpretação mais provável e confirme com UMA frase depois. NUNCA bloqueie pedindo "você quer dizer X ou Y?" para ações de leitura, navegação, cadastro local ou sincronização.
+- REGRA DE OURO DO GENERALISMO: Quando houver uma interpretação razoável do pedido e a ação NÃO for destrutiva (excluir, sobrescrever dados existentes, enviar para terceiros), EXECUTE IMEDIATAMENTE pela interpretação mais provável, sem gerar mensagens supérfluas de status. NUNCA bloqueie pedindo "você quer dizer X ou Y?" para ações de leitura, navegação, cadastro local ou sincronização.
 - EXPRESSÕES VAGAS DE DESTINO ("envie", "manda", "salva", "coloca no app", "joga no app", "adiciona"): infira o OBJETO a partir do último toolResult disponível na conversa e execute. Exemplos:
   - Último resultado = lista de alunos do portal → "envie para o app" = sync_portal_data_to_app(dataType='students', data=[...alunos...])
   - Último resultado = lista de eventos → "manda pro calendário" = sync_portal_data_to_app(dataType='calendar_events', data=[...eventos...])
@@ -362,7 +363,8 @@ async function callProviderWithFallback(
   optimizedMessages: CanonicalMessage[],
   maxTokens: number,
   temperature: number,
-  allUserKeys: Record<string, string>
+  allUserKeys: Record<string, string>,
+  activeRoster?: Array<{ id?: string; name: string } | string>
 ): Promise<Response> {
 
   const errorLogs: string[] = []
@@ -378,7 +380,7 @@ async function callProviderWithFallback(
 
     try {
       if (p === 'anthropic') {
-        const response = await fetch('https://api.anthropic.com/v1/messages', {
+        const response = await guardEgressFetch('https://api.anthropic.com/v1/messages', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
           body: JSON.stringify({
@@ -386,12 +388,12 @@ async function callProviderWithFallback(
             tools: AGENT_TOOLS.map(t => ({ name: t.name, description: t.description, input_schema: t.input_schema })),
             messages: toAnthropicMessages(optimizedMessages),
           }),
-        })
+        }, activeRoster)
         if (response.ok) {
           const data = await response.json()
           return Response.json({ provider: 'anthropic', ...data })
         } else {
-          errorLogs.push(`Anthropic ${response.status}: ${await response.text()}`)
+          errorLogs.push(`Anthropic ${response.status}: Falha no endpoint do provedor`)
         }
       }
 
@@ -408,7 +410,7 @@ async function callProviderWithFallback(
           try {
             const ctrl = new AbortController()
             const tid = setTimeout(() => ctrl.abort(), 9000)
-            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${gModel}:generateContent?key=${key}`, {
+            const response = await guardEgressFetch(`https://generativelanguage.googleapis.com/v1beta/models/${gModel}:generateContent?key=${key}`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               signal: ctrl.signal,
@@ -418,7 +420,7 @@ async function callProviderWithFallback(
                 contents: toGeminiContents(optimizedMessages),
                 generationConfig: { maxOutputTokens: maxTokens, temperature },
               }),
-            })
+            }, activeRoster)
             clearTimeout(tid)
 
             if (response.ok) {
@@ -426,10 +428,13 @@ async function callProviderWithFallback(
               geminiSuccess = true
               return Response.json(normalizeGeminiResponse(data))
             } else {
-              errorLogs.push(`Gemini (${gModel}) ${response.status}: ${await response.text()}`)
+              errorLogs.push(`Gemini (${gModel}) ${response.status}: Falha no endpoint do provedor`)
             }
           } catch (gErr: any) {
-            errorLogs.push(`Gemini (${gModel}) error: ${gErr.message}`)
+            if (gErr instanceof EgressSecurityError) {
+              throw gErr
+            }
+            errorLogs.push(`Gemini (${gModel}) error: ${gErr.name || 'NetworkError'}`)
           }
         }
         if (geminiSuccess) continue
@@ -474,24 +479,30 @@ async function callProviderWithFallback(
               reqBody.tool_choice = 'auto'
             }
 
-            const response = await fetch(baseUrls[p], {
+            const response = await guardEgressFetch(baseUrls[p], {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
               body: JSON.stringify(reqBody),
-            })
+            }, activeRoster)
             if (response.ok) {
               const data = await response.json()
               return Response.json(normalizeOpenAIResponse(data, p))
             } else {
-              errorLogs.push(`${p} (${mName}) ${response.status}: ${await response.text()}`)
+              errorLogs.push(`${p} (${mName}) ${response.status}: Falha no endpoint do provedor`)
             }
           } catch (mErr: any) {
-            errorLogs.push(`${p} (${mName}) error: ${mErr.message}`)
+            if (mErr instanceof EgressSecurityError) {
+              throw mErr
+            }
+            errorLogs.push(`${p} (${mName}) error: ${mErr.name || 'NetworkError'}`)
           }
         }
       }
     } catch (err) {
-      errorLogs.push(`${p} catch: ${err instanceof Error ? err.message : 'Erro de rede'}`)
+      if (err instanceof EgressSecurityError) {
+        throw err
+      }
+      errorLogs.push(`${p} catch: ${err instanceof Error ? err.name : 'Erro de rede'}`)
     }
   }
 
@@ -515,7 +526,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json()
-    const { messages, context, provider, userKey, autoMode, userKeys = {}, teacherStyle, subject, subjectId, temperatureMode } = body as {
+    const { messages, context, provider, userKey, autoMode, userKeys = {}, teacherStyle, subject, subjectId, temperatureMode, activeRoster } = body as {
       messages: CanonicalMessage[]
       context: string
       provider: string
@@ -527,6 +538,7 @@ export async function POST(req: NextRequest) {
       subjectId?: string
       stream?: boolean
       temperatureMode?: 'deterministic' | 'balanced' | 'creative'
+      activeRoster?: Array<{ id?: string; name: string } | string>
     }
 
     const todayDate     = new Date().toISOString().split('T')[0]
@@ -570,7 +582,8 @@ export async function POST(req: NextRequest) {
               optimizedMessages,
               maxTokens,
               temperature,
-              userKeys
+              userKeys,
+              activeRoster
             )
             const data = await res.json()
             const fullReply = data.reply || data.content?.[0]?.text || ''
@@ -584,7 +597,11 @@ export async function POST(req: NextRequest) {
             controller.enqueue(encoder.encode('data: [DONE]\n\n'))
             controller.close()
           } catch (e: any) {
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: e.message })}\n\n`))
+            if (e instanceof EgressSecurityError) {
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: 'LGPD_EGRESS_BLOCKED', violations: e.violations })}\n\n`))
+            } else {
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: e.message })}\n\n`))
+            }
             controller.close()
           }
         }
@@ -606,11 +623,19 @@ export async function POST(req: NextRequest) {
       optimizedMessages,
       maxTokens,
       temperature,
-      userKeys
+      userKeys,
+      activeRoster
     )
 
   } catch (error: unknown) {
-    console.error('[Agent API] Critical Error:', error)
+    if (error instanceof EgressSecurityError) {
+      return Response.json({
+        error: 'LGPD_EGRESS_BLOCKED',
+        message: 'Dados pessoais ou sensíveis detectados no payload de saída para nuvem.',
+        violations: error.violations
+      }, { status: 422 })
+    }
+    console.error('[Agent API] Critical Error:', error instanceof Error ? error.name : 'UnknownError')
     const msg = error instanceof Error ? error.message : 'Erro desconhecido'
     return Response.json({ error: msg }, { status: 500 })
   }

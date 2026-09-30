@@ -199,6 +199,8 @@ def _call_gemini_vision(screenshot_b64: str, byok: Dict[str, str]) -> str:
 
 def default_llm_caller(screenshot_b64: str, byok: Dict[str, str]) -> str:
     """Despacha para o provedor correto com base em byok['provider']."""
+    if screenshot_b64:
+        raise PermissionError("Bloqueio de segurança F1b: Envio de screenshots do portal para nuvem bloqueado até a conclusão da F1b-2.")
     provider = (byok.get("provider") or "").lower().strip()
     if provider == "openai":
         return _call_openai_vision(screenshot_b64, byok)

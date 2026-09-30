@@ -1,4 +1,4 @@
-﻿# Teacher AI — Documento Mestre de Transição e Migração de Contexto
+# Teacher AI — Documento Mestre de Transição e Migração de Contexto
 **Data da Auditoria:** 18 de Setembro de 2026  
 **Status do Projeto:** Estável / 294 Testes Coletados (293 Passando) / Camadas 1, 2 e 3 Implementadas  
 **Repositório:** `C:\Users\rafae\Documents\antigravity\blissful-noether`
@@ -15,7 +15,7 @@ A plataforma **Teacher AI** é um assistente pedagógico por voz e texto projeta
    - Implementada seleção de folhas clicáveis (botões de ação como "Ver perfil") em vez de disparar eventos no container externo.
    - Implementada **desambiguação honesta**: diante de homônimos (ex: duas alunas chamadas "Alice"), o sistema não chuta; ele exibe modal com foto, turma e matrícula para escolha da professora. Diante de nome completo único ("Alice Almeida"), o clique é direto.
 2. **Correção do Bug de Sub-Navegação ("Recados Recebidos"):**
-   - Comandos compostos do tipo `"abra recados e abra recados recebidos"` agora detectam a sub-navegação e selecionam a sub-aba por matching léxico bidirecional (`DISCOVERY_SELECT_FILTER`), eliminando o falso sequestro para "qual recado você deseja responder".
+   - Comandos compostos do tipo `"abra recados e abra recados recebidos"` agora detectam a sub-navegação e selecionam a sub-aba por ferramentas atômicas de portal, eliminando o falso sequestro para "qual recado você deseja responder".
 3. **Auditoria Rigorosa de Evidência e Integridade de Testes:**
    - Explicada a aparente divergência entre os 46 testes do `unittest` e os **294 testes coletados pelo Pytest**: nenhum teste foi deletado (`git log --diff-filter=D` limpo). O runner oficial é o `pytest`.
    - Transparência total sobre a origem dos mocks nos testes Playwright: testes locais em memória utilizam `page.set_content(html_content)` sem tocar a rede ou expor dados de alunos reais (LGPD).
@@ -80,7 +80,7 @@ A plataforma **Teacher AI** é um assistente pedagógico por voz e texto projeta
    - Zero tráfego de rede para servidores de produção de `paineldoaluno.com.br`.
    - Dados sintéticos protegem integralmente a privacidade dos alunos (LGPD).
 3. **Bug "Recados Recebidos":**
-   - O comando `"abra recados e abra recados recebidos"` foi corrigido com a flag `isSubNavCommand` no `side_panel.js` (linha 2056), despachando `DISCOVERY_SELECT_FILTER` com score 100 para o botão correto e sem falsas perguntas de esclarecimento.
+   - O comando `"abra recados e abra recados recebidos"` foi corrigido com a flag `isSubNavCommand` no `side_panel.js` (linha 2056), despachando a seleção para o botão correto e sem falsas perguntas de esclarecimento.
 4. **Desambiguação de Alunos:**
    - Termo incompleto `"Alice"`: detecta 2 alunas homônimas, retornando `status: 'ambiguous'` com fotos e turmas para escolha manual.
    - Termo completo `"Alice Almeida"`: detecta 1 aluna única, efetuando o clique direto no botão de ação ("Ver perfil") sem diálogos desnecessários.

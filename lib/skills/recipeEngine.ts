@@ -9,6 +9,7 @@
  */
 
 import { validateTeamsCredentials, TEAMS_REQUIRED_SCOPES, TEAMS_ADMIN_GUIDE, type TeamsOAuthConfig } from '@/lib/teamsClient'
+import { guardEgressFetch } from '@/lib/piiMasking'
 
 export type RecipeStepType = 'portal_skill' | 'llm_transform' | 'checkpoint' | 'connector_action'
 
@@ -79,7 +80,7 @@ export async function executeLlmTransform(params: {
   // 1. Tentar Groq (se disponível)
   if (groqKey && (byokProvider === 'groq' || !byokProvider || byokKey?.startsWith('gsk_'))) {
     try {
-      const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      const res = await guardEgressFetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -108,7 +109,7 @@ export async function executeLlmTransform(params: {
   // 2. Tentar Gemini (se disponível)
   if (geminiKey) {
     try {
-      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${geminiKey}`, {
+      const res = await guardEgressFetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${geminiKey}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

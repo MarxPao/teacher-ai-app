@@ -521,6 +521,9 @@ class AgenticExecutionLoop:
                 }, (time.time() - t0) * 1000, "privacy_guard"
 
         # 3. Trilho 2: Sem PII -> Nuvem ultrarrápida (Groq / Gemini) com resiliência a rate-limit
+        if is_pii_turn or self._contains_pii(user_prompt) or "ESTADO ATUAL DA TELA:" in user_prompt:
+            raise PermissionError("Bloqueio de segurança F1b: Envio de screen_state ou dados de alunos para a nuvem bloqueado até a conclusão da F1b-2.")
+
         for attempt in range(2):
             if self.groq_api_key:
                 headers = {

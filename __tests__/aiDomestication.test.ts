@@ -41,13 +41,13 @@ describe('DOMESTICAÇÃO DE IA — BLOCO 3: Sistema de Temperatura Explícito', 
 
   test('calculateDynamicTokens usa fallback de regex apenas quando modo não especificado', () => {
     const fallbackShort = calculateDynamicTokens('adicione uma nota')
-    expect(fallbackShort.temperature).toBe(0.3)
+    expect(fallbackShort.temperature).toBe(0.2)
 
     const fallbackGen = calculateDynamicTokens('monte uma prova bimestral')
     expect(fallbackGen.temperature).toBe(0.7)
 
     const fallbackChat = calculateDynamicTokens('qual é a melhor metodologia para ensinar past perfect?')
-    expect(fallbackChat.temperature).toBe(0.6)
+    expect(fallbackChat.temperature).toBe(0.5)
   })
 
   test('TEMPERATURE_MODE_MAP classifica corretamente todos os módulos críticos 🔴 como deterministic', () => {

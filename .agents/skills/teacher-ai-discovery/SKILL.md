@@ -1,4 +1,4 @@
-﻿---
+---
 name: teacher-ai-discovery
 description: >-
   Guide the implementation, debugging, and execution of Teacher AI 3-Layer Discovery System (Camada 1 SkillGraph cache, Camada 2 Multi-step DOM exploration with progressive scroll and homonym disambiguation, and Camada 3 Point-and-Click overlay).
@@ -42,13 +42,10 @@ Este skill descreve como operar, depurar e estender o motor de descoberta de por
 
 A Camada 2 opera dentro do contexto da extensão Google Chrome através de duas mensagens principais enviadas pelo `side_panel.js`:
 
-### A. Sub-Navegação e Filtros: `DISCOVERY_SELECT_FILTER`
-- **Arquivo:** `teacher-extension/background.js` (função tratadora do action `DISCOVERY_SELECT_FILTER`).
-- **Objetivo:** Encontrar e clicar em botões horizontais, sub-abas e filtros (ex: `"Recados recebidos"`).
-- **Mecanismo:** Matching bidirecional de substring normalizada (remove acentos, caixa baixa):
-  - Exato: pontuação 100
-  - Inicia com: pontuação 85
-  - Contém ou é contido: pontuação 70-75
+### A. Sub-Navegação e Filtros: `portal_set_select` / `portal_click`
+- **Arquivo:** `teacher-extension/content.js` (ferramentas atômicas finas `portal_set_select` e `portal_click`).
+- **Objetivo:** Encontrar e acionar opções em selects nativos, botões horizontais, sub-abas e filtros (ex: `"Recados recebidos"`).
+- **Mecanismo:** Seleção determinística por índice e confirmação read-back via DOM.
 
 ### B. Cards de Alunos e Listas: `DISCOVERY_FIND_AND_CLICK_STUDENT`
 - **Arquivo:** `teacher-extension/background.js` (função tratadora do action `DISCOVERY_FIND_AND_CLICK_STUDENT`).

@@ -1026,6 +1026,10 @@ _STOPWORDS_AFTER_PREP = {
     "pagina", "página", "aba", "arquivo", "arquivos", "conteudo", "conteúdo", "secao", "seção"
 }
 
+def get_active_roster_students() -> List[str]:
+    """Retorna os nomes dos alunos da turma ativa para cruzamento anti-PII."""
+    return []
+
 def _contains_student_pii(text: str, known_students: Optional[List[str]] = None) -> bool:
     """
     Detecta se o texto do comando contém referência a dado pessoal
@@ -1163,6 +1167,9 @@ def _call_groq_llm(prompt_text: str, api_key: str, candidate_models: Optional[Li
     Chama a API do Groq para extração estruturada de JSON, alternando entre modelos disponíveis
     em caso de erro de cota ou modelo indisponível. Retorna (raw_json_str, model_name).
     """
+    if _contains_student_pii(prompt_text):
+        raise PermissionError("Bloqueio de segurança F1b: Dados de alunos detectados em chamada para nuvem em intent_parser.")
+
     models = candidate_models or ["openai/gpt-oss-120b", "qwen/qwen3.6-27b", "groq/compound"]
     headers = {
         "Content-Type": "application/json",
@@ -1203,6 +1210,9 @@ def _call_gemini_llm(prompt_text: str, api_key: str, candidate_models: Optional[
     Alterna entre modelos flash-lite e flash para máxima resiliência e disponibilidade de cota.
     Retorna (raw_json_str, model_name).
     """
+    if _contains_student_pii(prompt_text):
+        raise PermissionError("Bloqueio de segurança F1b: Dados de alunos detectados em chamada para nuvem em intent_parser.")
+
     models = candidate_models or ["gemini-3.1-flash-lite", "gemini-3.6-flash", "gemini-3.5-flash-lite"]
     for model in models:
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"

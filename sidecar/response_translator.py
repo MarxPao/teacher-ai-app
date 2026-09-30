@@ -91,7 +91,7 @@ def translate_task_response(task_result: Dict[str, Any]) -> Dict[str, Any]:
         }
 
         msg = (
-            f"Prontinho, professora! Preenchi a {campo} {novo_valor} para {aluno}. "
+            f"Preenchi a {campo} {novo_valor} para {aluno}. "
             "Dá uma conferida no cartão abaixo com a foto da tela para aprovar o salvamento definitivo no portal."
         )
 

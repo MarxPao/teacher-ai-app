@@ -19,7 +19,7 @@
 1. **Camada 1 — Cache Determinístico (SkillGraph / MapStore):**
    - Antes de qualquer exploração, consulta `sidecar/portal_structure_maps/<portal_id>.json`. Se houver seletores salvos e válidos com alta confiança, executa em milissegundos sem custo de LLM.
 2. **Camada 2 — Descoberta Autônoma Multi-Step (Extensão + Sidecar):**
-   - `DISCOVERY_SELECT_FILTER`: Sub-navegação em botões e abas horizontais com matching bidirecional de strings (ex: "recados recebidos" clica na sub-aba correspondente).
+   - `portal_set_select` & `portal_navigate`: Sub-navegação e seleção determinística de opções em dropdowns, abas e menus do portal escolar.
    - `DISCOVERY_FIND_AND_CLICK_STUDENT`: Localização hierárquica em grids de cards de alunos com **scroll vertical incremental** no container rolável, busca folha do botão de ação ("Ver perfil") e **detecção honesta de ambiguidade** (homônimos retornam modal com foto, turma e matrícula sem adivinhar).
 3. **Camada 3 — Overlay Aponte-e-Clique (Humano no Circuito):**
    - Se a exploração autônoma não encontrar o elemento com alta confiança, ativa a camada de overlay visual na tela do professor para gravação guiada da habilidade sem comandos complexos.

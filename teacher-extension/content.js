@@ -654,11 +654,196 @@ function showInPageCheckpointModal(preview) {
 let isExecutionPaused = false;
 let resumeExecutionResolver = null;
 
-function waitForExecutionResume() {
-  if (!isExecutionPaused) return Promise.resolve();
-  return new Promise((resolve) => {
-    resumeExecutionResolver = resolve;
+// ══════════════════════════════════════════════════════════════════════════════
+// MOTOR DE PERCEPÇÃO E FERRAMENTAS FINAS UNIFICADAS (F1)
+// ══════════════════════════════════════════════════════════════════════════════
+
+let portalElementRefMap = new Map();
+let portalElementCounter = 0;
+
+function getOrAssignRef(el) {
+  if (!el) return null;
+  if (el.__teacher_ref__) return el.__teacher_ref__;
+  portalElementCounter++;
+  const ref = `ref_${portalElementCounter}`;
+  el.__teacher_ref__ = ref;
+  portalElementRefMap.set(ref, el);
+  return ref;
+}
+
+function findElementByRef(ref) {
+  if (!ref) return null;
+  if (portalElementRefMap.has(ref)) {
+    const el = portalElementRefMap.get(ref);
+    if (el && document.contains(el)) return el;
+  }
+  const el = document.querySelector(`[data-teacher-ref="${ref}"], #${CSS.escape(ref)}`);
+  return el;
+}
+
+/**
+ * observe(scope?): F1 — só selects, botões, abas, links.
+ * Sem células de tabela nem valores de input (LGPD safe).
+ */
+function handlePortalObserve(scope) {
+  portalElementRefMap.clear();
+  portalElementCounter = 0;
+
+  const results = [];
+  const root = document.body || document.documentElement;
+
+  // 1. Selects nativos
+  const selects = root.querySelectorAll('select');
+  selects.forEach(sel => {
+    if (scope && scope.startsWith('form:') && sel.closest('form')?.id !== scope.replace('form:', '')) return;
+
+    const ref = getOrAssignRef(sel);
+    const options = Array.from(sel.options).map((opt, idx) => ({
+      index: idx,
+      text: (opt.text || opt.innerText || '').trim(),
+      value: opt.value
+    }));
+
+    const labelEl = sel.id ? document.querySelector(`label[for="${CSS.escape(sel.id)}"]`) : sel.closest('label');
+    const labelText = labelEl?.innerText?.trim() || sel.getAttribute('aria-label') || sel.name || sel.id || '';
+    const isGlobalNav = Boolean(sel.closest('header, nav, #header, #menu, .navbar, .topbar'));
+    const formId = sel.closest('form')?.id || null;
+
+    results.push({
+      ref,
+      role: 'native_select',
+      id: sel.id || null,
+      name: sel.name || null,
+      label: labelText,
+      scope: isGlobalNav ? 'global_nav' : (formId ? `form:${formId}` : 'main'),
+      disabled: Boolean(sel.disabled),
+      visible: sel.offsetParent !== null,
+      selected_index: sel.selectedIndex,
+      selected_text: sel.options[sel.selectedIndex]?.text?.trim() || '',
+      options
+    });
   });
+
+  // 2. Botões e Ações
+  const buttons = root.querySelectorAll('button, input[type="button"], input[type="submit"], [role="button"]');
+  buttons.forEach(btn => {
+    if (scope && scope.startsWith('form:') && btn.closest('form')?.id !== scope.replace('form:', '')) return;
+    const ref = getOrAssignRef(btn);
+    const text = (btn.innerText || btn.value || btn.getAttribute('aria-label') || '').trim();
+    if (!text && !btn.id) return;
+
+    const isGlobalNav = Boolean(btn.closest('header, nav, #header, #menu, .navbar, .topbar'));
+    results.push({
+      ref,
+      role: 'button',
+      id: btn.id || null,
+      text: text.slice(0, 80),
+      scope: isGlobalNav ? 'global_nav' : 'main',
+      disabled: Boolean(btn.disabled),
+      visible: btn.offsetParent !== null
+    });
+  });
+
+  // 3. Abas e Links de Navegação
+  const navLinks = root.querySelectorAll('nav a, [role="tab"], .nav-link, .tab, .menu-item a, ul.tabs a, li.tab a');
+  navLinks.forEach(link => {
+    const ref = getOrAssignRef(link);
+    const text = (link.innerText || link.getAttribute('aria-label') || '').trim();
+    if (!text) return;
+
+    results.push({
+      ref,
+      role: 'tab',
+      id: link.id || null,
+      text: text.slice(0, 80),
+      href: link.getAttribute('href') || null,
+      scope: 'global_nav',
+      visible: link.offsetParent !== null
+    });
+  });
+
+  return {
+    ok: true,
+    url: window.location.href,
+    title: document.title,
+    elements: results
+  };
+}
+
+/**
+ * set_select(ref, option_index): aplica por selectedIndex, dispara input+change, relê.
+ */
+function handlePortalSetSelect(ref, optionIndex) {
+  const sel = findElementByRef(ref) || document.getElementById(ref) || document.querySelector(ref);
+  if (!sel || sel.tagName !== 'SELECT') {
+    return {
+      ok: false,
+      error: `Elemento select não encontrado com ref "${ref}".`,
+      requested: optionIndex
+    };
+  }
+
+  const idx = Number(optionIndex);
+  if (isNaN(idx) || idx < 0 || idx >= sel.options.length) {
+    return {
+      ok: false,
+      error: `Índice de opção ${optionIndex} inválido para select "${sel.name || sel.id}". Total de opções: ${sel.options.length}.`,
+      available_options: Array.from(sel.options).map((o, i) => ({ index: i, text: o.text.trim() }))
+    };
+  }
+
+  const beforeIndex = sel.selectedIndex;
+  sel.selectedIndex = idx;
+  sel.dispatchEvent(new Event('input', { bubbles: true }));
+  sel.dispatchEvent(new Event('change', { bubbles: true }));
+
+  const readBackIndex = sel.selectedIndex;
+  const readBackText = sel.options[readBackIndex]?.text?.trim() || '';
+  const success = (readBackIndex === idx);
+
+  return {
+    ok: success,
+    status: success ? 'verified' : 'mismatch',
+    requested: idx,
+    requested_text: sel.options[idx]?.text?.trim() || '',
+    read_back: {
+      index: readBackIndex,
+      text: readBackText
+    },
+    evidence: success ? `selectedIndex alterado de ${beforeIndex} para ${readBackIndex}` : 'DOM não reteve o índice selecionado'
+  };
+}
+
+/**
+ * click(ref): aciona elemento por ref estável e aguarda estabilização.
+ */
+async function handlePortalClick(ref) {
+  const el = findElementByRef(ref) || document.getElementById(ref) || document.querySelector(ref);
+  if (!el) {
+    return {
+      ok: false,
+      error: `Elemento não encontrado com ref "${ref}".`
+    };
+  }
+
+  if (el.disabled) {
+    return {
+      ok: false,
+      error: `Elemento "${ref}" está desabilitado (disabled).`
+    };
+  }
+
+  const text = (el.innerText || el.value || '').trim();
+  el.click();
+
+  await new Promise(r => setTimeout(r, 400));
+
+  return {
+    ok: true,
+    status: 'verified',
+    clicked_text: text,
+    current_url: window.location.href
+  };
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -951,6 +1136,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     });
     showStatusToast('Teacher AI', 'success', `✅ Gravação finalizada!`);
     sendResponse({ ok: true, events: recordedSkillEvents, pageUrl: window.location.href });
+    return true;
+  }
+
+  if (message.action === 'PORTAL_OBSERVE') {
+    const res = handlePortalObserve(message.scope);
+    sendResponse(res);
+    return true;
+  }
+
+  if (message.action === 'PORTAL_SET_SELECT') {
+    const res = handlePortalSetSelect(message.ref || message.target, message.option_index ?? message.optionIndex);
+    sendResponse(res);
+    return true;
+  }
+
+  if (message.action === 'PORTAL_CLICK') {
+    handlePortalClick(message.ref || message.target).then(res => sendResponse(res));
     return true;
   }
 

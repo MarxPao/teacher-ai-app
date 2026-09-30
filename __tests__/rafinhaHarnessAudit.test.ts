@@ -148,7 +148,7 @@ describe('RAFINHA AGENT HARNESS AUDIT — SUÍTE DE 4 PILARES (Seção 7)', () =
       const res = await executeTool('confirm_portal_submission', { action: 'approve' }, mockNavigate as any, mockSpeak)
       expect(sessionStorageMock['teacher_active_portal_task']).toBeUndefined()
       expect(dispatchedEvents.some(e => e.type === 'teacher:portal_task_completed')).toBe(true)
-      expect(res).toContain('confirmada e executada com sucesso')
+      expect(res).toContain('realizada e verificada no portal escolar')
     })
 
     it('5. show_portal_screenshot: recupera URL de preview do portal em sessionStorage', async () => {

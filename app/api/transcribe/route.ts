@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { guardEgressFetch } from '@/lib/piiMasking'
 
 /**
  * Clean Portuguese filler words and hesitations (Wispr Flow Cleaner)
@@ -67,7 +68,7 @@ export async function POST(req: NextRequest) {
         groqFormData.append('prompt', whisperPrompt)
         groqFormData.append('response_format', 'json')
 
-        const res = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
+        const res = await guardEgressFetch('https://api.groq.com/openai/v1/audio/transcriptions', {
           method: 'POST',
           headers: { Authorization: `Bearer ${activeGroqKey}` },
           body: groqFormData,
@@ -94,7 +95,7 @@ export async function POST(req: NextRequest) {
         oaiFormData.append('language', 'pt')
         oaiFormData.append('prompt', whisperPrompt)
 
-        const res = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+        const res = await guardEgressFetch('https://api.openai.com/v1/audio/transcriptions', {
           method: 'POST',
           headers: { Authorization: `Bearer ${activeOpenAIKey}` },
           body: oaiFormData,
@@ -120,7 +121,7 @@ export async function POST(req: NextRequest) {
         const audioModels = ['gemini-3.6-flash', 'gemini-3.5-transcribe', 'gemini-3.5-flash-lite']
         for (const am of audioModels) {
           try {
-            const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${am}:generateContent?key=${activeGeminiKey}`, {
+            const res = await guardEgressFetch(`https://generativelanguage.googleapis.com/v1beta/models/${am}:generateContent?key=${activeGeminiKey}`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
