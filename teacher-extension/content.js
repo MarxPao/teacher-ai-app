@@ -659,6 +659,7 @@ let resumeExecutionResolver = null;
 // ══════════════════════════════════════════════════════════════════════════════
 
 let portalElementRefMap = new Map();
+let portalElementMetaMap = new Map();
 let portalElementCounter = 0;
 
 function getOrAssignRef(el) {
@@ -667,7 +668,21 @@ function getOrAssignRef(el) {
   portalElementCounter++;
   const ref = `ref_${portalElementCounter}`;
   el.__teacher_ref__ = ref;
+  try {
+    el.setAttribute('data-teacher-ref', ref);
+  } catch (e) {}
   portalElementRefMap.set(ref, el);
+
+  // Armazena metadados para re-resolução dinâmica de nós substituídos (RFC-010)
+  portalElementMetaMap.set(ref, {
+    tagName: el.tagName,
+    id: el.id || null,
+    name: el.getAttribute('name') || null,
+    formId: el.closest('form')?.id || null,
+    className: el.className || null,
+    isGlobalNav: Boolean(el.closest('header, nav, #header, #menu, .navbar, .topbar'))
+  });
+
   return ref;
 }
 
@@ -675,7 +690,7 @@ function findElementByRef(ref) {
   if (!ref) return null;
   if (portalElementRefMap.has(ref)) {
     const el = portalElementRefMap.get(ref);
-    if (el && document.contains(el)) return el;
+    if (el && (el.isConnected ?? document.contains(el))) return el;
   }
   const el = document.querySelector(`[data-teacher-ref="${ref}"], #${CSS.escape(ref)}`);
   return el;
@@ -687,6 +702,7 @@ function findElementByRef(ref) {
  */
 function handlePortalObserve(scope) {
   portalElementRefMap.clear();
+  portalElementMetaMap.clear();
   portalElementCounter = 0;
 
   const results = [];
@@ -771,10 +787,79 @@ function handlePortalObserve(scope) {
 }
 
 /**
- * set_select(ref, option_index): aplica por selectedIndex, dispara input+change, relê.
+ * Localiza dinamicamente o elemento <select> atual no DOM, re-resolvendo
+ * referências desconectadas ou substituídas pelo portal durante re-renders em cascata,
+ * respeitando estritamente o escopo original (form vs global_nav).
  */
-function handlePortalSetSelect(ref, optionIndex) {
-  const sel = findElementByRef(ref) || document.getElementById(ref) || document.querySelector(ref);
+function getLiveSelect(ref, fallbackEl) {
+  // 1. Se a referência atual ainda estiver conectada ao documento e for um SELECT válido
+  if (fallbackEl && (fallbackEl.isConnected ?? document.contains(fallbackEl)) && fallbackEl.tagName === 'SELECT') {
+    return fallbackEl;
+  }
+
+  // 2. Consulta o mapa de referências em memória
+  if (portalElementRefMap.has(ref)) {
+    const el = portalElementRefMap.get(ref);
+    if (el && (el.isConnected ?? document.contains(el)) && el.tagName === 'SELECT') {
+      return el;
+    }
+  }
+
+  const meta = portalElementMetaMap.get(ref);
+
+  // 3. Determina o container raiz de busca baseado no escopo gravado (evita colisão de forms/menus)
+  let searchRoot = document;
+  if (meta?.formId) {
+    const formEl = document.getElementById(meta.formId) || document.querySelector(`form#${CSS.escape(meta.formId)}`);
+    if (formEl) {
+      searchRoot = formEl;
+    }
+  }
+
+  // Tentativa A: Atributo data-teacher-ref preservado no DOM
+  try {
+    const byDataRef = searchRoot.querySelector(`select[data-teacher-ref="${ref}"]`);
+    if (byDataRef && byDataRef.tagName === 'SELECT') return byDataRef;
+  } catch (e) {}
+
+  // Tentativa B: ID exato dentro do searchRoot
+  if (meta?.id) {
+    try {
+      const byId = searchRoot.querySelector(`select#${CSS.escape(meta.id)}`) || (searchRoot === document ? document.getElementById(meta.id) : null);
+      if (byId && byId.tagName === 'SELECT') return byId;
+    } catch (e) {}
+  }
+
+  // Tentativa C: Name exato dentro do searchRoot
+  if (meta?.name) {
+    try {
+      const byName = searchRoot.querySelector(`select[name="${CSS.escape(meta.name)}"]`);
+      if (byName && byName.tagName === 'SELECT') return byName;
+    } catch (e) {}
+  }
+
+  // Tentativa D: Fallback genérico por findElementByRef
+  const generic = findElementByRef(ref);
+  if (generic && generic.tagName === 'SELECT') return generic;
+
+  return null;
+}
+
+function doubleRaf() {
+  return new Promise(resolve => {
+    const raf = typeof requestAnimationFrame === 'function' ? requestAnimationFrame : (cb) => setTimeout(cb, 16);
+    raf(() => {
+      raf(resolve);
+    });
+  });
+}
+
+/**
+ * set_select(ref, option_index): aplica por selectedIndex, aguarda estabilização
+ * com double-rAF, re-resolve o elemento ao vivo (RFC-010) e rejeita ativamente -1.
+ */
+async function handlePortalSetSelect(ref, optionIndex) {
+  let sel = findElementByRef(ref) || document.getElementById(ref) || document.querySelector(ref);
   if (!sel || sel.tagName !== 'SELECT') {
     return {
       ok: false,
@@ -793,24 +878,86 @@ function handlePortalSetSelect(ref, optionIndex) {
   }
 
   const beforeIndex = sel.selectedIndex;
+
+  // 1. Aplica a mutação física inicial
   sel.selectedIndex = idx;
   sel.dispatchEvent(new Event('input', { bubbles: true }));
   sel.dispatchEvent(new Event('change', { bubbles: true }));
 
-  const readBackIndex = sel.selectedIndex;
-  const readBackText = sel.options[readBackIndex]?.text?.trim() || '';
+  // 2. Foca o MutationObserver no target <select> e em seu container imediato (RFC-010)
+  const container = sel.closest('form') || sel.parentElement || document.body;
+  let observer = null;
+  if (typeof MutationObserver !== 'undefined') {
+    try {
+      observer = new MutationObserver(() => {});
+      observer.observe(container, { childList: true, subtree: true, attributes: true, attributeFilter: ['selected', 'disabled'] });
+    } catch (e) {}
+  }
+
+  // 3. Estabilização assíncrona por double-rAF e loop delimitado
+  const startTime = Date.now();
+  const timeoutMs = 1200;
+  let liveSel = sel;
+  let readBackIndex = -1;
+
+  try {
+    // Aguarda os repaints iniciais do navegador
+    await doubleRaf();
+
+    // Loop de amostragem ativa (rejeita -1 transitório gerado por reconstrução de opções)
+    while (Date.now() - startTime < timeoutMs) {
+      liveSel = getLiveSelect(ref, liveSel) || liveSel;
+
+      if (liveSel && liveSel.tagName === 'SELECT') {
+        const curIdx = liveSel.selectedIndex;
+
+        // Se o índice atingiu o solicitado, confirma que persiste após novo frame
+        if (curIdx === idx) {
+          await doubleRaf();
+          liveSel = getLiveSelect(ref, liveSel) || liveSel;
+          if (liveSel && liveSel.selectedIndex === idx) {
+            readBackIndex = idx;
+            break;
+          }
+        }
+
+        // Se não for -1, salva a leitura intermediária válida
+        if (curIdx !== -1) {
+          readBackIndex = curIdx;
+        }
+      }
+
+      await new Promise(r => setTimeout(r, 40));
+    }
+  } finally {
+    if (observer) {
+      observer.disconnect();
+    }
+  }
+
+  // Re-resolução final após o término do período de estabilização
+  liveSel = getLiveSelect(ref, liveSel) || liveSel;
+  if (liveSel && liveSel.tagName === 'SELECT') {
+    readBackIndex = liveSel.selectedIndex;
+  }
+
+  const readBackText = (liveSel && liveSel.options && liveSel.options[readBackIndex])
+    ? liveSel.options[readBackIndex].text.trim()
+    : '';
   const success = (readBackIndex === idx);
 
   return {
     ok: success,
-    status: success ? 'verified' : 'mismatch',
+    status: success ? 'verified' : (readBackIndex === -1 ? 'unsettled_rebuild' : 'mismatch'),
     requested: idx,
-    requested_text: sel.options[idx]?.text?.trim() || '',
+    requested_text: (liveSel && liveSel.options && liveSel.options[idx]) ? liveSel.options[idx].text.trim() : (sel.options[idx]?.text?.trim() || ''),
     read_back: {
       index: readBackIndex,
       text: readBackText
     },
-    evidence: success ? `selectedIndex alterado de ${beforeIndex} para ${readBackIndex}` : 'DOM não reteve o índice selecionado'
+    evidence: success
+      ? `selectedIndex alterado de ${beforeIndex} para ${readBackIndex} (estabilizado via double-rAF)`
+      : (readBackIndex === -1 ? 'DOM permaneceu em rebuild transitório (-1) após timeout de estabilização' : `DOM reteve índice divergente (${readBackIndex} !== ${idx})`)
   };
 }
 
@@ -846,6 +993,7 @@ async function handlePortalClick(ref) {
   };
 }
 
+if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   // ——— RECEPTOR DE IMPORTAÇÃO NO TEACHER AI APP (ORIGEM LOCALHOST:3000) ———
@@ -1146,8 +1294,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message.action === 'PORTAL_SET_SELECT') {
-    const res = handlePortalSetSelect(message.ref || message.target, message.option_index ?? message.optionIndex);
-    sendResponse(res);
+    handlePortalSetSelect(message.ref || message.target, message.option_index ?? message.optionIndex)
+      .then(res => sendResponse(res))
+      .catch(err => sendResponse({
+        ok: false,
+        error: err?.message || String(err),
+        requested: message.option_index ?? message.optionIndex
+      }));
     return true;
   }
 
@@ -1182,6 +1335,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 });
+}
 
 // ══════════════════════════════════════════════════════════════════════════════
 // DESTAQUE VISUAL EM TEMPO REAL DO AGENTE (ESTILO PERPLEXITY COMET / CLAUDE)
@@ -2897,6 +3051,17 @@ window.isDomSettled = isDomSettled;
 window.findInputBySpatialAnchor = findInputBySpatialAnchor;
 window.captureFormSnapshot = captureFormSnapshot;
 window.restoreFormSnapshot = restoreFormSnapshot;
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = {
+    handlePortalObserve,
+    handlePortalSetSelect,
+    handlePortalClick,
+    getLiveSelect,
+    getOrAssignRef,
+    findElementByRef
+  };
+}
 
 } // end if (!window.__teacherAgentLoaded)
 
