@@ -1,6 +1,7 @@
 'use client'
 import { toast, showConfirm } from '@/components/Toast'
 import Button from '@/components/Button'
+import StudentProfilePanel from '@/components/shared/StudentProfilePanel'
 import { safeGet, safeSet } from '@/lib/localDB'
 import { COLOR, TEXT, RADIUS, SPACE } from '@/styles/tokens'
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
@@ -741,162 +742,157 @@ export default function Students() {
             )}
           </div>
 
-          {/* Perfil do aluno */}
+          {/* Perfil compartilhado do aluno */}
           {selectedStudent && (
-            <div style={{ width: 320, flexShrink: 0 }}>
-              <div style={{ ...S.card, position: 'sticky', top: 20 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-                  <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                    <div style={{ width: 48, height: 48, borderRadius: '50%', background: '#2c1a0e', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fdf8f2', fontWeight: 700, fontSize: 20 }}>
-                      {selectedStudent.name.charAt(0).toUpperCase()}
-                    </div>
-                    <div>
-                      <div style={{ fontWeight: 700, color: COLOR.paperInk, fontSize: TEXT.subtitle }}>{selectedStudent.name}</div>
-                      <div style={{ fontSize: TEXT.caption, color: COLOR.paperMid }}>{classOf(selectedStudent)?.name} · {selectedStudent.level}</div>
-                    </div>
-                  </div>
-                  <button onClick={() => setSelectedId(null)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: COLOR.paperMid }}>×</button>
-                </div>
+            <div style={{ width: 440, minWidth: 360, maxWidth: 520, flexShrink: 0, position: 'sticky', top: 20 }}>
+              <StudentProfilePanel
+                studentId={selectedStudent.id}
+                onClose={() => setSelectedId(null)}
+                onUpdate={(updated) => {
+                  setStudents(prev => prev.map(s => s.id === updated.id ? (updated as StudentRecord) : s))
+                }}
+                extraTabs={[
+                  {
+                    id: 'competencias',
+                    label: 'Competências',
+                    icon: 'ti-chart-radar',
+                    content: (
+                      <div>
+                        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
+                          <RadarChart scores={getMetrics(selectedStudent.id)} metrics={metricDefs} size={220} />
+                        </div>
+                        <button
+                          onClick={() => setReportStudentId(selectedStudent.id)}
+                          style={{ ...S.btn, width: '100%', justifyContent: 'center', background: '#2c1a0e', color: '#fff' }}
+                        >
+                          <i className="ti ti-file-text" /> Relatório Pedagógico (PDF)
+                        </button>
+                      </div>
+                    )
+                  },
+                  {
+                    id: 'portal',
+                    label: 'Portal',
+                    icon: 'ti-school',
+                    content: (
+                      <div>
+                        <div style={{
+                          marginBottom: 16,
+                          padding: '12px 14px',
+                          background: '#fdf9f3',
+                          borderRadius: RADIUS.md,
+                          border: '1px solid #ede8dc',
+                          fontSize: 12,
+                          color: COLOR.paperWarm
+                        }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                            <span style={{ fontWeight: 700 }}>Origem:</span>
+                            <span>{selectedStudent.source_type === 'portal_scrape' || selectedStudent.sync_status === 'synced' ? `Portal (${selectedStudent.source_portal || 'Machado Sobrinho'})` : 'Manual / Não Vinculado'}</span>
+                          </div>
+                          {selectedStudent.portal_native_id && (
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                              <span style={{ fontWeight: 700 }}>Matrícula:</span>
+                              <span style={{ fontWeight: 600, color: COLOR.paperInk }}>{selectedStudent.portal_native_id}</span>
+                            </div>
+                          )}
+                          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <span style={{ fontWeight: 700 }}>Status:</span>
+                            <span style={{ color: selectedStudent.sync_status === 'synced' ? '#16a34a' : '#7a5c42', fontWeight: 700 }}>
+                              {selectedStudent.sync_status === 'synced' ? 'Sincronizado' : 'Local'}
+                            </span>
+                          </div>
+                        </div>
 
-                {/* Radar mini */}
-                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
-                  <RadarChart scores={getMetrics(selectedStudent.id)} metrics={metricDefs} size={200} />
-                </div>
+                        {selectedStudent.grades && Object.keys(selectedStudent.grades).length > 0 && (
+                          <button
+                            onClick={async () => {
+                              const portalName = selectedStudent.source_portal || 'machadosobrinho.paineldoaluno.com.br'
+                              const diff: DiffItem[] = Object.entries(selectedStudent.grades || {}).map(([avaliacao, nota]) => ({
+                                studentName: selectedStudent.name,
+                                field: `Nota - ${avaliacao}`,
+                                beforeValue: '',
+                                afterValue: String(nota),
+                                approved: true
+                              }))
 
-                {/* Notas */}
-                {Object.keys(selectedStudent.grades || {}).length > 0 && (
-                  <div style={{ marginBottom: 16 }}>
-                    <div style={S.label}>Notas</div>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                      {Object.entries(selectedStudent.grades || {}).map(([col, val]) => (
-                        <span key={col} style={{ ...S.badge, background: '#f5f0e8', color: COLOR.paperInk, fontSize: TEXT.caption }}>
-                          {col}: {val}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                              const cleanPayload = sanitizeOutboundPayload({
+                                platform: portalName,
+                                actionType: 'write_grades',
+                                title: `Lançar Notas de ${selectedStudent.name}`,
+                                classRef: classOf(selectedStudent)?.name || 'Geral',
+                                diff
+                              })
 
-                {/* Observações */}
-                {selectedStudent.notes && <p style={{ fontSize: TEXT.bodyCompact, color: COLOR.paperWarm, background: '#f5f0e8', borderRadius: RADIUS.md, padding: '10px 12px', margin: '0 0 16px' }}>{selectedStudent.notes}</p>}
+                              const createdTask = await createBrowserTask({
+                                portal: portalName,
+                                actionType: 'write_grades',
+                                payload: cleanPayload,
+                                approvalMode: 'batch',
+                                classRef: classOf(selectedStudent)?.name || 'Geral',
+                                studentCount: 1
+                              })
 
-                {/* Rastreabilidade e Proveniência */}
-                <div style={{
-                  marginBottom: 16,
-                  padding: '10px 12px',
-                  background: '#fdf9f3',
-                  borderRadius: RADIUS.md,
-                  border: '1px solid #ede8dc',
-                  fontSize: 11.5,
-                  color: COLOR.paperWarm
-                }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                    <span style={{ fontWeight: 700 }}>Origem:</span>
-                    <span>{selectedStudent.source_type === 'portal_scrape' || selectedStudent.sync_status === 'synced' ? `Portal (${selectedStudent.source_portal || 'Machado Sobrinho'})` : 'Manual / Não Vinculado'}</span>
-                  </div>
-                  {selectedStudent.portal_native_id && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                      <span style={{ fontWeight: 700 }}>Matrícula:</span>
-                      <span style={{ fontWeight: 600, color: COLOR.paperInk }}>{selectedStudent.portal_native_id}</span>
-                    </div>
-                  )}
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ fontWeight: 700 }}>Status:</span>
-                    <span style={{ color: selectedStudent.sync_status === 'synced' ? '#16a34a' : '#7a5c42', fontWeight: 700 }}>
-                      {selectedStudent.sync_status === 'synced' ? 'Sincronizado' : 'Local'}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Botão de Lançar Notas no Portal Oficial */}
-                {selectedStudent.grades && Object.keys(selectedStudent.grades).length > 0 && (
-                  <button
-                    onClick={async () => {
-                      const portalName = selectedStudent.source_portal || 'machadosobrinho.paineldoaluno.com.br'
-                      const diff: DiffItem[] = Object.entries(selectedStudent.grades || {}).map(([avaliacao, nota]) => ({
-                        studentName: selectedStudent.name,
-                        field: `Nota - ${avaliacao}`,
-                        beforeValue: '',
-                        afterValue: String(nota),
-                        approved: true
-                      }))
-
-                      const cleanPayload = sanitizeOutboundPayload({
-                        platform: portalName,
-                        actionType: 'write_grades',
-                        title: `Lançar Notas de ${selectedStudent.name}`,
-                        classRef: classOf(selectedStudent)?.name || 'Geral',
-                        diff
-                      })
-
-                      const createdTask = await createBrowserTask({
-                        portal: portalName,
-                        actionType: 'write_grades',
-                        payload: cleanPayload,
-                        approvalMode: 'batch',
-                        classRef: classOf(selectedStudent)?.name || 'Geral',
-                        studentCount: 1
-                      })
-
-                      setActiveAutomationTask(createdTask)
-                    }}
-                    style={{ ...S.btn, width: '100%', justifyContent: 'center', background: '#16a34a', color: '#fff', marginBottom: 8 }}
-                  >
-                    <i className="ti ti-upload" /> Lançar Notas no Portal
-                  </button>
-                )}
-
-                {/* Botões de Ação Comportamental, PEI, PDI e Arquivo */}
-                <button
-                  onClick={() => setBehaviorStudent(selectedStudent)}
-                  style={{ ...S.btn, width: '100%', justifyContent: 'center', background: '#2d9d5d', color: '#fff', marginBottom: 8 }}
-                >
-                  <i className="ti ti-award" /> Pontos Comportamentais (Dojo)
-                </button>
-
-                <button
-                  onClick={() => {
-                    const existing = getStudentPei(selectedStudent.id) || createDefaultPei(selectedStudent.id, selectedStudent.name)
-                    setActiveEditableDoc({
-                      type: 'pei',
-                      studentId: selectedStudent.id,
-                      studentName: selectedStudent.name,
-                      initialData: existing
-                    })
-                  }}
-                  style={{ ...S.btn, width: '100%', justifyContent: 'center', background: '#6d28d9', color: '#fff', marginBottom: 8 }}
-                >
-                  <i className="ti ti-accessible" /> Plano Educacional Individualizado (PEI)
-                </button>
-
-                <button
-                  onClick={() => {
-                    const existing = getStudentPdi(selectedStudent.id) || createDefaultPdi(selectedStudent.id, selectedStudent.name, selectedStudent.classId)
-                    setActiveEditableDoc({
-                      type: 'pdi',
-                      studentId: selectedStudent.id,
-                      studentName: selectedStudent.name,
-                      initialData: existing
-                    })
-                  }}
-                  style={{ ...S.btn, width: '100%', justifyContent: 'center', background: '#0284c7', color: '#fff', marginBottom: 8 }}
-                >
-                  <i className="ti ti-chart-arrows" /> Plano de Desenvolvimento Individual (PDI)
-                </button>
-
-                <button
-                  onClick={() => setArchiveStudent(selectedStudent)}
-                  style={{ ...S.btn, width: '100%', justifyContent: 'center', background: '#b45309', color: '#fff', marginBottom: 8 }}
-                >
-                  <i className="ti ti-archive" /> Arquivo de PEIs & PDIs
-                </button>
-
-                {/* Botão de Relatório Pedagógico */}
-                <button onClick={() => setReportStudentId(selectedStudent.id)}
-                  style={{ ...S.btn, width: '100%', justifyContent: 'center', background: '#2c1a0e', color: '#fff' }}>
-                  <i className="ti ti-file-text" /> Relatório Pedagógico (PDF)
-                </button>
-              </div>
+                              setActiveAutomationTask(createdTask)
+                            }}
+                            style={{ ...S.btn, width: '100%', justifyContent: 'center', background: '#16a34a', color: '#fff', marginBottom: 8 }}
+                          >
+                            <i className="ti ti-upload" /> Lançar Notas no Portal
+                          </button>
+                        )}
+                      </div>
+                    )
+                  },
+                  {
+                    id: 'inclusao',
+                    label: 'Inclusão & Atas',
+                    icon: 'ti-accessible',
+                    content: (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        <button
+                          onClick={() => setBehaviorStudent(selectedStudent)}
+                          style={{ ...S.btn, width: '100%', justifyContent: 'center', background: '#2d9d5d', color: '#fff' }}
+                        >
+                          <i className="ti ti-award" /> Pontos Comportamentais (Dojo)
+                        </button>
+                        <button
+                          onClick={() => {
+                            const existing = getStudentPei(selectedStudent.id) || createDefaultPei(selectedStudent.id, selectedStudent.name)
+                            setActiveEditableDoc({
+                              type: 'pei',
+                              studentId: selectedStudent.id,
+                              studentName: selectedStudent.name,
+                              initialData: existing
+                            })
+                          }}
+                          style={{ ...S.btn, width: '100%', justifyContent: 'center', background: '#6d28d9', color: '#fff' }}
+                        >
+                          <i className="ti ti-accessible" /> Plano Educacional Individualizado (PEI)
+                        </button>
+                        <button
+                          onClick={() => {
+                            const existing = getStudentPdi(selectedStudent.id) || createDefaultPdi(selectedStudent.id, selectedStudent.name, selectedStudent.classId)
+                            setActiveEditableDoc({
+                              type: 'pdi',
+                              studentId: selectedStudent.id,
+                              studentName: selectedStudent.name,
+                              initialData: existing
+                            })
+                          }}
+                          style={{ ...S.btn, width: '100%', justifyContent: 'center', background: '#0284c7', color: '#fff' }}
+                        >
+                          <i className="ti ti-chart-arrows" /> Plano de Desenvolvimento Individual (PDI)
+                        </button>
+                        <button
+                          onClick={() => setArchiveStudent(selectedStudent)}
+                          style={{ ...S.btn, width: '100%', justifyContent: 'center', background: '#b45309', color: '#fff' }}
+                        >
+                          <i className="ti ti-archive" /> Arquivo de PEIs & PDIs
+                        </button>
+                      </div>
+                    )
+                  }
+                ]}
+              />
             </div>
           )}
         </div>
