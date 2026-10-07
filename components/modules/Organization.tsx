@@ -2,13 +2,19 @@
 import { COLOR, RADIUS, TEXT, SHADOW, FONT } from '@/styles/tokens'
 import { toast, showConfirm } from '@/components/Toast'
 
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
+import SchoolDetailBox from '@/components/shared/SchoolDetailBox'
 import Button from '@/components/Button'
 import ModuleShell from '@/components/ModuleShell'
 import ModuleCard from '@/components/ModuleCard'
 import { syncToSupabase } from '@/lib/supabaseClient'
 
 interface School {
+  address?: string
+  phone?: string
+  email?: string
+  principal?: string
+  notes?: string
  id: string
  name: string
  code?: string
@@ -49,6 +55,13 @@ export default function Organization() {
  const [schoolName, setSchoolName] = useState('')
  const [schoolCode, setSchoolCode] = useState('')
  const [schoolColor, setSchoolColor] = useState('#8b5e3c')
+ const [schoolAddress, setSchoolAddress] = useState('')
+ const [schoolPhone, setSchoolPhone] = useState('')
+ const [schoolEmail, setSchoolEmail] = useState('')
+ const [schoolPrincipal, setSchoolPrincipal] = useState('')
+ const [attendanceSessions, setAttendanceSessions] = useState<any[]>([])
+ const [selectedSchoolId, setSelectedSchoolId] = useState<string | null>(null)
+ const expandedSchoolRef = useRef<HTMLDivElement>(null)
 
  // Modal / Form state for Classes
  const [showClassModal, setShowClassModal] = useState(false)
@@ -69,60 +82,128 @@ export default function Organization() {
  const [search, setSearch] = useState('')
 
  const loadEntities = useCallback(() => {
- try {
- const s = localStorage.getItem('teacher_schools')
- if (s) setSchools(JSON.parse(s))
- const c = localStorage.getItem('teacher_classes')
- if (c) setClasses(JSON.parse(c))
- const st = localStorage.getItem('teacher_students')
- if (st) setStudents(JSON.parse(st))
- } catch (e) {
- console.error('Error loading organization entities:', e)
- }
+  try {
+   const s = localStorage.getItem('teacher_schools')
+   if (s) setSchools(JSON.parse(s))
+   const c = localStorage.getItem('teacher_classes')
+   if (c) setClasses(JSON.parse(c))
+   const st = localStorage.getItem('teacher_students')
+   if (st) setStudents(JSON.parse(st))
+   const att = localStorage.getItem('teacher_attendance_records_v1')
+   if (att) setAttendanceSessions(JSON.parse(att))
+  } catch (e) {
+   console.error('Error loading organization entities:', e)
+  }
  }, [])
 
  useEffect(() => {
- loadEntities()
- window.addEventListener('storage', loadEntities)
- return () => window.removeEventListener('storage', loadEntities)
+  loadEntities()
+  window.addEventListener('storage', loadEntities)
+  return () => window.removeEventListener('storage', loadEntities)
  }, [loadEntities])
 
+ // Navegação por teclado: Esc recolhe o card de detalhes da escola
+ useEffect(() => {
+  const handleKeyDown = (e: KeyboardEvent) => {
+   if (e.key === 'Escape' && selectedSchoolId) {
+    setSelectedSchoolId(null)
+   }
+  }
+  window.addEventListener('keydown', handleKeyDown)
+  return () => window.removeEventListener('keydown', handleKeyDown)
+ }, [selectedSchoolId])
+
+ // Auto-scroll suave para o card da escola selecionada
+ useEffect(() => {
+  if (selectedSchoolId && expandedSchoolRef.current) {
+   expandedSchoolRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+ }, [selectedSchoolId])
+
+ // Limpa a escola selecionada ao alternar de aba
+ useEffect(() => {
+  setSelectedSchoolId(null)
+ }, [activeTab])
+
  const notifyChange = () => {
- window.dispatchEvent(new Event('storage'))
- window.dispatchEvent(new CustomEvent('teacher:data_changed'))
- syncToSupabase().catch(() => {})
+  window.dispatchEvent(new Event('storage'))
+  window.dispatchEvent(new CustomEvent('teacher:data_changed'))
+  syncToSupabase().catch(() => {})
  }
 
  // ESCOLAS CRUD 
  const openNewSchool = () => {
- setEditingSchool(null)
- setSchoolName('')
- setSchoolCode('')
- setSchoolColor('#8b5e3c')
- setShowSchoolModal(true)
+  setEditingSchool(null)
+  setSchoolName('')
+  setSchoolCode('')
+  setSchoolColor('#8b5e3c')
+  setSchoolAddress('')
+  setSchoolPhone('')
+  setSchoolEmail('')
+  setSchoolPrincipal('')
+  setShowSchoolModal(true)
  }
 
  const openEditSchool = (sch: School) => {
- setEditingSchool(sch)
- setSchoolName(sch.name)
- setSchoolCode(sch.code || '')
- setSchoolColor(sch.color || '#8b5e3c')
- setShowSchoolModal(true)
+  setEditingSchool(sch)
+  setSchoolName(sch.name)
+  setSchoolCode(sch.code || '')
+  setSchoolColor(sch.color || '#8b5e3c')
+  setSchoolAddress(sch.address || '')
+  setSchoolPhone(sch.phone || '')
+  setSchoolEmail(sch.email || '')
+  setSchoolPrincipal(sch.principal || '')
+  setShowSchoolModal(true)
  }
 
  const saveSchool = () => {
- if (!schoolName.trim()) return
- let updated: School[]
- if (editingSchool) {
- updated = schools.map(s => s.id === editingSchool.id ? { ...s, name: schoolName.trim(), code: schoolCode.trim(), color: schoolColor } : s)
- } else {
- const newSch: School = { id: 'sch_' + Date.now(), name: schoolName.trim(), code: schoolCode.trim(), color: schoolColor }
- updated = [...schools, newSch]
+  if (!schoolName.trim()) return
+  let updated: School[]
+  if (editingSchool) {
+   updated = schools.map(s => s.id === editingSchool.id ? {
+    ...s,
+    name: schoolName.trim(),
+    code: schoolCode.trim(),
+    color: schoolColor,
+    address: schoolAddress.trim(),
+    phone: schoolPhone.trim(),
+    email: schoolEmail.trim(),
+    principal: schoolPrincipal.trim()
+   } : s)
+  } else {
+   const newSch: School = {
+    id: 'sch_' + Date.now(),
+    name: schoolName.trim(),
+    code: schoolCode.trim(),
+    color: schoolColor,
+    address: schoolAddress.trim(),
+    phone: schoolPhone.trim(),
+    email: schoolEmail.trim(),
+    principal: schoolPrincipal.trim()
+   }
+   updated = [...schools, newSch]
+  }
+  setSchools(updated)
+  localStorage.setItem('teacher_schools', JSON.stringify(updated))
+  setShowSchoolModal(false)
+  notifyChange()
  }
- setSchools(updated)
- localStorage.setItem('teacher_schools', JSON.stringify(updated))
- setShowSchoolModal(false)
- notifyChange()
+
+ const handleSaveSchoolNotes = (schoolId: string, notes: string) => {
+  const updated = schools.map(s => s.id === schoolId ? { ...s, notes } : s)
+  setSchools(updated)
+  localStorage.setItem('teacher_schools', JSON.stringify(updated))
+  notifyChange()
+  toast.success('Anotações da escola salvas!')
+ }
+
+ const handleAddClassForSchool = (schoolId: string) => {
+  setEditingClass(null)
+  setClassName('')
+  setClassSchoolId(schoolId)
+  setClassGrade('6º Ano')
+  setClassYear('2026')
+  setShowClassModal(true)
  }
 
  const deleteSchool = async (id: string) => {
@@ -314,34 +395,83 @@ export default function Organization() {
 
  {/* ABA 1: ESCOLAS */}
  {activeTab === 'schools' && (
- <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
- {filteredSchools.map(sch => {
- const classCount = classes.filter(c => c.schoolId === sch.id).length
- return (
- <ModuleCard key={sch.id} padding={20}>
- <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
- <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
- <div style={{ width: 14, height: 14, borderRadius: '50%', background: sch.color || '#8b5e3c' }} />
- <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: '#2c1a0e' }}>{sch.name}</h3>
- </div>
- <div style={{ display: 'flex', gap: 6 }}>
- <Button variant="ghost" size="sm" icon={<i className="ti ti-pencil" />} onClick={() => openEditSchool(sch)} title="Editar" />
- <Button variant="danger" size="sm" icon={<i className="ti ti-trash" />} onClick={() => deleteSchool(sch.id)} title="Excluir" />
- </div>
- </div>
- <div style={{ fontSize: 12, color: '#665c54', display: 'flex', flexDirection: 'column', gap: 4 }}>
- <span><strong>Código:</strong> {sch.code || ''}</span>
- <span><strong>Turmas Vinculadas:</strong> {classCount}</span>
- </div>
- </ModuleCard>
- )
- })}
- {filteredSchools.length === 0 && (
- <div style={{ padding: 40, textAlign: 'center', color: '#8c7b70', gridColumn: '1 / -1' }}>
- Nenhuma escola cadastrada ainda. Clique em "+ Nova Escola" para adicionar.
- </div>
- )}
- </div>
+  <div>
+   {selectedSchoolId && (() => {
+    const selectedSchool = schools.find(s => s.id === selectedSchoolId)
+    if (!selectedSchool) return null
+    return (
+     <div ref={expandedSchoolRef}>
+      <SchoolDetailBox
+       school={selectedSchool}
+       classes={classes}
+       students={students}
+       attendanceSessions={attendanceSessions}
+       onClose={() => setSelectedSchoolId(null)}
+       onEdit={(sch) => openEditSchool(schools.find(s => s.id === sch.id) || sch)}
+       onAddClassForSchool={handleAddClassForSchool}
+       onSaveNotes={handleSaveSchoolNotes}
+      />
+     </div>
+    )
+   })()}
+
+   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
+    {filteredSchools.map(sch => {
+     const classCount = classes.filter(c => c.schoolId === sch.id).length
+     const isSelected = selectedSchoolId === sch.id
+     return (
+      <ModuleCard
+       key={sch.id}
+       padding={20}
+       style={{
+        cursor: 'pointer',
+        border: isSelected ? `2px solid ${sch.color || '#8b5e3c'}` : '1.5px solid rgba(139,115,85,0.18)',
+        boxShadow: isSelected ? '0 8px 24px rgba(44,26,14,0.12)' : undefined,
+        transition: 'all 0.2s ease',
+        background: isSelected ? '#fffdfa' : '#fff'
+       }}
+       onClick={() => setSelectedSchoolId(prev => prev === sch.id ? null : sch.id)}
+      >
+       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+         <div style={{ width: 14, height: 14, borderRadius: '50%', background: sch.color || '#8b5e3c', flexShrink: 0 }} />
+         <div>
+          <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: '#2c1a0e' }}>{sch.name}</h3>
+          {isSelected && (
+           <span style={{ fontSize: 10, fontWeight: 700, color: sch.color || '#8b5e3c', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            ● Selecionada
+           </span>
+          )}
+         </div>
+        </div>
+        <div style={{ display: 'flex', gap: 6 }} onClick={e => e.stopPropagation()}>
+         <Button variant="ghost" size="sm" icon={<i className="ti ti-pencil" />} onClick={() => openEditSchool(sch)} title="Editar" />
+         <Button variant="danger" size="sm" icon={<i className="ti ti-trash" />} onClick={() => deleteSchool(sch.id)} title="Excluir" />
+        </div>
+       </div>
+       <div style={{ fontSize: 12, color: '#665c54', display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <span><strong>Código:</strong> {sch.code || 'N/A'}</span>
+        <span><strong>Turmas Vinculadas:</strong> {classCount}</span>
+        {sch.address && <span><strong>Endereço:</strong> {sch.address}</span>}
+       </div>
+       <div style={{ marginTop: 14, paddingTop: 10, borderTop: '1px dashed rgba(139,115,85,0.15)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span style={{ fontSize: 11, fontWeight: 600, color: isSelected ? (sch.color || '#8b5e3c') : '#8c7b70' }}>
+         {isSelected ? 'Recolher detalhes ↑' : 'Ver detalhes da escola →'}
+        </span>
+        <span style={{ fontSize: 11, color: '#8c7b70' }}>
+         {classes.filter(c => c.schoolId === sch.id).length} turmas
+        </span>
+       </div>
+      </ModuleCard>
+     )
+    })}
+    {filteredSchools.length === 0 && (
+     <div style={{ padding: 40, textAlign: 'center', color: '#8c7b70', gridColumn: '1 / -1' }}>
+      Nenhuma escola cadastrada ainda. Clique em "+ Nova Escola" para adicionar.
+     </div>
+    )}
+   </div>
+  </div>
  )}
 
  {/* ABA 2: TURMAS */}
@@ -432,6 +562,23 @@ export default function Organization() {
 
  <label style={LabelStyle}>Código / Sigla</label>
  <input value={schoolCode} onChange={e => setSchoolCode(e.target.value)} placeholder="Ex: CDP-01" style={InputStyle} />
+
+ <label style={LabelStyle}>Endereço</label>
+ <input value={schoolAddress} onChange={e => setSchoolAddress(e.target.value)} placeholder="Ex: Av. Brasil, 1500 - Centro" style={InputStyle} />
+
+ <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+  <div>
+   <label style={LabelStyle}>Telefone</label>
+   <input value={schoolPhone} onChange={e => setSchoolPhone(e.target.value)} placeholder="(11) 98765-4321" style={InputStyle} />
+  </div>
+  <div>
+   <label style={LabelStyle}>E-mail</label>
+   <input value={schoolEmail} onChange={e => setSchoolEmail(e.target.value)} placeholder="contato@escola.com.br" style={InputStyle} />
+  </div>
+ </div>
+
+ <label style={LabelStyle}>Direção / Coordenação</label>
+ <input value={schoolPrincipal} onChange={e => setSchoolPrincipal(e.target.value)} placeholder="Ex: Profa. Helena Martins" style={InputStyle} />
 
  <label style={LabelStyle}>Cor Temática</label>
  <input type="color" value={schoolColor} onChange={e => setSchoolColor(e.target.value)} style={{ width: '100%', height: 38, border: 'none', borderRadius: RADIUS.md, cursor: 'pointer', marginBottom: 16 }} />

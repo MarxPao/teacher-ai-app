@@ -11,6 +11,7 @@ interface Props {
   padding?: number | string
   className?: string
   style?: React.CSSProperties
+  onClick?: React.MouseEventHandler<HTMLDivElement>
 }
 
 export default function ModuleCard({ 
@@ -20,11 +21,13 @@ export default function ModuleCard({
   headerAction, 
   padding = 24,
   className = '',
-  style = {}
+  style = {},
+  onClick
 }: Props) {
   return (
     <div 
       className={className}
+      onClick={onClick}
       style={{
         background: COLOR.surface1,
         border: `1px solid ${BORDER.soft}`,
