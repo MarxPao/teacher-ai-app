@@ -65,33 +65,38 @@ def parse_yaml_frontmatter(content: str) -> dict:
         raise ValueError("Formato inválido: conteúdo não possui frontmatter YAML delimitado por '---'.")
     
     raw_yaml, body = match.group(1), match.group(2)
-    data = {}
-    current_list_key = None
-    
-    for line in raw_yaml.splitlines():
-        line_str = line.rstrip()
-        if not line_str or line_str.startswith("#"):
-            continue
-        if line_str.strip().startswith("- ") and current_list_key:
-            val = line_str.strip()[2:].strip().strip('"').strip("'")
-            data[current_list_key].append(val)
-            continue
-        if ":" in line_str:
-            key, val = line_str.split(":", 1)
-            key = key.strip()
-            val = val.strip().split("#")[0].strip()
-            current_list_key = None
-            if val == "":
-                data[key] = []
-                current_list_key = key
-            elif val.startswith("[") and val.endswith("]"):
-                items = [x.strip().strip('"').strip("'") for x in val[1:-1].split(",") if x.strip()]
-                data[key] = items
-            else:
-                if (val.startswith('"') and val.endswith('"')) or (val.startswith("'") and val.endswith("'")):
-                    val = val[1:-1]
-                val = val.replace('\\"', '"').replace("\\'", "'")
-                data[key] = val
+    try:
+        import yaml
+        data = yaml.safe_load(raw_yaml)
+        if not isinstance(data, dict):
+            data = {}
+    except ImportError:
+        data = {}
+        current_list_key = None
+        for line in raw_yaml.splitlines():
+            line_str = line.rstrip()
+            if not line_str or line_str.startswith("#"):
+                continue
+            if line_str.strip().startswith("- ") and current_list_key:
+                val = line_str.strip()[2:].strip().strip('"').strip("'")
+                data[current_list_key].append(val)
+                continue
+            if ":" in line_str:
+                key, val = line_str.split(":", 1)
+                key = key.strip()
+                val = val.strip().split("#")[0].strip()
+                current_list_key = None
+                if val == "":
+                    data[key] = []
+                    current_list_key = key
+                elif val.startswith("[") and val.endswith("]"):
+                    items = [x.strip().strip('"').strip("'") for x in val[1:-1].split(",") if x.strip()]
+                    data[key] = items
+                else:
+                    if (val.startswith('"') and val.endswith('"')) or (val.startswith("'") and val.endswith("'")):
+                        val = val[1:-1]
+                    val = val.replace('\\"', '"').replace("\\'", "'")
+                    data[key] = val
 
     data["_body"] = body
     data["_raw_yaml"] = raw_yaml
