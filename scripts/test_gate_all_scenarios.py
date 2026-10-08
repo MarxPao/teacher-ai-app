@@ -22,6 +22,11 @@ import subprocess
 import sys
 from pathlib import Path
 
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 BASE_COMMIT = "main"
 AUDIT_DIR = Path(r"C:\Users\rafae\.gemini\orch_audit_test").resolve()
@@ -77,11 +82,12 @@ def main():
     # Obtém hashes canônicos das tarefas na main
     task_hashes = {}
     for task_file in REPO_ROOT.glob("tasks/*.md"):
-        code, out, _ = run_cmd(["git", "show", f"main:{task_file.name if 'tasks/' not in str(task_file) else task_file.relative_to(REPO_ROOT).as_posix()}"], cwd=REPO_ROOT)
+        code, out, _ = run_cmd(["git", "show", f"main:tasks/{task_file.name}"], cwd=REPO_ROOT)
         if code == 0:
             import hashlib
             raw_hash = hashlib.sha256(out.encode("utf-8")).hexdigest()
             task_hashes[task_file.name] = raw_hash
+            print(f"  [Task Lock] {task_file.name}: {raw_hash[:12]}...")
 
     # -------------------------------------------------------------
     # 1. ORCH_AUDIT_DIR ausente / inexistente
@@ -358,9 +364,15 @@ const alunoEmail = "mariana.silva@gmail.com";
     print_result(code_11a, out_11a, err_11a)
 
     print("\n--- Verificação de adulteração (simulando alteração de registro no log) ---")
-    # Adultera o log substituindo um caractere
-    log_content = audit_file.read_text(encoding="utf-8")
-    tampered_content = log_content.replace('"passed": true', '"passed": false')
+    lines = [l for l in audit_file.read_text(encoding="utf-8").splitlines() if l.strip()]
+    if lines:
+        import json
+        record = json.loads(lines[0])
+        record["payload"]["status"] = "ADULTERADO_FRAUDE"
+        lines[0] = json.dumps(record, ensure_ascii=False)
+        tampered_content = "\n".join(lines) + "\n"
+    else:
+        tampered_content = "adulterado\n"
     tampered_file = AUDIT_DIR / "orch_gate_audit_tampered.jsonl"
     tampered_file.write_text(tampered_content, encoding="utf-8")
 
