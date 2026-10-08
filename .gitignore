@@ -64,3 +64,4 @@ sidecar/skills/generic__*
 sidecar/skills/cache/
 sidecar/venv/
 .venv/
+.worktrees/
