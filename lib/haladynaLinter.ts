@@ -262,3 +262,42 @@ export function autoFixHaladynaViolations(
 }
 
 export { checkGenerationCompleteness, type GenerationCompletenessResult } from './assessmentGates'
+
+/**
+ * Detecta termos negativos redundantes ou duplas negativas que violam a diretriz de clareza de Haladyna
+ * (ex: 'não é incorreto', 'não ... exceto', 'nenhuma ... falsa').
+ */
+export function detectRedundantNegatives(stem: string): boolean {
+  if (!stem || typeof stem !== 'string') return false
+  const clean = stem.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  
+  const negativePointers = [
+    /\bnao\b/g,
+    /\bnunca\b/g,
+    /\bjamais\b/g,
+    /\bnenhum\b/g,
+    /\bnenhuma\b/g
+  ]
+  const secondaryNegatives = [
+    /\bincorret[ao]s?\b/,
+    /\berrad[ao]s?\b/,
+    /\bfals[ao]s?\b/,
+    /\bexceto\b/,
+    /\bmenos\b/,
+    /\bnao deixa de\b/
+  ]
+
+  let primeMatches = 0
+  for (const rx of negativePointers) {
+    const m = clean.match(rx)
+    if (m) primeMatches += m.length
+  }
+
+  const hasSecondary = secondaryNegatives.some(rx => rx.test(clean))
+
+  // Dupla negativa evidente
+  if (primeMatches >= 1 && hasSecondary) return true
+  if (primeMatches >= 2) return true
+
+  return false
+}
