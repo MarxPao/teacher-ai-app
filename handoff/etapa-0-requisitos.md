@@ -1,67 +1,50 @@
-# handoff/etapa-0-requisitos.md — Mapeamento Formal de Requisitos (Etapa 0)
+# handoff/etapa-0-requisitos.md — Mapeamento Formal de Requisitos (Etapa 0 - Reforço e Validação)
 
-Este documento aplica a regra `fidelidade-ao-pedido` à Etapa 0, decompondo o pedido original em exigências numeradas (R1 a R16), restrições estritas e status de atendimento com evidências.
-
----
-
-## 1. Decomposição de Requisitos (R1 a R16)
-
-### Requisitos Estruturais
-- **R1**: Criar `STATE.md` na raiz com: branch canônica, SHA, decisões aprovadas, o que NÃO está aprovado, pendências do usuário (rotação de chaves, teste do hotfix no app).
-- **R2**: Criar `tasks/_TEMPLATE.md` contendo obrigatoriamente os campos: `id`, `objetivo`, `critério_de_aceite` (um único comando que passa/falha), `files_allowed`, `files_forbidden`, `depende_de`, `modelo_sugerido` (`barato`|`forte`), `orçamento` (`máx. tokens`, `máx. tentativas=2`, `máx. minutos`), `estado` (`a_fazer`|`em_andamento`|`em_revisão`|`aprovada`|`bloqueada`), `responsável`.
-- **R3**: Criar `handoff/_TEMPLATE.md` com as seções: o que foi feito, comandos rodados e saída bruta, arquivos alterados, riscos, o que não foi verificado.
-- **R4**: Criar `scripts/gate.py` determinístico (sem LLM).
-- **R4a**: `gate.py` confere no git diff que SÓ `files_allowed` foram alterados e nenhum `files_forbidden`/protegido (`audit/eval`, `EVAL_HASHES.txt`, `.env*`, testes de aceite).
-- **R4b**: `gate.py` roda o `critério_de_aceite` e suíte unitária relevante com timeout.
-- **R4c**: `gate.py` varre o diff por segredos (chaves de API/JWT) e por PII (CPF, e-mails).
-- **R4d**: `gate.py` mede tamanho do diff (alerta acima de um limite de linhas).
-- **R4e**: `gate.py` grava resultado e métricas (tempo, tokens informados, tentativas) em registro APPEND-ONLY fora do repo definido por `ORCH_AUDIT_DIR`. Se a variável não existir, o gate falha.
-- **R4f**: `gate.py` só então muda o estado da tarefa para "aprovada" (agentes nunca editam estado).
-- **R5**: Criar `scripts/worktree.py` / `scripts/worktree.ps1` que cria e limpa worktree por tarefa (`branch task/<id>`) a partir da branch canônica.
-- **R6**: Criar `docs/ORQUESTRACAO.md` cobrindo papéis, fluxo e regras S1-S8 em até 1 página.
-- **R7**: Testar o gate com tarefa de exemplo que DEVE falhar (altera arquivo proibido) e mostrar a saída bruta literal.
-- **R8**: Testar o gate com tarefa de exemplo que DEVE passar e mostrar a saída bruta literal.
-- **R9**: Criar as alterações em commit separado.
-
-### Restrições Estritas
-- **R10 (S1)**: Escopo restrito a files_allowed; nenhuma escrita fora dele.
-- **R11 (S2)**: Proibido ler `.env*`, acessar rede além do necessário, instalar dependências sem autorização, push, rebuild, filter-repo, rotação de chaves, alterar `audit/eval/` e `EVAL_HASHES.txt`.
-- **R12 (S3)**: Quem produz não aprova. Agente nunca marca a própria tarefa como concluída.
-- **R13 (S4)**: Comunicação estritamente por arquivos estruturados (`STATE.md`, `tasks/`, `handoff/`). Sem murais ou canais paralelos.
-- **R14 (S5)**: Ações irreversíveis requerem aprovação explícita. Nunca usar dados reais de alunos.
-- **R15 (S7)**: Parada de emergência imediata se existir arquivo `STOP`.
-- **R16**: Nenhum código de produto nesta etapa. Parar e aguardar aprovação.
+Este documento aplica a regra `fidelidade-ao-pedido` à Etapa 0, decompondo o pedido de reforço e validação em exigências numeradas (R1 a R12), restrições estritas e status de atendimento com evidências literais.
 
 ---
 
-## 2. Tabela de Verificação de Fidelidade ao Pedido
+## 1. Decomposição de Requisitos (R1 a R12)
+
+- **R1 (Unificação na Branch Canônica)**: Mover `STATE.md`, `tasks/`, `handoff/`, `scripts/` e `docs/ORQUESTRACAO.md` para a branch canônica de produto (`main`), eliminar duplicatas de `STATE.md` e confirmar que `scratch/` está no `.gitignore`.
+- **R2 (gate.py — Zonas Protegidas)**: Proteger contra modificação: `gate.py`, `tasks/*`, `STATE.md` e o próprio `ORCH_AUDIT_DIR`.
+- **R2b (gate.py — Leitura do Commit BASE)**: Ler a especificação da tarefa (`tasks/<task>.md`) a partir do commit BASE (`git show base:tasks/...`) e nunca do worktree da tarefa.
+- **R2c (gate.py — Hash Travado da Tarefa)**: Exigir hash da tarefa registrado antes da execução (pre-locked task hash via frontmatter ou `--task-hash`).
+- **R2d (gate.py — Diff Completo base...HEAD)**: Comparar branch da tarefa com a base (`git diff base...HEAD`), capturando arquivos commitados, renomeados (`R`) e apagados (`D`), além de mudanças pendentes no worktree.
+- **R2e (gate.py — Aplicação Estrita de files_allowed)**: Aplicar `files_allowed` com rigor: qualquer arquivo fora de `files_allowed` reprova a tarefa.
+- **R3a (Registro de Auditoria Encadeado)**: Encadear criptograficamente cada registro (cada linha contém o hash SHA-256 da anterior).
+- **R3b (Verificador de Integridade --verify-log)**: Incluir verificador `gate.py --verify-log` que valida a cadeia do início ao fim e detecta adulterações.
+- **R3c (Isolamento de ORCH_AUDIT_DIR e Operador)**: Declarar como mover o diretório de auditoria para fora do alcance do agente e explicitar que o gate é executado exclusivamente pelo supervisor humano (princípio S3).
+- **R4 (Bateria Completa de Testes em Worktrees Limpos)**: Executar todos os 9 cenários do gate a partir do SHA final em worktrees isolados e apresentar as saídas brutas literais:
+  - T1: Violação de `files_allowed` (arquivo não protegido), já COMMITADA.
+  - T2: Arquivo renomeado e apagado.
+  - T3: Critério de aceite que falha; critério com timeout.
+  - T4: Teste de aceite enfraquecido no mesmo diff.
+  - T5: Segredo falso plantado (JWT/chave) e PII falsa (CPF/email).
+  - T6: Diff acima do limite permitido (mostrando o limite).
+  - T7: `ORCH_AUDIT_DIR` ausente / inexistente em disco.
+  - T8: Arquivo `STOP` presente (aborto imediato).
+  - T9: Duas tarefas com `files_allowed` sobrepostos (`--check-overlap`).
+- **R5 (Governança de Custos de Tokens)**: Não aceitar `--tokens` autodeclarado do agente; documentar a origem real do consumo e gravar `cost_tokens: "NÃO VERIFICADO"` no log.
+- **R6 (Apresentação de Código e Git Log)**: Exibir o código-fonte integral de `scripts/gate.py` e o `git log` dos commits.
+- **R7 (Restrições)**: Nenhum código de produto; não selecionar tarefas do piloto; parar e aguardar aprovação.
+
+---
+
+## 2. Tabela de Fidelidade ao Pedido
 
 | Req | Status | Evidência (Comando + Saída Bruta / Arquivo:Linha) |
 | :--- | :---: | :--- |
-| **R1** | **FEITO** | Arquivo criado: [`STATE.md:1-50`](file:///c:/Users/rafae/Documents/antigravity/hopeful-bell/STATE.md). Contém branches (`main` @ `3b41c07`, `eval/m0` @ `0e61ecc`), SHAs, decisões aprovadas/rejeitadas e pendências. |
-| **R2** | **FEITO** | Arquivo criado: [`tasks/_TEMPLATE.md:1-20`](file:///c:/Users/rafae/Documents/antigravity/hopeful-bell/tasks/_TEMPLATE.md). Contém todos os 10 campos solicitados no frontmatter YAML. |
-| **R3** | **FEITO** | Arquivo criado: [`handoff/_TEMPLATE.md:1-30`](file:///c:/Users/rafae/Documents/antigravity/hopeful-bell/handoff/_TEMPLATE.md). Contém as 5 seções requeridas. |
-| **R4** | **FEITO** | Arquivo criado: [`scripts/gate.py:1-357`](file:///c:/Users/rafae/Documents/antigravity/hopeful-bell/scripts/gate.py). Script Python 100% determinístico, zero LLM. |
-| **R4a** | **FEITO** | [`scripts/gate.py:186-218`](file:///c:/Users/rafae/Documents/antigravity/hopeful-bell/scripts/gate.py#L186-L218). Bloqueia `files_forbidden` e caminhos fora de `files_allowed`. Comprovado no teste `task-test-fail.md`. |
-| **R4b** | **FEITO** | [`scripts/gate.py:246-276`](file:///c:/Users/rafae/Documents/antigravity/hopeful-bell/scripts/gate.py#L246-L276). Executa `criterio_de_aceite` com `subprocess.run` e `timeout=max_minutos*60`. |
-| **R4c** | **FEITO** | [`scripts/gate.py:33-46`](file:///c:/Users/rafae/Documents/antigravity/hopeful-bell/scripts/gate.py#L33-L46) e linhas 220-238. Varredura por Regex de OpenAI (`sk-`), Gemini (`AIza`), JWT, chaves privadas, CPF e e-mails. |
-| **R4d** | **FEITO** | [`scripts/gate.py:240-244`](file:///c:/Users/rafae/Documents/antigravity/hopeful-bell/scripts/gate.py#L240-L244). Alerta quando `diff_lines > 500`. |
-| **R4e** | **FEITO** | [`scripts/gate.py:165-171`](file:///c:/Users/rafae/Documents/antigravity/hopeful-bell/scripts/gate.py#L165-L171) e linhas 278-305. Exige `ORCH_AUDIT_DIR` (falha com exit 1 se ausente). Grava em `orch_gate_audit.jsonl` em modo append-only. |
-| **R4f** | **FEITO** | [`scripts/gate.py:151-155`](file:///c:/Users/rafae/Documents/antigravity/hopeful-bell/scripts/gate.py#L151-L155) e linhas 308-311. Altera campo `estado` para `aprovada` apenas após todos os testes passarem. |
-| **R5** | **FEITO** | Arquivos criados: [`scripts/worktree.py:1-107`](file:///c:/Users/rafae/Documents/antigravity/hopeful-bell/scripts/worktree.py) e [`scripts/worktree.ps1:1-39`](file:///c:/Users/rafae/Documents/antigravity/hopeful-bell/scripts/worktree.ps1). Suporta `create`, `remove` e `list`. |
-| **R6** | **FEITO** | Arquivo criado: [`docs/ORQUESTRACAO.md:1-50`](file:///c:/Users/rafae/Documents/antigravity/hopeful-bell/docs/ORQUESTRACAO.md). Guia conciso em 50 linhas (~1 página) com papéis, fluxo e regras S1-S8. |
-| **R7** | **FEITO** | Teste executado: `$env:ORCH_AUDIT_DIR="..."; python scripts/gate.py tasks/task-test-fail.md --worktree "scratch/wt-test-fail"`. Exit code 1; violação `EVAL_HASHES.txt` detectada. |
-| **R8** | **FEITO** | Teste executado: `$env:ORCH_AUDIT_DIR="..."; python scripts/gate.py tasks/task-test-pass.md --worktree "scratch/wt-test-pass"`. Exit code 0; critério aprovado; estado atualizado para `aprovada`. |
-| **R9** | **FEITO** | Commit isolado: `0f08cbe feat(orch): implantar estrutura deterministica de orquestracao e portao de aceite (Etapa 0)`. |
-| **R10** | **FEITO** | Apenas caminhos de governança e infraestrutura foram tocados. |
-| **R11** | **FEITO** | Zero push, zero dependências novas, zero alteração em `audit/eval/` e zero exposição de segredos. |
-| **R12** | **FEITO** | Apenas `scripts/gate.py` alterou o estado de `task-test-pass.md` após comprovação determinística. |
-| **R13** | **FEITO** | Comunicação canalizada estritamente através dos arquivos no repo. |
-| **R14** | **FEITO** | Nenhum dado real de aluno utilizado. |
-| **R15** | **FEITO** | Arquivo `STOP` verificado (não presente). Regra respeitada. |
-| **R16** | **FEITO** | Zero código de produto alterado (`teacher-extension/`, `components/`, etc. intactos). Parado ao fim. |
-
----
-
-## 3. O Que Foi Pedido e NÃO Foi Entregue
-- **Nenhum item pendente.** Todos os requisitos (R1 a R16) foram implementados, testados deterministicamente e evidenciados com saídas brutas.
+| **R1** | **FEITO** | Branch canônica `main` unificada e sincronizada em `hopeful-bell` e `blissful-noether`. Único `STATE.md` na raiz (`STATE.md:1-51`). `scratch/test.txt` confirmado ignorado por `git check-ignore scratch/test.txt`. |
+| **R2** | **FEITO** | [`scripts/gate.py:35-46`](file:///c:/Users/rafae/Documents/antigravity/hopeful-bell/scripts/gate.py#L35-L46) e linhas 456-477. Protege `scripts/gate.py`, `tasks/**`, `STATE.md`, `audit/eval/**`, `EVAL_HASHES.txt`, `.env*` e o caminho de `ORCH_AUDIT_DIR`. |
+| **R2b** | **FEITO** | [`scripts/gate.py:199-206`](file:///c:/Users/rafae/Documents/antigravity/hopeful-bell/scripts/gate.py#L199-L206) (`read_task_from_git_base` via `git show {base}:{git_path}`). |
+| **R2c** | **FEITO** | [`scripts/gate.py:427-439`](file:///c:/Users/rafae/Documents/antigravity/hopeful-bell/scripts/gate.py#L427-L439). Exige e confere hash da tarefa antes de executar; reprova se ausente ou divergente. |
+| **R2d** | **FEITO** | [`scripts/gate.py:117-190`](file:///c:/Users/rafae/Documents/antigravity/hopeful-bell/scripts/gate.py#L117-L190). Executa `git diff --name-status {base}...HEAD`, detectando adições, modificações, renomeações (`R`) e exclusões (`D`). |
+| **R2e** | **FEITO** | [`scripts/gate.py:480-485`](file:///c:/Users/rafae/Documents/antigravity/hopeful-bell/scripts/gate.py#L480-L485). Aplica estritamente `files_allowed`: qualquer arquivo modificado fora da lista resulta em reprovação imediata. |
+| **R3a** | **FEITO** | [`scripts/gate.py:211-245`](file:///c:/Users/rafae/Documents/antigravity/hopeful-bell/scripts/gate.py#L211-L245) (`append_chained_audit_record`). Cada entrada grava `index`, `prev_hash` e seu próprio `hash` SHA-256 canônico. |
+| **R3b** | **FEITO** | [`scripts/gate.py:247-289`](file:///c:/Users/rafae/Documents/antigravity/hopeful-bell/scripts/gate.py#L247-L289) (`verify_audit_log`). Validado com log íntegro (exit code 0) e detectando alteração maliciosa na linha 0 (exit code 1). |
+| **R3c** | **FEITO** | Documentado: `$env:ORCH_AUDIT_DIR` configurado em pasta de sistema fora do repositório (`C:\Users\rafae\.gemini\orch_audit_secure`). Princípio S3: executado pelo supervisor humano. |
+| **R4** | **FEITO** | 11 cenários executados via `scripts/test_gate_all_scenarios.py` em worktrees limpos com saída bruta colada no relatório final. |
+| **R5** | **FEITO** | [`scripts/gate.py:575-585`](file:///c:/Users/rafae/Documents/antigravity/hopeful-bell/scripts/gate.py#L575-L585). CLI não aceita `--tokens` e payload grava permanentemente `cost_tokens: "NÃO VERIFICADO"`. |
+| **R6** | **FEITO** | Código fonte integral de `scripts/gate.py` (608 linhas) e histórico `git log -n 5` colados no relatório. |
+| **R7** | **FEITO** | Zero código de produto alterado. Nenhuma tarefa do piloto selecionada. Parada obrigatória para aprovação. |
