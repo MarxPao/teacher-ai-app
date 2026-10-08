@@ -407,7 +407,8 @@ def main():
     files_allowed = task_data.get("files_allowed", [])
     files_forbidden = task_data.get("files_forbidden", [])
     task_hash_locked = task_data.get("task_hash_locked") or args.task_hash
-    max_minutos = int(task_data.get("orcamento", {}).get("max_minutos", 15) if isinstance(task_data.get("orcamento"), dict) else 15)
+    max_minutos = float(task_data.get("orcamento", {}).get("max_minutos", 15) if isinstance(task_data.get("orcamento"), dict) else 15)
+    timeout_sec = max(1.0, max_minutos * 60)
 
     # -------------------------------------------------------------
     # REGRA 2(c): Exigência de Hash Travado da Tarefa
@@ -519,7 +520,7 @@ def main():
         print("\n[6/6] Pulando execução do critério de aceite (violações já detectadas).")
         acceptance_success = False
     else:
-        print(f"\n[6/6] Executando critério de aceite (Timeout: {max_minutos * 60}s):")
+        print(f"\n[6/6] Executando critério de aceite (Timeout: {timeout_sec:.1f}s):")
         print(f"  $ {criterio}")
         try:
             crit_res = subprocess.run(
@@ -530,7 +531,7 @@ def main():
                 text=True,
                 encoding="utf-8",
                 errors="replace",
-                timeout=max_minutos * 60
+                timeout=timeout_sec
             )
             acceptance_exit_code = crit_res.returncode
             acceptance_output = crit_res.stdout + ("\n" + crit_res.stderr if crit_res.stderr else "")
@@ -546,7 +547,7 @@ def main():
                 print(f"  [SUCESSO] Critério de aceite passou com código 0.")
         except subprocess.TimeoutExpired:
             acceptance_success = False
-            msg = f"Critério de aceite atingiu timeout de {max_minutos * 60}s"
+            msg = f"Critério de aceite atingiu timeout de {timeout_sec:.1f}s"
             violations.append(msg)
             print(f"  [TIMEOUT] {msg}")
 
