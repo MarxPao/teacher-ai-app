@@ -483,3 +483,33 @@ export function calculateDidacticSequenceProgress(params: {
   }
 }
 
+/**
+ * Calcula a dispersão estatística (média, variância e desvio padrão) de um conjunto de notas numéricas válidas (0 a 10).
+ */
+export function calculateGradeDispersion(grades: number[]): {
+  mean: number
+  variance: number
+  stdDev: number
+  isHomogeneous: boolean
+} {
+  if (!Array.isArray(grades)) {
+    return { mean: 0, variance: 0, stdDev: 0, isHomogeneous: true }
+  }
+
+  const validGrades = grades.filter(g => typeof g === 'number' && !isNaN(g) && g >= 0 && g <= 10)
+  if (validGrades.length === 0) {
+    return { mean: 0, variance: 0, stdDev: 0, isHomogeneous: true }
+  }
+
+  const mean = validGrades.reduce((sum, val) => sum + val, 0) / validGrades.length
+  const variance = validGrades.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / validGrades.length
+  const stdDev = Math.sqrt(variance)
+
+  return {
+    mean: Number(mean.toFixed(2)),
+    variance: Number(variance.toFixed(4)),
+    stdDev: Number(stdDev.toFixed(4)),
+    isHomogeneous: stdDev < 2.0
+  }
+}
+
