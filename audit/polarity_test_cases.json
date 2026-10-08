@@ -1,0 +1,112 @@
+[
+  {
+    "id": "CASE_01_POSITIVE_HEADER_PRESENCA",
+    "description": "Coluna 'Presença', sem rótulo no checkbox. Professor pede Presente.",
+    "column_header": "Presença",
+    "control_label": "",
+    "teacher_intent": "PRESENCA",
+    "expected_can_resolve": true,
+    "expected_polarity": "POSITIVE",
+    "expected_should_be_checked": true
+  },
+  {
+    "id": "CASE_02_POSITIVE_HEADER_PRESENCA_FALTA",
+    "description": "Coluna 'Presença', sem rótulo no checkbox. Professor pede Falta.",
+    "column_header": "Presença",
+    "control_label": "",
+    "teacher_intent": "FALTA",
+    "expected_can_resolve": true,
+    "expected_polarity": "POSITIVE",
+    "expected_should_be_checked": false
+  },
+  {
+    "id": "CASE_03_NEGATIVE_HEADER_FALTA",
+    "description": "Coluna 'Falta (Marcar se Ausente)'. Professor pede Presente.",
+    "column_header": "Falta (Marcar se Ausente)",
+    "control_label": "",
+    "teacher_intent": "PRESENCA",
+    "expected_can_resolve": true,
+    "expected_polarity": "NEGATIVE",
+    "expected_should_be_checked": false
+  },
+  {
+    "id": "CASE_04_NEGATIVE_HEADER_FALTA_FALTA",
+    "description": "Coluna 'Falta (Marcar se Ausente)'. Professor pede Falta.",
+    "column_header": "Falta (Marcar se Ausente)",
+    "control_label": "",
+    "teacher_intent": "FALTA",
+    "expected_can_resolve": true,
+    "expected_polarity": "NEGATIVE",
+    "expected_should_be_checked": true
+  },
+  {
+    "id": "CASE_05_SYNONYM_AUSENCIA_LABEL",
+    "description": "Coluna 'Diário de Frequência', rótulo do checkbox 'Marcar Ausente'. Professor pede Falta.",
+    "column_header": "Diário de Frequência",
+    "control_label": "Marcar Ausente",
+    "teacher_intent": "FALTA",
+    "expected_can_resolve": true,
+    "expected_polarity": "NEGATIVE",
+    "expected_should_be_checked": true
+  },
+  {
+    "id": "CASE_06_SYNONYM_COMPARECIMENTO",
+    "description": "Coluna 'Comparecimento Escolar'. Professor pede Presente.",
+    "column_header": "Comparecimento Escolar",
+    "control_label": "",
+    "teacher_intent": "PRESENCA",
+    "expected_can_resolve": true,
+    "expected_polarity": "POSITIVE",
+    "expected_should_be_checked": true
+  },
+  {
+    "id": "CASE_07_ENGLISH_ATTENDANCE",
+    "description": "Coluna 'Attendance'. Professor pede Presente.",
+    "column_header": "Attendance",
+    "control_label": "",
+    "teacher_intent": "PRESENCA",
+    "expected_can_resolve": true,
+    "expected_polarity": "POSITIVE",
+    "expected_should_be_checked": true
+  },
+  {
+    "id": "CASE_08_ENGLISH_ABSENCE",
+    "description": "Coluna 'Absence Records'. Professor pede Presente.",
+    "column_header": "Absence Records",
+    "control_label": "",
+    "teacher_intent": "PRESENCA",
+    "expected_can_resolve": true,
+    "expected_polarity": "NEGATIVE",
+    "expected_should_be_checked": false
+  },
+  {
+    "id": "CASE_09_AMBIGUOUS_HEADER_PF",
+    "description": "Coluna 'P/F' (Presença/Falta) sem rótulo identificador no controle -> Recusa segura obrigatória.",
+    "column_header": "P/F",
+    "control_label": "",
+    "teacher_intent": "PRESENCA",
+    "expected_can_resolve": false,
+    "expected_polarity": "AMBIGUOUS",
+    "expected_should_be_checked": null
+  },
+  {
+    "id": "CASE_10_GENERIC_HEADER_STATUS",
+    "description": "Coluna genérica 'Status' sem rótulo pedagógico no checkbox -> Recusa segura obrigatória.",
+    "column_header": "Status",
+    "control_label": "",
+    "teacher_intent": "FALTA",
+    "expected_can_resolve": false,
+    "expected_polarity": "AMBIGUOUS",
+    "expected_should_be_checked": null
+  },
+  {
+    "id": "CASE_11_CONFLICTING_SIGNALS",
+    "description": "Conflito: cabeçalho 'Presença', mas rótulo do checkbox 'Marcar Falta' -> Recusa segura por conflito.",
+    "column_header": "Presença",
+    "control_label": "Marcar Falta",
+    "teacher_intent": "PRESENCA",
+    "expected_can_resolve": false,
+    "expected_polarity": "CONFLICT",
+    "expected_should_be_checked": null
+  }
+]

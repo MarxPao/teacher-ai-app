@@ -4,10 +4,9 @@ objetivo: "Consolidar o resolvedor de polaridade de frequência no modulo oficia
 criterio_de_aceite: "python audit/test_polarity_parity.py"
 files_allowed:
   - "teacher-extension/attendancePolarity.js"
-  - "audit/test_polarity_parity.py"
-  - "audit/polarity_test_cases.json"
   - "handoff/handoff-TASK-001.md"
 files_forbidden:
+  - "audit/**"
   - "audit/eval/**"
   - "EVAL_HASHES.txt"
   - ".env*"
@@ -29,7 +28,7 @@ responsavel: "executor-polaridade"
 1. Trazer o módulo canônico do hotfix `c377471` para `teacher-extension/attendancePolarity.js`.
 2. Avaliar os 11 casos de teste canônicos (`audit/polarity_test_cases.json`) contra a lógica de resolução.
 3. Garantir que conflitos entre cabeçalho e rótulo (ex: Cabeçalho 'Presença' vs Rótulo 'Marcar Falta') e cabeçalhos ambíguos ('P/F', 'Status') resultem em recusa segura (*fail-closed* / `can_resolve: false`).
-4. Atualizar o executor de paridade `audit/test_polarity_parity.py` para validar `attendancePolarity.js` contra os 11 casos de teste com 100% de aprovação.
+4. Passar no executor de paridade pré-existente e imutável `audit/test_polarity_parity.py` com 11/11 casos aprovados.
 5. Registrar em `handoff/handoff-TASK-001.md` a tabela comparativa de onde divergiam e a justificativa da consolidação em um resolvedor único.
 
 ## 2. Critério de Aceite
@@ -39,5 +38,6 @@ python audit/test_polarity_parity.py
 ```
 
 ## 3. Restrições de Escopo (S1/S2)
-- Modificações estritamente restritas a `files_allowed`.
-- Nenhuma alteração permitida em `audit/eval/`, `EVAL_HASHES.txt`, `scripts/gate.py` ou `.env*`.
+- Modificações estritamente restritas a `files_allowed` (`teacher-extension/attendancePolarity.js` e `handoff/handoff-TASK-001.md`).
+- O teste de aceite em `audit/` é imutável e pertence ao commit base.
+- Nenhuma alteração permitida em `audit/**`, `EVAL_HASHES.txt`, `scripts/gate.py` ou `.env*`.
