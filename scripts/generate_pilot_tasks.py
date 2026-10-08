@@ -6,11 +6,10 @@ tasks = [
         "filename": "task-pilot-1-haladyna.md",
         "content": """---
 id: task-pilot-1-haladyna
-objetivo: Adicionar funcao pura detectRedundantNegatives em lib/haladynaLinter.ts com testes unitarios em __tests__/haladynaRedundantNegative.test.ts
+objetivo: Adicionar funcao pura detectRedundantNegatives em lib/haladynaLinter.ts
 criterio_de_aceite: npx vitest run __tests__/haladynaRedundantNegative.test.ts
 files_allowed:
   - lib/haladynaLinter.ts
-  - __tests__/haladynaRedundantNegative.test.ts
 files_forbidden:
   - scripts/gate.py
   - tasks/**
@@ -33,11 +32,10 @@ responsavel: orquestrador
         "filename": "task-pilot-2-school.md",
         "content": """---
 id: task-pilot-2-school
-objetivo: Adicionar funcoes puras formatInepCode e isValidInepCode em lib/schoolUtils.ts com testes unitarios em __tests__/schoolUtilsInep.test.ts
+objetivo: Adicionar funcoes puras formatInepCode e isValidInepCode em lib/schoolUtils.ts
 criterio_de_aceite: npx vitest run __tests__/schoolUtilsInep.test.ts
 files_allowed:
   - lib/schoolUtils.ts
-  - __tests__/schoolUtilsInep.test.ts
 files_forbidden:
   - scripts/gate.py
   - tasks/**
@@ -60,11 +58,10 @@ responsavel: orquestrador
         "filename": "task-pilot-3-class.md",
         "content": """---
 id: task-pilot-3-class
-objetivo: Adicionar funcao pura calculateGradeDispersion em lib/classUtils.ts com testes unitarios em __tests__/classUtilsDispersion.test.ts
+objetivo: Adicionar funcao pura calculateGradeDispersion em lib/classUtils.ts
 criterio_de_aceite: npx vitest run __tests__/classUtilsDispersion.test.ts
 files_allowed:
   - lib/classUtils.ts
-  - __tests__/classUtilsDispersion.test.ts
 files_forbidden:
   - scripts/gate.py
   - tasks/**

@@ -1,10 +1,9 @@
 ---
 id: task-pilot-1-haladyna
-objetivo: Adicionar funcao pura detectRedundantNegatives em lib/haladynaLinter.ts com testes unitarios em __tests__/haladynaRedundantNegative.test.ts
+objetivo: Adicionar funcao pura detectRedundantNegatives em lib/haladynaLinter.ts
 criterio_de_aceite: npx vitest run __tests__/haladynaRedundantNegative.test.ts
 files_allowed:
   - lib/haladynaLinter.ts
-  - __tests__/haladynaRedundantNegative.test.ts
 files_forbidden:
   - scripts/gate.py
   - tasks/**
@@ -19,6 +18,6 @@ orcamento:
   max_minutos: 5
 estado: a_fazer
 responsavel: orquestrador
-task_hash_locked: 64a52d822696823224627376d1af6d9e8670ffb158c3e05e123d251ed98f9c81
+task_hash_locked: cc5d9a91e2886b542106a3bd4d6d00e89a73df56052cbdc3fa4ca7d0ede6a00d
 ---
 # Tarefa Piloto 1: Linter Haladyna - Deteccao de Negativas Redundantes
