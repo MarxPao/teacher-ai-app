@@ -47,4 +47,4 @@ Este documento consolida a governança, integridade de branches, histórico de S
 1. **Rotação de Chaves de API e Segredos**: Usuário deve executar rotação periódica de credenciais de LLM e chaves de provedores fora do repositório.
 2. **Teste do Hotfix no App Real**: Usuário deve testar o módulo de polaridade de frequência (`attendancePolarity.js`) em portais de produção selecionados.
 3. **Aprovação da Consolidação de Branches**: Aprovação formal para executar a fusão de `main` e `worktree-eval-m0`.
-4. **Aprovação da Etapa 0 de Orquestração**: Revisão e liberação da infraestrutura de governança (`tasks/`, `handoff/`, `scripts/gate.py`, `scripts/worktree.py`, `docs/ORQUESTRACAO.md`).
+4. **Piloto de Orquestração (Etapas 1 a 4) CONCLUÍDO**: Infraestrutura determinística validada empiricamente nos Modos A e B com 5 registros encadeados no log e 3 tarefas aprovadas pelo `gate.py` (`handoff/piloto-etapas-1-a-4.md`).

@@ -16,7 +16,7 @@ orcamento:
   max_tokens: 15000
   max_tentativas: 2
   max_minutos: 5
-estado: a_fazer
+estado: aprovada
 responsavel: orquestrador
 task_hash_locked: cc5d9a91e2886b542106a3bd4d6d00e89a73df56052cbdc3fa4ca7d0ede6a00d
 ---
