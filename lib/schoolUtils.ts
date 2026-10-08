@@ -173,3 +173,21 @@ export function calculateSchoolMetrics(
     studentsList: schoolStudents
   }
 }
+
+/**
+ * Valida se um código INEP informado possui 8 dígitos numéricos válidos.
+ */
+export function isValidInepCode(inep: string): boolean {
+  if (!inep || typeof inep !== 'string') return false
+  const digits = inep.replace(/\D/g, '')
+  return digits.length === 8
+}
+
+/**
+ * Normaliza e formata o código INEP para uma string de 8 dígitos numéricos limpos.
+ */
+export function formatInepCode(inep: string): string {
+  if (!inep || typeof inep !== 'string') return ''
+  const digits = inep.replace(/\D/g, '')
+  return digits.length === 8 ? digits : ''
+}
