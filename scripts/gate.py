@@ -192,6 +192,10 @@ def get_git_diff_details(cwd: Path, base_commit: str) -> tuple:
 def compute_sha256(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
+def compute_normalized_task_hash(content: str) -> str:
+    lines = [l for l in content.splitlines() if not l.strip().startswith("task_hash_locked:")]
+    return hashlib.sha256("\n".join(lines).encode("utf-8")).hexdigest()
+
 def read_task_from_git_base(repo_root: Path, base_commit: str, rel_task_path: str) -> tuple:
     """Lê estritamente o arquivo da tarefa a partir do commit BASE via git show."""
     git_path = rel_task_path.replace("\\", "/")
@@ -200,9 +204,10 @@ def read_task_from_git_base(repo_root: Path, base_commit: str, rel_task_path: st
     if res.returncode != 0:
         raise FileNotFoundError(f"Tarefa '{git_path}' não encontrada no commit BASE ({base_commit}).")
     content = res.stdout
-    sha256_hash = compute_sha256(content)
+    sha256_raw = compute_sha256(content)
+    sha256_norm = compute_normalized_task_hash(content)
     data = parse_yaml_frontmatter(content)
-    return data, sha256_hash, content
+    return data, sha256_raw, sha256_norm, content
 
 def append_chained_audit_record(audit_file: Path, record_data: dict) -> dict:
     """Grava registro com encadeamento criptográfico de hash (hash chaining)."""
@@ -335,7 +340,10 @@ def main():
         sys.exit(1)
 
     audit_dir = Path(audit_env).resolve()
-    audit_dir.mkdir(parents=True, exist_ok=True)
+    if not audit_dir.exists() or not audit_dir.is_dir():
+        print(f"[GATE-ERRO FATAL] Diretório de auditoria especificado em ORCH_AUDIT_DIR não existe: {audit_dir}")
+        print("Regra S5: O diretório de auditoria deve ser pré-configurado fora do repositório.")
+        sys.exit(1)
     audit_log_file = audit_dir / "orch_gate_audit.jsonl"
 
     # -------------------------------------------------------------
@@ -398,14 +406,15 @@ def main():
     # -------------------------------------------------------------
     print("\n[1/6] Lendo especificação da tarefa a partir do commit BASE...")
     try:
-        task_data, task_base_sha, task_raw_content = read_task_from_git_base(repo_root, args.base, rel_task_path)
-        print(f"  Hash SHA-256 da tarefa no BASE: {task_base_sha}")
+        task_data, task_base_raw_sha, task_base_norm_sha, task_raw_content = read_task_from_git_base(repo_root, args.base, rel_task_path)
+        print(f"  Hash SHA-256 da tarefa no BASE (bruto): {task_base_raw_sha}")
     except Exception as e:
         msg = f"Falha ao ler tarefa do commit BASE ({args.base}): {e}"
         print(f"  [VIOLAÇÃO] {msg}")
         violations.append(msg)
         task_data = {}
-        task_base_sha = ""
+        task_base_raw_sha = ""
+        task_base_norm_sha = ""
 
     task_id = task_data.get("id", task_arg_path.stem)
     criterio = task_data.get("criterio_de_aceite")
@@ -423,8 +432,8 @@ def main():
         msg = "Hash travado da tarefa não informado (exija --task-hash ou campo 'task_hash_locked' na tarefa base)"
         print(f"  [VIOLAÇÃO 2(c)] {msg}")
         violations.append(msg)
-    elif task_base_sha != task_hash_locked:
-        msg = f"Hash da tarefa divergente! Esperado: {task_hash_locked}, Encontrado no base: {task_base_sha}"
+    elif task_hash_locked not in (task_base_raw_sha, task_base_norm_sha):
+        msg = f"Hash da tarefa divergente! Esperado: {task_hash_locked}, Encontrado no base: {task_base_raw_sha}"
         print(f"  [VIOLAÇÃO 2(c)] {msg}")
         violations.append(msg)
     else:
@@ -566,7 +575,7 @@ def main():
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "task_id": task_id,
         "task_file": rel_task_path,
-        "task_sha256": task_base_sha,
+        "task_sha256": task_base_raw_sha,
         "base_commit": args.base,
         "status": "APROVADA" if passed else "REPROVADA",
         "passed": passed,
