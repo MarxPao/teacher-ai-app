@@ -39,9 +39,9 @@
     if (!norm) return null;
 
     // Regra 0 (Ambiguidade/Agregação estrita):
-    // - "sem falta", "nao faltou", "nao falta", "not absent", "no absence" não determinam ação diária binária -> ambíguo
+    // - "sem falta", "nao faltou", "nao falta", "nao ausente", "not not present", "sem falta de presenca", "not absent", "no absence" -> ambíguo
     // - "total de faltas", "total de presencas", "total" são contadores/agregados -> ambíguo
-    const ambiguousRegex = /\b(sem\s+falta[s]?|nao\s+falto[u]?|nao\s+falta[s]?|not\s+absent|no\s+absence[s]?|without\s+absence[s]?|total\s+de|total)\b/i;
+    const ambiguousRegex = /\b(sem\s+falta[s]?|nao\s+falto[u]?|nao\s+falta[s]?|nao\s+ausente[s]?|not\s+not\s+present|sem\s+falta\s+de\s+presenca[s]?|not\s+absent|no\s+absence[s]?|without\s+absence[s]?|total\s+de|total)\b/i;
     if (ambiguousRegex.test(norm)) {
       return null;
     }
@@ -54,7 +54,7 @@
     }
 
     // Regra 2: Radicais de falta / ausência com limite de palavra (\b)
-    const absenceRegex = /\b(falta|faltas|ausente|ausentes|ausencia|ausencias|absent|absence)\b/i;
+    const absenceRegex = /\b(falta|faltas|faltou|faltaram|ausente|ausentes|ausencia|ausencias|absent|absence)\b/i;
     const hasAbsence = absenceRegex.test(norm);
 
     // Regra 3: Radicais de presença / comparecimento com limite de palavra (attendee removido)
