@@ -61,5 +61,8 @@ Este documento consolida a governança, integridade de branches, histórico de S
 | `TASK-001D` | Tratamento genérico de superseded_by, duplas negações fail-closed, sinais extras e palavras compostas (65 casos) | `task/TASK-001D` (`29da251` -> merged) | **APROVADA** (64 PASS, 1 SUPERSEDED) | `f9ff33b1834b...` (Index=16) |
 | `DÍVIDA-001` | Fechamento de ressalvas (C1 a C7): fuzz Mulberry32 (500 iter, N=237), CASE_66 (66 casos), placar separado, docs ORCH_AUDIT_DIR e política de negações | `main` (`c0dd893` .. `7412d10`) | **SANEADA & VERIFICADA** | N/A (direto na main pós-merge) |
 | `TASK-002` | SafeWriter: validação de visibilidade, detecção de honeypots e amarração relacional aluno↔linha no DOM | `task/TASK-002` (`398dce9` -> merged) | **APROVADA** (20/20 PASS) | `232c09c5a46f...` (Index=18) |
+| `TASK-003a` | Endurecimento do SafeWriter: novas formas de ocultação (scale, clip-path, font-size, pointer-events, overlay, ancestrais, translate) e honeypots estruturais (17 casos) | `task/TASK-003a` (`5461dd5` -> merged) | **APROVADA** (17/17 PASS) | `49d042837da9...` (Index=20) |
+| `TASK-003b` | Endurecimento do SafeWriter: amarração estrita por tokens, detecção de homônimos na tabela e nomes parciais (25 casos) | `task/TASK-003b` (`2fc06b8` -> merged) | **APROVADA** (25/25 PASS) | `59cc4eac573a...` (Index=21) |
+
 
 
