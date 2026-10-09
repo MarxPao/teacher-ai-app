@@ -1,6 +1,11 @@
 """
-audit/test_polarity_parity.py — Avaliacao do Resolvedor de Polaridade de Frequencia
-Executa a suite audit/polarity_test_cases.json contra o modulo oficial teacher-extension/attendancePolarity.js.
+audit/test_polarity_parity.py — Avaliação do Resolvedor de Polaridade de Frequência (JavaScript)
+Executa a suíte audit/polarity_test_cases.json contra o módulo canônico teacher-extension/attendancePolarity.js.
+
+Nota de Escopo Arquitetural:
+A resolução de polaridade opera exclusivamente no cliente (extensão Chrome Manifest V3, DOM).
+Não há módulo Python no sidecar previsto ou especificado na arquitetura.
+Paridade Python: [NÃO APLICÁVEL].
 """
 
 import json
@@ -34,11 +39,11 @@ def test_polarity_parity():
     print(f"  AVALIACAO DO RESOLVEDOR DE POLARIDADE ({len(test_cases)} CASOS)")
     print("=======================================================\n")
 
-    # Verifica se sidecar existe
+    # Verifica se sidecar existe (escopo exclusivo da extensão)
     if SIDECAR_MODULE_FILE.exists():
-        print(f"[SIDECAR] Módulo python encontrado em {SIDECAR_MODULE_FILE}. Paridade ativa.")
+        print(f"[SIDECAR] Módulo python detectado em {SIDECAR_MODULE_FILE}.")
     else:
-        print("[SIDECAR] Módulo sidecar/attendance_polarity.py inexistente. Paridade Python não-aplicável.")
+        print("[ESCOPO] Resolvedor canônico é exclusivamente JavaScript (extensão). Paridade Python: [NÃO APLICÁVEL].")
 
     # Verifica se o módulo JS exporta a lista de intenções (fonte única de verdade)
     js_module_path = str(JS_MODULE_FILE).replace("\\", "/")
