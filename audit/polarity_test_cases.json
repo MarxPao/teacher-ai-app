@@ -686,5 +686,21 @@
     "expected_can_resolve": true,
     "expected_polarity": "NEGATIVE",
     "expected_should_be_checked": false
+  },
+  {
+    "id": "CASE_66_AMBIGUOUS_HEADER_INVALID_EXTRA_SIGNALS",
+    "description": "Cabeçalho ambíguo 'Status' com extra_signals contendo tipos inválidos (aria-label: 123, title: ['x']) resulta em AMBIGUOUS",
+    "column_header": "Status",
+    "control_label": "",
+    "teacher_intent": "PRESENCA",
+    "extra_signals": {
+      "aria-label": 123,
+      "title": [
+        "x"
+      ]
+    },
+    "expected_can_resolve": false,
+    "expected_polarity": "AMBIGUOUS",
+    "expected_should_be_checked": null
   }
 ]

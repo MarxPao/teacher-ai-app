@@ -98,8 +98,19 @@ def test_polarity_parity():
                 print(f"     Motivo:   {js_res.get('reason')}")
 
     total = len(test_cases)
+    fail_count = len(failures)
     print("\n=======================================================")
-    print(f"  RESULTADO FINAL: {passed_count} aprovados, {superseded_count} superados de {total} casos")
+    print(f"  RESULTADO FINAL: {passed_count} aprovados, {fail_count} falhos, {superseded_count} superado (de {total})")
+    if failures:
+        print(f"  CASOS FALHOS (FAIL) - TOTAL: {fail_count}:")
+        for f_id, f_res, f_case in failures:
+            print(f"    - [{f_id}] {f_case.get('description', '')}")
+            print(f"      Esperado: canResolve={f_case.get('expected_can_resolve')}, polarity={f_case.get('expected_polarity')}, shouldBeChecked={f_case.get('expected_should_be_checked')}")
+            print(f"      Obtido:   canResolve={f_res.get('canResolve')}, polarity={f_res.get('polarity')}, shouldBeChecked={f_res.get('shouldBeChecked')}")
+            if f_res.get("reason"):
+                print(f"      Motivo:   {f_res.get('reason')}")
+    else:
+        print("  Falhas: 0")
     print("=======================================================\n")
 
     assert (passed_count + superseded_count) == total, f"Falha na suite de polaridade: {len(failures)} caso(s) falharam"
