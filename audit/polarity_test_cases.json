@@ -317,7 +317,8 @@
     "teacher_intent": "PRESENCA",
     "expected_can_resolve": true,
     "expected_polarity": "POSITIVE",
-    "expected_should_be_checked": true
+    "expected_should_be_checked": true,
+    "superseded_by": "CASE_34_ENGLISH_ATTENDEE_AMBIGUOUS_ADJUSTED"
   },
   {
     "id": "CASE_33_ENGLISH_ABSENT_LABEL",
@@ -538,5 +539,152 @@
     "expected_can_resolve": true,
     "expected_polarity": "POSITIVE",
     "expected_should_be_checked": true
+  },
+  {
+    "id": "CASE_53_DOUBLE_NEGATION_PT_NAO_AUSENTE",
+    "description": "Dupla negação PT 'Não ausente' -> ambiguidade fail-closed (AMBIGUOUS)",
+    "column_header": "Diário",
+    "control_label": "Não ausente",
+    "teacher_intent": "PRESENCA",
+    "expected_can_resolve": false,
+    "expected_polarity": "AMBIGUOUS",
+    "expected_should_be_checked": null
+  },
+  {
+    "id": "CASE_54_DOUBLE_NEGATION_EN_NOT_NOT_PRESENT",
+    "description": "Dupla negação EN 'Not not present' -> ambiguidade fail-closed (AMBIGUOUS)",
+    "column_header": "Not not present",
+    "control_label": "",
+    "teacher_intent": "PRESENCA",
+    "expected_can_resolve": false,
+    "expected_polarity": "AMBIGUOUS",
+    "expected_should_be_checked": null
+  },
+  {
+    "id": "CASE_55_DOUBLE_NEGATION_PT_SEM_FALTA_DE_PRESENCA",
+    "description": "Expressão ambígua PT 'Sem falta de presença' -> recusa fail-closed (AMBIGUOUS)",
+    "column_header": "Sem falta de presença",
+    "control_label": "",
+    "teacher_intent": "PRESENCA",
+    "expected_can_resolve": false,
+    "expected_polarity": "AMBIGUOUS",
+    "expected_should_be_checked": null
+  },
+  {
+    "id": "CASE_56_EXTRA_SIGNALS_ARIA_VS_TITLE_CONFLICT",
+    "description": "Conflito direto entre aria-label ('Presente') e title ('Falta') sem cabeçalho -> CONFLICT",
+    "column_header": "",
+    "control_label": "",
+    "teacher_intent": "PRESENCA",
+    "extra_signals": {
+      "aria-label": "Presente",
+      "title": "Falta"
+    },
+    "expected_can_resolve": false,
+    "expected_polarity": "CONFLICT",
+    "expected_should_be_checked": null
+  },
+  {
+    "id": "CASE_57_EXTRA_SIGNALS_EMPTY_AND_NULL",
+    "description": "Valores vazios e nulos em extra_signals não geram sinal espúrio nem erro -> POSITIVE",
+    "column_header": "Presença",
+    "control_label": "",
+    "teacher_intent": "PRESENCA",
+    "extra_signals": {
+      "aria-label": "",
+      "title": null
+    },
+    "expected_can_resolve": true,
+    "expected_polarity": "POSITIVE",
+    "expected_should_be_checked": true
+  },
+  {
+    "id": "CASE_58_EXTRA_SIGNALS_NON_STRING_TYPES",
+    "description": "Tipos não-string dentro de extra_signals ignorados defensivamente sem exceção -> POSITIVE",
+    "column_header": "Presença",
+    "control_label": "",
+    "teacher_intent": "PRESENCA",
+    "extra_signals": {
+      "aria-label": 123,
+      "title": [
+        "random"
+      ],
+      "meta": {}
+    },
+    "expected_can_resolve": true,
+    "expected_polarity": "POSITIVE",
+    "expected_should_be_checked": true
+  },
+  {
+    "id": "CASE_59_EXTRA_SIGNALS_EMPTY_OBJECT_MATCHES_ABSENT",
+    "description": "Objeto extra_signals vazio ({}) equivale a extra_signals ausente -> POSITIVE",
+    "column_header": "Presença",
+    "control_label": "",
+    "teacher_intent": "PRESENCA",
+    "extra_signals": {},
+    "expected_can_resolve": true,
+    "expected_polarity": "POSITIVE",
+    "expected_should_be_checked": true
+  },
+  {
+    "id": "CASE_60_EXTRA_SIGNALS_EMPTY_OBJECT_AMBIGUOUS_HEADER",
+    "description": "Cabeçalho neutro com extra_signals vazio ({}) resulta em AMBIGUOUS sem erro",
+    "column_header": "Status",
+    "control_label": "",
+    "teacher_intent": "PRESENCA",
+    "extra_signals": {},
+    "expected_can_resolve": false,
+    "expected_polarity": "AMBIGUOUS",
+    "expected_should_be_checked": null
+  },
+  {
+    "id": "CASE_61_COMPOUND_WORD_REPRESENTANTE",
+    "description": "Palavra composta 'Representante de Turma' não vaza para 'presente' -> AMBIGUOUS",
+    "column_header": "Representante de Turma",
+    "control_label": "",
+    "teacher_intent": "PRESENCA",
+    "expected_can_resolve": false,
+    "expected_polarity": "AMBIGUOUS",
+    "expected_should_be_checked": null
+  },
+  {
+    "id": "CASE_62_COMPOUND_WORD_AUSENTISMO",
+    "description": "Palavra derivada 'Taxa de Ausentismo Escolar' não vaza para 'ausente' -> AMBIGUOUS",
+    "column_header": "Taxa de Ausentismo Escolar",
+    "control_label": "",
+    "teacher_intent": "PRESENCA",
+    "expected_can_resolve": false,
+    "expected_polarity": "AMBIGUOUS",
+    "expected_should_be_checked": null
+  },
+  {
+    "id": "CASE_63_COMPOUND_WORD_PRE_SENTE",
+    "description": "Expressão hifenizada 'Pre-sente' normaliza para 'pre sente' e não vaza para 'presente' -> AMBIGUOUS",
+    "column_header": "Pre-sente",
+    "control_label": "",
+    "teacher_intent": "PRESENCA",
+    "expected_can_resolve": false,
+    "expected_polarity": "AMBIGUOUS",
+    "expected_should_be_checked": null
+  },
+  {
+    "id": "CASE_64_COMPOUND_WORD_ASFALTOU",
+    "description": "Palavra com radical embutido 'Rua Asfaltou' não vaza para 'faltou' -> AMBIGUOUS",
+    "column_header": "Rua Asfaltou",
+    "control_label": "",
+    "teacher_intent": "PRESENCA",
+    "expected_can_resolve": false,
+    "expected_polarity": "AMBIGUOUS",
+    "expected_should_be_checked": null
+  },
+  {
+    "id": "CASE_65_VERB_FALTOU_ABSENCE",
+    "description": "Forma verbal 'Faltou' isolada possui polaridade clara de ausência -> NEGATIVE",
+    "column_header": "Faltou",
+    "control_label": "",
+    "teacher_intent": "PRESENCA",
+    "expected_can_resolve": true,
+    "expected_polarity": "NEGATIVE",
+    "expected_should_be_checked": false
   }
 ]
