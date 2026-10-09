@@ -26,6 +26,24 @@ export interface GenerationCompletenessResult {
  *
  * Bloqueia o auto-save sempre que houver truncamento ou violação estrutural.
  */
+function normalizeOptionText(raw: string): string {
+  return (raw || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[.,!?;:]+$/, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function cleanHtmlStem(raw: string): string {
+  return (raw || '')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
 export function checkGenerationCompleteness(
   requestedCount: number,
   receivedOrItems: number | unknown[]
@@ -41,31 +59,69 @@ export function checkGenerationCompleteness(
       const item = receivedOrItems[i] as any
       if (!item) continue
 
-      // 1. Enunciado vazio
-      if (!item.stem || typeof item.stem !== 'string' || item.stem.trim().length === 0) {
+      // 1. Enunciado vazio (suporte a stem ou statement, e strip de HTML/&nbsp;)
+      const rawStem = item.stem ?? item.statement
+      const cleanedStem = typeof rawStem === 'string' ? cleanHtmlStem(rawStem) : ''
+      if (!cleanedStem || cleanedStem.length === 0) {
         structuralError = `Questão #${i + 1} possui enunciado vazio.`
         break
       }
 
-      // 2. Alternativas duplicadas
-      if (Array.isArray(item.options) && item.options.length >= 2) {
+      // Detecção de tipo de questão
+      const itemType = (item.type || '').toString().toLowerCase()
+      const isMultipleChoice = itemType === 'multiple_choice' || itemType === 'mc' || (!itemType && Array.isArray(item.options) && item.options.length > 0)
+      const options = Array.isArray(item.options) ? item.options : []
+
+      // 2. Múltipla escolha com menos de 2 opções
+      if (isMultipleChoice && options.length < 2) {
+        structuralError = `Questão #${i + 1} de múltipla escolha possui menos de 2 alternativas.`
+        break
+      }
+
+      // 3. Gabarito ausente em múltipla escolha
+      const key = (item.answerKey || item.correctOptionId || item.answer || '').toString().trim().toUpperCase()
+      if (isMultipleChoice && key.length === 0) {
+        structuralError = `Questão #${i + 1} de múltipla escolha não possui gabarito definido.`
+        break
+      }
+
+      // 4. Alternativas duplicadas com normalização NFD, pontuação e caixa
+      if (options.length >= 2) {
         const seenTexts = new Set<string>()
-        for (const opt of item.options) {
-          const text = (opt?.text || '').trim().toLowerCase()
-          if (text.length > 0 && seenTexts.has(text)) {
-            structuralError = `Questão #${i + 1} possui alternativas duplicadas ("${opt.text}").`
+        for (const opt of options) {
+          const rawText = typeof opt === 'string' ? opt : (opt?.text || '')
+          const normText = normalizeOptionText(rawText)
+          if (normText.length > 0 && seenTexts.has(normText)) {
+            const displayOpt = typeof opt === 'string' ? opt : (opt?.text || '')
+            structuralError = `Questão #${i + 1} possui alternativas duplicadas ("${displayOpt}").`
             break
           }
-          if (text.length > 0) seenTexts.add(text)
+          if (normText.length > 0) seenTexts.add(normText)
         }
         if (structuralError) break
 
-        // 3. Gabarito inexistente nas alternativas
-        const key = (item.answerKey || item.correctOptionId || '').trim().toUpperCase()
-        if (key.length > 0) {
-          const validLettersOrIds = item.options.map((o: any) => (o?.letter || o?.id || '').trim().toUpperCase()).filter(Boolean)
-          if (validLettersOrIds.length > 0 && !validLettersOrIds.includes(key)) {
-            structuralError = `Questão #${i + 1} possui gabarito '${key}' inexistente entre as alternativas [${validLettersOrIds.join(', ')}].`
+        // 5. Gabarito inexistente nas alternativas
+        if (isMultipleChoice && key.length > 0) {
+          const validKeys = options.map((opt: any, idx: number) => {
+            if (typeof opt === 'string') {
+              const letterMatch = opt.match(/^([A-Za-z0-9])[\)\.\:\-]/)
+              const letter = letterMatch ? letterMatch[1].toUpperCase() : String.fromCharCode(65 + idx)
+              return [letter, opt.trim().toUpperCase()]
+            }
+            const idOrLetter = (opt?.letter || opt?.id || '').toString().trim().toUpperCase()
+            const textVal = (opt?.text || '').toString().trim().toUpperCase()
+            return [idOrLetter, textVal]
+          }).flat().filter(Boolean)
+
+          if (validKeys.length > 0 && !validKeys.includes(key)) {
+            const lettersOnly = options.map((opt: any, idx: number) => {
+              if (typeof opt === 'string') {
+                const m = opt.match(/^([A-Za-z0-9])[\)\.\:\-]/)
+                return m ? m[1].toUpperCase() : String.fromCharCode(65 + idx)
+              }
+              return (opt?.letter || opt?.id || String.fromCharCode(65 + idx)).toString().trim().toUpperCase()
+            }).filter(Boolean)
+            structuralError = `Questão #${i + 1} possui gabarito '${key}' inexistente entre as alternativas [${lettersOnly.join(', ')}].`
             break
           }
         }
@@ -84,7 +140,9 @@ export function checkGenerationCompleteness(
     requested: requestedCount,
     received: receivedCount,
     warning: (isTruncated || hasStructuralErrors)
-      ? { requested: requestedCount, received: receivedCount, reason: structuralError || undefined }
+      ? (structuralError && !isTruncated
+          ? { requested: requestedCount, received: receivedCount, reason: structuralError }
+          : { requested: requestedCount, received: receivedCount })
       : null,
     canAutoSave
   }
