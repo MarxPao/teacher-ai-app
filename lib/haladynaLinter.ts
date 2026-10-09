@@ -198,30 +198,13 @@ export function autoFixHaladynaViolations(
     appliedFixes.push(`Remoção da pista fonética/gramatical "${matchedArticle}" no final do enunciado`)
   }
 
-  // 3. Fix ALL_NONE_ABOVE
+  // 3. Normalização determinística de espaços e pontuação nas alternativas
   currentOpts = currentOpts.map(opt => {
-    if (STATIC_ALL_NONE_REGEX.test(opt.text)) {
-      appliedFixes.push(`Substituição de "${opt.text}" por alternativa contextual plausível`)
-      return {
-        ...opt,
-        text: 'Nenhum dos fatores citados atua isoladamente no processo.'
-      }
+    const cleanText = opt.text.replace(/\s+/g, ' ').trim()
+    if (cleanText !== opt.text) {
+      appliedFixes.push(`Normalização determinística de espaços da opção ${opt.letter}`)
+      return { ...opt, text: cleanText }
     }
-    return opt
-  })
-
-  // 4. Fix REDUNDANT_DISTRACTOR (duplicate options)
-  const seenTexts = new Map<string, number>()
-  currentOpts = currentOpts.map(opt => {
-    const norm = opt.text.trim().toLowerCase()
-    if (seenTexts.has(norm)) {
-      appliedFixes.push(`Desduplicação da alternativa repetida "${opt.text}"`)
-      return {
-        ...opt,
-        text: `${opt.text} (fator complementar)`
-      }
-    }
-    seenTexts.set(norm, 1)
     return opt
   })
 

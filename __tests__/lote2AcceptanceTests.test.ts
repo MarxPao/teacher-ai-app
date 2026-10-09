@@ -66,7 +66,8 @@ describe('LOTE 2 — Testes de Aceite do Engine de Provas (Revisão Rigorosa)', 
 
     console.log(`[T1-PT Evidence] Questões: ${reparsed.length}/20 | Opções vazias: ${emptyOptionCount}/${totalOptionsParsed} | Gabaritos corrompidos: ${misalignmentIssues.length}/20`)
     expect(reparsed.length).toBe(20)
-    expect(emptyOptionCount).toBe(80)
+    expect(emptyOptionCount).toBe(0)
+    expect(misalignmentIssues.length).toBe(0)
   })
 
   // =========================================================================
@@ -133,8 +134,8 @@ describe('LOTE 2 — Testes de Aceite do Engine de Provas (Revisão Rigorosa)', 
     console.log(`[T1-EN Evidence] Exemplo da opção C corrigida pelo auto-fix: "${fixedQuestions[0].options?.[2]?.text}"`)
 
     expect(reparsedEn.length).toBe(20)
-    expect(emptyOptionCountEn).toBe(80)
-    expect(injectedFatorComplementar).toBe(20) // 20 questões tiveram a duplicata C corrigida com (fator complementar)
+    expect(emptyOptionCountEn).toBe(0)
+    expect(injectedFatorComplementar).toBe(0)
   })
 
   // =========================================================================

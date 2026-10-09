@@ -185,6 +185,7 @@ export default function TestAndWorksheets({ initialMode = 'exam' }: TestAndWorks
 
   // Visualização & Documento
   const [result, setResult] = useState('')
+  const [questionsList, setQuestionsList] = useState<EditableQuestionItem[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [activeViewTab, setActiveViewTab] = useState<'boxes' | 'canvas'>('boxes')
@@ -472,13 +473,14 @@ Gere agora todas as ${totalQuestions} questões completas em HTML limpo:`
       const raw = await callApi(selectedApi, prompt)
       // Processa questões vinculando a proveniência auditada (Fase 1)
       const parsed = parseContentToQuestions(cleanHtml(raw), activeProvenance)
+      setQuestionsList(parsed)
       const html = compileQuestionsToHtml(parsed)
       setResult(html)
 
       // Auditoria de qualidade psicométrica dos distratores (Fase 2 - distractorQualityAuditor)
       const distractorAudit = auditExamDistractors(parsed, activeProfile)
 
-      // Fase 2: Gate de Contagem (Truncamento por Limite de Tokens)
+      // Fase 2: Gate de Contagem e Integridade Estrutural
       const completeness = checkGenerationCompleteness(totalQuestions, parsed)
       setCountMismatchWarning(completeness.warning)
 
@@ -491,26 +493,30 @@ Gere agora todas as ${totalQuestions} questões completas em HTML limpo:`
             title: effectiveTitle,
             subtitle: `${cefr} · ${grade} · ${mode === 'exam' ? sections.slice(0, 2).join(', ') : skill}`,
             content: html,
+            questions: parsed
           })
           updateCounts()
 
-          // Sincroniza com o banco de itens da escola
-          addQuestionsBatch([{
-            id: `${mode}_auto_${Date.now()}`,
-            statement: html.slice(0, 300) + '...',
-            type: 'mc',
+          // Sincroniza com o banco de itens da escola (itens individuais completos, sem truncamento em 300)
+          addQuestionsBatch(parsed.map((q, idx) => ({
+            id: `${mode}_auto_${Date.now()}_${idx}`,
+            statement: q.stem,
+            type: q.type === 'multiple_choice' ? 'mc' : q.type === 'true_false' ? 'tf' : 'open',
             activityKind: itemType,
-            subject: activeProfile.nameShort || 'Inglês',
+            subject: activeProfile.nameShort || 'Geral',
             topic: topic || 'Conteúdo',
             level: cefr,
             year: new Date().getFullYear().toString(),
             schoolId: header.school || '',
             classRef: grade || '',
+            options: q.options?.map(o => o.text),
+            answer: q.answerKey,
+            explanation: q.explanation,
             tags: [mode === 'exam' ? 'Prova Oficial' : 'Lista de Exercícios', `${activeProfile.levelFramework.name} ${cefr}`],
             createdAt: Date.now(),
             source: 'ai',
-            fullContent: html
-          } as any])
+            fullContent: compileQuestionsToHtml([q])
+          } as any)))
         } catch {}
       }
 
@@ -566,14 +572,15 @@ Retorne a questão reformulada no formato estruturado:`
     const raw = await callApi(selectedApi, prompt)
     const newQuestions = parseContentToQuestions(raw)
     if (newQuestions.length > 0) {
-      const parsed = parseContentToQuestions(result)
-      parsed[questionIndex] = {
-        ...parsed[questionIndex],
+      const currentList = questionsList.length > 0 ? [...questionsList] : parseContentToQuestions(result)
+      currentList[questionIndex] = {
+        ...currentList[questionIndex],
         stem: newQuestions[0].stem,
-        options: newQuestions[0].options || parsed[questionIndex].options,
-        answerKey: newQuestions[0].answerKey || parsed[questionIndex].answerKey
+        options: newQuestions[0].options || currentList[questionIndex].options,
+        answerKey: newQuestions[0].answerKey || currentList[questionIndex].answerKey
       }
-      setResult(compileQuestionsToHtml(parsed))
+      setQuestionsList(currentList)
+      setResult(compileQuestionsToHtml(currentList))
     }
   }
 
@@ -1033,6 +1040,8 @@ Retorne a questão reformulada no formato estruturado:`
           ) : (
             <ExamResultThreeTabs
               result={result}
+              questions={questionsList}
+              onQuestionsChange={setQuestionsList}
               onContentChange={setResult}
               mode={mode}
               topic={topic}
@@ -1084,7 +1093,14 @@ Retorne a questão reformulada no formato estruturado:`
           title={savedDrawerMode === 'exam' ? 'Minhas Provas Salvas' : 'Meus Exercícios Salvos'}
           storageKey={savedDrawerMode === 'exam' ? 'teacher_saved_exams' : 'teacher_saved_quicks'}
           onSelect={(item: SavedItem) => {
-            setResult(item.content)
+            if ((item as any).questions && Array.isArray((item as any).questions)) {
+              setQuestionsList((item as any).questions)
+              setResult(item.content || compileQuestionsToHtml((item as any).questions))
+            } else {
+              const legacy = parseContentToQuestions(item.content)
+              setQuestionsList(legacy)
+              setResult(item.content)
+            }
             setMode(savedDrawerMode)
             setSavedDrawerMode(null)
           }}

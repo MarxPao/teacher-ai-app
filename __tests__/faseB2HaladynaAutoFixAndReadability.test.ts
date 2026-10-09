@@ -29,16 +29,11 @@ describe('Onda B - Fase B2: Haladyna Linter com Auto-Fix + Legibilidade Flesch-K
     expect(initialAudit.violations.some(v => v.ruleId === 'ALL_NONE_ABOVE')).toBe(true)
     expect(isCriticalHaladynaViolation(initialAudit.violations[0])).toBe(true)
 
-    // Aplica auto-fix
+    // Aplica auto-fix: não deve injetar frases inventadas como "Nenhum dos fatores citados..."
     const fixed = autoFixHaladynaViolations(stem, options, 'D')
-    expect(fixed.wasModified).toBe(true)
-    expect(fixed.appliedFixes.length).toBeGreaterThan(0)
-    expect(fixed.fixedOptions[3].text).not.toMatch(/todas as anteriores/i)
-    expect(fixed.fixedOptions[3].text).toContain('Nenhum dos fatores citados')
-
-    // Verifica que a violação crítica desapareceu
-    const auditAfter = auditHaladynaGuidelines(fixed.fixedStem, fixed.fixedOptions)
-    expect(auditAfter.violations.some(v => v.ruleId === 'ALL_NONE_ABOVE')).toBe(false)
+    expect(fixed.fixedOptions[3].text).not.toContain('Nenhum dos fatores citados')
+    // Violação que exige novo conteúdo semântico deve ser retida honestamente para bloqueio/regeneração
+    expect(fixed.remainingViolations.some(v => v.ruleId === 'ALL_NONE_ABOVE')).toBe(true)
   })
 
   it('deve converter palavras de negação minúsculas no enunciado para MAIÚSCULAS', () => {
@@ -78,7 +73,7 @@ describe('Onda B - Fase B2: Haladyna Linter com Auto-Fix + Legibilidade Flesch-K
     expect(fixed.appliedFixes.some(f => f.includes('pista fonética/gramatical'))).toBe(true)
   })
 
-  it('deve desduplicar distratores redundantes com texto idêntico', () => {
+  it('não deve injetar texto sintético como (fator complementar) e deve manter violação para o gate', () => {
     const stem = 'Qual o valor aproximado da aceleração da gravidade na Terra?'
     const options = [
       { letter: 'A', text: '9.8 m/s²' },
@@ -90,11 +85,12 @@ describe('Onda B - Fase B2: Haladyna Linter com Auto-Fix + Legibilidade Flesch-K
     expect(initialAudit.violations.some(v => v.ruleId === 'REDUNDANT_DISTRACTOR')).toBe(true)
 
     const fixed = autoFixHaladynaViolations(stem, options)
-    expect(fixed.wasModified).toBe(true)
-    expect(fixed.fixedOptions[2].text).toContain('(fator complementar)')
+    // Garantia de Honestidade: NUNCA injetar strings sintéticas não produzidas pela LLM
+    expect(fixed.fixedOptions[2].text).not.toContain('(fator complementar)')
+    expect(fixed.fixedOptions[2].text).toBe('9.8 m/s²')
 
-    const auditAfter = auditHaladynaGuidelines(fixed.fixedStem, fixed.fixedOptions)
-    expect(auditAfter.violations.some(v => v.ruleId === 'REDUNDANT_DISTRACTOR')).toBe(false)
+    // Violação que exige novo conteúdo semântico deve ser retida honestamente para bloqueio/regeneração
+    expect(fixed.remainingViolations.some(v => v.ruleId === 'REDUNDANT_DISTRACTOR')).toBe(true)
   })
 
   // ─────────────────────────────────────────────────────────────────────────────

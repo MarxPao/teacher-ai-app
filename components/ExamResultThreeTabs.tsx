@@ -176,6 +176,8 @@ export interface ExamResultThreeTabsProps {
   onDeleteAudio?: () => void
   onOpenOnlinePlayer?: () => void
   initialTab?: ResultTabKey
+  questions?: any[]
+  onQuestionsChange?: (questions: any[]) => void
 }
 
 export default function ExamResultThreeTabs({
@@ -209,6 +211,8 @@ export default function ExamResultThreeTabs({
   onDeleteAudio,
   onOpenOnlinePlayer,
   initialTab = 'document',
+  questions,
+  onQuestionsChange,
 }: ExamResultThreeTabsProps) {
   const [activeTab, setActiveTab] = useState<ResultTabKey>(initialTab)
   const [activeViewMode, setActiveViewMode] = useState<'boxes' | 'canvas'>('boxes')
@@ -216,11 +220,12 @@ export default function ExamResultThreeTabs({
   const [haladynaOverrideGranted, setHaladynaOverrideGranted] = useState(false)
   const [pendingExportAction, setPendingExportAction] = useState<(() => void) | null>(null)
 
-  // Extrai total de questões parsed
+  // Extrai total de questões parsed (privilegia array de objetos tipados quando fornecido)
   const parsedQuestions = useMemo(() => {
+    if (questions && questions.length > 0) return questions as EditableQuestionItem[]
     if (!result) return []
     return parseContentToQuestions(result)
-  }, [result])
+  }, [questions, result])
 
   const activeSubjectProfile = useMemo(() => {
     return getSubjectProfile(subjectId)

@@ -383,16 +383,21 @@ export function parseContentToQuestions(raw: string, defaultProvenance?: Provena
       return
     }
 
-    // Detecta gabarito / resposta
-    if (/^(?:Gabarito|Resposta|Answer|Chave|Feedback)[:\s]/i.test(trimmed)) {
-      currentAnswer = trimmed.replace(/^(?:Gabarito|Resposta|Answer|Chave|Feedback)[:\s]*/i, '')
+    // Detecta gabarito / resposta (suporte a símbolo de check ✓ e / Resolução)
+    if (/^(?:[✓✔]\s*)?(?:Gabarito|Resposta|Answer|Chave|Feedback)(?:\s*\/\s*Resolução)?[:\s]/i.test(trimmed)) {
+      currentAnswer = trimmed.replace(/^(?:[✓✔]\s*)?(?:Gabarito|Resposta|Answer|Chave|Feedback)(?:\s*\/\s*Resolução)?[:\s]*/i, '').trim()
       return
     }
 
     // Continuação do enunciado ou preenchimento de enunciado inicial
     if (currentStem) {
       if (currentOpts.length > 0) {
-        currentAnswer = (currentAnswer ? currentAnswer + '\n' : '') + trimmed
+        const lastOpt = currentOpts[currentOpts.length - 1]
+        if (!lastOpt.text || lastOpt.text.trim() === '') {
+          lastOpt.text = trimmed
+        } else {
+          currentAnswer = (currentAnswer ? currentAnswer + '\n' : '') + trimmed
+        }
       } else {
         currentStem += '\n' + trimmed
       }
@@ -465,10 +470,7 @@ export function compileQuestionsToHtml(questions: EditableQuestionItem[], custom
     if (q.options && q.options.length > 0) {
       html += `    <div class="exam-options-list" style="margin-left: 8px; display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px;">\n`
       q.options.forEach(opt => {
-        html += `      <div style="display: flex; align-items: flex-start; gap: 8px; font-size: 14px;">\n`
-        html += `        <strong style="min-width: 24px; color: #8b5e3c;">${opt.letter})</strong>\n`
-        html += `        <span>${opt.text}</span>\n`
-        html += `      </div>\n`
+        html += `      <div class="exam-option-line" style="display: flex; align-items: flex-start; gap: 8px; font-size: 14px;"><strong style="min-width: 24px; color: #8b5e3c;">${opt.letter})</strong> <span>${opt.text}</span></div>\n`
       })
       html += `    </div>\n`
     } else if (q.type === 'discursive') {
