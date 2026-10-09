@@ -56,3 +56,4 @@ Este documento consolida a governança, integridade de branches, histórico de S
 | ID | Objetivo | Branch / Commit | Status no Gate | Hash de Auditoria |
 | :--- | :--- | :--- | :---: | :--- |
 | `TASK-001` | Unificação e teste do resolvedor de polaridade de frequência (`attendancePolarity.js`) contra os 11 casos canônicos | `task/TASK-001` (`75dde0e` -> merged) | **APROVADA** (11/11 PASS) | `7ba2501daba9...` (Index=11) |
+| `TASK-001B` | Correções de rigor de polaridade (intenções fail-closed, normalização e 33 casos de teste) | `task/TASK-001B` (`466ccef` -> merged) | **APROVADA** (33/33 PASS) | `86dc62a4b881...` (Index=12) |
