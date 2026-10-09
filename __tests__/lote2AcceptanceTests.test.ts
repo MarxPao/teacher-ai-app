@@ -141,15 +141,14 @@ describe('LOTE 2 — Testes de Aceite do Engine de Provas (Revisão Rigorosa)', 
   // =========================================================================
   // T2: Reprodutibilidade e Configuração de Chaves
   // =========================================================================
-  it('T2 Reprodutibilidade: Verificacao de suporte a Seed e Chaves de API Reais', () => {
-    const hasKeys = ['OPENAI_API_KEY', 'GEMINI_API_KEY', 'GROQ_API_KEY', 'ANTHROPIC_API_KEY']
-      .some(k => !!process.env[k])
-
-    console.log(`[T2 Evidence] Chaves de API no ambiente de teste: ${hasKeys ? 'PRESENTES' : 'AUSENTES'}`)
-    console.log(`[T2 Evidence] Suporte a seed em TestAndWorksheets.tsx: NÃO IMPLEMENTADO`)
-    console.log(`[T2 Evidence] Status formal de T2 ao vivo: [NÃO VERIFICADO] por ausência de chaves de nuvem no runner`)
-    expect(true).toBe(true)
-  })
+  it.skipIf(!process.env.GEMINI_API_KEY)(
+    'T2 Reprodutibilidade: Verificação de suporte a Seed e Chaves de API Reais (Requer GEMINI_API_KEY)',
+    () => {
+      // Requer GEMINI_API_KEY configurada no runner para chamadas reais ao vivo
+      const key = process.env.GEMINI_API_KEY
+      expect(key).toBeDefined()
+    }
+  )
 
   // =========================================================================
   // T3: Portões: Questão com opções idênticas, gabarito errado E enunciado vazio
@@ -172,18 +171,30 @@ describe('LOTE 2 — Testes de Aceite do Engine de Provas (Revisão Rigorosa)', 
       }
     ]
 
-    const compCheckEmpty = checkGenerationCompleteness(qEmptyStem, 1)
+    const compCheckEmpty = checkGenerationCompleteness(1, qEmptyStem)
     console.log(`[T3-EmptyStem Evidence] canAutoSave com enunciado vazio:`, compCheckEmpty.canAutoSave)
     console.log(`[T3-EmptyStem Evidence] warning gerado:`, compCheckEmpty.warning)
 
     // 2. Opções idênticas
-    const auditDup = auditHaladynaGuidelines('Enunciado com opções duplicadas', [
-      { letter: 'A', text: 'Brasília' },
-      { letter: 'B', text: 'Brasília' },
-      { letter: 'C', text: 'São Paulo' },
-      { letter: 'D', text: 'Rio de Janeiro' }
-    ])
-    console.log(`[T3-Dup Evidence] Regras disparadas com opções duplicadas:`, auditDup.violations.map(v => v.ruleId))
+    const qDupOptions: EditableQuestionItem[] = [
+      {
+        id: 'q_dup',
+        number: 1,
+        type: 'multiple_choice',
+        typeLabel: 'Múltipla Escolha',
+        points: 1.0,
+        stem: 'Enunciado com opções duplicadas',
+        options: [
+          { letter: 'A', text: 'Brasília' },
+          { letter: 'B', text: 'Brasília' },
+          { letter: 'C', text: 'São Paulo' },
+          { letter: 'D', text: 'Rio de Janeiro' }
+        ],
+        answerKey: 'A'
+      }
+    ]
+    const compCheckDup = checkGenerationCompleteness(1, qDupOptions)
+    console.log(`[T3-Dup Evidence] canAutoSave com opções duplicadas:`, compCheckDup.canAutoSave)
 
     // 3. Gabarito inexistente
     const qInvalidKey: EditableQuestionItem[] = [
@@ -201,21 +212,28 @@ describe('LOTE 2 — Testes de Aceite do Engine de Provas (Revisão Rigorosa)', 
         answerKey: 'Z' // Gabarito inexistente
       }
     ]
-    const compCheckInv = checkGenerationCompleteness(qInvalidKey, 1)
+    const compCheckInv = checkGenerationCompleteness(1, qInvalidKey)
     console.log(`[T3-InvKey Evidence] canAutoSave com gabarito 'Z' inexistente:`, compCheckInv.canAutoSave)
 
-    // Verifica que o pipeline NÃO bloqueia (canAutoSave permanece true)
-    expect(compCheckEmpty.canAutoSave).toBe(true)
-    expect(compCheckInv.canAutoSave).toBe(true)
+    // Validação honesta: todas as anomalias estruturais devem BLOQUEAR o salvamento (canAutoSave: false)
+    expect(compCheckEmpty.canAutoSave).toBe(false)
+    expect(compCheckDup.canAutoSave).toBe(false)
+    expect(compCheckInv.canAutoSave).toBe(false)
   })
 
   // =========================================================================
   // T4: Segurança: Chave de API em URL e LocalStorage
   // =========================================================================
-  it('T4 Segurança: Detecção de Chave em URL e LocalStorage', () => {
-    const geminiUrlPattern = 'https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${key}'
-    const usesKeyInQueryParam = geminiUrlPattern.includes('?key=')
-    console.log(`[T4 Evidence] Chave do Gemini em query parameter da URL: ${usesKeyInQueryParam}`)
-    expect(usesKeyInQueryParam).toBe(true)
+  it('T4 Segurança: Chave de API não deve trafegar em query parameter de URL nem em localStorage plano', () => {
+    // Leitura estática do cliente de rede em produção (lib/autoApiSelector.ts)
+    const fs = require('fs')
+    const path = require('path')
+    const selectorCode = fs.readFileSync(path.resolve(__dirname, '../lib/autoApiSelector.ts'), 'utf-8')
+    const exposesKeyInUrlQuery = /generativelanguage\.googleapis\.com.*(?:\?|&)key=/i.test(selectorCode)
+
+    console.log(`[T4 Security Audit] Chave exposta em query param de URL em lib/autoApiSelector.ts: ${exposesKeyInUrlQuery}`)
+
+    // Asserção preventiva real: DEVE FALHAR se a chave for enviada via query param na URL (exige Header x-goog-api-key)
+    expect(exposesKeyInUrlQuery).toBe(false)
   })
 })

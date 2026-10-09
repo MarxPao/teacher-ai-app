@@ -364,3 +364,21 @@ A Etapa 0 está 100% concluída sem alteração de código de produto:
 - As causas raízes do round-trip, OMR desconectado, truncamento em 300 caracteres e ausência de dados de desempenho estão mapeadas com precisão cirúrgica.
 
 **Aguardando aprovação para avançar para o LOTE A (Tarefas 1, 2 e 3).**
+
+---
+
+## 4. Pré-Requisitos para Execução ao Vivo do Teste T2 (Reprodutibilidade)
+
+Para que o teste T2 possa ser executado ao vivo e transitar de `[NÃO VERIFICADO]` / `skipped` para `[VERIFICADO]`, são necessários os seguintes requisitos operacionais e de engenharia:
+
+1. **Credenciais de Nuvem no Runner:**
+   - Variável de ambiente `GEMINI_API_KEY` configurada com cota ativa para chamadas de inferência.
+2. **Suporte a Seed no Cliente de Geração (`autoApiSelector.ts`):**
+   - Inclusão do parâmetro `generationConfig: { seed: number, temperature: 0.0 }` na chamada à API do Gemini (`/models/{model}:generateContent`).
+   - Atualmente, a função `callApi` não propaga o parâmetro `seed` para o payload HTTP.
+3. **Mecanismo de Validação de Idênticos (5x):**
+   - Execução de 5 chamadas idênticas consecutivas com o mesmo prompt e a mesma `seed: 42`.
+   - Comparação determinística via hash SHA-256 dos textos normalizados gerados.
+4. **Política de Resiliência para Falhas de Infraestrutura (HTTP 503 / 429):**
+   - Implementação de retry com backoff exponencial (1s, 2s, 4s) e fallback automático para provedor secundário (Groq/OpenAI) caso o endpoint retorne 503 (Overloaded) ou 429 (Rate Limit).
+
