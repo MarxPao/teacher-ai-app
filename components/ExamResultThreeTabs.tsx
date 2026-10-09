@@ -946,13 +946,30 @@ export default function ExamResultThreeTabs({
                     onClick={() =>
                       executeWithHaladynaGate(() => {
                         const totalQ = parsedQuestions.length || 10
+                        const examTitle = header.title || topic || 'Avaliação Oficial'
                         const layout = createExamSheetLayout({
                           id: `exam_${Date.now().toString(36)}`,
-                          title: header.title || topic || 'Avaliação Oficial',
+                          title: examTitle,
                           version: 'Form_A',
                           totalQuestions: totalQ,
                           optionsPerQuestion: 4
                         })
+
+                        // Sincronização do Ciclo Fechado (D1): Grava layout e gabarito real para o OmniGrader
+                        const answerKeyString = parsedQuestions
+                          .map((q, i) => `${i + 1}:${(q.answer || q.answerKey || q.correctOptionId || 'A').toString().trim().toUpperCase()}`)
+                          .join(';')
+
+                        try {
+                          localStorage.setItem('teacher_omr_active_layout', JSON.stringify({
+                            title: examTitle,
+                            totalQuestions: totalQ,
+                            answerKeyString,
+                            timestamp: Date.now()
+                          }))
+                          toast.success('Cartão OMR gerado e gabarito sincronizado com o OmniGrader!')
+                        } catch {}
+
                         const html = generatePrintableOmrSheetHtml(layout, header.school || 'TEACHER AI — SISTEMA DE AVALIAÇÃO')
                         const win = window.open('', '_blank')
                         if (win) {
@@ -979,6 +996,45 @@ export default function ExamResultThreeTabs({
                     title="Gera a folha oficial de respostas padronizada com 4 marcadores fiduciais para correção instantânea por OMR"
                   >
                     <i className="ti ti-scan" /> 📄 Cartão OMR (Fiduciais)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const totalQ = parsedQuestions.length || 10
+                      const examTitle = header.title || topic || 'Avaliação Oficial'
+                      const answerKeyString = parsedQuestions
+                        .map((q, i) => `${i + 1}:${(q.answer || q.answerKey || q.correctOptionId || 'A').toString().trim().toUpperCase()}`)
+                        .join(';')
+
+                      try {
+                        localStorage.setItem('teacher_omr_active_layout', JSON.stringify({
+                          title: examTitle,
+                          totalQuestions: totalQ,
+                          answerKeyString,
+                          timestamp: Date.now()
+                        }))
+                        toast.info('Redirecionando para o OmniGrader com gabarito carregado...')
+                      } catch {}
+
+                      window.dispatchEvent(new CustomEvent('teacher:navigate', { detail: 'omnigrader' }))
+                    }}
+                    style={{
+                      padding: '8px 14px',
+                      borderRadius: RADIUS.md,
+                      border: '1.5px solid #2563eb',
+                      background: '#eff6ff',
+                      color: '#1e40af',
+                      fontSize: 12.5,
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      boxShadow: '0 2px 6px rgba(37,99,235,0.1)',
+                    }}
+                    title="Abre o OmniGrader para leitura por câmera/foto com este gabarito já carregado"
+                  >
+                    <i className="ti ti-camera" /> 📸 Corrigir no OmniGrader
                   </button>
                 )}
               </div>
