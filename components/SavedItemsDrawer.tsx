@@ -10,6 +10,7 @@ export interface SavedItem {
   createdAt: string
   tags?: string[]
   type?: string
+  questions?: any[]
 }
 
 interface SavedItemsDrawerProps {

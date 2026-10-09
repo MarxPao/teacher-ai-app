@@ -102,6 +102,7 @@ export interface EditableQuestionItem {
   diagnosticCoverage?: number
   dccAnalysis?: ItemDccAnalysis
   feedbackMatrix?: ItemFormativeFeedbackMatrix
+  explanation?: string
 }
 
 interface EditableQuestionBoxesProps {

@@ -17,7 +17,7 @@ import SourceKnowledgeHub, { SourceItem, KnowledgeMode, compileSourcesPrompt } f
 import SmartInsightsPanel from '@/components/modules/SmartInsightsPanel'
 import { AssessmentPreset, getStoredPresets, savePreset } from '@/lib/assessmentPresets'
 import { getTeacherCalibrations, saveModuleCalibration } from '@/lib/teacherCalibrations'
-import { addQuestionsBatch } from '@/lib/questionBankService'
+import { addQuestionsBatch, type UnifiedQuestion, type QuestionType } from '@/lib/questionBankService'
 import { runFactCheck, FactCheckResult } from '@/lib/factCheck'
 import { auditExamDistractors } from '@/lib/distractorQualityAuditor'
 import { checkGenerationCompleteness } from '@/lib/assessmentGates'
@@ -497,11 +497,29 @@ Gere agora todas as ${totalQuestions} questões completas em HTML limpo:`
           })
           updateCounts()
 
-          // Sincroniza com o banco de itens da escola (itens individuais completos, sem truncamento em 300)
-          addQuestionsBatch(parsed.map((q, idx) => ({
+          // Mapeamento tipado estrito de formato de questao para QuestionBank
+          const mapEditableTypeToQuestionType = (type: EditableQuestionItem['type']): QuestionType => {
+            switch (type) {
+              case 'multiple_choice':
+                return 'mc'
+              case 'true_false':
+                return 'tf'
+              case 'gap_fill':
+                return 'fill'
+              case 'discursive':
+              case 'matching':
+              case 'reading_text':
+              case 'other':
+              default:
+                return 'essay'
+            }
+          }
+
+          // Sincroniza com o banco de itens da escola (itens individuais completos, tipagem estrita sem as any)
+          addQuestionsBatch(parsed.map((q, idx): UnifiedQuestion => ({
             id: `${mode}_auto_${Date.now()}_${idx}`,
             statement: q.stem,
-            type: q.type === 'multiple_choice' ? 'mc' : q.type === 'true_false' ? 'tf' : 'open',
+            type: mapEditableTypeToQuestionType(q.type),
             activityKind: itemType,
             subject: activeProfile.nameShort || 'Geral',
             topic: topic || 'Conteúdo',
@@ -516,7 +534,7 @@ Gere agora todas as ${totalQuestions} questões completas em HTML limpo:`
             createdAt: Date.now(),
             source: 'ai',
             fullContent: compileQuestionsToHtml([q])
-          } as any)))
+          })))
         } catch {}
       }
 
