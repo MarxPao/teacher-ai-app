@@ -158,12 +158,14 @@ export interface HaladynaAutoFixResult {
 }
 
 /**
- * Corrige automaticamente violações canônicas de Haladyna:
+ * Corrige automaticamente e de forma estritamente determinística violações de Haladyna:
  * 1. Destaca negações em MAIÚSCULAS ("não" -> "NÃO", "exceto" -> "EXCETO");
  * 2. Remove pistas fonéticas/gramaticais no final do enunciado (anti-cueing: "an:", "é um:");
- * 3. Substitui "Todas/Nenhuma das anteriores" por alternativas contextuais plausíveis;
- * 4. Desduplica distratores repetidos;
- * 5. Balanceia opções excessivamente prolixas (length clueing).
+ * 3. Normaliza determinística e identicamente espaços e pontuação nas alternativas.
+ * 
+ * Nenhuma string sintética é injetada e nenhum corte de conteúdo é aplicado.
+ * Violações que demandam novo conteúdo (ALL_NONE_ABOVE, REDUNDANT_DISTRACTOR, LENGTH_CLUEING)
+ * são preservadas honestamente em remainingViolations para que os portões bloqueiem e solicitem regeneração.
  */
 export function autoFixHaladynaViolations(
   stem: string,
@@ -178,7 +180,7 @@ export function autoFixHaladynaViolations(
   let currentKey = (answerKey || '').trim().toUpperCase()
   const appliedFixes: string[] = []
 
-  // 1. Fix UNHIGHLIGHTED_NEGATIVE
+  // 1. Fix UNHIGHLIGHTED_NEGATIVE (determinístico: puramente maiúsculas)
   if (STATIC_NEGATIVE_TEST_REGEX.test(currentStem)) {
     const fixedStem = currentStem.replace(STATIC_NEGATIVE_GLOBAL_REGEX, (match) => {
       if (match !== match.toUpperCase()) {
@@ -190,7 +192,7 @@ export function autoFixHaladynaViolations(
     currentStem = fixedStem
   }
 
-  // 2. Fix ANTI_CUEING (trailing articles in stem)
+  // 2. Fix ANTI_CUEING (determinístico: remoção de artigos/preposições residuais antes de dois-pontos)
   const cueingMatch = currentStem.match(STATIC_CUEING_TRAILING_REGEX)
   if (cueingMatch && currentOpts.length >= 2) {
     const matchedArticle = cueingMatch[1]
@@ -198,7 +200,7 @@ export function autoFixHaladynaViolations(
     appliedFixes.push(`Remoção da pista fonética/gramatical "${matchedArticle}" no final do enunciado`)
   }
 
-  // 3. Normalização determinística de espaços e pontuação nas alternativas
+  // 3. Normalização determinística de espaços nas alternativas
   currentOpts = currentOpts.map(opt => {
     const cleanText = opt.text.replace(/\s+/g, ' ').trim()
     if (cleanText !== opt.text) {
@@ -208,30 +210,8 @@ export function autoFixHaladynaViolations(
     return opt
   })
 
-  // 5. Fix LENGTH_CLUEING (overly verbose option compared to average)
-  if (currentOpts.length >= 3) {
-    const lengths = currentOpts.map(o => o.text.trim().length).filter(l => l > 0)
-    const avgLen = lengths.reduce((a, b) => a + b, 0) / lengths.length
-    const maxLen = Math.max(...lengths)
-
-    if (maxLen > avgLen * 2.2 && (maxLen - Math.min(...lengths)) > 35) {
-      currentOpts = currentOpts.map(opt => {
-        if (opt.text.length > avgLen * 2.2) {
-          let trimmedText = opt.text.replace(STATIC_PAREN_END_REGEX, '').trim()
-          if (trimmedText.length > avgLen * 1.8) {
-            const firstSentence = trimmedText.split(STATIC_SENTENCE_SPLIT_REGEX)[0]
-            if (firstSentence && firstSentence.length >= 15) {
-              trimmedText = firstSentence.trim() + '.'
-            }
-          }
-          appliedFixes.push(`Balanceamento de extensão da opção ${opt.letter}: redução de detalhes prolixos`)
-          return { ...opt, text: trimmedText }
-        }
-        return opt
-      })
-    }
-  }
-
+  // Violações semânticas (ALL_NONE_ABOVE, REDUNDANT_DISTRACTOR, LENGTH_CLUEING) não sofrem auto-fix invasivo:
+  // são auditadas e retidas em remainingViolations para bloqueio e regeneração via portões.
   const remainingAudit = auditHaladynaGuidelines(currentStem, currentOpts)
 
   return {
