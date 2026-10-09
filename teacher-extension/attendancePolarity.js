@@ -7,13 +7,30 @@
 }(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
 
+  // Conjunto estrito de intenções pedagógicas válidas (fonte única de verdade)
+  const VALID_INTENTS = {
+    ABSENCE: ['FALTA', 'AUSENCIA'],
+    PRESENCE: ['PRESENCA', 'PRESENTE']
+  };
+
   function normalizeText(text) {
-    if (!text) return '';
+    if (text == null) return '';
     return String(text)
       .normalize('NFKD')
-      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[\u0300-\u036f]/g, '') // remove acentuação
+      .replace(/[^\w\s]/gi, ' ')        // substitui pontuações por espaço (ex: 'Presença:', 'FALTA?')
       .toLowerCase()
+      .replace(/\s+/g, ' ')             // colapsa espaços múltiplos
       .trim();
+  }
+
+  function parseTeacherIntent(intent) {
+    if (typeof intent !== 'string') return null;
+    const clean = normalizeText(intent).toUpperCase();
+    if (!clean) return null;
+    if (VALID_INTENTS.ABSENCE.includes(clean)) return 'ABSENCE';
+    if (VALID_INTENTS.PRESENCE.includes(clean)) return 'PRESENCE';
+    return null;
   }
 
   function resolveCheckboxPolarity(text) {
@@ -40,9 +57,9 @@
     const absenceRegex = /\b(falta|faltas|ausente|ausentes|ausencia|ausencias|absent|absence)\b/i;
     const hasAbsence = absenceRegex.test(norm);
 
-    // Regra 3: Radicais de presença / comparecimento com limite de palavra (\b para início de palavra)
+    // Regra 3: Radicais de presença / comparecimento com limite de palavra
     // Evita falsos positivos como "Representante" ou "Apresentação"
-    const presenceRegex = /\b(presenca|presencas|presente|presentes|compareceu|compareceram|comparecimento|attend|attendance|present)\b/i;
+    const presenceRegex = /\b(presenca|presencas|presente|presentes|compareceu|compareceram|comparecimento|attend|attendance|attendee|attendees|present)\b/i;
     const hasPresence = presenceRegex.test(norm);
 
     // Conflito de polaridade: se contiver ambos sem negação disambiguadora -> ambíguo
@@ -70,6 +87,16 @@
   }
 
   function resolveAttendancePolarity(columnHeader, controlLabel, teacherIntent) {
+    const parsedIntent = parseTeacherIntent(teacherIntent);
+    if (!parsedIntent) {
+      return {
+        canResolve: false,
+        polarity: 'INVALID_INTENT',
+        shouldBeChecked: null,
+        reason: `Intenção do professor inválida ou desconhecida: ${JSON.stringify(teacherIntent)}`
+      };
+    }
+
     const headerPol = resolveCheckboxPolarity(columnHeader);
     const labelPol = resolveCheckboxPolarity(controlLabel);
 
@@ -93,7 +120,7 @@
       };
     }
 
-    const isAbsent = (teacherIntent === 'FALTA' || teacherIntent === 'AUSENCIA');
+    const isAbsent = (parsedIntent === 'ABSENCE');
     const shouldCheck = determineTargetChecked(resolvedPol, isAbsent);
     const polarityName = (resolvedPol === 'presence') ? 'POSITIVE' : 'NEGATIVE';
 
@@ -174,7 +201,9 @@
   }
 
   return {
+    VALID_INTENTS,
     normalizeText,
+    parseTeacherIntent,
     resolveCheckboxPolarity,
     determineTargetChecked,
     resolveAttendancePolarity,
