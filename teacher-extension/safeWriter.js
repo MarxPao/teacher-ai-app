@@ -14,6 +14,23 @@
       .trim();
   }
 
+  function tokenize(text) {
+    const norm = normalizeText(text);
+    return norm ? norm.split(' ').filter(Boolean) : [];
+  }
+
+  function containsTokenSequence(rowTokens, targetTokens) {
+    if (!targetTokens.length || targetTokens.length > rowTokens.length) return false;
+    for (let i = 0; i <= rowTokens.length - targetTokens.length; i++) {
+      let match = true;
+      for (let j = 0; j < targetTokens.length; j++) {
+        if (rowTokens[i + j] !== targetTokens[j]) { match = false; break; }
+      }
+      if (match) return true;
+    }
+    return false;
+  }
+
   function findRowContainer(el) {
     if (!el || typeof el !== 'object') return null;
     let row = typeof el.closest === 'function' ? el.closest('tr, [role="row"], .student-row, .aluno-card, li.student-item') : null;
@@ -28,6 +45,34 @@
       }
     }
     return row;
+  }
+
+  function findTableContainer(row) {
+    if (!row) return null;
+    let container = typeof row.closest === 'function' ? row.closest('table, tbody, [role="grid"], [role="table"]') : null;
+    if (!container) {
+      let p = row.parentElement || row.parentNode;
+      while (p) {
+        if (p.tagName === 'TABLE' || p.tagName === 'TBODY' || (typeof p.getAttribute === 'function' && (p.getAttribute('role') === 'grid' || p.getAttribute('role') === 'table'))) {
+          container = p;
+          break;
+        }
+        p = p.parentElement || p.parentNode;
+      }
+    }
+    return container;
+  }
+
+  function getRowsInContainer(container) {
+    if (!container) return [];
+    if (typeof container.querySelectorAll === 'function') {
+      const list = container.querySelectorAll('tr');
+      if (list && list.length > 0) return Array.from(list);
+    }
+    if (Array.isArray(container.children)) {
+      return container.children.filter(function (c) { return c.tagName === 'TR'; });
+    }
+    return [];
   }
 
   function isElementVisible(el, docRef) {
@@ -156,14 +201,44 @@
     return false;
   }
 
-  function validateStudentRowTarget(el, expectedStudentName) {
-    if (!el || typeof el !== 'object' || !expectedStudentName || typeof expectedStudentName !== 'string') return false;
-    const target = normalizeText(expectedStudentName);
-    if (!target) return false;
+  function validateStudentRowTargetDetail(el, expectedStudentName) {
+    if (!el || typeof el !== 'object' || !expectedStudentName || typeof expectedStudentName !== 'string') {
+      return { valid: false, reason: 'STUDENT_MISMATCH' };
+    }
+    const targetTokens = tokenize(expectedStudentName);
+    if (targetTokens.length === 0) return { valid: false, reason: 'INVALID_STUDENT_NAME' };
 
     const row = findRowContainer(el);
-    if (!row) return false;
-    return normalizeText(row.textContent || '').includes(target);
+    if (!row) return { valid: false, reason: 'STUDENT_MISMATCH' };
+
+    const rowTokens = tokenize(row.textContent || '');
+    const isContained = containsTokenSequence(rowTokens, targetTokens);
+    if (!isContained) return { valid: false, reason: 'STUDENT_MISMATCH' };
+
+    // Verificação de homônimos na mesma tabela/grid
+    const tableContainer = findTableContainer(row);
+    if (tableContainer) {
+      const siblingRows = getRowsInContainer(tableContainer);
+      let matchCount = 0;
+      for (let i = 0; i < siblingRows.length; i++) {
+        const sTokens = tokenize(siblingRows[i].textContent || '');
+        if (containsTokenSequence(sTokens, targetTokens)) {
+          matchCount++;
+          if (matchCount > 1) return { valid: false, reason: 'AMBIGUOUS_HOMONYM' };
+        }
+      }
+    }
+
+    // Verificação de nome parcial de token único (apenas primeiro nome)
+    if (targetTokens.length === 1) {
+      return { valid: false, reason: 'AMBIGUOUS_PARTIAL_NAME' };
+    }
+
+    return { valid: true, reason: null };
+  }
+
+  function validateStudentRowTarget(el, expectedStudentName) {
+    return validateStudentRowTargetDetail(el, expectedStudentName).valid;
   }
 
   function canSafelyWrite(el, expectedStudentName, options) {
@@ -175,7 +250,11 @@
     if (el.readOnly === true) return { canWrite: false, targetElement: null, reason: 'ELEMENT_READONLY' };
     if (isHoneypot(el)) return { canWrite: false, targetElement: null, reason: 'HONEYPOT_DETECTED' };
     if (!isElementVisible(el, options ? options.doc : null)) return { canWrite: false, targetElement: null, reason: 'ELEMENT_NOT_VISIBLE' };
-    if (!validateStudentRowTarget(el, expectedStudentName)) return { canWrite: false, targetElement: null, reason: 'STUDENT_MISMATCH' };
+
+    const rowValidation = validateStudentRowTargetDetail(el, expectedStudentName);
+    if (!rowValidation.valid) {
+      return { canWrite: false, targetElement: null, reason: rowValidation.reason };
+    }
     return { canWrite: true, targetElement: el, reason: null };
   }
 
