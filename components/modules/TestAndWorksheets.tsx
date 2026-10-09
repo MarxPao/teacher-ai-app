@@ -195,7 +195,7 @@ export default function TestAndWorksheets({ initialMode = 'exam' }: TestAndWorks
   // Fase 2 & 4: Gate de Contagem e Recuperação Espaçada
   const [includeSpacedRetrieval, setIncludeSpacedRetrieval] = useState(false)
   const [spacedWarning, setSpacedWarning] = useState<string | null>(null)
-  const [countMismatchWarning, setCountMismatchWarning] = useState<{ requested: number; received: number } | null>(null)
+  const [countMismatchWarning, setCountMismatchWarning] = useState<{ requested: number; received: number; reason?: string } | null>(null)
   const [includeUDL, setIncludeUDL] = useState(false)
 
   // APIs
@@ -482,7 +482,25 @@ Gere agora todas as ${totalQuestions} questões completas em HTML limpo:`
 
       // Fase 2: Gate de Contagem e Integridade Estrutural
       const completeness = checkGenerationCompleteness(totalQuestions, parsed)
+
+      // Verificação de violações pedagógicas críticas restantes do Haladyna (severidade error)
+      const criticalHaladynaViolation = parsed
+        .flatMap(q => q.haladynaViolations || [])
+        .find(v => v.severity === 'error')
+
+      if (criticalHaladynaViolation && completeness.canAutoSave) {
+        completeness.canAutoSave = false
+        completeness.warning = {
+          requested: totalQuestions,
+          received: parsed.length,
+          reason: `Violação crítica (Haladyna): ${criticalHaladynaViolation.description}`
+        }
+      }
+
       setCountMismatchWarning(completeness.warning)
+      if (completeness.warning?.reason) {
+        toast.warning(completeness.warning.reason)
+      }
 
       if (completeness.canAutoSave) {
         // Auto-save no Repositório Unificado (Zero-Leakage) apenas com lote íntegro
@@ -982,7 +1000,12 @@ Retorne a questão reformulada no formato estruturado:`
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <span style={{ fontSize: 22 }}>⚠️</span>
                 <div>
-                  <strong>Truncamento Detectado:</strong> O modelo gerou {countMismatchWarning.received} de {countMismatchWarning.requested} questões solicitadas (possível limite de tokens da IA).
+                  <strong>{countMismatchWarning.reason ? 'Alerta de Integridade Estrutural:' : 'Truncamento Detectado:'}</strong>{' '}
+                  {countMismatchWarning.reason ? (
+                    <span>{countMismatchWarning.reason}</span>
+                  ) : (
+                    <span>O modelo gerou {countMismatchWarning.received} de {countMismatchWarning.requested} questões solicitadas (possível limite de tokens da IA).</span>
+                  )}
                   <br />
                   <span style={{ fontSize: 12, color: '#7f1d1d' }}>
                     O salvamento automático no repositório foi bloqueado para proteger a integridade do banco de itens.
