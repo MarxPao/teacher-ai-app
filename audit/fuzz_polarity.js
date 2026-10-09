@@ -121,6 +121,9 @@ function runFuzzSuite(iterations = 500) {
   let passedIterations = 0;
   let exceptionsCount = 0;
   let invariantFailures = [];
+  let semanticNoSignalCount = 0;
+  let semanticNoSignalPassed = 0;
+  let semanticFailuresCount = 0;
 
   for (let i = 1; i <= iterations; i++) {
     const header = getRandomVal();
@@ -217,15 +220,21 @@ function runFuzzSuite(iterations = 500) {
     const hasAnySignal = hasAnyRecognizedPolarityKeyword(header) ||
                          hasAnyRecognizedPolarityKeyword(label) ||
                          hasAnyRecognizedPolarityKeyword(extra);
-    if (!hasAnySignal && res.canResolve !== false) {
-      invariantFailures.push({
-        iteration: i,
-        type: 'SEMANTIC_FAIL_CLOSED_VIOLATION',
-        reason: 'Nenhum termo de presença/ausência reconhecido nas entradas, mas canResolve retornou true',
-        res,
-        inputs: { header, label, intent, extra }
-      });
-      continue;
+    if (!hasAnySignal) {
+      semanticNoSignalCount++;
+      if (res.canResolve === false) {
+        semanticNoSignalPassed++;
+      } else {
+        semanticFailuresCount++;
+        invariantFailures.push({
+          iteration: i,
+          type: 'SEMANTIC_FAIL_CLOSED_VIOLATION',
+          reason: 'Nenhum termo de presença/ausência reconhecido nas entradas, mas canResolve retornou true',
+          res,
+          inputs: { header, label, intent, extra }
+        });
+        continue;
+      }
     }
 
     passedIterations++;
@@ -236,6 +245,9 @@ function runFuzzSuite(iterations = 500) {
   console.log(`Iterações aprovadas com invariantes válidas: ${passedIterations}`);
   console.log(`Exceções não tratadas: ${exceptionsCount}`);
   console.log(`Violações de invariantes: ${invariantFailures.length}`);
+  console.log(`Iterações com entrada sem termos de frequência reconhecidos: ${semanticNoSignalCount}`);
+  console.log(`Dessas, com canResolve=false: ${semanticNoSignalPassed} (esperado: todas)`);
+  console.log(`Violações do invariante semântico: ${semanticFailuresCount}`);
 
   if (invariantFailures.length > 0) {
     console.error(`\n[FALHA] ${invariantFailures.length} iterações violaram o contrato! Primeiras 3 falhas:`);
