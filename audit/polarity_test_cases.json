@@ -108,5 +108,225 @@
     "expected_can_resolve": false,
     "expected_polarity": "CONFLICT",
     "expected_should_be_checked": null
+  },
+  {
+    "id": "CASE_12_INTENT_AUSENCIA_HEADER_PRESENCA",
+    "description": "Sinônimo pedagógico 'AUSENCIA' em coluna positiva 'Presença' -> shouldBeChecked=false",
+    "column_header": "Presença",
+    "control_label": "",
+    "teacher_intent": "AUSENCIA",
+    "expected_can_resolve": true,
+    "expected_polarity": "POSITIVE",
+    "expected_should_be_checked": false
+  },
+  {
+    "id": "CASE_13_INTENT_PRESENTE_HEADER_PRESENCA",
+    "description": "Sinônimo pedagógico 'PRESENTE' em coluna positiva 'Presença' -> shouldBeChecked=true",
+    "column_header": "Presença",
+    "control_label": "",
+    "teacher_intent": "PRESENTE",
+    "expected_can_resolve": true,
+    "expected_polarity": "POSITIVE",
+    "expected_should_be_checked": true
+  },
+  {
+    "id": "CASE_14_INTENT_AUSENCIA_HEADER_FALTA",
+    "description": "Sinônimo pedagógico 'AUSENCIA' em coluna negativa 'Falta' -> shouldBeChecked=true",
+    "column_header": "Falta",
+    "control_label": "",
+    "teacher_intent": "AUSENCIA",
+    "expected_can_resolve": true,
+    "expected_polarity": "NEGATIVE",
+    "expected_should_be_checked": true
+  },
+  {
+    "id": "CASE_15_INTENT_PRESENTE_HEADER_FALTA",
+    "description": "Sinônimo pedagógico 'PRESENTE' em coluna negativa 'Falta' -> shouldBeChecked=false",
+    "column_header": "Falta",
+    "control_label": "",
+    "teacher_intent": "PRESENTE",
+    "expected_can_resolve": true,
+    "expected_polarity": "NEGATIVE",
+    "expected_should_be_checked": false
+  },
+  {
+    "id": "CASE_16_INTENT_INVALID_NULL",
+    "description": "Intenção nula (null) -> Recusa segura por intenção inválida (fail-closed)",
+    "column_header": "Presença",
+    "control_label": "",
+    "teacher_intent": null,
+    "expected_can_resolve": false,
+    "expected_polarity": "INVALID_INTENT",
+    "expected_should_be_checked": null
+  },
+  {
+    "id": "CASE_17_INTENT_INVALID_EMPTY_STRING",
+    "description": "Intenção vazia ('') -> Recusa segura por intenção inválida (fail-closed)",
+    "column_header": "Presença",
+    "control_label": "",
+    "teacher_intent": "",
+    "expected_can_resolve": false,
+    "expected_polarity": "INVALID_INTENT",
+    "expected_should_be_checked": null
+  },
+  {
+    "id": "CASE_18_INTENT_INVALID_XYZ",
+    "description": "Intenção desconhecida ('XYZ') -> Recusa segura por intenção inválida (fail-closed)",
+    "column_header": "Presença",
+    "control_label": "",
+    "teacher_intent": "XYZ",
+    "expected_can_resolve": false,
+    "expected_polarity": "INVALID_INTENT",
+    "expected_should_be_checked": null
+  },
+  {
+    "id": "CASE_19_INTENT_INVALID_NUMBER",
+    "description": "Intenção de tipo não-string (número 123) -> Recusa segura por intenção inválida",
+    "column_header": "Presença",
+    "control_label": "",
+    "teacher_intent": 123,
+    "expected_can_resolve": false,
+    "expected_polarity": "INVALID_INTENT",
+    "expected_should_be_checked": null
+  },
+  {
+    "id": "CASE_20_INTENT_NORMALIZED_LOWERCASE_FALTA",
+    "description": "Intenção em minúsculas 'falta' -> Normaliza para 'FALTA' e resolve com sucesso",
+    "column_header": "Presença",
+    "control_label": "",
+    "teacher_intent": "falta",
+    "expected_can_resolve": true,
+    "expected_polarity": "POSITIVE",
+    "expected_should_be_checked": false
+  },
+  {
+    "id": "CASE_21_INTENT_NORMALIZED_ACCENT_AUSENCIA",
+    "description": "Intenção com acento e mista 'Ausência' -> Normaliza para 'AUSENCIA' e resolve com sucesso",
+    "column_header": "Presença",
+    "control_label": "",
+    "teacher_intent": "Ausência",
+    "expected_can_resolve": true,
+    "expected_polarity": "POSITIVE",
+    "expected_should_be_checked": false
+  },
+  {
+    "id": "CASE_22_EMPTY_AND_WHITESPACE_HEADERS",
+    "description": "Cabeçalho com apenas espaços e rótulo vazio -> AMBIGUOUS (fail-closed)",
+    "column_header": "   ",
+    "control_label": null,
+    "teacher_intent": "PRESENCA",
+    "expected_can_resolve": false,
+    "expected_polarity": "AMBIGUOUS",
+    "expected_should_be_checked": null
+  },
+  {
+    "id": "CASE_23_AMBIGUOUS_HEADER_CLEAR_LABEL",
+    "description": "Cabeçalho ambíguo 'P/F' com rótulo claro 'Marcar Falta' -> Resolve pelo rótulo",
+    "column_header": "P/F",
+    "control_label": "Marcar Falta",
+    "teacher_intent": "FALTA",
+    "expected_can_resolve": true,
+    "expected_polarity": "NEGATIVE",
+    "expected_should_be_checked": true
+  },
+  {
+    "id": "CASE_24_CLEAR_HEADER_AMBIGUOUS_LABEL",
+    "description": "Cabeçalho claro 'Comparecimento' com rótulo ambíguo 'Status' -> Resolve pelo cabeçalho",
+    "column_header": "Comparecimento",
+    "control_label": "Status",
+    "teacher_intent": "PRESENCA",
+    "expected_can_resolve": true,
+    "expected_polarity": "POSITIVE",
+    "expected_should_be_checked": true
+  },
+  {
+    "id": "CASE_25_AGREEING_SIGNALS_PRESENCE",
+    "description": "Cabeçalho 'Presença' e rótulo 'Presente' (ambos presença) -> Resolve sem conflito",
+    "column_header": "Presença",
+    "control_label": "Presente",
+    "teacher_intent": "PRESENCA",
+    "expected_can_resolve": true,
+    "expected_polarity": "POSITIVE",
+    "expected_should_be_checked": true
+  },
+  {
+    "id": "CASE_26_AGREEING_SIGNALS_ABSENCE",
+    "description": "Cabeçalho 'Falta' e rótulo 'Ausente' (ambos ausência) -> Resolve sem conflito",
+    "column_header": "Falta",
+    "control_label": "Ausente",
+    "teacher_intent": "FALTA",
+    "expected_can_resolve": true,
+    "expected_polarity": "NEGATIVE",
+    "expected_should_be_checked": true
+  },
+  {
+    "id": "CASE_27_CONFLICT_ABSENCE_HEADER_PRESENCE_LABEL",
+    "description": "Conflito inverso: cabeçalho 'Falta' e rótulo 'Marcar Presença' -> Recusa segura (CONFLICT)",
+    "column_header": "Falta",
+    "control_label": "Marcar Presença",
+    "teacher_intent": "PRESENCA",
+    "expected_can_resolve": false,
+    "expected_polarity": "CONFLICT",
+    "expected_should_be_checked": null
+  },
+  {
+    "id": "CASE_28_NEGATIVE_CONTROL_PRESENCE_INTENT",
+    "description": "Checkbox de polaridade negativa ('Marcar Falta') com intenção de presença -> shouldBeChecked=false",
+    "column_header": "Diário de Frequência",
+    "control_label": "Marcar Falta",
+    "teacher_intent": "PRESENCA",
+    "expected_can_resolve": true,
+    "expected_polarity": "NEGATIVE",
+    "expected_should_be_checked": false
+  },
+  {
+    "id": "CASE_29_NORMALIZATION_UPPERCASE_AND_SPACES",
+    "description": "Normalização: cabeçalho com espaços e caixa alta ' PRESENÇA ' -> POSITIVE",
+    "column_header": " PRESENÇA ",
+    "control_label": "",
+    "teacher_intent": "PRESENCA",
+    "expected_can_resolve": true,
+    "expected_polarity": "POSITIVE",
+    "expected_should_be_checked": true
+  },
+  {
+    "id": "CASE_30_NORMALIZATION_PUNCTUATION_PRESENCA",
+    "description": "Normalização: cabeçalho com dois-pontos 'Presença:' -> POSITIVE",
+    "column_header": "Presença:",
+    "control_label": "",
+    "teacher_intent": "PRESENCA",
+    "expected_can_resolve": true,
+    "expected_polarity": "POSITIVE",
+    "expected_should_be_checked": true
+  },
+  {
+    "id": "CASE_31_NORMALIZATION_PUNCTUATION_FALTA",
+    "description": "Normalização: cabeçalho com interrogação 'FALTA?' -> NEGATIVE",
+    "column_header": "FALTA?",
+    "control_label": "",
+    "teacher_intent": "FALTA",
+    "expected_can_resolve": true,
+    "expected_polarity": "NEGATIVE",
+    "expected_should_be_checked": true
+  },
+  {
+    "id": "CASE_32_ENGLISH_ATTENDEE_LABEL",
+    "description": "Inglês adicional: rótulo 'Attendee' em cabeçalho neutro -> POSITIVE",
+    "column_header": "Daily Log",
+    "control_label": "Attendee",
+    "teacher_intent": "PRESENCA",
+    "expected_can_resolve": true,
+    "expected_polarity": "POSITIVE",
+    "expected_should_be_checked": true
+  },
+  {
+    "id": "CASE_33_ENGLISH_ABSENT_LABEL",
+    "description": "Inglês adicional: rótulo 'Mark as Absent' em cabeçalho neutro -> NEGATIVE",
+    "column_header": "Daily Log",
+    "control_label": "Mark as Absent",
+    "teacher_intent": "FALTA",
+    "expected_can_resolve": true,
+    "expected_polarity": "NEGATIVE",
+    "expected_should_be_checked": true
   }
 ]

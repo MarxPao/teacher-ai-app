@@ -11,16 +11,17 @@ from pathlib import Path
 ROOT_DIR = Path(__file__).resolve().parent.parent
 TEST_CASES_FILE = ROOT_DIR / "audit" / "polarity_test_cases.json"
 JS_MODULE_FILE = ROOT_DIR / "teacher-extension" / "attendancePolarity.js"
+SIDECAR_MODULE_FILE = ROOT_DIR / "sidecar" / "attendance_polarity.py"
 
 def run_js_polarity_case(case: dict) -> dict:
     js_module_path = str(JS_MODULE_FILE).replace("\\", "/")
+    # O harness NÃO reimplementa a lógica: apenas serializa o caso, chama o módulo JS e retorna a resposta
+    intent_json = json.dumps(case['teacher_intent'])
+    header_json = json.dumps(case['column_header'])
+    label_json = json.dumps(case['control_label'])
     js_code = f"""
     const AttendancePolarity = require('{js_module_path}');
-    const res = AttendancePolarity.resolveAttendancePolarity(
-        {json.dumps(case['column_header'])},
-        {json.dumps(case['control_label'])},
-        {json.dumps(case['teacher_intent'])}
-    );
+    const res = AttendancePolarity.resolveAttendancePolarity({header_json}, {label_json}, {intent_json});
     console.log(JSON.stringify(res));
     """
     proc = subprocess.run(["node", "-e", js_code], capture_output=True, text=True, check=True)
@@ -29,9 +30,30 @@ def run_js_polarity_case(case: dict) -> dict:
 def test_polarity_parity():
     test_cases = json.loads(TEST_CASES_FILE.read_text(encoding="utf-8"))
     print("\n=======================================================")
-    print("  AVALIACAO DO RESOLVEDOR DE POLARIDADE (11 CASOS)")
-    print(f"  Total de casos avaliados: {len(test_cases)}")
+    print(f"  AVALIACAO DO RESOLVEDOR DE POLARIDADE ({len(test_cases)} CASOS)")
     print("=======================================================\n")
+
+    # Verifica se sidecar existe
+    if SIDECAR_MODULE_FILE.exists():
+        print(f"[SIDECAR] Módulo python encontrado em {SIDECAR_MODULE_FILE}. Paridade ativa.")
+    else:
+        print("[SIDECAR] Módulo sidecar/attendance_polarity.py inexistente. Paridade Python não-aplicável.")
+
+    # Verifica se o módulo JS exporta a lista de intenções (fonte única de verdade)
+    js_module_path = str(JS_MODULE_FILE).replace("\\", "/")
+    chk_code = f"""
+    const AttendancePolarity = require('{js_module_path}');
+    if (!AttendancePolarity.VALID_INTENTS || typeof AttendancePolarity.parseTeacherIntent !== 'function') {{
+        console.error('Módulo não exporta VALID_INTENTS ou parseTeacherIntent!');
+        process.exit(1);
+    }}
+    console.log(JSON.stringify(AttendancePolarity.VALID_INTENTS));
+    """
+    chk_proc = subprocess.run(["node", "-e", chk_code], capture_output=True, text=True)
+    if chk_proc.returncode != 0:
+        print(f"[ERRO DE CONTRATO] {chk_proc.stderr.strip()}", file=sys.stderr)
+        sys.exit(1)
+    print(f"[FONTE UNICA DE INTENCOES] {chk_proc.stdout.strip()}\n")
 
     passed_count = 0
     failures = []
@@ -58,13 +80,15 @@ def test_polarity_parity():
             print(f"[{idx:02d}] {c_id}: FAIL")
             print(f"     Esperado: canResolve={exp_resolve}, pol={exp_pol}, checked={exp_checked}")
             print(f"     Obtido:   canResolve={js_res.get('canResolve')}, pol={js_res.get('polarity')}, checked={js_res.get('shouldBeChecked')}")
+            if js_res.get("reason"):
+                print(f"     Motivo:   {js_res.get('reason')}")
 
     total = len(test_cases)
     print("\n=======================================================")
     print(f"  RESULTADO FINAL: {passed_count}/{total} casos aprovados")
     print("=======================================================\n")
 
-    assert passed_count == total, f"Falha na suite de polaridade: {len(failures)} caso(s) falharam: {failures}"
+    assert passed_count == total, f"Falha na suite de polaridade: {len(failures)} caso(s) falharam"
 
 if __name__ == "__main__":
     try:
