@@ -11,6 +11,7 @@ import { z } from 'zod'
 
 export const QuestionOptionSchema = z.object({
   id: z.string().min(1, 'ID da alternativa é obrigatório'),
+  letter: z.string().optional(),
   text: z.string().min(1, 'Texto da alternativa não pode ser vazio')
 })
 
@@ -44,15 +45,21 @@ export const QuestionSchema = z.object({
   stem: z.string().trim().min(1, 'Enunciado não pode ser vazio'),
   options: z.array(QuestionOptionSchema).default([]),
   correctOptionId: z.string().trim().min(1, 'Gabarito é obrigatório'),
-  rationale: z.string().default(''),
-  skillCode: z.string().default(''),
-  cefrLevel: z.string().default(''),
-  bloomLevel: z.string().default(''),
-  difficultyTarget: z.string().default('medium'),
-  language: z.string().default('pt'),
+  rationale: z.string().optional().default(''),
+  skillCode: z.string().optional().default(''),
+  cefrLevel: z.string().optional().default(''),
+  bloomLevel: z.string().optional().default(''),
+  difficultyTarget: z.string().optional().default('medium'),
+  language: z.string().optional().default('pt'),
   contextText: z.string().optional(),
   points: z.number().optional(),
   rubric: z.string().optional(),
+  answerKey: z.string().optional(),
+  explanation: z.string().optional(),
+  bloomTaxonomy: z.string().optional(),
+  subject: z.string().optional(),
+  topic: z.string().optional(),
+  canAutoSave: z.boolean().optional(),
   provenance: QuestionProvenanceSchema
 }).superRefine((data, ctx) => {
   // Validações estruturais para questões fechadas
@@ -94,6 +101,7 @@ export const QuestionSchema = z.object({
 })
 
 export type Question = z.infer<typeof QuestionSchema>
+export type QuestionInput = z.input<typeof QuestionSchema>
 
 export const ExamSchema = z.array(QuestionSchema).min(1, 'Avaliação deve conter ao menos 1 questão')
 
@@ -217,7 +225,8 @@ export function compileQuestionsToHtml(
     if (options.length > 0) {
       html += `    <div class="exam-options-list" style="margin-left: 8px; display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px;">\n`
       options.forEach(opt => {
-        const letter = ('letter' in opt ? opt.letter : opt.id).toUpperCase()
+        const rawLetter = ('letter' in opt && opt.letter) ? opt.letter : ('id' in opt ? (opt as any).id : 'A')
+        const letter = (rawLetter || 'A').toUpperCase()
         const text = opt.text || ''
         html += `      <div class="exam-option-line" style="display: flex; align-items: flex-start; gap: 8px; font-size: 14px;"><strong style="min-width: 24px; color: #8b5e3c;">${letter})</strong> <span>${text}</span></div>\n`
       })
