@@ -328,5 +328,215 @@
     "expected_can_resolve": true,
     "expected_polarity": "NEGATIVE",
     "expected_should_be_checked": true
+  },
+  {
+    "id": "CASE_34_ENGLISH_ATTENDEE_AMBIGUOUS_ADJUSTED",
+    "description": "Ajuste do CASE_32: 'Attendee' é substantivo de pessoa/papel, não polaridade de status -> AMBIGUOUS (fail-closed)",
+    "column_header": "Daily Log",
+    "control_label": "Attendee",
+    "teacher_intent": "PRESENCA",
+    "expected_can_resolve": false,
+    "expected_polarity": "AMBIGUOUS",
+    "expected_should_be_checked": null
+  },
+  {
+    "id": "CASE_35_NEGATION_PT_NAO_COMPARECEU_PRESENCA",
+    "description": "Negação inequívoca PT 'Não compareceu' -> polaridade NEGATIVE (ausência), shouldBeChecked=false",
+    "column_header": "Registro Diário",
+    "control_label": "Não compareceu",
+    "teacher_intent": "PRESENCA",
+    "expected_can_resolve": true,
+    "expected_polarity": "NEGATIVE",
+    "expected_should_be_checked": false
+  },
+  {
+    "id": "CASE_36_NEGATION_PT_NAO_COMPARECEU_FALTA",
+    "description": "Negação inequívoca PT 'Não compareceu' com intenção FALTA -> shouldBeChecked=true",
+    "column_header": "Registro Diário",
+    "control_label": "Não compareceu",
+    "teacher_intent": "FALTA",
+    "expected_can_resolve": true,
+    "expected_polarity": "NEGATIVE",
+    "expected_should_be_checked": true
+  },
+  {
+    "id": "CASE_37_NEGATION_PT_NAO_PRESENTE_PRESENCA",
+    "description": "Negação inequívoca PT 'Nao presente' em cabeçalho -> polaridade NEGATIVE",
+    "column_header": "Nao presente",
+    "control_label": "",
+    "teacher_intent": "PRESENCA",
+    "expected_can_resolve": true,
+    "expected_polarity": "NEGATIVE",
+    "expected_should_be_checked": false
+  },
+  {
+    "id": "CASE_38_NEGATION_EN_NOT_PRESENT_PRESENCA",
+    "description": "Negação inequívoca EN 'Not present' em cabeçalho -> polaridade NEGATIVE",
+    "column_header": "Not present",
+    "control_label": "",
+    "teacher_intent": "PRESENCA",
+    "expected_can_resolve": true,
+    "expected_polarity": "NEGATIVE",
+    "expected_should_be_checked": false
+  },
+  {
+    "id": "CASE_39_NEGATION_PT_NAO_FALTOU_FAIL_CLOSED",
+    "description": "Dupla negação / ambiguidade PT 'Não faltou' -> recusa fail-closed (AMBIGUOUS)",
+    "column_header": "Não faltou",
+    "control_label": "",
+    "teacher_intent": "PRESENCA",
+    "expected_can_resolve": false,
+    "expected_polarity": "AMBIGUOUS",
+    "expected_should_be_checked": null
+  },
+  {
+    "id": "CASE_40_NEGATION_PT_SEM_FALTA_FAIL_CLOSED",
+    "description": "Expressão ambígua / dupla negação PT 'Sem falta' -> recusa fail-closed (AMBIGUOUS)",
+    "column_header": "Sem falta",
+    "control_label": "",
+    "teacher_intent": "PRESENCA",
+    "expected_can_resolve": false,
+    "expected_polarity": "AMBIGUOUS",
+    "expected_should_be_checked": null
+  },
+  {
+    "id": "CASE_41_NEGATION_EN_NOT_ABSENT_FAIL_CLOSED",
+    "description": "Dupla negação EN 'Not absent' -> recusa fail-closed (AMBIGUOUS)",
+    "column_header": "Not absent",
+    "control_label": "",
+    "teacher_intent": "PRESENCA",
+    "expected_can_resolve": false,
+    "expected_polarity": "AMBIGUOUS",
+    "expected_should_be_checked": null
+  },
+  {
+    "id": "CASE_42_NEGATION_EN_NO_ABSENCE_FAIL_CLOSED",
+    "description": "Expressão ambígua EN 'No absence' -> recusa fail-closed (AMBIGUOUS)",
+    "column_header": "No absence",
+    "control_label": "",
+    "teacher_intent": "PRESENCA",
+    "expected_can_resolve": false,
+    "expected_polarity": "AMBIGUOUS",
+    "expected_should_be_checked": null
+  },
+  {
+    "id": "CASE_43_TYPE_UNDEFINED_INTENT",
+    "description": "Intenção null/undefined -> INVALID_INTENT sem lançar exceção",
+    "column_header": "Presença",
+    "control_label": "",
+    "teacher_intent": null,
+    "expected_can_resolve": false,
+    "expected_polarity": "INVALID_INTENT",
+    "expected_should_be_checked": null
+  },
+  {
+    "id": "CASE_44_TYPE_OBJECT_INTENT",
+    "description": "Intenção tipo objeto -> INVALID_INTENT sem lançar exceção",
+    "column_header": "Presença",
+    "control_label": "",
+    "teacher_intent": {
+      "action": "present"
+    },
+    "expected_can_resolve": false,
+    "expected_polarity": "INVALID_INTENT",
+    "expected_should_be_checked": null
+  },
+  {
+    "id": "CASE_45_TYPE_ARRAY_INTENT",
+    "description": "Intenção tipo array -> INVALID_INTENT sem lançar exceção",
+    "column_header": "Presença",
+    "control_label": "",
+    "teacher_intent": [
+      "PRESENCA"
+    ],
+    "expected_can_resolve": false,
+    "expected_polarity": "INVALID_INTENT",
+    "expected_should_be_checked": null
+  },
+  {
+    "id": "CASE_46_TYPE_OBJECT_AND_ARRAY_HEADER_LABEL",
+    "description": "Cabeçalho objeto e rótulo array -> tipos inválidos ignorados sem exceção -> AMBIGUOUS",
+    "column_header": {
+      "header": "Presenca"
+    },
+    "control_label": [
+      "Presente"
+    ],
+    "teacher_intent": "PRESENCA",
+    "expected_can_resolve": false,
+    "expected_polarity": "AMBIGUOUS",
+    "expected_should_be_checked": null
+  },
+  {
+    "id": "CASE_47_TYPE_NUMBER_HEADER_AND_LABEL",
+    "description": "Cabeçalho e rótulo numéricos -> sem sinal semântico -> AMBIGUOUS sem lançar exceção",
+    "column_header": 101,
+    "control_label": 42,
+    "teacher_intent": "PRESENCA",
+    "expected_can_resolve": false,
+    "expected_polarity": "AMBIGUOUS",
+    "expected_should_be_checked": null
+  },
+  {
+    "id": "CASE_48_EXTRA_SIGNALS_ARIA_LABEL_PRESENCE",
+    "description": "Sinal extra via aria-label 'Marcar presença do aluno' desambigua cabeçalho neutro -> POSITIVE",
+    "column_header": "Diário Geral",
+    "control_label": "",
+    "teacher_intent": "PRESENCA",
+    "extra_signals": "Marcar presença do aluno",
+    "expected_can_resolve": true,
+    "expected_polarity": "POSITIVE",
+    "expected_should_be_checked": true
+  },
+  {
+    "id": "CASE_49_EXTRA_SIGNALS_TITLE_ABSENCE",
+    "description": "Sinal extra via title 'Lançar falta' em objeto -> NEGATIVE (shouldBeChecked=false)",
+    "column_header": "Diário Geral",
+    "control_label": "",
+    "teacher_intent": "PRESENCA",
+    "extra_signals": {
+      "title": "Lançar falta"
+    },
+    "expected_can_resolve": true,
+    "expected_polarity": "NEGATIVE",
+    "expected_should_be_checked": false
+  },
+  {
+    "id": "CASE_50_EXTRA_SIGNALS_CONFLICT_HEADER_VS_ARIA",
+    "description": "Conflito direto entre cabeçalho ('Presença') e aria-label ('Marcar Falta') -> CONFLICT (fail-closed)",
+    "column_header": "Presença",
+    "control_label": "",
+    "teacher_intent": "PRESENCA",
+    "extra_signals": "Marcar Falta",
+    "expected_can_resolve": false,
+    "expected_polarity": "CONFLICT",
+    "expected_should_be_checked": null
+  },
+  {
+    "id": "CASE_51_EXTRA_SIGNALS_CONFLICT_LABEL_VS_TITLE",
+    "description": "Conflito direto entre rótulo ('Presente') e title ('Registrar ausência') -> CONFLICT (fail-closed)",
+    "column_header": "Status",
+    "control_label": "Presente",
+    "teacher_intent": "PRESENCA",
+    "extra_signals": {
+      "title": "Registrar ausência"
+    },
+    "expected_can_resolve": false,
+    "expected_polarity": "CONFLICT",
+    "expected_should_be_checked": null
+  },
+  {
+    "id": "CASE_52_EXTRA_SIGNALS_AGREEING_WITH_HEADER",
+    "description": "Sinais extras concordantes com cabeçalho ('Presença', 'Presente') -> POSITIVE sem conflito",
+    "column_header": "Presença",
+    "control_label": "",
+    "teacher_intent": "PRESENCA",
+    "extra_signals": {
+      "aria-label": "Presente",
+      "title": "Confirmar Presença"
+    },
+    "expected_can_resolve": true,
+    "expected_polarity": "POSITIVE",
+    "expected_should_be_checked": true
   }
 ]
