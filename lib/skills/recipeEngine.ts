@@ -109,9 +109,12 @@ export async function executeLlmTransform(params: {
   // 2. Tentar Gemini (se disponível)
   if (geminiKey) {
     try {
-      const res = await guardEgressFetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${geminiKey}`, {
+      const res = await guardEgressFetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': geminiKey
+        },
         body: JSON.stringify({
           contents: [{ parts: [{ text: `${systemPrompt}\n\n${userPrompt}` }] }],
           generationConfig: { temperature: 0.3 }

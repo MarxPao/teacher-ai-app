@@ -52,10 +52,13 @@ export async function POST(req: NextRequest) {
       for (const m of models) {
         try {
           const res = await guardEgressFetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${geminiKey}`,
+            `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent`,
             {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers: {
+                'Content-Type': 'application/json',
+                'x-goog-api-key': geminiKey
+              },
               body: JSON.stringify({
                 contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: mimeType, data: base64 } }] }],
                 generationConfig: { temperature: 0.1, maxOutputTokens: 8192 }

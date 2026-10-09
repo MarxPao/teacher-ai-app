@@ -181,7 +181,7 @@ def _call_gemini_vision(screenshot_b64: str, byok: Dict[str, str]) -> str:
     import urllib.request
     api_key = byok.get("api_key", "")
     model = byok.get("model", "gemini-1.5-flash")
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
     payload = json.dumps({
         "contents": [{
             "parts": [
@@ -191,7 +191,15 @@ def _call_gemini_vision(screenshot_b64: str, byok: Dict[str, str]) -> str:
         }],
         "generationConfig": {"maxOutputTokens": 600}
     }).encode()
-    req = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/json"}, method="POST")
+    req = urllib.request.Request(
+        url,
+        data=payload,
+        headers={
+            "Content-Type": "application/json",
+            "x-goog-api-key": api_key
+        },
+        method="POST"
+    )
     with urllib.request.urlopen(req, timeout=30) as r:
         resp = json.loads(r.read())
     return resp["candidates"][0]["content"]["parts"][0]["text"]

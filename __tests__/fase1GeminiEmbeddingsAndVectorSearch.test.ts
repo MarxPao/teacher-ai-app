@@ -104,10 +104,13 @@ describe('FASE 1 — Ativação de Embeddings Reais (Gemini text-embedding-004 +
 
       const result = await generateGeminiEmbedding('Conditionals Type 2', 'test-api-key')
       expect(global.fetch).toHaveBeenCalledWith(
-        'https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=test-api-key',
+        'https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent',
         expect.objectContaining({
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'x-goog-api-key': 'test-api-key'
+          },
           body: JSON.stringify({
             model: 'models/text-embedding-004',
             content: { parts: [{ text: 'Conditionals Type 2' }] }

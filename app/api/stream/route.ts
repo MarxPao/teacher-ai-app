@@ -34,9 +34,12 @@ export async function POST(req: NextRequest) {
         let geminiRes: Response | null = null
         for (const model of streamModels) {
           try {
-            const res = await guardEgressFetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?key=${geminiKey}`, {
+            const res = await guardEgressFetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent`, {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers: {
+                'Content-Type': 'application/json',
+                'x-goog-api-key': geminiKey
+              },
               body: JSON.stringify({
                 contents: [{ role: 'user', parts: [{ text: (systemPrompt ? systemPrompt + '\n\n' : '') + prompt }] }],
                 generationConfig: { temperature: 0.7 }

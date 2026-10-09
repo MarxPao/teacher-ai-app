@@ -121,9 +121,12 @@ export async function POST(req: NextRequest) {
         const audioModels = ['gemini-3.6-flash', 'gemini-3.5-transcribe', 'gemini-3.5-flash-lite']
         for (const am of audioModels) {
           try {
-            const res = await guardEgressFetch(`https://generativelanguage.googleapis.com/v1beta/models/${am}:generateContent?key=${activeGeminiKey}`, {
+            const res = await guardEgressFetch(`https://generativelanguage.googleapis.com/v1beta/models/${am}:generateContent`, {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers: {
+                'Content-Type': 'application/json',
+                'x-goog-api-key': activeGeminiKey
+              },
               body: JSON.stringify({
                 contents: [{
                   parts: [

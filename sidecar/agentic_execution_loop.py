@@ -553,7 +553,7 @@ class AgenticExecutionLoop:
 
             if self.gemini_api_key:
                 for model in ["gemini-2.5-flash", "gemini-flash-latest", "gemini-2.5-flash-lite"]:
-                    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={self.gemini_api_key}"
+                    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
                     payload = json.dumps({
                         "system_instruction": {"parts": [{"text": SYSTEM_PROMPT_REACT}]},
                         "contents": [{"parts": [{"text": user_prompt}]}],
@@ -562,7 +562,15 @@ class AgenticExecutionLoop:
                             "response_mime_type": "application/json"
                         }
                     }).encode("utf-8")
-                    req = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/json"}, method="POST")
+                    req = urllib.request.Request(
+                        url,
+                        data=payload,
+                        headers={
+                            "Content-Type": "application/json",
+                            "x-goog-api-key": self.gemini_api_key
+                        },
+                        method="POST"
+                    )
                     try:
                         with urllib.request.urlopen(req, timeout=10) as resp:
                             data = json.loads(resp.read().decode("utf-8"))
