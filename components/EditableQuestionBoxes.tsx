@@ -59,7 +59,7 @@ export interface Provenance {
   sourceLabel?: string        // Nome do PDF, arquivo ou título da referência
   sourceUrl?: string          // URL manual informada pelo professor
   sourceSnippet?: string      // Trecho ou contexto específico de onde a questão derivou
-  confidence: 'verified' | 'unverified'
+  confidence: 'verified' | 'unverified' | 'teacher_provided' | 'partial'
   pageNumber?: number         // Número da página real de onde o conteúdo foi extraído
   unitTitle?: string          // Título da unidade/capítulo real
   chunkId?: string            // Identificador unívoco do chunk
@@ -135,7 +135,9 @@ export function parseContentToQuestions(raw: string, defaultProvenance?: Provena
         type: typeMatch[1] as ProvenanceType,
         sourceLabel: labelMatch ? labelMatch[1] : undefined,
         sourceUrl: urlMatch ? urlMatch[1] : undefined,
-        confidence: (confMatch && confMatch[1] === 'verified' ? 'verified' : 'unverified') as 'verified' | 'unverified',
+        confidence: (typeMatch[1] === 'teacher_reference'
+          ? 'teacher_provided'
+          : (confMatch && confMatch[1] === 'verified' ? 'verified' : 'unverified')) as any,
         pageNumber: pageMatch ? parseInt(pageMatch[1], 10) : defaultProvenance?.pageNumber,
         unitTitle: unitMatch ? unitMatch[1] : defaultProvenance?.unitTitle,
         chunkId: chunkMatch ? chunkMatch[1] : defaultProvenance?.chunkId
@@ -1107,7 +1109,7 @@ export default function EditableQuestionBoxes({
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: '#1e40af', fontWeight: 700 }}>
                       <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#2563eb' }} />
                       <span>🔗 Ref. Docente: {q.provenance.sourceLabel || q.provenance.sourceUrl || 'Referência Manual'}</span>
-                      <span style={{ fontSize: 10, background: '#dbeafe', color: '#1e40af', padding: '1px 5px', borderRadius: 4, border: '1px solid #bfdbfe' }}>Verificada</span>
+                      <span style={{ fontSize: 10, background: '#dbeafe', color: '#1e40af', padding: '1px 5px', borderRadius: 4, border: '1px solid #bfdbfe' }}>Fornecida pelo Professor</span>
                     </span>
                   )}
                   {(!q.provenance || q.provenance.type === 'general_knowledge') && (
@@ -1123,7 +1125,7 @@ export default function EditableQuestionBoxes({
                 {q.predictedDifficulty !== undefined && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: RADIUS.sm, background: '#f8fafc', border: '1px solid #e2e8f0', fontSize: 11.5 }}>
                     <span style={{ fontWeight: 700, color: '#475569', display: 'flex', alignItems: 'center', gap: 4 }}>
-                      🎯 Dificuldade Prevista (a priori - LLTM):
+                      🎯 Dificuldade Prevista:
                     </span>
                     <span style={{
                       fontWeight: 800,
@@ -1131,8 +1133,8 @@ export default function EditableQuestionBoxes({
                     }}>
                       {q.predictedDifficulty >= 0 ? '+' : ''}{q.predictedDifficulty.toFixed(2)} logits
                     </span>
-                    <span style={{ color: '#64748b', fontSize: 11 }}>
-                      ({q.predictedDifficultyLabel || 'Estimativa matemática pré-aplicação'})
+                    <span style={{ color: '#64748b', fontSize: 10.5, fontStyle: 'italic' }}>
+                      [Estimativa a priori (0 respostas reais)]
                     </span>
                   </div>
                 )}

@@ -27,10 +27,10 @@ export const QuestionTypeSchema = z.enum([
 export type QuestionType = z.infer<typeof QuestionTypeSchema>
 
 export const QuestionProvenanceSchema = z.object({
-  type: z.enum(['file_upload', 'web_search', 'teacher_provided', 'general_knowledge']).optional(),
+  type: z.enum(['file_upload', 'uploaded_source', 'web_search', 'teacher_provided', 'teacher_reference', 'curriculum_anchor', 'general_knowledge']).optional(),
   sourceLabel: z.string().optional(),
   sourceUrl: z.string().optional(),
-  confidence: z.enum(['unverified', 'teacher_provided', 'verified']).optional(),
+  confidence: z.enum(['unverified', 'partial', 'teacher_provided', 'verified']).optional(),
   pageNumber: z.number().optional(),
   unitTitle: z.string().optional(),
   chunkId: z.string().optional()

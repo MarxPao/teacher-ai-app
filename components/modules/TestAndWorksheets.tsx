@@ -493,7 +493,7 @@ Gere agora todas as ${totalQuestions} questões completas em HTML limpo:`
         completeness.warning = {
           requested: totalQuestions,
           received: parsed.length,
-          reason: `Violação crítica (Haladyna): ${criticalHaladynaViolation.description}`
+          reason: `Violação crítica (Haladyna): ${criticalHaladynaViolation.message}`
         }
       }
 

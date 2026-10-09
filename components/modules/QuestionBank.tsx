@@ -738,10 +738,10 @@ Para questões dissertativas ou V/F, omita "options". Para V/F, o "answer" deve 
                           }`}
                           title={isEmpirical
                             ? `Calibração psicométrica empírica estável com ${count} respostas de alunos reais registradas.`
-                            : 'Estimativa curricular preliminar (Seed). O item passará ao status empírico após acumular N >= 10 respostas de alunos reais.'}
+                            : 'Estimativa a priori (0 respostas reais). O item passará ao status empírico após acumular N >= 10 respostas de alunos reais.'}
                         >
                           <span>{isEmpirical ? '📊' : '🌱'}</span>
-                          {isEmpirical ? `[Calibrado Empiricamente (N=${count})]` : '[Estimativa Curricular Inicial (Seed)]'}
+                          {isEmpirical ? `[Calibrado Empiricamente (N=${count})]` : '[Estimativa a priori (0 respostas reais)]'}
                         </span>
                       )
                     })()}

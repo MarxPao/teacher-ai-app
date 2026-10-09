@@ -2247,70 +2247,6 @@ export default function ExamResultThreeTabs({
                 </p>
               </div>
 
-              {/* Card de Equacionamento por TRI Stocking-Lord & Haebara (Onda G - Fase G2) */}
-              <div style={{
-                background: '#f8fafc',
-                border: '1.5px solid #cbd5e1',
-                borderRadius: RADIUS.md,
-                padding: '12px 14px',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 8,
-                gridColumn: '1 / -1'
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 800, fontSize: 13, color: '#1e293b' }}>
-                    <span>📐</span>
-                    <span>Equacionamento por TRI (Fase G2 — Stocking-Lord &amp; Haebara)</span>
-                  </div>
-                  <span style={{
-                    fontSize: 11,
-                    fontWeight: 700,
-                    padding: '2px 8px',
-                    borderRadius: 4,
-                    background: '#fef3c7',
-                    color: '#92400e'
-                  }}>
-                    A = {irtEquatingSummary.constants.A} (Escala) &bull; B = {irtEquatingSummary.constants.B} (Translação) &bull; RMS Âncora = {irtEquatingSummary.anchorDiscrepancyRMS}
-                  </span>
-                </div>
-                <p style={{ margin: 0, fontSize: 11.5, color: '#475569', lineHeight: 1.45 }}>
-                  Conexão de escalas latentes de proficiência através de itens âncora (Stocking &amp; Lord, 1983; Haebara, 1980). Transforma os parâmetros $a_j, b_j$ da nova forma para a métrica canônica do banco via otimização das Curvas Características do Teste (TCC) e Curvas dos Itens (ICC), viabilizando a comparabilidade invariante do escore verdadeiro $\tau(\theta)$ entre diferentes edições do exame.
-                </p>
-              </div>
-
-              {/* Card de Gestão e Purificação de Itens Âncora & Drift (Onda G - Fase G3) */}
-              <div style={{
-                background: '#f8fafc',
-                border: '1.5px solid #cbd5e1',
-                borderRadius: RADIUS.md,
-                padding: '12px 14px',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 8,
-                gridColumn: '1 / -1'
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 800, fontSize: 13, color: '#1e293b' }}>
-                    <span>🛡️</span>
-                    <span>Gestão &amp; Purificação de Itens Âncora (Fase G3 — Kolen &amp; Brennan / Holland &amp; Thayer)</span>
-                  </div>
-                  <span style={{
-                    fontSize: 11,
-                    fontWeight: 700,
-                    padding: '2px 8px',
-                    borderRadius: 4,
-                    background: anchorPurificationSummary.healthStatus === 'healthy' ? '#dcfce7' : '#fef3c7',
-                    color: anchorPurificationSummary.healthStatus === 'healthy' ? '#166534' : '#92400e'
-                  }}>
-                    {anchorPurificationSummary.purifiedAnchorCount}/{anchorPurificationSummary.initialAnchorCount} Âncoras Estáveis &bull; {anchorPurificationSummary.purgedItemsCount} Purgados por Drift
-                  </span>
-                </div>
-                <p style={{ margin: 0, fontSize: 11.5, color: '#475569', lineHeight: 1.45 }}>
-                  Detecção autônoma de Item Parameter Drift (IPD) e Funcionamento Diferencial do Item (DIF) via estatística de Mantel-Haenszel e Delta de Holland-Thayer (Kolen &amp; Brennan, 2014; Dorans &amp; Holland, 1993). O algoritmo de <strong>purificação iterativa</strong> expurga itens que sofreram vazamento, desgaste ou drift de dificuldade ($|d_j| &gt; 0.35$), impedindo que âncoras corrompidas distorçam a comparabilidade longitudinal de todo o banco de avaliações.
-                </p>
-              </div>
-
               {/* Card de Confiabilidade Psicométrica Global (Onda H - Fase H1) */}
               <div style={{
                 background: '#f8fafc',
@@ -2326,6 +2262,9 @@ export default function ExamResultThreeTabs({
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 800, fontSize: 13, color: '#1e293b' }}>
                     <span>🎯</span>
                     <span>Confiabilidade Psicométrica Global (Fase H1 — Cronbach &amp; McDonald)</span>
+                    <span style={{ fontSize: 10.5, fontWeight: 700, padding: '1px 6px', borderRadius: 4, background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a' }}>
+                      Estimativa Teórica (Não Medida)
+                    </span>
                   </div>
                   <span style={{
                     fontSize: 11,
@@ -2335,11 +2274,11 @@ export default function ExamResultThreeTabs({
                     background: reliabilitySummary.cronbachAlpha >= 0.80 ? '#dcfce7' : reliabilitySummary.cronbachAlpha >= 0.70 ? '#e0f2fe' : '#fef3c7',
                     color: reliabilitySummary.cronbachAlpha >= 0.80 ? '#166534' : reliabilitySummary.cronbachAlpha >= 0.70 ? '#0369a1' : '#92400e'
                   }}>
-                    α = {reliabilitySummary.cronbachAlpha} &bull; ω = {reliabilitySummary.mcdonaldOmega} &bull; SEM = {reliabilitySummary.standardErrorOfMeasurement} pts
+                    α = {reliabilitySummary.cronbachAlpha} (estimativa teórica, não medida) &bull; ω = {reliabilitySummary.mcdonaldOmega} &bull; SEM = {reliabilitySummary.standardErrorOfMeasurement} pts
                   </span>
                 </div>
                 <p style={{ margin: 0, fontSize: 11.5, color: '#475569', lineHeight: 1.45 }}>
-                  Mensuração rigorosa da consistência interna e fidedignidade da avaliação (Cronbach, 1951; McDonald, 1999; Nunnally &amp; Bernstein, 1994). Calcula o <strong>Alfa de Cronbach</strong> (&alpha;), o <strong>Ômega Total de McDonald</strong> (&omega;, livre da premissa de tau-equivalência) e o <strong>Erro Padrão de Medida</strong> (SEM), acompanhados da análise de <em>Alpha if Item Deleted</em> para assegurar que cada questão contribua positivamente para a precisão da nota final.
+                  Mensuração teórica da consistência interna a priori (Cronbach, 1951; McDonald, 1999). O valor de <strong>Alfa de Cronbach</strong> (&alpha;) projetado é uma <strong>estimativa teórica, não medida</strong> a partir da simulação de parâmetros dos itens gerados, não substituindo a calibração com respostas reais de estudantes.
                 </p>
               </div>
 
