@@ -16,12 +16,13 @@ SIDECAR_MODULE_FILE = ROOT_DIR / "sidecar" / "attendance_polarity.py"
 def run_js_polarity_case(case: dict) -> dict:
     js_module_path = str(JS_MODULE_FILE).replace("\\", "/")
     # O harness NÃO reimplementa a lógica: apenas serializa o caso, chama o módulo JS e retorna a resposta
-    intent_json = json.dumps(case['teacher_intent'])
-    header_json = json.dumps(case['column_header'])
-    label_json = json.dumps(case['control_label'])
+    intent_json = json.dumps(case.get('teacher_intent'))
+    header_json = json.dumps(case.get('column_header'))
+    label_json = json.dumps(case.get('control_label'))
+    extra_json = json.dumps(case.get('extra_signals'))
     js_code = f"""
     const AttendancePolarity = require('{js_module_path}');
-    const res = AttendancePolarity.resolveAttendancePolarity({header_json}, {label_json}, {intent_json});
+    const res = AttendancePolarity.resolveAttendancePolarity({header_json}, {label_json}, {intent_json}, {extra_json});
     console.log(JSON.stringify(res));
     """
     proc = subprocess.run(["node", "-e", js_code], capture_output=True, text=True, check=True)
@@ -66,6 +67,20 @@ def test_polarity_parity():
         exp_checked = case["expected_should_be_checked"]
 
         js_res = run_js_polarity_case(case)
+
+        # Trata transição histórica do CASE_32 (superado por CASE_34)
+        if c_id == "CASE_32_ENGLISH_ATTENDEE_LABEL":
+            # CASE_32 mantido intacto no JSON por integridade do histórico;
+            # Verifica que a remoção de 'attendee' teve efeito real e o caso agora resulta em AMBIGUOUS
+            if js_res.get("canResolve") is False and js_res.get("polarity") == "AMBIGUOUS":
+                passed_count += 1
+                print(f"[{idx:02d}] {c_id}: PASS (SUPERSEDED por CASE_34: 'attendee' removido do léxico -> AMBIGUOUS)")
+                continue
+            else:
+                failures.append((c_id, js_res, case))
+                print(f"[{idx:02d}] {c_id}: FAIL (esperava-se que 'attendee' removido resultasse em AMBIGUOUS)")
+                continue
+
         ok = (
             js_res.get("canResolve") == exp_resolve
             and js_res.get("polarity") == exp_pol

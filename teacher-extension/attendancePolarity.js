@@ -14,8 +14,8 @@
   };
 
   function normalizeText(text) {
-    if (text == null) return '';
-    return String(text)
+    if (typeof text !== 'string') return '';
+    return text
       .normalize('NFKD')
       .replace(/[\u0300-\u036f]/g, '') // remove acentuação
       .replace(/[^\w\s]/gi, ' ')        // substitui pontuações por espaço (ex: 'Presença:', 'FALTA?')
@@ -34,21 +34,21 @@
   }
 
   function resolveCheckboxPolarity(text) {
-    if (!text) return null;
+    if (typeof text !== 'string') return null;
     const norm = normalizeText(text);
     if (!norm) return null;
 
     // Regra 0 (Ambiguidade/Agregação estrita):
-    // - "sem falta", "nao faltou", "nao falta" não determinam ação diária binária -> ambíguo
+    // - "sem falta", "nao faltou", "nao falta", "not absent", "no absence" não determinam ação diária binária -> ambíguo
     // - "total de faltas", "total de presencas", "total" são contadores/agregados -> ambíguo
-    const ambiguousRegex = /\b(sem\s+falta[s]?|nao\s+falto[u]?|nao\s+falta[s]?|total\s+de|total)\b/i;
+    const ambiguousRegex = /\b(sem\s+falta[s]?|nao\s+falto[u]?|nao\s+falta[s]?|not\s+absent|no\s+absence[s]?|without\s+absence[s]?|total\s+de|total)\b/i;
     if (ambiguousRegex.test(norm)) {
       return null;
     }
 
     // Regra 1 (Precedência máxima): Negações explícitas antes de radicais -> ausência
-    // Ex: "não compareceu", "nao veio", "sem presenca", "não esteve", "não presente"
-    const negationRegex = /\b(nao\s+compareceu|nao\s+veio|nao\s+presente|sem\s+presenca|nao\s+esteve)\b/i;
+    // Ex: "não compareceu", "nao veio", "sem presenca", "não esteve", "não presente", "not present"
+    const negationRegex = /\b(nao\s+compareceu|nao\s+compareceram|nao\s+comparecimento|nao\s+veio|nao\s+presente[s]?|not\s+present|not\s+attending|sem\s+presenca|nao\s+esteve)\b/i;
     if (negationRegex.test(norm)) {
       return 'absence';
     }
@@ -57,9 +57,8 @@
     const absenceRegex = /\b(falta|faltas|ausente|ausentes|ausencia|ausencias|absent|absence)\b/i;
     const hasAbsence = absenceRegex.test(norm);
 
-    // Regra 3: Radicais de presença / comparecimento com limite de palavra
-    // Evita falsos positivos como "Representante" ou "Apresentação"
-    const presenceRegex = /\b(presenca|presencas|presente|presentes|compareceu|compareceram|comparecimento|attend|attendance|attendee|attendees|present)\b/i;
+    // Regra 3: Radicais de presença / comparecimento com limite de palavra (attendee removido)
+    const presenceRegex = /\b(presenca|presencas|presente|presentes|compareceu|compareceram|comparecimento|attend|attendance|present)\b/i;
     const hasPresence = presenceRegex.test(norm);
 
     // Conflito de polaridade: se contiver ambos sem negação disambiguadora -> ambíguo
@@ -76,6 +75,14 @@
     return null;
   }
 
+  function extractPolaritySignals(value) {
+    if (!value) return [];
+    if (typeof value === 'string') { const p = resolveCheckboxPolarity(value); return p ? [p] : []; }
+    if (Array.isArray(value)) return value.map(resolveCheckboxPolarity).filter(Boolean);
+    if (typeof value === 'object') return Object.values(value).map(resolveCheckboxPolarity).filter(Boolean);
+    return [];
+  }
+
   function determineTargetChecked(polarity, isAbsent) {
     if (polarity === 'presence') {
       return !isAbsent;
@@ -86,7 +93,7 @@
     return null;
   }
 
-  function resolveAttendancePolarity(columnHeader, controlLabel, teacherIntent) {
+  function resolveAttendancePolarity(columnHeader, controlLabel, teacherIntent, extraSignals) {
     const parsedIntent = parseTeacherIntent(teacherIntent);
     if (!parsedIntent) {
       return {
@@ -97,11 +104,15 @@
       };
     }
 
-    const headerPol = resolveCheckboxPolarity(columnHeader);
-    const labelPol = resolveCheckboxPolarity(controlLabel);
+    const signals = [];
+    const headerPol = (typeof columnHeader === 'string') ? resolveCheckboxPolarity(columnHeader) : null;
+    if (headerPol) signals.push(headerPol);
+    const labelPol = (typeof controlLabel === 'string') ? resolveCheckboxPolarity(controlLabel) : null;
+    if (labelPol) signals.push(labelPol);
+    if (extraSignals) signals.push(...extractPolaritySignals(extraSignals));
 
     // Detecção de conflito: cabeçalho e rótulo apontam direções opostas
-    if (headerPol && labelPol && headerPol !== labelPol) {
+    if (signals.includes('presence') && signals.includes('absence')) {
       return {
         canResolve: false,
         polarity: 'CONFLICT',
@@ -110,8 +121,7 @@
       };
     }
 
-    const resolvedPol = headerPol || labelPol;
-    if (!resolvedPol) {
+    if (signals.length === 0) {
       return {
         canResolve: false,
         polarity: 'AMBIGUOUS',
@@ -120,6 +130,7 @@
       };
     }
 
+    const resolvedPol = signals.includes('presence') ? 'presence' : 'absence';
     const isAbsent = (parsedIntent === 'ABSENCE');
     const shouldCheck = determineTargetChecked(resolvedPol, isAbsent);
     const polarityName = (resolvedPol === 'presence') ? 'POSITIVE' : 'NEGATIVE';
@@ -208,6 +219,7 @@
     determineTargetChecked,
     resolveAttendancePolarity,
     getCheckboxHeaderAndLabel,
-    resolveElementPolarity
+    resolveElementPolarity,
+    extractPolaritySignals
   };
 }));
