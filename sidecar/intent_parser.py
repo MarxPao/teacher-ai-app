@@ -1280,7 +1280,7 @@ def extract_intent(
     para imunizar contra Prompt Injection Indireto vindo do DOM ou de dados externos.
     """
     g_key = groq_key or os.getenv("GROQ_API_KEY") or os.getenv("GROQ_KEY") or ""
-    gem_key = gemini_key or os.getenv("GEMINI_API_KEY") or os.getenv("NEXT_PUBLIC_GEMINI_KEY") or ""
+    gem_key = gemini_key or os.getenv("GEMINI_API_KEY") or os.getenv("GEMINI_KEY") or ""
     local_model = ollama_model or os.getenv("OLLAMA_MODEL") or "llama3.2:3b"
     local_url = ollama_url or os.getenv("OLLAMA_URL") or "http://localhost:11434"
 

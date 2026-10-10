@@ -73,8 +73,7 @@ export function getGeminiApiKey(explicitKey?: string): string {
 
   // 2. Tenta recuperar de variáveis de ambiente no Node / servidor / testes
   if (typeof process !== 'undefined' && process.env) {
-    const envKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || 
-                   process.env.GEMINI_API_KEY || 
+    const envKey = process.env.GEMINI_API_KEY || 
                    process.env.GEMINI_KEY || 
                    ''
     if (envKey.trim().length > 0) {

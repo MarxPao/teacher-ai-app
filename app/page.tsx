@@ -171,10 +171,10 @@ export default function Home() {
   // Auto-seed: configura APIs e Supabase no 1º carregamento
   useEffect(() => {
     seedApiKeysIfNeeded({
-      elevenlabs_key: process.env.NEXT_PUBLIC_ELEVENLABS_KEY || '',
-      groq_key:       process.env.NEXT_PUBLIC_GROQ_KEY       || '',
-      gemini_key:     process.env.NEXT_PUBLIC_GEMINI_KEY     || '',
-      openai_key:     process.env.NEXT_PUBLIC_OPENAI_KEY     || '',
+      elevenlabs_key: '',
+      groq_key:       '',
+      gemini_key:     '',
+      openai_key:     '',
     })
 
     if (localStorage.getItem('teacher_auto_mode') === null) {

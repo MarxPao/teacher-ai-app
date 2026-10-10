@@ -590,7 +590,7 @@ class ExtensionBridge:
         """Tenta sintetizar uma resposta semântica rica usando LLM configurado."""
         import os
         groq_key = os.getenv("GROQ_API_KEY") or os.getenv("GROQ_KEY") or ""
-        gemini_key = os.getenv("GEMINI_API_KEY") or os.getenv("NEXT_PUBLIC_GEMINI_KEY") or ""
+        gemini_key = os.getenv("GEMINI_API_KEY") or os.getenv("GEMINI_KEY") or ""
         if not (groq_key or gemini_key):
             return None
 
