@@ -234,9 +234,14 @@ def translate_task_response(task_result: Dict[str, Any]) -> Dict[str, Any]:
             else:
                 alvo = acao or "a ação"
 
-        item_alvo = task_result.get("aluno") or task_result.get("item") or ""
-        item_str = f" para {item_alvo}" if item_alvo else ""
-        
+        # Lançamento de nota/falta refere-se à coluna/controle geral da turma na tela (invariante por aluno)
+        is_turma_action = "falta" in str(acao).lower() or "nota" in str(acao).lower()
+        if not is_turma_action:
+            item_alvo = task_result.get("aluno") or task_result.get("item") or ""
+            item_str = f" para {item_alvo}" if item_alvo else ""
+        else:
+            item_str = ""
+
         # Verbo de ação correspondente
         if "responder" in str(acao).lower():
             verbo = "responder"
