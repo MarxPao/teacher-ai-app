@@ -1312,7 +1312,9 @@ def extract_intent(
     else:
         # Fallback de importação: usa o roteador binário legado
         data_class = None  # type: ignore
-    is_pii = _contains_student_pii(user_text, known_students=active_roster)
+    is_pii = _contains_student_pii(user_text, known_students=active_roster) or (bool(page_content) and _contains_student_pii(page_content, known_students=active_roster))
+    if is_pii and _SECURITY_LOCK_AVAILABLE and data_class is not None and data_class.value == 4:
+        data_class = DataClass.C1
 
     # ── CLASSE 0: Dado de Saúde / LGPD Especial — BLOQUEIO ABSOLUTO ──────────
     if _SECURITY_LOCK_AVAILABLE and data_class is not None and data_class.value == 0:
@@ -1388,7 +1390,10 @@ def extract_intent(
         if not parsed:
             # Pseudonimização bem-sucedida → chamar cloud com prompt mascarado
             if g_key and len(g_key) > 10:
-                res = _call_groq_llm(pseudo_prompt, g_key)
+                try:
+                    res = _call_groq_llm(pseudo_prompt, g_key)
+                except PermissionError:
+                    res = None
                 if res:
                     raw_json, model_name = res
                     try:
@@ -1402,7 +1407,10 @@ def extract_intent(
                         parsed = None
 
             if not parsed and gem_key and len(gem_key) > 10:
-                res = _call_gemini_llm(pseudo_prompt, gem_key)
+                try:
+                    res = _call_gemini_llm(pseudo_prompt, gem_key)
+                except PermissionError:
+                    res = None
                 if res:
                     raw_json, model_name = res
                     try:
@@ -1428,7 +1436,10 @@ def extract_intent(
         # ── CLASSE 4: Pedagógico genérico — Cloud livre ───────────────────────
         # 1. Provedor Primário: Groq LLM
         if g_key and len(g_key) > 10:
-            res = _call_groq_llm(isolated_prompt, g_key)
+            try:
+                res = _call_groq_llm(isolated_prompt, g_key)
+            except PermissionError:
+                res = None
             if res:
                 raw_json, model_name = res
                 try:
@@ -1440,7 +1451,10 @@ def extract_intent(
 
         # 2. Provedor Secundário: Google Gemini Flash
         if not parsed and gem_key and len(gem_key) > 10:
-            res = _call_gemini_llm(isolated_prompt, gem_key)
+            try:
+                res = _call_gemini_llm(isolated_prompt, gem_key)
+            except PermissionError:
+                res = None
             if res:
                 raw_json, model_name = res
                 try:
