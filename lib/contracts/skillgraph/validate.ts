@@ -27,6 +27,7 @@ export interface Issue {
     | 'E_CSS_PARAM'
     | 'W_HOMONYM_RISK'
     | 'W_UNREACHABLE_NODE'
+    | 'W_FOOTER_ROW_RISK'
   nodeId?: string
   message: string
 }
@@ -307,6 +308,53 @@ export function validateGraph(graph: SkillGraphV2): ValidationReport {
       }
       if (!(node.body_entry in graph.nodes)) {
         errors.push({ code: 'E_DANGLING_REF', nodeId, message: `body_entry "${node.body_entry}" não existe no grafo` })
+      } else if (node.over.kind === 'table_rows') {
+        const hasSkip =
+          (Array.isArray((node as any).skip_rows) && (node as any).skip_rows.length > 0) ||
+          (Array.isArray((node.over as any).skip_rows) && (node.over as any).skip_rows.length > 0)
+
+        if (!hasSkip) {
+          // Checa se o corpo do laço alcança nó arriscado (WRITE, UPLOAD, CLICK com is_submit_action)
+          const bq: string[] = [node.body_entry]
+          const visitedBody = new Set<string>()
+          let reachesRisky = false
+
+          while (bq.length > 0) {
+            const curId = bq.shift()!
+            if (curId === SENTINEL_CONTINUE || curId === SENTINEL_ABORT || curId === SENTINEL_END) continue
+            if (visitedBody.has(curId)) continue
+            visitedBody.add(curId)
+
+            const target = graph.nodes[curId]
+            if (!target) continue
+
+            if (
+              target.type === 'WRITE' ||
+              target.type === 'UPLOAD' ||
+              (target.type === 'CLICK' && target.is_submit_action)
+            ) {
+              reachesRisky = true
+              break
+            }
+
+            if (target.type === 'BRANCH') {
+              if (target.on_true in graph.nodes) bq.push(target.on_true)
+              if (target.on_false in graph.nodes) bq.push(target.on_false)
+            } else {
+              if (target.on_success in graph.nodes) bq.push(target.on_success)
+              if (target.on_fail in graph.nodes) bq.push(target.on_fail)
+              if (target.type === 'LOOP' && target.body_entry in graph.nodes) bq.push(target.body_entry)
+            }
+          }
+
+          if (reachesRisky) {
+            warnings.push({
+              code: 'W_FOOTER_ROW_RISK',
+              nodeId,
+              message: `LOOP sobre table_rows "${nodeId}" alcança nó arriscado sem skip_rows configurado (risco de interagir com linha de rodapé/total)`,
+            })
+          }
+        }
       }
     }
   }

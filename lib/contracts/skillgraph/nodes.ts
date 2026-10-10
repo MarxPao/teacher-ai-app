@@ -50,6 +50,19 @@ export const LocateNodeSchema = z.object({
   mode: z.enum(['direct', 'scroll_until_found', 'paginate_until_found']).default('direct'),
 }).strict()
 
+// ─── Tipo RowSkip para descarte de linhas não-dados (G1) ────────────────────
+export interface RowSkip {
+  column_labels: string[]
+  match?: 'exact' | 'normalized' | 'contains'
+  values: string[]
+}
+
+export const RowSkipSchema: z.ZodType<RowSkip> = z.object({
+  column_labels: z.array(z.string().min(1)).min(1),
+  match: z.enum(['exact', 'normalized', 'contains']).default('normalized'),
+  values: z.array(z.string().min(1)).min(1),
+}).strict()
+
 // ─── 3. READ ─────────────────────────────────────────────────────────────────
 export const ReadNodeSchema = z.object({
   ...BaseNodeFields,
@@ -57,9 +70,13 @@ export const ReadNodeSchema = z.object({
   source: z.object({
     kind: z.enum(['table', 'element_text', 'element_value', 'list']),
     anchor: AnchorOrRefSchema,
+    skip_rows: z.array(RowSkipSchema).max(10).optional(),
+    skip_empty_rows: z.boolean().optional().default(true),
   }).strict(),
   into: z.string().min(1),
   paginate: z.boolean().optional().default(false),
+  skip_rows: z.array(RowSkipSchema).max(10).optional(),
+  skip_empty_rows: z.boolean().optional().default(true),
 }).strict()
 
 // ─── 4. WRITE ────────────────────────────────────────────────────────────────
@@ -94,7 +111,12 @@ export const WaitNodeSchema = z.object({
 
 // ─── 7. LOOP ─────────────────────────────────────────────────────────────────
 export const LoopOverSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('table_rows'), table: AnchorOrRefSchema }).strict(),
+  z.object({
+    kind: z.literal('table_rows'),
+    table: AnchorOrRefSchema,
+    skip_rows: z.array(RowSkipSchema).max(10).optional(),
+    skip_empty_rows: z.boolean().optional().default(true),
+  }).strict(),
   z.object({ kind: z.literal('var_list'), var: z.string().min(1) }).strict(),
   z.object({ kind: z.literal('param_list'), param: z.string().min(1) }).strict(),
 ])
@@ -106,6 +128,8 @@ export const LoopNodeSchema = z.object({
   as: z.string().min(1),
   body_entry: z.string().min(1),
   max_iterations: z.number().int().min(1).max(1000),
+  skip_rows: z.array(RowSkipSchema).max(10).optional(),
+  skip_empty_rows: z.boolean().optional().default(true),
 }).strict()
 
 // ─── 8. BRANCH ───────────────────────────────────────────────────────────────
