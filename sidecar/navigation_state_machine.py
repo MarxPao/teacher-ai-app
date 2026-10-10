@@ -1,3 +1,5 @@
+# DEPRECATED (fase 1): substituído por SkillGraph v2 (docs/contracts/SKILLGRAPH_V2.md).
+# Não adicione novos usos.
 """
 navigation_state_machine.py — Máquina de Estados de Navegação (Etapa 2)
 

@@ -1,3 +1,5 @@
+# DEPRECATED (fase 1): substituído por SkillGraph v2 (docs/contracts/SKILLGRAPH_V2.md).
+# Não adicione novos usos.
 """
 sidecar/skills/state_graph_skill.py — Topologia por Grafo de Estados (State-Graph FSM) & Screen Fingerprinting
 
