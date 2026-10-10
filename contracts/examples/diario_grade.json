@@ -1,0 +1,168 @@
+{
+  "spec_version": "2.0",
+  "identity": {
+    "portal_id": "synthetic_portal",
+    "domain": "localhost:8899",
+    "task_id": "lancar_falta",
+    "version": 1,
+    "name": "Lançar Falta em Diário em Grade (Alunos × Datas)",
+    "description": "Localiza coluna de data com TextSpec parametrizado e linha com chave primária e secundária"
+  },
+  "compat": {
+    "support_tier": 1,
+    "archetype_tags": ["grid_attendance", "matrix_roster"],
+    "tested_archetypes": ["standard"],
+    "min_runner_version": "2.0.0"
+  },
+  "params": {
+    "aluno": {
+      "type": "student_ref",
+      "required": true,
+      "pii": true,
+      "description": "Aluno contendo matrícula e nome"
+    },
+    "data": {
+      "type": "date",
+      "required": true,
+      "pii": false,
+      "description": "Data da aula para registro de frequência"
+    },
+    "marcar_falta": {
+      "type": "boolean",
+      "required": true,
+      "pii": false,
+      "description": "Se verdadeiro, registra falta"
+    }
+  },
+  "entry_node": "nav_grade",
+  "nodes": {
+    "nav_grade": {
+      "label": "Navega para a tela de diário em grade",
+      "type": "NAVIGATE",
+      "path": "/portal/standard",
+      "host": "localhost:8899",
+      "retry": { "max_attempts": 2, "backoff_ms": 300 },
+      "timeout_ms": 5000,
+      "postconditions": [],
+      "on_success": "checkpoint_chamada",
+      "on_fail": "$abort"
+    },
+    "checkpoint_chamada": {
+      "label": "Aprovação prévia do professor para registro na grade de datas",
+      "type": "CHECKPOINT",
+      "summary": [
+        { "label": "Aluno", "value": { "param": "aluno.name" } },
+        { "label": "Data da Chamada", "value": { "param": "data", "transform": "format_ddmm" } },
+        { "label": "Registrar Ausência", "value": { "param": "marcar_falta" } }
+      ],
+      "scope": "once",
+      "on_reject": "$abort",
+      "retry": { "max_attempts": 1, "backoff_ms": 0 },
+      "timeout_ms": 30000,
+      "postconditions": [],
+      "on_success": "marca_presenca_grade",
+      "on_fail": "$abort"
+    },
+    "marca_presenca_grade": {
+      "label": "Marca checkbox da data na linha do aluno usando chave primária e secundária",
+      "type": "WRITE",
+      "anchor": {
+        "candidates": [
+          {
+            "strategy": "column_header",
+            "column_label": { "param": "data", "transform": "format_ddmm" },
+            "match": "normalized"
+          }
+        ],
+        "scope": {
+          "within": {
+            "table": {
+              "candidates": [{ "strategy": "css", "selector": "#tabela-alunos" }],
+              "description": "Tabela de Grade"
+            },
+            "key": {
+              "column_labels": ["Matrícula", "Código"],
+              "equals": { "param": "aluno.portal_id" },
+              "match": "exact",
+              "secondary_key": {
+                "column_labels": ["Nome do Aluno", "Discente"],
+                "equals": { "param": "aluno.name" },
+                "match": "normalized"
+              },
+              "on_multiple": "use_secondary",
+              "on_none": "fail"
+            }
+          }
+        },
+        "description": "Célula de falta na data da coluna correspondente"
+      },
+      "value": { "param": "marcar_falta" },
+      "method": "set_checked",
+      "semantic": "attendance",
+      "read_back": true,
+      "retry": { "max_attempts": 2, "backoff_ms": 300 },
+      "timeout_ms": 5000,
+      "postconditions": [],
+      "on_success": "salvar_grade",
+      "on_fail": "$abort"
+    },
+    "salvar_grade": {
+      "label": "Confirma gravação no portal escolar",
+      "type": "CLICK",
+      "anchor": {
+        "candidates": [{ "strategy": "css", "selector": "#btn-salvar" }],
+        "description": "Botão Salvar Lançamentos"
+      },
+      "is_submit_action": true,
+      "retry": { "max_attempts": 2, "backoff_ms": 500 },
+      "timeout_ms": 5000,
+      "postconditions": [],
+      "on_success": "$end",
+      "on_fail": "$abort"
+    }
+  },
+  "canonical_mapping": {
+    "columns": [
+      {
+        "portal_labels": ["Matrícula"],
+        "field": "student.portal_id",
+        "semantic_type": "identifier"
+      },
+      {
+        "portal_labels": ["Nome do Aluno"],
+        "field": "student.name",
+        "semantic_type": "name"
+      },
+      {
+        "portal_labels": ["Falta"],
+        "field": "attendance.status",
+        "semantic_type": "status"
+      }
+    ],
+    "grade_scale": {
+      "type": "numeric",
+      "min": 0,
+      "max": 10,
+      "decimal_separator": "."
+    },
+    "attendance": {
+      "polarity": "checked_is_absent"
+    },
+    "ambiguous_requires_confirmation": true
+  },
+  "safety": {
+    "side_effect_level": "write",
+    "writes_require_checkpoint": true,
+    "max_writes_per_run": 1,
+    "rate_limit": { "min_delay_ms": 100, "jitter_ms": 50 },
+    "allowed_hosts": ["localhost:8899"]
+  },
+  "provenance": {
+    "author": "teacher_ai_recorder",
+    "created_at": "2026-10-10T19:00:00Z",
+    "updated_at": "2026-10-10T19:00:00Z",
+    "source": "recorded",
+    "has_self_healed": false,
+    "pii_scrubbed": true
+  }
+}

@@ -80,11 +80,13 @@ export const AnchorRefSchema: z.ZodType<AnchorRef> = z.object({
   ref: z.string().min(1),
 }).strict()
 
-export const RowScopeKeySchema: z.ZodType<RowScopeKey> = z.object({
-  column_labels: z.array(z.string().min(1)).min(1),
-  equals: ValueRefSchema,
-  match: z.enum(['exact', 'normalized', 'contains']).default('normalized'),
-}).strict()
+export const RowScopeKeySchema: z.ZodType<RowScopeKey> = z.lazy(() =>
+  z.object({
+    column_labels: z.array(z.string().min(1)).min(1),
+    equals: ValueRefSchema,
+    match: z.enum(['exact', 'normalized', 'contains']).default('normalized'),
+  }).strict()
+)
 
 export const RowScopeSchema: z.ZodType<RowScope> = z.lazy(() =>
   z.object({

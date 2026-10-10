@@ -11,7 +11,7 @@ describe('SkillGraph v2 Contract Tests', () => {
 
   // ─── 1. Exemplos Válidos ───────────────────────────────────────────────────
   describe('Exemplos Válidos (Zod Schema & Semantic Validator)', () => {
-    const validFiles = ['read_roster.json', 'lancar_falta.json', 'lancar_nota.json']
+    const validFiles = ['read_roster.json', 'lancar_falta.json', 'lancar_nota.json', 'diario_grade.json']
 
     validFiles.forEach(file => {
       it(`deve validar com sucesso o exemplo "${file}"`, () => {
@@ -82,6 +82,29 @@ describe('SkillGraph v2 Contract Tests', () => {
 
       expect(report.valid).toBe(false)
       const hasExpectedCode = report.errors.some(e => e.code === 'E_PII_LITERAL')
+      expect(hasExpectedCode).toBe(true)
+    })
+
+    it('(e) seletor CSS parametrizado deve falhar no schema Zod ou com E_CSS_PARAM', () => {
+      const rawJson = JSON.parse(
+        fs.readFileSync(path.join(invalidExamplesDir, 'invalid_param_in_css.json'), 'utf-8')
+      )
+      const parsed = SkillGraphV2Schema.safeParse(rawJson)
+      expect(parsed.success).toBe(false)
+      const report = validateGraph(rawJson as any)
+      const hasCssParam = report.errors.some(e => e.code === 'E_CSS_PARAM')
+      expect(hasCssParam).toBe(true)
+    })
+
+    it('(f) parâmetro não declarado em âncora deve falhar com E_UNDECLARED_PARAM', () => {
+      const rawJson = JSON.parse(
+        fs.readFileSync(path.join(invalidExamplesDir, 'invalid_undeclared_param_in_anchor.json'), 'utf-8')
+      )
+      const parsed = SkillGraphV2Schema.parse(rawJson)
+      const report = validateGraph(parsed)
+
+      expect(report.valid).toBe(false)
+      const hasExpectedCode = report.errors.some(e => e.code === 'E_UNDECLARED_PARAM')
       expect(hasExpectedCode).toBe(true)
     })
   })
