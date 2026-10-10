@@ -41,6 +41,8 @@ export interface BenchmarkResult {
   totalQuestions: number;
   unmodifiedAcceptedQuestions: number;
   unmodifiedAcceptanceRate: number;
+  /** Nome honesto canônico da métrica: taxa de conformidade dos portões em bateria estática sintética */
+  synthetic_battery_gate_pass_rate: number;
   rejectionBreakdown: {
     gate1Structure: number;
     gate2Haladyna: number;
@@ -1008,6 +1010,7 @@ export function runReferenceExamBenchmark(options: BenchmarkOptions = {}): Bench
     totalQuestions,
     unmodifiedAcceptedQuestions,
     unmodifiedAcceptanceRate,
+    synthetic_battery_gate_pass_rate: unmodifiedAcceptanceRate,
     rejectionBreakdown,
     detailsPerSubject,
     examReports,

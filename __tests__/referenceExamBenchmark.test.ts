@@ -34,6 +34,7 @@ describe('D3: Benchmark de Provas de Referência e Taxa de Aceite Sem Edição',
 
     // Na bateria de referência com questões canônicas bem formatadas, a taxa deve ser >= 80%
     expect(result.unmodifiedAcceptanceRate).toBeGreaterThanOrEqual(0.80);
+    expect(result.synthetic_battery_gate_pass_rate).toBe(result.unmodifiedAcceptanceRate);
 
     // Deve reportar breakdown detalhado por disciplina e por portão
     expect(Object.keys(result.detailsPerSubject).length).toBeGreaterThanOrEqual(5);

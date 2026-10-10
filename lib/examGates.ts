@@ -10,6 +10,7 @@
 
 import { Question } from './examSchema'
 import { auditHaladynaGuidelines } from './haladynaLinter'
+import { DEFAULT_GATES_THRESHOLDS } from './pedagogicalConfig'
 
 export interface GateResult {
   id: 'G1' | 'G2' | 'G3' | 'G4'
@@ -243,11 +244,11 @@ export function evaluateGateG3(
     lengthDeltaMin?: number
   } = {}
 ): GateResult {
-  const JACCARD_LIMIT = options.jaccardThreshold ?? 0.80
-  const MIN_CHARS = options.minOptionLength ?? 2
-  const RATIO_MIN = options.lengthRatioMin ?? 0.25
-  const RATIO_MAX = options.lengthRatioMax ?? 2.50
-  const DELTA_MIN = options.lengthDeltaMin ?? 35
+  const JACCARD_LIMIT = options.jaccardThreshold ?? DEFAULT_GATES_THRESHOLDS.jaccardMaxSimilarity
+  const MIN_CHARS = options.minOptionLength ?? DEFAULT_GATES_THRESHOLDS.minOptionLength
+  const RATIO_MIN = options.lengthRatioMin ?? DEFAULT_GATES_THRESHOLDS.lengthRatioMin
+  const RATIO_MAX = options.lengthRatioMax ?? DEFAULT_GATES_THRESHOLDS.lengthRatioMax
+  const DELTA_MIN = options.lengthDeltaMin ?? DEFAULT_GATES_THRESHOLDS.lengthDeltaMin
 
   for (let i = 0; i < questions.length; i++) {
     const q = questions[i]

@@ -5,6 +5,8 @@
  * transformando notas e erros históricos em diretrizes de reforço pedagógico para a próxima prova.
  */
 
+import { DEFAULT_ADAPTATION_THRESHOLDS } from './pedagogicalConfig'
+
 export interface SkillProficiencyAggregate {
   skillCode: string
   skillDescription?: string
@@ -236,9 +238,9 @@ export function buildAdaptationInput(
   targetClassId: string,
   options: AdaptationThresholds = {}
 ): AdaptationInputResult {
-  const minK = options.minGroupSizeK ?? 5
-  const remCutoff = options.remediationCutoff ?? 0.60
-  const solCutoff = options.solidCutoff ?? 0.75
+  const minK = options.minGroupSizeK ?? DEFAULT_ADAPTATION_THRESHOLDS.minGroupSizeK
+  const remCutoff = options.remediationCutoff ?? DEFAULT_ADAPTATION_THRESHOLDS.remediationMasteryCutoff
+  const solCutoff = options.solidCutoff ?? DEFAULT_ADAPTATION_THRESHOLDS.solidMasteryCutoff
 
   if (!Array.isArray(examRecords) || examRecords.length === 0 || !targetClassId) {
     return {

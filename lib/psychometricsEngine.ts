@@ -8,6 +8,8 @@
  * 4. Calibração empírica e alerta de divergência entre dificuldade nominal e real (N >= 10)
  */
 
+import { DEFAULT_PSYCHOMETRICS_THRESHOLDS } from './pedagogicalConfig'
+
 export interface StudentItemResponse {
   studentId: string
   correct: boolean
@@ -111,12 +113,12 @@ export function computeBayesianPValue(
   nominalDifficulty: string | undefined,
   observedSuccesses: number,
   observedTotal: number,
-  priorWeight: number = 10
+  priorWeight: number = DEFAULT_PSYCHOMETRICS_THRESHOLDS.priorWeightN0
 ): BayesianPValueCalculation {
   const norm = normalizeNominalDifficulty(nominalDifficulty)
-  let p0 = 0.50
-  if (norm === 'easy') p0 = 0.80
-  else if (norm === 'hard') p0 = 0.25
+  let p0 = DEFAULT_PSYCHOMETRICS_THRESHOLDS.priorP0Medium
+  if (norm === 'easy') p0 = DEFAULT_PSYCHOMETRICS_THRESHOLDS.priorP0Easy
+  else if (norm === 'hard') p0 = DEFAULT_PSYCHOMETRICS_THRESHOLDS.priorP0Hard
 
   const N0 = Math.max(1, priorWeight)
   const Nreal = Math.max(0, observedTotal)
