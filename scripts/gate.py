@@ -147,6 +147,7 @@ def get_git_diff_details(cwd: Path, base_commit: str) -> tuple:
                 changed_files.add(parts[1].replace("\\", "/"))
 
     # 2. Mudanças pendentes / unstaged / untracked no worktree
+    untracked_files = set()
     status_cmd = ["git", "status", "--porcelain"]
     res_status = subprocess.run(status_cmd, cwd=cwd, capture_output=True, text=True, encoding="utf-8", errors="replace")
     if res_status.returncode == 0:
@@ -166,7 +167,10 @@ def get_git_diff_details(cwd: Path, base_commit: str) -> tuple:
                 changed_files.add(del_file)
                 renamed_deleted_files.add(del_file)
             else:
-                changed_files.add(path_part.replace("\\", "/"))
+                norm_p = path_part.replace("\\", "/")
+                changed_files.add(norm_p)
+                if "?" in status_code:
+                    untracked_files.add(norm_p)
 
     # 3. Conteúdo textual do diff (base...HEAD + HEAD)
     full_diff_cmd = ["git", "diff", f"{base_commit}...HEAD"]
@@ -178,7 +182,7 @@ def get_git_diff_details(cwd: Path, base_commit: str) -> tuple:
     diff_text += "\n" + (diff_wt_res.stdout or "")
 
     # Adiciona conteúdo de arquivos untracked no diff para varredura
-    for f in list(changed_files):
+    for f in list(untracked_files):
         f_path = cwd / f
         if f_path.is_file():
             try:
