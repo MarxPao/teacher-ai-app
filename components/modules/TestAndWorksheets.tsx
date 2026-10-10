@@ -28,6 +28,16 @@ import EditableQuestionBoxes, {
   compileQuestionsToHtml,
   Provenance
 } from '@/components/EditableQuestionBoxes'
+import {
+  generateExam,
+  BlockedQuestion
+} from '@/lib/examGeneration'
+import {
+  QuestionSchema,
+  Question,
+  questionToLegacy,
+  legacyToQuestion
+} from '@/lib/examSchema'
 import QuestionCountByTypeList, {
   QuestionTypeCountMap,
   DEFAULT_QUESTION_COUNTS,
@@ -201,6 +211,15 @@ export default function TestAndWorksheets({ initialMode = 'exam' }: TestAndWorks
   const [spacedWarning, setSpacedWarning] = useState<string | null>(null)
   const [countMismatchWarning, setCountMismatchWarning] = useState<{ requested: number; received: number; reason?: string } | null>(null)
   const [includeUDL, setIncludeUDL] = useState(false)
+
+  // Sessão 3: Retorno JSON Validado e Reentativa Isolada
+  const [generationProgressMsg, setGenerationProgressMsg] = useState<string>('')
+  const [callsUsedCount, setCallsUsedCount] = useState<number | null>(null)
+  const [isLegacyParsed, setIsLegacyParsed] = useState<boolean>(false)
+  const [blockedQuestions, setBlockedQuestions] = useState<BlockedQuestion[]>([])
+  const [showManualPasteModal, setShowManualPasteModal] = useState<boolean>(false)
+  const [manualPasteText, setManualPasteText] = useState<string>('')
+  const [manualInvalidQuestions, setManualInvalidQuestions] = useState<Array<{ index: number; reason: string }>>([])
 
   // Sessão 5: Adaptação por Desempenho da Turma (k >= 5) & Reforço Pedagógico
   const [includeClassAdaptation, setIncludeClassAdaptation] = useState(false)
@@ -507,9 +526,62 @@ ESTRUTURA OBRIGATÓRIA:
 Gere agora todas as ${totalQuestions} questões completas em HTML limpo:`
       }
 
-      const raw = await callApi(selectedApi, prompt)
-      // Processa questões vinculando a proveniência auditada (Fase 1)
-      const parsed = parseContentToQuestions(cleanHtml(raw), activeProvenance)
+      setGenerationProgressMsg('Solicitando questões estruturadas em JSON à LLM...')
+      setCallsUsedCount(null)
+      setIsLegacyParsed(false)
+      setBlockedQuestions([])
+
+      // Executa geração client-side com validação atômica por item e reentativas isoladas
+      const examGenResult = await generateExam({
+        callApi: (p) => callApi(selectedApi, p),
+        buildPrompt: () => prompt,
+        onProgress: ({ message }) => setGenerationProgressMsg(message),
+        legacyParser: (rawText) => {
+          const legacyItems = parseContentToQuestions(cleanHtml(rawText), activeProvenance)
+          return legacyItems.map(item => {
+            const options = (item.options || []).map(opt => ({
+              id: opt.letter.toUpperCase(),
+              text: opt.text
+            }))
+            const qType: Question['type'] =
+              item.type === 'true_false'
+                ? 'true_false'
+                : item.type === 'gap_fill'
+                ? 'fill_in_blank'
+                : options.length > 0
+                ? 'multiple_choice'
+                : 'open_ended'
+
+            return QuestionSchema.parse({
+              id: item.id || `legacy_q_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+              type: qType,
+              stem: item.stem,
+              options,
+              correctOptionId: item.answerKey || (options[0]?.id || 'A'),
+              rationale: item.explanation || '',
+              provenance: item.provenance
+            })
+          })
+        }
+      })
+
+      setCallsUsedCount(examGenResult.callsUsed)
+      setIsLegacyParsed(examGenResult.legacyParsed)
+      setBlockedQuestions(examGenResult.blocked)
+      setGenerationProgressMsg('')
+
+      // Converte Question[] validadas para EditableQuestionItem[] para a UI existente
+      const parsed: EditableQuestionItem[] = examGenResult.questions.map((q, idx) => {
+        const legacy = questionToLegacy(q)
+        return {
+          ...legacy,
+          number: idx + 1,
+          typeLabel: q.type === 'multiple_choice' ? 'Múltipla Escolha' : q.type === 'true_false' ? 'Verdadeiro ou Falso' : 'Geral',
+          points: q.points || 1,
+          provenance: q.provenance || activeProvenance
+        } as EditableQuestionItem
+      })
+
       setQuestionsList(parsed)
       const html = compileQuestionsToHtml(parsed)
       setResult(html)
@@ -623,6 +695,70 @@ Gere agora todas as ${totalQuestions} questões completas em HTML limpo:`
     updateCounts()
     setCountMismatchWarning(null)
     toast.success('Avaliação salva no repositório.')
+  }
+
+  // Sessão 3 — T2: Validação estrita para Modo Manual (Colagem), listando itens inválidos sem reentativa
+  const handleValidateAndApplyManualPaste = () => {
+    if (!manualPasteText.trim()) return
+    setManualInvalidQuestions([])
+
+    let candidateItems: any[] = []
+    try {
+      const parsedJson = JSON.parse(manualPasteText.trim())
+      candidateItems = Array.isArray(parsedJson) ? parsedJson : (parsedJson.questions || [parsedJson])
+    } catch {
+      // Formato texto/legado
+      const legacyItems = parseContentToQuestions(manualPasteText.trim())
+      candidateItems = legacyItems.map(item => {
+        const options = (item.options || []).map(opt => ({ id: opt.letter.toUpperCase(), text: opt.text }))
+        return {
+          id: item.id || `manual_q_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+          type: item.type === 'true_false' ? 'true_false' : (options.length > 0 ? 'multiple_choice' : 'open_ended'),
+          stem: item.stem,
+          options,
+          correctOptionId: item.answerKey || (options[0]?.id || 'A'),
+          rationale: item.explanation || ''
+        }
+      })
+    }
+
+    const valids: Question[] = []
+    const invalids: Array<{ index: number; reason: string }> = []
+
+    candidateItems.forEach((item, idx) => {
+      const val = QuestionSchema.safeParse(item)
+      if (val.success) {
+        valids.push(val.data)
+      } else {
+        const reason = val.error.issues.map(iss => iss.message).join('; ')
+        invalids.push({ index: idx + 1, reason })
+      }
+    })
+
+    setManualInvalidQuestions(invalids)
+
+    if (valids.length > 0) {
+      const newParsed: EditableQuestionItem[] = valids.map((q, idx) => {
+        const leg = questionToLegacy(q)
+        return {
+          ...leg,
+          number: (questionsList.length || 0) + idx + 1,
+          typeLabel: q.type === 'multiple_choice' ? 'Múltipla Escolha' : q.type === 'true_false' ? 'Verdadeiro ou Falso' : 'Geral',
+          points: q.points || 1
+        } as EditableQuestionItem
+      })
+      const merged = [...questionsList, ...newParsed]
+      setQuestionsList(merged)
+      setResult(compileQuestionsToHtml(merged))
+      toast.success(`${valids.length} questão(ões) válida(s) adicionada(s) com sucesso!`)
+    }
+
+    if (invalids.length > 0) {
+      toast.warning(`${invalids.length} questão(ões) inválida(s) identificada(s). Veja os motivos detalhados.`)
+    } else {
+      setShowManualPasteModal(false)
+      setManualPasteText('')
+    }
   }
 
   // Assistente Rafinha para Ajustar Questão Individual
@@ -762,28 +898,51 @@ Retorne a questão reformulada no formato estruturado:`
         {/* COLUNA ESQUERDA: CONFIGURAÇÕES E FORMULÁRIO */}
         <div style={{ overflowY: 'auto', paddingRight: 8, paddingBottom: 32, display: 'flex', flexDirection: 'column', gap: 14 }}>
 
-          {/* Botão de Geração */}
-          <button
-            onClick={handleGenerateContent}
-            disabled={loading}
-            style={{
-              padding: '14px 20px',
-              borderRadius: RADIUS.lg,
-              background: loading ? '#a08060' : 'linear-gradient(135deg, #8b5e3c, #5c3a21)',
-              color: '#fff',
-              fontSize: 15,
-              fontWeight: 800,
-              border: 'none',
-              cursor: loading ? 'wait' : 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 10,
-              boxShadow: '0 4px 16px rgba(139,94,60,0.3)'
-            }}
-          >
-            {loading ? '⚡ Construindo com Rigor Pedagógico...' : `✨ Gerar ${mode === 'exam' ? 'Prova Oficial Completa' : 'Lista de Exercícios Completa'}`}
-          </button>
+          {/* Botões de Geração e Modo Manual */}
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button
+              onClick={handleGenerateContent}
+              disabled={loading}
+              style={{
+                flex: 1,
+                padding: '14px 20px',
+                borderRadius: RADIUS.lg,
+                background: loading ? '#a08060' : 'linear-gradient(135deg, #8b5e3c, #5c3a21)',
+                color: '#fff',
+                fontSize: 15,
+                fontWeight: 800,
+                border: 'none',
+                cursor: loading ? 'wait' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 10,
+                boxShadow: '0 4px 16px rgba(139,94,60,0.3)'
+              }}
+            >
+              {loading ? '⚡ Construindo com Rigor Pedagógico...' : `✨ Gerar ${mode === 'exam' ? 'Prova Oficial Completa' : 'Lista de Exercícios Completa'}`}
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowManualPasteModal(true)}
+              title="Modo Manual: Colar e validar questões diretamente sem IA"
+              style={{
+                padding: '14px 16px',
+                borderRadius: RADIUS.lg,
+                border: '1.5px solid #8b5e3c',
+                background: '#faf6f0',
+                color: '#8b5e3c',
+                fontSize: 13,
+                fontWeight: 700,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6
+              }}
+            >
+              📋 Modo Manual
+            </button>
+          </div>
 
           {/* Seletor de Modelo IA */}
           <div style={CARD}>
@@ -1118,6 +1277,63 @@ Retorne a questão reformulada no formato estruturado:`
             </div>
           )}
 
+          {/* Sessão 3: Banner de Métricas de Geração (Chamadas Utilizadas & Parser Legado) */}
+          {callsUsedCount !== null && (
+            <div style={{
+              background: isLegacyParsed ? '#fffbe6' : '#f0fdf4',
+              border: `1px solid ${isLegacyParsed ? '#ffe58f' : '#bbf7d0'}`,
+              borderRadius: RADIUS.md,
+              padding: '10px 14px',
+              color: isLegacyParsed ? '#8c6b3e' : '#166534',
+              fontSize: 12.5,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 8,
+              lineHeight: 1.45,
+              flexShrink: 0
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 16 }}>{isLegacyParsed ? '⚠️' : '⚡'}</span>
+                <span>
+                  <strong>Geração BYOK:</strong> Prova elaborada com <strong>{callsUsedCount} chamada(s)</strong> de LLM.
+                  {isLegacyParsed && ' (Formato Legado: A LLM não devolveu JSON puro; os itens foram recuperados pelo parser de compatibilidade).'}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Sessão 3: Banner de Questões Bloqueadas (Validação Psicométrica Rígida) */}
+          {blockedQuestions.length > 0 && (
+            <div style={{
+              background: '#fef2f2',
+              border: '1.5px solid #fca5a5',
+              borderRadius: RADIUS.md,
+              padding: '12px 16px',
+              color: '#991b1b',
+              fontSize: 12.5,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 6,
+              flexShrink: 0
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 18 }}>🚫</span>
+                <strong>{blockedQuestions.length} questão(ões) bloqueada(s) por violar contrato psicométrico:</strong>
+              </div>
+              <ul style={{ margin: '4px 0 0 20px', padding: 0 }}>
+                {blockedQuestions.map(b => (
+                  <li key={b.index} style={{ marginBottom: 4 }}>
+                    <strong>Item {b.index}:</strong> {b.reason}
+                  </li>
+                ))}
+              </ul>
+              <span style={{ fontSize: 11.5, color: '#7f1d1d' }}>
+                Itens bloqueados foram isolados e nunca são salvos de forma parcial para preservar a idoneidade da prova.
+              </span>
+            </div>
+          )}
+
           {loading ? (
             <div
               style={{
@@ -1143,8 +1359,8 @@ Retorne a questão reformulada no formato estruturado:`
                   animation: 'spin 0.8s linear infinite',
                 }}
               />
-              <p style={{ color: '#7a5c42', fontSize: 14, fontWeight: 700 }}>
-                Elaborando com psicometria, taxonomia de Bloom e didática...
+              <p style={{ color: '#7a5c42', fontSize: 14, fontWeight: 700, textAlign: 'center', maxWidth: 400 }}>
+                {generationProgressMsg || 'Elaborando com psicometria, taxonomia de Bloom e didática...'}
               </p>
             </div>
           ) : (
@@ -1229,6 +1445,104 @@ Retorne a questão reformulada no formato estruturado:`
             toast.success(`✓ Prova enviada por ${name}! Nota ${score}/10 gravada no Diário de Classe.`)
           }}
         />
+      )}
+
+      {/* Modal: Modo Manual (Colagem de Questões com Validação sem Reentativa) */}
+      {showManualPasteModal && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(0,0,0,0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+          padding: 20
+        }}>
+          <div style={{
+            background: '#fff',
+            borderRadius: RADIUS.lg,
+            maxWidth: 720,
+            width: '100%',
+            maxHeight: '90vh',
+            display: 'flex',
+            flexDirection: 'column',
+            boxShadow: '0 10px 30px rgba(0,0,0,0.2)',
+            overflow: 'hidden'
+          }}>
+            <div style={{ padding: '16px 20px', borderBottom: '1px solid #e8e0d0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#2c1a0e' }}>
+                📋 Modo Manual — Colagem de Questões
+              </h3>
+              <button
+                type="button"
+                onClick={() => { setShowManualPasteModal(false); setManualInvalidQuestions([]); }}
+                style={{ background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: '#7a5c42' }}
+              >
+                ✕
+              </button>
+            </div>
+            <div style={{ padding: '16px 20px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <p style={{ margin: 0, fontSize: 13, color: '#665c54', lineHeight: 1.45 }}>
+                Cole aqui suas questões no formato JSON estruturado ou texto formatado. O sistema valida cada item contra o contrato psicométrico. Questões com inconsistências serão listadas abaixo para conferência, sem reentativa automática.
+              </p>
+              <textarea
+                value={manualPasteText}
+                onChange={e => setManualPasteText(e.target.value)}
+                placeholder="Cole o array JSON ou texto com as questões aqui..."
+                rows={10}
+                style={{
+                  width: '100%',
+                  padding: 12,
+                  borderRadius: RADIUS.md,
+                  border: '1px solid #d5c8bb',
+                  fontFamily: 'monospace',
+                  fontSize: 12.5,
+                  resize: 'vertical',
+                  boxSizing: 'border-box'
+                }}
+              />
+              {manualInvalidQuestions.length > 0 && (
+                <div style={{
+                  background: '#fef2f2',
+                  border: '1px solid #fca5a5',
+                  borderRadius: RADIUS.md,
+                  padding: '12px 14px',
+                  color: '#991b1b',
+                  fontSize: 12
+                }}>
+                  <strong>⚠️ {manualInvalidQuestions.length} questão(ões) inválida(s) identificada(s):</strong>
+                  <ul style={{ margin: '6px 0 0 16px', padding: 0 }}>
+                    {manualInvalidQuestions.map(inv => (
+                      <li key={inv.index} style={{ marginBottom: 4 }}>
+                        <strong>Item {inv.index}:</strong> {inv.reason}
+                      </li>
+                    ))}
+                  </ul>
+                  <span style={{ fontSize: 11, color: '#7f1d1d', display: 'block', marginTop: 4 }}>
+                    No modo manual, as questões inválidas não são corrigidas automaticamente. Corrija o texto ou formato das opções.
+                  </span>
+                </div>
+              )}
+            </div>
+            <div style={{ padding: '12px 20px', borderTop: '1px solid #e8e0d0', display: 'flex', justifyContent: 'flex-end', gap: 10, background: '#faf6f0' }}>
+              <button
+                type="button"
+                onClick={() => { setShowManualPasteModal(false); setManualInvalidQuestions([]); }}
+                style={{ padding: '8px 14px', borderRadius: RADIUS.md, border: '1px solid #d5c8bb', background: '#fff', color: '#665c54', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleValidateAndApplyManualPaste}
+                style={{ padding: '8px 16px', borderRadius: RADIUS.md, border: 'none', background: '#8b5e3c', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
+              >
+                Validar e Inserir Questões
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
