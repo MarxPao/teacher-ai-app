@@ -822,11 +822,56 @@
                         "additionalProperties": false
                       }
                     ]
+                  },
+                  "skip_rows": {
+                    "maxItems": 10,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "column_labels": {
+                          "minItems": 1,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        },
+                        "match": {
+                          "default": "normalized",
+                          "type": "string",
+                          "enum": [
+                            "exact",
+                            "normalized",
+                            "contains"
+                          ]
+                        },
+                        "values": {
+                          "minItems": 1,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        }
+                      },
+                      "required": [
+                        "column_labels",
+                        "match",
+                        "values"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "skip_empty_rows": {
+                    "default": true,
+                    "type": "boolean"
                   }
                 },
                 "required": [
                   "kind",
-                  "anchor"
+                  "anchor",
+                  "skip_empty_rows"
                 ],
                 "additionalProperties": false
               },
@@ -836,6 +881,50 @@
               },
               "paginate": {
                 "default": false,
+                "type": "boolean"
+              },
+              "skip_rows": {
+                "maxItems": 10,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "column_labels": {
+                      "minItems": 1,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
+                    "match": {
+                      "default": "normalized",
+                      "type": "string",
+                      "enum": [
+                        "exact",
+                        "normalized",
+                        "contains"
+                      ]
+                    },
+                    "values": {
+                      "minItems": 1,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    }
+                  },
+                  "required": [
+                    "column_labels",
+                    "match",
+                    "values"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "skip_empty_rows": {
+                "default": true,
                 "type": "boolean"
               }
             },
@@ -849,7 +938,8 @@
               "type",
               "source",
               "into",
-              "paginate"
+              "paginate",
+              "skip_empty_rows"
             ],
             "additionalProperties": false
           },
@@ -1618,11 +1708,56 @@
                             "additionalProperties": false
                           }
                         ]
+                      },
+                      "skip_rows": {
+                        "maxItems": 10,
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "column_labels": {
+                              "minItems": 1,
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "minLength": 1
+                              }
+                            },
+                            "match": {
+                              "default": "normalized",
+                              "type": "string",
+                              "enum": [
+                                "exact",
+                                "normalized",
+                                "contains"
+                              ]
+                            },
+                            "values": {
+                              "minItems": 1,
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "minLength": 1
+                              }
+                            }
+                          },
+                          "required": [
+                            "column_labels",
+                            "match",
+                            "values"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "skip_empty_rows": {
+                        "default": true,
+                        "type": "boolean"
                       }
                     },
                     "required": [
                       "kind",
-                      "table"
+                      "table",
+                      "skip_empty_rows"
                     ],
                     "additionalProperties": false
                   },
@@ -1676,6 +1811,50 @@
                 "type": "integer",
                 "minimum": 1,
                 "maximum": 1000
+              },
+              "skip_rows": {
+                "maxItems": 10,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "column_labels": {
+                      "minItems": 1,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
+                    "match": {
+                      "default": "normalized",
+                      "type": "string",
+                      "enum": [
+                        "exact",
+                        "normalized",
+                        "contains"
+                      ]
+                    },
+                    "values": {
+                      "minItems": 1,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    }
+                  },
+                  "required": [
+                    "column_labels",
+                    "match",
+                    "values"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "skip_empty_rows": {
+                "default": true,
+                "type": "boolean"
               }
             },
             "required": [
@@ -1689,7 +1868,8 @@
               "over",
               "as",
               "body_entry",
-              "max_iterations"
+              "max_iterations",
+              "skip_empty_rows"
             ],
             "additionalProperties": false
           },

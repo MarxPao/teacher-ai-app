@@ -120,4 +120,111 @@ describe('SkillGraph v2 Contract Tests', () => {
       expect(generatedSchema).toEqual(committedSchema)
     })
   })
+
+  // ─── 4. Verificação de Avisos Semânticos (Warnings) ──────────────────────────
+  describe('Avisos Semânticos (Warnings)', () => {
+    it('grafo com LOOP table_rows + WRITE sem skip_rows produz warning W_FOOTER_ROW_RISK e nenhum erro', () => {
+      const graphWithRisk = {
+        spec_version: '2.0',
+        identity: {
+          portal_id: 'synthetic_portal',
+          domain: 'localhost:8899',
+          task_id: 'custom:loop_risco_total',
+          version: 1,
+          name: 'Loop sobre Tabela sem skip_rows',
+          description: 'Demonstra emissão do warning W_FOOTER_ROW_RISK ao alcançar WRITE sem skip_rows',
+        },
+        compat: {
+          support_tier: 1,
+          archetype_tags: ['table'],
+          tested_archetypes: ['standard'],
+          min_runner_version: '2.0.0',
+        },
+        params: {},
+        entry_node: 'checkpoint_previo',
+        nodes: {
+          checkpoint_previo: {
+            label: 'Aprovação prévia do lote',
+            type: 'CHECKPOINT',
+            summary: [{ label: 'Confirmação', value: { lit: true } }],
+            scope: 'per_batch',
+            on_reject: '$abort',
+            retry: { max_attempts: 1, backoff_ms: 0 },
+            timeout_ms: 5000,
+            postconditions: [],
+            on_success: 'loop_tabela',
+            on_fail: '$abort',
+          },
+          loop_tabela: {
+            label: 'Itera sobre linhas da tabela sem filtrar rodapé',
+            type: 'LOOP',
+            over: {
+              kind: 'table_rows',
+              table: {
+                candidates: [{ strategy: 'css', selector: '#tabela-alunos' }],
+                description: 'Tabela de alunos',
+              },
+            },
+            as: 'linha',
+            body_entry: 'escreve_linha',
+            max_iterations: 30,
+            retry: { max_attempts: 1, backoff_ms: 0 },
+            timeout_ms: 5000,
+            postconditions: [],
+            on_success: '$end',
+            on_fail: '$abort',
+          },
+          escreve_linha: {
+            label: 'Preenche campo na linha',
+            type: 'WRITE',
+            anchor: {
+              candidates: [{ strategy: 'css', selector: 'input.nota' }],
+              description: 'Campo de nota',
+            },
+            value: { lit: '10' },
+            method: 'type_native',
+            semantic: 'grade',
+            read_back: true,
+            retry: { max_attempts: 1, backoff_ms: 0 },
+            timeout_ms: 5000,
+            postconditions: [],
+            on_success: '$continue',
+            on_fail: '$abort',
+          },
+        },
+        canonical_mapping: {
+          columns: [],
+          grade_scale: { type: 'numeric', min: 0, max: 10, decimal_separator: '.' },
+          attendance: { polarity: 'not_applicable' },
+          ambiguous_requires_confirmation: true,
+        },
+        safety: {
+          side_effect_level: 'write',
+          writes_require_checkpoint: true,
+          max_writes_per_run: 50,
+          rate_limit: { min_delay_ms: 100, jitter_ms: 50 },
+          allowed_hosts: ['localhost:8899'],
+        },
+        provenance: {
+          author: 'tester',
+          created_at: '2026-10-10T19:00:00Z',
+          updated_at: '2026-10-10T19:00:00Z',
+          source: 'handwritten',
+          has_self_healed: false,
+        },
+      }
+
+      const parsed = SkillGraphV2Schema.safeParse(graphWithRisk)
+      expect(parsed.success).toBe(true)
+
+      if (parsed.success) {
+        const report = validateGraph(parsed.data)
+        expect(report.valid).toBe(true)
+        expect(report.errors).toHaveLength(0)
+
+        const hasFooterRisk = report.warnings.some(w => w.code === 'W_FOOTER_ROW_RISK')
+        expect(hasFooterRisk).toBe(true)
+      }
+    })
+  })
 })

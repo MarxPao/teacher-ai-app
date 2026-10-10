@@ -80,6 +80,14 @@
       },
       "into": "alunos_extraidos",
       "paginate": true,
+      "skip_rows": [
+        {
+          "column_labels": ["Nome", "Aluno"],
+          "match": "normalized",
+          "values": ["Total", "Média", "Subtotal"]
+        }
+      ],
+      "skip_empty_rows": true,
       "retry": { "max_attempts": 2, "backoff_ms": 300 },
       "timeout_ms": 5000,
       "postconditions": [

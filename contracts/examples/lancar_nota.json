@@ -63,6 +63,14 @@
       "as": "item",
       "body_entry": "ramifica_se_preenchido",
       "max_iterations": 50,
+      "skip_rows": [
+        {
+          "column_labels": ["Nome do Aluno", "Discente"],
+          "match": "normalized",
+          "values": ["Total", "Média", "Subtotal"]
+        }
+      ],
+      "skip_empty_rows": true,
       "retry": { "max_attempts": 1, "backoff_ms": 0 },
       "timeout_ms": 10000,
       "postconditions": [],
