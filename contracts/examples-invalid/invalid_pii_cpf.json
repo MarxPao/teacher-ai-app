@@ -1,0 +1,73 @@
+{
+  "spec_version": "2.0",
+  "identity": {
+    "portal_id": "synthetic_portal",
+    "domain": "localhost:8899",
+    "task_id": "lancar_falta",
+    "version": 1,
+    "name": "Inválido - Literal com CPF",
+    "description": "Viola o princípio P3 Sem PII no mapa contendo CPF em literal"
+  },
+  "compat": {
+    "support_tier": 1,
+    "archetype_tags": ["standard_table"],
+    "tested_archetypes": ["standard"],
+    "min_runner_version": "2.0.0"
+  },
+  "params": {},
+  "entry_node": "checkpoint_seguro",
+  "nodes": {
+    "checkpoint_seguro": {
+      "label": "Checkpoint com aprovação humana",
+      "type": "CHECKPOINT",
+      "summary": [
+        { "label": "CPF Chumbado Proibido", "value": { "lit": "123.456.789-00" } }
+      ],
+      "scope": "once",
+      "on_reject": "$abort",
+      "retry": { "max_attempts": 1, "backoff_ms": 0 },
+      "timeout_ms": 5000,
+      "postconditions": [],
+      "on_success": "escreve_dado",
+      "on_fail": "$abort"
+    },
+    "escreve_dado": {
+      "label": "Escrita autorizada",
+      "type": "WRITE",
+      "anchor": {
+        "candidates": [{ "strategy": "css", "selector": "#input" }],
+        "description": "Input"
+      },
+      "value": { "lit": "ok" },
+      "method": "type_native",
+      "semantic": "text",
+      "read_back": true,
+      "retry": { "max_attempts": 1, "backoff_ms": 0 },
+      "timeout_ms": 5000,
+      "postconditions": [],
+      "on_success": "$end",
+      "on_fail": "$abort"
+    }
+  },
+  "canonical_mapping": {
+    "columns": [],
+    "grade_scale": { "type": "numeric", "min": 0, "max": 10, "decimal_separator": "." },
+    "attendance": { "polarity": "not_applicable" },
+    "ambiguous_requires_confirmation": true
+  },
+  "safety": {
+    "side_effect_level": "write",
+    "writes_require_checkpoint": true,
+    "max_writes_per_run": 1,
+    "rate_limit": { "min_delay_ms": 100, "jitter_ms": 50 },
+    "allowed_hosts": ["localhost:8899"]
+  },
+  "provenance": {
+    "author": "tester",
+    "created_at": "2026-10-10T12:00:00Z",
+    "updated_at": "2026-10-10T12:00:00Z",
+    "source": "handwritten",
+    "has_self_healed": false,
+    "pii_scrubbed": false
+  }
+}
