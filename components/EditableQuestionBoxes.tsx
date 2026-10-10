@@ -59,7 +59,7 @@ export interface Provenance {
   sourceLabel?: string        // Nome do PDF, arquivo ou título da referência
   sourceUrl?: string          // URL manual informada pelo professor
   sourceSnippet?: string      // Trecho ou contexto específico de onde a questão derivou
-  confidence: 'verified' | 'unverified'
+  confidence: 'verified' | 'unverified' | 'teacher_provided' | 'partial'
   pageNumber?: number         // Número da página real de onde o conteúdo foi extraído
   unitTitle?: string          // Título da unidade/capítulo real
   chunkId?: string            // Identificador unívoco do chunk
@@ -102,6 +102,7 @@ export interface EditableQuestionItem {
   diagnosticCoverage?: number
   dccAnalysis?: ItemDccAnalysis
   feedbackMatrix?: ItemFormativeFeedbackMatrix
+  explanation?: string
 }
 
 interface EditableQuestionBoxesProps {
@@ -134,7 +135,9 @@ export function parseContentToQuestions(raw: string, defaultProvenance?: Provena
         type: typeMatch[1] as ProvenanceType,
         sourceLabel: labelMatch ? labelMatch[1] : undefined,
         sourceUrl: urlMatch ? urlMatch[1] : undefined,
-        confidence: (confMatch && confMatch[1] === 'verified' ? 'verified' : 'unverified') as 'verified' | 'unverified',
+        confidence: (typeMatch[1] === 'teacher_reference'
+          ? 'teacher_provided'
+          : (confMatch && confMatch[1] === 'verified' ? 'verified' : 'unverified')) as any,
         pageNumber: pageMatch ? parseInt(pageMatch[1], 10) : defaultProvenance?.pageNumber,
         unitTitle: unitMatch ? unitMatch[1] : defaultProvenance?.unitTitle,
         chunkId: chunkMatch ? chunkMatch[1] : defaultProvenance?.chunkId
@@ -383,16 +386,21 @@ export function parseContentToQuestions(raw: string, defaultProvenance?: Provena
       return
     }
 
-    // Detecta gabarito / resposta
-    if (/^(?:Gabarito|Resposta|Answer|Chave|Feedback)[:\s]/i.test(trimmed)) {
-      currentAnswer = trimmed.replace(/^(?:Gabarito|Resposta|Answer|Chave|Feedback)[:\s]*/i, '')
+    // Detecta gabarito / resposta (suporte a símbolo de check ✓ e / Resolução)
+    if (/^(?:[✓✔]\s*)?(?:Gabarito|Resposta|Answer|Chave|Feedback)(?:\s*\/\s*Resolução)?[:\s]/i.test(trimmed)) {
+      currentAnswer = trimmed.replace(/^(?:[✓✔]\s*)?(?:Gabarito|Resposta|Answer|Chave|Feedback)(?:\s*\/\s*Resolução)?[:\s]*/i, '').trim()
       return
     }
 
     // Continuação do enunciado ou preenchimento de enunciado inicial
     if (currentStem) {
       if (currentOpts.length > 0) {
-        currentAnswer = (currentAnswer ? currentAnswer + '\n' : '') + trimmed
+        const lastOpt = currentOpts[currentOpts.length - 1]
+        if (!lastOpt.text || lastOpt.text.trim() === '') {
+          lastOpt.text = trimmed
+        } else {
+          currentAnswer = (currentAnswer ? currentAnswer + '\n' : '') + trimmed
+        }
       } else {
         currentStem += '\n' + trimmed
       }
@@ -465,10 +473,7 @@ export function compileQuestionsToHtml(questions: EditableQuestionItem[], custom
     if (q.options && q.options.length > 0) {
       html += `    <div class="exam-options-list" style="margin-left: 8px; display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px;">\n`
       q.options.forEach(opt => {
-        html += `      <div style="display: flex; align-items: flex-start; gap: 8px; font-size: 14px;">\n`
-        html += `        <strong style="min-width: 24px; color: #8b5e3c;">${opt.letter})</strong>\n`
-        html += `        <span>${opt.text}</span>\n`
-        html += `      </div>\n`
+        html += `      <div class="exam-option-line" style="display: flex; align-items: flex-start; gap: 8px; font-size: 14px;"><strong style="min-width: 24px; color: #8b5e3c;">${opt.letter})</strong> <span>${opt.text}</span></div>\n`
       })
       html += `    </div>\n`
     } else if (q.type === 'discursive') {
@@ -1104,7 +1109,7 @@ export default function EditableQuestionBoxes({
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: '#1e40af', fontWeight: 700 }}>
                       <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#2563eb' }} />
                       <span>🔗 Ref. Docente: {q.provenance.sourceLabel || q.provenance.sourceUrl || 'Referência Manual'}</span>
-                      <span style={{ fontSize: 10, background: '#dbeafe', color: '#1e40af', padding: '1px 5px', borderRadius: 4, border: '1px solid #bfdbfe' }}>Verificada</span>
+                      <span style={{ fontSize: 10, background: '#dbeafe', color: '#1e40af', padding: '1px 5px', borderRadius: 4, border: '1px solid #bfdbfe' }}>Fornecida pelo Professor</span>
                     </span>
                   )}
                   {(!q.provenance || q.provenance.type === 'general_knowledge') && (
@@ -1120,7 +1125,7 @@ export default function EditableQuestionBoxes({
                 {q.predictedDifficulty !== undefined && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: RADIUS.sm, background: '#f8fafc', border: '1px solid #e2e8f0', fontSize: 11.5 }}>
                     <span style={{ fontWeight: 700, color: '#475569', display: 'flex', alignItems: 'center', gap: 4 }}>
-                      🎯 Dificuldade Prevista (a priori - LLTM):
+                      🎯 Dificuldade Prevista:
                     </span>
                     <span style={{
                       fontWeight: 800,
@@ -1128,8 +1133,8 @@ export default function EditableQuestionBoxes({
                     }}>
                       {q.predictedDifficulty >= 0 ? '+' : ''}{q.predictedDifficulty.toFixed(2)} logits
                     </span>
-                    <span style={{ color: '#64748b', fontSize: 11 }}>
-                      ({q.predictedDifficultyLabel || 'Estimativa matemática pré-aplicação'})
+                    <span style={{ color: '#64748b', fontSize: 10.5, fontStyle: 'italic' }}>
+                      [Estimativa a priori (0 respostas reais)]
                     </span>
                   </div>
                 )}

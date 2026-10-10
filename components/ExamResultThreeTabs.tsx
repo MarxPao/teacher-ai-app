@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useMemo } from 'react'
+import { toast } from '@/components/Toast'
 import DocumentCanvas from '@/components/DocumentCanvas'
 import EditableQuestionBoxes, { EditableQuestionItem, parseContentToQuestions } from '@/components/EditableQuestionBoxes'
 import AudioPlayerCard from '@/components/AudioPlayerCard'
@@ -57,6 +58,7 @@ import {
   getExamAuditHistory,
   type ExamVersionHistory
 } from '@/lib/examAuditVersioning'
+import { syncOmrLayoutWithItemIds } from '@/lib/omrItemPsychometricsBridge'
 import { preLinterQualityGate } from '@/lib/itemConsistencyAndSimilarityEngine'
 import {
   deriveGrmFromAnalyticalRubric,
@@ -176,6 +178,8 @@ export interface ExamResultThreeTabsProps {
   onDeleteAudio?: () => void
   onOpenOnlinePlayer?: () => void
   initialTab?: ResultTabKey
+  questions?: any[]
+  onQuestionsChange?: (questions: any[]) => void
 }
 
 export default function ExamResultThreeTabs({
@@ -209,6 +213,8 @@ export default function ExamResultThreeTabs({
   onDeleteAudio,
   onOpenOnlinePlayer,
   initialTab = 'document',
+  questions,
+  onQuestionsChange,
 }: ExamResultThreeTabsProps) {
   const [activeTab, setActiveTab] = useState<ResultTabKey>(initialTab)
   const [activeViewMode, setActiveViewMode] = useState<'boxes' | 'canvas'>('boxes')
@@ -216,11 +222,12 @@ export default function ExamResultThreeTabs({
   const [haladynaOverrideGranted, setHaladynaOverrideGranted] = useState(false)
   const [pendingExportAction, setPendingExportAction] = useState<(() => void) | null>(null)
 
-  // Extrai total de questões parsed
+  // Extrai total de questões parsed (privilegia array de objetos tipados quando fornecido)
   const parsedQuestions = useMemo(() => {
+    if (questions && questions.length > 0) return questions as EditableQuestionItem[]
     if (!result) return []
     return parseContentToQuestions(result)
-  }, [result])
+  }, [questions, result])
 
   const activeSubjectProfile = useMemo(() => {
     return getSubjectProfile(subjectId)
@@ -936,45 +943,94 @@ export default function ExamResultThreeTabs({
                 )}
 
                 {mode === 'exam' && (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      executeWithHaladynaGate(() => {
-                        const totalQ = parsedQuestions.length || 10
-                        const layout = createExamSheetLayout({
-                          id: `exam_${Date.now().toString(36)}`,
-                          title: header.title || topic || 'Avaliação Oficial',
-                          version: 'Form_A',
-                          totalQuestions: totalQ,
-                          optionsPerQuestion: 4
+                  <>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        executeWithHaladynaGate(() => {
+                          const totalQ = parsedQuestions.length || 10
+                          const examTitle = header.title || topic || 'Avaliação Oficial'
+                          const layout = createExamSheetLayout({
+                            id: `exam_${Date.now().toString(36)}`,
+                            title: examTitle,
+                            version: 'Form_A',
+                            totalQuestions: totalQ,
+                            optionsPerQuestion: 4
+                          })
+
+                          // Sincronização do Ciclo Fechado (D1/Sessão 5): Grava layout, gabarito e itemIds reais para o OmniGrader
+                          const omrLayout = syncOmrLayoutWithItemIds({
+                            examTitle,
+                            questions: parsedQuestions
+                          })
+
+                          try {
+                            localStorage.setItem('teacher_omr_active_layout', JSON.stringify(omrLayout))
+                            toast.success('Cartão OMR gerado e gabarito sincronizado com o OmniGrader!')
+                          } catch {}
+
+                          const html = generatePrintableOmrSheetHtml(layout, header.school || 'TEACHER AI — SISTEMA DE AVALIAÇÃO')
+                          const win = window.open('', '_blank')
+                          if (win) {
+                            win.document.write(html)
+                            win.document.close()
+                            setTimeout(() => win.print(), 350)
+                          }
                         })
-                        const html = generatePrintableOmrSheetHtml(layout, header.school || 'TEACHER AI — SISTEMA DE AVALIAÇÃO')
-                        const win = window.open('', '_blank')
-                        if (win) {
-                          win.document.write(html)
-                          win.document.close()
-                          setTimeout(() => win.print(), 350)
-                        }
-                      })
-                    }
-                    style={{
-                      padding: '8px 14px',
-                      borderRadius: RADIUS.md,
-                      border: '1.5px solid #8b5e3c',
-                      background: '#fffcf8',
-                      color: '#8b5e3c',
-                      fontSize: 12.5,
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 6,
-                      boxShadow: '0 2px 6px rgba(139,94,60,0.1)',
-                    }}
-                    title="Gera a folha oficial de respostas padronizada com 4 marcadores fiduciais para correção instantânea por OMR"
-                  >
-                    <i className="ti ti-scan" /> 📄 Cartão OMR (Fiduciais)
-                  </button>
+                      }
+                      style={{
+                        padding: '8px 14px',
+                        borderRadius: RADIUS.md,
+                        border: '1.5px solid #8b5e3c',
+                        background: '#fffcf8',
+                        color: '#8b5e3c',
+                        fontSize: 12.5,
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        boxShadow: '0 2px 6px rgba(139,94,60,0.1)',
+                      }}
+                      title="Gera a folha oficial de respostas padronizada com 4 marcadores fiduciais para correção instantânea por OMR"
+                    >
+                      <i className="ti ti-scan" /> 📄 Cartão OMR (Fiduciais)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const examTitle = header.title || topic || 'Avaliação Oficial'
+                        const omrLayout = syncOmrLayoutWithItemIds({
+                          examTitle,
+                          questions: parsedQuestions
+                        })
+
+                        try {
+                          localStorage.setItem('teacher_omr_active_layout', JSON.stringify(omrLayout))
+                          toast.info('Redirecionando para o OmniGrader com gabarito carregado...')
+                        } catch {}
+
+                        window.dispatchEvent(new CustomEvent('teacher:navigate', { detail: 'omnigrader' }))
+                      }}
+                      style={{
+                        padding: '8px 14px',
+                        borderRadius: RADIUS.md,
+                        border: '1.5px solid #2563eb',
+                        background: '#eff6ff',
+                        color: '#1e40af',
+                        fontSize: 12.5,
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        boxShadow: '0 2px 6px rgba(37,99,235,0.1)',
+                      }}
+                      title="Abre o OmniGrader para leitura por câmera/foto com este gabarito já carregado"
+                    >
+                      <i className="ti ti-camera" /> 📸 Corrigir no OmniGrader
+                    </button>
+                  </>
                 )}
               </div>
 
@@ -2242,70 +2298,6 @@ export default function ExamResultThreeTabs({
                 </p>
               </div>
 
-              {/* Card de Equacionamento por TRI Stocking-Lord & Haebara (Onda G - Fase G2) */}
-              <div style={{
-                background: '#f8fafc',
-                border: '1.5px solid #cbd5e1',
-                borderRadius: RADIUS.md,
-                padding: '12px 14px',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 8,
-                gridColumn: '1 / -1'
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 800, fontSize: 13, color: '#1e293b' }}>
-                    <span>📐</span>
-                    <span>Equacionamento por TRI (Fase G2 — Stocking-Lord &amp; Haebara)</span>
-                  </div>
-                  <span style={{
-                    fontSize: 11,
-                    fontWeight: 700,
-                    padding: '2px 8px',
-                    borderRadius: 4,
-                    background: '#fef3c7',
-                    color: '#92400e'
-                  }}>
-                    A = {irtEquatingSummary.constants.A} (Escala) &bull; B = {irtEquatingSummary.constants.B} (Translação) &bull; RMS Âncora = {irtEquatingSummary.anchorDiscrepancyRMS}
-                  </span>
-                </div>
-                <p style={{ margin: 0, fontSize: 11.5, color: '#475569', lineHeight: 1.45 }}>
-                  Conexão de escalas latentes de proficiência através de itens âncora (Stocking &amp; Lord, 1983; Haebara, 1980). Transforma os parâmetros $a_j, b_j$ da nova forma para a métrica canônica do banco via otimização das Curvas Características do Teste (TCC) e Curvas dos Itens (ICC), viabilizando a comparabilidade invariante do escore verdadeiro $\tau(\theta)$ entre diferentes edições do exame.
-                </p>
-              </div>
-
-              {/* Card de Gestão e Purificação de Itens Âncora & Drift (Onda G - Fase G3) */}
-              <div style={{
-                background: '#f8fafc',
-                border: '1.5px solid #cbd5e1',
-                borderRadius: RADIUS.md,
-                padding: '12px 14px',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 8,
-                gridColumn: '1 / -1'
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 800, fontSize: 13, color: '#1e293b' }}>
-                    <span>🛡️</span>
-                    <span>Gestão &amp; Purificação de Itens Âncora (Fase G3 — Kolen &amp; Brennan / Holland &amp; Thayer)</span>
-                  </div>
-                  <span style={{
-                    fontSize: 11,
-                    fontWeight: 700,
-                    padding: '2px 8px',
-                    borderRadius: 4,
-                    background: anchorPurificationSummary.healthStatus === 'healthy' ? '#dcfce7' : '#fef3c7',
-                    color: anchorPurificationSummary.healthStatus === 'healthy' ? '#166534' : '#92400e'
-                  }}>
-                    {anchorPurificationSummary.purifiedAnchorCount}/{anchorPurificationSummary.initialAnchorCount} Âncoras Estáveis &bull; {anchorPurificationSummary.purgedItemsCount} Purgados por Drift
-                  </span>
-                </div>
-                <p style={{ margin: 0, fontSize: 11.5, color: '#475569', lineHeight: 1.45 }}>
-                  Detecção autônoma de Item Parameter Drift (IPD) e Funcionamento Diferencial do Item (DIF) via estatística de Mantel-Haenszel e Delta de Holland-Thayer (Kolen &amp; Brennan, 2014; Dorans &amp; Holland, 1993). O algoritmo de <strong>purificação iterativa</strong> expurga itens que sofreram vazamento, desgaste ou drift de dificuldade ($|d_j| &gt; 0.35$), impedindo que âncoras corrompidas distorçam a comparabilidade longitudinal de todo o banco de avaliações.
-                </p>
-              </div>
-
               {/* Card de Confiabilidade Psicométrica Global (Onda H - Fase H1) */}
               <div style={{
                 background: '#f8fafc',
@@ -2321,6 +2313,9 @@ export default function ExamResultThreeTabs({
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 800, fontSize: 13, color: '#1e293b' }}>
                     <span>🎯</span>
                     <span>Confiabilidade Psicométrica Global (Fase H1 — Cronbach &amp; McDonald)</span>
+                    <span style={{ fontSize: 10.5, fontWeight: 700, padding: '1px 6px', borderRadius: 4, background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a' }}>
+                      Estimativa Teórica (Não Medida)
+                    </span>
                   </div>
                   <span style={{
                     fontSize: 11,
@@ -2330,11 +2325,11 @@ export default function ExamResultThreeTabs({
                     background: reliabilitySummary.cronbachAlpha >= 0.80 ? '#dcfce7' : reliabilitySummary.cronbachAlpha >= 0.70 ? '#e0f2fe' : '#fef3c7',
                     color: reliabilitySummary.cronbachAlpha >= 0.80 ? '#166534' : reliabilitySummary.cronbachAlpha >= 0.70 ? '#0369a1' : '#92400e'
                   }}>
-                    α = {reliabilitySummary.cronbachAlpha} &bull; ω = {reliabilitySummary.mcdonaldOmega} &bull; SEM = {reliabilitySummary.standardErrorOfMeasurement} pts
+                    α = {reliabilitySummary.cronbachAlpha} (estimativa teórica, não medida) &bull; ω = {reliabilitySummary.mcdonaldOmega} &bull; SEM = {reliabilitySummary.standardErrorOfMeasurement} pts
                   </span>
                 </div>
                 <p style={{ margin: 0, fontSize: 11.5, color: '#475569', lineHeight: 1.45 }}>
-                  Mensuração rigorosa da consistência interna e fidedignidade da avaliação (Cronbach, 1951; McDonald, 1999; Nunnally &amp; Bernstein, 1994). Calcula o <strong>Alfa de Cronbach</strong> (&alpha;), o <strong>Ômega Total de McDonald</strong> (&omega;, livre da premissa de tau-equivalência) e o <strong>Erro Padrão de Medida</strong> (SEM), acompanhados da análise de <em>Alpha if Item Deleted</em> para assegurar que cada questão contribua positivamente para a precisão da nota final.
+                  Mensuração teórica da consistência interna a priori (Cronbach, 1951; McDonald, 1999). O valor de <strong>Alfa de Cronbach</strong> (&alpha;) projetado é uma <strong>estimativa teórica, não medida</strong> a partir da simulação de parâmetros dos itens gerados, não substituindo a calibração com respostas reais de estudantes.
                 </p>
               </div>
 

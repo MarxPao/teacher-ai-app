@@ -6,6 +6,10 @@ export interface FactCheckResult {
   level: 'ok' | 'warn' | 'error'
   issues: string[]
   suggestions: string[]
+  coverage: 'full' | 'chunked' | 'partial'
+  totalCharacters: number
+  analyzedCharacters: number
+  coverageNotice: string
 }
 
 const FACT_CHECK_PROMPT = (content: string, grade: string, subject: string) => `
@@ -36,8 +40,25 @@ export async function runFactCheck(
   subject: string,
   api: ApiConfig
 ): Promise<FactCheckResult> {
+  const totalChars = (content || '').length
+  const isLong = totalChars > 3000
+  const analyzedChars = Math.min(totalChars, 3000)
+  const coverageType: 'full' | 'partial' = isLong ? 'partial' : 'full'
+  const coverageNotice = isLong
+    ? `Verificação factual parcial (primeiros ${analyzedChars} caracteres analisados de ${totalChars} caracteres totais).`
+    : `Verificação factual integral (100% do conteúdo analisado: ${totalChars} caracteres).`
+
   if (api.provider === 'manual' || !api.key) {
-    return { score: 0, level: 'warn', issues: ['API não configurada — revisão manual necessária.'], suggestions: [] }
+    return {
+      score: 0,
+      level: 'warn',
+      issues: ['API não configurada — revisão manual necessária.'],
+      suggestions: [],
+      coverage: coverageType,
+      totalCharacters: totalChars,
+      analyzedCharacters: analyzedChars,
+      coverageNotice
+    }
   }
 
   const prompt = FACT_CHECK_PROMPT(content, grade, subject)
@@ -113,9 +134,22 @@ export async function runFactCheck(
       score,
       level: score >= 85 ? 'ok' : score >= 60 ? 'warn' : 'error',
       issues:      Array.isArray(parsed.issues)      ? parsed.issues      : [],
-      suggestions: Array.isArray(parsed.suggestions) ? parsed.suggestions : []
+      suggestions: Array.isArray(parsed.suggestions) ? parsed.suggestions : [],
+      coverage: coverageType,
+      totalCharacters: totalChars,
+      analyzedCharacters: analyzedChars,
+      coverageNotice
     }
   } catch {
-    return { score: 50, level: 'warn', issues: ['Não foi possível validar o conteúdo automaticamente.'], suggestions: ['Revise manualmente antes de usar.'] }
+    return {
+      score: 50,
+      level: 'warn',
+      issues: ['Não foi possível validar o conteúdo automaticamente.'],
+      suggestions: ['Revise manualmente antes de usar.'],
+      coverage: coverageType,
+      totalCharacters: totalChars,
+      analyzedCharacters: analyzedChars,
+      coverageNotice
+    }
   }
 }

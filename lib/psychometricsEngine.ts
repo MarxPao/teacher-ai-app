@@ -8,6 +8,8 @@
  * 4. Calibração empírica e alerta de divergência entre dificuldade nominal e real (N >= 10)
  */
 
+import { DEFAULT_PSYCHOMETRICS_THRESHOLDS } from './pedagogicalConfig'
+
 export interface StudentItemResponse {
   studentId: string
   correct: boolean
@@ -91,6 +93,54 @@ export function calculateKelleyDiscrimination(
   return D
 }
 
+export interface BayesianPValueCalculation {
+  priorPValue: number
+  priorWeight: number
+  observedSuccesses: number
+  observedTotal: number
+  bayesianPValue: number
+  seedWeightPercentage: number
+  empiricalWeightPercentage: number
+}
+
+/**
+ * Calcula o p-value com Smoothing Bayesiano Beta-Binomial:
+ * A estimativa da seed a priori possui peso equivalente a N0 observações.
+ * Conforme respostas reais acumulam (N_real), o peso relativo da seed decai assintoticamente a zero:
+ * p_bayes = (p0 * N0 + k_real) / (N0 + N_real)
+ */
+export function computeBayesianPValue(
+  nominalDifficulty: string | undefined,
+  observedSuccesses: number,
+  observedTotal: number,
+  priorWeight: number = DEFAULT_PSYCHOMETRICS_THRESHOLDS.priorWeightN0
+): BayesianPValueCalculation {
+  const norm = normalizeNominalDifficulty(nominalDifficulty)
+  let p0 = DEFAULT_PSYCHOMETRICS_THRESHOLDS.priorP0Medium
+  if (norm === 'easy') p0 = DEFAULT_PSYCHOMETRICS_THRESHOLDS.priorP0Easy
+  else if (norm === 'hard') p0 = DEFAULT_PSYCHOMETRICS_THRESHOLDS.priorP0Hard
+
+  const N0 = Math.max(1, priorWeight)
+  const Nreal = Math.max(0, observedTotal)
+  const kreal = Math.max(0, Math.min(Nreal, observedSuccesses))
+
+  const totalEffective = N0 + Nreal
+  const bayesianPValue = Number(((p0 * N0 + kreal) / totalEffective).toFixed(3))
+
+  const seedWeightPercentage = Number(((N0 / totalEffective) * 100).toFixed(1))
+  const empiricalWeightPercentage = Number(((Nreal / totalEffective) * 100).toFixed(1))
+
+  return {
+    priorPValue: p0,
+    priorWeight: N0,
+    observedSuccesses: kreal,
+    observedTotal: Nreal,
+    bayesianPValue,
+    seedWeightPercentage,
+    empiricalWeightPercentage
+  }
+}
+
 /**
  * Avalia psicometricamente o conjunto acumulado de respostas de uma questão
  */
@@ -100,12 +150,13 @@ export function evaluateItemPsychometrics(
 ): EmpiricalPsychometrics {
   const total = responses.length
   if (total === 0) {
+    const priorP = computeBayesianPValue(nominalDifficulty, 0, 0, 10).priorPValue
     return {
       totalResponses: 0,
       correctCount: 0,
-      pValue: 0.5,
+      pValue: priorP,
       discriminationIndex: null,
-      empiricalDifficulty: 'medium',
+      empiricalDifficulty: classifyEmpiricalDifficulty(priorP),
       isDivergentFromNominal: false,
       divergenceSeverity: 'none',
       lastCalibratedAt: Date.now()
@@ -113,7 +164,8 @@ export function evaluateItemPsychometrics(
   }
 
   const correctCount = responses.filter(r => r.correct).length
-  const pValue = Number((correctCount / total).toFixed(3))
+  const bayesCalc = computeBayesianPValue(nominalDifficulty, correctCount, total, 10)
+  const pValue = bayesCalc.bayesianPValue
   const empiricalDifficulty = classifyEmpiricalDifficulty(pValue)
   const discriminationIndex = calculateKelleyDiscrimination(responses)
 

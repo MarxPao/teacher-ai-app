@@ -38,6 +38,7 @@ export interface UnifiedQuestion {
   source?: 'manual' | 'ai' | 'library_extraction'
   responseHistory?: Array<{ studentId: string; correct: boolean; totalExamScore?: number; timestamp: number }>
   psychometrics?: EmpiricalPsychometrics
+  fullContent?: string
 }
 
 const STORAGE_KEY_PRIMARY = 'teacher_unified_questions'

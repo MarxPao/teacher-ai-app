@@ -242,9 +242,12 @@ export async function executeUnifiedAiCall(api: ApiConfig | null, prompt: string
     let lastErr = ''
     for (const m of modelsToTry) {
       try {
-        const r = await guardEgressFetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${key}`, {
+        const r = await guardEgressFetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'x-goog-api-key': key
+          },
           body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
         })
         const d = await r.json()
