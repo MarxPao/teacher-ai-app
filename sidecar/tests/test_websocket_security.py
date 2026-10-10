@@ -35,17 +35,24 @@ class MockHeaders:
 
 
 class MockWebSocket:
-    def __init__(self, origin=None, host="127.0.0.1:8766", api_flavor="request_headers"):
+    def __init__(self, origin=None, host="127.0.0.1:8766", api_flavor="request_headers", token=None, path=None):
         self.sent_messages = []
         self.closed = False
         self.close_code = None
         self.close_reason = None
+        self.path = path
 
         headers = {}
         if origin is not None:
             headers["Origin"] = origin
         if host is not None:
             headers["Host"] = host
+        if token is not False:
+            try:
+                from auth_token import get_current_auth_token
+                headers["X-Sidecar-Token"] = token if token is not None else get_current_auth_token()
+            except Exception:
+                pass
 
         mock_h = MockHeaders(headers)
 

@@ -168,18 +168,71 @@ function launchViaNativeMessaging(isRetry = false) {
   }
 }
 
+let sidecarAuthToken = null;
+
+async function getOrCreateSidecarAuthToken() {
+  if (sidecarAuthToken) return sidecarAuthToken;
+
+  // 1. Tenta carregar do chrome.storage.local
+  try {
+    if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+      const stored = await chrome.storage.local.get(['sidecar_auth_token']);
+      if (stored && stored.sidecar_auth_token) {
+        sidecarAuthToken = stored.sidecar_auth_token;
+        return sidecarAuthToken;
+      }
+    }
+  } catch (e) {}
+
+  // 2. Tenta obter via canal seguro do Host Nativo local (passo de pareamento)
+  if (typeof chrome !== 'undefined' && chrome.runtime?.sendNativeMessage) {
+    try {
+      const response = await new Promise((resolve) => {
+        chrome.runtime.sendNativeMessage(
+          NATIVE_HOST_NAME,
+          { action: 'get_auth_token' },
+          (res) => {
+            if (chrome.runtime.lastError || !res || !res.success) {
+              resolve(null);
+            } else {
+              resolve(res);
+            }
+          }
+        );
+      });
+      if (response && response.token) {
+        sidecarAuthToken = response.token;
+        await chrome.storage.local.set({ sidecar_auth_token: sidecarAuthToken });
+        console.log('[TeacherAI Extension] 🔑 Token de autenticação pareado via canal seguro local.');
+        return sidecarAuthToken;
+      }
+    } catch (err) {
+      console.warn('[TeacherAI Extension] Canal de pareamento nativo indisponível:', err);
+    }
+  }
+
+  return sidecarAuthToken;
+}
+
 // ─── GERENCIAMENTO DE WEBSOCKET LOCAL ──────────────────────────────────────────
 
-function connectWebSocket() {
+async function connectWebSocket() {
   if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
     return;
   }
 
   try {
-    ws = new WebSocket(WS_URL_PRIMARY);
+    const token = await getOrCreateSidecarAuthToken();
+    const targetUrl = token ? `${WS_URL_PRIMARY}?token=${encodeURIComponent(token)}` : WS_URL_PRIMARY;
+    ws = new WebSocket(targetUrl);
 
     ws.onopen = () => {
       console.log('[TeacherAI Extension] 🔌 Conectado ao Sidecar via WebSocket (:8766)');
+      if (token) {
+        try {
+          ws.send(JSON.stringify({ type: 'AUTH', token }));
+        } catch (e) {}
+      }
       isSidecarOnline = true;
       bothStartupMethodsFailed = false;
 
@@ -232,7 +285,12 @@ function connectWebSocket() {
 
 async function checkHttpFallbackAndReconnect() {
   try {
-    const res = await fetch(HTTP_STATUS_FALLBACK, { signal: AbortSignal.timeout(3000) });
+    const token = await getOrCreateSidecarAuthToken();
+    const headers = token ? { 'X-Sidecar-Token': token } : {};
+    const res = await fetch(HTTP_STATUS_FALLBACK, {
+      headers,
+      signal: AbortSignal.timeout(3000)
+    });
     if (res.ok) {
       isSidecarOnline = true;
       evaluateActiveTab();

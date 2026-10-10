@@ -56,6 +56,10 @@ def local_security_server():
 def make_http_request(url: str, method: str = "GET", headers: dict = None, data: bytes = None):
     """Auxiliar para disparar requisição HTTP e capturar resposta ou erro HTTPError."""
     req_headers = headers.copy() if headers else {}
+    if "X-Sidecar-Token" not in req_headers and "x-sidecar-token" not in req_headers and req_headers.get("SKIP_AUTH_HEADER") is not True:
+        from auth_token import get_current_auth_token
+        req_headers["X-Sidecar-Token"] = get_current_auth_token()
+    req_headers.pop("SKIP_AUTH_HEADER", None)
     req = urllib.request.Request(url, data=data, headers=req_headers, method=method)
     try:
         with urllib.request.urlopen(req, timeout=10.0) as resp:
