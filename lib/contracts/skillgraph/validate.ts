@@ -5,8 +5,8 @@ import {
   SENTINEL_ABORT,
   SENTINEL_CONTINUE,
 } from './nodes'
-import type { ValueRef, Condition } from './primitives'
-import type { Anchor, Candidate, AnchorScope } from './anchors'
+import type { ValueRef, Condition, TextSpec, Fingerprint } from './primitives'
+import type { Anchor, Candidate, AnchorOrRef, AnchorScope, RowScope } from './anchors'
 
 export interface Issue {
   code:
@@ -24,6 +24,8 @@ export interface Issue {
     | 'E_LOOP_BODY_ESCAPE'
     | 'E_PII_LITERAL'
     | 'E_LIMITS'
+    | 'E_CSS_PARAM'
+    | 'W_HOMONYM_RISK'
     | 'W_UNREACHABLE_NODE'
   nodeId?: string
   message: string
@@ -38,6 +40,7 @@ export interface ValidationReport {
 const CPF_REGEX = /\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b/
 const EMAIL_REGEX = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/
 const PHONE_REGEX = /\b(?:\+?55\s?)?(?:\(?\d{2}\)?\s?)?(?:9\d{4}|\d{4})[-.\s]?\d{4}\b/
+const ID_KEYWORD_REGEX = /matricula|matrícula|portal_id|id|código|codigo|ra|registro/i
 
 function checkPIIText(text: string, nodeId: string | undefined, issues: Issue[]) {
   if (CPF_REGEX.test(text)) {
@@ -53,8 +56,9 @@ function inspectValueRef(val: ValueRef, nodeId: string | undefined, graph: Skill
   if ('lit' in val && typeof val.lit === 'string') {
     checkPIIText(val.lit, nodeId, issues)
   } else if ('param' in val) {
-    if (!graph.params || !(val.param in graph.params)) {
-      issues.push({ code: 'E_UNDECLARED_PARAM', nodeId, message: `Parâmetro "${val.param}" não declarado no grafo` })
+    const rootParam = val.param.split('.')[0]
+    if (!graph.params || !(rootParam in graph.params)) {
+      issues.push({ code: 'E_UNDECLARED_PARAM', nodeId, message: `Parâmetro "${val.param}" (raiz: "${rootParam}") não declarado no grafo` })
     }
   } else if ('var' in val) {
     const rootVar = val.var.split('.')[0]
@@ -64,17 +68,106 @@ function inspectValueRef(val: ValueRef, nodeId: string | undefined, graph: Skill
   }
 }
 
+function inspectTextSpec(spec: TextSpec, nodeId: string | undefined, graph: SkillGraphV2, declaredVars: Set<string>, issues: Issue[]) {
+  if (typeof spec === 'string') {
+    checkPIIText(spec, nodeId, issues)
+  } else {
+    inspectValueRef(spec, nodeId, graph, declaredVars, issues)
+  }
+}
+
+function inspectAnchor(
+  anchor: AnchorOrRef,
+  nodeId: string | undefined,
+  graph: SkillGraphV2,
+  declaredVars: Set<string>,
+  issues: Issue[],
+  warnings: Issue[]
+) {
+  if ('ref' in anchor) {
+    if (!graph.anchor_library || !(anchor.ref in graph.anchor_library)) {
+      issues.push({ code: 'E_UNKNOWN_ANCHOR_REF', nodeId, message: `Referência a âncora "${anchor.ref}" não encontrada na anchor_library` })
+    }
+    return
+  }
+
+  for (const c of anchor.candidates || []) {
+    if (c.strategy === 'css') {
+      const sel: any = (c as any).selector
+      if (typeof sel !== 'string' || (typeof sel === 'object' && ('param' in sel || 'var' in sel || 'lit' in sel))) {
+        issues.push({ code: 'E_CSS_PARAM', nodeId, message: 'Candidato CSS não pode ser parametrizável com ValueRef' })
+      } else {
+        checkPIIText(sel, nodeId, issues)
+      }
+    } else if (c.strategy === 'role_name') inspectTextSpec(c.name, nodeId, graph, declaredVars, issues)
+    else if (c.strategy === 'label_text') inspectTextSpec(c.label, nodeId, graph, declaredVars, issues)
+    else if (c.strategy === 'aria_label') inspectTextSpec(c.aria_label, nodeId, graph, declaredVars, issues)
+    else if (c.strategy === 'placeholder') inspectTextSpec(c.placeholder, nodeId, graph, declaredVars, issues)
+    else if (c.strategy === 'test_id') inspectTextSpec(c.test_id, nodeId, graph, declaredVars, issues)
+    else if (c.strategy === 'text') inspectTextSpec(c.text, nodeId, graph, declaredVars, issues)
+    else if (c.strategy === 'column_header') inspectTextSpec(c.column_label, nodeId, graph, declaredVars, issues)
+    else if (c.strategy === 'structural_relative') inspectAnchor(c.to, nodeId, graph, declaredVars, issues, warnings)
+  }
+
+  if (anchor.scope?.within) {
+    const within = anchor.scope.within
+    if ('ref' in within) {
+      if (!graph.anchor_library || !(within.ref in graph.anchor_library)) {
+        issues.push({ code: 'E_UNKNOWN_ANCHOR_REF', nodeId, message: `Referência de escopo "${within.ref}" ausente em anchor_library` })
+      }
+    } else if ('table' in within) {
+      inspectAnchor(within.table, nodeId, graph, declaredVars, issues, warnings)
+      inspectValueRef(within.key.equals, nodeId, graph, declaredVars, issues)
+      if (within.key.secondary_key) {
+        inspectValueRef(within.key.secondary_key.equals, nodeId, graph, declaredVars, issues)
+      } else {
+        const hasId = within.key.column_labels.some(l => ID_KEYWORD_REGEX.test(l))
+        if (!hasId) {
+          warnings.push({ code: 'W_HOMONYM_RISK', nodeId, message: 'RowScope usa apenas nome do aluno sem secondary_key (risco de homônimos)' })
+        }
+      }
+    }
+  }
+}
+
+function inspectCondition(
+  cond: Condition,
+  nodeId: string | undefined,
+  graph: SkillGraphV2,
+  declaredVars: Set<string>,
+  issues: Issue[],
+  warnings: Issue[]
+) {
+  if (cond.op === 'all' || cond.op === 'any') {
+    for (const c of cond.conditions) inspectCondition(c, nodeId, graph, declaredVars, issues, warnings)
+  } else if (cond.op === 'not') {
+    inspectCondition(cond.condition, nodeId, graph, declaredVars, issues, warnings)
+  } else if ('anchor' in cond) {
+    inspectAnchor(cond.anchor, nodeId, graph, declaredVars, issues, warnings)
+    if ('value' in cond) inspectValueRef(cond.value, nodeId, graph, declaredVars, issues)
+  } else if ('var' in cond) {
+    const rootVar = cond.var.split('.')[0]
+    if (!declaredVars.has(rootVar) && !(graph.params && rootVar in graph.params)) {
+      issues.push({ code: 'E_UNDECLARED_VAR', nodeId, message: `Variável "${cond.var}" em Condition usada antes de ser produzida` })
+    }
+    if ('value' in cond) inspectValueRef(cond.value, nodeId, graph, declaredVars, issues)
+  }
+}
+
+function inspectFingerprint(fp: Fingerprint | undefined, nodeId: string | undefined, graph: SkillGraphV2, declaredVars: Set<string>, issues: Issue[], warnings: Issue[]) {
+  if (!fp) return
+  for (const lm of fp.landmarks || []) inspectAnchor(lm, nodeId, graph, declaredVars, issues, warnings)
+  for (const fl of fp.forbidden_landmarks || []) inspectAnchor(fl, nodeId, graph, declaredVars, issues, warnings)
+}
+
 export function validateGraph(graph: SkillGraphV2): ValidationReport {
   const errors: Issue[] = []
   const warnings: Issue[] = []
 
   // 1. Limites Globais
   const nodeCount = Object.keys(graph.nodes || {}).length
-  if (nodeCount > 200) {
-    errors.push({ code: 'E_LIMITS', message: `Grafo excede o teto de 200 nós (atual: ${nodeCount})` })
-  }
-  const serialized = JSON.stringify(graph)
-  if (Buffer.byteLength(serialized, 'utf-8') > 262144) {
+  if (nodeCount > 200) errors.push({ code: 'E_LIMITS', message: `Grafo excede o teto de 200 nós (atual: ${nodeCount})` })
+  if (Buffer.byteLength(JSON.stringify(graph), 'utf-8') > 262144) {
     errors.push({ code: 'E_LIMITS', message: 'Tamanho serializado do grafo excede o teto de 256 KB' })
   }
 
@@ -84,7 +177,7 @@ export function validateGraph(graph: SkillGraphV2): ValidationReport {
     return { valid: false, errors, warnings }
   }
 
-  // 3. Coleta de variáveis produzidas e verificação de referências
+  // 3. Coleta de variáveis produzidas
   const declaredVars = new Set<string>(['item', 'record', 'row', 'index'])
   for (const [nodeId, node] of Object.entries(graph.nodes)) {
     if (node.type === 'READ') declaredVars.add(node.into)
@@ -92,34 +185,49 @@ export function validateGraph(graph: SkillGraphV2): ValidationReport {
     if (node.type === 'DOWNLOAD') declaredVars.add(node.into)
   }
 
-  // 4. Verificação Estática de Nós
+  // 4. Varredura de anchor_library e fingerprints
+  if (graph.anchor_library) {
+    for (const [name, anc] of Object.entries(graph.anchor_library)) {
+      inspectAnchor(anc, `anchor_library.${name}`, graph, declaredVars, errors, warnings)
+    }
+  }
+  inspectFingerprint(graph.entry_fingerprint, 'entry_fingerprint', graph, declaredVars, errors, warnings)
+
+  // 5. Verificação Estática de Nós
   for (const [nodeId, node] of Object.entries(graph.nodes)) {
-    // E_READONLY_VIOLATION
     if (graph.safety.side_effect_level === 'read') {
       if (node.type === 'WRITE' || node.type === 'UPLOAD' || (node.type === 'CLICK' && node.is_submit_action)) {
         errors.push({ code: 'E_READONLY_VIOLATION', nodeId, message: `Nó mutador "${node.type}" proibido em grafo read-only` })
       }
     }
 
-    // Validação de Host em NAVIGATE
-    if (node.type === 'NAVIGATE') {
-      if (node.host && !graph.safety.allowed_hosts.includes(node.host)) {
-        errors.push({ code: 'E_HOST_NOT_ALLOWED', nodeId, message: `Host "${node.host}" não permitido em safety.allowed_hosts` })
-      }
+    if (node.type === 'NAVIGATE' && node.host && !graph.safety.allowed_hosts.includes(node.host)) {
+      errors.push({ code: 'E_HOST_NOT_ALLOWED', nodeId, message: `Host "${node.host}" não permitido em safety.allowed_hosts` })
     }
 
-    // Inspeção de ValueRefs e PII
+    // Inspeção de âncoras e valores
+    if ('anchor' in node) inspectAnchor(node.anchor, nodeId, graph, declaredVars, errors, warnings)
+    if (node.type === 'READ') inspectAnchor(node.source.anchor, nodeId, graph, declaredVars, errors, warnings)
     if (node.type === 'WRITE') inspectValueRef(node.value, nodeId, graph, declaredVars, errors)
-    if (node.type === 'UPLOAD') inspectValueRef(node.source, nodeId, graph, declaredVars, errors)
+    if (node.type === 'UPLOAD') {
+      inspectAnchor(node.input, nodeId, graph, declaredVars, errors, warnings)
+      inspectValueRef(node.source, nodeId, graph, declaredVars, errors)
+    }
+    if (node.type === 'DOWNLOAD') inspectAnchor(node.trigger, nodeId, graph, declaredVars, errors, warnings)
     if (node.type === 'CHECKPOINT') {
       for (const item of node.summary) inspectValueRef(item.value, nodeId, graph, declaredVars, errors)
     }
+    if (node.type === 'BRANCH') inspectCondition(node.condition, nodeId, graph, declaredVars, errors, warnings)
+    if (node.type === 'WAIT' && node.until) inspectCondition(node.until, nodeId, graph, declaredVars, errors, warnings)
+    if (node.type === 'HANDOFF_HUMAN') inspectCondition(node.resume_when, nodeId, graph, declaredVars, errors, warnings)
+    for (const pc of node.postconditions || []) inspectCondition(pc, nodeId, graph, declaredVars, errors, warnings)
+    inspectFingerprint(node.expect_fingerprint, nodeId, graph, declaredVars, errors, warnings)
 
     // Sentinelas e Arestas
-    const validSentinelsSuccess = new Set([SENTINEL_END, SENTINEL_CONTINUE])
+    const validSentinels = new Set([SENTINEL_END, SENTINEL_CONTINUE])
     if (node.type === 'BRANCH') {
       for (const edge of [node.on_true, node.on_false]) {
-        if (!validSentinelsSuccess.has(edge) && edge !== SENTINEL_ABORT && !(edge in graph.nodes)) {
+        if (!validSentinels.has(edge) && edge !== SENTINEL_ABORT && !(edge in graph.nodes)) {
           errors.push({ code: 'E_DANGLING_REF', nodeId, message: `Aresta do BRANCH aponta para nó inexistente: "${edge}"` })
         }
       }
@@ -136,41 +244,36 @@ export function validateGraph(graph: SkillGraphV2): ValidationReport {
     }
   }
 
-  // 5. Verificação de Ciclos (DAG)
+  // 6. Verificação de Ciclos (DAG)
   const visited = new Set<string>()
-  const recursionStack = new Set<string>()
-  let hasCycle = false
-
+  const recStack = new Set<string>()
   function detectCycle(u: string) {
     visited.add(u)
-    recursionStack.add(u)
-    const node = graph.nodes[u]
-    if (node) {
+    recStack.add(u)
+    const n = graph.nodes[u]
+    if (n) {
       const neighbors: string[] = []
-      if (node.type === 'BRANCH') {
-        if (node.on_true in graph.nodes) neighbors.push(node.on_true)
-        if (node.on_false in graph.nodes) neighbors.push(node.on_false)
+      if (n.type === 'BRANCH') {
+        if (n.on_true in graph.nodes) neighbors.push(n.on_true)
+        if (n.on_false in graph.nodes) neighbors.push(n.on_false)
       } else {
-        if (node.on_success in graph.nodes) neighbors.push(node.on_success)
-        if (node.on_fail in graph.nodes) neighbors.push(node.on_fail)
+        if (n.on_success in graph.nodes) neighbors.push(n.on_success)
+        if (n.on_fail in graph.nodes) neighbors.push(n.on_fail)
       }
       for (const v of neighbors) {
-        if (!visited.has(v)) {
-          detectCycle(v)
-        } else if (recursionStack.has(v)) {
-          hasCycle = true
-          errors.push({ code: 'E_CYCLE', nodeId: u, message: `Ciclo detectado no grafo envolvendo os nós "${u}" e "${v}"` })
+        if (!visited.has(v)) detectCycle(v)
+        else if (recStack.has(v)) {
+          errors.push({ code: 'E_CYCLE', nodeId: u, message: `Ciclo detectado envolvendo nós "${u}" e "${v}"` })
         }
       }
     }
-    recursionStack.delete(u)
+    recStack.delete(u)
   }
-
   for (const n of Object.keys(graph.nodes)) {
     if (!visited.has(n)) detectCycle(n)
   }
 
-  // 6. E_WRITE_WITHOUT_CHECKPOINT (Remover checkpoints e checar alcançabilidade de nós arriscados)
+  // 7. E_WRITE_WITHOUT_CHECKPOINT (Sem checkpoints, checa alcance de nós arriscados)
   const reachableWithoutCheckpoint = new Set<string>()
   const q: string[] = [graph.entry_node]
   while (q.length > 0) {
@@ -178,7 +281,7 @@ export function validateGraph(graph: SkillGraphV2): ValidationReport {
     if (reachableWithoutCheckpoint.has(curId)) continue
     reachableWithoutCheckpoint.add(curId)
     const n = graph.nodes[curId]
-    if (!n || n.type === 'CHECKPOINT') continue // Bloqueia a propagação através de CHECKPOINT
+    if (!n || n.type === 'CHECKPOINT') continue
 
     if (n.type === 'BRANCH') {
       if (n.on_true in graph.nodes) q.push(n.on_true)
@@ -189,21 +292,14 @@ export function validateGraph(graph: SkillGraphV2): ValidationReport {
       if (n.type === 'LOOP' && n.body_entry in graph.nodes) q.push(n.body_entry)
     }
   }
-
   for (const nodeId of reachableWithoutCheckpoint) {
     const n = graph.nodes[nodeId]
-    if (!n) continue
-    const isRisky = n.type === 'WRITE' || n.type === 'UPLOAD' || (n.type === 'CLICK' && n.is_submit_action)
-    if (isRisky) {
-      errors.push({
-        code: 'E_WRITE_WITHOUT_CHECKPOINT',
-        nodeId,
-        message: `Nó arriscado "${nodeId}" (${n.type}) é alcançável a partir de entry_node sem passar por um nó CHECKPOINT`,
-      })
+    if (n && (n.type === 'WRITE' || n.type === 'UPLOAD' || (n.type === 'CLICK' && n.is_submit_action))) {
+      errors.push({ code: 'E_WRITE_WITHOUT_CHECKPOINT', nodeId, message: `Nó arriscado "${nodeId}" alcançável sem CHECKPOINT prévio` })
     }
   }
 
-  // 7. Loop Body Escape & Limites
+  // 8. Loop Body Escape & Limites
   for (const [nodeId, node] of Object.entries(graph.nodes)) {
     if (node.type === 'LOOP') {
       if (node.max_iterations <= 0 || node.max_iterations > 1000) {
@@ -215,7 +311,7 @@ export function validateGraph(graph: SkillGraphV2): ValidationReport {
     }
   }
 
-  // 8. Warning: W_UNREACHABLE_NODE
+  // 9. Warning: W_UNREACHABLE_NODE
   const allReachable = new Set<string>()
   const rq: string[] = [graph.entry_node]
   while (rq.length > 0) {
@@ -239,9 +335,5 @@ export function validateGraph(graph: SkillGraphV2): ValidationReport {
     }
   }
 
-  return {
-    valid: errors.length === 0,
-    errors,
-    warnings,
-  }
+  return { valid: errors.length === 0, errors, warnings }
 }
