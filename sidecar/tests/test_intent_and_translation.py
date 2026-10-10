@@ -268,9 +268,11 @@ class TestManualServerHTTP(unittest.TestCase):
     def test_get_portal_status_endpoint(self):
         import json
         import urllib.request
+        from auth_token import get_current_auth_token
 
+        token = get_current_auth_token()
         url = f"http://127.0.0.1:{self.port}/portal_status"
-        req = urllib.request.Request(url, method="GET")
+        req = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"}, method="GET")
         with urllib.request.urlopen(req, timeout=5) as resp:
             data = json.loads(resp.read().decode("utf-8"))
             assert resp.status == 200
@@ -280,10 +282,12 @@ class TestManualServerHTTP(unittest.TestCase):
     def test_post_natural_intent_clarification(self):
         import json
         import urllib.request
+        from auth_token import get_current_auth_token
 
+        token = get_current_auth_token()
         url = f"http://127.0.0.1:{self.port}/natural_intent"
         payload = json.dumps({"text": "lança nota do Hugo"}).encode("utf-8")
-        req = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/json"}, method="POST")
+        req = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/json", "Authorization": f"Bearer {token}"}, method="POST")
         with urllib.request.urlopen(req, timeout=25) as resp:
             data = json.loads(resp.read().decode("utf-8"))
             assert resp.status == 200
