@@ -58,6 +58,7 @@ import {
   getExamAuditHistory,
   type ExamVersionHistory
 } from '@/lib/examAuditVersioning'
+import { syncOmrLayoutWithItemIds } from '@/lib/omrItemPsychometricsBridge'
 import { preLinterQualityGate } from '@/lib/itemConsistencyAndSimilarityEngine'
 import {
   deriveGrmFromAnalyticalRubric,
@@ -957,18 +958,14 @@ export default function ExamResultThreeTabs({
                             optionsPerQuestion: 4
                           })
 
-                          // Sincronização do Ciclo Fechado (D1): Grava layout e gabarito real para o OmniGrader
-                          const answerKeyString = parsedQuestions
-                            .map((q, i) => `${i + 1}:${((q as any).answer || (q as any).correctOptionId || q.answerKey || 'A').toString().trim().toUpperCase()}`)
-                            .join(';')
+                          // Sincronização do Ciclo Fechado (D1/Sessão 5): Grava layout, gabarito e itemIds reais para o OmniGrader
+                          const omrLayout = syncOmrLayoutWithItemIds({
+                            examTitle,
+                            questions: parsedQuestions
+                          })
 
                           try {
-                            localStorage.setItem('teacher_omr_active_layout', JSON.stringify({
-                              title: examTitle,
-                              totalQuestions: totalQ,
-                              answerKeyString,
-                              timestamp: Date.now()
-                            }))
+                            localStorage.setItem('teacher_omr_active_layout', JSON.stringify(omrLayout))
                             toast.success('Cartão OMR gerado e gabarito sincronizado com o OmniGrader!')
                           } catch {}
 
@@ -1002,19 +999,14 @@ export default function ExamResultThreeTabs({
                     <button
                       type="button"
                       onClick={() => {
-                        const totalQ = parsedQuestions.length || 10
                         const examTitle = header.title || topic || 'Avaliação Oficial'
-                        const answerKeyString = parsedQuestions
-                          .map((q, i) => `${i + 1}:${((q as any).answer || (q as any).correctOptionId || q.answerKey || 'A').toString().trim().toUpperCase()}`)
-                          .join(';')
+                        const omrLayout = syncOmrLayoutWithItemIds({
+                          examTitle,
+                          questions: parsedQuestions
+                        })
 
                         try {
-                          localStorage.setItem('teacher_omr_active_layout', JSON.stringify({
-                            title: examTitle,
-                            totalQuestions: totalQ,
-                            answerKeyString,
-                            timestamp: Date.now()
-                          }))
+                          localStorage.setItem('teacher_omr_active_layout', JSON.stringify(omrLayout))
                           toast.info('Redirecionando para o OmniGrader com gabarito carregado...')
                         } catch {}
 

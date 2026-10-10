@@ -26,6 +26,7 @@ import { recordApprovedCorrection } from '@/lib/curatedMemory'
 import { getAnchorExemplarsPrompt } from '@/lib/rubrics/anchorExemplars'
 import { screenEssayStylometrics, StylometricAdvisory } from '@/lib/stylometricScreening'
 import { ingestOmniGraderEvaluation } from '@/lib/studentDossier'
+import { recordOmrItemResponsesToQuestionBank } from '@/lib/omrItemPsychometricsBridge'
 import ModelCapabilityBanner from '@/components/ModelCapabilityBanner'
 import '@/lib/subjects/english'
 import '@/lib/subjects/portuguese'
@@ -118,6 +119,7 @@ export default function OmniGrader({ initialTab = 'photo' }: OmniGraderProps) {
   const [selectedStudentPhoto, setSelectedStudentPhoto] = useState('')
   const [examTitlePhoto, setExamTitlePhoto] = useState('Prova Bimestral de Inglês')
   const [answerKeyPhoto, setAnswerKeyPhoto] = useState('1:A, 2:B, 3:C, 4:D, 5:A, 6:C, 7:B, 8:D, 9:A, 10:B')
+  const [activeItemIdsPhoto, setActiveItemIdsPhoto] = useState<string[]>([])
   const [imageUri, setImageUri] = useState<string | null>(null)
   const [gradingScenario, setGradingScenario] = useState<'scenario_a_omr' | 'scenario_b_external'>('scenario_a_omr')
   const [isGradingPhoto, setIsGradingPhoto] = useState(false)
@@ -169,11 +171,14 @@ export default function OmniGrader({ initialTab = 'photo' }: OmniGraderProps) {
       }
       setClasses(cl)
 
-      // Auto-carregamento do Cartão OMR gerado no ExamBuilder (via safeGet / safeSet da arquitetura Onda 2)
-      const parsedLayout = safeGet<{ title?: string; answerKeyString?: string } | null>('teacher_omr_active_layout', null)
+      // Auto-carregamento do Cartão OMR gerado no ExamBuilder (via safeGet / safeSet da arquitetura Onda 2 e Sessão 5)
+      const parsedLayout = safeGet<{ title?: string; answerKeyString?: string; itemIds?: string[] } | null>('teacher_omr_active_layout', null)
       if (parsedLayout) {
         if (parsedLayout.title) setExamTitlePhoto(parsedLayout.title)
         if (parsedLayout.answerKeyString) setAnswerKeyPhoto(parsedLayout.answerKeyString)
+        if (Array.isArray(parsedLayout.itemIds) && parsedLayout.itemIds.length > 0) {
+          setActiveItemIdsPhoto(parsedLayout.itemIds)
+        }
         setGradingScenario('scenario_a_omr')
         setActiveTab('photo')
         safeSet('teacher_omr_active_layout', null)
@@ -416,6 +421,24 @@ export default function OmniGrader({ initialTab = 'photo' }: OmniGraderProps) {
         safeSet('teacher_student_bkt_mastery', existingMasteries)
       }
 
+      // Sessão 5 - T3: Grava respostas por item no QuestionBank via psychometricsEngine
+      try {
+        const existingBank = safeGet<any[]>('teacher_question_bank_items', [])
+        const numItems = Object.keys(detectedMap).length
+        const fallbackItemIds = Array.from({ length: numItems }, (_, i) => `item_auto_${i + 1}`)
+        const resolvedItemIds = activeItemIdsPhoto.length >= numItems ? activeItemIdsPhoto : fallbackItemIds
+        const qbUpdated = recordOmrItemResponsesToQuestionBank({
+          itemIds: resolvedItemIds,
+          studentResponses: [{
+            studentId: updated[idx].id,
+            answers: Object.fromEntries(Object.entries(detectedMap).map(([k, v]) => [k.toString(), v]))
+          }],
+          answerKey: Object.fromEntries(Object.entries(parsedKey).map(([k, v]) => [k.toString(), v])),
+          existingBankItems: existingBank
+        })
+        safeSet('teacher_question_bank_items', qbUpdated)
+      } catch {}
+
       window.dispatchEvent(new Event('storage'))
       toast.success(`Nota ${photoGradeResult.score}/10 lançada e BKT atualizado para ${updated[idx].name}!`)
     }
@@ -497,6 +520,24 @@ export default function OmniGrader({ initialTab = 'photo' }: OmniGraderProps) {
       })
       safeSet('teacher_student_bkt_mastery', existingMasteries)
       safeSet('teacher_dina_item_parameters', result.dinaCalibrationSummary.itemParameters)
+
+      // Sessão 5 - T3: Grava respostas por item do lote OMR no QuestionBank via psychometricsEngine
+      try {
+        const existingBank = safeGet<any[]>('teacher_question_bank_items', [])
+        const numItems = totalQ
+        const fallbackItemIds = Array.from({ length: numItems }, (_, i) => `item_auto_${i + 1}`)
+        const resolvedItemIds = activeItemIdsPhoto.length >= numItems ? activeItemIdsPhoto : fallbackItemIds
+        const qbUpdated = recordOmrItemResponsesToQuestionBank({
+          itemIds: resolvedItemIds,
+          studentResponses: mockSheets.map(s => ({
+            studentId: s.studentId,
+            answers: Object.fromEntries(Object.entries(s.detectedAnswers).map(([k, v]) => [k.toString(), v]))
+          })),
+          answerKey: Object.fromEntries(Object.entries(parsedKey).map(([k, v]) => [k.toString(), v])),
+          existingBankItems: existingBank
+        })
+        safeSet('teacher_question_bank_items', qbUpdated)
+      } catch {}
 
       toast.success(`Lote de ${result.totalSheetsProcessed} folhas OMR processado com sucesso! BKT e DINA/DIF atualizados.`)
     } catch (err: any) {

@@ -42,6 +42,10 @@ import {
   TestBlueprint
 } from '@/lib/testBlueprintEngine'
 import {
+  getPastClassAdaptationFromStorage,
+  buildAdaptivePromptEntry
+} from '@/lib/classSkillAdaptationEngine'
+import {
   getSubjectProfile,
   getExamSections,
   getLevelIds,
@@ -197,6 +201,27 @@ export default function TestAndWorksheets({ initialMode = 'exam' }: TestAndWorks
   const [spacedWarning, setSpacedWarning] = useState<string | null>(null)
   const [countMismatchWarning, setCountMismatchWarning] = useState<{ requested: number; received: number; reason?: string } | null>(null)
   const [includeUDL, setIncludeUDL] = useState(false)
+
+  // Sessão 5: Adaptação por Desempenho da Turma (k >= 5) & Reforço Pedagógico
+  const [includeClassAdaptation, setIncludeClassAdaptation] = useState(false)
+  const [adaptationPreview, setAdaptationPreview] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!includeClassAdaptation) {
+      setAdaptationPreview(null)
+      return
+    }
+    const targetClass = header.classGroup || grade
+    const classAdaptation = getPastClassAdaptationFromStorage(targetClass)
+    const totalQ = computeTotalQuestions(questionCounts) || 10
+    const { adaptiveOutput } = buildAdaptivePromptEntry(
+      '',
+      { totalQuestions: totalQ },
+      classAdaptation,
+      true
+    )
+    setAdaptationPreview(adaptiveOutput.previewText)
+  }, [includeClassAdaptation, header.classGroup, grade, questionCounts])
 
   // APIs
   const [apis, setApis] = useState<ApiConfig[]>([])
@@ -401,6 +426,18 @@ export default function TestAndWorksheets({ initialMode = 'exam' }: TestAndWorks
 
       const blueprintSection = generateBlueprintPromptSection(testBlueprint)
 
+      // Sessão 5 - T2: Integração com Blueprint Adaptativo (Opt-in)
+      const targetClass = header.classGroup || grade
+      const classAdaptation = includeClassAdaptation
+        ? getPastClassAdaptationFromStorage(targetClass)
+        : null
+      const { fullBlueprintPrompt } = buildAdaptivePromptEntry(
+        blueprintSection,
+        testBlueprint,
+        classAdaptation,
+        includeClassAdaptation
+      )
+
       let prompt = ''
 
       if (mode === 'exam') {
@@ -423,7 +460,7 @@ ${customPrompt ? `\nDIRETRIZES DO PROFESSOR:\n"${customPrompt}"\n` : ''}
 ${methInstructions}
 ${levelGatingRule}
 
-${blueprintSection}
+${fullBlueprintPrompt}
 
 === DISTRIBUIÇÃO COGNITIVA & DIFICULDADE (BLOOM) ===
 - LEMBRAR/COMPREENDER (${bloomRemember}%) | APLICAR (${bloomApply}%) | ANALISAR (${bloomAnalyze}%) | AVALIAR/CRIAR (${bloomEvaluate}%)
@@ -460,7 +497,7 @@ ${customPrompt ? `\nDIRETRIZES DO PROFESSOR:\n"${customPrompt}"\n` : ''}
 ${neeProfile ? `\nADAPTAÇÃO ESPECIAL (NEE): Adaptar para perfil ${neeProfile}.` : ''}
 ${methInstructions}
 
-${blueprintSection}
+${fullBlueprintPrompt}
 
 ESTRUTURA OBRIGATÓRIA:
 1. Comece com <h2>${effectiveTitle}</h2>
@@ -843,6 +880,38 @@ Retorne a questão reformulada no formato estruturado:`
                 style={{ width: 18, height: 18, cursor: 'pointer', accentColor: '#8b5e3c', flexShrink: 0 }}
               />
             </div>
+          </div>
+
+          {/* Adaptação Pedagógica por Turma (Sessão 5 - T2) */}
+          <div style={CARD}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+              <div>
+                <label style={{ ...SL, margin: '0 0 2px' }}>🎯 Adaptação Pedagógica por Turma (K-Anonimato & Reforço Cognitivo)</label>
+                <span style={{ fontSize: 11.5, color: '#7a5c42', lineHeight: 1.4, display: 'block' }}>
+                  Analisa o histórico de notas da turma ({header.classGroup || grade}) com k ≥ 5 (LGPD Zero PII) e aloca itens extras de reforço para sanar defasagens diagnosticadas.
+                </span>
+              </div>
+              <input
+                type="checkbox"
+                checked={includeClassAdaptation}
+                onChange={e => setIncludeClassAdaptation(e.target.checked)}
+                style={{ width: 18, height: 18, cursor: 'pointer', accentColor: '#8b5e3c', flexShrink: 0 }}
+              />
+            </div>
+            {includeClassAdaptation && adaptationPreview && (
+              <div style={{
+                marginTop: 8,
+                padding: '8px 12px',
+                borderRadius: RADIUS.sm,
+                background: adaptationPreview.includes('🎯') ? '#f3faf4' : '#fff9ea',
+                border: `1px solid ${adaptationPreview.includes('🎯') ? '#93c59e' : '#f5c66b'}`,
+                fontSize: 12,
+                color: adaptationPreview.includes('🎯') ? '#1e4620' : '#855309',
+                lineHeight: 1.45
+              }}>
+                {adaptationPreview}
+              </div>
+            )}
           </div>
 
           {/* Acessibilidade Universal & UDL (Pilar V) */}
