@@ -3,6 +3,21 @@ import { z } from 'zod'
 import { AnchorOrRefSchema, type AnchorOrRef } from './anchors'
 
 /**
+ * Transform — Transformações determinísticas aplicáveis a dados lidos do DOM ou parâmetros.
+ */
+export const TransformSchema = z.enum([
+  'trim',
+  'normalize_name',
+  'parse_decimal_pt_br',
+  'strip_percent',
+  'to_number',
+  'to_date_br',
+  'format_ddmm',
+  'format_ddmmyyyy',
+])
+export type Transform = z.infer<typeof TransformSchema>
+
+/**
  * ValueRef — Referência declarativa a valores dinâmicos ou literais (P1 Declarativo).
  * Proíbe interpolações soltas de string e execuções em runtime.
  */
@@ -13,11 +28,13 @@ export type LitValueRef = z.infer<typeof LitValueRefSchema>
 
 export const ParamValueRefSchema = z.object({
   param: z.string().min(1),
+  transform: TransformSchema.optional(),
 }).strict()
 export type ParamValueRef = z.infer<typeof ParamValueRefSchema>
 
 export const VarValueRefSchema = z.object({
   var: z.string().min(1).regex(/^[a-zA-Z0-9_]+(\.[a-zA-Z0-9_]+)*$/, 'Caminho de variável inválido'),
+  transform: TransformSchema.optional(),
 }).strict()
 export type VarValueRef = z.infer<typeof VarValueRefSchema>
 
@@ -29,17 +46,14 @@ export const ValueRefSchema = z.union([
 export type ValueRef = z.infer<typeof ValueRefSchema>
 
 /**
- * Transform — Transformações determinísticas aplicáveis a dados lidos do DOM.
+ * TextSpec — Especificação declarativa de texto em candidatos de âncora (L1).
+ * Permite string literal fixa ou ValueRef ({param} ou {var}), proibindo interpolação (P1).
  */
-export const TransformSchema = z.enum([
-  'trim',
-  'normalize_name',
-  'parse_decimal_pt_br',
-  'strip_percent',
-  'to_number',
-  'to_date_br',
+export const TextSpecSchema = z.union([
+  z.string().min(1),
+  ValueRefSchema,
 ])
-export type Transform = z.infer<typeof TransformSchema>
+export type TextSpec = z.infer<typeof TextSpecSchema>
 
 // ─── Condition (Vocabulário Fechado, Profundidade Máxima 3) ─────────────────
 

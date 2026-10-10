@@ -1,6 +1,6 @@
 // CONTRATO v2.0 — mudanças exigem bump de spec_version e aprovação do dono
 import { z } from 'zod'
-import { ValueRefSchema, type ValueRef } from './primitives'
+import { ValueRefSchema, TextSpecSchema, type ValueRef, type TextSpec } from './primitives'
 
 // ─── Interfaces TypeScript para Tipos Recursivos ────────────────────────────
 
@@ -13,12 +13,21 @@ export interface AnchorRef {
   ref: string
 }
 
+export interface RowScopeKey {
+  column_labels: string[]
+  equals: ValueRef
+  match?: 'exact' | 'normalized' | 'contains'
+}
+
 export interface RowScope {
   table: AnchorOrRef
   key: {
     column_labels: string[]
     equals: ValueRef
-    match?: 'exact' | 'normalized'
+    match?: 'exact' | 'normalized' | 'contains'
+    secondary_key?: RowScopeKey
+    on_multiple?: 'fail' | 'use_secondary'
+    on_none?: 'fail' | 'skip'
   }
 }
 
@@ -33,15 +42,17 @@ export interface SemanticHint {
   semantic_type?: string
 }
 
+export type CandidateMatchMode = 'exact' | 'normalized' | 'contains'
+
 export type Candidate =
-  | { strategy: 'role_name'; role: string; name: string }
-  | { strategy: 'label_text'; label: string }
-  | { strategy: 'aria_label'; aria_label: string }
-  | { strategy: 'placeholder'; placeholder: string }
-  | { strategy: 'test_id'; test_id: string }
-  | { strategy: 'text'; text: string; exact?: boolean }
+  | { strategy: 'role_name'; role: string; name: TextSpec; match?: CandidateMatchMode }
+  | { strategy: 'label_text'; label: TextSpec; match?: CandidateMatchMode }
+  | { strategy: 'aria_label'; aria_label: TextSpec; match?: CandidateMatchMode }
+  | { strategy: 'placeholder'; placeholder: TextSpec; match?: CandidateMatchMode }
+  | { strategy: 'test_id'; test_id: TextSpec; match?: CandidateMatchMode }
+  | { strategy: 'text'; text: TextSpec; match?: CandidateMatchMode; exact?: boolean }
   | { strategy: 'css'; selector: string }
-  | { strategy: 'column_header'; column_label: string }
+  | { strategy: 'column_header'; column_label: TextSpec; match?: CandidateMatchMode }
   | {
       strategy: 'structural_relative'
       relation: 'parent' | 'next_sibling' | 'prev_sibling' | 'first_child'
@@ -69,13 +80,22 @@ export const AnchorRefSchema: z.ZodType<AnchorRef> = z.object({
   ref: z.string().min(1),
 }).strict()
 
+export const RowScopeKeySchema: z.ZodType<RowScopeKey> = z.object({
+  column_labels: z.array(z.string().min(1)).min(1),
+  equals: ValueRefSchema,
+  match: z.enum(['exact', 'normalized', 'contains']).default('normalized'),
+}).strict()
+
 export const RowScopeSchema: z.ZodType<RowScope> = z.lazy(() =>
   z.object({
     table: AnchorOrRefSchema,
     key: z.object({
       column_labels: z.array(z.string().min(1)).min(1),
       equals: ValueRefSchema,
-      match: z.enum(['exact', 'normalized']).default('normalized'),
+      match: z.enum(['exact', 'normalized', 'contains']).default('normalized'),
+      secondary_key: RowScopeKeySchema.optional(),
+      on_multiple: z.enum(['fail', 'use_secondary']).default('fail'),
+      on_none: z.enum(['fail', 'skip']).default('fail'),
     }).strict(),
   }).strict()
 )
@@ -93,41 +113,50 @@ export const SemanticHintSchema: z.ZodType<SemanticHint> = z.object({
   semantic_type: z.string().optional(),
 }).strict()
 
+export const CandidateMatchModeSchema = z.enum(['exact', 'normalized', 'contains']).default('normalized')
+
 export const CandidateSchema: z.ZodType<Candidate> = z.lazy(() =>
   z.discriminatedUnion('strategy', [
     z.object({
       strategy: z.literal('role_name'),
       role: z.string().min(1),
-      name: z.string().min(1),
+      name: TextSpecSchema,
+      match: CandidateMatchModeSchema.optional(),
     }).strict(),
     z.object({
       strategy: z.literal('label_text'),
-      label: z.string().min(1),
+      label: TextSpecSchema,
+      match: CandidateMatchModeSchema.optional(),
     }).strict(),
     z.object({
       strategy: z.literal('aria_label'),
-      aria_label: z.string().min(1),
+      aria_label: TextSpecSchema,
+      match: CandidateMatchModeSchema.optional(),
     }).strict(),
     z.object({
       strategy: z.literal('placeholder'),
-      placeholder: z.string().min(1),
+      placeholder: TextSpecSchema,
+      match: CandidateMatchModeSchema.optional(),
     }).strict(),
     z.object({
       strategy: z.literal('test_id'),
-      test_id: z.string().min(1),
+      test_id: TextSpecSchema,
+      match: CandidateMatchModeSchema.optional(),
     }).strict(),
     z.object({
       strategy: z.literal('text'),
-      text: z.string().min(1),
+      text: TextSpecSchema,
+      match: CandidateMatchModeSchema.optional(),
       exact: z.boolean().optional().default(true),
     }).strict(),
     z.object({
       strategy: z.literal('css'),
-      selector: z.string().min(1),
+      selector: z.string().min(1), // Seletor CSS NUNCA é parametrizável (evita injeção)
     }).strict(),
     z.object({
       strategy: z.literal('column_header'),
-      column_label: z.string().min(1),
+      column_label: TextSpecSchema,
+      match: CandidateMatchModeSchema.optional(),
     }).strict(),
     z.object({
       strategy: z.literal('structural_relative'),

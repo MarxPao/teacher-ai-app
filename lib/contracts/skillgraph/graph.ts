@@ -66,6 +66,7 @@ export const ParamDefinitionSchema = z.object({
     'term',
     'file',
     'list',
+    'date',
   ]),
   required: z.boolean(),
   default: z.any().optional(),
