@@ -63,6 +63,7 @@ Este documento consolida a governança, integridade de branches, histórico de S
 | `TASK-002` | SafeWriter: validação de visibilidade, detecção de honeypots e amarração relacional aluno↔linha no DOM | `task/TASK-002` (`398dce9` -> merged) | **APROVADA** (20/20 PASS) | `232c09c5a46f...` (Index=18) |
 | `TASK-003a` | Endurecimento do SafeWriter: novas formas de ocultação (scale, clip-path, font-size, pointer-events, overlay, ancestrais, translate) e honeypots estruturais (17 casos) | `task/TASK-003a` (`5461dd5` -> merged) | **APROVADA** (17/17 PASS) | `49d042837da9...` (Index=20) |
 | `TASK-003b` | Endurecimento do SafeWriter: amarração estrita por tokens, detecção de homônimos na tabela e nomes parciais (25 casos) | `task/TASK-003b` (`2fc06b8` -> merged) | **APROVADA** (25/25 PASS) | `59cc4eac573a...` (Index=21) |
+| `TASK-004` | Correção de js_inspect (SyntaxError V8) em browser_use_agent e degradação segura fail-closed para regras regex em caso de PermissionError de PII em intent_parser | `task/TASK-004` (`b94e487` -> merged) | **APROVADA** (23/23 PASS) | `0744505f343a...` (Index=23) |
 
 
 
