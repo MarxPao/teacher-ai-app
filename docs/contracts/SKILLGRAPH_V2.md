@@ -67,6 +67,32 @@ A localização de elementos no DOM opera em 3 níveis determinísticos:
    - `css`: seletor CSS determinístico.
    - `column_header`: cabeçalho de coluna associado em um `RowScope`.
    - `structural_relative`: relação parental ou de irmandade no DOM (`parent`, `next_sibling`, `prev_sibling`, `first_child`).
+
+### 3.1. Âncoras Parametrizáveis (`TextSpec` — L1)
+Candidatos textuais (`role_name`, `label_text`, `aria_label`, `placeholder`, `test_id`, `text`, `column_header`) utilizam o tipo unificado `TextSpec`:
+- **Valores suportados:** string literal fixa ou `ValueRef` (`{ param: "x" }` ou `{ var: "y" }`).
+- **Transformações determinísticas:** `ValueRef` suporta transformações opcionais declarativas (`Transform`), como `format_ddmm` e `format_ddmmyyyy` (ex: localizar coluna da aula a partir de um parâmetro de data `2026-10-10` transformado em `"10/10"`), além de `trim`, `normalize_name`, `strip_percent`, `parse_decimal_pt_br`.
+- **Modos de correspondência:** `match?: 'exact' | 'normalized' | 'contains'` (padrão: `'normalized'`).
+- **Proibição de interpolação:** Em conformidade com o princípio P1, não são permitidos templates ou concatenações dinâmicas de string.
+- ⚠️ **PROIBIÇÃO DE PARAMETRIZAÇÃO EM SELETORES CSS (Segurança Crítica):**
+  A estratégia `css` aceita **estritamente string literal estática** (`selector: string.min(1)`). É terminantemente proibido o uso de `TextSpec` ou `ValueRef` em seletores CSS. Essa restrição elimina qualquer superfície de ataque de *CSS/Selector Injection* no navegador do usuário. Tentativas são rejeitadas pelo schema Zod e pelo validador semântico com `E_CSS_PARAM`.
+
+### 3.2. Chave de Linha Robusta e Homônimos (`RowScope` — L2)
+Para operações tabulares (ex.: diários de classe, grades de notas e chamadas), a localização dentro de linhas utiliza `RowScope`:
+- **Chave Primária (`key`):**
+  - `column_labels: string[]`: lista de cabeçalhos possíveis para a coluna identificadora (ex.: `["Matrícula", "Código"]`).
+  - `equals: ValueRef`: valor esperado (ex.: `{ param: "aluno.portal_id" }`).
+  - `match?: 'exact' | 'normalized' | 'contains'`.
+- **Chave Secundária de Desambiguação (`secondary_key`):**
+  - Permite definir chave de desempate (ex.: chave primária por código/matrícula e chave secundária por `["Nome do Aluno", "Discente"]` com `{ param: "aluno.name" }`, ou vice-versa).
+- **Semântica de Conflito (`on_multiple`):**
+  - `'fail'` (padrão): se mais de uma linha corresponder à chave primária (ex.: dois alunos homônimos na mesma turma com mesmo nome civil), o runner falha imediatamente sem arriscar mutação no aluno errado.
+  - `'use_secondary'`: o runner consulta a `secondary_key` para desambiguar a linha. Se o conflito persistir após a chave secundária, a execução falha.
+- **Semântica de Ausência (`on_none`):**
+  - `'fail'` (padrão): interrompe a execução se a linha do aluno não for encontrada na tabela.
+  - `'skip'`: permite ignorar a linha se a operação for projetada para processamento parcial.
+- **Aviso Semântico `W_HOMONYM_RISK`:** O validador emite aviso caso um mapa utilize apenas colunas de nome discente na chave primária sem configurar `secondary_key`.
+
 2. **Nível 2 — Matcher Semântico Local:** Se todos os candidatos falharem, o runner consulta o `semantic_hint` (`role`, `semantic_type`) e tenta localizar elementos equivalentes dentro do mesmo container/escopo usando heurísticas locais estáticas (sem rede ou LLM).
 3. **Nível 3 — Falha Segura:** Se o elemento não puder ser localizado com confiança, a execução segue para `on_fail` (ou `$abort`) e registra `needs_repair: true` para acionar auto-reparo offline.
 
@@ -117,5 +143,37 @@ A localização de elementos no DOM opera em 3 níveis determinísticos:
 | `E_LOOP_UNBOUNDED` | Erro | Nó `LOOP` sem `max_iterations` ou com teto superior a 1000. |
 | `E_LOOP_BODY_ESCAPE` | Erro | Corpo do loop atinge `$end` ou salta para fora sem passar por `$continue`. |
 | `E_PII_LITERAL` | Erro | Literal estático ou candidato de seletor contém dados em formato de CPF, e-mail ou telefone. |
+| `E_CSS_PARAM` | Erro | Candidato com estratégia CSS utiliza seletor parametrizado (prevenção contra injeção de seletores). |
 | `E_LIMITS` | Erro | Grafo excede 200 nós ou tamanho serializado superior a 256 KB. |
 | `W_UNREACHABLE_NODE` | Aviso | Nó presente no mapa mas inalcançável a partir de `entry_node`. |
+| `W_HOMONYM_RISK` | Aviso | Âncora de linha (`RowScope.key`) filtra por coluna de nome discente sem definir `secondary_key` para desambiguação. |
+
+---
+
+## 7. Obrigações do Runner em Tempo de Execução (Runtime Contract — L3)
+
+O executor determinístico na extensão Chrome MV3 deve obedecer rigorosamente a 7 obrigações de runtime antes, durante e após a execução de qualquer nó:
+
+1. **Leitura de `before_value` antes de mutação em WRITE:**
+   Antes de qualquer disparo de evento ou digitação em um nó `WRITE`, o runner deve ler o valor existente no campo (`before_value`) e retê-lo no contexto da execução.
+2. **Reversão ou abort se read-back pós-escrita divergente:**
+   Após a escrita, o runner executa a leitura confirmatória (`read_back: true`). Se o valor verificado pós-escrita (`after_value`) divergir do valor pretendido, o runner deve tentar restaurar o `before_value` original ou abortar a execução imediatamente (`$abort`), evitando corrupção de dados escolares no portal.
+3. **Checagem em runtime de `allowed_hosts` em toda navegação e ação:**
+   A conformidade de domínio não é apenas estática em compilação. Em runtime, antes de qualquer navegação (`NAVIGATE`), troca de janela, inspeção em iframe (`FrameRef`) ou requisição de rede, o runner valida se o host de destino está expressamente presente em `safety.allowed_hosts`.
+4. **Execução estrita do checkpoint humano (HITL):**
+   Ao atingir um nó `CHECKPOINT`, o runner interrompe o fluxo e apresenta o resumo pedagógico para confirmação pelo professor. Se o usuário rejeitar (`on_reject`), a execução é imediatamente cancelada. É estritamente proibido auto-aprovar ou contornar um checkpoint por timeout ou script.
+5. **Registro em trilha de auditoria estruturada (`AuditEntry`):**
+   Toda ação mutadora ou de leitura relevante deve gerar um registro padronizado pelo contrato `AuditEntrySchema` (`run_id`, `graph`, `node_id`, `action`, `target_ref`, `before_value`, `after_value`, `verified_by`, `status`, `error_code`, `at`). Campos com PII sensível (`before_value`, `after_value`, `target_ref`) recebem guarda local e nunca são transmitidos externamente.
+6. **Recusa de execução se mapa não passar no validador semântico:**
+   Antes de disparar o `entry_node`, o runner executa a validação de schema e a análise semântica (`validateGraph`). Mapas que apresentem qualquer erro estrutural (`valid: false`) são sumariamente recusados, impedindo comportamentos anômalos no DOM.
+7. **Sem chamadas a LLM em runtime — runner 100% determinístico:**
+   O runner é um interpretador puro de autômato finito/DAG. Durante a execução, é expressamente vedada qualquer consulta a LLM (local ou em nuvem). Toda a busca de elementos, desambiguação e digitação é governada deterministicamente pelas regras declaradas no grafo e nos candidatos de âncora.
+
+---
+
+## 8. Consumo do Contrato pela Extensão (Decisão de Arquitetura L4)
+
+A extensão Chrome Manifest V3 consumirá os contratos TypeScript unificados (`lib/contracts/`) compilados em um bundle único via **esbuild** (a ser configurado na Fase 2), sem duplicar schemas ou interfaces em JavaScript:
+- **Fonte Única da Verdade:** Toda definição de Zod schema, tipos TypeScript e rotinas de validação reside em `lib/contracts/`.
+- **Zero Duplicação:** Não há manutenção manual paralela de schemas em `.js` dentro de `teacher-extension/`.
+- **Integridade de Tipos:** O bundle compilado para a extensão compartilha exatamente os mesmos limites, tipos e regras que o app desktop.
