@@ -123,6 +123,14 @@ Para operações tabulares (ex.: diários de classe, grades de notas e chamadas)
      - **Antes do Loop (`scope: "per_batch"`):** O professor aprova o lote inteiro uma única vez no início.
      - **Dentro do Loop (`scope: "per_iteration"`):** O professor aprova aluno por aluno individualmente a cada iteração.
    - A validação semântica remove todos os nós `CHECKPOINT`; se qualquer `WRITE` puder ser atingido a partir de `entry_node`, o grafo é rejeitado com `E_WRITE_WITHOUT_CHECKPOINT`.
+4. **Filtragem de Linhas que Não São Dados (`skip_rows` e `skip_empty_rows` — G1):**
+   - Em tabelas escolares, linhas de rodapé (ex.: "Total", "Média", "Subtotal") ou linhas vazias não devem ser processadas como alunos.
+   - `skip_rows?: RowSkip[]` (máx. 10): lista de regras declarativas para descartar linhas.
+     - `RowSkip = { column_labels: string[], match?: 'exact' | 'normalized' | 'contains', values: string[] }`.
+     - Valores são exclusivamente literais de string (sem `ValueRef`), e a linha é descartada se qualquer regra casar.
+     - Suportado em `READ` (leitura tabular com `source.kind: "table"`) e `LOOP` (iteração sobre `table_rows`).
+   - `skip_empty_rows: boolean` (padrão `true`): descarta automaticamente linhas cujas células de dados estejam vazias ou contenham apenas espaços.
+   - **Aviso `W_FOOTER_ROW_RISK`:** O validador emite aviso caso um nó `LOOP` sobre `table_rows` alcance nós de risco (`WRITE`, `UPLOAD`, submit) sem definir `skip_rows`.
 
 ---
 
@@ -147,12 +155,14 @@ Para operações tabulares (ex.: diários de classe, grades de notas e chamadas)
 | `E_LIMITS` | Erro | Grafo excede 200 nós ou tamanho serializado superior a 256 KB. |
 | `W_UNREACHABLE_NODE` | Aviso | Nó presente no mapa mas inalcançável a partir de `entry_node`. |
 | `W_HOMONYM_RISK` | Aviso | Âncora de linha (`RowScope.key`) filtra por coluna de nome discente sem definir `secondary_key` para desambiguação. |
+| `W_FOOTER_ROW_RISK` | Aviso | `LOOP` sobre `table_rows` alcança nó arriscado sem `skip_rows` configurado (risco de interagir com linha de rodapé/total). |
+| `E_VALUE_OUT_OF_SCALE` | Erro (Runtime) | Nota fora dos limites de `grade_scale` em `WRITE` com `semantic: "grade"` (emitido em `AuditEntry` pelo runner em runtime; não emitido pelo `validateGraph`). |
 
 ---
 
 ## 7. Obrigações do Runner em Tempo de Execução (Runtime Contract — L3)
 
-O executor determinístico na extensão Chrome MV3 deve obedecer rigorosamente a 7 obrigações de runtime antes, durante e após a execução de qualquer nó:
+O executor determinístico na extensão Chrome MV3 deve obedecer rigorosamente a 8 obrigações de runtime antes, durante e após a execução de qualquer nó:
 
 1. **Leitura de `before_value` antes de mutação em WRITE:**
    Antes de qualquer disparo de evento ou digitação em um nó `WRITE`, o runner deve ler o valor existente no campo (`before_value`) e retê-lo no contexto da execução.
@@ -168,6 +178,12 @@ O executor determinístico na extensão Chrome MV3 deve obedecer rigorosamente a
    Antes de disparar o `entry_node`, o runner executa a validação de schema e a análise semântica (`validateGraph`). Mapas que apresentem qualquer erro estrutural (`valid: false`) são sumariamente recusados, impedindo comportamentos anômalos no DOM.
 7. **Sem chamadas a LLM em runtime — runner 100% determinístico:**
    O runner é um interpretador puro de autômato finito/DAG. Durante a execução, é expressamente vedada qualquer consulta a LLM (local ou em nuvem). Toda a busca de elementos, desambiguação e digitação é governada deterministicamente pelas regras declaradas no grafo e nos candidatos de âncora.
+8. **Validação de escala antes de mutação de nota (`semantic: "grade"` — G2):**
+   Antes de disparar qualquer escrita em nó `WRITE` com `semantic: "grade"`, o runner valida obrigatoriamente o valor contra a escala declarada em `canonical_mapping.grade_scale`:
+   - **Escala numérica (`numeric`):** o valor normalizado deve respeitar `min <= valor <= max`.
+   - **Escala conceitual (`concept`):** o valor deve constar na lista de valores permitidos (`values`).
+   - **Escala descritiva (`descriptive`):** o valor deve ser uma string não vazia.
+   Caso o valor esteja fora da escala: o runner **não escreve no DOM**, registra uma entrada em `AuditEntry` com `status: "failed"` e `error_code: "E_VALUE_OUT_OF_SCALE"`, e redireciona o fluxo para `on_fail` (ou `$abort`), impedindo a persistência de notas corrompidas no portal escolar.
 
 ---
 
