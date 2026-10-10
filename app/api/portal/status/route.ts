@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { getSidecarAuthHeaders } from '@/lib/sidecarAuth'
 
 /**
  * GET /api/portal/status
@@ -12,6 +13,7 @@ export async function GET() {
   // 1. Tenta consultar o endpoint amigável do sidecar (:8765)
   try {
     const sidecarRes = await fetch('http://127.0.0.1:8765/portal_status', {
+      headers: getSidecarAuthHeaders(),
       signal: AbortSignal.timeout(800)
     }).catch(() => null)
 

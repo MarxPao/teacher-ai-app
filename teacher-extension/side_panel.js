@@ -157,6 +157,18 @@ function initKeepAlivePort() {
 }
 initKeepAlivePort();
 
+async function getSidecarTokenHeader() {
+  try {
+    if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+      const data = await chrome.storage.local.get(['sidecar_auth_token']);
+      if (data?.sidecar_auth_token) {
+        return { 'X-Sidecar-Token': data.sidecar_auth_token };
+      }
+    }
+  } catch (e) {}
+  return {};
+}
+
 // ── Monitoramento do Motor de Inteligência Local (Fase 1) ────────────────────
 async function updateAiEngineStatus() {
   const card = document.getElementById('ai-model-status-card');
@@ -172,7 +184,11 @@ async function updateAiEngineStatus() {
   if (!card || !badge) return;
 
   try {
-    const resp = await fetch('http://127.0.0.1:8765/ai_engine_status', { cache: 'no-store' });
+    const tokenHeader = await getSidecarTokenHeader();
+    const resp = await fetch('http://127.0.0.1:8765/ai_engine_status', {
+      headers: tokenHeader,
+      cache: 'no-store'
+    });
     if (!resp.ok) throw new Error('Status HTTP ' + resp.status);
     const data = await resp.json();
 
@@ -1903,9 +1919,10 @@ function extractNavigationTarget(text) {
 
 async function parseNaturalIntent(text) {
   try {
+    const tokenHeader = await getSidecarTokenHeader();
     const res = await fetch('http://localhost:8765/natural_intent', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...tokenHeader },
       body: JSON.stringify({ text, parse_only: true })
     });
     if (res.ok) {

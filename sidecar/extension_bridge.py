@@ -14,7 +14,12 @@ import logging
 import threading
 import time
 from typing import Any, Dict, Optional, Set
-from urllib.parse import urlparse
+from urllib.parse import urlparse, parse_qs
+
+try:
+    from auth_token import verify_auth_token, get_current_auth_token
+except ImportError:
+    from sidecar.auth_token import verify_auth_token, get_current_auth_token
 
 try:
     import websockets
@@ -161,6 +166,43 @@ class ExtensionBridge:
 
         return None
 
+    @staticmethod
+    def _extract_token(websocket: Any) -> Optional[str]:
+        """Extrai o token de autenticação via query param (?token=) ou cabeçalhos HTTP."""
+        path = getattr(websocket, "path", None)
+        if not path:
+            req = getattr(websocket, "request", None)
+            if req and hasattr(req, "path"):
+                path = req.path
+        if path and "?" in path:
+            try:
+                parsed = urlparse(path)
+                qs = parse_qs(parsed.query)
+                if "token" in qs and qs["token"]:
+                    return qs["token"][0].strip()
+            except Exception:
+                pass
+
+        req = getattr(websocket, "request", None)
+        if req is not None and hasattr(req, "headers"):
+            t = req.headers.get("X-Sidecar-Token") or req.headers.get("x-sidecar-token")
+            if t:
+                return t.strip()
+
+        req_headers = getattr(websocket, "request_headers", None)
+        if req_headers is not None:
+            t = req_headers.get("X-Sidecar-Token") or req_headers.get("x-sidecar-token")
+            if t:
+                return t.strip()
+
+        headers = getattr(websocket, "headers", None)
+        if headers is not None and hasattr(headers, "get"):
+            t = headers.get("X-Sidecar-Token") or headers.get("x-sidecar-token")
+            if t:
+                return t.strip()
+
+        return None
+
     async def _handle_connection(self, websocket: Any):
         """Gerencia o ciclo de vida da conexão WebSocket da extensão."""
         origin = self._extract_origin(websocket)
@@ -168,6 +210,30 @@ class ExtensionBridge:
             logger.warning(f"[ExtensionBridge] ⛔ Conexão WebSocket rejeitada de origem não autorizada: '{origin}'")
             try:
                 await websocket.close(1008, "Policy Violation: Untrusted Origin")
+            except Exception:
+                pass
+            return
+
+        # Validação do token de autenticação (Porta 8766)
+        token = self._extract_token(websocket)
+        authenticated = verify_auth_token(token) if token else False
+
+        if not authenticated:
+            # Tenta autenticação via primeira mensagem WebSocket ({ "type": "AUTH", "token": "..." })
+            try:
+                if hasattr(websocket, "recv"):
+                    raw_first = await asyncio.wait_for(websocket.recv(), timeout=3.0)
+                    first_msg = json.loads(raw_first)
+                    if first_msg.get("type") == "AUTH" and verify_auth_token(first_msg.get("token")):
+                        authenticated = True
+                        await websocket.send(json.dumps({"type": "AUTH_OK", "status": "authenticated"}))
+            except Exception:
+                authenticated = False
+
+        if not authenticated:
+            logger.warning("[ExtensionBridge] ⛔ Conexão WebSocket rejeitada: token ausente ou inválido.")
+            try:
+                await websocket.close(1008, "Policy Violation: Authentication Required")
             except Exception:
                 pass
             return
@@ -186,6 +252,13 @@ class ExtensionBridge:
                 try:
                     msg = json.loads(raw_message)
                     msg_type = msg.get("type")
+
+                    if msg_type == "AUTH":
+                        if verify_auth_token(msg.get("token")):
+                            await websocket.send(json.dumps({"type": "AUTH_OK", "status": "authenticated"}))
+                        else:
+                            await websocket.close(1008, "Policy Violation: Invalid Token")
+                            break
 
                     if msg_type == "TAB_STATUS_UPDATE":
                         # Atualiza estado da aba do navegador da professora

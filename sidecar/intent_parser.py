@@ -1215,7 +1215,7 @@ def _call_gemini_llm(prompt_text: str, api_key: str, candidate_models: Optional[
 
     models = candidate_models or ["gemini-3.1-flash-lite", "gemini-3.6-flash", "gemini-3.5-flash-lite"]
     for model in models:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
         payload = json.dumps({
             "system_instruction": {
                 "parts": [{"text": SYSTEM_PROMPT_INTENT}]
@@ -1229,7 +1229,10 @@ def _call_gemini_llm(prompt_text: str, api_key: str, candidate_models: Optional[
             }
         }).encode("utf-8")
 
-        headers = {"Content-Type": "application/json"}
+        headers = {
+            "Content-Type": "application/json",
+            "x-goog-api-key": api_key
+        }
         req = urllib.request.Request(url, data=payload, headers=headers, method="POST")
         try:
             with urllib.request.urlopen(req, timeout=12) as resp:

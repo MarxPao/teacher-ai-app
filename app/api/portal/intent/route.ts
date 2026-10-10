@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getSidecarAuthHeaders } from '@/lib/sidecarAuth'
 
 /**
  * POST /api/portal/intent
@@ -24,7 +25,10 @@ export async function POST(req: NextRequest) {
     try {
       const sidecarRes = await fetch('http://127.0.0.1:8765/natural_intent', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...getSidecarAuthHeaders()
+        },
         body: JSON.stringify({
           text: message,
           history,

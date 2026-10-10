@@ -1,13 +1,13 @@
-name: Security & TypeCheck Audit
+name: Security & Quality Audit
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ main, master, 'refactor/**', 'feat/**', 'fix/**' ]
   pull_request:
     branches: [ main, master ]
 
 jobs:
-  audit_and_typecheck:
+  audit_and_test:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -25,8 +25,14 @@ jobs:
       - name: Run TypeScript Check
         run: npx tsc --noEmit
 
-      - name: Run Package Security Audit
-        run: npm audit --audit-level=critical
+      - name: Run Package Security Audit (Critical/High)
+        run: npm audit --audit-level=high
 
       - name: Run Zero-Simulation Anti-Mock Audit
         run: node scripts/scan-mocks.mjs
+
+      - name: Run Vitest Suite
+        run: npx vitest run
+
+      - name: Run Next.js Build
+        run: npm run build

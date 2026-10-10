@@ -21,7 +21,7 @@ from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 from typing import Any, Dict, Optional
 import urllib.request
-from urllib.parse import urlparse
+from urllib.parse import urlparse, parse_qs
 
 # Garante sidecar no sys.path
 _SIDECAR_DIR = Path(__file__).resolve().parent
@@ -51,8 +51,8 @@ from chrome_launcher import (
 )
 from cdp_connector import CDPConnector
 from navigation_state_machine import NavigationStateMachine, NavState
-from safe_writer import SafeWriter
 from extension_bridge import bridge_instance
+from auth_token import verify_auth_token, initialize_auth_token, get_current_auth_token
 
 SERVER_PORT = 8765
 
@@ -696,6 +696,39 @@ class ManualServerHandler(BaseHTTPRequestHandler):
             self.send_header("Access-Control-Allow-Origin", origin)
             self.send_header("Vary", "Origin")
 
+    def _extract_token(self) -> Optional[str]:
+        """Extrai o token de autenticação dos cabeçalhos ou query string."""
+        token = self.headers.get("X-Sidecar-Token") or self.headers.get("x-sidecar-token")
+        if token:
+            return token.strip()
+        auth = self.headers.get("Authorization", "")
+        if auth.startswith("Bearer "):
+            return auth[7:].strip()
+        try:
+            parsed = urlparse(self.path)
+            qs = parse_qs(parsed.query)
+            if "token" in qs and qs["token"]:
+                return qs["token"][0].strip()
+        except Exception:
+            pass
+        return None
+
+    def _is_authenticated(self) -> bool:
+        """
+        Valida token para requisições recebidas.
+        Endpoints públicos/diagnóstico de infraestrutura local não expõem dados da professora nem realizam escrita:
+        - GET / (dashboard HTML local)
+        - GET /health (diagnóstico de processo/porta CDP)
+        - GET /ai_engine_status (status do modelo em memória)
+        Para endpoints com ação de escrita, automação ou dados da professora (/task, /natural_intent, /ask_page, /portal_status, /ai_engine_preload),
+        exige token válido via X-Sidecar-Token, Bearer ou ?token=.
+        """
+        clean_path = self.path.split("?")[0]
+        if clean_path in ("/", "/index.html", "/health", "/ai_engine_status"):
+            return True
+        token = self._extract_token()
+        return verify_auth_token(token)
+
     def do_OPTIONS(self):
         if not self._is_host_allowed() or not self._is_origin_allowed():
             self.send_response(403)
@@ -707,7 +740,7 @@ class ManualServerHandler(BaseHTTPRequestHandler):
         self.send_response(200)
         self._send_cors_headers()
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Teacher-AI-Source")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Teacher-AI-Source, X-Sidecar-Token")
         self.end_headers()
 
     def do_GET(self):
@@ -726,7 +759,16 @@ class ManualServerHandler(BaseHTTPRequestHandler):
             self.wfile.write(json.dumps({"error": f"Forbidden: Untrusted origin '{origin}'"}).encode("utf-8"))
             return
 
-        if self.path == "/" or self.path == "/index.html":
+        if not self._is_authenticated():
+            self.send_response(401)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self._send_cors_headers()
+            self.end_headers()
+            self.wfile.write(b'{"error": "Unauthorized: invalid or missing X-Sidecar-Token"}')
+            return
+
+        clean_path = self.path.split("?")[0]
+        if clean_path == "/" or clean_path == "/index.html":
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self._send_cors_headers()
@@ -734,7 +776,7 @@ class ManualServerHandler(BaseHTTPRequestHandler):
             self.wfile.write(HTML_DASHBOARD.encode("utf-8"))
             return
 
-        if self.path == "/health":
+        if clean_path == "/health":
             is_ok, msg = check_cdp_health()
             tabs = get_open_tabs() if is_ok else []
             resp = {
@@ -750,7 +792,7 @@ class ManualServerHandler(BaseHTTPRequestHandler):
             self.wfile.write(json.dumps(resp).encode("utf-8"))
             return
 
-        if self.path == "/portal_status":
+        if clean_path == "/portal_status":
             if bridge_instance.is_connected():
                 resp = bridge_instance.get_status_summary()
                 self.send_response(200)
@@ -789,7 +831,7 @@ class ManualServerHandler(BaseHTTPRequestHandler):
             self.wfile.write(json.dumps(resp).encode("utf-8"))
             return
 
-        if self.path == "/ai_engine_status":
+        if clean_path == "/ai_engine_status":
             try:
                 from sidecar.local_semantic_matcher import LocalSemanticMatcher
             except ImportError:
@@ -822,7 +864,16 @@ class ManualServerHandler(BaseHTTPRequestHandler):
             self.wfile.write(json.dumps({"error": f"Forbidden: Untrusted origin '{origin}'"}).encode("utf-8"))
             return
 
-        if self.path == "/task":
+        if not self._is_authenticated():
+            self.send_response(401)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self._send_cors_headers()
+            self.end_headers()
+            self.wfile.write(b'{"error": "Unauthorized: invalid or missing X-Sidecar-Token"}')
+            return
+
+        clean_path = self.path.split("?")[0]
+        if clean_path == "/task":
             content_length = int(self.headers.get("Content-Length", 0))
             body_bytes = self.rfile.read(content_length)
             try:
@@ -845,7 +896,7 @@ class ManualServerHandler(BaseHTTPRequestHandler):
             self.wfile.write(json.dumps(result, indent=2).encode("utf-8"))
             return
 
-        if self.path == "/natural_intent":
+        if clean_path == "/natural_intent":
             content_length = int(self.headers.get("Content-Length", 0))
             body_bytes = self.rfile.read(content_length)
             try:
@@ -887,7 +938,7 @@ class ManualServerHandler(BaseHTTPRequestHandler):
             self.wfile.write(json.dumps(result, ensure_ascii=False, indent=2).encode("utf-8"))
             return
 
-        if self.path == "/ask_page":
+        if clean_path == "/ask_page":
             content_length = int(self.headers.get("Content-Length", 0))
             body_bytes = self.rfile.read(content_length)
             try:
@@ -914,7 +965,7 @@ class ManualServerHandler(BaseHTTPRequestHandler):
             self.wfile.write(json.dumps({"sucesso": True, "answer": final_ans}, ensure_ascii=False).encode("utf-8"))
             return
 
-        if self.path == "/ai_engine_preload":
+        if clean_path == "/ai_engine_preload":
             try:
                 from local_semantic_matcher import LocalSemanticMatcher
             except ImportError:
@@ -932,7 +983,10 @@ class ManualServerHandler(BaseHTTPRequestHandler):
         self.end_headers()
 
 
-def start_server(port: int = SERVER_PORT, enable_tray: bool = False):
+def start_server(port: int = SERVER_PORT, enable_tray: bool = False, auth_token: Optional[str] = None):
+    # Inicializa ou recupera token de autenticação protegido
+    active_token = initialize_auth_token(auth_token)
+
     bridge_instance.start_background()
     server = ThreadingHTTPServer(("127.0.0.1", port), ManualServerHandler)
 
@@ -975,6 +1029,7 @@ def start_server(port: int = SERVER_PORT, enable_tray: bool = False):
     print(f" • Painel Web Local:   👉 http://localhost:{port} 👈")
     print(f" • Endpoint REST:      👉 POST http://localhost:{port}/task 👈")
     print(f" • Ponte Extensão (WS): 👉 ws://localhost:{bridge_instance.port} 👈")
+    print(f" • Token Sidecar:      👉 {active_token[:6]}...{active_token[-4:]} (~/.teacher-ai/sidecar_auth_token)")
     print(f" • Chrome Dedicado:    👉 http://localhost:{CDP_PORT} (perfil: {PROFILE_DIR})")
     print(f" • Autostart (Boot):   {startup_msg}")
     print("=" * 72)
@@ -1017,6 +1072,7 @@ if __name__ == "__main__":
     parser.add_argument("--task", type=str, help="JSON da intencao estruturada para executar via CLI e sair")
     parser.add_argument("--launch", action="store_true", help="Abre o Chrome com perfil dedicado antes de iniciar")
     parser.add_argument("--tray", action="store_true", help="Inicia o ícone na bandeja do sistema (system tray)")
+    parser.add_argument("--auth-token", type=str, default=None, help="Token explícito de autenticação do sidecar")
 
     args = parser.parse_args()
 
@@ -1026,4 +1082,4 @@ if __name__ == "__main__":
     if args.task:
         run_cli_intent(args.task)
     else:
-        start_server(args.port, enable_tray=args.tray)
+        start_server(args.port, enable_tray=args.tray, auth_token=args.auth_token)

@@ -410,9 +410,12 @@ async function callProviderWithFallback(
           try {
             const ctrl = new AbortController()
             const tid = setTimeout(() => ctrl.abort(), 9000)
-            const response = await guardEgressFetch(`https://generativelanguage.googleapis.com/v1beta/models/${gModel}:generateContent?key=${key}`, {
+            const response = await guardEgressFetch(`https://generativelanguage.googleapis.com/v1beta/models/${gModel}:generateContent`, {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers: {
+                'Content-Type': 'application/json',
+                'x-goog-api-key': key
+              },
               signal: ctrl.signal,
               body: JSON.stringify({
                 system_instruction: { parts: [{ text: systemPrompt }] },

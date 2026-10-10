@@ -176,10 +176,13 @@ export async function generateGeminiEmbedding(text: string, apiKey?: string): Pr
 
   try {
     const response = await guardEgressFetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${key}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent`,
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': key
+        },
         body: JSON.stringify({
           model: 'models/text-embedding-004',
           content: {
@@ -219,10 +222,13 @@ export async function batchGenerateGeminiEmbeddings(texts: string[], apiKey?: st
 
   try {
     const response = await guardEgressFetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:batchEmbedContents?key=${key}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:batchEmbedContents`,
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': key
+        },
         body: JSON.stringify({
           requests: texts.map(t => ({
             model: 'models/text-embedding-004',

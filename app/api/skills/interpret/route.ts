@@ -168,11 +168,14 @@ Responda ESTRITAMENTE em formato JSON com esses campos.`
         console.warn(`[Interpret] Groq retornou HTTP ${groqRes.status}: ${errText}. Ativando fallback determinístico.`)
       }
     } else {
-      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${byokKey}`
+      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent`
       try {
         const geminiRes = await guardEgressFetch(geminiUrl, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'x-goog-api-key': byokKey
+          },
           body: JSON.stringify({
             contents: [{ parts: [{ text: prompt }] }],
             generationConfig: {

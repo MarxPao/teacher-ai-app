@@ -36,16 +36,38 @@ export function safeGet<T>(key: string, fallback: T): T {
 
 /**
  * Safely JSON-stringifies and writes a value to localStorage.
- * Silently no-ops in SSR or on QuotaExceededError.
+ * Retorna boolean (true = gravou com sucesso, false = falha ou SSR).
+ * Em caso de falha (inclusive QuotaExceededError), emite o evento global
+ * 'teacher:storage-error' contendo key e motivo/error.
  */
-export function safeSet<T>(key: string, value: T): void {
-  if (typeof window === 'undefined') return
+export function safeSet<T>(key: string, value: T): boolean {
+  if (typeof window === 'undefined') return false
   try {
     localStorage.setItem(key, JSON.stringify(value))
-  } catch (e) {
+    return true
+  } catch (e: any) {
     if (process.env.NODE_ENV !== 'production') {
       console.error(`[localDB] Failed to write key "${key}"`, e)
     }
+    try {
+      const isQuota = e?.name === 'QuotaExceededError' || e?.code === 22 || (typeof e?.message === 'string' && e.message.includes('quota'))
+      const reason = isQuota
+        ? 'QuotaExceededError: Limite de armazenamento local atingido.'
+        : (e?.message || 'Falha ao salvar no armazenamento local.')
+
+      window.dispatchEvent(
+        new CustomEvent('teacher:storage-error', {
+          detail: {
+            key,
+            reason,
+            error: e
+          }
+        })
+      )
+    } catch {
+      // Ignora se o dispatch do evento falhar
+    }
+    return false
   }
 }
 

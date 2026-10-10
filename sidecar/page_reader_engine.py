@@ -750,12 +750,14 @@ def _call_gemini(b64: str, prompt: str, byok: Dict) -> str:
     if b64:
         parts.append({"inlineData": {"mimeType": "image/png", "data": b64}})
     url = (f"https://generativelanguage.googleapis.com/v1beta/models/"
-           f"{byok.get('model', 'gemini-flash-latest')}:generateContent?key={byok['api_key']}")
+           f"{byok.get('model', 'gemini-flash-latest')}:generateContent")
     payload = json.dumps({
         "contents": [{"parts": parts}],
         "generationConfig": {"maxOutputTokens": 800, "responseMimeType": "application/json"}
     }).encode()
-    req = urllib.request.Request(url, data=payload, headers=COMMON_HEADERS, method="POST")
+    headers = dict(COMMON_HEADERS)
+    headers["x-goog-api-key"] = byok['api_key']
+    req = urllib.request.Request(url, data=payload, headers=headers, method="POST")
     with urllib.request.urlopen(req, timeout=30) as r:
         return json.loads(r.read())["candidates"][0]["content"]["parts"][0]["text"]
 

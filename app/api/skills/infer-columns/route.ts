@@ -145,9 +145,12 @@ ${headers.map((h: string, i: number) => `${i + 1}. "${h}": [${(samplesPerCol[h] 
 
 Responda estritamente com JSON: { "classifications": [ { "header": string, "semantic_type": string } ] }`
 
-        const geminiRes = await guardEgressFetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${geminiKey}`, {
+        const geminiRes = await guardEgressFetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'x-goog-api-key': geminiKey
+          },
           body: JSON.stringify({
             contents: [{ parts: [{ text: prompt }] }],
             generationConfig: { responseMimeType: 'application/json', temperature: 0.1 },

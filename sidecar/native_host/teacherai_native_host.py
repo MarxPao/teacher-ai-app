@@ -182,6 +182,24 @@ def handle_request(req: dict) -> dict:
     if action == "launch_sidecar":
         return launch_sidecar_process()
 
+    if action == "get_auth_token":
+        try:
+            sidecar_dir = Path(__file__).resolve().parent.parent
+            if str(sidecar_dir) not in sys.path:
+                sys.path.insert(0, str(sidecar_dir))
+            from auth_token import get_current_auth_token
+            token = get_current_auth_token()
+            return {
+                "success": True,
+                "token": token
+            }
+        except Exception as e:
+            log(f"Erro ao obter token de autenticação: {e}")
+            return {
+                "success": False,
+                "error": str(e)
+            }
+
     return {
         "success": False,
         "message": f"Ação desconhecida: {action}"

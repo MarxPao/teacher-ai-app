@@ -45,9 +45,9 @@ export async function validateProviderApiKey(provider: string, rawKey: string): 
     let res: Response | null = null
 
     if (prov === 'gemini') {
-      res = await guardEgressFetch('https://generativelanguage.googleapis.com/v1beta/models', {
+      res = await guardEgressFetch(`https://generativelanguage.googleapis.com/v1beta/models`, {
         method: 'GET',
-        headers: { 'x-goog-api-key': key }
+        headers: { 'x-goog-api-key': key.trim() }
       })
     } else if (prov === 'openai') {
       res = await guardEgressFetch('https://api.openai.com/v1/models', {
