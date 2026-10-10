@@ -1041,9 +1041,7 @@ class BrowserUseAgent:
                     }
                 }
             }
-                    }
-                }
-            }
+
 
             // 3. Coleta campos de entrada visíveis na página (sem limitar apenas à linha do aluno, para permitir campos fora da tabela)
             const allInputs = Array.from(document.querySelectorAll('input, select, textarea'));
