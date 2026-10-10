@@ -8,11 +8,8 @@ Este documento consolida a governança, integridade de branches, histórico de S
 
 | Repositório / Worktree Local | Branch / Estado | Commit SHA | Descrição e Papel Canônico |
 | :--- | :--- | :--- | :--- |
-| `C:/Users/rafae/Documents/antigravity/blissful-noether` | `main` | `3b41c07` | **Tronco Canônico de Produto**. Contém o merge de `d1ccd60`, a correção RFC-010 (`2598a1e`) e telas de turmas e escolas. |
-| `C:/Users/rafae/Documents/antigravity/worktree-eval-m0` | `eval/m0-reliable-evaluation` | `0e61ecc` | **Tronco Canônico da Régua M0**. Contém `EVAL_HASHES.txt`, 72 portais (`audit/eval/specs/dev`), `generator.py`, `run.py`, fixtures `unit/html` e o hotfix `c377471` (`teacher-extension/attendancePolarity.js`). |
-| `C:/Users/rafae/Documents/antigravity/hopeful-bell` | `feat-turmas-perfil-aluno` | `d1ccd60` | Workspace ativo do agente (já integrado na `main` de `blissful-noether` via commit `845d9aa`). |
-| `C:/Users/rafae/Documents/antigravity/worktree-259c42d` | detached HEAD | `259c42d` | Marco intermediário do harness M0 com casca SPA única. |
-| `C:/Users/rafae/Documents/antigravity/worktree-before-hotfix` | detached HEAD | `74f066f` | Estado imediatamente anterior ao hotfix de polaridade de frequência. |
+| `C:/Users/rafae/Documents/antigravity/hopeful-bell` | `main` | `13e77e2` | **Tronco Principal Unificado**. Contém o engine de provas v2 auditado (`4cd4007` via merge `5380dc0`), a etapa 0 de refatoração (`3f15e8a` via merge `6dfcdf5`), SafeWriter endurecido (TASK-002, 003a, 003b) e correções de portais (TASK-004 e TASK-005). |
+| `C:/Users/rafae/Documents/antigravity/hopeful-bell-fix-engine` | `fix/engine-provas` | `4cd4007` | **Engine de Provas v2 (Integrado)**. 11 arquivos de teste, 58 testes aprovados, psicometria bayesiana, adaptação por turma e OMR. |
 
 ### Plano de Consolidação (Pendente de Aprovação)
 1. Tronco único em `blissful-noether` (`main` em `3b41c07`).
