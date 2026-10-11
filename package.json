@@ -13,8 +13,11 @@
     "scan:mocks": "node scripts/scan-mocks.mjs",
     "harness:build": "esbuild tools/runner-harness/harness.ts --bundle --outfile=tools/runner-harness/dist/harness.bundle.js --format=esm --sourcemap",
     "harness": "npx tsx scripts/serve-harness.ts",
-    "build:ext": "npx tsx scripts/build-extension-runner.ts",
-    "compile:trace": "npx tsx scripts/compile-trace.ts"
+    "compile:trace": "npx tsx scripts/compile-trace.ts",
+    "desktop:build": "npx tsx scripts/build-desktop.ts",
+    "desktop:dev": "npm run desktop:build && electron ./dist-desktop/main.js",
+    "desktop:seed-demo": "npx tsx desktop/scripts/seedDemo.ts",
+    "privacy:scan": "npx tsx scripts/privacy-scan.ts"
   },
   "dependencies": {
     "@tailwindcss/typography": "^0.5.19",
@@ -37,6 +40,7 @@
     "@types/pg": "^8.20.3",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "electron": "^34.5.8",
     "eslint": "^9",
     "eslint-config-next": "16.2.6",
     "jsdom": "^30.1.1",

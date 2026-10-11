@@ -61,6 +61,7 @@ sidecar/screenshots/
 
 # distribution & audit scratch
 /dist/
+/dist-desktop/
 *.crx
 audit_experiments_output.json
 scratch_report.txt

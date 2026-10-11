@@ -1,0 +1,200 @@
+import * as path from 'node:path'
+import * as fs from 'node:fs'
+import { app, BrowserWindow, ipcMain, session } from 'electron'
+import { NodeSqliteDriver } from './db/nodeSqliteDriver'
+import { VaultManager } from './vault/safeStorage'
+import {
+  MigrationRunner,
+  SqlStudentRepository,
+  SqlSkillGraphRepository,
+  SqlAuditRepository,
+  SqlConsentRepository,
+  SqlSettingsRepository,
+  createEncryptedBackup,
+  restoreEncryptedBackup,
+  UI_ALLOWED_METHODS,
+  MethodParamSchemas,
+  MAX_MESSAGE_BYTES,
+} from '../lib/desktop-core'
+
+// 1. Instância Única
+const gotTheLock = app.requestSingleInstanceLock()
+if (!gotTheLock) {
+  app.quit()
+}
+
+let mainWindow: BrowserWindow | null = null
+let driver: NodeSqliteDriver | null = null
+let vault: VaultManager | null = null
+let dataKey: Buffer | null = null
+
+// Repositórios
+let studentRepo: SqlStudentRepository | null = null
+let graphRepo: SqlSkillGraphRepository | null = null
+let auditRepo: SqlAuditRepository | null = null
+let consentRepo: SqlConsentRepository | null = null
+let settingsRepo: SqlSettingsRepository | null = null
+
+async function initCore() {
+  const userData = app.getPath('userData')
+  const dataDir = path.join(userData, 'data')
+  if (!fs.existsSync(dataDir)) {
+    fs.mkdirSync(dataDir, { recursive: true })
+  }
+
+  vault = new VaultManager(userData)
+  dataKey = vault.getOrCreateDEK()
+
+  const dbPath = path.join(dataDir, 'teacher_local.db')
+  driver = new NodeSqliteDriver(dbPath)
+
+  const runner = new MigrationRunner(driver)
+  await runner.run()
+
+  studentRepo = new SqlStudentRepository(driver, dataKey)
+  graphRepo = new SqlSkillGraphRepository(driver)
+  auditRepo = new SqlAuditRepository(driver, dataKey)
+  consentRepo = new SqlConsentRepository(driver)
+  settingsRepo = new SqlSettingsRepository(driver)
+}
+
+function createWindow() {
+  mainWindow = new BrowserWindow({
+    width: 960,
+    height: 700,
+    minWidth: 800,
+    minHeight: 600,
+    title: 'Teacher AI — Desktop Local-First',
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      webSecurity: true,
+      allowRunningInsecureContent: false,
+    },
+  })
+
+  // Endurecimento: Bloqueia abertura de novas janelas e navegação não intencional
+  mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    if (!url.startsWith('file://')) {
+      event.preventDefault()
+    }
+  })
+
+  if (app.isPackaged) {
+    mainWindow.webContents.on('devtools-opened', () => {
+      mainWindow?.webContents.closeDevTools()
+    })
+  }
+
+  // Carrega UI local protegida
+  mainWindow.loadFile(path.join(__dirname, 'ui', 'index.html'))
+}
+
+// 2. Configurações de Sessão e Segurança de Rede
+app.whenReady().then(async () => {
+  session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => {
+    callback(false)
+  })
+
+  await initCore()
+  setupIpcHandlers()
+  createWindow()
+
+  app.on('activate', () => {
+    if (BrowserWindow.getAllWindows().length === 0) createWindow()
+  })
+})
+
+app.on('window-all-closed', () => {
+  if (process.platform !== 'darwin') {
+    driver?.close()
+    app.quit()
+  }
+})
+
+// 3. Handlers IPC com Validação Zod e Lista de Permissão
+function setupIpcHandlers() {
+  ipcMain.handle('teacher:call', async (event, payload: any) => {
+    // Validação do frame de origem
+    if (!event.senderFrame) {
+      return { v: 1, id: 'err', success: false, error: { code: 'E_NM_UNAUTHORIZED', message: 'Origem IPC não autorizada.' } }
+    }
+
+    const { method, params } = payload || {}
+    const msgBytes = Buffer.byteLength(JSON.stringify(payload || {}), 'utf8')
+    if (msgBytes > MAX_MESSAGE_BYTES) {
+      return { v: 1, id: 'err', success: false, error: { code: 'E_NM_TOO_LARGE', message: 'Mensagem excede 1 MB.' } }
+    }
+
+    if (!UI_ALLOWED_METHODS.includes(method)) {
+      return { v: 1, id: 'err', success: false, error: { code: 'E_METHOD_NOT_ALLOWED', message: `Método ${method} não autorizado.` } }
+    }
+
+    // Validação de Schema por Zod
+    const schema = (MethodParamSchemas as any)[method]
+    if (schema) {
+      const parsed = schema.safeParse(params || {})
+      if (!parsed.success) {
+        return {
+          v: 1,
+          id: 'err',
+          success: false,
+          error: { code: 'E_VALIDATION_FAILED', message: 'Parâmetros inválidos.', details: parsed.error.format() },
+        }
+      }
+    }
+
+    try {
+      let result: any = null
+
+      switch (method) {
+        case 'app.status':
+          result = { ready: true, dbLocked: false, hasOllama: false }
+          break
+        case 'students.list':
+          result = await studentRepo?.listStudents(params)
+          break
+        case 'graphs.get':
+          result = await graphRepo?.get(params.portalId, params.taskId, params.version)
+          break
+        case 'graphs.save':
+          result = await graphRepo?.save(params.graph)
+          break
+        case 'audit.append':
+          const id = await auditRepo?.append(params.entry)
+          result = { ack: true, id }
+          break
+        case 'data.backup':
+          if (!dataKey) throw new Error('Chve de dados indisponível.')
+          const backupData = JSON.stringify({
+            students: await studentRepo?.listStudents(),
+            exportedAt: new Date().toISOString(),
+          })
+          const backupBuffer = await createEncryptedBackup(backupData, params.passphrase)
+          const backupPath = path.join(app.getPath('userData'), `backup-${Date.now()}.tbackup`)
+          fs.writeFileSync(backupPath, backupBuffer)
+          result = { path: backupPath, bytes: backupBuffer.length }
+          break
+        case 'data.restore':
+          const buf = Buffer.from(params.backupBase64, 'base64')
+          const restoredJson = await restoreEncryptedBackup(buf, params.passphrase)
+          result = { restored: true, length: restoredJson.length }
+          break
+        default:
+          result = { ok: true }
+      }
+
+      return { v: 1, id: 'res', success: true, result }
+    } catch (err: any) {
+      return {
+        v: 1,
+        id: 'err',
+        success: false,
+        error: { code: err.code || 'E_INTERNAL', message: err.message || 'Erro interno.' },
+      }
+    }
+  })
+}

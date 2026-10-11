@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
+// @ts-ignore
 import { DatabaseSync } from 'node:sqlite'
 import * as crypto from 'node:crypto'
 import type { SqlDriver } from '../lib/desktop-core/db/SqlDriver'
