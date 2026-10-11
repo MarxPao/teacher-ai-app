@@ -4,6 +4,7 @@ import { app, BrowserWindow, ipcMain, session } from 'electron'
 import { NodeSqliteDriver } from './db/nodeSqliteDriver'
 import { VaultManager } from './vault/safeStorage'
 import { NamedPipeServer } from './nm/pipeServer'
+import { LlmGateway } from './llm/llmGateway'
 import {
   MigrationRunner,
   SqlStudentRepository,
@@ -38,11 +39,14 @@ let graphRepo: SqlSkillGraphRepository | null = null
 let auditRepo: SqlAuditRepository | null = null
 let consentRepo: SqlConsentRepository | null = null
 let settingsRepo: SqlSettingsRepository | null = null
+let llmGateway: LlmGateway | null = null
 
 async function executeBusinessMethod(method: string, params: any): Promise<any> {
   switch (method) {
-    case 'app.status':
-      return { ready: true, dbLocked: false, hasOllama: false }
+    case 'app.status': {
+      const hasOllama = llmGateway ? await llmGateway.checkOllamaStatus() : false
+      return { ready: true, dbLocked: false, hasOllama }
+    }
 
     case 'students.list':
       return await studentRepo?.listStudents(params)
@@ -65,8 +69,13 @@ async function executeBusinessMethod(method: string, params: any): Promise<any> 
       return { ack: true, id }
     }
 
-    case 'nlu.parse':
+    case 'nlu.parse': {
+      const students = (await studentRepo?.listStudents()) || []
+      if (llmGateway) {
+        return await llmGateway.parseIntent(params.text || '', students)
+      }
       return { intent: 'unknown', params: {}, supported: false }
+    }
 
     case 'data.backup': {
       if (!dataKey) throw new Error('Chave de dados indisponível.')
@@ -143,6 +152,7 @@ async function initCore() {
   auditRepo = new SqlAuditRepository(driver, dataKey)
   consentRepo = new SqlConsentRepository(driver)
   settingsRepo = new SqlSettingsRepository(driver)
+  llmGateway = new LlmGateway({ consentRepo, vault })
 
   // Inicializa servidor de Named Pipe para Chrome Native Messaging
   pipeServer = new NamedPipeServer({

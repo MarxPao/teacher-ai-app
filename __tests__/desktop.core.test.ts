@@ -26,6 +26,7 @@ import {
   MAX_MESSAGE_BYTES,
   EXTENSION_ALLOWED_METHODS,
   migrateLocalStorageToDesktop,
+  Pseudonymizer,
 } from '../lib/desktop-core'
 import type { SkillGraphV2 } from '../lib/contracts/skillgraph'
 import type { AuditEntry } from '../lib/contracts/audit'
@@ -524,4 +525,30 @@ describe('Desktop Core — Teste de Fronteira (Fase 6)', () => {
       expect(rerun.alreadyMigrated).toBe(true)
     })
   })
+
+  // 12. Pseudonimizador LGPD
+  describe('12. Pseudonimizador LGPD', () => {
+    it('deve substituir nomes, CPFs e e-mails por tokens reversíveis e restaurar perfeitamente', () => {
+      const known = [
+        { name: 'Mariana Lima', identifier: 'MAT-101' },
+        { name: 'Zeca Canário', identifier: 'MAT-102' },
+      ]
+      const originalText = 'Lançar 2 faltas para Mariana Lima (CPF 123.456.789-00, email mariana@escola.com) e nota 9.5 para Zeca Canário.'
+
+      const session = Pseudonymizer.pseudonymize(originalText, known)
+
+      expect(session.sanitizedText).not.toContain('Mariana Lima')
+      expect(session.sanitizedText).not.toContain('Zeca Canário')
+      expect(session.sanitizedText).not.toContain('123.456.789-00')
+      expect(session.sanitizedText).not.toContain('mariana@escola.com')
+      expect(session.sanitizedText).toContain('ALUNO_1')
+      expect(session.sanitizedText).toContain('ALUNO_2')
+      expect(session.sanitizedText).toContain('CPF_1')
+      expect(session.sanitizedText).toContain('EMAIL_1')
+
+      const restored = Pseudonymizer.depseudonymize(session.sanitizedText, session.tokenToOriginal)
+      expect(restored).toBe(originalText)
+    })
+  })
 })
+
