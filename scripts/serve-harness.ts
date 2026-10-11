@@ -37,9 +37,14 @@ function resolveFilePath(reqUrl: string): string | null {
     return path.join(HARNESS_DIR, 'dist', distFile)
   }
 
-  if (cleanPath.startsWith('/graphs/synthetic/')) {
-    const graphFile = cleanPath.slice('/graphs/synthetic/'.length)
-    return path.join(ROOT, 'graphs', 'synthetic', graphFile)
+  if (cleanPath.startsWith('/graphs/')) {
+    const graphFile = cleanPath.slice('/graphs/'.length)
+    return path.join(ROOT, 'graphs', graphFile)
+  }
+
+  if (cleanPath.startsWith('/conformance/')) {
+    const confFile = cleanPath.slice('/conformance/'.length)
+    return path.join(ROOT, 'conformance', confFile)
   }
 
   // Fallback para arquivos dentro de tools/runner-harness
@@ -97,7 +102,7 @@ const server = http.createServer((req, res) => {
   }
 })
 
-server.listen(PORT, HOST, () => {
-  console.log(`[Harness] Servidor do SkillGraph Harness rodando em http://${HOST}:${PORT}`)
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`[Harness] Servidor do SkillGraph Harness rodando em http://127.0.0.1:${PORT} e http://localhost:${PORT}`)
   console.log(`[Harness] Pressione Ctrl+C para encerrar.`)
 })

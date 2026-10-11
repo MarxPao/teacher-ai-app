@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Holdout - Wizard Multi-Etapas</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; }
+    .step { display: none; margin-top: 15px; padding: 15px; border: 1px solid #ccc; }
+    .active { display: block; }
+    button { padding: 8px 16px; margin-top: 10px; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <h1>Assistente de Lançamento de Notas</h1>
+  <div id="step-1" class="step active">
+    <h3>Etapa 1: Dados do Aluno</h3>
+    <p>Aluno selecionado: <strong id="nome_aluno">Juliana Canário</strong></p>
+    <button id="btn-next-1" type="button">Avançar para Nota</button>
+  </div>
+  <div id="step-2" class="step">
+    <h3>Etapa 2: Atribuição de Nota</h3>
+    <label for="nota_juliana">Nota Final:</label>
+    <input type="text" id="nota_juliana" aria-label="Nota de Juliana Canário" value="">
+    <br>
+    <button id="btn-next-2" type="button">Avançar para Resumo</button>
+  </div>
+  <div id="step-3" class="step">
+    <h3>Etapa 3: Resumo e Confirmação</h3>
+    <p>Confirme a nota: <span id="resumo_nota">-</span></p>
+    <button id="btn-finish" type="button">Finalizar</button>
+  </div>
+  <script>
+    document.getElementById('btn-next-1').addEventListener('click', () => {
+      document.getElementById('step-1').classList.remove('active');
+      document.getElementById('step-2').classList.add('active');
+    });
+    document.getElementById('btn-next-2').addEventListener('click', () => {
+      const nota = document.getElementById('nota_juliana').value;
+      document.getElementById('resumo_nota').textContent = nota;
+      document.getElementById('step-2').classList.remove('active');
+      document.getElementById('step-3').classList.add('active');
+    });
+    document.getElementById('btn-finish').addEventListener('click', () => {
+      document.getElementById('step-3').innerHTML = '<h3 id="concluido">Lançamento Concluído com Sucesso!</h3>';
+    });
+  </script>
+</body>
+</html>

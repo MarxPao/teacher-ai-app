@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Holdout - Download e Upload</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; }
+    .box { margin-bottom: 20px; padding: 15px; border: 1px solid #ccc; }
+  </style>
+</head>
+<body>
+  <h1>Exportação e Importação de Relatórios</h1>
+  <div class="box">
+    <h3>Exportar Boletim da Turma</h3>
+    <button id="btn-download" type="button">Baixar Boletim CSV</button>
+  </div>
+  <div class="box">
+    <h3>Importar Comprovante Assinado</h3>
+    <label for="input-anexo">Selecionar arquivo:</label>
+    <input type="file" id="input-anexo" aria-label="Comprovante de Notas">
+    <p id="status-upload">Nenhum arquivo enviado.</p>
+  </div>
+  <script>
+    document.getElementById('btn-download').addEventListener('click', () => {
+      const blob = new Blob(['matricula,nome,nota\n801,Mariana Canário,9.0\n'], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'boletim_turma.csv';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    });
+
+    document.getElementById('input-anexo').addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        document.getElementById('status-upload').textContent = 'Arquivo recebido: ' + file.name;
+      }
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Holdout - Infinite Scroll</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; }
+    #scroll-box { height: 200px; overflow-y: auto; border: 1px solid #aaa; padding: 10px; }
+    .item { padding: 12px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; }
+  </style>
+</head>
+<body>
+  <h1>Lista com Carregamento por Scroll Infinito</h1>
+  <div id="scroll-box">
+    <div id="item-list"></div>
+    <div id="loading" style="text-align: center; color: #888;">Carregando mais discentes...</div>
+  </div>
+  <script>
+    const box = document.getElementById('scroll-box');
+    const list = document.getElementById('item-list');
+    let loadedBatches = 0;
+
+    function addBatch() {
+      if (loadedBatches >= 3) {
+        document.getElementById('loading').style.display = 'none';
+        return;
+      }
+      for (let i = 1; i <= 5; i++) {
+        const id = 700 + (loadedBatches * 5) + i;
+        const name = (id === 715) ? 'Lucas Canário' : 'Discente ' + id + ' Canário';
+        const el = document.createElement('div');
+        el.className = 'item';
+        el.innerHTML = '<span>' + id + ' - ' + name + '</span><input type="text" id="presenca_' + id + '" aria-label="' + name + ' - Frequência" value="P">';
+        list.appendChild(el);
+      }
+      loadedBatches++;
+    }
+
+    box.addEventListener('scroll', () => {
+      if (box.scrollTop + box.clientHeight >= box.scrollHeight - 40) {
+        addBatch();
+      }
+    });
+
+    addBatch(); // Batch 1 inicial
+  </script>
+</body>
+</html>

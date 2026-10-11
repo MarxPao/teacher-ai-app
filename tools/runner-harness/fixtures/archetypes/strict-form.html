@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>DEV - Strict Form</title>
+  <style>body { font-family: sans-serif; padding: 20px; } .error { color: red; }</style>
+</head>
+<body>
+  <h1>DEV - Validação Estrita com Blur</h1>
+  <form id="f1">
+    <label for="val-input">Nota:</label>
+    <input id="val-input" aria-label="Campo Estrito" value="">
+    <span id="err-msg" class="error" style="display:none;">Inválido</span>
+  </form>
+  <script>
+    const el = document.getElementById('val-input');
+    const err = document.getElementById('err-msg');
+    el.addEventListener('blur', () => {
+      const v = el.value.trim();
+      err.style.display = (v && !isNaN(parseFloat(v))) ? 'none' : 'inline';
+    });
+  </script>
+</body>
+</html>

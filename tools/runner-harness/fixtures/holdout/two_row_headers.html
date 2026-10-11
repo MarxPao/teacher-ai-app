@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Holdout - Two-Row Headers</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+    th { background: #f0f0f0; }
+  </style>
+</head>
+<body>
+  <h1>Lançamento Bimestral com Cabeçalho Composto</h1>
+  <table id="tabela-notas">
+    <thead>
+      <tr>
+        <th rowspan="2">Matrícula</th>
+        <th rowspan="2">Nome do Aluno</th>
+        <th colspan="2">1º Bimestre</th>
+      </tr>
+      <tr>
+        <th>Nota</th>
+        <th>Falta</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>101</td>
+        <td>Alice Canário</td>
+        <td><input type="text" id="nota_101" aria-label="Alice Canário - Nota 1º Bimestre" value="8.0"></td>
+        <td><input type="text" id="falta_101" aria-label="Alice Canário - Falta 1º Bimestre" value="0"></td>
+      </tr>
+      <tr>
+        <td>102</td>
+        <td>Bruno Canário</td>
+        <td><input type="text" id="nota_102" aria-label="Bruno Canário - Nota 1º Bimestre" value="7.5"></td>
+        <td><input type="text" id="falta_102" aria-label="Bruno Canário - Falta 1º Bimestre" value="1"></td>
+      </tr>
+    </tbody>
+  </table>
+</body>
+</html>

@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Holdout - Hidden and Duplicate Inputs</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; }
+    .hidden { display: none !important; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border: 1px solid #ccc; padding: 8px; }
+  </style>
+</head>
+<body>
+  <h1>Tabela com Inputs Duplicados Ocultos e Honeypots</h1>
+  <form id="form-notas">
+    <input type="hidden" name="csrf_token" value="sec_token_999">
+    <div class="hidden">
+      <!-- Honeypot e versão mobile oculta -->
+      <input type="text" name="honeypot" id="nota_201_honeypot" value="0.0">
+      <input type="text" name="mobile_nota_201" id="nota_201_mobile" value="6.0">
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Matrícula</th>
+          <th>Aluno</th>
+          <th>Nota</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>201</td>
+          <td>Carlos Canário</td>
+          <td>
+            <input type="text" id="nota_201_desktop" aria-label="Carlos Canário - Nota" value="7.0">
+          </td>
+        </tr>
+        <tr>
+          <td>202</td>
+          <td>Daniela Canário</td>
+          <td>
+            <input type="text" id="nota_202_desktop" aria-label="Daniela Canário - Nota" value="8.5">
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </form>
+</body>
+</html>

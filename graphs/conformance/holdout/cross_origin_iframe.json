@@ -1,0 +1,142 @@
+{
+  "spec_version": "2.0",
+  "identity": {
+    "portal_id": "holdout_portal",
+    "domain": "127.0.0.1:8898",
+    "task_id": "custom:cross_origin_iframe",
+    "version": 1,
+    "name": "Escrita em Iframe de Origem Cruzada",
+    "description": "Localiza e grava dentro de frame cross-origin"
+  },
+  "compat": {
+    "support_tier": 1,
+    "archetype_tags": [
+      "cross_origin_iframe"
+    ],
+    "tested_archetypes": [
+      "cross_origin_iframe"
+    ],
+    "min_runner_version": "2.0.0"
+  },
+  "params": {},
+  "entry_node": "n1",
+  "nodes": {
+    "n1": {
+      "label": "Confirmar escrita no iframe",
+      "retry": {
+        "max_attempts": 1,
+        "backoff_ms": 0
+      },
+      "timeout_ms": 5000,
+      "postconditions": [],
+      "on_success": "n2",
+      "on_fail": "$abort",
+      "type": "CHECKPOINT",
+      "summary": [
+        {
+          "label": "Aluno Remoto",
+          "value": {
+            "lit": "Gabriel Canário"
+          }
+        },
+        {
+          "label": "Nota",
+          "value": {
+            "lit": "10.0"
+          }
+        }
+      ],
+      "scope": "once",
+      "on_reject": "$abort"
+    },
+    "n2": {
+      "label": "Lançar nota no frame remoto",
+      "retry": {
+        "max_attempts": 2,
+        "backoff_ms": 200
+      },
+      "timeout_ms": 5000,
+      "postconditions": [],
+      "on_success": "$end",
+      "on_fail": "$abort",
+      "type": "WRITE",
+      "anchor": {
+        "candidates": [
+          {
+            "strategy": "aria_label",
+            "aria_label": "Gabriel Canário - Nota Remota",
+            "match": "normalized"
+          },
+          {
+            "strategy": "css",
+            "selector": "#nota_401"
+          }
+        ],
+        "description": "Campo de Nota Remota",
+        "expect_count": "one"
+      },
+      "value": {
+        "lit": "10.0"
+      },
+      "method": "set_value_dispatch",
+      "semantic": "grade",
+      "read_back": true
+    }
+  },
+  "canonical_mapping": {
+    "columns": [
+      {
+        "portal_labels": [
+          "Nome do Aluno",
+          "Aluno",
+          "Discente",
+          "Estudante"
+        ],
+        "field": "student.name",
+        "semantic_type": "name"
+      },
+      {
+        "portal_labels": [
+          "Nota",
+          "Avaliação",
+          "Prova"
+        ],
+        "field": "grade.value",
+        "semantic_type": "grade"
+      }
+    ],
+    "grade_scale": {
+      "type": "numeric",
+      "min": 0,
+      "max": 10,
+      "decimal_separator": "."
+    },
+    "attendance": {
+      "polarity": "checked_is_absent"
+    },
+    "ambiguous_requires_confirmation": true
+  },
+  "safety": {
+    "side_effect_level": "write",
+    "writes_require_checkpoint": true,
+    "max_writes_per_run": 5,
+    "rate_limit": {
+      "min_delay_ms": 50,
+      "jitter_ms": 10
+    },
+    "allowed_hosts": [
+      "127.0.0.1",
+      "localhost",
+      "127.0.0.1:8898",
+      "localhost:8898"
+    ]
+  },
+  "provenance": {
+    "author": "holdout_author",
+    "created_at": "2026-10-11T12:00:00Z",
+    "updated_at": "2026-10-11T12:00:00Z",
+    "source": "recorded",
+    "has_self_healed": false,
+    "pii_scrubbed": true
+  }
+}

@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Holdout - Strict Form</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; }
+    .form-group { margin-bottom: 15px; }
+    .invalid-feedback { color: red; font-size: 13px; display: none; }
+    .is-invalid { border-color: red; }
+  </style>
+</head>
+<body>
+  <h1>Formulário Estrito com Validação Reativa</h1>
+  <form id="form-estrito">
+    <div class="form-group">
+      <label for="campo-aluno">Aluno:</label>
+      <input type="text" id="campo-aluno" value="Igor Canário" readonly>
+    </div>
+    <div class="form-group">
+      <label for="campo-nota">Nota da Avaliação:</label>
+      <input type="text" id="campo-nota" aria-label="Nota do Aluno" value="">
+      <div id="erro-nota" class="invalid-feedback">A nota deve ser um número válido (ex: 8.5) e campo desfoque obrigatório.</div>
+    </div>
+  </form>
+  <script>
+    const input = document.getElementById('campo-nota');
+    const erro = document.getElementById('erro-nota');
+
+    input.addEventListener('blur', () => {
+      const val = input.value.trim();
+      const num = parseFloat(val);
+      if (isNaN(num) || num < 0 || num > 10 || !/^\d+(\.\d+)?$/.test(val)) {
+        input.classList.add('is-invalid');
+        erro.style.display = 'block';
+      } else {
+        input.classList.remove('is-invalid');
+        erro.style.display = 'none';
+      }
+    });
+
+    input.addEventListener('input', () => {
+      // Enquanto digita sem blur, se estiver vazio marca inválido
+      if (!input.value) {
+        input.classList.add('is-invalid');
+        erro.style.display = 'block';
+      }
+    });
+  </script>
+</body>
+</html>

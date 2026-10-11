@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>DEV - SSO Redirect</title>
+  <style>body { font-family: sans-serif; padding: 20px; }</style>
+</head>
+<body>
+  <h1>DEV - SSO Mock</h1>
+  <div id="unauth">
+    <button id="btn-login-sso" type="button">Autenticar com IdP</button>
+  </div>
+  <div id="auth" style="display:none;">
+    <h3>Autenticado!</h3>
+    <input id="input-sso-aluno" aria-label="Nota Aluno SSO" value="">
+  </div>
+  <script>
+    if (new URLSearchParams(window.location.search).get('auth') === '1') {
+      document.getElementById('unauth').style.display = 'none';
+      document.getElementById('auth').style.display = 'block';
+    }
+    document.getElementById('btn-login-sso').onclick = () => {
+      window.location.href = window.location.pathname + '?auth=1';
+    };
+  </script>
+</body>
+</html>

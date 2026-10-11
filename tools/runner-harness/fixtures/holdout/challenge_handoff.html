@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Holdout - Desafio com Handoff Humano</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; }
+    #challenge-overlay {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center;
+    }
+    .modal { background: #fff; padding: 30px; border-radius: 8px; text-align: center; }
+    #area-trabalho { display: none; }
+  </style>
+</head>
+<body>
+  <h1>Portal com Desafio Interativo</h1>
+  <div id="challenge-overlay">
+    <div class="modal">
+      <h2>Verificação de Segurança</h2>
+      <p>Por favor, confirme manualmente para prosseguir.</p>
+      <button id="btn-resolve" type="button" style="padding: 10px 20px; cursor: pointer;">Confirmar Sou Humano</button>
+    </div>
+  </div>
+  <div id="area-trabalho">
+    <h3>Lançamento Liberado</h3>
+    <p>Aluno: Mariana Canário (901)</p>
+    <label for="nota_901">Nota:</label>
+    <input type="text" id="nota_901" aria-label="Mariana Canário - Nota" value="">
+  </div>
+  <script>
+    document.getElementById('btn-resolve').addEventListener('click', () => {
+      document.getElementById('challenge-overlay').style.display = 'none';
+      document.getElementById('area-trabalho').style.display = 'block';
+    });
+  </script>
+</body>
+</html>

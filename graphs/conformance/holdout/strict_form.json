@@ -1,0 +1,142 @@
+{
+  "spec_version": "2.0",
+  "identity": {
+    "portal_id": "holdout_portal",
+    "domain": "127.0.0.1:8898",
+    "task_id": "custom:strict_form",
+    "version": 1,
+    "name": "Formulário Estrito Reativo",
+    "description": "Digita nota com ciclo focus/input/change/blur"
+  },
+  "compat": {
+    "support_tier": 1,
+    "archetype_tags": [
+      "strict_form"
+    ],
+    "tested_archetypes": [
+      "strict_form"
+    ],
+    "min_runner_version": "2.0.0"
+  },
+  "params": {},
+  "entry_node": "n1",
+  "nodes": {
+    "n1": {
+      "label": "Confirmar nota individual",
+      "retry": {
+        "max_attempts": 1,
+        "backoff_ms": 0
+      },
+      "timeout_ms": 5000,
+      "postconditions": [],
+      "on_success": "n2",
+      "on_fail": "$abort",
+      "type": "CHECKPOINT",
+      "summary": [
+        {
+          "label": "Aluno",
+          "value": {
+            "lit": "Igor Canário"
+          }
+        },
+        {
+          "label": "Nota",
+          "value": {
+            "lit": "8.5"
+          }
+        }
+      ],
+      "scope": "once",
+      "on_reject": "$abort"
+    },
+    "n2": {
+      "label": "Digitar nota com validação estrita",
+      "retry": {
+        "max_attempts": 2,
+        "backoff_ms": 200
+      },
+      "timeout_ms": 5000,
+      "postconditions": [],
+      "on_success": "$end",
+      "on_fail": "$abort",
+      "type": "WRITE",
+      "anchor": {
+        "candidates": [
+          {
+            "strategy": "aria_label",
+            "aria_label": "Nota do Aluno",
+            "match": "normalized"
+          },
+          {
+            "strategy": "css",
+            "selector": "#campo-nota"
+          }
+        ],
+        "description": "Campo de Nota do Aluno",
+        "expect_count": "one"
+      },
+      "value": {
+        "lit": "8.5"
+      },
+      "method": "set_value_dispatch",
+      "semantic": "grade",
+      "read_back": true
+    }
+  },
+  "canonical_mapping": {
+    "columns": [
+      {
+        "portal_labels": [
+          "Nome do Aluno",
+          "Aluno",
+          "Discente",
+          "Estudante"
+        ],
+        "field": "student.name",
+        "semantic_type": "name"
+      },
+      {
+        "portal_labels": [
+          "Nota",
+          "Avaliação",
+          "Prova"
+        ],
+        "field": "grade.value",
+        "semantic_type": "grade"
+      }
+    ],
+    "grade_scale": {
+      "type": "numeric",
+      "min": 0,
+      "max": 10,
+      "decimal_separator": "."
+    },
+    "attendance": {
+      "polarity": "checked_is_absent"
+    },
+    "ambiguous_requires_confirmation": true
+  },
+  "safety": {
+    "side_effect_level": "write",
+    "writes_require_checkpoint": true,
+    "max_writes_per_run": 5,
+    "rate_limit": {
+      "min_delay_ms": 50,
+      "jitter_ms": 10
+    },
+    "allowed_hosts": [
+      "127.0.0.1",
+      "localhost",
+      "127.0.0.1:8898",
+      "localhost:8898"
+    ]
+  },
+  "provenance": {
+    "author": "holdout_author",
+    "created_at": "2026-10-11T12:00:00Z",
+    "updated_at": "2026-10-11T12:00:00Z",
+    "source": "recorded",
+    "has_self_healed": false,
+    "pii_scrubbed": true
+  }
+}

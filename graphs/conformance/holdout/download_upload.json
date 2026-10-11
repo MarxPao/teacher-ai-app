@@ -1,0 +1,160 @@
+{
+  "spec_version": "2.0",
+  "identity": {
+    "portal_id": "holdout_portal",
+    "domain": "127.0.0.1:8898",
+    "task_id": "custom:download_upload",
+    "version": 1,
+    "name": "Download e Upload de Arquivos",
+    "description": "Baixa boletim e sobe comprovante"
+  },
+  "compat": {
+    "support_tier": 1,
+    "archetype_tags": [
+      "download_upload"
+    ],
+    "tested_archetypes": [
+      "download_upload"
+    ],
+    "min_runner_version": "2.0.0"
+  },
+  "params": {},
+  "entry_node": "n1",
+  "nodes": {
+    "n1": {
+      "label": "Baixar boletim",
+      "retry": {
+        "max_attempts": 2,
+        "backoff_ms": 200
+      },
+      "timeout_ms": 10000,
+      "postconditions": [],
+      "on_success": "n2",
+      "on_fail": "$abort",
+      "type": "DOWNLOAD",
+      "trigger": {
+        "candidates": [
+          {
+            "strategy": "css",
+            "selector": "#btn-download"
+          }
+        ],
+        "description": "Botão Baixar Boletim CSV",
+        "expect_count": "one"
+      },
+      "expect": {
+        "mime_hint": "text/csv",
+        "filename_pattern": "boletim_.*\\.csv"
+      },
+      "into": "var_downloaded_file"
+    },
+    "n2": {
+      "label": "Confirmar upload de comprovante",
+      "retry": {
+        "max_attempts": 1,
+        "backoff_ms": 0
+      },
+      "timeout_ms": 5000,
+      "postconditions": [],
+      "on_success": "n3",
+      "on_fail": "$abort",
+      "type": "CHECKPOINT",
+      "summary": [
+        {
+          "label": "Arquivo",
+          "value": {
+            "lit": "comprovante_assinado.csv"
+          }
+        }
+      ],
+      "scope": "once",
+      "on_reject": "$abort"
+    },
+    "n3": {
+      "label": "Enviar comprovante assinado",
+      "retry": {
+        "max_attempts": 2,
+        "backoff_ms": 200
+      },
+      "timeout_ms": 5000,
+      "postconditions": [],
+      "on_success": "$end",
+      "on_fail": "$abort",
+      "type": "UPLOAD",
+      "input": {
+        "candidates": [
+          {
+            "strategy": "aria_label",
+            "aria_label": "Comprovante de Notas",
+            "match": "normalized"
+          },
+          {
+            "strategy": "css",
+            "selector": "#input-anexo"
+          }
+        ],
+        "description": "Input de Comprovante",
+        "expect_count": "one"
+      },
+      "source": {
+        "lit": "comprovante_assinado.csv"
+      }
+    }
+  },
+  "canonical_mapping": {
+    "columns": [
+      {
+        "portal_labels": [
+          "Nome do Aluno",
+          "Aluno",
+          "Discente",
+          "Estudante"
+        ],
+        "field": "student.name",
+        "semantic_type": "name"
+      },
+      {
+        "portal_labels": [
+          "Nota",
+          "Avaliação",
+          "Prova"
+        ],
+        "field": "grade.value",
+        "semantic_type": "grade"
+      }
+    ],
+    "grade_scale": {
+      "type": "numeric",
+      "min": 0,
+      "max": 10,
+      "decimal_separator": "."
+    },
+    "attendance": {
+      "polarity": "checked_is_absent"
+    },
+    "ambiguous_requires_confirmation": true
+  },
+  "safety": {
+    "side_effect_level": "write",
+    "writes_require_checkpoint": true,
+    "max_writes_per_run": 5,
+    "rate_limit": {
+      "min_delay_ms": 50,
+      "jitter_ms": 10
+    },
+    "allowed_hosts": [
+      "127.0.0.1",
+      "localhost",
+      "127.0.0.1:8898",
+      "localhost:8898"
+    ]
+  },
+  "provenance": {
+    "author": "holdout_author",
+    "created_at": "2026-10-11T12:00:00Z",
+    "updated_at": "2026-10-11T12:00:00Z",
+    "source": "recorded",
+    "has_self_healed": false,
+    "pii_scrubbed": true
+  }
+}

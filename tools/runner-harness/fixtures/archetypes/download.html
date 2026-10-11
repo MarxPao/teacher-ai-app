@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>DEV - Download de Arquivo</title>
+  <style>body { font-family: sans-serif; padding: 20px; }</style>
+</head>
+<body>
+  <h1>DEV - Download de Relatório</h1>
+  <button id="btn-export-csv" type="button">Exportar Relatório CSV</button>
+  <script>
+    document.getElementById('btn-export-csv').addEventListener('click', () => {
+      const blob = new Blob(['matricula,nome,media\n101,Alice,8.5\n'], { type: 'text/csv' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'relatorio_turma.csv';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    });
+  </script>
+</body>
+</html>

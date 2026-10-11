@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>DEV - Desafio Handoff</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; }
+    #bloqueio { background: #ffebee; border: 2px solid #c62828; padding: 20px; margin-bottom: 20px; }
+    #conteudo { display: none; }
+  </style>
+</head>
+<body>
+  <h1>DEV - Validação Humana Obrigatória</h1>
+  <div id="bloqueio">
+    <p>Clique abaixo para desbloquear o diário:</p>
+    <button id="btn-desbloquear" type="button">Liberar Acesso</button>
+  </div>
+  <div id="conteudo">
+    <h3>Diário Desbloqueado</h3>
+    <input id="nota-dev" aria-label="Nota Desbloqueada" value="">
+  </div>
+  <script>
+    document.getElementById('btn-desbloquear').onclick = () => {
+      document.getElementById('bloqueio').style.display = 'none';
+      document.getElementById('conteudo').style.display = 'block';
+    };
+  </script>
+</body>
+</html>

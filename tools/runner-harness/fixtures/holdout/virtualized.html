@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Holdout - Virtualized Table</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; }
+    #viewport { height: 200px; overflow-y: auto; border: 1px solid #999; position: relative; }
+    .row { height: 40px; box-sizing: border-box; border-bottom: 1px solid #eee; display: flex; align-items: center; padding: 0 10px; }
+    .col-id { width: 60px; }
+    .col-name { width: 200px; }
+  </style>
+</head>
+<body>
+  <h1>Tabela Virtualizada (Janelamento)</h1>
+  <div id="viewport">
+    <div id="content" style="height: 800px; position: relative;">
+      <div id="rendered-rows"></div>
+    </div>
+  </div>
+  <script>
+    const items = [];
+    for (let i = 1; i <= 20; i++) {
+      items.push({ id: 300 + i, name: i === 20 ? 'Zeca Canário' : 'Aluno ' + i + ' Canário', val: '7.0' });
+    }
+    const viewport = document.getElementById('viewport');
+    const container = document.getElementById('rendered-rows');
+    const ROW_HEIGHT = 40;
+
+    function render() {
+      const start = Math.floor(viewport.scrollTop / ROW_HEIGHT);
+      const end = Math.min(items.length, start + 6);
+      container.innerHTML = '';
+      container.style.transform = 'translateY(' + (start * ROW_HEIGHT) + 'px)';
+      for (let i = start; i < end; i++) {
+        const item = items[i];
+        const div = document.createElement('div');
+        div.className = 'row';
+        div.innerHTML = '<span class="col-id">' + item.id + '</span><span class="col-name">' + item.name + '</span><input type="text" id="vnota_' + item.id + '" aria-label="' + item.name + ' - Nota" value="' + item.val + '">';
+        container.appendChild(div);
+      }
+    }
+    viewport.addEventListener('scroll', render);
+    render();
+  </script>
+</body>
+</html>

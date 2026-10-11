@@ -1,0 +1,28 @@
+{
+  "version": "1.0",
+  "locked_at": "2026-10-11T12:00:00Z",
+  "files": {
+    "tools/runner-harness/fixtures/holdout/challenge_handoff.html": "42992025b594d6518bc83d24f2331d1f1af4aeb097107f14cd360a310acf65ff",
+    "tools/runner-harness/fixtures/holdout/cross_origin_iframe.html": "5f4fe6fc38521786e37ad1b52679ab44cf53fc7f75092ddad77e7172a6615d2b",
+    "tools/runner-harness/fixtures/holdout/download_upload.html": "0fb66be8246e2db26f0aeb66701a1a91d0044121f1b93e1e532143c456a07731",
+    "tools/runner-harness/fixtures/holdout/hidden_duplicate_inputs.html": "afbc251e81034660e10b70eaf7c13dee722097d7b462e736c646bfd18bbe7a35",
+    "tools/runner-harness/fixtures/holdout/iframe_content.html": "65887a8cbe10cc8e2a476d65e01faa0641d9c823f37725f15cead84ecfc2c829",
+    "tools/runner-harness/fixtures/holdout/infinite_scroll.html": "0bdd2cefe214527611683c99c71882e48d8f2074be95a8e95826f3378b3aa0da",
+    "tools/runner-harness/fixtures/holdout/sso_idp.html": "5967aa54417b9999bec3e56ad93ab8640e57d7556713a4fa7a9c087eeeea00e7",
+    "tools/runner-harness/fixtures/holdout/sso_redirect.html": "a6e01fe62582d613cc96d329b9e59b6fc4e7bd7b4491cf6d56203bd4ff60a7d2",
+    "tools/runner-harness/fixtures/holdout/strict_form.html": "a2d2a81d4b1816b680457a90df57f2c2eb866c015504896586d5fb827627032a",
+    "tools/runner-harness/fixtures/holdout/two_row_headers.html": "7399a016e7e2e6db65e0a4420029b12a8ce25ecfe415839f3f13a1755648b116",
+    "tools/runner-harness/fixtures/holdout/virtualized.html": "005edb9569e3942b2bb50c3924822fddd3fd9c870b781b4791be95c2e4c95cff",
+    "tools/runner-harness/fixtures/holdout/wizard.html": "0c801fb6cc302a01c5bec9db699f99aefda7abd6ffdf649bf62568f48e004eb2",
+    "graphs/conformance/holdout/challenge_handoff.json": "ab7a98ba5cd9d7568e8627922326ea50af0058b72e37643591b23fc7855eb12a",
+    "graphs/conformance/holdout/cross_origin_iframe.json": "fe3b4a9860703d18b829423ea48077e5694c64f35c2dab848479896180816fa5",
+    "graphs/conformance/holdout/download_upload.json": "0fc099cf4189228df87b18e3f8130ac45f37083c4f186c6f2c0931ff75b86b85",
+    "graphs/conformance/holdout/hidden_duplicate_inputs.json": "ab5bb5af3f409d5dddde2b3719484643444dd5f00e475b22b0ace2b950aeaa3c",
+    "graphs/conformance/holdout/infinite_scroll.json": "1591e5a42df0a55849544c6e9ae55f16637d88fa75cb767df24081bc04941f4a",
+    "graphs/conformance/holdout/sso_redirect.json": "4b487b41c809fc679a133a62b1065fc0e6278aa4d6e4e7582f25b0885eb817fb",
+    "graphs/conformance/holdout/strict_form.json": "d1fabd414f43c73bd56e0167f0e0089d9a89aa48ca815fab9b2992507ea46cf8",
+    "graphs/conformance/holdout/two_row_headers.json": "b1ad1750993b920a5eb154e308bbd6970a42862d941116c989f2a7bf1eac1d8d",
+    "graphs/conformance/holdout/virtualized.json": "ac4068b0e994fc2a0218dde69ec9fcab08d4ab296743036877da7de59e3f2f77",
+    "graphs/conformance/holdout/wizard.json": "f5491366695214a98e7b835ac24303a674fce83f631143b79e750e7db28c08eb"
+  }
+}

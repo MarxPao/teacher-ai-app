@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>DEV - Upload de Arquivo</title>
+  <style>body { font-family: sans-serif; padding: 20px; }</style>
+</head>
+<body>
+  <h1>DEV - Upload de Comprovante</h1>
+  <form id="upload-form">
+    <label for="file-input">Anexo:</label>
+    <input type="file" id="file-input" aria-label="Arquivo de Fechamento">
+    <div id="upload-msg">Nenhum arquivo anexado.</div>
+  </form>
+  <script>
+    document.getElementById('file-input').addEventListener('change', (e) => {
+      const f = e.target.files[0];
+      if (f) document.getElementById('upload-msg').textContent = 'Anexado: ' + f.name;
+    });
+  </script>
+</body>
+</html>

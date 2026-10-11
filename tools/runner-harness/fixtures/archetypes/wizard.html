@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>DEV - Wizard</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; }
+    .panel { display: none; padding: 15px; border: 1px solid #ccc; }
+    .visible { display: block; }
+  </style>
+</head>
+<body>
+  <h1>DEV - Assistente em 3 Etapas</h1>
+  <div id="p1" class="panel visible">
+    <h3>Passo 1: Turma</h3>
+    <button id="p1-next" type="button">Próximo</button>
+  </div>
+  <div id="p2" class="panel">
+    <h3>Passo 2: Nota</h3>
+    <input id="input-wizard-nota" aria-label="Nota Wizard" value="">
+    <button id="p2-next" type="button">Próximo</button>
+  </div>
+  <div id="p3" class="panel">
+    <h3>Passo 3: Salvar</h3>
+    <button id="p3-save" type="button">Confirmar Lançamento</button>
+    <div id="saved-msg" style="display:none;">Salvo com sucesso!</div>
+  </div>
+  <script>
+    document.getElementById('p1-next').onclick = () => {
+      document.getElementById('p1').classList.remove('visible');
+      document.getElementById('p2').classList.add('visible');
+    };
+    document.getElementById('p2-next').onclick = () => {
+      document.getElementById('p2').classList.remove('visible');
+      document.getElementById('p3').classList.add('visible');
+    };
+    document.getElementById('p3-save').onclick = () => {
+      document.getElementById('saved-msg').style.display = 'block';
+    };
+  </script>
+</body>
+</html>

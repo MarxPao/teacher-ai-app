@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>DEV - Infinite Scroll</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; }
+    #container { height: 180px; overflow-y: scroll; border: 1px solid #ccc; padding: 10px; }
+    .item { padding: 8px; border-bottom: 1px solid #eee; }
+  </style>
+</head>
+<body>
+  <h1>DEV - Scroll Infinito de Alunos</h1>
+  <div id="container">
+    <div id="list"></div>
+    <div id="sentinel">Carregando...</div>
+  </div>
+  <script>
+    const list = document.getElementById('list');
+    let page = 0;
+    function loadPage() {
+      if (page >= 3) {
+        document.getElementById('sentinel').textContent = 'Fim da lista';
+        return;
+      }
+      for (let i = 1; i <= 5; i++) {
+        const id = 100 + (page * 5) + i;
+        const name = (id === 115) ? 'Zeca Canário' : 'Aluno ' + id;
+        const div = document.createElement('div');
+        div.className = 'item';
+        div.innerHTML = id + ' - ' + name + ' <input id="campo_' + id + '" aria-label="' + name + ' - Nota" value="7.0">';
+        list.appendChild(div);
+      }
+      page++;
+    }
+    document.getElementById('container').addEventListener('scroll', (e) => {
+      const c = e.target;
+      if (c.scrollTop + c.clientHeight >= c.scrollHeight - 20) loadPage();
+    });
+    loadPage();
+  </script>
+</body>
+</html>
