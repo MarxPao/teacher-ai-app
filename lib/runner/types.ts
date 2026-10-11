@@ -1,5 +1,5 @@
 // lib/runner/types.ts
-// Tipos de execução pura do SkillGraph v2 (sem DOM, sem rede, sem chrome)
+// Tipos de execução pura do SkillGraph v2 (motor puro sem efeitos colaterais)
 
 import type { AuditEntry } from '../contracts/audit'
 import type { Fingerprint } from '../contracts/skillgraph/primitives'
