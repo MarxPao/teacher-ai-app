@@ -53,3 +53,17 @@ Para assegurar transparência e linguagem acolhedora sem jargões técnicos:
    - 🔵 **Tier 3:** *"Somente Consulta — Lê as listas com segurança sem realizar alterações."*
 2. **Revisão Pedagógica:**
    - Mapas classificados como Tier 2 destacam visualmente a etapa que necessita de intervenção (ex.: *"Por favor, selecione a turma antes de clicar em Executar"*).
+
+---
+
+## 4. Resiliência a Drift e Escada de Auto-Reparo (Fase 5)
+
+Quando um portal atualiza sua interface (renomeação de botões, reorganização de colunas ou mutações de layout), o engine aplica a **Escada de Resolução de Âncoras**:
+
+1. **Degrau 1 — Candidato Prioritário:** Seletor exato de maior especificidade (`role_name`, `label_text`, `test_id`).
+2. **Degrau 2 — Candidatos de Fallback:** Alternativas declaradas no contrato do grafo (`aria_label`, `css`, `text`). Se localizado aqui, classifica como drift `soft`.
+3. **Degrau 3 — Matcher Semântico Determinístico Local (Sem LLM):**
+   - **Nós de Leitura (`READ`, `LOCATE`, `WAIT`):** Soft heal automático em runtime se $\text{score} \ge 0.85$ e $\text{margem} \ge 0.20$ (fora de chaves de aluno). Não persiste em disco; sinaliza `has_self_healed` no trace.
+   - **Nós de Escrita (`WRITE`, `CLICK` de submissão, `UPLOAD`):** Soft heal **proibido**. O motor emite `repair_requested`, captura snapshot sem PII e entra em `SAFE_ABORT`.
+   - **Aprovação Humana:** O professor ou auditor aprova com 1 clique no painel, gerando uma nova versão imutável (`version = max + 1`) com reversão instantânea via `setActive`.
+
