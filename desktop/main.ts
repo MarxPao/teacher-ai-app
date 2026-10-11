@@ -3,6 +3,7 @@ import * as fs from 'node:fs'
 import { app, BrowserWindow, ipcMain, session } from 'electron'
 import { NodeSqliteDriver } from './db/nodeSqliteDriver'
 import { VaultManager } from './vault/safeStorage'
+import { NamedPipeServer } from './nm/pipeServer'
 import {
   MigrationRunner,
   SqlStudentRepository,
@@ -27,6 +28,7 @@ let mainWindow: BrowserWindow | null = null
 let driver: NodeSqliteDriver | null = null
 let vault: VaultManager | null = null
 let dataKey: Buffer | null = null
+let pipeServer: NamedPipeServer | null = null
 
 // Repositórios
 let studentRepo: SqlStudentRepository | null = null
@@ -34,6 +36,58 @@ let graphRepo: SqlSkillGraphRepository | null = null
 let auditRepo: SqlAuditRepository | null = null
 let consentRepo: SqlConsentRepository | null = null
 let settingsRepo: SqlSettingsRepository | null = null
+
+async function executeBusinessMethod(method: string, params: any): Promise<any> {
+  switch (method) {
+    case 'app.status':
+      return { ready: true, dbLocked: false, hasOllama: false }
+
+    case 'students.list':
+      return await studentRepo?.listStudents(params)
+
+    case 'students.upsertRoster':
+      return await studentRepo?.upsertStudentsFromPortal(
+        params.classId,
+        params.students,
+        params.source
+      )
+
+    case 'graphs.get':
+      return await graphRepo?.get(params.portalId, params.taskId, params.version)
+
+    case 'graphs.save':
+      return await graphRepo?.save(params.graph)
+
+    case 'audit.append': {
+      const id = await auditRepo?.append(params.entry)
+      return { ack: true, id }
+    }
+
+    case 'nlu.parse':
+      return { intent: 'unknown', params: {}, supported: false }
+
+    case 'data.backup': {
+      if (!dataKey) throw new Error('Chave de dados indisponível.')
+      const backupData = JSON.stringify({
+        students: await studentRepo?.listStudents(),
+        exportedAt: new Date().toISOString(),
+      })
+      const backupBuffer = await createEncryptedBackup(backupData, params.passphrase)
+      const backupPath = path.join(app.getPath('userData'), `backup-${Date.now()}.tbackup`)
+      fs.writeFileSync(backupPath, backupBuffer)
+      return { path: backupPath, bytes: backupBuffer.length }
+    }
+
+    case 'data.restore': {
+      const buf = Buffer.from(params.backupBase64, 'base64')
+      const restoredJson = await restoreEncryptedBackup(buf, params.passphrase)
+      return { restored: true, length: restoredJson.length }
+    }
+
+    default:
+      return { ok: true }
+  }
+}
 
 async function initCore() {
   const userData = app.getPath('userData')
@@ -56,6 +110,15 @@ async function initCore() {
   auditRepo = new SqlAuditRepository(driver, dataKey)
   consentRepo = new SqlConsentRepository(driver)
   settingsRepo = new SqlSettingsRepository(driver)
+
+  // Inicializa servidor de Named Pipe para Chrome Native Messaging
+  pipeServer = new NamedPipeServer({
+    userDataPath: userData,
+    handleMethod: async (method, params) => {
+      return await executeBusinessMethod(method, params)
+    },
+  })
+  await pipeServer.start()
 }
 
 function createWindow() {
@@ -93,7 +156,7 @@ function createWindow() {
   mainWindow.loadFile(path.join(__dirname, 'ui', 'index.html'))
 }
 
-// 2. Configurações de Sessão e Segurança de Rede
+// 2. Ciclo de Vida e Segurança
 app.whenReady().then(async () => {
   session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => {
     callback(false)
@@ -108,8 +171,9 @@ app.whenReady().then(async () => {
   })
 })
 
-app.on('window-all-closed', () => {
+app.on('window-all-closed', async () => {
   if (process.platform !== 'darwin') {
+    await pipeServer?.stop()
     driver?.close()
     app.quit()
   }
@@ -118,7 +182,6 @@ app.on('window-all-closed', () => {
 // 3. Handlers IPC com Validação Zod e Lista de Permissão
 function setupIpcHandlers() {
   ipcMain.handle('teacher:call', async (event, payload: any) => {
-    // Validação do frame de origem
     if (!event.senderFrame) {
       return { v: 1, id: 'err', success: false, error: { code: 'E_NM_UNAUTHORIZED', message: 'Origem IPC não autorizada.' } }
     }
@@ -133,7 +196,6 @@ function setupIpcHandlers() {
       return { v: 1, id: 'err', success: false, error: { code: 'E_METHOD_NOT_ALLOWED', message: `Método ${method} não autorizado.` } }
     }
 
-    // Validação de Schema por Zod
     const schema = (MethodParamSchemas as any)[method]
     if (schema) {
       const parsed = schema.safeParse(params || {})
@@ -148,45 +210,7 @@ function setupIpcHandlers() {
     }
 
     try {
-      let result: any = null
-
-      switch (method) {
-        case 'app.status':
-          result = { ready: true, dbLocked: false, hasOllama: false }
-          break
-        case 'students.list':
-          result = await studentRepo?.listStudents(params)
-          break
-        case 'graphs.get':
-          result = await graphRepo?.get(params.portalId, params.taskId, params.version)
-          break
-        case 'graphs.save':
-          result = await graphRepo?.save(params.graph)
-          break
-        case 'audit.append':
-          const id = await auditRepo?.append(params.entry)
-          result = { ack: true, id }
-          break
-        case 'data.backup':
-          if (!dataKey) throw new Error('Chve de dados indisponível.')
-          const backupData = JSON.stringify({
-            students: await studentRepo?.listStudents(),
-            exportedAt: new Date().toISOString(),
-          })
-          const backupBuffer = await createEncryptedBackup(backupData, params.passphrase)
-          const backupPath = path.join(app.getPath('userData'), `backup-${Date.now()}.tbackup`)
-          fs.writeFileSync(backupPath, backupBuffer)
-          result = { path: backupPath, bytes: backupBuffer.length }
-          break
-        case 'data.restore':
-          const buf = Buffer.from(params.backupBase64, 'base64')
-          const restoredJson = await restoreEncryptedBackup(buf, params.passphrase)
-          result = { restored: true, length: restoredJson.length }
-          break
-        default:
-          result = { ok: true }
-      }
-
+      const result = await executeBusinessMethod(method, params)
       return { v: 1, id: 'res', success: true, result }
     } catch (err: any) {
       return {

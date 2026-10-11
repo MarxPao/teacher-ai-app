@@ -36,7 +36,24 @@ async function runDesktopBuild(): Promise<void> {
     sourcemap: true,
   })
 
-  // 3. Copia UI estática
+  // 3. Shim nativo para Native Messaging
+  await build({
+    entryPoints: [path.join(ROOT, 'desktop', 'native-host', 'shim.ts')],
+    bundle: true,
+    outfile: path.join(DIST_DIR, 'shim.js'),
+    format: 'cjs',
+    platform: 'node',
+    target: 'node20',
+    sourcemap: true,
+  })
+
+  // 4. Cria runner em lote shim.bat
+  fs.writeFileSync(
+    path.join(DIST_DIR, 'shim.bat'),
+    '@echo off\r\nnode "%~dp0shim.js"\r\n'
+  )
+
+  // 5. Copia UI estática
   const srcUi = path.join(ROOT, 'desktop', 'ui')
   const destUi = path.join(DIST_DIR, 'ui')
   if (!fs.existsSync(destUi)) {
