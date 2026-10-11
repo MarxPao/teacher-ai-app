@@ -126,6 +126,11 @@
         success: result.success,
         friendlyMessage: result.success ? 'Ação concluída com sucesso no portal!' : toTeacherFriendlyMessage(result.error),
         runId,
+        error: result.error ? {
+          code: result.error.code || 'E_RUNTIME',
+          message: result.error.message || String(result.error),
+          nodeId: result.error.nodeId || result.state?.currentNodeId || null,
+        } : null,
       })
     } catch (err) {
       await chrome.storage.session.set({
@@ -136,6 +141,11 @@
         success: false,
         friendlyMessage: toTeacherFriendlyMessage(err),
         runId,
+        error: {
+          code: err.code || 'E_UNHANDLED',
+          message: err.message || String(err),
+          nodeId: err.nodeId || null,
+        },
       })
     }
   }

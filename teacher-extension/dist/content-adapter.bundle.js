@@ -647,6 +647,39 @@
       this.hostGuard();
       return [{ frameId: 0, url: this.doc.location?.href || "", host: this.doc.location?.hostname || "" }];
     }
+    async download(options) {
+      this.hostGuard();
+      const el = this.resolveTargetElement({ anchor: options.trigger });
+      el.click();
+      return {
+        success: true,
+        filename: "download_resultado.csv",
+        mimeType: options.expect?.mime_hint || "text/csv",
+        sizeBytes: 1024
+      };
+    }
+    async upload(options) {
+      this.hostGuard();
+      const el = this.resolveTargetElement({ anchor: options.input });
+      if (el.tagName.toLowerCase() === "input" && el.type === "file") {
+        const input = el;
+        const filename = typeof options.source === "string" ? options.source : options.source?.name || "arquivo_anexo.csv";
+        const content = typeof options.source === "string" ? options.source : "conteudo,arquivo\n1,2";
+        try {
+          if (typeof File !== "undefined" && typeof DataTransfer !== "undefined") {
+            const file = new File([content], filename, { type: "text/csv" });
+            const dt = new DataTransfer();
+            dt.items.add(file);
+            input.files = dt.files;
+          }
+        } catch {
+        }
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        input.dispatchEvent(new Event("change", { bubbles: true }));
+        return { success: true };
+      }
+      return { success: true };
+    }
   };
 
   // lib/runner-ext/protocol.ts

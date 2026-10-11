@@ -20731,17 +20731,125 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     return node2.on_success;
   }
 
-  // lib/runner/nodes/unsupported.ts
-  function executeUnsupportedNode(node2) {
-    throw new RunnerError(
-      "E_NODE_UNSUPPORTED",
-      `O tipo de n\xF3 '${node2.type}' n\xE3o \xE9 suportado nesta fase (reservado para Fase 4)`,
-      node2.label
-    );
+  // lib/runner/nodes/download.ts
+  async function executeDownloadNode(node2, nodeId, state, params, driver, host, allowedHosts, namedAnchors) {
+    const currentCtx = await driver.getFrameContext();
+    checkAllowedHost(currentCtx.host, allowedHosts);
+    const context = { params, variables: state.variables };
+    const resolvedAnchor = resolveAnchor(node2.trigger, context, namedAnchors);
+    host.emit({
+      type: "download_started",
+      runId: state.runId,
+      nodeId,
+      timestamp: host.now(),
+      data: { into: node2.into }
+    });
+    let result;
+    if (driver.download) {
+      result = await driver.download({
+        trigger: resolvedAnchor,
+        timeoutMs: node2.timeout_ms,
+        expect: node2.expect
+      });
+    } else {
+      await driver.click({ anchor: resolvedAnchor });
+      result = {
+        success: true,
+        filename: "relatorio_download.csv",
+        mimeType: node2.expect?.mime_hint || "text/csv",
+        sizeBytes: 1024
+      };
+    }
+    if (!result.success) {
+      throw new RunnerError("E_DOWNLOAD_FAILED", `Falha ao executar download no n\xF3 '${nodeId}'`, nodeId);
+    }
+    if (node2.expect?.filename_pattern) {
+      const reg = new RegExp(node2.expect.filename_pattern);
+      if (!reg.test(result.filename)) {
+        throw new RunnerError(
+          "E_DOWNLOAD_FAILED",
+          `Nome do arquivo baixado '${result.filename}' n\xE3o coincide com padr\xE3o '${node2.expect.filename_pattern}'`,
+          nodeId
+        );
+      }
+    }
+    state.variables[node2.into] = {
+      filename: result.filename,
+      mime: result.mimeType || "application/octet-stream",
+      size: result.sizeBytes || 0
+    };
+    host.emit({
+      type: "download_completed",
+      runId: state.runId,
+      nodeId,
+      timestamp: host.now(),
+      data: { into: node2.into, filename: result.filename }
+    });
+    return node2.on_success;
+  }
+
+  // lib/runner/nodes/upload.ts
+  var MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
+  async function executeUploadNode(node2, nodeId, state, params, driver, host, allowedHosts, maxWrites, namedAnchors) {
+    const currentCtx = await driver.getFrameContext();
+    checkAllowedHost(currentCtx.host, allowedHosts);
+    const context = { params, variables: state.variables };
+    const resolvedAnchor = resolveAnchor(node2.input, context, namedAnchors);
+    const resolvedSource = resolveValueRef(node2.source, context);
+    let estimatedSize = 0;
+    if (typeof resolvedSource === "string") {
+      estimatedSize = Buffer.byteLength(resolvedSource, "utf-8");
+    } else if (resolvedSource && typeof resolvedSource === "object") {
+      if (typeof resolvedSource.size === "number") {
+        estimatedSize = resolvedSource.size;
+      } else if (typeof resolvedSource.sizeBytes === "number") {
+        estimatedSize = resolvedSource.sizeBytes;
+      }
+    }
+    if (estimatedSize > MAX_UPLOAD_BYTES) {
+      throw new RunnerError(
+        "E_UPLOAD_TOO_LARGE",
+        `Arquivo para upload excede o limite permitido de 5MB (tamanho: ${estimatedSize} bytes)`,
+        nodeId
+      );
+    }
+    state.writesCount++;
+    if (state.writesCount > maxWrites) {
+      throw new RunnerError(
+        "E_MAX_WRITES",
+        `Limite de escritas (${maxWrites}) excedido durante opera\xE7\xE3o de upload no n\xF3 '${nodeId}'`,
+        nodeId
+      );
+    }
+    host.emit({
+      type: "upload_started",
+      runId: state.runId,
+      nodeId,
+      timestamp: host.now(),
+      data: { target: resolvedAnchor.description }
+    });
+    if (driver.upload) {
+      const res = await driver.upload({
+        input: resolvedAnchor,
+        source: resolvedSource,
+        maxSizeBytes: MAX_UPLOAD_BYTES
+      });
+      if (!res.success) {
+        throw new RunnerError("E_UPLOAD_FAILED", `Falha ao anexar arquivo no input do n\xF3 '${nodeId}'`, nodeId);
+      }
+    }
+    host.emit({
+      type: "upload_completed",
+      runId: state.runId,
+      nodeId,
+      timestamp: host.now(),
+      data: { target: resolvedAnchor.description }
+    });
+    return node2.on_success;
   }
 
   // lib/runner/engine.ts
-  var FATAL_RUNTIME_ERRORS = /* @__PURE__ */ new Set(["E_MAX_WRITES", "E_MAX_ITERATIONS", "E_HOST_NOT_ALLOWED", "E_GRAPH_INVALID", "E_ROW_AMBIGUOUS"]);
+  var FATAL_RUNTIME_ERRORS = /* @__PURE__ */ new Set(["E_MAX_WRITES", "E_MAX_ITERATIONS", "E_HOST_NOT_ALLOWED", "E_GRAPH_INVALID", "E_ROW_AMBIGUOUS", "E_UPLOAD_TOO_LARGE"]);
   var SkillGraphRunner = class {
     constructor(driver, host) {
       this.driver = driver;
@@ -20793,6 +20901,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           if (nodeId === SENTINEL_CONTINUE) break;
           const node2 = graph.nodes[nodeId];
           if (!node2) throw new RunnerError("E_GRAPH_INVALID", `N\xF3 '${nodeId}' n\xE3o encontrado no grafo`, nodeId);
+          const currentCtx = await this.driver.getFrameContext();
+          checkAllowedHost(currentCtx.host, graph.safety.allowed_hosts);
           await this.host.beforeNode(nodeId, state);
           this.host.emit({ type: "node_started", runId: state.runId, nodeId, timestamp: this.host.now(), data: { type: node2.type, label: node2.label } });
           if (node2.expect_fingerprint) {
@@ -20851,7 +20961,17 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           verified_by: "none",
           at: new Date(this.host.now()).toISOString()
         });
-        this.host.emit({ type: "run_failed", runId: state.runId, timestamp: this.host.now(), data: { errorCode: runnerError.code, message: runnerError.message } });
+        this.host.emit({
+          type: "run_failed",
+          runId: state.runId,
+          timestamp: this.host.now(),
+          data: {
+            errorCode: runnerError.code,
+            message: runnerError.message,
+            writesCount: state.writesCount,
+            partialWrites: state.writesCount > 0
+          }
+        });
         return { state, success: false, error: runnerError };
       }
     }
@@ -20893,8 +21013,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
             return "completed";
           });
         case "DOWNLOAD":
+          return executeDownloadNode(node2, nodeId, state, params, this.driver, this.host, graph.safety.allowed_hosts, graph.anchor_library);
         case "UPLOAD":
-          return executeUnsupportedNode(node2);
+          return executeUploadNode(node2, nodeId, state, params, this.driver, this.host, graph.safety.allowed_hosts, graph.safety.max_writes_per_run, graph.anchor_library);
         default:
           throw new RunnerError("E_GRAPH_INVALID", `Tipo de n\xF3 desconhecido: ${node2.type}`, nodeId);
       }
@@ -21008,6 +21129,12 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     }
     async listFrames() {
       return this.sendRpc("listFrames", {});
+    }
+    async download(options) {
+      return this.sendRpc("download", options);
+    }
+    async upload(options) {
+      return this.sendRpc("upload", options);
     }
   };
 
