@@ -157,6 +157,18 @@ export const TraceStepSchema = z.union([
   StepNoteSchema,
 ])
 export type TraceStep = z.infer<typeof TraceStepSchema>
+export type StepNavigate = z.infer<typeof StepNavigateSchema>
+export type StepClick = z.infer<typeof StepClickSchema>
+export type StepInput = z.infer<typeof StepInputSchema>
+export type StepSelect = z.infer<typeof StepSelectSchema>
+export type StepCheck = z.infer<typeof StepCheckSchema>
+export type StepKey = z.infer<typeof StepKeySchema>
+export type StepMarkTable = z.infer<typeof StepMarkTableSchema>
+export type StepMarkNextPage = z.infer<typeof StepMarkNextPageSchema>
+export type StepMarkElement = z.infer<typeof StepMarkElementSchema>
+export type StepSettled = z.infer<typeof StepSettledSchema>
+export type StepSensitiveField = z.infer<typeof StepSensitiveFieldSchema>
+export type StepNote = z.infer<typeof StepNoteSchema>
 
 // ── Digest da Página ────────────────────────────────────────────────────────
 
