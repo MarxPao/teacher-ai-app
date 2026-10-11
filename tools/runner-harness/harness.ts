@@ -146,7 +146,8 @@ export function initHarness(): void {
     traceView.loadGraph(parsedGraph as SkillGraphV2)
     traceView.updateVariables(initialVars)
 
-    const driver = new DomDriver(doc)
+    const allowedHosts = (parsedGraph as any)?.safety?.allowed_hosts || ['localhost', '127.0.0.1']
+    const driver = new DomDriver(doc, allowedHosts)
     const host = createHarnessHost(() => {})
     const runner = new SkillGraphRunner(driver, host)
 

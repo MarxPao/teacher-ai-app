@@ -21630,7 +21630,7 @@ var TraceView = class {
       el.className = "text-xs border-l-2 pl-2 mb-2 " + (item.status === "success" ? "border-green-500" : item.status === "reverted" ? "border-orange-500" : "border-red-500");
       el.innerHTML = `
         <div class="font-mono font-bold text-gray-700">${item.action} (${item.status})</div>
-        <div class="text-gray-500">Alvo: ${item.target.selector || item.target.field_label || "--"}</div>
+        <div class="text-gray-500">Alvo: ${item.target_ref || item.node_id || "--"}</div>
         <div class="text-gray-600">Valor anterior: <code>${String(item.before_value)}</code> &rarr; Novo: <code>${String(item.after_value)}</code></div>
       `;
       this.auditContainer.appendChild(el);
@@ -22161,7 +22161,8 @@ function initHarness() {
     btnPause.textContent = isPaused ? "Retomar" : "Pausar";
     traceView.loadGraph(parsedGraph);
     traceView.updateVariables(initialVars);
-    const driver = new DomDriver(doc);
+    const allowedHosts = parsedGraph?.safety?.allowed_hosts || ["localhost", "127.0.0.1"];
+    const driver = new DomDriver(doc, allowedHosts);
     const host = createHarnessHost(() => {
     });
     const runner = new SkillGraphRunner(driver, host);
