@@ -1,0 +1,138 @@
+{
+  "spec_version": "2.0",
+  "identity": {
+    "portal_id": "synthetic_portal",
+    "domain": "localhost:8898",
+    "task_id": "lancar_nota",
+    "version": 1,
+    "name": "Lançar Nota Individual",
+    "description": "Lança nota numérica com validação de escala e read-back"
+  },
+  "compat": {
+    "support_tier": 1,
+    "archetype_tags": ["standard_table", "grade_scale"],
+    "tested_archetypes": ["standard", "columns"],
+    "min_runner_version": "2.0.0"
+  },
+  "params": {
+    "aluno_nome": {
+      "type": "student_ref",
+      "required": true,
+      "pii": true,
+      "description": "Nome completo do aluno"
+    },
+    "nota_valor": {
+      "type": "string",
+      "required": true,
+      "pii": false,
+      "description": "Nota numérica (escala 0 a 10)"
+    }
+  },
+  "entry_node": "confirma_nota",
+  "nodes": {
+    "confirma_nota": {
+      "label": "Confirmação do professor para lançamento de nota",
+      "type": "CHECKPOINT",
+      "summary": [
+        { "label": "Aluno Selecionado", "value": { "param": "aluno_nome" } },
+        { "label": "Nota Informada", "value": { "param": "nota_valor" } }
+      ],
+      "scope": "once",
+      "on_reject": "$abort",
+      "retry": { "max_attempts": 1, "backoff_ms": 0 },
+      "timeout_ms": 30000,
+      "postconditions": [],
+      "on_success": "escreve_nota",
+      "on_fail": "$abort"
+    },
+    "escreve_nota": {
+      "label": "Digita nota no input correspondente à linha do discente",
+      "type": "WRITE",
+      "anchor": {
+        "candidates": [
+          { "strategy": "css", "selector": "input[type='number']" },
+          { "strategy": "css", "selector": "input[type='text']" }
+        ],
+        "scope": {
+          "within": {
+            "table": {
+              "candidates": [
+                { "strategy": "css", "selector": "#tabela-alunos" },
+                { "strategy": "css", "selector": "#grid-rendimento" },
+                { "strategy": "css", "selector": "table" }
+              ],
+              "description": "Tabela de Diário"
+            },
+            "key": {
+              "column_labels": ["Nome do Aluno", "Discente", "Nome", "Educando", "Estudante"],
+              "equals": { "param": "aluno_nome" },
+              "match": "normalized"
+            }
+          }
+        },
+        "description": "Campo de nota do aluno especificado"
+      },
+      "value": { "param": "nota_valor" },
+      "method": "type_native",
+      "semantic": "grade",
+      "read_back": true,
+      "retry": { "max_attempts": 2, "backoff_ms": 500 },
+      "timeout_ms": 5000,
+      "postconditions": [],
+      "on_success": "salvar_diario",
+      "on_fail": "$abort"
+    },
+    "salvar_diario": {
+      "label": "Grava lançamentos no portal escolar",
+      "type": "CLICK",
+      "anchor": {
+        "candidates": [
+          { "strategy": "css", "selector": "#btn-salvar" },
+          { "strategy": "css", "selector": ".btn-confirmar" },
+          { "strategy": "css", "selector": "button" }
+        ],
+        "description": "Botão Gravar Notas"
+      },
+      "is_submit_action": true,
+      "retry": { "max_attempts": 2, "backoff_ms": 500 },
+      "timeout_ms": 5000,
+      "postconditions": [],
+      "on_success": "$end",
+      "on_fail": "$abort"
+    }
+  },
+  "canonical_mapping": {
+    "columns": [
+      {
+        "portal_labels": ["Nome do Aluno", "Discente", "Nome"],
+        "field": "student.name",
+        "semantic_type": "name"
+      }
+    ],
+    "grade_scale": {
+      "type": "numeric",
+      "min": 0,
+      "max": 10,
+      "decimal_separator": "."
+    },
+    "attendance": {
+      "polarity": "checked_is_absent"
+    },
+    "ambiguous_requires_confirmation": true
+  },
+  "safety": {
+    "side_effect_level": "write",
+    "writes_require_checkpoint": true,
+    "max_writes_per_run": 5,
+    "rate_limit": { "min_delay_ms": 50, "jitter_ms": 20 },
+    "allowed_hosts": ["localhost:8898", "127.0.0.1:8898", "localhost:8899", "127.0.0.1:8899", "localhost", "127.0.0.1"]
+  },
+  "provenance": {
+    "author": "teacher_ai_synthetic",
+    "created_at": "2026-10-10T12:00:00Z",
+    "updated_at": "2026-10-10T12:00:00Z",
+    "source": "recorded",
+    "has_self_healed": false,
+    "pii_scrubbed": true
+  }
+}

@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <title>Portal Padrão (Baseline)</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+    th, td { border: 1px solid #cbd5e1; padding: 8px 12px; text-align: left; }
+    th { background: #f1f5f9; }
+    input[type="number"], input[type="text"] { width: 80px; padding: 4px; border: 1px solid #94a3b8; border-radius: 4px; }
+    button { margin-top: 15px; padding: 8px 16px; background: #2563eb; color: white; border: none; border-radius: 4px; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <h1>Diário de Classe - 1º Ano A</h1>
+  <table id="tabela-alunos">
+    <thead>
+      <tr>
+        <th>Matrícula</th>
+        <th>Nome do Aluno</th>
+        <th>Turma</th>
+        <th>Nota</th>
+        <th>Falta</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>101</td>
+        <td class="nome">Alice Souza</td>
+        <td>1A</td>
+        <td><input type="number" id="nota_101" name="nota_101" step="0.1" value="8.5"></td>
+        <td><input type="checkbox" id="falta_101" name="falta_101"></td>
+      </tr>
+      <tr>
+        <td>102</td>
+        <td class="nome">Bruno Santos</td>
+        <td>1A</td>
+        <td><input type="number" id="nota_102" name="nota_102" step="0.1" value=""></td>
+        <td><input type="checkbox" id="falta_102" name="falta_102"></td>
+      </tr>
+      <tr>
+        <td>103</td>
+        <td class="nome">Carlos Silva</td>
+        <td>1A</td>
+        <td><input type="number" id="nota_103" name="nota_103" step="0.1" value="6.0"></td>
+        <td><input type="checkbox" id="falta_103" name="falta_103"></td>
+      </tr>
+    </tbody>
+  </table>
+  <button id="btn-salvar" type="button" onclick="alert('Salvo com sucesso!')">Salvar Lançamentos</button>
+</body>
+</html>

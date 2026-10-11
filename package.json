@@ -10,7 +10,9 @@
     "test": "vitest run --testTimeout=30000",
     "test:silent": "vitest run --reporter=basic --testTimeout=30000",
     "audit:simulations": "node scripts/scan-mocks.mjs",
-    "scan:mocks": "node scripts/scan-mocks.mjs"
+    "scan:mocks": "node scripts/scan-mocks.mjs",
+    "harness:build": "esbuild tools/runner-harness/harness.ts --bundle --outfile=tools/runner-harness/dist/harness.bundle.js --format=esm --sourcemap",
+    "harness": "tsx scripts/serve-harness.ts"
   },
   "dependencies": {
     "@tailwindcss/typography": "^0.5.19",

@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <title>Portal Mutado - Inversão de Colunas</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+    th, td { border: 1px solid #cbd5e1; padding: 8px 12px; text-align: left; }
+    th { background: #e2e8f0; }
+    input[type="text"] { width: 80px; padding: 4px; border: 1px solid #94a3b8; border-radius: 4px; }
+    .btn-confirmar { margin-top: 15px; padding: 8px 16px; background: #059669; color: white; border: none; border-radius: 4px; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <h1>Lista de Rendimento Escolar (Colunas Invertidas)</h1>
+  <table id="grid-rendimento">
+    <thead>
+      <tr>
+        <th>Situação</th>
+        <th>Código</th>
+        <th>Discente</th>
+        <th>Avaliação</th>
+        <th>Frequência</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Ativo</td>
+        <td>202401</td>
+        <td class="nome-discente">Carlos Eduardo Lima</td>
+        <td><input type="text" name="rendimento_202401" value="7.0"></td>
+        <td><input type="checkbox" name="falta_202401"></td>
+      </tr>
+      <tr>
+        <td>Ativo</td>
+        <td>202402</td>
+        <td class="nome-discente">Daniela Martins</td>
+        <td><input type="text" name="rendimento_202402" value=""></td>
+        <td><input type="checkbox" name="falta_202402"></td>
+      </tr>
+      <tr>
+        <td>Ativo</td>
+        <td>202403</td>
+        <td class="nome-discente">Alice Souza</td>
+        <td><input type="text" name="rendimento_202403" value="9.0"></td>
+        <td><input type="checkbox" name="falta_202403"></td>
+      </tr>
+    </tbody>
+  </table>
+  <button class="btn-confirmar" type="button">Gravar Alterações</button>
+</body>
+</html>

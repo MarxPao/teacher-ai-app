@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <title>Portal com Input Reformatador (Simulação de Divergência)</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+    th, td { border: 1px solid #cbd5e1; padding: 8px 12px; text-align: left; }
+    th { background: #fee2e2; }
+    .alert-box { padding: 12px; background: #fef2f2; border: 1px solid #f87171; border-radius: 6px; color: #991b1b; margin-bottom: 15px; }
+  </style>
+</head>
+<body>
+  <h1>Portal Instável / Reformatador de Input</h1>
+  <div class="alert-box">
+    <strong>⚠️ Comportamento de Teste:</strong> Qualquer valor digitado no campo de nota é automaticamente interceptado pelo script da página e sufixado com <code>-ERR</code>, provocando divergência proposital de read-back para demonstrar a reversão segura e o aborto determinístico do runner.
+  </div>
+
+  <table id="tabela-alunos">
+    <thead>
+      <tr><th>Matrícula</th><th>Nome do Aluno</th><th>Nota</th><th>Falta</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>101</td>
+        <td>Alice Souza</td>
+        <td><input type="text" id="nota_reformat" value="7.0"></td>
+        <td><input type="checkbox"></td>
+      </tr>
+    </tbody>
+  </table>
+  <button id="btn-salvar" style="margin-top:15px;padding:8px 16px;">Salvar Lançamentos</button>
+
+  <script>
+    const input = document.getElementById('nota_reformat');
+    input.addEventListener('input', () => {
+      // Reformatador forçado: corrompe o valor esperado
+      if (input.value && !input.value.endsWith('-ERR')) {
+        input.value = input.value + '-ERR';
+      }
+    });
+  </script>
+</body>
+</html>

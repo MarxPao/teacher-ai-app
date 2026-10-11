@@ -1,0 +1,117 @@
+{
+  "spec_version": "2.0",
+  "identity": {
+    "portal_id": "synthetic_portal",
+    "domain": "localhost:8898",
+    "task_id": "read_roster",
+    "version": 1,
+    "name": "Ler Roster de Alunos",
+    "description": "Extrai lista de alunos com normalização e suporte a colunas dinâmicas"
+  },
+  "compat": {
+    "support_tier": 1,
+    "archetype_tags": ["table", "standard_table", "columns_mutation"],
+    "tested_archetypes": ["standard", "columns"],
+    "min_runner_version": "2.0.0"
+  },
+  "params": {},
+  "entry_node": "locate_table",
+  "nodes": {
+    "locate_table": {
+      "label": "Localiza tabela ou grade de alunos no DOM",
+      "type": "LOCATE",
+      "anchor": {
+        "candidates": [
+          { "strategy": "css", "selector": "#tabela-alunos" },
+          { "strategy": "css", "selector": "#grid-rendimento" },
+          { "strategy": "css", "selector": "#paged-table" },
+          { "strategy": "css", "selector": "table" }
+        ],
+        "description": "Tabela de estudantes"
+      },
+      "mode": "direct",
+      "retry": { "max_attempts": 2, "backoff_ms": 300 },
+      "timeout_ms": 5000,
+      "postconditions": [],
+      "on_success": "read_roster_table",
+      "on_fail": "$abort"
+    },
+    "read_roster_table": {
+      "label": "Lê registros da tabela descartando linhas de totais",
+      "type": "READ",
+      "source": {
+        "kind": "table",
+        "anchor": {
+          "candidates": [
+            { "strategy": "css", "selector": "#tabela-alunos" },
+            { "strategy": "css", "selector": "#grid-rendimento" },
+            { "strategy": "css", "selector": "#paged-table" },
+            { "strategy": "css", "selector": "table" }
+          ],
+          "description": "Tabela de alunos"
+        },
+        "skip_rows": [
+          {
+            "column_labels": ["Nome", "Nome do Aluno", "Discente", "Estudante", "Situação"],
+            "match": "normalized",
+            "values": ["Total", "Total de Alunos", "Média", "Subtotal"]
+          }
+        ],
+        "skip_empty_rows": true
+      },
+      "into": "alunos_extraidos",
+      "paginate": false,
+      "retry": { "max_attempts": 2, "backoff_ms": 300 },
+      "timeout_ms": 5000,
+      "postconditions": [],
+      "on_success": "$end",
+      "on_fail": "$abort"
+    }
+  },
+  "canonical_mapping": {
+    "columns": [
+      {
+        "portal_labels": ["Matrícula", "Código", "ID", "Identificação"],
+        "field": "student.portal_id",
+        "semantic_type": "identifier"
+      },
+      {
+        "portal_labels": ["Nome do Aluno", "Discente", "Nome", "Educando", "Estudante"],
+        "field": "student.name",
+        "semantic_type": "name",
+        "transform": "normalize_name"
+      },
+      {
+        "portal_labels": ["Nota", "Avaliação", "Rendimento"],
+        "field": "grade.value",
+        "semantic_type": "numeric_grade",
+        "transform": "parse_decimal_pt_br"
+      }
+    ],
+    "grade_scale": {
+      "type": "numeric",
+      "min": 0,
+      "max": 10,
+      "decimal_separator": "."
+    },
+    "attendance": {
+      "polarity": "checked_is_absent"
+    },
+    "ambiguous_requires_confirmation": true
+  },
+  "safety": {
+    "side_effect_level": "read",
+    "writes_require_checkpoint": true,
+    "max_writes_per_run": 0,
+    "rate_limit": { "min_delay_ms": 50, "jitter_ms": 20 },
+    "allowed_hosts": ["localhost:8898", "127.0.0.1:8898", "localhost:8899", "127.0.0.1:8899", "localhost", "127.0.0.1"]
+  },
+  "provenance": {
+    "author": "teacher_ai_synthetic",
+    "created_at": "2026-10-10T12:00:00Z",
+    "updated_at": "2026-10-10T12:00:00Z",
+    "source": "recorded",
+    "has_self_healed": false,
+    "pii_scrubbed": true
+  }
+}

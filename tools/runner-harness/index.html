@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Teacher AI - SkillGraph v2 Runner Harness</title>
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --panel-bg: #ffffff;
+      --border: #e2e8f0;
+      --text: #1e293b;
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --danger: #dc2626;
+      --warning: #d97706;
+      --success: #16a34a;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+    header {
+      background: var(--panel-bg);
+      border-bottom: 1px solid var(--border);
+      padding: 10px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    header h1 { font-size: 1.1rem; font-weight: 700; color: #0f172a; }
+    header .badge {
+      background: #e0e7ff;
+      color: #3730a3;
+      font-size: 0.75rem;
+      padding: 4px 8px;
+      border-radius: 9999px;
+      font-weight: 600;
+    }
+    .main-layout {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      flex: 1;
+      overflow: hidden;
+      gap: 1px;
+      background: var(--border);
+    }
+    .panel {
+      background: var(--panel-bg);
+      padding: 16px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .section-title {
+      font-size: 0.85rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #64748b;
+      margin-bottom: 6px;
+    }
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+    button {
+      padding: 8px 14px;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: all 0.15s;
+    }
+    .btn-primary { background: var(--primary); color: white; }
+    .btn-primary:hover { background: var(--primary-hover); }
+    .btn-secondary { background: #f1f5f9; color: #334155; border-color: #cbd5e1; }
+    .btn-secondary:hover { background: #e2e8f0; }
+    .btn-danger { background: #fee2e2; color: var(--danger); border-color: #fca5a5; }
+    .btn-danger:hover { background: #fecaca; }
+    select, textarea, input[type="text"] {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px 10px;
+      font-size: 0.85rem;
+      background: #fff;
+    }
+    textarea { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.8rem; resize: vertical; }
+    iframe {
+      width: 100%;
+      height: 320px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: #fff;
+    }
+    .node-card {
+      background: #f8fafc;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px;
+      margin-bottom: 8px;
+    }
+    .status-indicator { display: inline-block; width: 10px; height: 10px; border-radius: 50%; }
+    pre {
+      background: #0f172a;
+      color: #f8fafc;
+      padding: 12px;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      overflow-x: auto;
+      max-height: 200px;
+    }
+    footer {
+      background: #0f172a;
+      color: #94a3b8;
+      padding: 8px 20px;
+      font-size: 0.8rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-top: 1px solid #1e293b;
+    }
+    .zero-cost-badge {
+      color: #4ade80;
+      font-weight: 700;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Teacher AI — SkillGraph v2 Harness</h1>
+    </div>
+    <div class="badge">Execução Local Sem Extensão</div>
+  </header>
+
+  <div class="main-layout">
+    <!-- Coluna Esquerda: Controles, Fixture e Entrada -->
+    <div class="panel">
+      <div>
+        <div class="section-title">1. Fixture de Teste (DOM)</div>
+        <select id="fixture-select">
+          <option value="standard.html">standard.html — Tabela básica de alunos</option>
+          <option value="columns_reversed.html">columns_reversed.html — Colunas invertidas</option>
+          <option value="footer_total.html">footer_total.html — Linhas de Total e Média</option>
+          <option value="pagination.html">pagination.html — Paginação com botão Próxima</option>
+          <option value="virtualized.html">virtualized.html — Container com rolagem virtual</option>
+          <option value="diario_grid.html">diario_grid.html — Grade estilo diário de classe</option>
+          <option value="reformatting_input.html">reformatting_input.html — Input com auto-formatação no blur</option>
+        </select>
+        <div style="margin-top: 8px;">
+          <iframe id="fixture-frame" src="fixtures/standard.html"></iframe>
+        </div>
+      </div>
+
+      <div>
+        <div class="section-title">2. Grafo Sintético v2</div>
+        <select id="graph-select">
+          <option value="read_roster">read_roster.json — Ler lista de alunos</option>
+          <option value="lancar_falta">lancar_falta.json — Lançar faltas em lote</option>
+          <option value="lancar_nota">lancar_nota.json — Lançar notas com read-back</option>
+        </select>
+        <div style="margin-top: 6px;">
+          <textarea id="graph-json" rows="6" placeholder="JSON do SkillGraph v2"></textarea>
+        </div>
+      </div>
+
+      <div>
+        <div class="section-title">3. Variáveis Iniciais (JSON)</div>
+        <textarea id="variables-json" rows="2" placeholder='{"turma": "9A"}'></textarea>
+        <div style="margin-top: 6px; display: flex; align-items: center; gap: 8px;">
+          <input type="checkbox" id="dry-run-check">
+          <label for="dry-run-check" style="font-size: 0.85rem; cursor: pointer;">Modo Dry-Run (não mutar inputs reais)</label>
+        </div>
+      </div>
+
+      <div>
+        <div class="section-title">4. Controle de Execução</div>
+        <div class="toolbar">
+          <button id="btn-run" class="btn-primary">▶ Executar</button>
+          <button id="btn-step" class="btn-secondary">⏭ Passo a passo</button>
+          <button id="btn-pause" class="btn-secondary">⏸ Pausar</button>
+          <button id="btn-abort" class="btn-danger">⏹ Abortar</button>
+          <button id="btn-clear" class="btn-secondary">Limpar</button>
+          <button id="btn-export-trace" class="btn-secondary">Exportar trace (JSON)</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Coluna Direita: Visualização da Árvore, Variáveis e Auditoria -->
+    <div class="panel">
+      <div>
+        <div class="section-title">Árvore de Nós em Tempo Real</div>
+        <div id="graph-tree">
+          <div style="color: #94a3b8; font-size: 0.85rem;">Carregando grafo...</div>
+        </div>
+      </div>
+
+      <div>
+        <div class="section-title">Variáveis Vivas (Mascaradas por LGPD)</div>
+        <pre id="vars-inspector">{}</pre>
+      </div>
+
+      <div>
+        <div class="section-title">Log de Auditoria de Operações Arriscadas</div>
+        <div id="audit-log">
+          <div style="color: #94a3b8; font-size: 0.85rem;">Nenhuma mutação registrada.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <div id="footer-counters" class="zero-cost-badge">Chamadas de LLM: 0 | Requisições de rede: 0</div>
+    <div>Motor Determinístico 100% Puro &bull; SkillGraph v2</div>
+  </footer>
+
+  <script type="module" src="dist/harness.bundle.js"></script>
+</body>
+</html>

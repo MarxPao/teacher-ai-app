@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <title>Portal com Linhas de Total no Rodapé</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+    th, td { border: 1px solid #cbd5e1; padding: 8px 12px; text-align: left; }
+    th { background: #f8fafc; }
+    .total-row { background: #f1f5f9; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <h1>Diário com Linhas de Fechamento / Rodapé</h1>
+  <table id="tabela-alunos">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Nome do Aluno</th>
+        <th>Nota</th>
+        <th>Falta</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>101</td>
+        <td>Alice Souza</td>
+        <td><input type="number" value="8.5"></td>
+        <td><input type="checkbox"></td>
+      </tr>
+      <tr>
+        <td>102</td>
+        <td>Bruno Santos</td>
+        <td><input type="number" value="7.0"></td>
+        <td><input type="checkbox"></td>
+      </tr>
+      <tr class="total-row">
+        <td>—</td>
+        <td>Subtotal</td>
+        <td>15.5</td>
+        <td>0</td>
+      </tr>
+      <tr class="total-row">
+        <td>—</td>
+        <td>Total de Alunos</td>
+        <td>2 matriculados</td>
+        <td>—</td>
+      </tr>
+      <tr class="total-row">
+        <td>—</td>
+        <td>Média da Turma</td>
+        <td>7.75</td>
+        <td>—</td>
+      </tr>
+    </tbody>
+  </table>
+  <button id="btn-salvar">Salvar</button>
+</body>
+</html>

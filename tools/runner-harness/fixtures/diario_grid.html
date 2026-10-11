@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <title>Diário em Grade (Alunos × Datas)</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+    th, td { border: 1px solid #cbd5e1; padding: 8px 10px; text-align: center; }
+    th.left, td.left { text-align: left; }
+    th { background: #f1f5f9; }
+    input[type="checkbox"] { transform: scale(1.1); }
+  </style>
+</head>
+<body>
+  <h1>Diário de Classe - Frequência por Data</h1>
+  <table id="tabela-alunos">
+    <thead>
+      <tr>
+        <th rowspan="2" class="left">Matrícula</th>
+        <th rowspan="2" class="left">Nome do Aluno</th>
+        <th colspan="3">Fevereiro / 2026</th>
+      </tr>
+      <tr>
+        <th>02/02</th>
+        <th>03/02</th>
+        <th>04/02</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="left">101</td>
+        <td class="left">Alice Souza</td>
+        <td><input type="checkbox" id="d1_101" title="02/02"></td>
+        <td><input type="checkbox" id="d2_101" title="03/02"></td>
+        <td><input type="checkbox" id="d3_101" title="04/02"></td>
+      </tr>
+      <tr>
+        <td class="left">102</td>
+        <td class="left">Bruno Santos</td>
+        <td><input type="checkbox" id="d1_102" title="02/02"></td>
+        <td><input type="checkbox" id="d2_102" title="03/02"></td>
+        <td><input type="checkbox" id="d3_102" title="04/02"></td>
+      </tr>
+    </tbody>
+  </table>
+  <button id="btn-salvar" type="button" style="margin-top:15px;padding:8px 16px;background:#2563eb;color:#fff;border:none;border-radius:4px;">Gravar Pautas</button>
+</body>
+</html>
