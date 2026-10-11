@@ -67,6 +67,18 @@ export async function executeLocateNode(
   const context = { params, variables: state.variables }
   const resolvedAnchor = resolveAnchor(node.anchor, context, namedAnchors)
 
+  // Se a âncora possuir escopo de linha (RowScope), avalia a resolução da linha
+  if (resolvedAnchor.scope?.within && 'table' in resolvedAnchor.scope.within) {
+    const rowScope = resolvedAnchor.scope.within
+    const rowRes = await driver.locateRow(rowScope)
+    if (rowRes.ambiguous && rowScope.key.on_multiple === 'fail') {
+      throw new RunnerError('E_ROW_AMBIGUOUS', 'Múltiplas linhas casaram com a chave primária no escopo de linha', nodeId)
+    }
+    if ((rowRes.matchedIndex === -1 || !rowRes.rowHandleId) && rowScope.key.on_none === 'fail') {
+      throw new RunnerError('E_ROW_NOT_FOUND', 'Linha especificada não foi encontrada na tabela', nodeId)
+    }
+  }
+
   if (node.mode === 'scroll_until_found') {
     const scrollRes = await driver.scroll({
       mode: 'scroll_until_found',

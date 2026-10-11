@@ -1,8 +1,7 @@
 // lib/runner/engine.ts
 // Engine puro determinístico de execução do SkillGraph v2 (sem DOM, sem rede, sem LLM)
 
-import { SkillGraphV2Schema, type SkillGraphV2 } from '../contracts/skillgraph/graph'
-import { validateGraph } from '../contracts/skillgraph/validate'
+import { SkillGraphV2Schema, validateGraph, type SkillGraphV2 } from '../contracts/skillgraph'
 import { SENTINEL_END, SENTINEL_ABORT, SENTINEL_CONTINUE } from '../contracts/skillgraph/nodes'
 import type { Driver, Host, RunState } from './types'
 import { RunnerError } from './types'
@@ -22,6 +21,8 @@ export interface GraphRunnerOptions {
   initialVariables?: Record<string, any>
 }
 
+const FATAL_RUNTIME_ERRORS = new Set(['E_MAX_WRITES', 'E_MAX_ITERATIONS', 'E_HOST_NOT_ALLOWED', 'E_GRAPH_INVALID', 'E_ROW_AMBIGUOUS'])
+
 export class SkillGraphRunner {
   constructor(
     private readonly driver: Driver,
@@ -33,7 +34,7 @@ export class SkillGraphRunner {
     params: Record<string, any> = {},
     options: GraphRunnerOptions = {}
   ): Promise<{ state: RunState; success: boolean; error?: RunnerError }> {
-    // 1. Obrigação 1: Validação prévia estrita do grafo
+    // 1. Validação prévia estrita do grafo
     const parseResult = SkillGraphV2Schema.safeParse(rawGraph)
     if (!parseResult.success) {
       throw new RunnerError('E_GRAPH_INVALID', `Schema do grafo inválido: ${parseResult.error.message}`)
@@ -46,11 +47,10 @@ export class SkillGraphRunner {
       throw new RunnerError('E_GRAPH_INVALID', `Regras de integridade violadas: ${errList}`)
     }
 
-    // 2. Obrigação 2: Verificação do host atual contra allowed_hosts
+    // 2. Verificação de host e fingerprint
     const initialCtx = await this.driver.getFrameContext()
     checkAllowedHost(initialCtx.host, graph.safety.allowed_hosts)
 
-    // 3. Obrigação 3: Checagem de entry_fingerprint
     if (graph.entry_fingerprint) {
       const fpMatch = await this.driver.matchFingerprint(graph.entry_fingerprint)
       if (!fpMatch.matched) {
@@ -70,58 +70,37 @@ export class SkillGraphRunner {
       updatedAt: this.host.now(),
     }
 
-    const graphRef = {
-      portal_id: graph.identity.portal_id,
-      task_id: graph.identity.task_id,
-      version: graph.identity.version,
-    }
+    const graphRef = { portal_id: graph.identity.portal_id, task_id: graph.identity.task_id, version: graph.identity.version }
+    let lastError: RunnerError | undefined
 
     try {
       while (state.currentNodeId && state.status === 'running') {
         const nodeId = state.currentNodeId
-
         if (nodeId === SENTINEL_END) {
           state.status = 'completed'
           break
         }
         if (nodeId === SENTINEL_ABORT) {
           state.status = 'aborted'
-          throw new RunnerError('E_INTERRUPTED', 'Execução abortada por transição para $abort', nodeId)
+          throw lastError ?? new RunnerError('E_INTERRUPTED', 'Execução abortada por transição para $abort', nodeId)
         }
-        if (nodeId === SENTINEL_CONTINUE) {
-          break
-        }
+        if (nodeId === SENTINEL_CONTINUE) break
 
         const node = graph.nodes[nodeId]
-        if (!node) {
-          throw new RunnerError('E_GRAPH_INVALID', `Nó '${nodeId}' não encontrado no grafo`, nodeId)
-        }
+        if (!node) throw new RunnerError('E_GRAPH_INVALID', `Nó '${nodeId}' não encontrado no grafo`, nodeId)
 
-        // Modo passo a passo
         await this.host.beforeNode(nodeId, state)
+        this.host.emit({ type: 'node_started', runId: state.runId, nodeId, timestamp: this.host.now(), data: { type: node.type, label: node.label } })
 
-        this.host.emit({
-          type: 'node_started',
-          runId: state.runId,
-          nodeId,
-          timestamp: this.host.now(),
-          data: { type: node.type, label: node.label },
-        })
-
-        // Checagem de expect_fingerprint no nó
         if (node.expect_fingerprint) {
           const nodeFp = await this.driver.matchFingerprint(node.expect_fingerprint)
-          if (!nodeFp.matched) {
-            throw new RunnerError('E_FINGERPRINT_MISMATCH', `Fingerprint do nó '${nodeId}' divergiu`, nodeId)
-          }
+          if (!nodeFp.matched) throw new RunnerError('E_FINGERPRINT_MISMATCH', `Fingerprint do nó '${nodeId}' divergiu`, nodeId)
         }
 
-        // Rate limit para nós de efeito colateral
         if (node.type === 'WRITE' || node.type === 'NAVIGATE' || (node.type === 'CLICK' && node.is_submit_action)) {
           await applyRateLimit(graph.safety.rate_limit, this.host)
         }
 
-        // Execução do nó com política de retries
         let nextNodeId = ''
         const retryAttempts = node.retry?.max_attempts ?? 1
         const backoffMs = node.retry?.backoff_ms ?? 500
@@ -129,12 +108,13 @@ export class SkillGraphRunner {
         for (let attempt = 1; attempt <= retryAttempts; attempt++) {
           try {
             nextNodeId = await this.executeNodeDispatch(node, nodeId, state, params, graph, graphRef)
+            lastError = undefined
             break
           } catch (err: any) {
-            // Em caso de WRITE executado fisicamente com read-back falho, proibido retries
-            const fallbackFail = 'on_fail' in node ? (node as any).on_fail : undefined
-            if (err?.code === 'E_READBACK_MISMATCH' || attempt >= retryAttempts) {
-              if (fallbackFail && err?.code !== 'E_READBACK_MISMATCH') {
+            lastError = err instanceof RunnerError ? err : new RunnerError('E_INTERRUPTED', err.message, nodeId)
+            if (FATAL_RUNTIME_ERRORS.has(lastError.code) || err?.code === 'E_READBACK_MISMATCH' || attempt >= retryAttempts) {
+              const fallbackFail = 'on_fail' in node ? (node as any).on_fail : undefined
+              if (fallbackFail && err?.code !== 'E_READBACK_MISMATCH' && !FATAL_RUNTIME_ERRORS.has(lastError.code)) {
                 nextNodeId = fallbackFail
                 break
               }
@@ -144,15 +124,12 @@ export class SkillGraphRunner {
           }
         }
 
-        // Avaliação de pós-condições
         if (node.postconditions && node.postconditions.length > 0) {
           for (const pc of node.postconditions) {
             const context = { params, variables: state.variables }
             const resolvedCond = resolveCondition(pc, context, graph.anchor_library)
             const satisfied = await evaluateCondition(resolvedCond, state.variables, this.driver)
-            if (!satisfied) {
-              throw new RunnerError('E_POSTCONDITION_FAILED', `Pós-condição falhou no nó '${nodeId}'`, nodeId)
-            }
+            if (!satisfied) throw new RunnerError('E_POSTCONDITION_FAILED', `Pós-condição falhou no nó '${nodeId}'`, nodeId)
           }
         }
 
@@ -161,12 +138,7 @@ export class SkillGraphRunner {
       }
 
       state.status = 'completed'
-      this.host.emit({
-        type: 'run_completed',
-        runId: state.runId,
-        timestamp: this.host.now(),
-        data: { writesCount: state.writesCount },
-      })
+      this.host.emit({ type: 'run_completed', runId: state.runId, timestamp: this.host.now(), data: { writesCount: state.writesCount } })
       return { state, success: true }
     } catch (err: any) {
       state.status = 'failed'
@@ -182,12 +154,7 @@ export class SkillGraphRunner {
         verified_by: 'none',
         at: new Date(this.host.now()).toISOString(),
       })
-      this.host.emit({
-        type: 'run_failed',
-        runId: state.runId,
-        timestamp: this.host.now(),
-        data: { errorCode: runnerError.code, message: runnerError.message },
-      })
+      this.host.emit({ type: 'run_failed', runId: state.runId, timestamp: this.host.now(), data: { errorCode: runnerError.code, message: runnerError.message } })
       return { state, success: false, error: runnerError }
     }
   }
