@@ -60,6 +60,25 @@ export function normalizedLevenshteinSimilarity(a: string, b: string): number {
   return Math.max(0, 1.0 - dist / maxLen)
 }
 
+const SYNONYM_GROUPS: Set<string>[] = [
+  new Set(['salvar', 'gravar', 'confirmar', 'registrar', 'submeter', 'save', 'submit']),
+  new Set(['presenca', 'presencas', 'frequencia', 'comparecimento', 'attendance', 'present']),
+  new Set(['falta', 'faltas', 'ausencia', 'ausencias', 'absent', 'absence']),
+  new Set(['nota', 'notas', 'media', 'conceito', 'pontuacao', 'grade', 'score']),
+  new Set(['proximo', 'proxima', 'avancar', 'continuar', 'seguir', 'next']),
+  new Set(['anterior', 'voltar', 'retornar', 'prev', 'back']),
+  new Set(['baixar', 'download', 'exportar', 'export']),
+  new Set(['enviar', 'upload', 'importar', 'import']),
+]
+
+function areTokensSynonyms(t1: string, t2: string): boolean {
+  if (t1 === t2) return true
+  for (const group of SYNONYM_GROUPS) {
+    if (group.has(t1) && group.has(t2)) return true
+  }
+  return false
+}
+
 export function computeTextSimilarity(textA: string, textB: string): number {
   const normA = normalizeText(textA)
   const normB = normalizeText(textB)
@@ -74,14 +93,24 @@ export function computeTextSimilarity(textA: string, textB: string): number {
     return containmentScore
   }
 
-  // 2. Jaccard de tokens
-  const setA = tokenSet(normA)
-  const setB = tokenSet(normB)
-  const jaccard = jaccardSimilarity(setA, setB)
+  // 2. Correspondência semântica de tokens com sinônimos
+  const tokensA = Array.from(tokenSet(normA))
+  const tokensB = Array.from(tokenSet(normB))
+
+  let synMatches = 0
+  for (const ta of tokensA) {
+    if (tokensB.some(tb => areTokensSynonyms(ta, tb))) {
+      synMatches++
+    }
+  }
+
+  // |A ∪ B| = |A| + |B| - |A ∩ B|
+  const synUnionSize = tokensA.length + tokensB.length - synMatches
+  const synJaccard = synUnionSize > 0 ? synMatches / synUnionSize : 0.0
 
   // 3. Levenshtein
   const lev = normalizedLevenshteinSimilarity(normA, normB)
 
   // Combinação ponderada
-  return 0.65 * jaccard + 0.35 * lev
+  return Math.max(synJaccard, 0.65 * synJaccard + 0.35 * lev)
 }

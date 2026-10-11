@@ -93,7 +93,8 @@ export function extractSignals(
     attrScore += computeTextSimilarity(expected.placeholder, observed.placeholder)
   }
 
-  const attributeMatch = attrCount > 0 ? attrScore / attrCount : 0.5
+  const hasExpectedAttrs = Boolean(expected.name || expected.id || expected.type || expected.placeholder)
+  const attributeMatch = attrCount > 0 ? attrScore / attrCount : (hasExpectedAttrs ? 0.0 : 1.0)
 
   // 5. Classes CSS
   const expClasses = (expected.classes || []).filter(c => !c.startsWith('tw-') && !c.startsWith('css-'))
