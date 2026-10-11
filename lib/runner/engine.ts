@@ -17,6 +17,8 @@ import { executeCheckpointNode, executeHandoffNode } from './nodes/checkpoint'
 import { executeDownloadNode } from './nodes/download'
 import { executeUploadNode } from './nodes/upload'
 import { executeUnsupportedNode } from './nodes/unsupported'
+import { resolveAnchor } from './anchorResolve'
+import { attemptSoftHealOrRepair, emitDriftEvent } from './driftHook'
 
 export interface GraphRunnerOptions {
   dryRun?: boolean
@@ -114,12 +116,43 @@ export class SkillGraphRunner {
           try {
             nextNodeId = await this.executeNodeDispatch(node, nodeId, state, params, graph, graphRef)
             lastError = undefined
+            emitDriftEvent({
+              nodeId,
+              nodeType: node.type,
+              graphId: graph.identity.portal_id || graph.identity.name,
+              graphVersion: graph.identity.version,
+              state,
+              driver: this.driver,
+              host: this.host,
+            }, 'none')
             break
           } catch (err: any) {
             lastError = err instanceof RunnerError ? err : new RunnerError('E_INTERRUPTED', err.message, nodeId)
-            if (FATAL_RUNTIME_ERRORS.has(lastError.code) || err?.code === 'E_READBACK_MISMATCH' || attempt >= retryAttempts) {
+            if (lastError.code === 'E_ANCHOR_NOT_FOUND') {
+              const driftRes = await attemptSoftHealOrRepair({
+                nodeId,
+                nodeType: node.type,
+                graphId: graph.identity.portal_id || graph.identity.name,
+                graphVersion: graph.identity.version,
+                anchor: 'anchor' in node ? resolveAnchor(node.anchor, { params, variables: state.variables }, graph.anchor_library) : undefined,
+                state,
+                driver: this.driver,
+                host: this.host,
+              })
+              if (driftRes.healed) {
+                try {
+                  nextNodeId = await this.executeNodeDispatch(node, nodeId, state, params, graph, graphRef)
+                  lastError = undefined
+                  break
+                } catch {
+                  // segue fluxo de erro se ainda falhar
+                }
+              }
+            }
+            const isFatal = lastError ? FATAL_RUNTIME_ERRORS.has(lastError.code) : false
+            if (isFatal || err?.code === 'E_READBACK_MISMATCH' || attempt >= retryAttempts) {
               const fallbackFail = 'on_fail' in node ? (node as any).on_fail : undefined
-              if (fallbackFail && err?.code !== 'E_READBACK_MISMATCH' && !FATAL_RUNTIME_ERRORS.has(lastError.code)) {
+              if (fallbackFail && err?.code !== 'E_READBACK_MISMATCH' && !isFatal) {
                 nextNodeId = fallbackFail
                 break
               }
@@ -143,7 +176,15 @@ export class SkillGraphRunner {
       }
 
       state.status = 'completed'
-      this.host.emit({ type: 'run_completed', runId: state.runId, timestamp: this.host.now(), data: { writesCount: state.writesCount } })
+      this.host.emit({
+        type: 'run_completed',
+        runId: state.runId,
+        timestamp: this.host.now(),
+        data: {
+          writesCount: state.writesCount,
+          hasSelfHealed: Boolean(state.hasSelfHealed),
+        },
+      })
       return { state, success: true }
     } catch (err: any) {
       state.status = 'failed'

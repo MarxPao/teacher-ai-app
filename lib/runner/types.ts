@@ -4,6 +4,7 @@
 import type { AuditEntry } from '../contracts/audit'
 import type { Fingerprint } from '../contracts/skillgraph/primitives'
 import type { RowSkip } from '../contracts/skillgraph/nodes'
+import type { ElementDescriptor } from '../recorder/traceSchema'
 
 // ─── Códigos de Erro de Runtime ─────────────────────────────────────────────
 
@@ -160,6 +161,9 @@ export interface Driver {
   listFrames(): Promise<Array<{ frameId: number; url: string; host: string }>>
   download?(options: DownloadOptions): Promise<{ success: boolean; filename: string; mimeType?: string; sizeBytes?: number }>
   upload?(options: UploadOptions): Promise<{ success: boolean }>
+  describeElements?(selector?: string): Promise<ElementDescriptor[]>
+  highlight?(selector: string, mode: 'old' | 'new'): Promise<void>
+  clearHighlight?(): Promise<void>
 }
 
 export interface DownloadOptions {
@@ -242,6 +246,7 @@ export interface RunState {
   loopStack: Array<{ nodeId: string; index: number; total: number; item: any }>
   writesCount: number
   dryRun: boolean
+  hasSelfHealed?: boolean
   startedAt: number
   updatedAt: number
 }
@@ -251,6 +256,7 @@ export type RunEventType =
   | 'node_completed'
   | 'node_failed'
   | 'node_skipped'
+  | 'drift'
   | 'write_performed'
   | 'write_reverted'
   | 'checkpoint_requested'
