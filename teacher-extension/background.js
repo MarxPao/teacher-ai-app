@@ -1242,6 +1242,43 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       const payload = message.payload || {};
       const { tool, params, portalId } = payload;
 
+      // ─── GUARDA RESTRITA SKILLGRAPH V2: PROIBIDO CAIR EM SELETOR FIXO ───
+      const useV2 = await new Promise((r) => {
+        chrome.storage.local.get(['USE_SKILLGRAPH_V2'], (res) => r(Boolean(res?.USE_SKILLGRAPH_V2)));
+      });
+
+      if (useV2) {
+        const graphKey = params?.task_id || tool;
+        const bundle = globalThis.SkillGraphBundle?.SkillGraphV2;
+        const graph = bundle?.syntheticGraphs?.[graphKey] || null;
+
+        if (!graph) {
+          sendResponse({
+            success: false,
+            mapNotFound: true,
+            verified: false,
+            error: 'Mapa para esta ação não encontrado. Deseja gravar uma demonstração?',
+            friendlyMessage: 'Mapa para esta ação não encontrado. Deseja gravar uma demonstração?'
+          });
+          return;
+        }
+
+        if (typeof handleSkillGraphMessage === 'function') {
+          handleSkillGraphMessage({
+            action: 'SKILLGRAPH_RUN',
+            payload: { graph, initialVariables: params?.variables || {} }
+          }, sender, (v2Res) => {
+            sendResponse({
+              success: v2Res.success,
+              verified: v2Res.success,
+              error: v2Res.success ? undefined : v2Res.friendlyMessage,
+              friendlyMessage: v2Res.friendlyMessage
+            });
+          });
+          return;
+        }
+      }
+
       // 1. Localiza aba ativa de portal conectado
       const targetTabId = await resolveActivePortalTab(params?.tabId);
 
