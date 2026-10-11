@@ -1,3 +1,5 @@
+# DEPRECATED (fase 1): substituído por SkillGraph v2 (docs/contracts/SKILLGRAPH_V2.md).
+# Não adicione novos usos.
 """
 skill_graph_schema.py — Modelos Pydantic v2 do Skill Graph (Lote 1)
 """

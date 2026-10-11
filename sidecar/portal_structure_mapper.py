@@ -1,3 +1,5 @@
+# DEPRECATED (fase 1): substituído por SkillGraph v2 (docs/contracts/SKILLGRAPH_V2.md).
+# Não adicione novos usos.
 """
 sidecar/portal_structure_mapper.py — Mapeamento Estrutural Passivo do Portal (PARTE 2)
 

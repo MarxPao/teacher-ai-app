@@ -1,3 +1,5 @@
+# DEPRECATED (fase 1): substituído por SkillGraph v2 (docs/contracts/SKILLGRAPH_V2.md).
+# Não adicione novos usos.
 """
 portal_map_store.py — Camada de Acesso a Mapas de Portal Descobertos
 
