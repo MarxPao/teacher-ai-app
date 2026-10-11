@@ -78,4 +78,42 @@ export class VaultManager {
     }
     return safeStorage.decryptString(encryptedBuffer)
   }
+
+  /**
+   * Armazena uma chave de API cifrada com DPAPI no cofre local.
+   */
+  setApiKey(provider: string, key: string): void {
+    if (!fs.existsSync(this.vaultDir)) {
+      fs.mkdirSync(this.vaultDir, { recursive: true })
+    }
+    const safeProvider = provider.toLowerCase().replace(/[^a-z0-9_-]/g, '_')
+    const filePath = path.join(this.vaultDir, `key_${safeProvider}.enc`)
+    const encrypted = this.encryptSecret(key)
+    fs.writeFileSync(filePath, encrypted)
+  }
+
+  /**
+   * Decifra e recupera a chave de API diretamente do cofre do SO (apenas para o main process).
+   */
+  getApiKey(provider: string): string | null {
+    const safeProvider = provider.toLowerCase().replace(/[^a-z0-9_-]/g, '_')
+    const filePath = path.join(this.vaultDir, `key_${safeProvider}.enc`)
+    if (!fs.existsSync(filePath)) return null
+    try {
+      const encrypted = fs.readFileSync(filePath)
+      return this.decryptSecret(encrypted)
+    } catch {
+      return null
+    }
+  }
+
+  /**
+   * Consulta a existência de chave sem expor o segredo (para UI / status).
+   */
+  hasApiKey(provider: string): boolean {
+    const safeProvider = provider.toLowerCase().replace(/[^a-z0-9_-]/g, '_')
+    const filePath = path.join(this.vaultDir, `key_${safeProvider}.enc`)
+    return fs.existsSync(filePath)
+  }
 }
+

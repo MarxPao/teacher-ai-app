@@ -11,6 +11,8 @@ import {
   SqlAuditRepository,
   SqlConsentRepository,
   SqlSettingsRepository,
+  ExportService,
+  ErasureService,
   createEncryptedBackup,
   restoreEncryptedBackup,
   UI_ALLOWED_METHODS,
@@ -82,6 +84,37 @@ async function executeBusinessMethod(method: string, params: any): Promise<any> 
       const buf = Buffer.from(params.backupBase64, 'base64')
       const restoredJson = await restoreEncryptedBackup(buf, params.passphrase)
       return { restored: true, length: restoredJson.length }
+    }
+
+    case 'data.exportStudent': {
+      if (!driver || !dataKey) throw new Error('Banco ou chave de dados indisponível.')
+      const exportService = new ExportService(driver, dataKey)
+      return await exportService.exportStudentDossier(params.studentId)
+    }
+
+    case 'data.eraseStudent': {
+      if (!driver) throw new Error('Banco indisponível.')
+      const erasureService = new ErasureService(driver)
+      return await erasureService.eraseStudent(params.studentId)
+    }
+
+    case 'keys.configure': {
+      if (!vault) throw new Error('Cofre indisponível.')
+      vault.setApiKey(params.provider, params.key)
+      return { configured: true, provider: params.provider }
+    }
+
+    case 'keys.status': {
+      if (!vault) throw new Error('Cofre indisponível.')
+      if (params.provider) {
+        return { provider: params.provider, configured: vault.hasApiKey(params.provider) }
+      }
+      const providers = ['openai', 'anthropic', 'google', 'groq', 'default']
+      const status: Record<string, boolean> = {}
+      for (const p of providers) {
+        status[p] = vault.hasApiKey(p)
+      }
+      return { status }
     }
 
     default:

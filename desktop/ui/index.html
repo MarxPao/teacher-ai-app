@@ -13,6 +13,8 @@
       --muted: #94a3b8;
       --primary: #3b82f6;
       --primary-hover: #2563eb;
+      --danger: #ef4444;
+      --danger-hover: #dc2626;
       --success: #10b981;
       --border: #334155;
     }
@@ -26,6 +28,7 @@
       min-height: 100vh;
       box-sizing: border-box;
       padding: 24px;
+      gap: 20px;
     }
     header {
       display: flex;
@@ -33,7 +36,6 @@
       align-items: center;
       border-bottom: 1px solid var(--border);
       padding-bottom: 16px;
-      margin-bottom: 24px;
     }
     h1 {
       font-size: 20px;
@@ -66,6 +68,9 @@
       font-size: 16px;
       margin-top: 0;
       margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
     }
     p {
       color: var(--muted);
@@ -77,12 +82,12 @@
       background: var(--primary);
       color: white;
       border: none;
-      padding: 10px 16px;
-      font-size: 14px;
+      padding: 8px 14px;
+      font-size: 13px;
       font-weight: 500;
-      border-radius: 8px;
+      border-radius: 6px;
       cursor: pointer;
-      transition: background 0.2s;
+      transition: background 0.15s;
     }
     .btn:hover {
       background: var(--primary-hover);
@@ -91,22 +96,59 @@
       background: transparent;
       border: 1px solid var(--border);
       color: var(--text);
-      margin-left: 8px;
     }
     .btn-secondary:hover {
       background: rgba(255, 255, 255, 0.05);
     }
-    input {
+    .btn-danger {
+      background: var(--danger);
+      color: white;
+      border: none;
+      padding: 6px 10px;
+      font-size: 12px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .btn-danger:hover {
+      background: var(--danger-hover);
+    }
+    input, select {
       background: #0f172a;
       border: 1px solid var(--border);
       color: white;
-      padding: 10px;
+      padding: 8px 12px;
       border-radius: 6px;
-      font-size: 14px;
+      font-size: 13px;
       width: 100%;
       box-sizing: border-box;
-      margin-bottom: 12px;
+      margin-bottom: 10px;
     }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      margin-top: 10px;
+    }
+    th, td {
+      padding: 8px 10px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+    th {
+      color: var(--muted);
+      font-weight: 600;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .status-pill {
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-weight: 600;
+    }
+    .status-ok { background: rgba(16, 185, 129, 0.2); color: #34d399; }
+    .status-off { background: rgba(239, 68, 68, 0.2); color: #f87171; }
     #status-log {
       background: #090d16;
       border: 1px solid var(--border);
@@ -116,6 +158,8 @@
       font-size: 12px;
       color: #38bdf8;
       min-height: 80px;
+      max-height: 140px;
+      overflow-y: auto;
       white-space: pre-wrap;
     }
   </style>
@@ -123,27 +167,76 @@
 <body>
   <header>
     <h1>🎓 Teacher AI Desktop <span class="badge">Local-First (Blindado)</span></h1>
-    <div id="security-indicator" style="font-size: 13px; color: #10b981;">🛡️ Cofre Windows Ativo | Zero Portas Abertas</div>
+    <div id="security-indicator" style="font-size: 13px; color: #10b981;">🛡️ Cofre Windows Ativo | Zero Portas TCP Abertas</div>
   </header>
 
   <div class="grid">
-    <div class="card">
-      <h2>🏠 Onde Ficam Seus Dados?</h2>
-      <p>Todos os seus dados escolares, notas e históricos de alunos estão guardados <strong>exclusivamente na sua máquina</strong>, protegidos pelo cofre criptográfico seguro do sistema operacional.</p>
-      <p>Nenhuma informação sai da sua estação de trabalho sem a sua permissão expressa e pré-visualização.</p>
+    <!-- Card 1: Discentes e LGPD -->
+    <div class="card" style="grid-column: span 2;">
+      <h2>
+        <span>👥 Discentes no SQLite Cifrado (AES-256-GCM)</span>
+        <button class="btn btn-secondary" id="btn-refresh-students">🔄 Atualizar Lista</button>
+      </h2>
+      <p>Dados de discentes protegidos em repouso por chave de 256 bits embrulhada no cofre do sistema operacional.</p>
+      <div style="overflow-x: auto;">
+        <table id="students-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Nome Completo</th>
+              <th>Matrícula</th>
+              <th>Turma</th>
+              <th>Ações LGPD</th>
+            </tr>
+          </thead>
+          <tbody id="students-tbody">
+            <tr><td colspan="5" style="color: var(--muted); text-align: center;">Carregando discentes...</td></tr>
+          </tbody>
+        </table>
+      </div>
     </div>
 
+    <!-- Card 2: Cofre de Chaves BYOK -->
     <div class="card">
-      <h2>💾 Cópia de Segurança (Backup Cifrado)</h2>
-      <p>Crie uma cópia de segurança protegida por senha para transferir seus dados com segurança ou manter um backup pessoal.</p>
-      <input type="password" id="backup-passphrase" placeholder="Digite uma senha forte (mín. 6 caracteres)">
-      <button class="btn" id="btn-backup">Exportar Backup Cifrado</button>
-      <button class="btn btn-secondary" id="btn-status">Atualizar Status</button>
+      <h2>🔑 Cofre de Chaves de IA (BYOK - DPAPI)</h2>
+      <p>Suas chaves nunca são enviadas para a interface nem para a extensão. Ficam exclusivamente no cofre do sistema operacional.</p>
+      
+      <div id="keys-status-container" style="margin-bottom: 12px; font-size: 13px; display: flex; flex-direction: column; gap: 6px;">
+        <!-- Preenchido via app.js -->
+      </div>
+
+      <div style="border-top: 1px solid var(--border); padding-top: 12px;">
+        <label style="font-size: 12px; color: var(--muted);">Provedor:</label>
+        <select id="key-provider">
+          <option value="groq">Groq (Recomendado para velocidade)</option>
+          <option value="openai">OpenAI</option>
+          <option value="google">Google Gemini</option>
+          <option value="anthropic">Anthropic Claude</option>
+        </select>
+        <label style="font-size: 12px; color: var(--muted);">Chave de API:</label>
+        <input type="password" id="key-input" placeholder="Cole sua chave aqui...">
+        <button class="btn" id="btn-save-key">Salvar no Cofre DPAPI</button>
+      </div>
+    </div>
+
+    <!-- Card 3: Backup & Restauração -->
+    <div class="card">
+      <h2>💾 Cópia de Segurança Cifrada</h2>
+      <p>Exporte ou restaure toda a base de dados com senha forte pessoal (scrypt + AES-256-GCM).</p>
+      
+      <input type="password" id="backup-passphrase" placeholder="Senha do backup (mín. 6 caracteres)">
+      <div style="display: flex; gap: 8px;">
+        <button class="btn" id="btn-backup" style="flex: 1;">Exportar Backup</button>
+        <button class="btn btn-secondary" id="btn-status">Diagnóstico</button>
+      </div>
+      <div style="margin-top: 10px; font-size: 12px; color: var(--muted);">
+        Para restaurar um arquivo <code>.tbackup</code>, use a opção correspondente do app.
+      </div>
     </div>
   </div>
 
-  <div class="card" style="margin-top: 20px;">
-    <h2>📊 Status do Sistema Local</h2>
+  <div class="card">
+    <h2>📊 Trilha de Auditoria e Diagnóstico do Sistema</h2>
     <div id="status-log">Iniciando diagnóstico local...</div>
   </div>
 
