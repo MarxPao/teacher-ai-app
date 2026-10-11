@@ -22,6 +22,8 @@ import { readHtmlTable, parseTableHeaders } from './tableReader'
 import { executeDomWrite } from './writer'
 import { evaluateDomCondition } from './conditions'
 import { matchText, findHeaderMatch } from '../runner/text'
+import { describeElements as extractDescriptors } from './elementDescriptor'
+import { highlightElement, clearHighlights } from './highlightOverlay'
 
 export class DomDriver implements Driver {
   private handleStore = new ElementHandleStore()
@@ -246,5 +248,21 @@ export class DomDriver implements Driver {
       return { success: true }
     }
     return { success: true }
+  }
+
+  public async describeElements(selector?: string) {
+    this.hostGuard()
+    return extractDescriptors(this.doc, selector)
+  }
+
+  public async highlight(selector: string, mode: 'old' | 'new') {
+    this.hostGuard()
+    const el = this.doc.querySelector(selector)
+    if (el) highlightElement(el, mode)
+  }
+
+  public async clearHighlight() {
+    this.hostGuard()
+    clearHighlights(this.doc)
   }
 }
