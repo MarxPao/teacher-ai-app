@@ -145,6 +145,7 @@
     <div style="display: flex; gap: 8px; align-items: center;">
       <button id="tab-btn-runner" class="btn-primary" style="padding: 6px 14px;">Executar (Runner)</button>
       <button id="tab-btn-recorder" class="btn-secondary" style="padding: 6px 14px;">Gravar & Revisar</button>
+      <button id="tab-btn-repair" class="btn-secondary" style="padding: 6px 14px;">Resiliência (Auto-Reparo)</button>
       <div class="badge">Execução Local Sem Extensão</div>
     </div>
   </header>
@@ -249,6 +250,11 @@
       <div id="review-view-container" style="margin-top: 8px;">
         <div style="color: #94a3b8; font-size: 0.85rem;">Inicie uma gravação ou carregue um trace dourado acima para revisar e compilar.</div>
       </div>
+    </div>
+
+    <!-- Coluna Direita: Painel de Resiliência (Repair) -->
+    <div id="panel-repair-view" class="panel" style="display: none;">
+      <div id="repair-view-container"></div>
     </div>
   </div>
 

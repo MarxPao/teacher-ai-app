@@ -8,6 +8,8 @@ import type { AuditEntry } from '../../lib/contracts/audit'
 import type { SkillGraphV2 } from '../../lib/contracts/skillgraph'
 import { TraceView } from './traceView'
 import { ReviewView } from './reviewView'
+import { RepairView } from './repairView'
+import { ALL_REPAIR_SCENARIOS } from './scenarios'
 import { DomRecorder } from '../../lib/recorder-dom/recorderCore'
 import { MemorySkillGraphRepository } from '../../lib/repositories/MemorySkillGraphRepository'
 import type { Trace } from '../../lib/recorder/traceSchema'
@@ -64,11 +66,14 @@ export function initHarness(): void {
   const btnExport = $<HTMLButtonElement>('btn-export-trace')
   const tabBtnRunner = $<HTMLButtonElement>('tab-btn-runner')
   const tabBtnRecorder = $<HTMLButtonElement>('tab-btn-recorder')
+  const tabBtnRepair = $<HTMLButtonElement>('tab-btn-repair')
   const panelRunner = $('panel-runner-view')
   const panelRecorder = $('panel-recorder-view')
+  const panelRepair = $('panel-repair-view')
   const btnStartRecord = $<HTMLButtonElement>('btn-start-record')
   const btnStopRecord = $<HTMLButtonElement>('btn-stop-record')
   const reviewContainer = $('review-view-container')
+  const repairContainer = $('repair-view-container')
 
   traceView = new TraceView(
     document.getElementById('graph-tree')!,
@@ -79,20 +84,46 @@ export function initHarness(): void {
 
   const repository = new MemorySkillGraphRepository()
   const reviewView = new ReviewView(reviewContainer, repository, () => fixtureFrame.contentDocument)
+  const repairView = new RepairView(
+    repairContainer,
+    repository,
+    () => fixtureFrame.contentDocument,
+    () => {
+      try {
+        return JSON.parse(graphJsonArea.value)
+      } catch {
+        return null
+      }
+    }
+  )
+  repairView.render(ALL_REPAIR_SCENARIOS)
 
   // Alternância de Abas
   tabBtnRunner.addEventListener('click', () => {
     tabBtnRunner.className = 'btn-primary'
     tabBtnRecorder.className = 'btn-secondary'
+    tabBtnRepair.className = 'btn-secondary'
     panelRunner.style.display = 'flex'
     panelRecorder.style.display = 'none'
+    panelRepair.style.display = 'none'
   })
 
   tabBtnRecorder.addEventListener('click', () => {
     tabBtnRunner.className = 'btn-secondary'
     tabBtnRecorder.className = 'btn-primary'
+    tabBtnRepair.className = 'btn-secondary'
     panelRunner.style.display = 'none'
     panelRecorder.style.display = 'flex'
+    panelRepair.style.display = 'none'
+  })
+
+  tabBtnRepair.addEventListener('click', () => {
+    tabBtnRunner.className = 'btn-secondary'
+    tabBtnRecorder.className = 'btn-secondary'
+    tabBtnRepair.className = 'btn-primary'
+    panelRunner.style.display = 'none'
+    panelRecorder.style.display = 'none'
+    panelRepair.style.display = 'flex'
   })
 
   // Gravação DOM

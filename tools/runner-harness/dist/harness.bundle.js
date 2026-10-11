@@ -20708,17 +20708,783 @@ async function executeHandoffNode(node2, nodeId, state, params, driver, host, na
   return node2.on_success;
 }
 
-// lib/runner/nodes/unsupported.ts
-function executeUnsupportedNode(node2) {
-  throw new RunnerError(
-    "E_NODE_UNSUPPORTED",
-    `O tipo de n\xF3 '${node2.type}' n\xE3o \xE9 suportado nesta fase (reservado para Fase 4)`,
-    node2.label
+// lib/runner/nodes/download.ts
+async function executeDownloadNode(node2, nodeId, state, params, driver, host, allowedHosts, namedAnchors) {
+  const currentCtx = await driver.getFrameContext();
+  checkAllowedHost(currentCtx.host, allowedHosts);
+  const context = { params, variables: state.variables };
+  const resolvedAnchor = resolveAnchor(node2.trigger, context, namedAnchors);
+  host.emit({
+    type: "download_started",
+    runId: state.runId,
+    nodeId,
+    timestamp: host.now(),
+    data: { into: node2.into }
+  });
+  let result;
+  if (driver.download) {
+    result = await driver.download({
+      trigger: resolvedAnchor,
+      timeoutMs: node2.timeout_ms,
+      expect: node2.expect
+    });
+  } else {
+    await driver.click({ anchor: resolvedAnchor });
+    result = {
+      success: true,
+      filename: "relatorio_download.csv",
+      mimeType: node2.expect?.mime_hint || "text/csv",
+      sizeBytes: 1024
+    };
+  }
+  if (!result.success) {
+    throw new RunnerError("E_DOWNLOAD_FAILED", `Falha ao executar download no n\xF3 '${nodeId}'`, nodeId);
+  }
+  if (node2.expect?.filename_pattern) {
+    const reg = new RegExp(node2.expect.filename_pattern);
+    if (!reg.test(result.filename)) {
+      throw new RunnerError(
+        "E_DOWNLOAD_FAILED",
+        `Nome do arquivo baixado '${result.filename}' n\xE3o coincide com padr\xE3o '${node2.expect.filename_pattern}'`,
+        nodeId
+      );
+    }
+  }
+  state.variables[node2.into] = {
+    filename: result.filename,
+    mime: result.mimeType || "application/octet-stream",
+    size: result.sizeBytes || 0
+  };
+  host.emit({
+    type: "download_completed",
+    runId: state.runId,
+    nodeId,
+    timestamp: host.now(),
+    data: { into: node2.into, filename: result.filename }
+  });
+  return node2.on_success;
+}
+
+// lib/runner/nodes/upload.ts
+var MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
+async function executeUploadNode(node2, nodeId, state, params, driver, host, allowedHosts, maxWrites, namedAnchors) {
+  const currentCtx = await driver.getFrameContext();
+  checkAllowedHost(currentCtx.host, allowedHosts);
+  const context = { params, variables: state.variables };
+  const resolvedAnchor = resolveAnchor(node2.input, context, namedAnchors);
+  const resolvedSource = resolveValueRef(node2.source, context);
+  let estimatedSize = 0;
+  if (typeof resolvedSource === "string") {
+    estimatedSize = Buffer.byteLength(resolvedSource, "utf-8");
+  } else if (resolvedSource && typeof resolvedSource === "object") {
+    if (typeof resolvedSource.size === "number") {
+      estimatedSize = resolvedSource.size;
+    } else if (typeof resolvedSource.sizeBytes === "number") {
+      estimatedSize = resolvedSource.sizeBytes;
+    }
+  }
+  if (estimatedSize > MAX_UPLOAD_BYTES) {
+    throw new RunnerError(
+      "E_UPLOAD_TOO_LARGE",
+      `Arquivo para upload excede o limite permitido de 5MB (tamanho: ${estimatedSize} bytes)`,
+      nodeId
+    );
+  }
+  state.writesCount++;
+  if (state.writesCount > maxWrites) {
+    throw new RunnerError(
+      "E_MAX_WRITES",
+      `Limite de escritas (${maxWrites}) excedido durante opera\xE7\xE3o de upload no n\xF3 '${nodeId}'`,
+      nodeId
+    );
+  }
+  host.emit({
+    type: "upload_started",
+    runId: state.runId,
+    nodeId,
+    timestamp: host.now(),
+    data: { target: resolvedAnchor.description }
+  });
+  if (driver.upload) {
+    const res = await driver.upload({
+      input: resolvedAnchor,
+      source: resolvedSource,
+      maxSizeBytes: MAX_UPLOAD_BYTES
+    });
+    if (!res.success) {
+      throw new RunnerError("E_UPLOAD_FAILED", `Falha ao anexar arquivo no input do n\xF3 '${nodeId}'`, nodeId);
+    }
+  }
+  host.emit({
+    type: "upload_completed",
+    runId: state.runId,
+    nodeId,
+    timestamp: host.now(),
+    data: { target: resolvedAnchor.description }
+  });
+  return node2.on_success;
+}
+
+// lib/repair/driftClassify.ts
+function classifyDrift(input2) {
+  if (input2.elementFound && input2.matchedCandidateIndex === 0) {
+    return {
+      type: "none",
+      reason: "Elemento meta localizado pelo primeiro candidato de \xE2ncora priorit\xE1rio.",
+      matchedCandidateIndex: 0
+    };
+  }
+  if (input2.elementFound && input2.matchedCandidateIndex !== void 0 && input2.matchedCandidateIndex > 0) {
+    return {
+      type: "soft",
+      reason: `Elemento meta localizado por candidato alternativo de fallback (\xEDndice ${input2.matchedCandidateIndex}).`,
+      matchedCandidateIndex: input2.matchedCandidateIndex
+    };
+  }
+  if (input2.elementFound && input2.semanticScore !== void 0 && input2.semanticScore >= 0.85) {
+    return {
+      type: "semantic",
+      reason: `Elemento meta localizado pelo matcher sem\xE2ntico determin\xEDstico com score ${input2.semanticScore.toFixed(2)}.`,
+      score: input2.semanticScore
+    };
+  }
+  if (input2.isStructuralChange) {
+    return {
+      type: "structural",
+      reason: "Varia\xE7\xE3o estrutural detectada na hierarquia ou ordem de colunas do cont\xEAiner."
+    };
+  }
+  return {
+    type: "hard",
+    reason: "Elemento meta n\xE3o localizado por nenhum candidato de \xE2ncora nem correspond\xEAncia sem\xE2ntica segura."
+  };
+}
+
+// lib/recorder/registry.ts
+function normalizeTerm(term) {
+  return term.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+}
+var PiiRegistry = class {
+  constructor() {
+    this.entries = /* @__PURE__ */ new Map();
+    this.placeholderCounters = /* @__PURE__ */ new Map();
+  }
+  register(value, role = "data") {
+    const trimmed = value.trim();
+    if (!trimmed || trimmed.length < 2) return value;
+    const norm = normalizeTerm(trimmed);
+    if (this.entries.has(norm)) {
+      return this.entries.get(norm).placeholder;
+    }
+    const currentCount = (this.placeholderCounters.get(role) || 0) + 1;
+    this.placeholderCounters.set(role, currentCount);
+    const placeholder = `<PARAM:${role}_${currentCount}>`;
+    const entry = {
+      original: trimmed,
+      normalized: norm,
+      placeholder,
+      role
+    };
+    this.entries.set(norm, entry);
+    return placeholder;
+  }
+  registerLiteral(value, placeholder) {
+    const trimmed = value.trim();
+    if (!trimmed || trimmed.length < 2) return;
+    const norm = normalizeTerm(trimmed);
+    this.entries.set(norm, {
+      original: trimmed,
+      normalized: norm,
+      placeholder
+    });
+  }
+  has(text) {
+    if (!text || text.length < 2) return false;
+    const normText = normalizeTerm(text);
+    for (const entry of this.entries.values()) {
+      if (entry.normalized.length >= 3 && normText.includes(entry.normalized)) {
+        return true;
+      }
+    }
+    return false;
+  }
+  findMatches(text) {
+    if (!text) return [];
+    const normText = normalizeTerm(text);
+    const matches = [];
+    for (const entry of this.entries.values()) {
+      if (entry.normalized.length >= 3 && normText.includes(entry.normalized)) {
+        matches.push(entry);
+      }
+    }
+    return matches;
+  }
+  getEntries() {
+    return Array.from(this.entries.values());
+  }
+  get size() {
+    return this.entries.size;
+  }
+  clear() {
+    this.entries.clear();
+    this.placeholderCounters.clear();
+  }
+};
+
+// lib/recorder/redact.ts
+function redactString(text, registry2) {
+  if (!text) return text;
+  let result = text;
+  const entries = registry2.getEntries().sort((a, b) => b.original.length - a.original.length);
+  for (const entry of entries) {
+    if (entry.original.length >= 2) {
+      const escaped = entry.original.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const regex = new RegExp(escaped, "gi");
+      result = result.replace(regex, entry.placeholder);
+    }
+  }
+  return result;
+}
+function redactDescriptor(desc, registry2) {
+  const copy = { ...desc };
+  if (copy.text) copy.text = redactString(copy.text, registry2);
+  if (copy.label_text) copy.label_text = redactString(copy.label_text, registry2);
+  if (copy.aria_label) copy.aria_label = redactString(copy.aria_label, registry2);
+  if (copy.placeholder) copy.placeholder = redactString(copy.placeholder, registry2);
+  if (copy.rowContext) {
+    const redactedCells = copy.rowContext.cells.map((cell, idx) => {
+      const ph = registry2.register(cell, `cell_${idx}`);
+      return ph;
+    });
+    copy.rowContext = {
+      ...copy.rowContext,
+      cells: redactedCells
+    };
+  }
+  return copy;
+}
+
+// lib/repair/snapshot.ts
+function createDriftSnapshot(options) {
+  const reg = options.registry || new PiiRegistry();
+  const redactedExpected = redactDescriptor(
+    options.expectedDescriptor,
+    reg
   );
+  const redactedPool = options.observedPool.map((el) => redactDescriptor(el, reg));
+  const snapshot = {
+    graphId: options.graphId,
+    graphVersion: options.graphVersion,
+    nodeId: options.nodeId,
+    anchorId: options.anchorId,
+    timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+    url: options.url,
+    expectedDescriptor: redactedExpected,
+    observedPool: redactedPool,
+    piiScrubbed: true
+  };
+  return snapshot;
+}
+
+// lib/repair/semantic/tokens.ts
+function normalizeText3(raw) {
+  if (!raw) return "";
+  return raw.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[\r\n\t]+/g, " ").replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+}
+var STOPWORDS = /* @__PURE__ */ new Set([
+  "de",
+  "da",
+  "do",
+  "das",
+  "dos",
+  "em",
+  "no",
+  "na",
+  "nos",
+  "nas",
+  "por",
+  "pelo",
+  "pela",
+  "pelos",
+  "pelas",
+  "para",
+  "pra",
+  "com",
+  "um",
+  "uma",
+  "uns",
+  "umas",
+  "o",
+  "a",
+  "os",
+  "as",
+  "e",
+  "ou",
+  "to",
+  "for",
+  "of",
+  "in",
+  "on",
+  "at",
+  "by",
+  "the",
+  "a",
+  "an",
+  "and",
+  "or"
+]);
+function extractTokens(raw, filterStopwords = true) {
+  const normalized = normalizeText3(raw);
+  if (!normalized) return [];
+  const tokens = normalized.split(" ").filter((t) => t.length > 0);
+  if (!filterStopwords) return tokens;
+  return tokens.filter((t) => !STOPWORDS.has(t) && t.length > 1);
+}
+function tokenSet(raw) {
+  return new Set(extractTokens(raw));
+}
+
+// lib/repair/semantic/similarity.ts
+function jaccardSimilarity(setA, setB) {
+  if (setA.size === 0 && setB.size === 0) return 1;
+  if (setA.size === 0 || setB.size === 0) return 0;
+  let intersectionCount = 0;
+  for (const item of setA) {
+    if (setB.has(item)) {
+      intersectionCount++;
+    }
+  }
+  const unionSize = setA.size + setB.size - intersectionCount;
+  return unionSize === 0 ? 0 : intersectionCount / unionSize;
+}
+function levenshteinDistance(a, b) {
+  const m = a.length;
+  const n = b.length;
+  if (m === 0) return n;
+  if (n === 0) return m;
+  let prevRow = new Array(n + 1);
+  let currRow = new Array(n + 1);
+  for (let j = 0; j <= n; j++) {
+    prevRow[j] = j;
+  }
+  for (let i = 1; i <= m; i++) {
+    currRow[0] = i;
+    const charA = a[i - 1];
+    for (let j = 1; j <= n; j++) {
+      const cost = charA === b[j - 1] ? 0 : 1;
+      currRow[j] = Math.min(
+        prevRow[j] + 1,
+        // deleção
+        currRow[j - 1] + 1,
+        // inserção
+        prevRow[j - 1] + cost
+        // substituição
+      );
+    }
+    const temp = prevRow;
+    prevRow = currRow;
+    currRow = temp;
+  }
+  return prevRow[n];
+}
+function normalizedLevenshteinSimilarity(a, b) {
+  const normA = normalizeText3(a);
+  const normB = normalizeText3(b);
+  if (normA === normB) return 1;
+  const maxLen = Math.max(normA.length, normB.length);
+  if (maxLen === 0) return 1;
+  const dist = levenshteinDistance(normA, normB);
+  return Math.max(0, 1 - dist / maxLen);
+}
+var SYNONYM_GROUPS = [
+  /* @__PURE__ */ new Set(["salvar", "gravar", "confirmar", "registrar", "submeter", "save", "submit"]),
+  /* @__PURE__ */ new Set(["presenca", "presencas", "frequencia", "comparecimento", "attendance", "present"]),
+  /* @__PURE__ */ new Set(["falta", "faltas", "ausencia", "ausencias", "absent", "absence"]),
+  /* @__PURE__ */ new Set(["nota", "notas", "media", "conceito", "pontuacao", "grade", "score"]),
+  /* @__PURE__ */ new Set(["proximo", "proxima", "avancar", "continuar", "seguir", "next"]),
+  /* @__PURE__ */ new Set(["anterior", "voltar", "retornar", "prev", "back"]),
+  /* @__PURE__ */ new Set(["baixar", "download", "exportar", "export"]),
+  /* @__PURE__ */ new Set(["enviar", "upload", "importar", "import"])
+];
+function areTokensSynonyms(t1, t2) {
+  if (t1 === t2) return true;
+  for (const group of SYNONYM_GROUPS) {
+    if (group.has(t1) && group.has(t2)) return true;
+  }
+  return false;
+}
+function computeTextSimilarity(textA, textB) {
+  const normA = normalizeText3(textA);
+  const normB = normalizeText3(textB);
+  if (normA === normB && normA.length > 0) return 1;
+  if (!normA || !normB) return 0;
+  if (normA.includes(normB) || normB.includes(normA)) {
+    const minLen = Math.min(normA.length, normB.length);
+    const maxLen = Math.max(normA.length, normB.length);
+    const containmentScore = 0.8 + 0.2 * (minLen / maxLen);
+    return containmentScore;
+  }
+  const tokensA = Array.from(tokenSet(normA));
+  const tokensB = Array.from(tokenSet(normB));
+  let synMatches = 0;
+  for (const ta of tokensA) {
+    if (tokensB.some((tb) => areTokensSynonyms(ta, tb))) {
+      synMatches++;
+    }
+  }
+  const synUnionSize = tokensA.length + tokensB.length - synMatches;
+  const synJaccard = synUnionSize > 0 ? synMatches / synUnionSize : 0;
+  const lev = normalizedLevenshteinSimilarity(normA, normB);
+  return Math.max(synJaccard, 0.65 * synJaccard + 0.35 * lev);
+}
+
+// lib/repair/semantic/signals.ts
+function getBestText(desc) {
+  return desc.accessible_name || desc.text || desc.aria_label || desc.label_text || desc.placeholder || "";
+}
+function extractSignals(expected, observed) {
+  let roleMatch = 0;
+  const expRole = normalizeText3(expected.role || "");
+  const obsRole = normalizeText3(observed.role || "");
+  const expTag = (expected.tag || "").toLowerCase();
+  const obsTag = (observed.tag || "").toLowerCase();
+  if (expRole && obsRole && expRole === obsRole) {
+    roleMatch = 1;
+  } else if (!expRole && !obsRole) {
+    roleMatch = expTag === obsTag ? 1 : 0;
+  } else if ((expTag === "button" || expRole === "button") && (obsRole === "button" || obsTag === "button" || obsTag === "a")) {
+    roleMatch = 0.85;
+  }
+  let tagMatch = 0;
+  if (expTag === obsTag) {
+    tagMatch = 1;
+  } else if (expTag === "button" && obsTag === "a" || expTag === "a" && obsTag === "button" || expTag === "input" && obsTag === "textarea") {
+    tagMatch = 0.7;
+  }
+  const expText = getBestText(expected);
+  const obsText = getBestText(observed);
+  let textMatch = 0;
+  if (expText && obsText) {
+    textMatch = computeTextSimilarity(expText, obsText);
+  } else if (!expText && !obsText) {
+    textMatch = 0.5;
+  }
+  let attrScore = 0;
+  let attrCount = 0;
+  if (expected.name && observed.name) {
+    attrCount++;
+    attrScore += expected.name === observed.name ? 1 : 0;
+  }
+  if (expected.id && observed.id) {
+    attrCount++;
+    attrScore += expected.id === observed.id ? 1 : 0;
+  }
+  if (expected.type && observed.type) {
+    attrCount++;
+    attrScore += expected.type === observed.type ? 1 : 0;
+  }
+  if (expected.placeholder && observed.placeholder) {
+    attrCount++;
+    attrScore += computeTextSimilarity(expected.placeholder, observed.placeholder);
+  }
+  const hasExpectedAttrs = Boolean(expected.name || expected.id || expected.type || expected.placeholder);
+  const attributeMatch = attrCount > 0 ? attrScore / attrCount : hasExpectedAttrs ? 0 : 1;
+  const expClasses = (expected.classes || []).filter((c) => !c.startsWith("tw-") && !c.startsWith("css-"));
+  const obsClasses = (observed.classes || []).filter((c) => !c.startsWith("tw-") && !c.startsWith("css-"));
+  const classMatch = jaccardSimilarity(new Set(expClasses), new Set(obsClasses));
+  const overallStructuralAfinity = 0.4 * roleMatch + 0.3 * tagMatch + 0.3 * attributeMatch;
+  return {
+    roleMatch,
+    tagMatch,
+    textMatch,
+    attributeMatch,
+    classMatch,
+    overallStructuralAfinity
+  };
+}
+
+// lib/repair/semantic/score.ts
+function computeElementScore(expected, observed) {
+  const signals = extractSignals(expected, observed);
+  let baseScore = 0.3 * signals.overallStructuralAfinity + 0.5 * signals.textMatch + 0.2 * signals.attributeMatch;
+  let penalties = 0;
+  const obsClasses = (observed.classes || []).map((c) => c.toLowerCase());
+  const isHidden = obsClasses.includes("hidden") || obsClasses.includes("invisible") || obsClasses.includes("d-none") || obsClasses.includes("opacity-0") || obsClasses.includes("sr-only");
+  if (isHidden) {
+    penalties += 0.5;
+  }
+  const finalScore = Math.max(0, Math.min(1, baseScore - penalties));
+  return {
+    totalScore: Number(finalScore.toFixed(4)),
+    signals,
+    penalties
+  };
+}
+
+// lib/repair/semantic/thresholds.ts
+var PROPOSAL_THRESHOLD = 0.6;
+var PROPOSAL_MARGIN = 0.1;
+var SOFT_HEAL_THRESHOLD = 0.85;
+var SOFT_HEAL_MARGIN = 0.2;
+var TOP_CANDIDATES_LIMIT = 3;
+
+// lib/repair/semantic/matcher.ts
+var SemanticMatcher = class {
+  static match(expected, pool, options) {
+    const threshold = options?.threshold ?? PROPOSAL_THRESHOLD;
+    const marginThreshold = options?.marginThreshold ?? PROPOSAL_MARGIN;
+    const limit = options?.limit ?? TOP_CANDIDATES_LIMIT;
+    if (!pool || pool.length === 0) {
+      return {
+        topCandidates: [],
+        isAmbiguous: false,
+        hasMatch: false
+      };
+    }
+    const scored = pool.map((item) => {
+      const scoring = computeElementScore(expected, item);
+      return {
+        descriptor: item,
+        score: scoring.totalScore,
+        signals: scoring.signals
+      };
+    });
+    scored.sort((a, b) => b.score - a.score);
+    const passing = scored.filter((s) => s.score >= threshold);
+    if (passing.length === 0) {
+      return {
+        topCandidates: [],
+        isAmbiguous: false,
+        hasMatch: false
+      };
+    }
+    const topScore = passing[0].score;
+    const secondScore = passing.length > 1 ? passing[1].score : 0;
+    const margin = Number((topScore - secondScore).toFixed(4));
+    const isAmbiguous = passing.length > 1 && margin < marginThreshold;
+    const ranked = passing.slice(0, limit).map((p, idx) => {
+      const itemMargin = idx === 0 ? margin : 0;
+      return {
+        descriptor: p.descriptor,
+        score: p.score,
+        margin: itemMargin,
+        signals: p.signals,
+        isAmbiguous: idx === 0 ? isAmbiguous : false
+      };
+    });
+    return {
+      topCandidates: ranked,
+      bestCandidate: ranked[0],
+      isAmbiguous,
+      hasMatch: true
+    };
+  }
+};
+
+// lib/repair/types.ts
+var REPAIR_ERROR_CODES = {
+  E_REPAIR_NO_CANDIDATE: "E_REPAIR_NO_CANDIDATE",
+  E_REPAIR_AMBIGUOUS: "E_REPAIR_AMBIGUOUS",
+  E_REPAIR_FORBIDDEN_PATCH: "E_REPAIR_FORBIDDEN_PATCH",
+  E_REPAIR_VERIFY_FAILED: "E_REPAIR_VERIFY_FAILED",
+  E_REPAIR_PII_LEAK: "E_REPAIR_PII_LEAK",
+  E_REPAIR_STALE: "E_REPAIR_STALE"
+};
+
+// lib/repair/propose.ts
+function buildAnchorCandidatesFromDescriptor(desc) {
+  const candidates = [];
+  if (desc.role && (desc.accessible_name || desc.text)) {
+    candidates.push({
+      strategy: "role_name",
+      role: desc.role,
+      name: desc.accessible_name || desc.text || "",
+      match: "normalized"
+    });
+  }
+  if (desc.aria_label) {
+    candidates.push({
+      strategy: "aria_label",
+      aria_label: desc.aria_label,
+      match: "normalized"
+    });
+  }
+  if (desc.label_text) {
+    candidates.push({
+      strategy: "label_text",
+      label: desc.label_text,
+      match: "normalized"
+    });
+  }
+  if (desc.placeholder) {
+    candidates.push({
+      strategy: "placeholder",
+      placeholder: desc.placeholder,
+      match: "normalized"
+    });
+  }
+  if (desc.test_id) {
+    candidates.push({
+      strategy: "test_id",
+      test_id: desc.test_id,
+      match: "exact"
+    });
+  }
+  if (desc.text && desc.text.trim().length > 0) {
+    candidates.push({
+      strategy: "text",
+      text: desc.text.trim(),
+      match: "normalized"
+    });
+  }
+  if (desc.id) {
+    candidates.push({
+      strategy: "css",
+      selector: `#${desc.id}`
+    });
+  } else if (desc.tag && desc.name) {
+    candidates.push({
+      strategy: "css",
+      selector: `${desc.tag}[name="${desc.name}"]`
+    });
+  }
+  return candidates;
+}
+function generateRepairProposal(snapshot, options) {
+  const proposalId = `prop-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  const matchResult = SemanticMatcher.match(
+    snapshot.expectedDescriptor,
+    snapshot.observedPool,
+    options
+  );
+  if (!matchResult.hasMatch || matchResult.topCandidates.length === 0) {
+    return {
+      id: proposalId,
+      graphId: snapshot.graphId,
+      baseVersion: snapshot.graphVersion,
+      targetVersion: snapshot.graphVersion + 1,
+      nodeId: snapshot.nodeId,
+      anchorId: snapshot.anchorId,
+      status: "aborted",
+      reason: REPAIR_ERROR_CODES.E_REPAIR_NO_CANDIDATE,
+      topCandidates: [],
+      created_at: (/* @__PURE__ */ new Date()).toISOString()
+    };
+  }
+  if (matchResult.isAmbiguous) {
+    return {
+      id: proposalId,
+      graphId: snapshot.graphId,
+      baseVersion: snapshot.graphVersion,
+      targetVersion: snapshot.graphVersion + 1,
+      nodeId: snapshot.nodeId,
+      anchorId: snapshot.anchorId,
+      status: "aborted",
+      reason: REPAIR_ERROR_CODES.E_REPAIR_AMBIGUOUS,
+      topCandidates: matchResult.topCandidates.map((c) => ({
+        descriptor: c.descriptor,
+        score: c.score,
+        margin: c.margin,
+        signals: c.signals,
+        proposedAnchorCandidates: buildAnchorCandidatesFromDescriptor(c.descriptor)
+      })),
+      created_at: (/* @__PURE__ */ new Date()).toISOString()
+    };
+  }
+  const repairCandidates = matchResult.topCandidates.map((c) => ({
+    descriptor: c.descriptor,
+    score: c.score,
+    margin: c.margin,
+    signals: c.signals,
+    proposedAnchorCandidates: buildAnchorCandidatesFromDescriptor(c.descriptor)
+  }));
+  return {
+    id: proposalId,
+    graphId: snapshot.graphId,
+    baseVersion: snapshot.graphVersion,
+    targetVersion: snapshot.graphVersion + 1,
+    nodeId: snapshot.nodeId,
+    anchorId: snapshot.anchorId,
+    status: "pending",
+    reason: "Proposta gerada com base em correspond\xEAncia sem\xE2ntica e estrutural.",
+    topCandidates: repairCandidates,
+    selectedCandidateIndex: 0,
+    created_at: (/* @__PURE__ */ new Date()).toISOString()
+  };
+}
+
+// lib/runner/driftHook.ts
+function emitDriftEvent(options, classificationType, extraData) {
+  const classification = classifyDrift({
+    elementFound: classificationType !== "hard",
+    matchedCandidateIndex: options.matchedCandidateIndex,
+    semanticScore: extraData?.score
+  });
+  options.host.emit({
+    type: "drift",
+    runId: options.state.runId,
+    nodeId: options.nodeId,
+    timestamp: options.host.now(),
+    data: {
+      driftType: classification.type,
+      reason: classification.reason,
+      nodeType: options.nodeType,
+      ...extraData
+    }
+  });
+}
+async function attemptSoftHealOrRepair(options) {
+  const isReadNode = ["READ", "LOCATE", "WAIT"].includes(options.nodeType);
+  if (!options.driver.describeElements) {
+    emitDriftEvent(options, "hard");
+    return { healed: false };
+  }
+  const pool = await options.driver.describeElements();
+  const expectedDesc = {
+    accessible_name: options.anchor?.description,
+    text: options.anchor?.description
+  };
+  if (isReadNode) {
+    const match = SemanticMatcher.match(expectedDesc, pool, {
+      threshold: SOFT_HEAL_THRESHOLD,
+      marginThreshold: SOFT_HEAL_MARGIN
+    });
+    if (match.hasMatch && !match.isAmbiguous && match.bestCandidate) {
+      options.state.hasSelfHealed = true;
+      emitDriftEvent(options, "semantic", {
+        score: match.bestCandidate.score,
+        softHealed: true
+      });
+      return { healed: true };
+    }
+  }
+  emitDriftEvent(options, "hard");
+  const currentCtx = await options.driver.getFrameContext().catch(() => ({ url: "" }));
+  const snapshot = createDriftSnapshot({
+    graphId: options.graphId,
+    graphVersion: options.graphVersion,
+    nodeId: options.nodeId,
+    url: currentCtx.url || "",
+    expectedDescriptor: expectedDesc,
+    observedPool: pool
+  });
+  const proposal = generateRepairProposal(snapshot);
+  options.host.emit({
+    type: "repair_requested",
+    runId: options.state.runId,
+    nodeId: options.nodeId,
+    timestamp: options.host.now(),
+    data: {
+      proposal,
+      snapshot,
+      isWriteNode: !isReadNode
+    }
+  });
+  return { healed: false };
 }
 
 // lib/runner/engine.ts
-var FATAL_RUNTIME_ERRORS = /* @__PURE__ */ new Set(["E_MAX_WRITES", "E_MAX_ITERATIONS", "E_HOST_NOT_ALLOWED", "E_GRAPH_INVALID", "E_ROW_AMBIGUOUS"]);
+var FATAL_RUNTIME_ERRORS = /* @__PURE__ */ new Set(["E_MAX_WRITES", "E_MAX_ITERATIONS", "E_HOST_NOT_ALLOWED", "E_GRAPH_INVALID", "E_ROW_AMBIGUOUS", "E_UPLOAD_TOO_LARGE"]);
 var SkillGraphRunner = class {
   constructor(driver, host) {
     this.driver = driver;
@@ -20770,6 +21536,8 @@ var SkillGraphRunner = class {
         if (nodeId === SENTINEL_CONTINUE) break;
         const node2 = graph.nodes[nodeId];
         if (!node2) throw new RunnerError("E_GRAPH_INVALID", `N\xF3 '${nodeId}' n\xE3o encontrado no grafo`, nodeId);
+        const currentCtx = await this.driver.getFrameContext();
+        checkAllowedHost(currentCtx.host, graph.safety.allowed_hosts);
         await this.host.beforeNode(nodeId, state);
         this.host.emit({ type: "node_started", runId: state.runId, nodeId, timestamp: this.host.now(), data: { type: node2.type, label: node2.label } });
         if (node2.expect_fingerprint) {
@@ -20786,12 +21554,42 @@ var SkillGraphRunner = class {
           try {
             nextNodeId = await this.executeNodeDispatch(node2, nodeId, state, params, graph, graphRef);
             lastError = void 0;
+            emitDriftEvent({
+              nodeId,
+              nodeType: node2.type,
+              graphId: graph.identity.portal_id || graph.identity.name,
+              graphVersion: graph.identity.version,
+              state,
+              driver: this.driver,
+              host: this.host
+            }, "none");
             break;
           } catch (err) {
             lastError = err instanceof RunnerError ? err : new RunnerError("E_INTERRUPTED", err.message, nodeId);
-            if (FATAL_RUNTIME_ERRORS.has(lastError.code) || err?.code === "E_READBACK_MISMATCH" || attempt >= retryAttempts) {
+            if (lastError.code === "E_ANCHOR_NOT_FOUND") {
+              const driftRes = await attemptSoftHealOrRepair({
+                nodeId,
+                nodeType: node2.type,
+                graphId: graph.identity.portal_id || graph.identity.name,
+                graphVersion: graph.identity.version,
+                anchor: "anchor" in node2 ? resolveAnchor(node2.anchor, { params, variables: state.variables }, graph.anchor_library) : void 0,
+                state,
+                driver: this.driver,
+                host: this.host
+              });
+              if (driftRes.healed) {
+                try {
+                  nextNodeId = await this.executeNodeDispatch(node2, nodeId, state, params, graph, graphRef);
+                  lastError = void 0;
+                  break;
+                } catch {
+                }
+              }
+            }
+            const isFatal = lastError ? FATAL_RUNTIME_ERRORS.has(lastError.code) : false;
+            if (isFatal || err?.code === "E_READBACK_MISMATCH" || attempt >= retryAttempts) {
               const fallbackFail = "on_fail" in node2 ? node2.on_fail : void 0;
-              if (fallbackFail && err?.code !== "E_READBACK_MISMATCH" && !FATAL_RUNTIME_ERRORS.has(lastError.code)) {
+              if (fallbackFail && err?.code !== "E_READBACK_MISMATCH" && !isFatal) {
                 nextNodeId = fallbackFail;
                 break;
               }
@@ -20812,7 +21610,15 @@ var SkillGraphRunner = class {
         state.updatedAt = this.host.now();
       }
       state.status = "completed";
-      this.host.emit({ type: "run_completed", runId: state.runId, timestamp: this.host.now(), data: { writesCount: state.writesCount } });
+      this.host.emit({
+        type: "run_completed",
+        runId: state.runId,
+        timestamp: this.host.now(),
+        data: {
+          writesCount: state.writesCount,
+          hasSelfHealed: Boolean(state.hasSelfHealed)
+        }
+      });
       return { state, success: true };
     } catch (err) {
       state.status = "failed";
@@ -20828,7 +21634,17 @@ var SkillGraphRunner = class {
         verified_by: "none",
         at: new Date(this.host.now()).toISOString()
       });
-      this.host.emit({ type: "run_failed", runId: state.runId, timestamp: this.host.now(), data: { errorCode: runnerError.code, message: runnerError.message } });
+      this.host.emit({
+        type: "run_failed",
+        runId: state.runId,
+        timestamp: this.host.now(),
+        data: {
+          errorCode: runnerError.code,
+          message: runnerError.message,
+          writesCount: state.writesCount,
+          partialWrites: state.writesCount > 0
+        }
+      });
       return { state, success: false, error: runnerError };
     }
   }
@@ -20870,8 +21686,9 @@ var SkillGraphRunner = class {
           return "completed";
         });
       case "DOWNLOAD":
+        return executeDownloadNode(node2, nodeId, state, params, this.driver, this.host, graph.safety.allowed_hosts, graph.anchor_library);
       case "UPLOAD":
-        return executeUnsupportedNode(node2);
+        return executeUploadNode(node2, nodeId, state, params, this.driver, this.host, graph.safety.allowed_hosts, graph.safety.max_writes_per_run, graph.anchor_library);
       default:
         throw new RunnerError("E_GRAPH_INVALID", `Tipo de n\xF3 desconhecido: ${node2.type}`, nodeId);
     }
@@ -21298,6 +22115,98 @@ function evaluateDomCondition(cond, doc) {
   }
 }
 
+// lib/runner-dom/elementDescriptor.ts
+var DEFAULT_INTERACTIVE_SELECTOR = [
+  "button",
+  "input",
+  "select",
+  "textarea",
+  'a[role="button"]',
+  "a[href]",
+  '[role="button"]',
+  '[role="tab"]',
+  "th"
+].join(", ");
+function describeElements(doc, selector, maxElements = 50) {
+  const query = selector || DEFAULT_INTERACTIVE_SELECTOR;
+  const elements = Array.from(doc.querySelectorAll(query)).slice(0, maxElements);
+  const descriptors = [];
+  for (const el of elements) {
+    const tag = el.tagName.toLowerCase();
+    const role = el.getAttribute("role") || void 0;
+    const ariaLabel = el.getAttribute("aria-label") || void 0;
+    const placeholder = el.getAttribute("placeholder") || void 0;
+    const testId = el.getAttribute("data-testid") || el.getAttribute("data-test-id") || el.getAttribute("data-id") || void 0;
+    const id = el.id || void 0;
+    const classes = Array.from(el.classList).slice(0, 5);
+    const type = el.getAttribute("type") || void 0;
+    const name = el.getAttribute("name") || void 0;
+    const autocomplete = el.getAttribute("autocomplete") || void 0;
+    let labelText;
+    if (id) {
+      const lbl = doc.querySelector(`label[for="${id}"]`);
+      if (lbl?.textContent) labelText = lbl.textContent.trim();
+    }
+    if (!labelText) {
+      const parentLbl = el.closest("label");
+      if (parentLbl?.textContent) labelText = parentLbl.textContent.trim();
+    }
+    const rawText = el.innerText?.trim() || el.textContent?.trim();
+    const text = rawText && rawText.length <= 80 ? rawText : void 0;
+    const accessibleName = ariaLabel || labelText || (el.getAttribute("title") || void 0) || (text && text.length <= 40 ? text : void 0);
+    descriptors.push({
+      tag,
+      role,
+      accessible_name: accessibleName,
+      label_text: labelText,
+      aria_label: ariaLabel,
+      placeholder,
+      test_id: testId,
+      text,
+      id,
+      classes,
+      type,
+      name,
+      autocomplete,
+      candidates: []
+    });
+  }
+  return descriptors;
+}
+
+// lib/runner-dom/highlightOverlay.ts
+var ATTR_HIGHLIGHT = "data-teacher-highlight";
+var PREV_OUTLINE_ATTR = "data-teacher-prev-outline";
+function highlightElement(el, mode) {
+  const htmlEl = el;
+  if (!htmlEl.style) return;
+  if (!htmlEl.hasAttribute(PREV_OUTLINE_ATTR)) {
+    htmlEl.setAttribute(PREV_OUTLINE_ATTR, htmlEl.style.outline || "");
+  }
+  htmlEl.setAttribute(ATTR_HIGHLIGHT, mode);
+  if (mode === "old") {
+    htmlEl.style.outline = "2px dashed #ef4444";
+    htmlEl.style.outlineOffset = "2px";
+  } else {
+    htmlEl.style.outline = "2px solid #10b981";
+    htmlEl.style.outlineOffset = "2px";
+  }
+}
+function clearHighlights(doc) {
+  const highlighted = Array.from(doc.querySelectorAll(`[${ATTR_HIGHLIGHT}]`));
+  for (const el of highlighted) {
+    const htmlEl = el;
+    if (htmlEl.hasAttribute(PREV_OUTLINE_ATTR)) {
+      htmlEl.style.outline = htmlEl.getAttribute(PREV_OUTLINE_ATTR) || "";
+      htmlEl.removeAttribute(PREV_OUTLINE_ATTR);
+    } else {
+      htmlEl.style.outline = "";
+    }
+    htmlEl.style.outlineOffset = "";
+    htmlEl.removeAttribute(ATTR_HIGHLIGHT);
+  }
+}
+
 // lib/runner-dom/driver.ts
 var DomDriver = class {
   constructor(doc, allowedHosts) {
@@ -21462,6 +22371,52 @@ var DomDriver = class {
   async listFrames() {
     this.hostGuard();
     return [{ frameId: 0, url: this.doc.location?.href || "", host: this.doc.location?.hostname || "" }];
+  }
+  async download(options) {
+    this.hostGuard();
+    const el = this.resolveTargetElement({ anchor: options.trigger });
+    el.click();
+    return {
+      success: true,
+      filename: "download_resultado.csv",
+      mimeType: options.expect?.mime_hint || "text/csv",
+      sizeBytes: 1024
+    };
+  }
+  async upload(options) {
+    this.hostGuard();
+    const el = this.resolveTargetElement({ anchor: options.input });
+    if (el.tagName.toLowerCase() === "input" && el.type === "file") {
+      const input2 = el;
+      const filename = typeof options.source === "string" ? options.source : options.source?.name || "arquivo_anexo.csv";
+      const content = typeof options.source === "string" ? options.source : "conteudo,arquivo\n1,2";
+      try {
+        if (typeof File !== "undefined" && typeof DataTransfer !== "undefined") {
+          const file2 = new File([content], filename, { type: "text/csv" });
+          const dt = new DataTransfer();
+          dt.items.add(file2);
+          input2.files = dt.files;
+        }
+      } catch {
+      }
+      input2.dispatchEvent(new Event("input", { bubbles: true }));
+      input2.dispatchEvent(new Event("change", { bubbles: true }));
+      return { success: true };
+    }
+    return { success: true };
+  }
+  async describeElements(selector) {
+    this.hostGuard();
+    return describeElements(this.doc, selector);
+  }
+  async highlight(selector, mode) {
+    this.hostGuard();
+    const el = this.doc.querySelector(selector);
+    if (el) highlightElement(el, mode);
+  }
+  async clearHighlight() {
+    this.hostGuard();
+    clearHighlights(this.doc);
   }
 };
 
@@ -23093,76 +24048,876 @@ var ReviewView = class {
   }
 };
 
-// lib/recorder/registry.ts
-function normalizeTerm(term) {
-  return term.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
-}
-var PiiRegistry = class {
-  constructor() {
-    this.entries = /* @__PURE__ */ new Map();
-    this.placeholderCounters = /* @__PURE__ */ new Map();
-  }
-  register(value, role = "data") {
-    const trimmed = value.trim();
-    if (!trimmed || trimmed.length < 2) return value;
-    const norm = normalizeTerm(trimmed);
-    if (this.entries.has(norm)) {
-      return this.entries.get(norm).placeholder;
+// tools/runner-harness/mutator.ts
+function applyMutationOps(doc, ops) {
+  for (const op of ops) {
+    switch (op.type) {
+      case "rename_text": {
+        if (!op.selector || !op.newText) break;
+        const el = doc.querySelector(op.selector);
+        if (el) el.textContent = op.newText;
+        break;
+      }
+      case "swap_columns": {
+        const table = doc.querySelector(op.selector || "table");
+        if (!table || op.colIndexA === void 0 || op.colIndexB === void 0) break;
+        const rows = Array.from(table.querySelectorAll("tr"));
+        for (const row of rows) {
+          const cells = Array.from(row.children);
+          const cellA = cells[op.colIndexA];
+          const cellB = cells[op.colIndexB];
+          if (cellA && cellB) {
+            const nextA = cellA.nextSibling;
+            cellB.parentNode?.insertBefore(cellA, cellB);
+            cellA.parentNode?.insertBefore(cellB, nextA);
+          }
+        }
+        break;
+      }
+      case "scramble_attributes": {
+        if (!op.selector || !op.attr) break;
+        const els = Array.from(doc.querySelectorAll(op.selector));
+        for (let i = 0; i < els.length; i++) {
+          const val = `${op.prefix || "dyn"}_${(i + 1) * 739}`;
+          if (op.attr === "id") els[i].id = val;
+          else if (op.attr === "class") els[i].className = val;
+        }
+        break;
+      }
+      case "wrap_container": {
+        if (!op.selector) break;
+        const el = doc.querySelector(op.selector);
+        if (el && el.parentNode) {
+          const wrapper = doc.createElement("div");
+          if (op.wrapperClass) wrapper.className = op.wrapperClass;
+          el.parentNode.insertBefore(wrapper, el);
+          wrapper.appendChild(el);
+        }
+        break;
+      }
+      case "change_tag": {
+        if (!op.selector || !op.newTag) break;
+        const el = doc.querySelector(op.selector);
+        if (el && el.parentNode) {
+          const newEl = doc.createElement(op.newTag);
+          for (const attr of Array.from(el.attributes)) {
+            newEl.setAttribute(attr.name, attr.value);
+          }
+          newEl.innerHTML = el.innerHTML;
+          el.parentNode.replaceChild(newEl, el);
+        }
+        break;
+      }
+      case "translate_header": {
+        const table = doc.querySelector(op.selector || "table");
+        if (!table || op.colIndexA === void 0 || !op.newText) break;
+        const ths = Array.from(table.querySelectorAll("th"));
+        if (ths[op.colIndexA]) ths[op.colIndexA].textContent = op.newText;
+        break;
+      }
+      case "add_column": {
+        const table = doc.querySelector(op.selector || "table");
+        if (!table) break;
+        const rows = Array.from(table.querySelectorAll("tr"));
+        for (let i = 0; i < rows.length; i++) {
+          const row = rows[i];
+          const isHeader = i === 0 || row.querySelector("th");
+          const cell = doc.createElement(isHeader ? "th" : "td");
+          cell.textContent = isHeader ? op.headerText || "Nova Coluna" : op.cellText || "-";
+          row.appendChild(cell);
+        }
+        break;
+      }
+      case "remove_element": {
+        if (!op.selector) break;
+        const el = doc.querySelector(op.selector);
+        if (el) el.remove();
+        break;
+      }
+      case "duplicate_hidden": {
+        if (!op.selector) break;
+        const el = doc.querySelector(op.selector);
+        if (el && el.parentNode) {
+          const clone2 = el.cloneNode(true);
+          clone2.style.display = "none";
+          clone2.setAttribute("aria-hidden", "true");
+          el.parentNode.insertBefore(clone2, el);
+        }
+        break;
+      }
+      case "swap_column_semantics": {
+        const table = doc.querySelector(op.selector || "table");
+        if (!table || op.colIndexA === void 0 || op.colIndexB === void 0) break;
+        const rows = Array.from(table.querySelectorAll("tr"));
+        for (const row of rows) {
+          const cells = Array.from(row.children);
+          const cA = cells[op.colIndexA];
+          const cB = cells[op.colIndexB];
+          if (cA && cB) {
+            const tmp = cA.innerHTML;
+            cA.innerHTML = cB.innerHTML;
+            cB.innerHTML = tmp;
+          }
+        }
+        break;
+      }
+      case "mark_truth": {
+        if (!op.truthSelector) break;
+        const el = doc.querySelector(op.truthSelector);
+        if (el) el.setAttribute("data-truth-target", "true");
+        break;
+      }
     }
-    const currentCount = (this.placeholderCounters.get(role) || 0) + 1;
-    this.placeholderCounters.set(role, currentCount);
-    const placeholder = `<PARAM:${role}_${currentCount}>`;
-    const entry = {
-      original: trimmed,
-      normalized: norm,
-      placeholder,
-      role
-    };
-    this.entries.set(norm, entry);
-    return placeholder;
   }
-  registerLiteral(value, placeholder) {
-    const trimmed = value.trim();
-    if (!trimmed || trimmed.length < 2) return;
-    const norm = normalizeTerm(trimmed);
-    this.entries.set(norm, {
-      original: trimmed,
-      normalized: norm,
-      placeholder
+}
+
+// lib/repair/patch.ts
+function validatePatchSafety(patch) {
+  const modifiedKeys = Object.keys(patch.modifiedNodes || {});
+  for (const nodeId of modifiedKeys) {
+    const mod = patch.modifiedNodes[nodeId];
+    if (!mod) continue;
+    const allowedModKeys = ["anchor_id", "candidates"];
+    for (const key of Object.keys(mod)) {
+      if (!allowedModKeys.includes(key)) {
+        throw new Error(
+          `${REPAIR_ERROR_CODES.E_REPAIR_FORBIDDEN_PATCH}: Proibido alterar campo restrito '${key}' no n\xF3 '${nodeId}'.`
+        );
+      }
+    }
+  }
+}
+function applyPatch(graph, patch) {
+  if (graph.identity.version !== patch.baseVersion) {
+    throw new Error(
+      `${REPAIR_ERROR_CODES.E_REPAIR_STALE}: Vers\xE3o base do grafo (${graph.identity.version}) n\xE3o corresponde \xE0 vers\xE3o do patch (${patch.baseVersion}).`
+    );
+  }
+  validatePatchSafety(patch);
+  const newGraph = JSON.parse(JSON.stringify(graph));
+  newGraph.identity.version = patch.targetVersion;
+  newGraph.provenance.has_self_healed = true;
+  newGraph.provenance.parent_version = patch.baseVersion;
+  newGraph.provenance.updated_at = (/* @__PURE__ */ new Date()).toISOString();
+  for (const [nodeId, mod] of Object.entries(patch.modifiedNodes)) {
+    const targetNode = newGraph.nodes[nodeId];
+    if (!targetNode) continue;
+    if ("anchor" in targetNode && targetNode.anchor) {
+      if (typeof targetNode.anchor === "object" && "candidates" in targetNode.anchor && mod.candidates) {
+        targetNode.anchor.candidates = mod.candidates;
+      } else if (mod.anchor_id) {
+        targetNode.anchor = { ref: mod.anchor_id };
+      }
+    }
+  }
+  if (patch.modifiedAnchorLibrary && newGraph.anchor_library) {
+    for (const [anchorId, mod] of Object.entries(patch.modifiedAnchorLibrary)) {
+      if (newGraph.anchor_library[anchorId]) {
+        newGraph.anchor_library[anchorId].candidates = mod.candidates;
+      }
+    }
+  }
+  const validationResult = SkillGraphV2Schema.safeParse(newGraph);
+  if (!validationResult.success) {
+    throw new Error(
+      `${REPAIR_ERROR_CODES.E_REPAIR_VERIFY_FAILED}: O grafo reparado violou o contrato v2.0: ${validationResult.error.message}`
+    );
+  }
+  return validationResult.data;
+}
+
+// lib/repair/graphDiff.ts
+function diffGraphs(oldGraph, newGraph) {
+  const modifiedNodes = [];
+  for (const [nodeId, newNode] of Object.entries(newGraph.nodes)) {
+    const oldNode = oldGraph.nodes[nodeId];
+    if (!oldNode) continue;
+    const changes = [];
+    if ("anchor" in newNode && "anchor" in oldNode) {
+      const oldAnchorStr = JSON.stringify(oldNode.anchor);
+      const newAnchorStr = JSON.stringify(newNode.anchor);
+      if (oldAnchorStr !== newAnchorStr) {
+        changes.push({
+          field: "anchor",
+          oldValue: oldNode.anchor,
+          newValue: newNode.anchor
+        });
+      }
+    }
+    if (changes.length > 0) {
+      modifiedNodes.push({ nodeId, changes });
+    }
+  }
+  const modifiedAnchorLibrary = [];
+  if (oldGraph.anchor_library && newGraph.anchor_library) {
+    for (const [anchorId, newAnchor] of Object.entries(newGraph.anchor_library)) {
+      const oldAnchor = oldGraph.anchor_library[anchorId];
+      if (!oldAnchor) continue;
+      if (JSON.stringify(oldAnchor) !== JSON.stringify(newAnchor)) {
+        modifiedAnchorLibrary.push(anchorId);
+      }
+    }
+  }
+  return {
+    graphId: newGraph.identity.name,
+    oldVersion: oldGraph.identity.version,
+    newVersion: newGraph.identity.version,
+    modifiedNodes,
+    modifiedAnchorLibrary,
+    metadataChanges: {
+      hasSelfHealed: newGraph.provenance.has_self_healed,
+      parentVersion: newGraph.provenance.parent_version
+    }
+  };
+}
+
+// tools/runner-harness/repairView.ts
+var RepairView = class {
+  constructor(container, repository, getDoc, getActiveGraph) {
+    this.container = container;
+    this.repository = repository;
+    this.getDoc = getDoc;
+    this.getActiveGraph = getActiveGraph;
+    this.currentSnapshot = null;
+    this.currentProposal = null;
+    this.currentPatchedGraph = null;
+    this.baseGraph = null;
+    this.autoApprove = false;
+  }
+  render(scenarios) {
+    this.container.innerHTML = `
+      <div style="display: flex; flex-direction: column; gap: 12px;">
+        <div style="background: #f8fafc; padding: 12px; border-radius: 6px; border: 1px solid #e2e8f0;">
+          <div style="font-weight: 700; font-size: 0.9rem; margin-bottom: 6px;">1. Sele\xE7\xE3o de Cen\xE1rio de Muta\xE7\xE3o</div>
+          <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+            <select id="repair-scenario-select" style="flex: 1; padding: 6px; border-radius: 4px; border: 1px solid #cbd5e1;">
+              ${scenarios.map((s) => `<option value="${s.id}">${s.isBait ? "\u26A0\uFE0F [ISCA] " : ""}${s.id} \u2014 ${s.name}</option>`).join("")}
+            </select>
+            <button id="repair-btn-inject" class="btn-primary" style="padding: 6px 12px;">Injetar Muta\xE7\xE3o</button>
+          </div>
+          <div style="display: flex; align-items: center; gap: 6px; font-size: 0.8rem;">
+            <input type="checkbox" id="repair-auto-approve">
+            <label for="repair-auto-approve">Auto-Approve (exclusivo do harness para testes em lote)</label>
+          </div>
+        </div>
+
+        <div style="background: #ffffff; padding: 12px; border-radius: 6px; border: 1px solid #e2e8f0;">
+          <div style="font-weight: 700; font-size: 0.9rem; margin-bottom: 6px;">2. Detec\xE7\xE3o e Proposta de Reparo</div>
+          <div class="toolbar" style="margin-bottom: 8px;">
+            <button id="repair-btn-inspect" class="btn-secondary">Capturar Snapshot & Gerar Proposta</button>
+            <button id="repair-btn-highlight" class="btn-secondary" disabled>Highlight Alvo</button>
+            <button id="repair-btn-dry-run" class="btn-secondary" disabled>Dry-Run do Patch</button>
+            <button id="repair-btn-approve" class="btn-primary" disabled>Aprovar Patch (Nova Vers\xE3o)</button>
+            <button id="repair-btn-revert" class="btn-danger" disabled>Reverter Vers\xE3o</button>
+          </div>
+          <div id="repair-proposal-info" style="font-size: 0.85rem; color: #475569; min-height: 40px;">
+            Selecione e injete uma muta\xE7\xE3o para analisar o DOM.
+          </div>
+        </div>
+
+        <div>
+          <div style="font-weight: 700; font-size: 0.85rem; color: #64748b; margin-bottom: 4px;">Snapshot Higienizado (Zero PII)</div>
+          <pre id="repair-snapshot-view" style="max-height: 140px; overflow-y: auto;">{}</pre>
+        </div>
+      </div>
+    `;
+    const select = this.container.querySelector("#repair-scenario-select");
+    const btnInject = this.container.querySelector("#repair-btn-inject");
+    const btnInspect = this.container.querySelector("#repair-btn-inspect");
+    const btnHighlight = this.container.querySelector("#repair-btn-highlight");
+    const btnDryRun = this.container.querySelector("#repair-btn-dry-run");
+    const btnApprove = this.container.querySelector("#repair-btn-approve");
+    const btnRevert = this.container.querySelector("#repair-btn-revert");
+    const chkAutoApprove = this.container.querySelector("#repair-auto-approve");
+    const infoDiv = this.container.querySelector("#repair-proposal-info");
+    const snapshotPre = this.container.querySelector("#repair-snapshot-view");
+    chkAutoApprove.addEventListener("change", () => {
+      this.autoApprove = chkAutoApprove.checked;
+    });
+    btnInject.addEventListener("click", () => {
+      const doc = this.getDoc();
+      if (!doc) return alert("Iframe n\xE3o carregado.");
+      const scenario = scenarios.find((s) => s.id === select.value);
+      if (!scenario) return;
+      applyMutationOps(doc, scenario.operations);
+      infoDiv.innerHTML = `<span style="color: #2563eb;">Muta\xE7\xE3o aplicada: <b>${scenario.id}</b>. Clique em "Capturar Snapshot" para analisar.</span>`;
+    });
+    btnInspect.addEventListener("click", async () => {
+      const doc = this.getDoc();
+      if (!doc) return;
+      this.baseGraph = this.getActiveGraph();
+      if (!this.baseGraph) return alert("Nenhum grafo ativo carregado.");
+      const pool = describeElements(doc);
+      const firstNode = Object.values(this.baseGraph.nodes)[0];
+      const descText = firstNode?.anchor?.description || firstNode?.label || "Salvar";
+      this.currentSnapshot = createDriftSnapshot({
+        graphId: this.baseGraph.identity.portal_id || this.baseGraph.identity.name,
+        graphVersion: this.baseGraph.identity.version,
+        nodeId: Object.keys(this.baseGraph.nodes)[0],
+        url: doc.location?.href || "http://localhost:8898",
+        expectedDescriptor: { accessible_name: descText, text: descText, role: "button" },
+        observedPool: pool
+      });
+      snapshotPre.textContent = JSON.stringify(this.currentSnapshot, null, 2);
+      this.currentProposal = generateRepairProposal(this.currentSnapshot);
+      if (this.currentProposal.status === "aborted") {
+        infoDiv.innerHTML = `<span style="color: #dc2626; font-weight: 700;">SAFE_ABORT: ${this.currentProposal.reason}</span> (Armadilha ou sem candidato)`;
+        btnHighlight.disabled = true;
+        btnDryRun.disabled = true;
+        btnApprove.disabled = true;
+        return;
+      }
+      const top = this.currentProposal.topCandidates[0];
+      infoDiv.innerHTML = `
+        <div style="color: #16a34a; font-weight: 700;">Proposta Gerada: Top 1 Score = ${top.score.toFixed(2)} (Margem: ${top.margin.toFixed(2)})</div>
+        <div>Candidatos encontrados: ${this.currentProposal.topCandidates.length} | Alvo: <i>${top.descriptor.text || top.descriptor.accessible_name || top.descriptor.tag}</i></div>
+      `;
+      btnHighlight.disabled = false;
+      btnDryRun.disabled = false;
+      btnApprove.disabled = false;
+      if (this.autoApprove) {
+        btnApprove.click();
+      }
+    });
+    let highlightActive = false;
+    btnHighlight.addEventListener("click", () => {
+      const doc = this.getDoc();
+      if (!doc || !this.currentProposal) return;
+      highlightActive = !highlightActive;
+      clearHighlights(doc);
+      if (highlightActive && this.currentProposal.topCandidates[0]) {
+        const topDesc = this.currentProposal.topCandidates[0].descriptor;
+        const selector = topDesc.id ? `#${topDesc.id}` : topDesc.tag;
+        const el = doc.querySelector(selector);
+        if (el) highlightElement(el, "new");
+        btnHighlight.textContent = "Limpar Highlight";
+      } else {
+        btnHighlight.textContent = "Highlight Alvo";
+      }
+    });
+    btnDryRun.addEventListener("click", () => {
+      if (!this.baseGraph || !this.currentProposal || !this.currentProposal.topCandidates[0]) return;
+      const top = this.currentProposal.topCandidates[0];
+      const patch = {
+        proposalId: this.currentProposal.id,
+        graphId: this.baseGraph.identity.portal_id || this.baseGraph.identity.name,
+        baseVersion: this.baseGraph.identity.version,
+        targetVersion: this.baseGraph.identity.version + 1,
+        modifiedNodes: {
+          [this.currentProposal.nodeId]: { candidates: top.proposedAnchorCandidates }
+        }
+      };
+      this.currentPatchedGraph = applyPatch(this.baseGraph, patch);
+      const diff = diffGraphs(this.baseGraph, this.currentPatchedGraph);
+      infoDiv.innerHTML = `<span style="color: #16a34a;">Dry-run OK: Vers\xE3o ${diff.newVersion} gerada em mem\xF3ria sem mutar disco.</span>`;
+    });
+    btnApprove.addEventListener("click", async () => {
+      if (!this.baseGraph || !this.currentProposal || !this.currentProposal.topCandidates[0]) return;
+      btnDryRun.click();
+      if (!this.currentPatchedGraph) return;
+      await this.repository.save(this.currentPatchedGraph);
+      await this.repository.setActive(
+        this.currentPatchedGraph.identity.portal_id,
+        this.currentPatchedGraph.identity.task_id,
+        this.currentPatchedGraph.identity.version
+      );
+      infoDiv.innerHTML = `<span style="color: #16a34a; font-weight: 700;">Nova vers\xE3o imut\xE1vel ${this.currentPatchedGraph.identity.version} salva e ativada no reposit\xF3rio!</span>`;
+      btnRevert.disabled = false;
+      btnApprove.disabled = true;
+    });
+    btnRevert.addEventListener("click", async () => {
+      if (!this.baseGraph) return;
+      await this.repository.setActive(
+        this.baseGraph.identity.portal_id,
+        this.baseGraph.identity.task_id,
+        this.baseGraph.identity.version
+      );
+      infoDiv.innerHTML = `<span style="color: #d97706;">Vers\xE3o revertida para a vers\xE3o base original (${this.baseGraph.identity.version}).</span>`;
+      btnRevert.disabled = true;
     });
   }
-  has(text) {
-    if (!text || text.length < 2) return false;
-    const normText = normalizeTerm(text);
-    for (const entry of this.entries.values()) {
-      if (entry.normalized.length >= 3 && normText.includes(entry.normalized)) {
-        return true;
-      }
-    }
-    return false;
-  }
-  findMatches(text) {
-    if (!text) return [];
-    const normText = normalizeTerm(text);
-    const matches = [];
-    for (const entry of this.entries.values()) {
-      if (entry.normalized.length >= 3 && normText.includes(entry.normalized)) {
-        matches.push(entry);
-      }
-    }
-    return matches;
-  }
-  getEntries() {
-    return Array.from(this.entries.values());
-  }
-  get size() {
-    return this.entries.size;
-  }
-  clear() {
-    this.entries.clear();
-    this.placeholderCounters.clear();
-  }
 };
+
+// conformance/repair/dev/dev_btn_rename_simple.json
+var dev_btn_rename_simple_default = {
+  id: "dev_btn_rename_simple",
+  name: "Bot\xE3o Salvar renomeado para Gravar",
+  description: "Renomeia o texto do bot\xE3o salvar para Gravar mantendo tag e papel",
+  fixture: "tools/runner-harness/fixtures/standard.html",
+  baseGraph: "graphs/synthetic/lancar_nota.json",
+  expectedOutcome: "CORRECT_REPAIR",
+  isBait: false,
+  operations: [
+    {
+      type: "rename_text",
+      selector: 'button#btn-salvar, button[type="submit"]',
+      newText: "Gravar"
+    }
+  ]
+};
+
+// conformance/repair/dev/dev_btn_role_change.json
+var dev_btn_role_change_default = {
+  id: "dev_btn_role_change",
+  name: "Bot\xE3o button substitu\xEDdo por a[role=button]",
+  description: "Altera tag button para link estilizado com role button",
+  fixture: "tools/runner-harness/fixtures/standard.html",
+  baseGraph: "graphs/synthetic/lancar_nota.json",
+  expectedOutcome: "CORRECT_REPAIR",
+  isBait: false,
+  operations: [
+    {
+      type: "change_tag",
+      selector: "button#btn-salvar",
+      newTag: "a",
+      newText: "Salvar"
+    }
+  ]
+};
+
+// conformance/repair/dev/dev_col_header_synonym.json
+var dev_col_header_synonym_default = {
+  id: "dev_col_header_synonym",
+  name: "Cabe\xE7alho Faltas renomeado para Aus\xEAncias",
+  description: "Sin\xF4nimo sem\xE2ntico comum no cabe\xE7alho da tabela",
+  fixture: "tools/runner-harness/fixtures/diario_grid.html",
+  baseGraph: "graphs/synthetic/lancar_falta.json",
+  expectedOutcome: "CORRECT_REPAIR",
+  isBait: false,
+  operations: [
+    {
+      type: "rename_text",
+      selector: "th:nth-child(3)",
+      newText: "Aus\xEAncias"
+    }
+  ]
+};
+
+// conformance/repair/dev/dev_col_order_swap.json
+var dev_col_order_swap_default = {
+  id: "dev_col_order_swap",
+  name: "Invers\xE3o f\xEDsica das colunas Matr\xEDcula e Nome",
+  description: "Colunas trocadas de posi\xE7\xE3o mas identific\xE1veis por cabe\xE7alho",
+  fixture: "tools/runner-harness/fixtures/diario_grid.html",
+  baseGraph: "graphs/synthetic/read_roster.json",
+  expectedOutcome: "CORRECT_REPAIR",
+  isBait: false,
+  operations: [
+    {
+      type: "swap_columns",
+      selector: "table",
+      colIndexA: 0,
+      colIndexB: 1
+    }
+  ]
+};
+
+// conformance/repair/dev/dev_container_nesting.json
+var dev_container_nesting_default = {
+  id: "dev_container_nesting",
+  name: "Tabela envelopada por container responsivo",
+  description: "Adiciona div.table-responsive ao redor da tabela alterando profundidade",
+  fixture: "tools/runner-harness/fixtures/diario_grid.html",
+  baseGraph: "graphs/synthetic/read_roster.json",
+  expectedOutcome: "CORRECT_REPAIR",
+  isBait: false,
+  operations: [
+    {
+      type: "wrap_container",
+      selector: "table",
+      wrapperClass: "table-responsive card-body"
+    }
+  ]
+};
+
+// conformance/repair/dev/dev_class_hash_scramble.json
+var dev_class_hash_scramble_default = {
+  id: "dev_class_hash_scramble",
+  name: "Classes CSS substitu\xEDdas por hashes de bundler",
+  description: "Simula rebuild de framework utilit\xE1rio alterando classes est\xE1ticas",
+  fixture: "tools/runner-harness/fixtures/standard.html",
+  baseGraph: "graphs/synthetic/lancar_nota.json",
+  expectedOutcome: "CORRECT_REPAIR",
+  isBait: false,
+  operations: [
+    {
+      type: "scramble_attributes",
+      selector: "button, input, table",
+      attr: "class",
+      prefix: "tw-"
+    }
+  ]
+};
+
+// conformance/repair/dev/dev_input_id_scramble.json
+var dev_input_id_scramble_default = {
+  id: "dev_input_id_scramble",
+  name: "IDs est\xE1ticos de inputs substitu\xEDdos por UUIDs",
+  description: "Framework que gera IDs din\xE2micos a cada render",
+  fixture: "tools/runner-harness/fixtures/standard.html",
+  baseGraph: "graphs/synthetic/lancar_nota.json",
+  expectedOutcome: "CORRECT_REPAIR",
+  isBait: false,
+  operations: [
+    {
+      type: "scramble_attributes",
+      selector: "input",
+      attr: "id",
+      prefix: "uuid-"
+    }
+  ]
+};
+
+// conformance/repair/dev/dev_col_header_english.json
+var dev_col_header_english_default = {
+  id: "dev_col_header_english",
+  name: "Cabe\xE7alhos traduzidos para ingl\xEAs",
+  description: "Mudan\xE7a de localiza\xE7\xE3o/idioma na interface da tabela",
+  fixture: "tools/runner-harness/fixtures/diario_grid.html",
+  baseGraph: "graphs/synthetic/read_roster.json",
+  expectedOutcome: "CORRECT_REPAIR",
+  isBait: false,
+  operations: [
+    {
+      type: "translate_header",
+      selector: "th:nth-child(2)",
+      headerText: "Student Name"
+    }
+  ]
+};
+
+// conformance/repair/dev/dev_add_extra_col.json
+var dev_add_extra_col_default = {
+  id: "dev_add_extra_col",
+  name: "Coluna Turma inserida antes da meta",
+  description: "Adiciona coluna intermedi\xE1ria alterando \xEDndices num\xE9ricos",
+  fixture: "tools/runner-harness/fixtures/diario_grid.html",
+  baseGraph: "graphs/synthetic/read_roster.json",
+  expectedOutcome: "CORRECT_REPAIR",
+  isBait: false,
+  operations: [
+    {
+      type: "add_column",
+      selector: "table",
+      colIndexA: 1,
+      headerText: "Turma",
+      cellText: "9\xBA A"
+    }
+  ]
+};
+
+// conformance/repair/dev/dev_input_type_change.json
+var dev_input_type_change_default = {
+  id: "dev_input_type_change",
+  name: "Input ganha classe e tipo especializado",
+  description: "Evolu\xE7\xE3o de estilo sem alterar papel sem\xE2ntico do campo",
+  fixture: "tools/runner-harness/fixtures/standard.html",
+  baseGraph: "graphs/synthetic/lancar_nota.json",
+  expectedOutcome: "CORRECT_REPAIR",
+  isBait: false,
+  operations: [
+    {
+      type: "scramble_attributes",
+      selector: 'input[name="nota"]',
+      attr: "class",
+      prefix: "num-input-"
+    }
+  ]
+};
+
+// conformance/repair/dev/dev_row_tag_change.json
+var dev_row_tag_change_default = {
+  id: "dev_row_tag_change",
+  name: "Envelopamento de corpo de dados da tabela",
+  description: "Adi\xE7\xE3o de classe estrutural em tbody para grid virtual",
+  fixture: "tools/runner-harness/fixtures/diario_grid.html",
+  baseGraph: "graphs/synthetic/read_roster.json",
+  expectedOutcome: "CORRECT_REPAIR",
+  isBait: false,
+  operations: [
+    {
+      type: "wrap_container",
+      selector: "tbody",
+      wrapperClass: "grid-rows"
+    }
+  ]
+};
+
+// conformance/repair/dev/dev_sub_button_icon.json
+var dev_sub_button_icon_default = {
+  id: "dev_sub_button_icon",
+  name: "Bot\xE3o recebe \xEDcone decorativo com texto",
+  description: "Inclus\xE3o de emoji/\xEDcone antes do texto de a\xE7\xE3o",
+  fixture: "tools/runner-harness/fixtures/standard.html",
+  baseGraph: "graphs/synthetic/lancar_nota.json",
+  expectedOutcome: "CORRECT_REPAIR",
+  isBait: false,
+  operations: [
+    {
+      type: "rename_text",
+      selector: "button#btn-salvar",
+      newText: "\u{1F4BE} Salvar Lan\xE7amento"
+    }
+  ]
+};
+
+// conformance/repair/holdout/holdout_save_btn_synonym.json
+var holdout_save_btn_synonym_default = {
+  id: "holdout_save_btn_synonym",
+  name: "Bot\xE3o Salvar renomeado para Confirmar Lan\xE7amento",
+  description: "Sin\xF4nimo sem\xE2ntico de a\xE7\xE3o final em formul\xE1rio estrito",
+  fixture: "tools/runner-harness/fixtures/holdout/strict_form.html",
+  baseGraph: "graphs/conformance/holdout/strict_form.json",
+  expectedOutcome: "CORRECT_REPAIR",
+  isBait: false,
+  operations: [
+    {
+      type: "rename_text",
+      selector: 'button[type="submit"], button.btn-save, #submit-btn',
+      newText: "Confirmar Lan\xE7amento"
+    }
+  ]
+};
+
+// conformance/repair/holdout/holdout_col_presenca_synonym.json
+var holdout_col_presenca_synonym_default = {
+  id: "holdout_col_presenca_synonym",
+  name: "Coluna Presen\xE7a renomeada para Frequ\xEAncia Escolar",
+  description: "Sin\xF4nimo educacional em cabe\xE7alho com m\xFAltiplas linhas",
+  fixture: "tools/runner-harness/fixtures/holdout/two_row_headers.html",
+  baseGraph: "graphs/conformance/holdout/two_row_headers.json",
+  expectedOutcome: "CORRECT_REPAIR",
+  isBait: false,
+  operations: [
+    {
+      type: "rename_text",
+      selector: "th:nth-child(2)",
+      newText: "Frequ\xEAncia Escolar"
+    }
+  ]
+};
+
+// conformance/repair/holdout/holdout_nota_input_placeholder.json
+var holdout_nota_input_placeholder_default = {
+  id: "holdout_nota_input_placeholder",
+  name: "Campo nota perde ID est\xE1tico mantendo papel e name",
+  description: "Input em formul\xE1rio estrito perde ID est\xE1tico",
+  fixture: "tools/runner-harness/fixtures/holdout/strict_form.html",
+  baseGraph: "graphs/conformance/holdout/strict_form.json",
+  expectedOutcome: "CORRECT_REPAIR",
+  isBait: false,
+  operations: [
+    {
+      type: "scramble_attributes",
+      selector: 'input[name="nota"], #input-nota',
+      attr: "id",
+      prefix: "field-rnd-"
+    }
+  ]
+};
+
+// conformance/repair/holdout/holdout_wizard_step_btn.json
+var holdout_wizard_step_btn_default = {
+  id: "holdout_wizard_step_btn",
+  name: "Bot\xE3o Avan\xE7ar Etapa renomeado para Pr\xF3ximo Passo",
+  description: "Navega\xE7\xE3o de fluxo assistido por wizard",
+  fixture: "tools/runner-harness/fixtures/holdout/wizard.html",
+  baseGraph: "graphs/conformance/holdout/wizard.json",
+  expectedOutcome: "CORRECT_REPAIR",
+  isBait: false,
+  operations: [
+    {
+      type: "rename_text",
+      selector: "button#next-step, .wizard-next",
+      newText: "Pr\xF3ximo Passo"
+    }
+  ]
+};
+
+// conformance/repair/holdout/holdout_download_btn_text.json
+var holdout_download_btn_text_default = {
+  id: "holdout_download_btn_text",
+  name: "Bot\xE3o Baixar Boletim CSV alterado para Exportar Planilha",
+  description: "A\xE7\xE3o de download de arquivo renomeada com sin\xF4nimo operacional",
+  fixture: "tools/runner-harness/fixtures/holdout/download_upload.html",
+  baseGraph: "graphs/conformance/holdout/download_upload.json",
+  expectedOutcome: "CORRECT_REPAIR",
+  isBait: false,
+  operations: [
+    {
+      type: "rename_text",
+      selector: "button#download-btn, #btn-export",
+      newText: "Exportar Planilha"
+    }
+  ]
+};
+
+// conformance/repair/holdout/holdout_two_row_header_drift.json
+var holdout_two_row_header_drift_default = {
+  id: "holdout_two_row_header_drift",
+  name: "Tabela ganha nova coluna bimestral",
+  description: "Inser\xE7\xE3o de coluna alterando offsets de \xEDndice de dados",
+  fixture: "tools/runner-harness/fixtures/holdout/two_row_headers.html",
+  baseGraph: "graphs/conformance/holdout/two_row_headers.json",
+  expectedOutcome: "CORRECT_REPAIR",
+  isBait: false,
+  operations: [
+    {
+      type: "add_column",
+      selector: "table",
+      colIndexA: 1,
+      headerText: "1\xBA Bimestre",
+      cellText: "OK"
+    }
+  ]
+};
+
+// conformance/repair/holdout/holdout_infinite_scroll_container.json
+var holdout_infinite_scroll_container_default = {
+  id: "holdout_infinite_scroll_container",
+  name: "Container de scroll ganha classe responsiva",
+  description: "Container de rolagem virtual envelopado",
+  fixture: "tools/runner-harness/fixtures/holdout/infinite_scroll.html",
+  baseGraph: "graphs/conformance/holdout/infinite_scroll.json",
+  expectedOutcome: "CORRECT_REPAIR",
+  isBait: false,
+  operations: [
+    {
+      type: "wrap_container",
+      selector: "#scroll-container, .infinite-list",
+      wrapperClass: "scroll-viewport-v2"
+    }
+  ]
+};
+
+// conformance/repair/holdout/holdout_pagination_btn_aria.json
+var holdout_pagination_btn_aria_default = {
+  id: "holdout_pagination_btn_aria",
+  name: "Bot\xE3o Pr\xF3xima atualizado com texto completo",
+  description: "Varia\xE7\xE3o de r\xF3tulo textual de pagina\xE7\xE3o",
+  fixture: "tools/runner-harness/fixtures/pagination.html",
+  baseGraph: "graphs/synthetic/read_roster.json",
+  expectedOutcome: "CORRECT_REPAIR",
+  isBait: false,
+  operations: [
+    {
+      type: "rename_text",
+      selector: "button#next-page, .btn-next",
+      newText: "Pr\xF3xima P\xE1gina"
+    }
+  ]
+};
+
+// conformance/repair/holdout/holdout_bait_twin_buttons.json
+var holdout_bait_twin_buttons_default = {
+  id: "holdout_bait_twin_buttons",
+  name: "ISCA: Dois bot\xF5es id\xEAnticos de salvar com inten\xE7\xF5es diferentes",
+  description: "Dois bot\xF5es lado a lado: Salvar Altera\xE7\xF5es e Salvar como Rascunho. Amb\xEDguo, deve abortar com seguran\xE7a.",
+  fixture: "tools/runner-harness/fixtures/holdout/strict_form.html",
+  baseGraph: "graphs/conformance/holdout/strict_form.json",
+  expectedOutcome: "SAFE_ABORT",
+  isBait: true,
+  operations: [
+    {
+      type: "duplicate_hidden",
+      selector: 'button[type="submit"], #submit-btn',
+      newText: "Salvar como Rascunho"
+    },
+    {
+      type: "rename_text",
+      selector: 'button[type="submit"], #submit-btn',
+      newText: "Salvar Altera\xE7\xF5es"
+    }
+  ]
+};
+
+// conformance/repair/holdout/holdout_bait_polarity_swap.json
+var holdout_bait_polarity_swap_default = {
+  id: "holdout_bait_polarity_swap",
+  name: "ISCA: Invers\xE3o de polaridade entre faltas e presen\xE7as",
+  description: "Colunas de dados trocam sem\xE2ntica oposta. Deve abortar com SAFE_ABORT sem gravar na coluna errada.",
+  fixture: "tools/runner-harness/fixtures/holdout/two_row_headers.html",
+  baseGraph: "graphs/conformance/holdout/two_row_headers.json",
+  expectedOutcome: "SAFE_ABORT",
+  isBait: true,
+  operations: [
+    {
+      type: "swap_column_semantics",
+      selector: "table",
+      colIndexA: 2,
+      colIndexB: 3
+    }
+  ]
+};
+
+// conformance/repair/holdout/holdout_bait_target_deleted.json
+var holdout_bait_target_deleted_default = {
+  id: "holdout_bait_target_deleted",
+  name: "ISCA: Elemento alvo exclu\xEDdo completamente do DOM",
+  description: "Bot\xE3o de submiss\xE3o removido pelo portal. Deve abortar com SAFE_ABORT.",
+  fixture: "tools/runner-harness/fixtures/holdout/strict_form.html",
+  baseGraph: "graphs/conformance/holdout/strict_form.json",
+  expectedOutcome: "SAFE_ABORT",
+  isBait: true,
+  operations: [
+    {
+      type: "remove_element",
+      selector: 'button[type="submit"], #submit-btn'
+    }
+  ]
+};
+
+// conformance/repair/holdout/holdout_bait_hidden_honeypot.json
+var holdout_bait_hidden_honeypot_default = {
+  id: "holdout_bait_hidden_honeypot",
+  name: "ISCA: Campo fantasma oculto como armadilha",
+  description: "Input honeypot oculto com mesmo nome/classe. Deve abortar ou ignorar elemento invis\xEDvel.",
+  fixture: "tools/runner-harness/fixtures/holdout/strict_form.html",
+  baseGraph: "graphs/conformance/holdout/strict_form.json",
+  expectedOutcome: "SAFE_ABORT",
+  isBait: true,
+  operations: [
+    {
+      type: "duplicate_hidden",
+      selector: 'input[name="nota"], #input-nota',
+      newText: "honeypot"
+    }
+  ]
+};
+
+// tools/runner-harness/scenarios.ts
+var DEV_SCENARIOS = [
+  dev_btn_rename_simple_default,
+  dev_btn_role_change_default,
+  dev_col_header_synonym_default,
+  dev_col_order_swap_default,
+  dev_container_nesting_default,
+  dev_class_hash_scramble_default,
+  dev_input_id_scramble_default,
+  dev_col_header_english_default,
+  dev_add_extra_col_default,
+  dev_input_type_change_default,
+  dev_row_tag_change_default,
+  dev_sub_button_icon_default
+];
+var HOLDOUT_SCENARIOS = [
+  holdout_save_btn_synonym_default,
+  holdout_col_presenca_synonym_default,
+  holdout_nota_input_placeholder_default,
+  holdout_wizard_step_btn_default,
+  holdout_download_btn_text_default,
+  holdout_two_row_header_drift_default,
+  holdout_infinite_scroll_container_default,
+  holdout_pagination_btn_aria_default,
+  holdout_bait_twin_buttons_default,
+  holdout_bait_polarity_swap_default,
+  holdout_bait_target_deleted_default,
+  holdout_bait_hidden_honeypot_default
+];
+var ALL_REPAIR_SCENARIOS = [
+  ...DEV_SCENARIOS,
+  ...HOLDOUT_SCENARIOS
+];
 
 // lib/recorder-dom/anchorCandidates.ts
 function generateAnchorCandidates(el, doc) {
@@ -24641,11 +26396,14 @@ function initHarness() {
   const btnExport = $("btn-export-trace");
   const tabBtnRunner = $("tab-btn-runner");
   const tabBtnRecorder = $("tab-btn-recorder");
+  const tabBtnRepair = $("tab-btn-repair");
   const panelRunner = $("panel-runner-view");
   const panelRecorder = $("panel-recorder-view");
+  const panelRepair = $("panel-repair-view");
   const btnStartRecord = $("btn-start-record");
   const btnStopRecord = $("btn-stop-record");
   const reviewContainer = $("review-view-container");
+  const repairContainer = $("repair-view-container");
   traceView = new TraceView(
     document.getElementById("graph-tree"),
     document.getElementById("vars-inspector"),
@@ -24654,17 +26412,42 @@ function initHarness() {
   );
   const repository = new MemorySkillGraphRepository();
   const reviewView = new ReviewView(reviewContainer, repository, () => fixtureFrame.contentDocument);
+  const repairView = new RepairView(
+    repairContainer,
+    repository,
+    () => fixtureFrame.contentDocument,
+    () => {
+      try {
+        return JSON.parse(graphJsonArea.value);
+      } catch {
+        return null;
+      }
+    }
+  );
+  repairView.render(ALL_REPAIR_SCENARIOS);
   tabBtnRunner.addEventListener("click", () => {
     tabBtnRunner.className = "btn-primary";
     tabBtnRecorder.className = "btn-secondary";
+    tabBtnRepair.className = "btn-secondary";
     panelRunner.style.display = "flex";
     panelRecorder.style.display = "none";
+    panelRepair.style.display = "none";
   });
   tabBtnRecorder.addEventListener("click", () => {
     tabBtnRunner.className = "btn-secondary";
     tabBtnRecorder.className = "btn-primary";
+    tabBtnRepair.className = "btn-secondary";
     panelRunner.style.display = "none";
     panelRecorder.style.display = "flex";
+    panelRepair.style.display = "none";
+  });
+  tabBtnRepair.addEventListener("click", () => {
+    tabBtnRunner.className = "btn-secondary";
+    tabBtnRecorder.className = "btn-secondary";
+    tabBtnRepair.className = "btn-primary";
+    panelRunner.style.display = "none";
+    panelRecorder.style.display = "none";
+    panelRepair.style.display = "flex";
   });
   btnStartRecord.addEventListener("click", () => {
     const doc = fixtureFrame.contentDocument;
