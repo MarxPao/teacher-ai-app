@@ -9,6 +9,18 @@ import { SkillGraphV2Schema, validateGraph } from '../contracts/skillgraph'
 import readRosterGraph from '../../graphs/synthetic/read_roster.json'
 import lancarFaltaGraph from '../../graphs/synthetic/lancar_falta.json'
 import lancarNotaGraph from '../../graphs/synthetic/lancar_nota.json'
+import {
+  applyPatch,
+  generateRepairProposal,
+  createDriftSnapshot,
+  diffGraphs,
+  createInitialHealthMetrics,
+  recordExecutionSuccess,
+  recordExecutionFailure,
+  recordSoftHeal,
+  recordManualRepair,
+  computeGraphHealthStatus,
+} from '../repair'
 
 declare const chrome: any
 
@@ -79,6 +91,16 @@ const SkillGraphV2 = {
   SkillGraphV2Schema,
   validateGraph,
   createExtensionHost,
+  applyPatch,
+  generateRepairProposal,
+  createDriftSnapshot,
+  diffGraphs,
+  createInitialHealthMetrics,
+  recordExecutionSuccess,
+  recordExecutionFailure,
+  recordSoftHeal,
+  recordManualRepair,
+  computeGraphHealthStatus,
   syntheticGraphs: {
     read_roster: readRosterGraph,
     lancar_falta: lancarFaltaGraph,

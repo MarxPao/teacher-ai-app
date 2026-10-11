@@ -74,6 +74,12 @@ export class ContentAdapter {
       let result: any
       if (method === 'click') {
         result = await this.driver.click(params.target, params.options)
+      } else if (method === 'highlight') {
+        result = await this.driver.highlight?.(params.selector, params.mode)
+      } else if (method === 'clearHighlight') {
+        result = await this.driver.clearHighlight?.()
+      } else if (method === 'describeElements') {
+        result = await this.driver.describeElements?.(params)
       } else {
         result = await driverAny[method](params)
       }

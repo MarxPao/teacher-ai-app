@@ -19,6 +19,9 @@ export type DriverMethodName =
   | 'listFrames'
   | 'download'
   | 'upload'
+  | 'describeElements'
+  | 'highlight'
+  | 'clearHighlight'
 
 export interface DriverRpcRequest<M extends DriverMethodName = DriverMethodName> {
   channel: typeof SKILLGRAPH_RPC_CHANNEL

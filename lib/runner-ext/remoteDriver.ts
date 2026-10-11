@@ -17,6 +17,7 @@ import type {
 } from '../runner/types'
 import { RunnerError } from '../runner/types'
 import type { Fingerprint } from '../contracts/skillgraph/primitives'
+import type { ElementDescriptor } from '../recorder/traceSchema'
 import { SKILLGRAPH_RPC_CHANNEL, type DriverMethodName, type DriverRpcRequest, type DriverRpcResponse } from './protocol'
 
 declare const chrome: any
@@ -186,5 +187,17 @@ export class RemoteDriver implements Driver {
 
   public async upload(options: UploadOptions): Promise<{ success: boolean }> {
     return this.sendRpc('upload', options)
+  }
+
+  public async describeElements(selector?: string): Promise<ElementDescriptor[]> {
+    return this.sendRpc('describeElements', selector)
+  }
+
+  public async highlight(selector: string, mode: 'old' | 'new'): Promise<void> {
+    return this.sendRpc('highlight', { selector, mode })
+  }
+
+  public async clearHighlight(): Promise<void> {
+    return this.sendRpc('clearHighlight', {})
   }
 }

@@ -103,10 +103,50 @@
     const host = bundle.createExtensionHost({
       runId,
       onEvent: (event) => {
+        if (event.type === 'repair_requested') {
+          chrome.storage.session.set({
+            skillgraph_pending_repair: {
+              ...event.data,
+              friendlyPrompt: 'O portal mudou um botão ou campo. O assistente localizou uma atualização segura. Deseja aplicar?',
+            },
+          }).catch(() => {})
+        }
         chrome.runtime.sendMessage({ type: 'SKILLGRAPH_EVENT', event }).catch(() => {})
       },
     })
     const runner = new bundle.SkillGraphRunner(driver, host)
+
+    const portalId = graph.identity?.portal_id || 'default'
+    const taskId = graph.identity?.task_id || 'custom'
+
+    function recordHealth(isSuccess, hasSelfHealed) {
+      const healthKey = `graph_health:${portalId}:${taskId}`
+      chrome.storage.local.get([healthKey], (res) => {
+        let metrics = res && res[healthKey]
+        if (!metrics) {
+          metrics = bundle.createInitialHealthMetrics ? bundle.createInitialHealthMetrics(taskId) : {
+            graphId: taskId,
+            totalExecutions: 0,
+            successfulExecutions: 0,
+            failedExecutions: 0,
+            softHealsCount: 0,
+            manualRepairsCount: 0,
+            lastExecutionAt: null,
+            lastRepairAt: null,
+            status: 'healthy',
+          }
+        }
+        if (isSuccess) {
+          metrics = bundle.recordExecutionSuccess ? bundle.recordExecutionSuccess(metrics) : metrics
+          if (hasSelfHealed && bundle.recordSoftHeal) {
+            metrics = bundle.recordSoftHeal(metrics)
+          }
+        } else {
+          metrics = bundle.recordExecutionFailure ? bundle.recordExecutionFailure(metrics) : metrics
+        }
+        chrome.storage.local.set({ [healthKey]: metrics })
+      })
+    }
 
     try {
       await chrome.storage.session.set({
@@ -117,6 +157,8 @@
         initialVariables: payload.initialVariables || {},
         dryRun: Boolean(payload.dryRun),
       })
+
+      recordHealth(result.success, Boolean(result.state?.hasSelfHealed))
 
       await chrome.storage.session.set({
         skillgraph_current_run: { runId, status: result.success ? 'completed' : 'failed', finishedAt: Date.now() },
@@ -133,6 +175,7 @@
         } : null,
       })
     } catch (err) {
+      recordHealth(false, false)
       await chrome.storage.session.set({
         skillgraph_current_run: { runId, status: 'failed', finishedAt: Date.now(), error: err.message },
       })
@@ -169,10 +212,46 @@
       return true
     }
 
+    if (message.action === 'SKILLGRAPH_GET_HEALTH') {
+      const healthKey = `graph_health:${message.portalId || 'default'}:${message.taskId}`
+      chrome.storage.local.get([healthKey], (res) => {
+        sendResponse({ success: true, metrics: res?.[healthKey] || null })
+      })
+      return true
+    }
+
+    if (message.action === 'SKILLGRAPH_APPROVE_REPAIR') {
+      chrome.storage.session.get(['skillgraph_pending_repair'], async (res) => {
+        const pending = res?.skillgraph_pending_repair
+        if (!pending) {
+          sendResponse({ success: false, friendlyMessage: 'Nenhuma proposta de reparo pendente encontrada.' })
+          return
+        }
+        const healthKey = `graph_health:${message.portalId || 'default'}:${message.taskId}`
+        chrome.storage.local.get([healthKey], (hRes) => {
+          if (hRes?.[healthKey] && bundle?.recordManualRepair) {
+            const updated = bundle.recordManualRepair(hRes[healthKey])
+            chrome.storage.local.set({ [healthKey]: updated })
+          }
+        })
+        await chrome.storage.session.remove(['skillgraph_pending_repair'])
+        sendResponse({
+          success: true,
+          friendlyMessage: 'Atualização do portal confirmada com sucesso! ✨',
+        })
+      })
+      return true
+    }
+
     if (message.action === 'SKILLGRAPH_GET_STATUS') {
       Promise.all([
         getFlag(),
-        chrome.storage.session.get(['skillgraph_current_run', 'skillgraph_run_state', 'skillgraph_audit_log']),
+        chrome.storage.session.get([
+          'skillgraph_current_run',
+          'skillgraph_run_state',
+          'skillgraph_audit_log',
+          'skillgraph_pending_repair',
+        ]),
       ]).then(([flag, sessionData]) => {
         sendResponse({
           success: true,
@@ -180,6 +259,7 @@
           currentRun: sessionData?.skillgraph_current_run || null,
           runState: sessionData?.skillgraph_run_state || null,
           auditLog: sessionData?.skillgraph_audit_log || [],
+          pendingRepair: sessionData?.skillgraph_pending_repair || null,
         })
       })
       return true

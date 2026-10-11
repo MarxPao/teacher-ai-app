@@ -482,6 +482,98 @@
     }
   }
 
+  // lib/runner-dom/elementDescriptor.ts
+  var DEFAULT_INTERACTIVE_SELECTOR = [
+    "button",
+    "input",
+    "select",
+    "textarea",
+    'a[role="button"]',
+    "a[href]",
+    '[role="button"]',
+    '[role="tab"]',
+    "th"
+  ].join(", ");
+  function describeElements(doc, selector, maxElements = 50) {
+    const query = selector || DEFAULT_INTERACTIVE_SELECTOR;
+    const elements = Array.from(doc.querySelectorAll(query)).slice(0, maxElements);
+    const descriptors = [];
+    for (const el of elements) {
+      const tag = el.tagName.toLowerCase();
+      const role = el.getAttribute("role") || void 0;
+      const ariaLabel = el.getAttribute("aria-label") || void 0;
+      const placeholder = el.getAttribute("placeholder") || void 0;
+      const testId = el.getAttribute("data-testid") || el.getAttribute("data-test-id") || el.getAttribute("data-id") || void 0;
+      const id = el.id || void 0;
+      const classes = Array.from(el.classList).slice(0, 5);
+      const type = el.getAttribute("type") || void 0;
+      const name = el.getAttribute("name") || void 0;
+      const autocomplete = el.getAttribute("autocomplete") || void 0;
+      let labelText;
+      if (id) {
+        const lbl = doc.querySelector(`label[for="${id}"]`);
+        if (lbl?.textContent) labelText = lbl.textContent.trim();
+      }
+      if (!labelText) {
+        const parentLbl = el.closest("label");
+        if (parentLbl?.textContent) labelText = parentLbl.textContent.trim();
+      }
+      const rawText = el.innerText?.trim() || el.textContent?.trim();
+      const text = rawText && rawText.length <= 80 ? rawText : void 0;
+      const accessibleName = ariaLabel || labelText || (el.getAttribute("title") || void 0) || (text && text.length <= 40 ? text : void 0);
+      descriptors.push({
+        tag,
+        role,
+        accessible_name: accessibleName,
+        label_text: labelText,
+        aria_label: ariaLabel,
+        placeholder,
+        test_id: testId,
+        text,
+        id,
+        classes,
+        type,
+        name,
+        autocomplete,
+        candidates: []
+      });
+    }
+    return descriptors;
+  }
+
+  // lib/runner-dom/highlightOverlay.ts
+  var ATTR_HIGHLIGHT = "data-teacher-highlight";
+  var PREV_OUTLINE_ATTR = "data-teacher-prev-outline";
+  function highlightElement(el, mode) {
+    const htmlEl = el;
+    if (!htmlEl.style) return;
+    if (!htmlEl.hasAttribute(PREV_OUTLINE_ATTR)) {
+      htmlEl.setAttribute(PREV_OUTLINE_ATTR, htmlEl.style.outline || "");
+    }
+    htmlEl.setAttribute(ATTR_HIGHLIGHT, mode);
+    if (mode === "old") {
+      htmlEl.style.outline = "2px dashed #ef4444";
+      htmlEl.style.outlineOffset = "2px";
+    } else {
+      htmlEl.style.outline = "2px solid #10b981";
+      htmlEl.style.outlineOffset = "2px";
+    }
+  }
+  function clearHighlights(doc) {
+    const highlighted = Array.from(doc.querySelectorAll(`[${ATTR_HIGHLIGHT}]`));
+    for (const el of highlighted) {
+      const htmlEl = el;
+      if (htmlEl.hasAttribute(PREV_OUTLINE_ATTR)) {
+        htmlEl.style.outline = htmlEl.getAttribute(PREV_OUTLINE_ATTR) || "";
+        htmlEl.removeAttribute(PREV_OUTLINE_ATTR);
+      } else {
+        htmlEl.style.outline = "";
+      }
+      htmlEl.style.outlineOffset = "";
+      htmlEl.removeAttribute(ATTR_HIGHLIGHT);
+    }
+  }
+
   // lib/runner-dom/driver.ts
   var DomDriver = class {
     constructor(doc, allowedHosts) {
@@ -680,6 +772,19 @@
       }
       return { success: true };
     }
+    async describeElements(selector) {
+      this.hostGuard();
+      return describeElements(this.doc, selector);
+    }
+    async highlight(selector, mode) {
+      this.hostGuard();
+      const el = this.doc.querySelector(selector);
+      if (el) highlightElement(el, mode);
+    }
+    async clearHighlight() {
+      this.hostGuard();
+      clearHighlights(this.doc);
+    }
   };
 
   // lib/runner-ext/protocol.ts
@@ -739,6 +844,12 @@
         let result;
         if (method === "click") {
           result = await this.driver.click(params.target, params.options);
+        } else if (method === "highlight") {
+          result = await this.driver.highlight?.(params.selector, params.mode);
+        } else if (method === "clearHighlight") {
+          result = await this.driver.clearHighlight?.();
+        } else if (method === "describeElements") {
+          result = await this.driver.describeElements?.(params);
         } else {
           result = await driverAny[method](params);
         }

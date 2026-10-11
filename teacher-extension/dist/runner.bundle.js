@@ -20848,6 +20848,664 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     return node2.on_success;
   }
 
+  // lib/repair/driftClassify.ts
+  function classifyDrift(input2) {
+    if (input2.elementFound && input2.matchedCandidateIndex === 0) {
+      return {
+        type: "none",
+        reason: "Elemento meta localizado pelo primeiro candidato de \xE2ncora priorit\xE1rio.",
+        matchedCandidateIndex: 0
+      };
+    }
+    if (input2.elementFound && input2.matchedCandidateIndex !== void 0 && input2.matchedCandidateIndex > 0) {
+      return {
+        type: "soft",
+        reason: `Elemento meta localizado por candidato alternativo de fallback (\xEDndice ${input2.matchedCandidateIndex}).`,
+        matchedCandidateIndex: input2.matchedCandidateIndex
+      };
+    }
+    if (input2.elementFound && input2.semanticScore !== void 0 && input2.semanticScore >= 0.85) {
+      return {
+        type: "semantic",
+        reason: `Elemento meta localizado pelo matcher sem\xE2ntico determin\xEDstico com score ${input2.semanticScore.toFixed(2)}.`,
+        score: input2.semanticScore
+      };
+    }
+    if (input2.isStructuralChange) {
+      return {
+        type: "structural",
+        reason: "Varia\xE7\xE3o estrutural detectada na hierarquia ou ordem de colunas do cont\xEAiner."
+      };
+    }
+    return {
+      type: "hard",
+      reason: "Elemento meta n\xE3o localizado por nenhum candidato de \xE2ncora nem correspond\xEAncia sem\xE2ntica segura."
+    };
+  }
+
+  // lib/recorder/registry.ts
+  function normalizeTerm(term) {
+    return term.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+  }
+  var PiiRegistry = class {
+    constructor() {
+      this.entries = /* @__PURE__ */ new Map();
+      this.placeholderCounters = /* @__PURE__ */ new Map();
+    }
+    register(value, role = "data") {
+      const trimmed = value.trim();
+      if (!trimmed || trimmed.length < 2) return value;
+      const norm = normalizeTerm(trimmed);
+      if (this.entries.has(norm)) {
+        return this.entries.get(norm).placeholder;
+      }
+      const currentCount = (this.placeholderCounters.get(role) || 0) + 1;
+      this.placeholderCounters.set(role, currentCount);
+      const placeholder = `<PARAM:${role}_${currentCount}>`;
+      const entry = {
+        original: trimmed,
+        normalized: norm,
+        placeholder,
+        role
+      };
+      this.entries.set(norm, entry);
+      return placeholder;
+    }
+    registerLiteral(value, placeholder) {
+      const trimmed = value.trim();
+      if (!trimmed || trimmed.length < 2) return;
+      const norm = normalizeTerm(trimmed);
+      this.entries.set(norm, {
+        original: trimmed,
+        normalized: norm,
+        placeholder
+      });
+    }
+    has(text) {
+      if (!text || text.length < 2) return false;
+      const normText = normalizeTerm(text);
+      for (const entry of this.entries.values()) {
+        if (entry.normalized.length >= 3 && normText.includes(entry.normalized)) {
+          return true;
+        }
+      }
+      return false;
+    }
+    findMatches(text) {
+      if (!text) return [];
+      const normText = normalizeTerm(text);
+      const matches = [];
+      for (const entry of this.entries.values()) {
+        if (entry.normalized.length >= 3 && normText.includes(entry.normalized)) {
+          matches.push(entry);
+        }
+      }
+      return matches;
+    }
+    getEntries() {
+      return Array.from(this.entries.values());
+    }
+    get size() {
+      return this.entries.size;
+    }
+    clear() {
+      this.entries.clear();
+      this.placeholderCounters.clear();
+    }
+  };
+
+  // lib/recorder/redact.ts
+  function redactString(text, registry2) {
+    if (!text) return text;
+    let result = text;
+    const entries = registry2.getEntries().sort((a, b) => b.original.length - a.original.length);
+    for (const entry of entries) {
+      if (entry.original.length >= 2) {
+        const escaped = entry.original.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const regex = new RegExp(escaped, "gi");
+        result = result.replace(regex, entry.placeholder);
+      }
+    }
+    return result;
+  }
+  function redactDescriptor(desc, registry2) {
+    const copy = { ...desc };
+    if (copy.text) copy.text = redactString(copy.text, registry2);
+    if (copy.label_text) copy.label_text = redactString(copy.label_text, registry2);
+    if (copy.aria_label) copy.aria_label = redactString(copy.aria_label, registry2);
+    if (copy.placeholder) copy.placeholder = redactString(copy.placeholder, registry2);
+    if (copy.rowContext) {
+      const redactedCells = copy.rowContext.cells.map((cell, idx) => {
+        const ph = registry2.register(cell, `cell_${idx}`);
+        return ph;
+      });
+      copy.rowContext = {
+        ...copy.rowContext,
+        cells: redactedCells
+      };
+    }
+    return copy;
+  }
+
+  // lib/repair/snapshot.ts
+  function createDriftSnapshot(options) {
+    const reg = options.registry || new PiiRegistry();
+    const redactedExpected = redactDescriptor(
+      options.expectedDescriptor,
+      reg
+    );
+    const redactedPool = options.observedPool.map((el) => redactDescriptor(el, reg));
+    const snapshot = {
+      graphId: options.graphId,
+      graphVersion: options.graphVersion,
+      nodeId: options.nodeId,
+      anchorId: options.anchorId,
+      timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+      url: options.url,
+      expectedDescriptor: redactedExpected,
+      observedPool: redactedPool,
+      piiScrubbed: true
+    };
+    return snapshot;
+  }
+
+  // lib/repair/semantic/tokens.ts
+  function normalizeText3(raw) {
+    if (!raw) return "";
+    return raw.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[\r\n\t]+/g, " ").replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+  }
+  var STOPWORDS = /* @__PURE__ */ new Set([
+    "de",
+    "da",
+    "do",
+    "das",
+    "dos",
+    "em",
+    "no",
+    "na",
+    "nos",
+    "nas",
+    "por",
+    "pelo",
+    "pela",
+    "pelos",
+    "pelas",
+    "para",
+    "pra",
+    "com",
+    "um",
+    "uma",
+    "uns",
+    "umas",
+    "o",
+    "a",
+    "os",
+    "as",
+    "e",
+    "ou",
+    "to",
+    "for",
+    "of",
+    "in",
+    "on",
+    "at",
+    "by",
+    "the",
+    "a",
+    "an",
+    "and",
+    "or"
+  ]);
+  function extractTokens(raw, filterStopwords = true) {
+    const normalized = normalizeText3(raw);
+    if (!normalized) return [];
+    const tokens = normalized.split(" ").filter((t) => t.length > 0);
+    if (!filterStopwords) return tokens;
+    return tokens.filter((t) => !STOPWORDS.has(t) && t.length > 1);
+  }
+  function tokenSet(raw) {
+    return new Set(extractTokens(raw));
+  }
+
+  // lib/repair/semantic/similarity.ts
+  function jaccardSimilarity(setA, setB) {
+    if (setA.size === 0 && setB.size === 0) return 1;
+    if (setA.size === 0 || setB.size === 0) return 0;
+    let intersectionCount = 0;
+    for (const item of setA) {
+      if (setB.has(item)) {
+        intersectionCount++;
+      }
+    }
+    const unionSize = setA.size + setB.size - intersectionCount;
+    return unionSize === 0 ? 0 : intersectionCount / unionSize;
+  }
+  function levenshteinDistance(a, b) {
+    const m = a.length;
+    const n = b.length;
+    if (m === 0) return n;
+    if (n === 0) return m;
+    let prevRow = new Array(n + 1);
+    let currRow = new Array(n + 1);
+    for (let j = 0; j <= n; j++) {
+      prevRow[j] = j;
+    }
+    for (let i = 1; i <= m; i++) {
+      currRow[0] = i;
+      const charA = a[i - 1];
+      for (let j = 1; j <= n; j++) {
+        const cost = charA === b[j - 1] ? 0 : 1;
+        currRow[j] = Math.min(
+          prevRow[j] + 1,
+          // deleção
+          currRow[j - 1] + 1,
+          // inserção
+          prevRow[j - 1] + cost
+          // substituição
+        );
+      }
+      const temp = prevRow;
+      prevRow = currRow;
+      currRow = temp;
+    }
+    return prevRow[n];
+  }
+  function normalizedLevenshteinSimilarity(a, b) {
+    const normA = normalizeText3(a);
+    const normB = normalizeText3(b);
+    if (normA === normB) return 1;
+    const maxLen = Math.max(normA.length, normB.length);
+    if (maxLen === 0) return 1;
+    const dist = levenshteinDistance(normA, normB);
+    return Math.max(0, 1 - dist / maxLen);
+  }
+  var SYNONYM_GROUPS = [
+    /* @__PURE__ */ new Set(["salvar", "gravar", "confirmar", "registrar", "submeter", "save", "submit"]),
+    /* @__PURE__ */ new Set(["presenca", "presencas", "frequencia", "comparecimento", "attendance", "present"]),
+    /* @__PURE__ */ new Set(["falta", "faltas", "ausencia", "ausencias", "absent", "absence"]),
+    /* @__PURE__ */ new Set(["nota", "notas", "media", "conceito", "pontuacao", "grade", "score"]),
+    /* @__PURE__ */ new Set(["proximo", "proxima", "avancar", "continuar", "seguir", "next"]),
+    /* @__PURE__ */ new Set(["anterior", "voltar", "retornar", "prev", "back"]),
+    /* @__PURE__ */ new Set(["baixar", "download", "exportar", "export"]),
+    /* @__PURE__ */ new Set(["enviar", "upload", "importar", "import"])
+  ];
+  function areTokensSynonyms(t1, t2) {
+    if (t1 === t2) return true;
+    for (const group of SYNONYM_GROUPS) {
+      if (group.has(t1) && group.has(t2)) return true;
+    }
+    return false;
+  }
+  function computeTextSimilarity(textA, textB) {
+    const normA = normalizeText3(textA);
+    const normB = normalizeText3(textB);
+    if (normA === normB && normA.length > 0) return 1;
+    if (!normA || !normB) return 0;
+    if (normA.includes(normB) || normB.includes(normA)) {
+      const minLen = Math.min(normA.length, normB.length);
+      const maxLen = Math.max(normA.length, normB.length);
+      const containmentScore = 0.8 + 0.2 * (minLen / maxLen);
+      return containmentScore;
+    }
+    const tokensA = Array.from(tokenSet(normA));
+    const tokensB = Array.from(tokenSet(normB));
+    let synMatches = 0;
+    for (const ta of tokensA) {
+      if (tokensB.some((tb) => areTokensSynonyms(ta, tb))) {
+        synMatches++;
+      }
+    }
+    const synUnionSize = tokensA.length + tokensB.length - synMatches;
+    const synJaccard = synUnionSize > 0 ? synMatches / synUnionSize : 0;
+    const lev = normalizedLevenshteinSimilarity(normA, normB);
+    return Math.max(synJaccard, 0.65 * synJaccard + 0.35 * lev);
+  }
+
+  // lib/repair/semantic/signals.ts
+  function getBestText(desc) {
+    return desc.accessible_name || desc.text || desc.aria_label || desc.label_text || desc.placeholder || "";
+  }
+  function extractSignals(expected, observed) {
+    let roleMatch = 0;
+    const expRole = normalizeText3(expected.role || "");
+    const obsRole = normalizeText3(observed.role || "");
+    const expTag = (expected.tag || "").toLowerCase();
+    const obsTag = (observed.tag || "").toLowerCase();
+    if (expRole && obsRole && expRole === obsRole) {
+      roleMatch = 1;
+    } else if (!expRole && !obsRole) {
+      roleMatch = expTag === obsTag ? 1 : 0;
+    } else if ((expTag === "button" || expRole === "button") && (obsRole === "button" || obsTag === "button" || obsTag === "a")) {
+      roleMatch = 0.85;
+    }
+    let tagMatch = 0;
+    if (expTag === obsTag) {
+      tagMatch = 1;
+    } else if (expTag === "button" && obsTag === "a" || expTag === "a" && obsTag === "button" || expTag === "input" && obsTag === "textarea") {
+      tagMatch = 0.7;
+    }
+    const expText = getBestText(expected);
+    const obsText = getBestText(observed);
+    let textMatch = 0;
+    if (expText && obsText) {
+      textMatch = computeTextSimilarity(expText, obsText);
+    } else if (!expText && !obsText) {
+      textMatch = 0.5;
+    }
+    let attrScore = 0;
+    let attrCount = 0;
+    if (expected.name && observed.name) {
+      attrCount++;
+      attrScore += expected.name === observed.name ? 1 : 0;
+    }
+    if (expected.id && observed.id) {
+      attrCount++;
+      attrScore += expected.id === observed.id ? 1 : 0;
+    }
+    if (expected.type && observed.type) {
+      attrCount++;
+      attrScore += expected.type === observed.type ? 1 : 0;
+    }
+    if (expected.placeholder && observed.placeholder) {
+      attrCount++;
+      attrScore += computeTextSimilarity(expected.placeholder, observed.placeholder);
+    }
+    const hasExpectedAttrs = Boolean(expected.name || expected.id || expected.type || expected.placeholder);
+    const attributeMatch = attrCount > 0 ? attrScore / attrCount : hasExpectedAttrs ? 0 : 1;
+    const expClasses = (expected.classes || []).filter((c) => !c.startsWith("tw-") && !c.startsWith("css-"));
+    const obsClasses = (observed.classes || []).filter((c) => !c.startsWith("tw-") && !c.startsWith("css-"));
+    const classMatch = jaccardSimilarity(new Set(expClasses), new Set(obsClasses));
+    const overallStructuralAfinity = 0.4 * roleMatch + 0.3 * tagMatch + 0.3 * attributeMatch;
+    return {
+      roleMatch,
+      tagMatch,
+      textMatch,
+      attributeMatch,
+      classMatch,
+      overallStructuralAfinity
+    };
+  }
+
+  // lib/repair/semantic/score.ts
+  function computeElementScore(expected, observed) {
+    const signals = extractSignals(expected, observed);
+    let baseScore = 0.3 * signals.overallStructuralAfinity + 0.5 * signals.textMatch + 0.2 * signals.attributeMatch;
+    let penalties = 0;
+    const obsClasses = (observed.classes || []).map((c) => c.toLowerCase());
+    const isHidden = obsClasses.includes("hidden") || obsClasses.includes("invisible") || obsClasses.includes("d-none") || obsClasses.includes("opacity-0") || obsClasses.includes("sr-only");
+    if (isHidden) {
+      penalties += 0.5;
+    }
+    const finalScore = Math.max(0, Math.min(1, baseScore - penalties));
+    return {
+      totalScore: Number(finalScore.toFixed(4)),
+      signals,
+      penalties
+    };
+  }
+
+  // lib/repair/semantic/thresholds.ts
+  var PROPOSAL_THRESHOLD = 0.6;
+  var PROPOSAL_MARGIN = 0.1;
+  var SOFT_HEAL_THRESHOLD = 0.85;
+  var SOFT_HEAL_MARGIN = 0.2;
+  var TOP_CANDIDATES_LIMIT = 3;
+
+  // lib/repair/semantic/matcher.ts
+  var SemanticMatcher = class {
+    static match(expected, pool, options) {
+      const threshold = options?.threshold ?? PROPOSAL_THRESHOLD;
+      const marginThreshold = options?.marginThreshold ?? PROPOSAL_MARGIN;
+      const limit = options?.limit ?? TOP_CANDIDATES_LIMIT;
+      if (!pool || pool.length === 0) {
+        return {
+          topCandidates: [],
+          isAmbiguous: false,
+          hasMatch: false
+        };
+      }
+      const scored = pool.map((item) => {
+        const scoring = computeElementScore(expected, item);
+        return {
+          descriptor: item,
+          score: scoring.totalScore,
+          signals: scoring.signals
+        };
+      });
+      scored.sort((a, b) => b.score - a.score);
+      const passing = scored.filter((s) => s.score >= threshold);
+      if (passing.length === 0) {
+        return {
+          topCandidates: [],
+          isAmbiguous: false,
+          hasMatch: false
+        };
+      }
+      const topScore = passing[0].score;
+      const secondScore = passing.length > 1 ? passing[1].score : 0;
+      const margin = Number((topScore - secondScore).toFixed(4));
+      const isAmbiguous = passing.length > 1 && margin < marginThreshold;
+      const ranked = passing.slice(0, limit).map((p, idx) => {
+        const itemMargin = idx === 0 ? margin : 0;
+        return {
+          descriptor: p.descriptor,
+          score: p.score,
+          margin: itemMargin,
+          signals: p.signals,
+          isAmbiguous: idx === 0 ? isAmbiguous : false
+        };
+      });
+      return {
+        topCandidates: ranked,
+        bestCandidate: ranked[0],
+        isAmbiguous,
+        hasMatch: true
+      };
+    }
+  };
+
+  // lib/repair/types.ts
+  var REPAIR_ERROR_CODES = {
+    E_REPAIR_NO_CANDIDATE: "E_REPAIR_NO_CANDIDATE",
+    E_REPAIR_AMBIGUOUS: "E_REPAIR_AMBIGUOUS",
+    E_REPAIR_FORBIDDEN_PATCH: "E_REPAIR_FORBIDDEN_PATCH",
+    E_REPAIR_VERIFY_FAILED: "E_REPAIR_VERIFY_FAILED",
+    E_REPAIR_PII_LEAK: "E_REPAIR_PII_LEAK",
+    E_REPAIR_STALE: "E_REPAIR_STALE"
+  };
+
+  // lib/repair/propose.ts
+  function buildAnchorCandidatesFromDescriptor(desc) {
+    const candidates = [];
+    if (desc.role && (desc.accessible_name || desc.text)) {
+      candidates.push({
+        strategy: "role_name",
+        role: desc.role,
+        name: desc.accessible_name || desc.text || "",
+        match: "normalized"
+      });
+    }
+    if (desc.aria_label) {
+      candidates.push({
+        strategy: "aria_label",
+        aria_label: desc.aria_label,
+        match: "normalized"
+      });
+    }
+    if (desc.label_text) {
+      candidates.push({
+        strategy: "label_text",
+        label: desc.label_text,
+        match: "normalized"
+      });
+    }
+    if (desc.placeholder) {
+      candidates.push({
+        strategy: "placeholder",
+        placeholder: desc.placeholder,
+        match: "normalized"
+      });
+    }
+    if (desc.test_id) {
+      candidates.push({
+        strategy: "test_id",
+        test_id: desc.test_id,
+        match: "exact"
+      });
+    }
+    if (desc.text && desc.text.trim().length > 0) {
+      candidates.push({
+        strategy: "text",
+        text: desc.text.trim(),
+        match: "normalized"
+      });
+    }
+    if (desc.id) {
+      candidates.push({
+        strategy: "css",
+        selector: `#${desc.id}`
+      });
+    } else if (desc.tag && desc.name) {
+      candidates.push({
+        strategy: "css",
+        selector: `${desc.tag}[name="${desc.name}"]`
+      });
+    }
+    return candidates;
+  }
+  function generateRepairProposal(snapshot, options) {
+    const proposalId = `prop-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const matchResult = SemanticMatcher.match(
+      snapshot.expectedDescriptor,
+      snapshot.observedPool,
+      options
+    );
+    if (!matchResult.hasMatch || matchResult.topCandidates.length === 0) {
+      return {
+        id: proposalId,
+        graphId: snapshot.graphId,
+        baseVersion: snapshot.graphVersion,
+        targetVersion: snapshot.graphVersion + 1,
+        nodeId: snapshot.nodeId,
+        anchorId: snapshot.anchorId,
+        status: "aborted",
+        reason: REPAIR_ERROR_CODES.E_REPAIR_NO_CANDIDATE,
+        topCandidates: [],
+        created_at: (/* @__PURE__ */ new Date()).toISOString()
+      };
+    }
+    if (matchResult.isAmbiguous) {
+      return {
+        id: proposalId,
+        graphId: snapshot.graphId,
+        baseVersion: snapshot.graphVersion,
+        targetVersion: snapshot.graphVersion + 1,
+        nodeId: snapshot.nodeId,
+        anchorId: snapshot.anchorId,
+        status: "aborted",
+        reason: REPAIR_ERROR_CODES.E_REPAIR_AMBIGUOUS,
+        topCandidates: matchResult.topCandidates.map((c) => ({
+          descriptor: c.descriptor,
+          score: c.score,
+          margin: c.margin,
+          signals: c.signals,
+          proposedAnchorCandidates: buildAnchorCandidatesFromDescriptor(c.descriptor)
+        })),
+        created_at: (/* @__PURE__ */ new Date()).toISOString()
+      };
+    }
+    const repairCandidates = matchResult.topCandidates.map((c) => ({
+      descriptor: c.descriptor,
+      score: c.score,
+      margin: c.margin,
+      signals: c.signals,
+      proposedAnchorCandidates: buildAnchorCandidatesFromDescriptor(c.descriptor)
+    }));
+    return {
+      id: proposalId,
+      graphId: snapshot.graphId,
+      baseVersion: snapshot.graphVersion,
+      targetVersion: snapshot.graphVersion + 1,
+      nodeId: snapshot.nodeId,
+      anchorId: snapshot.anchorId,
+      status: "pending",
+      reason: "Proposta gerada com base em correspond\xEAncia sem\xE2ntica e estrutural.",
+      topCandidates: repairCandidates,
+      selectedCandidateIndex: 0,
+      created_at: (/* @__PURE__ */ new Date()).toISOString()
+    };
+  }
+
+  // lib/runner/driftHook.ts
+  function emitDriftEvent(options, classificationType, extraData) {
+    const classification = classifyDrift({
+      elementFound: classificationType !== "hard",
+      matchedCandidateIndex: options.matchedCandidateIndex,
+      semanticScore: extraData?.score
+    });
+    options.host.emit({
+      type: "drift",
+      runId: options.state.runId,
+      nodeId: options.nodeId,
+      timestamp: options.host.now(),
+      data: {
+        driftType: classification.type,
+        reason: classification.reason,
+        nodeType: options.nodeType,
+        ...extraData
+      }
+    });
+  }
+  async function attemptSoftHealOrRepair(options) {
+    const isReadNode = ["READ", "LOCATE", "WAIT"].includes(options.nodeType);
+    if (!options.driver.describeElements) {
+      emitDriftEvent(options, "hard");
+      return { healed: false };
+    }
+    const pool = await options.driver.describeElements();
+    const expectedDesc = {
+      accessible_name: options.anchor?.description,
+      text: options.anchor?.description
+    };
+    if (isReadNode) {
+      const match = SemanticMatcher.match(expectedDesc, pool, {
+        threshold: SOFT_HEAL_THRESHOLD,
+        marginThreshold: SOFT_HEAL_MARGIN
+      });
+      if (match.hasMatch && !match.isAmbiguous && match.bestCandidate) {
+        options.state.hasSelfHealed = true;
+        emitDriftEvent(options, "semantic", {
+          score: match.bestCandidate.score,
+          softHealed: true
+        });
+        return { healed: true };
+      }
+    }
+    emitDriftEvent(options, "hard");
+    const currentCtx = await options.driver.getFrameContext().catch(() => ({ url: "" }));
+    const snapshot = createDriftSnapshot({
+      graphId: options.graphId,
+      graphVersion: options.graphVersion,
+      nodeId: options.nodeId,
+      url: currentCtx.url || "",
+      expectedDescriptor: expectedDesc,
+      observedPool: pool
+    });
+    const proposal = generateRepairProposal(snapshot);
+    options.host.emit({
+      type: "repair_requested",
+      runId: options.state.runId,
+      nodeId: options.nodeId,
+      timestamp: options.host.now(),
+      data: {
+        proposal,
+        snapshot,
+        isWriteNode: !isReadNode
+      }
+    });
+    return { healed: false };
+  }
+
   // lib/runner/engine.ts
   var FATAL_RUNTIME_ERRORS = /* @__PURE__ */ new Set(["E_MAX_WRITES", "E_MAX_ITERATIONS", "E_HOST_NOT_ALLOWED", "E_GRAPH_INVALID", "E_ROW_AMBIGUOUS", "E_UPLOAD_TOO_LARGE"]);
   var SkillGraphRunner = class {
@@ -20919,12 +21577,42 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
             try {
               nextNodeId = await this.executeNodeDispatch(node2, nodeId, state, params, graph, graphRef);
               lastError = void 0;
+              emitDriftEvent({
+                nodeId,
+                nodeType: node2.type,
+                graphId: graph.identity.portal_id || graph.identity.name,
+                graphVersion: graph.identity.version,
+                state,
+                driver: this.driver,
+                host: this.host
+              }, "none");
               break;
             } catch (err) {
               lastError = err instanceof RunnerError ? err : new RunnerError("E_INTERRUPTED", err.message, nodeId);
-              if (FATAL_RUNTIME_ERRORS.has(lastError.code) || err?.code === "E_READBACK_MISMATCH" || attempt >= retryAttempts) {
+              if (lastError.code === "E_ANCHOR_NOT_FOUND") {
+                const driftRes = await attemptSoftHealOrRepair({
+                  nodeId,
+                  nodeType: node2.type,
+                  graphId: graph.identity.portal_id || graph.identity.name,
+                  graphVersion: graph.identity.version,
+                  anchor: "anchor" in node2 ? resolveAnchor(node2.anchor, { params, variables: state.variables }, graph.anchor_library) : void 0,
+                  state,
+                  driver: this.driver,
+                  host: this.host
+                });
+                if (driftRes.healed) {
+                  try {
+                    nextNodeId = await this.executeNodeDispatch(node2, nodeId, state, params, graph, graphRef);
+                    lastError = void 0;
+                    break;
+                  } catch {
+                  }
+                }
+              }
+              const isFatal = lastError ? FATAL_RUNTIME_ERRORS.has(lastError.code) : false;
+              if (isFatal || err?.code === "E_READBACK_MISMATCH" || attempt >= retryAttempts) {
                 const fallbackFail = "on_fail" in node2 ? node2.on_fail : void 0;
-                if (fallbackFail && err?.code !== "E_READBACK_MISMATCH" && !FATAL_RUNTIME_ERRORS.has(lastError.code)) {
+                if (fallbackFail && err?.code !== "E_READBACK_MISMATCH" && !isFatal) {
                   nextNodeId = fallbackFail;
                   break;
                 }
@@ -20945,7 +21633,15 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           state.updatedAt = this.host.now();
         }
         state.status = "completed";
-        this.host.emit({ type: "run_completed", runId: state.runId, timestamp: this.host.now(), data: { writesCount: state.writesCount } });
+        this.host.emit({
+          type: "run_completed",
+          runId: state.runId,
+          timestamp: this.host.now(),
+          data: {
+            writesCount: state.writesCount,
+            hasSelfHealed: Boolean(state.hasSelfHealed)
+          }
+        });
         return { state, success: true };
       } catch (err) {
         state.status = "failed";
@@ -21135,6 +21831,15 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     }
     async upload(options) {
       return this.sendRpc("upload", options);
+    }
+    async describeElements(selector) {
+      return this.sendRpc("describeElements", selector);
+    }
+    async highlight(selector, mode) {
+      return this.sendRpc("highlight", { selector, mode });
+    }
+    async clearHighlight() {
+      return this.sendRpc("clearHighlight", {});
     }
   };
 
@@ -21538,6 +22243,172 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     }
   };
 
+  // lib/repair/patch.ts
+  function validatePatchSafety(patch) {
+    const modifiedKeys = Object.keys(patch.modifiedNodes || {});
+    for (const nodeId of modifiedKeys) {
+      const mod = patch.modifiedNodes[nodeId];
+      if (!mod) continue;
+      const allowedModKeys = ["anchor_id", "candidates"];
+      for (const key of Object.keys(mod)) {
+        if (!allowedModKeys.includes(key)) {
+          throw new Error(
+            `${REPAIR_ERROR_CODES.E_REPAIR_FORBIDDEN_PATCH}: Proibido alterar campo restrito '${key}' no n\xF3 '${nodeId}'.`
+          );
+        }
+      }
+    }
+  }
+  function applyPatch(graph, patch) {
+    if (graph.identity.version !== patch.baseVersion) {
+      throw new Error(
+        `${REPAIR_ERROR_CODES.E_REPAIR_STALE}: Vers\xE3o base do grafo (${graph.identity.version}) n\xE3o corresponde \xE0 vers\xE3o do patch (${patch.baseVersion}).`
+      );
+    }
+    validatePatchSafety(patch);
+    const newGraph = JSON.parse(JSON.stringify(graph));
+    newGraph.identity.version = patch.targetVersion;
+    newGraph.provenance.has_self_healed = true;
+    newGraph.provenance.parent_version = patch.baseVersion;
+    newGraph.provenance.updated_at = (/* @__PURE__ */ new Date()).toISOString();
+    for (const [nodeId, mod] of Object.entries(patch.modifiedNodes)) {
+      const targetNode = newGraph.nodes[nodeId];
+      if (!targetNode) continue;
+      if ("anchor" in targetNode && targetNode.anchor) {
+        if (typeof targetNode.anchor === "object" && "candidates" in targetNode.anchor && mod.candidates) {
+          targetNode.anchor.candidates = mod.candidates;
+        } else if (mod.anchor_id) {
+          targetNode.anchor = { ref: mod.anchor_id };
+        }
+      }
+    }
+    if (patch.modifiedAnchorLibrary && newGraph.anchor_library) {
+      for (const [anchorId, mod] of Object.entries(patch.modifiedAnchorLibrary)) {
+        if (newGraph.anchor_library[anchorId]) {
+          newGraph.anchor_library[anchorId].candidates = mod.candidates;
+        }
+      }
+    }
+    const validationResult = SkillGraphV2Schema.safeParse(newGraph);
+    if (!validationResult.success) {
+      throw new Error(
+        `${REPAIR_ERROR_CODES.E_REPAIR_VERIFY_FAILED}: O grafo reparado violou o contrato v2.0: ${validationResult.error.message}`
+      );
+    }
+    return validationResult.data;
+  }
+
+  // lib/repair/graphDiff.ts
+  function diffGraphs(oldGraph, newGraph) {
+    const modifiedNodes = [];
+    for (const [nodeId, newNode] of Object.entries(newGraph.nodes)) {
+      const oldNode = oldGraph.nodes[nodeId];
+      if (!oldNode) continue;
+      const changes = [];
+      if ("anchor" in newNode && "anchor" in oldNode) {
+        const oldAnchorStr = JSON.stringify(oldNode.anchor);
+        const newAnchorStr = JSON.stringify(newNode.anchor);
+        if (oldAnchorStr !== newAnchorStr) {
+          changes.push({
+            field: "anchor",
+            oldValue: oldNode.anchor,
+            newValue: newNode.anchor
+          });
+        }
+      }
+      if (changes.length > 0) {
+        modifiedNodes.push({ nodeId, changes });
+      }
+    }
+    const modifiedAnchorLibrary = [];
+    if (oldGraph.anchor_library && newGraph.anchor_library) {
+      for (const [anchorId, newAnchor] of Object.entries(newGraph.anchor_library)) {
+        const oldAnchor = oldGraph.anchor_library[anchorId];
+        if (!oldAnchor) continue;
+        if (JSON.stringify(oldAnchor) !== JSON.stringify(newAnchor)) {
+          modifiedAnchorLibrary.push(anchorId);
+        }
+      }
+    }
+    return {
+      graphId: newGraph.identity.name,
+      oldVersion: oldGraph.identity.version,
+      newVersion: newGraph.identity.version,
+      modifiedNodes,
+      modifiedAnchorLibrary,
+      metadataChanges: {
+        hasSelfHealed: newGraph.provenance.has_self_healed,
+        parentVersion: newGraph.provenance.parent_version
+      }
+    };
+  }
+
+  // lib/repair/health.ts
+  function createInitialHealthMetrics(graphId) {
+    return {
+      graphId,
+      totalExecutions: 0,
+      successfulExecutions: 0,
+      failedExecutions: 0,
+      softHealsCount: 0,
+      manualRepairsCount: 0,
+      lastExecutionAt: null,
+      lastRepairAt: null,
+      status: "healthy"
+    };
+  }
+  function computeGraphHealthStatus(metrics) {
+    if (metrics.totalExecutions === 0) {
+      return "healthy";
+    }
+    const successRate = metrics.successfulExecutions / metrics.totalExecutions;
+    if (successRate < 0.6 || metrics.failedExecutions >= 3 && successRate < 0.7) {
+      return "broken";
+    }
+    if (successRate < 0.85 || metrics.softHealsCount > 0) {
+      return "degraded";
+    }
+    return "healthy";
+  }
+  function recordExecutionSuccess(metrics, timestamp = (/* @__PURE__ */ new Date()).toISOString()) {
+    const updated = {
+      ...metrics,
+      totalExecutions: metrics.totalExecutions + 1,
+      successfulExecutions: metrics.successfulExecutions + 1,
+      lastExecutionAt: timestamp
+    };
+    updated.status = computeGraphHealthStatus(updated);
+    return updated;
+  }
+  function recordExecutionFailure(metrics, timestamp = (/* @__PURE__ */ new Date()).toISOString()) {
+    const updated = {
+      ...metrics,
+      totalExecutions: metrics.totalExecutions + 1,
+      failedExecutions: metrics.failedExecutions + 1,
+      lastExecutionAt: timestamp
+    };
+    updated.status = computeGraphHealthStatus(updated);
+    return updated;
+  }
+  function recordSoftHeal(metrics, timestamp = (/* @__PURE__ */ new Date()).toISOString()) {
+    const updated = {
+      ...metrics,
+      softHealsCount: metrics.softHealsCount + 1,
+      lastExecutionAt: timestamp
+    };
+    updated.status = computeGraphHealthStatus(updated);
+    return updated;
+  }
+  function recordManualRepair(metrics, timestamp = (/* @__PURE__ */ new Date()).toISOString()) {
+    const updated = {
+      ...metrics,
+      manualRepairsCount: metrics.manualRepairsCount + 1,
+      lastRepairAt: timestamp
+    };
+    updated.status = computeGraphHealthStatus(updated);
+    return updated;
+  }
+
   // lib/runner-ext/workerEntry.ts
   function createExtensionHost(options) {
     return {
@@ -21602,6 +22473,16 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     SkillGraphV2Schema,
     validateGraph,
     createExtensionHost,
+    applyPatch,
+    generateRepairProposal,
+    createDriftSnapshot,
+    diffGraphs,
+    createInitialHealthMetrics,
+    recordExecutionSuccess,
+    recordExecutionFailure,
+    recordSoftHeal,
+    recordManualRepair,
+    computeGraphHealthStatus,
     syntheticGraphs: {
       read_roster: read_roster_default,
       lancar_falta: lancar_falta_default,
