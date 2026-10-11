@@ -14,6 +14,8 @@ import { executeNavigateNode, executeLocateNode } from './nodes/navigate'
 import { executeLoopNode } from './nodes/loop'
 import { executeBranchNode, executeWaitNode } from './nodes/branch'
 import { executeCheckpointNode, executeHandoffNode } from './nodes/checkpoint'
+import { executeDownloadNode } from './nodes/download'
+import { executeUploadNode } from './nodes/upload'
 import { executeUnsupportedNode } from './nodes/unsupported'
 
 export interface GraphRunnerOptions {
@@ -21,7 +23,7 @@ export interface GraphRunnerOptions {
   initialVariables?: Record<string, any>
 }
 
-const FATAL_RUNTIME_ERRORS = new Set(['E_MAX_WRITES', 'E_MAX_ITERATIONS', 'E_HOST_NOT_ALLOWED', 'E_GRAPH_INVALID', 'E_ROW_AMBIGUOUS'])
+const FATAL_RUNTIME_ERRORS = new Set(['E_MAX_WRITES', 'E_MAX_ITERATIONS', 'E_HOST_NOT_ALLOWED', 'E_GRAPH_INVALID', 'E_ROW_AMBIGUOUS', 'E_UPLOAD_TOO_LARGE'])
 
 export class SkillGraphRunner {
   constructor(
@@ -89,6 +91,9 @@ export class SkillGraphRunner {
         const node = graph.nodes[nodeId]
         if (!node) throw new RunnerError('E_GRAPH_INVALID', `Nó '${nodeId}' não encontrado no grafo`, nodeId)
 
+        const currentCtx = await this.driver.getFrameContext()
+        checkAllowedHost(currentCtx.host, graph.safety.allowed_hosts)
+
         await this.host.beforeNode(nodeId, state)
         this.host.emit({ type: 'node_started', runId: state.runId, nodeId, timestamp: this.host.now(), data: { type: node.type, label: node.label } })
 
@@ -154,7 +159,17 @@ export class SkillGraphRunner {
         verified_by: 'none',
         at: new Date(this.host.now()).toISOString(),
       })
-      this.host.emit({ type: 'run_failed', runId: state.runId, timestamp: this.host.now(), data: { errorCode: runnerError.code, message: runnerError.message } })
+      this.host.emit({
+        type: 'run_failed',
+        runId: state.runId,
+        timestamp: this.host.now(),
+        data: {
+          errorCode: runnerError.code,
+          message: runnerError.message,
+          writesCount: state.writesCount,
+          partialWrites: state.writesCount > 0,
+        },
+      })
       return { state, success: false, error: runnerError }
     }
   }
@@ -204,8 +219,9 @@ export class SkillGraphRunner {
           return 'completed'
         })
       case 'DOWNLOAD':
+        return executeDownloadNode(node, nodeId, state, params, this.driver, this.host, graph.safety.allowed_hosts, graph.anchor_library)
       case 'UPLOAD':
-        return executeUnsupportedNode(node)
+        return executeUploadNode(node, nodeId, state, params, this.driver, this.host, graph.safety.allowed_hosts, graph.safety.max_writes_per_run, graph.anchor_library)
       default:
         throw new RunnerError('E_GRAPH_INVALID', `Tipo de nó desconhecido: ${node.type}`, nodeId)
     }

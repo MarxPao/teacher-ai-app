@@ -24,6 +24,10 @@ export const RUNTIME_ERROR_CODES = [
   'E_TIMEOUT',
   'E_NODE_UNSUPPORTED',
   'E_HANDOFF_TIMEOUT',
+  'E_DOWNLOAD_FAILED',
+  'E_UPLOAD_FAILED',
+  'E_UPLOAD_TOO_LARGE',
+  'E_PERMISSION_DENIED',
   'E_INTERRUPTED',
 ] as const
 
@@ -154,6 +158,23 @@ export interface Driver {
   getFrameContext(): Promise<{ url: string; host: string; frameId: number }>
   matchFingerprint(fp: Fingerprint): Promise<{ matched: boolean; details: Record<string, boolean> }>
   listFrames(): Promise<Array<{ frameId: number; url: string; host: string }>>
+  download?(options: DownloadOptions): Promise<{ success: boolean; filename: string; mimeType?: string; sizeBytes?: number }>
+  upload?(options: UploadOptions): Promise<{ success: boolean }>
+}
+
+export interface DownloadOptions {
+  trigger: ResolvedAnchor
+  timeoutMs?: number
+  expect?: {
+    mime_hint?: string
+    filename_pattern?: string
+  }
+}
+
+export interface UploadOptions {
+  input: ResolvedAnchor
+  source: any
+  maxSizeBytes?: number
 }
 
 // ─── Condição Resolvida ─────────────────────────────────────────────────────
@@ -236,6 +257,10 @@ export type RunEventType =
   | 'checkpoint_resolved'
   | 'handoff_started'
   | 'handoff_resumed'
+  | 'download_started'
+  | 'download_completed'
+  | 'upload_started'
+  | 'upload_completed'
   | 'repair_requested'
   | 'run_completed'
   | 'run_failed'

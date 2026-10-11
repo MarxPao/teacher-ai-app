@@ -67,8 +67,10 @@ class FakeDriver implements Driver {
     return { success: true }
   }
 
+  public conditionSatisfied = true
+
   async evaluateCondition(cond: ResolvedCondition) {
-    return { satisfied: true }
+    return { satisfied: this.conditionSatisfied }
   }
 
   async scroll(options: ScrollOptions) {
@@ -89,6 +91,14 @@ class FakeDriver implements Driver {
 
   async listFrames() {
     return [{ frameId: 0, url: this.currentUrl, host: this.currentHost }]
+  }
+
+  async download(options: any) {
+    return { success: true, filename: 'boletim_turma.csv', mimeType: 'text/csv', sizeBytes: 1024 }
+  }
+
+  async upload(options: any) {
+    return { success: true }
   }
 }
 
@@ -676,5 +686,349 @@ describe('SkillGraphRunner — Testes de Fronteira Determinísticos (T2.4)', () 
     expect(error?.code).toBe('E_READBACK_MISMATCH')
     // Exatamente 2 chamadas: 1 tentativa física + 1 reversão (sem repetir os 3 retries após mutação)
     expect(driver.writeHistory).toHaveLength(2)
+  })
+})
+
+describe('Fase 4: Capacidades do Engine por Arquétipo (T4.4)', () => {
+  it('1. DOWNLOAD com host permitido vs não permitido', async () => {
+    const driver = new FakeDriver()
+    const host = new FakeHost()
+    const runner = new SkillGraphRunner(driver, host)
+
+    const graph = createBaseGraph({
+      safety: { side_effect_level: 'read', writes_require_checkpoint: true, max_writes_per_run: 5, rate_limit: { min_delay_ms: 0, jitter_ms: 0 }, allowed_hosts: ['localhost:8899'] },
+      entry_node: 'dl',
+      nodes: {
+        dl: {
+          label: 'Download Relatório',
+          type: 'DOWNLOAD',
+          trigger: { candidates: [{ strategy: 'css', selector: '#btn-dl' }], description: 'Botão DL' },
+          expect: { filename_pattern: 'boletim_.*\\.csv' },
+          into: 'arquivo_baixado',
+          retry: { max_attempts: 1, backoff_ms: 0 },
+          timeout_ms: 5000,
+          postconditions: [],
+          on_success: '$end',
+          on_fail: '$abort',
+        },
+      },
+    })
+
+    const resOk = await runner.run(graph)
+    expect(resOk.success).toBe(true)
+    expect(resOk.state.variables['arquivo_baixado']?.filename).toBe('boletim_turma.csv')
+
+    driver.currentHost = 'evil.com'
+    await expect(runner.run(graph)).rejects.toThrow()
+  })
+
+  it('2. UPLOAD só em host permitido e incrementa writesCount', async () => {
+    const driver = new FakeDriver()
+    const host = new FakeHost()
+    const runner = new SkillGraphRunner(driver, host)
+
+    const graph = createBaseGraph({
+      safety: { side_effect_level: 'write', writes_require_checkpoint: true, max_writes_per_run: 5, rate_limit: { min_delay_ms: 0, jitter_ms: 0 }, allowed_hosts: ['localhost:8899'] },
+      entry_node: 'chk',
+      nodes: {
+        chk: {
+          label: 'Check',
+          type: 'CHECKPOINT',
+          summary: [{ label: 'Arquivo', value: { lit: 'anexo.csv' } }],
+          scope: 'once',
+          on_reject: '$abort',
+          retry: { max_attempts: 1, backoff_ms: 0 },
+          timeout_ms: 5000,
+          postconditions: [],
+          on_success: 'up',
+          on_fail: '$abort',
+        },
+        up: {
+          label: 'Upload Comprovante',
+          type: 'UPLOAD',
+          input: { candidates: [{ strategy: 'css', selector: '#file' }], description: 'Input File' },
+          source: { lit: 'conteudo valido' },
+          retry: { max_attempts: 1, backoff_ms: 0 },
+          timeout_ms: 5000,
+          postconditions: [],
+          on_success: '$end',
+          on_fail: '$abort',
+        },
+      },
+    })
+
+    const resOk = await runner.run(graph)
+    expect(resOk.success).toBe(true)
+    expect(resOk.state.writesCount).toBe(1)
+
+    driver.currentHost = 'unauthorized.com'
+    await expect(runner.run(graph)).rejects.toThrow()
+  })
+
+  it('3. HANDOFF_HUMAN falha por timeout se desafio não for resolvido', async () => {
+    const driver = new FakeDriver()
+    driver.conditionSatisfied = false
+    const host = new FakeHost()
+    const runner = new SkillGraphRunner(driver, host)
+
+    const graph = createBaseGraph({
+      safety: { side_effect_level: 'read', writes_require_checkpoint: true, max_writes_per_run: 5, rate_limit: { min_delay_ms: 0, jitter_ms: 0 }, allowed_hosts: ['localhost:8899'] },
+      entry_node: 'hoff',
+      nodes: {
+        hoff: {
+          label: 'Desafio Humano',
+          type: 'HANDOFF_HUMAN',
+          reason: 'captcha',
+          message: 'Resolva o captcha',
+          resume_when: { op: 'visible', anchor: { candidates: [{ strategy: 'css', selector: '#ok' }], description: 'Ok' } },
+          timeout_ms: 2000,
+          retry: { max_attempts: 1, backoff_ms: 0 },
+          postconditions: [],
+          on_success: '$end',
+          on_fail: '$abort',
+        },
+      },
+    })
+
+    const { success, error } = await runner.run(graph)
+    expect(success).toBe(false)
+    expect(error?.code).toBe('E_HANDOFF_TIMEOUT')
+  })
+
+  it('4. SSO com redirecionamento para host fora de allowed_hosts', async () => {
+    const driver = new FakeDriver()
+    const host = new FakeHost()
+    const runner = new SkillGraphRunner(driver, host)
+
+    const graph = createBaseGraph({
+      safety: { side_effect_level: 'read', writes_require_checkpoint: true, max_writes_per_run: 5, rate_limit: { min_delay_ms: 0, jitter_ms: 0 }, allowed_hosts: ['localhost:8899'] },
+      entry_node: 'sso_click',
+      nodes: {
+        sso_click: {
+          label: 'Clique SSO',
+          type: 'CLICK',
+          anchor: { candidates: [{ strategy: 'css', selector: '#btn-sso' }], description: 'SSO' },
+          is_submit_action: false,
+          expect_navigation: true,
+          retry: { max_attempts: 1, backoff_ms: 0 },
+          timeout_ms: 5000,
+          postconditions: [],
+          on_success: 'sso_next',
+          on_fail: '$abort',
+        },
+        sso_next: {
+          label: 'Passo seguinte pós-redirect',
+          type: 'WAIT',
+          ms: 100,
+          retry: { max_attempts: 1, backoff_ms: 0 },
+          timeout_ms: 5000,
+          postconditions: [],
+          on_success: '$end',
+          on_fail: '$abort',
+        },
+      },
+    })
+
+    let originalClick = driver.click.bind(driver)
+    driver.click = async (target, opts) => {
+      driver.currentHost = 'malicious-idp.com'
+      return originalClick(target, opts)
+    }
+
+    const { success, error } = await runner.run(graph)
+    expect(success).toBe(false)
+    expect(error?.code).toBe('E_HOST_NOT_ALLOWED')
+  })
+
+  it('5. Wizard com falha na etapa 3 após escrita emite alerta de escrita parcial', async () => {
+    const driver = new FakeDriver()
+    const host = new FakeHost()
+    const runner = new SkillGraphRunner(driver, host)
+
+    const graph = createBaseGraph({
+      safety: { side_effect_level: 'write', writes_require_checkpoint: true, max_writes_per_run: 5, rate_limit: { min_delay_ms: 0, jitter_ms: 0 }, allowed_hosts: ['localhost:8899'] },
+      entry_node: 'chk',
+      nodes: {
+        chk: {
+          label: 'Check',
+          type: 'CHECKPOINT',
+          summary: [{ label: 'Val', value: { lit: '9.0' } }],
+          scope: 'once',
+          on_reject: '$abort',
+          retry: { max_attempts: 1, backoff_ms: 0 },
+          timeout_ms: 5000,
+          postconditions: [],
+          on_success: 'step2_write',
+          on_fail: '$abort',
+        },
+        step2_write: {
+          label: 'Etapa 2 - Escrita',
+          type: 'WRITE',
+          anchor: { candidates: [{ strategy: 'css', selector: '#in' }], description: 'Input' },
+          value: { lit: '9.0' },
+          method: 'set_value_dispatch',
+          semantic: 'grade',
+          read_back: true,
+          retry: { max_attempts: 1, backoff_ms: 0 },
+          timeout_ms: 5000,
+          postconditions: [],
+          on_success: 'step3_fail',
+          on_fail: '$abort',
+        },
+        step3_fail: {
+          label: 'Etapa 3 - Botão Inexistente',
+          type: 'CLICK',
+          anchor: { candidates: [{ strategy: 'css', selector: '#missing-btn' }], description: 'Botão' },
+          is_submit_action: true,
+          retry: { max_attempts: 1, backoff_ms: 0 },
+          timeout_ms: 5000,
+          postconditions: [],
+          on_success: '$end',
+          on_fail: '$abort',
+        },
+      },
+    })
+
+    driver.click = async (target, opts) => {
+      if (target && 'anchor' in target && target.anchor.description === 'Botão') {
+        throw new RunnerError('E_ANCHOR_NOT_FOUND', 'Botão inexistente', 'step3_fail')
+      }
+      return { success: true }
+    }
+
+    const { success, error, state } = await runner.run(graph)
+    expect(success).toBe(false)
+    expect(state.writesCount).toBe(1)
+    const failedEvent = host.events.find(e => e.type === 'run_failed')
+    expect(failedEvent?.data?.partialWrites).toBe(true)
+    expect(failedEvent?.data?.writesCount).toBe(1)
+  })
+
+  it('6. Formulário estrito com pós-condição validada', async () => {
+    const driver = new FakeDriver()
+    driver.conditionSatisfied = true
+    const host = new FakeHost()
+    const runner = new SkillGraphRunner(driver, host)
+
+    const graph = createBaseGraph({
+      safety: { side_effect_level: 'write', writes_require_checkpoint: true, max_writes_per_run: 5, rate_limit: { min_delay_ms: 0, jitter_ms: 0 }, allowed_hosts: ['localhost:8899'] },
+      entry_node: 'chk',
+      nodes: {
+        chk: {
+          label: 'Check',
+          type: 'CHECKPOINT',
+          summary: [{ label: 'Val', value: { lit: '8.5' } }],
+          scope: 'once',
+          on_reject: '$abort',
+          retry: { max_attempts: 1, backoff_ms: 0 },
+          timeout_ms: 5000,
+          postconditions: [],
+          on_success: 'wr',
+          on_fail: '$abort',
+        },
+        wr: {
+          label: 'Escrita estrita',
+          type: 'WRITE',
+          anchor: { candidates: [{ strategy: 'css', selector: '#in' }], description: 'Input' },
+          value: { lit: '8.5' },
+          method: 'set_value_dispatch',
+          semantic: 'grade',
+          read_back: true,
+          retry: { max_attempts: 1, backoff_ms: 0 },
+          timeout_ms: 5000,
+          postconditions: [
+            { op: 'value_equals', anchor: { candidates: [{ strategy: 'css', selector: '#in' }], description: 'Input' }, value: { lit: '8.5' } }
+          ],
+          on_success: '$end',
+          on_fail: '$abort',
+        },
+      },
+    })
+
+    const res = await runner.run(graph)
+    expect(res.success).toBe(true)
+
+    driver.conditionSatisfied = false
+    const resFail = await runner.run(graph)
+    expect(resFail.success).toBe(false)
+    expect(resFail.error?.code).toBe('E_POSTCONDITION_FAILED')
+  })
+
+  it('7. Scroll infinito com scroll_until_found no LOCATE', async () => {
+    const driver = new FakeDriver()
+    const host = new FakeHost()
+    const runner = new SkillGraphRunner(driver, host)
+    let scrollCalled = false
+    driver.scroll = async () => {
+      scrollCalled = true
+      return { found: true }
+    }
+
+    const graph = createBaseGraph({
+      safety: { side_effect_level: 'read', writes_require_checkpoint: true, max_writes_per_run: 5, rate_limit: { min_delay_ms: 0, jitter_ms: 0 }, allowed_hosts: ['localhost:8899'] },
+      entry_node: 'loc',
+      nodes: {
+        loc: {
+          label: 'Localizar com scroll infinito',
+          type: 'LOCATE',
+          anchor: { candidates: [{ strategy: 'css', selector: '#item-15' }], description: 'Item 15' },
+          mode: 'scroll_until_found',
+          retry: { max_attempts: 1, backoff_ms: 0 },
+          timeout_ms: 5000,
+          postconditions: [],
+          on_success: '$end',
+          on_fail: '$abort',
+        },
+      },
+    })
+
+    const res = await runner.run(graph)
+    expect(res.success).toBe(true)
+    expect(scrollCalled).toBe(true)
+  })
+
+  it('8. Limite de tamanho de upload rejeita payload > 5MB', async () => {
+    const driver = new FakeDriver()
+    const host = new FakeHost()
+    const runner = new SkillGraphRunner(driver, host)
+
+    const payloadGrande = 'X'.repeat(6 * 1024 * 1024)
+
+    const graph = createBaseGraph({
+      safety: { side_effect_level: 'write', writes_require_checkpoint: true, max_writes_per_run: 5, rate_limit: { min_delay_ms: 0, jitter_ms: 0 }, allowed_hosts: ['localhost:8899'] },
+      params: {
+        payload_file: { type: 'string', required: true, pii: false, description: 'Payload' },
+      },
+      entry_node: 'chk',
+      nodes: {
+        chk: {
+          label: 'Check',
+          type: 'CHECKPOINT',
+          summary: [{ label: 'Arquivo', value: { lit: 'grande.csv' } }],
+          scope: 'once',
+          on_reject: '$abort',
+          retry: { max_attempts: 1, backoff_ms: 0 },
+          timeout_ms: 5000,
+          postconditions: [],
+          on_success: 'up',
+          on_fail: '$abort',
+        },
+        up: {
+          label: 'Upload Gigante',
+          type: 'UPLOAD',
+          input: { candidates: [{ strategy: 'css', selector: '#file' }], description: 'Input File' },
+          source: { param: 'payload_file' },
+          retry: { max_attempts: 1, backoff_ms: 0 },
+          timeout_ms: 5000,
+          postconditions: [],
+          on_success: '$end',
+          on_fail: '$abort',
+        },
+      },
+    })
+
+    const { success, error } = await runner.run(graph, { payload_file: payloadGrande })
+    expect(success).toBe(false)
+    expect(error?.code).toBe('E_UPLOAD_TOO_LARGE')
   })
 })
