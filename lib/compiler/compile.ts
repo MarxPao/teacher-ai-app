@@ -11,11 +11,14 @@ import { createParameterContext } from './stages/parametrize'
 import { assembleGraph } from './stages/assemble'
 import { buildSafetyConfig } from './stages/safety'
 import { buildFingerprint } from './stages/fingerprint'
+import { scrubGraph } from './scrub'
+import type { PiiRegistry } from '../recorder/registry'
 import { CompilerError, type CompilerReport } from './report'
 
 export interface CompileOptions {
   clock?: () => string
   compilerVersion?: string
+  piiRegistry?: PiiRegistry
 }
 
 export interface CompileResult {
@@ -136,6 +139,11 @@ export function compile(
       'E_COMPILED_GRAPH_INVALID',
       `O grafo compilado falhou nas invariantes estáticas de validateGraph: ${errorMsgs}`
     )
+  }
+
+  // 8. Varredura Anti-PII com PiiRegistry
+  if (options?.piiRegistry) {
+    scrubGraph(graph, options.piiRegistry)
   }
 
   const allWarnings = [

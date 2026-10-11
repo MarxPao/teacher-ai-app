@@ -13,7 +13,8 @@
     "scan:mocks": "node scripts/scan-mocks.mjs",
     "harness:build": "esbuild tools/runner-harness/harness.ts --bundle --outfile=tools/runner-harness/dist/harness.bundle.js --format=esm --sourcemap",
     "harness": "npx tsx scripts/serve-harness.ts",
-    "build:ext": "npx tsx scripts/build-extension-runner.ts"
+    "build:ext": "npx tsx scripts/build-extension-runner.ts",
+    "compile:trace": "npx tsx scripts/compile-trace.ts"
   },
   "dependencies": {
     "@tailwindcss/typography": "^0.5.19",
