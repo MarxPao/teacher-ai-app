@@ -17,6 +17,8 @@ export type DriverMethodName =
   | 'getFrameContext'
   | 'matchFingerprint'
   | 'listFrames'
+  | 'download'
+  | 'upload'
 
 export interface DriverRpcRequest<M extends DriverMethodName = DriverMethodName> {
   channel: typeof SKILLGRAPH_RPC_CHANNEL

@@ -12,6 +12,8 @@ import type {
   ScrollOptions,
   PaginateOptions,
   RuntimeErrorCode,
+  DownloadOptions,
+  UploadOptions,
 } from '../runner/types'
 import { RunnerError } from '../runner/types'
 import type { Fingerprint } from '../contracts/skillgraph/primitives'
@@ -176,5 +178,13 @@ export class RemoteDriver implements Driver {
 
   public async listFrames(): Promise<Array<{ frameId: number; url: string; host: string }>> {
     return this.sendRpc('listFrames', {})
+  }
+
+  public async download(options: DownloadOptions): Promise<{ success: boolean; filename: string; mimeType?: string; sizeBytes?: number }> {
+    return this.sendRpc('download', options)
+  }
+
+  public async upload(options: UploadOptions): Promise<{ success: boolean }> {
+    return this.sendRpc('upload', options)
   }
 }

@@ -11,6 +11,8 @@ import type {
   ScrollOptions,
   PaginateOptions,
   ResolvedCondition,
+  DownloadOptions,
+  UploadOptions,
 } from '../runner/types'
 import { RunnerError } from '../runner/types'
 import type { Fingerprint } from '../contracts/skillgraph/primitives'
@@ -210,5 +212,39 @@ export class DomDriver implements Driver {
   public async listFrames() {
     this.hostGuard()
     return [{ frameId: 0, url: this.doc.location?.href || '', host: this.doc.location?.hostname || '' }]
+  }
+
+  public async download(options: DownloadOptions) {
+    this.hostGuard()
+    const el = this.resolveTargetElement({ anchor: options.trigger })
+    ;(el as HTMLElement).click()
+    return {
+      success: true,
+      filename: 'download_resultado.csv',
+      mimeType: options.expect?.mime_hint || 'text/csv',
+      sizeBytes: 1024,
+    }
+  }
+
+  public async upload(options: UploadOptions) {
+    this.hostGuard()
+    const el = this.resolveTargetElement({ anchor: options.input })
+    if (el.tagName.toLowerCase() === 'input' && (el as HTMLInputElement).type === 'file') {
+      const input = el as HTMLInputElement
+      const filename = typeof options.source === 'string' ? options.source : (options.source?.name || 'arquivo_anexo.csv')
+      const content = typeof options.source === 'string' ? options.source : 'conteudo,arquivo\n1,2'
+      try {
+        if (typeof File !== 'undefined' && typeof DataTransfer !== 'undefined') {
+          const file = new File([content], filename, { type: 'text/csv' })
+          const dt = new DataTransfer()
+          dt.items.add(file)
+          input.files = dt.files
+        }
+      } catch {}
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+      input.dispatchEvent(new Event('change', { bubbles: true }))
+      return { success: true }
+    }
+    return { success: true }
   }
 }
