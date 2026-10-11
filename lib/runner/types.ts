@@ -30,6 +30,7 @@ export const RUNTIME_ERROR_CODES = [
   'E_UPLOAD_TOO_LARGE',
   'E_PERMISSION_DENIED',
   'E_INTERRUPTED',
+  'E_AUDIT_UNAVAILABLE',
 ] as const
 
 export type RuntimeErrorCode = (typeof RUNTIME_ERROR_CODES)[number]

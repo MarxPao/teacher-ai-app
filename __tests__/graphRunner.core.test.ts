@@ -117,7 +117,12 @@ class FakeHost implements Host {
     return true
   }
 
+  public shouldFailAudit = false
+
   async audit(entry: AuditEntry) {
+    if (this.shouldFailAudit) {
+      throw new Error('Falha no subsistema de auditoria')
+    }
     this.audits.push(entry)
   }
 
@@ -1030,5 +1035,93 @@ describe('Fase 4: Capacidades do Engine por Arquétipo (T4.4)', () => {
     const { success, error } = await runner.run(graph, { payload_file: payloadGrande })
     expect(success).toBe(false)
     expect(error?.code).toBe('E_UPLOAD_TOO_LARGE')
+  })
+
+  describe('Auditoria Write-Ahead e Resiliência Local (Fase 6)', () => {
+    function createWriteGraph(): SkillGraphV2 {
+      return createBaseGraph({
+        safety: {
+          side_effect_level: 'write',
+          writes_require_checkpoint: true,
+          max_writes_per_run: 5,
+          rate_limit: { min_delay_ms: 0, jitter_ms: 0 },
+          allowed_hosts: ['localhost:8899'],
+        },
+        entry_node: 'chk',
+        nodes: {
+          chk: {
+            label: 'Check',
+            type: 'CHECKPOINT',
+            summary: [{ label: 'Item', value: { lit: 'valor' } }],
+            scope: 'once',
+            on_reject: '$abort',
+            retry: { max_attempts: 1, backoff_ms: 0 },
+            timeout_ms: 5000,
+            postconditions: [],
+            on_success: 'wr',
+            on_fail: '$abort',
+          },
+          wr: {
+            label: 'Escrever Nota',
+            type: 'WRITE',
+            anchor: { candidates: [{ strategy: 'css', selector: '#grade-input' }], description: 'Campo de Nota' },
+            value: { lit: '10.0' },
+            method: 'set_value_dispatch',
+            semantic: 'grade',
+            read_back: true,
+            timeout_ms: 5000,
+            retry: { max_attempts: 1, backoff_ms: 0 },
+            postconditions: [],
+            on_success: '$end',
+            on_fail: '$abort',
+          },
+        },
+      })
+    }
+
+    it('1. Ack ausente ou falha de auditoria aborta com E_AUDIT_UNAVAILABLE e zero escritas no DOM', async () => {
+      const driver = new FakeDriver()
+      const host = new FakeHost()
+      host.shouldFailAudit = true
+      const runner = new SkillGraphRunner(driver, host)
+
+      const graph = createWriteGraph()
+      const { success, error } = await runner.run(graph, {})
+
+      expect(success).toBe(false)
+      expect(error?.code).toBe('E_AUDIT_UNAVAILABLE')
+      expect(driver.writeHistory).toHaveLength(0)
+    })
+
+    it('2. Ack de auditoria persistido com sucesso permite escrita e registra write-ahead', async () => {
+      const driver = new FakeDriver()
+      const host = new FakeHost()
+      host.shouldFailAudit = false
+      const runner = new SkillGraphRunner(driver, host)
+
+      const graph = createWriteGraph()
+      const { success, error } = await runner.run(graph, {})
+
+      expect(success).toBe(true)
+      expect(error).toBeUndefined()
+      expect(driver.writeHistory).toHaveLength(1)
+      expect(driver.writeHistory[0].value).toBe('10.0')
+      expect(host.audits.length).toBeGreaterThanOrEqual(2)
+      expect(host.audits[0].verified_by).toBe('none')
+      expect(host.audits[1].verified_by).toBe('read_back')
+    })
+
+    it('3. Modo dry-run não executa escrita física no DOM mesmo com auditoria indisponível', async () => {
+      const driver = new FakeDriver()
+      const host = new FakeHost()
+      host.shouldFailAudit = true
+      const runner = new SkillGraphRunner(driver, host)
+
+      const graph = createWriteGraph()
+      const { success } = await runner.run(graph, {}, { dryRun: true })
+
+      expect(success).toBe(true)
+      expect(driver.writeHistory).toHaveLength(0)
+    })
   })
 })

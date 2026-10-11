@@ -4,3 +4,4 @@
 export * from './protocol'
 export * from './remoteDriver'
 export * from './contentAdapter'
+export * from './nativeClient'

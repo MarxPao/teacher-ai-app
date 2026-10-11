@@ -189,17 +189,19 @@ export class SkillGraphRunner {
     } catch (err: any) {
       state.status = 'failed'
       const runnerError = err instanceof RunnerError ? err : new RunnerError('E_INTERRUPTED', err.message)
-      await this.host.audit({
-        run_id: state.runId,
-        graph: graphRef,
-        node_id: state.currentNodeId ?? 'unknown',
-        action: 'abort',
-        status: 'failed',
-        error_code: runnerError.code,
-        target_ref: runnerError.nodeId,
-        verified_by: 'none',
-        at: new Date(this.host.now()).toISOString(),
-      })
+      try {
+        await this.host.audit({
+          run_id: state.runId,
+          graph: graphRef,
+          node_id: state.currentNodeId ?? 'unknown',
+          action: 'abort',
+          status: 'failed',
+          error_code: runnerError.code,
+          target_ref: runnerError.nodeId,
+          verified_by: 'none',
+          at: new Date(this.host.now()).toISOString(),
+        })
+      } catch {}
       this.host.emit({
         type: 'run_failed',
         runId: state.runId,

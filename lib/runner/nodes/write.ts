@@ -91,18 +91,22 @@ export async function executeWriteNode(
 
   // 4. Semântica de Dry-Run (não muta o DOM, relata "escreveria X -> Y")
   if (state.dryRun) {
-    await host.audit({
-      run_id: state.runId,
-      graph: options.graphRef ?? { portal_id: 'unknown', task_id: 'unknown', version: 1 },
-      node_id: nodeId,
-      action: 'write',
-      status: 'success',
-      target_ref: node.label,
-      before_value: beforeValue,
-      after_value: strValue,
-      verified_by: 'none',
-      at: new Date(host.now()).toISOString(),
-    })
+    try {
+      await host.audit({
+        run_id: state.runId,
+        graph: options.graphRef ?? { portal_id: 'unknown', task_id: 'unknown', version: 1 },
+        node_id: nodeId,
+        action: 'write',
+        status: 'success',
+        target_ref: node.label,
+        before_value: beforeValue,
+        after_value: strValue,
+        verified_by: 'none',
+        at: new Date(host.now()).toISOString(),
+      })
+    } catch {
+      // Dry-run não exige persistência estrita de auditoria
+    }
     host.emit({
       type: 'write_performed',
       runId: state.runId,
@@ -118,7 +122,30 @@ export async function executeWriteNode(
     checkMaxWrites(state.writesCount, options.maxWrites, nodeId)
   }
 
-  // 6. Mutação física no DOM
+  // 6. Auditoria Write-Ahead Obrigatória (Ack pré-escrita persistido antes de tocar no DOM)
+  try {
+    await host.audit({
+      run_id: state.runId,
+      graph: options.graphRef ?? { portal_id: 'unknown', task_id: 'unknown', version: 1 },
+      node_id: nodeId,
+      action: 'write',
+      status: 'success',
+      target_ref: node.label,
+      before_value: beforeValue,
+      after_value: strValue,
+      verified_by: 'none',
+      at: new Date(host.now()).toISOString(),
+    })
+  } catch (err: any) {
+    throw new RunnerError(
+      'E_AUDIT_UNAVAILABLE',
+      `Auditoria write-ahead indisponível antes da mutação física: ${err?.message || err}`,
+      nodeId,
+      { cause: String(err) }
+    )
+  }
+
+  // 7. Mutação física no DOM
   const writeRes = await driver.write({
     target: { anchor: resolvedAnchor },
     value: strValue,
