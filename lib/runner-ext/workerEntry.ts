@@ -21,13 +21,17 @@ import {
   recordManualRepair,
   computeGraphHealthStatus,
 } from '../repair'
+import { NativeClient, NativeSkillGraphRepository, NativeAuditSink } from './nativeClient'
 
 declare const chrome: any
 
 export function createExtensionHost(options: {
   runId: string
   onEvent?: (event: RunEvent) => void
+  nativeClient?: NativeClient
 }): Host {
+  const auditSink = options.nativeClient ? new NativeAuditSink(options.nativeClient) : null
+
   return {
     async confirm(cp: CheckpointPayload): Promise<boolean> {
       if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
@@ -48,6 +52,10 @@ export function createExtensionHost(options: {
       return true
     },
     async audit(entry: AuditEntry): Promise<void> {
+      if (auditSink) {
+        await auditSink.audit(entry)
+        return
+      }
       if (typeof chrome !== 'undefined' && chrome.storage?.session) {
         try {
           const current = await chrome.storage.session.get('skillgraph_audit_log')
@@ -91,6 +99,9 @@ const SkillGraphV2 = {
   SkillGraphV2Schema,
   validateGraph,
   createExtensionHost,
+  NativeClient,
+  NativeSkillGraphRepository,
+  NativeAuditSink,
   applyPatch,
   generateRepairProposal,
   createDriftSnapshot,
@@ -112,4 +123,4 @@ if (typeof globalThis !== 'undefined') {
   ;(globalThis as any).SkillGraphV2 = SkillGraphV2
 }
 
-export { SkillGraphRunner, RemoteDriver, SkillGraphV2 }
+export { SkillGraphRunner, RemoteDriver, SkillGraphV2, NativeClient, NativeSkillGraphRepository, NativeAuditSink }

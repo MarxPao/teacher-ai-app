@@ -50,7 +50,7 @@ try {
 const WS_URL_PRIMARY = 'ws://127.0.0.1:8766';
 const WS_URL_FALLBACK = 'ws://127.0.0.1:8765/status_stream';
 const HTTP_STATUS_FALLBACK = 'http://127.0.0.1:8765/portal_status';
-const NATIVE_HOST_NAME = 'com.teacherai.host';
+const NATIVE_HOST_NAME = 'com.teacherai.desktop';
 const STARTUP_TIMEOUT_MS = 5000;
 
 const KNOWN_PORTALS = [
@@ -66,6 +66,7 @@ const KNOWN_PORTALS = [
 
 let ws = null;
 let isSidecarOnline = false;
+let isAppConnected = false;
 let startupMethod = null; // 'scheduled_task' | 'native_messaging' | 'failed_both'
 let bothStartupMethodsFailed = false;
 let isLaunchingViaNative = false;
@@ -1208,12 +1209,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     (async () => {
       await evaluateActiveTab(message.activeTabId || (sender && sender.tab ? sender.tab.id : null));
       sendResponse({
-        isSidecarOnline,
+        isSidecarOnline: Boolean(isAppConnected || isSidecarOnline),
+        isAppConnected,
         tabState: currentTabState,
         startupMethod,
         bothStartupMethodsFailed,
         isLaunchingViaNative,
-        isConnecting: Boolean(!isSidecarOnline && (startupTimer || isLaunchingViaNative))
+        isConnecting: Boolean(!isAppConnected && !isSidecarOnline && (startupTimer || isLaunchingViaNative))
       });
     })();
     return true;
@@ -1225,14 +1227,96 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       connectWebSocket();
       await evaluateActiveTab(message.activeTabId || (sender && sender.tab ? sender.tab.id : null));
       sendResponse({
-        isSidecarOnline,
+        isSidecarOnline: Boolean(isAppConnected || isSidecarOnline),
+        isAppConnected,
         tabState: currentTabState,
         startupMethod,
         bothStartupMethodsFailed,
         isLaunchingViaNative,
-        isConnecting: Boolean(!isSidecarOnline && (startupTimer || isLaunchingViaNative))
+        isConnecting: Boolean(!isAppConnected && !isSidecarOnline && (startupTimer || isLaunchingViaNative))
       });
     })();
+    return true;
+  }
+
+  // ─── CANAL NATIVE MESSAGING COM APP DESKTOP (FASE 6) ───────────────────────
+  if (message.action === 'DESKTOP_GET_STATUS') {
+    try {
+      chrome.runtime.sendNativeMessage(
+        NATIVE_HOST_NAME,
+        { v: 1, id: 'req_' + Date.now(), method: 'app.status', params: {} },
+        (response) => {
+          if (chrome.runtime.lastError || !response?.success) {
+            isAppConnected = false;
+            sendResponse({ success: false, error: chrome.runtime.lastError?.message || response?.error?.message });
+          } else {
+            isAppConnected = true;
+            isSidecarOnline = true;
+            sendResponse(response);
+          }
+        }
+      );
+    } catch (err) {
+      isAppConnected = false;
+      sendResponse({ success: false, error: err.message });
+    }
+    return true;
+  }
+
+  if (message.action === 'DESKTOP_LIST_STUDENTS') {
+    try {
+      chrome.runtime.sendNativeMessage(
+        NATIVE_HOST_NAME,
+        { v: 1, id: 'req_' + Date.now(), method: 'students.list', params: message.payload || {} },
+        (response) => {
+          if (chrome.runtime.lastError) {
+            sendResponse({ success: false, error: chrome.runtime.lastError.message });
+          } else {
+            sendResponse(response);
+          }
+        }
+      );
+    } catch (err) {
+      sendResponse({ success: false, error: err.message });
+    }
+    return true;
+  }
+
+  if (message.action === 'DESKTOP_UPSERT_ROSTER') {
+    try {
+      chrome.runtime.sendNativeMessage(
+        NATIVE_HOST_NAME,
+        { v: 1, id: 'req_' + Date.now(), method: 'students.upsertRoster', params: message.payload || {} },
+        (response) => {
+          if (chrome.runtime.lastError) {
+            sendResponse({ success: false, error: chrome.runtime.lastError.message });
+          } else {
+            sendResponse(response);
+          }
+        }
+      );
+    } catch (err) {
+      sendResponse({ success: false, error: err.message });
+    }
+    return true;
+  }
+
+  if (message.action === 'DESKTOP_PARSE_NLU') {
+    try {
+      chrome.runtime.sendNativeMessage(
+        NATIVE_HOST_NAME,
+        { v: 1, id: 'req_' + Date.now(), method: 'nlu.parse', params: { text: message.text || '' } },
+        (response) => {
+          if (chrome.runtime.lastError) {
+            sendResponse({ success: false, error: chrome.runtime.lastError.message });
+          } else {
+            sendResponse(response);
+          }
+        }
+      );
+    } catch (err) {
+      sendResponse({ success: false, error: err.message });
+    }
     return true;
   }
 

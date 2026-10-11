@@ -21,6 +21,9 @@ var SkillGraphBundle = (() => {
   // lib/runner-ext/workerEntry.ts
   var workerEntry_exports = {};
   __export(workerEntry_exports, {
+    NativeAuditSink: () => NativeAuditSink,
+    NativeClient: () => NativeClient,
+    NativeSkillGraphRepository: () => NativeSkillGraphRepository,
     RemoteDriver: () => RemoteDriver,
     SkillGraphRunner: () => SkillGraphRunner,
     SkillGraphV2: () => SkillGraphV2,
@@ -20410,6 +20413,34 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       polarity = options.canonicalMapping?.attendance.polarity === "checked_is_present" ? "presence" : "absence";
     }
     if (state.dryRun) {
+      try {
+        await host.audit({
+          run_id: state.runId,
+          graph: options.graphRef ?? { portal_id: "unknown", task_id: "unknown", version: 1 },
+          node_id: nodeId,
+          action: "write",
+          status: "success",
+          target_ref: node2.label,
+          before_value: beforeValue,
+          after_value: strValue,
+          verified_by: "none",
+          at: new Date(host.now()).toISOString()
+        });
+      } catch {
+      }
+      host.emit({
+        type: "write_performed",
+        runId: state.runId,
+        nodeId,
+        timestamp: host.now(),
+        data: { dryRun: true, beforeValue, afterValue: strValue, semantic: node2.semantic }
+      });
+      return node2.on_success;
+    }
+    if (options.maxWrites !== void 0) {
+      checkMaxWrites(state.writesCount, options.maxWrites, nodeId);
+    }
+    try {
       await host.audit({
         run_id: state.runId,
         graph: options.graphRef ?? { portal_id: "unknown", task_id: "unknown", version: 1 },
@@ -20422,17 +20453,13 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         verified_by: "none",
         at: new Date(host.now()).toISOString()
       });
-      host.emit({
-        type: "write_performed",
-        runId: state.runId,
+    } catch (err) {
+      throw new RunnerError(
+        "E_AUDIT_UNAVAILABLE",
+        `Auditoria write-ahead indispon\xEDvel antes da muta\xE7\xE3o f\xEDsica: ${err?.message || err}`,
         nodeId,
-        timestamp: host.now(),
-        data: { dryRun: true, beforeValue, afterValue: strValue, semantic: node2.semantic }
-      });
-      return node2.on_success;
-    }
-    if (options.maxWrites !== void 0) {
-      checkMaxWrites(state.writesCount, options.maxWrites, nodeId);
+        { cause: String(err) }
+      );
     }
     const writeRes = await driver.write({
       target: { anchor: resolvedAnchor },
@@ -21646,17 +21673,20 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       } catch (err) {
         state.status = "failed";
         const runnerError = err instanceof RunnerError ? err : new RunnerError("E_INTERRUPTED", err.message);
-        await this.host.audit({
-          run_id: state.runId,
-          graph: graphRef,
-          node_id: state.currentNodeId ?? "unknown",
-          action: "abort",
-          status: "failed",
-          error_code: runnerError.code,
-          target_ref: runnerError.nodeId,
-          verified_by: "none",
-          at: new Date(this.host.now()).toISOString()
-        });
+        try {
+          await this.host.audit({
+            run_id: state.runId,
+            graph: graphRef,
+            node_id: state.currentNodeId ?? "unknown",
+            action: "abort",
+            status: "failed",
+            error_code: runnerError.code,
+            target_ref: runnerError.nodeId,
+            verified_by: "none",
+            at: new Date(this.host.now()).toISOString()
+          });
+        } catch {
+        }
         this.host.emit({
           type: "run_failed",
           runId: state.runId,
@@ -22409,8 +22439,173 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     return updated;
   }
 
+  // lib/runner-ext/nativeClient.ts
+  var NativeClient = class {
+    constructor(options = {}) {
+      this.port = null;
+      this.pending = /* @__PURE__ */ new Map();
+      this.hostName = options.hostName || "com.teacherai.desktop";
+      this.defaultTimeoutMs = options.defaultTimeoutMs ?? 5e3;
+      this.connector = options.connector;
+    }
+    isConnected() {
+      return this.port !== null;
+    }
+    connect() {
+      if (this.port) return this.port;
+      let port;
+      if (this.connector) {
+        port = this.connector();
+      } else if (typeof chrome !== "undefined" && chrome.runtime?.connectNative) {
+        port = chrome.runtime.connectNative(this.hostName);
+      } else {
+        throw new Error("Ambiente Chrome Native Messaging indispon\xEDvel.");
+      }
+      port.onMessage.addListener((msg) => {
+        this.handleMessage(msg);
+      });
+      port.onDisconnect.addListener(() => {
+        const lastError = typeof chrome !== "undefined" && chrome.runtime?.lastError ? chrome.runtime.lastError.message : "Porta Native Messaging desconectada.";
+        this.handleDisconnect(new Error(lastError));
+      });
+      this.port = port;
+      return port;
+    }
+    disconnect() {
+      if (this.port) {
+        try {
+          this.port.disconnect?.();
+        } catch {
+        }
+        this.port = null;
+      }
+      this.handleDisconnect(new Error("Cliente desconectado manualmente."));
+    }
+    handleMessage(response) {
+      if (!response || !response.id) return;
+      const entry = this.pending.get(response.id);
+      if (!entry) return;
+      clearTimeout(entry.timer);
+      this.pending.delete(response.id);
+      if (response.success) {
+        entry.resolve(response.result);
+      } else {
+        const err = new Error(response.error?.message || "Erro na requisi\xE7\xE3o nativa.");
+        err.code = response.error?.code || "E_NM_FAILED";
+        err.details = response.error?.details;
+        entry.reject(err);
+      }
+    }
+    handleDisconnect(err) {
+      this.port = null;
+      for (const [id, entry] of this.pending.entries()) {
+        clearTimeout(entry.timer);
+        entry.reject(err);
+      }
+      this.pending.clear();
+    }
+    async send(method, params = {}, timeoutMs) {
+      const port = this.connect();
+      const id = `req_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+      const timeout = timeoutMs ?? this.defaultTimeoutMs;
+      const request = {
+        v: 1,
+        id,
+        method,
+        params
+      };
+      return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+          this.pending.delete(id);
+          reject(
+            new Error(
+              `Timeout de comunica\xE7\xE3o nativa (${timeout}ms) aguardando m\xE9todo ${method}.`
+            )
+          );
+        }, timeout);
+        this.pending.set(id, { resolve, reject, timer });
+        try {
+          port.postMessage(request);
+        } catch (err) {
+          clearTimeout(timer);
+          this.pending.delete(id);
+          reject(err);
+        }
+      });
+    }
+    // ─── Métodos de Negócio Tipados ─────────────────────────────────────────────
+    async getStatus() {
+      return this.send("app.status");
+    }
+    async listStudents(classId) {
+      return this.send("students.list", classId ? { classId } : {});
+    }
+    async upsertRoster(classId, students, source) {
+      return this.send("students.upsertRoster", { classId, students, source });
+    }
+    async getGraph(portalId, taskId, version2) {
+      const params = { portalId, taskId };
+      if (version2 !== void 0) params.version = version2;
+      return this.send("graphs.get", params);
+    }
+    async saveGraph(graph) {
+      return this.send("graphs.save", { graph });
+    }
+    async appendAudit(entry, timeoutMs = 3e3) {
+      return this.send("audit.append", { entry }, timeoutMs);
+    }
+    async parseNlu(text) {
+      return this.send("nlu.parse", { text });
+    }
+  };
+  var NativeSkillGraphRepository = class {
+    constructor(client) {
+      this.client = client;
+    }
+    async get(portalId, taskId, version2) {
+      return this.client.getGraph(portalId, taskId, version2);
+    }
+    async listVersions(portalId, taskId) {
+      try {
+        const active = await this.client.getGraph(portalId, taskId);
+        if (!active) return [];
+        return [
+          {
+            portalId: active.identity.portal_id,
+            taskId: active.identity.task_id,
+            version: active.identity.version,
+            name: active.identity.name,
+            createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+            isActive: true
+          }
+        ];
+      } catch {
+        return [];
+      }
+    }
+    async save(graph) {
+      return this.client.saveGraph(graph);
+    }
+    async setActive(_portalId, _taskId, _version) {
+      return true;
+    }
+  };
+  var NativeAuditSink = class {
+    constructor(client, timeoutMs = 3e3) {
+      this.client = client;
+      this.timeoutMs = timeoutMs;
+    }
+    async audit(entry) {
+      const res = await this.client.appendAudit(entry, this.timeoutMs);
+      if (!res || res.ack !== true) {
+        throw new Error("Falha no ack de persist\xEAncia de auditoria write-ahead.");
+      }
+    }
+  };
+
   // lib/runner-ext/workerEntry.ts
   function createExtensionHost(options) {
+    const auditSink = options.nativeClient ? new NativeAuditSink(options.nativeClient) : null;
     return {
       async confirm(cp) {
         if (typeof chrome !== "undefined" && chrome.runtime?.sendMessage) {
@@ -22433,6 +22628,10 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         return true;
       },
       async audit(entry) {
+        if (auditSink) {
+          await auditSink.audit(entry);
+          return;
+        }
         if (typeof chrome !== "undefined" && chrome.storage?.session) {
           try {
             const current = await chrome.storage.session.get("skillgraph_audit_log");
@@ -22473,6 +22672,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     SkillGraphV2Schema,
     validateGraph,
     createExtensionHost,
+    NativeClient,
+    NativeSkillGraphRepository,
+    NativeAuditSink,
     applyPatch,
     generateRepairProposal,
     createDriftSnapshot,

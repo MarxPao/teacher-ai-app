@@ -436,35 +436,36 @@ async function updatePortalConnection() {
           }
         }
 
+        const isApp = Boolean(resp && (resp.isAppConnected || resp.isSidecarOnline));
         if (visorSidecarStatus) {
-          if (isSidecar) {
-            visorSidecarStatus.textContent = 'Ativo (:8766)';
+          if (isApp) {
+            visorSidecarStatus.textContent = 'App conectado ✓';
             visorSidecarStatus.style.color = '#15803d';
           } else {
-            visorSidecarStatus.textContent = 'Conectando...';
-            visorSidecarStatus.style.color = '#0284c7';
+            visorSidecarStatus.textContent = 'Abra o app Teacher AI';
+            visorSidecarStatus.style.color = '#dc2626';
           }
         }
 
         if (visorOverallBadge) {
-          if (isMapped && isAuth && isSidecar) {
+          if (isMapped && isAuth && isApp) {
             visorOverallBadge.className = 'visor-badge ready';
             visorOverallBadge.style.background = '';
             visorOverallBadge.style.color = '';
             visorOverallBadge.style.borderColor = '';
-            visorOverallBadge.innerHTML = '🟢 Conectado';
+            visorOverallBadge.innerHTML = '🟢 Conectado ao App';
           } else if (isMapped && !isAuth) {
             visorOverallBadge.className = 'visor-badge needs_login';
             visorOverallBadge.style.background = '';
             visorOverallBadge.style.color = '';
             visorOverallBadge.style.borderColor = '';
             visorOverallBadge.innerHTML = '🟡 Requer Login';
-          } else if (isMapped && !isSidecar) {
-            visorOverallBadge.className = 'visor-badge connecting';
+          } else if (isMapped && !isApp) {
+            visorOverallBadge.className = 'visor-badge offline';
             visorOverallBadge.style.background = '';
             visorOverallBadge.style.color = '';
             visorOverallBadge.style.borderColor = '';
-            visorOverallBadge.innerHTML = '🌐 Portal Ativo (Conectando)';
+            visorOverallBadge.innerHTML = '🔴 Abra o app Teacher AI';
           } else {
             visorOverallBadge.className = 'visor-badge offline';
             visorOverallBadge.style.background = '';
@@ -1074,7 +1075,7 @@ let loadedClassesList = [];
 let pendingRecordedEvents = null;
 let pendingPageUrl = '';
 
-// ── 1. Carregar Turma Ativa via Backend Next.js (Supabase sem chaves na extensão) ─
+// ── 1. Carregar Turma Ativa via App Desktop Local (SQLite Cifrado) ou Backend ─
 async function loadActiveTurma(forceEmpty = false) {
   const cardActive = document.getElementById('active-class-card');
   const cardEmpty  = document.getElementById('empty-class-card');
@@ -1082,8 +1083,71 @@ async function loadActiveTurma(forceEmpty = false) {
   const yearEl     = document.getElementById('active-class-year');
   const idEl       = document.getElementById('active-class-id');
   const chipsEl    = document.getElementById('classes-chips');
+  const sourceBadge = document.getElementById('turma-source-badge');
 
   try {
+    // 1. Tenta carregar do App Desktop local via Native Messaging
+    if (!forceEmpty && typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+      const nativeRes = await new Promise((resolve) => {
+        chrome.runtime.sendMessage({ action: 'DESKTOP_LIST_STUDENTS' }, (res) => resolve(res));
+      });
+
+      if (nativeRes && nativeRes.success && Array.isArray(nativeRes.result) && nativeRes.result.length > 0) {
+        if (sourceBadge) {
+          sourceBadge.textContent = 'App Local (SQLite Cifrado)';
+          sourceBadge.style.background = '#dcfce7';
+          sourceBadge.style.color = '#15803d';
+        }
+        const students = nativeRes.result;
+        const classesMap = new Map();
+        students.forEach(st => {
+          const cId = st.class_id || 'turma_padrao';
+          if (!classesMap.has(cId)) {
+            classesMap.set(cId, {
+              id: cId,
+              name: st.class_name || (cId === 'turma_padrao' ? 'Turma Principal' : cId),
+              year: '2026',
+              students: [],
+            });
+          }
+          classesMap.get(cId).students.push(st);
+        });
+
+        loadedClassesList = Array.from(classesMap.values());
+        const activeClass = loadedClassesList[0];
+        activeTurmaId = activeClass.id;
+
+        if (cardEmpty) cardEmpty.style.display = 'none';
+        if (cardActive) cardActive.style.display = 'block';
+
+        if (nameEl) nameEl.textContent = activeClass.name;
+        if (yearEl) yearEl.textContent = `${activeClass.students.length} alunos (Cifrado)`;
+        if (idEl) idEl.textContent = `Origem: SQLite Local`;
+
+        if (chipsEl) {
+          chipsEl.innerHTML = loadedClassesList.map((c, i) => `
+            <button class="class-chip ${i === 0 ? 'active' : ''}" data-id="${escapeHtml(c.id)}" data-name="${escapeHtml(c.name)}">
+              ${escapeHtml(c.name)} (${c.students.length})
+            </button>
+          `).join('');
+
+          chipsEl.querySelectorAll('.class-chip').forEach(btn => {
+            btn.addEventListener('click', () => {
+              chipsEl.querySelectorAll('.class-chip').forEach(b => b.classList.remove('active'));
+              btn.classList.add('active');
+              activeTurmaId = btn.dataset.id;
+              const chosen = loadedClassesList.find(x => x.id === activeTurmaId);
+              if (nameEl) nameEl.textContent = chosen?.name || btn.dataset.name;
+              if (yearEl) yearEl.textContent = `${chosen?.students?.length || 0} alunos (Cifrado)`;
+              if (idEl) idEl.textContent = `Origem: SQLite Local`;
+            });
+          });
+        }
+        console.log(`[SidePanel] Turma Ativa carregada via SQLite Local: "${activeClass.name}" (${students.length} alunos)`);
+        return;
+      }
+    }
+
     const url = forceEmpty 
       ? 'http://localhost:3000/api/classes?empty=true' 
       : 'http://localhost:3000/api/classes';
@@ -1095,19 +1159,15 @@ async function loadActiveTurma(forceEmpty = false) {
     loadedClassesList = data.classes || [];
 
     if (loadedClassesList.length === 0) {
-      // Estado Vazio Obrigatório
       if (cardActive) cardActive.style.display = 'none';
       if (cardEmpty) cardEmpty.style.display = 'block';
       activeTurmaId = null;
-      console.log('[SidePanel] Estado Vazio exibido: Nenhuma turma encontrada.');
       return;
     }
 
-    // Exibe card populado
     if (cardEmpty) cardEmpty.style.display = 'none';
     if (cardActive) cardActive.style.display = 'block';
 
-    // Seleciona a primeira como ativa por padrão
     const activeClass = loadedClassesList[0];
     activeTurmaId = activeClass.id;
     if (nameEl) nameEl.textContent = activeClass.name;
@@ -1115,7 +1175,6 @@ async function loadActiveTurma(forceEmpty = false) {
     if (idEl) idEl.textContent = `ID: ${activeClass.id}`;
     postToEntityBus('REQUEST_ACTIVE_CLASS_TODOS', { className: activeClass.name });
 
-    // Renderiza seletor de chips
     if (chipsEl) {
       chipsEl.innerHTML = loadedClassesList.slice(0, 6).map((c, i) => `
         <button class="class-chip ${i === 0 ? 'active' : ''}" data-id="${escapeHtml(c.id)}" data-name="${escapeHtml(c.name)}" data-year="${escapeHtml(c.year || '')}">
@@ -1131,13 +1190,10 @@ async function loadActiveTurma(forceEmpty = false) {
           if (nameEl) nameEl.textContent = btn.dataset.name;
           if (yearEl) yearEl.textContent = btn.dataset.year ? `Ano ${btn.dataset.year}` : 'Ativa';
           if (idEl) idEl.textContent = `ID: ${activeTurmaId}`;
-          console.log('[SidePanel] Turma ativa alterada para:', btn.dataset.name, activeTurmaId);
           postToEntityBus('REQUEST_ACTIVE_CLASS_TODOS', { className: btn.dataset.name });
         });
       });
     }
-
-    console.log(`[SidePanel] Turma Ativa carregada via Supabase: "${activeClass.name}" (ID: ${activeTurmaId})`);
   } catch (err) {
     console.warn('[SidePanel] Erro ao carregar turmas do backend:', err);
     if (cardActive) cardActive.style.display = 'none';
@@ -1917,22 +1973,42 @@ function extractNavigationTarget(text) {
   return null;
 }
 
+async function upsertFromPortal(classId, students, portalId) {
+  if (!Array.isArray(students) || students.length === 0) return { success: false };
+  return new Promise((resolve) => {
+    if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+      chrome.runtime.sendMessage({
+        action: 'DESKTOP_UPSERT_ROSTER',
+        payload: {
+          classId: classId || activeTurmaId || 'turma_padrao',
+          students,
+          source: {
+            portalId: portalId || activePlatform || 'portal_ativo',
+            readAt: new Date().toISOString(),
+          },
+        },
+      }, (res) => {
+        resolve(res || { success: false });
+      });
+    } else {
+      resolve({ success: false });
+    }
+  });
+}
+
 async function parseNaturalIntent(text) {
+  // 1. Tenta interpretar via App Desktop (Native Messaging)
   try {
-    const tokenHeader = await getSidecarTokenHeader();
-    const res = await fetch('http://localhost:8765/natural_intent', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...tokenHeader },
-      body: JSON.stringify({ text, parse_only: true })
-    });
-    if (res.ok) {
-      const data = await res.json();
-      if (data.intencao) return data.intencao;
-      if (data.intent) return data.intent;
-      if (data.acao) return data;
+    if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+      const nativeNluRes = await new Promise((resolve) => {
+        chrome.runtime.sendMessage({ action: 'DESKTOP_PARSE_NLU', text }, (res) => resolve(res));
+      });
+      if (nativeNluRes && nativeNluRes.success && nativeNluRes.result?.intent && nativeNluRes.result.intent !== 'unknown') {
+        return nativeNluRes.result;
+      }
     }
   } catch (e) {
-    console.warn('[SidePanel] Endpoint natural_intent offline, usando parser heurístico local:', e);
+    console.warn('[SidePanel] Desktop NLU indisponível, usando fallback:', e);
   }
 
   // Heurística local de fallback resiliente
@@ -2789,6 +2865,10 @@ async function handleProcessCommand(commandText) {
           executionResult = await dispatchPortalBridgePromise({ action: 'READ_PAGE_DATA' });
         } else if (toolName === 'read_roster' || (toolName === 'invoke_teacher_capability' && toolInput?.capability === 'read_roster')) {
           executionResult = await dispatchPortalBridgePromise({ action: 'READ_ACTIVE_PORTAL_ROSTER' });
+          if (executionResult && (executionResult.students || executionResult.roster)) {
+            const rosterList = executionResult.students || executionResult.roster;
+            upsertFromPortal(activeTurmaId, rosterList, activePlatform);
+          }
         } else {
           executionResult = await dispatchPortalBridgePromise({ action: 'EXECUTE_PORTAL_ACTION', payload: toolInput });
           executedSteps.push({
