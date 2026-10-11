@@ -37,6 +37,16 @@ if (!composeReply && typeof require === 'function') {
   } catch (e) {}
 }
 
+// ─── CARREGAMENTO DO SKILLGRAPH V2 RUNNER & ORQUESTRADOR ─────────────────────
+try {
+  if (typeof importScripts === 'function') {
+    importScripts('dist/runner.bundle.js');
+    importScripts('orchestrator_v2.js');
+  }
+} catch (e) {
+  console.warn('[TeacherAI] Erro ao carregar SkillGraph v2 runner no Service Worker:', e);
+}
+
 const WS_URL_PRIMARY = 'ws://127.0.0.1:8766';
 const WS_URL_FALLBACK = 'ws://127.0.0.1:8765/status_stream';
 const HTTP_STATUS_FALLBACK = 'http://127.0.0.1:8765/portal_status';
@@ -1180,6 +1190,11 @@ async function internalReadRoster(targetTabId) {
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  // Delega mensagens do SkillGraph v2 diretamente ao orquestrador v2
+  if (typeof handleSkillGraphMessage === 'function' && handleSkillGraphMessage(message, sender, sendResponse)) {
+    return true;
+  }
+
   if (message.action === 'RELOAD_EXTENSION') {
     try {
       chrome.runtime.reload();

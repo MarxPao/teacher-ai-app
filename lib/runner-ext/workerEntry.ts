@@ -6,6 +6,9 @@ import { RemoteDriver } from './remoteDriver'
 import type { Host, CheckpointPayload, HandoffPayload, RunEvent, RunState } from '../runner/types'
 import type { AuditEntry } from '../contracts/audit'
 import { SkillGraphV2Schema, validateGraph } from '../contracts/skillgraph'
+import readRosterGraph from '../../graphs/synthetic/read_roster.json'
+import lancarFaltaGraph from '../../graphs/synthetic/lancar_falta.json'
+import lancarNotaGraph from '../../graphs/synthetic/lancar_nota.json'
 
 declare const chrome: any
 
@@ -76,6 +79,11 @@ const SkillGraphV2 = {
   SkillGraphV2Schema,
   validateGraph,
   createExtensionHost,
+  syntheticGraphs: {
+    read_roster: readRosterGraph,
+    lancar_falta: lancarFaltaGraph,
+    lancar_nota: lancarNotaGraph,
+  },
 }
 
 if (typeof globalThis !== 'undefined') {
