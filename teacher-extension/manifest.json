@@ -46,6 +46,7 @@
         "portal_dom_reader.js",
         "transaction_manager.js",
         "session_guardian.js",
+        "dist/content-adapter.bundle.js",
         "content.js"
       ],
       "run_at": "document_idle",
