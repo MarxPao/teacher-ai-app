@@ -1,0 +1,17 @@
+{
+  "id": "dev_btn_role_change",
+  "name": "Botão button substituído por a[role=button]",
+  "description": "Altera tag button para link estilizado com role button",
+  "fixture": "tools/runner-harness/fixtures/standard.html",
+  "baseGraph": "graphs/synthetic/lancar_nota.json",
+  "expectedOutcome": "CORRECT_REPAIR",
+  "isBait": false,
+  "operations": [
+    {
+      "type": "change_tag",
+      "selector": "button#btn-salvar",
+      "newTag": "a",
+      "newText": "Salvar"
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "id": "holdout_download_btn_text",
+  "name": "Botão Baixar Boletim CSV alterado para Exportar Planilha",
+  "description": "Ação de download de arquivo renomeada com sinônimo operacional",
+  "fixture": "tools/runner-harness/fixtures/holdout/download_upload.html",
+  "baseGraph": "graphs/conformance/holdout/download_upload.json",
+  "expectedOutcome": "CORRECT_REPAIR",
+  "isBait": false,
+  "operations": [
+    {
+      "type": "rename_text",
+      "selector": "button#download-btn, #btn-export",
+      "newText": "Exportar Planilha"
+    }
+  ]
+}

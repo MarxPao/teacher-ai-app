@@ -1,0 +1,17 @@
+{
+  "id": "holdout_nota_input_placeholder",
+  "name": "Campo nota perde ID estático mantendo papel e name",
+  "description": "Input em formulário estrito perde ID estático",
+  "fixture": "tools/runner-harness/fixtures/holdout/strict_form.html",
+  "baseGraph": "graphs/conformance/holdout/strict_form.json",
+  "expectedOutcome": "CORRECT_REPAIR",
+  "isBait": false,
+  "operations": [
+    {
+      "type": "scramble_attributes",
+      "selector": "input[name=\"nota\"], #input-nota",
+      "attr": "id",
+      "prefix": "field-rnd-"
+    }
+  ]
+}

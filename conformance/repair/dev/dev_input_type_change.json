@@ -1,0 +1,17 @@
+{
+  "id": "dev_input_type_change",
+  "name": "Input ganha classe e tipo especializado",
+  "description": "Evolução de estilo sem alterar papel semântico do campo",
+  "fixture": "tools/runner-harness/fixtures/standard.html",
+  "baseGraph": "graphs/synthetic/lancar_nota.json",
+  "expectedOutcome": "CORRECT_REPAIR",
+  "isBait": false,
+  "operations": [
+    {
+      "type": "scramble_attributes",
+      "selector": "input[name=\"nota\"]",
+      "attr": "class",
+      "prefix": "num-input-"
+    }
+  ]
+}

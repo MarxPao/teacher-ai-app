@@ -1,0 +1,16 @@
+{
+  "id": "dev_container_nesting",
+  "name": "Tabela envelopada por container responsivo",
+  "description": "Adiciona div.table-responsive ao redor da tabela alterando profundidade",
+  "fixture": "tools/runner-harness/fixtures/diario_grid.html",
+  "baseGraph": "graphs/synthetic/read_roster.json",
+  "expectedOutcome": "CORRECT_REPAIR",
+  "isBait": false,
+  "operations": [
+    {
+      "type": "wrap_container",
+      "selector": "table",
+      "wrapperClass": "table-responsive card-body"
+    }
+  ]
+}

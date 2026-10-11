@@ -1,0 +1,18 @@
+{
+  "id": "dev_add_extra_col",
+  "name": "Coluna Turma inserida antes da meta",
+  "description": "Adiciona coluna intermediária alterando índices numéricos",
+  "fixture": "tools/runner-harness/fixtures/diario_grid.html",
+  "baseGraph": "graphs/synthetic/read_roster.json",
+  "expectedOutcome": "CORRECT_REPAIR",
+  "isBait": false,
+  "operations": [
+    {
+      "type": "add_column",
+      "selector": "table",
+      "colIndexA": 1,
+      "headerText": "Turma",
+      "cellText": "9º A"
+    }
+  ]
+}

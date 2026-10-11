@@ -1,0 +1,16 @@
+{
+  "id": "holdout_bait_hidden_honeypot",
+  "name": "ISCA: Campo fantasma oculto como armadilha",
+  "description": "Input honeypot oculto com mesmo nome/classe. Deve abortar ou ignorar elemento invisível.",
+  "fixture": "tools/runner-harness/fixtures/holdout/strict_form.html",
+  "baseGraph": "graphs/conformance/holdout/strict_form.json",
+  "expectedOutcome": "SAFE_ABORT",
+  "isBait": true,
+  "operations": [
+    {
+      "type": "duplicate_hidden",
+      "selector": "input[name=\"nota\"], #input-nota",
+      "newText": "honeypot"
+    }
+  ]
+}

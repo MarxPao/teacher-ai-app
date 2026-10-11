@@ -1,0 +1,16 @@
+{
+  "id": "holdout_pagination_btn_aria",
+  "name": "Botão Próxima atualizado com texto completo",
+  "description": "Variação de rótulo textual de paginação",
+  "fixture": "tools/runner-harness/fixtures/pagination.html",
+  "baseGraph": "graphs/synthetic/read_roster.json",
+  "expectedOutcome": "CORRECT_REPAIR",
+  "isBait": false,
+  "operations": [
+    {
+      "type": "rename_text",
+      "selector": "button#next-page, .btn-next",
+      "newText": "Próxima Página"
+    }
+  ]
+}

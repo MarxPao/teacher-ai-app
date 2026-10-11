@@ -1,0 +1,16 @@
+{
+  "id": "holdout_col_presenca_synonym",
+  "name": "Coluna Presença renomeada para Frequência Escolar",
+  "description": "Sinônimo educacional em cabeçalho com múltiplas linhas",
+  "fixture": "tools/runner-harness/fixtures/holdout/two_row_headers.html",
+  "baseGraph": "graphs/conformance/holdout/two_row_headers.json",
+  "expectedOutcome": "CORRECT_REPAIR",
+  "isBait": false,
+  "operations": [
+    {
+      "type": "rename_text",
+      "selector": "th:nth-child(2)",
+      "newText": "Frequência Escolar"
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "id": "dev_input_id_scramble",
+  "name": "IDs estáticos de inputs substituídos por UUIDs",
+  "description": "Framework que gera IDs dinâmicos a cada render",
+  "fixture": "tools/runner-harness/fixtures/standard.html",
+  "baseGraph": "graphs/synthetic/lancar_nota.json",
+  "expectedOutcome": "CORRECT_REPAIR",
+  "isBait": false,
+  "operations": [
+    {
+      "type": "scramble_attributes",
+      "selector": "input",
+      "attr": "id",
+      "prefix": "uuid-"
+    }
+  ]
+}

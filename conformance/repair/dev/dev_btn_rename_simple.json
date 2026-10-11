@@ -1,0 +1,16 @@
+{
+  "id": "dev_btn_rename_simple",
+  "name": "Botão Salvar renomeado para Gravar",
+  "description": "Renomeia o texto do botão salvar para Gravar mantendo tag e papel",
+  "fixture": "tools/runner-harness/fixtures/standard.html",
+  "baseGraph": "graphs/synthetic/lancar_nota.json",
+  "expectedOutcome": "CORRECT_REPAIR",
+  "isBait": false,
+  "operations": [
+    {
+      "type": "rename_text",
+      "selector": "button#btn-salvar, button[type=\"submit\"]",
+      "newText": "Gravar"
+    }
+  ]
+}

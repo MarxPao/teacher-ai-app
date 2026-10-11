@@ -1,0 +1,21 @@
+{
+  "id": "holdout_bait_twin_buttons",
+  "name": "ISCA: Dois botões idênticos de salvar com intenções diferentes",
+  "description": "Dois botões lado a lado: Salvar Alterações e Salvar como Rascunho. Ambíguo, deve abortar com segurança.",
+  "fixture": "tools/runner-harness/fixtures/holdout/strict_form.html",
+  "baseGraph": "graphs/conformance/holdout/strict_form.json",
+  "expectedOutcome": "SAFE_ABORT",
+  "isBait": true,
+  "operations": [
+    {
+      "type": "duplicate_hidden",
+      "selector": "button[type=\"submit\"], #submit-btn",
+      "newText": "Salvar como Rascunho"
+    },
+    {
+      "type": "rename_text",
+      "selector": "button[type=\"submit\"], #submit-btn",
+      "newText": "Salvar Alterações"
+    }
+  ]
+}

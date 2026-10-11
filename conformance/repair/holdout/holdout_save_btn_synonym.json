@@ -1,0 +1,16 @@
+{
+  "id": "holdout_save_btn_synonym",
+  "name": "Botão Salvar renomeado para Confirmar Lançamento",
+  "description": "Sinônimo semântico de ação final em formulário estrito",
+  "fixture": "tools/runner-harness/fixtures/holdout/strict_form.html",
+  "baseGraph": "graphs/conformance/holdout/strict_form.json",
+  "expectedOutcome": "CORRECT_REPAIR",
+  "isBait": false,
+  "operations": [
+    {
+      "type": "rename_text",
+      "selector": "button[type=\"submit\"], button.btn-save, #submit-btn",
+      "newText": "Confirmar Lançamento"
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "id": "dev_sub_button_icon",
+  "name": "Botão recebe ícone decorativo com texto",
+  "description": "Inclusão de emoji/ícone antes do texto de ação",
+  "fixture": "tools/runner-harness/fixtures/standard.html",
+  "baseGraph": "graphs/synthetic/lancar_nota.json",
+  "expectedOutcome": "CORRECT_REPAIR",
+  "isBait": false,
+  "operations": [
+    {
+      "type": "rename_text",
+      "selector": "button#btn-salvar",
+      "newText": "💾 Salvar Lançamento"
+    }
+  ]
+}

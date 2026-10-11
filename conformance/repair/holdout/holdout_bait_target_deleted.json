@@ -1,0 +1,15 @@
+{
+  "id": "holdout_bait_target_deleted",
+  "name": "ISCA: Elemento alvo excluído completamente do DOM",
+  "description": "Botão de submissão removido pelo portal. Deve abortar com SAFE_ABORT.",
+  "fixture": "tools/runner-harness/fixtures/holdout/strict_form.html",
+  "baseGraph": "graphs/conformance/holdout/strict_form.json",
+  "expectedOutcome": "SAFE_ABORT",
+  "isBait": true,
+  "operations": [
+    {
+      "type": "remove_element",
+      "selector": "button[type=\"submit\"], #submit-btn"
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "id": "holdout_two_row_header_drift",
+  "name": "Tabela ganha nova coluna bimestral",
+  "description": "Inserção de coluna alterando offsets de índice de dados",
+  "fixture": "tools/runner-harness/fixtures/holdout/two_row_headers.html",
+  "baseGraph": "graphs/conformance/holdout/two_row_headers.json",
+  "expectedOutcome": "CORRECT_REPAIR",
+  "isBait": false,
+  "operations": [
+    {
+      "type": "add_column",
+      "selector": "table",
+      "colIndexA": 1,
+      "headerText": "1º Bimestre",
+      "cellText": "OK"
+    }
+  ]
+}

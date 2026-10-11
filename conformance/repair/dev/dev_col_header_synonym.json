@@ -1,0 +1,16 @@
+{
+  "id": "dev_col_header_synonym",
+  "name": "Cabeçalho Faltas renomeado para Ausências",
+  "description": "Sinônimo semântico comum no cabeçalho da tabela",
+  "fixture": "tools/runner-harness/fixtures/diario_grid.html",
+  "baseGraph": "graphs/synthetic/lancar_falta.json",
+  "expectedOutcome": "CORRECT_REPAIR",
+  "isBait": false,
+  "operations": [
+    {
+      "type": "rename_text",
+      "selector": "th:nth-child(3)",
+      "newText": "Ausências"
+    }
+  ]
+}

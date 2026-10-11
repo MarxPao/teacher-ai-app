@@ -1,0 +1,16 @@
+{
+  "id": "holdout_infinite_scroll_container",
+  "name": "Container de scroll ganha classe responsiva",
+  "description": "Container de rolagem virtual envelopado",
+  "fixture": "tools/runner-harness/fixtures/holdout/infinite_scroll.html",
+  "baseGraph": "graphs/conformance/holdout/infinite_scroll.json",
+  "expectedOutcome": "CORRECT_REPAIR",
+  "isBait": false,
+  "operations": [
+    {
+      "type": "wrap_container",
+      "selector": "#scroll-container, .infinite-list",
+      "wrapperClass": "scroll-viewport-v2"
+    }
+  ]
+}

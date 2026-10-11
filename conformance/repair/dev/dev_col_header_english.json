@@ -1,0 +1,16 @@
+{
+  "id": "dev_col_header_english",
+  "name": "Cabeçalhos traduzidos para inglês",
+  "description": "Mudança de localização/idioma na interface da tabela",
+  "fixture": "tools/runner-harness/fixtures/diario_grid.html",
+  "baseGraph": "graphs/synthetic/read_roster.json",
+  "expectedOutcome": "CORRECT_REPAIR",
+  "isBait": false,
+  "operations": [
+    {
+      "type": "translate_header",
+      "selector": "th:nth-child(2)",
+      "headerText": "Student Name"
+    }
+  ]
+}

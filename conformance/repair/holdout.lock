@@ -1,0 +1,19 @@
+{
+  "version": "1.0",
+  "locked_at": "2026-10-11T18:00:00Z",
+  "files": {
+    "tools/runner-harness/mutator.ts": "2e80319aa8eac26a34d907572ee50d175b61b7b402dca4f6fd05392a00c8772d",
+    "conformance/repair/holdout/holdout_save_btn_synonym.json": "89f31259a29a31c1a339a54973eb62db5ba83dc7fa9bab60ec4ac396d6cd8e72",
+    "conformance/repair/holdout/holdout_col_presenca_synonym.json": "334ab6b17bbc683cc5f1de082217b2595be1562421aabe82ed6b63ace78285be",
+    "conformance/repair/holdout/holdout_nota_input_placeholder.json": "1b1c6db62ba138bdaba6fbc0ec09265b4691a46f830213ee3abd2d937a111fa5",
+    "conformance/repair/holdout/holdout_wizard_step_btn.json": "0ddd36ab2a4b71fe10ee9de8c71404acc82205baaacac73172918fcfc1f8823a",
+    "conformance/repair/holdout/holdout_download_btn_text.json": "8297a75f18a238e268167d199c4b791260a51d5ffe0cb280f39c65f65defaa07",
+    "conformance/repair/holdout/holdout_two_row_header_drift.json": "9cad56541f4dedbc6d379804bfff12de80ef8d3d2ae008091b5432c38d851310",
+    "conformance/repair/holdout/holdout_infinite_scroll_container.json": "149716acef6381804adc9bee5eeec41d18426486e06a4ead1e976d295f7fc0e8",
+    "conformance/repair/holdout/holdout_pagination_btn_aria.json": "bd97104a95788f49fde1a728f8d1b9d5d49a414094cd3ed8992129c481b12741",
+    "conformance/repair/holdout/holdout_bait_twin_buttons.json": "7a02928c8cd29d6d4279a218d3c7ca761992cc0ebe925285739ce515c11e27b9",
+    "conformance/repair/holdout/holdout_bait_polarity_swap.json": "04cdb2201d815f0ffe1dd8e6c156c4eb0f9c42b1c0e137a043239e0f65e1e3f2",
+    "conformance/repair/holdout/holdout_bait_target_deleted.json": "806fe14fb4343061e5bd017e200578cbda479abfe43ee0ad4af81cdf25ef9920",
+    "conformance/repair/holdout/holdout_bait_hidden_honeypot.json": "9b547921cd2ddc4182deeafeaae5f6c73f3b49372baec33a70a6c17e885806fa"
+  }
+}

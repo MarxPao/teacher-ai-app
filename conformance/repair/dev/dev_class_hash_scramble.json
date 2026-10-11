@@ -1,0 +1,17 @@
+{
+  "id": "dev_class_hash_scramble",
+  "name": "Classes CSS substituídas por hashes de bundler",
+  "description": "Simula rebuild de framework utilitário alterando classes estáticas",
+  "fixture": "tools/runner-harness/fixtures/standard.html",
+  "baseGraph": "graphs/synthetic/lancar_nota.json",
+  "expectedOutcome": "CORRECT_REPAIR",
+  "isBait": false,
+  "operations": [
+    {
+      "type": "scramble_attributes",
+      "selector": "button, input, table",
+      "attr": "class",
+      "prefix": "tw-"
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "id": "holdout_bait_polarity_swap",
+  "name": "ISCA: Inversão de polaridade entre faltas e presenças",
+  "description": "Colunas de dados trocam semântica oposta. Deve abortar com SAFE_ABORT sem gravar na coluna errada.",
+  "fixture": "tools/runner-harness/fixtures/holdout/two_row_headers.html",
+  "baseGraph": "graphs/conformance/holdout/two_row_headers.json",
+  "expectedOutcome": "SAFE_ABORT",
+  "isBait": true,
+  "operations": [
+    {
+      "type": "swap_column_semantics",
+      "selector": "table",
+      "colIndexA": 2,
+      "colIndexB": 3
+    }
+  ]
+}

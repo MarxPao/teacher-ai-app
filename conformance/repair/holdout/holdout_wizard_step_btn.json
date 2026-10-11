@@ -1,0 +1,16 @@
+{
+  "id": "holdout_wizard_step_btn",
+  "name": "Botão Avançar Etapa renomeado para Próximo Passo",
+  "description": "Navegação de fluxo assistido por wizard",
+  "fixture": "tools/runner-harness/fixtures/holdout/wizard.html",
+  "baseGraph": "graphs/conformance/holdout/wizard.json",
+  "expectedOutcome": "CORRECT_REPAIR",
+  "isBait": false,
+  "operations": [
+    {
+      "type": "rename_text",
+      "selector": "button#next-step, .wizard-next",
+      "newText": "Próximo Passo"
+    }
+  ]
+}
