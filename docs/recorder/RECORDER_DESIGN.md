@@ -249,8 +249,13 @@ Conforme auditado em `lib/contracts/skillgraph/validate.ts`:
 - **Prós**: Solução ideal para longo prazo.
 - **Contras**: Exige alteração do contrato congelado, proibida na Fase 3.
 
-### 11.3 Recomendação
-**Adotar a Opção A como padrão principal do compilador** (filtro via `NAVIGATE.query` quando refletido na URL, e via `CLICK` com `TextSpec` em abas de turma). Para casos residuais da Opção B (dropdowns que não alteram URL), o compilador emite o grafo com `CHECKPOINT` explicativo ou marca para revisão humana.
+### 11.3 Decisão Aprovada no GATE 0
+- **Opção A Aprovada como Padrão**:
+  1. Filtro via `NAVIGATE.query` parametrizada (`ValueRef`) quando a seleção de turma alterar os parâmetros da URL (ex.: `?turma=8A`).
+  2. Filtro via nó `CLICK` com `is_submit_action: false` e `TextSpec` parametrizado quando a seleção for por abas ou botões visíveis de turmas (ex.: abas "8A", "8B").
+- **Caso Residual (<select> ou busca que NÃO altera a URL)**:
+  * O compilador emite terminantemente o erro **`E_UNSUPPORTED_PATTERN`** com mensagem explicativa clara classificando o fluxo como Tier 2 (suporte via gravação assistida).
+  * A introdução de um nó declarativo `FILTER` fica formalmente adiada para a **Fase 4**. O contrato congelado v2.0 permanece **100% inalterado**.
 
 ---
 
@@ -296,9 +301,9 @@ Conforme auditado em `lib/contracts/skillgraph/validate.ts`:
 - `pickMode.ts`: Captura em modo de marcação com `stopPropagation`.
 - `recorderCore.ts`: Listeners em capture phase com agregação no blur/change.
 
-### 12.5 `lib/repositories/` (Tarefa T3.8b - Armazenamento de Grafos)
-- `ChromeStorageSkillGraphRepository.ts`: Implementação sobre `chrome.storage.local`.
-- `MemorySkillGraphRepository.ts`: Implementação em memória para o harness e testes.
+### 12.5 Repositórios de Grafos (Divididos entre Parte A e Parte B)
+- **Tarefa T3.6b (Parte A - antes da T3.7)**: `lib/repositories/MemorySkillGraphRepository.ts` (implementação em memória para o botão Salvar do harness e testes).
+- **Tarefa T3.8b (Parte B)**: `lib/repositories/ChromeStorageSkillGraphRepository.ts` (implementação sobre `chrome.storage.local` para a extensão).
 
 ### 12.6 `tools/runner-harness/` e Traces Dourados
 - `tools/runner-harness/reviewView.ts`: UI compartilhada de revisão do trace e decisões.
