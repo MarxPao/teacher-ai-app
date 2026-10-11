@@ -25,6 +25,7 @@ import {
   MethodParamSchemas,
   MAX_MESSAGE_BYTES,
   EXTENSION_ALLOWED_METHODS,
+  migrateLocalStorageToDesktop,
 } from '../lib/desktop-core'
 import type { SkillGraphV2 } from '../lib/contracts/skillgraph'
 import type { AuditEntry } from '../lib/contracts/audit'
@@ -478,6 +479,49 @@ describe('Desktop Core — Teste de Fronteira (Fase 6)', () => {
       await settingsRepo.set('theme', { mode: 'dark' })
       const theme = await settingsRepo.get<{ mode: string }>('theme')
       expect(theme?.mode).toBe('dark')
+    })
+  })
+
+  // 11. Migração Segura de localStorage
+  describe('11. Migração Segura de localStorage', () => {
+    it('deve migrar segredos para o cofre e discentes para o SQLite, expurgando as chaves sensíveis', async () => {
+      const storageMap = new Map<string, string>()
+      storageMap.set('teacher_apis', JSON.stringify({ openai: 'sk-test-123', anthropic: 'sk-ant-456' }))
+      storageMap.set('teacher_byok_key', 'sk-single-789')
+      storageMap.set('teacher_students', JSON.stringify([{ id: 'st1', name: 'Zeca' }]))
+      storageMap.set('teacher_theme', 'dark')
+
+      const fakeStorage = {
+        getItem: (k: string) => storageMap.get(k) ?? null,
+        setItem: (k: string, v: string) => { storageMap.set(k, v) },
+        removeItem: (k: string) => { storageMap.delete(k) },
+      }
+
+      const invokedCalls: Array<{ method: string; params: any }> = []
+      const fakeBridge = {
+        invoke: async (method: string, params?: any) => {
+          invokedCalls.push({ method, params })
+          return { ok: true }
+        },
+      }
+
+      const report = await migrateLocalStorageToDesktop(fakeBridge, fakeStorage)
+      expect(report.alreadyMigrated).toBe(false)
+      expect(report.secretsMigrated).toBe(3)
+      expect(report.studentsMigrated).toBe(1)
+      expect(report.keysPurged).toContain('teacher_apis')
+      expect(report.keysPurged).toContain('teacher_students')
+
+      // Chaves sensíveis foram apagadas
+      expect(fakeStorage.getItem('teacher_apis')).toBeNull()
+      expect(fakeStorage.getItem('teacher_students')).toBeNull()
+      // Chaves não sensíveis permanecem
+      expect(fakeStorage.getItem('teacher_theme')).toBe('dark')
+      expect(fakeStorage.getItem('teacher_migrated_to_desktop_v1')).toBe('done')
+
+      // Segunda execução idempotente
+      const rerun = await migrateLocalStorageToDesktop(fakeBridge, fakeStorage)
+      expect(rerun.alreadyMigrated).toBe(true)
     })
   })
 })

@@ -177,11 +177,51 @@ export const KEYS = {
 export type LocalDBKey = typeof KEYS[keyof typeof KEYS]
 
 // ─── Typed Entity Accessors ────────────────────────────────────────────────────
+import { migrateLocalStorageToDesktop } from './desktop-core/migration/localStorageMigration'
+
+declare const window: any
+
+let inMemoryStudentsCache: any[] | null = null
+
+/**
+ * Inicializa a sincronização do cache local com o SQLite Cifrado do App Desktop via IPC.
+ */
+export async function initDesktopDatabaseSync(): Promise<void> {
+  if (typeof window === 'undefined' || !window.electronAPI) return
+  try {
+    await migrateLocalStorageToDesktop(window.electronAPI, localStorage)
+    const students = await window.electronAPI.invoke('students.list')
+    if (Array.isArray(students)) {
+      inMemoryStudentsCache = students
+    }
+  } catch (err) {
+    console.warn('[LocalDB] Erro ao sincronizar com desktop database:', err)
+  }
+}
+
 // Use these in components instead of raw localStorage calls.
 
 // Students
-export const getStudents   = <T = unknown[]>() => safeGet<T>(KEYS.STUDENTS, [] as unknown as T)
-export const setStudents   = <T>(v: T) => safeSet(KEYS.STUDENTS, v)
+export const getStudents   = <T = unknown[]>(): T => {
+  if (inMemoryStudentsCache !== null) {
+    return inMemoryStudentsCache as unknown as T
+  }
+  return safeGet<T>(KEYS.STUDENTS, [] as unknown as T)
+}
+export const setStudents   = <T>(v: T): boolean => {
+  if (Array.isArray(v)) {
+    inMemoryStudentsCache = v
+  }
+  const ok = safeSet(KEYS.STUDENTS, v)
+  if (typeof window !== 'undefined' && window.electronAPI && Array.isArray(v)) {
+    window.electronAPI.invoke('students.upsertRoster', {
+      classId: 'default',
+      students: v,
+      source: { portalId: 'app_sync', readAt: new Date().toISOString() },
+    }).catch(() => {})
+  }
+  return ok
+}
 
 // Classes
 export const getClasses    = <T = unknown[]>() => safeGet<T>(KEYS.CLASSES, [] as unknown as T)
