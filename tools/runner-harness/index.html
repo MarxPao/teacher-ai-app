@@ -142,7 +142,11 @@
     <div>
       <h1>Teacher AI — SkillGraph v2 Harness</h1>
     </div>
-    <div class="badge">Execução Local Sem Extensão</div>
+    <div style="display: flex; gap: 8px; align-items: center;">
+      <button id="tab-btn-runner" class="btn-primary" style="padding: 6px 14px;">Executar (Runner)</button>
+      <button id="tab-btn-recorder" class="btn-secondary" style="padding: 6px 14px;">Gravar & Revisar</button>
+      <div class="badge">Execução Local Sem Extensão</div>
+    </div>
   </header>
 
   <div class="main-layout">
@@ -158,6 +162,8 @@
           <option value="virtualized.html">virtualized.html — Container com rolagem virtual</option>
           <option value="diario_grid.html">diario_grid.html — Grade estilo diário de classe</option>
           <option value="reformatting_input.html">reformatting_input.html — Input com auto-formatação no blur</option>
+          <option value="portal_com_login.html">portal_com_login.html — Login e transição de tela</option>
+          <option value="portal_com_abas.html">portal_com_abas.html — Seleção de turma por abas</option>
         </select>
         <div style="margin-top: 8px;">
           <iframe id="fixture-frame" src="fixtures/standard.html"></iframe>
@@ -198,8 +204,8 @@
       </div>
     </div>
 
-    <!-- Coluna Direita: Visualização da Árvore, Variáveis e Auditoria -->
-    <div class="panel">
+    <!-- Coluna Direita: Painel de Execução (Runner) -->
+    <div id="panel-runner-view" class="panel">
       <div>
         <div class="section-title">Árvore de Nós em Tempo Real</div>
         <div id="graph-tree">
@@ -217,6 +223,31 @@
         <div id="audit-log">
           <div style="color: #94a3b8; font-size: 0.85rem;">Nenhuma mutação registrada.</div>
         </div>
+      </div>
+    </div>
+
+    <!-- Coluna Direita: Painel de Gravação e Revisão (Recorder) -->
+    <div id="panel-recorder-view" class="panel" style="display: none;">
+      <div>
+        <div class="section-title">Controle de Gravação no DOM</div>
+        <div class="toolbar">
+          <button id="btn-start-record" class="btn-primary">🔴 Iniciar Gravação no Fixture</button>
+          <button id="btn-stop-record" class="btn-danger" disabled>⏹ Parar Gravação</button>
+        </div>
+      </div>
+
+      <div>
+        <div class="section-title">Carregar Trace Dourado (Amostras Rápidas)</div>
+        <div class="toolbar">
+          <button id="btn-load-trace-roster" class="btn-secondary">read_roster</button>
+          <button id="btn-load-trace-falta" class="btn-secondary">lancar_falta</button>
+          <button id="btn-load-trace-nota" class="btn-secondary">lancar_nota</button>
+          <button id="btn-load-trace-login" class="btn-secondary">login</button>
+        </div>
+      </div>
+
+      <div id="review-view-container" style="margin-top: 8px;">
+        <div style="color: #94a3b8; font-size: 0.85rem;">Inicie uma gravação ou carregue um trace dourado acima para revisar e compilar.</div>
       </div>
     </div>
   </div>

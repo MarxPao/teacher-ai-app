@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Portal do Professor - Filtro por Abas</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; background: #f8fafc; color: #1e293b; }
+    .card { background: white; padding: 20px; border-radius: 8px; border: 1px solid #e2e8f0; max-width: 700px; margin: 0 auto; }
+    .tabs { display: flex; gap: 8px; border-bottom: 2px solid #e2e8f0; margin-bottom: 16px; }
+    .tab { padding: 8px 16px; cursor: pointer; border: none; background: none; font-weight: 600; color: #64748b; border-bottom: 2px solid transparent; margin-bottom: -2px; }
+    .tab.active { color: #2563eb; border-bottom-color: #2563eb; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { border: 1px solid #e2e8f0; padding: 8px; text-align: left; }
+    th { background: #f1f5f9; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>Relação de Alunos por Turma</h2>
+    <div class="tabs" role="tablist">
+      <button class="tab active" role="tab" id="tab-8a" aria-selected="true">Turma 8A</button>
+      <button class="tab" role="tab" id="tab-8b" aria-selected="false">Turma 8B</button>
+    </div>
+
+    <div id="content-8a">
+      <table class="table-alunos">
+        <thead>
+          <tr><th>Matrícula</th><th>Nome</th><th>Turma</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>202401</td><td>Zeca Canário</td><td>8A</td></tr>
+          <tr><td>202402</td><td>Beatriz Souza</td><td>8A</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div id="content-8b" style="display: none;">
+      <table class="table-alunos">
+        <thead>
+          <tr><th>Matrícula</th><th>Nome</th><th>Turma</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>202403</td><td>Carlos Drummond</td><td>8B</td></tr>
+          <tr><td>202404</td><td>Daniela Mercury</td><td>8B</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    const t8a = document.getElementById('tab-8a');
+    const t8b = document.getElementById('tab-8b');
+    const c8a = document.getElementById('content-8a');
+    const c8b = document.getElementById('content-8b');
+
+    t8a.addEventListener('click', () => {
+      t8a.classList.add('active');
+      t8b.classList.remove('active');
+      c8a.style.display = 'block';
+      c8b.style.display = 'none';
+    });
+
+    t8b.addEventListener('click', () => {
+      t8b.classList.add('active');
+      t8a.classList.remove('active');
+      c8b.style.display = 'block';
+      c8a.style.display = 'none';
+    });
+  </script>
+</body>
+</html>

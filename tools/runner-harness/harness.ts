@@ -1,5 +1,5 @@
 // tools/runner-harness/harness.ts
-// Controlador principal da interface de testes manuais do SkillGraphRunner
+// Controlador principal da interface de testes manuais do SkillGraphRunner e Gravador
 
 import { SkillGraphRunner } from '../../lib/runner/engine'
 import { DomDriver } from '../../lib/runner-dom/driver'
@@ -7,10 +7,19 @@ import type { Host, CheckpointPayload, HandoffPayload, RunEvent, RunState } from
 import type { AuditEntry } from '../../lib/contracts/audit'
 import type { SkillGraphV2 } from '../../lib/contracts/skillgraph'
 import { TraceView } from './traceView'
+import { ReviewView } from './reviewView'
+import { DomRecorder } from '../../lib/recorder-dom/recorderCore'
+import { MemorySkillGraphRepository } from '../../lib/repositories/MemorySkillGraphRepository'
+import type { Trace } from '../../lib/recorder/traceSchema'
 
 import readRosterGraph from '../../graphs/synthetic/read_roster.json'
 import lancarFaltaGraph from '../../graphs/synthetic/lancar_falta.json'
 import lancarNotaGraph from '../../graphs/synthetic/lancar_nota.json'
+
+import traceRoster from '../../traces/golden/read_roster.trace.json'
+import traceFalta from '../../traces/golden/lancar_falta.trace.json'
+import traceNota from '../../traces/golden/lancar_nota.trace.json'
+import traceLogin from '../../traces/golden/login.trace.json'
 
 const SYNTHETIC_GRAPHS: Record<string, SkillGraphV2> = {
   read_roster: readRosterGraph as unknown as SkillGraphV2,
@@ -24,13 +33,11 @@ let stepMode = false
 let stepResolver: (() => void) | null = null
 let abortRequested = false
 let traceView: TraceView
+let currentRecorder: DomRecorder | null = null
 
 function waitIfPaused(): Promise<void> {
-  if (abortRequested) {
-    throw new Error('E_INTERRUPTED: Execução abortada pelo operador no painel')
-  }
+  if (abortRequested) throw new Error('E_INTERRUPTED: Execução abortada pelo operador no painel')
   if (!isPaused && !stepMode) return Promise.resolve()
-
   return new Promise((resolve) => {
     stepResolver = () => {
       stepResolver = null
@@ -39,47 +46,29 @@ function waitIfPaused(): Promise<void> {
   })
 }
 
-function createHarnessHost(onStep: (nodeId: string) => void): Host {
-  return {
-    async confirm(cp: CheckpointPayload): Promise<boolean> {
-      return window.confirm(`[CHECKPOINT] ${cp.label}\n\nConfirma a continuidade?`)
-    },
-    async handoff(ho: HandoffPayload): Promise<boolean> {
-      window.alert(`[HANDOFF] Intervenção necessária (${ho.reason}): ${ho.message}`)
-      return true
-    },
-    async audit(entry: AuditEntry): Promise<void> {
-      traceView.addAuditEntry(entry)
-    },
-    emit(event: RunEvent): void {
-      traceView.handleEvent(event)
-    },
-    async beforeNode(nodeId: string, _state: RunState): Promise<void> {
-      onStep(nodeId)
-      await waitIfPaused()
-      if (stepMode) isPaused = true
-    },
-    now: () => Date.now(),
-    sleep: (ms: number) => new Promise((resolve) => setTimeout(resolve, ms)),
-    random: () => Math.random(),
-    randomId: () => 'run_' + Math.random().toString(36).slice(2, 9),
-  }
-}
+import { createHarnessHost } from './harnessHost'
 
 export function initHarness(): void {
-  const fixtureSelect = document.getElementById('fixture-select') as HTMLSelectElement
-  const fixtureFrame = document.getElementById('fixture-frame') as HTMLIFrameElement
-  const graphSelect = document.getElementById('graph-select') as HTMLSelectElement
-  const graphJsonArea = document.getElementById('graph-json') as HTMLTextAreaElement
-  const varsJsonArea = document.getElementById('variables-json') as HTMLTextAreaElement
-  const dryRunCheck = document.getElementById('dry-run-check') as HTMLInputElement
-
-  const btnRun = document.getElementById('btn-run') as HTMLButtonElement
-  const btnPause = document.getElementById('btn-pause') as HTMLButtonElement
-  const btnStep = document.getElementById('btn-step') as HTMLButtonElement
-  const btnAbort = document.getElementById('btn-abort') as HTMLButtonElement
-  const btnClear = document.getElementById('btn-clear') as HTMLButtonElement
-  const btnExport = document.getElementById('btn-export-trace') as HTMLButtonElement
+  const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T
+  const fixtureSelect = $<HTMLSelectElement>('fixture-select')
+  const fixtureFrame = $<HTMLIFrameElement>('fixture-frame')
+  const graphSelect = $<HTMLSelectElement>('graph-select')
+  const graphJsonArea = $<HTMLTextAreaElement>('graph-json')
+  const varsJsonArea = $<HTMLTextAreaElement>('variables-json')
+  const dryRunCheck = $<HTMLInputElement>('dry-run-check')
+  const btnRun = $<HTMLButtonElement>('btn-run')
+  const btnPause = $<HTMLButtonElement>('btn-pause')
+  const btnStep = $<HTMLButtonElement>('btn-step')
+  const btnAbort = $<HTMLButtonElement>('btn-abort')
+  const btnClear = $<HTMLButtonElement>('btn-clear')
+  const btnExport = $<HTMLButtonElement>('btn-export-trace')
+  const tabBtnRunner = $<HTMLButtonElement>('tab-btn-runner')
+  const tabBtnRecorder = $<HTMLButtonElement>('tab-btn-recorder')
+  const panelRunner = $('panel-runner-view')
+  const panelRecorder = $('panel-recorder-view')
+  const btnStartRecord = $<HTMLButtonElement>('btn-start-record')
+  const btnStopRecord = $<HTMLButtonElement>('btn-stop-record')
+  const reviewContainer = $('review-view-container')
 
   traceView = new TraceView(
     document.getElementById('graph-tree')!,
@@ -87,6 +76,60 @@ export function initHarness(): void {
     document.getElementById('audit-log')!,
     document.getElementById('footer-counters')!
   )
+
+  const repository = new MemorySkillGraphRepository()
+  const reviewView = new ReviewView(reviewContainer, repository, () => fixtureFrame.contentDocument)
+
+  // Alternância de Abas
+  tabBtnRunner.addEventListener('click', () => {
+    tabBtnRunner.className = 'btn-primary'
+    tabBtnRecorder.className = 'btn-secondary'
+    panelRunner.style.display = 'flex'
+    panelRecorder.style.display = 'none'
+  })
+
+  tabBtnRecorder.addEventListener('click', () => {
+    tabBtnRunner.className = 'btn-secondary'
+    tabBtnRecorder.className = 'btn-primary'
+    panelRunner.style.display = 'none'
+    panelRecorder.style.display = 'flex'
+  })
+
+  // Gravação DOM
+  btnStartRecord.addEventListener('click', () => {
+    const doc = fixtureFrame.contentDocument
+    if (!doc) {
+      alert('Iframe não acessível.')
+      return
+    }
+    currentRecorder = new DomRecorder(doc, {
+      taskId: 'read_roster',
+      mountOverlay: true,
+      onFinish: (trace) => {
+        btnStartRecord.disabled = false
+        btnStopRecord.disabled = true
+        reviewView.show(trace)
+      },
+    })
+    currentRecorder.start()
+    btnStartRecord.disabled = true
+    btnStopRecord.disabled = false
+  })
+
+  btnStopRecord.addEventListener('click', () => {
+    if (!currentRecorder) return
+    const trace = currentRecorder.stop()
+    currentRecorder = null
+    btnStartRecord.disabled = false
+    btnStopRecord.disabled = true
+    reviewView.show(trace)
+  })
+
+  // Carga Rápida de Traces Dourados
+  document.getElementById('btn-load-trace-roster')?.addEventListener('click', () => reviewView.show(traceRoster as unknown as Trace))
+  document.getElementById('btn-load-trace-falta')?.addEventListener('click', () => reviewView.show(traceFalta as unknown as Trace))
+  document.getElementById('btn-load-trace-nota')?.addEventListener('click', () => reviewView.show(traceNota as unknown as Trace))
+  document.getElementById('btn-load-trace-login')?.addEventListener('click', () => reviewView.show(traceLogin as unknown as Trace))
 
   function loadSelectedGraph(): void {
     const key = graphSelect.value
@@ -106,10 +149,7 @@ export function initHarness(): void {
 
   async function execute(stepping: boolean): Promise<void> {
     if (isRunning) {
-      if (stepping && isPaused && stepResolver) {
-        stepResolver()
-        return
-      }
+      if (stepping && isPaused && stepResolver) stepResolver()
       return
     }
 
@@ -133,7 +173,7 @@ export function initHarness(): void {
 
     const doc = fixtureFrame.contentDocument
     if (!doc) {
-      alert('Iframe não acessível ou ainda não carregado.')
+      alert('Iframe não acessível.')
       return
     }
 
@@ -148,14 +188,18 @@ export function initHarness(): void {
 
     const allowedHosts = (parsedGraph as any)?.safety?.allowed_hosts || ['localhost', '127.0.0.1']
     const driver = new DomDriver(doc, allowedHosts)
-    const host = createHarnessHost(() => {})
+    const host = createHarnessHost({
+      traceView,
+      onStep: () => {},
+      waitIfPaused,
+      setPaused: (p) => { isPaused = p },
+      isStepMode: () => stepMode,
+    })
     const runner = new SkillGraphRunner(driver, host)
 
     try {
       const result = await runner.run(parsedGraph, {}, { dryRun: dryRunCheck.checked, initialVariables: initialVars })
-      if (!result.success) {
-        alert(`Execução finalizada com erro: ${result.error?.message}`)
-      }
+      if (!result.success) alert(`Execução com erro: ${result.error?.message}`)
     } catch (err: any) {
       alert(`Falha fatal no runner: ${err.message}`)
     } finally {
@@ -167,35 +211,23 @@ export function initHarness(): void {
   }
 
   btnRun.addEventListener('click', () => execute(false))
-  btnStep.addEventListener('click', () => {
-    if (isRunning && isPaused && stepResolver) {
-      stepResolver()
-    } else {
-      execute(true)
-    }
-  })
-
+  btnStep.addEventListener('click', () => (isRunning && isPaused && stepResolver ? stepResolver() : execute(true)))
   btnPause.addEventListener('click', () => {
     if (!isRunning) return
     isPaused = !isPaused
     btnPause.textContent = isPaused ? 'Retomar' : 'Pausar'
-    if (!isPaused && stepResolver) {
-      stepResolver()
-    }
+    if (!isPaused && stepResolver) stepResolver()
   })
-
   btnAbort.addEventListener('click', () => {
     if (!isRunning) return
     abortRequested = true
     if (stepResolver) stepResolver()
   })
-
   btnClear.addEventListener('click', () => {
     if (isRunning) return
     traceView.clear()
     loadSelectedGraph()
   })
-
   btnExport.addEventListener('click', () => {
     const data = traceView.exportTrace()
     const blob = new Blob([data], { type: 'application/json' })
