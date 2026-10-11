@@ -1,0 +1,70 @@
+{
+  "trace_version": "1.0",
+  "task_id": "lancar_nota",
+  "started_at": 1775865600000,
+  "initial_url": "http://portal.escola.com/notas?turma=8A",
+  "page_digest": {
+    "host": "portal.escola.com",
+    "path": "/notas",
+    "title": "Portal do Professor - Lançamento de Notas",
+    "headings": ["Quadro de Notas"],
+    "table_headers": ["Matrícula", "Nome", "Nota"],
+    "counts": { "tables": 1, "rows": 30 },
+    "landmarks": ["Boletim"]
+  },
+  "steps": [
+    {
+      "id": "s1",
+      "at": 1775865600100,
+      "frame_path": "/",
+      "host": "portal.escola.com",
+      "path": "/notas",
+      "kind": "navigate",
+      "url": "http://portal.escola.com/notas?turma=8A"
+    },
+    {
+      "id": "s2",
+      "at": 1775865601000,
+      "frame_path": "/",
+      "host": "portal.escola.com",
+      "path": "/notas",
+      "kind": "input",
+      "value": "9.5",
+      "descriptor": {
+        "tag": "input",
+        "type": "text",
+        "accessible_name": "Nota",
+        "classes": ["input-nota"],
+        "candidates": [
+          { "strategy": "column_header", "column_label": "Nota", "match": "normalized" },
+          { "strategy": "css", "selector": "input.input-nota" }
+        ],
+        "rowContext": {
+          "headers": ["Matrícula", "Nome", "Nota"],
+          "column_index": 2,
+          "cells": ["202401", "Zeca Canário", "9.5"]
+        }
+      }
+    },
+    {
+      "id": "s3",
+      "at": 1775865602000,
+      "frame_path": "/",
+      "host": "portal.escola.com",
+      "path": "/notas",
+      "kind": "click",
+      "is_submit_action": true,
+      "descriptor": {
+        "tag": "button",
+        "role": "button",
+        "text": "Gravar Notas",
+        "accessible_name": "Gravar Notas",
+        "classes": ["btn-gravar"],
+        "candidates": [
+          { "strategy": "role_name", "role": "button", "name": "Gravar Notas", "match": "normalized" },
+          { "strategy": "css", "selector": "button.btn-gravar" }
+        ]
+      }
+    }
+  ]
+}

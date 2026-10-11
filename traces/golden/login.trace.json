@@ -1,0 +1,76 @@
+{
+  "trace_version": "1.0",
+  "task_id": "read_roster",
+  "started_at": 1775865600000,
+  "initial_url": "http://portal.escola.com/login",
+  "page_digest": {
+    "host": "portal.escola.com",
+    "path": "/login",
+    "title": "Portal do Professor - Acesso Restrito",
+    "headings": ["Identificação do Usuário"],
+    "counts": {},
+    "landmarks": ["Formulário de Login"]
+  },
+  "steps": [
+    {
+      "id": "s1",
+      "at": 1775865600100,
+      "frame_path": "/",
+      "host": "portal.escola.com",
+      "path": "/login",
+      "kind": "navigate",
+      "url": "http://portal.escola.com/login"
+    },
+    {
+      "id": "s2",
+      "at": 1775865601000,
+      "frame_path": "/",
+      "host": "portal.escola.com",
+      "path": "/login",
+      "kind": "sensitive_field",
+      "descriptor": {
+        "tag": "input",
+        "type": "password",
+        "name": "senha",
+        "autocomplete": "current-password",
+        "accessible_name": "Senha de Acesso",
+        "classes": ["form-password"],
+        "candidates": [
+          { "strategy": "css", "selector": "input[type='password']" }
+        ]
+      }
+    },
+    {
+      "id": "s3",
+      "at": 1775865605000,
+      "frame_path": "/",
+      "host": "portal.escola.com",
+      "path": "/alunos",
+      "kind": "navigate",
+      "url": "http://portal.escola.com/alunos?turma=8A"
+    },
+    {
+      "id": "s4",
+      "at": 1775865606000,
+      "frame_path": "/",
+      "host": "portal.escola.com",
+      "path": "/alunos",
+      "kind": "mark_table",
+      "descriptor": {
+        "tag": "table",
+        "role": "table",
+        "accessible_name": "Tabela de Alunos",
+        "classes": ["table-alunos"],
+        "candidates": [
+          { "strategy": "role_name", "role": "table", "name": "Tabela de Alunos", "match": "normalized" },
+          { "strategy": "css", "selector": "table.table-alunos" }
+        ],
+        "rowContext": {
+          "headers": ["Matrícula", "Nome"],
+          "column_index": 0,
+          "cells": ["202401", "Zeca Canário"]
+        }
+      }
+    }
+  ]
+}

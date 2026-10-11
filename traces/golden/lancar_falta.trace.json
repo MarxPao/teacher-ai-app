@@ -1,0 +1,72 @@
+{
+  "trace_version": "1.0",
+  "task_id": "lancar_falta",
+  "started_at": 1775865600000,
+  "initial_url": "http://portal.escola.com/frequencia?turma=8A",
+  "page_digest": {
+    "host": "portal.escola.com",
+    "path": "/frequencia",
+    "title": "Portal do Professor - Diário de Frequência",
+    "headings": ["Lançamento de Frequência"],
+    "table_headers": ["Matrícula", "Nome", "11/10"],
+    "counts": { "tables": 1, "rows": 30 },
+    "landmarks": ["Diário de Classe"]
+  },
+  "steps": [
+    {
+      "id": "s1",
+      "at": 1775865600100,
+      "frame_path": "/",
+      "host": "portal.escola.com",
+      "path": "/frequencia",
+      "kind": "navigate",
+      "url": "http://portal.escola.com/frequencia?turma=8A"
+    },
+    {
+      "id": "s2",
+      "at": 1775865601000,
+      "frame_path": "/",
+      "host": "portal.escola.com",
+      "path": "/frequencia",
+      "kind": "check",
+      "checked": true,
+      "descriptor": {
+        "tag": "input",
+        "type": "checkbox",
+        "role": "checkbox",
+        "accessible_name": "Falta",
+        "classes": ["chk-falta"],
+        "candidates": [
+          { "strategy": "column_header", "column_label": "11/10", "match": "normalized" },
+          { "strategy": "role_name", "role": "checkbox", "name": "Falta", "match": "normalized" },
+          { "strategy": "css", "selector": "input.chk-falta" }
+        ],
+        "rowContext": {
+          "headers": ["Matrícula", "Nome", "11/10"],
+          "column_index": 2,
+          "cells": ["202401", "Zeca Canário", "P"]
+        }
+      }
+    },
+    {
+      "id": "s3",
+      "at": 1775865602000,
+      "frame_path": "/",
+      "host": "portal.escola.com",
+      "path": "/frequencia",
+      "kind": "click",
+      "is_submit_action": true,
+      "descriptor": {
+        "tag": "button",
+        "role": "button",
+        "text": "Salvar Frequência",
+        "accessible_name": "Salvar Frequência",
+        "classes": ["btn-save"],
+        "candidates": [
+          { "strategy": "role_name", "role": "button", "name": "Salvar Frequência", "match": "normalized" },
+          { "strategy": "css", "selector": "button.btn-save" }
+        ]
+      }
+    }
+  ]
+}

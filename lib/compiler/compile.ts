@@ -1,6 +1,7 @@
 // lib/compiler/compile.ts
 // Pipeline puro e determinístico de compilação: Trace + Decisions -> SkillGraph v2
 
+import '../contracts/skillgraph/primitives'
 import { TraceSchema, type Trace } from '../recorder/traceSchema'
 import { MAX_TRACE_STEPS, MAX_TRACE_SIZE_BYTES } from '../recorder/limits'
 import { CompilerDecisionsSchema, type CompilerDecisions } from './decisions'
@@ -36,6 +37,9 @@ export function compile(
   if (Buffer.byteLength(traceStr, 'utf-8') > MAX_TRACE_SIZE_BYTES) {
     throw new CompilerError('E_TRACE_TOO_LARGE', `O trace excede o tamanho máximo de ${MAX_TRACE_SIZE_BYTES} bytes.`)
   }
+  if (Array.isArray((rawTrace as any)?.steps) && (rawTrace as any).steps.length > MAX_TRACE_STEPS) {
+    throw new CompilerError('E_TRACE_TOO_LARGE', `O trace contém ${(rawTrace as any).steps.length} passos (máximo: ${MAX_TRACE_STEPS}).`)
+  }
 
   // 2. Validação do Schema do Trace
   const traceParsed = TraceSchema.safeParse(rawTrace)
@@ -46,10 +50,6 @@ export function compile(
     )
   }
   const trace = traceParsed.data
-
-  if (trace.steps.length > MAX_TRACE_STEPS) {
-    throw new CompilerError('E_TRACE_TOO_LARGE', `O trace contém ${trace.steps.length} passos (máximo: ${MAX_TRACE_STEPS}).`)
-  }
 
   // 3. Validação das Decisões do Usuário
   const decisionsParsed = CompilerDecisionsSchema.safeParse(rawDecisions)

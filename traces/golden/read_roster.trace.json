@@ -1,0 +1,78 @@
+{
+  "trace_version": "1.0",
+  "task_id": "read_roster",
+  "started_at": 1775865600000,
+  "initial_url": "http://portal.escola.com/alunos?turma=8A",
+  "page_digest": {
+    "host": "portal.escola.com",
+    "path": "/alunos",
+    "title": "Portal do Professor - Relação de Alunos",
+    "headings": ["Lista de Alunos - Turma 8A"],
+    "table_headers": ["Matrícula", "Nome", "Situação"],
+    "form_labels": ["Turma"],
+    "counts": { "tables": 1, "rows": 30 },
+    "landmarks": ["Menu Principal", "Tabela de Alunos"]
+  },
+  "steps": [
+    {
+      "id": "s1",
+      "at": 1775865600100,
+      "frame_path": "/",
+      "host": "portal.escola.com",
+      "path": "/alunos",
+      "kind": "navigate",
+      "url": "http://portal.escola.com/alunos?turma=8A"
+    },
+    {
+      "id": "s2",
+      "at": 1775865601000,
+      "frame_path": "/",
+      "host": "portal.escola.com",
+      "path": "/alunos",
+      "kind": "mark_table",
+      "descriptor": {
+        "tag": "table",
+        "role": "table",
+        "accessible_name": "Tabela de Alunos",
+        "classes": ["table-alunos"],
+        "candidates": [
+          { "strategy": "role_name", "role": "table", "name": "Tabela de Alunos", "match": "normalized" },
+          { "strategy": "css", "selector": "table.table-alunos" }
+        ],
+        "rowContext": {
+          "headers": ["Matrícula", "Nome", "Situação"],
+          "column_index": 0,
+          "cells": ["202401", "Zeca Canário", "Ativo"]
+        }
+      }
+    },
+    {
+      "id": "s3",
+      "at": 1775865602000,
+      "frame_path": "/",
+      "host": "portal.escola.com",
+      "path": "/alunos",
+      "kind": "mark_next_page",
+      "descriptor": {
+        "tag": "button",
+        "role": "button",
+        "text": "Próxima",
+        "accessible_name": "Próxima Página",
+        "classes": ["btn-next"],
+        "candidates": [
+          { "strategy": "role_name", "role": "button", "name": "Próxima", "match": "normalized" },
+          { "strategy": "css", "selector": "button.btn-next" }
+        ]
+      }
+    },
+    {
+      "id": "s4",
+      "at": 1775865602500,
+      "frame_path": "/",
+      "host": "portal.escola.com",
+      "path": "/alunos",
+      "kind": "settled",
+      "delta": {}
+    }
+  ]
+}
