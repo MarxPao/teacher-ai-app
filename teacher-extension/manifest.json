@@ -29,7 +29,6 @@
     "tabs",
     "sidePanel",
     "scripting",
-    "debugger",
     "nativeMessaging",
     "alarms"
   ],

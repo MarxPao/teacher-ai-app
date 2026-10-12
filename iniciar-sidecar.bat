@@ -1,21 +1,13 @@
 @echo off
-title Teacher AI — Servidor Sidecar Manual
+echo ============================================================
+echo   [DEPRECATED] SIDECAR PYTHON DESATIVADO (FASE 6)
+echo ============================================================
+echo O Teacher AI agora opera 100%% no aplicativo desktop Electron
+echo com SQLite local cifrado, cofre DPAPI e Chrome Native Messaging.
+echo Nao e mais necessario iniciar o servidor sidecar Python ou abrir
+echo portas HTTP/WebSocket locais.
 echo.
-echo  =====================================================
-echo   Teacher AI — Iniciando Sidecar de Homologacao Manual
-echo  =====================================================
-echo.
-
-where python >nul 2>&1
-if %ERRORLEVEL% NEQ 0 (
-    echo  [ERRO] Python nao encontrado no PATH.
-    pause
-    exit /b 1
-)
-
-echo  Abrindo painel web em http://localhost:8765...
-start http://localhost:8765
-
-echo  Iniciando servidor HTTP e conector CDP...
-python sidecar\manual_runner.py
+echo Execute o aplicativo desktop diretamente:
+echo   npm run desktop:dev
+echo ============================================================
 pause
