@@ -96,9 +96,9 @@ async function executeBusinessMethod(method: string, params: any): Promise<any> 
     }
 
     case 'data.exportStudent': {
-      if (!driver || !dataKey) throw new Error('Banco ou chave de dados indisponível.')
-      const exportService = new ExportService(driver, dataKey)
-      return await exportService.exportStudentDossier(params.studentId)
+      if (!studentRepo) throw new Error('Repositório de discentes indisponível.')
+      const exportService = new ExportService(studentRepo)
+      return await exportService.exportStudent(params.studentId)
     }
 
     case 'data.eraseStudent': {
