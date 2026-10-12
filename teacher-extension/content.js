@@ -551,23 +551,7 @@ function handleInspectAndScrape() {
   return payload;
 }
 
-// ——— Message Listener (App postMessage + BroadcastChannel + Chrome Runtime) ———
-
-window.addEventListener('message', (event) => {
-  const isFromApp = event.origin === 'http://localhost:3000' || event.origin === 'http://localhost:3001';
-  if (!isFromApp) return;
-
-  const isAppPage = window.location.href.includes('localhost:3000') || window.location.href.includes('localhost:3001');
-  if (isAppPage) {
-    chrome.runtime.sendMessage({ action: 'FORWARD_TO_PORTAL', payload: event.data });
-  } else {
-    if (event.data.action === 'EXECUTE_PORTAL_ACTION' || event.data.action === 'FILL_DEADLINE') {
-      handleExecutePortalAction(event.data);
-    } else if (event.data.action === 'INSPECT_PAGE' || event.data.action === 'EXTRACT_PAGE_DATA') {
-      handleInspectAndScrape();
-    }
-  }
-});
+// ——— Message Listener (Desacoplado do app web legado: no v2 opera via Native Messaging) ———
 
 try {
   const bc = new BroadcastChannel('teacher_portal_bridge');
@@ -2741,132 +2725,7 @@ function universalExtractStudents() {
 }
 
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// ROTA B: BRIDGE EXTENSÃO-APP (postMessage + content script com validação estrita)
-// ═══════════════════════════════════════════════════════════════════════════════
-const ALLOWED_APP_ORIGINS = ['http://localhost:3000', 'http://localhost:3001'];
-
-window.addEventListener('message', async (event) => {
-  // Ignora mensagens sem payload ou de fontes não estruturadas
-  if (!event.data || typeof event.data !== 'object') return;
-
-  // ─── PING DE CONEXÃO DO RELAY ──────────────────────────────────────────────
-  if (event.data.type === 'TEACHER_RELAY_PING') {
-    if (!ALLOWED_APP_ORIGINS.includes(event.origin)) return;
-    window.postMessage({
-      type: 'TEACHER_RELAY_PONG',
-      requestId: event.data.requestId || null,
-      payload: { online: true, version: '3.1' }
-    }, event.origin);
-    return;
-  }
-
-  // ─── RELAY DE EXECUÇÃO DE FERRAMENTAS DO APP PARA A EXTENSÃO ───────────────
-  if (event.data.type === 'TEACHER_RELAY_TO_EXTENSION') {
-    if (!ALLOWED_APP_ORIGINS.includes(event.origin)) {
-      console.warn(`[TeacherRelayBridge] ⛔ Origem rejeitada: "${event.origin}"`);
-      return;
-    }
-
-    const { requestId, payload } = event.data;
-
-    try {
-      if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
-        chrome.runtime.sendMessage({
-          action: 'RELAY_TOOL_EXECUTION',
-          requestId,
-          payload
-        }, (resp) => {
-          if (chrome.runtime.lastError) {
-            window.postMessage({
-              type: 'TEACHER_RELAY_RESPONSE',
-              requestId,
-              payload: {
-                success: false,
-                status: 'extension_error',
-                error: chrome.runtime.lastError.message
-              }
-            }, event.origin);
-            return;
-          }
-
-          window.postMessage({
-            type: 'TEACHER_RELAY_RESPONSE',
-            requestId,
-            payload: resp || { success: false, error: 'Resposta vazia da extensão.' }
-          }, event.origin);
-        });
-      } else {
-        window.postMessage({
-          type: 'TEACHER_RELAY_RESPONSE',
-          requestId,
-          payload: {
-            success: false,
-            status: 'extension_unavailable',
-            error: 'API chrome.runtime não disponível no contexto da página.'
-          }
-        }, event.origin);
-      }
-    } catch (err) {
-      window.postMessage({
-        type: 'TEACHER_RELAY_RESPONSE',
-        requestId,
-        payload: {
-          success: false,
-          status: 'relay_exception',
-          error: err.message
-        }
-      }, event.origin);
-    }
-    return;
-  }
-
-  if (event.data.type === 'TEACHER_BRIDGE_COMMAND') {
-    // 1. VALIDAÇÃO DE ORIGEM OBRIGATÓRIA (Item 2.2)
-    if (!ALLOWED_APP_ORIGINS.includes(event.origin)) {
-      console.warn(`[TeacherBridge] ⛔ Mensagem descartada — Origem rejeitada: "${event.origin}". Origens permitidas: ${ALLOWED_APP_ORIGINS.join(', ')}`);
-      return;
-    }
-
-    console.log(`[TeacherBridge] ✅ Mensagem válida recebida da origem confiável (${event.origin}):`, event.data);
-    const payload = event.data.payload || {};
-
-    try {
-      // Repassa para o endpoint /api/skills/interpret
-      const res = await fetch('http://localhost:3000/api/skills/interpret', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-byok-key': payload.byokKey || 'gsk_mock_test_key_for_development_placeholder'
-        },
-        body: JSON.stringify({
-          text: payload.text || '',
-          portalId: payload.portalId || null,
-          turmaId: payload.turmaId || null,
-          source: 'bridge_app'
-        })
-      });
-
-      const result = await res.json();
-      console.log('[TeacherBridge] Resposta do interpretador recebida:', result);
-
-      // Devolve resposta de forma visível para a própria UI do app
-      window.postMessage({
-        type: 'TEACHER_BRIDGE_RESPONSE',
-        requestId: event.data.requestId || null,
-        payload: result
-      }, event.origin);
-
-    } catch (err) {
-      console.error('[TeacherBridge] Erro ao comunicar com endpoint de interpretação:', err);
-      window.postMessage({
-        type: 'TEACHER_BRIDGE_RESPONSE',
-        requestId: event.data.requestId || null,
-        payload: { ok: false, error: err.message }
-      }, event.origin);
-    }
-  }
-});
+// ——— BRIDGE EXTENSÃO-APP (Desacoplada: no v2 a comunicação é via Chrome Native Messaging com o Desktop) ———
 
 // ——— OTIMIZAÇÕES AVANÇADAS: DOM Settled, Spatial Anchoring e Auto-Draft ———
 

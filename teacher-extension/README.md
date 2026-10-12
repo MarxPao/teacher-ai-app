@@ -33,7 +33,7 @@ teacher-extension/
 
 ## Como Usar
 
-1. Abra o app TEACHER??? em `http://localhost:3000`
+1. Inicie o app Teacher AI Desktop (consulte docs/desktop/INSTALL.md)
 2. Acesse o módulo **Extensões** na barra lateral
 3. Selecione uma tarefa do seu calendário
 4. Clique em **Preencher Agênticamente** no portal desejado

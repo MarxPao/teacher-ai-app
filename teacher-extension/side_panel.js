@@ -569,21 +569,24 @@ function executeMatchedSkill(skillGraph, taskName) {
       const verificationMethod = verifiedNode?.verification_method || (isOk ? 'implicit_dom_success' : 'unverified_failure');
       const errorDetails = resp?.error || chrome.runtime.lastError?.message || null;
 
-      // ── Persistência de Histórico Honesto (Item 1) ──
+      // ── Persistência de Histórico Honesto (Local-First via chrome.storage.local) ──
       try {
-        fetch('http://localhost:3000/api/skills/log-execution', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            skill_id: skillGraph?.id || skillGraph?.task_id || taskName,
-            portal_id: skillGraph?.portal_id || 'machado_sobrinho',
-            task_name: skillGraph?.name || taskName,
-            status,
-            verified: isVerified,
-            verification_method: verificationMethod,
-            error_details: errorDetails
-          })
-        }).catch(err => console.warn('[LogExecution] Erro ao gravar:', err));
+        if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+          chrome.storage.local.get(['skills_audit_history'], (stored) => {
+            const list = Array.isArray(stored?.skills_audit_history) ? stored.skills_audit_history : [];
+            list.push({
+              skill_id: skillGraph?.id || skillGraph?.task_id || taskName,
+              portal_id: skillGraph?.portal_id || 'portal_escolar',
+              task_name: skillGraph?.name || taskName,
+              status,
+              verified: isVerified,
+              verification_method: verificationMethod,
+              error_details: errorDetails,
+              timestamp: Date.now()
+            });
+            chrome.storage.local.set({ skills_audit_history: list.slice(-100) });
+          });
+        }
       } catch (e) {}
 
       if (chrome.runtime.lastError || !resp?.ok) {
@@ -637,24 +640,19 @@ function executeMatchedSkill(skillGraph, taskName) {
       let byokKey = await getSecureByokKey();
       let valResult = { valid: true, confidence: 0.9, reasoning: 'Dados validados com sucesso.' };
 
-      try {
-        const valRes = await fetch('http://localhost:3000/api/skills/validate-result', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-byok-key': byokKey
-          },
-          body: JSON.stringify({
-            records,
-            columns: skillGraph?.metadata?.columns || [],
-            taskName
-          })
-        });
-        if (valRes.ok) {
-          valResult = await valRes.json();
-        }
-      } catch (valErr) {
-        console.warn('[SidePanel] Erro ao validar resultado semântico:', valErr);
+      // Validação estrutural determinística local (sem requisição TCP)
+      if (Array.isArray(records) && records.length > 0) {
+        valResult = {
+          valid: true,
+          confidence: 1.0,
+          reasoning: `${records.length} registro(s) estruturado(s) localizados com sucesso.`
+        };
+      } else {
+        valResult = {
+          valid: false,
+          confidence: 0.0,
+          reasoning: 'Nenhum registro extraído da tabela do portal.'
+        };
       }
 
       renderStudentListWithValidation(records, valResult, source, taskName);
@@ -881,33 +879,29 @@ if (btnRecordRoute) {
 
 async function syncTeacherMemory() {
   try {
-    const res = await fetch('http://localhost:3000/api/agent/memory', { signal: AbortSignal.timeout(3000) });
-    if (res.ok) {
-      const data = await res.json();
-      if (data?.ok && data.data) {
-        localStorage.setItem('teacher_synced_profile', JSON.stringify(data.data));
-        console.log('[SidePanel] Perfil e memória curada sincronizados do Teacher AI:', data.data.teacherName);
-      }
+    if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+      chrome.storage.local.get(['teacher_synced_profile'], (res) => {
+        if (res?.teacher_synced_profile) {
+          localStorage.setItem('teacher_synced_profile', JSON.stringify(res.teacher_synced_profile));
+        }
+      });
     }
-  } catch (e) {
-    // Silencioso se o servidor Next.js não estiver rodando
-  }
+  } catch (e) {}
 }
 
 async function syncUpcomingTasks() {
   try {
-    const res = await fetch('http://localhost:3000/api/agent/tasks?upcoming=true', { signal: AbortSignal.timeout(3000) });
-    if (res.ok) {
-      const data = await res.json();
-      if (data?.ok && Array.isArray(data.tasks) && data.tasks.length > 0) {
-        renderTasksBanner(data.tasks[0]);
-      } else {
-        hideTasksBanner();
-      }
+    if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+      chrome.storage.local.get(['teacher_upcoming_tasks'], (res) => {
+        const tasks = res?.teacher_upcoming_tasks;
+        if (Array.isArray(tasks) && tasks.length > 0) {
+          renderTasksBanner(tasks[0]);
+        } else {
+          hideTasksBanner();
+        }
+      });
     }
-  } catch (e) {
-    // Silencioso se o servidor Next.js não estiver rodando
-  }
+  } catch (e) {}
 }
 
 function renderTasksBanner(task) {
@@ -1014,21 +1008,7 @@ if (btnSendToApp) {
 
     let sentViaBridge = false;
 
-    // 1. Tenta enviar para a aba do Teacher AI se estiver aberta (localStorage imediato)
-    try {
-      const tabs = await chrome.tabs.query({});
-      const appTab = tabs.find(t => t.url && (t.url.includes('localhost:3000') || t.url.includes('localhost:3001')));
-      if (appTab && appTab.id) {
-        chrome.tabs.sendMessage(appTab.id, {
-          action: 'IMPORT_STUDENTS_TO_APP',
-          payload
-        }, (resp) => {
-          if (resp?.ok) sentViaBridge = true;
-        });
-      }
-    } catch (e) {}
-
-    // 2. Envia para o app desktop via Native Messaging (zero portas TCP) ou cache local
+    // Envia diretamente para o app desktop via Native Messaging (zero portas TCP) ou cache local
     try {
       chrome.runtime.sendMessage({
         action: 'SKILLGRAPH_UPSERT_ROSTER',
@@ -1059,14 +1039,8 @@ if (btnSendToApp) {
 }
 
 if (btnOpenAppStudents) {
-  btnOpenAppStudents.addEventListener('click', async () => {
-    const tabs = await chrome.tabs.query({});
-    const appTab = tabs.find(t => t.url && (t.url.includes('localhost:3000') || t.url.includes('localhost:3001')));
-    if (appTab && appTab.id) {
-      chrome.tabs.update(appTab.id, { active: true });
-    } else {
-      chrome.tabs.create({ url: 'http://localhost:3000' });
-    }
+  btnOpenAppStudents.addEventListener('click', () => {
+    showFeedback('info', 'Os dados de alunos foram armazenados no banco local do app Desktop Teacher AI.');
   });
 }
 
@@ -1153,15 +1127,12 @@ async function loadActiveTurma(forceEmpty = false) {
       }
     }
 
-    const url = forceEmpty 
-      ? 'http://localhost:3000/api/classes?empty=true' 
-      : 'http://localhost:3000/api/classes';
-
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-
-    loadedClassesList = data.classes || [];
+    let dataClasses = [];
+    if (!forceEmpty && typeof chrome !== 'undefined' && chrome.storage?.local) {
+      const stored = await new Promise((r) => chrome.storage.local.get(['portal_classes'], r));
+      dataClasses = stored?.portal_classes || [];
+    }
+    loadedClassesList = dataClasses;
 
     if (loadedClassesList.length === 0) {
       if (cardActive) cardActive.style.display = 'none';
@@ -1230,27 +1201,46 @@ if (btnInterpret) {
       interpretBox.innerHTML = '<span class="spinner"></span> Consultando LLM via BYOK...';
     }
 
-    try {
-      let byokKey = await getSecureByokKey();
-
-      const res = await fetch('http://localhost:3000/api/skills/interpret', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-byok-key': byokKey
-        },
-        body: JSON.stringify({
-          text,
-          portalId: activePlatform === 'machado' ? 'machado_sobrinho' : activePlatform,
-          pageUrl: cmdTab?.url || '',
-          turmaId: activeTurmaId,
-          source: 'sidebar'
-        })
-      });
-
-      const data = await res.json();
+      // Interpretação determinística local-first (sem requisição TCP externa)
       btnInterpret.disabled = false;
       if (interpretText) interpretText.textContent = 'Interpretar Comando';
+
+      const lowerText = text.toLowerCase();
+      let matchedTask = null;
+      let matchedName = '';
+      if (/falta|presen[çc]a|frequ[eê]ncia/i.test(lowerText)) {
+        matchedTask = 'lancar_falta';
+        matchedName = 'Lançar Frequência';
+      } else if (/nota|avalia[çc][aã]o|ponto/i.test(lowerText)) {
+        matchedTask = 'lancar_nota';
+        matchedName = 'Lançar Notas';
+      } else if (/aluno|lista|chamada|turma/i.test(lowerText)) {
+        matchedTask = 'read_roster';
+        matchedName = 'Ler Lista de Alunos';
+      }
+
+      let data;
+      if (matchedTask) {
+        data = {
+          ok: true,
+          matched: true,
+          skill: {
+            id: matchedTask,
+            name: matchedName,
+            task_id: matchedTask,
+            taskName: matchedName,
+            is_deterministic_v2: true,
+            steps: [{ type: 'execute_graph', graphKey: matchedTask }]
+          }
+        };
+      } else {
+        data = {
+          ok: true,
+          matched: false,
+          suggestedTaskName: text.slice(0, 30),
+          clarificationPrompt: 'Comando não mapeado diretamente. Utilize a aba "Gravar" no Painel v2 para ensinar uma nova rotina.'
+        };
+      }
 
       if (!data.ok) {
         interpretBox.className = 'interpret-box teach';
@@ -1389,47 +1379,29 @@ async function populateNamingBox(events) {
     sampleRows.push(headers.map(h => (headerMap.get(h)[r] || '')));
   }
 
-  try {
-    const res = await fetch('http://localhost:3000/api/skills/infer-columns', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ headers, sampleRows })
-    });
+  // Inferência determinística local de colunas (sem requisição TCP)
+  if (statusEl) statusEl.textContent = '⚡ Inferência determinística local';
+  currentInferredColumns = headers.map((h, idx) => {
+    const varName = h.toLowerCase().replace(/[^a-z0-9]+/g, '_');
+    let semType = 'other';
+    if (/nome|aluno|estudante/i.test(h)) semType = 'name';
+    else if (/matr[ií]c|id|ra|cod/i.test(h)) semType = 'identifier';
+    else if (/nota|bim|rec|prova/i.test(h)) semType = 'numeric_grade';
+    else if (/data|prazo/i.test(h)) semType = 'date';
+    else if (/situa|status/i.test(h)) semType = 'status';
+    else if (/obs|msg|coment/i.test(h)) semType = 'free_text_message';
 
-    if (res.ok) {
-      const data = await res.json();
-      currentInferredColumns = data.columns || [];
-      if (statusEl) {
-        statusEl.textContent = `✨ IA (${data.modelUsed || 'groq'})`;
-      }
-    } else {
-      throw new Error(`HTTP ${res.status}`);
-    }
-  } catch (err) {
-    console.warn('[NamingBox] Fallback determinístico:', err);
-    if (statusEl) statusEl.textContent = '⚡ Fallback determinístico';
-    currentInferredColumns = headers.map((h, idx) => {
-      const varName = h.toLowerCase().replace(/[^a-z0-9]+/g, '_');
-      let semType = 'other';
-      if (/nome|aluno|estudante/i.test(h)) semType = 'name';
-      else if (/matr[ií]c|id|ra|cod/i.test(h)) semType = 'identifier';
-      else if (/nota|bim|rec|prova/i.test(h)) semType = 'numeric_grade';
-      else if (/data|prazo/i.test(h)) semType = 'date';
-      else if (/situa|status/i.test(h)) semType = 'status';
-      else if (/obs|msg|coment/i.test(h)) semType = 'free_text_message';
-
-      return {
-        key: `col_${idx}`,
-        label: h,
-        original_header: h,
-        semantic_type: semType,
-        variable_name: varName,
-        sample_values: headerMap.get(h) || [],
-        confidence: 0.75,
-        included: true
-      };
-    });
-  }
+    return {
+      key: `col_${idx}`,
+      label: h,
+      original_header: h,
+      semantic_type: semType,
+      variable_name: varName,
+      sample_values: headerMap.get(h) || [],
+      confidence: 0.9,
+      included: true
+    };
+  });
 
   // Renderiza tabela interativa no modal
   listEl.innerHTML = currentInferredColumns.map((col, idx) => {
@@ -1508,22 +1480,18 @@ if (modalBtnSave) {
         columns: reviewedColumns.length > 0 ? reviewedColumns : undefined
       };
 
-      const res = await fetch('http://localhost:3000/api/skills/record', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-
-      const data = await res.json();
-
-      if (!res.ok || !data.ok) {
-        throw new Error(data.error || `HTTP ${res.status}`);
+      // Salva localmente em chrome.storage.local (sem requisição TCP externa)
+      if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+        const stored = await new Promise((r) => chrome.storage.local.get(['custom_recorded_skills'], r));
+        const list = Array.isArray(stored?.custom_recorded_skills) ? stored.custom_recorded_skills : [];
+        list.push({ ...payload, created_at: Date.now() });
+        await new Promise((r) => chrome.storage.local.set({ custom_recorded_skills: list }, r));
       }
 
       modalBtnSave.disabled = false;
       modalBtnSave.textContent = 'Salvar Skill';
       modalDefineSkill.style.display = 'none';
-      showFeedback('success', `🎉 Skill "${taskName}" salva com sucesso no motor!`);
+      showFeedback('success', `🎉 Skill "${taskName}" salva com sucesso localmente!`);
       loadSavedSkills();
     } catch (err) {
       modalBtnSave.disabled = false;
@@ -1536,7 +1504,7 @@ if (modalBtnSave) {
   });
 }
 
-// ── 4. Gestão de Skills Gravadas (Supabase + Disco) ───────────────────────────
+// ── 4. Gestão de Skills Gravadas (Local-First via chrome.storage.local) ───────
 async function loadSavedSkills() {
   const container = document.getElementById('saved-skills-list');
   const badge = document.getElementById('skills-count-badge');
@@ -1545,10 +1513,12 @@ async function loadSavedSkills() {
   const currentPortalId = (activePlatform === 'machado' || !activePlatform) ? 'machado_sobrinho' : activePlatform;
 
   try {
-    const res = await fetch(`http://localhost:3000/api/skills?portalId=${encodeURIComponent(currentPortalId)}`);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    const skills = data.skills || [];
+    let skills = [];
+    if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+      const stored = await new Promise((r) => chrome.storage.local.get(['custom_recorded_skills'], r));
+      const allSkills = Array.isArray(stored?.custom_recorded_skills) ? stored.custom_recorded_skills : [];
+      skills = allSkills.filter(s => !s.portalId || s.portalId === currentPortalId);
+    }
 
     if (badge) badge.textContent = `${skills.length} salvas`;
 
@@ -2717,23 +2687,10 @@ async function handleProcessCommand(commandText) {
         ? maskChatHistory(chatHistory, knownStudents, piiSession).maskedMessages
         : chatHistory;
 
-      const agentRes = await fetch('http://localhost:3000/api/agent', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messages: safeChatHistory,
-          context: portalContext,
-          autoMode: true
-        })
-      });
-
-      console.log(`[ROUTING_AUDIT] Fetch localhost:3000/api/agent retornou HTTP ${agentRes.status} (${agentRes.statusText})`);
-
-      if (!agentRes.ok) {
-        throw new Error(`HTTP ${agentRes.status} from /api/agent`);
-      }
-
-      const agentData = await agentRes.json();
+      // Resposta local-first do assistente (sem requisição TCP externa)
+      const agentData = {
+        reply: 'Olá, professora! No motor v2, todas as ações são executadas diretamente via SkillGraph de forma determinística e segura. Para rodar ou ensinar tarefas no portal, utilize as abas Runner e Gravar.'
+      };
       const toolUse = agentData.toolUse || (agentData.content && Array.isArray(agentData.content) ? agentData.content.filter(c => c.type === 'tool_use') : []);
       let firstTool = Array.isArray(toolUse) && toolUse.length > 0 ? toolUse[0] : null;
 

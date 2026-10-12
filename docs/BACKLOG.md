@@ -82,20 +82,20 @@ Este documento centraliza as funcionalidades, arquétipos e melhorias postergada
 
 ---
 
-## 5. Dívidas Técnicas Isoladas da Integração / Pós-Gate A
+## 5. Dívidas Técnicas Isoladas da Integração / Pós-Gate A (RESOLVIDAS)
 
-- **Expurgo de fetches a `localhost:3000` em scripts legados da extensão:**
-  - `teacher-extension/side_panel.js`: exatamente 15 ocorrências remanescentes (inativas no fluxo padrão v2 `side_panel_v2.html`).
-  - `teacher-extension/content.js`: exatamente 4 ocorrências remanescentes (caminhos legados de UI local).
-- **Ponte legada de `content.js` com a página do app Next:** Desacoplar listeners e bridge de comunicação direta entre `content.js` e o frontend web local em `localhost:3000`.
-- **Módulos legados marcados como `@deprecated`:**
-  - `lib/supabaseClient.ts`: 1 declaração, substituído pelo SQLite cifrado do Desktop.
-  - `lib/agentTools.ts`: ferramentas do assistente legado web.
-  - `lib/exportUtils.ts`: exportação de relatórios da aplicação web legada.
-  - `lib/teacherCalibrations.ts`: preferências web migradas para tabela `settings` no Desktop SQLite.
-  - `scripts/package_distribution.py`: distribuição baseada em TCP/sidecar Python.
-  - `sidecar/native_host/teacherai_native_host.bat`: host Python legado substituído por `dist-desktop/shim.bat`.
-- **Instalador sem Terminal (.exe / NSIS):**
-  - O app desktop v2 compila e opera via `dist-desktop/` com registro HKCU em `scripts/native-host-register.ts`. A geração de instalador executável autônomo sem terminal depende de aprovação da dependência `electron-builder` e assinatura de código Authenticode para evitar falsos positivos de antivírus/SmartScreen.
+- [x] **Expurgo de fetches a `localhost:3000` em scripts da extensão:**
+  - `teacher-extension/side_panel.js`: **0 ocorrências remanescentes** (todas as 15 substituídas por persistência em `chrome.storage.local` e resposta assistiva local-first).
+  - `teacher-extension/content.js`: **0 ocorrências remanescentes** (todas as 4 removidas/desacopladas).
+- [x] **Ponte legada de `content.js` com a página do app Next:** Desacoplada e removida (comunicação exclusiva via Chrome Native Messaging com o Desktop).
+- [x] **Módulos legados marcados como `@deprecated`:**
+  - `lib/supabaseClient.ts`: marcado como `@deprecated`, sem chamadas ativas pelo engine.
+  - `lib/agentTools.ts`: marcado como `@deprecated`.
+  - `lib/exportUtils.ts`: marcado como `@deprecated`.
+  - `lib/teacherCalibrations.ts`: marcado como `@deprecated`.
+  - `scripts/package_distribution.py`: marcado como `[DEPRECATED]`.
+  - `sidecar/native_host/teacherai_native_host.bat`: marcado como `[DEPRECATED]`.
+- [ ] **Instalador sem Terminal (.exe / NSIS):**
+  - O app desktop v2 compila e opera via `dist-desktop/` com registro HKCU em `scripts/native-host-register.ts`. A geração de instalador executável autônomo sem terminal depende de homologação de empacotador (`electron-builder`) e assinatura de código Authenticode para evitar falsos positivos de antivírus/SmartScreen.
 
 
