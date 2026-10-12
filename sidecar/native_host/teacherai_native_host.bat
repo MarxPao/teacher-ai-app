@@ -1,6 +1,6 @@
 @echo off
-REM Chrome Native Messaging Host Launcher for Teacher AI
-REM Passes stdin/stdout directly to the Python host script
+REM @deprecated Native Host Python legado. O host canônico de produção v2 é
+REM dist-desktop/shim.bat (compilado de desktop/native-host/shim.ts). Consulte docs/desktop/INSTALL.md.
 
 set PYTHON_CMD="C:\Users\rafae\AppData\Local\Python\pythoncore-3.14-64\python.exe"
 if not exist %PYTHON_CMD% (

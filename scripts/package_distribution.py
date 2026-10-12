@@ -1,3 +1,8 @@
+# scripts/package_distribution.py
+# @deprecated Empacotador de distribuição legado baseado no sidecar Python em TCP.
+# O aplicativo canônico de produção utiliza Electron + Chrome Native Messaging (zero portas TCP).
+# Consulte `docs/desktop/INSTALL.md` para instruções de instalação e build do desktop v2.
+
 import os
 import shutil
 import zipfile
