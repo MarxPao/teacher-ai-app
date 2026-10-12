@@ -1,10 +1,24 @@
 # Backlog de Evoluções e Dívidas Técnicas
 
-Este documento centraliza as funcionalidades, arquétipos e melhorias postergadas para fases futuras, conforme as regras anti-espiral do Teacher AI.
+Este documento centraliza as funcionalidades, arquétipos e melhorias postergadas para versões futuras, conforme as regras anti-espiral do Teacher AI.
 
 ---
 
-## 1. Concluído na Fase 6 (Local-First e Blindagem)
+## 1. Concluído na Fase 7 (Comunidade: Pacotes de Mapas, Assinatura e Registro)
+
+- [x] **Formato Padronizado de Pacote (`skillpkg/1`):** Especificação rígida em JSON (.skillpkg.json) com manifesto, grafo sanitizado e assinatura digital Ed25519.
+- [x] **Canonicalização Determinística JCS (RFC 8785):** Implementação pura em TypeScript (`canonical.ts`), garantindo hashing determinístico independente de plataforma.
+- [x] **Sanitização de PII e Placeholders RFC 2606 (`h1.invalid`):** Pipeline de exportação expurga nomes de alunos e turmas, substituindo domínios reais por marcadores neutros.
+- [x] **Quarentena e Dry-Run Pré-Ativação:** Tabela `community_packages` com fluxo `quarantined` $\rightarrow$ `dry_run_passed` $\rightarrow$ `activated`. Repositório `SqlSkillGraphRepository` bloqueia execução com `E_GRAPH_QUARANTINED`.
+- [x] **Guarda de Runtime Anti-Submissão Oculta (`E_CLICK_UNDECLARED_SUBMIT`):** Inspeciona botões de ação e aborta cliques em botões de salvar/submeter não declarados no grafo importado.
+- [x] **Proteções Anti-ReDoS e Parser JSON Estrito:** Expressões regulares validadas estaticamente com truncamento a 2.000 caracteres; parser seguro contra poluição de protótipo e recursão profunda.
+- [x] **Cliente de Registro Estático com Privacidade Total:** Busca 100% em memória no cliente a partir de `index.json` assinado por chave mestra (`pinnedKey.ts`), sem telemetria de consulta.
+- [x] **Proteção Contra Rollback de Versão:** Rastreamento em `community_seen_versions` bloqueando downgrades maliciosos (`E_PKG_ROLLBACK`).
+- [x] **Template de Registro Comunitário (`registry-template/`):** Script de verificação automatizada (`verify-registry.ts`) e workflow de CI para GitHub Actions.
+
+---
+
+## 2. Concluído na Fase 6 (Local-First e Blindagem)
 
 - [x] **App Desktop Electron (`desktop/`):** Processo isolado (`contextIsolation: true`, `sandbox: true`), único dono dos dados, sem portas TCP abertas.
 - [x] **Banco de Dados SQLite Cifrado (`lib/desktop-core/db/`):** Envelope AES-256-GCM em colunas sensíveis via `node:sqlite`, DEK protegida pelo cofre do SO (DPAPI no Windows via `safeStorage`), backups cifrados por senha com scrypt + AES-GCM (`.tbackup`).
@@ -17,7 +31,7 @@ Este documento centraliza as funcionalidades, arquétipos e melhorias postergada
 
 ---
 
-## 2. Concluído na Fase 5 (Resiliência e Reparo)
+## 3. Concluído na Fase 5 (Resiliência e Reparo)
 
 - [x] **Reparo Automático Offline e Matcher Semântico Local (Degrau 3):**
   - Implementado 100% determinístico e sem LLM sob `lib/repair/` e `lib/repair/semantic/`.
@@ -28,12 +42,22 @@ Este documento centraliza as funcionalidades, arquétipos e melhorias postergada
 
 ---
 
-## 3. Backlog Futuro / Pós-Fase 6
+## 4. Backlog Futuro / Pós-Fase 7
 
 - **Suporte Multiplataforma para Desktop (macOS e Linux):**
-  - *Contexto:* A Fase 6 focou em Windows-first (DPAPI via `safeStorage`, Named Pipes no formato `\\.\pipe\...`).
+  - *Contexto:* O desenvolvimento focou em Windows-first (DPAPI via `safeStorage`, Named Pipes no formato `\\.\pipe\...`).
   - *Evolução:* Implementar adaptadores para macOS (Keychain + Unix Domain Sockets) e Linux (Secret Service / libsecret + Unix Domain Sockets).
   - *Prioridade:* Média.
+
+- **Reexportação de Mapas Importados com Linhagem:**
+  - *Contexto:* Na Fase 7, mapas com `provenance.source === 'imported'` têm reexportação expressamente bloqueada (`E_EXPORT_NOT_ALLOWED`) para evitar cadeias de suprimentos confusas.
+  - *Evolução:* Permitir reexportação de mapas bifurcados/re-gravados preservando um campo de linhagem de crédito (`forked_from: {key_id, package_id, version}`).
+  - *Prioridade:* Baixa.
+
+- **Sistema de Confiança Social e Feedback Descentralizado:**
+  - *Contexto:* O registro estático atual não implementa avaliações, comentários ou métricas de uso para manter total silêncio de rede e zero telemetria.
+  - *Evolução:* Protocolo descentralizado de reputação assinado por professoras verificadas via Git PR ou atestações públicas.
+  - *Prioridade:* Baixa.
 
 - **Migração de Chaves de UI Restantes de `localStorage`:**
   - *Contexto:* Chaves sensíveis (alunos, turmas, notas, segredos) foram 100% migradas e expurgadas para o SQLite cifrado. Chaves visuais puramente locais de UI (tema claro/escuro, filtros de paginação) permaneceram no `localStorage`.
