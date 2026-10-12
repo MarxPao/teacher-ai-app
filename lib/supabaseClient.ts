@@ -1,4 +1,6 @@
 /**
+ * @deprecated Módulo legado de sincronização Supabase na nuvem.
+ * O aplicativo opera sob o paradigma local-first (Fase 6) com SQLite cifrado no Desktop.
  * supabaseClient.ts — Conexão com Supabase para Cloud Sync em tempo real
  * Utiliza preferencialmente a service_role key ou anonKey para acesso garantido.
  */

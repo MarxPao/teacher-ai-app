@@ -1,5 +1,6 @@
 import { toast, showConfirm } from '@/components/Toast'
 /**
+ * @deprecated Módulo de exportação de relatórios da aplicação web legada.
  * exportUtils.ts — Exportação Oficial em PDF/Word/Excel com Cabeçalhos Padronizados das Escolas,
  * Preferências Globais de Formatação e Suporte Visual a Necessidades Educacionais Especiais (NEE)
  */

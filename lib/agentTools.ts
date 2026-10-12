@@ -1,4 +1,5 @@
 /**
+ * @deprecated Módulo de ferramentas do assistente legado. O motor canônico é o SkillGraph v2.
  * agentTools.ts — Definições de Tools para o Motor Agêntico da Rafinha
  * Cobertura 100% de Todas as Funcionalidades do Aplicativo
  */

@@ -1,4 +1,5 @@
 /**
+ * @deprecated Preferências da aplicação web legada. No Desktop v2, configurações residem na tabela settings do SQLite.
  * teacherCalibrations.ts — Calibrações e Preferências Globais do Professor
  * Unifica todas as calibrações de módulos (Avaliações, Provas, Correção, Gradebook, Frequência,
  * Planejamento, Comunicados e IA) para que o professor configure uma vez e o app lembre sempre.

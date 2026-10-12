@@ -84,7 +84,18 @@ Este documento centraliza as funcionalidades, arquétipos e melhorias postergada
 
 ## 5. Dívidas Técnicas Isoladas da Integração / Pós-Gate A
 
-- **Expurgo de fetches a `localhost:3000` em scripts legados da extensão:** Restam 15 ocorrências em `teacher-extension/side_panel.js` e 4 ocorrências em `teacher-extension/content.js`, inativas no fluxo do painel v2 (`side_panel_v2.html` / `orchestrator_v2.js`).
+- **Expurgo de fetches a `localhost:3000` em scripts legados da extensão:**
+  - `teacher-extension/side_panel.js`: exatamente 15 ocorrências remanescentes (inativas no fluxo padrão v2 `side_panel_v2.html`).
+  - `teacher-extension/content.js`: exatamente 4 ocorrências remanescentes (caminhos legados de UI local).
 - **Ponte legada de `content.js` com a página do app Next:** Desacoplar listeners e bridge de comunicação direta entre `content.js` e o frontend web local em `localhost:3000`.
-- **Expurgo definitivo de `lib/supabaseClient.ts`:** Módulo legado de cliente Supabase web na raiz de `lib/`, não utilizado pelo motor desktop nem pelo runner v2.
+- **Módulos legados marcados como `@deprecated`:**
+  - `lib/supabaseClient.ts`: 1 declaração, substituído pelo SQLite cifrado do Desktop.
+  - `lib/agentTools.ts`: ferramentas do assistente legado web.
+  - `lib/exportUtils.ts`: exportação de relatórios da aplicação web legada.
+  - `lib/teacherCalibrations.ts`: preferências web migradas para tabela `settings` no Desktop SQLite.
+  - `scripts/package_distribution.py`: distribuição baseada em TCP/sidecar Python.
+  - `sidecar/native_host/teacherai_native_host.bat`: host Python legado substituído por `dist-desktop/shim.bat`.
+- **Instalador sem Terminal (.exe / NSIS):**
+  - O app desktop v2 compila e opera via `dist-desktop/` com registro HKCU em `scripts/native-host-register.ts`. A geração de instalador executável autônomo sem terminal depende de aprovação da dependência `electron-builder` e assinatura de código Authenticode para evitar falsos positivos de antivírus/SmartScreen.
+
 
