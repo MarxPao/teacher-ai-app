@@ -2869,11 +2869,8 @@ async function handleProcessCommand(commandText) {
         } else if (toolName === 'inspect_portal_page' || toolName === 'read_page_data' || (toolName === 'invoke_teacher_capability' && toolInput?.capability === 'read_calendar')) {
           executionResult = await dispatchPortalBridgePromise({ action: 'READ_PAGE_DATA' });
         } else if (toolName === 'read_roster' || (toolName === 'invoke_teacher_capability' && toolInput?.capability === 'read_roster')) {
-          executionResult = await dispatchPortalBridgePromise({ action: 'READ_ACTIVE_PORTAL_ROSTER' });
-          if (executionResult && (executionResult.students || executionResult.roster)) {
-            const rosterList = executionResult.students || executionResult.roster;
-            upsertFromPortal(activeTurmaId, rosterList, activePlatform);
-          }
+          appendAssistantChatMessage('Use a aba v2 do painel para ler a turma.', true);
+          executionResult = { sucesso: false, message: 'Use a aba v2 do painel para ler a turma.' };
         } else {
           executionResult = await dispatchPortalBridgePromise({ action: 'EXECUTE_PORTAL_ACTION', payload: toolInput });
           executedSteps.push({
