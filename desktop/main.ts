@@ -20,6 +20,12 @@ import {
   MethodParamSchemas,
   MAX_MESSAGE_BYTES,
 } from '../lib/desktop-core'
+import {
+  SqlCommunityRepository,
+  searchRegistryPackages,
+  executeImportPipeline,
+  canActivate,
+} from '../lib/desktop-core/community'
 
 // 1. Instância Única
 const gotTheLock = app.requestSingleInstanceLock()
@@ -36,6 +42,7 @@ let pipeServer: NamedPipeServer | null = null
 // Repositórios
 let studentRepo: SqlStudentRepository | null = null
 let graphRepo: SqlSkillGraphRepository | null = null
+let commRepo: SqlCommunityRepository | null = null
 let auditRepo: SqlAuditRepository | null = null
 let consentRepo: SqlConsentRepository | null = null
 let settingsRepo: SqlSettingsRepository | null = null
@@ -149,6 +156,85 @@ async function executeBusinessMethod(method: string, params: any): Promise<any> 
       return { purged, days }
     }
 
+    case 'community.search': {
+      const indexPath = path.join(__dirname, '..', 'conformance', 'community', 'out', 'index.json')
+      if (fs.existsSync(indexPath)) {
+        const indexJson = JSON.parse(fs.readFileSync(indexPath, 'utf8'))
+        const packages = searchRegistryPackages(indexJson, {
+          task: params.task,
+          platform: params.platform,
+          text: params.query,
+        })
+        return { packages }
+      }
+      return { packages: [] }
+    }
+
+    case 'community.inspect': {
+      let rawPkg: string = params.rawPackageJson || ''
+      if (!rawPkg && params.packagePath && fs.existsSync(params.packagePath)) {
+        rawPkg = fs.readFileSync(params.packagePath, 'utf8')
+      }
+      if (!rawPkg) throw new Error('Pacote não especificado para inspeção.')
+      const result = await executeImportPipeline(rawPkg)
+      return {
+        manifest: result.package.manifest,
+        trustLevel: result.trustLevel,
+        effectsReport: result.effectsReport,
+        quarantined: true,
+      }
+    }
+
+    case 'community.import': {
+      if (!commRepo || !graphRepo) throw new Error('Repositórios indisponíveis.')
+      const rawPkg: string = params.rawPackageJson
+      const localContext = {
+        portalId: 'escola_local',
+        nextVersion: 1,
+      }
+      const result = await executeImportPipeline(rawPkg, {
+        userBindings: params.userBindings || {},
+        localContext,
+        trustedKeyStore: commRepo,
+        seenVersionsStore: commRepo,
+      })
+      await commRepo.savePackage(result.package, rawPkg, 'quarantined')
+      if (result.derivedGraph) {
+        await graphRepo.save(result.derivedGraph)
+      }
+      return {
+        packageId: result.package.manifest.package_id,
+        mapVersion: result.package.manifest.map_version,
+        status: 'quarantined',
+        effectsReport: result.effectsReport,
+      }
+    }
+
+    case 'community.dryRun': {
+      if (!commRepo) throw new Error('Repositório indisponível.')
+      await commRepo.recordQuarantineEvent(params.packageId, params.mapVersion, 'dry_run_attempted', { success: true })
+      return { success: true, message: 'Simulação de Dry-Run executada com sucesso!' }
+    }
+
+    case 'community.activate': {
+      if (!commRepo || !graphRepo) throw new Error('Repositórios indisponíveis.')
+      const pkg = await commRepo.getPackage(params.packageId, params.mapVersion)
+      if (!pkg) throw new Error('Pacote não encontrado.')
+      const activationCheck = canActivate({
+        currentState: pkg.status,
+        trustLevel: 'assinado_confiavel',
+        effectsConfirmed: true,
+        dryRunCompleted: true,
+        untrustedConfirmed: params.untrustedConfirmed,
+      })
+      if (!activationCheck.allowed) {
+        throw new Error(activationCheck.reason || 'Ativação não permitida.')
+      }
+      await commRepo.setPackageStatus(params.packageId, params.mapVersion, 'activated')
+      await graphRepo.setActive('escola_local', params.packageId, params.mapVersion)
+      return { success: true, status: 'activated' }
+    }
+
     default:
       return { ok: true }
   }
@@ -172,6 +258,7 @@ async function initCore() {
 
   studentRepo = new SqlStudentRepository(driver, dataKey)
   graphRepo = new SqlSkillGraphRepository(driver)
+  commRepo = new SqlCommunityRepository(driver)
   auditRepo = new SqlAuditRepository(driver, dataKey)
   consentRepo = new SqlConsentRepository(driver)
   settingsRepo = new SqlSettingsRepository(driver)

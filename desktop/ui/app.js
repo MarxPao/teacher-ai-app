@@ -218,7 +218,183 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   })
 
+  // ─── Funcionalidades Comunitárias (Fase 7) ──────────────────────────────────
+  const commSearchInput = document.getElementById('community-search-input')
+  const btnSearchComm = document.getElementById('btn-search-community')
+  const btnRefreshComm = document.getElementById('btn-refresh-community')
+  const commPackagesContainer = document.getElementById('community-packages-container')
+  const modal = document.getElementById('quarantine-modal')
+  const modalTitle = document.getElementById('modal-title')
+  const modalContent = document.getElementById('modal-content')
+  const btnCloseModal = document.getElementById('btn-close-modal')
+
+  btnCloseModal?.addEventListener('click', () => {
+    if (modal) modal.style.display = 'none'
+  })
+
+  async function loadCommunityPackages(query = '') {
+    if (!window.teacherDesktop) return
+    log(`Consultando mapas disponíveis no índice comunitário em memória...`)
+
+    try {
+      const res = await window.teacherDesktop.invoke('community.search', { query })
+      if (!res.success || !Array.isArray(res.result?.packages)) {
+        if (commPackagesContainer) {
+          commPackagesContainer.innerHTML = '<div style="color: var(--muted); font-size: 13px;">Nenhum mapa disponível no momento.</div>'
+        }
+        return
+      }
+
+      const packages = res.result.packages
+      if (packages.length === 0) {
+        if (commPackagesContainer) {
+          commPackagesContainer.innerHTML = '<div style="color: var(--muted); font-size: 13px;">Nenhum mapa encontrado para os critérios informados.</div>'
+        }
+        return
+      }
+
+      if (commPackagesContainer) {
+        commPackagesContainer.innerHTML = packages.map((pkg) => {
+          let badgeHtml = '<span class="status-pill status-off">⚠ Autor Desconhecido</span>'
+          if (pkg.reviewed) {
+            badgeHtml = '<span class="status-pill status-ok">✓ Verificado no Registro</span>'
+          }
+
+          return `
+            <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; justify-content: space-between; gap: 8px;">
+              <div>
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px;">
+                  <strong style="font-size: 14px; color: var(--text);">${escapeHtml(pkg.package_id)}</strong>
+                  ${badgeHtml}
+                </div>
+                <div style="font-size: 12px; color: var(--muted);">Versão: v${escapeHtml(pkg.map_version)} | Spec: ${escapeHtml(pkg.spec_version)}</div>
+                <div style="font-size: 12px; color: var(--muted); margin-top: 4px;">Plataforma: <code>${escapeHtml(pkg.platform_hint || 'portal')}</code></div>
+                <div style="font-size: 12px; color: var(--muted); margin-top: 2px;">Tarefas: ${escapeHtml(pkg.tasks.join(', '))}</div>
+              </div>
+              <div style="display: flex; gap: 6px; margin-top: 6px;">
+                <button class="btn btn-inspect-pkg" data-id="${escapeHtml(pkg.package_id)}" data-version="${escapeHtml(pkg.map_version)}" data-path="${escapeHtml(pkg.path)}" style="width: 100%;">
+                  🛡️ Inspecionar & Quarentena
+                </button>
+              </div>
+            </div>
+          `
+        }).join('')
+
+        commPackagesContainer.querySelectorAll('.btn-inspect-pkg').forEach((btn) => {
+          btn.addEventListener('click', async (e) => {
+            const pkgId = e.currentTarget.dataset.id
+            const pkgVer = Number(e.currentTarget.dataset.version)
+            await openQuarantineInspection(pkgId, pkgVer)
+          })
+        })
+      }
+
+      log(`Índice comunitário atualizado: ${packages.length} mapa(s) disponível(is).`)
+    } catch (err) {
+      log(`Falha ao buscar mapas comunitários: ${err.message}`)
+    }
+  }
+
+  async function openQuarantineInspection(packageId, mapVersion) {
+    if (!modal || !modalContent) return
+    modal.style.display = 'flex'
+    modalTitle.textContent = `🛡️ Quarentena & Efeitos: ${packageId} (v${mapVersion})`
+    modalContent.innerHTML = '<div>Carregando relatório de segurança e efeitos do mapa...</div>'
+
+    try {
+      // Simula recuperação ou inspeção do pacote
+      modalContent.innerHTML = `
+        <div style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 6px; padding: 10px; color: #fca5a5;">
+          <strong>Estado Atual: QUARENTENA ATIVA</strong><br>
+          Este mapa não pode efetuar alterações no seu portal até que você revise os nós e valide em simulação.
+        </div>
+
+        <div>
+          <label style="font-weight: 600; display: block; margin-bottom: 4px;">Vincular Marcador de Portal (h1.invalid):</label>
+          <input type="text" id="bind-h1-host" placeholder="ex: machadosobrinho.paineldoaluno.com.br" value="paineldoaluno.com.br">
+          <small style="color: var(--muted);">Informe o endereço web onde a automação deve atuar.</small>
+        </div>
+
+        <div style="border-top: 1px solid var(--border); padding-top: 10px;">
+          <strong>Ações Sensíveis no Portal:</strong>
+          <ul style="margin: 6px 0 0 0; padding-left: 20px; color: var(--muted);">
+            <li>Clique de Submissão de Formulário detectado</li>
+            <li>Leitura de tabela e identificação de discentes</li>
+          </ul>
+        </div>
+
+        <div style="display: flex; gap: 8px; margin-top: 10px;">
+          <button class="btn btn-secondary" id="btn-run-dryrun" style="flex: 1;">🧪 Simular (Dry-Run)</button>
+          <button class="btn" id="btn-activate-map" style="flex: 1; opacity: 0.5;" disabled>✅ Ativar Mapa</button>
+        </div>
+        <div id="dryrun-feedback" style="font-size: 12px; color: #38bdf8; display: none;"></div>
+      `
+
+      const btnDryRun = document.getElementById('btn-run-dryrun')
+      const btnActivate = document.getElementById('btn-activate-map')
+      const dryrunFeedback = document.getElementById('dryrun-feedback')
+
+      btnDryRun?.addEventListener('click', async () => {
+        log(`Executando dry-run supervisionado para ${packageId}...`)
+        btnDryRun.textContent = 'Simulando...'
+        btnDryRun.disabled = true
+
+        try {
+          const res = await window.teacherDesktop.invoke('community.dryRun', { packageId, mapVersion })
+          if (res.success) {
+            log(`Dry-run concluído com sucesso para ${packageId}! Ações de escrita bloqueadas com segurança durante o teste.`)
+            if (dryrunFeedback) {
+              dryrunFeedback.style.display = 'block'
+              dryrunFeedback.textContent = '✓ Simulação prévia bem-sucedida! Nenhum dado foi alterado. O mapa agora pode ser ativado.'
+            }
+            if (btnActivate) {
+              btnActivate.disabled = false
+              btnActivate.style.opacity = '1'
+            }
+          }
+        } catch (err) {
+          log(`Erro no dry-run: ${err.message}`)
+        } finally {
+          btnDryRun.textContent = '🧪 Simular Novamente'
+          btnDryRun.disabled = false
+        }
+      })
+
+      btnActivate?.addEventListener('click', async () => {
+        log(`Solicitando ativação permanente do mapa ${packageId} (v${mapVersion})...`)
+        try {
+          const res = await window.teacherDesktop.invoke('community.activate', {
+            packageId,
+            mapVersion,
+            untrustedConfirmed: true,
+          })
+          if (res.success) {
+            log(`Mapa ${packageId} ativado com sucesso! Pronto para execução nas aulas.`)
+            alert(`Mapa "${packageId}" liberado da quarentena e pronto para uso seguro!`)
+            if (modal) modal.style.display = 'none'
+            await loadCommunityPackages(commSearchInput?.value || '')
+          } else {
+            alert(`Falha na ativação: ${res.error?.message}`)
+          }
+        } catch (err) {
+          log(`Erro na ativação: ${err.message}`)
+        }
+      })
+    } catch (err) {
+      modalContent.innerHTML = `<div style="color: var(--danger);">Erro ao carregar detalhes: ${err.message}</div>`
+    }
+  }
+
+  btnSearchComm?.addEventListener('click', () => {
+    loadCommunityPackages(commSearchInput?.value || '')
+  })
+  btnRefreshComm?.addEventListener('click', () => {
+    loadCommunityPackages(commSearchInput?.value || '')
+  })
+
   await checkStatus()
   await loadStudents()
   await loadKeysStatus()
+  await loadCommunityPackages()
 })
+

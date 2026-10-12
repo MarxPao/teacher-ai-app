@@ -233,11 +233,42 @@
         Para restaurar um arquivo <code>.tbackup</code>, use a opção correspondente do app.
       </div>
     </div>
+
+    <!-- Card 4: Comunidade de Mapas Pedagógicos -->
+    <div class="card" style="grid-column: span 2;">
+      <h2>
+        <span>🤝 Mapas da Comunidade (Compartilhamento Seguro)</span>
+        <button class="btn btn-secondary" id="btn-refresh-community">🔄 Atualizar Registro</button>
+      </h2>
+      <p>Importe fluxos criados e revisados por outros educadores. Todo mapa importado entra em <strong>quarentena</strong> até que você confirme as ações de tela e realize uma simulação sem riscos no seu portal.</p>
+      
+      <div style="display: flex; gap: 10px; margin-bottom: 14px;">
+        <input type="text" id="community-search-input" placeholder="Buscar por tarefa (ex: read_roster, lancar_falta) ou plataforma..." style="margin-bottom: 0;">
+        <button class="btn" id="btn-search-community" style="white-space: nowrap;">🔍 Buscar</button>
+      </div>
+
+      <div id="community-packages-container" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px;">
+        <div style="color: var(--muted); font-size: 13px;">Clique em "Atualizar Registro" ou "Buscar" para explorar mapas disponíveis.</div>
+      </div>
+    </div>
   </div>
 
   <div class="card">
     <h2>📊 Trilha de Auditoria e Diagnóstico do Sistema</h2>
     <div id="status-log">Iniciando diagnóstico local...</div>
+  </div>
+
+  <!-- Modal de Quarentena & Relatório de Efeitos -->
+  <div id="quarantine-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); align-items: center; justify-content: center; z-index: 1000; padding: 20px;">
+    <div class="card" style="max-width: 640px; width: 100%; max-height: 90vh; overflow-y: auto;">
+      <h2 style="margin-bottom: 8px;">
+        <span id="modal-title">🛡️ Quarentena & Revisão de Efeitos</span>
+        <button class="btn btn-secondary" id="btn-close-modal" style="padding: 2px 8px;">✕</button>
+      </h2>
+      <div id="modal-content" style="font-size: 13px; display: flex; flex-direction: column; gap: 12px;">
+        <!-- Preenchido via app.js -->
+      </div>
+    </div>
   </div>
 
   <script src="app.js"></script>
