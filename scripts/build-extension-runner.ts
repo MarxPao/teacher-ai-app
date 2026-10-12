@@ -20,6 +20,7 @@ async function runBuild(): Promise<void> {
   const expectedOutputs = [
     path.join(DIST_DIR, 'runner.bundle.js'),
     path.join(DIST_DIR, 'content-adapter.bundle.js'),
+    path.join(DIST_DIR, 'recorder.bundle.js'),
   ]
 
   // 1. Runner para o Service Worker (background.js)
@@ -42,6 +43,20 @@ async function runBuild(): Promise<void> {
     entryPoints: [path.join(ROOT, 'lib', 'runner-ext', 'contentEntry.ts')],
     bundle: true,
     outfile: expectedOutputs[1],
+    format: 'iife',
+    platform: 'browser',
+    target: 'chrome110',
+    sourcemap: true,
+    define: {
+      '__DEV__': isDev ? 'true' : 'false',
+    },
+  })
+
+  // 3. Gravador de Demonstrações DOM (lib/recorder-dom)
+  await build({
+    entryPoints: [path.join(ROOT, 'lib', 'recorder-dom', 'extensionEntry.ts')],
+    bundle: true,
+    outfile: expectedOutputs[2],
     format: 'iife',
     platform: 'browser',
     target: 'chrome110',

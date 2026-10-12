@@ -13,6 +13,7 @@ export interface RecorderOptions {
   taskId?: string
   initialUrl?: string
   mountOverlay?: boolean
+  allowUntrustedEvents?: boolean
   onFinish?: (trace: Trace) => void
 }
 
@@ -93,6 +94,7 @@ export class DomRecorder {
 
   private handleClick(e: MouseEvent): void {
     if (!this.isRecording || this.isPaused) return
+    if (e.isTrusted === false && !this.options.allowUntrustedEvents) return
     const target = e.target as Element | null
     if (!target || this.isOverlayTarget(target)) return
 
@@ -105,6 +107,7 @@ export class DomRecorder {
 
   private handleChange(e: Event): void {
     if (!this.isRecording || this.isPaused) return
+    if (e.isTrusted === false && !this.options.allowUntrustedEvents) return
     const target = e.target as Element | null
     if (!target || this.isOverlayTarget(target)) return
 
@@ -117,6 +120,7 @@ export class DomRecorder {
 
   private handleBlur(e: FocusEvent): void {
     if (!this.isRecording || this.isPaused) return
+    if (e.isTrusted === false && !this.options.allowUntrustedEvents) return
     const target = e.target as Element | null
     if (!target || this.isOverlayTarget(target)) return
 
@@ -129,6 +133,7 @@ export class DomRecorder {
 
   private handleKeyDown(e: KeyboardEvent): void {
     if (!this.isRecording || this.isPaused) return
+    if (e.isTrusted === false && !this.options.allowUntrustedEvents) return
     if (e.key === 'Enter' || e.key === 'Tab' || e.key === 'Escape') {
       this.steps.push({
         id: this.nextStepId(),

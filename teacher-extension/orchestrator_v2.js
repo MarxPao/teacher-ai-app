@@ -273,7 +273,7 @@
           }
           await chrome.scripting.executeScript({
             target: { tabId },
-            files: ['recorder_injected.js'],
+            files: ['dist/recorder.bundle.js'],
           })
           await chrome.storage.session.set({
             skillgraph_recording: { recording: true, tabId, startedAt: Date.now() },

@@ -1,5 +1,7 @@
 // teacher-extension/recorder_injected.js
-// Content script injetável de demonstração e captura de trace para o SkillGraph v2
+// @deprecated Gravador legado injetável. O gravador canônico de produção é compilado
+// a partir de lib/recorder-dom/extensionEntry.ts para teacher-extension/dist/recorder.bundle.js.
+// Mantido para compatibilidade retroativa em ambientes sem suporte a bundles modulares.
 
 (function () {
   if (window.__TEACHER_AI_RECORDING_ACTIVE__) {
@@ -154,6 +156,7 @@
   }
 
   function handleClick(e) {
+    if (e.isTrusted === false) return
     if (!e.target || e.target.closest('#__teacher_ai_recorder_banner__')) return
     const el = e.target
     const descriptor = buildElementDescriptor(el)
@@ -170,6 +173,7 @@
   }
 
   function handleChange(e) {
+    if (e.isTrusted === false) return
     if (!e.target || e.target.closest('#__teacher_ai_recorder_banner__')) return
     const el = e.target
     const descriptor = buildElementDescriptor(el)
@@ -187,12 +191,29 @@
     updateCount()
   }
 
+  function handleKeyDown(e) {
+    if (e.isTrusted === false) return
+    if (e.key === 'Enter' || e.key === 'Tab' || e.key === 'Escape') {
+      steps.push({
+        id: 'step_' + steps.length,
+        type: 'key',
+        key: e.key,
+        at: Date.now(),
+        host: window.location.hostname,
+        path: window.location.pathname,
+      })
+      updateCount()
+    }
+  }
+
   document.addEventListener('click', handleClick, true)
   document.addEventListener('change', handleChange, true)
+  document.addEventListener('keydown', handleKeyDown, true)
 
   window.__TEACHER_AI_STOP_RECORDING__ = function () {
     document.removeEventListener('click', handleClick, true)
     document.removeEventListener('change', handleChange, true)
+    document.removeEventListener('keydown', handleKeyDown, true)
     const el = document.getElementById('__teacher_ai_recorder_banner__')
     if (el) el.remove()
     window.__TEACHER_AI_RECORDING_ACTIVE__ = false
