@@ -1099,7 +1099,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     (async () => {
       console.log('[Teacher AI Extractor] Executando ação de skill na página:', window.location.href);
-      const graphToRun = message.skillGraph || CANONICAL_READ_ROSTER_GRAPH;
+      if (!message.skillGraph) {
+        sendResponse({
+          ok: false,
+          code: "MAP_NOT_FOUND",
+          message: "Mapa não encontrado para este portal. Grave ou importe um mapa no painel."
+        });
+        return;
+      }
+      const graphToRun = message.skillGraph;
       let graphExecResult = null;
       let graphStudents = [];
       let executionSource = 'graph_executor';
@@ -1722,55 +1730,6 @@ function snapshotPortalTable() {
 
 // ——— MOTOR GENÉRICO GRAPHEXECUTOR (LOTE 1 — SKILL GRAPH RUNTIME) ———
 
-const CANONICAL_READ_ROSTER_GRAPH = {
-  id: 'skill_read_roster_mtqeirwc',
-  name: 'Leitura de read_roster — machado_sobrinho',
-  portal_id: 'machado_sobrinho',
-  task_id: 'read_roster',
-  version: '1.0.0',
-  entry_node: 'nav_0',
-  nodes: {
-    nav_0: {
-      id: 'nav_0',
-      type: 'NAVIGATE',
-      anchor: { strategy: 'css_selector', value: 'https://machadosobrinho.paineldoaluno.com.br/professor_notas' },
-      params: {},
-      on_success: 'locate_0',
-      on_fail: null
-    },
-    locate_0: {
-      id: 'locate_0',
-      type: 'LOCATE',
-      anchor: { strategy: 'css_selector', value: 'table, div.grid-meus-alunos, [class*="aluno" i]' },
-      params: {},
-      on_success: 'locate_aluno_row',
-      on_fail: null
-    },
-    locate_aluno_row: {
-      id: 'locate_aluno_row',
-      type: 'LOCATE',
-      anchor: { strategy: 'css_selector', value: 'table tbody tr' },
-      params: { multiplicity: 'all' },
-      on_success: 'read_0',
-      on_fail: null
-    },
-    read_0: {
-      id: 'read_0',
-      type: 'READ',
-      anchor: { strategy: 'css_selector', value: 'td:nth-child(1)', scope: 'row_current' },
-      params: { variable_bindings: ['aluno_nome'] },
-      on_success: 'loop_proxima_linha',
-      on_fail: null
-    },
-    loop_proxima_linha: {
-      id: 'loop_proxima_linha',
-      type: 'LOOP',
-      params: { loop_target: 'read_0', collection_node: 'locate_aluno_row' },
-      on_success: null,
-      on_fail: null
-    }
-  }
-};
 
 function interpolateBindings(template, bindings) {
   if (!template) return '';
