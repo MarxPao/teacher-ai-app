@@ -21,7 +21,8 @@
     "community:conformance:build": "npx tsx scripts/community/conformance-build.ts",
     "community:conformance": "npx tsx scripts/community/conformance-run.ts",
     "community:demo": "npx tsx scripts/community/demo.ts",
-    "community:import-check": "npx tsx scripts/community/import-check.ts"
+    "community:import-check": "npx tsx scripts/community/import-check.ts",
+    "build:ext": "npx tsx scripts/build-extension-runner.ts"
   },
   "dependencies": {
     "@tailwindcss/typography": "^0.5.19",

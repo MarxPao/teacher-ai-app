@@ -20542,6 +20542,17 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       });
       return node2.on_success;
     }
+    if (!node2.is_submit_action && driver.describeClickTarget) {
+      const desc = await driver.describeClickTarget({ anchor: resolvedAnchor });
+      if (desc && desc.isSubmitOrMutating) {
+        throw new RunnerError(
+          "E_CLICK_UNDECLARED_SUBMIT",
+          `O n\xF3 "${nodeId}" tentou acionar um elemento de muta\xE7\xE3o/submiss\xE3o (${desc.tagName}) sem declarar "is_submit_action: true" no grafo.`,
+          nodeId,
+          { tagName: desc.tagName, type: desc.type }
+        );
+      }
+    }
     await driver.click({ anchor: resolvedAnchor }, { isSubmit: node2.is_submit_action });
     host.emit({
       type: "node_completed",
