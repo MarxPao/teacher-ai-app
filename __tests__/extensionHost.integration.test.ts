@@ -151,6 +151,9 @@ describe('ExtensionHost Integration: Checkpoint, Timeout e Aborto Seguro', () =>
           addListener: vi.fn((listener: (msg: any) => void) => {
             messageListeners.push(listener)
           }),
+          removeListener: vi.fn((listener: (msg: any) => void) => {
+            messageListeners = messageListeners.filter((l) => l !== listener)
+          }),
         },
       },
       storage: {
@@ -329,5 +332,47 @@ describe('ExtensionHost Integration: Checkpoint, Timeout e Aborto Seguro', () =>
 
     await expect(confirmPromise).rejects.toThrow(RunnerError)
     await expect(confirmPromise).rejects.toMatchObject({ code: 'E_INTERRUPTED' })
+  })
+
+  it('9. dispose() remove o listener de onMessage evitando vazamento de memória', async () => {
+    const host = createExtensionHost({ runId: 'run_dispose_1', dryRun: true })
+    expect(messageListeners).toHaveLength(1)
+
+    host.dispose()
+
+    expect(messageListeners).toHaveLength(0)
+    expect(chrome.runtime.onMessage.removeListener).toHaveBeenCalledTimes(1)
+  })
+
+  it('10. Mensagem com requestId divergente ou ausente NÃO resolve o checkpoint pendente', async () => {
+    const host = createExtensionHost({
+      runId: 'run_strict_id',
+      dryRun: true,
+      checkpointTimeoutMs: 50,
+    })
+
+    const confirmPromise = host.confirm({
+      nodeId: 'chk_node',
+      label: 'Confirmar Nota',
+      summary: [],
+      scope: 'once',
+    })
+
+    expect(sentMessages).toHaveLength(1)
+    const validRequestId = sentMessages[0].requestId
+
+    // Mensagem com requestId errado tentando aprovar:
+    messageListeners.forEach((l) =>
+      l({ type: 'SKILLGRAPH_CHECKPOINT_RESPONSE', requestId: 'wrong_request_id', approved: true })
+    )
+
+    // Mensagem sem requestId tentando aprovar:
+    messageListeners.forEach((l) =>
+      l({ type: 'SKILLGRAPH_CHECKPOINT_RESPONSE', approved: true })
+    )
+
+    // O checkpoint não deve ser aprovado por IDs inválidos e deve expirar fail-closed
+    const result = await confirmPromise
+    expect(result).toBe(false)
   })
 })

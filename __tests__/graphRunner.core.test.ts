@@ -1127,7 +1127,7 @@ describe('Fase 4: Capacidades do Engine por Arquétipo (T4.4)', () => {
 
     it('4. [C2-T1] Nó WRITE com createExtensionHost de produção sem ack aborta antes de escrever', async () => {
       const driver = new FakeDriver()
-      const host = createExtensionHost({ runId: 'prod_run_audit_fail' })
+      const host = createExtensionHost({ runId: 'prod_run_audit_fail', onConfirm: async () => true })
       const runner = new SkillGraphRunner(driver, host)
 
       const graph = createWriteGraph()
@@ -1140,7 +1140,7 @@ describe('Fase 4: Capacidades do Engine por Arquétipo (T4.4)', () => {
 
     it('5. [C2-T2] Modo dry-run em createExtensionHost não exige ack de auditoria no desktop', async () => {
       const driver = new FakeDriver()
-      const host = createExtensionHost({ runId: 'prod_run_dry_run', dryRun: true })
+      const host = createExtensionHost({ runId: 'prod_run_dry_run', dryRun: true, onConfirm: async () => true })
       const runner = new SkillGraphRunner(driver, host)
 
       const graph = createWriteGraph()
@@ -1148,6 +1148,20 @@ describe('Fase 4: Capacidades do Engine por Arquétipo (T4.4)', () => {
 
       expect(success).toBe(true)
       expect(error).toBeUndefined()
+      expect(driver.writeHistory).toHaveLength(0)
+    })
+
+    it('6. [C2-T3] createExtensionHost sem onConfirm e sem Chrome é fail-closed absoluto (zero escritas)', async () => {
+      const driver = new FakeDriver()
+      // Sem runtime Chrome e sem onConfirm -> deve resolver false (fail-closed)
+      const host = createExtensionHost({ runId: 'prod_run_fail_closed' })
+      const runner = new SkillGraphRunner(driver, host)
+
+      const graph = createWriteGraph()
+      const { success } = await runner.run(graph, {})
+
+      // Rejeitado no checkpoint antes de qualquer escrita
+      expect(success).toBe(false)
       expect(driver.writeHistory).toHaveLength(0)
     })
   })

@@ -249,6 +249,11 @@
       if (currentRunnerAbort === abortController) {
         currentRunnerAbort = null
       }
+      try {
+        if (typeof hostObj?.dispose === 'function') {
+          hostObj.dispose()
+        }
+      } catch {}
     }
   }
 

@@ -40,6 +40,7 @@ export interface ExtensionHostOptions {
 
 export interface ExtensionHost extends Host {
   abort(): void
+  dispose(): void
   resolveCheckpoint(requestId: string, approved: boolean): boolean
   resolveHandoff(requestId: string, resumed: boolean): boolean
 }
@@ -89,9 +90,11 @@ export function createExtensionHost(options: ExtensionHostOptions): ExtensionHos
     }, { once: true })
   }
 
+  let messageListener: ((message: any) => void) | null = null
+
   if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
     try {
-      chrome.runtime.onMessage.addListener((message: any) => {
+      messageListener = (message: any) => {
         if (!message) return
         if (message.action === 'SKILLGRAPH_CHECKPOINT_RESPONSE' || message.type === 'SKILLGRAPH_CHECKPOINT_RESPONSE') {
           const { requestId, approved } = message
@@ -100,14 +103,6 @@ export function createExtensionHost(options: ExtensionHostOptions): ExtensionHos
             pendingCheckpoints.delete(requestId)
             clearTimeout(entry.timer)
             entry.resolve(Boolean(approved))
-          } else if (!requestId && pendingCheckpoints.size > 0) {
-            const first = pendingCheckpoints.entries().next().value
-            if (first) {
-              const [firstId, entry] = first
-              pendingCheckpoints.delete(firstId)
-              clearTimeout(entry.timer)
-              entry.resolve(Boolean(approved))
-            }
           }
         } else if (message.action === 'SKILLGRAPH_HANDOFF_RESPONSE' || message.type === 'SKILLGRAPH_HANDOFF_RESPONSE') {
           const { requestId, resumed } = message
@@ -116,19 +111,12 @@ export function createExtensionHost(options: ExtensionHostOptions): ExtensionHos
             pendingHandoffs.delete(requestId)
             clearTimeout(entry.timer)
             entry.resolve(Boolean(resumed))
-          } else if (!requestId && pendingHandoffs.size > 0) {
-            const first = pendingHandoffs.entries().next().value
-            if (first) {
-              const [firstId, entry] = first
-              pendingHandoffs.delete(firstId)
-              clearTimeout(entry.timer)
-              entry.resolve(Boolean(resumed))
-            }
           }
         } else if (message.action === 'SKILLGRAPH_ABORT') {
           triggerAbort('Execução abortada pelo usuário')
         }
-      })
+      }
+      chrome.runtime.onMessage.addListener(messageListener)
     } catch {
       // Ignora falha de registro de listener se chrome.runtime for mock limitado
     }
@@ -167,12 +155,7 @@ export function createExtensionHost(options: ExtensionHostOptions): ExtensionHos
         })
       }
 
-      // Em ambiente de teste Node headless (sem runtime Chrome): permite simulação do fluxo
-      if (options.dryRun || isDevMode || (typeof process !== 'undefined' && process.env?.NODE_ENV === 'test')) {
-        return true
-      }
-
-      // Sem chrome e sem onConfirm -> fail closed obrigatório
+      // Sem runtime Chrome e sem onConfirm -> fail closed absoluto
       return false
     },
     async handoff(ho: HandoffPayload): Promise<boolean> {
@@ -206,10 +189,7 @@ export function createExtensionHost(options: ExtensionHostOptions): ExtensionHos
         })
       }
 
-      if (options.dryRun || isDevMode || (typeof process !== 'undefined' && process.env?.NODE_ENV === 'test')) {
-        return true
-      }
-
+      // Sem runtime Chrome e sem onHandoff -> fail closed absoluto
       return false
     },
     async audit(entry: AuditEntry): Promise<void> {
@@ -286,6 +266,15 @@ export function createExtensionHost(options: ExtensionHostOptions): ExtensionHos
     randomId: () => 'ext_run_' + Math.random().toString(36).slice(2, 9),
     abort() {
       triggerAbort('Execução cancelada pelo usuário')
+    },
+    dispose() {
+      if (messageListener && typeof chrome !== 'undefined' && chrome.runtime?.onMessage?.removeListener) {
+        try {
+          chrome.runtime.onMessage.removeListener(messageListener)
+        } catch {}
+        messageListener = null
+      }
+      triggerAbort('Host finalizado')
     },
     resolveCheckpoint(requestId: string, approved: boolean): boolean {
       if (pendingCheckpoints.has(requestId)) {
