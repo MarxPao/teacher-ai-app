@@ -40,7 +40,7 @@ export type PackageSignature = z.infer<typeof PackageSignatureSchema>
 export const SkillPackageSchema = z.object({
   pkg_format: z.literal('skillpkg/1'),
   manifest: PackageManifestSchema,
-  content: SkillGraphV2Schema,
+  content: z.record(z.string(), z.any()) as unknown as z.ZodType<SkillGraphV2>,
   signature: PackageSignatureSchema,
 }).strict()
 export type SkillPackage = z.infer<typeof SkillPackageSchema>
