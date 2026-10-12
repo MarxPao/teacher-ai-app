@@ -11,11 +11,13 @@ Autor: Engenheiro de Software Principal / Auditor Independente
 A rodada única de patchwork de fechamento do engine concluiu com sucesso a integração de ponta a ponta do motor SkillGraph v2, eliminando todos os portais hardcoded de produção, conectando o gravador oficial (`lib/recorder-dom`) compilado para bundle da extensão com salvaguardas de `isTrusted` e anti-keylogger, completando a interface da aba Suíte e modal de Checkpoint no painel v2, garantindo a invariante de auditoria write-ahead sem portas TCP e documentando a instalação do Desktop v2.
 
 - **Compilação TypeScript:** `npx tsc --noEmit` executado com código 0 (zero erros de tipagem).
-- **Suíte de Testes Canônica (Vitest):** 4 arquivos executados, **91 testes aprovados (91/91, 0 falhas)**:
+- **Suíte de Testes Canônica (Vitest):** 6 arquivos executados, **114 testes aprovados (114/114, 0 falhas)**:
+  - `__tests__/repair.core.test.ts`: 15 passed
   - `__tests__/compiler.core.test.ts`: 10 passed
   - `__tests__/community.core.test.ts`: 35 passed
-  - `__tests__/desktop.core.test.ts`: 21 passed
+  - `__tests__/extensionHost.integration.test.ts`: 8 passed
   - `__tests__/graphRunner.core.test.ts`: 25 passed
+  - `__tests__/desktop.core.test.ts`: 21 passed
 - **Validação de Portais Reais e HOLDOUTs:** Estritamente `PENDENTE (dono)`.
 
 ---
@@ -72,9 +74,9 @@ Comando: `git grep -n -E "suite-table-body|suite-summary-box|modal-checkpoint" -
 ```
 teacher-extension/side_panel_v2.html:109:            <tbody id="suite-table-body"></tbody>
 teacher-extension/side_panel_v2.html:112:        <div id="suite-summary-box" style="display: none; font-size: 11px; padding: 6px 8px; border-radius: 4px; margin-bottom: 8px;"></div>
-teacher-extension/side_panel_v2.html:118:  <div id="modal-checkpoint" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center; padding: 12px;">
-teacher-extension/side_panel_v2.html:127:        <button id="modal-checkpoint-btn-abort" style="flex: 1; padding: 6px; font-size: 11px; background: #f8fafc; color: #475569; border: 1px solid #cbd5e1; border-radius: 4px; cursor: pointer;">Cancelar</button>
-teacher-extension/side_panel_v2.html:128:        <button id="modal-checkpoint-btn-approve" class="btn-main" style="flex: 1.2; padding: 6px; font-size: 11px; background: #dc2626;">Aprovar e Gravar</button>
+teacher-extension/side_panel_v2.html:126:  <div id="modal-checkpoint" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center; padding: 12px;">
+teacher-extension/side_panel_v2.html:135:        <button id="modal-checkpoint-btn-abort" style="flex: 1; padding: 6px; font-size: 11px; background: #f8fafc; color: #475569; border: 1px solid #cbd5e1; border-radius: 4px; cursor: pointer;">Cancelar</button>
+teacher-extension/side_panel_v2.html:136:        <button id="modal-checkpoint-btn-approve" class="btn-main" style="flex: 1.2; padding: 6px; font-size: 11px; background: #dc2626;">Aprovar e Gravar</button>
 ```
 *Status: [OK] Elementos estruturais de suíte e checkpoint presentes no DOM de side_panel_v2.html.*
 
@@ -92,6 +94,21 @@ Comando: `Test-Path docs/desktop/INSTALL.md`
 True
 ```
 *Status: [OK] Documento de instalação criado e referenciado no repositório.*
+
+### B10 — Confirmação Humana Real, Fail-Closed Timeout, Abort e UI de Reparo Ativa
+Comando: `npx vitest run __tests__/extensionHost.integration.test.ts`
+```
+✓ __tests__/extensionHost.integration.test.ts (8 tests)
+  ✓ 1. confirm() aguarda resposta do usuário e resolve true quando aprovado
+  ✓ 2. confirm() resolve false quando usuário rejeita/cancela no side panel
+  ✓ 3. confirm() é fail-closed: resolve false por timeout quando professor não responde
+  ✓ 4. Execução do grafo: Rejeição no checkpoint impede execução do nó WRITE
+  ✓ 5. Execução do grafo: Aprovação no checkpoint permite escrita com sucesso
+  ✓ 6. AbortSignal interrompe confirm() imediatamente com E_INTERRUPTED
+  ✓ 7. host.abort() interrompe nó antes da execução (beforeNode)
+  ✓ 8. Mensagem SKILLGRAPH_ABORT via listener aborta pendências imediatamente
+```
+*Status: [OK] Checkpoints 100% interativos com timeout fail-closed, abort em tempo real e prevenção física de escrita no DOM.*
 
 ---
 

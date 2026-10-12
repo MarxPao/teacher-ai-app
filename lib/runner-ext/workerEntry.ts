@@ -25,33 +25,192 @@ import { compile, analyzeTrace, CompilerError, scrubGraph } from '../compiler'
 declare const chrome: any
 declare const __DEV__: boolean
 
-export function createExtensionHost(options: {
+export interface ExtensionHostOptions {
   runId: string
   onEvent?: (event: RunEvent) => void
   nativeClient?: NativeClient
   dryRun?: boolean
-}): Host {
+  checkpointTimeoutMs?: number
+  handoffTimeoutMs?: number
+  abortSignal?: AbortSignal
+  isAborted?: () => boolean
+  onConfirm?: (checkpoint: CheckpointPayload) => Promise<boolean> | boolean
+  onHandoff?: (handoff: HandoffPayload) => Promise<boolean> | boolean
+}
+
+export interface ExtensionHost extends Host {
+  abort(): void
+  resolveCheckpoint(requestId: string, approved: boolean): boolean
+  resolveHandoff(requestId: string, resumed: boolean): boolean
+}
+
+export function createExtensionHost(options: ExtensionHostOptions): ExtensionHost {
   const auditSink = options.nativeClient ? new NativeAuditSink(options.nativeClient) : null
   const isDevMode = typeof __DEV__ !== 'undefined' ? __DEV__ : false
 
+  let internalAborted = false
+  const isAborted = (): boolean => {
+    if (internalAborted) return true
+    if (options.abortSignal?.aborted) return true
+    if (options.isAborted?.()) return true
+    return false
+  }
+
+  const pendingCheckpoints = new Map<string, {
+    resolve: (approved: boolean) => void
+    reject: (err: any) => void
+    timer: any
+  }>()
+
+  const pendingHandoffs = new Map<string, {
+    resolve: (resumed: boolean) => void
+    reject: (err: any) => void
+    timer: any
+  }>()
+
+  const triggerAbort = (reason = 'Execução cancelada pelo usuário') => {
+    internalAborted = true
+    for (const [, cp] of pendingCheckpoints.entries()) {
+      clearTimeout(cp.timer)
+      cp.reject(new RunnerError('E_INTERRUPTED', reason))
+    }
+    pendingCheckpoints.clear()
+
+    for (const [, ho] of pendingHandoffs.entries()) {
+      clearTimeout(ho.timer)
+      ho.reject(new RunnerError('E_INTERRUPTED', reason))
+    }
+    pendingHandoffs.clear()
+  }
+
+  if (options.abortSignal) {
+    options.abortSignal.addEventListener('abort', () => {
+      triggerAbort('Execução cancelada pelo usuário')
+    }, { once: true })
+  }
+
+  if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
+    try {
+      chrome.runtime.onMessage.addListener((message: any) => {
+        if (!message) return
+        if (message.action === 'SKILLGRAPH_CHECKPOINT_RESPONSE' || message.type === 'SKILLGRAPH_CHECKPOINT_RESPONSE') {
+          const { requestId, approved } = message
+          if (requestId && pendingCheckpoints.has(requestId)) {
+            const entry = pendingCheckpoints.get(requestId)!
+            pendingCheckpoints.delete(requestId)
+            clearTimeout(entry.timer)
+            entry.resolve(Boolean(approved))
+          } else if (!requestId && pendingCheckpoints.size > 0) {
+            const first = pendingCheckpoints.entries().next().value
+            if (first) {
+              const [firstId, entry] = first
+              pendingCheckpoints.delete(firstId)
+              clearTimeout(entry.timer)
+              entry.resolve(Boolean(approved))
+            }
+          }
+        } else if (message.action === 'SKILLGRAPH_HANDOFF_RESPONSE' || message.type === 'SKILLGRAPH_HANDOFF_RESPONSE') {
+          const { requestId, resumed } = message
+          if (requestId && pendingHandoffs.has(requestId)) {
+            const entry = pendingHandoffs.get(requestId)!
+            pendingHandoffs.delete(requestId)
+            clearTimeout(entry.timer)
+            entry.resolve(Boolean(resumed))
+          } else if (!requestId && pendingHandoffs.size > 0) {
+            const first = pendingHandoffs.entries().next().value
+            if (first) {
+              const [firstId, entry] = first
+              pendingHandoffs.delete(firstId)
+              clearTimeout(entry.timer)
+              entry.resolve(Boolean(resumed))
+            }
+          }
+        } else if (message.action === 'SKILLGRAPH_ABORT') {
+          triggerAbort('Execução abortada pelo usuário')
+        }
+      })
+    } catch {
+      // Ignora falha de registro de listener se chrome.runtime for mock limitado
+    }
+  }
+
   return {
     async confirm(cp: CheckpointPayload): Promise<boolean> {
+      if (isAborted()) {
+        throw new RunnerError('E_INTERRUPTED', 'Execução cancelada pelo usuário', cp.nodeId)
+      }
+
+      if (options.onConfirm) {
+        return Boolean(await options.onConfirm(cp))
+      }
+
+      const requestId = `${options.runId}_cp_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
+      const timeoutMs = options.checkpointTimeoutMs ?? 60000
+
       if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
         chrome.runtime.sendMessage({
           type: 'SKILLGRAPH_CHECKPOINT_REQUEST',
+          action: 'SKILLGRAPH_CHECKPOINT_REQUEST',
+          requestId,
+          runId: options.runId,
           checkpoint: cp,
         }).catch(() => {})
+
+        return new Promise<boolean>((resolve, reject) => {
+          const timer = setTimeout(() => {
+            pendingCheckpoints.delete(requestId)
+            // Timeout fail-closed: nunca aprova escrita sem confirmação do professor
+            resolve(false)
+          }, timeoutMs)
+
+          pendingCheckpoints.set(requestId, { resolve, reject, timer })
+        })
       }
-      return true
+
+      // Em ambiente de teste Node headless (sem runtime Chrome): permite simulação do fluxo
+      if (options.dryRun || isDevMode || (typeof process !== 'undefined' && process.env?.NODE_ENV === 'test')) {
+        return true
+      }
+
+      // Sem chrome e sem onConfirm -> fail closed obrigatório
+      return false
     },
     async handoff(ho: HandoffPayload): Promise<boolean> {
+      if (isAborted()) {
+        throw new RunnerError('E_INTERRUPTED', 'Execução cancelada pelo usuário', ho.nodeId)
+      }
+
+      if (options.onHandoff) {
+        return Boolean(await options.onHandoff(ho))
+      }
+
+      const requestId = `${options.runId}_ho_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
+      const timeoutMs = options.handoffTimeoutMs ?? ho.timeout_ms ?? 60000
+
       if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
         chrome.runtime.sendMessage({
           type: 'SKILLGRAPH_HANDOFF_REQUEST',
+          action: 'SKILLGRAPH_HANDOFF_REQUEST',
+          requestId,
+          runId: options.runId,
           handoff: ho,
         }).catch(() => {})
+
+        return new Promise<boolean>((resolve, reject) => {
+          const timer = setTimeout(() => {
+            pendingHandoffs.delete(requestId)
+            resolve(false)
+          }, timeoutMs)
+
+          pendingHandoffs.set(requestId, { resolve, reject, timer })
+        })
       }
-      return true
+
+      if (options.dryRun || isDevMode || (typeof process !== 'undefined' && process.env?.NODE_ENV === 'test')) {
+        return true
+      }
+
+      return false
     },
     async audit(entry: AuditEntry): Promise<void> {
       if (auditSink && !options.dryRun) {
@@ -96,7 +255,10 @@ export function createExtensionHost(options: {
         }).catch(() => {})
       }
     },
-    async beforeNode(_nodeId: string, state: RunState): Promise<void> {
+    async beforeNode(nodeId: string, state: RunState): Promise<void> {
+      if (isAborted()) {
+        throw new RunnerError('E_INTERRUPTED', 'Execução cancelada pelo usuário', nodeId)
+      }
       if (typeof chrome !== 'undefined' && chrome.storage?.session) {
         try {
           await chrome.storage.session.set({ skillgraph_run_state: state })
@@ -106,9 +268,45 @@ export function createExtensionHost(options: {
       }
     },
     now: () => Date.now(),
-    sleep: (ms: number) => new Promise((resolve) => setTimeout(resolve, ms)),
+    sleep: (ms: number) => {
+      return new Promise<void>((resolve, reject) => {
+        if (isAborted()) {
+          return reject(new RunnerError('E_INTERRUPTED', 'Execução cancelada pelo usuário'))
+        }
+        const timer = setTimeout(resolve, ms)
+        if (options.abortSignal) {
+          options.abortSignal.addEventListener('abort', () => {
+            clearTimeout(timer)
+            reject(new RunnerError('E_INTERRUPTED', 'Execução cancelada pelo usuário'))
+          }, { once: true })
+        }
+      })
+    },
     random: () => Math.random(),
     randomId: () => 'ext_run_' + Math.random().toString(36).slice(2, 9),
+    abort() {
+      triggerAbort('Execução cancelada pelo usuário')
+    },
+    resolveCheckpoint(requestId: string, approved: boolean): boolean {
+      if (pendingCheckpoints.has(requestId)) {
+        const entry = pendingCheckpoints.get(requestId)!
+        pendingCheckpoints.delete(requestId)
+        clearTimeout(entry.timer)
+        entry.resolve(approved)
+        return true
+      }
+      return false
+    },
+    resolveHandoff(requestId: string, resumed: boolean): boolean {
+      if (pendingHandoffs.has(requestId)) {
+        const entry = pendingHandoffs.get(requestId)!
+        pendingHandoffs.delete(requestId)
+        clearTimeout(entry.timer)
+        entry.resolve(resumed)
+        return true
+      }
+      return false
+    },
   }
 }
 

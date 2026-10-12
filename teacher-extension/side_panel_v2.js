@@ -14,6 +14,19 @@
     const progressBar = document.getElementById('sgv2-progress-bar')
     const messageBox = document.getElementById('sgv2-message-box')
 
+    const modalCheckpoint = document.getElementById('modal-checkpoint')
+    const checkpointTitle = document.getElementById('checkpoint-title')
+    const checkpointDesc = document.getElementById('checkpoint-desc')
+    const checkpointPreview = document.getElementById('checkpoint-preview-data')
+    const btnCheckpointApprove = document.getElementById('modal-checkpoint-btn-approve')
+    const btnCheckpointAbort = document.getElementById('modal-checkpoint-btn-abort')
+    let currentCheckpointRequestId = null
+
+    const repairBox = document.getElementById('sgv2-repair-box')
+    const repairPrompt = document.getElementById('sgv2-repair-prompt')
+    const btnApproveRepair = document.getElementById('sgv2-btn-approve-repair')
+    const btnRejectRepair = document.getElementById('sgv2-btn-reject-repair')
+
     if (!toggle || !body || !btnRun) return
 
     // 1. Sincroniza estado inicial da flag
@@ -225,17 +238,122 @@
 
     // 6. Abortar execução
     btnAbort?.addEventListener('click', () => {
+      if (modalCheckpoint) modalCheckpoint.style.display = 'none'
       chrome.runtime.sendMessage({ action: 'SKILLGRAPH_ABORT' }, () => {
         if (statusText) statusText.textContent = 'Execução cancelada'
       })
     })
 
-    // 7. Escuta de eventos em tempo real do engine
+    // 7. Controles de Confirmação de Checkpoint (Modal)
+    btnCheckpointApprove?.addEventListener('click', () => {
+      if (modalCheckpoint) modalCheckpoint.style.display = 'none'
+      if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+        chrome.runtime.sendMessage({
+          type: 'SKILLGRAPH_CHECKPOINT_RESPONSE',
+          action: 'SKILLGRAPH_CHECKPOINT_RESPONSE',
+          requestId: currentCheckpointRequestId,
+          approved: true,
+        })
+      }
+    })
+
+    btnCheckpointAbort?.addEventListener('click', () => {
+      if (modalCheckpoint) modalCheckpoint.style.display = 'none'
+      if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+        chrome.runtime.sendMessage({
+          type: 'SKILLGRAPH_CHECKPOINT_RESPONSE',
+          action: 'SKILLGRAPH_CHECKPOINT_RESPONSE',
+          requestId: currentCheckpointRequestId,
+          approved: false,
+        })
+      }
+    })
+
+    // 8. Controles de Proposta de Reparo (Drift)
+    function checkPendingRepair() {
+      if (typeof chrome !== 'undefined' && chrome.storage?.session) {
+        chrome.storage.session.get(['skillgraph_pending_repair'], (res) => {
+          const pending = res?.skillgraph_pending_repair
+          if (pending && repairBox) {
+            repairBox.style.display = 'block'
+            if (repairPrompt && pending.friendlyPrompt) {
+              repairPrompt.textContent = pending.friendlyPrompt
+            }
+          } else if (repairBox) {
+            repairBox.style.display = 'none'
+          }
+        })
+      }
+    }
+    checkPendingRepair()
+
+    btnApproveRepair?.addEventListener('click', () => {
+      btnApproveRepair.disabled = true
+      btnApproveRepair.textContent = 'Aplicando...'
+      chrome.runtime.sendMessage({ action: 'SKILLGRAPH_APPROVE_REPAIR', approved: true }, (res) => {
+        btnApproveRepair.disabled = false
+        btnApproveRepair.textContent = 'Aplicar Atualização ✨'
+        if (repairBox) repairBox.style.display = 'none'
+        if (messageBox) {
+          messageBox.style.display = 'block'
+          messageBox.textContent = res?.friendlyMessage || (res?.success ? 'Portal atualizado com sucesso!' : 'Falha ao atualizar portal.')
+          messageBox.style.background = res?.success ? '#f0fdf4' : '#fef2f2'
+          messageBox.style.border = res?.success ? '1px solid #bbf7d0' : '1px solid #fecaca'
+          messageBox.style.color = res?.success ? '#166534' : '#991b1b'
+        }
+      })
+    })
+
+    btnRejectRepair?.addEventListener('click', () => {
+      chrome.runtime.sendMessage({ action: 'SKILLGRAPH_APPROVE_REPAIR', approved: false }, (res) => {
+        if (repairBox) repairBox.style.display = 'none'
+        if (messageBox) {
+          messageBox.style.display = 'block'
+          messageBox.textContent = res?.friendlyMessage || 'Atualização descartada.'
+          messageBox.style.background = '#f8fafc'
+          messageBox.style.border = '1px solid #cbd5e1'
+          messageBox.style.color = '#475569'
+        }
+      })
+    })
+
+    // 9. Escuta de eventos em tempo real do engine
     if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
       chrome.runtime.onMessage.addListener((msg) => {
-        if (msg && msg.type === 'SKILLGRAPH_EVENT' && msg.event) {
+        if (!msg) return
+
+        if (msg.type === 'SKILLGRAPH_CHECKPOINT_REQUEST' || msg.action === 'SKILLGRAPH_CHECKPOINT_REQUEST') {
+          currentCheckpointRequestId = msg.requestId || null
+          const cp = msg.checkpoint || {}
+          if (checkpointTitle) checkpointTitle.textContent = cp.label || cp.nodeId || 'Aprovação de Ação'
+          if (checkpointDesc) checkpointDesc.textContent = cp.scope ? `Escopo: ${cp.scope}` : 'Confirmação necessária antes de executar no portal.'
+          if (checkpointPreview) {
+            if (Array.isArray(cp.summary)) {
+              checkpointPreview.textContent = cp.summary.map((s) => `${s.label}: ${typeof s.value === 'object' ? JSON.stringify(s.value) : s.value}`).join('\n')
+            } else {
+              checkpointPreview.textContent = JSON.stringify(cp.summary || {}, null, 2)
+            }
+          }
+          if (modalCheckpoint) modalCheckpoint.style.display = 'flex'
+          return
+        }
+
+        if (msg.type === 'SKILLGRAPH_EVENT' && msg.event) {
           const ev = msg.event
           if (nodeLabel) nodeLabel.textContent = `Nó: ${ev.nodeId || '--'}`
+
+          if (ev.type === 'checkpoint_resolved' || ev.type === 'run_completed' || ev.type === 'run_failed') {
+            if (modalCheckpoint) modalCheckpoint.style.display = 'none'
+          }
+
+          if (ev.type === 'repair_requested') {
+            if (repairBox) {
+              repairBox.style.display = 'block'
+              if (repairPrompt && ev.data?.friendlyPrompt) {
+                repairPrompt.textContent = ev.data.friendlyPrompt
+              }
+            }
+          }
 
           if (ev.type === 'node_started') {
             if (statusText) statusText.textContent = `Executando ${ev.data?.type || ''}...`

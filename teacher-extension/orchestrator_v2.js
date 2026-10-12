@@ -131,11 +131,15 @@
     }
 
     const runId = 'ext_run_' + Date.now()
+    const abortController = new AbortController()
+    currentRunnerAbort = abortController
+
     const driver = new bundle.RemoteDriver(tabId)
     const hostObj = bundle.createExtensionHost({
       runId,
       nativeClient,
       dryRun: Boolean(payload.dryRun),
+      abortSignal: abortController.signal,
       onEvent: (event) => {
         if (event.type === 'repair_requested') {
           chrome.storage.session.set({
@@ -241,6 +245,10 @@
           nodeId: err.nodeId || null,
         },
       })
+    } finally {
+      if (currentRunnerAbort === abortController) {
+        currentRunnerAbort = null
+      }
     }
   }
 
@@ -260,6 +268,22 @@
 
     if (message.action === 'SKILLGRAPH_RUN') {
       executeGraph(message.payload || {}, sendResponse)
+      return true
+    }
+
+    if (message.action === 'SKILLGRAPH_ABORT') {
+      if (currentRunnerAbort) {
+        currentRunnerAbort.abort()
+        currentRunnerAbort = null
+        sendResponse({ success: true, friendlyMessage: 'Execução cancelada pelo usuário.' })
+      } else {
+        sendResponse({ success: true, friendlyMessage: 'Nenhuma execução em andamento.' })
+      }
+      return true
+    }
+
+    if (message.action === 'SKILLGRAPH_CHECKPOINT_RESPONSE' || message.type === 'SKILLGRAPH_CHECKPOINT_RESPONSE') {
+      sendResponse({ success: true })
       return true
     }
 
@@ -457,6 +481,12 @@
         const pending = res?.skillgraph_pending_repair
         if (!pending) {
           sendResponse({ success: false, friendlyMessage: 'Nenhuma proposta de reparo pendente encontrada.' })
+          return
+        }
+
+        if (message.approved === false) {
+          await chrome.storage.session.remove(['skillgraph_pending_repair'])
+          sendResponse({ success: true, friendlyMessage: 'Atualização descartada. A versão anterior foi mantida.' })
           return
         }
 
