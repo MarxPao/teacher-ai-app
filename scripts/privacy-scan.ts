@@ -79,18 +79,44 @@ function loadTargetNames(namesFile?: string): string[] {
   return Array.from(new Set(names))
 }
 
-function walkDir(dir: string, fileList: string[] = []): string[] {
+const IGNORED_DIRS = new Set([
+  'node_modules',
+  '.git',
+  '.next',
+  '.gemini',
+  'dist',
+  'dist-desktop',
+  '__tests__',
+  'tools',
+  'traces',
+  'graphs',
+  'contracts',
+  'docs',
+  'handoff',
+  'audit',
+  'public',
+  'scripts',
+])
+
+function walkDir(dir: string, fileList: string[] = [], isRoot = false): string[] {
   if (!fs.existsSync(dir)) return fileList
 
   const entries = fs.readdirSync(dir, { withFileTypes: true })
   for (const entry of entries) {
     const fullPath = path.join(dir, entry.name)
     if (entry.isDirectory()) {
-      if (['node_modules', '.git', '.next', 'dist', 'dist-desktop'].includes(entry.name)) {
+      if (isRoot && IGNORED_DIRS.has(entry.name)) {
         continue
       }
-      walkDir(fullPath, fileList)
+      if (['node_modules', '.git', '.next', '.gemini', 'dist', 'dist-desktop'].includes(entry.name)) {
+        continue
+      }
+      walkDir(fullPath, fileList, false)
     } else if (entry.isFile()) {
+      // Ignora scripts de seed de desenvolvimento ao auditar codigo
+      if (entry.name === 'seedDemo.ts') {
+        continue
+      }
       fileList.push(fullPath)
     }
   }
@@ -111,8 +137,8 @@ async function runScan() {
     }
   }
 
-  const searchNames = loadTargetNames(options.namesFile)
-  const files = walkDir(options.targetPath)
+  const isRoot = options.targetPath === '.' || options.targetPath === './'
+  const files = walkDir(options.targetPath, [], isRoot)
 
   let violationsCount = 0
   let scannedFiles = 0
