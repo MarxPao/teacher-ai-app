@@ -113,7 +113,8 @@ export async function executeImportPipeline(
   traverseSafeText(pkg.content, 'content')
 
   // 8. Varredura de expressões regulares ReDoS
-  for (const [nodeId, node] of Object.entries(pkg.content.nodes || {})) {
+  for (const [nodeId, rawNode] of Object.entries(pkg.content.nodes || {})) {
+    const node: any = rawNode
     if (node.type === 'BRANCH' && node.condition?.op === 'text_matches') {
       checkSafeRegex(node.condition.pattern, `nodes.${nodeId}.condition.pattern`)
     }
@@ -147,7 +148,8 @@ export async function executeImportPipeline(
   if (pkg.content.entry_fingerprint?.route?.host) {
     verifyHost(pkg.content.entry_fingerprint.route.host, 'entry_fingerprint.route.host')
   }
-  for (const [nodeId, node] of Object.entries(pkg.content.nodes || {})) {
+  for (const [nodeId, rawNode] of Object.entries(pkg.content.nodes || {})) {
+    const node: any = rawNode
     if (node.type === 'NAVIGATE' && node.host) {
       verifyHost(node.host, `nodes.${nodeId}.host`)
     }

@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { SkillGraphV2Schema, GraphCompatSchema } from '../../contracts/skillgraph'
+import { SkillGraphV2Schema, GraphCompatSchema, type SkillGraphV2 } from '../../contracts/skillgraph'
 
 export const PublisherSchema = z.object({
   key_id: z.string().min(1),

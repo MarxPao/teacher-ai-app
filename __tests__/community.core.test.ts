@@ -18,6 +18,11 @@ import {
   CommunityError,
 } from '../lib/desktop-core/community'
 import { TEST_ONLY_KEYS } from '../conformance/community/testKeys'
+// @ts-ignore
+import { DatabaseSync } from 'node:sqlite'
+import { MigrationRunner } from '../lib/desktop-core/db/migrations'
+import { SqlCommunityRepository } from '../lib/desktop-core/community/repositories/SqlCommunityRepository'
+import { SqlSkillGraphRepository } from '../lib/desktop-core/db/repositories/SqlSkillGraphRepository'
 
 const BASE_DIR = path.resolve(__dirname, '..', 'conformance', 'community', 'base')
 const OUT_DEV_DIR = path.resolve(__dirname, '..', 'conformance', 'community', 'out', 'dev')
@@ -332,6 +337,161 @@ describe('Fase 7 - Núcleo Comunitário: Teste de Fronteira', () => {
         dryRunCompleted: true,
       })
       expect(res.allowed).toBe(true)
+    })
+  })
+
+  describe('8. Persistência SQLite Comunitária e Enforcement de Quarentena', () => {
+    class MemoryDriver {
+      public db: any
+      constructor() {
+        this.db = new DatabaseSync(':memory:')
+      }
+      async execute(sql: string, params: unknown[] = []) {
+        const stmt = this.db.prepare(sql)
+        stmt.run(...params)
+      }
+      async query(sql: string, params: unknown[] = []) {
+        const stmt = this.db.prepare(sql)
+        return stmt.all(...params)
+      }
+      async queryOne(sql: string, params: unknown[] = []) {
+        const stmt = this.db.prepare(sql)
+        return stmt.get(...params) || null
+      }
+      async transaction(cb: any) {
+        this.db.exec('BEGIN')
+        try {
+          const res = await cb(this)
+          this.db.exec('COMMIT')
+          return res
+        } catch (e) {
+          this.db.exec('ROLLBACK')
+          throw e
+        }
+      }
+    }
+
+    it('migra v1 e v2 com sucesso e cria tabelas comunitárias', async () => {
+      const driver = new MemoryDriver()
+      const runner = new MigrationRunner(driver as any)
+      const res = await runner.run()
+      expect(res.applied).toBe(2)
+
+      const tables = await driver.query(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'community_%'"
+      )
+      const names = tables.map((t: any) => t.name)
+      expect(names).toContain('community_packages')
+      expect(names).toContain('community_trusted_keys')
+      expect(names).toContain('community_seen_versions')
+      expect(names).toContain('community_quarantine_events')
+    })
+
+    it('SqlCommunityRepository gerencia pacotes, chaves confiáveis e versões vistas', async () => {
+      const driver = new MemoryDriver()
+      const runner = new MigrationRunner(driver as any)
+      await runner.run()
+
+      const repo = new SqlCommunityRepository(driver as any)
+
+      // 1. Chaves confiáveis
+      expect(await repo.isTrusted('chave_123')).toBe(false)
+      await repo.pinTrustedKey('chave_123', 'prof_ana')
+      expect(await repo.isTrusted('chave_123')).toBe(true)
+
+      // 2. Proteção de Rollback
+      expect(await repo.getMaxSeenVersion('chave_123', 'mapa_diario')).toBe(null)
+      await repo.recordSeenVersion('chave_123', 'mapa_diario', 2)
+      expect(await repo.getMaxSeenVersion('chave_123', 'mapa_diario')).toBe(2)
+
+      // 3. Salvar e recuperar pacote
+      const mockPkg: any = {
+        pkg_format: 'skillpkg/1',
+        manifest: {
+          package_id: 'mapa_diario',
+          map_version: 2,
+          spec_version: '2.0',
+          publisher: { key_id: 'chave_123', handle: 'prof_ana' },
+          license: 'CC-BY-4.0',
+          hosts: [{ placeholder: 'h1.invalid', role: 'portal' }],
+          tasks: ['read_roster'],
+          created_at: '2026-10-11T20:00:00Z',
+        },
+        content: loadBaseGraph('base_read_roster.json'),
+        signature: { alg: 'ed25519', key_id: 'chave_123', public_key: 'aabb', sig: 'ccdd' },
+      }
+
+      await repo.savePackage(mockPkg, JSON.stringify(mockPkg), 'quarantined')
+      expect(await repo.getPackageStatus('mapa_diario', 2)).toBe('quarantined')
+
+      const events = await repo.getQuarantineEvents('mapa_diario', 2)
+      expect(events.length).toBeGreaterThan(0)
+      expect(events[0].event_type).toBe('quarantined')
+
+      // 4. Transição de status para ativado
+      await repo.setPackageStatus('mapa_diario', 2, 'activated', { dryRunSuccess: true })
+      expect(await repo.getPackageStatus('mapa_diario', 2)).toBe('activated')
+    })
+
+    it('SqlSkillGraphRepository bloqueia recuperação e ativação de mapas em quarentena (E_GRAPH_QUARANTINED)', async () => {
+      const driver = new MemoryDriver()
+      const runner = new MigrationRunner(driver as any)
+      await runner.run()
+
+      const commRepo = new SqlCommunityRepository(driver as any)
+      const graphRepo = new SqlSkillGraphRepository(driver as any)
+
+      // Salva pacote comunitário em quarentena
+      const mockPkg: any = {
+        pkg_format: 'skillpkg/1',
+        manifest: {
+          package_id: 'mapa_quarentena',
+          map_version: 1,
+          spec_version: '2.0',
+          publisher: { key_id: 'chave_pub', handle: 'prof_pub' },
+          license: 'CC-BY-4.0',
+          hosts: [{ placeholder: 'h1.invalid', role: 'portal' }],
+          tasks: ['lancar_falta'],
+          created_at: '2026-10-11T20:00:00Z',
+        },
+        content: loadBaseGraph('base_lancar_falta.json'),
+        signature: { alg: 'ed25519', key_id: 'chave_pub', public_key: '1122', sig: '3344' },
+      }
+      await commRepo.savePackage(mockPkg, JSON.stringify(mockPkg), 'quarantined')
+
+      // Salva grafo localmente marcado como imported
+      const importedGraph = loadBaseGraph('base_lancar_falta.json')
+      importedGraph.identity.portal_id = 'escola_local'
+      importedGraph.identity.task_id = 'mapa_quarentena'
+      importedGraph.identity.version = 1
+      importedGraph.provenance = {
+        source: 'imported',
+        package_id: 'mapa_quarentena',
+        map_version: 1,
+        created_at: '2026-10-11T20:00:00Z',
+      }
+      await graphRepo.save(importedGraph)
+
+      // Tentativa de carregar via get() deve lançar E_GRAPH_QUARANTINED
+      await expect(graphRepo.get('escola_local', 'mapa_quarentena', 1)).rejects.toThrowError(
+        expect.objectContaining({ code: 'E_GRAPH_QUARANTINED' })
+      )
+
+      // Tentativa de marcar ativo via setActive() deve lançar E_GRAPH_QUARANTINED
+      await expect(graphRepo.setActive('escola_local', 'mapa_quarentena', 1)).rejects.toThrowError(
+        expect.objectContaining({ code: 'E_GRAPH_QUARANTINED' })
+      )
+
+      // Ativação do pacote na comunidade
+      await commRepo.setPackageStatus('mapa_quarentena', 1, 'activated')
+
+      // Agora get() e setActive() devem passar com sucesso!
+      const activeGraph = await graphRepo.get('escola_local', 'mapa_quarentena', 1)
+      expect(activeGraph).not.toBeNull()
+      expect(activeGraph?.identity.task_id).toBe('mapa_quarentena')
+
+      const activated = await graphRepo.setActive('escola_local', 'mapa_quarentena', 1)
+      expect(activated).toBe(true)
     })
   })
 })
