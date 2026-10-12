@@ -71,3 +71,4 @@ sidecar/skills/cache/
 sidecar/venv/
 .venv/
 .worktrees/
+conformance/community/out/

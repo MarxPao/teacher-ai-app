@@ -1,0 +1,21 @@
+{
+  "id": "holdout_02_legit_read_attendance",
+  "set": "holdout",
+  "base_graph": "base_read_attendance.json",
+  "package_id": "diario-resumo-freq",
+  "map_version": 1,
+  "publisher_key": "publisherB",
+  "platform_hint": "paineldoaluno",
+  "hosts": [
+    {
+      "placeholder": "h1.invalid",
+      "role": "portal",
+      "suffix_hint": "paineldoaluno.com.br"
+    }
+  ],
+  "mutations": [],
+  "expected": "accept",
+  "test_binding": {
+    "h1.invalid": "escola.paineldoaluno.com.br"
+  }
+}

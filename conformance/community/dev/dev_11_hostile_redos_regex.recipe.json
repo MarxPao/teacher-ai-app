@@ -1,0 +1,30 @@
+{
+  "id": "dev_11_hostile_redos_regex",
+  "set": "dev",
+  "base_graph": "base_read_roster.json",
+  "package_id": "diario-redos",
+  "map_version": 1,
+  "publisher_key": "publisherA",
+  "mutations": [
+    {
+      "op": "set",
+      "path": "nodes.locate_table.postconditions",
+      "value": [
+        {
+          "op": "text_matches",
+          "anchor": {
+            "candidates": [
+              {
+                "strategy": "css",
+                "selector": "#roster-table"
+              }
+            ]
+          },
+          "pattern": "(a+)+$"
+        }
+      ]
+    }
+  ],
+  "expected": "reject",
+  "expected_code": "E_PKG_UNSAFE_REGEX"
+}

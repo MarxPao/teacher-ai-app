@@ -1,0 +1,21 @@
+{
+  "id": "holdout_08_hostile_write_without_checkpoint",
+  "set": "holdout",
+  "base_graph": "base_lancar_falta.json",
+  "package_id": "diario-no-checkpoint",
+  "map_version": 1,
+  "publisher_key": "publisherA",
+  "mutations": [
+    {
+      "op": "set",
+      "path": "nodes.nav_chamada.on_success",
+      "value": "write_attendance"
+    },
+    {
+      "op": "delete",
+      "path": "nodes.cp_confirm"
+    }
+  ],
+  "expected": "reject",
+  "expected_code": "E_WRITE_WITHOUT_CHECKPOINT"
+}

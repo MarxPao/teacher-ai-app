@@ -1,0 +1,107 @@
+{
+  "spec_version": "2.0",
+  "identity": {
+    "portal_id": "placeholder_portal",
+    "domain": "h1.invalid",
+    "task_id": "lancar_falta",
+    "version": 1,
+    "name": "Lançar Falta",
+    "description": "Registra faltas e frequências na caderneta escolar"
+  },
+  "compat": {
+    "support_tier": 1,
+    "archetype_tags": ["table", "checkboxes"],
+    "tested_archetypes": ["checkboxes"],
+    "min_runner_version": "2.0.0"
+  },
+  "params": {
+    "data_aula": {
+      "type": "date",
+      "required": true,
+      "pii": false,
+      "description": "Data da aula"
+    }
+  },
+  "entry_fingerprint": {
+    "route": {
+      "host": "h1.invalid",
+      "path_pattern": "/portal/chamada"
+    },
+    "landmarks": [
+      {
+        "candidates": [{ "strategy": "css", "selector": "#chamada-grid" }],
+        "description": "Grid de chamada visível"
+      }
+    ]
+  },
+  "entry_node": "nav_chamada",
+  "nodes": {
+    "nav_chamada": {
+      "label": "Navega para a página de chamada",
+      "type": "NAVIGATE",
+      "path": "/portal/chamada",
+      "host": "h1.invalid",
+      "retry": { "max_attempts": 2, "backoff_ms": 300 },
+      "timeout_ms": 5000,
+      "postconditions": [],
+      "on_success": "cp_confirm",
+      "on_fail": "$abort"
+    },
+    "cp_confirm": {
+      "label": "Confirmação do Usuário",
+      "type": "CHECKPOINT",
+      "summary": [
+        { "label": "Operação", "value": { "lit": "Lançamento de Frequência" } }
+      ],
+      "on_success": "write_attendance",
+      "on_fail": "$abort"
+    },
+    "write_attendance": {
+      "label": "Marca a ausência do discente",
+      "type": "WRITE",
+      "anchor": {
+        "candidates": [{ "strategy": "css", "selector": "input.check-falta" }]
+      },
+      "value": { "lit": "true" },
+      "semantic": "attendance",
+      "on_success": "submit_chamada",
+      "on_fail": "$abort"
+    },
+    "submit_chamada": {
+      "label": "Salva a chamada",
+      "type": "CLICK",
+      "anchor": {
+        "candidates": [
+          { "strategy": "role_name", "role": "button", "name": "Salvar Frequência" },
+          { "strategy": "css", "selector": "#btn-salvar" }
+        ]
+      },
+      "is_submit_action": true,
+      "expect_navigation": false,
+      "on_success": "$end",
+      "on_fail": "$abort"
+    }
+  },
+  "canonical_mapping": {
+    "columns": [
+      { "portal_labels": ["Falta", "Ausência"], "field": "attendance.status", "semantic_type": "boolean" }
+    ],
+    "grade_scale": { "type": "numeric", "min": 0, "max": 10, "decimal_separator": "," },
+    "attendance": { "polarity": "checked_is_absent" },
+    "ambiguous_requires_confirmation": true
+  },
+  "safety": {
+    "side_effect_level": "write",
+    "writes_require_checkpoint": true,
+    "max_writes_per_run": 50,
+    "rate_limit": { "min_delay_ms": 200, "jitter_ms": 100 },
+    "allowed_hosts": ["h1.invalid"]
+  },
+  "provenance": {
+    "author": "Professora Autora",
+    "created_at": "2026-10-11T20:00:00Z",
+    "updated_at": "2026-10-11T20:00:00Z",
+    "source": "recorded",
+    "pii_scrubbed": true
+  }
+}

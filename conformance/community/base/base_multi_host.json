@@ -1,0 +1,82 @@
+{
+  "spec_version": "2.0",
+  "identity": {
+    "portal_id": "placeholder_portal",
+    "domain": "h1.invalid",
+    "task_id": "read_roster",
+    "version": 1,
+    "name": "Ler Roster com Login Federado",
+    "description": "Acessa portal e redireciona para IdP corporativo"
+  },
+  "compat": {
+    "support_tier": 2,
+    "archetype_tags": ["sso_redirect", "table"],
+    "tested_archetypes": ["sso_redirect"],
+    "min_runner_version": "2.0.0"
+  },
+  "params": {},
+  "entry_fingerprint": {
+    "route": {
+      "host": "h1.invalid",
+      "path_pattern": "/login"
+    }
+  },
+  "entry_node": "nav_login",
+  "nodes": {
+    "nav_login": {
+      "label": "Inicia login no portal",
+      "type": "NAVIGATE",
+      "path": "/login",
+      "host": "h1.invalid",
+      "retry": { "max_attempts": 2, "backoff_ms": 300 },
+      "timeout_ms": 5000,
+      "postconditions": [],
+      "on_success": "click_sso",
+      "on_fail": "$abort"
+    },
+    "click_sso": {
+      "label": "Clica no botão de login com IdP",
+      "type": "CLICK",
+      "anchor": {
+        "candidates": [{ "strategy": "css", "selector": "#btn-sso" }]
+      },
+      "is_submit_action": false,
+      "expect_navigation": true,
+      "on_success": "nav_idp",
+      "on_fail": "$abort"
+    },
+    "nav_idp": {
+      "label": "Redirecionamento para o IdP",
+      "type": "NAVIGATE",
+      "path": "/oauth/authorize",
+      "host": "h2.invalid",
+      "retry": { "max_attempts": 2, "backoff_ms": 300 },
+      "timeout_ms": 5000,
+      "postconditions": [],
+      "on_success": "$end",
+      "on_fail": "$abort"
+    }
+  },
+  "canonical_mapping": {
+    "columns": [
+      { "portal_labels": ["Nome"], "field": "student.name", "semantic_type": "string" }
+    ],
+    "grade_scale": { "type": "numeric", "min": 0, "max": 10, "decimal_separator": "," },
+    "attendance": { "polarity": "not_applicable" },
+    "ambiguous_requires_confirmation": true
+  },
+  "safety": {
+    "side_effect_level": "read",
+    "writes_require_checkpoint": true,
+    "max_writes_per_run": 0,
+    "rate_limit": { "min_delay_ms": 200, "jitter_ms": 100 },
+    "allowed_hosts": ["h1.invalid", "h2.invalid"]
+  },
+  "provenance": {
+    "author": "Professora Autora",
+    "created_at": "2026-10-11T20:00:00Z",
+    "updated_at": "2026-10-11T20:00:00Z",
+    "source": "recorded",
+    "pii_scrubbed": true
+  }
+}

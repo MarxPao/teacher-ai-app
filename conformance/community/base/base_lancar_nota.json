@@ -1,0 +1,107 @@
+{
+  "spec_version": "2.0",
+  "identity": {
+    "portal_id": "placeholder_portal",
+    "domain": "h1.invalid",
+    "task_id": "lancar_nota",
+    "version": 1,
+    "name": "Lançar Notas da Avaliação",
+    "description": "Lança notas em lote na caderneta escolar"
+  },
+  "compat": {
+    "support_tier": 1,
+    "archetype_tags": ["table", "inputs"],
+    "tested_archetypes": ["inputs"],
+    "min_runner_version": "2.0.0"
+  },
+  "params": {
+    "avaliacao": {
+      "type": "string",
+      "required": true,
+      "pii": false,
+      "description": "Nome da avaliação"
+    }
+  },
+  "entry_fingerprint": {
+    "route": {
+      "host": "h1.invalid",
+      "path_pattern": "/portal/notas"
+    },
+    "landmarks": [
+      {
+        "candidates": [{ "strategy": "css", "selector": "#tabela-notas" }],
+        "description": "Tabela de notas visível"
+      }
+    ]
+  },
+  "entry_node": "nav_notas",
+  "nodes": {
+    "nav_notas": {
+      "label": "Navega para a página de notas",
+      "type": "NAVIGATE",
+      "path": "/portal/notas",
+      "host": "h1.invalid",
+      "retry": { "max_attempts": 2, "backoff_ms": 300 },
+      "timeout_ms": 5000,
+      "postconditions": [],
+      "on_success": "cp_confirm_notas",
+      "on_fail": "$abort"
+    },
+    "cp_confirm_notas": {
+      "label": "Confirmação de Lançamento de Notas",
+      "type": "CHECKPOINT",
+      "summary": [
+        { "label": "Tarefa", "value": { "lit": "Lançar Notas Escolares" } }
+      ],
+      "on_success": "write_score",
+      "on_fail": "$abort"
+    },
+    "write_score": {
+      "label": "Digita a nota do aluno",
+      "type": "WRITE",
+      "anchor": {
+        "candidates": [{ "strategy": "css", "selector": "input.input-nota" }]
+      },
+      "value": { "lit": "8,5" },
+      "semantic": "grade",
+      "on_success": "submit_notas",
+      "on_fail": "$abort"
+    },
+    "submit_notas": {
+      "label": "Grava as notas no sistema",
+      "type": "CLICK",
+      "anchor": {
+        "candidates": [
+          { "strategy": "role_name", "role": "button", "name": "Salvar Avaliação" },
+          { "strategy": "css", "selector": "#btn-salvar-notas" }
+        ]
+      },
+      "is_submit_action": true,
+      "expect_navigation": false,
+      "on_success": "$end",
+      "on_fail": "$abort"
+    }
+  },
+  "canonical_mapping": {
+    "columns": [
+      { "portal_labels": ["Nota", "Grau"], "field": "student.portal_id", "semantic_type": "grade" }
+    ],
+    "grade_scale": { "type": "numeric", "min": 0, "max": 10, "decimal_separator": "," },
+    "attendance": { "polarity": "not_applicable" },
+    "ambiguous_requires_confirmation": true
+  },
+  "safety": {
+    "side_effect_level": "write",
+    "writes_require_checkpoint": true,
+    "max_writes_per_run": 50,
+    "rate_limit": { "min_delay_ms": 200, "jitter_ms": 100 },
+    "allowed_hosts": ["h1.invalid"]
+  },
+  "provenance": {
+    "author": "Professora Autora",
+    "created_at": "2026-10-11T20:00:00Z",
+    "updated_at": "2026-10-11T20:00:00Z",
+    "source": "recorded",
+    "pii_scrubbed": true
+  }
+}

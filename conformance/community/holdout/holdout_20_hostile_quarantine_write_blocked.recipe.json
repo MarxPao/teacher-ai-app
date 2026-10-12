@@ -1,0 +1,15 @@
+{
+  "id": "holdout_20_hostile_quarantine_write_blocked",
+  "set": "holdout",
+  "base_graph": "base_lancar_falta.json",
+  "package_id": "diario-quarantine-blocked",
+  "map_version": 1,
+  "publisher_key": "publisherA",
+  "test_action": "execute_write_without_activation",
+  "mutations": [],
+  "expected": "reject",
+  "expected_code": "E_GRAPH_QUARANTINED",
+  "test_binding": {
+    "h1.invalid": "escola.paineldoaluno.com.br"
+  }
+}

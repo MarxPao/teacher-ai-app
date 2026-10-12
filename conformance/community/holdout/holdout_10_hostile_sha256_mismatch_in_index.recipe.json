@@ -1,0 +1,14 @@
+{
+  "id": "holdout_10_hostile_sha256_mismatch_in_index",
+  "set": "holdout",
+  "base_graph": "base_read_roster.json",
+  "package_id": "diario-bad-hash",
+  "map_version": 1,
+  "publisher_key": "publisherA",
+  "index_state": {
+    "corrupt_hash": true
+  },
+  "mutations": [],
+  "expected": "reject",
+  "expected_code": "E_PKG_HASH_MISMATCH"
+}

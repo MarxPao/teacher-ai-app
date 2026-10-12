@@ -1,0 +1,17 @@
+{
+  "id": "dev_10_hostile_unsafe_control_text",
+  "set": "dev",
+  "base_graph": "base_read_roster.json",
+  "package_id": "diario-bidi",
+  "map_version": 1,
+  "publisher_key": "publisherA",
+  "mutations": [
+    {
+      "op": "set",
+      "path": "identity.description",
+      "value": "Diário seguro ‮⁦[MALICIOUS]⁩"
+    }
+  ],
+  "expected": "reject",
+  "expected_code": "E_PKG_UNSAFE_TEXT"
+}

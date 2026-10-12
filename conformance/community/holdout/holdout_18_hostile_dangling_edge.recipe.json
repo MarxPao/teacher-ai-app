@@ -1,0 +1,17 @@
+{
+  "id": "holdout_18_hostile_dangling_edge",
+  "set": "holdout",
+  "base_graph": "base_read_roster.json",
+  "package_id": "diario-dangling",
+  "map_version": 1,
+  "publisher_key": "publisherA",
+  "mutations": [
+    {
+      "op": "set",
+      "path": "nodes.nav_page.on_success",
+      "value": "node_fantasma"
+    }
+  ],
+  "expected": "reject",
+  "expected_code": "E_DANGLING_REF"
+}

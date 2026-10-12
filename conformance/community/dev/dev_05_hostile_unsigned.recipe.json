@@ -1,0 +1,12 @@
+{
+  "id": "dev_05_hostile_unsigned",
+  "set": "dev",
+  "base_graph": "base_read_roster.json",
+  "package_id": "diario-unsigned",
+  "map_version": 1,
+  "publisher_key": "publisherA",
+  "skip_signature": true,
+  "mutations": [],
+  "expected": "reject",
+  "expected_code": "E_PKG_UNSIGNED"
+}

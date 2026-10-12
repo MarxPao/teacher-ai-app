@@ -1,0 +1,21 @@
+{
+  "id": "holdout_03_legit_lancar_nota",
+  "set": "holdout",
+  "base_graph": "base_lancar_nota.json",
+  "package_id": "diario-notas",
+  "map_version": 1,
+  "publisher_key": "publisherA",
+  "platform_hint": "paineldoaluno",
+  "hosts": [
+    {
+      "placeholder": "h1.invalid",
+      "role": "portal",
+      "suffix_hint": "paineldoaluno.com.br"
+    }
+  ],
+  "mutations": [],
+  "expected": "accept",
+  "test_binding": {
+    "h1.invalid": "escola.paineldoaluno.com.br"
+  }
+}

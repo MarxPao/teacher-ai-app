@@ -1,0 +1,16 @@
+{
+  "id": "holdout_16_hostile_too_many_nodes",
+  "set": "holdout",
+  "base_graph": "base_read_roster.json",
+  "package_id": "diario-many-nodes",
+  "map_version": 1,
+  "publisher_key": "publisherA",
+  "mutations": [
+    {
+      "op": "generate_extra_nodes",
+      "count": 205
+    }
+  ],
+  "expected": "reject",
+  "expected_code": "E_LIMITS"
+}

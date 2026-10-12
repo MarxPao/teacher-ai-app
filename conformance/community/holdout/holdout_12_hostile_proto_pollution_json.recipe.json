@@ -1,0 +1,14 @@
+{
+  "id": "holdout_12_hostile_proto_pollution_json",
+  "set": "holdout",
+  "base_graph": "base_read_roster.json",
+  "package_id": "diario-proto-pollute",
+  "map_version": 1,
+  "publisher_key": "publisherA",
+  "tamper_after_sign": {
+    "inject_proto_key": true
+  },
+  "mutations": [],
+  "expected": "reject",
+  "expected_code": "E_PKG_UNSAFE_JSON"
+}
