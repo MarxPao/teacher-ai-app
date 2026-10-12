@@ -112,18 +112,6 @@ export function createExtensionHost(options: {
   }
 }
 
-// Grafos sintéticos apenas em modo de desenvolvimento local
-let devSyntheticGraphs: Record<string, any> = {}
-if (typeof __DEV__ !== 'undefined' && __DEV__) {
-  try {
-    devSyntheticGraphs = {
-      read_roster: require('../../graphs/synthetic/read_roster.json'),
-      lancar_falta: require('../../graphs/synthetic/lancar_falta.json'),
-      lancar_nota: require('../../graphs/synthetic/lancar_nota.json'),
-    }
-  } catch {}
-}
-
 // Expõe classes e utilitários no escopo global do Service Worker
 const SkillGraphV2 = {
   SkillGraphRunner,
@@ -148,7 +136,6 @@ const SkillGraphV2 = {
   analyzeTrace,
   CompilerError,
   scrubGraph,
-  syntheticGraphs: devSyntheticGraphs,
 }
 
 if (typeof globalThis !== 'undefined') {

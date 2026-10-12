@@ -1342,8 +1342,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
       if (useV2) {
         const graphKey = params?.task_id || tool;
-        const bundle = globalThis.SkillGraphBundle?.SkillGraphV2;
-        const graph = bundle?.syntheticGraphs?.[graphKey] || null;
+        const graph = params?.skillGraph || null;
 
         if (!graph) {
           sendResponse({
