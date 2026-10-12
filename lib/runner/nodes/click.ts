@@ -4,6 +4,7 @@
 import type { ClickNodeSchema } from '../../contracts/skillgraph/nodes'
 import type { z } from 'zod'
 import type { Driver, Host, RunState } from '../types'
+import { RunnerError } from '../types'
 import { resolveAnchor } from '../anchorResolve'
 import type { Anchor } from '../../contracts/skillgraph/anchors'
 
@@ -31,6 +32,19 @@ export async function executeClickNode(
       data: { dryRun: true, skippedSubmitClick: true, description: node.label },
     })
     return node.on_success
+  }
+
+  // Proteção de integridade comunitária: elemento de submissão/mutação exige is_submit_action: true
+  if (!node.is_submit_action && driver.describeClickTarget) {
+    const desc = await driver.describeClickTarget({ anchor: resolvedAnchor })
+    if (desc && desc.isSubmitOrMutating) {
+      throw new RunnerError(
+        'E_CLICK_UNDECLARED_SUBMIT',
+        `O nó "${nodeId}" tentou acionar um elemento de mutação/submissão (${desc.tagName}) sem declarar "is_submit_action: true" no grafo.`,
+        nodeId,
+        { tagName: desc.tagName, type: desc.type }
+      )
+    }
   }
 
   await driver.click({ anchor: resolvedAnchor }, { isSubmit: node.is_submit_action })

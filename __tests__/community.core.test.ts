@@ -16,6 +16,10 @@ import {
   assertAllowedDifferencesOnly,
   canActivate,
   CommunityError,
+  fetchAndVerifyRegistryIndex,
+  searchRegistryPackages,
+  downloadRegistryPackage,
+  DEFAULT_PINNED_REGISTRY_KEY,
 } from '../lib/desktop-core/community'
 import { TEST_ONLY_KEYS } from '../conformance/community/testKeys'
 // @ts-ignore
@@ -23,6 +27,7 @@ import { DatabaseSync } from 'node:sqlite'
 import { MigrationRunner } from '../lib/desktop-core/db/migrations'
 import { SqlCommunityRepository } from '../lib/desktop-core/community/repositories/SqlCommunityRepository'
 import { SqlSkillGraphRepository } from '../lib/desktop-core/db/repositories/SqlSkillGraphRepository'
+import { executeClickNode } from '../lib/runner/nodes/click'
 
 const BASE_DIR = path.resolve(__dirname, '..', 'conformance', 'community', 'base')
 const OUT_DEV_DIR = path.resolve(__dirname, '..', 'conformance', 'community', 'out', 'dev')
@@ -492,6 +497,114 @@ describe('Fase 7 - Núcleo Comunitário: Teste de Fronteira', () => {
 
       const activated = await graphRepo.setActive('escola_local', 'mapa_quarentena', 1)
       expect(activated).toBe(true)
+    })
+  })
+
+  describe('9. Cliente do Registro Comunitário e Guardas de Runtime (T7.8)', () => {
+    const mockFetcher = {
+      async fetchText(url: string) {
+        if (url.endsWith('/index.json')) {
+          const indexPath = path.resolve(__dirname, '..', 'conformance', 'community', 'out', 'index.json')
+          return fs.readFileSync(indexPath, 'utf8')
+        }
+        if (url.includes('.skillpkg.json')) {
+          const fileName = path.basename(url)
+          const devPkgPath = path.resolve(__dirname, '..', 'conformance', 'community', 'out', 'dev', fileName)
+          if (fs.existsSync(devPkgPath)) return fs.readFileSync(devPkgPath, 'utf8')
+          const holdoutPkgPath = path.resolve(__dirname, '..', 'conformance', 'community', 'out', 'holdout', fileName)
+          if (fs.existsSync(holdoutPkgPath)) return fs.readFileSync(holdoutPkgPath, 'utf8')
+        }
+        throw new Error(`404 Not Found: ${url}`)
+      },
+    }
+
+    it('baixa e valida o índice assinado do registro comunitário com a chave mestra fixada', async () => {
+      const index = await fetchAndVerifyRegistryIndex('https://registry.invalid', mockFetcher, DEFAULT_PINNED_REGISTRY_KEY)
+      expect(index.registry_version).toBe(1)
+      expect(index.packages.length).toBeGreaterThan(0)
+      expect(index.revoked_keys).toContain(TEST_ONLY_KEYS.maliciousPublisher.keyId)
+    })
+
+    it('rejeita índice com assinatura violada com E_REGISTRY_INDEX_INVALID', async () => {
+      const badFetcher = {
+        async fetchText() {
+          const validJson = fs.readFileSync(path.resolve(__dirname, '..', 'conformance', 'community', 'out', 'index.json'), 'utf8')
+          const parsed = JSON.parse(validJson)
+          // Adultera data de atualização após assinatura
+          parsed.updated_at = '2099-01-01T00:00:00Z'
+          return JSON.stringify(parsed)
+        },
+      }
+
+      await expect(
+        fetchAndVerifyRegistryIndex('https://registry.invalid', badFetcher, DEFAULT_PINNED_REGISTRY_KEY)
+      ).rejects.toThrowError(expect.objectContaining({ code: 'E_REGISTRY_INDEX_INVALID' }))
+    })
+
+    it('realiza busca em memória e exclui chaves revogadas', async () => {
+      const index = await fetchAndVerifyRegistryIndex('https://registry.invalid', mockFetcher, DEFAULT_PINNED_REGISTRY_KEY)
+
+      // Busca por tarefa sem vazar requisição para a rede
+      const results = searchRegistryPackages(index, { task: 'read_roster' })
+      expect(results.length).toBeGreaterThan(0)
+
+      // Garante que nenhum resultado pertence a chaves revogadas
+      const hasRevoked = results.some((p) => p.publisher_key_id === TEST_ONLY_KEYS.maliciousPublisher.keyId)
+      expect(hasRevoked).toBe(false)
+    })
+
+    it('baixa pacote e rejeita com E_PKG_HASH_MISMATCH se o hash não coincidir', async () => {
+      const index = await fetchAndVerifyRegistryIndex('https://registry.invalid', mockFetcher, DEFAULT_PINNED_REGISTRY_KEY)
+      const targetEntry = index.packages[0]
+
+      const badPkgFetcher = {
+        async fetchText() {
+          return '{"tampered": true}'
+        },
+      }
+
+      await expect(
+        downloadRegistryPackage('https://registry.invalid', targetEntry, badPkgFetcher)
+      ).rejects.toThrowError(expect.objectContaining({ code: 'E_PKG_HASH_MISMATCH' }))
+    })
+
+    it('guarda de runtime: bloqueia clique em botão de submissão não declarado (E_CLICK_UNDECLARED_SUBMIT)', async () => {
+      const clickNode: any = {
+        label: 'Botão camuflado',
+        type: 'CLICK',
+        anchor: { candidates: [{ strategy: 'css', selector: '#btn-salvar' }] },
+        is_submit_action: false, // Declarou falso no grafo!
+        on_success: '$end',
+        on_fail: '$abort',
+      }
+
+      const mockDriver: any = {
+        async describeClickTarget() {
+          return {
+            tagName: 'BUTTON',
+            type: 'submit',
+            isSubmitOrMutating: true, // Mas no DOM real é submit!
+          }
+        },
+        async click() {
+          return { success: true }
+        },
+      }
+
+      const mockHost: any = {
+        emit() {},
+        now() { return '2026-10-11T20:00:00Z' },
+      }
+
+      const state: any = {
+        runId: 'run-1',
+        variables: {},
+        dryRun: false,
+      }
+
+      await expect(
+        executeClickNode(clickNode, 'click_node_1', state, {}, mockDriver, mockHost)
+      ).rejects.toThrowError(expect.objectContaining({ code: 'E_CLICK_UNDECLARED_SUBMIT' }))
     })
   })
 })

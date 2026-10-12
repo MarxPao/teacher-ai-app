@@ -27,10 +27,14 @@ export const UI_ALLOWED_METHODS = [
   'data.backup',
   'data.restore',
   'keys.configure',
-  'keys.status',
   'consents.get',
   'consents.set',
   'audit.purge',
+  'community.search',
+  'community.inspect',
+  'community.import',
+  'community.activate',
+  'community.dryRun',
 ] as const
 
 export type UiMethod = typeof UI_ALLOWED_METHODS[number]
@@ -136,5 +140,32 @@ export const MethodParamSchemas = {
 
   'audit.purge': z.object({
     days: z.number().int().min(1).optional(),
+  }).strict(),
+
+  'community.search': z.object({
+    query: z.string().optional(),
+    platform: z.string().optional(),
+    task: z.string().optional(),
+  }).strict(),
+
+  'community.inspect': z.object({
+    packagePath: z.string().optional(),
+    rawPackageJson: z.string().optional(),
+  }).strict(),
+
+  'community.import': z.object({
+    rawPackageJson: z.string().min(1),
+    userBindings: z.record(z.string(), z.string()).optional(),
+  }).strict(),
+
+  'community.activate': z.object({
+    packageId: z.string().min(1),
+    mapVersion: z.number().int().min(1),
+    untrustedConfirmed: z.boolean().optional(),
+  }).strict(),
+
+  'community.dryRun': z.object({
+    packageId: z.string().min(1),
+    mapVersion: z.number().int().min(1),
   }).strict(),
 } as const

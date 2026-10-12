@@ -56,3 +56,21 @@ export function findHeaderMatch(
   }
   return -1
 }
+
+/**
+ * Executa casamento por regex no runner com truncamento dinâmico e proteção anti-ReDoS.
+ */
+export function safeRegexMatch(
+  text: string,
+  pattern: string,
+  maxTextLen = 2048
+): boolean {
+  if (typeof text !== 'string' || typeof pattern !== 'string') return false
+  const truncated = text.length > maxTextLen ? text.slice(0, maxTextLen) : text
+  try {
+    const rx = new RegExp(pattern)
+    return rx.test(truncated)
+  } catch {
+    return false
+  }
+}

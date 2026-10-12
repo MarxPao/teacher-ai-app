@@ -31,6 +31,7 @@ export const RUNTIME_ERROR_CODES = [
   'E_PERMISSION_DENIED',
   'E_INTERRUPTED',
   'E_AUDIT_UNAVAILABLE',
+  'E_CLICK_UNDECLARED_SUBMIT',
 ] as const
 
 export type RuntimeErrorCode = (typeof RUNTIME_ERROR_CODES)[number]
@@ -163,6 +164,13 @@ export interface Driver {
   download?(options: DownloadOptions): Promise<{ success: boolean; filename: string; mimeType?: string; sizeBytes?: number }>
   upload?(options: UploadOptions): Promise<{ success: boolean }>
   describeElements?(selector?: string): Promise<ElementDescriptor[]>
+  describeClickTarget?(target: ElementTarget): Promise<{
+    tagName: string
+    type?: string
+    isSubmitOrMutating: boolean
+    formAction?: string
+    text?: string
+  }>
   highlight?(selector: string, mode: 'old' | 'new'): Promise<void>
   clearHighlight?(): Promise<void>
 }
