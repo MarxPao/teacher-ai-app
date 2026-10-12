@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Teacher AI — Painel v2</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; margin: 0; padding: 12px; font-size: 12px; color: #0f172a; background: #fff; }
+    button { font-family: inherit; }
+    .btn-main { background: #2563eb; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <div id="card-skillgraph-v2">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+      <span style="font-weight: 700; font-size: 13px; color: #2563eb;">Teacher AI — Motor v2</span>
+      <input type="checkbox" id="toggle-skillgraph-v2" checked style="display: none;" />
+    </div>
+
+    <div id="skillgraph-v2-body" style="display: block;">
+      <div style="display: flex; gap: 4px; margin-bottom: 8px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px;">
+        <button id="sgv2-tab-runner" style="font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 4px; border: none; background: #2563eb; color: #fff; cursor: pointer;">Runner</button>
+        <button id="sgv2-tab-record" style="font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 4px; border: 1px solid #cbd5e1; background: #f8fafc; color: #475569; cursor: pointer;">Gravar</button>
+        <button id="sgv2-tab-suite" style="font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 4px; border: 1px solid #cbd5e1; background: #f8fafc; color: #475569; cursor: pointer;">Suíte</button>
+      </div>
+
+      <!-- Visão 1: Runner -->
+      <div id="sgv2-runner-view">
+        <p style="font-size: 11px; color: #64748b; margin-bottom: 8px;">
+          Execução determinística via SkillGraph v2 (sem LLM, sem rede).
+        </p>
+        <div style="display: flex; gap: 6px; margin-bottom: 8px;">
+          <select id="sgv2-select-graph" style="flex: 1; padding: 4px 6px; font-size: 11px; border: 1px solid #cbd5e1; border-radius: 6px;">
+            <option value="read_roster">Ler Lista de Alunos (read_roster)</option>
+            <option value="lancar_falta">Lançar Presença/Falta (lancar_falta)</option>
+            <option value="lancar_nota">Lançar Notas (lancar_nota)</option>
+          </select>
+          <button id="sgv2-btn-run" class="btn-main" style="padding: 4px 10px; font-size: 11px;">Executar</button>
+        </div>
+        <div id="sgv2-progress-box" style="display: none; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px; margin-bottom: 8px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+            <span id="sgv2-node-label" style="font-size: 11px; font-weight: 600; color: #1e293b;">Nó: --</span>
+            <span id="sgv2-step-counter" style="font-size: 10px; color: #64748b;">v2</span>
+          </div>
+          <div style="width: 100%; height: 6px; background: #e2e8f0; border-radius: 3px; overflow: hidden; margin-bottom: 6px;">
+            <div id="sgv2-progress-bar" style="width: 0%; height: 100%; background: #2563eb; transition: width 0.2s;"></div>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span id="sgv2-status-text" style="font-size: 10px; color: #475569;">Aguardando...</span>
+            <button id="sgv2-btn-abort" style="font-size: 10px; padding: 2px 6px; background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5; border-radius: 4px; cursor: pointer;">Abortar</button>
+          </div>
+        </div>
+        <div id="sgv2-message-box" style="display: none; font-size: 11px; padding: 8px; border-radius: 6px; line-height: 1.4;"></div>
+      </div>
+
+      <!-- Visão 2: Gravar -->
+      <div id="sgv2-record-view" style="display: none;">
+        <p style="font-size: 11px; color: #64748b; margin-bottom: 8px;">
+          Grave demonstrações no portal da escola para ensinar novas ações.
+        </p>
+        <div style="display: flex; gap: 6px; margin-bottom: 8px;">
+          <select id="sgv2-record-task-select" style="flex: 1; padding: 4px 6px; font-size: 11px; border: 1px solid #cbd5e1; border-radius: 6px;">
+            <option value="read_roster">Ler Lista de Alunos (read_roster)</option>
+            <option value="lancar_falta">Lançar Presença/Falta (lancar_falta)</option>
+            <option value="lancar_nota">Lançar Notas (lancar_nota)</option>
+            <option value="custom">Outra Ação Personalizada</option>
+          </select>
+        </div>
+        <div style="display: flex; gap: 6px; margin-bottom: 8px;">
+          <button id="sgv2-btn-start-record" class="btn-main" style="flex: 1; padding: 6px 10px; font-size: 11px; background: #dc2626;">🔴 Iniciar Gravação</button>
+          <button id="sgv2-btn-stop-record" style="flex: 1; display: none; padding: 6px 10px; font-size: 11px; background: #16a34a; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">⏹️ Parar e Compilar</button>
+        </div>
+        <div id="sgv2-recording-indicator" style="display: none; background: #fef2f2; border: 1px solid #fecaca; border-radius: 6px; padding: 8px; margin-bottom: 8px; font-size: 11px; color: #991b1b;">
+          Gravando demonstração no portal ativo... Interaja na página e clique em Parar.
+        </div>
+        <div id="sgv2-record-decisions-box" style="display: none; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px; margin-bottom: 8px; font-size: 11px;">
+          <div style="font-weight: 700; margin-bottom: 6px;">Confirmação de Campo do Portal:</div>
+          <p id="sgv2-record-decisions-prompt" style="color: #475569; margin-bottom: 6px;">Como este campo de preenchimento deve ser interpretado?</p>
+          <div style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px;">
+            <label style="display: flex; align-items: center; gap: 6px;"><input type="radio" name="sgv2-record-type" value="grade" checked /> <span>Nota escolar numérica (0 a 10)</span></label>
+            <label style="display: flex; align-items: center; gap: 6px;"><input type="radio" name="sgv2-record-type" value="attendance" /> <span>Frequência / Presença</span></label>
+            <label style="display: flex; align-items: center; gap: 6px;"><input type="radio" name="sgv2-record-type" value="other" /> <span>Apenas Leitura / Outro</span></label>
+          </div>
+          <button id="sgv2-btn-confirm-compile" class="btn-main" style="width: 100%; padding: 6px; font-size: 11px;">Salvar e Ativar Mapa ✨</button>
+        </div>
+        <div id="sgv2-record-message-box" style="display: none; font-size: 11px; padding: 8px; border-radius: 6px; line-height: 1.4; margin-bottom: 8px;"></div>
+      </div>
+
+      <!-- Visão 3: Suíte -->
+      <div id="sgv2-suite-view" style="display: none;">
+        <div style="font-size: 11px; font-weight: 600; color: #166534; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px; padding: 5px 8px; margin-bottom: 8px; display: flex; justify-content: space-between;">
+          <span id="suite-counter-llm">LLM: 0</span>
+          <span id="suite-counter-net">Rede do runner: 0</span>
+        </div>
+        <div style="display: flex; gap: 4px; margin-bottom: 8px;">
+          <button id="btn-suite-dev" style="flex: 1; padding: 4px 6px; font-size: 10px; background: #0284c7; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-weight: 600;">Rodar DEV</button>
+          <button id="btn-suite-holdout" style="flex: 1; padding: 4px 6px; font-size: 10px; background: #7c3aed; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-weight: 600;">Rodar HOLDOUT</button>
+          <button id="btn-suite-download" style="padding: 4px 6px; font-size: 10px; background: #f1f5f9; color: #334155; border: 1px solid #cbd5e1; border-radius: 4px; cursor: pointer;" disabled>Baixar JSON</button>
+        </div>
+        <div id="suite-lock-box" style="display: none; font-size: 10px; padding: 6px 8px; border-radius: 4px; margin-bottom: 8px;"></div>
+        <div id="suite-table-container" style="max-height: 220px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 6px; background: #fff; margin-bottom: 8px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="dist/runner.bundle.js"></script>
+  <script src="suiteView.js"></script>
+  <script src="side_panel_v2.js"></script>
+</body>
+</html>

@@ -18,7 +18,7 @@
     }
   },
   "side_panel": {
-    "default_path": "side_panel.html"
+    "default_path": "side_panel_v2.html"
   },
   "background": {
     "service_worker": "background.js"
@@ -70,7 +70,7 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["side_panel.html", "side_panel.js", "portal_normalizer.js", "portal_dom_reader.js"],
+      "resources": ["portal_normalizer.js", "portal_dom_reader.js"],
       "matches": ["http://localhost/*", "http://127.0.0.1/*"]
     }
   ]
