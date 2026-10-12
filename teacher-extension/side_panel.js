@@ -1028,27 +1028,32 @@ if (btnSendToApp) {
       }
     } catch (e) {}
 
-    // 2. Envia também via API REST do Next.js
+    // 2. Envia para o app desktop via Native Messaging (zero portas TCP) ou cache local
     try {
-      const res = await fetch('http://localhost:3000/api/students/import', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-
-      if (res.ok) {
-        const data = await res.json();
+      chrome.runtime.sendMessage({
+        action: 'SKILLGRAPH_UPSERT_ROSTER',
+        payload: {
+          classId: className,
+          students: currentLoadedStudents,
+          source: { portalId: PLATFORMS[activePlatform]?.name || 'portal_escolar', readAt: new Date().toISOString() },
+        },
+      }, (res) => {
         btnSendToApp.disabled = false;
         sendBtnText.textContent = 'Enviar para "Alunos" no Teacher AI';
-        showFeedback('success', `🎉 ${data.studentsCount || currentLoadedStudents.length} alunos salvos na turma "${className}"!`);
-        if (btnOpenAppStudents) btnOpenAppStudents.style.display = 'flex';
-      } else {
-        throw new Error(`HTTP ${res.status}`);
-      }
+        if (res && res.success) {
+          showFeedback('success', `🎉 ${currentLoadedStudents.length} alunos salvos na turma "${className}" no app desktop!`);
+          if (btnOpenAppStudents) btnOpenAppStudents.style.display = 'flex';
+        } else {
+          // Fallback para cache local seguro da extensão
+          chrome.storage.local.set({ [`cached_roster_${className}`]: currentLoadedStudents }, () => {
+            showFeedback('success', `🎉 ${currentLoadedStudents.length} alunos salvos localmente na turma "${className}". Abra o app Teacher AI para sincronizar.`);
+          });
+        }
+      });
     } catch (err) {
       btnSendToApp.disabled = false;
       sendBtnText.textContent = 'Enviar para "Alunos" no Teacher AI';
-      showFeedback('error', 'Verifique se o Teacher AI está aberto em http://localhost:3000');
+      showFeedback('error', 'Abra o app Teacher AI para sincronizar discentes.');
     }
   });
 }
@@ -3448,44 +3453,64 @@ if (typeof document !== 'undefined') {
       btnConfirm.disabled = true;
       btnConfirm.innerHTML = `<span class="spinner" style="width:12px;height:12px;border-width:2px;display:inline-block;margin-right:4px;"></span> Gravando no portal...`;
 
-      dispatchPortalBridgeMessage({
-        action: 'EXECUTE_SAFE_WRITE',
-        studentName: student.name,
-        targetValue: intent.nota || intent.faltas || '1',
-        actionType: intent.acao
-      }, (response) => {
-        btnConfirm.disabled = false;
-        btnConfirm.innerHTML = `<i class="ti ti-check"></i> <span>Confirmar</span>`;
+      chrome.storage.local.get(['USE_SKILLGRAPH_V2'], (flagRes) => {
+        const useV2 = flagRes && flagRes.USE_SKILLGRAPH_V2 !== false;
 
-        if (response && response.sucesso && response.verified) {
-          showSuccessCard(student.name, response.before_val, response.after_val);
-          student.currentValue = response.after_val;
-          const activeTurmaEl = document.getElementById('active-class-name');
-          const currentTurma = (activeTurmaEl && activeTurmaEl.textContent !== '—') ? activeTurmaEl.textContent : 'Turma 9A';
-          trackActionUsage(intent.acao, currentTurma, `Lançar ${intent.acao === 'lancar_falta' ? 'falta' : 'nota'} ${currentTurma}`);
+        if (useV2) {
+          chrome.runtime.sendMessage({
+            action: 'SKILLGRAPH_RUN',
+            payload: {
+              graphKey: intent.acao,
+              taskId: intent.acao,
+              initialVariables: {
+                student_name: student.name,
+                value: intent.nota || intent.faltas || '1',
+              },
+            },
+          }, (v2Res) => {
+            btnConfirm.disabled = false;
+            btnConfirm.innerHTML = `<i class="ti ti-check"></i> <span>Confirmar</span>`;
 
-          // Sincronização Write-Through: Persiste alteração na tabela de negócio students no Supabase
-          try {
-            fetch('http://localhost:3000/api/students/write-through', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                studentName: student.name,
-                matricula: student.matricula || student.portal_native_id || student.rollNumber || '',
-                classRef: currentTurma,
-                field: intent.acao === 'lancar_falta' ? 'faltas' : (intent.campo || 'nota'),
-                value: response.after_val,
-                actionType: intent.acao,
-                portal: window.location.hostname || 'Portal Escolar'
-              })
-            }).catch(err => console.warn('[Write-Through] Falha de sincronização com Supabase:', err));
-          } catch (e) {}
-        } else {
-          showHonestErrorCard(
-            'Falha na gravação',
-            (response && response.mensagem) || 'O portal não confirmou a gravação do valor no campo.'
-          );
+            if (v2Res && v2Res.success) {
+              const afterVal = intent.nota || intent.faltas || '1';
+              showSuccessCard(student.name, student.currentValue || 'vazio', afterVal);
+              student.currentValue = afterVal;
+              const activeTurmaEl = document.getElementById('active-class-name');
+              const currentTurma = (activeTurmaEl && activeTurmaEl.textContent !== '—') ? activeTurmaEl.textContent : 'Turma';
+              trackActionUsage(intent.acao, currentTurma, `Lançar ${intent.acao === 'lancar_falta' ? 'falta' : 'nota'} ${currentTurma}`);
+            } else {
+              showHonestErrorCard(
+                'Falha na gravação',
+                v2Res?.friendlyMessage || 'O portal não registrou a alteração conforme esperado.'
+              );
+            }
+          });
+          return;
         }
+
+        // Modo legado caso v2 tenha sido desativado explicitamente
+        dispatchPortalBridgeMessage({
+          action: 'EXECUTE_SAFE_WRITE',
+          studentName: student.name,
+          targetValue: intent.nota || intent.faltas || '1',
+          actionType: intent.acao
+        }, (response) => {
+          btnConfirm.disabled = false;
+          btnConfirm.innerHTML = `<i class="ti ti-check"></i> <span>Confirmar</span>`;
+
+          if (response && response.sucesso && response.verified) {
+            showSuccessCard(student.name, response.before_val, response.after_val);
+            student.currentValue = response.after_val;
+            const activeTurmaEl = document.getElementById('active-class-name');
+            const currentTurma = (activeTurmaEl && activeTurmaEl.textContent !== '—') ? activeTurmaEl.textContent : 'Turma 9A';
+            trackActionUsage(intent.acao, currentTurma, `Lançar ${intent.acao === 'lancar_falta' ? 'falta' : 'nota'} ${currentTurma}`);
+          } else {
+            showHonestErrorCard(
+              'Falha na gravação',
+              (response && response.mensagem) || 'O portal não confirmou a gravação do valor no campo.'
+            );
+          }
+        });
       });
     });
   }

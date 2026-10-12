@@ -277,10 +277,17 @@ async function connectWebSocket() {
     };
 
     ws.onclose = () => {
-      console.log('[TeacherAI Extension] Conexão WS fechada. Tentando fallback ou reconexão...');
       isSidecarOnline = false;
       updateToolbarBadge('offline');
-      setTimeout(checkHttpFallbackAndReconnect, 3000);
+      if (typeof wsReconnectAttempts === 'undefined') {
+        globalThis.wsReconnectAttempts = 0;
+      }
+      if (globalThis.wsReconnectAttempts < 1) {
+        globalThis.wsReconnectAttempts++;
+        setTimeout(checkHttpFallbackAndReconnect, 3000);
+      } else {
+        console.log('[TeacherAI Extension] Modo nativo v2 ativo. Canal prioritário: Chrome Native Messaging (com.teacherai.desktop).');
+      }
     };
 
     ws.onerror = () => {
@@ -290,7 +297,6 @@ async function connectWebSocket() {
   } catch {
     isSidecarOnline = false;
     updateToolbarBadge('offline');
-    setTimeout(checkHttpFallbackAndReconnect, 3000);
   }
 }
 
@@ -2339,16 +2345,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 });
 
-// Inicialização imediata com estado visual "Conectando..." durante a verificação inicial
-updateToolbarBadge('connecting');
-connectWebSocket();
+// Inicialização: se em modo SkillGraph v2, prioriza Chrome Native Messaging (zero portas TCP)
+chrome.storage.local.get(['USE_SKILLGRAPH_V2'], (res) => {
+  const useV2 = res && res.USE_SKILLGRAPH_V2 !== false;
+  if (!useV2) {
+    updateToolbarBadge('connecting');
+    connectWebSocket();
+    startupTimer = setTimeout(() => {
+      if (!isSidecarOnline) {
+        console.log('[TeacherAI Extension] Timeout expirou sem conexão com sidecar.');
+      }
+    }, STARTUP_TIMEOUT_MS);
+  } else {
+    console.log('[TeacherAI Extension] SkillGraph v2 ativado. Canal principal: Chrome Native Messaging (zero portas TCP).');
+    updateToolbarBadge('online');
+  }
+});
+
 evaluateActiveTab();
 setInterval(evaluateActiveTab, 5000);
-
-startupTimer = setTimeout(() => {
-  if (!isSidecarOnline) {
-    console.log('[TeacherAI Extension] ⏱️ Timeout de 5s expirou sem conexão. Acionando Fallback B (Native Messaging)...');
-    launchViaNativeMessaging(false);
-  }
-}, STARTUP_TIMEOUT_MS);
 

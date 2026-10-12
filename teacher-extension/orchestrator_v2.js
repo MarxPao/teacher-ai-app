@@ -425,6 +425,25 @@
       return true
     }
 
+    if (message.action === 'SKILLGRAPH_UPSERT_ROSTER') {
+      (async () => {
+        try {
+          const bundle = globalThis.SkillGraphBundle?.SkillGraphV2
+          const NativeClientClass = bundle?.NativeClient || globalThis.NativeClient
+          const nativeClient = NativeClientClass ? new NativeClientClass({ hostName: 'com.teacherai.desktop' }) : null
+          if (nativeClient) {
+            await nativeClient.send('students.upsertFromPortal', message.payload || {})
+            sendResponse({ success: true })
+          } else {
+            sendResponse({ success: false, friendlyMessage: 'Abra o app Teacher AI para sincronizar discentes.' })
+          }
+        } catch (err) {
+          sendResponse({ success: false, friendlyMessage: err.message || String(err) })
+        }
+      })()
+      return true
+    }
+
     if (message.action === 'SKILLGRAPH_GET_HEALTH') {
       const healthKey = `graph_health:${message.portalId || 'default'}:${message.taskId}`
       chrome.storage.local.get([healthKey], (res) => {
