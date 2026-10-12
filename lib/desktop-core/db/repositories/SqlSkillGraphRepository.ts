@@ -61,6 +61,53 @@ export class SqlSkillGraphRepository implements SkillGraphRepository {
     return graph
   }
 
+  async resolveActive(
+    host: string,
+    taskId: string
+  ): Promise<SkillGraphV2 | null> {
+    const rows = await this.driver.query<{ graph_json: string }>(
+      'SELECT graph_json FROM skill_graphs WHERE task_id = ? ORDER BY is_active DESC, version DESC',
+      [taskId]
+    )
+
+    for (const row of rows) {
+      try {
+        const graph = JSON.parse(row.graph_json) as SkillGraphV2
+        const allowed = graph.safety?.allowed_hosts || []
+        const matches = allowed.some((h) => {
+          if (h === '*' || h === host) return true
+          if (host.endsWith('.' + h)) return true
+          if (h.endsWith('.' + host)) return true
+          return false
+        })
+
+        if (matches) {
+          if (graph.provenance?.source === 'imported') {
+            const packageId = (graph.provenance as any).package_id || taskId
+            const mapVersion = (graph.provenance as any).map_version || graph.identity.version
+
+            const commStatus = await this.driver.queryOne<{ status: string }>(
+              'SELECT status FROM community_packages WHERE package_id = ? AND map_version = ?',
+              [packageId, mapVersion]
+            )
+
+            if (!commStatus || commStatus.status !== 'activated') {
+              throw new CommunityError(
+                'E_GRAPH_QUARANTINED',
+                `O mapa "${taskId}" (v${graph.identity.version}) é da comunidade e está em quarentena (${commStatus?.status || 'desconhecido'}). Liberação bloqueada até ativação explícita após dry-run.`
+              )
+            }
+          }
+          return graph
+        }
+      } catch (err) {
+        if (err instanceof CommunityError) throw err
+      }
+    }
+
+    return null
+  }
+
   async listVersions(
     portalId: string,
     taskId: string

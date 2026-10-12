@@ -21884,406 +21884,6 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     }
   };
 
-  // graphs/synthetic/read_roster.json
-  var read_roster_default = {
-    spec_version: "2.0",
-    identity: {
-      portal_id: "synthetic_portal",
-      domain: "localhost:8898",
-      task_id: "read_roster",
-      version: 1,
-      name: "Ler Roster de Alunos",
-      description: "Extrai lista de alunos com normaliza\xE7\xE3o e suporte a colunas din\xE2micas"
-    },
-    compat: {
-      support_tier: 1,
-      archetype_tags: ["table", "standard_table", "columns_mutation"],
-      tested_archetypes: ["standard", "columns"],
-      min_runner_version: "2.0.0"
-    },
-    params: {},
-    entry_node: "locate_table",
-    nodes: {
-      locate_table: {
-        label: "Localiza tabela ou grade de alunos no DOM",
-        type: "LOCATE",
-        anchor: {
-          candidates: [
-            { strategy: "css", selector: "#tabela-alunos" },
-            { strategy: "css", selector: "#grid-rendimento" },
-            { strategy: "css", selector: "#paged-table" },
-            { strategy: "css", selector: "table" }
-          ],
-          description: "Tabela de estudantes"
-        },
-        mode: "direct",
-        retry: { max_attempts: 2, backoff_ms: 300 },
-        timeout_ms: 5e3,
-        postconditions: [],
-        on_success: "read_roster_table",
-        on_fail: "$abort"
-      },
-      read_roster_table: {
-        label: "L\xEA registros da tabela descartando linhas de totais",
-        type: "READ",
-        source: {
-          kind: "table",
-          anchor: {
-            candidates: [
-              { strategy: "css", selector: "#tabela-alunos" },
-              { strategy: "css", selector: "#grid-rendimento" },
-              { strategy: "css", selector: "#paged-table" },
-              { strategy: "css", selector: "table" }
-            ],
-            description: "Tabela de alunos"
-          },
-          skip_rows: [
-            {
-              column_labels: ["Nome", "Nome do Aluno", "Discente", "Estudante", "Situa\xE7\xE3o"],
-              match: "normalized",
-              values: ["Total", "Total de Alunos", "M\xE9dia", "Subtotal"]
-            }
-          ],
-          skip_empty_rows: true
-        },
-        into: "alunos_extraidos",
-        paginate: false,
-        retry: { max_attempts: 2, backoff_ms: 300 },
-        timeout_ms: 5e3,
-        postconditions: [],
-        on_success: "$end",
-        on_fail: "$abort"
-      }
-    },
-    canonical_mapping: {
-      columns: [
-        {
-          portal_labels: ["Matr\xEDcula", "C\xF3digo", "ID", "Identifica\xE7\xE3o"],
-          field: "student.portal_id",
-          semantic_type: "identifier"
-        },
-        {
-          portal_labels: ["Nome do Aluno", "Discente", "Nome", "Educando", "Estudante"],
-          field: "student.name",
-          semantic_type: "name",
-          transform: "normalize_name"
-        },
-        {
-          portal_labels: ["Nota", "Avalia\xE7\xE3o", "Rendimento"],
-          field: "grade.value",
-          semantic_type: "numeric_grade",
-          transform: "parse_decimal_pt_br"
-        }
-      ],
-      grade_scale: {
-        type: "numeric",
-        min: 0,
-        max: 10,
-        decimal_separator: "."
-      },
-      attendance: {
-        polarity: "checked_is_absent"
-      },
-      ambiguous_requires_confirmation: true
-    },
-    safety: {
-      side_effect_level: "read",
-      writes_require_checkpoint: true,
-      max_writes_per_run: 0,
-      rate_limit: { min_delay_ms: 50, jitter_ms: 20 },
-      allowed_hosts: ["localhost:8898", "127.0.0.1:8898", "localhost:8899", "127.0.0.1:8899", "localhost", "127.0.0.1"]
-    },
-    provenance: {
-      author: "teacher_ai_synthetic",
-      created_at: "2026-10-10T12:00:00Z",
-      updated_at: "2026-10-10T12:00:00Z",
-      source: "recorded",
-      has_self_healed: false,
-      pii_scrubbed: true
-    }
-  };
-
-  // graphs/synthetic/lancar_falta.json
-  var lancar_falta_default = {
-    spec_version: "2.0",
-    identity: {
-      portal_id: "synthetic_portal",
-      domain: "localhost:8898",
-      task_id: "lancar_falta",
-      version: 1,
-      name: "Lan\xE7ar Falta Individual",
-      description: "Lan\xE7a falta em aluno espec\xEDfico com checkpoint e verifica\xE7\xE3o de read-back"
-    },
-    compat: {
-      support_tier: 1,
-      archetype_tags: ["standard_table", "checkbox_polarity"],
-      tested_archetypes: ["standard", "columns"],
-      min_runner_version: "2.0.0"
-    },
-    params: {
-      aluno_nome: {
-        type: "student_ref",
-        required: true,
-        pii: true,
-        description: "Nome completo do aluno"
-      },
-      marcar_falta: {
-        type: "boolean",
-        required: true,
-        pii: false,
-        description: "True para marcar aus\xEAncia, False para presen\xE7a"
-      }
-    },
-    entry_node: "confirma_falta",
-    nodes: {
-      confirma_falta: {
-        label: "Solicita confirma\xE7\xE3o do professor para lan\xE7amento de falta",
-        type: "CHECKPOINT",
-        summary: [
-          { label: "Aluno Selecionado", value: { param: "aluno_nome" } },
-          { label: "Registro de Falta", value: { param: "marcar_falta" } }
-        ],
-        scope: "once",
-        on_reject: "$abort",
-        retry: { max_attempts: 1, backoff_ms: 0 },
-        timeout_ms: 3e4,
-        postconditions: [],
-        on_success: "marca_falta",
-        on_fail: "$abort"
-      },
-      marca_falta: {
-        label: "Marca checkbox de falta na linha do aluno correspondente",
-        type: "WRITE",
-        anchor: {
-          candidates: [
-            { strategy: "css", selector: "input[type='checkbox']" }
-          ],
-          scope: {
-            within: {
-              table: {
-                candidates: [
-                  { strategy: "css", selector: "#tabela-alunos" },
-                  { strategy: "css", selector: "#grid-rendimento" },
-                  { strategy: "css", selector: "#tabela-frequencia" },
-                  { strategy: "css", selector: "table" }
-                ],
-                description: "Tabela de Di\xE1rio"
-              },
-              key: {
-                column_labels: ["Nome do Aluno", "Discente", "Nome", "Educando", "Estudante"],
-                equals: { param: "aluno_nome" },
-                match: "normalized"
-              }
-            }
-          },
-          description: "Checkbox de falta do aluno especificado"
-        },
-        value: { param: "marcar_falta" },
-        method: "set_checked",
-        semantic: "attendance",
-        read_back: true,
-        retry: { max_attempts: 2, backoff_ms: 500 },
-        timeout_ms: 5e3,
-        postconditions: [],
-        on_success: "salvar_diario",
-        on_fail: "$abort"
-      },
-      salvar_diario: {
-        label: "Grava lan\xE7amentos no portal escolar",
-        type: "CLICK",
-        anchor: {
-          candidates: [
-            { strategy: "css", selector: "#btn-salvar" },
-            { strategy: "css", selector: ".btn-confirmar" },
-            { strategy: "css", selector: "#btn-salvar-frequencia" },
-            { strategy: "css", selector: "button" }
-          ],
-          description: "Bot\xE3o Salvar Lan\xE7amentos"
-        },
-        is_submit_action: true,
-        retry: { max_attempts: 2, backoff_ms: 500 },
-        timeout_ms: 5e3,
-        postconditions: [],
-        on_success: "$end",
-        on_fail: "$abort"
-      }
-    },
-    canonical_mapping: {
-      columns: [
-        {
-          portal_labels: ["Nome do Aluno", "Discente", "Nome"],
-          field: "student.name",
-          semantic_type: "name"
-        }
-      ],
-      grade_scale: {
-        type: "numeric",
-        min: 0,
-        max: 10,
-        decimal_separator: "."
-      },
-      attendance: {
-        polarity: "checked_is_absent"
-      },
-      ambiguous_requires_confirmation: true
-    },
-    safety: {
-      side_effect_level: "write",
-      writes_require_checkpoint: true,
-      max_writes_per_run: 5,
-      rate_limit: { min_delay_ms: 50, jitter_ms: 20 },
-      allowed_hosts: ["localhost:8898", "127.0.0.1:8898", "localhost:8899", "127.0.0.1:8899", "localhost", "127.0.0.1"]
-    },
-    provenance: {
-      author: "teacher_ai_synthetic",
-      created_at: "2026-10-10T12:00:00Z",
-      updated_at: "2026-10-10T12:00:00Z",
-      source: "recorded",
-      has_self_healed: false,
-      pii_scrubbed: true
-    }
-  };
-
-  // graphs/synthetic/lancar_nota.json
-  var lancar_nota_default = {
-    spec_version: "2.0",
-    identity: {
-      portal_id: "synthetic_portal",
-      domain: "localhost:8898",
-      task_id: "lancar_nota",
-      version: 1,
-      name: "Lan\xE7ar Nota Individual",
-      description: "Lan\xE7a nota num\xE9rica com valida\xE7\xE3o de escala e read-back"
-    },
-    compat: {
-      support_tier: 1,
-      archetype_tags: ["standard_table", "grade_scale"],
-      tested_archetypes: ["standard", "columns"],
-      min_runner_version: "2.0.0"
-    },
-    params: {
-      aluno_nome: {
-        type: "student_ref",
-        required: true,
-        pii: true,
-        description: "Nome completo do aluno"
-      },
-      nota_valor: {
-        type: "string",
-        required: true,
-        pii: false,
-        description: "Nota num\xE9rica (escala 0 a 10)"
-      }
-    },
-    entry_node: "confirma_nota",
-    nodes: {
-      confirma_nota: {
-        label: "Confirma\xE7\xE3o do professor para lan\xE7amento de nota",
-        type: "CHECKPOINT",
-        summary: [
-          { label: "Aluno Selecionado", value: { param: "aluno_nome" } },
-          { label: "Nota Informada", value: { param: "nota_valor" } }
-        ],
-        scope: "once",
-        on_reject: "$abort",
-        retry: { max_attempts: 1, backoff_ms: 0 },
-        timeout_ms: 3e4,
-        postconditions: [],
-        on_success: "escreve_nota",
-        on_fail: "$abort"
-      },
-      escreve_nota: {
-        label: "Digita nota no input correspondente \xE0 linha do discente",
-        type: "WRITE",
-        anchor: {
-          candidates: [
-            { strategy: "css", selector: "input[type='number']" },
-            { strategy: "css", selector: "input[type='text']" }
-          ],
-          scope: {
-            within: {
-              table: {
-                candidates: [
-                  { strategy: "css", selector: "#tabela-alunos" },
-                  { strategy: "css", selector: "#grid-rendimento" },
-                  { strategy: "css", selector: "table" }
-                ],
-                description: "Tabela de Di\xE1rio"
-              },
-              key: {
-                column_labels: ["Nome do Aluno", "Discente", "Nome", "Educando", "Estudante"],
-                equals: { param: "aluno_nome" },
-                match: "normalized"
-              }
-            }
-          },
-          description: "Campo de nota do aluno especificado"
-        },
-        value: { param: "nota_valor" },
-        method: "type_native",
-        semantic: "grade",
-        read_back: true,
-        retry: { max_attempts: 2, backoff_ms: 500 },
-        timeout_ms: 5e3,
-        postconditions: [],
-        on_success: "salvar_diario",
-        on_fail: "$abort"
-      },
-      salvar_diario: {
-        label: "Grava lan\xE7amentos no portal escolar",
-        type: "CLICK",
-        anchor: {
-          candidates: [
-            { strategy: "css", selector: "#btn-salvar" },
-            { strategy: "css", selector: ".btn-confirmar" },
-            { strategy: "css", selector: "button" }
-          ],
-          description: "Bot\xE3o Gravar Notas"
-        },
-        is_submit_action: true,
-        retry: { max_attempts: 2, backoff_ms: 500 },
-        timeout_ms: 5e3,
-        postconditions: [],
-        on_success: "$end",
-        on_fail: "$abort"
-      }
-    },
-    canonical_mapping: {
-      columns: [
-        {
-          portal_labels: ["Nome do Aluno", "Discente", "Nome"],
-          field: "student.name",
-          semantic_type: "name"
-        }
-      ],
-      grade_scale: {
-        type: "numeric",
-        min: 0,
-        max: 10,
-        decimal_separator: "."
-      },
-      attendance: {
-        polarity: "checked_is_absent"
-      },
-      ambiguous_requires_confirmation: true
-    },
-    safety: {
-      side_effect_level: "write",
-      writes_require_checkpoint: true,
-      max_writes_per_run: 5,
-      rate_limit: { min_delay_ms: 50, jitter_ms: 20 },
-      allowed_hosts: ["localhost:8898", "127.0.0.1:8898", "localhost:8899", "127.0.0.1:8899", "localhost", "127.0.0.1"]
-    },
-    provenance: {
-      author: "teacher_ai_synthetic",
-      created_at: "2026-10-10T12:00:00Z",
-      updated_at: "2026-10-10T12:00:00Z",
-      source: "recorded",
-      has_self_healed: false,
-      pii_scrubbed: true
-    }
-  };
-
   // lib/repair/patch.ts
   function validatePatchSafety(patch) {
     const modifiedKeys = Object.keys(patch.modifiedNodes || {});
@@ -22617,6 +22217,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   // lib/runner-ext/workerEntry.ts
   function createExtensionHost(options) {
     const auditSink = options.nativeClient ? new NativeAuditSink(options.nativeClient) : null;
+    const isDevMode = true ? false : false;
     return {
       async confirm(cp) {
         if (typeof chrome !== "undefined" && chrome.runtime?.sendMessage) {
@@ -22639,19 +22240,33 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         return true;
       },
       async audit(entry) {
-        if (auditSink) {
-          await auditSink.audit(entry);
-          return;
-        }
-        if (typeof chrome !== "undefined" && chrome.storage?.session) {
+        if (auditSink && !options.dryRun) {
           try {
-            const current = await chrome.storage.session.get("skillgraph_audit_log");
-            const list = Array.isArray(current?.skillgraph_audit_log) ? current.skillgraph_audit_log : [];
-            list.push(entry);
-            await chrome.storage.session.set({ skillgraph_audit_log: list.slice(-50) });
-          } catch {
+            await auditSink.audit(entry);
+            return;
+          } catch (err) {
+            throw new RunnerError(
+              "E_AUDIT_UNAVAILABLE",
+              `Audit sink indispon\xEDvel no app desktop: ${err.message || String(err)}`
+            );
           }
         }
+        if (options.dryRun || isDevMode) {
+          if (typeof chrome !== "undefined" && chrome.storage?.session) {
+            try {
+              const current = await chrome.storage.session.get("skillgraph_audit_log");
+              const list = Array.isArray(current?.skillgraph_audit_log) ? current.skillgraph_audit_log : [];
+              list.push(entry);
+              await chrome.storage.session.set({ skillgraph_audit_log: list.slice(-50) });
+            } catch {
+            }
+          }
+          return;
+        }
+        throw new RunnerError(
+          "E_AUDIT_UNAVAILABLE",
+          "Auditoria write-ahead indispon\xEDvel: o app Teacher AI deve estar aberto e conectado."
+        );
       },
       emit(event) {
         if (options.onEvent) options.onEvent(event);
@@ -22677,6 +22292,17 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       randomId: () => "ext_run_" + Math.random().toString(36).slice(2, 9)
     };
   }
+  var devSyntheticGraphs = {};
+  if (false) {
+    try {
+      devSyntheticGraphs = {
+        read_roster: null,
+        lancar_falta: null,
+        lancar_nota: null
+      };
+    } catch {
+    }
+  }
   var SkillGraphV2 = {
     SkillGraphRunner,
     RemoteDriver,
@@ -22696,11 +22322,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     recordSoftHeal,
     recordManualRepair,
     computeGraphHealthStatus,
-    syntheticGraphs: {
-      read_roster: read_roster_default,
-      lancar_falta: lancar_falta_default,
-      lancar_nota: lancar_nota_default
-    }
+    syntheticGraphs: devSyntheticGraphs
   };
   if (typeof globalThis !== "undefined") {
     ;

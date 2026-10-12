@@ -10,6 +10,16 @@
     if (!err) return 'Ação concluída com sucesso no portal!'
     const msg = String(err.message || err)
 
+    if (
+      msg.includes('Ambiente Chrome Native Messaging indisponível') ||
+      msg.includes('Porta Native Messaging desconectada') ||
+      msg.includes('Native Messaging') ||
+      msg.includes('com.teacherai.desktop') ||
+      msg.includes('E_NM_FAILED') ||
+      msg.includes('E_AUDIT_UNAVAILABLE')
+    ) {
+      return 'Abra o app Teacher AI para continuar. O assistente precisa do aplicativo desktop ativo.'
+    }
     if (msg.includes('E_HOST_NOT_ALLOWED')) {
       return 'O portal aberto nesta aba não está cadastrado para esta automação. Verifique se você está na página correta da escola.'
     }
@@ -83,13 +93,35 @@
       return
     }
 
+    const NativeClientClass = bundle.NativeClient || globalThis.NativeClient
+    const nativeClient = NativeClientClass ? new NativeClientClass({ hostName: 'com.teacherai.desktop' }) : null
+
+    let host = payload.host
+    if (!host) {
+      try {
+        const tab = await chrome.tabs.get(tabId)
+        if (tab && tab.url) {
+          host = new URL(tab.url).hostname
+        }
+      } catch {}
+    }
+
     let graph = payload.graph
-    if (!graph && payload.graphKey && bundle.syntheticGraphs) {
-      graph = bundle.syntheticGraphs[payload.graphKey]
+    const taskId = payload.taskId || payload.graphKey || (graph && graph.identity && graph.identity.task_id) || 'custom'
+
+    if (!graph && host && taskId && nativeClient) {
+      try {
+        const resp = await nativeClient.send('graphs.resolveActive', { host, taskId })
+        if (resp && resp.graph) {
+          graph = resp.graph
+        }
+      } catch (nmErr) {
+        console.warn('[SkillGraph Orchestrator] Erro ao resolver grafo via Native Messaging:', nmErr)
+      }
     }
 
     if (!graph) {
-      // Regra de Ouro: Sem grafo = "mapa não encontrado", NUNCA seletor fixo
+      // Regra de Ouro: Sem grafo = "mapa não encontrado", NUNCA seletor fixo nem synthetic graphs em produção
       sendResponse({
         success: false,
         mapNotFound: true,
@@ -100,8 +132,10 @@
 
     const runId = 'ext_run_' + Date.now()
     const driver = new bundle.RemoteDriver(tabId)
-    const host = bundle.createExtensionHost({
+    const hostObj = bundle.createExtensionHost({
       runId,
+      nativeClient,
+      dryRun: Boolean(payload.dryRun),
       onEvent: (event) => {
         if (event.type === 'repair_requested') {
           chrome.storage.session.set({
@@ -114,10 +148,9 @@
         chrome.runtime.sendMessage({ type: 'SKILLGRAPH_EVENT', event }).catch(() => {})
       },
     })
-    const runner = new bundle.SkillGraphRunner(driver, host)
+    const runner = new bundle.SkillGraphRunner(driver, hostObj)
 
     const portalId = graph.identity?.portal_id || 'default'
-    const taskId = graph.identity?.task_id || 'custom'
 
     function recordHealth(isSuccess, hasSelfHealed) {
       const healthKey = `graph_health:${portalId}:${taskId}`
@@ -159,6 +192,22 @@
       })
 
       recordHealth(result.success, Boolean(result.state?.hasSelfHealed))
+
+      // Se a tarefa for read_roster e tiver sucesso, sincroniza alunos com o app desktop
+      if (result.success && taskId === 'read_roster' && nativeClient) {
+        const roster = result.state?.variables?.roster || result.state?.variables?.students || []
+        if (Array.isArray(roster) && roster.length > 0) {
+          try {
+            await nativeClient.send('students.upsertFromPortal', {
+              classId: payload.classId || 'default',
+              students: roster,
+              source: host || portalId,
+            })
+          } catch (syncErr) {
+            console.warn('[SkillGraph Orchestrator] Falha ao sincronizar lista com o app desktop:', syncErr)
+          }
+        }
+      }
 
       await chrome.storage.session.set({
         skillgraph_current_run: { runId, status: result.success ? 'completed' : 'failed', finishedAt: Date.now() },

@@ -6,9 +6,7 @@ import { RemoteDriver } from './remoteDriver'
 import type { Host, CheckpointPayload, HandoffPayload, RunEvent, RunState } from '../runner/types'
 import type { AuditEntry } from '../contracts/audit'
 import { SkillGraphV2Schema, validateGraph } from '../contracts/skillgraph'
-import readRosterGraph from '../../graphs/synthetic/read_roster.json'
-import lancarFaltaGraph from '../../graphs/synthetic/lancar_falta.json'
-import lancarNotaGraph from '../../graphs/synthetic/lancar_nota.json'
+import { RunnerError } from '../runner/types'
 import {
   applyPatch,
   generateRepairProposal,
@@ -24,13 +22,16 @@ import {
 import { NativeClient, NativeSkillGraphRepository, NativeAuditSink } from './nativeClient'
 
 declare const chrome: any
+declare const __DEV__: boolean
 
 export function createExtensionHost(options: {
   runId: string
   onEvent?: (event: RunEvent) => void
   nativeClient?: NativeClient
+  dryRun?: boolean
 }): Host {
   const auditSink = options.nativeClient ? new NativeAuditSink(options.nativeClient) : null
+  const isDevMode = typeof __DEV__ !== 'undefined' ? __DEV__ : false
 
   return {
     async confirm(cp: CheckpointPayload): Promise<boolean> {
@@ -52,20 +53,38 @@ export function createExtensionHost(options: {
       return true
     },
     async audit(entry: AuditEntry): Promise<void> {
-      if (auditSink) {
-        await auditSink.audit(entry)
-        return
-      }
-      if (typeof chrome !== 'undefined' && chrome.storage?.session) {
+      if (auditSink && !options.dryRun) {
         try {
-          const current = await chrome.storage.session.get('skillgraph_audit_log')
-          const list = Array.isArray(current?.skillgraph_audit_log) ? current.skillgraph_audit_log : []
-          list.push(entry)
-          await chrome.storage.session.set({ skillgraph_audit_log: list.slice(-50) })
-        } catch {
-          // Fallback silencioso caso storage.session não esteja disponível
+          await auditSink.audit(entry)
+          return
+        } catch (err: any) {
+          throw new RunnerError(
+            'E_AUDIT_UNAVAILABLE',
+            `Audit sink indisponível no app desktop: ${err.message || String(err)}`
+          )
         }
       }
+
+      // Em dry-run ou modo DEV, permite fallback no storage de sessão
+      if (options.dryRun || isDevMode) {
+        if (typeof chrome !== 'undefined' && chrome.storage?.session) {
+          try {
+            const current = await chrome.storage.session.get('skillgraph_audit_log')
+            const list = Array.isArray(current?.skillgraph_audit_log) ? current.skillgraph_audit_log : []
+            list.push(entry)
+            await chrome.storage.session.set({ skillgraph_audit_log: list.slice(-50) })
+          } catch {
+            // Ignora falha de storage de sessão
+          }
+        }
+        return
+      }
+
+      // Em produção real, se auditSink não foi configurado ou falhou, aborta obrigatoriamente
+      throw new RunnerError(
+        'E_AUDIT_UNAVAILABLE',
+        'Auditoria write-ahead indisponível: o app Teacher AI deve estar aberto e conectado.'
+      )
     },
     emit(event: RunEvent): void {
       if (options.onEvent) options.onEvent(event)
@@ -92,6 +111,18 @@ export function createExtensionHost(options: {
   }
 }
 
+// Grafos sintéticos apenas em modo de desenvolvimento local
+let devSyntheticGraphs: Record<string, any> = {}
+if (typeof __DEV__ !== 'undefined' && __DEV__) {
+  try {
+    devSyntheticGraphs = {
+      read_roster: require('../../graphs/synthetic/read_roster.json'),
+      lancar_falta: require('../../graphs/synthetic/lancar_falta.json'),
+      lancar_nota: require('../../graphs/synthetic/lancar_nota.json'),
+    }
+  } catch {}
+}
+
 // Expõe classes e utilitários no escopo global do Service Worker
 const SkillGraphV2 = {
   SkillGraphRunner,
@@ -112,11 +143,7 @@ const SkillGraphV2 = {
   recordSoftHeal,
   recordManualRepair,
   computeGraphHealthStatus,
-  syntheticGraphs: {
-    read_roster: readRosterGraph,
-    lancar_falta: lancarFaltaGraph,
-    lancar_nota: lancarNotaGraph,
-  },
+  syntheticGraphs: devSyntheticGraphs,
 }
 
 if (typeof globalThis !== 'undefined') {

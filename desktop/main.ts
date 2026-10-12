@@ -59,6 +59,7 @@ async function executeBusinessMethod(method: string, params: any): Promise<any> 
       return await studentRepo?.listStudents(params)
 
     case 'students.upsertRoster':
+    case 'students.upsertFromPortal':
       return await studentRepo?.upsertStudentsFromPortal(
         params.classId,
         params.students,
@@ -67,6 +68,9 @@ async function executeBusinessMethod(method: string, params: any): Promise<any> 
 
     case 'graphs.get':
       return await graphRepo?.get(params.portalId, params.taskId, params.version)
+
+    case 'graphs.resolveActive':
+      return await graphRepo?.resolveActive(params.host, params.taskId)
 
     case 'graphs.save':
       return await graphRepo?.save(params.graph)

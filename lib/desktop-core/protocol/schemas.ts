@@ -9,7 +9,9 @@ export const EXTENSION_ALLOWED_METHODS = [
   'app.status',
   'students.list',
   'students.upsertRoster',
+  'students.upsertFromPortal',
   'graphs.get',
+  'graphs.resolveActive',
   'graphs.save',
   'audit.append',
   'nlu.parse',
@@ -86,10 +88,24 @@ export const MethodParamSchemas = {
     }).strict(),
   }).strict(),
 
+  'students.upsertFromPortal': z.object({
+    classId: z.string().min(1),
+    students: z.array(z.record(z.string(), z.unknown())),
+    source: z.object({
+      portalId: z.string().min(1),
+      readAt: z.string().min(1),
+    }).strict(),
+  }).strict(),
+
   'graphs.get': z.object({
     portalId: z.string().min(1),
     taskId: z.string().min(1),
     version: z.number().int().min(1).optional(),
+  }).strict(),
+
+  'graphs.resolveActive': z.object({
+    host: z.string().min(1),
+    taskId: z.string().min(1),
   }).strict(),
 
   'graphs.save': z.object({

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { SkillGraphRunner } from '../lib/runner/engine'
+import { createExtensionHost } from '../lib/runner-ext/workerEntry'
 import { RunnerError, type Driver, type Host, type RunState, type RunEvent, type ResolvedAnchor, type ResolvedRowScope, type ReadTableOptions, type WriteOptions, type ScrollOptions, type PaginateOptions, type ResolvedCondition } from '../lib/runner/types'
 import type { AuditEntry } from '../lib/contracts/audit'
 import type { SkillGraphV2 } from '../lib/contracts/skillgraph'
@@ -1121,6 +1122,32 @@ describe('Fase 4: Capacidades do Engine por Arquétipo (T4.4)', () => {
       const { success } = await runner.run(graph, {}, { dryRun: true })
 
       expect(success).toBe(true)
+      expect(driver.writeHistory).toHaveLength(0)
+    })
+
+    it('4. [C2-T1] Nó WRITE com createExtensionHost de produção sem ack aborta antes de escrever', async () => {
+      const driver = new FakeDriver()
+      const host = createExtensionHost({ runId: 'prod_run_audit_fail' })
+      const runner = new SkillGraphRunner(driver, host)
+
+      const graph = createWriteGraph()
+      const { success, error } = await runner.run(graph, {})
+
+      expect(success).toBe(false)
+      expect(error?.code).toBe('E_AUDIT_UNAVAILABLE')
+      expect(driver.writeHistory).toHaveLength(0)
+    })
+
+    it('5. [C2-T2] Modo dry-run em createExtensionHost não exige ack de auditoria no desktop', async () => {
+      const driver = new FakeDriver()
+      const host = createExtensionHost({ runId: 'prod_run_dry_run', dryRun: true })
+      const runner = new SkillGraphRunner(driver, host)
+
+      const graph = createWriteGraph()
+      const { success, error } = await runner.run(graph, {}, { dryRun: true })
+
+      expect(success).toBe(true)
+      expect(error).toBeUndefined()
       expect(driver.writeHistory).toHaveLength(0)
     })
   })
