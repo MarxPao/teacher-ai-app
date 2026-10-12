@@ -263,6 +263,168 @@
       return true
     }
 
+    if (message.action === 'SKILLGRAPH_START_RECORD') {
+      (async () => {
+        try {
+          const tabId = await resolveTargetTab(message.tabId)
+          if (!tabId) {
+            sendResponse({ success: false, friendlyMessage: 'Nenhuma aba ativa do portal encontrada para iniciar a gravação.' })
+            return
+          }
+          await chrome.scripting.executeScript({
+            target: { tabId },
+            files: ['recorder_injected.js'],
+          })
+          await chrome.storage.session.set({
+            skillgraph_recording: { recording: true, tabId, startedAt: Date.now() },
+          })
+          sendResponse({
+            success: true,
+            friendlyMessage: 'Gravação iniciada! Realize os passos no portal da escola. Clique em "Parar e Compilar" quando terminar.',
+          })
+        } catch (err) {
+          sendResponse({
+            success: false,
+            friendlyMessage: `Falha ao iniciar gravador no portal: ${err.message || String(err)}`,
+          })
+        }
+      })()
+      return true
+    }
+
+    if (message.action === 'SKILLGRAPH_STOP_RECORD') {
+      (async () => {
+        try {
+          const session = await chrome.storage.session.get(['skillgraph_recording'])
+          const tabId = await resolveTargetTab(message.tabId || session?.skillgraph_recording?.tabId)
+          if (!tabId) {
+            sendResponse({ success: false, friendlyMessage: 'Nenhuma aba ativa vinculada à gravação.' })
+            return
+          }
+
+          const injectionResults = await chrome.scripting.executeScript({
+            target: { tabId },
+            func: () => {
+              if (typeof window.__TEACHER_AI_STOP_RECORDING__ === 'function') {
+                return window.__TEACHER_AI_STOP_RECORDING__()
+              }
+              return null
+            },
+          })
+
+          const trace = injectionResults?.[0]?.result
+          if (!trace || !trace.steps || trace.steps.length === 0) {
+            await chrome.storage.session.remove(['skillgraph_recording'])
+            sendResponse({
+              success: false,
+              friendlyMessage: 'Nenhuma ação foi capturada durante a demonstração. Tente gravar novamente interagindo com o portal.',
+            })
+            return
+          }
+
+          const bundle = globalThis.SkillGraphBundle?.SkillGraphV2
+          let analysis = null
+          if (bundle?.analyzeTrace) {
+            try {
+              analysis = bundle.analyzeTrace(trace)
+            } catch (aErr) {
+              console.warn('[SkillGraph Orchestrator] Falha ao analisar trace:', aErr)
+            }
+          }
+
+          await chrome.storage.session.set({
+            skillgraph_last_trace: trace,
+            skillgraph_last_analysis: analysis,
+          })
+          await chrome.storage.session.remove(['skillgraph_recording'])
+
+          sendResponse({
+            success: true,
+            trace,
+            analysis,
+            promptPolarity: Boolean(analysis?.detections?.suggestedPolarity),
+            promptGradeScale: Boolean(analysis?.detections?.suggestedGradeScale),
+            friendlyMessage: `Gravação finalizada com ${trace.steps.length} passos capturados! Revise as opções para compilar o mapa.`,
+          })
+        } catch (err) {
+          sendResponse({
+            success: false,
+            friendlyMessage: `Falha ao parar a gravação: ${err.message || String(err)}`,
+          })
+        }
+      })()
+      return true
+    }
+
+    if (message.action === 'SKILLGRAPH_COMPILE_RECORD') {
+      (async () => {
+        const bundle = globalThis.SkillGraphBundle?.SkillGraphV2
+        if (!bundle || !bundle.compile) {
+          sendResponse({
+            success: false,
+            friendlyMessage: 'Compilador do SkillGraph não carregado na extensão.',
+          })
+          return
+        }
+
+        try {
+          let trace = message.payload?.trace
+          if (!trace) {
+            const sess = await chrome.storage.session.get(['skillgraph_last_trace'])
+            trace = sess?.skillgraph_last_trace
+          }
+
+          if (!trace) {
+            sendResponse({
+              success: false,
+              friendlyMessage: 'Nenhum trace gravado encontrado para compilação.',
+            })
+            return
+          }
+
+          const decisions = message.payload?.decisions || {
+            task_id: message.payload?.taskId || trace.task_id || 'custom_task',
+            portal_id: message.payload?.portalId || trace.portal_id || 'portal_escolar',
+            task_name: message.payload?.taskName || 'Automação gravada',
+            allowed_hosts: [trace.steps?.[0]?.host || 'localhost'],
+          }
+
+          const compileResult = bundle.compile(trace, decisions)
+          const graph = compileResult.graph
+
+          const validation = bundle.validateGraph ? bundle.validateGraph(graph) : { valid: true }
+          if (!validation.valid) {
+            sendResponse({
+              success: false,
+              friendlyMessage: 'O mapa gerado violou regras de integridade e não pôde ser salvo.',
+            })
+            return
+          }
+
+          const NativeClientClass = bundle.NativeClient || globalThis.NativeClient
+          const nativeClient = NativeClientClass ? new NativeClientClass({ hostName: 'com.teacherai.desktop' }) : null
+          if (nativeClient) {
+            await nativeClient.send('graphs.save', { graph, activate: true })
+          }
+
+          await chrome.storage.session.remove(['skillgraph_last_trace', 'skillgraph_last_analysis'])
+
+          sendResponse({
+            success: true,
+            graph,
+            friendlyMessage: 'Mapa gravado com sucesso! Agora você pode automatizar esta ação no portal. ✨',
+          })
+        } catch (err) {
+          console.warn('[SkillGraph Orchestrator] Erro na compilação do trace:', err)
+          sendResponse({
+            success: false,
+            friendlyMessage: `Não foi possível compilar o mapa: ${err.message || 'Verifique as ações gravadas e tente novamente.'}`,
+          })
+        }
+      })()
+      return true
+    }
+
     if (message.action === 'SKILLGRAPH_GET_HEALTH') {
       const healthKey = `graph_health:${message.portalId || 'default'}:${message.taskId}`
       chrome.storage.local.get([healthKey], (res) => {

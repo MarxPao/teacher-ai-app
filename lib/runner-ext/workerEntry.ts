@@ -20,6 +20,7 @@ import {
   computeGraphHealthStatus,
 } from '../repair'
 import { NativeClient, NativeSkillGraphRepository, NativeAuditSink } from './nativeClient'
+import { compile, analyzeTrace, CompilerError, scrubGraph } from '../compiler'
 
 declare const chrome: any
 declare const __DEV__: boolean
@@ -143,6 +144,10 @@ const SkillGraphV2 = {
   recordSoftHeal,
   recordManualRepair,
   computeGraphHealthStatus,
+  compile,
+  analyzeTrace,
+  CompilerError,
+  scrubGraph,
   syntheticGraphs: devSyntheticGraphs,
 }
 
@@ -150,4 +155,15 @@ if (typeof globalThis !== 'undefined') {
   ;(globalThis as any).SkillGraphV2 = SkillGraphV2
 }
 
-export { SkillGraphRunner, RemoteDriver, SkillGraphV2, NativeClient, NativeSkillGraphRepository, NativeAuditSink }
+export {
+  SkillGraphRunner,
+  RemoteDriver,
+  SkillGraphV2,
+  NativeClient,
+  NativeSkillGraphRepository,
+  NativeAuditSink,
+  compile,
+  analyzeTrace,
+  CompilerError,
+  scrubGraph,
+}

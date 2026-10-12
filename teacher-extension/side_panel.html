@@ -1165,10 +1165,73 @@
       </div>
 
       <div id="skillgraph-v2-body" style="display: none; margin-top: 10px;">
-        <!-- Sub-abas: Runner vs Suíte -->
+        <!-- Sub-abas: Runner vs Gravar vs Suíte -->
         <div style="display: flex; gap: 4px; margin-bottom: 8px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px;">
           <button id="sgv2-tab-runner" style="font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 4px; border: none; background: #2563eb; color: #fff; cursor: pointer;">Runner</button>
+          <button id="sgv2-tab-record" style="font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 4px; border: 1px solid #cbd5e1; background: #f8fafc; color: #475569; cursor: pointer;">Gravar</button>
           <button id="sgv2-tab-suite" style="font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 4px; border: 1px solid #cbd5e1; background: #f8fafc; color: #475569; cursor: pointer;">Suíte</button>
+        </div>
+
+        <!-- Visão Gravar: Demonstração e Compilador Local -->
+        <div id="sgv2-record-view" style="display: none;">
+          <p style="font-size: 11px; color: #64748b; margin-bottom: 8px;">
+            Grave suas ações no portal da escola para ensinar uma nova automação ao Teacher AI sem programar.
+          </p>
+
+          <div style="display: flex; gap: 6px; margin-bottom: 8px;">
+            <select id="sgv2-record-task-select" style="flex: 1; padding: 4px 6px; font-size: 11px; border: 1px solid #cbd5e1; border-radius: 6px;">
+              <option value="read_roster">Ler Lista de Alunos (read_roster)</option>
+              <option value="lancar_falta">Lançar Presença/Falta (lancar_falta)</option>
+              <option value="lancar_nota">Lançar Notas (lancar_nota)</option>
+              <option value="custom">Outra Ação Personalizada</option>
+            </select>
+          </div>
+
+          <div style="display: flex; gap: 6px; margin-bottom: 8px;">
+            <button id="sgv2-btn-start-record" class="btn-main" style="flex: 1; padding: 6px 10px; font-size: 11px; background: #dc2626; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
+              🔴 Iniciar Gravação
+            </button>
+            <button id="sgv2-btn-stop-record" style="flex: 1; display: none; padding: 6px 10px; font-size: 11px; background: #16a34a; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
+              ⏹️ Parar e Compilar
+            </button>
+          </div>
+
+          <!-- Indicador de Gravação Ativa -->
+          <div id="sgv2-recording-indicator" style="display: none; background: #fef2f2; border: 1px solid #fecaca; border-radius: 6px; padding: 8px; margin-bottom: 8px; font-size: 11px; color: #991b1b;">
+            <div style="display: flex; align-items: center; gap: 6px; font-weight: 700; margin-bottom: 4px;">
+              <span class="pulse-dot" style="background: #dc2626;"></span>
+              Gravando demonstração no portal...
+            </div>
+            <div style="font-size: 10px; color: #7f1d1d;">
+              Interaja normalmente com o portal aberto nesta aba. Ao terminar os passos, clique em "Parar e Compilar".
+            </div>
+          </div>
+
+          <!-- Diálogo Amigável de Decisão (Polaridade / Escala) -->
+          <div id="sgv2-record-decisions-box" style="display: none; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px; margin-bottom: 8px; font-size: 11px;">
+            <div style="font-weight: 700; color: #0f172a; margin-bottom: 6px;">Confirmação de Campo do Portal:</div>
+            <p id="sgv2-record-decisions-prompt" style="color: #475569; margin-bottom: 6px;">Como este campo de preenchimento deve ser interpretado?</p>
+            <div style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px;">
+              <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                <input type="radio" name="sgv2-record-type" value="grade" checked />
+                <span>Nota escolar numérica (0 a 10)</span>
+              </label>
+              <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                <input type="radio" name="sgv2-record-type" value="attendance" />
+                <span>Frequência / Presença (Marcado = Presente)</span>
+              </label>
+              <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                <input type="radio" name="sgv2-record-type" value="other" />
+                <span>Apenas Leitura / Outro</span>
+              </label>
+            </div>
+            <button id="sgv2-btn-confirm-compile" class="btn-main" style="width: 100%; padding: 6px; font-size: 11px; background: #2563eb; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
+              Salvar e Ativar Mapa no Teacher AI ✨
+            </button>
+          </div>
+
+          <!-- Mensagens Amigáveis de Gravação/Compilação -->
+          <div id="sgv2-record-message-box" style="display: none; font-size: 11px; padding: 8px; border-radius: 6px; line-height: 1.4; margin-bottom: 8px;"></div>
         </div>
 
         <!-- Visão 1: Runner Individual -->

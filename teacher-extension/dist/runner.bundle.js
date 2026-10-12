@@ -21,13 +21,17 @@ var SkillGraphBundle = (() => {
   // lib/runner-ext/workerEntry.ts
   var workerEntry_exports = {};
   __export(workerEntry_exports, {
+    CompilerError: () => CompilerError,
     NativeAuditSink: () => NativeAuditSink,
     NativeClient: () => NativeClient,
     NativeSkillGraphRepository: () => NativeSkillGraphRepository,
     RemoteDriver: () => RemoteDriver,
     SkillGraphRunner: () => SkillGraphRunner,
     SkillGraphV2: () => SkillGraphV2,
-    createExtensionHost: () => createExtensionHost
+    analyzeTrace: () => analyzeTrace,
+    compile: () => compile2,
+    createExtensionHost: () => createExtensionHost,
+    scrubGraph: () => scrubGraph
   });
 
   // node_modules/zod/v4/classic/external.js
@@ -22214,6 +22218,1270 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     }
   };
 
+  // lib/recorder/limits.ts
+  var MAX_TRACE_STEPS = 500;
+  var MAX_TRACE_SIZE_BYTES = 2 * 1024 * 1024;
+  var MAX_STRING_LENGTH = 80;
+  var MAX_CELLS_PER_ROW = 30;
+  var MAX_CANDIDATES = 6;
+
+  // lib/recorder/sensitiveRules.ts
+  var SENSITIVE_KEYWORDS = [
+    "senha",
+    "password",
+    "pass",
+    "pwd",
+    "token",
+    "otp",
+    "cvv",
+    "cpf",
+    "cartao",
+    "credit_card",
+    "auth_code",
+    "pin"
+  ];
+  var SENSITIVE_KEYWORD_REGEX = new RegExp(`\\b(${SENSITIVE_KEYWORDS.join("|")})\\b`, "i");
+  function isSensitiveField(target) {
+    if (!target) return false;
+    if (target.type?.toLowerCase() === "password") {
+      return true;
+    }
+    const ac = target.autocomplete?.toLowerCase() || "";
+    if (ac.includes("current-password") || ac.includes("new-password") || ac.includes("one-time-code") || ac.includes("cc-") || ac.includes("credit-card")) {
+      return true;
+    }
+    const fields = [target.name, target.id, target.label, target.placeholder];
+    for (const f of fields) {
+      if (f && SENSITIVE_KEYWORD_REGEX.test(f)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // lib/recorder/traceSchema.ts
+  var CandidateSchema2 = external_exports.discriminatedUnion("strategy", [
+    external_exports.object({ strategy: external_exports.literal("role_name"), role: external_exports.string(), name: external_exports.string(), match: external_exports.enum(["exact", "normalized", "contains"]).optional() }).strict(),
+    external_exports.object({ strategy: external_exports.literal("label_text"), label: external_exports.string(), match: external_exports.enum(["exact", "normalized", "contains"]).optional() }).strict(),
+    external_exports.object({ strategy: external_exports.literal("aria_label"), aria_label: external_exports.string(), match: external_exports.enum(["exact", "normalized", "contains"]).optional() }).strict(),
+    external_exports.object({ strategy: external_exports.literal("placeholder"), placeholder: external_exports.string(), match: external_exports.enum(["exact", "normalized", "contains"]).optional() }).strict(),
+    external_exports.object({ strategy: external_exports.literal("test_id"), test_id: external_exports.string(), match: external_exports.enum(["exact", "normalized", "contains"]).optional() }).strict(),
+    external_exports.object({ strategy: external_exports.literal("text"), text: external_exports.string(), match: external_exports.enum(["exact", "normalized", "contains"]).optional(), exact: external_exports.boolean().optional() }).strict(),
+    external_exports.object({ strategy: external_exports.literal("css"), selector: external_exports.string() }).strict(),
+    external_exports.object({ strategy: external_exports.literal("column_header"), column_label: external_exports.string(), match: external_exports.enum(["exact", "normalized", "contains"]).optional() }).strict()
+  ]);
+  var ElementDescriptorSchema = external_exports.object({
+    tag: external_exports.string(),
+    role: external_exports.string().optional(),
+    accessible_name: external_exports.string().optional(),
+    label_text: external_exports.string().optional(),
+    aria_label: external_exports.string().optional(),
+    placeholder: external_exports.string().optional(),
+    test_id: external_exports.string().optional(),
+    text: external_exports.string().optional(),
+    id: external_exports.string().optional(),
+    classes: external_exports.array(external_exports.string()).default([]),
+    type: external_exports.string().optional(),
+    name: external_exports.string().optional(),
+    autocomplete: external_exports.string().optional(),
+    rowContext: external_exports.object({
+      headers: external_exports.array(external_exports.string()),
+      column_index: external_exports.number().int(),
+      cells: external_exports.array(external_exports.string().max(MAX_STRING_LENGTH)).max(MAX_CELLS_PER_ROW)
+    }).strict().optional(),
+    candidates: external_exports.array(CandidateSchema2).max(MAX_CANDIDATES).default([]),
+    fragile: external_exports.boolean().optional(),
+    matchCount: external_exports.number().int().optional()
+  }).strict();
+  var BaseStepFields = {
+    id: external_exports.string(),
+    at: external_exports.number(),
+    frame_path: external_exports.string().default("/"),
+    host: external_exports.string(),
+    path: external_exports.string()
+  };
+  var StepNavigateSchema = external_exports.object({
+    ...BaseStepFields,
+    kind: external_exports.literal("navigate"),
+    url: external_exports.string(),
+    transitionType: external_exports.string().optional()
+  }).strict();
+  var StepClickSchema = external_exports.object({
+    ...BaseStepFields,
+    kind: external_exports.literal("click"),
+    descriptor: ElementDescriptorSchema,
+    is_submit_action: external_exports.boolean().optional()
+  }).strict();
+  var StepInputSchema = external_exports.object({
+    ...BaseStepFields,
+    kind: external_exports.literal("input"),
+    descriptor: ElementDescriptorSchema,
+    value: external_exports.string().max(MAX_STRING_LENGTH)
+  }).strict().refine(
+    (s) => !isSensitiveField(s.descriptor),
+    { message: "Input em campo sens\xEDvel \xE9 estritamente proibido no trace (deve usar sensitive_field sem valor)" }
+  );
+  var StepSelectSchema = external_exports.object({
+    ...BaseStepFields,
+    kind: external_exports.literal("select"),
+    descriptor: ElementDescriptorSchema,
+    value: external_exports.string().max(MAX_STRING_LENGTH),
+    text: external_exports.string().max(MAX_STRING_LENGTH).optional(),
+    before_value: external_exports.string().max(MAX_STRING_LENGTH).optional()
+  }).strict();
+  var StepCheckSchema = external_exports.object({
+    ...BaseStepFields,
+    kind: external_exports.literal("check"),
+    descriptor: ElementDescriptorSchema,
+    checked: external_exports.boolean(),
+    before_checked: external_exports.boolean().optional()
+  }).strict();
+  var StepKeySchema = external_exports.object({
+    ...BaseStepFields,
+    kind: external_exports.literal("key"),
+    key: external_exports.enum(["Enter", "Tab", "Escape"])
+  }).strict();
+  var StepMarkTableSchema = external_exports.object({
+    ...BaseStepFields,
+    kind: external_exports.literal("mark_table"),
+    descriptor: ElementDescriptorSchema
+  }).strict();
+  var StepMarkNextPageSchema = external_exports.object({
+    ...BaseStepFields,
+    kind: external_exports.literal("mark_next_page"),
+    descriptor: ElementDescriptorSchema
+  }).strict();
+  var StepMarkElementSchema = external_exports.object({
+    ...BaseStepFields,
+    kind: external_exports.literal("mark_element"),
+    descriptor: ElementDescriptorSchema
+  }).strict();
+  var StepSettledSchema = external_exports.object({
+    ...BaseStepFields,
+    kind: external_exports.literal("settled"),
+    delta: external_exports.record(external_exports.string(), external_exports.any()).optional()
+  }).strict();
+  var StepSensitiveFieldSchema = external_exports.object({
+    ...BaseStepFields,
+    kind: external_exports.literal("sensitive_field"),
+    descriptor: ElementDescriptorSchema
+  }).strict();
+  var StepNoteSchema = external_exports.object({
+    ...BaseStepFields,
+    kind: external_exports.literal("note"),
+    text: external_exports.string().max(MAX_STRING_LENGTH)
+  }).strict();
+  var TraceStepSchema = external_exports.union([
+    StepNavigateSchema,
+    StepClickSchema,
+    StepInputSchema,
+    StepSelectSchema,
+    StepCheckSchema,
+    StepKeySchema,
+    StepMarkTableSchema,
+    StepMarkNextPageSchema,
+    StepMarkElementSchema,
+    StepSettledSchema,
+    StepSensitiveFieldSchema,
+    StepNoteSchema
+  ]);
+  var PageDigestSchema = external_exports.object({
+    host: external_exports.string(),
+    path: external_exports.string(),
+    title: external_exports.string().optional(),
+    headings: external_exports.array(external_exports.string().max(MAX_STRING_LENGTH)).default([]),
+    table_headers: external_exports.array(external_exports.string().max(MAX_STRING_LENGTH)).default([]),
+    form_labels: external_exports.array(external_exports.string().max(MAX_STRING_LENGTH)).default([]),
+    counts: external_exports.record(external_exports.string(), external_exports.number()).default({}),
+    landmarks: external_exports.array(external_exports.string()).default([])
+  }).strict();
+  var TraceSchema = external_exports.object({
+    trace_version: external_exports.literal("1.0"),
+    task_id: external_exports.string(),
+    started_at: external_exports.number(),
+    ended_at: external_exports.number().optional(),
+    initial_url: external_exports.string(),
+    page_digest: PageDigestSchema.optional(),
+    steps: external_exports.array(TraceStepSchema).max(MAX_TRACE_STEPS)
+  }).strict();
+
+  // lib/compiler/decisions.ts
+  var ClassFilterDecisionSchema = external_exports.object({
+    mode: external_exports.enum(["query", "tab_click", "none"]),
+    param_name: external_exports.string().min(1).default("turma"),
+    query_param: external_exports.string().optional(),
+    tab_step_id: external_exports.string().optional()
+  }).strict();
+  var CompilerDecisionsSchema = external_exports.object({
+    task_id: external_exports.string().min(1),
+    portal_id: external_exports.string().min(1),
+    task_name: external_exports.string().min(1),
+    allowed_hosts: external_exports.array(external_exports.string().min(1)).min(1),
+    row_key_column: external_exports.string().optional(),
+    secondary_key_column: external_exports.string().optional(),
+    attendance_polarity: AttendancePolaritySchema.optional(),
+    grade_scale: GradeScaleSchema.optional(),
+    class_filter: ClassFilterDecisionSchema.optional(),
+    target_field_step_id: external_exports.string().optional()
+  }).strict();
+
+  // lib/compiler/report.ts
+  var CompilerError = class extends Error {
+    constructor(code, message, stepId, details) {
+      super(`[${code}] ${message}`);
+      this.code = code;
+      this.stepId = stepId;
+      this.details = details;
+      this.name = "CompilerError";
+    }
+  };
+
+  // lib/compiler/stages/segment.ts
+  function segmentTrace(trace, decisions) {
+    const loginSteps = [];
+    const actionSteps = [];
+    let tableStep;
+    let paginationStep;
+    let submitStep;
+    let initialNav;
+    let hasSelectWithoutQuery = false;
+    let lastSelectStep = null;
+    for (let i = 0; i < trace.steps.length; i++) {
+      const step = trace.steps[i];
+      if (step.kind === "navigate" && !initialNav) {
+        initialNav = step;
+      }
+      if (step.kind === "sensitive_field") {
+        loginSteps.push(step);
+      }
+      if (step.kind === "select") {
+        lastSelectStep = step;
+        hasSelectWithoutQuery = true;
+      }
+      if (step.kind === "navigate" && lastSelectStep) {
+        try {
+          const u = new URL(step.url, "http://localhost");
+          if (Array.from(u.searchParams.keys()).length > 0) {
+            hasSelectWithoutQuery = false;
+          }
+        } catch {
+        }
+      }
+      if (step.kind === "mark_table") {
+        tableStep = step;
+      }
+      if (step.kind === "mark_next_page") {
+        paginationStep = step;
+      }
+      if (step.kind === "click") {
+        const text = step.descriptor.text || "";
+        const isSubmit = step.is_submit_action || /\b(salvar|gravar|confirmar|concluir|submit|save)\b/i.test(text);
+        if (isSubmit) {
+          submitStep = step;
+        } else if (/\b(pr[oó]xim[ao]|next|seguir)\b/i.test(text)) {
+          if (!paginationStep) paginationStep = step;
+        } else {
+          actionSteps.push(step);
+        }
+      }
+      if (step.kind === "input") {
+        actionSteps.push(step);
+        if (!tableStep && step.descriptor.rowContext) {
+          tableStep = step;
+        }
+      }
+      if (step.kind === "check") {
+        actionSteps.push(step);
+        if (!tableStep && step.descriptor.rowContext) {
+          tableStep = step;
+        }
+      }
+    }
+    let filterStep;
+    if (decisions.class_filter && decisions.class_filter.mode !== "none") {
+      if (decisions.class_filter.mode === "query") {
+        const navWithQuery = trace.steps.find((s) => {
+          if (s.kind !== "navigate") return false;
+          try {
+            const u = new URL(s.url, "http://localhost");
+            return decisions.class_filter?.query_param ? u.searchParams.has(decisions.class_filter.query_param) : Array.from(u.searchParams.keys()).length > 0;
+          } catch {
+            return false;
+          }
+        });
+        if (navWithQuery && navWithQuery.kind === "navigate") {
+          const u = new URL(navWithQuery.url, "http://localhost");
+          const qParam = decisions.class_filter.query_param || Array.from(u.searchParams.keys())[0];
+          filterStep = {
+            mode: "query",
+            step: navWithQuery,
+            queryParam: qParam,
+            value: u.searchParams.get(qParam) || void 0
+          };
+        }
+      } else if (decisions.class_filter.mode === "tab_click") {
+        const tabClick = trace.steps.find((s) => {
+          if (s.kind !== "click") return false;
+          if (decisions.class_filter?.tab_step_id) {
+            return s.id === decisions.class_filter.tab_step_id;
+          }
+          return s.descriptor.role === "tab" || /turma\s+[0-9A-Z]|[0-9][A-Z]\b/i.test(s.descriptor.text || "");
+        });
+        if (tabClick) {
+          filterStep = {
+            mode: "tab_click",
+            step: tabClick,
+            value: tabClick.descriptor.text?.trim()
+          };
+        }
+      }
+    } else if (hasSelectWithoutQuery) {
+      throw new CompilerError(
+        "E_UNSUPPORTED_PATTERN",
+        "O portal utiliza sele\xE7\xE3o por dropdown (<select>) que n\xE3o altera a URL. O contrato congelado v2.0 n\xE3o suporta filtros por muta\xE7\xE3o em grafos read-only (adiado para v2.1/Fase 4)."
+      );
+    }
+    const isWriteTask = decisions.task_id === "lancar_falta" || decisions.task_id === "lancar_nota";
+    if (isWriteTask && actionSteps.length === 0) {
+      throw new CompilerError(
+        "E_NO_WRITE_STEP",
+        `A tarefa de escrita "${decisions.task_id}" requer pelo menos um passo de marca\xE7\xE3o ou digita\xE7\xE3o gravado.`
+      );
+    }
+    if ((decisions.task_id === "read_roster" || isWriteTask) && !tableStep) {
+      throw new CompilerError(
+        "E_NO_TABLE_MARKED",
+        "Nenhuma tabela de alunos foi marcada no trace (necess\xE1rio marcar tabela ou interagir com linha de aluno)."
+      );
+    }
+    return {
+      initialNav,
+      loginSteps,
+      filterStep,
+      tableStep,
+      actionSteps,
+      submitStep,
+      paginationStep
+    };
+  }
+
+  // lib/compiler/stages/parametrize.ts
+  var DATE_REGEX = /\b\d{1,2}[\/\-]\d{1,2}(?:[\/\-]\d{2,4})?\b/;
+  function createParameterContext(decisions) {
+    const params = {};
+    const hasFilter = decisions.class_filter && decisions.class_filter.mode !== "none";
+    const filterParamName = decisions.class_filter?.param_name || "turma";
+    if (hasFilter) {
+      params[filterParamName] = {
+        type: "string",
+        required: true,
+        pii: false,
+        description: "Identificador ou nome da turma a ser acessada"
+      };
+    }
+    if (decisions.task_id === "lancar_falta") {
+      params["student_ref"] = {
+        type: "student_ref",
+        required: true,
+        pii: false,
+        description: "Identificador \xFAnico do aluno (nome ou matr\xEDcula)"
+      };
+      params["attendance_status"] = {
+        type: "string",
+        required: true,
+        pii: false,
+        description: "Status de presen\xE7a ou falta a ser lan\xE7ado"
+      };
+      params["date"] = {
+        type: "date",
+        required: false,
+        pii: false,
+        description: "Data de refer\xEAncia para o lan\xE7amento de frequ\xEAncia"
+      };
+    } else if (decisions.task_id === "lancar_nota") {
+      params["student_ref"] = {
+        type: "student_ref",
+        required: true,
+        pii: false,
+        description: "Identificador \xFAnico do aluno (nome ou matr\xEDcula)"
+      };
+      params["grade_value"] = {
+        type: "number",
+        required: true,
+        pii: false,
+        description: "Valor num\xE9rico da nota a ser lan\xE7ada"
+      };
+    } else if (decisions.task_id === "read_roster") {
+    }
+    return {
+      params,
+      getFilterValueRef: () => ({
+        param: filterParamName
+      }),
+      getFilterTextSpec: () => ({
+        param: filterParamName
+      }),
+      getRowKeyRef: () => ({
+        param: "student_ref"
+      }),
+      getWriteValueRef: (taskId) => {
+        if (taskId === "lancar_falta") {
+          return { param: "attendance_status" };
+        }
+        return { param: "grade_value" };
+      },
+      isDateHeader: (header) => {
+        return DATE_REGEX.test(header);
+      },
+      getDateHeaderRef: () => ({
+        param: "date",
+        transform: "format_ddmm"
+      })
+    };
+  }
+
+  // lib/compiler/stages/anchors.ts
+  function buildTableAnchor(tableDescriptor) {
+    if (tableDescriptor && tableDescriptor.candidates && tableDescriptor.candidates.length > 0) {
+      return {
+        description: "Tabela principal de alunos e dados",
+        candidates: tableDescriptor.candidates,
+        expect_count: "one"
+      };
+    }
+    return {
+      description: "Tabela de alunos da turma",
+      candidates: [
+        { strategy: "role_name", role: "table", name: "Alunos", match: "normalized" },
+        { strategy: "role_name", role: "grid", name: "Alunos", match: "normalized" },
+        { strategy: "css", selector: "table" }
+      ],
+      expect_count: "one"
+    };
+  }
+  function buildRowScope(descriptor, tableAnchor, decisions, paramContext) {
+    const headers = descriptor.rowContext?.headers || [];
+    let keyCol = decisions.row_key_column;
+    if (!keyCol) {
+      keyCol = headers.find((h) => /\b(matricula|ra|codigo|registro|id)\b/i.test(h));
+    }
+    if (!keyCol) {
+      keyCol = headers.find((h) => /\b(nome|aluno|estudante|name)\b/i.test(h));
+    }
+    if (!keyCol && headers.length > 0) {
+      keyCol = headers[0];
+    }
+    if (!keyCol) {
+      keyCol = "Nome";
+    }
+    const keyLabels = [keyCol];
+    let secondaryKey;
+    if (decisions.secondary_key_column) {
+      secondaryKey = {
+        column_labels: [decisions.secondary_key_column],
+        equals: paramContext.getRowKeyRef(),
+        match: "normalized"
+      };
+    }
+    return {
+      table: tableAnchor,
+      key: {
+        column_labels: keyLabels,
+        equals: paramContext.getRowKeyRef(),
+        match: "normalized",
+        secondary_key: secondaryKey,
+        on_multiple: "fail",
+        on_none: "fail"
+      }
+    };
+  }
+  function buildAnchorFromDescriptor(descriptor, description, tableAnchor, decisions, paramContext) {
+    const candidates = [];
+    for (const c of descriptor.candidates || []) {
+      if (c.strategy === "column_header") {
+        const colLabel = typeof c.column_label === "string" ? c.column_label : "";
+        if (paramContext.isDateHeader(colLabel)) {
+          candidates.push({
+            strategy: "column_header",
+            column_label: paramContext.getDateHeaderRef(),
+            match: "normalized"
+          });
+        } else {
+          candidates.push(c);
+        }
+      } else {
+        candidates.push(c);
+      }
+    }
+    if (candidates.length === 0) {
+      if (descriptor.role && (descriptor.accessible_name || descriptor.text)) {
+        candidates.push({
+          strategy: "role_name",
+          role: descriptor.role,
+          name: descriptor.accessible_name || descriptor.text,
+          match: "normalized"
+        });
+      }
+      if (descriptor.aria_label) {
+        candidates.push({
+          strategy: "aria_label",
+          aria_label: descriptor.aria_label,
+          match: "normalized"
+        });
+      }
+      if (descriptor.placeholder) {
+        candidates.push({
+          strategy: "placeholder",
+          placeholder: descriptor.placeholder,
+          match: "normalized"
+        });
+      }
+      if (descriptor.test_id) {
+        candidates.push({
+          strategy: "test_id",
+          test_id: descriptor.test_id,
+          match: "exact"
+        });
+      }
+      if (descriptor.id) {
+        candidates.push({
+          strategy: "css",
+          selector: `#${descriptor.id}`
+        });
+      }
+    }
+    if (candidates.length === 0) {
+      throw new CompilerError(
+        "E_ANCHOR_UNSTABLE",
+        `N\xE3o foi poss\xEDvel sintetizar nenhuma \xE2ncora candidata est\xE1vel para o elemento "${description}".`
+      );
+    }
+    const anchor2 = {
+      description,
+      candidates,
+      expect_count: "one"
+    };
+    if (descriptor.rowContext && tableAnchor) {
+      anchor2.scope = {
+        within: buildRowScope(descriptor, tableAnchor, decisions, paramContext)
+      };
+    }
+    return anchor2;
+  }
+
+  // lib/compiler/stages/safety.ts
+  function buildSafetyConfig(decisions, isWriteTask) {
+    const hosts = decisions.allowed_hosts && decisions.allowed_hosts.length > 0 ? decisions.allowed_hosts : ["localhost"];
+    return {
+      side_effect_level: isWriteTask ? "write" : "read",
+      writes_require_checkpoint: true,
+      max_writes_per_run: isWriteTask ? 100 : 0,
+      rate_limit: {
+        min_delay_ms: 200,
+        jitter_ms: 100
+      },
+      allowed_hosts: hosts
+    };
+  }
+  function buildCheckpointNode(options) {
+    const summary = [
+      { label: "Aluno", value: { param: "student_ref" } }
+    ];
+    if (options.taskId === "lancar_falta") {
+      summary.push({ label: "Presen\xE7a/Falta", value: { param: "attendance_status" } });
+    } else if (options.taskId === "lancar_nota") {
+      summary.push({ label: "Nota", value: { param: "grade_value" } });
+    } else {
+      summary.push({ label: "A\xE7\xE3o", value: { lit: "Gravar altera\xE7\xF5es" } });
+    }
+    return {
+      type: "CHECKPOINT",
+      label: "Confirma\xE7\xE3o do Professor para Lan\xE7amento",
+      retry: { max_attempts: 1, backoff_ms: 0 },
+      timeout_ms: 3e4,
+      postconditions: [],
+      on_success: options.on_success,
+      on_fail: options.on_reject,
+      on_reject: options.on_reject,
+      scope: "once",
+      summary
+    };
+  }
+
+  // lib/compiler/synonyms.ts
+  var CANONICAL_SYNONYMS = [
+    {
+      field: "student.name",
+      semantic_type: "name",
+      patterns: [
+        /\b(nome|aluno|estudante|estudantes|alunos|name|student|pupil)\b/i
+      ]
+    },
+    {
+      field: "student.roll_number",
+      semantic_type: "identifier",
+      patterns: [
+        /\b(matricula|matriculas|ra|registro|codigo|cod|enrollment|id|roll_number)\b/i
+      ]
+    },
+    {
+      field: "student.portal_id",
+      semantic_type: "identifier",
+      patterns: [
+        /\b(id_aluno|portal_id|student_id|identificador)\b/i
+      ]
+    },
+    {
+      field: "student.class",
+      semantic_type: "group",
+      patterns: [
+        /\b(turma|classe|grupo|class|grade|section)\b/i
+      ]
+    },
+    {
+      field: "attendance.status",
+      semantic_type: "attendance_mark",
+      patterns: [
+        /\b(falta|faltas|presenca|presencas|frequencia|chamada|attendance|present|absent)\b/i
+      ]
+    },
+    {
+      field: "attendance.absences_count",
+      semantic_type: "counter",
+      patterns: [
+        /\b(total_faltas|num_faltas|ausencias|absences_count)\b/i
+      ]
+    },
+    {
+      field: "grade.value",
+      semantic_type: "grade_value",
+      patterns: [
+        /\b(nota|notas|media|conceito|score|grade|evaluation|resultado)\b/i
+      ]
+    },
+    {
+      field: "grade.term",
+      semantic_type: "term_period",
+      patterns: [
+        /\b(bimestre|trimestre|semestre|periodo|etapa|term|quarter)\b/i
+      ]
+    },
+    {
+      field: "grade.subject",
+      semantic_type: "subject",
+      patterns: [
+        /\b(disciplina|materia|subject|course)\b/i
+      ]
+    },
+    {
+      field: "grade.assessment_name",
+      semantic_type: "assessment_name",
+      patterns: [
+        /\b(avaliacao|prova|trabalho|teste|atividade|exam|assignment)\b/i
+      ]
+    }
+  ];
+  function inferCanonicalField(label) {
+    if (!label) return null;
+    const clean = label.trim();
+    for (const rule of CANONICAL_SYNONYMS) {
+      for (const pat of rule.patterns) {
+        if (pat.test(clean)) {
+          return { field: rule.field, semantic_type: rule.semantic_type };
+        }
+      }
+    }
+    return null;
+  }
+
+  // lib/compiler/stages/canonicalMapping.ts
+  function buildCanonicalMapping(columnHeaders, decisions) {
+    const columns = columnHeaders.map((h) => {
+      const inferred = inferCanonicalField(h);
+      if (!inferred) return null;
+      return {
+        portal_labels: [h],
+        field: inferred.field,
+        semantic_type: inferred.semantic_type
+      };
+    }).filter(Boolean);
+    if (columns.length === 0) {
+      columns.push(
+        { portal_labels: ["Nome", "Aluno"], field: "student.name", semantic_type: "name" },
+        { portal_labels: ["Matr\xEDcula", "RA", "C\xF3digo"], field: "student.roll_number", semantic_type: "identifier" }
+      );
+    }
+    return {
+      columns,
+      grade_scale: decisions.grade_scale || { type: "numeric", min: 0, max: 10, decimal_separator: "," },
+      attendance: {
+        polarity: decisions.attendance_polarity || "checked_is_present"
+      },
+      ambiguous_requires_confirmation: true
+    };
+  }
+
+  // lib/compiler/stages/assemblePreamble.ts
+  function buildPreambleNodes(trace, segmented, decisions, paramContext, allocId) {
+    const planned = [];
+    if (segmented.loginSteps.length > 0) {
+      const loginStep = segmented.loginSteps[0];
+      const loginAnchor = buildAnchorFromDescriptor(
+        loginStep.descriptor,
+        "Formul\xE1rio ou campo protegido de autentica\xE7\xE3o",
+        void 0,
+        decisions,
+        paramContext
+      );
+      planned.push({
+        id: allocId(),
+        build: (next) => ({
+          type: "HANDOFF_HUMAN",
+          label: "Aguardar Autentica\xE7\xE3o do Usu\xE1rio no Portal",
+          reason: "login",
+          message: "Por favor, realize seu login no portal escolar para que a automa\xE7\xE3o prossiga.",
+          resume_when: { op: "not_exists", anchor: loginAnchor },
+          timeout_ms: 18e4,
+          retry: { max_attempts: 1, backoff_ms: 0 },
+          postconditions: [],
+          on_success: next,
+          on_fail: "$abort"
+        })
+      });
+    }
+    const initialUrl = segmented.initialNav && "url" in segmented.initialNav ? segmented.initialNav.url : trace.initial_url;
+    let path = "/";
+    let host = trace.steps[0]?.host || "localhost";
+    try {
+      const u = new URL(initialUrl, "http://localhost");
+      path = u.pathname;
+      if (u.host) host = u.host;
+    } catch {
+    }
+    const navQuery = segmented.filterStep?.mode === "query" && segmented.filterStep.queryParam ? { [segmented.filterStep.queryParam]: paramContext.getFilterValueRef() } : void 0;
+    planned.push({
+      id: allocId(),
+      build: (next) => ({
+        type: "NAVIGATE",
+        label: `Navegar para ${path}`,
+        path,
+        host,
+        query: navQuery,
+        retry: { max_attempts: 2, backoff_ms: 500 },
+        timeout_ms: 1e4,
+        postconditions: [],
+        on_success: next,
+        on_fail: "$abort"
+      })
+    });
+    if (segmented.filterStep?.mode === "tab_click" && "descriptor" in segmented.filterStep.step) {
+      const tabAnchor = buildAnchorFromDescriptor(
+        segmented.filterStep.step.descriptor,
+        "Aba de sele\xE7\xE3o da turma",
+        void 0,
+        decisions,
+        paramContext
+      );
+      tabAnchor.candidates = tabAnchor.candidates.map((c) => {
+        if (c.strategy === "text" || c.strategy === "role_name") {
+          return { ...c, name: paramContext.getFilterTextSpec(), text: paramContext.getFilterTextSpec() };
+        }
+        return c;
+      });
+      planned.push({
+        id: allocId(),
+        build: (next) => ({
+          type: "CLICK",
+          label: "Selecionar Aba da Turma",
+          anchor: tabAnchor,
+          is_submit_action: false,
+          expect_navigation: false,
+          retry: { max_attempts: 2, backoff_ms: 500 },
+          timeout_ms: 5e3,
+          postconditions: [],
+          on_success: next,
+          on_fail: "$abort"
+        })
+      });
+    }
+    return planned;
+  }
+
+  // lib/compiler/stages/assemble.ts
+  function assembleGraph(trace, segmented, decisions, paramContext) {
+    const nodes = {};
+    const warnings = [];
+    let nodeCount = 0;
+    const nextId = () => `n${++nodeCount}`;
+    let tableAnchor;
+    if (segmented.tableStep && "descriptor" in segmented.tableStep) {
+      tableAnchor = buildTableAnchor(segmented.tableStep.descriptor);
+    } else {
+      tableAnchor = buildTableAnchor();
+    }
+    const plannedNodes = buildPreambleNodes(trace, segmented, decisions, paramContext, nextId);
+    const isWriteTask = decisions.task_id === "lancar_falta" || decisions.task_id === "lancar_nota";
+    if (decisions.task_id === "read_roster") {
+      plannedNodes.push({
+        id: nextId(),
+        build: (next) => ({
+          type: "READ",
+          label: "Extrair Lista de Alunos e Dados da Turma",
+          source: {
+            kind: "table",
+            anchor: tableAnchor,
+            skip_empty_rows: true
+          },
+          into: "roster",
+          paginate: !!segmented.paginationStep,
+          skip_empty_rows: true,
+          retry: { max_attempts: 2, backoff_ms: 500 },
+          timeout_ms: 1e4,
+          postconditions: [],
+          on_success: next,
+          on_fail: "$abort"
+        })
+      });
+    } else if (isWriteTask) {
+      if (segmented.actionSteps.length > 1) {
+        warnings.push({
+          code: "W_BATCH_PATTERN_IGNORED",
+          message: "M\xFAltiplas intera\xE7\xF5es gravadas em lote detectadas. O fluxo foi abstra\xEDdo para execu\xE7\xE3o unit\xE1ria por par\xE2metro."
+        });
+      }
+      plannedNodes.push({
+        id: nextId(),
+        build: (next) => buildCheckpointNode({
+          nodeId: "n_cp",
+          taskId: decisions.task_id,
+          on_success: next,
+          on_reject: "$abort"
+        })
+      });
+      const actionStep = segmented.actionSteps[0];
+      const fieldAnchor = buildAnchorFromDescriptor(
+        actionStep.descriptor,
+        decisions.task_id === "lancar_falta" ? "Campo de frequ\xEAncia do aluno" : "Campo de nota do aluno",
+        tableAnchor,
+        decisions,
+        paramContext
+      );
+      plannedNodes.push({
+        id: nextId(),
+        build: (next) => ({
+          type: "WRITE",
+          label: decisions.task_id === "lancar_falta" ? "Lan\xE7ar Frequ\xEAncia do Aluno" : "Lan\xE7ar Nota do Aluno",
+          anchor: fieldAnchor,
+          value: paramContext.getWriteValueRef(decisions.task_id),
+          method: decisions.task_id === "lancar_falta" ? "set_checked" : "set_value_dispatch",
+          semantic: decisions.task_id === "lancar_falta" ? "attendance" : "grade",
+          read_back: true,
+          retry: { max_attempts: 2, backoff_ms: 500 },
+          timeout_ms: 5e3,
+          postconditions: [],
+          on_success: next,
+          on_fail: "$abort"
+        })
+      });
+      if (segmented.submitStep) {
+        const submitAnchor = buildAnchorFromDescriptor(
+          segmented.submitStep.descriptor,
+          "Bot\xE3o de Gravar/Confirmar Lan\xE7amento",
+          void 0,
+          decisions,
+          paramContext
+        );
+        plannedNodes.push({
+          id: nextId(),
+          build: (next) => ({
+            type: "CLICK",
+            label: "Confirmar e Salvar Altera\xE7\xF5es",
+            anchor: submitAnchor,
+            is_submit_action: true,
+            expect_navigation: false,
+            retry: { max_attempts: 2, backoff_ms: 500 },
+            timeout_ms: 1e4,
+            postconditions: [],
+            on_success: next,
+            on_fail: "$abort"
+          })
+        });
+      }
+    }
+    for (let i = 0; i < plannedNodes.length; i++) {
+      const cur = plannedNodes[i];
+      const nextSuccess = i === plannedNodes.length - 1 ? "$end" : plannedNodes[i + 1].id;
+      nodes[cur.id] = cur.build(nextSuccess);
+    }
+    const columnHeaders = segmented.tableStep && "descriptor" in segmented.tableStep && segmented.tableStep.descriptor.rowContext ? segmented.tableStep.descriptor.rowContext.headers : segmented.actionSteps[0]?.descriptor.rowContext?.headers || [];
+    const canonical_mapping = buildCanonicalMapping(columnHeaders, decisions);
+    let pagination;
+    if (segmented.paginationStep && "descriptor" in segmented.paginationStep) {
+      const nextAnchor = buildAnchorFromDescriptor(
+        segmented.paginationStep.descriptor,
+        "Bot\xE3o de pr\xF3xima p\xE1gina",
+        void 0,
+        decisions,
+        paramContext
+      );
+      pagination = {
+        type: "next_button",
+        next: nextAnchor,
+        max_pages: 50,
+        delay_ms: { min: 300, max: 1e3 }
+      };
+    }
+    return {
+      entry_node: plannedNodes[0]?.id || "n1",
+      nodes,
+      canonical_mapping,
+      pagination,
+      warnings
+    };
+  }
+
+  // lib/compiler/stages/fingerprint.ts
+  function buildFingerprint(urlOrPath, host, digest) {
+    let path = urlOrPath;
+    try {
+      const u = new URL(urlOrPath, "http://localhost");
+      path = u.pathname;
+    } catch {
+    }
+    const route = {
+      host: host || void 0,
+      path_pattern: path ? `${path.replace(/\/$/, "")}*` : "/*"
+    };
+    const landmarks = [];
+    if (digest) {
+      for (const lm of digest.landmarks || []) {
+        if (lm.trim()) {
+          landmarks.push({
+            description: `Marco estrutural: ${lm}`,
+            candidates: [{ strategy: "text", text: lm.trim(), match: "contains" }]
+          });
+          if (landmarks.length >= 3) break;
+        }
+      }
+      if (landmarks.length === 0) {
+        for (const h of digest.headings || []) {
+          if (h.trim()) {
+            landmarks.push({
+              description: `T\xEDtulo da p\xE1gina: ${h}`,
+              candidates: [{ strategy: "text", text: h.trim(), match: "contains" }]
+            });
+            if (landmarks.length >= 2) break;
+          }
+        }
+      }
+    }
+    if (landmarks.length === 0) {
+      landmarks.push({
+        description: "Estrutura principal da p\xE1gina",
+        candidates: [
+          { strategy: "role_name", role: "main", name: "Principal", match: "contains" },
+          { strategy: "css", selector: 'main, [role="main"], body' }
+        ]
+      });
+    }
+    const titlePattern = digest?.title ? `*${digest.title.trim().slice(0, 30)}*` : void 0;
+    return {
+      route,
+      landmarks,
+      title_pattern: titlePattern
+    };
+  }
+
+  // lib/compiler/scrub.ts
+  function scrubGraph(graph, registry2) {
+    const violations = [];
+    function traverse(obj, currentPath) {
+      if (obj === null || obj === void 0) return;
+      if (typeof obj === "string") {
+        const matches = registry2.findMatches(obj);
+        for (const m of matches) {
+          violations.push({
+            path: currentPath,
+            entry: m,
+            matchedString: obj
+          });
+        }
+        return;
+      }
+      if (Array.isArray(obj)) {
+        for (let i = 0; i < obj.length; i++) {
+          traverse(obj[i], `${currentPath}[${i}]`);
+        }
+        return;
+      }
+      if (typeof obj === "object") {
+        for (const [key, value] of Object.entries(obj)) {
+          traverse(value, currentPath ? `${currentPath}.${key}` : key);
+        }
+      }
+    }
+    traverse(graph, "");
+    if (violations.length > 0) {
+      const first = violations[0];
+      throw new CompilerError(
+        "E_PII_SCRUB_FAILED",
+        `O valor sens\xEDvel registrado "${first.entry.original}" vazou para dentro do grafo compilado no campo "${first.path}".`
+      );
+    }
+    if (graph.provenance) {
+      graph.provenance.pii_scrubbed = true;
+    }
+  }
+
+  // lib/compiler/compile.ts
+  function compile2(rawTrace, rawDecisions, options) {
+    const traceStr = JSON.stringify(rawTrace);
+    const sizeBytes = typeof Buffer !== "undefined" ? Buffer.byteLength(traceStr, "utf-8") : new TextEncoder().encode(traceStr).length;
+    if (sizeBytes > MAX_TRACE_SIZE_BYTES) {
+      throw new CompilerError("E_TRACE_TOO_LARGE", `O trace excede o tamanho m\xE1ximo de ${MAX_TRACE_SIZE_BYTES} bytes.`);
+    }
+    if (Array.isArray(rawTrace?.steps) && rawTrace.steps.length > MAX_TRACE_STEPS) {
+      throw new CompilerError("E_TRACE_TOO_LARGE", `O trace cont\xE9m ${rawTrace.steps.length} passos (m\xE1ximo: ${MAX_TRACE_STEPS}).`);
+    }
+    const traceParsed = TraceSchema.safeParse(rawTrace);
+    if (!traceParsed.success) {
+      throw new CompilerError(
+        "E_TRACE_INVALID",
+        `O trace n\xE3o est\xE1 em conformidade com o TraceSchema: ${traceParsed.error.message}`
+      );
+    }
+    const trace = traceParsed.data;
+    const decisionsParsed = CompilerDecisionsSchema.safeParse(rawDecisions);
+    if (!decisionsParsed.success) {
+      throw new CompilerError(
+        "E_DECISION_REQUIRED",
+        `Decis\xF5es obrigat\xF3rias n\xE3o foram fornecidas ou s\xE3o inv\xE1lidas: ${decisionsParsed.error.message}`
+      );
+    }
+    const decisions = decisionsParsed.data;
+    const isWriteTask = decisions.task_id === "lancar_falta" || decisions.task_id === "lancar_nota";
+    if (decisions.task_id === "lancar_falta" && !decisions.attendance_polarity) {
+      throw new CompilerError("E_DECISION_REQUIRED", "A polaridade de frequ\xEAncia (attendance_polarity) \xE9 obrigat\xF3ria para lan\xE7ar falta.");
+    }
+    const segmented = segmentTrace(trace, decisions);
+    const paramContext = createParameterContext(decisions);
+    const assembled = assembleGraph(trace, segmented, decisions, paramContext);
+    const safetyConfig = buildSafetyConfig(decisions, isWriteTask);
+    const initialUrl = segmented.initialNav && "url" in segmented.initialNav ? segmented.initialNav.url : trace.initial_url;
+    const host = decisions.allowed_hosts[0] || "localhost";
+    const entryFingerprint = buildFingerprint(initialUrl, host, trace.page_digest);
+    const timestamp = options?.clock ? options.clock() : "2026-10-11T00:00:00.000Z";
+    const compilerVersion = options?.compilerVersion || "2.0.0";
+    const unvalidatedGraph = {
+      spec_version: "2.0",
+      identity: {
+        portal_id: decisions.portal_id,
+        domain: host,
+        task_id: decisions.task_id,
+        version: 1,
+        name: decisions.task_name,
+        description: `Grafo compilado determin\xEDsticamente para ${decisions.task_name}`
+      },
+      compat: {
+        support_tier: 1,
+        archetype_tags: ["recorded", "table_form"],
+        tested_archetypes: ["standard_table"],
+        min_runner_version: "2.0.0"
+      },
+      params: paramContext.params,
+      entry_fingerprint: entryFingerprint,
+      entry_node: assembled.entry_node,
+      nodes: assembled.nodes,
+      canonical_mapping: assembled.canonical_mapping,
+      safety: safetyConfig,
+      provenance: {
+        author: "teacher-ai-compiler",
+        created_at: timestamp,
+        updated_at: timestamp,
+        source: "recorded",
+        compiler_version: compilerVersion,
+        has_self_healed: false,
+        pii_scrubbed: true
+      }
+    };
+    if (assembled.pagination) {
+      unvalidatedGraph.pagination = assembled.pagination;
+    }
+    const schemaValidation = SkillGraphV2Schema.safeParse(unvalidatedGraph);
+    if (!schemaValidation.success) {
+      throw new CompilerError(
+        "E_COMPILED_GRAPH_INVALID",
+        `O grafo compilado falhou na valida\xE7\xE3o de schema: ${schemaValidation.error.message}`
+      );
+    }
+    const graph = schemaValidation.data;
+    const validationReport = validateGraph(graph);
+    if (!validationReport.valid) {
+      const errorMsgs = validationReport.errors.map((e) => `[${e.code}] ${e.message}`).join("; ");
+      throw new CompilerError(
+        "E_COMPILED_GRAPH_INVALID",
+        `O grafo compilado falhou nas invariantes est\xE1ticas de validateGraph: ${errorMsgs}`
+      );
+    }
+    if (options?.piiRegistry) {
+      scrubGraph(graph, options.piiRegistry);
+    }
+    const allWarnings = [
+      ...assembled.warnings,
+      ...validationReport.warnings.map((w) => ({
+        code: w.code,
+        message: w.message,
+        nodeId: w.nodeId
+      }))
+    ];
+    return {
+      graph,
+      report: {
+        valid: true,
+        errors: [],
+        warnings: allWarnings
+      }
+    };
+  }
+
+  // lib/compiler/analyze.ts
+  function analyzeTrace(trace) {
+    const hosts = /* @__PURE__ */ new Set();
+    let hasTable = false;
+    let tableHeaders = [];
+    let hasWrites = false;
+    let hasChecks = false;
+    let hasLogin = false;
+    let hasPagination = false;
+    const writeRowIndices = /* @__PURE__ */ new Set();
+    let lastFilterStep = null;
+    let classFilter = { mode: "none" };
+    let observedGradeVal = null;
+    for (let i = 0; i < trace.steps.length; i++) {
+      const step = trace.steps[i];
+      if (step.host) hosts.add(step.host);
+      if (step.kind === "sensitive_field") {
+        hasLogin = true;
+      }
+      if (step.kind === "mark_table") {
+        hasTable = true;
+        if (step.descriptor.rowContext?.headers) {
+          tableHeaders = step.descriptor.rowContext.headers;
+        }
+      }
+      if (step.kind === "mark_next_page") {
+        hasPagination = true;
+      }
+      if (step.kind === "click") {
+        if (step.descriptor.text && /pr[oó]xim[ao]|next|seguir/i.test(step.descriptor.text)) {
+          hasPagination = true;
+        }
+        if (step.descriptor.role === "tab" || /turma\s+[0-9A-Z]|[0-9][A-Z]\b/i.test(step.descriptor.text || "")) {
+          classFilter = {
+            mode: "tab_click",
+            stepId: step.id,
+            value: step.descriptor.text?.trim()
+          };
+        }
+      }
+      if (step.kind === "select") {
+        lastFilterStep = step;
+      }
+      if (step.kind === "navigate" && lastFilterStep) {
+        try {
+          const u = new URL(step.url, "http://localhost");
+          const entries = Array.from(u.searchParams.entries());
+          if (entries.length > 0) {
+            const matchedParam = entries.find(([k, v]) => v === lastFilterStep.value) || entries[0];
+            classFilter = {
+              mode: "query",
+              queryParam: matchedParam[0],
+              stepId: lastFilterStep.id,
+              value: matchedParam[1]
+            };
+          }
+        } catch {
+        }
+        lastFilterStep = null;
+      }
+      if (step.kind === "input") {
+        hasWrites = true;
+        if (step.descriptor.rowContext) {
+          hasTable = true;
+          if (tableHeaders.length === 0) tableHeaders = step.descriptor.rowContext.headers;
+          writeRowIndices.add(step.descriptor.rowContext.column_index);
+        }
+        const num = parseFloat(step.value.replace(",", "."));
+        if (!isNaN(num)) observedGradeVal = num;
+      }
+      if (step.kind === "check") {
+        hasChecks = true;
+        if (step.descriptor.rowContext) {
+          hasTable = true;
+          if (tableHeaders.length === 0) tableHeaders = step.descriptor.rowContext.headers;
+          writeRowIndices.add(step.descriptor.rowContext.column_index);
+        }
+      }
+    }
+    if (lastFilterStep && classFilter.mode === "none") {
+      classFilter = {
+        mode: "unsupported_select",
+        stepId: lastFilterStep.id
+      };
+    }
+    let suggestedKey = null;
+    for (const h of tableHeaders) {
+      if (/\b(matricula|ra|codigo|registro|enrollment|id)\b/i.test(h)) {
+        suggestedKey = h;
+        break;
+      }
+    }
+    if (!suggestedKey) {
+      for (const h of tableHeaders) {
+        if (/\b(nome|aluno|estudante|name|student)\b/i.test(h)) {
+          suggestedKey = h;
+          break;
+        }
+      }
+    }
+    let suggestedPolarity = null;
+    if (hasChecks) {
+      suggestedPolarity = "checked_is_present";
+    }
+    let suggestedGradeScale = null;
+    if (observedGradeVal !== null) {
+      suggestedGradeScale = observedGradeVal <= 10 ? { min: 0, max: 10 } : { min: 0, max: 100 };
+    }
+    const detections = {
+      hasTable,
+      tableHeaders,
+      hasWrites,
+      hasChecks,
+      hasLogin,
+      hasPagination,
+      repeatedPattern: writeRowIndices.size > 1,
+      detectedHosts: Array.from(hosts),
+      suggestedPolarity,
+      suggestedGradeScale,
+      suggestedKeyColumn: suggestedKey,
+      classFilterDetection: classFilter
+    };
+    const pendingDecisions = [];
+    if (hasChecks) pendingDecisions.push("attendance_polarity");
+    if (hasWrites) pendingDecisions.push("grade_scale");
+    if (hasTable) pendingDecisions.push("row_key_column");
+    if (detections.detectedHosts.length === 0) pendingDecisions.push("allowed_hosts");
+    return {
+      detections,
+      defaultDecisions: {
+        portal_id: detections.detectedHosts[0] ? detections.detectedHosts[0].replace(/[^a-zA-Z0-9_]/g, "_") : "portal_escolar",
+        allowed_hosts: detections.detectedHosts,
+        row_key_column: suggestedKey || void 0
+      },
+      pendingDecisions
+    };
+  }
+
   // lib/runner-ext/workerEntry.ts
   function createExtensionHost(options) {
     const auditSink = options.nativeClient ? new NativeAuditSink(options.nativeClient) : null;
@@ -22322,6 +23590,10 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     recordSoftHeal,
     recordManualRepair,
     computeGraphHealthStatus,
+    compile: compile2,
+    analyzeTrace,
+    CompilerError,
+    scrubGraph,
     syntheticGraphs: devSyntheticGraphs
   };
   if (typeof globalThis !== "undefined") {

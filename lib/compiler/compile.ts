@@ -34,7 +34,8 @@ export function compile(
 ): CompileResult {
   // 1. Limites de Tamanho e Passos
   const traceStr = JSON.stringify(rawTrace)
-  if (Buffer.byteLength(traceStr, 'utf-8') > MAX_TRACE_SIZE_BYTES) {
+  const sizeBytes = typeof Buffer !== 'undefined' ? Buffer.byteLength(traceStr, 'utf-8') : new TextEncoder().encode(traceStr).length
+  if (sizeBytes > MAX_TRACE_SIZE_BYTES) {
     throw new CompilerError('E_TRACE_TOO_LARGE', `O trace excede o tamanho máximo de ${MAX_TRACE_SIZE_BYTES} bytes.`)
   }
   if (Array.isArray((rawTrace as any)?.steps) && (rawTrace as any).steps.length > MAX_TRACE_STEPS) {
