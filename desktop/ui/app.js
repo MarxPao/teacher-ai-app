@@ -392,6 +392,62 @@ document.addEventListener('DOMContentLoaded', async () => {
     loadCommunityPackages(commSearchInput?.value || '')
   })
 
+  // Exportar / Compartilhar mapa local assinado e sanitizado
+  const btnExportMap = document.getElementById('btn-export-map')
+  const exportTaskSelect = document.getElementById('export-task-select')
+  const exportStatusMsg = document.getElementById('export-status-msg')
+
+  btnExportMap?.addEventListener('click', async () => {
+    const taskId = exportTaskSelect?.value || 'read_roster'
+    btnExportMap.disabled = true
+    btnExportMap.textContent = 'Exportando...'
+    if (exportStatusMsg) exportStatusMsg.style.display = 'none'
+
+    try {
+      const client = window.teacherAi || window.teacherDesktop
+      if (!client) throw new Error('Bridge desktop indisponível.')
+
+      const res = await (client.send ? client.send('community.export', { portalId: 'portal_escolar', taskId }) : client.invoke('community.export', { portalId: 'portal_escolar', taskId }))
+
+      btnExportMap.disabled = false
+      btnExportMap.textContent = '📦 Compartilhar Mapa'
+
+      if (res && res.success) {
+        const blob = new Blob([res.packageJson], { type: 'application/json' })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = res.filename || `${taskId}.teacherai.json`
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        URL.revokeObjectURL(url)
+
+        if (exportStatusMsg) {
+          exportStatusMsg.style.display = 'block'
+          exportStatusMsg.style.background = 'rgba(16, 185, 129, 0.15)'
+          exportStatusMsg.style.color = '#34d399'
+          exportStatusMsg.style.border = '1px solid rgba(16, 185, 129, 0.3)'
+          exportStatusMsg.textContent = 'Pacote assinado e sanitizado gerado com sucesso. Nenhum dado pessoal ou nome da sua escola foi incluído.'
+        }
+        log(`Pacote comunitário exportado: ${res.filename} (ID: ${res.packageId})`)
+      } else {
+        throw new Error(res?.error?.message || 'Falha ao exportar mapa.')
+      }
+    } catch (err) {
+      btnExportMap.disabled = false
+      btnExportMap.textContent = '📦 Compartilhar Mapa'
+      if (exportStatusMsg) {
+        exportStatusMsg.style.display = 'block'
+        exportStatusMsg.style.background = 'rgba(239, 68, 68, 0.15)'
+        exportStatusMsg.style.color = '#f87171'
+        exportStatusMsg.style.border = '1px solid rgba(239, 68, 68, 0.3)'
+        exportStatusMsg.textContent = `Erro ao exportar: ${err.message}`
+      }
+      log(`Erro na exportação comunitária: ${err.message}`)
+    }
+  })
+
   await checkStatus()
   await loadStudents()
   await loadKeysStatus()

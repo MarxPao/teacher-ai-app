@@ -24,6 +24,7 @@ export type ExtensionMethod = typeof EXTENSION_ALLOWED_METHODS[number]
  */
 export const UI_ALLOWED_METHODS = [
   ...EXTENSION_ALLOWED_METHODS,
+  'community.export',
   'data.exportStudent',
   'data.eraseStudent',
   'data.backup',
@@ -184,5 +185,12 @@ export const MethodParamSchemas = {
   'community.dryRun': z.object({
     packageId: z.string().min(1),
     mapVersion: z.number().int().min(1),
+  }).strict(),
+
+  'community.export': z.object({
+    portalId: z.string().min(1),
+    taskId: z.string().min(1),
+    privateKeyPem: z.string().optional(),
+    authorName: z.string().optional(),
   }).strict(),
 } as const

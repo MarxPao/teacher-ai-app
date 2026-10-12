@@ -25,6 +25,7 @@ import {
   searchRegistryPackages,
   executeImportPipeline,
   canActivate,
+  PackageExporter,
 } from '../lib/desktop-core/community'
 
 // 1. Instância Única
@@ -242,6 +243,35 @@ async function executeBusinessMethod(method: string, params: any): Promise<any> 
       await commRepo.setPackageStatus(params.packageId, params.mapVersion, 'activated')
       await graphRepo.setActive('escola_local', params.packageId, params.mapVersion)
       return { success: true, status: 'activated' }
+    }
+
+    case 'community.export': {
+      if (!graphRepo) throw new Error('Repositório de grafos indisponível.')
+      const graph = await graphRepo.get(params.portalId, params.taskId)
+      if (!graph) {
+        throw new Error(`Grafo ativo para "${params.taskId}" não encontrado.`)
+      }
+
+      const privateKeyPem = params.privateKeyPem || vault?.getOrCreateExportKey('author')
+      if (!privateKeyPem) {
+        throw new Error('Chave privada de assinatura indisponível no cofre.')
+      }
+
+      const { pkg, pkgJson } = await PackageExporter.export({
+        graph,
+        privateKeyPem,
+        author: { name: params.authorName || 'Comunidade' },
+        packageId: `${params.taskId}_pkg`,
+      })
+
+      const filename = `${params.taskId}_v${graph.identity?.version || 1}.teacherai.json`
+      return {
+        success: true,
+        packageJson: pkgJson,
+        filename,
+        packageId: pkg.manifest.package_id,
+        keyId: pkg.signature.key_id,
+      }
     }
 
     default:

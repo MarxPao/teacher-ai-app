@@ -7,9 +7,11 @@ import {
 } from '../packageSchema'
 import { sanitizeGraphForExport } from './sanitize'
 import { extractAndReplaceHosts } from './hostMap'
+import * as crypto from 'node:crypto'
 import { canonicalize } from '../canonical'
 import { MAX_PACKAGE_BYTES } from '../limits'
 import { CommunityError } from '../errors'
+import { rawPublicKeyFromSpki, computeKeyId } from '../signing'
 
 export interface Signer {
   sign(dataBytes: Buffer): Promise<{ sig: string; keyId: string; publicKeyHex: string }>
@@ -100,4 +102,40 @@ export async function buildExportPackage(
   }
 
   return { pkg, pkgJson }
+}
+
+export class PackageExporter {
+  static async export(options: {
+    graph: SkillGraphV2
+    privateKeyPem: string
+    author?: { name: string }
+    packageId?: string
+    license?: 'CC0-1.0' | 'CC-BY-4.0'
+  }): Promise<{ pkg: SkillPackage; pkgJson: string }> {
+    const keyObject = crypto.createPrivateKey(options.privateKeyPem)
+    const signer: Signer = {
+      async sign(dataBytes: Buffer) {
+        const sig = crypto.sign(null, dataBytes, keyObject).toString('base64')
+        const publicKey = crypto.createPublicKey(keyObject)
+        const spkiDer = publicKey.export({ type: 'spki', format: 'der' }) as Buffer
+        const rawPub = rawPublicKeyFromSpki(spkiDer)
+        const keyId = computeKeyId(rawPub)
+        return {
+          sig,
+          keyId,
+          publicKeyHex: spkiDer.toString('hex'),
+        }
+      },
+    }
+
+    const packageId = options.packageId || `${options.graph.identity.task_id || 'mapa'}_pkg`
+    const publisherHandle = options.author?.name || 'Comunidade'
+    const license = options.license || 'CC0-1.0'
+
+    return await buildExportPackage(options.graph, {
+      packageId,
+      publisherHandle,
+      license,
+    }, signer)
+  }
 }

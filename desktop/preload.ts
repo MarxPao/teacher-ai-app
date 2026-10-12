@@ -11,3 +11,7 @@ const bridge: DesktopBridge = {
 }
 
 contextBridge.exposeInMainWorld('teacherDesktop', bridge)
+contextBridge.exposeInMainWorld('teacherAi', {
+  send: (method: string, params: Record<string, unknown> = {}) => bridge.invoke(method, params),
+  invoke: (method: string, params: Record<string, unknown> = {}) => bridge.invoke(method, params),
+})

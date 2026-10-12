@@ -242,6 +242,25 @@
       </h2>
       <p>Importe fluxos criados e revisados por outros educadores. Todo mapa importado entra em <strong>quarentena</strong> até que você confirme as ações de tela e realize uma simulação sem riscos no seu portal.</p>
       
+      <!-- Exportar / Compartilhar Mapa Local -->
+      <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin-bottom: 14px;">
+        <h3 style="font-size: 13px; margin: 0 0 6px 0; color: var(--text); display: flex; align-items: center; gap: 6px;">
+          📤 Compartilhar Meu Mapa com a Comunidade
+        </h3>
+        <p style="font-size: 12px; margin-bottom: 10px;">
+          Gera um pacote assinado com criptografia Ed25519 e sanitizado contra vazamento de dados da sua escola.
+        </p>
+        <div style="display: flex; gap: 8px; align-items: center;">
+          <select id="export-task-select" style="max-width: 260px; margin-bottom: 0;">
+            <option value="read_roster">read_roster (Ler Lista de Alunos)</option>
+            <option value="lancar_falta">lancar_falta (Lançar Frequência)</option>
+            <option value="lancar_nota">lancar_nota (Lançar Notas)</option>
+          </select>
+          <button class="btn" id="btn-export-map">📦 Compartilhar Mapa</button>
+        </div>
+        <div id="export-status-msg" style="display: none; margin-top: 8px; font-size: 12px; padding: 8px; border-radius: 6px;"></div>
+      </div>
+
       <div style="display: flex; gap: 10px; margin-bottom: 14px;">
         <input type="text" id="community-search-input" placeholder="Buscar por tarefa (ex: read_roster, lancar_falta) ou plataforma..." style="margin-bottom: 0;">
         <button class="btn" id="btn-search-community" style="white-space: nowrap;">🔍 Buscar</button>

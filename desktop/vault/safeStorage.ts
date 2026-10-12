@@ -1,5 +1,6 @@
 import * as fs from 'node:fs'
 import * as path from 'node:path'
+import * as crypto from 'node:crypto'
 import { safeStorage } from 'electron'
 import { generateDataKey } from '../../lib/desktop-core/crypto/envelope'
 import { DesktopCoreError } from '../../lib/desktop-core/errors'
@@ -114,6 +115,36 @@ export class VaultManager {
     const safeProvider = provider.toLowerCase().replace(/[^a-z0-9_-]/g, '_')
     const filePath = path.join(this.vaultDir, `key_${safeProvider}.enc`)
     return fs.existsSync(filePath)
+  }
+
+  /**
+   * Obtém ou inicializa chave privada Ed25519 cifrada com DPAPI para assinatura de pacotes.
+   */
+  getOrCreateExportKey(identity: string = 'author'): string {
+    const safeId = identity.toLowerCase().replace(/[^a-z0-9_-]/g, '_')
+    const filePath = path.join(this.vaultDir, `key_export_${safeId}.enc`)
+
+    if (fs.existsSync(filePath)) {
+      try {
+        const encrypted = fs.readFileSync(filePath)
+        return this.decryptSecret(encrypted)
+      } catch {}
+    }
+
+    const { privateKey } = crypto.generateKeyPairSync('ed25519')
+    const privateKeyPem = privateKey.export({ type: 'pkcs8', format: 'pem' }).toString()
+
+    try {
+      if (!fs.existsSync(this.vaultDir)) {
+        fs.mkdirSync(this.vaultDir, { recursive: true })
+      }
+      const encrypted = this.encryptSecret(privateKeyPem)
+      fs.writeFileSync(filePath, encrypted)
+    } catch {
+      // Retorna em memória se DPAPI estiver indisponível
+    }
+
+    return privateKeyPem
   }
 }
 
