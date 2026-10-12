@@ -126,6 +126,29 @@ async function executeBusinessMethod(method: string, params: any): Promise<any> 
       return { status }
     }
 
+    case 'consents.get': {
+      if (!consentRepo) throw new Error('Repositório indisponível.')
+      return {
+        openai: await consentRepo.getConsent('openai'),
+        anthropic: await consentRepo.getConsent('anthropic'),
+        google: await consentRepo.getConsent('google'),
+        groq: await consentRepo.getConsent('groq'),
+      }
+    }
+
+    case 'consents.set': {
+      if (!consentRepo) throw new Error('Repositório indisponível.')
+      await consentRepo.setConsent(params.provider, Boolean(params.consented), params.scope || 'geral')
+      return { success: true, provider: params.provider, consented: Boolean(params.consented) }
+    }
+
+    case 'audit.purge': {
+      if (!auditRepo) throw new Error('Repositório indisponível.')
+      const days = typeof params.days === 'number' ? params.days : 90
+      const purged = await auditRepo.purgeOlderThan(days)
+      return { purged, days }
+    }
+
     default:
       return { ok: true }
   }

@@ -28,6 +28,9 @@ export const UI_ALLOWED_METHODS = [
   'data.restore',
   'keys.configure',
   'keys.status',
+  'consents.get',
+  'consents.set',
+  'audit.purge',
 ] as const
 
 export type UiMethod = typeof UI_ALLOWED_METHODS[number]
@@ -121,5 +124,17 @@ export const MethodParamSchemas = {
 
   'keys.status': z.object({
     provider: z.string().optional(),
+  }).strict(),
+
+  'consents.get': z.object({}).strict(),
+
+  'consents.set': z.object({
+    provider: z.string().min(1),
+    consented: z.boolean(),
+    scope: z.string().optional(),
+  }).strict(),
+
+  'audit.purge': z.object({
+    days: z.number().int().min(1).optional(),
   }).strict(),
 } as const
