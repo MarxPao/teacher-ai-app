@@ -53,16 +53,9 @@ const HTTP_STATUS_FALLBACK = 'http://127.0.0.1:8765/portal_status';
 const NATIVE_HOST_NAME = 'com.teacherai.desktop';
 const STARTUP_TIMEOUT_MS = 5000;
 
-const KNOWN_PORTALS = [
-  { id: 'ieducar', name: 'i-Educar', domains: ['ieducar.com.br', 'comunidade.ieducar'] },
-  { id: 'machado_sobrinho', name: 'Machado Sobrinho', domains: ['machadosobrinho', 'paineldoaluno.com.br', 'paineldoprofessor'] },
-  { id: 'plural', name: 'Plurall (SOMOS)', domains: ['plural.net', 'plurall.net'] },
-  { id: 'cambridge', name: 'Cambridge One', domains: ['cambridgeone.org'] },
-  { id: 'santa_catarina', name: 'Rede Santa Catarina', domains: ['redesantacatarina.org.br'] },
-  { id: 'teams', name: 'Microsoft Teams', domains: ['teams.microsoft.com'] },
-  { id: 'sed_sp', name: 'SED São Paulo', domains: ['sed.educacao.sp.gov.br'] },
-  { id: 'sandbox', name: 'Portal de Teste (Sandbox)', domains: ['localhost', '127.0.0.1', 'portal_mock', 'portal_real'] }
-];
+// Lista de portais fixos esvaziada por padrão para conformidade O1 (generalista).
+// A detecção é dinâmica baseada no host da aba contra allowed_hosts de grafos ativos.
+const KNOWN_PORTALS = [];
 
 let ws = null;
 let isSidecarOnline = false;
@@ -329,6 +322,16 @@ function identifyPortal(url) {
       return p;
     }
   }
+  try {
+    const parsed = new URL(url);
+    if (parsed.hostname && !parsed.protocol.startsWith('chrome')) {
+      return {
+        id: parsed.hostname.replace(/[^a-zA-Z0-9_]/g, '_'),
+        name: parsed.hostname,
+        domains: [parsed.hostname],
+      };
+    }
+  } catch {}
   return null;
 }
 

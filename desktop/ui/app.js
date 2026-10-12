@@ -311,7 +311,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         <div>
           <label style="font-weight: 600; display: block; margin-bottom: 4px;">Vincular Marcador de Portal (h1.invalid):</label>
-          <input type="text" id="bind-h1-host" placeholder="ex: machadosobrinho.paineldoaluno.com.br" value="paineldoaluno.com.br">
+          <input type="text" id="bind-h1-host" placeholder="ex: portal-escolar.example" value="">
           <small style="color: var(--muted);">Informe o endereço web onde a automação deve atuar.</small>
         </div>
 

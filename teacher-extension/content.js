@@ -52,17 +52,6 @@ const PLATFORM_PROFILES = {
       submit:      ['button[type="submit"]', '#btn_salvar', '.btn']
     }
   },
-  machado: {
-    match: () => CURRENT_URL.includes('paineldoaluno.com.br'),
-    name: 'Machado Sobrinho',
-    selectors: {
-      title:       ['input[name*="titulo"]', 'input[name*="assunto"]', 'input[id*="diario"]', 'input[placeholder*="Assunto"]'],
-      date:        ['input[type="date"]', 'input[name*="data"]', 'input[id*="data"]'],
-      description: ['textarea[name*="conteudo"]', 'textarea[name*="descricao"]', 'textarea[name*="pauta"]', 'div[contenteditable="true"]'],
-      classRef:    ['select[name*="turma"]', 'select[id*="turma"]', 'input[name*="turma"]'],
-      submit:      ['button[type="submit"]', 'input[type="submit"]', '.btn-salvar', '#btn-salvar']
-    }
-  },
   santacatarina: {
     match: () => CURRENT_URL.includes('redesantacatarina.org.br'),
     name: 'Rede Santa Catarina',
@@ -1000,7 +989,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'IMPORT_STUDENTS_TO_APP') {
     const payload = message.payload || {};
     const className = (payload.className || 'Turma do Portal').trim();
-    const portalName = payload.portalName || 'Machado Sobrinho';
+    const portalName = payload.portalName || 'Portal Escolar';
     const students = payload.students || [];
 
     try {
@@ -2675,7 +2664,7 @@ function universalExtractStudents() {
     if (students.length >= 2) return students;
   }
 
-  // ESTRATÉGIA 2: Grade de Cartões / Divs (padrão Machado Sobrinho: .grid-meus-alunos, .card-aluno, etc.)
+  // ESTRATÉGIA 2: Grade de Cartões / Divs (.grid-meus-alunos, .card-aluno, etc.)
   const cardContainers = Array.from(document.querySelectorAll(
     'div.grid-meus-alunos, div.meus-alunos-grid, [class*="alunos" i], [class*="student" i], [class*="roster" i], main, #conteudo, .container'
   ));
@@ -2852,7 +2841,7 @@ window.addEventListener('message', async (event) => {
         },
         body: JSON.stringify({
           text: payload.text || '',
-          portalId: payload.portalId || 'machado_sobrinho',
+          portalId: payload.portalId || null,
           turmaId: payload.turmaId || null,
           source: 'bridge_app'
         })
