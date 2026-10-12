@@ -1,5 +1,5 @@
 @echo off
-REM @deprecated Native Host Python legado. O host canônico de produção v2 é
+REM [DEPRECATED] @deprecated Native Host Python legado. O host canônico de produção v2 é
 REM dist-desktop/shim.bat (compilado de desktop/native-host/shim.ts). Consulte docs/desktop/INSTALL.md.
 
 set PYTHON_CMD="C:\Users\rafae\AppData\Local\Python\pythoncore-3.14-64\python.exe"

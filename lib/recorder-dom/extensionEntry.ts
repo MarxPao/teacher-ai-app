@@ -4,6 +4,8 @@
 import { DomRecorder } from './recorderCore'
 import type { Trace } from '../recorder/traceSchema'
 
+declare const chrome: any
+
 declare global {
   interface Window {
     __TEACHER_AI_RECORDING_ACTIVE__?: boolean
@@ -36,8 +38,8 @@ declare global {
     window.__TEACHER_AI_RECORDING_ACTIVE__ = false
     const trace = recorder.stop()
 
-    if (trace && !trace.portal_id) {
-      trace.portal_id = window.location.hostname.replace(/[^a-zA-Z0-9_]/g, '_')
+    if (trace && !(trace as any).portal_id) {
+      ;(trace as any).portal_id = window.location.hostname.replace(/[^a-zA-Z0-9_]/g, '_')
     }
 
     if (typeof chrome !== 'undefined' && chrome.storage?.session) {
