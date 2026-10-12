@@ -1386,22 +1386,24 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       // 2. Roteia execução de acordo com o tipo de ferramenta
       try {
         if (tool === 'read_roster' || (tool === 'invoke_teacher_capability' && params?.capability === 'read_roster')) {
+          const graph = params?.skillGraph || params?.graph;
+          if (!graph) {
+            sendResponse({
+              ok: false,
+              code: "MAP_NOT_FOUND",
+              message: "Mapa não encontrado para este portal. Grave ou importe um mapa no painel."
+            });
+            return;
+          }
           chrome.tabs.sendMessage(targetTabId, {
             action: 'EXECUTE_SKILL_GRAPH',
-            skillGraph: null
+            skillGraph: graph
           }, (graphResp) => {
             if (chrome.runtime.lastError || !graphResp?.ok) {
-              // Fallback gracioso para leitura direta de tabela no DOM
-              chrome.tabs.sendMessage(targetTabId, { action: 'READ_ACTIVE_PORTAL_ROSTER' }, (rosterResp) => {
-                const students = rosterResp?.students || [];
-                sendResponse({
-                  success: Boolean(rosterResp && rosterResp.sucesso),
-                  verified: Boolean(students.length > 0),
-                  verification_method: 'dom_roster_table',
-                  students,
-                  data: { students },
-                  error: rosterResp?.mensagem
-                });
+              sendResponse({
+                ok: false,
+                code: "MAP_NOT_FOUND",
+                message: "Mapa não encontrado para este portal. Grave ou importe um mapa no painel."
               });
             } else {
               const students = graphResp.records || graphResp.students || [];
@@ -1636,18 +1638,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
-  if (message.action === 'READ_ACTIVE_PORTAL_ROSTER') {
-    (async () => {
-      const targetTabId = await resolveActivePortalTab(message.tabId);
-      if (!targetTabId) {
-        sendResponse({ sucesso: false, mensagem: 'Nenhuma aba ativa do portal identificada.' });
-        return;
-      }
-      const res = await internalReadRoster(targetTabId);
-      sendResponse(res);
-    })();
-    return true;
-  }
 
   if (message.action === 'EXECUTE_SAFE_WRITE') {
     (async () => {
