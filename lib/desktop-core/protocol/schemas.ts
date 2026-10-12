@@ -110,6 +110,7 @@ export const MethodParamSchemas = {
 
   'graphs.save': z.object({
     graph: z.record(z.string(), z.unknown()),
+    activate: z.boolean().optional(),
   }).strict(),
 
   'audit.append': z.object({

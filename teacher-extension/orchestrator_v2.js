@@ -141,6 +141,8 @@
           chrome.storage.session.set({
             skillgraph_pending_repair: {
               ...event.data,
+              graph,
+              tabId,
               friendlyPrompt: 'O portal mudou um botão ou campo. O assistente localizou uma atualização segura. Deseja aplicar?',
             },
           }).catch(() => {})
@@ -276,18 +278,107 @@
           sendResponse({ success: false, friendlyMessage: 'Nenhuma proposta de reparo pendente encontrada.' })
           return
         }
-        const healthKey = `graph_health:${message.portalId || 'default'}:${message.taskId}`
-        chrome.storage.local.get([healthKey], (hRes) => {
-          if (hRes?.[healthKey] && bundle?.recordManualRepair) {
-            const updated = bundle.recordManualRepair(hRes[healthKey])
-            chrome.storage.local.set({ [healthKey]: updated })
+
+        const bundle = globalThis.SkillGraphBundle?.SkillGraphV2
+        if (!bundle) {
+          sendResponse({ success: false, friendlyMessage: 'Motor SkillGraph não disponível para aplicar o reparo.' })
+          return
+        }
+
+        try {
+          const graph = pending.graph || message.graph
+          if (!graph) {
+            sendResponse({ success: false, friendlyMessage: 'Grafo original não encontrado para aplicar o reparo.' })
+            return
           }
-        })
-        await chrome.storage.session.remove(['skillgraph_pending_repair'])
-        sendResponse({
-          success: true,
-          friendlyMessage: 'Atualização do portal confirmada com sucesso! ✨',
-        })
+
+          let patch = pending.patch
+          if (!patch && pending.proposal && pending.proposal.topCandidates && pending.proposal.topCandidates.length > 0) {
+            const selectedIdx = pending.proposal.selectedCandidateIndex || 0
+            const top = pending.proposal.topCandidates[selectedIdx]
+            patch = {
+              proposalId: pending.proposal.id,
+              graphId: pending.proposal.graphId || graph.identity.portal_id || graph.identity.name,
+              baseVersion: pending.proposal.baseVersion || graph.identity.version,
+              targetVersion: (pending.proposal.baseVersion || graph.identity.version) + 1,
+              modifiedNodes: {
+                [pending.proposal.nodeId]: { candidates: top.proposedAnchorCandidates },
+              },
+            }
+          }
+
+          if (!patch) {
+            sendResponse({ success: false, friendlyMessage: 'Proposta não contém candidatos válidos de reparo.' })
+            return
+          }
+
+          // 1. Aplica o patch imutável gerando nova versão v+1
+          const patched = bundle.applyPatch(graph, patch)
+
+          // 2. Valida regras de integridade do grafo resultante
+          const validation = bundle.validateGraph ? bundle.validateGraph(patched) : { valid: true }
+          if (!validation.valid) {
+            sendResponse({
+              success: false,
+              friendlyMessage: 'O mapa resultante do reparo violou as regras de integridade e não pôde ser salvo.',
+            })
+            return
+          }
+
+          // 3. Dry-run do nó reparado para confirmar que acha o elemento no portal
+          const tabId = await resolveTargetTab(message.tabId || pending.tabId)
+          if (tabId && bundle.RemoteDriver) {
+            const driver = new bundle.RemoteDriver(tabId)
+            const modifiedNodeId = Object.keys(patch.modifiedNodes || {})[0] || pending.proposal?.nodeId
+            const patchedNode = patched.nodes[modifiedNodeId]
+            if (patchedNode && patchedNode.anchor) {
+              const locateResult = await driver.locateAnchor(patchedNode.anchor).catch(() => null)
+              if (!locateResult || locateResult.matchCount === 0) {
+                await chrome.storage.session.remove(['skillgraph_pending_repair'])
+                sendResponse({
+                  success: false,
+                  friendlyMessage: 'Não foi possível confirmar o novo elemento no portal. A versão anterior foi mantida. Deseja regravar a demonstração?',
+                })
+                return
+              }
+            }
+          }
+
+          // 4. Salva a nova versão v+1 no app desktop via NativeClient e a ativa
+          const NativeClientClass = bundle.NativeClient || globalThis.NativeClient
+          const nativeClient = NativeClientClass ? new NativeClientClass({ hostName: 'com.teacherai.desktop' }) : null
+          if (nativeClient) {
+            await nativeClient.send('graphs.save', { graph: patched, activate: true })
+          }
+
+          // 5. Atualiza métricas de saúde com recordManualRepair
+          const portalId = patched.identity?.portal_id || message.portalId || 'default'
+          const taskId = patched.identity?.task_id || message.taskId || 'custom'
+          const healthKey = `graph_health:${portalId}:${taskId}`
+          chrome.storage.local.get([healthKey], (hRes) => {
+            if (hRes?.[healthKey] && bundle.recordManualRepair) {
+              const updated = bundle.recordManualRepair(hRes[healthKey])
+              chrome.storage.local.set({ [healthKey]: updated })
+            }
+          })
+
+          // 6. Limpa estado de reparo pendente
+          await chrome.storage.session.remove(['skillgraph_pending_repair'])
+
+          // 7. Informa a professora
+          sendResponse({
+            success: true,
+            friendlyMessage: `Portal atualizado com sucesso! Versão ${patched.identity.version} salva. ✨`,
+            newVersion: patched.identity.version,
+          })
+        } catch (repairErr) {
+          console.warn('[SkillGraph Orchestrator] Erro ao aplicar reparo:', repairErr)
+          await chrome.storage.session.remove(['skillgraph_pending_repair'])
+          sendResponse({
+            success: false,
+            friendlyMessage: 'Falha ao aplicar atualização do portal. A versão anterior foi mantida.',
+          })
+        }
       })
       return true
     }

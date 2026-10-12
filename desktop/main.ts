@@ -72,8 +72,13 @@ async function executeBusinessMethod(method: string, params: any): Promise<any> 
     case 'graphs.resolveActive':
       return await graphRepo?.resolveActive(params.host, params.taskId)
 
-    case 'graphs.save':
-      return await graphRepo?.save(params.graph)
+    case 'graphs.save': {
+      const saved = await graphRepo?.save(params.graph as any)
+      if (params.activate && saved) {
+        await graphRepo?.setActive(saved.identity.portal_id, saved.identity.task_id, saved.identity.version)
+      }
+      return saved
+    }
 
     case 'audit.append': {
       const id = await auditRepo?.append(params.entry)
