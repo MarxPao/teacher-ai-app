@@ -79,3 +79,12 @@ Este documento centraliza as funcionalidades, arquétipos e melhorias postergada
   - *Status Atual:* Classificado como **Tier 2** (assistido), emitindo instrução de conferência ou handoff antes do início da rotina.
   - *Evolução:* Criação formal do nó `FILTER` com restrições estritas de segurança (fora de linhas de dados e sem mutação arbitrária).
   - *Prioridade:* Média.
+
+---
+
+## 5. Dívidas Técnicas Isoladas da Integração / Pós-Gate A
+
+- **Expurgo de fetches a `localhost:3000` em scripts legados da extensão:** Restam 15 ocorrências em `teacher-extension/side_panel.js` e 4 ocorrências em `teacher-extension/content.js`, inativas no fluxo do painel v2 (`side_panel_v2.html` / `orchestrator_v2.js`).
+- **Ponte legada de `content.js` com a página do app Next:** Desacoplar listeners e bridge de comunicação direta entre `content.js` e o frontend web local em `localhost:3000`.
+- **Expurgo definitivo de `lib/supabaseClient.ts`:** Módulo legado de cliente Supabase web na raiz de `lib/`, não utilizado pelo motor desktop nem pelo runner v2.
+
