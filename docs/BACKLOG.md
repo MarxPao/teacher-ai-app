@@ -98,4 +98,17 @@ Este documento centraliza as funcionalidades, arquétipos e melhorias postergada
 - [ ] **Instalador sem Terminal (.exe / NSIS):**
   - O app desktop v2 compila e opera via `dist-desktop/` com registro HKCU em `scripts/native-host-register.ts`. A geração de instalador executável autônomo sem terminal depende de homologação de empacotador (`electron-builder`) e assinatura de código Authenticode para evitar falsos positivos de antivírus/SmartScreen.
 
+---
+
+## 6. Próximas Etapas (Pós-Gate A e SSO Handoff) e Itens Fora de Escopo
+
+- [ ] **Etapa 2 — Gravação Assistida de Fluxos Complexos com Sub-grafos:** Gravação encadeada de navegação em múltiplos passos com compilação determinística e nós de checkpoint.
+- [ ] **Etapa 3 — Expansão de Arquétipos Complexos:** Suporte avançado para paginação virtualizada infinita e grades tabulares multidimensionais.
+- [ ] **Etapa 4 — Auditoria Formal de Conformidade Multi-Portal:** Testes automatizados contra matriz ampliada de portais escolares.
+- [ ] **Exploração autônoma por LLM (Auto-Recorder):** Descoberta exploratória delegada a modelos em nuvem (fora do runner determinístico local-first).
+- [ ] **Ancoragem visual multimodal:** Detecção por visão computacional/VLM para páginas sem âncoras semânticas ou DOM estável.
+- [ ] **Benchmark bipartido automatizado:** Suíte contínua comparando tempo de compilação humana vs. precisão determinística em produção.
+- [ ] **Aposentadoria definitiva de `side_panel.js` legado:** Migração integral dos painéis restantes para o stack `side_panel_v2.js`.
+- [ ] **Expurgo final de eventuais chamadas residuais a `localhost:3000`** em scripts utilitários ou protótipos fora da extensão.
+
 
