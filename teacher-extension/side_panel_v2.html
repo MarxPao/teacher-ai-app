@@ -58,6 +58,15 @@
             <button id="sgv2-btn-approve-repair" class="btn-main" style="flex: 1.2; padding: 4px 6px; font-size: 10px; background: #d97706;">Aplicar Atualização ✨</button>
           </div>
         </div>
+        <div id="sgv2-handoff-box" style="display: none; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 6px; padding: 10px; margin-top: 8px;">
+          <div style="font-weight: 700; font-size: 11px; color: #1e40af; margin-bottom: 4px;">🛡️ Verificação de Segurança Necessária</div>
+          <p id="sgv2-handoff-msg" style="font-size: 10px; color: #1e3a8a; margin-bottom: 6px; line-height: 1.4;">O portal pediu uma verificação de segurança (login, CAPTCHA ou código). Resolva diretamente na página; a automação espera.</p>
+          <div id="sgv2-handoff-timer" style="font-size: 10px; color: #3b82f6; font-weight: 600; margin-bottom: 8px;">Tempo restante: --s</div>
+          <div style="display: flex; gap: 6px;">
+            <button id="sgv2-btn-cancel-handoff" style="flex: 1; padding: 4px 6px; font-size: 10px; background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5; border-radius: 4px; cursor: pointer;">Cancelar execução</button>
+            <button id="sgv2-btn-resolved-handoff" class="btn-main" style="flex: 1.2; padding: 4px 6px; font-size: 10px; background: #2563eb;">Já resolvi ✨</button>
+          </div>
+        </div>
       </div>
 
       <!-- Visão 2: Gravar -->

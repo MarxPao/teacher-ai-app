@@ -27,6 +27,15 @@
     const btnApproveRepair = document.getElementById('sgv2-btn-approve-repair')
     const btnRejectRepair = document.getElementById('sgv2-btn-reject-repair')
 
+    const handoffBox = document.getElementById('sgv2-handoff-box')
+    const handoffMsg = document.getElementById('sgv2-handoff-msg')
+    const handoffTimer = document.getElementById('sgv2-handoff-timer')
+    const btnCancelHandoff = document.getElementById('sgv2-btn-cancel-handoff')
+    const btnResolvedHandoff = document.getElementById('sgv2-btn-resolved-handoff')
+    let currentHandoffRequestId = null
+    let handoffInterval = null
+    let handoffSeconds = 60
+
     if (!toggle || !body || !btnRun) return
 
     // 1. Sincroniza estado inicial da flag
@@ -317,10 +326,77 @@
       })
     })
 
+    function showHandoffCard(requestId, timeoutMs) {
+      currentHandoffRequestId = requestId || null
+      if (handoffBox) handoffBox.style.display = 'block'
+      if (handoffMsg) {
+        handoffMsg.textContent = 'O portal pediu uma verificação de segurança (login, CAPTCHA ou código). Resolva diretamente na página; a automação espera.'
+      }
+      handoffSeconds = Math.max(1, Math.round((timeoutMs || 60000) / 1000))
+      if (handoffTimer) handoffTimer.textContent = `Tempo restante: ${handoffSeconds}s`
+
+      if (handoffInterval) clearInterval(handoffInterval)
+      handoffInterval = setInterval(() => {
+        handoffSeconds -= 1
+        if (handoffSeconds <= 0) {
+          clearInterval(handoffInterval)
+          handoffInterval = null
+          if (handoffTimer) handoffTimer.textContent = 'Tempo limite esgotado.'
+        } else {
+          if (handoffTimer) handoffTimer.textContent = `Tempo restante: ${handoffSeconds}s`
+        }
+      }, 1000)
+    }
+
+    function hideHandoffCard() {
+      if (handoffInterval) {
+        clearInterval(handoffInterval)
+        handoffInterval = null
+      }
+      if (handoffBox) handoffBox.style.display = 'none'
+      currentHandoffRequestId = null
+    }
+
+    btnResolvedHandoff?.addEventListener('click', () => {
+      if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+        chrome.runtime.sendMessage({
+          type: 'SKILLGRAPH_HANDOFF_RESPONSE',
+          action: 'SKILLGRAPH_HANDOFF_RESPONSE',
+          requestId: currentHandoffRequestId,
+          resumed: true,
+        })
+      }
+      hideHandoffCard()
+    })
+
+    btnCancelHandoff?.addEventListener('click', () => {
+      if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+        chrome.runtime.sendMessage({
+          action: 'SKILLGRAPH_ABORT',
+          type: 'SKILLGRAPH_HANDOFF_RESPONSE',
+          requestId: currentHandoffRequestId,
+          resumed: false,
+        })
+      }
+      hideHandoffCard()
+      if (messageBox) {
+        messageBox.style.display = 'block'
+        messageBox.textContent = 'Execução cancelada pelo usuário.'
+        messageBox.style.background = '#fef2f2'
+        messageBox.style.border = '1px solid #fecaca'
+        messageBox.style.color = '#991b1b'
+      }
+    })
+
     // 9. Escuta de eventos em tempo real do engine
     if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
       chrome.runtime.onMessage.addListener((msg) => {
         if (!msg) return
+
+        if (msg.type === 'SKILLGRAPH_HANDOFF_REQUEST' || msg.action === 'SKILLGRAPH_HANDOFF_REQUEST') {
+          showHandoffCard(msg.requestId, msg.handoff?.timeout_ms)
+          return
+        }
 
         if (msg.type === 'SKILLGRAPH_CHECKPOINT_REQUEST' || msg.action === 'SKILLGRAPH_CHECKPOINT_REQUEST') {
           currentCheckpointRequestId = msg.requestId || null
@@ -342,7 +418,16 @@
           const ev = msg.event
           if (nodeLabel) nodeLabel.textContent = `Nó: ${ev.nodeId || '--'}`
 
-          if (ev.type === 'checkpoint_resolved' || ev.type === 'run_completed' || ev.type === 'run_failed') {
+          if (ev.type === 'handoff_started' || ev.type === 'auth_handoff_started') {
+            showHandoffCard(ev.data?.requestId, ev.data?.timeout_ms)
+          } else if (
+            ev.type === 'handoff_resumed' ||
+            ev.type === 'auth_handoff_completed' ||
+            ev.type === 'checkpoint_resolved' ||
+            ev.type === 'run_completed' ||
+            ev.type === 'run_failed'
+          ) {
+            hideHandoffCard()
             if (modalCheckpoint) modalCheckpoint.style.display = 'none'
           }
 
