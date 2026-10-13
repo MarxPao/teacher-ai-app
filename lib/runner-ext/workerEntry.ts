@@ -21,12 +21,18 @@ import {
 } from '../repair'
 import { NativeClient, NativeSkillGraphRepository, NativeAuditSink } from './nativeClient'
 import { compile, analyzeTrace, CompilerError, scrubGraph } from '../compiler'
+import { SSOHandoffManager, type SSOHandoffAuditEntry } from './ssoHandoff'
 
 declare const chrome: any
 declare const __DEV__: boolean
 
 export interface ExtensionHostOptions {
   runId: string
+  targetTabId?: number
+  originHost?: string
+  allowedHosts?: string[]
+  expectFingerprint?: any
+  driver?: any
   onEvent?: (event: RunEvent) => void
   nativeClient?: NativeClient
   dryRun?: boolean
@@ -43,6 +49,8 @@ export interface ExtensionHost extends Host {
   dispose(): void
   resolveCheckpoint(requestId: string, approved: boolean): boolean
   resolveHandoff(requestId: string, resumed: boolean): boolean
+  getSSOAuditLog(): SSOHandoffAuditEntry[]
+  ssoManager?: SSOHandoffManager
 }
 
 export function createExtensionHost(options: ExtensionHostOptions): ExtensionHost {
@@ -56,6 +64,27 @@ export function createExtensionHost(options: ExtensionHostOptions): ExtensionHos
     if (options.isAborted?.()) return true
     return false
   }
+
+  const ssoManager = options.allowedHosts ? new SSOHandoffManager({
+    runId: options.runId,
+    targetTabId: options.targetTabId ?? 0,
+    originHost: options.originHost ?? 'portal',
+    allowedHosts: options.allowedHosts,
+    expectFingerprint: options.expectFingerprint,
+    driver: options.driver,
+    timeoutMs: options.handoffTimeoutMs,
+    isAborted,
+    onEvent: (ev) => {
+      if (options.onEvent) {
+        options.onEvent({
+          type: ev.type as any,
+          runId: ev.runId,
+          timestamp: Date.now(),
+          data: ev.data,
+        })
+      }
+    },
+  }) : null
 
   const pendingCheckpoints = new Map<string, {
     resolve: (approved: boolean) => void
@@ -268,6 +297,9 @@ export function createExtensionHost(options: ExtensionHostOptions): ExtensionHos
       triggerAbort('Execução cancelada pelo usuário')
     },
     dispose() {
+      if (ssoManager) {
+        ssoManager.cleanup().catch(() => {})
+      }
       if (messageListener && typeof chrome !== 'undefined' && chrome.runtime?.onMessage?.removeListener) {
         try {
           chrome.runtime.onMessage.removeListener(messageListener)
@@ -296,6 +328,10 @@ export function createExtensionHost(options: ExtensionHostOptions): ExtensionHos
       }
       return false
     },
+    getSSOAuditLog(): SSOHandoffAuditEntry[] {
+      return ssoManager ? ssoManager.getAuditLog() : []
+    },
+    ssoManager: ssoManager ?? undefined,
   }
 }
 
@@ -323,6 +359,7 @@ const SkillGraphV2 = {
   analyzeTrace,
   CompilerError,
   scrubGraph,
+  SSOHandoffManager,
 }
 
 if (typeof globalThis !== 'undefined') {
@@ -340,4 +377,5 @@ export {
   analyzeTrace,
   CompilerError,
   scrubGraph,
+  SSOHandoffManager,
 }

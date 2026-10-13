@@ -137,10 +137,12 @@ function createCheckpointWriteGraph(): SkillGraphV2 {
 describe('ExtensionHost Integration: Checkpoint, Timeout e Aborto Seguro', () => {
   let messageListeners: Array<(msg: any) => void> = []
   let sentMessages: any[] = []
+  let tabCreatedListeners: Array<(tab: any) => void> = []
 
   beforeEach(() => {
     messageListeners = []
     sentMessages = []
+    tabCreatedListeners = []
     ;(globalThis as any).chrome = {
       runtime: {
         sendMessage: vi.fn(async (msg: any) => {
@@ -156,10 +158,16 @@ describe('ExtensionHost Integration: Checkpoint, Timeout e Aborto Seguro', () =>
           }),
         },
       },
+      tabs: {
+        onCreated: { addListener: vi.fn((l) => tabCreatedListeners.push(l)), removeListener: vi.fn() },
+        onUpdated: { addListener: vi.fn(), removeListener: vi.fn() },
+        onRemoved: { addListener: vi.fn(), removeListener: vi.fn() },
+      },
       storage: {
         session: {
           get: vi.fn(async () => ({})),
           set: vi.fn(async () => {}),
+          remove: vi.fn(async () => {}),
         },
       },
     }
@@ -374,5 +382,78 @@ describe('ExtensionHost Integration: Checkpoint, Timeout e Aborto Seguro', () =>
     // O checkpoint não deve ser aprovado por IDs inválidos e deve expirar fail-closed
     const result = await confirmPromise
     expect(result).toBe(false)
+  })
+
+  it('11. [SSO-H4-a] Host de login fora de allowed_hosts aborta com E_HOST_NOT_ALLOWED', async () => {
+    const host = createExtensionHost({
+      runId: 'run_sso_untrusted',
+      targetTabId: 10,
+      originHost: 'portal.escola.com',
+      allowedHosts: ['portal.escola.com', 'accounts.google.com'],
+      dryRun: true,
+    })
+
+    tabCreatedListeners.forEach((l) => l({ id: 99, openerTabId: 10 }))
+    const navPromise = host.ssoManager!.handleAuthNavigation('https://idp.desconhecido.com/auth')
+    await expect(navPromise).rejects.toThrow(RunnerError)
+    await expect(navPromise).rejects.toMatchObject({ code: 'E_HOST_NOT_ALLOWED' })
+  })
+
+  it('12. [SSO-H4-b] Durante handoff nenhum comando de leitura/injeção é emitido e audit registra apenas os dois eventos', async () => {
+    const mockDriver = new MockDriver()
+    const readSpy = vi.spyOn(mockDriver, 'readText')
+    const writeSpy = vi.spyOn(mockDriver, 'write')
+
+    const host = createExtensionHost({
+      runId: 'run_sso_audit_clean',
+      targetTabId: 10,
+      originHost: 'portal.escola.com',
+      allowedHosts: ['portal.escola.com', 'accounts.google.com'],
+      driver: mockDriver,
+      dryRun: true,
+    })
+
+    tabCreatedListeners.forEach((l) => l({ id: 99, openerTabId: 10 }))
+    await host.ssoManager!.handleAuthNavigation('https://accounts.google.com/o/oauth2/auth?token=secret123')
+
+    expect(readSpy).not.toHaveBeenCalled()
+    expect(writeSpy).not.toHaveBeenCalled()
+    expect(mockDriver.writeHistory).toHaveLength(0)
+
+    await host.ssoManager!.handleAuthNavigation('https://portal.escola.com/dashboard')
+
+    const auditLog = host.getSSOAuditLog()
+    expect(auditLog).toHaveLength(2)
+    expect(auditLog[0]).toMatchObject({
+      event: 'auth_handoff_started',
+      from: 'portal.escola.com',
+      to: 'accounts.google.com',
+    })
+    expect(auditLog[1]).toMatchObject({
+      event: 'auth_handoff_completed',
+      from: 'accounts.google.com',
+      to: 'portal.escola.com',
+    })
+  })
+
+  it('13. [SSO-H4-c] Timeout de SSO sem retorno do usuário aborta com E_HANDOFF_TIMEOUT e zero escritas', async () => {
+    const mockDriver = new MockDriver()
+    const host = createExtensionHost({
+      runId: 'run_sso_timeout',
+      targetTabId: 10,
+      originHost: 'portal.escola.com',
+      allowedHosts: ['portal.escola.com', 'accounts.google.com'],
+      driver: mockDriver,
+      handoffTimeoutMs: 30,
+      dryRun: true,
+    })
+
+    tabCreatedListeners.forEach((l) => l({ id: 99, openerTabId: 10 }))
+    await host.ssoManager!.handleAuthNavigation('https://accounts.google.com/signin')
+
+    const completionPromise = host.ssoManager!.waitForCompletion()
+    await expect(completionPromise).rejects.toThrow(RunnerError)
+    await expect(completionPromise).rejects.toMatchObject({ code: 'E_HANDOFF_TIMEOUT' })
+    expect(mockDriver.writeHistory).toHaveLength(0)
   })
 })

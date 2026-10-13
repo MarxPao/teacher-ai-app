@@ -137,6 +137,10 @@
     const driver = new bundle.RemoteDriver(tabId)
     const hostObj = bundle.createExtensionHost({
       runId,
+      targetTabId: tabId,
+      originHost: graph.identity?.domain || host,
+      allowedHosts: graph.safety?.allowed_hosts || [],
+      driver,
       nativeClient,
       dryRun: Boolean(payload.dryRun),
       abortSignal: abortController.signal,
