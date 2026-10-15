@@ -26,10 +26,24 @@ export interface LlmResponse {
   tokensCount?: number
 }
 
+export interface CatalogSkill {
+  id: string
+  name: string
+  description?: string
+  params?: Array<{
+    name: string
+    type: string
+    required?: boolean
+    description?: string
+  }>
+}
+
 export interface ParsedIntent {
-  intent: 'lancar_falta' | 'lancar_nota' | 'read_roster' | 'unknown'
+  skill_id?: string
+  intent: string
   params: Record<string, any>
   supported: boolean
+  no_match?: boolean
   raw?: string
 }
 
@@ -139,16 +153,96 @@ export class LlmGateway {
   }
 
   /**
-   * Parser NLU determinístico e resiliente (TS puro com regex e enriquecimento de intenção).
+   * Parser NLU estruturado e roteado ao catálogo de habilidades ativas.
+   * Se catálogo for fornecido: devolve estritamente skill_id do catálogo ou no_match.
+   * Se catálogo não for fornecido: mantém compatibilidade legada determinística.
    */
-  async parseIntent(text: string, knownStudents: Array<{ name: string }> = []): Promise<ParsedIntent> {
+  async parseIntent(
+    text: string,
+    knownStudents: Array<{ name: string }> = [],
+    catalog?: CatalogSkill[]
+  ): Promise<ParsedIntent> {
     const lower = text.toLowerCase()
 
-    // 1. Lançar Falta
-    if (/falta|presen[çc]a|aus[êe]ncia/i.test(lower)) {
-      const faltaMatch = lower.match(/(\d+)\s+falta/) || lower.match(/falta\s+(\d+)/)
-      const count = faltaMatch ? parseInt(faltaMatch[1], 10) : 1
+    if (catalog !== undefined) {
+      if (!Array.isArray(catalog) || catalog.length === 0) {
+        return {
+          intent: 'unknown',
+          params: {},
+          supported: false,
+          no_match: true,
+          raw: text,
+        }
+      }
 
+      let bestSkill: CatalogSkill | null = null
+      let highestScore = 0
+
+      for (const skill of catalog) {
+        let score = 0
+        const idLower = skill.id.toLowerCase()
+        const nameLower = (skill.name || '').toLowerCase()
+
+        if (lower.includes(idLower) || (idLower.startsWith('custom:') && lower.includes(idLower.replace('custom:', '')))) {
+          score += 10
+        }
+        if (nameLower && lower.includes(nameLower)) {
+          score += 8
+        }
+        if (
+          /falta|presen[çc]a|aus[êe]ncia/i.test(lower) &&
+          (/falta|presen[çc]a|attendance/i.test(idLower) || /falta|presen[çc]a/i.test(nameLower) || skill.params?.some((p) => p.name === 'attendance_status'))
+        ) {
+          score += 6
+        }
+        if (
+          /nota|grau|avalia[çc][ãa]o/i.test(lower) &&
+          (/nota|grade/i.test(idLower) || /nota/i.test(nameLower) || skill.params?.some((p) => p.name === 'grade_value'))
+        ) {
+          score += 6
+        }
+        if (
+          /listar|alunos|turma|discentes|carregar/i.test(lower) &&
+          (/roster|alunos|turma/i.test(idLower) || /lista|alunos|turma/i.test(nameLower))
+        ) {
+          score += 6
+        }
+        if (
+          /aula|mensagem|comunicado|plano|texto/i.test(lower) &&
+          (/aula|mensagem|texto/i.test(idLower) || /aula|mensagem/i.test(nameLower) || skill.params?.some((p) => p.name === 'texto'))
+        ) {
+          score += 6
+        }
+
+        if (score > highestScore) {
+          highestScore = score
+          bestSkill = skill
+        }
+      }
+
+      if (!bestSkill || highestScore <= 0) {
+        return {
+          intent: 'unknown',
+          params: {},
+          supported: false,
+          no_match: true,
+          raw: text,
+        }
+      }
+
+      // Validação estrita: skill_id DEVE pertencer ao catálogo
+      const matchedId = bestSkill.id
+      if (!catalog.some((s) => s.id === matchedId)) {
+        return {
+          intent: 'unknown',
+          params: {},
+          supported: false,
+          no_match: true,
+          raw: text,
+        }
+      }
+
+      const extractedParams: Record<string, any> = {}
       let targetStudent: string | null = null
       for (const st of knownStudents) {
         if (lower.includes(st.name.toLowerCase())) {
@@ -157,6 +251,43 @@ export class LlmGateway {
         }
       }
 
+      const declaredParams = bestSkill.params || []
+      for (const p of declaredParams) {
+        if (p.name === 'student_ref') {
+          if (targetStudent) extractedParams['student_ref'] = targetStudent
+        } else if (p.name === 'attendance_status') {
+          extractedParams['attendance_status'] = /falta|aus[êe]ncia/i.test(lower) ? 'falta' : 'presente'
+        } else if (p.name === 'grade_value') {
+          const notaMatch = lower.match(/(?:nota|grau)\s+(\d+[.,]?\d*)/) || lower.match(/(\d+[.,]?\d*)\s+(?:para|pro|ao)/)
+          if (notaMatch) {
+            extractedParams['grade_value'] = parseFloat(notaMatch[1].replace(',', '.'))
+          }
+        } else if (p.name === 'texto') {
+          extractedParams['texto'] = text.replace(/^(?:assistente,?|por favor,?|pe[çc]o para|registre|grave|envie|publique)\s*/i, '').trim()
+        }
+      }
+
+      return {
+        skill_id: matchedId,
+        intent: matchedId,
+        params: extractedParams,
+        supported: true,
+        no_match: false,
+        raw: text,
+      }
+    }
+
+    // Fallback legado quando catálogo não é fornecido
+    if (/falta|presen[çc]a|aus[êe]ncia/i.test(lower)) {
+      const faltaMatch = lower.match(/(\d+)\s+falta/) || lower.match(/falta\s+(\d+)/)
+      const count = faltaMatch ? parseInt(faltaMatch[1], 10) : 1
+      let targetStudent: string | null = null
+      for (const st of knownStudents) {
+        if (lower.includes(st.name.toLowerCase())) {
+          targetStudent = st.name
+          break
+        }
+      }
       return {
         intent: 'lancar_falta',
         params: { count, studentName: targetStudent },
@@ -165,11 +296,9 @@ export class LlmGateway {
       }
     }
 
-    // 2. Lançar Nota
     if (/nota|grau|avalia[çc][ãa]o/i.test(lower)) {
       const notaMatch = lower.match(/(?:nota|grau)\s+(\d+[.,]?\d*)/) || lower.match(/(\d+[.,]?\d*)\s+(?:para|pro|ao)/)
       const grade = notaMatch ? parseFloat(notaMatch[1].replace(',', '.')) : 10.0
-
       let targetStudent: string | null = null
       for (const st of knownStudents) {
         if (lower.includes(st.name.toLowerCase())) {
@@ -177,7 +306,6 @@ export class LlmGateway {
           break
         }
       }
-
       return {
         intent: 'lancar_nota',
         params: { grade, studentName: targetStudent },
@@ -186,7 +314,6 @@ export class LlmGateway {
       }
     }
 
-    // 3. Ler Turma / Roster
     if (/listar|alunos|turma|discentes|carregar/i.test(lower)) {
       return {
         intent: 'read_roster',
@@ -200,6 +327,7 @@ export class LlmGateway {
       intent: 'unknown',
       params: {},
       supported: false,
+      no_match: true,
       raw: text,
     }
   }

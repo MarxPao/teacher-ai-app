@@ -92,9 +92,9 @@ async function executeBusinessMethod(method: string, params: any): Promise<any> 
     case 'nlu.parse': {
       const students = (await studentRepo?.listStudents()) || []
       if (llmGateway) {
-        return await llmGateway.parseIntent(params.text || '', students)
+        return await llmGateway.parseIntent(params.text || '', students, params.catalog)
       }
-      return { intent: 'unknown', params: {}, supported: false }
+      return { intent: 'unknown', params: {}, supported: false, no_match: true }
     }
 
     case 'data.backup': {
