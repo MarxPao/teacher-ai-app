@@ -67,25 +67,24 @@ export function compile(
     throw new CompilerError('E_PII_SCRUB_FAILED', 'O identificador da tarefa contém PII (CPF ou e-mail detectado).')
   }
 
-  const hasAttendanceControl = trace.steps.some(
-    (s) =>
-      s.kind === 'check' ||
-      /presen[çc]a|falta|frequ[eê]ncia|attendance|absent|present/i.test(
-        (s as any).descriptor?.text || (s as any).descriptor?.name || ''
-      )
-  )
-  const hasGradeControl = trace.steps.some(
-    (s) =>
-      s.kind === 'input' &&
-      /nota|grade|pontua[çc][ãa]o|score|avalia[çc][ãa]o/i.test(
-        (s as any).descriptor?.text || (s as any).descriptor?.name || ''
-      )
-  )
+  const hasAttendanceControl = trace.steps.some((s) => {
+    if (s.kind === 'check') return true
+    const d = (s as any).descriptor || {}
+    const textSample = `${d.text || ''} ${d.name || ''} ${d.aria_label || ''} ${d.label || ''} ${d.placeholder || ''} ${d.rowContext?.headers?.join(' ') || ''}`
+    return /presen[çc]a|falta|frequ[eê]ncia|attendance|absent|present/i.test(textSample)
+  })
+
+  const hasGradeControl = trace.steps.some((s) => {
+    if (s.kind !== 'input') return false
+    const d = (s as any).descriptor || {}
+    const textSample = `${d.text || ''} ${d.name || ''} ${d.aria_label || ''} ${d.label || ''} ${d.placeholder || ''} ${d.rowContext?.headers?.join(' ') || ''}`
+    return /nota|grade|pontua[çc][ãa]o|score|avalia[çc][ãa]o/i.test(textSample)
+  })
 
   if ((decisions.task_id === 'lancar_falta' || hasAttendanceControl) && !decisions.attendance_polarity) {
     throw new CompilerError('E_DECISION_REQUIRED', 'A polaridade de frequência (attendance_polarity) é obrigatória para lançar frequência/falta.')
   }
-  if (hasGradeControl && !decisions.grade_scale && decisions.task_id === 'lancar_nota') {
+  if ((decisions.task_id === 'lancar_nota' || hasGradeControl) && !decisions.grade_scale) {
     throw new CompilerError('E_DECISION_REQUIRED', 'A escala de notas (grade_scale) é obrigatória para lançar notas.')
   }
 

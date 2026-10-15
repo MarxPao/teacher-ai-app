@@ -76,6 +76,9 @@ async function executeBusinessMethod(method: string, params: any): Promise<any> 
     case 'graphs.listActive':
       return await graphRepo?.listActive(params.host)
 
+    case 'graphs.list':
+      return await graphRepo?.list()
+
     case 'graphs.save': {
       const saved = await graphRepo?.save(params.graph as any)
       if (params.activate && saved) {

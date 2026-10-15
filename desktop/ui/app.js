@@ -390,6 +390,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   })
   btnRefreshComm?.addEventListener('click', () => {
     loadCommunityPackages(commSearchInput?.value || '')
+    loadExportTasks()
   })
 
   // Exportar / Compartilhar mapa local assinado e sanitizado
@@ -397,8 +398,43 @@ document.addEventListener('DOMContentLoaded', async () => {
   const exportTaskSelect = document.getElementById('export-task-select')
   const exportStatusMsg = document.getElementById('export-status-msg')
 
+  async function loadExportTasks() {
+    if (!exportTaskSelect) return
+    const client = window.teacherAi || window.teacherDesktop
+    if (!client) {
+      exportTaskSelect.innerHTML = '<option value="">Bridge desktop indisponível</option>'
+      return
+    }
+
+    try {
+      const res = await (client.send ? client.send('graphs.list', {}) : client.invoke('graphs.list', {}))
+      const list = res?.success && Array.isArray(res.result) ? res.result : Array.isArray(res) ? res : []
+      if (!list || list.length === 0) {
+        exportTaskSelect.innerHTML = '<option value="">Nenhuma habilidade gravada no banco</option>'
+        return
+      }
+
+      exportTaskSelect.innerHTML = list
+        .map((g) => {
+          const name = g.name || g.task_name || ''
+          const label = name ? `${g.task_id} (${name})` : g.task_id
+          const portalInfo = g.portal_id ? ` [${g.portal_id}]` : ''
+          return `<option value="${escapeHtml(g.task_id)}" data-portal="${escapeHtml(g.portal_id || 'portal_escolar')}">${escapeHtml(label + portalInfo)}</option>`
+        })
+        .join('')
+    } catch (err) {
+      exportTaskSelect.innerHTML = `<option value="">Erro ao carregar habilidades: ${escapeHtml(err.message)}</option>`
+    }
+  }
+
   btnExportMap?.addEventListener('click', async () => {
-    const taskId = exportTaskSelect?.value || 'read_roster'
+    const selectedOption = exportTaskSelect?.selectedOptions?.[0]
+    const taskId = exportTaskSelect?.value
+    if (!taskId) {
+      alert('Selecione uma habilidade gravada para exportar.')
+      return
+    }
+    const portalId = selectedOption?.getAttribute('data-portal') || 'portal_escolar'
     btnExportMap.disabled = true
     btnExportMap.textContent = 'Exportando...'
     if (exportStatusMsg) exportStatusMsg.style.display = 'none'
@@ -407,7 +443,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       const client = window.teacherAi || window.teacherDesktop
       if (!client) throw new Error('Bridge desktop indisponível.')
 
-      const res = await (client.send ? client.send('community.export', { portalId: 'portal_escolar', taskId }) : client.invoke('community.export', { portalId: 'portal_escolar', taskId }))
+      const res = await (client.send ? client.send('community.export', { portalId, taskId }) : client.invoke('community.export', { portalId, taskId }))
 
       btnExportMap.disabled = false
       btnExportMap.textContent = '📦 Compartilhar Mapa'
@@ -452,5 +488,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadStudents()
   await loadKeysStatus()
   await loadCommunityPackages()
+  await loadExportTasks()
 })
 

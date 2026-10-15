@@ -13,6 +13,7 @@ export const EXTENSION_ALLOWED_METHODS = [
   'graphs.get',
   'graphs.resolveActive',
   'graphs.listActive',
+  'graphs.list',
   'graphs.save',
   'audit.append',
   'nlu.parse',

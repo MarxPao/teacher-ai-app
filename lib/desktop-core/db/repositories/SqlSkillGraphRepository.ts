@@ -110,7 +110,7 @@ export class SqlSkillGraphRepository implements SkillGraphRepository {
 
   async listActive(host: string): Promise<SkillGraphV2[]> {
     const rows = await this.driver.query<{ graph_json: string }>(
-      'SELECT graph_json FROM skill_graphs WHERE is_active = 1 ORDER BY updated_at DESC'
+      'SELECT graph_json FROM skill_graphs WHERE is_active = 1 ORDER BY created_at DESC'
     )
 
     const activeGraphs: SkillGraphV2[] = []
@@ -146,6 +146,19 @@ export class SqlSkillGraphRepository implements SkillGraphRepository {
     }
 
     return activeGraphs
+  }
+
+  async list(): Promise<Array<{ portal_id: string; task_id: string; version: number; name: string; is_active: number }>> {
+    const rows = await this.driver.query<{
+      portal_id: string
+      task_id: string
+      version: number
+      name: string
+      is_active: number
+    }>(
+      'SELECT portal_id, task_id, version, name, is_active FROM skill_graphs ORDER BY is_active DESC, created_at DESC'
+    )
+    return rows
   }
 
   async listVersions(

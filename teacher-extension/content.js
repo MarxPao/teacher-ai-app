@@ -268,60 +268,6 @@ function matchStudentName(portalText, studentName) {
   return false;
 }
 
-// ——— Preenchimento Estruturado de Notas (Grades Table com Fuzzy Matching) ———
-function fillGradesMatrix(studentGrades) {
-  if (!Array.isArray(studentGrades) || studentGrades.length === 0) return 0;
-
-  let filledCount = 0;
-  const rows = Array.from(document.querySelectorAll('tr, div.student-row, div.grade-item, div.row, li'));
-
-  studentGrades.forEach(st => {
-    const studentName = st.name;
-    const grade = st.grade;
-
-    for (const row of rows) {
-      const rowText = row.innerText;
-      if (matchStudentName(rowText, studentName)) {
-        const gradeInput = row.querySelector('input[type="number"], input[type="text"], input[name*="nota"], input[id*="nota"], input[name*="grade"]') ||
-                           row.querySelector('input:not([type="hidden"]):not([type="checkbox"])');
-        if (gradeInput) {
-          setFieldValue(gradeInput, grade);
-          filledCount++;
-          break;
-        }
-      }
-    }
-  });
-
-  return filledCount;
-}
-
-// ——— Preenchimento de Chamada / Frequência com Fuzzy Matching ———
-function fillAttendanceMatrix(absentStudents = [], presentStudents = []) {
-  let markedCount = 0;
-  const rows = Array.from(document.querySelectorAll('tr, div.student-row, div.row, li'));
-
-  rows.forEach(row => {
-    const rowText = row.innerText;
-    const isAbsent = absentStudents.some(name => matchStudentName(rowText, name));
-
-    const checkbox = row.querySelector('input[type="checkbox"]');
-    if (checkbox) {
-      if (isAbsent) {
-        checkbox.checked = false;
-        checkbox.dispatchEvent(new Event('change', { bubbles: true }));
-        markedCount++;
-      } else {
-        checkbox.checked = true;
-        checkbox.dispatchEvent(new Event('change', { bubbles: true }));
-        markedCount++;
-      }
-    }
-  });
-
-  return markedCount;
-}
-
 // ─── GAP 8: Detecção e Auto-Bypass de Overlays/Spinners em Portais Legados ──────
 async function waitForOverlaysToClear(maxWaitMs = 3000, pollIntervalMs = 100) {
   const overlaySelectors = [
@@ -389,22 +335,14 @@ async function handleExecutePortalAction(data) {
 
   let filledCount = 0;
 
-  if (actionType === 'grades' || actionType === 'lancar_nota') {
-    const studentGrades = p.studentGrades?.length ? p.studentGrades : (p.aluno || data.aluno ? [{ name: p.aluno || data.aluno, grade: p.nota ?? data.nota }] : []);
-    filledCount = fillGradesMatrix(studentGrades);
-  } else if (actionType === 'attendance' || actionType === 'lancar_falta') {
-    const absentStudents = p.absentStudents?.length ? p.absentStudents : (p.aluno || data.aluno ? [p.aluno || data.aluno] : []);
-    filledCount = fillAttendanceMatrix(absentStudents, p.presentStudents || []);
-  } else {
-    // Diário / Tarefa / Pauta
-    const results = {
-      title:    fillField(s.title,       ['title', 'titulo', 'nome', 'assunto', 'atividade', 'diario', 'tema', 'conteudo', 'plano', 'lesson'], p.title),
-      date:     fillField(s.date,        ['date', 'data', 'limite', 'entrega', 'prazo', 'aula', 'vencimento', 'due'], p.date),
-      desc:     fillField(s.description, ['desc', 'descricao', 'detalhes', 'observacoes', 'body', 'comentario', 'pauta', 'instrucoes', 'metodologia'], p.description || p.methodology || ''),
-      classRef: fillField(s.classRef,    ['class', 'turma', 'grupo', 'serie', 'grade'], p.classRef || ''),
-    };
-    filledCount = Object.values(results).filter(Boolean).length;
-  }
+  // Preenchimento de formulário (Diário / Tarefa / Pauta)
+  const results = {
+    title:    fillField(s.title,       ['title', 'titulo', 'nome', 'assunto', 'atividade', 'diario', 'tema', 'conteudo', 'plano', 'lesson'], p.title),
+    date:     fillField(s.date,        ['date', 'data', 'limite', 'entrega', 'prazo', 'aula', 'vencimento', 'due'], p.date),
+    desc:     fillField(s.description, ['desc', 'descricao', 'detalhes', 'observacoes', 'body', 'comentario', 'pauta', 'instrucoes', 'metodologia'], p.description || p.methodology || ''),
+    classRef: fillField(s.classRef,    ['class', 'turma', 'grupo', 'serie', 'grade'], p.classRef || ''),
+  };
+  filledCount = Object.values(results).filter(Boolean).length;
 
   const success = filledCount > 0;
   const resultPayload = {
@@ -416,9 +354,9 @@ async function handleExecutePortalAction(data) {
       : `Não encontrei campos de formulário para ${actionType} na tela atual do portal. Certifique-se de estar na aba correspondente.`,
     filledCount,
     diff: {
-      aluno: p.aluno || data.aluno || (p.studentGrades?.[0]?.name) || '',
-      campo: (actionType === 'grades' || actionType === 'lancar_nota') ? 'nota' : 'falta',
-      depois: String(p.nota ?? data.nota ?? p.studentGrades?.[0]?.grade ?? '')
+      aluno: p.aluno || data.aluno || '',
+      campo: actionType,
+      depois: String(p.description || p.methodology || p.title || '')
     }
   };
 
