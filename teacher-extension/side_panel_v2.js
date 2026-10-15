@@ -161,12 +161,19 @@
 
       const typeEl = document.querySelector('input[name="sgv2-record-type"]:checked')
       const fieldType = typeEl ? typeEl.value : 'grade'
-      const taskId = recordTaskSelect?.value || 'custom'
+      const nameInput = document.getElementById('sgv2-record-task-name')
+      const descInput = document.getElementById('sgv2-record-task-desc')
+      const slugInput = document.getElementById('sgv2-record-task-slug')
+      const rawSlug = (slugInput?.value || '').trim().toLowerCase().replace(/[^a-z0-9_-]/g, '-') || 'acao-customizada'
+      const taskId = `custom:${rawSlug}`
+      const taskName = (nameInput?.value || '').trim() || `Habilidade ${rawSlug}`
+      const taskDesc = (descInput?.value || '').trim() || ''
 
       const decisions = {
         task_id: taskId,
         portal_id: currentRecordedTrace?.portal_id || 'portal_escolar',
-        task_name: `Automação ${taskId}`,
+        task_name: taskName,
+        task_description: taskDesc,
         allowed_hosts: [currentRecordedTrace?.steps?.[0]?.host || 'localhost'],
         attendance_polarity: fieldType === 'attendance' ? 'checked_is_present' : undefined,
         grade_scale: fieldType === 'grade' ? { type: 'numeric', min: 0, max: 10, decimal_separator: ',' } : undefined,
@@ -183,8 +190,9 @@
         (res) => {
           btnConfirmCompile.disabled = false
           btnConfirmCompile.textContent = 'Salvar e Ativar Mapa no Teacher AI ✨'
-          if (res?.success && recordDecisionsBox) {
-            recordDecisionsBox.style.display = 'none'
+          if (res?.success) {
+            if (recordDecisionsBox) recordDecisionsBox.style.display = 'none'
+            loadActiveSkills()
           }
 
           if (recordMessageBox) {
@@ -202,9 +210,150 @@
       )
     })
 
-    // 5. Execução do grafo (Runner)
+    // 5. Catálogo dinâmico e Execução (Runner)
+    let activeSkills = []
+
+    function renderParamsForm(skill) {
+      const descEl = document.getElementById('sgv2-skill-desc')
+      const formEl = document.getElementById('sgv2-params-form')
+      const fieldsEl = document.getElementById('sgv2-params-fields')
+      if (!formEl || !fieldsEl) return
+      if (descEl) {
+        descEl.textContent = skill?.identity?.description || ''
+        descEl.style.display = skill?.identity?.description ? 'block' : 'none'
+      }
+      fieldsEl.innerHTML = ''
+      const params = skill?.params || []
+      if (params.length === 0) {
+        formEl.style.display = 'none'
+        return
+      }
+      formEl.style.display = 'block'
+      params.forEach((p) => {
+        const row = document.createElement('div')
+        row.style.marginBottom = '4px'
+        const label = document.createElement('label')
+        label.style.display = 'block'
+        label.style.fontSize = '10px'
+        label.style.color = '#334155'
+        label.textContent = `${p.label || p.name}${p.required ? ' *' : ''}:`
+        row.appendChild(label)
+
+        let input
+        if (p.type === 'boolean') {
+          input = document.createElement('input')
+          input.type = 'checkbox'
+        } else if (p.type === 'enum' && Array.isArray(p.options)) {
+          input = document.createElement('select')
+          p.options.forEach((opt) => {
+            const op = document.createElement('option')
+            op.value = opt
+            op.textContent = opt
+            input.appendChild(op)
+          })
+        } else {
+          input = document.createElement('input')
+          input.type = p.type === 'number' ? 'number' : (p.type === 'date' ? 'date' : 'text')
+          input.placeholder = p.description || p.name
+        }
+        input.dataset.paramName = p.name
+        input.style.width = '100%'
+        input.style.fontSize = '11px'
+        input.style.padding = '3px 4px'
+        input.style.boxSizing = 'border-box'
+        row.appendChild(input)
+        fieldsEl.appendChild(row)
+      })
+    }
+
+    function loadActiveSkills() {
+      if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return
+      chrome.runtime.sendMessage({ action: 'SKILLGRAPH_LIST_ACTIVE_SKILLS' }, (res) => {
+        const container = document.getElementById('sgv2-skills-select-container')
+        const noSkills = document.getElementById('sgv2-no-skills-box')
+        if (res?.skills && res.skills.length > 0) {
+          activeSkills = res.skills
+          if (container) container.style.display = 'flex'
+          if (noSkills) noSkills.style.display = 'none'
+          if (select) {
+            select.innerHTML = activeSkills.map((s) => `<option value="${s.task_id}">${s.identity?.name || s.task_id} (${s.compat?.support_tier || 'tier_1'})</option>`).join('')
+            renderParamsForm(activeSkills[0])
+          }
+        } else {
+          activeSkills = []
+          if (container) container.style.display = 'none'
+          if (noSkills) noSkills.style.display = 'block'
+          const formEl = document.getElementById('sgv2-params-form')
+          if (formEl) formEl.style.display = 'none'
+          const descEl = document.getElementById('sgv2-skill-desc')
+          if (descEl) descEl.style.display = 'none'
+        }
+      })
+    }
+
+    select?.addEventListener('change', () => {
+      const chosen = activeSkills.find((s) => s.task_id === select.value)
+      if (chosen) renderParamsForm(chosen)
+    })
+
+    document.getElementById('sgv2-btn-goto-record')?.addEventListener('click', () => switchSubTab(tabRecord, viewRecord))
+
+    document.getElementById('sgv2-btn-nlu-send')?.addEventListener('click', () => {
+      const nluInput = document.getElementById('sgv2-nlu-input')
+      const nluFeedback = document.getElementById('sgv2-nlu-feedback')
+      const text = (nluInput?.value || '').trim()
+      if (!text) return
+      chrome.runtime.sendMessage({
+        action: 'SKILLGRAPH_NLU_PARSE',
+        text,
+        catalog: activeSkills.map((s) => ({
+          id: s.task_id,
+          name: s.identity?.name || s.task_id,
+          description: s.identity?.description || '',
+          params: s.params || [],
+        })),
+      }, (res) => {
+        if (!nluFeedback) return
+        nluFeedback.style.display = 'block'
+        if (res?.no_match || !res?.skill_id) {
+          nluFeedback.style.background = '#fefce8'
+          nluFeedback.style.color = '#854d0e'
+          nluFeedback.innerHTML = 'Ainda não sei fazer isso neste portal. <a href="#" id="sgv2-nlu-teach-link" style="color: #2563eb; font-weight: 600;">Quer me ensinar?</a>'
+          document.getElementById('sgv2-nlu-teach-link')?.addEventListener('click', (e) => {
+            e.preventDefault()
+            switchSubTab(tabRecord, viewRecord)
+          })
+        } else {
+          nluFeedback.style.background = '#f0fdf4'
+          nluFeedback.style.color = '#166534'
+          nluFeedback.textContent = 'Habilidade selecionada! Confira os parâmetros e clique em Executar.'
+          if (select) {
+            select.value = res.skill_id
+            const chosen = activeSkills.find((s) => s.task_id === res.skill_id)
+            if (chosen) {
+              renderParamsForm(chosen)
+              if (res.params && typeof res.params === 'object') {
+                Object.entries(res.params).forEach(([k, v]) => {
+                  const el = document.querySelector(`#sgv2-params-fields [data-param-name="${k}"]`)
+                  if (el) {
+                    if (el.type === 'checkbox') el.checked = Boolean(v)
+                    else el.value = v
+                  }
+                })
+              }
+            }
+          }
+        }
+      })
+    })
+
     btnRun.addEventListener('click', () => {
-      const graphKey = select?.value || 'lancar_falta'
+      const graphKey = select?.value
+      if (!graphKey) return
+      const initialVariables = {}
+      document.querySelectorAll('#sgv2-params-fields [data-param-name]').forEach((el) => {
+        initialVariables[el.dataset.paramName] = el.type === 'checkbox' ? el.checked : el.value
+      })
       btnRun.disabled = true
       btnRun.textContent = 'Executando...'
       if (progressBox) progressBox.style.display = 'block'
@@ -216,7 +365,7 @@
       chrome.runtime.sendMessage(
         {
           action: 'SKILLGRAPH_RUN',
-          payload: { graphKey },
+          payload: { graphKey, initialVariables },
         },
         (res) => {
           btnRun.disabled = false
@@ -244,6 +393,8 @@
         }
       )
     })
+
+    loadActiveSkills()
 
     // 6. Abortar execução
     btnAbort?.addEventListener('click', () => {

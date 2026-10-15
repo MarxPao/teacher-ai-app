@@ -28,13 +28,28 @@
         <p style="font-size: 11px; color: #64748b; margin-bottom: 8px;">
           Execução determinística via SkillGraph v2 (sem LLM, sem rede).
         </p>
-        <div style="display: flex; gap: 6px; margin-bottom: 8px;">
+        <div style="margin-bottom: 8px;">
+          <div style="display: flex; gap: 4px;">
+            <input type="text" id="sgv2-nlu-input" placeholder="Pedir em linguagem natural..." style="flex: 1; padding: 4px 6px; font-size: 11px; border: 1px solid #cbd5e1; border-radius: 6px;" />
+            <button id="sgv2-btn-nlu-send" style="padding: 4px 8px; font-size: 11px; background: #0284c7; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">Pedir</button>
+          </div>
+          <div id="sgv2-nlu-feedback" style="display: none; font-size: 10px; margin-top: 4px; padding: 4px 6px; border-radius: 4px;"></div>
+        </div>
+
+        <div id="sgv2-skills-select-container" style="display: flex; gap: 6px; margin-bottom: 6px;">
           <select id="sgv2-select-graph" style="flex: 1; padding: 4px 6px; font-size: 11px; border: 1px solid #cbd5e1; border-radius: 6px;">
-            <option value="read_roster">Ler Lista de Alunos (read_roster)</option>
-            <option value="lancar_falta">Lançar Presença/Falta (lancar_falta)</option>
-            <option value="lancar_nota">Lançar Notas (lancar_nota)</option>
+            <option value="">Carregando habilidades do portal...</option>
           </select>
           <button id="sgv2-btn-run" class="btn-main" style="padding: 4px 10px; font-size: 11px;">Executar</button>
+        </div>
+        <div id="sgv2-skill-desc" style="display: none; font-size: 10px; color: #64748b; margin-bottom: 6px; padding: 4px 6px; background: #f8fafc; border-radius: 4px; border: 1px solid #f1f5f9;"></div>
+        <div id="sgv2-params-form" style="display: none; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px; margin-bottom: 8px;">
+          <div style="font-size: 11px; font-weight: 700; color: #1e293b; margin-bottom: 6px;">Parâmetros da Habilidade:</div>
+          <div id="sgv2-params-fields" style="display: flex; flex-direction: column; gap: 6px;"></div>
+        </div>
+        <div id="sgv2-no-skills-box" style="display: none; background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 6px; padding: 12px; text-align: center; margin-bottom: 8px;">
+          <p style="font-size: 11px; color: #64748b; margin-bottom: 8px;">Nenhuma habilidade para este portal. Ensine uma gravando.</p>
+          <button id="sgv2-btn-goto-record" class="btn-main" style="padding: 4px 10px; font-size: 11px; background: #2563eb;">Ir para o Gravador ✨</button>
         </div>
         <div id="sgv2-progress-box" style="display: none; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px; margin-bottom: 8px;">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
@@ -74,13 +89,10 @@
         <p style="font-size: 11px; color: #64748b; margin-bottom: 8px;">
           Grave demonstrações no portal da escola para ensinar novas ações.
         </p>
-        <div style="display: flex; gap: 6px; margin-bottom: 8px;">
-          <select id="sgv2-record-task-select" style="flex: 1; padding: 4px 6px; font-size: 11px; border: 1px solid #cbd5e1; border-radius: 6px;">
-            <option value="read_roster">Ler Lista de Alunos (read_roster)</option>
-            <option value="lancar_falta">Lançar Presença/Falta (lancar_falta)</option>
-            <option value="lancar_nota">Lançar Notas (lancar_nota)</option>
-            <option value="custom">Outra Ação Personalizada</option>
-          </select>
+        <div style="display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px;">
+          <input type="text" id="sgv2-record-task-name" placeholder="Nome da Habilidade (ex: Registrar Aula)" style="padding: 4px 6px; font-size: 11px; border: 1px solid #cbd5e1; border-radius: 6px;" />
+          <input type="text" id="sgv2-record-task-desc" placeholder="Descrição do que a habilidade faz" style="padding: 4px 6px; font-size: 11px; border: 1px solid #cbd5e1; border-radius: 6px;" />
+          <input type="text" id="sgv2-record-task-slug" placeholder="Slug (ex: registrar-aula)" style="padding: 4px 6px; font-size: 10px; border: 1px solid #cbd5e1; border-radius: 6px;" />
         </div>
         <div style="display: flex; gap: 6px; margin-bottom: 8px;">
           <button id="sgv2-btn-start-record" class="btn-main" style="flex: 1; padding: 6px 10px; font-size: 11px; background: #dc2626;">🔴 Iniciar Gravação</button>
@@ -139,6 +151,8 @@
         <div id="checkpoint-title" style="font-weight: 700; font-size: 11px; color: #0f172a; margin-bottom: 4px;">Aprovação de Ação</div>
         <div id="checkpoint-desc" style="font-size: 10px; color: #475569; margin-bottom: 6px;">Confirmação necessária antes de executar no portal.</div>
         <div id="checkpoint-preview-data" style="font-size: 10px; color: #334155; background: #fff; border: 1px solid #cbd5e1; border-radius: 4px; padding: 4px; max-height: 80px; overflow-y: auto; font-family: monospace;"></div>
+        <textarea id="checkpoint-editable-text" style="display: none; width: 100%; box-sizing: border-box; font-size: 11px; border: 1px solid #cbd5e1; border-radius: 4px; padding: 4px; margin-top: 6px; font-family: sans-serif; resize: vertical; min-height: 50px;"></textarea>
+        <div id="checkpoint-warning-irreversible" style="display: none; font-size: 10px; color: #b91c1c; font-weight: 600; margin-top: 6px; padding: 4px; background: #fff1f2; border-radius: 4px; border: 1px solid #fecdd3;">Atenção: Ações de envio ou publicação não podem ser desfeitas após a gravação no portal.</div>
       </div>
       <div style="display: flex; gap: 6px;">
         <button id="modal-checkpoint-btn-abort" style="flex: 1; padding: 6px; font-size: 11px; background: #f8fafc; color: #475569; border: 1px solid #cbd5e1; border-radius: 4px; cursor: pointer;">Cancelar</button>

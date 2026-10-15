@@ -108,6 +108,46 @@ export class SqlSkillGraphRepository implements SkillGraphRepository {
     return null
   }
 
+  async listActive(host: string): Promise<SkillGraphV2[]> {
+    const rows = await this.driver.query<{ graph_json: string }>(
+      'SELECT graph_json FROM skill_graphs WHERE is_active = 1 ORDER BY updated_at DESC'
+    )
+
+    const activeGraphs: SkillGraphV2[] = []
+    for (const row of rows) {
+      try {
+        const graph = JSON.parse(row.graph_json) as SkillGraphV2
+        const allowed = graph.safety?.allowed_hosts || []
+        const matches = allowed.some((h) => {
+          if (h === '*' || h === host) return true
+          if (host.endsWith('.' + h)) return true
+          if (h.endsWith('.' + host)) return true
+          return false
+        })
+
+        if (!matches) continue
+
+        if (graph.provenance?.source === 'imported') {
+          const packageId = (graph.provenance as any).package_id || graph.identity.task_id
+          const mapVersion = (graph.provenance as any).map_version || graph.identity.version
+
+          const commStatus = await this.driver.queryOne<{ status: string }>(
+            'SELECT status FROM community_packages WHERE package_id = ? AND map_version = ?',
+            [packageId, mapVersion]
+          )
+
+          if (!commStatus || commStatus.status !== 'activated') {
+            continue
+          }
+        }
+
+        activeGraphs.push(graph)
+      } catch {}
+    }
+
+    return activeGraphs
+  }
+
   async listVersions(
     portalId: string,
     taskId: string

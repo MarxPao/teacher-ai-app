@@ -275,6 +275,64 @@
       return true
     }
 
+    if (message.action === 'SKILLGRAPH_LIST_ACTIVE_SKILLS') {
+      (async () => {
+        try {
+          const tabId = await resolveTargetTab(message.tabId)
+          let host = message.host
+          if (!host && tabId) {
+            try {
+              const tab = await chrome.tabs.get(tabId)
+              if (tab && tab.url) {
+                host = new URL(tab.url).hostname
+              }
+            } catch {}
+          }
+          host = host || 'localhost'
+          const bundle = globalThis.SkillGraphBundle?.SkillGraphV2
+          const NativeClientClass = bundle?.NativeClient || globalThis.NativeClient
+          const nativeClient = NativeClientClass ? new NativeClientClass({ hostName: 'com.teacherai.desktop' }) : null
+          let skills = []
+          if (nativeClient) {
+            try {
+              const resp = await nativeClient.send('graphs.listActive', { host })
+              if (Array.isArray(resp)) {
+                skills = resp
+              }
+            } catch (err) {
+              console.warn('[SkillGraph Orchestrator] graphs.listActive falhou:', err)
+            }
+          }
+          sendResponse({ success: true, host, skills })
+        } catch (err) {
+          sendResponse({ success: false, skills: [], error: err.message })
+        }
+      })()
+      return true
+    }
+
+    if (message.action === 'SKILLGRAPH_NLU_PARSE') {
+      (async () => {
+        try {
+          const bundle = globalThis.SkillGraphBundle?.SkillGraphV2
+          const NativeClientClass = bundle?.NativeClient || globalThis.NativeClient
+          const nativeClient = NativeClientClass ? new NativeClientClass({ hostName: 'com.teacherai.desktop' }) : null
+          if (!nativeClient) {
+            sendResponse({ success: false, no_match: true, error: 'Desktop app não conectado.' })
+            return
+          }
+          const resp = await nativeClient.send('nlu.parse', {
+            text: message.text,
+            catalog: message.catalog || [],
+          })
+          sendResponse({ success: true, ...(resp || {}) })
+        } catch (err) {
+          sendResponse({ success: false, no_match: true, error: err.message })
+        }
+      })()
+      return true
+    }
+
     if (message.action === 'SKILLGRAPH_RUN') {
       executeGraph(message.payload || {}, sendResponse)
       return true

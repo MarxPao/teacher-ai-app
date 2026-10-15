@@ -12,6 +12,7 @@ export const EXTENSION_ALLOWED_METHODS = [
   'students.upsertFromPortal',
   'graphs.get',
   'graphs.resolveActive',
+  'graphs.listActive',
   'graphs.save',
   'audit.append',
   'nlu.parse',
@@ -109,6 +110,10 @@ export const MethodParamSchemas = {
     taskId: z.string().min(1),
   }).strict(),
 
+  'graphs.listActive': z.object({
+    host: z.string().min(1),
+  }).strict(),
+
   'graphs.save': z.object({
     graph: z.record(z.string(), z.unknown()),
     activate: z.boolean().optional(),
@@ -120,6 +125,12 @@ export const MethodParamSchemas = {
 
   'nlu.parse': z.object({
     text: z.string().min(1),
+    catalog: z.array(z.object({
+      id: z.string().min(1),
+      name: z.string().min(1),
+      description: z.string().optional(),
+      params: z.record(z.string(), z.unknown()).optional(),
+    })).optional(),
   }).strict(),
 
   'data.exportStudent': z.object({
