@@ -476,7 +476,10 @@ async function checkTabAuthentication(tabId) {
       return results[0].result;
     }
   } catch (err) {
-    console.warn('[TeacherAI Extension] Falha ao executar script de auth:', err);
+    const msg = (err && err.message) || String(err);
+    if (!msg.includes('Cannot access contents') && !msg.includes('Extension manifest must request permission')) {
+      console.warn('[TeacherAI Extension] Falha ao executar script de auth:', err);
+    }
   }
   return { isAuthenticated: false, hasTable: false, pageKind: 'error', friendlyPageName: 'Desconhecida' };
 }

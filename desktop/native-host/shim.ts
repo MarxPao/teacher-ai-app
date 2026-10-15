@@ -10,15 +10,27 @@ function getNoncePath(): string {
   return path.join(appData, 'TeacherAI', 'vault', 'session_nonce')
 }
 
-function writeChromeResponse(obj: any): void {
+function writeChromeResponse(obj: any, cb?: () => void): void {
   const jsonStr = JSON.stringify(obj)
   const payload = Buffer.from(jsonStr, 'utf8')
   const header = Buffer.alloc(4)
   header.writeUInt32LE(payload.length, 0)
-  process.stdout.write(Buffer.concat([header, payload]))
+  process.stdout.write(Buffer.concat([header, payload]), cb)
 }
 
-async function tryConnectPipe(retries = 5, delayMs = 400): Promise<net.Socket> {
+function getProjectRoot(): string {
+  const oneUp = path.resolve(__dirname, '..')
+  if (fs.existsSync(path.join(oneUp, 'dist-desktop', 'main.js')) || fs.existsSync(path.join(oneUp, 'package.json'))) {
+    return oneUp
+  }
+  const twoUp = path.resolve(__dirname, '..', '..')
+  if (fs.existsSync(path.join(twoUp, 'dist-desktop', 'main.js')) || fs.existsSync(path.join(twoUp, 'package.json'))) {
+    return twoUp
+  }
+  return oneUp
+}
+
+async function tryConnectPipe(retries = 15, delayMs = 400): Promise<net.Socket> {
   for (let i = 0; i < retries; i++) {
     const socket = await new Promise<net.Socket | null>((resolve) => {
       const s = net.connect(PIPE_NAME)
@@ -44,15 +56,16 @@ async function tryConnectPipe(retries = 5, delayMs = 400): Promise<net.Socket> {
 
 function tryAutoStartApp(): void {
   try {
-    const rootDir = path.resolve(__dirname, '..', '..')
+    const rootDir = getProjectRoot()
     const electronBin = path.join(rootDir, 'node_modules', '.bin', process.platform === 'win32' ? 'electron.cmd' : 'electron')
     const mainJs = path.join(rootDir, 'dist-desktop', 'main.js')
 
     if (fs.existsSync(electronBin) && fs.existsSync(mainJs)) {
       const child = spawn(electronBin, [mainJs], {
+        cwd: rootDir,
         detached: true,
         stdio: 'ignore',
-        windowsHide: true,
+        windowsHide: false,
       })
       child.unref()
     }
@@ -65,17 +78,20 @@ async function main() {
   try {
     socket = await tryConnectPipe()
   } catch {
-    // Lê primeira mensagem do stdin para ter o ID da requisição
-    writeChromeResponse({
-      v: 1,
-      id: 'init_err',
-      success: false,
-      error: {
-        code: 'E_APP_NOT_RUNNING',
-        message: 'O aplicativo Teacher AI Desktop não está em execução e não pôde ser iniciado automaticamente.',
+    writeChromeResponse(
+      {
+        v: 1,
+        id: 'init_err',
+        success: false,
+        error: {
+          code: 'E_APP_NOT_RUNNING',
+          message: 'O aplicativo Teacher AI Desktop não está em execução e não pôde ser iniciado automaticamente.',
+        },
       },
-    })
-    process.exit(0)
+      () => {
+        setTimeout(() => process.exit(0), 100)
+      }
+    )
     return
   }
 
