@@ -50,7 +50,7 @@ export class NativeClient {
 
   constructor(options: NativeClientOptions = {}) {
     this.hostName = options.hostName || 'com.teacherai.desktop'
-    this.defaultTimeoutMs = options.defaultTimeoutMs ?? 5000
+    this.defaultTimeoutMs = options.defaultTimeoutMs ?? 15000
     this.connector = options.connector
   }
 

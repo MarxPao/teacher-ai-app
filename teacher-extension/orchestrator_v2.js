@@ -362,13 +362,41 @@
             sendResponse({ success: false, friendlyMessage: 'Nenhuma aba ativa do portal encontrada para iniciar a gravação.' })
             return
           }
+          const tab = await chrome.tabs.get(tabId)
+          const initialUrl = tab?.url || 'http://localhost/'
+          let initialHost = 'localhost'
+          let initialPath = '/'
+          try {
+            const parsed = new URL(initialUrl)
+            initialHost = parsed.host
+            initialPath = parsed.pathname
+          } catch {}
+
+          const initialStep = {
+            id: 's1',
+            at: Date.now(),
+            frame_path: '/',
+            host: initialHost,
+            path: initialPath,
+            kind: 'navigate',
+            url: initialUrl,
+          }
+
+          await chrome.storage.session.set({
+            skillgraph_recording: {
+              recording: true,
+              tabId,
+              startedAt: Date.now(),
+              initialUrl,
+              steps: [initialStep],
+            },
+          })
+
           await chrome.scripting.executeScript({
             target: { tabId },
             files: ['dist/recorder.bundle.js'],
           })
-          await chrome.storage.session.set({
-            skillgraph_recording: { recording: true, tabId, startedAt: Date.now() },
-          })
+
           sendResponse({
             success: true,
             friendlyMessage: 'Gravação iniciada! Realize os passos no portal da escola. Clique em "Parar e Compilar" quando terminar.',
@@ -383,27 +411,68 @@
       return true
     }
 
+    if (message.action === 'SKILLGRAPH_STEP_CAPTURED' && message.step) {
+      (async () => {
+        try {
+          const session = await chrome.storage.session.get(['skillgraph_recording'])
+          const rec = session?.skillgraph_recording
+          if (rec && rec.recording) {
+            rec.steps = rec.steps || []
+            rec.steps.push(message.step)
+            await chrome.storage.session.set({ skillgraph_recording: rec })
+          }
+        } catch {}
+      })()
+      return false
+    }
+
     if (message.action === 'SKILLGRAPH_STOP_RECORD') {
       (async () => {
         try {
           const session = await chrome.storage.session.get(['skillgraph_recording'])
-          const tabId = await resolveTargetTab(message.tabId || session?.skillgraph_recording?.tabId)
+          const rec = session?.skillgraph_recording
+          const tabId = await resolveTargetTab(message.tabId || rec?.tabId)
           if (!tabId) {
             sendResponse({ success: false, friendlyMessage: 'Nenhuma aba ativa vinculada à gravação.' })
             return
           }
 
-          const injectionResults = await chrome.scripting.executeScript({
-            target: { tabId },
-            func: () => {
-              if (typeof window.__TEACHER_AI_STOP_RECORDING__ === 'function') {
-                return window.__TEACHER_AI_STOP_RECORDING__()
-              }
-              return null
-            },
-          })
+          let localTrace = null
+          try {
+            const injectionResults = await chrome.scripting.executeScript({
+              target: { tabId },
+              func: () => {
+                if (typeof window.__TEACHER_AI_STOP_RECORDING__ === 'function') {
+                  return window.__TEACHER_AI_STOP_RECORDING__()
+                }
+                return null
+              },
+            })
+            localTrace = injectionResults?.[0]?.result
+          } catch {}
 
-          const trace = injectionResults?.[0]?.result
+          const accumulatedSteps = rec?.steps || []
+          let trace = null
+
+          if (accumulatedSteps.length > 0) {
+            let portalId = 'portal'
+            try {
+              portalId = new URL(rec.initialUrl || '').hostname.replace(/[^a-zA-Z0-9_]/g, '_')
+            } catch {}
+
+            trace = {
+              trace_version: '1.0',
+              task_id: 'custom_skill',
+              started_at: rec.startedAt || Date.now(),
+              ended_at: Date.now(),
+              initial_url: rec.initialUrl || '',
+              steps: accumulatedSteps,
+              portal_id: portalId,
+            }
+          } else if (localTrace && localTrace.steps && localTrace.steps.length > 0) {
+            trace = localTrace
+          }
+
           if (!trace || !trace.steps || trace.steps.length === 0) {
             await chrome.storage.session.remove(['skillgraph_recording'])
             sendResponse({
@@ -684,6 +753,46 @@
     }
 
     return false
+  }
+
+  // Monitor de Navegação durante Gravação (Multi-Page Recorder)
+  if (typeof chrome !== 'undefined' && chrome.tabs?.onUpdated) {
+    chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
+      if (changeInfo.status === 'complete' && tab?.url) {
+        try {
+          const session = await chrome.storage.session.get(['skillgraph_recording'])
+          const rec = session?.skillgraph_recording
+          if (rec && rec.recording && rec.tabId === tabId) {
+            if (tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://') || tab.url.startsWith('about:')) {
+              return
+            }
+
+            const lastStep = rec.steps?.[rec.steps.length - 1]
+            if (!lastStep || lastStep.url !== tab.url) {
+              try {
+                const parsed = new URL(tab.url)
+                rec.steps = rec.steps || []
+                rec.steps.push({
+                  id: `s${rec.steps.length + 1}`,
+                  at: Date.now(),
+                  frame_path: '/',
+                  host: parsed.host,
+                  path: parsed.pathname,
+                  kind: 'navigate',
+                  url: tab.url,
+                })
+                await chrome.storage.session.set({ skillgraph_recording: rec })
+              } catch {}
+            }
+
+            await chrome.scripting.executeScript({
+              target: { tabId },
+              files: ['dist/recorder.bundle.js'],
+            }).catch(() => {})
+          }
+        } catch {}
+      }
+    })
   }
 
   globalThis.handleSkillGraphMessage = handleSkillGraphMessage

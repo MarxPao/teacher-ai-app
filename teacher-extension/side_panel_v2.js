@@ -99,6 +99,17 @@
     const recordTaskSelect = document.getElementById('sgv2-record-task-select')
     let currentRecordedTrace = null
 
+    // Sincroniza estado de gravação caso a aba ou painel recarregue
+    if (typeof chrome !== 'undefined' && chrome.storage?.session?.get) {
+      chrome.storage.session.get(['skillgraph_recording'], (res) => {
+        if (res?.skillgraph_recording?.recording) {
+          if (btnStartRecord) btnStartRecord.style.display = 'none'
+          if (btnStopRecord) btnStopRecord.style.display = 'block'
+          if (recordingIndicator) recordingIndicator.style.display = 'block'
+        }
+      })
+    }
+
     btnStartRecord?.addEventListener('click', () => {
       btnStartRecord.style.display = 'none'
       btnStopRecord.style.display = 'block'

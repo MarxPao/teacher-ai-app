@@ -22,36 +22,57 @@ declare global {
   }
 
   window.__TEACHER_AI_RECORDING_ACTIVE__ = true
-  const taskId = window.__TEACHER_AI_TASK_ID__ || 'read_roster'
+  const taskId = window.__TEACHER_AI_TASK_ID__ || 'custom_skill'
 
-  const recorder = new DomRecorder(document, {
-    taskId,
-    initialUrl: window.location.href,
-    mountOverlay: true,
-  })
+  function initRecorder(initialStepSeq = 0) {
+    const recorder = new DomRecorder(document, {
+      taskId,
+      initialUrl: window.location.href,
+      mountOverlay: true,
+      initialStepSeq,
+      onStepCaptured: (step) => {
+        try {
+          if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+            chrome.runtime.sendMessage({ action: 'SKILLGRAPH_STEP_CAPTURED', step }).catch(() => {})
+          }
+        } catch {}
+      },
+    })
 
-  window.__TEACHER_AI_DOM_RECORDER__ = recorder
-  recorder.start()
+    window.__TEACHER_AI_DOM_RECORDER__ = recorder
+    recorder.start()
 
-  window.__TEACHER_AI_STOP_RECORDING__ = function (): Trace | null {
-    if (!window.__TEACHER_AI_RECORDING_ACTIVE__) return null
-    window.__TEACHER_AI_RECORDING_ACTIVE__ = false
-    const trace = recorder.stop()
+    window.__TEACHER_AI_STOP_RECORDING__ = function (): Trace | null {
+      if (!window.__TEACHER_AI_RECORDING_ACTIVE__) return null
+      window.__TEACHER_AI_RECORDING_ACTIVE__ = false
+      const trace = recorder.stop()
 
-    if (trace && !(trace as any).portal_id) {
-      ;(trace as any).portal_id = window.location.hostname.replace(/[^a-zA-Z0-9_]/g, '_')
-    }
-
-    if (typeof chrome !== 'undefined' && chrome.storage?.session) {
-      try {
-        chrome.storage.session.set({ skillgraph_last_trace: trace })
-      } catch (_) {
-        // Silencioso em caso de contexto isolado
+      if (trace && !(trace as any).portal_id) {
+        ;(trace as any).portal_id = window.location.hostname.replace(/[^a-zA-Z0-9_]/g, '_')
       }
+
+      if (typeof chrome !== 'undefined' && chrome.storage?.session) {
+        try {
+          chrome.storage.session.set({ skillgraph_last_trace: trace })
+        } catch (_) {
+          // Silencioso em caso de contexto isolado
+        }
+      }
+
+      return trace
     }
 
-    return trace
+    console.log('[TeacherAI Recorder] DomRecorder inicializado com sucesso via lib/recorder-dom.')
   }
 
-  console.log('[TeacherAI Recorder] DomRecorder inicializado com sucesso via lib/recorder-dom.')
+  // Tenta sincronizar a sequência de passos acumulada com a sessão da extensão
+  if (typeof chrome !== 'undefined' && chrome.storage?.session?.get) {
+    chrome.storage.session.get(['skillgraph_recording'], (res: any) => {
+      const steps = res?.skillgraph_recording?.steps
+      const startSeq = Array.isArray(steps) ? steps.length : 0
+      initRecorder(startSeq)
+    })
+  } else {
+    initRecorder(0)
+  }
 })()

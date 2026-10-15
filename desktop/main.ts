@@ -28,7 +28,8 @@ import {
   PackageExporter,
 } from '../lib/desktop-core/community'
 
-// 1. Instância Única
+// 1. Configuração do App e Instância Única
+app.setName('TeacherAI')
 const gotTheLock = app.requestSingleInstanceLock()
 if (!gotTheLock) {
   app.quit()
