@@ -16,6 +16,7 @@ export const EXTENSION_ALLOWED_METHODS = [
   'graphs.save',
   'audit.append',
   'nlu.parse',
+  'llm.generateText',
 ] as const
 
 export type ExtensionMethod = typeof EXTENSION_ALLOWED_METHODS[number]
@@ -129,8 +130,13 @@ export const MethodParamSchemas = {
       id: z.string().min(1),
       name: z.string().min(1),
       description: z.string().optional(),
-      params: z.record(z.string(), z.unknown()).optional(),
+      params: z.union([z.record(z.string(), z.unknown()), z.array(z.any())]).optional(),
     })).optional(),
+  }).strict(),
+
+  'llm.generateText': z.object({
+    instruction: z.string().min(1),
+    maxLength: z.number().int().positive().optional(),
   }).strict(),
 
   'data.exportStudent': z.object({

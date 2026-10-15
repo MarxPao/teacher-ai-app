@@ -407,12 +407,15 @@
     // 7. Controles de Confirmação de Checkpoint (Modal)
     btnCheckpointApprove?.addEventListener('click', () => {
       if (modalCheckpoint) modalCheckpoint.style.display = 'none'
+      const editableTextEl = document.getElementById('checkpoint-editable-text')
+      const updatedText = editableTextEl && editableTextEl.style.display !== 'none' ? editableTextEl.value : undefined
       if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
         chrome.runtime.sendMessage({
           type: 'SKILLGRAPH_CHECKPOINT_RESPONSE',
           action: 'SKILLGRAPH_CHECKPOINT_RESPONSE',
           requestId: currentCheckpointRequestId,
           approved: true,
+          updatedText,
         })
       }
     })
@@ -554,6 +557,30 @@
           const cp = msg.checkpoint || {}
           if (checkpointTitle) checkpointTitle.textContent = cp.label || cp.nodeId || 'Aprovação de Ação'
           if (checkpointDesc) checkpointDesc.textContent = cp.scope ? `Escopo: ${cp.scope}` : 'Confirmação necessária antes de executar no portal.'
+
+          const editableTextEl = document.getElementById('checkpoint-editable-text')
+          const warningEl = document.getElementById('checkpoint-warning-irreversible')
+
+          let textFound = ''
+          if (Array.isArray(cp.summary)) {
+            const textSummary = cp.summary.find((s) => s.label === 'Texto')
+            if (textSummary) {
+              textFound = typeof textSummary.value === 'object' ? (textSummary.value.lit || textSummary.value.param || '') : textSummary.value
+            }
+          }
+          if (editableTextEl) {
+            if (textFound) {
+              editableTextEl.value = textFound
+              editableTextEl.style.display = 'block'
+            } else {
+              editableTextEl.style.display = 'none'
+            }
+          }
+          if (warningEl) {
+            const isSubmitOrSend = /envio|publica[çc][ãa]o|grava[çc][ãa]o/i.test(cp.label || '')
+            warningEl.style.display = isSubmitOrSend ? 'block' : 'none'
+          }
+
           if (checkpointPreview) {
             if (Array.isArray(cp.summary)) {
               checkpointPreview.textContent = cp.summary.map((s) => `${s.label}: ${typeof s.value === 'object' ? JSON.stringify(s.value) : s.value}`).join('\n')

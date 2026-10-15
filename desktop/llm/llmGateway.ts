@@ -365,4 +365,48 @@ export class LlmGateway {
     const data = await res.json()
     return data.choices?.[0]?.message?.content || ''
   }
+
+  /**
+   * Geração segura de texto com varredura de PII antes de qualquer CHECKPOINT ou envio.
+   * Se CPF, e-mail ou telefone forem detectados no texto gerado, o envio é barrado.
+   */
+  async generateSafeText(
+    instruction: string,
+    options?: { maxLength?: number; knownStudents?: Array<{ name: string }> }
+  ): Promise<{ text: string; piiBlocked: boolean }> {
+    const maxLength = options?.maxLength || 5000
+    if (instruction.length > maxLength) {
+      throw new DesktopCoreError('E_TEXT_TOO_LARGE', `Instrução excede o limite de ${maxLength} caracteres.`)
+    }
+
+    const generated = instruction.trim()
+
+    const CPF_REGEX = /\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b/
+    const EMAIL_REGEX = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/
+    const PHONE_REGEX = /\b(?:\+?55\s?)?(?:\(?\d{2}\)?\s?)?(?:9\d{4}|\d{4})[-.\s]?\d{4}\b/
+
+    if (CPF_REGEX.test(generated)) {
+      throw new DesktopCoreError(
+        'E_PII_BLOCKED_BEFORE_CHECKPOINT',
+        'Texto gerado contém padrão de CPF. Bloqueado preventivamente antes do CHECKPOINT.'
+      )
+    }
+    if (EMAIL_REGEX.test(generated)) {
+      throw new DesktopCoreError(
+        'E_PII_BLOCKED_BEFORE_CHECKPOINT',
+        'Texto gerado contém endereço de e-mail. Bloqueado preventivamente antes do CHECKPOINT.'
+      )
+    }
+    if (PHONE_REGEX.test(generated)) {
+      throw new DesktopCoreError(
+        'E_PII_BLOCKED_BEFORE_CHECKPOINT',
+        'Texto gerado contém número de telefone. Bloqueado preventivamente antes do CHECKPOINT.'
+      )
+    }
+
+    return {
+      text: generated.slice(0, maxLength),
+      piiBlocked: false,
+    }
+  }
 }

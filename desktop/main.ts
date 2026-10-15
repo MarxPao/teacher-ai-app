@@ -97,6 +97,11 @@ async function executeBusinessMethod(method: string, params: any): Promise<any> 
       return { intent: 'unknown', params: {}, supported: false, no_match: true }
     }
 
+    case 'llm.generateText': {
+      if (!llmGateway) throw new Error('LLM Gateway indisponível.')
+      return await llmGateway.generateSafeText(params.instruction || '', { maxLength: params.maxLength })
+    }
+
     case 'data.backup': {
       if (!dataKey) throw new Error('Chave de dados indisponível.')
       const backupData = JSON.stringify({
