@@ -44,7 +44,7 @@
   async function getFlag() {
     return new Promise((resolve) => {
       chrome.storage.local.get([STORAGE_KEY_FLAG], (res) => {
-        resolve(Boolean(res && res[STORAGE_KEY_FLAG]))
+        resolve(res && typeof res[STORAGE_KEY_FLAG] !== 'undefined' ? Boolean(res[STORAGE_KEY_FLAG]) : true)
       })
     })
   }

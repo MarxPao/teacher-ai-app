@@ -38,16 +38,12 @@
 
     if (!toggle || !body || !btnRun) return
 
-    // 1. Sincroniza estado inicial da flag
+    // 1. Sincroniza estado inicial da flag (padrão ativo para o painel v2)
     if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
       chrome.runtime.sendMessage({ action: 'SKILLGRAPH_GET_FLAG' }, (res) => {
-        if (res && res.flag) {
-          toggle.checked = true
-          body.style.display = 'block'
-        } else {
-          toggle.checked = false
-          body.style.display = 'none'
-        }
+        const isEnabled = res && typeof res.flag !== 'undefined' ? Boolean(res.flag) : true
+        if (toggle) toggle.checked = isEnabled
+        if (body) body.style.display = isEnabled ? 'block' : 'none'
       })
     }
 
