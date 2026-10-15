@@ -64,7 +64,7 @@ export function compile(
 
   // Verificações contextuais de decisões e anti-PII no identificador
   if (/\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b/.test(decisions.task_id) || /@/.test(decisions.task_id)) {
-    throw new CompilerError('E_PII_IN_SLUG', 'O identificador da tarefa contém PII (CPF ou e-mail detectado).')
+    throw new CompilerError('E_PII_SCRUB_FAILED', 'O identificador da tarefa contém PII (CPF ou e-mail detectado).')
   }
 
   const hasAttendanceControl = trace.steps.some(

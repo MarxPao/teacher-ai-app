@@ -240,4 +240,61 @@ describe('Compiler Core v2 — Determinístico e Anti-PII', () => {
     const { report } = compile(trace, decisions, { clock: FIXED_CLOCK })
     expect(report.warnings.some((w) => w.code === 'W_BATCH_PATTERN_IGNORED')).toBe(true)
   })
+
+  it('11. (G5.3) Compilar fluxo sem controle de frequência/nota não exige polaridade', () => {
+    const trace: Trace = {
+      trace_version: '1.0',
+      task_id: 'custom:registrar-aula',
+      started_at: 1775865600000,
+      initial_url: 'http://portal.escola.com/diario',
+      steps: [
+        {
+          id: 's1',
+          at: 1775865600100,
+          frame_path: '/',
+          host: 'portal.escola.com',
+          path: '/diario',
+          kind: 'navigate',
+          url: 'http://portal.escola.com/diario',
+        },
+        {
+          id: 's2',
+          at: 1775865600200,
+          frame_path: '/',
+          host: 'portal.escola.com',
+          path: '/diario',
+          kind: 'input',
+          value: 'Conteúdo sobre frações',
+          descriptor: { tag: 'textarea', id: 'conteudo_aula', aria_label: 'Conteúdo da Aula', classes: [] },
+        },
+        {
+          id: 's3',
+          at: 1775865600300,
+          frame_path: '/',
+          host: 'portal.escola.com',
+          path: '/diario',
+          kind: 'click',
+          descriptor: { tag: 'button', text: 'Gravar Aula', role: 'button', classes: [] },
+        },
+      ],
+    }
+
+    const decisions: CompilerDecisions = {
+      task_id: 'custom:registrar-aula',
+      portal_id: 'portal_escola',
+      task_name: 'Registrar Aula',
+      allowed_hosts: ['portal.escola.com'],
+    }
+
+    const { graph, report } = compile(trace, decisions, { clock: FIXED_CLOCK })
+    expect(report.valid).toBe(true)
+    expect(graph.identity.task_id).toBe('custom:registrar-aula')
+    expect(graph.params['texto']).toBeDefined()
+    expect(graph.params['texto'].type).toBe('string')
+    expect(graph.nodes.n2.type).toBe('CHECKPOINT')
+    expect(graph.nodes.n3.type).toBe('WRITE')
+    const writeNode = graph.nodes.n3 as any
+    expect(writeNode.semantic).toBe('text')
+    expect(writeNode.value).toEqual({ param: 'texto' })
+  })
 })

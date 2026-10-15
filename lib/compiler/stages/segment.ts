@@ -128,6 +128,7 @@ export function segmentTrace(trace: Trace, decisions: CompilerDecisions): Segmen
         const qParam = decisions.class_filter.query_param || Array.from(u.searchParams.keys())[0]
         filterStep = {
           mode: 'query',
+          step: navWithQuery,
           queryParam: qParam,
           value: u.searchParams.get(qParam) || undefined,
         }

@@ -3,6 +3,7 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { DatabaseSync } from 'node:sqlite'
 import * as crypto from 'node:crypto'
 import type { SqlDriver } from '../lib/desktop-core/db/SqlDriver'
+import { LlmGateway } from '../desktop/llm/llmGateway'
 import {
   encryptEnvelope,
   decryptEnvelope,
@@ -548,6 +549,38 @@ describe('Desktop Core — Teste de Fronteira (Fase 6)', () => {
 
       const restored = Pseudonymizer.depseudonymize(session.sanitizedText, session.tokenToOriginal)
       expect(restored).toBe(originalText)
+    })
+  })
+
+  // 13. Habilidades Genéricas e Roteamento de Catálogo (G5)
+  describe('13. Habilidades Genéricas e Roteamento de Catálogo (G5)', () => {
+    it('(1) menu/parse não contém id literal fora do catálogo', async () => {
+      const gateway = new LlmGateway({ consentRepo: {} as any, vault: {} as any })
+      const catalog = [
+        { id: 'custom:registrar-chamada', name: 'Registrar Chamada', params: [{ name: 'attendance_status', type: 'string' }] },
+        { id: 'custom:comunicado', name: 'Enviar Comunicado', params: [{ name: 'texto', type: 'string' }] },
+      ]
+      const res = await gateway.parseIntent('marcar falta para o aluno', [], catalog)
+      expect(res.no_match).toBe(false)
+      expect(catalog.some((s) => s.id === res.skill_id)).toBe(true)
+      expect(['read_roster', 'lancar_falta', 'lancar_nota']).not.toContain(res.skill_id)
+    })
+
+    it('(2) skill_id fora do catálogo -> no_match', async () => {
+      const gateway = new LlmGateway({ consentRepo: {} as any, vault: {} as any })
+      const catalog = [
+        { id: 'custom:registrar-chamada', name: 'Registrar Chamada' },
+      ]
+      const res = await gateway.parseIntent('lançar nota 9.5 em matemática', [], catalog)
+      expect(res.no_match).toBe(true)
+      expect(res.skill_id).toBeUndefined()
+    })
+
+    it('(4) texto gerado com CPF é barrado antes do CHECKPOINT', async () => {
+      const gateway = new LlmGateway({ consentRepo: {} as any, vault: {} as any })
+      await expect(
+        gateway.generateSafeText('Plano de aula com CPF do orientador: 123.456.789-00')
+      ).rejects.toThrowError(/CPF/)
     })
   })
 })
