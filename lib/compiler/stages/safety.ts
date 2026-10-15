@@ -33,22 +33,28 @@ export function buildCheckpointNode(options: {
   taskId: string
   on_success: string
   on_reject: string
+  hasSubmit?: boolean
+  isText?: boolean
 }): CheckpointNode {
-  const summary: CheckpointNode['summary'] = [
-    { label: 'Aluno', value: { param: 'student_ref' } },
-  ]
+  const summary: CheckpointNode['summary'] = []
 
   if (options.taskId === 'lancar_falta') {
+    summary.push({ label: 'Aluno', value: { param: 'student_ref' } })
     summary.push({ label: 'Presença/Falta', value: { param: 'attendance_status' } })
   } else if (options.taskId === 'lancar_nota') {
+    summary.push({ label: 'Aluno', value: { param: 'student_ref' } })
     summary.push({ label: 'Nota', value: { param: 'grade_value' } })
+  } else if (options.isText) {
+    summary.push({ label: 'Texto', value: { param: 'texto' } })
   } else {
     summary.push({ label: 'Ação', value: { lit: 'Gravar alterações' } })
   }
 
+  const label = options.hasSubmit ? 'Confirmação de Envio' : 'Confirmação do Professor para Lançamento'
+
   return {
     type: 'CHECKPOINT',
-    label: 'Confirmação do Professor para Lançamento',
+    label,
     retry: { max_attempts: 1, backoff_ms: 0 },
     timeout_ms: 30000,
     postconditions: [],

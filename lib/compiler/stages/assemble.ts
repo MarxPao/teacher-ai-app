@@ -45,7 +45,11 @@ export function assembleGraph(
   const plannedNodes: PlannedNode[] = buildPreambleNodes(trace, segmented, decisions, paramContext, nextId)
 
   // 2. Execução da Tarefa
-  const isWriteTask = decisions.task_id === 'lancar_falta' || decisions.task_id === 'lancar_nota'
+  const isWriteTask =
+    decisions.task_id === 'lancar_falta' ||
+    decisions.task_id === 'lancar_nota' ||
+    segmented.actionSteps.length > 0 ||
+    !!segmented.submitStep
 
   if (decisions.task_id === 'read_roster') {
     plannedNodes.push({
@@ -76,6 +80,13 @@ export function assembleGraph(
       })
     }
 
+    const actionStep = segmented.actionSteps[0]
+    const isAttendance =
+      decisions.task_id === 'lancar_falta' ||
+      decisions.attendance_polarity !== undefined ||
+      actionStep?.kind === 'check'
+    const isGrade = decisions.task_id === 'lancar_nota' || decisions.grade_scale !== undefined
+
     // CHECKPOINT Obrigatório
     plannedNodes.push({
       id: nextId(),
@@ -85,36 +96,47 @@ export function assembleGraph(
           taskId: decisions.task_id,
           on_success: next,
           on_reject: '$abort',
+          hasSubmit: !!segmented.submitStep,
+          isText: !isAttendance && !isGrade,
         }),
     })
 
     // Nó WRITE
-    const actionStep = segmented.actionSteps[0]
-    const fieldAnchor = buildAnchorFromDescriptor(
-      actionStep.descriptor,
-      decisions.task_id === 'lancar_falta' ? 'Campo de frequência do aluno' : 'Campo de nota do aluno',
-      tableAnchor,
-      decisions,
-      paramContext
-    )
+    if (actionStep) {
+      const fieldAnchor = buildAnchorFromDescriptor(
+        actionStep.descriptor,
+        isAttendance
+          ? 'Campo de frequência do aluno'
+          : isGrade
+          ? 'Campo de nota do aluno'
+          : `Campo de texto de ${decisions.task_name}`,
+        tableAnchor,
+        decisions,
+        paramContext
+      )
 
-    plannedNodes.push({
-      id: nextId(),
-      build: (next) => ({
-        type: 'WRITE',
-        label: decisions.task_id === 'lancar_falta' ? 'Lançar Frequência do Aluno' : 'Lançar Nota do Aluno',
-        anchor: fieldAnchor,
-        value: paramContext.getWriteValueRef(decisions.task_id),
-        method: decisions.task_id === 'lancar_falta' ? 'set_checked' : 'set_value_dispatch',
-        semantic: decisions.task_id === 'lancar_falta' ? 'attendance' : 'grade',
-        read_back: true,
-        retry: { max_attempts: 2, backoff_ms: 500 },
-        timeout_ms: 5000,
-        postconditions: [],
-        on_success: next,
-        on_fail: '$abort',
-      }),
-    })
+      plannedNodes.push({
+        id: nextId(),
+        build: (next) => ({
+          type: 'WRITE',
+          label: isAttendance
+            ? 'Lançar Frequência do Aluno'
+            : isGrade
+            ? 'Lançar Nota do Aluno'
+            : `Registrar ${decisions.task_name}`,
+          anchor: fieldAnchor,
+          value: paramContext.getWriteValueRef(decisions.task_id),
+          method: isAttendance ? 'set_checked' : 'set_value_dispatch',
+          semantic: isAttendance ? 'attendance' : isGrade ? 'grade' : 'text',
+          read_back: true,
+          retry: { max_attempts: 2, backoff_ms: 500 },
+          timeout_ms: 5000,
+          postconditions: [],
+          on_success: next,
+          on_fail: '$abort',
+        }),
+      })
+    }
 
     // Nó CLICK de Submissão (se houver)
     if (segmented.submitStep) {

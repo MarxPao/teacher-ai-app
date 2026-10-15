@@ -34,7 +34,7 @@ export function createParameterContext(decisions: CompilerDecisions): ParameterC
   }
 
   // 2. Parâmetros específicos por tarefa
-  if (decisions.task_id === 'lancar_falta') {
+  if (decisions.task_id === 'lancar_falta' || decisions.attendance_polarity) {
     params['student_ref'] = {
       type: 'student_ref',
       required: true,
@@ -53,7 +53,7 @@ export function createParameterContext(decisions: CompilerDecisions): ParameterC
       pii: false,
       description: 'Data de referência para o lançamento de frequência',
     }
-  } else if (decisions.task_id === 'lancar_nota') {
+  } else if (decisions.task_id === 'lancar_nota' || decisions.grade_scale) {
     params['student_ref'] = {
       type: 'student_ref',
       required: true,
@@ -68,6 +68,14 @@ export function createParameterContext(decisions: CompilerDecisions): ParameterC
     }
   } else if (decisions.task_id === 'read_roster') {
     // Apenas turma (já configurada acima)
+  } else {
+    // Habilidade genérica: texto livre (aula, mensagem, anotação)
+    params['texto'] = {
+      type: 'string',
+      required: true,
+      pii: false,
+      description: 'Conteúdo textual a ser inserido no portal',
+    }
   }
 
   return {
@@ -82,10 +90,13 @@ export function createParameterContext(decisions: CompilerDecisions): ParameterC
       param: 'student_ref',
     }),
     getWriteValueRef: (taskId: string): ValueRef => {
-      if (taskId === 'lancar_falta') {
+      if (taskId === 'lancar_falta' || decisions.attendance_polarity) {
         return { param: 'attendance_status' }
       }
-      return { param: 'grade_value' }
+      if (taskId === 'lancar_nota' || decisions.grade_scale) {
+        return { param: 'grade_value' }
+      }
+      return { param: 'texto' }
     },
     isDateHeader: (header: string): boolean => {
       return DATE_REGEX.test(header)

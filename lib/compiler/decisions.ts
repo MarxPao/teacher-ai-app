@@ -16,6 +16,7 @@ export const CompilerDecisionsSchema = z.object({
   task_id: z.string().min(1),
   portal_id: z.string().min(1),
   task_name: z.string().min(1),
+  task_description: z.string().optional(),
   allowed_hosts: z.array(z.string().min(1)).min(1),
   row_key_column: z.string().optional(),
   secondary_key_column: z.string().optional(),

@@ -62,11 +62,37 @@ export function compile(
   }
   const decisions = decisionsParsed.data
 
-  // Verificações contextuais de decisões
-  const isWriteTask = decisions.task_id === 'lancar_falta' || decisions.task_id === 'lancar_nota'
-  if (decisions.task_id === 'lancar_falta' && !decisions.attendance_polarity) {
-    throw new CompilerError('E_DECISION_REQUIRED', 'A polaridade de frequência (attendance_polarity) é obrigatória para lançar falta.')
+  // Verificações contextuais de decisões e anti-PII no identificador
+  if (/\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b/.test(decisions.task_id) || /@/.test(decisions.task_id)) {
+    throw new CompilerError('E_PII_IN_SLUG', 'O identificador da tarefa contém PII (CPF ou e-mail detectado).')
   }
+
+  const hasAttendanceControl = trace.steps.some(
+    (s) =>
+      s.kind === 'check' ||
+      /presen[çc]a|falta|frequ[eê]ncia|attendance|absent|present/i.test(
+        (s as any).descriptor?.text || (s as any).descriptor?.name || ''
+      )
+  )
+  const hasGradeControl = trace.steps.some(
+    (s) =>
+      s.kind === 'input' &&
+      /nota|grade|pontua[çc][ãa]o|score|avalia[çc][ãa]o/i.test(
+        (s as any).descriptor?.text || (s as any).descriptor?.name || ''
+      )
+  )
+
+  if ((decisions.task_id === 'lancar_falta' || hasAttendanceControl) && !decisions.attendance_polarity) {
+    throw new CompilerError('E_DECISION_REQUIRED', 'A polaridade de frequência (attendance_polarity) é obrigatória para lançar frequência/falta.')
+  }
+  if (hasGradeControl && !decisions.grade_scale && decisions.task_id === 'lancar_nota') {
+    throw new CompilerError('E_DECISION_REQUIRED', 'A escala de notas (grade_scale) é obrigatória para lançar notas.')
+  }
+
+  const isWriteTask =
+    decisions.task_id === 'lancar_falta' ||
+    decisions.task_id === 'lancar_nota' ||
+    trace.steps.some((s) => s.kind === 'input' || s.kind === 'check' || (s.kind === 'click' && (s as any).is_submit_action))
 
   // 4. Estágios do Compilador
   const segmented = segmentTrace(trace, decisions)
@@ -93,7 +119,7 @@ export function compile(
       task_id: decisions.task_id,
       version: 1,
       name: decisions.task_name,
-      description: `Grafo compilado determinísticamente para ${decisions.task_name}`,
+      description: decisions.task_description || `Grafo compilado determinísticamente para ${decisions.task_name}`,
     },
     compat: {
       support_tier: 1,

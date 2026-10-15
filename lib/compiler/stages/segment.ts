@@ -80,7 +80,7 @@ export function segmentTrace(trace: Trace, decisions: CompilerDecisions): Segmen
       const text = step.descriptor.text || ''
       const isSubmit =
         step.is_submit_action ||
-        /\b(salvar|gravar|confirmar|concluir|submit|save)\b/i.test(text)
+        /\b(salvar|gravar|confirmar|concluir|submit|save|enviar|publicar|post|send)\b/i.test(text)
 
       if (isSubmit) {
         submitStep = step
@@ -128,7 +128,6 @@ export function segmentTrace(trace: Trace, decisions: CompilerDecisions): Segmen
         const qParam = decisions.class_filter.query_param || Array.from(u.searchParams.keys())[0]
         filterStep = {
           mode: 'query',
-          step: navWithQuery,
           queryParam: qParam,
           value: u.searchParams.get(qParam) || undefined,
         }
@@ -158,15 +157,16 @@ export function segmentTrace(trace: Trace, decisions: CompilerDecisions): Segmen
   }
 
   // Validação de requisitos de escrita vs leitura
-  const isWriteTask = decisions.task_id === 'lancar_falta' || decisions.task_id === 'lancar_nota'
-  if (isWriteTask && actionSteps.length === 0) {
+  const isWriteTask = decisions.task_id === 'lancar_falta' || decisions.task_id === 'lancar_nota' || actionSteps.length > 0 || !!submitStep
+  if (isWriteTask && actionSteps.length === 0 && !submitStep) {
     throw new CompilerError(
       'E_NO_WRITE_STEP',
       `A tarefa de escrita "${decisions.task_id}" requer pelo menos um passo de marcação ou digitação gravado.`
     )
   }
 
-  if ((decisions.task_id === 'read_roster' || isWriteTask) && !tableStep) {
+  const requiresTable = decisions.task_id === 'read_roster' || decisions.task_id === 'lancar_falta' || decisions.task_id === 'lancar_nota'
+  if (requiresTable && !tableStep) {
     throw new CompilerError(
       'E_NO_TABLE_MARKED',
       'Nenhuma tabela de alunos foi marcada no trace (necessário marcar tabela ou interagir com linha de aluno).'
