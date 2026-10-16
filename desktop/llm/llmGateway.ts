@@ -85,7 +85,7 @@ function extractNumericGradeWithCorrection(lower: string): number | undefined {
     return parseFloat(correctionMatch[1].replace(',', '.'))
   }
   const notaMatch =
-    lower.match(/(?:nota|grau|valendo|com)\s+(\d+[.,]?\d*)/) ||
+    lower.match(/(?:nota|grau|valendo|com|bota|coloca|ponha|d[aá])\s+(\d+[.,]?\d*)/) ||
     lower.match(/(\d+[.,]?\d*)\s+(?:para|pro|pra|ao|na|no)/)
   if (notaMatch) {
     return parseFloat(notaMatch[1].replace(',', '.'))
@@ -271,15 +271,15 @@ export class LlmGateway {
           score += 8
         }
         if (
-          /falta|presen[çc]a|aus[êe]ncia|chamada/i.test(lower) &&
-          (/falta|presen[çc]a|attendance/i.test(idLower) ||
-            /falta|presen[çc]a/i.test(nameLower) ||
+          /falta|presen[çc]a|aus[êe]ncia|chamada|lansa\s+falta/i.test(lower) &&
+          (/falta|presen[çc]a|attendance|chamada/i.test(idLower) ||
+            /falta|presen[çc]a|chamada/i.test(nameLower) ||
             skillParams.some((p) => p.name === 'attendance_status' || p.name === 'falta'))
         ) {
           score += 6
         }
         if (
-          /nota|grau|avalia[çc][ãa]o|ponto/i.test(lower) &&
+          /nota|grau|avalia[çc][ãa]o|ponto|\b(?:bota|coloca|ponha|d[aá])\s+\d+[.,]?\d*/i.test(lower) &&
           (/nota|grade/i.test(idLower) ||
             /nota/i.test(nameLower) ||
             skillParams.some((p) => p.name === 'grade_value' || p.name === 'nota'))
@@ -329,10 +329,13 @@ export class LlmGateway {
         }
       }
 
+      const normFold = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      const lowerFolded = normFold(lower)
+
       const extractedParams: Record<string, any> = {}
       let targetStudent: string | null = null
       for (const st of knownStudents) {
-        if (lower.includes(st.name.toLowerCase())) {
+        if (lower.includes(st.name.toLowerCase()) || lowerFolded.includes(normFold(st.name))) {
           targetStudent = st.name
           break
         }

@@ -1196,8 +1196,8 @@ describe('Fase 4: Capacidades do Engine por Arquétipo (T4.4)', () => {
       const { success } = await runner.run(graph, {})
 
       expect(success).toBe(true)
-      expect(driver.navigationHistory).toEqual(['https://localhost:8899/portal/notas'])
-      expect(driver.currentUrl).toBe('https://localhost:8899/portal/notas')
+      expect(driver.navigationHistory).toEqual(['http://localhost:8899/portal/notas'])
+      expect(driver.currentUrl).toBe('http://localhost:8899/portal/notas')
     })
 
     it('8. [NAVIGATE] Bloqueia URL absoluta apontando para host fora de allowed_hosts antes de navegar', async () => {

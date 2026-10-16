@@ -352,35 +352,75 @@ export class DomDriver implements Driver {
   public async download(options: DownloadOptions) {
     this.hostGuard()
     const el = this.resolveTargetElement({ anchor: options.trigger })
+    const anchorEl = (el.tagName.toLowerCase() === 'a' ? el : el.closest('a') || el.querySelector('a')) as HTMLAnchorElement | null
+    const rawHref = anchorEl?.getAttribute('href') || el.getAttribute('data-href') || el.getAttribute('data-url') || ''
+    const downloadAttr = anchorEl?.getAttribute('download') || el.getAttribute('data-filename') || ''
+
+    let filename = downloadAttr.trim()
+    if (!filename && rawHref && !rawHref.startsWith('data:') && !rawHref.startsWith('javascript:')) {
+      try {
+        const u = new URL(rawHref, this.doc.location?.href || 'http://localhost')
+        const lastSeg = u.pathname.split('/').filter(Boolean).pop()
+        if (lastSeg && lastSeg.includes('.')) filename = decodeURIComponent(lastSeg)
+      } catch {}
+    }
+    if (!filename) {
+      const ext = options.expect?.mime_hint?.includes('pdf') ? 'pdf' : 'csv'
+      filename = `download_resultado.${ext}`
+    }
+
+    let sizeBytes = 1024
+    let mimeType = options.expect?.mime_hint || 'text/csv'
+    if (rawHref.startsWith('data:')) {
+      const commaIdx = rawHref.indexOf(',')
+      if (commaIdx > 5) {
+        const meta = rawHref.slice(5, commaIdx)
+        const payload = rawHref.slice(commaIdx + 1)
+        const semiIdx = meta.indexOf(';')
+        if (semiIdx > 0) mimeType = meta.slice(0, semiIdx)
+        else if (meta) mimeType = meta
+        sizeBytes = Math.max(1, payload.length)
+      }
+    }
+
     ;(el as HTMLElement).click()
     return {
       success: true,
-      filename: 'download_resultado.csv',
-      mimeType: options.expect?.mime_hint || 'text/csv',
-      sizeBytes: 1024,
+      filename,
+      mimeType,
+      sizeBytes,
     }
   }
 
   public async upload(options: UploadOptions) {
     this.hostGuard()
     const el = this.resolveTargetElement({ anchor: options.input })
-    if (el.tagName.toLowerCase() === 'input' && (el as HTMLInputElement).type === 'file') {
-      const input = el as HTMLInputElement
+    const fileInput = (
+      el.tagName.toLowerCase() === 'input' && (el as HTMLInputElement).type === 'file'
+        ? el
+        : el.querySelector('input[type="file"]')
+    ) as HTMLInputElement | null
+
+    if (fileInput) {
       const filename = typeof options.source === 'string' ? options.source : (options.source?.name || 'arquivo_anexo.csv')
-      const content = typeof options.source === 'string' ? options.source : 'conteudo,arquivo\n1,2'
+      const content =
+        typeof options.source === 'string'
+          ? options.source
+          : ((options.source as any)?.content || 'conteudo,arquivo\n1,2')
+      const mimeType = (typeof options.source === 'object' && (options.source as any)?.mimeType) || 'text/csv'
       try {
         if (typeof File !== 'undefined' && typeof DataTransfer !== 'undefined') {
-          const file = new File([content], filename, { type: 'text/csv' })
+          const file = new File([content], filename, { type: mimeType })
           const dt = new DataTransfer()
           dt.items.add(file)
-          input.files = dt.files
+          fileInput.files = dt.files
         }
       } catch {}
-      input.dispatchEvent(new Event('input', { bubbles: true }))
-      input.dispatchEvent(new Event('change', { bubbles: true }))
-      return { success: true }
+      fileInput.dispatchEvent(new Event('input', { bubbles: true }))
+      fileInput.dispatchEvent(new Event('change', { bubbles: true }))
+      return { success: true, filename }
     }
-    return { success: true }
+    return { success: false }
   }
 
   public async describeElements(selector?: string) {

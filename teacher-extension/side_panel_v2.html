@@ -36,11 +36,17 @@
           <div id="sgv2-nlu-feedback" style="display: none; font-size: 10px; margin-top: 4px; padding: 4px 6px; border-radius: 4px;"></div>
         </div>
 
-        <div id="sgv2-skills-select-container" style="display: flex; gap: 6px; margin-bottom: 6px;">
+        <div id="sgv2-skills-select-container" style="display: flex; gap: 6px; margin-bottom: 6px; align-items: center;">
           <select id="sgv2-select-graph" style="flex: 1; padding: 4px 6px; font-size: 11px; border: 1px solid #cbd5e1; border-radius: 6px;">
             <option value="">Carregando habilidades do portal...</option>
           </select>
           <button id="sgv2-btn-run" class="btn-main" style="padding: 4px 10px; font-size: 11px;">Executar</button>
+        </div>
+        <div style="margin-bottom: 6px;">
+          <label style="display: inline-flex; align-items: center; gap: 4px; font-size: 10px; color: #475569; cursor: pointer;">
+            <input type="checkbox" id="sgv2-chk-dryrun" />
+            <span>🧪 Simular sem gravar no portal (Dry-Run)</span>
+          </label>
         </div>
         <div id="sgv2-skill-desc" style="display: none; font-size: 10px; color: #64748b; margin-bottom: 6px; padding: 4px 6px; background: #f8fafc; border-radius: 4px; border: 1px solid #f1f5f9;"></div>
         <div id="sgv2-params-form" style="display: none; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px; margin-bottom: 8px;">
@@ -51,7 +57,7 @@
           <p style="font-size: 11px; color: #64748b; margin-bottom: 8px;">Nenhuma habilidade para este portal. Ensine uma gravando.</p>
           <button id="sgv2-btn-goto-record" class="btn-main" style="padding: 4px 10px; font-size: 11px; background: #2563eb;">Ir para o Gravador ✨</button>
         </div>
-        <div id="sgv2-progress-box" style="display: none; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px; margin-bottom: 8px;">
+        <div id="sgv2-progress-box" aria-live="polite" style="display: none; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px; margin-bottom: 8px;">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
             <span id="sgv2-node-label" style="font-size: 11px; font-weight: 600; color: #1e293b;">Nó: --</span>
             <span id="sgv2-step-counter" style="font-size: 10px; color: #64748b;">v2</span>
@@ -64,7 +70,7 @@
             <button id="sgv2-btn-abort" style="font-size: 10px; padding: 2px 6px; background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5; border-radius: 4px; cursor: pointer;">Abortar</button>
           </div>
         </div>
-        <div id="sgv2-message-box" style="display: none; font-size: 11px; padding: 8px; border-radius: 6px; line-height: 1.4;"></div>
+        <div id="sgv2-message-box" role="status" aria-live="polite" style="display: none; font-size: 11px; padding: 8px; border-radius: 6px; line-height: 1.4;"></div>
         <div id="sgv2-repair-box" style="display: none; background: #fffbeb; border: 1px solid #fde68a; border-radius: 6px; padding: 10px; margin-top: 8px;">
           <div style="font-weight: 700; font-size: 11px; color: #92400e; margin-bottom: 4px;">🛠️ Atualização do Portal Detectada</div>
           <p id="sgv2-repair-prompt" style="font-size: 10px; color: #78350f; margin-bottom: 8px; line-height: 1.4;">O portal mudou um botão ou campo. O assistente localizou uma atualização segura. Deseja aplicar?</p>
@@ -105,9 +111,9 @@
           <div style="font-weight: 700; margin-bottom: 6px;">Confirmação de Campo do Portal:</div>
           <p id="sgv2-record-decisions-prompt" style="color: #475569; margin-bottom: 6px;">Como este campo de preenchimento deve ser interpretado?</p>
           <div style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px;">
-            <label style="display: flex; align-items: center; gap: 6px;"><input type="radio" name="sgv2-record-type" value="grade" checked /> <span>Nota escolar numérica (0 a 10)</span></label>
+            <label style="display: flex; align-items: center; gap: 6px;"><input type="radio" name="sgv2-record-type" value="grade" /> <span>Nota escolar numérica (0 a 10)</span></label>
             <label style="display: flex; align-items: center; gap: 6px;"><input type="radio" name="sgv2-record-type" value="attendance" /> <span>Frequência / Presença</span></label>
-            <label style="display: flex; align-items: center; gap: 6px;"><input type="radio" name="sgv2-record-type" value="other" /> <span>Apenas Leitura / Outro</span></label>
+            <label style="display: flex; align-items: center; gap: 6px;"><input type="radio" name="sgv2-record-type" value="other" checked /> <span>Texto Livre / Navegação / Leitura</span></label>
           </div>
           <button id="sgv2-btn-confirm-compile" class="btn-main" style="width: 100%; padding: 6px; font-size: 11px;">Salvar e Ativar Mapa ✨</button>
         </div>
@@ -144,7 +150,7 @@
   </div>
 
   <!-- MODAL: CHECKPOINT / CONFIRMAÇÃO HUMANA OBRIGATÓRIA -->
-  <div id="modal-checkpoint" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center; padding: 12px;">
+  <div id="modal-checkpoint" role="dialog" aria-modal="true" aria-labelledby="checkpoint-title" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center; padding: 12px;">
     <div style="background: #fff; border-radius: 8px; padding: 14px; max-width: 320px; width: 100%; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); border-top: 4px solid #dc2626;">
       <div style="font-size: 13px; font-weight: 800; color: #991b1b; margin-bottom: 6px;">⚠️ Ponto de Controle (Checkpoint)</div>
       <div style="background: #fef2f2; border: 1px solid #fee2e2; border-radius: 6px; padding: 8px; margin-bottom: 10px;">

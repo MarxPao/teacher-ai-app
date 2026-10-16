@@ -197,6 +197,30 @@ export class RemoteDriver implements Driver {
   }
 
   public async download(options: DownloadOptions): Promise<{ success: boolean; filename: string; mimeType?: string; sizeBytes?: number }> {
+    if (typeof chrome !== 'undefined' && chrome.downloads?.onCreated?.addListener) {
+      let capturedItem: any = null
+      const onCreated = (item: any) => {
+        capturedItem = item
+      }
+      try {
+        chrome.downloads.onCreated.addListener(onCreated)
+        const rpcRes = (await this.sendRpc('download', options)) as { success: boolean; filename: string; mimeType?: string; sizeBytes?: number }
+        await new Promise((r) => setTimeout(r, 300))
+        try { chrome.downloads.onCreated.removeListener(onCreated) } catch {}
+        if (capturedItem) {
+          return {
+            success: true,
+            filename: capturedItem.filename ? String(capturedItem.filename).split(/[\\/]/).pop()! : rpcRes.filename,
+            mimeType: capturedItem.mime || rpcRes.mimeType,
+            sizeBytes: typeof capturedItem.fileSize === 'number' && capturedItem.fileSize > 0 ? capturedItem.fileSize : rpcRes.sizeBytes,
+          }
+        }
+        return rpcRes
+      } catch (err) {
+        try { chrome.downloads.onCreated.removeListener(onCreated) } catch {}
+        throw err
+      }
+    }
     return this.sendRpc('download', options)
   }
 

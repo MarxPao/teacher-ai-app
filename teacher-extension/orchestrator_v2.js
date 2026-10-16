@@ -442,16 +442,16 @@
             .replace(/^-+|-+$/g, '') || 'nav'
           const taskId = 'custom:nav-' + slug.slice(0, 30)
 
-          // 3. Monta trace conforme TraceSchema (v1.0)
+          // 3. Monta trace conforme TraceSchema (v1.0) preservando startUrl/startPath como ponto de partida
           const isUrlNavigation = destUrl !== startUrl && !destUrl.includes('#')
           const trace = {
             trace_version: '1.0',
             task_id: taskId,
             started_at: Date.now(),
-            initial_url: isUrlNavigation ? destUrl : startUrl,
+            initial_url: startUrl,
             page_digest: {
               host,
-              path: isUrlNavigation ? destPath : startPath,
+              path: startPath,
               title: cleanName,
               headings: [],
               table_headers: [],

@@ -56,7 +56,8 @@ export async function executeNavigateNode(
         throw new RunnerError('E_HOST_NOT_ALLOWED', `URL absoluta inválida em NAVIGATE: ${fullTarget}`, nodeId)
       }
     }
-    const finalUrl = isAbsolute ? fullTarget : (targetHost ? `https://${targetHost}${fullTarget}` : fullTarget)
+    const currentScheme = currentCtx.url?.startsWith('http://') ? 'http' : 'https'
+    const finalUrl = isAbsolute ? fullTarget : (targetHost ? `${currentScheme}://${targetHost}${fullTarget}` : fullTarget)
     await driver.navigate(finalUrl)
   }
 

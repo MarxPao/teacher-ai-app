@@ -45,7 +45,9 @@ export function assembleGraph(
   const plannedNodes: PlannedNode[] = buildPreambleNodes(trace, segmented, decisions, paramContext, nextId)
 
   // 2. Execução da Tarefa
-  const writeActionSteps = segmented.actionSteps.filter(s => s.kind === 'input' || s.kind === 'check')
+  const writeActionSteps = segmented.actionSteps.filter(
+    s => s.kind === 'input' || s.kind === 'check' || s.kind === 'select'
+  )
   const navClickSteps = segmented.actionSteps.filter(
     s => s.kind === 'click' && s.id !== (segmented.filterStep?.step as any)?.id
   )
@@ -145,9 +147,10 @@ export function assembleGraph(
         }),
     })
 
-    // Nós WRITE (suporta múltiplos campos distintos em formulários/wizards)
+    // Nós WRITE (suporta múltiplos campos distintos em formulários/wizards, incluindo <select>)
     for (const actionStep of distinctWriteSteps) {
       const stepIsCheck = actionStep.kind === 'check' || isAttendance
+      const stepIsSelect = actionStep.kind === 'select'
       const stepLabel =
         (actionStep.descriptor as any).aria_label ||
         (actionStep.descriptor as any).label_text ||
@@ -159,7 +162,7 @@ export function assembleGraph(
           ? 'Campo de frequência do aluno'
           : isGrade
           ? 'Campo de nota do aluno'
-          : `Campo de texto de ${stepLabel}`,
+          : `Campo de ${stepLabel}`,
         tableAnchor,
         decisions,
         paramContext
@@ -176,7 +179,7 @@ export function assembleGraph(
             : `Registrar ${stepLabel}`,
           anchor: fieldAnchor,
           value: paramContext.getWriteValueRef(decisions.task_id),
-          method: stepIsCheck ? 'set_checked' : 'set_value_dispatch',
+          method: stepIsSelect ? 'select_option' : stepIsCheck ? 'set_checked' : 'set_value_dispatch',
           semantic: stepIsCheck ? 'attendance' : isGrade ? 'grade' : 'text',
           read_back: true,
           retry: { max_attempts: 2, backoff_ms: 500 },

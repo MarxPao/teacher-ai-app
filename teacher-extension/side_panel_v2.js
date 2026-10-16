@@ -160,7 +160,7 @@
           const steps = Array.isArray(res.trace.steps) ? res.trace.steps : []
           const hasCheck = steps.some((s) => s.kind === 'check')
           const hasNumericInput = steps.some((s) => s.kind === 'input' && /^\d+([.,]\d+)?$/.test(String(s.value || '').trim()))
-          const targetRadioVal = hasCheck || res.promptPolarity ? 'attendance' : (hasNumericInput || res.promptGradeScale ? 'grade' : 'text')
+          const targetRadioVal = hasCheck || res.promptPolarity ? 'attendance' : (hasNumericInput || res.promptGradeScale ? 'grade' : 'other')
           const radioToSelect = document.querySelector(`input[name="sgv2-record-type"][value="${targetRadioVal}"]`)
           if (radioToSelect) radioToSelect.checked = true
           if (recordDecisionsBox) recordDecisionsBox.style.display = 'block'
@@ -173,7 +173,7 @@
       btnConfirmCompile.textContent = 'Compilando e salvando...'
 
       const typeEl = document.querySelector('input[name="sgv2-record-type"]:checked')
-      const fieldType = typeEl ? typeEl.value : 'text'
+      const fieldType = typeEl ? typeEl.value : 'other'
       const nameInput = document.getElementById('sgv2-record-task-name')
       const descInput = document.getElementById('sgv2-record-task-desc')
       const slugInput = document.getElementById('sgv2-record-task-slug')
@@ -352,6 +352,12 @@
       }, (res) => {
         if (!nluFeedback) return
         nluFeedback.style.display = 'block'
+        if (res?.clarification_needed) {
+          nluFeedback.style.background = '#fefce8'
+          nluFeedback.style.color = '#854d0e'
+          nluFeedback.textContent = 'Percebi uma exceção ou condição em lote no seu pedido. Por segurança, selecione a habilidade abaixo e informe o aluno específico antes de executar.'
+          return
+        }
         if (res?.no_match || !res?.skill_id) {
           nluFeedback.style.background = '#fefce8'
           nluFeedback.style.color = '#854d0e'
@@ -423,18 +429,20 @@
       document.querySelectorAll('#sgv2-params-fields [data-param-name]').forEach((el) => {
         initialVariables[el.dataset.paramName] = el.type === 'checkbox' ? el.checked : el.value
       })
+      const chkDryRun = document.getElementById('sgv2-chk-dryrun')
+      const dryRun = Boolean(chkDryRun?.checked)
       btnRun.disabled = true
-      btnRun.textContent = 'Executando...'
+      btnRun.textContent = dryRun ? 'Simulando...' : 'Executando...'
       if (progressBox) progressBox.style.display = 'block'
       if (messageBox) messageBox.style.display = 'none'
       if (nodeLabel) nodeLabel.textContent = 'Iniciando motor...'
-      if (statusText) statusText.textContent = 'Preparando execução'
+      if (statusText) statusText.textContent = dryRun ? 'Simulação (Dry-Run)' : 'Preparando execução'
       if (progressBar) progressBar.style.width = '10%'
 
       chrome.runtime.sendMessage(
         {
           action: 'SKILLGRAPH_RUN',
-          payload: { graphKey, initialVariables },
+          payload: { graphKey, initialVariables, dryRun },
         },
         (res) => {
           btnRun.disabled = false
