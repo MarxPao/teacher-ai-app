@@ -269,7 +269,7 @@ export class SkillGraphRunner {
       case 'DOWNLOAD':
         return executeDownloadNode(node, nodeId, state, params, this.driver, this.host, graph.safety.allowed_hosts, graph.anchor_library)
       case 'UPLOAD':
-        return executeUploadNode(node, nodeId, state, params, this.driver, this.host, graph.safety.allowed_hosts, graph.safety.max_writes_per_run, graph.anchor_library)
+        return executeUploadNode(node, nodeId, state, params, this.driver, this.host, graph.safety.allowed_hosts, graph.safety.max_writes_per_run, graph.anchor_library, graphRef)
       default:
         throw new RunnerError('E_GRAPH_INVALID', `Tipo de nó desconhecido: ${node.type}`, nodeId)
     }

@@ -251,6 +251,26 @@ describe('Desktop Core — Teste de Fronteira (Fase 6)', () => {
       current = await repo.get('portal_teste', 'lancar_falta')
       expect(current?.identity.version).toBe(2)
     })
+
+    it('respeita activate:false no save (a v1 não nasce ativa)', async () => {
+      const repo = new SqlSkillGraphRepository(driver, clock)
+      const inactiveGraph: SkillGraphV2 = {
+        ...dummyGraph,
+        identity: {
+          ...dummyGraph.identity,
+          task_id: 'nav_explorada',
+          version: 1,
+        },
+      }
+      await repo.save(inactiveGraph, { activate: false })
+
+      const versions = await repo.listVersions('portal_teste', 'nav_explorada')
+      expect(versions).toHaveLength(1)
+      expect(versions[0].isActive).toBe(false)
+
+      const resolved = await repo.resolveActive('teste.escola.com.br', 'nav_explorada')
+      expect(resolved).toBeNull()
+    })
   })
 
   // 5. Repositórios de Alunos e Isolamento
@@ -623,6 +643,95 @@ describe('Desktop Core — Teste de Fronteira (Fase 6)', () => {
       expect(resException.clarification_needed).toBe(true)
       expect(resException.params.student_ref).toBeUndefined()
     })
+
+    it('(6) mantém memória conversacional multi-turno para referências elípticas ("E 8,5 para o João na mesma turma")', async () => {
+      const gateway = new LlmGateway({ consentRepo: {} as any, vault: {} as any })
+      const catalog = [
+        {
+          id: 'lancar_nota',
+          name: 'Lançar Nota',
+          params: {
+            student_ref: { type: 'string', required: true },
+            grade_value: { type: 'number', required: true },
+            turma: { type: 'string', required: false },
+            data: { type: 'date', required: false },
+          },
+        },
+      ]
+      const students = [{ name: 'Mariana Lima' }, { name: 'João Pedro' }]
+
+      // Turno 1: Comando completo
+      const turn1 = await gateway.parseIntent('Lançar nota 9,0 para Mariana Lima na turma 6A hoje', students, catalog)
+      expect(turn1.no_match).toBe(false)
+      expect(turn1.skill_id).toBe('lancar_nota')
+      expect(turn1.params.student_ref).toBe('Mariana Lima')
+      expect(turn1.params.grade_value).toBe(9)
+      expect(turn1.params.turma).toBe('6A')
+      expect(turn1.params.data).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+
+      // Turno 2: Comando elíptico sem repetir o verbo/habilidade, herdando turma e data da sessão
+      const turn2 = await gateway.parseIntent('E 8,5 para o João Pedro na mesma turma', students, catalog)
+      expect(turn2.no_match).toBe(false)
+      expect(turn2.skill_id).toBe('lancar_nota')
+      expect(turn2.params.student_ref).toBe('João Pedro')
+      expect(turn2.params.grade_value).toBe(8.5)
+      expect(turn2.params.turma).toBe('6A')
+      expect(turn2.params.data).toBe(turn1.params.data)
+    })
+
+    it('(7) auto-registra o Native Messaging Host (com.teacherai.desktop) em HKCU no boot gerando o shim físico (.cmd) e o manifesto (.json)', async () => {
+      const { autoRegisterNativeMessagingHost, REGISTRY_KEY_CHROME, REGISTRY_KEY_EDGE } = await import(
+        '../desktop/nativeHost/autoRegister'
+      )
+
+      const executedCmds: string[] = []
+      const writtenFiles: Record<string, string> = {}
+
+      const res = autoRegisterNativeMessagingHost({
+        userDataPath: 'C:\\Users\\Professora\\AppData\\Roaming\\TeacherAI',
+        extensionIds: ['ext1234567890abcdef'],
+        platform: 'win32',
+        mkdir: () => {},
+        writeFile: (f, content) => {
+          writtenFiles[f] = content
+        },
+        execCommand: cmd => {
+          executedCmds.push(cmd)
+        },
+      })
+
+      expect(res.registered).toBe(true)
+      expect(res.manifestPath).toContain('com.teacherai.desktop.json')
+      expect(res.shimPath).toContain('teacherai-nm-shim.cmd')
+      expect(writtenFiles[res.shimPath]).toContain('node "')
+      expect(writtenFiles[res.shimPath]).toContain('shim.js" %*')
+
+      const parsed = JSON.parse(writtenFiles[res.manifestPath])
+      expect(parsed.name).toBe('com.teacherai.desktop')
+      expect(parsed.path).toBe(res.shimPath)
+      expect(parsed.type).toBe('stdio')
+      expect(parsed.allowed_origins).toEqual(['chrome-extension://ext1234567890abcdef/'])
+      expect(res.registryKeys).toEqual([REGISTRY_KEY_CHROME, REGISTRY_KEY_EDGE])
+      expect(executedCmds).toHaveLength(2)
+      expect(executedCmds[0]).toContain(REGISTRY_KEY_CHROME)
+      expect(executedCmds[1]).toContain(REGISTRY_KEY_EDGE)
+
+      // Verifica modo Electron empacotado (B1: zero dependência de Node.js instalado na máquina da professora)
+      const electronWritten: Record<string, string> = {}
+      const resElectron = autoRegisterNativeMessagingHost({
+        userDataPath: 'C:\\Users\\Professora\\AppData\\Roaming\\TeacherAI',
+        electronExecPath: 'C:\\Program Files\\TeacherAI\\TeacherAI.exe',
+        platform: 'win32',
+        mkdir: () => {},
+        writeFile: (f, content) => {
+          electronWritten[f] = content
+        },
+        execCommand: () => {},
+      })
+      expect(electronWritten[resElectron.shimPath]).toContain('set ELECTRON_RUN_AS_NODE=1')
+      expect(electronWritten[resElectron.shimPath]).toContain('"C:\\Program Files\\TeacherAI\\TeacherAI.exe"')
+    })
   })
 })
+
 

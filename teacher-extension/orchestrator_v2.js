@@ -78,6 +78,129 @@
     })
   }
 
+  const STANDALONE_GRAPHS_KEY = 'standalone_skillgraphs_v2'
+
+  async function getStandaloneGraphsMap() {
+    return new Promise((resolve) => {
+      chrome.storage.local.get([STANDALONE_GRAPHS_KEY], (res) => {
+        resolve((res && res[STANDALONE_GRAPHS_KEY] && typeof res[STANDALONE_GRAPHS_KEY] === 'object') ? res[STANDALONE_GRAPHS_KEY] : {})
+      })
+    })
+  }
+
+  async function saveStandaloneGraph(graph, activate = false) {
+    if (!graph || !graph.identity) return null
+    const bundle = globalThis.SkillGraphBundle?.SkillGraphV2
+    if (bundle?.validateGraph) {
+      const validation = bundle.validateGraph(graph)
+      if (!validation.valid) {
+        throw new Error('E_GRAPH_INVALID: Mapa rejeitado por validateGraph antes de salvar.')
+      }
+    }
+    const map = await getStandaloneGraphsMap()
+    const portalId = graph.identity.portal_id || graph.identity.domain || 'default'
+    const taskId = graph.identity.task_id || 'custom'
+    const version = Number(graph.identity.version) || 1
+    const prefix = `${portalId}::${taskId}::`
+
+    if (activate) {
+      for (const k of Object.keys(map)) {
+        if (k.startsWith(prefix) && map[k]) {
+          map[k].active = false
+        }
+      }
+    }
+
+    const key = `${prefix}v${version}`
+    map[key] = {
+      graph,
+      portalId,
+      domain: graph.identity.domain || portalId,
+      taskId,
+      version,
+      active: Boolean(activate),
+      dryRunPassed: Boolean(activate),
+      savedAt: Date.now(),
+    }
+
+    await new Promise((resolve) => {
+      chrome.storage.local.set({ [STANDALONE_GRAPHS_KEY]: map }, () => resolve())
+    })
+    return graph
+  }
+
+  async function resolveStandaloneGraph(host, taskId) {
+    if (!taskId) return null
+    const map = await getStandaloneGraphsMap()
+    const cleanHost = String(host || '').toLowerCase()
+    const candidates = Object.values(map).filter((entry) => {
+      if (!entry || !entry.active || !entry.graph) return false
+      if (entry.taskId !== taskId) return false
+      if (!cleanHost) return true
+      const dom = String(entry.domain || '').toLowerCase()
+      const pid = String(entry.portalId || '').toLowerCase()
+      const allowed = Array.isArray(entry.graph.safety?.allowed_hosts)
+        ? entry.graph.safety.allowed_hosts.map((h) => String(h).toLowerCase())
+        : []
+      return dom === cleanHost || pid === cleanHost || allowed.includes(cleanHost) || pid === cleanHost.replace(/[^a-z0-9._-]/gi, '_')
+    })
+    if (candidates.length === 0) return null
+    candidates.sort((a, b) => (b.version || 0) - (a.version || 0))
+    return candidates[0].graph
+  }
+
+  async function listStandaloneActiveSkills(host) {
+    const map = await getStandaloneGraphsMap()
+    const cleanHost = String(host || '').toLowerCase()
+    const skills = []
+    for (const entry of Object.values(map)) {
+      if (!entry || !entry.active || !entry.graph) continue
+      const dom = String(entry.domain || '').toLowerCase()
+      const pid = String(entry.portalId || '').toLowerCase()
+      const allowed = Array.isArray(entry.graph.safety?.allowed_hosts)
+        ? entry.graph.safety.allowed_hosts.map((h) => String(h).toLowerCase())
+        : []
+      if (!cleanHost || dom === cleanHost || pid === cleanHost || allowed.includes(cleanHost) || pid === cleanHost.replace(/[^a-z0-9._-]/gi, '_')) {
+        skills.push({
+          id: entry.taskId,
+          task_id: entry.taskId,
+          portal_id: entry.portalId,
+          version: entry.version,
+          name: entry.graph.identity?.name || entry.taskId,
+          description: entry.graph.identity?.description || '',
+          params: entry.graph.params || {},
+          standalone: true,
+        })
+      }
+    }
+    return skills
+  }
+
+  async function setStandaloneGraphActive(portalId, taskId, version, requireDryRun = true) {
+    const map = await getStandaloneGraphsMap()
+    const prefix = `${portalId}::${taskId}::`
+    let targetKey = null
+    for (const k of Object.keys(map)) {
+      if (k.startsWith(prefix) && map[k]) {
+        const isTarget = version ? map[k].version === Number(version) : true
+        if (isTarget) targetKey = k
+      }
+    }
+    if (!targetKey || !map[targetKey]) return { ok: false, reason: 'not_found' }
+    if (requireDryRun && !map[targetKey].dryRunPassed) {
+      return { ok: false, reason: 'dry_run_required' }
+    }
+    for (const k of Object.keys(map)) {
+      if (k.startsWith(prefix) && map[k]) {
+        map[k].active = k === targetKey
+      }
+    }
+    await new Promise((resolve) => {
+      chrome.storage.local.set({ [STANDALONE_GRAPHS_KEY]: map }, () => resolve())
+    })
+    return { ok: true }
+  }
+
   async function resolveTargetTab(tabId) {
     if (typeof tabId === 'number') return tabId
     const tabs = await chrome.tabs.query({ active: true, currentWindow: true })
@@ -136,8 +259,12 @@
           graph = resp.graph || (resp.spec_version ? resp : null)
         }
       } catch (nmErr) {
-        console.warn('[SkillGraph Orchestrator] Erro ao resolver grafo via Native Messaging:', nmErr)
+        console.warn('[SkillGraph Orchestrator] Erro ao resolver grafo via Native Messaging (usando fallback Standalone):', nmErr)
       }
+    }
+
+    if (!graph && taskId) {
+      graph = await resolveStandaloneGraph(host, taskId)
     }
 
     if (!graph) {
@@ -163,6 +290,7 @@
       driver,
       nativeClient,
       dryRun: Boolean(payload.dryRun),
+      standaloneFallback: Boolean(payload.standaloneFallback) && Boolean(payload.dryRun),
       abortSignal: abortController.signal,
       onEvent: (event) => {
         if (event.type === 'repair_requested') {
@@ -221,6 +349,16 @@
         initialVariables: payload.initialVariables || {},
         dryRun: Boolean(payload.dryRun),
       })
+
+      if (result.success && payload.dryRun) {
+        const map = await getStandaloneGraphsMap()
+        const gVer = Number(graph.identity?.version) || 1
+        const gKey = `${portalId}::${taskId}::v${gVer}`
+        if (map[gKey]) {
+          map[gKey].dryRunPassed = true
+          await new Promise((r) => chrome.storage.local.set({ [STANDALONE_GRAPHS_KEY]: map }, () => r()))
+        }
+      }
 
       recordHealth(result.success, Boolean(result.state?.hasSelfHealed))
 
@@ -324,7 +462,14 @@
                 skills = resp
               }
             } catch (err) {
-              console.warn('[SkillGraph Orchestrator] graphs.listActive falhou:', err)
+              console.warn('[SkillGraph Orchestrator] graphs.listActive falhou (usando fallback Standalone):', err)
+            }
+          }
+          const standaloneSkills = await listStandaloneActiveSkills(host)
+          const seenIds = new Set(skills.map((s) => s.id || s.task_id))
+          for (const st of standaloneSkills) {
+            if (!seenIds.has(st.id || st.task_id)) {
+              skills.push(st)
             }
           }
           sendResponse({ success: true, host, skills })
@@ -337,11 +482,51 @@
 
     if (message.action === 'SKILLGRAPH_NLU_PARSE') {
       (async () => {
+        const bundle = globalThis.SkillGraphBundle?.SkillGraphV2
+        const fallbackLocalNlu = () => {
+          if (bundle && typeof bundle.decomposeCompoundTeacherCommand === 'function') {
+            const decomposed = bundle.decomposeCompoundTeacherCommand(message.text || '')
+            if (decomposed && decomposed.taskIntent && decomposed.taskIntent !== 'explore') {
+              const catalog = Array.isArray(message.catalog) ? message.catalog : []
+              const matchedSkill = catalog.find(
+                (c) => (c.id || c.task_id) === decomposed.taskIntent || (c.id || c.task_id || '').includes(decomposed.taskIntent)
+              )
+              const skillId = matchedSkill ? (matchedSkill.id || matchedSkill.task_id) : (catalog.length === 0 ? decomposed.taskIntent : null)
+              if (skillId) {
+                const params = { ...(decomposed.entities || {}) }
+                if (Array.isArray(decomposed.filters)) {
+                  for (const f of decomposed.filters) {
+                    if (f && f.concept && f.value) params[f.concept] = f.value
+                  }
+                }
+                if (params.aluno && !params.student_ref) params.student_ref = params.aluno
+                if (params.valor && decomposed.taskIntent === 'lancar_nota' && !params.grade_value) {
+                  params.grade_value = Number(params.valor)
+                }
+                return {
+                  success: true,
+                  no_match: false,
+                  skill_id: skillId,
+                  params,
+                  filters: decomposed.filters || [],
+                  navigation_target: decomposed.navigationTarget,
+                  standalone_nlu: true,
+                }
+              }
+            }
+          }
+          return null
+        }
+
         try {
-          const bundle = globalThis.SkillGraphBundle?.SkillGraphV2
           const NativeClientClass = bundle?.NativeClient || globalThis.NativeClient
           const nativeClient = NativeClientClass ? new NativeClientClass({ hostName: 'com.teacherai.desktop' }) : null
           if (!nativeClient) {
+            const localRes = fallbackLocalNlu()
+            if (localRes) {
+              sendResponse(localRes)
+              return
+            }
             sendResponse({ success: false, no_match: true, error: 'Desktop app não conectado.' })
             return
           }
@@ -351,6 +536,11 @@
           })
           sendResponse({ success: true, ...(resp || {}) })
         } catch (err) {
+          const localRes = fallbackLocalNlu()
+          if (localRes) {
+            sendResponse(localRes)
+            return
+          }
           sendResponse({ success: false, no_match: true, error: err.message })
         }
       })()
@@ -383,7 +573,7 @@
           }
 
           // Guardrail de segurança: bloquear termos destrutivos antes de explorar
-          if (/\b(excluir|deletar|apagar|remover|demitir|formatar|pagar|transferir|cancelar matricula)\b/i.test(queryText)) {
+          if (/\b(excluir|deletar|apagar|remover|demitir|formatar|pagar|transferir|cancelar|fechar|fechamento|consolidar|finalizar|encerrar|concluir|aprovar|reprovar|assinar|homologar|publicar|enviar|confirmar)\b/i.test(queryText.normalize('NFD').replace(/[\u0300-\u036f]/g, ''))) {
             sendResponse({
               success: false,
               friendlyMessage: 'Por segurança, o assistente não executa ações destrutivas ou financeiras durante a exploração autônoma.',
@@ -391,49 +581,112 @@
             return
           }
 
-          // 1. Executa exploração autônoma no DOM usando a função da Camada 2
+          // 1. Divide o comando em até 3 hops encadeados (ex.: "diário de classe e depois notas" ou "acadêmico > frequência")
+          const hopTargets = queryText
+            .split(/\s+(?:e\s+depois|depois|em\s+seguida|->|>|›)\s+/i)
+            .map((s) => s.trim())
+            .filter(Boolean)
+            .slice(0, 3)
+
           const navFn = globalThis.internalNavigatePortalTab
-          let navRes = null
-          if (typeof navFn === 'function') {
-            navRes = await navFn(tabId, queryText)
-          } else {
-            navRes = await new Promise((resolve) => {
-              chrome.runtime.sendMessage({ action: 'NAVIGATE_PORTAL_TAB', target: queryText, tabId }, resolve)
-            })
-          }
+          const recordedSteps = []
+          let currentUrl = startUrl
+          let currentPath = startPath
+          let currentHost = host
+          let lastElementText = queryText
 
-          if (!navRes || (!navRes.sucesso && !navRes.ok)) {
-            sendResponse({
-              success: false,
-              friendlyMessage: navRes?.mensagem || `Não encontrei abas ou links para "${queryText}" nesta página do portal.`,
-            })
-            return
-          }
-
-          // 2. Aguarda estabilização e verifica se houve mudança de URL (e se permaneceu no mesmo host)
-          await new Promise((r) => setTimeout(r, 800))
-          let destUrl = startUrl
-          let destPath = startPath
-          let destHost = host
-          try {
-            const tabAfter = await chrome.tabs.get(tabId)
-            if (tabAfter?.url) {
-              destUrl = tabAfter.url
-              const parsedDest = new URL(destUrl)
-              destPath = parsedDest.pathname
-              destHost = parsedDest.host
+          for (let hIdx = 0; hIdx < hopTargets.length; hIdx++) {
+            const hopTarget = hopTargets[hIdx]
+            let navRes = null
+            if (typeof navFn === 'function') {
+              navRes = await navFn(tabId, hopTarget, [host])
+            } else {
+              navRes = await new Promise((resolve) => {
+                chrome.runtime.sendMessage({ action: 'NAVIGATE_PORTAL_TAB', target: hopTarget, tabId, allowedHosts: [host] }, resolve)
+              })
             }
-          } catch {}
 
-          if (destHost && host && destHost.toLowerCase() !== host.toLowerCase()) {
-            sendResponse({
-              success: false,
-              friendlyMessage: `A navegação saiu do domínio do portal (${host} -> ${destHost}) e não foi gravada por segurança.`,
-            })
-            return
+            if (!navRes || (!navRes.sucesso && !navRes.ok)) {
+              if (recordedSteps.length === 0) {
+                sendResponse({
+                  success: false,
+                  friendlyMessage: navRes?.mensagem || `Não encontrei abas ou links para "${hopTarget}" nesta página do portal.`,
+                })
+                return
+              }
+              break
+            }
+
+            await new Promise((r) => setTimeout(r, 600))
+            let nextUrl = currentUrl
+            let nextPath = currentPath
+            let nextHost = currentHost
+            try {
+              const tabAfter = await chrome.tabs.get(tabId)
+              if (tabAfter?.url) {
+                nextUrl = tabAfter.url
+                const parsedDest = new URL(nextUrl)
+                nextPath = parsedDest.pathname
+                nextHost = parsedDest.host
+              }
+            } catch {}
+
+            if (nextHost && host && nextHost.toLowerCase() !== host.toLowerCase()) {
+              sendResponse({
+                success: false,
+                friendlyMessage: `A navegação saiu do domínio do portal (${host} -> ${nextHost}) e não foi gravada por segurança.`,
+              })
+              return
+            }
+
+            const subHops = Array.isArray(navRes.hops) && navRes.hops.length > 0
+              ? navRes.hops
+              : [{ elementText: (navRes.elementText || hopTarget).trim(), tag: navRes.tag || 'a' }]
+
+            const isUrlNavigation = nextUrl !== currentUrl && !nextUrl.includes('#')
+            for (let sIdx = 0; sIdx < subHops.length; sIdx++) {
+              if (recordedSteps.length >= 3) break
+              const sh = subHops[sIdx]
+              const stepText = (sh.elementText || hopTarget).trim()
+              lastElementText = stepText
+              const isLastSubHop = sIdx === subHops.length - 1
+
+              if (isLastSubHop && isUrlNavigation && subHops.length === 1) {
+                recordedSteps.push({
+                  id: `s${recordedSteps.length + 1}`,
+                  at: Date.now(),
+                  frame_path: '/',
+                  host,
+                  path: nextPath,
+                  kind: 'navigate',
+                  url: nextUrl,
+                })
+              } else {
+                recordedSteps.push({
+                  id: `s${recordedSteps.length + 1}`,
+                  at: Date.now(),
+                  frame_path: '/',
+                  host,
+                  path: currentPath,
+                  kind: 'click',
+                  descriptor: {
+                    tag: (sh.tag || 'a').toLowerCase(),
+                    text: stepText,
+                    classes: [],
+                    candidates: [
+                      { strategy: 'text', text: stepText, match: 'normalized' },
+                    ],
+                  },
+                })
+              }
+            }
+
+            currentUrl = nextUrl
+            currentPath = nextPath
+            currentHost = nextHost
           }
 
-          const cleanName = (navRes.elementText || queryText).trim()
+          const cleanName = lastElementText.trim()
           const slug = cleanName
             .toLowerCase()
             .normalize('NFD')
@@ -442,8 +695,7 @@
             .replace(/^-+|-+$/g, '') || 'nav'
           const taskId = 'custom:nav-' + slug.slice(0, 30)
 
-          // 3. Monta trace conforme TraceSchema (v1.0) preservando startUrl/startPath como ponto de partida
-          const isUrlNavigation = destUrl !== startUrl && !destUrl.includes('#')
+          // 3. Monta trace multi-hop conforme TraceSchema (v1.0)
           const trace = {
             trace_version: '1.0',
             task_id: taskId,
@@ -459,39 +711,12 @@
               counts: { tables: 0, rows: 0 },
               landmarks: [],
             },
-            steps: isUrlNavigation
-              ? [
-                  {
-                    id: 's1',
-                    at: Date.now(),
-                    frame_path: '/',
-                    host,
-                    path: destPath,
-                    kind: 'navigate',
-                    url: destUrl,
-                  },
-                ]
-              : [
-                  {
-                    id: 's1',
-                    at: Date.now(),
-                    frame_path: '/',
-                    host,
-                    path: startPath,
-                    kind: 'click',
-                    descriptor: {
-                      tag: (navRes.tag || 'a').toLowerCase(),
-                      text: cleanName,
-                      classes: [],
-                      candidates: [
-                        { strategy: 'text', text: cleanName, match: 'normalized' },
-                      ],
-                    },
-                  },
-                ],
+            steps: recordedSteps,
           }
 
-          // 4. Compilação e salvamento automático como SkillGraph v2 (somente leitura/navegação)
+          await chrome.storage.session.set({ skillgraph_last_trace: trace }).catch(() => {})
+
+          // 4. Compilação em quarentena (activate: false) para revisão humana quando necessário
           const bundle = globalThis.SkillGraphBundle?.SkillGraphV2
           let savedGraph = null
           if (bundle && typeof bundle.compile === 'function') {
@@ -500,16 +725,17 @@
                 task_id: taskId,
                 portal_id: host.replace(/[^a-zA-Z0-9._-]/g, '_'),
                 task_name: `Acessar ${cleanName}`,
-                task_description: `Navega autonomamente para a aba ou página ${cleanName}`,
+                task_description: `Navega autonomamente (${recordedSteps.length} passo(s)) até ${cleanName}`,
                 allowed_hosts: [host],
               }
               const compileResult = bundle.compile(trace, decisions)
               if (compileResult?.graph && compileResult.graph.safety?.side_effect_level === 'read') {
                 savedGraph = compileResult.graph
+                await saveStandaloneGraph(savedGraph, false)
                 const NativeClientClass = bundle.NativeClient || globalThis.NativeClient
                 const nativeClient = NativeClientClass ? new NativeClientClass({ hostName: 'com.teacherai.desktop' }) : null
                 if (nativeClient) {
-                  await nativeClient.send('graphs.save', { graph: savedGraph, activate: true })
+                  await nativeClient.send('graphs.save', { graph: savedGraph, activate: false }).catch(() => {})
                 }
               }
             } catch (compileErr) {
@@ -520,9 +746,12 @@
           sendResponse({
             success: true,
             learned: true,
+            quarantine: true,
             taskId,
+            trace,
+            hops: recordedSteps.length,
             graph: savedGraph,
-            friendlyMessage: `Achei e acessei "${cleanName}"! ✨ Aprendi este trajeto para próximas execuções instantâneas.`,
+            friendlyMessage: `Achei e acessei "${cleanName}" em ${recordedSteps.length} passo(s)! ✨ Confirme o mapa para ativá-lo nas próximas execuções.`,
           })
         } catch (err) {
           sendResponse({
@@ -762,10 +991,11 @@
             return
           }
 
+          await saveStandaloneGraph(graph, true)
           const NativeClientClass = bundle.NativeClient || globalThis.NativeClient
           const nativeClient = NativeClientClass ? new NativeClientClass({ hostName: 'com.teacherai.desktop' }) : null
           if (nativeClient) {
-            await nativeClient.send('graphs.save', { graph, activate: true })
+            await nativeClient.send('graphs.save', { graph, activate: true }).catch(() => {})
           }
 
           await chrome.storage.session.remove(['skillgraph_last_trace', 'skillgraph_last_analysis'])
@@ -797,6 +1027,61 @@
             sendResponse({ success: true })
           } else {
             sendResponse({ success: false, friendlyMessage: 'Abra o app Teacher AI para sincronizar discentes.' })
+          }
+        } catch (err) {
+          sendResponse({ success: false, friendlyMessage: toTeacherFriendlyMessage(err) })
+        }
+      })()
+      return true
+    }
+
+    if (message.action === 'SKILLGRAPH_ACTIVATE_GRAPH') {
+      (async () => {
+        try {
+          if (!message.portalId || !message.taskId) {
+            sendResponse({ success: false, friendlyMessage: 'Identificador do mapa ausente para ativação.' })
+            return
+          }
+          if (!message.confirmed) {
+            sendResponse({
+              success: false,
+              friendlyMessage: 'Confirme a lista de nós e efeitos da habilidade antes de ativá-la.',
+            })
+            return
+          }
+          const requireDryRun = message.isRevert !== true
+          const actRes = await setStandaloneGraphActive(message.portalId, message.taskId, message.version, requireDryRun)
+          if (requireDryRun && !actRes.ok && actRes.reason === 'dry_run_required') {
+            sendResponse({
+              success: false,
+              friendlyMessage: 'Execute uma simulação (Dry-Run) bem-sucedida antes de ativar esta habilidade aprendida.',
+            })
+            return
+          }
+          const bundle = globalThis.SkillGraphBundle?.SkillGraphV2
+          const NativeClientClass = bundle?.NativeClient || globalThis.NativeClient
+          const nativeClient = NativeClientClass ? new NativeClientClass({ hostName: 'com.teacherai.desktop' }) : null
+          if (nativeClient) {
+            try {
+              await nativeClient.send('graphs.setActive', {
+                portalId: message.portalId,
+                taskId: message.taskId,
+                version: message.version,
+              })
+              sendResponse({ success: true })
+              return
+            } catch (nmErr) {
+              if (actRes.ok) {
+                sendResponse({ success: true, standalone: true })
+                return
+              }
+              throw nmErr
+            }
+          }
+          if (actRes.ok) {
+            sendResponse({ success: true, standalone: true })
+          } else {
+            sendResponse({ success: false, friendlyMessage: 'Abra o app Teacher AI para ativar a habilidade.' })
           }
         } catch (err) {
           sendResponse({ success: false, friendlyMessage: toTeacherFriendlyMessage(err) })
@@ -892,11 +1177,12 @@
             }
           }
 
-          // 4. Salva a nova versão v+1 no app desktop via NativeClient e a ativa
+          // 4. Salva a nova versão v+1 localmente (Standalone) e no app desktop via NativeClient (se disponível)
+          await saveStandaloneGraph(patched, true)
           const NativeClientClass = bundle.NativeClient || globalThis.NativeClient
           const nativeClient = NativeClientClass ? new NativeClientClass({ hostName: 'com.teacherai.desktop' }) : null
           if (nativeClient) {
-            await nativeClient.send('graphs.save', { graph: patched, activate: true })
+            await nativeClient.send('graphs.save', { graph: patched, activate: true }).catch(() => {})
           }
 
           // 5. Atualiza métricas de saúde com recordManualRepair

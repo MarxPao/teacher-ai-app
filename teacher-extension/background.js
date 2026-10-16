@@ -927,7 +927,7 @@ async function waitForPageSettled(tabId, maxWaitMs = 2500) {
   await new Promise(r => setTimeout(r, 350));
 }
 
-async function internalNavigatePortalTab(targetTabId, targetKeyword) {
+async function internalNavigatePortalTab(targetTabId, targetKeyword, allowedHosts = []) {
   const keyword = (targetKeyword || '').trim().toLowerCase()
     .replace(/\s+\b(?:e|e\s+depois|depois|em\s+seguida|a[ií])\b.*$/i, '')
     .replace(/\s+e$/i, '')
@@ -936,51 +936,168 @@ async function internalNavigatePortalTab(targetTabId, targetKeyword) {
   try {
     const results = await chrome.scripting.executeScript({
       target: { tabId: targetTabId },
-      args: [keyword],
-      func: async (kw) => {
+      args: [keyword, Array.isArray(allowedHosts) ? allowedHosts : []],
+      func: async (kw, allowedHostList) => {
         const cleanKey = kw.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-        const destructivePattern = /\b(excluir|deletar|apagar|remover|demitir|formatar|pagar|transferir|salvar|gravar|enviar|publicar|confirmar lancamento)\b/i;
+        const destructivePattern = /\b(excluir|deletar|apagar|remover|demitir|formatar|pagar|transferir|salvar|gravar|enviar|publicar|confirmar|fechar|fechamento|consolidar|finalizar|encerrar|concluir|lancar|cancelar|aprovar|reprovar|assinar|homologar|bloquear|desbloquear|resetar|sair|logout)\b/i;
         if (destructivePattern.test(cleanKey)) {
           return { sucesso: false, mensagem: `Ação bloqueada por segurança durante navegação autônoma: '${kw}'.` };
         }
-        const candidates = Array.from(document.querySelectorAll('a, button, [role="tab"], [role="menuitem"], [role="button"], .tab, .tab-btn, .nav-link, li, span'));
-        
-        let bestElement = null;
-        let bestScore = -1;
 
-        for (const el of candidates) {
-          if (el.offsetParent === null && el.offsetWidth === 0 && el.offsetHeight === 0) continue;
-          if (el.tagName === 'INPUT' && el.type === 'submit') continue;
-          
-          const text = (el.innerText || el.textContent || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-          const aria = (el.getAttribute('aria-label') || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-          const title = (el.getAttribute('title') || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-          const href = (el.getAttribute('href') || '').toLowerCase();
-          const id = (el.id || '').toLowerCase();
+        const effectiveAllowedHosts = (Array.isArray(allowedHostList) && allowedHostList.length > 0
+          ? allowedHostList
+          : [location.host, location.hostname]
+        ).map(h => String(h || '').toLowerCase()).filter(Boolean);
 
-          if (destructivePattern.test(text) || destructivePattern.test(aria) || destructivePattern.test(title)) {
-            continue;
+        const isHrefAllowed = (el) => {
+          const anchor = el.tagName === 'A' ? el : (el.closest ? el.closest('a') : null);
+          const rawHref = (el.getAttribute && el.getAttribute('href')) || (anchor && anchor.getAttribute('href')) || '';
+          if (!rawHref || rawHref.startsWith('#') || rawHref.toLowerCase().startsWith('javascript:')) return true;
+          try {
+            const parsed = new URL(rawHref, location.href);
+            const h = (parsed.host || '').toLowerCase();
+            const hn = (parsed.hostname || '').toLowerCase();
+            return effectiveAllowedHosts.some(allowed => allowed === '*' || allowed === h || allowed === hn || hn.endsWith('.' + allowed));
+          } catch {
+            return false;
           }
+        };
 
-          let score = 0;
-          if (text === cleanKey) score = 100;
-          else if (text.startsWith(cleanKey)) score = 80;
-          else if (text.includes(cleanKey)) score = 60;
-          else if (aria.includes(cleanKey)) score = 50;
-          else if (title.includes(cleanKey)) score = 40;
-          else if (id.includes(cleanKey)) score = 30;
-          else if (href.includes(cleanKey)) score = 20;
-
-          if (el.getAttribute('role') === 'tab' || el.classList.contains('tab') || el.classList.contains('nav-link')) {
-            score += 15;
+        const collectClickableCandidates = (root) => {
+          const selector = 'a, button, [role="tab"], [role="menuitem"], [role="button"], .tab, .tab-btn, .nav-link, li, span';
+          const list = Array.from(root.querySelectorAll(selector));
+          const all = Array.from(root.querySelectorAll('*'));
+          for (const node of all) {
+            let sr = null;
+            try {
+              sr = (globalThis.chrome?.dom?.openOrClosedShadowRoot?.(node)) || node.shadowRoot || node.__sgv2ShadowRoot;
+            } catch {
+              sr = node.shadowRoot || node.__sgv2ShadowRoot;
+            }
+            if (sr) list.push(...collectClickableCandidates(sr));
           }
-          if (el.tagName === 'A' || el.tagName === 'BUTTON') {
-            score += 10;
-          }
+          return list;
+        };
 
-          if (score > bestScore && score >= 20) {
-            bestScore = score;
-            bestElement = el;
+        const PORTAL_SEMANTIC_CLUSTERS = [
+          ['notas', 'avaliacoes', 'avaliacao', 'conceitos', 'boletim', 'medias', 'digitacao de notas', 'rendimento', 'notas e faltas'],
+          ['frequencia', 'chamada', 'fazer chamada', 'faltas', 'presenca', 'assiduidade', 'registro de presenca', 'diario de frequencia', 'apontamento de faltas'],
+          ['conteudo', 'conteudo ministrado', 'aula dada', 'plano de aula', 'registro de aula', 'materia lecionada', 'diario de classe'],
+          ['alunos', 'discentes', 'estudantes', 'meus alunos', 'relacao nominal', 'enturmacao', 'lista de alunos', 'turmas', 'minhas turmas'],
+          ['ocorrencias', 'observacoes', 'ficha individual', 'parecer descritivo', 'acompanhamento pedagogico', 'comportamento'],
+        ];
+
+        const expandSemanticSynonyms = (key) => {
+          const synonyms = new Set([key]);
+          for (const cluster of PORTAL_SEMANTIC_CLUSTERS) {
+            if (cluster.some(term => key.includes(term) || term.includes(key))) {
+              for (const term of cluster) synonyms.add(term);
+            }
+          }
+          return Array.from(synonyms);
+        };
+
+        const findBestCandidate = (searchKey) => {
+          const candidates = collectClickableCandidates(document);
+          const expandedKeys = expandSemanticSynonyms(searchKey);
+          const stopWords = new Set(['de', 'da', 'do', 'das', 'dos', 'para', 'em', 'na', 'no', 'as', 'os', 'a', 'o', 'e']);
+          const searchTokens = searchKey.split(/\s+/).filter(t => t.length > 2 && !stopWords.has(t));
+
+          let bestEl = null;
+          let bestScore = -1;
+
+          for (const el of candidates) {
+            if (el.offsetParent === null && el.offsetWidth === 0 && el.offsetHeight === 0) continue;
+            if (el.tagName === 'INPUT' && el.type === 'submit') continue;
+
+            const text = (el.innerText || el.textContent || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+            const aria = (el.getAttribute('aria-label') || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+            const title = (el.getAttribute('title') || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+            const href = (el.getAttribute('href') || '').toLowerCase();
+            const id = (el.id || '').toLowerCase();
+
+            if (destructivePattern.test(text) || destructivePattern.test(aria) || destructivePattern.test(title) || !isHrefAllowed(el)) {
+              continue;
+            }
+
+            let score = 0;
+            if (text === searchKey) score = 100;
+            else if (text.startsWith(searchKey)) score = 85;
+            else if (text.includes(searchKey)) score = 70;
+            else if (aria.includes(searchKey)) score = 55;
+            else if (title.includes(searchKey)) score = 45;
+            else if (id.includes(searchKey)) score = 35;
+            else if (href.includes(searchKey)) score = 25;
+
+            // Match semântico por cluster de sinônimos pedagógicos (ex.: "notas" -> "Digitação de Notas")
+            // Exige texto com >= 4 caracteres e sinônimo CONTIDO no texto (nunca o inverso: "de" ⊂ "consolidacao de etapa")
+            if (score === 0 && text.length >= 4 && text.length <= 60) {
+              for (const syn of expandedKeys) {
+                if (syn === searchKey || syn.length < 4) continue;
+                if (text === syn) { score = Math.max(score, 75); break; }
+                if (text.includes(syn)) { score = Math.max(score, 58); }
+                else if (aria.includes(syn) || title.includes(syn)) { score = Math.max(score, 42); }
+              }
+            }
+
+            // Match por sobreposição de tokens significativos
+            if (score === 0 && searchTokens.length > 0 && text.length > 0 && text.length <= 60) {
+              const matchedTokens = searchTokens.filter(tk => text.includes(tk) || aria.includes(tk));
+              if (matchedTokens.length > 0) {
+                score = Math.round((matchedTokens.length / searchTokens.length) * 50);
+              }
+            }
+
+            if (score > 0) {
+              if (el.getAttribute('role') === 'tab' || el.classList.contains('tab') || el.classList.contains('nav-link')) {
+                score += 15;
+              }
+              if (el.tagName === 'A' || el.tagName === 'BUTTON') {
+                score += 10;
+              }
+              // Anti-Loop (Browser-Use pattern): penaliza elementos já clicados para o mesmo objetivo nesta tela
+              if (el.getAttribute('data-tai-explored') === searchKey) {
+                score -= 45;
+              }
+            }
+
+            if (score > bestScore && score >= 20) {
+              bestScore = score;
+              bestEl = el;
+            }
+          }
+          return bestEl;
+        };
+
+        const hops = [];
+        let bestElement = findBestCandidate(cleanKey);
+
+        // Se o item de submenu não está visível diretamente, tenta expandir um menu pai relacionado (Hop intermediário)
+        if (!bestElement) {
+          const parentMenuKeywords = ['diario', 'academico', 'ensino', 'avaliacao', 'turma', 'aluno', 'menu', 'secretaria'];
+          const expandableMenus = collectClickableCandidates(document).filter(el => {
+            if (el.offsetParent === null && el.offsetWidth === 0 && el.offsetHeight === 0) return false;
+            const txt = (el.innerText || el.textContent || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+            if (destructivePattern.test(txt)) return false;
+            const isExpandable =
+              el.getAttribute('aria-expanded') === 'false' ||
+              el.getAttribute('aria-haspopup') === 'true' ||
+              el.classList.contains('dropdown-toggle') ||
+              el.classList.contains('has-submenu') ||
+              parentMenuKeywords.some(pk => txt === pk || txt.startsWith(pk));
+            return isExpandable;
+          });
+
+          for (const parentEl of expandableMenus.slice(0, 3)) {
+            const parentTxt = (parentEl.innerText || parentEl.textContent || 'Menu').trim();
+            try { parentEl.click(); } catch {}
+            await new Promise(r => setTimeout(r, 220));
+            const revealed = findBestCandidate(cleanKey);
+            if (revealed) {
+              hops.push({ elementText: parentTxt, tag: parentEl.tagName, target: parentTxt });
+              bestElement = revealed;
+              break;
+            }
           }
         }
 
@@ -1000,6 +1117,7 @@ async function internalNavigatePortalTab(targetTabId, targetKeyword) {
         await new Promise(r => setTimeout(r, 120));
 
         try {
+          bestElement.setAttribute('data-tai-explored', cleanKey);
           bestElement.click();
         } catch (e) {
           bestElement.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
@@ -1015,11 +1133,19 @@ async function internalNavigatePortalTab(targetTabId, targetKeyword) {
           } catch {}
         }, 1500);
 
-        return {
-          sucesso: true,
+        const finalHop = {
           elementText: (bestElement.innerText || bestElement.textContent || kw).trim(),
           tag: bestElement.tagName,
           target: kw
+        };
+        hops.push(finalHop);
+
+        return {
+          sucesso: true,
+          elementText: finalHop.elementText,
+          tag: finalHop.tag,
+          target: kw,
+          hops
         };
       }
     });

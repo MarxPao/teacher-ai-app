@@ -456,4 +456,38 @@ describe('ExtensionHost Integration: Checkpoint, Timeout e Aborto Seguro', () =>
     await expect(completionPromise).rejects.toMatchObject({ code: 'E_HANDOFF_TIMEOUT' })
     expect(mockDriver.writeHistory).toHaveLength(0)
   })
+
+  it('14. [Segurança C6] Sem ack do app e sem dryRun, escrita aborta com E_AUDIT_UNAVAILABLE mesmo com standaloneFallback=true e nada vai ao chrome.storage.local', async () => {
+    const localStore: Record<string, any> = {}
+    ;(globalThis as any).chrome.storage.local = {
+      get: vi.fn((_keys: string[], cb: (res: any) => void) => cb(localStore)),
+      set: vi.fn((items: Record<string, any>, cb?: () => void) => {
+        Object.assign(localStore, items)
+        if (cb) cb()
+      }),
+    }
+
+    const host = createExtensionHost({
+      runId: 'run_no_ack_abort',
+      dryRun: false,
+      standaloneFallback: true,
+    })
+
+    const auditPromise = host.audit({
+      run_id: 'run_no_ack_abort',
+      graph: { portal_id: 'portal.escola.com', task_id: 'lancar_nota', version: 1 },
+      node_id: 'write_node',
+      action: 'write',
+      status: 'success',
+      target_ref: 'Nota da aluna Maria',
+      before_value: '8.0',
+      after_value: '9.5',
+      verified_by: 'read_back',
+      at: new Date().toISOString(),
+    })
+
+    await expect(auditPromise).rejects.toThrow(RunnerError)
+    await expect(auditPromise).rejects.toMatchObject({ code: 'E_AUDIT_UNAVAILABLE' })
+    expect(Object.keys(localStore)).toHaveLength(0)
+  })
 })

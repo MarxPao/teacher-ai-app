@@ -22,6 +22,11 @@ import {
 import { NativeClient, NativeSkillGraphRepository, NativeAuditSink } from './nativeClient'
 import { compile, analyzeTrace, CompilerError, scrubGraph } from '../compiler'
 import { SSOHandoffManager, type SSOHandoffAuditEntry } from './ssoHandoff'
+import {
+  distillInteractiveDom,
+  decomposeCompoundTeacherCommand,
+  selectBestDistilledAction,
+} from '../explorer/domDistiller'
 
 declare const chrome: any
 declare const __DEV__: boolean
@@ -36,6 +41,7 @@ export interface ExtensionHostOptions {
   onEvent?: (event: RunEvent) => void
   nativeClient?: NativeClient
   dryRun?: boolean
+  standaloneFallback?: boolean
   checkpointTimeoutMs?: number
   handoffTimeoutMs?: number
   abortSignal?: AbortSignal
@@ -233,38 +239,46 @@ export function createExtensionHost(options: ExtensionHostOptions): ExtensionHos
       return false
     },
     async audit(entry: AuditEntry): Promise<void> {
-      if (auditSink && !options.dryRun) {
+      const isRealMutation = !options.dryRun
+      if (isRealMutation) {
+        if (!auditSink) {
+          throw new RunnerError(
+            'E_AUDIT_UNAVAILABLE',
+            'Auditoria write-ahead indisponível: o app Teacher AI deve estar aberto e conectado.'
+          )
+        }
         try {
           await auditSink.audit(entry)
           return
         } catch (err: any) {
           throw new RunnerError(
             'E_AUDIT_UNAVAILABLE',
-            `Audit sink indisponível no app desktop: ${err.message || String(err)}`
+            `Audit sink indisponível no app desktop: ${err?.message || String(err)}`
           )
         }
       }
 
-      // Em dry-run ou modo DEV, permite fallback no storage de sessão
-      if (options.dryRun || isDevMode) {
+      // Em dryRun: true (com ou sem standaloneFallback/DEV), nunca grava before_value, after_value ou nomes;
+      // mantém apenas códigos e IDs técnicos na memória efêmera de sessão.
+      if (options.dryRun && (isDevMode || options.standaloneFallback)) {
         if (typeof chrome !== 'undefined' && chrome.storage?.session) {
           try {
+            const minimalEntry = {
+              run_id: entry.run_id,
+              graph: entry.graph,
+              node_id: entry.node_id,
+              action: entry.action,
+              status: entry.status,
+              error_code: entry.error_code,
+              at: entry.at,
+            }
             const current = await chrome.storage.session.get('skillgraph_audit_log')
             const list = Array.isArray(current?.skillgraph_audit_log) ? current.skillgraph_audit_log : []
-            list.push(entry)
+            list.push(minimalEntry)
             await chrome.storage.session.set({ skillgraph_audit_log: list.slice(-50) })
-          } catch {
-            // Ignora falha de storage de sessão
-          }
+          } catch {}
         }
-        return
       }
-
-      // Em produção real, se auditSink não foi configurado ou falhou, aborta obrigatoriamente
-      throw new RunnerError(
-        'E_AUDIT_UNAVAILABLE',
-        'Auditoria write-ahead indisponível: o app Teacher AI deve estar aberto e conectado.'
-      )
     },
     emit(event: RunEvent): void {
       if (options.onEvent) options.onEvent(event)
@@ -371,6 +385,9 @@ const SkillGraphV2 = {
   CompilerError,
   scrubGraph,
   SSOHandoffManager,
+  distillInteractiveDom,
+  decomposeCompoundTeacherCommand,
+  selectBestDistilledAction,
 }
 
 if (typeof globalThis !== 'undefined') {
@@ -389,4 +406,7 @@ export {
   CompilerError,
   scrubGraph,
   SSOHandoffManager,
+  distillInteractiveDom,
+  decomposeCompoundTeacherCommand,
+  selectBestDistilledAction,
 }

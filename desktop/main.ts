@@ -5,6 +5,7 @@ import { NodeSqliteDriver } from './db/nodeSqliteDriver'
 import { VaultManager } from './vault/safeStorage'
 import { NamedPipeServer } from './nm/pipeServer'
 import { LlmGateway } from './llm/llmGateway'
+import { autoRegisterNativeMessagingHost } from './nativeHost/autoRegister'
 import {
   MigrationRunner,
   SqlStudentRepository,
@@ -27,6 +28,7 @@ import {
   canActivate,
   PackageExporter,
 } from '../lib/desktop-core/community'
+import { validateGraph } from '../lib/contracts/skillgraph'
 
 // 1. Configuração do App e Instância Única
 app.setName('TeacherAI')
@@ -94,8 +96,13 @@ async function executeBusinessMethod(method: string, params: any): Promise<any> 
     }
 
     case 'graphs.save': {
-      const saved = await graphRepo?.save(params.graph as any)
-      if (params.activate && saved) {
+      const validation = validateGraph(params.graph as any)
+      if (!validation.valid) {
+        throw new Error(`E_GRAPH_INVALID: ${validation.errors.map((e: any) => e.message).join('; ')}`)
+      }
+      const shouldActivate = params.activate !== false
+      const saved = await graphRepo?.save(params.graph as any, { activate: shouldActivate })
+      if (shouldActivate && saved) {
         await graphRepo?.setActive(saved.identity.portal_id, saved.identity.task_id, saved.identity.version)
       }
       return saved
@@ -347,6 +354,9 @@ async function initCore() {
     },
   })
   await pipeServer.start()
+
+  // Auto-registro zero-terminal do Native Messaging Host em HKCU (Chrome & Edge)
+  autoRegisterNativeMessagingHost({ userDataPath: userData, electronExecPath: process.execPath })
 }
 
 function createWindow() {

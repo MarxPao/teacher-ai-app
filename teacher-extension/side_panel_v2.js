@@ -385,7 +385,65 @@
               if (exploreRes?.success) {
                 nluFeedback.style.background = '#f0fdf4'
                 nluFeedback.style.color = '#166534'
-                nluFeedback.textContent = exploreRes.friendlyMessage || 'Navegação realizada e habilidade aprendida com sucesso! ✨'
+                nluFeedback.textContent = exploreRes.friendlyMessage || 'Navegação realizada e habilidade aprendida em quarentena! ✨'
+                const learnedGraph = exploreRes.quarantine ? exploreRes.graph : null
+                const learnedId = learnedGraph?.identity
+                if (learnedId) {
+                  const nodesSummary = Object.entries(learnedGraph.nodes || {})
+                    .map(([id, n]) => `${id} [${n.type}: ${n.label || id}]`)
+                    .join(' → ')
+                  const sideEffect = learnedGraph.safety?.side_effect_level || 'read'
+                  nluFeedback.insertAdjacentHTML(
+                    'beforeend',
+                    `<div style="margin-top:6px;padding:6px;background:#fff;border:1px solid #bbf7d0;border-radius:4px;font-size:11px;color:#1e293b;">
+                      <div><strong>Revisão de Nós e Efeitos (${sideEffect}):</strong> ${nodesSummary}</div>
+                      <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;">
+                        <button id="sgv2-dryrun-learned" type="button" style="padding:3px 8px;font-size:11px;background:#0284c7;color:#fff;border:none;border-radius:4px;cursor:pointer;">1. Testar Simulação (Dry-Run)</button>
+                        <button id="sgv2-activate-learned" type="button" disabled style="padding:3px 8px;font-size:11px;background:#94a3b8;color:#fff;border:none;border-radius:4px;cursor:not-allowed;">2. Confirmar Nós e Ativar</button>
+                      </div>
+                    </div>`
+                  )
+                  const btnDryRun = document.getElementById('sgv2-dryrun-learned')
+                  const btnActivate = document.getElementById('sgv2-activate-learned')
+                  btnDryRun?.addEventListener('click', () => {
+                    btnDryRun.disabled = true
+                    btnDryRun.textContent = 'Simulando...'
+                    chrome.runtime.sendMessage(
+                      { action: 'SKILLGRAPH_RUN', payload: { graph: learnedGraph, taskId: learnedId.task_id, dryRun: true, standaloneFallback: true } },
+                      (drRes) => {
+                        if (drRes?.success) {
+                          btnDryRun.textContent = '✓ Dry-Run Aprovado'
+                          if (btnActivate) {
+                            btnActivate.disabled = false
+                            btnActivate.style.background = '#16a34a'
+                            btnActivate.style.cursor = 'pointer'
+                          }
+                        } else {
+                          btnDryRun.disabled = false
+                          btnDryRun.textContent = 'Falha no Dry-Run (Tentar novamente)'
+                        }
+                      }
+                    )
+                  })
+                  btnActivate?.addEventListener('click', (e) => {
+                    e.preventDefault()
+                    chrome.runtime.sendMessage(
+                      {
+                        action: 'SKILLGRAPH_ACTIVATE_GRAPH',
+                        portalId: learnedId.portal_id,
+                        taskId: learnedId.task_id,
+                        version: learnedId.version,
+                        confirmed: true,
+                      },
+                      (actRes) => {
+                        nluFeedback.textContent = actRes?.success
+                          ? 'Habilidade revisada e ativada após Dry-Run! ✨'
+                          : (actRes?.friendlyMessage || 'Não consegui ativar agora.')
+                        loadActiveSkills()
+                      }
+                    )
+                  })
+                }
                 loadActiveSkills()
               } else {
                 nluFeedback.style.background = '#fef2f2'
@@ -717,4 +775,23 @@
       initSkillGraphV2Panel()
     }
   }
+})()
+
+// Modo compatibilidade: a permissão opcional "debugger" só é pedida com gesto explícito da professora.
+// Sem ela, o fallback CDP (teclado real, event.isTrusted = true) do RemoteDriver fica desligado.
+;(() => {
+  const chk = document.getElementById('sgv2-chk-trusted')
+  if (!chk || typeof chrome === 'undefined' || !chrome.permissions) return
+  chrome.permissions.contains({ permissions: ['debugger'] }, (has) => {
+    chk.checked = Boolean(has)
+  })
+  chk.addEventListener('change', () => {
+    if (chk.checked) {
+      chrome.permissions.request({ permissions: ['debugger'] }, (granted) => {
+        chk.checked = Boolean(granted)
+      })
+    } else {
+      chrome.permissions.remove({ permissions: ['debugger'] }, () => {})
+    }
+  })
 })()

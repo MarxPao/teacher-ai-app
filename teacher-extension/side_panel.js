@@ -1024,10 +1024,7 @@ if (btnSendToApp) {
           showFeedback('success', `🎉 ${currentLoadedStudents.length} alunos salvos na turma "${className}" no app desktop!`);
           if (btnOpenAppStudents) btnOpenAppStudents.style.display = 'flex';
         } else {
-          // Fallback para cache local seguro da extensão
-          chrome.storage.local.set({ [`cached_roster_${className}`]: currentLoadedStudents }, () => {
-            showFeedback('success', `🎉 ${currentLoadedStudents.length} alunos salvos localmente na turma "${className}". Abra o app Teacher AI para sincronizar.`);
-          });
+          showFeedback('error', 'Abra o app Teacher AI para salvar os discentes no banco cifrado local.');
         }
       });
     } catch (err) {
@@ -1201,6 +1198,7 @@ if (btnInterpret) {
       interpretBox.innerHTML = '<span class="spinner"></span> Consultando LLM via BYOK...';
     }
 
+    try {
       // Interpretação determinística local-first (sem requisição TCP externa)
       btnInterpret.disabled = false;
       if (interpretText) interpretText.textContent = 'Interpretar Comando';

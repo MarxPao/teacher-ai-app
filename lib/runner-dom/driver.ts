@@ -19,7 +19,7 @@ import type { Fingerprint } from '../contracts/skillgraph/primitives'
 import { ElementHandleStore } from './handleStore'
 import { resolveAnchorElements, getElementText } from './selectors'
 import { readHtmlTable, parseTableHeaders } from './tableReader'
-import { executeDomWrite } from './writer'
+import { executeDomWriteAsync } from './writer'
 import { evaluateDomCondition } from './conditions'
 import { matchText, findHeaderMatch } from '../runner/text'
 import { describeElements as extractDescriptors } from './elementDescriptor'
@@ -119,50 +119,141 @@ export class DomDriver implements Driver {
     return { matchedIndex: -1, totalCandidates: 0, ambiguous: false }
   }
 
+  /**
+   * Portado de Skyvern (`skyvern/webeye/scraper/domUtils.js` -> `expectHitTarget`):
+   * Garante que o elemento esteja no viewport e verifica via `elementFromPoint` (ou overlays ativos)
+   * se há um toast/modal/banner obstruindo o ponto central do alvo, fechando-o e aguardando o fade-out antes de interagir.
+   */
+  private async ensureElementNotOccluded(el: Element): Promise<void> {
+    try {
+      if (typeof (el as HTMLElement).scrollIntoView === 'function') {
+        ;(el as HTMLElement).scrollIntoView({ behavior: 'instant' as any, block: 'center', inline: 'center' })
+      }
+    } catch {}
+
+    let blocker: Element | null = null
+    try {
+      if (typeof el.getBoundingClientRect === 'function' && typeof this.doc.elementFromPoint === 'function') {
+        const rect = el.getBoundingClientRect()
+        if (rect.width > 0 && rect.height > 0) {
+          const cx = rect.left + rect.width / 2
+          const cy = rect.top + rect.height / 2
+          const hit = this.doc.elementFromPoint(cx, cy)
+          if (hit && hit !== el && !el.contains(hit) && !hit.contains(el)) {
+            const isLinkedLabel = hit.tagName?.toLowerCase() === 'label' && el.id && hit.getAttribute?.('for') === el.id
+            if (!isLinkedLabel) {
+              // Só overlays reconhecidos contam como bloqueio. Um elemento qualquer no ponto (header fixo,
+              // sidebar) NÃO é "fechado" — clicar em [data-dismiss] dele poderia cancelar o fluxo do portal.
+              blocker = hit.closest?.('.toast, .modal.show, .swal2-container, .cookie-banner, [role="alertdialog"], [data-occluding-overlay]') || null
+            }
+          }
+        }
+      }
+    } catch {}
+
+    if (blocker && !blocker.contains?.(el)) {
+      const closeBtn = blocker.querySelector?.(
+        '.btn-close, .toast-close, button.close, [aria-label*="Fechar" i], [aria-label*="Close" i], [data-dismiss]'
+      ) as HTMLElement | null
+      if (closeBtn) {
+        try {
+          closeBtn.click()
+          await new Promise(r => setTimeout(r, 20))
+        } catch {}
+      }
+    }
+  }
+
   public async readTable(options: ReadTableOptions) {
     this.hostGuard()
     const tableEl = this.resolveTargetElement({ anchor: options.anchor })
     const firstPage = readHtmlTable(tableEl, options)
 
     const paginateCfg = (options as any).paginate
-    if (!paginateCfg) {
+    const isVirtualizedGrid =
+      !paginateCfg &&
+      (tableEl.matches?.('.ag-root, .MuiDataGrid-root, .ReactVirtualized__Grid, [data-virtualized="true"]') ||
+        Boolean(tableEl.querySelector('[aria-rowindex], [row-index], .ag-body-viewport, .MuiDataGrid-virtualScroller')))
+
+    if (!paginateCfg && !isVirtualizedGrid) {
       return firstPage
     }
 
-    const maxPages = paginateCfg.maxPages ?? paginateCfg.max_pages ?? 10
-    const mode = paginateCfg.mode || 'next_button'
+    const maxPages = paginateCfg ? (paginateCfg.maxPages ?? paginateCfg.max_pages ?? 10) : 15
+    const mode = paginateCfg ? (paginateCfg.mode || 'next_button') : 'virtual_scroll'
     const allRows = [...firstPage.rows]
     const allRawCells = [...(firstPage.rawCells || [])]
-    const seenRowKeys = new Set(allRows.map(r => JSON.stringify(r)))
+
+    // Dedup por contagem de ocorrências dentro de cada lote: linhas idênticas visíveis AO MESMO TEMPO
+    // (homônimos com a mesma nota) são preservadas; só a sobreposição entre lotes é descartada.
+    const countByKey = (rows: Array<Record<string, string>>) => {
+      const m = new Map<string, number>()
+      for (const r of rows) {
+        const k = JSON.stringify(r)
+        m.set(k, (m.get(k) || 0) + 1)
+      }
+      return m
+    }
+    const maxSeen = countByKey(allRows)
+    const batchSignature = (rows: Array<Record<string, string>>) => rows.map(r => JSON.stringify(r)).join('|')
+    let lastSignature = batchSignature(firstPage.rows)
+
+    const virtualViewport = isVirtualizedGrid
+      ? (tableEl.querySelector('.ag-body-viewport, .ag-body-vertical-scroll-viewport, .MuiDataGrid-virtualScroller, .ReactVirtualized__Grid, .virtual-viewport') || tableEl)
+      : null
 
     for (let page = 1; page < maxPages; page++) {
-      const pagRes = await this.paginate({
-        action: 'next_page',
-        mode,
-        maxPages,
-        buttonTarget: paginateCfg.next_button ? { anchor: paginateCfg.next_button } : paginateCfg.buttonTarget,
-      })
-      if (!pagRes.advanced || pagRes.isLastPage) break
-
-      let currentTableEl: Element = tableEl
-      try {
-        currentTableEl = this.resolveTargetElement({ anchor: options.anchor })
-      } catch {
-        break
+      if (isVirtualizedGrid && virtualViewport) {
+        const prevTop = virtualViewport.scrollTop || 0
+        virtualViewport.scrollTop = prevTop + 300
+        virtualViewport.dispatchEvent(new Event('scroll', { bubbles: true }))
+        // Fim da rolagem: o scrollTop não avançou (DOM real) — nada novo para ler
+        if ((virtualViewport.scrollTop || 0) === prevTop && typeof (virtualViewport as HTMLElement).scrollHeight === 'number') break
+      } else {
+        const pagRes = await this.paginate({
+          action: 'next_page',
+          mode,
+          maxPages,
+          buttonTarget: paginateCfg.next_button ? { anchor: paginateCfg.next_button } : paginateCfg.buttonTarget,
+        })
+        if (!pagRes.advanced || pagRes.isLastPage) break
       }
-      const nextRes = readHtmlTable(currentTableEl, options)
+
+      // Aguarda o re-render assíncrono (rAF/debounce do AG-Grid, MUI, React-Virtualized ou página nova): até ~300ms
+      let currentTableEl: Element = tableEl
+      let nextRes = { headers: firstPage.headers, rows: [] as Array<Record<string, string>>, rawCells: [] as string[][] }
+      for (let wait = 0, maxWaits = isVirtualizedGrid ? 12 : 40; wait < maxWaits; wait++) {
+        await new Promise(r => setTimeout(r, 25))
+        try {
+          currentTableEl = this.resolveTargetElement({ anchor: options.anchor })
+        } catch {
+          continue
+        }
+        nextRes = readHtmlTable(currentTableEl, options) as typeof nextRes
+        if (batchSignature(nextRes.rows) !== lastSignature) break
+      }
+      const signature = batchSignature(nextRes.rows)
+      if (signature === lastSignature) break
+      lastSignature = signature
+
       let added = 0
+      const batchCounts = countByKey(nextRes.rows)
+      const emitted = new Map<string, number>()
       for (let i = 0; i < nextRes.rows.length; i++) {
         const row = nextRes.rows[i]
         const key = JSON.stringify(row)
-        if (!seenRowKeys.has(key)) {
-          seenRowKeys.add(key)
+        const occurrence = (emitted.get(key) || 0) + 1
+        emitted.set(key, occurrence)
+        if (occurrence > (maxSeen.get(key) || 0)) {
           allRows.push(row)
           if (nextRes.rawCells?.[i]) {
             allRawCells.push(nextRes.rawCells[i])
           }
           added++
         }
+      }
+      for (const [k, c] of batchCounts) {
+        if (c > (maxSeen.get(k) || 0)) maxSeen.set(k, c)
       }
       if (added === 0) break
     }
@@ -186,12 +277,35 @@ export class DomDriver implements Driver {
   public async write(options: WriteOptions) {
     this.hostGuard()
     const el = this.resolveTargetElement(options.target)
-    return executeDomWrite(el, options)
+    await this.ensureElementNotOccluded(el)
+    return executeDomWriteAsync(el, options)
+  }
+
+  public async getBoundingBox(target: ElementTarget): Promise<{ x: number; y: number; width: number; height: number; visible: boolean }> {
+    this.hostGuard()
+    const el = this.resolveTargetElement(target)
+    try {
+      if (typeof (el as HTMLElement).scrollIntoView === 'function') {
+        ;(el as HTMLElement).scrollIntoView({ behavior: 'instant' as any, block: 'center', inline: 'center' })
+      }
+    } catch {}
+    if (typeof el.getBoundingClientRect === 'function') {
+      const r = el.getBoundingClientRect()
+      return {
+        x: r.left,
+        y: r.top,
+        width: r.width,
+        height: r.height,
+        visible: r.width > 0 && r.height > 0,
+      }
+    }
+    return { x: 0, y: 0, width: 0, height: 0, visible: false }
   }
 
   public async click(target: ElementTarget, options?: { isSubmit?: boolean }) {
     this.hostGuard()
     const el = this.resolveTargetElement(target)
+    await this.ensureElementNotOccluded(el)
     ;(el as HTMLElement).click()
     return { success: true }
   }
@@ -264,12 +378,15 @@ export class DomDriver implements Driver {
 
   public async paginate(options: PaginateOptions) {
     this.hostGuard()
+    if ((options.mode as string) === 'page_number') {
+      throw new RunnerError('E_NODE_UNSUPPORTED', 'Modo de paginação page_number não implementado.')
+    }
     if (options.mode === 'infinite_scroll' || options.mode === 'virtual_scroll') {
       const container = this.findScrollableContainer()
       const prevTop = container.scrollTop
       container.scrollTop += 600
       container.dispatchEvent(new Event('scroll', { bubbles: true }))
-      const advanced = container.scrollTop !== prevTop || true
+      const advanced = container.scrollTop !== prevTop
       return { advanced, isLastPage: false }
     }
 
@@ -357,20 +474,22 @@ export class DomDriver implements Driver {
     const downloadAttr = anchorEl?.getAttribute('download') || el.getAttribute('data-filename') || ''
 
     let filename = downloadAttr.trim()
-    if (!filename && rawHref && !rawHref.startsWith('data:') && !rawHref.startsWith('javascript:')) {
+    if (!filename && rawHref && !rawHref.startsWith('data:') && !rawHref.startsWith('javascript:') && !rawHref.startsWith('#')) {
       try {
         const u = new URL(rawHref, this.doc.location?.href || 'http://localhost')
         const lastSeg = u.pathname.split('/').filter(Boolean).pop()
         if (lastSeg && lastSeg.includes('.')) filename = decodeURIComponent(lastSeg)
       } catch {}
     }
-    if (!filename) {
-      const ext = options.expect?.mime_hint?.includes('pdf') ? 'pdf' : 'csv'
-      filename = `download_resultado.${ext}`
+
+    const hasRealDownloadSignal = Boolean(filename) || rawHref.startsWith('data:') || rawHref.startsWith('blob:')
+    if (!hasRealDownloadSignal) {
+      ;(el as HTMLElement).click()
+      throw new RunnerError('E_DOWNLOAD_FAILED', 'Nenhum evento ou link de download real encontrado no elemento acionado.')
     }
 
-    let sizeBytes = 1024
-    let mimeType = options.expect?.mime_hint || 'text/csv'
+    let sizeBytes = 0
+    let mimeType = options.expect?.mime_hint || 'application/octet-stream'
     if (rawHref.startsWith('data:')) {
       const commaIdx = rawHref.indexOf(',')
       if (commaIdx > 5) {
@@ -380,6 +499,10 @@ export class DomDriver implements Driver {
         if (semiIdx > 0) mimeType = meta.slice(0, semiIdx)
         else if (meta) mimeType = meta
         sizeBytes = Math.max(1, payload.length)
+        if (!filename) {
+          const ext = mimeType.includes('pdf') ? 'pdf' : 'csv'
+          filename = `arquivo.${ext}`
+        }
       }
     }
 
@@ -401,26 +524,39 @@ export class DomDriver implements Driver {
         : el.querySelector('input[type="file"]')
     ) as HTMLInputElement | null
 
-    if (fileInput) {
-      const filename = typeof options.source === 'string' ? options.source : (options.source?.name || 'arquivo_anexo.csv')
-      const content =
-        typeof options.source === 'string'
-          ? options.source
-          : ((options.source as any)?.content || 'conteudo,arquivo\n1,2')
-      const mimeType = (typeof options.source === 'object' && (options.source as any)?.mimeType) || 'text/csv'
-      try {
-        if (typeof File !== 'undefined' && typeof DataTransfer !== 'undefined') {
-          const file = new File([content], filename, { type: mimeType })
-          const dt = new DataTransfer()
-          dt.items.add(file)
-          fileInput.files = dt.files
-        }
-      } catch {}
-      fileInput.dispatchEvent(new Event('input', { bubbles: true }))
-      fileInput.dispatchEvent(new Event('change', { bubbles: true }))
-      return { success: true, filename }
+    const src = options.source as any
+    // Proibido criar new File([caminho]) a partir de string de caminho: exige arquivo real em memória de sessão (File ou objeto { name, content/data })
+    if (!fileInput || !src || typeof src === 'string') {
+      return { success: false }
     }
-    return { success: false }
+
+    const maxBytes = options.maxSizeBytes ?? 5 * 1024 * 1024
+    const isFileInstance = typeof File !== 'undefined' && src instanceof File
+    const filename = isFileInstance ? src.name : String(src.name || src.filename || '').trim()
+    const rawContent = isFileInstance ? src : (src.content ?? src.data ?? src.buffer)
+    if (!filename || rawContent === undefined || rawContent === null) {
+      return { success: false }
+    }
+
+    const byteSize = isFileInstance
+      ? src.size
+      : typeof rawContent === 'string'
+        ? new TextEncoder().encode(rawContent).byteLength
+        : (rawContent.byteLength ?? rawContent.size ?? 0)
+    if (byteSize > maxBytes) {
+      throw new RunnerError('E_UPLOAD_TOO_LARGE', `Arquivo excede o limite de ${maxBytes} bytes.`)
+    }
+
+    const mimeType = isFileInstance ? src.type : (src.mimeType || src.type || 'text/csv')
+    if (typeof File !== 'undefined' && typeof DataTransfer !== 'undefined') {
+      const fileObj = isFileInstance ? src : new File([rawContent], filename, { type: mimeType })
+      const dt = new DataTransfer()
+      dt.items.add(fileObj)
+      fileInput.files = dt.files
+    }
+    fileInput.dispatchEvent(new Event('input', { bubbles: true }))
+    fileInput.dispatchEvent(new Event('change', { bubbles: true }))
+    return { success: true, filename }
   }
 
   public async describeElements(selector?: string) {

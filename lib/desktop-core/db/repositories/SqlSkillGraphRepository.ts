@@ -66,7 +66,7 @@ export class SqlSkillGraphRepository implements SkillGraphRepository {
     taskId: string
   ): Promise<SkillGraphV2 | null> {
     const rows = await this.driver.query<{ graph_json: string }>(
-      'SELECT graph_json FROM skill_graphs WHERE task_id = ? ORDER BY is_active DESC, version DESC',
+      'SELECT graph_json FROM skill_graphs WHERE task_id = ? AND is_active = 1 ORDER BY version DESC',
       [taskId]
     )
 
@@ -187,7 +187,7 @@ export class SqlSkillGraphRepository implements SkillGraphRepository {
     }))
   }
 
-  async save(graph: SkillGraphV2): Promise<SkillGraphV2> {
+  async save(graph: SkillGraphV2, options?: { activate?: boolean }): Promise<SkillGraphV2> {
     const portalId = graph.identity.portal_id
     const taskId = graph.identity.task_id
     const now = this.clock.toISOString()
@@ -216,8 +216,8 @@ export class SqlSkillGraphRepository implements SkillGraphRepository {
         },
       }
 
-      // Se for a primeira versão, torna-se ativa automaticamente
-      const isActive = existingMax === 0 ? 1 : 0
+      // Se activate === false explícito, não nasce ativa nem na v1
+      const isActive = options?.activate === false ? 0 : (existingMax === 0 ? 1 : 0)
 
       await tx.execute(
         `INSERT INTO skill_graphs (
