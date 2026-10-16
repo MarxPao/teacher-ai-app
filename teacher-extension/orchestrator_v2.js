@@ -8,6 +8,7 @@
   // Mensagens pedagógicas e acolhedoras para a professora (Regra Zero Jargão)
   function toTeacherFriendlyMessage(err) {
     if (!err) return 'Ação concluída com sucesso no portal!'
+    const code = (err && err.code) ? String(err.code) : ''
     const msg = String(err.message || err)
 
     if (
@@ -15,27 +16,46 @@
       msg.includes('Porta Native Messaging desconectada') ||
       msg.includes('Native Messaging') ||
       msg.includes('com.teacherai.desktop') ||
+      code === 'E_NM_FAILED' ||
+      code === 'E_AUDIT_UNAVAILABLE' ||
       msg.includes('E_NM_FAILED') ||
       msg.includes('E_AUDIT_UNAVAILABLE')
     ) {
       return 'Abra o app Teacher AI para continuar. O assistente precisa do aplicativo desktop ativo.'
     }
-    if (msg.includes('E_HOST_NOT_ALLOWED')) {
+    if (code === 'E_HOST_NOT_ALLOWED' || msg.includes('E_HOST_NOT_ALLOWED')) {
       return 'O portal aberto nesta aba não está cadastrado para esta automação. Verifique se você está na página correta da escola.'
     }
-    if (msg.includes('E_ANCHOR_NOT_FOUND') || msg.includes('E_ROW_NOT_FOUND')) {
+    if (
+      code === 'E_ANCHOR_NOT_FOUND' ||
+      code === 'E_ROW_NOT_FOUND' ||
+      msg.includes('E_ANCHOR_NOT_FOUND') ||
+      msg.includes('E_ROW_NOT_FOUND')
+    ) {
       return 'Não consegui localizar este item na página. A tabela ou formulário do portal pode ter mudado.'
     }
-    if (msg.includes('E_VALUE_OUT_OF_SCALE')) {
+    if (code === 'E_FINGERPRINT_MISMATCH' || msg.includes('E_FINGERPRINT_MISMATCH')) {
+      return 'A página aberta não parece ser a tela esperada para esta habilidade. Abra a aba correta do portal e tente novamente.'
+    }
+    if (code === 'E_VALUE_OUT_OF_SCALE' || msg.includes('E_VALUE_OUT_OF_SCALE')) {
       return 'O valor informado está fora do padrão aceito pelo portal (ex.: nota maior que 10).'
     }
-    if (msg.includes('E_READBACK_MISMATCH')) {
+    if (code === 'E_READBACK_MISMATCH' || msg.includes('E_READBACK_MISMATCH')) {
       return 'O portal não registrou a alteração conforme esperado. O valor foi restaurado para segurança.'
     }
-    if (msg.includes('E_INTERRUPTED')) {
+    if (code === 'E_GRAPH_INVALID' || msg.includes('E_GRAPH_INVALID')) {
+      return 'O mapa desta habilidade precisa ser revisado antes de executar. Tente gravar a demonstração novamente.'
+    }
+    if (code === 'E_NODE_UNSUPPORTED' || code === 'E_UNSUPPORTED_PATTERN' || msg.includes('E_NODE_UNSUPPORTED') || msg.includes('E_UNSUPPORTED_PATTERN')) {
+      return 'Este formato de campo ou controle do portal ainda não é suportado automaticamente.'
+    }
+    if (code === 'E_PII_SCRUB_FAILED' || msg.includes('E_PII_SCRUB_FAILED')) {
+      return 'Por proteção de privacidade (LGPD), dados pessoais foram detectados no mapa e o salvamento foi bloqueado.'
+    }
+    if (code === 'E_INTERRUPTED' || msg.includes('E_INTERRUPTED')) {
       return 'A execução foi interrompida pelo usuário.'
     }
-    if (msg.includes('E_TIMEOUT')) {
+    if (code === 'E_TIMEOUT' || msg.includes('E_TIMEOUT')) {
       return 'O portal demorou mais do que o esperado para responder. Tente novamente.'
     }
     return 'Não foi possível concluir a ação no portal. Deseja gravar uma demonstração?'
@@ -759,7 +779,7 @@
           console.warn('[SkillGraph Orchestrator] Erro na compilação do trace:', err)
           sendResponse({
             success: false,
-            friendlyMessage: `Não foi possível compilar o mapa: ${err.message || 'Verifique as ações gravadas e tente novamente.'}`,
+            friendlyMessage: toTeacherFriendlyMessage(err),
           })
         }
       })()
@@ -779,7 +799,7 @@
             sendResponse({ success: false, friendlyMessage: 'Abra o app Teacher AI para sincronizar discentes.' })
           }
         } catch (err) {
-          sendResponse({ success: false, friendlyMessage: err.message || String(err) })
+          sendResponse({ success: false, friendlyMessage: toTeacherFriendlyMessage(err) })
         }
       })()
       return true

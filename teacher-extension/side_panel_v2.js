@@ -157,6 +157,12 @@
 
         if (res?.success && res.trace) {
           currentRecordedTrace = res.trace
+          const steps = Array.isArray(res.trace.steps) ? res.trace.steps : []
+          const hasCheck = steps.some((s) => s.kind === 'check')
+          const hasNumericInput = steps.some((s) => s.kind === 'input' && /^\d+([.,]\d+)?$/.test(String(s.value || '').trim()))
+          const targetRadioVal = hasCheck || res.promptPolarity ? 'attendance' : (hasNumericInput || res.promptGradeScale ? 'grade' : 'text')
+          const radioToSelect = document.querySelector(`input[name="sgv2-record-type"][value="${targetRadioVal}"]`)
+          if (radioToSelect) radioToSelect.checked = true
           if (recordDecisionsBox) recordDecisionsBox.style.display = 'block'
         }
       })
@@ -167,7 +173,7 @@
       btnConfirmCompile.textContent = 'Compilando e salvando...'
 
       const typeEl = document.querySelector('input[name="sgv2-record-type"]:checked')
-      const fieldType = typeEl ? typeEl.value : 'grade'
+      const fieldType = typeEl ? typeEl.value : 'text'
       const nameInput = document.getElementById('sgv2-record-task-name')
       const descInput = document.getElementById('sgv2-record-task-desc')
       const slugInput = document.getElementById('sgv2-record-task-slug')
@@ -176,14 +182,18 @@
       const taskName = (nameInput?.value || '').trim() || `Habilidade ${rawSlug}`
       const taskDesc = (descInput?.value || '').trim() || ''
 
+      const traceSteps = Array.isArray(currentRecordedTrace?.steps) ? currentRecordedTrace.steps : []
+      const hasInputStep = traceSteps.some((s) => s.kind === 'input')
+      const hasCheckStep = traceSteps.some((s) => s.kind === 'check')
+
       const decisions = {
         task_id: taskId,
         portal_id: currentRecordedTrace?.portal_id || 'portal_escolar',
         task_name: taskName,
         task_description: taskDesc,
         allowed_hosts: [currentRecordedTrace?.steps?.[0]?.host || 'localhost'],
-        attendance_polarity: fieldType === 'attendance' ? 'checked_is_present' : undefined,
-        grade_scale: fieldType === 'grade' ? { type: 'numeric', min: 0, max: 10, decimal_separator: ',' } : undefined,
+        attendance_polarity: fieldType === 'attendance' && hasCheckStep ? 'checked_is_present' : undefined,
+        grade_scale: fieldType === 'grade' && hasInputStep ? { type: 'numeric', min: 0, max: 10, decimal_separator: ',' } : undefined,
       }
 
       chrome.runtime.sendMessage(

@@ -287,4 +287,34 @@ export class SqlSkillGraphRepository implements SkillGraphRepository {
       return true
     })
   }
+
+  async delete(
+    portalId: string,
+    taskId: string,
+    version?: number
+  ): Promise<boolean> {
+    if (typeof version === 'number') {
+      const existing = await this.driver.queryOne<{ version: number }>(
+        'SELECT version FROM skill_graphs WHERE portal_id = ? AND task_id = ? AND version = ?',
+        [portalId, taskId, version]
+      )
+      if (!existing) return false
+      await this.driver.execute(
+        'DELETE FROM skill_graphs WHERE portal_id = ? AND task_id = ? AND version = ?',
+        [portalId, taskId, version]
+      )
+      return true
+    }
+    const existing = await this.driver.queryOne<{ version: number }>(
+      'SELECT version FROM skill_graphs WHERE portal_id = ? AND task_id = ? LIMIT 1',
+      [portalId, taskId]
+    )
+    if (!existing) return false
+    await this.driver.execute(
+      'DELETE FROM skill_graphs WHERE portal_id = ? AND task_id = ?',
+      [portalId, taskId]
+    )
+    return true
+  }
 }
+

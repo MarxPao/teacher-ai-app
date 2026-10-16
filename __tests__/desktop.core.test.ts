@@ -613,6 +613,15 @@ describe('Desktop Core — Teste de Fronteira (Fase 6)', () => {
         catalog
       )
       expect(resNegated.no_match).toBe(true)
+
+      const resException = await gateway.parseIntent(
+        'Lançar presença para todos menos o João',
+        [{ name: 'João' }],
+        catalog
+      )
+      expect(resException.no_match).toBe(true)
+      expect(resException.clarification_needed).toBe(true)
+      expect(resException.params.student_ref).toBeUndefined()
     })
   })
 })

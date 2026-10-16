@@ -14,6 +14,9 @@ export const EXTENSION_ALLOWED_METHODS = [
   'graphs.resolveActive',
   'graphs.listActive',
   'graphs.list',
+  'graphs.listVersions',
+  'graphs.setActive',
+  'graphs.delete',
   'graphs.save',
   'audit.append',
   'nlu.parse',
@@ -33,6 +36,7 @@ export const UI_ALLOWED_METHODS = [
   'data.backup',
   'data.restore',
   'keys.configure',
+  'keys.status',
   'consents.get',
   'consents.set',
   'audit.purge',
@@ -114,6 +118,25 @@ export const MethodParamSchemas = {
 
   'graphs.listActive': z.object({
     host: z.string().min(1),
+  }).strict(),
+
+  'graphs.list': z.object({}).strict(),
+
+  'graphs.listVersions': z.object({
+    portalId: z.string().min(1),
+    taskId: z.string().min(1),
+  }).strict(),
+
+  'graphs.setActive': z.object({
+    portalId: z.string().min(1),
+    taskId: z.string().min(1),
+    version: z.number().int().min(1),
+  }).strict(),
+
+  'graphs.delete': z.object({
+    portalId: z.string().min(1),
+    taskId: z.string().min(1),
+    version: z.number().int().min(1).optional(),
   }).strict(),
 
   'graphs.save': z.object({

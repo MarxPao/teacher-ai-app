@@ -80,6 +80,19 @@ async function executeBusinessMethod(method: string, params: any): Promise<any> 
     case 'graphs.list':
       return await graphRepo?.list()
 
+    case 'graphs.listVersions':
+      return await graphRepo?.listVersions(params.portalId, params.taskId)
+
+    case 'graphs.setActive': {
+      const activated = await graphRepo?.setActive(params.portalId, params.taskId, params.version)
+      return { success: Boolean(activated), portalId: params.portalId, taskId: params.taskId, version: params.version }
+    }
+
+    case 'graphs.delete': {
+      const deleted = await graphRepo?.delete(params.portalId, params.taskId, params.version)
+      return { success: Boolean(deleted), portalId: params.portalId, taskId: params.taskId, version: params.version }
+    }
+
     case 'graphs.save': {
       const saved = await graphRepo?.save(params.graph as any)
       if (params.activate && saved) {
@@ -121,7 +134,18 @@ async function executeBusinessMethod(method: string, params: any): Promise<any> 
     case 'data.restore': {
       const buf = Buffer.from(params.backupBase64, 'base64')
       const restoredJson = await restoreEncryptedBackup(buf, params.passphrase)
-      return { restored: true, length: restoredJson.length }
+      let studentsRestored = 0
+      try {
+        const parsed = JSON.parse(restoredJson)
+        if (Array.isArray(parsed?.students) && studentRepo) {
+          await studentRepo.upsertStudentsFromPortal('restored_backup', parsed.students, {
+            portalId: 'backup_restore',
+            readAt: new Date().toISOString(),
+          })
+          studentsRestored = parsed.students.length
+        }
+      } catch {}
+      return { restored: true, length: restoredJson.length, studentsRestored }
     }
 
     case 'data.exportStudent': {

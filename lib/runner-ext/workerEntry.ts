@@ -65,27 +65,6 @@ export function createExtensionHost(options: ExtensionHostOptions): ExtensionHos
     return false
   }
 
-  const ssoManager = options.allowedHosts ? new SSOHandoffManager({
-    runId: options.runId,
-    targetTabId: options.targetTabId ?? 0,
-    originHost: options.originHost ?? 'portal',
-    allowedHosts: options.allowedHosts,
-    expectFingerprint: options.expectFingerprint,
-    driver: options.driver,
-    timeoutMs: options.handoffTimeoutMs,
-    isAborted,
-    onEvent: (ev) => {
-      if (options.onEvent) {
-        options.onEvent({
-          type: ev.type as any,
-          runId: ev.runId,
-          timestamp: Date.now(),
-          data: ev.data,
-        })
-      }
-    },
-  }) : null
-
   const pendingCheckpoints = new Map<string, {
     cp: CheckpointPayload & { updatedText?: string }
     resolve: (approved: boolean) => void
@@ -98,6 +77,34 @@ export function createExtensionHost(options: ExtensionHostOptions): ExtensionHos
     reject: (err: any) => void
     timer: any
   }>()
+
+  const ssoManager = options.allowedHosts ? new SSOHandoffManager({
+    runId: options.runId,
+    targetTabId: options.targetTabId ?? 0,
+    originHost: options.originHost ?? 'portal',
+    allowedHosts: options.allowedHosts,
+    expectFingerprint: options.expectFingerprint,
+    driver: options.driver,
+    timeoutMs: options.handoffTimeoutMs,
+    isAborted,
+    onEvent: (ev) => {
+      if (ev.type === 'sso_handoff_completed') {
+        for (const [reqId, ho] of pendingHandoffs.entries()) {
+          pendingHandoffs.delete(reqId)
+          clearTimeout(ho.timer)
+          ho.resolve(true)
+        }
+      }
+      if (options.onEvent) {
+        options.onEvent({
+          type: ev.type as any,
+          runId: ev.runId,
+          timestamp: Date.now(),
+          data: ev.data,
+        })
+      }
+    },
+  }) : null
 
   const triggerAbort = (reason = 'Execução cancelada pelo usuário') => {
     internalAborted = true

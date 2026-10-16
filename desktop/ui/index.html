@@ -225,22 +225,48 @@
       <p>Exporte ou restaure toda a base de dados com senha forte pessoal (scrypt + AES-256-GCM).</p>
       
       <input type="password" id="backup-passphrase" placeholder="Senha do backup (mín. 6 caracteres)">
-      <div style="display: flex; gap: 8px;">
+      <div style="display: flex; gap: 8px; margin-bottom: 10px;">
         <button class="btn" id="btn-backup" style="flex: 1;">Exportar Backup</button>
         <button class="btn btn-secondary" id="btn-status">Diagnóstico</button>
       </div>
-      <div style="margin-top: 10px; font-size: 12px; color: var(--muted);">
-        Para restaurar um arquivo <code>.tbackup</code>, use a opção correspondente do app.
+      <div style="border-top: 1px solid var(--border); padding-top: 10px;">
+        <label style="font-size: 12px; color: var(--muted); display: block; margin-bottom: 6px;">Restaurar arquivo <code>.tbackup</code>:</label>
+        <input type="file" id="restore-file-input" accept=".tbackup" style="margin-bottom: 8px;">
+        <button class="btn btn-secondary" id="btn-restore-backup" style="width: 100%;">📥 Restaurar Backup (.tbackup)</button>
       </div>
     </div>
 
-    <!-- Card 4: Comunidade de Mapas Pedagógicos -->
+    <!-- Card 4: Gestão de Habilidades & Mapas da Comunidade -->
     <div class="card" style="grid-column: span 2;">
       <h2>
-        <span>🤝 Mapas da Comunidade (Compartilhamento Seguro)</span>
+        <span>🧭 Gestão de Habilidades & Mapas da Comunidade</span>
         <button class="btn btn-secondary" id="btn-refresh-community">🔄 Atualizar Registro</button>
       </h2>
-      <p>Importe fluxos criados e revisados por outros educadores. Todo mapa importado entra em <strong>quarentena</strong> até que você confirme as ações de tela e realize uma simulação sem riscos no seu portal.</p>
+      <p>Gerencie versões das suas habilidades gravadas (ativar/reverter versão ou excluir) e compartilhe ou importe mapas com a comunidade.</p>
+
+      <!-- Gestão de Versões e Exclusão de Habilidades Locais -->
+      <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin-bottom: 14px;">
+        <h3 style="font-size: 13px; margin: 0 0 6px 0; color: var(--text);">
+          🗂️ Minhas Habilidades Gravadas (Versões & Reversão)
+        </h3>
+        <div style="overflow-x: auto;">
+          <table id="local-skills-table">
+            <thead>
+              <tr>
+                <th>Portal</th>
+                <th>Tarefa (ID)</th>
+                <th>Nome</th>
+                <th>Versão</th>
+                <th>Status</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody id="local-skills-tbody">
+              <tr><td colspan="6" style="color: var(--muted); text-align: center;">Carregando habilidades locais...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
       
       <!-- Exportar / Compartilhar Mapa Local -->
       <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin-bottom: 14px;">

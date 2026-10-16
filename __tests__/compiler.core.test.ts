@@ -348,4 +348,68 @@ describe('Compiler Core v2 — Determinístico e Anti-PII', () => {
     expect((graph.nodes.n2 as any).expect_navigation).toBe(true)
     expect(validateGraph(graph).valid).toBe(true)
   })
+
+  it('13. Compila formulário multi-campos distintos gerando múltiplos nós WRITE após o CHECKPOINT', () => {
+    const trace: Trace = {
+      trace_version: '1.0',
+      task_id: 'custom:plano-completo',
+      started_at: 1775865600000,
+      initial_url: 'http://portal.escola.com/plano',
+      steps: [
+        {
+          id: 's1',
+          at: 1775865600100,
+          frame_path: '/',
+          host: 'portal.escola.com',
+          path: '/plano',
+          kind: 'navigate',
+          url: 'http://portal.escola.com/plano',
+        },
+        {
+          id: 's2',
+          at: 1775865600200,
+          frame_path: '/',
+          host: 'portal.escola.com',
+          path: '/plano',
+          kind: 'input',
+          value: 'Frações Equivalentes',
+          descriptor: { tag: 'input', id: 'titulo_aula', aria_label: 'Título da Aula', classes: [] },
+        },
+        {
+          id: 's3',
+          at: 1775865600300,
+          frame_path: '/',
+          host: 'portal.escola.com',
+          path: '/plano',
+          kind: 'input',
+          value: 'Exercícios práticos do capítulo 4',
+          descriptor: { tag: 'textarea', id: 'conteudo_aula', aria_label: 'Conteúdo da Aula', classes: [] },
+        },
+        {
+          id: 's4',
+          at: 1775865600400,
+          frame_path: '/',
+          host: 'portal.escola.com',
+          path: '/plano',
+          kind: 'click',
+          is_submit_action: true,
+          descriptor: { tag: 'button', text: 'Salvar Plano', role: 'button', classes: [] },
+        },
+      ],
+    }
+
+    const decisions: CompilerDecisions = {
+      task_id: 'custom:plano-completo',
+      portal_id: 'portal_escola',
+      task_name: 'Registrar Plano Completo',
+      allowed_hosts: ['portal.escola.com'],
+    }
+
+    const { graph, report } = compile(trace, decisions, { clock: FIXED_CLOCK })
+    expect(report.valid).toBe(true)
+    expect(report.warnings.some((w) => w.code === 'W_BATCH_PATTERN_IGNORED')).toBe(false)
+    const writeNodes = Object.values(graph.nodes).filter((n) => n.type === 'WRITE')
+    expect(writeNodes).toHaveLength(2)
+    expect(validateGraph(graph).valid).toBe(true)
+  })
 })

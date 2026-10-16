@@ -231,6 +231,19 @@ export class LlmGateway {
       }
     }
 
+    // Guardrail contra cláusulas de exceção em lote ("todos menos o João", "exceto Maria", "salvo Pedro")
+    // Impede que o nome citado na exceção seja extraído como o único alvo de escrita individual
+    if (/\b(?:todos?\s+menos|todas?\s+menos|exceto|salvo|menos\s+(?:o|a)\b)/i.test(lower)) {
+      return {
+        intent: 'unknown',
+        params: {},
+        supported: false,
+        no_match: true,
+        clarification_needed: true,
+        raw: text,
+      }
+    }
+
     if (catalog !== undefined) {
       if (!Array.isArray(catalog) || catalog.length === 0) {
         return {

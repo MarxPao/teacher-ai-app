@@ -218,6 +218,45 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   })
 
+  const btnRestoreBackup = document.getElementById('btn-restore-backup')
+  const restoreFileInput = document.getElementById('restore-file-input')
+
+  btnRestoreBackup?.addEventListener('click', async () => {
+    const passphrase = passInput?.value || ''
+    if (passphrase.length < 6) {
+      alert('Informe a senha do backup (mínimo 6 caracteres) no campo acima.')
+      return
+    }
+    const file = restoreFileInput?.files?.[0]
+    if (!file) {
+      alert('Selecione um arquivo .tbackup para restaurar.')
+      return
+    }
+
+    log(`Restaurando cópia de segurança cifrada (${file.name})...`)
+    try {
+      const arrayBuffer = await file.arrayBuffer()
+      const bytes = new Uint8Array(arrayBuffer)
+      let binary = ''
+      for (let i = 0; i < bytes.byteLength; i++) {
+        binary += String.fromCharCode(bytes[i])
+      }
+      const backupBase64 = btoa(binary)
+      const res = await window.teacherDesktop.invoke('data.restore', { passphrase, backupBase64 })
+      if (res.success) {
+        log(`Backup restaurado com sucesso! (${res.result?.length || 0} bytes decifrados).`)
+        alert('Backup restaurado com sucesso!')
+        await loadStudents()
+      } else {
+        log(`Falha ao restaurar backup: ${res.error?.message}`)
+        alert(`Erro ao restaurar: ${res.error?.message}`)
+      }
+    } catch (err) {
+      log(`Erro ao restaurar backup: ${err.message}`)
+      alert(`Erro ao restaurar: ${err.message}`)
+    }
+  })
+
   // ─── Funcionalidades Comunitárias (Fase 7) ──────────────────────────────────
   const commSearchInput = document.getElementById('community-search-input')
   const btnSearchComm = document.getElementById('btn-search-community')
@@ -397,12 +436,15 @@ document.addEventListener('DOMContentLoaded', async () => {
   const btnExportMap = document.getElementById('btn-export-map')
   const exportTaskSelect = document.getElementById('export-task-select')
   const exportStatusMsg = document.getElementById('export-status-msg')
+  const localSkillsTbody = document.getElementById('local-skills-tbody')
 
   async function loadExportTasks() {
-    if (!exportTaskSelect) return
     const client = window.teacherAi || window.teacherDesktop
     if (!client) {
-      exportTaskSelect.innerHTML = '<option value="">Bridge desktop indisponível</option>'
+      if (exportTaskSelect) exportTaskSelect.innerHTML = '<option value="">Bridge desktop indisponível</option>'
+      if (localSkillsTbody) {
+        localSkillsTbody.innerHTML = '<tr><td colspan="6" style="color: var(--muted); text-align: center;">Bridge desktop indisponível</td></tr>'
+      }
       return
     }
 
@@ -410,20 +452,97 @@ document.addEventListener('DOMContentLoaded', async () => {
       const res = await (client.send ? client.send('graphs.list', {}) : client.invoke('graphs.list', {}))
       const list = res?.success && Array.isArray(res.result) ? res.result : Array.isArray(res) ? res : []
       if (!list || list.length === 0) {
-        exportTaskSelect.innerHTML = '<option value="">Nenhuma habilidade gravada no banco</option>'
+        if (exportTaskSelect) exportTaskSelect.innerHTML = '<option value="">Nenhuma habilidade gravada no banco</option>'
+        if (localSkillsTbody) {
+          localSkillsTbody.innerHTML = '<tr><td colspan="6" style="color: var(--muted); text-align: center;">Nenhuma habilidade gravada no banco local.</td></tr>'
+        }
         return
       }
 
-      exportTaskSelect.innerHTML = list
-        .map((g) => {
-          const name = g.name || g.task_name || ''
-          const label = name ? `${g.task_id} (${name})` : g.task_id
-          const portalInfo = g.portal_id ? ` [${g.portal_id}]` : ''
-          return `<option value="${escapeHtml(g.task_id)}" data-portal="${escapeHtml(g.portal_id || 'portal_escolar')}">${escapeHtml(label + portalInfo)}</option>`
+      if (exportTaskSelect) {
+        exportTaskSelect.innerHTML = list
+          .map((g) => {
+            const name = g.name || g.task_name || ''
+            const label = name ? `${g.task_id} (${name})` : g.task_id
+            const portalInfo = g.portal_id ? ` [${g.portal_id}]` : ''
+            return `<option value="${escapeHtml(g.task_id)}" data-portal="${escapeHtml(g.portal_id || 'portal_escolar')}">${escapeHtml(label + portalInfo)}</option>`
+          })
+          .join('')
+      }
+
+      if (localSkillsTbody) {
+        localSkillsTbody.innerHTML = list
+          .map((g) => {
+            const isActive = g.is_active === 1 || g.is_active === true
+            return `
+              <tr>
+                <td><code>${escapeHtml(g.portal_id || 'portal_escolar')}</code></td>
+                <td style="font-family: monospace; font-size: 12px;">${escapeHtml(g.task_id)}</td>
+                <td>${escapeHtml(g.name || g.task_id)}</td>
+                <td>v${escapeHtml(g.version || 1)}</td>
+                <td>
+                  <span class="status-pill ${isActive ? 'status-ok' : 'status-off'}">
+                    ${isActive ? 'Ativa' : 'Inativa'}
+                  </span>
+                </td>
+                <td>
+                  ${
+                    !isActive
+                      ? `<button class="btn btn-secondary btn-activate-version" data-portal="${escapeHtml(g.portal_id)}" data-task="${escapeHtml(g.task_id)}" data-version="${escapeHtml(g.version)}" style="font-size: 11px; padding: 4px 8px;">Ativar / Reverter</button>`
+                      : ''
+                  }
+                  <button class="btn-danger btn-delete-version" data-portal="${escapeHtml(g.portal_id)}" data-task="${escapeHtml(g.task_id)}" data-version="${escapeHtml(g.version)}" style="font-size: 11px; padding: 4px 8px; margin-left: 4px;">Excluir</button>
+                </td>
+              </tr>
+            `
+          })
+          .join('')
+
+        localSkillsTbody.querySelectorAll('.btn-activate-version').forEach((btn) => {
+          btn.addEventListener('click', async (e) => {
+            const portalId = e.currentTarget.dataset.portal
+            const taskId = e.currentTarget.dataset.task
+            const version = Number(e.currentTarget.dataset.version)
+            try {
+              const actRes = await (client.send
+                ? client.send('graphs.setActive', { portalId, taskId, version })
+                : client.invoke('graphs.setActive', { portalId, taskId, version }))
+              if (actRes?.success !== false) {
+                log(`Versão v${version} da habilidade "${taskId}" ativada no portal "${portalId}".`)
+                await loadExportTasks()
+              } else {
+                alert(`Erro ao ativar versão: ${actRes?.error?.message || 'Falha'}`)
+              }
+            } catch (err) {
+              log(`Erro ao reverter versão: ${err.message}`)
+            }
+          })
         })
-        .join('')
+
+        localSkillsTbody.querySelectorAll('.btn-delete-version').forEach((btn) => {
+          btn.addEventListener('click', async (e) => {
+            const portalId = e.currentTarget.dataset.portal
+            const taskId = e.currentTarget.dataset.task
+            const version = Number(e.currentTarget.dataset.version)
+            if (!confirm(`Deseja excluir a versão v${version} da habilidade "${taskId}"?`)) return
+            try {
+              const delRes = await (client.send
+                ? client.send('graphs.delete', { portalId, taskId, version })
+                : client.invoke('graphs.delete', { portalId, taskId, version }))
+              if (delRes?.success !== false) {
+                log(`Versão v${version} da habilidade "${taskId}" removida.`)
+                await loadExportTasks()
+              } else {
+                alert(`Erro ao excluir habilidade: ${delRes?.error?.message || 'Falha'}`)
+              }
+            } catch (err) {
+              log(`Erro ao excluir habilidade: ${err.message}`)
+            }
+          })
+        })
+      }
     } catch (err) {
-      exportTaskSelect.innerHTML = `<option value="">Erro ao carregar habilidades: ${escapeHtml(err.message)}</option>`
+      if (exportTaskSelect) exportTaskSelect.innerHTML = `<option value="">Erro ao carregar habilidades: ${escapeHtml(err.message)}</option>`
     }
   }
 
