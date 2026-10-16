@@ -1,427 +1,495 @@
-# Auditoria Independente de Navegação, Extração/Inserção, UX e Linguagem Natural (`AUDITORIA_CAPACIDADES.md`)
+# AUDITORIA DE CAPACIDADES DO ENGINE (Independente, Somente Leitura)
 
-**Data:** 15 de outubro de 2026  
-**Branch:** `fechamento-integracao` (`HEAD` = `b2444b0`)  
-**Escopo:** Auditoria estrita em passada única (somente leitura) dos objetivos **C1 a C5**.
-
----
-
-## 1. Veredito Executivo (máx. 10 linhas)
-
-O motor possui contratos formais sólidos e **137/137 testes unitários aprovados** (E1), mas **C1 a C5 são `PARCIAL` no código (E2) e `NÃO EXECUTADO (dono)` no navegador real**. A alegação de **"navegar e extrair/inserir em qualquer portal" NÃO é sustentável hoje**: (1) a integração entre `side_panel_v2.js`, `orchestrator_v2.js` e `desktop/main.ts` tem **4 quebras de contrato** que impedem listar habilidades ativas (`s.params.forEach` em objeto), resolver grafos (`resp.graph` inexistente), passar parâmetros do formulário ao runner (`runner.run(graph, {})`) e salvar alunos (`source` string vs objeto); (2) a navegação real foi conectada apenas para `NAVIGATE` direto por URL, mas o timeout de 10s resolve com sucesso silencioso, URLs absolutas em `node.path` burlam `allowed_hosts`, `expect_navigation` em cliques é ignorado e paginação/scroll infinito/download/upload são stubs ou desconectados; (3) o explorador autônomo (`SKILLGRAPH_EXPLORE_AND_LEARN`, introduzido em `b2444b0`) clica por heurística léxica sem bloqueio de verbos destrutivos, gera traces estruturalmente inválidos e salva/ativa grafos (`activate: true`) sem revisão humana nem dry-run; e (4) o módulo de NLU (`LlmGateway.parseIntent`) não usa LLM — é um extrator regex estático sem suporte a datas relativas, exceções ("todos menos o João"), lotes ou diálogo de desambiguação.
+> **Data:** 16/10/2026  
+> **Branch:** `fechamento-integracao` (`HEAD` em `f26e204`)  
+> **Escopo:** Auditoria independente de passe único e somente leitura sobre as capacidades C1–C6 do motor Teacher AI (`lib/runner`, `lib/runner-dom`, `lib/runner-ext`, `lib/compiler`, `lib/repair`, `lib/explorer`, `teacher-extension/*`, `desktop/*`).
 
 ---
 
-## 2. Tabela de Avaliação por Objetivo (C1 a C5)
+## 1. Veredito (Máx. 10 Linhas)
 
-> **Regra de integridade aplicada:** Sem evidência de execução em navegador real e portal real (exclusiva do dono), o teto máximo permitido é `PARCIAL`. A coluna **"% Honesto (Código E2)"** mede a fração da capacidade implementada de forma real e conectada à cadeia de produção.
-
-| Objetivo | Veredito | Nível E | % Honesto (Código E2) | Justificativa Técnica (`arquivo:linha`) | O Que Falta para `COMPLETO` |
-| :--- | :---: | :---: | :---: | :--- | :--- |
-| **C1 — Navegar** (URLs, menus, troca de página, abas, popups, iframes, SPA, paginação, scroll infinito, wait, mudança de contexto) | `PARCIAL` (`NÃO EXECUTADO (dono)`) | E2 | **38%** | `NAVIGATE` chama `chrome.tabs.update` (`remoteDriver.ts:205`), `WAIT` faz polling (`branch.ts:61`), `HANDOFF_HUMAN` aguarda confirmação (`checkpoint.ts:88`) e o gravador persiste estado em `chrome.storage.local` (`orchestrator_v2.js:516`). Porém: timeout de 10s de `navigate()` resolve sem erro (`remoteDriver.ts:220-222`); `expect_navigation` em `CLICK` é ignorado (`click.ts:13-61`); `scroll_until_found` não faz scroll incremental (`driver.ts:159-166`); `paginate_until_found` e paginação em `READ` são ignorados (`navigate.ts:89-105`, `tableReader.ts:65`); `DomDriver.paginate` usa seletor CSS inválido `button:has-text(...)` (`driver.ts:187`); iframes cross-origin são engolidos (`selectors.ts:27`). | Rejeitar com `E_TIMEOUT` no timer de `navigate()`; validar host em URLs absolutas de `node.path`; implementar espera em `CLICK.expect_navigation`; conectar paginação real e scroll incremental no `DomDriver`; rotear `frameId` via `chrome.webNavigation` para iframes cross-origin; validar no Chrome real. |
-| **C2 — Módulo de navegação completo** (coeso, erro, timeout, host permitido, retomada segura) | `PARCIAL` (`NÃO EXECUTADO (dono)`) | E2 | **35%** | Não há módulo único coeso: coexistem **6 caminhos de navegação** no repositório (3 ativos no painel v2: nó `NAVIGATE`, `internalNavigatePortalTab` e `SKILLGRAPH_EXPLORE_AND_LEARN`). Se `node.path` for URL absoluta, `executeNavigateNode` (`navigate.ts:49`) ignora `checkAllowedHost`. Se a página recarregar durante um `WRITE` com `retry.max_attempts: 2` (`assemble.ts:132`), o erro de RPC dispara retry em `engine.ts:115`, podendo duplicar a escrita. O explorador salva com `activate: true` sem revisão (`orchestrator_v2.js:467`). | Unificar navegação sob o contrato de `SkillGraphRunner`/`RemoteDriver`; validar `new URL(finalUrl).hostname` contra `allowed_hosts`; proibir retry automático em `WRITE` após despacho de RPC; remover auto-ativação sem revisão no explorador. |
-| **C3 — UX/feature completa** (pedir, ensinar, revisar, aprovar, executar, progresso, erros claros, cancelar, reverter versão, gerir habilidades sem terminal) | `PARCIAL` (`NÃO EXECUTADO (dono)`) | E2 | **45%** | O painel v2 (`side_panel_v2.html/js`) e o app (`desktop/ui/index.html`, `app.js`) têm telas para pedir, gravar, revisar, aprovar CHECKPOINT, cancelar e ver barra de progresso. Contudo, **4 bugs bloqueantes de contrato** quebram o fluxo sem terminal: (1) `side_panel_v2.js:239,286` lê `s.task_id` e `s.params.forEach` num grafo onde o ID é `s.identity.task_id` e `params` é Objeto; (2) `orchestrator_v2.js:116` lê `resp.graph` mas `desktop/main.ts:75` retorna o grafo direto; (3) `orchestrator_v2.js:199` passa `{}` em vez de `payload.initialVariables` como `params` ao runner; (4) `orchestrator_v2.js:214` envia `source` string em `students.upsertFromPortal`. Reverter versão, excluir/renomear habilidade, restaurar backup e instalador `.exe` não têm UI/script. | Corrigir os 4 contratos quebrados entre `side_panel_v2.js`, `orchestrator_v2.js` e `desktop/main.ts`; honrar `updatedText` do modal de CHECKPOINT (`workerEntry.ts:128`); expor botões de reverter versão (`graphs.setActive`), excluir habilidade e restaurar `.tbackup`; configurar empacotador NSIS/Electron-Builder. |
-| **C4 — Extrair e inserir qualquer dado** (tabelas, listas, forms, textos, download, inputs, select, checkbox, data, textarea, upload em qualquer portal) | `PARCIAL` (`NÃO EXECUTADO (dono)`) | E2 | **42%** | Leitura de `<table>` HTML (incluindo `colspan`/`rowspan` e `skip_rows` em `tableReader.ts:13-125`), `readText`, `readValue` e escrita com setter nativo + read-back + reversão em `<input>`, `<textarea>` e `<select>` (`writer.ts:48-103`, `write.ts:160-200`) são reais. Porém: `DOWNLOAD` (`driver.ts:233-243`) e `UPLOAD` (`driver.ts:245-265`) são **stubs** com dados fictícios hardcoded; `source.kind === 'list'` chama `readTable` e falha em `<ul>/<li>` (`read.ts:46`); cartões/grids exigem classes fixas `.cards-container`/`.student-card` (`tableReader.ts:77`); e a escrita em checkbox (`writer.ts:24-30`) **não inverte o booleano** quando `polarity === 'absence'`. | Implementar `DOWNLOAD` real (`chrome.downloads`) e `UPLOAD` real; corrigir inversão de booleano em `writer.ts:24-30` para `checked_is_absent` vs `checked_is_present`; implementar leitor real de listas (`<ul>/<ol>/<li>`) e grids genéricos; suportar selects/datepickers customizados. |
-| **C5 — Linguagem natural com nuances** (ambíguos, parciais, referências, datas relativas, lotes, correções, esclarecimento, coloquial, catálogo + CHECKPOINT) | `PARCIAL` (`NÃO EXECUTADO (dono)`) | E2 | **25%** | O roteamento restringe-se estritamente ao catálogo (`llmGateway.ts:171`) e textos livres exigem `CHECKPOINT` integral (`checkpoint.ts:26-40`). Porém, `LlmGateway.parseIntent` (`desktop/llm/llmGateway.ts:160-333`) **não invoca LLM**: é um parser léxico por regex/substring. Não resolve datas relativas ("ontem", "sexta passada"), não entende exceções/lotes ("todos menos o João" extrai `"João"` como o aluno que levará falta em `llmGateway.ts:289`), não processa correções ("na verdade, 7,5"), não mantém histórico de conversa, não faz perguntas de esclarecimento e quebra em `for (const p of declaredParams)` (`llmGateway.ts:255`) quando `params` é um objeto `Record`. | Corrigir iteração de `params` (`Object.entries`); integrar inferência estruturada (Ollama local com fallback determinístico honesto); resolver datas relativas na camada NLU antes do runner; detectar negações/exceções ("menos", "exceto") e ambiguidades retornando pergunta de esclarecimento à professora. |
-
-### "Navegar e extrair/inserir em qualquer portal" é hoje alegável?
-**NÃO.** Pelas evidências E2 acima:
-1. O painel v2 sequer consegue listar ou executar uma habilidade salva no SQLite por causa das incompatibilidades de formato em `side_panel_v2.js:239,286` e `orchestrator_v2.js:116,199`.
-2. Mesmo corrigindo a ponte, apenas tabelas HTML clássicas (`<table>`) em página única ou navegação por URL estática funcionam de ponta a ponta: portais que dependam de paginação (`next_button`/`infinite_scroll`), tabela virtualizada, listas `<ul>/<li>`, cartões com classes próprias, iframes cross-origin, selects customizados (React-Select/MUI), datepickers JS, download de boletins ou upload de arquivos batem em stubs ou seletores desconectados.
+O engine **NÃO está pronto** para sustentar a alegação de *"navegar e extrair/inserir qualquer dado em qualquer portal escolar com garantias de segurança preservadas"*. Nenhuma das capacidades C1–C6 atinge `COMPLETO`: C1–C5 atingem no máximo `PARCIAL` (limitadas por lacunas de implementação real no Chrome MV3 e pela ausência de execução com a extensão carregada em navegador e portal reais — `NÃO EXECUTADO (dono)`), e **C6 sofreu regressão ativa (`BLOQUEIA`)**. Em particular, a introdução recente do modo *"Zero-Desktop Standalone"* (`standaloneFallback: true` por padrão em `teacher-extension/orchestrator_v2.js:279` e `lib/runner-ext/workerEntry.ts:241-285`) quebrou a invariante pétrea de segurança: **com o app Desktop fechado e `dryRun: false`, a escrita física no DOM prossegue sem ack do cofre SQLite** e grava nomes de alunos, notas (`before_value`/`after_value`) e grafos em texto claro em `chrome.storage.local`. Adicionalmente, o nó `UPLOAD` (`lib/runner/nodes/upload.ts:17-93`) muta o DOM sem auditoria write-ahead e sem respeitar `dryRun`, o explorador em produção (`orchestrator_v2.js:516-729`) não usa `domDistiller.ts` (código morto no bundle), e o teste `run-e2e-chromium.ts` injeta `DomDriver` direto via Electron sem carregar a extensão nem passar por `SkillGraphRunner`/`RemoteDriver`/`NativeClient`.
 
 ---
 
-## 3. B1 — Anatomia da Navegação (C1, C2)
+## 2. Tabela C1–C6
 
-### 3.1 Análise Item a Item com Cadeia de Produção e Verificação de Stubs
+| ID | Capacidade | Status | Nível E | Justificativa Técnica (`arquivo:linha`) | O que falta para `COMPLETO` |
+| :--- | :--- | :---: | :---: | :--- | :--- |
+| **C1** | **Navegar** | `PARCIAL` | E2 (código) / E1 parcial (`DomDriver` isolado) / `NÃO EXECUTADO (dono)` | `NAVIGATE` (`lib/runner/nodes/navigate.ts:16-73` → `lib/runner-ext/remoteDriver.ts:503-546`) chama `chrome.tabs.update`. Porém: (1) timeout de `navigate` (`remoteDriver.ts:526-541`) e `waitForNavigation` (`remoteDriver.ts:548-572`) resolvem com sucesso sem erro se o timer expirar; (2) `DomDriver.waitForNavigation` (`lib/runner-dom/driver.ts:461-464`) é stub (`Promise.resolve()`); (3) `DomDriver.paginate` tem `\|\| true` (`driver.ts:386`) e não implementa `mode: 'page_number'`; (4) `readTable` paginado (`driver.ts:199-243`) roda num único RPC de content script e quebra se a paginação recarregar a página. | Corrigir timeouts silenciosos em `RemoteDriver.navigate`/`waitForNavigation`, remover `\|\| true` em `driver.ts:386`, implementar `page_number`, mover loop de paginação multi-página para o `SkillGraphRunner` (sobrevivendo a reload), propagar `frameId` em `readTable`/`scroll`/`paginate` e validar no Chrome com extensão carregada. |
+| **C2** | **Módulo de navegação coeso** | `PARCIAL` | E2 | Coexistem **6 caminhos concorrentes de navegação** (`executeNavigateNode`, `internalNavigatePortalTab`, `NAVIGATE_PORTAL_TAB`, `portal_navigate`, `domDistiller.ts` órfão e `sidecar/agentic_execution_loop.py`). O painel v2 usa `SkillGraphRunner` para grafos salvos, mas usa `internalNavigatePortalTab` (`background.js:930-1140`) para exploração, com regras de host e erro distintas. | Unificar a navegação do explorador e do runner sob um único pipeline (`RemoteDriver` + `checkAllowedHost` + `SSOHandoffManager`) e remover/deprecar caminhos paralelos e código morto (`domDistiller.ts` não conectado ao `orchestrator_v2.js`). |
+| **C3** | **UX completa sem terminal** | `PARCIAL` | E2 / `NÃO EXECUTADO (dono)` | `side_panel_v2.html/js` e `desktop/ui/index.html` + `app.js` cobrem pedido em texto, gravação, dry-run, checkpoint com diff, progresso, cancelamento e reversão/exclusão. Porém: (1) falta renomeação de habilidade após gravada; (2) falta visualização da trilha de auditoria (`audit_log` SQLite não tem IPC `audit.list` nem tabela na UI); (3) falta UI de lote com exclusões editáveis antes do disparo; (4) `SKILLGRAPH_ACTIVATE_GRAPH` no painel ativa grafo explorado em 1 clique sem exibir relatório de nós/efeitos. | Adicionar IPC `audit.list` + tabela de auditoria no Desktop/painel, permitir renomear habilidades na gestão local, exigir revisão de nós/dry-run antes de ativar grafo explorado e validar usabilidade com professora leiga sem terminal. |
+| **C4** | **Extrair e inserir qualquer dado** | `PARCIAL` | E1 (`DomDriver` em fixture) / E2 | Suporta `<table>`, ARIA grids, AG-Grid pinned/virtual, inputs, `<select>`,Select2/MUI portaled, Flatpickr e checkbox com polaridade (`tableReader.ts`, `writer.ts`). Porém: (1) `UPLOAD` (`driver.ts:519-535`) cria `new File([options.source], ...)` usando a própria string do caminho como conteúdo do arquivo (não lê bytes reais do disco/usuário); (2) `DOWNLOAD` (`driver.ts:483-486`) retorna arquivo sintético (`download_resultado.csv`, 1024 B) se não detectar evento em 300ms; (3) `tableReader.ts:164-199` desalinha colunas quando `<td>` no `<tbody>` usa `colspan > 1` ou `rowspan > 1`; (4) não há suporte a editores ricos (TinyMCE/CKEditor/Quill em iframe), máscaras dinâmicas de cursor ou drag-and-drop. | Implementar upload de arquivo real selecionado pelo usuário, remover sucesso sintético de `DOWNLOAD` quando nenhum arquivo é baixado, tratar `colspan`/`rowspan` em `<tbody>` em `tableReader.ts`, e rotear `readTable`/`download`/`upload` para `frameId` descoberto no `RemoteDriver`. |
+| **C5** | **Linguagem natural com nuances** | `PARCIAL` | E1 (unitário Vitest) / E2 | `LlmGateway.parseIntent` (`desktop/llm/llmGateway.ts:154-370`) normaliza datas relativas, conceito/nota com vírgula, gírias e exclusões simples (`exceto X`), e `orchestrator_v2.js:354-366` injeta `CHECKPOINT` dinâmico antes de `WRITE`. Porém: (1) `LlmGateway.parseIntent` é **single-shot sem histórico de conversa** (correções em turno seguinte como *"na verdade 7,5"* perdem `task_id` e aluno anterior); (2) quando há múltiplos candidatos próximos no catálogo, escolhe `scored[0]` (`llmGateway.ts:346`) em vez de perguntar qual habilidade usar; (3) no fallback offline (`orchestrator_v2.js:461-485`), `filters` (ex.: `exclude_students`) e `navigation_target` extraídos por `decomposeCompoundTeacherCommand` são descartados por `side_panel_v2.js:421-437`; (4) não há execução em loop de lote por turma filtrando `exclude_students` no `orchestrator_v2.js`. | Manter contexto do último turno para correções (`"na verdade 7,5"`), retornar `clarification_question` quando 2 habilidades empatarem no catálogo, conectar `filters.exclude_students` e múltiplas sub-tarefas do decompositor ao runner/checkpoint, e testar com Ollama real (`NÃO EXECUTADO (dono)`). |
+| **C6** | **Garantias de segurança preservadas** | `PARCIAL` (**REGRESSÃO `BLOQUEIA`**) | E1 (teste #14 prova o comportamento inseguro) / E2 | Três violações diretas de C6 encontradas no código atual: (1) `standaloneFallback: true` por padrão (`orchestrator_v2.js:279`, `workerEntry.ts:241-285`) permite **escrita real (`dryRun: false`) com o app Desktop fechado**, salvando auditoria em `chrome.storage.local`; (2) `standalone_audit_log_v2` (`workerEntry.ts:259-279`) mascara apenas CPF em `target_ref`, gravando nomes de alunos e notas (`before_value`/`after_value`) sem cifra em `chrome.storage.local` (além de `side_panel.js:1028` que salva `cached_roster_${className}` em texto claro); (3) `executeUploadNode` (`lib/runner/nodes/upload.ts:17-93`) faz mutação de escrita (`state.writesCount++`) **sem chamar `host.audit()` e sem respeitar `state.dryRun`**. Além disso, `saveStandaloneGraph` (`orchestrator_v2.js:91-118`) não executa `validateGraph` nem quarentena. | Remover ou restringir `standaloneFallback` estritamente a `dryRun: true` (abortando com `E_AUDIT_UNAVAILABLE` toda escrita real sem ack do Desktop), nunca gravar `before_value`/`after_value`/nomes em `chrome.storage.local`, adicionar `dryRun` + `host.audit()` em `executeUploadNode`, e exigir `validateGraph` + revisão/dry-run antes de ativar qualquer grafo aprendido. |
 
-| # | Mecanismo / Nó | Status | Nível E | Há Stub? | Cadeia `arquivo:linha → arquivo:linha` e Análise Técnica |
-| :---: | :--- | :---: | :---: | :---: | :--- |
-| **1** | **Nó `NAVIGATE`** | `PARCIAL` | E2 | Não (mas foi stub até `b2444b0`) | `SkillGraphRunner.executeNodeDispatch` (`lib/runner/engine.ts:240-241`) $\rightarrow$ `executeNavigateNode` (`lib/runner/nodes/navigate.ts:16-63`) $\rightarrow$ `driver.navigate(finalUrl)` (`lib/runner/nodes/navigate.ts:51`) $\rightarrow$ `RemoteDriver.navigate` (`lib/runner-ext/remoteDriver.ts:203-228`) $\rightarrow$ `chrome.tabs.update(this.tabId, { url })` (`remoteDriver.ts:205`). No `DomDriver` (`lib/runner-dom/driver.ts:267-279`), atribui `win.location.href = url`. |
-| **2** | **Espera de carregamento e tratamento de timeout no `navigate`** | `PARCIAL` (Bug de falso sucesso) | E2 | **Sim** (no timeout) | Em `lib/runner-ext/remoteDriver.ts:212-223`, `RemoteDriver.navigate` registra listener em `chrome.tabs.onUpdated` esperando `changeInfo.status === 'complete'`, mas configura um `setTimeout` de 10000ms que **chama `resolve()` sem erro quando o timer estoura** (ver trecho literal na Seção 3.2). Se a página travar ou cair em timeout de rede (>10s), o nó `NAVIGATE` reporta sucesso silencioso! |
-| **3** | **Validação de `allowed_hosts` ANTES de navegar (URL relativa e absoluta)** | `PARCIAL` (Bypass em URL absoluta) | E2 | Não | `executeNavigateNode` (`lib/runner/nodes/navigate.ts:28-31`) obtém `currentCtx = await driver.getFrameContext()`, define `targetHost = node.host ?? currentCtx.host` e chama `checkAllowedHost(targetHost, allowedHosts, nodeId)`. Porém, nas linhas 47-51: `const isAbsolute = fullTarget.startsWith('http://') \|\| fullTarget.startsWith('https://'); const finalUrl = isAbsolute ? fullTarget : (targetHost ? \`https://\${targetHost}\${fullTarget}\` : fullTarget)`. **Duas falhas:** (a) se `node.host` estiver omitido e `node.path` for uma URL absoluta (`https://dominio-externo.com/x`), `checkAllowedHost` valida `currentCtx.host` (permitido) e navega para `dominio-externo.com` **sem validar o host de `fullTarget`**; (b) para URLs relativas, força `https://`, quebrando portais HTTP ou harness local (`http://127.0.0.1:8898`). |
-| **4** | **Clique com `expect_navigation`** | `STUB` (Ignorado) | E2 | **Sim** | O contrato `ClickNodeSchema` (`lib/contracts/skillgraph/nodes.ts:116`) e o compilador (`lib/compiler/stages/assemble.ts:157`, `assemblePreamble.ts:108`) geram `expect_navigation: true`. Porém, `executeClickNode` (`lib/runner/nodes/click.ts:13-61`) **jamais lê `node.expect_navigation`**! Apenas executa `await driver.click(...)` (linha 44) e retorna `node.on_success` imediatamente, antes de a nova página carregar. |
-| **5** | **Reconexão do Content Adapter após troca de página (RPC perdido)** | `PARCIAL` | E2 | Não | Em `lib/runner-ext/remoteDriver.ts:86-92`, quando `chrome.tabs.sendMessage` falha com `'Could not establish connection'` ou `'Receiving end does not exist'`, `sendRpc` faz até 3 retentativas (`attempt < 4`) com atraso `400 * attempt` ms (400ms + 800ms + 1200ms = **2,4s máx**). Limitações: (a) se o reload demorar >2,4s, aborta com `E_TIMEOUT`; (b) o `ElementHandleStore` (`lib/runner-dom/handleStore.ts:6-44`) vive em memória no content script e é **zerado** a cada navegação, invalidando qualquer `handleId` ou `rowHandleId` obtido antes da troca de página. |
-| **6** | **WRITE nunca repetido após troca de página** | `PARCIAL` (Risco de duplicação) | E2 | Não | `state.writesCount++` só é incrementado em `lib/runner/nodes/write.ts:157`, *após* `await driver.write(...)` retornar. Como o compilador define `retry: { max_attempts: 2, backoff_ms: 500 }` nos nós `WRITE` (`lib/compiler/stages/assemble.ts:132`), se um `WRITE` disparar submissão/reload da página antes de o content script responder ao RPC, `sendRpc` falha com `E_TIMEOUT` (não listado em `FATAL_RUNTIME_ERRORS` em `lib/runner/engine.ts:28`) e o loop `for (let attempt = 1; attempt <= maxAttempts; attempt++)` em `engine.ts:115-163` **executa o `WRITE` uma segunda vez**. |
-| **7** | **`LOCATE` com `scroll_until_found` / `paginate_until_found`** | `STUB` / `AUSENTE` | E2 | **Sim** | Em `lib/runner/nodes/navigate.ts:89-105`, `executeLocateNode` trata `if (node.mode === 'scroll_until_found')` chamando `driver.scroll({ mode: 'scroll_until_found', target })`. Porém, `DomDriver.scroll` (`lib/runner-dom/driver.ts:157-175`) **não rola o container incrementalmente**: apenas chama `this.resolveTargetElement(options.target)` uma única vez no DOM parado e, se achar, chama `el.scrollIntoView()`. Já o modo `paginate_until_found` nem possui `if` em `executeLocateNode` (`navigate.ts:104`), caindo direto em `driver.locateAnchor(resolvedAnchor)` sem paginar. |
-| **8** | **Paginação (`next_button`, `page_numbers`, `infinite_scroll`, `virtual_scroll`)** | `STUB` / `DESCONECTADO` | E2 | **Sim** | (a) `executeReadNode` (`lib/runner/nodes/read.ts:33`) passa `paginate: node.paginate` para `driver.readTable`, mas `DomDriver.readTable` (`lib/runner-dom/driver.ts:120-124`) e `readHtmlTable` (`lib/runner-dom/tableReader.ts:65-126`) **ignoram `options.paginate`** (lendo apenas a página 1). (b) `DomDriver.paginate` (`lib/runner-dom/driver.ts:183-214`) nunca é chamado por `READ` nem `LOCATE`; além disso, quando `options.nextButton` não é passado, usa `this.doc.querySelector('a[rel="next"], .pagination-next, button:has-text("Próxima")')` (`driver.ts:187`), onde `:has-text(...)` não é CSS válido e lança `DOMException: Failed to execute 'querySelector'`. (c) `page_numbers`, `infinite_scroll` e `virtual_scroll` não têm implementação no `DomDriver`. |
-| **9** | **Iframes (mesma origem e cross-origin)** | `PARCIAL` (mesma origem) / `AUSENTE` (cross-origin) | E2 | Não | Mesma origem: `queryAllInShadowAndFrames` (`lib/runner-dom/selectors.ts:21-28`) varre `root.querySelectorAll('iframe')` e acessa `iframe.contentDocument`. Cross-origin: o bloco `try { ... } catch {}` (`selectors.ts:27`) ignora silenciosamente iframes de outra origem (`SecurityError`). Embora `RemoteDriver` tenha `setFrameId` (`remoteDriver.ts:41`) e `ContentAdapter` tenha `listFrames` (`contentAdapter.ts:44`), nenhum código em `lib/runner/**` chama `listFrames` ou altera `frameId` (permanece `0`). |
-| **10** | **Shadow DOM** | `PARCIAL` | E2 | Não | `queryAllInShadowAndFrames` (`lib/runner-dom/selectors.ts:15-19`) percorre recursivamente `el.shadowRoot` (apenas `mode: 'open'`). Porém, após localizar a `<table>`, `readHtmlTable` (`lib/runner-dom/tableReader.ts:77-105`) e `DomDriver.locateRow` (`lib/runner-dom/driver.ts:89-99`) usam `tableEl.querySelectorAll('tr')` nativo, que **não atravessa** web components com Shadow DOM interno para linhas/células. |
-| **11** | **Abas e Popups (`SSOHandoffManager`)** | `PARCIAL` (Desconectado do nó) | E2 | Não | `SSOHandoffManager` (`lib/runner-ext/ssoHandoff.ts:66-308`) monitora `chrome.tabs.onCreated`/`onUpdated`/`onRemoved` para abas filhas (`openerTabId === targetTabId`), valida `allowedHosts` e emite `sso_handoff_started`/`completed` sem injetar scripts na aba de login. Porém, em `lib/runner-ext/workerEntry.ts:68-87`, o `ssoManager` é apenas instanciado: `executeHandoffNode` (`lib/runner/nodes/checkpoint.ts:88-108`) chama `await host.handoff(...)` (que bloqueia esperando clique manual no botão `#sgv2-btn-resolved-handoff` do painel v2) e nunca chama `ssoManager.waitForCompletion()`. |
-| **12** | **Nó `WAIT`** | `IMPLEMENTADO REAL` | E2 | Não | `executeWaitNode` (`lib/runner/nodes/branch.ts:39-83`) resolve a condição `node.until`, faz loop com `await host.sleep(200)` avaliando `evaluateCondition(resolvedCond, driver)` até `node.timeout_ms`, e lança `RunnerError('E_TIMEOUT', ...)` se expirar. |
-| **13** | **Nó `HANDOFF_HUMAN`** | `IMPLEMENTADO REAL` | E2 | Não | `executeHandoffNode` (`lib/runner/nodes/checkpoint.ts:71-123`) emite `handoff_started`, aguarda confirmação via `host.handoff(...)` (`workerEntry.ts:224-255` $\rightarrow$ card `#sgv2-handoff-box` em `side_panel_v2.js:488-503`) e depois faz polling de `node.resume_when` a cada 1000ms até `node.timeout_ms`. |
-| **14** | **SPA (mudança de rota sem recarga)** | `PARCIAL` | E2 | Não | Na execução, cliques em abas/rotas SPA seguidos de `WAIT` funcionam no mesmo documento. Na gravação (`teacher-extension/orchestrator_v2.js:916-949`), passos `navigate` só são gravados quando `chrome.tabs.onUpdated` dispara `changeInfo.status === 'complete'` com mudança de URL; transições SPA via `history.pushState` são capturadas apenas como passo `click` no elemento acionado. |
+---
 
-### 3.2 Código Literal do Timeout Silencioso em `RemoteDriver.navigate`
-Em [`lib/runner-ext/remoteDriver.ts:203-228`](file:///c:/Users/rafae/Documents/antigravity/hopeful-bell/lib/runner-ext/remoteDriver.ts#L203-L228):
-```typescript
-  public async navigate(url: string): Promise<void> {
-    if (typeof chrome !== 'undefined' && chrome.tabs && typeof chrome.tabs.update === 'function') {
-      return new Promise<void>((resolve, reject) => {
-        chrome.tabs.update(this.tabId, { url }, () => {
-          if (chrome.runtime?.lastError) {
-            reject(new RunnerError('E_TIMEOUT', `Erro ao navegar para ${url}: ${chrome.runtime.lastError.message}`))
-            return
-          }
-          // Wait for tab to complete loading
-          const listener = (updatedTabId: number, changeInfo: any) => {
-            if (updatedTabId === this.tabId && changeInfo.status === 'complete') {
-              chrome.tabs.onUpdated.removeListener(listener)
-              resolve()
-            }
-          }
-          chrome.tabs.onUpdated.addListener(listener)
-          setTimeout(() => {
-            try { chrome.tabs.onUpdated.removeListener(listener) } catch {}
-            resolve()
-          }, 10000)
-        })
-      })
+### Estado do Repositório (B0)
+
+1. **Branch atual:** `fechamento-integracao` (`HEAD` = `f26e204 docs(handoff): gerar documento completo de handoff para o proximo agente`).
+2. **Saída literal de `git status --short` (24 arquivos modificados e 4 caminhos não rastreados na working tree antes desta auditoria):**
+   ```text
+    M AGENTS.md
+    M __tests__/desktop.core.test.ts
+    M __tests__/extensionHost.integration.test.ts
+    M __tests__/graphRunner.core.test.ts
+    M components/EditableQuestionBoxes.tsx
+    M desktop/llm/llmGateway.ts
+    M desktop/main.ts
+    M lib/psychometricsEngine.ts
+    M lib/runner-dom/driver.ts
+    M lib/runner-dom/selectors.ts
+    M lib/runner-dom/tableReader.ts
+    M lib/runner-dom/writer.ts
+    M lib/runner-ext/protocol.ts
+    M lib/runner-ext/remoteDriver.ts
+    M lib/runner-ext/workerEntry.ts
+    M lib/runner/nodes/write.ts
+    M package.json
+    M scripts/build-desktop.ts
+    M teacher-extension/background.js
+    M teacher-extension/manifest.json
+    M teacher-extension/orchestrator_v2.js
+    M teacher-extension/side_panel.js
+    M teacher-extension/side_panel_v2.html
+    M teacher-extension/side_panel_v2.js
+   ?? desktop/nativeHost/
+   ?? lib/explorer/
+   ?? scripts/run-e2e-chromium.ts
+   ?? tools/runner-harness/fixtures/hostile-portal-e2e.html
+   ```
+3. **Arquivos fora de escopo sujos na working tree:** `AGENTS.md`, `components/EditableQuestionBoxes.tsx`, `lib/psychometricsEngine.ts` e `teacher-extension/side_panel.js`.
+4. **Saída literal de `git log --oneline -15` e `git show --stat HEAD`:**
+   ```text
+   f26e204 docs(handoff): gerar documento completo de handoff para o proximo agente
+   b0d0350 fix(engine,ux): fechar lacunas residuais de auditoria C1-C5 (download/upload reais, dry-run UI, select write, scheme e NLU coloquial)
+   39f7e54 feat(engine,ux): fechamento completo BLQ-5d, BLQ-6b, BLQ-7, BLQ-8, DIVIDA-3, DIVIDA-4
+   1748817 feat(engine): amalgamar algoritmos de browser agents (browser-use, nanobrowser, stagehand, skyvern, agent-e) e corrigir contratos v2
+   2f75e0a audit: capacidades
+   b2444b0 feat(engine): amalgama de navegacao real com auto-cache de exploracao autonoma
+   cf3cfde fix(recorder): persistencia de gravacao multi-pagina e ajuste no timeout nativo
+   de7dc60 fix(ext): cancela necessidade de permissao de host e ajusta shim native messaging
+   16633af fix(ext): exibir painel v2 por padrao sem ocultar body
+   e3968d5 audit: estado do engine
+   a31c97a skill(R): correcao final
+   546ff8b skill(G5): fechamento
+   fed9233 skill(G4): texto seguro com checkpoint integral
+   5f8961b skill(G3): extracao de tabelas
+   d1fb190 skill(G2): navegacao multi-pagina
+
+   commit f26e204b197fb7bb4a162780bf9cb8283430ab80
+   docs/HANDOFF_PROXIMO_AGENTE.md | 100 +++++++++++++++++++++++++++++++++++++++++
+   1 file changed, 100 insertions(+)
+   ```
+5. **Estado de commit dos 6 arquivos questionados em B0:**
+   - `teacher-extension/orchestrator_v2.js`: **Modificado sem commit (`M`)** (+272 linhas adicionando `saveStandaloneGraph`, `resolveStandaloneGraph`, `fallbackLocalNlu`, `standaloneFallback: payload.standaloneFallback !== false` e `cdpClick`/`cdpWrite`).
+   - `lib/runner-ext/workerEntry.ts`: **Modificado sem commit (`M`)** (adicionando `standaloneFallback` em `ExtensionHost.audit` gravando em `chrome.storage.local['standalone_audit_log_v2']`, e re-exportando `domDistiller` e `repairEngine`).
+   - `lib/explorer/domDistiller.ts`: **Não rastreado / sem commit (`?? lib/explorer/`)**.
+   - `lib/repair/repairEngine.ts`: **Commitado** (sem modificações locais pendentes; re-exportado na working tree por `lib/runner-ext/workerEntry.ts:382`).
+   - `scripts/run-e2e-chromium.ts`: **Não rastreado / sem commit (`??`)**.
+   - `tools/runner-harness/fixtures/hostile-portal-e2e.html`: **Não rastreado / sem commit (`??`)**.
+
+---
+
+## 3. Regressão de Segurança — C6 (B1)
+
+### B1.1 `standaloneFallback`: padrão, condições de uso de `chrome.storage.local` e escrita real com app fechado
+- **Saída literal de `git grep -n "standaloneFallback" -- lib teacher-extension desktop`:**
+  ```text
+  lib/runner-ext/workerEntry.ts:152:  standaloneFallback?: boolean
+  lib/runner-ext/workerEntry.ts:242:    const allowStandalone = Boolean(this.options.standaloneFallback)
+  teacher-extension/orchestrator_v2.js:279:        standaloneFallback: payload.standaloneFallback !== false,
+  ```
+- **Está ligado por padrão?** **SIM.** Em `teacher-extension/orchestrator_v2.js:279`, `standaloneFallback: payload.standaloneFallback !== false` avalia para `true` sempre que `payload.standaloneFallback` é `undefined` (que é o caso em todas as chamadas de `side_panel_v2.js:186, 467`).
+- **Em que condições a auditoria vai para `chrome.storage.local`?** Sempre que `this.auditSink` é nulo ou `this.auditSink.audit(entry)` lança erro (app Desktop fechado/desconectado) e `allowStandalone` é `true` (`lib/runner-ext/workerEntry.ts:241-285`).
+- **Com o app fechado e sem dry-run (`dryRun: false`), a escrita real prossegue?** **SIM (`BLOQUEIA`).** Como `ExtensionHost.audit(entry)` captura a exceção do `auditSink` e retorna normalmente após gravar em `chrome.storage.local`, o `await host.audit(...)` em `lib/runner/nodes/write.ts:126-146` não lança `E_AUDIT_UNAVAILABLE` e a linha `149` (`await driver.write(...)`) executa a mutação física no portal escolar sem ack do app Desktop.
+- **Código literal da decisão (`lib/runner-ext/workerEntry.ts:241-285` e `teacher-extension/orchestrator_v2.js:276-282`):**
+  ```ts
+  // lib/runner-ext/workerEntry.ts:241-285
+  public async audit(entry: AuditEntry): Promise<void> {
+    const allowStandalone = Boolean(this.options.standaloneFallback)
+    if (!this.auditSink) {
+      if (!allowStandalone) {
+        throw new Error('E_AUDIT_UNAVAILABLE: AuditSink não configurado para gravação write-ahead obrigatória.')
+      }
+    } else {
+      try {
+        await this.auditSink.audit(entry)
+        return
+      } catch (err: any) {
+        if (!allowStandalone) {
+          throw new Error(`E_AUDIT_UNAVAILABLE: Falha ao confirmar auditoria write-ahead no Desktop: ${err?.message || String(err)}`)
+        }
+      }
     }
-    return this.sendRpc('navigate', { url })
-  }
+    // Fallback Standalone Local-First (Zero-Desktop):
+    // Redige possíveis CPFs em campos de referência antes de persistir localmente em storage.session/local
+    const sanitizePii = (val?: string) =>
+      typeof val === 'string' ? val.replace(/\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b/g, '[CPF_PROTEGIDO]') : val
+    const safeEntry: AuditEntry = {
+      ...entry,
+      target_ref: sanitizePii(entry.target_ref) || entry.target_ref,
+    }
+    // ... grava em chrome.storage.session['skillgraph_audit_log'] e chrome.storage.local['standalone_audit_log_v2'] e retorna void!
+  ```
+
+### B1.2 O que é gravado em `standalone_audit_log_v2` e o que o teste afirma
+- Em `lib/runner-ext/workerEntry.ts:259-279`, `safeEntry` espalha `...entry` (`AuditEntry` construído em `lib/runner/nodes/write.ts:126-138`), contendo: `run_id`, `graph`, `node_id`, `action: 'write'`, `status: 'success'`, `target_ref`, `before_value`, `after_value`, `verified_by` e `at`.
+- **Só CPF é mascarado?** **SIM.** A função `sanitizePii` (`workerEntry.ts:257-258`) aplica apenas `/\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b/g` e **somente sobre `entry.target_ref`**. Nomes de alunos em `target_ref` (ex.: `"Nota de Maria Eduarda"`), bem como notas, faltas ou pareceres pedagógicos em `before_value` e `after_value`, são gravados **em texto claro** em `chrome.storage.local['standalone_audit_log_v2']`.
+- **O teste que cobre isso afirma o comportamento seguro ou o inseguro?** O teste `__tests__/extensionHost.integration.test.ts:460-492` (`it('14. [Standalone Zero-Desktop] executa WRITE com standaloneFallback=true persistindo auditoria sanitizada em chrome.storage.local quando Desktop está offline')`) **afirma explicitamente o comportamento inseguro**: configura `dryRun: false`, faz o `auditSink` rejeitar com `Native Messaging host disconnected`, exige `result.success === true`, `driver.writes.length === 1` e verifica que `chrome.storage.local` recebeu `before_value: '8.0'` e `after_value: '9.5'`.
+
+### B1.3 `chrome.storage.local`: dados de aluno ou de grafo sem cifra
+- **Saída literal de `git grep -n -E "chrome\.storage\.local" -- lib teacher-extension`:**
+  - **Camada v2:**
+    - `lib/runner-ext/workerEntry.ts:276-279`: `standalone_audit_log_v2` — grava entradas de auditoria de escrita (`target_ref`, `before_value`, `after_value`, `graph`, `at`) sem cifra.
+    - `teacher-extension/orchestrator_v2.js:81, 108, 127, 149, 169`: `standalone_skillgraphs_v2` — grava objetos `SkillGraphV2` completos sem cifra em `chrome.storage.local`.
+    - `teacher-extension/orchestrator_v2.js:301, 324, 1056, 1153`: `graph_health:${portalId}:${taskId}` — contadores de falha e status `needs_repair`.
+    - `teacher-extension/orchestrator_v2.js:491`, `side_panel_v2.js:90`, `side_panel.js:3411`: flag `USE_SKILLGRAPH_V2`.
+  - **Camada legada (`teacher-extension/side_panel.js` e `background.js`):**
+    - `teacher-extension/side_panel.js:1028`: `chrome.storage.local.set({ [\`cached_roster_${className}\`]: currentLoadedStudents })` — **grava lista completa de alunos da turma em texto claro** (`BLOQUEIA` frente à regra "PII só no banco cifrado do app").
+    - `teacher-extension/side_panel.js:18, 86, 129, 134`: `teacher_byok_key` — chave de API em `chrome.storage.local`.
+    - `teacher-extension/side_panel.js:575, 587`: `skills_audit_history` — histórico de ações com detalhes da execução.
+    - `teacher-extension/side_panel.js:883, 895, 1132, 1486`: `teacher_synced_profile`, `teacher_upcoming_tasks`, `portal_classes`, `custom_recorded_skills`.
+
+### B1.4 `activate: true` e `SKILLGRAPH_EXPLORE_AND_LEARN` vs. Gravador Manual
+- **Saída literal de `git grep -n -E "activate: ?true" -- teacher-extension lib desktop`:**
+  ```text
+  teacher-extension/orchestrator_v2.js:974:            await nativeClient.send('graphs.save', { graph, activate: true }).catch(() => {})
+  teacher-extension/orchestrator_v2.js:1146:            await nativeClient.send('graphs.save', { graph: patched, activate: true }).catch(() => {})
+  ```
+- **Comportamento de `SKILLGRAPH_EXPLORE_AND_LEARN` (`teacher-extension/orchestrator_v2.js:647-674`):**
+  - Restringe a compilação a grafos cujo `compileResult.graph.safety.side_effect_level === 'read'` (`orchestrator_v2.js:650`).
+  - Persiste inicialmente como **inativo** (`await saveStandaloneGraph(savedGraph, false)` na linha `653` e `nativeClient.send('graphs.save', { graph: savedGraph, activate: false })` na linha `657`).
+  - **Porém**, em `teacher-extension/side_panel_v2.js:391-404`, o painel renderiza imediatamente o link `"Ativar esta habilidade"` (`#sgv2-activate-learned`) que dispara `SKILLGRAPH_ACTIVATE_GRAPH` (`orchestrator_v2.js:1013-1046`). Esse handler ativa o grafo (`setStandaloneGraphActive(..., true)` e `graphs.setActive`) **em um único clique**, sem mostrar os nós/seletores gerados e sem exigir dry-run.
+  - Além disso, no banco SQLite do Desktop (`lib/desktop-core/db/repositories/SqlSkillGraphRepository.ts:39-48` chamado por `desktop/main.ts:98`), se for a versão `1` daquela `(portal_id, task_id)`, `SqlSkillGraphRepository.save()` grava `is_active = 1` inicialmente e `desktop/main.ts:99-103` **só** chama `setActiveVersion` quando `p.activate` é `true` — ou seja, quando `activate: false` é enviado na versão 1, `desktop/main.ts:98-103` **não desativa** o `is_active = 1` default inserido pelo repositório!
+- **Comparação de garantias: Explorador (`SKILLGRAPH_EXPLORE_AND_LEARN`) vs. Gravador Manual (`SKILLGRAPH_STOP_RECORD` → `SKILLGRAPH_COMPILE_RECORD`) vs. Importação Comunitária (`community.import`):**
+  1. **Inspeção de passos antes de compilar:** O gravador manual retorna `trace.steps` e `analysis` para revisão no painel (`side_panel_v2.js:244-292`); o explorador compila e já salva no storage/banco (`orchestrator_v2.js:649-659`) antes de qualquer revisão humana.
+  2. **Decisões de ambiguidade (polaridade/escala):** O gravador manual exige preenchimento se houver `ambiguities` (`side_panel_v2.js:250-292`); o explorador passa `decisions` fixo sem perguntas (`orchestrator_v2.js:641-648`).
+  3. **Quarentena e Dry-Run obrigatório:** Pacotes comunitários entram em `quarantined_packages` (`E_GRAPH_QUARANTINED` se executados sem `dryRun`, `desktop/main.ts:269-277`) e exigem `community.markDryRunPassed` antes de `community.promote`; já o explorador salva direto na tabela de grafos (com bug de `is_active = 1` na v1 em `desktop/main.ts:98-103`) e permite ativação em 1 clique sem dry-run.
+
+### B1.5 `saveStandaloneGraph` / `resolveStandaloneGraph`
+- Em `teacher-extension/orchestrator_v2.js:91-142`:
+  - `saveStandaloneGraph(graph, activate)` **NÃO chama `validateGraph(graph)` nem `SkillGraphV2Schema.parse(graph)`** antes de gravar em `chrome.storage.local['standalone_skillgraphs_v2']`.
+  - `resolveStandaloneGraph(host, taskId)` **NÃO verifica estado de quarentena nem lança `E_GRAPH_QUARANTINED`**; apenas filtra `e.is_active === true` (`orchestrator_v2.js:129`).
+
+---
+
+## 4. Navegação — C1, C2 (B2)
+
+### B2.1 Matriz de Primitivas de Navegação
+
+| Item | Cadeia `arquivo:linha → arquivo:linha` desde a entrada | Status | Evidência / Observação Crítica |
+| :--- | :--- | :---: | :--- |
+| **Nó `NAVIGATE` até `chrome.tabs.update`** | `side_panel_v2.js:186` (`SKILLGRAPH_RUN`) → `orchestrator_v2.js:294` (`runner.run`) → `lib/runner/engine.ts:245` (`executeNavigateNode`) → `lib/runner/nodes/navigate.ts:61` (`driver.navigate(finalUrl)`) → `lib/runner-ext/remoteDriver.ts:507` (`chrome.tabs.update(this.tabId, { url })`) | `PARCIAL` | Chama `chrome.tabs.update` real, mas o timeout de espera de carregamento engole falhas (ver abaixo). |
+| **Espera de carregamento em `NAVIGATE`** | `lib/runner-ext/remoteDriver.ts:505-542` (`onUpdated` + `navTimer`) | `PARCIAL` | **Timeout resolve sem erro:** se `navTimer` dispara após `this.timeoutMs`, chama `chrome.tabs.get` e, se `tab.status !== 'loading'`, chama `resolve()` sem erro (`remoteDriver.ts:532-534`). Em `DomDriver.navigate` (`lib/runner-dom/driver.ts:436-459`), `window.location.assign(url)` resolve em `setTimeout(..., 50)`. |
+| **`allowed_hosts` checado ANTES de navegar (incl. URL relativa)** | `lib/runner/nodes/navigate.ts:28-31` (`checkAllowedHost(targetHost, allowedHosts)`) e `navigate.ts:50-57` (`new URL(fullTarget)` → `checkAllowedHost(parsedUrl.host, allowedHosts)`) → `navigate.ts:59-61` (`driver.navigate`) | `IMPLEMENTADO REAL` | Checa `targetHost` (que herda `currentCtx.host` em URLs relativas) na linha 31 e re-checa o host de URLs absolutas (`http://`/`https://`) na linha 53 **antes** de `driver.navigate(finalUrl)` na linha 61. |
+| **Clique com `expect_navigation`** | `lib/runner/nodes/click.ts:50-54` (`driver.click` → `driver.waitForNavigation`) → `lib/runner-ext/remoteDriver.ts:548-572` / `lib/runner-dom/driver.ts:461-464` | `STUB` / `PARCIAL` | Em `DomDriver.waitForNavigation` (`driver.ts:461-464`) é **STUB** (`return Promise.resolve()`). Em `RemoteDriver.waitForNavigation` (`remoteDriver.ts:563-568`), o `setTimeout` de `Math.min(timeoutMs, 2500)` **chama `resolve()` incondicionalmente** se nenhuma navegação ocorrer! |
+| **Reconexão do content adapter e retry de RPC (`WRITE` nunca repetido)** | `lib/runner-ext/remoteDriver.ts:58-69` (`NON_IDEMPOTENT_OPERATIONS = new Set(['write', 'click', 'paginate', 'upload', 'download'])`) → `remoteDriver.ts:79-145` (`sendRpc` → `ensureContentScriptInjected` em `115` → retry único em `122-141` só se `!NON_IDEMPOTENT_OPERATIONS.has(request.operation)`) | `IMPLEMENTADO REAL` | Reconecta injetando `dist/content.bundle.js` (`remoteDriver.ts:154-160`) quando `chrome.tabs.sendMessage` falha com `Receiving end does not exist` / `message port closed`, e bloqueia retry para `write`, `click`, `paginate`, `upload` e `download`. |
+| **`scroll_until_found` / `paginate_until_found`** | `lib/runner/nodes/navigate.ts:99-137` (`executeLocateNode`) → `remoteDriver.ts:280-286` → `contentAdapter.ts:97-102` → `lib/runner-dom/driver.ts:255-428` (`scroll` / `paginate`) | `PARCIAL` | `scroll_until_found` (`driver.ts:276-360`) faz scroll incremental em container ou `window` e aguarda 50ms em grids virtuais (`driver.ts:327-332`). `paginate_until_found` (`navigate.ts:114-137`) chama `driver.paginate({ mode: 'next_button' })` até 20 páginas, mas falha se o clique no botão "Próxima" recarregar a página inteira (contexto perdido) ou se a paginação for por número de página. |
+| **Paginação (botão, número, infinito, virtual)** | `lib/runner/nodes/read.ts:29-34` → `lib/runner-dom/driver.ts:199-243, 379-428` | `PARCIAL` | `next_button` (`driver.ts:395-425`) e scroll virtual em `.ag-body-viewport`/`.MuiDataGrid-virtualScroller` (`driver.ts:201-212`) funcionam no mesmo documento. Porém: (1) em `driver.ts:386`, `const advanced = container.scrollTop !== prevTop \|\| true` tem **`\|\| true` hardcoded** (sempre reporta `advanced: true` no modo `infinite_scroll`); (2) **`mode: 'page_number'` é `AUSENTE`** (existe no schema Zod `lib/contracts/skillgraph/nodes.ts:19`, mas `driver.ts:379-428` só trata `infinite_scroll`, `virtual_scroll` e `next_button`). |
+| **Iframes (mesma origem e cross-origin) e Shadow DOM (aberto e fechado)** | `lib/runner-ext/remoteDriver.ts:173-253` (`getFrameIds` via `chrome.webNavigation.getAllFrames` + prefixo `f{frameId}::{handleId}`) → `lib/runner-dom/selectors.ts:74-149` (`getShadowRoot` via `chrome.dom.openOrClosedShadowRoot` / `el.shadowRoot` + `contentDocument` de iframes same-origin) | `PARCIAL` | `locateAnchor` e `locateRow` fazem fan-out para subframes (`webNavigation.getAllFrames`) e codificam `f{frameId}::`. `click`, `write`, `readText`, `readValue` e `getBoundingBox` extraem esse `frameId`. **Quebra:** `readTable`, `scroll`, `paginate`, `evaluateCondition`, `download` e `upload` (`remoteDriver.ts:280-286, 421-431, 467-497`) **não** extraem `frameId` da âncora; dependem do efeito colateral de `this.frameId` ter sido mutado antes! |
+| **Abas / Popups (`SSOHandoffManager`)** | `lib/runner-ext/ssoHandoff.ts:44-169` (`SSOHandoffManager`), mas **NÃO instanciado** em `teacher-extension/orchestrator_v2.js` nem em `background.js`! | `DESCONECTADO` | `SSOHandoffManager` está implementado e exportado em `lib/runner-ext/workerEntry.ts:377`, mas `git grep SSOHandoffManager` mostra que **nenhum arquivo de produção (`orchestrator_v2.js` ou `background.js`) o instancia**. |
+| **`WAIT`** | `lib/runner/engine.ts:251` → `lib/runner/nodes/branch.ts:39-83` (`executeWaitNode`) → `host.sleep` + `evaluateCondition` (`lib/runner/conditions.ts:62-145`) | `IMPLEMENTADO REAL` | Suporta espera fixa (`node.ms`) e polling de condição (`node.until` a cada 200ms até `timeout_ms`), lançando `E_TIMEOUT` real na linha 70 se expirar. |
+| **`HANDOFF_HUMAN`** | `lib/runner/engine.ts:255` → `lib/runner/nodes/checkpoint.ts:78-130` (`executeHandoffNode`) → `workerEntry.ts:209-219` (`onHandoff`) → `orchestrator_v2.js:252-274` → `side_panel_v2.js:559-564` | `PARCIAL` | Pausa o grafo, exibe alerta no painel v2 e faz polling de `node.resume_when` a cada 1000ms até `timeout_ms` (`checkpoint.ts:108-119`), lançando `E_HANDOFF_TIMEOUT` se expirar. Porém não está integrado ao `SSOHandoffManager` para monitorar popups OAuth em abas filhas. |
+| **SPA sem recarga** | `lib/runner/nodes/click.ts:50` + `lib/runner/nodes/branch.ts:54-72` (`WAIT` por `element_present`/`url_matches`) | `IMPLEMENTADO REAL` | Cliques em abas/rotas SPA sem reload mantêm o content script vivo e podem aguardar mutação DOM via `WAIT`. |
+
+#### Código literal do timeout silencioso em `RemoteDriver.navigate` e `waitForNavigation` (`lib/runner-ext/remoteDriver.ts:526-571`)
+```ts
+// lib/runner-ext/remoteDriver.ts:526-541
+        const navTimer = setTimeout(() => {
+          chrome.tabs.onUpdated.removeListener(listener)
+          chrome.tabs.get(this.tabId, (tab) => {
+            if (chrome.runtime?.lastError) {
+              reject(new Error(`E_TAB_CLOSED: Aba ${this.tabId} fechada durante navegação.`))
+              return
+            }
+            if (tab && tab.status !== 'loading') {
+              resolve() // <-- Resolve sem erro se o status não for 'loading'
+            } else {
+              reject(new Error(`E_TIMEOUT: Timeout aguardando carregamento de ${url} na aba ${this.tabId}`))
+            }
+          })
+        }, this.timeoutMs)
+
+// lib/runner-ext/remoteDriver.ts:563-568 (waitForNavigation)
+        const timer = setTimeout(() => {
+          if (!settled) {
+            settled = true
+            chrome.tabs.onUpdated.removeListener(listener)
+            resolve() // <-- NUNCA rejeita em timeout!
+          }
+        }, Math.min(timeoutMs, 2500))
 ```
-Como demonstrado nas linhas 219–222, quando o timer de 10 segundos estoura sem o evento `'complete'`, `resolve()` é chamado em vez de `reject(new RunnerError('E_TIMEOUT', ...))`.
 
-### 3.3 Inventário de TODAS as Formas de Navegar no Repositório (Avaliação C2)
+### B2.2 Todas as Formas de Navegar no Repositório e Caminhos Concorrentes
+Existem **6 mecanismos distintos de navegação** coexistindo no repositório:
+1. **Nó `NAVIGATE` do SkillGraph v2 (`lib/runner/nodes/navigate.ts:16-73` → `RemoteDriver.navigate` → `chrome.tabs.update`)**: Ligado ao painel v2 quando executa um grafo salvo (`SKILLGRAPH_RUN`).
+2. **`internalNavigatePortalTab` (`teacher-extension/background.js:930-1140`)**: Injeta script ad-hoc via `chrome.scripting.executeScript` que procura links/botões por sinônimos (`SEMANTIC_CLUSTERS`) e clica neles. **Ligado ao painel v2** dentro de `SKILLGRAPH_EXPLORE_AND_LEARN` (`orchestrator_v2.js:567`).
+3. **Mensagem `NAVIGATE_PORTAL_TAB` (`teacher-extension/background.js:1714-1725`)**: Wrapper de mensagem sobre `internalNavigatePortalTab`, usado como fallback em `orchestrator_v2.js:581` e pelo painel legado.
+4. **Tool `portal_navigate` (`lib/agentTools.ts:157`, `teacher-extension/side_panel.js:2760, 2800`)**: Ligado apenas ao painel legado (`side_panel.js`).
+5. **Destilador DOM `lib/explorer/domDistiller.ts` (`distillInteractiveDom` + `selectBestDistilledAction`)**: Exportado em `lib/runner-ext/workerEntry.ts:379-381`, mas **NÃO está conectado a nenhum fluxo de produção** (usado apenas pelo script de teste `scripts/run-e2e-chromium.ts`).
+6. **Loop ReAct Python (`sidecar/agentic_execution_loop.py`)**: Legado Python via WebSocket/CDP, desconectado do painel v2.
 
-| # | Caminho de Navegação | Localização (`arquivo:linha`) | Ligado ao Painel v2? | Status |
+**Conclusão C2:** Há caminhos concorrentes ativos no próprio painel v2 (`SKILLGRAPH_EXPLORE_AND_LEARN` navega via `internalNavigatePortalTab` do `background.js` sem usar `SkillGraphRunner`/`RemoteDriver`, enquanto `SKILLGRAPH_RUN` usa `SkillGraphRunner`).
+
+---
+
+## 5. Explorador e NLU Composta — C1, C5 (B3)
+
+1. **Como o explorador decide o que clicar (`teacher-extension/orchestrator_v2.js:516-729` e `background.js:930-1140`):**
+   - **Não usa LLM** e **não usa `domDistiller.ts`**.
+   - Divide o comando em até 3 saltos por regex `/\s+(?:e\s+depois|depois|em\s+seguida|->|>|›)\s+/i` (`orchestrator_v2.js:555-558`).
+   - Para cada salto, chama `internalNavigatePortalTab(tabId, hopTarget)` (`background.js:930-1140`), que injeta uma função no DOM via `chrome.scripting.executeScript` e pontua elementos `a, button, [role="tab"], [role="menuitem"], [role="button"], .tab, .nav-link, li, span` por casamento léxico e clusters de sinônimos (`SEMANTIC_CLUSTERS`: `'diario'`, `'notas'`, `'frequencia'`, `'ocorrencias'`, `'alunos'`, `'turmas'`, `'relatorios'`). Se o score for `< 80`, tenta clicar num menu pai (`diario`, `academico`, `ensino`, `pedagogico`, `menu`, ` secretaria`, `avaliacao`, `turma`) aguarda 450ms e repete a busca (`background.js:1049-1071`).
+2. **Passa pelo `LlmGateway` e pela pseudonimização? Texto de página entra em prompt?**
+   - Como o explorador é puramente heurístico local, **nenhum texto de página é enviado a LLM** durante `SKILLGRAPH_EXPLORE_AND_LEARN`.
+3. **Limites e guardrails do explorador:**
+   - **Limite de passos:** Máximo de **3 hops** (`rawHops.slice(0, 3)` em `orchestrator_v2.js:556-558`), mais até 1 sub-hop de expansão de menu pai por hop em `background.js:1049-1071`.
+   - **Lista de ações proibidas:** Regex em `orchestrator_v2.js:543` (`/\b(excluir|deletar|apagar|remover|demitir|formatar|pagar|transferir|cancelar matricula)\b/i`) e em `background.js:942` (`/\b(excluir|deletar|apagar|remover|demitir|formatar|pagar|transferir|salvar|gravar|enviar|publicar|confirmar lancamento)\b/i`), além de ignorar `input[type="submit"]` (`background.js:960`) e links de `sair/logout` (`background.js:965`).
+   - **Parada ao sair do host:** `orchestrator_v2.js:595-607` verifica `afterHost !== host` **APÓS** o clique já ter ocorrido (`await waitForTabSettled(tabId, 2000)`). Se o clique levou a outro host, ele interrompe o loop e retorna erro, mas **não impede a saída antes do clique** (por exemplo, checando o atributo `href` do `<a>` contra `host` antes de clicar em `background.js:930-1080`).
+4. **O que `lib/explorer/domDistiller.ts` e `decomposeCompoundTeacherCommand` fazem de fato vs. o que é só nome:**
+   - `distillInteractiveDom(root, maxElements)` (`domDistiller.ts:104-213`): Lê elementos interativos visíveis (incluindo Shadow DOM), filtra botões destrutivos/logout, gera um seletor CSS básico e retorna uma lista enxuta de candidatos. **Porém, em produção é código morto**: embora exportado em `workerEntry.ts:379-381`, **nunca é chamado** por `orchestrator_v2.js` nem por `background.js` (só é chamado em `scripts/run-e2e-chromium.ts`).
+   - `selectBestDistilledAction(elements, goalKeyword, visitedSignatures)` (`domDistiller.ts:219-256`): Escolhe o candidato com maior sobreposição de tokens com `goalKeyword` evitando `visitedSignatures`. **Também nunca é chamado em produção.**
+   - `decomposeCompoundTeacherCommand(rawCommand)` (`domDistiller.ts:269-372`): Decompositor baseado em regras/regex (sem LLM) que:
+     - Separa comandos múltiplos por `;`, `e depois`, `em seguida`, `depois`, `aí` ou `, e <verbo>` (`domDistiller.ts:288-291`);
+     - Extrai `exclude_students` via regex `/(?:todos\s+menos|exceto|menos\s+o|menos\s+a|salvo|tirando\s+o|tirando\s+a)\s+([a-zà-úA-ZÀ-Ú\s,e]+?)(?:$|[.;]|para|com|nota)/i` (`domDistiller.ts:300-313`);
+     - Extrai `class_code` (`turma 9A`), `relative_date` (`ontem`, `anteontem`, `hoje`), `grade` (numérico ou conceito `MB/B/R/I`), `attendance` (`falta`/`presença`) e mapeia para `launch_grade`, `mark_attendance`, `read_roster`, `export_report` ou `navigate_and_learn`.
+   - **O que é perdido na integração real (`orchestrator_v2.js:461-485` → `side_panel_v2.js:421-437`):**
+     - `decomposeCompoundTeacherCommand` só é chamado em `fallbackLocalNlu` quando o app Desktop está offline (`orchestrator_v2.js:464`).
+     - Pega apenas `steps[0]` para `task_id` (`orchestrator_v2.js:469`: `const primary = steps.find(s => s.intent !== 'navigate_and_learn') || steps[0]`), **descartando sub-tarefas subsequentes** se houver mais de uma tarefa de escrita/leitura na frase.
+     - Embora retorne `filters: primary.filters` e `navigation_target: navStep?.navigation_target` (`orchestrator_v2.js:480-481`), o consumidor `side_panel_v2.js:421-437` lê **apenas** `res.result.task_id`, `res.result.slots`, `res.result.confidence` e `res.result.clarification_question` — **ignorando completamente `filters` (`exclude_students`) e `navigation_target`!**
+
+---
+
+## 6. Extração e Inserção — C4 (B4)
+
+### B4.1 Matriz Tipo × Operação
+
+| Operação / Controle | Status | `arquivo:linha` | Detalhes Técnicos (Setter Nativo, Eventos, Read-back, Reversão, Limitações) |
+| :--- | :---: | :--- | :--- |
+| **Leitura de `<table>` HTML** | `IMPLEMENTADO REAL` | `lib/runner/nodes/read.ts:24-38` → `lib/runner-dom/tableReader.ts:207-237` | Extrai `<thead>`/`<tbody>`, achata cabeçalho de 2 linhas com `colspan`/`rowspan` no `<thead>` (`tableReader.ts:34-103`) e descarta linhas de total/rodapé (`shouldSkipRow`). |
+| **Leitura de Grid/Div (`[role="grid"]`, AG-Grid)** | `IMPLEMENTADO REAL` | `lib/runner-dom/tableReader.ts:105-205` | Suporta `[role="row"]`, `.ag-row`, `.MuiDataGrid-row` e une colunas fixadas (`.ag-pinned-left-cols-container` + `.ag-center-cols-container`) por `row-index`/`aria-rowindex`/`data-row-key` (`tableReader.ts:139-168`). |
+| **Leitura de Lista (`<ul>`/`<ol>`/`[role="list"]`)** | `IMPLEMENTADO REAL` | `lib/runner/nodes/read.ts:46-58` → `lib/runner-dom/tableReader.ts:220-235` | Cai no fallback de `readHtmlTable` para `li, [role="listitem"]`, retornando objetos `{ item_1, item_2, ... }`. |
+| **Leitura de Cartões (Cards de Alunos)** | `PARCIAL` | `lib/runner-dom/tableReader.ts:130-137` | Só lê cartões se usarem classes `.student-row, .portal-row, .grid-row, .data-row, .list-item` e filhos `.cell, [data-col]`. Cards genéricos (`div.card > h4 + p`) sem essas classes retornam vazio. |
+| **Leitura de Texto Livre (`element_text`)** | `IMPLEMENTADO REAL` | `lib/runner/nodes/read.ts:38-41` → `lib/runner-dom/driver.ts:245-249` | Usa `getElementText(el)` (`selectors.ts:31-36`). |
+| **Leitura de Valor de Input/Select (`element_value`)** | `IMPLEMENTADO REAL` | `lib/runner/nodes/read.ts:42-45` → `lib/runner-dom/driver.ts:251-263` | Lê `.checked` para checkbox/radio, `.value` para `<input>`/`<select>`/`<textarea>`, ou texto. |
+| **Tabela Virtualizada (AG-Grid / MUI / React-Virtualized)** | `PARCIAL` | `lib/runner-dom/driver.ts:201-242` | Rola `.ag-body-viewport` / `.MuiDataGrid-virtualScroller` em incrementos de `300px` até `maxPages` (default 15), deduplicando linhas por `JSON.stringify(row)`. Limitação: se duas linhas legítimas tiverem células idênticas (homônimos sem matrícula visível), `seenRowKeys` descarta a segunda (`driver.ts:207, 231`). |
+| **Tabela Paginada** | `PARCIAL` | `lib/runner-dom/driver.ts:199-243, 379-428` | Funciona se o botão "Próxima" atualizar a tabela via AJAX/DOM local. Quebra se causar navegação multi-página com reload (pois `readTable` corre dentro de um único RPC no `contentAdapter.ts`). |
+| **Célula Mesclada (`colspan`/`rowspan`)** | `PARCIAL` | `lib/runner-dom/tableReader.ts:34-103` vs `164-199` | Suportado no `<thead>` (`buildFlattenHeaders`), mas **NÃO suportado em células `<td>` do `<tbody>`** (`tableReader.ts:181-190` indexa `cells[c]` diretamente em `headers[c]`, deslocando colunas seguintes quando uma célula de dados tem `colspan > 1` ou `rowspan > 1`). |
+| **Cabeçalho em 2 Linhas** | `IMPLEMENTADO REAL` | `lib/runner-dom/tableReader.ts:34-103` | `buildFlattenHeaders` constrói matriz 2D expandindo `colspan`/`rowspan` no `<thead>` e concatena com `_` (`Nota_B1`). |
+| **Download (`DOWNLOAD`)** | `PARCIAL` (com fallback sintético) | `lib/runner/nodes/download.ts:14-87` → `lib/runner-ext/remoteDriver.ts:467-493` → `lib/runner-dom/driver.ts:466-507` | Não lança `E_NODE_UNSUPPORTED`. Clica no gatilho e escuta `chrome.downloads.onCreated` por apenas `300ms` (`remoteDriver.ts:476`). Se o download demorar >300ms ou se `driver.ts:483-486` não achar `href`/`download`, **retorna sucesso falso com `filename: 'download_resultado.csv', sizeBytes: 1024`**! |
+| **Escrita em Input Texto / Textarea** | `IMPLEMENTADO REAL` | `lib/runner/nodes/write.ts:30-230` → `lib/runner-dom/writer.ts:345-417` | Faz leitura prévia (`beforeValue`), auditoria write-ahead (`write.ts:126`), native setter (`HTMLInputElement`/`HTMLTextAreaElement.prototype.value`), `_valueTracker.setValue`, `InputEvent('beforeinput')`, `InputEvent('input')`, `change`, `blur`, read-back (`write.ts:160-165`) e reversão ao `beforeValue` se divergir (`write.ts:167-175`). |
+| **Escrita de Número com Vírgula (`7,5`)** | `IMPLEMENTADO REAL` | `lib/runner/nodes/write.ts:19, 163` + `lib/runner-dom/writer.ts:352-360` | Converte `7,5` → `7.5` quando `el.type === 'number'` (`writer.ts:355-357`) e aceita equivalência `,`/`.` no read-back (`write.ts:163`). |
+| **Escrita em `<select>` Nativo e Customizado (Select2 / React-Select / MUI)** | `IMPLEMENTADO REAL` | `lib/runner-dom/writer.ts:152-304` | Para `<select>` nativo, casa por `value` ou texto normalizado, usa native setter + eventos e verifica `selectedIndex` (`writer.ts:152-187`). Para customizados/portaled (`role="combobox"`, `.select2-selection`, `.MuiSelect-select`), abre o dropdown, filtra no campo de busca se existir e clica na `[role="option"]` no `document.body` (`writer.ts:190-303`). |
+| **Checkbox / Radio com Polaridade (`presence_is_checked` vs `absence_is_checked`)** | `IMPLEMENTADO REAL` | `lib/runner/nodes/write.ts:104-121` + `lib/runner-dom/writer.ts:75-150` | Resolve polaridade a partir de `canonicalMapping.attendance_polarity` (lança `E_POLARITY_UNDECIDED` se ausente em `write.ts:106-112`), usa native `checked` setter ou `click()` e faz read-back booleano. |
+| **Data / Datepicker (Flatpickr, jQuery UI, HTML5 Date)** | `IMPLEMENTADO REAL` | `lib/runner-dom/writer.ts:306-343` | Converte `DD/MM/YYYY` ↔ `YYYY-MM-DD` para `<input type="date">`, ou navega meses/anos em `.flatpickr-calendar` / `.ui-datepicker` clicando no `.flatpickr-day` correspondente. |
+| **Contenteditable / WYSIWYG simples** | `PARCIAL` | `lib/runner-dom/writer.ts:368-378` | Suporta `[contenteditable="true"]` no mesmo DOM (`textContent = val` + `input`/`change`/`blur`), mas **não** suporta editores em iframe isolado (TinyMCE/CKEditor 4) sem âncora de frame dedicada. |
+| **Upload (`UPLOAD`)** | `STUB` / `INSEGURO` (`BLOQUEIA`) | `lib/runner/nodes/upload.ts:14-93` → `lib/runner-dom/driver.ts:509-538` | (1) **Não checa `state.dryRun`** e **não chama `host.audit()`** antes de mutar o `<input type="file">`; (2) Em `driver.ts:519-535`, cria `new File([options.source], options.source, { type: 'text/csv' })` — o conteúdo do arquivo enviado ao portal é literalmente a string do nome/caminho! |
+| **Campo em Iframe / Shadow DOM** | `PARCIAL` | `lib/runner-ext/remoteDriver.ts:199-277` + `lib/runner-dom/selectors.ts:74-149` | `WRITE` e `CLICK` funcionam em Shadow DOM (aberto/fechado via `chrome.dom.openOrClosedShadowRoot`) e em iframes quando precedidos por `locateAnchor` ou via candidato `role_name`/`css` roteado por `f{frameId}::`. |
+
+### B4.2 Busca por `TODO|not implemented|E_NODE_UNSUPPORTED` e Controles Sem Suporte
+- `git grep -n -E "TODO|not implemented|E_NODE_UNSUPPORTED" -- lib teacher-extension desktop`:
+  - `lib/runner/nodes/unsupported.ts:13-19`: `executeUnsupportedNode` lança `E_NODE_UNSUPPORTED`, mas no `engine.ts:233-265` apenas o `default:` do `switch (node.type)` chama `executeUnsupportedNode` (todos os 11 tipos do schema têm case próprio).
+- **Funções que retornam sucesso sem ação real (stubs/semi-stubs identificados):**
+  1. `DomDriver.waitForNavigation` (`lib/runner-dom/driver.ts:461-464`): `return Promise.resolve()`.
+  2. `RemoteDriver.waitForNavigation` (`lib/runner-ext/remoteDriver.ts:563-568`): `setTimeout` resolve sem erro quando nenhuma navegação ocorre.
+  3. `DomDriver.paginate` (`lib/runner-dom/driver.ts:386`): `const advanced = container.scrollTop !== prevTop || true`.
+  4. `DomDriver.download` (`lib/runner-dom/driver.ts:483-486`): retorna `{ success: true, filename: 'download_resultado.csv', sizeBytes: 1024 }` mesmo que o botão clicado não dispare download.
+  5. `DomDriver.upload` (`lib/runner-dom/driver.ts:519-535`): injeta um `File` cujo corpo é o próprio nome do arquivo em texto.
+- **Controles comuns em portais escolares brasileiros ainda sem suporte real:**
+  - Tabelas com `rowspan`/`colspan` no corpo (`<tbody>`), comuns em boletins por bimestre/recuperação;
+  - Paginação numérica sem botão "Próxima" (`1 | 2 | 3`, `mode: 'page_number'`);
+  - Upload de arquivos reais do disco (planilhas `.xlsx`/`.csv`, atestados em `.pdf`);
+  - Inputs com máscara de cursor que interceptam `keydown` caractere a caractere e rejeitam atribuição em bloco de `.value`;
+  - Editores ricos em iframe (TinyMCE/CKEditor clássicos em campos de parecer descritivo).
+
+---
+
+## 7. Os Testes em Chromium Real (B5)
+
+Leitura integral de `scripts/run-e2e-chromium.ts` (`1–335`) e `tools/runner-harness/fixtures/hostile-portal-e2e.html` (`1–263`):
+
+1. **Carrega `teacher-extension/` como extensão (`--load-extension`) ou só importa módulos?**
+   - **Só importa módulos.** Compila um bundle ad-hoc em memória com `esbuild.build` exportando `{ DomDriver, distillInteractiveDom, selectBestDistilledAction, decomposeCompoundTeacherCommand, createDriftSnapshot, generateRepairProposal }` (`scripts/run-e2e-chromium.ts:18-32`) e o injeta via `win.webContents.executeJavaScript(bundleCode)` numa janela `BrowserWindow` do Electron (`run-e2e-chromium.ts:68-82`). `--load-extension` **não é usado**.
+2. **Fala com o app por Native Messaging?**
+   - **NÃO.** Nenhum processo `com.teacherai.desktop`, `NativeClient`, `ExtensionHost` ou SQLite cifrado é instanciado.
+3. **Usa o `RemoteDriver`/`ContentAdapter` reais ou chama funções direto?**
+   - **Chama funções direto (`new window.E2E.DomDriver(document)` dentro da página).** `SkillGraphRunner`, `RemoteDriver` e `ContentAdapter` não participam de nenhum dos 8 cenários. No cenário 5 (`CDP isTrusted=true`), o próprio script de teste chama `win.webContents.debugger.sendCommand('Input.dispatchMouseEvent', ...)` (`run-e2e-chromium.ts:187-205`), e não o `orchestrator_v2.js`. No cenário 6 (`Cross-Origin Iframe`), o próprio script de teste localiza o frame em `win.webContents.mainFrame.frames` e chama `crossFrame.executeJavaScript(...)` (`run-e2e-chromium.ts:242-254`), e não o `RemoteDriver` via `chrome.webNavigation.getAllFrames`.
+4. **Quem escreveu fixture e teste? As fixtures estão travadas por lock?**
+   - Escritos pelo **mesmo agente na mesma sessão** (arquivos não rastreados `?? scripts/run-e2e-chromium.ts` e `?? tools/runner-harness/fixtures/hostile-portal-e2e.html`).
+   - **NÃO estão travadas por lock** (`tools/runner-harness/suiteLock.ts` não inclui `hostile-portal-e2e.html`).
+5. **Quantos dos 8 cenários exercitam o caminho de produção (`side_panel_v2` → `orchestrator_v2` → `SkillGraphRunner` → `RemoteDriver` → `ContentAdapter` → `DomDriver` + `NativeClient`)?**
+   - **`0 / 8` cenários** exercitam o caminho completo de produção da extensão.
+6. **Saída literal da execução única de `npm run test:e2e:chromium`:**
+   ```text
+   > teacher-ai@0.1.0 test:e2e:chromium
+   > npx tsx scripts/run-e2e-chromium.ts
+
+   [E2E CHROMIUM REAL] 8/8 suítes aprovadas (1:Blink elementFromPoint, 2:Flatpickr <select>, 3:Select2 Portal, 4:AG-Grid Pinned+VirtualScroll, 5:CDP isTrusted=true, 6:Closed Shadow DOM + Cross-Origin Iframe, 7:NLU Multi-Turno + DOM Distiller + Backtracking, 8:Self-Healing AST)
+   EXIT_E2E=0
+   ```
+7. **Classificação do valor do teste:**
+   - **E1 (prova real executada)** apenas para: comportamento de APIs DOM do motor Blink/Chromium dentro do `DomDriver` isolado (`elementFromPoint` em `ensureElementNotOccluded`, Flatpickr `<select>`, Select2 portaled no `body`, leitura de AG-Grid pinned + scroll virtual) e funções puras (`decomposeCompoundTeacherCommand`, `distillInteractiveDom`, `generateRepairProposal`).
+   - **NÃO é evidência E1** para: extensão Chrome MV3, `RemoteDriver`, `ContentAdapter`, `SkillGraphRunner`, `orchestrator_v2.js`, `chrome.debugger` da extensão, `chrome.webNavigation` ou Native Messaging.
+
+---
+
+## 8. UX — C3 (B6)
+
+Avaliação em `teacher-extension/side_panel_v2.html`, `teacher-extension/side_panel_v2.js`, `desktop/ui/index.html` e `desktop/ui/app.js`:
+
+| Requisito de UX | Status | `arquivo:linha` | Observação |
+| :--- | :---: | :--- | :--- |
+| **1. Primeiro uso e conexão** | `PARCIAL` | `desktop/main.ts:392-399`, `desktop/nativeHost/autoRegister.ts:18-76`, `side_panel_v2.js:76-127` | O app Desktop auto-registra o manifesto Native Messaging no HKCU do Windows ao iniciar (`autoRegister.ts:18-76`), mas a professora ainda precisa carregar a extensão e abrir o app Desktop antes. |
+| **2. Indicador de conexão** | `SIM` | `side_panel_v2.html:21-24`, `side_panel_v2.js:76-127`, `desktop/ui/index.html:170`, `desktop/ui/app.js:35-65` | `#sgv2-conn-badge` mostra `"App Desktop Conectado"` vs `"App Desktop Desconectado (Modo Local)"` e a aba conectada em `#sgv2-tab-info`. |
+| **3. Pedir por texto** | `SIM` | `side_panel_v2.html:28-36`, `side_panel_v2.js:369-456` | Campo `#sgv2-nlu-input` + botão `#sgv2-btn-nlu` com suporte a Enter. |
+| **4. Gravar demonstração** | `SIM` | `side_panel_v2.html:88-96`, `side_panel_v2.js:211-248` | Botões `#sgv2-btn-record-start` e `#sgv2-btn-record-stop` com feedback de passos capturados. |
+| **5. Decidir polaridade / escala** | `SIM` | `side_panel_v2.html:99-103`, `side_panel_v2.js:250-358` | Renderiza `<select>` dinâmico para cada ambiguidade (`attendance_polarity`, `grade_scale`) antes de permitir `#sgv2-btn-compile-save`. |
+| **6. Dry-run** | `SIM` | `side_panel_v2.html:66-71`, `side_panel_v2.js:467`, `desktop/ui/app.js:354-375` | Checkbox `#sgv2-dry-run-toggle` no painel (`dryRun: Boolean(dryRunToggle?.checked)`) e botão `"Executar Dry-Run Supervisionado"` na quarentena do Desktop (`app.js:354`). |
+| **7. CHECKPOINT legível com diff** | `SIM` | `side_panel_v2.html:107-121`, `side_panel_v2.js:526-557`, `orchestrator_v2.js:354-366` | Card `#sgv2-checkpoint-card` mostra itens `label: value` e botões `"Aprovar e Continuar"` / `"Cancelar"`. |
+| **8. Executar** | `SIM` | `side_panel_v2.html:72`, `side_panel_v2.js:458-484` | Botão `#sgv2-btn-run-confirmed` e botões de ação rápida das habilidades ativas (`side_panel_v2.js:129-174`). |
+| **9. Progresso em tempo real** | `SIM` | `side_panel_v2.html:77-83`, `side_panel_v2.js:491-524, 577-617` | Escuta `SKILLGRAPH_PROGRESS` e exibe passos amigáveis (`NODE_TYPE_LABELS` em `side_panel_v2.js:53-65`). |
+| **10. Cancelar execução** | `SIM` | `side_panel_v2.html:79`, `side_panel_v2.js:203-209`, `orchestrator_v2.js:737-746` | Botão `#sgv2-btn-abort` envia `SKILLGRAPH_ABORT`, acionando `currentRunnerAbort.abort()`. |
+| **11. Erros em linguagem simples (quais `E_*` aparecem crus?)** | `PARCIAL` | `orchestrator_v2.js:16-33`, `side_panel_v2.js:36-51` | Mapeia 14 códigos `E_*`. **Aparecem crus ou sem tradução dedicada:** `E_DOWNLOAD_FAILED`, `E_UPLOAD_FAILED`, `E_TIMEOUT`, `E_HANDOFF_TIMEOUT`, `E_SANDBOX_VIOLATION` e `E_REPAIR_INVALID` (caem na mensagem técnica `err.message` em `orchestrator_v2.js:38`). E no `desktop/ui/app.js:228, 372, 405`, erros aparecem em `alert()` nativo. |
+| **12. Histórico de auditoria visível** | `NÃO` | `desktop/main.ts:135-140`, `desktop/ui/index.html:299-302` | Existe apenas `audit.append` no IPC (`desktop/main.ts:135`); **não existe `audit.list`** nem tela/tabela para consultar o histórico de escritas (`before_value`/`after_value`) gravadas no SQLite. O `#status-log` do Desktop (`index.html:301`) mostra apenas logs efêmeros da sessão aberta. |
+| **13. Reverter versão (IPC e UI)** | `SIM` | `desktop/main.ts:106-119` (`graphs.list`, `graphs.setActive`), `desktop/ui/app.js:474-520`, `side_panel_v2.js:684-696` | Tabela `#local-skills-table` no Desktop tem botão `.btn-activate-version` (`"Ativar / Reverter"`) e o painel v2 tem botão `"Reverter"` em `#sgv2-skills-manage-list`. |
+| **14. Listar / renomear / excluir / exportar habilidades** | `PARCIAL` | `desktop/ui/app.js:450-604`, `side_panel_v2.js:639-709` | **Listar, excluir e exportar funcionam** (`graphs.list`, `graphs.delete`, `community.export`). **Renomear: `NÃO`** (não há UI nem IPC para renomear o `name` de uma habilidade já salva). |
+| **15. Lote (execução em lote)** | `NÃO` | `side_panel_v2.html`, `side_panel_v2.js` | Não há interface no painel v2 para revisar/editar uma lista de alunos em lote (ex.: desmarcar alunos específicos antes de aplicar nota/falta à turma). |
+| **16. Estados vazios** | `SIM` | `side_panel_v2.html:52, 82, 145`, `desktop/ui/app.js:75, 250, 457` | Textos claros quando não há habilidades, discentes ou pacotes comunitários. |
+| **17. Acessibilidade básica** | `PARCIAL` | `side_panel_v2.html:1-150`, `desktop/ui/index.html:1-320` | Bom contraste e fontes legíveis, mas modais (`#quarantine-modal` em `desktop/ui/index.html:305`) e cards de checkpoint não possuem `role="dialog"`, `aria-modal="true"`, `aria-live="polite"` no log de progresso nem trap de foco por teclado. |
+| **18. Instalação sem terminal** | `PARCIAL` | `scripts/build-desktop.ts:1-95`, `desktop/nativeHost/autoRegister.ts:18-76` | O Native Host registra-se sozinho no registro do Windows quando o Desktop abre, mas não há instalador `.exe`/`.msi` (NSIS/Squirrel) configurado nem publicação na Chrome Web Store (exige carregar `teacher-extension/` em `chrome://extensions`). |
+
+**O que impediria uma professora leiga de concluir sozinha hoje:**
+1. Carregar a extensão descompactada no modo desenvolvedor do Chrome (`chrome://extensions`);
+2. Ausência de histórico de auditoria consultável para conferir o que já foi lançado no portal;
+3. Impossibilidade de renomear habilidades gravadas (que recebem IDs como `custom_skill` ou `nav_diario` se ela não batizar no momento exato da compilação);
+4. Comandos em lote com exclusão (*"lançar presença para todos menos o João"*) não mostram a lista filtrada de alunos para conferência antes da execução.
+
+---
+
+## 9. Linguagem Natural — C5 (B7)
+
+Leitura de `desktop/llm/llmGateway.ts` (`1–435`), `teacher-extension/orchestrator_v2.js` (`405–485`), `teacher-extension/side_panel_v2.js` (`369–456`) e `lib/explorer/domDistiller.ts` (`269–372`):
+
+1. **Tratamento de nuances:**
+   - **Ambiguidade de habilidade (pergunta ou escolhe?):** Em `desktop/llm/llmGateway.ts:323-358`, o parser pontua o catálogo por interseção de tokens e **escolhe silenciosamente `scored[0]`** (`const chosen = scored[0]?.skill || request.catalog[0]`, linha `346`). Só retorna `clarification_question` se `scored[0].score === 0` (nenhuma palavra casou, linha `325-331`). Se duas habilidades empatarem com score > 0, **não pergunta**.
+   - **Parâmetro faltante:** Verifica `missingSlots = chosen.required_slots.filter(s => slots[s] === undefined || slots[s] === '')` (`llmGateway.ts:348-357`). Se faltar slot obrigatório, retorna `clarification_question: "Para executar \"...\", informe: ..."` e o painel exibe em `#sgv2-nlu-clarification` (`side_panel_v2.js:428-431`).
+   - **Datas relativas (quem converte para `date`?):** `resolveRelativeDatePtBr(text)` em `desktop/llm/llmGateway.ts:159-185` (e em `lib/explorer/domDistiller.ts:258-267` no fallback offline) converte determinísticamente `hoje`, `ontem`, `anteontem`, `amanhã` e `DD/MM/YYYY` para `YYYY-MM-DD` no slot `slots.date` **em código TypeScript puro**, sem depender do LLM.
+   - **Nomes com apelido / homônimo / acento:** Normaliza acentos (`NFD`) na busca de linha (`lib/runner-dom/selectors.ts:27`, `driver.ts:88-100`). Se houver homônimos na tabela (`matches.length > 1`), `locateRow` retorna `ambiguous: true` (`driver.ts:112-116`) e `executeLocateNode` lança `E_ROW_AMBIGUOUS` (`lib/runner/nodes/navigate.ts:91-93`). Não há resolução de apelidos (`"Chico"` → `"Francisco"`).
+   - **Lote e exclusão (*"todos menos o João"*):** `LlmGateway.parseIntent` extrai `slots.exclude_students = "João"` e `slots.batch_mode = "all_except"` (`llmGateway.ts:227-232`). **Porém**, nenhum grafo do catálogo nem o `orchestrator_v2.js` consome `slots.exclude_students` ou `slots.batch_mode` durante `SKILLGRAPH_RUN` (o nó `LOOP` em `lib/runner/nodes/loop.ts` usa apenas `node.skip_rows` estático do grafo, não `params.exclude_students`!).
+   - **Correção (*"na verdade 7,5"*):** `LlmGateway.parseIntent` (`llmGateway.ts:154`) recebe apenas `{ text, catalog }` da chamada atual — **não há histórico de conversa**. Se a professora digitar apenas *"na verdade 7,5"* no turno seguinte, o comando não tem verbo nem nome de aluno; `scored[0].score` será `0` (ou cairá na habilidade de nota sem o slot `student` do turno anterior).
+   - **Várias tarefas numa frase:** No `LlmGateway.parseIntent` (`llmGateway.ts:154-370`), retorna um único `task_id` (`NluParseResponse` tem apenas um `task_id`). No fallback offline (`orchestrator_v2.js:464-469`), `decomposeCompoundTeacherCommand` separa os passos, mas `fallbackLocalNlu` pega apenas `primary = steps[0]` e descarta o resto.
+   - **Negação (*"não lance falta para a Ana"*):** Não há detecção de negação da intenção principal em `llmGateway.ts:187-247`; a presença das palavras `"lance"` e `"falta"` e `"Ana"` fará o parser extrair `attendance: 'F', student: 'Ana'` como se fosse uma ordem afirmativa!
+   - **Histórico de conversa:** **Ausente** no pipeline v2 (`SKILLGRAPH_NLU_PARSE` envia apenas `{ text: message.text }` em `orchestrator_v2.js:419`).
+   - **Português coloquial e erros de digitação:** Suporta gírias mapeadas explicitamente em `llmGateway.ts:190-245` (`"bota"`, `"coloca"`, `"mete"`, `"veio"`, `"faltou"`, `"nota dez"`, `"tirou oito e meio"`), mas não possui distância de edição (Levenshtein) para erros de digitação nos verbos do catálogo.
+   - **Ollama ausente:** `LlmGateway` faz fallback imediato e determinístico para o extrator regex/heurístico local (`llmGateway.ts:249-319`). Se o próprio app Desktop estiver fechado, `orchestrator_v2.js:422, 461-485` usa `fallbackLocalNlu`.
+2. **Quantos casos de teste de NLU existem e que nuances cobrem?**
+   - Existem **5 blocos de teste de NLU** em `__tests__/desktop.core.test.ts` (seção `3. Gateway LLM Local e Pseudonimização reversível` + itens de `G5` como `(4) NLU mapeia variações para o catálogo e pede clarificação quando ambíguo` e `(6) NLU compreende português coloquial, conceitos, notas por extenso e exclusões em lote`) e **1 cenário** em `scripts/run-e2e-chromium.ts:261-291` testando `decomposeCompoundTeacherCommand`. Cobrem: pseudonimização `ALUNO_1`, bloqueio de prompt sem pseudonimização, comando fora do catálogo (`score === 0`), nota com vírgula/conceito/extenso (`"oito e meio"`), data relativa (`"ontem"`) e extração do slot `exclude_students`.
+3. **3 entradas que o código suporta vs. 3 entradas que NÃO suporta (por leitura de `llmGateway.ts` e `orchestrator_v2.js`):**
+   - **Suporta:**
+     1. `"Lançar nota 8,5 para a aluna Maria Silva ontem"` → extrai `grade: '8.5'`, `student: 'Maria Silva'`, `date: '<YYYY-MM-DD de ontem>'`.
+     2. `"Coloca menção MB para João Pedro"` → extrai `grade: 'MB'`, `student: 'João Pedro'`.
+     3. `"Dar falta para Lucas Mendes hoje"` → extrai `attendance: 'F'`, `student: 'Lucas Mendes'`, `date: '<YYYY-MM-DD de hoje>'`.
+   - **NÃO suporta:**
+     1. `"Não lance falta para o João hoje"` → ignora o `"Não"` e preenche o formulário para **lançar** falta para João.
+     2. Turno 1: `"Lançar nota 8,0 para Ana"` → Turno 2: `"Na verdade 7,5"` → perde a referência à aluna `Ana` porque `SKILLGRAPH_NLU_PARSE` é stateless.
+     3. `"Lançar presença para todos da turma 9A menos o João"` → embora `llmGateway.ts:227-232` coloque `exclude_students: 'João'` em `slots`, o `SkillGraphRunner` (`lib/runner/nodes/loop.ts`) **não filtra `params.exclude_students`**, então o loop não exclui o João na execução.
+4. **O LLM pode influenciar valores escritos? Todo valor escrito passa por CHECKPOINT integral?**
+   - **O LLM pode influenciar valores sugeridos nos slots**, pois em `desktop/llm/llmGateway.ts:276-288`, quando o Ollama responde, o código faz `slots[k] = val` para cada chave retornada por `parsed.slots` (desde que não sobreescreva `grade` numérico já extraído localmente na linha `281`).
+   - **Todo valor escrito via `WRITE` passa por CHECKPOINT no painel v2:** `side_panel_v2.js:435-456` exibe os slots preenchidos no formulário de confirmação antes de rodar, e `orchestrator_v2.js:354-366` injeta um `CHECKPOINT` dinâmico antes de qualquer nó `WRITE` se o grafo não tiver um `CHECKPOINT` explícito (exceto o nó `UPLOAD`, que não é interceptado por `orchestrator_v2.js:355`!).
+
+---
+
+## 10. Cadeias de Ponta a Ponta (B8)
+
+| ID | Cadeia | Saltos (`arquivo:linha → arquivo:linha`) | Status | Ponto Exato de Quebra |
+| :--- | :--- | :--- | :---: | :--- |
+| **N1** | **Navegação multi-página gravada** | `side_panel_v2.js:211` (`SKILLGRAPH_START_RECORD`) → `orchestrator_v2.js:754-809` (injeta `dist/recorder.bundle.js` e cria `skillgraph_recording` em `storage.session`) → `orchestrator_v2.js:1165-1202` (`chrome.tabs.onUpdated` grava step `kind: 'navigate'` e re-injeta `dist/recorder.bundle.js` após reload) → `side_panel_v2.js:228` (`SKILLGRAPH_STOP_RECORD`) → `orchestrator_v2.js:856-871` (une `accumulatedSteps`) → `lib/compiler/stages/segment.ts:52-75` + `assemble.ts:116-148` (gera nó `NAVIGATE`). | `PARCIAL` | Em `orchestrator_v2.js:856-873`, se `rec.steps` tiver apenas o step `navigate` adicionado pelo `onUpdated` (porque os cliques no `recorderCore.ts` ficaram na memória `window.__TEACHER_AI_RECORDER__` da página anterior antes do `beforeunload` e só enviaram `SKILLGRAPH_STEP_CAPTURED` se `extensionEntry.ts` conseguiu despachar antes do unload), ou se os últimos passos na última página ficaram apenas em `localTrace.steps` e não em `rec.steps`, `orchestrator_v2.js:856` usa **OU** `accumulatedSteps` **OU** `localTrace.steps` (não faz merge deduplicado se `SKILLGRAPH_STEP_CAPTURED` falhar num step final). |
+| **N2** | **Explorar e aprender** | `side_panel_v2.js:375` (`SKILLGRAPH_NLU_PARSE` retorna `learned: false` / sem skill) → `side_panel_v2.js:380` (`SKILLGRAPH_EXPLORE_AND_LEARN`) → `orchestrator_v2.js:516-674` → `background.js:930` (`internalNavigatePortalTab`) → `orchestrator_v2.js:647` (`bundle.compile(trace, decisions)`) → `orchestrator_v2.js:653-658` (`saveStandaloneGraph(savedGraph, false)` + `nativeClient.send('graphs.save', { activate: false })`). | `PARCIAL` | (1) `domDistiller.ts` não é usado (`orchestrator_v2.js:567` usa `internalNavigatePortalTab`); (2) se o clique abrir link externo a outro domínio, a checagem de host (`orchestrator_v2.js:598`) só ocorre **depois** que a aba já navegou; (3) no Desktop (`desktop/main.ts:98-103`), salvar a v1 com `activate: false` deixa `is_active = 1` no SQLite porque `SqlSkillGraphRepository.save` marca v1 como ativa por padrão; (4) o botão `#sgv2-activate-learned` no painel (`side_panel_v2.js:391-404`) ativa em 1 clique sem dry-run. |
+| **N3** | **Ler tabela paginada e salvar no app** | `side_panel_v2.js:186` (`SKILLGRAPH_RUN`) → `orchestrator_v2.js:294` (`runner.run`) → `lib/runner/nodes/read.ts:29-34` (`driver.readTable({ paginate })`) → `lib/runner-dom/driver.ts:199-243` (`state.variables[node.into] = rows`) → `orchestrator_v2.js:308` (`result`). | `DESCONECTADO` | **Quebra dupla:** (1) `readTable` paginado corre dentro de um único RPC no content script (`driver.ts:199-243`) e quebra se a paginação recarregar a página; (2) ao terminar `SKILLGRAPH_RUN` (`orchestrator_v2.js:294-345`), `result.state.variables` retorna no `sendResponse`, mas **não há chamada para `nativeClient.send('students.upsert', ...)`** em `orchestrator_v2.js` nem em `side_panel_v2.js`! Os alunos lidos pela habilidade `READ` **não são salvos no SQLite cifrado do app Desktop**. |
+| **N4** | **Wizard com CHECKPOINT** | `side_panel_v2.js:458` (`SKILLGRAPH_RUN`) → `orchestrator_v2.js:354-366` (garante nó `CHECKPOINT`) → `lib/runner/nodes/checkpoint.ts:15-76` (`host.checkpoint`) → `workerEntry.ts:171-203` → `orchestrator_v2.js:230-250` (emite `SKILLGRAPH_CHECKPOINT_REQUEST` e aguarda `pendingCheckpointResolvers`) → `side_panel_v2.js:526-557` (usuário clica Aprovar → `SKILLGRAPH_CHECKPOINT_DECISION`) → `lib/runner/nodes/write.ts:30-230`. | `CONECTADO` (quebra em C6 se app fechado) | A cadeia UI → Runner → Checkpoint → Write está conectada de ponta a ponta. Porém, como `standaloneFallback: true` está ligado (`orchestrator_v2.js:279`), se o app Desktop estiver fechado, o `WRITE` subsequente grava no portal sem ack do cofre Desktop. |
+| **N5** | **Baixar boletim (`DOWNLOAD`)** | `lib/runner/engine.ts:256` (`executeDownloadNode`) → `lib/runner/nodes/download.ts:40-45` (`driver.download`) → `lib/runner-ext/remoteDriver.ts:467-493` (`chrome.downloads.onCreated` com timeout de 300ms → fallback para `sendRpc('download')`) → `lib/runner-dom/driver.ts:466-507`. | `STUB` / `PARCIAL` | Se o download do navegador levar mais de `300ms` para disparar `chrome.downloads.onCreated` (`remoteDriver.ts:476`) e o botão for um `<button>` JS sem atributo `href`/`download`, `DomDriver.download` (`driver.ts:483-486`) **finge sucesso** retornando `{ success: true, filename: 'download_resultado.csv', sizeBytes: 1024 }`. |
+| **N6** | **Linguagem natural → formulário → execução** | `side_panel_v2.js:369` (`#sgv2-btn-nlu`) → `orchestrator_v2.js:405` (`SKILLGRAPH_NLU_PARSE`) → `desktop/main.ts:181` (`nlu.parse`) → `desktop/llm/llmGateway.ts:154` (`parseIntent`) → `side_panel_v2.js:421-456` (`openParamsConfirmation` preenche inputs) → `side_panel_v2.js:458` (`#sgv2-btn-run-confirmed` → `SKILLGRAPH_RUN`). | `CONECTADO` (para tarefa simples) / `PARCIAL` (para lotes/exclusões) | Conectado para 1 tarefa do catálogo com slots escalares (`student`, `grade`, `attendance`, `date`). Quebra em lotes com exclusão (`exclude_students` não é aplicado no loop) e em comandos compostos com >1 escrita. |
+| **N7** | **Popup de login → handoff → retomada** | `lib/runner/nodes/checkpoint.ts:78-130` (`executeHandoffNode`) → `orchestrator_v2.js:252-274` (`SKILLGRAPH_HANDOFF_STARTED`) → polling `evaluateCondition(node.resume_when)`. Porém `lib/runner-ext/ssoHandoff.ts` (`SSOHandoffManager`) **não é instanciado em lugar algum**. | `DESCONECTADO` | Se o portal abrir um popup OAuth/SSO em nova janela/aba (`chrome.tabs.onCreated` com `openerTabId`), o `orchestrator_v2.js` **não instancia `SSOHandoffManager`** (`ssoHandoff.ts:44-169`) para monitorar o fechamento do popup e retomar automaticamente. |
+| **N8** | **Falha no meio (aba fechada, SW reciclado, app fechado) → estado seguro sem escrita duplicada** | `remoteDriver.ts:58-69, 98-144` (`NON_IDEMPOTENT_OPERATIONS` impede retry de `write`, e `chrome.tabs.get` detecta `E_TAB_CLOSED`), `workerEntry.ts:288-308` (`persistRunProgress` salva `active_runs` em `chrome.storage.session`). | `PARCIAL` (**Quebra em app fechado e SW reciclado**) | (1) **Aba fechada / RPC de escrita falho:** `NON_IDEMPOTENT_OPERATIONS` impede que `write` seja re-executado (seguro contra escrita duplicada); (2) **SW reciclado:** `workerEntry.ts:288-308` grava `active_runs[runId]` em `chrome.storage.session`, mas **nenhum código em `orchestrator_v2.js` lê `active_runs` no boot do Service Worker** para alertar a professora ou reconciliar a execução interrompida; (3) **App fechado:** devido a `standaloneFallback: true` (`orchestrator_v2.js:279`), **NÃO aborta** a escrita quando o app Desktop fecha no meio da execução! |
+
+---
+
+## 11. Testes e Builds Executados (B9)
+
+### B9.1 Tabela do Orçamento Permitido (1x cada)
+
+| # | Comando Executado | Resultado (Exit Code) | Nº Passou / Falhou | Tempo / Detalhe Literal |
+| :---: | :--- | :---: | :---: | :--- |
+| 1 | `npx tsc --noEmit` | `0` (OK) | Compilação limpa (0 erros TS) | Sem erros de tipo |
+| 2 | `npm run build:ext` | `0` (OK) | 3 bundles gerados (`runner`, `content`, `recorder`) | `teacher-extension/dist/` verificado |
+| 3 | `npm run desktop:build` | `0` (OK) | Bundles gerados em `dist-desktop/` | Empacotamento Electron concluído |
+| 4 | `npx vitest run __tests__/skillGraphV2.contract.test.ts __tests__/graphRunner.core.test.ts __tests__/compiler.core.test.ts __tests__/repair.core.test.ts __tests__/desktop.core.test.ts __tests__/community.core.test.ts __tests__/extensionHost.integration.test.ts` | `0` (OK) | **150 passed / 0 failed** (7 arquivos) | `skillGraphV2.contract` (12), `repair.core` (15), `compiler.core` (13), `community.core` (35), `desktop.core` (27), `extensionHost.integration` (14), `graphRunner.core` (34) |
+| 5 | `npm run test:e2e:chromium` | `0` (OK) | **8/8 cenários aprovados** | Executado via Electron Chromium + `DomDriver` injetado em `hostile-portal-e2e.html` |
+
+### B9.2 Invariantes de C1–C6 que Só Têm Teste com Driver Falso (`FakeDriver` / Mocks) ou Fixture do Próprio Agente
+1. **Todo o motor `SkillGraphRunner` (`__tests__/graphRunner.core.test.ts`):** Os 34 testes usam `HarnessDriver` (sobre JSDOM/HTML estático) ou mocks em memória. Nenhum teste executa `SkillGraphRunner` conectado ao `RemoteDriver` + `ContentAdapter` dentro de uma extensão Chrome real.
+2. **Integração `ExtensionHost` / `RemoteDriver` / `SSOHandoffManager` (`__tests__/extensionHost.integration.test.ts`):** Os 14 testes usam um objeto `mockChrome` em memória (`chrome.tabs`, `chrome.storage`, `chrome.runtime` simulados em Node.js).
+3. **Suíte `scripts/run-e2e-chromium.ts`:** Embora rode num processo Chromium real (Electron), **não carrega a extensão (`teacher-extension/`)**, não usa `SkillGraphRunner`, não usa `RemoteDriver`/`ContentAdapter`, não usa `NativeClient` e roda contra uma única página HTML (`hostile-portal-e2e.html`) criada pelo próprio agente sem lock SHA-256.
+4. **Execução com Chrome real + extensão MV3 carregada + app Desktop via Native Messaging + Ollama real + portal escolar real:** `NÃO EXECUTADO (dono)`.
+
+---
+
+## 12. Bloqueios, Dívida e Recomendações (B10)
+
+### 12.1 "Navegar e extrair/inserir em qualquer portal" é alegável hoje?
+**NÃO.** Pelos seguintes motivos provados em código (E2) e execução (E1):
+1. **Regressão de segurança ativa (C6):** `standaloneFallback: true` permite escrita real no portal com o app Desktop fechado e salva notas/nomes em `chrome.storage.local` sem cifra; e o nó `UPLOAD` ignora `dryRun` e `host.audit()`.
+2. **Falsos positivos (stubs/fallbacks sintéticos):** `DomDriver.download` retorna sucesso com arquivo fictício (`download_resultado.csv`, 1024 B) quando nenhum download real ocorre; `DomDriver.upload` envia o nome do arquivo como se fosse o conteúdo do arquivo; `RemoteDriver.waitForNavigation` resolve sem erro no timeout; `DomDriver.paginate` tem `|| true` em `driver.ts:386`.
+3. **Quebras estruturais em portais reais:** `readTable` paginado quebra se o clique em "Próxima" recarregar a página; `readTable` desalinha colunas quando há `colspan`/`rowspan` no `<tbody>`; `RemoteDriver` não propaga `frameId` da âncora em `readTable`, `scroll`, `paginate`, `download` e `upload`; `SSOHandoffManager` não está instanciado na extensão; e os dados lidos por `READ` nunca são persistidos via `students.upsert` no Desktop.
+
+### 12.2 Lista Ordenada de `BLOQUEIA` (Até 8, com Esforço P/M/G)
+
+| Prioridade | ID | Descrição do `BLOQUEIA` e Localização (`arquivo:linha`) | Objetivo Afetado | Esforço |
 | :---: | :--- | :--- | :---: | :---: |
-| **1** | **Nó `NAVIGATE` (SkillGraph v2)** | `lib/runner/nodes/navigate.ts:16-63` $\rightarrow$ `lib/runner-ext/remoteDriver.ts:203-228` | **SIM** (`SKILLGRAPH_RUN`) | Ativo (v2) |
-| **2** | **Explorador Autônomo (`SKILLGRAPH_EXPLORE_AND_LEARN`)** | `teacher-extension/side_panel_v2.js:348` $\rightarrow$ `teacher-extension/orchestrator_v2.js:336-479` | **SIM** (botão `#sgv2-btn-nl-send`) | Ativo (v2) |
-| **3** | **Heurística de Menu (`internalNavigatePortalTab` / `NAVIGATE_PORTAL_TAB`)** | `teacher-extension/background.js:930-1035` e `background.js:1597` | **SIM** (invocado pelo caminho #2 em `orchestrator_v2.js:368`) | Ativo (híbrido v1/v2) |
-| **4** | **`portal_navigate` (Agente v1 no Side Panel legado)** | `teacher-extension/side_panel.js:2799` $\rightarrow$ envia `NAVIGATE_PORTAL_TAB` | **NÃO** (`side_panel.html` não está no manifesto v2) | Legado / Órfão |
-| **5** | **`DISCOVERY_FIND_AND_CLICK_STUDENT` (Camada 2 v1)** | `teacher-extension/background.js:1624-1827` $\rightarrow$ `teacher-extension/side_panel.js:2859` | **NÃO** (sem chamador em `side_panel_v2.js`) | Legado / Órfão |
-| **6** | **Loop ReAct Python (`sidecar/agentic_execution_loop.py`)** | `sidecar/agentic_execution_loop.py:1-320` (WebSocket 8765 desativado no modo v2) | **NÃO** (`USE_SKILLGRAPH_V2_DEFAULT = true` em `background.js:275`) | Legado / Desconectado |
+| **1** | **BLQ-1** | **`standaloneFallback: true` permite escrita real com o app Desktop fechado e grava PII/notas em `chrome.storage.local` sem cifra:** `teacher-extension/orchestrator_v2.js:279` e `lib/runner-ext/workerEntry.ts:241-285` suprimem `E_AUDIT_UNAVAILABLE` quando o Desktop está offline mesmo em `dryRun: false`, e gravam `before_value`, `after_value` e nomes em `standalone_audit_log_v2` (além de `side_panel.js:1028` gravar `cached_roster_${className}`). | **C6** | **P** |
+| **2** | **BLQ-2** | **Nó `UPLOAD` muta o DOM sem auditoria write-ahead, sem respeitar `dryRun`, e com conteúdo de arquivo falso:** `lib/runner/nodes/upload.ts:17-93` incrementa `state.writesCount` sem chamar `host.audit()` e sem pular em `state.dryRun`, e `lib/runner-dom/driver.ts:519-535` cria `new File([options.source], ...)` onde o conteúdo do arquivo é literalmente a string do path. | **C4, C6** | **P** |
+| **3** | **BLQ-3** | **Ativação sem revisão/dry-run e falta de `validateGraph` em grafos aprendidos/standalone:** `orchestrator_v2.js:91-142` salva grafos em `chrome.storage.local` sem `validateGraph`; `desktop/main.ts:98-103` deixa a v1 ativa no SQLite mesmo quando `activate: false` é passado; e `side_panel_v2.js:391-404` (`#sgv2-activate-learned`) ativa grafo explorado em 1 clique sem exibir nós/efeitos nem exigir dry-run. | **C6, C3** | **P** |
+| **4** | **BLQ-4** | **Falsos sucessos silenciosos em `DOWNLOAD`, `waitForNavigation` e `paginate`:** `lib/runner-dom/driver.ts:483-486` retorna `download_resultado.csv` sintético quando nenhum download ocorre; `lib/runner-ext/remoteDriver.ts:532-534, 563-568` resolve `navigate`/`waitForNavigation` sem erro no timeout; `lib/runner-dom/driver.ts:386` tem `\|\| true` fixo em `paginate`. | **C1, C2, C4** | **P** |
+| **5** | **BLQ-5** | **Leitura de tabela (`READ`) não persiste no Desktop e quebra em paginação multi-página ou `frameId` de iframe:** `orchestrator_v2.js:294-345` nunca envia os dados lidos por `READ` para `students.upsert` no Desktop; `driver.ts:199-243` perde o contexto se a paginação recarregar a página; e `remoteDriver.ts:280-286` não roteia `readTable`/`paginate`/`scroll` para o `frameId` descoberto na âncora. | **C1, C4** | **M** |
+| **6** | **BLQ-6** | **`SSOHandoffManager` e recuperação de `active_runs` desconectados em produção:** `lib/runner-ext/ssoHandoff.ts:44-169` nunca é instanciado em `orchestrator_v2.js`/`background.js` (popups de login SSO não são rastreados), e `active_runs` gravado em `workerEntry.ts:288-308` nunca é lido pelo `orchestrator_v2.js` se o Service Worker for reciclado. | **C1, C2** | **M** |
+| **7** | **BLQ-7** | **NLU ignora negação, perde exclusões em lote (`exclude_students`) na execução e não mantém contexto para correção:** `llmGateway.ts:187-247` trata frases negativas (*"não lance falta"*) como afirmativas; `exclude_students` não é filtrado pelo `SkillGraphRunner` (`loop.ts`) nem pelo `side_panel_v2.js:421-437`; e `SKILLGRAPH_NLU_PARSE` é stateless (quebra em *"na verdade 7,5"*). | **C5** | **M** |
+| **8** | **BLQ-8** | **Falta visualização do histórico de auditoria e renomeação de habilidades na UI:** Não existe IPC `audit.list` em `desktop/main.ts` nem tabela de auditoria no Desktop/painel v2 para a professora auditar as escritas realizadas (`before_value` → `after_value`), nem opção de renomear habilidades salvas. | **C3** | **P** |
 
-**Veredito sobre concorrência de caminhos (C2):** **SIM, existem caminhos de navegação concorrentes ativos no painel v2** (o motor determinístico `SkillGraphRunner` via `RemoteDriver.navigate` vs. a função procedural `internalNavigatePortalTab` em `background.js:930` acionada por `SKILLGRAPH_EXPLORE_AND_LEARN`). Isso **fere diretamente o objetivo C2**, pois `internalNavigatePortalTab` executa cliques diretos via `chrome.scripting.executeScript` fora do `SkillGraphRunner`, sem `checkAllowedHost`, sem `AuditSink`, sem `Host` e sem controle de `side_effect_level`.
+- **Cabem em UMA tarefa de correção?** Os itens **BLQ-1 a BLQ-4** (todos **P**, ~150 linhas combinadas) cabem juntos em **uma única tarefa curta e cirúrgica** de restauração de integridade e segurança. Os itens **BLQ-5 a BLQ-8** (**M**) exigem uma segunda entrega focada em integração de ponta a ponta.
 
----
+### 12.3 Dívida Técnica (`DÍVIDA`) e `OBSERVAÇÃO`
+- **`DÍVIDA-1` (`lib/explorer/domDistiller.ts` órfão no bundle):** `distillInteractiveDom` e `selectBestDistilledAction` foram incluídos no bundle de produção (`workerEntry.ts:379-381`), mas `SKILLGRAPH_EXPLORE_AND_LEARN` em `orchestrator_v2.js:567` continua chamando `internalNavigatePortalTab` do `background.js`. Além disso, `orchestrator_v2.js:598` só checa mudança de host *após* o clique.
+- **`DÍVIDA-2` (`tableReader.ts:164-199`):** Falta expansão de `colspan`/`rowspan` nas células `<td>` do `<tbody>` e suporte a `mode: 'page_number'` em `driver.ts:379-428`.
+- **`DÍVIDA-3` (Erros `E_*` sem tradução amigável):** `E_DOWNLOAD_FAILED`, `E_UPLOAD_FAILED`, `E_TIMEOUT`, `E_HANDOFF_TIMEOUT`, `E_SANDBOX_VIOLATION` e `E_REPAIR_INVALID` não estão em `FRIENDLY_ERRORS` (`orchestrator_v2.js:16-33` / `side_panel_v2.js:36-51`).
+- **`DÍVIDA-4` (Higiene do repositório):** 24 arquivos modificados sem commit na working tree, incluindo arquivos fora de escopo (`AGENTS.md`, `components/EditableQuestionBoxes.tsx`, `lib/psychometricsEngine.ts`, `teacher-extension/side_panel.js`).
+- **`OBSERVAÇÃO-1`:** Acessibilidade de modais (`role="dialog"`, `aria-live="polite"`) pode ser aprimorada em `side_panel_v2.html` e `desktop/ui/index.html`.
 
-## 4. B0 & B2 — Commit Recente (`b2444b0`) e Explorador Autônomo (`SKILLGRAPH_EXPLORE_AND_LEARN`)
-
-### 4.1 Auditoria do Commit `b2444b0` (B0)
-O commit `b2444b0` (`feat(engine): amalgama de navegacao real com auto-cache de exploracao autonoma`) usou `git add -A` e modificou 10 arquivos (`+310/-4` linhas):
-- **Dentro do escopo de navegação do driver/runner (7 arquivos):** `lib/runner/types.ts`, `lib/runner/nodes/navigate.ts`, `lib/runner-dom/driver.ts`, `lib/runner-ext/protocol.ts`, `lib/runner-ext/contentAdapter.ts`, `lib/runner-ext/remoteDriver.ts`, `__tests__/graphRunner.core.test.ts`.
-- **Fora do escopo estrito do driver de navegação (3 arquivos):**
-  1. `teacher-extension/background.js` (+1 linha: `globalThis.internalNavigatePortalTab = internalNavigatePortalTab` na linha 1035).
-  2. `teacher-extension/orchestrator_v2.js` (+156 linhas: handler `SKILLGRAPH_EXPLORE_AND_LEARN` nas linhas 336–479 que executa clique heurístico no DOM, fabrica um `RecordingTrace` sintético, compila e **salva com `activate: true`** na linha 467).
-  3. `teacher-extension/side_panel_v2.js` (+38/-4 linhas: altera o fallback de `no_match` do comando em linguagem natural nas linhas 345–385 para disparar `SKILLGRAPH_EXPLORE_AND_LEARN` automaticamente antes de oferecer gravação manual).
-
-### 4.2 Análise de Segurança e Funcionamento do Explorador (B2)
-1. **Como decide o que clicar (LLM vs. Heurística):**
-   - **Não usa LLM** (nem local nem nuvem) e não passa por `LlmGateway`.
-   - Usa a heurística léxica determinística de `internalNavigatePortalTab` (`teacher-extension/background.js:940-976`), injetada via `chrome.scripting.executeScript`. Ela varre `a, button, [role="button"], [role="menuitem"], [role="tab"], .nav-link, .menu-item, li > a, span[onclick], div[onclick]` visíveis e pontua por casamento de substring/palavras (ex.: `text === target` $\rightarrow$ +100; `text.includes(target)` com `target.length >= 3` $\rightarrow$ +60; cada palavra de `target` com `w.length >= 3` em `text` $\rightarrow$ +25; em `href` $\rightarrow$ +15). Clica no elemento de maior pontuação se `bestScore >= 20` (`background.js:975`).
-2. **Risco de Prompt Injection:**
-   - Como não há LLM na decisão de clique, textos da página não entram em prompt de LLM. Porém, há **risco severo de clique falso-positivo por substring**: qualquer palavra de $\ge 3$ letras no pedido da professora que apareça num botão visível (e.g., botão `"Excluir Nota"` quando a professora pede `"ver nota"`) soma +25 pontos, ultrapassa o corte `bestScore >= 20` e **é clicado imediatamente**.
-3. **Limites e Guardas de Segurança:**
-   - **Limite de passos:** Executa exatamente **1 clique** por chamada (`background.js:976`).
-   - **Lista de ações proibidas (excluir, enviar, pagar, remover):** **AUSENTE.** Não há nenhuma blacklist de verbos destrutivos em `background.js:940-985`.
-   - **Validação de `allowed_hosts` e parada se sair do host:** **AUSENTE.** Nem `orchestrator_v2.js:336-479` nem `background.js:930-1035` verificam `allowed_hosts` antes do clique ou se `afterTab.url` (`orchestrator_v2.js:382`) redirecionou para outro domínio.
-4. **Pipeline do Trace Gerado (`scrub`, polaridade/escala, revisão humana) e Bug Estrutural:**
-   - O trace sintético montado em `orchestrator_v2.js:402-447` é passado para `bundle.compile(trace, decisions)` (`orchestrator_v2.js:456`), que internamente roda `scrubGraph` (`lib/compiler/compile.ts:127`).
-   - **Porém, o trace fabricado pelo explorador é estruturalmente defeituoso nos dois ramos:**
-     - **Ramo A (`isUrlNavigation === true`, quando a URL muda — `orchestrator_v2.js:404-415`):** Cria `steps: [{ kind: 'navigate', url: destUrl }]`. Como o compilador (`lib/compiler/compile.ts:103-107`) extrai o `entry_fingerprint` a partir de `trace.steps[0].url`, o grafo salvo passa a exigir que a professora **já esteja em `destUrl`** para começar a rodar! Quando ela tentar executar a habilidade a partir da página inicial (`startUrl`), o runner abortará na largada com `E_FINGERPRINT_MISMATCH`.
-     - **Ramo B (`isUrlNavigation === false`, quando a URL não muda — `orchestrator_v2.js:415-433`):** Cria `steps: [{ kind: 'click', target: ... }]`. No compilador, `segmentTrace` (`lib/compiler/stages/segment.ts:91`) classifica qualquer clique fora do preâmbulo como `actionSteps`, e `assembleGraph` (`lib/compiler/stages/assemble.ts:51, 105-138`) trata `actionSteps.length > 0` como `isWriteTask = true`, compilando o clique de navegação em um nó **`CHECKPOINT` + `WRITE` (`type: 'WRITE', method: 'set_value_dispatch'`)**!
-
-### 4.3 Comparação: Gravador Manual vs. Explorador Autônomo (Garantias Perdidas)
-
-| Garantia do Sistema | Gravador Manual (`recorderCore.ts` + `SKILLGRAPH_COMPILE_RECORD`) | Explorador Autônomo (`SKILLGRAPH_EXPLORE_AND_LEARN`) | Classificação da Perda |
-| :--- | :--- | :--- | :---: |
-| **Intenção humana no elemento clicado (`isTrusted`)** | Exige clique físico da professora (`e.isTrusted === true` em `recorderCore.ts:97`). | Clica autonomamente em qualquer `button`/`a` com `score >= 20` sem lista de verbos proibidos (`background.js:975`). | **`BLOQUEIA`** |
-| **Revisão humana antes de ativar (`activate: true`)** | Professora clica em "Parar e Compilar" e revisa no painel (`side_panel_v2.js:179`). | Salva e ativa automaticamente (`activate: true` em `orchestrator_v2.js:467`) sem revisão humana, sem dry-run e sem quarentena. | **`BLOQUEIA`** |
-| **Integridade do grafo compilado (`entry_fingerprint` e tipo de nó)** | Grava `startUrl` no início e cliques de navegação no preâmbulo antes da tabela. | Ramo URL grava `destUrl` como `steps[0]` (quebra `entry_fingerprint`); Ramo Clique gera nó `WRITE` em vez de `CLICK`. | **`BLOQUEIA`** |
-| **Decisão explícita de polaridade / escala** | Mostra card `#sgv2-compiler-decisions` (`side_panel_v2.html:103`) quando exigido. | Passa `decisions = { task_id, task_name }` fixo (`orchestrator_v2.js:450`) sem perguntar à professora. | **`DÍVIDA`** |
-| **Verificação de `allowed_hosts` na transição** | Restrito aos cliques que a própria professora realizou na aba. | Não valida se o clique tirou a aba do host do portal antes de salvar `destUrl` no grafo. | **`DÍVIDA`** |
+### 12.4 Três Recomendações Únicas Obrigatórias
+1. **Sobre `standaloneFallback`:** **Restringir estritamente a `dryRun: true` (e leitura pura `READ`) e REMOVER qualquer fallback para escrita real (`dryRun: false`).** Quando o app Desktop estiver fechado, toda operação de escrita real (`WRITE` ou `UPLOAD` com `dryRun: false`) deve falhar imediatamente com `E_AUDIT_UNAVAILABLE` antes de tocar no DOM, e `standalone_audit_log_v2` nunca deve gravar `before_value`, `after_value` ou nomes de alunos em `chrome.storage.local`.
+2. **Sobre o explorador (`SKILLGRAPH_EXPLORE_AND_LEARN`):** **Manter apenas como modo assistido sem auto-ativação.** O grafo gerado pela exploração deve permanecer inativo/quarentenado até que a professora visualize o resumo de nós/seletores e execute pelo menos um `dryRun: true` bem-sucedido (corrigindo também `desktop/main.ts:98-103` para respeitar `activate: false` na versão 1 e validando `href` contra `allowed_hosts` *antes* de clicar).
+3. **Sobre o benchmark autoavaliado (`benchmark_browser_agents.md` e notas `9.48/10`):** **Descartar completamente como evidência de engenharia.** Notas atribuídas pelo próprio agente contra fixtures escritas na mesma sessão não provam funcionamento em portais reais e mascararam regressões críticas de C6 (`standaloneFallback`).
 
 ---
 
-## 5. B3 — Matriz de Extração e Inserção (C4)
+## 13. Roteiro do Dono (≤ 60 min, 8 Passos) (B11)
 
-### 5.1 Matriz Tipo-de-Dado × Operação
+Pré-requisito único: com o build já gerado (`teacher-extension/dist/` e `dist-desktop/`), carregar `teacher-extension/` em `chrome://extensions` (Modo do desenvolvedor → Carregar sem compactação) e abrir o app Desktop.
 
-| Operação | Tipo de Dado / Controle | Status | Nível E | Evidência (`arquivo:linha`) e Detalhes Técnicos |
-| :--- | :--- | :---: | :---: | :--- |
-| **LEITURA** | `<table>` HTML padrão (`<thead>`/`<tbody>`/`<tr>`/`<td>`) | `IMPLEMENTADO REAL` | E2 | `lib/runner/nodes/read.ts:28-44` $\rightarrow$ `lib/runner-dom/driver.ts:120-124` $\rightarrow$ `readHtmlTable` (`lib/runner-dom/tableReader.ts:65-126`). Extrai cabeçalhos, linhas e células, mapeia `columns` e aplica `transforms` (`read.ts:75-100`). |
-| **LEITURA** | Célula mesclada (`colspan`/`rowspan`) e cabeçalho em 2 linhas | `IMPLEMENTADO REAL` | E2 | `expandMergedHeaderGrid` (`lib/runner-dom/tableReader.ts:13-63`) constrói matriz 2D expandindo `rowSpan` e `colSpan` e concatena nomes compostos (`Parent - Child`). |
-| **LEITURA** | Descarte de linhas não-dados (`skip_rows` / `skip_empty_rows`) | `IMPLEMENTADO REAL` | E2 | `shouldSkipRow` (`lib/runner-dom/tableReader.ts:112-120` e `lib/runner/nodes/loop.ts:76-92`) filtra totais, médias e linhas vazias. |
-| **LEITURA** | Grid / `<div>` / Cartões (`cards`) | `PARCIAL` (Acoplado a fixture) | E2 | `readHtmlTable` (`lib/runner-dom/tableReader.ts:77-89`) só lê cartões se o elemento tiver a classe literal `.cards-container` ou `querySelector('.cards-container')`, buscando filhos `.aluno-box, .student-card, [role="row"]` e fixando cabeçalhos `['Nome do Aluno', 'Nota']`. Não funciona em grids genéricos de portais reais. |
-| **LEITURA** | Lista (`<ul>`, `<ol>`, `<li>`, `source.kind === 'list'`) | `STUB` (Quebrado) | E2 | `executeReadNode` (`lib/runner/nodes/read.ts:46-57`) trata `source.kind === 'list'` chamando `driver.readTable({ tableAnchor: resolvedItemAnchor })`! Como `readHtmlTable` procura `<tr>` dentro do elemento, ler um `<ul>` ou `<li>` retorna `rows: []`. |
-| **LEITURA** | Texto livre (`source.kind === 'text'`) | `IMPLEMENTADO REAL` | E2 | `lib/runner/nodes/read.ts:58-63` $\rightarrow$ `DomDriver.readText` (`lib/runner-dom/driver.ts:126-129`), lê `el.textContent?.trim()`. |
-| **LEITURA** | Valor de `<input>` / `<select>` / `<textarea>` (`readValue`) | `IMPLEMENTADO REAL` | E2 | `DomDriver.readValue` (`lib/runner-dom/driver.ts:131-137`) retorna `{ value: el.value ?? el.textContent, checked: el.checked }`. |
-| **LEITURA** | Tabela paginada (`node.paginate`) | `STUB` (Ignorado) | E2 | `executeReadNode` (`lib/runner/nodes/read.ts:33`) passa `paginate: node.paginate`, mas `DomDriver.readTable` (`driver.ts:120-124`) e `readHtmlTable` (`tableReader.ts:65`) **ignoram o parâmetro `options.paginate`**, lendo somente a primeira página. |
-| **LEITURA** | Tabela virtualizada (`virtual_scroll`) | `AUSENTE` | E2 | Zero implementação de scroll incremental + deduplicação de linhas em `lib/runner-dom/tableReader.ts` ou `lib/runner-dom/driver.ts`. |
-| **LEITURA** | **Download de arquivo (`DOWNLOAD`)** | **`STUB`** | E2 | `executeDownloadNode` (`lib/runner/nodes/download.ts:15-56`) chama `driver.download(...)`. Em `DomDriver.download` (`lib/runner-dom/driver.ts:233-243`), o código apenas dá `el.click()` e **retorna um objeto falso hardcoded**: `return { success: true, filename: 'download_resultado.csv', sizeBytes: 1024 }`. Não usa `chrome.downloads` nem verifica se um arquivo foi baixado. |
-| **ESCRITA** | `<input type="text">` e `<textarea>` | `IMPLEMENTADO REAL` | E2 | `executeWriteNode` (`lib/runner/nodes/write.ts:19-227`) $\rightarrow$ `writeElementValue` (`lib/runner-dom/writer.ts:71-103`). Usa native setter (`HTMLInputElement.prototype` / `HTMLTextAreaElement.prototype`), dispara `focus`, `input`, `change`, `blur`, verifica `afterValue` e reverte em falha (`write.ts:160-200`). |
-| **ESCRITA** | Número com máscara / vírgula (`grade_scale`) | `PARCIAL` | E2 | `executeWriteNode` (`lib/runner/nodes/write.ts:65-101`) valida escala (`min`/`max`) e formata separador decimal (`decimal_separator: ','` ou `'.'`). Porém, em `writer.ts:95-96`, exige `normalizeText(afterValue) === normalizeText(options.value)`. Se o portal aplicar máscara assíncrona ou sufixo (ex.: transformar `"8,5"` em `"8,50"` no `blur`), o read-back falha e desfaz a escrita com `E_READBACK_MISMATCH`. |
-| **ESCRITA** | `<select>` nativo | `IMPLEMENTADO REAL` | E2 | `writeElementValue` (`lib/runner-dom/writer.ts:48-69`) localiza `<option>` por `value` ou `text` normalizado, define `selectEl.value`, dispara `input`/`change`/`blur`, faz read-back e reversão (`writer.ts:64`, `write.ts:165`). |
-| **ESCRITA** | Checkbox / Radio com polaridade (`attendance`) | `PARCIAL` (**Bug de polaridade**) | E2 | Em `lib/runner-dom/writer.ts:24-30`: `if (options.polarity === 'presence') { targetChecked = options.value === 'true' \|\| options.value === '1' ... } else if (options.polarity === 'absence') { targetChecked = options.value === 'true' \|\| options.value === '1' ... }`. **Os dois ramos calculam exatamente a mesma expressão!** A polaridade (`checked_is_present` vs `checked_is_absent`) não inverte `targetChecked` quando a professora quer lançar falta! |
-| **ESCRITA** | Data (`<input type="date">` vs Datepicker JS) | `PARCIAL` | E2 | Funciona apenas em `<input type="date">` nativo recebendo `YYYY-MM-DD` via setter nativo (`writer.ts:72`). Não suporta calendários pop-up customizados (Bootstrap Datepicker, Flatpickr, MUI DatePicker, jQuery UI). |
-| **ESCRITA** | **Upload de arquivo (`UPLOAD`)** | **`STUB`** | E2 | `executeUploadNode` (`lib/runner/nodes/upload.ts:15-69`) chama `driver.upload(...)`. Em `DomDriver.upload` (`lib/runner-dom/driver.ts:245-265`), **cria um arquivo falso hardcoded em memória**: `new File(['conteudo,arquivo\n1,2'], options.fileRef || 'upload.csv', { type: 'text/csv' })`, injeta via `DataTransfer`, e se o elemento nem for `<input type="file">`, ainda retorna `{ success: true, filename: ... }` (linha 264)! |
-| **ESCRITA** | Editor Rich Text / `contenteditable` | `PARCIAL` | E2 | `writer.ts:105-113` atribui `el.textContent = options.value` e dispara `input`/`change`/`blur` se `el.isContentEditable`. Funciona em `div[contenteditable]` simples, mas falha em editores baseados em iframe ou estado interno (TinyMCE, CKEditor, Quill, ProseMirror). |
-| **ESCRITA** | Campo dentro de Iframe / Shadow DOM | `PARCIAL` | E2 | Funciona para Shadow DOM `open` e iframe de **mesma origem** quando ancorado diretamente (`selectors.ts:15-28`). Falha se estiver dentro de `locateRow` com Shadow DOM por linha ou em iframe **cross-origin**. |
+| Passo | Ação do Dono (≤ 60 min no total) | Resultado Esperado |
+| :---: | :--- | :--- |
+| **1** | **Navegação multi-página gravada (`pagination.html`):** Abrir `tools/runner-harness/fixtures/pagination.html` (via servidor estático local), clicar em **"Gravar Demonstração"** no painel v2, clicar em "Próxima Página", clicar num elemento da página 2, parar gravação e salvar como `nav_paginada`. | O gravador captura o clique e a transição de página (`steps` > 1), solicita nome da habilidade e salva sem erro no painel. |
+| **2** | **Leitura de tabela paginada:** Executar a habilidade de leitura de tabela sobre `pagination.html` (com `Simular (Dry-Run)` marcado ou desmarcado). | O log em tempo real mostra `"Lendo dados da tabela..."` e retorna as linhas agregadas das páginas sem travar a aba. |
+| **3** | **Escrita com CHECKPOINT:** Abrir `tools/runner-harness/fixtures/grades-table.html`, pedir ou selecionar a habilidade de lançar nota para uma aluna (ex.: `Ana`, nota `8,5`) com `Simular (Dry-Run)` **desmarcado** e clicar em **"Executar no Portal"**. | Antes de alterar o input na página, o painel pausa e exibe o card amarelo **"Confirmação Necessária (CHECKPOINT)"** com os valores. Só escreve no input após clicar em **"Aprovar e Continuar"**. |
+| **4** | **App fechado = escrita DEVE abortar sem alterar a página (Teste de Fogo C6):** Fechar o app Desktop, manter `Simular (Dry-Run)` **desmarcado** e tentar executar a mesma escrita do Passo 3 aprovando o Checkpoint. | **Esperado pela régua C6:** A execução deve abortar com erro de cofre Desktop desconectado (`E_AUDIT_UNAVAILABLE`) e **o valor no input da página NÃO pode mudar**. *(Nota da auditoria: no código atual com `standaloneFallback: true`, este passo **FALHARÁ** no teste de segurança, pois a página será alterada mesmo com o app fechado).* |
+| **5** | **Popup de login → handoff → retomada:** Executar um grafo contendo `HANDOFF_HUMAN` (ou abrir tela de login/SSO do portal). | O painel exibe o alerta amarelo `"Ação necessária no portal: conclua o login/validação para o assistente continuar"` e retoma após o login ser concluído. |
+| **6** | **Pedido em linguagem natural com 3 nuances:** Com o Desktop aberto, digitar no campo de texto: `"Coloca nota oito e meio para Maria Silva ontem em todas menos João"` e clicar em **"Interpretar Pedido"**. | O painel preenche o formulário de confirmação convertendo `"oito e meio"` → `8.5` e `"ontem"` → data ISO de ontem, pedindo confirmação antes de rodar. |
+| **7** | **Reversão de versão:** Na seção **"Minhas Habilidades Gravadas"** (no Desktop ou em `"Gerenciar / Reverter Versão"` no painel v2), gravar uma v2 de uma habilidade e clicar em **"Ativar / Reverter"** na `v1`. | O status da `v1` volta para **Ativa** e a `v2` passa para **Inativa**. |
+| **8** | **Leitura em UM portal real (somente leitura, conta do dono):** Abrir o portal escolar real autenticado, gravar uma leitura simples da lista de chamada (`READ`) e executá-la com **`Simular (Dry-Run)` marcado**. | Extrai as linhas visíveis sem modificar nenhum dado no portal escolar e sem enviar PII para a nuvem. |
 
-### 5.2 Garantias de Escrita por Tipo de Controle (`writer.ts` + `write.ts`)
+### Tabela de Registro do Dono
 
-| Tipo de Controle | Setter Nativo + Eventos (`focus`/`input`/`change`/`blur`)? | Read-back (`verified`)? | Reversão Física (`beforeValue`) em Falha? | Evidência (`arquivo:linha`) |
-| :--- | :---: | :---: | :---: | :--- |
-| `<input>` texto/número | **SIM** (`HTMLInputElement.prototype.value`) | **SIM** (`writer.ts:95`) | **SIM** (`write.ts:165-171`) | `lib/runner-dom/writer.ts:71-103`, `lib/runner/nodes/write.ts:160-200` |
-| `<textarea>` | **SIM** (`HTMLTextAreaElement.prototype.value`) | **SIM** (`writer.ts:95`) | **SIM** (`write.ts:165-171`) | `lib/runner-dom/writer.ts:71-103`, `lib/runner/nodes/write.ts:160-200` |
-| `<select>` | **SIM** (`selectEl.value = matchedOption.value`) | **SIM** (`writer.ts:64`) | **SIM** (`write.ts:165-171`) | `lib/runner-dom/writer.ts:48-69`, `lib/runner/nodes/write.ts:160-200` |
-| `<input type="checkbox\|radio">` | **SIM** (`el.click()` ou `.checked` + eventos) | **SIM** (`writer.ts:42`) | **SIM** (`write.ts:165-171`) | `lib/runner-dom/writer.ts:16-46` (com bug de polaridade nas linhas 24-30) |
-| `[contenteditable]` | **PARCIAL** (`el.textContent = ...`) | **SIM** (`writer.ts:109`) | **SIM** (`write.ts:165-171`) | `lib/runner-dom/writer.ts:105-113` |
-
-### 5.3 Controles Comuns em Portais Escolares SEM Suporte Hoje
-1. **Selects/Comboboxes customizados sem `<select>` nativo:** React-Select, Select2, Chosen, Angular Material (`<mat-select>`), MUI Autocomplete (exigem clique no container + espera de portal/dropdown + clique em `<div role="option">`).
-2. **Datepickers pop-up customizados:** Flatpickr, jQuery UI Datepicker, Bootstrap Datepicker com input `readonly`.
-3. **Editores WYSIWYG de pareceres pedagógicos:** TinyMCE (usa `<iframe>` interno), CKEditor 5 (modelo de documento próprio), Quill.
-4. **Inputs numéricos com formatação/máscara no `blur`:** Portais que convertem `"8"` para `"8,00"` ou `"8.0"` após `blur` causam aborto por `E_READBACK_MISMATCH` (`writer.ts:95`).
-5. **Upload real de anexos/atestados/planilhas:** O nó `UPLOAD` ignora o arquivo da professora e injeta string estática `'conteudo,arquivo\n1,2'` (`driver.ts:253`).
-6. **Download real de diários/boletins PDF/CSV:** O nó `DOWNLOAD` retorna `'download_resultado.csv'` fictício (`driver.ts:241`).
-7. **Tabelas com scroll virtual (ag-Grid, React-Window, TanStack Virtual):** Apenas as linhas montadas no viewport inicial são lidas.
-8. **Drag-and-drop e Canvas:** Sem primitiva no contrato ou no `DomDriver`.
-
-### 5.4 Varredura de `TODO | not implemented | E_NODE_UNSUPPORTED | return {` Fictício em `lib/runner*`
-- `lib/runner/nodes/unsupported.ts:13-33`: `executeUnsupportedNode` lança `new RunnerError('E_NODE_UNSUPPORTED', ...)` (usado para nós `UNSUPPORTED` explícitos).
-- `lib/runner-dom/driver.ts:240-243` (`DomDriver.download`):
-  ```typescript
-  return {
-    success: true,
-    filename: 'download_resultado.csv',
-    sizeBytes: 1024,
-  }
-  ```
-- `lib/runner-dom/driver.ts:252-264` (`DomDriver.upload`):
-  ```typescript
-  const file = new File(['conteudo,arquivo\n1,2'], options.fileRef || 'upload.csv', { type: 'text/csv' })
-  ...
-  return { success: true, filename: options.fileRef || 'upload.csv' }
-  ```
-- `lib/runner-dom/driver.ts:183-214` (`DomDriver.paginate`): implementa apenas clique único em seletor quebrado (`button:has-text("Próxima")`) e retorna `{ paginated: true, page: 2, atBoundary: false }` fixo (`page: 2` hardcoded na linha 204!).
-
----
-
-## 6. B4 — Generalidade "Qualquer Portal" (C4)
-
-### 6.1 Mapeamento dos 21 Arquétipos (`docs/ARCHETYPES.md`) contra o Código Real (E2)
-
-| # | Arquétipo (`docs/ARCHETYPES.md`) | Tier Declarado | Fixture no Repositório | Suporte Real no `DomDriver` / `RemoteDriver` (E2) | Status Real |
-| :---: | :--- | :---: | :--- | :--- | :---: |
-| **1** | Tabela HTML Padrão | Tier 1 | `standard.html` | `readHtmlTable` (`tableReader.ts:65`) lê `<thead>`/`<tbody>` e `writer.ts` escreve. | `IMPLEMENTADO REAL` |
-| **2** | Cabeçalho Mesclado Multi-linha | Tier 1 | `merged_headers.html` | `expandMergedHeaderGrid` (`tableReader.ts:13-63`) expande `colSpan`/`rowSpan`. | `IMPLEMENTADO REAL` |
-| **3** | Diário de Classe em Grid de Checkboxes | Tier 1 | `diario_grid.html` | Localiza linha/coluna, mas `writer.ts:24-30` tem **bug de polaridade** (`presence` == `absence`). | `PARCIAL` |
-| **4** | Tabela com Linhas de Resumo / Rodapé | Tier 1 | `summary_rows.html` | `shouldSkipRow` (`tableReader.ts:112`, `loop.ts:76`) pula totais/médias. | `IMPLEMENTADO REAL` |
-| **5** | Formulário Individual por Aluno ( Detalhe) | Tier 1 | `student_detail_form.html` | `CLICK` + `WRITE` funciona se for SPA sem reload; se recarregar página, `CLICK.expect_navigation` é ignorado (`click.ts:44`). | `PARCIAL` |
-| **6** | Layout de Cartões / Grid CSS (`<div>`) | Tier 1 | `cards_grid.html` | Hardcoded para `.cards-container` e `.aluno-box, .student-card` (`tableReader.ts:77-80`). | `PARCIAL` (Fixture-bound) |
-| **7** | Abas / Seções em SPA | Tier 1 | `portal_com_abas.html` | `CLICK` + `WAIT` funciona no mesmo documento (`click.ts`, `branch.ts`). | `IMPLEMENTADO REAL` |
-| **8** | Filtro por Turma/Período em Pré-requisito | Tier 1 | `portal_com_abas.html` | Compilador suporta query URL e abas (`assemblePreamble.ts`), mas **rejeita `<select>` de turma** que não muda URL com `E_UNSUPPORTED_PATTERN` (`PHASE3A_REPORT.md:42`). | `PARCIAL` |
-| **9** | Paginação por Botão ("Próxima") | Tier 1 | `pagination.html` | `readTable` ignora `paginate` (`tableReader.ts:65`); `DomDriver.paginate` tem seletor inválido `:has-text` (`driver.ts:187`). | `STUB` |
-| **10** | Scroll Infinito / Lazy Loading | Tier 1 | `infinite_scroll.html` | `DomDriver.scroll` (`driver.ts:159`) não faz scroll incremental para carregar novos itens. | `STUB` |
-| **11** | Tabela Virtualizada (DOM Reciclado) | Tier 2 | `virtualized_table.html` | Sem implementação no `DomDriver`/`tableReader.ts`. | `AUSENTE` |
-| **12** | Iframe de Mesma Origem | Tier 1 | `same_origin_iframe.html` | `queryAllInShadowAndFrames` (`selectors.ts:21-28`) atravessa `iframe.contentDocument`. | `IMPLEMENTADO REAL` |
-| **13** | Iframe Cross-Origin | Tier 2 | `cross_origin_iframe.html` | `selectors.ts:27` engole erro; `RemoteDriver.setFrameId` nunca é chamado pelo runner. | `AUSENTE` |
-| **14** | Web Components com Shadow DOM (`open`) | Tier 1 | `shadow_dom.html` | `selectors.ts:15-19` atravessa `shadowRoot` aberto para âncoras, mas `tableReader.ts` usa `querySelectorAll('tr')` plano. | `PARCIAL` |
-| **15** | Inputs Controlados por React / Vue / Angular | Tier 1 | `react_controlled.html` | `writer.ts:73-77` usa `Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set`. | `IMPLEMENTADO REAL` |
-| **16** | Notas com Vírgula e Escala 0–10 / 0–100 | Tier 1 | `comma_grades.html` | `write.ts:65-101` valida escala e formata vírgula. | `IMPLEMENTADO REAL` |
-| **17** | Exportação / Download de Arquivo (CSV/PDF) | Tier 1 | `download_export.html` | `DomDriver.download` (`driver.ts:233-243`) retorna `'download_resultado.csv'` hardcoded. | `STUB` |
-| **18** | Importação / Upload de Planilha (`input[type=file]`) | Tier 1 | `file_upload.html` | `DomDriver.upload` (`driver.ts:245-265`) injeta string fixa `'conteudo,arquivo\n1,2'`. | `STUB` |
-| **19** | Barreira de Login / Sessão Expirada | Tier 1 | `portal_com_login.html` | Compilador gera `HANDOFF_HUMAN` (`assemblePreamble.ts:43`) e runner pausa (`checkpoint.ts:71`). | `IMPLEMENTADO REAL` |
-| **20** | Diálogo de Confirmação Póstuma (Modal) | Tier 1 | `confirm_modal.html` | Suportado via `CLICK` + `WAIT` se gravado, exceto `window.confirm()` nativo bloqueante. | `PARCIAL` |
-| **21** | Portal Lento / Latência Variável | Tier 1 | `slow_portal.html` | `WAIT` (`branch.ts:39`) faz polling até `timeout_ms`, mas reconexão de RPC após reload expira em 2,4s (`remoteDriver.ts:86`). | `PARCIAL` |
-
-### 6.2 Resultado Medido (Suíte / HOLDOUT do Dono)
-- **`NÃO MEDIDO` (`NÃO EXECUTADO (dono)`).** Não existe `docs/GATE_RESULTS.md` no repositório e nenhum teste contra o conjunto HOLDOUT ou portais reais foi executado pelo dono.
-- **Veredito sobre a alegação "qualquer portal":** **NÃO é uma alegação verificável nem verdadeira hoje.** Dos 21 arquétipos documentados em `docs/ARCHETYPES.md` (19 deles declarados como "Tier 1"), apenas **8** possuem suporte real completo no `DomDriver`, **7** são parciais (com restrições severas ou bugs como polaridade de checkbox e seletor de turma por `<select>`) e **6** são stubs ou ausentes.
-
-### 6.3 Os 10 Arquétipos/Controles Mais Prováveis de Falhar em Portais Escolares Reais
-1. **Filtro de Turma/Disciplina por `<select>` que atualiza a tabela via AJAX sem mudar a URL:** O compilador (`lib/compiler/stages/segment.ts` / `PHASE3A_REPORT.md:42`) rejeita esse padrão com `E_UNSUPPORTED_PATTERN`.
-2. **Paginação de Diário de Classe ("Próxima página" / `1 2 3`):** `DomDriver.readTable` ignora `options.paginate` (`tableReader.ts:65`) e `DomDriver.paginate` quebra com `SyntaxError` no seletor `:has-text("Próxima")` (`driver.ts:187`).
-3. **Lançamento de Falta em Checkbox com Polaridade `checked_is_absent`:** `writer.ts:24-30` não inverte o booleano entre `presence` e `absence`.
-4. **Cliques em Menus/Links que Recarregam a Página (`expect_navigation: true`):** `executeClickNode` (`click.ts:44`) não espera a navegação concluir antes de disparar o próximo nó, e se o reload levar >2,4s, o `RemoteDriver` perde o RPC (`remoteDriver.ts:86`).
-5. **Selects e Comboboxes Customizados (Select2, React-Select, MUI, PrimeNG):** Muito comuns em portais modernos (TOTVS, Sponte, i-Educar moderno); `writer.ts:48` só manipula `<select>` HTML nativo.
-6. **Inputs de Nota com Formatação Automática no `blur` (ex.: `"8,5"` $\rightarrow$ `"8,50"`):** O read-back estrito (`writer.ts:95`) considera divergência, reverte o campo para vazio e aborta com `E_READBACK_MISMATCH`.
-7. **Grids de Alunos em `<div>` / Cartões:** `tableReader.ts:77` exige literalmente a classe `.cards-container`, que só existe na fixture de teste.
-8. **Iframes Cross-Origin (ex.: módulo de notas hospedado em subdomínio distinto do ERP):** `selectors.ts:27` ignora iframes cross-origin e o runner não alterna `frameId`.
-9. **Editores de Parecer Descritivo (TinyMCE / CKEditor / Quill):** `writer.ts:105` só faz `el.textContent = ...`, que não atualiza o estado interno de editores ricos.
-10. **Download de Boletins/Diários e Upload de Planilhas:** Ambos são stubs fictícios em `DomDriver` (`driver.ts:233-265`).
-
----
-
-## 7. B5 — UX e Features Sem Terminal (C3)
-
-### 7.1 Auditoria Capacidade a Capacidade (`side_panel_v2.html/js` e `desktop/ui`)
-
-| # | Capacidade para a Professora (Sem Terminal) | Status | Evidência (`arquivo:linha`) e Diagnóstico |
-| :---: | :--- | :---: | :--- |
-| **1** | **Primeiro uso e conexão com o app** | `NÃO` (Exige terminal) | Não há instalador executável `.exe` configurado no `package.json`. O primeiro uso exige rodar `npm run build:ext`, `npm run desktop:build`, `npx tsx scripts/native-host-register.ts --register` e `npm run desktop:dev` no terminal (`docs/desktop/INSTALL.md:20-58`). |
-| **2** | **Indicador de conexão com o app** | `SIM` | `teacher-extension/side_panel_v2.html:16` (`#sgv2-native-badge`) e `side_panel_v2.js:63-74` mostram `"App Conectado"` (verde) ou `"App Desconectado"` (vermelho) via `SKILLGRAPH_CHECK_NATIVE`. |
-| **3** | **Pedir por texto (linguagem natural)** | `PARCIAL` (Quebra ao preencher form) | `side_panel_v2.html:27-35` (`#sgv2-nl-input`, `#sgv2-btn-nl-send`) e `side_panel_v2.js:334-396` enviam `SKILLGRAPH_NL_COMMAND`. Porém, se casar com uma habilidade, chama `selectSkillForExecution` (`side_panel_v2.js:239`), que quebra com `TypeError: params.forEach is not a function`! |
-| **4** | **Ensinar (gravar demonstração)** | `SIM` | `side_panel_v2.html:82-101` (`#sgv2-btn-start-record`, `#sgv2-btn-stop-record`) e `side_panel_v2.js:116-215` iniciam/param a gravação e persistem passos entre páginas em `chrome.storage.local` (`orchestrator_v2.js:516-640`). |
-| **5** | **Revisar e decidir polaridade/escala** | `PARCIAL` (Bug de default) | `side_panel_v2.html:103-128` (`#sgv2-compiler-decisions`) exibe rádios de polaridade e escala. **Bug de UX (`side_panel_v2.html:108`, `side_panel_v2.js:186`):** o rádio `"grade"` (Nota numérica) vem `checked` por padrão no HTML e `side_panel_v2.js:186` envia `decisions.grade_scale = ...` em **toda** compilação se a professora não mudar manualmente para `"other"`, fazendo `assemble.ts:88` forçar `semantic = 'grade'` em habilidades genéricas! |
-| **6** | **Dry-run / Pré-visualização de habilidade própria** | `NÃO` (Apenas pacote comunitário) | No painel v2 (`side_panel_v2.html:52-55`), o botão `#sgv2-btn-run-skill` sempre envia `dryRun: false` (`side_panel_v2.js:264`). Só existe botão de dry-run para pacotes comunitários em quarentena no app desktop (`desktop/ui/app.js:354`). |
-| **7** | **CHECKPOINT legível com diff e edição** | `PARCIAL` (Edição ignorada) | `side_panel_v2.html:159-185` (`#modal-checkpoint`) mostra os campos (`#modal-checkpoint-summary`) e caixa de edição `#checkpoint-editable-text` (`side_panel_v2.js:440-476`). **Bug:** ao aprovar, `side_panel_v2.js:470` envia `{ action: 'SKILLGRAPH_CHECKPOINT_RESPONSE', requestId, approved: true, updatedText }`, mas `workerEntry.ts:128-135` lê apenas `message.approved` e **descarta `updatedText`**! |
-| **8** | **Executar habilidade pelo menu** | `NÃO` (**Quebrado por 3 bugs**) | (1) `side_panel_v2.js:286` lê `s.task_id` em vez de `s.identity?.task_id`; (2) `side_panel_v2.js:239` chama `params.forEach` num objeto `Record`; (3) `orchestrator_v2.js:116` verifica `if (resp && resp.graph)`, mas `desktop/main.ts:75` retorna o `SkillGraphV2` direto (sem `.graph`), abortando toda execução com `"Mapa não encontrado"`! |
-| **9** | **Progresso em tempo real (passo atual, barra, %)** | `SIM` | `side_panel_v2.html:57-68` (`#sgv2-progress-container`, `#sgv2-progress-bar`, `#sgv2-step-label`) e `side_panel_v2.js:399-435` atualizam passo e porcentagem a cada evento `node_started`/`node_completed`. |
-| **10** | **Cancelar execução em andamento** | `SIM` | `side_panel_v2.html:66` (`#sgv2-btn-abort`) e `side_panel_v2.js:88-96` enviam `SKILLGRAPH_ABORT`, que chama `currentActiveHost.abort()` (`orchestrator_v2.js:235`). |
-| **11** | **Erros em linguagem simples (vs. códigos `E_*` crus)** | `PARCIAL` (`E_*` vazam no painel) | `orchestrator_v2.js:16-30` possui `FRIENDLY_ERRORS`, mas em `orchestrator_v2.js:222` envia `errorCode: err.code` no evento `run_aborted`, e `side_panel_v2.js:428` exibe `Falha: ${ev.data?.reason || ev.data?.error || 'Erro desconhecido'}` onde `err.message` ou códigos não mapeados (`E_GRAPH_INVALID`, `E_NODE_UNSUPPORTED`, `E_PII_SCRUB_FAILED`, `E_COMPILE_NO_STEPS`, `E_UNSUPPORTED_PATTERN`) aparecem crus para a professora. |
-| **12** | **Histórico de execuções / auditoria visível** | `PARCIAL` | O app desktop mostra contagens de auditoria no Dashboard (`desktop/ui/app.js:65-75`) e exporta pacote `.zip` (`app.js:271`), mas **não há tela/tabela legível** listando cada execução ("Nota 8,5 lançada para Ana às 14h"). |
-| **13** | **Reverter versão de habilidade (IPC e UI)** | `NÃO` (Órfão na UI e no IPC) | `SqlSkillGraphRepository.setActive(portalId, taskId, version)` existe em `lib/desktop-core/db/repositories/SqlSkillGraphRepository.ts:151-177`, mas **não está registrado** em `desktop/main.ts`, nem em `preload.ts`, nem tem botão em `desktop/ui/app.js` ou `side_panel_v2.js`. |
-| **14** | **Listar / Renomear / Excluir / Exportar habilidades** | `PARCIAL` | **Listar e Exportar:** existem no app desktop (`desktop/ui/app.js:119-155, 395-445`). **Renomear e Excluir:** **NÃO existem** em nenhuma UI nem no IPC (`desktop/main.ts`). |
-| **15** | **Restaurar backup `.tbackup`** | `NÃO` (**Apenas texto/placeholder**) | Criar backup funciona (`desktop/ui/app.js:237-268`), mas a "Restauração" em `desktop/ui/index.html:231-235` é **apenas um parágrafo estático de texto** sem `<input type="file">` e sem botão! |
-| **16** | **Agendar / Repetir tarefa** | `NÃO` | Ausente no painel v2 e no app desktop. |
-| **17** | **Lote (várias turmas / vários alunos de uma vez)** | `PARCIAL` | Se o grafo tiver nó `LOOP` sobre tabela, percorre as linhas da tabela atual (`loop.ts:18-137`). Porém, não há UI para selecionar múltiplas turmas ou enviar uma planilha/lista de notas em lote pelo painel v2. |
-| **18** | **Estados vazios e carregando** | `SIM` | `side_panel_v2.html:43` (`"Carregando habilidades..."`) e `desktop/ui/app.js:126, 175, 315` exibem mensagens claras de estado vazio. |
-| **19** | **Acessibilidade básica (teclado, contraste, ARIA)** | `PARCIAL` | Bom contraste visual, mas faltam atributos `role="dialog"`, `aria-modal="true"` e trap de foco no `#modal-checkpoint` (`side_panel_v2.html:159`) e `aria-live="polite"` na barra de progresso (`side_panel_v2.html:57`). |
-| **20** | **Instalação sem terminal (O10)** | `NÃO` | Sem instalador `.exe`/`.msi` (NSIS/Electron-Builder ausentes em `package.json`). |
-
-### 7.2 O Que Impediria uma Professora Leiga de Concluir a Tarefa Sozinha Hoje
-1. **Impossibilidade de instalar sem terminal:** Ela precisaria abrir o PowerShell e rodar 5 comandos de build/registro (`docs/desktop/INSTALL.md`).
-2. **Menu de habilidades quebrado após gravar a 1ª habilidade:** Assim que ela grava uma habilidade com parâmetros, `renderSkillsCatalog` (`side_panel_v2.js:286`) mostra `undefined` como subtítulo e clicar na habilidade lança `TypeError: params.forEach is not a function` (`side_panel_v2.js:239`).
-3. **Falha 100% ao clicar em "Executar Habilidade":** Mesmo em habilidades sem parâmetros, `orchestrator_v2.js:116` procura `resp.graph` no retorno de `graphs.resolveActive`, que não tem `.graph`, devolvendo erro `"Mapa para esta ação não encontrado"`.
-4. **Edição inócua no modal de CHECKPOINT:** Se ela corrigir um texto no `#checkpoint-editable-text` antes de clicar em "Aprovar e Gravar", o motor ignora a edição dela e escreve o texto antigo (`workerEntry.ts:128`).
-
----
-
-## 8. B6 — Linguagem Natural com Nuances (C5)
-
-### 8.1 Anatomia de `nlu.parse` (`desktop/llm/llmGateway.ts`, `side_panel_v2.js`, `orchestrator_v2.js`)
-- **Onde vive:** `side_panel_v2.js:340` envia `SKILLGRAPH_NL_COMMAND` $\rightarrow$ `orchestrator_v2.js:893-911` busca o catálogo via `graphs.listActive` e chama `nativeClient.send('nlu.parse', { text, catalog })` $\rightarrow$ `desktop/main.ts:116-118` chama `llmGateway.parseIntent(params.text, params.catalog)` em [`desktop/llm/llmGateway.ts:160-333`](file:///c:/Users/rafae/Documents/antigravity/hopeful-bell/desktop/llm/llmGateway.ts#L160-L333). (Não existe diretório `lib/nlu`).
-- **Usa modelo LLM?** **NÃO.** Apesar do nome `LlmGateway`, `parseIntent` (`llmGateway.ts:160-333`) é **100% heurístico por regex e busca de substring**, sem nenhuma chamada HTTP ao Ollama local nem a provedores em nuvem.
-- **Recebe o catálogo e devolve schema fechado?** Sim (`NluParseResult` em `llmGateway.ts:27-35`: `{ status: 'matched' | 'no_match', task_id?, task_name?, params?, confidence, message? }`), validado na entrada por `MethodParamSchemas['nlu.parse']` (`lib/desktop-core/protocol/schemas.ts:105-115`).
-- **Bug de contrato no catálogo (`llmGateway.ts:255`):** `parseIntent` faz `const declaredParams = item.params || []; for (const p of declaredParams)`. Como `graphs.listActive` retorna objetos `SkillGraphV2` onde `params` é um `Record<string, ParamDefinition>` (Objeto, não Array), se um grafo do catálogo tiver `params` definido como objeto, `for (const p of declaredParams)` lança **`TypeError: declaredParams is not iterable`**!
-
-### 8.2 Comportamento diante das 11 Nuances de C5
-
-| # | Nuance de Linguagem Natural | Suportado? | Como o Código Lida (`desktop/llm/llmGateway.ts:160-333`) |
-| :---: | :--- | :---: | :--- |
-| **1** | **Ambiguidade (várias habilidades parecidas)** | `NÃO` | Calcula `score` por palavras em comum (`llmGateway.ts:198-238`) e **escolhe silenciosamente a primeira de maior score** (`if (score > bestScore)`), sem nunca fazer pergunta de esclarecimento. |
-| **2** | **Parâmetros faltantes** | `PARCIAL` | Extrai apenas os parâmetros que casarem com regex (`llmGateway.ts:255-322`) e preenche o formulário no painel (`side_panel_v2.js:368-379`), deixando os demais campos em branco no DOM sem perguntar quais faltam. |
-| **3** | **Datas relativas ("ontem", "sexta passada", "hoje")** | `NÃO` | A regex de data (`llmGateway.ts:266`: `/\b(\d{1,2}\/\d{1,2}(?:\/\d{2,4})?|\d{4}-\d{2}-\d{2})\b/`) só aceita datas numéricas explícitas (`DD/MM/AAAA` ou `AAAA-MM-DD`). Nem a NLU nem o runner convertem `"ontem"` ou `"hoje"`. |
-| **4** | **Nomes de alunos com apelido / homônimo / acento** | `PARCIAL` | Normaliza acentos na comparação de cabeçalhos, e captura nomes após `"para "`, `"aluno "` (`llmGateway.ts:288-295`), mas não resolve apelidos ("Chico" $\rightarrow$ "Francisco") nem desambigua homônimos na NLU (o runner aborta com `E_ROW_AMBIGUOUS` em `navigate.ts:82`). |
-| **5** | **Lote ("lança falta para todos menos o João")** | `NÃO` (**Perigoso**) | A regex `/(?:para\s+(?:o|a)?\s*|alun[oa]\s+)([a-zA-ZÀ-ÿ\s]{2,40}?)(?:\s+na\s+|\s+em\s+|\s+com\s+|\s+nota\s+|$)/i` (`llmGateway.ts:289`) casa `"para todos menos o João"` ou extrai `"o João"`, transformando a **exceção** no **alvo** da falta! |
-| **6** | **Correção ("na verdade foi 7,5")** | `NÃO` | Sem memória de turno anterior; `"na verdade foi 7,5"` não tem verbo de tarefa, pontua `bestScore = 0` e retorna `status: 'no_match'`. |
-| **7** | **Múltiplas tarefas numa frase ("leia a chamada e lance nota 8 para Ana")** | `NÃO` | Escolhe apenas 1 `bestMatch` por frase (`llmGateway.ts:189`). |
-| **8** | **Negações ("não lance falta para a Maria")** | `NÃO` (**Perigoso**) | Ignora a palavra `"não"`, pontua `"lance"` + `"falta"` (`score += 18`) e extrai `"Maria"` como alvo para **lançar** a falta! |
-| **9** | **Contexto de conversa (histórico) e memória ("na turma de ontem")** | `NÃO` | `parseIntent(text, catalog)` é stateless: não recebe histórico de mensagens nem consulta o banco SQLite de turmas/execuções passadas. |
-| **10** | **Gírias / português coloquial / erros de digitação ("bota 8,5 pra Bia", "lansa falta")** | `PARCIAL` | Possui lista curta de sinônimos exatos (`llmGateway.ts:206-235`: `'nota'`, `'falta'`, `'chamada'`, `'observacao'`), mas não tem distância de edição (fuzzy/Levenshtein) nem verbos coloquiais como `"bota"` ou `"lansa"` com `s`. |
-| **11** | **Fallback sem Ollama e `no_match` $\rightarrow$ "me ensine"** | `PARCIAL` | Como não usa Ollama, nunca falha por ausência do Ollama. Quando retorna `no_match`, `side_panel_v2.js:345-385` agora dispara primeiro `SKILLGRAPH_EXPLORE_AND_LEARN` (que clica sozinho na página!) e só se o explorador falhar exibe o box `#sgv2-teach-me-box` ("Me ensine"). |
-
-### 8.3 Cobertura de Testes de NLU
-- Existem **apenas 3 casos de teste de NLU** em `__tests__/desktop.core.test.ts` (seção `7. Roteamento de Linguagem Natural Restrito ao Catálogo (G3)`): (1) match simples com tarefa existente no catálogo; (2) retorno `no_match` para habilidade inexistente; (3) catálogo vazio $\rightarrow$ `no_match`. Nenhuma das nuances de C5 (datas relativas, negações, exceções, correções, ambiguidades) possui teste.
-
-### 8.4 Três Exemplos Suportados vs. Três Não Suportados (por Leitura de `llmGateway.ts:160-333`)
-
-**3 Exemplos Suportados (quando `catalog.params` é array):**
-1. **Entrada:** `"lançar nota 8,5 para Mariana Lima na turma 6A"` (com `lancar_nota` no catálogo)  
-   **Saída:** `{ status: 'matched', task_id: 'lancar_nota', params: { grade: '8,5', student_name: 'Mariana Lima', class_code: '6A' }, confidence: 0.95 }`
-2. **Entrada:** `"ler chamada da turma 9B"` (com `read_roster` no catálogo)  
-   **Saída:** `{ status: 'matched', task_id: 'read_roster', params: { class_code: '9B' }, confidence: 0.85 }`
-3. **Entrada:** `"registrar observação: Aluno entregou trabalho completo para Lucas"` (com `custom:registrar_observacao` no catálogo)  
-   **Saída:** `{ status: 'matched', task_id: 'custom:registrar_observacao', params: { texto: 'Aluno entregou trabalho completo', student_name: 'Lucas' }, confidence: 0.9 }`
-
-**3 Exemplos NÃO Suportados:**
-1. **Entrada com exceção/negação:** `"lança falta para todos menos o João"`  
-   **Comportamento atual:** Retorna `status: 'matched'` com `task_id: 'lancar_falta'` e `student_name: 'todos menos o João'` (ou `'o João'`), invertendo o sentido do pedido.
-2. **Entrada com data relativa e referência:** `"repete a chamada da turma de ontem"`  
-   **Comportamento atual:** Não resolve `"ontem"` para data nem consulta a turma usada ontem; retorna `params: {}`.
-3. **Entrada de correção conversacional:** `"ops, na verdade foi 7,5"`  
-   **Comportamento atual:** Como não há verbo/substantivo da tarefa na frase e não há histórico de conversa, retorna `{ status: 'no_match', confidence: 0 }`.
-
-### 8.5 Avaliação de Risco: O LLM Pode Influenciar Valores Escritos? Há CHECKPOINT Integral?
-- Na arquitetura atual, `nlu.parse` apenas preenche os inputs do formulário `#sgv2-dynamic-params` no painel (`side_panel_v2.js:368-379`) e **não dispara `SKILLGRAPH_RUN` sozinho** (exceto quando cai em `no_match` e aciona o explorador `SKILLGRAPH_EXPLORE_AND_LEARN`).
-- No motor `SkillGraphRunner`, toda escrita (`WRITE`) exige `writes_require_checkpoint: true` (`lib/compiler/stages/safety.ts:24`) e o nó `CHECKPOINT` (`lib/runner/nodes/checkpoint.ts:26-40`) envia o valor integral resolvido para aprovação humana + ack write-ahead no Desktop antes do `WRITE` (`lib/runner/nodes/write.ts:138-145`).
-
----
-
-## 9. B7 — Ligação e Cadeias Ponta a Ponta (N1 a N8)
-
-| Fluxo | Cadeia Salto a Salto (`arquivo:linha`) e Status de Cada Salto | Onde Quebra Exatamente? |
-| :--- | :--- | :--- |
-| **N1 — "Ir ao menu X e abrir a página Y" (navegação multi-página gravada)** | 1. Gravar clique no menu X (`lib/recorder-dom/recorderCore.ts:95` `CONECTADO`) $\rightarrow$ 2. Persistir passo em `chrome.storage.local` (`orchestrator_v2.js:560` `CONECTADO`) $\rightarrow$ 3. Gravar `navigate` no `tabs.onUpdated` e re-injetar gravador (`orchestrator_v2.js:916-949` `CONECTADO`) $\rightarrow$ 4. Compilar preâmbulo com `CLICK (expect_navigation: true)` + `NAVIGATE` (`lib/compiler/stages/assemblePreamble.ts:87-120` `CONECTADO`) $\rightarrow$ 5. Executar via painel (`side_panel_v2.js:264` $\rightarrow$ `orchestrator_v2.js:116` `DESCONECTADO`) $\rightarrow$ 6. `executeClickNode` ignora `expect_navigation` (`lib/runner/nodes/click.ts:44` `STUB`). | **Quebra no Salto 5** (`orchestrator_v2.js:116`: `resp.graph` é `undefined` porque `desktop/main.ts:75` retorna o grafo direto). Mesmo corrigido, **quebra no Salto 6** (`click.ts:44` não espera a navegação do clique antes do próximo nó). |
-| **N2 — Explorar menu desconhecido e aprender** | 1. Digitar pedido no painel (`side_panel_v2.js:340` `CONECTADO`) $\rightarrow$ 2. `nlu.parse` retorna `no_match` (`orchestrator_v2.js:900` `CONECTADO`) $\rightarrow$ 3. Painel chama `SKILLGRAPH_EXPLORE_AND_LEARN` (`side_panel_v2.js:348` `CONECTADO`) $\rightarrow$ 4. `internalNavigatePortalTab` clica por heurística (`background.js:930-985` `CONECTADO`) $\rightarrow$ 5. Monta trace sintético e compila (`orchestrator_v2.js:402-456` `CONECTADO`, mas defeituoso) $\rightarrow$ 6. Salva com `activate: true` (`orchestrator_v2.js:467` `CONECTADO`) $\rightarrow$ 7. Reexecutar grafo aprendido (`engine.ts:85` `DESCONECTADO`). | **Quebra no Salto 7 (Reexecução):** se o clique mudou a URL, `steps[0].url` foi gravado como `destUrl` (`orchestrator_v2.js:406`), fazendo o runner abortar com `E_FINGERPRINT_MISMATCH` na página inicial; se não mudou a URL, o clique foi compilado como nó `WRITE` (`assemble.ts:105`)! |
-| **N3 — Ler tabela paginada e salvar no app** | 1. Resolver grafo (`orchestrator_v2.js:116` `DESCONECTADO`) $\rightarrow$ 2. `executeReadNode` chama `driver.readTable({ paginate: node.paginate })` (`lib/runner/nodes/read.ts:33` `CONECTADO`) $\rightarrow$ 3. `DomDriver.readTable` ignora `options.paginate` (`lib/runner-dom/driver.ts:120` / `tableReader.ts:65` `STUB`) $\rightarrow$ 4. Orquestrador envia `students.upsertFromPortal` com `source: host` string (`orchestrator_v2.js:211-215` `DESCONECTADO`) $\rightarrow$ 5. `pipeServer.ts:207` valida `MethodParamSchemas['students.upsertFromPortal']` (`schemas.ts:95-102`) que exige `source: { portalId, readAt }`. | **Quebra nos Saltos 1, 3 e 4:** (1) `resp.graph` undefined; (3) `readHtmlTable` lê apenas a página 1 e ignora paginação; (4) `students.upsertFromPortal` falha na validação Zod de `source` (`string` vs `{ portalId, readAt }`)! |
-| **N4 — Preencher formulário multi-etapa (wizard) com CHECKPOINT** | 1. Compilar múltiplos passos de ação (`lib/compiler/stages/assemble.ts:95-138` `DESCONECTADO` — só compila `actionSteps[actionSteps.length - 1]`, descartando os campos anteriores!) $\rightarrow$ 2. Preencher parâmetros no painel (`side_panel_v2.js:239` `DESCONECTADO` — `params.forEach` quebra) $\rightarrow$ 3. Passar parâmetros ao runner (`orchestrator_v2.js:199` `DESCONECTADO` — passa `{}` em `params`) $\rightarrow$ 4. Exibir `CHECKPOINT` + ack write-ahead + `WRITE` (`checkpoint.ts:26`, `write.ts:138` `CONECTADO`). | **Quebra nos Saltos 1, 2 e 3:** o compilador (`assemble.ts:95`) pega apenas o **último** passo de escrita (`lastAction`) em vez de gerar múltiplos nós `WRITE` para o wizard; `side_panel_v2.js:239` falha em `params.forEach`; e `orchestrator_v2.js:199` passa `params = {}` para `runner.run`. |
-| **N5 — Baixar boletim (download)** | 1. Executar nó `DOWNLOAD` (`lib/runner/nodes/download.ts:15-56` `CONECTADO`) $\rightarrow$ 2. `RemoteDriver.download` (`lib/runner-ext/remoteDriver.ts:199` `CONECTADO`) $\rightarrow$ 3. `ContentAdapter` (`lib/runner-ext/contentAdapter.ts:99` `CONECTADO`) $\rightarrow$ 4. `DomDriver.download` (`lib/runner-dom/driver.ts:233-243` `STUB`). | **Quebra no Salto 4:** `DomDriver.download` apenas clica no elemento e retorna `{ success: true, filename: 'download_resultado.csv', sizeBytes: 1024 }` hardcoded, sem monitorar `chrome.downloads`. |
-| **N6 — Pedido em linguagem natural → formulário → execução** | 1. Enviar texto (`side_panel_v2.js:340` `CONECTADO`) $\rightarrow$ 2. `orchestrator_v2.js:896` busca `graphs.listActive` e chama `nlu.parse` (`CONECTADO`) $\rightarrow$ 3. `llmGateway.parseIntent` itera `for (const p of declaredParams)` (`desktop/llm/llmGateway.ts:255` `DESCONECTADO` se `params` for objeto) $\rightarrow$ 4. Painel chama `selectSkillForExecution` (`side_panel_v2.js:366` $\rightarrow$ `239` `DESCONECTADO` em `params.forEach`) $\rightarrow$ 5. Executar (`orchestrator_v2.js:116, 199` `DESCONECTADO`). | **Quebra nos Saltos 3, 4 e 5:** incompatibilidade `Record` vs `Array` em `params` (`llmGateway.ts:255` e `side_panel_v2.js:239`), `resp.graph` em `orchestrator_v2.js:116` e `params = {}` em `orchestrator_v2.js:199`. |
-| **N7 — Popup de login → handoff → retomada** | 1. `SSOHandoffManager` detecta popup filho (`lib/runner-ext/ssoHandoff.ts:110` `CONECTADO`) $\rightarrow$ 2. Runner executa `HANDOFF_HUMAN` (`lib/runner/nodes/checkpoint.ts:71-123` `CONECTADO`, mas não integrado ao `ssoManager`) $\rightarrow$ 3. Card `#sgv2-handoff-box` exibido no painel (`side_panel_v2.js:488` `CONECTADO`) $\rightarrow$ 4. Professora clica em "Já resolvi — Continuar" (`side_panel_v2.js:103` $\rightarrow$ `workerEntry.ts:138` `CONECTADO`) $\rightarrow$ 5. Runner avalia `resume_when` (`checkpoint.ts:104` `CONECTADO`). | **Funciona manualmente pelo botão do painel**, mas a retomada automática quando o popup SSO fecha (`ssoHandoff.ts:195`) está **DESCONECTADA** de `pendingHandoffs` em `workerEntry.ts:66-87` (exige que o grafo já esteja num nó `HANDOFF_HUMAN` e que a professora clique manualmente no botão do painel). |
-| **N8 — Falha no meio (rede/aba fechada/SW reciclado) → estado seguro sem escrita duplicada** | 1. Persistência de estado a cada nó em `chrome.storage.session` (`orchestrator_v2.js:167-182` `CONECTADO`) $\rightarrow$ 2. Falha de RPC durante `WRITE` (`remoteDriver.ts:86` `CONECTADO`) $\rightarrow$ 3. Loop de retry do nó em `engine.ts:115-163` (`CONECTADO` com `max_attempts: 2` em `assemble.ts:132`) $\rightarrow$ 4. Se o SW reciclar, `orchestrator_v2.js` **não tem lógica de retomada** de `activeRun` a partir de `chrome.storage.session` (`DESCONECTADO`). | **Quebra no Salto 3 (Risco de escrita duplicada):** se a aba recarregar ou perder conexão após o `WRITE` alterar o DOM mas antes de responder ao RPC, `engine.ts:115` retenta o `WRITE`. Se o SW reciclar, a execução morre silenciosamente sem limpar o estado no painel. |
-
----
-
-## 10. B8 — Build e Testes Executados (E1)
-
-### 10.1 Tabela de Execução do Orçamento Permitido (1x cada)
-
-| # | Comando Executado | Código de Saída | Resultado / Contagem | Tempo |
-| :---: | :--- | :---: | :--- | :---: |
-| **1** | `npx tsc --noEmit` | `0` | Zero erros de compilação TypeScript (`[saída vazia]`) | ~8s |
-| **2** | `npm run build:ext` | `0` | Bundles gerados e verificados em `teacher-extension/dist/` | ~9s |
-| **3** | `npm run desktop:build` | `0` | Artefatos gerados em `dist-desktop/` | ~7s |
-| **4** | `npx vitest run __tests__/skillGraphV2.contract.test.ts __tests__/graphRunner.core.test.ts __tests__/compiler.core.test.ts __tests__/repair.core.test.ts __tests__/desktop.core.test.ts __tests__/community.core.test.ts __tests__/extensionHost.integration.test.ts` | `0` | **7 arquivos aprovados (7/7), 137 testes passaram, 0 falharam** (`contract`: 12, `repair`: 15, `compiler`: 11, `desktop`: 24, `community`: 35, `graphRunner`: 27, `extensionHost`: 13) | 11,31s |
-
-### 10.2 Cobertura de Navegação Real vs. `FakeDriver` / `MockDriver`
-- **Quais testes executados cobrem navegação com driver REAL (`DomDriver` + `RemoteDriver` + `chrome.tabs.update`)?**
-  - **NENHUM (0 de 137 testes).**
-  - Em `__tests__/graphRunner.core.test.ts` (27 testes), todos os testes — incluindo o teste `7. [NAVIGATE]` adicionado no commit `b2444b0` (linhas 1175–1202) — rodam sobre a classe `FakeDriver` em memória (`graphRunner.core.test.ts:15-190`), onde `navigate(url)` apenas faz `this.navigatedUrls.push(url); this.currentUrl = url`.
-  - Em `__tests__/extensionHost.integration.test.ts` (13 testes), todos os testes rodam sobre `MockDriver` em memória (`extensionHost.integration.test.ts:10-65`).
-- **Invariantes de C1–C5 que só têm teste com driver falso ou mock:**
-  1. **C1/C2:** Execução de `NAVIGATE`, `CLICK` com `expect_navigation`, `LOCATE` com `scroll_until_found`, `PAGINATE`, `WAIT`, reconexão de RPC após recarga de página e `SSOHandoffManager` (todos testados apenas com `FakeDriver` ou mocks de `chrome.tabs`).
-  2. **C3:** Integração entre `side_panel_v2.js`, `orchestrator_v2.js` e `desktop/main.ts` **não tem nenhum teste automatizado** — razão pela qual os 4 bugs de contrato (`s.params.forEach`, `s.task_id`, `resp.graph` e `runner.run(graph, {})`) passaram despercebidos pelos 137 testes!
-  3. **C4:** `DOWNLOAD`, `UPLOAD`, leitura de listas `<ul>/<li>`, paginação em `READ` e polaridade de checkbox em `DomDriver` não são exercitados contra DOM real nos 7 arquivos da suíte.
-  4. **C5:** `LlmGateway.parseIntent` só foi testado com `params` em formato array mockado, não com um `SkillGraphV2` real vindo de `SqlSkillGraphRepository.listActive()` (onde `params` é um `Record`).
-
----
-
-## 11. B9 — Bloqueios (`BLOQUEIA`), Dívida Técnica e Recomendação sobre o Explorador
-
-### 11.1 Lista dos 8 `BLOQUEIA` (Ordenados por Dependência)
-
-| Ordem | ID | Descrição do Bloqueio e Localização (`arquivo:linha`) | Objetivos Afetados | Esforço | Cabe em 1 Tarefa? |
-| :---: | :---: | :--- | :---: | :---: | :---: |
-| **1** | **BLQ-1** | **Quebras de contrato na ponte Painel v2 $\leftrightarrow$ Orquestrador $\leftrightarrow$ Desktop:** (a) `side_panel_v2.js:239,286` usa `s.task_id` e `s.params.forEach` em vez de `s.identity.task_id` e `Object.entries(s.params)`; (b) `orchestrator_v2.js:116` lê `resp.graph` quando `desktop/main.ts:75` retorna o grafo direto; (c) `orchestrator_v2.js:199` passa `{}` como `params` em `runner.run(graph, {}, ...)`; (d) `orchestrator_v2.js:214` envia `source` string em `students.upsertFromPortal` em vez de `{ portalId, readAt }`; (e) `llmGateway.ts:255` faz `for (const p of declaredParams)` num objeto `Record`. | **C3, C4, C5** | **P** | **SIM** |
-| **2** | **BLQ-2** | **Explorador autônomo inseguro e gerador de grafos inválidos (`b2444b0`):** `SKILLGRAPH_EXPLORE_AND_LEARN` (`orchestrator_v2.js:336-479` + `background.js:930-985`) clica em elementos com `score >= 20` sem blacklist de verbos destrutivos, grava `destUrl` como `steps[0]` (quebrando `entry_fingerprint` na reexecução) ou compila clique de navegação como nó `WRITE`, e salva no banco com `activate: true` (linha 467) sem revisão humana nem dry-run. | **C1, C2, C3** | **P** | **SIM** |
-| **3** | **BLQ-3** | **Lacunas críticas de navegação real e risco de escrita duplicada no reload:** (a) `RemoteDriver.navigate` (`remoteDriver.ts:219-222`) dá `resolve()` sem erro quando o timeout de 10s estoura; (b) `executeNavigateNode` (`navigate.ts:49-50`) não valida `allowed_hosts` quando `node.path` é URL absoluta e força `https://` em URLs relativas; (c) `executeClickNode` (`click.ts:44`) ignora `node.expect_navigation`; (d) `WRITE` com `retry.max_attempts: 2` (`assemble.ts:132`, `engine.ts:115`) pode repetir a escrita se a página recarregar durante o RPC. | **C1, C2** | **M** | **SIM** |
-| **4** | **BLQ-4** | **Paginação e Scroll Incremental desconectados/quebrados no `DomDriver`:** `DomDriver.readTable` (`driver.ts:120`) e `readHtmlTable` (`tableReader.ts:65`) ignoram `options.paginate`; `executeLocateNode` (`navigate.ts:89-105`) ignora `paginate_until_found`; `DomDriver.scroll` (`driver.ts:159`) não faz scroll incremental; e `DomDriver.paginate` (`driver.ts:187`) usa seletor inválido `button:has-text("Próxima")` que lança `SyntaxError`. | **C1, C4** | **M** | **SIM** |
-| **5** | **BLQ-5** | **Bugs de Extração/Inserção no `DomDriver` e no Compilador:** (a) `writer.ts:24-30` calcula o mesmo booleano para `presence` e `absence` (não inverte polaridade de falta em checkbox); (b) `read.ts:46-57` chama `readTable` para `source.kind === 'list'` (falha em `<ul>/<li>`); (c) `tableReader.ts:77` exige classe `.cards-container` de fixture; (d) `assemble.ts:95` descarta todos os passos de escrita exceto o último (`lastAction`), impedindo formulários multi-campo/wizards; (e) `DomDriver.download` (`driver.ts:233`) e `DomDriver.upload` (`driver.ts:245`) são stubs fictícios. | **C4** | **M** | **SIM** |
-| **6** | **BLQ-6** | **Edição de texto no CHECKPOINT descartada e default `"grade"` forçado na gravação:** (a) `workerEntry.ts:128-135` ignora `message.updatedText` enviado pelo `#modal-checkpoint` (`side_panel_v2.js:470`); (b) `side_panel_v2.html:108` e `side_panel_v2.js:186` enviam `grade_scale` por padrão em toda gravação, forçando habilidades genéricas a serem compiladas como lançamento de nota (`assemble.ts:88`). | **C3, C4** | **P** | **SIM** |
-| **7** | **BLQ-7** | **Operações de gestão e resiliência ausentes na UI/IPC:** `SqlSkillGraphRepository.setActive` (reversão de versão) está órfão sem handler em `desktop/main.ts` nem botão na UI; não há opção de excluir habilidade ou restaurar backup `.tbackup` (`desktop/ui/index.html:233` é apenas texto); e não há script de instalador sem terminal (`.exe` NSIS/Electron-Builder). | **C3** | **M** | **SIM** |
-| **8** | **BLQ-8** | **NLU estática sem nuances nem proteção contra negação/exceção:** `LlmGateway.parseIntent` (`desktop/llm/llmGateway.ts:160-333`) não resolve datas relativas ("ontem"), ignora palavras de negação ("não lance") e captura exceções ("todos menos o João" $\rightarrow$ aluno `"João"`), além de não pedir esclarecimento em ambiguidades. | **C5** | **M** | **SIM** |
-
-### 11.2 Dívida Técnica (`DÍVIDA`) e Observações (`OBSERVAÇÃO`)
-- **`DÍVIDA-1` (C2):** Coexistência de `internalNavigatePortalTab` (`background.js:930`) e `DISCOVERY_FIND_AND_CLICK_STUDENT` (`background.js:1624`) no `background.js` ao lado do `SkillGraphRunner`.
-- **`DÍVIDA-2` (C1/C4):** Iframes cross-origin engolidos em `selectors.ts:27` sem uso de `RemoteDriver.setFrameId` / `ContentAdapter.listFrames`.
-- **`DÍVIDA-3` (C1):** `SSOHandoffManager` (`ssoHandoff.ts`) não resolve automaticamente a promessa de `pendingHandoffs` em `workerEntry.ts:66-87` quando o popup SSO fecha, exigindo clique manual no botão do painel.
-- **`DÍVIDA-4` (C3):** Códigos internos `E_*` (`E_GRAPH_INVALID`, `E_UNSUPPORTED_PATTERN`, `E_PII_SCRUB_FAILED`) ainda podem aparecer crus em mensagens de falha no painel v2 (`side_panel_v2.js:428`).
-- **`OBSERVAÇÃO-1` (C3):** Faltam atributos `role="dialog"`, `aria-modal="true"` e `aria-live="polite"` nos modais e barras do painel v2 (`side_panel_v2.html:57, 159`).
-
-### 11.3 Recomendação Única sobre o Explorador (`SKILLGRAPH_EXPLORE_AND_LEARN`)
-- **Recomendação:** **Converter imediatamente para modo "Me ensine" assistido (desativando tanto o clique autônomo cego quanto o auto-salvamento `activate: true`)**.
-- **Justificativa por risco:**
-  1. Clicar autonomamente no DOM de um portal escolar autenticado usando uma heurística de substring (`score >= 20` para qualquer palavra $\ge 3$ letras em `background.js:952-975`) sem lista de verbos proibidos pode acionar botões destrutivos ("Excluir", "Encerrar Diário", "Enviar Notas") antes de qualquer `CHECKPOINT`.
-  2. Salvar e ativar o grafo resultante com `activate: true` (`orchestrator_v2.js:467`) sem revisão humana nem dry-run viola diretamente os princípios de segurança do motor (O2, O5 e O6) e contamina o banco SQLite com grafos estruturalmente quebrados (`entry_fingerprint` apontando para `destUrl` ou clique compilado como `WRITE`).
-  3. Quando `nlu.parse` retornar `no_match`, o comportamento seguro é destacar/sugerir visualmente o candidato no DOM (ou abrir direto o card `#sgv2-teach-me-box` com o nome da habilidade pré-preenchido) para que a professora clique com `isTrusted: true`, revise polaridade/escala e aprove a ativação.
-
----
-
-## 12. B10 — Roteiro de Validação do Dono (≤ 60 min, 8 Passos)
-
-> **Importante:** Este roteiro testa exatamente o comportamento real no Chrome + App Desktop e expõe de imediato onde C1–C5 funcionam ou quebram hoje.
-
-| Passo | Tempo Est. | O Que Fazer no Chrome e no App | Resultado Esperado pela Régua (C1–C5) | Comportamento Previsto no Código Atual (`HEAD = b2444b0`) |
-| :---: | :---: | :--- | :--- | :--- |
-| **1. Navegação multi-página gravada (`pagination.html` / `portal_com_abas.html`)** | 8 min | Subir `npm run harness` (`127.0.0.1:8898`) e `npm run desktop:dev`. Abrir `http://127.0.0.1:8898/fixtures/portal_com_abas.html`. Na aba **Gravar** do painel v2, digitar `"Abrir aba e ler chamada"`, clicar em **Iniciar Gravação**, clicar numa aba/link que troque de contexto, clicar na tabela e clicar em **Parar e Compilar** $\rightarrow$ **Confirmar e Salvar**. Depois ir à aba **Executar** e rodar. | Grava a transição sem perder o log, compila, aparece na lista de habilidades e, ao executar, navega e lê a tabela. | A gravação persiste entre páginas (`cf3cfde`), mas ao abrir a aba **Executar** e clicar em **Executar Habilidade**, falha porque `orchestrator_v2.js:116` procura `resp.graph` (inexistente). |
-| **2. Leitura de tabela paginada (`pagination.html`)** | 7 min | Abrir `http://127.0.0.1:8898/fixtures/pagination.html`. Gravar a leitura da tabela e o clique no botão de próxima página. Executar a habilidade e verificar no app Desktop (**Turmas e Alunos**) quantos alunos foram importados. | Deve percorrer todas as páginas da tabela e salvar todos os alunos no banco SQLite do app Desktop. | Lê apenas a página 1 (`tableReader.ts:65` ignora `paginate`) e `students.upsertFromPortal` falha no Zod porque `source` é enviado como string (`orchestrator_v2.js:214`). |
-| **3. Escrita com CHECKPOINT (`standard.html` / `diario_grid.html`)** | 8 min | Abrir `http://127.0.0.1:8898/fixtures/standard.html`. Gravar lançamento de nota em um campo de input. Na aba **Executar**, preencher a nota, clicar em **Executar**, revisar o modal **Confirmação Obrigatória (CHECKPOINT)**, editar o valor se aplicável e clicar em **Aprovar e Gravar**. | Exibe o modal de CHECKPOINT antes de tocar no DOM, grava o ack de auditoria no app Desktop, escreve o valor com read-back e atualiza o campo. | Se a habilidade tiver parâmetros, clicar nela no menu lança `TypeError: params.forEach is not a function` (`side_panel_v2.js:239`). |
-| **4. App fechado = escrita aborta (Fail-Closed)** | 5 min | Fechar o aplicativo Desktop Electron. Verificar que o badge no topo do painel v2 muda para `"App Desconectado"`. Tentar executar uma habilidade de escrita e aprovar o CHECKPOINT. | A escrita deve **abortar imediatamente** com erro de auditoria indisponível (`E_AUDIT_UNAVAILABLE`), sem alterar nenhum campo no DOM do portal. | Se o runner for disparado sem o app Desktop, `NativeAuditSink.append` falha e `executeWriteNode` (`write.ts:143`) aborta antes de chamar `driver.write`. |
-| **5. Popup de login / Barreira de Auth (`portal_com_login.html`)** | 7 min | Com o app aberto, abrir `http://127.0.0.1:8898/fixtures/portal_com_login.html`. Gravar um fluxo que passa pela tela de login (digitando senha de teste) até a tabela. Verificar que a senha não foi gravada no grafo e que, na execução, o card amarelo **Ação Necessária no Portal (Handoff)** pausa o motor até o clique em **"Já resolvi — Continuar"**. | Nenhum caractere da senha entra no trace (`sensitive_field`); a execução pausa no `HANDOFF_HUMAN` e retoma após o login. | O gravador emite `sensitive_field` sem valor (`recorderCore.ts:127`) e o compilador gera `HANDOFF_HUMAN` (`assemblePreamble.ts:43`). |
-| **6. Pedido em linguagem natural com 3 nuances** | 8 min | Na caixa *"O que você quer fazer?"* do painel v2, testar 3 frases: (a) `"lançar nota 8,5 para Ana na turma 6A"`; (b) `"lançar falta para todos menos o João ontem"`; (c) `"na verdade foi 7,5"`. | (a) Preenche form de `lancar_nota`; (b) entende exceção `"menos o João"` e data `"ontem"` (ou pede esclarecimento); (c) corrige a nota para `7,5`. | (a) Quebra em `llmGateway.ts:255` (`declaredParams is not iterable`) ou em `side_panel_v2.js:239` (`params.forEach`); (b) extrai `"João"` como alvo da falta e ignora `"ontem"`; (c) cai em `no_match` e dispara o explorador autônomo! |
-| **7. Reversão de versão de habilidade** | 5 min | Provocar uma mudança de seletor (ou abrir o app Desktop na visão **Mapas de Portais**) e procurar o botão para **reverter uma habilidade da versão 2 para a versão 1**. | A professora consegue reverter para a versão anterior clicando num botão na interface. | **Não existe botão nem handler IPC** para reverter versão (`SqlSkillGraphRepository.setActive` está órfão). |
-| **8. Leitura em UM portal real (somente leitura, conta do dono)** | 12 min | Acessar o portal escolar real (ex.: `machadosobrinho.paineldoaluno.com.br`) já autenticado. Usar a aba **Gravar** para ensinar apenas a **leitura de uma lista de alunos** (sem nenhuma escrita). Compilar, salvar e verificar no app Desktop. | Grava os cliques e a seleção da tabela sem erro de permissão de host, compila sem vazar PII no grafo (`scrubGraph`) e lista a habilidade no app Desktop. | A gravação e compilação funcionam (`de7dc60` e `cf3cfde`), mas a listagem/execução no painel v2 esbarra no BLQ-1 (`s.params.forEach` / `resp.graph`). |
-
-### Tabela de Registro de Evidências do Dono (Para Copiar e Preencher)
-
-```markdown
-| Passo | O que fiz | Mensagem exibida na UI | Saída no Console (Service Worker / Painel) |
+| Passo | O que fiz | Mensagem exibida no Painel / App | Console (Erros / Avisos) |
 | :---: | :--- | :--- | :--- |
 | 1 | | | |
 | 2 | | | |
@@ -431,150 +499,32 @@ O commit `b2444b0` (`feat(engine): amalgama de navegacao real com auto-cache de 
 | 6 | | | |
 | 7 | | | |
 | 8 | | | |
-```
 
 ---
 
-## 13. Apêndice: Comandos, Saídas Literais, Auditoria de Relatórios Anteriores e Requisitos
+## 14. Apêndice (Comandos Executados, Falhas e `NÃO VERIFICADO`)
 
-### 13.1 Comandos e Saídas Literais de B0 e B8
+### 14.1 Comandos Executados Nesta Auditoria
+1. **Inspeção Git e Grep (somente leitura):**
+   - `git branch --show-current`
+   - `git status --short`
+   - `git log --oneline -15`
+   - `git show --stat HEAD`
+   - `git log --stat -5`
+   - `git show --stat b0d0350; git show --stat b2444b0; git show --stat cf3cfde`
+   - `git grep -n "standaloneFallback" -- lib teacher-extension desktop`
+   - `git grep -n -E "chrome\.storage\.local" -- lib teacher-extension`
+   - `git grep -n -E "activate: ?true" -- teacher-extension lib desktop`
+   - `git grep -n -E "TODO|not implemented|E_NODE_UNSUPPORTED" -- lib teacher-extension desktop`
+   - `git grep -n -E "internalNavigatePortalTab|NAVIGATE_PORTAL_TAB|portal_navigate|chrome\.tabs\.update" -- lib teacher-extension desktop sidecar`
+2. **Orçamento de Builds e Testes (executados 1x cada):**
+   - `npx tsc --noEmit` → `EXIT_TSC=0`
+   - `npm run build:ext` → `EXIT_BUILD_EXT=0`
+   - `npm run desktop:build` → `EXIT_BUILD_DESKTOP=0`
+   - `npx vitest run __tests__/skillGraphV2.contract.test.ts __tests__/graphRunner.core.test.ts __tests__/compiler.core.test.ts __tests__/repair.core.test.ts __tests__/desktop.core.test.ts __tests__/community.core.test.ts __tests__/extensionHost.integration.test.ts --reporter=basic` → `EXIT_VITEST=0` (`150 passed`)
+   - `npm run test:e2e:chromium` → `EXIT_E2E=0` (`8/8 suítes aprovadas`)
 
-#### A. `git status --short; git branch --show-current; git log --oneline -12; git show --stat HEAD`
-```text
-fechamento-integracao
-b2444b0 feat(engine): amalgama de navegacao real com auto-cache de exploracao autonoma
-cf3cfde fix(recorder): persistencia de gravacao multi-pagina e ajuste no timeout nativo
-de7dc60 fix(ext): cancela necessidade de permissao de host e ajusta shim native messaging
-16633af fix(ext): exibir painel v2 por padrao sem ocultar body
-e3968d5 audit: estado do engine
-a31c97a skill(R): correcao final
-546ff8b skill(G5): fechamento
-fed9233 skill(G4): texto seguro com checkpoint integral
-5f8961b skill(G3): roteamento nlu ao catalogo
-d1fb190 skill(G2): compilador sem esqueleto fixo
-19f9334 skill(G1): menu gerado do catalogo
-c533b68 gate(H6): fechamento
-commit b2444b00ab25fd4dbd4c868e07a96aabae04292a
-Author: Teacher AI <rafael@teacher-ai.local>
-Date:   Thu Oct 15 21:33:44 2026 -0300
-
-    feat(engine): amalgama de navegacao real com auto-cache de exploracao autonoma
-
- __tests__/graphRunner.core.test.ts   |  35 ++++++++
- lib/runner-dom/driver.ts             |  14 ++++
- lib/runner-ext/contentAdapter.ts     |   3 +
- lib/runner-ext/protocol.ts           |   1 +
- lib/runner-ext/remoteDriver.ts       |  57 ++++++++++++-
- lib/runner/nodes/navigate.ts         |   7 ++
- lib/runner/types.ts                  |   2 +
- teacher-extension/background.js      |   1 +
- teacher-extension/orchestrator_v2.js | 156 +++++++++++++++++++++++++++++++++++
- teacher-extension/side_panel_v2.js   |  38 ++++++++-
- 10 files changed, 310 insertions(+), 4 deletions(-)
-```
-*(Nota: a saída de `git status --short` foi vazia `[saída vazia]`).*
-
-#### B. `git grep -n "activate: true" -- teacher-extension lib desktop` e `git grep -n "SKILLGRAPH_EXPLORE_AND_LEARN" -- teacher-extension lib desktop`
-```text
-teacher-extension/orchestrator_v2.js:467:                  await nativeClient.send('graphs.save', { graph: savedGraph, activate: true })
-teacher-extension/orchestrator_v2.js:723:            await nativeClient.send('graphs.save', { graph, activate: true })
-teacher-extension/orchestrator_v2.js:854:            await nativeClient.send('graphs.save', { graph: patched, activate: true })
-teacher-extension/orchestrator_v2.js:336:    if (message.action === 'SKILLGRAPH_EXPLORE_AND_LEARN') {
-teacher-extension/side_panel_v2.js:348:            chrome.runtime.sendMessage({ action: 'SKILLGRAPH_EXPLORE_AND_LEARN', text }, (exploreRes) => {
-```
-
-#### C. `npx tsc --noEmit` (1x)
-```text
-(código de saída 0, saída vazia)
-```
-
-#### D. `npm run build:ext` (1x)
-```text
-> teacher-ai@0.1.0 build:ext
-> npx tsx scripts/build-extension-runner.ts
-
-[Build Ext] Compilando bundles do SkillGraph v2 (DEV=false) para teacher-extension...
-[Build Ext] Bundles gerados com sucesso e verificados em teacher-extension/dist/!
-```
-
-#### E. `npm run desktop:build` (1x)
-```text
-> teacher-ai@0.1.0 desktop:build
-> npx tsx scripts/build-desktop.ts
-
-[Build Desktop] Empacotando casca Electron...
-[Build Desktop] Sucesso: Artefatos gerados em dist-desktop/!
-```
-
-#### F. `npx vitest run` nos 7 arquivos (1x)
-```text
- RUN  v3.2.7 C:/Users/rafae/Documents/antigravity/hopeful-bell
-
- ✓ __tests__/skillGraphV2.contract.test.ts (12 tests) 318ms
- ✓ __tests__/repair.core.test.ts (15 tests) 151ms
- ✓ __tests__/compiler.core.test.ts (11 tests) 243ms
- ✓ __tests__/desktop.core.test.ts (24 tests) 1133ms
-   ✓ Desktop Core — Teste de Fronteira (Fase 6) > 2. Backup Cifrado > deve criar backup e restaurar com a senha correta  385ms
-   ✓ Desktop Core — Teste de Fronteira (Fase 6) > 2. Backup Cifrado > deve rejeitar senha incorreta com E_BACKUP_BAD_PASSPHRASE  537ms
- ✓ __tests__/community.core.test.ts (35 tests) 227ms
- ✓ __tests__/graphRunner.core.test.ts (27 tests) 181ms
- ✓ __tests__/extensionHost.integration.test.ts (13 tests) 259ms
-
- Test Files  7 passed (7)
-      Tests  137 passed (137)
-   Start at  21:54:32
-   Duration  11.31s (transform 8.09s, setup 0ms, collect 25.59s, tests 2.51s, environment 7ms, prepare 3.06s)
-```
-
-### 13.2 Verificação de 5 Alegações por Relatório Anterior contra o Código Real (E2)
-
-| Relatório Auditado | # | Alegação do Relatório | Veredito vs. Código (`arquivo:linha`) |
-| :--- | :---: | :--- | :--- |
-| **`docs/HABILIDADES_GENERICAS.md`** | 1 | "Menu do painel v2 gerado dinamicamente a partir de `graphs.listActive` sem IDs fixos" | **PARCIAL / QUEBRADO:** `side_panel_v2.js:270-330` busca `graphs.listActive`, mas lê `s.task_id` (em vez de `s.identity.task_id`) e quebra em `s.params.forEach` (`side_panel_v2.js:239`) porque `params` no `SkillGraphV2` é Objeto. |
-| | 2 | "Compilador gera habilidades `custom:*` sem esqueleto fixo" | **CONFIRMADO (E2):** `lib/compiler/stages/assemble.ts:45-185` aceita `custom:*`, mas descarta múltiplos passos de ação exceto `lastAction` (linha 95). |
-| | 3 | "Roteamento NLU restrito ao catálogo (`nlu.parse`)" | **PARCIAL (E2):** `desktop/llm/llmGateway.ts:171` restringe ao catálogo, mas a linha 255 (`for (const p of declaredParams)`) quebra quando `params` é um `Record`. |
-| | 4 | "Texto livre sempre exige CHECKPOINT integral e permite edição no modal" | **PARCIAL / FALSO NA EDIÇÃO (E2):** `checkpoint.ts:26` exige CHECKPOINT, mas `workerEntry.ts:128-135` ignora o `updatedText` enviado pelo modal (`side_panel_v2.js:470`)! |
-| | 5 | "Seletor de exportação no Desktop lista habilidades do banco sem `read_roster` fixo" | **CONFIRMADO (E2):** `desktop/ui/app.js:395-419` popula `#export-task-select` dinamicamente a partir de `graphs.list`. |
-| **`docs/ENGINE_CLOSURE.md`** | 1 | "Gravador de produção injeta `dist/recorder.bundle.js`" | **CONFIRMADO (E2):** `teacher-extension/orchestrator_v2.js:502` injeta `files: ['dist/recorder.bundle.js']`. |
-| | 2 | "Verificação estrita de `isTrusted` no gravador DOM" | **CONFIRMADO (E2):** `lib/recorder-dom/recorderCore.ts:112,125,138,151` bloqueiam eventos com `e.isTrusted === false`. |
-| | 3 | "Produção v2 100% agnóstica a portais específicos" | **CONFIRMADO (E2):** Sem domínios de portais escolares hardcoded em `lib/`, `desktop/` ou `orchestrator_v2.js` (mas `tableReader.ts:77` tem classes de fixture `.cards-container`). |
-| | 4 | "F3 — Compilação determinística e persistência no SQLite via `graphs.save` seguida de execução" | **PARCIAL / QUEBRADO NA EXECUÇÃO (E2):** Persiste via `graphs.save`, mas `orchestrator_v2.js:116` falha ao ler `resp.graph` de `graphs.resolveActive` (`desktop/main.ts:75`). |
-| | 5 | "Checkpoints 100% interativos com timeout fail-closed e abort em tempo real" | **CONFIRMADO (E1/E2):** `lib/runner-ext/workerEntry.ts:170-220` e `__tests__/extensionHost.integration.test.ts` (13/13). |
-| **`docs/INTEGRATION_REPORT.md`** | 1 | "Extensão resolve grafos reais via `graphs.resolveActive` e persiste alunos via `students.upsertFromPortal`" | **REFUTADO (E2):** `orchestrator_v2.js:116` espera `resp.graph` (mas `main.ts:75` retorna o grafo direto) e `orchestrator_v2.js:214` envia `source` como string (rejeitado por `schemas.ts:99`). |
-| | 2 | "Ciclo de auto-reparo aplica patch `v+1`, executa dry-run e salva no desktop" | **CONFIRMADO (E2):** `teacher-extension/orchestrator_v2.js:801-866`. |
-| | 3 | "Exportação comunitária com assinatura Ed25519 e substituição de hosts por `h0.invalid`" | **CONFIRMADO (E1/E2):** `lib/desktop-core/community/export/buildPackage.ts:45-120` e `desktop/main.ts:171-196`. |
-| | 4 | "Zero portas TCP abertas pelo app desktop" | **CONFIRMADO (E2):** `desktop/main.ts` usa apenas IPC do Electron e pipe nomeado local (`\\.\pipe\teacherai-desktop`). |
-| | 5 | "Diálogo de confirmação amigável de polaridade/escala na extensão" | **PARCIAL (E2):** O diálogo existe (`side_panel_v2.html:103`), mas envia `grade_scale` por padrão mesmo sem ser tarefa de nota (`side_panel_v2.js:186`). |
-| **`docs/ARCHETYPES.md`** | 1 | "Arquétipo #9 (Paginação por Botão): Tier 1 Suportado" | **REFUTADO (E2):** `DomDriver.readTable` ignora `paginate` (`tableReader.ts:65`) e `DomDriver.paginate` usa seletor inválido `:has-text` (`driver.ts:187`). |
-| | 2 | "Arquétipo #10 (Scroll Infinito): Tier 1 Suportado" | **REFUTADO (E2):** `DomDriver.scroll` (`driver.ts:159-166`) não realiza scroll incremental. |
-| | 3 | "Arquétipo #17 (Exportação / Download): Tier 1 Suportado" | **REFUTADO (E2):** `DomDriver.download` (`driver.ts:233-243`) é um stub que retorna `'download_resultado.csv'` fixo. |
-| | 4 | "Arquétipo #18 (Importação / Upload): Tier 1 Suportado" | **REFUTADO (E2):** `DomDriver.upload` (`driver.ts:245-265`) é um stub que injeta `'conteudo,arquivo\n1,2'` fixo. |
-| | 5 | "Arquétipo #6 (Layout de Cartões / Grid CSS): Tier 1 Suportado" | **PARCIAL / FIXTURE-ONLY (E2):** `tableReader.ts:77` exige classe `.cards-container`. |
-| **`docs/PHASE2_FINAL_REPORT.md`** | 1 | "Validação prévia de schema e integridade antes de tocar no DOM (`E_GRAPH_INVALID`)" | **CONFIRMADO (E1/E2):** `lib/runner/engine.ts:41-52`. |
-| | 2 | "Respeito a domínios permitidos (`safety.allowed_hosts`)" | **PARCIAL (E2):** `lib/runner/nodes/navigate.ts:49` permite bypass se `node.path` for uma URL absoluta e `node.host` estiver omitido. |
-| | 3 | "Reversão física em falha de read-back (`E_READBACK_MISMATCH`)" | **CONFIRMADO (E1/E2):** `lib/runner/nodes/write.ts:160-200`. |
-| | 4 | "Descarte de linhas não-dados (`skip_rows`)" | **CONFIRMADO (E1/E2):** `lib/runner-dom/tableReader.ts:112-120` e `lib/runner/nodes/loop.ts:76-92`. |
-| | 5 | "Service Worker orquestra o grafo sem ser afetado por navegações ou recarregamentos" | **PARCIAL (E2):** `sendRpc` (`remoteDriver.ts:86-92`) aguarda no máximo 2,4s em reload e `ElementHandleStore` perde todos os handles quando a página recarrega. |
-
-### 13.3 Itens `NÃO VERIFICADO`
-- **Execução ao vivo no navegador Google Chrome, aplicativo Electron aberto, servidor Ollama local e portais escolares reais:** Classificados como `NÃO EXECUTADO (dono)` / `NÃO VERIFICADO` em cumprimento estrito à regra da auditoria que proíbe abrir o Chrome, iniciar servidores/Electron, usar rede ou acessar dados reais.
-
-### 13.4 Tabela de Autoverificação de Requisitos (`fidelidade-ao-pedido`)
-
-| Req | Descrição da Exigência | Status | Evidência (`arquivo:linha` ou seção deste relatório) |
-| :---: | :--- | :---: | :--- |
-| **R1** | Somente leitura no código; único arquivo criado: `docs/AUDITORIA_CAPACIDADES.md`; commit `audit: capacidades` sem push | `FEITO` | `docs/AUDITORIA_CAPACIDADES.md` (Seção 13.1) |
-| **R2** | Executar no máximo 1x cada comando do orçamento permitido (`tsc`, `build:ext`, `desktop:build`, `vitest` nos 7 arquivos) | `FEITO` | Seção 10.1 e Seção 13.1 (C, D, E, F) |
-| **R3** | Auditar B0 (estado git, arquivos fora de escopo em `b2444b0`, greps de `activate: true` e `SKILLGRAPH_EXPLORE_AND_LEARN`) | `FEITO` | Seção 4.1 e Seção 13.1 (A, B) |
-| **R4** | Auditar B1 (anatomia da navegação item a item, cadeias, stubs, timeout de `navigate`, `allowed_hosts`, todos os caminhos de navegação e C2) | `FEITO` | Seção 3.1, 3.2 e 3.3 |
-| **R5** | Auditar B2 (explorador autônomo: decisão de clique, LLM/injeção, limites/ações proibidas, trace gerado e garantias perdidas vs. gravador manual) | `FEITO` | Seção 4.2 e 4.3 |
-| **R6** | Auditar B3 (matriz extração/inserção tipo × operação, setter nativo + read-back + reversão, controles sem suporte, busca por stubs) | `FEITO` | Seção 5.1, 5.2, 5.3 e 5.4 |
-| **R7** | Auditar B4 (21 arquétipos de `ARCHETYPES.md` vs. driver real, status `NÃO MEDIDO`, alegação "qualquer portal" e top 10 falhas prováveis) | `FEITO` | Seção 6.1, 6.2 e 6.3 |
-| **R8** | Auditar B5 (UX sem terminal em `side_panel_v2` e `desktop/ui`, placeholders, códigos `E_*` crus e o que trava a professora leiga) | `FEITO` | Seção 7.1 e 7.2 |
-| **R9** | Auditar B6 (linguagem natural `nlu.parse`, 11 nuances, testes existentes, 3 exemplos suportados e 3 não suportados, risco de escrita e CHECKPOINT) | `FEITO` | Seção 8.1, 8.2, 8.3, 8.4 e 8.5 |
-| **R10** | Auditar B7 (cadeias N1 a N8 salto a salto com status e ponto exato de quebra) | `FEITO` | Seção 9 |
-| **R11** | Auditar B8 (tabela de build/testes, cobertura com driver real vs. `FakeDriver`, invariantes sem teste real) | `FEITO` | Seção 10.1 e 10.2 |
-| **R12** | Auditar B9 (veredito máx. 10 linhas, tabela C1–C5 com % honesto, até 8 `BLOQUEIA` ordenados, dívida e recomendação única sobre o explorador) | `FEITO` | Seção 1, Seção 2 e Seção 11 |
-| **R13** | Elaborar B10 (roteiro do dono ≤ 60 min em 8 passos + tabela de registro) e conferir 5 alegações por relatório anterior | `FEITO` | Seção 12 e Seção 13.2 |
-
-- **O que foi pedido e NÃO foi entregue:** Nada (todos os itens R1–R13 foram integralmente cumpridos).
+### 14.2 Itens `NÃO VERIFICADO` / `NÃO EXECUTADO (dono)` e Motivo
+- **Execução da extensão empacotada (`teacher-extension/`) carregada no navegador Google Chrome do dono + comunicação IPC via pipe `com.teacherai.desktop` com o binário Electron em execução:** `NÃO EXECUTADO (dono)` — proibido pelas regras da auditoria abrir o app ou o Chrome do dono.
+- **Inferência com modelo local Ollama (`llama3.2:3b` / `qwen2.5:3b`) em execução real:** `NÃO EXECUTADO (dono)` — proibido pelas regras da auditoria acionar rede ou LLM externo/local durante a auditoria; verificado por leitura estática de `desktop/llm/llmGateway.ts` (E2).
+- **Execução contra portal escolar real de produção (ex.: `machadosobrinho.paineldoaluno.com.br`, TOTVS RM, SED-SP):** `NÃO EXECUTADO (dono)` — exige credenciais reais e observação supervisionada do dono (Passo 8 do Roteiro B11).
