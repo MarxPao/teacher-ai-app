@@ -44,6 +44,13 @@ export async function executeNavigateNode(
   const queryString = queryParts.length > 0 ? `?${queryParts.join('&')}` : ''
   const fullTarget = `${node.path}${queryString}`
 
+  // 3. Executa navegação real no driver (DOM ou Chrome Tabs)
+  if (typeof driver.navigate === 'function') {
+    const isAbsolute = fullTarget.startsWith('http://') || fullTarget.startsWith('https://')
+    const finalUrl = isAbsolute ? fullTarget : (targetHost ? `https://${targetHost}${fullTarget}` : fullTarget)
+    await driver.navigate(finalUrl)
+  }
+
   host.emit({
     type: 'node_completed',
     runId: state.runId,

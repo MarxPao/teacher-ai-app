@@ -1021,6 +1021,7 @@ async function internalNavigatePortalTab(targetTabId, targetKeyword) {
     return { sucesso: false, mensagem: err.message };
   }
 }
+globalThis.internalNavigatePortalTab = internalNavigatePortalTab;
 
 
 

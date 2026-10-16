@@ -101,6 +101,13 @@ class FakeDriver implements Driver {
   async upload(options: any) {
     return { success: true }
   }
+
+  public navigationHistory: string[] = []
+
+  async navigate(url: string) {
+    this.navigationHistory.push(url)
+    this.currentUrl = url
+  }
 }
 
 class FakeHost implements Host {
@@ -1163,6 +1170,34 @@ describe('Fase 4: Capacidades do Engine por Arquétipo (T4.4)', () => {
       // Rejeitado no checkpoint antes de qualquer escrita
       expect(success).toBe(false)
       expect(driver.writeHistory).toHaveLength(0)
+    })
+
+    it('7. [NAVIGATE] Nó NAVIGATE invoca driver.navigate com a URL calculada e atualiza o estado', async () => {
+      const driver = new FakeDriver()
+      const host = new FakeHost()
+      const runner = new SkillGraphRunner(driver, host)
+
+      const graph = createBaseGraph({
+        entry_node: 'nav_node',
+        nodes: {
+          nav_node: {
+            label: 'Navega para notas',
+            type: 'NAVIGATE',
+            path: '/portal/notas',
+            retry: { max_attempts: 1, backoff_ms: 0 },
+            timeout_ms: 5000,
+            postconditions: [],
+            on_success: '$end',
+            on_fail: '$abort',
+          },
+        },
+      })
+
+      const { success } = await runner.run(graph, {})
+
+      expect(success).toBe(true)
+      expect(driver.navigationHistory).toEqual(['https://localhost:8899/portal/notas'])
+      expect(driver.currentUrl).toBe('https://localhost:8899/portal/notas')
     })
   })
 })

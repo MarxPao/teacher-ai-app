@@ -47,7 +47,7 @@ export class RemoteDriver implements Driver {
     return this.frameId
   }
 
-  private async sendRpc<T>(method: DriverMethodName, params: any): Promise<T> {
+  private async sendRpc<T>(method: DriverMethodName, params: any, attempt = 1): Promise<T> {
     const id = 'rpc_' + Math.random().toString(36).slice(2, 9)
     const request: DriverRpcRequest = {
       channel: SKILLGRAPH_RPC_CHANNEL,
@@ -83,6 +83,13 @@ export class RemoteDriver implements Driver {
           const lastError = chrome.runtime.lastError
           if (lastError) {
             const msg = lastError.message || 'Falha na comunicação com o content script'
+            // Se a página está recarregando ou em transição, tenta novamente até 3 vezes
+            if (attempt < 4 && (msg.includes('Could not establish connection') || msg.includes('Receiving end does not exist'))) {
+              setTimeout(() => {
+                this.sendRpc<T>(method, params, attempt + 1).then(resolve, reject)
+              }, 400 * attempt)
+              return
+            }
             reject(new RunnerError('E_TIMEOUT', `RPC falhou (${method}): ${msg}`))
             return
           }
@@ -191,6 +198,54 @@ export class RemoteDriver implements Driver {
 
   public async describeElements(selector?: string): Promise<ElementDescriptor[]> {
     return this.sendRpc('describeElements', selector)
+  }
+
+  public async navigate(url: string): Promise<void> {
+    if (typeof chrome !== 'undefined' && chrome.tabs && typeof chrome.tabs.update === 'function') {
+      return new Promise<void>((resolve, reject) => {
+        chrome.tabs.update(this.tabId, { url }, () => {
+          if (chrome.runtime?.lastError) {
+            reject(new RunnerError('E_TIMEOUT', `Erro ao navegar para ${url}: ${chrome.runtime.lastError.message}`))
+            return
+          }
+          const listener = (updatedTabId: number, changeInfo: any) => {
+            if (updatedTabId === this.tabId && changeInfo.status === 'complete') {
+              chrome.tabs.onUpdated.removeListener(listener)
+              resolve()
+            }
+          }
+          chrome.tabs.onUpdated.addListener(listener)
+          setTimeout(() => {
+            try {
+              chrome.tabs.onUpdated.removeListener(listener)
+            } catch {}
+            resolve()
+          }, 10000)
+        })
+      })
+    }
+    return this.sendRpc('navigate', { url })
+  }
+
+  public async waitForNavigation(timeoutMs = 10000): Promise<void> {
+    if (typeof chrome !== 'undefined' && chrome.tabs && typeof chrome.tabs.onUpdated === 'function') {
+      return new Promise<void>((resolve) => {
+        const listener = (updatedTabId: number, changeInfo: any) => {
+          if (updatedTabId === this.tabId && changeInfo.status === 'complete') {
+            chrome.tabs.onUpdated.removeListener(listener)
+            resolve()
+          }
+        }
+        chrome.tabs.onUpdated.addListener(listener)
+        setTimeout(() => {
+          try {
+            chrome.tabs.onUpdated.removeListener(listener)
+          } catch {}
+          resolve()
+        }, timeoutMs)
+      })
+    }
+    return Promise.resolve()
   }
 
   public async highlight(selector: string, mode: 'old' | 'new'): Promise<void> {

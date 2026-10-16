@@ -325,10 +325,42 @@
         if (res?.no_match || !res?.skill_id) {
           nluFeedback.style.background = '#fefce8'
           nluFeedback.style.color = '#854d0e'
-          nluFeedback.innerHTML = 'Ainda não sei fazer isso neste portal. <a href="#" id="sgv2-nlu-teach-link" style="color: #2563eb; font-weight: 600;">Quer me ensinar?</a>'
-          document.getElementById('sgv2-nlu-teach-link')?.addEventListener('click', (e) => {
-            e.preventDefault()
+          nluFeedback.innerHTML = `
+            <span>Ainda não tenho esta habilidade gravada.</span>
+            <div style="margin-top: 6px; display: flex; gap: 6px; flex-wrap: wrap;">
+              <button id="sgv2-btn-explore" type="button" style="padding: 4px 8px; font-size: 11px; background: #2563eb; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-weight: 500;">🧭 Explorar e Aprender na Página ✨</button>
+              <button id="sgv2-btn-teach-record" type="button" style="padding: 4px 8px; font-size: 11px; background: #e2e8f0; color: #334155; border: none; border-radius: 4px; cursor: pointer;">📹 Ensinar Gravando</button>
+            </div>
+          `
+          document.getElementById('sgv2-btn-teach-record')?.addEventListener('click', () => {
             switchSubTab(tabRecord, viewRecord)
+          })
+          document.getElementById('sgv2-btn-explore')?.addEventListener('click', () => {
+            const btnExplore = document.getElementById('sgv2-btn-explore')
+            if (btnExplore) {
+              btnExplore.disabled = true
+              btnExplore.textContent = 'Explorando página...'
+            }
+            nluFeedback.style.background = '#eff6ff'
+            nluFeedback.style.color = '#1e40af'
+            nluFeedback.textContent = `Procurando "${text}" e navegando na página...`
+
+            chrome.runtime.sendMessage({ action: 'SKILLGRAPH_EXPLORE_AND_LEARN', text }, (exploreRes) => {
+              if (exploreRes?.success) {
+                nluFeedback.style.background = '#f0fdf4'
+                nluFeedback.style.color = '#166534'
+                nluFeedback.textContent = exploreRes.friendlyMessage || 'Navegação realizada e habilidade aprendida com sucesso! ✨'
+                loadActiveSkills()
+              } else {
+                nluFeedback.style.background = '#fef2f2'
+                nluFeedback.style.color = '#991b1b'
+                nluFeedback.innerHTML = `${exploreRes?.friendlyMessage || 'Não encontrei este item na página.'} <a href="#" id="sgv2-nlu-teach-fallback" style="color: #2563eb; font-weight: 600;">Gravar demonstração?</a>`
+                document.getElementById('sgv2-nlu-teach-fallback')?.addEventListener('click', (e) => {
+                  e.preventDefault()
+                  switchSubTab(tabRecord, viewRecord)
+                })
+              }
+            })
           })
         } else {
           nluFeedback.style.background = '#f0fdf4'

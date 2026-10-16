@@ -333,6 +333,162 @@
       return true
     }
 
+    if (message.action === 'SKILLGRAPH_EXPLORE_AND_LEARN') {
+      (async () => {
+        try {
+          const tabId = await resolveTargetTab(message.tabId)
+          if (!tabId) {
+            sendResponse({ success: false, friendlyMessage: 'Nenhuma aba ativa do portal encontrada para navegação.' })
+            return
+          }
+
+          const tabBefore = await chrome.tabs.get(tabId)
+          const startUrl = tabBefore?.url || ''
+          let host = 'localhost'
+          let startPath = '/'
+          try {
+            const u = new URL(startUrl)
+            host = u.host
+            startPath = u.pathname
+          } catch {}
+
+          const queryText = (message.text || '').trim()
+          if (!queryText) {
+            sendResponse({ success: false, friendlyMessage: 'Nenhum termo de navegação informado.' })
+            return
+          }
+
+          // 1. Executa exploração autônoma no DOM usando a função da Camada 2
+          const navFn = globalThis.internalNavigatePortalTab
+          let navRes = null
+          if (typeof navFn === 'function') {
+            navRes = await navFn(tabId, queryText)
+          } else {
+            navRes = await new Promise((resolve) => {
+              chrome.runtime.sendMessage({ action: 'NAVIGATE_PORTAL_TAB', target: queryText, tabId }, resolve)
+            })
+          }
+
+          if (!navRes || (!navRes.sucesso && !navRes.ok)) {
+            sendResponse({
+              success: false,
+              friendlyMessage: navRes?.mensagem || `Não encontrei abas ou links para "${queryText}" nesta página do portal.`,
+            })
+            return
+          }
+
+          // 2. Aguarda estabilização e verifica se houve mudança de URL
+          await new Promise((r) => setTimeout(r, 800))
+          let destUrl = startUrl
+          let destPath = startPath
+          try {
+            const tabAfter = await chrome.tabs.get(tabId)
+            if (tabAfter?.url) {
+              destUrl = tabAfter.url
+              destPath = new URL(destUrl).pathname
+            }
+          } catch {}
+
+          const cleanName = (navRes.elementText || queryText).trim()
+          const slug = cleanName
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/[^a-z0-9]+/g, '_')
+            .replace(/^_+|_+$/g, '') || 'nav'
+          const taskId = 'custom:nav_' + slug.slice(0, 30)
+
+          // 3. Monta trace conforme TraceSchema (v1.0)
+          const isUrlNavigation = destUrl !== startUrl && !destUrl.includes('#')
+          const trace = {
+            trace_version: '1.0',
+            task_id: taskId,
+            started_at: Date.now(),
+            ended_at: Date.now(),
+            initial_url: startUrl,
+            page_digest: {
+              host,
+              path: startPath,
+              headings: [],
+              table_headers: [],
+              form_labels: [],
+              counts: {},
+              landmarks: [],
+            },
+            steps: isUrlNavigation
+              ? [
+                  {
+                    id: 's1',
+                    at: Date.now(),
+                    frame_path: '/',
+                    host,
+                    path: destPath,
+                    kind: 'navigate',
+                    url: destUrl,
+                  },
+                ]
+              : [
+                  {
+                    id: 's1',
+                    at: Date.now(),
+                    frame_path: '/',
+                    host,
+                    path: startPath,
+                    kind: 'click',
+                    descriptor: {
+                      tag: (navRes.tag || 'a').toLowerCase(),
+                      text: cleanName,
+                      classes: [],
+                      candidates: [
+                        { strategy: 'text', text: cleanName },
+                      ],
+                    },
+                  },
+                ],
+          }
+
+          // 4. Compilação e salvamento automático como SkillGraph v2
+          const bundle = globalThis.SkillGraphBundle?.SkillGraphV2
+          let savedGraph = null
+          if (bundle && typeof bundle.compile === 'function') {
+            try {
+              const decisions = {
+                task_id: taskId,
+                name: `Acessar ${cleanName}`,
+                description: `Navega autonomamente para a aba ou página ${cleanName}`,
+                allowed_hosts: [host],
+              }
+              const compileResult = bundle.compile(trace, decisions)
+              if (compileResult?.graph) {
+                savedGraph = compileResult.graph
+                const NativeClientClass = bundle.NativeClient || globalThis.NativeClient
+                const nativeClient = NativeClientClass ? new NativeClientClass({ hostName: 'com.teacherai.desktop' }) : null
+                if (nativeClient) {
+                  await nativeClient.send('graphs.save', { graph: savedGraph, activate: true })
+                }
+              }
+            } catch (compileErr) {
+              console.warn('[SkillGraph Orchestrator] Falha ao auto-compilar skill de navegação:', compileErr)
+            }
+          }
+
+          sendResponse({
+            success: true,
+            learned: true,
+            taskId,
+            graph: savedGraph,
+            friendlyMessage: `Achei e acessei "${cleanName}"! ✨ Aprendi este trajeto para próximas execuções instantâneas.`,
+          })
+        } catch (err) {
+          sendResponse({
+            success: false,
+            friendlyMessage: `Erro durante a navegação autônoma: ${err.message || String(err)}`,
+          })
+        }
+      })()
+      return true
+    }
+
     if (message.action === 'SKILLGRAPH_RUN') {
       executeGraph(message.payload || {}, sendResponse)
       return true

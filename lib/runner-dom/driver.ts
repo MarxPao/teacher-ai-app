@@ -216,6 +216,20 @@ export class DomDriver implements Driver {
     return [{ frameId: 0, url: this.doc.location?.href || '', host: this.doc.location?.hostname || '' }]
   }
 
+  public async navigate(url: string): Promise<void> {
+    this.hostGuard()
+    if (this.doc.location) {
+      try {
+        this.doc.location.href = url
+      } catch {}
+    }
+  }
+
+  public async waitForNavigation(_timeoutMs = 10000): Promise<void> {
+    this.hostGuard()
+    return Promise.resolve()
+  }
+
   public async download(options: DownloadOptions) {
     this.hostGuard()
     const el = this.resolveTargetElement({ anchor: options.trigger })

@@ -161,6 +161,8 @@ export interface Driver {
   getFrameContext(): Promise<{ url: string; host: string; frameId: number }>
   matchFingerprint(fp: Fingerprint): Promise<{ matched: boolean; details: Record<string, boolean> }>
   listFrames(): Promise<Array<{ frameId: number; url: string; host: string }>>
+  navigate?(url: string): Promise<void>
+  waitForNavigation?(timeoutMs?: number): Promise<void>
   download?(options: DownloadOptions): Promise<{ success: boolean; filename: string; mimeType?: string; sizeBytes?: number }>
   upload?(options: UploadOptions): Promise<{ success: boolean }>
   describeElements?(selector?: string): Promise<ElementDescriptor[]>

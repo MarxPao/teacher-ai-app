@@ -80,6 +80,9 @@ export class ContentAdapter {
         result = await this.driver.clearHighlight?.()
       } else if (method === 'describeElements') {
         result = await this.driver.describeElements?.(params)
+      } else if (method === 'navigate') {
+        const targetUrl = typeof params === 'string' ? params : (params?.url || '')
+        result = await this.driver.navigate?.(targetUrl)
       } else {
         result = await driverAny[method](params)
       }

@@ -22,6 +22,7 @@ export type DriverMethodName =
   | 'describeElements'
   | 'highlight'
   | 'clearHighlight'
+  | 'navigate'
 
 export interface DriverRpcRequest<M extends DriverMethodName = DriverMethodName> {
   channel: typeof SKILLGRAPH_RPC_CHANNEL
