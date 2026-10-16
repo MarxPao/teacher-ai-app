@@ -158,8 +158,13 @@ export function segmentTrace(trace: Trace, decisions: CompilerDecisions): Segmen
   }
 
   // Validação de requisitos de escrita vs leitura
-  const isWriteTask = decisions.task_id === 'lancar_falta' || decisions.task_id === 'lancar_nota' || actionSteps.length > 0 || !!submitStep
-  if (isWriteTask && actionSteps.length === 0 && !submitStep) {
+  const hasWriteAction = actionSteps.some(s => s.kind === 'input' || s.kind === 'check')
+  const isWriteTask =
+    decisions.task_id === 'lancar_falta' ||
+    decisions.task_id === 'lancar_nota' ||
+    hasWriteAction ||
+    !!submitStep
+  if (isWriteTask && !hasWriteAction && !submitStep) {
     throw new CompilerError(
       'E_NO_WRITE_STEP',
       `A tarefa de escrita "${decisions.task_id}" requer pelo menos um passo de marcação ou digitação gravado.`

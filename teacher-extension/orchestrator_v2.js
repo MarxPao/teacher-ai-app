@@ -112,8 +112,8 @@
     if (!graph && host && taskId && nativeClient) {
       try {
         const resp = await nativeClient.send('graphs.resolveActive', { host, taskId })
-        if (resp && resp.graph) {
-          graph = resp.graph
+        if (resp) {
+          graph = resp.graph || (resp.spec_version ? resp : null)
         }
       } catch (nmErr) {
         console.warn('[SkillGraph Orchestrator] Erro ao resolver grafo via Native Messaging:', nmErr)
@@ -196,7 +196,8 @@
         skillgraph_current_run: { runId, status: 'running', tabId, startedAt: Date.now() },
       })
 
-      const result = await runner.run(graph, {}, {
+      const runParams = payload.params || payload.initialVariables || {}
+      const result = await runner.run(graph, runParams, {
         initialVariables: payload.initialVariables || {},
         dryRun: Boolean(payload.dryRun),
       })
@@ -209,9 +210,12 @@
         if (Array.isArray(roster) && roster.length > 0) {
           try {
             await nativeClient.send('students.upsertFromPortal', {
-              classId: payload.classId || 'default',
+              classId: payload.classId || runParams.turma || 'default',
               students: roster,
-              source: host || portalId,
+              source: {
+                portalId: host || portalId,
+                readAt: new Date().toISOString(),
+              },
             })
           } catch (syncErr) {
             console.warn('[SkillGraph Orchestrator] Falha ao sincronizar lista com o app desktop:', syncErr)
@@ -358,6 +362,15 @@
             return
           }
 
+          // Guardrail de segurança: bloquear termos destrutivos antes de explorar
+          if (/\b(excluir|deletar|apagar|remover|demitir|formatar|pagar|transferir|cancelar matricula)\b/i.test(queryText)) {
+            sendResponse({
+              success: false,
+              friendlyMessage: 'Por segurança, o assistente não executa ações destrutivas ou financeiras durante a exploração autônoma.',
+            })
+            return
+          }
+
           // 1. Executa exploração autônoma no DOM usando a função da Camada 2
           const navFn = globalThis.internalNavigatePortalTab
           let navRes = null
@@ -377,26 +390,37 @@
             return
           }
 
-          // 2. Aguarda estabilização e verifica se houve mudança de URL
+          // 2. Aguarda estabilização e verifica se houve mudança de URL (e se permaneceu no mesmo host)
           await new Promise((r) => setTimeout(r, 800))
           let destUrl = startUrl
           let destPath = startPath
+          let destHost = host
           try {
             const tabAfter = await chrome.tabs.get(tabId)
             if (tabAfter?.url) {
               destUrl = tabAfter.url
-              destPath = new URL(destUrl).pathname
+              const parsedDest = new URL(destUrl)
+              destPath = parsedDest.pathname
+              destHost = parsedDest.host
             }
           } catch {}
+
+          if (destHost && host && destHost.toLowerCase() !== host.toLowerCase()) {
+            sendResponse({
+              success: false,
+              friendlyMessage: `A navegação saiu do domínio do portal (${host} -> ${destHost}) e não foi gravada por segurança.`,
+            })
+            return
+          }
 
           const cleanName = (navRes.elementText || queryText).trim()
           const slug = cleanName
             .toLowerCase()
             .normalize('NFD')
             .replace(/[\u0300-\u036f]/g, '')
-            .replace(/[^a-z0-9]+/g, '_')
-            .replace(/^_+|_+$/g, '') || 'nav'
-          const taskId = 'custom:nav_' + slug.slice(0, 30)
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-+|-+$/g, '') || 'nav'
+          const taskId = 'custom:nav-' + slug.slice(0, 30)
 
           // 3. Monta trace conforme TraceSchema (v1.0)
           const isUrlNavigation = destUrl !== startUrl && !destUrl.includes('#')
@@ -404,15 +428,15 @@
             trace_version: '1.0',
             task_id: taskId,
             started_at: Date.now(),
-            ended_at: Date.now(),
-            initial_url: startUrl,
+            initial_url: isUrlNavigation ? destUrl : startUrl,
             page_digest: {
               host,
-              path: startPath,
+              path: isUrlNavigation ? destPath : startPath,
+              title: cleanName,
               headings: [],
               table_headers: [],
               form_labels: [],
-              counts: {},
+              counts: { tables: 0, rows: 0 },
               landmarks: [],
             },
             steps: isUrlNavigation
@@ -440,26 +464,27 @@
                       text: cleanName,
                       classes: [],
                       candidates: [
-                        { strategy: 'text', text: cleanName },
+                        { strategy: 'text', text: cleanName, match: 'normalized' },
                       ],
                     },
                   },
                 ],
           }
 
-          // 4. Compilação e salvamento automático como SkillGraph v2
+          // 4. Compilação e salvamento automático como SkillGraph v2 (somente leitura/navegação)
           const bundle = globalThis.SkillGraphBundle?.SkillGraphV2
           let savedGraph = null
           if (bundle && typeof bundle.compile === 'function') {
             try {
               const decisions = {
                 task_id: taskId,
-                name: `Acessar ${cleanName}`,
-                description: `Navega autonomamente para a aba ou página ${cleanName}`,
+                portal_id: host.replace(/[^a-zA-Z0-9._-]/g, '_'),
+                task_name: `Acessar ${cleanName}`,
+                task_description: `Navega autonomamente para a aba ou página ${cleanName}`,
                 allowed_hosts: [host],
               }
               const compileResult = bundle.compile(trace, decisions)
-              if (compileResult?.graph) {
+              if (compileResult?.graph && compileResult.graph.safety?.side_effect_level === 'read') {
                 savedGraph = compileResult.graph
                 const NativeClientClass = bundle.NativeClient || globalThis.NativeClient
                 const nativeClient = NativeClientClass ? new NativeClientClass({ hostName: 'com.teacherai.desktop' }) : null

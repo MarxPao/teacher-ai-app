@@ -939,6 +939,10 @@ async function internalNavigatePortalTab(targetTabId, targetKeyword) {
       args: [keyword],
       func: async (kw) => {
         const cleanKey = kw.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        const destructivePattern = /\b(excluir|deletar|apagar|remover|demitir|formatar|pagar|transferir|salvar|gravar|enviar|publicar|confirmar lancamento)\b/i;
+        if (destructivePattern.test(cleanKey)) {
+          return { sucesso: false, mensagem: `Ação bloqueada por segurança durante navegação autônoma: '${kw}'.` };
+        }
         const candidates = Array.from(document.querySelectorAll('a, button, [role="tab"], [role="menuitem"], [role="button"], .tab, .tab-btn, .nav-link, li, span'));
         
         let bestElement = null;
@@ -946,12 +950,17 @@ async function internalNavigatePortalTab(targetTabId, targetKeyword) {
 
         for (const el of candidates) {
           if (el.offsetParent === null && el.offsetWidth === 0 && el.offsetHeight === 0) continue;
+          if (el.tagName === 'INPUT' && el.type === 'submit') continue;
           
           const text = (el.innerText || el.textContent || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
           const aria = (el.getAttribute('aria-label') || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
           const title = (el.getAttribute('title') || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
           const href = (el.getAttribute('href') || '').toLowerCase();
           const id = (el.id || '').toLowerCase();
+
+          if (destructivePattern.test(text) || destructivePattern.test(aria) || destructivePattern.test(title)) {
+            continue;
+          }
 
           let score = 0;
           if (text === cleanKey) score = 100;

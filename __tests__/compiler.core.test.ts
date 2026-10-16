@@ -297,4 +297,55 @@ describe('Compiler Core v2 — Determinístico e Anti-PII', () => {
     expect(writeNode.semantic).toBe('text')
     expect(writeNode.value).toEqual({ param: 'texto' })
   })
+
+  it('12. Compila trace de navegação pura (cliques de menu sem escrita) como side_effect_level: read com nós NAVIGATE + CLICK', () => {
+    const trace: Trace = {
+      trace_version: '1.0',
+      task_id: 'custom:nav-boletim',
+      started_at: 1775865600000,
+      initial_url: 'http://portal.escola.com/painel',
+      page_digest: {
+        host: 'portal.escola.com',
+        path: '/painel',
+        title: 'Boletim',
+        headings: [],
+        table_headers: [],
+        form_labels: [],
+        counts: { tables: 0, rows: 0 },
+        landmarks: [],
+      },
+      steps: [
+        {
+          id: 's1',
+          at: 1775865600100,
+          frame_path: '/',
+          host: 'portal.escola.com',
+          path: '/painel',
+          kind: 'click',
+          descriptor: {
+            tag: 'a',
+            text: 'Boletim Escolar',
+            classes: [],
+            candidates: [{ strategy: 'text', text: 'Boletim Escolar', match: 'normalized' }],
+          },
+        },
+      ],
+    }
+
+    const decisions: CompilerDecisions = {
+      task_id: 'custom:nav-boletim',
+      portal_id: 'portal_escola',
+      task_name: 'Acessar Boletim Escolar',
+      task_description: 'Navega para a aba Boletim Escolar',
+      allowed_hosts: ['portal.escola.com'],
+    }
+
+    const { graph, report } = compile(trace, decisions, { clock: FIXED_CLOCK })
+    expect(report.valid).toBe(true)
+    expect(graph.safety.side_effect_level).toBe('read')
+    expect(graph.nodes.n1.type).toBe('NAVIGATE')
+    expect(graph.nodes.n2.type).toBe('CLICK')
+    expect((graph.nodes.n2 as any).expect_navigation).toBe(true)
+    expect(validateGraph(graph).valid).toBe(true)
+  })
 })

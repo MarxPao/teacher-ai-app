@@ -1199,5 +1199,101 @@ describe('Fase 4: Capacidades do Engine por Arquétipo (T4.4)', () => {
       expect(driver.navigationHistory).toEqual(['https://localhost:8899/portal/notas'])
       expect(driver.currentUrl).toBe('https://localhost:8899/portal/notas')
     })
+
+    it('8. [NAVIGATE] Bloqueia URL absoluta apontando para host fora de allowed_hosts antes de navegar', async () => {
+      const driver = new FakeDriver()
+      const host = new FakeHost()
+      const runner = new SkillGraphRunner(driver, host)
+
+      const graph = createBaseGraph({
+        entry_node: 'nav_evil',
+        nodes: {
+          nav_evil: {
+            label: 'Navega para host malicioso',
+            type: 'NAVIGATE',
+            path: 'https://evil-phishing.com/roubar-sessao',
+            retry: { max_attempts: 1, backoff_ms: 0 },
+            timeout_ms: 5000,
+            postconditions: [],
+            on_success: '$end',
+            on_fail: '$abort',
+          },
+        },
+      })
+
+      const { success, error } = await runner.run(graph, {})
+      expect(success).toBe(false)
+      expect(error?.code).toBe('E_HOST_NOT_ALLOWED')
+      expect(driver.navigationHistory).toHaveLength(0)
+    })
+
+    it('9. [CLICK] Com expect_navigation: true aguarda driver.waitForNavigation antes de prosseguir', async () => {
+      const driver = new FakeDriver()
+      const host = new FakeHost()
+      const runner = new SkillGraphRunner(driver, host)
+      let waitedForNav = false
+      ;(driver as any).waitForNavigation = async () => {
+        waitedForNav = true
+      }
+
+      const graph = createBaseGraph({
+        entry_node: 'click_nav',
+        nodes: {
+          click_nav: {
+            label: 'Clicar em link com navegação',
+            type: 'CLICK',
+            anchor: { candidates: [{ strategy: 'css', selector: '#link-diario' }], description: 'Diário' },
+            is_submit_action: false,
+            expect_navigation: true,
+            retry: { max_attempts: 1, backoff_ms: 0 },
+            timeout_ms: 5000,
+            postconditions: [],
+            on_success: '$end',
+            on_fail: '$abort',
+          },
+        },
+      })
+
+      const { success } = await runner.run(graph, {})
+      expect(success).toBe(true)
+      expect(waitedForNav).toBe(true)
+    })
+
+    it('10. [LOCATE] Com mode: paginate_until_found avança páginas até encontrar a âncora', async () => {
+      const driver = new FakeDriver()
+      const host = new FakeHost()
+      const runner = new SkillGraphRunner(driver, host)
+      let page = 1
+      driver.locateAnchor = async () => {
+        if (page < 3) return { matchCount: 0, matchedCandidateIndex: -1 }
+        return { matchCount: 1, matchedCandidateIndex: 0, handleId: 'h-found' }
+      }
+      driver.paginate = async () => {
+        page++
+        return { advanced: true, isLastPage: page >= 5 }
+      }
+
+      const graph = createBaseGraph({
+        entry_node: 'loc_pag',
+        nodes: {
+          loc_pag: {
+            label: 'Localizar aluno na página 3',
+            type: 'LOCATE',
+            anchor: { candidates: [{ strategy: 'css', selector: '#aluno-p3' }], description: 'Aluno Página 3' },
+            mode: 'paginate_until_found',
+            retry: { max_attempts: 1, backoff_ms: 0 },
+            timeout_ms: 5000,
+            postconditions: [],
+            on_success: '$end',
+            on_fail: '$abort',
+          },
+        },
+      })
+
+      const { success } = await runner.run(graph, {})
+      expect(success).toBe(true)
+      expect(page).toBe(3)
+      expect(host.events.some(e => e.type === 'node_completed' && e.nodeId === 'loc_pag')).toBe(true)
+    })
   })
 })

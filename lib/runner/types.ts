@@ -123,7 +123,9 @@ export interface ScrollOptions {
 }
 
 export interface PaginateOptions {
-  action: 'next_page' | 'page_number'
+  action?: 'next_page' | 'page_number'
+  mode?: 'next_button' | 'page_numbers' | 'infinite_scroll' | 'virtual_scroll'
+  maxPages?: number
   targetPage?: number
   buttonTarget?: ElementTarget
 }

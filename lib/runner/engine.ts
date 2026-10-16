@@ -58,7 +58,10 @@ export class SkillGraphRunner {
     if (graph.entry_fingerprint) {
       const fpMatch = await this.driver.matchFingerprint(graph.entry_fingerprint)
       if (!fpMatch.matched) {
-        throw new RunnerError('E_FINGERPRINT_MISMATCH', 'Fingerprint de entrada divergiu do portal atual')
+        const entryNode = graph.nodes[graph.entry_node]
+        if (!entryNode || entryNode.type !== 'NAVIGATE') {
+          throw new RunnerError('E_FINGERPRINT_MISMATCH', 'Fingerprint de entrada divergiu do portal atual')
+        }
       }
     }
 
@@ -150,9 +153,11 @@ export class SkillGraphRunner {
               }
             }
             const isFatal = lastError ? FATAL_RUNTIME_ERRORS.has(lastError.code) : false
-            if (isFatal || err?.code === 'E_READBACK_MISMATCH' || attempt >= retryAttempts) {
+            // WRITE nunca é repetido em caso de timeout de RPC pós-envio para evitar escrita duplicada em reload
+            const isNonIdempotentWriteFailure = node.type === 'WRITE' && lastError?.code === 'E_TIMEOUT'
+            if (isFatal || isNonIdempotentWriteFailure || err?.code === 'E_READBACK_MISMATCH' || attempt >= retryAttempts) {
               const fallbackFail = 'on_fail' in node ? (node as any).on_fail : undefined
-              if (fallbackFail && err?.code !== 'E_READBACK_MISMATCH' && !isFatal) {
+              if (fallbackFail && err?.code !== 'E_READBACK_MISMATCH' && !isFatal && !isNonIdempotentWriteFailure) {
                 nextNodeId = fallbackFail
                 break
               }

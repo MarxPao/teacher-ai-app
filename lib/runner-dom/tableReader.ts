@@ -15,6 +15,11 @@ export function parseTableHeaders(table: Element): string[] {
   const headerRows = theadRows.length > 0 ? theadRows : Array.from(table.querySelectorAll('tr')).filter(r => r.querySelector('th'))
 
   if (headerRows.length === 0) {
+    // Suporte a ARIA grid / role="table" (Stagehand / Agent-E pattern)
+    const ariaHeaders = Array.from(table.querySelectorAll('[role="columnheader"]'))
+    if (ariaHeaders.length > 0) {
+      return ariaHeaders.map((h, i) => (h as HTMLElement).innerText?.trim() || h.textContent?.trim() || `Coluna ${i + 1}`)
+    }
     // Fallback: se não houver thead ou th, inspeciona a primeira tr
     const firstTr = table.querySelector('tr')
     if (firstTr) {
@@ -66,30 +71,73 @@ export function readHtmlTable(tableEl: Element, options: ReadTableOptions): Pars
   const headers = parseTableHeaders(tableEl)
   const rows: Array<Record<string, string>> = []
   const rawCells: string[][] = []
+  const tag = tableEl.tagName.toLowerCase()
 
-  // Coleta linhas de dados
+  // 1. Suporte a listas HTML (<ul>, <ol>, [role="list"])
+  if (tag === 'ul' || tag === 'ol' || tableEl.getAttribute('role') === 'list') {
+    const items = Array.from(tableEl.querySelectorAll(':scope > li, [role="listitem"], li'))
+    for (const item of items) {
+      const text = (item as HTMLElement).innerText?.trim() || item.textContent?.trim() || ''
+      if (!text && options.skip_empty_rows !== false) continue
+      const input = item.querySelector('input, select, textarea') as HTMLInputElement | HTMLSelectElement | null
+      const record: Record<string, string> = {
+        'Nome do Aluno': text,
+        'Item': text,
+      }
+      if (input) {
+        record['Valor'] = (input as HTMLInputElement).type === 'checkbox'
+          ? ((input as HTMLInputElement).checked ? 'true' : 'false')
+          : (input.value || '')
+      }
+      if (!shouldSkipRow(record, options.skip_rows, options.skip_empty_rows)) {
+        rows.push(record)
+        rawCells.push([text])
+      }
+    }
+    return { headers: ['Nome do Aluno', 'Item'], rows, rawCells }
+  }
+
+  // 2. Coleta linhas de dados de <table> ou ARIA grid
   let trs = Array.from(tableEl.querySelectorAll('tbody tr'))
   if (trs.length === 0) {
     trs = Array.from(tableEl.querySelectorAll('tr')).filter(r => !r.querySelector('th'))
   }
+  if (trs.length === 0) {
+    trs = Array.from(tableEl.querySelectorAll('[role="row"]')).filter(r => !r.querySelector('[role="columnheader"]'))
+  }
 
-  // Suporte a cards em layout div/grid (ex: .cards-container .aluno-box)
-  if (trs.length === 0 && tableEl.classList.contains('cards-container')) {
-    const cards = Array.from(tableEl.querySelectorAll('.aluno-box, .student-card, [role="row"]'))
-    for (const card of cards) {
-      const record: Record<string, string> = {}
-      const title = card.querySelector('.student-title, h3, h4')?.textContent?.trim() || ''
-      const input = card.querySelector('input, select') as HTMLInputElement | HTMLSelectElement | null
-
-      record['Nome do Aluno'] = title
-      record['Nota'] = input?.value || ''
-      rows.push(record)
+  // 3. Suporte universal a cards/grids em layout div (Skyvern / Agent-E sibling card detection)
+  if (trs.length === 0) {
+    let cards = Array.from(tableEl.querySelectorAll('.aluno-box, .student-card, [role="row"], [class*="student-card"], [class*="aluno-card"], [class*="card-item"]'))
+    if (cards.length === 0 && tableEl.children.length > 0) {
+      // Detecta elementos irmãos repetitivos no container
+      cards = Array.from(tableEl.children).filter(
+        c => !['script', 'style', 'template', 'thead'].includes(c.tagName.toLowerCase())
+      )
     }
-    return { headers: ['Nome do Aluno', 'Nota'], rows, rawCells: [] }
+    if (cards.length > 0) {
+      for (const card of cards) {
+        const record: Record<string, string> = {}
+        const titleEl = card.querySelector('.student-title, [class*="name"], [class*="nome"], h2, h3, h4, h5, strong')
+        const title = titleEl?.textContent?.trim() || (card as HTMLElement).innerText?.split('\n')[0]?.trim() || ''
+        const input = card.querySelector('input, select, textarea') as HTMLInputElement | HTMLSelectElement | null
+        const val = input
+          ? ((input as HTMLInputElement).type === 'checkbox' ? ((input as HTMLInputElement).checked ? 'true' : 'false') : (input.value || ''))
+          : ''
+
+        record['Nome do Aluno'] = title
+        record['Nota'] = val
+        if (!shouldSkipRow(record, options.skip_rows, options.skip_empty_rows)) {
+          rows.push(record)
+          rawCells.push([title, val])
+        }
+      }
+      return { headers: ['Nome do Aluno', 'Nota'], rows, rawCells }
+    }
   }
 
   for (const tr of trs) {
-    const cells = Array.from(tr.querySelectorAll('td, th'))
+    const cells = Array.from(tr.querySelectorAll('td, th, [role="gridcell"], [role="cell"], [role="rowheader"]'))
     if (cells.length === 0) continue
 
     const rowObj: Record<string, string> = {}

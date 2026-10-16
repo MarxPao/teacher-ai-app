@@ -47,6 +47,15 @@ export async function executeNavigateNode(
   // 3. Executa navegação real no driver (DOM ou Chrome Tabs)
   if (typeof driver.navigate === 'function') {
     const isAbsolute = fullTarget.startsWith('http://') || fullTarget.startsWith('https://')
+    if (isAbsolute) {
+      try {
+        const parsedUrl = new URL(fullTarget)
+        checkAllowedHost(parsedUrl.host || parsedUrl.hostname, allowedHosts, nodeId)
+      } catch (err) {
+        if (err instanceof RunnerError) throw err
+        throw new RunnerError('E_HOST_NOT_ALLOWED', `URL absoluta inválida em NAVIGATE: ${fullTarget}`, nodeId)
+      }
+    }
     const finalUrl = isAbsolute ? fullTarget : (targetHost ? `https://${targetHost}${fullTarget}` : fullTarget)
     await driver.navigate(finalUrl)
   }
@@ -100,6 +109,30 @@ export async function executeLocateNode(
         data: { anchor: resolvedAnchor.description, mode: node.mode },
       })
       throw new RunnerError('E_ANCHOR_NOT_FOUND', `Elemento '${resolvedAnchor.description}' não localizado após scroll`, nodeId)
+    }
+  } else if (node.mode === 'paginate_until_found') {
+    let found = false
+    const maxPages = 20
+    for (let page = 1; page <= maxPages; page++) {
+      const locateRes = await driver.locateAnchor(resolvedAnchor)
+      if (locateRes.matchCount > 0) {
+        found = true
+        break
+      }
+      const pagRes = await driver.paginate({ mode: 'next_button', maxPages })
+      if (!pagRes.advanced || pagRes.isLastPage) {
+        break
+      }
+    }
+    if (!found) {
+      host.emit({
+        type: 'repair_requested',
+        runId: state.runId,
+        nodeId,
+        timestamp: host.now(),
+        data: { anchor: resolvedAnchor.description, mode: node.mode },
+      })
+      throw new RunnerError('E_ANCHOR_NOT_FOUND', `Elemento '${resolvedAnchor.description}' não localizado após paginação`, nodeId)
     }
   } else {
     const locateRes = await driver.locateAnchor(resolvedAnchor)

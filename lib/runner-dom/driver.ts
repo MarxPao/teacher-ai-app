@@ -76,13 +76,15 @@ export class DomDriver implements Driver {
       return { matchedIndex: -1, totalCandidates: 0, ambiguous: false }
     }
 
-    const trs = Array.from(tableEl.querySelectorAll('tbody tr, tr')).filter(r => !r.querySelector('th'))
+    const trs = Array.from(tableEl.querySelectorAll('tbody tr, tr, [role="row"]')).filter(
+      r => !r.querySelector('th, [role="columnheader"]')
+    )
     const matchingRows: Element[] = []
 
     for (const tr of trs) {
-      const cells = Array.from(tr.querySelectorAll('td, th'))
+      const cells = Array.from(tr.querySelectorAll('td, th, [role="gridcell"], [role="cell"]'))
       if (cells[keyIndex]) {
-        const txt = (cells[keyIndex] as HTMLElement).innerText?.trim() || ''
+        const txt = (cells[keyIndex] as HTMLElement).innerText?.trim() || cells[keyIndex].textContent?.trim() || ''
         if (matchText(txt, String(scope.key.equals), scope.key.match)) {
           matchingRows.push(tr)
         }
@@ -94,8 +96,8 @@ export class DomDriver implements Driver {
       const secIndex = findHeaderMatch(headers, secKey.column_labels, secKey.match)
       if (secIndex >= 0) {
         const filtered = matchingRows.filter(tr => {
-          const cells = Array.from(tr.querySelectorAll('td, th'))
-          const val = (cells[secIndex] as HTMLElement)?.innerText?.trim() || ''
+          const cells = Array.from(tr.querySelectorAll('td, th, [role="gridcell"], [role="cell"]'))
+          const val = (cells[secIndex] as HTMLElement)?.innerText?.trim() || cells[secIndex]?.textContent?.trim() || ''
           return matchText(val, String(secKey.equals), secKey.match)
         })
         if (filtered.length === 1) {
@@ -120,7 +122,52 @@ export class DomDriver implements Driver {
   public async readTable(options: ReadTableOptions) {
     this.hostGuard()
     const tableEl = this.resolveTargetElement({ anchor: options.anchor })
-    return readHtmlTable(tableEl, options)
+    const firstPage = readHtmlTable(tableEl, options)
+
+    const paginateCfg = (options as any).paginate
+    if (!paginateCfg) {
+      return firstPage
+    }
+
+    const maxPages = paginateCfg.maxPages ?? paginateCfg.max_pages ?? 10
+    const mode = paginateCfg.mode || 'next_button'
+    const allRows = [...firstPage.rows]
+    const allRawCells = [...(firstPage.rawCells || [])]
+    const seenRowKeys = new Set(allRows.map(r => JSON.stringify(r)))
+
+    for (let page = 1; page < maxPages; page++) {
+      const pagRes = await this.paginate({
+        action: 'next_page',
+        mode,
+        maxPages,
+        buttonTarget: paginateCfg.next_button ? { anchor: paginateCfg.next_button } : paginateCfg.buttonTarget,
+      })
+      if (!pagRes.advanced || pagRes.isLastPage) break
+
+      let currentTableEl: Element = tableEl
+      try {
+        currentTableEl = this.resolveTargetElement({ anchor: options.anchor })
+      } catch {
+        break
+      }
+      const nextRes = readHtmlTable(currentTableEl, options)
+      let added = 0
+      for (let i = 0; i < nextRes.rows.length; i++) {
+        const row = nextRes.rows[i]
+        const key = JSON.stringify(row)
+        if (!seenRowKeys.has(key)) {
+          seenRowKeys.add(key)
+          allRows.push(row)
+          if (nextRes.rawCells?.[i]) {
+            allRawCells.push(nextRes.rawCells[i])
+          }
+          added++
+        }
+      }
+      if (added === 0) break
+    }
+
+    return { headers: firstPage.headers, rows: allRows, rawCells: allRawCells }
   }
 
   public async readText(target: ElementTarget) {
@@ -154,20 +201,61 @@ export class DomDriver implements Driver {
     return evaluateDomCondition(cond, this.doc)
   }
 
+  private findScrollableContainer(): Element {
+    const candidates = Array.from(
+      this.doc.querySelectorAll('main, [role="main"], .table-responsive, .scroll-container, .content, div, section')
+    )
+    let best: Element | null = null
+    let bestOverflow = 0
+    for (const el of candidates) {
+      const sh = (el as HTMLElement).scrollHeight || 0
+      const ch = (el as HTMLElement).clientHeight || 0
+      if (sh > ch + 20 && sh - ch > bestOverflow) {
+        best = el
+        bestOverflow = sh - ch
+      }
+    }
+    return best || this.doc.scrollingElement || this.doc.documentElement || this.doc.body
+  }
+
   public async scroll(options: ScrollOptions) {
     this.hostGuard()
     if (options.mode === 'scroll_until_found' && options.target) {
-      try {
-        const el = this.resolveTargetElement(options.target)
-        ;(el as HTMLElement).scrollIntoView({ behavior: 'instant' as any, block: 'center' })
-        return { found: true }
-      } catch {
-        return { found: false }
+      const container = options.container
+        ? (() => {
+            try {
+              return this.resolveTargetElement(options.container)
+            } catch {
+              return this.findScrollableContainer()
+            }
+          })()
+        : this.findScrollableContainer()
+
+      const maxDist = options.maxDistancePx || 3000
+      const stepPx = 400
+      let scrolled = 0
+
+      while (scrolled <= maxDist) {
+        try {
+          const el = this.resolveTargetElement(options.target)
+          if (typeof (el as HTMLElement).scrollIntoView === 'function') {
+            ;(el as HTMLElement).scrollIntoView({ behavior: 'instant' as any, block: 'center' })
+          }
+          return { found: true }
+        } catch {
+          if (scrolled >= maxDist) break
+          if (container) {
+            container.scrollTop += stepPx
+            container.dispatchEvent(new Event('scroll', { bubbles: true }))
+          }
+          scrolled += stepPx
+        }
       }
+      return { found: false }
     }
     if (options.mode === 'virtual_scroll') {
-      const container = options.container ? this.resolveTargetElement(options.container) : this.doc.documentElement
-      container.scrollTop += (options.maxDistancePx || 150)
+      const container = options.container ? this.resolveTargetElement(options.container) : this.findScrollableContainer()
+      container.scrollTop += options.maxDistancePx || 150
       container.dispatchEvent(new Event('scroll', { bubbles: true }))
       return { found: true }
     }
@@ -176,19 +264,49 @@ export class DomDriver implements Driver {
 
   public async paginate(options: PaginateOptions) {
     this.hostGuard()
+    if (options.mode === 'infinite_scroll' || options.mode === 'virtual_scroll') {
+      const container = this.findScrollableContainer()
+      const prevTop = container.scrollTop
+      container.scrollTop += 600
+      container.dispatchEvent(new Event('scroll', { bubbles: true }))
+      const advanced = container.scrollTop !== prevTop || true
+      return { advanced, isLastPage: false }
+    }
+
     if (options.buttonTarget) {
       const btn = this.resolveTargetElement(options.buttonTarget)
-      const isDisabled = btn.hasAttribute('disabled') || (btn as HTMLButtonElement).disabled
+      const isDisabled =
+        btn.hasAttribute('disabled') ||
+        (btn as HTMLButtonElement).disabled ||
+        btn.getAttribute('aria-disabled') === 'true' ||
+        btn.classList.contains('disabled')
       if (isDisabled) return { advanced: false, isLastPage: true }
       ;(btn as HTMLElement).click()
       return { advanced: true, isLastPage: false }
     }
 
-    const defaultNextBtn = this.doc.querySelector('.btn-proxima-pagina, button.next-page, button:has-text("Próxima")')
-    if (defaultNextBtn) {
-      const isDisabled = defaultNextBtn.hasAttribute('disabled') || (defaultNextBtn as HTMLButtonElement).disabled
+    let nextBtn = this.doc.querySelector(
+      '.btn-proxima-pagina, button.next-page, a.next-page, a[rel="next"], .pagination-next, [aria-label*="Próxima" i], [aria-label*="Next" i]'
+    )
+
+    if (!nextBtn) {
+      const clickables = Array.from(this.doc.querySelectorAll('button, a, [role="button"], li.page-item a'))
+      nextBtn =
+        clickables.find(el => {
+          const txt = ((el as HTMLElement).innerText || el.textContent || '').trim()
+          return /^(pr[oó]xim[ao]|next|›|»|avancar|avançar)$/i.test(txt)
+        }) || null
+    }
+
+    if (nextBtn) {
+      const isDisabled =
+        nextBtn.hasAttribute('disabled') ||
+        (nextBtn as HTMLButtonElement).disabled ||
+        nextBtn.getAttribute('aria-disabled') === 'true' ||
+        nextBtn.classList.contains('disabled') ||
+        nextBtn.parentElement?.classList.contains('disabled')
       if (isDisabled) return { advanced: false, isLastPage: true }
-      ;(defaultNextBtn as HTMLElement).click()
+      ;(nextBtn as HTMLElement).click()
       return { advanced: true, isLastPage: false }
     }
 
@@ -207,7 +325,8 @@ export class DomDriver implements Driver {
   public async matchFingerprint(fp: Fingerprint) {
     this.hostGuard()
     const path = this.doc.location?.pathname || '/'
-    const pathMatched = new RegExp(fp.route.path_pattern).test(path)
+    const patternStr = fp.route.path_pattern.replace(/(^|[^.])\*/g, '$1.*')
+    const pathMatched = new RegExp(patternStr).test(path)
     return { matched: pathMatched, details: { path: pathMatched } }
   }
 

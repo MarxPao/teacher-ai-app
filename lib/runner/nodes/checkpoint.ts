@@ -35,19 +35,26 @@ export async function executeCheckpointNode(
     data: { summary, scope: node.scope },
   })
 
-  const approved = await host.confirm({
+  const cpPayload: any = {
     nodeId,
     label: node.label,
     summary,
     scope: node.scope,
-  })
+  }
+
+  const approved = await host.confirm(cpPayload)
+
+  if (approved && cpPayload.updatedText !== undefined) {
+    params.texto = cpPayload.updatedText
+    state.variables.texto = cpPayload.updatedText
+  }
 
   host.emit({
     type: 'checkpoint_resolved',
     runId: state.runId,
     nodeId,
     timestamp: host.now(),
-    data: { approved },
+    data: { approved, updatedText: cpPayload.updatedText },
   })
 
   if (!approved) {

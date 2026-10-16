@@ -49,12 +49,16 @@ export async function executeClickNode(
 
   await driver.click({ anchor: resolvedAnchor }, { isSubmit: node.is_submit_action })
 
+  if (node.expect_navigation && typeof driver.waitForNavigation === 'function') {
+    await driver.waitForNavigation(node.timeout_ms ?? 10000)
+  }
+
   host.emit({
     type: 'node_completed',
     runId: state.runId,
     nodeId,
     timestamp: host.now(),
-    data: { clicked: true, isSubmit: node.is_submit_action },
+    data: { clicked: true, isSubmit: node.is_submit_action, expectedNavigation: Boolean(node.expect_navigation) },
   })
 
   return node.on_success

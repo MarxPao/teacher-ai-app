@@ -582,6 +582,38 @@ describe('Desktop Core — Teste de Fronteira (Fase 6)', () => {
         gateway.generateSafeText('Plano de aula com CPF do orientador: 123.456.789-00')
       ).rejects.toThrowError(/CPF/)
     })
+
+    it('(5) suporta params em Record<string, GraphParam>, autocorreção de nota, data relativa e bloqueio de negação', async () => {
+      const gateway = new LlmGateway({ consentRepo: {} as any, vault: {} as any })
+      const catalog = [
+        {
+          id: 'lancar_nota',
+          name: 'Lançar Nota',
+          params: {
+            student_ref: { type: 'string', required: true },
+            grade_value: { type: 'number', required: true },
+            data: { type: 'date', required: false },
+          },
+        },
+      ]
+      const resCorrected = await gateway.parseIntent(
+        'Lançar nota 6,0 para Mariana Lima de ontem, na verdade 7,5',
+        [{ name: 'Mariana Lima' }],
+        catalog
+      )
+      expect(resCorrected.no_match).toBe(false)
+      expect(resCorrected.skill_id).toBe('lancar_nota')
+      expect(resCorrected.params.student_ref).toBe('Mariana Lima')
+      expect(resCorrected.params.grade_value).toBe(7.5)
+      expect(resCorrected.params.data).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+
+      const resNegated = await gateway.parseIntent(
+        'Não lance nota 7,5 para Mariana Lima',
+        [{ name: 'Mariana Lima' }],
+        catalog
+      )
+      expect(resNegated.no_match).toBe(true)
+    })
   })
 })
 

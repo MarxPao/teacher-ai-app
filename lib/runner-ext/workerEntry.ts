@@ -87,6 +87,7 @@ export function createExtensionHost(options: ExtensionHostOptions): ExtensionHos
   }) : null
 
   const pendingCheckpoints = new Map<string, {
+    cp: CheckpointPayload & { updatedText?: string }
     resolve: (approved: boolean) => void
     reject: (err: any) => void
     timer: any
@@ -126,11 +127,14 @@ export function createExtensionHost(options: ExtensionHostOptions): ExtensionHos
       messageListener = (message: any) => {
         if (!message) return
         if (message.action === 'SKILLGRAPH_CHECKPOINT_RESPONSE' || message.type === 'SKILLGRAPH_CHECKPOINT_RESPONSE') {
-          const { requestId, approved } = message
+          const { requestId, approved, updatedText } = message
           if (requestId && pendingCheckpoints.has(requestId)) {
             const entry = pendingCheckpoints.get(requestId)!
             pendingCheckpoints.delete(requestId)
             clearTimeout(entry.timer)
+            if (updatedText !== undefined) {
+              entry.cp.updatedText = String(updatedText)
+            }
             entry.resolve(Boolean(approved))
           }
         } else if (message.action === 'SKILLGRAPH_HANDOFF_RESPONSE' || message.type === 'SKILLGRAPH_HANDOFF_RESPONSE') {
@@ -180,7 +184,7 @@ export function createExtensionHost(options: ExtensionHostOptions): ExtensionHos
             resolve(false)
           }, timeoutMs)
 
-          pendingCheckpoints.set(requestId, { resolve, reject, timer })
+          pendingCheckpoints.set(requestId, { cp, resolve, reject, timer })
         })
       }
 

@@ -220,6 +220,22 @@
     // 5. Catálogo dinâmico e Execução (Runner)
     let activeSkills = []
 
+    function getSkillId(s) {
+      return s?.identity?.task_id || s?.task_id || ''
+    }
+
+    function normalizeParamsList(rawParams) {
+      if (!rawParams) return []
+      if (Array.isArray(rawParams)) return rawParams
+      if (typeof rawParams === 'object') {
+        return Object.entries(rawParams).map(([name, def]) => ({
+          name,
+          ...(typeof def === 'object' && def !== null ? def : {}),
+        }))
+      }
+      return []
+    }
+
     function renderParamsForm(skill) {
       const descEl = document.getElementById('sgv2-skill-desc')
       const formEl = document.getElementById('sgv2-params-form')
@@ -230,7 +246,7 @@
         descEl.style.display = skill?.identity?.description ? 'block' : 'none'
       }
       fieldsEl.innerHTML = ''
-      const params = skill?.params || []
+      const params = normalizeParamsList(skill?.params)
       if (params.length === 0) {
         formEl.style.display = 'none'
         return
@@ -243,16 +259,17 @@
         label.style.display = 'block'
         label.style.fontSize = '10px'
         label.style.color = '#334155'
-        label.textContent = `${p.label || p.name}${p.required ? ' *' : ''}:`
+        label.textContent = `${p.label || p.description || p.name}${p.required ? ' *' : ''}:`
         row.appendChild(label)
 
         let input
+        const enumValues = p.options || p.enum_values
         if (p.type === 'boolean') {
           input = document.createElement('input')
           input.type = 'checkbox'
-        } else if (p.type === 'enum' && Array.isArray(p.options)) {
+        } else if (p.type === 'enum' && Array.isArray(enumValues)) {
           input = document.createElement('select')
-          p.options.forEach((opt) => {
+          enumValues.forEach((opt) => {
             const op = document.createElement('option')
             op.value = opt
             op.textContent = opt
@@ -283,7 +300,10 @@
           if (container) container.style.display = 'flex'
           if (noSkills) noSkills.style.display = 'none'
           if (select) {
-            select.innerHTML = activeSkills.map((s) => `<option value="${s.task_id}">${s.identity?.name || s.task_id} (${s.compat?.support_tier || 'tier_1'})</option>`).join('')
+            select.innerHTML = activeSkills.map((s) => {
+              const id = getSkillId(s)
+              return `<option value="${id}">${s.identity?.name || id} (tier_${s.compat?.support_tier || 1})</option>`
+            }).join('')
             renderParamsForm(activeSkills[0])
           }
         } else {
@@ -299,7 +319,7 @@
     }
 
     select?.addEventListener('change', () => {
-      const chosen = activeSkills.find((s) => s.task_id === select.value)
+      const chosen = activeSkills.find((s) => getSkillId(s) === select.value)
       if (chosen) renderParamsForm(chosen)
     })
 
@@ -314,10 +334,10 @@
         action: 'SKILLGRAPH_NLU_PARSE',
         text,
         catalog: activeSkills.map((s) => ({
-          id: s.task_id,
-          name: s.identity?.name || s.task_id,
+          id: getSkillId(s),
+          name: s.identity?.name || getSkillId(s),
           description: s.identity?.description || '',
-          params: s.params || [],
+          params: normalizeParamsList(s.params),
         })),
       }, (res) => {
         if (!nluFeedback) return
@@ -368,7 +388,7 @@
           nluFeedback.textContent = 'Habilidade selecionada! Confira os parâmetros e clique em Executar.'
           if (select) {
             select.value = res.skill_id
-            const chosen = activeSkills.find((s) => s.task_id === res.skill_id)
+            const chosen = activeSkills.find((s) => getSkillId(s) === res.skill_id)
             if (chosen) {
               renderParamsForm(chosen)
               if (res.params && typeof res.params === 'object') {

@@ -30,12 +30,67 @@ export interface CatalogSkill {
   id: string
   name: string
   description?: string
-  params?: Array<{
-    name: string
-    type: string
-    required?: boolean
-    description?: string
-  }>
+  params?:
+    | Array<{
+        name: string
+        type: string
+        required?: boolean
+        description?: string
+      }>
+    | Record<
+        string,
+        {
+          type: string
+          required?: boolean
+          description?: string
+        }
+      >
+}
+
+function normalizeSkillParams(
+  rawParams: CatalogSkill['params']
+): Array<{ name: string; type: string; required?: boolean; description?: string }> {
+  if (!rawParams) return []
+  if (Array.isArray(rawParams)) return rawParams
+  if (typeof rawParams === 'object') {
+    return Object.entries(rawParams).map(([name, def]) => ({
+      name,
+      ...(typeof def === 'object' && def !== null ? def : { type: 'string' }),
+    }))
+  }
+  return []
+}
+
+function resolveRelativeDate(lower: string, now = new Date()): string | undefined {
+  const explicitMatch = lower.match(/\b(\d{2}\/\d{2}(?:\/\d{4})?)\b/)
+  if (explicitMatch) return explicitMatch[1]
+  if (/\banteontem\b/i.test(lower)) {
+    const d = new Date(now.getTime() - 2 * 86400000)
+    return d.toISOString().slice(0, 10)
+  }
+  if (/\bontem\b/i.test(lower)) {
+    const d = new Date(now.getTime() - 86400000)
+    return d.toISOString().slice(0, 10)
+  }
+  if (/\bhoje\b/i.test(lower)) {
+    return now.toISOString().slice(0, 10)
+  }
+  return undefined
+}
+
+function extractNumericGradeWithCorrection(lower: string): number | undefined {
+  // Prioriza autocorreções coloquiais ("na verdade 7,5", "ops, 8,0", "corrigindo para 9")
+  const correctionMatch = lower.match(/(?:na verdade|ops|perd[aã]o|corrigindo(?:\s+para)?|melhor)\s*[,:]?\s*(\d+[.,]?\d*)/i)
+  if (correctionMatch) {
+    return parseFloat(correctionMatch[1].replace(',', '.'))
+  }
+  const notaMatch =
+    lower.match(/(?:nota|grau|valendo|com)\s+(\d+[.,]?\d*)/) ||
+    lower.match(/(\d+[.,]?\d*)\s+(?:para|pro|pra|ao|na|no)/)
+  if (notaMatch) {
+    return parseFloat(notaMatch[1].replace(',', '.'))
+  }
+  return undefined
 }
 
 export interface ParsedIntent {
@@ -44,6 +99,7 @@ export interface ParsedIntent {
   params: Record<string, any>
   supported: boolean
   no_match?: boolean
+  clarification_needed?: boolean
   raw?: string
 }
 
@@ -164,6 +220,17 @@ export class LlmGateway {
   ): Promise<ParsedIntent> {
     const lower = text.toLowerCase()
 
+    // Guardrail contra negação explícita ("não lance falta", "não marque nota")
+    if (/\b(?:n[aã]o\s+(?:lance|lancar|lan[çc]ar|marque|marcar|registre|registrar|grave|gravar|coloque|alterar|altere))\b/i.test(lower)) {
+      return {
+        intent: 'unknown',
+        params: {},
+        supported: false,
+        no_match: true,
+        raw: text,
+      }
+    }
+
     if (catalog !== undefined) {
       if (!Array.isArray(catalog) || catalog.length === 0) {
         return {
@@ -182,6 +249,7 @@ export class LlmGateway {
         let score = 0
         const idLower = skill.id.toLowerCase()
         const nameLower = (skill.name || '').toLowerCase()
+        const skillParams = normalizeSkillParams(skill.params)
 
         if (lower.includes(idLower) || (idLower.startsWith('custom:') && lower.includes(idLower.replace('custom:', '')))) {
           score += 10
@@ -190,26 +258,32 @@ export class LlmGateway {
           score += 8
         }
         if (
-          /falta|presen[çc]a|aus[êe]ncia/i.test(lower) &&
-          (/falta|presen[çc]a|attendance/i.test(idLower) || /falta|presen[çc]a/i.test(nameLower) || skill.params?.some((p) => p.name === 'attendance_status'))
+          /falta|presen[çc]a|aus[êe]ncia|chamada/i.test(lower) &&
+          (/falta|presen[çc]a|attendance/i.test(idLower) ||
+            /falta|presen[çc]a/i.test(nameLower) ||
+            skillParams.some((p) => p.name === 'attendance_status' || p.name === 'falta'))
         ) {
           score += 6
         }
         if (
-          /nota|grau|avalia[çc][ãa]o/i.test(lower) &&
-          (/nota|grade/i.test(idLower) || /nota/i.test(nameLower) || skill.params?.some((p) => p.name === 'grade_value'))
+          /nota|grau|avalia[çc][ãa]o|ponto/i.test(lower) &&
+          (/nota|grade/i.test(idLower) ||
+            /nota/i.test(nameLower) ||
+            skillParams.some((p) => p.name === 'grade_value' || p.name === 'nota'))
         ) {
           score += 6
         }
         if (
-          /listar|alunos|turma|discentes|carregar/i.test(lower) &&
+          /listar|alunos|turma|discentes|carregar|chamada/i.test(lower) &&
           (/roster|alunos|turma/i.test(idLower) || /lista|alunos|turma/i.test(nameLower))
         ) {
           score += 6
         }
         if (
-          /aula|mensagem|comunicado|plano|texto/i.test(lower) &&
-          (/aula|mensagem|texto/i.test(idLower) || /aula|mensagem/i.test(nameLower) || skill.params?.some((p) => p.name === 'texto'))
+          /aula|mensagem|comunicado|plano|texto|conte[uú]do/i.test(lower) &&
+          (/aula|mensagem|texto/i.test(idLower) ||
+            /aula|mensagem/i.test(nameLower) ||
+            skillParams.some((p) => p.name === 'texto'))
         ) {
           score += 6
         }
@@ -251,19 +325,25 @@ export class LlmGateway {
         }
       }
 
-      const declaredParams = bestSkill.params || []
+      const declaredParams = normalizeSkillParams(bestSkill.params)
       for (const p of declaredParams) {
-        if (p.name === 'student_ref') {
-          if (targetStudent) extractedParams['student_ref'] = targetStudent
-        } else if (p.name === 'attendance_status') {
-          extractedParams['attendance_status'] = /falta|aus[êe]ncia/i.test(lower) ? 'falta' : 'presente'
-        } else if (p.name === 'grade_value') {
-          const notaMatch = lower.match(/(?:nota|grau)\s+(\d+[.,]?\d*)/) || lower.match(/(\d+[.,]?\d*)\s+(?:para|pro|ao)/)
-          if (notaMatch) {
-            extractedParams['grade_value'] = parseFloat(notaMatch[1].replace(',', '.'))
+        if (p.name === 'student_ref' || p.name === 'aluno' || p.name === 'student') {
+          if (targetStudent) extractedParams[p.name] = targetStudent
+        } else if (p.name === 'attendance_status' || p.name === 'falta') {
+          extractedParams[p.name] = /falta|aus[êe]ncia/i.test(lower) ? 'falta' : 'presente'
+        } else if (p.name === 'grade_value' || p.name === 'nota') {
+          const gradeVal = extractNumericGradeWithCorrection(lower)
+          if (gradeVal !== undefined) {
+            extractedParams[p.name] = gradeVal
           }
         } else if (p.name === 'texto') {
           extractedParams['texto'] = text.replace(/^(?:assistente,?|por favor,?|pe[çc]o para|registre|grave|envie|publique)\s*/i, '').trim()
+        } else if (p.type === 'date' || p.name === 'data' || p.name === 'date') {
+          const relDate = resolveRelativeDate(lower)
+          if (relDate) extractedParams[p.name] = relDate
+        } else if (p.name === 'turma' || p.name === 'class_id') {
+          const turmaMatch = text.match(/\bturma\s+([0-9A-Za-z_-]+)/i) || text.match(/\b([1-9]\s?[A-Za-z])\b/)
+          if (turmaMatch) extractedParams[p.name] = turmaMatch[1].replace(/\s+/g, '').toUpperCase()
         }
       }
 

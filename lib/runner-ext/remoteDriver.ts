@@ -83,11 +83,19 @@ export class RemoteDriver implements Driver {
           const lastError = chrome.runtime.lastError
           if (lastError) {
             const msg = lastError.message || 'Falha na comunicação com o content script'
-            // Se a página está recarregando ou em transição, tenta novamente até 3 vezes
-            if (attempt < 4 && (msg.includes('Could not establish connection') || msg.includes('Receiving end does not exist'))) {
-              setTimeout(() => {
+            // Padrão Nanobrowser MV3: se a página está em transição ou perdeu o content script, re-injeta e retenta (até 5 tentativas)
+            if (attempt < 6 && (msg.includes('Could not establish connection') || msg.includes('Receiving end does not exist') || msg.includes('message port closed'))) {
+              setTimeout(async () => {
+                if (attempt >= 2 && typeof chrome !== 'undefined' && chrome.scripting?.executeScript) {
+                  try {
+                    await chrome.scripting.executeScript({
+                      target: { tabId: this.tabId },
+                      files: ['dist/content-adapter.bundle.js'],
+                    })
+                  } catch {}
+                }
                 this.sendRpc<T>(method, params, attempt + 1).then(resolve, reject)
-              }, 400 * attempt)
+              }, 350 * attempt)
               return
             }
             reject(new RunnerError('E_TIMEOUT', `RPC falhou (${method}): ${msg}`))
@@ -203,24 +211,42 @@ export class RemoteDriver implements Driver {
   public async navigate(url: string): Promise<void> {
     if (typeof chrome !== 'undefined' && chrome.tabs && typeof chrome.tabs.update === 'function') {
       return new Promise<void>((resolve, reject) => {
+        let done = false
         chrome.tabs.update(this.tabId, { url }, () => {
           if (chrome.runtime?.lastError) {
+            done = true
             reject(new RunnerError('E_TIMEOUT', `Erro ao navegar para ${url}: ${chrome.runtime.lastError.message}`))
             return
           }
           const listener = (updatedTabId: number, changeInfo: any) => {
             if (updatedTabId === this.tabId && changeInfo.status === 'complete') {
-              chrome.tabs.onUpdated.removeListener(listener)
-              resolve()
+              if (done) return
+              done = true
+              clearTimeout(navTimer)
+              try { chrome.tabs.onUpdated.removeListener(listener) } catch {}
+              // Pequeno settle para hidratação inicial do DOM
+              setTimeout(() => resolve(), 150)
             }
           }
-          chrome.tabs.onUpdated.addListener(listener)
-          setTimeout(() => {
-            try {
-              chrome.tabs.onUpdated.removeListener(listener)
-            } catch {}
-            resolve()
-          }, 10000)
+          if (chrome.tabs.onUpdated?.addListener) {
+            chrome.tabs.onUpdated.addListener(listener)
+          }
+          const navTimer = setTimeout(() => {
+            if (done) return
+            done = true
+            try { chrome.tabs.onUpdated?.removeListener(listener) } catch {}
+            if (typeof chrome.tabs.get === 'function') {
+              chrome.tabs.get(this.tabId, (tab: any) => {
+                if (tab && tab.status === 'loading') {
+                  reject(new RunnerError('E_TIMEOUT', `Timeout (${this.timeoutMs}ms) aguardando carregamento de ${url}`))
+                } else {
+                  resolve()
+                }
+              })
+            } else {
+              reject(new RunnerError('E_TIMEOUT', `Timeout (${this.timeoutMs}ms) aguardando carregamento de ${url}`))
+            }
+          }, this.timeoutMs)
         })
       })
     }
@@ -228,21 +254,26 @@ export class RemoteDriver implements Driver {
   }
 
   public async waitForNavigation(timeoutMs = 10000): Promise<void> {
-    if (typeof chrome !== 'undefined' && chrome.tabs && typeof chrome.tabs.onUpdated === 'function') {
+    if (typeof chrome !== 'undefined' && chrome.tabs && chrome.tabs.onUpdated?.addListener) {
       return new Promise<void>((resolve) => {
+        let done = false
         const listener = (updatedTabId: number, changeInfo: any) => {
           if (updatedTabId === this.tabId && changeInfo.status === 'complete') {
-            chrome.tabs.onUpdated.removeListener(listener)
-            resolve()
+            if (done) return
+            done = true
+            clearTimeout(timer)
+            try { chrome.tabs.onUpdated.removeListener(listener) } catch {}
+            setTimeout(() => resolve(), 150)
           }
         }
         chrome.tabs.onUpdated.addListener(listener)
-        setTimeout(() => {
-          try {
-            chrome.tabs.onUpdated.removeListener(listener)
-          } catch {}
+        // Se for transição SPA ou carregamento rápido já concluído, libera após janela de settle
+        const timer = setTimeout(() => {
+          if (done) return
+          done = true
+          try { chrome.tabs.onUpdated.removeListener(listener) } catch {}
           resolve()
-        }, timeoutMs)
+        }, Math.min(timeoutMs, 2500))
       })
     }
     return Promise.resolve()

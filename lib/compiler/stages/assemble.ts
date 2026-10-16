@@ -45,11 +45,42 @@ export function assembleGraph(
   const plannedNodes: PlannedNode[] = buildPreambleNodes(trace, segmented, decisions, paramContext, nextId)
 
   // 2. Execução da Tarefa
+  const writeActionSteps = segmented.actionSteps.filter(s => s.kind === 'input' || s.kind === 'check')
+  const navClickSteps = segmented.actionSteps.filter(
+    s => s.kind === 'click' && s.id !== (segmented.filterStep?.step as any)?.id
+  )
   const isWriteTask =
     decisions.task_id === 'lancar_falta' ||
     decisions.task_id === 'lancar_nota' ||
-    segmented.actionSteps.length > 0 ||
+    writeActionSteps.length > 0 ||
     !!segmented.submitStep
+
+  // Cliques intermediários de navegação (ex.: menus, links, sub-abas)
+  for (const clickStep of navClickSteps) {
+    const clickAnchor = buildAnchorFromDescriptor(
+      clickStep.descriptor,
+      clickStep.descriptor.text ? `Menu ${clickStep.descriptor.text}` : 'Elemento de navegação',
+      undefined,
+      decisions,
+      paramContext
+    )
+    const expectNav = Boolean((clickStep.descriptor as any).href || clickStep.descriptor.tag === 'a')
+    plannedNodes.push({
+      id: nextId(),
+      build: (next) => ({
+        type: 'CLICK',
+        label: clickStep.descriptor.text ? `Clicar em ${clickStep.descriptor.text}` : 'Navegar pelo Menu',
+        anchor: clickAnchor,
+        is_submit_action: false,
+        expect_navigation: expectNav,
+        retry: { max_attempts: 2, backoff_ms: 500 },
+        timeout_ms: 8000,
+        postconditions: [],
+        on_success: next,
+        on_fail: '$abort',
+      }),
+    })
+  }
 
   if (decisions.task_id === 'read_roster') {
     plannedNodes.push({
@@ -73,14 +104,14 @@ export function assembleGraph(
       }),
     })
   } else if (isWriteTask) {
-    if (segmented.actionSteps.length > 1) {
+    if (writeActionSteps.length > 1) {
       warnings.push({
         code: 'W_BATCH_PATTERN_IGNORED',
         message: 'Múltiplas interações gravadas em lote detectadas. O fluxo foi abstraído para execução unitária por parâmetro.',
       })
     }
 
-    const actionStep = segmented.actionSteps[0]
+    const actionStep = writeActionSteps[0]
     const isAttendance =
       decisions.task_id === 'lancar_falta' ||
       decisions.attendance_polarity !== undefined ||

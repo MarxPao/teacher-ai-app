@@ -157,7 +157,11 @@ export async function executeWriteNode(
   state.writesCount++
 
   // 7. Verificação de Read-back e Reversão Obrigatória em caso de divergência
-  const isMatch = writeRes.verified && (writeRes.afterValue === strValue || (node.method === 'set_checked' && Boolean(writeRes.afterValue) === Boolean(strValue)))
+  const isMatch =
+    writeRes.verified &&
+    (writeRes.afterValue === strValue ||
+      writeRes.afterValue.replace(',', '.') === strValue.replace(',', '.') ||
+      (node.method === 'set_checked' && Boolean(writeRes.afterValue) === Boolean(strValue)))
 
   if (!isMatch) {
     // Reversão imediata ao before_value
