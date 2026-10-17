@@ -623,4 +623,77 @@ describe('ExtensionHost Integration: Checkpoint, Timeout e Aborto Seguro', () =>
     expect(apiCode).toContain('export async function POST')
     expect(apiCode).toContain('portal_skills?on_conflict=portal_id,task_id,version')
   })
+
+  it('20. [Cadeia Multi-Passo sem Conjunções + Filtros Mês/Disciplina] Divide "acesse frequencia, depois selecione setimo ano selecione lingua inglesa selecione julho/2026" em 4 passos e resolve Turma, Disciplina ("Inglês") e Mês ("Julho")', async () => {
+    const { splitMultiStepTeacherCommand, selectBestDistilledAction } = await import('../lib/explorer/domDistiller')
+    const hops = splitMultiStepTeacherCommand(
+      'acesse frequencia, depois selecione setimo ano selecione lingua inglesa selecione julho/2026'
+    )
+    expect(hops).toEqual([
+      'acesse frequencia',
+      'selecione setimo ano',
+      'selecione lingua inglesa',
+      'selecione julho/2026',
+    ])
+
+    const snapshot = {
+      urlPath: '/professor_frequencia',
+      stateHash: 'freq1234',
+      compactPromptText: '[1] <select>Turma</select> [2] <select>Disciplina</select> [3] <select>Mês</select>',
+      elements: [
+        {
+          idx: 1,
+          tag: 'select',
+          role: 'select',
+          label: 'Turma',
+          context: 'section',
+          selector: '#filtro-turma',
+          isDestructive: false,
+          options: [
+            { value: '', text: 'Selecione a turma' },
+            { value: '7A', text: '7º Ano A' },
+          ],
+        },
+        {
+          idx: 2,
+          tag: 'select',
+          role: 'select',
+          label: 'Disciplina',
+          context: 'section',
+          selector: '#filtro-disciplina',
+          isDestructive: false,
+          options: [
+            { value: '', text: 'Selecione a disciplina' },
+            { value: 'ING', text: 'Inglês' },
+          ],
+        },
+        {
+          idx: 3,
+          tag: 'select',
+          role: 'select',
+          label: 'Mês',
+          context: 'section',
+          selector: '#filtro-mes',
+          isDestructive: false,
+          options: [
+            { value: '', text: 'Selecione o mês' },
+            { value: '07', text: 'Julho' },
+          ],
+        },
+      ],
+    }
+
+    const r1 = selectBestDistilledAction(snapshot as any, hops[1])
+    expect(r1.selected?.selector).toBe('#filtro-turma')
+    expect(r1.matchedOption).toEqual({ value: '7A', text: '7º Ano A' })
+
+    const r2 = selectBestDistilledAction(snapshot as any, hops[2])
+    expect(r2.selected?.selector).toBe('#filtro-disciplina')
+    expect(r2.matchedOption).toEqual({ value: 'ING', text: 'Inglês' })
+
+    const r3 = selectBestDistilledAction(snapshot as any, hops[3])
+    expect(r3.selected?.selector).toBe('#filtro-mes')
+    expect(r3.matchedOption).toEqual({ value: '07', text: 'Julho' })
+  })
 })
+

@@ -951,15 +951,23 @@ async function internalNavigatePortalTab(targetTabId, targetKeyword, allowedHost
 
         const ordinalMap = { primeiro: '1', primeira: '1', segundo: '2', segunda: '2', terceiro: '3', terceira: '3', quarto: '4', quarta: '4', quinto: '5', quinta: '5', sexto: '6', sexta: '6', setimo: '7', setima: '7', oitavo: '8', oitava: '8', nono: '9', nona: '9' };
         const buildOrdinalVariants = (baseKey) => {
-          const set = new Set([baseKey]);
+          const sp = String(baseKey || '').replace(/[/\-_,.;:]+/g, ' ').replace(/\s+/g, ' ').trim();
+          const noYr = sp.replace(/\b20\d{2}\b/g, '').replace(/\s+/g, ' ').trim();
+          const set = new Set([baseKey, sp]);
+          if (noYr.length >= 3) set.add(noYr);
+          const subjPairs = [['lingua inglesa', 'ingles'], ['lingua portuguesa', 'portugues'], ['educacao fisica', 'ed fisica'], ['ensino religioso', 'religiao']];
+          for (const [f, s] of subjPairs) {
+            if (sp.includes(f)) set.add(sp.replace(f, s));
+            if (sp.includes(s)) set.add(sp.replace(s, f));
+          }
           for (const [word, digit] of Object.entries(ordinalMap)) {
-            if (new RegExp(`\\b${word}\\b`).test(baseKey)) {
-              set.add(baseKey.replace(new RegExp(`\\b${word}\\b`, 'g'), digit));
-              set.add(baseKey.replace(new RegExp(`\\b${word}\\b`, 'g'), `${digit}o`));
-              set.add(baseKey.replace(new RegExp(`\\b${word}\\b`, 'g'), `${digit}a`));
-            } else if (new RegExp(`\\b${digit}[º°oaª]?\\b`).test(baseKey)) {
-              set.add(baseKey.replace(new RegExp(`\\b${digit}[º°oaª]?\\b`, 'g'), word));
-              set.add(baseKey.replace(new RegExp(`\\b${digit}[º°oaª]?\\b`, 'g'), digit));
+            if (new RegExp(`\\b${word}\\b`).test(sp)) {
+              set.add(sp.replace(new RegExp(`\\b${word}\\b`, 'g'), digit));
+              set.add(sp.replace(new RegExp(`\\b${word}\\b`, 'g'), `${digit}o`));
+              set.add(sp.replace(new RegExp(`\\b${word}\\b`, 'g'), `${digit}a`));
+            } else if (new RegExp(`\\b${digit}[º°oaª]?\\b`).test(sp)) {
+              set.add(sp.replace(new RegExp(`\\b${digit}[º°oaª]?\\b`, 'g'), word));
+              set.add(sp.replace(new RegExp(`\\b${digit}[º°oaª]?\\b`, 'g'), digit));
             }
           }
           return Array.from(set).filter(Boolean);
@@ -1011,12 +1019,13 @@ async function internalNavigatePortalTab(targetTabId, targetKeyword, allowedHost
           for (const sel of selects) {
             for (const opt of Array.from(sel.options || [])) {
               const rawText = (opt.text || opt.label || '').trim();
-              const normOpt = rawText.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[º°ª]/g, '');
+              const normOpt = rawText.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[º°ª]/g, '').replace(/[/\-_,.;:]+/g, ' ').replace(/\s+/g, ' ').trim();
               if (!normOpt || /^selecione\b/i.test(normOpt)) continue;
               for (const v of variants) {
                 let sc = 0;
                 if (normOpt === v) sc = 100;
                 else if (normOpt.startsWith(v) || normOpt.includes(v)) sc = 88;
+                else if (normOpt.length >= 4 && v.includes(normOpt)) sc = 84;
                 else {
                   const tks = v.split(/\s+/).filter(t => t.length >= 1 && !['de', 'da', 'do', 'ano'].includes(t));
                   if (tks.length > 0 && tks.every(t => new RegExp(`(?:^|\\b)${t}`).test(normOpt))) sc = 82;
@@ -1119,7 +1128,15 @@ async function internalNavigatePortalTab(targetTabId, targetKeyword, allowedHost
         };
 
         const hops = [];
-        const selectMatch = findBestSelectMatch(cleanKey);
+        let selectMatch = null;
+        let bestElement = null;
+        for (let attempt = 0; attempt < 8; attempt++) {
+          selectMatch = findBestSelectMatch(cleanKey);
+          if (selectMatch && selectMatch.sel && selectMatch.opt) break;
+          bestElement = findBestCandidate(cleanKey);
+          if (bestElement) break;
+          await new Promise(r => setTimeout(r, 250));
+        }
         if (selectMatch && selectMatch.sel && selectMatch.opt) {
           const { sel, opt } = selectMatch;
           const optText = (opt.text || opt.label || kw).trim();
@@ -1128,17 +1145,17 @@ async function internalNavigatePortalTab(targetTabId, targetKeyword, allowedHost
           sel.scrollIntoView({ behavior: 'smooth', block: 'center' });
           sel.style.outline = '2px solid #38bdf8';
           try {
+            opt.selected = true;
             const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value')?.set;
             if (nativeSetter) nativeSetter.call(sel, opt.value);
             else sel.value = opt.value;
           } catch { sel.value = opt.value; }
           sel.dispatchEvent(new Event('input', { bubbles: true }));
           sel.dispatchEvent(new Event('change', { bubbles: true }));
-          await new Promise(r => setTimeout(r, 250));
+          await new Promise(r => setTimeout(r, 350));
           const hop = { kind: 'select', elementText: optText, selectValue: String(opt.value ?? ''), selectId: sel.id || '', selectName: sel.name || '', selectLabel, tag: 'SELECT', target: kw };
           return { sucesso: true, kind: 'select', elementText: optText, tag: 'SELECT', target: kw, hops: [hop] };
         }
-        let bestElement = findBestCandidate(cleanKey);
 
         // Se o item de submenu não está visível diretamente, tenta expandir um menu pai relacionado (Hop intermediário)
         if (!bestElement) {

@@ -201,7 +201,22 @@ export function normalizePortalGoalVariants(rawGoal: string): { cleanGoal: strin
     .replace(/^(?:a\s+turma|o\s+ano|a\s+disciplina|o\s+mes|a\s+aba|o\s+filtro\s+de|o\s+filtro)\s+/i, '')
     .trim()
 
-  const variants = new Set<string>([base])
+  const spaceNormalized = base.replace(/[/\-_,.;:]+/g, ' ').replace(/\s+/g, ' ').trim()
+  const withoutYear = spaceNormalized.replace(/\b20\d{2}\b/g, '').replace(/\s+/g, ' ').trim()
+  const variants = new Set<string>([base, spaceNormalized])
+  if (withoutYear.length >= 3) variants.add(withoutYear)
+
+  const subjectPairs: Array<[string, string]> = [
+    ['lingua inglesa', 'ingles'],
+    ['lingua portuguesa', 'portugues'],
+    ['educacao fisica', 'ed fisica'],
+    ['ensino religioso', 'religiao'],
+  ]
+  for (const [full, short] of subjectPairs) {
+    if (spaceNormalized.includes(full)) variants.add(spaceNormalized.replace(full, short))
+    if (spaceNormalized.includes(short)) variants.add(spaceNormalized.replace(short, full))
+  }
+
   for (const [word, digit] of Object.entries(ORDINAL_MAP)) {
     if (new RegExp(`\\b${word}\\b`).test(base)) {
       variants.add(base.replace(new RegExp(`\\b${word}\\b`, 'g'), digit))
@@ -215,6 +230,23 @@ export function normalizePortalGoalVariants(rawGoal: string): { cleanGoal: strin
     }
   }
   return { cleanGoal: base, variants: Array.from(variants).filter(Boolean) }
+}
+
+/**
+ * Divide comandos encadeados (com vírgulas, "depois", "em seguida" ou verbos repetidos como
+ * "acesse frequencia, depois selecione setimo ano selecione lingua inglesa selecione julho/2026")
+ * em até 10 passos individuais.
+ */
+export function splitMultiStepTeacherCommand(rawText: string): string[] {
+  const cleaned = String(rawText || '').trim()
+  if (!cleaned) return []
+  return cleaned
+    .split(
+      /\s*(?:[,;]|->|>|›|\b(?:e\s+depois|depois|em\s+seguida|logo\s+ap[oó]s|ent[aã]o)\b|\s+e\s+(?=(?:selecione|selecionar|escolha|escolher|clicar|clique|visualizar|lancar|lançar|abrir|abra|ir|va|vá|acessar|acesse|filtrar|filtre)\b)|\s+(?=(?:selecione|selecionar|escolha|escolher|clicar\s+em|clique\s+em|abrir|abra|ir\s+para|va\s+para|vá\s+para|acessar|acesse|filtrar\s+por|filtre\s+por)\b))\s*/i
+    )
+    .map(s => s.trim())
+    .filter(Boolean)
+    .slice(0, 10)
 }
 
 /**
@@ -322,7 +354,7 @@ export function selectBestDistilledAction(
 
     if (el.tag === 'select' && Array.isArray((el as any).options)) {
       for (const opt of (el as any).options as Array<{ value: string; text: string }>) {
-        const normOpt = opt.text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
+        const normOpt = opt.text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[/\-_,.;:]+/g, ' ').replace(/\s+/g, ' ').trim()
         if (!normOpt || /^selecione\b/i.test(normOpt)) continue
         for (const v of variants) {
           if (!v) continue
@@ -331,6 +363,7 @@ export function selectBestDistilledAction(
           let optScore = 0
           if (optNoOrd === vNoOrd) optScore = 98
           else if (optNoOrd.startsWith(vNoOrd) || optNoOrd.includes(vNoOrd)) optScore = 88
+          else if (optNoOrd.length >= 4 && vNoOrd.includes(optNoOrd)) optScore = 84
           if (optScore > bestScore) {
             bestScore = optScore
             best = el

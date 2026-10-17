@@ -634,15 +634,19 @@
             return
           }
 
-          // 1. Divide o comando em até 3 hops encadeados (ex.: "selecione 7º ano, matemática e visualizar frequência")
+          // 1. Divide o comando em até 10 hops encadeados (incluindo verbos repetidos sem vírgula)
           const hopTargets = queryText
-            .split(/\s*(?:,|\s+e\s+depois\s+|\s+depois\s+|\s+em\s+seguida\s+|\s+e\s+(?=(?:selecione|selecionar|escolha|escolher|clicar|clique|visualizar|lancar|lançar|abrir|ir|filtrar)\b)|->|>|›)\s*/i)
+            .split(
+              /\s*(?:[,;]|->|>|›|\b(?:e\s+depois|depois|em\s+seguida|logo\s+ap[oó]s|ent[aã]o)\b|\s+e\s+(?=(?:selecione|selecionar|escolha|escolher|clicar|clique|visualizar|lancar|lançar|abrir|abra|ir|va|vá|acessar|acesse|filtrar|filtre)\b)|\s+(?=(?:selecione|selecionar|escolha|escolher|clicar\s+em|clique\s+em|abrir|abra|ir\s+para|va\s+para|vá\s+para|acessar|acesse|filtrar\s+por|filtre\s+por)\b))\s*/i
+            )
             .map((s) => s.trim())
             .filter(Boolean)
-            .slice(0, 3)
+            .slice(0, 10)
 
           const navFn = globalThis.internalNavigatePortalTab
           const recordedSteps = []
+          const executedLabels = []
+          let failedHop = null
           let currentUrl = startUrl
           let currentPath = startPath
           let currentHost = host
@@ -667,10 +671,20 @@
                 })
                 return
               }
+              failedHop = hopTarget
               break
             }
 
-            await new Promise((r) => setTimeout(r, 600))
+            // Aguarda carregamento da página/AJAX caso o hop anterior tenha disparado navegação ou filtro dependente
+            for (let w = 0; w < 10; w++) {
+              await new Promise((r) => setTimeout(r, 300))
+              try {
+                const tCheck = await chrome.tabs.get(tabId)
+                if (!tCheck || tCheck.status === 'complete') break
+              } catch {
+                break
+              }
+            }
             let nextUrl = currentUrl
             let nextPath = currentPath
             let nextHost = currentHost
@@ -698,10 +712,11 @@
 
             const isUrlNavigation = nextUrl !== currentUrl && !nextUrl.includes('#')
             for (let sIdx = 0; sIdx < subHops.length; sIdx++) {
-              if (recordedSteps.length >= 3) break
+              if (recordedSteps.length >= 10) break
               const sh = subHops[sIdx]
               const stepText = (sh.elementText || hopTarget).trim()
               lastElementText = stepText
+              executedLabels.push(stepText)
               const isLastSubHop = sIdx === subHops.length - 1
 
               if (sh.kind === 'select') {
@@ -763,8 +778,8 @@
             currentHost = nextHost
           }
 
-          const cleanName = lastElementText.trim()
-          const slug = cleanName
+          const cleanName = executedLabels.length > 1 ? executedLabels.join(' → ') : lastElementText.trim()
+          const slug = lastElementText.trim()
             .toLowerCase()
             .normalize('NFD')
             .replace(/[\u0300-\u036f]/g, '')
@@ -801,8 +816,8 @@
               const decisions = {
                 task_id: taskId,
                 portal_id: host.replace(/[^a-zA-Z0-9._-]/g, '_'),
-                task_name: `Acessar ${cleanName}`,
-                task_description: `Navega autonomamente (${recordedSteps.length} passo(s)) até ${cleanName}`,
+                task_name: `Acessar ${cleanName}`.slice(0, 80),
+                task_description: `Executa (${recordedSteps.length} passo(s)): ${cleanName}`,
                 allowed_hosts: [host],
               }
               const compileResult = bundle.compile(trace, decisions)
@@ -821,6 +836,10 @@
             }
           }
 
+          const summaryMsg = failedHop
+            ? `Executei ${recordedSteps.length} passo(s) (${cleanName}), mas não encontrei "${failedHop}" nos filtros ou botões da tela atual.`
+            : `Executei ${recordedSteps.length} passo(s) (${cleanName})! ✨ Confirme o mapa abaixo se quiser salvar como rotina.`
+
           sendResponse({
             success: true,
             learned: true,
@@ -829,7 +848,7 @@
             trace,
             hops: recordedSteps.length,
             graph: savedGraph,
-            friendlyMessage: `Achei e acessei "${cleanName}" em ${recordedSteps.length} passo(s)! ✨ Confirme o mapa para ativá-lo nas próximas execuções.`,
+            friendlyMessage: summaryMsg,
           })
         } catch (err) {
           sendResponse({
