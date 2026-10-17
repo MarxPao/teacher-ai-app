@@ -5,9 +5,19 @@
   const STORAGE_KEY_FLAG = 'USE_SKILLGRAPH_V2'
   let currentRunnerAbort = null
 
+  function reportError(err, operation) {
+    const bundle = globalThis.SkillGraphBundle?.SkillGraphV2
+    if (bundle?.reportError) return bundle.reportError(err, { operation }).friendlyMessage
+    return toTeacherFriendlyMessage(err)
+  }
+
   // Mensagens pedagógicas e acolhedoras para a professora (Regra Zero Jargão)
   function toTeacherFriendlyMessage(err) {
     if (!err) return 'Ação concluída com sucesso no portal!'
+    const bundle = globalThis.SkillGraphBundle?.SkillGraphV2
+    if (bundle?.getTeacherFriendlyErrorMessage && (err.code || /\bE_[A-Z0-9_]+\b/.test(String(err.message || err)))) {
+      return bundle.getTeacherFriendlyErrorMessage(err)
+    }
     const code = (err && err.code) ? String(err.code) : ''
     const msg = String(err.message || err)
 
@@ -61,6 +71,17 @@
     return 'Não foi possível concluir a ação no portal. Deseja gravar uma demonstração?'
   }
 
+  let _sharedNativeClient = null
+  function getSharedNativeClient() {
+    const bundle = globalThis.SkillGraphBundle?.SkillGraphV2
+    const NativeClientClass = bundle?.NativeClient || globalThis.NativeClient
+    if (!NativeClientClass) return null
+    if (!_sharedNativeClient || (typeof _sharedNativeClient.isConnected === 'function' && !_sharedNativeClient.isConnected())) {
+      _sharedNativeClient = new NativeClientClass({ hostName: 'com.teacherai.desktop', defaultTimeoutMs: 4000 })
+    }
+    return _sharedNativeClient
+  }
+
   async function getFlag() {
     return new Promise((resolve) => {
       chrome.storage.local.get([STORAGE_KEY_FLAG], (res) => {
@@ -88,22 +109,33 @@
     })
   }
 
-  async function saveStandaloneGraph(graph, activate = false) {
+  async function saveStandaloneGraph(graph, activate = false, origin = 'standalone_draft') {
     if (!graph || !graph.identity) return null
     const bundle = globalThis.SkillGraphBundle?.SkillGraphV2
-    if (bundle?.validateGraph) {
+    const isPendingDraft = graph.status === 'pending_decisions'
+    if (activate && bundle?.assertCanActivateGraph) {
+      bundle.assertCanActivateGraph({
+        origin,
+        teacherConfirmed: origin === 'teacher_approved',
+        dryRunPassed: origin === 'teacher_approved',
+        taskId: graph.identity.task_id,
+        graphStatus: graph.status,
+      })
+    }
+    if (!isPendingDraft && bundle?.validateGraph) {
       const validation = bundle.validateGraph(graph)
       if (!validation.valid) {
         throw new Error('E_GRAPH_INVALID: Mapa rejeitado por validateGraph antes de salvar.')
       }
     }
+    const finalActivate = isPendingDraft ? false : Boolean(activate)
     const map = await getStandaloneGraphsMap()
     const portalId = graph.identity.portal_id || graph.identity.domain || 'default'
     const taskId = graph.identity.task_id || 'custom'
     const version = Number(graph.identity.version) || 1
     const prefix = `${portalId}::${taskId}::`
 
-    if (activate) {
+    if (finalActivate) {
       for (const k of Object.keys(map)) {
         if (k.startsWith(prefix) && map[k]) {
           map[k].active = false
@@ -118,8 +150,10 @@
       domain: graph.identity.domain || portalId,
       taskId,
       version,
-      active: Boolean(activate),
-      dryRunPassed: Boolean(activate),
+      status: isPendingDraft ? 'pending_decisions' : (finalActivate ? 'active' : 'quarantined'),
+      active: finalActivate,
+      dryRunPassed: finalActivate,
+      origin,
       savedAt: Date.now(),
     }
 
@@ -236,8 +270,7 @@
       return
     }
 
-    const NativeClientClass = bundle.NativeClient || globalThis.NativeClient
-    const nativeClient = NativeClientClass ? new NativeClientClass({ hostName: 'com.teacherai.desktop' }) : null
+    const nativeClient = getSharedNativeClient()
 
     let host = payload.host
     if (!host) {
@@ -259,7 +292,7 @@
           graph = resp.graph || (resp.spec_version ? resp : null)
         }
       } catch (nmErr) {
-        console.warn('[SkillGraph Orchestrator] Erro ao resolver grafo via Native Messaging (usando fallback Standalone):', nmErr)
+        reportError(nmErr, 'graphs.resolveActive')
       }
     }
 
@@ -376,7 +409,7 @@
               },
             })
           } catch (syncErr) {
-            console.warn('[SkillGraph Orchestrator] Falha ao sincronizar lista com o app desktop:', syncErr)
+            reportError(syncErr, 'students.upsertFromPortal')
           }
         }
       }
@@ -451,9 +484,7 @@
             } catch {}
           }
           host = host || 'localhost'
-          const bundle = globalThis.SkillGraphBundle?.SkillGraphV2
-          const NativeClientClass = bundle?.NativeClient || globalThis.NativeClient
-          const nativeClient = NativeClientClass ? new NativeClientClass({ hostName: 'com.teacherai.desktop' }) : null
+          const nativeClient = getSharedNativeClient()
           let skills = []
           if (nativeClient) {
             try {
@@ -462,7 +493,7 @@
                 skills = resp
               }
             } catch (err) {
-              console.warn('[SkillGraph Orchestrator] graphs.listActive falhou (usando fallback Standalone):', err)
+              reportError(err, 'graphs.listActive')
             }
           }
           const standaloneSkills = await listStandaloneActiveSkills(host)
@@ -519,8 +550,7 @@
         }
 
         try {
-          const NativeClientClass = bundle?.NativeClient || globalThis.NativeClient
-          const nativeClient = NativeClientClass ? new NativeClientClass({ hostName: 'com.teacherai.desktop' }) : null
+          const nativeClient = getSharedNativeClient()
           if (!nativeClient) {
             const localRes = fallbackLocalNlu()
             if (localRes) {
@@ -729,17 +759,18 @@
                 allowed_hosts: [host],
               }
               const compileResult = bundle.compile(trace, decisions)
-              if (compileResult?.graph && compileResult.graph.safety?.side_effect_level === 'read') {
+              if (compileResult?.status === 'needs_decisions' && compileResult.partialGraph) {
+                await saveStandaloneGraph(compileResult.partialGraph, false, 'exploration')
+              } else if (compileResult?.graph && compileResult.graph.safety?.side_effect_level === 'read') {
                 savedGraph = compileResult.graph
-                await saveStandaloneGraph(savedGraph, false)
-                const NativeClientClass = bundle.NativeClient || globalThis.NativeClient
-                const nativeClient = NativeClientClass ? new NativeClientClass({ hostName: 'com.teacherai.desktop' }) : null
+                await saveStandaloneGraph(savedGraph, false, 'exploration')
+                const nativeClient = getSharedNativeClient()
                 if (nativeClient) {
-                  await nativeClient.send('graphs.save', { graph: savedGraph, activate: false }).catch(() => {})
+                  await nativeClient.send('graphs.save', { graph: savedGraph, activate: false, origin: 'exploration' }).catch(() => {})
                 }
               }
             } catch (compileErr) {
-              console.warn('[SkillGraph Orchestrator] Falha ao auto-compilar skill de navegação:', compileErr)
+              reportError(compileErr, 'explore.autoCompile')
             }
           }
 
@@ -885,11 +916,6 @@
           let trace = null
 
           if (accumulatedSteps.length > 0) {
-            let portalId = 'portal'
-            try {
-              portalId = new URL(rec.initialUrl || '').hostname.replace(/[^a-zA-Z0-9_]/g, '_')
-            } catch {}
-
             trace = {
               trace_version: '1.0',
               task_id: 'custom_skill',
@@ -897,10 +923,10 @@
               ended_at: Date.now(),
               initial_url: rec.initialUrl || '',
               steps: accumulatedSteps,
-              portal_id: portalId,
             }
           } else if (localTrace && localTrace.steps && localTrace.steps.length > 0) {
-            trace = localTrace
+            const { portal_id: _ignoredPortalId, ...cleanLocalTrace } = localTrace
+            trace = cleanLocalTrace
           }
 
           if (!trace || !trace.steps || trace.steps.length === 0) {
@@ -918,7 +944,7 @@
             try {
               analysis = bundle.analyzeTrace(trace)
             } catch (aErr) {
-              console.warn('[SkillGraph Orchestrator] Falha ao analisar trace:', aErr)
+              reportError(aErr, 'record.analyzeTrace')
             }
           }
 
@@ -946,6 +972,14 @@
       return true
     }
 
+    if (message.action === 'SKILLGRAPH_GET_PENDING_DECISIONS') {
+      getStandaloneGraphsMap().then((map) => {
+        const pending = Object.values(map).filter((e) => e && e.status === 'pending_decisions')
+        sendResponse({ success: true, pending })
+      })
+      return true
+    }
+
     if (message.action === 'SKILLGRAPH_COMPILE_RECORD') {
       (async () => {
         const bundle = globalThis.SkillGraphBundle?.SkillGraphV2
@@ -959,9 +993,18 @@
 
         try {
           let trace = message.payload?.trace
+          let savedDecisions = {}
           if (!trace) {
             const sess = await chrome.storage.session.get(['skillgraph_last_trace'])
             trace = sess?.skillgraph_last_trace
+          }
+          if (!trace) {
+            const map = await getStandaloneGraphsMap()
+            const pendingEntry = Object.values(map).find((e) => e && e.status === 'pending_decisions' && e.graph?.sanitized_trace)
+            if (pendingEntry) {
+              trace = pendingEntry.graph.sanitized_trace
+              savedDecisions = pendingEntry.graph.decisions_snapshot || {}
+            }
           }
 
           if (!trace) {
@@ -972,16 +1015,48 @@
             return
           }
 
-          const decisions = message.payload?.decisions || {
-            task_id: message.payload?.taskId || trace.task_id || 'custom_task',
-            portal_id: message.payload?.portalId || trace.portal_id || 'portal_escolar',
-            task_name: message.payload?.taskName || 'Automação gravada',
-            allowed_hosts: [trace.steps?.[0]?.host || 'localhost'],
+          const { portal_id: legacyPortalId, ...cleanTrace } = trace
+          let fallbackPortalId = legacyPortalId || 'portal_escolar'
+          try {
+            if (!legacyPortalId && cleanTrace.initial_url) {
+              fallbackPortalId = new URL(cleanTrace.initial_url).hostname.replace(/[^a-zA-Z0-9_]/g, '_') || 'portal_escolar'
+            }
+          } catch {}
+
+          const rawDecisions = {
+            ...savedDecisions,
+            ...(message.payload?.decisions || {
+              task_id: message.payload?.taskId || cleanTrace.task_id || 'custom_task',
+              portal_id: message.payload?.portalId || fallbackPortalId,
+              task_name: message.payload?.taskName || 'Automação gravada',
+              allowed_hosts: [cleanTrace.steps?.[0]?.host || 'localhost'],
+            }),
+          }
+          const decisions = {
+            ...rawDecisions,
+            portal_id: rawDecisions.portal_id || fallbackPortalId,
           }
 
-          const compileResult = bundle.compile(trace, decisions)
-          const graph = compileResult.graph
+          const compileResult = bundle.compile(cleanTrace, decisions)
+          if (compileResult.status === 'needs_decisions') {
+            await saveStandaloneGraph(compileResult.partialGraph, false, 'standalone_draft')
+            chrome.runtime.sendMessage({
+              type: 'SKILLGRAPH_DECISIONS_REQUIRED',
+              action: 'SKILLGRAPH_DECISIONS_REQUIRED',
+              decisions: compileResult.decisions,
+              partialGraph: compileResult.partialGraph,
+            }).catch(() => {})
+            sendResponse({
+              success: false,
+              status: 'needs_decisions',
+              decisions: compileResult.decisions,
+              partialGraph: compileResult.partialGraph,
+              friendlyMessage: compileResult.decisions?.[0]?.question || 'Confirme a decisão pendente no painel lateral.',
+            })
+            return
+          }
 
+          const graph = compileResult.graph
           const validation = bundle.validateGraph ? bundle.validateGraph(graph) : { valid: true }
           if (!validation.valid) {
             sendResponse({
@@ -991,25 +1066,27 @@
             return
           }
 
-          await saveStandaloneGraph(graph, true)
-          const NativeClientClass = bundle.NativeClient || globalThis.NativeClient
-          const nativeClient = NativeClientClass ? new NativeClientClass({ hostName: 'com.teacherai.desktop' }) : null
+          const shouldActivate = message.payload?.activate === true
+          await saveStandaloneGraph(graph, shouldActivate, shouldActivate ? 'teacher_approved' : 'standalone_draft')
+          const nativeClient = getSharedNativeClient()
           if (nativeClient) {
-            await nativeClient.send('graphs.save', { graph, activate: true }).catch(() => {})
+            await nativeClient.send('graphs.save', { graph, activate: shouldActivate, origin: shouldActivate ? 'teacher_approved' : 'standalone_draft' }).catch(() => {})
           }
 
           await chrome.storage.session.remove(['skillgraph_last_trace', 'skillgraph_last_analysis'])
 
           sendResponse({
             success: true,
+            status: 'compiled',
+            active: shouldActivate,
             graph,
             friendlyMessage: 'Mapa gravado com sucesso! Agora você pode automatizar esta ação no portal. ✨',
           })
         } catch (err) {
-          console.warn('[SkillGraph Orchestrator] Erro na compilação do trace:', err)
+          const friendlyMessage = reportError(err, 'record.compile')
           sendResponse({
             success: false,
-            friendlyMessage: toTeacherFriendlyMessage(err),
+            friendlyMessage,
           })
         }
       })()
@@ -1019,9 +1096,7 @@
     if (message.action === 'SKILLGRAPH_UPSERT_ROSTER') {
       (async () => {
         try {
-          const bundle = globalThis.SkillGraphBundle?.SkillGraphV2
-          const NativeClientClass = bundle?.NativeClient || globalThis.NativeClient
-          const nativeClient = NativeClientClass ? new NativeClientClass({ hostName: 'com.teacherai.desktop' }) : null
+          const nativeClient = getSharedNativeClient()
           if (nativeClient) {
             await nativeClient.send('students.upsertFromPortal', message.payload || {})
             sendResponse({ success: true })
@@ -1058,9 +1133,7 @@
             })
             return
           }
-          const bundle = globalThis.SkillGraphBundle?.SkillGraphV2
-          const NativeClientClass = bundle?.NativeClient || globalThis.NativeClient
-          const nativeClient = NativeClientClass ? new NativeClientClass({ hostName: 'com.teacherai.desktop' }) : null
+          const nativeClient = getSharedNativeClient()
           if (nativeClient) {
             try {
               await nativeClient.send('graphs.setActive', {
@@ -1178,11 +1251,10 @@
           }
 
           // 4. Salva a nova versão v+1 localmente (Standalone) e no app desktop via NativeClient (se disponível)
-          await saveStandaloneGraph(patched, true)
-          const NativeClientClass = bundle.NativeClient || globalThis.NativeClient
-          const nativeClient = NativeClientClass ? new NativeClientClass({ hostName: 'com.teacherai.desktop' }) : null
+          await saveStandaloneGraph(patched, true, 'teacher_approved')
+          const nativeClient = getSharedNativeClient()
           if (nativeClient) {
-            await nativeClient.send('graphs.save', { graph: patched, activate: true }).catch(() => {})
+            await nativeClient.send('graphs.save', { graph: patched, activate: true, origin: 'teacher_approved' }).catch(() => {})
           }
 
           // 5. Atualiza métricas de saúde com recordManualRepair
@@ -1206,11 +1278,11 @@
             newVersion: patched.identity.version,
           })
         } catch (repairErr) {
-          console.warn('[SkillGraph Orchestrator] Erro ao aplicar reparo:', repairErr)
+          const friendlyMsg = reportError(repairErr, 'repair.apply')
           await chrome.storage.session.remove(['skillgraph_pending_repair'])
           sendResponse({
             success: false,
-            friendlyMessage: 'Falha ao aplicar atualização do portal. A versão anterior foi mantida.',
+            friendlyMessage: friendlyMsg || 'Falha ao aplicar atualização do portal. A versão anterior foi mantida.',
           })
         }
       })

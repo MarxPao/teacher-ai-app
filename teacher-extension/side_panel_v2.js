@@ -69,18 +69,17 @@
     function switchSubTab(activeTab, activeView) {
       ;[tabRunner, tabRecord, tabSuite].forEach((tab) => {
         if (!tab) return
-        tab.style.background = '#f8fafc'
-        tab.style.color = '#475569'
-        tab.style.border = '1px solid #cbd5e1'
+        tab.classList.remove('active')
+        tab.style.background = ''
+        tab.style.color = ''
+        tab.style.border = ''
       })
       ;[viewRunner, viewRecord, viewSuite].forEach((view) => {
         if (!view) return
         view.style.display = 'none'
       })
       if (activeTab) {
-        activeTab.style.background = '#2563eb'
-        activeTab.style.color = '#fff'
-        activeTab.style.border = 'none'
+        activeTab.classList.add('active')
       }
       if (activeView) activeView.style.display = 'block'
     }
@@ -88,6 +87,23 @@
     tabRunner?.addEventListener('click', () => switchSubTab(tabRunner, viewRunner))
     tabRecord?.addEventListener('click', () => switchSubTab(tabRecord, viewRecord))
     tabSuite?.addEventListener('click', () => switchSubTab(tabSuite, viewSuite))
+
+    // Auto-geração amigável de slug ao digitar o nome da habilidade
+    const taskNameInputEl = document.getElementById('sgv2-record-task-name')
+    const taskSlugInputEl = document.getElementById('sgv2-record-task-slug')
+    let slugManuallyEdited = false
+    taskSlugInputEl?.addEventListener('input', () => {
+      slugManuallyEdited = Boolean(taskSlugInputEl.value.trim())
+    })
+    taskNameInputEl?.addEventListener('input', () => {
+      if (slugManuallyEdited || !taskSlugInputEl) return
+      taskSlugInputEl.value = (taskNameInputEl.value || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+    })
 
     // 4. Fluxo de Gravação e Compilação
     const btnStartRecord = document.getElementById('sgv2-btn-start-record')
@@ -182,9 +198,8 @@
       const taskName = (nameInput?.value || '').trim() || `Habilidade ${rawSlug}`
       const taskDesc = (descInput?.value || '').trim() || ''
 
-      const traceSteps = Array.isArray(currentRecordedTrace?.steps) ? currentRecordedTrace.steps : []
-      const hasInputStep = traceSteps.some((s) => s.kind === 'input')
-      const hasCheckStep = traceSteps.some((s) => s.kind === 'check')
+      const polarityEl = document.querySelector('input[name="sgv2-attendance-polarity"]:checked')
+      const chosenPolarity = polarityEl ? polarityEl.value : undefined
 
       const decisions = {
         task_id: taskId,
@@ -192,8 +207,7 @@
         task_name: taskName,
         task_description: taskDesc,
         allowed_hosts: [currentRecordedTrace?.steps?.[0]?.host || 'localhost'],
-        attendance_polarity: fieldType === 'attendance' && hasCheckStep ? 'checked_is_present' : undefined,
-        grade_scale: fieldType === 'grade' && hasInputStep ? { type: 'numeric', min: 0, max: 10, decimal_separator: ',' } : undefined,
+        attendance_polarity: fieldType === 'attendance' ? chosenPolarity : undefined,
       }
 
       chrome.runtime.sendMessage(
@@ -207,7 +221,9 @@
         (res) => {
           btnConfirmCompile.disabled = false
           btnConfirmCompile.textContent = 'Salvar e Ativar Mapa no Teacher AI ✨'
-          if (res?.success) {
+          if (res?.status === 'needs_decisions' && Array.isArray(res.decisions)) {
+            renderPendingDecisions(res.decisions)
+          } else if (res?.success) {
             if (recordDecisionsBox) recordDecisionsBox.style.display = 'none'
             loadActiveSkills()
           }
@@ -226,6 +242,17 @@
         }
       )
     })
+
+    function renderPendingDecisions(decisionsList) {
+      if (!Array.isArray(decisionsList) || decisionsList.length === 0 || !recordDecisionsBox) return
+      recordDecisionsBox.style.display = 'block'
+      if (recordMessageBox) {
+        recordMessageBox.style.display = 'block'
+        recordMessageBox.textContent = decisionsList.map((d) => d.question).join(' ')
+        recordMessageBox.style.background = '#fffbeb'
+        recordMessageBox.style.color = '#92400e'
+      }
+    }
 
     // 5. Catálogo dinâmico e Execução (Runner)
     let activeSkills = []
@@ -264,11 +291,13 @@
       formEl.style.display = 'block'
       params.forEach((p) => {
         const row = document.createElement('div')
-        row.style.marginBottom = '4px'
+        row.style.marginBottom = '6px'
         const label = document.createElement('label')
         label.style.display = 'block'
-        label.style.fontSize = '10px'
-        label.style.color = '#334155'
+        label.style.fontSize = '11px'
+        label.style.fontWeight = '600'
+        label.style.color = '#5c3d20'
+        label.style.marginBottom = '4px'
         label.textContent = `${p.label || p.description || p.name}${p.required ? ' *' : ''}:`
         row.appendChild(label)
 
@@ -291,13 +320,25 @@
           input.placeholder = p.description || p.name
         }
         input.dataset.paramName = p.name
-        input.style.width = '100%'
-        input.style.fontSize = '11px'
-        input.style.padding = '3px 4px'
-        input.style.boxSizing = 'border-box'
+        if (p.type !== 'boolean') {
+          input.className = 'sp-input'
+        }
         row.appendChild(input)
         fieldsEl.appendChild(row)
       })
+    }
+
+    const BUILTIN_EXPLORE_SKILL = {
+      task_id: '__autonomous_navigate__',
+      identity: {
+        task_id: '__autonomous_navigate__',
+        name: '🧭 Navegar Autonomamente no Portal',
+        description: 'Localiza menus, abas e links na página e navega autonomamente até o destino desejado.',
+      },
+      compat: { support_tier: 1 },
+      params: [
+        { name: 'destino', label: 'Para onde navegar (ex: Frequência, Notas, Diário, Turmas)', type: 'string', required: true },
+      ],
     }
 
     function loadActiveSkills() {
@@ -305,25 +346,16 @@
       chrome.runtime.sendMessage({ action: 'SKILLGRAPH_LIST_ACTIVE_SKILLS' }, (res) => {
         const container = document.getElementById('sgv2-skills-select-container')
         const noSkills = document.getElementById('sgv2-no-skills-box')
-        if (res?.skills && res.skills.length > 0) {
-          activeSkills = res.skills
-          if (container) container.style.display = 'flex'
-          if (noSkills) noSkills.style.display = 'none'
-          if (select) {
-            select.innerHTML = activeSkills.map((s) => {
-              const id = getSkillId(s)
-              return `<option value="${id}">${s.identity?.name || id} (tier_${s.compat?.support_tier || 1})</option>`
-            }).join('')
-            renderParamsForm(activeSkills[0])
-          }
-        } else {
-          activeSkills = []
-          if (container) container.style.display = 'none'
-          if (noSkills) noSkills.style.display = 'block'
-          const formEl = document.getElementById('sgv2-params-form')
-          if (formEl) formEl.style.display = 'none'
-          const descEl = document.getElementById('sgv2-skill-desc')
-          if (descEl) descEl.style.display = 'none'
+        const savedSkills = Array.isArray(res?.skills) ? res.skills : []
+        activeSkills = [...savedSkills, BUILTIN_EXPLORE_SKILL]
+        if (container) container.style.display = 'flex'
+        if (noSkills) noSkills.style.display = savedSkills.length === 0 ? 'block' : 'none'
+        if (select) {
+          select.innerHTML = activeSkills.map((s) => {
+            const id = getSkillId(s)
+            return `<option value="${id}">${s.identity?.name || id}</option>`
+          }).join('')
+          renderParamsForm(activeSkills[0])
         }
       })
     }
@@ -335,6 +367,49 @@
 
     document.getElementById('sgv2-btn-goto-record')?.addEventListener('click', () => switchSubTab(tabRecord, viewRecord))
 
+    function triggerExplore(rawTarget) {
+      const nluFeedback = document.getElementById('sgv2-nlu-feedback')
+      const nluInput = document.getElementById('sgv2-nlu-input')
+      const destInput = document.querySelector('#sgv2-params-fields [data-param-name="destino"]')
+      const text = (rawTarget || nluInput?.value || destInput?.value || '').trim()
+      if (!nluFeedback) return
+      nluFeedback.style.display = 'block'
+      if (!text) {
+        nluFeedback.style.background = 'rgba(139, 94, 60, 0.10)'
+        nluFeedback.style.border = '1px solid rgba(139, 94, 60, 0.25)'
+        nluFeedback.style.color = '#5c3d20'
+        nluFeedback.textContent = 'Digite acima ou escolha uma sugestão rápida (ex: Frequência, Notas, Diário) para navegar! 🧭'
+        ;(nluInput || destInput)?.focus()
+        return
+      }
+      nluFeedback.style.background = 'rgba(139, 94, 60, 0.10)'
+      nluFeedback.style.border = '1px solid rgba(139, 94, 60, 0.25)'
+      nluFeedback.style.color = '#5c3d20'
+      nluFeedback.textContent = `Procurando "${text}" e navegando autonomamente na página...`
+      chrome.runtime.sendMessage({ action: 'SKILLGRAPH_EXPLORE_AND_LEARN', text }, (exploreRes) => {
+        handleExploreResponse(exploreRes, nluFeedback)
+      })
+    }
+
+    document.querySelectorAll('.sp-chip[data-quick-nlu]').forEach((chip) => {
+      chip.addEventListener('click', () => {
+        const target = chip.getAttribute('data-quick-nlu') || ''
+        const nluInput = document.getElementById('sgv2-nlu-input')
+        const destInput = document.querySelector('#sgv2-params-fields [data-param-name="destino"]')
+        if (nluInput) nluInput.value = target
+        if (destInput) destInput.value = target
+        triggerExplore(target)
+      })
+    })
+
+    document.getElementById('sgv2-btn-explore-empty')?.addEventListener('click', () => triggerExplore())
+    document.getElementById('sgv2-nlu-input')?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault()
+        document.getElementById('sgv2-btn-nlu-send')?.click()
+      }
+    })
+
     document.getElementById('sgv2-btn-nlu-send')?.addEventListener('click', () => {
       const nluInput = document.getElementById('sgv2-nlu-input')
       const nluFeedback = document.getElementById('sgv2-nlu-feedback')
@@ -343,7 +418,7 @@
       chrome.runtime.sendMessage({
         action: 'SKILLGRAPH_NLU_PARSE',
         text,
-        catalog: activeSkills.map((s) => ({
+        catalog: activeSkills.filter((s) => getSkillId(s) !== '__autonomous_navigate__').map((s) => ({
           id: getSkillId(s),
           name: s.identity?.name || getSkillId(s),
           description: s.identity?.description || '',
@@ -359,103 +434,7 @@
           return
         }
         if (res?.no_match || !res?.skill_id) {
-          nluFeedback.style.background = '#fefce8'
-          nluFeedback.style.color = '#854d0e'
-          nluFeedback.innerHTML = `
-            <span>Ainda não tenho esta habilidade gravada.</span>
-            <div style="margin-top: 6px; display: flex; gap: 6px; flex-wrap: wrap;">
-              <button id="sgv2-btn-explore" type="button" style="padding: 4px 8px; font-size: 11px; background: #2563eb; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-weight: 500;">🧭 Explorar e Aprender na Página ✨</button>
-              <button id="sgv2-btn-teach-record" type="button" style="padding: 4px 8px; font-size: 11px; background: #e2e8f0; color: #334155; border: none; border-radius: 4px; cursor: pointer;">📹 Ensinar Gravando</button>
-            </div>
-          `
-          document.getElementById('sgv2-btn-teach-record')?.addEventListener('click', () => {
-            switchSubTab(tabRecord, viewRecord)
-          })
-          document.getElementById('sgv2-btn-explore')?.addEventListener('click', () => {
-            const btnExplore = document.getElementById('sgv2-btn-explore')
-            if (btnExplore) {
-              btnExplore.disabled = true
-              btnExplore.textContent = 'Explorando página...'
-            }
-            nluFeedback.style.background = '#eff6ff'
-            nluFeedback.style.color = '#1e40af'
-            nluFeedback.textContent = `Procurando "${text}" e navegando na página...`
-
-            chrome.runtime.sendMessage({ action: 'SKILLGRAPH_EXPLORE_AND_LEARN', text }, (exploreRes) => {
-              if (exploreRes?.success) {
-                nluFeedback.style.background = '#f0fdf4'
-                nluFeedback.style.color = '#166534'
-                nluFeedback.textContent = exploreRes.friendlyMessage || 'Navegação realizada e habilidade aprendida em quarentena! ✨'
-                const learnedGraph = exploreRes.quarantine ? exploreRes.graph : null
-                const learnedId = learnedGraph?.identity
-                if (learnedId) {
-                  const nodesSummary = Object.entries(learnedGraph.nodes || {})
-                    .map(([id, n]) => `${id} [${n.type}: ${n.label || id}]`)
-                    .join(' → ')
-                  const sideEffect = learnedGraph.safety?.side_effect_level || 'read'
-                  nluFeedback.insertAdjacentHTML(
-                    'beforeend',
-                    `<div style="margin-top:6px;padding:6px;background:#fff;border:1px solid #bbf7d0;border-radius:4px;font-size:11px;color:#1e293b;">
-                      <div><strong>Revisão de Nós e Efeitos (${sideEffect}):</strong> ${nodesSummary}</div>
-                      <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;">
-                        <button id="sgv2-dryrun-learned" type="button" style="padding:3px 8px;font-size:11px;background:#0284c7;color:#fff;border:none;border-radius:4px;cursor:pointer;">1. Testar Simulação (Dry-Run)</button>
-                        <button id="sgv2-activate-learned" type="button" disabled style="padding:3px 8px;font-size:11px;background:#94a3b8;color:#fff;border:none;border-radius:4px;cursor:not-allowed;">2. Confirmar Nós e Ativar</button>
-                      </div>
-                    </div>`
-                  )
-                  const btnDryRun = document.getElementById('sgv2-dryrun-learned')
-                  const btnActivate = document.getElementById('sgv2-activate-learned')
-                  btnDryRun?.addEventListener('click', () => {
-                    btnDryRun.disabled = true
-                    btnDryRun.textContent = 'Simulando...'
-                    chrome.runtime.sendMessage(
-                      { action: 'SKILLGRAPH_RUN', payload: { graph: learnedGraph, taskId: learnedId.task_id, dryRun: true, standaloneFallback: true } },
-                      (drRes) => {
-                        if (drRes?.success) {
-                          btnDryRun.textContent = '✓ Dry-Run Aprovado'
-                          if (btnActivate) {
-                            btnActivate.disabled = false
-                            btnActivate.style.background = '#16a34a'
-                            btnActivate.style.cursor = 'pointer'
-                          }
-                        } else {
-                          btnDryRun.disabled = false
-                          btnDryRun.textContent = 'Falha no Dry-Run (Tentar novamente)'
-                        }
-                      }
-                    )
-                  })
-                  btnActivate?.addEventListener('click', (e) => {
-                    e.preventDefault()
-                    chrome.runtime.sendMessage(
-                      {
-                        action: 'SKILLGRAPH_ACTIVATE_GRAPH',
-                        portalId: learnedId.portal_id,
-                        taskId: learnedId.task_id,
-                        version: learnedId.version,
-                        confirmed: true,
-                      },
-                      (actRes) => {
-                        nluFeedback.textContent = actRes?.success
-                          ? 'Habilidade revisada e ativada após Dry-Run! ✨'
-                          : (actRes?.friendlyMessage || 'Não consegui ativar agora.')
-                        loadActiveSkills()
-                      }
-                    )
-                  })
-                }
-                loadActiveSkills()
-              } else {
-                nluFeedback.style.background = '#fef2f2'
-                nluFeedback.style.color = '#991b1b'
-                nluFeedback.innerHTML = `${exploreRes?.friendlyMessage || 'Não encontrei este item na página.'} <a href="#" id="sgv2-nlu-teach-fallback" style="color: #2563eb; font-weight: 600;">Gravar demonstração?</a>`
-                document.getElementById('sgv2-nlu-teach-fallback')?.addEventListener('click', (e) => {
-                  e.preventDefault()
-                  switchSubTab(tabRecord, viewRecord)
-                })
-              }
-            })
-          })
+          triggerExplore(text)
         } else {
           nluFeedback.style.background = '#f0fdf4'
           nluFeedback.style.color = '#166534'
@@ -480,6 +459,84 @@
       })
     })
 
+    function handleExploreResponse(exploreRes, nluFeedback) {
+      if (exploreRes?.success) {
+        nluFeedback.style.background = 'rgba(61, 122, 78, 0.10)'
+        nluFeedback.style.border = '1px solid rgba(61, 122, 78, 0.25)'
+        nluFeedback.style.color = '#346a43'
+        nluFeedback.textContent = exploreRes.friendlyMessage || 'Navegação realizada! Revise a habilidade aprendida abaixo para ativá-la. ✨'
+        const learnedGraph = exploreRes.quarantine ? exploreRes.graph : null
+        const learnedId = learnedGraph?.identity
+        if (learnedId) {
+          const nodesSummary = Object.entries(learnedGraph.nodes || {})
+            .map(([id, n]) => `${n.label || id}`)
+            .join(' → ')
+          const sideEffectLabel = (learnedGraph.safety?.side_effect_level || 'read') === 'read' ? 'Apenas leitura/navegação' : 'Altera dados no portal'
+          nluFeedback.insertAdjacentHTML(
+            'beforeend',
+            `<div style="margin-top:8px;padding:10px;background:#fffcf8;border:1px solid rgba(139,115,85,0.22);border-radius:8px;font-size:12px;color:#2c1a0e;">
+              <div style="margin-bottom:4px;"><strong>Passos Aprendidos (${sideEffectLabel}):</strong> ${nodesSummary}</div>
+              <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;">
+                <button id="sgv2-dryrun-learned" type="button" style="padding:5px 10px;font-size:11px;font-weight:700;background:#8b5e3c;color:#fffcf8;border:none;border-radius:6px;cursor:pointer;">1. Testar Simulação (Dry-Run)</button>
+                <button id="sgv2-activate-learned" type="button" disabled style="padding:5px 10px;font-size:11px;font-weight:700;background:#ede4d6;color:#7a5c42;border:none;border-radius:6px;cursor:not-allowed;">2. Confirmar e Ativar</button>
+              </div>
+            </div>`
+          )
+          const btnDryRun = document.getElementById('sgv2-dryrun-learned')
+          const btnActivate = document.getElementById('sgv2-activate-learned')
+          btnDryRun?.addEventListener('click', () => {
+            btnDryRun.disabled = true
+            btnDryRun.textContent = 'Simulando...'
+            chrome.runtime.sendMessage(
+              { action: 'SKILLGRAPH_RUN', payload: { graph: learnedGraph, taskId: learnedId.task_id, dryRun: true, standaloneFallback: true } },
+              (drRes) => {
+                if (drRes?.success) {
+                  btnDryRun.textContent = '✓ Simulação Aprovada'
+                  if (btnActivate) {
+                    btnActivate.disabled = false
+                    btnActivate.style.background = '#346a43'
+                    btnActivate.style.color = '#fffcf8'
+                    btnActivate.style.cursor = 'pointer'
+                  }
+                } else {
+                  btnDryRun.disabled = false
+                  btnDryRun.textContent = 'Tentar Simulação Novamente'
+                }
+              }
+            )
+          })
+          btnActivate?.addEventListener('click', (e) => {
+            e.preventDefault()
+            chrome.runtime.sendMessage(
+              {
+                action: 'SKILLGRAPH_ACTIVATE_GRAPH',
+                portalId: learnedId.portal_id,
+                taskId: learnedId.task_id,
+                version: learnedId.version,
+                confirmed: true,
+              },
+              (actRes) => {
+                nluFeedback.textContent = actRes?.success
+                  ? 'Habilidade revisada e ativada após simulação! ✨'
+                  : (actRes?.friendlyMessage || 'Não consegui ativar agora.')
+                loadActiveSkills()
+              }
+            )
+          })
+        }
+        loadActiveSkills()
+      } else {
+        nluFeedback.style.background = 'rgba(168, 50, 50, 0.10)'
+        nluFeedback.style.border = '1px solid rgba(168, 50, 50, 0.25)'
+        nluFeedback.style.color = '#a83232'
+        nluFeedback.innerHTML = `${exploreRes?.friendlyMessage || 'Não encontrei este item na página.'} <a href="#" id="sgv2-nlu-teach-fallback" style="color: #8b5e3c; font-weight: 700; text-decoration: underline;">Gravar demonstração?</a>`
+        document.getElementById('sgv2-nlu-teach-fallback')?.addEventListener('click', (e) => {
+          e.preventDefault()
+          switchSubTab(tabRecord, viewRecord)
+        })
+      }
+    }
+
     btnRun.addEventListener('click', () => {
       const graphKey = select?.value
       if (!graphKey) return
@@ -487,6 +544,10 @@
       document.querySelectorAll('#sgv2-params-fields [data-param-name]').forEach((el) => {
         initialVariables[el.dataset.paramName] = el.type === 'checkbox' ? el.checked : el.value
       })
+      if (graphKey === '__autonomous_navigate__') {
+        triggerExplore(initialVariables.destino)
+        return
+      }
       const chkDryRun = document.getElementById('sgv2-chk-dryrun')
       const dryRun = Boolean(chkDryRun?.checked)
       btnRun.disabled = true
@@ -681,6 +742,22 @@
     if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
       chrome.runtime.onMessage.addListener((msg) => {
         if (!msg) return
+
+        if (msg.type === 'SKILLGRAPH_DECISIONS_REQUIRED' || msg.action === 'SKILLGRAPH_DECISIONS_REQUIRED') {
+          renderPendingDecisions(msg.decisions)
+          return
+        }
+
+        if (msg.type === 'SKILLGRAPH_ERROR_NOTICE' || msg.action === 'SKILLGRAPH_ERROR_NOTICE') {
+          if (messageBox && msg.notice?.friendlyMessage) {
+            messageBox.style.display = 'block'
+            messageBox.textContent = msg.notice.friendlyMessage
+            messageBox.style.background = '#fef2f2'
+            messageBox.style.border = '1px solid #fecaca'
+            messageBox.style.color = '#991b1b'
+          }
+          return
+        }
 
         if (msg.type === 'SKILLGRAPH_HANDOFF_REQUEST' || msg.action === 'SKILLGRAPH_HANDOFF_REQUEST') {
           showHandoffCard(msg.requestId, msg.handoff?.timeout_ms)

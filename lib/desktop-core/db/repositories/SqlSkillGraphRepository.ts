@@ -187,10 +187,25 @@ export class SqlSkillGraphRepository implements SkillGraphRepository {
     }))
   }
 
-  async save(graph: SkillGraphV2, options?: { activate?: boolean }): Promise<SkillGraphV2> {
+  async save(
+    graph: SkillGraphV2,
+    options?: { activate?: boolean; origin?: 'exploration' | 'standalone_draft' | 'community_quarantine' | 'teacher_approved' }
+  ): Promise<SkillGraphV2> {
     const portalId = graph.identity.portal_id
     const taskId = graph.identity.task_id
     const now = this.clock.toISOString()
+
+    const isExplorationOrigin =
+      options?.origin === 'exploration' ||
+      taskId.startsWith('custom:nav-') ||
+      taskId.startsWith('explored:')
+
+    if (options?.activate === true && isExplorationOrigin && options?.origin !== 'teacher_approved') {
+      throw new CommunityError(
+        'E_EXPLORATION_CANNOT_ACTIVATE' as any,
+        `Ativação automática rejeitada para "${taskId}": grafos de exploração exigem aprovação explícita da professora.`
+      )
+    }
 
     return await this.driver.transaction(async (tx) => {
       // 1. Descobre se já existem versões deste grafo
@@ -216,8 +231,13 @@ export class SqlSkillGraphRepository implements SkillGraphRepository {
         },
       }
 
-      // Se activate === false explícito, não nasce ativa nem na v1
-      const isActive = options?.activate === false ? 0 : (existingMax === 0 ? 1 : 0)
+      // Se activate === false explícito ou vier de exploração sem teacher_approved, nunca nasce ativa nem na v1
+      const isActive =
+        options?.activate === false || (isExplorationOrigin && options?.origin !== 'teacher_approved')
+          ? 0
+          : existingMax === 0 || options?.activate === true
+          ? 1
+          : 0
 
       await tx.execute(
         `INSERT INTO skill_graphs (

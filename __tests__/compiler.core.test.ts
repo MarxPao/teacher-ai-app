@@ -204,7 +204,7 @@ describe('Compiler Core v2 — Determinístico e Anti-PII', () => {
     expectErrorCode(() => compile(hugeTrace, decisions), 'E_TRACE_TOO_LARGE')
   })
 
-  it('9. Decisão obrigatória: lancar_falta sem attendance_polarity lança E_DECISION_REQUIRED', () => {
+  it('9. Decisão obrigatória: lancar_falta sem attendance_polarity devolve needs_decisions (não ativo, zero PII) e lança E_DECISION_REQUIRED se ignorado', () => {
     const trace = loadGoldenTrace('lancar_falta.trace.json')
     const decisions: CompilerDecisions = {
       task_id: 'lancar_falta',
@@ -213,7 +213,15 @@ describe('Compiler Core v2 — Determinístico e Anti-PII', () => {
       allowed_hosts: ['portal.escola.com'],
     }
 
-    expectErrorCode(() => compile(trace, decisions), 'E_DECISION_REQUIRED')
+    const res = compile(trace, decisions)
+    expect(res.status).toBe('needs_decisions')
+    if (res.status === 'needs_decisions') {
+      expect(res.decisions.map((d) => d.key)).toEqual(['attendance_polarity'])
+      expect(res.partialGraph.active).toBe(false)
+      expect(res.partialGraph.status).toBe('pending_decisions')
+      expect(res.partialGraph.provenance.pii_scrubbed).toBe(true)
+    }
+    expectErrorCode(() => (res as any).graph, 'E_DECISION_REQUIRED')
   })
 
   it('10. Detecta padrão em lote e emite W_BATCH_PATTERN_IGNORED', () => {
@@ -324,9 +332,9 @@ describe('Compiler Core v2 — Determinístico e Anti-PII', () => {
           kind: 'click',
           descriptor: {
             tag: 'a',
-            text: 'Boletim Escolar',
+            text: 'Frequência Escolar',
             classes: [],
-            candidates: [{ strategy: 'text', text: 'Boletim Escolar', match: 'normalized' }],
+            candidates: [{ strategy: 'text', text: 'Frequência Escolar', match: 'normalized' }],
           },
         },
       ],
@@ -335,12 +343,14 @@ describe('Compiler Core v2 — Determinístico e Anti-PII', () => {
     const decisions: CompilerDecisions = {
       task_id: 'custom:nav-boletim',
       portal_id: 'portal_escola',
-      task_name: 'Acessar Boletim Escolar',
-      task_description: 'Navega para a aba Boletim Escolar',
+      task_name: 'Acessar Frequência Escolar',
+      task_description: 'Navega para a aba Frequência Escolar',
       allowed_hosts: ['portal.escola.com'],
     }
 
-    const { graph, report } = compile(trace, decisions, { clock: FIXED_CLOCK })
+    const res = compile(trace, decisions, { clock: FIXED_CLOCK })
+    expect(res.status).toBe('compiled')
+    const { graph, report } = res as any
     expect(report.valid).toBe(true)
     expect(graph.safety.side_effect_level).toBe('read')
     expect(graph.nodes.n1.type).toBe('NAVIGATE')
@@ -411,5 +421,42 @@ describe('Compiler Core v2 — Determinístico e Anti-PII', () => {
     const writeNodes = Object.values(graph.nodes).filter((n) => n.type === 'WRITE')
     expect(writeNodes).toHaveLength(2)
     expect(validateGraph(graph).valid).toBe(true)
+  })
+
+  it('14. Retoma rascunho pending_decisions de frequência e de nota quando a professora responde as decisões', () => {
+    const attTrace = loadGoldenTrace('lancar_falta.trace.json')
+    const pendingAtt = compile(attTrace, {
+      task_id: 'lancar_falta',
+      portal_id: 'portal_escola',
+      task_name: 'Lançar Falta',
+      allowed_hosts: ['portal.escola.com'],
+    })
+    expect(pendingAtt.status).toBe('needs_decisions')
+    if (pendingAtt.status === 'needs_decisions') {
+      const completedAtt = compile(pendingAtt.partialGraph.sanitized_trace, {
+        ...(pendingAtt.partialGraph.decisions_snapshot as CompilerDecisions),
+        attendance_polarity: 'checked_is_absent',
+      }, { clock: FIXED_CLOCK })
+      expect(completedAtt.status).toBe('compiled')
+      expect(validateGraph(completedAtt.graph).valid).toBe(true)
+    }
+
+    const gradeTrace = loadGoldenTrace('lancar_nota.trace.json')
+    const pendingGrade = compile(gradeTrace, {
+      task_id: 'lancar_nota',
+      portal_id: 'portal_escola',
+      task_name: 'Lançar Nota',
+      allowed_hosts: ['portal.escola.com'],
+    })
+    expect(pendingGrade.status).toBe('needs_decisions')
+    if (pendingGrade.status === 'needs_decisions') {
+      expect(pendingGrade.decisions.map((d) => d.key)).toEqual(['grade_scale'])
+      const completedGrade = compile(pendingGrade.partialGraph.sanitized_trace, {
+        ...(pendingGrade.partialGraph.decisions_snapshot as CompilerDecisions),
+        grade_scale: { type: 'numeric', min: 0, max: 10, decimal_separator: ',' },
+      }, { clock: FIXED_CLOCK })
+      expect(completedGrade.status).toBe('compiled')
+      expect(validateGraph(completedGrade.graph).valid).toBe(true)
+    }
   })
 })

@@ -7,3 +7,5 @@ export * from './decisions'
 export * from './report'
 export * from './synonyms'
 export * from './scrub'
+export * from './pendingDecisions'
+

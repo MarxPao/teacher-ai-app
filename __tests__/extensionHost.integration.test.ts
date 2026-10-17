@@ -490,4 +490,85 @@ describe('ExtensionHost Integration: Checkpoint, Timeout e Aborto Seguro', () =>
     await expect(auditPromise).rejects.toMatchObject({ code: 'E_AUDIT_UNAVAILABLE' })
     expect(Object.keys(localStore)).toHaveLength(0)
   })
+
+  it('15. [Prompt 2] Rascunho pending_decisions sobrevive a reinício do service worker, despacha para a UI (frequência e nota) e resposta gera grafo completo ainda não ativo', async () => {
+    const { PendingDraftOrchestrator, STANDALONE_GRAPHS_STORAGE_KEY } = await import('../lib/runner-ext/pendingDraftStore')
+    const mem: Record<string, any> = {}
+    const uiEvents: any[] = []
+    ;(globalThis as any).chrome.storage.local = {
+      get: vi.fn((_keys: any, cb: (res: any) => void) => cb(mem)),
+      set: vi.fn((items: Record<string, any>, cb?: () => void) => {
+        Object.assign(mem, items)
+        if (cb) cb()
+      }),
+    }
+    ;(globalThis as any).chrome.runtime.sendMessage = vi.fn((msg: any) => {
+      if (msg?.type === 'SKILLGRAPH_DECISIONS_REQUIRED') uiEvents.push(msg)
+      return Promise.resolve()
+    })
+
+    const baseDecisions = { task_id: 'custom:chamada', portal_id: 'portal.escola.com', task_name: 'Chamada', allowed_hosts: ['portal.escola.com'] }
+    const attTrace: any = {
+      trace_version: '1.0', task_id: 'custom:chamada', started_at: 1000, initial_url: 'https://portal.escola.com/freq',
+      steps: [{ id: 's1', at: 1010, frame_path: '/', host: 'portal.escola.com', path: '/freq', kind: 'check', checked: true, descriptor: { tag: 'input', aria_label: 'Presença Zeca Canário', classes: [] } }],
+    }
+
+    const orch1 = new PendingDraftOrchestrator()
+    const res1 = await orch1.compileAndPersist(attTrace, baseDecisions)
+    expect(res1.status).toBe('needs_decisions')
+    expect(uiEvents).toHaveLength(1)
+    expect(mem[STANDALONE_GRAPHS_STORAGE_KEY]['portal.escola.com::custom:chamada::v1'].active).toBe(false)
+
+    // Reinício do service worker (nova instância lendo do mesmo chrome.storage.local)
+    const orch2 = new PendingDraftOrchestrator()
+    const pendingList = await orch2.listPendingDrafts('portal.escola.com')
+    expect(pendingList).toHaveLength(1)
+    const res2 = await orch2.submitDecisionAnswers('custom:chamada', { attendance_polarity: 'checked_is_present' }, 'portal.escola.com')
+    expect(res2.status).toBe('compiled')
+    expect(mem[STANDALONE_GRAPHS_STORAGE_KEY]['portal.escola.com::custom:chamada::v1'].active).toBe(false)
+
+    // Grade scale também passa pelo mesmo mecanismo para a UI
+    const gradeTrace: any = {
+      trace_version: '1.0', task_id: 'custom:nota', started_at: 1000, initial_url: 'https://portal.escola.com/notas',
+      steps: [{ id: 's1', at: 1010, frame_path: '/', host: 'portal.escola.com', path: '/notas', kind: 'input', value: '9,5', descriptor: { tag: 'input', aria_label: 'Nota Bimestral', classes: [] } }],
+    }
+    const resGrade = await orch2.compileAndPersist(gradeTrace, { ...baseDecisions, task_id: 'custom:nota' })
+    expect(resGrade.status).toBe('needs_decisions')
+    expect(resGrade.decisions?.[0]?.key).toBe('grade_scale')
+  })
+
+  it('16. [Prompt 3] Contrato de erros E_*: todos os códigos emitidos por compiler, runner, runner-ext e repair têm mensagem em português e reportError envia aviso à UI', async () => {
+    const fs = await import('node:fs')
+    const path = await import('node:path')
+    const { ALL_ENGINE_ERROR_CODES, TEACHER_ERROR_MESSAGES, reportError } = await import('../lib/runner-ext/errorCatalog')
+
+    const dirs = ['lib/compiler', 'lib/runner', 'lib/runner-ext', 'lib/repair']
+    const discoveredCodes = new Set<string>(ALL_ENGINE_ERROR_CODES)
+    for (const d of dirs) {
+      for (const f of fs.readdirSync(path.join(process.cwd(), d))) {
+        if (!f.endsWith('.ts')) continue
+        const content = fs.readFileSync(path.join(process.cwd(), d, f), 'utf8')
+        for (const m of content.matchAll(/['"](E_[A-Z0-9_]+)['"]/g)) discoveredCodes.add(m[1])
+      }
+    }
+    for (const code of discoveredCodes) {
+      expect(TEACHER_ERROR_MESSAGES[code], `Código ${code} sem mensagem mapeada para a UI`).toBeTruthy()
+      expect(TEACHER_ERROR_MESSAGES[code].length).toBeGreaterThan(10)
+    }
+    const notices: any[] = []
+    const notice = reportError({ code: 'E_DECISION_REQUIRED', message: 'internal' }, { operation: 'compile', notifySidePanel: (n) => notices.push(n) })
+    expect(notices).toHaveLength(1)
+    expect(notice.friendlyMessage).toContain('painel lateral')
+  })
+
+  it('17. [Prompt 5] Guarda única de ativação bloqueia qualquer caminho de exploração nos 3 modos (assisted, autonomous_read, autonomous_full)', async () => {
+    const { assertCanActivateGraph } = await import('../lib/runner-ext/errorCatalog')
+    for (const mode of ['assisted', 'autonomous_read', 'autonomous_full'] as const) {
+      expect(() => assertCanActivateGraph({ origin: 'exploration', explorerMode: mode, teacherConfirmed: true, dryRunPassed: true })).toThrow(/E_EXPLORATION_CANNOT_ACTIVATE/)
+      expect(() => assertCanActivateGraph({ origin: 'standalone_draft', explorerMode: mode, teacherConfirmed: true, dryRunPassed: true })).toThrow(/E_EXPLORATION_CANNOT_ACTIVATE/)
+      expect(() => assertCanActivateGraph({ origin: 'teacher_approved', explorerMode: mode, teacherConfirmed: true, graphStatus: 'pending_decisions', dryRunPassed: true })).toThrow(/E_DECISION_REQUIRED/)
+      expect(() => assertCanActivateGraph({ origin: 'teacher_approved', explorerMode: mode, teacherConfirmed: true, taskId: 'custom:nav-boletim', dryRunPassed: false })).toThrow(/E_EXPLORATION_CANNOT_ACTIVATE/)
+      expect(() => assertCanActivateGraph({ origin: 'teacher_approved', explorerMode: mode, teacherConfirmed: true, taskId: 'custom:nav-boletim', dryRunPassed: true })).not.toThrow()
+    }
+  })
 })

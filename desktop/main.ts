@@ -100,8 +100,18 @@ async function executeBusinessMethod(method: string, params: any): Promise<any> 
       if (!validation.valid) {
         throw new Error(`E_GRAPH_INVALID: ${validation.errors.map((e: any) => e.message).join('; ')}`)
       }
-      const shouldActivate = params.activate !== false
-      const saved = await graphRepo?.save(params.graph as any, { activate: shouldActivate })
+      const taskId = String((params.graph as any)?.identity?.task_id || '')
+      const isExplored =
+        params.origin === 'exploration' ||
+        taskId.startsWith('custom:nav-') ||
+        taskId.startsWith('explored:')
+      const shouldActivate = isExplored
+        ? params.origin === 'teacher_approved' && params.activate === true
+        : params.activate !== false
+      const saved = await graphRepo?.save(params.graph as any, {
+        activate: shouldActivate,
+        origin: params.origin,
+      })
       if (shouldActivate && saved) {
         await graphRepo?.setActive(saved.identity.portal_id, saved.identity.task_id, saved.identity.version)
       }
@@ -356,7 +366,10 @@ async function initCore() {
   await pipeServer.start()
 
   // Auto-registro zero-terminal do Native Messaging Host em HKCU (Chrome & Edge)
-  autoRegisterNativeMessagingHost({ userDataPath: userData, electronExecPath: process.execPath })
+  autoRegisterNativeMessagingHost({
+    userDataPath: userData,
+    electronExecPath: app.isPackaged ? process.execPath : undefined,
+  })
 }
 
 function createWindow() {

@@ -27,6 +27,18 @@ import {
   decomposeCompoundTeacherCommand,
   selectBestDistilledAction,
 } from '../explorer/domDistiller'
+import {
+  ALL_ENGINE_ERROR_CODES,
+  TEACHER_ERROR_MESSAGES,
+  extractErrorCode,
+  getTeacherFriendlyErrorMessage,
+  reportError,
+  assertCanActivateGraph,
+} from './errorCatalog'
+import {
+  PendingDraftOrchestrator,
+  STANDALONE_GRAPHS_STORAGE_KEY,
+} from './pendingDraftStore'
 
 declare const chrome: any
 declare const __DEV__: boolean
@@ -388,6 +400,14 @@ const SkillGraphV2 = {
   distillInteractiveDom,
   decomposeCompoundTeacherCommand,
   selectBestDistilledAction,
+  ALL_ENGINE_ERROR_CODES,
+  TEACHER_ERROR_MESSAGES,
+  extractErrorCode,
+  getTeacherFriendlyErrorMessage,
+  reportError,
+  assertCanActivateGraph,
+  PendingDraftOrchestrator,
+  STANDALONE_GRAPHS_STORAGE_KEY,
 }
 
 if (typeof globalThis !== 'undefined') {
@@ -409,4 +429,12 @@ export {
   distillInteractiveDom,
   decomposeCompoundTeacherCommand,
   selectBestDistilledAction,
+  ALL_ENGINE_ERROR_CODES,
+  TEACHER_ERROR_MESSAGES,
+  extractErrorCode,
+  getTeacherFriendlyErrorMessage,
+  reportError,
+  assertCanActivateGraph,
+  PendingDraftOrchestrator,
+  STANDALONE_GRAPHS_STORAGE_KEY,
 }

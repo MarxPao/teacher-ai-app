@@ -15,6 +15,13 @@ import { buildFingerprint } from './stages/fingerprint'
 import { scrubGraph } from './scrub'
 import type { PiiRegistry } from '../recorder/registry'
 import { CompilerError, type CompilerReport } from './report'
+import {
+  evaluatePendingDecisions,
+  buildNeedsDecisionsResult,
+  type CompileOutcome,
+  type PendingDecisionDescriptor,
+  type PartialDraftGraph,
+} from './pendingDecisions'
 
 export interface CompileOptions {
   clock?: () => string
@@ -22,9 +29,12 @@ export interface CompileOptions {
   piiRegistry?: PiiRegistry
 }
 
-export interface CompileResult {
+export type CompileResult = CompileOutcome & {
+  status: 'compiled' | 'needs_decisions'
   graph: SkillGraphV2
   report: CompilerReport
+  decisions?: PendingDecisionDescriptor[]
+  partialGraph?: PartialDraftGraph
 }
 
 export function compile(
@@ -67,25 +77,19 @@ export function compile(
     throw new CompilerError('E_PII_SCRUB_FAILED', 'O identificador da tarefa contém PII (CPF ou e-mail detectado).')
   }
 
-  const hasAttendanceControl = trace.steps.some((s) => {
-    if (s.kind === 'check') return true
-    const d = (s as any).descriptor || {}
-    const textSample = `${d.text || ''} ${d.name || ''} ${d.aria_label || ''} ${d.label || ''} ${d.placeholder || ''} ${d.rowContext?.headers?.join(' ') || ''}`
-    return /presen[çc]a|falta|frequ[eê]ncia|attendance|absent|present/i.test(textSample)
-  })
+  const timestamp = options?.clock ? options.clock() : '2026-10-11T00:00:00.000Z'
+  const compilerVersion = options?.compilerVersion || '2.0.0'
 
-  const hasGradeControl = trace.steps.some((s) => {
-    if (s.kind !== 'input') return false
-    const d = (s as any).descriptor || {}
-    const textSample = `${d.text || ''} ${d.name || ''} ${d.aria_label || ''} ${d.label || ''} ${d.placeholder || ''} ${d.rowContext?.headers?.join(' ') || ''}`
-    return /nota|grade|pontua[çc][ãa]o|score|avalia[çc][ãa]o/i.test(textSample)
-  })
-
-  if ((decisions.task_id === 'lancar_falta' || hasAttendanceControl) && !decisions.attendance_polarity) {
-    throw new CompilerError('E_DECISION_REQUIRED', 'A polaridade de frequência (attendance_polarity) é obrigatória para lançar frequência/falta.')
-  }
-  if ((decisions.task_id === 'lancar_nota' || hasGradeControl) && !decisions.grade_scale) {
-    throw new CompilerError('E_DECISION_REQUIRED', 'A escala de notas (grade_scale) é obrigatória para lançar notas.')
+  const pendingDecisions = evaluatePendingDecisions(trace, decisions)
+  if (pendingDecisions.length > 0) {
+    return buildNeedsDecisionsResult(
+      trace,
+      decisions,
+      pendingDecisions,
+      timestamp,
+      compilerVersion,
+      options?.piiRegistry
+    )
   }
 
   const isWriteTask =
@@ -105,9 +109,6 @@ export function compile(
     : trace.initial_url
   const host = decisions.allowed_hosts[0] || 'localhost'
   const entryFingerprint = buildFingerprint(initialUrl, host, trace.page_digest)
-
-  const timestamp = options?.clock ? options.clock() : '2026-10-11T00:00:00.000Z'
-  const compilerVersion = options?.compilerVersion || '2.0.0'
 
   // 5. Montagem do SkillGraphV2
   const unvalidatedGraph: any = {
@@ -182,6 +183,7 @@ export function compile(
   ]
 
   return {
+    status: 'compiled',
     graph,
     report: {
       valid: true,

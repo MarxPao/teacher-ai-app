@@ -270,6 +270,25 @@ describe('Desktop Core — Teste de Fronteira (Fase 6)', () => {
 
       const resolved = await repo.resolveActive('teste.escola.com.br', 'nav_explorada')
       expect(resolved).toBeNull()
+
+      const exploredNavGraph: SkillGraph = {
+        ...dummyGraph,
+        identity: {
+          ...dummyGraph.identity,
+          task_id: 'custom:nav-boletim',
+          version: 1,
+        },
+      }
+      // Mesmo sem passar activate: false, grafo de exploração nunca auto-ativa na v1
+      await repo.save(exploredNavGraph)
+      const navVersions = await repo.listVersions('portal_teste', 'custom:nav-boletim')
+      expect(navVersions).toHaveLength(1)
+      expect(navVersions[0].isActive).toBe(false)
+
+      // Tentar ativar diretamente vindo de exploração lança E_EXPLORATION_CANNOT_ACTIVATE
+      await expect(
+        repo.save({ ...exploredNavGraph, identity: { ...exploredNavGraph.identity, version: 2 } }, { activate: true, origin: 'exploration' })
+      ).rejects.toThrowError(/E_EXPLORATION_CANNOT_ACTIVATE/)
     })
   })
 

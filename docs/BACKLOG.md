@@ -110,5 +110,10 @@ Este documento centraliza as funcionalidades, arquétipos e melhorias postergada
 - [ ] **Benchmark bipartido automatizado:** Suíte contínua comparando tempo de compilação humana vs. precisão determinística em produção.
 - [ ] **Aposentadoria definitiva de `side_panel.js` legado:** Migração integral dos painéis restantes para o stack `side_panel_v2.js`.
 - [ ] **Expurgo final de eventuais chamadas residuais a `localhost:3000`** em scripts utilitários ou protótipos fora da extensão.
-
-
+- [ ] **Substituição de blocos `catch` console-only em scripts legados da extensão por `reportError`:**
+  - `teacher-extension/orchestrator_v2.js`: migrado integralmente para `reportError(err, context)` com notificação `SKILLGRAPH_ERROR_NOTICE` no painel lateral.
+  - Arquivos legados pendentes (fora do limite de 80 linhas por arquivo):
+    - `teacher-extension/background.js`: linhas 57, 134, 152, 469, 492, 650, 998, 1277.
+    - `teacher-extension/content.js`: linhas 949, 1007, 1291, 1344, 1370.
+    - `teacher-extension/popup.js`: linha 77.
+    - `teacher-extension/side_panel.js`: linhas 148, 696, 809, 1084, 1455, 2248, 2266, 2289, 2500, 2608.
