@@ -95,7 +95,7 @@ export function compile(
   const isWriteTask =
     decisions.task_id === 'lancar_falta' ||
     decisions.task_id === 'lancar_nota' ||
-    trace.steps.some((s) => s.kind === 'input' || s.kind === 'check' || (s.kind === 'click' && (s as any).is_submit_action))
+    trace.steps.some((s) => s.kind === 'input' || s.kind === 'check' || s.kind === 'select' || (s.kind === 'click' && (s as any).is_submit_action))
 
   // 4. Estágios do Compilador
   const segmented = segmentTrace(trace, decisions)

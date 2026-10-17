@@ -571,4 +571,36 @@ describe('ExtensionHost Integration: Checkpoint, Timeout e Aborto Seguro', () =>
       expect(() => assertCanActivateGraph({ origin: 'teacher_approved', explorerMode: mode, teacherConfirmed: true, taskId: 'custom:nav-boletim', dryRunPassed: true })).not.toThrow()
     }
   })
+
+  it('18. [Seleção Sistêmica em Abas/Filtros] Resolve "selecione setimo ano nos filtros" contra <option> "7º Ano A" de um <select> com equivalência ordinal', async () => {
+    const { selectBestDistilledAction, decomposeCompoundTeacherCommand } = await import('../lib/explorer/domDistiller')
+    const decomposed = decomposeCompoundTeacherCommand('selecione setimo ano nos filtros')
+    expect(decomposed.filters).toEqual([{ concept: 'turma', value: 'setimo ano' }])
+
+    const snapshot = {
+      urlPath: '/frequencia',
+      stateHash: 'abc12345',
+      compactPromptText: '[1] <select>Selecione uma turma</select>',
+      elements: [
+        {
+          idx: 1,
+          tag: 'select',
+          role: 'select',
+          label: 'Selecione uma turma',
+          context: 'section',
+          selector: '#turma',
+          isDestructive: false,
+          options: [
+            { value: '', text: 'Selecione uma turma' },
+            { value: '6A', text: '6º Ano A - Ensino Fundamental' },
+            { value: '7A', text: '7º Ano A - Ensino Fundamental' },
+          ],
+        },
+      ],
+    }
+    const res = selectBestDistilledAction(snapshot as any, 'selecione setimo ano nos filtros')
+    expect(res.selected?.selector).toBe('#turma')
+    expect(res.matchedOption).toEqual({ value: '7A', text: '7º Ano A - Ensino Fundamental' })
+    expect(res.score).toBeGreaterThanOrEqual(80)
+  })
 })

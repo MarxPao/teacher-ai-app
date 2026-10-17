@@ -459,4 +459,41 @@ describe('Compiler Core v2 — Determinístico e Anti-PII', () => {
       expect(validateGraph(completedGrade.graph).valid).toBe(true)
     }
   })
+
+  it('15. Compila trace com seleção de filtro (<select>) e clique sem divergência de side_effect_level', () => {
+    const selectTrace: Trace = {
+      trace_version: '1.0',
+      task_id: 'custom:nav-7-ano',
+      started_at: 1775865600000,
+      initial_url: 'http://portal.escola.com/frequencia',
+      steps: [
+        {
+          id: 's1',
+          at: 1775865600100,
+          frame_path: '/',
+          host: 'portal.escola.com',
+          path: '/frequencia',
+          kind: 'select',
+          value: '7A',
+          text: '7º Ano A',
+          descriptor: {
+            tag: 'select',
+            id: 'filtro_turma',
+            aria_label: 'Selecione uma turma',
+            classes: [],
+            candidates: [{ strategy: 'css', selector: '#filtro_turma' }],
+          },
+        },
+      ],
+    }
+    const res = compile(selectTrace, {
+      task_id: 'custom:nav-7-ano',
+      portal_id: 'portal_escola',
+      task_name: 'Filtrar 7º Ano A',
+      allowed_hosts: ['portal.escola.com'],
+    }, { clock: FIXED_CLOCK })
+    expect(res.status).toBe('compiled')
+    expect(validateGraph(res.graph).valid).toBe(true)
+    expect(res.graph.safety.side_effect_level).toBe('write')
+  })
 })

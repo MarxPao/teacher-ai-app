@@ -493,7 +493,10 @@
                 skills = resp
               }
             } catch (err) {
-              reportError(err, 'graphs.listActive')
+              const isNativeOffline = /timeout|native messaging|disconnected|host/i.test(String(err?.message || err))
+              if (!isNativeOffline) {
+                reportError(err, 'graphs.listActive')
+              }
             }
           }
           const standaloneSkills = await listStandaloneActiveSkills(host)
@@ -611,9 +614,9 @@
             return
           }
 
-          // 1. Divide o comando em até 3 hops encadeados (ex.: "diário de classe e depois notas" ou "acadêmico > frequência")
+          // 1. Divide o comando em até 3 hops encadeados (ex.: "selecione 7º ano, matemática e visualizar frequência")
           const hopTargets = queryText
-            .split(/\s+(?:e\s+depois|depois|em\s+seguida|->|>|›)\s+/i)
+            .split(/\s*(?:,|\s+e\s+depois\s+|\s+depois\s+|\s+em\s+seguida\s+|\s+e\s+(?=(?:selecione|selecionar|escolha|escolher|clicar|clique|visualizar|lancar|lançar|abrir|ir|filtrar)\b)|->|>|›)\s*/i)
             .map((s) => s.trim())
             .filter(Boolean)
             .slice(0, 3)
@@ -640,7 +643,7 @@
               if (recordedSteps.length === 0) {
                 sendResponse({
                   success: false,
-                  friendlyMessage: navRes?.mensagem || `Não encontrei abas ou links para "${hopTarget}" nesta página do portal.`,
+                  friendlyMessage: navRes?.mensagem || `Não encontrei abas, filtros ou opções para "${hopTarget}" nesta página do portal.`,
                 })
                 return
               }
@@ -671,7 +674,7 @@
 
             const subHops = Array.isArray(navRes.hops) && navRes.hops.length > 0
               ? navRes.hops
-              : [{ elementText: (navRes.elementText || hopTarget).trim(), tag: navRes.tag || 'a' }]
+              : [{ elementText: (navRes.elementText || hopTarget).trim(), tag: navRes.tag || 'a', kind: navRes.kind }]
 
             const isUrlNavigation = nextUrl !== currentUrl && !nextUrl.includes('#')
             for (let sIdx = 0; sIdx < subHops.length; sIdx++) {
@@ -681,7 +684,31 @@
               lastElementText = stepText
               const isLastSubHop = sIdx === subHops.length - 1
 
-              if (isLastSubHop && isUrlNavigation && subHops.length === 1) {
+              if (sh.kind === 'select') {
+                const selCandidates = []
+                if (sh.selectId) selCandidates.push({ strategy: 'css', selector: `#${sh.selectId}` })
+                if (sh.selectName) selCandidates.push({ strategy: 'css', selector: `select[name="${sh.selectName}"]` })
+                if (sh.selectLabel) selCandidates.push({ strategy: 'aria_label', aria_label: sh.selectLabel, match: 'contains' })
+                if (selCandidates.length === 0) selCandidates.push({ strategy: 'css', selector: 'select' })
+                recordedSteps.push({
+                  id: `s${recordedSteps.length + 1}`,
+                  at: Date.now(),
+                  frame_path: '/',
+                  host,
+                  path: currentPath,
+                  kind: 'select',
+                  value: String(sh.selectValue ?? stepText),
+                  text: stepText,
+                  descriptor: {
+                    tag: 'select',
+                    ...(sh.selectId ? { id: sh.selectId } : {}),
+                    ...(sh.selectName ? { name: sh.selectName } : {}),
+                    ...(sh.selectLabel ? { aria_label: sh.selectLabel } : {}),
+                    classes: [],
+                    candidates: selCandidates,
+                  },
+                })
+              } else if (isLastSubHop && isUrlNavigation && subHops.length === 1) {
                 recordedSteps.push({
                   id: `s${recordedSteps.length + 1}`,
                   at: Date.now(),

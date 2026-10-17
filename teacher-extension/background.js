@@ -938,11 +938,32 @@ async function internalNavigatePortalTab(targetTabId, targetKeyword, allowedHost
       target: { tabId: targetTabId },
       args: [keyword, Array.isArray(allowedHosts) ? allowedHosts : []],
       func: async (kw, allowedHostList) => {
-        const cleanKey = kw.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-        const destructivePattern = /\b(excluir|deletar|apagar|remover|demitir|formatar|pagar|transferir|salvar|gravar|enviar|publicar|confirmar|fechar|fechamento|consolidar|finalizar|encerrar|concluir|lancar|cancelar|aprovar|reprovar|assinar|homologar|bloquear|desbloquear|resetar|sair|logout)\b/i;
+        const rawNorm = kw.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+        const cleanKey = rawNorm
+          .replace(/^(?:por\s+favor\s+)?(?:selecione|selecionar|escolha|escolher|filtre\s+por|filtrar\s+por|filtrar|ir\s+para|ir\s+em|va\s+para|abrir|abra|clicar\s+em|clique\s+em|acessar|acesse|ver|mostrar|mudar\s+para)\s+/i, '')
+          .replace(/\s+(?:nos\s+filtros|no\s+filtro|na\s+aba|nas\s+abas|no\s+menu|na\s+lista|no\s+campo|do\s+portal|da\s+pagina)$/i, '')
+          .replace(/^(?:a\s+turma|o\s+ano|a\s+disciplina|o\s+mes|a\s+aba|o\s+filtro\s+de|o\s+filtro)\s+/i, '')
+          .trim() || rawNorm;
+        const destructivePattern = /\b(excluir|deletar|apagar|remover|demitir|formatar|pagar|transferir|salvar|gravar|enviar|publicar|confirmar|fechar|fechamento|consolidar|finalizar|encerrar|concluir|cancelar|aprovar|reprovar|assinar|homologar|bloquear|desbloquear|resetar|sair|logout)\b/i;
         if (destructivePattern.test(cleanKey)) {
           return { sucesso: false, mensagem: `Ação bloqueada por segurança durante navegação autônoma: '${kw}'.` };
         }
+
+        const ordinalMap = { primeiro: '1', primeira: '1', segundo: '2', segunda: '2', terceiro: '3', terceira: '3', quarto: '4', quarta: '4', quinto: '5', quinta: '5', sexto: '6', sexta: '6', setimo: '7', setima: '7', oitavo: '8', oitava: '8', nono: '9', nona: '9' };
+        const buildOrdinalVariants = (baseKey) => {
+          const set = new Set([baseKey]);
+          for (const [word, digit] of Object.entries(ordinalMap)) {
+            if (new RegExp(`\\b${word}\\b`).test(baseKey)) {
+              set.add(baseKey.replace(new RegExp(`\\b${word}\\b`, 'g'), digit));
+              set.add(baseKey.replace(new RegExp(`\\b${word}\\b`, 'g'), `${digit}o`));
+              set.add(baseKey.replace(new RegExp(`\\b${word}\\b`, 'g'), `${digit}a`));
+            } else if (new RegExp(`\\b${digit}[º°oaª]?\\b`).test(baseKey)) {
+              set.add(baseKey.replace(new RegExp(`\\b${digit}[º°oaª]?\\b`, 'g'), word));
+              set.add(baseKey.replace(new RegExp(`\\b${digit}[º°oaª]?\\b`, 'g'), digit));
+            }
+          }
+          return Array.from(set).filter(Boolean);
+        };
 
         const effectiveAllowedHosts = (Array.isArray(allowedHostList) && allowedHostList.length > 0
           ? allowedHostList
@@ -964,7 +985,7 @@ async function internalNavigatePortalTab(targetTabId, targetKeyword, allowedHost
         };
 
         const collectClickableCandidates = (root) => {
-          const selector = 'a, button, [role="tab"], [role="menuitem"], [role="button"], .tab, .tab-btn, .nav-link, li, span';
+          const selector = 'a, button, [role="tab"], [role="menuitem"], [role="button"], [role="option"], .tab, .tab-btn, .nav-link, li, span';
           const list = Array.from(root.querySelectorAll(selector));
           const all = Array.from(root.querySelectorAll('*'));
           for (const node of all) {
@@ -979,6 +1000,34 @@ async function internalNavigatePortalTab(targetTabId, targetKeyword, allowedHost
           return list;
         };
 
+        const findBestSelectMatch = (searchKey) => {
+          const variants = buildOrdinalVariants(searchKey).map(v => v.replace(/[º°ª]/g, ''));
+          const selects = Array.from(document.querySelectorAll('select')).filter(s => {
+            if (s.offsetParent === null && s.offsetWidth === 0 && s.offsetHeight === 0) return false;
+            if (s.closest && s.closest('tbody tr')) return false;
+            return true;
+          });
+          let bestSel = null, bestOpt = null, bestScore = -1;
+          for (const sel of selects) {
+            for (const opt of Array.from(sel.options || [])) {
+              const rawText = (opt.text || opt.label || '').trim();
+              const normOpt = rawText.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[º°ª]/g, '');
+              if (!normOpt || /^selecione\b/i.test(normOpt)) continue;
+              for (const v of variants) {
+                let sc = 0;
+                if (normOpt === v) sc = 100;
+                else if (normOpt.startsWith(v) || normOpt.includes(v)) sc = 88;
+                else {
+                  const tks = v.split(/\s+/).filter(t => t.length >= 1 && !['de', 'da', 'do', 'ano'].includes(t));
+                  if (tks.length > 0 && tks.every(t => new RegExp(`(?:^|\\b)${t}`).test(normOpt))) sc = 82;
+                }
+                if (sc > bestScore) { bestScore = sc; bestSel = sel; bestOpt = opt; }
+              }
+            }
+          }
+          return bestScore >= 75 ? { sel: bestSel, opt: bestOpt } : null;
+        };
+
         const PORTAL_SEMANTIC_CLUSTERS = [
           ['notas', 'avaliacoes', 'avaliacao', 'conceitos', 'boletim', 'medias', 'digitacao de notas', 'rendimento', 'notas e faltas'],
           ['frequencia', 'chamada', 'fazer chamada', 'faltas', 'presenca', 'assiduidade', 'registro de presenca', 'diario de frequencia', 'apontamento de faltas'],
@@ -988,7 +1037,7 @@ async function internalNavigatePortalTab(targetTabId, targetKeyword, allowedHost
         ];
 
         const expandSemanticSynonyms = (key) => {
-          const synonyms = new Set([key]);
+          const synonyms = new Set(buildOrdinalVariants(key));
           for (const cluster of PORTAL_SEMANTIC_CLUSTERS) {
             if (cluster.some(term => key.includes(term) || term.includes(key))) {
               for (const term of cluster) synonyms.add(term);
@@ -1070,6 +1119,25 @@ async function internalNavigatePortalTab(targetTabId, targetKeyword, allowedHost
         };
 
         const hops = [];
+        const selectMatch = findBestSelectMatch(cleanKey);
+        if (selectMatch && selectMatch.sel && selectMatch.opt) {
+          const { sel, opt } = selectMatch;
+          const optText = (opt.text || opt.label || kw).trim();
+          const placeholderOpt = sel.options && sel.options[0] ? (sel.options[0].text || '').trim() : '';
+          const selectLabel = sel.getAttribute('aria-label') || sel.getAttribute('title') || placeholderOpt || sel.name || sel.id || 'Filtro';
+          sel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          sel.style.outline = '2px solid #38bdf8';
+          try {
+            const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value')?.set;
+            if (nativeSetter) nativeSetter.call(sel, opt.value);
+            else sel.value = opt.value;
+          } catch { sel.value = opt.value; }
+          sel.dispatchEvent(new Event('input', { bubbles: true }));
+          sel.dispatchEvent(new Event('change', { bubbles: true }));
+          await new Promise(r => setTimeout(r, 250));
+          const hop = { kind: 'select', elementText: optText, selectValue: String(opt.value ?? ''), selectId: sel.id || '', selectName: sel.name || '', selectLabel, tag: 'SELECT', target: kw };
+          return { sucesso: true, kind: 'select', elementText: optText, tag: 'SELECT', target: kw, hops: [hop] };
+        }
         let bestElement = findBestCandidate(cleanKey);
 
         // Se o item de submenu não está visível diretamente, tenta expandir um menu pai relacionado (Hop intermediário)
