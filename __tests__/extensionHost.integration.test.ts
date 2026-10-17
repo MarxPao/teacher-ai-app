@@ -603,4 +603,16 @@ describe('ExtensionHost Integration: Checkpoint, Timeout e Aborto Seguro', () =>
     expect(res.matchedOption).toEqual({ value: '7A', text: '7º Ano A - Ensino Fundamental' })
     expect(res.score).toBeGreaterThanOrEqual(80)
   })
+
+  it('19. [Chatbox Conversacional no Side Panel] side_panel_v2.html integra #sgv2-chat-messages + side_panel_chat.js e roteia perguntas sobre a tela para SKILLGRAPH_INSPECT_PAGE_CONTEXT', async () => {
+    const fs = await import('node:fs')
+    const path = await import('node:path')
+    const html = fs.readFileSync(path.join(process.cwd(), 'teacher-extension/side_panel_v2.html'), 'utf8')
+    expect(html).toContain('id="sgv2-chat-messages"')
+    expect(html).toContain('src="side_panel_chat.js"')
+
+    const chatCode = fs.readFileSync(path.join(process.cwd(), 'teacher-extension/side_panel_chat.js'), 'utf8')
+    expect(chatCode).toContain('SKILLGRAPH_INSPECT_PAGE_CONTEXT')
+    expect(chatCode).toContain('initSkillGraphChat')
+  })
 })

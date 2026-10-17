@@ -367,27 +367,45 @@
 
     document.getElementById('sgv2-btn-goto-record')?.addEventListener('click', () => switchSubTab(tabRecord, viewRecord))
 
-    function triggerExplore(rawTarget) {
+    const chat = typeof globalThis.initSkillGraphChat === 'function'
+      ? globalThis.initSkillGraphChat({
+          onReloadSkills: loadActiveSkills,
+          onTeachRecord: () => switchSubTab(tabRecord, viewRecord),
+          onSendCommand: (cmdText) => {
+            const nluInput = document.getElementById('sgv2-nlu-input')
+            if (nluInput) nluInput.value = cmdText
+            document.getElementById('sgv2-btn-nlu-send')?.click()
+          },
+        })
+      : null
+
+    function triggerExplore(rawTarget, skipUserEcho) {
       const nluFeedback = document.getElementById('sgv2-nlu-feedback')
       const nluInput = document.getElementById('sgv2-nlu-input')
       const destInput = document.querySelector('#sgv2-params-fields [data-param-name="destino"]')
       const text = (rawTarget || nluInput?.value || destInput?.value || '').trim()
-      if (!nluFeedback) return
-      nluFeedback.style.display = 'block'
       if (!text) {
-        nluFeedback.style.background = 'rgba(139, 94, 60, 0.10)'
-        nluFeedback.style.border = '1px solid rgba(139, 94, 60, 0.25)'
-        nluFeedback.style.color = '#5c3d20'
-        nluFeedback.textContent = 'Digite acima ou escolha uma sugestão rápida (ex: Frequência, Notas, Diário) para navegar! 🧭'
+        chat?.appendAssistantMessage('Digite sua mensagem abaixo ou escolha uma sugestão rápida (ex: Frequência, Notas, O que há na tela?) para começarmos! 🧭')
         ;(nluInput || destInput)?.focus()
         return
       }
-      nluFeedback.style.background = 'rgba(139, 94, 60, 0.10)'
-      nluFeedback.style.border = '1px solid rgba(139, 94, 60, 0.25)'
-      nluFeedback.style.color = '#5c3d20'
-      nluFeedback.textContent = `Procurando "${text}" e navegando autonomamente na página...`
+      if (chat) {
+        if (!skipUserEcho) chat.appendUserMessage(text)
+        if (chat.isConversationalOrInspectQuery(text)) {
+          chat.inspectAndReplyPageContext(text)
+          return
+        }
+        chat.showTyping(`Procurando "${text}" e interagindo com a página...`)
+      } else if (nluFeedback) {
+        nluFeedback.style.display = 'block'
+        nluFeedback.textContent = `Procurando "${text}" e navegando autonomamente na página...`
+      }
       chrome.runtime.sendMessage({ action: 'SKILLGRAPH_EXPLORE_AND_LEARN', text }, (exploreRes) => {
-        handleExploreResponse(exploreRes, nluFeedback)
+        if (chat) {
+          chat.handleExploreResult(exploreRes, text)
+        } else if (nluFeedback) {
+          handleExploreResponse(exploreRes, nluFeedback)
+        }
       })
     }
 
@@ -396,9 +414,9 @@
         const target = chip.getAttribute('data-quick-nlu') || ''
         const nluInput = document.getElementById('sgv2-nlu-input')
         const destInput = document.querySelector('#sgv2-params-fields [data-param-name="destino"]')
-        if (nluInput) nluInput.value = target
+        if (nluInput) nluInput.value = ''
         if (destInput) destInput.value = target
-        triggerExplore(target)
+        triggerExplore(target, false)
       })
     })
 
@@ -415,6 +433,15 @@
       const nluFeedback = document.getElementById('sgv2-nlu-feedback')
       const text = (nluInput?.value || '').trim()
       if (!text) return
+      if (nluInput) nluInput.value = ''
+      if (chat) {
+        chat.appendUserMessage(text)
+        if (chat.isConversationalOrInspectQuery(text)) {
+          chat.inspectAndReplyPageContext(text)
+          return
+        }
+        chat.showTyping('Analisando seu pedido...')
+      }
       chrome.runtime.sendMessage({
         action: 'SKILLGRAPH_NLU_PARSE',
         text,
@@ -425,23 +452,28 @@
           params: normalizeParamsList(s.params),
         })),
       }, (res) => {
-        if (!nluFeedback) return
-        nluFeedback.style.display = 'block'
         if (res?.clarification_needed) {
-          nluFeedback.style.background = '#fefce8'
-          nluFeedback.style.color = '#854d0e'
-          nluFeedback.textContent = 'Percebi uma exceção ou condição em lote no seu pedido. Por segurança, selecione a habilidade abaixo e informe o aluno específico antes de executar.'
+          const msg = 'Percebi uma exceção ou condição em lote no seu pedido. Por segurança, selecione a habilidade abaixo e informe o aluno específico antes de executar.'
+          if (chat) chat.appendAssistantMessage(msg, { variant: 'error' })
+          else if (nluFeedback) {
+            nluFeedback.style.display = 'block'
+            nluFeedback.textContent = msg
+          }
           return
         }
         if (res?.no_match || !res?.skill_id) {
-          triggerExplore(text)
+          triggerExplore(text, true)
         } else {
-          nluFeedback.style.background = '#f0fdf4'
-          nluFeedback.style.color = '#166534'
-          nluFeedback.textContent = 'Habilidade selecionada! Confira os parâmetros e clique em Executar.'
+          const chosen = activeSkills.find((s) => getSkillId(s) === res.skill_id)
+          const skillTitle = chosen?.identity?.name || res.skill_id
+          if (chat) {
+            chat.appendAssistantMessage(`Encontrei a habilidade "${skillTitle}"! Já preenchi os parâmetros abaixo — confira e clique em Executar. ✨`, { variant: 'success' })
+          } else if (nluFeedback) {
+            nluFeedback.style.display = 'block'
+            nluFeedback.textContent = 'Habilidade selecionada! Confira os parâmetros e clique em Executar.'
+          }
           if (select) {
             select.value = res.skill_id
-            const chosen = activeSkills.find((s) => getSkillId(s) === res.skill_id)
             if (chosen) {
               renderParamsForm(chosen)
               if (res.params && typeof res.params === 'object') {

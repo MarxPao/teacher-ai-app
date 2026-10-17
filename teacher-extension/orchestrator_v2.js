@@ -788,7 +788,7 @@
               const compileResult = bundle.compile(trace, decisions)
               if (compileResult?.status === 'needs_decisions' && compileResult.partialGraph) {
                 await saveStandaloneGraph(compileResult.partialGraph, false, 'exploration')
-              } else if (compileResult?.graph && compileResult.graph.safety?.side_effect_level === 'read') {
+              } else if (compileResult?.graph) {
                 savedGraph = compileResult.graph
                 await saveStandaloneGraph(savedGraph, false, 'exploration')
                 const nativeClient = getSharedNativeClient()
@@ -816,6 +816,46 @@
             success: false,
             friendlyMessage: `Erro durante a navegação autônoma: ${err.message || String(err)}`,
           })
+        }
+      })()
+      return true
+    }
+
+    if (message.action === 'SKILLGRAPH_INSPECT_PAGE_CONTEXT') {
+      ;(async () => {
+        try {
+          const tabId = await resolveTargetTab(message.tabId)
+          if (!tabId) {
+            sendResponse({ success: false })
+            return
+          }
+          const results = await chrome.scripting.executeScript({
+            target: { tabId, allFrames: false },
+            func: () => {
+              const filters = []
+              for (const sel of document.querySelectorAll('select')) {
+                if (sel.closest('tbody tr') || sel.offsetWidth === 0) continue
+                const lbl = (sel.getAttribute('aria-label') || (sel.id && document.querySelector(`label[for="${CSS.escape(sel.id)}"]`)?.textContent) || sel.closest('label')?.textContent || sel.options?.[0]?.text || 'Filtro').trim()
+                const options = Array.from(sel.options || [])
+                  .filter((o) => o.value !== '' && !/^(selecione|escolha|todos|--)/i.test((o.text || '').trim()))
+                  .slice(0, 12)
+                  .map((o) => ({ value: o.value, text: (o.text || '').trim() }))
+                if (options.length > 0) filters.push({ label: lbl.slice(0, 40), options })
+              }
+              const tabs = []
+              for (const el of document.querySelectorAll('a, button, [role="tab"], .nav-link, .tab')) {
+                if (el.closest('tbody tr') || el.offsetWidth === 0) continue
+                const t = (el.innerText || el.textContent || '').trim().replace(/\s+/g, ' ')
+                if (t && t.length >= 3 && t.length <= 32 && !tabs.includes(t)) tabs.push(t)
+                if (tabs.length >= 12) break
+              }
+              return { title: document.title, url: location.pathname, filters, tabs }
+            },
+          })
+          const data = results?.[0]?.result || {}
+          sendResponse({ success: true, ...data })
+        } catch {
+          sendResponse({ success: false })
         }
       })()
       return true
