@@ -11,6 +11,11 @@ import {
   buildStandaloneAnswerKeyHtml,
   buildStandalonePedagogicalReasoningHtml
 } from '@/lib/exportUtils'
+import {
+  getDocumentFormats,
+  getDefaultFormatForSchool,
+  type SchoolDocumentFormat
+} from '@/lib/documentFormatTemplates'
 import { createExamSheetLayout, generatePrintableOmrSheetHtml, processOMRBatchAndUpdatePsychometrics } from '@/lib/omr'
 import { generateExecutivePedagogicalSummary } from '@/lib/executivePedagogicalSummary'
 import { BnccSkill, getBnccForGrade } from '@/lib/bnccStore'
@@ -185,6 +190,8 @@ export interface ExamResultThreeTabsProps {
   initialTab?: ResultTabKey
   questions?: any[]
   onQuestionsChange?: (questions: any[]) => void
+  documentFormatId?: string
+  onDocumentFormatChange?: (formatId: string) => void
 }
 
 export default function ExamResultThreeTabs({
@@ -220,12 +227,19 @@ export default function ExamResultThreeTabs({
   initialTab = 'document',
   questions,
   onQuestionsChange,
+  documentFormatId,
+  onDocumentFormatChange,
 }: ExamResultThreeTabsProps) {
   const [activeTab, setActiveTab] = useState<ResultTabKey>(initialTab)
   const [activeViewMode, setActiveViewMode] = useState<'boxes' | 'canvas'>('boxes')
   const [showHaladynaGateModal, setShowHaladynaGateModal] = useState(false)
   const [haladynaOverrideGranted, setHaladynaOverrideGranted] = useState(false)
   const [pendingExportAction, setPendingExportAction] = useState<(() => void) | null>(null)
+  const [availableFormats] = useState<SchoolDocumentFormat[]>(() => getDocumentFormats())
+  const [localFormatId, setLocalFormatId] = useState<string>(() =>
+    getDefaultFormatForSchool(header.school || 'Machado Sobrinho', mode === 'exam' ? 'exam' : 'worksheet').id
+  )
+  const effectiveFormatId = documentFormatId || localFormatId
 
   // Extrai total de questões parsed (privilegia array de objetos tipados quando fornecido)
   const parsedQuestions = useMemo(() => {
@@ -859,6 +873,34 @@ export default function ExamResultThreeTabs({
             >
               {/* Botões de Exportação dos 3 Documentos Independentes (1. Prova | 2. Gabarito | 3. Reasoning & Justificativa) */}
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                {/* SELETOR DE FORMATO DE ARQUIVO DA ESCOLA */}
+                <select
+                  value={effectiveFormatId}
+                  onChange={e => {
+                    const nextId = e.target.value
+                    setLocalFormatId(nextId)
+                    onDocumentFormatChange?.(nextId)
+                  }}
+                  title="Selecione o Formato de Arquivo padrão da Escola (configurável em Biblioteca & Repositório -> 7. Formatos de Arquivo)"
+                  style={{
+                    padding: '7px 10px',
+                    borderRadius: RADIUS.md,
+                    border: '1.5px solid #8b5e3c',
+                    background: '#fffcf8',
+                    color: '#2c1a0e',
+                    fontSize: 11.5,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    maxWidth: 245,
+                  }}
+                >
+                  {availableFormats.map(f => (
+                    <option key={f.id} value={f.id}>
+                      📐 {f.name}
+                    </option>
+                  ))}
+                </select>
+
                 {/* DOC 1: A PROVA DO ALUNO (SEM GABARITO) */}
                 <button
                   type="button"
@@ -868,11 +910,13 @@ export default function ExamResultThreeTabs({
                         schoolName: header.school || 'ESCOLA DE ENSINO & IDIOMAS',
                         teacherName: header.teacher || 'Professor(a)',
                         className: grade || '9º Ano',
+                        subjectName,
                         title:
                           header.title ||
                           (topic ? `${mode === 'exam' ? 'PROVA' : 'ATIVIDADE'} ${topic.toUpperCase()}` : 'AVALIAÇÃO'),
                         content: result,
                         showStudentNameBox: true,
+                        formatId: effectiveFormatId,
                       })
                     )
                   }
@@ -890,7 +934,7 @@ export default function ExamResultThreeTabs({
                     gap: 5,
                     boxShadow: '0 2px 8px rgba(139,94,60,0.2)',
                   }}
-                  title="Documento 1: Exporta exclusivamente a folha de prova do aluno (sem gabarito)"
+                  title="Documento 1: Exporta exclusivamente a folha de prova do aluno (sem gabarito) no formato da escola"
                 >
                   <i className="ti ti-printer" /> 📄 1. Prova (PDF)
                 </button>
@@ -903,11 +947,13 @@ export default function ExamResultThreeTabs({
                         schoolName: header.school || 'ESCOLA DE ENSINO & IDIOMAS',
                         teacherName: header.teacher || 'Professor(a)',
                         className: grade || '9º Ano',
+                        subjectName,
                         title:
                           header.title ||
                           (topic ? `${mode === 'exam' ? 'PROVA' : 'ATIVIDADE'} ${topic.toUpperCase()}` : 'AVALIAÇÃO'),
                         content: result,
                         showStudentNameBox: true,
+                        formatId: effectiveFormatId,
                       })
                     )
                   }
@@ -924,7 +970,7 @@ export default function ExamResultThreeTabs({
                     alignItems: 'center',
                     gap: 5,
                   }}
-                  title="Documento 1: Exporta exclusivamente a folha de prova do aluno em Word (.doc)"
+                  title="Documento 1: Exporta exclusivamente a folha de prova do aluno em Word (.doc) no formato da escola"
                 >
                   <i className="ti ti-file-text" /> Prova (.doc)
                 </button>
@@ -945,10 +991,12 @@ export default function ExamResultThreeTabs({
                       schoolName: header.school || 'ESCOLA DE ENSINO & IDIOMAS',
                       teacherName: header.teacher || 'Professor(a)',
                       className: grade || '9º Ano',
+                      subjectName,
                       title: `GABARITO OFICIAL — ${baseTitle}`,
                       instructions: 'DOCUMENTO EXCLUSIVO DO PROFESSOR — Folha de Gabarito e Padrão de Respostas.',
                       content: answerKeyHtml,
                       showStudentNameBox: false,
+                      formatId: effectiveFormatId,
                     })
                   }}
                   style={{
@@ -984,10 +1032,12 @@ export default function ExamResultThreeTabs({
                       schoolName: header.school || 'ESCOLA DE ENSINO & IDIOMAS',
                       teacherName: header.teacher || 'Professor(a)',
                       className: grade || '9º Ano',
+                      subjectName,
                       title: `GABARITO OFICIAL — ${baseTitle}`,
                       instructions: 'DOCUMENTO EXCLUSIVO DO PROFESSOR — Folha de Gabarito e Padrão de Respostas.',
                       content: answerKeyHtml,
                       showStudentNameBox: false,
+                      formatId: effectiveFormatId,
                     })
                   }}
                   style={{
@@ -1037,11 +1087,13 @@ export default function ExamResultThreeTabs({
                       schoolName: header.school || 'ESCOLA DE ENSINO & IDIOMAS',
                       teacherName: header.teacher || 'Professor(a)',
                       className: grade || '9º Ano',
+                      subjectName,
                       title: `REASONING & JUSTIFICATIVA PEDAGÓGICA — ${baseTitle}`,
                       instructions:
                         'DOCUMENTO PEDAGÓGICO DO PROFESSOR E COORDENAÇÃO — Fundamentação da prova como um todo e reasoning detalhado questão por questão.',
                       content: reasoningHtml,
                       showStudentNameBox: false,
+                      formatId: effectiveFormatId,
                     })
                   }}
                   style={{
@@ -1090,11 +1142,13 @@ export default function ExamResultThreeTabs({
                       schoolName: header.school || 'ESCOLA DE ENSINO & IDIOMAS',
                       teacherName: header.teacher || 'Professor(a)',
                       className: grade || '9º Ano',
+                      subjectName,
                       title: `REASONING & JUSTIFICATIVA PEDAGÓGICA — ${baseTitle}`,
                       instructions:
                         'DOCUMENTO PEDAGÓGICO DO PROFESSOR E COORDENAÇÃO — Fundamentação da prova como um todo e reasoning detalhado questão por questão.',
                       content: reasoningHtml,
                       showStudentNameBox: false,
+                      formatId: effectiveFormatId,
                     })
                   }}
                   style={{

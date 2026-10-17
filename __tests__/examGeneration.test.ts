@@ -433,6 +433,72 @@ Espero que atenda aos critérios!
     expect(doc3Reasoning).toContain('Paris é a capital e maior cidade da França.')
     expect(doc3Reasoning).toContain('O oxigênio possui número atômico 8 e símbolo O.')
   })
+
+  it('deve aplicar o Formato de Arquivo da Escola (QUESTÃO 01, alternativas (A), inferência de modelo e Sequência Didática)', async () => {
+    const {
+      getDefaultFormatForSchool,
+      applySchoolFormatToBodyHtml,
+      inferDocumentFormatFromSampleText
+    } = await import('@/lib/documentFormatTemplates')
+    const { buildDidacticSequenceExportHtml } = await import('@/lib/exportUtils')
+    const { compileQuestionsToHtml } = await import('@/lib/examSchema')
+
+    // 1. Formato padrão Machado Sobrinho ("QUESTÃO 01" e P&B)
+    const machadoFmt = getDefaultFormatForSchool('Machado Sobrinho', 'exam')
+    expect(machadoFmt.id).toBe('fmt_machado_oficial')
+    expect(machadoFmt.questionNumberStyle).toBe('questao_padded')
+
+    const rawHtml = compileQuestionsToHtml([validQuestion1, validQuestion2], 'Prova Modelo')
+    const formattedMachado = applySchoolFormatToBodyHtml(rawHtml, machadoFmt)
+    expect(formattedMachado).toContain('QUESTÃO 01')
+    expect(formattedMachado).toContain('QUESTÃO 02')
+
+    // 2. Formato Anglo (2 Colunas + Alternativas "(A)")
+    const angloFmt = getDefaultFormatForSchool('Colégio Anglo', 'exam')
+    expect(angloFmt.columns).toBe(2)
+    expect(angloFmt.optionLabelStyle).toBe('(A)')
+    const formattedAnglo = applySchoolFormatToBodyHtml(rawHtml, angloFmt)
+    expect(formattedAnglo).toContain('(A)')
+    expect(formattedAnglo).toContain('(B)')
+
+    // 3. Inferência automática a partir de texto de prova exemplo
+    const inferred = inferDocumentFormatFromSampleText({
+      fileName: 'simulado_enem_2colunas.docx',
+      extractedText: 'QUESTÃO 01\nLeia o texto.\n(A) Opção 1\n(B) Opção 2\nCoordenação Pedagógica',
+      schoolName: 'Colégio Exemplo'
+    })
+    expect(inferred.columns).toBe(2)
+    expect(inferred.questionNumberStyle).toBe('questao_padded')
+    expect(inferred.optionLabelStyle).toBe('(A)')
+    expect(inferred.showSignatureLine).toBe(true)
+
+    // 4. Exportação estruturada de Sequência Didática
+    const seqHtml = buildDidacticSequenceExportHtml({
+      schoolName: 'Machado Sobrinho',
+      gradeName: '9º Ano B',
+      bimesterName: 'Ano Letivo 2026',
+      units: [
+        {
+          title: 'Unit 1: Present Perfect & Global Issues',
+          status: 'completed',
+          progress: 100,
+          plannedWeeks: 'Semanas 1–4',
+          actualWeeks: 'Semanas 1–4',
+          plannedHours: 8,
+          completedHours: 8,
+          grammar: ['Present Perfect'],
+          vocabulary: ['Sustainability'],
+          skills: ['Reading', 'Speaking'],
+          bnccCodes: ['EF09LI01']
+        }
+      ],
+      aiAssessmentText: 'Turma com excelente ritmo curricular.'
+    })
+    expect(seqHtml).toContain('QUADRO SINÓPTICO DO PLANEJAMENTO E EXECUÇÃO')
+    expect(seqHtml).toContain('Unit 1: Present Perfect & Global Issues')
+    expect(seqHtml).toContain('UNIDADE 01')
+  })
 })
+
 
 

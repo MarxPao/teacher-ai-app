@@ -15,6 +15,17 @@ import {
   syncToSupabase 
 } from '@/lib/supabaseClient'
 import { BnccSkill, getBnccCatalog, saveBnccCatalog } from '@/lib/bnccStore'
+import {
+  SchoolDocumentFormat,
+  DocumentFormatCategory,
+  HeaderLayoutStyle,
+  QuestionNumberFormat,
+  OptionLabelFormat,
+  getDocumentFormats,
+  saveDocumentFormats,
+  getDefaultFormatForSchool,
+  inferDocumentFormatFromSampleText,
+} from '@/lib/documentFormatTemplates'
 
 export interface RepositoryItem {
  id: number
@@ -355,8 +366,16 @@ const AXIS_STYLE_MAP: Record<string, { bg: string; color: string; border: string
 }
 
 export default function Repository() {
-  // 6 PARTIÇÕES PRINCIPAIS 
-  const [activePartition, setActivePartition] = useState<'headers' | 'exercises' | 'bibliography' | 'files' | 'images' | 'competencies'>('headers')
+  // 7 PARTIÇÕES PRINCIPAIS 
+  const [activePartition, setActivePartition] = useState<'headers' | 'exercises' | 'bibliography' | 'files' | 'images' | 'competencies' | 'formats'>('headers')
+
+  // 7. Formatos de Arquivo & Padrão de Diagramação Escolar
+  const [documentFormats, setDocumentFormats] = useState<SchoolDocumentFormat[]>(() => getDocumentFormats())
+  const [selectedFormatId, setSelectedFormatId] = useState<string>('fmt_machado_oficial')
+  const [formatSchoolFilter, setFormatSchoolFilter] = useState<string>('all')
+  const [formatCategoryFilter, setFormatCategoryFilter] = useState<string>('all')
+  const formatSampleInputRef = useRef<HTMLInputElement | null>(null)
+  const [exportFormatIdForRepo, setExportFormatIdForRepo] = useState<string>('fmt_machado_oficial')
 
   // 6. Matriz Central de Competências & Habilidades (BNCC/ELT)
   const [competencies, setCompetencies] = useState<BnccSkill[]>([])
@@ -1632,12 +1651,67 @@ export default function Repository() {
               <i className="ti ti-plus" /> Nova Competência / Habilidade
             </button>
           )}
+
+          {activePartition === 'formats' && (
+            <>
+              <button
+                onClick={() => formatSampleInputRef.current?.click()}
+                style={{ ...btnSecondary, borderColor: '#8b5e3c', color: '#8b5e3c', fontWeight: 700 }}
+              >
+                <i className="ti ti-file-import" /> Importar Modelo (.docx / .pdf / .txt)
+              </button>
+              <button
+                onClick={() => {
+                  const defaultSchool = registeredSchools[0]?.name || 'Machado Sobrinho'
+                  const newFmt: SchoolDocumentFormat = {
+                    id: `fmt_custom_${Date.now()}`,
+                    name: `Formato ${defaultSchool} (${documentFormats.length + 1})`,
+                    description: 'Padrão personalizado de formatação para provas, sequências didáticas e documentos da escola.',
+                    schoolName: defaultSchool,
+                    targetCategory: 'all',
+                    isDefaultForSchool: false,
+                    paperSize: 'A4',
+                    orientation: 'portrait',
+                    marginsMm: { top: 15, right: 15, bottom: 15, left: 15 },
+                    columns: 1,
+                    columnGapMm: 8,
+                    showColumnDivider: false,
+                    fontFamily: "'Times New Roman', Times, serif",
+                    fontSizePt: 11,
+                    lineHeight: 1.45,
+                    textAlign: 'justify',
+                    headerStyle: 'boxed_grid',
+                    primaryColor: '#000000',
+                    blackAndWhitePrintMode: true,
+                    officialSchoolSubtitle: `${defaultSchool.toUpperCase()} — EDUCAÇÃO BÁSICA`,
+                    defaultInstructions: '1. Leia atentamente as questões antes de responder.\n2. Utilize caneta azul ou preta.\n3. Questões objetivas rasuradas serão anuladas.',
+                    questionNumberStyle: 'questao_padded',
+                    optionLabelStyle: 'A)',
+                    discursiveLinesCount: 4,
+                    showPointsPerQuestion: true,
+                    compactQuestionSpacing: false,
+                    footerText: `${defaultSchool} • Departamento de Língua Inglesa • Teacher AI`,
+                    showSignatureLine: false,
+                    signatureLabels: ['Professor(a) Responsável', 'Coordenação Pedagógica']
+                  }
+                  const updated = [newFmt, ...documentFormats]
+                  setDocumentFormats(updated)
+                  saveDocumentFormats(updated)
+                  setSelectedFormatId(newFmt.id)
+                  showToast('Novo formato escolar criado!')
+                }}
+                style={btnPrimary}
+              >
+                <i className="ti ti-plus" /> Novo Formato Escolar
+              </button>
+            </>
+          )}
         </div>
       }
     >
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 16 }}>
 
-        {/* BARRA DE SELEÇÃO DAS 6 PARTIÇÕES */}
+        {/* BARRA DE SELEÇÃO DAS 7 PARTIÇÕES */}
         <div style={{
           display: 'flex', gap: 8, background: '#fffcf8', padding: '6px',
           borderRadius: RADIUS.lg, border: '1.5px solid rgba(139,115,85,0.18)', width: 'fit-content',
@@ -1719,6 +1793,19 @@ export default function Repository() {
             }}
           >
             <i className="ti ti-target" /> 6. Competências BNCC ({competencies.length})
+          </button>
+
+          <button
+            onClick={() => setActivePartition('formats')}
+            style={{
+              padding: '10px 18px', borderRadius: RADIUS.md, border: 'none',
+              background: activePartition === 'formats' ? '#8b5e3c' : 'transparent',
+              color: activePartition === 'formats' ? '#fff' : '#665c54',
+              fontSize: TEXT.body, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
+              transition: 'all 0.15s'
+            }}
+          >
+            <i className="ti ti-layout-columns" /> 7. Formatos de Arquivo ({documentFormats.length})
           </button>
         </div>
 
@@ -2109,7 +2196,21 @@ export default function Repository() {
  </div>
  </div>
 
- <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+ <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+ <select
+ value={exportFormatIdForRepo}
+ onChange={e => setExportFormatIdForRepo(e.target.value)}
+ title="Formato de Arquivo da Escola"
+ style={{
+ padding: '8px 10px', borderRadius: RADIUS.md, border: '1.5px solid #8b5e3c',
+ background: '#fffcf8', color: '#2c1a0e', fontSize: 12, fontWeight: 700, cursor: 'pointer'
+ }}
+ >
+ {documentFormats.map(f => (
+ <option key={f.id} value={f.id}>📐 {f.name}</option>
+ ))}
+ </select>
+
  <button
  onClick={() => exportToPdf({
  schoolName: currentSelectedHeader?.officialName || viewExercise.school || 'COLÉGIO & ESCOLA DE ENSINO',
@@ -2118,7 +2219,8 @@ export default function Repository() {
  title: viewExercise.title,
  content: viewExercise.content,
  headerImageUrl: currentSelectedHeader?.headerImageUrl,
- instructions: currentSelectedHeader?.instructions
+ instructions: currentSelectedHeader?.instructions,
+ formatId: exportFormatIdForRepo
  })}
  style={btnPrimary}
  >
@@ -2133,7 +2235,8 @@ export default function Repository() {
  title: viewExercise.title,
  content: viewExercise.content,
  headerImageUrl: currentSelectedHeader?.headerImageUrl,
- instructions: currentSelectedHeader?.instructions
+ instructions: currentSelectedHeader?.instructions,
+ formatId: exportFormatIdForRepo
  })}
  style={btnSecondary}
  >
@@ -2442,6 +2545,23 @@ export default function Repository() {
  title="Criar Prova ou Lista de Exercícios usando este material"
  >
  <i className="ti ti-sparkles" /> Gerar Prova com Este Arquivo
+ </button>
+
+ <button
+ onClick={() => {
+ exportToPdf({
+ schoolName: selectedLooseFile.school || currentSelectedHeader?.officialName || 'COLÉGIO & ESCOLA DE ENSINO',
+ teacherName: currentSelectedHeader?.teacherName || headerTeacher || 'Professor(a)',
+ className: headerClassGroup || 'Ensino Regular',
+ title: selectedLooseFile.title,
+ content: selectedLooseFile.extractedText || '',
+ formatId: exportFormatIdForRepo
+ })
+ }}
+ style={btnSecondary}
+ title="Formatar e imprimir este documento no padrão visual da escola"
+ >
+ <i className="ti ti-printer" /> Formatar no Padrão da Escola (PDF)
  </button>
 
  <button
@@ -3277,6 +3397,536 @@ export default function Repository() {
       </div>
     </div>
   )}
+
+  {/* ================================================================= */}
+  {/* PARTIÇÃO 7: FORMATOS DE ARQUIVO & PADRÃO DE DIAGRAMAÇÃO ESCOLAR   */}
+  {/* ================================================================= */}
+  {activePartition === 'formats' && (() => {
+    const activeFormat = documentFormats.find(f => f.id === selectedFormatId) || documentFormats[0]
+    const filteredFormats = documentFormats.filter(f => {
+      if (formatSchoolFilter !== 'all' && f.schoolName !== formatSchoolFilter) return false
+      if (formatCategoryFilter !== 'all' && f.targetCategory !== 'all' && f.targetCategory !== formatCategoryFilter) return false
+      return true
+    })
+
+    const updateActiveFormat = (patch: Partial<SchoolDocumentFormat>) => {
+      if (!activeFormat) return
+      const updated = documentFormats.map(f => (f.id === activeFormat.id ? { ...f, ...patch } : f))
+      setDocumentFormats(updated)
+      saveDocumentFormats(updated)
+    }
+
+    const handleImportSampleFormatFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0]
+      if (!file) return
+      try {
+        const text = await file.text()
+        const targetSchool = formatSchoolFilter !== 'all' ? formatSchoolFilter : (registeredSchools[0]?.name || 'Machado Sobrinho')
+        const inferred = inferDocumentFormatFromSampleText({
+          fileName: file.name,
+          extractedText: text,
+          schoolName: targetSchool
+        })
+        const updated = [inferred, ...documentFormats]
+        setDocumentFormats(updated)
+        saveDocumentFormats(updated)
+        setSelectedFormatId(inferred.id)
+        showToast(`Formato extraído de "${file.name}" e vinculado a ${targetSchool}!`)
+      } catch {
+        showToast('Erro ao ler modelo de arquivo.')
+      } finally {
+        e.target.value = ''
+      }
+    }
+
+    const availableSchoolNames = Array.from(
+      new Set([
+        'Machado Sobrinho',
+        'Rede Santa Catarina',
+        'Colégio Anglo',
+        'Colegio Oxford / Cambridge',
+        'Geral',
+        ...registeredSchools.map(s => s.name),
+        ...documentFormats.map(f => f.schoolName)
+      ])
+    ).filter(Boolean)
+
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16, flex: 1, minHeight: 0 }}>
+        <input
+          type="file"
+          ref={formatSampleInputRef}
+          onChange={handleImportSampleFormatFile}
+          accept=".txt,.doc,.docx,.pdf,.md,.html"
+          style={{ display: 'none' }}
+        />
+
+        <div style={{ display: 'grid', gridTemplateColumns: '360px 1fr', gap: 22, flex: 1, minHeight: 0 }}>
+          {/* COLUNA ESQUERDA: LISTA DE FORMATOS POR ESCOLA */}
+          <div className="prominent-scrollbar" style={{
+            background: '#fff', borderRadius: RADIUS.xl, border: '1px solid rgba(139,115,85,0.16)',
+            padding: 16, display: 'flex', flexDirection: 'column', gap: 12, overflowY: 'auto'
+          }}>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 800, color: '#2c1a0e', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <i className="ti ti-layout-columns" style={{ color: '#8b5e3c', fontSize: 18 }} />
+                <span>Padrões de Formato por Escola</span>
+              </div>
+              <p style={{ fontSize: 11.5, color: '#7a5c42', margin: '4px 0 0', lineHeight: 1.4 }}>
+                Configure margens, 1 ou 2 colunas, fonte, numeração de questões e rodapé oficial de cada colégio para Provas, Sequências Didáticas e Documentos.
+              </p>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              <select
+                value={formatSchoolFilter}
+                onChange={e => setFormatSchoolFilter(e.target.value)}
+                style={{ ...inputStyle, padding: '7px 10px', fontSize: 11.5 }}
+              >
+                <option value="all">🏫 Todas as Escolas</option>
+                {availableSchoolNames.map(s => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+
+              <select
+                value={formatCategoryFilter}
+                onChange={e => setFormatCategoryFilter(e.target.value)}
+                style={{ ...inputStyle, padding: '7px 10px', fontSize: 11.5 }}
+              >
+                <option value="all">📄 Todos os Tipos</option>
+                <option value="exam">Provas Oficiais</option>
+                <option value="worksheet">Listas de Exercícios</option>
+                <option value="didactic_sequence">Sequência Didática</option>
+                <option value="general_document">Documento Geral</option>
+              </select>
+            </div>
+
+            <button
+              onClick={() => formatSampleInputRef.current?.click()}
+              style={{
+                padding: '9px 12px', borderRadius: RADIUS.md, border: '1.5px dashed #8b5e3c',
+                background: '#fffcf8', color: '#8b5e3c', fontSize: 12, fontWeight: 700,
+                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6
+              }}
+            >
+              <i className="ti ti-upload" /> Extrair Formato de Prova/Doc Exemplo
+            </button>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {filteredFormats.map(fmt => {
+                const isSelected = activeFormat?.id === fmt.id
+                return (
+                  <div
+                    key={fmt.id}
+                    onClick={() => setSelectedFormatId(fmt.id)}
+                    style={{
+                      padding: '12px 14px', borderRadius: RADIUS.lg, cursor: 'pointer',
+                      background: isSelected ? '#fdf8f2' : '#faf8f5',
+                      border: isSelected ? '2px solid #8b5e3c' : '1px solid #ede8dc',
+                      transition: 'all 0.15s'
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 6 }}>
+                      <div style={{ fontSize: 13, fontWeight: 800, color: '#2c1a0e' }}>{fmt.name}</div>
+                      {fmt.isDefaultForSchool && (
+                        <span style={{
+                          fontSize: 10, fontWeight: 800, background: '#dcfce7', color: '#166534',
+                          padding: '2px 6px', borderRadius: 4, whiteSpace: 'nowrap'
+                        }}>
+                          Padrão da Escola
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ fontSize: 11, color: '#7a5c42', marginTop: 4, lineHeight: 1.35 }}>
+                      {fmt.description}
+                    </div>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8, fontSize: 10.5, fontWeight: 700 }}>
+                      <span style={{ background: '#ede8dc', color: '#5a3e28', padding: '2px 7px', borderRadius: 4 }}>
+                        🏫 {fmt.schoolName}
+                      </span>
+                      <span style={{ background: '#e0f2fe', color: '#0369a1', padding: '2px 7px', borderRadius: 4 }}>
+                        {fmt.columns === 2 ? '2 Colunas' : '1 Coluna'}
+                      </span>
+                      <span style={{ background: '#f3e8ff', color: '#6d28d9', padding: '2px 7px', borderRadius: 4 }}>
+                        {fmt.fontSizePt}pt • {fmt.optionLabelStyle}
+                      </span>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* COLUNA DIREITA: EDITOR PARAMÉTRICO + PREVIEW VISUAL A4 AO VIVO */}
+          {activeFormat && (
+            <div className="prominent-scrollbar" style={{
+              background: '#fff', borderRadius: RADIUS.xl, border: '1px solid rgba(139,115,85,0.16)',
+              padding: 22, display: 'flex', flexDirection: 'column', gap: 18, overflowY: 'auto'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #ede8dc', paddingBottom: 12, flexWrap: 'wrap', gap: 10 }}>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#2c1a0e', fontFamily: "'Fraunces', Georgia, serif" }}>
+                    📐 {activeFormat.name}
+                  </h3>
+                  <span style={{ fontSize: 12, color: '#7a5c42' }}>
+                    Escola vinculada: <strong>{activeFormat.schoolName}</strong> &bull; Aplicável em Provas, Exercícios, Sequências Didáticas e Documentos
+                  </span>
+                </div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <button
+                    onClick={() => {
+                      const updated = documentFormats.map(f =>
+                        f.schoolName === activeFormat.schoolName
+                          ? { ...f, isDefaultForSchool: f.id === activeFormat.id }
+                          : f
+                      )
+                      setDocumentFormats(updated)
+                      saveDocumentFormats(updated)
+                      showToast(`Definido como formato padrão para ${activeFormat.schoolName}!`)
+                    }}
+                    style={{ ...btnSecondary, borderColor: '#16a34a', color: '#166534', fontWeight: 700 }}
+                  >
+                    ⭐ Definir Padrão de {activeFormat.schoolName}
+                  </button>
+                  <button
+                    onClick={() => {
+                      exportToPdf({
+                        schoolName: activeFormat.schoolName,
+                        teacherName: headerTeacher || 'Rafaela Toldo',
+                        className: headerClassGroup || '9º Ano Fund.',
+                        title: `PROVA MODELO — ${activeFormat.schoolName.toUpperCase()}`,
+                        documentFormat: activeFormat,
+                        content: `
+                          <div class="exam-question-item">
+                            <div style="font-weight:700; margin-bottom:6px;">
+                              <span style="display:inline-block; background:#8b5e3c; color:#fff; padding:2px 8px; border-radius:6px; font-size:12px; margin-right:8px;">1.</span>
+                              <span style="float:right; font-size:12px;">(1.0 pt)</span>
+                            </div>
+                            <p>Read the excerpt below and select the alternative that correctly uses the <strong>Present Perfect</strong> in an academic context:</p>
+                            <div class="exam-options-list">
+                              <div class="exam-option-line"><strong>A)</strong> <span>Scientists have discovered new sustainable materials this decade.</span></div>
+                              <div class="exam-option-line"><strong>B)</strong> <span>Scientists discovered new sustainable materials since 2020.</span></div>
+                              <div class="exam-option-line"><strong>C)</strong> <span>Scientists has discover new materials yesterday.</span></div>
+                              <div class="exam-option-line"><strong>D)</strong> <span>Scientists are discover new materials every year.</span></div>
+                            </div>
+                          </div>
+                          <div class="exam-question-item">
+                            <div style="font-weight:700; margin-bottom:6px;">
+                              <span style="display:inline-block; background:#8b5e3c; color:#fff; padding:2px 8px; border-radius:6px; font-size:12px; margin-right:8px;">2.</span>
+                              <span style="float:right; font-size:12px;">(1.0 pt)</span>
+                            </div>
+                            <p>In the sentence <em>"The captain intends to travel next month"</em>, the false friend <strong>pretend</strong> in English means:</p>
+                            <div class="exam-options-list">
+                              <div class="exam-option-line"><strong>A)</strong> <span>Planejar com antecedência.</span></div>
+                              <div class="exam-option-line"><strong>B)</strong> <span>Fingir ou simular uma situação.</span></div>
+                              <div class="exam-option-line"><strong>C)</strong> <span>Pretender ou ter a intenção real.</span></div>
+                              <div class="exam-option-line"><strong>D)</strong> <span>Prever um acontecimento futuro.</span></div>
+                            </div>
+                          </div>
+                        `
+                      })
+                    }}
+                    style={btnPrimary}
+                  >
+                    🖨️ Testar Folha A4 (PDF)
+                  </button>
+                  {!activeFormat.id.startsWith('fmt_') && (
+                    <button
+                      onClick={() => {
+                        const remaining = documentFormats.filter(f => f.id !== activeFormat.id)
+                        setDocumentFormats(remaining)
+                        saveDocumentFormats(remaining)
+                        if (remaining[0]) setSelectedFormatId(remaining[0].id)
+                        showToast('Formato removido.')
+                      }}
+                      style={{ ...btnSecondary, color: '#dc2626' }}
+                    >
+                      Excluir
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* CONTROLES DE EDIÇÃO DO FORMATO */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12, background: '#faf8f5', padding: 16, borderRadius: RADIUS.lg, border: '1px solid #ede8dc' }}>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 800, color: '#5a3e28', display: 'block', marginBottom: 4 }}>Nome do Formato</label>
+                  <input
+                    value={activeFormat.name}
+                    onChange={e => updateActiveFormat({ name: e.target.value })}
+                    style={inputStyle}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 800, color: '#5a3e28', display: 'block', marginBottom: 4 }}>Escola Vinculada</label>
+                  <select
+                    value={activeFormat.schoolName}
+                    onChange={e => updateActiveFormat({ schoolName: e.target.value })}
+                    style={inputStyle}
+                  >
+                    {availableSchoolNames.map(s => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 800, color: '#5a3e28', display: 'block', marginBottom: 4 }}>Aplicação Principal</label>
+                  <select
+                    value={activeFormat.targetCategory}
+                    onChange={e => updateActiveFormat({ targetCategory: e.target.value as DocumentFormatCategory })}
+                    style={inputStyle}
+                  >
+                    <option value="all">Universal (Provas, Sequências e Docs)</option>
+                    <option value="exam">Provas & Simulados</option>
+                    <option value="worksheet">Listas de Exercícios</option>
+                    <option value="didactic_sequence">Sequência Didática & Coordenação</option>
+                    <option value="general_document">Documentos Gerais / Comunicados</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 800, color: '#5a3e28', display: 'block', marginBottom: 4 }}>Diagramação de Colunas</label>
+                  <select
+                    value={activeFormat.columns}
+                    onChange={e => updateActiveFormat({ columns: Number(e.target.value) as 1 | 2 })}
+                    style={inputStyle}
+                  >
+                    <option value={1}>1 Coluna (Tradicional)</option>
+                    <option value={2}>2 Colunas (Estilo ENEM / Anglo)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 800, color: '#5a3e28', display: 'block', marginBottom: 4 }}>Estilo do Cabeçalho</label>
+                  <select
+                    value={activeFormat.headerStyle}
+                    onChange={e => updateActiveFormat({ headerStyle: e.target.value as HeaderLayoutStyle })}
+                    style={inputStyle}
+                  >
+                    <option value="boxed_grid">Grade Tabelada Fechada (Clássico)</option>
+                    <option value="academic_classic">Acadêmico com Dupla Linha</option>
+                    <option value="minimal_banner">Faixa Compacta (Econômico)</option>
+                    <option value="institutional_clean">Institucional Limpo (Coordenação)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 800, color: '#5a3e28', display: 'block', marginBottom: 4 }}>Família Tipográfica</label>
+                  <select
+                    value={activeFormat.fontFamily}
+                    onChange={e => updateActiveFormat({ fontFamily: e.target.value })}
+                    style={inputStyle}
+                  >
+                    <option value="'Times New Roman', Times, serif">Times New Roman (Acadêmico)</option>
+                    <option value="Arial, Helvetica, sans-serif">Arial / Helvetica (Sem Serifa)</option>
+                    <option value="'Calibri', 'Segoe UI', sans-serif">Calibri (Moderno)</option>
+                    <option value="Georgia, serif">Georgia (Editorial)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 800, color: '#5a3e28', display: 'block', marginBottom: 4 }}>Tamanho da Fonte ({activeFormat.fontSizePt}pt)</label>
+                  <input
+                    type="number"
+                    min={9}
+                    max={16}
+                    step={0.5}
+                    value={activeFormat.fontSizePt}
+                    onChange={e => updateActiveFormat({ fontSizePt: Number(e.target.value) || 11 })}
+                    style={inputStyle}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 800, color: '#5a3e28', display: 'block', marginBottom: 4 }}>Padrão de Numeração de Questão</label>
+                  <select
+                    value={activeFormat.questionNumberStyle}
+                    onChange={e => updateActiveFormat({ questionNumberStyle: e.target.value as QuestionNumberFormat })}
+                    style={inputStyle}
+                  >
+                    <option value="questao_padded">QUESTÃO 01 (Caixa Alta Colégio/ENEM)</option>
+                    <option value="badge_number">Badge Destacado (1.)</option>
+                    <option value="numeric_dot">Numérico Direto (1.)</option>
+                    <option value="question_en">Bilíngue Internacional (Question 1.)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 800, color: '#5a3e28', display: 'block', marginBottom: 4 }}>Estilo das Alternativas</label>
+                  <select
+                    value={activeFormat.optionLabelStyle}
+                    onChange={e => updateActiveFormat({ optionLabelStyle: e.target.value as OptionLabelFormat })}
+                    style={inputStyle}
+                  >
+                    <option value="A)">A) B) C) D)</option>
+                    <option value="(A)">(A) (B) (C) (D)</option>
+                    <option value="[A]">[A] [B] [C] [D]</option>
+                    <option value="a)">a) b) c) d)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 800, color: '#5a3e28', display: 'block', marginBottom: 4 }}>Margens A4 (mm: Sup / Dir / Inf / Esq)</label>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 4 }}>
+                    {(['top', 'right', 'bottom', 'left'] as const).map(side => (
+                      <input
+                        key={side}
+                        type="number"
+                        min={6}
+                        max={35}
+                        value={activeFormat.marginsMm[side]}
+                        onChange={e =>
+                          updateActiveFormat({
+                            marginsMm: { ...activeFormat.marginsMm, [side]: Number(e.target.value) || 12 }
+                          })
+                        }
+                        style={{ ...inputStyle, padding: '6px', textAlign: 'center', fontSize: 11.5 }}
+                        title={`Margem ${side} (mm)`}
+                      />
+                    ))}
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, justifyContent: 'center' }}>
+                  <label style={{ fontSize: 11.5, fontWeight: 700, color: '#2c1a0e', display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={activeFormat.blackAndWhitePrintMode}
+                      onChange={e => updateActiveFormat({ blackAndWhitePrintMode: e.target.checked })}
+                    />
+                    Modo P&B Gráfica / Xerox (Alto Contraste)
+                  </label>
+                  <label style={{ fontSize: 11.5, fontWeight: 700, color: '#2c1a0e', display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={activeFormat.showSignatureLine}
+                      onChange={e => updateActiveFormat({ showSignatureLine: e.target.checked })}
+                    />
+                    Incluir Linha de Assinatura (Docente / Coordenação)
+                  </label>
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 800, color: '#5a3e28', display: 'block', marginBottom: 4 }}>Instruções Padrão da Escola</label>
+                  <textarea
+                    rows={3}
+                    value={activeFormat.defaultInstructions}
+                    onChange={e => updateActiveFormat({ defaultInstructions: e.target.value })}
+                    style={{ ...inputStyle, resize: 'vertical', fontSize: 12 }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 800, color: '#5a3e28', display: 'block', marginBottom: 4 }}>Subtítulo Institucional & Rodapé</label>
+                  <input
+                    placeholder="Subtítulo no cabeçalho..."
+                    value={activeFormat.officialSchoolSubtitle || ''}
+                    onChange={e => updateActiveFormat({ officialSchoolSubtitle: e.target.value })}
+                    style={{ ...inputStyle, marginBottom: 6, fontSize: 12 }}
+                  />
+                  <input
+                    placeholder="Texto de rodapé..."
+                    value={activeFormat.footerText}
+                    onChange={e => updateActiveFormat({ footerText: e.target.value })}
+                    style={{ ...inputStyle, fontSize: 12 }}
+                  />
+                </div>
+              </div>
+
+              {/* PREVIEW VISUAL A4 AO VIVO */}
+              <div style={{ background: '#e2e8f0', padding: 20, borderRadius: RADIUS.lg, border: '1px solid #cbd5e1' }}>
+                <div style={{ fontSize: 11, fontWeight: 800, color: '#475569', textTransform: 'uppercase', marginBottom: 10, display: 'flex', justifyContent: 'space-between' }}>
+                  <span>📄 Pré-Visualização Fiel da Folha A4 ({activeFormat.schoolName})</span>
+                  <span>{activeFormat.columns === 2 ? 'Duas Colunas' : 'Coluna Única'} • {activeFormat.fontFamily.split(',')[0].replace(/'/g, '')} {activeFormat.fontSizePt}pt</span>
+                </div>
+                <div style={{
+                  background: '#fff',
+                  padding: `${activeFormat.marginsMm.top}px ${activeFormat.marginsMm.right + 6}px ${activeFormat.marginsMm.bottom}px ${activeFormat.marginsMm.left + 6}px`,
+                  borderRadius: 4,
+                  boxShadow: '0 6px 20px rgba(0,0,0,0.12)',
+                  fontFamily: activeFormat.fontFamily,
+                  fontSize: `${activeFormat.fontSizePt}pt`,
+                  lineHeight: activeFormat.lineHeight,
+                  color: '#000'
+                }}>
+                  <div style={{ border: '2px solid #000', padding: '6px 10px', marginBottom: 10, textAlign: 'center' }}>
+                    <div style={{ fontWeight: 'bold', fontSize: `${activeFormat.fontSizePt + 1.5}pt`, textTransform: 'uppercase' }}>
+                      {activeFormat.schoolName}
+                    </div>
+                    {activeFormat.officialSchoolSubtitle && (
+                      <div style={{ fontSize: '8.5pt', color: '#333' }}>{activeFormat.officialSchoolSubtitle}</div>
+                    )}
+                    <div style={{ fontSize: '9pt', borderTop: '1px solid #000', marginTop: 4, paddingTop: 4, display: 'flex', justifyContent: 'space-between' }}>
+                      <span><strong>DISCIPLINA:</strong> Língua Inglesa</span>
+                      <span><strong>TURMA:</strong> 9º Ano</span>
+                      <span><strong>NOTA:</strong> ____ / 10,0</span>
+                    </div>
+                  </div>
+
+                  <div style={{
+                    columnCount: activeFormat.columns,
+                    columnGap: `${activeFormat.columnGapMm}mm`,
+                    columnRule: activeFormat.columns === 2 && activeFormat.showColumnDivider ? '1px solid #94a3b8' : 'none',
+                    textAlign: activeFormat.textAlign
+                  }}>
+                    {[1, 2].map(num => (
+                      <div key={num} style={{ breakInside: 'avoid', marginBottom: 12, paddingBottom: 8, borderBottom: '1px solid #cbd5e1' }}>
+                        <div style={{ fontWeight: 'bold', marginBottom: 4 }}>
+                          {activeFormat.questionNumberStyle === 'questao_padded'
+                            ? `QUESTÃO 0${num}`
+                            : activeFormat.questionNumberStyle === 'question_en'
+                            ? `Question ${num}.`
+                            : `${num}.`}{' '}
+                          {activeFormat.showPointsPerQuestion && <span style={{ float: 'right', fontSize: '9pt' }}>(1,0 pt)</span>}
+                        </div>
+                        <p style={{ margin: '0 0 6px 0' }}>
+                          Exemplo de enunciado diagramado automaticamente no formato oficial da escola <strong>{activeFormat.schoolName}</strong>:
+                        </p>
+                        {['A', 'B', 'C', 'D'].map(letter => {
+                          const lbl =
+                            activeFormat.optionLabelStyle === '(A)'
+                              ? `(${letter})`
+                              : activeFormat.optionLabelStyle === '[A]'
+                              ? `[${letter}]`
+                              : activeFormat.optionLabelStyle === 'a)'
+                              ? `${letter.toLowerCase()})`
+                              : `${letter})`
+                          return (
+                            <div key={letter} style={{ marginBottom: 2 }}>
+                              <strong>{lbl}</strong> Alternativa de exemplo calibrada para impressão escolar.
+                            </div>
+                          )
+                        })}
+                      </div>
+                    ))}
+                  </div>
+
+                  {activeFormat.showSignatureLine && (
+                    <div style={{ display: 'flex', justifyContent: 'space-around', marginTop: 18, paddingTop: 8, fontSize: '8.5pt' }}>
+                      <div style={{ borderTop: '1px solid #000', width: '40%', textAlign: 'center', paddingTop: 3 }}>
+                        {activeFormat.signatureLabels?.[0] || 'Professor(a) Responsável'}
+                      </div>
+                      <div style={{ borderTop: '1px solid #000', width: '40%', textAlign: 'center', paddingTop: 3 }}>
+                        {activeFormat.signatureLabels?.[1] || 'Coordenação Pedagógica'}
+                      </div>
+                    </div>
+                  )}
+
+                  <div style={{ marginTop: 12, borderTop: '1px solid #888', paddingTop: 4, textAlign: 'center', fontSize: '8pt', color: '#444' }}>
+                    {activeFormat.footerText}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  })()}
 
 </div>
 

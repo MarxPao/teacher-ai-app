@@ -16,6 +16,16 @@ import {
   subscribeToDidacticSequenceUpdates
 } from '@/lib/didacticSequenceService'
 import { indexDocumentContent } from '@/lib/ragEngine'
+import {
+  exportToPdf,
+  exportToWord,
+  buildDidacticSequenceExportHtml
+} from '@/lib/exportUtils'
+import {
+  getDocumentFormats,
+  getDefaultFormatForSchool,
+  type SchoolDocumentFormat
+} from '@/lib/documentFormatTemplates'
 
 
 export interface SequenceUnit {
@@ -394,11 +404,52 @@ export default function DidacticSequence() {
   const [selectedSchool, setSelectedSchool] = useState('Machado Sobrinho')
   const [selectedClass, setSelectedClass] = useState('9º Ano B')
   const [selectedYear, setSelectedYear] = useState('2026')
+  const [availableFormats, setAvailableFormats] = useState<SchoolDocumentFormat[]>(() => getDocumentFormats())
+  const [selectedFormatId, setSelectedFormatId] = useState<string>(() =>
+    getDefaultFormatForSchool('Machado Sobrinho', 'didactic_sequence').id
+  )
 
   const [selectedUnit, setSelectedUnit] = useState<SequenceUnit | null>(null)
   const [analyzingAi, setAnalyzingAi] = useState(false)
   const [aiReport, setAiReport] = useState<string | null>(null)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
+
+  const handleExportSequence = (target: 'pdf' | 'word') => {
+    const html = buildDidacticSequenceExportHtml({
+      schoolName: selectedSchool,
+      gradeName: selectedClass,
+      bimesterName: `Ano Letivo ${selectedYear}`,
+      units: units.map(u => ({
+        title: u.title,
+        status: u.status === 'current' ? 'in_progress' : u.status,
+        progress: u.masteryPercentage || (u.status === 'completed' ? 100 : u.status === 'current' ? 50 : 0),
+        plannedWeeks: `Semanas ${u.plannedWeekStart}–${u.plannedWeekEnd} (${u.plannedQuarter})`,
+        actualWeeks: `Semanas ${u.actualWeekStart}–${u.actualWeekEnd} (${u.actualQuarter})`,
+        plannedHours: u.plannedLessons || 8,
+        completedHours: u.actualLessonsGiven || 0,
+        grammar: u.grammarFocus ? [u.grammarFocus] : [],
+        vocabulary: u.vocabularyFocus ? [u.vocabularyFocus] : [],
+        skills: u.topics || [],
+        bookModule: u.bookRef,
+        notes: `${u.aiAssessment || ''}${u.suggestedAction ? ` | Ação: ${u.suggestedAction}` : ''}`
+      })),
+      aiAssessmentText: aiReport || undefined
+    })
+
+    const opts = {
+      schoolName: selectedSchool,
+      teacherName: 'Rafaela Toldo',
+      className: selectedClass,
+      subjectName: 'Língua Inglesa',
+      title: `SEQUÊNCIA DIDÁTICA E CRONOGRAMA CURRICULAR — ${selectedClass.toUpperCase()} (${selectedYear})`,
+      content: html,
+      showStudentNameBox: false,
+      formatId: selectedFormatId
+    }
+
+    if (target === 'pdf') exportToPdf(opts)
+    else exportToWord(opts)
+  }
 
   // Edit / Add Modal State
   const [editModalUnit, setEditModalUnit] = useState<SequenceUnit | null>(null)
@@ -842,6 +893,30 @@ ${buildTeacherStyleSystemPrompt()}`
 
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
           <button
+            onClick={() => handleExportSequence('pdf')}
+            title="Exporta a Sequência Didática formatada no padrão oficial da escola selecionada (PDF)"
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6, padding: '10px 16px',
+              borderRadius: RADIUS.md, border: '1.5px solid #8b5e3c', background: '#fffcf8', color: '#8b5e3c',
+              fontSize: 13, fontWeight: 700, cursor: 'pointer'
+            }}
+          >
+            <i className="ti ti-printer" /> 📄 Exportar Sequência (PDF)
+          </button>
+
+          <button
+            onClick={() => handleExportSequence('word')}
+            title="Exporta a Sequência Didática em Word (.doc) no formato da escola"
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6, padding: '10px 14px',
+              borderRadius: RADIUS.md, border: '1px solid rgba(139,115,85,0.35)', background: '#fff', color: '#5a3e28',
+              fontSize: 13, fontWeight: 700, cursor: 'pointer'
+            }}
+          >
+            <i className="ti ti-file-text" /> Word (.doc)
+          </button>
+
+          <button
             onClick={handleSyncWithBook}
             title="Importa e atualiza as unidades da sequência a partir do livro didático indexado no repositório"
             style={{
@@ -881,11 +956,20 @@ ${buildTeacherStyleSystemPrompt()}`
         </div>
       </div>
 
-      {/* Barra de Filtros de Contexto (Escola / Turma / Ano) */}
-      <div style={{ background: '#fffcf8', padding: '16px 20px', borderRadius: RADIUS.xl, border: '1px solid rgba(139,115,85,0.14)', marginBottom: 24, boxShadow: '0 2px 8px rgba(44,26,14,0.04)', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 2fr', gap: 16, alignItems: 'center' }}>
+      {/* Barra de Filtros de Contexto (Escola / Turma / Ano / Formato de Arquivo) */}
+      <div style={{ background: '#fffcf8', padding: '16px 20px', borderRadius: RADIUS.xl, border: '1px solid rgba(139,115,85,0.14)', marginBottom: 24, boxShadow: '0 2px 8px rgba(44,26,14,0.04)', display: 'grid', gridTemplateColumns: '1fr 1fr 0.8fr 1.4fr 1.6fr', gap: 14, alignItems: 'center' }}>
         <div>
           <label style={{ fontSize: 11, fontWeight: 700, color: '#7a5c42', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Escola</label>
-          <select value={selectedSchool} onChange={e => setSelectedSchool(e.target.value)} style={{ width: '100%', padding: '8px 12px', borderRadius: RADIUS.md, border: '1px solid rgba(139,115,85,0.22)', background: '#fff', fontSize: 13, color: '#2c1a0e', outline: 'none', fontWeight: 600 }}>
+          <select
+            value={selectedSchool}
+            onChange={e => {
+              const nextSchool = e.target.value
+              setSelectedSchool(nextSchool)
+              const fmt = getDefaultFormatForSchool(nextSchool, 'didactic_sequence')
+              if (fmt) setSelectedFormatId(fmt.id)
+            }}
+            style={{ width: '100%', padding: '8px 12px', borderRadius: RADIUS.md, border: '1px solid rgba(139,115,85,0.22)', background: '#fff', fontSize: 13, color: '#2c1a0e', outline: 'none', fontWeight: 600 }}
+          >
             {schools.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
         </div>
@@ -902,6 +986,19 @@ ${buildTeacherStyleSystemPrompt()}`
           <select value={selectedYear} onChange={e => setSelectedYear(e.target.value)} style={{ width: '100%', padding: '8px 12px', borderRadius: RADIUS.md, border: '1px solid rgba(139,115,85,0.22)', background: '#fff', fontSize: 13, color: '#2c1a0e', outline: 'none', fontWeight: 600 }}>
             <option>2026</option>
             <option>2025</option>
+          </select>
+        </div>
+
+        <div>
+          <label style={{ fontSize: 11, fontWeight: 700, color: '#7a5c42', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>📐 Formato de Arquivo (Escola)</label>
+          <select
+            value={selectedFormatId}
+            onChange={e => setSelectedFormatId(e.target.value)}
+            style={{ width: '100%', padding: '8px 12px', borderRadius: RADIUS.md, border: '1.5px solid #8b5e3c', background: '#fff', fontSize: 12.5, color: '#2c1a0e', outline: 'none', fontWeight: 700 }}
+          >
+            {availableFormats.map(f => (
+              <option key={f.id} value={f.id}>{f.name}</option>
+            ))}
           </select>
         </div>
 

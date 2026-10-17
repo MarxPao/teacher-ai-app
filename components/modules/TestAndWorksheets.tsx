@@ -12,6 +12,11 @@ import SavedItemsDrawer, { saveItemToStorage, SavedItem } from '@/components/Sav
 import { PEDAGOGICAL_METHODOLOGIES, buildMethodologyInstructions } from '@/lib/pedagogicalMethodologies'
 import PresetSelector from '@/components/PresetSelector'
 import { exportToPdf, exportToWord, generateSvgQRCode } from '@/lib/exportUtils'
+import {
+  getDocumentFormats,
+  getDefaultFormatForSchool,
+  type SchoolDocumentFormat
+} from '@/lib/documentFormatTemplates'
 import StudentExamPlayer, { OnlineQuestion } from '@/components/modules/StudentExamPlayer'
 import SourceKnowledgeHub, { SourceItem, KnowledgeMode, compileSourcesPrompt } from '@/components/SourceKnowledgeHub'
 import SmartInsightsPanel from '@/components/modules/SmartInsightsPanel'
@@ -247,11 +252,16 @@ export default function TestAndWorksheets({ initialMode = 'exam' }: TestAndWorks
   const [savedDrawerMode, setSavedDrawerMode] = useState<'exam' | 'worksheet' | null>(null)
   const [savedExamsCount, setSavedExamsCount] = useState(0)
   const [savedWorksheetsCount, setSavedWorksheetsCount] = useState(0)
+  const [availableFormats, setAvailableFormats] = useState<SchoolDocumentFormat[]>(() => getDocumentFormats())
+  const [selectedDocumentFormatId, setSelectedDocumentFormatId] = useState<string>(() =>
+    getDefaultFormatForSchool('Machado Sobrinho', 'exam').id
+  )
 
-  // Sincroniza contagens salvas
+  // Sincroniza contagens salvas e formatos de arquivo
   const updateCounts = () => {
     try { setSavedExamsCount(JSON.parse(localStorage.getItem('teacher_saved_exams') || '[]').length) } catch { setSavedExamsCount(0) }
     try { setSavedWorksheetsCount(JSON.parse(localStorage.getItem('teacher_saved_quicks') || '[]').length) } catch { setSavedWorksheetsCount(0) }
+    try { setAvailableFormats(getDocumentFormats()) } catch {}
   }
 
   useEffect(() => {
@@ -1218,15 +1228,53 @@ ${currentQuestion.options ? 'A) [Alternativa A]\nB) [Alternativa B]\nC) [Alterna
             </div>
           )}
 
-          {/* Configurações de Cabeçalho Oficial */}
+          {/* Configurações de Cabeçalho Oficial & Formato de Arquivo da Escola */}
           <div style={CARD}>
-            <label style={SL}>🏫 Cabeçalho Oficial</label>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+              <label style={{ ...SL, marginBottom: 0 }}>🏫 Cabeçalho & Formato de Arquivo</label>
+              <button
+                type="button"
+                onClick={() => window.dispatchEvent(new CustomEvent('teacher:navigate', { detail: 'repository' }))}
+                style={{ background: 'none', border: 'none', color: '#8b5e3c', fontSize: 10.5, fontWeight: 700, cursor: 'pointer' }}
+                title="Gerenciar Formatos de Arquivo na Biblioteca & Repositório"
+              >
+                ⚙️ Configurar Formatos
+              </button>
+            </div>
             <input
               value={header.school}
-              onChange={e => setHeader(h => ({ ...h, school: e.target.value }))}
-              placeholder="Nome da Escola"
+              onChange={e => {
+                const nextSchool = e.target.value
+                setHeader(h => ({ ...h, school: nextSchool }))
+                const matched = getDefaultFormatForSchool(nextSchool, mode === 'exam' ? 'exam' : 'worksheet')
+                if (matched) setSelectedDocumentFormatId(matched.id)
+              }}
+              placeholder="Nome da Escola (ex: Machado Sobrinho)"
               style={{ ...SI, marginBottom: 8 }}
             />
+            <div style={{ marginBottom: 8 }}>
+              <label style={{ fontSize: 10.5, fontWeight: 700, color: '#665c54', display: 'block', marginBottom: 3 }}>
+                📐 Formato de Arquivo (Diagramação da Escola):
+              </label>
+              <select
+                value={selectedDocumentFormatId}
+                onChange={e => {
+                  const nextId = e.target.value
+                  setSelectedDocumentFormatId(nextId)
+                  const fmt = availableFormats.find(f => f.id === nextId)
+                  if (fmt && fmt.schoolName && fmt.schoolName !== 'Geral' && !header.school) {
+                    setHeader(h => ({ ...h, school: fmt.schoolName }))
+                  }
+                }}
+                style={{ ...SI, fontWeight: 700, color: '#2c1a0e', cursor: 'pointer' }}
+              >
+                {availableFormats.map(f => (
+                  <option key={f.id} value={f.id}>
+                    {f.name} ({f.columns === 2 ? '2 Col' : '1 Col'} • {f.optionLabelStyle})
+                  </option>
+                ))}
+              </select>
+            </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
               <input value={header.teacher} onChange={e => setHeader(h => ({ ...h, teacher: e.target.value }))} placeholder="Professor(a)" style={SI} />
               <input value={header.classGroup} onChange={e => setHeader(h => ({ ...h, classGroup: e.target.value }))} placeholder="Turma (ex: 9º B)" style={SI} />
@@ -1464,6 +1512,8 @@ ${currentQuestion.options ? 'A) [Alternativa A]\nB) [Alternativa B]\nC) [Alterna
               onGenerateAudio={handleGenerateAudio}
               onDeleteAudio={() => setAudioUrl(null)}
               onOpenOnlinePlayer={() => setShowOnlineModal(true)}
+              documentFormatId={selectedDocumentFormatId}
+              onDocumentFormatChange={setSelectedDocumentFormatId}
             />
           )}
         </div>

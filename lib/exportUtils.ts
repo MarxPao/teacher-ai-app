@@ -1,4 +1,9 @@
 import { toast, showConfirm } from '@/components/Toast'
+import {
+  SchoolDocumentFormat,
+  getDocumentFormatById,
+  applySchoolFormatToBodyHtml
+} from '@/lib/documentFormatTemplates'
 /**
  * @deprecated Módulo de exportação de relatórios da aplicação web legada.
  * exportUtils.ts — Exportação Oficial em PDF/Word/Excel com Cabeçalhos Padronizados das Escolas,
@@ -9,6 +14,7 @@ export interface ExportHeaderOptions {
   schoolName?: string
   teacherName?: string
   className?: string
+  subjectName?: string
   date?: string
   title: string
   subtitle?: string
@@ -17,6 +23,8 @@ export interface ExportHeaderOptions {
   showStudentNameBox?: boolean
   instructions?: string
   schoolTemplate?: 'machado' | 'santacatarina' | 'plurall' | 'cambridge' | 'standard'
+  formatId?: string
+  documentFormat?: SchoolDocumentFormat
   headerImageUrl?: string
   isImageHeader?: boolean
   neeProfile?: 'standard' | 'dyslexia' | 'adhd' | 'asd' | 'low_vis'
@@ -96,18 +104,153 @@ export const OFFICIAL_SCHOOL_TEMPLATES = [
   }
 ]
 
+function renderSchoolHeaderHtml(params: {
+  fmt: SchoolDocumentFormat
+  school: string
+  teacher: string
+  classGroup: string
+  subject: string
+  dateStr: string
+  instructions: string
+  showStudentNameBox: boolean
+  headerImageUrl?: string
+}): string {
+  const { fmt, school, teacher, classGroup, subject, dateStr, instructions, showStudentNameBox, headerImageUrl } = params
+  if (headerImageUrl) {
+    return `
+      <div style="text-align: center; margin-bottom: 16px; border-bottom: 2px solid #000; padding-bottom: 8px;">
+        <img src="${headerImageUrl}" style="width: 100%; max-height: 220px; object-fit: contain;" />
+      </div>
+    `
+  }
+
+  const accent = fmt.blackAndWhitePrintMode ? '#000000' : (fmt.primaryColor || '#000000')
+  const subtitleLine = fmt.officialSchoolSubtitle
+    ? `<div style="font-size: 9pt; font-weight: normal; letter-spacing: 0.04em; margin-top: 2px;">${fmt.officialSchoolSubtitle}</div>`
+    : ''
+
+  if (fmt.headerStyle === 'minimal_banner') {
+    return `
+      <div style="border: 2px solid ${accent}; padding: 8px 12px; margin-bottom: 12px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 1px solid ${accent}; padding-bottom: 4px; margin-bottom: 6px;">
+          <strong style="font-size: 11.5pt; text-transform: uppercase;">${school}</strong>
+          <span style="font-size: 9.5pt;"><strong>${subject}</strong> &bull; Prof(a). ${teacher} &bull; ${dateStr}</span>
+        </div>
+        ${showStudentNameBox ? `
+        <div style="display:flex; justify-content:space-between; font-size: 9.5pt;">
+          <span><strong>ALUNO(A):</strong> _________________________________________________</span>
+          <span><strong>TURMA:</strong> ${classGroup}</span>
+          <span><strong>NOTA:</strong> _____ / 10,0</span>
+        </div>
+        ` : `
+        <div style="font-size: 9.5pt;"><strong>TURMA / SÉRIE:</strong> ${classGroup}</div>
+        `}
+      </div>
+      ${instructions ? `
+      <div class="instructions-box">
+        <strong>INSTRUÇÕES:</strong> ${instructions.replace(/\n/g, ' &bull; ')}
+      </div>` : ''}
+    `
+  }
+
+  if (fmt.headerStyle === 'institutional_clean') {
+    return `
+      <div style="border-bottom: 2px solid ${accent}; padding-bottom: 8px; margin-bottom: 14px;">
+        <div style="font-size: 13pt; font-weight: bold; text-transform: uppercase; color: ${accent};">${school}</div>
+        ${subtitleLine}
+        <div style="display: flex; flex-wrap: wrap; gap: 16px; margin-top: 6px; font-size: 9.5pt;">
+          <span><strong>Disciplina:</strong> ${subject}</span>
+          <span><strong>Docente:</strong> ${teacher}</span>
+          <span><strong>Turma/Série:</strong> ${classGroup}</span>
+          <span><strong>Data:</strong> ${dateStr}</span>
+        </div>
+      </div>
+      ${instructions ? `
+      <div class="instructions-box">
+        <strong>DIRETRIZES / OBJETIVOS DO DOCUMENTO:</strong><br/>
+        ${instructions.replace(/\n/g, '<br/>')}
+      </div>` : ''}
+    `
+  }
+
+  if (fmt.headerStyle === 'academic_classic') {
+    return `
+      <div style="text-align: center; border-top: 2px solid ${accent}; border-bottom: 2px solid ${accent}; padding: 8px 0; margin-bottom: 10px;">
+        <div class="school-title" style="color: ${accent};">${school}</div>
+        ${subtitleLine}
+        <div style="font-size: 9.5pt; margin-top: 4px;">
+          <strong>Disciplina:</strong> ${subject} &nbsp;|&nbsp; <strong>Prof(a).:</strong> ${teacher} &nbsp;|&nbsp; <strong>Turma:</strong> ${classGroup} &nbsp;|&nbsp; <strong>Data:</strong> ${dateStr}
+        </div>
+      </div>
+      ${showStudentNameBox ? `
+      <table class="header-table" style="margin-bottom: 10px;">
+        <tr>
+          <td colspan="2"><strong>ALUNO(A):</strong> ____________________________________________________</td>
+          <td class="grade-box"><strong>NOTA:</strong> ______ / 10,0</td>
+        </tr>
+      </table>` : ''}
+      ${instructions ? `
+      <div class="instructions-box">
+        <strong>INSTRUÇÕES GERAIS:</strong><br/>
+        ${instructions.replace(/\n/g, '<br/>')}
+      </div>` : ''}
+    `
+  }
+
+  // Default: 'boxed_grid'
+  return `
+    <table class="header-table">
+      <tr>
+        <td colspan="3" class="school-title">
+          ${school}
+          ${subtitleLine}
+        </td>
+      </tr>
+      <tr>
+        <td><strong>DISCIPLINA:</strong> ${subject}</td>
+        <td><strong>PROFESSOR(A):</strong> ${teacher}</td>
+        <td><strong>DATA:</strong> ${dateStr}</td>
+      </tr>
+      <tr>
+        <td><strong>TURMA / SÉRIE:</strong> ${classGroup}</td>
+        <td colspan="2"><strong>ETAPA / TRIMESTRE:</strong> 1º Trimestre / Bimestre</td>
+      </tr>
+      ${showStudentNameBox ? `
+      <tr>
+        <td colspan="2"><strong>ALUNO(A):</strong> ____________________________________________________</td>
+        <td class="grade-box"><strong>NOTA:</strong> ______ / 10,0</td>
+      </tr>
+      ` : ''}
+    </table>
+
+    ${instructions ? `
+    <div class="instructions-box">
+      <strong>INSTRUÇÕES GERAIS:</strong><br/>
+      ${instructions.replace(/\n/g, '<br/>')}
+    </div>` : ''}
+  `
+}
+
 /**
- * 1. Exporta conteúdo para PDF Oficial com Cabeçalho e Suporte a NEE e Preferências Globais
+ * 1. Exporta conteúdo para PDF Oficial com Cabeçalho, Formato de Arquivo da Escola e Suporte a NEE
  */
 export function exportToPdf(options: ExportHeaderOptions) {
   const prefs = getGlobalDocumentPrefs()
-  const school = options.schoolName || 'ESCOLA / INSTITUTO DE ENSINO'
+  const fmt = options.documentFormat || getDocumentFormatById(options.formatId, options.schoolName)
+  const school = options.schoolName || (fmt.schoolName !== 'Geral' ? fmt.schoolName : 'ESCOLA / INSTITUTO DE ENSINO')
   const teacher = options.teacherName || 'Professor(a)'
   const classGroup = options.className || 'Turma ____'
+  const subject = options.subjectName || 'Língua Inglesa'
   const dateStr = options.date || new Date().toLocaleDateString('pt-BR')
   const title = options.title || 'AVALIAÇÃO DE LÍNGUA INGLESA'
-  const instructions = options.instructions || 'Leia atentamente as instruções e responda com clareza a caneta azul ou preta.'
+  const instructions = options.instructions ?? fmt.defaultInstructions ?? 'Leia atentamente as instruções e responda com clareza a caneta azul ou preta.'
   const nee = options.neeProfile || 'standard'
+
+  const fontFamily = options.customStyles?.fontFamily || fmt.fontFamily || prefs.fontFamily
+  const fontSizePt = options.customStyles?.fontSizePt || fmt.fontSizePt || prefs.fontSizePt
+  const lineHeight = options.customStyles?.lineHeight || fmt.lineHeight || prefs.lineHeight
+  const margins = fmt.marginsMm || { top: prefs.marginMm, right: prefs.marginMm, bottom: prefs.marginMm, left: prefs.marginMm }
+  const accentColor = fmt.blackAndWhitePrintMode ? '#000000' : (fmt.primaryColor || '#000000')
 
   const printWindow = window.open('', '_blank')
   if (!printWindow) {
@@ -115,7 +258,7 @@ export function exportToPdf(options: ExportHeaderOptions) {
     return
   }
 
-  // Definição de Estilos CSS Adaptados para NEE e Preferências Globais
+  // Definição de Estilos CSS Adaptados para NEE e Formato Escolar
   let neeCss = ''
   let neeBadgeHtml = ''
 
@@ -220,25 +363,61 @@ export function exportToPdf(options: ExportHeaderOptions) {
       .content p { font-size: 17pt !important; margin-bottom: 18px !important; }
     `
   } else {
-    // Padrão com Preferências Globais do Professor
+    // Padrão com Formato de Arquivo da Escola
     neeCss = `
       body {
-        font-family: ${prefs.fontFamily};
-        font-size: ${prefs.fontSizePt}pt;
-        line-height: ${prefs.lineHeight};
+        font-family: ${fontFamily};
+        font-size: ${fontSizePt}pt;
+        line-height: ${lineHeight};
+        text-align: ${fmt.textAlign || 'justify'};
         color: #000;
       }
-      .header-table { border: 2px solid #000; }
-      .header-table td { border: 1px solid #000; padding: 6px 10px; font-size: ${prefs.fontSizePt - 0.5}pt; }
-      .school-title { font-size: ${prefs.fontSizePt + 2}pt; font-weight: bold; text-align: center; text-transform: uppercase; }
-      .doc-title { font-size: ${prefs.fontSizePt + 1}pt; font-weight: bold; text-align: center; margin: 12px 0 8px 0; text-transform: uppercase; text-decoration: underline; }
-      .instructions-box { border: 1px solid #000; padding: 8px 12px; margin-bottom: 15px; font-size: ${prefs.fontSizePt - 1.5}pt; background: #fbfbfb; line-height: 1.4; }
-      .grade-box { text-align: center; font-weight: bold; font-size: ${prefs.fontSizePt}pt; }
-      .content h1, .content h2, .content h3 { font-size: ${prefs.fontSizePt + 0.5}pt; margin-top: 12px; margin-bottom: 4px; text-transform: uppercase; }
+      .header-table { border: 2px solid ${accentColor}; }
+      .header-table td { border: 1px solid ${accentColor}; padding: 6px 10px; font-size: ${fontSizePt - 0.5}pt; text-align: left; }
+      .school-title { font-size: ${fontSizePt + 2}pt; font-weight: bold; text-align: center !important; text-transform: uppercase; color: ${accentColor}; }
+      .doc-title { font-size: ${fontSizePt + 1}pt; font-weight: bold; text-align: center; margin: 12px 0 8px 0; text-transform: uppercase; text-decoration: underline; color: ${accentColor}; }
+      .instructions-box { border: 1px solid ${accentColor}; padding: 8px 12px; margin-bottom: 15px; font-size: ${fontSizePt - 1.5}pt; background: #fbfbfb; line-height: 1.4; text-align: left; }
+      .grade-box { text-align: center !important; font-weight: bold; font-size: ${fontSizePt}pt; }
+      .content h1, .content h2, .content h3 { font-size: ${fontSizePt + 0.5}pt; margin-top: 12px; margin-bottom: 4px; text-transform: uppercase; color: ${accentColor}; column-span: all; }
     `
   }
 
-  const formattedDocContent = prepareDocumentContentForExport(options.content, nee, title)
+  const rawFormattedContent = prepareDocumentContentForExport(options.content, nee, title)
+  const formattedDocContent = applySchoolFormatToBodyHtml(rawFormattedContent, fmt)
+
+  const columnCss =
+    fmt.columns === 2 && nee === 'standard'
+      ? `column-count: 2; column-gap: ${fmt.columnGapMm || 8}mm; column-rule: ${
+          fmt.showColumnDivider ? '1px solid #94a3b8' : 'none'
+        };`
+      : ''
+
+  const headerHtml = renderSchoolHeaderHtml({
+    fmt,
+    school,
+    teacher,
+    classGroup,
+    subject,
+    dateStr,
+    instructions,
+    showStudentNameBox: options.showStudentNameBox !== false,
+    headerImageUrl: options.headerImageUrl
+  })
+
+  const signatureHtml = fmt.showSignatureLine
+    ? `
+      <div style="display:flex; justify-content:space-around; margin-top: 38px; padding-top: 12px; page-break-inside: avoid;">
+        <div style="text-align:center; width: 42%; border-top: 1px solid #000; padding-top: 4px; font-size: 9pt;">
+          ${fmt.signatureLabels?.[0] || 'Assinatura do(a) Professor(a)'}
+        </div>
+        <div style="text-align:center; width: 42%; border-top: 1px solid #000; padding-top: 4px; font-size: 9pt;">
+          ${fmt.signatureLabels?.[1] || 'Visto da Coordenação Pedagógica'}
+        </div>
+      </div>
+    `
+    : ''
+
+  const footerLabel = fmt.footerText || `${school} • Departamento de ${subject} • Teacher AI`
 
   const html = `
     <!DOCTYPE html>
@@ -247,76 +426,48 @@ export function exportToPdf(options: ExportHeaderOptions) {
       <meta charset="UTF-8">
       <title>${title}</title>
       <style>
-        @page { size: A4; margin: ${prefs.marginMm}mm; }
+        @page { size: ${fmt.paperSize || 'A4'} ${fmt.orientation || 'portrait'}; margin: ${margins.top}mm ${margins.right}mm ${margins.bottom}mm ${margins.left}mm; }
         body { margin: 0; padding: 0; }
         .header-table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
-        .content { margin-top: 10px; }
-        .content-table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 10pt; }
-        .content-table th, .content-table td { border: 1px solid #94a3b8; padding: 6px 10px; text-align: left; vertical-align: top; }
+        .content { margin-top: 10px; ${columnCss} }
+        .content-table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 9.5pt; column-span: all; }
+        .content-table th, .content-table td { border: 1px solid #64748b; padding: 6px 10px; text-align: left; vertical-align: top; }
         .content-table th { background-color: #f1f5f9; font-weight: bold; color: #0f172a; }
         .content-table tr:nth-child(even) { background-color: #f8fafc; }
-        .content-divider { border: 0; border-top: 1px solid #cbd5e1; margin: 16px 0; }
+        .content-divider { border: 0; border-top: 1px solid #cbd5e1; margin: 16px 0; column-span: all; }
         .content ul { margin: 6px 0 10px 20px; padding: 0; }
         .content li { margin-bottom: 4px; }
         .content p { margin: 6px 0; }
-        .exam-question-item { page-break-inside: avoid; break-inside: avoid; margin-bottom: 18px !important; padding-bottom: 14px !important; border-bottom: 1px solid #cbd5e1 !important; }
-        .exam-options-list { margin-left: 6px !important; margin-bottom: 10px !important; }
-        .exam-option-line { margin-bottom: 4px !important; line-height: 1.45 !important; }
-        .teacher-answer-key-sheet { page-break-before: always; break-before: page; margin-top: 24px; padding-top: 12px; }
-        .footer { margin-top: 30px; font-size: 8.5pt; text-align: center; border-top: 1px solid #888; padding-top: 5px; color: #444; }
+        .exam-question-item { page-break-inside: avoid; break-inside: avoid; margin-bottom: ${fmt.compactQuestionSpacing ? '10px' : '18px'} !important; padding-bottom: ${fmt.compactQuestionSpacing ? '8px' : '14px'} !important; border-bottom: 1px solid #cbd5e1 !important; }
+        .exam-options-list { margin-left: 6px !important; margin-bottom: 8px !important; }
+        .exam-option-line { margin-bottom: 3px !important; line-height: 1.4 !important; }
+        .teacher-answer-key-sheet { page-break-before: always; break-before: page; margin-top: 24px; padding-top: 12px; column-span: all; }
+        .footer { margin-top: 28px; font-size: 8.5pt; text-align: center; border-top: 1px solid #888; padding-top: 5px; color: #333; }
         @media print { .no-print { display: none !important; } }
         ${neeCss}
       </style>
     </head>
     <body>
-      <div class="no-print" style="background:#f5f0e8; padding:12px; text-align:center; border-bottom:1px solid #ccc; font-family:sans-serif; display:flex; justify-content:center; gap:12px; align-items:center;">
+      <div class="no-print" style="background:#f5f0e8; padding:12px; text-align:center; border-bottom:1px solid #ccc; font-family:sans-serif; display:flex; justify-content:center; gap:12px; align-items:center; flex-wrap:wrap;">
         <button onclick="window.print()" style="padding:10px 20px; background:#8b5e3c; color:#fff; border:none; border-radius:8px; font-weight:bold; cursor:pointer; font-size:14px;">
           🖨️ Imprimir / Salvar PDF
         </button>
+        <span style="font-size:12px; color:#5a3e28; font-weight:600;">📐 Formato aplicado: ${fmt.name} (${fmt.columns === 2 ? '2 Colunas' : '1 Coluna'})</span>
         <span style="font-size:12px; color:#7a5c42;">(Dica: Selecione "Salvar como PDF" no destino da impressão)</span>
       </div>
 
-      <div style="padding: 15px;">
+      <div style="padding: 10px 14px;">
         ${neeBadgeHtml}
-
-        ${options.headerImageUrl ? `
-        <div style="text-align: center; margin-bottom: 16px; border-bottom: 2px solid #000; padding-bottom: 8px;">
-          <img src="${options.headerImageUrl}" style="width: 100%; max-height: 220px; object-fit: contain;" />
-        </div>
-        ` : `
-        <table class="header-table">
-          <tr>
-            <td colspan="3" class="school-title">${school}</td>
-          </tr>
-          <tr>
-            <td><strong>DISCIPLINA:</strong> Língua Inglesa</td>
-            <td><strong>PROFESSOR(A):</strong> ${teacher}</td>
-            <td><strong>DATA:</strong> ${dateStr}</td>
-          </tr>
-          <tr>
-            <td><strong>TURMA / SÉRIE:</strong> ${classGroup}</td>
-            <td colspan="2"><strong>ETAPA / TRIMESTRE:</strong> 1º Trimestre / Bimestre</td>
-          </tr>
-          ${options.showStudentNameBox !== false ? `
-          <tr>
-            <td colspan="2"><strong>ALUNO(A):</strong> ____________________________________________________</td>
-            <td class="grade-box"><strong>NOTA:</strong> ______ / 10,0</td>
-          </tr>
-          ` : ''}
-        </table>
-
-        <div class="instructions-box">
-          <strong>INSTRUÇÕES GERAIS:</strong><br/>
-          ${instructions.replace(/\n/g, '<br/>')}
-        </div>
-        `}
+        ${headerHtml}
 
         <div class="doc-title">${title}</div>
 
         <div class="content">${formattedDocContent}</div>
 
+        ${signatureHtml}
+
         <div class="footer">
-          ${school} &bull; Departamento de Língua Inglesa &bull; Teacher AI
+          ${footerLabel}
         </div>
       </div>
 
@@ -334,17 +485,50 @@ export function exportToPdf(options: ExportHeaderOptions) {
 }
 
 /**
- * 2. Exporta conteúdo para Word (.docx) Editável
+ * 2. Exporta conteúdo para Word (.doc) Editável respeitando o Formato de Arquivo da Escola
  */
 export function exportToWord(options: ExportHeaderOptions) {
   const prefs = getGlobalDocumentPrefs()
-  const school = options.schoolName || 'ESCOLA / INSTITUTO DE ENSINO'
+  const fmt = options.documentFormat || getDocumentFormatById(options.formatId, options.schoolName)
+  const school = options.schoolName || (fmt.schoolName !== 'Geral' ? fmt.schoolName : 'ESCOLA / INSTITUTO DE ENSINO')
   const teacher = options.teacherName || 'Professor(a)'
   const classGroup = options.className || 'Turma ____'
+  const subject = options.subjectName || 'Língua Inglesa'
   const dateStr = options.date || new Date().toLocaleDateString('pt-BR')
   const title = options.title || 'AVALIAÇÃO DE LÍNGUA INGLESA'
-  const instructions = options.instructions || 'Leia atentamente as instruções e responda com clareza.'
-  const formattedDocContent = prepareDocumentContentForExport(options.content, 'standard', title)
+  const instructions = options.instructions ?? fmt.defaultInstructions ?? 'Leia atentamente as instruções e responda com clareza.'
+  const fontFamily = fmt.fontFamily || prefs.fontFamily
+  const fontSizePt = fmt.fontSizePt || prefs.fontSizePt
+  const lineHeight = fmt.lineHeight || prefs.lineHeight
+
+  const rawFormattedContent = prepareDocumentContentForExport(options.content, 'standard', title)
+  const formattedDocContent = applySchoolFormatToBodyHtml(rawFormattedContent, fmt)
+
+  const headerHtml = renderSchoolHeaderHtml({
+    fmt,
+    school,
+    teacher,
+    classGroup,
+    subject,
+    dateStr,
+    instructions,
+    showStudentNameBox: options.showStudentNameBox !== false,
+    headerImageUrl: options.headerImageUrl
+  })
+
+  const signatureHtml = fmt.showSignatureLine
+    ? `
+      <table style="width:100%; border:none; margin-top:28pt;">
+        <tr>
+          <td style="border:none; text-align:center; width:45%;">________________________________________<br/>${fmt.signatureLabels?.[0] || 'Assinatura do(a) Professor(a)'}</td>
+          <td style="border:none; width:10%;"></td>
+          <td style="border:none; text-align:center; width:45%;">________________________________________<br/>${fmt.signatureLabels?.[1] || 'Visto da Coordenação Pedagógica'}</td>
+        </tr>
+      </table>
+    `
+    : ''
+
+  const footerLabel = fmt.footerText || `${school} • Departamento de ${subject} • Teacher AI`
 
   const contentHtml = `
     <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
@@ -352,11 +536,17 @@ export function exportToWord(options: ExportHeaderOptions) {
       <meta charset='utf-8'>
       <title>${title}</title>
       <style>
-        body { font-family: ${prefs.fontFamily}; font-size: ${prefs.fontSizePt}pt; line-height: ${prefs.lineHeight}; }
-        table { width: 100%; border-collapse: collapse; margin-bottom: 12pt; }
-        td { border: 1pt solid #000; padding: 5pt; font-size: ${prefs.fontSizePt - 1}pt; }
-        h1, h2 { font-size: ${prefs.fontSizePt + 2}pt; text-align: center; text-transform: uppercase; margin-top: 12pt; }
-        .instructions { border: 1pt solid #666; padding: 6pt; font-size: ${prefs.fontSizePt - 2}pt; margin-bottom: 10pt; }
+        @page Section1 {
+          size: ${fmt.orientation === 'landscape' ? '29.7cm 21.0cm' : '21.0cm 29.7cm'};
+          margin: ${fmt.marginsMm.top}mm ${fmt.marginsMm.right}mm ${fmt.marginsMm.bottom}mm ${fmt.marginsMm.left}mm;
+        }
+        div.Section1 { page: Section1; }
+        body { font-family: ${fontFamily}; font-size: ${fontSizePt}pt; line-height: ${lineHeight}; text-align: ${fmt.textAlign || 'justify'}; }
+        table.header-table { width: 100%; border-collapse: collapse; margin-bottom: 12pt; }
+        table.header-table td { border: 1pt solid #000; padding: 5pt; font-size: ${fontSizePt - 0.5}pt; }
+        .school-title { font-size: ${fontSizePt + 2}pt; font-weight: bold; text-align: center; text-transform: uppercase; }
+        .instructions-box { border: 1pt solid #444; padding: 6pt; font-size: ${fontSizePt - 1.5}pt; margin-bottom: 10pt; background: #fbfbfb; }
+        h1, h2 { font-size: ${fontSizePt + 1.5}pt; text-align: center; text-transform: uppercase; margin-top: 12pt; }
         p { margin-bottom: 6pt; }
         .content-table { width: 100%; border-collapse: collapse; margin-bottom: 12pt; }
         .content-table th, .content-table td { border: 1pt solid #666; padding: 5pt; text-align: left; vertical-align: top; }
@@ -370,39 +560,13 @@ export function exportToWord(options: ExportHeaderOptions) {
       </style>
     </head>
     <body>
-      ${options.headerImageUrl ? `
-      <div style="text-align:center; margin-bottom:12pt;">
-        <img src="${options.headerImageUrl}" style="max-width:100%; max-height:180pt;" />
+      <div class="Section1">
+        ${headerHtml}
+        <h1>${title}</h1>
+        <div>${formattedDocContent}</div>
+        ${signatureHtml}
+        <p style="margin-top:24pt; font-size:8.5pt; text-align:center; color:#555; border-top:1pt solid #999; padding-top:4pt;">${footerLabel}</p>
       </div>
-      ` : `
-      <table>
-        <tr><td colspan="3" style="text-align:center; font-weight:bold; font-size:12pt;">${school}</td></tr>
-        <tr>
-          <td><b>DISCIPLINA:</b> Língua Inglesa</td>
-          <td><b>PROFESSOR(A):</b> ${teacher}</td>
-          <td><b>DATA:</b> ${dateStr}</td>
-        </tr>
-        <tr>
-          <td><b>TURMA:</b> ${classGroup}</td>
-          <td colspan="2"><b>ETAPA:</b> 1º Trimestre / Bimestre</td>
-        </tr>
-        ${options.showStudentNameBox !== false ? `
-        <tr>
-          <td colspan="2"><b>ALUNO(A):</b> ____________________________________________________</td>
-          <td style="text-align:center;"><b>NOTA:</b> _____ / 10,0</td>
-        </tr>
-        ` : ''}
-      </table>
-
-      <div class="instructions">
-        <b>INSTRUÇÕES:</b><br/>
-        ${instructions.replace(/\n/g, '<br/>')}
-      </div>
-      `}
-
-      <h1>${title}</h1>
-
-      <div>${formattedDocContent}</div>
     </body>
     </html>
   `
@@ -961,4 +1125,118 @@ export async function exportElementToPdf(elementId: string, filename: string = '
   `)
   printWindow.document.close()
 }
+
+/**
+ * 8. Constrói HTML estruturado de Sequência Didática para exportação oficial da escola (PDF e Word)
+ */
+export function buildDidacticSequenceExportHtml(params: {
+  schoolName: string
+  gradeName: string
+  bimesterName: string
+  units: Array<{
+    title: string
+    status: string
+    progress: number
+    plannedWeeks: string
+    actualWeeks: string
+    plannedHours: number
+    completedHours: number
+    grammar: string[]
+    vocabulary: string[]
+    skills: string[]
+    bnccCodes?: string[]
+    pageRange?: string
+    bookModule?: string
+    notes?: string
+  }>
+  aiAssessmentText?: string
+}): string {
+  const statusMap: Record<string, string> = {
+    completed: 'Concluído',
+    in_progress: 'Em Andamento',
+    upcoming: 'Planejado',
+    delayed: 'Em Ajuste / Atrasado'
+  }
+
+  const totalPlannedHours = params.units.reduce((acc, u) => acc + (u.plannedHours || 0), 0)
+  const totalCompletedHours = params.units.reduce((acc, u) => acc + (u.completedHours || 0), 0)
+
+  const tableRows = params.units
+    .map(
+      (u, idx) => `
+      <tr>
+        <td style="font-weight:bold;">${idx + 1}. ${u.title}${u.bookModule ? `<br/><span style="font-size:8.5pt; color:#475569;">${u.bookModule}${u.pageRange ? ` (${u.pageRange})` : ''}</span>` : ''}</td>
+        <td style="text-align:center;">${statusMap[u.status] || u.status}<br/><strong>${u.progress}%</strong></td>
+        <td style="text-align:center;">Prev: ${u.plannedWeeks}<br/>Real: ${u.actualWeeks}</td>
+        <td style="text-align:center;">${u.completedHours}h / ${u.plannedHours}h</td>
+        <td><strong>Gramática:</strong> ${(u.grammar || []).join(', ') || '—'}<br/><strong>Vocabulário:</strong> ${(u.vocabulary || []).join(', ') || '—'}</td>
+        <td>${(u.skills || []).join(', ')}${u.bnccCodes && u.bnccCodes.length > 0 ? `<br/><strong>BNCC:</strong> ${u.bnccCodes.join(', ')}` : ''}</td>
+      </tr>
+    `
+    )
+    .join('\n')
+
+  const detailedUnitsHtml = params.units
+    .map(
+      (u, idx) => `
+      <div class="exam-question-item" style="margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid #cbd5e1; page-break-inside: avoid;">
+        <div style="font-weight: bold; font-size: 11pt; margin-bottom: 4px;">
+          UNIDADE ${String(idx + 1).padStart(2, '0')} &mdash; ${u.title} (${statusMap[u.status] || u.status} &bull; ${u.progress}%)
+        </div>
+        <p style="margin: 3px 0; font-size: 10pt;">
+          <strong>Cronograma:</strong> Previsto (${u.plannedWeeks}) | Realizado (${u.actualWeeks}) &bull;
+          <strong>Carga Horária:</strong> ${u.completedHours}h ministradas de ${u.plannedHours}h previstas
+          ${u.bookModule ? ` &bull; <strong>Material:</strong> ${u.bookModule} (${u.pageRange || ''})` : ''}
+        </p>
+        <p style="margin: 3px 0; font-size: 10pt;">
+          <strong>Eixo Gramatical:</strong> ${(u.grammar || []).join('; ') || 'Não especificado'}<br/>
+          <strong>Campo Lexical (Vocabulário):</strong> ${(u.vocabulary || []).join('; ') || 'Não especificado'}<br/>
+          <strong>Habilidades Trabalhadas:</strong> ${(u.skills || []).join(', ') || '4 Skills'}${u.bnccCodes?.length ? ` &bull; <strong>BNCC:</strong> ${u.bnccCodes.join(', ')}` : ''}
+        </p>
+        ${u.notes ? `<p style="margin: 4px 0 0 0; font-size: 9.5pt; background: #f8fafc; padding: 6px 10px; border-left: 3px solid #64748b;"><strong>Observações Pedagógicas / Diário de Bordo:</strong> ${u.notes}</p>` : ''}
+      </div>
+    `
+    )
+    .join('\n')
+
+  return `
+    <div class="generated-exam-document">
+      <h2>1. QUADRO SINÓPTICO DO PLANEJAMENTO E EXECUÇÃO (${params.bimesterName.toUpperCase()})</h2>
+      <p>
+        Relatório institucional de acompanhamento da Sequência Didática da turma/série <strong>${params.gradeName}</strong> na unidade escolar <strong>${params.schoolName}</strong>,
+        totalizando <strong>${totalCompletedHours}h concluídas</strong> de <strong>${totalPlannedHours}h planejadas</strong> (${params.units.length} unidades curriculares).
+      </p>
+
+      <table class="content-table">
+        <thead>
+          <tr>
+            <th>Unidade / Módulo</th>
+            <th style="text-align:center;">Status</th>
+            <th style="text-align:center;">Semanas</th>
+            <th style="text-align:center;">C.H.</th>
+            <th>Conteúdos (Gramática & Vocabulário)</th>
+            <th>Habilidades & BNCC</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${tableRows}
+        </tbody>
+      </table>
+
+      <h2>2. DETALHAMENTO PEDAGÓGICO POR UNIDADE DIDÁTICA</h2>
+      ${detailedUnitsHtml}
+
+      ${
+        params.aiAssessmentText
+          ? `
+        <hr class="content-divider" />
+        <h2>3. PARECER PEDAGÓGICO E RECOMENDAÇÕES DE AJUSTE DE ROTA</h2>
+        ${formatMarkdownToHtml(params.aiAssessmentText)}
+      `
+          : ''
+      }
+    </div>
+  `
+}
+
 
