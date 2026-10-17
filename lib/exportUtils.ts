@@ -238,12 +238,15 @@ export function exportToPdf(options: ExportHeaderOptions) {
     `
   }
 
+  const formattedDocContent = prepareDocumentContentForExport(options.content, nee, title)
+
   const html = `
     <!DOCTYPE html>
     <html lang="pt-BR">
     <head>
       <meta charset="UTF-8">
       <title>${title}</title>
+      <style>
         @page { size: A4; margin: ${prefs.marginMm}mm; }
         body { margin: 0; padding: 0; }
         .header-table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
@@ -256,8 +259,12 @@ export function exportToPdf(options: ExportHeaderOptions) {
         .content ul { margin: 6px 0 10px 20px; padding: 0; }
         .content li { margin-bottom: 4px; }
         .content p { margin: 6px 0; }
+        .exam-question-item { page-break-inside: avoid; break-inside: avoid; margin-bottom: 18px !important; padding-bottom: 14px !important; border-bottom: 1px solid #cbd5e1 !important; }
+        .exam-options-list { margin-left: 6px !important; margin-bottom: 10px !important; }
+        .exam-option-line { margin-bottom: 4px !important; line-height: 1.45 !important; }
+        .teacher-answer-key-sheet { page-break-before: always; break-before: page; margin-top: 24px; padding-top: 12px; }
         .footer { margin-top: 30px; font-size: 8.5pt; text-align: center; border-top: 1px solid #888; padding-top: 5px; color: #444; }
-        @media print { .no-print { display: none; } }
+        @media print { .no-print { display: none !important; } }
         ${neeCss}
       </style>
     </head>
@@ -306,7 +313,7 @@ export function exportToPdf(options: ExportHeaderOptions) {
 
         <div class="doc-title">${title}</div>
 
-        <div class="content">${formatMarkdownToHtml(options.content, nee)}</div>
+        <div class="content">${formattedDocContent}</div>
 
         <div class="footer">
           ${school} &bull; Departamento de Língua Inglesa &bull; Teacher AI
@@ -337,6 +344,7 @@ export function exportToWord(options: ExportHeaderOptions) {
   const dateStr = options.date || new Date().toLocaleDateString('pt-BR')
   const title = options.title || 'AVALIAÇÃO DE LÍNGUA INGLESA'
   const instructions = options.instructions || 'Leia atentamente as instruções e responda com clareza.'
+  const formattedDocContent = prepareDocumentContentForExport(options.content, 'standard', title)
 
   const contentHtml = `
     <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
@@ -354,6 +362,9 @@ export function exportToWord(options: ExportHeaderOptions) {
         .content-table th, .content-table td { border: 1pt solid #666; padding: 5pt; text-align: left; vertical-align: top; }
         .content-table th { background-color: #f2f2f2; font-weight: bold; }
         .content-divider { border: 0; border-top: 1pt solid #999; margin: 14pt 0; }
+        .exam-question-item { margin-bottom: 14pt; padding-bottom: 10pt; border-bottom: 1pt solid #ccc; }
+        .exam-option-line { margin-bottom: 3pt; }
+        .teacher-answer-key-sheet { page-break-before: always; margin-top: 20pt; }
         ul { margin: 6pt 0 10pt 18pt; padding: 0; }
         li { margin-bottom: 4pt; }
       </style>
@@ -389,7 +400,7 @@ export function exportToWord(options: ExportHeaderOptions) {
 
       <h1>${title}</h1>
 
-      <div>${formatMarkdownToHtml(options.content, 'standard')}</div>
+      <div>${formattedDocContent}</div>
     </body>
     </html>
   `
@@ -502,6 +513,83 @@ export function formatInlineMarkdown(text: string, nee: string = 'standard'): st
   }
 
   return formatted
+}
+
+/**
+ * Prepara o conteúdo para exportação em PDF/Word:
+ * - Se o conteúdo já for HTML estruturado (ex: gerado por compileQuestionsToHtml),
+ *   preserva o HTML sem escapar tags e separa os blocos `.exam-answer-key` em uma
+ *   Folha de Gabarito do Professor ao final do documento (evitando expor respostas na prova do aluno).
+ * - Caso contrário, converte Markdown para HTML via formatMarkdownToHtml.
+ */
+export function prepareDocumentContentForExport(
+  content: string,
+  nee: string = 'standard',
+  docTitle: string = 'AVALIAÇÃO'
+): string {
+  if (!content) return ''
+  const trimmed = content.trim()
+  const isStructuredHtml =
+    trimmed.includes('class="generated-exam-document"') ||
+    trimmed.includes('class="exam-question-item"') ||
+    /^\s*<(div|table|h[1-6]|p|section|article|ol|ul)\b/i.test(trimmed)
+
+  if (!isStructuredHtml) {
+    return formatMarkdownToHtml(content, nee)
+  }
+
+  const extractedAnswers: Array<{ questionNumber: number; answerHtml: string }> = []
+  let qCounter = 0
+
+  // Extrai gabaritos inline (.exam-answer-key) e remove-os do corpo da prova do aluno
+  const studentBodyHtml = trimmed.replace(
+    /<div\s+class="exam-answer-key"[^>]*>([\s\S]*?)<\/div>/gi,
+    (_fullMatch, innerHtml: string) => {
+      qCounter++
+      const cleanedAnswer = innerHtml
+        .replace(/<strong>\s*✓?\s*Gabarito\s*(?:\/\s*Resolução)?\s*:\s*<\/strong>/i, '')
+        .trim()
+      if (cleanedAnswer) {
+        extractedAnswers.push({
+          questionNumber: qCounter,
+          answerHtml: cleanedAnswer
+        })
+      }
+      return ''
+    }
+  )
+
+  if (extractedAnswers.length === 0) {
+    return studentBodyHtml
+  }
+
+  const rowsHtml = extractedAnswers
+    .map(
+      item =>
+        `<tr><td style="text-align:center; font-weight:bold; width:90px;">Questão ${item.questionNumber}</td><td>${item.answerHtml}</td></tr>`
+    )
+    .join('\n')
+
+  const answerSheetHtml = `
+    <div class="teacher-answer-key-sheet" style="page-break-before: always; break-before: page; margin-top: 28px; padding-top: 16px; border-top: 2px solid #000;">
+      <h2 style="text-align: center; font-size: 12pt; font-weight: bold; text-transform: uppercase; margin-bottom: 12px;">
+        GABARITO OFICIAL DO PROFESSOR &mdash; ${docTitle}
+      </h2>
+      <table class="content-table" style="width: 100%; border-collapse: collapse;">
+        <thead>
+          <tr>
+            <th style="width: 90px; text-align: center;">Item</th>
+            <th>Gabarito / Resolução Esperada</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rowsHtml}
+        </tbody>
+      </table>
+    </div>
+  `
+
+  return `${studentBodyHtml}\n${answerSheetHtml}`
 }
 
 /**

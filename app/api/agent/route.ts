@@ -406,15 +406,12 @@ async function callProviderWithFallback(
       }
 
       if (p === 'gemini') {
-        // Modelos Gemini 3.x + fallback 2.x/latest validados na API
+        // Modelos Gemini 2.5/2.0 validados na API em primeiro lugar para evitar 404 sequenciais
         const geminiModels = [
-          'gemini-3.6-flash',
-          'gemini-3.5-flash-lite',
-          'gemini-3.5-flash',
-          'gemini-3.1-flash-lite',
           'gemini-2.5-flash',
           'gemini-2.0-flash',
           'gemini-flash-latest',
+          'gemini-flash-lite-latest',
         ]
         const timeoutMs = (!needsTools || maxTokens >= 4096) ? 45000 : 12000
         let geminiSuccess = false
@@ -481,7 +478,7 @@ async function callProviderWithFallback(
         }))
 
         const modelsToTry = modelsByProvider[p] || ['gpt-4o-mini']
-        const effectiveMaxTokens = ['groq', 'zhipu', 'openrouter'].includes(p) ? Math.min(maxTokens, 4096) : maxTokens
+        const effectiveMaxTokens = ['zhipu', 'openrouter'].includes(p) ? Math.min(maxTokens, 4096) : Math.min(maxTokens, 8192)
 
         for (const mName of modelsToTry) {
           try {

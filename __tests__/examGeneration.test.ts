@@ -323,4 +323,86 @@ Espero que atenda aos critérios!
     expect(result.questions).toHaveLength(16)
     expect(result.questions[15].id).toBe('q16')
   })
+
+  // 11. Extração de objeto único com array interno options + normalização de tipos da LLM
+  it('T3.11: não deve confundir array interno options com array raiz em retry e deve normalizar tipos aliases (gap_fill, essay)', async () => {
+    const rawRetryWithProse = `Aqui está a questão corrigida:\n${JSON.stringify(validQuestion2, null, 2)}`
+    const extracted = extractJsonFromText(rawRetryWithProse)
+    expect(Array.isArray(extracted)).toBe(false)
+    expect(extracted.id).toBe('q2')
+    expect(extracted.stem).toBe('Qual elemento químico tem símbolo O?')
+
+    const aliasedQuestions = [
+      {
+        id: 'q_gap',
+        type: 'gap_fill',
+        stem: 'Complete: The Space Marine ___ to travel tomorrow.',
+        answerKey: 'intends',
+        rationale: 'Usa-se intends para indicar pretensão.'
+      },
+      {
+        id: 'q_essay',
+        type: 'text_production',
+        stem: 'Write a short paragraph using 3 false friends.',
+        rationale: 'Avaliar uso correto de actually, pretend e intend.'
+      }
+    ]
+
+    const mockCallApi = vi.fn().mockResolvedValueOnce(JSON.stringify(aliasedQuestions))
+    const result = await generateExam({
+      callApi: mockCallApi,
+      buildPrompt: () => 'Gere 2 questões abertas'
+    })
+
+    expect(result.blocked).toHaveLength(0)
+    expect(result.questions).toHaveLength(2)
+    expect(result.questions[0].type).toBe('fill_in_blank')
+    expect(result.questions[0].correctOptionId).toBe('intends')
+    expect(result.questions[1].type).toBe('discursive')
+  })
+
+  // 12. Balanceamento determinístico de gabarito quando todas as respostas vêm como 'A'
+  it('T3.12: deve distribuir gabaritos entre A, B, C e D quando a LLM concentra >60% na alternativa A', async () => {
+    const allABatch = Array.from({ length: 8 }, (_, i) => ({
+      ...validQuestion1,
+      id: `q${i + 1}`,
+      stem: `Questão ${i + 1} sobre gramática?`,
+      options: [
+        { id: 'A', text: `Resposta Correta ${i + 1}` },
+        { id: 'B', text: `Distrator B ${i + 1}` },
+        { id: 'C', text: `Distrator C ${i + 1}` },
+        { id: 'D', text: `Distrator D ${i + 1}` }
+      ],
+      correctOptionId: 'A'
+    }))
+
+    const mockCallApi = vi.fn().mockResolvedValueOnce(JSON.stringify(allABatch))
+    const result = await generateExam({
+      callApi: mockCallApi,
+      buildPrompt: () => 'Gere 8 questões'
+    })
+
+    const distinctKeys = new Set(result.questions.map(q => q.correctOptionId))
+    expect(distinctKeys.size).toBe(4)
+    result.questions.forEach((q, idx) => {
+      const correctOpt = q.options.find(o => o.id === q.correctOptionId)
+      expect(correctOpt?.text).toBe(`Resposta Correta ${idx + 1}`)
+    })
+  })
+
+  // 13. Exportação PDF/Word preserva HTML de compileQuestionsToHtml e separa Gabarito do Professor
+  it('T3.13: prepareDocumentContentForExport não escapa tags HTML da prova e move gabaritos para folha separada ao final', async () => {
+    const { compileQuestionsToHtml } = await import('@/lib/examSchema')
+    const { prepareDocumentContentForExport } = await import('@/lib/exportUtils')
+
+    const examHtml = compileQuestionsToHtml([validQuestion1, validQuestion2], 'Prova Warhammer 40k')
+    const exportedHtml = prepareDocumentContentForExport(examHtml, 'standard', 'Prova Warhammer 40k')
+
+    expect(exportedHtml).not.toContain('&lt;div class="generated-exam-document"')
+    expect(exportedHtml).toContain('<div class="generated-exam-document"')
+    expect(exportedHtml).not.toContain('class="exam-answer-key"')
+    expect(exportedHtml).toContain('class="teacher-answer-key-sheet"')
+    expect(exportedHtml).toContain('GABARITO OFICIAL DO PROFESSOR')
+  })
 })
+

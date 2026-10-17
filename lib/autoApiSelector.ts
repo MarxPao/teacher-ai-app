@@ -265,7 +265,7 @@ export async function executeUnifiedAiCall(api: ApiConfig | null, prompt: string
     if (p === 'openrouter') baseUrl = 'https://openrouter.ai/api/v1/chat/completions'
     if (p === 'zhipu') baseUrl = 'https://open.bigmodel.cn/api/paas/v4/chat/completions'
 
-    const maxTokensForProvider = ['openai', 'deepseek', 'siliconflow'].includes(p) ? 8192 : 4096
+    const maxTokensForProvider = ['openai', 'deepseek', 'siliconflow', 'groq'].includes(p) ? 8192 : 4096
     const r = await guardEgressFetch(baseUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
@@ -282,8 +282,13 @@ export async function executeUnifiedAiCall(api: ApiConfig | null, prompt: string
 
   // 3. Google Gemini
   else if (p === 'gemini') {
-    const validModel = model && !model.includes('gemini-2.0') && !model.includes('gemini-1.5') && !model.includes('gemini-2.5') ? model : 'gemini-3.6-flash'
-    const modelsToTry = [validModel, 'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-flash-latest', 'gemini-flash-lite-latest']
+    const modelsToTry = Array.from(new Set([
+      ...(model && !model.includes('gemini-3.') ? [model] : []),
+      'gemini-2.5-flash',
+      'gemini-2.0-flash',
+      'gemini-flash-latest',
+      'gemini-flash-lite-latest',
+    ]))
     let lastErr = ''
     for (const m of modelsToTry) {
       try {
