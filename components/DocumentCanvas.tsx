@@ -189,7 +189,8 @@ export default function DocumentCanvas({
 
  // Export DOCX 
  function exportDocx() {
- const htmlContent = editorRef.current?.innerHTML || content || ''
+ const rawHtmlContent = editorRef.current?.innerHTML || content || ''
+ const htmlContent = rawHtmlContent.replace(/<div\s+class="exam-answer-key"[^>]*>[\s\S]*?<\/div>/gi, '')
  const schoolName = matchedHeader?.officialName || headerData?.school || 'Escola'
  const teacherName = fields.teacher || headerData?.teacher || 'Professor'
  const docTitle = headerData?.title || 'Documento'

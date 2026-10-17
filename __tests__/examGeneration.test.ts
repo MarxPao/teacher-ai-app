@@ -390,19 +390,49 @@ Espero que atenda aos critérios!
     })
   })
 
-  // 13. Exportação PDF/Word preserva HTML de compileQuestionsToHtml e separa Gabarito do Professor
-  it('T3.13: prepareDocumentContentForExport não escapa tags HTML da prova e move gabaritos para folha separada ao final', async () => {
+  // 13. Exportação em 3 Documentos Estritamente Separados: 1. Prova (sem gabarito), 2. Gabarito Oficial, 3. Reasoning & Justificativa Pedagógica
+  it('T3.13: gera 3 documentos separados (1. Prova sem gabarito, 2. Folha de Gabarito, 3. Reasoning da prova como um todo e de cada questão)', async () => {
     const { compileQuestionsToHtml } = await import('@/lib/examSchema')
-    const { prepareDocumentContentForExport } = await import('@/lib/exportUtils')
+    const {
+      prepareDocumentContentForExport,
+      buildStandaloneAnswerKeyHtml,
+      buildStandalonePedagogicalReasoningHtml
+    } = await import('@/lib/exportUtils')
 
     const examHtml = compileQuestionsToHtml([validQuestion1, validQuestion2], 'Prova Warhammer 40k')
-    const exportedHtml = prepareDocumentContentForExport(examHtml, 'standard', 'Prova Warhammer 40k')
 
-    expect(exportedHtml).not.toContain('&lt;div class="generated-exam-document"')
-    expect(exportedHtml).toContain('<div class="generated-exam-document"')
-    expect(exportedHtml).not.toContain('class="exam-answer-key"')
-    expect(exportedHtml).toContain('class="teacher-answer-key-sheet"')
-    expect(exportedHtml).toContain('GABARITO OFICIAL DO PROFESSOR')
+    // Documento 1: Prova do Aluno (NÃO escapa HTML e NÃO inclui gabarito nem folha do professor)
+    const doc1StudentExam = prepareDocumentContentForExport(examHtml, 'standard', 'Prova Warhammer 40k')
+    expect(doc1StudentExam).not.toContain('&lt;div class="generated-exam-document"')
+    expect(doc1StudentExam).toContain('<div class="generated-exam-document"')
+    expect(doc1StudentExam).not.toContain('class="exam-answer-key"')
+    expect(doc1StudentExam).not.toContain('GABARITO OFICIAL')
+
+    // Documento 2: Folha de Gabarito Oficial separada
+    const doc2AnswerKey = buildStandaloneAnswerKeyHtml({
+      questions: [validQuestion1, validQuestion2],
+      rawContent: examHtml,
+      title: 'Prova Warhammer 40k'
+    })
+    expect(doc2AnswerKey).toContain('Questão 1')
+    expect(doc2AnswerKey).toContain('Paris')
+    expect(doc2AnswerKey).toContain('Questão 2')
+    expect(doc2AnswerKey).toContain('Oxigênio')
+
+    // Documento 3: Reasoning e Justificativa Pedagógica (para a prova como um todo e para cada questão)
+    const doc3Reasoning = buildStandalonePedagogicalReasoningHtml({
+      questions: [validQuestion1, validQuestion2],
+      title: 'Prova Warhammer 40k',
+      topic: 'False Friends & Grammar',
+      grade: '9º Ano',
+      level: 'B1',
+      subjectName: 'Língua Inglesa'
+    })
+    expect(doc3Reasoning).toContain('PARTE I &mdash; JUSTIFICATIVA PEDAGÓGICA E ARQUITETURA DA PROVA COMO UM TODO')
+    expect(doc3Reasoning).toContain('PARTE II &mdash; REASONING E JUSTIFICATIVA PEDAGÓGICA QUESTÃO POR QUESTÃO')
+    expect(doc3Reasoning).toContain('Paris é a capital e maior cidade da França.')
+    expect(doc3Reasoning).toContain('O oxigênio possui número atômico 8 e símbolo O.')
   })
 })
+
 

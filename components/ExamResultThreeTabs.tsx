@@ -5,7 +5,12 @@ import { toast } from '@/components/Toast'
 import DocumentCanvas from '@/components/DocumentCanvas'
 import EditableQuestionBoxes, { EditableQuestionItem, parseContentToQuestions } from '@/components/EditableQuestionBoxes'
 import AudioPlayerCard from '@/components/AudioPlayerCard'
-import { exportToPdf, exportToWord } from '@/lib/exportUtils'
+import {
+  exportToPdf,
+  exportToWord,
+  buildStandaloneAnswerKeyHtml,
+  buildStandalonePedagogicalReasoningHtml
+} from '@/lib/exportUtils'
 import { createExamSheetLayout, generatePrintableOmrSheetHtml, processOMRBatchAndUpdatePsychometrics } from '@/lib/omr'
 import { generateExecutivePedagogicalSummary } from '@/lib/executivePedagogicalSummary'
 import { BnccSkill, getBnccForGrade } from '@/lib/bnccStore'
@@ -852,8 +857,9 @@ export default function ExamResultThreeTabs({
                 flexShrink: 0,
               }}
             >
-              {/* Botões de Exportação */}
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {/* Botões de Exportação dos 3 Documentos Independentes (1. Prova | 2. Gabarito | 3. Reasoning & Justificativa) */}
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                {/* DOC 1: A PROVA DO ALUNO (SEM GABARITO) */}
                 <button
                   type="button"
                   onClick={() =>
@@ -866,25 +872,27 @@ export default function ExamResultThreeTabs({
                           header.title ||
                           (topic ? `${mode === 'exam' ? 'PROVA' : 'ATIVIDADE'} ${topic.toUpperCase()}` : 'AVALIAÇÃO'),
                         content: result,
+                        showStudentNameBox: true,
                       })
                     )
                   }
                   style={{
-                    padding: '8px 14px',
+                    padding: '8px 13px',
                     borderRadius: RADIUS.md,
                     border: 'none',
                     background: '#8b5e3c',
                     color: '#fff',
-                    fontSize: 12.5,
+                    fontSize: 12,
                     fontWeight: 700,
                     cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: 6,
+                    gap: 5,
                     boxShadow: '0 2px 8px rgba(139,94,60,0.2)',
                   }}
+                  title="Documento 1: Exporta exclusivamente a folha de prova do aluno (sem gabarito)"
                 >
-                  <i className="ti ti-printer" /> Exportar PDF Oficial
+                  <i className="ti ti-printer" /> 📄 1. Prova (PDF)
                 </button>
 
                 <button
@@ -899,24 +907,212 @@ export default function ExamResultThreeTabs({
                           header.title ||
                           (topic ? `${mode === 'exam' ? 'PROVA' : 'ATIVIDADE'} ${topic.toUpperCase()}` : 'AVALIAÇÃO'),
                         content: result,
+                        showStudentNameBox: true,
                       })
                     )
                   }
                   style={{
-                    padding: '8px 14px',
+                    padding: '8px 11px',
                     borderRadius: RADIUS.md,
                     border: '1px solid #c0a080',
                     background: '#fffcf8',
                     color: '#8b5e3c',
-                    fontSize: 12.5,
+                    fontSize: 12,
                     fontWeight: 700,
                     cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: 6,
+                    gap: 5,
                   }}
+                  title="Documento 1: Exporta exclusivamente a folha de prova do aluno em Word (.doc)"
                 >
-                  <i className="ti ti-file-text" /> Exportar Word (.docx)
+                  <i className="ti ti-file-text" /> Prova (.doc)
+                </button>
+
+                {/* DOC 2: FOLHA DE GABARITO OFICIAL (DOCUMENTO SEPARADO) */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const baseTitle =
+                      header.title ||
+                      (topic ? `${mode === 'exam' ? 'PROVA' : 'ATIVIDADE'} ${topic.toUpperCase()}` : 'AVALIAÇÃO')
+                    const answerKeyHtml = buildStandaloneAnswerKeyHtml({
+                      questions: parsedQuestions,
+                      rawContent: result,
+                      title: baseTitle
+                    })
+                    exportToPdf({
+                      schoolName: header.school || 'ESCOLA DE ENSINO & IDIOMAS',
+                      teacherName: header.teacher || 'Professor(a)',
+                      className: grade || '9º Ano',
+                      title: `GABARITO OFICIAL — ${baseTitle}`,
+                      instructions: 'DOCUMENTO EXCLUSIVO DO PROFESSOR — Folha de Gabarito e Padrão de Respostas.',
+                      content: answerKeyHtml,
+                      showStudentNameBox: false,
+                    })
+                  }}
+                  style={{
+                    padding: '8px 13px',
+                    borderRadius: RADIUS.md,
+                    border: '1.5px solid #16a34a',
+                    background: '#f0fdf4',
+                    color: '#166534',
+                    fontSize: 12,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 5,
+                  }}
+                  title="Documento 2: Exporta a Folha de Gabarito Oficial em documento separado"
+                >
+                  ✅ 2. Gabarito (PDF)
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const baseTitle =
+                      header.title ||
+                      (topic ? `${mode === 'exam' ? 'PROVA' : 'ATIVIDADE'} ${topic.toUpperCase()}` : 'AVALIAÇÃO')
+                    const answerKeyHtml = buildStandaloneAnswerKeyHtml({
+                      questions: parsedQuestions,
+                      rawContent: result,
+                      title: baseTitle
+                    })
+                    exportToWord({
+                      schoolName: header.school || 'ESCOLA DE ENSINO & IDIOMAS',
+                      teacherName: header.teacher || 'Professor(a)',
+                      className: grade || '9º Ano',
+                      title: `GABARITO OFICIAL — ${baseTitle}`,
+                      instructions: 'DOCUMENTO EXCLUSIVO DO PROFESSOR — Folha de Gabarito e Padrão de Respostas.',
+                      content: answerKeyHtml,
+                      showStudentNameBox: false,
+                    })
+                  }}
+                  style={{
+                    padding: '8px 11px',
+                    borderRadius: RADIUS.md,
+                    border: '1px solid #86efac',
+                    background: '#ffffff',
+                    color: '#166534',
+                    fontSize: 12,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 5,
+                  }}
+                  title="Documento 2: Exporta a Folha de Gabarito Oficial em Word (.doc) separado"
+                >
+                  Gabarito (.doc)
+                </button>
+
+                {/* DOC 3: REASONING & JUSTIFICATIVA PEDAGÓGICA (PROVA COMPLETA + CADA QUESTÃO) */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const baseTitle =
+                      header.title ||
+                      (topic ? `${mode === 'exam' ? 'PROVA' : 'ATIVIDADE'} ${topic.toUpperCase()}` : 'AVALIAÇÃO')
+                    const reasoningHtml = buildStandalonePedagogicalReasoningHtml({
+                      questions: parsedQuestions,
+                      title: baseTitle,
+                      topic,
+                      grade,
+                      level,
+                      subjectName,
+                      sections,
+                      approach,
+                      bloomDistribution,
+                      difficultyDistribution,
+                      distractorSummary: distractorAudit.summaryLabel,
+                      distractorCoveragePct: distractorAudit.coveragePercentage,
+                      distractorQuestions: distractorAudit.questions,
+                      factCheck: factCheck || null,
+                      sources: activeSources,
+                      bnccSkills: matchingBnccSkills
+                    })
+                    exportToPdf({
+                      schoolName: header.school || 'ESCOLA DE ENSINO & IDIOMAS',
+                      teacherName: header.teacher || 'Professor(a)',
+                      className: grade || '9º Ano',
+                      title: `REASONING & JUSTIFICATIVA PEDAGÓGICA — ${baseTitle}`,
+                      instructions:
+                        'DOCUMENTO PEDAGÓGICO DO PROFESSOR E COORDENAÇÃO — Fundamentação da prova como um todo e reasoning detalhado questão por questão.',
+                      content: reasoningHtml,
+                      showStudentNameBox: false,
+                    })
+                  }}
+                  style={{
+                    padding: '8px 13px',
+                    borderRadius: RADIUS.md,
+                    border: '1.5px solid #6d28d9',
+                    background: '#f5f3ff',
+                    color: '#5b21b6',
+                    fontSize: 12,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 5,
+                  }}
+                  title="Documento 3: Exporta o Relatório de Reasoning e Justificativa Pedagógica (da prova como um todo e de cada questão) em documento separado"
+                >
+                  🧠 3. Reasoning & Justificativa (PDF)
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const baseTitle =
+                      header.title ||
+                      (topic ? `${mode === 'exam' ? 'PROVA' : 'ATIVIDADE'} ${topic.toUpperCase()}` : 'AVALIAÇÃO')
+                    const reasoningHtml = buildStandalonePedagogicalReasoningHtml({
+                      questions: parsedQuestions,
+                      title: baseTitle,
+                      topic,
+                      grade,
+                      level,
+                      subjectName,
+                      sections,
+                      approach,
+                      bloomDistribution,
+                      difficultyDistribution,
+                      distractorSummary: distractorAudit.summaryLabel,
+                      distractorCoveragePct: distractorAudit.coveragePercentage,
+                      distractorQuestions: distractorAudit.questions,
+                      factCheck: factCheck || null,
+                      sources: activeSources,
+                      bnccSkills: matchingBnccSkills
+                    })
+                    exportToWord({
+                      schoolName: header.school || 'ESCOLA DE ENSINO & IDIOMAS',
+                      teacherName: header.teacher || 'Professor(a)',
+                      className: grade || '9º Ano',
+                      title: `REASONING & JUSTIFICATIVA PEDAGÓGICA — ${baseTitle}`,
+                      instructions:
+                        'DOCUMENTO PEDAGÓGICO DO PROFESSOR E COORDENAÇÃO — Fundamentação da prova como um todo e reasoning detalhado questão por questão.',
+                      content: reasoningHtml,
+                      showStudentNameBox: false,
+                    })
+                  }}
+                  style={{
+                    padding: '8px 11px',
+                    borderRadius: RADIUS.md,
+                    border: '1px solid #c4b5fd',
+                    background: '#ffffff',
+                    color: '#5b21b6',
+                    fontSize: 12,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 5,
+                  }}
+                  title="Documento 3: Exporta o Relatório de Reasoning e Justificativa Pedagógica em Word (.doc) separado"
+                >
+                  Reasoning (.doc)
                 </button>
 
                 {mode === 'exam' && onOpenOnlinePlayer && (
@@ -1463,6 +1659,82 @@ export default function ExamResultThreeTabs({
             <p style={{ margin: 0, fontSize: 13, opacity: 0.92, lineHeight: 1.5 }}>
               Transparência total sobre os critérios cognitivos de Bloom, calibração de dificuldade da TRI e engenharia de distratores diagnósticos aplicados na elaboração deste documento.
             </p>
+          </div>
+
+          {/* 0. Justificativa Pedagógica da Prova como um Todo + Reasoning Questão por Questão */}
+          <div
+            style={{
+              background: '#fff',
+              borderRadius: RADIUS.lg,
+              padding: '16px 20px',
+              border: '1.5px solid #ede8dc',
+              boxShadow: SHADOW.sm,
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
+              <h4 style={{ margin: 0, fontSize: 15, fontWeight: 800, color: '#2c1a0e' }}>
+                📑 Justificativa Pedagógica da Prova como um Todo & Reasoning por Questão ({parsedQuestions.length} itens)
+              </h4>
+              <span style={{ fontSize: 11.5, fontWeight: 700, color: '#5b21b6', background: '#f5f3ff', padding: '3px 10px', borderRadius: 6, border: '1px solid #ddd6fe' }}>
+                Exportável como Documento 3 independente (PDF / Word)
+              </span>
+            </div>
+
+            <div style={{ background: '#fdf8f2', border: '1px solid #ede8dc', borderRadius: RADIUS.md, padding: '12px 14px', marginBottom: 14, fontSize: 12.5, color: '#4a3b32', lineHeight: 1.55 }}>
+              <strong>Justificativa Global da Prova:</strong> Esta avaliação de <strong>{subjectName}</strong> ({grade} · Nível {level}) sobre <strong>&ldquo;{topic || 'Conteúdo Programático'}&rdquo;</strong> foi estruturada integrando os eixos <em>{sections.join(', ')}</em> sob a abordagem <em>{approach.join(', ')}</em>. O balanceamento cognitivo ({bloomDistribution.remember}% Lembrar/Compreender, {bloomDistribution.apply}% Aplicar, {bloomDistribution.analyze}% Analisar, {bloomDistribution.evaluate}% Avaliar/Criar) e a progressão de dificuldade ({difficultyDistribution.easy}% Fácil, {difficultyDistribution.medium}% Médio, {difficultyDistribution.hard}% Difícil, {difficultyDistribution.challenge}% Desafio) garantem validade de construto, acolhimento inicial e precisão diagnóstica.
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {parsedQuestions.map((q: any, idx: number) => {
+                const qNum = idx + 1
+                const rawKey = String(q.correctOptionId ?? q.answerKey ?? '—').trim()
+                const opts = Array.isArray(q.options) ? q.options : []
+                const matchedOpt = opts.find(
+                  (o: any) => String(o.id ?? o.letter ?? '').trim().toUpperCase() === rawKey.toUpperCase()
+                )
+                const rationaleText =
+                  q.rationale ||
+                  q.explanation ||
+                  q.rubric?.criteria?.[0]?.description ||
+                  `Avalia a aplicação contextualizada e discriminação conceitual de "${topic || 'conteúdo bimestral'}" na questão ${qNum}.`
+                const qAudit = distractorAudit.questions.find(dq => dq.questionNumber === qNum)
+
+                return (
+                  <div
+                    key={q.id || qNum}
+                    style={{
+                      background: '#ffffff',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: RADIUS.md,
+                      padding: '12px 14px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 6,
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+                      <strong style={{ fontSize: 13, color: '#2c1a0e' }}>
+                        Questão {qNum} · {q.typeLabel || q.type || 'Item'}
+                      </strong>
+                      <span style={{ fontSize: 11.5, fontWeight: 700, color: '#166534', background: '#f0fdf4', padding: '2px 8px', borderRadius: 6, border: '1px solid #bbf7d0' }}>
+                        ✓ Gabarito: {matchedOpt ? `${rawKey}) ${matchedOpt.text}` : rawKey}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: 12, color: '#475569' }}>
+                      <strong>Enunciado:</strong> {q.stem}
+                    </div>
+                    <div style={{ fontSize: 12, color: '#1e293b', background: '#f8fafc', padding: '8px 10px', borderRadius: 6, borderLeft: '3px solid #8b5e3c', lineHeight: 1.45 }}>
+                      <strong>🧠 Reasoning & Justificativa Pedagógica:</strong> {rationaleText}
+                      {qAudit?.feedback ? (
+                        <div style={{ marginTop: 4, color: '#475569', fontSize: 11.5 }}>
+                          <strong>🎯 Distratores:</strong> {qAudit.feedback}
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
           </div>
 
           {/* 1. Matriz da Taxonomia de Bloom */}

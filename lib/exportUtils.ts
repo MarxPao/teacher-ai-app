@@ -386,10 +386,12 @@ export function exportToWord(options: ExportHeaderOptions) {
           <td><b>TURMA:</b> ${classGroup}</td>
           <td colspan="2"><b>ETAPA:</b> 1º Trimestre / Bimestre</td>
         </tr>
+        ${options.showStudentNameBox !== false ? `
         <tr>
           <td colspan="2"><b>ALUNO(A):</b> ____________________________________________________</td>
           <td style="text-align:center;"><b>NOTA:</b> _____ / 10,0</td>
         </tr>
+        ` : ''}
       </table>
 
       <div class="instructions">
@@ -516,16 +518,16 @@ export function formatInlineMarkdown(text: string, nee: string = 'standard'): st
 }
 
 /**
- * Prepara o conteúdo para exportação em PDF/Word:
+ * Prepara o conteúdo da PROVA DO ALUNO (Documento 1) para exportação em PDF/Word:
  * - Se o conteúdo já for HTML estruturado (ex: gerado por compileQuestionsToHtml),
- *   preserva o HTML sem escapar tags e separa os blocos `.exam-answer-key` em uma
- *   Folha de Gabarito do Professor ao final do documento (evitando expor respostas na prova do aluno).
+ *   preserva o HTML sem escapar tags e REMOVE integralmente qualquer bloco `.exam-answer-key`
+ *   (o gabarito e o reasoning pedagógico são exportados em documentos independentes).
  * - Caso contrário, converte Markdown para HTML via formatMarkdownToHtml.
  */
 export function prepareDocumentContentForExport(
   content: string,
   nee: string = 'standard',
-  docTitle: string = 'AVALIAÇÃO'
+  _docTitle: string = 'AVALIAÇÃO'
 ): string {
   if (!content) return ''
   const trimmed = content.trim()
@@ -538,48 +540,107 @@ export function prepareDocumentContentForExport(
     return formatMarkdownToHtml(content, nee)
   }
 
-  const extractedAnswers: Array<{ questionNumber: number; answerHtml: string }> = []
-  let qCounter = 0
+  // Remove gabaritos inline (.exam-answer-key) para que a Prova do Aluno contenha exclusivamente os itens de avaliação
+  return trimmed.replace(/<div\s+class="exam-answer-key"[^>]*>[\s\S]*?<\/div>/gi, '')
+}
 
-  // Extrai gabaritos inline (.exam-answer-key) e remove-os do corpo da prova do aluno
-  const studentBodyHtml = trimmed.replace(
-    /<div\s+class="exam-answer-key"[^>]*>([\s\S]*?)<\/div>/gi,
-    (_fullMatch, innerHtml: string) => {
+/**
+ * Constrói o HTML exclusivo do DOCUMENTO 2 — FOLHA DE GABARITO OFICIAL (separado da prova e do relatório de reasoning).
+ */
+export function buildStandaloneAnswerKeyHtml(params: {
+  questions?: Array<any>
+  rawContent?: string
+  title?: string
+}): string {
+  const questions = Array.isArray(params.questions) ? params.questions : []
+  const rows: Array<{
+    num: number
+    typeLabel: string
+    points: string
+    key: string
+    resolutionText: string
+  }> = []
+
+  if (questions.length > 0) {
+    questions.forEach((q, idx) => {
+      const num = idx + 1
+      const rawKey = String(q.correctOptionId ?? q.answerKey ?? '—').trim()
+      const opts = Array.isArray(q.options) ? q.options : []
+      const matchedOpt = opts.find(
+        (o: any) => String(o.id ?? o.letter ?? '').trim().toUpperCase() === rawKey.toUpperCase()
+      )
+      const typeMap: Record<string, string> = {
+        multiple_choice: 'Múltipla Escolha',
+        true_false: 'Verdadeiro / Falso',
+        fill_in_blank: 'Lacunas (Gap Fill)',
+        gap_fill: 'Lacunas (Gap Fill)',
+        discursive: 'Dissertativa',
+        open_ended: 'Resposta Aberta',
+        matching: 'Associação',
+        reading_text: 'Interpretação'
+      }
+      const typeLabel = q.typeLabel || typeMap[String(q.type || '')] || 'Objetiva / Discursiva'
+      const pts = typeof q.points === 'number' ? `${q.points.toFixed(1)} pt` : '1.0 pt'
+      const resolutionText = matchedOpt
+        ? `<strong>${rawKey})</strong> ${matchedOpt.text}`
+        : rawKey
+
+      rows.push({
+        num,
+        typeLabel,
+        points: pts,
+        key: opts.length > 0 ? rawKey.toUpperCase() : 'Aberta',
+        resolutionText
+      })
+    })
+  } else if (params.rawContent) {
+    let qCounter = 0
+    const regex = /<div\s+class="exam-answer-key"[^>]*>([\s\S]*?)<\/div>/gi
+    let match: RegExpExecArray | null
+    while ((match = regex.exec(params.rawContent)) !== null) {
       qCounter++
-      const cleanedAnswer = innerHtml
+      const cleaned = match[1]
         .replace(/<strong>\s*✓?\s*Gabarito\s*(?:\/\s*Resolução)?\s*:\s*<\/strong>/i, '')
         .trim()
-      if (cleanedAnswer) {
-        extractedAnswers.push({
-          questionNumber: qCounter,
-          answerHtml: cleanedAnswer
-        })
-      }
-      return ''
+      rows.push({
+        num: qCounter,
+        typeLabel: 'Item da Avaliação',
+        points: '1.0 pt',
+        key: cleaned.length <= 3 ? cleaned.toUpperCase() : 'Resolução',
+        resolutionText: cleaned
+      })
     }
-  )
-
-  if (extractedAnswers.length === 0) {
-    return studentBodyHtml
   }
 
-  const rowsHtml = extractedAnswers
-    .map(
-      item =>
-        `<tr><td style="text-align:center; font-weight:bold; width:90px;">Questão ${item.questionNumber}</td><td>${item.answerHtml}</td></tr>`
-    )
-    .join('\n')
+  const rowsHtml =
+    rows.length > 0
+      ? rows
+          .map(
+            r => `
+        <tr>
+          <td style="text-align:center; font-weight:bold; width:70px;">Questão ${r.num}</td>
+          <td style="width:140px;">${r.typeLabel}</td>
+          <td style="text-align:center; font-weight:bold; width:90px; color:#166534; background:#f0fdf4;">${r.key}</td>
+          <td>${r.resolutionText}</td>
+          <td style="text-align:center; width:75px;">${r.points}</td>
+        </tr>`
+          )
+          .join('\n')
+      : `<tr><td colspan="5" style="text-align:center;">Nenhum gabarito estruturado encontrado.</td></tr>`
 
-  const answerSheetHtml = `
-    <div class="teacher-answer-key-sheet" style="page-break-before: always; break-before: page; margin-top: 28px; padding-top: 16px; border-top: 2px solid #000;">
-      <h2 style="text-align: center; font-size: 12pt; font-weight: bold; text-transform: uppercase; margin-bottom: 12px;">
-        GABARITO OFICIAL DO PROFESSOR &mdash; ${docTitle}
-      </h2>
+  return `
+    <div class="generated-exam-document" style="font-family: inherit; color: #0f172a; line-height: 1.5;">
+      <p style="margin: 0 0 12px 0; font-size: 10.5pt; color: #334155;">
+        <strong>Total de Questões:</strong> ${rows.length} &bull; <strong>Documento Exclusivo do Professor:</strong> Folha de Gabarito Oficial separada da folha de aplicação do aluno.
+      </p>
       <table class="content-table" style="width: 100%; border-collapse: collapse;">
         <thead>
           <tr>
-            <th style="width: 90px; text-align: center;">Item</th>
-            <th>Gabarito / Resolução Esperada</th>
+            <th style="width: 70px; text-align: center;">Item</th>
+            <th style="width: 140px;">Formato</th>
+            <th style="width: 90px; text-align: center;">Gabarito</th>
+            <th>Alternativa Correta / Padrão de Resposta Esperado</th>
+            <th style="width: 75px; text-align: center;">Valor</th>
           </tr>
         </thead>
         <tbody>
@@ -588,8 +649,205 @@ export function prepareDocumentContentForExport(
       </table>
     </div>
   `
+}
 
-  return `${studentBodyHtml}\n${answerSheetHtml}`
+/**
+ * Constrói o HTML exclusivo do DOCUMENTO 3 — RELATÓRIO DE REASONING & JUSTIFICATIVA PEDAGÓGICA
+ * (contemplando a justificativa global da prova como um todo E o reasoning detalhado de cada questão).
+ */
+export function buildStandalonePedagogicalReasoningHtml(params: {
+  questions?: Array<any>
+  title?: string
+  topic?: string
+  grade?: string
+  level?: string
+  subjectName?: string
+  sections?: string[]
+  approach?: string[]
+  bloomDistribution?: { remember: number; apply: number; analyze: number; evaluate: number }
+  difficultyDistribution?: { easy: number; medium: number; hard: number; challenge: number }
+  distractorSummary?: string
+  distractorCoveragePct?: number
+  distractorQuestions?: Array<{ questionNumber: number; rating: string; feedback: string }>
+  factCheck?: { score: number; level: string; issues: string[] } | null
+  sources?: Array<{ title: string; category?: string; scopeInfo?: string }>
+  bnccSkills?: Array<{ code: string; axis?: string; description: string }>
+}): string {
+  const questions = Array.isArray(params.questions) ? params.questions : []
+  const bloom = params.bloomDistribution || { remember: 25, apply: 30, analyze: 25, evaluate: 20 }
+  const diff = params.difficultyDistribution || { easy: 20, medium: 50, hard: 25, challenge: 5 }
+  const sectionsList = params.sections?.length ? params.sections.join(', ') : 'Competências Gerais da Disciplina'
+  const approachesList = params.approach?.length ? params.approach.join(', ') : 'Avaliação Diagnóstica e Formativa (Bloom & TRI)'
+  const sourcesHtml =
+    params.sources && params.sources.length > 0
+      ? `<ul>${params.sources
+          .map(
+            s =>
+              `<li><strong>${s.title}</strong>${s.category ? ` (${s.category})` : ''}${
+                s.scopeInfo ? ` — <em>${s.scopeInfo}</em>` : ''
+              }</li>`
+          )
+          .join('')}</ul>`
+      : `<p>Elaboração fundamentada na matriz curricular da série (${params.grade || 'Ensino Regular'}) e diretrizes BNCC/CEFR.</p>`
+
+  const bnccHtml =
+    params.bnccSkills && params.bnccSkills.length > 0
+      ? `<ul>${params.bnccSkills
+          .map(sk => `<li><strong>${sk.code}</strong>${sk.axis ? ` [${sk.axis}]` : ''}: ${sk.description}</li>`)
+          .join('')}</ul>`
+      : ''
+
+  const distractorAuditByNum = new Map<number, { rating: string; feedback: string }>()
+  if (Array.isArray(params.distractorQuestions)) {
+    params.distractorQuestions.forEach(dq => distractorAuditByNum.set(dq.questionNumber, dq))
+  }
+
+  const perQuestionHtml = questions
+    .map((q, idx) => {
+      const qNum = idx + 1
+      const rawKey = String(q.correctOptionId ?? q.answerKey ?? '—').trim()
+      const opts = Array.isArray(q.options) ? q.options : []
+      const matchedOpt = opts.find(
+        (o: any) => String(o.id ?? o.letter ?? '').trim().toUpperCase() === rawKey.toUpperCase()
+      )
+      const distractors = opts.filter(
+        (o: any) => String(o.id ?? o.letter ?? '').trim().toUpperCase() !== rawKey.toUpperCase()
+      )
+
+      const typeMap: Record<string, string> = {
+        multiple_choice: 'Múltipla Escolha',
+        true_false: 'Verdadeiro / Falso',
+        fill_in_blank: 'Lacunas (Gap Fill)',
+        gap_fill: 'Lacunas (Gap Fill)',
+        discursive: 'Dissertativa',
+        open_ended: 'Resposta Aberta',
+        matching: 'Associação',
+        reading_text: 'Interpretação'
+      }
+      const typeLabel = q.typeLabel || typeMap[String(q.type || '')] || 'Questão Avaliativa'
+      const diffLabel = q.predictedDifficultyLabel || q.difficultyTarget || 'Médio'
+      const skillCode = q.skillCode || (params.bnccSkills?.[idx % (params.bnccSkills?.length || 1)]?.code ?? 'Alinhamento Curricular')
+      const sourceLabel = q.provenance?.sourceLabel || (params.sources?.[0]?.title ?? 'Matriz Curricular / BNCC')
+      const unitInfo = q.provenance?.unitTitle ? ` (${q.provenance.unitTitle})` : ''
+
+      const rationaleText =
+        q.rationale ||
+        q.explanation ||
+        q.rubric?.criteria?.[0]?.description ||
+        `Esta questão avalia a competência do estudante em aplicar e analisar os conceitos de "${params.topic || 'conteúdo programático'}" no formato ${typeLabel.toLowerCase()}, exigindo leitura atenta do contexto e discriminação conceitual precisa.`
+
+      const dqAudit = distractorAuditByNum.get(qNum)
+      const distractorAnalysisText =
+        dqAudit?.feedback ||
+        (distractors.length > 0
+          ? `Os distratores (${distractors.map((d: any) => `${d.id || d.letter}`).join(', ')}) foram construídos para capturar concepções alternativas, generalizações indevidas ou falsos cognatos recorrentes na série ${params.grade || ''}.`
+          : 'Questão de resposta construída avaliada por rubrica analítica de coerência conceitual e precisão linguística.')
+
+      return `
+        <div class="exam-question-item" style="page-break-inside: avoid; break-inside: avoid; border: 1px solid #cbd5e1; border-radius: 6px; padding: 12px 14px; margin-bottom: 14px; background: #ffffff;">
+          <div style="border-bottom: 1px solid #e2e8f0; padding-bottom: 6px; margin-bottom: 8px; display: flex; justify-content: space-between; font-weight: bold; font-size: 10.5pt;">
+            <span>QUESTÃO ${qNum} &bull; ${typeLabel.toUpperCase()}</span>
+            <span>Dificuldade: ${String(diffLabel).toUpperCase()} &bull; Habilidade: ${skillCode}</span>
+          </div>
+          <p style="margin: 4px 0 8px 0; font-size: 10pt; color: #1e293b;">
+            <strong>Enunciado Avaliado:</strong> ${(q.stem || '').replace(/\n/g, '<br/>')}
+          </p>
+          <p style="margin: 4px 0 8px 0; font-size: 10pt; color: #166534; background: #f0fdf4; padding: 6px 10px; border-left: 3px solid #16a34a;">
+            <strong>Gabarito Oficial:</strong> ${
+              matchedOpt ? `${rawKey}) ${matchedOpt.text}` : rawKey
+            }
+          </p>
+          <div style="margin: 6px 0; font-size: 10pt; color: #0f172a; line-height: 1.5;">
+            <strong>🧠 Reasoning & Justificativa Pedagógica do Item:</strong><br/>
+            ${String(rationaleText).replace(/\n/g, '<br/>')}
+          </div>
+          <div style="margin: 6px 0 2px 0; font-size: 9.5pt; color: #334155; line-height: 1.45; background: #f8fafc; padding: 6px 10px; border-left: 3px solid #64748b;">
+            <strong>🎯 Engenharia Diagnóstica de Distratores & Fonte:</strong> ${distractorAnalysisText}
+            <br/><em>Fonte / Proveniência:</em> ${sourceLabel}${unitInfo}
+          </div>
+        </div>
+      `
+    })
+    .join('\n')
+
+  return `
+    <div class="generated-exam-document" style="font-family: inherit; color: #0f172a; line-height: 1.55;">
+      <h2>PARTE I &mdash; JUSTIFICATIVA PEDAGÓGICA E ARQUITETURA DA PROVA COMO UM TODO</h2>
+      <p>
+        Este documento apresenta a fundamentação didático-pedagógica, o alinhamento curricular e a justificativa psicométrica da avaliação
+        <strong>${params.title || 'Avaliação Oficial'}</strong> (${params.subjectName || 'Língua Inglesa'} &bull; ${params.grade || 'Ensino Regular'} &bull; Nível ${params.level || 'Intermediário'}),
+        seguida da linha de raciocínio (<em>reasoning</em>) detalhada para cada uma das <strong>${questions.length} questões</strong> que compõem o instrumento.
+      </p>
+
+      <h3>1. Intencionalidade Pedagógica Global e Escopo Curricular</h3>
+      <p>
+        A avaliação foi desenhada sobre o eixo temático <strong>"${params.topic || 'Conteúdo Programático'}"</strong>, contemplando de forma integrada as seções de
+        <strong>${sectionsList}</strong> sob as diretrizes metodológicas de <strong>${approachesList}</strong>.
+        O instrumento busca aferir não apenas a memorização isolada de regras ou vocábulos, mas a capacidade de mobilizar conhecimentos em contextos autênticos de leitura, interpretação e aplicação linguística.
+      </p>
+
+      <h3>2. Matriz de Equilíbrio Cognitivo (Taxonomia de Bloom) e Calibração de Dificuldade (TRI)</h3>
+      <table class="content-table" style="width: 100%; border-collapse: collapse; margin: 10px 0;">
+        <thead>
+          <tr>
+            <th>Dimensão Analisada</th>
+            <th>Distribuição Planejada</th>
+            <th>Justificativa Pedagógica na Prova</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Lembrar & Compreender (Bloom)</strong></td>
+            <td style="text-align:center; font-weight:bold;">${bloom.remember}%</td>
+            <td>Aferição da base lexical e reconhecimento explícito de estruturas fundamentais do bimestre.</td>
+          </tr>
+          <tr>
+            <td><strong>Aplicar (Bloom)</strong></td>
+            <td style="text-align:center; font-weight:bold;">${bloom.apply}%</td>
+            <td>Transferência ativa de regras gramaticais e vocabulário para novas situações comunicativas.</td>
+          </tr>
+          <tr>
+            <td><strong>Analisar (Bloom)</strong></td>
+            <td style="text-align:center; font-weight:bold;">${bloom.analyze}%</td>
+            <td>Inferência contextual, contraste semântico (ex: falsos cognatos) e leitura crítica de enunciados.</td>
+          </tr>
+          <tr>
+            <td><strong>Avaliar & Criar (Bloom)</strong></td>
+            <td style="text-align:center; font-weight:bold;">${bloom.evaluate}%</td>
+            <td>Julgamento de adequação discursiva e síntese autoral em itens de maior complexidade cognitiva.</td>
+          </tr>
+          <tr>
+            <td><strong>Curva de Dificuldade (TRI)</strong></td>
+            <td style="text-align:center; font-weight:bold;">Fácil ${diff.easy}% | Médio ${diff.medium}% | Difícil ${diff.hard}% | Desafio ${diff.challenge}%</td>
+            <td>Progressão calibrada para garantir acolhimento inicial (itens fáceis), precisão na média da turma (itens médios) e discriminação de alta proficiência (itens difíceis/desafio).</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>3. Fontes de Conhecimento, Habilidades BNCC e Auditoria de Qualidade</h3>
+      ${sourcesHtml}
+      ${bnccHtml}
+      <p>
+        <strong>Parecer de Engenharia de Distratores:</strong> ${
+          params.distractorSummary ||
+          `Cobertura diagnóstica verificada em ${params.distractorCoveragePct ?? 100}% dos itens de múltipla escolha, evitando alternativas absurdas ou violações de Haladyna.`
+        }
+        ${
+          params.factCheck
+            ? `<br/><strong>Auditoria Fact-Check:</strong> Índice de consistência factual ${params.factCheck.score}/100 (${params.factCheck.level.toUpperCase()}).`
+            : ''
+        }
+      </p>
+
+      <hr class="content-divider" />
+
+      <h2>PARTE II &mdash; REASONING E JUSTIFICATIVA PEDAGÓGICA QUESTÃO POR QUESTÃO (1 A ${questions.length})</h2>
+      <p>
+        Abaixo detalha-se o raciocínio pedagógico individual de cada questão, explicitando a competência avaliada, a justificativa da alternativa correta e o papel diagnóstico dos distratores:
+      </p>
+      ${perQuestionHtml}
+    </div>
+  `
 }
 
 /**
@@ -665,7 +923,7 @@ export function formatMarkdownToHtml(text: string, nee: string = 'standard'): st
 }
 
 /**
- * 7. Exporta um elemento DOM diretamente para impressão/PDF
+ * 7. Exporta um elemento DOM diretamente para impressão/PDF (removendo gabaritos ocultos da folha do aluno)
  */
 export async function exportElementToPdf(elementId: string, filename: string = 'documento') {
   if (typeof window === 'undefined') return
@@ -679,6 +937,7 @@ export async function exportElementToPdf(elementId: string, filename: string = '
     window.print()
     return
   }
+  const cleanOuterHtml = el.outerHTML.replace(/<div\s+class="exam-answer-key"[^>]*>[\s\S]*?<\/div>/gi, '')
   printWindow.document.write(`
     <!DOCTYPE html>
     <html>
@@ -687,10 +946,11 @@ export async function exportElementToPdf(elementId: string, filename: string = '
         <style>
           @page { size: A4; margin: 12mm; }
           body { font-family: sans-serif; margin: 0; padding: 10px; }
+          .exam-answer-key { display: none !important; }
         </style>
       </head>
       <body>
-        ${el.outerHTML}
+        ${cleanOuterHtml}
         <script>
           window.onload = function() {
             setTimeout(function() { window.print(); }, 400);
@@ -701,3 +961,4 @@ export async function exportElementToPdf(elementId: string, filename: string = '
   `)
   printWindow.document.close()
 }
+
