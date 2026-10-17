@@ -1239,4 +1239,216 @@ export function buildDidacticSequenceExportHtml(params: {
   `
 }
 
+/**
+ * 9. Constrói o HTML exclusivo do DOCUMENTO 4 — FICHA DE ACOMPANHAMENTO E ADAPTAÇÃO PDI/PEI
+ * VINCULADA À AVALIAÇÃO OU ATIVIDADE (Documento independente da Prova, do Gabarito e do Reasoning).
+ */
+export function buildStandalonePdiAssessmentDocumentHtml(params: {
+  studentName: string
+  gradeCycle?: string
+  shift?: string
+  validityPeriod?: string
+  nextReviewDate?: string
+  regentTeacher?: string
+  pedagogicalTeam?: string
+  activityTitle: string
+  activityType?: 'exam' | 'worksheet'
+  topic?: string
+  generalObjective?: string
+  strategies?: Array<{ id?: string; description: string; isActive?: boolean }>
+  skillsMatrix?: Array<{
+    skillCode: string
+    skillDescription: string
+    status: string
+    previousSemesterStatus?: string
+    workDoneOrAdaptedSkill?: string
+    evaluatedStatusInThisActivity?: 'Sim' | 'Em desenvolvimento' | 'Não'
+    activityNote?: string
+  }>
+  questions?: Array<any>
+  evolutionNotes?: string
+}): string {
+  const dateStr = new Date().toLocaleDateString('pt-BR')
+  const actTypeLabel = params.activityType === 'worksheet' ? 'Atividade / Worksheet' : 'Avaliação / Prova'
+  const gradeLabel = params.gradeCycle || '6º ano do Ensino Fundamental'
+  const activeStrategies = (params.strategies || []).filter(s => s.isActive !== false)
+  const skills = params.skillsMatrix || []
+  const questions = Array.isArray(params.questions) ? params.questions : []
+
+  const normalizeStatus = (raw?: string) => {
+    if (!raw) return 'Em desenvolvimento'
+    const low = raw.trim().toLowerCase()
+    if (low === 'sim' || low === 'hv' || low === 'concluida') return 'Sim'
+    if (low === 'não' || low === 'nao' || low === 'hnv') return 'Não'
+    return 'Em desenvolvimento'
+  }
+
+  const strategiesHtml =
+    activeStrategies.length > 0
+      ? `<ul>${activeStrategies.map(s => `<li>${s.description}</li>`).join('')}</ul>`
+      : `<p>Aplicação das estratégias pedagógicas individualizadas previstas no PDI vigente.</p>`
+
+  const questionsMappingRows =
+    questions.length > 0
+      ? questions
+          .map((q, idx) => {
+            const bncc = q.bnccSkill || q.bnccCode || 'Competência linguística contextualizada'
+            const obj = q.pedagogicalObjective || q.bloomTaxonomy || 'Aferição formativa/somativa'
+            return `
+              <tr>
+                <td style="text-align:center; font-weight:bold;">Questão ${idx + 1}</td>
+                <td><strong>${bncc}</strong></td>
+                <td>${obj}</td>
+                <td>( &nbsp; ) Sim &nbsp;&nbsp; ( &nbsp; ) Em desenv. &nbsp;&nbsp; ( &nbsp; ) Não</td>
+              </tr>
+            `
+          })
+          .join('')
+      : ''
+
+  const skillsRowsHtml =
+    skills.length > 0
+      ? skills
+          .map(sk => {
+            const currentSt = normalizeStatus(sk.status)
+            const evalSt = sk.evaluatedStatusInThisActivity
+              ? normalizeStatus(sk.evaluatedStatusInThisActivity)
+              : currentSt
+            const prevInfo = sk.previousSemesterStatus
+              ? `<br/><span style="font-size:8.5pt; color:#475569;">Semestre anterior: ${sk.previousSemesterStatus}</span>`
+              : ''
+            return `
+              <tr>
+                <td style="font-weight:bold; width:12%;">${sk.skillCode}</td>
+                <td style="width:44%;">${sk.skillDescription}</td>
+                <td style="width:16%; font-weight:bold;">${currentSt}${prevInfo}</td>
+                <td style="width:28%;">
+                  <strong>Nesta ${actTypeLabel}:</strong> ${evalSt}
+                  ${sk.activityNote ? `<br/><em>${sk.activityNote}</em>` : sk.workDoneOrAdaptedSkill ? `<br/><span style="font-size:9pt;">${sk.workDoneOrAdaptedSkill}</span>` : ''}
+                </td>
+              </tr>
+            `
+          })
+          .join('')
+      : `<tr><td colspan="4" style="text-align:center;">Nenhuma habilidade BNCC vinculada.</td></tr>`
+
+  return `
+    <div class="generated-exam-document">
+      <h2>1. IDENTIFICAÇÃO DO PDI/PEI VINCULADO À ${actTypeLabel.toUpperCase()}</h2>
+      <p>
+        Documento pedagógico <strong>separado e exclusivo da equipe docente/pedagógica</strong> para registro de adaptações,
+        estratégias de aplicação e acompanhamento de superação de habilidades da BNCC do(a) estudante
+        <strong>${params.studentName}</strong> na atividade <strong>${params.activityTitle}</strong>.
+      </p>
+
+      <table class="content-table">
+        <tbody>
+          <tr>
+            <td style="font-weight:bold; width:22%; background:#f8fafc;">Aluno(a):</td>
+            <td style="width:28%;">${params.studentName}</td>
+            <td style="font-weight:bold; width:22%; background:#f8fafc;">Ano/turma &amp; Turno:</td>
+            <td style="width:28%;">${gradeLabel} (${params.shift || 'Matutino'})</td>
+          </tr>
+          <tr>
+            <td style="font-weight:bold; background:#f8fafc;">Professor(a) regente:</td>
+            <td>${params.regentTeacher || 'Rafaela Franco Toldo'}</td>
+            <td style="font-weight:bold; background:#f8fafc;">Equipe pedagógica:</td>
+            <td>${params.pedagogicalTeam || 'Marianna Panisset'}</td>
+          </tr>
+          <tr>
+            <td style="font-weight:bold; background:#f8fafc;">Vigência do PDI:</td>
+            <td>${params.validityPeriod || '1º semestre / 2026'}</td>
+            <td style="font-weight:bold; background:#f8fafc;">Próxima revisão:</td>
+            <td>${params.nextReviewDate || 'Dezembro / 2026'}</td>
+          </tr>
+          <tr>
+            <td style="font-weight:bold; background:#f8fafc;">Instrumento Avaliativo:</td>
+            <td>${params.activityTitle} (${actTypeLabel})</td>
+            <td style="font-weight:bold; background:#f8fafc;">Data de Registro:</td>
+            <td>${dateStr}</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h2>2. ESTRATÉGIAS PEDAGÓGICAS E RECURSOS DE APOIO APLICADOS</h2>
+      ${strategiesHtml}
+
+      ${
+        questionsMappingRows
+          ? `
+        <h2>3. MAPEAMENTO DE QUESTÕES DA ${actTypeLabel.toUpperCase()} POR COMPETÊNCIA</h2>
+        <table class="content-table">
+          <thead>
+            <tr>
+              <th style="width:14%; text-align:center;">Item</th>
+              <th style="width:24%;">Habilidade BNCC / Foco</th>
+              <th style="width:32%;">Objetivo Pedagógico</th>
+              <th style="width:30%;">Desempenho no Item</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${questionsMappingRows}
+          </tbody>
+        </table>
+      `
+          : ''
+      }
+
+      <h2>4. ACOMPANHAMENTO DE SUPERAÇÃO DE HABILIDADES — BNCC (${gradeLabel.toUpperCase()})</h2>
+      <p>
+        Registro evolutivo para acompanhamento no semestre vigente e verificação no próximo semestre sobre a conclusão das competências previstas:
+      </p>
+      <table class="content-table">
+        <thead>
+          <tr>
+            <th>Código</th>
+            <th>Habilidade (BNCC – Língua Inglesa)</th>
+            <th>Superada no PDI?</th>
+            <th>Avaliação / Observações</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${skillsRowsHtml}
+        </tbody>
+      </table>
+
+      ${
+        params.evolutionNotes
+          ? `
+        <h2>5. SÍNTESE DE OBSERVAÇÕES E EVOLUÇÃO DO(A) ALUNO(A)</h2>
+        <p>${params.evolutionNotes.replace(/\n\n/g, '</p><p>')}</p>
+      `
+          : ''
+      }
+
+      <h2>6. ASSINATURAS E VALIDAÇÃO PEDAGÓGICA</h2>
+      <table class="content-table" style="margin-top:14px;">
+        <tbody>
+          <tr>
+            <td style="width:50%; padding:18px 12px; vertical-align:bottom;">
+              <strong>Professor(a) regente:</strong> ${params.regentTeacher || 'Rafaela Franco Toldo'}<br/><br/>
+              _____________________________________________________
+            </td>
+            <td style="width:50%; padding:18px 12px; vertical-align:bottom;">
+              <strong>Coordenação pedagógica:</strong> ${params.pedagogicalTeam || 'Marianna Panisset'}<br/><br/>
+              _____________________________________________________
+            </td>
+          </tr>
+          <tr>
+            <td style="width:50%; padding:18px 12px; vertical-align:bottom;">
+              <strong>Responsável pelo(a) aluno(a):</strong><br/><br/>
+              _____________________________________________________
+            </td>
+            <td style="width:50%; padding:18px 12px; vertical-align:bottom;">
+              <strong>Data de validação:</strong> ${dateStr}<br/><br/>
+              _____ / _____ / _________
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  `
+}
+
+
 

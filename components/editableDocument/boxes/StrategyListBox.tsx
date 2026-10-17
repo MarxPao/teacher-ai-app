@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState } from 'react'
-import { COLOR, RADIUS } from '@/styles/tokens'
+import { COLOR, RADIUS, FONT } from '@/styles/tokens'
 import { BoxSchema, DocumentStrategyItem } from '@/lib/editableDocumentTypes'
 
 interface Props {
@@ -14,7 +14,11 @@ export default function StrategyListBox({ schema, data = [], onChange }: Props) 
   const [newText, setNewText] = useState('')
 
   const handleToggle = (id: string) => {
-    onChange(data.map(item => item.id === id ? { ...item, isActive: !item.isActive } : item))
+    onChange(data.map(item => (item.id === id ? { ...item, isActive: !item.isActive } : item)))
+  }
+
+  const handleEditDescription = (id: string, description: string) => {
+    onChange(data.map(item => (item.id === id ? { ...item, description } : item)))
   }
 
   const handleAdd = () => {
@@ -33,12 +37,22 @@ export default function StrategyListBox({ schema, data = [], onChange }: Props) 
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      {/* Lista de Itens */}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14, fontFamily: FONT.sans }}>
+      {/* Lista de Itens Editáveis */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {data.length === 0 ? (
-          <div style={{ padding: 16, textAlign: 'center', background: '#faf7f2', border: '1px solid #ede8dc', borderRadius: RADIUS.md, color: COLOR.paperMid, fontSize: 12 }}>
-            Nenhum item adicionado. Adicione novas estratégias ou acomodações no campo abaixo.
+          <div
+            style={{
+              padding: 16,
+              textAlign: 'center',
+              background: '#fdf8f2',
+              border: '1px dashed #dcd7cb',
+              borderRadius: RADIUS.md,
+              color: '#7a5c42',
+              fontSize: 12
+            }}
+          >
+            Nenhuma estratégia cadastrada. Adicione estratégias pedagógicas ou recursos de apoio abaixo.
           </div>
         ) : (
           data.map(item => (
@@ -47,31 +61,46 @@ export default function StrategyListBox({ schema, data = [], onChange }: Props) 
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: '10px 14px',
-                background: item.isActive ? '#fff' : '#f8fafc',
-                border: `1px solid ${item.isActive ? '#ede8dc' : '#e2e8f0'}`,
+                gap: 10,
+                padding: '9px 12px',
+                background: item.isActive ? '#fff' : '#faf7f2',
+                border: `1px solid ${item.isActive ? '#dcd7cb' : '#ede8dc'}`,
                 borderRadius: RADIUS.md,
                 transition: 'all 0.15s'
               }}
             >
-              <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', flex: 1 }}>
-                <input
-                  type="checkbox"
-                  checked={item.isActive}
-                  onChange={() => handleToggle(item.id)}
-                  style={{ width: 16, height: 16, accentColor: '#6d28d9', cursor: 'pointer' }}
-                />
-                <span
-                  style={{
-                    fontSize: 13,
-                    color: item.isActive ? COLOR.paperInk : COLOR.paperMid,
-                    textDecoration: item.isActive ? 'none' : 'line-through'
-                  }}
-                >
-                  {item.description}
-                </span>
-              </label>
+              <input
+                type="checkbox"
+                checked={item.isActive}
+                onChange={() => handleToggle(item.id)}
+                style={{ width: 16, height: 16, accentColor: '#8b5e3c', cursor: 'pointer', flexShrink: 0 }}
+                title={item.isActive ? 'Estratégia ativa no documento' : 'Estratégia desativada'}
+              />
+
+              <input
+                type="text"
+                value={item.description}
+                onChange={e => handleEditDescription(item.id, e.target.value)}
+                style={{
+                  flex: 1,
+                  border: '1px solid transparent',
+                  borderRadius: 6,
+                  padding: '4px 8px',
+                  fontSize: 13,
+                  color: item.isActive ? COLOR.paperInk : COLOR.paperMid,
+                  background: 'transparent',
+                  textDecoration: item.isActive ? 'none' : 'line-through',
+                  outline: 'none'
+                }}
+                onFocus={e => {
+                  e.currentTarget.style.borderColor = '#dcd7cb'
+                  e.currentTarget.style.background = '#fdf8f2'
+                }}
+                onBlur={e => {
+                  e.currentTarget.style.borderColor = 'transparent'
+                  e.currentTarget.style.background = 'transparent'
+                }}
+              />
 
               <button
                 type="button"
@@ -79,14 +108,13 @@ export default function StrategyListBox({ schema, data = [], onChange }: Props) 
                 style={{
                   background: 'none',
                   border: 'none',
-                  color: '#94a3b8',
+                  color: '#9c8b7a',
                   fontSize: 16,
                   cursor: 'pointer',
-                  marginLeft: 8
+                  padding: '0 4px',
+                  flexShrink: 0
                 }}
-                onMouseEnter={e => (e.currentTarget.style.color = '#ef4444')}
-                onMouseLeave={e => (e.currentTarget.style.color = '#94a3b8')}
-                title="Remover"
+                title="Remover estratégia"
               >
                 &times;
               </button>
@@ -106,13 +134,15 @@ export default function StrategyListBox({ schema, data = [], onChange }: Props) 
               handleAdd()
             }
           }}
-          placeholder="Adicionar nova estratégia ou acomodação..."
+          placeholder="Adicionar nova estratégia pedagógica ou recurso de apoio..."
           style={{
             flex: 1,
-            padding: '8px 12px',
+            padding: '9px 12px',
             borderRadius: RADIUS.md,
-            border: '1px solid #cbd5e1',
-            fontSize: 12
+            border: '1px solid #dcd7cb',
+            background: '#fff',
+            color: COLOR.paperInk,
+            fontSize: 12.5
           }}
         />
         <button
@@ -120,9 +150,9 @@ export default function StrategyListBox({ schema, data = [], onChange }: Props) 
           onClick={handleAdd}
           disabled={!newText.trim()}
           style={{
-            padding: '8px 16px',
-            background: newText.trim() ? '#8b5e3c' : '#cbd5e1',
-            color: '#fff',
+            padding: '9px 16px',
+            background: newText.trim() ? '#8b5e3c' : '#e2d9c8',
+            color: newText.trim() ? '#fff' : '#9c8b7a',
             border: 'none',
             borderRadius: RADIUS.md,
             fontSize: 12,
@@ -130,7 +160,7 @@ export default function StrategyListBox({ schema, data = [], onChange }: Props) 
             cursor: newText.trim() ? 'pointer' : 'not-allowed'
           }}
         >
-          Adicionar
+          + Adicionar Estratégia
         </button>
       </div>
     </div>

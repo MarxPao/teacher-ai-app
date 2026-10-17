@@ -6,6 +6,7 @@
  */
 
 import { SkillsMatrixRow } from './editableDocumentTypes'
+import { syncToSupabase, loadFromSupabase } from './supabaseClient'
 
 export interface SupportProfessional {
   name: string
@@ -60,8 +61,8 @@ export interface PeiRecord {
 
 export type PeiProfile = PeiRecord
 
-const PEI_STORAGE_KEY = 'teacher_pei_records_v1'
-const PEI_ARCHIVE_STORAGE_KEY = 'teacher_pei_archive_v1'
+export const PEI_STORAGE_KEY = 'teacher_pei_records_v1'
+export const PEI_ARCHIVE_STORAGE_KEY = 'teacher_pei_archive_v1'
 
 let _memoryPei: Record<string, PeiRecord> = {}
 let _memoryPeiArchive: Record<string, PeiRecord[]> = {}
@@ -81,6 +82,35 @@ export function getStudentPei(studentId: string): PeiRecord | null {
   return all[studentId] || null
 }
 
+export async function syncPeiToSupabase(
+  recordsOverride?: Record<string, PeiRecord>
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const all = recordsOverride || getAllPeiRecords()
+    const archive =
+      typeof window !== 'undefined'
+        ? JSON.parse(localStorage.getItem(PEI_ARCHIVE_STORAGE_KEY) || '{}')
+        : _memoryPeiArchive
+    return await syncToSupabase({
+      [PEI_STORAGE_KEY]: all,
+      [PEI_ARCHIVE_STORAGE_KEY]: archive
+    })
+  } catch (e: any) {
+    return { ok: false, error: e?.message || 'Falha ao sincronizar PEI com Supabase' }
+  }
+}
+
+export async function hydratePeisFromSupabase(): Promise<{ ok: boolean; count: number }> {
+  try {
+    const res = await loadFromSupabase()
+    const all = getAllPeiRecords()
+    return { ok: res.ok, count: Object.keys(all).length }
+  } catch {
+    const all = getAllPeiRecords()
+    return { ok: false, count: Object.keys(all).length }
+  }
+}
+
 export function saveStudentPei(pei: PeiRecord): void {
   const all = getAllPeiRecords()
   const updated = {
@@ -91,13 +121,15 @@ export function saveStudentPei(pei: PeiRecord): void {
   }
   all[pei.studentId] = updated
   _memoryPei = all
-  if (typeof window === 'undefined') return
-  try {
-    localStorage.setItem(PEI_STORAGE_KEY, JSON.stringify(all))
-    window.dispatchEvent(new CustomEvent('teacher:pei_changed', { detail: updated }))
-  } catch (e) {
-    console.error('[peiManagement] Erro ao salvar PEI:', e)
+  if (typeof window !== 'undefined') {
+    try {
+      localStorage.setItem(PEI_STORAGE_KEY, JSON.stringify(all))
+      window.dispatchEvent(new CustomEvent('teacher:pei_changed', { detail: updated }))
+    } catch (e) {
+      console.error('[peiManagement] Erro ao salvar PEI:', e)
+    }
   }
+  void syncPeiToSupabase(all)
 }
 
 export function getStudentPeiArchive(studentId: string): PeiRecord[] {
@@ -136,6 +168,7 @@ export function archiveStudentPei(studentId: string): boolean {
       delete all[studentId]
       localStorage.setItem(PEI_STORAGE_KEY, JSON.stringify(all))
       window.dispatchEvent(new CustomEvent('teacher:pei_changed', { detail: { studentId, archived: true } }))
+      void syncPeiToSupabase(all)
       return true
     } catch {
       return false
@@ -152,6 +185,7 @@ export function deleteStudentPei(studentId: string): boolean {
     try {
       localStorage.setItem(PEI_STORAGE_KEY, JSON.stringify(all))
       window.dispatchEvent(new CustomEvent('teacher:pei_changed', { detail: { studentId, deleted: true } }))
+      void syncPeiToSupabase(all)
       return true
     } catch {
       return false
