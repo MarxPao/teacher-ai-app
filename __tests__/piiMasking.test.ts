@@ -317,4 +317,108 @@ describe('PII Masking Gateway — LGPD & Zero-PII', () => {
       unmaskToolUse(gradeToolCall, session)
     }).toThrow(UnresolvedTokenError)
   })
+
+  it('9. Lida com prefixos de portais escolares e nomes compostos/do meio sem vazamentos no guardEgress', () => {
+    const portalRoster = [
+      'ANA CLARA REIS GONÇALVES',
+      'ANA CLARA DA COSTA SILVA PEREIRA',
+      'Estudante: 28 - Marcos Heleno de Albuquerque',
+      'Estudante: 25 - Marcos Paulo Marques Castro',
+      'Estudante: 33 - Sophia Silva Sousa',
+      'Estudante: 24 - Maria Clara Condelo Petronilho'
+    ]
+
+    // Mensagem com primeiros nomes, nomes do meio e compostos
+    const userPrompt = 'Registrar nota para Clara, Marcos Paulo, Sophia e Maria Clara na avaliação.'
+    const result = maskPii(userPrompt, portalRoster)
+
+    expect(result.maskedText).not.toContain('Clara')
+    expect(result.maskedText).not.toContain('Marcos')
+    expect(result.maskedText).not.toContain('Paulo')
+    expect(result.maskedText).not.toContain('Sophia')
+    expect(result.maskedText).not.toContain('Maria Clara')
+
+    // Deve passar no guardEgress com o roster ativo
+    expect(() => {
+      guardEgress({ prompt: result.maskedText }, portalRoster)
+    }).not.toThrow()
+
+    // Restaura fielmente os nomes para a visão do professor
+    const aiResponse = `Confirmo o registro de notas para ${result.maskedText}.`
+    const restored = result.unmask(aiResponse)
+    expect(restored).toContain('Clara')
+    expect(restored).toContain('Marcos Paulo')
+    expect(restored).toContain('Sophia')
+  })
+
+  it('10. maskChatHistory sanitiza histórico completo com prefixos de portal e permite tráfego no guardEgressFetch', async () => {
+    const portalRoster = [
+      'Estudante: 28 - Marcos Heleno de Albuquerque',
+      'Estudante: 25 - Marcos Paulo Marques Castro',
+      'ANA CLARA REIS GONÇALVES'
+    ]
+
+    const history = [
+      { role: 'user', content: 'O Marcos Heleno e a Ana Clara compareceram hoje?' },
+      { role: 'assistant', content: 'Sim, ambos estiveram presentes.' },
+      { role: 'user', content: 'Excelente, lance presença para Marcos Paulo também.' }
+    ]
+
+    const { maskedMessages, session } = maskChatHistory(history, portalRoster)
+
+    // Nenhuma mensagem mascarada contém nomes reais
+    const fullSerialized = JSON.stringify(maskedMessages)
+    expect(fullSerialized).not.toContain('Marcos Heleno')
+    expect(fullSerialized).not.toContain('Ana Clara')
+    expect(fullSerialized).not.toContain('Marcos Paulo')
+
+    // Inspecionado pelo guardEgress: 100% aprovado
+    expect(() => {
+      guardEgress({ messages: maskedMessages }, portalRoster)
+    }).not.toThrow()
+
+    // unmask restaura os nomes
+    const unmaskedReply = unmaskPii('[ALUNO_1] e [ALUNO_2] estão confirmados.', session)
+    expect(unmaskedReply).not.toContain('[ALUNO_')
+  })
+
+  it('11. executeUnifiedAiCall anonimiza automaticamente nomes do roster em localStorage (Marcos, Paulo, Sophia, André) antes do guardEgressFetch', async () => {
+    const { executeUnifiedAiCall } = await import('../lib/autoApiSelector')
+    const store: Record<string, string> = {
+      teacher_students: JSON.stringify([
+        { id: '1', name: 'Marcos Heleno de Albuquerque' },
+        { id: '2', name: 'Marcos Paulo Marques Castro' },
+        { id: '3', name: 'Sophia Silva Sousa' },
+        { id: '4', name: 'André Gonçalves' }
+      ])
+    }
+
+    vi.stubGlobal('localStorage', {
+      getItem: (k: string) => store[k] || null,
+      setItem: (k: string, v: string) => { store[k] = v },
+      removeItem: (k: string) => { delete store[k] },
+      clear: () => {}
+    })
+
+    const fetchSpy = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          choices: [{ message: { content: '[{"id":"q1","type":"multiple_choice","stem":"Text about [ALUNO_3] in São [ALUNO_2]","options":[{"id":"A","text":"Option A"},{"id":"B","text":"Option B"}],"correctOptionId":"A"}]' } }]
+        }),
+        { status: 200 }
+      )
+    )
+    vi.stubGlobal('fetch', fetchSpy)
+
+    const examPrompt = `=== INSTRUÇÕES & MARCOS ===\nContexto RAG: Sophia, a 26-year-old software designer from São Paulo, e André.`
+    const reply = await executeUnifiedAiCall(
+      { id: 'groq', name: 'Groq', provider: 'groq', key: 'gsk_test_key', model: 'llama-3.3-70b-versatile', active: true },
+      examPrompt
+    )
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1)
+    expect(reply).toContain('Sophia')
+    expect(reply).toContain('Paulo')
+  })
 })
+

@@ -16,7 +16,7 @@
  */
 
 import { ApiConfig } from '@/components/modules/ApiManager'
-import { guardEgressFetch } from '@/lib/piiMasking'
+import { guardEgressFetch, maskPii } from '@/lib/piiMasking'
 
 export type TaskType =
   | 'chat'           // Chat agêntico geral (Rafinha)
@@ -180,6 +180,15 @@ export function getAvailableApisForSelect(): ApiConfig[] {
  * Executa uma chamada unificada a QUALQUER provedor de IA cadastrado (Gemini, Groq, Zhipu, SiliconFlow, OpenRouter, OpenAI, Anthropic, DeepSeek).
  */
 export async function executeUnifiedAiCall(api: ApiConfig | null, prompt: string, systemPrompt?: string): Promise<string> {
+  // Camada Zero-PII Gateway: Anonimiza nomes da lista ativa de alunos e PII antes de qualquer envio externo
+  const maskedPromptObj = maskPii(prompt)
+  const safePrompt = maskedPromptObj.maskedText
+  const sharedSession = {
+    mapping: maskedPromptObj.mapping,
+    reverseMapping: maskedPromptObj.reverseMapping
+  }
+  const safeSystemPrompt = systemPrompt ? maskPii(systemPrompt, undefined, sharedSession).maskedText : ''
+
   // Coleta chaves salvas localmente pelo professor (BYOK) para enviar ao backend /api/agent ou usar no auto-select
   const allApis = getAvailableApisForSelect()
   const userKeys: Record<string, string> = {}
@@ -190,8 +199,8 @@ export async function executeUnifiedAiCall(api: ApiConfig | null, prompt: string
   }
 
   let effectiveApi = api
-  if (!effectiveApi || effectiveApi.provider === 'manual' || !effectiveApi.key) {
-    const taskType = detectTaskType(prompt)
+  if (!effectiveApi || effectiveApi.provider === 'manual' || !effectiveApi.key || effectiveApi.id === 'auto') {
+    const taskType = detectTaskType(safePrompt)
     const bestLocal = selectBestApi(allApis, taskType, true)
     if (bestLocal && bestLocal.provider !== 'manual' && bestLocal.key) {
       effectiveApi = bestLocal
@@ -203,8 +212,8 @@ export async function executeUnifiedAiCall(api: ApiConfig | null, prompt: string
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        messages: [{ role: 'user', content: prompt }],
-        context: systemPrompt || '',
+        messages: [{ role: 'user', content: safePrompt }],
+        context: safeSystemPrompt,
         autoMode: true,
         disableTools: true,
         userKeys
@@ -222,10 +231,11 @@ export async function executeUnifiedAiCall(api: ApiConfig | null, prompt: string
     const textFromContent = Array.isArray(data.content)
       ? data.content.find((c: any) => c.type === 'text' && typeof c.text === 'string')?.text
       : undefined
-    return data.reply || textFromContent || data.content?.[0]?.text || ''
+    const rawReply = data.reply || textFromContent || data.content?.[0]?.text || ''
+    return maskedPromptObj.unmask(rawReply)
   }
 
-  if (!effectiveApi || effectiveApi.provider === 'manual' || !effectiveApi.key) {
+  if (!effectiveApi || effectiveApi.provider === 'manual' || !effectiveApi.key || effectiveApi.id === 'auto') {
     return callBackendAgentFallback()
   }
 
@@ -239,7 +249,7 @@ export async function executeUnifiedAiCall(api: ApiConfig | null, prompt: string
     const r = await guardEgressFetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerously-allow-browser': 'true' },
-      body: JSON.stringify({ model: model || 'claude-3-5-sonnet-20241022', max_tokens: 8192, messages: [{ role: 'user', content: prompt }] }),
+      body: JSON.stringify({ model: model || 'claude-3-5-sonnet-20241022', max_tokens: 8192, messages: [{ role: 'user', content: safePrompt }] }),
     })
     const d = await r.json()
     if (d.error) throw new Error(d.error.message || 'Erro na Anthropic Claude')
@@ -261,7 +271,7 @@ export async function executeUnifiedAiCall(api: ApiConfig | null, prompt: string
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
       body: JSON.stringify({
         model: model || (p === 'groq' ? 'llama-3.3-70b-versatile' : p === 'deepseek' ? 'deepseek-chat' : p === 'zhipu' ? 'glm-4-flash' : 'gpt-4o-mini'),
-        messages: [{ role: 'user', content: prompt }],
+        messages: [{ role: 'user', content: safePrompt }],
         max_tokens: maxTokensForProvider
       }),
     })
@@ -273,7 +283,7 @@ export async function executeUnifiedAiCall(api: ApiConfig | null, prompt: string
   // 3. Google Gemini
   else if (p === 'gemini') {
     const validModel = model && !model.includes('gemini-2.0') && !model.includes('gemini-1.5') && !model.includes('gemini-2.5') ? model : 'gemini-3.6-flash'
-    const modelsToTry = [validModel, 'gemini-3.5-flash-lite', 'gemini-3.5-flash', 'gemini-flash-lite-latest', 'gemini-flash-latest', 'gemini-2.5-flash', 'gemini-2.0-flash']
+    const modelsToTry = [validModel, 'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-flash-latest', 'gemini-flash-lite-latest']
     let lastErr = ''
     for (const m of modelsToTry) {
       try {
@@ -284,7 +294,7 @@ export async function executeUnifiedAiCall(api: ApiConfig | null, prompt: string
             'x-goog-api-key': key
           },
           body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
+            contents: [{ parts: [{ text: safePrompt }] }],
             generationConfig: { maxOutputTokens: 8192 }
           }),
         })
@@ -296,6 +306,7 @@ export async function executeUnifiedAiCall(api: ApiConfig | null, prompt: string
           lastErr = d.error.message || `Erro no modelo ${m}`
         }
       } catch (e: any) {
+        if (e?.name === 'EgressSecurityError') throw e
         lastErr = e.message
       }
     }
@@ -307,10 +318,10 @@ export async function executeUnifiedAiCall(api: ApiConfig | null, prompt: string
   // Registra o consumo de tokens automaticamente no monitor
   try {
     const { recordTokenUsage, estimateTokensFromText } = await import('@/lib/tokenTracker')
-    const promptTokens = estimateTokensFromText(prompt)
+    const promptTokens = estimateTokensFromText(safePrompt)
     const completionTokens = estimateTokensFromText(resultText)
     recordTokenUsage(p, promptTokens, completionTokens)
   } catch {}
 
-  return resultText
+  return maskedPromptObj.unmask(resultText)
 }

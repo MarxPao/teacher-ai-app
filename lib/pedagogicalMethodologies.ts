@@ -277,6 +277,6 @@ export function buildMethodologyInstructions(selectedIdsOrNames: string[]): stri
 
   if (!instructions.length) return ''
 
-  return `\n=== INSTRUÇÕES RÍGOROSAS DE METODOLOGIAS & MARCOS SELECIONADOS ===\n${instructions.join('\n')}\n`
+  return `\n=== INSTRUÇÕES RIGOROSAS DE METODOLOGIAS & REFERENCIAIS SELECIONADOS ===\n${instructions.join('\n')}\n`
 }
 

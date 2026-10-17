@@ -1167,7 +1167,9 @@ export default function ExamResultThreeTabs({
               <div style={{ padding: 18 }}>
                 <EditableQuestionBoxes
                   initialContent={result}
+                  initialQuestions={questions}
                   onContentChange={onContentChange}
+                  onQuestionsChange={onQuestionsChange}
                   onAskRafinhaForQuestion={onAskRafinhaForQuestion}
                 />
               </div>

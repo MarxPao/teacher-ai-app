@@ -107,7 +107,9 @@ export interface EditableQuestionItem {
 
 interface EditableQuestionBoxesProps {
   initialContent: string
+  initialQuestions?: EditableQuestionItem[]
   onContentChange: (newContentHtml: string) => void
+  onQuestionsChange?: (updatedQuestions: EditableQuestionItem[]) => void
   onAskRafinhaForQuestion?: (questionIndex: number, currentQuestion: EditableQuestionItem, userInstruction: string) => Promise<string | void>
   examId?: string
 }
@@ -135,9 +137,9 @@ export function parseContentToQuestions(raw: string, defaultProvenance?: Provena
         type: typeMatch[1] as ProvenanceType,
         sourceLabel: labelMatch ? labelMatch[1] : undefined,
         sourceUrl: urlMatch ? urlMatch[1] : undefined,
-        confidence: (typeMatch[1] === 'teacher_reference'
-          ? 'teacher_provided'
-          : (confMatch && confMatch[1] === 'verified' ? 'verified' : 'unverified')) as any,
+        confidence: (confMatch && ['verified', 'teacher_provided', 'unverified', 'partial'].includes(confMatch[1])
+          ? confMatch[1]
+          : (typeMatch[1] === 'teacher_reference' ? 'teacher_provided' : 'unverified')) as any,
         pageNumber: pageMatch ? parseInt(pageMatch[1], 10) : defaultProvenance?.pageNumber,
         unitTitle: unitMatch ? unitMatch[1] : defaultProvenance?.unitTitle,
         chunkId: chunkMatch ? chunkMatch[1] : defaultProvenance?.chunkId
@@ -507,7 +509,9 @@ export const serializeQuestionsToHtml = compileQuestionsToHtml
 
 export default function EditableQuestionBoxes({
   initialContent,
+  initialQuestions,
   onContentChange,
+  onQuestionsChange,
   onAskRafinhaForQuestion,
   examId
 }: EditableQuestionBoxesProps) {
@@ -519,13 +523,15 @@ export default function EditableQuestionBoxes({
   const [rafinhaPromptText, setRafinhaPromptText] = useState('')
   const [rafinhaLoading, setRafinhaLoading] = useState(false)
 
-  // Parse inicial quando o conteúdo muda
+  // Parse inicial quando o conteúdo ou lista de questões muda
   useEffect(() => {
-    if (initialContent) {
+    if (initialQuestions && initialQuestions.length > 0) {
+      setQuestions(initialQuestions)
+    } else if (initialContent) {
       const parsed = parseContentToQuestions(initialContent)
       setQuestions(parsed)
     }
-  }, [initialContent])
+  }, [initialContent, initialQuestions])
 
   // Emite alterações de volta
   const triggerUpdate = useCallback((updated: EditableQuestionItem[]) => {
@@ -542,9 +548,10 @@ export default function EditableQuestionBoxes({
       return { ...q, haladynaWarnings, haladynaViolations }
     })
     setQuestions(reAudited)
+    onQuestionsChange?.(reAudited)
     const compiled = compileQuestionsToHtml(reAudited)
     onContentChange(compiled)
-  }, [onContentChange])
+  }, [onContentChange, onQuestionsChange])
 
   // Reordenação: Mover para Cima
   const handleMoveUp = (index: number) => {

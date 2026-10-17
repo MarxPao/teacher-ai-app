@@ -64,6 +64,7 @@ import {
   getAllSubjectProfiles,
   type SubjectProfile,
 } from '@/lib/subjectProfile'
+import { getAvailableApisForSelect, executeUnifiedAiCall } from '@/lib/autoApiSelector'
 import '@/lib/subjects/english'
 import '@/lib/subjects/portuguese'
 
@@ -99,7 +100,6 @@ const CARD: React.CSSProperties = { background: '#fff', borderRadius: RADIUS.xl,
 
 function loadApis(): ApiConfig[] {
   try {
-    const { getAvailableApisForSelect } = require('@/lib/autoApiSelector')
     return getAvailableApisForSelect()
   } catch { return [] }
 }
@@ -117,7 +117,6 @@ function cleanHtml(raw: string): string {
 }
 
 async function callApi(api: ApiConfig, prompt: string): Promise<string> {
-  const { executeUnifiedAiCall } = await import('@/lib/autoApiSelector')
   return executeUnifiedAiCall(api, prompt)
 }
 
@@ -381,7 +380,12 @@ export default function TestAndWorksheets({ initialMode = 'exam' }: TestAndWorks
         }
       } else {
         const { searchLibraryContext, buildRagPromptContext } = await import('@/lib/ragEngine')
-        const chunks = searchLibraryContext(queryTopic, { limit: 8 })
+        const chunks = searchLibraryContext(queryTopic, {
+          limit: 8,
+          subjectId: activeProfile.id,
+          gradeYear: grade,
+          classGroupId: header.classGroup || undefined
+        })
         if (chunks.length > 0) {
           libContext = buildRagPromptContext(chunks)
           const topChunk = chunks[0]
@@ -682,14 +686,12 @@ Gere agora todas as ${totalQuestions} questões completas estruturadas em JSON:`
         } catch {}
       }
 
-      // Executa Fact-Check no modo Worksheet
-      if (mode === 'worksheet') {
-        try {
-          setCheckingFact(true)
-          const fc = await runFactCheck(html, grade, 'Exercício', selectedApi)
-          setFactCheck(fc)
-        } catch {} finally { setCheckingFact(false) }
-      }
+      // Executa Fact-Check para validar consistência factual e gabarito
+      try {
+        setCheckingFact(true)
+        const fc = await runFactCheck(html, grade, activeProfile.name || 'Exercício', selectedApi)
+        setFactCheck(fc)
+      } catch {} finally { setCheckingFact(false) }
 
     } catch (err: any) {
       setError(err?.message || 'Erro ao gerar conteúdo.')
@@ -793,17 +795,46 @@ Enunciado: ${currentQuestion.stem}
 ${currentQuestion.options ? `Alternativas:\n${currentQuestion.options.map(o => `${o.letter}) ${o.text}`).join('\n')}` : ''}
 Gabarito atual: ${currentQuestion.answerKey || 'Não definido'}
 
-Retorne a questão reformulada no formato estruturado:`
+Retorne APENAS a questão reformulada exatamente neste formato (sem markdown):
+1. [Enunciado reformulado]
+${currentQuestion.options ? 'A) [Alternativa A]\nB) [Alternativa B]\nC) [Alternativa C]\nD) [Alternativa D]\n' : ''}Gabarito: [Letra ou resposta correta]`
 
     const raw = await callApi(selectedApi, prompt)
-    const newQuestions = parseContentToQuestions(raw)
-    if (newQuestions.length > 0) {
+    let updatedItem: Partial<EditableQuestionItem> | null = null
+    try {
+      const cleaned = raw.replace(/```json\s*/gi, '').replace(/```\s*/gi, '').trim()
+      if (cleaned.startsWith('{') || cleaned.startsWith('[')) {
+        const parsedJson = JSON.parse(cleaned)
+        const obj = Array.isArray(parsedJson) ? parsedJson[0] : (parsedJson.questions?.[0] || parsedJson)
+        if (obj && (obj.stem || obj.statement)) {
+          updatedItem = {
+            stem: obj.stem || obj.statement,
+            options: Array.isArray(obj.options)
+              ? obj.options.map((o: any, idx: number) => ({
+                  letter: (o.letter || o.id || String.fromCharCode(65 + idx)).toUpperCase(),
+                  text: o.text || String(o)
+                }))
+              : undefined,
+            answerKey: obj.correctOptionId || obj.answerKey || obj.answer
+          }
+        }
+      }
+    } catch {}
+
+    if (!updatedItem) {
+      const newQuestions = parseContentToQuestions(raw)
+      if (newQuestions.length > 0) {
+        updatedItem = newQuestions[0]
+      }
+    }
+
+    if (updatedItem) {
       const currentList = questionsList.length > 0 ? [...questionsList] : parseContentToQuestions(result)
       currentList[questionIndex] = {
         ...currentList[questionIndex],
-        stem: newQuestions[0].stem,
-        options: newQuestions[0].options || currentList[questionIndex].options,
-        answerKey: newQuestions[0].answerKey || currentList[questionIndex].answerKey
+        stem: updatedItem.stem || currentList[questionIndex].stem,
+        options: updatedItem.options && updatedItem.options.length > 0 ? updatedItem.options : currentList[questionIndex].options,
+        answerKey: updatedItem.answerKey || currentList[questionIndex].answerKey
       }
       setQuestionsList(currentList)
       setResult(compileQuestionsToHtml(currentList))
@@ -1384,7 +1415,17 @@ Retorne a questão reformulada no formato estruturado:`
             <ExamResultThreeTabs
               result={result}
               questions={questionsList}
-              onQuestionsChange={setQuestionsList}
+              onQuestionsChange={updated => {
+                setQuestionsList(updated)
+                if (countMismatchWarning) {
+                  const totalQ = computeTotalQuestions(questionCounts) || 10
+                  const comp = checkGenerationCompleteness(totalQ, updated)
+                  const crit = updated.flatMap(q => q.haladynaViolations || []).find(v => v.severity === 'error')
+                  if (comp.canAutoSave && !crit) {
+                    setCountMismatchWarning(null)
+                  }
+                }
+              }}
               onContentChange={setResult}
               mode={mode}
               topic={topic}

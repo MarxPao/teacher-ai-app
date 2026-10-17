@@ -107,16 +107,36 @@
 
   /**
    * Coleta nomes de alunos conhecidos de parâmetros ou storage local
+  /**
+   * Remove prefixos comuns de exportação de portais ("Estudante: 28 - ", "Aluno: 01 - ", etc)
+   */
+  function cleanRosterName(name) {
+    if (!name || typeof name !== 'string') return '';
+    return name
+      .replace(/^(?:Estudante|Aluno|Matr[ií]cula)?\s*[:#\d\s\-\.]*[-–:]\s*/i, '')
+      .replace(/^(?:Estudante|Aluno|Matr[ií]cula)\s*:\s*/i, '')
+      .replace(/^\d+[\.\)]\s*/, '')
+      .trim();
+  }
+
+  /**
+   * Coleta nomes de alunos conhecidos de parâmetros ou storage local
    */
   function extractKnownStudentNames(knownStudents) {
     var names = new Set();
+    function addName(raw) {
+      if (!raw || typeof raw !== 'string') return;
+      var trimmed = raw.trim();
+      if (trimmed.length >= 2) names.add(trimmed);
+      var cleaned = cleanRosterName(trimmed);
+      if (cleaned && cleaned.length >= 2) names.add(cleaned);
+    }
+
     if (Array.isArray(knownStudents)) {
       for (var i = 0; i < knownStudents.length; i++) {
         var s = knownStudents[i];
         var n = typeof s === 'string' ? s : (s && s.name ? s.name : '');
-        if (n && n.trim().length >= 2) {
-          names.add(n.trim());
-        }
+        addName(n);
       }
     }
 
@@ -127,9 +147,7 @@
           var parsedMem = JSON.parse(rawMem);
           if (Array.isArray(parsedMem)) {
             parsedMem.forEach(function (m) {
-              if (m.studentName && m.studentName.trim().length >= 2) {
-                names.add(m.studentName.trim());
-              }
+              if (m.studentName) addName(m.studentName);
             });
           }
         }
@@ -139,9 +157,7 @@
           if (Array.isArray(parsedStu)) {
             parsedStu.forEach(function (st) {
               var sname = typeof st === 'string' ? st : (st && st.name ? st.name : '');
-              if (sname && sname.trim().length >= 2) {
-                names.add(sname.trim());
-              }
+              if (sname) addName(sname);
             });
           }
         }
@@ -185,10 +201,29 @@
     studentList.forEach(function (rawName) {
       if (!rawName) return;
       candidateNames.push(rawName);
-      var parts = rawName.trim().split(/\s+/);
-      if (parts.length > 1 && parts[0].length >= 3 && !PEDAGOGICAL_STOPWORDS.has(parts[0].toLowerCase())) {
-        candidateNames.push(parts[0]);
+      var cleaned = cleanRosterName(rawName);
+      if (cleaned && cleaned !== rawName) {
+        candidateNames.push(cleaned);
       }
+
+      var target = cleaned || rawName;
+      var parts = target.trim().split(/\s+/);
+
+      // Composto dos dois primeiros nomes (ex: "Ana Clara", "Maria Clara", "Marcos Paulo")
+      if (parts.length >= 2) {
+        var comp = parts[0] + ' ' + parts[1];
+        if (comp.length >= 5 && !PEDAGOGICAL_STOPWORDS.has(comp.toLowerCase())) {
+          candidateNames.push(comp);
+        }
+      }
+
+      // Adiciona todas as partes individuais de nome com >= 3 caracteres (sem stopwords)
+      parts.forEach(function (p) {
+        var pClean = p.replace(/[^A-Za-zÀ-ÖØ-öø-ÿ]/g, '');
+        if (pClean.length >= 3 && !PEDAGOGICAL_STOPWORDS.has(pClean.toLowerCase())) {
+          candidateNames.push(pClean);
+        }
+      });
     });
 
     candidateNames.sort(function (a, b) { return b.length - a.length; });
@@ -204,23 +239,40 @@
       }
     });
 
+    function buildAccentInsensitiveRegex(cand) {
+      var norm = normalizeText(cand);
+      var pattern = '';
+      for (var i = 0; i < norm.length; i++) {
+        var ch = norm[i];
+        if (ch === 'a') pattern += '[aàáâãäå]';
+        else if (ch === 'e') pattern += '[eèéêë]';
+        else if (ch === 'i') pattern += '[iìíîï]';
+        else if (ch === 'o') pattern += '[oòóôõö]';
+        else if (ch === 'u') pattern += '[uùúûü]';
+        else if (ch === 'c') pattern += '[cç]';
+        else if (ch === 'n') pattern += '[nñ]';
+        else if (/\s/.test(ch)) pattern += '\\s+';
+        else pattern += ch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      }
+      return new RegExp('(^|[^A-Za-zÀ-ÖØ-öø-ÿ0-9])(' + pattern + ')(?=[^A-Za-zÀ-ÖØ-öø-ÿ0-9]|$)', 'gi');
+    }
+
     uniqueCandidates.forEach(function (cand) {
-      if (PEDAGOGICAL_STOPWORDS.has(cand.toLowerCase()) || cand.length < 3) return;
-      var escaped = cand.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      // Procura com limites de palavra ou delimitadores pontuais (/ , - _ =)
-      var regex = new RegExp('(?:\\b|[\\/_=-])(' + escaped + ')(?:\\b|[\\/_=-])', 'gi');
+      var normCand = normalizeText(cand);
+      if (PEDAGOGICAL_STOPWORDS.has(cand.toLowerCase()) || PEDAGOGICAL_STOPWORDS.has(normCand) || normCand.length < 3) return;
+      var regex = buildAccentInsensitiveRegex(cand);
 
       if (regex.test(processed)) {
-        var normCand = normalizeText(cand);
         if (!reverseMapping[normCand]) {
           var token = '[ALUNO_' + (session.studentCounter++) + ']';
           mapping[token] = cand;
           reverseMapping[normCand] = token;
         }
         var assignedToken = reverseMapping[normCand];
-        processed = processed.replace(regex, function (match, p1) {
+        regex.lastIndex = 0;
+        processed = processed.replace(regex, function (match, prefix) {
           piiCount++;
-          return match.replace(p1, assignedToken);
+          return prefix + assignedToken;
         });
       }
     });
@@ -448,24 +500,36 @@
 
     // 2. Validação contra lista de alunos da turma ativa (Canary / Active Class Roster)
     var roster = extractKnownStudentNames(activeRoster);
+    var seenViolations = new Set();
     roster.forEach(function (studentName) {
       if (!studentName || studentName.trim().length < 3) return;
-      var normStudent = normalizeText(studentName);
+      var cleanedName = cleanRosterName(studentName);
+      var targetName = (cleanedName && cleanedName.length >= 3) ? cleanedName : studentName;
+      var normStudent = normalizeText(targetName);
       if (PEDAGOGICAL_STOPWORDS.has(normStudent)) return;
 
       // Busca por nome completo ou por partes individuais (>= 4 letras)
       var escaped = normStudent.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       var fullRegex = new RegExp('(?:\\b|[\\/_=-])' + escaped + '(?:\\b|[\\/_=-])', 'i');
       if (fullRegex.test(lowerNorm)) {
-        violations.push('ACTIVE_ROSTER_STUDENT_DETECTED: ' + studentName);
+        var v = 'ACTIVE_ROSTER_STUDENT_DETECTED: ' + targetName;
+        if (!seenViolations.has(v)) {
+          seenViolations.add(v);
+          violations.push(v);
+        }
       } else {
         var parts = normStudent.split(/\s+/);
         if (parts.length > 1) {
           parts.forEach(function (p) {
-            if (p.length >= 4 && !PEDAGOGICAL_STOPWORDS.has(p)) {
-              var partRegex = new RegExp('(?:\\b|[\\/_=-])' + p + '(?:\\b|[\\/_=-])', 'i');
+            var pClean = p.replace(/[^a-z0-9]/g, '');
+            if (pClean.length >= 4 && !PEDAGOGICAL_STOPWORDS.has(pClean)) {
+              var partRegex = new RegExp('(?:\\b|[\\/_=-])' + pClean + '(?:\\b|[\\/_=-])', 'i');
               if (partRegex.test(lowerNorm)) {
-                violations.push('ACTIVE_ROSTER_STUDENT_PART_DETECTED: ' + p + ' (' + studentName + ')');
+                var vPart = 'ACTIVE_ROSTER_STUDENT_PART_DETECTED: ' + pClean + ' (' + targetName + ')';
+                if (!seenViolations.has(vPart)) {
+                  seenViolations.add(vPart);
+                  violations.push(vPart);
+                }
               }
             }
           });
