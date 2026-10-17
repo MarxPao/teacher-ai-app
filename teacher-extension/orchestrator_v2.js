@@ -646,6 +646,7 @@
           const navFn = globalThis.internalNavigatePortalTab
           const recordedSteps = []
           const executedLabels = []
+          const pageSelectTargets = []
           let failedHop = null
           let currentUrl = startUrl
           let currentPath = startPath
@@ -656,10 +657,10 @@
             const hopTarget = hopTargets[hIdx]
             let navRes = null
             if (typeof navFn === 'function') {
-              navRes = await navFn(tabId, hopTarget, [host])
+              navRes = await navFn(tabId, hopTarget, [host], pageSelectTargets)
             } else {
               navRes = await new Promise((resolve) => {
-                chrome.runtime.sendMessage({ action: 'NAVIGATE_PORTAL_TAB', target: hopTarget, tabId, allowedHosts: [host] }, resolve)
+                chrome.runtime.sendMessage({ action: 'NAVIGATE_PORTAL_TAB', target: hopTarget, tabId, allowedHosts: [host], priorSelectTargets: pageSelectTargets }, resolve)
               })
             }
 
@@ -711,6 +712,7 @@
               : [{ elementText: (navRes.elementText || hopTarget).trim(), tag: navRes.tag || 'a', kind: navRes.kind }]
 
             const isUrlNavigation = nextUrl !== currentUrl && !nextUrl.includes('#')
+            if (isUrlNavigation) pageSelectTargets.length = 0
             for (let sIdx = 0; sIdx < subHops.length; sIdx++) {
               if (recordedSteps.length >= 10) break
               const sh = subHops[sIdx]
@@ -720,10 +722,11 @@
               const isLastSubHop = sIdx === subHops.length - 1
 
               if (sh.kind === 'select') {
+                pageSelectTargets.push(hopTarget)
                 const selCandidates = []
                 if (sh.selectId) selCandidates.push({ strategy: 'css', selector: `#${sh.selectId}` })
                 if (sh.selectName) selCandidates.push({ strategy: 'css', selector: `select[name="${sh.selectName}"]` })
-                if (sh.selectLabel) selCandidates.push({ strategy: 'aria_label', aria_label: sh.selectLabel, match: 'contains' })
+                if (sh.selectAriaLabel) selCandidates.push({ strategy: 'aria_label', aria_label: sh.selectAriaLabel, match: 'contains' })
                 if (selCandidates.length === 0) selCandidates.push({ strategy: 'css', selector: 'select' })
                 recordedSteps.push({
                   id: `s${recordedSteps.length + 1}`,
@@ -738,7 +741,8 @@
                     tag: 'select',
                     ...(sh.selectId ? { id: sh.selectId } : {}),
                     ...(sh.selectName ? { name: sh.selectName } : {}),
-                    ...(sh.selectLabel ? { aria_label: sh.selectLabel } : {}),
+                    ...(sh.selectAriaLabel ? { aria_label: sh.selectAriaLabel } : {}),
+                    label_text: stepText,
                     classes: [],
                     candidates: selCandidates,
                   },

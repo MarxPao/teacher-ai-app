@@ -695,5 +695,108 @@ describe('ExtensionHost Integration: Checkpoint, Timeout e Aborto Seguro', () =>
     expect(r3.selected?.selector).toBe('#filtro-mes')
     expect(r3.matchedOption).toEqual({ value: '07', text: 'Julho' })
   })
+
+  it('21. [Malha Fechada em Cascata AJAX + Botão <input value="Visualizar frequência">] Reconcilia filtro de Disciplina ("LÍNGUA INGLESA") resetado para "TODAS AS DISCIPLINAS" ao mudar Mês ("Julho/2026") e resolve "clique em visualizar"', async () => {
+    const {
+      selectBestDistilledAction,
+      reconcileDomSelectFilters,
+    } = await import('../lib/explorer/domDistiller')
+
+    const snapshot = {
+      urlPath: '/professor_frequencia',
+      stateHash: 'freq_cascade_1',
+      compactPromptText: '[1] <select>Turma</select> [2] <select>Mês</select> [3] <select>Disciplina</select> [4] <select>Ordem</select> [5] <input>Visualizar frequência</input>',
+      elements: [
+        {
+          idx: 1,
+          tag: 'select',
+          role: 'select',
+          label: 'Selecione uma turma',
+          context: 'section',
+          selector: '#turma',
+          isDestructive: false,
+          options: [
+            { value: '', text: 'Selecione uma turma' },
+            { value: '6A', text: '6° ANO ENSINO FUNDAMENTAL II (ENSINO FUNDAMENTAL ANOS FINAIS) A' },
+          ],
+        },
+        {
+          idx: 2,
+          tag: 'select',
+          role: 'select',
+          label: 'Selecione um mês',
+          context: 'section',
+          selector: '#mes',
+          isDestructive: false,
+          options: [
+            { value: '', text: 'Selecione um mês' },
+            { value: '2026-07', text: 'Julho/2026' },
+          ],
+        },
+        {
+          idx: 3,
+          tag: 'select',
+          role: 'select',
+          label: 'TODAS AS DISCIPLINAS',
+          context: 'section',
+          selector: '#disciplina',
+          isDestructive: false,
+          options: [
+            { value: '', text: 'TODAS AS DISCIPLINAS' },
+            { value: 'ING', text: 'LÍNGUA INGLESA' },
+          ],
+        },
+        {
+          idx: 4,
+          tag: 'select',
+          role: 'select',
+          label: 'Ordem do diário',
+          context: 'section',
+          selector: '#ordem',
+          isDestructive: false,
+          options: [
+            { value: 'alfa', text: 'Ordem alfabética' },
+          ],
+        },
+        {
+          idx: 5,
+          tag: 'input',
+          role: 'button',
+          label: 'Visualizar frequência',
+          context: 'section',
+          selector: '#btn-visualizar',
+          isDestructive: false,
+        },
+      ],
+    }
+
+    // Simula o estado onde mudar Mês ("Julho/2026") resetou #disciplina para "" ("TODAS AS DISCIPLINAS")
+    const currentSelectValues: Record<string, string> = {
+      '#turma': '6A',
+      '#mes': '2026-07',
+      '#disciplina': '',
+      '#ordem': 'alfa',
+    }
+
+    const restored = reconcileDomSelectFilters(
+      snapshot as any,
+      ['selecione sexto ano', 'lingua inglesa', 'julho 2026', 'ordem alfabetica'],
+      currentSelectValues
+    )
+    expect(restored).toEqual([
+      {
+        selector: '#disciplina',
+        restoredValue: 'ING',
+        restoredText: 'LÍNGUA INGLESA',
+      },
+    ])
+    expect(currentSelectValues['#disciplina']).toBe('ING')
+
+    const clickRes = selectBestDistilledAction(snapshot as any, 'clique em visualizar')
+    expect(clickRes.selected?.selector).toBe('#btn-visualizar')
+    expect(clickRes.selected?.label).toBe('Visualizar frequência')
+    expect(clickRes.score).toBeGreaterThanOrEqual(80)
+  })
 })
+
 

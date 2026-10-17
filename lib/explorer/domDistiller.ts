@@ -196,9 +196,9 @@ export function normalizePortalGoalVariants(rawGoal: string): { cleanGoal: strin
     .toLowerCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
-    .replace(/^(?:por\s+favor\s+)?(?:selecione|selecionar|escolha|escolher|filtre\s+por|filtrar\s+por|filtrar|ir\s+para|ir\s+em|va\s+para|abrir|abra|clicar\s+em|clique\s+em|acessar|acesse|ver|mostrar|mudar\s+para)\s+/i, '')
-    .replace(/\s+(?:nos\s+filtros|no\s+filtro|na\s+aba|nas\s+abas|no\s+menu|na\s+lista|no\s+campo|do\s+portal|da\s+pagina)$/i, '')
-    .replace(/^(?:a\s+turma|o\s+ano|a\s+disciplina|o\s+mes|a\s+aba|o\s+filtro\s+de|o\s+filtro)\s+/i, '')
+    .replace(/^(?:por\s+favor\s+)?(?:selecione|selecionar|escolha|escolher|filtre\s+por|filtrar\s+por|filtrar|ir\s+para|ir\s+em|va\s+para|abrir|abra|clicar\s+no\s+botao|clique\s+no\s+botao|clicar\s+em|clique\s+em|clicar\s+no|clique\s+no|clicar\s+na|clique\s+na|clicar|clique|aperte|apertar|pressione|pressionar|acessar|acesse|ver|mostrar|mudar\s+para)\s+/i, '')
+    .replace(/\s+(?:nos\s+filtros|no\s+filtro|na\s+aba|nas\s+abas|no\s+menu|na\s+lista|no\s+campo|no\s+botao|do\s+portal|da\s+pagina)$/i, '')
+    .replace(/^(?:a\s+turma|o\s+ano|a\s+disciplina|o\s+mes|a\s+aba|o\s+botao|o\s+filtro\s+de|o\s+filtro)\s+/i, '')
     .trim()
 
   const spaceNormalized = base.replace(/[/\-_,.;:]+/g, ' ').replace(/\s+/g, ' ').trim()
@@ -420,4 +420,35 @@ export function selectBestDistilledAction(
     score: Math.max(0, bestScore),
   }
 }
+
+/**
+ * Reconcilia em malha fechada (Closed-Loop Self-Healing) todos os filtros <select>
+ * previamente selecionados na página caso um filtro dependente subsequente (ex.: Mês -> Disciplina)
+ * tenha resetado o valor via AJAX.
+ */
+export function reconcileDomSelectFilters(
+  snapshot: DistilledDomSnapshot,
+  priorSelectGoals: string[],
+  currentSelectValues: Record<string, string>
+): Array<{ selector: string; restoredValue: string; restoredText: string }> {
+  const restored: Array<{ selector: string; restoredValue: string; restoredText: string }> = []
+  if (!priorSelectGoals || priorSelectGoals.length === 0) return restored
+
+  for (const goal of priorSelectGoals) {
+    const match = selectBestDistilledAction(snapshot, goal)
+    if (!match.selected || match.selected.tag !== 'select' || !match.matchedOption) continue
+    const selector = match.selected.selector
+    const curVal = currentSelectValues[selector] ?? ''
+    if (curVal !== match.matchedOption.value && curVal !== match.matchedOption.text) {
+      currentSelectValues[selector] = match.matchedOption.value
+      restored.push({
+        selector,
+        restoredValue: match.matchedOption.value,
+        restoredText: match.matchedOption.text,
+      })
+    }
+  }
+  return restored
+}
+
 

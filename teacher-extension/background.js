@@ -927,7 +927,7 @@ async function waitForPageSettled(tabId, maxWaitMs = 2500) {
   await new Promise(r => setTimeout(r, 350));
 }
 
-async function internalNavigatePortalTab(targetTabId, targetKeyword, allowedHosts = []) {
+async function internalNavigatePortalTab(targetTabId, targetKeyword, allowedHosts = [], priorSelectTargets = []) {
   const keyword = (targetKeyword || '').trim().toLowerCase()
     .replace(/\s+\b(?:e|e\s+depois|depois|em\s+seguida|a[ií])\b.*$/i, '')
     .replace(/\s+e$/i, '')
@@ -936,14 +936,17 @@ async function internalNavigatePortalTab(targetTabId, targetKeyword, allowedHost
   try {
     const results = await chrome.scripting.executeScript({
       target: { tabId: targetTabId },
-      args: [keyword, Array.isArray(allowedHosts) ? allowedHosts : []],
-      func: async (kw, allowedHostList) => {
-        const rawNorm = kw.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
-        const cleanKey = rawNorm
-          .replace(/^(?:por\s+favor\s+)?(?:selecione|selecionar|escolha|escolher|filtre\s+por|filtrar\s+por|filtrar|ir\s+para|ir\s+em|va\s+para|abrir|abra|clicar\s+em|clique\s+em|acessar|acesse|ver|mostrar|mudar\s+para)\s+/i, '')
-          .replace(/\s+(?:nos\s+filtros|no\s+filtro|na\s+aba|nas\s+abas|no\s+menu|na\s+lista|no\s+campo|do\s+portal|da\s+pagina)$/i, '')
-          .replace(/^(?:a\s+turma|o\s+ano|a\s+disciplina|o\s+mes|a\s+aba|o\s+filtro\s+de|o\s+filtro)\s+/i, '')
-          .trim() || rawNorm;
+      args: [keyword, Array.isArray(allowedHosts) ? allowedHosts : [], Array.isArray(priorSelectTargets) ? priorSelectTargets : []],
+      func: async (kw, allowedHostList, priorTargets) => {
+        const stripGoalPrefix = (rawStr) => {
+          const rn = String(rawStr || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+          return rn
+            .replace(/^(?:por\s+favor\s+)?(?:selecione|selecionar|escolha|escolher|filtre\s+por|filtrar\s+por|filtrar|ir\s+para|ir\s+em|va\s+para|abrir|abra|clicar\s+no\s+botao|clique\s+no\s+botao|clicar\s+em|clique\s+em|clicar\s+no|clique\s+no|clicar\s+na|clique\s+na|clicar|clique|aperte|apertar|pressione|pressionar|acessar|acesse|ver|mostrar|mudar\s+para)\s+/i, '')
+            .replace(/\s+(?:nos\s+filtros|no\s+filtro|na\s+aba|nas\s+abas|no\s+menu|na\s+lista|no\s+campo|no\s+botao|do\s+portal|da\s+pagina)$/i, '')
+            .replace(/^(?:a\s+turma|o\s+ano|a\s+disciplina|o\s+mes|a\s+aba|o\s+botao|o\s+filtro\s+de|o\s+filtro)\s+/i, '')
+            .trim() || rn;
+        };
+        const cleanKey = stripGoalPrefix(kw);
         const destructivePattern = /\b(excluir|deletar|apagar|remover|demitir|formatar|pagar|transferir|salvar|gravar|enviar|publicar|confirmar|fechar|fechamento|consolidar|finalizar|encerrar|concluir|cancelar|aprovar|reprovar|assinar|homologar|bloquear|desbloquear|resetar|sair|logout)\b/i;
         if (destructivePattern.test(cleanKey)) {
           return { sucesso: false, mensagem: `Ação bloqueada por segurança durante navegação autônoma: '${kw}'.` };
@@ -993,7 +996,7 @@ async function internalNavigatePortalTab(targetTabId, targetKeyword, allowedHost
         };
 
         const collectClickableCandidates = (root) => {
-          const selector = 'a, button, [role="tab"], [role="menuitem"], [role="button"], [role="option"], .tab, .tab-btn, .nav-link, li, span';
+          const selector = 'a, button, input[type="button"], input[type="submit"], [onclick], [role="tab"], [role="menuitem"], [role="button"], [role="option"], .btn, .button, .tab, .tab-btn, .nav-link, li, span';
           const list = Array.from(root.querySelectorAll(selector));
           const all = Array.from(root.querySelectorAll('*'));
           for (const node of all) {
@@ -1066,9 +1069,8 @@ async function internalNavigatePortalTab(targetTabId, targetKeyword, allowedHost
 
           for (const el of candidates) {
             if (el.offsetParent === null && el.offsetWidth === 0 && el.offsetHeight === 0) continue;
-            if (el.tagName === 'INPUT' && el.type === 'submit') continue;
 
-            const text = (el.innerText || el.textContent || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+            const text = (el.innerText || el.textContent || el.value || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
             const aria = (el.getAttribute('aria-label') || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
             const title = (el.getAttribute('title') || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
             const href = (el.getAttribute('href') || '').toLowerCase();
@@ -1110,7 +1112,7 @@ async function internalNavigatePortalTab(targetTabId, targetKeyword, allowedHost
               if (el.getAttribute('role') === 'tab' || el.classList.contains('tab') || el.classList.contains('nav-link')) {
                 score += 15;
               }
-              if (el.tagName === 'A' || el.tagName === 'BUTTON') {
+              if (el.tagName === 'A' || el.tagName === 'BUTTON' || el.tagName === 'INPUT') {
                 score += 10;
               }
               // Anti-Loop (Browser-Use pattern): penaliza elementos já clicados para o mesmo objetivo nesta tela
@@ -1127,6 +1129,32 @@ async function internalNavigatePortalTab(targetTabId, targetKeyword, allowedHost
           return bestEl;
         };
 
+        const applySelectAndWait = async (sel, opt) => {
+          try {
+            if (typeof opt.index === 'number' && opt.index >= 0) sel.selectedIndex = opt.index;
+            opt.selected = true;
+            const ns = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value')?.set;
+            if (ns) ns.call(sel, opt.value); else sel.value = opt.value;
+          } catch { sel.value = opt.value; }
+          let mutated = false;
+          const obs = new MutationObserver(() => { mutated = true; });
+          try { obs.observe(document.body, { childList: true, subtree: true }); } catch {}
+          sel.dispatchEvent(new Event('input', { bubbles: true }));
+          sel.dispatchEvent(new Event('change', { bubbles: true }));
+          await new Promise(r => setTimeout(r, 450));
+          if (mutated) await new Promise(r => setTimeout(r, 400));
+          try { obs.disconnect(); } catch {}
+        };
+        const reconcilePriorSelects = async (targets) => {
+          for (const rawT of (targets || [])) {
+            const pk = stripGoalPrefix(rawT);
+            const m = pk ? findBestSelectMatch(pk) : null;
+            if (m?.sel && m?.opt && m.sel.options?.[m.sel.selectedIndex] !== m.opt && m.sel.value !== m.opt.value) {
+              await applySelectAndWait(m.sel, m.opt);
+            }
+          }
+        };
+
         const hops = [];
         let selectMatch = null;
         let bestElement = null;
@@ -1141,19 +1169,13 @@ async function internalNavigatePortalTab(targetTabId, targetKeyword, allowedHost
           const { sel, opt } = selectMatch;
           const optText = (opt.text || opt.label || kw).trim();
           const placeholderOpt = sel.options && sel.options[0] ? (sel.options[0].text || '').trim() : '';
-          const selectLabel = sel.getAttribute('aria-label') || sel.getAttribute('title') || placeholderOpt || sel.name || sel.id || 'Filtro';
+          const selectAriaLabel = sel.getAttribute('aria-label') || '';
+          const selectLabel = selectAriaLabel || sel.getAttribute('title') || placeholderOpt || sel.name || sel.id || 'Filtro';
           sel.scrollIntoView({ behavior: 'smooth', block: 'center' });
           sel.style.outline = '2px solid #38bdf8';
-          try {
-            opt.selected = true;
-            const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value')?.set;
-            if (nativeSetter) nativeSetter.call(sel, opt.value);
-            else sel.value = opt.value;
-          } catch { sel.value = opt.value; }
-          sel.dispatchEvent(new Event('input', { bubbles: true }));
-          sel.dispatchEvent(new Event('change', { bubbles: true }));
-          await new Promise(r => setTimeout(r, 350));
-          const hop = { kind: 'select', elementText: optText, selectValue: String(opt.value ?? ''), selectId: sel.id || '', selectName: sel.name || '', selectLabel, tag: 'SELECT', target: kw };
+          await applySelectAndWait(sel, opt);
+          await reconcilePriorSelects([...(priorTargets || []), kw]);
+          const hop = { kind: 'select', elementText: optText, selectValue: String(opt.value ?? ''), selectId: sel.id || '', selectName: sel.name || '', selectAriaLabel, selectLabel, tag: 'SELECT', target: kw };
           return { sucesso: true, kind: 'select', elementText: optText, tag: 'SELECT', target: kw, hops: [hop] };
         }
 
@@ -1162,7 +1184,7 @@ async function internalNavigatePortalTab(targetTabId, targetKeyword, allowedHost
           const parentMenuKeywords = ['diario', 'academico', 'ensino', 'avaliacao', 'turma', 'aluno', 'menu', 'secretaria'];
           const expandableMenus = collectClickableCandidates(document).filter(el => {
             if (el.offsetParent === null && el.offsetWidth === 0 && el.offsetHeight === 0) return false;
-            const txt = (el.innerText || el.textContent || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+            const txt = (el.innerText || el.textContent || el.value || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
             if (destructivePattern.test(txt)) return false;
             const isExpandable =
               el.getAttribute('aria-expanded') === 'false' ||
@@ -1189,6 +1211,8 @@ async function internalNavigatePortalTab(targetTabId, targetKeyword, allowedHost
         if (!bestElement) {
           return { sucesso: false, mensagem: `Não encontrei nenhuma aba ou link correspondente a '${kw}'.` };
         }
+
+        await reconcilePriorSelects(priorTargets || []);
 
         const origTransition = bestElement.style.transition;
         const origOutline = bestElement.style.outline;
@@ -1219,7 +1243,7 @@ async function internalNavigatePortalTab(targetTabId, targetKeyword, allowedHost
         }, 1500);
 
         const finalHop = {
-          elementText: (bestElement.innerText || bestElement.textContent || kw).trim(),
+          elementText: (bestElement.innerText || bestElement.textContent || bestElement.value || kw).trim(),
           tag: bestElement.tagName,
           target: kw
         };
