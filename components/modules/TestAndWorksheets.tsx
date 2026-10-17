@@ -460,10 +460,11 @@ export default function TestAndWorksheets({ initialMode = 'exam' }: TestAndWorks
       let prompt = ''
 
       if (mode === 'exam') {
-        // PROMPT DE PROVA OFICIAL
-        prompt = `Você é um examinador sênior especialista em Psicometria e elaboração científica de itens de avaliação para ${activeProfile.name}. Crie uma PROVA COMPLETA de altíssimo rigor psicométrico em HTML limpo.
+        // PROMPT DE PROVA OFICIAL (ESTRUTURADO PARA JSON)
+        prompt = `Você é um examinador sênior especialista em Psicometria e elaboração científica de itens de avaliação para ${activeProfile.name}. Crie uma PROVA COMPLETA de altíssimo rigor psicométrico.
 ${librarySection}
 ESPECIFICAÇÕES DA AVALIAÇÃO:
+- Título: ${effectiveTitle}
 - Matéria: ${activeProfile.name}
 - Escola: ${header.school || 'Escola'}
 - Professor(a): ${header.teacher || 'Professor(a)'}
@@ -472,6 +473,7 @@ ESPECIFICAÇÕES DA AVALIAÇÃO:
 - Quantidade Obrigatória: EXATAMENTE ${totalQuestions} QUESTÕES COMPLETAS (1 a ${totalQuestions})
 - Tópico Central: ${topic || 'Conteúdo bimestral'}
 - Seções do Exame: ${sections.join(', ')}
+- Pontuação Total: ${totalScore} pts | Duração: ${examDuration} min
 - ${stemInstruction}
 - ${optionInstruction}
 ${distributionText}
@@ -486,21 +488,15 @@ ${fullBlueprintPrompt}
 - Dificuldade: Fácil (${diffEasy}%), Médio (${diffMedium}%), Difícil (${diffHard}%), Desafio (${diffChallenge}%)
 ${distractorBlock}
 ${includeUDL ? `\n=== ACESSIBILIDADE UNIVERSAL & UDL (ISO 24495-1 / CAST 2018) ===
-Para cada questão, gere também dentro do container da questão:
-- <div class="udl-plain-language" style="display:none;" data-udl="plain">Versão em Linguagem Simples/Clara (frases curtas, ordem direta, sem rebuscamento)</div>
-- <div class="udl-audio-descriptive" style="display:none;" data-udl="audio">Transcrição descritiva acessível para leitor de tela</div>\n` : ''}
+Inclua no enunciado linguagem clara e acessível quando apropriado.\n` : ''}
 
-ESTRUTURA OBRIGATÓRIA:
-1. Container: <div class="exam-document" data-total-score="${totalScore}" data-duration-minutes="${examDuration}">
-2. Para cada seção: <h2> com título da seção e <div class="question-item"> para cada questão numerada.
-3. Ao final: <h2>Gabarito & Critérios de Correção</h2> com respostas e explicações de distratores.
-
-Gere agora todas as ${totalQuestions} questões completas em HTML limpo:`
+Gere agora todas as ${totalQuestions} questões completas estruturadas em JSON:`
       } else {
-        // PROMPT DE LISTA DE EXERCÍCIOS / WORKSHEET
-        prompt = `Você é um professor especialista em ${activeProfile.name}, Design Instrucional e Aprendizagem Ativa. Crie uma LISTA DE EXERCÍCIOS / WORKSHEET rica e contextualizada em HTML limpo.
+        // PROMPT DE LISTA DE EXERCÍCIOS / WORKSHEET (ESTRUTURADO PARA JSON)
+        prompt = `Você é um professor especialista em ${activeProfile.name}, Design Instrucional e Aprendizagem Ativa. Crie uma LISTA DE EXERCÍCIOS / WORKSHEET rica e contextualizada.
 ${librarySection}
 ESPECIFICAÇÕES DO EXERCÍCIO:
+- Título: ${effectiveTitle}
 - Matéria: ${activeProfile.name}
 - Escola: ${header.school || 'Escola'}
 - Professor(a): ${header.teacher || 'Professor(a)'}
@@ -518,12 +514,7 @@ ${methInstructions}
 
 ${fullBlueprintPrompt}
 
-ESTRUTURA OBRIGATÓRIA:
-1. Comece com <h2>${effectiveTitle}</h2>
-2. Cada questão numerada de 1 a ${totalQuestions} com enunciado claro e contextualizado.
-3. Ao final: <h2>Gabarito Comentado</h2> cobrindo todas as questões.
-
-Gere agora todas as ${totalQuestions} questões completas em HTML limpo:`
+Gere agora todas as ${totalQuestions} questões completas estruturadas em JSON:`
       }
 
       setGenerationProgressMsg('Solicitando questões estruturadas em JSON à LLM...')
@@ -531,14 +522,16 @@ Gere agora todas as ${totalQuestions} questões completas em HTML limpo:`
       setIsLegacyParsed(false)
       setBlockedQuestions([])
 
-      // Executa geração client-side com validação atômica por item e reentativas isoladas
+      // Executa geração client-side com validação atômica por item, reparo de truncamento e continuação
       const examGenResult = await generateExam({
         callApi: (p) => callApi(selectedApi, p),
         buildPrompt: () => prompt,
+        totalQuestions,
         onProgress: ({ message }) => setGenerationProgressMsg(message),
         legacyParser: (rawText) => {
           const legacyItems = parseContentToQuestions(cleanHtml(rawText), activeProvenance)
-          return legacyItems.map(item => {
+          const validLegacy: Question[] = []
+          for (const item of legacyItems) {
             const options = (item.options || []).map(opt => ({
               id: opt.letter.toUpperCase(),
               text: opt.text
@@ -548,20 +541,44 @@ Gere agora todas as ${totalQuestions} questões completas em HTML limpo:`
                 ? 'true_false'
                 : item.type === 'gap_fill'
                 ? 'fill_in_blank'
-                : options.length > 0
+                : options.length >= 2
                 ? 'multiple_choice'
                 : 'open_ended'
 
-            return QuestionSchema.parse({
+            const rawKey = (item.answerKey || '').trim()
+            const extractedLetter = rawKey.match(/^([A-EVF])\b/i)?.[1]?.toUpperCase() || rawKey.match(/\b([A-EVF])\b/i)?.[1]?.toUpperCase()
+            const validOptionIds = options.map(o => o.id.toUpperCase())
+            const resolvedCorrectId =
+              extractedLetter && validOptionIds.includes(extractedLetter)
+                ? extractedLetter
+                : (options[0]?.id || rawKey || 'A')
+
+            const candidate = {
               id: item.id || `legacy_q_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
               type: qType,
-              stem: item.stem,
-              options,
-              correctOptionId: item.answerKey || (options[0]?.id || 'A'),
-              rationale: item.explanation || '',
+              stem: (item.stem || '').trim(),
+              options: qType === 'open_ended' || qType === 'fill_in_blank' ? [] : options,
+              correctOptionId: resolvedCorrectId,
+              rationale: item.explanation || rawKey || '',
               provenance: item.provenance
-            })
-          })
+            }
+            const parsedItem = QuestionSchema.safeParse(candidate)
+            if (parsedItem.success) {
+              validLegacy.push(parsedItem.data)
+            } else if (candidate.stem.length > 0) {
+              // Fallback para item aberto caso as opções estejam malformadas no texto legado
+              const openFallback = QuestionSchema.safeParse({
+                ...candidate,
+                type: 'open_ended',
+                options: [],
+                correctOptionId: resolvedCorrectId || 'A'
+              })
+              if (openFallback.success) {
+                validLegacy.push(openFallback.data)
+              }
+            }
+          }
+          return validLegacy
         }
       })
 

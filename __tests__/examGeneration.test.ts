@@ -276,4 +276,51 @@ Espero que atenda aos critérios!
     expect(content).toMatch(/import\s*\{[^}]*generateExam[^}]*\}\s*from\s*['"]@\/lib\/examGeneration['"]/)
     expect(content).toContain('generateExam(')
   })
+
+  // 9. Resgate de JSON truncado por limite de tokens
+  it('T3.9: deve resgatar questões íntegras quando o array JSON é cortado no meio por limite de tokens', async () => {
+    const truncatedJson = '```json\n[\n' +
+      JSON.stringify(validQuestion1) + ',\n' +
+      JSON.stringify(validQuestion2) + ',\n' +
+      '  { "id": "q3", "type": "multiple_choice", "stem": "Questão cortada no meio sem fechar'
+
+    const mockCallApi = vi.fn().mockResolvedValue(truncatedJson)
+    const result = await generateExam({
+      callApi: mockCallApi,
+      buildPrompt: () => 'Gere 3 questões'
+    })
+
+    expect(result.legacyParsed).toBe(false)
+    expect(result.questions).toHaveLength(2)
+    expect(result.questions[0].id).toBe('q1')
+    expect(result.questions[1].id).toBe('q2')
+  })
+
+  // 10. Continuação automática de lote para provas longas (ex: 16 questões)
+  it('T3.10: deve completar automaticamente as 16 questões em lote complementar quando a 1ª chamada trunca em 10', async () => {
+    const makeQ = (n: number): Question => ({
+      ...validQuestion1,
+      id: `q${n}`,
+      stem: `Enunciado inédito da questão número ${n}?`
+    })
+
+    const batch1 = Array.from({ length: 10 }, (_, i) => makeQ(i + 1))
+    const batch2 = Array.from({ length: 6 }, (_, i) => makeQ(i + 11))
+
+    const mockCallApi = vi.fn()
+      .mockResolvedValueOnce(JSON.stringify(batch1))
+      .mockResolvedValueOnce(JSON.stringify(batch2))
+
+    const result = await generateExam({
+      callApi: mockCallApi,
+      buildPrompt: () => 'Gere 16 questões',
+      totalQuestions: 16
+    })
+
+    expect(mockCallApi).toHaveBeenCalledTimes(2)
+    expect(result.callsUsed).toBe(2)
+    expect(result.legacyParsed).toBe(false)
+    expect(result.questions).toHaveLength(16)
+    expect(result.questions[15].id).toBe('q16')
+  })
 })

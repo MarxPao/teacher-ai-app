@@ -37,6 +37,7 @@ export interface ExamGenerationProgress {
 export interface GenerateExamOptions {
   callApi: (prompt: string) => Promise<string>
   buildPrompt: () => string
+  totalQuestions?: number
   limits?: ExamGenerationLimits
   onProgress?: (progress: ExamGenerationProgress) => void
   legacyParser?: (raw: string) => Question[]
@@ -83,7 +84,32 @@ Regras Invioláveis do Schema:
 `
 
 /**
- * Extrai e desserializa JSON de texto livre, tolerando cercas de código ```json e markdown.
+ * Repara um array JSON truncado por limite de tokens da LLM, resgatando
+ * todos os objetos de questão que foram fechados de forma íntegra antes do corte.
+ */
+export function repairTruncatedJsonArray(rawText: string): any[] | null {
+  const firstBracket = rawText.indexOf('[')
+  if (firstBracket === -1) return null
+
+  const arraySlice = rawText.slice(firstBracket)
+  let searchPos = arraySlice.lastIndexOf('}')
+
+  while (searchPos > 0) {
+    const candidate = arraySlice.slice(0, searchPos + 1).trim().replace(/,\s*$/, '') + '\n]'
+    try {
+      const parsed = JSON.parse(candidate)
+      if (Array.isArray(parsed) && parsed.length > 0 && typeof parsed[0] === 'object' && parsed[0] !== null) {
+        return parsed
+      }
+    } catch {}
+    searchPos = arraySlice.lastIndexOf('}', searchPos - 1)
+  }
+
+  return null
+}
+
+/**
+ * Extrai e desserializa JSON de texto livre, tolerando cercas de código ```json, markdown e truncamento parcial.
  */
 export function extractJsonFromText(raw: string): any {
   if (!raw || typeof raw !== 'string') {
@@ -92,10 +118,12 @@ export function extractJsonFromText(raw: string): any {
 
   let text = raw.trim()
 
-  // 1. Remove cercas de código markdown (```json ... ``` ou ``` ... ```)
+  // 1. Remove cercas de código markdown fechadas (```json ... ```) ou abertas sem fechamento por corte de tokens
   const codeBlockMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/i)
   if (codeBlockMatch && codeBlockMatch[1]) {
     text = codeBlockMatch[1].trim()
+  } else if (/^```(?:json)?/i.test(text)) {
+    text = text.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim()
   }
 
   // 2. Tenta parse direto
@@ -122,6 +150,12 @@ export function extractJsonFromText(raw: string): any {
     try {
       return JSON.parse(candidate)
     } catch {}
+  }
+
+  // 4. Tenta reparar array JSON truncado por limite de tokens (resgata objetos completos antes do corte)
+  const repairedArray = repairTruncatedJsonArray(text)
+  if (repairedArray && repairedArray.length > 0) {
+    return repairedArray
   }
 
   throw new Error('Não foi possível identificar JSON válido na resposta da LLM')
@@ -151,12 +185,23 @@ ${JSON_EXAM_SCHEMA_INSTRUCTION}
 `
 }
 
+function normalizeRawJsonToArray(rawJson: any): any[] {
+  if (Array.isArray(rawJson)) return rawJson
+  if (rawJson && typeof rawJson === 'object') {
+    if (Array.isArray(rawJson.questions)) return rawJson.questions
+    if (Array.isArray(rawJson.items)) return rawJson.items
+    return [rawJson]
+  }
+  return []
+}
+
 /**
- * Executa a geração da avaliação com validação atômica por item e reentativas isoladas.
+ * Executa a geração da avaliação com validação atômica por item, reparo de truncamento e continuação automática.
  */
 export async function generateExam({
   callApi,
   buildPrompt,
+  totalQuestions,
   limits,
   onProgress,
   legacyParser
@@ -205,20 +250,7 @@ export async function generateExam({
     }
   }
 
-  // Normaliza estrutura para array de itens
-  let rawItems: any[] = []
-  if (Array.isArray(rawJson)) {
-    rawItems = rawJson
-  } else if (rawJson && typeof rawJson === 'object') {
-    if (Array.isArray(rawJson.questions)) {
-      rawItems = rawJson.questions
-    } else if (Array.isArray(rawJson.items)) {
-      rawItems = rawJson.items
-    } else {
-      // Objeto com uma única questão
-      rawItems = [rawJson]
-    }
-  }
+  const rawItems = normalizeRawJsonToArray(rawJson)
 
   if (rawItems.length === 0) {
     return {
@@ -232,67 +264,115 @@ export async function generateExam({
   const validQuestions: Question[] = []
   const blocked: BlockedQuestion[] = []
 
-  // 3. Validação questão por questão
-  for (let i = 0; i < rawItems.length; i++) {
-    const originalItem = rawItems[i]
-    let currentItem = originalItem
-    let itemValid = false
-    let lastErrors: string[] = []
-    let questionRetries = 0
+  const validateAndCollectItems = async (itemsToValidate: any[], indexOffset: number) => {
+    for (let i = 0; i < itemsToValidate.length; i++) {
+      const globalIdx = indexOffset + i
+      const originalItem = itemsToValidate[i]
+      let currentItem = originalItem
+      let itemValid = false
+      let lastErrors: string[] = []
+      let questionRetries = 0
 
-    // Validação inicial
-    let validationResult = QuestionSchema.safeParse(currentItem)
-    if (validationResult.success) {
-      validQuestions.push(validationResult.data)
-      itemValid = true
-    } else {
-      lastErrors = validationResult.error.issues.map(issue => issue.message)
-    }
+      // Validação inicial
+      const validationResult = QuestionSchema.safeParse(currentItem)
+      if (validationResult.success) {
+        validQuestions.push(validationResult.data)
+        itemValid = true
+      } else {
+        lastErrors = validationResult.error.issues.map(issue => issue.message)
+      }
 
-    // 4. Reentativas isoladas se inválido
-    while (
-      !itemValid &&
-      questionRetries < maxRetriesPerQuestion &&
-      totalRetriesUsed < maxRetriesPerExam
-    ) {
-      questionRetries++
-      totalRetriesUsed++
-      callsUsed++
+      // 4. Reentativas isoladas se inválido
+      while (
+        !itemValid &&
+        questionRetries < maxRetriesPerQuestion &&
+        totalRetriesUsed < maxRetriesPerExam
+      ) {
+        questionRetries++
+        totalRetriesUsed++
+        callsUsed++
 
-      onProgress?.({
-        questionIndex: i + 1,
-        attempt: questionRetries,
-        maxAttempts: maxRetriesPerQuestion,
-        message: `regenerando questão ${i + 1}, tentativa ${questionRetries} de ${maxRetriesPerQuestion}`
-      })
+        onProgress?.({
+          questionIndex: globalIdx + 1,
+          attempt: questionRetries,
+          maxAttempts: maxRetriesPerQuestion,
+          message: `regenerando questão ${globalIdx + 1}, tentativa ${questionRetries} de ${maxRetriesPerQuestion}`
+        })
 
-      const retryPrompt = buildQuestionRetryPrompt(currentItem, lastErrors, i + 1)
-      try {
-        const retryRaw = await callApi(retryPrompt)
-        const parsedRetry = extractJsonFromText(retryRaw)
-        const retryCandidate = Array.isArray(parsedRetry) ? parsedRetry[0] : parsedRetry
+        const retryPrompt = buildQuestionRetryPrompt(currentItem, lastErrors, globalIdx + 1)
+        try {
+          const retryRaw = await callApi(retryPrompt)
+          const parsedRetry = extractJsonFromText(retryRaw)
+          const retryCandidate = Array.isArray(parsedRetry) ? parsedRetry[0] : parsedRetry
 
-        const retryValidation = QuestionSchema.safeParse(retryCandidate)
-        if (retryValidation.success) {
-          validQuestions.push(retryValidation.data)
-          itemValid = true
-          break
-        } else {
-          currentItem = retryCandidate
-          lastErrors = retryValidation.error.issues.map(iss => iss.message)
+          const retryValidation = QuestionSchema.safeParse(retryCandidate)
+          if (retryValidation.success) {
+            validQuestions.push(retryValidation.data)
+            itemValid = true
+            break
+          } else {
+            currentItem = retryCandidate
+            lastErrors = retryValidation.error.issues.map(iss => iss.message)
+          }
+        } catch (retryErr: any) {
+          lastErrors.push(`Falha na chamada de reentativa: ${retryErr.message || String(retryErr)}`)
         }
-      } catch (retryErr: any) {
-        lastErrors.push(`Falha na chamada de reentativa: ${retryErr.message || String(retryErr)}`)
+      }
+
+      // 5. Se após reentativas ainda for inválida, é bloqueada
+      if (!itemValid) {
+        blocked.push({
+          index: globalIdx + 1,
+          rawItem: currentItem,
+          reason: lastErrors.join('; ') || 'Validação psicométrica falhou e limites de reentativa foram esgotados'
+        })
       }
     }
+  }
 
-    // 5. Se após reentativas ainda for inválida, é bloqueada
-    if (!itemValid) {
-      blocked.push({
-        index: i + 1,
-        rawItem: currentItem,
-        reason: lastErrors.join('; ') || 'Validação psicométrica falhou e limites de reentativa foram esgotados'
-      })
+  // 3. Valida o lote inicial
+  await validateAndCollectItems(rawItems, 0)
+
+  // 6. Continuação automática por lote se a LLM truncou a quantidade total solicitada (ex: gerou 10 de 16 por limite de tokens)
+  let continuationBatch = 0
+  const maxContinuationBatches = 2
+  while (
+    typeof totalQuestions === 'number' &&
+    totalQuestions > 0 &&
+    validQuestions.length > 0 &&
+    validQuestions.length + blocked.length < totalQuestions &&
+    continuationBatch < maxContinuationBatches
+  ) {
+    continuationBatch++
+    const remainingCount = totalQuestions - (validQuestions.length + blocked.length)
+    const startNumber = validQuestions.length + blocked.length + 1
+    const existingStemsSummary = validQuestions
+      .slice(-8)
+      .map((q, idx) => `${ idx + 1 }. ${ q.stem.slice(0, 90) }`)
+      .join('\n')
+
+    onProgress?.({
+      message: `Complementando lote (${validQuestions.length}/${totalQuestions} concluídas) — gerando ${remainingCount} questão(ões) restante(s)...`
+    })
+
+    const continuationPrompt = `${buildPrompt()}
+
+=== CONTINUAÇÃO DE LOTE (${startNumber} a ${totalQuestions}) ===
+As primeiras ${validQuestions.length} questões já foram geradas:
+${existingStemsSummary}
+
+Gere AGORA EXCLUSIVAMENTE as ${remainingCount} questões restantes (questões de número ${startNumber} até ${totalQuestions}), inéditas e sem repetir os enunciados acima.
+${JSON_EXAM_SCHEMA_INSTRUCTION}`
+
+    callsUsed++
+    try {
+      const contRaw = await callApi(continuationPrompt)
+      const contJson = extractJsonFromText(contRaw)
+      const contItems = normalizeRawJsonToArray(contJson).slice(0, remainingCount)
+      if (contItems.length === 0) break
+      await validateAndCollectItems(contItems, validQuestions.length + blocked.length)
+    } catch {
+      break
     }
   }
 

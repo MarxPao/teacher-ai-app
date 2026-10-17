@@ -5,7 +5,7 @@ import { getSubjectProfileById } from '@/lib/subjectProfile'
 import '@/lib/subjects/english'
 import '@/lib/subjects/portuguese'
 import { NextRequest } from 'next/server'
-import { guardEgressFetch, EgressSecurityError } from '@/lib/piiMasking'
+import { guardEgressFetch, EgressSecurityError, maskChatHistory, unmaskPii } from '@/lib/piiMasking'
 
 function getEnvKey(provider: string): string {
   if (provider === 'groq') return process.env.GROQ_API_KEY || process.env.GROQ_KEY || ''
@@ -364,12 +364,15 @@ async function callProviderWithFallback(
   maxTokens: number,
   temperature: number,
   allUserKeys: Record<string, string>,
-  activeRoster?: Array<{ id?: string; name: string } | string>
+  activeRoster?: Array<{ id?: string; name: string } | string>,
+  disableTools?: boolean
 ): Promise<Response> {
 
   const errorLogs: string[] = []
   const providersToTry = [provider, 'gemini', 'groq', 'deepseek', 'zhipu', 'siliconflow', 'openrouter', 'openai', 'anthropic'].filter((v, i, a) => a && a.indexOf(v) === i)
 
+  const lastUser = optimizedMessages.filter(m => m.role === 'user').slice(-1)[0]?.content || ''
+  const needsTools = !disableTools && !/FORMATO DE SAÍDA OBRIGATÓRIO \(JSON PURO\)|examinador|redação|avalie|critérios|rubrica|retorne estritamente|json no formato|Crie uma LISTA DE EXERCÍCIOS|Crie uma PROVA COMPLETA/i.test(lastUser)
 
   for (const p of providersToTry) {
     const key = (p === provider ? apiKey : '') ||
@@ -380,14 +383,19 @@ async function callProviderWithFallback(
 
     try {
       if (p === 'anthropic') {
+        const anthropicBody: Record<string, unknown> = {
+          model: 'claude-3-5-sonnet-20241022',
+          max_tokens: maxTokens,
+          system: systemPrompt,
+          messages: toAnthropicMessages(optimizedMessages),
+        }
+        if (needsTools) {
+          anthropicBody.tools = AGENT_TOOLS.map(t => ({ name: t.name, description: t.description, input_schema: t.input_schema }))
+        }
         const response = await guardEgressFetch('https://api.anthropic.com/v1/messages', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
-          body: JSON.stringify({
-            model: 'claude-opus-4-5', max_tokens: maxTokens, system: systemPrompt,
-            tools: AGENT_TOOLS.map(t => ({ name: t.name, description: t.description, input_schema: t.input_schema })),
-            messages: toAnthropicMessages(optimizedMessages),
-          }),
+          body: JSON.stringify(anthropicBody),
         }, activeRoster)
         if (response.ok) {
           const data = await response.json()
@@ -398,18 +406,30 @@ async function callProviderWithFallback(
       }
 
       if (p === 'gemini') {
-        // Modelos Gemini 3.x ativos e validados na API (200 OK)
+        // Modelos Gemini 3.x + fallback 2.x/latest validados na API
         const geminiModels = [
           'gemini-3.6-flash',
           'gemini-3.5-flash-lite',
           'gemini-3.5-flash',
           'gemini-3.1-flash-lite',
+          'gemini-2.5-flash',
+          'gemini-2.0-flash',
+          'gemini-flash-latest',
         ]
+        const timeoutMs = (!needsTools || maxTokens >= 4096) ? 45000 : 12000
         let geminiSuccess = false
         for (const gModel of geminiModels) {
           try {
             const ctrl = new AbortController()
-            const tid = setTimeout(() => ctrl.abort(), 9000)
+            const tid = setTimeout(() => ctrl.abort(), timeoutMs)
+            const geminiBody: Record<string, unknown> = {
+              system_instruction: { parts: [{ text: systemPrompt }] },
+              contents: toGeminiContents(optimizedMessages),
+              generationConfig: { maxOutputTokens: maxTokens, temperature },
+            }
+            if (needsTools) {
+              geminiBody.tools = toGeminiTools(AGENT_TOOLS)
+            }
             const response = await guardEgressFetch(`https://generativelanguage.googleapis.com/v1beta/models/${gModel}:generateContent`, {
               method: 'POST',
               headers: {
@@ -417,12 +437,7 @@ async function callProviderWithFallback(
                 'x-goog-api-key': key
               },
               signal: ctrl.signal,
-              body: JSON.stringify({
-                system_instruction: { parts: [{ text: systemPrompt }] },
-                tools: toGeminiTools(AGENT_TOOLS),
-                contents: toGeminiContents(optimizedMessages),
-                generationConfig: { maxOutputTokens: maxTokens, temperature },
-              }),
+              body: JSON.stringify(geminiBody),
             }, activeRoster)
             clearTimeout(tid)
 
@@ -454,7 +469,7 @@ async function callProviderWithFallback(
         }
         const modelsByProvider: Record<string, string[]> = {
           openai:      ['gpt-4o-mini', 'gpt-4o'],
-          groq:        ['openai/gpt-oss-120b', 'openai/gpt-oss-20b', 'qwen/qwen3.6-27b', 'groq/compound', 'llama-3.3-70b-versatile', 'llama-3.1-8b-instant'],
+          groq:        ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'openai/gpt-oss-120b', 'openai/gpt-oss-20b', 'qwen/qwen3.6-27b', 'groq/compound'],
           deepseek:    ['deepseek-chat'],
           zhipu:       ['glm-4-flash'],
           siliconflow: ['Qwen/Qwen2.5-72B-Instruct'],
@@ -466,15 +481,14 @@ async function callProviderWithFallback(
         }))
 
         const modelsToTry = modelsByProvider[p] || ['gpt-4o-mini']
-        const lastUser = optimizedMessages.filter(m => m.role === 'user').slice(-1)[0]?.content || ''
-        const needsTools = !/examinador|redação|avalie|critérios|rubrica|retorne estritamente|json no formato/i.test(lastUser)
+        const effectiveMaxTokens = ['groq', 'zhipu', 'openrouter'].includes(p) ? Math.min(maxTokens, 4096) : maxTokens
 
         for (const mName of modelsToTry) {
           try {
             const reqBody: Record<string, any> = {
               model: mName,
               messages: toOpenAIMessages(systemPrompt, optimizedMessages),
-              max_tokens: maxTokens,
+              max_tokens: effectiveMaxTokens,
               temperature,
             }
             if (needsTools) {
@@ -529,7 +543,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json()
-    const { messages, context, provider, userKey, autoMode, userKeys = {}, teacherStyle, subject, subjectId, temperatureMode, activeRoster } = body as {
+    const { messages, context, provider, userKey, autoMode, userKeys = {}, teacherStyle, subject, subjectId, temperatureMode, activeRoster, disableTools } = body as {
       messages: CanonicalMessage[]
       context: string
       provider: string
@@ -542,13 +556,24 @@ export async function POST(req: NextRequest) {
       stream?: boolean
       temperatureMode?: 'deterministic' | 'balanced' | 'creative'
       activeRoster?: Array<{ id?: string; name: string } | string>
+      disableTools?: boolean
     }
 
     const todayDate     = new Date().toISOString().split('T')[0]
     const tomorrowDate  = new Date(Date.now() + 86400000).toISOString().split('T')[0]
     const activeSubject = subjectId || subject || 'english'
     const safeContext   = sanitizePiiFromContext(context || '')
-    const systemPrompt  = getSystemPrompt(safeContext, todayDate, tomorrowDate, teacherStyle || '', activeSubject)
+
+    const optimizedMessages = pruneConversationHistory(messages, 8)
+    const lastUserText = [...messages].reverse().find(m => m.role === 'user')?.content || ''
+    const isDirectContentGen = Boolean(
+      disableTools ||
+      /FORMATO DE SAÍDA OBRIGATÓRIO \(JSON PURO\)|examinador|redação|avalie|critérios|rubrica|retorne estritamente|json no formato|Crie uma LISTA DE EXERCÍCIOS|Crie uma PROVA COMPLETA/i.test(lastUserText)
+    )
+
+    const systemPrompt = isDirectContentGen
+      ? `Você é um examinador sênior e especialista pedagógico do TEACHER AI. Gere diretamente o conteúdo completo solicitado pelo professor seguindo estritamente o formato pedido no prompt (JSON puro ou HTML), sem invocar ferramentas e sem pedir confirmações.${safeContext ? `\n\nContexto adicional:\n${safeContext}` : ''}`
+      : getSystemPrompt(safeContext, todayDate, tomorrowDate, teacherStyle || '', activeSubject)
 
     let effectiveProvider = provider
     let effectiveKey = userKey
@@ -566,11 +591,16 @@ export async function POST(req: NextRequest) {
       effectiveProvider = getEnvKey('groq') ? 'groq' : getEnvKey('gemini') ? 'gemini' : 'groq'
     }
 
+    const { maxTokens: calcTokens, temperature } = calculateDynamicTokens(lastUserText, temperatureMode)
+    const maxTokens = isDirectContentGen ? Math.max(calcTokens, 8192) : calcTokens
 
-    const optimizedMessages = pruneConversationHistory(messages, 8)
-    const lastUserText = [...messages].reverse().find(m => m.role === 'user')?.content || ''
-    const { maxTokens, temperature } = calculateDynamicTokens(lastUserText, temperatureMode)
-
+    let piiSession: any = undefined
+    let messagesToSend = optimizedMessages
+    if (activeRoster && Array.isArray(activeRoster) && activeRoster.length > 0) {
+      const maskResult = maskChatHistory(optimizedMessages, activeRoster)
+      messagesToSend = maskResult.maskedMessages
+      piiSession = maskResult.session
+    }
 
     // Se o cliente solicitar streaming SSE (Server-Sent Events)
     if (body.stream === true) {
@@ -582,14 +612,18 @@ export async function POST(req: NextRequest) {
               effectiveProvider,
               effectiveKey,
               systemPrompt,
-              optimizedMessages,
+              messagesToSend,
               maxTokens,
               temperature,
               userKeys,
-              activeRoster
+              activeRoster,
+              isDirectContentGen
             )
             const data = await res.json()
-            const fullReply = data.reply || data.content?.[0]?.text || ''
+            let fullReply = data.reply || data.content?.[0]?.text || ''
+            if (piiSession && fullReply) {
+              fullReply = unmaskPii(fullReply, piiSession)
+            }
 
             // Envia chunks simulados de streaming para baixíssima latência percebida (< 150ms)
             const words = fullReply.split(' ')
@@ -601,7 +635,7 @@ export async function POST(req: NextRequest) {
             controller.close()
           } catch (e: any) {
             if (e instanceof EgressSecurityError) {
-              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: 'LGPD_EGRESS_BLOCKED', violations: e.violations })}\n\n`))
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: 'LGPD_EGRESS_BLOCKED', message: 'Proteção de Privacidade LGPD: Nomes de alunos protegidos contra envio para nuvem.', violations: e.violations })}\n\n`))
             } else {
               controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: e.message })}\n\n`))
             }
@@ -619,22 +653,43 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    return await callProviderWithFallback(
+    const res = await callProviderWithFallback(
       effectiveProvider,
       effectiveKey,
       systemPrompt,
-      optimizedMessages,
+      messagesToSend,
       maxTokens,
       temperature,
       userKeys,
-      activeRoster
+      activeRoster,
+      isDirectContentGen
     )
+
+    if (piiSession) {
+      const data = await res.json()
+      if (data && typeof data === 'object') {
+        if (typeof data.reply === 'string') {
+          data.reply = unmaskPii(data.reply, piiSession)
+        }
+        if (Array.isArray(data.content)) {
+          data.content = data.content.map((c: any) => {
+            if (c.type === 'text' && typeof c.text === 'string') {
+              return { ...c, text: unmaskPii(c.text, piiSession) }
+            }
+            return c
+          })
+        }
+      }
+      return Response.json(data)
+    }
+
+    return res
 
   } catch (error: unknown) {
     if (error instanceof EgressSecurityError) {
       return Response.json({
         error: 'LGPD_EGRESS_BLOCKED',
-        message: 'Dados pessoais ou sensíveis detectados no payload de saída para nuvem.',
+        message: 'Proteção de Privacidade LGPD: Nomes de alunos protegidos contra envio para nuvem.',
         violations: error.violations
       }, { status: 422 })
     }
