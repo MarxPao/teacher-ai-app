@@ -811,6 +811,68 @@ describe('ExtensionHost Integration: Checkpoint, Timeout e Aborto Seguro', () =>
     expect(clickRes.selected?.label).toBe('Visualizar frequência')
     expect(clickRes.score).toBeGreaterThanOrEqual(80)
   })
+
+  it('22. ordena filtros <select> pela topologia do DOM (Turma -> Mês -> Disciplina -> Ordem), verifica pós-condição fail-honest e compila literais + clique pós-select na ordem correta', async () => {
+    const { planDomGroundedActions, verifySelectPostCondition } = await import('../lib/explorer/domDistiller')
+    const { compile } = await import('../lib/compiler')
+    const snapshot = {
+      url: 'https://machadosobrinho.paineldoaluno.com.br/professor_frequencia',
+      title: 'Frequência',
+      headings: ['Frequência'],
+      elements: [
+        { idx: 1, tag: 'select', role: 'select', label: 'Turma', context: 'section', selector: '#turma', isDestructive: false, options: [{ value: '7A', text: '7° ANO ENSINO FUNDAMENTAL II A' }] },
+        { idx: 2, tag: 'select', role: 'select', label: 'Mês', context: 'section', selector: '#mes', isDestructive: false, options: [{ value: '2026-07', text: 'Julho/2026' }] },
+        { idx: 3, tag: 'select', role: 'select', label: 'Disciplina', context: 'section', selector: '#disciplina', isDestructive: false, options: [{ value: '', text: 'TODAS AS DISCIPLINAS' }, { value: 'ING', text: 'LÍNGUA INGLESA' }] },
+        { idx: 4, tag: 'select', role: 'select', label: 'Ordem', context: 'section', selector: '#ordem', isDestructive: false, options: [{ value: 'alfa', text: 'Ordem alfabética' }] },
+        { idx: 5, tag: 'input', role: 'button', label: 'Visualizar frequência', context: 'section', selector: '#btn-visualizar', isDestructive: false },
+      ],
+    }
+
+    const planned = planDomGroundedActions(snapshot as any, [
+      'selecione setimo ano',
+      'lingua inglesa',
+      'julho/2026 e ordem alfabetica',
+      'clique em visualizar',
+    ])
+    expect(planned.map(p => p.element.selector)).toEqual(['#turma', '#mes', '#disciplina', '#ordem', '#btn-visualizar'])
+
+    const plannedUnseparated = planDomGroundedActions(snapshot as any, 'selecione 7º ano lingua inglesa julho/2026 ordem alfabetica')
+    expect(plannedUnseparated.map(p => p.element.selector)).toEqual(['#turma', '#mes', '#disciplina', '#ordem'])
+
+    expect(verifySelectPostCondition('', 'TODAS AS DISCIPLINAS', { value: 'ING', text: 'LÍNGUA INGLESA' }).verified).toBe(false)
+    expect(verifySelectPostCondition('ING', 'LÍNGUA INGLESA', { value: 'ING', text: 'LÍNGUA INGLESA' }).verified).toBe(true)
+
+    const compiled = compile(
+      {
+        trace_version: '1.0',
+        task_id: 'custom:nav-frequencia',
+        started_at: Date.now(),
+        initial_url: 'https://machadosobrinho.paineldoaluno.com.br/professor_frequencia',
+        page_digest: { host: 'machadosobrinho.paineldoaluno.com.br', path: '/professor_frequencia', title: 'Frequência', headings: [], table_headers: [], form_labels: [], counts: { tables: 0, rows: 0 }, landmarks: [] },
+        steps: [
+          { id: 's1', at: 1, frame_path: '/', host: 'machadosobrinho.paineldoaluno.com.br', path: '/professor_frequencia', kind: 'select', value: '7A', text: '7° ANO ENSINO FUNDAMENTAL II A', descriptor: { tag: 'select', id: 'turma', label_text: '7° ANO ENSINO FUNDAMENTAL II A', classes: [], candidates: [{ strategy: 'css', selector: '#turma' }] } },
+          { id: 's2', at: 2, frame_path: '/', host: 'machadosobrinho.paineldoaluno.com.br', path: '/professor_frequencia', kind: 'select', value: '2026-07', text: 'Julho/2026', descriptor: { tag: 'select', id: 'mes', label_text: 'Julho/2026', classes: [], candidates: [{ strategy: 'css', selector: '#mes' }] } },
+          { id: 's3', at: 3, frame_path: '/', host: 'machadosobrinho.paineldoaluno.com.br', path: '/professor_frequencia', kind: 'select', value: 'ING', text: 'LÍNGUA INGLESA', descriptor: { tag: 'select', id: 'disciplina', label_text: 'LÍNGUA INGLESA', classes: [], candidates: [{ strategy: 'css', selector: '#disciplina' }] } },
+          { id: 's4', at: 4, frame_path: '/', host: 'machadosobrinho.paineldoaluno.com.br', path: '/professor_frequencia', kind: 'click', descriptor: { tag: 'input', text: 'Visualizar frequência', classes: [], candidates: [{ strategy: 'text', text: 'Visualizar frequência', match: 'normalized' }] } },
+        ],
+      } as any,
+      {
+        task_id: 'custom:nav-frequencia',
+        portal_id: 'machadosobrinho_paineldoaluno_com_br',
+        task_name: 'Consultar Frequência',
+        allowed_hosts: ['machadosobrinho.paineldoaluno.com.br'],
+      } as any
+    )
+    expect(compiled.graph).toBeDefined()
+    const nodes = Object.values(compiled.graph!.nodes)
+    const writeNodes = nodes.filter((n: any) => n.type === 'WRITE') as any[]
+    expect(writeNodes.map(w => w.value)).toEqual([{ lit: '7A' }, { lit: '2026-07' }, { lit: 'ING' }])
+    const lastWriteNode = writeNodes[writeNodes.length - 1]
+    const nextAfterWrites = compiled.graph!.nodes[lastWriteNode.on_success] as any
+    expect(nextAfterWrites?.type).toBe('CLICK')
+    expect(nextAfterWrites?.label).toContain('Visualizar frequência')
+  })
 })
+
 
 

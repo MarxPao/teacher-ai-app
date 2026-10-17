@@ -654,14 +654,21 @@
           let lastElementText = queryText
 
           for (let hIdx = 0; hIdx < hopTargets.length; hIdx++) {
-            const hopTarget = hopTargets[hIdx]
+            let hopTarget = hopTargets[hIdx]
+            const pendingSlice = hopTargets.slice(hIdx)
             let navRes = null
             if (typeof navFn === 'function') {
-              navRes = await navFn(tabId, hopTarget, [host], pageSelectTargets)
+              navRes = await navFn(tabId, hopTarget, [host], pageSelectTargets, pendingSlice)
             } else {
               navRes = await new Promise((resolve) => {
-                chrome.runtime.sendMessage({ action: 'NAVIGATE_PORTAL_TAB', target: hopTarget, tabId, allowedHosts: [host], priorSelectTargets: pageSelectTargets }, resolve)
+                chrome.runtime.sendMessage({ action: 'NAVIGATE_PORTAL_TAB', target: hopTarget, tabId, allowedHosts: [host], priorSelectTargets: pageSelectTargets, pendingTargets: pendingSlice }, resolve)
               })
+            }
+            if (navRes?.swappedIdx > 0 && hIdx + navRes.swappedIdx < hopTargets.length) {
+              const sIdx = hIdx + navRes.swappedIdx
+              hopTargets[hIdx] = hopTargets[sIdx]
+              hopTargets[sIdx] = hopTarget
+              hopTarget = hopTargets[hIdx]
             }
 
             if (!navRes || (!navRes.sucesso && !navRes.ok)) {

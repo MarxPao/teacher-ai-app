@@ -927,7 +927,7 @@ async function waitForPageSettled(tabId, maxWaitMs = 2500) {
   await new Promise(r => setTimeout(r, 350));
 }
 
-async function internalNavigatePortalTab(targetTabId, targetKeyword, allowedHosts = [], priorSelectTargets = []) {
+async function internalNavigatePortalTab(targetTabId, targetKeyword, allowedHosts = [], priorSelectTargets = [], pendingTargets = []) {
   const keyword = (targetKeyword || '').trim().toLowerCase()
     .replace(/\s+\b(?:e\s+depois|depois|em\s+seguida|a[ií])\b.*$/i, '')
     .replace(/\s+e$/i, '')
@@ -937,8 +937,8 @@ async function internalNavigatePortalTab(targetTabId, targetKeyword, allowedHost
     const results = await chrome.scripting.executeScript({
       target: { tabId: targetTabId },
       world: 'MAIN',
-      args: [keyword, Array.isArray(allowedHosts) ? allowedHosts : [], Array.isArray(priorSelectTargets) ? priorSelectTargets : []],
-      func: async (kw, allowedHostList, priorTargets) => {
+      args: [keyword, Array.isArray(allowedHosts) ? allowedHosts : [], Array.isArray(priorSelectTargets) ? priorSelectTargets : [], Array.isArray(pendingTargets) ? pendingTargets : []],
+      func: async (kw, allowedHostList, priorTargets, pendingList) => {
         const stripGoalPrefix = (rawStr) => {
           const rn = String(rawStr || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
           return rn
@@ -947,7 +947,7 @@ async function internalNavigatePortalTab(targetTabId, targetKeyword, allowedHost
             .replace(/^(?:a\s+turma|o\s+ano|a\s+disciplina|o\s+mes|a\s+aba|o\s+botao|o\s+filtro\s+de|o\s+filtro)\s+/i, '')
             .trim() || rn;
         };
-        const cleanKey = stripGoalPrefix(kw);
+        let cleanKey = stripGoalPrefix(kw);
         const destructivePattern = /\b(excluir|deletar|apagar|remover|demitir|formatar|pagar|transferir|salvar|gravar|enviar|publicar|confirmar|fechar|fechamento|consolidar|finalizar|encerrar|concluir|cancelar|aprovar|reprovar|assinar|homologar|bloquear|desbloquear|resetar|sair|logout)\b/i;
         if (destructivePattern.test(cleanKey)) {
           return { sucesso: false, mensagem: `Ação bloqueada por segurança durante navegação autônoma: '${kw}'.` };
@@ -1013,7 +1013,7 @@ async function internalNavigatePortalTab(targetTabId, targetKeyword, allowedHost
         };
 
         const isOptUsable = (opt, sel) => {
-          if (!opt || opt.disabled || opt.hidden || sel.disabled || opt.style?.display === 'none' || opt.style?.visibility === 'hidden') return false;
+          if (!opt || opt.disabled || opt.hidden || sel.disabled || opt.style?.display === 'none' || opt.style?.visibility === 'hidden' || /\b(hidden|hide|d-none)\b/i.test(opt.className || '')) return false;
           const p = opt.parentElement;
           if (p?.tagName === 'OPTGROUP' && (p.disabled || p.hidden || p.style?.display === 'none')) return false;
           try { const cs = window.getComputedStyle(opt); if (cs?.display === 'none' || cs?.visibility === 'hidden') return false; } catch {}
@@ -1027,7 +1027,9 @@ async function internalNavigatePortalTab(targetTabId, targetKeyword, allowedHost
             return true;
           });
           const matches = [];
-          for (const sel of selects) {
+          for (let sIdx = 0; sIdx < selects.length; sIdx++) {
+            const sel = selects[sIdx];
+            const parentVals = selects.slice(0, sIdx).map(ps => String(ps.value || '').trim()).filter(v => v.length >= 2);
             for (const opt of Array.from(sel.options || [])) {
               if (!isOptUsable(opt, sel)) continue;
               const rawText = (opt.text || opt.label || '').trim();
@@ -1042,12 +1044,17 @@ async function internalNavigatePortalTab(targetTabId, targetKeyword, allowedHost
                   const tks = v.split(/\s+/).filter(t => t.length >= 1 && !['de', 'da', 'do', 'ano'].includes(t));
                   if (tks.length > 0 && tks.every(t => new RegExp(`(?:^|\\b)${t}`).test(normOpt))) sc = 82;
                 }
-                if (sc >= 75) { matches.push({ sel, opt, sc }); break; }
+                if (sc >= 75) {
+                  const outer = (opt.outerHTML || '').split('>')[0] || '';
+                  if (parentVals.some(pv => outer.includes(pv))) sc += 15;
+                  matches.push({ sel, opt, sc, selIdx: sIdx });
+                  break;
+                }
               }
             }
           }
           matches.sort((a, b) => b.sc - a.sc);
-          return matches[0] ? { sel: matches[0].sel, opt: matches[0].opt, candidates: matches.filter(m => m.sel === matches[0].sel).map(m => m.opt) } : null;
+          return matches[0] ? { sel: matches[0].sel, opt: matches[0].opt, selIdx: matches[0].selIdx, candidates: matches.filter(m => m.sel === matches[0].sel).map(m => m.opt) } : null;
         };
 
         const PORTAL_SEMANTIC_CLUSTERS = [
@@ -1142,7 +1149,7 @@ async function internalNavigatePortalTab(targetTabId, targetKeyword, allowedHost
         const applySelectAndWait = async (sel, opt, optList) => {
           const pool = Array.isArray(optList) && optList.length > 0 ? optList : [opt];
           let chosen = opt;
-          for (const cOpt of pool.slice(0, 6)) {
+          for (const cOpt of pool) {
             chosen = cOpt;
             try {
               const ns = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value')?.set;
@@ -1157,8 +1164,12 @@ async function internalNavigatePortalTab(targetTabId, targetKeyword, allowedHost
             sel.dispatchEvent(new Event('input', { bubbles: true }));
             sel.dispatchEvent(new Event('change', { bubbles: true }));
             try { const jq = window.jQuery || window.$; if (typeof jq === 'function') jq(sel).trigger('change'); } catch {}
-            await new Promise(r => setTimeout(r, 400));
-            if (mutated) await new Promise(r => setTimeout(r, 350));
+            for (let w = 0; w < 8; w++) {
+              await new Promise(r => setTimeout(r, 200));
+              const jqBusy = Number((window.jQuery || window.$)?.active || 0) > 0;
+              if (!jqBusy && !mutated && w >= 1) break;
+              mutated = false;
+            }
             try { obs.disconnect(); } catch {}
             if (sel.selectedIndex === cOpt.index || sel.options?.[sel.selectedIndex] === cOpt) break;
           }
@@ -1179,12 +1190,27 @@ async function internalNavigatePortalTab(targetTabId, targetKeyword, allowedHost
         const hops = [];
         let selectMatch = null;
         let bestElement = null;
+        let swappedIdx = 0;
         for (let attempt = 0; attempt < 8; attempt++) {
           selectMatch = findBestSelectMatch(cleanKey);
           if (selectMatch && selectMatch.sel && selectMatch.opt) break;
           bestElement = findBestCandidate(cleanKey);
           if (bestElement) break;
           await new Promise(r => setTimeout(r, 250));
+        }
+        if ((selectMatch || !bestElement) && Array.isArray(pendingList) && pendingList.length > 1) {
+          let bestIdx = selectMatch ? selectMatch.selIdx : 999;
+          for (let pIdx = 1; pIdx < pendingList.length; pIdx++) {
+            const pClean = stripGoalPrefix(pendingList[pIdx]);
+            const pMatch = pClean && !destructivePattern.test(pClean) ? findBestSelectMatch(pClean) : null;
+            if (pMatch && pMatch.selIdx < bestIdx) {
+              bestIdx = pMatch.selIdx;
+              selectMatch = pMatch;
+              kw = pendingList[pIdx];
+              cleanKey = pClean;
+              swappedIdx = pIdx;
+            }
+          }
         }
         if (selectMatch && selectMatch.sel && selectMatch.opt) {
           const { sel, opt, candidates } = selectMatch;
@@ -1193,11 +1219,16 @@ async function internalNavigatePortalTab(targetTabId, targetKeyword, allowedHost
           const chosenOpt = await applySelectAndWait(sel, opt, candidates);
           await reconcilePriorSelects([...(priorTargets || []), kw]);
           const optText = (chosenOpt.text || chosenOpt.label || kw).trim();
+          const finalOpt = sel.options?.[sel.selectedIndex];
+          const finalTxt = (finalOpt?.text || finalOpt?.label || '').trim();
+          if (!finalOpt || (finalOpt.value !== chosenOpt.value && finalTxt.toLowerCase() !== optText.toLowerCase())) {
+            return { sucesso: false, mensagem: `O filtro não manteve '${optText}' selecionado (atual: '${finalTxt || 'vazio'}').` };
+          }
           const placeholderOpt = sel.options && sel.options[0] ? (sel.options[0].text || '').trim() : '';
           const selectAriaLabel = sel.getAttribute('aria-label') || '';
           const selectLabel = selectAriaLabel || sel.getAttribute('title') || placeholderOpt || sel.name || sel.id || 'Filtro';
           const hop = { kind: 'select', elementText: optText, selectValue: String(chosenOpt.value ?? ''), selectId: sel.id || '', selectName: sel.name || '', selectAriaLabel, selectLabel, tag: 'SELECT', target: kw };
-          return { sucesso: true, kind: 'select', elementText: optText, tag: 'SELECT', target: kw, hops: [hop] };
+          return { sucesso: true, kind: 'select', swappedIdx, elementText: optText, tag: 'SELECT', target: kw, hops: [hop] };
         }
 
         // Se o item de submenu não está visível diretamente, tenta expandir um menu pai relacionado (Hop intermediário)

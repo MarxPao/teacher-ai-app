@@ -51,14 +51,17 @@ export function assembleGraph(
   const navClickSteps = segmented.actionSteps.filter(
     s => s.kind === 'click' && s.id !== (segmented.filterStep?.step as any)?.id
   )
-  const isWriteTask =
-    decisions.task_id === 'lancar_falta' ||
-    decisions.task_id === 'lancar_nota' ||
-    writeActionSteps.length > 0 ||
-    !!segmented.submitStep
-
-  // Cliques intermediários de navegação (ex.: menus, links, sub-abas)
-  for (const clickStep of navClickSteps) {
+  const firstWriteIdx =
+    writeActionSteps.length > 0 ? segmented.actionSteps.indexOf(writeActionSteps[0]) : -1
+  const preWriteClickSteps =
+    firstWriteIdx === -1
+      ? navClickSteps
+      : navClickSteps.filter(s => segmented.actionSteps.indexOf(s) < firstWriteIdx)
+  const postWriteClickSteps =
+    firstWriteIdx === -1
+      ? []
+      : navClickSteps.filter(s => segmented.actionSteps.indexOf(s) > firstWriteIdx)
+  const pushClickStepNode = (clickStep: (typeof navClickSteps)[number]) => {
     const clickAnchor = buildAnchorFromDescriptor(
       clickStep.descriptor,
       clickStep.descriptor.text ? `Menu ${clickStep.descriptor.text}` : 'Elemento de navegação',
@@ -82,6 +85,16 @@ export function assembleGraph(
         on_fail: '$abort',
       }),
     })
+  }
+  const isWriteTask =
+    decisions.task_id === 'lancar_falta' ||
+    decisions.task_id === 'lancar_nota' ||
+    writeActionSteps.length > 0 ||
+    !!segmented.submitStep
+
+  // Cliques intermediários de navegação anteriores à escrita (ex.: menus, links, sub-abas)
+  for (const clickStep of preWriteClickSteps) {
+    pushClickStepNode(clickStep)
   }
 
   if (decisions.task_id === 'read_roster') {
@@ -167,6 +180,10 @@ export function assembleGraph(
         decisions,
         paramContext
       )
+      const literalSelectVal =
+        stepIsSelect && !actionStep.descriptor.rowContext
+          ? String((actionStep as any).value || (actionStep as any).text || '').trim()
+          : ''
 
       plannedNodes.push({
         id: nextId(),
@@ -178,7 +195,7 @@ export function assembleGraph(
             ? 'Lançar Nota do Aluno'
             : `Registrar ${stepLabel}`,
           anchor: fieldAnchor,
-          value: paramContext.getWriteValueRef(decisions.task_id),
+          value: literalSelectVal ? { lit: literalSelectVal } : paramContext.getWriteValueRef(decisions.task_id),
           method: stepIsSelect ? 'select_option' : stepIsCheck ? 'set_checked' : 'set_value_dispatch',
           semantic: stepIsCheck ? 'attendance' : isGrade ? 'grade' : 'text',
           read_back: true,
@@ -189,6 +206,10 @@ export function assembleGraph(
           on_fail: '$abort',
         }),
       })
+    }
+
+    for (const clickStep of postWriteClickSteps) {
+      pushClickStepNode(clickStep)
     }
 
     // Nó CLICK de Submissão (se houver)

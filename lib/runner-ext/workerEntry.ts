@@ -26,6 +26,8 @@ import {
   distillInteractiveDom,
   decomposeCompoundTeacherCommand,
   selectBestDistilledAction,
+  planDomGroundedActions,
+  verifySelectPostCondition,
 } from '../explorer/domDistiller'
 import {
   ALL_ENGINE_ERROR_CODES,
@@ -400,6 +402,8 @@ const SkillGraphV2 = {
   distillInteractiveDom,
   decomposeCompoundTeacherCommand,
   selectBestDistilledAction,
+  planDomGroundedActions,
+  verifySelectPostCondition,
   ALL_ENGINE_ERROR_CODES,
   TEACHER_ERROR_MESSAGES,
   extractErrorCode,
@@ -429,6 +433,8 @@ export {
   distillInteractiveDom,
   decomposeCompoundTeacherCommand,
   selectBestDistilledAction,
+  planDomGroundedActions,
+  verifySelectPostCondition,
   ALL_ENGINE_ERROR_CODES,
   TEACHER_ERROR_MESSAGES,
   extractErrorCode,

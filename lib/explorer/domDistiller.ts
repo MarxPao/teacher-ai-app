@@ -453,4 +453,11 @@ export function reconcileDomSelectFilters(
   return restored
 }
 
+export {
+  planDomGroundedActions,
+  verifySelectPostCondition,
+  type PlannedDomAction,
+  type SelectPostConditionResult,
+} from './domActionPlanner'
+
 
