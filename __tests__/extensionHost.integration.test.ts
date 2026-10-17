@@ -696,11 +696,24 @@ describe('ExtensionHost Integration: Checkpoint, Timeout e Aborto Seguro', () =>
     expect(r3.matchedOption).toEqual({ value: '07', text: 'Julho' })
   })
 
-  it('21. [Malha Fechada em Cascata AJAX + Botão <input value="Visualizar frequência">] Reconcilia filtro de Disciplina ("LÍNGUA INGLESA") resetado para "TODAS AS DISCIPLINAS" ao mudar Mês ("Julho/2026") e resolve "clique em visualizar"', async () => {
+  it('21. [Malha Fechada em Cascata AJAX + Opções Duplicadas por Turma + Botão <input value="Visualizar frequência">] Divide 5 passos com "e", ignora <option> desabilitada/oculta de outra turma, reconcilia Disciplina ("LÍNGUA INGLESA") e resolve "clique em visualizar"', async () => {
     const {
+      splitMultiStepTeacherCommand,
       selectBestDistilledAction,
       reconcileDomSelectFilters,
     } = await import('../lib/explorer/domDistiller')
+
+    expect(
+      splitMultiStepTeacherCommand(
+        'acesse frequencia depois selecione setimo ano, lingua inglesa, julho/2026 e ordem alfabetica'
+      )
+    ).toEqual([
+      'acesse frequencia',
+      'selecione setimo ano',
+      'lingua inglesa',
+      'julho/2026',
+      'ordem alfabetica',
+    ])
 
     const snapshot = {
       urlPath: '/professor_frequencia',
@@ -743,6 +756,7 @@ describe('ExtensionHost Integration: Checkpoint, Timeout e Aborto Seguro', () =>
           isDestructive: false,
           options: [
             { value: '', text: 'TODAS AS DISCIPLINAS' },
+            { value: 'ING_TURMA_INATIVA', text: 'LÍNGUA INGLESA', disabled: true },
             { value: 'ING', text: 'LÍNGUA INGLESA' },
           ],
         },

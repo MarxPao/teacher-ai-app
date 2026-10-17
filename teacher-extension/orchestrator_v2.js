@@ -637,7 +637,7 @@
           // 1. Divide o comando em até 10 hops encadeados (incluindo verbos repetidos sem vírgula)
           const hopTargets = queryText
             .split(
-              /\s*(?:[,;]|->|>|›|\b(?:e\s+depois|depois|em\s+seguida|logo\s+ap[oó]s|ent[aã]o)\b|\s+e\s+(?=(?:selecione|selecionar|escolha|escolher|clicar|clique|visualizar|lancar|lançar|abrir|abra|ir|va|vá|acessar|acesse|filtrar|filtre)\b)|\s+(?=(?:selecione|selecionar|escolha|escolher|clicar\s+em|clique\s+em|abrir|abra|ir\s+para|va\s+para|vá\s+para|acessar|acesse|filtrar\s+por|filtre\s+por)\b))\s*/i
+              /\s*(?:[,;]|->|>|›|\b(?:e\s+depois|depois|em\s+seguida|logo\s+ap[oó]s|ent[aã]o)\b|(?<!\bnotas|\bindique)\s+e\s+(?!faltas\b|ganhe\b)|\s+(?=(?:selecione|selecionar|escolha|escolher|clicar\s+em|clique\s+em|abrir|abra|ir\s+para|va\s+para|vá\s+para|acessar|acesse|filtrar\s+por|filtre\s+por)\b))\s*/i
             )
             .map((s) => s.trim())
             .filter(Boolean)

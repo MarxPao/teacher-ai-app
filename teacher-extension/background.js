@@ -929,13 +929,14 @@ async function waitForPageSettled(tabId, maxWaitMs = 2500) {
 
 async function internalNavigatePortalTab(targetTabId, targetKeyword, allowedHosts = [], priorSelectTargets = []) {
   const keyword = (targetKeyword || '').trim().toLowerCase()
-    .replace(/\s+\b(?:e|e\s+depois|depois|em\s+seguida|a[ií])\b.*$/i, '')
+    .replace(/\s+\b(?:e\s+depois|depois|em\s+seguida|a[ií])\b.*$/i, '')
     .replace(/\s+e$/i, '')
     .trim();
 
   try {
     const results = await chrome.scripting.executeScript({
       target: { tabId: targetTabId },
+      world: 'MAIN',
       args: [keyword, Array.isArray(allowedHosts) ? allowedHosts : [], Array.isArray(priorSelectTargets) ? priorSelectTargets : []],
       func: async (kw, allowedHostList, priorTargets) => {
         const stripGoalPrefix = (rawStr) => {
@@ -1011,16 +1012,24 @@ async function internalNavigatePortalTab(targetTabId, targetKeyword, allowedHost
           return list;
         };
 
+        const isOptUsable = (opt, sel) => {
+          if (!opt || opt.disabled || opt.hidden || sel.disabled || opt.style?.display === 'none' || opt.style?.visibility === 'hidden') return false;
+          const p = opt.parentElement;
+          if (p?.tagName === 'OPTGROUP' && (p.disabled || p.hidden || p.style?.display === 'none')) return false;
+          try { const cs = window.getComputedStyle(opt); if (cs?.display === 'none' || cs?.visibility === 'hidden') return false; } catch {}
+          return true;
+        };
         const findBestSelectMatch = (searchKey) => {
           const variants = buildOrdinalVariants(searchKey).map(v => v.replace(/[º°ª]/g, ''));
           const selects = Array.from(document.querySelectorAll('select')).filter(s => {
-            if (s.offsetParent === null && s.offsetWidth === 0 && s.offsetHeight === 0) return false;
+            if (s.disabled || (s.offsetParent === null && s.offsetWidth === 0 && s.offsetHeight === 0)) return false;
             if (s.closest && s.closest('tbody tr')) return false;
             return true;
           });
-          let bestSel = null, bestOpt = null, bestScore = -1;
+          const matches = [];
           for (const sel of selects) {
             for (const opt of Array.from(sel.options || [])) {
+              if (!isOptUsable(opt, sel)) continue;
               const rawText = (opt.text || opt.label || '').trim();
               const normOpt = rawText.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[º°ª]/g, '').replace(/[/\-_,.;:]+/g, ' ').replace(/\s+/g, ' ').trim();
               if (!normOpt || /^selecione\b/i.test(normOpt)) continue;
@@ -1033,11 +1042,12 @@ async function internalNavigatePortalTab(targetTabId, targetKeyword, allowedHost
                   const tks = v.split(/\s+/).filter(t => t.length >= 1 && !['de', 'da', 'do', 'ano'].includes(t));
                   if (tks.length > 0 && tks.every(t => new RegExp(`(?:^|\\b)${t}`).test(normOpt))) sc = 82;
                 }
-                if (sc > bestScore) { bestScore = sc; bestSel = sel; bestOpt = opt; }
+                if (sc >= 75) { matches.push({ sel, opt, sc }); break; }
               }
             }
           }
-          return bestScore >= 75 ? { sel: bestSel, opt: bestOpt } : null;
+          matches.sort((a, b) => b.sc - a.sc);
+          return matches[0] ? { sel: matches[0].sel, opt: matches[0].opt, candidates: matches.filter(m => m.sel === matches[0].sel).map(m => m.opt) } : null;
         };
 
         const PORTAL_SEMANTIC_CLUSTERS = [
@@ -1129,28 +1139,39 @@ async function internalNavigatePortalTab(targetTabId, targetKeyword, allowedHost
           return bestEl;
         };
 
-        const applySelectAndWait = async (sel, opt) => {
-          try {
-            if (typeof opt.index === 'number' && opt.index >= 0) sel.selectedIndex = opt.index;
-            opt.selected = true;
-            const ns = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value')?.set;
-            if (ns) ns.call(sel, opt.value); else sel.value = opt.value;
-          } catch { sel.value = opt.value; }
-          let mutated = false;
-          const obs = new MutationObserver(() => { mutated = true; });
-          try { obs.observe(document.body, { childList: true, subtree: true }); } catch {}
-          sel.dispatchEvent(new Event('input', { bubbles: true }));
-          sel.dispatchEvent(new Event('change', { bubbles: true }));
-          await new Promise(r => setTimeout(r, 450));
-          if (mutated) await new Promise(r => setTimeout(r, 400));
-          try { obs.disconnect(); } catch {}
+        const applySelectAndWait = async (sel, opt, optList) => {
+          const pool = Array.isArray(optList) && optList.length > 0 ? optList : [opt];
+          let chosen = opt;
+          for (const cOpt of pool.slice(0, 6)) {
+            chosen = cOpt;
+            try {
+              const ns = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value')?.set;
+              if (ns) ns.call(sel, cOpt.value); else sel.value = cOpt.value;
+              Array.from(sel.options || []).forEach((o, i) => { o.selected = (i === cOpt.index); });
+              if (typeof cOpt.index === 'number' && cOpt.index >= 0) sel.selectedIndex = cOpt.index;
+              cOpt.selected = true;
+            } catch { sel.value = cOpt.value; }
+            let mutated = false;
+            const obs = new MutationObserver(() => { mutated = true; });
+            try { obs.observe(document.body, { childList: true, subtree: true }); } catch {}
+            sel.dispatchEvent(new Event('input', { bubbles: true }));
+            sel.dispatchEvent(new Event('change', { bubbles: true }));
+            try { const jq = window.jQuery || window.$; if (typeof jq === 'function') jq(sel).trigger('change'); } catch {}
+            await new Promise(r => setTimeout(r, 400));
+            if (mutated) await new Promise(r => setTimeout(r, 350));
+            try { obs.disconnect(); } catch {}
+            if (sel.selectedIndex === cOpt.index || sel.options?.[sel.selectedIndex] === cOpt) break;
+          }
+          return chosen;
         };
         const reconcilePriorSelects = async (targets) => {
           for (const rawT of (targets || [])) {
             const pk = stripGoalPrefix(rawT);
             const m = pk ? findBestSelectMatch(pk) : null;
-            if (m?.sel && m?.opt && m.sel.options?.[m.sel.selectedIndex] !== m.opt && m.sel.value !== m.opt.value) {
-              await applySelectAndWait(m.sel, m.opt);
+            if (m?.sel && m?.opt) {
+              const curTxt = (m.sel.options?.[m.sel.selectedIndex]?.text || '').trim();
+              const wantTxt = (m.opt.text || m.opt.label || '').trim();
+              if (curTxt !== wantTxt) await applySelectAndWait(m.sel, m.opt, m.candidates);
             }
           }
         };
@@ -1166,16 +1187,16 @@ async function internalNavigatePortalTab(targetTabId, targetKeyword, allowedHost
           await new Promise(r => setTimeout(r, 250));
         }
         if (selectMatch && selectMatch.sel && selectMatch.opt) {
-          const { sel, opt } = selectMatch;
-          const optText = (opt.text || opt.label || kw).trim();
+          const { sel, opt, candidates } = selectMatch;
+          sel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          sel.style.outline = '2px solid #38bdf8';
+          const chosenOpt = await applySelectAndWait(sel, opt, candidates);
+          await reconcilePriorSelects([...(priorTargets || []), kw]);
+          const optText = (chosenOpt.text || chosenOpt.label || kw).trim();
           const placeholderOpt = sel.options && sel.options[0] ? (sel.options[0].text || '').trim() : '';
           const selectAriaLabel = sel.getAttribute('aria-label') || '';
           const selectLabel = selectAriaLabel || sel.getAttribute('title') || placeholderOpt || sel.name || sel.id || 'Filtro';
-          sel.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          sel.style.outline = '2px solid #38bdf8';
-          await applySelectAndWait(sel, opt);
-          await reconcilePriorSelects([...(priorTargets || []), kw]);
-          const hop = { kind: 'select', elementText: optText, selectValue: String(opt.value ?? ''), selectId: sel.id || '', selectName: sel.name || '', selectAriaLabel, selectLabel, tag: 'SELECT', target: kw };
+          const hop = { kind: 'select', elementText: optText, selectValue: String(chosenOpt.value ?? ''), selectId: sel.id || '', selectName: sel.name || '', selectAriaLabel, selectLabel, tag: 'SELECT', target: kw };
           return { sucesso: true, kind: 'select', elementText: optText, tag: 'SELECT', target: kw, hops: [hop] };
         }
 

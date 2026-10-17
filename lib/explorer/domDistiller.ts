@@ -135,6 +135,7 @@ export function distillInteractiveDom(doc: Document, maxElements = 60): Distille
     const options =
       tag === 'select'
         ? Array.from((el as HTMLSelectElement).options || [])
+            .filter((o) => !o.disabled && !(o as HTMLElement).hidden && (o as HTMLElement).style?.display !== 'none')
             .map((o) => ({ value: String(o.value ?? ''), text: sanitizeStructuralLabel(o.text || o.label || '') }))
             .filter((o) => o.text.length > 0)
         : undefined
@@ -242,7 +243,7 @@ export function splitMultiStepTeacherCommand(rawText: string): string[] {
   if (!cleaned) return []
   return cleaned
     .split(
-      /\s*(?:[,;]|->|>|›|\b(?:e\s+depois|depois|em\s+seguida|logo\s+ap[oó]s|ent[aã]o)\b|\s+e\s+(?=(?:selecione|selecionar|escolha|escolher|clicar|clique|visualizar|lancar|lançar|abrir|abra|ir|va|vá|acessar|acesse|filtrar|filtre)\b)|\s+(?=(?:selecione|selecionar|escolha|escolher|clicar\s+em|clique\s+em|abrir|abra|ir\s+para|va\s+para|vá\s+para|acessar|acesse|filtrar\s+por|filtre\s+por)\b))\s*/i
+      /\s*(?:[,;]|->|>|›|\b(?:e\s+depois|depois|em\s+seguida|logo\s+ap[oó]s|ent[aã]o)\b|(?<!\bnotas|\bindique)\s+e\s+(?!faltas\b|ganhe\b)|\s+(?=(?:selecione|selecionar|escolha|escolher|clicar\s+em|clique\s+em|abrir|abra|ir\s+para|va\s+para|vá\s+para|acessar|acesse|filtrar\s+por|filtre\s+por)\b))\s*/i
     )
     .map(s => s.trim())
     .filter(Boolean)
@@ -353,7 +354,8 @@ export function selectBestDistilledAction(
     if (clickedSelectors.has(el.selector)) continue
 
     if (el.tag === 'select' && Array.isArray((el as any).options)) {
-      for (const opt of (el as any).options as Array<{ value: string; text: string }>) {
+      for (const opt of (el as any).options as Array<{ value: string; text: string; disabled?: boolean; hidden?: boolean }>) {
+        if (opt.disabled || opt.hidden) continue
         const normOpt = opt.text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[/\-_,.;:]+/g, ' ').replace(/\s+/g, ' ').trim()
         if (!normOpt || /^selecione\b/i.test(normOpt)) continue
         for (const v of variants) {
