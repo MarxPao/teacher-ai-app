@@ -47,10 +47,6 @@ declare global {
       window.__TEACHER_AI_RECORDING_ACTIVE__ = false
       const trace = recorder.stop()
 
-      if (trace && !(trace as any).portal_id) {
-        ;(trace as any).portal_id = window.location.hostname.replace(/[^a-zA-Z0-9_]/g, '_')
-      }
-
       if (typeof chrome !== 'undefined' && chrome.storage?.session) {
         try {
           chrome.storage.session.set({ skillgraph_last_trace: trace })
@@ -66,13 +62,21 @@ declare global {
   }
 
   // Tenta sincronizar a sequência de passos acumulada com a sessão da extensão
-  if (typeof chrome !== 'undefined' && chrome.storage?.session?.get) {
-    chrome.storage.session.get(['skillgraph_recording'], (res: any) => {
-      const steps = res?.skillgraph_recording?.steps
-      const startSeq = Array.isArray(steps) ? steps.length : 0
-      initRecorder(startSeq)
-    })
-  } else {
+  try {
+    if (typeof chrome !== 'undefined' && chrome.storage?.session?.get) {
+      chrome.storage.session.get(['skillgraph_recording'], (res: any) => {
+        if (chrome.runtime?.lastError) {
+          initRecorder(0)
+          return
+        }
+        const steps = res?.skillgraph_recording?.steps
+        const startSeq = Array.isArray(steps) ? steps.length : 0
+        initRecorder(startSeq)
+      })
+    } else {
+      initRecorder(0)
+    }
+  } catch {
     initRecorder(0)
   }
 })()

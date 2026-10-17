@@ -189,10 +189,88 @@
     return false
   }
 
+  function attachActivationControls(containerEl, graph, hooks) {
+    const learnedId = graph?.identity
+    if (!containerEl || !learnedId) return
+    const nodesSummary = Object.entries(graph.nodes || {})
+      .map(([id, n]) => `${n.label || id}`)
+      .join(' → ')
+    const sideEffectLabel =
+      (graph.safety?.side_effect_level || 'read') === 'read'
+        ? 'Leitura/Navegação'
+        : 'Seleção/Preenchimento'
+    const card = document.createElement('div')
+    card.style.cssText =
+      'margin-top:8px;padding:9px;background:#fffcf8;border:1px solid rgba(139,115,85,0.22);border-radius:8px;font-size:11.5px;color:#2c1a0e;'
+    card.innerHTML = `
+      <div style="margin-bottom:4px;"><strong>Passos (${escapeHtmlSafe(sideEffectLabel)}):</strong> ${escapeHtmlSafe(nodesSummary)}</div>
+      <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;">
+        <button type="button" class="chat-btn-dryrun" style="padding:5px 10px;font-size:11px;font-weight:700;background:#8b5e3c;color:#fffcf8;border:none;border-radius:6px;cursor:pointer;">1. Testar Simulação (Dry-Run)</button>
+        <button type="button" class="chat-btn-activate" disabled style="padding:5px 10px;font-size:11px;font-weight:700;background:#ede4d6;color:#7a5c42;border:none;border-radius:6px;cursor:not-allowed;">2. Confirmar e Ativar ✨</button>
+      </div>
+    `
+    containerEl.appendChild(card)
+    const btnDryRun = card.querySelector('.chat-btn-dryrun')
+    const btnActivate = card.querySelector('.chat-btn-activate')
+    btnDryRun?.addEventListener('click', () => {
+      btnDryRun.disabled = true
+      btnDryRun.textContent = 'Simulando...'
+      chrome.runtime.sendMessage(
+        {
+          action: 'SKILLGRAPH_RUN',
+          payload: { graph, taskId: learnedId.task_id, dryRun: true, standaloneFallback: true },
+        },
+        (drRes) => {
+          if (drRes?.success) {
+            btnDryRun.textContent = '✓ Simulação Aprovada'
+            if (btnActivate) {
+              btnActivate.disabled = false
+              btnActivate.style.background = '#346a43'
+              btnActivate.style.color = '#fffcf8'
+              btnActivate.style.cursor = 'pointer'
+            }
+          } else {
+            btnDryRun.disabled = false
+            btnDryRun.textContent = 'Tentar Simulação Novamente'
+          }
+        }
+      )
+    })
+    btnActivate?.addEventListener('click', (e) => {
+      e.preventDefault()
+      chrome.runtime.sendMessage(
+        {
+          action: 'SKILLGRAPH_ACTIVATE_GRAPH',
+          portalId: learnedId.portal_id,
+          taskId: learnedId.task_id,
+          version: learnedId.version,
+          confirmed: true,
+        },
+        (actRes) => {
+          btnActivate.disabled = true
+          btnActivate.textContent = actRes?.success ? '✓ Habilidade Ativada!' : 'Falha ao ativar'
+          if (typeof hooks?.onReloadSkills === 'function') hooks.onReloadSkills()
+        }
+      )
+    })
+  }
+
+  function syncPendingDecisionAnswersToSession() {
+    if (typeof chrome === 'undefined' || !chrome.storage?.session?.set) return
+    const polarityEl = document.querySelector('input[name="sgv2-attendance-polarity"]:checked')
+    const scaleEl = document.querySelector('input[name="sgv2-grade-scale"]:checked')
+    const answers = {}
+    if (polarityEl?.value) answers.attendance_polarity = polarityEl.value
+    if (scaleEl?.value) answers.grade_scale = scaleEl.value
+    chrome.storage.session.set({ skillgraph_pending_decision_answers: answers }).catch(() => {})
+  }
+
   function initChatController(hooks) {
     injectChatStyles()
     const messagesContainer = document.getElementById('sgv2-chat-messages')
     const clearBtn = document.getElementById('sgv2-btn-chat-clear')
+    const recordMessageBox = document.getElementById('sgv2-record-message-box')
+    const recordDecisionsBox = document.getElementById('sgv2-record-decisions-box')
     let history = []
     let typingRowEl = null
 
@@ -443,74 +521,14 @@
     function handleExploreResult(exploreRes, queryText) {
       if (exploreRes?.success) {
         const learnedGraph = exploreRes.quarantine ? exploreRes.graph : null
-        const learnedId = learnedGraph?.identity
         appendAssistantMessage(
           exploreRes.friendlyMessage || 'Ação realizada no portal! ✨ Revise os passos abaixo se quiser salvar como rotina.',
           {
             variant: 'success',
             onRenderBubble: (bubble) => {
-              if (!learnedId) return
-              const nodesSummary = Object.entries(learnedGraph.nodes || {})
-                .map(([id, n]) => `${n.label || id}`)
-                .join(' → ')
-              const sideEffectLabel =
-                (learnedGraph.safety?.side_effect_level || 'read') === 'read'
-                  ? 'Leitura/Navegação'
-                  : 'Seleção/Preenchimento'
-              const card = document.createElement('div')
-              card.style.cssText =
-                'margin-top:8px;padding:9px;background:#fffcf8;border:1px solid rgba(139,115,85,0.22);border-radius:8px;font-size:11.5px;color:#2c1a0e;'
-              card.innerHTML = `
-                <div style="margin-bottom:4px;"><strong>Passos (${escapeHtmlSafe(sideEffectLabel)}):</strong> ${escapeHtmlSafe(nodesSummary)}</div>
-                <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;">
-                  <button type="button" class="chat-btn-dryrun" style="padding:4px 9px;font-size:11px;font-weight:700;background:#8b5e3c;color:#fffcf8;border:none;border-radius:6px;cursor:pointer;">1. Testar Simulação (Dry-Run)</button>
-                  <button type="button" class="chat-btn-activate" disabled style="padding:4px 9px;font-size:11px;font-weight:700;background:#ede4d6;color:#7a5c42;border:none;border-radius:6px;cursor:not-allowed;">2. Confirmar e Ativar</button>
-                </div>
-              `
-              bubble.appendChild(card)
-              const btnDryRun = card.querySelector('.chat-btn-dryrun')
-              const btnActivate = card.querySelector('.chat-btn-activate')
-              btnDryRun?.addEventListener('click', () => {
-                btnDryRun.disabled = true
-                btnDryRun.textContent = 'Simulando...'
-                chrome.runtime.sendMessage(
-                  {
-                    action: 'SKILLGRAPH_RUN',
-                    payload: { graph: learnedGraph, taskId: learnedId.task_id, dryRun: true, standaloneFallback: true },
-                  },
-                  (drRes) => {
-                    if (drRes?.success) {
-                      btnDryRun.textContent = '✓ Simulação Aprovada'
-                      if (btnActivate) {
-                        btnActivate.disabled = false
-                        btnActivate.style.background = '#346a43'
-                        btnActivate.style.color = '#fffcf8'
-                        btnActivate.style.cursor = 'pointer'
-                      }
-                    } else {
-                      btnDryRun.disabled = false
-                      btnDryRun.textContent = 'Tentar Simulação Novamente'
-                    }
-                  }
-                )
-              })
-              btnActivate?.addEventListener('click', (e) => {
-                e.preventDefault()
-                chrome.runtime.sendMessage(
-                  {
-                    action: 'SKILLGRAPH_ACTIVATE_GRAPH',
-                    portalId: learnedId.portal_id,
-                    taskId: learnedId.task_id,
-                    version: learnedId.version,
-                    confirmed: true,
-                  },
-                  (actRes) => {
-                    btnActivate.disabled = true
-                    btnActivate.textContent = actRes?.success ? '✓ Habilidade Ativada!' : 'Falha ao ativar'
-                    if (typeof hooks?.onReloadSkills === 'function') hooks.onReloadSkills()
-                  }
-                )
-              })
+              if (learnedGraph?.identity) {
+                attachActivationControls(bubble, learnedGraph, hooks)
+              }
             },
           }
         )
@@ -523,6 +541,71 @@
       }
     }
 
+    function renderRecordCompileOutcome(res, targetMsgBox, targetDecBox) {
+      const msgBox = targetMsgBox || recordMessageBox
+      const decBox = targetDecBox || recordDecisionsBox
+      if (res?.status === 'needs_decisions' && Array.isArray(res.decisions)) {
+        if (decBox) {
+          decBox.style.display = 'block'
+          let extraContainer = document.getElementById('sgv2-dynamic-decisions-fields')
+          if (!extraContainer) {
+            extraContainer = document.createElement('div')
+            extraContainer.id = 'sgv2-dynamic-decisions-fields'
+            extraContainer.style.cssText = 'margin: 8px 0 12px; padding: 10px; background: var(--surface-1); border: 1px solid var(--border-medium); border-radius: 8px;'
+            decBox.insertBefore(extraContainer, decBox.lastElementChild)
+          }
+          extraContainer.innerHTML = res.decisions
+            .map((d) => {
+              const radioName = d.key === 'attendance_polarity' ? 'sgv2-attendance-polarity' : (d.key === 'grade_scale' ? 'sgv2-grade-scale' : `sgv2-dec-${d.key}`)
+              const optsHtml = (d.options || [])
+                .map(
+                  (o, idx) => `
+                  <label class="sp-checkbox-label" style="display:flex;margin-top:4px;">
+                    <input type="radio" name="${radioName}" value="${escapeHtmlSafe(o.value)}" ${idx === 0 ? 'checked' : ''} />
+                    <span>${escapeHtmlSafe(o.label)}</span>
+                  </label>`
+                )
+                .join('')
+              return `<div style="margin-bottom:6px;"><div style="font-size:11.5px;font-weight:700;color:var(--paper-ink);">${escapeHtmlSafe(d.question)}</div>${optsHtml}</div>`
+            })
+            .join('')
+          extraContainer.querySelectorAll('input[type="radio"]').forEach((r) => {
+            r.addEventListener('change', syncPendingDecisionAnswersToSession)
+          })
+          syncPendingDecisionAnswersToSession()
+        }
+        return
+      }
+
+      if (res?.graph && msgBox) {
+        msgBox.style.display = 'block'
+        msgBox.style.background = '#f0fdf4'
+        msgBox.style.color = '#166534'
+        msgBox.innerHTML = `<div>${escapeHtmlSafe(res.friendlyMessage || 'Habilidade gravada e sincronizada! Confirme a simulação abaixo para ativá-la no portal:')}</div>`
+        attachActivationControls(msgBox, res.graph, hooks)
+        appendAssistantMessage(
+          `Nova habilidade "${res.graph.identity?.name || 'Personalizada'}" gravada e sincronizada com o painel! ✨`,
+          {
+            variant: 'success',
+            onRenderBubble: (bubble) => attachActivationControls(bubble, res.graph, hooks),
+          }
+        )
+      }
+    }
+
+    if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
+      chrome.runtime.onMessage.addListener((msg) => {
+        if (!msg) return
+        if (msg.type === 'SKILLGRAPH_DECISIONS_REQUIRED' && Array.isArray(msg.decisions)) {
+          renderRecordCompileOutcome({ status: 'needs_decisions', decisions: msg.decisions }, recordMessageBox, recordDecisionsBox)
+        } else if (msg.type === 'SKILLGRAPH_RECORD_COMPILED' && msg.graph) {
+          setTimeout(() => {
+            renderRecordCompileOutcome({ success: true, graph: msg.graph }, recordMessageBox, recordDecisionsBox)
+          }, 30)
+        }
+      })
+    }
+
     return {
       appendUserMessage,
       appendAssistantMessage,
@@ -531,6 +614,7 @@
       isConversationalOrInspectQuery,
       inspectAndReplyPageContext,
       handleExploreResult,
+      renderRecordCompileOutcome,
     }
   }
 

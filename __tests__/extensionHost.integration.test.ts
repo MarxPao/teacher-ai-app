@@ -604,7 +604,7 @@ describe('ExtensionHost Integration: Checkpoint, Timeout e Aborto Seguro', () =>
     expect(res.score).toBeGreaterThanOrEqual(80)
   })
 
-  it('19. [Chatbox Conversacional no Side Panel] side_panel_v2.html integra #sgv2-chat-messages + side_panel_chat.js e roteia perguntas sobre a tela para SKILLGRAPH_INSPECT_PAGE_CONTEXT', async () => {
+  it('19. [Chatbox + Sincronização de Skills Gravadas] side_panel_v2.html integra #sgv2-chat-messages + side_panel_chat.js e orchestrator_v2 sincroniza skills gravadas com POST /api/skills (disco + Supabase)', async () => {
     const fs = await import('node:fs')
     const path = await import('node:path')
     const html = fs.readFileSync(path.join(process.cwd(), 'teacher-extension/side_panel_v2.html'), 'utf8')
@@ -613,6 +613,14 @@ describe('ExtensionHost Integration: Checkpoint, Timeout e Aborto Seguro', () =>
 
     const chatCode = fs.readFileSync(path.join(process.cwd(), 'teacher-extension/side_panel_chat.js'), 'utf8')
     expect(chatCode).toContain('SKILLGRAPH_INSPECT_PAGE_CONTEXT')
-    expect(chatCode).toContain('initSkillGraphChat')
+    expect(chatCode).toContain('SKILLGRAPH_RECORD_COMPILED')
+
+    const orchCode = fs.readFileSync(path.join(process.cwd(), 'teacher-extension/orchestrator_v2.js'), 'utf8')
+    expect(orchCode).toContain("fetch('http://localhost:3000/api/skills'")
+    expect(orchCode).toContain('SKILLGRAPH_RECORD_COMPILED')
+
+    const apiCode = fs.readFileSync(path.join(process.cwd(), 'app/api/skills/route.ts'), 'utf8')
+    expect(apiCode).toContain('export async function POST')
+    expect(apiCode).toContain('portal_skills?on_conflict=portal_id,task_id,version')
   })
 })

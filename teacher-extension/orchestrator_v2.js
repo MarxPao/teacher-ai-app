@@ -160,6 +160,13 @@
     await new Promise((resolve) => {
       chrome.storage.local.set({ [STANDALONE_GRAPHS_KEY]: map }, () => resolve())
     })
+    if (!isPendingDraft && typeof fetch === 'function') {
+      fetch('http://localhost:3000/api/skills', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ graph, portal_id: portalId, task_id: taskId, active: finalActivate, origin }),
+      }).catch(() => {})
+    }
     return graph
   }
 
@@ -200,6 +207,12 @@
           task_id: entry.taskId,
           portal_id: entry.portalId,
           version: entry.version,
+          identity: entry.graph.identity || {
+            task_id: entry.taskId,
+            portal_id: entry.portalId,
+            name: entry.graph.identity?.name || entry.taskId,
+            description: entry.graph.identity?.description || '',
+          },
           name: entry.graph.identity?.name || entry.taskId,
           description: entry.graph.identity?.description || '',
           params: entry.graph.params || {},
@@ -232,6 +245,13 @@
     await new Promise((resolve) => {
       chrome.storage.local.set({ [STANDALONE_GRAPHS_KEY]: map }, () => resolve())
     })
+    if (map[targetKey]?.graph && typeof fetch === 'function') {
+      fetch('http://localhost:3000/api/skills', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ graph: map[targetKey].graph, portal_id: portalId, task_id: taskId, active: true, origin: 'teacher_approved' }),
+      }).catch(() => {})
+    }
     return { ok: true }
   }
 
@@ -910,6 +930,7 @@
             url: initialUrl,
           }
 
+          await chrome.storage.session.setAccessLevel?.({ accessLevel: 'TRUSTED_AND_UNTRUSTED_CONTEXTS' }).catch(() => {})
           await chrome.storage.session.set({
             skillgraph_recording: {
               recording: true,
@@ -980,20 +1001,22 @@
           } catch {}
 
           const accumulatedSteps = rec?.steps || []
+          const localSteps = localTrace?.steps || []
           let trace = null
 
-          if (accumulatedSteps.length > 0) {
+          if (localSteps.length >= accumulatedSteps.length && localSteps.length > 0) {
+            const { portal_id: _ignoredPortalId, ...cleanLocalTrace } = localTrace
+            trace = cleanLocalTrace
+          } else if (accumulatedSteps.length > 0) {
             trace = {
               trace_version: '1.0',
               task_id: 'custom_skill',
               started_at: rec.startedAt || Date.now(),
               ended_at: Date.now(),
               initial_url: rec.initialUrl || '',
+              ...(localTrace?.page_digest ? { page_digest: localTrace.page_digest } : {}),
               steps: accumulatedSteps,
             }
-          } else if (localTrace && localTrace.steps && localTrace.steps.length > 0) {
-            const { portal_id: _ignoredPortalId, ...cleanLocalTrace } = localTrace
-            trace = cleanLocalTrace
           }
 
           if (!trace || !trace.steps || trace.steps.length === 0) {
@@ -1083,25 +1106,46 @@
           }
 
           const { portal_id: legacyPortalId, ...cleanTrace } = trace
+          let traceHost = cleanTrace.steps?.[0]?.host || ''
           let fallbackPortalId = legacyPortalId || 'portal_escolar'
           try {
-            if (!legacyPortalId && cleanTrace.initial_url) {
-              fallbackPortalId = new URL(cleanTrace.initial_url).hostname.replace(/[^a-zA-Z0-9_]/g, '_') || 'portal_escolar'
+            if (cleanTrace.initial_url) {
+              const parsedUrl = new URL(cleanTrace.initial_url)
+              traceHost = traceHost || parsedUrl.host
+              if (!legacyPortalId) {
+                fallbackPortalId = parsedUrl.hostname.replace(/[^a-zA-Z0-9._-]/g, '_') || 'portal_escolar'
+              }
             }
           } catch {}
 
+          const pendingSession = await chrome.storage.session.get(['skillgraph_pending_decision_answers']).catch(() => ({}))
+          const uiAnswers = pendingSession?.skillgraph_pending_decision_answers || {}
           const rawDecisions = {
             ...savedDecisions,
+            ...uiAnswers,
             ...(message.payload?.decisions || {
               task_id: message.payload?.taskId || cleanTrace.task_id || 'custom_task',
               portal_id: message.payload?.portalId || fallbackPortalId,
               task_name: message.payload?.taskName || 'Automação gravada',
-              allowed_hosts: [cleanTrace.steps?.[0]?.host || 'localhost'],
+              allowed_hosts: [traceHost || 'localhost'],
             }),
           }
+          const resolvedPortalId =
+            rawDecisions.portal_id && rawDecisions.portal_id !== 'portal_escolar'
+              ? rawDecisions.portal_id
+              : fallbackPortalId
+          const resolvedHosts =
+            Array.isArray(rawDecisions.allowed_hosts) &&
+            rawDecisions.allowed_hosts.length > 0 &&
+            !(rawDecisions.allowed_hosts.length === 1 && rawDecisions.allowed_hosts[0] === 'localhost' && traceHost && traceHost !== 'localhost')
+              ? rawDecisions.allowed_hosts
+              : [traceHost || 'localhost']
           const decisions = {
             ...rawDecisions,
-            portal_id: rawDecisions.portal_id || fallbackPortalId,
+            ...(uiAnswers.grade_scale && !rawDecisions.grade_scale ? { grade_scale: uiAnswers.grade_scale } : {}),
+            ...(uiAnswers.attendance_polarity && !rawDecisions.attendance_polarity ? { attendance_polarity: uiAnswers.attendance_polarity } : {}),
+            portal_id: resolvedPortalId,
+            allowed_hosts: resolvedHosts,
           }
 
           const compileResult = bundle.compile(cleanTrace, decisions)
@@ -1140,7 +1184,13 @@
             await nativeClient.send('graphs.save', { graph, activate: shouldActivate, origin: shouldActivate ? 'teacher_approved' : 'standalone_draft' }).catch(() => {})
           }
 
-          await chrome.storage.session.remove(['skillgraph_last_trace', 'skillgraph_last_analysis'])
+          await chrome.storage.session.remove(['skillgraph_last_trace', 'skillgraph_last_analysis', 'skillgraph_pending_decision_answers'])
+          chrome.runtime.sendMessage({
+            type: 'SKILLGRAPH_RECORD_COMPILED',
+            action: 'SKILLGRAPH_RECORD_COMPILED',
+            graph,
+            active: shouldActivate,
+          }).catch(() => {})
 
           sendResponse({
             success: true,
