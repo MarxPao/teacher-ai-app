@@ -166,7 +166,7 @@ export const MethodParamSchemas = {
 
   'agent.plan': z.object({
     system: z.string().min(1).max(4000),
-    user: z.string().min(1).max(20000),
+    user: z.string().min(1).max(40000),
     provider: z.enum(['ollama', 'groq', 'openai']).optional(),
   }).strict(),
 

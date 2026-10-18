@@ -1043,7 +1043,7 @@
           const planner = bundle.createLlmPlanner(complete)
           const verify = bundle.createLlmVerifier(complete)
           const loop = new bundle.ReasoningLoopExecutor(driver, hostObj, planner, {
-            maxSteps: message.maxSteps || 12,
+            maxSteps: message.maxSteps || 30,
             allowedHosts: [host],
             verify,
           })
