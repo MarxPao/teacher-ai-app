@@ -31,7 +31,8 @@
   var CPF_REGEX = /\b(?:\d{3}\.?\d{3}\.?\d{3}[-/]?\d{2}|\d{11})\b/g;
 
   // Telefone: (XX) 9XXXX-XXXX, XX9XXXXXXXX, +55 XX XXXXX-XXXX, fixos 4 dígitos
-  var PHONE_REGEX = /(?:\+?55\s?)?(?:\(?\d{2}\)?\s?)?(?:9\s?\d{4}[-\s]?\d{4}|\d{4}[-\s]?\d{4})\b/g;
+  // O lookbehind impede casar o final de IDs numéricos longos (ex.: cls_1785639505494)
+  var PHONE_REGEX = /(?<![\d_])(?:\+?55\s?)?(?:\(?\d{2}\)?\s?)?(?:9\s?\d{4}[-\s]?\d{4}|\d{4}[-\s]?\d{4})\b/g;
 
   // E-mail
   var EMAIL_REGEX = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g;
