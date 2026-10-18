@@ -6,6 +6,8 @@ import { buildReviewMirror, approvedWritesFrom } from '../runner/reviewMirror'
 import { RemoteDriver } from './remoteDriver'
 import { ReasoningLoopExecutor } from '../agent/reasoningLoop'
 import { createLlmPlanner, createLlmVerifier } from '../agent/llmPlanner'
+import { agentRunToTrace } from '../agent/trace'
+import { replayKey } from '../agent/replay'
 import type { Host, CheckpointPayload, HandoffPayload, RunEvent, RunState } from '../runner/types'
 import type { AuditEntry } from '../contracts/audit'
 import { SkillGraphV2Schema, validateGraph } from '../contracts/skillgraph'
@@ -387,6 +389,8 @@ const SkillGraphV2 = {
   ReasoningLoopExecutor,
   createLlmPlanner,
   createLlmVerifier,
+  agentRunToTrace,
+  replayKey,
   NativeClient,
   NativeSkillGraphRepository,
   NativeAuditSink,

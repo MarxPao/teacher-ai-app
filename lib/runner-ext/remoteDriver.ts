@@ -19,6 +19,7 @@ import { RunnerError } from '../runner/types'
 import type { Fingerprint } from '../contracts/skillgraph/primitives'
 import type { ElementDescriptor } from '../recorder/traceSchema'
 import type { AgentPageSnapshot } from '../runner-dom/agentObserver'
+import { mergeFrameSnapshots, type FrameSnapshot } from '../agent/frames'
 import { SKILLGRAPH_RPC_CHANNEL, type DriverMethodName, type DriverRpcRequest, type DriverRpcResponse } from './protocol'
 import { verifyCommittedValue } from '../runner-dom/writer'
 
@@ -65,7 +66,20 @@ function unwrapElementTargetFrame(target: ElementTarget): { frameId?: number; cl
       return { frameId: decoded.frameId, cleanTarget: { handleId: decoded.handleId } }
     }
   }
+  // Alvo por âncora com frameId (observação do agente em iframe de outra origem)
+  if (target && 'anchor' in target && typeof target.frameId === 'number') {
+    const { frameId, ...rest } = target
+    return { frameId: frameId > 0 ? frameId : undefined, cleanTarget: rest }
+  }
   return { cleanTarget: target }
+}
+
+const CDP_KEYS: Record<string, { code: string; vk: number; text?: string }> = {
+  Enter: { code: 'Enter', vk: 13, text: '\r' },
+  Escape: { code: 'Escape', vk: 27 },
+  Tab: { code: 'Tab', vk: 9 },
+  ArrowDown: { code: 'ArrowDown', vk: 40 },
+  ArrowUp: { code: 'ArrowUp', vk: 38 },
 }
 
 export interface RemoteDriverOptions {
@@ -76,13 +90,129 @@ export interface RemoteDriverOptions {
 export class RemoteDriver implements Driver {
   private frameId?: number
   private timeoutMs: number
+  private tabId: number
+  private tabHistory: number[] = []
 
-  constructor(
-    private readonly tabId: number,
-    options: RemoteDriverOptions = {}
-  ) {
+  constructor(tabId: number, options: RemoteDriverOptions = {}) {
+    this.tabId = tabId
     this.frameId = options.frameId
     this.timeoutMs = options.timeoutMs ?? 15000
+  }
+
+  public getTabId(): number {
+    return this.tabId
+  }
+
+  private hasDebugger(): boolean {
+    return typeof chrome !== 'undefined' && !!(chrome as any).debugger
+  }
+
+  /** Executa comandos CDP numa única sessão de depuração (anexa, envia em ordem, desanexa). */
+  private cdp(commands: Array<[string, any]>): Promise<boolean> {
+    const dbg = (chrome as any).debugger
+    const target = { tabId: this.tabId }
+    return new Promise<boolean>(resolve => {
+      dbg.attach(target, '1.3', () => {
+        // Já anexado (lastError) não impede o envio
+        void chrome.runtime?.lastError
+        let ok = true
+        const next = (i: number) => {
+          if (i >= commands.length) {
+            dbg.detach(target, () => {
+              void chrome.runtime?.lastError
+              resolve(ok)
+            })
+            return
+          }
+          dbg.sendCommand(target, commands[i][0], commands[i][1], () => {
+            if (chrome.runtime?.lastError) ok = false
+            next(i + 1)
+          })
+        }
+        next(0)
+      })
+    })
+  }
+
+  private async centerOf(cleanTarget: ElementTarget, frameId?: number): Promise<{ x: number; y: number } | null> {
+    // Coordenadas de iframe de outra origem são relativas ao quadro: sem como somar o deslocamento daqui
+    if (typeof frameId === 'number' && frameId > 0) return null
+    const box = await this.sendRpc<{ x: number; y: number; width: number; height: number; visible: boolean }>('getBoundingBox', cleanTarget, 1, frameId)
+    if (!box || !box.visible || box.width <= 0 || box.height <= 0) return null
+    return { x: Math.round(box.x + box.width / 2), y: Math.round(box.y + box.height / 2) }
+  }
+
+  /** Observação do agente: quadro principal + iframes de outra origem (cada um pelo seu content script). */
+  public async observePage(options?: { maxElements?: number; maxTextChars?: number }): Promise<AgentPageSnapshot> {
+    const top = await this.sendRpc<AgentPageSnapshot>('observePage', options || {}, 1, 0)
+    let topHost = ''
+    try {
+      topHost = new URL(top.url).hostname
+    } catch {}
+    const frames = await this.listFrames().catch(() => [])
+    const foreign = frames.filter(f => f.frameId > 0 && f.host && f.host !== topHost && /^https?:/.test(f.url))
+    const snaps: FrameSnapshot[] = []
+    for (const f of foreign.slice(0, 6)) {
+      try {
+        const snapshot = await this.sendRpc<AgentPageSnapshot>('observePage', { ...(options || {}), maxElements: 60 }, 1, f.frameId)
+        snaps.push({ frameId: f.frameId, url: f.url, host: f.host, snapshot })
+      } catch {}
+    }
+    return snaps.length ? mergeFrameSnapshots(top, snaps) : top
+  }
+
+  public async pressKey(key: string, target?: ElementTarget): Promise<void> {
+    const spec = CDP_KEYS[key]
+    if (target) {
+      const { frameId, cleanTarget } = unwrapElementTargetFrame(target)
+      if (this.hasDebugger() && spec) {
+        await this.sendRpc('focus', cleanTarget, 1, frameId)
+      } else {
+        await this.sendRpc('pressKey', { key, target: cleanTarget }, 1, frameId)
+        return
+      }
+    }
+    if (this.hasDebugger() && spec) {
+      const base = { key, code: spec.code, windowsVirtualKeyCode: spec.vk, nativeVirtualKeyCode: spec.vk }
+      const ok = await this.cdp([
+        ['Input.dispatchKeyEvent', { type: 'keyDown', ...base, ...(spec.text ? { text: spec.text } : {}) }],
+        ['Input.dispatchKeyEvent', { type: 'keyUp', ...base }],
+      ])
+      if (ok) return
+    }
+    await this.sendRpc('pressKey', { key }, 1)
+  }
+
+  public async hover(target: ElementTarget): Promise<void> {
+    const { frameId, cleanTarget } = unwrapElementTargetFrame(target)
+    if (this.hasDebugger()) {
+      const p = await this.centerOf(cleanTarget, frameId).catch(() => null)
+      if (p && (await this.cdp([['Input.dispatchMouseEvent', { type: 'mouseMoved', x: p.x, y: p.y }]]))) return
+    }
+    await this.sendRpc('hover', cleanTarget, 1, frameId)
+  }
+
+  public async scrollPage(direction: 'up' | 'down'): Promise<void> {
+    await this.sendRpc('scrollPage', direction, 1, 0)
+  }
+
+  /** Segue para a aba mais nova da mesma janela (ex.: relatório aberto em nova aba) ou volta para a anterior. */
+  public async switchTab(which: 'newest' | 'previous'): Promise<{ url: string }> {
+    if (which === 'previous') {
+      const prev = this.tabHistory.pop()
+      if (prev === undefined) throw new RunnerError('E_ANCHOR_NOT_FOUND', 'Não há aba anterior')
+      this.tabId = prev
+    } else {
+      const current = await chrome.tabs.get(this.tabId)
+      const tabs: any[] = await chrome.tabs.query({ windowId: current.windowId })
+      const newest = tabs.filter(t => t.id !== this.tabId).sort((a, b) => (b.id ?? 0) - (a.id ?? 0))[0]
+      if (!newest?.id) throw new RunnerError('E_ANCHOR_NOT_FOUND', 'Nenhuma outra aba aberta')
+      this.tabHistory.push(this.tabId)
+      this.tabId = newest.id
+      await chrome.tabs.update(newest.id, { active: true })
+    }
+    const tab = await chrome.tabs.get(this.tabId)
+    return { url: tab.url || '' }
   }
 
   public setFrameId(frameId?: number): void {
@@ -314,25 +444,33 @@ export class RemoteDriver implements Driver {
       error?: string
     }>('write', cleanOptions, 1, frameId)
 
-    // Escalação automática para CDP Hardware Input (event.isTrusted === true) caso o portal rejeite eventos JS sintéticos
-    if (!res.verified && options.method !== 'set_checked' && typeof chrome !== 'undefined' && (chrome as any).debugger) {
-      try {
-        const cdpOk = await this.tryDispatchTrustedCdpText(String(options.value))
-        if (cdpOk) {
-          const readBack = await this.readValue(options.target)
-          if (readBack && verifyCommittedValue(String(options.value), readBack.value)) {
-            return {
-              success: true,
-              beforeValue: res.beforeValue,
-              afterValue: readBack.value,
-              verified: true,
-            }
-          }
-        }
-      } catch {}
+    // Escalação para teclado real (CDP, event.isTrusted === true) quando o portal rejeita eventos sintéticos
+    if (!res.verified && options.method !== 'set_checked' && options.method !== 'select_option' && this.hasDebugger()) {
+      const trustedRes = await this.tryTrustedType(cleanTarget, String(options.value), frameId).catch(() => null)
+      if (trustedRes) return { ...trustedRes, beforeValue: res.beforeValue }
     }
 
     return res
+  }
+
+  /** Digitação real: foca o campo (selecionando o conteúdo atual) e insere o texto via CDP; confere por leitura. */
+  private async tryTrustedType(
+    cleanTarget: ElementTarget,
+    value: string,
+    frameId?: number
+  ): Promise<{ success: boolean; beforeValue: string; afterValue: string; verified: boolean } | null> {
+    if (typeof frameId === 'number' && frameId > 0) return null
+    const before = await this.sendRpc<{ value: string }>('readValue', cleanTarget, 1, frameId).catch(() => ({ value: '' }))
+    await this.sendRpc('focus', cleanTarget, 1, frameId)
+    const ok = await this.cdp([
+      ['Input.dispatchKeyEvent', { type: 'keyDown', key: 'a', code: 'KeyA', modifiers: 2, windowsVirtualKeyCode: 65 }],
+      ['Input.dispatchKeyEvent', { type: 'keyUp', key: 'a', code: 'KeyA', modifiers: 2, windowsVirtualKeyCode: 65 }],
+      ['Input.insertText', { text: value }],
+    ])
+    if (!ok) return null
+    const readBack = await this.sendRpc<{ value: string }>('readValue', cleanTarget, 1, frameId)
+    if (!readBack || !verifyCommittedValue(value, readBack.value)) return null
+    return { success: true, beforeValue: before.value ?? '', afterValue: readBack.value, verified: true }
   }
 
   public async inspectWriteTarget(target: any): Promise<{
@@ -343,28 +481,7 @@ export class RemoteDriver implements Driver {
     return this.sendRpc('inspectWriteTarget', { target })
   }
 
-  private async tryDispatchTrustedCdpText(text: string): Promise<boolean> {
-    const dbg = (chrome as any).debugger
-    if (!dbg) return false
-    const target = { tabId: this.tabId }
-    return new Promise<boolean>(resolve => {
-      dbg.attach(target, '1.3', () => {
-        // Mesmo se já anexado, tenta enviar Input.insertText no elemento focado pelo passo anterior
-        dbg.sendCommand(target, 'Input.insertText', { text }, (err: any) => {
-          dbg.sendCommand(
-            target,
-            'Input.dispatchKeyEvent',
-            { type: 'keyDown', windowsVirtualKeyCode: 13, key: 'Enter', code: 'Enter' },
-            () => {
-              dbg.detach(target, () => {
-                resolve(!err)
-              })
-            }
-          )
-        })
-      })
-    })
-  }
+  // (removido) a antiga digitação CDP apertava Enter depois do texto, o que podia enviar formulários.
 
   public async getBoundingBox(target: ElementTarget): Promise<{ x: number; y: number; width: number; height: number; visible: boolean }> {
     const { frameId, cleanTarget } = unwrapElementTargetFrame(target)
@@ -408,42 +525,15 @@ export class RemoteDriver implements Driver {
   }
 
   private async tryDispatchTrustedCdpClick(cleanTarget: ElementTarget, frameId?: number): Promise<boolean> {
-    const dbg = (chrome as any).debugger
-    if (!dbg) return false
+    if (!this.hasDebugger()) return false
     try {
-      const box = await this.sendRpc<{ x: number; y: number; width: number; height: number; visible: boolean }>(
-        'getBoundingBox',
-        cleanTarget,
-        1,
-        frameId
-      )
-      if (!box || !box.visible || box.width <= 0 || box.height <= 0) return false
-      const x = Math.round(box.x + box.width / 2)
-      const y = Math.round(box.y + box.height / 2)
-      const dbgTarget = { tabId: this.tabId }
-      return await new Promise<boolean>(resolve => {
-        dbg.attach(dbgTarget, '1.3', () => {
-          dbg.sendCommand(dbgTarget, 'Input.dispatchMouseEvent', { type: 'mouseMoved', x, y }, () => {
-            dbg.sendCommand(
-              dbgTarget,
-              'Input.dispatchMouseEvent',
-              { type: 'mousePressed', x, y, button: 'left', clickCount: 1 },
-              (pressErr: any) => {
-                dbg.sendCommand(
-                  dbgTarget,
-                  'Input.dispatchMouseEvent',
-                  { type: 'mouseReleased', x, y, button: 'left', clickCount: 1 },
-                  (relErr: any) => {
-                    dbg.detach(dbgTarget, () => {
-                      resolve(!pressErr && !relErr)
-                    })
-                  }
-                )
-              }
-            )
-          })
-        })
-      })
+      const p = await this.centerOf(cleanTarget, frameId)
+      if (!p) return false
+      return await this.cdp([
+        ['Input.dispatchMouseEvent', { type: 'mouseMoved', x: p.x, y: p.y }],
+        ['Input.dispatchMouseEvent', { type: 'mousePressed', x: p.x, y: p.y, button: 'left', clickCount: 1 }],
+        ['Input.dispatchMouseEvent', { type: 'mouseReleased', x: p.x, y: p.y, button: 'left', clickCount: 1 }],
+      ])
     } catch {
       return false
     }
@@ -536,10 +626,6 @@ export class RemoteDriver implements Driver {
 
   public async describeElements(selector?: string): Promise<ElementDescriptor[]> {
     return this.sendRpc('describeElements', selector)
-  }
-
-  public async observePage(options?: { maxElements?: number; maxTextChars?: number }): Promise<AgentPageSnapshot> {
-    return this.sendRpc('observePage', options || {})
   }
 
   public async navigate(url: string): Promise<void> {

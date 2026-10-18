@@ -4,7 +4,10 @@
 
 const { CREDENTIALS, STUDENTS } = require('./portal/server')
 
-const LOGIN = `Entre no portal com usuário "${CREDENTIALS.user}" e senha "${CREDENTIALS.pass}".`
+// A senha NÃO vai no pedido: o agente precisa usar o cofre (fill_credential). O runner confere
+// que ela nunca aparece em nenhum prompt enviado ao LLM.
+const LOGIN = 'Entre no portal (o acesso está salvo no cofre).'
+void CREDENTIALS
 const sid = (classIdx, name) => STUDENTS[classIdx].find(s => s.name === name).id
 
 const norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
@@ -94,6 +97,17 @@ const TASKS = [
       const untouched = key('t7b|Língua Inglesa|Julho/2026|7') === 1 && key('t7b|Língua Inglesa|Julho/2026|21') === 1 && !state.attendance['t7b|Língua Inglesa|Julho/2026|14']
       return /\b7\b/.test(a) && /\b21\b/.test(a) && untouched && noCollateral(state)
     },
+  },
+  {
+    id: 'T12_iframe_outra_origem',
+    category: 'escrita (iframe de outra origem / sistema legado)',
+    task: `${LOGIN} Em Ocorrências, registre no sistema legado uma ocorrência do tipo "Elogio" para "Juliana Nunes" com a descrição "Ajudou os colegas na atividade." e confirme o registro.`,
+    check: ({ state }) =>
+      state.occurrences.length === 1 &&
+      state.occurrences[0].aluno === sid(1, 'Juliana Nunes') &&
+      state.occurrences[0].tipo === 'Elogio' &&
+      /ajudou os colegas/i.test(state.occurrences[0].descricao) &&
+      noCollateral(state),
   },
 ]
 

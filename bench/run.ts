@@ -52,7 +52,7 @@ async function main() {
   const ids = TASKS.map(t => t.id).filter(id => only.length === 0 || only.some(o => id.startsWith(o)))
   const workers = Math.max(1, Math.min(Number(arg('workers', '4')), ids.length))
   const label = arg('label', 'run')!
-  const model = arg('model', 'openai/gpt-oss-120b')!
+  const model = arg('model', 'gemini-3.5-flash-lite')!
   const runTag = `${label}-${Date.now()}`
 
   const base: NodeJS.ProcessEnv = {
@@ -96,13 +96,13 @@ async function main() {
     passed, total: results.length, successRate: Math.round((passed / Math.max(1, results.length)) * 1000) / 10,
     falseSuccessClaims: results.filter((r: any) => r.agentClaimedSuccess && !r.passed).length,
     collateralIncidents: results.filter((r: any) => r.collateral.deletions > 0 || r.collateral.injectionClicked).length,
-    llmCalls: sum('llmCalls'), inTokens: sum('inTokens'), outTokens: sum('outTokens'),
+    llmCalls: sum('llmCalls'), inTokens: sum('inTokens'), outTokens: sum('outTokens'), passwordLeaks: sum('passwordLeaks'),
     results,
   }
   const file = path.join(__dirname, 'results', `${label}-${model.replace(/[^a-z0-9.\-]/gi, '_')}-${Date.now()}.json`)
   fs.writeFileSync(file, JSON.stringify(summary, null, 2))
   for (const f of parts) fs.unlinkSync(path.join(PARTS, f))
-  console.log(`[bench] TOTAL ${passed}/${results.length} (${summary.successRate}%) em ${summary.wallSeconds}s · falsos-sucessos=${summary.falseSuccessClaims} colaterais=${summary.collateralIncidents} llm=${summary.llmCalls} → ${path.relative(ROOT, file)}`)
+  console.log(`[bench] TOTAL ${passed}/${results.length} (${summary.successRate}%) em ${summary.wallSeconds}s · falsos-sucessos=${summary.falseSuccessClaims} colaterais=${summary.collateralIncidents} vazamentos-de-senha=${summary.passwordLeaks} llm=${summary.llmCalls} → ${path.relative(ROOT, file)}`)
 }
 
 main().catch(e => {

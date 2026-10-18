@@ -24,6 +24,13 @@ export interface AgentElement {
   context?: string
   region: 'dialog' | 'main' | 'nav' | 'other'
   inFrame?: boolean
+  /** Quadro (iframe de outra origem) onde o elemento vive; ausente = quadro principal */
+  frameId?: number
+  /** Campo de senha: o valor NUNCA sai da página, só se está preenchido */
+  sensitive?: boolean
+  filled?: boolean
+  /** Atributos estáveis, para converter a execução em SkillGraph */
+  attrs?: { id?: string; name?: string; ariaLabel?: string; placeholder?: string; testId?: string; autocomplete?: string; labelText?: string }
 }
 
 export interface AgentPageSnapshot {
@@ -80,8 +87,10 @@ function labelFor(el: Element): string {
   const tag = el.tagName.toLowerCase()
   if (tag === 'input' && ['button', 'submit', 'reset'].includes((el as HTMLInputElement).type)) return clean((el as HTMLInputElement).value)
   const txt = clean((el as HTMLElement).innerText || el.textContent)
-  if (txt && tag !== 'select' && tag !== 'textarea') return txt
   const title = el.getAttribute('title')
+  // Botão só de ícone ("⋮", "×", "✎"): o title diz o que ele faz
+  if (txt && title && !/[\p{L}\p{N}]/u.test(txt)) return clean(title)
+  if (txt && tag !== 'select' && tag !== 'textarea') return txt
   if (title) return clean(title)
   const ph = el.getAttribute('placeholder')
   if (ph) return clean(ph)
@@ -110,6 +119,35 @@ function contextFor(el: Element, ownLabel: string): string | undefined {
     if (h && h !== el && clean(h.textContent) && clean(h.textContent) !== ownLabel) return clean(h.textContent, 60)
   }
   return undefined
+}
+
+// IDs gerados (aleatórios, numéricos, com ':' do React) não servem de âncora em outra visita
+const looksGenerated = (id: string) => /^\d|:|[a-z]\d{4,}|^[a-z0-9]{6,9}$|^(ember|react|mui|ext-gen)/i.test(id)
+
+function stableAttrs(el: Element): AgentElement['attrs'] {
+  const a: NonNullable<AgentElement['attrs']> = {}
+  if (el.id && !looksGenerated(el.id)) a.id = el.id
+  const name = el.getAttribute('name')
+  if (name && !looksGenerated(name)) a.name = name
+  const aria = el.getAttribute('aria-label')
+  if (aria) a.ariaLabel = clean(aria)
+  const ph = el.getAttribute('placeholder')
+  if (ph) a.placeholder = clean(ph)
+  const tid = el.getAttribute('data-testid') || el.getAttribute('data-test-id')
+  if (tid) a.testId = tid
+  const ac = el.getAttribute('autocomplete')
+  if (ac) a.autocomplete = ac
+  if (el.id) {
+    try {
+      const lbl = (el.getRootNode() as Document | ShadowRoot).querySelector?.(`label[for="${CSS.escape(el.id)}"]`)
+      if (lbl?.textContent) a.labelText = clean(lbl.textContent)
+    } catch {}
+  }
+  if (!a.labelText) {
+    const parent = el.closest('label')
+    if (parent?.textContent) a.labelText = clean(parent.textContent)
+  }
+  return a
 }
 
 function regionOf(el: Element, dialog: Element | null): AgentElement['region'] {
@@ -227,6 +265,9 @@ export function observeAgentPage(doc: Document, opts: { maxElements?: number; ma
       e.options = Array.from(sel.options).filter(o => !o.disabled && !o.hidden).map(o => clean(o.text, 40)).slice(0, 40)
     } else if (tag === 'input' && ['checkbox', 'radio'].includes((el as HTMLInputElement).type)) {
       e.checked = (el as HTMLInputElement).checked
+    } else if (tag === 'input' && (el as HTMLInputElement).type === 'password') {
+      e.sensitive = true
+      e.filled = (el as HTMLInputElement).value.length > 0
     } else if (tag === 'input' || tag === 'textarea') {
       const v = (el as HTMLInputElement).value
       if (v) e.value = clean(v, 80)
@@ -235,6 +276,7 @@ export function observeAgentPage(doc: Document, opts: { maxElements?: number; ma
     }
     const ctx = contextFor(el, label)
     if (ctx) e.context = ctx
+    e.attrs = stableAttrs(el)
     return e
   })
 

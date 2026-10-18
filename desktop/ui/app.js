@@ -192,6 +192,61 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   })
 
+  const credContainer = document.getElementById('cred-status-container')
+
+  async function loadCredentialStatus() {
+    if (!window.teacherDesktop || !credContainer) return
+    try {
+      const res = await window.teacherDesktop.invoke('credentials.status')
+      const hosts = (res.success && res.result?.hosts) || []
+      credContainer.innerHTML = hosts.length
+        ? hosts.map(h => `
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 0;">
+              <span style="font-weight: 500;">${escapeHtml(h)}</span>
+              <button class="btn" data-del-cred="${escapeHtml(h)}" style="padding: 2px 10px; font-size: 12px;">Remover</button>
+            </div>`).join('')
+        : '<span style="color: var(--muted);">Nenhum portal cadastrado.</span>'
+      credContainer.querySelectorAll('[data-del-cred]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const host = btn.getAttribute('data-del-cred')
+          if (!confirm(`Remover o acesso guardado para ${host}?`)) return
+          await window.teacherDesktop.invoke('credentials.delete', { host })
+          await loadCredentialStatus()
+        })
+      })
+    } catch (err) {
+      log(`Erro ao listar acessos: ${err.message}`)
+    }
+  }
+
+  document.getElementById('btn-save-cred')?.addEventListener('click', async () => {
+    const hostInput = document.getElementById('cred-host')
+    const userInput = document.getElementById('cred-user')
+    const passInput2 = document.getElementById('cred-pass')
+    let host = (hostInput?.value || '').trim().toLowerCase()
+    try {
+      if (host.includes('://')) host = new URL(host).hostname
+    } catch {}
+    host = host.replace(/\/.*$/, '')
+    const username = (userInput?.value || '').trim()
+    const password = passInput2?.value || ''
+    if (!host || !username || !password) {
+      alert('Preencha o endereço do portal, o usuário e a senha.')
+      return
+    }
+    const res = await window.teacherDesktop.invoke('credentials.set', { host, username, password })
+    if (passInput2) passInput2.value = ''
+    if (res.success) {
+      log(`Acesso ao portal ${host} guardado no cofre do sistema.`)
+      if (userInput) userInput.value = ''
+      await loadCredentialStatus()
+    } else {
+      alert(`Erro: ${res.error?.message}`)
+    }
+  })
+
+  loadCredentialStatus()
+
   btnRefreshStudents?.addEventListener('click', loadStudents)
   btnStatus?.addEventListener('click', checkStatus)
 

@@ -22,6 +22,8 @@ export const EXTENSION_ALLOWED_METHODS = [
   'nlu.parse',
   'llm.generateText',
   'agent.plan',
+  'credentials.get',
+  'credentials.status',
 ] as const
 
 export type ExtensionMethod = typeof EXTENSION_ALLOWED_METHODS[number]
@@ -38,6 +40,8 @@ export const UI_ALLOWED_METHODS = [
   'data.restore',
   'keys.configure',
   'keys.status',
+  'credentials.set',
+  'credentials.delete',
   'consents.get',
   'consents.set',
   'audit.purge',
@@ -162,6 +166,22 @@ export const MethodParamSchemas = {
   'llm.generateText': z.object({
     instruction: z.string().min(1),
     maxLength: z.number().int().positive().optional(),
+  }).strict(),
+
+  'credentials.get': z.object({
+    host: z.string().min(1).max(253),
+  }).strict(),
+
+  'credentials.status': z.object({}).strict(),
+
+  'credentials.set': z.object({
+    host: z.string().min(1).max(253).regex(/^[a-z0-9.-]+$/i),
+    username: z.string().min(1).max(200),
+    password: z.string().min(1).max(500),
+  }).strict(),
+
+  'credentials.delete': z.object({
+    host: z.string().min(1).max(253),
   }).strict(),
 
   'agent.plan': z.object({

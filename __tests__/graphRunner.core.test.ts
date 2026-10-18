@@ -1607,6 +1607,10 @@ describe('Fase 4: Capacidades do Engine por Arquétipo (T4.4)', () => {
               cb({ channel: SKILLGRAPH_RPC_CHANNEL, id: req.id, ok: true, result: { success: true } })
               return
             }
+            if (req.method === 'describeClickTarget') {
+              cb({ channel: SKILLGRAPH_RPC_CHANNEL, id: req.id, ok: true, result: { tagName: 'button', isSubmitOrMutating: false } })
+              return
+            }
           },
         },
         debugger: {
@@ -1631,9 +1635,18 @@ describe('Fase 4: Capacidades do Engine por Arquétipo (T4.4)', () => {
         rDriver.setFrameId(0)
         const clickRes = await rDriver.click({ handleId: locRes.handleId! }, { requireTrusted: true })
         expect(clickRes.success).toBe(true)
-        const bboxCall = sentFrames.find(c => c.method === 'getBoundingBox')
-        expect(bboxCall?.frameId).toBe(2)
-        expect(bboxCall?.params).toEqual({ handleId: 'h_in_frame2' })
+        // Dentro de iframe de outra origem a caixa é relativa ao quadro: um clique CDP (coordenadas da página)
+        // cairia no lugar errado. O clique vai pelo content script do próprio quadro 2.
+        const clickCall = sentFrames.find(c => c.method === 'click')
+        expect(clickCall?.frameId).toBe(2)
+        expect(clickCall?.params.target).toEqual({ handleId: 'h_in_frame2' })
+        expect(cdpCommands).toEqual([])
+
+        // No quadro principal, o clique real (CDP) é o caminho padrão, no centro da caixa
+        const topClick = await rDriver.click({ handleId: 'h_top' }, { requireTrusted: true })
+        expect(topClick.success).toBe(true)
+        const bboxCall = sentFrames.filter(c => c.method === 'getBoundingBox').pop()
+        expect(bboxCall?.frameId).toBe(0)
         expect(cdpCommands.map(c => c.params.type)).toEqual(['mouseMoved', 'mousePressed', 'mouseReleased'])
         expect(cdpCommands[1].params.x).toBe(140)
         expect(cdpCommands[1].params.y).toBe(220)

@@ -83,7 +83,7 @@ describe('ReasoningLoopExecutor', () => {
   it('pede confirmação em clique destrutivo', async () => {
     const { driver, calls } = makeDriver([[desc({ text: 'Salvar notas' })]])
     const { host, asked } = makeHost(false)
-    const r = await new ReasoningLoopExecutor(driver, host, script({ action: 'click', idx: 0, reason: 'x' })).run('t')
+    const r = await new ReasoningLoopExecutor(driver, host, script({ action: 'click', idx: 0, reason: 'x' })).run('Salve as notas')
     expect(r.stoppedFor).toBe('rejected')
     expect(asked.length).toBe(1)
     expect(calls).toEqual([])

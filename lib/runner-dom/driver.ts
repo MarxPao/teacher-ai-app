@@ -39,7 +39,8 @@ export class DomDriver implements Driver {
     const currentHost = this.doc.location?.hostname || 'localhost'
     const isAllowed = this.allowedHosts.some(allowed => {
       const normAllowed = allowed.toLowerCase().trim()
-      return currentHost === normAllowed || currentHost.endsWith(`.${normAllowed}`)
+      // '*' = o content script aceita qualquer host; quem restringe é o orquestrador (allowedHosts do grafo/agente)
+      return normAllowed === '*' || currentHost === normAllowed || currentHost.endsWith(`.${normAllowed}`)
     })
 
     if (!isAllowed) {
@@ -321,15 +322,84 @@ export class DomDriver implements Driver {
     } catch {}
     if (typeof el.getBoundingClientRect === 'function') {
       const r = el.getBoundingClientRect()
+      // Elemento dentro de iframe de mesma origem: soma o deslocamento de cada quadro até o documento
+      // do driver, para que o clique real (CDP) caia no ponto certo da tela.
+      let x = r.left
+      let y = r.top
+      let win = el.ownerDocument?.defaultView as (Window & typeof globalThis) | null
+      while (win && win.document !== this.doc) {
+        const frameEl = win.frameElement as HTMLElement | null
+        if (!frameEl) break
+        const fr = frameEl.getBoundingClientRect()
+        x += fr.left + (frameEl.clientLeft || 0)
+        y += fr.top + (frameEl.clientTop || 0)
+        win = frameEl.ownerDocument?.defaultView as (Window & typeof globalThis) | null
+      }
       return {
-        x: r.left,
-        y: r.top,
+        x,
+        y,
         width: r.width,
         height: r.height,
         visible: r.width > 0 && r.height > 0,
       }
     }
     return { x: 0, y: 0, width: 0, height: 0, visible: false }
+  }
+
+  /** Só foca o elemento (para teclas/digitação reais via CDP logo em seguida). */
+  public async focus(target: ElementTarget): Promise<void> {
+    this.hostGuard()
+    const el = this.resolveTargetElement(target) as HTMLElement
+    try {
+      el.scrollIntoView?.({ block: 'center', inline: 'center' })
+    } catch {}
+    el.focus?.()
+    if (typeof (el as HTMLInputElement).select === 'function') {
+      try {
+        ;(el as HTMLInputElement).select()
+      } catch {}
+    }
+  }
+
+  public async pressKey(key: string, target?: ElementTarget): Promise<void> {
+    this.hostGuard()
+    const el = (target ? this.resolveTargetElement(target) : this.doc.activeElement) as HTMLElement | null
+    if (!el) throw new RunnerError('E_ANCHOR_NOT_FOUND', 'Nenhum elemento com foco para receber a tecla')
+    if (target) el.focus?.()
+    const init = { key, code: key, bubbles: true, cancelable: true }
+    const notCanceled = el.dispatchEvent(new KeyboardEvent('keydown', init))
+    el.dispatchEvent(new KeyboardEvent('keyup', init))
+    // Eventos sintéticos não disparam a ação padrão: emula o que o navegador faria
+    if (!notCanceled) return
+    if (key === 'Enter') {
+      const form = (el as HTMLInputElement).form || el.closest('form')
+      if (form && el.tagName.toLowerCase() === 'input') {
+        if (typeof (form as HTMLFormElement).requestSubmit === 'function') (form as HTMLFormElement).requestSubmit()
+        else (form as HTMLFormElement).submit()
+      } else if (el.tagName.toLowerCase() === 'button' || el.tagName.toLowerCase() === 'a') {
+        el.click()
+      }
+    } else if (key === 'Tab') {
+      const focusables = Array.from(this.doc.querySelectorAll<HTMLElement>('a[href], button, input, select, textarea, [tabindex]:not([tabindex="-1"])'))
+      const i = focusables.indexOf(el)
+      focusables[i + 1]?.focus()
+    }
+  }
+
+  public async hover(target: ElementTarget): Promise<void> {
+    this.hostGuard()
+    const el = this.resolveTargetElement(target)
+    for (const type of ['pointerover', 'pointerenter', 'mouseover', 'mouseenter', 'mousemove']) {
+      const Ctor = type.startsWith('pointer') && typeof PointerEvent !== 'undefined' ? PointerEvent : MouseEvent
+      el.dispatchEvent(new Ctor(type, { bubbles: type.endsWith('over') || type === 'mousemove', cancelable: true }))
+    }
+  }
+
+  public async scrollPage(direction: 'up' | 'down'): Promise<void> {
+    this.hostGuard()
+    const win = this.doc.defaultView
+    if (!win) return
+    win.scrollBy({ top: (direction === 'down' ? 1 : -1) * Math.round(win.innerHeight * 0.85), behavior: 'instant' as any })
   }
 
   public async describeClickTarget(target: ElementTarget): Promise<ClickTargetDescription> {

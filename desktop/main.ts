@@ -192,6 +192,30 @@ async function executeBusinessMethod(method: string, params: any): Promise<any> 
       return { configured: true, provider: params.provider }
     }
 
+    case 'credentials.set': {
+      if (!vault) throw new Error('Cofre indisponível.')
+      vault.setPortalCredential(params.host, params.username, params.password)
+      return { saved: true, host: params.host }
+    }
+
+    case 'credentials.get': {
+      // Só a extensão (via Native Messaging autorizado) pede; o valor vai direto para o campo do portal
+      if (!vault) throw new Error('Cofre indisponível.')
+      const cred = vault.getPortalCredential(params.host)
+      return cred ? { username: cred.username, password: cred.password } : { username: null, password: null }
+    }
+
+    case 'credentials.status': {
+      if (!vault) throw new Error('Cofre indisponível.')
+      return { hosts: vault.listPortalCredentialHosts() }
+    }
+
+    case 'credentials.delete': {
+      if (!vault) throw new Error('Cofre indisponível.')
+      vault.deletePortalCredential(params.host)
+      return { deleted: true }
+    }
+
     case 'keys.status': {
       if (!vault) throw new Error('Cofre indisponível.')
       if (params.provider) {

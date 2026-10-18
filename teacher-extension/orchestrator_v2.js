@@ -109,6 +109,144 @@
     })
   }
 
+  // ─── Agente genérico: replay + LLM, credenciais do cofre e aprendizado em SkillGraph ───────────
+
+  const AGENT_REPLAY_KEY = 'agent_replay_v1'
+
+  // Roteiros de execuções confirmadas, por portal + pedido (refeitos sem LLM na próxima vez)
+  const chromeReplayStore = {
+    async get(key) {
+      const res = await chrome.storage.local.get([AGENT_REPLAY_KEY]).catch(() => ({}))
+      const map = (res && res[AGENT_REPLAY_KEY]) || {}
+      return map[key] || null
+    },
+    async put(script) {
+      const res = await chrome.storage.local.get([AGENT_REPLAY_KEY]).catch(() => ({}))
+      const map = (res && res[AGENT_REPLAY_KEY]) || {}
+      map[script.key] = script
+      // Mantém só os 200 roteiros mais recentes
+      const keys = Object.keys(map).sort((a, b) => (map[b].updatedAt || 0) - (map[a].updatedAt || 0))
+      for (const k of keys.slice(200)) delete map[k]
+      await chrome.storage.local.set({ [AGENT_REPLAY_KEY]: map })
+    },
+    async delete(key) {
+      const res = await chrome.storage.local.get([AGENT_REPLAY_KEY]).catch(() => ({}))
+      const map = (res && res[AGENT_REPLAY_KEY]) || {}
+      delete map[key]
+      await chrome.storage.local.set({ [AGENT_REPLAY_KEY]: map })
+    },
+  }
+
+  // Compila a execução confirmada num SkillGraph em quarentena (a professora ativa depois de revisar)
+  async function learnGraphFromAgentRun(bundle, task, startUrl, host, result) {
+    if (!bundle?.compile || !bundle?.agentRunToTrace || !Array.isArray(result.trace) || result.trace.length === 0) return null
+    try {
+      const slug = task.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 30) || 'tarefa'
+      const taskId = 'custom:agente-' + slug
+      const trace = bundle.agentRunToTrace(taskId, startUrl, result.trace)
+      const decisions = {
+        task_id: taskId,
+        portal_id: host.replace(/[^a-zA-Z0-9._-]/g, '_'),
+        task_name: task.slice(0, 80),
+        task_description: `Aprendido pelo agente (${result.trace.length} passo(s)): ${task}`.slice(0, 300),
+        allowed_hosts: [host],
+      }
+      const compiled = bundle.compile(trace, decisions)
+      const graph = compiled?.status === 'needs_decisions' ? compiled.partialGraph : compiled?.graph
+      if (!graph) return null
+      await saveStandaloneGraph(graph, false, 'agent')
+      const nativeClient = getSharedNativeClient()
+      if (nativeClient && compiled.status !== 'needs_decisions') {
+        await nativeClient.send('graphs.save', { graph, activate: false, origin: 'agent' }).catch(() => {})
+      }
+      return { taskId, status: compiled.status }
+    } catch (err) {
+      reportError(err, 'agent.learnGraph')
+      return null
+    }
+  }
+
+  async function runGenericAgent({ tabId: requestedTabId, task, maxSteps, files, learn = true }) {
+    const bundle = globalThis.SkillGraphBundle?.SkillGraphV2
+    const nativeClient = getSharedNativeClient()
+    if (!bundle?.ReasoningLoopExecutor) {
+      return { success: false, unavailable: true, friendlyMessage: 'Agente genérico indisponível nesta versão da extensão.' }
+    }
+    if (!nativeClient) {
+      // Auditoria, cofre e modelo vivem no app desktop; sem ele o agente não escreve nem planeja.
+      return { success: false, unavailable: true, friendlyMessage: 'Abra o app desktop para usar o agente genérico.' }
+    }
+    const tabId = await resolveTargetTab(requestedTabId)
+    if (!tabId) return { success: false, friendlyMessage: 'Nenhuma aba ativa encontrada.' }
+    const tab = await chrome.tabs.get(tabId)
+    const startUrl = tab.url || ''
+    const host = new URL(startUrl).hostname
+    const runId = 'agent_run_' + Date.now()
+    const abortController = new AbortController()
+    currentRunnerAbort = abortController
+
+    const driver = new bundle.RemoteDriver(tabId)
+    const hostObj = bundle.createExtensionHost({
+      runId,
+      targetTabId: tabId,
+      originHost: host,
+      allowedHosts: [host],
+      driver,
+      nativeClient,
+      dryRun: false,
+      abortSignal: abortController.signal,
+      onEvent: (event) => {
+        chrome.runtime.sendMessage({ type: 'SKILLGRAPH_EVENT', event }).catch(() => {})
+      },
+    })
+    const complete = async (system, user) => {
+      if (abortController.signal.aborted) throw new Error('Execução cancelada')
+      const resp = await nativeClient.agentPlan(system, user)
+      return String(resp?.text || '')
+    }
+    // A senha vem do cofre do app desktop direto para o campo; nunca passa pelo LLM nem pelos logs
+    const credentials = async (h) => {
+      const r = await nativeClient.send('credentials.get', { host: h }).catch(() => null)
+      return r && r.username && r.password ? { username: r.username, password: r.password } : null
+    }
+    const loop = new bundle.ReasoningLoopExecutor(driver, hostObj, bundle.createLlmPlanner(complete), {
+      maxSteps: maxSteps || 30,
+      allowedHosts: [host],
+      verify: bundle.createLlmVerifier(complete),
+      replay: chromeReplayStore,
+      credentials,
+      files: files || undefined,
+      trustedInput: true,
+    })
+    let result
+    try {
+      result = await loop.run(task)
+    } finally {
+      if (currentRunnerAbort === abortController) currentRunnerAbort = null
+    }
+    const learned = result.success && learn && result.mode !== 'replay' ? await learnGraphFromAgentRun(bundle, task, startUrl, host, result) : null
+    const modeText = result.mode === 'replay' ? ' (rotina aprendida, sem IA)' : result.mode === 'replay+agent' ? ' (rotina aprendida + ajustes da IA)' : ''
+    return {
+      success: result.success,
+      runId,
+      stepsTaken: result.stepsTaken,
+      stoppedFor: result.stoppedFor,
+      mode: result.mode,
+      replayedSteps: result.replayedSteps,
+      plannerCalls: result.plannerCalls,
+      blockedByPolicy: result.blockedByPolicy,
+      answer: result.answer,
+      learned,
+      friendlyMessage: result.success
+        ? (result.answer ? result.answer : 'Tarefa concluída pelo agente.') + modeText
+        : result.stoppedFor === 'rejected'
+          ? 'Você não aprovou a ação; o agente parou.'
+          : result.stoppedFor === 'verification_failed'
+            ? 'O agente achou que terminou, mas a conferência final não confirmou: ' + (result.error || '')
+            : 'O agente não conseguiu concluir: ' + (result.error || 'motivo desconhecido'),
+    }
+  }
+
   async function saveStandaloneGraph(graph, activate = false, origin = 'standalone_draft') {
     if (!graph || !graph.identity) return null
     const bundle = globalThis.SkillGraphBundle?.SkillGraphV2
@@ -709,6 +847,29 @@
             return
           }
 
+          // O chat usa o mesmo motor do agente (observação rica + DomDriver + replay). O motor antigo
+          // de "hops" por regex fica só como reserva quando o agente não está disponível (sem app desktop).
+          const agentOut = await runGenericAgent({
+            tabId,
+            task: `Navegue no portal até: ${queryText}. Apenas navegue e aplique filtros; não grave, não envie e não exclua nada.`,
+            maxSteps: 20,
+          }).catch((e) => ({ success: false, friendlyMessage: String(e && e.message || e) }))
+          if (agentOut && !agentOut.unavailable) {
+            sendResponse({
+              success: agentOut.success,
+              learned: Boolean(agentOut.learned),
+              quarantine: true,
+              taskId: agentOut.learned?.taskId,
+              hops: agentOut.stepsTaken,
+              engine: 'agent',
+              mode: agentOut.mode,
+              friendlyMessage: agentOut.success
+                ? `Cheguei lá em ${agentOut.stepsTaken} passo(s)${agentOut.mode === 'replay' ? ' usando a rotina aprendida' : ''}! ✨ Revise o mapa abaixo se quiser salvar como rotina.`
+                : agentOut.friendlyMessage,
+            })
+            return
+          }
+
           // 1. Divide o comando em até 10 hops encadeados (incluindo verbos repetidos sem vírgula)
           const hopTargets = queryText
             .split(
@@ -994,74 +1155,13 @@
     if (message.action === 'SKILLGRAPH_AGENT_RUN') {
       (async () => {
         try {
-          const bundle = globalThis.SkillGraphBundle?.SkillGraphV2
-          const nativeClient = getSharedNativeClient()
           const task = String(message.text || '').trim()
-          if (!bundle?.ReasoningLoopExecutor) {
-            sendResponse({ success: false, friendlyMessage: 'Agente genérico indisponível nesta versão da extensão.' })
-            return
-          }
-          if (!nativeClient) {
-            // Auditoria e modelo vivem no app desktop; sem ele o agente não escreve nem planeja.
-            sendResponse({ success: false, friendlyMessage: 'Abra o app desktop para usar o agente genérico.' })
-            return
-          }
           if (!task) {
             sendResponse({ success: false, friendlyMessage: 'Descreva a tarefa para o agente.' })
             return
           }
-          const tabId = await resolveTargetTab(message.tabId)
-          if (!tabId) {
-            sendResponse({ success: false, friendlyMessage: 'Nenhuma aba ativa encontrada.' })
-            return
-          }
-          const tab = await chrome.tabs.get(tabId)
-          const host = new URL(tab.url).host
-          const runId = 'agent_run_' + Date.now()
-          const abortController = new AbortController()
-          currentRunnerAbort = abortController
-
-          const driver = new bundle.RemoteDriver(tabId)
-          const hostObj = bundle.createExtensionHost({
-            runId,
-            targetTabId: tabId,
-            originHost: host,
-            allowedHosts: [host],
-            driver,
-            nativeClient,
-            dryRun: false,
-            abortSignal: abortController.signal,
-            onEvent: (event) => {
-              chrome.runtime.sendMessage({ type: 'SKILLGRAPH_EVENT', event }).catch(() => {})
-            },
-          })
-          const complete = async (system, user) => {
-            if (abortController.signal.aborted) throw new Error('Execução cancelada')
-            const resp = await nativeClient.agentPlan(system, user)
-            return String(resp?.text || '')
-          }
-          const planner = bundle.createLlmPlanner(complete)
-          const verify = bundle.createLlmVerifier(complete)
-          const loop = new bundle.ReasoningLoopExecutor(driver, hostObj, planner, {
-            maxSteps: message.maxSteps || 30,
-            allowedHosts: [host],
-            verify,
-          })
-          const result = await loop.run(task)
-          if (currentRunnerAbort === abortController) currentRunnerAbort = null
-          sendResponse({
-            success: result.success,
-            runId,
-            stepsTaken: result.stepsTaken,
-            stoppedFor: result.stoppedFor,
-            friendlyMessage: result.success
-              ? 'Tarefa concluída pelo agente.'
-              : result.stoppedFor === 'rejected'
-                ? 'Você não aprovou a ação; o agente parou.'
-                : result.stoppedFor === 'verification_failed'
-                  ? 'O agente achou que terminou, mas a conferência final não confirmou: ' + (result.error || '')
-                : 'O agente não conseguiu concluir: ' + (result.error || 'motivo desconhecido'),
-          })
+          const out = await runGenericAgent({ tabId: message.tabId, task, maxSteps: message.maxSteps, files: message.files })
+          sendResponse(out)
         } catch (err) {
           currentRunnerAbort = null
           sendResponse({ success: false, friendlyMessage: 'O agente falhou: ' + (err && err.message ? err.message : String(err)) })

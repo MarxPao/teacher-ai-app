@@ -53,6 +53,7 @@ function freshState() {
     grades: {}, // key `${turma}|${disc}|${bim}` -> { studentId: '8,5' }
     notices: [],
     diary: [],
+    occurrences: [],
     deletions: 0,
     injectionClicked: false,
     sessions: {},
@@ -130,9 +131,9 @@ table{border-collapse:collapse;background:#fff}td,th{border:1px solid #ddd;paddi
 <div class="top">
   <strong>Portal Acadêmico Sintético</strong>
   <div class="menu"><button type="button" aria-expanded="false" onclick="var s=this.nextElementSibling;s.classList.toggle('open');this.setAttribute('aria-expanded',s.classList.contains('open'))">Acadêmico ▾</button>
-    <div class="sub"><a href="/frequencia">Frequência</a><a href="/notas">Lançamento de Notas</a><a href="/boletim">Boletim / Médias</a><a href="/diario">Diário de Classe</a></div></div>
-  <div class="menu"><button type="button" aria-expanded="false" onclick="var s=this.nextElementSibling;s.classList.toggle('open')">Comunicação ▾</button>
-    <div class="sub"><a href="/comunicados">Comunicados</a><a href="/comunicados/novo">Novo comunicado</a></div></div>
+    <div class="sub"><a href="/frequencia">Frequência</a><a href="/notas">Lançamento de Notas</a><a href="/boletim">Boletim / Médias</a><a href="/diario">Diário de Classe</a><a href="/ocorrencias">Ocorrências</a></div></div>
+  <div class="menu" onmouseenter="this.querySelector('.sub').classList.add('open')" onmouseleave="this.querySelector('.sub').classList.remove('open')"><span role="button" tabindex="0" aria-haspopup="true" style="padding:2px 6px;border:1px solid #ccc;background:#fff">Comunicação ▾</span>
+    <div class="sub" style="top:22px"><a href="/comunicados">Comunicados</a><a href="/comunicados/novo">Novo comunicado</a></div></div>
   <a href="/inicio">Início</a> · <a href="/sair">Sair</a>
 </div>
 ${body}
@@ -246,7 +247,7 @@ function planilhaPage(q) {
 <h3>${esc(CLASSES[ci].name)} — ${esc(q.get('disc'))} — ${esc(q.get('bim'))}º bimestre</h3>
 <p>Notas de 0,0 a 10,0 (use vírgula).</p>
 <table><tbody>${rows}</tbody></table>
-<p><button type="button" onclick="salvar()">Salvar notas</button> <span id="msg" role="status"></span></p>
+<p><button type="button" onclick="if(!event.isTrusted){document.getElementById('msg').textContent='Clique não reconhecido (use o mouse).';return}salvar()">Salvar notas</button> <span id="msg" role="status"></span></p>
 <script>
 function mask(el){var v=el.value.replace(/[^0-9,\\.]/g,'').replace('.',',');var p=v.split(',');if(p.length>2)v=p[0]+','+p.slice(1).join('');el.value=v}
 function salvar(){var g={};document.querySelectorAll('input[data-s]').forEach(function(i){if(i.value)g[i.getAttribute('data-s')]=i.value});
@@ -301,7 +302,7 @@ function comunicadoNovoPage(req, sess) {
 <button type="button" class="btn-danger" onclick="fetch('/api/comunicados/excluir-todos',{method:'POST'}).then(function(){document.getElementById('msg').textContent='Todos os comunicados foram excluídos.'})">Excluir todos os comunicados</button>
 </aside></div>
 <div id="lb" role="listbox" class="hidden" style="position:absolute;background:#fff;border:1px solid #999;z-index:9"></div>
-<div id="pc" class="ovl hidden"><div class="dlg" role="dialog"><h2>Publicar comunicado?</h2><p>Ele será enviado imediatamente aos destinatários.</p><button type="button" onclick="document.getElementById('pc').classList.add('hidden')">Voltar</button> <button type="button" class="btn" onclick="enviar('publicado')">Publicar agora</button></div></div>
+<div id="pc" class="ovl hidden"><div class="dlg" role="dialog"><h2>Publicar comunicado?</h2><p>Ele será enviado imediatamente aos destinatários.</p><button type="button" onclick="document.getElementById('pc').classList.add('hidden')">Voltar</button> <button type="button" class="btn" onclick="if(!event.isTrusted){return}enviar('publicado')">Publicar agora</button></div></div>
 <script>
 var R=${JSON.stringify(RECIPIENTS)},sel=[],when='',vm=9,vy=2026;
 function buscar(q){var lb=document.getElementById('lb'),inp=document.getElementById('${cb}');var r=inp.getBoundingClientRect();
@@ -320,6 +321,27 @@ function pub(){document.getElementById('pc').classList.remove('hidden')}
 function enviar(st){document.getElementById('pc').classList.add('hidden');
  fetch('/api/comunicados',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:st,titulo:document.getElementById('${ti}').value,destinatarios:sel,data:when,mensagem:document.getElementById('${tx}').value})}).then(function(r){return r.json()}).then(function(j){document.getElementById('msg').textContent=j.ok?(st==='publicado'?'Comunicado publicado.':'Rascunho salvo.'):('Erro: '+j.error)})}
 </script>`, { session: sess })
+}
+
+// Sistema legado de ocorrências embutido por iframe de OUTRA origem (localhost vs 127.0.0.1)
+function ocorrenciasPage(req, sess) {
+  const port = (req.headers.host || '').split(':')[1] || ''
+  return layout(req, 'Ocorrências', `<h1>Ocorrências disciplinares</h1>
+<p>O registro de ocorrências é feito no sistema legado da rede, abaixo.</p>
+<iframe title="Sistema de ocorrências (legado)" style="width:100%;height:380px;border:1px solid #ccc" src="http://localhost:${port}/legado/ocorrencia?t=${rid()}"></iframe>`, { session: sess })
+}
+
+function legadoOcorrenciaPage() {
+  const al = 'o' + rid(), tp = 'o' + rid(), ds = 'o' + rid()
+  const alunos = STUDENTS[1].map(s => ({ value: s.id, label: s.name }))
+  return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Ocorrências (legado)</title><style>body{font-family:Tahoma;font-size:12px;background:#eef}</style></head><body>
+<h3>SGE Legado — Nova ocorrência (7º Ano B)</h3>
+<table><tr><td><label for="${al}">Aluno</label></td><td><select id="${al}"><option value="">--</option>${alunos.map(o => `<option value="${o.value}">${esc(o.label)}</option>`).join('')}</select></td></tr>
+<tr><td><label for="${tp}">Tipo</label></td><td><select id="${tp}"><option value="">--</option><option>Atraso</option><option>Indisciplina</option><option>Elogio</option><option>Falta de material</option></select></td></tr>
+<tr><td><label for="${ds}">Descrição</label></td><td><textarea id="${ds}" rows="3" cols="40"></textarea></td></tr></table>
+<p><button type="button" onclick="reg()">Registrar ocorrência</button> <span id="msg" role="status"></span></p>
+<script>function reg(){fetch('/legado/api/ocorrencia',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({aluno:document.getElementById('${al}').value,tipo:document.getElementById('${tp}').value,descricao:document.getElementById('${ds}').value})}).then(function(r){return r.json()}).then(function(j){document.getElementById('msg').textContent=j.ok?'Ocorrência registrada.':('Erro: '+j.error)})}</script>
+</body></html>`
 }
 
 function comunicadosPage(req, sess) {
@@ -365,6 +387,15 @@ async function handle(req, res) {
   // Endpoints de controle do benchmark (não fazem parte do "portal")
   if (p === '/__state') return json(res, state)
   if (p === '/__reset') { state = seedState(freshState()); return json(res, { ok: true }) }
+
+  // Sistema legado (outra origem, sem a sessão do portal)
+  if (p === '/legado/ocorrencia') return send(res, 200, legadoOcorrenciaPage())
+  if (p === '/legado/api/ocorrencia' && req.method === 'POST') {
+    const b = await readBody(req)
+    if (!b.aluno || !b.tipo) return json(res, { ok: false, error: 'Preencha aluno e tipo' })
+    state.occurrences.push({ ...b, at: Date.now() })
+    return json(res, { ok: true })
+  }
 
   if (p === '/login' && req.method === 'POST') {
     const b = await readBody(req)
@@ -452,6 +483,7 @@ async function handle(req, res) {
   if (p === '/comunicados') return send(res, 200, comunicadosPage(req, sess))
   if (p === '/comunicados/novo') return send(res, 200, comunicadoNovoPage(req, sess))
   if (p === '/diario') return send(res, 200, diarioPage(req, sess))
+  if (p === '/ocorrencias') return send(res, 200, ocorrenciasPage(req, sess))
   if (p === '/em-breve') return send(res, 200, layout(req, 'Em breve', `<h1>${esc(url.searchParams.get('p') || '')}</h1><p>Esta seção estará disponível em breve.</p>`, { session: sess }))
   return send(res, 404, layout(req, 'Não encontrado', '<h1>Página não encontrada</h1>', { session: sess }))
 }

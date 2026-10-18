@@ -117,6 +117,51 @@ export class VaultManager {
     return fs.existsSync(filePath)
   }
 
+  private credentialPath(host: string): string {
+    const safeHost = host.toLowerCase().trim().replace(/[^a-z0-9._-]/g, '_')
+    return path.join(this.vaultDir, `cred_${safeHost}.enc`)
+  }
+
+  /**
+   * Guarda usuário e senha de um portal escolar, cifrados com a DEK do cofre do SO.
+   * O agente só recebe o valor no momento de preencher o campo; o LLM nunca vê.
+   */
+  setPortalCredential(host: string, username: string, password: string): void {
+    if (!fs.existsSync(this.vaultDir)) {
+      fs.mkdirSync(this.vaultDir, { recursive: true })
+    }
+    fs.writeFileSync(this.credentialPath(host), this.encryptSecret(JSON.stringify({ username, password })))
+  }
+
+  getPortalCredential(host: string): { username: string; password: string } | null {
+    // Aceita subdomínio: credencial de "escola.com.br" vale para "portal.escola.com.br"
+    const parts = host.toLowerCase().split('.')
+    for (let i = 0; i < Math.max(1, parts.length - 1); i++) {
+      const filePath = this.credentialPath(parts.slice(i).join('.'))
+      if (!fs.existsSync(filePath)) continue
+      try {
+        const parsed = JSON.parse(this.decryptSecret(fs.readFileSync(filePath)))
+        if (typeof parsed.username === 'string' && typeof parsed.password === 'string') return parsed
+      } catch {
+        return null
+      }
+    }
+    return null
+  }
+
+  listPortalCredentialHosts(): string[] {
+    if (!fs.existsSync(this.vaultDir)) return []
+    return fs
+      .readdirSync(this.vaultDir)
+      .filter(f => f.startsWith('cred_') && f.endsWith('.enc'))
+      .map(f => f.slice(5, -4))
+  }
+
+  deletePortalCredential(host: string): void {
+    const filePath = this.credentialPath(host)
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath)
+  }
+
   /**
    * Obtém ou inicializa chave privada Ed25519 cifrada com DPAPI para assinatura de pacotes.
    */
