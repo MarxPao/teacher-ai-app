@@ -143,7 +143,7 @@ describe('Motor de Frameworks Pedagógicos Reais (lessonFrameworks.ts)', () => {
       })
 
       // Verifica enriquecimento do catálogo central
-      expect(prompt).toContain('INSTRUÇÕES RÍGOROSAS DE METODOLOGIAS & MARCOS SELECIONADOS')
+      expect(prompt).toContain('INSTRUÇÕES RIGOROSAS DE METODOLOGIAS & REFERENCIAIS SELECIONADOS')
     })
   })
 

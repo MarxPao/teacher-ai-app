@@ -262,15 +262,19 @@ export function buildMethodologyInstructions(selectedIdsOrNames: string[]): stri
   if (!selectedIdsOrNames || !selectedIdsOrNames.length) return ''
 
   const instructions: string[] = []
+  const seenIds = new Set<string>()
 
   for (const item of selectedIdsOrNames) {
+    if (!item) continue
     const match = PEDAGOGICAL_METHODOLOGIES.find(m =>
       m.id.toLowerCase() === item.toLowerCase() ||
       m.name.toLowerCase().includes(item.toLowerCase()) ||
       item.toLowerCase().includes(m.name.toLowerCase())
     )
 
-    if (match) {
+    // Evita repetir a mesma metodologia quando id, framework e nome apontam para ela
+    if (match && !seenIds.has(match.id)) {
+      seenIds.add(match.id)
       instructions.push(`- **${match.name}**: ${match.promptInstruction}`)
     }
   }

@@ -50,6 +50,7 @@ const CATALOG_INDEX = new Map<string, BnccSkill>(
 // Re-exporta tipos e funções essenciais para ponto único de import
 export type { BnccSkill, CurriculumCoverageReport }
 export {
+  ALL_SUBJECTS_CATALOG,
   normalizeGradeYear,
   getCurriculumCoverageReport,
   getClassPostponedSkills,
@@ -60,6 +61,8 @@ export {
 // ─── Cache em Memória e Pub/Sub ──────────────────────────────────────────────
 
 let memoryCache: BnccSkill[] | null = null
+// Visão derivada (Língua Inglesa) — mantém a mesma referência até o cache base mudar
+let englishCache: BnccSkill[] | null = null
 let cacheVersion = 0
 const subscribers = new Set<() => void>()
 
@@ -88,6 +91,7 @@ if (typeof window !== 'undefined') {
  */
 export function invalidateBnccCache(): void {
   memoryCache = null
+  englishCache = null
   notifySubscribers()
 }
 
@@ -110,52 +114,148 @@ export function getBnccStoreVersion(): number {
 
 // ─── Métodos Imperativos Centrais ────────────────────────────────────────────
 
+/** Normaliza o identificador/rótulo de disciplina para a chave canônica do catálogo */
+export function normalizeBnccSubjectKey(subject?: string): string {
+  if (!subject) return 'english'
+  const s = subject.toLowerCase().trim()
+  if (s === 'all' || s.includes('todas')) return 'all'
+  if (s.includes('ingl') || s === 'ef_li' || s === 'english' || s === 'li' || s.includes('inglesa')) return 'english'
+  if (s.includes('portug') || s === 'ef_lp' || s === 'portuguese' || s === 'lp') return 'portuguese'
+  if (s.includes('mat') || s === 'ef_ma' || s === 'math' || s === 'ma') return 'math'
+  if (s.includes('ciên') || s.includes('cien') || s === 'ef_ci' || s === 'science' || s === 'ci') return 'science'
+  if (s.includes('hist') || s === 'ef_hi' || s === 'history' || s === 'hi') return 'history'
+  if (s.includes('geog') || s === 'ef_ge' || s === 'geography' || s === 'ge') return 'geography'
+  if (s.includes('art') || s === 'ef_ar' || s === 'art' || s === 'ar') return 'art'
+  if (s.includes('físic') || s.includes('fisic') || s === 'ef_ef' || s === 'pe' || s === 'ef') return 'pe'
+  if (s.includes('relig') || s === 'ef_er' || s === 'religion' || s === 'er') return 'religion'
+  return s
+}
+
+/** Verifica determinísticamente se uma habilidade BNCC pertence ao ano escolar/série solicitado */
+export function matchesBnccGrade(skill: BnccSkill, gradeQuery: string): boolean {
+  if (!gradeQuery || gradeQuery === 'all') return true
+  const q = gradeQuery.toLowerCase().trim()
+  const sGrade = (skill.gradeYear || '').toLowerCase()
+  const code = (skill.code || '').toUpperCase()
+
+  // 1. Ensino Médio
+  const isMedioQuery = q.includes('médio') || q.includes('medio') || q === 'em' || q.includes('ensino medio')
+  if (isMedioQuery) {
+    if (q.includes('1')) {
+      return sGrade.includes('1º médio') || sGrade.includes('1o médio') || code.startsWith('EM13LGG1')
+    }
+    if (q.includes('2')) {
+      return sGrade.includes('2º médio') || sGrade.includes('2o médio') || code.startsWith('EM13LGG3') || code.startsWith('EM13LGG4')
+    }
+    if (q.includes('3')) {
+      return sGrade.includes('3º médio') || sGrade.includes('3o médio') || code.startsWith('EM13LGG6') || code.startsWith('EM13LGG7')
+    }
+    // Qualquer ano do EM
+    return sGrade.includes('médio') || sGrade.includes('medio') || code.startsWith('EM')
+  }
+
+  // 2. 6º Ano (Fundamental II)
+  if (q.includes('6')) {
+    return sGrade.includes('6') || code.startsWith('EF06') || code.startsWith('EF67') || code.startsWith('EF69')
+  }
+
+  // 3. 7º Ano (Fundamental II)
+  if (q.includes('7')) {
+    return sGrade.includes('7') || code.startsWith('EF07') || code.startsWith('EF67') || code.startsWith('EF69')
+  }
+
+  // 4. 8º Ano (Fundamental II)
+  if (q.includes('8')) {
+    return sGrade.includes('8') || code.startsWith('EF08') || code.startsWith('EF89') || code.startsWith('EF69')
+  }
+
+  // 5. 9º Ano (Fundamental II)
+  if (q.includes('9')) {
+    return sGrade.includes('9') || code.startsWith('EF09') || code.startsWith('EF89') || code.startsWith('EF69')
+  }
+
+  // 6. Anos Iniciais (1º ao 5º Ano)
+  if (q.includes('iniciais') || q.includes('1º ao 5º') || q.includes('1 ao 5') || q === '1') {
+    return (
+      sGrade.includes('1º ao 5º') ||
+      sGrade.includes('1º fund') ||
+      sGrade.includes('2º fund') ||
+      sGrade.includes('3º fund') ||
+      sGrade.includes('4º fund') ||
+      sGrade.includes('5º fund') ||
+      code.startsWith('EF15') ||
+      code.startsWith('EF12') ||
+      code.startsWith('EF35') ||
+      code.startsWith('EF01') ||
+      code.startsWith('EF02') ||
+      code.startsWith('EF03') ||
+      code.startsWith('EF04') ||
+      code.startsWith('EF05')
+    )
+  }
+
+  // Fallback padrão
+  const cleanGrade = q.replace(/ano|série/g, '').trim()
+  return sGrade.includes(cleanGrade) || q.includes(sGrade)
+}
+
 /**
  * Retorna o catálogo completo de habilidades com cache em memória.
  *
  * subject:
- *   undefined | 'EF_LI' | 'english' → Inglês (DEFAULT_BNCC_SKILLS + customizações localStorage)
- *   'EF_LP' | 'portuguese'          → Língua Portuguesa
- *   'EF_MA' | 'math'                → Matemática
- *   'EF_CI' | 'science'             → Ciências
- *   'EF_HI' | 'history'             → História
- *   'EF_GE' | 'geography'           → Geografia
- *   'EF_AR' | 'art'                 → Arte
- *   'EF_EF' | 'pe'                  → Educação Física
- *   'EF_ER' | 'religion'            → Ensino Religioso
- *   'all'                           → Todas as disciplinas (1237+ habilidades)
+ *   undefined | 'EF_LI' | 'english' | 'Língua Inglesa' → Inglês (todas as 106 habilidades garantidas)
+ *   'EF_LP' | 'portuguese' | 'Língua Portuguesa'        → Língua Portuguesa (308 habilidades)
+ *   'EF_MA' | 'math' | 'Matemática'                     → Matemática (246 habilidades)
+ *   'EF_CI' | 'science' | 'Ciências'                    → Ciências (111 habilidades)
+ *   'EF_HI' | 'history' | 'História'                    → História (151 habilidades)
+ *   'EF_GE' | 'geography' | 'Geografia'                 → Geografia (123 habilidades)
+ *   'EF_AR' | 'art' | 'Arte'                            → Arte (61 habilidades)
+ *   'EF_EF' | 'pe' | 'Educação Física'                  → Educação Física (68 habilidades)
+ *   'EF_ER' | 'religion' | 'Ensino Religioso'           → Ensino Religioso (63 habilidades)
+ *   'all'                                               → Todas as disciplinas (1237+ habilidades)
  */
 export function getBnccCatalog(subject?: string): BnccSkill[] {
+  const normKey = normalizeBnccSubjectKey(subject)
+
+  // Filtros por disciplina específica oficial
+  const subjectMap: Record<string, BnccSkill[]> = {
+    'portuguese': LP_BNCC_SKILLS,
+    'math': MA_BNCC_SKILLS,
+    'science': CI_BNCC_SKILLS,
+    'history': HI_BNCC_SKILLS,
+    'geography': GE_BNCC_SKILLS,
+    'art': AR_BNCC_SKILLS,
+    'pe': PE_BNCC_SKILLS,
+    'religion': ER_BNCC_SKILLS,
+  }
+
+  if (subjectMap[normKey]) {
+    return subjectMap[normKey]
+  }
+
   // Base: inglês (com customizações do professor armazenadas em localStorage)
   if (!memoryCache) {
     memoryCache = getStoredBnccSkills()
   }
 
-  // Filtros por disciplina específica
-  const subjectMap: Record<string, BnccSkill[]> = {
-    'EF_LP': LP_BNCC_SKILLS, 'portuguese': LP_BNCC_SKILLS,
-    'EF_MA': MA_BNCC_SKILLS, 'math': MA_BNCC_SKILLS,
-    'EF_CI': CI_BNCC_SKILLS, 'science': CI_BNCC_SKILLS,
-    'EF_HI': HI_BNCC_SKILLS, 'history': HI_BNCC_SKILLS,
-    'EF_GE': GE_BNCC_SKILLS, 'geography': GE_BNCC_SKILLS,
-    'EF_AR': AR_BNCC_SKILLS, 'art': AR_BNCC_SKILLS,
-    'EF_EF': PE_BNCC_SKILLS, 'pe': PE_BNCC_SKILLS,
-    'EF_ER': ER_BNCC_SKILLS, 'religion': ER_BNCC_SKILLS,
-  }
-
-  if (subject && subject !== 'all' && subject !== 'EF_LI' && subject !== 'english') {
-    return subjectMap[subject] ?? []
-  }
-
-  if (subject === 'all') {
+  if (normKey === 'all') {
     // Catálogo universal completo — merge das customizações do professor com o catálogo oficial
     const customCodes = new Set(memoryCache.map(s => s.code))
     const officialOnly = ALL_SUBJECTS_CATALOG.filter(s => !customCodes.has(s.code))
     return [...memoryCache, ...officialOnly]
   }
 
-  // Padrão: Inglês (com customizações do localStorage)
-  return memoryCache
+  // Padrão: Língua Inglesa (Garante que todas as 106 habilidades do DEFAULT_BNCC_SKILLS
+  // estejam presentes mesmo se o cache em memória ou localStorage tiver dados parciais)
+  if (!englishCache) {
+    const englishOnly = memoryCache.filter(
+      s => !s.subject || s.subject === 'EF_LI' || s.subject === 'EM_LGG' || s.code.includes('LI') || s.code.startsWith('EM')
+    )
+    const existingCodes = new Set(englishOnly.map(s => s.code))
+    const missingDefault = DEFAULT_BNCC_SKILLS.filter(s => !existingCodes.has(s.code))
+    englishCache = missingDefault.length > 0 ? [...englishOnly, ...missingDefault] : englishOnly
+  }
+  return englishCache
 }
 
 /**
@@ -164,12 +264,7 @@ export function getBnccCatalog(subject?: string): BnccSkill[] {
 export function getBnccForGrade(gradeYear?: string, subject?: string): BnccSkill[] {
   const catalog = getBnccCatalog(subject)
   if (!gradeYear || gradeYear === 'all') return catalog
-
-  const cleanGrade = gradeYear.toLowerCase().replace(/ano|série/g, '').trim()
-  return catalog.filter(s => {
-    const sGrade = s.gradeYear.toLowerCase()
-    return sGrade.includes(cleanGrade) || gradeYear.toLowerCase().includes(sGrade)
-  })
+  return catalog.filter(s => matchesBnccGrade(s, gradeYear))
 }
 
 /**
@@ -179,6 +274,7 @@ export function getBnccForGrade(gradeYear?: string, subject?: string): BnccSkill
 export function saveBnccCatalog(skills: BnccSkill[]): void {
   saveStoredBnccSkills(skills)
   memoryCache = [...skills]
+  englishCache = null
   notifySubscribers()
 }
 
@@ -216,11 +312,7 @@ export function useBnccSkills(options?: UseBnccSkillsOptions): UseBnccSkillsResu
 
   const gradeSkills = useMemo(() => {
     if (!options?.gradeYear || options?.gradeYear === 'all') return allSkills
-    const cleanGrade = options.gradeYear.toLowerCase().replace(/ano|série/g, '').trim()
-    return allSkills.filter(s => {
-      const sGrade = s.gradeYear.toLowerCase()
-      return sGrade.includes(cleanGrade) || options.gradeYear!.toLowerCase().includes(sGrade)
-    })
+    return allSkills.filter(s => matchesBnccGrade(s, options.gradeYear!))
   }, [allSkills, options?.gradeYear])
 
   return {
