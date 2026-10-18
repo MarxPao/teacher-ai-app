@@ -25,6 +25,7 @@ import { matchText, findHeaderMatch } from '../runner/text'
 import { describeElements as extractDescriptors } from './elementDescriptor'
 import { highlightElement, clearHighlights } from './highlightOverlay'
 import { describeClickElement, type ClickTargetDescription } from './clickSafety'
+import { observeAgentPage, type AgentPageSnapshot } from './agentObserver'
 
 export class DomDriver implements Driver {
   private handleStore = new ElementHandleStore()
@@ -630,6 +631,11 @@ export class DomDriver implements Driver {
   public async describeElements(selector?: string) {
     this.hostGuard()
     return extractDescriptors(this.doc, selector)
+  }
+
+  public async observePage(options?: { maxElements?: number; maxTextChars?: number }): Promise<AgentPageSnapshot> {
+    this.hostGuard()
+    return observeAgentPage(this.doc, options)
   }
 
   public async highlight(selector: string, mode: 'old' | 'new') {

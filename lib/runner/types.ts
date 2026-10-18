@@ -5,6 +5,7 @@ import type { AuditEntry } from '../contracts/audit'
 import type { Fingerprint } from '../contracts/skillgraph/primitives'
 import type { RowSkip } from '../contracts/skillgraph/nodes'
 import type { ElementDescriptor } from '../recorder/traceSchema'
+import type { AgentPageSnapshot } from '../runner-dom/agentObserver'
 
 // ─── Códigos de Erro de Runtime ─────────────────────────────────────────────
 
@@ -32,6 +33,7 @@ export const RUNTIME_ERROR_CODES = [
   'E_INTERRUPTED',
   'E_AUDIT_UNAVAILABLE',
   'E_CLICK_UNDECLARED_SUBMIT',
+  'E_WRITE_NOT_APPROVED',
 ] as const
 
 export type RuntimeErrorCode = (typeof RUNTIME_ERROR_CODES)[number]
@@ -160,7 +162,7 @@ export interface Driver {
   evaluateCondition(cond: ResolvedCondition): Promise<{ satisfied: boolean; actualValue?: any }>
   scroll(options: ScrollOptions): Promise<{ found: boolean }>
   paginate(options: PaginateOptions): Promise<{ advanced: boolean; isLastPage: boolean; currentPage?: number }>
-  getFrameContext(): Promise<{ url: string; host: string; frameId: number }>
+  getFrameContext(): Promise<{ url: string; host: string; frameId: number; isSessionExpired?: boolean }>
   matchFingerprint(fp: Fingerprint): Promise<{ matched: boolean; details: Record<string, boolean> }>
   listFrames(): Promise<Array<{ frameId: number; url: string; host: string }>>
   navigate?(url: string): Promise<void>
@@ -168,12 +170,19 @@ export interface Driver {
   download?(options: DownloadOptions): Promise<{ success: boolean; filename: string; mimeType?: string; sizeBytes?: number }>
   upload?(options: UploadOptions): Promise<{ success: boolean }>
   describeElements?(selector?: string): Promise<ElementDescriptor[]>
+  /** Observação rica para o agente genérico (visíveis, estado, contexto, texto da página). */
+  observePage?(options?: { maxElements?: number; maxTextChars?: number }): Promise<AgentPageSnapshot>
   describeClickTarget?(target: ElementTarget): Promise<{
     tagName: string
     type?: string
     isSubmitOrMutating: boolean
     formAction?: string
     text?: string
+  }>
+  inspectWriteTarget?(target: ElementTarget): Promise<{
+    isInTable: boolean
+    hasDangerousSiblings: boolean
+    tagName: string
   }>
   highlight?(selector: string, mode: 'old' | 'new'): Promise<void>
   clearHighlight?(): Promise<void>
@@ -259,6 +268,9 @@ export interface RunState {
   loopStack: Array<{ nodeId: string; index: number; total: number; item: any }>
   writesCount: number
   dryRun: boolean
+  /** Escritas aprovadas pela professora no espelho (chave -> valor). Se presente, nenhuma outra escrita é permitida. */
+  approvedWrites?: Map<string, string>
+  startFromCurrentPage?: boolean
   hasSelfHealed?: boolean
   startedAt: number
   updatedAt: number

@@ -4,6 +4,7 @@
 import type { Driver, Host, ElementTarget, ResolvedAnchor, ResolvedCandidate } from '../runner/types'
 import type { ElementDescriptor } from '../recorder/traceSchema'
 import { sanitizeStructuralLabel } from '../explorer/domDistiller'
+import { AGENT_STAMP_ATTR, type AgentPageSnapshot } from '../runner-dom/agentObserver'
 
 export interface ObservedElement {
   idx: number
@@ -12,15 +13,31 @@ export interface ObservedElement {
   label: string
   type?: string
   destructive: boolean
+  // Campos da observação rica (driver.observePage)
+  stamp?: string
+  value?: string
+  checked?: boolean
+  disabled?: boolean
+  expanded?: boolean
+  pressed?: boolean
+  readonly?: boolean
+  options?: string[]
+  context?: string
+  region?: 'dialog' | 'main' | 'nav' | 'other'
 }
 
 export interface Observation {
   url: string
   stateHash: string
   elements: ObservedElement[]
+  title?: string
+  /** Texto visível da página (conteúdo NÃO confiável: nunca é instrução) */
+  text?: string
+  dialogOpen?: boolean
+  omitted?: number
 }
 
-export type AgentAction =
+export type AgentAction = (
   | { action: 'click'; idx: number; reason: string }
   | { action: 'type'; idx: number; value: string; reason: string }
   | { action: 'select'; idx: number; value: string; reason: string }
@@ -28,11 +45,17 @@ export type AgentAction =
   | { action: 'wait'; ms?: number; reason: string }
   | { action: 'complete'; reason: string }
   | { action: 'fail'; reason: string }
+) & {
+  /** Anotação que o agente quer lembrar nos próximos passos (ex.: valores lidos na página 1) */
+  note?: string
+}
 
 export interface PlannerInput {
   task: string
   observation: Observation
   history: string[]
+  /** Anotações acumuladas pelo próprio agente (memória de trabalho da tarefa) */
+  notes?: string[]
 }
 
 export type Planner = (input: PlannerInput) => Promise<AgentAction>
@@ -51,6 +74,8 @@ export interface ReasoningLoopConfig {
   maxSteps?: number
   stepTimeoutMs?: number
   allowedHosts?: string[]
+  /** Espera após cada ação para a página reagir (AJAX, animações). Padrão 350ms. */
+  settleMs?: number
 }
 
 export interface ReasoningLoopResult {
@@ -95,6 +120,46 @@ export function buildObservation(url: string, descriptors: ElementDescriptor[]):
   return { url, stateHash, elements }
 }
 
+// Observação a partir do snapshot rico do driver (elementos carimbados no DOM).
+export function observationFromSnapshot(snap: AgentPageSnapshot): Observation {
+  const elements: ObservedElement[] = snap.elements.map(e => {
+    const label = sanitizeStructuralLabel(e.label)
+    const context = e.context ? sanitizeStructuralLabel(e.context) : undefined
+    const o: ObservedElement = {
+      idx: e.idx,
+      tag: e.tag,
+      role: e.role,
+      label,
+      type: e.type,
+      destructive: DESTRUCTIVE_RE.test(label) || e.type === 'submit',
+      stamp: e.stamp,
+      region: e.region,
+    }
+    if (e.value !== undefined) o.value = sanitizeStructuralLabel(e.value)
+    if (e.checked !== undefined) o.checked = e.checked
+    if (e.disabled) o.disabled = true
+    if (e.readonly) o.readonly = true
+    if (e.expanded !== undefined) o.expanded = e.expanded
+    if (e.pressed !== undefined) o.pressed = e.pressed
+    if (e.options) o.options = e.options.map(x => sanitizeStructuralLabel(x))
+    if (context) o.context = context
+    return o
+  })
+  const text = sanitizeStructuralText(snap.text || '')
+  const stateHash = fnv1a(
+    snap.url + '|' + elements.map(e => `${e.tag}:${e.label}:${e.value ?? ''}:${e.checked ?? ''}:${e.expanded ?? ''}`).join('|') + '|' + fnv1a(text)
+  )
+  return { url: snap.url, stateHash, elements, title: snap.title, text, dialogOpen: snap.dialogOpen, omitted: snap.omitted }
+}
+
+// O texto da página passa pela mesma proteção de PII dos rótulos, linha a linha.
+function sanitizeStructuralText(text: string): string {
+  return text
+    .split('\n')
+    .map(line => line.replace(/\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b/g, '[CPF_PROTEGIDO]').replace(/[\w.+-]+@[\w-]+\.[\w.]+/g, '[EMAIL_PROTEGIDO]'))
+    .join('\n')
+}
+
 // Âncora a partir do descritor: prefere seletores estáveis, termina em texto/role.
 export function anchorFor(d: ElementDescriptor): ResolvedAnchor {
   const candidates: ResolvedCandidate[] = []
@@ -108,6 +173,17 @@ export function anchorFor(d: ElementDescriptor): ResolvedAnchor {
   if (d.role && name) candidates.push({ strategy: 'role_name', role: d.role, name, match: 'normalized' })
   if (d.text) candidates.push({ strategy: 'text', text: d.text, match: 'normalized' })
   return { candidates, description: labelOf(d) || d.tag, expect_count: 'one' }
+}
+
+function describeStep(plan: AgentAction, obs: Observation): string {
+  if ('idx' in plan) {
+    const el = obs.elements[plan.idx]
+    const name = el ? `"${el.label}"${el.context ? ` (${el.context})` : ''}` : `#${plan.idx}`
+    const val = 'value' in plan ? ` = "${plan.value}"` : ''
+    return `${plan.action} ${name}${val} — ${plan.reason}`
+  }
+  if (plan.action === 'navigate') return `navigate ${plan.url} — ${plan.reason}`
+  return `${plan.action}: ${plan.reason}`
 }
 
 export class ReasoningLoopExecutor {
@@ -127,11 +203,15 @@ export class ReasoningLoopExecutor {
   }
 
   private async observe(): Promise<{ obs: Observation; descriptors: ElementDescriptor[] }> {
-    if (!this.driver.describeElements) throw new Error('Driver sem describeElements')
     const ctx = await this.driver.getFrameContext()
     if (this.config.allowedHosts && !this.config.allowedHosts.includes(ctx.host)) {
       throw Object.assign(new Error(`Host fora da lista permitida: ${ctx.host}`), { stop: 'host_blocked' })
     }
+    if (this.driver.observePage) {
+      const snap = await this.driver.observePage()
+      return { obs: observationFromSnapshot({ ...snap, url: snap.url || ctx.url }), descriptors: [] }
+    }
+    if (!this.driver.describeElements) throw new Error('Driver sem describeElements')
     const descriptors = await this.driver.describeElements()
     return { obs: buildObservation(ctx.url, descriptors), descriptors }
   }
@@ -152,6 +232,7 @@ export class ReasoningLoopExecutor {
     const actions: AgentAction[] = []
     const history: string[] = []
     const seen = new Map<string, number>()
+    const notes: string[] = []
     let url = ''
     let rejectedCompletions = 0
 
@@ -167,18 +248,38 @@ export class ReasoningLoopExecutor {
 
       const visits = (seen.get(obs.stateHash) ?? 0) + 1
       seen.set(obs.stateHash, visits)
-      if (visits > 3) {
+      if (visits === 3) {
+        history.push('ALERTA: a página voltou ao mesmo estado 3 vezes. Se você já tem a informação, conclua; senão, mude de estratégia.')
+      }
+      if (visits > 4) {
         return { success: false, stepsTaken: step - 1, finalUrl: url, actions, error: 'Mesmo estado visitado repetidamente', stoppedFor: 'loop_detected' }
       }
 
-      let plan: AgentAction
-      try {
-        plan = await this.withTimeout(this.planner({ task, observation: obs, history }), 'planner')
-      } catch (e: any) {
-        return { success: false, stepsTaken: step - 1, finalUrl: url, actions, error: e.message, stoppedFor: 'planner_failed' }
+      // Uma nova tentativa quando o modelo responde algo inválido ou demora demais
+      let plan: AgentAction | undefined
+      let plannerError = ''
+      for (let attempt = 0; attempt < 2 && !plan; attempt++) {
+        try {
+          plan = await this.withTimeout(this.planner({ task, observation: obs, history, notes }), 'planner')
+        } catch (e: any) {
+          plannerError = e.message
+          if (attempt === 0) history.push(`erro do planejador: ${String(e.message).slice(0, 100)}; responda só com um JSON válido`)
+        }
+      }
+      if (!plan) {
+        return { success: false, stepsTaken: step - 1, finalUrl: url, actions, error: plannerError, stoppedFor: 'planner_failed' }
       }
       actions.push(plan)
-      history.push(`${plan.action}: ${plan.reason}`)
+      const entry = describeStep(plan, obs)
+      const recent = history.slice(-8).map(h => h.replace(/ → feito$/, ''))
+      history.push(entry)
+      if (plan.note) {
+        notes.push(plan.note.slice(0, 200))
+        if (notes.length > 30) notes.shift()
+      }
+      if (recent.filter(h => h === entry).length >= 2) {
+        history.push('ALERTA: você está repetindo as mesmas ações sem progresso. Mude de estratégia: aplique os filtros com o botão da página, anote o que já leu em "note" ou conclua.')
+      }
 
       if (plan.action === 'complete') {
         if (!this.config.verify) return { success: true, stepsTaken: step, finalUrl: url, actions }
@@ -206,6 +307,8 @@ export class ReasoningLoopExecutor {
         if (outcome === 'rejected') {
           return { success: false, stepsTaken: step, finalUrl: url, actions, error: 'Ação não aprovada pela professora', stoppedFor: 'rejected' }
         }
+        history[history.length - 1] += ' → feito'
+        if (plan.action !== 'wait') await this.host.sleep(this.config.settleMs ?? 350)
       } catch (e: any) {
         history.push(`erro: ${e.message}`)
         if (step === this.maxSteps) {
@@ -216,7 +319,22 @@ export class ReasoningLoopExecutor {
     return { success: false, stepsTaken: this.maxSteps, finalUrl: url, actions, error: `Limite de ${this.maxSteps} passos`, stoppedFor: 'max_steps' }
   }
 
-  private target(idx: number, descriptors: ElementDescriptor[]): ElementTarget {
+  private maskedEquivalent(after: string, wanted: string): boolean {
+    const digits = (v: string) => (v ?? '').replace(/\D/g, '')
+    return digits(after).length > 0 && digits(after) === digits(wanted)
+  }
+
+  private target(idx: number, descriptors: ElementDescriptor[], obs?: Observation): ElementTarget {
+    const stamped = obs?.elements[idx]?.stamp
+    if (stamped) {
+      return {
+        anchor: {
+          candidates: [{ strategy: 'css', selector: `[${AGENT_STAMP_ATTR}="${stamped}"]` }],
+          description: obs!.elements[idx].label || obs!.elements[idx].tag,
+          expect_count: 'one',
+        },
+      }
+    }
     const d = descriptors[idx]
     if (!d) throw new Error(`Índice de elemento inválido: ${idx}`)
     return { anchor: anchorFor(d) }
@@ -230,7 +348,7 @@ export class ReasoningLoopExecutor {
     switch (plan.action) {
       case 'click': {
         const el = obs.elements[plan.idx]
-        const target = this.target(plan.idx, descriptors)
+        const target = this.target(plan.idx, descriptors, obs)
         let mutating = el?.destructive ?? false
         if (this.driver.describeClickTarget) {
           const info = await this.driver.describeClickTarget(target)
@@ -254,7 +372,7 @@ export class ReasoningLoopExecutor {
           { label: 'Valor', value: plan.value },
         ])
         if (!ok) return 'rejected'
-        const target = this.target(plan.idx, descriptors)
+        const target = this.target(plan.idx, descriptors, obs)
         let before = ''
         try {
           const cur = await this.driver.readValue(target)
@@ -278,7 +396,13 @@ export class ReasoningLoopExecutor {
           method: plan.action === 'select' ? 'select_option' : 'type_native',
           semantic: 'text',
         })
-        const matches = res.success && res.verified && res.afterValue.trim() === plan.value.trim()
+        // O driver já confere o valor gravado (máscaras, rótulo vs. value do <select>);
+        // para texto livre exige também igualdade normalizada.
+        const norm = (v: string) => (v ?? '').replace(/\s+/g, ' ').trim().toLowerCase()
+        const matches =
+          res.success &&
+          res.verified &&
+          (plan.action === 'select' || norm(res.afterValue) === norm(plan.value) || this.maskedEquivalent(res.afterValue, plan.value))
         if (!matches) {
           try {
             await this.driver.write({ target, value: before, method: plan.action === 'select' ? 'select_option' : 'type_native', semantic: 'text' })
@@ -291,7 +415,8 @@ export class ReasoningLoopExecutor {
       }
       case 'navigate': {
         if (!this.driver.navigate) throw new Error('Driver sem navigate')
-        const host = new URL(plan.url).host
+        // Compara pelo hostname (sem porta), igual ao host que o driver informa em getFrameContext
+        const host = new URL(plan.url).hostname
         if (this.config.allowedHosts && !this.config.allowedHosts.includes(host)) {
           throw new Error(`Navegação bloqueada para ${host}`)
         }

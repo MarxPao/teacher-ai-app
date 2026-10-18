@@ -18,6 +18,7 @@ import type {
 import { RunnerError } from '../runner/types'
 import type { Fingerprint } from '../contracts/skillgraph/primitives'
 import type { ElementDescriptor } from '../recorder/traceSchema'
+import type { AgentPageSnapshot } from '../runner-dom/agentObserver'
 import { SKILLGRAPH_RPC_CHANNEL, type DriverMethodName, type DriverRpcRequest, type DriverRpcResponse } from './protocol'
 import { verifyCommittedValue } from '../runner-dom/writer'
 
@@ -35,6 +36,7 @@ const IDEMPOTENT_METHODS: ReadonlySet<DriverMethodName> = new Set<DriverMethodNa
   'matchFingerprint',
   'listFrames',
   'describeElements',
+  'observePage',
   'highlight',
   'clearHighlight',
   'getBoundingBox',
@@ -534,6 +536,10 @@ export class RemoteDriver implements Driver {
 
   public async describeElements(selector?: string): Promise<ElementDescriptor[]> {
     return this.sendRpc('describeElements', selector)
+  }
+
+  public async observePage(options?: { maxElements?: number; maxTextChars?: number }): Promise<AgentPageSnapshot> {
+    return this.sendRpc('observePage', options || {})
   }
 
   public async navigate(url: string): Promise<void> {

@@ -20,9 +20,13 @@ export type DriverMethodName =
   | 'download'
   | 'upload'
   | 'describeElements'
+  | 'observePage'
   | 'highlight'
   | 'clearHighlight'
   | 'navigate'
+  | 'getBoundingBox'
+  | 'inspectWriteTarget'
+  | 'describeClickTarget'
 
 export interface DriverRpcRequest<M extends DriverMethodName = DriverMethodName> {
   channel: typeof SKILLGRAPH_RPC_CHANNEL
