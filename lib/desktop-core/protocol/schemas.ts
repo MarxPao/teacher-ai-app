@@ -21,6 +21,7 @@ export const EXTENSION_ALLOWED_METHODS = [
   'audit.append',
   'nlu.parse',
   'llm.generateText',
+  'agent.plan',
 ] as const
 
 export type ExtensionMethod = typeof EXTENSION_ALLOWED_METHODS[number]
@@ -161,6 +162,12 @@ export const MethodParamSchemas = {
   'llm.generateText': z.object({
     instruction: z.string().min(1),
     maxLength: z.number().int().positive().optional(),
+  }).strict(),
+
+  'agent.plan': z.object({
+    system: z.string().min(1).max(4000),
+    user: z.string().min(1).max(20000),
+    provider: z.enum(['ollama', 'groq', 'openai']).optional(),
   }).strict(),
 
   'data.exportStudent': z.object({

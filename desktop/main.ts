@@ -131,6 +131,15 @@ async function executeBusinessMethod(method: string, params: any): Promise<any> 
       return { intent: 'unknown', params: {}, supported: false, no_match: true }
     }
 
+    case 'agent.plan': {
+      if (!llmGateway) throw new Error('LLM Gateway indisponível.')
+      const res = await llmGateway.complete({
+        prompt: `${params.system}\n\n${params.user}`,
+        provider: params.provider || 'ollama',
+      })
+      return { text: res.text }
+    }
+
     case 'llm.generateText': {
       if (!llmGateway) throw new Error('LLM Gateway indisponível.')
       return await llmGateway.generateSafeText(params.instruction || '', { maxLength: params.maxLength })

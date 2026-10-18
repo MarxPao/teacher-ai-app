@@ -333,6 +333,14 @@ export class RemoteDriver implements Driver {
     return res
   }
 
+  public async inspectWriteTarget(target: any): Promise<{
+    isInTable: boolean
+    hasDangerousSiblings: boolean
+    tagName: string
+  }> {
+    return this.sendRpc('inspectWriteTarget', { target })
+  }
+
   private async tryDispatchTrustedCdpText(text: string): Promise<boolean> {
     const dbg = (chrome as any).debugger
     if (!dbg) return false
@@ -361,8 +369,29 @@ export class RemoteDriver implements Driver {
     return this.sendRpc('getBoundingBox', cleanTarget, 1, frameId)
   }
 
+  public async describeClickTarget(target: ElementTarget): Promise<{
+    tagName: string
+    type?: string
+    isSubmitOrMutating: boolean
+    formAction?: string
+    text?: string
+  }> {
+    const { frameId, cleanTarget } = unwrapElementTargetFrame(target)
+    return this.sendRpc('describeClickTarget', cleanTarget, 1, frameId)
+  }
+
   public async click(target: ElementTarget, options?: { isSubmit?: boolean; requireTrusted?: boolean }): Promise<{ success: boolean }> {
     const { frameId, cleanTarget } = unwrapElementTargetFrame(target)
+    // O clique via CDP não passa pelo content script, então a checagem de envio é feita aqui antes.
+    if (!options?.isSubmit) {
+      const desc = await this.describeClickTarget(target)
+      if (desc?.isSubmitOrMutating) {
+        throw new RunnerError(
+          'E_CLICK_UNDECLARED_SUBMIT',
+          `Clique em elemento de envio/gravação sem is_submit_action: ${desc.tagName}`
+        )
+      }
+    }
     if (options?.requireTrusted && typeof chrome !== 'undefined' && (chrome as any).debugger) {
       const cdpOk = await this.tryDispatchTrustedCdpClick(cleanTarget, frameId)
       if (cdpOk) return { success: true }

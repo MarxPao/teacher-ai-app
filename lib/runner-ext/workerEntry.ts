@@ -2,7 +2,10 @@
 // Ponto de entrada do Service Worker (background) da extensão para o SkillGraph v2
 
 import { SkillGraphRunner } from '../runner/engine'
+import { buildReviewMirror, approvedWritesFrom } from '../runner/reviewMirror'
 import { RemoteDriver } from './remoteDriver'
+import { ReasoningLoopExecutor } from '../agent/reasoningLoop'
+import { createLlmPlanner, createLlmVerifier } from '../agent/llmPlanner'
 import type { Host, CheckpointPayload, HandoffPayload, RunEvent, RunState } from '../runner/types'
 import type { AuditEntry } from '../contracts/audit'
 import { SkillGraphV2Schema, validateGraph } from '../contracts/skillgraph'
@@ -381,6 +384,9 @@ const SkillGraphV2 = {
   SkillGraphV2Schema,
   validateGraph,
   createExtensionHost,
+  ReasoningLoopExecutor,
+  createLlmPlanner,
+  createLlmVerifier,
   NativeClient,
   NativeSkillGraphRepository,
   NativeAuditSink,
@@ -412,6 +418,8 @@ const SkillGraphV2 = {
   assertCanActivateGraph,
   PendingDraftOrchestrator,
   STANDALONE_GRAPHS_STORAGE_KEY,
+  buildReviewMirror,
+  approvedWritesFrom,
 }
 
 if (typeof globalThis !== 'undefined') {

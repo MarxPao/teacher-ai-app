@@ -30,13 +30,15 @@
     "sidePanel",
     "scripting",
     "nativeMessaging",
-    "alarms"
+    "alarms",
+    "webNavigation"
   ],
   "host_permissions": [
     "<all_urls>"
   ],
   "optional_permissions": [
-    "downloads"
+    "downloads",
+    "debugger"
   ],
   "content_scripts": [
     {

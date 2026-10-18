@@ -261,6 +261,68 @@
     return tabs[0]?.id || null
   }
 
+  const pendingMirrors = new Map()
+  const MIRROR_TIMEOUT_MS = 10 * 60 * 1000
+
+  function waitMirrorDecision(requestId, abortSignal) {
+    return new Promise((resolve) => {
+      const finish = (decision) => {
+        const entry = pendingMirrors.get(requestId)
+        if (!entry) return
+        pendingMirrors.delete(requestId)
+        clearTimeout(entry.timer)
+        resolve(decision)
+      }
+      // Fail-closed: timeout ou abort = nada é gravado
+      const timer = setTimeout(() => finish({ approved: false, approvedRowIds: [] }), MIRROR_TIMEOUT_MS)
+      pendingMirrors.set(requestId, { finish, timer })
+      abortSignal?.addEventListener('abort', () => finish({ approved: false, approvedRowIds: [] }), { once: true })
+    })
+  }
+
+  async function runReviewPhase(ctx) {
+    const { bundle, graph, tabId, host, runId, nativeClient, abortController, params, initialVariables } = ctx
+    const events = []
+    const driver = new bundle.RemoteDriver(tabId)
+    const hostObj = bundle.createExtensionHost({
+      runId: runId + '_review',
+      targetTabId: tabId,
+      originHost: graph.identity?.domain || host,
+      allowedHosts: graph.safety?.allowed_hosts || [],
+      driver,
+      nativeClient,
+      dryRun: true,
+      abortSignal: abortController.signal,
+      onEvent: (event) => {
+        events.push(event)
+        chrome.runtime.sendMessage({ type: 'SKILLGRAPH_EVENT', event }).catch(() => {})
+      },
+    })
+    try {
+      const runner = new bundle.SkillGraphRunner(driver, hostObj)
+      const result = await runner.run(graph, params, { initialVariables, dryRun: true })
+      if (!result.success) {
+        return { ok: false, friendlyMessage: toTeacherFriendlyMessage(result.error) }
+      }
+      const mirror = bundle.buildReviewMirror(events)
+      if (mirror.rows.length === 0) {
+        return { ok: true, approvedWrites: [] }
+      }
+      const requestId = runId + '_mirror_' + Date.now()
+      const decisionPromise = waitMirrorDecision(requestId, abortController.signal)
+      chrome.runtime.sendMessage({ type: 'SKILLGRAPH_MIRROR_REQUEST', action: 'SKILLGRAPH_MIRROR_REQUEST', requestId, mirror }).catch(() => {})
+      const decision = await decisionPromise
+      if (!decision.approved || decision.approvedRowIds.length === 0) {
+        return { ok: false, cancelled: true, friendlyMessage: 'Nada foi gravado no portal. A revisão foi cancelada.' }
+      }
+      return { ok: true, approvedWrites: bundle.approvedWritesFrom(mirror, decision.approvedRowIds) }
+    } catch (err) {
+      return { ok: false, friendlyMessage: toTeacherFriendlyMessage(err) }
+    } finally {
+      try { hostObj.dispose() } catch {}
+    }
+  }
+
   async function executeGraph(payload, sendResponse) {
     const isEnabled = await getFlag()
     if (!isEnabled) {
@@ -334,6 +396,18 @@
     const abortController = new AbortController()
     currentRunnerAbort = abortController
 
+    // Espelho de revisão: simula primeiro (dry-run), mostra antes/depois à professora e só grava o que ela aprovar.
+    let approvedWrites
+    if (payload.review && !payload.dryRun && bundle.buildReviewMirror) {
+      const review = await runReviewPhase({ bundle, graph, tabId, host, runId, nativeClient, abortController, params: payload.params || payload.initialVariables || {}, initialVariables: payload.initialVariables || {} })
+      if (!review.ok) {
+        if (currentRunnerAbort === abortController) currentRunnerAbort = null
+        sendResponse({ success: false, runId, cancelled: Boolean(review.cancelled), friendlyMessage: review.friendlyMessage })
+        return
+      }
+      approvedWrites = review.approvedWrites
+    }
+
     const driver = new bundle.RemoteDriver(tabId)
     const hostObj = bundle.createExtensionHost({
       runId,
@@ -401,6 +475,7 @@
       const result = await runner.run(graph, runParams, {
         initialVariables: payload.initialVariables || {},
         dryRun: Boolean(payload.dryRun),
+        ...(approvedWrites ? { approvedWrites } : {}),
       })
 
       if (result.success && payload.dryRun) {
@@ -916,6 +991,85 @@
       return true
     }
 
+    if (message.action === 'SKILLGRAPH_AGENT_RUN') {
+      (async () => {
+        try {
+          const bundle = globalThis.SkillGraphBundle?.SkillGraphV2
+          const nativeClient = getSharedNativeClient()
+          const task = String(message.text || '').trim()
+          if (!bundle?.ReasoningLoopExecutor) {
+            sendResponse({ success: false, friendlyMessage: 'Agente genérico indisponível nesta versão da extensão.' })
+            return
+          }
+          if (!nativeClient) {
+            // Auditoria e modelo vivem no app desktop; sem ele o agente não escreve nem planeja.
+            sendResponse({ success: false, friendlyMessage: 'Abra o app desktop para usar o agente genérico.' })
+            return
+          }
+          if (!task) {
+            sendResponse({ success: false, friendlyMessage: 'Descreva a tarefa para o agente.' })
+            return
+          }
+          const tabId = await resolveTargetTab(message.tabId)
+          if (!tabId) {
+            sendResponse({ success: false, friendlyMessage: 'Nenhuma aba ativa encontrada.' })
+            return
+          }
+          const tab = await chrome.tabs.get(tabId)
+          const host = new URL(tab.url).host
+          const runId = 'agent_run_' + Date.now()
+          const abortController = new AbortController()
+          currentRunnerAbort = abortController
+
+          const driver = new bundle.RemoteDriver(tabId)
+          const hostObj = bundle.createExtensionHost({
+            runId,
+            targetTabId: tabId,
+            originHost: host,
+            allowedHosts: [host],
+            driver,
+            nativeClient,
+            dryRun: false,
+            abortSignal: abortController.signal,
+            onEvent: (event) => {
+              chrome.runtime.sendMessage({ type: 'SKILLGRAPH_EVENT', event }).catch(() => {})
+            },
+          })
+          const complete = async (system, user) => {
+            if (abortController.signal.aborted) throw new Error('Execução cancelada')
+            const resp = await nativeClient.agentPlan(system, user)
+            return String(resp?.text || '')
+          }
+          const planner = bundle.createLlmPlanner(complete)
+          const verify = bundle.createLlmVerifier(complete)
+          const loop = new bundle.ReasoningLoopExecutor(driver, hostObj, planner, {
+            maxSteps: message.maxSteps || 12,
+            allowedHosts: [host],
+            verify,
+          })
+          const result = await loop.run(task)
+          if (currentRunnerAbort === abortController) currentRunnerAbort = null
+          sendResponse({
+            success: result.success,
+            runId,
+            stepsTaken: result.stepsTaken,
+            stoppedFor: result.stoppedFor,
+            friendlyMessage: result.success
+              ? 'Tarefa concluída pelo agente.'
+              : result.stoppedFor === 'rejected'
+                ? 'Você não aprovou a ação; o agente parou.'
+                : result.stoppedFor === 'verification_failed'
+                  ? 'O agente achou que terminou, mas a conferência final não confirmou: ' + (result.error || '')
+                : 'O agente não conseguiu concluir: ' + (result.error || 'motivo desconhecido'),
+          })
+        } catch (err) {
+          currentRunnerAbort = null
+          sendResponse({ success: false, friendlyMessage: 'O agente falhou: ' + (err && err.message ? err.message : String(err)) })
+        }
+      })()
+      return true
+    }
+
     if (message.action === 'SKILLGRAPH_ABORT') {
       if (currentRunnerAbort) {
         currentRunnerAbort.abort()
@@ -929,6 +1083,18 @@
 
     if (message.action === 'SKILLGRAPH_CHECKPOINT_RESPONSE' || message.type === 'SKILLGRAPH_CHECKPOINT_RESPONSE') {
       sendResponse({ success: true })
+      return true
+    }
+
+    if (message.action === 'SKILLGRAPH_MIRROR_RESPONSE' || message.type === 'SKILLGRAPH_MIRROR_RESPONSE') {
+      // Só o side panel da própria extensão decide; scripts de página (sender.tab) são ignorados.
+      const fromOwnUi = sender && sender.id === chrome.runtime.id && !sender.tab
+      const entry = fromOwnUi ? pendingMirrors.get(message.requestId) : null
+      if (entry) {
+        const ids = Array.isArray(message.approvedRowIds) ? message.approvedRowIds.map(String) : []
+        entry.finish({ approved: Boolean(message.approved), approvedRowIds: ids })
+      }
+      sendResponse({ success: Boolean(entry) })
       return true
     }
 

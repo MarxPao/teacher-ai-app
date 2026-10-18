@@ -24,6 +24,7 @@ import { evaluateDomCondition } from './conditions'
 import { matchText, findHeaderMatch } from '../runner/text'
 import { describeElements as extractDescriptors } from './elementDescriptor'
 import { highlightElement, clearHighlights } from './highlightOverlay'
+import { describeClickElement, type ClickTargetDescription } from './clickSafety'
 
 export class DomDriver implements Driver {
   private handleStore = new ElementHandleStore()
@@ -281,6 +282,34 @@ export class DomDriver implements Driver {
     return executeDomWriteAsync(el, options)
   }
 
+  public async inspectWriteTarget(target: ElementTarget): Promise<{
+    isInTable: boolean
+    hasDangerousSiblings: boolean
+    tagName: string
+  }> {
+    this.hostGuard()
+    try {
+      const el = this.resolveTargetElement(target)
+      const tagName = el.tagName.toLowerCase()
+      const isInTable = Boolean(
+        el.closest?.('table, tbody, [role="grid"], [role="table"], .tabela-lancamento, .grid-notas')
+      )
+      const container = el.closest?.('form, fieldset, .filter-container, .card, main') || el.parentElement
+      let hasDangerousSiblings = false
+      if (container) {
+        const dangerous = Array.from(
+          container.querySelectorAll(
+            'input[type="checkbox"], input[type="number"], input[name*="nota" i], input[name*="falta" i], input[name*="presenca" i]'
+          )
+        )
+        hasDangerousSiblings = dangerous.length > 0
+      }
+      return { isInTable, hasDangerousSiblings, tagName }
+    } catch {
+      return { isInTable: true, hasDangerousSiblings: true, tagName: 'unknown' }
+    }
+  }
+
   public async getBoundingBox(target: ElementTarget): Promise<{ x: number; y: number; width: number; height: number; visible: boolean }> {
     this.hostGuard()
     const el = this.resolveTargetElement(target)
@@ -302,9 +331,21 @@ export class DomDriver implements Driver {
     return { x: 0, y: 0, width: 0, height: 0, visible: false }
   }
 
+  public async describeClickTarget(target: ElementTarget): Promise<ClickTargetDescription> {
+    this.hostGuard()
+    return describeClickElement(this.resolveTargetElement(target))
+  }
+
   public async click(target: ElementTarget, options?: { isSubmit?: boolean }) {
     this.hostGuard()
     const el = this.resolveTargetElement(target)
+    // Defesa em profundidade: o driver recusa clique de envio que o grafo não declarou.
+    if (!options?.isSubmit && describeClickElement(el).isSubmitOrMutating) {
+      throw new RunnerError(
+        'E_CLICK_UNDECLARED_SUBMIT',
+        `Clique em elemento de envio/gravação sem is_submit_action: ${el.tagName.toLowerCase()}`
+      )
+    }
     await this.ensureElementNotOccluded(el)
     ;(el as HTMLElement).click()
     return { success: true }
@@ -430,12 +471,39 @@ export class DomDriver implements Driver {
     return { advanced: false, isLastPage: true }
   }
 
+  public isSessionExpired(): boolean {
+    const doc = this.doc
+    if (!doc) return false
+    const path = (doc.location?.pathname || '').toLowerCase()
+    const passwordInputs = Array.from(doc.querySelectorAll('input[type="password"]'))
+    const hasVisiblePasswordInput = passwordInputs.some(
+      inp =>
+        (inp as any).offsetParent !== null ||
+        ((inp as any).getBoundingClientRect?.().height || 0) > 0 ||
+        (inp as HTMLElement).style?.display !== 'none'
+    )
+    const hasLoginForm = !!doc.querySelector(
+      'form[action*="login" i], form[id*="login" i], .login-form, .login-box, form[name*="login" i], #form-login'
+    )
+    const hasSessionExpiredNotice = !!doc.querySelector(
+      '.sessao-expirada, [data-session-expired], #modal-sessao-expirada, .session-expired'
+    )
+    const isExplicitLoginUrl =
+      path.endsWith('/login') ||
+      path.includes('/professor_login') ||
+      path.includes('/signin') ||
+      path.includes('/entrar') ||
+      (path.includes('/auth') && !path.includes('contexto'))
+    return hasSessionExpiredNotice || (hasVisiblePasswordInput && (hasLoginForm || isExplicitLoginUrl)) || (hasLoginForm && hasVisiblePasswordInput)
+  }
+
   public async getFrameContext() {
     this.hostGuard()
     return {
       url: this.doc.location?.href || 'about:blank',
       host: this.doc.location?.hostname || 'localhost',
       frameId: 0,
+      isSessionExpired: this.isSessionExpired(),
     }
   }
 

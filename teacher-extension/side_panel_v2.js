@@ -22,6 +22,13 @@
     const btnCheckpointAbort = document.getElementById('modal-checkpoint-btn-abort')
     let currentCheckpointRequestId = null
 
+    const modalMirror = document.getElementById('modal-mirror')
+    const mirrorSummary = document.getElementById('mirror-summary')
+    const mirrorRows = document.getElementById('mirror-rows')
+    const btnMirrorApprove = document.getElementById('modal-mirror-btn-approve')
+    const btnMirrorCancel = document.getElementById('modal-mirror-btn-cancel')
+    let currentMirrorRequestId = null
+
     const repairBox = document.getElementById('sgv2-repair-box')
     const repairPrompt = document.getElementById('sgv2-repair-prompt')
     const btnApproveRepair = document.getElementById('sgv2-btn-approve-repair')
@@ -421,6 +428,35 @@
     })
 
     document.getElementById('sgv2-btn-explore-empty')?.addEventListener('click', () => triggerExplore())
+
+    const btnAgent = document.getElementById('sgv2-btn-agent')
+    btnAgent?.addEventListener('click', () => {
+      const nluInput = document.getElementById('sgv2-nlu-input')
+      const task = (nluInput?.value || '').trim()
+      if (!task) {
+        chat?.appendAssistantMessage('Descreva a tarefa para o agente (ex: abrir o diário da turma 7A) e clique em 🤖 Agente.')
+        nluInput?.focus()
+        return
+      }
+      if (nluInput) nluInput.value = ''
+      chat?.appendUserMessage(task)
+      chat?.showTyping('O agente está analisando a página. Ele pedirá sua aprovação antes de preencher ou enviar algo.')
+      btnAgent.disabled = true
+      if (progressBox) progressBox.style.display = 'block'
+      if (statusText) statusText.textContent = 'Agente trabalhando...'
+      chrome.runtime.sendMessage({ action: 'SKILLGRAPH_AGENT_RUN', text: task }, (res) => {
+        btnAgent.disabled = false
+        if (progressBox) progressBox.style.display = 'none'
+        const msg = (res && res.friendlyMessage) || (chrome.runtime.lastError ? 'Não consegui falar com o assistente.' : 'Sem resposta do agente.')
+        if (chat) {
+          chat.hideTyping?.()
+          chat.appendAssistantMessage(msg)
+        } else if (messageBox) {
+          messageBox.style.display = 'block'
+          messageBox.textContent = msg
+        }
+      })
+    })
     document.getElementById('sgv2-nlu-input')?.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
         e.preventDefault()
@@ -582,8 +618,9 @@
       }
       const chkDryRun = document.getElementById('sgv2-chk-dryrun')
       const dryRun = Boolean(chkDryRun?.checked)
+      const review = !dryRun && Boolean(document.getElementById('sgv2-chk-review')?.checked)
       btnRun.disabled = true
-      btnRun.textContent = dryRun ? 'Simulando...' : 'Executando...'
+      btnRun.textContent = dryRun || review ? 'Simulando...' : 'Executando...'
       if (progressBox) progressBox.style.display = 'block'
       if (messageBox) messageBox.style.display = 'none'
       if (nodeLabel) nodeLabel.textContent = 'Iniciando motor...'
@@ -593,7 +630,7 @@
       chrome.runtime.sendMessage(
         {
           action: 'SKILLGRAPH_RUN',
-          payload: { graphKey, initialVariables, dryRun },
+          payload: { graphKey, initialVariables, dryRun, review },
         },
         (res) => {
           btnRun.disabled = false
@@ -659,6 +696,68 @@
         })
       }
     })
+
+    // 7b. Espelho de revisão: mostra o que será aplicado no portal antes de qualquer gravação
+    function renderMirror(requestId, mirror) {
+      currentMirrorRequestId = requestId || null
+      const rows = Array.isArray(mirror?.rows) ? mirror.rows : []
+      const changed = rows.filter((r) => r.changed).length
+      const warned = rows.filter((r) => Array.isArray(r.warnings) && r.warnings.length).length
+      if (mirrorSummary) mirrorSummary.textContent = `${rows.length} campos · ${changed} mudanças · ${warned} com aviso. Nada foi gravado ainda.`
+      if (mirrorRows) {
+        mirrorRows.textContent = ''
+        rows.forEach((r) => {
+          const li = document.createElement('label')
+          li.className = 'sp-mirror-row'
+          li.style.cssText = 'display:flex;gap:8px;align-items:flex-start;padding:6px 0;border-bottom:1px solid var(--border-soft);font-size:11px;'
+          const cb = document.createElement('input')
+          cb.type = 'checkbox'
+          cb.dataset.rowId = r.id
+          cb.checked = Boolean(r.changed)
+          const box = document.createElement('div')
+          const head = document.createElement('div')
+          head.style.fontWeight = '700'
+          head.textContent = r.target || r.label || ''
+          const diff = document.createElement('div')
+          const oldEl = document.createElement('span')
+          oldEl.style.cssText = 'color:var(--danger);text-decoration:line-through;'
+          oldEl.textContent = r.before || '—'
+          const arrow = document.createTextNode('  →  ')
+          const newEl = document.createElement('span')
+          newEl.style.cssText = 'color:var(--success);font-weight:700;'
+          newEl.textContent = r.after || '—'
+          diff.append(oldEl, arrow, newEl)
+          box.append(head, diff)
+          ;(r.warnings || []).forEach((w) => {
+            const wEl = document.createElement('div')
+            wEl.style.color = 'var(--danger)'
+            wEl.textContent = '⚠ ' + w
+            box.append(wEl)
+          })
+          li.append(cb, box)
+          mirrorRows.append(li)
+        })
+      }
+      if (progressBox) progressBox.style.display = 'block'
+      if (modalMirror) modalMirror.style.display = 'flex'
+    }
+
+    function answerMirror(approved) {
+      if (modalMirror) modalMirror.style.display = 'none'
+      const ids = approved
+        ? Array.from(document.querySelectorAll('#mirror-rows input[data-row-id]:checked')).map((el) => el.dataset.rowId)
+        : []
+      chrome.runtime.sendMessage({
+        type: 'SKILLGRAPH_MIRROR_RESPONSE',
+        action: 'SKILLGRAPH_MIRROR_RESPONSE',
+        requestId: currentMirrorRequestId,
+        approved,
+        approvedRowIds: ids,
+      })
+      if (statusText) statusText.textContent = approved ? 'Gravando o que foi aprovado' : 'Revisão cancelada'
+    }
+    btnMirrorApprove?.addEventListener('click', () => answerMirror(true))
+    btnMirrorCancel?.addEventListener('click', () => answerMirror(false))
 
     // 8. Controles de Proposta de Reparo (Drift)
     function checkPendingRepair() {
@@ -788,6 +887,11 @@
             messageBox.style.border = '1px solid #fecaca'
             messageBox.style.color = '#991b1b'
           }
+          return
+        }
+
+        if (msg.type === 'SKILLGRAPH_MIRROR_REQUEST' || msg.action === 'SKILLGRAPH_MIRROR_REQUEST') {
+          renderMirror(msg.requestId, msg.mirror)
           return
         }
 
