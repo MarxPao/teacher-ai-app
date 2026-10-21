@@ -11,6 +11,7 @@ import {
   UnifiedAnalyticsDataset,
 } from '@/lib/analyticsData'
 import { savePedagogicalInsightToSupabase } from '@/lib/supabaseClient'
+import { isEltSubject, filterHintsByDiscipline, PEDAGOGICAL_RISK_THRESHOLD } from '@/lib/disciplineGate'
 
 export interface PedagogicalHint {
   id: string
@@ -23,7 +24,8 @@ export interface PedagogicalHint {
   theory: string
   prescription: string
   practicalSteps: string[]
-  recommendedLevel: string
+  recommendedLevel?: string
+  isEltSpecific?: boolean
   urgency: 'high' | 'medium' | 'low'
   sourceKey: 'krashen' | 'nation' | 'vygotsky' | 'scrivener' | 'field' | 'bloom' | 'bncc'
 }
@@ -154,7 +156,7 @@ export default function Insights() {
     normalizedStudents.forEach(st => {
       // 1. Caso: Aluno em Risco com Média Baixa (< 6.0)
       // IMPORTANTE: Só gera se o aluno REALMENTE possui notas cadastradas (hasGrades === true)
-      if (st.hasGrades && st.avgGrade !== null && st.avgGrade < 6.0) {
+      if (st.hasGrades && st.avgGrade !== null && st.avgGrade < PEDAGOGICAL_RISK_THRESHOLD) {
         hints.push({
           id: `hint_krashen_${st.id}`,
           targetType: 'student',
@@ -170,7 +172,7 @@ export default function Insights() {
             'Forneça insumo compreensível no nível i+1 (textos e diálogos com 95%+ de palavras compreendidas).',
             'Substitua a correção imediata explícita por "Recast" positivo (reformulação natural da frase pelo professor).'
           ],
-          recommendedLevel: st.level || 'A1/A2',
+          // Nível CEFR removido da regra de média
           urgency: 'high',
           sourceKey: 'krashen'
         })
@@ -182,7 +184,7 @@ export default function Insights() {
         ? st.metrics.grammar
         : (st.hasGrades && st.avgGrade !== null ? st.avgGrade : null)
 
-      if (grammarScore !== null && grammarScore < 6.5) {
+      if (grammarScore !== null && grammarScore < PEDAGOGICAL_RISK_THRESHOLD) {
         hints.push({
           id: `hint_vygotsky_${st.id}`,
           targetType: 'student',
@@ -198,7 +200,7 @@ export default function Insights() {
             'Crie pares de trabalho colaborativo com colegas de nível intermediário alto (Peer Tutoring).',
             'Forneça um checklist de autoavaliação com no máximo 3 itens-chave (ex: sujeito + verbo no passado).'
           ],
-          recommendedLevel: st.level || 'A2/B1',
+          // Nível CEFR removido da regra de média
           urgency: 'medium',
           sourceKey: 'vygotsky'
         })
@@ -221,7 +223,7 @@ export default function Insights() {
             'Designe o aluno como mediador de grupos ou co-criador de desafios de quiz para a turma.',
             'Adicione questões bônus com inferência textual complexa e vocabulário C1 de leitura extensiva.'
           ],
-          recommendedLevel: st.level || 'B2/C1',
+          // Nível CEFR removido da regra de média
           urgency: 'low',
           sourceKey: 'bloom'
         })
@@ -281,8 +283,19 @@ export default function Insights() {
   }, [normalizedStudents])
 
   // ─── Filtro dos Hints ───────────────────────────────────────────────────
-  const filteredHints = useMemo(() => {
-    return theoreticalHints.filter(hint => {
+  const currentSubject = useMemo(() => {
+    if (typeof window === 'undefined') return 'Inglês'
+    try {
+      return localStorage.getItem('teacher_active_class_subject') || 'Inglês'
+    } catch { return 'Inglês' }
+  }, [])
+
+  const { activeHints: disciplineGatedHints, notice: disciplineNotice } = useMemo(() => {
+    return filterHintsByDiscipline<PedagogicalHint>(theoreticalHints, currentSubject)
+  }, [theoreticalHints, currentSubject])
+
+  const filteredHints = useMemo<PedagogicalHint[]>(() => {
+    return disciplineGatedHints.filter((hint: PedagogicalHint) => {
       if (selectedClass !== 'all' && hint.targetType === 'class' && !hint.targetName.includes(selectedClass)) {
         return false
       }
@@ -646,6 +659,13 @@ Referência: ${new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'nu
             }}>
               {customAiDiagnostic}
             </div>
+          </div>
+        )}
+
+        {/* Aviso de Disciplina sem Catálogo Específico */}
+        {disciplineNotice && (
+          <div style={{ background: '#fdf8f2', border: '1px solid #d5c0b0', borderRadius: RADIUS.md, padding: '1rem', color: '#7a5c42', fontSize: '0.9rem' }}>
+            ℹ️ {disciplineNotice}
           </div>
         )}
 
