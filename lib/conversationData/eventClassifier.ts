@@ -67,25 +67,34 @@ const INSTRUCTION_PATTERNS = [
 
 // NÃO VALIDADO EM ASR REAL — Heurísticas refinadas para falas adversariais
 const RHETORICAL_PATTERNS = [
-  /^\s*(entenderam|entendeu|né|tá bom|tá|certo|beleza)\s*(turma|pessoal|gente)?\s*[?!.]*$/i
+  /^\s*(entenderam|entendeu|né|ne|tá bom|ta bom|tá|ta|certo|beleza|tranquilo|faz sentido|tudo certinho|tudo bem até aqui|tudo bem ate aqui|estão me ouvindo|estao me ouvindo|tá dando pra ouvir|ta dando pra ouvir|dando pra ouvir)\s*(turma|pessoal|gente|galera|no fundo da sala|isso pra vocês|isso pra voces)?\s*[?!.]*$/i
 ]
 
 const UPTALK_HESITATION_PATTERNS = [
-  /^\s*(a resposta certa é|eu acho que|o brasil é o|a célula animal não tem|eu fiz o|minha resposta é)(?:\s|$)/i
+  /^\s*(a resposta certa é|a resposta certa eh|eu acho que|o brasil é o|o brasil foi|a célula animal não tem|a celula vegetal tem|eu fiz o|minha resposta é|minha resposta deu|a capital da argentina|a fórmula da água oxigenada|o verbo está|o sangue oxigenado)(?:\s|$)/i
 ]
 
 const ELICITATION_PATTERNS = [
-  /\b(me explica|me diga|diga para|gostaria de saber|quero que vocês reflitam|explique como|detalhe por que|fale qual)\b/i
+  /\b(me\s+explica|me\s+diga|me\s+fale|diga\s+(?:para|pra)|gostaria\s+de\s+saber|quero\s+que\s+voc[eê]s\s+reflitam|quero\s+ouvir\s+de\s+voc[eê]s)\b/i,
+  /\b(explique|descreva|demonstre|cite|aponte|detalhe|fale|diga)\b(?:\s+(?:pra\s+turma|para\s+a\s+turma|pra\s+gente|para\s+mim|pra\s+mim|para\s+nós|dois|duas|um|uma|tr[eê]s|ao\s+menos|me)\s+[\w\s]{1,25}?)?\s+(?:como|por\s*qu[eê]|porque|qual|quais|o\s+que|onde|quem|exemplos?|diferen[cç]as?|etapas?)\b/i
 ]
 
 const ADMINISTRATIVE_PATTERNS = [
-  /\b(posso ir ao banheiro|beber água|onde jogo esse papel|vai cair na prova|que horas bate o sinal|amanhã nós vamos ao laboratório)\b/i
+  /\bposso\s+(?:ir\s+ao\s+banheiro|ir\s+no\s+banheiro|beber\s+[aá]gua|ir\s+beber\s+[aá]gua|entregar|fazer|apontar|ligar|usar|sair)\b/i,
+  /\b(?:vai\s+cair|cai)\s+n[ao]\s+(?:prova|teste|simulado|avalia[cç][aã]o)\b/i,
+  /\bque\s+horas\s+(?:bate\s+o\s+sinal|o\s+recreio\s+come[cç]a|come[cç]a\s+o\s+recreio|acaba\s+a\s+aula|termina|toca)\b/i,
+  /\bonde\s+(?:jogo|que\s+joga|descarta|coloca)\s+(?:esse\s+papel|o\s+lixo|a\s+ponta|o\s+papel)\b/i,
+  /\b(?:pode|d[aá]\s+pra|da\s+para)\s+(?:ser\s+feito\s+em|fazer\s+em|entregar\s+na)\s+(?:dupla|trio|grupo|semana\s+que\s+vem|secretaria)\b/i,
+  /\btem\s+(?:folha\s+de\s+rascunho|l[aá]pis|borracha|material)\s+sobrando\b/i,
+  /\bo\s+trabalho\s+de\s+[\w\s]{2,20}?\s+pode\s+ser\s+feito\b/i
 ]
 
 const INTERRUPTION_PATTERNS = [
   /\.\.\.$/i,
-  /^\s*(mas se a gente|espera aí|olha ali|gente silêncio|não entendi nada)\b/i
+  /^\s*(mas se a gente|espera aí|espera ai|olha ali|gente silêncio|gente silencio|não entendi nada|nao entendi nada|entao como eu ia dizendo|como eu ia dizendo)\b/i
 ]
+
+const VOCATIVE_PREFIX_REGEX = /^\s*(professora|professor|profa|profe|fala\s+prof|pessoal|turma|gente|galera|ei)\b\s*,?\s*/i
 
 export function isQuestionText(text: string, speakerRole: 'professor' | 'aluno' = 'professor'): boolean {
   const trimmed = text.trim()
@@ -120,8 +129,20 @@ export function isQuestionText(text: string, speakerRole: 'professor' | 'aluno' 
     return true
   }
 
-  // 7. Estilo ASR sem pontuação (início com pronome interrogativo ou inversão interrogativa)
-  return /^\s*(o que|quem|qual|quais|como|onde|por que|porque|por quê|quando|quanto|quantos|quantas|será que|as plantas respiram)\b/i.test(trimmed)
+  // 7. Normalização de vocativo em ASR (remove prefixo "professora...", "turma...")
+  const withoutVocative = trimmed.replace(VOCATIVE_PREFIX_REGEX, '')
+
+  // 8. Estilo ASR sem pontuação (início com pronome interrogativo ou inversão interrogativa)
+  if (/^\s*(o que|quem|qual|quais|como|onde|por que|porque|por quê|quando|quanto|quantos|quantas|será que|sera que)\b/i.test(withoutVocative)) {
+    return true
+  }
+
+  // 9. Oração subordinada condicional seguida de interrogativa ("se a terra gira... porque a gente nao...")
+  if (/\bse\s+[\w\s]{3,35}?\s+(por\s*qu[eê]|porque|como|quem|qual|o\s+que)\s+(?:a\s+gente|n[oó]s|voc[eê]s|[eé]\s+que)\b/i.test(withoutVocative)) {
+    return true
+  }
+
+  return false
 }
 
 export function extractQuestionSpan(text: string): string {

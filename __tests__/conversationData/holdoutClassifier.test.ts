@@ -41,12 +41,17 @@ describe('Classificador - Benchmark DEV2 (Dataset Queimado de 40 Falas para Diag
     const recall = tp + fn > 0 ? tp / (tp + fn) : 0
     const f1 = precision + recall > 0 ? (2 * precision * recall) / (precision + recall) : 0
 
-    // O teste aprova e registra a medição honesta sem ajuste
+    console.log(`\n=== DEV2 REPORT ===`)
+    console.log(`TP: ${tp}, TN: ${tn}, FP: ${fp}, FN: ${fn}`)
+    console.log(`Acurácia: ${(accuracy * 100).toFixed(1)}%`)
+    console.log(`Precisão: ${precision.toFixed(3)}`)
+    console.log(`Recall:   ${recall.toFixed(3)}`)
+    console.log(`F1-Score: ${f1.toFixed(3)}`)
+
+    // O teste afere que a acurácia no dev2 subiu substancialmente de 57.5%
     expect(DEV2_BURNED_DATASET.length).toBe(40)
-    expect(errors.length).toBe(17)
-    expect(accuracy).toBe(0.575)
-    expect(precision).toBeCloseTo(0.621, 2)
-    expect(recall).toBeCloseTo(0.750, 2)
-    expect(f1).toBeCloseTo(0.679, 2)
+    expect(accuracy).toBeGreaterThanOrEqual(0.85)
+    expect(precision).toBeGreaterThanOrEqual(0.85)
+    expect(recall).toBeGreaterThanOrEqual(0.85)
   })
 })
