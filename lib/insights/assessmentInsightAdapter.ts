@@ -7,10 +7,12 @@
  *
  * Regras e Gates Amostrais:
  * 1. Respeito aos limiares de amostragem mínima: N_MIN_CLASS_AGGREGATE (5), N_MIN_ITEM_DISCRIMINATION_ZDP (8), N_ITEM_CONFIDENCE_ALTA (15).
- * 2. Com n < 8, qualquer menção ou inferência ao construto "ZDP" (Zona de Desenvolvimento Proximal) é estritamente bloqueada.
- * 3. Separação rigorosa de fatos (observações objetivas) e hipóteses (linguagem não-afirmativa: "pode indicar", "sugere").
+ * 2. Com n < N_MIN_ITEM_DISCRIMINATION_ZDP (configurável como [DEFINIÇÃO A VALIDAR (dono)]), qualquer inferência de ZDP é bloqueada.
+ *    O bloqueio baseia-se prioritariamente em campos estruturados (category, ruleId, id) e conta com salvaguarda anti-evasão
+ *    para variações textuais (maiúsculas, "zona de desenvolvimento proximal", "zone of proximal development", "ZPD").
+ * 3. Separação rigorosa de fatos (observações objetivas) e hipóteses (linguagem não-afirmativa: "pode indicar", "sugere oportunidade").
  * 4. Nível de confiança ordinal derivado de n: 'baixa' | 'media' | 'alta'.
- * 5. Rejeição de qualquer insight que não cumpra 100% dos requisitos de validateInsightContract.
+ * 5. Rejeição categórica de qualquer insight que não cumpra 100% dos requisitos de validateInsightContract.
  */
 
 import {
@@ -24,12 +26,40 @@ import {
 } from './insightEngineV1'
 import type { AssessmentInsight } from '@/components/modules/SmartInsightsPanel'
 
+/**
+ * Limiar amostral mínimo padrão para inferência de ZDP (Vygotsky / discriminação de item).
+ * Marcado formalmente como [DEFINIÇÃO A VALIDAR (dono)], configurável pela professora.
+ */
+export const DEFAULT_ZDP_SAMPLE_THRESHOLD = N_MIN_ITEM_DISCRIMINATION_ZDP // [DEFINIÇÃO A VALIDAR (dono)]
+
 export interface AssessmentInsightAdapterContext {
   discipline?: string
   etapa?: string
   classSize?: number
   window?: string
   topic?: string
+  thresholds?: {
+    /** Limiar amostral configurável para ZDP [DEFINIÇÃO A VALIDAR (dono)] */
+    minItemDiscriminationZdp?: number
+  }
+}
+
+/**
+ * Detecta se o insight pertence ao construto ZDP usando prioritariamente campos estruturados
+ * e secundariamente regex anti-evasão multi-idioma (pt-BR / en) insensível a maiúsculas.
+ */
+export function isZdpConstruct(insight: AssessmentInsight): boolean {
+  if (!insight) return false
+
+  // 1. Detecção por campos estruturados (prioridade primária)
+  if (insight.category === 'zdp') return true
+  if (insight.ruleId === 'rule_zdp' || insight.ruleId === 'zdp_topics') return true
+  if (insight.id === 'zdp_topics' || insight.id.startsWith('zdp_') || insight.id.endsWith('_zdp')) return true
+
+  // 2. Salvaguarda anti-evasão: regex estrutural cobrindo variações textuais (maiúsculas/minúsculas e outros idiomas)
+  const fullContent = `${insight.id} ${insight.ruleId ?? ''} ${insight.category ?? ''} ${insight.title} ${insight.description}`
+  const zdpPattern = /\b(zdp|zpd|zona\s+de\s+desenvolvimento\s+proximal|zone\s+of\s+proximal\s+development)\b/i
+  return zdpPattern.test(fullContent)
 }
 
 /**
@@ -49,16 +79,11 @@ export function adaptAssessmentInsightToInsightV1(
   const etapa = context?.etapa || 'Ensino Fundamental II'
   const window = context?.window || 'avaliacao_bimestral'
 
-  // Gate Amostral Estrito: n < 8 impede construto de Discriminação de Item / ZDP
-  const containsZdpReference =
-    insight.id.toLowerCase().includes('zdp') ||
-    insight.title.toLowerCase().includes('zdp') ||
-    insight.title.toLowerCase().includes('desenvolvimento proximal') ||
-    insight.description.toLowerCase().includes('zdp') ||
-    insight.description.toLowerCase().includes('desenvolvimento proximal')
+  // Limiar amostral configurável [DEFINIÇÃO A VALIDAR (dono)]
+  const minZdpThreshold = context?.thresholds?.minItemDiscriminationZdp ?? DEFAULT_ZDP_SAMPLE_THRESHOLD
 
-  if (classSize < N_MIN_ITEM_DISCRIMINATION_ZDP && containsZdpReference) {
-    // Amostra insuficiente para sustentar inferência de ZDP
+  // Gate Amostral Estruturado de ZDP: n < minZdpThreshold impede construto de ZDP
+  if (classSize < minZdpThreshold && isZdpConstruct(insight)) {
     return null
   }
 
@@ -112,16 +137,16 @@ export function adaptAssessmentInsightToInsightV1(
     confidence = 'baixa'
   }
 
-  // Ressalvas de amostragem
+  // Ressalvas de amostragem pedagógica
   const caveats: string[] = []
   if (classSize < N_MIN_CLASS_AGGREGATE) {
-    caveats.push(`Amostra reduzida (n=${classSize}). Média agregada sujeita a alta variabilidade amostral.`)
+    caveats.push(`Amostra preliminar (n=${classSize}). Média agregada sujeita a variabilidade amostral.`)
   }
-  if (classSize < N_MIN_ITEM_DISCRIMINATION_ZDP) {
-    caveats.push(`Amostra abaixo do limiar psicométrico (n=${classSize} < 8). Inferências de item são preliminares.`)
+  if (classSize < minZdpThreshold) {
+    caveats.push(`Amostra abaixo do limiar psicométrico configurado [DEFINIÇÃO A VALIDAR (dono)] (n=${classSize} < ${minZdpThreshold}).`)
   }
 
-  // Fatos observáveis e hipóteses pedagógicas reflexivas (nunca afirmativas causais absolutas)
+  // Fatos observáveis e hipóteses pedagógicas reflexivas
   const facts: string[] = [insight.description]
   const hypotheses: string[] = [
     `Os indicadores observados em "${insight.title}" sugerem oportunidade reflexiva de ajuste pedagógico no tópico "${context?.topic || 'conteúdo avaliado'}".`
@@ -130,7 +155,7 @@ export function adaptAssessmentInsightToInsightV1(
   const candidate: InsightV1 = {
     id: insight.id.startsWith('ins_') ? insight.id : `ins_${insight.id}`,
     signals,
-    rule_id: `rule_assessment_${insight.type}`,
+    rule_id: insight.ruleId || `rule_assessment_${insight.type}`,
     confidence,
     approach_id: 'Avaliacao_Formativa_V1',
     applies_to: {
