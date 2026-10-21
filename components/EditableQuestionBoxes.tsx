@@ -35,6 +35,8 @@ import { deriveGpcmFromStepCount, type GpcmItemParameters } from '@/lib/gpcmEngi
 import { type RsmItemParameters } from '@/lib/rsmEngine'
 import {
   auditQuestionDistractorDiagnostics,
+  COGNITIVE_ERROR_REGISTRY,
+  type CognitiveErrorType,
   type DiagnosticDistractor
 } from '@/lib/diagnosticDistractorEngine'
 import {
@@ -103,6 +105,9 @@ export interface EditableQuestionItem {
   dccAnalysis?: ItemDccAnalysis
   feedbackMatrix?: ItemFormativeFeedbackMatrix
   explanation?: string
+  bloomLevel?: 'remember' | 'apply' | 'analyze' | 'evaluate'
+  rationale?: string
+  teacherCalibrationNotes?: string
 }
 
 interface EditableQuestionBoxesProps {
@@ -115,6 +120,32 @@ interface EditableQuestionBoxesProps {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+export const ERROR_TYPE_STYLES: Record<CognitiveErrorType, { bg: string; text: string; border: string }> = {
+  overgeneralization: { bg: '#fff7ed', text: '#c2410c', border: '#fed7aa' },
+  concept_inversion: { bg: '#eff6ff', text: '#1d4ed8', border: '#bfdbfe' },
+  l1_interference: { bg: '#faf5ff', text: '#7e22ce', border: '#e9d5ff' },
+  surface_heuristic: { bg: '#fefce8', text: '#a16207', border: '#fef08a' },
+  incomplete_rule: { bg: '#f8fafc', text: '#475569', border: '#cbd5e1' },
+  computational_slip: { bg: '#fef2f2', text: '#b91c1c', border: '#fecaca' }
+}
+
+export function getDistractorForOption(q: EditableQuestionItem, letter: string): DiagnosticDistractor {
+  const found = (q.diagnosticDistractors || []).find(d => d.letter.toUpperCase() === letter.toUpperCase())
+  if (found) return found
+  const defaultType: CognitiveErrorType = 'overgeneralization'
+  const meta = COGNITIVE_ERROR_REGISTRY[defaultType]
+  return {
+    letter: letter.toUpperCase(),
+    text: (q.options || []).find(o => o.letter.toUpperCase() === letter.toUpperCase())?.text || '',
+    errorType: defaultType,
+    errorLabel: meta.label,
+    cognitiveMechanism: meta.typicalMechanism,
+    remediationHint: meta.pedagogicalRemediation,
+    plausibilityScore: 0.35,
+    targetProficiencyBand: 'basico'
+  }
+}
+
 // PARSER INTELIGENTE DE HTML / MARKDOWN PARA BOXES ESTRUTURADOS
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -725,6 +756,124 @@ export default function EditableQuestionBoxes({
     triggerUpdate(updated)
   }
 
+  // Calibração Psicométrica de Distrator (Tipo de Erro Cognitivo)
+  const isCognitiveErrorType = (val: string): val is CognitiveErrorType => val in COGNITIVE_ERROR_REGISTRY
+  const handleDistractorErrorTypeChange = (qIndex: number, letter: string, rawType: string) => {
+    const newType: CognitiveErrorType = isCognitiveErrorType(rawType) ? rawType : 'overgeneralization'
+    const updated = [...questions]
+    const q = { ...updated[qIndex] }
+    const existingDistractors = [...(q.diagnosticDistractors || [])]
+    const idx = existingDistractors.findIndex(d => d.letter.toUpperCase() === letter.toUpperCase())
+    const meta = COGNITIVE_ERROR_REGISTRY[newType] || COGNITIVE_ERROR_REGISTRY['overgeneralization']
+
+    if (idx >= 0) {
+      existingDistractors[idx] = {
+        ...existingDistractors[idx],
+        errorType: newType,
+        errorLabel: meta.label,
+        cognitiveMechanism: meta.typicalMechanism,
+        remediationHint: meta.pedagogicalRemediation
+      }
+    } else {
+      existingDistractors.push({
+        letter: letter.toUpperCase(),
+        text: (q.options || []).find(o => o.letter.toUpperCase() === letter.toUpperCase())?.text || '',
+        errorType: newType,
+        errorLabel: meta.label,
+        cognitiveMechanism: meta.typicalMechanism,
+        remediationHint: meta.pedagogicalRemediation,
+        plausibilityScore: 0.35,
+        targetProficiencyBand: 'basico'
+      })
+    }
+
+    q.diagnosticDistractors = existingDistractors
+    updated[qIndex] = q
+    triggerUpdate(updated)
+
+    recordExamAuditEvent({
+      examId: effectiveExamId,
+      action: 'distractor_edited',
+      diffSummary: `Distrator ${letter} da Questão #${q.number}: erro cognitivo calibrado para "${meta.label}"`,
+      questionNumber: q.number,
+      details: { letter, newType }
+    })
+  }
+
+  // Calibração de Hipótese Diagnóstica do Distrator
+  const handleDistractorMechanismChange = (qIndex: number, letter: string, newMechanism: string) => {
+    const updated = [...questions]
+    const q = { ...updated[qIndex] }
+    const existingDistractors = [...(q.diagnosticDistractors || [])]
+    const idx = existingDistractors.findIndex(d => d.letter.toUpperCase() === letter.toUpperCase())
+
+    if (idx >= 0) {
+      existingDistractors[idx] = {
+        ...existingDistractors[idx],
+        cognitiveMechanism: newMechanism
+      }
+    } else {
+      const meta = COGNITIVE_ERROR_REGISTRY['overgeneralization']
+      existingDistractors.push({
+        letter: letter.toUpperCase(),
+        text: (q.options || []).find(o => o.letter.toUpperCase() === letter.toUpperCase())?.text || '',
+        errorType: 'overgeneralization',
+        errorLabel: meta.label,
+        cognitiveMechanism: newMechanism,
+        remediationHint: meta.pedagogicalRemediation,
+        plausibilityScore: 0.35,
+        targetProficiencyBand: 'basico'
+      })
+    }
+
+    q.diagnosticDistractors = existingDistractors
+    updated[qIndex] = q
+    triggerUpdate(updated)
+  }
+
+  // Calibração de Dificuldade Estimada pelo Professor
+  const handleDifficultyCalibrate = (qIndex: number, newDifficulty: string) => {
+    const updated = [...questions]
+    const q = { ...updated[qIndex] }
+    q.predictedDifficultyLabel = newDifficulty
+    const logitMap: Record<string, number> = {
+      'Fácil': -1.0,
+      'Médio': 0.0,
+      'Difícil': 1.0,
+      'Desafio': 1.8
+    }
+    if (logitMap[newDifficulty] !== undefined) {
+      q.predictedDifficulty = logitMap[newDifficulty]
+    }
+    updated[qIndex] = q
+    triggerUpdate(updated)
+
+    recordExamAuditEvent({
+      examId: effectiveExamId,
+      action: 'points_changed',
+      diffSummary: `Questão #${q.number}: dificuldade calibrada manualmente para "${newDifficulty}"`,
+      questionNumber: q.number,
+      details: { difficulty: newDifficulty }
+    })
+  }
+
+  // Calibração do Nível Cognitivo de Bloom pelo Professor
+  const handleBloomCalibrate = (qIndex: number, newBloom: 'remember' | 'apply' | 'analyze' | 'evaluate') => {
+    const updated = [...questions]
+    const q = { ...updated[qIndex] }
+    q.bloomLevel = newBloom
+    updated[qIndex] = q
+    triggerUpdate(updated)
+
+    recordExamAuditEvent({
+      examId: effectiveExamId,
+      action: 'stem_edited',
+      diffSummary: `Questão #${q.number}: nível de Bloom calibrado para "${newBloom}"`,
+      questionNumber: q.number,
+      details: { bloomLevel: newBloom }
+    })
+  }
+
   // Remover Alternativa
   const handleRemoveOption = (qIndex: number, optIndex: number) => {
     const updated = [...questions]
@@ -982,6 +1131,54 @@ export default function EditableQuestionBoxes({
                       }}
                     />
                     <span style={{ fontSize: TEXT.caption, color: '#7a5c42' }}>pt</span>
+                  </div>
+
+                  {/* Calibração de Dificuldade Estimada */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 8 }} title="Calibrar Dificuldade Psicométrica do Item">
+                    <span style={{ fontSize: 11, color: '#7a5c42', fontWeight: 600 }}>Dificuldade:</span>
+                    <select
+                      value={q.predictedDifficultyLabel || 'Médio'}
+                      onChange={e => handleDifficultyCalibrate(index, e.target.value)}
+                      style={{
+                        padding: '3px 6px',
+                        borderRadius: 6,
+                        border: '1px solid #d5c8bb',
+                        background: '#faf6f0',
+                        fontSize: 11,
+                        fontWeight: 700,
+                        color: '#2c1a0e',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <option value="Fácil">🟢 Fácil</option>
+                      <option value="Médio">🔵 Médio</option>
+                      <option value="Difícil">🟠 Difícil</option>
+                      <option value="Desafio">🔴 Desafio</option>
+                    </select>
+                  </div>
+
+                  {/* Calibração do Nível Cognitivo de Bloom */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 6 }} title="Calibrar Nível Cognitivo (Taxonomia de Bloom)">
+                    <span style={{ fontSize: 11, color: '#7a5c42', fontWeight: 600 }}>Bloom:</span>
+                    <select
+                      value={q.bloomLevel || 'apply'}
+                      onChange={e => handleBloomCalibrate(index, e.target.value as any)}
+                      style={{
+                        padding: '3px 6px',
+                        borderRadius: 6,
+                        border: '1px solid #d5c8bb',
+                        background: '#faf6f0',
+                        fontSize: 11,
+                        fontWeight: 700,
+                        color: '#2c1a0e',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <option value="remember">📖 Lembrar/Compreender</option>
+                      <option value="apply">⚙️ Aplicar</option>
+                      <option value="analyze">🔍 Analisar</option>
+                      <option value="evaluate">⚖️ Avaliar/Criar</option>
+                    </select>
                   </div>
                 </div>
 
@@ -1695,58 +1892,145 @@ export default function EditableQuestionBoxes({
                       </button>
                     </div>
 
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                      {(q.options || []).map((opt, optIdx) => (
-                        <div key={optIdx} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <span style={{
-                            width: 24,
-                            height: 24,
-                            borderRadius: 6,
-                            background: '#8b5e3c',
-                            color: '#fff',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            fontSize: 11,
-                            fontWeight: 800
-                          }}>
-                            {opt.letter}
-                          </span>
-                          <input
-                            type="text"
-                            value={opt.text}
-                            onChange={e => handleOptionChange(index, optIdx, e.target.value)}
-                            placeholder={`Texto da alternativa ${opt.letter}...`}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {(q.options || []).map((opt, optIdx) => {
+                        const isAnswerKey = String(opt.letter).trim().toUpperCase() === String(q.answerKey || 'A').trim().toUpperCase();
+                        const distractorData = getDistractorForOption(q, opt.letter);
+                        const currentErrorType = distractorData.errorType || 'overgeneralization';
+                        const errorMeta = COGNITIVE_ERROR_REGISTRY[currentErrorType] || COGNITIVE_ERROR_REGISTRY['overgeneralization'];
+                        const errorStyle = ERROR_TYPE_STYLES[currentErrorType] || ERROR_TYPE_STYLES['overgeneralization'];
+
+                        return (
+                          <div
+                            key={optIdx}
                             style={{
-                              flex: 1,
-                              padding: '8px 12px',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: 6,
+                              padding: '8px 10px',
                               borderRadius: RADIUS.md,
-                              border: '1px solid #d5c8bb',
-                              background: '#fff',
-                              fontSize: 13,
-                              color: '#2c1a0e',
-                              outline: 'none'
+                              background: isAnswerKey ? '#f0fdf4' : '#fcfaf7',
+                              border: isAnswerKey ? '1.5px solid #86efac' : '1px solid #e7dfd5'
                             }}
-                          />
-                          {(q.options || []).length > 2 && (
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveOption(index, optIdx)}
-                              style={{
-                                border: 'none',
-                                background: 'transparent',
-                                color: '#dc2626',
-                                cursor: 'pointer',
-                                fontSize: 13,
-                                padding: '4px'
-                              }}
-                              title="Remover alternativa"
-                            >
-                              ✕
-                            </button>
-                          )}
-                        </div>
-                      ))}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <span style={{
+                                width: 26,
+                                height: 26,
+                                borderRadius: 6,
+                                background: isAnswerKey ? '#16a34a' : '#8b5e3c',
+                                color: '#fff',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontSize: 12,
+                                fontWeight: 800,
+                                flexShrink: 0
+                              }}>
+                                {opt.letter}
+                              </span>
+                              <input
+                                type="text"
+                                value={opt.text}
+                                onChange={e => handleOptionChange(index, optIdx, e.target.value)}
+                                placeholder={`Texto da alternativa ${opt.letter}...`}
+                                style={{
+                                  flex: 1,
+                                  padding: '8px 12px',
+                                  borderRadius: RADIUS.md,
+                                  border: '1px solid #d5c8bb',
+                                  background: '#fff',
+                                  fontSize: 13,
+                                  color: '#2c1a0e',
+                                  outline: 'none'
+                                }}
+                              />
+                              {(q.options || []).length > 2 && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveOption(index, optIdx)}
+                                  style={{
+                                    border: 'none',
+                                    background: 'transparent',
+                                    color: '#dc2626',
+                                    cursor: 'pointer',
+                                    fontSize: 13,
+                                    padding: '4px'
+                                  }}
+                                  title="Remover alternativa"
+                                >
+                                  ✕
+                                </button>
+                              )}
+                            </div>
+
+                            {/* Painel Anatômico de Calibração Psicométrica da Alternativa */}
+                            {isAnswerKey ? (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#166534', paddingLeft: 34 }}>
+                                <span style={{ background: '#dcfce7', color: '#15803d', padding: '2px 8px', borderRadius: 4, fontWeight: 700, border: '1px solid #86efac' }}>
+                                  ✓ Gabarito Oficial (Resposta Correta)
+                                </span>
+                                <span style={{ color: '#166534', fontStyle: 'italic' }}>
+                                  Demonstração do construto / competência plena.
+                                </span>
+                              </div>
+                            ) : (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, paddingLeft: 34 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                  <span style={{ fontSize: 11, fontWeight: 700, color: '#7a5c42', display: 'flex', alignItems: 'center', gap: 4 }}>
+                                    🎯 Erro Cognitivo:
+                                  </span>
+                                  <select
+                                    value={currentErrorType}
+                                    onChange={e => handleDistractorErrorTypeChange(index, opt.letter, e.target.value)}
+                                    style={{
+                                      padding: '2px 8px',
+                                      borderRadius: 4,
+                                      fontSize: 11,
+                                      fontWeight: 700,
+                                      background: errorStyle.bg,
+                                      color: errorStyle.text,
+                                      border: `1px solid ${errorStyle.border}`,
+                                      cursor: 'pointer'
+                                    }}
+                                    title="Calibrar o modelo de erro cognitivo deste distrator"
+                                  >
+                                    {Object.entries(COGNITIVE_ERROR_REGISTRY).map(([typeKey, meta]) => (
+                                      <option key={typeKey} value={typeKey}>
+                                        {meta.label}
+                                      </option>
+                                    ))}
+                                  </select>
+                                  <span style={{ fontSize: 10, color: '#8c7664', fontStyle: 'italic' }}>
+                                    (Calibrável pelo professor)
+                                  </span>
+                                </div>
+
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                  <span style={{ fontSize: 10.5, color: '#7a5c42', fontWeight: 600, flexShrink: 0 }}>
+                                    💡 Hipótese Diagnóstica:
+                                  </span>
+                                  <input
+                                    type="text"
+                                    value={distractorData.cognitiveMechanism || ''}
+                                    onChange={e => handleDistractorMechanismChange(index, opt.letter, e.target.value)}
+                                    placeholder={`Descreva a hipótese clínica deste distrator... Ex: ${errorMeta.typicalMechanism}`}
+                                    style={{
+                                      flex: 1,
+                                      padding: '3px 8px',
+                                      borderRadius: 4,
+                                      border: '1px solid #d5c8bb',
+                                      background: '#fff',
+                                      fontSize: 11,
+                                      color: '#2c1a0e'
+                                    }}
+                                  />
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 )}

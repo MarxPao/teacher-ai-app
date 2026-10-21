@@ -2,14 +2,27 @@
 // Gateway de LLM do processo main: Ollama local como padrão, nuvem com consentimento e pseudonimização obrigatória
 
 import { Pseudonymizer } from '../../lib/desktop-core/llm/pseudonymizer'
-import { DesktopCoreError } from '../../lib/desktop-core/errors'
+import { DesktopCoreError, type DesktopErrorCode } from '../../lib/desktop-core/errors'
+export type { DesktopErrorCode }
+export { DesktopCoreError }
 import type { SqlConsentRepository } from '../../lib/desktop-core/db/repositories/SqlSettingsConsentRepository'
 import type { VaultManager } from '../vault/safeStorage'
+import {
+  isNegatedCommand,
+  extractBatchException,
+  extractTargetStudentWithCorrection,
+  extractDateWithCorrection,
+} from './nluGuards'
+import type { IConversationEngine, EngineMode } from './conversationEngine'
+import { ClassicEngine } from './engines/classicEngine'
+import { EvaAdaptedEngine } from './engines/evaAdaptedEngine'
+import { turnTrace } from '../../lib/turnTrace'
 
 export interface LlmGatewayOptions {
   consentRepo: SqlConsentRepository
   vault: VaultManager
   ollamaUrl?: string
+  engineMode?: EngineMode
 }
 
 export interface LlmRequest {
@@ -103,15 +116,55 @@ export interface ParsedIntent {
   raw?: string
 }
 
+export interface NluSessionContext {
+  lastSkillId?: string
+  lastTurma?: string
+  lastDate?: string
+  lastStudent?: string
+  lastAttendanceStatus?: string
+}
+
 export class LlmGateway {
   private consentRepo: SqlConsentRepository
   private vault: VaultManager
   private ollamaUrl: string
+  private sessionContext: NluSessionContext = {}
+  private engineMode: EngineMode
+  private conversationEngine?: IConversationEngine
 
   constructor(options: LlmGatewayOptions) {
     this.consentRepo = options.consentRepo
     this.vault = options.vault
     this.ollamaUrl = options.ollamaUrl || 'http://127.0.0.1:11434'
+    this.engineMode = options.engineMode || 'classic'
+  }
+
+  public getEngineMode(): EngineMode {
+    return this.engineMode
+  }
+
+  public setEngineMode(mode: EngineMode): void {
+    this.engineMode = mode
+    this.conversationEngine = undefined
+  }
+
+  public getConversationEngine(): IConversationEngine {
+    if (!this.conversationEngine) {
+      if (this.engineMode === 'eva') {
+        this.conversationEngine = new EvaAdaptedEngine(this)
+      } else {
+        this.conversationEngine = new ClassicEngine(this)
+      }
+    }
+    return this.conversationEngine
+  }
+
+  public getSessionContext(): NluSessionContext {
+    return { ...this.sessionContext }
+  }
+
+  public clearSessionContext(): void {
+    this.sessionContext = {}
   }
 
   /**
@@ -127,14 +180,16 @@ export class LlmGateway {
   }
 
   /**
-   * Executa uma inferência de LLM garantindo que:
-   * 1. O Ollama local seja prioridade máxima (zero dados saem da máquina).
-   * 2. Qualquer chamada a provedores em nuvem exija consentimento formal (LGPD) e passe por pseudonimização.
+   * Executa uma inferência de LLM.
+   * Ordem de prioridade para o agente: Groq → Google (Gemini) → erro.
+   * Ollama local é aceito quando explicitamente solicitado.
+   * Qualquer chamada a provedores em nuvem exige consentimento (formal ou implícito via vault) e
+   * passa por pseudonimização mandatória de PII antes de deixar a máquina.
    */
   async complete(request: LlmRequest): Promise<LlmResponse> {
-    const provider = request.provider || 'ollama'
+    const provider = request.provider || 'groq'
 
-    // 1. Provedor Local (Ollama)
+    // Provedor Local (Ollama) — acionado apenas quando explicitamente solicitado
     if (provider === 'ollama') {
       const isOnline = await this.checkOllamaStatus()
       if (!isOnline) {
@@ -143,69 +198,73 @@ export class LlmGateway {
           'Servidor Ollama local não está em execução em http://127.0.0.1:11434.'
         )
       }
-
       const res = await fetch(`${this.ollamaUrl}/api/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: request.model || 'llama3.2',
-          prompt: request.prompt,
-          stream: false,
-        }),
+        body: JSON.stringify({ model: request.model || 'llama3.2', prompt: request.prompt, stream: false }),
       })
-
-      if (!res.ok) {
-        throw new DesktopCoreError('E_LLM_REQUEST_FAILED', `Falha no Ollama local: HTTP ${res.status}`)
-      }
-
+      if (!res.ok) throw new DesktopCoreError('E_LLM_REQUEST_FAILED', `Falha no Ollama local: HTTP ${res.status}`)
       const data = await res.json()
-      return {
-        provider: 'ollama',
-        text: data.response || '',
-        pseudonymized: false,
-      }
+      return { provider: 'ollama', text: data.response || '', pseudonymized: false }
     }
 
-    // 2. Provedores em Nuvem (Exigem Consentimento Estrito na tabela consents)
-    const hasConsent = await this.consentRepo.getConsent(provider)
+    // Provedores em Nuvem — cascata: tenta o solicitado e depois o alternativo
+    const CASCADE: Array<'groq' | 'google' | 'openai'> = ['groq', 'google', 'openai']
+    const order = provider === 'groq'  ? ['groq', 'google'] as const
+                : provider === 'google' ? ['google', 'groq'] as const
+                : [provider as 'groq' | 'google' | 'openai']
+
+    let lastError: Error | null = null
+    for (const p of order) {
+      try {
+        return await this.completeWithProvider(p, request)
+      } catch (err: any) {
+        lastError = err
+        // Só tenta o próximo se for falha de disponibilidade/chave; não retenta em bloqueio de consentimento
+        const code = err?.code || ''
+        if (code === 'E_CONSENT_REQUIRED') throw err
+      }
+    }
+    throw lastError || new DesktopCoreError('E_LLM_ALL_FAILED', 'Todos os provedores em nuvem falharam.')
+  }
+
+  /**
+   * Tenta completar com um único provider em nuvem.
+   * Consentimento implícito: se a key existe no vault, o usuário já a configurou — aceita.
+   */
+  private async completeWithProvider(
+    provider: 'groq' | 'google' | 'openai',
+    request: LlmRequest
+  ): Promise<LlmResponse> {
+    // Consentimento: formal (banco) OU implícito (key no vault)
+    const hasConsent = (await this.consentRepo.getConsent(provider)) || this.vault.hasApiKey(provider)
     if (!hasConsent) {
       throw new DesktopCoreError(
         'E_CONSENT_REQUIRED',
-        `Envio de dados para o provedor em nuvem '${provider}' não foi formalmente consentido nas configurações de privacidade.`
+        `Envio de dados para '${provider}' não consentido. Configure a chave de API nas preferências.`
       )
     }
 
-    // 3. Recuperação de Chave no Cofre DPAPI
     const apiKey = this.vault.getApiKey(provider)
     if (!apiKey) {
-      throw new DesktopCoreError(
-        'E_API_KEY_MISSING',
-        `Chave de API para o provedor '${provider}' não foi configurada no cofre seguro do sistema.`
-      )
+      throw new DesktopCoreError('E_API_KEY_MISSING', `Chave de API para '${provider}' não encontrada no cofre.`)
     }
 
-    // 4. Pseudonimização Mandatória de PII antes de deixar a máquina
+    // Pseudonimização mandatória de PII antes de deixar a máquina
     const session = Pseudonymizer.pseudonymize(request.prompt, request.knownStudents || [])
 
-    // 5. Envio do Prompt Higienizado para o Provedor
     let rawOutput = ''
     if (provider === 'groq') {
       rawOutput = await this.callGroq(session.sanitizedText, apiKey, request.model)
+    } else if (provider === 'google') {
+      rawOutput = await this.callGoogle(session.sanitizedText, apiKey, request.model)
     } else if (provider === 'openai') {
       rawOutput = await this.callOpenAi(session.sanitizedText, apiKey, request.model)
-    } else {
-      // Mock / fallback seguro para outros provedores em nuvem
-      rawOutput = `Resposta higienizada simulada para: ${session.sanitizedText}`
     }
 
-    // 6. De-pseudonimização em memória
+    // De-pseudonimização em memória — os tokens nunca saem da máquina
     const finalText = Pseudonymizer.depseudonymize(rawOutput, session.tokenToOriginal)
-
-    return {
-      provider,
-      text: finalText,
-      pseudonymized: true,
-    }
+    return { provider, text: finalText, pseudonymized: true }
   }
 
   /**
@@ -218,25 +277,50 @@ export class LlmGateway {
     knownStudents: Array<{ name: string }> = [],
     catalog?: CatalogSkill[]
   ): Promise<ParsedIntent> {
+    const t_nlu_start = Date.now()
+    const res = await this._parseIntentInner(text, knownStudents, catalog)
+    try {
+      turnTrace.record({
+        id: `turn_${t_nlu_start}_${Math.random().toString(36).slice(2, 7)}`,
+        surface: 'desktop',
+        mode: 'unary',
+        provider: 'ollama',
+        nluDurationMs: Date.now() - t_nlu_start,
+        t_input: t_nlu_start,
+        t_done: Date.now(),
+      })
+    } catch {}
+    return res
+  }
+
+  private async _parseIntentInner(
+    text: string,
+    knownStudents: Array<{ name: string }> = [],
+    catalog?: CatalogSkill[]
+  ): Promise<ParsedIntent> {
     const lower = text.toLowerCase()
 
-    // Guardrail contra negação explícita ("não lance falta", "não marque nota")
-    if (/\b(?:n[aã]o\s+(?:lance|lancar|lan[çc]ar|marque|marcar|registre|registrar|grave|gravar|coloque|alterar|altere))\b/i.test(lower)) {
+    // Guardrail universal contra negação explícita ou indireta ("não lance falta", "não quero que marque nota")
+    if (isNegatedCommand(lower)) {
       return {
         intent: 'unknown',
         params: {},
         supported: false,
         no_match: true,
+        clarification_needed: true,
         raw: text,
       }
     }
 
     // Guardrail contra cláusulas de exceção em lote ("todos menos o João", "exceto Maria", "salvo Pedro")
     // Impede que o nome citado na exceção seja extraído como o único alvo de escrita individual
-    if (/\b(?:todos?\s+menos|todas?\s+menos|exceto|salvo|menos\s+(?:o|a)\b)/i.test(lower)) {
+    const batchInfo = extractBatchException(lower, knownStudents)
+    if (batchInfo) {
       return {
         intent: 'unknown',
-        params: {},
+        params: {
+          exclude_students: batchInfo.excludeStudents,
+        },
         supported: false,
         no_match: true,
         clarification_needed: true,
@@ -257,6 +341,7 @@ export class LlmGateway {
 
       let bestSkill: CatalogSkill | null = null
       let highestScore = 0
+      const scoredSkills: Array<{ skill: CatalogSkill; score: number }> = []
 
       for (const skill of catalog) {
         let score = 0
@@ -301,19 +386,48 @@ export class LlmGateway {
           score += 6
         }
 
+        scoredSkills.push({ skill, score })
         if (score > highestScore) {
           highestScore = score
           bestSkill = skill
         }
       }
 
-      if (!bestSkill || highestScore <= 0) {
+      const topTied = scoredSkills.filter((s) => s.score > 0 && s.score === highestScore)
+      if (topTied.length > 1) {
         return {
-          intent: 'unknown',
-          params: {},
+          intent: 'clarification',
+          params: {
+            tied_skills: topTied.map((t) => t.skill.id),
+          },
           supported: false,
           no_match: true,
+          clarification_needed: true,
           raw: text,
+        }
+      }
+
+      if (!bestSkill || highestScore <= 0) {
+        // Continuação elíptica multi-turno: se a professora disser "E 7,5 para o João" ou "e para a Maria na mesma turma"
+        // após já ter executado uma habilidade na sessão atual
+        const isContinuation =
+          Boolean(this.sessionContext.lastSkillId) &&
+          (/^\s*(?:e\b|tamb[eé]m\b|agora\b|mesm[ao]\b)/i.test(lower) ||
+            /\b(?:mesm[ao]\s+(?:turma|data|dia|aula)|tamb[eé]m)\b/i.test(lower) ||
+            extractNumericGradeWithCorrection(lower) !== undefined)
+
+        if (isContinuation && this.sessionContext.lastSkillId) {
+          bestSkill = catalog.find((s) => s.id === this.sessionContext.lastSkillId) || null
+        }
+
+        if (!bestSkill) {
+          return {
+            intent: 'unknown',
+            params: {},
+            supported: false,
+            no_match: true,
+            raw: text,
+          }
         }
       }
 
@@ -333,12 +447,9 @@ export class LlmGateway {
       const lowerFolded = normFold(lower)
 
       const extractedParams: Record<string, any> = {}
-      let targetStudent: string | null = null
-      for (const st of knownStudents) {
-        if (lower.includes(st.name.toLowerCase()) || lowerFolded.includes(normFold(st.name))) {
-          targetStudent = st.name
-          break
-        }
+      let targetStudent = extractTargetStudentWithCorrection(lower, knownStudents, normFold)
+      if (!targetStudent && /\b(?:mesm[ao]\s+alun[oa]|para\s+el[ea]\b)/i.test(lower) && this.sessionContext.lastStudent) {
+        targetStudent = this.sessionContext.lastStudent
       }
 
       const declaredParams = normalizeSkillParams(bestSkill.params)
@@ -346,7 +457,15 @@ export class LlmGateway {
         if (p.name === 'student_ref' || p.name === 'aluno' || p.name === 'student') {
           if (targetStudent) extractedParams[p.name] = targetStudent
         } else if (p.name === 'attendance_status' || p.name === 'falta') {
-          extractedParams[p.name] = /falta|aus[êe]ncia/i.test(lower) ? 'falta' : 'presente'
+          if (/falta|aus[êe]ncia/i.test(lower)) {
+            extractedParams[p.name] = 'falta'
+          } else if (/presen[çc]a|presente/i.test(lower)) {
+            extractedParams[p.name] = 'presente'
+          } else if (this.sessionContext.lastAttendanceStatus) {
+            extractedParams[p.name] = this.sessionContext.lastAttendanceStatus
+          } else {
+            extractedParams[p.name] = 'presente'
+          }
         } else if (p.name === 'grade_value' || p.name === 'nota') {
           const gradeVal = extractNumericGradeWithCorrection(lower)
           if (gradeVal !== undefined) {
@@ -355,13 +474,31 @@ export class LlmGateway {
         } else if (p.name === 'texto') {
           extractedParams['texto'] = text.replace(/^(?:assistente,?|por favor,?|pe[çc]o para|registre|grave|envie|publique)\s*/i, '').trim()
         } else if (p.type === 'date' || p.name === 'data' || p.name === 'date') {
-          const relDate = resolveRelativeDate(lower)
-          if (relDate) extractedParams[p.name] = relDate
+          const relDate = extractDateWithCorrection(lower, resolveRelativeDate)
+          if (relDate) {
+            extractedParams[p.name] = relDate
+          } else if (this.sessionContext.lastDate) {
+            extractedParams[p.name] = this.sessionContext.lastDate
+          }
         } else if (p.name === 'turma' || p.name === 'class_id') {
           const turmaMatch = text.match(/\bturma\s+([0-9A-Za-z_-]+)/i) || text.match(/\b([1-9]\s?[A-Za-z])\b/)
-          if (turmaMatch) extractedParams[p.name] = turmaMatch[1].replace(/\s+/g, '').toUpperCase()
+          if (turmaMatch && !/\bmesma\s+turma\b/i.test(lower)) {
+            extractedParams[p.name] = turmaMatch[1].replace(/\s+/g, '').toUpperCase()
+          } else if (this.sessionContext.lastTurma) {
+            extractedParams[p.name] = this.sessionContext.lastTurma
+          }
         }
       }
+
+      // Atualiza memória conversacional da sessão para o próximo turno
+      this.sessionContext.lastSkillId = matchedId
+      if (targetStudent) this.sessionContext.lastStudent = targetStudent
+      const resolvedTurma = extractedParams['turma'] || extractedParams['class_id']
+      if (resolvedTurma) this.sessionContext.lastTurma = resolvedTurma
+      const resolvedDate = extractedParams['data'] || extractedParams['date']
+      if (resolvedDate) this.sessionContext.lastDate = resolvedDate
+      const resolvedAtt = extractedParams['attendance_status'] || extractedParams['falta']
+      if (resolvedAtt) this.sessionContext.lastAttendanceStatus = resolvedAtt
 
       return {
         skill_id: matchedId,
@@ -443,6 +580,19 @@ export class LlmGateway {
     if (!res.ok) throw new Error(`Groq API error: HTTP ${res.status}`)
     const data = await res.json()
     return data.choices?.[0]?.message?.content || ''
+  }
+
+  private async callGoogle(prompt: string, apiKey: string, model?: string): Promise<string> {
+    const geminiModel = model || 'gemini-2.0-flash'
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${apiKey}`
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
+    })
+    if (!res.ok) throw new Error(`Google Gemini API error: HTTP ${res.status}`)
+    const data = await res.json()
+    return data.candidates?.[0]?.content?.parts?.[0]?.text || ''
   }
 
   private async callOpenAi(prompt: string, apiKey: string, model?: string): Promise<string> {

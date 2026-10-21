@@ -45,8 +45,15 @@ export function assembleGraph(
   const plannedNodes: PlannedNode[] = buildPreambleNodes(trace, segmented, decisions, paramContext, nextId)
 
   // 2. Execução da Tarefa
+  // Selects sem rowContext são filtros de navegação (SELECT_FILTER) e não devem ser compilados como WRITE.
+  // Eles permitem execução durante dryRun sem exigir audit write-ahead do Desktop App.
   const writeActionSteps = segmented.actionSteps.filter(
-    s => s.kind === 'input' || s.kind === 'check' || s.kind === 'select'
+    s => s.kind === 'input' || s.kind === 'check' ||
+    (s.kind === 'select' && !!(s.descriptor as any).rowContext)
+  )
+  // Selects de filtro de página (sem rowContext): executam como NAVIGATE_FILTER, não como WRITE
+  const filterSelectSteps = segmented.actionSteps.filter(
+    s => s.kind === 'select' && !(s.descriptor as any).rowContext
   )
   const navClickSteps = segmented.actionSteps.filter(
     s => s.kind === 'click' && s.id !== (segmented.filterStep?.step as any)?.id
@@ -95,6 +102,36 @@ export function assembleGraph(
   // Cliques intermediários de navegação anteriores à escrita (ex.: menus, links, sub-abas)
   for (const clickStep of preWriteClickSteps) {
     pushClickStepNode(clickStep)
+  }
+
+  // Filtros de consulta (SELECT sem rowContext): executam como WRITE com semantic:'filter'
+  // Permitidos em dryRun pelo isSafeQueryFilter em write.ts — sem write-ahead audit do Desktop App
+  for (const fs of filterSelectSteps) {
+    const fsAnchor = buildAnchorFromDescriptor(
+      fs.descriptor,
+      (fs.descriptor as any).aria_label || (fs.descriptor as any).label_text || (fs.descriptor as any).accessible_name || 'Filtro de consulta',
+      undefined,
+      decisions,
+      paramContext
+    )
+    const fsValue = String((fs as any).value || (fs as any).text || '').trim()
+    plannedNodes.push({
+      id: nextId(),
+      build: (next) => ({
+        type: 'WRITE',
+        label: `Selecionar filtro: ${fsValue || (fs.descriptor as any).aria_label || 'valor'}`,
+        anchor: fsAnchor,
+        value: { lit: fsValue },
+        method: 'select_option',
+        semantic: 'text',
+        read_back: true,
+        retry: { max_attempts: 2, backoff_ms: 500 },
+        timeout_ms: 5000,
+        postconditions: [],
+        on_success: next,
+        on_fail: '$abort',
+      }),
+    })
   }
 
   if (decisions.task_id === 'read_roster') {
