@@ -21,7 +21,7 @@ export interface AdversarialUtterance {
     | 'interrupcao'
 }
 
-export const ADVERSARIAL_40_DATASET: AdversarialUtterance[] = [
+export const DEV_ADVERSARIAL_CASES: ReadonlyArray<AdversarialUtterance> = Object.freeze([
   // ─── 1 a 7: Pergunta sem '?' (imperativo explicativo / elicitação) ─────────
   { id: 1, speakerRole: 'professor', text: 'me explica por que os mamíferos são homotérmicos', expectedIsQuestion: true, expectedSubtype: 'aberta', category: 'sem_interrogacao' },
   { id: 2, speakerRole: 'professor', text: 'diga para a turma qual é o ponto de ebulição da água', expectedIsQuestion: true, expectedSubtype: 'fechada', category: 'sem_interrogacao' },
@@ -75,4 +75,6 @@ export const ADVERSARIAL_40_DATASET: AdversarialUtterance[] = [
   { id: 38, speakerRole: 'aluno', text: 'não entendi nada', expectedIsQuestion: false, expectedSubtype: 'none', category: 'interrupcao' },
   { id: 39, speakerRole: 'aluno', text: 'olha ali na janela', expectedIsQuestion: false, expectedSubtype: 'none', category: 'interrupcao' },
   { id: 40, speakerRole: 'professor', text: 'gente silêncio', expectedIsQuestion: false, expectedSubtype: 'none', category: 'interrupcao' }
-]
+]);
+
+export const ADVERSARIAL_40_DATASET = DEV_ADVERSARIAL_CASES
