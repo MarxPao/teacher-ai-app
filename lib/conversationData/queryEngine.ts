@@ -315,24 +315,59 @@ export async function executeConversationQuery(
 
   // ─── 8. "Quanto tempo esperei após perguntar?" ────────────────────────────
   if (/\b(tempo esperei|wait time|tempo de espera|espera antes dos alunos|média de wait time)\b/i.test(normalizedQuery)) {
-    const waitEvents = events.filter(e => e.type === 'wait_time')
-    const items: QueryResultItem[] = waitEvents.map(e => ({
-      timeRange: formatTimeRange(e.start_ms, e.end_ms),
-      startMs: e.start_ms,
-      endMs: e.end_ms,
-      speaker: 'Silêncio / Espera Docente',
-      evidence: e.evidence_span
-    }))
+    const teacherQuestionEvents = events.filter(e => e.type === 'pergunta' && turns.find(t => t.id === e.turn_id)?.role === 'professor')
+    const totalQuestions = teacherQuestionEvents.length
 
-    const totalWait = waitEvents.reduce((acc, e) => acc + (e.end_ms - e.start_ms), 0)
-    const avgWait = waitEvents.length > 0 ? (totalWait / waitEvents.length / 1000).toFixed(1) : '0'
+    const measuredWaitTimes: number[] = []
+    const items: QueryResultItem[] = []
+    let deliberatePausesCount = 0
+
+    teacherQuestionEvents.forEach(qEvent => {
+      const turnIndex = turns.findIndex(t => t.id === qEvent.turn_id)
+      if (turnIndex >= 0 && turnIndex < turns.length - 1) {
+        const currentTurn = turns[turnIndex]
+        const nextTurn = turns[turnIndex + 1]
+        const waitMs = Math.max(0, nextTurn.start_ms - currentTurn.end_ms)
+        const waitSeconds = parseFloat((waitMs / 1000).toFixed(1))
+        measuredWaitTimes.push(waitSeconds)
+
+        if (waitSeconds >= 3.0) {
+          deliberatePausesCount++
+        }
+
+        items.push({
+          timeRange: formatTimeRange(currentTurn.end_ms, nextTurn.start_ms),
+          startMs: currentTurn.end_ms,
+          endMs: nextTurn.start_ms,
+          speaker: 'Espera / Silêncio Docente',
+          evidence: `Espera de ${waitSeconds}s após pergunta: "${qEvent.evidence_span}"`
+        })
+      }
+    })
+
+    const measuredCount = measuredWaitTimes.length
+    let avgWait = 0
+    let medianWait = 0
+
+    if (measuredCount > 0) {
+      const sum = measuredWaitTimes.reduce((acc, v) => acc + v, 0)
+      avgWait = parseFloat((sum / measuredCount).toFixed(1))
+
+      const sorted = [...measuredWaitTimes].sort((a, b) => a - b)
+      const mid = Math.floor(sorted.length / 2)
+      if (sorted.length % 2 === 0) {
+        medianWait = parseFloat(((sorted[mid - 1] + sorted[mid]) / 2).toFixed(1))
+      } else {
+        medianWait = sorted[mid]
+      }
+    }
 
     return {
       query,
       primitiveUsed: 'tempo_de_espera',
       definitionUsed: DEFINITION_WAIT_TIME,
-      numericResult: waitEvents.length,
-      formattedAnswer: `Você realizou ${waitEvents.length} pausas deliberadas pós-pergunta, com média de ${avgWait}s de espera.`,
+      numericResult: avgWait,
+      formattedAnswer: `Foram realizadas ${totalQuestions} perguntas docentes, das quais ${measuredCount} com espera medida. Média geral: ${avgWait.toFixed(1)}s, mediana: ${medianWait.toFixed(1)}s. Perguntas com espera >= 3s (pausa deliberada): ${deliberatePausesCount}.`,
       items
     }
   }

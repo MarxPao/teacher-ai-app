@@ -383,9 +383,11 @@ async function executeBusinessMethod(method: string, params: any): Promise<any> 
 
     default:
       if (method.startsWith('conversation.')) {
+        if (!driver || !(driver as any).db || !dataKey) {
+          throw new Error('Cofre local seguro indisponível no Desktop. Operação cancelada por segurança.')
+        }
         const { executeConversationMethod } = require('../lib/conversationData/desktopIpc')
-        const rawDb = (driver as any)?.db || new (require('node:sqlite').DatabaseSync)(path.join(app.getPath('userData'), 'data', 'teacher_local.db'))
-        return await executeConversationMethod(method, params, rawDb)
+        return await executeConversationMethod(method, params, driver, dataKey)
       }
       return { ok: true }
   }
@@ -448,13 +450,18 @@ async function initCore() {
     electronExecPath: app.isPackaged ? process.execPath : undefined,
   })
 
-  // Inicialização e purga de sessões de conversação vencidas no arranque (LGPD)
+  // Inicialização e purga de sessões de conversação vencidas no arranque e periódica (LGPD)
   try {
-    const rawDb = (driver as any)?.db || new (require('node:sqlite').DatabaseSync)(dbPath)
-    const { initConversationSchema, purgeExpiredSessions } = require('../lib/conversationData/schema')
-    initConversationSchema(rawDb)
-    purgeExpiredSessions(rawDb)
-  } catch {}
+    if (driver && (driver as any).db && dataKey) {
+      const { initConversationVault } = require('../lib/conversationData/schema')
+      await initConversationVault(driver)
+      const { executeConversationMethod, startPeriodicRetentionPurge } = require('../lib/conversationData/desktopIpc')
+      await executeConversationMethod('conversation.purgeExpired', {}, driver, dataKey)
+      startPeriodicRetentionPurge(driver, 3600000, dataKey)
+    }
+  } catch (err) {
+    console.error('[conversationData] Erro na inicialização do cofre:', err)
+  }
 }
 
 function createWindow() {

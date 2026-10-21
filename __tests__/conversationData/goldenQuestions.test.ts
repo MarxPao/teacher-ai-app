@@ -101,13 +101,20 @@ describe('TESTES DOURADOS: 12 Perguntas Canônicas + Salvaguardas de Privacidade
   })
 
   // 8. Quanto tempo esperei após perguntar?
-  it('Q8: Quanto tempo esperei após perguntar? -> Esperas com horários e média', async () => {
+  it('Q8: Quanto tempo esperei após perguntar? -> N perguntas, média 3.8s, mediana 3.0s, espera >=3s: 3', async () => {
     const res = await executeConversationQuery(repo, 'aula_50min_bio', 'Quanto tempo esperei após perguntar?')
-    expect(res.numericResult).toBe(3)
-    expect(res.formattedAnswer).toContain('média de 5.0s')
+    expect(res.numericResult).toBe(3.8)
+    expect(res.formattedAnswer).toContain('5 perguntas docentes')
+    expect(res.formattedAnswer).toContain('5 com espera medida')
+    expect(res.formattedAnswer).toContain('Média geral: 3.8s')
+    expect(res.formattedAnswer).toContain('mediana: 3.0s')
+    expect(res.formattedAnswer).toContain('espera >= 3s (pausa deliberada): 3')
+    expect(res.items.length).toBe(5)
     expect(res.items[0].timeRange).toBe('[02:17 - 02:23]')
-    expect(res.items[1].timeRange).toBe('[06:52 - 06:57]')
-    expect(res.items[2].timeRange).toBe('[11:55 - 11:58]')
+    expect(res.items[1].timeRange).toBe('[02:50 - 02:52]')
+    expect(res.items[2].timeRange).toBe('[06:52 - 06:57]')
+    expect(res.items[3].timeRange).toBe('[11:55 - 11:58]')
+    expect(res.items[4].timeRange).toBe('[13:20 - 13:22]')
   })
 
   // 9. Dúvidas dos alunos que ficaram sem resposta?

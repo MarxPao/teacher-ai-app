@@ -6,6 +6,7 @@
  */
 
 import type { SqlDriver } from '../desktop-core/db/SqlDriver'
+import { encryptEnvelope, decryptEnvelope } from '../desktop-core/crypto/envelope'
 import type {
   SessionRecord,
   TurnRecord,
@@ -81,7 +82,10 @@ export async function initConversationVault(driver: SqlDriver): Promise<void> {
 }
 
 export class ConversationVaultRepository {
-  constructor(private driver: SqlDriver) {}
+  constructor(
+    private driver: SqlDriver,
+    private dataKey?: Buffer
+  ) {}
 
   async createSession(session: SessionRecord): Promise<void> {
     const createdAt = session.created_at || new Date().toISOString()
@@ -120,6 +124,9 @@ export class ConversationVaultRepository {
 
   async deleteSession(sessionId: string): Promise<void> {
     await this.driver.execute(`DELETE FROM sessions WHERE id = ?`, [sessionId])
+    try {
+      await this.driver.execute(`VACUUM`)
+    } catch {}
   }
 
   async purgeExpiredSessions(now: string = new Date().toISOString()): Promise<number> {
@@ -134,6 +141,9 @@ export class ConversationVaultRepository {
         await tx.execute(`DELETE FROM sessions WHERE id = ?`, [sess.id])
       }
     })
+    try {
+      await this.driver.execute(`VACUUM`)
+    } catch {}
     return expired.length
   }
 
@@ -141,52 +151,73 @@ export class ConversationVaultRepository {
     if (turns.length === 0) return
     await this.driver.transaction(async tx => {
       for (const t of turns) {
+        const textToStore = this.dataKey ? encryptEnvelope(t.text, this.dataKey) : t.text
+        const labelToStore = this.dataKey ? encryptEnvelope(t.speaker_label, this.dataKey) : t.speaker_label
+
         await tx.execute(
           `INSERT INTO turns (id, session_id, speaker_label, role, start_ms, end_ms, text, turn_index)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-          [t.id, t.session_id, t.speaker_label, t.role, t.start_ms, t.end_ms, t.text, t.turn_index]
+          [t.id, t.session_id, labelToStore, t.role, t.start_ms, t.end_ms, textToStore, t.turn_index]
         )
       }
     })
   }
 
   async getTurnsBySession(sessionId: string): Promise<TurnRecord[]> {
-    return this.driver.query<TurnRecord>(
+    const rows = await this.driver.query<TurnRecord>(
       `SELECT * FROM turns WHERE session_id = ? ORDER BY turn_index ASC`,
       [sessionId]
     )
+
+    return rows.map(r => ({
+      ...r,
+      text: (this.dataKey && r.text.startsWith('enc:v1:')) ? decryptEnvelope(r.text, this.dataKey) : r.text,
+      speaker_label: (this.dataKey && r.speaker_label.startsWith('enc:v1:')) ? decryptEnvelope(r.speaker_label, this.dataKey) : r.speaker_label
+    }))
   }
 
   async insertEvents(events: EventRecord[]): Promise<void> {
     if (events.length === 0) return
     await this.driver.transaction(async tx => {
       for (const e of events) {
+        const evidenceToStore = this.dataKey ? encryptEnvelope(e.evidence_span, this.dataKey) : e.evidence_span
+
         await tx.execute(
           `INSERT INTO events (id, turn_id, session_id, type, subtype, confidence, evidence_span, start_ms, end_ms)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [e.id, e.turn_id, e.session_id, e.type, e.subtype, e.confidence, e.evidence_span, e.start_ms, e.end_ms]
+          [e.id, e.turn_id, e.session_id, e.type, e.subtype, e.confidence, evidenceToStore, e.start_ms, e.end_ms]
         )
       }
     })
   }
 
   async getEventsBySession(sessionId: string, type?: string): Promise<EventRecord[]> {
+    let rows: EventRecord[]
     if (type) {
-      return this.driver.query<EventRecord>(
+      rows = await this.driver.query<EventRecord>(
         `SELECT * FROM events WHERE session_id = ? AND type = ? ORDER BY start_ms ASC`,
         [sessionId, type]
       )
+    } else {
+      rows = await this.driver.query<EventRecord>(
+        `SELECT * FROM events WHERE session_id = ? ORDER BY start_ms ASC`,
+        [sessionId]
+      )
     }
-    return this.driver.query<EventRecord>(
-      `SELECT * FROM events WHERE session_id = ? ORDER BY start_ms ASC`,
-      [sessionId]
-    )
+
+    return rows.map(e => ({
+      ...e,
+      evidence_span: (this.dataKey && e.evidence_span.startsWith('enc:v1:')) ? decryptEnvelope(e.evidence_span, this.dataKey) : e.evidence_span
+    }))
   }
 
   async upsertSpeakerMap(maps: SpeakerMapRecord[]): Promise<void> {
     if (maps.length === 0) return
     await this.driver.transaction(async tx => {
       for (const m of maps) {
+        const labelToStore = this.dataKey ? encryptEnvelope(m.speaker_label, this.dataKey) : m.speaker_label
+        const nameToStore = (m.assigned_name && this.dataKey) ? encryptEnvelope(m.assigned_name, this.dataKey) : m.assigned_name
+
         await tx.execute(
           `INSERT INTO speaker_map (id, session_id, speaker_label, assigned_name, role, source, confidence)
            VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -195,16 +226,22 @@ export class ConversationVaultRepository {
              role = excluded.role,
              source = excluded.source,
              confidence = excluded.confidence`,
-          [m.id, m.session_id, m.speaker_label, m.assigned_name, m.role, m.source, m.confidence]
+          [m.id, m.session_id, labelToStore, nameToStore, m.role, m.source, m.confidence]
         )
       }
     })
   }
 
   async getSpeakerMap(sessionId: string): Promise<SpeakerMapRecord[]> {
-    return this.driver.query<SpeakerMapRecord>(
+    const rows = await this.driver.query<SpeakerMapRecord>(
       `SELECT * FROM speaker_map WHERE session_id = ?`,
       [sessionId]
     )
+
+    return rows.map(m => ({
+      ...m,
+      speaker_label: (this.dataKey && m.speaker_label.startsWith('enc:v1:')) ? decryptEnvelope(m.speaker_label, this.dataKey) : m.speaker_label,
+      assigned_name: (this.dataKey && m.assigned_name?.startsWith('enc:v1:')) ? decryptEnvelope(m.assigned_name, this.dataKey) : m.assigned_name
+    }))
   }
 }

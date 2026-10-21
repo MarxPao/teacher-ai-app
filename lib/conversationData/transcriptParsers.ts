@@ -136,13 +136,61 @@ export function parseSrt(content: string): ParsedRawTurn[] {
   return turns
 }
 
+export const NON_SPEAKER_PREFIXES = /^(atenção|atencao|exemplo|nota|obs|observação|observacao|importante|dica|questão|questao|exercício|exercicio|passo|resposta|item|aviso|lembrete|contexto|definição|definicao|fonte)\b/i
+
+export function isValidSpeakerCandidate(
+  candidate: string,
+  knownSpeakers: string[] = [],
+  frequencies: Map<string, number> = new Map()
+): boolean {
+  const trimmed = candidate.trim()
+  if (!trimmed) return false
+  if (NON_SPEAKER_PREFIXES.test(trimmed)) return false
+
+  // Se estiver na lista informada pelo usuário
+  if (knownSpeakers.some(k => k.toLowerCase() === trimmed.toLowerCase())) {
+    return true
+  }
+
+  // Nome curto (máximo 4 palavras)
+  const words = trimmed.split(/\s+/)
+  if (words.length > 4) return false
+
+  // Se tem prefixo típico de falante
+  if (/^(prof|profa|professor|professora|aluno|aluna|estudante|coord|coordenador|coordenadora|spk|speaker|locutor|locutora)\b/i.test(trimmed)) {
+    return true
+  }
+
+  // Se se repete mais de uma vez na transcrição
+  const count = frequencies.get(trimmed.toLowerCase()) || 0
+  if (count > 1) return true
+
+  // Se parece com um nome próprio capitalizado curto (1 a 3 palavras capitalizadas)
+  if (words.every(w => /^[A-ZÁÉÍÓÚÂÊÎÔÛÃÕÇ][a-záéíóúâêîôûãõç]+$/.test(w)) && words.length <= 3) {
+    return true
+  }
+
+  return false
+}
+
 /**
  * Parser tolerante para .txt com linhas no formato [00:01:00 - 00:01:20] Nome: fala ou Nome: fala
  */
-export function parseTxtTranscript(content: string): ParsedRawTurn[] {
+export function parseTxtTranscript(content: string, knownSpeakers: string[] = []): ParsedRawTurn[] {
   const lines = content.split(/\r?\n/).map(l => l.trim()).filter(Boolean)
   const turns: ParsedRawTurn[] = []
   let syntheticClockMs = 0
+
+  // 1. Contagem prévia de frequências para desambiguar falsos positivos de falantes
+  const frequencies = new Map<string, number>()
+  for (const line of lines) {
+    const clean = line.replace(/^\[[0-9:.,\s-]+\]\s*/, '')
+    const match = clean.match(/^([^:\n]+):\s*(.*)$/)
+    if (match) {
+      const cand = match[1].trim().toLowerCase()
+      frequencies.set(cand, (frequencies.get(cand) || 0) + 1)
+    }
+  }
 
   for (const line of lines) {
     let startMs = syntheticClockMs
@@ -165,9 +213,12 @@ export function parseTxtTranscript(content: string): ParsedRawTurn[] {
     let text = cleanLine
 
     const colonMatch = cleanLine.match(/^([^:\n]+):\s*(.*)$/)
-    if (colonMatch) {
+    if (colonMatch && isValidSpeakerCandidate(colonMatch[1], knownSpeakers, frequencies)) {
       speakerRaw = colonMatch[1].trim()
       text = colonMatch[2].trim()
+    } else {
+      speakerRaw = 'Desconhecido'
+      text = cleanLine
     }
 
     turns.push({
@@ -178,6 +229,16 @@ export function parseTxtTranscript(content: string): ParsedRawTurn[] {
     })
 
     syntheticClockMs = endMs + 1000
+  }
+
+  // Ordena rigorosamente os turnos por timestamp (startMs) crescente para corrigir desordenação
+  turns.sort((a, b) => a.startMs - b.startMs)
+
+  // Garante duração mínima se endMs <= startMs
+  for (const t of turns) {
+    if (t.endMs <= t.startMs) {
+      t.endMs = t.startMs + 5000
+    }
   }
 
   return turns
@@ -216,7 +277,7 @@ export async function importTranscriptFile(
   } else if (params.format === 'srt') {
     rawTurns = parseSrt(params.content)
   } else {
-    rawTurns = parseTxtTranscript(params.content)
+    rawTurns = parseTxtTranscript(params.content, [params.teacherSpeakerName].filter(Boolean))
   }
 
   if (rawTurns.length === 0) {

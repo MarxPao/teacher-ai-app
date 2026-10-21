@@ -164,7 +164,11 @@ export function segmentTrace(trace: Trace, decisions: CompilerDecisions): Segmen
   }
 
   // Validação de requisitos de escrita vs leitura
-  const hasWriteAction = actionSteps.some(s => s.kind === 'input' || s.kind === 'check' || s.kind === 'select')
+  // Selects sem rowContext são filtros de navegação (SELECT_FILTER), não lançamentos pedagógicos
+  const hasWriteAction = actionSteps.some(
+    s => s.kind === 'input' || s.kind === 'check' ||
+    (s.kind === 'select' && !!(s.descriptor as any).rowContext)
+  )
   const isWriteTask =
     decisions.task_id === 'lancar_falta' ||
     decisions.task_id === 'lancar_nota' ||

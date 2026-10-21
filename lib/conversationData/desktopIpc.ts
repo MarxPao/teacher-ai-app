@@ -38,9 +38,10 @@ export interface ConversationAskParams {
 export async function executeConversationMethod(
   method: string,
   params: any,
-  driver: SqlDriver
+  driver: SqlDriver,
+  dataKey?: Buffer
 ): Promise<any> {
-  const repo = new ConversationVaultRepository(driver)
+  const repo = new ConversationVaultRepository(driver, dataKey)
 
   switch (method) {
     case 'conversation.import': {
@@ -133,4 +134,23 @@ export async function executeConversationMethod(
     default:
       throw new Error(`Método de conversação desconhecido: ${method}`)
   }
+}
+
+/**
+ * Dispara purga periódica das sessões vencidas no SQLite do Desktop.
+ */
+export function startPeriodicRetentionPurge(
+  driver: SqlDriver,
+  intervalMs: number = 3600000,
+  dataKey?: Buffer
+): NodeJS.Timeout {
+  return setInterval(async () => {
+    try {
+      const repo = new ConversationVaultRepository(driver, dataKey)
+      const purged = await repo.purgeExpiredSessions()
+      if (purged > 0) {
+        console.log(`[conversationData] ${purged} sessões vencidas expurgadas periodicamente.`)
+      }
+    } catch {}
+  }, intervalMs)
 }

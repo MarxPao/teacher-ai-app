@@ -60,7 +60,7 @@ Este documento centraliza as funcionalidades, arquétipos e melhorias postergada
   - *Prioridade:* Baixa.
 
 - **Migração de Chaves de UI Restantes de `localStorage`:**
-  - *Contexto:* Chaves sensíveis (alunos, turmas, notas, segredos) foram 100% migradas e expurgadas para o SQLite cifrado. Chaves visuais puramente locais de UI (tema claro/escuro, filtros de paginação) permaneceram no `localStorage`.
+  - *Contexto:* Conforme evidenciado por Select-String nos fontes (`components/OnboardingWizard.tsx`, `components/RafinhaChat.tsx`, `lib/supabaseClient.ts`), chaves como `teacher_students` e `teacher_insights_ai_report` ainda permanecem temporariamente no `localStorage` do frontend para retrocompatibilidade (conforme item 8 / linha 137). A migração total desses dados de alunos para o SQLite cifrado local permanece como evolução agendada.
   - *Evolução:* Mover configurações de interface para a tabela `settings` no SQLite para unificação total.
   - *Prioridade:* Baixa.
 

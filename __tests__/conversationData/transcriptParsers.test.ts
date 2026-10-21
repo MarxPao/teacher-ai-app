@@ -117,4 +117,36 @@ describe('2. Importadores Tolerantes (.vtt, .srt, .txt) sem Dependências Novas'
     expect(turns[1].role).toBe('aluno')
     expect(turns[2].role).toBe('desconhecido')
   })
+
+  it('Item 6: "Atenção: abram o livro" e "Exemplo: x = 2" NÃO viram falantes e timestamps fora de ordem são reordenados', () => {
+    const txtAdversarial = `
+[00:03:00 - 00:03:10] Atenção: abram o livro na página 20
+[00:01:00 - 00:01:15] Professora Helena: Vamos iniciar a aula de matemática
+[00:02:00 - 00:02:20] Exemplo: x = 2 e y = 4
+[00:01:20 - 00:01:35] Canário Arthur: Professora, qual capítulo?
+`
+    const turns = parseTxtTranscript(txtAdversarial, ['Professora Helena'])
+
+    expect(turns).toHaveLength(4)
+
+    // 1. "Atenção:" NÃO vira falante
+    const atencaoTurn = turns.find(t => t.text.includes('abram o livro'))
+    expect(atencaoTurn?.speakerRaw).toBe('Desconhecido')
+    expect(atencaoTurn?.text).toContain('Atenção: abram o livro')
+
+    // 2. "Exemplo:" NÃO vira falante
+    const exemploTurn = turns.find(t => t.text.includes('x = 2'))
+    expect(exemploTurn?.speakerRaw).toBe('Desconhecido')
+    expect(exemploTurn?.text).toContain('Exemplo: x = 2')
+
+    // 3. Timestamps fora de ordem foram rigorosamente ordenados por startMs
+    expect(turns[0].startMs).toBe(60000) // 00:01:00 (Professora Helena)
+    expect(turns[0].speakerRaw).toBe('Professora Helena')
+
+    expect(turns[1].startMs).toBe(80000) // 00:01:20 (Canário Arthur)
+    expect(turns[1].speakerRaw).toBe('Canário Arthur')
+
+    expect(turns[2].startMs).toBe(120000) // 00:02:00 (Exemplo: x = 2)
+    expect(turns[3].startMs).toBe(180000) // 00:03:00 (Atenção: abram o livro)
+  })
 })

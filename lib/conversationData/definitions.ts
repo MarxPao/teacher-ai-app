@@ -18,7 +18,7 @@ export const DEFINITION_INTERVENCAO =
   'Turno de fala emitido por qualquer participante que adiciona conteúdo, comentário, questionamento ou resposta à discussão em andamento. [DEFINIÇÃO A VALIDAR (dono)]'
 
 export const DEFINITION_WAIT_TIME =
-  'Tempo de silêncio deliberado entre o término de uma pergunta formulada e a primeira intervenção que a sucede (Mary Budd Rowe: threshold de referência de 3.0s a 4.5s para promoção de reflexão cognitiva profunda). [DEFINIÇÃO A VALIDAR (dono)]'
+  'Métrica de espera pós-pergunta (Wait-Time I de Mary Budd Rowe): intervalo temporal mensurado entre o encerramento da pergunta formulada pelo docente e o início da manifestação subsequente. Reporta o total de perguntas, quantidade com espera mensurada, média e mediana globais sobre todas as perguntas, e separadamente a contagem de pausas reflexivas deliberadas (espera >= 3.0s). [DEFINIÇÃO A VALIDAR (dono)]'
 
 export const DEFINITION_MONOLOGO =
   'Trecho ininterrupto de fala contínua de um mesmo participante sem alternância de turno com duração igual ou superior a 30 segundos (30.000 ms). [DEFINIÇÃO A VALIDAR (dono)]'

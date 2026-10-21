@@ -47,10 +47,10 @@ async function runDesktopBuild(): Promise<void> {
     sourcemap: true,
   })
 
-  // 4. Cria runner em lote shim.bat
+  // 4. Cria runner em lote shim.bat (prefere binário Electron empacotado com ELECTRON_RUN_AS_NODE=1)
   fs.writeFileSync(
     path.join(DIST_DIR, 'shim.bat'),
-    '@echo off\r\nnode "%~dp0shim.js"\r\n'
+    '@echo off\r\nif exist "%~dp0..\\TeacherAI.exe" (\r\n  set ELECTRON_RUN_AS_NODE=1\r\n  "%~dp0..\\TeacherAI.exe" "%~dp0shim.js" %*\r\n) else (\r\n  node "%~dp0shim.js" %*\r\n)\r\n'
   )
 
   // 5. Copia UI estática
@@ -61,7 +61,7 @@ async function runDesktopBuild(): Promise<void> {
   }
 
   for (const file of fs.readdirSync(srcUi)) {
-    fs.copyFileSync(path.join(srcUi, file), path.join(destUi, file))
+    fs.cpSync(path.join(srcUi, file), path.join(destUi, file), { recursive: true })
   }
 
   console.log('[Build Desktop] Sucesso: Artefatos gerados em dist-desktop/!')
