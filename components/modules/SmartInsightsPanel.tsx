@@ -38,6 +38,8 @@ export interface ExamHistoryEntry {
 export interface AssessmentInsight {
   id: string
   type: 'bloom_adjust' | 'difficulty_adjust' | 'spacing_review' | 'weak_item' | 'class_gap' | 'student_gap' | 'interleave'
+  category?: 'zdp' | 'bloom' | 'difficulty' | 'spacing' | 'weak_item' | 'class_gap' | 'student_gap' | 'interleave' | string
+  ruleId?: string
   priority: 'high' | 'medium' | 'low'
   title: string
   description: string

@@ -28,9 +28,9 @@ import type { AssessmentInsight } from '@/components/modules/SmartInsightsPanel'
 
 /**
  * Limiar amostral mínimo padrão para inferência de ZDP (Vygotsky / discriminação de item).
- * Marcado formalmente como [DEFINIÇÃO A VALIDAR (dono)], configurável pela professora.
+ * Marcado formalmente como definicao_a_validar, configurável no contexto.
  */
-export const DEFAULT_ZDP_SAMPLE_THRESHOLD = N_MIN_ITEM_DISCRIMINATION_ZDP // [DEFINIÇÃO A VALIDAR (dono)]
+export const DEFAULT_ZDP_SAMPLE_THRESHOLD = N_MIN_ITEM_DISCRIMINATION_ZDP // definicao_a_validar
 
 export interface AssessmentInsightAdapterContext {
   discipline?: string
@@ -39,27 +39,47 @@ export interface AssessmentInsightAdapterContext {
   window?: string
   topic?: string
   thresholds?: {
-    /** Limiar amostral configurável para ZDP [DEFINIÇÃO A VALIDAR (dono)] */
+    /** Limiar amostral configurável para ZDP (definicao_a_validar) */
     minItemDiscriminationZdp?: number
   }
 }
 
 /**
- * Detecta se o insight pertence ao construto ZDP usando prioritariamente campos estruturados
- * e secundariamente regex anti-evasão multi-idioma (pt-BR / en) insensível a maiúsculas.
+ * Detecta se o insight pertence ao construto ZDP usando estritamente campos estruturados
+ * (categoria, ruleId, id de regra), sem busca de texto livre em títulos ou descrições,
+ * prevenindo falsos positivos quando um texto pedagógico apenas cita ZDP.
  */
 export function isZdpConstruct(insight: AssessmentInsight): boolean {
   if (!insight) return false
 
-  // 1. Detecção por campos estruturados (prioridade primária)
-  if (insight.category === 'zdp') return true
-  if (insight.ruleId === 'rule_zdp' || insight.ruleId === 'zdp_topics') return true
-  if (insight.id === 'zdp_topics' || insight.id.startsWith('zdp_') || insight.id.endsWith('_zdp')) return true
+  // 1. Campo estruturado de categoria
+  const category = (insight.category || '').trim().toLowerCase()
+  if (category === 'zdp' || category === 'item_discrimination_zdp') return true
 
-  // 2. Salvaguarda anti-evasão: regex estrutural cobrindo variações textuais (maiúsculas/minúsculas e outros idiomas)
-  const fullContent = `${insight.id} ${insight.ruleId ?? ''} ${insight.category ?? ''} ${insight.title} ${insight.description}`
-  const zdpPattern = /\b(zdp|zpd|zona\s+de\s+desenvolvimento\s+proximal|zone\s+of\s+proximal\s+development)\b/i
-  return zdpPattern.test(fullContent)
+  // 2. Campo estruturado de ruleId
+  const ruleId = (insight.ruleId || '').trim().toLowerCase()
+  if (
+    ruleId === 'rule_zdp' ||
+    ruleId === 'zdp_topics' ||
+    ruleId === 'item_discrimination_zdp' ||
+    ruleId.startsWith('zdp_') ||
+    ruleId.endsWith('_zdp')
+  ) {
+    return true
+  }
+
+  // 3. Campo estruturado de id (quando identifica regra de ZDP)
+  const id = (insight.id || '').trim().toLowerCase()
+  if (
+    id === 'zdp_topics' ||
+    id === 'item_discrimination_zdp' ||
+    id.startsWith('zdp_') ||
+    id.endsWith('_zdp')
+  ) {
+    return true
+  }
+
+  return false
 }
 
 /**
@@ -143,7 +163,7 @@ export function adaptAssessmentInsightToInsightV1(
     caveats.push(`Amostra preliminar (n=${classSize}). Média agregada sujeita a variabilidade amostral.`)
   }
   if (classSize < minZdpThreshold) {
-    caveats.push(`Amostra abaixo do limiar psicométrico configurado [DEFINIÇÃO A VALIDAR (dono)] (n=${classSize} < ${minZdpThreshold}).`)
+    caveats.push(`Amostra abaixo do limiar psicométrico configurado (definicao_a_validar) (n=${classSize} < ${minZdpThreshold}).`)
   }
 
   // Fatos observáveis e hipóteses pedagógicas reflexivas

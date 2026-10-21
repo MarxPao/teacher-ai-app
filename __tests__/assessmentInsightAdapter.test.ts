@@ -76,43 +76,85 @@ describe('Tarefa 4 e G2: Adapter Puro AssessmentInsight -> InsightV1', () => {
     expect(validateInsightContract(adaptedAdequate)).toBe(true)
   })
 
-  it('3. G2: Defesa anti-evasão textual bloqueia variações (maiúsculas, "zona de desenvolvimento proximal", idioma inglês)', () => {
-    const variations: AssessmentInsight[] = [
+  it('3. G2: Gate de ZDP valida variações estruturadas (category, ruleId, id) e NÃO bloqueia texto descritivo puro', () => {
+    const structuredVariations: AssessmentInsight[] = [
       {
-        id: 'evasion_upper',
+        id: 'item_1',
+        category: 'zdp',
         type: 'weak_item',
         priority: 'high',
-        title: '3 ITENS NA ZONA DE DESENVOLVIMENTO PROXIMAL',
-        description: 'Identificados itens em ZDP.',
+        title: 'Itens em mediação',
+        description: 'Discriminação de item observada.',
         action: 'Revisar',
         accepted: null
       },
       {
-        id: 'evasion_english',
+        id: 'item_2',
+        category: 'ZDP',
         type: 'weak_item',
         priority: 'high',
-        title: 'Zone of Proximal Development Identified',
-        description: 'Items falling in the ZPD range.',
-        action: 'Review in next class',
+        title: 'Itens em mediação',
+        description: 'Discriminação de item observada.',
+        action: 'Revisar',
         accepted: null
       },
       {
-        id: 'evasion_acronym_en',
+        id: 'item_3',
+        ruleId: 'rule_zdp',
+        type: 'weak_item',
+        priority: 'high',
+        title: 'Itens em mediação',
+        description: 'Discriminação observada.',
+        action: 'Revisar',
+        accepted: null
+      },
+      {
+        id: 'item_4',
+        ruleId: 'item_discrimination_zdp',
+        type: 'weak_item',
+        priority: 'high',
+        title: 'Discriminação de item',
+        description: 'Discriminação observada.',
+        action: 'Revisar',
+        accepted: null
+      },
+      {
+        id: 'zdp_topics',
         type: 'weak_item',
         priority: 'medium',
-        title: 'Items in ZPD',
-        description: 'Questions in ZPD boundary.',
-        action: 'Review',
+        title: 'Tópicos mapeados',
+        description: 'Mapeamento de tópicos.',
+        action: 'Revisar',
         accepted: null
       }
     ]
 
-    for (const v of variations) {
+    for (const v of structuredVariations) {
       expect(isZdpConstruct(v)).toBe(true)
       // Com n = 4 (< 8), todos devem ser categoricamente bloqueados
       const res = adaptAssessmentInsightToInsightV1(v, { classSize: 4 })
       expect(res).toBeNull()
     }
+
+    // Contra-prova: menção a "ZDP" no texto puro SEM campo estruturado NÃO ativa o gate de ZDP
+    const descriptiveTextOnlyInsight: AssessmentInsight = {
+      id: 'spacing_rule_1',
+      type: 'spacing_review',
+      category: 'spacing',
+      ruleId: 'rule_spacing',
+      priority: 'medium',
+      title: 'Revisão espaçada recomendada (relevante para fixação antes da ZDP)',
+      description: 'Atividades de revisão espaçada auxiliam os estudantes no avanço da zona de desenvolvimento proximal.',
+      action: 'Agendar revisão espaçada',
+      accepted: null
+    }
+
+    expect(isZdpConstruct(descriptiveTextOnlyInsight)).toBe(false)
+    // Com n = 4, NÃO deve ser bloqueado pelo gate de ZDP
+    const resSpacing = adaptAssessmentInsightToInsightV1(descriptiveTextOnlyInsight, { classSize: 4 })
+    expect(resSpacing).not.toBeNull()
+    if (!resSpacing) return
+    expect(resSpacing.signals[0].name).toBe('spacing_review_topics_count')
   })
 
   it('4. G2: N_MIN_ITEM_DISCRIMINATION_ZDP é configurável como definicao_a_validar', () => {
