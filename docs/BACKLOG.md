@@ -150,3 +150,13 @@ Conforme a arquitetura do Passo 4, o contrato unificado `InsightV1` (`lib/insigh
 - [ ] **`sidecar/pedagogical_anomaly_guardian.py`:** Padronizar as regras de alerta estatístico do guardião Python para refletir os limiares amostrais mínimos e os campos de confiança ordinal (`baixa`, `media`, `alta`).
 
 
+
+
+---
+
+## 10. Captura de Áudio, ASR e Diarização Local (Bloco 0)
+
+- [ ] **ASR On-Device em Tempo Real:** Empacotamento de runtime local Sherpa-ONNX / Whisper.cpp para inferência de áudio contínua sem internet (`docs/DESENHO_CAPTURA_AUDIO.md`).
+- [ ] **VAD e Calibração Acústica de Sala:** Calibração de Silero-VAD para ambientes ruidosos de sala de aula real.
+- [ ] **Consentimento e Banner no Desktop Core:** Interface interativa de consentimento prévio e banner persistente de gravação ativa.
+- [ ] **Validação Pedagógica das Definições:** Alinhamento das definições (`[DEFINIÇÃO A VALIDAR (dono)]`) com a equipe pedagógica e coordenação escolar.
