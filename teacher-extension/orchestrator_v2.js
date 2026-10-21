@@ -854,7 +854,16 @@
             task: `Navegue no portal até: ${queryText}. Apenas navegue e aplique filtros; não grave, não envie e não exclua nada.`,
             maxSteps: 20,
           }).catch((e) => ({ success: false, friendlyMessage: String(e && e.message || e) }))
-          if (agentOut && !agentOut.unavailable) {
+
+          // Se o agente retornou erro de autorização (app desktop bloqueou agent.plan),
+          // trata como indisponível e cai no fallback de hops determinístico.
+          const agentUnavailable =
+            agentOut?.unavailable ||
+            /não autorizado|not authorized|unauthorized|method.*not.*allowed|método.*não/i.test(
+              String(agentOut?.error || agentOut?.friendlyMessage || '')
+            )
+
+          if (agentOut && !agentUnavailable) {
             sendResponse({
               success: agentOut.success,
               learned: Boolean(agentOut.learned),
@@ -888,6 +897,91 @@
           let currentPath = startPath
           let currentHost = host
           let lastElementText = queryText
+
+          // Lacuna #3: ancora o plano no DOM real da aba — usa executeScript(world:'MAIN') para
+          // ler os <select> visíveis e expandir cláusulas sem vírgula ("7º ano lingua inglesa julho/2026"
+          // → ["7º ano", "lingua inglesa", "julho/2026"]) ancorando nas opções reais, e reordena pela
+          // posição topológica no DOM (Turma[0]→Mês[1]→Disciplina[2]→Ordem[3]), evitando reset por
+          // cascata AJAX. Espelha expandUnseparatedSelectClause de lib/explorer/domActionPlanner.ts.
+          try {
+            const domExpandResult = await chrome.scripting.executeScript({
+              target: { tabId },
+              world: 'MAIN',
+              func: (rawQuery) => {
+                // Normalização idêntica à de domActionPlanner.ts
+                const norm = (s) =>
+                  String(s || '')
+                    .toLowerCase()
+                    .normalize('NFD')
+                    .replace(/[̀-ͯ]/g, '')
+                    .replace(/[º°ª]/g, '')
+                    .replace(/[/\-_,.;:]+/g, ' ')
+                    .replace(/\s+/g, ' ')
+                    .trim()
+
+                // Variantes de normalização (com e sem acento, com e sem ordinal)
+                const variants = (s) => {
+                  const n = norm(s)
+                  return [n, n.replace(/\s+/g, ''), s.toLowerCase().trim()]
+                }
+
+                const queryNorm = norm(rawQuery)
+                const queryVariants = variants(rawQuery)
+
+                // Encontra todos os <select> visíveis no DOM pela ordem de aparição (topológica)
+                const selects = Array.from(document.querySelectorAll('select'))
+                  .filter((sel) => {
+                    if (sel.disabled || sel.hidden) return false
+                    try {
+                      const cs = window.getComputedStyle(sel)
+                      if (cs.display === 'none' || cs.visibility === 'hidden') return false
+                    } catch {}
+                    return true
+                  })
+                  .map((sel, domIdx) => ({ sel, domIdx }))
+
+                if (selects.length < 2) return null // sem múltiplos selects, regex split já resolve
+
+                // Para cada select, tenta casar a melhor opção dentro dos tokens do queryText
+                const matched = []
+                for (const { sel, domIdx } of selects) {
+                  let best = null
+                  for (const opt of Array.from(sel.options)) {
+                    if (opt.disabled || opt.hidden) continue
+                    const optNorm = norm(opt.text)
+                    if (!optNorm || optNorm.length < 4 || /^(selecione|todas|todos)\b/i.test(optNorm)) continue
+                    const optVariants = variants(opt.text)
+                    const optHead = optNorm.split(' ').slice(0, 2).join(' ')
+                    const toCheck = optVariants.concat(optHead.length >= 4 ? [optHead] : [])
+                    for (const v of toCheck) {
+                      if (v.length >= 4 && queryVariants.some((gv) => gv.includes(v))) {
+                        if (!best || v.length > best.len) {
+                          best = { text: opt.text, len: v.length, domIdx }
+                        }
+                        break
+                      }
+                    }
+                  }
+                  if (best) matched.push(best)
+                }
+
+                if (matched.length >= 2) {
+                  // Ordena pelo índice topológico real no DOM
+                  matched.sort((a, b) => a.domIdx - b.domIdx)
+                  return matched.map((m) => m.text)
+                }
+                return null
+              },
+              args: [queryText],
+            })
+            const expanded = domExpandResult?.[0]?.result
+            if (Array.isArray(expanded) && expanded.length >= 2) {
+              // Substitui o primeiro hop (cláusula unseparated) pelos sub-goals expandidos
+              hopTargets.splice(0, 1, ...expanded)
+            }
+          } catch (_planErr) {
+            // Falha silenciosa (aba sem permissão, contexto invalidado): continua com split regex
+          }
 
           for (let hIdx = 0; hIdx < hopTargets.length; hIdx++) {
             let hopTarget = hopTargets[hIdx]

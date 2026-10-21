@@ -457,6 +457,43 @@
         }
       })
     })
+    // Inicialização do assistente de voz local (Frente A: Voz como Canal)
+    let voiceAssistant = null
+    const voiceBtn = document.getElementById('sgv2-btn-voice')
+    if (globalThis.TeacherVoiceAssistant && voiceBtn) {
+      voiceAssistant = new globalThis.TeacherVoiceAssistant({
+        onTranscript: (spokenText) => {
+          const nluInput = document.getElementById('sgv2-nlu-input')
+          if (nluInput) {
+            nluInput.value = spokenText
+            document.getElementById('sgv2-btn-nlu-send')?.click()
+          }
+        },
+        onStateChange: (isListening) => {
+          if (isListening) {
+            voiceBtn.style.background = '#d9534f'
+            voiceBtn.style.color = '#fff'
+            voiceBtn.textContent = '🔴 Ouvindo...'
+            voiceBtn.title = 'Ouvindo sua fala... Clique para parar.'
+          } else {
+            voiceBtn.style.background = ''
+            voiceBtn.style.color = ''
+            voiceBtn.textContent = '🎙️'
+            voiceBtn.title = 'Comando de voz (Microfone)'
+          }
+        },
+        onError: (err) => {
+          if (err === 'not_supported' && chat) {
+            chat.appendAssistantMessage('Reconhecimento de voz não está disponível neste navegador.', { variant: 'error' })
+          }
+        },
+      })
+
+      voiceBtn.addEventListener('click', () => {
+        voiceAssistant?.toggle()
+      })
+    }
+
     document.getElementById('sgv2-nlu-input')?.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
         e.preventDefault()
@@ -495,6 +532,7 @@
             nluFeedback.style.display = 'block'
             nluFeedback.textContent = msg
           }
+          voiceAssistant?.speak(msg)
           return
         }
         if (res?.no_match || !res?.skill_id) {
@@ -502,12 +540,14 @@
         } else {
           const chosen = activeSkills.find((s) => getSkillId(s) === res.skill_id)
           const skillTitle = chosen?.identity?.name || res.skill_id
+          const successMsg = res.replyText || `Encontrei a habilidade "${skillTitle}"! Já preenchi os parâmetros abaixo — confira e clique em Executar. ✨`
           if (chat) {
-            chat.appendAssistantMessage(`Encontrei a habilidade "${skillTitle}"! Já preenchi os parâmetros abaixo — confira e clique em Executar. ✨`, { variant: 'success' })
+            chat.appendAssistantMessage(successMsg, { variant: 'success' })
           } else if (nluFeedback) {
             nluFeedback.style.display = 'block'
             nluFeedback.textContent = 'Habilidade selecionada! Confira os parâmetros e clique em Executar.'
           }
+          voiceAssistant?.speak(successMsg)
           if (select) {
             select.value = res.skill_id
             if (chosen) {

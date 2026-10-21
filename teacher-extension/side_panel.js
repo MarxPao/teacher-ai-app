@@ -2902,8 +2902,12 @@ async function handleProcessCommand(commandText) {
   } catch (err) {
     console.warn('[ROUTING_AUDIT] CAIU NO CATCH de /api/agent! Falha no processamento agêntico.');
     setProcessingState(false);
-    const errMsg = (err && err.message && err.message.includes('LGPD_EGRESS_BLOCKED'))
-      ? '⚠️ Operação pausada: dados de alunos protegidos pela diretiva LGPD.'
+    const isEgressBlocked = err && (
+      err.name === 'EgressSecurityError' ||
+      (err.message && (err.message.includes('LGPD_EGRESS_BLOCKED') || err.message.includes('Bloqueio Egress LGPD')))
+    );
+    const errMsg = isEgressBlocked
+      ? '⚠️ Proteção de Privacidade LGPD: Nomes de alunos protegidos contra envio para nuvem.'
       : (typeof composeReply === 'function'
         ? composeReply('error', { message: 'Servidor Teacher AI indisponível para automação.', error: 'Falha de conexão com /api/agent' })
         : 'Não foi possível concluir o processamento no servidor.');

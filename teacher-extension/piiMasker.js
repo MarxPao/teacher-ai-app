@@ -48,7 +48,10 @@
     'escola', 'turma', 'sala', 'aula', 'colegio', 'colégio', 'professor', 'professora', 'diretoria', 'coordenacao',
     'coordenação', 'secretaria', 'nota', 'recuperacao', 'recuperação', 'reforco', 'reforço', 'conselho', 'reuniao',
     'reunião', 'ata', 'diario', 'diário', 'unidade', 'capitulo', 'capítulo', 'livro', 'aluno', 'aluna', 'alunos',
-    'estudante', 'estudantes', 'portal', 'painel', 'sistema', 'menu', 'aba', 'link', 'relatorio', 'relatório'
+    'estudante', 'estudantes', 'portal', 'painel', 'sistema', 'menu', 'aba', 'link', 'relatorio', 'relatório',
+    'dias', 'costa', 'lima', 'rosa', 'ramos', 'vale', 'porto', 'leite', 'reis', 'neves', 'moraes', 'moura',
+    'matos', 'brito', 'campos', 'fontes', 'rios', 'marques', 'franco', 'salvador', 'brasil', 'silva', 'santos',
+    'sousa', 'souza', 'oliveira', 'pereira', 'carvalho', 'ferreira', 'alves', 'cunha', 'vieira', 'cardoso'
   ]);
 
   var SENSITIVE_DOM_ROLES = new Set([
