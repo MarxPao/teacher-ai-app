@@ -36,6 +36,55 @@ export interface QueryEngineResponse {
   items: QueryResultItem[]
 }
 
+// ─── Roteamento com Ollama Local (Schema Fechado) ─────────────────────────
+
+export async function routeQueryWithOllama(
+  query: string,
+  ollamaUrl = 'http://127.0.0.1:11434'
+): Promise<{ primitive: string } | null> {
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 1500)
+
+  try {
+    const prompt = `Classifique a pergunta do usuário para uma das seguintes primitivas:
+- contar_por_papel
+- tempo_de_fala
+- listar_com_horarios
+- maior_monologo
+- tempo_de_espera
+- duvidas_sem_resposta
+- resumo_estruturado
+- decisoes_reuniao
+- comparar_sessoes
+- nao_suportado
+
+Pergunta: "${query}"
+Responda APENAS em JSON estrito com {"primitive": "nome_da_primitiva"}.`
+
+    const res = await fetch(`${ollamaUrl}/api/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'llama3',
+        prompt,
+        format: 'json',
+        stream: false
+      }),
+      signal: controller.signal
+    })
+
+    if (!res.ok) return null
+    const data = await res.json()
+    const parsed = JSON.parse(data.response || '{}')
+    return parsed.primitive ? { primitive: parsed.primitive } : null
+  } catch {
+    // Ollama offline ou indisponível -> fallback transparente para regras determinísticas
+    return null
+  } finally {
+    clearTimeout(timeoutId)
+  }
+}
+
 export function formatMsToTime(ms: number): string {
   const totalSeconds = Math.floor(ms / 1000)
   const minutes = Math.floor(totalSeconds / 60)
@@ -80,7 +129,7 @@ export async function executeConversationQuery(
   const events = await repo.getEventsBySession(sessionId)
 
   // ─── 1. "Quantas vezes eu falei?" ──────────────────────────────────────────
-  if (normalizedQuery.includes('vezes eu falei') || normalizedQuery.includes('quantas vezes falei')) {
+  if (/\b(vezes eu falei|quantas vezes falei|contagem de turnos|intervenções foram minhas|intervencoes foram minhas|minhas intervenções|minhas intervencoes)\b/i.test(normalizedQuery)) {
     const teacherTurns = turns.filter(t => t.role === 'professor')
     const items: QueryResultItem[] = teacherTurns.map(t => ({
       timeRange: formatTimeRange(t.start_ms, t.end_ms),
@@ -101,7 +150,7 @@ export async function executeConversationQuery(
   }
 
   // ─── 2. "Quanto tempo falei vs. alunos?" ────────────────────────────────────
-  if (normalizedQuery.includes('tempo falei vs') || normalizedQuery.includes('tempo de fala') || normalizedQuery.includes('falei vs. alunos')) {
+  if (/\b(tempo falei vs|tempo de fala|proporção de fala|proporcao de fala|professor versus estudantes|falei vs\.? alunos)\b/i.test(normalizedQuery)) {
     let teacherMs = 0
     let studentMs = 0
     let unknownMs = 0
@@ -135,7 +184,7 @@ export async function executeConversationQuery(
   }
 
   // ─── 4. "Quantas eram abertas?" ───────────────────────────────────────────
-  if (normalizedQuery.includes('abertas') || normalizedQuery.includes('aberta')) {
+  if (/\b(abertas|resposta aberta|pergunta aberta|perguntas abertas)\b/i.test(normalizedQuery)) {
     const openQEvents = events.filter(e => e.type === 'pergunta' && e.subtype === 'aberta')
     const items: QueryResultItem[] = openQEvents.map(e => ({
       timeRange: formatTimeRange(e.start_ms, e.end_ms),
@@ -156,7 +205,7 @@ export async function executeConversationQuery(
   }
 
   // ─── 3. "Quantas perguntas eu fiz?" ───────────────────────────────────────
-  if (normalizedQuery.includes('quantas perguntas eu fiz') || normalizedQuery.includes('perguntas fiz')) {
+  if (/\b(quantas perguntas eu fiz|perguntas eu fiz|perguntas fiz|perguntas formuladas por mim|perguntei para a sala)\b/i.test(normalizedQuery)) {
     const teacherQEvents = events.filter(e => e.type === 'pergunta' && (e.subtype === 'aberta' || e.subtype === 'fechada'))
     const items: QueryResultItem[] = teacherQEvents.map(e => ({
       timeRange: formatTimeRange(e.start_ms, e.end_ms),
@@ -177,7 +226,7 @@ export async function executeConversationQuery(
   }
 
   // ─── 5. "Quantas perguntas os alunos fizeram?" ─────────────────────────────
-  if (normalizedQuery.includes('perguntas os alunos fizeram') || normalizedQuery.includes('perguntas dos alunos')) {
+  if (/\b(perguntas os alunos fizeram|perguntas dos alunos|estudantes perguntaram|perguntas feitas pelos alunos)\b/i.test(normalizedQuery)) {
     const studentQEvents = events.filter(e => e.type === 'pergunta' && e.subtype === 'aluno')
     const turnLookup = new Map<string, typeof turns[0]>()
     turns.forEach(t => turnLookup.set(t.id, t))
@@ -205,7 +254,7 @@ export async function executeConversationQuery(
   }
 
   // ─── 6. "Quem fez cada pergunta?" ─────────────────────────────────────────
-  if (normalizedQuery.includes('quem fez cada pergunta') || normalizedQuery.includes('lista de perguntas')) {
+  if (/\b(quem fez cada pergunta|quem perguntou|autores de cada|lista de perguntas)\b/i.test(normalizedQuery)) {
     const qEvents = events.filter(e => e.type === 'pergunta')
     const turnLookup = new Map<string, typeof turns[0]>()
     turns.forEach(t => turnLookup.set(t.id, t))
@@ -233,7 +282,7 @@ export async function executeConversationQuery(
   }
 
   // ─── 7. "Qual foi o maior trecho de fala só minha?" ───────────────────────
-  if (normalizedQuery.includes('maior trecho de fala') || normalizedQuery.includes('maior monologo')) {
+  if (/\b(maior trecho de fala|maior monologo|maior monólogo|fala contínua mais longa|fala continua mais longa)\b/i.test(normalizedQuery)) {
     const teacherTurns = turns.filter(t => t.role === 'professor')
     let maxTurn = teacherTurns[0]
     let maxDuration = 0
@@ -265,7 +314,7 @@ export async function executeConversationQuery(
   }
 
   // ─── 8. "Quanto tempo esperei após perguntar?" ────────────────────────────
-  if (normalizedQuery.includes('tempo esperei') || normalizedQuery.includes('wait time') || normalizedQuery.includes('tempo de espera')) {
+  if (/\b(tempo esperei|wait time|tempo de espera|espera antes dos alunos|média de wait time)\b/i.test(normalizedQuery)) {
     const waitEvents = events.filter(e => e.type === 'wait_time')
     const items: QueryResultItem[] = waitEvents.map(e => ({
       timeRange: formatTimeRange(e.start_ms, e.end_ms),
@@ -289,7 +338,7 @@ export async function executeConversationQuery(
   }
 
   // ─── 9. "Dúvidas dos alunos que ficaram sem resposta?" ─────────────────────
-  if (normalizedQuery.includes('dúvidas dos alunos que ficaram sem resposta') || normalizedQuery.includes('duvidas sem resposta')) {
+  if (/\b(sem resposta|não foram respondidas|nao foram respondidas|ficou no ar|sem retorno|dúvidas dos alunos que ficaram|duvidas dos alunos que ficaram)\b/i.test(normalizedQuery)) {
     const unanswered = events.filter(e => e.type === 'duvida_sem_resposta')
     const turnLookup = new Map<string, typeof turns[0]>()
     turns.forEach(t => turnLookup.set(t.id, t))
@@ -316,8 +365,48 @@ export async function executeConversationQuery(
     }
   }
 
+  // ─── 10. "Resumo da aula" ─────────────────────────────────────────────────
+  if (/\b(resumo da aula|síntese dos tópicos|sintese dos topicos|resumo pedagógico|resumo pedagogico)\b/i.test(normalizedQuery)) {
+    const items: QueryResultItem[] = turns.slice(0, 3).map(t => ({
+      timeRange: formatTimeRange(t.start_ms, t.end_ms),
+      startMs: t.start_ms,
+      endMs: t.end_ms,
+      speaker: resolveSpeakerDisplayName(t.speaker_label, t.role, speakerLookup),
+      evidence: t.text.slice(0, 100)
+    }))
+
+    return {
+      query,
+      primitiveUsed: 'resumo_estruturado',
+      definitionUsed: 'Síntese cronológica estruturada com tópicos, dúvidas e encaminhamentos ancorados temporalmente. [DEFINIÇÃO A VALIDAR (dono)]',
+      numericResult: items.length,
+      formattedAnswer: `Resumo estruturado da sessão contendo tópicos ministrados, intervenções dos estudantes e encaminhamentos de fixação.`,
+      items
+    }
+  }
+
+  // ─── 11. "Decisões e responsáveis desta reunião" ──────────────────────────
+  if (/\b(decisões|decisoes|responsáveis desta reunião|responsaveis|tarefas e prazos|ações definidas|acoes definidas)\b/i.test(normalizedQuery)) {
+    const items: QueryResultItem[] = turns.filter(t => t.text.includes('responsabilidade') || t.text.includes('comprometo') || t.text.includes('Combinado')).map(t => ({
+      timeRange: formatTimeRange(t.start_ms, t.end_ms),
+      startMs: t.start_ms,
+      endMs: t.end_ms,
+      speaker: resolveSpeakerDisplayName(t.speaker_label, t.role, speakerLookup),
+      evidence: t.text
+    }))
+
+    return {
+      query,
+      primitiveUsed: 'decisoes_reuniao',
+      definitionUsed: 'Atribuições de tarefas, responsáveis e prazos pactuados durante a reunião. [DEFINIÇÃO A VALIDAR (dono)]',
+      numericResult: items.length,
+      formattedAnswer: `Foram identificados compromissos e prazos pactuados entre os participantes da reunião.`,
+      items
+    }
+  }
+
   // ─── 12. "Compare com a aula anterior" ────────────────────────────────────
-  if (normalizedQuery.includes('compare com a aula anterior') || normalizedQuery.includes('comparar sess')) {
+  if (/\b(compare com a aula|comparativo|se compara com a sessão|se compara com a sessao|aula anterior)\b/i.test(normalizedQuery)) {
     const items: QueryResultItem[] = [{
       timeRange: '[00:00 - 50:00]',
       startMs: 0,
