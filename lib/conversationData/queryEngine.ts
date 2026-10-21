@@ -16,10 +16,13 @@ import {
   DEFINITION_PERGUNTA_FECHADA,
   DEFINITION_INTERVENCAO,
   DEFINITION_WAIT_TIME,
+  DEFAULT_DELIBERATE_PAUSE_THRESHOLD_SECONDS,
   DEFINITION_MONOLOGO,
   DEFINITION_DUVIDA_SEM_RESPOSTA,
   DEFINITION_INCLUDED_QUESTION_SUBTYPES,
   DEFINITION_QUESTION_SUBTYPES_TOTAL_RULE,
+  COUNT_DISCLAIMER_BASE,
+  SCHEDULE_CHECK_FOOTER,
   COUNT_DISCLAIMER_FOOTER
 } from './definitions'
 
@@ -121,7 +124,8 @@ export function resolveSpeakerDisplayName(
 export async function executeConversationQuery(
   repo: ConversationVaultRepository,
   sessionId: string,
-  query: string
+  query: string,
+  options?: { deliberatePauseThresholdSeconds?: number }
 ): Promise<QueryEngineResponse> {
   const normalizedQuery = query.toLowerCase().trim()
 
@@ -182,7 +186,8 @@ export async function executeConversationQuery(
       query,
       primitiveUsed: 'tempo_de_fala',
       definitionUsed: DEFINITION_INTERVENCAO,
-      formattedAnswer: `Tempo de fala — Professor: ${formatMsToTime(teacherMs)} (${teacherPct}%) vs. Alunos: ${formatMsToTime(studentMs)} (${studentPct}%).`,
+      numericResult: teacherMs,
+      formattedAnswer: `Tempo de fala — Professor: ${formatMsToTime(teacherMs)} (${teacherPct}%) vs. Alunos: ${formatMsToTime(studentMs)} (${studentPct}%).\n\n${COUNT_DISCLAIMER_FOOTER}`,
       items
     }
   }
@@ -334,7 +339,7 @@ export async function executeConversationQuery(
       primitiveUsed: 'maior_monologo',
       definitionUsed: DEFINITION_MONOLOGO,
       numericResult: maxDuration,
-      formattedAnswer: `Seu maior trecho ininterrupto de fala durou ${(maxDuration / 1000).toFixed(1)} segundos (${formatTimeRange(maxTurn?.start_ms ?? 0, maxTurn?.end_ms ?? 0)}).`,
+      formattedAnswer: `Seu maior trecho ininterrupto de fala durou ${(maxDuration / 1000).toFixed(1)} segundos (${formatTimeRange(maxTurn?.start_ms ?? 0, maxTurn?.end_ms ?? 0)}).\n\n${COUNT_DISCLAIMER_FOOTER}`,
       items
     }
   }
@@ -348,6 +353,8 @@ export async function executeConversationQuery(
     const items: QueryResultItem[] = []
     let deliberatePausesCount = 0
 
+    const pauseThreshold = options?.deliberatePauseThresholdSeconds ?? DEFAULT_DELIBERATE_PAUSE_THRESHOLD_SECONDS
+
     teacherQuestionEvents.forEach(qEvent => {
       const turnIndex = turns.findIndex(t => t.id === qEvent.turn_id)
       if (turnIndex >= 0 && turnIndex < turns.length - 1) {
@@ -357,7 +364,7 @@ export async function executeConversationQuery(
         const waitSeconds = parseFloat((waitMs / 1000).toFixed(1))
         measuredWaitTimes.push(waitSeconds)
 
-        if (waitSeconds >= 3.0) {
+        if (waitSeconds >= pauseThreshold) {
           deliberatePausesCount++
         }
 
@@ -393,7 +400,7 @@ export async function executeConversationQuery(
       primitiveUsed: 'tempo_de_espera',
       definitionUsed: DEFINITION_WAIT_TIME,
       numericResult: avgWait,
-      formattedAnswer: `Foram realizadas ${totalQuestions} perguntas docentes, das quais ${measuredCount} com espera medida. Média geral: ${avgWait.toFixed(1)}s, mediana: ${medianWait.toFixed(1)}s. Perguntas com espera >= 3s (pausa deliberada): ${deliberatePausesCount}.\n\n${COUNT_DISCLAIMER_FOOTER}`,
+      formattedAnswer: `Foram realizadas ${totalQuestions} perguntas docentes, das quais ${measuredCount} com espera medida. Média geral: ${avgWait.toFixed(1)}s, mediana: ${medianWait.toFixed(1)}s. Perguntas com espera >= ${pauseThreshold}s (pausa deliberada): ${deliberatePausesCount}.\n\n${COUNT_DISCLAIMER_FOOTER}`,
       items
     }
   }
@@ -421,7 +428,7 @@ export async function executeConversationQuery(
       primitiveUsed: 'duvidas_sem_resposta',
       definitionUsed: DEFINITION_DUVIDA_SEM_RESPOSTA,
       numericResult: unanswered.length,
-      formattedAnswer: `Foram detectadas ${unanswered.length} dúvida(s) de aluno(s) que não receberam resposta subsequente.`,
+      formattedAnswer: `Foram detectadas ${unanswered.length} dúvida(s) de aluno(s) que não receberam resposta subsequente.\n\n${COUNT_DISCLAIMER_FOOTER}`,
       items
     }
   }

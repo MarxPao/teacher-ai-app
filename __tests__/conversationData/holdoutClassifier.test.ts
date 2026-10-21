@@ -1,4 +1,7 @@
 import { describe, it, expect } from 'vitest'
+import * as fs from 'node:fs'
+import * as path from 'node:path'
+import * as crypto from 'node:crypto'
 import { DEV2_BURNED_DATASET } from '../../lib/conversationData/dev2Dataset'
 import { classifyAdversarialUtterance } from '../../lib/conversationData/eventClassifier'
 
@@ -53,5 +56,37 @@ describe('Classificador - Benchmark DEV2 (Dataset Queimado de 40 Falas para Diag
     expect(accuracy).toBeGreaterThanOrEqual(0.85)
     expect(precision).toBeGreaterThanOrEqual(0.85)
     expect(recall).toBeGreaterThanOrEqual(0.85)
+  })
+})
+
+describe('3.5 Trava de Integridade Cega dos Datasets (holdout.lock)', () => {
+  it('garante que todos os datasets (dev2, holdout, holdout3, adversarial) coincidem estritamente com seus hashes no holdout.lock', () => {
+    const lockPath = path.join(__dirname, '..', '..', 'lib', 'conversationData', 'holdout.lock')
+    const lockContent = fs.readFileSync(lockPath, 'utf8')
+    const lockEntries = new Map<string, string>()
+
+    for (const line of lockContent.split('\n')) {
+      const trimmed = line.trim()
+      if (!trimmed) continue
+      const [name, hashPrefixed] = trimmed.split(/\s+/)
+      const hash = hashPrefixed.replace(/^sha256:/, '')
+      lockEntries.set(name, hash)
+    }
+
+    const datasets = [
+      { name: 'adversarial', file: 'adversarialDataset.ts' },
+      { name: 'dev2', file: 'dev2Dataset.ts' },
+      { name: 'holdout', file: 'holdoutDataset.ts' },
+      { name: 'holdout3', file: 'holdout3Dataset.ts' }
+    ]
+
+    for (const d of datasets) {
+      expect(lockEntries.has(d.name), `Dataset ${d.name} ausente em holdout.lock`).toBe(true)
+      const filePath = path.join(__dirname, '..', '..', 'lib', 'conversationData', d.file)
+      const content = fs.readFileSync(filePath, 'utf8')
+      const normalized = content.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+      const actualHash = crypto.createHash('sha256').update(normalized, 'utf8').digest('hex')
+      expect(actualHash).toBe(lockEntries.get(d.name))
+    }
   })
 })
