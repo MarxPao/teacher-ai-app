@@ -283,9 +283,12 @@ export async function executeUnifiedAiCall(api: ApiConfig | null, prompt: string
   // 3. Google Gemini
   else if (p === 'gemini') {
     const modelsToTry = Array.from(new Set([
-      ...(model && !model.includes('gemini-3.') ? [model] : []),
+      ...(model ? [model] : []),
       'gemini-2.5-flash',
+      'gemini-2.5-flash-preview-05-20',
       'gemini-2.0-flash',
+      'gemini-1.5-flash',
+      'gemini-1.5-flash-latest',
       'gemini-flash-latest',
       'gemini-flash-lite-latest',
     ]))
@@ -315,9 +318,12 @@ export async function executeUnifiedAiCall(api: ApiConfig | null, prompt: string
         lastErr = e.message
       }
     }
-    if (!resultText) throw new Error(lastErr || 'Erro no Google Gemini')
+    if (!resultText) {
+      console.warn(`[AutoApiSelector] Modelos Gemini indisponíveis client-side (${lastErr}). Executando contingência via backend /api/agent...`)
+      return await callBackendAgentFallback()
+    }
   } else {
-    throw new Error(`Provedor ${p} não suportado.`)
+    return await callBackendAgentFallback()
   }
 
   // Registra o consumo de tokens automaticamente no monitor

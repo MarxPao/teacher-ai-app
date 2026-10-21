@@ -52,7 +52,7 @@ async function main() {
   const ids = TASKS.map(t => t.id).filter(id => only.length === 0 || only.some(o => id.startsWith(o)))
   const workers = Math.max(1, Math.min(Number(arg('workers', '4')), ids.length))
   const label = arg('label', 'run')!
-  const model = arg('model', 'gemini-3.5-flash-lite')!
+  const model = arg('model', 'gemini-3.6-flash')!
   const runTag = `${label}-${Date.now()}`
 
   const base: NodeJS.ProcessEnv = {
