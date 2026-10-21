@@ -224,9 +224,14 @@
               <div style="font-size: 13px; font-weight: 700; color: var(--text);">
                 <i class="ti ti-sparkles" style="color: var(--primary);"></i> ${escapeHtml(ins.ruleName || ins.ruleId)}
               </div>
-              <span class="badge" style="${badgeStyle} font-size: 10px; display: inline-flex; align-items: center; gap: 4px;">
-                <i class="ti ${badgeIcon}"></i> ${escapeHtml(ins.seloEvidencia || '[EVIDÊNCIA EM AVALIAÇÃO]')}
-              </span>
+              <div style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">
+                <span class="badge" style="${badgeStyle} font-size: 10px; display: inline-flex; align-items: center; gap: 4px;">
+                  <i class="ti ${badgeIcon}"></i> ${escapeHtml(ins.seloEvidencia || '[EVIDÊNCIA EM AVALIAÇÃO]')}
+                </span>
+                <span class="badge" style="background: var(--warning-bg, #fef3c7); color: var(--warning, #b45309); border: 1px solid var(--warning, #b45309); font-size: 9px; display: inline-flex; align-items: center; gap: 3px; padding: 1px 5px;">
+                  <i class="ti ti-alert-triangle"></i> [REFERÊNCIA A CONFERIR (dona)]
+                </span>
+              </div>
             </div>
 
             <!-- Fato Empírico -->
@@ -248,7 +253,10 @@
 
             <!-- Referência e Incerteza -->
             <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 8px; font-size: 11px; color: var(--muted); border-top: 1px dashed var(--border-soft); paddingTop: 6px;">
-              <div><i class="ti ti-book"></i> ${escapeHtml(ins.fonteReferencia || 'Literatura pedagógica')}</div>
+              <div>
+                <i class="ti ti-book"></i> <strong>Fonte:</strong> ${escapeHtml(ins.fonte || ins.fonteReferencia || 'Literatura pedagógica')}
+                <span class="badge" style="background: var(--warning-bg, #fef3c7); color: var(--warning, #b45309); border: 1px solid var(--warning, #b45309); font-size: 9px; margin-left: 6px; padding: 1px 5px; border-radius: var(--radius-sm, 4px);">[REFERÊNCIA A CONFERIR (dona)]</span>
+              </div>
               <div style="font-style: italic;">${escapeHtml(ins.incertezaNota || '')}</div>
             </div>
 

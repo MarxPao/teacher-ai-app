@@ -32,6 +32,7 @@ export interface GeneratedInsight {
   fonte: string
   evidencia: 'verificada' | 'nao_verificada'
   seloEvidencia: string
+  seloReferencia?: string
   limiarOrigem: string
   n: number
   incertezaNota: string
@@ -76,6 +77,7 @@ export interface RigorousInsightRule {
   fonteTeorica: string
   teoria: string
   evidencia: 'verificada' | 'nao_verificada'
+  seloReferencia?: string
   limiarOrigem: 'definicao_a_validar'
   limiarPadraoDescricao: string
   escopo: RuleScope
@@ -139,10 +141,11 @@ export const RIGOROUS_INSIGHT_RULES: RigorousInsightRule[] = [
     id: 'swain_1985_output_hypothesis',
     titulo: 'Tempo de Fala Discente em Língua Adicional (Output Compreensível)',
     fonteTeorica:
-      'Swain, M. (1985). Communicative competence: Some roles of comprehensible input and comprehensible output in its development. In S. Gass & C. Madden (Eds.), Input in Second Language Acquisition (pp. 235-253). Newbury House.',
+      'Swain, M. (1985). Communicative competence: Some roles of comprehensible input and comprehensible output in its development. In S. Gass & C. Madden (Eds.), Input in Second Language Acquisition (pp. 235-253). Newbury House. [REFERÊNCIA A CONFERIR (dona)]',
     teoria:
       'Conceito da Hipótese do Output Compreensível: a produção ativa em língua-alvo permite ao estudante testar hipóteses estruturais e consolidar recursos comunicativos.',
     evidencia: 'verificada',
+    seloReferencia: '[REFERÊNCIA A CONFERIR (dona)]',
     limiarOrigem: 'definicao_a_validar',
     limiarPadraoDescricao: 'Fala discente (STT) < 30.0% do tempo total falado [DEFINIÇÃO A VALIDAR (dono)]',
     escopo: {
@@ -171,9 +174,10 @@ export const RIGOROUS_INSIGHT_RULES: RigorousInsightRule[] = [
         acaoSugerida:
           'Pode-se experimentar a inclusão de breves trocas de hipóteses em duplas antes do compartilhamento aberto com a turma inteira.',
         fonte:
-          'Swain, M. (1985). Communicative competence: Some roles of comprehensible input and comprehensible output in its development.',
+          'Swain, M. (1985). Communicative competence: Some roles of comprehensible input and comprehensible output in its development. [REFERÊNCIA A CONFERIR (dona)]',
         evidencia: 'verificada',
         seloEvidencia: '[FONTE CIENTÍFICA VERIFICADA - OBRA EXISTENTE]',
+        seloReferencia: '[REFERÊNCIA A CONFERIR (dona)]',
         limiarOrigem: '[DEFINIÇÃO A VALIDAR (dono)]: Limiar não definido por Swain; configurável pelo docente.',
         n: report.speakingRatio.n,
         incertezaNota: 'Cálculo aritmético determinístico a partir dos timestamps de fala da transcrição.'
@@ -186,10 +190,11 @@ export const RIGOROUS_INSIGHT_RULES: RigorousInsightRule[] = [
     id: 'rowe_1974_wait_time',
     titulo: 'Tempo de Espera Pós-Pergunta Docente (Wait-Time I)',
     fonteTeorica:
-      'Rowe, M. B. (1974). Wait-time and rewards as instructional variables: Part one—wait-time. Journal of Research in Science Teaching, 11(2), 81-94.',
+      'Rowe, M. B. (1974). Wait-time and rewards as instructional variables: Part one—wait-time. Journal of Research in Science Teaching, 11(2), 81-94. [REFERÊNCIA A CONFERIR (dona)]',
     teoria:
       'Estudo empírico descritivo sobre duração de pausas após perguntas em aulas de ciências: observou correlação entre pausas mais estendidas e respostas mais ricas dos alunos.',
     evidencia: 'nao_verificada',
+    seloReferencia: '[REFERÊNCIA A CONFERIR (dona)]',
     limiarOrigem: 'definicao_a_validar',
     limiarPadraoDescricao: 'Média de espera < 3.0s ou menos de 50% de pausas ≥ 3.0s [DEFINIÇÃO A VALIDAR (dono)]',
     escopo: {
@@ -218,9 +223,10 @@ export const RIGOROUS_INSIGHT_RULES: RigorousInsightRule[] = [
           'Vale observar a variação de pausas conforme o objetivo da pergunta: perguntas de raciocínio aberto podem se beneficiar de tempo adicional para elaboração.',
         acaoSugerida: null, // Sem prescrição (fonte não verificada)
         fonte:
-          'Rowe, M. B. (1974). Wait-time and rewards as instructional variables: Part one—wait-time.',
+          'Rowe, M. B. (1974). Wait-time and rewards as instructional variables: Part one—wait-time. [REFERÊNCIA A CONFERIR (dona)]',
         evidencia: 'nao_verificada',
         seloEvidencia: '[CITAÇÃO NÃO VERIFICADA]',
+        seloReferencia: '[REFERÊNCIA A CONFERIR (dona)]',
         limiarOrigem: 'Mary Budd Rowe (1974) [CITAÇÃO NÃO VERIFICADA]: Limiar temporal descritivo a validar.',
         n: wt.countMeasured,
         incertezaNota:
@@ -234,10 +240,11 @@ export const RIGOROUS_INSIGHT_RULES: RigorousInsightRule[] = [
     id: 'long_sato_1983_question_types',
     titulo: 'Proporção de Perguntas de Resposta Aberta em Língua Adicional',
     fonteTeorica:
-      'Long, M. H., & Sato, C. J. (1983). Classroom foreigner talk discourse: Forms and functions of teachers\' questions. In H. W. Seliger & M. H. Long (Eds.), Classroom-Oriented Research in Second Language Acquisition (pp. 268-285). Newbury House.',
+      'Long, M. H., & Sato, C. J. (1983). Classroom foreigner talk discourse: Forms and functions of teachers\' questions. In H. W. Seliger & M. H. Long (Eds.), Classroom-Oriented Research in Second Language Acquisition (pp. 268-285). Newbury House. [REFERÊNCIA A CONFERIR (dona)]',
     teoria:
       'Análise tipológica de perguntas em interação de sala de aula: contraste entre perguntas de exibição (resposta previamente conhecida) e perguntas referenciais (resposta aberta e autêntica).',
     evidencia: 'verificada',
+    seloReferencia: '[REFERÊNCIA A CONFERIR (dona)]',
     limiarOrigem: 'definicao_a_validar',
     limiarPadraoDescricao: 'Perguntas abertas < 20.0% das perguntas com formato identificado [DEFINIÇÃO A VALIDAR (dono)]',
     escopo: {
@@ -270,9 +277,10 @@ export const RIGOROUS_INSIGHT_RULES: RigorousInsightRule[] = [
         acaoSugerida:
           'Em leituras ou debates, pode-se avaliar a inserção de perguntas que convidem à expressão de posicionamentos dos estudantes.',
         fonte:
-          'Long, M. H., & Sato, C. J. (1983). Classroom foreigner talk discourse: Forms and functions of teachers\' questions.',
+          'Long, M. H., & Sato, C. J. (1983). Classroom foreigner talk discourse: Forms and functions of teachers\' questions. [REFERÊNCIA A CONFERIR (dona)]',
         evidencia: 'verificada',
         seloEvidencia: '[FONTE CIENTÍFICA VERIFICADA - OBRA EXISTENTE]',
+        seloReferencia: '[REFERÊNCIA A CONFERIR (dona)]',
         limiarOrigem: '[DEFINIÇÃO A VALIDAR (dono)]: Limiar não fixado por Long & Sato; configurável pelo docente.',
         n: totalContent,
         incertezaNota:
@@ -286,10 +294,11 @@ export const RIGOROUS_INSIGHT_RULES: RigorousInsightRule[] = [
     id: 'black_wiliam_1998_formative_assessment',
     titulo: 'Acompanhamento e Retorno a Dúvidas Levantadas por Alunos',
     fonteTeorica:
-      'Black, P., & Wiliam, D. (1998). Assessment and classroom learning. Assessment in Education: Principles, Policy & Practice, 5(1), 7-74.',
+      'Black, P., & Wiliam, D. (1998). Assessment and classroom learning. Assessment in Education: Principles, Policy & Practice, 5(1), 7-74. [REFERÊNCIA A CONFERIR (dona)]',
     teoria:
       'Avaliação Formativa: o acompanhamento das manifestações de dúvida dos estudantes possibilita o ajuste pedagógico durante a mediação da aula.',
     evidencia: 'verificada',
+    seloReferencia: '[REFERÊNCIA A CONFERIR (dona)]',
     limiarOrigem: 'definicao_a_validar',
     limiarPadraoDescricao: 'Perguntas discentes sem retorno imediato detectado ≥ 2 [DEFINIÇÃO A VALIDAR (dono)]',
     escopo: {
@@ -315,9 +324,10 @@ export const RIGOROUS_INSIGHT_RULES: RigorousInsightRule[] = [
           'Pode indicar momentos de simultaneidade de falas, atividades em grupo paralelas ou dúvidas que cabem ser revisitadas em encontros futuros.',
         acaoSugerida:
           'Vale conferir os marcos temporais das perguntas e, se conveniente, retomar os pontos como revisão inicial no próximo encontro.',
-        fonte: 'Black, P., & Wiliam, D. (1998). Assessment and classroom learning.',
+        fonte: 'Black, P., & Wiliam, D. (1998). Assessment and classroom learning. [REFERÊNCIA A CONFERIR (dona)]',
         evidencia: 'verificada',
         seloEvidencia: '[FONTE CIENTÍFICA VERIFICADA - OBRA EXISTENTE]',
+        seloReferencia: '[REFERÊNCIA A CONFERIR (dona)]',
         limiarOrigem: '[DEFINIÇÃO A VALIDAR (dono)]: Limiar não fixado por Black & Wiliam; configurável pelo docente.',
         n: sq.unansweredQuestionsCount,
         incertezaNota:
@@ -336,10 +346,11 @@ export const RIGOROUS_INSIGHT_RULES: RigorousInsightRule[] = [
     id: 'sweller_1988_cognitive_load',
     titulo: 'Duração de Trechos Expositivos Ininterruptos',
     fonteTeorica:
-      'Sweller, J. (1988). Cognitive load during problem solving: Effects on learning. Cognitive Science, 12(2), 257-285.',
+      'Sweller, J. (1988). Cognitive load during problem solving: Effects on learning. Cognitive Science, 12(2), 257-285. [REFERÊNCIA A CONFERIR (dona)]',
     teoria:
       'Teoria da Carga Cognitiva: a capacidade de retenção em memória de trabalho beneficia-se da alternância entre exposição de conteúdo e checagem de assimilação.',
     evidencia: 'verificada',
+    seloReferencia: '[REFERÊNCIA A CONFERIR (dona)]',
     limiarOrigem: 'definicao_a_validar',
     limiarPadraoDescricao: 'Maior monólogo contínuo docente > 120.0s [DEFINIÇÃO A VALIDAR (dono)]',
     escopo: {
@@ -366,9 +377,10 @@ export const RIGOROUS_INSIGHT_RULES: RigorousInsightRule[] = [
           'Vale observar se em trechos explicativos prolongados é oportuno intercalar checagens breves para acompanhamento da turma.',
         acaoSugerida:
           'Pode-se testar a colocação de breves perguntas de checagem conceitual após blocos expositivos densos.',
-        fonte: 'Sweller, J. (1988). Cognitive load during problem solving: Effects on learning.',
+        fonte: 'Sweller, J. (1988). Cognitive load during problem solving: Effects on learning. [REFERÊNCIA A CONFERIR (dona)]',
         evidencia: 'verificada',
         seloEvidencia: '[FONTE CIENTÍFICA VERIFICADA - OBRA EXISTENTE]',
+        seloReferencia: '[REFERÊNCIA A CONFERIR (dona)]',
         limiarOrigem: '[DEFINIÇÃO A VALIDAR (dono)]: Limiar não fixado por Sweller; configurável pelo docente.',
         n: mono.durationSec,
         incertezaNota: 'Duração exata do maior turno docente contínuo identificado na transcrição.',

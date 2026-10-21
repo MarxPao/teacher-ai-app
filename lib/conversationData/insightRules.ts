@@ -39,6 +39,7 @@ export interface InsightRule {
   teoria: string
   fonte: string
   evidencia: 'verificada' | 'nao_verificada'
+  seloReferencia?: string
   limiarOrigem: string
   tipo: 'descritivo' | 'prescritivo'
   minimoAmostral: MinimoAmostral
@@ -57,8 +58,9 @@ export const INSIGHT_RULES: InsightRule[] = [
     teoria:
       'Hipótese do Output Compreensível (Swain, 1985): a aquisição de competência comunicativa em L2 requer que aprendizes tenham oportunidade ativa de produzir enunciados próprios, negociar significado e testar hipóteses gramaticais.',
     fonte:
-      'Swain, M. (1985). Communicative competence: Some roles of comprehensible input and comprehensible output in its development. In S. Gass & C. Madden (Eds.), Input in Second Language Acquisition (pp. 235-253). Newbury House.',
+      'Swain, M. (1985). Communicative competence: Some roles of comprehensible input and comprehensible output in its development. In S. Gass & C. Madden (Eds.), Input in Second Language Acquisition (pp. 235-253). Newbury House. [REFERÊNCIA A CONFERIR (dona)]',
     evidencia: 'verificada',
+    seloReferencia: '[REFERÊNCIA A CONFERIR (dona)]',
     limiarOrigem:
       '[DEFINIÇÃO A VALIDAR (dono)]: limiar configurável de fala docente > 80.0% do tempo total falado.',
     tipo: 'prescritivo',
@@ -82,9 +84,10 @@ export const INSIGHT_RULES: InsightRule[] = [
         acaoSugerida:
           'Para ampliar o output dos alunos sem perder o fio condutor, experimente introduzir um breve "think-pair-share" (2 a 3 minutos em duplas em inglês) antes de recolher respostas em plenária.',
         fonte:
-          'Swain, M. (1985). Communicative competence: Some roles of comprehensible input and comprehensible output in its development.',
+          'Swain, M. (1985). Communicative competence: Some roles of comprehensible input and comprehensible output in its development. [REFERÊNCIA A CONFERIR (dona)]',
         evidencia: 'verificada',
         seloEvidencia: '[FONTE CIENTÍFICA VERIFICADA]',
+        seloReferencia: '[REFERÊNCIA A CONFERIR (dona)]',
         limiarOrigem: '[DEFINIÇÃO A VALIDAR (dono)]',
         n: report.speakingRatio.n,
         incertezaNota: 'Cálculo aritmético determinístico a partir dos timestamps de fala da transcrição.'
@@ -99,8 +102,9 @@ export const INSIGHT_RULES: InsightRule[] = [
     teoria:
       'Investigação sobre tempo de pausa docente pós-pergunta (Rowe, 1974): a elevação do tempo de silêncio para patamares superiores a 3 segundos correlacionou-se a respostas mais articuladas e aumento de iniciativas de questionamento pelos alunos.',
     fonte:
-      'Rowe, M. B. (1974). Wait-time and rewards as instructional variables, their influence on language, logic, and fate control: Part one—wait-time. Journal of Research in Science Teaching, 11(2), 81-94.',
+      'Rowe, M. B. (1974). Wait-time and rewards as instructional variables, their influence on language, logic, and fate control: Part one—wait-time. Journal of Research in Science Teaching, 11(2), 81-94. [REFERÊNCIA A CONFERIR (dona)]',
     evidencia: 'nao_verificada',
+    seloReferencia: '[REFERÊNCIA A CONFERIR (dona)]',
     limiarOrigem:
       'Mary Budd Rowe (1974) [CITAÇÃO NÃO VERIFICADA]: média de espera < 3.0 segundos ou menos de 50% de pausas ≥ 3.0s.',
     tipo: 'descritivo',
@@ -124,9 +128,10 @@ export const INSIGHT_RULES: InsightRule[] = [
           'Pausas mais breves são usuais em checagens rápidas de rotina, mas podem demandar atenção quando a intenção pedagógica for permitir que o estudante estruture sentenças complexas em L2 antes de responder.',
         acaoSugerida: null, // Evidência não verificada => sem prescrição, apenas reflexão descritiva
         fonte:
-          'Rowe, M. B. (1974). Wait-time and rewards as instructional variables, their influence on language, logic, and fate control.',
+          'Rowe, M. B. (1974). Wait-time and rewards as instructional variables, their influence on language, logic, and fate control. [REFERÊNCIA A CONFERIR (dona)]',
         evidencia: 'nao_verificada',
         seloEvidencia: '[CITAÇÃO NÃO VERIFICADA]',
+        seloReferencia: '[REFERÊNCIA A CONFERIR (dona)]',
         limiarOrigem: 'Mary Budd Rowe (1974) [CITAÇÃO NÃO VERIFICADA]',
         n: wt.countMeasured,
         incertezaNota:
@@ -142,8 +147,9 @@ export const INSIGHT_RULES: InsightRule[] = [
     teoria:
       'Pesquisa em sala de aula de L2 (Long & Sato, 1983): o predomínio absoluto de perguntas fechadas ("display questions") tende a restringir a negociação de significado, enquanto perguntas abertas/referenciais aproximam a comunicação do uso natural da linguagem.',
     fonte:
-      'Long, M. H., & Sato, C. J. (1983). Classroom foreigner talk discourse: Forms and functions of teachers\' questions. In H. W. Seliger & M. H. Long (Eds.), Classroom-Oriented Research in Second Language Acquisition (pp. 268-285). Newbury House.',
+      'Long, M. H., & Sato, C. J. (1983). Classroom foreigner talk discourse: Forms and functions of teachers\' questions. In H. W. Seliger & M. H. Long (Eds.), Classroom-Oriented Research in Second Language Acquisition (pp. 268-285). Newbury House. [REFERÊNCIA A CONFERIR (dona)]',
     evidencia: 'verificada',
+    seloReferencia: '[REFERÊNCIA A CONFERIR (dona)]',
     limiarOrigem:
       '[DEFINIÇÃO A VALIDAR (dono)]: proporção de perguntas abertas < 25.0% das perguntas de conteúdo.',
     tipo: 'prescritivo',
@@ -171,9 +177,10 @@ export const INSIGHT_RULES: InsightRule[] = [
         acaoSugerida:
           'Em trechos de leitura ou interpretação, experimente incluir 1 ou 2 perguntas de opinião pessoal (ex: "How would you handle this situation in your daily life?") que não tenham resposta única predefinida.',
         fonte:
-          'Long, M. H., & Sato, C. J. (1983). Classroom foreigner talk discourse: Forms and functions of teachers\' questions.',
+          'Long, M. H., & Sato, C. J. (1983). Classroom foreigner talk discourse: Forms and functions of teachers\' questions. [REFERÊNCIA A CONFERIR (dona)]',
         evidencia: 'verificada',
         seloEvidencia: '[FONTE CIENTÍFICA VERIFICADA]',
+        seloReferencia: '[REFERÊNCIA A CONFERIR (dona)]',
         limiarOrigem: '[DEFINIÇÃO A VALIDAR (dono)]',
         n: totalContent,
         incertezaNota:
@@ -189,8 +196,9 @@ export const INSIGHT_RULES: InsightRule[] = [
     teoria:
       'Avaliação Formativa e Regulação Pedagógica (Black & Wiliam, 1998): a resposta às dúvidas dos alunos em sala constitui o mecanismo primário de diagnóstico e ajuste instrucional imediato.',
     fonte:
-      'Black, P., & Wiliam, D. (1998). Assessment and classroom learning. Assessment in Education: Principles, Policy & Practice, 5(1), 7-74.',
+      'Black, P., & Wiliam, D. (1998). Assessment and classroom learning. Assessment in Education: Principles, Policy & Practice, 5(1), 7-74. [REFERÊNCIA A CONFERIR (dona)]',
     evidencia: 'verificada',
+    seloReferencia: '[REFERÊNCIA A CONFERIR (dona)]',
     limiarOrigem:
       'Black & Wiliam (1998): presença de pelo menos 1 pergunta discente sem resposta docente nos próximos 2 turnos.',
     tipo: 'prescritivo',
@@ -211,9 +219,10 @@ export const INSIGHT_RULES: InsightRule[] = [
           'Pode decorrer de dinâmicas paralelas de sala, sobreposição de falas ou transição rápida para outra atividade, valendo conferir se o ponto pedagógico foi esclarecido.',
         acaoSugerida:
           'Verifique os momentos indicados nos marcadores de tempo e, se apropriado, retome o tópico como abertura rápida (*warm-up*) na aula seguinte.',
-        fonte: 'Black, P., & Wiliam, D. (1998). Assessment and classroom learning.',
+        fonte: 'Black, P., & Wiliam, D. (1998). Assessment and classroom learning. [REFERÊNCIA A CONFERIR (dona)]',
         evidencia: 'verificada',
         seloEvidencia: '[FONTE CIENTÍFICA VERIFICADA]',
+        seloReferencia: '[REFERÊNCIA A CONFERIR (dona)]',
         limiarOrigem: 'Black & Wiliam (1998)',
         n: sq.unansweredQuestionsCount,
         incertezaNota:
@@ -234,8 +243,9 @@ export const INSIGHT_RULES: InsightRule[] = [
     teoria:
       'Teoria da Carga Cognitiva (Sweller, 1988) e Aprendizagem Significativa (Ausubel, 1968): falas expositivas ininterruptas de longa duração em L2 tendem a saturar a memória de trabalho do aprendiz.',
     fonte:
-      'Sweller, J. (1988). Cognitive load during problem solving: Effects on learning. Cognitive Science, 12(2), 257-285.',
+      'Sweller, J. (1988). Cognitive load during problem solving: Effects on learning. Cognitive Science, 12(2), 257-285. [REFERÊNCIA A CONFERIR (dona)]',
     evidencia: 'verificada',
+    seloReferencia: '[REFERÊNCIA A CONFERIR (dona)]',
     limiarOrigem:
       '[DEFINIÇÃO A VALIDAR (dono)]: turno expositivo docente ininterrupto > 120 segundos (2 minutos).',
     tipo: 'prescritivo',
@@ -258,9 +268,10 @@ export const INSIGHT_RULES: InsightRule[] = [
           'Blocos de instrução direta prolongados são necessários na introdução de tópicos complexos, mas podem diluir a atenção ativa se não forem pontuados por micro-interações.',
         acaoSugerida:
           'Após blocos explicativos de mais de 2 minutos, experimente intercalar uma "Concept Checking Question" (CCQ) rápida ou pedir que os alunos refrasem a regra com as próprias palavras.',
-        fonte: 'Sweller, J. (1988). Cognitive load during problem solving: Effects on learning.',
+        fonte: 'Sweller, J. (1988). Cognitive load during problem solving: Effects on learning. [REFERÊNCIA A CONFERIR (dona)]',
         evidencia: 'verificada',
         seloEvidencia: '[FONTE CIENTÍFICA VERIFICADA]',
+        seloReferencia: '[REFERÊNCIA A CONFERIR (dona)]',
         limiarOrigem: '[DEFINIÇÃO A VALIDAR (dono)]',
         n: mono.durationSec,
         incertezaNota: 'Duração exata do maior turno docente identificado na transcrição.',

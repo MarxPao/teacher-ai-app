@@ -13,6 +13,7 @@ const { renderInsightsResult, formatTimeMs } = require('../../desktop/ui/convers
 class InMemorySqlDriver implements SqlDriver {
   private db: DatabaseSync
   constructor() { this.db = new DatabaseSync(':memory:') }
+  isOpen(): boolean { return this.db !== null }
   async execute(sql: string, params: unknown[] = []): Promise<void> { this.db.prepare(sql).run(...(params as any[])) }
   async query<T = unknown>(sql: string, params: unknown[] = []): Promise<T[]> { return this.db.prepare(sql).all(...(params as any[])) as T[] }
   async queryOne<T = unknown>(sql: string, params: unknown[] = []): Promise<T | null> { return (this.db.prepare(sql).get(...(params as any[])) as T) || null }
@@ -191,9 +192,10 @@ describe('I6: Apresentação de Insights na UI Desktop com Selos e Marcos Tempor
       const cards = mockContainer.querySelectorAll('.conv-insight-card')
       expect(cards).toHaveLength(2)
 
-      // 3. Selos de evidência corretos
+      // 3. Selos de evidência corretos e selo obrigatório de conferência da dona
       expect(mockContainer.innerHTML).toContain('[FONTE CIENTÍFICA VERIFICADA]')
       expect(mockContainer.innerHTML).toContain('[CITAÇÃO NÃO VERIFICADA]')
+      expect(mockContainer.innerHTML).toContain('[REFERÊNCIA A CONFERIR (dona)]')
 
       // 4. Rodapé de transparência com selo honesto
       expect(mockContainer.innerHTML).toContain('[NÃO VALIDADO EM ASR REAL]')
