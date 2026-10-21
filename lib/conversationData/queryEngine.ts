@@ -19,7 +19,8 @@ import {
   DEFINITION_MONOLOGO,
   DEFINITION_DUVIDA_SEM_RESPOSTA,
   DEFINITION_INCLUDED_QUESTION_SUBTYPES,
-  DEFINITION_QUESTION_SUBTYPES_TOTAL_RULE
+  DEFINITION_QUESTION_SUBTYPES_TOTAL_RULE,
+  COUNT_DISCLAIMER_FOOTER
 } from './definitions'
 
 export interface QueryResultItem {
@@ -147,7 +148,7 @@ export async function executeConversationQuery(
       primitiveUsed: 'contar_por_papel',
       definitionUsed: DEFINITION_INTERVENCAO,
       numericResult: teacherTurns.length,
-      formattedAnswer: `Você (professor) falou ${teacherTurns.length} vezes durante esta sessão.`,
+      formattedAnswer: `Você (professor) falou ${teacherTurns.length} vezes durante esta sessão.\n\n${COUNT_DISCLAIMER_FOOTER}`,
       items
     }
   }
@@ -202,7 +203,7 @@ export async function executeConversationQuery(
       primitiveUsed: 'contar_por_papel',
       definitionUsed: DEFINITION_PERGUNTA_ABERTA,
       numericResult: openQEvents.length,
-      formattedAnswer: `Foram identificadas ${openQEvents.length} pergunta(s) aberta(s) formulada(s) pelo docente.`,
+      formattedAnswer: `Foram identificadas ${openQEvents.length} pergunta(s) aberta(s) formulada(s) pelo docente.\n\n${COUNT_DISCLAIMER_FOOTER}`,
       items
     }
   }
@@ -234,7 +235,7 @@ export async function executeConversationQuery(
       primitiveUsed: 'contar_por_papel',
       definitionUsed: DEFINITION_PERGUNTA,
       numericResult: totalIncluded,
-      formattedAnswer: `Você formulou ${totalIncluded} perguntas durante esta sessão (quebra por subtipo: ${conteudoCount} de conteúdo + ${adminCount} administrativa(s) + ${checagemCount} de checagem/retórica = total de ${totalIncluded} perguntas computadas).`,
+      formattedAnswer: `Você formulou ${totalIncluded} perguntas durante esta sessão (quebra por subtipo: ${conteudoCount} de conteúdo + ${adminCount} administrativa(s) + ${checagemCount} de checagem/retórica = total de ${totalIncluded} perguntas computadas).\n\n${COUNT_DISCLAIMER_FOOTER}`,
       items
     }
   }
@@ -273,7 +274,7 @@ export async function executeConversationQuery(
       primitiveUsed: 'contar_por_papel',
       definitionUsed: DEFINITION_PERGUNTA,
       numericResult: totalIncluded,
-      formattedAnswer: `Os alunos fizeram ${totalIncluded} perguntas durante esta sessão (quebra por subtipo: ${conteudoCount} de conteúdo + ${adminCount} administrativa(s) + ${checagemCount} de checagem/retórica = total de ${totalIncluded} perguntas computadas).`,
+      formattedAnswer: `Os alunos fizeram ${totalIncluded} perguntas durante esta sessão (quebra por subtipo: ${conteudoCount} de conteúdo + ${adminCount} administrativa(s) + ${checagemCount} de checagem/retórica = total de ${totalIncluded} perguntas computadas).\n\n${COUNT_DISCLAIMER_FOOTER}`,
       items
     }
   }
@@ -392,7 +393,7 @@ export async function executeConversationQuery(
       primitiveUsed: 'tempo_de_espera',
       definitionUsed: DEFINITION_WAIT_TIME,
       numericResult: avgWait,
-      formattedAnswer: `Foram realizadas ${totalQuestions} perguntas docentes, das quais ${measuredCount} com espera medida. Média geral: ${avgWait.toFixed(1)}s, mediana: ${medianWait.toFixed(1)}s. Perguntas com espera >= 3s (pausa deliberada): ${deliberatePausesCount}.`,
+      formattedAnswer: `Foram realizadas ${totalQuestions} perguntas docentes, das quais ${measuredCount} com espera medida. Média geral: ${avgWait.toFixed(1)}s, mediana: ${medianWait.toFixed(1)}s. Perguntas com espera >= 3s (pausa deliberada): ${deliberatePausesCount}.\n\n${COUNT_DISCLAIMER_FOOTER}`,
       items
     }
   }

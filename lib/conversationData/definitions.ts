@@ -31,6 +31,9 @@ export const DEFINITION_QUESTION_SUBTYPES =
 export const DEFINITION_QUESTION_SUBTYPES_TOTAL_RULE =
   'Critério de cômputo do total de perguntas: O total é a soma estrita dos subtipos "conteúdo" e "administrativa". O subtipo "checagem" (ou retórica) é reportado à parte e NÃO integra o total de perguntas conceituais. [DEFINIÇÃO A VALIDAR (dono)]'
 
+export const COUNT_DISCLAIMER_FOOTER =
+  'Contagem automática. Precisão medida só em texto sintético; não validada em áudio real. Confira os horários listados.'
+
 export const DEFINITION_MONOLOGO =
   'Trecho ininterrupto de fala contínua de um mesmo participante sem alternância de turno com duração igual ou superior a 30 segundos (30.000 ms). [DEFINIÇÃO A VALIDAR (dono)]'
 

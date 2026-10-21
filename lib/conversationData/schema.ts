@@ -221,6 +221,9 @@ export class ConversationVaultRepository {
 
     if (sessionsMigrated > 0 || turnsMigrated > 0 || eventsMigrated > 0 || mapMigrated > 0) {
       await this.driver.execute(`VACUUM`)
+      try {
+        await this.driver.execute(`PRAGMA wal_checkpoint(TRUNCATE)`)
+      } catch {}
     }
 
     return { sessionsMigrated, turnsMigrated, eventsMigrated, mapMigrated }

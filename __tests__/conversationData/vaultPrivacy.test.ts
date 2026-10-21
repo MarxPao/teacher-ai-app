@@ -213,11 +213,19 @@ describe('Privacidade do Cofre - Cifra em Nível de Aplicação e Proteção Can
 
     securedDriver.close()
 
-    // 4. Prova que após a migração e VACUUM, o texto puro SUMIU dos bytes do arquivo em disco
-    const migratedBytes = fs.readFileSync(testDbPath)
-    expect(migratedBytes.includes(Buffer.from(LEGACY_TITLE))).toBe(false)
-    expect(migratedBytes.includes(Buffer.from(LEGACY_SPEAKER))).toBe(false)
-    expect(migratedBytes.includes(Buffer.from(LEGACY_TEXT))).toBe(false)
+    // 4. Prova que após a migração e VACUUM/checkpoint, o texto puro SUMIU dos bytes de db, db-wal e db-journal
+    const checkNoCanary = (filePath: string) => {
+      if (fs.existsSync(filePath)) {
+        const bytes = fs.readFileSync(filePath)
+        expect(bytes.includes(Buffer.from(LEGACY_TITLE))).toBe(false)
+        expect(bytes.includes(Buffer.from(LEGACY_SPEAKER))).toBe(false)
+        expect(bytes.includes(Buffer.from(LEGACY_TEXT))).toBe(false)
+      }
+    }
+
+    checkNoCanary(testDbPath)
+    checkNoCanary(testDbPath + '-wal')
+    checkNoCanary(testDbPath + '-journal')
 
     // 5. Prova que a leitura com a dataKey decifra perfeitamente os dados originais
     const verifyDriver = new NodeSqliteDriver(testDbPath)
@@ -251,14 +259,22 @@ describe('Privacidade do Cofre - Cifra em Nível de Aplicação e Proteção Can
       .rejects.toThrow('Falha ao compactar e expurgar fisicamente o cofre (VACUUM): database is locked')
   })
 
-  it('1.b: Lança erro em português se cofre seguro / driver.db estiver ausente', async () => {
-    await expect(async () => {
-      // Simula ausência do driver ou driver.db
-      const brokenDriver: any = { db: null }
-      if (!brokenDriver || !brokenDriver.db) {
-        throw new Error('Cofre local seguro indisponível no Desktop. Operação cancelada por segurança.')
-      }
-      await executeConversationMethod('conversation.ask', { sessionId: 's1', query: 'teste' }, brokenDriver)
-    }).rejects.toThrow('Cofre local seguro indisponível no Desktop. Operação cancelada por segurança.')
+  it('0.b e 1.b: Lança erro em português se cofre seguro / driver.db for undefined ou null', async () => {
+    // 1. Testa com driver.db === undefined
+    const driverWithUndefinedDb = { db: undefined } as any
+    await expect(
+      executeConversationMethod('conversation.ask', { sessionId: 's1', query: 'teste' }, driverWithUndefinedDb)
+    ).rejects.toThrow('Cofre local seguro indisponível no Desktop. Operação cancelada por segurança.')
+
+    // 2. Testa com driver.db === null
+    const driverWithNullDb = { db: null } as any
+    await expect(
+      executeConversationMethod('conversation.ask', { sessionId: 's1', query: 'teste' }, driverWithNullDb)
+    ).rejects.toThrow('Cofre local seguro indisponível no Desktop. Operação cancelada por segurança.')
+
+    // 3. Testa com driver falsy/nulo
+    await expect(
+      executeConversationMethod('conversation.ask', { sessionId: 's1', query: 'teste' }, null as any)
+    ).rejects.toThrow('Cofre local seguro indisponível no Desktop. Operação cancelada por segurança.')
   })
 })

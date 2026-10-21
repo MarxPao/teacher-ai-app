@@ -35,13 +35,16 @@ export interface ConversationAskParams {
   useOllama?: boolean
 }
 
+type DriverWithOptionalDb = SqlDriver & { db?: unknown }
+
 export async function executeConversationMethod(
   method: string,
   params: any,
   driver: SqlDriver,
   dataKey?: Buffer
 ): Promise<any> {
-  if (!driver || (driver as any).db === null) {
+  const driverWithDb = driver as DriverWithOptionalDb
+  if (!driver || !driverWithDb.db) {
     throw new Error('Cofre local seguro indisponível no Desktop. Operação cancelada por segurança.')
   }
   const repo = new ConversationVaultRepository(driver, dataKey)
