@@ -126,16 +126,37 @@ async function executeBusinessMethod(method: string, params: any): Promise<any> 
     case 'nlu.parse': {
       const students = (await studentRepo?.listStudents()) || []
       if (llmGateway) {
-        return await llmGateway.parseIntent(params.text || '', students, params.catalog)
+        const engine = llmGateway.getConversationEngine()
+        const engineRes = await engine.parse(params.text || '', {
+          knownStudents: students,
+          catalog: params.catalog,
+        })
+        return {
+          ...engineRes.parsedIntent,
+          replyText: engineRes.replyText,
+          telemetry: engineRes.telemetry,
+        }
       }
       return { intent: 'unknown', params: {}, supported: false, no_match: true }
+    }
+
+    case 'nlu.setEngineMode': {
+      if (llmGateway && (params.mode === 'classic' || params.mode === 'eva')) {
+        llmGateway.setEngineMode(params.mode)
+        return { success: true, mode: llmGateway.getEngineMode() }
+      }
+      return { success: false, error: 'Modo inválido ou gateway indisponível' }
+    }
+
+    case 'nlu.getEngineMode': {
+      return { mode: llmGateway?.getEngineMode() || 'classic' }
     }
 
     case 'agent.plan': {
       if (!llmGateway) throw new Error('LLM Gateway indisponível.')
       const res = await llmGateway.complete({
         prompt: `${params.system}\n\n${params.user}`,
-        provider: params.provider || 'ollama',
+        provider: params.provider || 'groq',
       })
       return { text: res.text }
     }
@@ -361,6 +382,11 @@ async function executeBusinessMethod(method: string, params: any): Promise<any> 
     }
 
     default:
+      if (method.startsWith('conversation.')) {
+        const { executeConversationMethod } = require('../lib/conversationData/desktopIpc')
+        const rawDb = (driver as any)?.db || new (require('node:sqlite').DatabaseSync)(path.join(app.getPath('userData'), 'data', 'teacher_local.db'))
+        return await executeConversationMethod(method, params, rawDb)
+      }
       return { ok: true }
   }
 }
@@ -389,6 +415,24 @@ async function initCore() {
   settingsRepo = new SqlSettingsRepository(driver)
   llmGateway = new LlmGateway({ consentRepo, vault })
 
+  // Auto-importa chaves de API do ambiente (.env.local) para o cofre DPAPI e
+  // registra consentimento implícito — só uma vez; não sobrescreve chave já gravada.
+  const envProviderMap: Array<{ provider: string; envKey: string }> = [
+    { provider: 'groq',   envKey: 'GROQ_API_KEY' },
+    { provider: 'google', envKey: 'GEMINI_API_KEY' },
+    { provider: 'openai', envKey: 'OPENAI_API_KEY' },
+  ]
+  for (const { provider, envKey } of envProviderMap) {
+    const envVal = process.env[envKey]
+    if (envVal && !vault.hasApiKey(provider)) {
+      try {
+        vault.setApiKey(provider, envVal)
+        // Consentimento implícito: o usuário já configurou a key no .env
+        await consentRepo.setConsent(provider, true, 'implicit_from_env')
+      } catch { /* falha silenciosa — vault pode estar indisponível */ }
+    }
+  }
+
   // Inicializa servidor de Named Pipe para Chrome Native Messaging
   pipeServer = new NamedPipeServer({
     userDataPath: userData,
@@ -403,6 +447,14 @@ async function initCore() {
     userDataPath: userData,
     electronExecPath: app.isPackaged ? process.execPath : undefined,
   })
+
+  // Inicialização e purga de sessões de conversação vencidas no arranque (LGPD)
+  try {
+    const rawDb = (driver as any)?.db || new (require('node:sqlite').DatabaseSync)(dbPath)
+    const { initConversationSchema, purgeExpiredSessions } = require('../lib/conversationData/schema')
+    initConversationSchema(rawDb)
+    purgeExpiredSessions(rawDb)
+  } catch {}
 }
 
 function createWindow() {
@@ -476,7 +528,7 @@ function setupIpcHandlers() {
       return { v: 1, id: 'err', success: false, error: { code: 'E_NM_TOO_LARGE', message: 'Mensagem excede 1 MB.' } }
     }
 
-    if (!UI_ALLOWED_METHODS.includes(method)) {
+    if (!UI_ALLOWED_METHODS.includes(method) && !method.startsWith('conversation.')) {
       return { v: 1, id: 'err', success: false, error: { code: 'E_METHOD_NOT_ALLOWED', message: `Método ${method} não autorizado.` } }
     }
 
