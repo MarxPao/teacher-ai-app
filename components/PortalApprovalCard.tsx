@@ -56,10 +56,10 @@ export const PortalApprovalCard: React.FC<PortalApprovalCardProps> = ({
       if (taskId && !taskId.startsWith('task_mock')) {
         await updateBrowserTask(taskId, { status: 'approved' })
       }
-      // Sincronização Write-Through: Atualiza a tabela de negócio students no Supabase
+      // Sincronização Write-Through (desativada em nuvem por LGPD Trilho 1; fail-closed sem travar fluxo)
       if (diff && diff.length > 0) {
         try {
-          await fetch('/api/students/write-through', {
+          const wtRes = await fetch('/api/students/write-through', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -70,8 +70,12 @@ export const PortalApprovalCard: React.FC<PortalApprovalCardProps> = ({
               diff
             })
           })
+          if (wtRes.status === 403) {
+            // Guard LGPD ativo: gravação em nuvem bloqueada, aprovação no portal prossegue normalmente
+            console.info('[ApprovalCard] Gravação de PII em nuvem bloqueada por conformidade LGPD (403). Lançamento preservado no portal.')
+          }
         } catch (syncErr) {
-          console.warn('[ApprovalCard] Falha na sincronização write-through:', syncErr)
+          console.warn('[ApprovalCard] Sincronização em nuvem indisponível (offline/LGPD):', syncErr)
         }
       }
       if (typeof window !== 'undefined') {

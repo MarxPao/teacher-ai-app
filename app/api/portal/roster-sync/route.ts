@@ -12,16 +12,18 @@ export async function OPTIONS() {
 
 /**
  * Bloqueio de Segurança LGPD (Trilho 1 / Diretriz Fundamental):
- * Reconciliação e sincronização de listas de alunos (roster) na nuvem
- * foi desativada em caráter definitivo.
- * O reconciliador e armazenamento de alunos opera exclusivamente no cofre local cifrado do Desktop.
+ * A rota /api/portal/roster-sync foi desativada em modo fail-closed.
+ * A conciliação e sincronização nominal de alunos raspados de portais de terceiros
+ * não pode trafegar nem persistir no Supabase Cloud.
+ * A conciliação deve ser executada localmente no Desktop.
  */
-export async function POST(req: NextRequest) {
+export async function POST(_req: NextRequest) {
   return NextResponse.json(
     {
       ok: false,
-      error: 'Bloqueio de Segurança LGPD (Trilho 1): Sincronização de lista de alunos com a nuvem está desativada por política de privacidade e LGPD. O reconciliador e armazenamento de alunos opera exclusivamente no cofre local cifrado do Desktop.',
-      code: 'E_STUDENT_PII_CLOUD_DISABLED'
+      code: 'E_STUDENT_PII_CLOUD_DISABLED',
+      error:
+        'Bloqueio de Segurança LGPD (Trilho 1): Sincronização de lista de alunos com a nuvem está desativada por política de privacidade e LGPD. O reconciliador e armazenamento de alunos opera exclusivamente no cofre local cifrado do Desktop.'
     },
     { status: 403, headers: corsHeaders }
   )

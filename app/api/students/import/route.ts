@@ -12,16 +12,17 @@ export async function OPTIONS() {
 
 /**
  * Bloqueio de Segurança LGPD (Trilho 1 / Diretriz Fundamental):
- * Importação de listas de alunos (PII: nomes, matrículas, turmas) para a nuvem
- * foi desativada em caráter definitivo.
- * O armazenamento deve ocorrer exclusivamente no cofre SQLite local cifrado do Desktop.
+ * A rota /api/students/import foi desativada em modo fail-closed.
+ * Importações nominais de estudantes e turmas não podem persistir em nuvem pública (Supabase REST).
+ * A criação de turmas e alunos ocorre exclusivamente no cofre SQLite local cifrado do Desktop.
  */
-export async function POST(req: NextRequest) {
+export async function POST(_req: NextRequest) {
   return NextResponse.json(
     {
       ok: false,
-      error: 'Bloqueio de Segurança LGPD (Trilho 1): Sincronização de dados de estudantes com a nuvem está desativada por política de privacidade e LGPD. O cadastro e importação de alunos deve ser realizado exclusivamente no cofre SQLite local cifrado do Desktop.',
-      code: 'E_STUDENT_PII_CLOUD_DISABLED'
+      code: 'E_STUDENT_PII_CLOUD_DISABLED',
+      error:
+        'Bloqueio de Segurança LGPD (Trilho 1): Sincronização de dados de estudantes com a nuvem está desativada por política de privacidade e LGPD. O cadastro e importação de alunos deve ser realizado exclusivamente no cofre SQLite local cifrado do Desktop.'
     },
     { status: 403, headers: corsHeaders }
   )
