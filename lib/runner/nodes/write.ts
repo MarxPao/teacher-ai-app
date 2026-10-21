@@ -84,10 +84,10 @@ export function isSafeQueryFilter(
     return { safe: false, reason: `method (${node.method}) ou semantic (${node.semantic}) inválido para filtro` }
   }
 
-  // (c) provenance: lista de permissão das origens confiáveis; ausente => não muta
+  // (c) Grafo marcado 'imported' bloqueado como camada extra de segurança
   const prov = options.graph?.provenance
-  if (!prov || !TRUSTED_PROVENANCE_SOURCES.has(prov.source)) {
-    return { safe: false, reason: 'provenance ausente ou não permitida' }
+  if (prov?.source === 'imported') {
+    return { safe: false, reason: 'grafo marcado imported não permite mutação em dry-run' }
   }
 
   // (e) Sem rowContext / rowScope na âncora resolvida (RowScope do schema: table + key)

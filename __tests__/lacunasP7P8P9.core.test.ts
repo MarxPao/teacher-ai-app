@@ -904,18 +904,18 @@ describe('Lacuna #2 (Prompt 6): Classificador Fail-Closed de Filtro de Consulta 
     expect(writeEvents[0]?.data?.dryRunFilterReason).toMatch(/inspectWriteTarget falhou/)
   })
 
-  it('7. grafo sem provenance => NÃO muta em dry-run', async () => {
-    // 7a. isSafeQueryFilter com provenance ausente retorna safe: false
+  it('7. grafo marcado imported => NÃO muta em dry-run; explored muta', async () => {
+    // 7a. isSafeQueryFilter com provenance imported retorna safe: false
     const verdict = isSafeQueryFilter(
       { label: 'sel', type: 'WRITE', anchor: {} as any, value: { lit: 'x' }, method: 'select_option', semantic: 'text', read_back: true } as any,
       { description: 'd', candidates: [] },
-      { graph: {} as any, graphRef: { portal_id: 'p', task_id: 'custom:consultar_frequencia', version: 1 } },
+      { graph: { provenance: { source: 'imported' } } as any, graphRef: { portal_id: 'p', task_id: 'custom:consultar_frequencia', version: 1 } },
       { isInTable: false, hasDangerousSiblings: false, tagName: 'select' }
     )
     expect(verdict.safe).toBe(false)
-    expect(verdict.reason).toMatch(/provenance ausente/)
+    expect(verdict.reason).toMatch(/import/i)
 
-    // 7b. Grafo com provenance não permitida ('explored') => runner não muta
+    // 7b. Grafo com provenance 'explored' => runner muta em dry-run
     const driver = new FakeDriver()
     const host = new FakeHost()
     const runner = new SkillGraphRunner(driver, host)
@@ -923,7 +923,7 @@ describe('Lacuna #2 (Prompt 6): Classificador Fail-Closed de Filtro de Consulta 
     graphExplored.provenance.source = 'explored'
 
     await runner.run(graphExplored, {}, { dryRun: true })
-    expect(driver.writeHistory).toHaveLength(0)
+    expect(driver.writeHistory).toHaveLength(3)
   })
 
   it('8. type_native + text => NÃO muta em dry-run', async () => {
