@@ -904,8 +904,28 @@ describe('Lacuna #2 (Prompt 6): Classificador Fail-Closed de Filtro de Consulta 
     expect(writeEvents[0]?.data?.dryRunFilterReason).toMatch(/inspectWriteTarget falhou/)
   })
 
-  it('7. grafo marcado imported => NÃO muta em dry-run; explored muta', async () => {
-    // 7a. isSafeQueryFilter com provenance imported retorna safe: false
+  it('7a. grafo sem provenance => NÃO muta em dry-run (fail-safe)', async () => {
+    // Provenance ausente/indefinida é tratada como fail-safe (safe: false)
+    const verdict = isSafeQueryFilter(
+      { label: 'sel', type: 'WRITE', anchor: {} as any, value: { lit: 'x' }, method: 'select_option', semantic: 'text', read_back: true } as any,
+      { description: 'd', candidates: [] },
+      { graph: {} as any, graphRef: { portal_id: 'p', task_id: 'custom:consultar_frequencia', version: 1 } },
+      { isInTable: false, hasDangerousSiblings: false, tagName: 'select' }
+    )
+    expect(verdict.safe).toBe(false)
+    expect(verdict.reason).toMatch(/provenance ausente/i)
+
+    const driver = new FakeDriver()
+    const host = new FakeHost()
+    const runner = new SkillGraphRunner(driver, host)
+    const graphNoProv = createFilterQueryGraph()
+    delete (graphNoProv as any).provenance
+
+    await expect(runner.run(graphNoProv, {}, { dryRun: true })).rejects.toThrow(/E_GRAPH_INVALID/)
+    expect(driver.writeHistory).toHaveLength(0)
+  })
+
+  it('7b. grafo marcado imported => NÃO muta em dry-run', async () => {
     const verdict = isSafeQueryFilter(
       { label: 'sel', type: 'WRITE', anchor: {} as any, value: { lit: 'x' }, method: 'select_option', semantic: 'text', read_back: true } as any,
       { description: 'd', candidates: [] },
@@ -915,14 +935,28 @@ describe('Lacuna #2 (Prompt 6): Classificador Fail-Closed de Filtro de Consulta 
     expect(verdict.safe).toBe(false)
     expect(verdict.reason).toMatch(/import/i)
 
-    // 7b. Grafo com provenance 'explored' => runner muta em dry-run
+    const driver = new FakeDriver()
+    const host = new FakeHost()
+    const runner = new SkillGraphRunner(driver, host)
+    const graphImported = createFilterQueryGraph()
+    graphImported.provenance.source = 'imported'
+
+    const res = await runner.run(graphImported, {}, { dryRun: true })
+    expect(driver.writeHistory).toHaveLength(0)
+    expect(res.state.writesCount).toBe(0)
+  })
+
+  it('7c. grafo com provenance explored => escritas reais state.writesCount === 0 em dry-run (apenas seleção simulada de filtro)', async () => {
     const driver = new FakeDriver()
     const host = new FakeHost()
     const runner = new SkillGraphRunner(driver, host)
     const graphExplored = createFilterQueryGraph()
     graphExplored.provenance.source = 'explored'
 
-    await runner.run(graphExplored, {}, { dryRun: true })
+    const res = await runner.run(graphExplored, {}, { dryRun: true })
+    // state.writesCount é o contador oficial de mutações persistidas do runner: estritamente 0 em dryRun
+    expect(res.state.writesCount).toBe(0)
+    // driver.writeHistory contém as 3 seleções de dropdown de navegação visual simuladas
     expect(driver.writeHistory).toHaveLength(3)
   })
 
