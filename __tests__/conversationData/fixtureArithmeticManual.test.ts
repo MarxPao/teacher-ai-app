@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest'
 import { fixtureAula50Min } from '../../lib/conversationData/fixtures'
+import {
+  CANONICAL_RAW_DURATIONS_MS,
+  calculateIndependentTurnMetrics,
+  generateManualAuditTable
+} from '../../lib/conversationData/fixtureArithmeticAudit'
 
 /**
  * Teste Independente de Aritmética Manual sobre a Fixture Canônica aula_50min_bio.
@@ -108,5 +113,47 @@ describe('C1. Auditoria e Aritmética Manual Independente da Fixture aula_50min_
 
     const deliberatePauses = waitTimes.filter(w => w >= 3.0)
     expect(deliberatePauses).toHaveLength(3) // 6.5s, 5.5s, 3.0s
+  })
+
+  it('5. Validação direta dos 18 timestamps brutos e exibição de tabela de conferência', () => {
+    turns.forEach((t, i) => {
+      const dur = t.endMs - t.startMs
+      expect(dur).toBe(CANONICAL_RAW_DURATIONS_MS[i])
+    })
+
+    const tableOutput = generateManualAuditTable(turns, roleMap)
+    expect(tableOutput).toContain('[CONFERÊNCIA MANUAL PENDENTE (dona)]')
+    console.log('\n' + tableOutput + '\n')
+  })
+
+  it('6. Testes de mutação determinística (troca de falante e acréscimo de 5s)', () => {
+    // Mutação 1: Turno 0 do professor dura +5000ms
+    const mutatedTurnsTime = turns.map((t, i) => i === 0 ? { ...t, endMs: t.endMs + 5000 } : t)
+    const m1 = calculateIndependentTurnMetrics(mutatedTurnsTime, roleMap)
+    expect(m1.teacherMs).toBe(506000)
+    expect(m1.studentMs).toBe(66000)
+    expect(m1.totalSpeakingMs).toBe(572000)
+    expect(m1.teacherPct).toBe(88.5)
+    expect(m1.studentPct).toBe(11.5)
+
+    // Mutação 2: Turno 3 de aluno (Arthur, 11500ms) vira professor
+    const mutatedTurnsRole = turns.map((t, i) => i === 3 ? { ...t, speaker: 'spk_prof' } : t)
+    const m2 = calculateIndependentTurnMetrics(mutatedTurnsRole, roleMap)
+    expect(m2.teacherMs).toBe(501000 + 11500)
+    expect(m2.studentMs).toBe(66000 - 11500)
+    expect(m2.totalSpeakingMs).toBe(567000)
+  })
+
+  it('7. Teste de propriedades invariantes (somas 100% e conservação)', () => {
+    const metrics = calculateIndependentTurnMetrics(turns, roleMap)
+    expect(metrics.teacherMs + metrics.studentMs).toBe(metrics.totalSpeakingMs)
+    expect(Number((metrics.teacherPct + metrics.studentPct).toFixed(1))).toBe(100.0)
+
+    let totalPauseMs = 0
+    for (let i = 1; i < turns.length; i++) {
+      totalPauseMs += (turns[i].startMs - turns[i - 1].endMs)
+    }
+    const totalSpanMs = turns[turns.length - 1].endMs - turns[0].startMs
+    expect(metrics.totalSpeakingMs + totalPauseMs).toBe(totalSpanMs)
   })
 })
