@@ -954,10 +954,12 @@ describe('Lacuna #2 (Prompt 6): Classificador Fail-Closed de Filtro de Consulta 
     graphExplored.provenance.source = 'explored'
 
     const res = await runner.run(graphExplored, {}, { dryRun: true })
-    // state.writesCount é o contador oficial de mutações persistidas do runner: estritamente 0 em dryRun
+    // 1. state.writesCount é o contador oficial de mutações persistidas do runner: estritamente 0 em dryRun (zero efeitos colaterais).
     expect(res.state.writesCount).toBe(0)
-    // driver.writeHistory contém as 3 seleções de dropdown de navegação visual simuladas
+    // 2. driver.writeHistory reflete as 3 ações DOM de dropdown de navegação/filtro disparadas em memória (selTurma, selMes, selDisc)
+    // autorizadas por isSafeQueryFilter para permitir a renderização da tabela para consulta, sem qualquer gravação no portal real.
     expect(driver.writeHistory).toHaveLength(3)
+    expect(driver.writeHistory.map(w => w.value)).toEqual(['7° ANO A', 'Julho/2026', 'LÍNGUA INGLESA'])
   })
 
   it('8. type_native + text => NÃO muta em dry-run', async () => {

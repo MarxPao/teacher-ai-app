@@ -8,6 +8,7 @@ import { wilsonScoreInterval, calculateLabelMetrics } from '../../lib/conversati
 class InMemorySqlDriver implements SqlDriver {
   private db: DatabaseSync
   constructor() { this.db = new DatabaseSync(':memory:') }
+  isOpen(): boolean { return this.db !== null }
   async execute(sql: string, params: unknown[] = []): Promise<void> { this.db.prepare(sql).run(...(params as any[])) }
   async query<T = unknown>(sql: string, params: unknown[] = []): Promise<T[]> { return this.db.prepare(sql).all(...(params as any[])) as T[] }
   async queryOne<T = unknown>(sql: string, params: unknown[] = []): Promise<T | null> { return (this.db.prepare(sql).get(...(params as any[])) as T) || null }

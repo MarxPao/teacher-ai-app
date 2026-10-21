@@ -62,4 +62,34 @@ describe('Item 2.1: Isolamento de Rede, Salvaguardas LGPD e Trilho 1 de PII', ()
     expect(routeContent).not.toContain('schema')
     expect(routeContent).not.toContain('desktopIpc')
   })
+
+  it('2.1.d: Auditoria estrita do bundle Desktop (dist-desktop): zero Supabase e zero URLs em shim/preload', () => {
+    const distDesktopDir = path.join(__dirname, '..', '..', 'dist-desktop')
+    if (!fs.existsSync(distDesktopDir)) {
+      return
+    }
+
+    const jsFiles = fs.readdirSync(distDesktopDir).filter(f => f.endsWith('.js'))
+    expect(jsFiles.length).toBeGreaterThan(0)
+
+    for (const jsFile of jsFiles) {
+      const content = fs.readFileSync(path.join(distDesktopDir, jsFile), 'utf8')
+      // Zero Supabase em qualquer artefato do Desktop
+      expect(content.toLowerCase()).not.toContain('@supabase/supabase-js')
+      expect(content).not.toMatch(/createClient\s*\(/)
+    }
+
+    // Preload e Shim nativo devem ser 100% isolados de chamadas remotas de rede
+    const preloadJs = path.join(distDesktopDir, 'preload.js')
+    if (fs.existsSync(preloadJs)) {
+      const preloadContent = fs.readFileSync(preloadJs, 'utf8')
+      expect(preloadContent).not.toMatch(/https?:\/\//)
+    }
+
+    const shimJs = path.join(distDesktopDir, 'shim.js')
+    if (fs.existsSync(shimJs)) {
+      const shimContent = fs.readFileSync(shimJs, 'utf8')
+      expect(shimContent).not.toMatch(/https?:\/\//)
+    }
+  })
 })

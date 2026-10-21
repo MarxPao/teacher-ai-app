@@ -59,7 +59,15 @@ describe('Privacidade do Cofre - Cifra em Nível de Aplicação e Proteção Can
     }
     expect(() => assertVaultReady(driverWithNullDb)).toThrow('Cofre local seguro indisponível no Desktop')
 
-    // 4. Driver fechado (isOpen() === false)
+    // 4. Driver fechado (isOpen() === false) ou sem isOpen (fail-closed obrigatório)
+    const driverWithoutIsOpen = {
+      execute: async () => {},
+      query: async () => [],
+      queryOne: async () => null,
+      transaction: async (fn: any) => fn({})
+    }
+    expect(() => assertVaultReady(driverWithoutIsOpen)).toThrow('E_VAULT_DRIVER_NOT_OPEN')
+
     const closedDriver = {
       isOpen: () => false,
       execute: async () => {},
@@ -67,6 +75,7 @@ describe('Privacidade do Cofre - Cifra em Nível de Aplicação e Proteção Can
       queryOne: async () => null,
       transaction: async (fn: any) => fn({})
     }
+    expect(() => assertVaultReady(closedDriver)).toThrow('E_VAULT_DRIVER_NOT_OPEN')
     expect(() => assertVaultReady(closedDriver)).toThrow('Cofre local seguro indisponível no Desktop')
 
     // 5. Driver alternativo válido (ex: mock ou IPC driver sem db mas com isOpen() === true ou métodos completos)
@@ -196,6 +205,7 @@ describe('Privacidade do Cofre - Cifra em Nível de Aplicação e Proteção Can
 
   it('A4. deleteSession: falha do VACUUM propaga para o chamador com erro em português', async () => {
     const mockDriver: any = {
+      isOpen: () => true,
       db: {},
       execute: async (sql: string) => {
         if (sql === 'VACUUM') {

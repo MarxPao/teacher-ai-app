@@ -48,30 +48,23 @@ export interface ConversationAskParams {
  */
 export function assertVaultReady(driver: unknown): asserts driver is SqlDriver {
   if (!driver || typeof driver !== 'object') {
-    throw new Error('Cofre local seguro indisponível no Desktop. Operação cancelada por segurança.')
+    throw new Error('E_VAULT_DRIVER_NOT_OPEN: Cofre local seguro indisponível no Desktop. Operação cancelada por segurança.')
   }
-  const candidate = driver as Partial<SqlDriver> & { db?: unknown; closed?: boolean }
+  const candidate = driver as Partial<SqlDriver>
 
-  // 1. Contrato explícito de abertura (se implementado)
-  if (typeof candidate.isOpen === 'function') {
-    if (!candidate.isOpen()) {
-      throw new Error('Cofre local seguro indisponível no Desktop. Operação cancelada por segurança.')
-    }
-  } else if ('db' in candidate) {
-    // 2. Contrato de driver com propriedade db (InMemorySqlDriver ou drivers com db acoplado)
-    if (candidate.db === null || candidate.db === undefined) {
-      throw new Error('Cofre local seguro indisponível no Desktop. Operação cancelada por segurança.')
-    }
+  // Contrato fail-closed estrito: o driver DEVE implementar isOpen() e retornar true
+  if (typeof candidate.isOpen !== 'function' || !candidate.isOpen()) {
+    throw new Error('E_VAULT_DRIVER_NOT_OPEN: Cofre local seguro indisponível no Desktop. O driver SQL deve implementar isOpen() e estar aberto.')
   }
 
-  // 3. Validação dos métodos essenciais da interface SqlDriver
+  // Validação dos métodos essenciais da interface SqlDriver
   if (
     typeof candidate.execute !== 'function' ||
     typeof candidate.query !== 'function' ||
     typeof candidate.queryOne !== 'function' ||
     typeof candidate.transaction !== 'function'
   ) {
-    throw new Error('Cofre local seguro indisponível no Desktop. Operação cancelada por segurança.')
+    throw new Error('E_VAULT_DRIVER_INVALID: Driver SQL incompleto no Desktop. Métodos execute, query, queryOne e transaction são obrigatórios.')
   }
 }
 
