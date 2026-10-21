@@ -58,16 +58,19 @@ export function assembleGraph(
   const navClickSteps = segmented.actionSteps.filter(
     s => s.kind === 'click' && s.id !== (segmented.filterStep?.step as any)?.id
   )
+  const allSelectOrWriteSteps = [...writeActionSteps, ...filterSelectSteps]
   const firstWriteIdx =
-    writeActionSteps.length > 0 ? segmented.actionSteps.indexOf(writeActionSteps[0]) : -1
+    allSelectOrWriteSteps.length > 0 ? segmented.actionSteps.indexOf(allSelectOrWriteSteps[0]) : -1
+  const lastWriteIdx =
+    allSelectOrWriteSteps.length > 0 ? segmented.actionSteps.indexOf(allSelectOrWriteSteps[allSelectOrWriteSteps.length - 1]) : -1
   const preWriteClickSteps =
     firstWriteIdx === -1
       ? navClickSteps
       : navClickSteps.filter(s => segmented.actionSteps.indexOf(s) < firstWriteIdx)
   const postWriteClickSteps =
-    firstWriteIdx === -1
+    lastWriteIdx === -1
       ? []
-      : navClickSteps.filter(s => segmented.actionSteps.indexOf(s) > firstWriteIdx)
+      : navClickSteps.filter(s => segmented.actionSteps.indexOf(s) > lastWriteIdx)
   const pushClickStepNode = (clickStep: (typeof navClickSteps)[number]) => {
     const clickAnchor = buildAnchorFromDescriptor(
       clickStep.descriptor,
@@ -106,6 +109,21 @@ export function assembleGraph(
 
   // Filtros de consulta (SELECT sem rowContext): executam como WRITE com semantic:'filter'
   // Permitidos em dryRun pelo isSafeQueryFilter em write.ts — sem write-ahead audit do Desktop App
+  if (filterSelectSteps.length > 0) {
+    plannedNodes.push({
+      id: nextId(),
+      build: (next) =>
+        buildCheckpointNode({
+          nodeId: 'n_cp_filter',
+          taskId: decisions.task_id,
+          on_success: next,
+          on_reject: '$abort',
+          hasSubmit: false,
+          isText: true,
+        }),
+    })
+  }
+
   for (const fs of filterSelectSteps) {
     const fsAnchor = buildAnchorFromDescriptor(
       fs.descriptor,
@@ -132,6 +150,12 @@ export function assembleGraph(
         on_fail: '$abort',
       }),
     })
+  }
+
+  if (!isWriteTask && filterSelectSteps.length > 0) {
+    for (const clickStep of postWriteClickSteps) {
+      pushClickStepNode(clickStep)
+    }
   }
 
   if (decisions.task_id === 'read_roster') {

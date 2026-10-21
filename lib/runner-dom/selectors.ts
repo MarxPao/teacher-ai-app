@@ -4,6 +4,33 @@
 import type { ResolvedCandidate, ResolvedAnchor } from '../runner/types'
 import { matchText } from '../runner/text'
 
+const closedShadowRoots = new WeakMap<Element, ShadowRoot>()
+
+export function installClosedShadowRootHook(proto: typeof Element.prototype = typeof Element !== 'undefined' ? Element.prototype : ({} as any)): void {
+  if (!proto || typeof proto.attachShadow !== 'function' || (proto.attachShadow as any).__sgv2Hooked) return
+  const origAttachShadow = proto.attachShadow
+  const hooked = function (this: Element, init: ShadowRootInit): ShadowRoot {
+    const root = origAttachShadow.call(this, init)
+    try {
+      closedShadowRoots.set(this, root)
+      Object.defineProperty(this, '__sgv2ShadowRoot', { value: root, configurable: true, enumerable: false })
+    } catch {}
+    return root
+  }
+  ;(hooked as any).__sgv2Hooked = true
+  proto.attachShadow = hooked
+}
+
+installClosedShadowRootHook()
+
+export function getShadowRoot(el: Element): ShadowRoot | null {
+  try {
+    const nativeClosedOrOpen = (globalThis as any).chrome?.dom?.openOrClosedShadowRoot?.(el)
+    if (nativeClosedOrOpen) return nativeClosedOrOpen
+  } catch {}
+  return el.shadowRoot || (el as any).__sgv2ShadowRoot || closedShadowRoots.get(el) || null
+}
+
 export function queryAllInShadowAndFrames(root: Document | Element | ShadowRoot, selector: string): Element[] {
   const elements: Element[] = []
 
@@ -11,14 +38,15 @@ export function queryAllInShadowAndFrames(root: Document | Element | ShadowRoot,
     elements.push(...Array.from(root.querySelectorAll(selector)))
   } catch {}
 
-  // Varredura recursiva em Shadow DOM aberto
+  // Varredura recursiva em Shadow DOM aberto e fechado (Stagehand v3 pierce parity)
   const allNodes = Array.from(root.querySelectorAll('*'))
   for (const el of allNodes) {
-    if (el.shadowRoot) {
-      elements.push(...queryAllInShadowAndFrames(el.shadowRoot, selector))
+    const sr = getShadowRoot(el)
+    if (sr) {
+      elements.push(...queryAllInShadowAndFrames(sr, selector))
     }
     // Varredura em iframes de mesma origem
-    if (el.tagName.toLowerCase() === 'iframe') {
+    if (el.tagName?.toLowerCase() === 'iframe') {
       try {
         const iframeDoc = (el as HTMLIFrameElement).contentDocument
         if (iframeDoc) {

@@ -245,20 +245,24 @@ export class PendingDraftOrchestrator {
     const key = `${input.portalId}::${input.taskId}::v${version}`
     const entry = map[key]
 
-    assertCanActivateGraph({
-      origin: input.origin,
-      explorerMode: input.explorerMode ?? entry?.explorerMode,
-      teacherConfirmed: input.teacherConfirmed,
-      dryRunPassed: input.dryRunPassed || Boolean(entry?.dryRunPassed),
-      taskId: input.taskId,
-      graphStatus: entry?.status,
-    })
-
     if (!entry) {
       const err = new Error(`E_GRAPH_INVALID: Grafo ${key} não encontrado para ativação.`) as Error & { code: string }
       err.code = 'E_GRAPH_INVALID'
       throw err
     }
+
+    // A proveniência é lida exclusivamente do registro persistido na criação, NUNCA confiando no chamador
+    const recordedGraphOrigin = entry.origin || 'standalone_draft'
+
+    assertCanActivateGraph({
+      graphOrigin: recordedGraphOrigin,
+      origin: input.origin,
+      explorerMode: entry.explorerMode ?? input.explorerMode,
+      teacherConfirmed: input.teacherConfirmed,
+      dryRunPassed: input.dryRunPassed || Boolean(entry.dryRunPassed),
+      taskId: input.taskId,
+      graphStatus: entry.status,
+    })
 
     const prefix = `${input.portalId}::${input.taskId}::`
     for (const k of Object.keys(map)) {

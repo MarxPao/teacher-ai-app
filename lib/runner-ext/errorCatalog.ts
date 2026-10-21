@@ -10,6 +10,7 @@ export const EXTRA_EXTENSION_ERROR_CODES = [
   'E_NM_FAILED',
   'E_EXPLORATION_CANNOT_ACTIVATE',
   'E_GRAPH_QUARANTINED',
+  'E_DRIFT_WRITE_PROTECTED',
 ] as const
 
 export const ALL_ENGINE_ERROR_CODES = [
@@ -89,6 +90,8 @@ export const TEACHER_ERROR_MESSAGES: Record<EngineErrorCode, string> = {
     'Por segurança, alterações reais no portal exigem que o aplicativo Teacher AI esteja aberto para registrar a auditoria.',
   E_CLICK_UNDECLARED_SUBMIT:
     'O assistente bloqueou um clique em botão de envio final que não havia passado pela revisão prévia.',
+  E_WRITE_NOT_APPROVED:
+    'A tentativa de escrita no portal foi bloqueada porque este campo não constava no plano de ação aprovado.',
 
   // Repair (lib/repair)
   E_REPAIR_NO_CANDIDATE:
@@ -111,6 +114,8 @@ export const TEACHER_ERROR_MESSAGES: Record<EngineErrorCode, string> = {
     'Habilidades descobertas por exploração ficam em revisão e só podem ser ativadas após simulação (Dry-Run) e sua confirmação.',
   E_GRAPH_QUARANTINED:
     'Esta habilidade está em quarentena de segurança. Realize uma simulação (Dry-Run) e confirme antes de ativá-la.',
+  E_DRIFT_WRITE_PROTECTED:
+    'Um campo de lançamento mudou de lugar no portal escolar. Por segurança dos dados dos alunos, a atualização exige sua confirmação prévia.',
 }
 
 export interface ErrorNoticePayload {
@@ -212,7 +217,8 @@ export type GraphActivationOrigin =
   | 'teacher_approved'
 
 export interface ActivationGuardInput {
-  origin: GraphActivationOrigin
+  origin?: GraphActivationOrigin
+  graphOrigin?: GraphActivationOrigin
   explorerMode?: ExplorerMode
   teacherConfirmed?: boolean
   dryRunPassed?: boolean
@@ -221,9 +227,10 @@ export interface ActivationGuardInput {
 }
 
 /**
- * Trava ÚNICA de ativação (Prompt 5):
+ * Trava ÚNICA de ativação (Prompt 5 + Prompt 10):
  * Independente do prisma do explorador (assisted, autonomous_read ou autonomous_full),
  * nenhum caminho de exploração ou rascunho pendente pode ativar um grafo sem origin === "teacher_approved".
+ * A proveniência do grafo (graphOrigin) é lida estritamente do registro gravado no disco na criação.
  */
 export function assertCanActivateGraph(input: ActivationGuardInput): void {
   if (input.graphStatus === 'pending_decisions') {
@@ -234,19 +241,22 @@ export function assertCanActivateGraph(input: ActivationGuardInput): void {
     throw err
   }
 
-  if (input.origin !== 'teacher_approved' || input.teacherConfirmed !== true) {
+  const effectiveOrigin = input.graphOrigin ?? input.origin
+
+  if (input.teacherConfirmed !== true || input.origin !== 'teacher_approved') {
     const err = new Error(
-      `E_EXPLORATION_CANNOT_ACTIVATE: Ativação recusada para origem "${input.origin}" (modo explorador: ${input.explorerMode || 'n/a'}). Somente aprovação explícita da professora ("teacher_approved") pode ativar um grafo.`
+      `E_EXPLORATION_CANNOT_ACTIVATE: Ativação recusada para origem "${effectiveOrigin}" (modo explorador: ${input.explorerMode || 'n/a'}). Somente aprovação explícita da professora ("teacher_approved") pode ativar um grafo.`
     ) as Error & { code: string }
     err.code = 'E_EXPLORATION_CANNOT_ACTIVATE'
     throw err
   }
 
-  const isExploredTask =
-    typeof input.taskId === 'string' &&
-    (input.taskId.startsWith('custom:nav-') || input.taskId.startsWith('explored:'))
+  const isExploration =
+    effectiveOrigin === 'exploration' ||
+    (typeof input.taskId === 'string' &&
+      (input.taskId.startsWith('custom:nav-') || input.taskId.startsWith('explored:')))
 
-  if (isExploredTask && input.dryRunPassed !== true) {
+  if (isExploration && input.dryRunPassed !== true) {
     const err = new Error(
       'E_EXPLORATION_CANNOT_ACTIVATE: Habilidade originada de exploração exige simulação (Dry-Run) aprovada antes da ativação pela professora.'
     ) as Error & { code: string }

@@ -33,17 +33,20 @@ export async function executeUploadNode(
   const resolvedAnchor = resolveAnchor(node.input, context, namedAnchors)
   const resolvedSource = resolveValueRef(node.source, context) ?? params.file
 
+  const getStrByteLength = (str: string) =>
+    typeof Buffer !== 'undefined' ? Buffer.byteLength(str, 'utf-8') : new TextEncoder().encode(str).length
+
   // Validação estrita de limite de tamanho em memória (máx 5MB)
   let estimatedSize = 0
   if (typeof resolvedSource === 'string') {
-    estimatedSize = Buffer.byteLength(resolvedSource, 'utf-8')
+    estimatedSize = getStrByteLength(resolvedSource)
   } else if (resolvedSource && typeof resolvedSource === 'object') {
     if (typeof (resolvedSource as any).size === 'number') {
       estimatedSize = (resolvedSource as any).size
     } else if (typeof (resolvedSource as any).sizeBytes === 'number') {
       estimatedSize = (resolvedSource as any).sizeBytes
     } else if (typeof (resolvedSource as any).content === 'string') {
-      estimatedSize = Buffer.byteLength((resolvedSource as any).content, 'utf-8')
+      estimatedSize = getStrByteLength((resolvedSource as any).content)
     } else if ((resolvedSource as any).content instanceof Uint8Array || ArrayBuffer.isView((resolvedSource as any).content)) {
       estimatedSize = (resolvedSource as any).content.byteLength
     }

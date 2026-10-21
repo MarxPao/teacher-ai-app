@@ -74,7 +74,7 @@ export function readHtmlTable(tableEl: Element, options: ReadTableOptions): Pars
   const tag = tableEl.tagName.toLowerCase()
 
   // 1. Suporte a listas HTML (<ul>, <ol>, [role="list"])
-  if (tag === 'ul' || tag === 'ol' || tableEl.getAttribute('role') === 'list') {
+  if (tag === 'ul' || tag === 'ol' || tableEl.getAttribute?.('role') === 'list') {
     const items = Array.from(tableEl.querySelectorAll(':scope > li, [role="listitem"], li'))
     for (const item of items) {
       const text = (item as HTMLElement).innerText?.trim() || item.textContent?.trim() || ''
@@ -136,8 +136,36 @@ export function readHtmlTable(tableEl: Element, options: ReadTableOptions): Pars
     }
   }
 
+  // 2.5. Join de Colunas Fixadas (AG-Grid .ag-pinned-left-cols-container + .ag-center-cols-container / AntD fixed columns):
+  // Quando múltiplos elementos [role="row"] ou <tr> compartilham o mesmo row-index, aria-rowindex ou data-row-key,
+  // mescla suas células na ordem dos containers (esquerda -> centro -> direita) em uma única linha lógica.
+  const logicalRows: Element[][] = []
+  const rowKeyMap = new Map<string, Element[]>()
   for (const tr of trs) {
-    const cells = Array.from(tr.querySelectorAll('td, th, [role="gridcell"], [role="cell"], [role="rowheader"]'))
+    const explicitRowKey =
+      tr.getAttribute?.('row-index') ||
+      tr.getAttribute?.('aria-rowindex') ||
+      tr.getAttribute?.('data-row-key') ||
+      tr.getAttribute?.('data-id')
+    if (explicitRowKey !== null && explicitRowKey !== undefined && explicitRowKey !== '') {
+      const key = String(explicitRowKey)
+      let group = rowKeyMap.get(key)
+      if (!group) {
+        group = []
+        rowKeyMap.set(key, group)
+        logicalRows.push(group)
+      }
+      group.push(tr)
+    } else {
+      logicalRows.push([tr])
+    }
+  }
+
+  for (const rowGroup of logicalRows) {
+    const cells: Element[] = []
+    for (const tr of rowGroup) {
+      cells.push(...Array.from(tr.querySelectorAll('td, th, [role="gridcell"], [role="cell"], [role="rowheader"]')))
+    }
     if (cells.length === 0) continue
 
     const rowObj: Record<string, string> = {}
