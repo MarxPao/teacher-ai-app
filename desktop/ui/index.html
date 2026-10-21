@@ -2,244 +2,515 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self';">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Teacher AI — Painel Desktop Local</title>
+  <!-- Tabler Icons, servido local (fonts/tabler-icons.woff2) — nunca CDN. O "Cofre do Sistema Ativo" do cabeçalho abaixo promete zero portas expostas; um <link> externo contradiria isso. Mesmo catálogo que a web e a extensão usam: <i class="ti ti-nome"> -->
+  <link rel="stylesheet" href="tabler-icons.min.css">
   <style>
+    /* ───── Teacher AI Design Tokens — Paleta Warm Leather (WCAG 2.1 AA) ───── */
     :root {
-      --bg: #0f172a;
-      --card-bg: #1e293b;
-      --text: #f8fafc;
-      --muted: #94a3b8;
-      --primary: #3b82f6;
-      --primary-hover: #2563eb;
-      --danger: #ef4444;
-      --danger-hover: #dc2626;
-      --success: #10b981;
-      --border: #334155;
+      --bg:            #fdf8f2;
+      --card-bg:       #fffcf8;
+      --surface-2:     #f7f0e8;
+      --surface-3:     #ede4d6;
+      --sidebar-bg:    #2e1a0c;
+      --sidebar-deep:  #231408;
+
+      --text:          #2c1a0e;
+      --text-sepia:    #5c3d20;
+      --muted:         #7a5c42;
+      --text-light:    #6f533a;
+
+      --primary:       #8b5e3c;
+      --primary-hover: #6f4728;
+      --accent-gold:   #945722;
+      --accent-glow:   rgba(139, 94, 60, 0.12);
+
+      --danger:        #a83232;
+      --danger-hover:  #822424;
+      --danger-bg:     rgba(168, 50, 50, 0.10);
+
+      --success:       #346a43;
+      --success-bg:    rgba(61, 122, 78, 0.10);
+
+      --warning:       #945710;
+      --warning-bg:    rgba(200, 122, 30, 0.12);
+
+      --border:        rgba(139, 115, 85, 0.20);
+      --border-soft:   rgba(139, 115, 85, 0.12);
+      --border-strong: rgba(139, 115, 85, 0.32);
+
+      --shadow-sm:     0 1px 3px rgba(44, 26, 14, 0.06), 0 4px 10px rgba(44, 26, 14, 0.05);
+      --shadow-md:     0 4px 12px rgba(44, 26, 14, 0.08), 0 16px 28px -8px rgba(44, 26, 14, 0.10);
+
+      --font-sans:     'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      --font-display:  'Fraunces', Georgia, serif;
+      --font-mono:     'JetBrains Mono', Consolas, monospace;
+
+      --radius-sm:     8px;
+      --radius-md:     10px;
+      --radius-lg:     14px;
     }
+
+    *, *::before, *::after {
+      box-sizing: border-box;
+    }
+
+    *:focus-visible {
+      outline: 2px solid var(--primary) !important;
+      outline-offset: 2px !important;
+    }
+
     body {
       margin: 0;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-family: var(--font-sans);
       background: var(--bg);
       color: var(--text);
       display: flex;
       flex-direction: column;
       min-height: 100vh;
-      box-sizing: border-box;
-      padding: 24px;
-      gap: 20px;
+      -webkit-font-smoothing: antialiased;
     }
+
     header {
+      background: linear-gradient(135deg, var(--sidebar-bg) 0%, var(--sidebar-deep) 100%);
+      color: #fffcf8;
       display: flex;
       justify-content: space-between;
       align-items: center;
-      border-bottom: 1px solid var(--border);
-      padding-bottom: 16px;
+      padding: 18px 28px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: var(--shadow-sm);
     }
+
     h1 {
-      font-size: 20px;
+      font-family: var(--font-display);
+      font-size: 22px;
+      font-weight: 600;
       margin: 0;
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 10px;
+      color: #fffcf8;
+      letter-spacing: -0.02em;
     }
+
     .badge {
-      background: rgba(16, 185, 129, 0.2);
-      color: var(--success);
-      font-size: 12px;
+      background: rgba(255, 252, 248, 0.12);
+      color: #f5efe6;
+      font-family: var(--font-sans);
+      font-size: 11px;
       font-weight: 600;
-      padding: 4px 10px;
+      padding: 4px 12px;
       border-radius: 9999px;
-      border: 1px solid rgba(16, 185, 129, 0.4);
+      border: 1px solid rgba(255, 252, 248, 0.20);
+      letter-spacing: 0.2px;
     }
+
+    .main-wrapper {
+      padding: 28px 32px;
+      max-width: 1200px;
+      width: 100%;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
     .grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: 20px;
     }
+
+    @media (max-width: 860px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+      .card[style*="span 2"] {
+        grid-column: span 1 !important;
+      }
+    }
+
     .card {
       background: var(--card-bg);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 20px;
+      border: 1px solid var(--border-soft);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      box-shadow: var(--shadow-sm);
     }
+
+    .sub-panel {
+      background: var(--surface-2);
+      border: 1px solid var(--border-soft);
+      border-radius: var(--radius-md);
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+
     h2 {
-      font-size: 16px;
+      font-family: var(--font-display);
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--text);
       margin-top: 0;
-      margin-bottom: 12px;
+      margin-bottom: 8px;
       display: flex;
       align-items: center;
       justify-content: space-between;
+      gap: 8px;
+      letter-spacing: -0.01em;
     }
+    h2 > span:first-child, h2 > i:first-child {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+    h2 i {
+      font-size: 17px;
+      color: var(--primary);
+    }
+
+    h3 {
+      font-family: var(--font-sans);
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text);
+      margin: 0 0 8px 0;
+    }
+
     p {
       color: var(--muted);
-      font-size: 14px;
-      line-height: 1.5;
-      margin-top: 0;
-    }
-    .btn {
-      background: var(--primary);
-      color: white;
-      border: none;
-      padding: 8px 14px;
       font-size: 13px;
-      font-weight: 500;
-      border-radius: 6px;
+      line-height: 1.6;
+      margin-top: 0;
+      margin-bottom: 14px;
+    }
+
+    .btn {
+      background: linear-gradient(135deg, var(--primary) 0%, var(--primary-hover) 100%);
+      color: #fffcf8;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      padding: 9px 16px;
+      font-size: 13px;
+      font-weight: 700;
+      font-family: var(--font-sans);
+      border-radius: var(--radius-md);
       cursor: pointer;
-      transition: background 0.15s;
+      box-shadow: 0 2px 8px rgba(139, 94, 60, 0.22);
+      transition: all 0.15s ease;
     }
-    .btn:hover {
-      background: var(--primary-hover);
+
+    .btn:hover:not(:disabled) {
+      background: linear-gradient(135deg, #7a5132 0%, #5c3d20 100%);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(139, 94, 60, 0.28);
     }
+
+    .btn:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+      transform: none;
+    }
+
     .btn-secondary {
-      background: transparent;
+      background: var(--card-bg);
       border: 1px solid var(--border);
+      color: var(--text-sepia);
+      box-shadow: 0 1px 2px rgba(44, 26, 14, 0.04);
+    }
+
+    .btn-secondary:hover:not(:disabled) {
+      background: var(--surface-2);
       color: var(--text);
+      border-color: var(--border-strong);
+      box-shadow: var(--shadow-sm);
     }
-    .btn-secondary:hover {
-      background: rgba(255, 255, 255, 0.05);
-    }
+
     .btn-danger {
       background: var(--danger);
-      color: white;
+      color: #fffcf8;
       border: none;
-      padding: 6px 10px;
+      padding: 6px 12px;
       font-size: 12px;
-      border-radius: 4px;
+      font-weight: 600;
+      font-family: var(--font-sans);
+      border-radius: var(--radius-sm);
       cursor: pointer;
+      transition: background 0.15s ease;
     }
+
     .btn-danger:hover {
       background: var(--danger-hover);
     }
+
     input, select {
-      background: #0f172a;
+      background: var(--bg);
       border: 1px solid var(--border);
-      color: white;
-      padding: 8px 12px;
-      border-radius: 6px;
+      color: var(--text);
+      padding: 9px 12px;
+      border-radius: var(--radius-md);
       font-size: 13px;
+      font-family: var(--font-sans);
       width: 100%;
-      box-sizing: border-box;
       margin-bottom: 10px;
+      outline: none;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
     }
+
+    input:focus, select:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px var(--accent-glow);
+      background: var(--card-bg);
+    }
+
+    input::placeholder {
+      color: var(--text-light);
+      opacity: 0.75;
+    }
+
+    code {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      background: var(--surface-3);
+      color: var(--text-sepia);
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+
     table {
       width: 100%;
       border-collapse: collapse;
       font-size: 13px;
-      margin-top: 10px;
+      margin-top: 8px;
     }
+
     th, td {
-      padding: 8px 10px;
+      padding: 10px 12px;
       text-align: left;
-      border-bottom: 1px solid var(--border);
+      border-bottom: 1px solid var(--border-soft);
+      color: var(--text);
     }
+
     th {
       color: var(--muted);
-      font-weight: 600;
+      font-weight: 700;
       font-size: 11px;
       text-transform: uppercase;
-      letter-spacing: 0.5px;
+      letter-spacing: 0.7px;
+      background: var(--surface-2);
     }
+
     .status-pill {
+      display: inline-flex;
+      align-items: center;
       font-size: 11px;
-      padding: 2px 8px;
-      border-radius: 12px;
-      font-weight: 600;
+      padding: 3px 10px;
+      border-radius: 9999px;
+      font-weight: 700;
     }
-    .status-ok { background: rgba(16, 185, 129, 0.2); color: #34d399; }
-    .status-off { background: rgba(239, 68, 68, 0.2); color: #f87171; }
+
+    .status-ok {
+      background: var(--success-bg);
+      color: var(--success);
+      border: 1px solid rgba(61, 122, 78, 0.22);
+    }
+
+    .status-off {
+      background: var(--danger-bg);
+      color: var(--danger);
+      border: 1px solid rgba(168, 50, 50, 0.22);
+    }
+
     #status-log {
-      background: #090d16;
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 12px;
-      font-family: monospace;
+      background: #1c110a;
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius-md);
+      padding: 14px;
+      font-family: var(--font-mono);
       font-size: 12px;
-      color: #38bdf8;
-      min-height: 80px;
-      max-height: 140px;
+      color: #f5efe6;
+      min-height: 90px;
+      max-height: 160px;
       overflow-y: auto;
       white-space: pre-wrap;
+      line-height: 1.5;
     }
   </style>
 </head>
 <body>
   <header>
-    <h1>🎓 Teacher AI Desktop <span class="badge">Local-First (Blindado)</span></h1>
-    <div id="security-indicator" style="font-size: 13px; color: #10b981;">🛡️ Cofre Windows Ativo | Zero Portas TCP Abertas</div>
+    <h1>Teacher AI Desktop <span class="badge">Cofre Local &amp; Proteção LGPD</span></h1>
+    <div id="security-indicator" style="font-size: 12px; font-weight: 600; color: #a7f3d0; background: rgba(52, 106, 67, 0.35); padding: 6px 12px; border-radius: 9999px; border: 1px solid rgba(167, 243, 208, 0.3); display: inline-flex; align-items: center; gap: 6px;">
+      <i class="ti ti-shield-check" style="font-size: 14px;"></i> Cofre do Sistema Ativo • Zero Portas Expostas
+    </div>
   </header>
 
-  <div class="grid">
-    <!-- Card 1: Discentes e LGPD -->
-    <div class="card" style="grid-column: span 2;">
-      <h2>
-        <span>👥 Discentes no SQLite Cifrado (AES-256-GCM)</span>
-        <button class="btn btn-secondary" id="btn-refresh-students">🔄 Atualizar Lista</button>
-      </h2>
-      <p>Dados de discentes protegidos em repouso por chave de 256 bits embrulhada no cofre do sistema operacional.</p>
-      <div style="overflow-x: auto;">
-        <table id="students-table">
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>Nome Completo</th>
-              <th>Matrícula</th>
-              <th>Turma</th>
-              <th>Ações LGPD</th>
-            </tr>
-          </thead>
-          <tbody id="students-tbody">
-            <tr><td colspan="5" style="color: var(--muted); text-align: center;">Carregando discentes...</td></tr>
-          </tbody>
-        </table>
+  <div class="main-wrapper">
+    <div class="grid">
+      <!-- Card 1: Discentes e LGPD -->
+      <div class="card" style="grid-column: span 2;">
+        <h2>
+          <span style="display: inline-flex; align-items: center; gap: 6px;"><i class="ti ti-users"></i> Discentes Protegidos no Cofre Local (AES-256-GCM)</span>
+          <button class="btn btn-secondary" id="btn-refresh-students" style="display: inline-flex; align-items: center; gap: 6px;"><i class="ti ti-refresh"></i> Atualizar Lista</button>
+        </h2>
+        <p>Os dados dos alunos permanecem guardados exclusivamente no seu computador, protegidos por criptografia vinculada à sua conta do sistema operacional.</p>
+        <div style="overflow-x: auto; border: 1px solid var(--border-soft); border-radius: var(--radius-md);">
+          <table id="students-table" style="margin-top: 0;">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Nome Completo</th>
+                <th>Matrícula</th>
+                <th>Turma</th>
+                <th>Direitos do Titular (LGPD)</th>
+              </tr>
+            </thead>
+            <tbody id="students-tbody">
+              <tr><td colspan="5" style="color: var(--muted); text-align: center;">Carregando discentes...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Card: Credenciais dos portais (o agente preenche o login sem a IA ver a senha) -->
+      <div class="card">
+        <h2><i class="ti ti-school"></i> Acesso aos portais escolares</h2>
+        <p>Guarde aqui o usuário e a senha do portal. O agente preenche o login direto do cofre do sistema; a senha nunca é enviada para a inteligência artificial.</p>
+        <div id="cred-status-container" class="sub-panel" style="margin-bottom: 14px; font-size: 13px; display: flex; flex-direction: column; gap: 6px;"></div>
+        <div style="border-top: 1px solid var(--border-soft); padding-top: 14px;">
+          <label style="display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.7px; color: var(--muted); margin-bottom: 6px;">Endereço do portal</label>
+          <input type="text" id="cred-host" placeholder="ex.: machadosobrinho.paineldoaluno.com.br">
+          <label style="display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.7px; color: var(--muted); margin-bottom: 6px;">Usuário</label>
+          <input type="text" id="cred-user" autocomplete="off">
+          <label style="display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.7px; color: var(--muted); margin-bottom: 6px;">Senha</label>
+          <input type="password" id="cred-pass" autocomplete="new-password">
+          <button class="btn" id="btn-save-cred" style="width: 100%;">Salvar no Cofre Seguro</button>
+        </div>
+      </div>
+
+      <!-- Card 2: Cofre de Chaves BYOK -->
+      <div class="card">
+        <h2><i class="ti ti-key"></i> Cofre de Chaves de IA (BYOK)</h2>
+        <p>Suas chaves de inteligência artificial ficam guardadas no cofre nativo do sistema e nunca ficam expostas no navegador.</p>
+        
+        <div id="keys-status-container" class="sub-panel" style="margin-bottom: 14px; font-size: 13px; display: flex; flex-direction: column; gap: 6px;">
+          <!-- Preenchido via app.js -->
+        </div>
+
+        <div style="border-top: 1px solid var(--border-soft); padding-top: 14px;">
+          <label style="display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.7px; color: var(--muted); margin-bottom: 6px;">Provedor de IA</label>
+          <select id="key-provider">
+            <option value="groq">Groq (Recomendado pela velocidade)</option>
+            <option value="openai">OpenAI</option>
+            <option value="google">Google Gemini</option>
+            <option value="anthropic">Anthropic Claude</option>
+          </select>
+          <label style="display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.7px; color: var(--muted); margin-bottom: 6px;">Chave de API</label>
+          <input type="password" id="key-input" placeholder="Cole sua chave secreta aqui...">
+          <button class="btn" id="btn-save-key" style="width: 100%;">Salvar no Cofre Seguro</button>
+        </div>
+      </div>
+
+      <!-- Card 3: Backup & Restauração -->
+      <div class="card">
+        <h2><i class="ti ti-device-floppy"></i> Cópia de Segurança Cifrada</h2>
+        <p>Exporte ou restaure sua base local com uma senha pessoal forte (proteção scrypt + AES-256-GCM).</p>
+        
+        <label style="display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.7px; color: var(--muted); margin-bottom: 6px;">Senha de Proteção</label>
+        <input type="password" id="backup-passphrase" placeholder="Mínimo de 6 caracteres">
+        <div style="display: flex; gap: 8px; margin-bottom: 14px;">
+          <button class="btn" id="btn-backup" style="flex: 1;">Exportar Backup</button>
+          <button class="btn btn-secondary" id="btn-status">Diagnóstico</button>
+        </div>
+        <div style="border-top: 1px solid var(--border-soft); padding-top: 14px;">
+          <label style="display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.7px; color: var(--muted); margin-bottom: 6px;">Restaurar arquivo <code>.tbackup</code></label>
+          <input type="file" id="restore-file-input" accept=".tbackup" style="margin-bottom: 10px; background: var(--surface-2);">
+          <button class="btn btn-secondary" id="btn-restore-backup" style="width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 6px;"><i class="ti ti-download"></i> Restaurar Cópia de Segurança</button>
+        </div>
+      </div>
+
+      <!-- Card 4: Gestão de Habilidades & Mapas da Comunidade -->
+      <div class="card" style="grid-column: span 2;">
+        <h2>
+          <span style="display: inline-flex; align-items: center; gap: 6px;"><i class="ti ti-compass"></i> Habilidades dos Portais &amp; Biblioteca Comunitária</span>
+          <button class="btn btn-secondary" id="btn-refresh-community" style="display: inline-flex; align-items: center; gap: 6px;"><i class="ti ti-refresh"></i> Atualizar Lista</button>
+        </h2>
+        <p>Gerencie as versões das habilidades que você ensinou ao assistente e compartilhe ou importe rotinas verificadas de outros professores.</p>
+
+        <!-- Gestão de Versões e Exclusão de Habilidades Locais -->
+        <div class="sub-panel">
+          <h3 style="display: flex; align-items: center; gap: 6px;"><i class="ti ti-folders"></i> Minhas Habilidades Gravadas (Versões &amp; Reversão)</h3>
+          <div style="overflow-x: auto; background: var(--card-bg); border: 1px solid var(--border-soft); border-radius: var(--radius-sm);">
+            <table id="local-skills-table" style="margin-top: 0;">
+              <thead>
+                <tr>
+                  <th>Portal</th>
+                  <th>Identificador</th>
+                  <th>Nome da Habilidade</th>
+                  <th>Versão</th>
+                  <th>Status</th>
+                  <th>Ações</th>
+                </tr>
+              </thead>
+              <tbody id="local-skills-tbody">
+                <tr><td colspan="6" style="color: var(--muted); text-align: center;">Carregando habilidades locais...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        
+        <!-- Exportar / Compartilhar Mapa Local -->
+        <div class="sub-panel">
+          <h3 style="display: flex; align-items: center; gap: 6px;">
+            <i class="ti ti-upload"></i> Compartilhar Habilidade com Outros Professores
+          </h3>
+          <p style="font-size: 12px; margin-bottom: 10px;">
+            Gera um arquivo assinado digitalmente e livre de qualquer nome de aluno ou dado sensível da sua escola.
+          </p>
+          <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+            <select id="export-task-select" style="max-width: 320px; margin-bottom: 0; background: var(--card-bg);">
+              <option value="">Carregando habilidades gravadas...</option>
+            </select>
+            <button class="btn" id="btn-export-map" style="display: inline-flex; align-items: center; gap: 6px;"><i class="ti ti-package"></i> Exportar Habilidade Limpa</button>
+          </div>
+          <div id="export-status-msg" style="display: none; margin-top: 10px; font-size: 12px; padding: 10px 12px; border-radius: var(--radius-sm);"></div>
+        </div>
+
+        <div style="display: flex; gap: 10px; margin-bottom: 14px;">
+          <input type="text" id="community-search-input" placeholder="Buscar habilidade por nome, tarefa ou portal escolar..." style="margin-bottom: 0;">
+          <button class="btn" id="btn-search-community" style="white-space: nowrap; display: inline-flex; align-items: center; gap: 6px;"><i class="ti ti-search"></i> Buscar</button>
+        </div>
+
+        <div id="community-packages-container" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px;">
+          <div style="color: var(--muted); font-size: 13px;">Clique em "Atualizar Lista" ou "Buscar" para explorar habilidades disponíveis.</div>
+        </div>
       </div>
     </div>
 
-    <!-- Card 2: Cofre de Chaves BYOK -->
     <div class="card">
-      <h2>🔑 Cofre de Chaves de IA (BYOK - DPAPI)</h2>
-      <p>Suas chaves nunca são enviadas para a interface nem para a extensão. Ficam exclusivamente no cofre do sistema operacional.</p>
-      
-      <div id="keys-status-container" style="margin-bottom: 12px; font-size: 13px; display: flex; flex-direction: column; gap: 6px;">
-        <!-- Preenchido via app.js -->
-      </div>
-
-      <div style="border-top: 1px solid var(--border); padding-top: 12px;">
-        <label style="font-size: 12px; color: var(--muted);">Provedor:</label>
-        <select id="key-provider">
-          <option value="groq">Groq (Recomendado para velocidade)</option>
-          <option value="openai">OpenAI</option>
-          <option value="google">Google Gemini</option>
-          <option value="anthropic">Anthropic Claude</option>
-        </select>
-        <label style="font-size: 12px; color: var(--muted);">Chave de API:</label>
-        <input type="password" id="key-input" placeholder="Cole sua chave aqui...">
-        <button class="btn" id="btn-save-key">Salvar no Cofre DPAPI</button>
-      </div>
-    </div>
-
-    <!-- Card 3: Backup & Restauração -->
-    <div class="card">
-      <h2>💾 Cópia de Segurança Cifrada</h2>
-      <p>Exporte ou restaure toda a base de dados com senha forte pessoal (scrypt + AES-256-GCM).</p>
-      
-      <input type="password" id="backup-passphrase" placeholder="Senha do backup (mín. 6 caracteres)">
-      <div style="display: flex; gap: 8px;">
-        <button class="btn" id="btn-backup" style="flex: 1;">Exportar Backup</button>
-        <button class="btn btn-secondary" id="btn-status">Diagnóstico</button>
-      </div>
-      <div style="margin-top: 10px; font-size: 12px; color: var(--muted);">
-        Para restaurar um arquivo <code>.tbackup</code>, use a opção correspondente do app.
-      </div>
+      <h2><i class="ti ti-chart-bar"></i> Registro de Atividades e Diagnóstico Local</h2>
+      <div id="status-log">Iniciando diagnóstico local...</div>
     </div>
   </div>
 
-  <div class="card">
-    <h2>📊 Trilha de Auditoria e Diagnóstico do Sistema</h2>
-    <div id="status-log">Iniciando diagnóstico local...</div>
+  <!-- Modal de Quarentena & Relatório de Efeitos -->
+  <div id="quarantine-modal" style="display: none; position: fixed; inset: 0; background: rgba(28, 17, 10, 0.65); backdrop-filter: blur(4px); align-items: center; justify-content: center; z-index: 1000; padding: 20px;">
+    <div class="card" style="max-width: 640px; width: 100%; max-height: 90vh; overflow-y: auto; box-shadow: var(--shadow-md); border-top: 4px solid var(--primary);">
+      <h2 style="margin-bottom: 12px;">
+        <span id="modal-title" style="display: inline-flex; align-items: center; gap: 6px;"><i class="ti ti-shield-check"></i> Revisão de Segurança da Habilidade</span>
+        <button class="btn btn-secondary" id="btn-close-modal" style="padding: 4px 10px;"><i class="ti ti-x"></i></button>
+      </h2>
+      <div id="modal-content" style="font-size: 13px; display: flex; flex-direction: column; gap: 12px;">
+        <!-- Preenchido via app.js -->
+      </div>
+    </div>
   </div>
 
   <script src="app.js"></script>
+  <script src="conversationLabeling.js"></script>
+  <script src="conversationInsights.js"></script>
+  <script src="conversation.js"></script>
 </body>
 </html>

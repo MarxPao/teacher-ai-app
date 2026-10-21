@@ -1,0 +1,72 @@
+{
+  "spec_version": "2.0",
+  "identity": {
+    "portal_id": "placeholder_portal",
+    "domain": "h1.invalid",
+    "task_id": "read_attendance",
+    "version": 1,
+    "name": "Ler Resumo de Frequência",
+    "description": "Lê percentual consolidado de faltas e presenças"
+  },
+  "compat": {
+    "support_tier": 1,
+    "archetype_tags": ["table"],
+    "tested_archetypes": ["table"],
+    "min_runner_version": "2.0.0"
+  },
+  "params": {},
+  "entry_fingerprint": {
+    "route": { "host": "h1.invalid", "path_pattern": "/frequencia" }
+  },
+  "entry_node": "nav_freq",
+  "nodes": {
+    "nav_freq": {
+      "label": "Navega para frequência",
+      "type": "NAVIGATE",
+      "path": "/frequencia",
+      "host": "h1.invalid",
+      "retry": { "max_attempts": 2, "backoff_ms": 300 },
+      "timeout_ms": 5000,
+      "postconditions": [],
+      "on_success": "read_freq",
+      "on_fail": "$abort"
+    },
+    "read_freq": {
+      "label": "Lê frequência",
+      "type": "READ",
+      "source": {
+        "kind": "table",
+        "anchor": { "candidates": [{ "strategy": "css", "selector": "#tabela-frequencia" }] },
+        "columns": [
+          { "name": "Aluno", "field": "student.name" },
+          { "name": "Total Faltas", "field": "student.portal_id" }
+        ]
+      },
+      "into": "attendance_data",
+      "on_success": "$end",
+      "on_fail": "$abort"
+    }
+  },
+  "canonical_mapping": {
+    "columns": [
+      { "portal_labels": ["Aluno"], "field": "student.name", "semantic_type": "string" }
+    ],
+    "grade_scale": { "type": "numeric", "min": 0, "max": 10, "decimal_separator": "," },
+    "attendance": { "polarity": "checked_is_absent" },
+    "ambiguous_requires_confirmation": true
+  },
+  "safety": {
+    "side_effect_level": "read",
+    "writes_require_checkpoint": true,
+    "max_writes_per_run": 0,
+    "rate_limit": { "min_delay_ms": 200, "jitter_ms": 100 },
+    "allowed_hosts": ["h1.invalid"]
+  },
+  "provenance": {
+    "author": "Professora Autora",
+    "created_at": "2026-10-11T20:00:00Z",
+    "updated_at": "2026-10-11T20:00:00Z",
+    "source": "recorded",
+    "pii_scrubbed": true
+  }
+}

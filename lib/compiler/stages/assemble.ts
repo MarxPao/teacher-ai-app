@@ -45,7 +45,118 @@ export function assembleGraph(
   const plannedNodes: PlannedNode[] = buildPreambleNodes(trace, segmented, decisions, paramContext, nextId)
 
   // 2. Execução da Tarefa
-  const isWriteTask = decisions.task_id === 'lancar_falta' || decisions.task_id === 'lancar_nota'
+  // Selects sem rowContext são filtros de navegação (SELECT_FILTER) e não devem ser compilados como WRITE.
+  // Eles permitem execução durante dryRun sem exigir audit write-ahead do Desktop App.
+  const writeActionSteps = segmented.actionSteps.filter(
+    s => s.kind === 'input' || s.kind === 'check' ||
+    (s.kind === 'select' && !!(s.descriptor as any).rowContext)
+  )
+  // Selects de filtro de página (sem rowContext): executam como NAVIGATE_FILTER, não como WRITE
+  const filterSelectSteps = segmented.actionSteps.filter(
+    s => s.kind === 'select' && !(s.descriptor as any).rowContext
+  )
+  const navClickSteps = segmented.actionSteps.filter(
+    s => s.kind === 'click' && s.id !== (segmented.filterStep?.step as any)?.id
+  )
+  const allSelectOrWriteSteps = [...writeActionSteps, ...filterSelectSteps]
+  const firstWriteIdx =
+    allSelectOrWriteSteps.length > 0 ? segmented.actionSteps.indexOf(allSelectOrWriteSteps[0]) : -1
+  const lastWriteIdx =
+    allSelectOrWriteSteps.length > 0 ? segmented.actionSteps.indexOf(allSelectOrWriteSteps[allSelectOrWriteSteps.length - 1]) : -1
+  const preWriteClickSteps =
+    firstWriteIdx === -1
+      ? navClickSteps
+      : navClickSteps.filter(s => segmented.actionSteps.indexOf(s) < firstWriteIdx)
+  const postWriteClickSteps =
+    lastWriteIdx === -1
+      ? []
+      : navClickSteps.filter(s => segmented.actionSteps.indexOf(s) > lastWriteIdx)
+  const pushClickStepNode = (clickStep: (typeof navClickSteps)[number]) => {
+    const clickAnchor = buildAnchorFromDescriptor(
+      clickStep.descriptor,
+      clickStep.descriptor.text ? `Menu ${clickStep.descriptor.text}` : 'Elemento de navegação',
+      undefined,
+      decisions,
+      paramContext
+    )
+    const expectNav = Boolean((clickStep.descriptor as any).href || clickStep.descriptor.tag === 'a')
+    plannedNodes.push({
+      id: nextId(),
+      build: (next) => ({
+        type: 'CLICK',
+        label: clickStep.descriptor.text ? `Clicar em ${clickStep.descriptor.text}` : 'Navegar pelo Menu',
+        anchor: clickAnchor,
+        is_submit_action: false,
+        expect_navigation: expectNav,
+        retry: { max_attempts: 2, backoff_ms: 500 },
+        timeout_ms: 8000,
+        postconditions: [],
+        on_success: next,
+        on_fail: '$abort',
+      }),
+    })
+  }
+  const isWriteTask =
+    decisions.task_id === 'lancar_falta' ||
+    decisions.task_id === 'lancar_nota' ||
+    writeActionSteps.length > 0 ||
+    !!segmented.submitStep
+
+  // Cliques intermediários de navegação anteriores à escrita (ex.: menus, links, sub-abas)
+  for (const clickStep of preWriteClickSteps) {
+    pushClickStepNode(clickStep)
+  }
+
+  // Filtros de consulta (SELECT sem rowContext): executam como WRITE com semantic:'filter'
+  // Permitidos em dryRun pelo isSafeQueryFilter em write.ts — sem write-ahead audit do Desktop App
+  if (filterSelectSteps.length > 0) {
+    plannedNodes.push({
+      id: nextId(),
+      build: (next) =>
+        buildCheckpointNode({
+          nodeId: 'n_cp_filter',
+          taskId: decisions.task_id,
+          on_success: next,
+          on_reject: '$abort',
+          hasSubmit: false,
+          isText: true,
+        }),
+    })
+  }
+
+  for (const fs of filterSelectSteps) {
+    const fsAnchor = buildAnchorFromDescriptor(
+      fs.descriptor,
+      (fs.descriptor as any).aria_label || (fs.descriptor as any).label_text || (fs.descriptor as any).accessible_name || 'Filtro de consulta',
+      undefined,
+      decisions,
+      paramContext
+    )
+    const fsValue = String((fs as any).value || (fs as any).text || '').trim()
+    plannedNodes.push({
+      id: nextId(),
+      build: (next) => ({
+        type: 'WRITE',
+        label: `Selecionar filtro: ${fsValue || (fs.descriptor as any).aria_label || 'valor'}`,
+        anchor: fsAnchor,
+        value: { lit: fsValue },
+        method: 'select_option',
+        semantic: 'text',
+        read_back: true,
+        retry: { max_attempts: 2, backoff_ms: 500 },
+        timeout_ms: 5000,
+        postconditions: [],
+        on_success: next,
+        on_fail: '$abort',
+      }),
+    })
+  }
+
+  if (!isWriteTask && filterSelectSteps.length > 0) {
+    for (const clickStep of postWriteClickSteps) {
+      pushClickStepNode(clickStep)
+    }
+  }
 
   if (decisions.task_id === 'read_roster') {
     plannedNodes.push({
@@ -69,12 +180,32 @@ export function assembleGraph(
       }),
     })
   } else if (isWriteTask) {
-    if (segmented.actionSteps.length > 1) {
+    const seenFieldKeys = new Set<string>()
+    const distinctWriteSteps: typeof writeActionSteps = []
+    for (const ws of writeActionSteps) {
+      const d = ws.descriptor as any
+      const fieldKey = d.rowContext
+        ? `table_col_${d.rowContext.column_index ?? 0}_${ws.kind}`
+        : `${ws.kind}_${d.id || d.aria_label || d.label_text || d.accessible_name || d.placeholder || d.name || d.tag}`
+      if (!seenFieldKeys.has(fieldKey)) {
+        seenFieldKeys.add(fieldKey)
+        distinctWriteSteps.push(ws)
+      }
+    }
+
+    if (distinctWriteSteps.length < writeActionSteps.length) {
       warnings.push({
         code: 'W_BATCH_PATTERN_IGNORED',
         message: 'Múltiplas interações gravadas em lote detectadas. O fluxo foi abstraído para execução unitária por parâmetro.',
       })
     }
+
+    const firstStep = distinctWriteSteps[0]
+    const isAttendance =
+      decisions.task_id === 'lancar_falta' ||
+      decisions.attendance_polarity !== undefined ||
+      firstStep?.kind === 'check'
+    const isGrade = decisions.task_id === 'lancar_nota' || decisions.grade_scale !== undefined
 
     // CHECKPOINT Obrigatório
     plannedNodes.push({
@@ -85,36 +216,62 @@ export function assembleGraph(
           taskId: decisions.task_id,
           on_success: next,
           on_reject: '$abort',
+          hasSubmit: !!segmented.submitStep,
+          isText: !isAttendance && !isGrade,
         }),
     })
 
-    // Nó WRITE
-    const actionStep = segmented.actionSteps[0]
-    const fieldAnchor = buildAnchorFromDescriptor(
-      actionStep.descriptor,
-      decisions.task_id === 'lancar_falta' ? 'Campo de frequência do aluno' : 'Campo de nota do aluno',
-      tableAnchor,
-      decisions,
-      paramContext
-    )
+    // Nós WRITE (suporta múltiplos campos distintos em formulários/wizards, incluindo <select>)
+    for (const actionStep of distinctWriteSteps) {
+      const stepIsCheck = actionStep.kind === 'check' || isAttendance
+      const stepIsSelect = actionStep.kind === 'select'
+      const stepLabel =
+        (actionStep.descriptor as any).aria_label ||
+        (actionStep.descriptor as any).label_text ||
+        (actionStep.descriptor as any).accessible_name ||
+        decisions.task_name
+      const fieldAnchor = buildAnchorFromDescriptor(
+        actionStep.descriptor,
+        stepIsCheck
+          ? 'Campo de frequência do aluno'
+          : isGrade
+          ? 'Campo de nota do aluno'
+          : `Campo de ${stepLabel}`,
+        tableAnchor,
+        decisions,
+        paramContext
+      )
+      const literalSelectVal =
+        stepIsSelect && !actionStep.descriptor.rowContext
+          ? String((actionStep as any).value || (actionStep as any).text || '').trim()
+          : ''
 
-    plannedNodes.push({
-      id: nextId(),
-      build: (next) => ({
-        type: 'WRITE',
-        label: decisions.task_id === 'lancar_falta' ? 'Lançar Frequência do Aluno' : 'Lançar Nota do Aluno',
-        anchor: fieldAnchor,
-        value: paramContext.getWriteValueRef(decisions.task_id),
-        method: decisions.task_id === 'lancar_falta' ? 'set_checked' : 'set_value_dispatch',
-        semantic: decisions.task_id === 'lancar_falta' ? 'attendance' : 'grade',
-        read_back: true,
-        retry: { max_attempts: 2, backoff_ms: 500 },
-        timeout_ms: 5000,
-        postconditions: [],
-        on_success: next,
-        on_fail: '$abort',
-      }),
-    })
+      plannedNodes.push({
+        id: nextId(),
+        build: (next) => ({
+          type: 'WRITE',
+          label: stepIsCheck
+            ? 'Lançar Frequência do Aluno'
+            : isGrade
+            ? 'Lançar Nota do Aluno'
+            : `Registrar ${stepLabel}`,
+          anchor: fieldAnchor,
+          value: literalSelectVal ? { lit: literalSelectVal } : paramContext.getWriteValueRef(decisions.task_id),
+          method: stepIsSelect ? 'select_option' : stepIsCheck ? 'set_checked' : 'set_value_dispatch',
+          semantic: stepIsCheck ? 'attendance' : isGrade ? 'grade' : 'text',
+          read_back: true,
+          retry: { max_attempts: 2, backoff_ms: 500 },
+          timeout_ms: 5000,
+          postconditions: [],
+          on_success: next,
+          on_fail: '$abort',
+        }),
+      })
+    }
+
+    for (const clickStep of postWriteClickSteps) {
+      pushClickStepNode(clickStep)
+    }
 
     // Nó CLICK de Submissão (se houver)
     if (segmented.submitStep) {

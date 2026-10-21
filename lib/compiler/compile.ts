@@ -15,6 +15,13 @@ import { buildFingerprint } from './stages/fingerprint'
 import { scrubGraph } from './scrub'
 import type { PiiRegistry } from '../recorder/registry'
 import { CompilerError, type CompilerReport } from './report'
+import {
+  evaluatePendingDecisions,
+  buildNeedsDecisionsResult,
+  type CompileOutcome,
+  type PendingDecisionDescriptor,
+  type PartialDraftGraph,
+} from './pendingDecisions'
 
 export interface CompileOptions {
   clock?: () => string
@@ -22,9 +29,12 @@ export interface CompileOptions {
   piiRegistry?: PiiRegistry
 }
 
-export interface CompileResult {
+export type CompileResult = CompileOutcome & {
+  status: 'compiled' | 'needs_decisions'
   graph: SkillGraphV2
   report: CompilerReport
+  decisions?: PendingDecisionDescriptor[]
+  partialGraph?: PartialDraftGraph
 }
 
 export function compile(
@@ -34,7 +44,8 @@ export function compile(
 ): CompileResult {
   // 1. Limites de Tamanho e Passos
   const traceStr = JSON.stringify(rawTrace)
-  if (Buffer.byteLength(traceStr, 'utf-8') > MAX_TRACE_SIZE_BYTES) {
+  const sizeBytes = typeof Buffer !== 'undefined' ? Buffer.byteLength(traceStr, 'utf-8') : new TextEncoder().encode(traceStr).length
+  if (sizeBytes > MAX_TRACE_SIZE_BYTES) {
     throw new CompilerError('E_TRACE_TOO_LARGE', `O trace excede o tamanho máximo de ${MAX_TRACE_SIZE_BYTES} bytes.`)
   }
   if (Array.isArray((rawTrace as any)?.steps) && (rawTrace as any).steps.length > MAX_TRACE_STEPS) {
@@ -61,11 +72,30 @@ export function compile(
   }
   const decisions = decisionsParsed.data
 
-  // Verificações contextuais de decisões
-  const isWriteTask = decisions.task_id === 'lancar_falta' || decisions.task_id === 'lancar_nota'
-  if (decisions.task_id === 'lancar_falta' && !decisions.attendance_polarity) {
-    throw new CompilerError('E_DECISION_REQUIRED', 'A polaridade de frequência (attendance_polarity) é obrigatória para lançar falta.')
+  // Verificações contextuais de decisões e anti-PII no identificador
+  if (/\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b/.test(decisions.task_id) || /@/.test(decisions.task_id)) {
+    throw new CompilerError('E_PII_SCRUB_FAILED', 'O identificador da tarefa contém PII (CPF ou e-mail detectado).')
   }
+
+  const timestamp = options?.clock ? options.clock() : '2026-10-11T00:00:00.000Z'
+  const compilerVersion = options?.compilerVersion || '2.0.0'
+
+  const pendingDecisions = evaluatePendingDecisions(trace, decisions)
+  if (pendingDecisions.length > 0) {
+    return buildNeedsDecisionsResult(
+      trace,
+      decisions,
+      pendingDecisions,
+      timestamp,
+      compilerVersion,
+      options?.piiRegistry
+    )
+  }
+
+  const isWriteTask =
+    decisions.task_id === 'lancar_falta' ||
+    decisions.task_id === 'lancar_nota' ||
+    trace.steps.some((s) => s.kind === 'input' || s.kind === 'check' || s.kind === 'select' || (s.kind === 'click' && (s as any).is_submit_action))
 
   // 4. Estágios do Compilador
   const segmented = segmentTrace(trace, decisions)
@@ -80,9 +110,6 @@ export function compile(
   const host = decisions.allowed_hosts[0] || 'localhost'
   const entryFingerprint = buildFingerprint(initialUrl, host, trace.page_digest)
 
-  const timestamp = options?.clock ? options.clock() : '2026-10-11T00:00:00.000Z'
-  const compilerVersion = options?.compilerVersion || '2.0.0'
-
   // 5. Montagem do SkillGraphV2
   const unvalidatedGraph: any = {
     spec_version: '2.0',
@@ -92,7 +119,7 @@ export function compile(
       task_id: decisions.task_id,
       version: 1,
       name: decisions.task_name,
-      description: `Grafo compilado determinísticamente para ${decisions.task_name}`,
+      description: decisions.task_description || `Grafo compilado determinísticamente para ${decisions.task_name}`,
     },
     compat: {
       support_tier: 1,
@@ -156,6 +183,7 @@ export function compile(
   ]
 
   return {
+    status: 'compiled',
     graph,
     report: {
       valid: true,

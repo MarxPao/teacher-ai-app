@@ -1,10 +1,24 @@
 # Backlog de Evoluções e Dívidas Técnicas
 
-Este documento centraliza as funcionalidades, arquétipos e melhorias postergadas para fases futuras, conforme as regras anti-espiral do Teacher AI.
+Este documento centraliza as funcionalidades, arquétipos e melhorias postergadas para versões futuras, conforme as regras anti-espiral do Teacher AI.
 
 ---
 
-## 1. Concluído na Fase 6 (Local-First e Blindagem)
+## 1. Concluído na Fase 7 (Comunidade: Pacotes de Mapas, Assinatura e Registro)
+
+- [x] **Formato Padronizado de Pacote (`skillpkg/1`):** Especificação rígida em JSON (.skillpkg.json) com manifesto, grafo sanitizado e assinatura digital Ed25519.
+- [x] **Canonicalização Determinística JCS (RFC 8785):** Implementação pura em TypeScript (`canonical.ts`), garantindo hashing determinístico independente de plataforma.
+- [x] **Sanitização de PII e Placeholders RFC 2606 (`h1.invalid`):** Pipeline de exportação expurga nomes de alunos e turmas, substituindo domínios reais por marcadores neutros.
+- [x] **Quarentena e Dry-Run Pré-Ativação:** Tabela `community_packages` com fluxo `quarantined` $\rightarrow$ `dry_run_passed` $\rightarrow$ `activated`. Repositório `SqlSkillGraphRepository` bloqueia execução com `E_GRAPH_QUARANTINED`.
+- [x] **Guarda de Runtime Anti-Submissão Oculta (`E_CLICK_UNDECLARED_SUBMIT`):** Inspeciona botões de ação e aborta cliques em botões de salvar/submeter não declarados no grafo importado.
+- [x] **Proteções Anti-ReDoS e Parser JSON Estrito:** Expressões regulares validadas estaticamente com truncamento a 2.000 caracteres; parser seguro contra poluição de protótipo e recursão profunda.
+- [x] **Cliente de Registro Estático com Privacidade Total:** Busca 100% em memória no cliente a partir de `index.json` assinado por chave mestra (`pinnedKey.ts`), sem telemetria de consulta.
+- [x] **Proteção Contra Rollback de Versão:** Rastreamento em `community_seen_versions` bloqueando downgrades maliciosos (`E_PKG_ROLLBACK`).
+- [x] **Template de Registro Comunitário (`registry-template/`):** Script de verificação automatizada (`verify-registry.ts`) e workflow de CI para GitHub Actions.
+
+---
+
+## 2. Concluído na Fase 6 (Local-First e Blindagem)
 
 - [x] **App Desktop Electron (`desktop/`):** Processo isolado (`contextIsolation: true`, `sandbox: true`), único dono dos dados, sem portas TCP abertas.
 - [x] **Banco de Dados SQLite Cifrado (`lib/desktop-core/db/`):** Envelope AES-256-GCM em colunas sensíveis via `node:sqlite`, DEK protegida pelo cofre do SO (DPAPI no Windows via `safeStorage`), backups cifrados por senha com scrypt + AES-GCM (`.tbackup`).
@@ -17,7 +31,7 @@ Este documento centraliza as funcionalidades, arquétipos e melhorias postergada
 
 ---
 
-## 2. Concluído na Fase 5 (Resiliência e Reparo)
+## 3. Concluído na Fase 5 (Resiliência e Reparo)
 
 - [x] **Reparo Automático Offline e Matcher Semântico Local (Degrau 3):**
   - Implementado 100% determinístico e sem LLM sob `lib/repair/` e `lib/repair/semantic/`.
@@ -28,15 +42,25 @@ Este documento centraliza as funcionalidades, arquétipos e melhorias postergada
 
 ---
 
-## 3. Backlog Futuro / Pós-Fase 6
+## 4. Backlog Futuro / Pós-Fase 7
 
 - **Suporte Multiplataforma para Desktop (macOS e Linux):**
-  - *Contexto:* A Fase 6 focou em Windows-first (DPAPI via `safeStorage`, Named Pipes no formato `\\.\pipe\...`).
+  - *Contexto:* O desenvolvimento focou em Windows-first (DPAPI via `safeStorage`, Named Pipes no formato `\\.\pipe\...`).
   - *Evolução:* Implementar adaptadores para macOS (Keychain + Unix Domain Sockets) e Linux (Secret Service / libsecret + Unix Domain Sockets).
   - *Prioridade:* Média.
 
+- **Reexportação de Mapas Importados com Linhagem:**
+  - *Contexto:* Na Fase 7, mapas com `provenance.source === 'imported'` têm reexportação expressamente bloqueada (`E_EXPORT_NOT_ALLOWED`) para evitar cadeias de suprimentos confusas.
+  - *Evolução:* Permitir reexportação de mapas bifurcados/re-gravados preservando um campo de linhagem de crédito (`forked_from: {key_id, package_id, version}`).
+  - *Prioridade:* Baixa.
+
+- **Sistema de Confiança Social e Feedback Descentralizado:**
+  - *Contexto:* O registro estático atual não implementa avaliações, comentários ou métricas de uso para manter total silêncio de rede e zero telemetria.
+  - *Evolução:* Protocolo descentralizado de reputação assinado por professoras verificadas via Git PR ou atestações públicas.
+  - *Prioridade:* Baixa.
+
 - **Migração de Chaves de UI Restantes de `localStorage`:**
-  - *Contexto:* Chaves sensíveis (alunos, turmas, notas, segredos) foram 100% migradas e expurgadas para o SQLite cifrado. Chaves visuais puramente locais de UI (tema claro/escuro, filtros de paginação) permaneceram no `localStorage`.
+  - *Contexto:* Conforme evidenciado por Select-String nos fontes (`components/OnboardingWizard.tsx`, `components/RafinhaChat.tsx`, `lib/supabaseClient.ts`), chaves como `teacher_students` e `teacher_insights_ai_report` ainda permanecem temporariamente no `localStorage` do frontend para retrocompatibilidade (conforme item 8 / linha 137). A migração total desses dados de alunos para o SQLite cifrado local permanece como evolução agendada.
   - *Evolução:* Mover configurações de interface para a tabela `settings` no SQLite para unificação total.
   - *Prioridade:* Baixa.
 
@@ -55,3 +79,92 @@ Este documento centraliza as funcionalidades, arquétipos e melhorias postergada
   - *Status Atual:* Classificado como **Tier 2** (assistido), emitindo instrução de conferência ou handoff antes do início da rotina.
   - *Evolução:* Criação formal do nó `FILTER` com restrições estritas de segurança (fora de linhas de dados e sem mutação arbitrária).
   - *Prioridade:* Média.
+
+---
+
+## 5. Dívidas Técnicas Isoladas da Integração / Pós-Gate A (RESOLVIDAS)
+
+- [x] **Expurgo de fetches a `localhost:3000` em scripts da extensão:**
+  - `teacher-extension/side_panel.js`: **0 ocorrências remanescentes** (todas as 15 substituídas por persistência em `chrome.storage.local` e resposta assistiva local-first).
+  - `teacher-extension/content.js`: **0 ocorrências remanescentes** (todas as 4 removidas/desacopladas).
+- [x] **Ponte legada de `content.js` com a página do app Next:** Desacoplada e removida (comunicação exclusiva via Chrome Native Messaging com o Desktop).
+- [x] **Módulos legados marcados como `@deprecated`:**
+  - `lib/supabaseClient.ts`: marcado como `@deprecated`, sem chamadas ativas pelo engine.
+  - `lib/agentTools.ts`: marcado como `@deprecated`.
+  - `lib/exportUtils.ts`: marcado como `@deprecated`.
+  - `lib/teacherCalibrations.ts`: marcado como `@deprecated`.
+  - `scripts/package_distribution.py`: marcado como `[DEPRECATED]`.
+  - `sidecar/native_host/teacherai_native_host.bat`: marcado como `[DEPRECATED]`.
+- [ ] **Instalador sem Terminal (.exe / NSIS):**
+  - O app desktop v2 compila e opera via `dist-desktop/` com registro HKCU em `scripts/native-host-register.ts`. A geração de instalador executável autônomo sem terminal depende de homologação de empacotador (`electron-builder`) e assinatura de código Authenticode para evitar falsos positivos de antivírus/SmartScreen.
+
+---
+
+## 6. Próximas Etapas (Pós-Gate A e SSO Handoff) e Itens Fora de Escopo
+
+- [ ] **Etapa 2 — Gravação Assistida de Fluxos Complexos com Sub-grafos:** Gravação encadeada de navegação em múltiplos passos com compilação determinística e nós de checkpoint.
+- [ ] **Etapa 3 — Expansão de Arquétipos Complexos:** Suporte avançado para paginação virtualizada infinita e grades tabulares multidimensionais.
+- [ ] **Etapa 4 — Auditoria Formal de Conformidade Multi-Portal:** Testes automatizados contra matriz ampliada de portais escolares.
+- [ ] **Exploração autônoma por LLM (Auto-Recorder):** Descoberta exploratória delegada a modelos em nuvem (fora do runner determinístico local-first).
+- [ ] **Ancoragem visual multimodal:** Detecção por visão computacional/VLM para páginas sem âncoras semânticas ou DOM estável.
+- [ ] **Benchmark bipartido automatizado:** Suíte contínua comparando tempo de compilação humana vs. precisão determinística em produção.
+- [ ] **Aposentadoria definitiva de `side_panel.js` legado:** Migração integral dos painéis restantes para o stack `side_panel_v2.js`.
+- [ ] **Expurgo final de eventuais chamadas residuais a `localhost:3000`** em scripts utilitários ou protótipos fora da extensão.
+- [ ] **Substituição de blocos `catch` console-only em scripts legados da extensão por `reportError`:**
+  - `teacher-extension/orchestrator_v2.js`: migrado integralmente para `reportError(err, context)` com notificação `SKILLGRAPH_ERROR_NOTICE` no painel lateral.
+  - Arquivos legados pendentes (fora do limite de 80 linhas por arquivo):
+    - `teacher-extension/background.js`: linhas 57, 134, 152, 469, 492, 650, 998, 1277.
+    - `teacher-extension/content.js`: linhas 949, 1007, 1291, 1344, 1370.
+    - `teacher-extension/side_panel.js`: linhas 148, 696, 809, 1084, 1455, 2248, 2266, 2289, 2500, 2608.
+
+---
+
+## 7. Unificação Arquitetural dos Motores DOM (Lacuna #1 do Motor)
+
+- **Diagnóstico:** Historicamente coexistiram dois motores de exploração e execução de DOM no projeto:
+  1. O motor exploratório em `teacher-extension/background.js` (linhas 930–1288), injetando closures ad-hoc com heurísticas de busca de `<select>`, variantes ordinais e detecção de nós interativos via `chrome.scripting.executeScript`;
+  2. O motor canônico determinístico em `lib/runner-dom/` (`writer.ts`, `selectors.ts`, `domActionPlanner.ts`), governado pelos contratos estritos do SkillGraph v2.
+- **Risco de Divergência:** A exploração conseguia navegar em certas cascatas de selects, mas a execução do grafo pelo runner sofria atrito em tempo real por sutilezas de opções ocultas (`isOptUsable`), falta de espera de silêncio de mutações assíncronas no DOM (`waitForDomSettled`) e correlação com selects pais.
+- **Arquitetura Alvo (Unificada):**
+  - **Única Fonte da Verdade:** O content script e o runner passam a consumir exclusivamente o motor unificado `lib/runner-dom/` (`writer.ts`, `selectors.ts`, `domActionPlanner.ts`).
+  - **Eliminação de Duplicação:** As rotinas ad-hoc de `background.js` são progressivamente substituídas por chamadas estruturadas via `ContentAdapter` / `DomDriver`.
+  - **Garantia de Paridade:** Toda e qualquer lógica de interação DOM (filtragem de opções visíveis/habilitadas, ordenação topológica de selects dependentes e estabilização via MutationObserver) reside em módulos TypeScript compartilhados, com paridade 1:1 comprovada por suíte de testes.
+
+---
+
+## 8. Pendências e Decisões de Privacidade de Insights (Passo 1 — Bloco 0)
+
+- [ ] **Preservação de Dados de LocalStorage sem Quebra de Chaves e Reconciliação:**
+  - *Sonda e Auditoria:* A chave `teacher_students` opera como persistência do estado do cliente no app web (`components/modules/Students.tsx`, `Gradebook.tsx`, etc.), populada inicialmente por alunos de demonstração/mock em `supabaseClient.ts:1317` e `OnboardingWizard.tsx:48` ou cadastros manuais do professor. A chave `teacher_insights_ai_report` armazena o parecer textual consolidado da turma em `Insights.tsx`.
+  - *Reconciliação Linha 63 vs Linha 137:* A meta da Linha 63 ("migração de dados para SQLite cifrado") refere-se à fronteira do aplicativo Desktop Electron (onde não há repouso de dados de alunos em texto claro no disco). Para o aplicativo web/SPA no navegador, `teacher_students` foi mantido para preservar a integridade das telas e dados da professora sem regressão ("não apagar código de produção"). A migração integral para SQLite é exclusiva do host Desktop.
+- [ ] **Sincronização de Relatórios de Conselho de Classe (`classCouncilEngine`):** `syncCouncilReportsToSupabase` foi blindado com expurgo de PII (`studentName: '[ESTUDANTE_PROTEGIDO]'`, `studentId: '[ID_PROTEGIDO]'`). Persistência individual integral permanece exclusivamente local em conformidade com o Trilho 1 LGPD.
+- [x] **Nota de Absorção de Commits Anteriores (`c82e380` e `910d473`):**
+  - Os commits `c82e380` e `910d473` absorveram alterações pontuais pré-existentes nos arquivos `EditableQuestionBoxes.tsx`, `llmGateway.ts`, `coldStart.ts`, `classCouncilEngine.ts` e `supabaseClient.ts`.
+  - *Razão Técnica:* Correção pontual de tipo para viabilizar compilação limpa do `tsc` (`npx tsc --noEmit` código 0) e unificação com padrão estruturado `TaggedError`.
+  - *Diretriz Estrita:* **Não reverter em bloco** — as alterações são dependências estruturais da compilação e tipagem estática.
+
+---
+
+## 9. Geradores de Insights Pendentes de Migração para Contrato InsightV1 (Passo 4 — Bloco 0)
+
+Conforme a arquitetura do Passo 4, o contrato unificado `InsightV1` (`lib/insights/insightEngineV1.ts`) e o gate amostral (`N_MIN_STUDENT_TRAJECTORY = 3`, `N_MIN_CLASS_AGGREGATE = 5`, `N_MIN_ITEM_DISCRIMINATION_ZDP = 8`) foram implementados e integrados ao `SmartInsightsPanel.tsx`. Os geradores legados abaixo permanecem agendados para migração em lotes nos ciclos subsequentes:
+
+- [ ] **`lib/pedagogicalInsights.ts`:** Migrar regras determinísticas de desvio de nota e engajamento para a estrutura de `signals`, `facts`, `hypotheses` e separação estrita de incerteza do `InsightV1`.
+- [ ] **`lib/predictiveAnalytics.ts`:** Migrar cálculos de projeção e fatores de risco para emitir `signals` com tamanho de janela $N$ e rotulagem neutra livre de afirmativas causais absolutas.
+- [ ] **`lib/executivePedagogicalSummary.ts`:** Migrar sumários executivos agregados da turma para validar contra o validador `validateInsightContract`.
+- [ ] **`lib/classCouncilEngine.ts`:** Unificar os pareceres de conselho de classe bimestrais com os tipos `InsightV1` e campos obrigatórios de ressalva amostral (`caveats`).
+- [x] **`lib/insights/assessmentInsightAdapter.ts` (Adapter Puro Concluído):** Concluído nas Rodadas R3 e R4 (`lib/insights/assessmentInsightAdapter.ts`). Converte `AssessmentInsight -> InsightV1` com validação formal estrita por `validateInsightContract`, bloqueio de inferência de ZDP para $n < 8$ (por campos estruturados e salvaguarda conservadora de texto livre) e cobertura de testes em `__tests__/assessmentInsightAdapter.test.ts`.
+- [ ] **Integração de `SmartInsightsPanel.tsx` com `assessmentInsightAdapter.ts` (Dívida de UI):** Auditoria da Rodada R4 confirmou que `SmartInsightsPanel.tsx` e `computeSmartInsights` ainda operam no formato local legado `AssessmentInsight` sem invocar o adapter em tempo de execução. A refatoração do componente visual para renderizar a partir do contrato canônico `InsightV1` adaptado está registrada como evolução futura de UI (sem alterar a tela no ciclo atual).
+- [ ] **`sidecar/pedagogical_anomaly_guardian.py`:** Padronizar as regras de alerta estatístico do guardião Python para refletir os limiares amostrais mínimos e os campos de confiança ordinal (`baixa`, `media`, `alta`).
+
+
+
+
+---
+
+## 10. Captura de Áudio, ASR e Diarização Local (Bloco 0)
+
+- [ ] **ASR On-Device em Tempo Real:** Empacotamento de runtime local Sherpa-ONNX / Whisper.cpp para inferência de áudio contínua sem internet (`docs/DESENHO_CAPTURA_AUDIO.md`).
+- [ ] **VAD e Calibração Acústica de Sala:** Calibração de Silero-VAD para ambientes ruidosos de sala de aula real.
+- [ ] **Consentimento e Banner no Desktop Core:** Interface interativa de consentimento prévio e banner persistente de gravação ativa.
+- [ ] **Validação Pedagógica das Definições:** Alinhamento das definições (`[DEFINIÇÃO A VALIDAR (dono)]`) com a equipe pedagógica e coordenação escolar.

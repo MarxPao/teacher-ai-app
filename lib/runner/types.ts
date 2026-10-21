@@ -5,6 +5,7 @@ import type { AuditEntry } from '../contracts/audit'
 import type { Fingerprint } from '../contracts/skillgraph/primitives'
 import type { RowSkip } from '../contracts/skillgraph/nodes'
 import type { ElementDescriptor } from '../recorder/traceSchema'
+import type { AgentPageSnapshot } from '../runner-dom/agentObserver'
 
 // ─── Códigos de Erro de Runtime ─────────────────────────────────────────────
 
@@ -31,6 +32,8 @@ export const RUNTIME_ERROR_CODES = [
   'E_PERMISSION_DENIED',
   'E_INTERRUPTED',
   'E_AUDIT_UNAVAILABLE',
+  'E_CLICK_UNDECLARED_SUBMIT',
+  'E_WRITE_NOT_APPROVED',
 ] as const
 
 export type RuntimeErrorCode = (typeof RUNTIME_ERROR_CODES)[number]
@@ -97,7 +100,8 @@ export interface ResolvedAnchor {
 
 // ─── Interface Driver (Primitivas DOM Serializáveis) ────────────────────────
 
-export type ElementTarget = { handleId: string } | { anchor: ResolvedAnchor }
+/** frameId: quadro (iframe de outra origem) onde o alvo vive; ausente = quadro principal */
+export type ElementTarget = { handleId: string } | { anchor: ResolvedAnchor; frameId?: number }
 
 export interface ReadTableOptions {
   anchor: ResolvedAnchor
@@ -111,6 +115,8 @@ export interface WriteOptions {
   value: string
   method: 'type_native' | 'set_value_dispatch' | 'select_option' | 'set_checked'
   semantic?: 'attendance' | 'grade' | 'text'
+  /** Digitar com eventos reais de teclado (CDP) quando o driver suporta */
+  trusted?: boolean
   polarity?: 'presence' | 'absence'
 }
 
@@ -122,7 +128,9 @@ export interface ScrollOptions {
 }
 
 export interface PaginateOptions {
-  action: 'next_page' | 'page_number'
+  action?: 'next_page' | 'page_number'
+  mode?: 'next_button' | 'page_numbers' | 'infinite_scroll' | 'virtual_scroll'
+  maxPages?: number
   targetPage?: number
   buttonTarget?: ElementTarget
 }
@@ -153,18 +161,44 @@ export interface Driver {
     verified: boolean
     error?: string
   }>
-  click(target: ElementTarget, options?: { isSubmit?: boolean }): Promise<{ success: boolean }>
+  click(target: ElementTarget, options?: { isSubmit?: boolean; requireTrusted?: boolean }): Promise<{ success: boolean }>
   evaluateCondition(cond: ResolvedCondition): Promise<{ satisfied: boolean; actualValue?: any }>
   scroll(options: ScrollOptions): Promise<{ found: boolean }>
   paginate(options: PaginateOptions): Promise<{ advanced: boolean; isLastPage: boolean; currentPage?: number }>
-  getFrameContext(): Promise<{ url: string; host: string; frameId: number }>
+  getFrameContext(): Promise<{ url: string; host: string; frameId: number; isSessionExpired?: boolean }>
   matchFingerprint(fp: Fingerprint): Promise<{ matched: boolean; details: Record<string, boolean> }>
   listFrames(): Promise<Array<{ frameId: number; url: string; host: string }>>
+  navigate?(url: string): Promise<void>
+  waitForNavigation?(timeoutMs?: number): Promise<void>
   download?(options: DownloadOptions): Promise<{ success: boolean; filename: string; mimeType?: string; sizeBytes?: number }>
   upload?(options: UploadOptions): Promise<{ success: boolean }>
   describeElements?(selector?: string): Promise<ElementDescriptor[]>
+  /** Observação rica para o agente genérico (visíveis, estado, contexto, texto da página). */
+  observePage?(options?: { maxElements?: number; maxTextChars?: number }): Promise<AgentPageSnapshot>
+  describeClickTarget?(target: ElementTarget): Promise<{
+    tagName: string
+    type?: string
+    isSubmitOrMutating: boolean
+    formAction?: string
+    text?: string
+  }>
+  inspectWriteTarget?(target: ElementTarget): Promise<{
+    isInTable: boolean
+    hasDangerousSiblings: boolean
+    tagName: string
+  }>
+  /** Tecla real (Enter/Escape/Tab/setas) no elemento indicado ou no elemento com foco */
+  pressKey?(key: string, target?: ElementTarget): Promise<void>
+  /** Passa o mouse sobre o elemento (menus que abrem por hover) */
+  hover?(target: ElementTarget): Promise<void>
+  /** Rola a página uma tela para cima/baixo */
+  scrollPage?(direction: 'up' | 'down'): Promise<void>
+  /** Troca a aba controlada (ex.: o portal abriu um relatório em nova aba) */
+  switchTab?(which: 'newest' | 'previous'): Promise<{ url: string }>
   highlight?(selector: string, mode: 'old' | 'new'): Promise<void>
   clearHighlight?(): Promise<void>
+  /** Gap 2: captura screenshot PNG local via CDP. Disponível no RemoteDriver. */
+  captureScreenshot?(): Promise<{ dataUrl: string; mimeType: 'image/png' }>
 }
 
 export interface DownloadOptions {
@@ -246,7 +280,12 @@ export interface RunState {
   variables: Record<string, any>
   loopStack: Array<{ nodeId: string; index: number; total: number; item: any }>
   writesCount: number
+  /** Gap 4: contador de steps do agente genérico (LLM-driven) */
+  stepsCount?: number
   dryRun: boolean
+  /** Escritas aprovadas pela professora no espelho (chave -> valor). Se presente, nenhuma outra escrita é permitida. */
+  approvedWrites?: Map<string, string>
+  startFromCurrentPage?: boolean
   hasSelfHealed?: boolean
   startedAt: number
   updatedAt: number

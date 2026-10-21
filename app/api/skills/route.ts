@@ -18,7 +18,7 @@ let activeMigrationPromise: Promise<any[]> | null = null
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, DELETE, OPTIONS',
+  'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-supabase-auth',
 }
 
@@ -364,5 +364,75 @@ export async function DELETE(req: NextRequest) {
       { ok: false, error: err.message || 'Erro interno ao excluir skill' },
       { status: 500, headers: corsHeaders }
     )
+  }
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    const body = await req.json()
+    const graph = body?.graph || body
+    const identity = graph?.identity || {}
+    const portalId = String(body?.portal_id || identity.portal_id || identity.domain || 'machado_sobrinho').replace(/[^a-zA-Z0-9._-]/g, '_')
+    const taskId = String(body?.task_id || identity.task_id || 'custom_skill')
+    const taskName = String(body?.task_name || identity.name || taskId)
+    const desc = String(body?.description || identity.description || '')
+    const version = normalizeSkillVersion(identity.version || body?.version || 1)
+    const skillType = (graph?.safety?.side_effect_level && graph.safety.side_effect_level !== 'read') ? 'writing' : 'reading'
+    const nowIso = new Date().toISOString()
+    const safeFolder = `${portalId}__${taskId.replace(/[^a-zA-Z0-9_-]/g, '_')}`
+    const skillId = body?.id || `skill_${safeFolder}`
+
+    const skillsDir = path.join(process.cwd(), 'sidecar', 'skills', safeFolder)
+    fs.mkdirSync(skillsDir, { recursive: true })
+    const diskPayload = {
+      ...graph,
+      id: skillId,
+      portal_id: portalId,
+      task_id: taskId,
+      name: taskName,
+      version,
+      metadata: {
+        task_name: taskName,
+        skill_type: skillType,
+        description: desc,
+        source_url: body?.page_url || '',
+        created_at: nowIso,
+        updated_at: nowIso,
+      },
+    }
+    fs.writeFileSync(path.join(skillsDir, 'v1.json'), JSON.stringify(diskPayload, null, 2), 'utf8')
+
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://parxakvjvuvsmvbvrshk.supabase.co'
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
+    let syncedToSupabase = false
+    if (supabaseUrl && serviceKey) {
+      const dbRow = {
+        id: skillId,
+        portal_id: portalId,
+        task_id: taskId,
+        name: taskName,
+        task_name: taskName,
+        skill_type: skillType,
+        description: desc,
+        version,
+        graph: diskPayload,
+        updated_at: nowIso,
+      }
+      const res = await fetch(`${supabaseUrl}/rest/v1/portal_skills?on_conflict=portal_id,task_id,version`, {
+        method: 'POST',
+        headers: {
+          apikey: serviceKey,
+          Authorization: `Bearer ${serviceKey}`,
+          'Content-Type': 'application/json',
+          Prefer: 'resolution=merge-duplicates',
+        },
+        body: JSON.stringify([dbRow]),
+      }).catch(() => null)
+      syncedToSupabase = Boolean(res?.ok)
+    }
+
+    return NextResponse.json({ ok: true, id: skillId, syncedToSupabase, savedToDisk: true }, { headers: corsHeaders })
+  } catch (err: any) {
+    return NextResponse.json({ ok: false, error: err?.message || 'Erro ao salvar skill' }, { status: 500, headers: corsHeaders })
   }
 }

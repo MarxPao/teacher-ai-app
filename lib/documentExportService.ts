@@ -19,167 +19,262 @@ export function generateDocumentHtml(options: DocumentExportOptions): string {
   const { type, title, schoolName, studentName, data } = options
   const dateStr = new Date().toLocaleDateString('pt-BR')
 
-  // ─── GERADOR DE HTML DO PDI ───────────────────────────────────────────────
+  // ─── GERADOR DE HTML DO PDI (MODELO OFICIAL 7 SEÇÕES — BNCC) ──────────────
   if (type === 'pdi') {
     const schoolInfo = data.schoolInfo || {}
     const studentInfo = data.studentInfo || {}
+    const ident = {
+      ...studentInfo,
+      ...(data.identification || {})
+    }
     const clinical = data.clinicalReport || {}
     const dev = data.developmentAssessment || {}
-    const proposal = data.curricularProposal?.proposta || data.proposta || ''
+    const generalObjective =
+      data.generalObjective?.objetivoGeral ||
+      data.objetivo_geral?.objetivoGeral ||
+      data.curricularProposal?.proposta ||
+      'Acompanhar e apoiar o desenvolvimento do(a) aluno(a) no componente curricular de Língua Inglesa, monitorando o alcance progressivo das habilidades previstas pela BNCC, com estratégias pedagógicas individualizadas, revisão periódica e registro contínuo dos avanços.'
     const skills = data.skillsMatrix || []
     const strategies = data.interventionPlan || []
-    const signatures = data.signatures || []
+    const generalEvolutionRaw =
+      data.generalObservations?.evolucaoGeral ||
+      data.observacoes_evolucao?.evolucaoGeral ||
+      Object.values(dev).filter(Boolean).join('\n\n') ||
+      ''
+    const reviewNotes =
+      data.followUpReview?.revisaoPeriodica ||
+      data.acompanhamento_revisao?.revisaoPeriodica ||
+      'Este PDI deverá ser revisado periodicamente pela equipe pedagógica, em conjunto com a família, ajustando metas e estratégias conforme a evolução do(a) aluno(a).'
+    const nextSemEval =
+      data.followUpReview?.parecerProximoSemestre ||
+      data.acompanhamento_revisao?.parecerProximoSemestre ||
+      ''
+    const signatures =
+      Array.isArray(data.signatures) && data.signatures.length > 0
+        ? data.signatures
+        : [
+            { role: 'Professor(a) regente', name: ident.regentTeacher || 'Rafaela Franco Toldo' },
+            { role: 'Coordenação pedagógica', name: ident.pedagogicalTeam || 'Marianna Panisset' },
+            { role: 'Responsável pelo(a) aluno(a)', name: ident.guardians || '' },
+            { role: 'Data', name: ident.creationDate || dateStr }
+          ]
+
+    const gradeLabel = ident.gradeCycle || '6º ano do Ensino Fundamental'
+    const componentLabel =
+      ident.curricularComponent || `Língua Inglesa — ${gradeLabel}`
+
+    const normalizeStatusLabel = (raw?: string) => {
+      if (!raw) return 'Em desenvolvimento'
+      const low = raw.trim().toLowerCase()
+      if (low === 'sim' || low === 'hv' || low === 'concluida') return 'Sim'
+      if (low === 'não' || low === 'nao' || low === 'hnv') return 'Não'
+      return 'Em desenvolvimento'
+    }
+
+    const evolutionParagraphs = generalEvolutionRaw
+      .split(/\n\s*\n|\n/)
+      .map((p: string) => p.trim())
+      .filter(Boolean)
 
     return `
       <!DOCTYPE html>
       <html lang="pt-BR">
       <head>
         <meta charset="UTF-8" />
-        <title>${title} — ${studentName || 'Estudante'}</title>
+        <title>${title} — ${ident.studentName || studentName || 'Estudante'}</title>
         <style>
           @page { size: A4; margin: 15mm; }
           body { font-family: 'Times New Roman', Times, serif; font-size: 11pt; line-height: 1.45; color: #000; margin: 0; padding: 0; }
-          .header-box { border: 2pt solid #000; padding: 10pt; margin-bottom: 14pt; text-align: center; }
-          .school-title { font-size: 14pt; font-weight: bold; text-transform: uppercase; margin-bottom: 4pt; }
-          .doc-title { font-size: 12pt; font-weight: bold; text-transform: uppercase; text-decoration: underline; margin-top: 6pt; }
-          .section-title { font-size: 11pt; font-weight: bold; text-transform: uppercase; background: #f0f0f0; border: 1pt solid #000; padding: 4pt 8pt; margin-top: 14pt; margin-bottom: 6pt; }
-          .field-table { width: 100%; border-collapse: collapse; margin-bottom: 8pt; }
-          .field-table td { border: 1pt solid #000; padding: 4pt 8pt; font-size: 10.5pt; vertical-align: top; }
-          .data-table { width: 100%; border-collapse: collapse; margin: 8pt 0; font-size: 10pt; }
-          .data-table th, .data-table td { border: 1pt solid #000; padding: 5pt 6pt; text-align: left; vertical-align: top; }
-          .data-table th { background-color: #e5e5e5; font-weight: bold; text-align: center; }
-          .badge-hv { font-weight: bold; color: #006600; text-align: center; }
-          .badge-hed { font-weight: bold; color: #996600; text-align: center; }
-          .badge-hnv { font-weight: bold; color: #666666; text-align: center; }
-          .legend-box { border: 1pt solid #000; padding: 4pt 8pt; font-size: 9pt; background: #f9f9f9; margin-top: 4pt; margin-bottom: 12pt; }
-          .narrative-item { margin-bottom: 8pt; }
-          .narrative-label { font-weight: bold; text-transform: uppercase; font-size: 10pt; }
-          .signature-grid { width: 100%; border-collapse: collapse; margin-top: 24pt; page-break-inside: avoid; }
-          .signature-cell { border: 1pt solid #000; padding: 12pt 8pt 6pt 8pt; text-align: center; width: 25%; vertical-align: bottom; }
-          .signature-line { border-top: 1pt solid #000; margin: 24pt 10pt 4pt 10pt; }
-          .signature-role { font-size: 9pt; font-weight: bold; text-transform: uppercase; }
+          .doc-header { text-align: center; border-bottom: 2pt solid #000; padding-bottom: 8pt; margin-bottom: 12pt; }
+          .school-subtitle { font-size: 10pt; font-weight: bold; text-transform: uppercase; color: #333; margin-bottom: 2pt; }
+          .doc-title { font-size: 14pt; font-weight: bold; text-transform: uppercase; margin: 0; }
+          .component-subtitle { font-size: 11pt; font-weight: bold; margin-top: 4pt; color: #111; }
+          .section-title { font-size: 11.5pt; font-weight: bold; margin-top: 14pt; margin-bottom: 6pt; border-bottom: 1pt solid #000; padding-bottom: 2pt; }
+          .field-table { width: 100%; border-collapse: collapse; margin-bottom: 10pt; }
+          .field-table td { border: 1pt solid #000; padding: 5pt 8pt; font-size: 10.5pt; vertical-align: top; }
+          .field-label { font-weight: bold; background-color: #f4f1ea; width: 22%; }
+          .data-table { width: 100%; border-collapse: collapse; margin: 8pt 0 12pt 0; font-size: 10pt; }
+          .data-table th, .data-table td { border: 1pt solid #000; padding: 5pt 7pt; text-align: left; vertical-align: top; }
+          .data-table th { background-color: #f4f1ea; font-weight: bold; }
+          .status-sim { font-weight: bold; color: #14532d; }
+          .status-dev { font-weight: bold; color: #78350f; }
+          .status-nao { font-weight: bold; color: #7f1d1d; }
+          .signature-grid { width: 100%; border-collapse: collapse; margin-top: 12pt; page-break-inside: avoid; }
+          .signature-cell { border: 1pt solid #000; padding: 14pt 10pt 8pt 10pt; width: 50%; vertical-align: bottom; }
+          .signature-line { border-bottom: 1pt solid #000; min-height: 18pt; margin-top: 12pt; margin-bottom: 4pt; }
+          .signature-role { font-size: 10pt; font-weight: bold; }
+          p { margin: 5pt 0; text-align: justify; }
+          ul { margin: 4pt 0 10pt 18pt; padding: 0; }
+          li { margin-bottom: 3pt; }
           @media print { .no-print { display: none; } }
         </style>
       </head>
       <body>
-        <div class="no-print" style="background:#f5f0e8; padding:12px; text-align:center; border-bottom:1px solid #ccc; font-family:sans-serif; display:flex; justify-content:center; gap:12px; align-items:center;">
-          <button onclick="window.print()" style="padding:10px 20px; background:#0284c7; color:#fff; border:none; border-radius:8px; font-weight:bold; cursor:pointer; font-size:14px;">
+        <div class="no-print" style="background:#f5efe6; padding:12px; text-align:center; border-bottom:1px solid #dcd7cb; font-family:sans-serif; display:flex; justify-content:center; gap:12px; align-items:center;">
+          <button onclick="window.print()" style="padding:10px 22px; background:#2c1a0e; color:#fdf8f2; border:1px solid #8b5e3c; border-radius:8px; font-weight:bold; cursor:pointer; font-size:13px;">
             🖨️ Imprimir / Salvar PDF
           </button>
         </div>
 
-        <div style="padding: 10px;">
-          <!-- 1. CABEÇALHO DA ESCOLA -->
-          <div class="header-box">
-            <div class="school-title">${(schoolInfo.schoolName || schoolName).toUpperCase()}</div>
-            <div>${schoolInfo.city || 'Juiz de Fora - MG'} &bull; Data de Elaboração: ${schoolInfo.creationDate || dateStr}</div>
-            <div class="doc-title">${title}</div>
+        <div style="padding: 6px;">
+          <!-- CABEÇALHO OFICIAL DO PDI -->
+          <div class="doc-header">
+            ${ident.schoolName || schoolInfo.schoolName || schoolName ? `<div class="school-subtitle">${ident.schoolName || schoolInfo.schoolName || schoolName}</div>` : ''}
+            <div class="doc-title">PLANO DE DESENVOLVIMENTO INDIVIDUAL (PDI)</div>
+            <div class="component-subtitle">Componente curricular: ${componentLabel}</div>
           </div>
 
-          <!-- 2. IDENTIFICAÇÃO DO ALUNO -->
-          <div class="section-title">1. Identificação do Aluno</div>
+          <!-- 1. IDENTIFICAÇÃO -->
+          <div class="section-title">1. Identificação</div>
           <table class="field-table">
             <tr>
-              <td colspan="2"><strong>NOME COMPLETO:</strong> ${studentInfo.studentName || studentName || '____________________________________________________'}</td>
-              <td><strong>NASCIMENTO:</strong> ${studentInfo.birthDate || '___/___/______'}</td>
+              <td class="field-label">Aluno(a):</td>
+              <td style="width:28%;">${ident.studentName || studentName || ''}</td>
+              <td class="field-label">Ano/turma:</td>
+              <td style="width:28%;">${gradeLabel}</td>
             </tr>
             <tr>
-              <td><strong>ANO / SÉRIE / CICLO:</strong> ${studentInfo.gradeCycle || 'Ensino Fundamental'}</td>
-              <td colspan="2"><strong>FILIAÇÃO (PAI):</strong> ${studentInfo.fatherName || 'Não informado'}</td>
+              <td class="field-label">Turno:</td>
+              <td>${ident.shift || 'Matutino'}</td>
+              <td class="field-label">Data de nascimento:</td>
+              <td>${ident.birthDate || ''}</td>
             </tr>
             <tr>
-              <td colspan="3"><strong>FILIAÇÃO (MÃE / RESPONSÁVEL):</strong> ${studentInfo.motherName || 'Não informada'}</td>
+              <td class="field-label">Data de elaboração:</td>
+              <td>${ident.creationDate || schoolInfo.creationDate || dateStr}</td>
+              <td class="field-label">Professor(a) regente:</td>
+              <td>${ident.regentTeacher || 'Rafaela Franco Toldo'}</td>
+            </tr>
+            <tr>
+              <td class="field-label">Equipe pedagógica envolvida:</td>
+              <td>${ident.pedagogicalTeam || 'Marianna Panisset'}</td>
+              <td class="field-label">Responsável(is) pelo(a) aluno(a):</td>
+              <td>${ident.guardians || ''}</td>
+            </tr>
+            <tr>
+              <td class="field-label">Período de vigência:</td>
+              <td>${ident.validityPeriod || '1º semestre / 2026'}</td>
+              <td class="field-label">Próxima revisão:</td>
+              <td>${ident.nextReviewDate || 'Dezembro / 2026'}</td>
             </tr>
           </table>
 
-          <!-- 3. RELATÓRIO CIRCUNSTANCIADO -->
-          <div class="section-title">2. Relatório Circunstanciado & Laudo Clínico</div>
-          <table class="field-table">
-            <tr>
-              <td><strong>HÁ DIAGNÓSTICO CLÍNICO?</strong> ${clinical.hasClinicalDiagnosis ? 'SIM (X) NÃO ( )' : 'SIM ( ) NÃO (X)'}</td>
-              <td><strong>CID-10:</strong> ${clinical.cid10 || 'Não aplicável'}</td>
-              <td><strong>DATA DO LAUDO:</strong> ${clinical.reportDate || '___/___/______'}</td>
-            </tr>
-            <tr>
-              <td colspan="2"><strong>PROFISSIONAL EMISSOR:</strong> ${clinical.professionalName || 'Não informado'}</td>
-              <td><strong>MEDICAÇÃO:</strong> ${clinical.medication || 'Nenhuma informada'}</td>
-            </tr>
-            <tr>
-              <td colspan="3"><strong>ACOMPANHAMENTOS ESPECIALIZADOS:</strong> ${clinical.specializedServices || 'Em acompanhamento pedagógico regular.'}</td>
-            </tr>
-          </table>
+          <!-- 2. OBJETIVO GERAL DO PDI -->
+          <div class="section-title">2. Objetivo geral do PDI</div>
+          <p>${generalObjective}</p>
 
-          <!-- 4. AVALIAÇÃO INICIAL DAS FUNÇÕES DE DESENVOLVIMENTO -->
-          <div class="section-title">3. Avaliação Inicial das Funções de Desenvolvimento</div>
-          <div style="border: 1pt solid #000; padding: 8pt; margin-bottom: 8pt;">
-            <div class="narrative-item"><span class="narrative-label">A) Percepção:</span> ${dev.percepcao || 'Em observação.'}</div>
-            <div class="narrative-item"><span class="narrative-label">B) Atenção:</span> ${dev.atencao || 'Em observação.'}</div>
-            <div class="narrative-item"><span class="narrative-label">C) Memória:</span> ${dev.memoria || 'Em observação.'}</div>
-            <div class="narrative-item"><span class="narrative-label">D) Linguagem:</span> ${dev.linguagem || 'Em observação.'}</div>
-            <div class="narrative-item"><span class="narrative-label">E) Raciocínio Lógico-Matemático:</span> ${dev.raciocinio || 'Em observação.'}</div>
-            <div class="narrative-item"><span class="narrative-label">F) Área Emocional-Afetiva-Social:</span> ${dev.emocional || 'Em observação.'}</div>
-          </div>
+          <!-- 3. ESTRATÉGIAS PEDAGÓGICAS E RECURSOS DE APOIO -->
+          <div class="section-title">3. Estratégias pedagógicas e recursos de apoio</div>
+          <ul>
+            ${
+              strategies
+                .filter((st: any) => st.isActive !== false)
+                .map((st: any) => `<li>${st.description}</li>`)
+                .join('') || '<li>Estratégias pedagógicas individualizadas e acompanhamento contínuo em sala.</li>'
+            }
+          </ul>
 
-          <!-- 5. PROPOSTA CURRICULAR -->
-          <div class="section-title">4. Proposta Curricular Diferenciada</div>
-          <div style="border: 1pt solid #000; padding: 8pt; margin-bottom: 8pt;">
-            ${proposal || 'Proposta pedagógica voltada para desenvolvimento de autonomia e mediação nas etapas de aprendizagem.'}
-          </div>
-
-          <!-- 6. MATRIZ DE HABILIDADES BNCC -->
-          <div class="section-title">5. Matriz de Habilidades BNCC Adaptadas</div>
+          <!-- 4. HABILIDADES ESPERADAS — BNCC -->
+          <div class="section-title">4. Habilidades esperadas — BNCC (${componentLabel})</div>
           <table class="data-table">
             <thead>
               <tr>
-                <th style="width: 20%;">Disciplina</th>
-                <th style="width: 25%;">Habilidade BNCC</th>
-                <th style="width: 40%;">Como foi trabalhado</th>
-                <th style="width: 15%;">Status</th>
+                <th style="width: 12%;">Código</th>
+                <th style="width: 50%;">Habilidade (BNCC – ${componentLabel})</th>
+                <th style="width: 16%;">Superada?</th>
+                <th style="width: 22%;">Observações</th>
               </tr>
             </thead>
             <tbody>
-              ${skills.length === 0 ? `
-                <tr><td colspan="4" style="text-align:center; padding:10pt;">Nenhuma habilidade registrada.</td></tr>
-              ` : skills.map((s: any) => `
-                <tr>
-                  <td><strong>${s.subject}</strong></td>
-                  <td><strong>${s.skillCode}</strong><br/><small>${s.skillDescription || ''}</small></td>
-                  <td>${s.workDoneOrAdaptedSkill || '-'}</td>
-                  <td class="badge-${(s.status || 'HED').toLowerCase()}">${s.status || 'HED'}</td>
-                </tr>
-              `).join('')}
+              ${
+                skills.length === 0
+                  ? `<tr><td colspan="4" style="text-align:center; padding:8pt;">Nenhuma habilidade BNCC registrada.</td></tr>`
+                  : skills
+                      .map((s: any) => {
+                        const st = normalizeStatusLabel(s.status)
+                        const stClass =
+                          st === 'Sim' ? 'status-sim' : st === 'Não' ? 'status-nao' : 'status-dev'
+                        const prevBadge =
+                          s.previousSemesterStatus && s.previousSemesterStatus !== st
+                            ? `<br/><small style="color:#555;">(Anterior: ${s.previousSemesterStatus})</small>`
+                            : ''
+                        return `
+                          <tr>
+                            <td><strong>${s.skillCode || ''}</strong></td>
+                            <td>${s.skillDescription || ''}</td>
+                            <td class="${stClass}">${st}${prevBadge}</td>
+                            <td>${s.workDoneOrAdaptedSkill || ''}</td>
+                          </tr>
+                        `
+                      })
+                      .join('')
+              }
             </tbody>
           </table>
-          <div class="legend-box">
-            <strong>LEGENDA OFICIAL:</strong> <strong>HV:</strong> Habilidade Validada &bull; <strong>HED:</strong> Habilidade em Desenvolvimento &bull; <strong>HNV:</strong> Habilidade Não Validada
-          </div>
 
-          <!-- 7. PLANO DE INTERVENÇÃO -->
-          <div class="section-title">6. Plano de Intervenção Pedagógica & AEE</div>
-          <div style="border: 1pt solid #000; padding: 8pt; margin-bottom: 8pt;">
-            <ul style="margin: 0; padding-left: 20pt;">
-              ${strategies.filter((st: any) => st.isActive).map((st: any) => `
-                <li style="margin-bottom: 4pt;">${st.description}</li>
-              `).join('') || '<li>Estratégias pedagógicas e mediações individuais ativas.</li>'}
-            </ul>
-          </div>
+          <!-- 5. OBSERVAÇÕES GERAIS E EVOLUÇÃO DO ALUNO -->
+          <div class="section-title">5. Observações gerais e evolução do aluno</div>
+          ${
+            evolutionParagraphs.length > 0
+              ? evolutionParagraphs.map((p: string) => `<p>${p}</p>`).join('')
+              : '<p>Em observação pedagógica contínua.</p>'
+          }
 
-          <!-- 8. TERMO DE ASSINATURA -->
-          <div class="section-title">7. Termo de Ciência e Validação Multiprofissional</div>
+          ${
+            clinical.hasClinicalDiagnosis || clinical.cid10
+              ? `
+                <div class="section-title">Anexo Clínico: Laudo e Acompanhamento Especializado</div>
+                <table class="field-table">
+                  <tr>
+                    <td class="field-label">Diagnóstico / CID-10:</td>
+                    <td>${clinical.cid10 || 'Sim'}</td>
+                    <td class="field-label">Profissional / Data:</td>
+                    <td>${clinical.professionalName || ''} ${clinical.reportDate ? `(${clinical.reportDate})` : ''}</td>
+                  </tr>
+                  <tr>
+                    <td class="field-label">Serviços Especializados:</td>
+                    <td>${clinical.specializedServices || '-'}</td>
+                    <td class="field-label">Medicação:</td>
+                    <td>${clinical.medication || '-'}</td>
+                  </tr>
+                </table>
+              `
+              : ''
+          }
+
+          <!-- 6. ACOMPANHAMENTO E REVISÃO -->
+          <div class="section-title">6. Acompanhamento e revisão</div>
+          <p>${reviewNotes}</p>
+          ${nextSemEval ? `<p><strong>Avaliação Semestral / Transição de Ciclo:</strong> ${nextSemEval}</p>` : ''}
+
+          <!-- 7. ASSINATURAS -->
+          <div class="section-title">7. Assinaturas</div>
           <table class="signature-grid">
             <tr>
-              ${(signatures.length > 0 ? signatures : [
-                { role: 'Direção Pedagógica', name: '' },
-                { role: 'Professores Regentes', name: '' },
-                { role: 'Coordenação Pedagógica', name: '' },
-                { role: 'Orientação Educacional / AEE', name: '' }
-              ]).map((sig: any) => `
-                <td class="signature-cell">
-                  <div>${sig.name || ''}</div>
-                  <div class="signature-line"></div>
-                  <div class="signature-role">${sig.role}</div>
-                </td>
-              `).join('')}
+              ${signatures
+                .slice(0, 2)
+                .map(
+                  (sig: any) => `
+                  <td class="signature-cell">
+                    <div class="signature-role">${sig.role}</div>
+                    <div class="signature-line">${sig.name || ''}</div>
+                  </td>
+                `
+                )
+                .join('')}
+            </tr>
+            <tr>
+              ${signatures
+                .slice(2, 4)
+                .map(
+                  (sig: any) => `
+                  <td class="signature-cell">
+                    <div class="signature-role">${sig.role}</div>
+                    <div class="signature-line">${sig.name || ''}</div>
+                  </td>
+                `
+                )
+                .join('')}
             </tr>
           </table>
         </div>

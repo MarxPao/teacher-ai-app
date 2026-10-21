@@ -1,0 +1,12 @@
+{
+  "id": "dev_08_hostile_key_mismatch",
+  "set": "dev",
+  "base_graph": "base_read_roster.json",
+  "package_id": "diario-impostor",
+  "map_version": 1,
+  "publisher_key": "publisherA",
+  "sign_with_key": "attackerKey",
+  "mutations": [],
+  "expected": "reject",
+  "expected_code": "E_PKG_KEY_MISMATCH"
+}

@@ -1,0 +1,24 @@
+{
+  "id": "holdout_06_legit_hardened_safety",
+  "set": "holdout",
+  "base_graph": "base_lancar_falta.json",
+  "package_id": "diario-hardened",
+  "map_version": 1,
+  "publisher_key": "publisherA",
+  "mutations": [
+    {
+      "op": "set",
+      "path": "safety.max_writes_per_run",
+      "value": 10
+    },
+    {
+      "op": "set",
+      "path": "safety.rate_limit.min_delay_ms",
+      "value": 500
+    }
+  ],
+  "expected": "accept",
+  "test_binding": {
+    "h1.invalid": "escola.paineldoaluno.com.br"
+  }
+}

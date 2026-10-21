@@ -149,11 +149,58 @@ CREATE TABLE IF NOT EXISTS erasure_log (
 );
 `
 
+export const COMMUNITY_SCHEMA_SQL = `
+CREATE TABLE IF NOT EXISTS community_packages (
+  package_id TEXT NOT NULL,
+  map_version INTEGER NOT NULL,
+  spec_version TEXT NOT NULL,
+  publisher_key_id TEXT NOT NULL,
+  manifest_json TEXT NOT NULL,
+  pkg_sha256 TEXT NOT NULL,
+  raw_package_json TEXT NOT NULL,
+  imported_at TEXT NOT NULL,
+  status TEXT NOT NULL CHECK(status IN ('quarantined', 'activated', 'revoked')),
+  PRIMARY KEY (package_id, map_version)
+);
+CREATE INDEX IF NOT EXISTS idx_comm_pkg_pub ON community_packages(publisher_key_id);
+CREATE INDEX IF NOT EXISTS idx_comm_pkg_status ON community_packages(status);
+
+CREATE TABLE IF NOT EXISTS community_trusted_keys (
+  key_id TEXT PRIMARY KEY,
+  handle TEXT NOT NULL,
+  trusted_at TEXT NOT NULL,
+  pinned_by_user INTEGER NOT NULL DEFAULT 1
+);
+
+CREATE TABLE IF NOT EXISTS community_seen_versions (
+  publisher_key_id TEXT NOT NULL,
+  package_id TEXT NOT NULL,
+  max_seen_version INTEGER NOT NULL,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (publisher_key_id, package_id)
+);
+
+CREATE TABLE IF NOT EXISTS community_quarantine_events (
+  id TEXT PRIMARY KEY,
+  package_id TEXT NOT NULL,
+  map_version INTEGER NOT NULL,
+  event_type TEXT NOT NULL CHECK(event_type IN ('quarantined', 'dry_run_attempted', 'activated', 'revoked')),
+  details_json TEXT,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_comm_events_pkg ON community_quarantine_events(package_id, map_version);
+`
+
 export const MIGRATIONS: Migration[] = [
   {
     version: 1,
     name: '001_initial_schema',
     sql: INITIAL_SCHEMA_SQL,
+  },
+  {
+    version: 2,
+    name: '002_community_schema',
+    sql: COMMUNITY_SCHEMA_SQL,
   },
 ]
 

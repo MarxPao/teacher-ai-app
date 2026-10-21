@@ -1,0 +1,17 @@
+{
+  "id": "holdout_19_hostile_cyclic_graph",
+  "set": "holdout",
+  "base_graph": "base_read_roster.json",
+  "package_id": "diario-ciclo",
+  "map_version": 1,
+  "publisher_key": "publisherA",
+  "mutations": [
+    {
+      "op": "set",
+      "path": "nodes.locate_table.on_success",
+      "value": "nav_page"
+    }
+  ],
+  "expected": "reject",
+  "expected_code": "E_CYCLE"
+}

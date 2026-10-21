@@ -12,6 +12,11 @@ import SavedItemsDrawer, { saveItemToStorage, SavedItem } from '@/components/Sav
 import { PEDAGOGICAL_METHODOLOGIES, buildMethodologyInstructions } from '@/lib/pedagogicalMethodologies'
 import PresetSelector from '@/components/PresetSelector'
 import { exportToPdf, exportToWord, generateSvgQRCode } from '@/lib/exportUtils'
+import {
+  getDocumentFormats,
+  getDefaultFormatForSchool,
+  type SchoolDocumentFormat
+} from '@/lib/documentFormatTemplates'
 import StudentExamPlayer, { OnlineQuestion } from '@/components/modules/StudentExamPlayer'
 import SourceKnowledgeHub, { SourceItem, KnowledgeMode, compileSourcesPrompt } from '@/components/SourceKnowledgeHub'
 import SmartInsightsPanel from '@/components/modules/SmartInsightsPanel'
@@ -64,6 +69,7 @@ import {
   getAllSubjectProfiles,
   type SubjectProfile,
 } from '@/lib/subjectProfile'
+import { getAvailableApisForSelect, executeUnifiedAiCall } from '@/lib/autoApiSelector'
 import '@/lib/subjects/english'
 import '@/lib/subjects/portuguese'
 
@@ -99,7 +105,6 @@ const CARD: React.CSSProperties = { background: '#fff', borderRadius: RADIUS.xl,
 
 function loadApis(): ApiConfig[] {
   try {
-    const { getAvailableApisForSelect } = require('@/lib/autoApiSelector')
     return getAvailableApisForSelect()
   } catch { return [] }
 }
@@ -117,7 +122,6 @@ function cleanHtml(raw: string): string {
 }
 
 async function callApi(api: ApiConfig, prompt: string): Promise<string> {
-  const { executeUnifiedAiCall } = await import('@/lib/autoApiSelector')
   return executeUnifiedAiCall(api, prompt)
 }
 
@@ -248,11 +252,16 @@ export default function TestAndWorksheets({ initialMode = 'exam' }: TestAndWorks
   const [savedDrawerMode, setSavedDrawerMode] = useState<'exam' | 'worksheet' | null>(null)
   const [savedExamsCount, setSavedExamsCount] = useState(0)
   const [savedWorksheetsCount, setSavedWorksheetsCount] = useState(0)
+  const [availableFormats, setAvailableFormats] = useState<SchoolDocumentFormat[]>(() => getDocumentFormats())
+  const [selectedDocumentFormatId, setSelectedDocumentFormatId] = useState<string>(() =>
+    getDefaultFormatForSchool('Machado Sobrinho', 'exam').id
+  )
 
-  // Sincroniza contagens salvas
+  // Sincroniza contagens salvas e formatos de arquivo
   const updateCounts = () => {
     try { setSavedExamsCount(JSON.parse(localStorage.getItem('teacher_saved_exams') || '[]').length) } catch { setSavedExamsCount(0) }
     try { setSavedWorksheetsCount(JSON.parse(localStorage.getItem('teacher_saved_quicks') || '[]').length) } catch { setSavedWorksheetsCount(0) }
+    try { setAvailableFormats(getDocumentFormats()) } catch {}
   }
 
   useEffect(() => {
@@ -381,7 +390,12 @@ export default function TestAndWorksheets({ initialMode = 'exam' }: TestAndWorks
         }
       } else {
         const { searchLibraryContext, buildRagPromptContext } = await import('@/lib/ragEngine')
-        const chunks = searchLibraryContext(queryTopic, { limit: 8 })
+        const chunks = searchLibraryContext(queryTopic, {
+          limit: 8,
+          subjectId: activeProfile.id,
+          gradeYear: grade,
+          classGroupId: header.classGroup || undefined
+        })
         if (chunks.length > 0) {
           libContext = buildRagPromptContext(chunks)
           const topChunk = chunks[0]
@@ -460,10 +474,11 @@ export default function TestAndWorksheets({ initialMode = 'exam' }: TestAndWorks
       let prompt = ''
 
       if (mode === 'exam') {
-        // PROMPT DE PROVA OFICIAL
-        prompt = `Você é um examinador sênior especialista em Psicometria e elaboração científica de itens de avaliação para ${activeProfile.name}. Crie uma PROVA COMPLETA de altíssimo rigor psicométrico em HTML limpo.
+        // PROMPT DE PROVA OFICIAL (ESTRUTURADO PARA JSON)
+        prompt = `Você é um examinador sênior especialista em Psicometria e elaboração científica de itens de avaliação para ${activeProfile.name}. Crie uma PROVA COMPLETA de altíssimo rigor psicométrico.
 ${librarySection}
 ESPECIFICAÇÕES DA AVALIAÇÃO:
+- Título: ${effectiveTitle}
 - Matéria: ${activeProfile.name}
 - Escola: ${header.school || 'Escola'}
 - Professor(a): ${header.teacher || 'Professor(a)'}
@@ -472,6 +487,7 @@ ESPECIFICAÇÕES DA AVALIAÇÃO:
 - Quantidade Obrigatória: EXATAMENTE ${totalQuestions} QUESTÕES COMPLETAS (1 a ${totalQuestions})
 - Tópico Central: ${topic || 'Conteúdo bimestral'}
 - Seções do Exame: ${sections.join(', ')}
+- Pontuação Total: ${totalScore} pts | Duração: ${examDuration} min
 - ${stemInstruction}
 - ${optionInstruction}
 ${distributionText}
@@ -486,21 +502,15 @@ ${fullBlueprintPrompt}
 - Dificuldade: Fácil (${diffEasy}%), Médio (${diffMedium}%), Difícil (${diffHard}%), Desafio (${diffChallenge}%)
 ${distractorBlock}
 ${includeUDL ? `\n=== ACESSIBILIDADE UNIVERSAL & UDL (ISO 24495-1 / CAST 2018) ===
-Para cada questão, gere também dentro do container da questão:
-- <div class="udl-plain-language" style="display:none;" data-udl="plain">Versão em Linguagem Simples/Clara (frases curtas, ordem direta, sem rebuscamento)</div>
-- <div class="udl-audio-descriptive" style="display:none;" data-udl="audio">Transcrição descritiva acessível para leitor de tela</div>\n` : ''}
+Inclua no enunciado linguagem clara e acessível quando apropriado.\n` : ''}
 
-ESTRUTURA OBRIGATÓRIA:
-1. Container: <div class="exam-document" data-total-score="${totalScore}" data-duration-minutes="${examDuration}">
-2. Para cada seção: <h2> com título da seção e <div class="question-item"> para cada questão numerada.
-3. Ao final: <h2>Gabarito & Critérios de Correção</h2> com respostas e explicações de distratores.
-
-Gere agora todas as ${totalQuestions} questões completas em HTML limpo:`
+Gere agora todas as ${totalQuestions} questões completas estruturadas em JSON:`
       } else {
-        // PROMPT DE LISTA DE EXERCÍCIOS / WORKSHEET
-        prompt = `Você é um professor especialista em ${activeProfile.name}, Design Instrucional e Aprendizagem Ativa. Crie uma LISTA DE EXERCÍCIOS / WORKSHEET rica e contextualizada em HTML limpo.
+        // PROMPT DE LISTA DE EXERCÍCIOS / WORKSHEET (ESTRUTURADO PARA JSON)
+        prompt = `Você é um professor especialista em ${activeProfile.name}, Design Instrucional e Aprendizagem Ativa. Crie uma LISTA DE EXERCÍCIOS / WORKSHEET rica e contextualizada.
 ${librarySection}
 ESPECIFICAÇÕES DO EXERCÍCIO:
+- Título: ${effectiveTitle}
 - Matéria: ${activeProfile.name}
 - Escola: ${header.school || 'Escola'}
 - Professor(a): ${header.teacher || 'Professor(a)'}
@@ -518,12 +528,7 @@ ${methInstructions}
 
 ${fullBlueprintPrompt}
 
-ESTRUTURA OBRIGATÓRIA:
-1. Comece com <h2>${effectiveTitle}</h2>
-2. Cada questão numerada de 1 a ${totalQuestions} com enunciado claro e contextualizado.
-3. Ao final: <h2>Gabarito Comentado</h2> cobrindo todas as questões.
-
-Gere agora todas as ${totalQuestions} questões completas em HTML limpo:`
+Gere agora todas as ${totalQuestions} questões completas estruturadas em JSON:`
       }
 
       setGenerationProgressMsg('Solicitando questões estruturadas em JSON à LLM...')
@@ -531,14 +536,16 @@ Gere agora todas as ${totalQuestions} questões completas em HTML limpo:`
       setIsLegacyParsed(false)
       setBlockedQuestions([])
 
-      // Executa geração client-side com validação atômica por item e reentativas isoladas
+      // Executa geração client-side com validação atômica por item, reparo de truncamento e continuação
       const examGenResult = await generateExam({
         callApi: (p) => callApi(selectedApi, p),
         buildPrompt: () => prompt,
+        totalQuestions,
         onProgress: ({ message }) => setGenerationProgressMsg(message),
         legacyParser: (rawText) => {
           const legacyItems = parseContentToQuestions(cleanHtml(rawText), activeProvenance)
-          return legacyItems.map(item => {
+          const validLegacy: Question[] = []
+          for (const item of legacyItems) {
             const options = (item.options || []).map(opt => ({
               id: opt.letter.toUpperCase(),
               text: opt.text
@@ -548,20 +555,44 @@ Gere agora todas as ${totalQuestions} questões completas em HTML limpo:`
                 ? 'true_false'
                 : item.type === 'gap_fill'
                 ? 'fill_in_blank'
-                : options.length > 0
+                : options.length >= 2
                 ? 'multiple_choice'
                 : 'open_ended'
 
-            return QuestionSchema.parse({
+            const rawKey = (item.answerKey || '').trim()
+            const extractedLetter = rawKey.match(/^([A-EVF])\b/i)?.[1]?.toUpperCase() || rawKey.match(/\b([A-EVF])\b/i)?.[1]?.toUpperCase()
+            const validOptionIds = options.map(o => o.id.toUpperCase())
+            const resolvedCorrectId =
+              extractedLetter && validOptionIds.includes(extractedLetter)
+                ? extractedLetter
+                : (options[0]?.id || rawKey || 'A')
+
+            const candidate = {
               id: item.id || `legacy_q_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
               type: qType,
-              stem: item.stem,
-              options,
-              correctOptionId: item.answerKey || (options[0]?.id || 'A'),
-              rationale: item.explanation || '',
+              stem: (item.stem || '').trim(),
+              options: qType === 'open_ended' || qType === 'fill_in_blank' ? [] : options,
+              correctOptionId: resolvedCorrectId,
+              rationale: item.explanation || rawKey || '',
               provenance: item.provenance
-            })
-          })
+            }
+            const parsedItem = QuestionSchema.safeParse(candidate)
+            if (parsedItem.success) {
+              validLegacy.push(parsedItem.data)
+            } else if (candidate.stem.length > 0) {
+              // Fallback para item aberto caso as opções estejam malformadas no texto legado
+              const openFallback = QuestionSchema.safeParse({
+                ...candidate,
+                type: 'open_ended',
+                options: [],
+                correctOptionId: resolvedCorrectId || 'A'
+              })
+              if (openFallback.success) {
+                validLegacy.push(openFallback.data)
+              }
+            }
+          }
+          return validLegacy
         }
       })
 
@@ -665,14 +696,12 @@ Gere agora todas as ${totalQuestions} questões completas em HTML limpo:`
         } catch {}
       }
 
-      // Executa Fact-Check no modo Worksheet
-      if (mode === 'worksheet') {
-        try {
-          setCheckingFact(true)
-          const fc = await runFactCheck(html, grade, 'Exercício', selectedApi)
-          setFactCheck(fc)
-        } catch {} finally { setCheckingFact(false) }
-      }
+      // Executa Fact-Check para validar consistência factual e gabarito
+      try {
+        setCheckingFact(true)
+        const fc = await runFactCheck(html, grade, activeProfile.name || 'Exercício', selectedApi)
+        setFactCheck(fc)
+      } catch {} finally { setCheckingFact(false) }
 
     } catch (err: any) {
       setError(err?.message || 'Erro ao gerar conteúdo.')
@@ -776,17 +805,46 @@ Enunciado: ${currentQuestion.stem}
 ${currentQuestion.options ? `Alternativas:\n${currentQuestion.options.map(o => `${o.letter}) ${o.text}`).join('\n')}` : ''}
 Gabarito atual: ${currentQuestion.answerKey || 'Não definido'}
 
-Retorne a questão reformulada no formato estruturado:`
+Retorne APENAS a questão reformulada exatamente neste formato (sem markdown):
+1. [Enunciado reformulado]
+${currentQuestion.options ? 'A) [Alternativa A]\nB) [Alternativa B]\nC) [Alternativa C]\nD) [Alternativa D]\n' : ''}Gabarito: [Letra ou resposta correta]`
 
     const raw = await callApi(selectedApi, prompt)
-    const newQuestions = parseContentToQuestions(raw)
-    if (newQuestions.length > 0) {
+    let updatedItem: Partial<EditableQuestionItem> | null = null
+    try {
+      const cleaned = raw.replace(/```json\s*/gi, '').replace(/```\s*/gi, '').trim()
+      if (cleaned.startsWith('{') || cleaned.startsWith('[')) {
+        const parsedJson = JSON.parse(cleaned)
+        const obj = Array.isArray(parsedJson) ? parsedJson[0] : (parsedJson.questions?.[0] || parsedJson)
+        if (obj && (obj.stem || obj.statement)) {
+          updatedItem = {
+            stem: obj.stem || obj.statement,
+            options: Array.isArray(obj.options)
+              ? obj.options.map((o: any, idx: number) => ({
+                  letter: (o.letter || o.id || String.fromCharCode(65 + idx)).toUpperCase(),
+                  text: o.text || String(o)
+                }))
+              : undefined,
+            answerKey: obj.correctOptionId || obj.answerKey || obj.answer
+          }
+        }
+      }
+    } catch {}
+
+    if (!updatedItem) {
+      const newQuestions = parseContentToQuestions(raw)
+      if (newQuestions.length > 0) {
+        updatedItem = newQuestions[0]
+      }
+    }
+
+    if (updatedItem) {
       const currentList = questionsList.length > 0 ? [...questionsList] : parseContentToQuestions(result)
       currentList[questionIndex] = {
         ...currentList[questionIndex],
-        stem: newQuestions[0].stem,
-        options: newQuestions[0].options || currentList[questionIndex].options,
-        answerKey: newQuestions[0].answerKey || currentList[questionIndex].answerKey
+        stem: updatedItem.stem || currentList[questionIndex].stem,
+        options: updatedItem.options && updatedItem.options.length > 0 ? updatedItem.options : currentList[questionIndex].options,
+        answerKey: updatedItem.answerKey || currentList[questionIndex].answerKey
       }
       setQuestionsList(currentList)
       setResult(compileQuestionsToHtml(currentList))
@@ -1170,15 +1228,53 @@ Retorne a questão reformulada no formato estruturado:`
             </div>
           )}
 
-          {/* Configurações de Cabeçalho Oficial */}
+          {/* Configurações de Cabeçalho Oficial & Formato de Arquivo da Escola */}
           <div style={CARD}>
-            <label style={SL}>🏫 Cabeçalho Oficial</label>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+              <label style={{ ...SL, marginBottom: 0 }}>🏫 Cabeçalho & Formato de Arquivo</label>
+              <button
+                type="button"
+                onClick={() => window.dispatchEvent(new CustomEvent('teacher:navigate', { detail: 'repository' }))}
+                style={{ background: 'none', border: 'none', color: '#8b5e3c', fontSize: 10.5, fontWeight: 700, cursor: 'pointer' }}
+                title="Gerenciar Formatos de Arquivo na Biblioteca & Repositório"
+              >
+                ⚙️ Configurar Formatos
+              </button>
+            </div>
             <input
               value={header.school}
-              onChange={e => setHeader(h => ({ ...h, school: e.target.value }))}
-              placeholder="Nome da Escola"
+              onChange={e => {
+                const nextSchool = e.target.value
+                setHeader(h => ({ ...h, school: nextSchool }))
+                const matched = getDefaultFormatForSchool(nextSchool, mode === 'exam' ? 'exam' : 'worksheet')
+                if (matched) setSelectedDocumentFormatId(matched.id)
+              }}
+              placeholder="Nome da Escola (ex: Machado Sobrinho)"
               style={{ ...SI, marginBottom: 8 }}
             />
+            <div style={{ marginBottom: 8 }}>
+              <label style={{ fontSize: 10.5, fontWeight: 700, color: '#665c54', display: 'block', marginBottom: 3 }}>
+                📐 Formato de Arquivo (Diagramação da Escola):
+              </label>
+              <select
+                value={selectedDocumentFormatId}
+                onChange={e => {
+                  const nextId = e.target.value
+                  setSelectedDocumentFormatId(nextId)
+                  const fmt = availableFormats.find(f => f.id === nextId)
+                  if (fmt && fmt.schoolName && fmt.schoolName !== 'Geral' && !header.school) {
+                    setHeader(h => ({ ...h, school: fmt.schoolName }))
+                  }
+                }}
+                style={{ ...SI, fontWeight: 700, color: '#2c1a0e', cursor: 'pointer' }}
+              >
+                {availableFormats.map(f => (
+                  <option key={f.id} value={f.id}>
+                    {f.name} ({f.columns === 2 ? '2 Col' : '1 Col'} • {f.optionLabelStyle})
+                  </option>
+                ))}
+              </select>
+            </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
               <input value={header.teacher} onChange={e => setHeader(h => ({ ...h, teacher: e.target.value }))} placeholder="Professor(a)" style={SI} />
               <input value={header.classGroup} onChange={e => setHeader(h => ({ ...h, classGroup: e.target.value }))} placeholder="Turma (ex: 9º B)" style={SI} />
@@ -1367,7 +1463,17 @@ Retorne a questão reformulada no formato estruturado:`
             <ExamResultThreeTabs
               result={result}
               questions={questionsList}
-              onQuestionsChange={setQuestionsList}
+              onQuestionsChange={updated => {
+                setQuestionsList(updated)
+                if (countMismatchWarning) {
+                  const totalQ = computeTotalQuestions(questionCounts) || 10
+                  const comp = checkGenerationCompleteness(totalQ, updated)
+                  const crit = updated.flatMap(q => q.haladynaViolations || []).find(v => v.severity === 'error')
+                  if (comp.canAutoSave && !crit) {
+                    setCountMismatchWarning(null)
+                  }
+                }
+              }}
               onContentChange={setResult}
               mode={mode}
               topic={topic}
@@ -1406,6 +1512,8 @@ Retorne a questão reformulada no formato estruturado:`
               onGenerateAudio={handleGenerateAudio}
               onDeleteAudio={() => setAudioUrl(null)}
               onOpenOnlinePlayer={() => setShowOnlineModal(true)}
+              documentFormatId={selectedDocumentFormatId}
+              onDocumentFormatChange={setSelectedDocumentFormatId}
             />
           )}
         </div>

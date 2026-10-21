@@ -54,9 +54,22 @@ export interface SkillsMatrixRow {
   subject: string
   skillCode: string
   skillDescription: string
+  /** Observações ou Como foi trabalhado / Habilidade adaptada */
   workDoneOrAdaptedSkill: string
-  status: 'HV' | 'HED' | 'HNV' | 'em_andamento' | 'concluida'
+  /** Status oficial do PDI ("Sim" | "Em desenvolvimento" | "Não") ou códigos legados */
+  status: 'Sim' | 'Em desenvolvimento' | 'Não' | 'HV' | 'HED' | 'HNV' | 'em_andamento' | 'concluida'
   criterion?: string
+  /** Status no semestre anterior para comparação evolutiva (1º Semestre -> 2º Semestre) */
+  previousSemesterStatus?: 'Sim' | 'Em desenvolvimento' | 'Não'
+  previousSemesterPeriod?: string
+  /** Registro de avaliações/atividades em que esta competência foi aferida */
+  evaluatedInActivities?: Array<{
+    activityId?: string
+    activityTitle: string
+    date: string
+    status: 'Sim' | 'Em desenvolvimento' | 'Não'
+    note?: string
+  }>
 }
 
 export interface DocumentGoalItem {
@@ -116,119 +129,141 @@ export interface SignatureItem {
   signedAt?: string
 }
 
-// ─── SCHEMA DO PDI (Extraído do Documento Oficial Escolar) ───────────────────
+// ─── SCHEMA DO PDI (Baseado no Modelo Oficial de Língua Inglesa — BNCC) ──────
 export const PDI_SCHEMA: DocumentSchema = {
   type: 'pdi',
-  title: 'Plano de Desenvolvimento Individual (PDI)',
-  description: 'Documento pedagógico de intervenção, desenvolvimento cognitivo e acompanhamento de habilidades.',
+  title: 'PLANO DE DESENVOLVIMENTO INDIVIDUAL (PDI)',
+  description: 'Acompanhamento pedagógico individualizado, estratégias de apoio e monitoramento semestral de habilidades da BNCC.',
   boxes: [
     {
-      id: 'dados_escola',
-      title: '1. Dados da Instituição de Ensino',
-      description: 'Identificação da escola, município e equipe gestora responsável.',
+      id: 'identificacao',
+      title: '1. Identificação',
+      description: 'Dados cadastrais do(a) aluno(a), componente curricular, equipe pedagógica e período de vigência semestral.',
       boxType: 'header_fields',
+      required: true,
       config: {
         fields: [
-          { key: 'schoolName', label: 'Nome da Escola', type: 'text', placeholder: 'Ex: Colégio Machado Sobrinho' },
-          { key: 'city', label: 'Município / UF', type: 'text', placeholder: 'Ex: Juiz de Fora - MG' },
-          { key: 'directors', label: 'Direção / Coordenação Responsável', type: 'text', placeholder: 'Nomes da direção pedagógica' },
-          { key: 'creationDate', label: 'Data de Elaboração', type: 'date' }
+          { key: 'studentName', label: 'Aluno(a)', type: 'text', placeholder: 'Ex: Carina Miranda de Oliveira' },
+          { key: 'gradeCycle', label: 'Ano/turma', type: 'text', placeholder: 'Ex: 6º ano do Ensino Fundamental' },
+          { key: 'shift', label: 'Turno', type: 'select', options: ['Matutino', 'Vespertino', 'Integral', 'Noturno'], defaultValue: 'Matutino' },
+          { key: 'birthDate', label: 'Data de nascimento', type: 'text', placeholder: 'DD/MM/AAAA' },
+          { key: 'creationDate', label: 'Data de elaboração', type: 'text', placeholder: 'Ex: 10/07/2026' },
+          { key: 'curricularComponent', label: 'Componente curricular', type: 'text', placeholder: 'Ex: Língua Inglesa — 6º ano do Ensino Fundamental' },
+          { key: 'regentTeacher', label: 'Professor(a) regente', type: 'text', placeholder: 'Ex: Rafaela Franco Toldo' },
+          { key: 'pedagogicalTeam', label: 'Equipe pedagógica envolvida', type: 'text', placeholder: 'Ex: Marianna Panisset' },
+          { key: 'guardians', label: 'Responsável(is) pelo(a) aluno(a)', type: 'text', placeholder: 'Nome dos responsáveis' },
+          { key: 'validityPeriod', label: 'Período de vigência', type: 'select', options: ['1º semestre / 2026', '2º semestre / 2026', '1º semestre / 2027', '2º semestre / 2027', 'Anual / 2026'], defaultValue: '1º semestre / 2026' },
+          { key: 'nextReviewDate', label: 'Próxima revisão', type: 'text', placeholder: 'Ex: Dezembro / 2026' },
+          { key: 'schoolName', label: 'Instituição de Ensino', type: 'text', placeholder: 'Ex: Colégio Machado Sobrinho' }
         ]
       }
     },
     {
-      id: 'identificacao_aluno',
-      title: '2. Identificação do Aluno',
-      description: 'Dados cadastrais do estudante e filiação.',
-      boxType: 'header_fields',
+      id: 'objetivo_geral',
+      title: '2. Objetivo geral do PDI',
+      description: 'Finalidade pedagógica do acompanhamento individualizado no componente curricular.',
+      boxType: 'rich_narrative',
+      required: true,
       config: {
-        fields: [
-          { key: 'studentName', label: 'Nome Completo do Aluno', type: 'text', placeholder: 'Nome do aluno' },
-          { key: 'birthDate', label: 'Data de Nascimento', type: 'date' },
-          { key: 'gradeCycle', label: 'Ano / Série / Ciclo', type: 'text', placeholder: 'Ex: 8º Ano do Ensino Fundamental' },
-          { key: 'fatherName', label: 'Filiação (Pai)', type: 'text', placeholder: 'Nome do pai' },
-          { key: 'motherName', label: 'Filiação (Mãe / Responsável)', type: 'text', placeholder: 'Nome da mãe ou responsável legal' }
+        subsections: [
+          {
+            key: 'objetivoGeral',
+            title: 'Objetivo geral do PDI',
+            placeholder: 'Acompanhar e apoiar o desenvolvimento do(a) aluno(a) no componente curricular de Língua Inglesa, monitorando o alcance progressivo das habilidades previstas pela BNCC...'
+          }
+        ],
+        aiAssistPrompt: 'Elabore o Objetivo Geral do PDI para acompanhamento das habilidades previstas pela BNCC com estratégias pedagógicas individualizadas, revisão periódica e registro contínuo dos avanços.'
+      }
+    },
+    {
+      id: 'plano_intervencao',
+      title: '3. Estratégias pedagógicas e recursos de apoio',
+      description: 'Estratégias metodológicas, recursos visuais, rotina previsível e flexibilizações adotadas em sala e nas avaliações.',
+      boxType: 'strategy_list',
+      config: {
+        category: 'intervention',
+        defaultStrategies: [
+          'Uso de instruções claras, objetivas e, quando necessário, apresentadas por escrito e oralmente.',
+          'Divisão das atividades em etapas menores, com tempo estendido quando necessário.',
+          'Apoio visual (imagens, esquemas, cartazes) para reforço do vocabulário e das estruturas trabalhadas.',
+          'Rotina previsível de aula, com antecipação de mudanças sempre que possível.',
+          'Reforço positivo e feedback frequente sobre o progresso.',
+          'Pausas programadas e ambiente com o mínimo de estímulos distratores durante atividades de concentração.',
+          'Flexibilização de formatos de avaliação (oral, escrita, prática), quando pertinente.'
         ]
+      }
+    },
+    {
+      id: 'matriz_habilidades',
+      title: '4. Habilidades esperadas — BNCC (Língua Inglesa)',
+      description: 'Monitoramento de competências e habilidades da BNCC (Sim • Em desenvolvimento • Não) com comparativo entre semestres.',
+      boxType: 'skills_matrix_table',
+      required: true,
+      config: {
+        mode: 'pdi',
+        columns: ['Código', 'Habilidade (BNCC – Língua Inglesa)', 'Superada?', 'Observações']
+      }
+    },
+    {
+      id: 'observacoes_evolucao',
+      title: '5. Observações gerais e evolução do aluno',
+      description: 'Registro descritivo do desenvolvimento linguístico, participação, atenção, autorregulação emocional, convivência e necessidade de adaptações.',
+      boxType: 'rich_narrative',
+      config: {
+        subsections: [
+          {
+            key: 'evolucaoGeral',
+            title: 'Observações gerais e evolução do(a) aluno(a)',
+            placeholder: 'Descreva o desenvolvimento do uso da língua, participação, domínio linguístico, impactos de faltas/concentração, manejo de frustrações, relacionamento interpessoal e necessidade ou não de adaptações de materiais/avaliações...'
+          }
+        ],
+        aiAssistPrompt: 'Redija o parecer descritivo de Observações Gerais e Evolução do Aluno no PDI de Língua Inglesa, abordando participação, domínio do idioma, atenção/concentração, autorregulação diante de frustrações, convivência com colegas e necessidade de adaptações.'
+      }
+    },
+    {
+      id: 'acompanhamento_revisao',
+      title: '6. Acompanhamento e revisão (Transição Semestral)',
+      description: 'Diretrizes de revisão periódica com a equipe pedagógica e família, e parecer de evolução para o próximo semestre.',
+      boxType: 'rich_narrative',
+      config: {
+        subsections: [
+          {
+            key: 'revisaoPeriodica',
+            title: 'Diretriz de acompanhamento e revisão semestral',
+            placeholder: 'Este PDI deverá ser revisado periodicamente pela equipe pedagógica, em conjunto com a família, ajustando metas e estratégias conforme a evolução do(a) aluno(a).'
+          },
+          {
+            key: 'parecerProximoSemestre',
+            title: 'Avaliação do Semestre Seguinte (Habilidades Concluídas vs. Pendentes)',
+            placeholder: 'Registre aqui a avaliação do semestre seguinte sobre as habilidades que estavam "Em desenvolvimento" ou "Não" no semestre anterior...'
+          }
+        ],
+        aiAssistPrompt: 'Sintetize o plano de acompanhamento e revisão semestral do PDI em conjunto com a equipe pedagógica e a família.'
       }
     },
     {
       id: 'relatorio_circunstanciado',
-      title: '3. Relatório Circunstanciado & Laudo Clínico',
-      description: 'Registro de acompanhamento clínico, diagnóstico médico e medicações.',
+      title: 'Anexo Clínico (Opcional): Laudo Médico / Acompanhamento Especializado',
+      description: 'Preencha caso o(a) estudante possua laudo clínico formal (TEA, TDAH, Dislexia, etc.) ou terapias externas.',
       boxType: 'checklist_conditional',
       config: {
-        questionLabel: 'Há diagnóstico clínico ou laudo pericial formal?',
+        questionLabel: 'Há diagnóstico clínico formal ou acompanhamento terapêutico externo?',
         conditionalFields: [
           { key: 'cid10', label: 'CID-10 / Diagnóstico Formal', type: 'text', placeholder: 'Ex: F84.0 (TEA), F90 (TDAH), etc.' },
           { key: 'professionalName', label: 'Profissional Emissor', type: 'text', placeholder: 'Médico, Neurologista ou Psiquiatra' },
           { key: 'reportDate', label: 'Data do Laudo', type: 'date' },
           { key: 'specializedServices', label: 'Acompanhamentos Especializados', type: 'text', placeholder: 'Psicologia, Fonoaudiologia, T.O., etc.' },
-          { key: 'medication', label: 'Uso de Medicação', type: 'text', placeholder: 'Nome da medicação e posologia, se relevante' }
-        ]
-      }
-    },
-    {
-      id: 'avaliacao_inicial',
-      title: '4. Avaliação Inicial das Funções de Desenvolvimento',
-      description: 'Mapeamento das funções cognitivas, linguísticas e socioafetivas do estudante.',
-      boxType: 'rich_narrative',
-      config: {
-        subsections: [
-          { key: 'percepcao', title: 'Percepção', placeholder: 'Discriminação visual, auditiva, espacial e temporal...' },
-          { key: 'atencao', title: 'Atenção', placeholder: 'Atenção sustentada, alternada, tempo de foco e dispersão...' },
-          { key: 'memoria', title: 'Memória', placeholder: 'Memória operacional, de curto e longo prazo...' },
-          { key: 'linguagem', title: 'Linguagem', placeholder: 'Expressão oral, compreensão, vocabulário e leitura...' },
-          { key: 'raciocinio', title: 'Raciocínio Lógico-Matemático', placeholder: 'Noções de número, operações, resolução de problemas...' },
-          { key: 'emocional', title: 'Área Emocional-Afetiva-Social', placeholder: 'Interação com pares, autorregulação, frustração e vínculos...' }
-        ],
-        aiAssistPrompt: 'Gere um rascunho descritivo pedagógico para as funções de desenvolvimento do aluno com base no perfil e observações registradas.'
-      }
-    },
-    {
-      id: 'proposta_curricular',
-      title: '5. Proposta Curricular Diferenciada',
-      description: 'Síntese das prioridades pedagógicas e objetivos do período letivo.',
-      boxType: 'rich_narrative',
-      config: {
-        subsections: [
-          { key: 'proposta', title: 'Diretriz da Proposta', placeholder: 'Descreva a abordagem prioritária de aprendizagem para o ciclo...' }
-        ],
-        aiAssistPrompt: 'Sintetize uma proposta curricular inclusiva em um parágrafo claro e acolhedor.'
-      }
-    },
-    {
-      id: 'matriz_habilidades',
-      title: '6. Matriz de Habilidades BNCC Adaptadas',
-      description: 'Mapeamento curricular por disciplina com status de aquisição (HV: Validada • HED: Em Desenvolvimento • HNV: Não Validada).',
-      boxType: 'skills_matrix_table',
-      config: {
-        mode: 'pdi',
-        columns: ['Disciplina', 'Habilidade BNCC', 'Como foi trabalhado', 'Status (HV/HED/HNV)']
-      }
-    },
-    {
-      id: 'plano_intervencao',
-      title: '7. Plano de Intervenção Pedagógica & AEE',
-      description: 'Estratégias metodológicas adotadas em sala de aula e no Atendimento Educacional Especializado.',
-      boxType: 'strategy_list',
-      config: {
-        category: 'intervention',
-        defaultStrategies: [
-          'Instruções verbais curtas divididas em etapas',
-          'Uso de recursos visuais e esquemas gráficos',
-          'Tempo adicional (+50%) em avaliações e tarefas',
-          'Avaliações com número reduzido de distratores',
-          'Pausas pedagógicas sensoriais programadas'
+          { key: 'medication', label: 'Uso de Medicação / Observações Clínicas', type: 'text', placeholder: 'Medicação e posologia, se relevante' }
         ]
       }
     },
     {
       id: 'assinaturas',
-      title: '8. Termo de Assinatura & Ciência',
-      description: 'Validação da equipe escolar multiprofissional.',
+      title: '7. Assinaturas',
+      description: 'Validação pelo(a) Professor(a) regente, Coordenação pedagógica, Responsável pelo(a) aluno(a) e Data.',
       boxType: 'signature_block',
       config: {
-        roles: ['Direção Pedagógica', 'Professores Regentes', 'Coordenação Pedagógica', 'Orientação Educacional / AEE']
+        roles: ['Professor(a) regente', 'Coordenação pedagógica', 'Responsável pelo(a) aluno(a)', 'Data']
       }
     }
   ]

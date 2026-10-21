@@ -97,7 +97,16 @@ export class NativeClient {
   }
 
   private handleMessage(response: ProtocolResponse): void {
-    if (!response || !response.id) return
+    if (!response) return
+
+    if (response.error && (!response.id || response.id === 'init_err' || !this.pending.has(response.id))) {
+      const err = new Error(response.error.message || 'Erro na conexão nativa.')
+      ;(err as any).code = response.error.code || 'E_NM_FAILED'
+      this.handleDisconnect(err)
+      return
+    }
+
+    if (!response.id) return
     const entry = this.pending.get(response.id)
     if (!entry) return
 
@@ -202,6 +211,10 @@ export class NativeClient {
 
   public async parseNlu(text: string): Promise<any> {
     return this.send('nlu.parse', { text })
+  }
+
+  public async agentPlan(system: string, user: string, timeoutMs = 30000): Promise<{ text: string }> {
+    return this.send('agent.plan', { system, user }, timeoutMs)
   }
 }
 

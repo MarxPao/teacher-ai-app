@@ -22,10 +22,13 @@ import { attemptSoftHealOrRepair, emitDriftEvent } from './driftHook'
 
 export interface GraphRunnerOptions {
   dryRun?: boolean
+  startFromCurrentPage?: boolean
   initialVariables?: Record<string, any>
+  /** Plano aprovado no espelho de revisão. Em execução real, só essas escritas (chave + valor) são aplicadas. */
+  approvedWrites?: Array<{ key: string; value: string }>
 }
 
-const FATAL_RUNTIME_ERRORS = new Set(['E_MAX_WRITES', 'E_MAX_ITERATIONS', 'E_HOST_NOT_ALLOWED', 'E_GRAPH_INVALID', 'E_ROW_AMBIGUOUS', 'E_UPLOAD_TOO_LARGE'])
+const FATAL_RUNTIME_ERRORS = new Set(['E_MAX_WRITES', 'E_MAX_ITERATIONS', 'E_HOST_NOT_ALLOWED', 'E_GRAPH_INVALID', 'E_ROW_AMBIGUOUS', 'E_UPLOAD_TOO_LARGE', 'E_WRITE_NOT_APPROVED', 'E_CLICK_UNDECLARED_SUBMIT'])
 
 export class SkillGraphRunner {
   constructor(
@@ -58,7 +61,10 @@ export class SkillGraphRunner {
     if (graph.entry_fingerprint) {
       const fpMatch = await this.driver.matchFingerprint(graph.entry_fingerprint)
       if (!fpMatch.matched) {
-        throw new RunnerError('E_FINGERPRINT_MISMATCH', 'Fingerprint de entrada divergiu do portal atual')
+        const entryNode = graph.nodes[graph.entry_node]
+        if (!entryNode || entryNode.type !== 'NAVIGATE') {
+          throw new RunnerError('E_FINGERPRINT_MISMATCH', 'Fingerprint de entrada divergiu do portal atual')
+        }
       }
     }
 
@@ -70,6 +76,13 @@ export class SkillGraphRunner {
       loopStack: [],
       writesCount: 0,
       dryRun: Boolean(options.dryRun),
+      approvedWrites:
+        !options.dryRun && options.approvedWrites
+          ? new Map(options.approvedWrites.map(w => [w.key, w.value]))
+          : undefined,
+      // Lacuna #5: padrão true — o runner assume que a aba já está aberta no portal.
+      // Callers podem passar false explícito para forçar navegação mesmo na mesma URL.
+      startFromCurrentPage: options.startFromCurrentPage !== false,
       startedAt: this.host.now(),
       updatedAt: this.host.now(),
     }
@@ -138,6 +151,7 @@ export class SkillGraphRunner {
                 state,
                 driver: this.driver,
                 host: this.host,
+                graph,
               })
               if (driftRes.healed) {
                 try {
@@ -150,9 +164,11 @@ export class SkillGraphRunner {
               }
             }
             const isFatal = lastError ? FATAL_RUNTIME_ERRORS.has(lastError.code) : false
-            if (isFatal || err?.code === 'E_READBACK_MISMATCH' || attempt >= retryAttempts) {
+            // WRITE nunca é repetido em caso de timeout de RPC pós-envio para evitar escrita duplicada em reload
+            const isNonIdempotentWriteFailure = node.type === 'WRITE' && lastError?.code === 'E_TIMEOUT'
+            if (isFatal || isNonIdempotentWriteFailure || err?.code === 'E_READBACK_MISMATCH' || attempt >= retryAttempts) {
               const fallbackFail = 'on_fail' in node ? (node as any).on_fail : undefined
-              if (fallbackFail && err?.code !== 'E_READBACK_MISMATCH' && !isFatal) {
+              if (fallbackFail && err?.code !== 'E_READBACK_MISMATCH' && !isFatal && !isNonIdempotentWriteFailure) {
                 nextNodeId = fallbackFail
                 break
               }
@@ -234,6 +250,7 @@ export class SkillGraphRunner {
           maxWrites: graph.safety.max_writes_per_run,
           graphRef,
           namedAnchors: graph.anchor_library,
+          graph,
         })
       case 'CLICK':
         return executeClickNode(node, nodeId, state, params, this.driver, this.host, graph.anchor_library)
@@ -264,7 +281,7 @@ export class SkillGraphRunner {
       case 'DOWNLOAD':
         return executeDownloadNode(node, nodeId, state, params, this.driver, this.host, graph.safety.allowed_hosts, graph.anchor_library)
       case 'UPLOAD':
-        return executeUploadNode(node, nodeId, state, params, this.driver, this.host, graph.safety.allowed_hosts, graph.safety.max_writes_per_run, graph.anchor_library)
+        return executeUploadNode(node, nodeId, state, params, this.driver, this.host, graph.safety.allowed_hosts, graph.safety.max_writes_per_run, graph.anchor_library, graphRef)
       default:
         throw new RunnerError('E_GRAPH_INVALID', `Tipo de nó desconhecido: ${node.type}`, nodeId)
     }

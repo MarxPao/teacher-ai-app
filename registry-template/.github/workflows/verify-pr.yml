@@ -1,0 +1,23 @@
+name: Verificação de Segurança de PR
+
+on:
+  pull_request:
+    branches: [ main ]
+  push:
+    branches: [ main ]
+
+jobs:
+  verify:
+    name: Validar Pacotes e Índice
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout do Repositório
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Executar Validação Automatizada de Conformidade
+        run: npx tsx scripts/verify-registry.ts

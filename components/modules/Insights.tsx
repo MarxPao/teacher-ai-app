@@ -11,6 +11,7 @@ import {
   UnifiedAnalyticsDataset,
 } from '@/lib/analyticsData'
 import { savePedagogicalInsightToSupabase } from '@/lib/supabaseClient'
+import { isEltSubject, filterHintsByDiscipline, PEDAGOGICAL_RISK_THRESHOLD } from '@/lib/disciplineGate'
 
 export interface PedagogicalHint {
   id: string
@@ -23,7 +24,8 @@ export interface PedagogicalHint {
   theory: string
   prescription: string
   practicalSteps: string[]
-  recommendedLevel: string
+  recommendedLevel?: string
+  isEltSpecific?: boolean
   urgency: 'high' | 'medium' | 'low'
   sourceKey: 'krashen' | 'nation' | 'vygotsky' | 'scrivener' | 'field' | 'bloom' | 'bncc'
 }
@@ -105,6 +107,7 @@ export default function Insights() {
   const [selectedStudent, setSelectedStudent] = useState<string>('all')
   const [activeFilterCategory, setActiveFilterCategory] = useState<string>('all')
   const [searchQuery, setSearchQuery] = useState('')
+  const [aiErrorNotice, setAiErrorNotice] = useState<string | null>(null)
   const [customAiDiagnostic, setCustomAiDiagnostic] = useState<string>(() => {
     if (typeof window !== 'undefined') {
       return localStorage.getItem('teacher_insights_ai_report') || ''
@@ -153,7 +156,7 @@ export default function Insights() {
     normalizedStudents.forEach(st => {
       // 1. Caso: Aluno em Risco com Média Baixa (< 6.0)
       // IMPORTANTE: Só gera se o aluno REALMENTE possui notas cadastradas (hasGrades === true)
-      if (st.hasGrades && st.avgGrade !== null && st.avgGrade < 6.0) {
+      if (st.hasGrades && st.avgGrade !== null && st.avgGrade < PEDAGOGICAL_RISK_THRESHOLD) {
         hints.push({
           id: `hint_krashen_${st.id}`,
           targetType: 'student',
@@ -169,7 +172,7 @@ export default function Insights() {
             'Forneça insumo compreensível no nível i+1 (textos e diálogos com 95%+ de palavras compreendidas).',
             'Substitua a correção imediata explícita por "Recast" positivo (reformulação natural da frase pelo professor).'
           ],
-          recommendedLevel: st.level || 'A1/A2',
+          // Nível CEFR removido da regra de média
           urgency: 'high',
           sourceKey: 'krashen'
         })
@@ -181,7 +184,7 @@ export default function Insights() {
         ? st.metrics.grammar
         : (st.hasGrades && st.avgGrade !== null ? st.avgGrade : null)
 
-      if (grammarScore !== null && grammarScore < 6.5) {
+      if (grammarScore !== null && grammarScore < PEDAGOGICAL_RISK_THRESHOLD) {
         hints.push({
           id: `hint_vygotsky_${st.id}`,
           targetType: 'student',
@@ -197,7 +200,7 @@ export default function Insights() {
             'Crie pares de trabalho colaborativo com colegas de nível intermediário alto (Peer Tutoring).',
             'Forneça um checklist de autoavaliação com no máximo 3 itens-chave (ex: sujeito + verbo no passado).'
           ],
-          recommendedLevel: st.level || 'A2/B1',
+          // Nível CEFR removido da regra de média
           urgency: 'medium',
           sourceKey: 'vygotsky'
         })
@@ -220,7 +223,7 @@ export default function Insights() {
             'Designe o aluno como mediador de grupos ou co-criador de desafios de quiz para a turma.',
             'Adicione questões bônus com inferência textual complexa e vocabulário C1 de leitura extensiva.'
           ],
-          recommendedLevel: st.level || 'B2/C1',
+          // Nível CEFR removido da regra de média
           urgency: 'low',
           sourceKey: 'bloom'
         })
@@ -280,8 +283,19 @@ export default function Insights() {
   }, [normalizedStudents])
 
   // ─── Filtro dos Hints ───────────────────────────────────────────────────
-  const filteredHints = useMemo(() => {
-    return theoreticalHints.filter(hint => {
+  const currentSubject = useMemo(() => {
+    if (typeof window === 'undefined') return 'Inglês'
+    try {
+      return localStorage.getItem('teacher_active_class_subject') || 'Inglês'
+    } catch { return 'Inglês' }
+  }, [])
+
+  const { activeHints: disciplineGatedHints, notice: disciplineNotice } = useMemo(() => {
+    return filterHintsByDiscipline<PedagogicalHint>(theoreticalHints, currentSubject)
+  }, [theoreticalHints, currentSubject])
+
+  const filteredHints = useMemo<PedagogicalHint[]>(() => {
+    return disciplineGatedHints.filter((hint: PedagogicalHint) => {
       if (selectedClass !== 'all' && hint.targetType === 'class' && !hint.targetName.includes(selectedClass)) {
         return false
       }
@@ -319,9 +333,9 @@ export default function Insights() {
         atRiskCount: atRisk.length,
         topPerformerCount: topPerf.length,
         averageGrade: avg,
-        atRiskStudents: atRisk.map(s => `${s.name} (${s.className}, média ${s.avgGrade})`),
-        topStudents: topPerf.map(s => `${s.name} (${s.className}, média ${s.avgGrade})`),
-        studentsList: normalizedStudents.slice(0, 10).map(s => ({ name: s.name, grade: s.avgGrade, class: s.className }))
+        atRiskStudents: atRisk.map((s, i) => `[ESTUDANTE_RISCO_${i + 1}] (${s.className || 'Turma'}, média ${s.avgGrade})`),
+        topStudents: topPerf.map((s, i) => `[ESTUDANTE_DESTAQUE_${i + 1}] (${s.className || 'Turma'}, média ${s.avgGrade})`),
+        studentsList: normalizedStudents.slice(0, 10).map((s, i) => ({ student: `[ESTUDANTE_${i + 1}]`, grade: s.avgGrade, class: s.className }))
       }
 
       const prompt = `Você é o Motor de Prescrições Pedagógicas Especializadas do Teacher AI.
@@ -333,38 +347,30 @@ Estruture em:
 1. 🎯 Diagnóstico dos Principais Gargalos Observados
 2. 📚 Fundamentação Teórica Prescritiva (cite os autores e obras correspondentes)
 3. ⚡ Plano de Ação Prático para as Próximas 3 Aulas
-4. 🛠️ Recomendações de Intervenção Diferenciada para Alunos em Risco e Superdotados.`
+4. 🛠️ Recomendações de Intervenção Diferenciada para Alunos em Risco e Destaque.`
 
       let generated = ''
 
-      // Tentativa 1: Via executeUnifiedAiCall com APIs configuradas
+      // Chamada obrigatória e exclusiva via /api/agent (Zero-PII Gateway)
       try {
-        const { getAvailableApisForSelect, executeUnifiedAiCall } = await import('@/lib/autoApiSelector')
-        const apis = getAvailableApisForSelect()
-        if (apis.length > 0) {
-          generated = await executeUnifiedAiCall(apis[0], prompt)
+        const storedApis = JSON.parse(localStorage.getItem('teacher_apis') || '[]')
+        const userKeys: Record<string, string> = {}
+        storedApis.forEach((a: any) => { if (a.key) userKeys[`${a.provider}_key`] = a.key })
+        const res = await fetch('/api/agent', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ messages: [{ role: 'user', content: prompt }], userKeys })
+        })
+        if (res.ok) {
+          const data = await res.json()
+          generated = data?.reply || data?.content || ''
+          setAiErrorNotice(null)
+        } else {
+          const errData = await res.json().catch(() => ({}))
+          setAiErrorNotice(`Esta análise não foi gerada pela IA (${res.status === 422 ? 'LGPD_EGRESS_BLOCKED' : `HTTP_${res.status}`}: ${errData?.message || 'bloqueio de segurança'})`)
         }
-      } catch {}
-
-      // Tentativa 2: Via endpoint de agente do servidor
-      if (!generated) {
-        try {
-          const storedApis = JSON.parse(localStorage.getItem('teacher_apis') || '[]')
-          const userKeys: Record<string, string> = {}
-          storedApis.forEach((a: any) => { if (a.key) userKeys[`${a.provider}_key`] = a.key })
-          const res = await fetch('/api/agent', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              messages: [{ role: 'user', content: prompt }],
-              userKeys,
-            })
-          })
-          if (res.ok) {
-            const data = await res.json()
-            generated = data?.reply || data?.content || ''
-          }
-        } catch {}
+      } catch (err: any) {
+        setAiErrorNotice(`Esta análise não foi gerada pela IA (erro de rede: ${err?.message || 'falha'})`)
       }
 
       // Tentativa 3: Síntese de Evidência Pedagógica Local Confiável (Grounding Krashen + Nation + Vygotsky)
@@ -372,7 +378,8 @@ Estruture em:
         const atRiskNames = atRisk.length > 0 ? atRisk.map(s => s.name).join(', ') : 'Nenhum aluno em situação crítica identificado'
         const topNames = topPerf.length > 0 ? topPerf.map(s => s.name).join(', ') : 'Desempenho distribuído homogeneamente'
 
-        generated = `PARECER PEDAGÓGICO PRESCRITIVO GERAL — TEACHER AI
+        generated = `[modelo padrão — Esta análise não foi gerada pela IA]
+PARECER PEDAGÓGICO PRESCRITIVO GERAL — TEACHER AI
 Referência: ${new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })} | Média Geral da Amostra: ${avg}/10
 
 1. 🎯 DIAGNÓSTICO DOS PRINCIPAIS GARGALOS OBSERVADOS
@@ -405,7 +412,7 @@ Referência: ${new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'nu
           totalStudents: normalizedStudents.length,
           atRiskCount: atRisk.length,
           topCount: topPerf.length,
-          criticalTopics: atRisk.map(s => `${s.name} (${s.className})`),
+          criticalTopics: Array.from(new Set(atRisk.map(s => s.className ? `Turma ${s.className}: Atenção` : 'Geral'))),
           aiReport: generated
         }).catch(err => console.warn('[Insights] Falha ao salvar snapshot no Supabase:', err))
       } catch {}
@@ -628,6 +635,11 @@ Referência: ${new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'nu
                 <TeacherLogo size={26} variant="badge" rounded={6} />
                 <span>Parecer Pedagógico Geral da Rafinha IA</span>
               </div>
+              {aiErrorNotice && (
+                <div style={{ fontSize: '0.8rem', color: '#b91c1c', background: '#fef2f2', padding: '4px 8px', borderRadius: RADIUS.sm, border: '1px solid #fecaca' }}>
+                  ⚠️ {aiErrorNotice}
+                </div>
+              )}
               <button
                 onClick={() => setCustomAiDiagnostic('')}
                 style={{ background: 'transparent', border: 'none', color: '#a08060', cursor: 'pointer' }}
@@ -647,6 +659,13 @@ Referência: ${new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'nu
             }}>
               {customAiDiagnostic}
             </div>
+          </div>
+        )}
+
+        {/* Aviso de Disciplina sem Catálogo Específico */}
+        {disciplineNotice && (
+          <div style={{ background: '#fdf8f2', border: '1px solid #d5c0b0', borderRadius: RADIUS.md, padding: '1rem', color: '#7a5c42', fontSize: '0.9rem' }}>
+            ℹ️ {disciplineNotice}
           </div>
         )}
 

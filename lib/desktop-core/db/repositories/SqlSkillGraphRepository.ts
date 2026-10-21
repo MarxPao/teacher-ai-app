@@ -6,6 +6,7 @@ import type {
 import type { SkillGraphV2 } from '../../../contracts/skillgraph'
 import type { Clock } from '../../time'
 import { defaultClock } from '../../time'
+import { CommunityError } from '../../community/errors'
 
 export class SqlSkillGraphRepository implements SkillGraphRepository {
   constructor(
@@ -33,11 +34,131 @@ export class SqlSkillGraphRepository implements SkillGraphRepository {
     const row = await this.driver.queryOne<{ graph_json: string }>(sql, params)
     if (!row) return null
 
+    let graph: SkillGraphV2
     try {
-      return JSON.parse(row.graph_json) as SkillGraphV2
+      graph = JSON.parse(row.graph_json) as SkillGraphV2
     } catch {
       return null
     }
+
+    if (graph.provenance?.source === 'imported') {
+      const packageId = (graph.provenance as any).package_id || taskId
+      const mapVersion = (graph.provenance as any).map_version || graph.identity.version
+
+      const commStatus = await this.driver.queryOne<{ status: string }>(
+        'SELECT status FROM community_packages WHERE package_id = ? AND map_version = ?',
+        [packageId, mapVersion]
+      )
+
+      if (!commStatus || commStatus.status !== 'activated') {
+        throw new CommunityError(
+          'E_GRAPH_QUARANTINED',
+          `O mapa "${taskId}" (v${graph.identity.version}) é da comunidade e está em quarentena (${commStatus?.status || 'desconhecido'}). Liberação bloqueada até ativação explícita após dry-run.`
+        )
+      }
+    }
+
+    return graph
+  }
+
+  async resolveActive(
+    host: string,
+    taskId: string
+  ): Promise<SkillGraphV2 | null> {
+    const rows = await this.driver.query<{ graph_json: string }>(
+      'SELECT graph_json FROM skill_graphs WHERE task_id = ? AND is_active = 1 ORDER BY version DESC',
+      [taskId]
+    )
+
+    for (const row of rows) {
+      try {
+        const graph = JSON.parse(row.graph_json) as SkillGraphV2
+        const allowed = graph.safety?.allowed_hosts || []
+        const matches = allowed.some((h) => {
+          if (h === '*' || h === host) return true
+          if (host.endsWith('.' + h)) return true
+          if (h.endsWith('.' + host)) return true
+          return false
+        })
+
+        if (matches) {
+          if (graph.provenance?.source === 'imported') {
+            const packageId = (graph.provenance as any).package_id || taskId
+            const mapVersion = (graph.provenance as any).map_version || graph.identity.version
+
+            const commStatus = await this.driver.queryOne<{ status: string }>(
+              'SELECT status FROM community_packages WHERE package_id = ? AND map_version = ?',
+              [packageId, mapVersion]
+            )
+
+            if (!commStatus || commStatus.status !== 'activated') {
+              throw new CommunityError(
+                'E_GRAPH_QUARANTINED',
+                `O mapa "${taskId}" (v${graph.identity.version}) é da comunidade e está em quarentena (${commStatus?.status || 'desconhecido'}). Liberação bloqueada até ativação explícita após dry-run.`
+              )
+            }
+          }
+          return graph
+        }
+      } catch (err) {
+        if (err instanceof CommunityError) throw err
+      }
+    }
+
+    return null
+  }
+
+  async listActive(host: string): Promise<SkillGraphV2[]> {
+    const rows = await this.driver.query<{ graph_json: string }>(
+      'SELECT graph_json FROM skill_graphs WHERE is_active = 1 ORDER BY created_at DESC'
+    )
+
+    const activeGraphs: SkillGraphV2[] = []
+    for (const row of rows) {
+      try {
+        const graph = JSON.parse(row.graph_json) as SkillGraphV2
+        const allowed = graph.safety?.allowed_hosts || []
+        const matches = allowed.some((h) => {
+          if (h === '*' || h === host) return true
+          if (host.endsWith('.' + h)) return true
+          if (h.endsWith('.' + host)) return true
+          return false
+        })
+
+        if (!matches) continue
+
+        if (graph.provenance?.source === 'imported') {
+          const packageId = (graph.provenance as any).package_id || graph.identity.task_id
+          const mapVersion = (graph.provenance as any).map_version || graph.identity.version
+
+          const commStatus = await this.driver.queryOne<{ status: string }>(
+            'SELECT status FROM community_packages WHERE package_id = ? AND map_version = ?',
+            [packageId, mapVersion]
+          )
+
+          if (!commStatus || commStatus.status !== 'activated') {
+            continue
+          }
+        }
+
+        activeGraphs.push(graph)
+      } catch {}
+    }
+
+    return activeGraphs
+  }
+
+  async list(): Promise<Array<{ portal_id: string; task_id: string; version: number; name: string; is_active: number }>> {
+    const rows = await this.driver.query<{
+      portal_id: string
+      task_id: string
+      version: number
+      name: string
+      is_active: number
+    }>(
+      'SELECT portal_id, task_id, version, name, is_active FROM skill_graphs ORDER BY is_active DESC, created_at DESC'
+    )
+    return rows
   }
 
   async listVersions(
@@ -66,10 +187,25 @@ export class SqlSkillGraphRepository implements SkillGraphRepository {
     }))
   }
 
-  async save(graph: SkillGraphV2): Promise<SkillGraphV2> {
+  async save(
+    graph: SkillGraphV2,
+    options?: { activate?: boolean; origin?: 'exploration' | 'standalone_draft' | 'community_quarantine' | 'teacher_approved' }
+  ): Promise<SkillGraphV2> {
     const portalId = graph.identity.portal_id
     const taskId = graph.identity.task_id
     const now = this.clock.toISOString()
+
+    const isExplorationOrigin =
+      options?.origin === 'exploration' ||
+      taskId.startsWith('custom:nav-') ||
+      taskId.startsWith('explored:')
+
+    if (options?.activate === true && isExplorationOrigin && options?.origin !== 'teacher_approved') {
+      throw new CommunityError(
+        'E_EXPLORATION_CANNOT_ACTIVATE' as any,
+        `Ativação automática rejeitada para "${taskId}": grafos de exploração exigem aprovação explícita da professora.`
+      )
+    }
 
     return await this.driver.transaction(async (tx) => {
       // 1. Descobre se já existem versões deste grafo
@@ -95,8 +231,13 @@ export class SqlSkillGraphRepository implements SkillGraphRepository {
         },
       }
 
-      // Se for a primeira versão, torna-se ativa automaticamente
-      const isActive = existingMax === 0 ? 1 : 0
+      // Se activate === false explícito ou vier de exploração sem teacher_approved, nunca nasce ativa nem na v1
+      const isActive =
+        options?.activate === false || (isExplorationOrigin && options?.origin !== 'teacher_approved')
+          ? 0
+          : existingMax === 0 || options?.activate === true
+          ? 1
+          : 0
 
       await tx.execute(
         `INSERT INTO skill_graphs (
@@ -124,12 +265,34 @@ export class SqlSkillGraphRepository implements SkillGraphRepository {
     version: number
   ): Promise<boolean> {
     return await this.driver.transaction(async (tx) => {
-      const exists = await tx.queryOne<{ version: number }>(
-        'SELECT version FROM skill_graphs WHERE portal_id = ? AND task_id = ? AND version = ?',
+      const targetRow = await tx.queryOne<{ graph_json: string }>(
+        'SELECT graph_json FROM skill_graphs WHERE portal_id = ? AND task_id = ? AND version = ?',
         [portalId, taskId, version]
       )
 
-      if (!exists) return false
+      if (!targetRow) return false
+
+      try {
+        const graph = JSON.parse(targetRow.graph_json) as SkillGraphV2
+        if (graph.provenance?.source === 'imported') {
+          const packageId = (graph.provenance as any).package_id || taskId
+          const mapVersion = (graph.provenance as any).map_version || graph.identity.version
+
+          const commStatus = await tx.queryOne<{ status: string }>(
+            'SELECT status FROM community_packages WHERE package_id = ? AND map_version = ?',
+            [packageId, mapVersion]
+          )
+
+          if (!commStatus || commStatus.status !== 'activated') {
+            throw new CommunityError(
+              'E_GRAPH_QUARANTINED',
+              `Ativação do mapa "${taskId}" (v${version}) rejeitada: o pacote comunitário está em quarentena.`
+            )
+          }
+        }
+      } catch (err) {
+        if (err instanceof CommunityError) throw err
+      }
 
       // Desativa todas e ativa a versão escolhida
       await tx.execute(
@@ -144,4 +307,34 @@ export class SqlSkillGraphRepository implements SkillGraphRepository {
       return true
     })
   }
+
+  async delete(
+    portalId: string,
+    taskId: string,
+    version?: number
+  ): Promise<boolean> {
+    if (typeof version === 'number') {
+      const existing = await this.driver.queryOne<{ version: number }>(
+        'SELECT version FROM skill_graphs WHERE portal_id = ? AND task_id = ? AND version = ?',
+        [portalId, taskId, version]
+      )
+      if (!existing) return false
+      await this.driver.execute(
+        'DELETE FROM skill_graphs WHERE portal_id = ? AND task_id = ? AND version = ?',
+        [portalId, taskId, version]
+      )
+      return true
+    }
+    const existing = await this.driver.queryOne<{ version: number }>(
+      'SELECT version FROM skill_graphs WHERE portal_id = ? AND task_id = ? LIMIT 1',
+      [portalId, taskId]
+    )
+    if (!existing) return false
+    await this.driver.execute(
+      'DELETE FROM skill_graphs WHERE portal_id = ? AND task_id = ?',
+      [portalId, taskId]
+    )
+    return true
+  }
 }
+

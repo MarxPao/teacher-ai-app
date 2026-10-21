@@ -1,0 +1,22 @@
+{
+  "id": "holdout_13_hostile_suffix_mismatch",
+  "set": "holdout",
+  "base_graph": "base_read_roster.json",
+  "package_id": "diario-suffix-err",
+  "map_version": 1,
+  "publisher_key": "publisherA",
+  "platform_hint": "paineldoaluno",
+  "hosts": [
+    {
+      "placeholder": "h1.invalid",
+      "role": "portal",
+      "suffix_hint": "paineldoaluno.com.br"
+    }
+  ],
+  "mutations": [],
+  "expected": "reject",
+  "expected_code": "E_BIND_SUFFIX_MISMATCH",
+  "test_binding": {
+    "h1.invalid": "portal-estranho.com.br"
+  }
+}

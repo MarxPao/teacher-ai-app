@@ -1,5 +1,6 @@
 import { ApiConfig } from '@/components/modules/ApiManager'
-import { guardEgressFetch } from '@/lib/piiMasking'
+import { guardEgressFetch, maskPii } from '@/lib/piiMasking'
+import { getAvailableApisForSelect, selectBestApi } from '@/lib/autoApiSelector'
 
 export interface FactCheckResult {
   score: number          // 0-100
@@ -48,7 +49,15 @@ export async function runFactCheck(
     ? `Verificação factual parcial (primeiros ${analyzedChars} caracteres analisados de ${totalChars} caracteres totais).`
     : `Verificação factual integral (100% do conteúdo analisado: ${totalChars} caracteres).`
 
-  if (api.provider === 'manual' || !api.key) {
+  let effectiveApi: ApiConfig | null = api
+  if (!effectiveApi || effectiveApi.provider === 'manual' || effectiveApi.id === 'auto' || !effectiveApi.key) {
+    const best = selectBestApi(getAvailableApisForSelect(), 'reasoning', true)
+    if (best && best.provider !== 'manual' && best.key) {
+      effectiveApi = best
+    }
+  }
+
+  if (!effectiveApi || effectiveApi.provider === 'manual' || !effectiveApi.key) {
     return {
       score: 0,
       level: 'warn',
@@ -61,43 +70,45 @@ export async function runFactCheck(
     }
   }
 
-  const prompt = FACT_CHECK_PROMPT(content, grade, subject)
+  const rawPrompt = FACT_CHECK_PROMPT(content, grade, subject)
+  const maskedPromptObj = maskPii(rawPrompt)
+  const prompt = maskedPromptObj.maskedText
 
   try {
     let raw = ''
 
-    if (api.provider === 'anthropic') {
+    if (effectiveApi.provider === 'anthropic') {
       const r = await guardEgressFetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-api-key': api.key, 'anthropic-version': '2023-06-01', 'anthropic-dangerously-allow-browser': 'true' },
-        body: JSON.stringify({ model: api.model || 'claude-3-5-sonnet-20241022', max_tokens: 800, messages: [{ role: 'user', content: prompt }] })
+        headers: { 'Content-Type': 'application/json', 'x-api-key': effectiveApi.key, 'anthropic-version': '2023-06-01', 'anthropic-dangerously-allow-browser': 'true' },
+        body: JSON.stringify({ model: effectiveApi.model || 'claude-3-5-sonnet-20241022', max_tokens: 800, messages: [{ role: 'user', content: prompt }] })
       })
       const d = await r.json()
       if (d.error) throw new Error(d.error.message || 'Erro Anthropic')
       raw = d.content?.[0]?.text || '{}'
-    } else if (['openai', 'deepseek', 'groq', 'openrouter', 'zhipu', 'siliconflow'].includes(api.provider)) {
-      const baseUrl = api.provider === 'deepseek' ? 'https://api.deepseek.com/v1/chat/completions'
-        : api.provider === 'groq' ? 'https://api.groq.com/openai/v1/chat/completions'
-        : api.provider === 'openrouter' ? 'https://openrouter.ai/api/v1/chat/completions'
-        : api.provider === 'zhipu' ? 'https://open.bigmodel.cn/api/paas/v4/chat/completions'
-        : api.provider === 'siliconflow' ? 'https://api.siliconflow.cn/v1/chat/completions'
+    } else if (['openai', 'deepseek', 'groq', 'openrouter', 'zhipu', 'siliconflow'].includes(effectiveApi.provider)) {
+      const baseUrl = effectiveApi.provider === 'deepseek' ? 'https://api.deepseek.com/v1/chat/completions'
+        : effectiveApi.provider === 'groq' ? 'https://api.groq.com/openai/v1/chat/completions'
+        : effectiveApi.provider === 'openrouter' ? 'https://openrouter.ai/api/v1/chat/completions'
+        : effectiveApi.provider === 'zhipu' ? 'https://open.bigmodel.cn/api/paas/v4/chat/completions'
+        : effectiveApi.provider === 'siliconflow' ? 'https://api.siliconflow.cn/v1/chat/completions'
         : 'https://api.openai.com/v1/chat/completions'
       const r = await guardEgressFetch(baseUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${api.key}` },
-        body: JSON.stringify({ model: api.model || (api.provider === 'groq' ? 'llama-3.3-70b-versatile' : 'gpt-4o-mini'), messages: [{ role: 'user', content: prompt }] })
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${effectiveApi.key}` },
+        body: JSON.stringify({ model: effectiveApi.model || (effectiveApi.provider === 'groq' ? 'llama-3.3-70b-versatile' : 'gpt-4o-mini'), messages: [{ role: 'user', content: prompt }] })
       })
       const d = await r.json()
-      if (d.error) throw new Error(d.error.message || `Erro ${api.provider}`)
+      if (d.error) throw new Error(d.error.message || `Erro ${effectiveApi.provider}`)
       raw = d.choices?.[0]?.message?.content || '{}'
-    } else if (api.provider === 'gemini') {
+    } else if (effectiveApi.provider === 'gemini') {
       // F1: garantir modelo padrão para não gerar URL inválida
-      const model = api.model && !api.model.includes('gemini-2.0') && !api.model.includes('gemini-1.5') && !api.model.includes('gemini-2.5') ? api.model : 'gemini-3.6-flash'
+      const model = effectiveApi.model && !effectiveApi.model.includes('gemini-2.0') && !effectiveApi.model.includes('gemini-1.5') && !effectiveApi.model.includes('gemini-2.5') ? effectiveApi.model : 'gemini-2.5-flash'
       const r = await guardEgressFetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-goog-api-key': api.key
+          'x-goog-api-key': effectiveApi.key
         },
         body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
       })
@@ -105,6 +116,8 @@ export async function runFactCheck(
       if (d.error) throw new Error(d.error.message || 'Erro Gemini')
       raw = d.candidates?.[0]?.content?.parts?.[0]?.text || '{}'
     }
+
+    raw = maskedPromptObj.unmask(raw)
 
     // F2-style: clean markdown fences and extract JSON robustly
     raw = raw.replace(/```json\s*/gi, '').replace(/```\s*/gi, '').trim()

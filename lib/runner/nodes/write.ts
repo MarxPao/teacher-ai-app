@@ -5,14 +5,134 @@ import type { WriteNodeSchema } from '../../contracts/skillgraph/nodes'
 import type { z } from 'zod'
 import type { CanonicalMapping } from '../../contracts/skillgraph/graph'
 import type { GradeScale } from '../../contracts/canonical'
-import type { Driver, Host, RunState } from '../types'
+import type { Driver, Host, RunState, ResolvedAnchor } from '../types'
 import { RunnerError } from '../types'
 import { resolveAnchor } from '../anchorResolve'
 import { resolveValueRef } from '../valueRef'
 import { checkMaxWrites } from '../limits'
+import { verifyCommittedValue } from '../../runner-dom/writer'
 import type { Anchor } from '../../contracts/skillgraph/anchors'
+import type { SkillGraphV2 } from '../../contracts/skillgraph'
 
 type WriteNode = z.infer<typeof WriteNodeSchema>
+
+function stableStringify(v: any): string {
+  if (v === null || typeof v !== 'object') return JSON.stringify(v)
+  if (Array.isArray(v)) return `[${v.map(stableStringify).join(',')}]`
+  return `{${Object.keys(v)
+    .sort()
+    .map(k => `${JSON.stringify(k)}:${stableStringify(v[k])}`)
+    .join(',')}}`
+}
+
+/** Chave estável de uma escrita: mesmo nó + mesmo alvo resolvido (inclui a linha do aluno). */
+export function writeKey(nodeId: string, anchor: ResolvedAnchor): string {
+  return `${nodeId}|${stableStringify(anchor)}`
+}
+
+export const READONLY_QUERY_TASKS = new Set([
+  'consultar_frequencia',
+  'consultar_notas',
+  'read_roster',
+  'visualizar_diario',
+  'ver_horarios',
+])
+
+export function isQueryTask(taskId?: string): boolean {
+  if (!taskId) return false
+  if (READONLY_QUERY_TASKS.has(taskId)) return true
+  if (
+    taskId.startsWith('custom:consultar_') ||
+    taskId.startsWith('custom:visualizar_') ||
+    taskId.startsWith('custom:nav-')
+  ) {
+    return true
+  }
+  return false
+}
+
+export const TRUSTED_PROVENANCE_SOURCES = new Set(['handwritten', 'recorded'])
+
+export interface SafeQueryFilterResult {
+  safe: boolean
+  reason?: string
+}
+
+export function isSafeQueryFilter(
+  node: WriteNode,
+  resolvedAnchor: ResolvedAnchor,
+  options: {
+    graph?: SkillGraphV2
+    graphRef?: { portal_id: string; task_id: string; version: number }
+  },
+  inspection?: { isInTable: boolean; hasDangerousSiblings: boolean; tagName: string } | null,
+  inspectionError?: string | null
+): SafeQueryFilterResult {
+  // (a) inspection ausente ou com erro => NÃO muta
+  if (inspectionError || !inspection) {
+    return { safe: false, reason: inspectionError || 'inspeção ausente' }
+  }
+  if (inspection.isInTable) {
+    return { safe: false, reason: 'alvo reside dentro de tabela' }
+  }
+  if (inspection.hasDangerousSiblings) {
+    return { safe: false, reason: 'alvo possui campos irmãos de nota ou frequência' }
+  }
+
+  // (b) exigir method === 'select_option' E semantic === 'text'
+  if (node.method !== 'select_option' || node.semantic !== 'text') {
+    return { safe: false, reason: `method (${node.method}) ou semantic (${node.semantic}) inválido para filtro` }
+  }
+
+  // (c) Exige proveniência explícita permitida ('explored'); provenance ausente ou 'imported' bloqueia fail-safe
+  const prov = options.graph?.provenance
+  if (!prov || !prov.source || prov.source === 'imported') {
+    return { safe: false, reason: 'provenance ausente ou imported não permite mutação em dry-run' }
+  }
+
+  // (e) Sem rowContext / rowScope na âncora resolvida (RowScope do schema: table + key)
+  if (
+    resolvedAnchor.scope?.within &&
+    ('table' in resolvedAnchor.scope.within || 'tableHandleId' in (resolvedAnchor.scope.within as any))
+  ) {
+    return { safe: false, reason: 'âncora vinculada a escopo de linha (rowScope)' }
+  }
+
+  // Whitelist estrita de tarefas de consulta
+  if (!isQueryTask(options.graphRef?.task_id)) {
+    return { safe: false, reason: 'tarefa não consta na whitelist de consultas' }
+  }
+
+  // (d) Varredura do DAG por TODAS as arestas (on_success, ramos de BRANCH, corpo de LOOP) e SEM PARAR no CHECKPOINT
+  if (options.graph && options.graph.nodes) {
+    const visited = new Set<string>()
+    const queue = [node.on_success]
+    while (queue.length > 0) {
+      const cur = queue.shift()!
+      if (!cur || cur.startsWith('$') || visited.has(cur)) continue
+      visited.add(cur)
+      const n = options.graph.nodes[cur]
+      if (!n) continue
+
+      if (n.type === 'WRITE' && (n.semantic === 'grade' || n.semantic === 'attendance')) {
+        return { safe: false, reason: `DAG alcança escrita pedagógica no nó "${cur}"` }
+      }
+      if (n.type === 'CLICK' && n.is_submit_action) {
+        return { safe: false, reason: `DAG alcança ação de submissão no nó "${cur}"` }
+      }
+      if (n.type === 'UPLOAD') {
+        return { safe: false, reason: `DAG alcança nó de upload "${cur}"` }
+      }
+
+      if ('on_success' in n && n.on_success) queue.push(n.on_success)
+      if ('on_true' in n && (n as any).on_true) queue.push((n as any).on_true)
+      if ('on_false' in n && (n as any).on_false) queue.push((n as any).on_false)
+      if (n.type === 'LOOP' && (n as any).body_entry) queue.push((n as any).body_entry)
+    }
+  }
+
+  return { safe: true }
+}
 
 export function validateGradeScale(val: string | number, gradeScale: GradeScale): boolean {
   if (gradeScale.type === 'numeric') {
@@ -22,7 +142,7 @@ export function validateGradeScale(val: string | number, gradeScale: GradeScale)
   }
   if (gradeScale.type === 'concept') {
     const s = String(val).trim().toUpperCase()
-    return gradeScale.values.map(v => v.trim().toUpperCase()).includes(s)
+    return gradeScale.values.map((v: string) => v.trim().toUpperCase()).includes(s)
   }
   return true
 }
@@ -39,6 +159,7 @@ export async function executeWriteNode(
     maxWrites?: number
     graphRef?: { portal_id: string; task_id: string; version: number }
     namedAnchors?: Record<string, Anchor>
+    graph?: SkillGraphV2
   }
 ): Promise<string> {
   const context = { params, variables: state.variables }
@@ -89,8 +210,33 @@ export async function executeWriteNode(
     polarity = options.canonicalMapping?.attendance.polarity === 'checked_is_present' ? 'presence' : 'absence'
   }
 
-  // 4. Semântica de Dry-Run (não muta o DOM, relata "escreveria X -> Y")
+  // 4. Semântica de Dry-Run (mutação permitida ESTRITAMENTE para filtros de consulta com evidência positiva)
   if (state.dryRun) {
+    let inspection: any = null
+    let inspectionError: string | null = null
+    if (typeof driver.inspectWriteTarget === 'function') {
+      try {
+        inspection = await driver.inspectWriteTarget({ anchor: resolvedAnchor })
+      } catch (err: any) {
+        inspectionError = `inspectWriteTarget falhou: ${err?.message || String(err)}`
+      }
+    } else {
+      inspectionError = 'driver não implementa inspectWriteTarget'
+    }
+
+    const filterVerdict = isSafeQueryFilter(node, resolvedAnchor, options, inspection, inspectionError)
+    const canMutateInDryRun = filterVerdict.safe
+
+    if (canMutateInDryRun) {
+      // Muta visualmente o DOM para que Turma/Mês/Disciplina atualizem na tela durante a simulação
+      await driver.write({
+        target: { anchor: resolvedAnchor },
+        value: strValue,
+        method: node.method ?? 'select_option',
+        polarity,
+      })
+    }
+
     try {
       await host.audit({
         run_id: state.runId,
@@ -112,9 +258,33 @@ export async function executeWriteNode(
       runId: state.runId,
       nodeId,
       timestamp: host.now(),
-      data: { dryRun: true, beforeValue, afterValue: strValue, semantic: node.semantic },
+      data: {
+        dryRun: true,
+        writeKey: writeKey(nodeId, resolvedAnchor),
+        label: node.label,
+        target: resolvedAnchor.description,
+        visualFilterMutation: canMutateInDryRun,
+        dryRunFilterReason: filterVerdict.reason,
+        beforeValue,
+        afterValue: strValue,
+        semantic: node.semantic,
+      },
     })
     return node.on_success
+  }
+
+  // 4.5. Barreira do espelho: só grava o que a professora aprovou (mesmo alvo e mesmo valor)
+  if (state.approvedWrites) {
+    const key = writeKey(nodeId, resolvedAnchor)
+    const approvedValue = state.approvedWrites.get(key)
+    if (approvedValue === undefined || approvedValue !== strValue) {
+      throw new RunnerError(
+        'E_WRITE_NOT_APPROVED',
+        `Escrita fora do plano aprovado em "${node.label}" (${resolvedAnchor.description}). Gere e aprove um novo espelho.`,
+        nodeId,
+        { expected: approvedValue, attempted: strValue }
+      )
+    }
   }
 
   // 5. Imposição estrita do limite de escritas
@@ -157,7 +327,12 @@ export async function executeWriteNode(
   state.writesCount++
 
   // 7. Verificação de Read-back e Reversão Obrigatória em caso de divergência
-  const isMatch = writeRes.verified && (writeRes.afterValue === strValue || (node.method === 'set_checked' && Boolean(writeRes.afterValue) === Boolean(strValue)))
+  const isMatch =
+    writeRes.verified &&
+    (writeRes.afterValue === strValue ||
+      writeRes.afterValue.replace(',', '.') === strValue.replace(',', '.') ||
+      (node.method === 'set_checked' && Boolean(writeRes.afterValue) === Boolean(strValue)) ||
+      verifyCommittedValue(strValue, writeRes.afterValue))
 
   if (!isMatch) {
     // Reversão imediata ao before_value

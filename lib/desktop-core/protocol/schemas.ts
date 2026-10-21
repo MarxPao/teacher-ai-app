@@ -9,10 +9,21 @@ export const EXTENSION_ALLOWED_METHODS = [
   'app.status',
   'students.list',
   'students.upsertRoster',
+  'students.upsertFromPortal',
   'graphs.get',
+  'graphs.resolveActive',
+  'graphs.listActive',
+  'graphs.list',
+  'graphs.listVersions',
+  'graphs.setActive',
+  'graphs.delete',
   'graphs.save',
   'audit.append',
   'nlu.parse',
+  'llm.generateText',
+  'agent.plan',
+  'credentials.get',
+  'credentials.status',
 ] as const
 
 export type ExtensionMethod = typeof EXTENSION_ALLOWED_METHODS[number]
@@ -22,15 +33,23 @@ export type ExtensionMethod = typeof EXTENSION_ALLOWED_METHODS[number]
  */
 export const UI_ALLOWED_METHODS = [
   ...EXTENSION_ALLOWED_METHODS,
+  'community.export',
   'data.exportStudent',
   'data.eraseStudent',
   'data.backup',
   'data.restore',
   'keys.configure',
   'keys.status',
+  'credentials.set',
+  'credentials.delete',
   'consents.get',
   'consents.set',
   'audit.purge',
+  'community.search',
+  'community.inspect',
+  'community.import',
+  'community.activate',
+  'community.dryRun',
 ] as const
 
 export type UiMethod = typeof UI_ALLOWED_METHODS[number]
@@ -82,7 +101,44 @@ export const MethodParamSchemas = {
     }).strict(),
   }).strict(),
 
+  'students.upsertFromPortal': z.object({
+    classId: z.string().min(1),
+    students: z.array(z.record(z.string(), z.unknown())),
+    source: z.object({
+      portalId: z.string().min(1),
+      readAt: z.string().min(1),
+    }).strict(),
+  }).strict(),
+
   'graphs.get': z.object({
+    portalId: z.string().min(1),
+    taskId: z.string().min(1),
+    version: z.number().int().min(1).optional(),
+  }).strict(),
+
+  'graphs.resolveActive': z.object({
+    host: z.string().min(1),
+    taskId: z.string().min(1),
+  }).strict(),
+
+  'graphs.listActive': z.object({
+    host: z.string().min(1),
+  }).strict(),
+
+  'graphs.list': z.object({}).strict(),
+
+  'graphs.listVersions': z.object({
+    portalId: z.string().min(1),
+    taskId: z.string().min(1),
+  }).strict(),
+
+  'graphs.setActive': z.object({
+    portalId: z.string().min(1),
+    taskId: z.string().min(1),
+    version: z.number().int().min(1),
+  }).strict(),
+
+  'graphs.delete': z.object({
     portalId: z.string().min(1),
     taskId: z.string().min(1),
     version: z.number().int().min(1).optional(),
@@ -90,6 +146,7 @@ export const MethodParamSchemas = {
 
   'graphs.save': z.object({
     graph: z.record(z.string(), z.unknown()),
+    activate: z.boolean().optional(),
   }).strict(),
 
   'audit.append': z.object({
@@ -98,6 +155,39 @@ export const MethodParamSchemas = {
 
   'nlu.parse': z.object({
     text: z.string().min(1),
+    catalog: z.array(z.object({
+      id: z.string().min(1),
+      name: z.string().min(1),
+      description: z.string().optional(),
+      params: z.union([z.record(z.string(), z.unknown()), z.array(z.any())]).optional(),
+    })).optional(),
+  }).strict(),
+
+  'llm.generateText': z.object({
+    instruction: z.string().min(1),
+    maxLength: z.number().int().positive().optional(),
+  }).strict(),
+
+  'credentials.get': z.object({
+    host: z.string().min(1).max(253),
+  }).strict(),
+
+  'credentials.status': z.object({}).strict(),
+
+  'credentials.set': z.object({
+    host: z.string().min(1).max(253).regex(/^[a-z0-9.-]+$/i),
+    username: z.string().min(1).max(200),
+    password: z.string().min(1).max(500),
+  }).strict(),
+
+  'credentials.delete': z.object({
+    host: z.string().min(1).max(253),
+  }).strict(),
+
+  'agent.plan': z.object({
+    system: z.string().min(1).max(4000),
+    user: z.string().min(1).max(40000),
+    provider: z.enum(['ollama', 'groq', 'openai']).optional(),
   }).strict(),
 
   'data.exportStudent': z.object({
@@ -136,5 +226,39 @@ export const MethodParamSchemas = {
 
   'audit.purge': z.object({
     days: z.number().int().min(1).optional(),
+  }).strict(),
+
+  'community.search': z.object({
+    query: z.string().optional(),
+    platform: z.string().optional(),
+    task: z.string().optional(),
+  }).strict(),
+
+  'community.inspect': z.object({
+    packagePath: z.string().optional(),
+    rawPackageJson: z.string().optional(),
+  }).strict(),
+
+  'community.import': z.object({
+    rawPackageJson: z.string().min(1),
+    userBindings: z.record(z.string(), z.string()).optional(),
+  }).strict(),
+
+  'community.activate': z.object({
+    packageId: z.string().min(1),
+    mapVersion: z.number().int().min(1),
+    untrustedConfirmed: z.boolean().optional(),
+  }).strict(),
+
+  'community.dryRun': z.object({
+    packageId: z.string().min(1),
+    mapVersion: z.number().int().min(1),
+  }).strict(),
+
+  'community.export': z.object({
+    portalId: z.string().min(1),
+    taskId: z.string().min(1),
+    privateKeyPem: z.string().optional(),
+    authorName: z.string().optional(),
   }).strict(),
 } as const

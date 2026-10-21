@@ -2,6 +2,8 @@
 import { COLOR, RADIUS, TEXT, SHADOW, FONT } from '@/styles/tokens'
 import React, { useState, useMemo, useEffect } from 'react'
 import { analyzeSpacing, TopicSpacingInfo, CalendarTask, QuestionBankEntry } from '@/lib/spacingScheduler'
+import { N_MIN_CLASS_AGGREGATE, N_MIN_ITEM_DISCRIMINATION_ZDP, N_ITEM_CONFIDENCE_ALTA } from '@/lib/insights/insightEngineV1'
+export { computeSmartInsights } from './smartInsightsGenerator'
 
 // --- Types ---
 
@@ -36,6 +38,8 @@ export interface ExamHistoryEntry {
 export interface AssessmentInsight {
   id: string
   type: 'bloom_adjust' | 'difficulty_adjust' | 'spacing_review' | 'weak_item' | 'class_gap' | 'student_gap' | 'interleave'
+  category?: 'zdp' | 'bloom' | 'difficulty' | 'spacing' | 'weak_item' | 'class_gap' | 'student_gap' | 'interleave' | string
+  ruleId?: string
   priority: 'high' | 'medium' | 'low'
   title: string
   description: string
@@ -144,7 +148,17 @@ export default function SmartInsightsPanel({
     }
 
     // --- INSIGHT 2: Average Score + Difficulty Adjust ---
-    if (lastExam && lastExam.results.length >= 2) {
+    if (lastExam && lastExam.results.length >= 1 && lastExam.results.length < N_MIN_CLASS_AGGREGATE) {
+      generated.push({
+        id: 'avg_small_sample',
+        type: 'difficulty_adjust',
+        priority: 'low',
+        title: 'ℹ️ Amostra pequena para média da turma',
+        description: `A turma possui apenas ${lastExam.results.length} alunos avaliados. A média agregada requer no mínimo ${N_MIN_CLASS_AGGREGATE} alunos para fundamentar ajustes curriculares.`,
+        action: 'Aguardar mais avaliações antes de calibrar a dificuldade da prova',
+        accepted: null
+      })
+    } else if (lastExam && lastExam.results.length >= N_MIN_CLASS_AGGREGATE) {
       const avgScore = lastExam.results.reduce((acc, r) =>
         acc + (r.maxScore > 0 ? r.totalScore / r.maxScore * 10 : 0), 0
       ) / lastExam.results.length
@@ -175,7 +189,17 @@ export default function SmartInsightsPanel({
     }
 
     // --- INSIGHT 3: Weak Items (p < 0.35 and D > 0.25 = ZDP) ---
-    if (lastExam && lastExam.results.length >= 3) {
+    if (lastExam && lastExam.results.length >= 1 && lastExam.results.length < N_MIN_ITEM_DISCRIMINATION_ZDP) {
+      generated.push({
+        id: 'small_sample_warning',
+        type: 'weak_item',
+        priority: 'low',
+        title: 'ℹ️ Amostra pequena para cálculo psicométrico',
+        description: `A turma possui apenas ${lastExam.results.length} alunos avaliados. O cálculo de discriminação e inferência de ZDP exige no mínimo ${N_MIN_ITEM_DISCRIMINATION_ZDP} alunos para validade estatística.`,
+        action: 'Aguardar aplicação com mais estudantes para habilitar análise de itens',
+        accepted: null
+      })
+    } else if (lastExam && lastExam.results.length >= N_MIN_ITEM_DISCRIMINATION_ZDP) {
       const questionCount = lastExam.results[0]?.questionResults.length || 0
       const weakItems: number[] = []
       const badItems: number[] = [] // D < 0.20 = item doesn't discriminate
@@ -201,12 +225,17 @@ export default function SmartInsightsPanel({
       }
 
       if (weakItems.length > 0) {
+        const isHighConfidence = lastExam.results.length >= N_ITEM_CONFIDENCE_ALTA
         generated.push({
           id: 'zdp_topics',
           type: 'weak_item',
-          priority: 'high',
-          title: `🎯 ${weakItems.length} questão(ões) na Zona de Desenvolvimento Proximal`,
-          description: `Q${weakItems.join(', Q')} tiveram p < 0.35 com boa discriminação — conteúdo em ZDP da turma. Merecem revisão e questões similares.`,
+          priority: isHighConfidence ? 'high' : 'low',
+          title: isHighConfidence
+            ? `🎯 ${weakItems.length} questão(ões) na Zona de Desenvolvimento Proximal`
+            : `🎯 ${weakItems.length} questão(ões) em zona de atenção formativa (amostra preliminar)`,
+          description: isHighConfidence
+            ? `Q${weakItems.join(', Q')} tiveram p < 0.35 com boa discriminação — conteúdo em ZDP da turma. Merecem revisão e questões similares.`
+            : `Amostra preliminar (${lastExam.results.length} alunos). Q${weakItems.join(', Q')} sugerem conteúdo em desenvolvimento da turma; recomenda-se verificar em novas avaliações antes de inferir construto ZDP consolidado.`,
           action: `Incluir questões de revisão sobre os tópicos dessas questões na próxima prova`,
           accepted: null
         })

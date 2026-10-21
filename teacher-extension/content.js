@@ -52,17 +52,6 @@ const PLATFORM_PROFILES = {
       submit:      ['button[type="submit"]', '#btn_salvar', '.btn']
     }
   },
-  machado: {
-    match: () => CURRENT_URL.includes('paineldoaluno.com.br'),
-    name: 'Machado Sobrinho',
-    selectors: {
-      title:       ['input[name*="titulo"]', 'input[name*="assunto"]', 'input[id*="diario"]', 'input[placeholder*="Assunto"]'],
-      date:        ['input[type="date"]', 'input[name*="data"]', 'input[id*="data"]'],
-      description: ['textarea[name*="conteudo"]', 'textarea[name*="descricao"]', 'textarea[name*="pauta"]', 'div[contenteditable="true"]'],
-      classRef:    ['select[name*="turma"]', 'select[id*="turma"]', 'input[name*="turma"]'],
-      submit:      ['button[type="submit"]', 'input[type="submit"]', '.btn-salvar', '#btn-salvar']
-    }
-  },
   santacatarina: {
     match: () => CURRENT_URL.includes('redesantacatarina.org.br'),
     name: 'Rede Santa Catarina',
@@ -279,60 +268,6 @@ function matchStudentName(portalText, studentName) {
   return false;
 }
 
-// ——— Preenchimento Estruturado de Notas (Grades Table com Fuzzy Matching) ———
-function fillGradesMatrix(studentGrades) {
-  if (!Array.isArray(studentGrades) || studentGrades.length === 0) return 0;
-
-  let filledCount = 0;
-  const rows = Array.from(document.querySelectorAll('tr, div.student-row, div.grade-item, div.row, li'));
-
-  studentGrades.forEach(st => {
-    const studentName = st.name;
-    const grade = st.grade;
-
-    for (const row of rows) {
-      const rowText = row.innerText;
-      if (matchStudentName(rowText, studentName)) {
-        const gradeInput = row.querySelector('input[type="number"], input[type="text"], input[name*="nota"], input[id*="nota"], input[name*="grade"]') ||
-                           row.querySelector('input:not([type="hidden"]):not([type="checkbox"])');
-        if (gradeInput) {
-          setFieldValue(gradeInput, grade);
-          filledCount++;
-          break;
-        }
-      }
-    }
-  });
-
-  return filledCount;
-}
-
-// ——— Preenchimento de Chamada / Frequência com Fuzzy Matching ———
-function fillAttendanceMatrix(absentStudents = [], presentStudents = []) {
-  let markedCount = 0;
-  const rows = Array.from(document.querySelectorAll('tr, div.student-row, div.row, li'));
-
-  rows.forEach(row => {
-    const rowText = row.innerText;
-    const isAbsent = absentStudents.some(name => matchStudentName(rowText, name));
-
-    const checkbox = row.querySelector('input[type="checkbox"]');
-    if (checkbox) {
-      if (isAbsent) {
-        checkbox.checked = false;
-        checkbox.dispatchEvent(new Event('change', { bubbles: true }));
-        markedCount++;
-      } else {
-        checkbox.checked = true;
-        checkbox.dispatchEvent(new Event('change', { bubbles: true }));
-        markedCount++;
-      }
-    }
-  });
-
-  return markedCount;
-}
-
 // ─── GAP 8: Detecção e Auto-Bypass de Overlays/Spinners em Portais Legados ──────
 async function waitForOverlaysToClear(maxWaitMs = 3000, pollIntervalMs = 100) {
   const overlaySelectors = [
@@ -400,22 +335,14 @@ async function handleExecutePortalAction(data) {
 
   let filledCount = 0;
 
-  if (actionType === 'grades' || actionType === 'lancar_nota') {
-    const studentGrades = p.studentGrades?.length ? p.studentGrades : (p.aluno || data.aluno ? [{ name: p.aluno || data.aluno, grade: p.nota ?? data.nota }] : []);
-    filledCount = fillGradesMatrix(studentGrades);
-  } else if (actionType === 'attendance' || actionType === 'lancar_falta') {
-    const absentStudents = p.absentStudents?.length ? p.absentStudents : (p.aluno || data.aluno ? [p.aluno || data.aluno] : []);
-    filledCount = fillAttendanceMatrix(absentStudents, p.presentStudents || []);
-  } else {
-    // Diário / Tarefa / Pauta
-    const results = {
-      title:    fillField(s.title,       ['title', 'titulo', 'nome', 'assunto', 'atividade', 'diario', 'tema', 'conteudo', 'plano', 'lesson'], p.title),
-      date:     fillField(s.date,        ['date', 'data', 'limite', 'entrega', 'prazo', 'aula', 'vencimento', 'due'], p.date),
-      desc:     fillField(s.description, ['desc', 'descricao', 'detalhes', 'observacoes', 'body', 'comentario', 'pauta', 'instrucoes', 'metodologia'], p.description || p.methodology || ''),
-      classRef: fillField(s.classRef,    ['class', 'turma', 'grupo', 'serie', 'grade'], p.classRef || ''),
-    };
-    filledCount = Object.values(results).filter(Boolean).length;
-  }
+  // Preenchimento de formulário (Diário / Tarefa / Pauta)
+  const results = {
+    title:    fillField(s.title,       ['title', 'titulo', 'nome', 'assunto', 'atividade', 'diario', 'tema', 'conteudo', 'plano', 'lesson'], p.title),
+    date:     fillField(s.date,        ['date', 'data', 'limite', 'entrega', 'prazo', 'aula', 'vencimento', 'due'], p.date),
+    desc:     fillField(s.description, ['desc', 'descricao', 'detalhes', 'observacoes', 'body', 'comentario', 'pauta', 'instrucoes', 'metodologia'], p.description || p.methodology || ''),
+    classRef: fillField(s.classRef,    ['class', 'turma', 'grupo', 'serie', 'grade'], p.classRef || ''),
+  };
+  filledCount = Object.values(results).filter(Boolean).length;
 
   const success = filledCount > 0;
   const resultPayload = {
@@ -427,9 +354,9 @@ async function handleExecutePortalAction(data) {
       : `Não encontrei campos de formulário para ${actionType} na tela atual do portal. Certifique-se de estar na aba correspondente.`,
     filledCount,
     diff: {
-      aluno: p.aluno || data.aluno || (p.studentGrades?.[0]?.name) || '',
-      campo: (actionType === 'grades' || actionType === 'lancar_nota') ? 'nota' : 'falta',
-      depois: String(p.nota ?? data.nota ?? p.studentGrades?.[0]?.grade ?? '')
+      aluno: p.aluno || data.aluno || '',
+      campo: actionType,
+      depois: String(p.description || p.methodology || p.title || '')
     }
   };
 
@@ -562,23 +489,7 @@ function handleInspectAndScrape() {
   return payload;
 }
 
-// ——— Message Listener (App postMessage + BroadcastChannel + Chrome Runtime) ———
-
-window.addEventListener('message', (event) => {
-  const isFromApp = event.origin === 'http://localhost:3000' || event.origin === 'http://localhost:3001';
-  if (!isFromApp) return;
-
-  const isAppPage = window.location.href.includes('localhost:3000') || window.location.href.includes('localhost:3001');
-  if (isAppPage) {
-    chrome.runtime.sendMessage({ action: 'FORWARD_TO_PORTAL', payload: event.data });
-  } else {
-    if (event.data.action === 'EXECUTE_PORTAL_ACTION' || event.data.action === 'FILL_DEADLINE') {
-      handleExecutePortalAction(event.data);
-    } else if (event.data.action === 'INSPECT_PAGE' || event.data.action === 'EXTRACT_PAGE_DATA') {
-      handleInspectAndScrape();
-    }
-  }
-});
+// ——— Message Listener (Desacoplado do app web legado: no v2 opera via Native Messaging) ———
 
 try {
   const bc = new BroadcastChannel('teacher_portal_bridge');
@@ -1000,7 +911,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'IMPORT_STUDENTS_TO_APP') {
     const payload = message.payload || {};
     const className = (payload.className || 'Turma do Portal').trim();
-    const portalName = payload.portalName || 'Machado Sobrinho';
+    const portalName = payload.portalName || 'Portal Escolar';
     const students = payload.students || [];
 
     try {
@@ -1099,7 +1010,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     (async () => {
       console.log('[Teacher AI Extractor] Executando ação de skill na página:', window.location.href);
-      const graphToRun = message.skillGraph || CANONICAL_READ_ROSTER_GRAPH;
+      if (!message.skillGraph) {
+        sendResponse({
+          ok: false,
+          code: "MAP_NOT_FOUND",
+          message: "Mapa não encontrado para este portal. Grave ou importe um mapa no painel."
+        });
+        return;
+      }
+      const graphToRun = message.skillGraph;
       let graphExecResult = null;
       let graphStudents = [];
       let executionSource = 'graph_executor';
@@ -1722,55 +1641,6 @@ function snapshotPortalTable() {
 
 // ——— MOTOR GENÉRICO GRAPHEXECUTOR (LOTE 1 — SKILL GRAPH RUNTIME) ———
 
-const CANONICAL_READ_ROSTER_GRAPH = {
-  id: 'skill_read_roster_mtqeirwc',
-  name: 'Leitura de read_roster — machado_sobrinho',
-  portal_id: 'machado_sobrinho',
-  task_id: 'read_roster',
-  version: '1.0.0',
-  entry_node: 'nav_0',
-  nodes: {
-    nav_0: {
-      id: 'nav_0',
-      type: 'NAVIGATE',
-      anchor: { strategy: 'css_selector', value: 'https://machadosobrinho.paineldoaluno.com.br/professor_notas' },
-      params: {},
-      on_success: 'locate_0',
-      on_fail: null
-    },
-    locate_0: {
-      id: 'locate_0',
-      type: 'LOCATE',
-      anchor: { strategy: 'css_selector', value: 'table, div.grid-meus-alunos, [class*="aluno" i]' },
-      params: {},
-      on_success: 'locate_aluno_row',
-      on_fail: null
-    },
-    locate_aluno_row: {
-      id: 'locate_aluno_row',
-      type: 'LOCATE',
-      anchor: { strategy: 'css_selector', value: 'table tbody tr' },
-      params: { multiplicity: 'all' },
-      on_success: 'read_0',
-      on_fail: null
-    },
-    read_0: {
-      id: 'read_0',
-      type: 'READ',
-      anchor: { strategy: 'css_selector', value: 'td:nth-child(1)', scope: 'row_current' },
-      params: { variable_bindings: ['aluno_nome'] },
-      on_success: 'loop_proxima_linha',
-      on_fail: null
-    },
-    loop_proxima_linha: {
-      id: 'loop_proxima_linha',
-      type: 'LOOP',
-      params: { loop_target: 'read_0', collection_node: 'locate_aluno_row' },
-      on_success: null,
-      on_fail: null
-    }
-  }
-};
 
 function interpolateBindings(template, bindings) {
   if (!template) return '';
@@ -2716,7 +2586,7 @@ function universalExtractStudents() {
     if (students.length >= 2) return students;
   }
 
-  // ESTRATÉGIA 2: Grade de Cartões / Divs (padrão Machado Sobrinho: .grid-meus-alunos, .card-aluno, etc.)
+  // ESTRATÉGIA 2: Grade de Cartões / Divs (.grid-meus-alunos, .card-aluno, etc.)
   const cardContainers = Array.from(document.querySelectorAll(
     'div.grid-meus-alunos, div.meus-alunos-grid, [class*="alunos" i], [class*="student" i], [class*="roster" i], main, #conteudo, .container'
   ));
@@ -2793,132 +2663,7 @@ function universalExtractStudents() {
 }
 
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// ROTA B: BRIDGE EXTENSÃO-APP (postMessage + content script com validação estrita)
-// ═══════════════════════════════════════════════════════════════════════════════
-const ALLOWED_APP_ORIGINS = ['http://localhost:3000', 'http://localhost:3001'];
-
-window.addEventListener('message', async (event) => {
-  // Ignora mensagens sem payload ou de fontes não estruturadas
-  if (!event.data || typeof event.data !== 'object') return;
-
-  // ─── PING DE CONEXÃO DO RELAY ──────────────────────────────────────────────
-  if (event.data.type === 'TEACHER_RELAY_PING') {
-    if (!ALLOWED_APP_ORIGINS.includes(event.origin)) return;
-    window.postMessage({
-      type: 'TEACHER_RELAY_PONG',
-      requestId: event.data.requestId || null,
-      payload: { online: true, version: '3.1' }
-    }, event.origin);
-    return;
-  }
-
-  // ─── RELAY DE EXECUÇÃO DE FERRAMENTAS DO APP PARA A EXTENSÃO ───────────────
-  if (event.data.type === 'TEACHER_RELAY_TO_EXTENSION') {
-    if (!ALLOWED_APP_ORIGINS.includes(event.origin)) {
-      console.warn(`[TeacherRelayBridge] ⛔ Origem rejeitada: "${event.origin}"`);
-      return;
-    }
-
-    const { requestId, payload } = event.data;
-
-    try {
-      if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
-        chrome.runtime.sendMessage({
-          action: 'RELAY_TOOL_EXECUTION',
-          requestId,
-          payload
-        }, (resp) => {
-          if (chrome.runtime.lastError) {
-            window.postMessage({
-              type: 'TEACHER_RELAY_RESPONSE',
-              requestId,
-              payload: {
-                success: false,
-                status: 'extension_error',
-                error: chrome.runtime.lastError.message
-              }
-            }, event.origin);
-            return;
-          }
-
-          window.postMessage({
-            type: 'TEACHER_RELAY_RESPONSE',
-            requestId,
-            payload: resp || { success: false, error: 'Resposta vazia da extensão.' }
-          }, event.origin);
-        });
-      } else {
-        window.postMessage({
-          type: 'TEACHER_RELAY_RESPONSE',
-          requestId,
-          payload: {
-            success: false,
-            status: 'extension_unavailable',
-            error: 'API chrome.runtime não disponível no contexto da página.'
-          }
-        }, event.origin);
-      }
-    } catch (err) {
-      window.postMessage({
-        type: 'TEACHER_RELAY_RESPONSE',
-        requestId,
-        payload: {
-          success: false,
-          status: 'relay_exception',
-          error: err.message
-        }
-      }, event.origin);
-    }
-    return;
-  }
-
-  if (event.data.type === 'TEACHER_BRIDGE_COMMAND') {
-    // 1. VALIDAÇÃO DE ORIGEM OBRIGATÓRIA (Item 2.2)
-    if (!ALLOWED_APP_ORIGINS.includes(event.origin)) {
-      console.warn(`[TeacherBridge] ⛔ Mensagem descartada — Origem rejeitada: "${event.origin}". Origens permitidas: ${ALLOWED_APP_ORIGINS.join(', ')}`);
-      return;
-    }
-
-    console.log(`[TeacherBridge] ✅ Mensagem válida recebida da origem confiável (${event.origin}):`, event.data);
-    const payload = event.data.payload || {};
-
-    try {
-      // Repassa para o endpoint /api/skills/interpret
-      const res = await fetch('http://localhost:3000/api/skills/interpret', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-byok-key': payload.byokKey || 'gsk_mock_test_key_for_development_placeholder'
-        },
-        body: JSON.stringify({
-          text: payload.text || '',
-          portalId: payload.portalId || 'machado_sobrinho',
-          turmaId: payload.turmaId || null,
-          source: 'bridge_app'
-        })
-      });
-
-      const result = await res.json();
-      console.log('[TeacherBridge] Resposta do interpretador recebida:', result);
-
-      // Devolve resposta de forma visível para a própria UI do app
-      window.postMessage({
-        type: 'TEACHER_BRIDGE_RESPONSE',
-        requestId: event.data.requestId || null,
-        payload: result
-      }, event.origin);
-
-    } catch (err) {
-      console.error('[TeacherBridge] Erro ao comunicar com endpoint de interpretação:', err);
-      window.postMessage({
-        type: 'TEACHER_BRIDGE_RESPONSE',
-        requestId: event.data.requestId || null,
-        payload: { ok: false, error: err.message }
-      }, event.origin);
-    }
-  }
-});
+// ——— BRIDGE EXTENSÃO-APP (Desacoplada: no v2 a comunicação é via Chrome Native Messaging com o Desktop) ———
 
 // ——— OTIMIZAÇÕES AVANÇADAS: DOM Settled, Spatial Anchoring e Auto-Draft ———
 

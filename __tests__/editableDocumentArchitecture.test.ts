@@ -42,26 +42,32 @@ describe('Arquitetura Unificada de Documentos Editáveis', () => {
 
   // ─── 1. SCHEMAS E ESTRUTURA DOS BOXES ──────────────────────────────────────
   describe('1. Schemas Canônicos e Validação Estrutural dos Boxes', () => {
-    it('1.1 PDI_SCHEMA possui exatamente 8 boxes ordenados compatíveis com o modelo oficial', () => {
+    it('1.1 PDI_SCHEMA segue o modelo canônico de 7 seções + anexo clínico opcional', () => {
       expect(PDI_SCHEMA.type).toBe('pdi')
       expect(PDI_SCHEMA.boxes.length).toBe(8)
 
-      const boxTypes = PDI_SCHEMA.boxes.map(b => b.boxType)
-      expect(boxTypes).toEqual([
-        'header_fields',         // 1. Dados da Escola
-        'header_fields',         // 2. Identificação do Aluno
-        'checklist_conditional', // 3. Relatório Circunstanciado (Laudo/CID-10)
-        'rich_narrative',        // 4. Avaliação Inicial (Funções de Desenvolvimento)
-        'rich_narrative',        // 5. Proposta Curricular
-        'skills_matrix_table',   // 6. Matriz de Habilidades BNCC Adaptadas
-        'strategy_list',         // 7. Plano de Intervenção Pedagógica & AEE
-        'signature_block'        // 8. Assinaturas
+      expect(PDI_SCHEMA.boxes.map(b => b.id)).toEqual([
+        'identificacao',             // 1. Identificação
+        'objetivo_geral',            // 2. Objetivo geral do PDI
+        'plano_intervencao',         // 3. Estratégias pedagógicas e recursos de apoio
+        'matriz_habilidades',        // 4. Habilidades esperadas — BNCC
+        'observacoes_evolucao',      // 5. Observações gerais e evolução
+        'acompanhamento_revisao',    // 6. Acompanhamento e revisão
+        'relatorio_circunstanciado', // Anexo clínico (opcional)
+        'assinaturas'                // 7. Assinaturas
       ])
 
-      // Verifica as 6 subseções de funções cognitivas no box 4
-      const avaliacaoBox = PDI_SCHEMA.boxes.find(b => b.id === 'avaliacao_inicial')
-      const subKeys = avaliacaoBox?.config?.subsections.map((s: any) => s.key)
-      expect(subKeys).toEqual(['percepcao', 'atencao', 'memoria', 'linguagem', 'raciocinio', 'emocional'])
+      const boxTypes = PDI_SCHEMA.boxes.map(b => b.boxType)
+      expect(boxTypes).toEqual([
+        'header_fields',
+        'rich_narrative',
+        'strategy_list',
+        'skills_matrix_table',
+        'rich_narrative',
+        'rich_narrative',
+        'checklist_conditional',
+        'signature_block'
+      ])
     })
 
     it('1.2 PEI_SCHEMA possui 8 boxes incluindo flexibilizacao_curricular e metas_smart', () => {
@@ -217,7 +223,7 @@ describe('Arquitetura Unificada de Documentos Editáveis', () => {
 
   // ─── 5. EXPORTAÇÃO FIEL PARA WORD / PDF ────────────────────────────────────
   describe('5. Exportação Oficial Fiel (DOCX e PDF)', () => {
-    it('5.1 PDI exportado contém cabeçalho escolar, tabela de habilidades com legenda HV/HED/HNV e 4 assinaturas', () => {
+    it('5.1 PDI exportado contém cabeçalho escolar, as 7 seções canônicas, tabela BNCC e assinaturas', () => {
       const pdi = createDefaultPdi('st_1', 'Bernardo Castro', '8º Ano B', 'Colégio Machado Sobrinho')
       const html = generateDocumentHtml({
         type: 'pdi',
@@ -231,23 +237,23 @@ describe('Arquitetura Unificada de Documentos Editáveis', () => {
       expect(html).toContain('COLÉGIO MACHADO SOBRINHO')
       expect(html).toContain('Bernardo Castro')
 
-      // Funções cognitivas
-      expect(html).toContain('Percepção:')
-      expect(html).toContain('Atenção:')
-      expect(html).toContain('Memória:')
+      // Seções canônicas
+      expect(html).toContain('1. Identificação')
+      expect(html).toContain('2. Objetivo geral do PDI')
+      expect(html).toContain('3. Estratégias pedagógicas e recursos de apoio')
+      expect(html).toContain('5. Observações gerais e evolução do aluno')
+      expect(html).toContain('6. Acompanhamento e revisão')
 
-      // Matriz de habilidades e legenda oficial
-      expect(html).toContain('Matriz de Habilidades BNCC Adaptadas')
-      expect(html).toContain('LEGENDA OFICIAL:')
-      expect(html).toContain('HV:</strong> Habilidade Validada')
-      expect(html).toContain('HED:</strong> Habilidade em Desenvolvimento')
-      expect(html).toContain('HNV:</strong> Habilidade Não Validada')
+      // Matriz de habilidades BNCC
+      expect(html).toContain('4. Habilidades esperadas — BNCC')
+      expect(html).toContain('EF06LI01')
+      expect(html).toContain('Superada?')
 
-      // Termo de assinaturas multiprofissional
-      expect(html).toContain('Direção Pedagógica')
-      expect(html).toContain('Professores Regentes')
-      expect(html).toContain('Coordenação Pedagógica')
-      expect(html).toContain('Orientação Educacional / AEE')
+      // Assinaturas
+      expect(html).toContain('7. Assinaturas')
+      expect(html).toContain('Professor(a) regente')
+      expect(html).toContain('Coordenação pedagógica')
+      expect(html).toContain('Responsável pelo(a) aluno(a)')
     })
 
     it('5.2 PEI exportado contém flexibilização curricular e metas SMART', () => {

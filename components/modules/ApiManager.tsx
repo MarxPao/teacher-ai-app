@@ -206,13 +206,13 @@ export default function ApiManager() {
     setSbSyncing(true)
     setSbStatus('⏳ Sincronizando para a nuvem...')
     const payload: Record<string, unknown> = {}
-    const KEYS = ['teacher_apis', 'teacher_students', 'teacher_lessons', 'teacher_gradebook', 'teacher_repo', 'teacher_auto_mode']
+    const KEYS = ['teacher_apis', 'teacher_lessons', 'teacher_gradebook', 'teacher_repo', 'teacher_auto_mode']
     for (const k of KEYS) {
       const v = localStorage.getItem(k)
       if (v) { try { payload[k] = JSON.parse(v) } catch { payload[k] = v } }
     }
     const res = await syncToSupabase(payload)
-    setSbStatus(res.ok ? '✅ Dados sincronizados com Supabase!' : `❌ ${res.error}`)
+    setSbStatus(res.ok ? '✅ Dados sincronizados (dados de alunos mantidos em sigilo local conforme LGPD)!' : `❌ ${res.error}`)
     setSbSyncing(false)
   }
 
@@ -348,7 +348,7 @@ export default function ApiManager() {
  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
  {[
  { provider: 'groq', label: ' Groq Llama-3.3 70B' },
- { provider: 'gemini', label: ' Google Gemini 3.6 Flash' },
+ { provider: 'gemini', label: ' Google Gemini 2.0 / 1.5 Flash' },
  { provider: 'zhipu', label: ' Zhipu AI GLM-4-Flash' },
  { provider: 'siliconflow', label: ' SiliconFlow Qwen2.5' },
  { provider: 'openrouter', label: ' OpenRouter (Rota Grátis)' },

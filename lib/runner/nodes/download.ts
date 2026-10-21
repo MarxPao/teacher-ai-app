@@ -37,21 +37,15 @@ export async function executeDownloadNode(
 
   let result: { success: boolean; filename: string; mimeType?: string; sizeBytes?: number }
 
-  if (driver.download) {
-    result = await driver.download({
-      trigger: resolvedAnchor,
-      timeoutMs: node.timeout_ms,
-      expect: node.expect,
-    })
-  } else {
-    await driver.click({ anchor: resolvedAnchor })
-    result = {
-      success: true,
-      filename: 'relatorio_download.csv',
-      mimeType: node.expect?.mime_hint || 'text/csv',
-      sizeBytes: 1024,
-    }
+  if (!driver.download) {
+    throw new RunnerError('E_DOWNLOAD_FAILED', `Driver não suporta download real no nó '${nodeId}'`, nodeId)
   }
+
+  result = await driver.download({
+    trigger: resolvedAnchor,
+    timeoutMs: node.timeout_ms,
+    expect: node.expect,
+  })
 
   if (!result.success) {
     throw new RunnerError('E_DOWNLOAD_FAILED', `Falha ao executar download no nó '${nodeId}'`, nodeId)

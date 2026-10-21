@@ -276,4 +276,229 @@ Espero que atenda aos critérios!
     expect(content).toMatch(/import\s*\{[^}]*generateExam[^}]*\}\s*from\s*['"]@\/lib\/examGeneration['"]/)
     expect(content).toContain('generateExam(')
   })
+
+  // 9. Resgate de JSON truncado por limite de tokens
+  it('T3.9: deve resgatar questões íntegras quando o array JSON é cortado no meio por limite de tokens', async () => {
+    const truncatedJson = '```json\n[\n' +
+      JSON.stringify(validQuestion1) + ',\n' +
+      JSON.stringify(validQuestion2) + ',\n' +
+      '  { "id": "q3", "type": "multiple_choice", "stem": "Questão cortada no meio sem fechar'
+
+    const mockCallApi = vi.fn().mockResolvedValue(truncatedJson)
+    const result = await generateExam({
+      callApi: mockCallApi,
+      buildPrompt: () => 'Gere 3 questões'
+    })
+
+    expect(result.legacyParsed).toBe(false)
+    expect(result.questions).toHaveLength(2)
+    expect(result.questions[0].id).toBe('q1')
+    expect(result.questions[1].id).toBe('q2')
+  })
+
+  // 10. Continuação automática de lote para provas longas (ex: 16 questões)
+  it('T3.10: deve completar automaticamente as 16 questões em lote complementar quando a 1ª chamada trunca em 10', async () => {
+    const makeQ = (n: number): Question => ({
+      ...validQuestion1,
+      id: `q${n}`,
+      stem: `Enunciado inédito da questão número ${n}?`
+    })
+
+    const batch1 = Array.from({ length: 10 }, (_, i) => makeQ(i + 1))
+    const batch2 = Array.from({ length: 6 }, (_, i) => makeQ(i + 11))
+
+    const mockCallApi = vi.fn()
+      .mockResolvedValueOnce(JSON.stringify(batch1))
+      .mockResolvedValueOnce(JSON.stringify(batch2))
+
+    const result = await generateExam({
+      callApi: mockCallApi,
+      buildPrompt: () => 'Gere 16 questões',
+      totalQuestions: 16
+    })
+
+    expect(mockCallApi).toHaveBeenCalledTimes(2)
+    expect(result.callsUsed).toBe(2)
+    expect(result.legacyParsed).toBe(false)
+    expect(result.questions).toHaveLength(16)
+    expect(result.questions[15].id).toBe('q16')
+  })
+
+  // 11. Extração de objeto único com array interno options + normalização de tipos da LLM
+  it('T3.11: não deve confundir array interno options com array raiz em retry e deve normalizar tipos aliases (gap_fill, essay)', async () => {
+    const rawRetryWithProse = `Aqui está a questão corrigida:\n${JSON.stringify(validQuestion2, null, 2)}`
+    const extracted = extractJsonFromText(rawRetryWithProse)
+    expect(Array.isArray(extracted)).toBe(false)
+    expect(extracted.id).toBe('q2')
+    expect(extracted.stem).toBe('Qual elemento químico tem símbolo O?')
+
+    const aliasedQuestions = [
+      {
+        id: 'q_gap',
+        type: 'gap_fill',
+        stem: 'Complete: The Space Marine ___ to travel tomorrow.',
+        answerKey: 'intends',
+        rationale: 'Usa-se intends para indicar pretensão.'
+      },
+      {
+        id: 'q_essay',
+        type: 'text_production',
+        stem: 'Write a short paragraph using 3 false friends.',
+        rationale: 'Avaliar uso correto de actually, pretend e intend.'
+      }
+    ]
+
+    const mockCallApi = vi.fn().mockResolvedValueOnce(JSON.stringify(aliasedQuestions))
+    const result = await generateExam({
+      callApi: mockCallApi,
+      buildPrompt: () => 'Gere 2 questões abertas'
+    })
+
+    expect(result.blocked).toHaveLength(0)
+    expect(result.questions).toHaveLength(2)
+    expect(result.questions[0].type).toBe('fill_in_blank')
+    expect(result.questions[0].correctOptionId).toBe('intends')
+    expect(result.questions[1].type).toBe('discursive')
+  })
+
+  // 12. Balanceamento determinístico de gabarito quando todas as respostas vêm como 'A'
+  it('T3.12: deve distribuir gabaritos entre A, B, C e D quando a LLM concentra >60% na alternativa A', async () => {
+    const allABatch = Array.from({ length: 8 }, (_, i) => ({
+      ...validQuestion1,
+      id: `q${i + 1}`,
+      stem: `Questão ${i + 1} sobre gramática?`,
+      options: [
+        { id: 'A', text: `Resposta Correta ${i + 1}` },
+        { id: 'B', text: `Distrator B ${i + 1}` },
+        { id: 'C', text: `Distrator C ${i + 1}` },
+        { id: 'D', text: `Distrator D ${i + 1}` }
+      ],
+      correctOptionId: 'A'
+    }))
+
+    const mockCallApi = vi.fn().mockResolvedValueOnce(JSON.stringify(allABatch))
+    const result = await generateExam({
+      callApi: mockCallApi,
+      buildPrompt: () => 'Gere 8 questões'
+    })
+
+    const distinctKeys = new Set(result.questions.map(q => q.correctOptionId))
+    expect(distinctKeys.size).toBe(4)
+    result.questions.forEach((q, idx) => {
+      const correctOpt = q.options.find(o => o.id === q.correctOptionId)
+      expect(correctOpt?.text).toBe(`Resposta Correta ${idx + 1}`)
+    })
+  })
+
+  // 13. Exportação em 3 Documentos Estritamente Separados: 1. Prova (sem gabarito), 2. Gabarito Oficial, 3. Reasoning & Justificativa Pedagógica
+  it('T3.13: gera 3 documentos separados (1. Prova sem gabarito, 2. Folha de Gabarito, 3. Reasoning da prova como um todo e de cada questão)', async () => {
+    const { compileQuestionsToHtml } = await import('@/lib/examSchema')
+    const {
+      prepareDocumentContentForExport,
+      buildStandaloneAnswerKeyHtml,
+      buildStandalonePedagogicalReasoningHtml
+    } = await import('@/lib/exportUtils')
+
+    const examHtml = compileQuestionsToHtml([validQuestion1, validQuestion2], 'Prova Warhammer 40k')
+
+    // Documento 1: Prova do Aluno (NÃO escapa HTML e NÃO inclui gabarito nem folha do professor)
+    const doc1StudentExam = prepareDocumentContentForExport(examHtml, 'standard', 'Prova Warhammer 40k')
+    expect(doc1StudentExam).not.toContain('&lt;div class="generated-exam-document"')
+    expect(doc1StudentExam).toContain('<div class="generated-exam-document"')
+    expect(doc1StudentExam).not.toContain('class="exam-answer-key"')
+    expect(doc1StudentExam).not.toContain('GABARITO OFICIAL')
+
+    // Documento 2: Folha de Gabarito Oficial separada
+    const doc2AnswerKey = buildStandaloneAnswerKeyHtml({
+      questions: [validQuestion1, validQuestion2],
+      rawContent: examHtml,
+      title: 'Prova Warhammer 40k'
+    })
+    expect(doc2AnswerKey).toContain('Questão 1')
+    expect(doc2AnswerKey).toContain('Paris')
+    expect(doc2AnswerKey).toContain('Questão 2')
+    expect(doc2AnswerKey).toContain('Oxigênio')
+
+    // Documento 3: Reasoning e Justificativa Pedagógica (para a prova como um todo e para cada questão)
+    const doc3Reasoning = buildStandalonePedagogicalReasoningHtml({
+      questions: [validQuestion1, validQuestion2],
+      title: 'Prova Warhammer 40k',
+      topic: 'False Friends & Grammar',
+      grade: '9º Ano',
+      level: 'B1',
+      subjectName: 'Língua Inglesa'
+    })
+    expect(doc3Reasoning).toContain('PARTE I &mdash; JUSTIFICATIVA PEDAGÓGICA E ARQUITETURA DA PROVA COMO UM TODO')
+    expect(doc3Reasoning).toContain('PARTE II &mdash; REASONING E JUSTIFICATIVA PEDAGÓGICA QUESTÃO POR QUESTÃO')
+    expect(doc3Reasoning).toContain('Paris é a capital e maior cidade da França.')
+    expect(doc3Reasoning).toContain('O oxigênio possui número atômico 8 e símbolo O.')
+  })
+
+  it('deve aplicar o Formato de Arquivo da Escola (QUESTÃO 01, alternativas (A), inferência de modelo e Sequência Didática)', async () => {
+    const {
+      getDefaultFormatForSchool,
+      applySchoolFormatToBodyHtml,
+      inferDocumentFormatFromSampleText
+    } = await import('@/lib/documentFormatTemplates')
+    const { buildDidacticSequenceExportHtml } = await import('@/lib/exportUtils')
+    const { compileQuestionsToHtml } = await import('@/lib/examSchema')
+
+    // 1. Formato padrão Machado Sobrinho ("QUESTÃO 01" e P&B)
+    const machadoFmt = getDefaultFormatForSchool('Machado Sobrinho', 'exam')
+    expect(machadoFmt.id).toBe('fmt_machado_oficial')
+    expect(machadoFmt.questionNumberStyle).toBe('questao_padded')
+
+    const rawHtml = compileQuestionsToHtml([validQuestion1, validQuestion2], 'Prova Modelo')
+    const formattedMachado = applySchoolFormatToBodyHtml(rawHtml, machadoFmt)
+    expect(formattedMachado).toContain('QUESTÃO 01')
+    expect(formattedMachado).toContain('QUESTÃO 02')
+
+    // 2. Formato Anglo (2 Colunas + Alternativas "(A)")
+    const angloFmt = getDefaultFormatForSchool('Colégio Anglo', 'exam')
+    expect(angloFmt.columns).toBe(2)
+    expect(angloFmt.optionLabelStyle).toBe('(A)')
+    const formattedAnglo = applySchoolFormatToBodyHtml(rawHtml, angloFmt)
+    expect(formattedAnglo).toContain('(A)')
+    expect(formattedAnglo).toContain('(B)')
+
+    // 3. Inferência automática a partir de texto de prova exemplo
+    const inferred = inferDocumentFormatFromSampleText({
+      fileName: 'simulado_enem_2colunas.docx',
+      extractedText: 'QUESTÃO 01\nLeia o texto.\n(A) Opção 1\n(B) Opção 2\nCoordenação Pedagógica',
+      schoolName: 'Colégio Exemplo'
+    })
+    expect(inferred.columns).toBe(2)
+    expect(inferred.questionNumberStyle).toBe('questao_padded')
+    expect(inferred.optionLabelStyle).toBe('(A)')
+    expect(inferred.showSignatureLine).toBe(true)
+
+    // 4. Exportação estruturada de Sequência Didática
+    const seqHtml = buildDidacticSequenceExportHtml({
+      schoolName: 'Machado Sobrinho',
+      gradeName: '9º Ano B',
+      bimesterName: 'Ano Letivo 2026',
+      units: [
+        {
+          title: 'Unit 1: Present Perfect & Global Issues',
+          status: 'completed',
+          progress: 100,
+          plannedWeeks: 'Semanas 1–4',
+          actualWeeks: 'Semanas 1–4',
+          plannedHours: 8,
+          completedHours: 8,
+          grammar: ['Present Perfect'],
+          vocabulary: ['Sustainability'],
+          skills: ['Reading', 'Speaking'],
+          bnccCodes: ['EF09LI01']
+        }
+      ],
+      aiAssessmentText: 'Turma com excelente ritmo curricular.'
+    })
+    expect(seqHtml).toContain('QUADRO SINÓPTICO DO PLANEJAMENTO E EXECUÇÃO')
+    expect(seqHtml).toContain('Unit 1: Present Perfect & Global Issues')
+    expect(seqHtml).toContain('UNIDADE 01')
+  })
 })
+
+
+

@@ -1,0 +1,24 @@
+{
+  "id": "dev_07_hostile_unbound_real_host",
+  "set": "dev",
+  "base_graph": "base_read_roster.json",
+  "package_id": "diario-real-host",
+  "map_version": 1,
+  "publisher_key": "publisherA",
+  "mutations": [
+    {
+      "op": "set",
+      "path": "safety.allowed_hosts",
+      "value": [
+        "escola.paineldoaluno.com.br"
+      ]
+    },
+    {
+      "op": "set",
+      "path": "nodes.nav_page.host",
+      "value": "escola.paineldoaluno.com.br"
+    }
+  ],
+  "expected": "reject",
+  "expected_code": "E_PKG_UNBOUND_HOST"
+}

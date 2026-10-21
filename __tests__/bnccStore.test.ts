@@ -90,9 +90,10 @@ describe('BNCC Store — Fonte Única Reativa', () => {
     expect(subscriberNotified).toBe(true)
     expect(getBnccStoreVersion()).toBeGreaterThan(initialVersion)
 
+    // A habilidade personalizada vem primeiro; as 106 oficiais de Inglês são sempre garantidas
     const updated = getBnccCatalog()
-    expect(updated.length).toBe(1)
     expect(updated[0].code).toBe('CUSTOM01')
+    expect(updated.length).toBe(107)
 
     unsubscribe()
   })

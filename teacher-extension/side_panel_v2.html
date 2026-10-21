@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Teacher AI — Assistente do Portal</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    /* ───── Teacher AI Design Tokens — Paleta Warm Leather (WCAG 2.1 AA) ───── */
+    :root {
+      --paper-deep:   #1c110a;
+      --paper-ink:    #2c1a0e;
+      --paper-sepia:  #5c3d20;
+      --paper-warm:   #7a5c42;
+      --paper-mid:    #71553d;
+      --paper-light:  #6f533a;
+      --paper-cream:  #f5efe6;
+      --paper-page:   #fdf8f2;
+      --paper-alt:    #f0e8d8;
+      --paper-white:  #fffcf8;
+
+      --surface-1:    #fffcf8;
+      --surface-2:    #f7f0e8;
+      --surface-3:    #ede4d6;
+
+      --sidebar-bg:   #2e1a0c;
+      --sidebar-deep: #231408;
+
+      --accent:       #8b5e3c;
+      --accent-hover: #6f4728;
+      --accent-light: #875532;
+      --accent-gold:  #945722;
+      --accent-glow:  rgba(139, 94, 60, 0.10);
+
+      --success:      #346a43;
+      --success-bg:   rgba(61, 122, 78, 0.10);
+      --success-bd:   rgba(61, 122, 78, 0.25);
+
+      --warning:      #945710;
+      --warning-bg:   rgba(200, 122, 30, 0.12);
+      --warning-bd:   rgba(200, 122, 30, 0.28);
+
+      --danger:       #a83232;
+      --danger-bg:    rgba(168, 50, 50, 0.10);
+      --danger-bd:    rgba(168, 50, 50, 0.25);
+
+      --info:         #2a6080;
+      --info-bg:      rgba(42, 96, 128, 0.10);
+      --info-bd:      rgba(42, 96, 128, 0.25);
+
+      --border-soft:   rgba(139, 115, 85, 0.14);
+      --border-medium: rgba(139, 115, 85, 0.22);
+      --border-strong: rgba(139, 115, 85, 0.34);
+
+      --shadow-flat: 0 1px 2px rgba(44, 26, 14, 0.04);
+      --shadow-sm:   0 1px 3px rgba(44, 26, 14, 0.06), 0 4px 10px rgba(44, 26, 14, 0.05);
+      --shadow-md:   0 4px 12px rgba(44, 26, 14, 0.08), 0 16px 28px -8px rgba(44, 26, 14, 0.10);
+
+      --font-sans:    'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      --font-display: 'Fraunces', Georgia, serif;
+      --font-mono:    'JetBrains Mono', monospace;
+
+      --radius-sm:   8px;
+      --radius-md:   10px;
+      --radius-lg:   14px;
+      --radius-pill: 9999px;
+    }
+
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    *:focus-visible {
+      outline: 2px solid var(--accent) !important;
+      outline-offset: 2px !important;
+    }
+
+    body {
+      font-family: var(--font-sans);
+      font-size: 13px;
+      line-height: 1.5;
+      color: var(--paper-ink);
+      background: var(--paper-page);
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    button, input, select, textarea {
+      font-family: var(--font-sans);
+      color: var(--paper-ink);
+    }
+
+    /* ───── Topbar Warm Espresso (padrão Sidebar do App) ───── */
+    .sp-header {
+      background: linear-gradient(135deg, var(--sidebar-bg) 0%, var(--sidebar-deep) 100%);
+      color: var(--paper-page);
+      padding: 14px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .sp-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .sp-logo-badge {
+      width: 32px;
+      height: 32px;
+      border-radius: var(--radius-sm);
+      background: linear-gradient(135deg, var(--accent) 0%, var(--accent-hover) 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+    }
+
+    .sp-brand-title {
+      font-family: var(--font-display);
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--paper-white);
+      letter-spacing: -0.02em;
+      line-height: 1.15;
+    }
+
+    .sp-brand-subtitle {
+      font-size: 11px;
+      color: #d6c3b0;
+      font-weight: 500;
+    }
+
+    .sp-status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: var(--radius-pill);
+      background: rgba(255, 252, 248, 0.10);
+      color: #f5efe6;
+      border: 1px solid rgba(255, 252, 248, 0.16);
+    }
+
+    .sp-status-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #52b788;
+      box-shadow: 0 0 8px rgba(82, 183, 136, 0.6);
+    }
+
+    /* ───── Container Principal ───── */
+    .sp-container {
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    /* ───── Segmented Tabs ───── */
+    .sp-tabs {
+      display: flex;
+      gap: 4px;
+      background: var(--surface-3);
+      padding: 4px;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border-soft);
+    }
+
+    .sp-tab {
+      flex: 1;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 7px 10px;
+      border-radius: var(--radius-sm);
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--paper-warm);
+      cursor: pointer;
+      transition: all 0.15s ease;
+      text-align: center;
+      white-space: nowrap;
+    }
+
+    .sp-tab:hover {
+      color: var(--paper-ink);
+    }
+
+    .sp-tab.active {
+      background: var(--accent);
+      color: var(--paper-white);
+      box-shadow: 0 1px 4px rgba(139, 94, 60, 0.25);
+    }
+
+    /* ───── Cards (Superfície Warm Leather) ───── */
+    .sp-card {
+      background: var(--surface-1);
+      border: 1px solid var(--border-soft);
+      border-radius: var(--radius-lg);
+      padding: 14px;
+      box-shadow: var(--shadow-sm);
+      margin-bottom: 12px;
+    }
+
+    .sp-card-subtle {
+      background: var(--surface-2);
+      border: 1px solid var(--border-soft);
+      border-radius: var(--radius-md);
+      padding: 12px;
+      box-shadow: var(--shadow-flat);
+      margin-bottom: 10px;
+    }
+
+    .sp-label {
+      display: block;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--paper-warm);
+      text-transform: uppercase;
+      letter-spacing: 0.7px;
+      margin-bottom: 6px;
+    }
+
+    .sp-helper {
+      font-size: 12px;
+      color: var(--paper-warm);
+      line-height: 1.5;
+      margin-bottom: 10px;
+    }
+
+    /* ───── Inputs & Selects ───── */
+    .sp-input,
+    .sp-select,
+    input[type="text"],
+    input[type="number"],
+    input[type="date"],
+    select,
+    textarea {
+      width: 100%;
+      padding: 8px 12px;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border-medium);
+      background: var(--paper-page);
+      font-size: 13px;
+      color: var(--paper-ink);
+      outline: none;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    input[type="text"]:focus,
+    input[type="number"]:focus,
+    input[type="date"]:focus,
+    select:focus,
+    textarea:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-glow);
+      background: var(--surface-1);
+    }
+
+    input::placeholder,
+    textarea::placeholder {
+      color: var(--paper-light);
+      opacity: 0.75;
+    }
+
+    /* ───── Botões ───── */
+    .btn-main {
+      background: linear-gradient(135deg, var(--accent) 0%, var(--accent-hover) 100%);
+      color: var(--paper-white);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: var(--radius-md);
+      padding: 8px 14px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      box-shadow: 0 2px 8px rgba(139, 94, 60, 0.22);
+      transition: all 0.15s ease;
+    }
+
+    .btn-main:hover:not(:disabled) {
+      background: linear-gradient(135deg, #7a5132 0%, #5c3d20 100%);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(139, 94, 60, 0.30);
+    }
+
+    .btn-main:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .btn-secondary {
+      background: var(--surface-1);
+      color: var(--paper-sepia);
+      border: 1px solid var(--border-medium);
+      border-radius: var(--radius-md);
+      padding: 8px 14px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      box-shadow: var(--shadow-flat);
+      transition: all 0.15s ease;
+    }
+
+    .btn-secondary:hover:not(:disabled) {
+      background: var(--surface-2);
+      color: var(--paper-ink);
+      border-color: var(--border-strong);
+    }
+
+    .btn-danger-soft {
+      background: var(--danger-bg);
+      color: var(--danger);
+      border: 1px solid var(--danger-bd);
+      border-radius: var(--radius-sm);
+      padding: 4px 10px;
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .btn-danger-soft:hover {
+      background: rgba(168, 50, 50, 0.18);
+    }
+
+    /* ───── Sugestões Rápidas (Chips Pedagógicos) ───── */
+    .sp-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 8px;
+    }
+
+    .sp-chip {
+      background: var(--surface-2);
+      color: var(--paper-sepia);
+      border: 1px solid var(--border-soft);
+      border-radius: var(--radius-pill);
+      padding: 4px 10px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .sp-chip:hover {
+      background: var(--accent-glow);
+      border-color: var(--accent);
+      color: var(--paper-ink);
+    }
+
+    /* ───── Opções de Execução (Toggles Compactos) ───── */
+    .sp-options-row {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid var(--border-soft);
+    }
+
+    .sp-checkbox-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--paper-warm);
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .sp-checkbox-label input[type="checkbox"],
+    .sp-checkbox-label input[type="radio"] {
+      accent-color: var(--accent);
+      width: 15px;
+      height: 15px;
+      cursor: pointer;
+    }
+
+    /* ───── Scrollbar Fina Warm Leather ───── */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(139, 115, 85, 0.28);
+      border-radius: 99px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(139, 115, 85, 0.48);
+    }
+  </style>
+</head>
+<body>
+  <div id="card-skillgraph-v2">
+    <!-- Header no padrão Warm Espresso da Sidebar do Teacher AI -->
+    <header class="sp-header">
+      <div class="sp-brand">
+        <div class="sp-logo-badge" aria-hidden="true">🦉</div>
+        <div>
+          <div class="sp-brand-title">Teacher AI</div>
+          <div class="sp-brand-subtitle">Assistente do Portal Escolar</div>
+        </div>
+      </div>
+      <div class="sp-status-pill" title="Operação local com proteção de dados (LGPD)">
+        <span class="sp-status-dot"></span>
+        <span>Ativo</span>
+      </div>
+      <input type="checkbox" id="toggle-skillgraph-v2" checked style="display: none;" />
+    </header>
+
+    <div id="skillgraph-v2-body" class="sp-container" style="display: block;">
+      <!-- Navegação entre modos com linguagem acolhedora -->
+      <div class="sp-tabs" role="tablist">
+        <button id="sgv2-tab-runner" class="sp-tab active" role="tab">✨ Assistente</button>
+        <button id="sgv2-tab-record" class="sp-tab" role="tab">📹 Ensinar</button>
+        <button id="sgv2-tab-suite" class="sp-tab" role="tab">🛡️ Diagnóstico</button>
+      </div>
+
+      <!-- Visão 1: Assistente (Runner) -->
+      <div id="sgv2-runner-view">
+        <!-- Card 1: Chatbox Conversacional do Assistente -->
+        <div class="sp-card" id="sgv2-chat-card">
+          <div class="sp-chat-header">
+            <div class="sp-chat-header-title">
+              <span class="sp-chat-avatar-sm" aria-hidden="true">🦉</span>
+              <div>
+                <label class="sp-label" for="sgv2-nlu-input" style="margin-bottom: 0;">Chat do Assistente</label>
+                <div style="font-size: 11px; color: var(--paper-warm);">Converse, tire dúvidas da tela ou peça ações</div>
+              </div>
+            </div>
+            <button type="button" id="sgv2-btn-chat-clear" class="sp-btn-clear-chat" title="Limpar histórico da conversa">Limpar</button>
+          </div>
+          <div id="sgv2-chat-messages" class="sp-chat-messages" role="log" aria-live="polite" aria-label="Histórico de conversa com o assistente"></div>
+          <div class="sp-chat-composer">
+            <input type="text" id="sgv2-nlu-input" class="sp-input" placeholder="Digite sua mensagem ou peça uma ação..." style="flex: 1;" />
+            <button id="sgv2-btn-nlu-send" class="btn-main" style="white-space: nowrap;">Enviar ✨</button>
+            <button id="sgv2-btn-agent" class="btn-secondary" style="white-space: nowrap;" title="O agente decide os passos em qualquer página e pede sua aprovação antes de preencher ou enviar">🤖 Agente</button>
+          </div>
+          <div class="sp-chips" aria-label="Sugestões rápidas">
+            <button type="button" class="sp-chip" data-quick-nlu="O que há nesta tela?">🔍 O que há na tela?</button>
+            <button type="button" class="sp-chip" data-quick-nlu="Frequência">📋 Frequência</button>
+            <button type="button" class="sp-chip" data-quick-nlu="Notas">📊 Notas</button>
+            <button type="button" class="sp-chip" data-quick-nlu="Diário de Classe">📖 Diário</button>
+            <button type="button" class="sp-chip" data-quick-nlu="Turmas">👥 Turmas</button>
+          </div>
+          <div id="sgv2-nlu-feedback" style="display: none; font-size: 12px; margin-top: 10px; padding: 10px 12px; border-radius: var(--radius-md); line-height: 1.45;"></div>
+        </div>
+
+        <!-- Estado Vazio (Quando o portal ainda não tem habilidades gravadas) -->
+        <div id="sgv2-no-skills-box" style="display: none; background: var(--surface-2); border: 1px dashed var(--border-strong); border-radius: var(--radius-lg); padding: 16px; text-align: center; margin-bottom: 12px;">
+          <div style="font-family: var(--font-display); font-size: 15px; font-weight: 600; color: var(--paper-ink); margin-bottom: 4px;">
+            Nenhuma rotina personalizada ainda
+          </div>
+          <p style="font-size: 12px; color: var(--paper-warm); margin-bottom: 12px; line-height: 1.5;">
+            Você já pode navegar autonomamente pelo portal ou gravar uma demonstração passo a passo.
+          </p>
+          <div style="display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;">
+            <button id="sgv2-btn-explore-empty" class="btn-main" style="font-size: 12px;">🧭 Navegar Autonomamente ✨</button>
+            <button id="sgv2-btn-goto-record" class="btn-secondary" style="font-size: 12px;">📹 Ensinar Gravando</button>
+          </div>
+        </div>
+
+        <!-- Card 2: Catálogo de Habilidades e Parâmetros -->
+        <div class="sp-card">
+          <label class="sp-label" for="sgv2-select-graph">Habilidades do Portal</label>
+          <div id="sgv2-skills-select-container" style="display: flex; gap: 8px; margin-bottom: 8px; align-items: center;">
+            <select id="sgv2-select-graph" class="sp-select" style="flex: 1;">
+              <option value="">Carregando habilidades do portal...</option>
+            </select>
+            <button id="sgv2-btn-run" class="btn-main" style="white-space: nowrap;">Executar</button>
+          </div>
+
+          <div id="sgv2-skill-desc" style="display: none; font-size: 12px; color: var(--paper-warm); margin-bottom: 10px; padding: 8px 10px; background: var(--surface-2); border-radius: var(--radius-sm); border: 1px solid var(--border-soft);"></div>
+
+          <div id="sgv2-params-form" class="sp-card-subtle" style="display: none;">
+            <div class="sp-label" style="margin-bottom: 8px;">Preencher Detalhes</div>
+            <div id="sgv2-params-fields" style="display: flex; flex-direction: column; gap: 8px;"></div>
+          </div>
+
+          <div class="sp-options-row">
+            <label class="sp-checkbox-label">
+              <input type="checkbox" id="sgv2-chk-dryrun" />
+              <span>🧪 Simular sem salvar alterações no portal (Dry-Run)</span>
+            </label>
+            <label class="sp-checkbox-label" title="Simula primeiro e mostra o que vai mudar no portal. Só grava o que você aprovar.">
+              <input type="checkbox" id="sgv2-chk-review" checked />
+              <span>🛡️ Revisar antes de gravar (recomendado)</span>
+            </label>
+            <label class="sp-checkbox-label" title="Usa digitação nativa quando o portal escolar exige teclado físico.">
+              <input type="checkbox" id="sgv2-chk-trusted" />
+              <span>⌨️ Modo compatibilidade avançada (teclado real)</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Caixa de Progresso de Execução -->
+        <div id="sgv2-progress-box" class="sp-card" aria-live="polite" style="display: none;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+            <span id="sgv2-node-label" style="font-size: 12px; font-weight: 700; color: var(--paper-ink);">Etapa: --</span>
+            <span id="sgv2-step-counter" style="font-size: 11px; font-weight: 600; color: var(--paper-mid); background: var(--surface-2); padding: 2px 8px; border-radius: var(--radius-pill);">Em andamento</span>
+          </div>
+          <div style="width: 100%; height: 8px; background: var(--surface-3); border-radius: var(--radius-pill); overflow: hidden; margin-bottom: 8px;">
+            <div id="sgv2-progress-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-gold)); transition: width 0.25s ease;"></div>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span id="sgv2-status-text" style="font-size: 12px; color: var(--paper-warm);">Aguardando...</span>
+            <button id="sgv2-btn-abort" class="btn-danger-soft">Interromper</button>
+          </div>
+        </div>
+
+        <!-- Mensagem de Retorno -->
+        <div id="sgv2-message-box" role="status" aria-live="polite" style="display: none; font-size: 12px; padding: 12px; border-radius: var(--radius-md); line-height: 1.5; margin-bottom: 12px;"></div>
+
+        <!-- Proposta de Auto-Reparo -->
+        <div id="sgv2-repair-box" class="sp-card" style="display: none; background: #fff9f0; border: 1px solid var(--warning-bd);">
+          <div style="font-family: var(--font-display); font-weight: 700; font-size: 14px; color: var(--warning); margin-bottom: 4px;">
+            🛠️ Mudança Visual no Portal Detectada
+          </div>
+          <p id="sgv2-repair-prompt" style="font-size: 12px; color: var(--paper-sepia); margin-bottom: 10px; line-height: 1.5;">
+            O portal mudou a posição de um botão ou campo. O assistente encontrou o novo local com segurança. Deseja atualizar?
+          </p>
+          <div style="display: flex; gap: 8px;">
+            <button id="sgv2-btn-reject-repair" class="btn-secondary" style="flex: 1;">Manter Anterior</button>
+            <button id="sgv2-btn-approve-repair" class="btn-main" style="flex: 1.2;">Atualizar Habilidade ✨</button>
+          </div>
+        </div>
+
+        <!-- Handoff Humano (Login / Captcha) -->
+        <div id="sgv2-handoff-box" class="sp-card" style="display: none; background: var(--surface-2); border: 1px solid var(--border-strong);">
+          <div style="font-family: var(--font-display); font-weight: 700; font-size: 14px; color: var(--paper-ink); margin-bottom: 4px;">
+            🛡️ Sua Confirmação na Página é Necessária
+          </div>
+          <p id="sgv2-handoff-msg" style="font-size: 12px; color: var(--paper-warm); margin-bottom: 8px; line-height: 1.5;">
+            O portal solicitou login ou verificação de segurança. Conclua na aba do portal e avise abaixo para continuarmos.
+          </p>
+          <div id="sgv2-handoff-timer" style="font-size: 11px; color: var(--accent); font-weight: 700; margin-bottom: 10px;">Tempo restante: --s</div>
+          <div style="display: flex; gap: 8px;">
+            <button id="sgv2-btn-cancel-handoff" class="btn-danger-soft" style="flex: 1; padding: 8px;">Cancelar</button>
+            <button id="sgv2-btn-resolved-handoff" class="btn-main" style="flex: 1.3;">Já Concluí ✨</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Visão 2: Ensinar (Gravar) -->
+      <div id="sgv2-record-view" style="display: none;">
+        <div class="sp-card">
+          <div class="sp-label">Ensinar Nova Habilidade ao Assistente</div>
+          <p class="sp-helper">
+            Dê um nome para a rotina, inicie a gravação e execute os passos normalmente no portal. O Teacher AI aprende o caminho sem guardar dados pessoais dos alunos.
+          </p>
+          <div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px;">
+            <div>
+              <label for="sgv2-record-task-name" style="font-size: 11px; font-weight: 600; color: var(--paper-sepia); display: block; margin-bottom: 4px;">Nome da Habilidade</label>
+              <input type="text" id="sgv2-record-task-name" class="sp-input" placeholder="Ex: Lançar Frequência Diária" />
+            </div>
+            <div>
+              <label for="sgv2-record-task-desc" style="font-size: 11px; font-weight: 600; color: var(--paper-sepia); display: block; margin-bottom: 4px;">Breve Descrição (opcional)</label>
+              <input type="text" id="sgv2-record-task-desc" class="sp-input" placeholder="Ex: Abre a turma e registra presença dos alunos" />
+            </div>
+            <details style="font-size: 11px; color: var(--paper-mid);">
+              <summary style="cursor: pointer; user-select: none;">Identificador técnico (gerado automaticamente)</summary>
+              <input type="text" id="sgv2-record-task-slug" class="sp-input" placeholder="Ex: lancar-frequencia-diaria" style="margin-top: 6px; font-family: var(--font-mono); font-size: 11px;" />
+            </details>
+          </div>
+
+          <div style="display: flex; gap: 8px; margin-bottom: 10px;">
+            <button id="sgv2-btn-start-record" class="btn-main" style="flex: 1; background: linear-gradient(135deg, var(--danger) 0%, #7f2323 100%);">🔴 Iniciar Gravação</button>
+            <button id="sgv2-btn-stop-record" class="btn-main" style="flex: 1; display: none; background: linear-gradient(135deg, var(--success) 0%, #244d30 100%);">⏹️ Concluir e Aprender</button>
+          </div>
+
+          <div id="sgv2-recording-indicator" style="display: none; background: var(--danger-bg); border: 1px solid var(--danger-bd); border-radius: var(--radius-md); padding: 10px 12px; margin-bottom: 10px; font-size: 12px; color: var(--danger); font-weight: 600;">
+            🔴 Gravando sua demonstração... Realize os cliques no portal e depois clique em "Concluir e Aprender".
+          </div>
+
+          <div id="sgv2-record-decisions-box" class="sp-card-subtle" style="display: none;">
+            <div class="sp-label" style="margin-bottom: 4px;">Como o Assistente Deve Tratar Este Preenchimento?</div>
+            <p id="sgv2-record-decisions-prompt" style="font-size: 12px; color: var(--paper-warm); margin-bottom: 8px;">
+              Escolha o tipo de informação manipulada nesta habilidade:
+            </p>
+            <div style="display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px;">
+              <label class="sp-checkbox-label"><input type="radio" name="sgv2-record-type" value="grade" /> <span>Nota escolar numérica (0 a 10)</span></label>
+              <label class="sp-checkbox-label"><input type="radio" name="sgv2-record-type" value="attendance" /> <span>Frequência / Presença de alunos</span></label>
+              <label class="sp-checkbox-label"><input type="radio" name="sgv2-record-type" value="other" checked /> <span>Texto livre, parecer ou navegação</span></label>
+            </div>
+            <button id="sgv2-btn-confirm-compile" class="btn-main" style="width: 100%;">Salvar e Ativar Habilidade ✨</button>
+          </div>
+
+          <div id="sgv2-record-message-box" style="display: none; font-size: 12px; padding: 10px 12px; border-radius: var(--radius-md); line-height: 1.45;"></div>
+        </div>
+      </div>
+
+      <!-- Visão 3: Diagnóstico (Suíte de Verificação) -->
+      <div id="sgv2-suite-view" style="display: none;">
+        <div class="sp-card">
+          <div class="sp-label">Verificação de Integridade e Conformidade</div>
+          <div style="font-size: 12px; font-weight: 600; color: var(--success); background: var(--success-bg); border: 1px solid var(--success-bd); border-radius: var(--radius-md); padding: 8px 12px; margin-bottom: 10px; display: flex; justify-content: space-between;">
+            <span id="suite-counter-llm">LLM: 0</span>
+            <span id="suite-counter-net">Rede do runner: 0</span>
+          </div>
+          <div style="display: flex; gap: 6px; margin-bottom: 10px;">
+            <button id="btn-suite-dev" class="btn-main" style="flex: 1; font-size: 11px; padding: 6px 8px;">Rodar DEV</button>
+            <button id="btn-suite-holdout" class="btn-secondary" style="flex: 1; font-size: 11px; padding: 6px 8px; color: var(--paper-ink);">Rodar HOLDOUT</button>
+            <button id="btn-suite-download" class="btn-secondary" style="font-size: 11px; padding: 6px 8px;" disabled>Baixar JSON</button>
+          </div>
+          <div id="suite-lock-box" style="display: none; font-size: 11px; padding: 8px 10px; border-radius: var(--radius-sm); margin-bottom: 10px;"></div>
+          <div id="suite-table-container" style="max-height: 240px; overflow-y: auto; border: 1px solid var(--border-soft); border-radius: var(--radius-md); background: var(--surface-1); margin-bottom: 10px;">
+            <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+              <thead>
+                <tr style="background: var(--surface-2); border-bottom: 1px solid var(--border-soft); text-align: left; color: var(--paper-warm); font-size: 11px; text-transform: uppercase;">
+                  <th style="padding: 6px 8px;">Cenário</th>
+                  <th style="padding: 6px 8px;">Status</th>
+                  <th style="padding: 6px 8px;">Tempo</th>
+                </tr>
+              </thead>
+              <tbody id="suite-table-body"></tbody>
+            </table>
+          </div>
+          <div id="suite-summary-box" style="display: none; font-size: 12px; padding: 8px 10px; border-radius: var(--radius-sm);"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: CHECKPOINT / CONFIRMAÇÃO HUMANA OBRIGATÓRIA -->
+  <div id="modal-checkpoint" role="dialog" aria-modal="true" aria-labelledby="checkpoint-title" style="display: none; position: fixed; inset: 0; background: rgba(28, 17, 10, 0.65); backdrop-filter: blur(4px); z-index: 1000; align-items: center; justify-content: center; padding: 14px;">
+    <div style="background: var(--surface-1); border-radius: var(--radius-lg); padding: 18px; max-width: 340px; width: 100%; box-shadow: var(--shadow-md); border: 1px solid var(--border-medium); border-top: 4px solid var(--accent);">
+      <div style="font-family: var(--font-display); font-size: 16px; font-weight: 700; color: var(--paper-ink); margin-bottom: 8px;">
+        🛡️ Confirmação do Professor
+      </div>
+      <div style="background: var(--surface-2); border: 1px solid var(--border-soft); border-radius: var(--radius-md); padding: 10px; margin-bottom: 12px;">
+        <div id="checkpoint-title" style="font-weight: 700; font-size: 12px; color: var(--paper-ink); margin-bottom: 4px;">Revisão Antes de Salvar</div>
+        <div id="checkpoint-desc" style="font-size: 11px; color: var(--paper-warm); margin-bottom: 8px;">Confira os dados abaixo antes de gravar no portal escolar.</div>
+        <div id="checkpoint-preview-data" style="font-size: 11px; color: var(--paper-ink); background: var(--surface-1); border: 1px solid var(--border-medium); border-radius: var(--radius-sm); padding: 8px; max-height: 100px; overflow-y: auto; font-family: var(--font-mono); white-space: pre-wrap;"></div>
+        <textarea id="checkpoint-editable-text" style="display: none; width: 100%; font-size: 12px; border: 1px solid var(--border-medium); border-radius: var(--radius-sm); padding: 8px; margin-top: 8px; resize: vertical; min-height: 60px;"></textarea>
+        <div id="checkpoint-warning-irreversible" style="display: none; font-size: 11px; color: var(--danger); font-weight: 600; margin-top: 8px; padding: 6px 8px; background: var(--danger-bg); border-radius: var(--radius-sm); border: 1px solid var(--danger-bd);">
+          Atenção: Ações de envio ou publicação final no portal não podem ser desfeitas automaticamente.
+        </div>
+      </div>
+      <div style="display: flex; gap: 8px;">
+        <button id="modal-checkpoint-btn-abort" class="btn-secondary" style="flex: 1;">Cancelar</button>
+        <button id="modal-checkpoint-btn-approve" class="btn-main" style="flex: 1.3;">Aprovar e Gravar ✨</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: ESPELHO DE REVISÃO (antes/depois de cada campo, nada gravado até aprovar) -->
+  <div id="modal-mirror" role="dialog" aria-modal="true" aria-labelledby="mirror-title" style="display: none; position: fixed; inset: 0; background: rgba(28, 17, 10, 0.65); backdrop-filter: blur(4px); z-index: 1001; align-items: center; justify-content: center; padding: 14px;">
+    <div style="background: var(--surface-1); border-radius: var(--radius-lg); padding: 18px; max-width: 380px; width: 100%; max-height: 90vh; display: flex; flex-direction: column; box-shadow: var(--shadow-md); border: 1px solid var(--border-medium); border-top: 4px solid var(--accent);">
+      <div id="mirror-title" style="font-family: var(--font-display); font-size: 16px; font-weight: 700; color: var(--paper-ink); margin-bottom: 4px;">🛡️ Revise antes de gravar</div>
+      <div id="mirror-summary" style="font-size: 11px; color: var(--paper-warm); margin-bottom: 8px;"></div>
+      <div id="mirror-rows" style="overflow-y: auto; flex: 1; min-height: 80px; margin-bottom: 12px; color: var(--paper-ink);"></div>
+      <div style="display: flex; gap: 8px;">
+        <button id="modal-mirror-btn-cancel" class="btn-secondary" style="flex: 1;">Cancelar</button>
+        <button id="modal-mirror-btn-approve" class="btn-main" style="flex: 1.3;">Aprovar e gravar ✨</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="dist/runner.bundle.js"></script>
+  <script src="suiteView.js"></script>
+  <script src="side_panel_chat.js"></script>
+  <script src="side_panel_v2.js"></script>
+</body>
+</html>

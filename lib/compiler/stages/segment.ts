@@ -25,20 +25,20 @@ export interface SegmentedTrace {
     value?: string
   }
   tableStep?: StepMarkTable | TraceStep
-  actionSteps: (StepInput | StepCheck | StepClick)[]
+  actionSteps: (StepInput | StepCheck | StepSelect | StepClick)[]
   submitStep?: StepClick
   paginationStep?: StepMarkNextPage | StepClick
 }
 
 export function segmentTrace(trace: Trace, decisions: CompilerDecisions): SegmentedTrace {
   const loginSteps: StepSensitiveField[] = []
-  const actionSteps: (StepInput | StepCheck | StepClick)[] = []
+  const actionSteps: (StepInput | StepCheck | StepSelect | StepClick)[] = []
   let tableStep: StepMarkTable | TraceStep | undefined
   let paginationStep: StepMarkNextPage | StepClick | undefined
   let submitStep: StepClick | undefined
   let initialNav: TraceStep | undefined
 
-  // Detecção de seletor não suportado
+  // Detecção de seletor não suportado em grafos read-only
   let hasSelectWithoutQuery = false
   let lastSelectStep: StepSelect | null = null
 
@@ -56,6 +56,12 @@ export function segmentTrace(trace: Trace, decisions: CompilerDecisions): Segmen
     if (step.kind === 'select') {
       lastSelectStep = step
       hasSelectWithoutQuery = true
+      if (decisions.task_id !== 'read_roster') {
+        actionSteps.push(step)
+        if (!tableStep && step.descriptor.rowContext) {
+          tableStep = step
+        }
+      }
     }
 
     if (step.kind === 'navigate' && lastSelectStep) {
@@ -80,7 +86,7 @@ export function segmentTrace(trace: Trace, decisions: CompilerDecisions): Segmen
       const text = step.descriptor.text || ''
       const isSubmit =
         step.is_submit_action ||
-        /\b(salvar|gravar|confirmar|concluir|submit|save)\b/i.test(text)
+        /\b(salvar|gravar|confirmar|concluir|submit|save|enviar|publicar|post|send)\b/i.test(text)
 
       if (isSubmit) {
         submitStep = step
@@ -149,7 +155,7 @@ export function segmentTrace(trace: Trace, decisions: CompilerDecisions): Segmen
         }
       }
     }
-  } else if (hasSelectWithoutQuery) {
+  } else if (hasSelectWithoutQuery && decisions.task_id === 'read_roster') {
     throw new CompilerError(
       'E_UNSUPPORTED_PATTERN',
       'O portal utiliza seleção por dropdown (<select>) que não altera a URL. ' +
@@ -158,15 +164,25 @@ export function segmentTrace(trace: Trace, decisions: CompilerDecisions): Segmen
   }
 
   // Validação de requisitos de escrita vs leitura
-  const isWriteTask = decisions.task_id === 'lancar_falta' || decisions.task_id === 'lancar_nota'
-  if (isWriteTask && actionSteps.length === 0) {
+  // Selects sem rowContext são filtros de navegação (SELECT_FILTER), não lançamentos pedagógicos
+  const hasWriteAction = actionSteps.some(
+    s => s.kind === 'input' || s.kind === 'check' ||
+    (s.kind === 'select' && !!(s.descriptor as any).rowContext)
+  )
+  const isWriteTask =
+    decisions.task_id === 'lancar_falta' ||
+    decisions.task_id === 'lancar_nota' ||
+    hasWriteAction ||
+    !!submitStep
+  if (isWriteTask && !hasWriteAction && !submitStep) {
     throw new CompilerError(
       'E_NO_WRITE_STEP',
       `A tarefa de escrita "${decisions.task_id}" requer pelo menos um passo de marcação ou digitação gravado.`
     )
   }
 
-  if ((decisions.task_id === 'read_roster' || isWriteTask) && !tableStep) {
+  const requiresTable = decisions.task_id === 'read_roster' || decisions.task_id === 'lancar_falta' || decisions.task_id === 'lancar_nota'
+  if (requiresTable && !tableStep) {
     throw new CompilerError(
       'E_NO_TABLE_MARKED',
       'Nenhuma tabela de alunos foi marcada no trace (necessário marcar tabela ou interagir com linha de aluno).'

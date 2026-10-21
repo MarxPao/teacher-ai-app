@@ -33,11 +33,12 @@ export class ContentAdapter {
       if (method === 'getFrameContext') {
         const url = this.doc.location?.href || ''
         const host = this.doc.location?.hostname || ''
+        const isSessionExpired = typeof this.driver.isSessionExpired === 'function' ? this.driver.isSessionExpired() : false
         return {
           channel: SKILLGRAPH_RPC_CHANNEL,
           id,
           ok: true,
-          result: { url, host, frameId: 0 },
+          result: { url, host, frameId: 0, isSessionExpired },
         }
       }
 
@@ -80,6 +81,13 @@ export class ContentAdapter {
         result = await this.driver.clearHighlight?.()
       } else if (method === 'describeElements') {
         result = await this.driver.describeElements?.(params)
+      } else if (method === 'navigate') {
+        const targetUrl = typeof params === 'string' ? params : (params?.url || '')
+        result = await this.driver.navigate?.(targetUrl)
+      } else if (method === 'pressKey') {
+        result = await this.driver.pressKey(params.key, params.target)
+      } else if (method === 'inspectWriteTarget') {
+        result = await (this.driver as any).inspectWriteTarget?.(params.target || params)
       } else {
         result = await driverAny[method](params)
       }

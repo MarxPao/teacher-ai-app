@@ -1,0 +1,14 @@
+{
+  "id": "holdout_09_hostile_revoked_publisher_key",
+  "set": "holdout",
+  "base_graph": "base_read_roster.json",
+  "package_id": "diario-revoked-pub",
+  "map_version": 1,
+  "publisher_key": "maliciousPublisher",
+  "index_state": {
+    "revoke_publisher": true
+  },
+  "mutations": [],
+  "expected": "reject",
+  "expected_code": "E_PKG_KEY_REVOKED"
+}

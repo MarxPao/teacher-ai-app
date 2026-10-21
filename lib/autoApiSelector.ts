@@ -16,7 +16,7 @@
  */
 
 import { ApiConfig } from '@/components/modules/ApiManager'
-import { guardEgressFetch } from '@/lib/piiMasking'
+import { guardEgressFetch, maskPii } from '@/lib/piiMasking'
 
 export type TaskType =
   | 'chat'           // Chat agêntico geral (Rafinha)
@@ -180,24 +180,68 @@ export function getAvailableApisForSelect(): ApiConfig[] {
  * Executa uma chamada unificada a QUALQUER provedor de IA cadastrado (Gemini, Groq, Zhipu, SiliconFlow, OpenRouter, OpenAI, Anthropic, DeepSeek).
  */
 export async function executeUnifiedAiCall(api: ApiConfig | null, prompt: string, systemPrompt?: string): Promise<string> {
-  if (!api || api.provider === 'manual' || !api.key) {
+  // Camada Zero-PII Gateway: Anonimiza nomes da lista ativa de alunos e PII antes de qualquer envio externo
+  const maskedPromptObj = maskPii(prompt)
+  const safePrompt = maskedPromptObj.maskedText
+  const sharedSession = {
+    mapping: maskedPromptObj.mapping,
+    reverseMapping: maskedPromptObj.reverseMapping
+  }
+  const safeSystemPrompt = systemPrompt ? maskPii(systemPrompt, undefined, sharedSession).maskedText : ''
+
+  // Coleta chaves salvas localmente pelo professor (BYOK) para enviar ao backend /api/agent ou usar no auto-select
+  const allApis = getAvailableApisForSelect()
+  const userKeys: Record<string, string> = {}
+  for (const item of allApis) {
+    if (item.provider && item.provider !== 'manual' && item.key) {
+      userKeys[`${item.provider}_key`] = item.key
+    }
+  }
+
+  let effectiveApi = api
+  if (!effectiveApi || effectiveApi.provider === 'manual' || !effectiveApi.key || effectiveApi.id === 'auto') {
+    const taskType = detectTaskType(safePrompt)
+    const bestLocal = selectBestApi(allApis, taskType, true)
+    if (bestLocal && bestLocal.provider !== 'manual' && bestLocal.key) {
+      effectiveApi = bestLocal
+    }
+  }
+
+  const callBackendAgentFallback = async (): Promise<string> => {
     const res = await fetch('/api/agent', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        messages: [{ role: 'user', content: prompt }],
-        context: systemPrompt || '',
-        autoMode: true
+        messages: [{ role: 'user', content: safePrompt }],
+        context: safeSystemPrompt,
+        autoMode: true,
+        disableTools: true,
+        userKeys
       })
     })
-    if (!res.ok) throw new Error('Configure uma chave válida em "APIs & Modelos" para gerar o conteúdo.')
+    if (!res.ok) {
+      let errMsg = 'Configure uma chave válida em "APIs & Modelos" para gerar o conteúdo.'
+      try {
+        const errData = await res.json()
+        if (errData?.error) errMsg = errData.error
+      } catch {}
+      throw new Error(errMsg)
+    }
     const data = await res.json()
-    return data.reply || data.content?.[0]?.text || ''
+    const textFromContent = Array.isArray(data.content)
+      ? data.content.find((c: any) => c.type === 'text' && typeof c.text === 'string')?.text
+      : undefined
+    const rawReply = data.reply || textFromContent || data.content?.[0]?.text || ''
+    return maskedPromptObj.unmask(rawReply)
   }
 
-  const p = api.provider
-  const key = api.key
-  const model = api.model
+  if (!effectiveApi || effectiveApi.provider === 'manual' || !effectiveApi.key || effectiveApi.id === 'auto') {
+    return callBackendAgentFallback()
+  }
+
+  const p = effectiveApi.provider
+  const key = effectiveApi.key
+  const model = effectiveApi.model
   let resultText = ''
 
   // 1. Anthropic Claude
@@ -205,7 +249,7 @@ export async function executeUnifiedAiCall(api: ApiConfig | null, prompt: string
     const r = await guardEgressFetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerously-allow-browser': 'true' },
-      body: JSON.stringify({ model: model || 'claude-3-5-sonnet-20241022', max_tokens: 4096, messages: [{ role: 'user', content: prompt }] }),
+      body: JSON.stringify({ model: model || 'claude-3-5-sonnet-20241022', max_tokens: 8192, messages: [{ role: 'user', content: safePrompt }] }),
     })
     const d = await r.json()
     if (d.error) throw new Error(d.error.message || 'Erro na Anthropic Claude')
@@ -221,13 +265,14 @@ export async function executeUnifiedAiCall(api: ApiConfig | null, prompt: string
     if (p === 'openrouter') baseUrl = 'https://openrouter.ai/api/v1/chat/completions'
     if (p === 'zhipu') baseUrl = 'https://open.bigmodel.cn/api/paas/v4/chat/completions'
 
+    const maxTokensForProvider = ['openai', 'deepseek', 'siliconflow', 'groq'].includes(p) ? 8192 : 4096
     const r = await guardEgressFetch(baseUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
       body: JSON.stringify({
         model: model || (p === 'groq' ? 'llama-3.3-70b-versatile' : p === 'deepseek' ? 'deepseek-chat' : p === 'zhipu' ? 'glm-4-flash' : 'gpt-4o-mini'),
-        messages: [{ role: 'user', content: prompt }],
-        max_tokens: 4096
+        messages: [{ role: 'user', content: safePrompt }],
+        max_tokens: maxTokensForProvider
       }),
     })
     const d = await r.json()
@@ -237,8 +282,16 @@ export async function executeUnifiedAiCall(api: ApiConfig | null, prompt: string
 
   // 3. Google Gemini
   else if (p === 'gemini') {
-    const validModel = model && !model.includes('gemini-2.0') && !model.includes('gemini-1.5') && !model.includes('gemini-2.5') ? model : 'gemini-3.6-flash'
-    const modelsToTry = [validModel, 'gemini-3.5-flash-lite', 'gemini-3.5-flash', 'gemini-flash-lite-latest', 'gemini-flash-latest']
+    const modelsToTry = Array.from(new Set([
+      ...(model ? [model] : []),
+      'gemini-2.5-flash',
+      'gemini-2.5-flash-preview-05-20',
+      'gemini-2.0-flash',
+      'gemini-1.5-flash',
+      'gemini-1.5-flash-latest',
+      'gemini-flash-latest',
+      'gemini-flash-lite-latest',
+    ]))
     let lastErr = ''
     for (const m of modelsToTry) {
       try {
@@ -248,7 +301,10 @@ export async function executeUnifiedAiCall(api: ApiConfig | null, prompt: string
             'Content-Type': 'application/json',
             'x-goog-api-key': key
           },
-          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: safePrompt }] }],
+            generationConfig: { maxOutputTokens: 8192 }
+          }),
         })
         const d = await r.json()
         if (!d.error && d.candidates?.[0]?.content?.parts?.[0]?.text) {
@@ -258,21 +314,25 @@ export async function executeUnifiedAiCall(api: ApiConfig | null, prompt: string
           lastErr = d.error.message || `Erro no modelo ${m}`
         }
       } catch (e: any) {
+        if (e?.name === 'EgressSecurityError') throw e
         lastErr = e.message
       }
     }
-    if (!resultText) throw new Error(lastErr || 'Erro no Google Gemini')
+    if (!resultText) {
+      console.warn(`[AutoApiSelector] Modelos Gemini indisponíveis client-side (${lastErr}). Executando contingência via backend /api/agent...`)
+      return await callBackendAgentFallback()
+    }
   } else {
-    throw new Error(`Provedor ${p} não suportado.`)
+    return await callBackendAgentFallback()
   }
 
   // Registra o consumo de tokens automaticamente no monitor
   try {
     const { recordTokenUsage, estimateTokensFromText } = await import('@/lib/tokenTracker')
-    const promptTokens = estimateTokensFromText(prompt)
+    const promptTokens = estimateTokensFromText(safePrompt)
     const completionTokens = estimateTokensFromText(resultText)
     recordTokenUsage(p, promptTokens, completionTokens)
   } catch {}
 
-  return resultText
+  return maskedPromptObj.unmask(resultText)
 }

@@ -108,7 +108,7 @@ ${buildTeacherStyleSystemPrompt()}`
       {/* Botão de Assistência de IA */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
         <span style={{ fontSize: 12, color: COLOR.paperMid }}>
-          Preencha os campos abaixo ou solicite uma sugestão inicial da IA baseada nas observações do aluno.
+          Edite livremente o texto abaixo ou solicite uma sugestão inicial da IA baseada nas observações do(a) estudante.
         </span>
         <button
           type="button"
@@ -119,18 +119,17 @@ ${buildTeacherStyleSystemPrompt()}`
             alignItems: 'center',
             gap: 6,
             padding: '6px 14px',
-            background: isGenerating ? '#e2e8f0' : 'linear-gradient(135deg, #6d28d9, #4c3a8e)',
-            color: '#fff',
-            border: 'none',
+            background: isGenerating ? '#e2d9c8' : '#2c1a0e',
+            color: '#fdf8f2',
+            border: '1px solid #8b5e3c',
             borderRadius: RADIUS.md,
             fontSize: 12,
             fontWeight: 700,
-            cursor: isGenerating ? 'not-allowed' : 'pointer',
-            boxShadow: '0 2px 6px rgba(109, 40, 217, 0.25)'
+            cursor: isGenerating ? 'not-allowed' : 'pointer'
           }}
         >
           <i className={isGenerating ? 'ti ti-loader' : 'ti ti-sparkles'} />
-          {isGenerating ? 'Gerando rascunho...' : 'Assistência de IA (Rascunho)'}
+          {isGenerating ? 'Gerando rascunho...' : '✨ Sugerir Texto com IA'}
         </button>
       </div>
 
@@ -139,6 +138,7 @@ ${buildTeacherStyleSystemPrompt()}`
         {subsections.map(sub => {
           const value = data[sub.key] || ''
           const isAiDraft = Boolean(aiDraftKeys[sub.key])
+          const rowCount = sub.key === 'evolucaoGeral' ? 9 : sub.key === 'objetivoGeral' ? 4 : 4
 
           return (
             <div
@@ -149,13 +149,13 @@ ${buildTeacherStyleSystemPrompt()}`
                 gap: 6,
                 padding: 12,
                 borderRadius: RADIUS.md,
-                background: isAiDraft ? '#faf5ff' : '#fff',
-                border: `1px solid ${isAiDraft ? '#c084fc' : '#ede8dc'}`,
+                background: isAiDraft ? '#fdf8f2' : '#fff',
+                border: `1px solid ${isAiDraft ? '#8b5e3c' : '#ede8dc'}`,
                 transition: 'all 0.2s'
               }}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <label style={{ fontSize: 12, fontWeight: 700, color: isAiDraft ? '#6b21a8' : COLOR.paperInk }}>
+                <label style={{ fontSize: 12, fontWeight: 700, color: COLOR.paperInk }}>
                   {sub.title}
                 </label>
                 {isAiDraft && (
@@ -165,8 +165,8 @@ ${buildTeacherStyleSystemPrompt()}`
                       fontWeight: 700,
                       padding: '2px 8px',
                       borderRadius: 12,
-                      background: '#e9d5ff',
-                      color: '#581c87',
+                      background: '#f5efe6',
+                      color: '#8b5e3c',
                       display: 'inline-flex',
                       alignItems: 'center',
                       gap: 4
@@ -184,7 +184,7 @@ ${buildTeacherStyleSystemPrompt()}`
                   markReviewed(sub.key)
                 }}
                 placeholder={sub.placeholder || `Descreva observações sobre ${sub.title}...`}
-                rows={3}
+                rows={rowCount}
                 style={{
                   width: '100%',
                   padding: '10px 12px',
@@ -192,7 +192,7 @@ ${buildTeacherStyleSystemPrompt()}`
                   border: '1px solid #dcd7cb',
                   background: '#fff',
                   fontSize: 13,
-                  lineHeight: 1.5,
+                  lineHeight: 1.55,
                   color: COLOR.paperInk,
                   outline: 'none',
                   resize: 'vertical'

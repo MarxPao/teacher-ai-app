@@ -1,0 +1,17 @@
+{
+  "id": "holdout_17_hostile_unsupported_spec",
+  "set": "holdout",
+  "base_graph": "base_read_roster.json",
+  "package_id": "diario-spec-3",
+  "map_version": 1,
+  "publisher_key": "publisherA",
+  "mutations": [
+    {
+      "op": "set",
+      "path": "spec_version",
+      "value": "3.0"
+    }
+  ],
+  "expected": "reject",
+  "expected_code": "E_PKG_SPEC_UNSUPPORTED"
+}

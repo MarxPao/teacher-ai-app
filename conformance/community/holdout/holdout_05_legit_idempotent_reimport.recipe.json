@@ -1,0 +1,16 @@
+{
+  "id": "holdout_05_legit_idempotent_reimport",
+  "set": "holdout",
+  "base_graph": "base_read_roster.json",
+  "package_id": "diario-reimport",
+  "map_version": 1,
+  "publisher_key": "publisherA",
+  "prior_state": {
+    "seen_version": 1
+  },
+  "mutations": [],
+  "expected": "accept",
+  "test_binding": {
+    "h1.invalid": "escola.paineldoaluno.com.br"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "id": "holdout_14_hostile_cpf_literal",
+  "set": "holdout",
+  "base_graph": "base_read_roster.json",
+  "package_id": "diario-pii-cpf",
+  "map_version": 1,
+  "publisher_key": "publisherA",
+  "mutations": [
+    {
+      "op": "set",
+      "path": "nodes.nav_page.label",
+      "value": "Aluno 123.456.789-00"
+    }
+  ],
+  "expected": "reject",
+  "expected_code": "E_PKG_PII"
+}

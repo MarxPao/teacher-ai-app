@@ -168,7 +168,9 @@ export function validateGraph(graph: SkillGraphV2): ValidationReport {
   // 1. Limites Globais
   const nodeCount = Object.keys(graph.nodes || {}).length
   if (nodeCount > 200) errors.push({ code: 'E_LIMITS', message: `Grafo excede o teto de 200 nós (atual: ${nodeCount})` })
-  if (Buffer.byteLength(JSON.stringify(graph), 'utf-8') > 262144) {
+  const serialized = JSON.stringify(graph)
+  const byteLength = typeof Buffer !== 'undefined' ? Buffer.byteLength(serialized, 'utf-8') : new TextEncoder().encode(serialized).length
+  if (byteLength > 262144) {
     errors.push({ code: 'E_LIMITS', message: 'Tamanho serializado do grafo excede o teto de 256 KB' })
   }
 

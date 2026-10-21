@@ -1,0 +1,17 @@
+{
+  "id": "holdout_15_hostile_email_literal",
+  "set": "holdout",
+  "base_graph": "base_read_roster.json",
+  "package_id": "diario-pii-email",
+  "map_version": 1,
+  "publisher_key": "publisherA",
+  "mutations": [
+    {
+      "op": "set",
+      "path": "nodes.nav_page.label",
+      "value": "Contato: mariana@escola.com.br"
+    }
+  ],
+  "expected": "reject",
+  "expected_code": "E_PKG_PII"
+}

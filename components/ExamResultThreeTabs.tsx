@@ -5,7 +5,24 @@ import { toast } from '@/components/Toast'
 import DocumentCanvas from '@/components/DocumentCanvas'
 import EditableQuestionBoxes, { EditableQuestionItem, parseContentToQuestions } from '@/components/EditableQuestionBoxes'
 import AudioPlayerCard from '@/components/AudioPlayerCard'
-import { exportToPdf, exportToWord } from '@/lib/exportUtils'
+import {
+  exportToPdf,
+  exportToWord,
+  buildStandaloneAnswerKeyHtml,
+  buildStandalonePedagogicalReasoningHtml,
+  buildStandalonePdiAssessmentDocumentHtml
+} from '@/lib/exportUtils'
+import {
+  getAllPdiRecords,
+  recordPdiCompetencyEvaluation,
+  normalizePdiSkillStatus,
+  type PdiRecord
+} from '@/lib/pdiManagement'
+import {
+  getDocumentFormats,
+  getDefaultFormatForSchool,
+  type SchoolDocumentFormat
+} from '@/lib/documentFormatTemplates'
 import { createExamSheetLayout, generatePrintableOmrSheetHtml, processOMRBatchAndUpdatePsychometrics } from '@/lib/omr'
 import { generateExecutivePedagogicalSummary } from '@/lib/executivePedagogicalSummary'
 import { BnccSkill, getBnccForGrade } from '@/lib/bnccStore'
@@ -180,6 +197,8 @@ export interface ExamResultThreeTabsProps {
   initialTab?: ResultTabKey
   questions?: any[]
   onQuestionsChange?: (questions: any[]) => void
+  documentFormatId?: string
+  onDocumentFormatChange?: (formatId: string) => void
 }
 
 export default function ExamResultThreeTabs({
@@ -215,12 +234,35 @@ export default function ExamResultThreeTabs({
   initialTab = 'document',
   questions,
   onQuestionsChange,
+  documentFormatId,
+  onDocumentFormatChange,
 }: ExamResultThreeTabsProps) {
   const [activeTab, setActiveTab] = useState<ResultTabKey>(initialTab)
   const [activeViewMode, setActiveViewMode] = useState<'boxes' | 'canvas'>('boxes')
   const [showHaladynaGateModal, setShowHaladynaGateModal] = useState(false)
   const [haladynaOverrideGranted, setHaladynaOverrideGranted] = useState(false)
   const [pendingExportAction, setPendingExportAction] = useState<(() => void) | null>(null)
+  const [availableFormats] = useState<SchoolDocumentFormat[]>(() => getDocumentFormats())
+  const [localFormatId, setLocalFormatId] = useState<string>(() =>
+    getDefaultFormatForSchool(header.school || 'Machado Sobrinho', mode === 'exam' ? 'exam' : 'worksheet').id
+  )
+  const effectiveFormatId = documentFormatId || localFormatId
+
+  // Integração PDI / PEI com Avaliações e Atividades (Documento 4 Separado + Avaliação de Competências)
+  const [pdiRecordsMap, setPdiRecordsMap] = useState<Record<string, PdiRecord>>(() => getAllPdiRecords())
+  const pdiStudentList = useMemo(() => Object.values(pdiRecordsMap), [pdiRecordsMap])
+  const [selectedPdiStudentId, setSelectedPdiStudentId] = useState<string>(() => {
+    const all = Object.values(getAllPdiRecords())
+    return all[0]?.studentId || 'student_carina_miranda_6ano'
+  })
+  const [showPdiAssessmentDrawer, setShowPdiAssessmentDrawer] = useState<boolean>(false)
+  const [pdiActivityEvaluations, setPdiActivityEvaluations] = useState<
+    Record<string, { status: 'Sim' | 'Em desenvolvimento' | 'Não'; note: string }>
+  >({})
+
+  const activePdiStudent: PdiRecord | null = useMemo(() => {
+    return pdiRecordsMap[selectedPdiStudentId] || pdiStudentList[0] || null
+  }, [pdiRecordsMap, selectedPdiStudentId, pdiStudentList])
 
   // Extrai total de questões parsed (privilegia array de objetos tipados quando fornecido)
   const parsedQuestions = useMemo(() => {
@@ -852,8 +894,37 @@ export default function ExamResultThreeTabs({
                 flexShrink: 0,
               }}
             >
-              {/* Botões de Exportação */}
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {/* Botões de Exportação dos 3 Documentos Independentes (1. Prova | 2. Gabarito | 3. Reasoning & Justificativa) */}
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                {/* SELETOR DE FORMATO DE ARQUIVO DA ESCOLA */}
+                <select
+                  value={effectiveFormatId}
+                  onChange={e => {
+                    const nextId = e.target.value
+                    setLocalFormatId(nextId)
+                    onDocumentFormatChange?.(nextId)
+                  }}
+                  title="Selecione o Formato de Arquivo padrão da Escola (configurável em Biblioteca & Repositório -> 7. Formatos de Arquivo)"
+                  style={{
+                    padding: '7px 10px',
+                    borderRadius: RADIUS.md,
+                    border: '1.5px solid #8b5e3c',
+                    background: '#fffcf8',
+                    color: '#2c1a0e',
+                    fontSize: 11.5,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    maxWidth: 245,
+                  }}
+                >
+                  {availableFormats.map(f => (
+                    <option key={f.id} value={f.id}>
+                      📐 {f.name}
+                    </option>
+                  ))}
+                </select>
+
+                {/* DOC 1: A PROVA DO ALUNO (SEM GABARITO) */}
                 <button
                   type="button"
                   onClick={() =>
@@ -862,29 +933,33 @@ export default function ExamResultThreeTabs({
                         schoolName: header.school || 'ESCOLA DE ENSINO & IDIOMAS',
                         teacherName: header.teacher || 'Professor(a)',
                         className: grade || '9º Ano',
+                        subjectName,
                         title:
                           header.title ||
                           (topic ? `${mode === 'exam' ? 'PROVA' : 'ATIVIDADE'} ${topic.toUpperCase()}` : 'AVALIAÇÃO'),
                         content: result,
+                        showStudentNameBox: true,
+                        formatId: effectiveFormatId,
                       })
                     )
                   }
                   style={{
-                    padding: '8px 14px',
+                    padding: '8px 13px',
                     borderRadius: RADIUS.md,
                     border: 'none',
                     background: '#8b5e3c',
                     color: '#fff',
-                    fontSize: 12.5,
+                    fontSize: 12,
                     fontWeight: 700,
                     cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: 6,
+                    gap: 5,
                     boxShadow: '0 2px 8px rgba(139,94,60,0.2)',
                   }}
+                  title="Documento 1: Exporta exclusivamente a folha de prova do aluno (sem gabarito) no formato da escola"
                 >
-                  <i className="ti ti-printer" /> Exportar PDF Oficial
+                  <i className="ti ti-printer" /> 📄 1. Prova (PDF)
                 </button>
 
                 <button
@@ -895,29 +970,370 @@ export default function ExamResultThreeTabs({
                         schoolName: header.school || 'ESCOLA DE ENSINO & IDIOMAS',
                         teacherName: header.teacher || 'Professor(a)',
                         className: grade || '9º Ano',
+                        subjectName,
                         title:
                           header.title ||
                           (topic ? `${mode === 'exam' ? 'PROVA' : 'ATIVIDADE'} ${topic.toUpperCase()}` : 'AVALIAÇÃO'),
                         content: result,
+                        showStudentNameBox: true,
+                        formatId: effectiveFormatId,
                       })
                     )
                   }
                   style={{
-                    padding: '8px 14px',
+                    padding: '8px 11px',
                     borderRadius: RADIUS.md,
                     border: '1px solid #c0a080',
                     background: '#fffcf8',
                     color: '#8b5e3c',
-                    fontSize: 12.5,
+                    fontSize: 12,
                     fontWeight: 700,
                     cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: 6,
+                    gap: 5,
                   }}
+                  title="Documento 1: Exporta exclusivamente a folha de prova do aluno em Word (.doc) no formato da escola"
                 >
-                  <i className="ti ti-file-text" /> Exportar Word (.docx)
+                  <i className="ti ti-file-text" /> Prova (.doc)
                 </button>
+
+                {/* DOC 2: FOLHA DE GABARITO OFICIAL (DOCUMENTO SEPARADO) */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const baseTitle =
+                      header.title ||
+                      (topic ? `${mode === 'exam' ? 'PROVA' : 'ATIVIDADE'} ${topic.toUpperCase()}` : 'AVALIAÇÃO')
+                    const answerKeyHtml = buildStandaloneAnswerKeyHtml({
+                      questions: parsedQuestions,
+                      rawContent: result,
+                      title: baseTitle
+                    })
+                    exportToPdf({
+                      schoolName: header.school || 'ESCOLA DE ENSINO & IDIOMAS',
+                      teacherName: header.teacher || 'Professor(a)',
+                      className: grade || '9º Ano',
+                      subjectName,
+                      title: `GABARITO OFICIAL — ${baseTitle}`,
+                      instructions: 'DOCUMENTO EXCLUSIVO DO PROFESSOR — Folha de Gabarito e Padrão de Respostas.',
+                      content: answerKeyHtml,
+                      showStudentNameBox: false,
+                      formatId: effectiveFormatId,
+                    })
+                  }}
+                  style={{
+                    padding: '8px 13px',
+                    borderRadius: RADIUS.md,
+                    border: '1.5px solid #16a34a',
+                    background: '#f0fdf4',
+                    color: '#166534',
+                    fontSize: 12,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 5,
+                  }}
+                  title="Documento 2: Exporta a Folha de Gabarito Oficial em documento separado"
+                >
+                  ✅ 2. Gabarito (PDF)
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const baseTitle =
+                      header.title ||
+                      (topic ? `${mode === 'exam' ? 'PROVA' : 'ATIVIDADE'} ${topic.toUpperCase()}` : 'AVALIAÇÃO')
+                    const answerKeyHtml = buildStandaloneAnswerKeyHtml({
+                      questions: parsedQuestions,
+                      rawContent: result,
+                      title: baseTitle
+                    })
+                    exportToWord({
+                      schoolName: header.school || 'ESCOLA DE ENSINO & IDIOMAS',
+                      teacherName: header.teacher || 'Professor(a)',
+                      className: grade || '9º Ano',
+                      subjectName,
+                      title: `GABARITO OFICIAL — ${baseTitle}`,
+                      instructions: 'DOCUMENTO EXCLUSIVO DO PROFESSOR — Folha de Gabarito e Padrão de Respostas.',
+                      content: answerKeyHtml,
+                      showStudentNameBox: false,
+                      formatId: effectiveFormatId,
+                    })
+                  }}
+                  style={{
+                    padding: '8px 11px',
+                    borderRadius: RADIUS.md,
+                    border: '1px solid #86efac',
+                    background: '#ffffff',
+                    color: '#166534',
+                    fontSize: 12,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 5,
+                  }}
+                  title="Documento 2: Exporta a Folha de Gabarito Oficial em Word (.doc) separado"
+                >
+                  Gabarito (.doc)
+                </button>
+
+                {/* DOC 3: REASONING & JUSTIFICATIVA PEDAGÓGICA (PROVA COMPLETA + CADA QUESTÃO) */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const baseTitle =
+                      header.title ||
+                      (topic ? `${mode === 'exam' ? 'PROVA' : 'ATIVIDADE'} ${topic.toUpperCase()}` : 'AVALIAÇÃO')
+                    const reasoningHtml = buildStandalonePedagogicalReasoningHtml({
+                      questions: parsedQuestions,
+                      title: baseTitle,
+                      topic,
+                      grade,
+                      level,
+                      subjectName,
+                      sections,
+                      approach,
+                      bloomDistribution,
+                      difficultyDistribution,
+                      distractorSummary: distractorAudit.summaryLabel,
+                      distractorCoveragePct: distractorAudit.coveragePercentage,
+                      distractorQuestions: distractorAudit.questions,
+                      factCheck: factCheck || null,
+                      sources: activeSources,
+                      bnccSkills: matchingBnccSkills
+                    })
+                    exportToPdf({
+                      schoolName: header.school || 'ESCOLA DE ENSINO & IDIOMAS',
+                      teacherName: header.teacher || 'Professor(a)',
+                      className: grade || '9º Ano',
+                      subjectName,
+                      title: `REASONING & JUSTIFICATIVA PEDAGÓGICA — ${baseTitle}`,
+                      instructions:
+                        'DOCUMENTO PEDAGÓGICO DO PROFESSOR E COORDENAÇÃO — Fundamentação da prova como um todo e reasoning detalhado questão por questão.',
+                      content: reasoningHtml,
+                      showStudentNameBox: false,
+                      formatId: effectiveFormatId,
+                    })
+                  }}
+                  style={{
+                    padding: '8px 13px',
+                    borderRadius: RADIUS.md,
+                    border: '1.5px solid #6d28d9',
+                    background: '#f5f3ff',
+                    color: '#5b21b6',
+                    fontSize: 12,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 5,
+                  }}
+                  title="Documento 3: Exporta o Relatório de Reasoning e Justificativa Pedagógica (da prova como um todo e de cada questão) em documento separado"
+                >
+                  🧠 3. Reasoning & Justificativa (PDF)
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const baseTitle =
+                      header.title ||
+                      (topic ? `${mode === 'exam' ? 'PROVA' : 'ATIVIDADE'} ${topic.toUpperCase()}` : 'AVALIAÇÃO')
+                    const reasoningHtml = buildStandalonePedagogicalReasoningHtml({
+                      questions: parsedQuestions,
+                      title: baseTitle,
+                      topic,
+                      grade,
+                      level,
+                      subjectName,
+                      sections,
+                      approach,
+                      bloomDistribution,
+                      difficultyDistribution,
+                      distractorSummary: distractorAudit.summaryLabel,
+                      distractorCoveragePct: distractorAudit.coveragePercentage,
+                      distractorQuestions: distractorAudit.questions,
+                      factCheck: factCheck || null,
+                      sources: activeSources,
+                      bnccSkills: matchingBnccSkills
+                    })
+                    exportToWord({
+                      schoolName: header.school || 'ESCOLA DE ENSINO & IDIOMAS',
+                      teacherName: header.teacher || 'Professor(a)',
+                      className: grade || '9º Ano',
+                      subjectName,
+                      title: `REASONING & JUSTIFICATIVA PEDAGÓGICA — ${baseTitle}`,
+                      instructions:
+                        'DOCUMENTO PEDAGÓGICO DO PROFESSOR E COORDENAÇÃO — Fundamentação da prova como um todo e reasoning detalhado questão por questão.',
+                      content: reasoningHtml,
+                      showStudentNameBox: false,
+                      formatId: effectiveFormatId,
+                    })
+                  }}
+                  style={{
+                    padding: '8px 11px',
+                    borderRadius: RADIUS.md,
+                    border: '1px solid #c4b5fd',
+                    background: '#ffffff',
+                    color: '#5b21b6',
+                    fontSize: 12,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 5,
+                  }}
+                  title="Documento 3: Exporta o Relatório de Reasoning e Justificativa Pedagógica em Word (.doc) separado"
+                >
+                  Reasoning (.doc)
+                </button>
+
+                {/* DOC 4: FICHA DE ACOMPANHAMENTO E ADAPTAÇÃO PDI/PEI (DOCUMENTO SEPARADO) */}
+                {activePdiStudent && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const baseTitle =
+                          header.title ||
+                          (topic ? `${mode === 'exam' ? 'PROVA' : 'ATIVIDADE'} ${topic.toUpperCase()}` : 'AVALIAÇÃO')
+                        const ident = activePdiStudent.identification || activePdiStudent.studentInfo || {}
+                        const pdiDocHtml = buildStandalonePdiAssessmentDocumentHtml({
+                          studentName: activePdiStudent.studentName,
+                          gradeCycle: ident.gradeCycle || grade || '6º ano do Ensino Fundamental',
+                          shift: ident.shift || 'Matutino',
+                          validityPeriod: ident.validityPeriod || '1º semestre / 2026',
+                          nextReviewDate: ident.nextReviewDate || 'Dezembro / 2026',
+                          regentTeacher: ident.regentTeacher || header.teacher || 'Rafaela Franco Toldo',
+                          pedagogicalTeam: ident.pedagogicalTeam || 'Marianna Panisset',
+                          activityTitle: baseTitle,
+                          activityType: mode,
+                          topic,
+                          strategies: activePdiStudent.interventionPlan || [],
+                          skillsMatrix: (activePdiStudent.skillsMatrix || []).map(sk => ({
+                            ...sk,
+                            evaluatedStatusInThisActivity: pdiActivityEvaluations[sk.skillCode]?.status,
+                            activityNote: pdiActivityEvaluations[sk.skillCode]?.note
+                          })),
+                          questions: parsedQuestions,
+                          evolutionNotes: activePdiStudent.generalObservations?.evolucaoGeral
+                        })
+                        exportToPdf({
+                          schoolName: header.school || activePdiStudent.schoolName || 'Colégio Machado Sobrinho',
+                          teacherName: ident.regentTeacher || header.teacher || 'Rafaela Franco Toldo',
+                          className: ident.gradeCycle || grade || '6º Ano',
+                          subjectName,
+                          title: `FICHA PDI/PEI DA AVALIAÇÃO — ${activePdiStudent.studentName.toUpperCase()}`,
+                          instructions: `DOCUMENTO SEPARADO DE ACOMPANHAMENTO PDI/PEI — Registro de estratégias e aferição de habilidades BNCC em "${baseTitle}".`,
+                          content: pdiDocHtml,
+                          showStudentNameBox: false,
+                          formatId: effectiveFormatId
+                        })
+                      }}
+                      style={{
+                        padding: '8px 13px',
+                        borderRadius: RADIUS.md,
+                        border: '1.5px solid #2c1a0e',
+                        background: '#2c1a0e',
+                        color: '#fdf8f2',
+                        fontSize: 12,
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 5
+                      }}
+                      title="Documento 4 (Separado): Exporta a Ficha de Adaptação e Acompanhamento de Competências do PDI/PEI vinculada a esta avaliação/atividade"
+                    >
+                      📋 4. Ficha PDI/PEI (PDF)
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const baseTitle =
+                          header.title ||
+                          (topic ? `${mode === 'exam' ? 'PROVA' : 'ATIVIDADE'} ${topic.toUpperCase()}` : 'AVALIAÇÃO')
+                        const ident = activePdiStudent.identification || activePdiStudent.studentInfo || {}
+                        const pdiDocHtml = buildStandalonePdiAssessmentDocumentHtml({
+                          studentName: activePdiStudent.studentName,
+                          gradeCycle: ident.gradeCycle || grade || '6º ano do Ensino Fundamental',
+                          shift: ident.shift || 'Matutino',
+                          validityPeriod: ident.validityPeriod || '1º semestre / 2026',
+                          nextReviewDate: ident.nextReviewDate || 'Dezembro / 2026',
+                          regentTeacher: ident.regentTeacher || header.teacher || 'Rafaela Franco Toldo',
+                          pedagogicalTeam: ident.pedagogicalTeam || 'Marianna Panisset',
+                          activityTitle: baseTitle,
+                          activityType: mode,
+                          topic,
+                          strategies: activePdiStudent.interventionPlan || [],
+                          skillsMatrix: (activePdiStudent.skillsMatrix || []).map(sk => ({
+                            ...sk,
+                            evaluatedStatusInThisActivity: pdiActivityEvaluations[sk.skillCode]?.status,
+                            activityNote: pdiActivityEvaluations[sk.skillCode]?.note
+                          })),
+                          questions: parsedQuestions,
+                          evolutionNotes: activePdiStudent.generalObservations?.evolucaoGeral
+                        })
+                        exportToWord({
+                          schoolName: header.school || activePdiStudent.schoolName || 'Colégio Machado Sobrinho',
+                          teacherName: ident.regentTeacher || header.teacher || 'Rafaela Franco Toldo',
+                          className: ident.gradeCycle || grade || '6º Ano',
+                          subjectName,
+                          title: `FICHA PDI/PEI DA AVALIAÇÃO — ${activePdiStudent.studentName.toUpperCase()}`,
+                          instructions: `DOCUMENTO SEPARADO DE ACOMPANHAMENTO PDI/PEI — Registro de estratégias e aferição de habilidades BNCC em "${baseTitle}".`,
+                          content: pdiDocHtml,
+                          showStudentNameBox: false,
+                          formatId: effectiveFormatId
+                        })
+                      }}
+                      style={{
+                        padding: '8px 11px',
+                        borderRadius: RADIUS.md,
+                        border: '1px solid #8b5e3c',
+                        background: '#ffffff',
+                        color: '#2c1a0e',
+                        fontSize: 12,
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 5
+                      }}
+                      title="Documento 4 (Separado): Exporta a Ficha de Adaptação e Acompanhamento de Competências do PDI/PEI em Word (.doc)"
+                    >
+                      Ficha PDI (.doc)
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPdiRecordsMap(getAllPdiRecords())
+                        setShowPdiAssessmentDrawer(prev => !prev)
+                      }}
+                      style={{
+                        padding: '8px 12px',
+                        borderRadius: RADIUS.md,
+                        border: showPdiAssessmentDrawer ? '1.5px solid #2c1a0e' : '1px solid #8b5e3c',
+                        background: showPdiAssessmentDrawer ? '#f5efe6' : '#fffcf8',
+                        color: '#2c1a0e',
+                        fontSize: 12,
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 5
+                      }}
+                      title="Avalia e registra no PDI do aluno (e no Supabase) se ele concluiu as competências BNCC cobradas nesta avaliação/atividade"
+                    >
+                      🎯 {showPdiAssessmentDrawer ? 'Fechar Avaliação PDI' : 'Avaliar Competências no PDI'}
+                    </button>
+                  </>
+                )}
 
                 {mode === 'exam' && onOpenOnlinePlayer && (
                   <button
@@ -1078,6 +1494,199 @@ export default function ExamResultThreeTabs({
             </div>
           )}
 
+          {/* ─── PAINEL INTEGRADO DE ACOMPANHAMENTO PDI/PEI NESTA AVALIAÇÃO/ATIVIDADE (DOCUMENTO 4) ─── */}
+          {result && showPdiAssessmentDrawer && activePdiStudent && (
+            <div
+              style={{
+                flexShrink: 0,
+                background: '#ffffff',
+                border: '1.5px solid #8b5e3c',
+                borderRadius: RADIUS.lg,
+                padding: 18,
+                boxShadow: SHADOW.sm,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 14
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 800, color: '#8b5e3c', textTransform: 'uppercase', letterSpacing: 0.6 }}>
+                    INTEGRAÇÃO PDI / PEI &bull; DOCUMENTO SEPARADO DE ACOMPANHAMENTO DE COMPETÊNCIAS
+                  </div>
+                  <div style={{ fontSize: 15, fontWeight: 800, color: '#2c1a0e', marginTop: 2 }}>
+                    Avaliar Superação de Competências BNCC nesta {mode === 'exam' ? 'Avaliação' : 'Atividade'}
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <label style={{ fontSize: 12, fontWeight: 700, color: '#2c1a0e' }}>Aluno(a) com PDI:</label>
+                  <select
+                    value={activePdiStudent.studentId}
+                    onChange={e => setSelectedPdiStudentId(e.target.value)}
+                    style={{
+                      padding: '6px 10px',
+                      borderRadius: RADIUS.sm,
+                      border: '1px solid #8b5e3c',
+                      background: '#fdf8f2',
+                      color: '#2c1a0e',
+                      fontSize: 12,
+                      fontWeight: 700
+                    }}
+                  >
+                    {pdiStudentList.map(st => (
+                      <option key={st.studentId} value={st.studentId}>
+                        {st.studentName} ({st.identification?.gradeCycle || st.studentInfo?.gradeCycle || '6º ano'})
+                      </option>
+                    ))}
+                  </select>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const baseTitle =
+                        header.title ||
+                        (topic ? `${mode === 'exam' ? 'PROVA' : 'ATIVIDADE'} ${topic.toUpperCase()}` : 'AVALIAÇÃO')
+                      const evalArray = Object.entries(pdiActivityEvaluations).map(([skillCode, val]) => ({
+                        skillCode,
+                        status: val.status,
+                        note: val.note
+                      }))
+                      if (evalArray.length === 0) {
+                        toast.info('Altere o status de ao menos uma habilidade abaixo para atualizar o PDI do(a) estudante.')
+                        return
+                      }
+                      const updated = recordPdiCompetencyEvaluation(
+                        activePdiStudent.studentId,
+                        baseTitle,
+                        evalArray
+                      )
+                      if (updated) {
+                        setPdiRecordsMap(getAllPdiRecords())
+                        toast.success(
+                          `PDI de ${activePdiStudent.studentName} atualizado com ${evalArray.length} habilidade(s) avaliada(s) e sincronizado com o Supabase!`
+                        )
+                      }
+                    }}
+                    style={{
+                      padding: '7px 14px',
+                      borderRadius: RADIUS.sm,
+                      background: '#2c1a0e',
+                      color: '#fdf8f2',
+                      border: '1px solid #8b5e3c',
+                      fontSize: 12,
+                      fontWeight: 700,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    ☁️ Salvar Avaliação no PDI + Supabase
+                  </button>
+                </div>
+              </div>
+
+              <div style={{ maxHeight: 260, overflowY: 'auto', border: '1px solid #ede8dc', borderRadius: RADIUS.md }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                  <thead>
+                    <tr style={{ background: '#f5efe6', borderBottom: '1px solid #dcd7cb', textAlign: 'left' }}>
+                      <th style={{ padding: '8px 10px', width: 95, color: '#2c1a0e' }}>Código</th>
+                      <th style={{ padding: '8px 10px', color: '#2c1a0e' }}>Habilidade BNCC do PDI</th>
+                      <th style={{ padding: '8px 10px', width: 140, color: '#2c1a0e' }}>Status Atual no PDI</th>
+                      <th style={{ padding: '8px 10px', width: 175, color: '#2c1a0e' }}>Resultado nesta Atividade</th>
+                      <th style={{ padding: '8px 10px', width: 220, color: '#2c1a0e' }}>Observação na Atividade</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(activePdiStudent.skillsMatrix || []).map((sk, idx) => {
+                      const currentNormalized = normalizePdiSkillStatus(sk.status)
+                      const override = pdiActivityEvaluations[sk.skillCode]
+                      const selectedStatus = override?.status || currentNormalized
+
+                      return (
+                        <tr
+                          key={sk.id || idx}
+                          style={{
+                            borderBottom: '1px solid #ede8dc',
+                            background: idx % 2 === 0 ? '#fff' : '#fcfaf7'
+                          }}
+                        >
+                          <td style={{ padding: '6px 10px', fontWeight: 700, color: '#2c1a0e' }}>{sk.skillCode}</td>
+                          <td style={{ padding: '6px 10px', color: '#2c1a0e' }}>{sk.skillDescription}</td>
+                          <td style={{ padding: '6px 10px', fontWeight: 700, color: '#7a5c42' }}>
+                            {currentNormalized}
+                          </td>
+                          <td style={{ padding: '6px 10px' }}>
+                            <select
+                              value={selectedStatus}
+                              onChange={e => {
+                                const nextSt = e.target.value as 'Sim' | 'Em desenvolvimento' | 'Não'
+                                setPdiActivityEvaluations(prev => ({
+                                  ...prev,
+                                  [sk.skillCode]: {
+                                    status: nextSt,
+                                    note: prev[sk.skillCode]?.note || ''
+                                  }
+                                }))
+                              }}
+                              style={{
+                                width: '100%',
+                                padding: '5px 8px',
+                                borderRadius: 6,
+                                border: '1px solid #dcd7cb',
+                                fontSize: 11.5,
+                                fontWeight: 700,
+                                background:
+                                  selectedStatus === 'Sim'
+                                    ? '#f0fdf4'
+                                    : selectedStatus === 'Não'
+                                    ? '#fef2f2'
+                                    : '#fffbeb',
+                                color:
+                                  selectedStatus === 'Sim'
+                                    ? '#166534'
+                                    : selectedStatus === 'Não'
+                                    ? '#991b1b'
+                                    : '#92400e'
+                              }}
+                            >
+                              <option value="Sim">Sim (Superada)</option>
+                              <option value="Em desenvolvimento">Em desenvolvimento</option>
+                              <option value="Não">Não</option>
+                            </select>
+                          </td>
+                          <td style={{ padding: '6px 10px' }}>
+                            <input
+                              type="text"
+                              value={override?.note || ''}
+                              onChange={e => {
+                                const val = e.target.value
+                                setPdiActivityEvaluations(prev => ({
+                                  ...prev,
+                                  [sk.skillCode]: {
+                                    status: prev[sk.skillCode]?.status || currentNormalized,
+                                    note: val
+                                  }
+                                }))
+                              }}
+                              placeholder="Observação de desempenho..."
+                              style={{
+                                width: '100%',
+                                padding: '5px 8px',
+                                borderRadius: 6,
+                                border: '1px solid #dcd7cb',
+                                fontSize: 11.5,
+                                color: '#2c1a0e'
+                              }}
+                            />
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
           {/* BANNER CONSOLIDADO DE INTEGRIDADE PEDAGÓGICA (HALADYNA GATE) */}
           {criticalHaladynaViolations.length > 0 && (
             <div
@@ -1167,7 +1776,9 @@ export default function ExamResultThreeTabs({
               <div style={{ padding: 18 }}>
                 <EditableQuestionBoxes
                   initialContent={result}
+                  initialQuestions={questions}
                   onContentChange={onContentChange}
+                  onQuestionsChange={onQuestionsChange}
                   onAskRafinhaForQuestion={onAskRafinhaForQuestion}
                 />
               </div>
@@ -1461,6 +2072,82 @@ export default function ExamResultThreeTabs({
             <p style={{ margin: 0, fontSize: 13, opacity: 0.92, lineHeight: 1.5 }}>
               Transparência total sobre os critérios cognitivos de Bloom, calibração de dificuldade da TRI e engenharia de distratores diagnósticos aplicados na elaboração deste documento.
             </p>
+          </div>
+
+          {/* 0. Justificativa Pedagógica da Prova como um Todo + Reasoning Questão por Questão */}
+          <div
+            style={{
+              background: '#fff',
+              borderRadius: RADIUS.lg,
+              padding: '16px 20px',
+              border: '1.5px solid #ede8dc',
+              boxShadow: SHADOW.sm,
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
+              <h4 style={{ margin: 0, fontSize: 15, fontWeight: 800, color: '#2c1a0e' }}>
+                📑 Justificativa Pedagógica da Prova como um Todo & Reasoning por Questão ({parsedQuestions.length} itens)
+              </h4>
+              <span style={{ fontSize: 11.5, fontWeight: 700, color: '#5b21b6', background: '#f5f3ff', padding: '3px 10px', borderRadius: 6, border: '1px solid #ddd6fe' }}>
+                Exportável como Documento 3 independente (PDF / Word)
+              </span>
+            </div>
+
+            <div style={{ background: '#fdf8f2', border: '1px solid #ede8dc', borderRadius: RADIUS.md, padding: '12px 14px', marginBottom: 14, fontSize: 12.5, color: '#4a3b32', lineHeight: 1.55 }}>
+              <strong>Justificativa Global da Prova:</strong> Esta avaliação de <strong>{subjectName}</strong> ({grade} · Nível {level}) sobre <strong>&ldquo;{topic || 'Conteúdo Programático'}&rdquo;</strong> foi estruturada integrando os eixos <em>{sections.join(', ')}</em> sob a abordagem <em>{approach.join(', ')}</em>. O balanceamento cognitivo ({bloomDistribution.remember}% Lembrar/Compreender, {bloomDistribution.apply}% Aplicar, {bloomDistribution.analyze}% Analisar, {bloomDistribution.evaluate}% Avaliar/Criar) e a progressão de dificuldade ({difficultyDistribution.easy}% Fácil, {difficultyDistribution.medium}% Médio, {difficultyDistribution.hard}% Difícil, {difficultyDistribution.challenge}% Desafio) garantem validade de construto, acolhimento inicial e precisão diagnóstica.
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {parsedQuestions.map((q: any, idx: number) => {
+                const qNum = idx + 1
+                const rawKey = String(q.correctOptionId ?? q.answerKey ?? '—').trim()
+                const opts = Array.isArray(q.options) ? q.options : []
+                const matchedOpt = opts.find(
+                  (o: any) => String(o.id ?? o.letter ?? '').trim().toUpperCase() === rawKey.toUpperCase()
+                )
+                const rationaleText =
+                  q.rationale ||
+                  q.explanation ||
+                  q.rubric?.criteria?.[0]?.description ||
+                  `Avalia a aplicação contextualizada e discriminação conceitual de "${topic || 'conteúdo bimestral'}" na questão ${qNum}.`
+                const qAudit = distractorAudit.questions.find(dq => dq.questionNumber === qNum)
+
+                return (
+                  <div
+                    key={q.id || qNum}
+                    style={{
+                      background: '#ffffff',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: RADIUS.md,
+                      padding: '12px 14px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 6,
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+                      <strong style={{ fontSize: 13, color: '#2c1a0e' }}>
+                        Questão {qNum} · {q.typeLabel || q.type || 'Item'}
+                      </strong>
+                      <span style={{ fontSize: 11.5, fontWeight: 700, color: '#166534', background: '#f0fdf4', padding: '2px 8px', borderRadius: 6, border: '1px solid #bbf7d0' }}>
+                        ✓ Gabarito: {matchedOpt ? `${rawKey}) ${matchedOpt.text}` : rawKey}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: 12, color: '#475569' }}>
+                      <strong>Enunciado:</strong> {q.stem}
+                    </div>
+                    <div style={{ fontSize: 12, color: '#1e293b', background: '#f8fafc', padding: '8px 10px', borderRadius: 6, borderLeft: '3px solid #8b5e3c', lineHeight: 1.45 }}>
+                      <strong>🧠 Reasoning & Justificativa Pedagógica:</strong> {rationaleText}
+                      {qAudit?.feedback ? (
+                        <div style={{ marginTop: 4, color: '#475569', fontSize: 11.5 }}>
+                          <strong>🎯 Distratores:</strong> {qAudit.feedback}
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
           </div>
 
           {/* 1. Matriz da Taxonomia de Bloom */}

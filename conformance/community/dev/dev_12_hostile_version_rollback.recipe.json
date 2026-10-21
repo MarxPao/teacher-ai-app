@@ -1,0 +1,14 @@
+{
+  "id": "dev_12_hostile_version_rollback",
+  "set": "dev",
+  "base_graph": "base_read_roster.json",
+  "package_id": "diario-rollback",
+  "map_version": 1,
+  "publisher_key": "publisherA",
+  "prior_state": {
+    "seen_version": 2
+  },
+  "mutations": [],
+  "expected": "reject",
+  "expected_code": "E_PKG_ROLLBACK"
+}

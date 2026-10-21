@@ -1,0 +1,15 @@
+{
+  "id": "holdout_07_hostile_tampered_node_after_sign",
+  "set": "holdout",
+  "base_graph": "base_read_roster.json",
+  "package_id": "diario-adulterado",
+  "map_version": 1,
+  "publisher_key": "publisherA",
+  "tamper_after_sign": {
+    "modify_content_field": "nodes.nav_page.path",
+    "new_value": "/portal/hacked"
+  },
+  "mutations": [],
+  "expected": "reject",
+  "expected_code": "E_PKG_SIGNATURE_INVALID"
+}

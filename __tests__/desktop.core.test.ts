@@ -3,6 +3,7 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { DatabaseSync } from 'node:sqlite'
 import * as crypto from 'node:crypto'
 import type { SqlDriver } from '../lib/desktop-core/db/SqlDriver'
+import { LlmGateway } from '../desktop/llm/llmGateway'
 import {
   encryptEnvelope,
   decryptEnvelope,
@@ -249,6 +250,45 @@ describe('Desktop Core — Teste de Fronteira (Fase 6)', () => {
       await repo.setActive('portal_teste', 'lancar_falta', 2)
       current = await repo.get('portal_teste', 'lancar_falta')
       expect(current?.identity.version).toBe(2)
+    })
+
+    it('respeita activate:false no save (a v1 não nasce ativa)', async () => {
+      const repo = new SqlSkillGraphRepository(driver, clock)
+      const inactiveGraph: SkillGraphV2 = {
+        ...dummyGraph,
+        identity: {
+          ...dummyGraph.identity,
+          task_id: 'nav_explorada',
+          version: 1,
+        },
+      }
+      await repo.save(inactiveGraph, { activate: false })
+
+      const versions = await repo.listVersions('portal_teste', 'nav_explorada')
+      expect(versions).toHaveLength(1)
+      expect(versions[0].isActive).toBe(false)
+
+      const resolved = await repo.resolveActive('teste.escola.com.br', 'nav_explorada')
+      expect(resolved).toBeNull()
+
+      const exploredNavGraph: SkillGraph = {
+        ...dummyGraph,
+        identity: {
+          ...dummyGraph.identity,
+          task_id: 'custom:nav-boletim',
+          version: 1,
+        },
+      }
+      // Mesmo sem passar activate: false, grafo de exploração nunca auto-ativa na v1
+      await repo.save(exploredNavGraph)
+      const navVersions = await repo.listVersions('portal_teste', 'custom:nav-boletim')
+      expect(navVersions).toHaveLength(1)
+      expect(navVersions[0].isActive).toBe(false)
+
+      // Tentar ativar diretamente vindo de exploração lança E_EXPLORATION_CANNOT_ACTIVATE
+      await expect(
+        repo.save({ ...exploredNavGraph, identity: { ...exploredNavGraph.identity, version: 2 } }, { activate: true, origin: 'exploration' })
+      ).rejects.toThrowError(/E_EXPLORATION_CANNOT_ACTIVATE/)
     })
   })
 
@@ -550,5 +590,167 @@ describe('Desktop Core — Teste de Fronteira (Fase 6)', () => {
       expect(restored).toBe(originalText)
     })
   })
+
+  // 13. Habilidades Genéricas e Roteamento de Catálogo (G5)
+  describe('13. Habilidades Genéricas e Roteamento de Catálogo (G5)', () => {
+    it('(1) menu/parse não contém id literal fora do catálogo', async () => {
+      const gateway = new LlmGateway({ consentRepo: {} as any, vault: {} as any })
+      const catalog = [
+        { id: 'custom:registrar-chamada', name: 'Registrar Chamada', params: [{ name: 'attendance_status', type: 'string' }] },
+        { id: 'custom:comunicado', name: 'Enviar Comunicado', params: [{ name: 'texto', type: 'string' }] },
+      ]
+      const res = await gateway.parseIntent('marcar falta para o aluno', [], catalog)
+      expect(res.no_match).toBe(false)
+      expect(catalog.some((s) => s.id === res.skill_id)).toBe(true)
+      expect(['read_roster', 'lancar_falta', 'lancar_nota']).not.toContain(res.skill_id)
+    })
+
+    it('(2) skill_id fora do catálogo -> no_match', async () => {
+      const gateway = new LlmGateway({ consentRepo: {} as any, vault: {} as any })
+      const catalog = [
+        { id: 'custom:registrar-chamada', name: 'Registrar Chamada' },
+      ]
+      const res = await gateway.parseIntent('lançar nota 9.5 em matemática', [], catalog)
+      expect(res.no_match).toBe(true)
+      expect(res.skill_id).toBeUndefined()
+    })
+
+    it('(4) texto gerado com CPF é barrado antes do CHECKPOINT', async () => {
+      const gateway = new LlmGateway({ consentRepo: {} as any, vault: {} as any })
+      await expect(
+        gateway.generateSafeText('Plano de aula com CPF do orientador: 123.456.789-00')
+      ).rejects.toThrowError(/CPF/)
+    })
+
+    it('(5) suporta params em Record<string, GraphParam>, autocorreção de nota, data relativa e bloqueio de negação', async () => {
+      const gateway = new LlmGateway({ consentRepo: {} as any, vault: {} as any })
+      const catalog = [
+        {
+          id: 'lancar_nota',
+          name: 'Lançar Nota',
+          params: {
+            student_ref: { type: 'string', required: true },
+            grade_value: { type: 'number', required: true },
+            data: { type: 'date', required: false },
+          },
+        },
+      ]
+      const resCorrected = await gateway.parseIntent(
+        'Lançar nota 6,0 para Mariana Lima de ontem, na verdade 7,5',
+        [{ name: 'Mariana Lima' }],
+        catalog
+      )
+      expect(resCorrected.no_match).toBe(false)
+      expect(resCorrected.skill_id).toBe('lancar_nota')
+      expect(resCorrected.params.student_ref).toBe('Mariana Lima')
+      expect(resCorrected.params.grade_value).toBe(7.5)
+      expect(resCorrected.params.data).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+
+      const resNegated = await gateway.parseIntent(
+        'Não lance nota 7,5 para Mariana Lima',
+        [{ name: 'Mariana Lima' }],
+        catalog
+      )
+      expect(resNegated.no_match).toBe(true)
+
+      const resException = await gateway.parseIntent(
+        'Lançar presença para todos menos o João',
+        [{ name: 'João' }],
+        catalog
+      )
+      expect(resException.no_match).toBe(true)
+      expect(resException.clarification_needed).toBe(true)
+      expect(resException.params.student_ref).toBeUndefined()
+    })
+
+    it('(6) mantém memória conversacional multi-turno para referências elípticas ("E 8,5 para o João na mesma turma")', async () => {
+      const gateway = new LlmGateway({ consentRepo: {} as any, vault: {} as any })
+      const catalog = [
+        {
+          id: 'lancar_nota',
+          name: 'Lançar Nota',
+          params: {
+            student_ref: { type: 'string', required: true },
+            grade_value: { type: 'number', required: true },
+            turma: { type: 'string', required: false },
+            data: { type: 'date', required: false },
+          },
+        },
+      ]
+      const students = [{ name: 'Mariana Lima' }, { name: 'João Pedro' }]
+
+      // Turno 1: Comando completo
+      const turn1 = await gateway.parseIntent('Lançar nota 9,0 para Mariana Lima na turma 6A hoje', students, catalog)
+      expect(turn1.no_match).toBe(false)
+      expect(turn1.skill_id).toBe('lancar_nota')
+      expect(turn1.params.student_ref).toBe('Mariana Lima')
+      expect(turn1.params.grade_value).toBe(9)
+      expect(turn1.params.turma).toBe('6A')
+      expect(turn1.params.data).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+
+      // Turno 2: Comando elíptico sem repetir o verbo/habilidade, herdando turma e data da sessão
+      const turn2 = await gateway.parseIntent('E 8,5 para o João Pedro na mesma turma', students, catalog)
+      expect(turn2.no_match).toBe(false)
+      expect(turn2.skill_id).toBe('lancar_nota')
+      expect(turn2.params.student_ref).toBe('João Pedro')
+      expect(turn2.params.grade_value).toBe(8.5)
+      expect(turn2.params.turma).toBe('6A')
+      expect(turn2.params.data).toBe(turn1.params.data)
+    })
+
+    it('(7) auto-registra o Native Messaging Host (com.teacherai.desktop) em HKCU no boot gerando o shim físico (.cmd) e o manifesto (.json)', async () => {
+      const { autoRegisterNativeMessagingHost, REGISTRY_KEY_CHROME, REGISTRY_KEY_EDGE } = await import(
+        '../desktop/nativeHost/autoRegister'
+      )
+
+      const executedCmds: string[] = []
+      const writtenFiles: Record<string, string> = {}
+
+      const res = autoRegisterNativeMessagingHost({
+        userDataPath: 'C:\\Users\\Professora\\AppData\\Roaming\\TeacherAI',
+        extensionIds: ['ext1234567890abcdef'],
+        platform: 'win32',
+        mkdir: () => {},
+        writeFile: (f, content) => {
+          writtenFiles[f] = content
+        },
+        execCommand: cmd => {
+          executedCmds.push(cmd)
+        },
+      })
+
+      expect(res.registered).toBe(true)
+      expect(res.manifestPath).toContain('com.teacherai.desktop.json')
+      expect(res.shimPath).toContain('teacherai-nm-shim.cmd')
+      expect(writtenFiles[res.shimPath]).toContain('node "')
+      expect(writtenFiles[res.shimPath]).toContain('shim.js" %*')
+
+      const parsed = JSON.parse(writtenFiles[res.manifestPath])
+      expect(parsed.name).toBe('com.teacherai.desktop')
+      expect(parsed.path).toBe(res.shimPath)
+      expect(parsed.type).toBe('stdio')
+      expect(parsed.allowed_origins).toEqual(['chrome-extension://ext1234567890abcdef/'])
+      expect(res.registryKeys).toEqual([REGISTRY_KEY_CHROME, REGISTRY_KEY_EDGE])
+      expect(executedCmds).toHaveLength(2)
+      expect(executedCmds[0]).toContain(REGISTRY_KEY_CHROME)
+      expect(executedCmds[1]).toContain(REGISTRY_KEY_EDGE)
+
+      // Verifica modo Electron empacotado (B1: zero dependência de Node.js instalado na máquina da professora)
+      const electronWritten: Record<string, string> = {}
+      const resElectron = autoRegisterNativeMessagingHost({
+        userDataPath: 'C:\\Users\\Professora\\AppData\\Roaming\\TeacherAI',
+        electronExecPath: 'C:\\Program Files\\TeacherAI\\TeacherAI.exe',
+        platform: 'win32',
+        mkdir: () => {},
+        writeFile: (f, content) => {
+          electronWritten[f] = content
+        },
+        execCommand: () => {},
+      })
+      expect(electronWritten[resElectron.shimPath]).toContain('set ELECTRON_RUN_AS_NODE=1')
+      expect(electronWritten[resElectron.shimPath]).toContain('"C:\\Program Files\\TeacherAI\\TeacherAI.exe"')
+    })
+  })
 })
+
 

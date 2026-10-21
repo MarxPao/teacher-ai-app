@@ -1,0 +1,21 @@
+{
+  "id": "dev_01_legit_read_roster",
+  "set": "dev",
+  "base_graph": "base_read_roster.json",
+  "package_id": "diario-roster",
+  "map_version": 1,
+  "publisher_key": "publisherA",
+  "platform_hint": "paineldoaluno",
+  "hosts": [
+    {
+      "placeholder": "h1.invalid",
+      "role": "portal",
+      "suffix_hint": "paineldoaluno.com.br"
+    }
+  ],
+  "mutations": [],
+  "expected": "accept",
+  "test_binding": {
+    "h1.invalid": "escola.paineldoaluno.com.br"
+  }
+}

@@ -53,16 +53,9 @@ const HTTP_STATUS_FALLBACK = 'http://127.0.0.1:8765/portal_status';
 const NATIVE_HOST_NAME = 'com.teacherai.desktop';
 const STARTUP_TIMEOUT_MS = 5000;
 
-const KNOWN_PORTALS = [
-  { id: 'ieducar', name: 'i-Educar', domains: ['ieducar.com.br', 'comunidade.ieducar'] },
-  { id: 'machado_sobrinho', name: 'Machado Sobrinho', domains: ['machadosobrinho', 'paineldoaluno.com.br', 'paineldoprofessor'] },
-  { id: 'plural', name: 'Plurall (SOMOS)', domains: ['plural.net', 'plurall.net'] },
-  { id: 'cambridge', name: 'Cambridge One', domains: ['cambridgeone.org'] },
-  { id: 'santa_catarina', name: 'Rede Santa Catarina', domains: ['redesantacatarina.org.br'] },
-  { id: 'teams', name: 'Microsoft Teams', domains: ['teams.microsoft.com'] },
-  { id: 'sed_sp', name: 'SED São Paulo', domains: ['sed.educacao.sp.gov.br'] },
-  { id: 'sandbox', name: 'Portal de Teste (Sandbox)', domains: ['localhost', '127.0.0.1', 'portal_mock', 'portal_real'] }
-];
+// Lista de portais fixos esvaziada por padrão para conformidade O1 (generalista).
+// A detecção é dinâmica baseada no host da aba contra allowed_hosts de grafos ativos.
+const KNOWN_PORTALS = [];
 
 let ws = null;
 let isSidecarOnline = false;
@@ -277,10 +270,17 @@ async function connectWebSocket() {
     };
 
     ws.onclose = () => {
-      console.log('[TeacherAI Extension] Conexão WS fechada. Tentando fallback ou reconexão...');
       isSidecarOnline = false;
       updateToolbarBadge('offline');
-      setTimeout(checkHttpFallbackAndReconnect, 3000);
+      if (typeof wsReconnectAttempts === 'undefined') {
+        globalThis.wsReconnectAttempts = 0;
+      }
+      if (globalThis.wsReconnectAttempts < 1) {
+        globalThis.wsReconnectAttempts++;
+        setTimeout(checkHttpFallbackAndReconnect, 3000);
+      } else {
+        console.log('[TeacherAI Extension] Modo nativo v2 ativo. Canal prioritário: Chrome Native Messaging (com.teacherai.desktop).');
+      }
     };
 
     ws.onerror = () => {
@@ -290,7 +290,6 @@ async function connectWebSocket() {
   } catch {
     isSidecarOnline = false;
     updateToolbarBadge('offline');
-    setTimeout(checkHttpFallbackAndReconnect, 3000);
   }
 }
 
@@ -323,6 +322,16 @@ function identifyPortal(url) {
       return p;
     }
   }
+  try {
+    const parsed = new URL(url);
+    if (parsed.hostname && !parsed.protocol.startsWith('chrome')) {
+      return {
+        id: parsed.hostname.replace(/[^a-zA-Z0-9_]/g, '_'),
+        name: parsed.hostname,
+        domains: [parsed.hostname],
+      };
+    }
+  } catch {}
   return null;
 }
 
@@ -467,7 +476,10 @@ async function checkTabAuthentication(tabId) {
       return results[0].result;
     }
   } catch (err) {
-    console.warn('[TeacherAI Extension] Falha ao executar script de auth:', err);
+    const msg = (err && err.message) || String(err);
+    if (!msg.includes('Cannot access contents') && !msg.includes('Extension manifest must request permission')) {
+      console.warn('[TeacherAI Extension] Falha ao executar script de auth:', err);
+    }
   }
   return { isAuthenticated: false, hasTable: false, pageKind: 'error', friendlyPageName: 'Desconhecida' };
 }
@@ -759,79 +771,11 @@ async function handleExecutePortalAction(msg) {
     }
 
     // 2. Fallback caso content.js não estivesse presente ou não tenha tratado a mensagem
-    if (!execResult || (!execResult.sucesso && !execResult.success && execResult.filledCount === undefined)) {
-      const results = await chrome.scripting.executeScript({
-        target: { tabId: targetTabId },
-        args: [acao, aluno, nota, faltas],
-        func: (acaoParam, alunoParam, notaParam, faltasParam) => {
-          // Localiza linha do aluno na tabela
-          const rows = Array.from(document.querySelectorAll('table tr, tr, div.student-row, li'));
-          let targetRow = null;
-
-          const cleanTarget = alunoParam.trim().toLowerCase();
-          const firstName = cleanTarget.split(' ')[0];
-
-          for (const r of rows) {
-            const txt = r.innerText.toLowerCase();
-            if (txt.includes(cleanTarget)) {
-              targetRow = r;
-              break;
-            }
-          }
-
-          if (!targetRow && firstName.length > 2) {
-            for (const r of rows) {
-              const txt = r.innerText.toLowerCase();
-              if (txt.includes(firstName)) {
-                targetRow = r;
-                break;
-              }
-            }
-          }
-
-          if (!targetRow) {
-            return { sucesso: false, status: 'student_not_found', aluno: alunoParam };
-          }
-
-          // Busca input na linha
-          const inputs = Array.from(targetRow.querySelectorAll('input:not([type="hidden"]):not([type="checkbox"])'));
-          if (inputs.length === 0) {
-            return { sucesso: false, status: 'no_editable_inputs', aluno: alunoParam };
-          }
-
-          const input = inputs[0];
-          const valBefore = input.value || '';
-          const targetValue = (acaoParam === 'lancar_nota') ? String(notaParam) : String(faltasParam);
-
-          // Preenche com disparo de eventos seguros e compatibilidade com React/Vue
-          input.focus();
-          const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
-          if (nativeSetter) {
-            nativeSetter.set.call(input, targetValue);
-          } else {
-            input.value = targetValue;
-          }
-          input.dispatchEvent(new Event('input', { bubbles: true }));
-          input.dispatchEvent(new Event('change', { bubbles: true }));
-          input.dispatchEvent(new Event('blur', { bubbles: true }));
-
-          return {
-            sucesso: true,
-            status: 'draft_completed_pending_submit',
-            diff: {
-              aluno: alunoParam,
-              campo: acaoParam === 'lancar_nota' ? 'nota' : 'falta',
-              antes: valBefore,
-              depois: targetValue,
-              drift_detectado: false
-            }
-          };
-        }
-      });
-
-      execResult = (results && results[0] && results[0].result) || {
+    if (!execResult) {
+      execResult = {
         sucesso: false,
-        status: 'execution_failed'
+        status: 'content_script_unavailable',
+        mensagem: 'Não foi possível comunicar com o script de conteúdo da página.'
       };
     }
 
@@ -841,8 +785,8 @@ async function handleExecutePortalAction(msg) {
       status: execResult.status || (isSuccess ? 'draft_completed_pending_submit' : 'execution_failed'),
       diff: execResult.diff || {
         aluno,
-        campo: acao === 'lancar_nota' ? 'nota' : 'falta',
-        depois: String(nota ?? faltas)
+        campo: acao,
+        depois: String(nota ?? faltas ?? '')
       },
       ...execResult
     };
@@ -983,57 +927,344 @@ async function waitForPageSettled(tabId, maxWaitMs = 2500) {
   await new Promise(r => setTimeout(r, 350));
 }
 
-async function internalNavigatePortalTab(targetTabId, targetKeyword) {
+async function internalNavigatePortalTab(targetTabId, targetKeyword, allowedHosts = [], priorSelectTargets = [], pendingTargets = []) {
   const keyword = (targetKeyword || '').trim().toLowerCase()
-    .replace(/\s+\b(?:e|e\s+depois|depois|em\s+seguida|a[ií])\b.*$/i, '')
+    .replace(/\s+\b(?:e\s+depois|depois|em\s+seguida|a[ií])\b.*$/i, '')
     .replace(/\s+e$/i, '')
     .trim();
 
   try {
     const results = await chrome.scripting.executeScript({
       target: { tabId: targetTabId },
-      args: [keyword],
-      func: async (kw) => {
-        const cleanKey = kw.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-        const candidates = Array.from(document.querySelectorAll('a, button, [role="tab"], [role="menuitem"], [role="button"], .tab, .tab-btn, .nav-link, li, span'));
-        
+      world: 'MAIN',
+      args: [keyword, Array.isArray(allowedHosts) ? allowedHosts : [], Array.isArray(priorSelectTargets) ? priorSelectTargets : [], Array.isArray(pendingTargets) ? pendingTargets : []],
+      func: async (kw, allowedHostList, priorTargets, pendingList) => {
+        const stripGoalPrefix = (rawStr) => {
+          const rn = String(rawStr || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+          return rn
+            .replace(/^(?:por\s+favor\s+)?(?:selecione|selecionar|escolha|escolher|filtre\s+por|filtrar\s+por|filtrar|ir\s+para|ir\s+em|va\s+para|abrir|abra|clicar\s+no\s+botao|clique\s+no\s+botao|clicar\s+em|clique\s+em|clicar\s+no|clique\s+no|clicar\s+na|clique\s+na|clicar|clique|aperte|apertar|pressione|pressionar|acessar|acesse|ver|mostrar|mudar\s+para)\s+/i, '')
+            .replace(/\s+(?:nos\s+filtros|no\s+filtro|na\s+aba|nas\s+abas|no\s+menu|na\s+lista|no\s+campo|no\s+botao|do\s+portal|da\s+pagina)$/i, '')
+            .replace(/^(?:a\s+turma|o\s+ano|a\s+disciplina|o\s+mes|a\s+aba|o\s+botao|o\s+filtro\s+de|o\s+filtro)\s+/i, '')
+            .trim() || rn;
+        };
+        let cleanKey = stripGoalPrefix(kw);
+        const destructivePattern = /\b(excluir|deletar|apagar|remover|demitir|formatar|pagar|transferir|salvar|gravar|enviar|publicar|confirmar|fechar|fechamento|consolidar|finalizar|encerrar|concluir|cancelar|aprovar|reprovar|assinar|homologar|bloquear|desbloquear|resetar|sair|logout)\b/i;
+        if (destructivePattern.test(cleanKey)) {
+          return { sucesso: false, mensagem: `Ação bloqueada por segurança durante navegação autônoma: '${kw}'.` };
+        }
+
+        const ordinalMap = { primeiro: '1', primeira: '1', segundo: '2', segunda: '2', terceiro: '3', terceira: '3', quarto: '4', quarta: '4', quinto: '5', quinta: '5', sexto: '6', sexta: '6', setimo: '7', setima: '7', oitavo: '8', oitava: '8', nono: '9', nona: '9' };
+        const buildOrdinalVariants = (baseKey) => {
+          const sp = String(baseKey || '').replace(/[/\-_,.;:]+/g, ' ').replace(/\s+/g, ' ').trim();
+          const noYr = sp.replace(/\b20\d{2}\b/g, '').replace(/\s+/g, ' ').trim();
+          const set = new Set([baseKey, sp]);
+          if (noYr.length >= 3) set.add(noYr);
+          const subjPairs = [['lingua inglesa', 'ingles'], ['lingua portuguesa', 'portugues'], ['educacao fisica', 'ed fisica'], ['ensino religioso', 'religiao']];
+          for (const [f, s] of subjPairs) {
+            if (sp.includes(f)) set.add(sp.replace(f, s));
+            if (sp.includes(s)) set.add(sp.replace(s, f));
+          }
+          for (const [word, digit] of Object.entries(ordinalMap)) {
+            if (new RegExp(`\\b${word}\\b`).test(sp)) {
+              set.add(sp.replace(new RegExp(`\\b${word}\\b`, 'g'), digit));
+              set.add(sp.replace(new RegExp(`\\b${word}\\b`, 'g'), `${digit}o`));
+              set.add(sp.replace(new RegExp(`\\b${word}\\b`, 'g'), `${digit}a`));
+            } else if (new RegExp(`\\b${digit}[º°oaª]?\\b`).test(sp)) {
+              set.add(sp.replace(new RegExp(`\\b${digit}[º°oaª]?\\b`, 'g'), word));
+              set.add(sp.replace(new RegExp(`\\b${digit}[º°oaª]?\\b`, 'g'), digit));
+            }
+          }
+          return Array.from(set).filter(Boolean);
+        };
+
+        const effectiveAllowedHosts = (Array.isArray(allowedHostList) && allowedHostList.length > 0
+          ? allowedHostList
+          : [location.host, location.hostname]
+        ).map(h => String(h || '').toLowerCase()).filter(Boolean);
+
+        const isHrefAllowed = (el) => {
+          const anchor = el.tagName === 'A' ? el : (el.closest ? el.closest('a') : null);
+          const rawHref = (el.getAttribute && el.getAttribute('href')) || (anchor && anchor.getAttribute('href')) || '';
+          if (!rawHref || rawHref.startsWith('#') || rawHref.toLowerCase().startsWith('javascript:')) return true;
+          try {
+            const parsed = new URL(rawHref, location.href);
+            const h = (parsed.host || '').toLowerCase();
+            const hn = (parsed.hostname || '').toLowerCase();
+            return effectiveAllowedHosts.some(allowed => allowed === '*' || allowed === h || allowed === hn || hn.endsWith('.' + allowed));
+          } catch {
+            return false;
+          }
+        };
+
+        const collectClickableCandidates = (root) => {
+          const selector = 'a, button, input[type="button"], input[type="submit"], [onclick], [role="tab"], [role="menuitem"], [role="button"], [role="option"], .btn, .button, .tab, .tab-btn, .nav-link, li, span';
+          const list = Array.from(root.querySelectorAll(selector));
+          const all = Array.from(root.querySelectorAll('*'));
+          for (const node of all) {
+            let sr = null;
+            try {
+              sr = (globalThis.chrome?.dom?.openOrClosedShadowRoot?.(node)) || node.shadowRoot || node.__sgv2ShadowRoot;
+            } catch {
+              sr = node.shadowRoot || node.__sgv2ShadowRoot;
+            }
+            if (sr) list.push(...collectClickableCandidates(sr));
+          }
+          return list;
+        };
+
+        const isOptUsable = (opt, sel) => {
+          if (!opt || opt.disabled || opt.hidden || sel.disabled || opt.style?.display === 'none' || opt.style?.visibility === 'hidden' || /\b(hidden|hide|d-none)\b/i.test(opt.className || '')) return false;
+          const p = opt.parentElement;
+          if (p?.tagName === 'OPTGROUP' && (p.disabled || p.hidden || p.style?.display === 'none')) return false;
+          try { const cs = window.getComputedStyle(opt); if (cs?.display === 'none' || cs?.visibility === 'hidden') return false; } catch {}
+          return true;
+        };
+        const findBestSelectMatch = (searchKey) => {
+          const variants = buildOrdinalVariants(searchKey).map(v => v.replace(/[º°ª]/g, ''));
+          const selects = Array.from(document.querySelectorAll('select')).filter(s => {
+            if (s.disabled || (s.offsetParent === null && s.offsetWidth === 0 && s.offsetHeight === 0)) return false;
+            if (s.closest && s.closest('tbody tr')) return false;
+            return true;
+          });
+          const matches = [];
+          for (let sIdx = 0; sIdx < selects.length; sIdx++) {
+            const sel = selects[sIdx];
+            const parentVals = selects.slice(0, sIdx).map(ps => String(ps.value || '').trim()).filter(v => v.length >= 2);
+            for (const opt of Array.from(sel.options || [])) {
+              if (!isOptUsable(opt, sel)) continue;
+              const rawText = (opt.text || opt.label || '').trim();
+              const normOpt = rawText.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[º°ª]/g, '').replace(/[/\-_,.;:]+/g, ' ').replace(/\s+/g, ' ').trim();
+              if (!normOpt || /^selecione\b/i.test(normOpt)) continue;
+              for (const v of variants) {
+                let sc = 0;
+                if (normOpt === v) sc = 100;
+                else if (normOpt.startsWith(v) || normOpt.includes(v)) sc = 88;
+                else if (normOpt.length >= 4 && v.includes(normOpt)) sc = 84;
+                else {
+                  const tks = v.split(/\s+/).filter(t => t.length >= 1 && !['de', 'da', 'do', 'ano'].includes(t));
+                  if (tks.length > 0 && tks.every(t => new RegExp(`(?:^|\\b)${t}`).test(normOpt))) sc = 82;
+                }
+                if (sc >= 75) {
+                  const outer = (opt.outerHTML || '').split('>')[0] || '';
+                  if (parentVals.some(pv => outer.includes(pv))) sc += 15;
+                  matches.push({ sel, opt, sc, selIdx: sIdx });
+                  break;
+                }
+              }
+            }
+          }
+          matches.sort((a, b) => b.sc - a.sc);
+          return matches[0] ? { sel: matches[0].sel, opt: matches[0].opt, selIdx: matches[0].selIdx, candidates: matches.filter(m => m.sel === matches[0].sel).map(m => m.opt) } : null;
+        };
+
+        const PORTAL_SEMANTIC_CLUSTERS = [
+          ['notas', 'avaliacoes', 'avaliacao', 'conceitos', 'boletim', 'medias', 'digitacao de notas', 'rendimento', 'notas e faltas'],
+          ['frequencia', 'chamada', 'fazer chamada', 'faltas', 'presenca', 'assiduidade', 'registro de presenca', 'diario de frequencia', 'apontamento de faltas'],
+          ['conteudo', 'conteudo ministrado', 'aula dada', 'plano de aula', 'registro de aula', 'materia lecionada', 'diario de classe'],
+          ['alunos', 'discentes', 'estudantes', 'meus alunos', 'relacao nominal', 'enturmacao', 'lista de alunos', 'turmas', 'minhas turmas'],
+          ['ocorrencias', 'observacoes', 'ficha individual', 'parecer descritivo', 'acompanhamento pedagogico', 'comportamento'],
+        ];
+
+        const expandSemanticSynonyms = (key) => {
+          const synonyms = new Set(buildOrdinalVariants(key));
+          for (const cluster of PORTAL_SEMANTIC_CLUSTERS) {
+            if (cluster.some(term => key.includes(term) || term.includes(key))) {
+              for (const term of cluster) synonyms.add(term);
+            }
+          }
+          return Array.from(synonyms);
+        };
+
+        const findBestCandidate = (searchKey) => {
+          const candidates = collectClickableCandidates(document);
+          const expandedKeys = expandSemanticSynonyms(searchKey);
+          const stopWords = new Set(['de', 'da', 'do', 'das', 'dos', 'para', 'em', 'na', 'no', 'as', 'os', 'a', 'o', 'e']);
+          const searchTokens = searchKey.split(/\s+/).filter(t => t.length > 2 && !stopWords.has(t));
+
+          let bestEl = null;
+          let bestScore = -1;
+
+          for (const el of candidates) {
+            if (el.offsetParent === null && el.offsetWidth === 0 && el.offsetHeight === 0) continue;
+
+            const text = (el.innerText || el.textContent || el.value || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+            const aria = (el.getAttribute('aria-label') || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+            const title = (el.getAttribute('title') || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+            const href = (el.getAttribute('href') || '').toLowerCase();
+            const id = (el.id || '').toLowerCase();
+
+            if (destructivePattern.test(text) || destructivePattern.test(aria) || destructivePattern.test(title) || !isHrefAllowed(el)) {
+              continue;
+            }
+
+            let score = 0;
+            if (text === searchKey) score = 100;
+            else if (text.startsWith(searchKey)) score = 85;
+            else if (text.includes(searchKey)) score = 70;
+            else if (aria.includes(searchKey)) score = 55;
+            else if (title.includes(searchKey)) score = 45;
+            else if (id.includes(searchKey)) score = 35;
+            else if (href.includes(searchKey)) score = 25;
+
+            // Match semântico por cluster de sinônimos pedagógicos (ex.: "notas" -> "Digitação de Notas")
+            // Exige texto com >= 4 caracteres e sinônimo CONTIDO no texto (nunca o inverso: "de" ⊂ "consolidacao de etapa")
+            if (score === 0 && text.length >= 4 && text.length <= 60) {
+              for (const syn of expandedKeys) {
+                if (syn === searchKey || syn.length < 4) continue;
+                if (text === syn) { score = Math.max(score, 75); break; }
+                if (text.includes(syn)) { score = Math.max(score, 58); }
+                else if (aria.includes(syn) || title.includes(syn)) { score = Math.max(score, 42); }
+              }
+            }
+
+            // Match por sobreposição de tokens significativos
+            if (score === 0 && searchTokens.length > 0 && text.length > 0 && text.length <= 60) {
+              const matchedTokens = searchTokens.filter(tk => text.includes(tk) || aria.includes(tk));
+              if (matchedTokens.length > 0) {
+                score = Math.round((matchedTokens.length / searchTokens.length) * 50);
+              }
+            }
+
+            if (score > 0) {
+              if (el.getAttribute('role') === 'tab' || el.classList.contains('tab') || el.classList.contains('nav-link')) {
+                score += 15;
+              }
+              if (el.tagName === 'A' || el.tagName === 'BUTTON' || el.tagName === 'INPUT') {
+                score += 10;
+              }
+              // Anti-Loop (Browser-Use pattern): penaliza elementos já clicados para o mesmo objetivo nesta tela
+              if (el.getAttribute('data-tai-explored') === searchKey) {
+                score -= 45;
+              }
+            }
+
+            if (score > bestScore && score >= 20) {
+              bestScore = score;
+              bestEl = el;
+            }
+          }
+          return bestEl;
+        };
+
+        const applySelectAndWait = async (sel, opt, optList) => {
+          const pool = Array.isArray(optList) && optList.length > 0 ? optList : [opt];
+          let chosen = opt;
+          for (const cOpt of pool) {
+            chosen = cOpt;
+            try {
+              const ns = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value')?.set;
+              if (ns) ns.call(sel, cOpt.value); else sel.value = cOpt.value;
+              Array.from(sel.options || []).forEach((o, i) => { o.selected = (i === cOpt.index); });
+              if (typeof cOpt.index === 'number' && cOpt.index >= 0) sel.selectedIndex = cOpt.index;
+              cOpt.selected = true;
+            } catch { sel.value = cOpt.value; }
+            let mutated = false;
+            const obs = new MutationObserver(() => { mutated = true; });
+            try { obs.observe(document.body, { childList: true, subtree: true }); } catch {}
+            sel.dispatchEvent(new Event('input', { bubbles: true }));
+            sel.dispatchEvent(new Event('change', { bubbles: true }));
+            try { const jq = window.jQuery || window.$; if (typeof jq === 'function') jq(sel).trigger('change'); } catch {}
+            for (let w = 0; w < 8; w++) {
+              await new Promise(r => setTimeout(r, 200));
+              const jqBusy = Number((window.jQuery || window.$)?.active || 0) > 0;
+              if (!jqBusy && !mutated && w >= 1) break;
+              mutated = false;
+            }
+            try { obs.disconnect(); } catch {}
+            if (sel.selectedIndex === cOpt.index || sel.options?.[sel.selectedIndex] === cOpt) break;
+          }
+          return chosen;
+        };
+        const reconcilePriorSelects = async (targets) => {
+          for (const rawT of (targets || [])) {
+            const pk = stripGoalPrefix(rawT);
+            const m = pk ? findBestSelectMatch(pk) : null;
+            if (m?.sel && m?.opt) {
+              const curTxt = (m.sel.options?.[m.sel.selectedIndex]?.text || '').trim();
+              const wantTxt = (m.opt.text || m.opt.label || '').trim();
+              if (curTxt !== wantTxt) await applySelectAndWait(m.sel, m.opt, m.candidates);
+            }
+          }
+        };
+
+        const hops = [];
+        let selectMatch = null;
         let bestElement = null;
-        let bestScore = -1;
-
-        for (const el of candidates) {
-          if (el.offsetParent === null && el.offsetWidth === 0 && el.offsetHeight === 0) continue;
-          
-          const text = (el.innerText || el.textContent || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-          const aria = (el.getAttribute('aria-label') || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-          const title = (el.getAttribute('title') || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-          const href = (el.getAttribute('href') || '').toLowerCase();
-          const id = (el.id || '').toLowerCase();
-
-          let score = 0;
-          if (text === cleanKey) score = 100;
-          else if (text.startsWith(cleanKey)) score = 80;
-          else if (text.includes(cleanKey)) score = 60;
-          else if (aria.includes(cleanKey)) score = 50;
-          else if (title.includes(cleanKey)) score = 40;
-          else if (id.includes(cleanKey)) score = 30;
-          else if (href.includes(cleanKey)) score = 20;
-
-          if (el.getAttribute('role') === 'tab' || el.classList.contains('tab') || el.classList.contains('nav-link')) {
-            score += 15;
+        let swappedIdx = 0;
+        for (let attempt = 0; attempt < 8; attempt++) {
+          selectMatch = findBestSelectMatch(cleanKey);
+          if (selectMatch && selectMatch.sel && selectMatch.opt) break;
+          bestElement = findBestCandidate(cleanKey);
+          if (bestElement) break;
+          await new Promise(r => setTimeout(r, 250));
+        }
+        if ((selectMatch || !bestElement) && Array.isArray(pendingList) && pendingList.length > 1) {
+          let bestIdx = selectMatch ? selectMatch.selIdx : 999;
+          for (let pIdx = 1; pIdx < pendingList.length; pIdx++) {
+            const pClean = stripGoalPrefix(pendingList[pIdx]);
+            const pMatch = pClean && !destructivePattern.test(pClean) ? findBestSelectMatch(pClean) : null;
+            if (pMatch && pMatch.selIdx < bestIdx) {
+              bestIdx = pMatch.selIdx;
+              selectMatch = pMatch;
+              kw = pendingList[pIdx];
+              cleanKey = pClean;
+              swappedIdx = pIdx;
+            }
           }
-          if (el.tagName === 'A' || el.tagName === 'BUTTON') {
-            score += 10;
+        }
+        if (selectMatch && selectMatch.sel && selectMatch.opt) {
+          const { sel, opt, candidates } = selectMatch;
+          sel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          sel.style.outline = '2px solid #38bdf8';
+          const chosenOpt = await applySelectAndWait(sel, opt, candidates);
+          await reconcilePriorSelects([...(priorTargets || []), kw]);
+          const optText = (chosenOpt.text || chosenOpt.label || kw).trim();
+          const finalOpt = sel.options?.[sel.selectedIndex];
+          const finalTxt = (finalOpt?.text || finalOpt?.label || '').trim();
+          if (!finalOpt || (finalOpt.value !== chosenOpt.value && finalTxt.toLowerCase() !== optText.toLowerCase())) {
+            return { sucesso: false, mensagem: `O filtro não manteve '${optText}' selecionado (atual: '${finalTxt || 'vazio'}').` };
           }
+          const placeholderOpt = sel.options && sel.options[0] ? (sel.options[0].text || '').trim() : '';
+          const selectAriaLabel = sel.getAttribute('aria-label') || '';
+          const selectLabel = selectAriaLabel || sel.getAttribute('title') || placeholderOpt || sel.name || sel.id || 'Filtro';
+          const hop = { kind: 'select', elementText: optText, selectValue: String(chosenOpt.value ?? ''), selectId: sel.id || '', selectName: sel.name || '', selectAriaLabel, selectLabel, tag: 'SELECT', target: kw };
+          return { sucesso: true, kind: 'select', swappedIdx, elementText: optText, tag: 'SELECT', target: kw, hops: [hop] };
+        }
 
-          if (score > bestScore && score >= 20) {
-            bestScore = score;
-            bestElement = el;
+        // Se o item de submenu não está visível diretamente, tenta expandir um menu pai relacionado (Hop intermediário)
+        if (!bestElement) {
+          const parentMenuKeywords = ['diario', 'academico', 'ensino', 'avaliacao', 'turma', 'aluno', 'menu', 'secretaria'];
+          const expandableMenus = collectClickableCandidates(document).filter(el => {
+            if (el.offsetParent === null && el.offsetWidth === 0 && el.offsetHeight === 0) return false;
+            const txt = (el.innerText || el.textContent || el.value || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+            if (destructivePattern.test(txt)) return false;
+            const isExpandable =
+              el.getAttribute('aria-expanded') === 'false' ||
+              el.getAttribute('aria-haspopup') === 'true' ||
+              el.classList.contains('dropdown-toggle') ||
+              el.classList.contains('has-submenu') ||
+              parentMenuKeywords.some(pk => txt === pk || txt.startsWith(pk));
+            return isExpandable;
+          });
+
+          for (const parentEl of expandableMenus.slice(0, 3)) {
+            const parentTxt = (parentEl.innerText || parentEl.textContent || 'Menu').trim();
+            try { parentEl.click(); } catch {}
+            await new Promise(r => setTimeout(r, 220));
+            const revealed = findBestCandidate(cleanKey);
+            if (revealed) {
+              hops.push({ elementText: parentTxt, tag: parentEl.tagName, target: parentTxt });
+              bestElement = revealed;
+              break;
+            }
           }
         }
 
         if (!bestElement) {
           return { sucesso: false, mensagem: `Não encontrei nenhuma aba ou link correspondente a '${kw}'.` };
         }
+
+        await reconcilePriorSelects(priorTargets || []);
 
         const origTransition = bestElement.style.transition;
         const origOutline = bestElement.style.outline;
@@ -1047,6 +1278,7 @@ async function internalNavigatePortalTab(targetTabId, targetKeyword) {
         await new Promise(r => setTimeout(r, 120));
 
         try {
+          bestElement.setAttribute('data-tai-explored', cleanKey);
           bestElement.click();
         } catch (e) {
           bestElement.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
@@ -1062,11 +1294,19 @@ async function internalNavigatePortalTab(targetTabId, targetKeyword) {
           } catch {}
         }, 1500);
 
-        return {
-          sucesso: true,
-          elementText: (bestElement.innerText || bestElement.textContent || kw).trim(),
+        const finalHop = {
+          elementText: (bestElement.innerText || bestElement.textContent || bestElement.value || kw).trim(),
           tag: bestElement.tagName,
           target: kw
+        };
+        hops.push(finalHop);
+
+        return {
+          sucesso: true,
+          elementText: finalHop.elementText,
+          tag: finalHop.tag,
+          target: kw,
+          hops
         };
       }
     });
@@ -1077,6 +1317,7 @@ async function internalNavigatePortalTab(targetTabId, targetKeyword) {
     return { sucesso: false, mensagem: err.message };
   }
 }
+globalThis.internalNavigatePortalTab = internalNavigatePortalTab;
 
 
 
@@ -1333,8 +1574,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
       if (useV2) {
         const graphKey = params?.task_id || tool;
-        const bundle = globalThis.SkillGraphBundle?.SkillGraphV2;
-        const graph = bundle?.syntheticGraphs?.[graphKey] || null;
+        const graph = params?.skillGraph || null;
 
         if (!graph) {
           sendResponse({
@@ -1380,22 +1620,24 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       // 2. Roteia execução de acordo com o tipo de ferramenta
       try {
         if (tool === 'read_roster' || (tool === 'invoke_teacher_capability' && params?.capability === 'read_roster')) {
+          const graph = params?.skillGraph || params?.graph;
+          if (!graph) {
+            sendResponse({
+              ok: false,
+              code: "MAP_NOT_FOUND",
+              message: "Mapa não encontrado para este portal. Grave ou importe um mapa no painel."
+            });
+            return;
+          }
           chrome.tabs.sendMessage(targetTabId, {
             action: 'EXECUTE_SKILL_GRAPH',
-            skillGraph: null
+            skillGraph: graph
           }, (graphResp) => {
             if (chrome.runtime.lastError || !graphResp?.ok) {
-              // Fallback gracioso para leitura direta de tabela no DOM
-              chrome.tabs.sendMessage(targetTabId, { action: 'READ_ACTIVE_PORTAL_ROSTER' }, (rosterResp) => {
-                const students = rosterResp?.students || [];
-                sendResponse({
-                  success: Boolean(rosterResp && rosterResp.sucesso),
-                  verified: Boolean(students.length > 0),
-                  verification_method: 'dom_roster_table',
-                  students,
-                  data: { students },
-                  error: rosterResp?.mensagem
-                });
+              sendResponse({
+                ok: false,
+                code: "MAP_NOT_FOUND",
+                message: "Mapa não encontrado para este portal. Grave ou importe um mapa no painel."
               });
             } else {
               const students = graphResp.records || graphResp.students || [];
@@ -1630,207 +1872,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
-  if (message.action === 'READ_ACTIVE_PORTAL_ROSTER') {
-    (async () => {
-      const targetTabId = await resolveActivePortalTab(message.tabId);
-      if (!targetTabId) {
-        sendResponse({ sucesso: false, mensagem: 'Nenhuma aba ativa do portal identificada.' });
-        return;
-      }
-      const res = await internalReadRoster(targetTabId);
-      sendResponse(res);
-    })();
-    return true;
-  }
-
-  if (message.action === 'EXECUTE_SAFE_WRITE') {
-    (async () => {
-      const targetTabId = await resolveActivePortalTab(message.tabId);
-      if (!targetTabId) {
-        sendResponse({ sucesso: false, mensagem: 'Nenhuma aba ativa do portal para escrita.' });
-        return;
-      }
-
-      let { studentName, targetValue, actionType } = message;
-
-      // Guardião Pedagógico de Validação e Normalização de Notas
-      if ((actionType === 'lancar_nota' || !actionType) && targetValue !== undefined && targetValue !== null) {
-        const rawNota = parseFloat(String(targetValue).replace(',', '.'));
-        if (!isNaN(rawNota)) {
-          if (rawNota > 10 && rawNota <= 100) {
-            targetValue = String(parseFloat((rawNota / 10).toFixed(1)));
-            console.log('[SafeWriter] 💡 Guardião Pedagógico: valor normalizado com sucesso.');
-          } else if (rawNota < 0 || rawNota > 100) {
-            sendResponse({
-              sucesso: false,
-              status: 'invalid_grade_range',
-              mensagem: `A nota ${rawNota} está fora da escala permitida (0 a 10). Por favor, confira o valor informado. ✨`
-            });
-            return;
-          } else {
-            targetValue = String(rawNota);
-          }
-        }
-      }
-
-      try {
-        const results = await chrome.scripting.executeScript({
-          target: { tabId: targetTabId },
-          args: [studentName, String(targetValue), actionType || 'lancar_nota'],
-          func: (targetName, valStr, actType) => {
-            const rows = Array.from(document.querySelectorAll('table tr'));
-            const norm = (s) => (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
-            const cleanTarget = norm(targetName);
-            let targetRow = null;
-
-            for (const r of rows) {
-              const rowText = norm(r.innerText);
-              if (rowText.includes(cleanTarget)) {
-                targetRow = r;
-                break;
-              }
-            }
-
-            if (!targetRow) {
-              const firstName = cleanTarget.split(' ')[0];
-              if (firstName.length > 2) {
-                for (const r of rows) {
-                  const rowText = norm(r.innerText);
-                  if (rowText.includes(firstName)) {
-                    targetRow = r;
-                    break;
-                  }
-                }
-              }
-            }
-
-            if (!targetRow) {
-              return { sucesso: false, status: 'student_not_found', mensagem: `Aluno '${targetName}' não encontrado no portal.` };
-            }
-
-            const isFalta = (actType === 'lancar_falta');
-            const checkboxes = Array.from(targetRow.querySelectorAll('input[type="checkbox"]'));
-            const textInputs = Array.from(targetRow.querySelectorAll('input:not([type="hidden"]):not([type="checkbox"])'));
-            const selects = Array.from(targetRow.querySelectorAll('select'));
-
-            let targetInput = null;
-            if (isFalta && checkboxes.length > 0) {
-              targetInput = checkboxes[0];
-            } else if (textInputs.length > 0) {
-              targetInput = textInputs[0];
-            } else if (checkboxes.length > 0) {
-              targetInput = checkboxes[0];
-            } else if (selects.length > 0) {
-              targetInput = selects[0];
-            }
-
-            if (!targetInput) {
-              return { sucesso: false, status: 'no_inputs', mensagem: `Nenhum campo editável (${isFalta ? 'falta/frequência' : 'nota'}) na linha deste aluno.` };
-            }
-
-            // 1. Aplica destaque visual seguro
-            const origTransition = targetInput.style.transition;
-            const origOutline = targetInput.style.outline;
-            const origBg = targetInput.style.backgroundColor;
-
-            targetInput.style.transition = 'all 0.3s ease';
-            targetInput.style.outline = '3px solid #10b981';
-            targetInput.style.backgroundColor = '#ecfdf5';
-            targetInput.style.boxShadow = '0 0 16px rgba(16, 185, 129, 0.6)';
-
-            let beforeVal = '';
-            let afterVal = '';
-            let isVerified = false;
-
-            // 2. Escrita por tipo de controle
-            if (targetInput.type === 'checkbox') {
-              beforeVal = targetInput.checked ? 'Marcado' : 'Desmarcado';
-              const shouldBeChecked = isFalta ? (valStr !== '0' && valStr.toLowerCase() !== 'false') : true;
-
-              if (targetInput.checked !== shouldBeChecked) {
-                targetInput.checked = shouldBeChecked;
-                targetInput.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
-                targetInput.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
-                targetInput.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
-              }
-              targetInput.focus();
-              afterVal = targetInput.checked ? 'Marcado' : 'Desmarcado';
-              isVerified = (targetInput.checked === shouldBeChecked);
-            } else if (targetInput.tagName === 'SELECT') {
-              beforeVal = targetInput.options[targetInput.selectedIndex]?.text || targetInput.value || '';
-              let opt = Array.from(targetInput.options).find(o => norm(o.value) === norm(valStr) || norm(o.text).includes(norm(valStr)));
-              if (!opt && isFalta) {
-                opt = Array.from(targetInput.options).find(o => norm(o.value) === 'f' || norm(o.text).includes('falta'));
-              }
-              if (opt) {
-                targetInput.value = opt.value;
-              }
-              targetInput.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
-              targetInput.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
-              afterVal = targetInput.options[targetInput.selectedIndex]?.text || targetInput.value;
-              isVerified = opt ? (targetInput.value === opt.value) : true;
-            } else {
-              beforeVal = targetInput.value || '';
-              try {
-                const proto = Object.getPrototypeOf(targetInput);
-                const descriptor = Object.getOwnPropertyDescriptor(proto, 'value') ||
-                                   Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
-                if (descriptor && descriptor.set) {
-                  descriptor.set.call(targetInput, valStr);
-                } else {
-                  targetInput.value = valStr;
-                }
-              } catch (e) {
-                targetInput.value = valStr;
-              }
-
-              targetInput.focus();
-              targetInput.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
-              targetInput.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
-              afterVal = targetInput.value;
-              isVerified = (afterVal === valStr);
-            }
-
-            // Restaura estilo gradualmente após 2.5s
-            setTimeout(() => {
-              try {
-                targetInput.style.transition = 'all 0.5s ease';
-                targetInput.style.outline = origOutline;
-                targetInput.style.backgroundColor = origBg;
-                targetInput.style.boxShadow = 'none';
-              } catch {}
-            }, 2500);
-
-            return {
-              sucesso: isVerified,
-              status: isVerified ? 'verified_persisted' : 'verification_failed',
-              studentName: targetName,
-              before_val: beforeVal,
-              after_val: afterVal,
-              expected_val: valStr,
-              verified: isVerified
-            };
-          }
-        });
-
-        const execRes = (results && results[0] && results[0].result) || { sucesso: false, status: 'script_failed' };
-
-        // Captura screenshot da evidência visual com o highlight verde
-        let screenshot = null;
-        try {
-          screenshot = await chrome.tabs.captureVisibleTab(null, { format: 'png' });
-        } catch {}
-
-        sendResponse({
-          ...execRes,
-          screenshot
-        });
-      } catch (err) {
-        sendResponse({ sucesso: false, status: 'exception', mensagem: err.message });
-      }
-    })();
-    return true;
-  }
 
   if (message.action === 'PORTAL_OBSERVE' || message.action === 'PORTAL_SET_SELECT' || message.action === 'PORTAL_CLICK') {
     (async () => {
@@ -2339,16 +2380,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 });
 
-// Inicialização imediata com estado visual "Conectando..." durante a verificação inicial
-updateToolbarBadge('connecting');
-connectWebSocket();
+// Inicialização: se em modo SkillGraph v2, prioriza Chrome Native Messaging (zero portas TCP)
+chrome.storage.local.get(['USE_SKILLGRAPH_V2'], (res) => {
+  const useV2 = res && res.USE_SKILLGRAPH_V2 !== false;
+  if (!useV2) {
+    updateToolbarBadge('connecting');
+    connectWebSocket();
+    startupTimer = setTimeout(() => {
+      if (!isSidecarOnline) {
+        console.log('[TeacherAI Extension] Timeout expirou sem conexão com sidecar.');
+      }
+    }, STARTUP_TIMEOUT_MS);
+  } else {
+    console.log('[TeacherAI Extension] SkillGraph v2 ativado. Canal principal: Chrome Native Messaging (zero portas TCP).');
+    updateToolbarBadge('online');
+  }
+});
+
 evaluateActiveTab();
 setInterval(evaluateActiveTab, 5000);
-
-startupTimer = setTimeout(() => {
-  if (!isSidecarOnline) {
-    console.log('[TeacherAI Extension] ⏱️ Timeout de 5s expirou sem conexão. Acionando Fallback B (Native Messaging)...');
-    launchViaNativeMessaging(false);
-  }
-}, STARTUP_TIMEOUT_MS);
 

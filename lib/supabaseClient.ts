@@ -1,4 +1,6 @@
 /**
+ * @deprecated Módulo legado de sincronização Supabase na nuvem.
+ * O aplicativo opera sob o paradigma local-first (Fase 6) com SQLite cifrado no Desktop.
  * supabaseClient.ts — Conexão com Supabase para Cloud Sync em tempo real
  * Utiliza preferencialmente a service_role key ou anonKey para acesso garantido.
  */
@@ -49,12 +51,26 @@ export async function syncToSupabase(payload?: Record<string, unknown>): Promise
   const apiKey = getActiveKey(cfg)
   if (!apiKey) return { ok: false, error: 'Chave do Supabase ausente.' }
 
-  let syncPayload = payload || {}
+  let syncPayload: Record<string, any> = { ...(payload || {}) }
+  delete syncPayload['teacher_students']
+  delete syncPayload['teacher_private_students']
+  delete syncPayload['teacher_student_metrics']
+  delete syncPayload['teacher_student_memory']
   if (Object.keys(syncPayload).length === 0) {
     if (typeof window !== 'undefined') {
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i)
-        if (key && key.startsWith('teacher_') && key !== 'teacher_supabase_config' && key !== 'teacher_auth_session' && !key.endsWith('_lastModified')) {
+        if (
+          key &&
+          key.startsWith('teacher_') &&
+          key !== 'teacher_supabase_config' &&
+          key !== 'teacher_auth_session' &&
+          key !== 'teacher_students' &&
+          key !== 'teacher_private_students' &&
+          key !== 'teacher_student_metrics' &&
+          key !== 'teacher_student_memory' &&
+          !key.endsWith('_lastModified')
+        ) {
           try {
             const val = localStorage.getItem(key)
             if (val) syncPayload[key] = JSON.parse(val)
@@ -65,6 +81,11 @@ export async function syncToSupabase(payload?: Record<string, unknown>): Promise
   }
 
   try {
+    delete syncPayload['teacher_students']
+    delete syncPayload['teacher_private_students']
+    delete syncPayload['teacher_student_metrics']
+    delete syncPayload['teacher_student_memory']
+
     const rows = Object.entries(syncPayload).map(([key, value]) => ({ key, value, updated_at: new Date().toISOString() }))
 
     if (rows.length > 0) {
@@ -113,18 +134,7 @@ export async function syncToSupabase(payload?: Record<string, unknown>): Promise
         id: String(c.id), name: String(c.name), school_id: c.schoolId ? String(c.schoolId) : null, grade: c.grade || null, year: c.year || null
       }))))
     }
-    if (Array.isArray(syncPayload['teacher_students'])) {
-      promises.push(upsertRelational('students', syncPayload['teacher_students'].map((s: any) => ({
-        id: String(s.id),
-        name: String(s.name),
-        email: s.email || null,
-        class_id: s.classId ? String(s.classId) : (s.class ? String(s.class) : null),
-        class_name: s.className || s.class || null,
-        school_id: s.schoolId ? String(s.schoolId) : null,
-        grades: s.grades || {},
-        metrics: s.metrics || {}
-      }))))
-    }
+    // Bloqueio LGPD (Trilho 1): teacher_students e teacher_private_students expurgados de syncToSupabase
     if (Array.isArray(syncPayload['teacher_saved_exams'])) {
       promises.push(upsertRelational('exams', syncPayload['teacher_saved_exams'].map((e: any) => ({
         id: String(e.id), title: String(e.title || ''), topic: e.topic || null, cefr: e.cefr || null, grade: e.grade || null, content: String(e.content || JSON.stringify(e)), sections: e.sections || []
@@ -166,29 +176,7 @@ export async function syncToSupabase(payload?: Record<string, unknown>): Promise
         file_url: file.fileDataUrl || null
       }))))
     }
-    if (Array.isArray(syncPayload['teacher_private_students'])) {
-      promises.push(upsertRelational('private_students', syncPayload['teacher_private_students'].map((s: any) => ({
-        id: String(s.id),
-        name: String(s.name),
-        subject: String(s.subject),
-        guardian_name: s.guardianName || null,
-        phone: s.phone || null,
-        email: s.email || null,
-        monthly_fee: s.monthlyFee || 0,
-        due_day: s.dueDay || 10,
-        payment_method: s.paymentMethod || 'PIX',
-        last_payment_date: s.lastPaymentDate || null,
-        modality: s.modality || 'Online',
-        schedule_info: s.scheduleInfo || '',
-        payment_status: s.paymentStatus || 'em_dia',
-        mastery_percentage: s.masteryPercentage || 75,
-        goals: s.goals || null,
-        ai_diagnostic: s.aiDiagnostic || null,
-        roadmap: s.roadmap || [],
-        lessons_history: s.lessonsHistory || [],
-        grades_history: s.gradesHistory || []
-      }))))
-    }
+    // Bloqueio LGPD (Trilho 1): teacher_private_students expurgado de syncToSupabase
     if (Array.isArray(syncPayload['teacher_media_library'])) {
       promises.push(upsertRelational('media_library', syncPayload['teacher_media_library'].map((m: any) => ({
         id: String(m.id),
@@ -233,7 +221,16 @@ export async function loadFromSupabase(): Promise<{ ok: boolean; count?: number;
     const rows: Array<{ key: string; value: unknown }> = await res.json()
     let count = 0
     for (const row of rows) {
-      if (row.key && row.value !== undefined && row.key !== 'teacher_auth_session' && row.key !== 'teacher_supabase_config') {
+      if (
+        row.key &&
+        row.value !== undefined &&
+        row.key !== 'teacher_auth_session' &&
+        row.key !== 'teacher_supabase_config' &&
+        row.key !== 'teacher_students' &&
+        row.key !== 'teacher_private_students' &&
+        row.key !== 'teacher_student_metrics' &&
+        row.key !== 'teacher_student_memory'
+      ) {
         localStorage.setItem(row.key, typeof row.value === 'string' ? row.value : JSON.stringify(row.value))
         count++
       }
@@ -466,6 +463,8 @@ export interface SupabasePrivateDidacticUnit {
  * Busca todos os alunos particulares cadastrados no Supabase Cloud.
  */
 export async function fetchPrivateStudentsFromSupabase(): Promise<any[]> {
+  let isLgpdBlocked = true
+  if (isLgpdBlocked) return [] // Bloqueio LGPD
   const cfg = getSupabaseConfig()
   if (!cfg?.url) return []
   const apiKey = getActiveKey(cfg)
@@ -516,6 +515,10 @@ export async function fetchPrivateStudentsFromSupabase(): Promise<any[]> {
  * Salva/Atualiza um aluno particular diretamente no Supabase Cloud.
  */
 export async function upsertPrivateStudentToSupabase(student: any): Promise<{ ok: boolean; error?: string }> {
+  let isLgpdBlocked = true
+  if (isLgpdBlocked) {
+    return { ok: false, error: 'Bloqueio de Segurança LGPD (Trilho 1): Gravação de alunos particulares em nuvem desativada.' }
+  }
   const cfg = getSupabaseConfig()
   if (!cfg?.url) return { ok: true }
   const apiKey = getActiveKey(cfg)
@@ -574,6 +577,10 @@ export async function upsertPrivateStudentToSupabase(student: any): Promise<{ ok
  * Exclui um aluno particular no Supabase Cloud.
  */
 export async function deletePrivateStudentFromSupabase(studentId: string): Promise<boolean> {
+  let isLgpdBlocked = true
+  if (isLgpdBlocked) {
+    return true
+  }
   const cfg = getSupabaseConfig()
   if (!cfg?.url) return false
   const apiKey = getActiveKey(cfg)
@@ -1170,6 +1177,11 @@ export async function savePedagogicalInsightToSupabase(insight: {
     ? insight.overallAverage
     : (insight.overallMastery !== undefined ? Number((insight.overallMastery / 10).toFixed(1)) : null)
 
+  // LGPD Zero Egress: pedagogical_insights NÃO recebe nomes nem IDs de alunos
+  const sanitizedTopics = Array.isArray(insight.criticalTopics)
+    ? insight.criticalTopics.map(t => typeof t === 'string' && t.includes('(') ? t.replace(/^.*?\((.*?)\)$/, 'Turma $1: Aluno em atenção') : t)
+    : []
+
   const payload = {
     id: 'ins_' + Date.now(),
     school: insight.school || insight.schoolId || '',
@@ -1179,7 +1191,7 @@ export async function savePedagogicalInsightToSupabase(insight: {
     critical_count: insight.criticalCount ?? insight.atRiskCount ?? 0,
     moderate_count: insight.moderateCount ?? 0,
     top_count: insight.topCount ?? 0,
-    critical_topics: insight.criticalTopics || [],
+    critical_topics: sanitizedTopics,
     ai_report: insight.aiReport || null,
     updated_at: new Date().toISOString()
   }
@@ -1366,7 +1378,11 @@ export async function savePortalExecutionLogToSupabase(log: {
         mode: log.mode || 'supervised',
         status: log.status || 'success',
         filled_count: log.filledCount || 0,
-        extracted_data: log.extractedData || {},
+        extracted_data: (() => {
+          const c = { ...(log.extractedData || {}) }
+          delete c.writeItems; delete c.syncResults; delete c.students; delete c.diff; delete c.studentName; delete c.matricula
+          return c
+        })(),
         error_message: log.errorMessage || null,
         created_at: new Date().toISOString()
       })
@@ -1985,4 +2001,206 @@ export async function deleteDidacticSequenceFromSupabase(id: string): Promise<bo
     return false
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ALUNOS & TURMAS NO SUPABASE (Students & Classes)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export function isSupabaseConfigured(): boolean {
+  const cfg = getSupabaseConfig()
+  return !!(cfg?.url && (cfg.anonKey || cfg.serviceKey))
+}
+
+export async function fetchStudentsFromSupabase(): Promise<Array<{
+  id: string
+  name: string
+  classId: string
+  schoolId: string
+  notes: string
+  level: string
+  grades?: Record<string, string>
+  metrics?: Record<string, number>
+  email?: string
+  rollNumber?: string
+  portal_native_id?: string
+  source_type?: 'portal_scrape' | 'trello_import' | 'manual_entry' | 'csv_import'
+  source_portal?: string
+  sync_status?: 'synced' | 'local_only' | 'conflict_pending'
+  nee_flag?: boolean
+}>> {
+  const cfg = getSupabaseConfig()
+  if (!cfg?.url) return []
+  const apiKey = getActiveKey(cfg)
+  if (!apiKey) return []
+
+  try {
+    let isLgpdBlocked = true
+    if (isLgpdBlocked) return []
+    const res = await fetch(`${cfg.url}/rest/v1/students?select=*&order=name.asc`, {
+      headers: {
+        'apikey': apiKey,
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      }
+    })
+    if (!res.ok) return []
+    const data = await res.json()
+    if (!Array.isArray(data)) return []
+
+    return data.map((row: any) => ({
+      id: String(row.id),
+      name: String(row.name || ''),
+      classId: row.class_id ? String(row.class_id) : (row.classId ? String(row.classId) : ''),
+      schoolId: row.school_id ? String(row.school_id) : (row.schoolId ? String(row.schoolId) : ''),
+      notes: row.notes || '',
+      level: row.level || 'A2',
+      grades: row.grades && typeof row.grades === 'object' ? row.grades : {},
+      metrics: row.metrics && typeof row.metrics === 'object' ? row.metrics : {},
+      email: row.email || undefined,
+      rollNumber: row.roll_number || row.rollNumber || undefined,
+      portal_native_id: row.portal_native_id || undefined,
+      source_type: (row.source_type as any) || 'manual_entry',
+      source_portal: row.source_portal || undefined,
+      sync_status: 'synced' as const,
+      nee_flag: Boolean(row.nee_flag)
+    }))
+  } catch {
+    return []
+  }
+}
+
+export const saveStudentToSupabase = async (_student: any): Promise<{ ok: boolean; error?: string }> => {
+  return {
+    ok: false,
+    error: 'Bloqueio de Segurança LGPD (Trilho 1): Gravação de dados identificáveis de alunos (PII) em nuvem é desativada. Armazenamento restrito ao cofre local.'
+  }
+}
+
+export async function upsertStudentToSupabase(_student: {
+  id: string
+  name: string
+  classId?: string
+  schoolId?: string
+  notes?: string
+  level?: string
+  grades?: Record<string, string | number>
+  metrics?: Record<string, number>
+  email?: string
+  rollNumber?: string
+  portal_native_id?: string
+  source_type?: string
+  source_portal?: string
+  nee_flag?: boolean
+}): Promise<{ ok: boolean; error?: string }> {
+  return {
+    ok: false,
+    error: 'Bloqueio de Segurança LGPD (Trilho 1): Gravação de dados identificáveis de alunos (PII) em nuvem é desativada. Armazenamento restrito ao cofre local.'
+  }
+}
+
+async function _legacy_upsertStudentToSupabase(student: {
+  id: string
+  name: string
+  classId?: string
+  schoolId?: string
+  notes?: string
+  level?: string
+  grades?: Record<string, string | number>
+  metrics?: Record<string, number>
+  email?: string
+  rollNumber?: string
+  portal_native_id?: string
+  source_type?: string
+  source_portal?: string
+  nee_flag?: boolean
+}): Promise<{ ok: boolean; error?: string }> {
+  const cfg = getSupabaseConfig()
+  if (!cfg?.url) return { ok: true }
+  const apiKey = getActiveKey(cfg)
+  if (!apiKey) return { ok: true }
+
+  try {
+    const payload = {
+      id: String(student.id),
+      name: String(student.name),
+      class_id: student.classId ? String(student.classId) : null,
+      school_id: student.schoolId ? String(student.schoolId) : null,
+      email: student.email || null,
+      notes: student.notes || null,
+      level: student.level || 'A2',
+      grades: student.grades || {},
+      metrics: student.metrics || {},
+      roll_number: student.rollNumber || null,
+      portal_native_id: student.portal_native_id || null,
+      source_type: student.source_type || 'manual_entry',
+      source_portal: student.source_portal || null,
+      nee_flag: Boolean(student.nee_flag),
+      updated_at: new Date().toISOString()
+    }
+
+    const res = await fetch(`${cfg.url}/rest/v1/students`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': apiKey,
+        'Authorization': `Bearer ${apiKey}`,
+        'Prefer': 'resolution=merge-duplicates'
+      },
+      body: JSON.stringify(payload)
+    })
+    return { ok: res.ok }
+  } catch (e: unknown) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Erro de rede' }
+  }
+}
+
+export async function deleteStudentFromSupabase(_studentId: string): Promise<boolean> {
+  // Bloqueio LGPD (Trilho 1): Exclusão em nuvem desativada (gerenciamento estritamente local)
+  return true
+}
+
+async function _legacy_deleteStudentFromSupabase(studentId: string): Promise<boolean> {
+  const cfg = getSupabaseConfig()
+  if (!cfg?.url) return true
+  const apiKey = getActiveKey(cfg)
+  if (!apiKey) return true
+
+  try {
+    const res = await fetch(`${cfg.url}/rest/v1/students?id=eq.${encodeURIComponent(studentId)}`, {
+      method: 'DELETE',
+      headers: { 'apikey': apiKey, 'Authorization': `Bearer ${apiKey}` }
+    })
+    return res.ok
+  } catch {
+    return false
+  }
+}
+
+export async function saveStudentMetricsToSupabase(_studentId: string, _metrics: Record<string, number>): Promise<boolean> {
+  // Bloqueio LGPD (Trilho 1): Gravação de métricas de estudantes em nuvem desativada
+  return false
+}
+
+async function _legacy_saveStudentMetricsToSupabase(studentId: string, metrics: Record<string, number>): Promise<boolean> {
+  const cfg = getSupabaseConfig()
+  if (!cfg?.url) return true
+  const apiKey = getActiveKey(cfg)
+  if (!apiKey) return true
+
+  try {
+    const res = await fetch(`${cfg.url}/rest/v1/students?id=eq.${encodeURIComponent(studentId)}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': apiKey,
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({ metrics, updated_at: new Date().toISOString() })
+    })
+    return res.ok
+  } catch {
+    return false
+  }
+}
+
 

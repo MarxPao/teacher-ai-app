@@ -13,6 +13,9 @@ export interface RecorderOptions {
   taskId?: string
   initialUrl?: string
   mountOverlay?: boolean
+  allowUntrustedEvents?: boolean
+  initialStepSeq?: number
+  onStepCaptured?: (step: TraceStep) => void
   onFinish?: (trace: Trace) => void
 }
 
@@ -33,6 +36,7 @@ export class DomRecorder {
   private handleKeyDownBound: (e: KeyboardEvent) => void
 
   constructor(private doc: Document, private options: RecorderOptions = {}) {
+    this.stepSeq = options.initialStepSeq || 0
     this.handleClickBound = this.handleClick.bind(this)
     this.handleChangeBound = this.handleChange.bind(this)
     this.handleBlurBound = this.handleBlur.bind(this)
@@ -41,6 +45,12 @@ export class DomRecorder {
 
   private nextStepId(): string {
     return `s${++this.stepSeq}`
+  }
+
+  private pushStep(step: TraceStep): void {
+    this.steps.push(step)
+    this.overlay?.updateStepCount(this.stepSeq)
+    this.options.onStepCaptured?.(step)
   }
 
   public start(): void {
@@ -54,15 +64,19 @@ export class DomRecorder {
     const host = this.doc.location?.host || 'localhost'
     const path = this.doc.location?.pathname || '/'
 
-    this.steps.push({
-      id: this.nextStepId(),
-      at: this.startedAt,
-      frame_path: '/',
-      host,
-      path,
-      kind: 'navigate',
-      url: currentUrl,
-    })
+    if (this.stepSeq === 0) {
+      const initStep: TraceStep = {
+        id: this.nextStepId(),
+        at: this.startedAt,
+        frame_path: '/',
+        host,
+        path,
+        kind: 'navigate',
+        url: currentUrl,
+      }
+      this.steps.push(initStep)
+      this.options.onStepCaptured?.(initStep)
+    }
 
     if (this.options.mountOverlay !== false && this.doc.body) {
       this.overlay = new RecordingOverlay(this.doc, {
@@ -74,6 +88,9 @@ export class DomRecorder {
           if (this.options.onFinish) this.options.onFinish(trace)
         },
       })
+      if (this.stepSeq > 0) {
+        this.overlay.updateStepCount(this.stepSeq)
+      }
     }
 
     this.doc.addEventListener('click', this.handleClickBound, true)
@@ -93,44 +110,45 @@ export class DomRecorder {
 
   private handleClick(e: MouseEvent): void {
     if (!this.isRecording || this.isPaused) return
+    if (e.isTrusted === false && !this.options.allowUntrustedEvents) return
     const target = e.target as Element | null
     if (!target || this.isOverlayTarget(target)) return
 
     const step = createClickStep(target, this.doc, this.registry, this.nextStepId())
     if (step) {
-      this.steps.push(step)
-      this.overlay?.updateStepCount(this.steps.length)
+      this.pushStep(step)
     }
   }
 
   private handleChange(e: Event): void {
     if (!this.isRecording || this.isPaused) return
+    if (e.isTrusted === false && !this.options.allowUntrustedEvents) return
     const target = e.target as Element | null
     if (!target || this.isOverlayTarget(target)) return
 
     const step = createChangeStep(target, this.doc, this.registry, this.nextStepId())
     if (step) {
-      this.steps.push(step)
-      this.overlay?.updateStepCount(this.steps.length)
+      this.pushStep(step)
     }
   }
 
   private handleBlur(e: FocusEvent): void {
     if (!this.isRecording || this.isPaused) return
+    if (e.isTrusted === false && !this.options.allowUntrustedEvents) return
     const target = e.target as Element | null
     if (!target || this.isOverlayTarget(target)) return
 
     const step = createBlurStep(target, this.doc, this.registry, this.nextStepId())
     if (step) {
-      this.steps.push(step)
-      this.overlay?.updateStepCount(this.steps.length)
+      this.pushStep(step)
     }
   }
 
   private handleKeyDown(e: KeyboardEvent): void {
     if (!this.isRecording || this.isPaused) return
+    if (e.isTrusted === false && !this.options.allowUntrustedEvents) return
     if (e.key === 'Enter' || e.key === 'Tab' || e.key === 'Escape') {
-      this.steps.push({
+      this.pushStep({
         id: this.nextStepId(),
         at: Date.now(),
         frame_path: '/',
@@ -139,7 +157,6 @@ export class DomRecorder {
         kind: 'key',
         key: e.key,
       })
-      this.overlay?.updateStepCount(this.steps.length)
     }
   }
 
@@ -149,7 +166,7 @@ export class DomRecorder {
       this.pickMode = null
       if (!el) return
       const descriptor = extractElementDescriptor(el, this.doc, this.registry)
-      this.steps.push({
+      this.pushStep({
         id: this.nextStepId(),
         at: Date.now(),
         frame_path: '/',
@@ -158,7 +175,6 @@ export class DomRecorder {
         kind: 'mark_table',
         descriptor,
       })
-      this.overlay?.updateStepCount(this.steps.length)
     })
     this.pickMode.start()
   }
@@ -169,7 +185,7 @@ export class DomRecorder {
       this.pickMode = null
       if (!el) return
       const descriptor = extractElementDescriptor(el, this.doc, this.registry)
-      this.steps.push({
+      this.pushStep({
         id: this.nextStepId(),
         at: Date.now(),
         frame_path: '/',
@@ -178,7 +194,6 @@ export class DomRecorder {
         kind: 'mark_next_page',
         descriptor,
       })
-      this.overlay?.updateStepCount(this.steps.length)
     })
     this.pickMode.start()
   }

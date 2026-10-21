@@ -62,6 +62,7 @@ sidecar/screenshots/
 # distribution & audit scratch
 /dist/
 /dist-desktop/
+teacher-extension/dist/
 *.crx
 audit_experiments_output.json
 scratch_report.txt
@@ -71,3 +72,4 @@ sidecar/skills/cache/
 sidecar/venv/
 .venv/
 .worktrees/
+conformance/community/out/

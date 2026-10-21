@@ -1,0 +1,26 @@
+{
+  "id": "dev_03_legit_idp_auth",
+  "set": "dev",
+  "base_graph": "base_multi_host.json",
+  "package_id": "diario-sso",
+  "map_version": 1,
+  "publisher_key": "publisherA",
+  "platform_hint": "paineldoaluno",
+  "hosts": [
+    {
+      "placeholder": "h1.invalid",
+      "role": "portal",
+      "suffix_hint": "paineldoaluno.com.br"
+    },
+    {
+      "placeholder": "h2.invalid",
+      "role": "idp"
+    }
+  ],
+  "mutations": [],
+  "expected": "accept",
+  "test_binding": {
+    "h1.invalid": "escola.paineldoaluno.com.br",
+    "h2.invalid": "login.microsoftonline.com"
+  }
+}

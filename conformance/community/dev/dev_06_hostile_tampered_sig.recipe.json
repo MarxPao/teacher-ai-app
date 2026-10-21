@@ -1,0 +1,14 @@
+{
+  "id": "dev_06_hostile_tampered_sig",
+  "set": "dev",
+  "base_graph": "base_read_roster.json",
+  "package_id": "diario-corrompido",
+  "map_version": 1,
+  "publisher_key": "publisherA",
+  "tamper_after_sign": {
+    "corrupt_sig_byte": true
+  },
+  "mutations": [],
+  "expected": "reject",
+  "expected_code": "E_PKG_SIGNATURE_INVALID"
+}

@@ -239,9 +239,9 @@ export function compileQuestionsToHtml(
       html += `    </div>\n`
     }
 
-    // Gabarito / Chave de Correção
+    // Gabarito / Chave de Correção (oculto na folha do aluno; preservado para re-parse e documento de gabarito separado)
     if (answerKey) {
-      html += `    <div class="exam-answer-key" style="margin-top: 8px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 6px 12px; font-size: 12.5px; color: #166534;">\n`
+      html += `    <div class="exam-answer-key" style="display: none; margin-top: 8px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 6px 12px; font-size: 12.5px; color: #166534;">\n`
       html += `      <strong>✓ Gabarito / Resolução:</strong> ${answerKey.replace(/\n/g, ' ')}\n`
       html += `    </div>\n`
     }

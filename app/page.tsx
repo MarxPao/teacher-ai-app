@@ -221,8 +221,8 @@ export default function Home() {
     const sbCfg = localStorage.getItem('teacher_supabase_config')
     if (!sbCfg || sbCfg === '{}' || sbCfg.includes('serviceKey')) {
       const defaultSb = {
-        url:     process.env.NEXT_PUBLIC_SUPABASE_URL      || 'https://parxakvjvuvsmvbvrshk.supabase.co',
-        anonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBhcnhha3ZqdnV2c212YnZyc2hrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgyNjgyMDcsImV4cCI6MjA5Mzg0NDIwN30.m7usRhAT6Z_wHxZsykPjV_op5GyRscz3Gnu9teKTMoM',
+        url:     process.env.NEXT_PUBLIC_SUPABASE_URL      || '',
+        anonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
       }
       localStorage.setItem('teacher_supabase_config', JSON.stringify(defaultSb))
     }

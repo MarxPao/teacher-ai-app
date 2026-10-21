@@ -2,6 +2,7 @@
  * Motor de Diagnóstico Pedagógico e Alertas Automáticos (#47, #48).
  * Analisa notas, erros frequentes e histórico para alertar o professor.
  */
+import { PEDAGOGICAL_RISK_THRESHOLD, PEDAGOGICAL_EXCELLENCE_THRESHOLD } from './disciplineGate'
 
 export interface PedagogicalAlert {
   id: string
@@ -39,7 +40,7 @@ export function generatePedagogicalInsights(
   // 1. Detecção de Alunos com Queda de Desempenho ou Nota Crítica (< 6.0)
   students.forEach((student) => {
     const grade = student.lastGrade ?? student.avgGrade
-    if (grade !== undefined && grade < 6.0) {
+    if (grade !== undefined && grade < PEDAGOGICAL_RISK_THRESHOLD) {
       alerts.push({
         id: `alert_grade_${student.id}`,
         type: 'danger',
@@ -73,7 +74,7 @@ export function generatePedagogicalInsights(
   }
 
   // 3. Reconhecimento de Destaque / Evolução Positiva
-  const topStudents = students.filter((s) => (s.lastGrade ?? s.avgGrade ?? 0) >= 9.0)
+  const topStudents = students.filter((s) => (s.lastGrade ?? s.avgGrade ?? 0) >= PEDAGOGICAL_EXCELLENCE_THRESHOLD)
   if (topStudents.length > 0) {
     const names = topStudents.slice(0, 2).map((s) => s.name).join(', ')
     alerts.push({

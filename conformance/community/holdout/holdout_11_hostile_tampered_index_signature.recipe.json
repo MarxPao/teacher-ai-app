@@ -1,0 +1,14 @@
+{
+  "id": "holdout_11_hostile_tampered_index_signature",
+  "set": "holdout",
+  "base_graph": "base_read_roster.json",
+  "package_id": "diario-bad-index-sig",
+  "map_version": 1,
+  "publisher_key": "publisherA",
+  "index_state": {
+    "corrupt_index_sig": true
+  },
+  "mutations": [],
+  "expected": "reject",
+  "expected_code": "E_REGISTRY_INDEX_INVALID"
+}

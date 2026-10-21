@@ -52,6 +52,7 @@ export async function executeReadNode(
       anchor: resolvedAnchor,
       skip_rows: skipRows,
       skip_empty_rows: skipEmptyRows,
+      paginate: node.paginate,
     })
     state.variables[node.into] = tableData.rows.filter(r => !shouldSkipRow(r, skipRows, skipEmptyRows))
   }

@@ -1,5 +1,6 @@
 import * as fs from 'node:fs'
 import * as path from 'node:path'
+import * as crypto from 'node:crypto'
 import { safeStorage } from 'electron'
 import { generateDataKey } from '../../lib/desktop-core/crypto/envelope'
 import { DesktopCoreError } from '../../lib/desktop-core/errors'
@@ -22,6 +23,17 @@ export class VaultManager {
         'E_VAULT_UNAVAILABLE',
         'O cofre criptográfico seguro do sistema operacional (DPAPI) não está disponível. Não é seguro continuar sem criptografia de chaves.'
       )
+    }
+
+    // Se o runtime expuser getSelectedStorageBackend (Linux/Chromium), rejeita basic_text (inseguro)
+    if (typeof (safeStorage as any).getSelectedStorageBackend === 'function') {
+      const backend = (safeStorage as any).getSelectedStorageBackend()
+      if (backend === 'basic_text') {
+        throw new DesktopCoreError(
+          'E_VAULT_BACKEND_INSECURE',
+          'O cofre criptográfico está operando em modo inseguro (basic_text sem chaveiro do sistema). Operação abortada para proteção dos dados.'
+        )
+      }
     }
 
     if (!fs.existsSync(this.vaultDir)) {
@@ -115,5 +127,79 @@ export class VaultManager {
     const filePath = path.join(this.vaultDir, `key_${safeProvider}.enc`)
     return fs.existsSync(filePath)
   }
-}
 
+  private credentialPath(host: string): string {
+    const safeHost = host.toLowerCase().trim().replace(/[^a-z0-9._-]/g, '_')
+    return path.join(this.vaultDir, `cred_${safeHost}.enc`)
+  }
+
+  /**
+   * Guarda usuário e senha de um portal escolar, cifrados com a DEK do cofre do SO.
+   * O agente só recebe o valor no momento de preencher o campo; o LLM nunca vê.
+   */
+  setPortalCredential(host: string, username: string, password: string): void {
+    if (!fs.existsSync(this.vaultDir)) {
+      fs.mkdirSync(this.vaultDir, { recursive: true })
+    }
+    fs.writeFileSync(this.credentialPath(host), this.encryptSecret(JSON.stringify({ username, password })))
+  }
+
+  getPortalCredential(host: string): { username: string; password: string } | null {
+    // Aceita subdomínio: credencial de "escola.com.br" vale para "portal.escola.com.br"
+    const parts = host.toLowerCase().split('.')
+    for (let i = 0; i < Math.max(1, parts.length - 1); i++) {
+      const filePath = this.credentialPath(parts.slice(i).join('.'))
+      if (!fs.existsSync(filePath)) continue
+      try {
+        const parsed = JSON.parse(this.decryptSecret(fs.readFileSync(filePath)))
+        if (typeof parsed.username === 'string' && typeof parsed.password === 'string') return parsed
+      } catch {
+        return null
+      }
+    }
+    return null
+  }
+
+  listPortalCredentialHosts(): string[] {
+    if (!fs.existsSync(this.vaultDir)) return []
+    return fs
+      .readdirSync(this.vaultDir)
+      .filter(f => f.startsWith('cred_') && f.endsWith('.enc'))
+      .map(f => f.slice(5, -4))
+  }
+
+  deletePortalCredential(host: string): void {
+    const filePath = this.credentialPath(host)
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath)
+  }
+
+  /**
+   * Obtém ou inicializa chave privada Ed25519 cifrada com DPAPI para assinatura de pacotes.
+   */
+  getOrCreateExportKey(identity: string = 'author'): string {
+    const safeId = identity.toLowerCase().replace(/[^a-z0-9_-]/g, '_')
+    const filePath = path.join(this.vaultDir, `key_export_${safeId}.enc`)
+
+    if (fs.existsSync(filePath)) {
+      try {
+        const encrypted = fs.readFileSync(filePath)
+        return this.decryptSecret(encrypted)
+      } catch {}
+    }
+
+    const { privateKey } = crypto.generateKeyPairSync('ed25519')
+    const privateKeyPem = privateKey.export({ type: 'pkcs8', format: 'pem' }).toString()
+
+    try {
+      if (!fs.existsSync(this.vaultDir)) {
+        fs.mkdirSync(this.vaultDir, { recursive: true })
+      }
+      const encrypted = this.encryptSecret(privateKeyPem)
+      fs.writeFileSync(filePath, encrypted)
+    } catch {
+      // Retorna em memória se DPAPI estiver indisponível
+    }
+
+    return privateKeyPem
+  }
+}

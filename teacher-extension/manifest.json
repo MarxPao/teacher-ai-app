@@ -18,7 +18,7 @@
     }
   },
   "side_panel": {
-    "default_path": "side_panel.html"
+    "default_path": "side_panel_v2.html"
   },
   "background": {
     "service_worker": "background.js"
@@ -30,19 +30,15 @@
     "sidePanel",
     "scripting",
     "nativeMessaging",
-    "alarms"
+    "alarms",
+    "webNavigation"
   ],
   "host_permissions": [
-    "http://localhost:8898/*",
-    "http://127.0.0.1:8898/*",
-    "http://localhost:8899/*",
-    "http://127.0.0.1:8899/*"
-  ],
-  "optional_host_permissions": [
-    "*://*/*"
+    "<all_urls>"
   ],
   "optional_permissions": [
-    "downloads"
+    "downloads",
+    "debugger"
   ],
   "content_scripts": [
     {
@@ -70,7 +66,7 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["side_panel.html", "side_panel.js", "portal_normalizer.js", "portal_dom_reader.js"],
+      "resources": ["portal_normalizer.js", "portal_dom_reader.js"],
       "matches": ["http://localhost/*", "http://127.0.0.1/*"]
     }
   ]

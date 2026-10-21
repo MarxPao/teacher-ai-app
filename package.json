@@ -17,7 +17,13 @@
     "desktop:build": "npx tsx scripts/build-desktop.ts",
     "desktop:dev": "npm run desktop:build && electron ./dist-desktop/main.js",
     "desktop:seed-demo": "npx tsx desktop/scripts/seedDemo.ts",
-    "privacy:scan": "npx tsx scripts/privacy-scan.ts"
+    "privacy:scan": "npx tsx scripts/privacy-scan.ts",
+    "community:conformance:build": "npx tsx scripts/community/conformance-build.ts",
+    "community:conformance": "npx tsx scripts/community/conformance-run.ts",
+    "community:demo": "npx tsx scripts/community/demo.ts",
+    "community:import-check": "npx tsx scripts/community/import-check.ts",
+    "build:ext": "npx tsx scripts/build-extension-runner.ts",
+    "gate:preflight": "npx tsx scripts/gate-a-preflight.ts"
   },
   "dependencies": {
     "@tailwindcss/typography": "^0.5.19",
