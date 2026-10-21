@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { NextRequest } from 'next/server'
 import { GET, POST, DELETE } from '../app/api/students/route'
+import { POST as importStudentsPOST } from '../app/api/students/import/route'
+import { POST as rosterSyncPOST } from '../app/api/portal/roster-sync/route'
 
 describe('T1. Salvaguarda LGPD: Bloqueio Fail-Closed de PII em Nuvem (/api/students)', () => {
   const originalFetch = global.fetch
@@ -69,6 +71,57 @@ describe('T1. Salvaguarda LGPD: Bloqueio Fail-Closed de PII em Nuvem (/api/stude
     expect(res.status).toBe(403)
     expect(json.ok).toBe(false)
     expect(json.code).toBe('E_STUDENT_PII_CLOUD_DISABLED')
+    expect(global.fetch).not.toHaveBeenCalled()
+  })
+
+  it('H2: POST /api/students/import bloqueia envio de alunos para nuvem com HTTP 403 e NÃO emite fetch', async () => {
+    const importPayload = {
+      className: '6º Ano B - Ciências',
+      portalName: 'Machado Sobrinho',
+      students: [
+        { name: 'Canário Beatriz Lima', matricula: '2026001' },
+        { name: 'Canário Carlos Eduardo', matricula: '2026002' }
+      ]
+    }
+
+    const req = new NextRequest('http://localhost:3000/api/students/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(importPayload)
+    })
+
+    const res = await importStudentsPOST(req)
+    const json = await res.json()
+
+    expect(res.status).toBe(403)
+    expect(json.ok).toBe(false)
+    expect(json.code).toBe('E_STUDENT_PII_CLOUD_DISABLED')
+    expect(json.error).toContain('Sincronização de dados de estudantes com a nuvem está desativada por política de privacidade e LGPD')
+    expect(global.fetch).not.toHaveBeenCalled()
+  })
+
+  it('H2: POST /api/portal/roster-sync bloqueia reconciliação em nuvem com HTTP 403 e NÃO emite fetch', async () => {
+    const rosterPayload = {
+      className: '7º Ano A',
+      portalName: 'Portal Escolar',
+      students: [
+        { name: 'Canário Daniel Alves', rollNumber: '1', portalStudentId: 'std_01' }
+      ]
+    }
+
+    const req = new NextRequest('http://localhost:3000/api/portal/roster-sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(rosterPayload)
+    })
+
+    const res = await rosterSyncPOST(req)
+    const json = await res.json()
+
+    expect(res.status).toBe(403)
+    expect(json.ok).toBe(false)
+    expect(json.code).toBe('E_STUDENT_PII_CLOUD_DISABLED')
+    expect(json.error).toContain('Sincronização de lista de alunos com a nuvem está desativada por política de privacidade e LGPD')
     expect(global.fetch).not.toHaveBeenCalled()
   })
 })
