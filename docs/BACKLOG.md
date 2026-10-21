@@ -153,6 +153,7 @@ Conforme a arquitetura do Passo 4, o contrato unificado `InsightV1` (`lib/insigh
 - [ ] **`lib/predictiveAnalytics.ts`:** Migrar cálculos de projeção e fatores de risco para emitir `signals` com tamanho de janela $N$ e rotulagem neutra livre de afirmativas causais absolutas.
 - [ ] **`lib/executivePedagogicalSummary.ts`:** Migrar sumários executivos agregados da turma para validar contra o validador `validateInsightContract`.
 - [ ] **`lib/classCouncilEngine.ts`:** Unificar os pareceres de conselho de classe bimestrais com os tipos `InsightV1` e campos obrigatórios de ressalva amostral (`caveats`).
+- [ ] **`components/modules/smartInsightsGenerator.ts` (Lacuna Arquitetural):** Implementar Adapter `AssessmentInsight -> InsightV1` com validação formal por `validateInsightContract` antes de renderizar no `SmartInsightsPanel.tsx`. Atualmente, `computeSmartInsights` consome as constantes amostrais de `insightEngineV1`, mas emite objetos `AssessmentInsight` diretamente sem validação de esquema `InsightV1`.
 - [ ] **`sidecar/pedagogical_anomaly_guardian.py`:** Padronizar as regras de alerta estatístico do guardião Python para refletir os limiares amostrais mínimos e os campos de confiança ordinal (`baixa`, `media`, `alta`).
 
 
