@@ -9,10 +9,10 @@ export const DEFINITION_PERGUNTA =
   'Enunciado interrogativo emitido em sala de aula ou reunião que solicita esclarecimento, síntese, checagem ou reflexão, identificado por entonação/ponto de interrogação ou pronomes interrogativos (o que, quem, qual, como, onde, por que, quando, quanto). [DEFINIÇÃO A VALIDAR (dono)]'
 
 export const DEFINITION_PERGUNTA_ABERTA =
-  'Pergunta que demanda elaboração conceitual, justificativa, síntese ou explicação causal, não podendo ser respondida satisfatoriamente com apenas "sim", "não" ou uma única palavra. [DEFINIÇÃO A VALIDAR (dono)]'
+  'Pergunta aberta: Enunciado que demanda elaboração conceitual, justificativa, síntese ou explicação causal, não podendo ser respondida satisfatoriamente com apenas "sim", "não" ou uma única palavra. [DEFINIÇÃO A VALIDAR (dono)]'
 
 export const DEFINITION_PERGUNTA_FECHADA =
-  'Pergunta convergente ou de checagem factual que admite resposta binária (sim/não) ou escolha restrita direta sem necessidade de argumentação causal. [DEFINIÇÃO A VALIDAR (dono)]'
+  'Pergunta fechada: Enunciado convergente ou de checagem factual que admite resposta binária (sim/não) ou escolha restrita direta sem necessidade de argumentação causal. [DEFINIÇÃO A VALIDAR (dono)]'
 
 export const DEFINITION_INTERVENCAO =
   'Turno de fala emitido por qualquer participante que adiciona conteúdo, comentário, questionamento ou resposta à discussão em andamento. [DEFINIÇÃO A VALIDAR (dono)]'

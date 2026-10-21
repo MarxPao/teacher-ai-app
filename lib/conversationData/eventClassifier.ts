@@ -68,7 +68,7 @@ const INSTRUCTION_PATTERNS = [
 export function isQuestionText(text: string): boolean {
   const trimmed = text.trim()
   if (trimmed.includes('?')) return true
-  return /\b(o que|quem|qual|quais|como|onde|por que|por quê|quando|quanto|quantos|quantas|será que)\b/i.test(trimmed)
+  return /^\s*(o que|quem|qual|quais|como|onde|por que|por quê|quando|quanto|quantos|quantas|será que)\b/i.test(trimmed)
 }
 
 export function extractQuestionSpan(text: string): string {
