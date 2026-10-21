@@ -115,5 +115,25 @@ Este documento centraliza as funcionalidades, arquétipos e melhorias postergada
   - Arquivos legados pendentes (fora do limite de 80 linhas por arquivo):
     - `teacher-extension/background.js`: linhas 57, 134, 152, 469, 492, 650, 998, 1277.
     - `teacher-extension/content.js`: linhas 949, 1007, 1291, 1344, 1370.
-    - `teacher-extension/popup.js`: linha 77.
     - `teacher-extension/side_panel.js`: linhas 148, 696, 809, 1084, 1455, 2248, 2266, 2289, 2500, 2608.
+
+---
+
+## 7. Unificação Arquitetural dos Motores DOM (Lacuna #1 do Motor)
+
+- **Diagnóstico:** Historicamente coexistiram dois motores de exploração e execução de DOM no projeto:
+  1. O motor exploratório em `teacher-extension/background.js` (linhas 930–1288), injetando closures ad-hoc com heurísticas de busca de `<select>`, variantes ordinais e detecção de nós interativos via `chrome.scripting.executeScript`;
+  2. O motor canônico determinístico em `lib/runner-dom/` (`writer.ts`, `selectors.ts`, `domActionPlanner.ts`), governado pelos contratos estritos do SkillGraph v2.
+- **Risco de Divergência:** A exploração conseguia navegar em certas cascatas de selects, mas a execução do grafo pelo runner sofria atrito em tempo real por sutilezas de opções ocultas (`isOptUsable`), falta de espera de silêncio de mutações assíncronas no DOM (`waitForDomSettled`) e correlação com selects pais.
+- **Arquitetura Alvo (Unificada):**
+  - **Única Fonte da Verdade:** O content script e o runner passam a consumir exclusivamente o motor unificado `lib/runner-dom/` (`writer.ts`, `selectors.ts`, `domActionPlanner.ts`).
+  - **Eliminação de Duplicação:** As rotinas ad-hoc de `background.js` são progressivamente substituídas por chamadas estruturadas via `ContentAdapter` / `DomDriver`.
+  - **Garantia de Paridade:** Toda e qualquer lógica de interação DOM (filtragem de opções visíveis/habilitadas, ordenação topológica de selects dependentes e estabilização via MutationObserver) reside em módulos TypeScript compartilhados, com paridade 1:1 comprovada por suíte de testes.
+
+---
+
+## 8. Pendências e Decisões de Privacidade de Insights (Passo 1 — Bloco 0)
+
+- [ ] **Preservação de Dados de LocalStorage sem Quebra de Chaves:** As chaves de armazenamento local (`teacher_students`, `teacher_insights_ai_report`, etc.) foram preservadas para manter a retrocompatibilidade sem destruição de dados da usuária. A migração completa para repositório SQLite cifrado no desktop fica agendada para ciclo subsequente.
+- [ ] **Sincronização de Relatórios de Conselho de Classe (`classCouncilEngine`):** `syncCouncilReportsToSupabase` foi blindado com expurgo de PII (`studentName: '[ESTUDANTE_PROTEGIDO]'`, `studentId: '[ID_PROTEGIDO]'`). Persistência individual integral permanece exclusivamente local em conformidade com o Trilho 1 LGPD.
+

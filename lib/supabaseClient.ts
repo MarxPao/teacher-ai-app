@@ -1172,6 +1172,11 @@ export async function savePedagogicalInsightToSupabase(insight: {
     ? insight.overallAverage
     : (insight.overallMastery !== undefined ? Number((insight.overallMastery / 10).toFixed(1)) : null)
 
+  // LGPD Zero Egress: pedagogical_insights NÃO recebe nomes nem IDs de alunos
+  const sanitizedTopics = Array.isArray(insight.criticalTopics)
+    ? insight.criticalTopics.map(t => typeof t === 'string' && t.includes('(') ? t.replace(/^.*?\((.*?)\)$/, 'Turma $1: Aluno em atenção') : t)
+    : []
+
   const payload = {
     id: 'ins_' + Date.now(),
     school: insight.school || insight.schoolId || '',
@@ -1181,7 +1186,7 @@ export async function savePedagogicalInsightToSupabase(insight: {
     critical_count: insight.criticalCount ?? insight.atRiskCount ?? 0,
     moderate_count: insight.moderateCount ?? 0,
     top_count: insight.topCount ?? 0,
-    critical_topics: insight.criticalTopics || [],
+    critical_topics: sanitizedTopics,
     ai_report: insight.aiReport || null,
     updated_at: new Date().toISOString()
   }
@@ -1987,4 +1992,165 @@ export async function deleteDidacticSequenceFromSupabase(id: string): Promise<bo
     return false
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ALUNOS & TURMAS NO SUPABASE (Students & Classes)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export function isSupabaseConfigured(): boolean {
+  const cfg = getSupabaseConfig()
+  return !!(cfg?.url && (cfg.anonKey || cfg.serviceKey))
+}
+
+export async function fetchStudentsFromSupabase(): Promise<Array<{
+  id: string
+  name: string
+  classId: string
+  schoolId: string
+  notes: string
+  level: string
+  grades?: Record<string, string>
+  metrics?: Record<string, number>
+  email?: string
+  rollNumber?: string
+  portal_native_id?: string
+  source_type?: 'portal_scrape' | 'trello_import' | 'manual_entry' | 'csv_import'
+  source_portal?: string
+  sync_status?: 'synced' | 'local_only' | 'conflict_pending'
+  nee_flag?: boolean
+}>> {
+  const cfg = getSupabaseConfig()
+  if (!cfg?.url) return []
+  const apiKey = getActiveKey(cfg)
+  if (!apiKey) return []
+
+  try {
+    const res = await fetch(`${cfg.url}/rest/v1/students?select=*&order=name.asc`, {
+      headers: {
+        'apikey': apiKey,
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      }
+    })
+    if (!res.ok) return []
+    const data = await res.json()
+    if (!Array.isArray(data)) return []
+
+    return data.map((row: any) => ({
+      id: String(row.id),
+      name: String(row.name || ''),
+      classId: row.class_id ? String(row.class_id) : (row.classId ? String(row.classId) : ''),
+      schoolId: row.school_id ? String(row.school_id) : (row.schoolId ? String(row.schoolId) : ''),
+      notes: row.notes || '',
+      level: row.level || 'A2',
+      grades: row.grades && typeof row.grades === 'object' ? row.grades : {},
+      metrics: row.metrics && typeof row.metrics === 'object' ? row.metrics : {},
+      email: row.email || undefined,
+      rollNumber: row.roll_number || row.rollNumber || undefined,
+      portal_native_id: row.portal_native_id || undefined,
+      source_type: (row.source_type as any) || 'manual_entry',
+      source_portal: row.source_portal || undefined,
+      sync_status: 'synced' as const,
+      nee_flag: Boolean(row.nee_flag)
+    }))
+  } catch {
+    return []
+  }
+}
+
+export async function upsertStudentToSupabase(student: {
+  id: string
+  name: string
+  classId?: string
+  schoolId?: string
+  notes?: string
+  level?: string
+  grades?: Record<string, string | number>
+  metrics?: Record<string, number>
+  email?: string
+  rollNumber?: string
+  portal_native_id?: string
+  source_type?: string
+  source_portal?: string
+  nee_flag?: boolean
+}): Promise<{ ok: boolean; error?: string }> {
+  const cfg = getSupabaseConfig()
+  if (!cfg?.url) return { ok: true }
+  const apiKey = getActiveKey(cfg)
+  if (!apiKey) return { ok: true }
+
+  try {
+    const payload = {
+      id: String(student.id),
+      name: String(student.name),
+      class_id: student.classId ? String(student.classId) : null,
+      school_id: student.schoolId ? String(student.schoolId) : null,
+      email: student.email || null,
+      notes: student.notes || null,
+      level: student.level || 'A2',
+      grades: student.grades || {},
+      metrics: student.metrics || {},
+      roll_number: student.rollNumber || null,
+      portal_native_id: student.portal_native_id || null,
+      source_type: student.source_type || 'manual_entry',
+      source_portal: student.source_portal || null,
+      nee_flag: Boolean(student.nee_flag),
+      updated_at: new Date().toISOString()
+    }
+
+    const res = await fetch(`${cfg.url}/rest/v1/students`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': apiKey,
+        'Authorization': `Bearer ${apiKey}`,
+        'Prefer': 'resolution=merge-duplicates'
+      },
+      body: JSON.stringify(payload)
+    })
+    return { ok: res.ok }
+  } catch (e: unknown) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Erro de rede' }
+  }
+}
+
+export async function deleteStudentFromSupabase(studentId: string): Promise<boolean> {
+  const cfg = getSupabaseConfig()
+  if (!cfg?.url) return true
+  const apiKey = getActiveKey(cfg)
+  if (!apiKey) return true
+
+  try {
+    const res = await fetch(`${cfg.url}/rest/v1/students?id=eq.${encodeURIComponent(studentId)}`, {
+      method: 'DELETE',
+      headers: { 'apikey': apiKey, 'Authorization': `Bearer ${apiKey}` }
+    })
+    return res.ok
+  } catch {
+    return false
+  }
+}
+
+export async function saveStudentMetricsToSupabase(studentId: string, metrics: Record<string, number>): Promise<boolean> {
+  const cfg = getSupabaseConfig()
+  if (!cfg?.url) return true
+  const apiKey = getActiveKey(cfg)
+  if (!apiKey) return true
+
+  try {
+    const res = await fetch(`${cfg.url}/rest/v1/students?id=eq.${encodeURIComponent(studentId)}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': apiKey,
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({ metrics, updated_at: new Date().toISOString() })
+    })
+    return res.ok
+  } catch {
+    return false
+  }
+}
+
 

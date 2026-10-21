@@ -105,6 +105,7 @@ export default function Insights() {
   const [selectedStudent, setSelectedStudent] = useState<string>('all')
   const [activeFilterCategory, setActiveFilterCategory] = useState<string>('all')
   const [searchQuery, setSearchQuery] = useState('')
+  const [aiErrorNotice, setAiErrorNotice] = useState<string | null>(null)
   const [customAiDiagnostic, setCustomAiDiagnostic] = useState<string>(() => {
     if (typeof window !== 'undefined') {
       return localStorage.getItem('teacher_insights_ai_report') || ''
@@ -319,9 +320,9 @@ export default function Insights() {
         atRiskCount: atRisk.length,
         topPerformerCount: topPerf.length,
         averageGrade: avg,
-        atRiskStudents: atRisk.map(s => `${s.name} (${s.className}, média ${s.avgGrade})`),
-        topStudents: topPerf.map(s => `${s.name} (${s.className}, média ${s.avgGrade})`),
-        studentsList: normalizedStudents.slice(0, 10).map(s => ({ name: s.name, grade: s.avgGrade, class: s.className }))
+        atRiskStudents: atRisk.map((s, i) => `[ESTUDANTE_RISCO_${i + 1}] (${s.className || 'Turma'}, média ${s.avgGrade})`),
+        topStudents: topPerf.map((s, i) => `[ESTUDANTE_DESTAQUE_${i + 1}] (${s.className || 'Turma'}, média ${s.avgGrade})`),
+        studentsList: normalizedStudents.slice(0, 10).map((s, i) => ({ student: `[ESTUDANTE_${i + 1}]`, grade: s.avgGrade, class: s.className }))
       }
 
       const prompt = `Você é o Motor de Prescrições Pedagógicas Especializadas do Teacher AI.
@@ -337,34 +338,26 @@ Estruture em:
 
       let generated = ''
 
-      // Tentativa 1: Via executeUnifiedAiCall com APIs configuradas
+      // Chamada obrigatória e exclusiva via /api/agent (Zero-PII Gateway)
       try {
-        const { getAvailableApisForSelect, executeUnifiedAiCall } = await import('@/lib/autoApiSelector')
-        const apis = getAvailableApisForSelect()
-        if (apis.length > 0) {
-          generated = await executeUnifiedAiCall(apis[0], prompt)
+        const storedApis = JSON.parse(localStorage.getItem('teacher_apis') || '[]')
+        const userKeys: Record<string, string> = {}
+        storedApis.forEach((a: any) => { if (a.key) userKeys[`${a.provider}_key`] = a.key })
+        const res = await fetch('/api/agent', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ messages: [{ role: 'user', content: prompt }], userKeys })
+        })
+        if (res.ok) {
+          const data = await res.json()
+          generated = data?.reply || data?.content || ''
+          setAiErrorNotice(null)
+        } else {
+          const errData = await res.json().catch(() => ({}))
+          setAiErrorNotice(`Esta análise não foi gerada pela IA (${res.status === 422 ? 'LGPD_EGRESS_BLOCKED' : `HTTP_${res.status}`}: ${errData?.message || 'bloqueio de segurança'})`)
         }
-      } catch {}
-
-      // Tentativa 2: Via endpoint de agente do servidor
-      if (!generated) {
-        try {
-          const storedApis = JSON.parse(localStorage.getItem('teacher_apis') || '[]')
-          const userKeys: Record<string, string> = {}
-          storedApis.forEach((a: any) => { if (a.key) userKeys[`${a.provider}_key`] = a.key })
-          const res = await fetch('/api/agent', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              messages: [{ role: 'user', content: prompt }],
-              userKeys,
-            })
-          })
-          if (res.ok) {
-            const data = await res.json()
-            generated = data?.reply || data?.content || ''
-          }
-        } catch {}
+      } catch (err: any) {
+        setAiErrorNotice(`Esta análise não foi gerada pela IA (erro de rede: ${err?.message || 'falha'})`)
       }
 
       // Tentativa 3: Síntese de Evidência Pedagógica Local Confiável (Grounding Krashen + Nation + Vygotsky)
@@ -372,7 +365,8 @@ Estruture em:
         const atRiskNames = atRisk.length > 0 ? atRisk.map(s => s.name).join(', ') : 'Nenhum aluno em situação crítica identificado'
         const topNames = topPerf.length > 0 ? topPerf.map(s => s.name).join(', ') : 'Desempenho distribuído homogeneamente'
 
-        generated = `PARECER PEDAGÓGICO PRESCRITIVO GERAL — TEACHER AI
+        generated = `[modelo padrão — Esta análise não foi gerada pela IA]
+PARECER PEDAGÓGICO PRESCRITIVO GERAL — TEACHER AI
 Referência: ${new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })} | Média Geral da Amostra: ${avg}/10
 
 1. 🎯 DIAGNÓSTICO DOS PRINCIPAIS GARGALOS OBSERVADOS
@@ -405,7 +399,7 @@ Referência: ${new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'nu
           totalStudents: normalizedStudents.length,
           atRiskCount: atRisk.length,
           topCount: topPerf.length,
-          criticalTopics: atRisk.map(s => `${s.name} (${s.className})`),
+          criticalTopics: Array.from(new Set(atRisk.map(s => s.className ? `Turma ${s.className}: Atenção` : 'Geral'))),
           aiReport: generated
         }).catch(err => console.warn('[Insights] Falha ao salvar snapshot no Supabase:', err))
       } catch {}
@@ -628,6 +622,11 @@ Referência: ${new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'nu
                 <TeacherLogo size={26} variant="badge" rounded={6} />
                 <span>Parecer Pedagógico Geral da Rafinha IA</span>
               </div>
+              {aiErrorNotice && (
+                <div style={{ fontSize: '0.8rem', color: '#b91c1c', background: '#fef2f2', padding: '4px 8px', borderRadius: RADIUS.sm, border: '1px solid #fecaca' }}>
+                  ⚠️ {aiErrorNotice}
+                </div>
+              )}
               <button
                 onClick={() => setCustomAiDiagnostic('')}
                 style={{ background: 'transparent', border: 'none', color: '#a08060', cursor: 'pointer' }}
