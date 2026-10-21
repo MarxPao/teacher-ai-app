@@ -193,4 +193,76 @@ describe('Privacidade do Cofre - Cifra em Nível de Aplicação e Proteção Can
       }
     }
   })
+
+  it('A4. deleteSession: falha do VACUUM propaga para o chamador com erro em português', async () => {
+    const mockDriver: any = {
+      db: {},
+      execute: async (sql: string) => {
+        if (sql === 'VACUUM') {
+          throw new Error('database is locked (VACUUM failed simulation)')
+        }
+      },
+      query: async () => [],
+      queryOne: async () => null,
+      transaction: async (fn: any) => fn(mockDriver)
+    }
+    const repo = new ConversationVaultRepository(mockDriver, dataKey)
+    await expect(repo.deleteSession('sess_err')).rejects.toThrow('database is locked (VACUUM failed simulation)')
+
+    await expect(
+      executeConversationMethod('conversation.delete', { sessionId: 'sess_err' }, mockDriver, dataKey)
+    ).rejects.toThrow('Falha ao compactar e expurgar fisicamente o cofre (VACUUM): database is locked')
+  })
+
+  it('1.d isolado: Apagar sessão executa VACUUM e remove registros fisicamente do cofre', async () => {
+    const driver = new NodeSqliteDriver(testDbPath)
+    await initConversationVault(driver)
+    const repo = new ConversationVaultRepository(driver, dataKey)
+
+    await repo.createSession({
+      id: 'sess_del',
+      title: 'Sessão Deletável',
+      session_type: 'aula',
+      total_duration_ms: 10000
+    })
+    await repo.insertTurns([
+      { id: 't_del', session_id: 'sess_del', speaker_label: 'spk', role: 'professor', start_ms: 0, end_ms: 1000, text: 'Texto', turn_index: 0 }
+    ])
+
+    await repo.deleteSession('sess_del')
+    expect(await repo.listSessions()).toHaveLength(0)
+    expect(await repo.getTurnsBySession('sess_del')).toHaveLength(0)
+    driver.close()
+  })
+
+  it('1.a isolado: Reabertura com dataKey restaura campos cifrados (speakerMap, turns, title)', async () => {
+    const driver = new NodeSqliteDriver(testDbPath)
+    await initConversationVault(driver)
+    const repo = new ConversationVaultRepository(driver, dataKey)
+
+    await repo.createSession({
+      id: 's_dec',
+      title: 'Título Cifrado 123',
+      session_type: 'aula',
+      total_duration_ms: 5000
+    })
+    await repo.insertTurns([
+      { id: 't_dec', session_id: 's_dec', speaker_label: 'Aluno João', role: 'aluno', start_ms: 0, end_ms: 1000, text: 'Pergunta secreta', turn_index: 0 }
+    ])
+    await repo.upsertSpeakerMap([
+      { id: 'sm_1', session_id: 's_dec', speaker_label: 'Aluno João', assigned_name: 'Nome Real João', role: 'aluno', source: 'manual', confidence: 1.0 }
+    ])
+    driver.close()
+
+    const readerDriver = new NodeSqliteDriver(testDbPath)
+    const readerRepo = new ConversationVaultRepository(readerDriver, dataKey)
+    const sessions = await readerRepo.listSessions()
+    expect(sessions[0].title).toBe('Título Cifrado 123')
+    const turns = await readerRepo.getTurnsBySession('s_dec')
+    expect(turns[0].text).toBe('Pergunta secreta')
+    expect(turns[0].speaker_label).toBe('Aluno João')
+    const sm = await readerRepo.getSpeakerMap('s_dec')
+    expect(sm[0].assigned_name).toBe('Nome Real João')
+    readerDriver.close()
+  })
 })

@@ -102,8 +102,19 @@ describe('Item 1.5: Separação Estrita de Canais, Allowlists e Verificação Sp
     }
   })
 
-  it('1.5.b: Matriz completa de métodos conversation.* x Canal (Extensão vs UI Desktop)', () => {
-    // Função canônica de autorização da UI Desktop (desktop/main.ts L531)
+  it('Extensão Chrome: rejeita todo e qualquer método conversation.* via NamedPipeServer', () => {
+    function authorizeExtensionCall(method: string): boolean {
+      return EXTENSION_ALLOWED_METHODS.includes(method as any)
+    }
+
+    for (const method of ALL_CONVERSATION_METHODS) {
+      expect(authorizeExtensionCall(method)).toBe(false)
+    }
+
+    expect(authorizeExtensionCall('malicious.shellExecute')).toBe(false)
+  })
+
+  it('Electron UI: alcança conversation.* através do canal autorizado de Renderer IPC', () => {
     function authorizeDesktopUiCall(method: string): boolean {
       if (!UI_ALLOWED_METHODS.includes(method as any) && !method.startsWith('conversation.')) {
         return false
@@ -111,21 +122,10 @@ describe('Item 1.5: Separação Estrita de Canais, Allowlists e Verificação Sp
       return true
     }
 
-    // Função canônica de autorização da Extensão Chrome (desktop/nm/pipeServer.ts L194)
-    function authorizeExtensionCall(method: string): boolean {
-      return EXTENSION_ALLOWED_METHODS.includes(method as any)
-    }
-
     for (const method of ALL_CONVERSATION_METHODS) {
-      // Extensão DEVE bloquear todo método conversation.*
-      expect(authorizeExtensionCall(method)).toBe(false)
-
-      // UI Desktop DEVE autorizar todo método conversation.*
       expect(authorizeDesktopUiCall(method)).toBe(true)
     }
 
-    // Método arbitrário malicioso é bloqueado em ambos
-    expect(authorizeExtensionCall('malicious.shellExecute')).toBe(false)
     expect(authorizeDesktopUiCall('malicious.shellExecute')).toBe(false)
   })
 })
