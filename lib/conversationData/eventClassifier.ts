@@ -146,6 +146,19 @@ export function classifyQuestionSubtype(text: string, role: string): EventSubtyp
   return 'fechada'
 }
 
+export type QuestionTripartiteSubtype = 'conteudo' | 'checagem' | 'administrativa'
+
+export function classifyQuestionTripartiteSubtype(text: string): QuestionTripartiteSubtype {
+  const trimmed = text.trim()
+  if (RHETORICAL_PATTERNS.some(p => p.test(trimmed))) {
+    return 'checagem'
+  }
+  if (ADMINISTRATIVE_PATTERNS.some(p => p.test(trimmed))) {
+    return 'administrativa'
+  }
+  return 'conteudo'
+}
+
 // ─── Avaliador de Falas Adversariais (NÃO VALIDADO EM ASR REAL) ──────────────
 
 export interface AdversarialEvaluationResult {

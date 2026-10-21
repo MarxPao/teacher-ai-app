@@ -73,7 +73,7 @@ CREATE TABLE IF NOT EXISTS user_turn_labels (
   id TEXT PRIMARY KEY,
   session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
   turn_id TEXT NOT NULL REFERENCES turns(id) ON DELETE CASCADE,
-  user_label TEXT NOT NULL CHECK(user_label IN ('pergunta', 'nao_pergunta', 'pular')),
+  user_label TEXT NOT NULL,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   UNIQUE(session_id, turn_id)
 );
@@ -227,7 +227,7 @@ export class ConversationVaultRepository {
   }
 
   /**
-   * B5. Salva rótulo pedagógico da professora no cofre seguro
+   * B5. Salva rótulo pedagógico da professora no cofre seguro (cifrado no nível de aplicação)
    */
   async saveUserTurnLabel(params: {
     sessionId: string
@@ -235,19 +235,24 @@ export class ConversationVaultRepository {
     userLabel: 'pergunta' | 'nao_pergunta' | 'pular'
   }): Promise<void> {
     const id = `lbl_${params.sessionId}_${params.turnId}`
+    const labelToStore = this.dataKey ? encryptEnvelope(params.userLabel, this.dataKey) : params.userLabel
     await this.driver.execute(
       `INSERT INTO user_turn_labels (id, session_id, turn_id, user_label, created_at)
        VALUES (?, ?, ?, ?, datetime('now'))
        ON CONFLICT(session_id, turn_id) DO UPDATE SET user_label = excluded.user_label, created_at = datetime('now')`,
-      [id, params.sessionId, params.turnId, params.userLabel]
+      [id, params.sessionId, params.turnId, labelToStore]
     )
   }
 
   async getUserTurnLabels(sessionId: string): Promise<Array<{ turn_id: string; user_label: string }>> {
-    return this.driver.query<Array<{ turn_id: string; user_label: string }>[0]>(
+    const rows = await this.driver.query<{ turn_id: string; user_label: string }>(
       `SELECT turn_id, user_label FROM user_turn_labels WHERE session_id = ?`,
       [sessionId]
     )
+    return rows.map(r => ({
+      turn_id: r.turn_id,
+      user_label: (this.dataKey && r.user_label.startsWith('enc:v1:')) ? decryptEnvelope(r.user_label, this.dataKey) : r.user_label
+    }))
   }
 
   async insertTurns(turns: TurnRecord[]): Promise<void> {

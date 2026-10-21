@@ -18,7 +18,18 @@ export const DEFINITION_INTERVENCAO =
   'Turno de fala emitido por qualquer participante que adiciona conteúdo, comentário, questionamento ou resposta à discussão em andamento. [DEFINIÇÃO A VALIDAR (dono)]'
 
 export const DEFINITION_WAIT_TIME =
-  'Métrica de espera pós-pergunta (Wait-Time I de Mary Budd Rowe): intervalo temporal mensurado entre o encerramento da pergunta formulada pelo docente e o início da manifestação subsequente. Reporta o total de perguntas, quantidade com espera mensurada, média e mediana globais sobre todas as perguntas, e separadamente a contagem de pausas reflexivas deliberadas (espera >= 3.0s). [DEFINIÇÃO A VALIDAR (dono)]'
+  'Métrica de espera pós-pergunta (Wait-Time I de Mary Budd Rowe [CITAÇÃO NÃO VERIFICADA]): intervalo temporal mensurado entre o encerramento da pergunta formulada pelo docente e o início da manifestação subsequente. Reporta o total de perguntas, quantidade com espera mensurada, média e mediana globais sobre todas as perguntas, e separadamente a contagem de pausas reflexivas deliberadas (espera >= 3.0s). [DEFINIÇÃO A VALIDAR (dono)]'
+
+export const DEFINITION_INCLUDED_QUESTION_SUBTYPES: ReadonlyArray<'conteudo' | 'administrativa'> = Object.freeze([
+  'conteudo',
+  'administrativa'
+])
+
+export const DEFINITION_QUESTION_SUBTYPES =
+  'Classificação tripartite de perguntas pedagógicas: "conteúdo" (questões conceituais abertas ou fechadas), "administrativa" (organização de rotina escolar, materiais e horários) e "checagem" (retórica de canal ou confirmação discursiva). [DEFINIÇÃO A VALIDAR (dono)]'
+
+export const DEFINITION_QUESTION_SUBTYPES_TOTAL_RULE =
+  'Critério de cômputo do total de perguntas: O total é a soma estrita dos subtipos "conteúdo" e "administrativa". O subtipo "checagem" (ou retórica) é reportado à parte e NÃO integra o total de perguntas conceituais. [DEFINIÇÃO A VALIDAR (dono)]'
 
 export const DEFINITION_MONOLOGO =
   'Trecho ininterrupto de fala contínua de um mesmo participante sem alternância de turno com duração igual ou superior a 30 segundos (30.000 ms). [DEFINIÇÃO A VALIDAR (dono)]'

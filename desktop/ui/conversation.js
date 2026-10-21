@@ -126,6 +126,11 @@
       </div>
     `
 
+    // Monta ferramenta de rotulagem pedagógica da professora (B5)
+    if (typeof window.mountConversationLabeling === 'function') {
+      window.mountConversationLabeling(card, () => activeSessionId, getBridge)
+    }
+
     // Insere antes do card de diagnóstico
     const diagCard = document.querySelector('.main-wrapper > .card:last-child')
     if (diagCard) {
@@ -348,6 +353,13 @@
       })
       detailsHtml += '</ul></div>'
     }
+
+    // Rodapé obrigatório em todas as respostas de contagem (B4)
+    detailsHtml += `
+      <div style="margin-top: 12px; padding-top: 8px; border-top: 1px dashed var(--border); font-size: 11px; color: var(--muted); font-style: italic;">
+        <i class="ti ti-info-circle"></i> Contagem automática. Precisão medida só em texto sintético; não validada em áudio real. Confira os horários listados.
+      </div>
+    `
 
     showResponse(mainText, detailsHtml, definition)
   }

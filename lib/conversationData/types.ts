@@ -26,6 +26,9 @@ export type EventSubtype =
   | 'anomalo'
   | 'padrao'
   | 'none'
+  | 'conteudo'
+  | 'checagem'
+  | 'administrativa'
 
 export interface SessionRecord {
   id: string

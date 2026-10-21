@@ -9,6 +9,7 @@
 
 import type { ConversationVaultRepository } from './schema'
 import type { SpeakerRole, EventType, EventSubtype } from './types'
+import { classifyQuestionTripartiteSubtype } from './eventClassifier'
 import {
   DEFINITION_PERGUNTA,
   DEFINITION_PERGUNTA_ABERTA,
@@ -16,7 +17,9 @@ import {
   DEFINITION_INTERVENCAO,
   DEFINITION_WAIT_TIME,
   DEFINITION_MONOLOGO,
-  DEFINITION_DUVIDA_SEM_RESPOSTA
+  DEFINITION_DUVIDA_SEM_RESPOSTA,
+  DEFINITION_INCLUDED_QUESTION_SUBTYPES,
+  DEFINITION_QUESTION_SUBTYPES_TOTAL_RULE
 } from './definitions'
 
 export interface QueryResultItem {
@@ -207,6 +210,17 @@ export async function executeConversationQuery(
   // ─── 3. "Quantas perguntas eu fiz?" ───────────────────────────────────────
   if (/\b(quantas perguntas eu fiz|perguntas eu fiz|perguntas fiz|perguntas formuladas por mim|perguntei para a sala)\b/i.test(normalizedQuery)) {
     const teacherQEvents = events.filter(e => e.type === 'pergunta' && (e.subtype === 'aberta' || e.subtype === 'fechada'))
+    let conteudoCount = 0
+    let adminCount = 0
+    let checagemCount = 0
+    teacherQEvents.forEach(e => {
+      const sub = classifyQuestionTripartiteSubtype(e.evidence_span)
+      if (sub === 'administrativa') adminCount++
+      else if (sub === 'checagem') checagemCount++
+      else conteudoCount++
+    })
+    const totalIncluded = conteudoCount + adminCount
+
     const items: QueryResultItem[] = teacherQEvents.map(e => ({
       timeRange: formatTimeRange(e.start_ms, e.end_ms),
       startMs: e.start_ms,
@@ -219,8 +233,8 @@ export async function executeConversationQuery(
       query,
       primitiveUsed: 'contar_por_papel',
       definitionUsed: DEFINITION_PERGUNTA,
-      numericResult: teacherQEvents.length,
-      formattedAnswer: `Você formulou ${teacherQEvents.length} perguntas durante esta sessão.`,
+      numericResult: totalIncluded,
+      formattedAnswer: `Você formulou ${totalIncluded} perguntas durante esta sessão (quebra por subtipo: ${conteudoCount} de conteúdo + ${adminCount} administrativa(s) + ${checagemCount} de checagem/retórica = total de ${totalIncluded} perguntas computadas).`,
       items
     }
   }
@@ -228,6 +242,17 @@ export async function executeConversationQuery(
   // ─── 5. "Quantas perguntas os alunos fizeram?" ─────────────────────────────
   if (/\b(perguntas os alunos fizeram|perguntas dos alunos|estudantes perguntaram|perguntas feitas pelos alunos)\b/i.test(normalizedQuery)) {
     const studentQEvents = events.filter(e => e.type === 'pergunta' && e.subtype === 'aluno')
+    let conteudoCount = 0
+    let adminCount = 0
+    let checagemCount = 0
+    studentQEvents.forEach(e => {
+      const sub = classifyQuestionTripartiteSubtype(e.evidence_span)
+      if (sub === 'administrativa') adminCount++
+      else if (sub === 'checagem') checagemCount++
+      else conteudoCount++
+    })
+    const totalIncluded = conteudoCount + adminCount
+
     const turnLookup = new Map<string, typeof turns[0]>()
     turns.forEach(t => turnLookup.set(t.id, t))
 
@@ -247,8 +272,8 @@ export async function executeConversationQuery(
       query,
       primitiveUsed: 'contar_por_papel',
       definitionUsed: DEFINITION_PERGUNTA,
-      numericResult: studentQEvents.length,
-      formattedAnswer: `Os alunos fizeram ${studentQEvents.length} perguntas durante esta sessão.`,
+      numericResult: totalIncluded,
+      formattedAnswer: `Os alunos fizeram ${totalIncluded} perguntas durante esta sessão (quebra por subtipo: ${conteudoCount} de conteúdo + ${adminCount} administrativa(s) + ${checagemCount} de checagem/retórica = total de ${totalIncluded} perguntas computadas).`,
       items
     }
   }
