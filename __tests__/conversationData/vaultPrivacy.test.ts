@@ -27,7 +27,7 @@ describe('Privacidade do Cofre - Cifra em Nível de Aplicação e Proteção Can
   afterEach(() => {
     try {
       if (fs.existsSync(testDbPath)) fs.unlinkSync(testDbPath)
-      if (fs.existsSync(tmpDir)) fs.rmdirSync(tmpDir, { recursive: true })
+      if (fs.existsSync(tmpDir)) fs.rmSync(tmpDir, { recursive: true, force: true })
     } catch {}
   })
 
@@ -39,11 +39,12 @@ describe('Privacidade do Cofre - Cifra em Nível de Aplicação e Proteção Can
 
     const CANARY_NAME = 'CanarioSilenciosoAluno99'
     const CANARY_TEXT = 'SegredoCanarioBiologia123'
+    const CANARY_TITLE = 'Atendimento Canario Arthur Bio 789'
     const sessionId = 'session_canary_test'
 
     await repo.createSession({
       id: sessionId,
-      title: 'Aula de Teste de Criptografia',
+      title: CANARY_TITLE,
       session_type: 'aula',
       total_duration_ms: 60000,
       retention_days: 30
@@ -90,19 +91,24 @@ describe('Privacidade do Cofre - Cifra em Nível de Aplicação e Proteção Can
 
     driver.close()
 
-    // 1.a Inspeção dos bytes físicos do arquivo SQLite em disco
+    // 1.a e A2: Inspeção dos bytes físicos do arquivo SQLite em disco
     const fileBytes = fs.readFileSync(testDbPath)
     const fileString = fileBytes.toString('utf8')
 
     expect(fileBytes.includes(Buffer.from(CANARY_NAME))).toBe(false)
     expect(fileBytes.includes(Buffer.from(CANARY_TEXT))).toBe(false)
+    expect(fileBytes.includes(Buffer.from(CANARY_TITLE))).toBe(false)
     expect(fileBytes.includes(Buffer.from('NomeRealCanario456'))).toBe(false)
     expect(fileString.includes(CANARY_NAME)).toBe(false)
     expect(fileString.includes(CANARY_TEXT)).toBe(false)
+    expect(fileString.includes(CANARY_TITLE)).toBe(false)
 
     // Reabre e valida leitura com chave correta
     const readerDriver = new NodeSqliteDriver(testDbPath)
     const readerRepo = new ConversationVaultRepository(readerDriver, dataKey)
+
+    const sessions = await readerRepo.listSessions()
+    expect(sessions[0].title).toBe(CANARY_TITLE)
 
     const turns = await readerRepo.getTurnsBySession(sessionId)
     expect(turns.length).toBe(1)
@@ -157,6 +163,92 @@ describe('Privacidade do Cofre - Cifra em Nível de Aplicação e Proteção Can
     expect(turns.length).toBe(0)
 
     driver.close()
+  })
+
+  it('A3. Migração: detecta linhas sem prefixo enc:v1: e recifra na abertura do cofre com banco legado', async () => {
+    // 1. Cria um banco legado sem dataKey (texto puro)
+    const legacyDriver = new NodeSqliteDriver(testDbPath)
+    await initConversationVault(legacyDriver)
+    const legacyRepo = new ConversationVaultRepository(legacyDriver) // sem dataKey
+
+    const LEGACY_TITLE = 'Aula Legada Canario Texto Puro 101'
+    const LEGACY_SPEAKER = 'Canario Legado 202'
+    const LEGACY_TEXT = 'Conteudo Confidencial em Claro 303'
+
+    await legacyRepo.createSession({
+      id: 'sess_legacy',
+      title: LEGACY_TITLE,
+      session_type: 'aula',
+      total_duration_ms: 15000
+    })
+
+    await legacyRepo.insertTurns([
+      {
+        id: 'turn_leg_1',
+        session_id: 'sess_legacy',
+        speaker_label: LEGACY_SPEAKER,
+        role: 'aluno',
+        start_ms: 0,
+        end_ms: 5000,
+        text: LEGACY_TEXT,
+        turn_index: 0
+      }
+    ])
+
+    legacyDriver.close()
+
+    // 2. Prova que o banco legado continha texto puro nos bytes em disco
+    const rawLegacyBytes = fs.readFileSync(testDbPath)
+    expect(rawLegacyBytes.includes(Buffer.from(LEGACY_TITLE))).toBe(true)
+    expect(rawLegacyBytes.includes(Buffer.from(LEGACY_SPEAKER))).toBe(true)
+    expect(rawLegacyBytes.includes(Buffer.from(LEGACY_TEXT))).toBe(true)
+
+    // 3. Abre o banco com chave segura e executa a migração automática
+    const securedDriver = new NodeSqliteDriver(testDbPath)
+    const securedRepo = new ConversationVaultRepository(securedDriver, dataKey)
+    const migrationReport = await securedRepo.migrateLegacyPlaintextToEncrypted()
+
+    expect(migrationReport.sessionsMigrated).toBe(1)
+    expect(migrationReport.turnsMigrated).toBe(1)
+
+    securedDriver.close()
+
+    // 4. Prova que após a migração e VACUUM, o texto puro SUMIU dos bytes do arquivo em disco
+    const migratedBytes = fs.readFileSync(testDbPath)
+    expect(migratedBytes.includes(Buffer.from(LEGACY_TITLE))).toBe(false)
+    expect(migratedBytes.includes(Buffer.from(LEGACY_SPEAKER))).toBe(false)
+    expect(migratedBytes.includes(Buffer.from(LEGACY_TEXT))).toBe(false)
+
+    // 5. Prova que a leitura com a dataKey decifra perfeitamente os dados originais
+    const verifyDriver = new NodeSqliteDriver(testDbPath)
+    const verifyRepo = new ConversationVaultRepository(verifyDriver, dataKey)
+
+    const restoredSessions = await verifyRepo.listSessions()
+    expect(restoredSessions[0].title).toBe(LEGACY_TITLE)
+
+    const restoredTurns = await verifyRepo.getTurnsBySession('sess_legacy')
+    expect(restoredTurns[0].speaker_label).toBe(LEGACY_SPEAKER)
+    expect(restoredTurns[0].text).toBe(LEGACY_TEXT)
+
+    verifyDriver.close()
+  })
+
+  it('A4. deleteSession: falha do VACUUM propaga para o chamador', async () => {
+    const mockDriver: any = {
+      db: {},
+      execute: async (sql: string) => {
+        if (sql === 'VACUUM') {
+          throw new Error('database is locked (VACUUM failed simulation)')
+        }
+      }
+    }
+    const repo = new ConversationVaultRepository(mockDriver, dataKey)
+
+    await expect(repo.deleteSession('sess_err')).rejects.toThrow('database is locked (VACUUM failed simulation)')
+
+    // Verifica que o desktopIpc traduz para português
+    await expect(executeConversationMethod('conversation.delete', { sessionId: 'sess_err' }, mockDriver, dataKey))
+      .rejects.toThrow('Falha ao compactar e expurgar fisicamente o cofre (VACUUM): database is locked')
   })
 
   it('1.b: Lança erro em português se cofre seguro / driver.db estiver ausente', async () => {

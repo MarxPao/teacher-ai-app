@@ -1,10 +1,62 @@
 import { describe, it, expect } from 'vitest'
+import * as fs from 'node:fs'
+import * as path from 'node:path'
 import {
   EXTENSION_ALLOWED_METHODS,
   UI_ALLOWED_METHODS
 } from '../../lib/desktop-core/protocol/schemas'
+import { NamedPipeServer } from '../../desktop/nm/pipeServer'
 
-describe('Item 2: Separação Estrita de Canais e Allowlists (Extensão NM vs Electron UI)', () => {
+describe('Item 2 e A5: Separação Estrita de Canais e Allowlists (Extensão NM vs Electron UI)', () => {
+  it('A5: Handler REAL do NamedPipeServer rejeita conversation.ask com E_METHOD_NOT_ALLOWED', async () => {
+    const tmpUserData = path.join(__dirname, '..', '..', 'tmp_test_pipeserver')
+    if (!fs.existsSync(tmpUserData)) {
+      fs.mkdirSync(tmpUserData, { recursive: true })
+    }
+
+    try {
+      const server = new NamedPipeServer({
+        userDataPath: tmpUserData,
+        handleMethod: async () => ({ ok: true })
+      })
+
+      let writtenData: Buffer | null = null
+      const mockSocket: any = {
+        write: (buf: Buffer) => {
+          writtenData = buf
+          return true
+        },
+        destroy: () => {}
+      }
+
+      const authenticatedSession = {
+        authenticated: true,
+        lastRequestTime: Date.now(),
+        requestCountInWindow: 1
+      }
+
+      // Executa o handler REAL processMessage do NamedPipeServer
+      await (server as any).processMessage(mockSocket, authenticatedSession, {
+        id: 'req_conv_ask',
+        method: 'conversation.ask',
+        params: { sessionId: 's1', query: 'quantas perguntas fiz?' }
+      })
+
+      expect(writtenData).not.toBeNull()
+      // O protocolo usa prefixo uint32le de 4 bytes
+      const jsonPayload = JSON.parse(writtenData!.subarray(4).toString('utf8'))
+
+      expect(jsonPayload.success).toBe(false)
+      expect(jsonPayload.error.code).toBe('E_METHOD_NOT_ALLOWED')
+      expect(jsonPayload.error.message).toContain('não autorizado para a extensão')
+      expect(jsonPayload.id).toBe('req_conv_ask')
+    } finally {
+      try {
+        fs.rmSync(tmpUserData, { recursive: true, force: true })
+      } catch {}
+    }
+  })
+
   it('Extensão Chrome: rejeita todo e qualquer método conversation.* via NamedPipeServer', () => {
     // 1. Prova estrutural: nenhum método conversation.* consta na lista da extensão
     const conversationMethods = [

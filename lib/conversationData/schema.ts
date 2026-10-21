@@ -68,6 +68,17 @@ CREATE TABLE IF NOT EXISTS speaker_map (
 );
 
 CREATE INDEX IF NOT EXISTS idx_speaker_map_session ON speaker_map(session_id);
+
+CREATE TABLE IF NOT EXISTS user_turn_labels (
+  id TEXT PRIMARY KEY,
+  session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+  turn_id TEXT NOT NULL REFERENCES turns(id) ON DELETE CASCADE,
+  user_label TEXT NOT NULL CHECK(user_label IN ('pergunta', 'nao_pergunta', 'pular')),
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(session_id, turn_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_turn_labels_session ON user_turn_labels(session_id);
 `
 
 export async function initConversationVault(driver: SqlDriver): Promise<void> {
@@ -91,13 +102,14 @@ export class ConversationVaultRepository {
     const createdAt = session.created_at || new Date().toISOString()
     const retentionDays = session.retention_days || 90
     const expiresAt = session.expires_at || new Date(Date.now() + retentionDays * 86400000).toISOString()
+    const titleToStore = this.dataKey ? encryptEnvelope(session.title, this.dataKey) : session.title
 
     await this.driver.execute(
       `INSERT INTO sessions (id, title, session_type, start_time, end_time, total_duration_ms, retention_days, created_at, expires_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         session.id,
-        session.title,
+        titleToStore,
         session.session_type,
         session.start_time ?? null,
         session.end_time ?? null,
@@ -110,23 +122,30 @@ export class ConversationVaultRepository {
   }
 
   async getSession(sessionId: string): Promise<SessionRecord | null> {
-    return this.driver.queryOne<SessionRecord>(
+    const row = await this.driver.queryOne<SessionRecord>(
       `SELECT * FROM sessions WHERE id = ?`,
       [sessionId]
     )
+    if (!row) return null
+    return {
+      ...row,
+      title: (this.dataKey && row.title.startsWith('enc:v1:')) ? decryptEnvelope(row.title, this.dataKey) : row.title
+    }
   }
 
   async listSessions(): Promise<SessionRecord[]> {
-    return this.driver.query<SessionRecord>(
+    const rows = await this.driver.query<SessionRecord>(
       `SELECT * FROM sessions ORDER BY created_at DESC`
     )
+    return rows.map(r => ({
+      ...r,
+      title: (this.dataKey && r.title.startsWith('enc:v1:')) ? decryptEnvelope(r.title, this.dataKey) : r.title
+    }))
   }
 
   async deleteSession(sessionId: string): Promise<void> {
     await this.driver.execute(`DELETE FROM sessions WHERE id = ?`, [sessionId])
-    try {
-      await this.driver.execute(`VACUUM`)
-    } catch {}
+    await this.driver.execute(`VACUUM`)
   }
 
   async purgeExpiredSessions(now: string = new Date().toISOString()): Promise<number> {
@@ -141,10 +160,94 @@ export class ConversationVaultRepository {
         await tx.execute(`DELETE FROM sessions WHERE id = ?`, [sess.id])
       }
     })
-    try {
-      await this.driver.execute(`VACUUM`)
-    } catch {}
+    await this.driver.execute(`VACUUM`)
     return expired.length
+  }
+
+  /**
+   * A3. Migração: Detecta linhas sem o prefixo enc:v1: e recifra na abertura do cofre.
+   */
+  async migrateLegacyPlaintextToEncrypted(): Promise<{ sessionsMigrated: number; turnsMigrated: number; eventsMigrated: number; mapMigrated: number }> {
+    if (!this.dataKey) {
+      throw new Error('Chave de dados (dataKey) necessária para migrar registros legados para o cofre cifrado.')
+    }
+
+    let sessionsMigrated = 0
+    let turnsMigrated = 0
+    let eventsMigrated = 0
+    let mapMigrated = 0
+
+    // 1. Sessions com title em texto claro
+    const legacySessions = await this.driver.query<SessionRecord>(
+      `SELECT * FROM sessions WHERE title NOT LIKE 'enc:v1:%'`
+    )
+    for (const sess of legacySessions) {
+      const encTitle = encryptEnvelope(sess.title, this.dataKey)
+      await this.driver.execute(`UPDATE sessions SET title = ? WHERE id = ?`, [encTitle, sess.id])
+      sessionsMigrated++
+    }
+
+    // 2. Turns com text ou speaker_label em texto claro
+    const legacyTurns = await this.driver.query<TurnRecord>(
+      `SELECT * FROM turns WHERE text NOT LIKE 'enc:v1:%' OR speaker_label NOT LIKE 'enc:v1:%'`
+    )
+    for (const t of legacyTurns) {
+      const encText = t.text.startsWith('enc:v1:') ? t.text : encryptEnvelope(t.text, this.dataKey)
+      const encLabel = t.speaker_label.startsWith('enc:v1:') ? t.speaker_label : encryptEnvelope(t.speaker_label, this.dataKey)
+      await this.driver.execute(`UPDATE turns SET text = ?, speaker_label = ? WHERE id = ?`, [encText, encLabel, t.id])
+      turnsMigrated++
+    }
+
+    // 3. Events com evidence_span em texto claro
+    const legacyEvents = await this.driver.query<EventRecord>(
+      `SELECT * FROM events WHERE evidence_span NOT LIKE 'enc:v1:%'`
+    )
+    for (const e of legacyEvents) {
+      const encEvidence = encryptEnvelope(e.evidence_span, this.dataKey)
+      await this.driver.execute(`UPDATE events SET evidence_span = ? WHERE id = ?`, [encEvidence, e.id])
+      eventsMigrated++
+    }
+
+    // 4. Speaker map
+    const legacyMaps = await this.driver.query<SpeakerMapRecord>(
+      `SELECT * FROM speaker_map WHERE speaker_label NOT LIKE 'enc:v1:%' OR (assigned_name IS NOT NULL AND assigned_name NOT LIKE 'enc:v1:%')`
+    )
+    for (const m of legacyMaps) {
+      const encLabel = m.speaker_label.startsWith('enc:v1:') ? m.speaker_label : encryptEnvelope(m.speaker_label, this.dataKey)
+      const encName = (m.assigned_name && !m.assigned_name.startsWith('enc:v1:')) ? encryptEnvelope(m.assigned_name, this.dataKey) : m.assigned_name
+      await this.driver.execute(`UPDATE speaker_map SET speaker_label = ?, assigned_name = ? WHERE id = ?`, [encLabel, encName, m.id])
+      mapMigrated++
+    }
+
+    if (sessionsMigrated > 0 || turnsMigrated > 0 || eventsMigrated > 0 || mapMigrated > 0) {
+      await this.driver.execute(`VACUUM`)
+    }
+
+    return { sessionsMigrated, turnsMigrated, eventsMigrated, mapMigrated }
+  }
+
+  /**
+   * B5. Salva rótulo pedagógico da professora no cofre seguro
+   */
+  async saveUserTurnLabel(params: {
+    sessionId: string
+    turnId: string
+    userLabel: 'pergunta' | 'nao_pergunta' | 'pular'
+  }): Promise<void> {
+    const id = `lbl_${params.sessionId}_${params.turnId}`
+    await this.driver.execute(
+      `INSERT INTO user_turn_labels (id, session_id, turn_id, user_label, created_at)
+       VALUES (?, ?, ?, ?, datetime('now'))
+       ON CONFLICT(session_id, turn_id) DO UPDATE SET user_label = excluded.user_label, created_at = datetime('now')`,
+      [id, params.sessionId, params.turnId, params.userLabel]
+    )
+  }
+
+  async getUserTurnLabels(sessionId: string): Promise<Array<{ turn_id: string; user_label: string }>> {
+    return this.driver.query<Array<{ turn_id: string; user_label: string }>[0]>(
+      `SELECT turn_id, user_label FROM user_turn_labels WHERE session_id = ?`,
+      [sessionId]
+    )
   }
 
   async insertTurns(turns: TurnRecord[]): Promise<void> {
