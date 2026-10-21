@@ -79,6 +79,17 @@ CREATE TABLE IF NOT EXISTS user_turn_labels (
 );
 
 CREATE INDEX IF NOT EXISTS idx_turn_labels_session ON user_turn_labels(session_id);
+
+CREATE TABLE IF NOT EXISTS session_insights (
+  id TEXT PRIMARY KEY,
+  session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+  rule_id TEXT NOT NULL,
+  insight_payload TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(session_id, rule_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_session_insights_session ON session_insights(session_id);
 `
 
 export async function initConversationVault(driver: SqlDriver): Promise<void> {
@@ -384,5 +395,35 @@ export class ConversationVaultRepository {
       speaker_label: (this.dataKey && m.speaker_label.startsWith('enc:v1:')) ? decryptEnvelope(m.speaker_label, this.dataKey) : m.speaker_label,
       assigned_name: (this.dataKey && m.assigned_name?.startsWith('enc:v1:')) ? decryptEnvelope(m.assigned_name, this.dataKey) : m.assigned_name
     }))
+  }
+
+  async saveSessionInsights(sessionId: string, insights: any[]): Promise<void> {
+    if (insights.length === 0) return
+    await this.driver.transaction(async tx => {
+      for (const ins of insights) {
+        const payloadJson = JSON.stringify(ins)
+        const payloadToStore = this.dataKey ? encryptEnvelope(payloadJson, this.dataKey) : payloadJson
+        const id = `ins_${sessionId}_${ins.rule_id || ins.id}`
+        await tx.execute(
+          `INSERT INTO session_insights (id, session_id, rule_id, insight_payload, created_at)
+           VALUES (?, ?, ?, ?, datetime('now'))
+           ON CONFLICT(session_id, rule_id) DO UPDATE SET insight_payload = excluded.insight_payload, created_at = datetime('now')`,
+          [id, sessionId, ins.rule_id || ins.id, payloadToStore]
+        )
+      }
+    })
+  }
+
+  async getSessionInsights(sessionId: string): Promise<any[]> {
+    const rows = await this.driver.query<{ insight_payload: string }>(
+      `SELECT insight_payload FROM session_insights WHERE session_id = ? ORDER BY created_at ASC`,
+      [sessionId]
+    )
+    return rows.map(r => {
+      const decrypted = (this.dataKey && r.insight_payload.startsWith('enc:v1:'))
+        ? decryptEnvelope(r.insight_payload, this.dataKey)
+        : r.insight_payload
+      return JSON.parse(decrypted)
+    })
   }
 }
