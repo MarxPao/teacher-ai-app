@@ -155,9 +155,25 @@ describe('Tarefa 4 e G2: Adapter Puro AssessmentInsight -> InsightV1', () => {
     expect(resSpacing).not.toBeNull()
     if (!resSpacing) return
     expect(resSpacing.signals[0].name).toBe('spacing_review_topics_count')
+
+    // Salvaguarda conservadora: inferência direta de ZDP de item no texto livre ativa o gate e bloqueia com n < 8
+    const freeTextItemZdpInsight: AssessmentInsight = {
+      id: 'item_text_zdp_1',
+      type: 'weak_item',
+      category: 'general',
+      ruleId: 'rule_general',
+      priority: 'high',
+      title: 'Itens com discriminação na ZDP',
+      description: 'Questões identificadas na faixa de ZDP da turma.',
+      action: 'Revisar itens',
+      accepted: null
+    }
+    expect(isZdpConstruct(freeTextItemZdpInsight)).toBe(true)
+    const resItemTextZdp = adaptAssessmentInsightToInsightV1(freeTextItemZdpInsight, { classSize: 4 })
+    expect(resItemTextZdp).toBeNull() // Bloqueado fail-closed por ser inferência de item com n < 8
   })
 
-  it('4. G2: N_MIN_ITEM_DISCRIMINATION_ZDP é configurável como definicao_a_validar', () => {
+  it('4. G2: N_MIN_ITEM_DISCRIMINATION_ZDP é configurável como [DEFINIÇÃO A VALIDAR (dono)]', () => {
     expect(DEFAULT_ZDP_SAMPLE_THRESHOLD).toBe(8)
 
     // Professora configura limiar mais rigoroso (ex: n_min = 12)

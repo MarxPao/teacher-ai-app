@@ -28,9 +28,9 @@ import type { AssessmentInsight } from '@/components/modules/SmartInsightsPanel'
 
 /**
  * Limiar amostral mínimo padrão para inferência de ZDP (Vygotsky / discriminação de item).
- * Marcado formalmente como definicao_a_validar, configurável no contexto.
+ * Marcado formalmente como [DEFINIÇÃO A VALIDAR (dono)], configurável no contexto.
  */
-export const DEFAULT_ZDP_SAMPLE_THRESHOLD = N_MIN_ITEM_DISCRIMINATION_ZDP // definicao_a_validar
+export const DEFAULT_ZDP_SAMPLE_THRESHOLD = N_MIN_ITEM_DISCRIMINATION_ZDP // [DEFINIÇÃO A VALIDAR (dono)]
 
 export interface AssessmentInsightAdapterContext {
   discipline?: string
@@ -39,15 +39,33 @@ export interface AssessmentInsightAdapterContext {
   window?: string
   topic?: string
   thresholds?: {
-    /** Limiar amostral configurável para ZDP (definicao_a_validar) */
+    /** Limiar amostral configurável para ZDP ([DEFINIÇÃO A VALIDAR (dono)]) */
     minItemDiscriminationZdp?: number
   }
 }
 
 /**
- * Detecta se o insight pertence ao construto ZDP usando estritamente campos estruturados
- * (categoria, ruleId, id de regra), sem busca de texto livre em títulos ou descrições,
- * prevenindo falsos positivos quando um texto pedagógico apenas cita ZDP.
+ * Detecta inferência psicométrica de item/questão associada à ZDP no texto livre
+ * (título e descrição). Salvaguarda conservadora: rejeita com n < 8 apenas se houver
+ * inferência real sobre itens ou questões, sem suprimir menções conceituais gerais.
+ */
+export function hasItemZdpInference(insight: AssessmentInsight): boolean {
+  if (!insight) return false
+  const text = `${insight.title || ''} ${insight.description || ''}`.toLowerCase()
+  const itemZdpPatterns = [
+    /\b(item|itens|quest[aã]o|quest[oõ]es)\s+.*?\b(zdp|zpd)\b/i,
+    /\b(zdp|zpd)\s+.*?\b(item|itens|quest[aã]o|quest[oõ]es)\b/i,
+    /\b(faixa|limiar|n[ií]vel)\s+de\s+(zdp|zpd)\b/i,
+    /\bdiscrimina[cç][aã]o\s+.*?\b(zdp|zpd)\b/i,
+    /\b(zdp|zpd)\s+.*?\bdiscrimina[cç][aã]o\b/i
+  ]
+  return itemZdpPatterns.some(pattern => pattern.test(text))
+}
+
+/**
+ * Detecta se o insight pertence ao construto ZDP usando campos estruturados
+ * (categoria, ruleId, id de regra) e salvaguarda conservadora de inferência de item no texto livre.
+ * Previne falsos positivos quando um texto pedagógico apenas cita ZDP conceitualmente.
  */
 export function isZdpConstruct(insight: AssessmentInsight): boolean {
   if (!insight) return false
@@ -76,6 +94,12 @@ export function isZdpConstruct(insight: AssessmentInsight): boolean {
     id.startsWith('zdp_') ||
     id.endsWith('_zdp')
   ) {
+    return true
+  }
+
+  // 4. Salvaguarda conservadora de texto livre: inferência psicométrica de item/questão em ZDP
+  // (exclusivamente quando há inferência direta de item, preservando menções conceituais gerais)
+  if (hasItemZdpInference(insight)) {
     return true
   }
 
@@ -163,7 +187,7 @@ export function adaptAssessmentInsightToInsightV1(
     caveats.push(`Amostra preliminar (n=${classSize}). Média agregada sujeita a variabilidade amostral.`)
   }
   if (classSize < minZdpThreshold) {
-    caveats.push(`Amostra abaixo do limiar psicométrico configurado (definicao_a_validar) (n=${classSize} < ${minZdpThreshold}).`)
+    caveats.push(`Amostra abaixo do limiar psicométrico configurado ([DEFINIÇÃO A VALIDAR (dono)]) (n=${classSize} < ${minZdpThreshold}).`)
   }
 
   // Fatos observáveis e hipóteses pedagógicas reflexivas

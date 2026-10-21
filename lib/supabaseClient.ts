@@ -134,19 +134,7 @@ export async function syncToSupabase(payload?: Record<string, unknown>): Promise
         id: String(c.id), name: String(c.name), school_id: c.schoolId ? String(c.schoolId) : null, grade: c.grade || null, year: c.year || null
       }))))
     }
-    // Bloqueio LGPD (Trilho 1): teacher_students desativado de syncToSupabase
-    if (false as boolean) {
-      promises.push(upsertRelational('students', syncPayload['teacher_students'].map((s: any) => ({
-        id: String(s.id),
-        name: String(s.name),
-        email: s.email || null,
-        class_id: s.classId ? String(s.classId) : (s.class ? String(s.class) : null),
-        class_name: s.className || s.class || null,
-        school_id: s.schoolId ? String(s.schoolId) : null,
-        grades: s.grades || {},
-        metrics: s.metrics || {}
-      }))))
-    }
+    // Bloqueio LGPD (Trilho 1): teacher_students e teacher_private_students expurgados de syncToSupabase
     if (Array.isArray(syncPayload['teacher_saved_exams'])) {
       promises.push(upsertRelational('exams', syncPayload['teacher_saved_exams'].map((e: any) => ({
         id: String(e.id), title: String(e.title || ''), topic: e.topic || null, cefr: e.cefr || null, grade: e.grade || null, content: String(e.content || JSON.stringify(e)), sections: e.sections || []
@@ -188,30 +176,7 @@ export async function syncToSupabase(payload?: Record<string, unknown>): Promise
         file_url: file.fileDataUrl || null
       }))))
     }
-    // Bloqueio LGPD (Trilho 1): teacher_private_students desativado de syncToSupabase
-    if (false as boolean) {
-      promises.push(upsertRelational('private_students', syncPayload['teacher_private_students'].map((s: any) => ({
-        id: String(s.id),
-        name: String(s.name),
-        subject: String(s.subject),
-        guardian_name: s.guardianName || null,
-        phone: s.phone || null,
-        email: s.email || null,
-        monthly_fee: s.monthlyFee || 0,
-        due_day: s.dueDay || 10,
-        payment_method: s.paymentMethod || 'PIX',
-        last_payment_date: s.lastPaymentDate || null,
-        modality: s.modality || 'Online',
-        schedule_info: s.scheduleInfo || '',
-        payment_status: s.paymentStatus || 'em_dia',
-        mastery_percentage: s.masteryPercentage || 75,
-        goals: s.goals || null,
-        ai_diagnostic: s.aiDiagnostic || null,
-        roadmap: s.roadmap || [],
-        lessons_history: s.lessonsHistory || [],
-        grades_history: s.gradesHistory || []
-      }))))
-    }
+    // Bloqueio LGPD (Trilho 1): teacher_private_students expurgado de syncToSupabase
     if (Array.isArray(syncPayload['teacher_media_library'])) {
       promises.push(upsertRelational('media_library', syncPayload['teacher_media_library'].map((m: any) => ({
         id: String(m.id),

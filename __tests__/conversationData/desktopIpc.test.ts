@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { DatabaseSync } from 'node:sqlite'
 import type { SqlDriver } from '../../lib/desktop-core/db/SqlDriver'
 import { initConversationVault } from '../../lib/conversationData/schema'
-import { executeConversationMethod } from '../../lib/conversationData/desktopIpc'
+import { executeConversationMethod, assertVaultReady } from '../../lib/conversationData/desktopIpc'
 import { fixtureAula50Min } from '../../lib/conversationData/fixtures'
 
 class InMemorySqlDriver implements SqlDriver {
@@ -117,5 +117,52 @@ describe('3. IPC no Desktop: conversation.import, sessions.list, ask, summary, d
 
     const listRes = await executeConversationMethod('conversation.sessions.list', {}, driver, testDataKey)
     expect(listRes.sessions).toHaveLength(0)
+  })
+})
+
+describe('assertVaultReady fail-closed', () => {
+  it('lança E_VAULT_DRIVER_NOT_OPEN se driver for null ou undefined', () => {
+    expect(() => assertVaultReady(null)).toThrow('E_VAULT_DRIVER_NOT_OPEN')
+    expect(() => assertVaultReady(undefined)).toThrow('E_VAULT_DRIVER_NOT_OPEN')
+  })
+
+  it('lança E_VAULT_DRIVER_NOT_OPEN se driver não implementar isOpen', () => {
+    const driverWithoutIsOpen = {
+      execute: async () => {},
+      query: async () => [],
+      queryOne: async () => null,
+      transaction: async (cb: any) => cb(driverWithoutIsOpen),
+    }
+    expect(() => assertVaultReady(driverWithoutIsOpen)).toThrow('E_VAULT_DRIVER_NOT_OPEN')
+  })
+
+  it('lança E_VAULT_DRIVER_NOT_OPEN se driver.isOpen() retornar false', () => {
+    const closedDriver = {
+      isOpen: () => false,
+      execute: async () => {},
+      query: async () => [],
+      queryOne: async () => null,
+      transaction: async (cb: any) => cb(closedDriver),
+    }
+    expect(() => assertVaultReady(closedDriver)).toThrow('E_VAULT_DRIVER_NOT_OPEN')
+  })
+
+  it('lança E_VAULT_DRIVER_INVALID se driver estiver aberto mas faltar métodos obrigatórios', () => {
+    const incompleteDriver = {
+      isOpen: () => true,
+      execute: async () => {},
+    }
+    expect(() => assertVaultReady(incompleteDriver)).toThrow('E_VAULT_DRIVER_INVALID')
+  })
+
+  it('não lança erro quando o driver é válido e está aberto', () => {
+    const validDriver = {
+      isOpen: () => true,
+      execute: async () => {},
+      query: async () => [],
+      queryOne: async () => null,
+      transaction: async (cb: any) => cb(validDriver),
+    }
+    expect(() => assertVaultReady(validDriver)).not.toThrow()
   })
 })
