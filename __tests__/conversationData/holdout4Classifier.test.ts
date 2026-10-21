@@ -30,11 +30,20 @@ describe('Classificador - Benchmark Holdout 4 ASR Real (40 Falas Inéditas Sem P
     const datasetPath = path.join(__dirname, '..', '..', 'lib', 'conversationData', 'holdout4Dataset.ts')
     const lockPath = path.join(__dirname, '..', '..', 'lib', 'conversationData', 'holdout.lock')
 
-    const content = fs.readFileSync(datasetPath)
-    const computedHash = 'sha256:' + crypto.createHash('sha256').update(content).digest('hex').toUpperCase()
-    const lockedHash = fs.readFileSync(lockPath, 'ascii').trim()
+    const content = fs.readFileSync(datasetPath, 'utf8')
+    const normalized = content.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+    const computedHash = crypto.createHash('sha256').update(normalized, 'utf8').digest('hex')
 
-    expect(computedHash).toBe(lockedHash)
+    const lockContent = fs.readFileSync(lockPath, 'utf8')
+    const lockEntries = new Map<string, string>()
+    for (const line of lockContent.split('\n')) {
+      const trimmed = line.trim()
+      if (!trimmed) continue
+      const [name, hashPrefixed] = trimmed.split(/\s+/)
+      lockEntries.set(name, hashPrefixed.replace(/^sha256:/, ''))
+    }
+
+    expect(lockEntries.get('holdout4')).toBe(computedHash)
   })
 
   it('Executa UMA vez sobre Holdout 4 e reporta métricas com Intervalo de Wilson 95% (NÃO VALIDADO EM ASR REAL)', () => {

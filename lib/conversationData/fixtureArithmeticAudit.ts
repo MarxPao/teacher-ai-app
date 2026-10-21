@@ -111,7 +111,7 @@ export function generateManualAuditTable(
   })
 
   lines.push('------------------------------------------------------------------------------------------------------------------')
-  lines.push('[GABARITO INDEPENDENTE CONFERIDO À MÃO]')
+  lines.push('[GABARITO INDEPENDENTE CALCULADO DETERMINISTICAMENTE]')
   lines.push('• Tempo Docente: 501.0s (88.4%) | Tempo Discente: 66.0s (11.6%) | Total Falado: 567.0s (100.0%)')
   lines.push('• Perguntas Docentes: 5 (Wait-Time I: Média 3.8s, Mediana 3.0s, Pausas >= 3s: 3/5)')
   lines.push('• Perguntas Discentes: 2')

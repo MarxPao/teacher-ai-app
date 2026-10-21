@@ -157,6 +157,7 @@ describe('T3: Rotulagem Local da Professora, Intervalo de Wilson e Avaliação E
 
     it('benchmark via IPC executa no cofre local, calcula Wilson e acumula múltiplas sessões sem rede', async () => {
       const fetchSpy = vi.spyOn(global, 'fetch')
+      const dataKey = Buffer.alloc(32, 0x42)
 
       // Cria sessão 1
       await executeConversationMethod('conversation.import', {
@@ -165,7 +166,7 @@ describe('T3: Rotulagem Local da Professora, Intervalo de Wilson e Avaliação E
         title: 'Sessão 1',
         sessionType: 'aula',
         sessionId: 'sess_ipc_1'
-      }, driver)
+      }, driver, dataKey)
 
       // Cria sessão 2
       await executeConversationMethod('conversation.import', {
@@ -174,24 +175,24 @@ describe('T3: Rotulagem Local da Professora, Intervalo de Wilson e Avaliação E
         title: 'Sessão 2',
         sessionType: 'aula',
         sessionId: 'sess_ipc_2'
-      }, driver)
+      }, driver, dataKey)
 
       // Rotula turnos da sessão 1
-      const turnsSess1 = await executeConversationMethod('conversation.turns.list', { sessionId: 'sess_ipc_1' }, driver)
+      const turnsSess1 = await executeConversationMethod('conversation.turns.list', { sessionId: 'sess_ipc_1' }, driver, dataKey)
       const t1 = turnsSess1.turns[0].id
       const t2 = turnsSess1.turns[1].id
-      await executeConversationMethod('conversation.labels.save', { sessionId: 'sess_ipc_1', turnId: t1, userLabel: 'pergunta' }, driver)
-      await executeConversationMethod('conversation.labels.save', { sessionId: 'sess_ipc_1', turnId: t2, userLabel: 'nao_pergunta' }, driver)
+      await executeConversationMethod('conversation.labels.save', { sessionId: 'sess_ipc_1', turnId: t1, userLabel: 'pergunta' }, driver, dataKey)
+      await executeConversationMethod('conversation.labels.save', { sessionId: 'sess_ipc_1', turnId: t2, userLabel: 'nao_pergunta' }, driver, dataKey)
 
       // Rotula turnos da sessão 2
-      const turnsSess2 = await executeConversationMethod('conversation.turns.list', { sessionId: 'sess_ipc_2' }, driver)
+      const turnsSess2 = await executeConversationMethod('conversation.turns.list', { sessionId: 'sess_ipc_2' }, driver, dataKey)
       const t3 = turnsSess2.turns[0].id
       const t4 = turnsSess2.turns[1].id
-      await executeConversationMethod('conversation.labels.save', { sessionId: 'sess_ipc_2', turnId: t3, userLabel: 'pergunta' }, driver)
-      await executeConversationMethod('conversation.labels.save', { sessionId: 'sess_ipc_2', turnId: t4, userLabel: 'pular' }, driver)
+      await executeConversationMethod('conversation.labels.save', { sessionId: 'sess_ipc_2', turnId: t3, userLabel: 'pergunta' }, driver, dataKey)
+      await executeConversationMethod('conversation.labels.save', { sessionId: 'sess_ipc_2', turnId: t4, userLabel: 'pular' }, driver, dataKey)
 
       // Benchmark da sessão 1 isolada
-      const bench1 = await executeConversationMethod('conversation.labels.benchmark', { sessionId: 'sess_ipc_1' }, driver)
+      const bench1 = await executeConversationMethod('conversation.labels.benchmark', { sessionId: 'sess_ipc_1' }, driver, dataKey)
       expect(bench1.success).toBe(true)
       expect(bench1.evaluatedCount).toBe(2)
       expect(bench1.insufficientSampleWarning).toBe(true)
@@ -200,7 +201,7 @@ describe('T3: Rotulagem Local da Professora, Intervalo de Wilson e Avaliação E
       expect(bench1.recallWilson).toBeDefined()
 
       // Benchmark acumulado (todas as sessões)
-      const benchAll = await executeConversationMethod('conversation.labels.benchmark', { allSessions: true }, driver)
+      const benchAll = await executeConversationMethod('conversation.labels.benchmark', { allSessions: true }, driver, dataKey)
       expect(benchAll.success).toBe(true)
       // Sessão 1 contribui com 2 (pergunta, nao_pergunta), Sessão 2 contribui com 1 (pergunta; 'pular' é ignorado)
       expect(benchAll.evaluatedCount).toBe(3)
