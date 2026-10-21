@@ -14,7 +14,48 @@
  */
 
 import type { SessionPedagogicalReport } from './pedagogicalMetrics'
-import { meetsSampleMinimum, type MinimoAmostral, type GeneratedInsight } from './insightRules'
+
+export interface MinimoAmostral {
+  minTurns?: number
+  minDurationMs?: number
+  minTeacherQuestions?: number
+  minStudentQuestions?: number
+}
+
+export interface GeneratedInsight {
+  ruleId: string
+  tipo: 'descritivo' | 'prescritivo'
+  titulo: string
+  observacao: string
+  significadoPotencial: string
+  acaoSugerida: string | null
+  fonte: string
+  evidencia: 'verificada' | 'nao_verificada'
+  seloEvidencia: string
+  limiarOrigem: string
+  n: number
+  incertezaNota: string
+  timestampsOrigem?: Array<{ startMs: number; endMs: number; label: string }>
+}
+
+/**
+ * Valida se os dados da sessão atingem os requisitos mínimos amostrais da regra.
+ */
+export function meetsSampleMinimum(report: SessionPedagogicalReport, min: MinimoAmostral): boolean {
+  if (min.minTurns !== undefined && report.speakingRatio.n < min.minTurns) {
+    return false
+  }
+  if (min.minDurationMs !== undefined && report.sessionDurationMs < min.minDurationMs) {
+    return false
+  }
+  if (min.minTeacherQuestions !== undefined && report.teacherQuestions.value.totalObserved < min.minTeacherQuestions) {
+    return false
+  }
+  if (min.minStudentQuestions !== undefined && report.studentQuestions.value.totalObserved < min.minStudentQuestions) {
+    return false
+  }
+  return true
+}
 
 export interface InsightRuleThresholds {
   sttMinPctThreshold?: number // padrão: 30.0% (Swain - definicao_a_validar)

@@ -14,7 +14,7 @@ import {
 } from '../insights/insightEngineV1'
 import type { SessionPedagogicalReport } from './pedagogicalMetrics'
 import { computeSessionPedagogicalReport } from './pedagogicalMetrics'
-import type { GeneratedInsight } from './insightRules'
+import type { GeneratedInsight } from './rigorousInsightRules'
 import { runInsightConfidenceGate, type ConfidenceGateResult } from './insightConfidenceGate'
 import type { ConversationVaultRepository } from './schema'
 
@@ -38,6 +38,7 @@ export function convertToInsightV1(
   const signals: SignalMeasurement[] = []
 
   switch (insight.ruleId) {
+    case 'swain_1985_output_hypothesis':
     case 'rule_teacher_speaking_ratio':
       signals.push({
         name: 'teacher_speaking_pct',
@@ -46,6 +47,7 @@ export function convertToInsightV1(
         window: 'sessao_aula'
       })
       break
+    case 'rowe_1974_wait_time':
     case 'rule_wait_time_reflection':
       signals.push({
         name: 'wait_time_mean_sec',
@@ -54,6 +56,7 @@ export function convertToInsightV1(
         window: 'sessao_aula'
       })
       break
+    case 'long_sato_1983_question_types':
     case 'rule_open_referential_questions':
       signals.push({
         name: 'open_questions_count',
@@ -62,6 +65,7 @@ export function convertToInsightV1(
         window: 'sessao_aula'
       })
       break
+    case 'black_wiliam_1998_formative_assessment':
     case 'rule_unanswered_student_questions':
       signals.push({
         name: 'unanswered_questions_count',
@@ -70,6 +74,7 @@ export function convertToInsightV1(
         window: 'sessao_aula'
       })
       break
+    case 'sweller_1988_cognitive_load':
     case 'rule_extended_monologue':
       signals.push({
         name: 'longest_monologue_sec',

@@ -1,14 +1,8 @@
 /**
  * lib/conversationData/insightRules.ts
  *
- * Banco de regras teórico-pedagógicas formais para geração de insights reflexivos.
- * Estrutura declarativa e modular separada do motor de execução.
- *
- * Diretrizes invioláveis:
- * 1. Cada regra carrega evidencia: 'verificada' | 'nao_verificada' e fonte completa.
- * 2. Citações não verificáveis recebem o selo [CITAÇÃO NÃO VERIFICADA] e permanecem descritivas.
- * 3. Limiares sem fonte verificada são marcados [DEFINIÇÃO A VALIDAR (dono)].
- * 4. Linguagem estritamente hipotética e reflexiva ("pode indicar", "vale observar").
+ * @deprecated Use `rigorousInsightRules.ts` para catálogo e avaliação formal de regras pedagógicas.
+ * Este módulo é mantido como fachada legada e para compatibilidade retroativa de tipos e testes.
  */
 
 import type { SessionPedagogicalReport } from './pedagogicalMetrics'
@@ -17,9 +11,15 @@ import {
   evaluateRigorousInsightRules,
   PROHIBITED_WORDS,
   formatQuestionCountWithUncertainty,
+  meetsSampleMinimum,
   type RigorousInsightRule,
-  type RuleScope
+  type RuleScope,
+  type MinimoAmostral,
+  type GeneratedInsight
 } from './rigorousInsightRules'
+
+export type { MinimoAmostral, GeneratedInsight }
+export { meetsSampleMinimum }
 
 export interface InsightRuleThresholds {
   teacherSpeechPctThreshold?: number // padrão 80.0%
@@ -30,29 +30,9 @@ export interface InsightRuleThresholds {
   monologueDurationSecThreshold?: number // padrão 120s
 }
 
-export interface MinimoAmostral {
-  minTurns?: number
-  minDurationMs?: number
-  minTeacherQuestions?: number
-  minStudentQuestions?: number
-}
-
-export interface GeneratedInsight {
-  ruleId: string
-  tipo: 'descritivo' | 'prescritivo'
-  titulo: string
-  observacao: string
-  significadoPotencial: string
-  acaoSugerida: string | null
-  fonte: string
-  evidencia: 'verificada' | 'nao_verificada'
-  seloEvidencia: string
-  limiarOrigem: string
-  n: number
-  incertezaNota: string
-  timestampsOrigem?: Array<{ startMs: number; endMs: number; label: string }>
-}
-
+/**
+ * @deprecated Use `RigorousInsightRule` de `./rigorousInsightRules`.
+ */
 export interface InsightRule {
   id: string
   titulo: string
@@ -67,26 +47,7 @@ export interface InsightRule {
 }
 
 /**
- * Valida se os dados da sessão atingem os requisitos mínimos amostrais da regra.
- */
-export function meetsSampleMinimum(report: SessionPedagogicalReport, min: MinimoAmostral): boolean {
-  if (min.minTurns !== undefined && report.speakingRatio.n < min.minTurns) {
-    return false
-  }
-  if (min.minDurationMs !== undefined && report.sessionDurationMs < min.minDurationMs) {
-    return false
-  }
-  if (min.minTeacherQuestions !== undefined && report.teacherQuestions.value.totalObserved < min.minTeacherQuestions) {
-    return false
-  }
-  if (min.minStudentQuestions !== undefined && report.studentQuestions.value.totalObserved < min.minStudentQuestions) {
-    return false
-  }
-  return true
-}
-
-/**
- * Catálogo Canônico de Regras Pedagógicas Formais.
+ * @deprecated Use `RIGOROUS_INSIGHT_RULES` de `./rigorousInsightRules`.
  */
 export const INSIGHT_RULES: InsightRule[] = [
   // REGRA 1: Proporção de fala e oportunidade de output discente em L2

@@ -10,7 +10,11 @@
 
 import type { SessionRecord, TurnRecord, EventRecord } from './types'
 import type { SessionPedagogicalReport } from './pedagogicalMetrics'
-import { evaluateInsightRules, type GeneratedInsight, type InsightRuleThresholds } from './insightRules'
+import {
+  evaluateRigorousInsightRules,
+  type GeneratedInsight,
+  type InsightRuleThresholds
+} from './rigorousInsightRules'
 
 export type ConfidenceGateFailureReason =
   | 'E_DEMO_DATA_EXCLUDED'
@@ -165,11 +169,13 @@ export function runInsightConfidenceGate(params: {
     }
   }
 
-  // 5. Avaliação do Catálogo de Regras
-  const rawInsights = evaluateInsightRules(pedagogicalReport, thresholds, {
+  // 5. Avaliação do Catálogo de Regras Rigoroso
+  const evaluationResult = evaluateRigorousInsightRules(pedagogicalReport, {
     discipline,
-    sessionType: session.session_type as any
+    sessionType: session.session_type as any,
+    thresholds
   })
+  const rawInsights = evaluationResult.insights
 
   if (rawInsights.length === 0) {
     return {
