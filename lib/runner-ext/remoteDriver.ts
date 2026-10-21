@@ -694,4 +694,35 @@ export class RemoteDriver implements Driver {
   public async clearHighlight(): Promise<void> {
     return this.sendRpc('clearHighlight', {})
   }
+
+  /** Gap 2: screenshot local via CDP — sem tráfego externo */
+  async captureScreenshot(): Promise<{ dataUrl: string; mimeType: 'image/png' }> {
+    return this._cdpCapture()
+  }
+
+  private async _cdpCapture(): Promise<{ dataUrl: string; mimeType: 'image/png' }> {
+    const dbg = (chrome as any).debugger
+    const target = { tabId: this.tabId }
+    return new Promise((resolve, reject) => {
+      dbg.attach(target, '1.3', () => {
+        if (chrome.runtime.lastError) {
+          reject(new Error(chrome.runtime.lastError.message))
+          return
+        }
+        dbg.sendCommand(
+          target,
+          'Page.captureScreenshot',
+          { format: 'png', quality: 80, captureBeyondViewport: false },
+          (result: { data: string }) => {
+            dbg.detach(target, () => {})
+            if (chrome.runtime.lastError || !result?.data) {
+              reject(new Error(chrome.runtime.lastError?.message || 'captureScreenshot vazio'))
+              return
+            }
+            resolve({ dataUrl: `data:image/png;base64,${result.data}`, mimeType: 'image/png' })
+          }
+        )
+      })
+    })
+  }
 }

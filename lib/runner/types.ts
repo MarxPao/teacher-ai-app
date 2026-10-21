@@ -197,6 +197,8 @@ export interface Driver {
   switchTab?(which: 'newest' | 'previous'): Promise<{ url: string }>
   highlight?(selector: string, mode: 'old' | 'new'): Promise<void>
   clearHighlight?(): Promise<void>
+  /** Gap 2: captura screenshot PNG local via CDP. Disponível no RemoteDriver. */
+  captureScreenshot?(): Promise<{ dataUrl: string; mimeType: 'image/png' }>
 }
 
 export interface DownloadOptions {
@@ -278,6 +280,8 @@ export interface RunState {
   variables: Record<string, any>
   loopStack: Array<{ nodeId: string; index: number; total: number; item: any }>
   writesCount: number
+  /** Gap 4: contador de steps do agente genérico (LLM-driven) */
+  stepsCount?: number
   dryRun: boolean
   /** Escritas aprovadas pela professora no espelho (chave -> valor). Se presente, nenhuma outra escrita é permitida. */
   approvedWrites?: Map<string, string>
