@@ -137,3 +137,16 @@ Este documento centraliza as funcionalidades, arquétipos e melhorias postergada
 - [ ] **Preservação de Dados de LocalStorage sem Quebra de Chaves:** As chaves de armazenamento local (`teacher_students`, `teacher_insights_ai_report`, etc.) foram preservadas para manter a retrocompatibilidade sem destruição de dados da usuária. A migração completa para repositório SQLite cifrado no desktop fica agendada para ciclo subsequente.
 - [ ] **Sincronização de Relatórios de Conselho de Classe (`classCouncilEngine`):** `syncCouncilReportsToSupabase` foi blindado com expurgo de PII (`studentName: '[ESTUDANTE_PROTEGIDO]'`, `studentId: '[ID_PROTEGIDO]'`). Persistência individual integral permanece exclusivamente local em conformidade com o Trilho 1 LGPD.
 
+---
+
+## 9. Geradores de Insights Pendentes de Migração para Contrato InsightV1 (Passo 4 — Bloco 0)
+
+Conforme a arquitetura do Passo 4, o contrato unificado `InsightV1` (`lib/insights/insightEngineV1.ts`) e o gate amostral (`N_MIN_STUDENT_TRAJECTORY = 3`, `N_MIN_CLASS_AGGREGATE = 5`, `N_MIN_ITEM_DISCRIMINATION_ZDP = 8`) foram implementados e integrados ao `SmartInsightsPanel.tsx`. Os geradores legados abaixo permanecem agendados para migração em lotes nos ciclos subsequentes:
+
+- [ ] **`lib/pedagogicalInsights.ts`:** Migrar regras determinísticas de desvio de nota e engajamento para a estrutura de `signals`, `facts`, `hypotheses` e separação estrita de incerteza do `InsightV1`.
+- [ ] **`lib/predictiveAnalytics.ts`:** Migrar cálculos de projeção e fatores de risco para emitir `signals` com tamanho de janela $N$ e rotulagem neutra livre de afirmativas causais absolutas.
+- [ ] **`lib/executivePedagogicalSummary.ts`:** Migrar sumários executivos agregados da turma para validar contra o validador `validateInsightContract`.
+- [ ] **`lib/classCouncilEngine.ts`:** Unificar os pareceres de conselho de classe bimestrais com os tipos `InsightV1` e campos obrigatórios de ressalva amostral (`caveats`).
+- [ ] **`sidecar/pedagogical_anomaly_guardian.py`:** Padronizar as regras de alerta estatístico do guardião Python para refletir os limiares amostrais mínimos e os campos de confiança ordinal (`baixa`, `media`, `alta`).
+
+

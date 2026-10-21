@@ -2,6 +2,7 @@
 import { COLOR, RADIUS, TEXT, SHADOW, FONT } from '@/styles/tokens'
 import React, { useState, useMemo, useEffect } from 'react'
 import { analyzeSpacing, TopicSpacingInfo, CalendarTask, QuestionBankEntry } from '@/lib/spacingScheduler'
+import { N_MIN_CLASS_AGGREGATE, N_MIN_ITEM_DISCRIMINATION_ZDP } from '@/lib/insights/insightEngineV1'
 
 // --- Types ---
 
@@ -144,7 +145,7 @@ export default function SmartInsightsPanel({
     }
 
     // --- INSIGHT 2: Average Score + Difficulty Adjust ---
-    if (lastExam && lastExam.results.length >= 2) {
+    if (lastExam && lastExam.results.length >= N_MIN_CLASS_AGGREGATE) {
       const avgScore = lastExam.results.reduce((acc, r) =>
         acc + (r.maxScore > 0 ? r.totalScore / r.maxScore * 10 : 0), 0
       ) / lastExam.results.length
@@ -175,7 +176,17 @@ export default function SmartInsightsPanel({
     }
 
     // --- INSIGHT 3: Weak Items (p < 0.35 and D > 0.25 = ZDP) ---
-    if (lastExam && lastExam.results.length >= 3) {
+    if (lastExam && lastExam.results.length >= 1 && lastExam.results.length < N_MIN_ITEM_DISCRIMINATION_ZDP) {
+      generated.push({
+        id: 'small_sample_warning',
+        type: 'weak_item',
+        priority: 'low',
+        title: 'ℹ️ Amostra pequena para cálculo psicométrico',
+        description: `A turma possui apenas ${lastExam.results.length} avaliações registradas. O cálculo de discriminação e inferência de ZDP exige no mínimo ${N_MIN_ITEM_DISCRIMINATION_ZDP} avaliações para validade estatística.`,
+        action: 'Aguardar aplicação com mais estudantes para habilitar análise de itens',
+        accepted: null
+      })
+    } else if (lastExam && lastExam.results.length >= N_MIN_ITEM_DISCRIMINATION_ZDP) {
       const questionCount = lastExam.results[0]?.questionResults.length || 0
       const weakItems: number[] = []
       const badItems: number[] = [] // D < 0.20 = item doesn't discriminate
