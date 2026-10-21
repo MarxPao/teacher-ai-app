@@ -22,6 +22,7 @@ import { classifySessionEvents } from './eventClassifier'
 import { executeConversationQuery, routeQueryWithOllama } from './queryEngine'
 import { generateStructuredSummary } from './summarizer'
 import { calculateLabelMetrics } from './labelingEvaluation'
+import { getUnifiedSessionPedagogicalData } from './insightIntegrationAdapter'
 import type { SessionType } from './types'
 
 export interface ConversationImportParams {
@@ -237,6 +238,18 @@ export async function executeConversationMethod(
         success: true,
         purgedCount
       }
+    }
+
+    case 'conversation.insights.get': {
+      const sessionId = params.sessionId as string
+      if (!sessionId) throw new Error('Parâmetro "sessionId" é obrigatório.')
+      const discipline = params.discipline as string | undefined
+      const allowFixturesForTesting = Boolean(params.allowFixturesForTesting)
+      const data = await getUnifiedSessionPedagogicalData(sessionId, repo, {
+        discipline,
+        allowFixturesForTesting
+      })
+      return { success: true, ...data }
     }
 
     default:

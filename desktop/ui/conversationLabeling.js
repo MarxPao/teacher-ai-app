@@ -99,6 +99,8 @@
       turnsLabelList.innerHTML = ''
       turns.forEach((turn, idx) => {
         const row = document.createElement('div')
+        row.id = `conv-turn-row-${turn.id}`
+        row.dataset.turnId = turn.id
         row.style.display = 'flex'
         row.style.alignItems = 'center'
         row.style.justifyContent = 'space-between'

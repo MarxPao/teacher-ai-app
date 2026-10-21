@@ -131,6 +131,11 @@
       window.mountConversationLabeling(card, () => activeSessionId, getBridge)
     }
 
+    // Monta painel de parecer pedagógico e insights reflexivos (I6)
+    if (typeof window.mountConversationInsights === 'function') {
+      window.mountConversationInsights(card, () => activeSessionId, getBridge)
+    }
+
     // Insere antes do card de diagnóstico
     const diagCard = document.querySelector('.main-wrapper > .card:last-child')
     if (diagCard) {
