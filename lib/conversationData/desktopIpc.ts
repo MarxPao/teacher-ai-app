@@ -17,6 +17,7 @@ import { importConversationJson } from './importer'
 import { classifySessionEvents } from './eventClassifier'
 import { executeConversationQuery, routeQueryWithOllama } from './queryEngine'
 import { generateStructuredSummary } from './summarizer'
+import { calculateLabelMetrics } from './labelingEvaluation'
 import type { SessionType } from './types'
 
 export interface ConversationImportParams {
@@ -159,45 +160,29 @@ export async function executeConversationMethod(
     }
 
     case 'conversation.labels.benchmark': {
-      const sessionId = params.sessionId as string
-      if (!sessionId) throw new Error('Parâmetro "sessionId" é obrigatório.')
-      const turns = await repo.getTurnsBySession(sessionId)
-      const events = await repo.getEventsBySession(sessionId)
-      const userLabels = await repo.getUserTurnLabels(sessionId)
+      const sessionId = params.sessionId as string | undefined
+      const allSessions = Boolean(params.allSessions || sessionId === 'all' || !sessionId)
 
-      const labelMap = new Map(userLabels.map(l => [l.turn_id, l.user_label]))
-      const questionTurns = new Set(events.filter(e => e.type === 'pergunta').map(e => e.turn_id))
+      let turns: any[]
+      let events: any[]
+      let userLabels: Array<{ session_id?: string; turn_id: string; user_label: string }>
 
-      let tp = 0, fp = 0, tn = 0, fn = 0
-      let evaluatedCount = 0
-
-      for (const turn of turns) {
-        const manualLabel = labelMap.get(turn.id)
-        if (!manualLabel || manualLabel === 'pular') continue
-
-        evaluatedCount++
-        const expectedIsQuestion = manualLabel === 'pergunta'
-        const predictedIsQuestion = questionTurns.has(turn.id)
-
-        if (predictedIsQuestion && expectedIsQuestion) tp++
-        else if (predictedIsQuestion && !expectedIsQuestion) fp++
-        else if (!predictedIsQuestion && !expectedIsQuestion) tn++
-        else fn++
+      if (!allSessions && sessionId) {
+        turns = await repo.getTurnsBySession(sessionId)
+        events = await repo.getEventsBySession(sessionId)
+        userLabels = await repo.getUserTurnLabels(sessionId)
+      } else {
+        turns = await repo.getAllTurns()
+        events = await repo.getAllEvents()
+        userLabels = await repo.getAllUserTurnLabels()
       }
 
-      const precision = tp + fp > 0 ? tp / (tp + fp) : 0
-      const recall = tp + fn > 0 ? tp / (tp + fn) : 0
-      const accuracy = evaluatedCount > 0 ? (tp + tn) / evaluatedCount : 0
-      const f1 = precision + recall > 0 ? (2 * precision * recall) / (precision + recall) : 0
+      const questionTurnIds = new Set(events.filter(e => e.type === 'pergunta').map(e => e.turn_id))
+      const metrics = calculateLabelMetrics(turns, questionTurnIds, userLabels)
 
       return {
         success: true,
-        evaluatedCount,
-        tp, fp, tn, fn,
-        precision,
-        recall,
-        accuracy,
-        f1
+        ...metrics
       }
     }
 

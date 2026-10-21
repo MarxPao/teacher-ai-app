@@ -29,11 +29,14 @@
       <p style="font-size: 12px; margin-bottom: 8px;">Valide manualmente as falas da sessão para calcular precisão e recall do classificador contra suas próprias anotações (100% no cofre local cifrado).</p>
 
       <div id="conv-labeling-container" style="display: none; margin-top: 10px;">
-        <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 10px; background: var(--surface-2); padding: 8px; border-radius: var(--radius-sm);">
+        <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; background: var(--surface-2); padding: 8px; border-radius: var(--radius-sm);">
           <button class="btn" id="conv-btn-calc-metrics" style="font-size: 11px; padding: 5px 10px;">
-            <i class="ti ti-calculator"></i> Calcular Precisão &amp; Recall
+            <i class="ti ti-calculator"></i> Avaliar Sessão
           </button>
-          <div id="conv-metrics-display" style="font-size: 12px; font-weight: 600; color: var(--text);">
+          <button class="btn btn-secondary" id="conv-btn-calc-cumulative" style="font-size: 11px; padding: 5px 10px;">
+            <i class="ti ti-chart-arrows-vertical"></i> Avaliar Acumulado (Todas)
+          </button>
+          <div id="conv-metrics-display" style="font-size: 12px; font-weight: 600; color: var(--text); flex: 1 1 100%;">
             Nenhuma anotação avaliada ainda.
           </div>
         </div>
@@ -175,19 +178,40 @@
       }
     }
 
-    btnCalcMetrics?.addEventListener('click', async () => {
+    async function runBenchmark(allSessions = false) {
       const bridge = getBridge()
       const activeSessionId = getActiveSessionId()
-      if (!bridge || !activeSessionId || !metricsDisplay) return
+      if (!bridge || (!activeSessionId && !allSessions) || !metricsDisplay) return
       metricsDisplay.textContent = 'Calculando no cofre local...'
       try {
-        const res = await bridge.invoke('conversation.labels.benchmark', { sessionId: activeSessionId })
+        const payload = allSessions ? { allSessions: true } : { sessionId: activeSessionId }
+        const res = await bridge.invoke('conversation.labels.benchmark', payload)
         if (res?.success && res.result) {
           const m = res.result
           if (m.evaluatedCount === 0) {
             metricsDisplay.textContent = 'Nenhuma fala rotulada como Pergunta ou Não-Pergunta ainda.'
           } else {
-            metricsDisplay.innerHTML = `Avaliadas: ${m.evaluatedCount} | Precisão: ${(m.precision * 100).toFixed(1)}% | Recall: ${(m.recall * 100).toFixed(1)}% | Acurácia: ${(m.accuracy * 100).toFixed(1)}% (TP: ${m.tp}, FP: ${m.fp}, TN: ${m.tn}, FN: ${m.fn})`
+            const pPct = (m.precision * 100).toFixed(1)
+            const rPct = (m.recall * 100).toFixed(1)
+            const pLow = m.precisionWilson ? (m.precisionWilson.lower * 100).toFixed(1) : '-'
+            const pHigh = m.precisionWilson ? (m.precisionWilson.upper * 100).toFixed(1) : '-'
+            const rLow = m.recallWilson ? (m.recallWilson.lower * 100).toFixed(1) : '-'
+            const rHigh = m.recallWilson ? (m.recallWilson.upper * 100).toFixed(1) : '-'
+
+            let warningHtml = ''
+            if (m.evaluatedCount < 100) {
+              const warnMsg = m.warningMessage || `Amostra insuficiente para conclusão estatística (n = ${m.evaluatedCount} < 100)`
+              warningHtml = `<div style="color: var(--warning, #d97706); font-weight: 500; font-size: 11px; margin-top: 4px;">
+                <i class="ti ti-alert-triangle"></i> ${escapeHtml(warnMsg)}
+              </div>`
+            }
+
+            const scopeLabel = allSessions ? 'Acumulado (Todas as Sessões)' : 'Sessão Ativa'
+            metricsDisplay.innerHTML = `
+              <div><strong>[${scopeLabel}]</strong> Avaliadas: ${m.evaluatedCount} | Precisão: ${pPct}% [IC 95%: ${pLow}% - ${pHigh}%] | Recall: ${rPct}% [IC 95%: ${rLow}% - ${rHigh}%]</div>
+              <div style="font-size: 11px; color: var(--muted); margin-top: 2px;">(TP: ${m.tp}, FP: ${m.fp}, TN: ${m.tn}, FN: ${m.fn})</div>
+              ${warningHtml}
+            `
           }
         } else {
           metricsDisplay.textContent = 'Erro ao calcular métricas.'
@@ -195,6 +219,9 @@
       } catch (err) {
         metricsDisplay.textContent = 'Erro: ' + err.message
       }
-    })
+    }
+
+    btnCalcMetrics?.addEventListener('click', () => runBenchmark(false))
+    subPanel.querySelector('#conv-btn-calc-cumulative')?.addEventListener('click', () => runBenchmark(true))
   }
 })()

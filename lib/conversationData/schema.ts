@@ -113,7 +113,7 @@ export class ConversationVaultRepository {
         session.session_type,
         session.start_time ?? null,
         session.end_time ?? null,
-        session.total_duration_ms,
+        session.total_duration_ms ?? 0,
         retentionDays,
         createdAt,
         expiresAt
@@ -247,15 +247,24 @@ export class ConversationVaultRepository {
     )
   }
 
-  async getUserTurnLabels(sessionId: string): Promise<Array<{ turn_id: string; user_label: string }>> {
-    const rows = await this.driver.query<{ turn_id: string; user_label: string }>(
-      `SELECT turn_id, user_label FROM user_turn_labels WHERE session_id = ?`,
-      [sessionId]
-    )
+  async getUserTurnLabels(sessionId?: string): Promise<Array<{ session_id: string; turn_id: string; user_label: string }>> {
+    const rows = sessionId
+      ? await this.driver.query<{ session_id: string; turn_id: string; user_label: string }>(
+          `SELECT session_id, turn_id, user_label FROM user_turn_labels WHERE session_id = ?`,
+          [sessionId]
+        )
+      : await this.driver.query<{ session_id: string; turn_id: string; user_label: string }>(
+          `SELECT session_id, turn_id, user_label FROM user_turn_labels`
+        )
     return rows.map(r => ({
+      session_id: r.session_id,
       turn_id: r.turn_id,
       user_label: (this.dataKey && r.user_label.startsWith('enc:v1:')) ? decryptEnvelope(r.user_label, this.dataKey) : r.user_label
     }))
+  }
+
+  async getAllUserTurnLabels(): Promise<Array<{ session_id: string; turn_id: string; user_label: string }>> {
+    return this.getUserTurnLabels()
   }
 
   async insertTurns(turns: TurnRecord[]): Promise<void> {
@@ -316,6 +325,27 @@ export class ConversationVaultRepository {
       )
     }
 
+    return rows.map(e => ({
+      ...e,
+      evidence_span: (this.dataKey && e.evidence_span.startsWith('enc:v1:')) ? decryptEnvelope(e.evidence_span, this.dataKey) : e.evidence_span
+    }))
+  }
+
+  async getAllTurns(): Promise<TurnRecord[]> {
+    const rows = await this.driver.query<TurnRecord>(
+      `SELECT * FROM turns ORDER BY start_ms ASC`
+    )
+    return rows.map(r => ({
+      ...r,
+      text: (this.dataKey && r.text.startsWith('enc:v1:')) ? decryptEnvelope(r.text, this.dataKey) : r.text,
+      speaker_label: (this.dataKey && r.speaker_label.startsWith('enc:v1:')) ? decryptEnvelope(r.speaker_label, this.dataKey) : r.speaker_label
+    }))
+  }
+
+  async getAllEvents(type?: string): Promise<EventRecord[]> {
+    const rows = type
+      ? await this.driver.query<EventRecord>(`SELECT * FROM events WHERE type = ? ORDER BY start_ms ASC`, [type])
+      : await this.driver.query<EventRecord>(`SELECT * FROM events ORDER BY start_ms ASC`)
     return rows.map(e => ({
       ...e,
       evidence_span: (this.dataKey && e.evidence_span.startsWith('enc:v1:')) ? decryptEnvelope(e.evidence_span, this.dataKey) : e.evidence_span

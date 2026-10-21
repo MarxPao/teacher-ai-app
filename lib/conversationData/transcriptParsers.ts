@@ -311,8 +311,9 @@ export async function importTranscriptFile(
       role = 'desconhecido'
       assignedName = null
     } else if (
-      spkName.toLowerCase().trim() === params.teacherSpeakerName.toLowerCase().trim() ||
-      spkName.toLowerCase().includes(params.teacherSpeakerName.toLowerCase().trim())
+      params.teacherSpeakerName &&
+      (spkName.toLowerCase().trim() === params.teacherSpeakerName.toLowerCase().trim() ||
+       spkName.toLowerCase().includes(params.teacherSpeakerName.toLowerCase().trim()))
     ) {
       role = params.sessionType === 'reuniao' ? 'coordenador' : 'professor'
       source = 'manual'
