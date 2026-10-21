@@ -102,7 +102,7 @@ export const INSIGHT_RULES: InsightRule[] = [
     teoria:
       'Investigação sobre tempo de pausa docente pós-pergunta (Rowe, 1974): a elevação do tempo de silêncio para patamares superiores a 3 segundos correlacionou-se a respostas mais articuladas e aumento de iniciativas de questionamento pelos alunos.',
     fonte:
-      'Rowe, M. B. (1974). Wait-time and rewards as instructional variables, their influence on language, logic, and fate control: Part one—wait-time. Journal of Research in Science Teaching, 11(2), 81-94. [REFERÊNCIA A CONFERIR (dona)]',
+      'Rowe, M. B. (1974). Wait-time and rewards as instructional variables, their influence on language, logic, and fate control: Part one-wait-time. Journal of Research in Science Teaching, 11(2), 81-94. [REFERÊNCIA A CONFERIR (dona)]',
     evidencia: 'nao_verificada',
     seloReferencia: '[REFERÊNCIA A CONFERIR (dona)]',
     limiarOrigem:

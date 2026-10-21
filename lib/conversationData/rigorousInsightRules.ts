@@ -190,7 +190,7 @@ export const RIGOROUS_INSIGHT_RULES: RigorousInsightRule[] = [
     id: 'rowe_1974_wait_time',
     titulo: 'Tempo de Espera Pós-Pergunta Docente (Wait-Time I)',
     fonteTeorica:
-      'Rowe, M. B. (1974). Wait-time and rewards as instructional variables: Part one—wait-time. Journal of Research in Science Teaching, 11(2), 81-94. [REFERÊNCIA A CONFERIR (dona)]',
+      'Rowe, M. B. (1974). Wait-time and rewards as instructional variables, their influence on language, logic, and fate control: Part one-wait-time. Journal of Research in Science Teaching, 11(2), 81-94. [REFERÊNCIA A CONFERIR (dona)]',
     teoria:
       'Estudo empírico descritivo sobre duração de pausas após perguntas em aulas de ciências: observou correlação entre pausas mais estendidas e respostas mais ricas dos alunos.',
     evidencia: 'nao_verificada',
