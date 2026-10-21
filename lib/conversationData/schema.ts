@@ -11,7 +11,9 @@ import type {
   SessionRecord,
   TurnRecord,
   EventRecord,
-  SpeakerMapRecord
+  SpeakerMapRecord,
+  PortalApprovalRecord,
+  PortalApprovalDiffItem
 } from './types'
 
 export const CONVERSATION_VAULT_SCHEMA_SQL = `
@@ -90,6 +92,28 @@ CREATE TABLE IF NOT EXISTS session_insights (
 );
 
 CREATE INDEX IF NOT EXISTS idx_session_insights_session ON session_insights(session_id);
+
+CREATE TABLE IF NOT EXISTS portal_write_approvals (
+  id TEXT PRIMARY KEY,
+  task_id TEXT NOT NULL,
+  portal_id TEXT NOT NULL,
+  portal_name TEXT NOT NULL,
+  action_type TEXT NOT NULL,
+  class_ref TEXT,
+  status TEXT NOT NULL CHECK(status IN ('approved', 'rejected', 'aborted', 'pending')),
+  diff_encrypted TEXT NOT NULL,
+  screenshot_hash TEXT,
+  total_items INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  approved_at TEXT,
+  CHECK(
+    (status = 'approved' AND approved_at IS NOT NULL) OR
+    (status != 'approved')
+  )
+);
+
+CREATE INDEX IF NOT EXISTS idx_portal_write_approvals_task ON portal_write_approvals(task_id);
+CREATE INDEX IF NOT EXISTS idx_portal_write_approvals_status ON portal_write_approvals(status);
 `
 
 export async function initConversationVault(driver: SqlDriver): Promise<void> {
@@ -425,5 +449,94 @@ export class ConversationVaultRepository {
         : r.insight_payload
       return JSON.parse(decrypted)
     })
+  }
+
+  async savePortalApproval(record: PortalApprovalRecord): Promise<void> {
+    if (!this.dataKey) {
+      throw new Error('E_VAULT_KEY_MISSING: Chave criptográfica ausente para cifrar diff da aprovação de portal.')
+    }
+    const diffJson = JSON.stringify(record.diff || [])
+    const diffEncrypted = encryptEnvelope(diffJson, this.dataKey)
+    const totalItems = record.total_items ?? (record.diff ? record.diff.length : 0)
+    const createdAt = record.created_at || new Date().toISOString()
+    const approvedAt = record.status === 'approved' ? (record.approved_at || new Date().toISOString()) : null
+
+    await this.driver.execute(
+      `INSERT INTO portal_write_approvals (
+        id, task_id, portal_id, portal_name, action_type, class_ref, status, diff_encrypted, screenshot_hash, total_items, created_at, approved_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        status = excluded.status,
+        diff_encrypted = excluded.diff_encrypted,
+        screenshot_hash = excluded.screenshot_hash,
+        total_items = excluded.total_items,
+        approved_at = excluded.approved_at`,
+      [
+        record.id,
+        record.task_id,
+        record.portal_id,
+        record.portal_name,
+        record.action_type,
+        record.class_ref ?? null,
+        record.status,
+        diffEncrypted,
+        record.screenshot_hash ?? null,
+        totalItems,
+        createdAt,
+        approvedAt
+      ]
+    )
+  }
+
+  async getPortalApproval(id: string): Promise<PortalApprovalRecord | null> {
+    const row = await this.driver.queryOne<any>(
+      `SELECT * FROM portal_write_approvals WHERE id = ?`,
+      [id]
+    )
+    if (!row) return null
+    return this.hydratePortalApproval(row)
+  }
+
+  async getPortalApprovalByTask(taskId: string): Promise<PortalApprovalRecord | null> {
+    const row = await this.driver.queryOne<any>(
+      `SELECT * FROM portal_write_approvals WHERE task_id = ? ORDER BY created_at DESC LIMIT 1`,
+      [taskId]
+    )
+    if (!row) return null
+    return this.hydratePortalApproval(row)
+  }
+
+  async listPortalApprovals(filter?: { status?: string }): Promise<PortalApprovalRecord[]> {
+    let sql = `SELECT * FROM portal_write_approvals`
+    const params: unknown[] = []
+    if (filter?.status) {
+      sql += ` WHERE status = ?`
+      params.push(filter.status)
+    }
+    sql += ` ORDER BY created_at DESC`
+    const rows = await this.driver.query<any>(sql, params)
+    return rows.map(r => this.hydratePortalApproval(r))
+  }
+
+  private hydratePortalApproval(row: any): PortalApprovalRecord {
+    const decryptedDiff = (this.dataKey && row.diff_encrypted.startsWith('enc:v1:'))
+      ? decryptEnvelope(row.diff_encrypted, this.dataKey)
+      : row.diff_encrypted
+    const diff: PortalApprovalDiffItem[] = JSON.parse(decryptedDiff)
+
+    return {
+      id: row.id,
+      task_id: row.task_id,
+      portal_id: row.portal_id,
+      portal_name: row.portal_name,
+      action_type: row.action_type,
+      class_ref: row.class_ref ?? undefined,
+      status: row.status,
+      diff,
+      screenshot_hash: row.screenshot_hash ?? undefined,
+      total_items: row.total_items,
+      created_at: row.created_at,
+      approved_at: row.approved_at ?? null
+    }
   }
 }

@@ -56,26 +56,37 @@ export const PortalApprovalCard: React.FC<PortalApprovalCardProps> = ({
       if (taskId && !taskId.startsWith('task_mock')) {
         await updateBrowserTask(taskId, { status: 'approved' })
       }
-      // Sincronização Write-Through (desativada em nuvem por LGPD Trilho 1; fail-closed sem travar fluxo)
+      // Opção B: Espelho de Aprovação 100% no cofre local seguro (Trilho 1 / LGPD)
+      // Zero fetch para /api/students/write-through e zero PII na nuvem
       if (diff && diff.length > 0) {
         try {
-          const wtRes = await fetch('/api/students/write-through', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              taskId,
-              portal,
-              actionType,
-              classRef,
-              diff
-            })
-          })
-          if (wtRes.status === 403) {
-            // Guard LGPD ativo: gravação em nuvem bloqueada, aprovação no portal prossegue normalmente
-            console.info('[ApprovalCard] Gravação de PII em nuvem bloqueada por conformidade LGPD (403). Lançamento preservado no portal.')
+          const approvalRecord = {
+            id: `appr_${Date.now()}_${taskId || 'manual'}`,
+            task_id: taskId || 'manual_task',
+            portal_id: (portal || 'portal_escolar').toLowerCase().replace(/[^a-z0-9]/g, '_'),
+            portal_name: portal || 'Portal Escolar',
+            action_type: actionType || 'write_through',
+            class_ref: classRef || null,
+            status: 'approved' as const,
+            diff: diff.map((d: any) => ({
+              studentName: d.studentName || d.name || '',
+              matricula: d.matricula || d.portal_native_id || d.rollNumber || undefined,
+              field: d.field || 'nota',
+              value: d.afterValue !== undefined ? d.afterValue : d.value,
+              beforeValue: d.beforeValue
+            })),
+            total_items: diff.length,
+            approved_at: new Date().toISOString()
           }
-        } catch (syncErr) {
-          console.warn('[ApprovalCard] Sincronização em nuvem indisponível (offline/LGPD):', syncErr)
+
+          if (typeof window !== 'undefined' && ((window as any).teacherDesktop?.invoke || (window as any).teacherAi?.invoke)) {
+            const bridge = (window as any).teacherDesktop || (window as any).teacherAi
+            await bridge.invoke('conversation.portal.saveApproval', { approval: approvalRecord })
+          } else if (typeof window !== 'undefined') {
+            sessionStorage.setItem('teacher_last_local_portal_approval', JSON.stringify(approvalRecord))
+          }
+        } catch (localErr) {
+          console.warn('[ApprovalCard] Falha ao persistir espelho local no cofre:', localErr)
         }
       }
       if (typeof window !== 'undefined') {

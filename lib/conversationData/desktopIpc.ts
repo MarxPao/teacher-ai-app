@@ -23,7 +23,7 @@ import { executeConversationQuery, routeQueryWithOllama } from './queryEngine'
 import { generateStructuredSummary } from './summarizer'
 import { calculateLabelMetrics } from './labelingEvaluation'
 import { getUnifiedSessionPedagogicalData } from './insightIntegrationAdapter'
-import type { SessionType } from './types'
+import type { SessionType, PortalApprovalRecord } from './types'
 
 export interface ConversationImportParams {
   content: string
@@ -243,6 +243,34 @@ export async function executeConversationMethod(
         allowFixturesForTesting
       })
       return { success: true, ...data }
+    }
+
+    case 'conversation.portal.saveApproval': {
+      const approval = params.approval as PortalApprovalRecord
+      if (!approval || !approval.id || !approval.task_id) {
+        throw new Error('Parâmetros de aprovação incompletos (id e task_id são obrigatórios).')
+      }
+      await repo.savePortalApproval(approval)
+      return { success: true, id: approval.id }
+    }
+
+    case 'conversation.portal.getApproval': {
+      const { id, taskId } = params || {}
+      let approval: PortalApprovalRecord | null = null
+      if (id) {
+        approval = await repo.getPortalApproval(id)
+      } else if (taskId) {
+        approval = await repo.getPortalApprovalByTask(taskId)
+      } else {
+        throw new Error('Identificador da aprovação ("id" ou "taskId") é obrigatório.')
+      }
+      return { success: true, approval }
+    }
+
+    case 'conversation.portal.listApprovals': {
+      const status = params?.status as string | undefined
+      const approvals = await repo.listPortalApprovals({ status })
+      return { success: true, approvals }
     }
 
     default:

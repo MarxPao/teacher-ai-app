@@ -1413,7 +1413,11 @@ export async function savePortalExecutionLogToSupabase(log: {
         mode: log.mode || 'supervised',
         status: log.status || 'success',
         filled_count: log.filledCount || 0,
-        extracted_data: log.extractedData || {},
+        extracted_data: (() => {
+          const c = { ...(log.extractedData || {}) }
+          delete c.writeItems; delete c.syncResults; delete c.students; delete c.diff; delete c.studentName; delete c.matricula
+          return c
+        })(),
         error_message: log.errorMessage || null,
         created_at: new Date().toISOString()
       })

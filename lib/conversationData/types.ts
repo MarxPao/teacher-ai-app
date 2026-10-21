@@ -74,3 +74,26 @@ export interface SpeakerMapRecord {
   source: 'manual' | 'inferido'
   confidence: number
 }
+
+export interface PortalApprovalDiffItem {
+  studentName: string
+  matricula?: string
+  field: string
+  value: string | number
+  beforeValue?: string | number
+}
+
+export interface PortalApprovalRecord {
+  id: string
+  task_id: string
+  portal_id: string
+  portal_name: string
+  action_type: string
+  class_ref?: string
+  status: 'approved' | 'rejected' | 'aborted' | 'pending'
+  diff: PortalApprovalDiffItem[]
+  screenshot_hash?: string
+  total_items: number
+  created_at?: string
+  approved_at?: string | null
+}
