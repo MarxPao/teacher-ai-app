@@ -62,7 +62,7 @@ describe('I6: Apresentação de Insights na UI Desktop com Selos e Marcos Tempor
       // 2. Invoca o handler de parecer pedagógico
       const res = await executeConversationMethod(
         'conversation.insights.get',
-        { sessionId, allowFixturesForTesting: true, discipline: 'Biologia' },
+        { sessionId, allowFixturesForTesting: true, discipline: 'Língua Inglesa' },
         driver,
         dataKey
       )

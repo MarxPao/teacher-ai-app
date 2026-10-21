@@ -12,11 +12,21 @@
  */
 
 import type { SessionPedagogicalReport } from './pedagogicalMetrics'
+import {
+  RIGOROUS_INSIGHT_RULES,
+  evaluateRigorousInsightRules,
+  PROHIBITED_WORDS,
+  formatQuestionCountWithUncertainty,
+  type RigorousInsightRule,
+  type RuleScope
+} from './rigorousInsightRules'
 
 export interface InsightRuleThresholds {
   teacherSpeechPctThreshold?: number // padrão 80.0%
+  sttMinPctThreshold?: number // padrão 30.0%
   waitTimeSecThreshold?: number // padrão 3.0s
-  openQuestionsRatioThreshold?: number // padrão 0.25 (25%)
+  openQuestionsRatioThreshold?: number // padrão 0.20 (20%)
+  unansweredQuestionsThreshold?: number // padrão 2
   monologueDurationSecThreshold?: number // padrão 120s
 }
 
@@ -307,22 +317,25 @@ export const INSIGHT_RULES: InsightRule[] = [
 
 /**
  * Avalia todas as regras do catálogo contra um relatório de sessão.
- * Aplica automaticamente o filtro de mínimo amostral para cada regra.
+ * Aplica escopo, mínimo amostral e devolutiva estritamente descritiva.
  */
 export function evaluateInsightRules(
   report: SessionPedagogicalReport,
-  thresholds?: InsightRuleThresholds
+  thresholds?: InsightRuleThresholds,
+  sessionInfo?: { discipline?: string; sessionType?: 'aula' | 'reuniao' }
 ): GeneratedInsight[] {
-  const insights: GeneratedInsight[] = []
-
-  for (const rule of INSIGHT_RULES) {
-    if (!meetsSampleMinimum(report, rule.minimoAmostral)) {
-      continue
-    }
-    if (rule.condicao(report, thresholds)) {
-      insights.push(rule.gerarInsight(report, thresholds))
-    }
-  }
-
-  return insights
+  const result = evaluateRigorousInsightRules(report, {
+    thresholds,
+    discipline: sessionInfo?.discipline,
+    sessionType: sessionInfo?.sessionType
+  })
+  return result.insights
 }
+
+export {
+  RIGOROUS_INSIGHT_RULES,
+  evaluateRigorousInsightRules,
+  PROHIBITED_WORDS,
+  formatQuestionCountWithUncertainty
+}
+export type { RigorousInsightRule, RuleScope }

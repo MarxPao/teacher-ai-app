@@ -93,8 +93,9 @@ export function runInsightConfidenceGate(params: {
   pedagogicalReport: SessionPedagogicalReport
   thresholds?: InsightRuleThresholds
   allowFixturesForTesting?: boolean
+  discipline?: string
 }): ConfidenceGateResult {
-  const { session, turns, pedagogicalReport, thresholds, allowFixturesForTesting = false } = params
+  const { session, turns, pedagogicalReport, thresholds, allowFixturesForTesting = false, discipline } = params
 
   const durationMs = pedagogicalReport.sessionDurationMs
   const turnsCount = turns.length
@@ -165,7 +166,10 @@ export function runInsightConfidenceGate(params: {
   }
 
   // 5. Avaliação do Catálogo de Regras
-  const rawInsights = evaluateInsightRules(pedagogicalReport, thresholds)
+  const rawInsights = evaluateInsightRules(pedagogicalReport, thresholds, {
+    discipline,
+    sessionType: session.session_type as any
+  })
 
   if (rawInsights.length === 0) {
     return {

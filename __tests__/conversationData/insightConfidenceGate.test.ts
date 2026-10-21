@@ -163,13 +163,14 @@ describe('I3: Gate de Confiança Pré-Insight', () => {
   })
 
   describe('4. Sessão Íntegra e Qualificada', () => {
-    it('aprova sessão íntegra de 50 minutos, anexa ressalva honesta e retorna insights com selos', () => {
+    it('aprova sessão íntegra de 50 minutos, anexa ressalva honesta e retorna insights com selos em L2', () => {
       const { session, turns, pedagogicalReport } = getFixtureData()
 
       const result = runInsightConfidenceGate({
         session,
         turns,
-        pedagogicalReport
+        pedagogicalReport,
+        discipline: 'Língua Inglesa'
       })
 
       expect(result.passed).toBe(true)

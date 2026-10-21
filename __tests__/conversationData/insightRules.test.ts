@@ -141,20 +141,24 @@ describe('I2: Banco de Regras Teórico Formal (insightRules)', () => {
   })
 
   describe('3. Avaliação Agregada do Catálogo (evaluateInsightRules)', () => {
-    it('avalia o relatório da fixture canônica gerando os insights qualificados', () => {
-      const insights = evaluateInsightRules(canonicalReport)
-      expect(insights.length).toBeGreaterThanOrEqual(1)
+    it('avalia o relatório da fixture canônica gerando os insights qualificados quando no escopo de L2', () => {
+      // 1. Em aula de L2 (Inglês): Swain dispara pois fala discente é 11.6% (< 30.0%)
+      const l2Insights = evaluateInsightRules(canonicalReport, undefined, { discipline: 'Língua Inglesa' })
+      expect(l2Insights.length).toBeGreaterThanOrEqual(1)
 
-      // Regra 1 (TTT 88.4%) deve estar presente
-      const tttInsight = insights.find(i => i.ruleId === 'rule_teacher_speaking_ratio')
-      expect(tttInsight).toBeDefined()
-      expect(tttInsight?.observacao).toContain('88.4%')
+      const swainInsight = l2Insights.find(i => i.ruleId === 'swain_1985_output_hypothesis' || i.ruleId === 'rule_teacher_speaking_ratio')
+      expect(swainInsight).toBeDefined()
+      expect(swainInsight?.observacao).toContain('11.6%')
 
-      // Nenhum insight usa linguagem imperativa ou acusatória
-      for (const ins of insights) {
-        expect(ins.observacao).not.toMatch(/prejudica|errado|inadequado|falhou/i)
+      // Nenhum insight usa termos proibidos ou linguagem imperativa
+      for (const ins of l2Insights) {
+        expect(ins.observacao).not.toMatch(/prejudica|errado|inadequado|falhou|reflete|ideal|deveria/i)
         expect(ins.significadoPotencial).toMatch(/pode indicar|pode|vale observar/i)
       }
+
+      // 2. Em aula de Biologia: Swain fica fora de escopo e nenhuma regra dispara
+      const bioInsights = evaluateInsightRules(canonicalReport, undefined, { discipline: 'Biologia' })
+      expect(bioInsights).toHaveLength(0)
     })
   })
 })

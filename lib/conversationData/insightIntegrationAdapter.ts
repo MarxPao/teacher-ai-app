@@ -172,6 +172,7 @@ export async function getUnifiedSessionPedagogicalData(
     session,
     turns,
     pedagogicalReport,
+    discipline: options?.discipline,
     allowFixturesForTesting: options?.allowFixturesForTesting
   })
 

@@ -117,7 +117,7 @@ describe('I5: Integração com Módulo de Insights/Analytics e Validação de Co
     // Prova persistência cifrada no cofre e recuperação com integridade
     const storedInsights = await repo.getSessionInsights(session.id)
     expect(storedInsights).toHaveLength(unified.validInsightV1List.length)
-    expect(storedInsights[0].rule_id).toBe('rule_teacher_speaking_ratio')
+    expect(storedInsights[0].rule_id).toBe('swain_1985_output_hypothesis')
 
     // Prova de isolamento de rede: zero chamadas a serviços externos
     expect(fetchSpy).not.toHaveBeenCalled()
