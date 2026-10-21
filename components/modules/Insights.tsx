@@ -347,7 +347,7 @@ Estruture em:
 1. 🎯 Diagnóstico dos Principais Gargalos Observados
 2. 📚 Fundamentação Teórica Prescritiva (cite os autores e obras correspondentes)
 3. ⚡ Plano de Ação Prático para as Próximas 3 Aulas
-4. 🛠️ Recomendações de Intervenção Diferenciada para Alunos em Risco e Superdotados.`
+4. 🛠️ Recomendações de Intervenção Diferenciada para Alunos em Risco e Destaque.`
 
       let generated = ''
 

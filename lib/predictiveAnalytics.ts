@@ -170,7 +170,7 @@ export function calculateStudentCompositeRisk(
   }
 
   const rawComponents = [
-    { key: 'academic',    label: 'Déficit Acadêmico (A)',   icon: 'ti-school',        rawScore: academicScore,     weight: 0.40 },
+    { key: 'academic',    label: 'Desempenho em Avaliações (A)',   icon: 'ti-school',        rawScore: academicScore,     weight: 0.40 },
     { key: 'trend',       label: 'Queda de Trajetória (B)', icon: 'ti-trending-down', rawScore: trendScore,        weight: 0.25 },
     { key: 'attendance',  label: 'Infrequência (C)',        icon: 'ti-calendar-off',  rawScore: attendanceScore,   weight: 0.20 },
     { key: 'qualitative', label: 'Alertas Pedagógicos (Q)', icon: 'ti-message-report', rawScore: qualitativeScore, weight: 0.15 },
