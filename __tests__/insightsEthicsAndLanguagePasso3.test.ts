@@ -8,7 +8,8 @@ describe('Passo 3: Linguagem Ética e Anti-Rotulação Pedagógica', () => {
     'lib/predictiveAnalytics.ts',
     'lib/insightsPrivacyService.ts',
     'lib/pedagogicalInsights.ts',
-    'components/modules/SmartInsightsPanel.tsx'
+    'components/modules/SmartInsightsPanel.tsx',
+    'lib/insights/insightEngineV1.ts'
   ]
 
   const PROHIBITED_TERMS = [

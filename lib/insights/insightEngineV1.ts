@@ -42,6 +42,7 @@ export interface InsightV1 {
 export const N_MIN_STUDENT_TRAJECTORY = 3 // VALOR DE POLÍTICA, A VALIDAR (pedagogo)
 export const N_MIN_CLASS_AGGREGATE = 5 // VALOR DE POLÍTICA, A VALIDAR (pedagogo)
 export const N_MIN_ITEM_DISCRIMINATION_ZDP = 8 // VALOR DE POLÍTICA, A VALIDAR (pedagogo)
+export const N_ITEM_CONFIDENCE_ALTA = 15 // VALOR DE POLÍTICA, A VALIDAR (pedagogo)
 
 export interface StudentAssessmentHistory {
   studentName: string
