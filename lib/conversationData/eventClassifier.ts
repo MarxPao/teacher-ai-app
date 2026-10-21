@@ -65,10 +65,63 @@ const INSTRUCTION_PATTERNS = [
   /\babram na página\b/i
 ]
 
-export function isQuestionText(text: string): boolean {
+// NÃO VALIDADO EM ASR REAL — Heurísticas refinadas para falas adversariais
+const RHETORICAL_PATTERNS = [
+  /^\s*(entenderam|entendeu|né|tá bom|tá|certo|beleza)\s*(turma|pessoal|gente)?\s*[?!.]*$/i
+]
+
+const UPTALK_HESITATION_PATTERNS = [
+  /^\s*(a resposta certa é|eu acho que|o brasil é o|a célula animal não tem|eu fiz o|minha resposta é)(?:\s|$)/i
+]
+
+const ELICITATION_PATTERNS = [
+  /\b(me explica|me diga|diga para|gostaria de saber|quero que vocês reflitam|explique como|detalhe por que|fale qual)\b/i
+]
+
+const ADMINISTRATIVE_PATTERNS = [
+  /\b(posso ir ao banheiro|beber água|onde jogo esse papel|vai cair na prova|que horas bate o sinal|amanhã nós vamos ao laboratório)\b/i
+]
+
+const INTERRUPTION_PATTERNS = [
+  /\.\.\.$/i,
+  /^\s*(mas se a gente|espera aí|olha ali|gente silêncio|não entendi nada)\b/i
+]
+
+export function isQuestionText(text: string, speakerRole: 'professor' | 'aluno' = 'professor'): boolean {
   const trimmed = text.trim()
-  if (trimmed.includes('?')) return true
-  return /^\s*(o que|quem|qual|quais|como|onde|por que|por quê|quando|quanto|quantos|quantas|será que)\b/i.test(trimmed)
+
+  // 1. Interrupções ou falas incompletas não são perguntas conceituais
+  if (INTERRUPTION_PATTERNS.some(p => p.test(trimmed))) {
+    return false
+  }
+
+  // 2. Retóricas / checagem de canal ('entenderam?', 'né?')
+  if (RHETORICAL_PATTERNS.some(p => p.test(trimmed))) {
+    return false
+  }
+
+  // 3. Afirmações com hesitação discente ('a resposta certa é a letra C?')
+  if (speakerRole === 'aluno' && UPTALK_HESITATION_PATTERNS.some(p => p.test(trimmed))) {
+    return false
+  }
+
+  // 4. Comandos de elicitação sem '?' ('me explica por que...', 'diga para a turma qual...')
+  if (ELICITATION_PATTERNS.some(p => p.test(trimmed))) {
+    return true
+  }
+
+  // 5. Perguntas administrativas explícitas
+  if (ADMINISTRATIVE_PATTERNS.some(p => p.test(trimmed))) {
+    return true
+  }
+
+  // 6. Presença de ponto de interrogação
+  if (trimmed.includes('?')) {
+    return true
+  }
+
+  // 7. Estilo ASR sem pontuação (início com pronome interrogativo ou inversão interrogativa)
+  return /^\s*(o que|quem|qual|quais|como|onde|por que|porque|por quê|quando|quanto|quantos|quantas|será que|as plantas respiram)\b/i.test(trimmed)
 }
 
 export function extractQuestionSpan(text: string): string {
@@ -78,7 +131,12 @@ export function extractQuestionSpan(text: string): string {
 }
 
 export function classifyQuestionSubtype(text: string, role: string): EventSubtype {
-  if (role === 'aluno') return 'aluno'
+  if (role === 'aluno') {
+    if (ADMINISTRATIVE_PATTERNS.some(p => p.test(text))) {
+      return 'aluno' // agrupado como aluno ou administrativa
+    }
+    return 'aluno'
+  }
   for (const pattern of OPEN_QUESTION_PATTERNS) {
     if (pattern.test(text)) return 'aberta'
   }
@@ -86,6 +144,77 @@ export function classifyQuestionSubtype(text: string, role: string): EventSubtyp
     if (pattern.test(text)) return 'fechada'
   }
   return 'fechada'
+}
+
+// ─── Avaliador de Falas Adversariais (NÃO VALIDADO EM ASR REAL) ──────────────
+
+export interface AdversarialEvaluationResult {
+  total: number
+  accuracy: number
+  precision: number
+  recall: number
+  f1Score: number
+  details: Array<{
+    id: number
+    text: string
+    category: string
+    expectedIsQuestion: boolean
+    detectedAsQuestion: boolean
+    correct: boolean
+  }>
+}
+
+export function classifyAdversarialUtterance(text: string, speakerRole: 'professor' | 'aluno'): boolean {
+  return isQuestionText(text, speakerRole)
+}
+
+export function evaluateAdversarialBenchmark(
+  dataset: Array<{
+    id: number
+    speakerRole: 'professor' | 'aluno'
+    text: string
+    expectedIsQuestion: boolean
+    category: string
+  }>
+): AdversarialEvaluationResult {
+  let tp = 0
+  let fp = 0
+  let tn = 0
+  let fn = 0
+
+  const details = dataset.map(item => {
+    const detected = classifyAdversarialUtterance(item.text, item.speakerRole)
+    const correct = detected === item.expectedIsQuestion
+
+    if (item.expectedIsQuestion && detected) tp++
+    else if (!item.expectedIsQuestion && detected) fp++
+    else if (!item.expectedIsQuestion && !detected) tn++
+    else if (item.expectedIsQuestion && !detected) fn++
+
+    return {
+      id: item.id,
+      text: item.text,
+      category: item.category,
+      expectedIsQuestion: item.expectedIsQuestion,
+      detectedAsQuestion: detected,
+      correct
+    }
+  })
+
+  const total = dataset.length
+  const accuracy = Number(((tp + tn) / total).toFixed(3))
+  const precision = tp + fp > 0 ? Number((tp / (tp + fp)).toFixed(3)) : 1.0
+  const recall = tp + fn > 0 ? Number((tp / (tp + fn)).toFixed(3)) : 1.0
+  const f1Score = precision + recall > 0 ? Number(((2 * precision * recall) / (precision + recall)).toFixed(3)) : 0.0
+
+  return {
+    total,
+    accuracy,
+    precision,
+    recall,
+    f1Score,
+    details
+  }
 }
 
 export async function classifySessionEvents(
