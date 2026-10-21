@@ -112,8 +112,29 @@ export class ConversationVaultRepository {
     )
   }
 
+  async listSessions(): Promise<SessionRecord[]> {
+    return this.driver.query<SessionRecord>(
+      `SELECT * FROM sessions ORDER BY created_at DESC`
+    )
+  }
+
   async deleteSession(sessionId: string): Promise<void> {
     await this.driver.execute(`DELETE FROM sessions WHERE id = ?`, [sessionId])
+  }
+
+  async purgeExpiredSessions(now: string = new Date().toISOString()): Promise<number> {
+    const expired = await this.driver.query<{ id: string }>(
+      `SELECT id FROM sessions WHERE expires_at IS NOT NULL AND expires_at < ?`,
+      [now]
+    )
+    if (expired.length === 0) return 0
+
+    await this.driver.transaction(async tx => {
+      for (const sess of expired) {
+        await tx.execute(`DELETE FROM sessions WHERE id = ?`, [sess.id])
+      }
+    })
+    return expired.length
   }
 
   async insertTurns(turns: TurnRecord[]): Promise<void> {

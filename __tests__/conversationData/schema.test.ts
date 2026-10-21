@@ -185,4 +185,56 @@ describe('2.1 Esquema no Cofre Local (SQLite Cifrado/Estruturado)', () => {
     expect(turns).toHaveLength(0)
     expect(events).toHaveLength(0)
   })
+
+  it('purga sessões vencidas (expires_at no passado) e lista sessões ativas', async () => {
+    // Sessão ativa
+    await repo.createSession({
+      id: 'sess_active',
+      title: 'Aula Ativa',
+      session_type: 'aula',
+      total_duration_ms: 100000,
+      retention_days: 90,
+      expires_at: new Date(Date.now() + 86400000 * 30).toISOString()
+    })
+
+    // Sessão vencida (expirou ontem)
+    const yesterday = new Date(Date.now() - 86400000).toISOString()
+    await repo.createSession({
+      id: 'sess_expired',
+      title: 'Aula Antiga Expirada',
+      session_type: 'aula',
+      total_duration_ms: 100000,
+      retention_days: 30,
+      expires_at: yesterday
+    })
+
+    await repo.insertTurns([
+      {
+        id: 't_exp',
+        session_id: 'sess_expired',
+        speaker_label: 'spk_prof',
+        role: 'professor',
+        start_ms: 0,
+        end_ms: 4000,
+        text: 'Turno expirado',
+        turn_index: 0
+      }
+    ])
+
+    const initialList = await repo.listSessions()
+    expect(initialList).toHaveLength(2)
+
+    // Executa a purga
+    const purgedCount = await repo.purgeExpiredSessions()
+    expect(purgedCount).toBe(1)
+
+    // Apenas a sessão ativa deve restar
+    const remainingSessions = await repo.listSessions()
+    expect(remainingSessions).toHaveLength(1)
+    expect(remainingSessions[0].id).toBe('sess_active')
+
+    // Turnos da sessão expirada foram removidos em cascata
+    const expTurns = await repo.getTurnsBySession('sess_expired')
+    expect(expTurns).toHaveLength(0)
+  })
 })
