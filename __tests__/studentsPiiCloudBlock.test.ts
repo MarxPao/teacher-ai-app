@@ -5,10 +5,14 @@ import { POST as importStudentsPOST } from '../app/api/students/import/route'
 import { POST as rosterSyncPOST } from '../app/api/portal/roster-sync/route'
 import { POST as writeThroughPOST } from '../app/api/students/write-through/route'
 import {
+  fetchStudentsFromSupabase,
   upsertStudentToSupabase,
   saveStudentToSupabase,
   saveStudentMetricsToSupabase,
   deleteStudentFromSupabase,
+  fetchPrivateStudentsFromSupabase,
+  upsertPrivateStudentToSupabase,
+  deletePrivateStudentFromSupabase,
   syncToSupabase
 } from '../lib/supabaseClient'
 
@@ -313,5 +317,27 @@ describe('H3. Desativação de PII de Estudantes no Supabase (lib/supabaseClient
 
     // Confirma que a aprovação foi concluída com sucesso mesmo com a nuvem bloqueada
     expect(onApprovedCalled).toBe(true)
+  })
+
+  it('Z2: Métodos de alunos particulares em supabaseClient são estritamente fail-closed e emitem ZERO fetch', async () => {
+    // 1. fetchPrivateStudentsFromSupabase retorna lista vazia e emite zero fetch
+    const privList = await fetchPrivateStudentsFromSupabase()
+    expect(privList).toEqual([])
+    expect(global.fetch).not.toHaveBeenCalled()
+
+    // 2. upsertPrivateStudentToSupabase rejeita com erro LGPD e emite zero fetch
+    const upsertRes = await upsertPrivateStudentToSupabase({
+      id: 'priv_test_1',
+      name: 'Aluno Canário Particular',
+      subject: 'Inglês'
+    })
+    expect(upsertRes.ok).toBe(false)
+    expect(upsertRes.error).toContain('Bloqueio de Segurança LGPD (Trilho 1)')
+    expect(global.fetch).not.toHaveBeenCalled()
+
+    // 3. deletePrivateStudentFromSupabase não emite fetch à nuvem
+    const delRes = await deletePrivateStudentFromSupabase('priv_test_1')
+    expect(delRes).toBe(true)
+    expect(global.fetch).not.toHaveBeenCalled()
   })
 })
