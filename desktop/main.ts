@@ -383,7 +383,7 @@ async function executeBusinessMethod(method: string, params: any): Promise<any> 
 
     default:
       if (method.startsWith('conversation.')) {
-        if (!driver || !(driver as any).db || !dataKey) {
+        if (!driver || !driver.isOpen() || !dataKey) {
           throw new Error('Cofre local seguro indisponível no Desktop. Operação cancelada por segurança.')
         }
         const { executeConversationMethod } = require('../lib/conversationData/desktopIpc')
@@ -452,7 +452,7 @@ async function initCore() {
 
   // Inicialização e purga de sessões de conversação vencidas no arranque e periódica (LGPD)
   try {
-    if (driver && (driver as any).db && dataKey) {
+    if (driver && driver.isOpen() && dataKey) {
       const { initConversationVault } = require('../lib/conversationData/schema')
       await initConversationVault(driver)
       const { executeConversationMethod, startPeriodicRetentionPurge } = require('../lib/conversationData/desktopIpc')

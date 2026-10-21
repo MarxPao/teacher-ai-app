@@ -101,6 +101,38 @@ describe('Privacidade do Cofre - Cifra em Nível de Aplicação e Proteção Can
     ).rejects.toThrow('E_VAULT_KEY_MISSING')
   })
 
+  it('G1: Driver de produção (NodeSqliteDriver) implementa isOpen(), cofre abre, assertVaultReady passa e fail-closed no close', async () => {
+    const prodDbPath = path.join(tmpDir, 'test_prod_vault.db')
+    const prodDriver = new NodeSqliteDriver(prodDbPath)
+
+    // 1. O driver de produção implementa isOpen e retorna true
+    expect(typeof prodDriver.isOpen).toBe('function')
+    expect(prodDriver.isOpen()).toBe(true)
+
+    // 2. assertVaultReady passa sem exceção
+    expect(() => assertVaultReady(prodDriver)).not.toThrow()
+
+    // 3. Inicializa o cofre e executa operações reais no banco de produção
+    await initConversationVault(prodDriver)
+    const repo = new ConversationVaultRepository(prodDriver, dataKey)
+    await repo.createSession({
+      id: 'sess_prod_1',
+      title: 'Sessão Teste Produção',
+      session_type: 'aula',
+      total_duration_ms: 60000
+    })
+    const fetched = await repo.getSession('sess_prod_1')
+    expect(fetched).not.toBeNull()
+    expect(fetched?.title).toBe('Sessão Teste Produção')
+
+    // 4. Fechamento do driver coloca isOpen() em false
+    prodDriver.close()
+    expect(prodDriver.isOpen()).toBe(false)
+
+    // 5. assertVaultReady bloqueia com erro tipado após fechamento (fail-closed)
+    expect(() => assertVaultReady(prodDriver)).toThrow('E_VAULT_DRIVER_NOT_OPEN')
+  })
+
   it('1.4: Teste triplo de bytes com controle positivo, acentuação UTF-8/UTF-16LE, rotulagem e pós-delete', async () => {
     const CANARY_NAME = 'João Biologia 7º Ano Ação Pedagógica'
     const CANARY_TEXT = 'Conteúdo Confidencial de Avaliação ZDP com Árvore e Mitocôndria 987'
