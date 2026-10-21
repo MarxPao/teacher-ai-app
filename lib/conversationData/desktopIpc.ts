@@ -8,6 +8,10 @@
  * - conversation.ask
  * - conversation.summary
  * - conversation.delete
+ * - conversation.turns.list
+ * - conversation.labels.save
+ * - conversation.labels.benchmark
+ * - conversation.purgeExpired
  */
 
 import type { SqlDriver } from '../desktop-core/db/SqlDriver'
@@ -36,7 +40,50 @@ export interface ConversationAskParams {
   useOllama?: boolean
 }
 
-type DriverWithOptionalDb = SqlDriver & { db?: unknown }
+/**
+ * Validação rigorosa e fail-closed do estado operacional do driver SQLite.
+ * Suporta contratos explícitos com isOpen() e contratos com propriedade db (in-memory / sqlite nativo),
+ * além de validar a presença de todos os métodos SQL fundamentais sem uso de duck typing frágil.
+ */
+export function assertVaultReady(driver: unknown): asserts driver is SqlDriver {
+  if (!driver || typeof driver !== 'object') {
+    throw new Error('Cofre local seguro indisponível no Desktop. Operação cancelada por segurança.')
+  }
+  const candidate = driver as Partial<SqlDriver> & { db?: unknown; closed?: boolean }
+
+  // 1. Contrato explícito de abertura (se implementado)
+  if (typeof candidate.isOpen === 'function') {
+    if (!candidate.isOpen()) {
+      throw new Error('Cofre local seguro indisponível no Desktop. Operação cancelada por segurança.')
+    }
+  } else if ('db' in candidate) {
+    // 2. Contrato de driver com propriedade db (InMemorySqlDriver ou drivers com db acoplado)
+    if (candidate.db === null || candidate.db === undefined) {
+      throw new Error('Cofre local seguro indisponível no Desktop. Operação cancelada por segurança.')
+    }
+  }
+
+  // 3. Validação dos métodos essenciais da interface SqlDriver
+  if (
+    typeof candidate.execute !== 'function' ||
+    typeof candidate.query !== 'function' ||
+    typeof candidate.queryOne !== 'function' ||
+    typeof candidate.transaction !== 'function'
+  ) {
+    throw new Error('Cofre local seguro indisponível no Desktop. Operação cancelada por segurança.')
+  }
+}
+
+/**
+ * Validação estrita da chave criptográfica DEK (Buffer de 32 bytes).
+ * Lança erro explícito E_VAULT_KEY_MISSING se ausente ou inválida.
+ */
+export function assertValidDataKey(dataKey: unknown): Buffer {
+  if (!dataKey || !Buffer.isBuffer(dataKey) || dataKey.length !== 32) {
+    throw new Error('E_VAULT_KEY_MISSING: Chave criptográfica do cofre ausente ou inválida (requer Buffer de 32 bytes).')
+  }
+  return dataKey
+}
 
 export async function executeConversationMethod(
   method: string,
@@ -44,11 +91,9 @@ export async function executeConversationMethod(
   driver: SqlDriver,
   dataKey?: Buffer
 ): Promise<any> {
-  const driverWithDb = driver as DriverWithOptionalDb
-  if (!driver || !driverWithDb.db) {
-    throw new Error('Cofre local seguro indisponível no Desktop. Operação cancelada por segurança.')
-  }
-  const repo = new ConversationVaultRepository(driver, dataKey)
+  assertVaultReady(driver)
+  const validKey = assertValidDataKey(dataKey)
+  const repo = new ConversationVaultRepository(driver, validKey)
 
   switch (method) {
     case 'conversation.import': {
@@ -207,9 +252,11 @@ export function startPeriodicRetentionPurge(
   intervalMs: number = 3600000,
   dataKey?: Buffer
 ): NodeJS.Timeout {
+  assertVaultReady(driver)
+  const validKey = assertValidDataKey(dataKey)
   return setInterval(async () => {
     try {
-      const repo = new ConversationVaultRepository(driver, dataKey)
+      const repo = new ConversationVaultRepository(driver, validKey)
       const purged = await repo.purgeExpiredSessions()
       if (purged > 0) {
         console.log(`[conversationData] ${purged} sessões vencidas expurgadas periodicamente.`)

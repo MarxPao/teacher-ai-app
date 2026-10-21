@@ -25,6 +25,17 @@ export class VaultManager {
       )
     }
 
+    // Se o runtime expuser getSelectedStorageBackend (Linux/Chromium), rejeita basic_text (inseguro)
+    if (typeof (safeStorage as any).getSelectedStorageBackend === 'function') {
+      const backend = (safeStorage as any).getSelectedStorageBackend()
+      if (backend === 'basic_text') {
+        throw new DesktopCoreError(
+          'E_VAULT_BACKEND_INSECURE',
+          'O cofre criptográfico está operando em modo inseguro (basic_text sem chaveiro do sistema). Operação abortada para proteção dos dados.'
+        )
+      }
+    }
+
     if (!fs.existsSync(this.vaultDir)) {
       fs.mkdirSync(this.vaultDir, { recursive: true })
     }
@@ -192,4 +203,3 @@ export class VaultManager {
     return privateKeyPem
   }
 }
-

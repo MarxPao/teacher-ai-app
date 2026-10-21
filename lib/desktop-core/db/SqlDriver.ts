@@ -7,4 +7,6 @@ export interface SqlDriver {
   query<T = unknown>(sql: string, params?: unknown[]): Promise<T[]>
   queryOne<T = unknown>(sql: string, params?: unknown[]): Promise<T | null>
   transaction<T>(fn: (tx: SqlDriver) => Promise<T>): Promise<T>
+  isOpen?(): boolean
+  close?(): void
 }

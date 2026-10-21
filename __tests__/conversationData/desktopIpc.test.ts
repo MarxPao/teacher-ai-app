@@ -19,10 +19,17 @@ class InMemorySqlDriver implements SqlDriver {
 
 describe('3. IPC no Desktop: conversation.import, sessions.list, ask, summary, delete', () => {
   let driver: SqlDriver
+  const testDataKey = Buffer.alloc(32, 0x01)
 
   beforeEach(async () => {
     driver = new InMemorySqlDriver()
     await initConversationVault(driver)
+  })
+
+  it('validação fail-closed: ausência de dataKey lança E_VAULT_KEY_MISSING', async () => {
+    await expect(
+      executeConversationMethod('conversation.sessions.list', {}, driver, undefined)
+    ).rejects.toThrow('E_VAULT_KEY_MISSING')
   })
 
   it('conversation.import: importa transcrição e classifica eventos', async () => {
@@ -32,7 +39,7 @@ describe('3. IPC no Desktop: conversation.import, sessions.list, ask, summary, d
       title: 'Aula de Teste IPC',
       sessionType: 'aula',
       teacherSpeakerName: 'Professora Helena'
-    }, driver)
+    }, driver, testDataKey)
 
     expect(res.success).toBe(true)
     expect(res.sessionId).toBe('aula_50min_bio')
@@ -47,9 +54,9 @@ describe('3. IPC no Desktop: conversation.import, sessions.list, ask, summary, d
       title: 'Aula 1',
       sessionType: 'aula',
       teacherSpeakerName: 'Professora Helena'
-    }, driver)
+    }, driver, testDataKey)
 
-    const listRes = await executeConversationMethod('conversation.sessions.list', {}, driver)
+    const listRes = await executeConversationMethod('conversation.sessions.list', {}, driver, testDataKey)
     expect(listRes.success).toBe(true)
     expect(listRes.sessions).toHaveLength(1)
     expect(listRes.sessions[0].id).toBe('aula_50min_bio')
@@ -62,12 +69,12 @@ describe('3. IPC no Desktop: conversation.import, sessions.list, ask, summary, d
       title: 'Aula 1',
       sessionType: 'aula',
       teacherSpeakerName: 'Professora Helena'
-    }, driver)
+    }, driver, testDataKey)
 
     const askRes = await executeConversationMethod('conversation.ask', {
       sessionId: 'aula_50min_bio',
       query: 'Quantas perguntas eu fiz?'
-    }, driver)
+    }, driver, testDataKey)
 
     expect(askRes.success).toBe(true)
     expect(askRes.response.numericResult).toBe(5)
@@ -81,11 +88,11 @@ describe('3. IPC no Desktop: conversation.import, sessions.list, ask, summary, d
       title: 'Aula 1',
       sessionType: 'aula',
       teacherSpeakerName: 'Professora Helena'
-    }, driver)
+    }, driver, testDataKey)
 
     const summaryRes = await executeConversationMethod('conversation.summary', {
       sessionId: 'aula_50min_bio'
-    }, driver)
+    }, driver, testDataKey)
 
     expect(summaryRes.success).toBe(true)
     expect(summaryRes.summary.type).toBe('aula')
@@ -100,14 +107,14 @@ describe('3. IPC no Desktop: conversation.import, sessions.list, ask, summary, d
       title: 'Aula 1',
       sessionType: 'aula',
       teacherSpeakerName: 'Professora Helena'
-    }, driver)
+    }, driver, testDataKey)
 
     const delRes = await executeConversationMethod('conversation.delete', {
       sessionId: 'aula_50min_bio'
-    }, driver)
+    }, driver, testDataKey)
     expect(delRes.success).toBe(true)
 
-    const listRes = await executeConversationMethod('conversation.sessions.list', {}, driver)
+    const listRes = await executeConversationMethod('conversation.sessions.list', {}, driver, testDataKey)
     expect(listRes.sessions).toHaveLength(0)
   })
 })
