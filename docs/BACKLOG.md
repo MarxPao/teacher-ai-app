@@ -134,8 +134,14 @@ Este documento centraliza as funcionalidades, arquétipos e melhorias postergada
 
 ## 8. Pendências e Decisões de Privacidade de Insights (Passo 1 — Bloco 0)
 
-- [ ] **Preservação de Dados de LocalStorage sem Quebra de Chaves:** As chaves de armazenamento local (`teacher_students`, `teacher_insights_ai_report`, etc.) foram preservadas para manter a retrocompatibilidade sem destruição de dados da usuária. A migração completa para repositório SQLite cifrado no desktop fica agendada para ciclo subsequente.
+- [ ] **Preservação de Dados de LocalStorage sem Quebra de Chaves e Reconciliação:**
+  - *Sonda e Auditoria:* A chave `teacher_students` opera como persistência do estado do cliente no app web (`components/modules/Students.tsx`, `Gradebook.tsx`, etc.), populada inicialmente por alunos de demonstração/mock em `supabaseClient.ts:1317` e `OnboardingWizard.tsx:48` ou cadastros manuais do professor. A chave `teacher_insights_ai_report` armazena o parecer textual consolidado da turma em `Insights.tsx`.
+  - *Reconciliação Linha 63 vs Linha 137:* A meta da Linha 63 ("migração de dados para SQLite cifrado") refere-se à fronteira do aplicativo Desktop Electron (onde não há repouso de dados de alunos em texto claro no disco). Para o aplicativo web/SPA no navegador, `teacher_students` foi mantido para preservar a integridade das telas e dados da professora sem regressão ("não apagar código de produção"). A migração integral para SQLite é exclusiva do host Desktop.
 - [ ] **Sincronização de Relatórios de Conselho de Classe (`classCouncilEngine`):** `syncCouncilReportsToSupabase` foi blindado com expurgo de PII (`studentName: '[ESTUDANTE_PROTEGIDO]'`, `studentId: '[ID_PROTEGIDO]'`). Persistência individual integral permanece exclusivamente local em conformidade com o Trilho 1 LGPD.
+- [x] **Nota de Absorção de Commits Anteriores (`c82e380` e `910d473`):**
+  - Os commits `c82e380` e `910d473` absorveram alterações pontuais pré-existentes nos arquivos `EditableQuestionBoxes.tsx`, `llmGateway.ts`, `coldStart.ts`, `classCouncilEngine.ts` e `supabaseClient.ts`.
+  - *Razão Técnica:* Correção pontual de tipo para viabilizar compilação limpa do `tsc` (`npx tsc --noEmit` código 0) e unificação com padrão estruturado `TaggedError`.
+  - *Diretriz Estrita:* **Não reverter em bloco** — as alterações são dependências estruturais da compilação e tipagem estática.
 
 ---
 
