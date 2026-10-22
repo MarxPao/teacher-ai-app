@@ -29,6 +29,48 @@ import {
   PackageExporter,
 } from '../lib/desktop-core/community'
 import { validateGraph } from '../lib/contracts/skillgraph'
+import * as crypto from 'node:crypto'
+
+// ── Gap A3 (Parecer 2026-10-21): Token de Aprovação para graphs.setActive ──
+// A extensão de Chrome pode chamar graphs.setActive via NativeMessaging sem
+// que o processo Electron (desktop) tenha verificado aprovação humana.
+// Este Map armazena tokens curto-prazo (TTL = 5 min) emitidos pelo Electron
+// quando a professora confirma a ativação de uma skill na UI desktop.
+// A extensão deve obter o token via `graphs.requestActivationToken` e passá-lo
+// de volta em `graphs.setActive` dentro do TTL; sem token válido, setActive recusa.
+const ACTIVATION_TOKEN_TTL_MS = 5 * 60 * 1000 // 5 minutos
+interface ActivationToken {
+  portalId: string
+  taskId: string
+  version: string
+  expiresAt: number
+}
+const pendingActivationTokens = new Map<string, ActivationToken>()
+
+/** Emite um token de aprovação curto-prazo após validação do caller.
+ *  Chamado por `graphs.requestActivationToken` — reservado para a UI desktop
+ *  ou para fluxos em que a professora explicitamente confirmou a ativação. */
+function issueActivationToken(portalId: string, taskId: string, version: string): string {
+  // Limpa tokens expirados antes de emitir novo
+  const now = Date.now()
+  for (const [k, t] of pendingActivationTokens.entries()) {
+    if (t.expiresAt < now) pendingActivationTokens.delete(k)
+  }
+  const token = crypto.randomBytes(24).toString('hex')
+  pendingActivationTokens.set(token, { portalId, taskId, version, expiresAt: now + ACTIVATION_TOKEN_TTL_MS })
+  return token
+}
+
+/** Valida e consome um token de aprovação. Retorna true se válido, false caso contrário. */
+function consumeActivationToken(token: string, portalId: string, taskId: string, version: string): boolean {
+  const entry = pendingActivationTokens.get(token)
+  if (!entry) return false
+  // Consome token (uso único) independente do resultado
+  pendingActivationTokens.delete(token)
+  if (Date.now() > entry.expiresAt) return false
+  if (entry.portalId !== portalId || entry.taskId !== taskId || entry.version !== version) return false
+  return true
+}
 
 // 1. Configuração do App e Instância Única
 app.setName('TeacherAI')
@@ -85,9 +127,42 @@ async function executeBusinessMethod(method: string, params: any): Promise<any> 
     case 'graphs.listVersions':
       return await graphRepo?.listVersions(params.portalId, params.taskId)
 
+    // ── Gap A3: Emissão de token de aprovação ──
+    // A extensão chama este endpoint ANTES de chamar graphs.setActive.
+    // O Electron valida que a requisição vem de um contexto autorizado
+    // (ipcMain handler verifica origin; NativeMessaging valida host).
+    // O token retornado tem TTL de 5 min e é de uso único.
+    case 'graphs.requestActivationToken': {
+      const { portalId, taskId, version } = params || {}
+      if (!portalId || !taskId || !version) {
+        throw Object.assign(new Error('portalId, taskId e version são obrigatórios para emitir token de ativação.'), { code: 'E_MISSING_PARAMS' })
+      }
+      const token = issueActivationToken(String(portalId), String(taskId), String(version))
+      return { success: true, token, expiresInMs: ACTIVATION_TOKEN_TTL_MS }
+    }
+
     case 'graphs.setActive': {
-      const activated = await graphRepo?.setActive(params.portalId, params.taskId, params.version)
-      return { success: Boolean(activated), portalId: params.portalId, taskId: params.taskId, version: params.version }
+      // ── Gap A3: Verificação de token de aprovação ──
+      // graphs.setActive agora exige um approvalToken válido, de uso único,
+      // emitido pelo Electron via graphs.requestActivationToken.
+      // Sem token válido, a ativação é recusada para impedir que a extensão
+      // ative skills autonomamente sem aprovação humana no desktop.
+      const { portalId, taskId, version, approvalToken } = params || {}
+      if (!approvalToken) {
+        throw Object.assign(
+          new Error('graphs.setActive requer approvalToken emitido via graphs.requestActivationToken (Gap A3: aprovação humana obrigatória).'),
+          { code: 'E_ACTIVATION_TOKEN_MISSING' }
+        )
+      }
+      const tokenValid = consumeActivationToken(String(approvalToken), String(portalId), String(taskId), String(version))
+      if (!tokenValid) {
+        throw Object.assign(
+          new Error('Token de ativação inválido, expirado ou não corresponde ao grafo solicitado. Solicite um novo token via graphs.requestActivationToken.'),
+          { code: 'E_ACTIVATION_TOKEN_INVALID' }
+        )
+      }
+      const activated = await graphRepo?.setActive(portalId, taskId, version)
+      return { success: Boolean(activated), portalId, taskId, version }
     }
 
     case 'graphs.delete': {

@@ -1643,10 +1643,25 @@
           const nativeClient = getSharedNativeClient()
           if (nativeClient) {
             try {
+              // ── Gap A3: Solicita token de aprovação ao Electron antes de setActive ──
+              // O Electron (desktop/main.ts) emite um token curto-prazo (TTL=5min)
+              // que prova que esta ativação foi autorizada pelo processo desktop,
+              // impedindo que a extensão ative graphs autonomamente via NativeMessaging.
+              const tokenRes = await nativeClient.send('graphs.requestActivationToken', {
+                portalId: message.portalId,
+                taskId: message.taskId,
+                version: message.version,
+              })
+              if (!tokenRes || !tokenRes.token) {
+                sendResponse({ success: false, friendlyMessage: 'Não foi possível obter autorização do app Teacher AI para ativar esta habilidade.' })
+                return
+              }
+              // Passa o token de volta para o Electron no setActive — uso único
               await nativeClient.send('graphs.setActive', {
                 portalId: message.portalId,
                 taskId: message.taskId,
                 version: message.version,
+                approvalToken: tokenRes.token,
               })
               sendResponse({ success: true })
               return

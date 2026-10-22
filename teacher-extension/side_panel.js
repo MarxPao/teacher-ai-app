@@ -800,7 +800,217 @@ if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
       sendResponse({ ok: true });
       return true;
     }
+
+    // ── Gap A1 (Parecer 2026-10-21): Handler para SKILLGRAPH_DECISIONS_REQUIRED ──
+    // O orchestrator_v2.js envia esta mensagem quando o compiler retorna
+    // status: 'needs_decisions' — ou seja, a professora precisa responder
+    // perguntas de polaridade (presença vs falta) antes de o grafo ser salvo.
+    // Antes desta correção, o painel caia silenciosamente no else → showHonestErrorCard,
+    // nunca mostrando a pergunta para a professora.
+    if (msg.action === 'SKILLGRAPH_DECISIONS_REQUIRED') {
+      const decisions = msg.decisions || [];
+      console.log('[SidePanel] Gap A1: SKILLGRAPH_DECISIONS_REQUIRED recebido:', decisions.length, 'decisões');
+      showSkillGraphDecisionsCard(decisions);
+      sendResponse({ received: true });
+      return true;
+    }
   });
+}
+
+// ── Gap A1: Renderiza card de decisão de polaridade para a professora ──
+// Chamado quando o SkillGraph compiler não consegue determinar sozinho se
+// o portal usa "presença" ou "falta" como marcador de frequência.
+// A professora responde aqui; as respostas são salvas em storage.session
+// para o orchestrator reler na próxima compilação.
+function showSkillGraphDecisionsCard(decisions) {
+  hideAllApprovalCards();
+  setProcessingState(false);
+
+  // Reutiliza a área do card-skillgraph-v2 exibindo perguntas inline,
+  // ou cria um container flutuante se o card não estiver visível.
+  const sgCard = document.getElementById('card-skillgraph-v2');
+  const sgBody = document.getElementById('skillgraph-v2-body');
+  const container = document.getElementById('sgv2-runner-view') || sgBody;
+
+  if (!container) {
+    console.warn('[SidePanel] Gap A1: container sgv2 não encontrado, usando honest-error como fallback');
+    showHonestErrorCard(
+      'Confirme a polaridade do portal',
+      (decisions[0]?.question) || 'O SkillGraph precisa de uma confirmação antes de continuar.'
+    );
+    return;
+  }
+
+  // Garante que o card pai esteja visível
+  if (sgCard) sgCard.style.display = 'block';
+  if (sgBody) sgBody.style.display = 'block';
+
+  // Remove card de decisão anterior se existir
+  const existing = document.getElementById('sgv2-decisions-overlay');
+  if (existing) existing.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'sgv2-decisions-overlay';
+  overlay.style.cssText = [
+    'background:#fffbeb',
+    'border:1.5px solid #f59e0b',
+    'border-radius:8px',
+    'padding:12px',
+    'margin-top:8px',
+    'font-size:12px',
+    'color:#1e293b',
+  ].join(';');
+
+  const title = document.createElement('div');
+  title.style.cssText = 'font-weight:700;color:#b45309;margin-bottom:8px;display:flex;align-items:center;gap:6px;';
+  title.innerHTML = '<span style="font-size:15px;">⚠️</span> Decisão necessária para compilar a habilidade';
+  overlay.appendChild(title);
+
+  // Para cada decisão pendente, cria um bloco de pergunta + botões de escolha
+  const answers = {};
+  const answerSelectors = [];
+
+  decisions.forEach((decision, idx) => {
+    const block = document.createElement('div');
+    block.style.cssText = 'margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid #fcd34d;';
+    if (idx === decisions.length - 1) block.style.borderBottom = 'none';
+
+    const q = document.createElement('div');
+    q.style.cssText = 'margin-bottom:6px;line-height:1.4;';
+    q.textContent = decision.question || `Confirmação necessária (${decision.key})`;
+    block.appendChild(q);
+
+    const btnRow = document.createElement('div');
+    btnRow.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;';
+
+    // Choices padrão por key conhecida; fallback genérico se o compiler enviar outros
+    const choices = decision.choices || (
+      decision.key === 'attendance_polarity'
+        ? [
+            { label: '✅ Presença (marcar = presente)', value: 'presenca' },
+            { label: '❌ Falta (marcar = falta)', value: 'falta' },
+          ]
+        : decision.key === 'grade_scale'
+        ? [
+            { label: '0–10', value: '0-10' },
+            { label: '0–100', value: '0-100' },
+          ]
+        : [
+            { label: 'Sim', value: 'sim' },
+            { label: 'Não', value: 'nao' },
+          ]
+    );
+
+    let selectedBtn = null;
+    const btns = choices.map((choice) => {
+      const btn = document.createElement('button');
+      btn.style.cssText = [
+        'flex:1',
+        'min-width:80px',
+        'padding:5px 8px',
+        'border:1.5px solid #f59e0b',
+        'border-radius:6px',
+        'background:#fff',
+        'color:#92400e',
+        'font-size:11px',
+        'font-weight:600',
+        'cursor:pointer',
+        'transition:background 0.15s',
+      ].join(';');
+      btn.textContent = choice.label;
+      btn.dataset.value = choice.value;
+      btn.dataset.key = decision.key;
+
+      btn.onclick = () => {
+        // Deseleciona outros do mesmo grupo
+        btns.forEach((b) => {
+          b.style.background = '#fff';
+          b.style.color = '#92400e';
+          b.style.borderColor = '#f59e0b';
+        });
+        btn.style.background = '#f59e0b';
+        btn.style.color = '#fff';
+        btn.style.borderColor = '#d97706';
+        selectedBtn = choice.value;
+        answers[decision.key] = choice.value;
+      };
+
+      btnRow.appendChild(btn);
+      return btn;
+    });
+
+    answerSelectors.push({ key: decision.key, btns, getSelected: () => answers[decision.key] });
+    block.appendChild(btnRow);
+    overlay.appendChild(block);
+  });
+
+  // Botão de confirmação — só ativo quando todas as decisões foram respondidas
+  const confirmRow = document.createElement('div');
+  confirmRow.style.cssText = 'margin-top:8px;display:flex;gap:6px;';
+
+  const cancelBtn = document.createElement('button');
+  cancelBtn.style.cssText = 'flex:1;padding:6px 10px;border:1px solid #cbd5e1;border-radius:6px;background:#f8fafc;color:#475569;font-size:11px;font-weight:600;cursor:pointer;';
+  cancelBtn.textContent = 'Cancelar compilação';
+  cancelBtn.onclick = () => {
+    overlay.remove();
+    chrome.storage?.session?.remove(['skillgraph_pending_decision_answers']).catch(() => {});
+  };
+
+  const confirmBtn = document.createElement('button');
+  confirmBtn.style.cssText = 'flex:2;padding:6px 10px;border:none;border-radius:6px;background:#2563eb;color:#fff;font-size:11px;font-weight:600;cursor:pointer;';
+  confirmBtn.textContent = '✓ Confirmar e recompilar';
+  confirmBtn.onclick = () => {
+    // Valida que todas as decisões foram respondidas
+    const allAnswered = decisions.every((d) => answers[d.key] !== undefined);
+    if (!allAnswered) {
+      confirmBtn.textContent = '⚠️ Responda todas as perguntas acima';
+      setTimeout(() => { confirmBtn.textContent = '✓ Confirmar e recompilar'; }, 2000);
+      return;
+    }
+
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = 'Recompilando…';
+
+    // Salva respostas em session storage — orchestrator_v2.js lê em linha 1511
+    chrome.storage?.session?.set({ skillgraph_pending_decision_answers: answers })
+      .then(() => {
+        console.log('[SidePanel] Gap A1: respostas de decisão salvas:', answers);
+        overlay.remove();
+        // Re-dispara compile com as respostas armazenadas.
+        // SKILLGRAPH_COMPILE_RECORD sem payload relê o trace de session storage
+        // e combina com as respostas de decisão que acabamos de salvar (linhas 1511-1536
+        // do orchestrator_v2.js).
+        chrome.runtime.sendMessage(
+          { action: 'SKILLGRAPH_COMPILE_RECORD' },
+          (res) => {
+            if (res && res.success) {
+              showNaturalProgressCard('Recompilando habilidade com as decisões confirmadas…');
+            } else if (res && res.status === 'needs_decisions') {
+              // Ainda há decisões — mostra novamente (não deveria acontecer)
+              showSkillGraphDecisionsCard(res.decisions || []);
+            } else {
+              showHonestErrorCard(
+                'Falha na recompilação',
+                res?.friendlyMessage || 'Não foi possível recompilar após as decisões. Tente novamente.'
+              );
+            }
+          }
+        );
+      })
+      .catch((err) => {
+        console.error('[SidePanel] Gap A1: erro ao salvar respostas:', err);
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = '✓ Confirmar e recompilar';
+      });
+  };
+
+  confirmRow.appendChild(cancelBtn);
+  confirmRow.appendChild(confirmBtn);
+  overlay.appendChild(confirmRow);
+
+  // Insere antes do primeiro filho do container
+  container.insertBefore(overlay, container.firstChild);
+  scrollChatToBottom();
 }
 
 if (btnRecordRoute) {
