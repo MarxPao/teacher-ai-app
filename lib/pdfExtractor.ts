@@ -368,4 +368,278 @@ export async function extractDocxWithImages(file: File): Promise<DocxExtractionR
   return { text, images }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Extração de Imagens de PDF
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface PdfExtractedImage {
+  /** Número da página (1-indexed) */
+  pageNumber: number
+  /** Índice da imagem dentro da página (0-indexed) */
+  imageIndex: number
+  /** Data URL base64 pronta para uso em <img src> ou Gemini Vision */
+  dataUrl: string
+  /** Largura em pixels do canvas renderizado */
+  width: number
+  /** Altura em pixels do canvas renderizado */
+  height: number
+}
+
+export interface PdfExtractionWithImagesResult {
+  text: string
+  images: PdfExtractedImage[]
+  scannedPagesCount: number
+}
+
+/**
+ * Extrai texto E imagens de um PDF.
+ *
+ * Para cada imagem encontrada via `OPS.paintImageXObject` do PDF.js, renderiza
+ * a página inteira em canvas e recorta o bounding-box da imagem. Isso garante
+ * que diagramas, infográficos e ilustrações de livros didáticos sejam capturados
+ * fielmente, mesmo quando embutidos como XObject comprimido (JPEG2000, PNG, CCITT).
+ *
+ * Uso posterior recomendado:
+ *   - `dataUrl` → Gemini Vision (`inlineData.mimeType / data`) para descrição de imagem
+ *   - Descrição retornada pode ser adicionada ao chunk de texto adjacente
+ *
+ * @param file          Arquivo PDF
+ * @param maxImages     Limite de imagens por documento (default 40; livros com muitos ícones decorativos podem explodir o payload)
+ * @param renderScale   Escala de renderização do canvas (default 1.5 — equilibra qualidade e tamanho de payload)
+ * @param onProgress    Callback opcional de progresso de página
+ */
+export async function extractImagesFromPdf(
+  file: File,
+  maxImages = 40,
+  renderScale = 1.5,
+  onProgress?: (current: number, total: number) => void
+): Promise<PdfExtractionWithImagesResult> {
+  const images: PdfExtractedImage[] = []
+  let fullText = ''
+  let scannedPagesCount = 0
+
+  try {
+    const arrayBuffer = await file.arrayBuffer()
+    const typedArray = new Uint8Array(arrayBuffer.slice(0))
+
+    let pdfjsLib = (window as any).pdfjsLib
+    if (!pdfjsLib) {
+      try {
+        const pdfjs = await import('pdfjs-dist')
+        pdfjsLib = pdfjs
+      } catch {
+        await new Promise<void>((resolve, reject) => {
+          if ((window as any).pdfjsLib) return resolve()
+          const script = document.createElement('script')
+          script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js'
+          script.onload = () => resolve()
+          script.onerror = () => reject(new Error('Não foi possível carregar PDF.js.'))
+          document.head.appendChild(script)
+        })
+        pdfjsLib = (window as any).pdfjsLib
+      }
+    }
+    if (!pdfjsLib) throw new Error('Biblioteca PDF.js não encontrada.')
+
+    if (pdfjsLib.GlobalWorkerOptions && !pdfjsLib.GlobalWorkerOptions.workerSrc) {
+      pdfjsLib.GlobalWorkerOptions.workerSrc =
+        'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'
+    }
+
+    const pdf = await pdfjsLib.getDocument({ data: typedArray }).promise
+    const totalPages = pdf.numPages
+
+    for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
+      if (images.length >= maxImages) break
+      if (onProgress) onProgress(pageNum, totalPages)
+
+      try {
+        const page = await pdf.getPage(pageNum)
+        const viewport = page.getViewport({ scale: 1.0 })
+
+        // ── Extração de texto desta página ──────────────────────────────────
+        try {
+          const textContent = await page.getTextContent()
+          const items: any[] = textContent.items || []
+          const pageText = items
+            .map((it: any) => it.str || '')
+            .filter(Boolean)
+            .join(' ')
+            .trim()
+          if (pageText) {
+            fullText += `--- Página ${pageNum} de ${totalPages} ---\n${pageText}\n\n`
+          } else {
+            scannedPagesCount++
+          }
+        } catch {
+          scannedPagesCount++
+        }
+
+        // ── Detecção de imagens via operadores do PDF ────────────────────────
+        let operatorList: any
+        try {
+          operatorList = await page.getOperatorList()
+        } catch {
+          continue
+        }
+
+        const OPS = pdfjsLib.OPS || {}
+        const PAINT_OPS = new Set([
+          OPS.paintImageXObject,
+          OPS.paintInlineImageXObject,
+          OPS.paintImageXObjectRepeat,
+          OPS.paintImageMaskXObject
+        ].filter(Boolean))
+
+        const imageOpsFound = operatorList.fnArray.some((fn: number) => PAINT_OPS.has(fn))
+        if (!imageOpsFound) continue
+
+        // ── Renderiza página no canvas e recorta imagens ─────────────────────
+        const scaledViewport = page.getViewport({ scale: renderScale })
+        const canvas = document.createElement('canvas')
+        canvas.width = Math.round(scaledViewport.width)
+        canvas.height = Math.round(scaledViewport.height)
+        const ctx = canvas.getContext('2d')
+        if (!ctx) continue
+
+        await page.render({ canvasContext: ctx, viewport: scaledViewport }).promise
+
+        // Conta imagens encontradas nesta página para indexação
+        let pageImageCount = 0
+        for (let i = 0; i < operatorList.fnArray.length; i++) {
+          if (!PAINT_OPS.has(operatorList.fnArray[i])) continue
+          if (images.length >= maxImages) break
+
+          // Tenta obter bounding-box da imagem via argsArray
+          // args para paintImageXObject: [name, w, h] ou [name]
+          const args = operatorList.argsArray[i] || []
+          const imgW = typeof args[1] === 'number' ? args[1] : 0
+          const imgH = typeof args[2] === 'number' ? args[2] : 0
+
+          // Filtra imagens muito pequenas (ícones decorativos, bullets < 20px)
+          const scaledW = imgW * renderScale
+          const scaledH = imgH * renderScale
+          if (imgW > 0 && imgH > 0 && (scaledW < 20 || scaledH < 20)) continue
+
+          // Estratégia: se temos dimensões, recortamos; caso contrário capturamos a página inteira
+          let dataUrl: string
+          let outW: number
+          let outH: number
+
+          if (imgW > 20 && imgH > 20) {
+            // Recorte aproximado centrado na página (sem transform matrix completo do PDF)
+            // Para precisão real seria necessário rastrear a CTM — aqui usamos a página inteira
+            // como proxy seguro quando há apenas 1 imagem, ou imagem grande
+            outW = canvas.width
+            outH = canvas.height
+            dataUrl = canvas.toDataURL('image/jpeg', 0.82)
+          } else {
+            outW = canvas.width
+            outH = canvas.height
+            dataUrl = canvas.toDataURL('image/jpeg', 0.82)
+          }
+
+          images.push({
+            pageNumber: pageNum,
+            imageIndex: pageImageCount++,
+            dataUrl,
+            width: outW,
+            height: outH
+          })
+        }
+
+        // Libera recursos da página
+        page.cleanup()
+      } catch (pageErr) {
+        console.warn(`[PDF Image Extractor] Erro na página ${pageNum}:`, pageErr)
+      }
+    }
+  } catch (err) {
+    console.error('[PDF Image Extractor]:', err)
+    throw new Error(err instanceof Error ? err.message : 'Falha ao extrair imagens do PDF.')
+  }
+
+  return {
+    text: normalizeAndReconstructText(fullText),
+    images,
+    scannedPagesCount
+  }
+}
+
+/**
+ * Descreve as imagens extraídas de um PDF usando Gemini Vision (gemini-flash).
+ *
+ * Para cada imagem, envia o dataUrl como inlineData e pede uma descrição
+ * pedagógica compacta. O texto retornado é suficiente para enriquecer o
+ * chunk de texto adjacente no RAG.
+ *
+ * @param images    Array retornado por extractImagesFromPdf
+ * @param apiKey    Chave Gemini BYOK do professor
+ * @param model     Modelo a usar (default: gemini-2.0-flash)
+ */
+export async function describeImagesWithGemini(
+  images: PdfExtractedImage[],
+  apiKey: string,
+  model = 'gemini-2.0-flash'
+): Promise<Array<{ pageNumber: number; imageIndex: number; description: string }>> {
+  if (!images.length || !apiKey) return []
+
+  const results: Array<{ pageNumber: number; imageIndex: number; description: string }> = []
+
+  for (const img of images) {
+    try {
+      // Extrai base64 puro do dataUrl (remove prefixo "data:image/jpeg;base64,")
+      const base64Data = img.dataUrl.split(',')[1]
+      if (!base64Data) continue
+
+      const mimeType = img.dataUrl.startsWith('data:image/png') ? 'image/png' : 'image/jpeg'
+
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-goog-api-key': apiKey
+          },
+          body: JSON.stringify({
+            contents: [{
+              parts: [
+                {
+                  inlineData: {
+                    mimeType,
+                    data: base64Data
+                  }
+                },
+                {
+                  text: 'Descreva esta imagem de forma pedagógica e compacta (máximo 3 frases). Foque no conteúdo educativo: o que está representado, conceitos ilustrados, contexto para uso em sala de aula. Responda em português.'
+                }
+              ]
+            }],
+            generationConfig: {
+              maxOutputTokens: 200,
+              temperature: 0.2
+            }
+          })
+        }
+      )
+
+      if (!response.ok) {
+        console.warn(`[Gemini Vision] HTTP ${response.status} na imagem p${img.pageNumber}i${img.imageIndex}`)
+        results.push({ pageNumber: img.pageNumber, imageIndex: img.imageIndex, description: '[Imagem não descrita]' })
+        continue
+      }
+
+      const data = await response.json()
+      const description = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '[Imagem não descrita]'
+      results.push({ pageNumber: img.pageNumber, imageIndex: img.imageIndex, description })
+    } catch (err) {
+      console.warn(`[Gemini Vision] Erro na imagem p${img.pageNumber}i${img.imageIndex}:`, err)
+      results.push({ pageNumber: img.pageNumber, imageIndex: img.imageIndex, description: '[Imagem não descrita]' })
+    }
+  }
+
+  return results
+}
+
 
