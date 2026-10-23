@@ -133,10 +133,35 @@ export async function runSessionPipeline(sessionId: string): Promise<ClassroomSe
     session.statusDetail = 'Transcrevendo áudio em alta definição (Whisper)...'
     session.progressPct = 25
 
-    // Se chunks já tiverem texto, compilar; caso contrário, simular/processar
-    for (const chunk of session.chunks) {
-      if (!chunk.text) {
-        chunk.text = `Transcrição pedagógica do bloco ${chunk.chunkIndex + 1}.`
+    // Se chunks já tiverem texto (pré-transcritos pelo Python sidecar via Whisper),
+    // compilar diretamente. Caso contrário, marcar como não transcrito — nunca inserir
+    // texto fictício que contaminaria as métricas de TTT/STT reais.
+    const untranscribedCount = session.chunks.filter(c => !c.text || !c.text.trim()).length
+    if (untranscribedCount > 0) {
+      // Tenta chamar o sidecar Python (Whisper local) via API interna
+      // Se não disponível, mantém texto vazio — heurísticas degradam com graciosidade
+      try {
+        const sidecarRes = await fetch('/api/transcribe-chunks', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sessionId: session.id,
+            chunks: session.chunks
+              .filter(c => !c.text || !c.text.trim())
+              .map(c => ({ chunkIndex: c.chunkIndex, startMs: c.startMs, endMs: c.endMs }))
+          })
+        })
+        if (sidecarRes.ok) {
+          const { transcribedChunks } = await sidecarRes.json()
+          for (const tc of (transcribedChunks || [])) {
+            const idx = session.chunks.findIndex(c => c.chunkIndex === tc.chunkIndex)
+            if (idx >= 0 && tc.text) session.chunks[idx].text = tc.text
+          }
+        }
+      } catch {
+        // Sidecar indisponível — pipeline continua; segmentos sem texto serão omitidos
+        // nas métricas (TTT/STT calculados apenas sobre segmentos com texto real)
+        console.warn('[classroomPipeline] Sidecar Whisper indisponível. Métricas parciais.')
       }
     }
 
@@ -145,9 +170,63 @@ export async function runSessionPipeline(sessionId: string): Promise<ClassroomSe
     session.statusDetail = 'Diarizando locutores (Professor vs. Alunos)...'
     session.progressPct = 50
 
-    // Se segmentos ainda não existirem, gerar segmentação diarizada a partir dos chunks
+    // Se segmentos ainda não existirem, tenta diarização real via sidecar Python (pyannote.audio)
+    // ou via Gemini Flash com timestamps de speaker. Fallback explicitamente rotulado.
     if (session.segments.length === 0) {
-      session.segments = generateDiarizedSegments(session.chunks)
+      let diarizationOk = false
+
+      // Tentativa 1: Sidecar Python (pyannote.audio — qualidade de produção)
+      try {
+        const diarRes = await fetch('/api/diarize', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId: session.id, chunks: session.chunks })
+        })
+        if (diarRes.ok) {
+          const { segments: realSegments } = await diarRes.json()
+          if (Array.isArray(realSegments) && realSegments.length > 0) {
+            session.segments = realSegments
+            diarizationOk = true
+          }
+        }
+      } catch {
+        // sidecar indisponível
+      }
+
+      // Tentativa 2: Gemini Flash com pedido de timestamps de speaker no transcript
+      if (!diarizationOk) {
+        try {
+          const fullTranscript = session.chunks
+            .filter(c => c.text && c.text.trim())
+            .map(c => `[${Math.round(c.startMs / 1000)}s] ${c.text}`)
+            .join('\n')
+
+          if (fullTranscript.trim().length > 0) {
+            const geminiRes = await fetch('/api/diarize-gemini', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ sessionId: session.id, transcript: fullTranscript })
+            })
+            if (geminiRes.ok) {
+              const { segments: geminiSegments } = await geminiRes.json()
+              if (Array.isArray(geminiSegments) && geminiSegments.length > 0) {
+                session.segments = geminiSegments
+                diarizationOk = true
+              }
+            }
+          }
+        } catch {
+          // Gemini indisponível
+        }
+      }
+
+      // Fallback explícito: segmentação heurística com aviso de qualidade
+      if (!diarizationOk) {
+        console.warn('[classroomPipeline] Diarização real indisponível. Usando heurística estrutural — TTT/STT são ESTIMATIVAS.')
+        session.segments = generateHeuristicSegments(session.chunks)
+        // Marca sessão como diarização estimada para a UI mostrar aviso ao professor
+        session.statusDetail = 'Diarização estimada (heurística) — instale pyannote.audio ou configure Gemini para diarização real.'
+      }
     }
 
     // 3. Estágio: Extracting Highlights
@@ -183,14 +262,33 @@ export async function runSessionPipeline(sessionId: string): Promise<ClassroomSe
 }
 
 /**
- * Utilitário determinístico de segmentação de locutores
+ * Segmentação heurística estrutural — FALLBACK EXPLÍCITO.
+ *
+ * NÃO é diarização real. Divide cada chunk assumindo que o professor fala
+ * nos primeiros 60% e um aluno nos 40% restantes. Confidence artificialmente
+ * baixa (0.45) para sinalizar que são estimativas.
+ *
+ * Use apenas quando pyannote.audio (sidecar) e Gemini Flash estiverem indisponíveis.
+ * TTT/STT resultante deve ser exibido com aviso na UI ("Estimativa — diarização real não disponível").
  */
-function generateDiarizedSegments(chunks: ClassroomSession['chunks']): ClassroomSegment[] {
+function generateHeuristicSegments(chunks: ClassroomSession['chunks']): ClassroomSegment[] {
   const segments: ClassroomSegment[] = []
   let segIndex = 0
 
   for (const chunk of chunks) {
+    const chunkText = chunk.text?.trim() || ''
+    // Pula chunks sem transcrição real — não contaminar métricas com texto vazio
+    if (!chunkText) continue
+
     const chunkDuration = chunk.endMs - chunk.startMs
+    if (chunkDuration <= 0) continue
+
+    // Divide o texto do chunk proporcionalmente (60% professor / 40% aluno)
+    const words = chunkText.split(/\s+/)
+    const teacherWordCount = Math.ceil(words.length * 0.6)
+    const teacherText = words.slice(0, teacherWordCount).join(' ')
+    const studentText = words.slice(teacherWordCount).join(' ')
+
     const midPoint = chunk.startMs + Math.round(chunkDuration * 0.6)
 
     // Segmento do Professor
@@ -200,21 +298,24 @@ function generateDiarizedSegments(chunks: ClassroomSession['chunks']): Classroom
       startMs: chunk.startMs,
       endMs: midPoint,
       durationMs: midPoint - chunk.startMs,
-      text: chunk.text || 'Explicação do professor sobre o conteúdo.',
-      confidence: 0.98
+      text: teacherText || chunkText,
+      // Confidence baixa para sinalizar origem heurística
+      confidence: 0.45
     })
 
-    // Segmento do Aluno (com rotação aluno_1, aluno_2...)
-    const studentLabel = `aluno_${(segIndex % 4) + 1}`
-    segments.push({
-      id: `seg_${segIndex++}`,
-      speaker: studentLabel,
-      startMs: midPoint + 1000,
-      endMs: chunk.endMs,
-      durationMs: chunk.endMs - (midPoint + 1000),
-      text: 'Intervenção do aluno respondendo à questão.',
-      confidence: 0.92
-    })
+    // Segmento do Aluno (apenas se há texto de aluno e duração positiva)
+    if (studentText.trim() && chunk.endMs > midPoint + 500) {
+      const studentLabel = `aluno_${(segIndex % 4) + 1}`
+      segments.push({
+        id: `seg_${segIndex++}`,
+        speaker: studentLabel,
+        startMs: midPoint + 500,
+        endMs: chunk.endMs,
+        durationMs: chunk.endMs - (midPoint + 500),
+        text: studentText,
+        confidence: 0.45
+      })
+    }
   }
 
   return segments

@@ -1,0 +1,191 @@
+{
+  "spec_version": "2.0",
+  "identity": {
+    "portal_id": "machadosobrinho.paineldoaluno.com.br",
+    "domain": "machadosobrinho.paineldoaluno.com.br",
+    "task_id": "custom:nav-ordem-alfabetica",
+    "version": 1,
+    "name": "Acessar Ordem alfabética",
+    "description": "Executa (1 passo(s)): Ordem alfabética"
+  },
+  "compat": {
+    "support_tier": 1,
+    "archetype_tags": [
+      "recorded",
+      "table_form"
+    ],
+    "tested_archetypes": [
+      "standard_table"
+    ],
+    "min_runner_version": "2.0.0"
+  },
+  "params": {
+    "texto": {
+      "type": "string",
+      "required": true,
+      "pii": false,
+      "description": "Conteúdo textual a ser inserido no portal"
+    }
+  },
+  "entry_fingerprint": {
+    "route": {
+      "host": "machadosobrinho.paineldoaluno.com.br",
+      "path_pattern": "/professor_frequencia*"
+    },
+    "landmarks": [
+      {
+        "candidates": [
+          {
+            "strategy": "role_name",
+            "role": "main",
+            "name": "Principal",
+            "match": "contains"
+          },
+          {
+            "strategy": "css",
+            "selector": "main, [role=\"main\"], body"
+          }
+        ],
+        "description": "Estrutura principal da página",
+        "expect_count": "one"
+      }
+    ],
+    "title_pattern": "*Ordem alfabética*"
+  },
+  "entry_node": "n1",
+  "nodes": {
+    "n1": {
+      "label": "Navegar para /professor_frequencia",
+      "retry": {
+        "max_attempts": 2,
+        "backoff_ms": 500
+      },
+      "timeout_ms": 10000,
+      "postconditions": [],
+      "on_success": "n2",
+      "on_fail": "$abort",
+      "type": "NAVIGATE",
+      "path": "/professor_frequencia",
+      "host": "machadosobrinho.paineldoaluno.com.br"
+    },
+    "n2": {
+      "label": "Confirmação do Professor para Lançamento",
+      "retry": {
+        "max_attempts": 1,
+        "backoff_ms": 0
+      },
+      "timeout_ms": 30000,
+      "postconditions": [],
+      "on_success": "n3",
+      "on_fail": "$abort",
+      "type": "CHECKPOINT",
+      "summary": [
+        {
+          "label": "Texto",
+          "value": {
+            "param": "texto"
+          }
+        }
+      ],
+      "scope": "once",
+      "on_reject": "$abort"
+    },
+    "n3": {
+      "label": "Registrar Ordem alfabética",
+      "retry": {
+        "max_attempts": 2,
+        "backoff_ms": 500
+      },
+      "timeout_ms": 5000,
+      "postconditions": [],
+      "on_success": "$end",
+      "on_fail": "$abort",
+      "type": "WRITE",
+      "anchor": {
+        "candidates": [
+          {
+            "strategy": "css",
+            "selector": "#ordem"
+          },
+          {
+            "strategy": "css",
+            "selector": "select[name=\"ordem\"]"
+          }
+        ],
+        "description": "Campo de Ordem alfabética",
+        "expect_count": "one"
+      },
+      "value": {
+        "lit": "A"
+      },
+      "method": "select_option",
+      "semantic": "text",
+      "read_back": true
+    }
+  },
+  "canonical_mapping": {
+    "columns": [
+      {
+        "portal_labels": [
+          "Nome",
+          "Aluno"
+        ],
+        "field": "student.name",
+        "semantic_type": "name"
+      },
+      {
+        "portal_labels": [
+          "Matrícula",
+          "RA",
+          "Código"
+        ],
+        "field": "student.roll_number",
+        "semantic_type": "identifier"
+      }
+    ],
+    "grade_scale": {
+      "type": "numeric",
+      "min": 0,
+      "max": 10,
+      "decimal_separator": ","
+    },
+    "attendance": {
+      "polarity": "checked_is_present"
+    },
+    "ambiguous_requires_confirmation": true
+  },
+  "safety": {
+    "side_effect_level": "write",
+    "writes_require_checkpoint": true,
+    "max_writes_per_run": 100,
+    "rate_limit": {
+      "min_delay_ms": 200,
+      "jitter_ms": 100
+    },
+    "allowed_hosts": [
+      "machadosobrinho.paineldoaluno.com.br"
+    ]
+  },
+  "provenance": {
+    "author": "teacher-ai-compiler",
+    "created_at": "2026-10-11T00:00:00.000Z",
+    "updated_at": "2026-10-11T00:00:00.000Z",
+    "source": "recorded",
+    "compiler_version": "2.0.0",
+    "has_self_healed": false,
+    "pii_scrubbed": true
+  },
+  "id": "skill_machadosobrinho.paineldoaluno.com.br__custom_nav-ordem-alfabetica",
+  "portal_id": "machadosobrinho.paineldoaluno.com.br",
+  "task_id": "custom:nav-ordem-alfabetica",
+  "name": "Acessar Ordem alfabética",
+  "version": "1.0.0",
+  "metadata": {
+    "task_name": "Acessar Ordem alfabética",
+    "skill_type": "writing",
+    "description": "Executa (1 passo(s)): Ordem alfabética",
+    "source_url": "",
+    "created_at": "2026-10-17T15:25:29.560Z",
+    "updated_at": "2026-10-17T15:25:29.560Z"
+  }
+}

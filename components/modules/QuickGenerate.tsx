@@ -39,8 +39,7 @@ import {
   type SubjectProfile,
 } from '@/lib/subjectProfile'
 import { buildTeacherStyleSystemPrompt } from '@/lib/teacherStyleProfile'
-import '@/lib/subjects/english'
-import '@/lib/subjects/portuguese'
+import '@/lib/subjects'
 
 // Types
 

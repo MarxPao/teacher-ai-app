@@ -9,10 +9,13 @@ import { searchWeb, WebSearchResult } from '@/lib/webSearch'
 import {
   getEmbeddingMode,
   getEmbeddingModeNotice,
+  searchVectorChunks,
   searchVectorChunksSync,
+  getGeminiApiKey,
   type VectorChunk
 } from '@/lib/vectorSearch'
 import { indexDocumentContent } from '@/lib/ragEngine'
+import { extractImagesFromPdf, describeImagesWithGemini } from '@/lib/pdfExtractor'
 
 export interface SourceItem {
   id: string
@@ -45,6 +48,10 @@ export interface CompileSourcesOptions {
   maxCharsPerSource?: number
 }
 
+/**
+ * Versão síncrona (fallback TF-hash) — mantida para compatibilidade com chamadores
+ * que não podem usar await. Para geração de material, prefira compileSourcesPromptAsync.
+ */
 export function compileSourcesPrompt(
   sources: SourceItem[],
   mode: KnowledgeMode,
@@ -81,7 +88,6 @@ export function compileSourcesPrompt(
 
     let sourceContent = ''
 
-    // Se o conteúdo for curto (<= 4000 caracteres), usa integralmente
     if (s.content.length <= 4000) {
       sourceContent = s.content
       retrievedChunksCount += 1
@@ -90,33 +96,16 @@ export function compileSourcesPrompt(
       const unitMatch = s.content.match(/(?:\[(UNIT\s*\d+[^\]]*)\]|(Capítulo\s*\d+[^:\n]*:[^\n]+)|(UNIDADE\s*\d+[^:\n]*:[^\n]+))/i)
       if (unitMatch && !primaryUnitTitle) primaryUnitTitle = (unitMatch[1] || unitMatch[2] || unitMatch[3]).trim()
     } else {
-      // Para documentos longos (ex: livros didáticos completos), fatia em unidades/capítulos/páginas
-      // via indexDocumentContent e busca os trechos semanticamente mais relevantes ao invés do corte cego de 7.000 chars
-      const docChunks = indexDocumentContent(
-        s.id,
-        s.title,
-        s.sourceType,
-        s.category || 'Fonte',
-        s.content
-      )
-
+      const docChunks = indexDocumentContent(s.id, s.title, s.sourceType, s.category || 'Fonte', s.content)
       const vectorChunks: VectorChunk[] = docChunks.length > 0
         ? docChunks.map(dc => {
             const separator = dc.content.startsWith(':') || dc.content.startsWith(' -') ? '' : '\n'
-            return {
-              id: dc.id,
-              content: `${dc.unitTitle}${separator}${dc.content}`,
-              embedding: dc.embedding,
-              pageNumber: dc.pageNumber,
-              unitTitle: dc.unitTitle
-            }
+            return { id: dc.id, content: `${dc.unitTitle}${separator}${dc.content}`, embedding: dc.embedding, pageNumber: dc.pageNumber, unitTitle: dc.unitTitle }
           })
-        : (s.content.match(/[\s\S]{1,1500}/g) || [s.content]).map((chunkText, cIdx) => ({
-            id: `${s.id}_chunk_${cIdx}`,
-            content: chunkText
-          }))
+        : (s.content.match(/[\s\S]{1,1500}/g) || [s.content]).map((chunkText, cIdx) => ({ id: `${s.id}_chunk_${cIdx}`, content: chunkText }))
 
       if (topic && topic.trim().length > 0) {
+        // Sempre usa TF-hash sync aqui — para Gemini semântico usar compileSourcesPromptAsync
         const topChunks = searchVectorChunksSync(topic.trim(), vectorChunks, topK)
         retrievedChunksCount += topChunks.length
         if (topChunks.length > 0 && primaryPageNumber === undefined) {
@@ -134,10 +123,9 @@ export function compileSourcesPrompt(
             if (unitMatch) primaryUnitTitle = (unitMatch[1] || unitMatch[2] || unitMatch[3]).trim()
           }
         }
-        sourceContent = `[TRECHOS RECUPERADOS VIA BUSCA SEMÂNTICA PARA O TÓPICO: "${topic}"]\n` +
+        sourceContent = `[TRECHOS RECUPERADOS VIA BUSCA SEMÂNTICA (TF-hash) PARA O TÓPICO: "${topic}"]\n` +
           topChunks.map((c, i) => `--- Trecho Relevante #${i + 1} ---\n${c.content}`).join('\n\n')
       } else {
-        // Sem tópico especificado: extrai uma amostra equilibrada até maxChars
         const sampleChunks = vectorChunks.slice(0, topK)
         retrievedChunksCount += sampleChunks.length
         if (sampleChunks.length > 0 && primaryPageNumber === undefined) {
@@ -187,6 +175,133 @@ ${formattedSources}
     primaryUnitTitle,
     primaryChunkId
   }
+}
+
+/**
+ * Versão assíncrona de compileSourcesPrompt com embeddings Gemini reais.
+ * Use esta em ExamBuilder, LessonStudio e Rafinha para qualidade semântica máxima.
+ * Fallback automático para TF-hash se não houver chave BYOK configurada.
+ */
+export async function compileSourcesPromptAsync(
+  sources: SourceItem[],
+  mode: KnowledgeMode,
+  options?: string | CompileSourcesOptions
+): Promise<{
+  promptContext: string
+  activeCount: number
+  totalWords: number
+  retrievedChunksCount?: number
+  primaryPageNumber?: number
+  primaryUnitTitle?: string
+  primaryChunkId?: string
+  embeddingMode: 'gemini' | 'local_fallback'
+}> {
+  const activeSources = sources.filter(s => s.active)
+  if (activeSources.length === 0) {
+    return { promptContext: '', activeCount: 0, totalWords: 0, retrievedChunksCount: 0, embeddingMode: 'local_fallback' }
+  }
+
+  const topic = typeof options === 'string' ? options : options?.topicQuery || ''
+  const topK = (typeof options === 'object' && options?.topKPerSource) || 5
+  const apiKey = getGeminiApiKey()
+  const embeddingMode = apiKey ? 'gemini' : 'local_fallback'
+
+  let totalWords = 0
+  let retrievedChunksCount = 0
+  let primaryPageNumber: number | undefined = undefined
+  let primaryUnitTitle: string | undefined = undefined
+  let primaryChunkId: string | undefined = undefined
+
+  const formattedSourcesArray = await Promise.all(activeSources.map(async (s, idx) => {
+    const words = s.wordCount || (s.content ? s.content.trim().split(/\s+/).length : 0)
+    totalWords += words
+    const scopeNote = s.scopeInfo ? `\nRecorte / Capítulo / Páginas: ${s.scopeInfo}` : ''
+    const urlNote = s.url ? `\nLink da Fonte: ${s.url}` : ''
+
+    let sourceContent = ''
+
+    if (s.content.length <= 4000) {
+      sourceContent = s.content
+      retrievedChunksCount += 1
+      const pageMatch = s.content.match(/--- Página\s*(\d+)/i)
+      if (pageMatch && primaryPageNumber === undefined) primaryPageNumber = parseInt(pageMatch[1], 10)
+      const unitMatch = s.content.match(/(?:\[(UNIT\s*\d+[^\]]*)\]|(Capítulo\s*\d+[^:\n]*:[^\n]+)|(UNIDADE\s*\d+[^:\n]*:[^\n]+))/i)
+      if (unitMatch && !primaryUnitTitle) primaryUnitTitle = (unitMatch[1] || unitMatch[2] || unitMatch[3]).trim()
+    } else {
+      const docChunks = indexDocumentContent(s.id, s.title, s.sourceType, s.category || 'Fonte', s.content)
+      const vectorChunks: VectorChunk[] = docChunks.length > 0
+        ? docChunks.map(dc => {
+            const separator = dc.content.startsWith(':') || dc.content.startsWith(' -') ? '' : '\n'
+            return { id: dc.id, content: `${dc.unitTitle}${separator}${dc.content}`, embedding: dc.embedding, pageNumber: dc.pageNumber, unitTitle: dc.unitTitle }
+          })
+        : (s.content.match(/[\s\S]{1,1500}/g) || [s.content]).map((chunkText, cIdx) => ({ id: `${s.id}_chunk_${cIdx}`, content: chunkText }))
+
+      if (topic && topic.trim().length > 0) {
+        // Usa Gemini semântico real (com fallback automático para TF-hash)
+        const topChunks = await searchVectorChunks(topic.trim(), vectorChunks, topK, undefined, apiKey || undefined)
+        retrievedChunksCount += topChunks.length
+        if (topChunks.length > 0 && primaryPageNumber === undefined) {
+          const topC = topChunks[0]
+          primaryChunkId = topC.id
+          if (topC.pageNumber) primaryPageNumber = topC.pageNumber
+          else {
+            const pageMatch = topC.content.match(/--- Página\s*(\d+)/i)
+            if (pageMatch) primaryPageNumber = parseInt(pageMatch[1], 10)
+          }
+          if (topC.unitTitle && !topC.unitTitle.startsWith('--- Página')) {
+            primaryUnitTitle = topC.unitTitle
+          } else {
+            const unitMatch = topC.content.match(/(?:\[(UNIT\s*\d+[^\]]*)\]|(Capítulo\s*\d+[^:\n]*:[^\n]+)|(UNIDADE\s*\d+[^:\n]*:[^\n]+))/i)
+            if (unitMatch) primaryUnitTitle = (unitMatch[1] || unitMatch[2] || unitMatch[3]).trim()
+          }
+        }
+        const modeLabel = embeddingMode === 'gemini' ? 'GEMINI text-embedding-004' : 'TF-hash local'
+        sourceContent = `[TRECHOS RECUPERADOS VIA BUSCA SEMÂNTICA (${modeLabel}) PARA O TÓPICO: "${topic}"]\n` +
+          topChunks.map((c, i) => `--- Trecho Relevante #${i + 1} ---\n${c.content}`).join('\n\n')
+      } else {
+        const sampleChunks = vectorChunks.slice(0, topK)
+        retrievedChunksCount += sampleChunks.length
+        if (sampleChunks.length > 0 && primaryPageNumber === undefined) {
+          const topC = sampleChunks[0]
+          primaryChunkId = topC.id
+          if (topC.pageNumber) primaryPageNumber = topC.pageNumber
+          const unitMatch = topC.content.match(/(?:\[(UNIT\s*\d+[^\]]*)\]|(Capítulo\s*\d+[^:\n]*:[^\n]+)|(UNIDADE\s*\d+[^:\n]*:[^\n]+))/i)
+          if (unitMatch) primaryUnitTitle = (unitMatch[1] || unitMatch[2] || unitMatch[3]).trim()
+        }
+        sourceContent = sampleChunks.map((c, i) => `--- Trecho #${i + 1} ---\n${c.content}`).join('\n\n')
+      }
+    }
+
+    return `[FONTE ${idx + 1}: ${s.title}]
+Tipo: ${s.sourceType.toUpperCase()} | Formato: ${s.fileType || 'texto'}${scopeNote}${urlNote}
+Conteúdo da Fonte:
+${sourceContent}`
+  }))
+
+  const formattedSources = formattedSourcesArray.join('\n----------------------------------------\n')
+
+  let modeInstruction = ''
+  if (mode === 'grounded') {
+    modeInstruction = `DIRETRIZ DE CONHECIMENTO: MODO ESTRITO (GROUNDED RAG - 100% FIEL ÀS FONTES)
+Todas as questões, vocabulários, interpretações de texto e estruturas gramaticais DEVEM ser fundamentadas EXCLUSIVAMENTE nas fontes fornecidas acima. NÃO invente vocabulário ou fatos externos.`
+  } else if (mode === 'web') {
+    modeInstruction = `DIRETRIZ DE CONHECIMENTO: MODO WEB & INTERNET ABERTA
+Utilize as fontes fornecidas como âncora principal e complemente livremente com fatos atualizados, notícias reais da internet e contexto contemporâneo.`
+  } else {
+    modeInstruction = `DIRETRIZ DE CONHECIMENTO: MODO HÍBRIDO (RECOMENDADO)
+Utilize as fontes fornecidas como base temático-conceitual, sintetizando o vocabulário e tópicos dos materiais com as metodologias pedagógicas, critérios CEFR/BNCC e elaboração de questões originais e inéditas da IA.`
+  }
+
+  const promptContext = `
+=== BASE DE CONHECIMENTO MULTI-FONTES (ESTILO NOTEBOOKLM) ===
+${modeInstruction}
+TOTAL DE FONTES ATIVAS: ${activeSources.length} (${totalWords.toLocaleString()} palavras de referência)
+
+${formattedSources}
+=== FIM DA BASE DE CONHECIMENTO ===
+`
+
+  return { promptContext, activeCount: activeSources.length, totalWords, retrievedChunksCount, primaryPageNumber, primaryUnitTitle, primaryChunkId, embeddingMode }
 }
 
 export default function SourceKnowledgeHub({
@@ -297,10 +412,43 @@ export default function SourceKnowledgeHub({
     try {
       let text = ''
       if (fileType === 'pdf') {
-        const { extractTextFromPdf } = await import('@/lib/pdfExtractor')
-        text = await extractTextFromPdf(file, (curr, tot) => {
-          setUploadStatus(`Extraindo PDF: página ${curr}/${tot}...`)
-        })
+        // Extrai texto e imagens simultaneamente (mesma passagem pelo PDF.js)
+        const { text: pdfText, images, scannedPagesCount } = await extractImagesFromPdf(
+          file,
+          40,   // máx 40 imagens por documento
+          1.5,  // escala do canvas
+          (curr, tot) => setUploadStatus(`Extraindo PDF: página ${curr}/${tot}...`)
+        )
+
+        text = pdfText
+
+        // Se há imagens E o professor tem chave Gemini BYOK, descreve via Vision
+        if (images.length > 0) {
+          const geminiKey = getGeminiApiKey()
+          if (geminiKey) {
+            setUploadStatus(`Descrevendo ${images.length} imagem(ns) com Gemini Vision...`)
+            try {
+              const descriptions = await describeImagesWithGemini(images, geminiKey)
+              if (descriptions.length > 0) {
+                // Anexa descrições ao final do texto, organizadas por página
+                const imageBlock = descriptions
+                  .map(d => `[IMAGEM — Página ${d.pageNumber}]: ${d.description}`)
+                  .join('\n')
+                text = text + '\n\n--- Descrições de Imagens (Gemini Vision) ---\n' + imageBlock
+              }
+            } catch {
+              // Falha na Vision não bloqueia o upload — texto já foi extraído
+              console.warn('[SourceKnowledgeHub] Gemini Vision falhou; imagens ignoradas.')
+            }
+          } else if (images.length > 0) {
+            // Sem chave: avisa o professor que imagens foram encontradas mas não descritas
+            text = text + `\n\n[NOTA: ${images.length} imagem(ns) encontrada(s) neste PDF. Configure uma chave Gemini BYOK para que sejam descritas automaticamente.]`
+          }
+        }
+
+        if (scannedPagesCount > 0 && !text.trim()) {
+          throw new Error(`O PDF "${file.name}" parece escaneado (sem camada de texto). Converta para PDF pesquisável ou envie como .docx.`)
+        }
       } else if (fileType === 'docx') {
         const { extractDocxWithImages } = await import('@/lib/pdfExtractor')
         const res = await extractDocxWithImages(file)

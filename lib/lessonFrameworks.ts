@@ -17,6 +17,8 @@ import {
   CheckingQuestions,
   HarvardThinkingRoutine
 } from './pedagogicalEnhancements'
+import { SUBJECT_SPECIALIZED_FRAMEWORKS } from './subjectLessonFrameworks'
+import { getSubjectProfile } from './subjectProfile'
 
 export interface FrameworkStageDefinition {
   name: string
@@ -48,6 +50,7 @@ export interface LessonFrameworkConfig {
 }
 
 export const LESSON_FRAMEWORKS: LessonFrameworkConfig[] = [
+  ...SUBJECT_SPECIALIZED_FRAMEWORKS,
   // ─── 1. PPP (PRESENTATION, PRACTICE, PRODUCTION) ───────────────────────────
   {
     id: 'ppp',
@@ -1109,12 +1112,44 @@ export function buildDynamicFrameworkPrompt(options: {
   spacedRetrievalHook?: string
   includeGeneralCompetencies?: boolean
   bookReferenceContent?: string
+  subjectId?: string
 }): string {
-  const fw = getLessonFrameworkConfig(options.methodologyId)
-  const enrichedMethodologyInfo = buildMethodologyInstructions([options.methodologyId, fw.id, fw.name])
+  const profile = getSubjectProfile(options.subjectId || options.activeProfileName)
+  const isEnglish = profile.id === 'english' || (!options.subjectId && (!options.activeProfileName || /inglês|english|elt/i.test(options.activeProfileName)))
 
-  const cefrGating = options.cefrLevel ? getCefrGatingRules(options.cefrLevel) : ''
-  const l1Directives = options.l1InterferenceDirectives || getL1InterferenceDirectives(options.topic, options.activeProfileName)
+  const fw = getLessonFrameworkConfig(options.methodologyId)
+  let enrichedMethodologyInfo = buildMethodologyInstructions([options.methodologyId, fw.id, fw.name])
+
+  const cefrGating = isEnglish && options.cefrLevel ? getCefrGatingRules(options.cefrLevel) : ''
+  const l1Directives = isEnglish ? (options.l1InterferenceDirectives || getL1InterferenceDirectives(options.topic, options.activeProfileName)) : ''
+
+  // Diretivas da Tríade e Equilíbrio de Tempo (quando não for inglês ou quando explicitamente configurado)
+  let triadSection = ''
+  let timeBalanceSection = ''
+  if (profile.presentationTriad) {
+    triadSection = `\n[TRÍADE DE APRESENTAÇÃO OBRIGATÓRIA — ${profile.presentationTriad.name.toUpperCase()}]:\n- Dimensões obrigatórias: ${profile.presentationTriad.components.join(' ➔ ')}\n- DIRETIVA: ${profile.presentationTriad.promptDirective}`
+  }
+  if (profile.timeBalanceMetric) {
+    timeBalanceSection = `\n[EQUILÍBRIO DE TEMPO DOCENTE/DISCENTE — ${profile.timeBalanceMetric.primaryMetric}]:\n- ${profile.timeBalanceMetric.teacherRoleLabel} máximo: ${profile.timeBalanceMetric.targetRatio.teacherMax}%\n- ${profile.timeBalanceMetric.studentRoleLabel} mínimo: ${profile.timeBalanceMetric.targetRatio.studentMin}%\n- Racional Pedagógico: ${profile.timeBalanceMetric.pedagogicalRationale}`
+  }
+
+  // De-biasing de frameworks universais (como 5E, UbD, PBL, Flipped) quando o contexto não for inglês
+  let frameworkDirective = fw.promptDirective
+  if (!isEnglish) {
+    frameworkDirective = frameworkDirective
+      .replace(/\(MFP\)/gi, '')
+      .replace(/estruturas linguísticas \(MFP\)/gi, 'conceitos, modelos e procedimentos da disciplina')
+      .replace(/Significado, Forma e Pronúncia/gi, 'Fundamentação conceitual, Estrutura e Aplicação prática')
+      .replace(/Significado, Forma e Uso/gi, 'Fundamentação conceitual, Estrutura e Aplicação prática')
+      .replace(/regras\/estruturas linguísticas/gi, 'conceitos e modelos estruturantes')
+      .replace(/linguagem-alvo/gi, 'conteúdo conceitual')
+
+    enrichedMethodologyInfo = enrichedMethodologyInfo
+      .replace(/\(MFP\)/gi, '')
+      .replace(/\/MFP/gi, '')
+      .replace(/MFP/gi, 'conceitos fundamentais')
+      .replace(/regras\/estruturas linguísticas/gi, 'conceitos e modelos estruturantes')
+  }
 
   // Injeções pedagógicas avançadas
   let clilSection = ''
@@ -1158,10 +1193,10 @@ export function buildDynamicFrameworkPrompt(options: {
   // Instrução rigorosa sobre diferenciação de habilidades BNCC por ação pedagógica
   const bnccDifferentiatorInstruction = `
 INSTRUÇÃO CRÍTICA SOBRE ATRIBUIÇÃO DE HABILIDADES BNCC POR ETAPA:
-1. Analise a AÇÃO PEDAGÓGICA específica de CADA etapa (ex.: leitura, escrita, oralidade/escuta, conhecimentos linguísticos/gramática).
-2. Atribua no campo "targetBnccCode" o código BNCC correspondente a essa prática específica (ex.: se a etapa é de leitura, use a habilidade de leitura; se é de debate oral, use a de oralidade; se é de escrita, use a de escrita).
+1. Analise a AÇÃO PEDAGÓGICA específica de CADA etapa (ex.: problematização, investigação empírica, análise de dados/fontes, modelagem conceitual, resolução de problemas, argumentação/debate crítico).
+2. Atribua no campo "targetBnccCode" o código BNCC correspondente a essa prática específica da disciplina (${profile.nameShort}).
 3. NÃO repita o mesmo código em todas as etapas a menos que genuinamente a mesma e única habilidade esteja sendo trabalhada do início ao fim da aula.
-4. Cada etapa DEVE refletir com precisão a modalidade linguística e o foco cognitivo trabalhado nela.
+4. Cada etapa DEVE refletir com precisão a modalidade investigativa e o foco cognitivo trabalhado nela.
 5. No campo "interactionType" de cada etapa, declare a dinâmica de interação: 'whole_class' (turma toda), 'pair' (dupla), 'group' (pequeno grupo), 'individual' (individual), ou 'teacher_student' (professor-aluno).
 6. No campo "materialReference" de cada etapa, cite opcionalmente páginas ou exercícios do material/livro (ex: "Livro pág. 42 ex. 3-5").
 `
@@ -1169,6 +1204,8 @@ INSTRUÇÃO CRÍTICA SOBRE ATRIBUIÇÃO DE HABILIDADES BNCC POR ETAPA:
   const contextualSections = [
     options.classMemorySnippet ? `\n${options.classMemorySnippet}` : '',
     spacedRetrievalSection,
+    triadSection,
+    timeBalanceSection,
     cefrGating ? `\n[GATING CEFR & LIMITES LINGUÍSTICOS (${options.cefrLevel})]:\n${cefrGating}` : '',
     l1Directives ? `\n[ESPECIALIZAÇÃO ELT BRASIL — ${l1Directives}]` : '',
     clilSection,
@@ -1189,9 +1226,9 @@ DADOS DA AULA:
 - Duração Total da Aula: ${options.targetDurationMinutes} minutos (a soma de durationMin de todas as etapas DEVE totalizar exatamente ${options.targetDurationMinutes} min)
 - Material de Apoio: ${options.bookTitle || 'Livro Didático'} ${options.unitChapter ? `(${options.unitChapter})` : ''}
 - Habilidades BNCC Alvo: ${options.bnccPromptString}
-${options.cefrLevel ? `- Nível CEFR Alvo: ${options.cefrLevel}` : ''}
+${isEnglish && options.cefrLevel ? `- Nível CEFR Alvo: ${options.cefrLevel}` : ''}
 
-${fw.promptDirective}
+${frameworkDirective}
 ${enrichedMethodologyInfo}
 ${options.promptDirective}
 ${options.systemPrompt}
@@ -1239,9 +1276,9 @@ DADOS DA AULA:
 - Duração Total da Aula: ${options.targetDurationMinutes} minutos (a soma de durationMin de todas as etapas DEVE totalizar exatamente ${options.targetDurationMinutes} min)
 - Material de Apoio: ${options.bookTitle || 'Livro Didático'} ${options.unitChapter ? `(${options.unitChapter})` : ''}
 - Habilidades BNCC Alvo: ${options.bnccPromptString}
-${options.cefrLevel ? `- Nível CEFR Alvo: ${options.cefrLevel}` : ''}
+${isEnglish && options.cefrLevel ? `- Nível CEFR Alvo: ${options.cefrLevel}` : ''}
 
-${fw.promptDirective}
+${frameworkDirective}
 ${enrichedMethodologyInfo}
 ${options.promptDirective}
 ${options.systemPrompt}

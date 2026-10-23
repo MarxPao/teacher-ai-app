@@ -1,0 +1,137 @@
+{
+  "spec_version": "2.0",
+  "identity": {
+    "portal_id": "portaleducacao.redesantacatarina.org.br",
+    "domain": "portaleducacao.redesantacatarina.org.br",
+    "task_id": "custom:nav-digitacao-de-notas",
+    "version": 1,
+    "name": "Acessar Digitação de Notas",
+    "description": "Executa (1 passo(s)): Digitação de Notas"
+  },
+  "compat": {
+    "support_tier": 1,
+    "archetype_tags": [
+      "recorded",
+      "table_form"
+    ],
+    "tested_archetypes": [
+      "standard_table"
+    ],
+    "min_runner_version": "2.0.0"
+  },
+  "params": {
+    "texto": {
+      "type": "string",
+      "required": true,
+      "pii": false,
+      "description": "Conteúdo textual a ser inserido no portal"
+    }
+  },
+  "entry_fingerprint": {
+    "route": {
+      "host": "portaleducacao.redesantacatarina.org.br",
+      "path_pattern": "/academico/diario-de-classe/registro-de-notas*"
+    },
+    "landmarks": [
+      {
+        "candidates": [
+          {
+            "strategy": "role_name",
+            "role": "main",
+            "name": "Principal",
+            "match": "contains"
+          },
+          {
+            "strategy": "css",
+            "selector": "main, [role=\"main\"], body"
+          }
+        ],
+        "description": "Estrutura principal da página",
+        "expect_count": "one"
+      }
+    ],
+    "title_pattern": "*Digitação de Notas*"
+  },
+  "entry_node": "n1",
+  "nodes": {
+    "n1": {
+      "label": "Navegar para /academico/diario-de-classe/registro-de-notas",
+      "retry": {
+        "max_attempts": 2,
+        "backoff_ms": 500
+      },
+      "timeout_ms": 10000,
+      "postconditions": [],
+      "on_success": "$end",
+      "on_fail": "$abort",
+      "type": "NAVIGATE",
+      "path": "/academico/diario-de-classe/registro-de-notas",
+      "host": "portaleducacao.redesantacatarina.org.br"
+    }
+  },
+  "canonical_mapping": {
+    "columns": [
+      {
+        "portal_labels": [
+          "Nome",
+          "Aluno"
+        ],
+        "field": "student.name",
+        "semantic_type": "name"
+      },
+      {
+        "portal_labels": [
+          "Matrícula",
+          "RA",
+          "Código"
+        ],
+        "field": "student.roll_number",
+        "semantic_type": "identifier"
+      }
+    ],
+    "grade_scale": {
+      "type": "numeric",
+      "min": 0,
+      "max": 10,
+      "decimal_separator": ","
+    },
+    "attendance": {
+      "polarity": "checked_is_present"
+    },
+    "ambiguous_requires_confirmation": true
+  },
+  "safety": {
+    "side_effect_level": "read",
+    "writes_require_checkpoint": true,
+    "max_writes_per_run": 0,
+    "rate_limit": {
+      "min_delay_ms": 200,
+      "jitter_ms": 100
+    },
+    "allowed_hosts": [
+      "portaleducacao.redesantacatarina.org.br"
+    ]
+  },
+  "provenance": {
+    "author": "teacher-ai-compiler",
+    "created_at": "2026-10-11T00:00:00.000Z",
+    "updated_at": "2026-10-11T00:00:00.000Z",
+    "source": "recorded",
+    "compiler_version": "2.0.0",
+    "has_self_healed": false,
+    "pii_scrubbed": true
+  },
+  "id": "skill_portaleducacao.redesantacatarina.org.br__custom_nav-digitacao-de-notas",
+  "portal_id": "portaleducacao.redesantacatarina.org.br",
+  "task_id": "custom:nav-digitacao-de-notas",
+  "name": "Acessar Digitação de Notas",
+  "version": "1.0.0",
+  "metadata": {
+    "task_name": "Acessar Digitação de Notas",
+    "skill_type": "reading",
+    "description": "Executa (1 passo(s)): Digitação de Notas",
+    "source_url": "",
+    "created_at": "2026-10-17T16:03:10.055Z",
+    "updated_at": "2026-10-17T16:03:10.055Z"
+  }
+}

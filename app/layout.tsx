@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import './globals.css'
+import '@/lib/subjects'
 import ServiceWorkerRegister from '@/components/ServiceWorkerRegister'
 import StorageErrorBanner from '@/components/StorageErrorBanner'
 

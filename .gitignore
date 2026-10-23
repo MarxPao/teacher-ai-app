@@ -73,3 +73,9 @@ sidecar/venv/
 .venv/
 .worktrees/
 conformance/community/out/
+
+# Temporary scratch and benchmark files
+diff_background.txt
+commit-*.bat
+bench/.build/
+bench/results/

@@ -39,16 +39,65 @@
       .sp-chat-messages {
         display: flex;
         flex-direction: column;
-        gap: 10px;
-        max-height: 290px;
-        min-height: 180px;
+        gap: 12px;
+        min-height: 280px;
+        max-height: 440px;
         overflow-y: auto;
-        padding: 10px;
+        padding: 14px;
         background: var(--paper-page);
         border: 1px solid var(--border-soft);
         border-radius: var(--radius-md);
-        margin-bottom: 10px;
+        margin-bottom: 12px;
         scroll-behavior: smooth;
+      }
+      .sp-chat-bubble {
+        padding: 10px 14px;
+        border-radius: 14px;
+        font-size: 13.5px;
+        line-height: 1.5;
+        word-break: break-word;
+        box-shadow: var(--shadow-flat);
+      }
+      .sp-chat-composer {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        width: 100%;
+      }
+      .sp-chat-textarea {
+        width: 100%;
+        min-height: 56px;
+        max-height: 120px;
+        padding: 10px 12px;
+        font-size: 13.5px;
+        font-family: inherit;
+        color: var(--paper-ink);
+        background: var(--surface-1);
+        border: 1.5px solid var(--border-medium);
+        border-radius: var(--radius-md);
+        resize: vertical;
+        box-sizing: border-box;
+        line-height: 1.45;
+        outline: none;
+        transition: border-color 0.15s ease, box-shadow 0.15s ease;
+      }
+      .sp-chat-textarea:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 2px var(--accent-glow);
+      }
+      .sp-chat-composer-bar {
+        display: flex;
+        justify-content: flex-end;
+      }
+      .sp-btn-send {
+        padding: 8px 20px;
+        font-size: 13px;
+        font-weight: 700;
+        border-radius: var(--radius-md);
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        cursor: pointer;
       }
       .sp-chat-row {
         display: flex;
@@ -359,12 +408,7 @@
       const welcome = {
         id: 'welcome_' + Date.now(),
         role: 'assistant',
-        text: 'Olá, professora! Sou seu assistente no portal escolar. ✨\nVocê pode conversar comigo, perguntar o que há nesta tela ou pedir ações como "selecione 7º ano nos filtros" e "ir para Frequência".',
-        chips: [
-          { label: '🔍 O que há nesta tela?', command: 'O que há nesta tela?' },
-          { label: '📋 Ir para Frequência', command: 'Ir para Frequência' },
-          { label: '📊 Abrir Notas', command: 'Abrir Notas' },
-        ],
+        text: 'Olá, professora! Sou seu assistente no portal escolar. ✨\nO que você deseja fazer hoje? (ex: "acesse notas", "acesse frequencia", "selecione 7º ano")',
         ts: Date.now(),
       }
       history = [welcome]
@@ -448,13 +492,40 @@
       return bubble
     }
 
+    function sanitizeErrorText(raw) {
+      if (!raw) return ''
+      const s = String(raw).trim()
+      if (/503|high demand|temporarily unavailable|spikes in demand/i.test(s)) {
+        return 'O serviço de inteligência artificial está temporariamente sobrecarregado. Aguarde alguns instantes e tente novamente.'
+      }
+      if (/429|quota exceeded|resource_exhausted|taxa limite|cota/i.test(s)) {
+        return 'O limite temporário de requisições por minuto da IA foi atingido. Aguarde alguns segundos e tente novamente.'
+      }
+      if (/404|not found|modelo não encontrado/i.test(s)) {
+        return 'O modelo de inteligência artificial configurado não foi encontrado ou está indisponível.'
+      }
+      if (/E_API_KEY_MISSING|chave.*não encontrada|chave de api/i.test(s)) {
+        return 'Chave de API não configurada. Por favor, cadastre sua chave nas preferências do aplicativo desktop.'
+      }
+      if (/E_CONSENT_REQUIRED|não consentido/i.test(s)) {
+        return 'Envio de dados para a inteligência artificial não configurado. Verifique suas preferências no aplicativo desktop.'
+      }
+      if (s.includes('Google Gemini API error') || s.includes('"error":') || s.includes('HTTP 5')) {
+        return 'O serviço de inteligência artificial encontrou uma instabilidade temporária. Tente novamente em instantes.'
+      }
+      if (s.length > 150 || s.includes('{') || s.includes('\n')) {
+        return 'Não foi possível concluir a ação nesta tela. Deseja tentar outra opção ou gravar uma demonstração?'
+      }
+      return s
+    }
+
     function inspectAndReplyPageContext(userText, fallbackPrefix) {
-      showTyping('Lendo abas e filtros disponíveis na página...')
+      showTyping('Lendo abas e opções disponíveis na página...')
       chrome.runtime.sendMessage({ action: 'SKILLGRAPH_INSPECT_PAGE_CONTEXT' }, (ctx) => {
         if (!ctx || !ctx.success) {
           appendAssistantMessage(
-            fallbackPrefix ||
-              'Estou pronto para ajudar! Abra a aba do portal escolar e me diga para qual seção deseja ir (ex: Frequência, Notas, Diário) ou qual filtro deseja selecionar.',
+            sanitizeErrorText(fallbackPrefix) ||
+              'Estou pronto para ajudar! Abra a aba do portal escolar e me diga para qual seção deseja ir (ex: Frequência, Notas, Aulas) ou qual filtro deseja selecionar.',
             {
               variant: fallbackPrefix ? 'error' : 'normal',
               chips: [
@@ -467,22 +538,35 @@
           return
         }
 
-        const lines = []
+        // Se veio de falha/fallback, exibe orientação acolhedora e sucinta sem poluir com dump de filtros
         if (fallbackPrefix) {
-          lines.push(fallbackPrefix)
-          lines.push('')
-        } else {
-          lines.push(`📍 Página atual: ${ctx.title || ctx.url || 'Portal Escolar'}`)
+          const cleanErr = sanitizeErrorText(fallbackPrefix)
+          const lines = [cleanErr, '', 'Posso tentar uma das abas abaixo ou você pode me ensinar como fazer:']
+          const chips = []
+          if (Array.isArray(ctx.tabs) && ctx.tabs.length > 0) {
+            ctx.tabs.slice(0, 3).forEach((t) => chips.push({ label: `Ir para ${t}`, command: t }))
+          }
+          chips.push({ label: '📹 Gravar demonstração', command: '__record__' })
+          appendAssistantMessage(lines.join('\n'), {
+            variant: 'error',
+            chips,
+          })
+          return
         }
 
+        // Modo inspeção ("O que há nesta tela?"): resumo enxuto e pedagógico
+        const lines = [`📍 Página atual: ${ctx.title || 'Portal Escolar'}`]
         const chips = []
+        if (Array.isArray(ctx.tabs) && ctx.tabs.length > 0) {
+          lines.push(`🧭 Abas: ${ctx.tabs.slice(0, 6).join(', ')}`)
+          ctx.tabs.slice(0, 3).forEach((t) => chips.push({ label: `Ir para ${t}`, command: t }))
+        }
         if (Array.isArray(ctx.filters) && ctx.filters.length > 0) {
-          lines.push('🎛️ Filtros disponíveis nesta tela:')
-          ctx.filters.forEach((f) => {
-            const optsPreview = (f.options || []).slice(0, 6).map((o) => o.text).join(', ')
-            lines.push(`• ${f.label}: ${optsPreview || 'sem opções'}`)
-            ;(f.options || []).slice(0, 4).forEach((o) => {
-              if (chips.length < 7) {
+          const filterSummary = ctx.filters.map((f) => f.label || 'Filtro').slice(0, 4).join(', ')
+          lines.push(`🎛️ Filtros: ${filterSummary}`)
+          ctx.filters.slice(0, 2).forEach((f) => {
+            (f.options || []).slice(0, 2).forEach((o) => {
+              if (chips.length < 6) {
                 chips.push({
                   label: `Selecionar ${o.text}`,
                   command: `selecione ${o.text} nos filtros`,
@@ -491,28 +575,11 @@
             })
           })
         }
-
-        if (Array.isArray(ctx.tabs) && ctx.tabs.length > 0) {
-          lines.push(`🧭 Abas e botões visíveis: ${ctx.tabs.slice(0, 8).join(', ')}`)
-          ctx.tabs.slice(0, 3).forEach((t) => {
-            if (chips.length < 9) {
-              chips.push({ label: `Ir para ${t}`, command: t })
-            }
-          })
-        }
-
-        if (fallbackPrefix) {
-          chips.push({ label: '📹 Gravar demonstração', command: '__record__' })
-        }
-
-        if (lines.length <= 1) {
-          lines.push('Não encontrei filtros <select> nesta tela, mas posso clicar em abas ou você pode gravar uma demonstração na aba "📹 Ensinar".')
-        } else {
-          lines.push('\nToque em uma opção abaixo ou digite o que deseja fazer:')
-        }
+        chips.push({ label: '📹 Gravar demonstração', command: '__record__' })
+        lines.push('\nO que deseja fazer nesta tela?')
 
         appendAssistantMessage(lines.join('\n'), {
-          variant: fallbackPrefix ? 'error' : 'normal',
+          variant: 'normal',
           chips,
         })
       })
@@ -520,16 +587,10 @@
 
     function handleExploreResult(exploreRes, queryText) {
       if (exploreRes?.success) {
-        const learnedGraph = exploreRes.quarantine ? exploreRes.graph : null
         appendAssistantMessage(
-          exploreRes.friendlyMessage || 'Ação realizada no portal! ✨ Revise os passos abaixo se quiser salvar como rotina.',
+          exploreRes.friendlyMessage || `Pronto! Acessei "${queryText}" no portal. ✨`,
           {
             variant: 'success',
-            onRenderBubble: (bubble) => {
-              if (learnedGraph?.identity) {
-                attachActivationControls(bubble, learnedGraph, hooks)
-              }
-            },
           }
         )
         if (typeof hooks?.onReloadSkills === 'function') hooks.onReloadSkills()

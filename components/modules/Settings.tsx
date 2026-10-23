@@ -31,8 +31,7 @@ import PortalSkillsModule from '@/components/modules/PortalSkillsModule'
 import Button from '@/components/Button'
 import { validateSupabaseCredentials, ByokValidationResult } from '@/lib/byokValidator'
 import { exportTeacherDataAsJson, exportTeacherStudentsCsv } from '@/lib/dataPortability'
-import '@/lib/subjects/english'
-import '@/lib/subjects/portuguese'
+import '@/lib/subjects'
 
 interface Config { school: string; teacher: string; apikey: string; instructions: string; cloudSyncUrl?: string }
 
@@ -457,11 +456,22 @@ export default function Settings() {
                       }}
                       style={{ width: '100%', border: '1px solid rgba(88,110,117,0.2)', borderRadius: 9, padding: '9px 12px', fontSize: TEXT.body, background: '#fdf8f2', color: '#2c1a0e', outline: 'none', fontFamily: "'Plus Jakarta Sans', sans-serif" }}
                     >
-                      {subjects.map(s => (
-                        <option key={s.id} value={s.id}>
-                          {s.name} ({s.id === 'english' ? 'Cambridge / CEFR' : 'BNCC / ENEM'})
-                        </option>
-                      ))}
+                      {subjects.map(s => {
+                        const frameworkTag = s.id === 'english'
+                          ? 'Cambridge / CEFR'
+                          : s.id === 'science'
+                          ? 'BNCC Ciências EF II'
+                          : ['physics', 'chemistry', 'biology'].includes(s.id)
+                          ? 'BNCC Ensino Médio'
+                          : s.id === 'history'
+                          ? 'BNCC & Leis 10.639 / 11.645'
+                          : 'BNCC & ENEM'
+                        return (
+                          <option key={s.id} value={s.id}>
+                            {s.name} ({frameworkTag})
+                          </option>
+                        )
+                      })}
                     </select>
                     <p style={{ fontSize: TEXT.caption, color: '#7a5c42', marginTop: 6, margin: '6px 0 0' }}>
                       Define a taxonomia e o gerador padrão quando nenhuma turma específica estiver selecionada.

@@ -119,7 +119,7 @@ export function generateDocumentHtml(options: DocumentExportOptions): string {
         <div style="padding: 6px;">
           <!-- CABEÇALHO OFICIAL DO PDI -->
           <div class="doc-header">
-            ${ident.schoolName || schoolInfo.schoolName || schoolName ? `<div class="school-subtitle">${ident.schoolName || schoolInfo.schoolName || schoolName}</div>` : ''}
+            ${ident.schoolName || schoolInfo.schoolName || schoolName ? `<div class="school-subtitle">${(ident.schoolName || schoolInfo.schoolName || schoolName).toUpperCase()}</div>` : ''}
             <div class="doc-title">PLANO DE DESENVOLVIMENTO INDIVIDUAL (PDI)</div>
             <div class="component-subtitle">Componente curricular: ${componentLabel}</div>
           </div>

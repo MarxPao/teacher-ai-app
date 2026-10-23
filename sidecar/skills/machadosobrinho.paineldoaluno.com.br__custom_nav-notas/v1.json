@@ -1,0 +1,137 @@
+{
+  "spec_version": "2.0",
+  "identity": {
+    "portal_id": "machadosobrinho.paineldoaluno.com.br",
+    "domain": "machadosobrinho.paineldoaluno.com.br",
+    "task_id": "custom:nav-notas",
+    "version": 1,
+    "name": "Acessar Notas",
+    "description": "Executa (1 passo(s)): Notas"
+  },
+  "compat": {
+    "support_tier": 1,
+    "archetype_tags": [
+      "recorded",
+      "table_form"
+    ],
+    "tested_archetypes": [
+      "standard_table"
+    ],
+    "min_runner_version": "2.0.0"
+  },
+  "params": {
+    "texto": {
+      "type": "string",
+      "required": true,
+      "pii": false,
+      "description": "Conteúdo textual a ser inserido no portal"
+    }
+  },
+  "entry_fingerprint": {
+    "route": {
+      "host": "machadosobrinho.paineldoaluno.com.br",
+      "path_pattern": "/professor_notas*"
+    },
+    "landmarks": [
+      {
+        "candidates": [
+          {
+            "strategy": "role_name",
+            "role": "main",
+            "name": "Principal",
+            "match": "contains"
+          },
+          {
+            "strategy": "css",
+            "selector": "main, [role=\"main\"], body"
+          }
+        ],
+        "description": "Estrutura principal da página",
+        "expect_count": "one"
+      }
+    ],
+    "title_pattern": "*Notas*"
+  },
+  "entry_node": "n1",
+  "nodes": {
+    "n1": {
+      "label": "Navegar para /professor_notas",
+      "retry": {
+        "max_attempts": 2,
+        "backoff_ms": 500
+      },
+      "timeout_ms": 10000,
+      "postconditions": [],
+      "on_success": "$end",
+      "on_fail": "$abort",
+      "type": "NAVIGATE",
+      "path": "/professor_notas",
+      "host": "machadosobrinho.paineldoaluno.com.br"
+    }
+  },
+  "canonical_mapping": {
+    "columns": [
+      {
+        "portal_labels": [
+          "Nome",
+          "Aluno"
+        ],
+        "field": "student.name",
+        "semantic_type": "name"
+      },
+      {
+        "portal_labels": [
+          "Matrícula",
+          "RA",
+          "Código"
+        ],
+        "field": "student.roll_number",
+        "semantic_type": "identifier"
+      }
+    ],
+    "grade_scale": {
+      "type": "numeric",
+      "min": 0,
+      "max": 10,
+      "decimal_separator": ","
+    },
+    "attendance": {
+      "polarity": "checked_is_present"
+    },
+    "ambiguous_requires_confirmation": true
+  },
+  "safety": {
+    "side_effect_level": "read",
+    "writes_require_checkpoint": true,
+    "max_writes_per_run": 0,
+    "rate_limit": {
+      "min_delay_ms": 200,
+      "jitter_ms": 100
+    },
+    "allowed_hosts": [
+      "machadosobrinho.paineldoaluno.com.br"
+    ]
+  },
+  "provenance": {
+    "author": "teacher-ai-compiler",
+    "created_at": "2026-10-11T00:00:00.000Z",
+    "updated_at": "2026-10-11T00:00:00.000Z",
+    "source": "recorded",
+    "compiler_version": "2.0.0",
+    "has_self_healed": false,
+    "pii_scrubbed": true
+  },
+  "id": "skill_machadosobrinho.paineldoaluno.com.br__custom_nav-notas",
+  "portal_id": "machadosobrinho.paineldoaluno.com.br",
+  "task_id": "custom:nav-notas",
+  "name": "Acessar Notas",
+  "version": "1.0.0",
+  "metadata": {
+    "task_name": "Acessar Notas",
+    "skill_type": "reading",
+    "description": "Executa (1 passo(s)): Notas",
+    "source_url": "",
+    "created_at": "2026-10-23T10:34:34.476Z",
+    "updated_at": "2026-10-23T10:34:34.476Z"
+  }
+}

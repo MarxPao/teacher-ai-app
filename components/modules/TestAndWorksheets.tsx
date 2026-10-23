@@ -70,8 +70,7 @@ import {
   type SubjectProfile,
 } from '@/lib/subjectProfile'
 import { getAvailableApisForSelect, executeUnifiedAiCall } from '@/lib/autoApiSelector'
-import '@/lib/subjects/english'
-import '@/lib/subjects/portuguese'
+import '@/lib/subjects'
 
 // Types
 export type ContentMode = 'exam' | 'worksheet'
@@ -147,6 +146,29 @@ export default function TestAndWorksheets({ initialMode = 'exam' }: TestAndWorks
     }
     return 'english'
   })
+
+  useEffect(() => {
+    const handleSubjectChange = (e: Event) => {
+      const newSubId = (e as CustomEvent).detail
+      if (typeof newSubId === 'string' && newSubId) {
+        setSubjectId(newSubId)
+      } else {
+        try {
+          const raw = localStorage.getItem('teacher_settings')
+          if (raw) {
+            const s = JSON.parse(raw)
+            if (s.defaultSubject) setSubjectId(s.defaultSubject)
+          }
+        } catch {}
+      }
+    }
+    window.addEventListener('teacher:subject_changed', handleSubjectChange)
+    window.addEventListener('teacher:data_changed', handleSubjectChange)
+    return () => {
+      window.removeEventListener('teacher:subject_changed', handleSubjectChange)
+      window.removeEventListener('teacher:data_changed', handleSubjectChange)
+    }
+  }, [])
   const activeProfile = getSubjectProfile(subjectId)
   const SECTIONS = getExamSections(activeProfile)
   const CEFR = getLevelIds(activeProfile).length > 0 ? getLevelIds(activeProfile) : ['A1', 'A2', 'B1', 'B2', 'C1', 'C2']
@@ -254,27 +276,40 @@ export default function TestAndWorksheets({ initialMode = 'exam' }: TestAndWorks
   const [savedWorksheetsCount, setSavedWorksheetsCount] = useState(0)
   const [availableFormats, setAvailableFormats] = useState<SchoolDocumentFormat[]>(() => getDocumentFormats())
   const [selectedDocumentFormatId, setSelectedDocumentFormatId] = useState<string>(() =>
-    getDefaultFormatForSchool('Machado Sobrinho', 'exam').id
+    getDefaultFormatForSchool(undefined, 'exam').id
   )
 
   // Sincroniza contagens salvas e formatos de arquivo
   const updateCounts = () => {
     try { setSavedExamsCount(JSON.parse(localStorage.getItem('teacher_saved_exams') || '[]').length) } catch { setSavedExamsCount(0) }
     try { setSavedWorksheetsCount(JSON.parse(localStorage.getItem('teacher_saved_quicks') || '[]').length) } catch { setSavedWorksheetsCount(0) }
-    try { setAvailableFormats(getDocumentFormats()) } catch {}
+    try {
+      const fmts = getDocumentFormats()
+      setAvailableFormats(fmts)
+      const currentSchool = header.school || loadConfig().school || ''
+      const def = getDefaultFormatForSchool(currentSchool, mode === 'exam' ? 'exam' : 'worksheet')
+      if (def) setSelectedDocumentFormatId(def.id)
+    } catch {}
   }
 
   useEffect(() => {
     updateCounts()
     window.addEventListener('storage', updateCounts)
-    return () => window.removeEventListener('storage', updateCounts)
-  }, [])
+    window.addEventListener('teacher:formats-updated', updateCounts)
+    return () => {
+      window.removeEventListener('storage', updateCounts)
+      window.removeEventListener('teacher:formats-updated', updateCounts)
+    }
+  }, [header.school, mode])
 
   // Inicialização de APIs e Config
   useEffect(() => {
     const cfg = loadConfig()
     const a = loadApis()
-    setHeader(h => ({ ...h, school: cfg.school || '', teacher: cfg.teacher || '' }))
+    const initialSchool = cfg.school || ''
+    setHeader(h => ({ ...h, school: initialSchool, teacher: cfg.teacher || '' }))
+    const defFormat = getDefaultFormatForSchool(initialSchool, mode === 'exam' ? 'exam' : 'worksheet')
+    if (defFormat) setSelectedDocumentFormatId(defFormat.id)
     setApis(a)
     if (a.length > 0) setSelectedApiId(a[0].id)
 

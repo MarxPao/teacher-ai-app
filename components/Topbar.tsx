@@ -8,6 +8,10 @@ import TeacherLogo from '@/components/TeacherLogo'
 import { ModuleKey } from '@/app/page'
 
 import { useGlobalVoice } from '@/lib/useGlobalVoice'
+import { getAllSubjectProfiles, getSubjectProfile } from '@/lib/subjectProfile'
+import { saveTeacherStyleProfile } from '@/lib/teacherStyleProfile'
+import { toast } from '@/components/Toast'
+import '@/lib/subjects'
 
 interface TopbarProps {
   module: string
@@ -53,6 +57,96 @@ export default function Topbar({ module, submodule, isAiLoading = false, onNavig
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
   }, [settingsOpen])
+
+  // Gestão de Disciplina Ativa (Multi-Disciplinas)
+  const [subjectMenuOpen, setSubjectMenuOpen] = useState(false)
+  const [currentSubjectId, setCurrentSubjectId] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = localStorage.getItem('teacher_settings')
+        if (raw) {
+          const s = JSON.parse(raw)
+          if (s.defaultSubject) return s.defaultSubject
+        }
+      } catch {}
+    }
+    return 'english'
+  })
+  const subjectMenuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const syncSubject = () => {
+      try {
+        const raw = localStorage.getItem('teacher_settings')
+        if (raw) {
+          const s = JSON.parse(raw)
+          if (s.defaultSubject && s.defaultSubject !== currentSubjectId) {
+            setCurrentSubjectId(s.defaultSubject)
+          }
+        }
+      } catch {}
+    }
+    window.addEventListener('teacher:data_changed', syncSubject)
+    window.addEventListener('teacher:subject_changed', syncSubject)
+    return () => {
+      window.removeEventListener('teacher:data_changed', syncSubject)
+      window.removeEventListener('teacher:subject_changed', syncSubject)
+    }
+  }, [currentSubjectId])
+
+  useEffect(() => {
+    if (!subjectMenuOpen) return
+    const handler = (e: MouseEvent) => {
+      if (subjectMenuRef.current && !subjectMenuRef.current.contains(e.target as Node)) {
+        setSubjectMenuOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [subjectMenuOpen])
+
+  useEffect(() => {
+    if (!subjectMenuOpen) return
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') setSubjectMenuOpen(false) }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [subjectMenuOpen])
+
+  const getSubjectMeta = (id: string) => {
+    switch (id) {
+      case 'portuguese': return { icon: 'ti-book', color: '#c4834a', bg: '#fffaf5' }
+      case 'math': return { icon: 'ti-math-symbols', color: '#059669', bg: '#ecfdf5' }
+      case 'history': return { icon: 'ti-hourglass-empty', color: '#d97706', bg: '#fffbeb' }
+      case 'geography': return { icon: 'ti-map-2', color: '#0891b2', bg: '#ecfeff' }
+      case 'physics': return { icon: 'ti-bolt', color: '#4f46e5', bg: '#eef2ff' }
+      case 'chemistry': return { icon: 'ti-flask', color: '#7c3aed', bg: '#f5f3ff' }
+      case 'biology': return { icon: 'ti-dna', color: '#0d9488', bg: '#f0fdfa' }
+      case 'science': return { icon: 'ti-atom-2', color: '#16a34a', bg: '#f0fdf4' }
+      case 'english':
+      default: return { icon: 'ti-world', color: '#8b5e3c', bg: '#fffcf8' }
+    }
+  }
+
+  const handleSelectSubject = (id: string) => {
+    try {
+      const raw = localStorage.getItem('teacher_settings')
+      const s = raw ? JSON.parse(raw) : {}
+      s.defaultSubject = id
+      localStorage.setItem('teacher_settings', JSON.stringify(s))
+      localStorage.setItem('teacher_active_class_subject', id)
+      saveTeacherStyleProfile({ defaultSubject: id })
+    } catch {}
+    setCurrentSubjectId(id)
+    setSubjectMenuOpen(false)
+    window.dispatchEvent(new CustomEvent('teacher:data_changed'))
+    window.dispatchEvent(new CustomEvent('teacher:subject_changed', { detail: id }))
+    const prof = getSubjectProfile(id)
+    toast.success(`Matéria ativa: ${prof.name}!`)
+  }
+
+  const allSubjects = getAllSubjectProfiles()
+  const activeProfile = getSubjectProfile(currentSubjectId)
+  const activeMeta = getSubjectMeta(activeProfile.id)
 
   return (
     <header
@@ -104,6 +198,86 @@ export default function Topbar({ module, submodule, isAiLoading = false, onNavig
       )}
 
       <div style={{ display: 'flex', alignItems: 'center', gap: SPACE[2], flexShrink: 0 }}>
+        {/* Seletor de Disciplina Ativa (Multi-Disciplinas) */}
+        <div ref={subjectMenuRef} style={{ position: 'relative' }}>
+          <button
+            onClick={() => setSubjectMenuOpen(prev => !prev)}
+            title={`Disciplina ativa: ${activeProfile.name}. Clique para alternar.`}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              padding: '4px 10px',
+              borderRadius: RADIUS.md,
+              border: `1px solid ${activeMeta.color}40`,
+              background: activeMeta.bg,
+              color: activeMeta.color,
+              cursor: 'pointer', fontSize: TEXT.xs, fontWeight: 700,
+              fontFamily: FONT.sans, transition: TRANSITION.fast,
+              boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)'
+            }}
+          >
+            <i className={`ti ${activeMeta.icon}`} style={{ fontSize: 13 }} />
+            <span className="hidden sm:inline">{activeProfile.nameShort || activeProfile.name}</span>
+            <i className="ti ti-chevron-down" style={{ fontSize: 10, opacity: 0.7 }} />
+          </button>
+
+          {subjectMenuOpen && (
+            <div
+              style={{
+                position: 'absolute',
+                top: 'calc(100% + 6px)',
+                right: 0,
+                width: 250,
+                background: '#fff',
+                borderRadius: RADIUS.lg,
+                boxShadow: '0 10px 28px rgba(44,26,14,0.18)',
+                border: '1px solid rgba(88,110,117,0.2)',
+                padding: 6,
+                zIndex: 100,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 2
+              }}
+            >
+              <div style={{ padding: '6px 10px', fontSize: 10.5, fontWeight: 800, color: '#a08060', textTransform: 'uppercase', letterSpacing: '0.8px', borderBottom: '1px solid rgba(0,0,0,0.06)', marginBottom: 4 }}>
+                Alternar Matéria Ativa
+              </div>
+              <div style={{ maxHeight: 320, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }}>
+                {allSubjects.map(sub => {
+                  const meta = getSubjectMeta(sub.id)
+                  const isSel = sub.id === currentSubjectId
+                  return (
+                    <button
+                      key={sub.id}
+                      onClick={() => handleSelectSubject(sub.id)}
+                      style={{
+                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                        padding: '7px 10px',
+                        borderRadius: RADIUS.md,
+                        background: isSel ? '#f5efe6' : 'transparent',
+                        border: 'none',
+                        cursor: 'pointer',
+                        textAlign: 'left',
+                        fontFamily: FONT.sans,
+                        fontSize: 12.5,
+                        fontWeight: isSel ? 700 : 500,
+                        color: isSel ? '#2c1a0e' : '#4b382a',
+                        transition: 'background 0.12s ease'
+                      }}
+                    >
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <i className={`ti ${meta.icon}`} style={{ color: meta.color, fontSize: 14 }} />
+                        <span>{sub.name}</span>
+                      </span>
+                      {isSel && (
+                        <i className="ti ti-check" style={{ color: '#8b5e3c', fontSize: 14 }} />
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+        </div>
         {/* Botão Rafinha IA */}
         <button
           onClick={() => window.dispatchEvent(new CustomEvent('teacher:open_rafinha'))}

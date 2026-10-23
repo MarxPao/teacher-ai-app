@@ -75,10 +75,15 @@ export interface SchoolDocumentFormat {
   footerText: string
   showSignatureLine: boolean
   signatureLabels?: [string, string]
+  logoUrl?: string
 }
 
 const STORAGE_KEY = 'teacher_document_formats_v1'
 const ACTIVE_FORMAT_KEY = 'teacher_active_document_format_id'
+
+// Fallback em memória para testes (Node/Vitest) e ambientes SSR
+let memoryFormats: SchoolDocumentFormat[] | null = null
+let memoryActiveFormatId: string | null = null
 
 export const DEFAULT_DOCUMENT_FORMATS: SchoolDocumentFormat[] = [
   {
@@ -244,44 +249,96 @@ export const DEFAULT_DOCUMENT_FORMATS: SchoolDocumentFormat[] = [
 ]
 
 /**
- * Lista todos os formatos de arquivo salvos (mesclando os padrões com os personalizados do professor).
+ * Detecta o nome de um colégio/escola a partir do cabeçalho ou das primeiras linhas de texto.
+ */
+export function detectSchoolNameFromText(text: string, fileName?: string): string | null {
+  const head = (text || '').slice(0, 2000)
+
+  // 1. Procura termos institucionais comuns no cabeçalho
+  const m = head.match(
+    /(?:col[ée]gio|escola(?:\s+estadual|\s+municipal|\s+particular)?|instituto(?:\s+federal|\s+de\s+educa[çc][ãa]o)?|centro\s+educacional|rede\s+de\s+ensino|educand[áa]rio|liceu)\s+([A-Za-zÀ-ÿ0-9\s'’.\-]{3,50})/i
+  )
+  if (m && m[0]) {
+    const raw = m[0].split('\n')[0].replace(/[;:,—–\-].*$/, '').trim()
+    if (raw.length >= 6 && raw.length <= 60 && !/^(escola|col[ée]gio)$/i.test(raw)) {
+      return raw.replace(/\s+/g, ' ')
+    }
+  }
+
+  // 2. Procura no nome do arquivo se há menção explícita
+  if (fileName) {
+    const fnMatch = fileName.match(/(?:col[ée]gio|escola|instituto|rede)[_\s-]+([A-Za-zÀ-ÿ0-9\s'’-]+?)(?=[_\s.-]|$)/i)
+    if (fnMatch && fnMatch[0]) {
+      return fnMatch[0].replace(/[_-]+/g, ' ').trim()
+    }
+  }
+
+  return null
+}
+
+/**
+ * Lista todos os formatos de arquivo salvos (mesclando os personalizados do professor com os padrões).
+ * Os formatos salvos pelo professor têm precedência de ordem e configuração.
  */
 export function getDocumentFormats(): SchoolDocumentFormat[] {
-  if (typeof localStorage === 'undefined') return DEFAULT_DOCUMENT_FORMATS
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return DEFAULT_DOCUMENT_FORMATS
-    const parsed = JSON.parse(raw)
-    if (!Array.isArray(parsed) || parsed.length === 0) return DEFAULT_DOCUMENT_FORMATS
-
-    const byId = new Map<string, SchoolDocumentFormat>()
-    DEFAULT_DOCUMENT_FORMATS.forEach(fmt => byId.set(fmt.id, fmt))
-    parsed.forEach((fmt: SchoolDocumentFormat) => {
-      if (fmt && fmt.id) byId.set(fmt.id, fmt)
-    })
-    return Array.from(byId.values())
-  } catch {
-    return DEFAULT_DOCUMENT_FORMATS
+  let parsed: SchoolDocumentFormat[] | null = memoryFormats
+  if (typeof localStorage !== 'undefined') {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY)
+      if (raw) {
+        const json = JSON.parse(raw)
+        if (Array.isArray(json) && json.length > 0) {
+          parsed = json
+        }
+      }
+    } catch {}
   }
+
+  if (!parsed || parsed.length === 0) return DEFAULT_DOCUMENT_FORMATS
+
+  const result: SchoolDocumentFormat[] = []
+  const seenIds = new Set<string>()
+
+  // Formatos salvos pelo professor têm prioridade
+  parsed.forEach((fmt: SchoolDocumentFormat) => {
+    if (fmt && fmt.id) {
+      result.push(fmt)
+      seenIds.add(fmt.id)
+    }
+  })
+
+  // Adiciona formatos padrão não presentes na lista salva
+  DEFAULT_DOCUMENT_FORMATS.forEach(fmt => {
+    if (!seenIds.has(fmt.id)) {
+      result.push(fmt)
+      seenIds.add(fmt.id)
+    }
+  })
+
+  return result
 }
 
 /**
  * Salva a lista de formatos de arquivo no localStorage e sincroniza com Supabase.
  */
 export function saveDocumentFormats(formats: SchoolDocumentFormat[]): void {
-  if (typeof localStorage === 'undefined') return
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(formats))
-    if (typeof window !== 'undefined') {
+  memoryFormats = formats
+  if (typeof localStorage !== 'undefined') {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(formats))
+    } catch {}
+  }
+  if (typeof window !== 'undefined') {
+    try {
       window.dispatchEvent(new Event('storage'))
       window.dispatchEvent(new CustomEvent('teacher:formats-updated'))
-    }
-    import('@/lib/supabaseClient')
-      .then(({ syncToSupabase }) => {
-        syncToSupabase({ [STORAGE_KEY]: formats })
-      })
-      .catch(() => {})
-  } catch {}
+    } catch {}
+  }
+  import('@/lib/supabaseClient')
+    .then(({ syncToSupabase }) => {
+      syncToSupabase({ [STORAGE_KEY]: formats })
+    })
+    .catch(() => {})
 }
 
 /**
@@ -306,18 +363,33 @@ export function getDefaultFormatForSchool(
   const all = getDocumentFormats()
   const normSchool = (schoolName || '').trim().toLowerCase()
 
+  // 1. Se houver formato ativo explicitamente salvo pelo professor
+  let activeId: string | null = memoryActiveFormatId
+  if (typeof localStorage !== 'undefined') {
+    try {
+      activeId = localStorage.getItem(ACTIVE_FORMAT_KEY) || activeId
+    } catch {}
+  }
+  const activeFmt = activeId ? all.find(f => f.id === activeId) : undefined
+
   if (normSchool && normSchool !== 'todas as escolas' && normSchool !== 'geral') {
-    // 1. Busca match exato ou parcial da escola + categoria
+    // 2. Busca match da escola + categoria
     const schoolMatches = all.filter(f => {
       const s = (f.schoolName || '').trim().toLowerCase()
       return s && (normSchool.includes(s) || s.includes(normSchool))
     })
 
     if (schoolMatches.length > 0) {
-      const catMatch = schoolMatches.find(f => f.targetCategory === category && f.isDefaultForSchool) ||
-                       schoolMatches.find(f => f.targetCategory === category) ||
-                       schoolMatches.find(f => f.isDefaultForSchool) ||
-                       schoolMatches[0]
+      // Se o formato ativo pertencer a esta escola, dá prioridade a ele
+      if (activeFmt && schoolMatches.some(f => f.id === activeFmt.id)) {
+        return activeFmt
+      }
+
+      const catMatch =
+        schoolMatches.find(f => (f.targetCategory === category || f.targetCategory === 'all') && f.isDefaultForSchool) ||
+        schoolMatches.find(f => f.isDefaultForSchool) ||
+        schoolMatches.find(f => f.targetCategory === category) ||
+        schoolMatches[0]
       if (catMatch) return catMatch
     }
   }
@@ -327,41 +399,72 @@ export function getDefaultFormatForSchool(
     if (seqFmt) return seqFmt
   }
 
-  // Verifica se há um formato ativo global selecionado pelo professor
-  if (typeof localStorage !== 'undefined') {
-    const activeId = localStorage.getItem(ACTIVE_FORMAT_KEY)
-    if (activeId) {
-      const activeFmt = all.find(f => f.id === activeId)
-      if (activeFmt) return activeFmt
-    }
-  }
+  // Se nenhum match específico da escola, usa formato ativo global
+  if (activeFmt) return activeFmt
 
   return all[0] || DEFAULT_DOCUMENT_FORMATS[0]
 }
 
 export function setActiveDocumentFormatId(formatId: string): void {
-  if (typeof localStorage === 'undefined') return
-  try {
-    localStorage.setItem(ACTIVE_FORMAT_KEY, formatId)
-    if (typeof window !== 'undefined') {
+  memoryActiveFormatId = formatId
+  if (typeof localStorage !== 'undefined') {
+    try {
+      localStorage.setItem(ACTIVE_FORMAT_KEY, formatId)
+    } catch {}
+  }
+  if (typeof window !== 'undefined') {
+    try {
       window.dispatchEvent(new CustomEvent('teacher:formats-updated'))
-    }
-  } catch {}
+    } catch {}
+  }
+}
+
+export interface InferDocumentFormatParams {
+  fileName: string
+  extractedText: string
+  schoolName?: string
+  targetCategory?: DocumentFormatCategory
+  layoutHints?: {
+    fontFamily?: string
+    fontSizePt?: number
+    columns?: 1 | 2
+    marginsMm?: { top: number; right: number; bottom: number; left: number }
+    headerStyle?: HeaderLayoutStyle
+    footerText?: string
+    logoDataUrl?: string
+  }
 }
 
 /**
  * Infere um SchoolDocumentFormat automaticamente a partir do texto extraído de um arquivo modelo (.docx / .pdf / .txt)
  * enviado pelo professor na Biblioteca & Repositório.
  */
-export function inferDocumentFormatFromSampleText(params: {
-  fileName: string
-  extractedText: string
-  schoolName?: string
-  targetCategory?: DocumentFormatCategory
-}): SchoolDocumentFormat {
+export function inferDocumentFormatFromSampleText(params: InferDocumentFormatParams): SchoolDocumentFormat {
   const text = params.extractedText || ''
   const cleanName = params.fileName.replace(/\.[^/.]+$/, '').replace(/[_-]+/g, ' ').trim()
-  const school = params.schoolName?.trim() || cleanName || 'Escola Personalizada'
+
+  // Se o schoolName recebido for genérico ou fallback, tenta extrair o nome real do colégio do próprio arquivo
+  let school = params.schoolName?.trim() || ''
+  if (!school || school.toLowerCase() === 'machado sobrinho' || school.toLowerCase() === 'geral' || school.toLowerCase() === 'todas as escolas') {
+    const detected = detectSchoolNameFromText(text, params.fileName)
+    if (detected) {
+      school = detected
+    } else if (!school) {
+      school = cleanName || 'Escola Personalizada'
+    }
+  }
+
+  // Detecta categoria alvo
+  let targetCategory = params.targetCategory || 'all'
+  if (targetCategory === 'all') {
+    if (/(?:prova|teste|simulado|avalia[çc][ãa]o|exam)/i.test(`${cleanName} ${text.slice(0, 500)}`)) {
+      targetCategory = 'exam'
+    } else if (/(?:lista|exerc[íi]cio|atividade|tarefa|worksheet)/i.test(cleanName)) {
+      targetCategory = 'worksheet'
+    } else if (/(?:sequ[êe]ncia|plano)/i.test(cleanName)) {
+      targetCategory = 'didactic_sequence'
+    }
+  }
 
   // Detecta padrão de numeração de questão no arquivo exemplo
   let questionNumberStyle: QuestionNumberFormat = 'badge_number'
@@ -369,50 +472,86 @@ export function inferDocumentFormatFromSampleText(params: {
     questionNumberStyle = 'questao_padded'
   } else if (/Question\s+\d+/i.test(text)) {
     questionNumberStyle = 'question_en'
-  } else if (/^\s*\d+\.\s+/m.test(text)) {
+  } else if (/^\s*\d+[\.\)]\s+/m.test(text)) {
     questionNumberStyle = 'numeric_dot'
   }
 
   // Detecta padrão de alternativas: (A) vs [A] vs a) vs A)
   let optionLabelStyle: OptionLabelFormat = 'A)'
-  if (/^\s*\([A-E]\)\s+/m.test(text)) {
+  if (/(?:^|\s)\([A-E]\)\s/m.test(text)) {
     optionLabelStyle = '(A)'
-  } else if (/^\s*\[[A-E]\]\s+/m.test(text)) {
+  } else if (/(?:^|\s)\[[A-E]\]\s/m.test(text)) {
     optionLabelStyle = '[A]'
-  } else if (/^\s*[a-e]\)\s+/m.test(text)) {
+  } else if (/(?:^|\s)[a-e]\)\s/m.test(text)) {
     optionLabelStyle = 'a)'
   }
 
   // Detecta instruções existentes no arquivo
   const lines = text.split('\n').map(l => l.trim()).filter(Boolean)
-  const instructionLines = lines
-    .filter(l => /^(1\.|2\.|3\.|4\.|•|-)\s*(leia|utilize|responda|não é permitido|preencha|assinale|write|answer)/i.test(l))
-    .slice(0, 5)
+  let instructionLines: string[] = []
+
+  // Tenta bloco explícito de orientações
+  const instrBlockMatch = text.match(
+    /(?:instru[çc][õo]es|orienta[çc][õo]es|observa[çc][õo]es)[\s:]*([\s\S]{20,500}?)(?=\n\s*(?:quest[ãa]o|question|\d+[\.\)]|aluno|disciplina|conte[úu]do|$))/i
+  )
+  if (instrBlockMatch && instrBlockMatch[1]) {
+    instructionLines = instrBlockMatch[1]
+      .split('\n')
+      .map(l => l.trim())
+      .filter(l => l.length > 5 && !/instru[çc][õo]es/i.test(l))
+      .slice(0, 5)
+  }
+
+  if (instructionLines.length === 0) {
+    instructionLines = lines
+      .filter(l => /^(1\.|2\.|3\.|4\.|•|-)\s*(leia|utilize|responda|não é permitido|preencha|assinale|write|answer)/i.test(l))
+      .slice(0, 5)
+  }
+
+  // Detecta subtítulo ou título oficial da prova
+  let detectedSubtitle = `${school.toUpperCase()} — DOCUMENTO OFICIAL`
+  const subtitleCandidate = lines.slice(0, 15).find(l =>
+    /(?:avalia[çc][ãa]o|teste|simulado|prova|ensino\s+fundamental|ensino\s+m[ée]dio|bimestre|trimestre)/i.test(l) &&
+    !/nome|aluno|turma|data|professor|disciplina|nota/i.test(l) &&
+    l.length >= 6 && l.length <= 80
+  )
+  if (subtitleCandidate) {
+    detectedSubtitle = subtitleCandidate.toUpperCase()
+  }
 
   const hasSignature = /assinatura|coordena[çc][ãa]o|visto|professor\(a\)\s*respons[áa]vel/i.test(text)
-  const isTwoColumns = /(duas\s+colunas|2\s*colunas|2col|enem|simulado)/i.test(`${cleanName} ${text}`)
+  const isTwoColumns = params.layoutHints?.columns === 2 || /(duas\s+colunas|2\s*colunas|2col|enem|simulado)/i.test(`${cleanName} ${text}`)
+
+  const marginsMm = params.layoutHints?.marginsMm || (
+    isTwoColumns ? { top: 12, right: 12, bottom: 12, left: 12 } : { top: 15, right: 15, bottom: 15, left: 15 }
+  )
+
+  const fontFamily = params.layoutHints?.fontFamily || "'Times New Roman', Times, serif"
+  const fontSizePt = params.layoutHints?.fontSizePt || 11
+  const headerStyle: HeaderLayoutStyle = params.layoutHints?.headerStyle || 'boxed_grid'
+  const footerText = params.layoutHints?.footerText || `${school} • Documento Formatado pelo Padrão da Escola`
 
   return {
     id: `fmt_custom_${Date.now()}`,
     name: `Modelo ${school} (${cleanName.slice(0, 28)})`,
     description: `Formato extraído automaticamente do arquivo modelo "${params.fileName}" para a escola ${school}.`,
     schoolName: school,
-    targetCategory: params.targetCategory || 'all',
+    targetCategory,
     isDefaultForSchool: true,
     paperSize: 'A4',
     orientation: 'portrait',
-    marginsMm: isTwoColumns ? { top: 12, right: 12, bottom: 12, left: 12 } : { top: 15, right: 15, bottom: 15, left: 15 },
+    marginsMm,
     columns: isTwoColumns ? 2 : 1,
     columnGapMm: 8,
     showColumnDivider: isTwoColumns,
-    fontFamily: "'Times New Roman', Times, serif",
-    fontSizePt: 11,
+    fontFamily,
+    fontSizePt,
     lineHeight: 1.45,
     textAlign: 'justify',
-    headerStyle: 'boxed_grid',
+    headerStyle,
     primaryColor: '#000000',
     blackAndWhitePrintMode: true,
-    officialSchoolSubtitle: `${school.toUpperCase()} — DOCUMENTO OFICIAL`,
+    officialSchoolSubtitle: detectedSubtitle,
     defaultInstructions:
       instructionLines.length > 0
         ? instructionLines.join('\n')
@@ -422,9 +561,10 @@ export function inferDocumentFormatFromSampleText(params: {
     discursiveLinesCount: 4,
     showPointsPerQuestion: true,
     compactQuestionSpacing: false,
-    footerText: `${school} • Documento Formatado pelo Padrão da Escola`,
+    footerText,
     showSignatureLine: hasSignature,
-    signatureLabels: ['Professor(a) Responsável', 'Coordenação Pedagógica']
+    signatureLabels: ['Professor(a) Responsável', 'Coordenação Pedagógica'],
+    logoUrl: params.layoutHints?.logoDataUrl
   }
 }
 

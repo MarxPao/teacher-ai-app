@@ -3,8 +3,7 @@
 import { useState } from 'react'
 import { getAllSubjectProfiles } from '@/lib/subjectProfile'
 import { updateUserProfile } from '@/lib/supabaseAuth'
-import '@/lib/subjects/english'
-import '@/lib/subjects/portuguese'
+import '@/lib/subjects'
 
 interface OnboardingFlowProps {
   teacherName?: string
@@ -29,28 +28,78 @@ const AVAILABLE_SUBJECT_OPTIONS = [
     icon: 'ti-book',
     color: '#c4834a',
     bgLight: '#fffcf8',
-    desc: '4 eixos BNCC (Leitura, Produção, Oralidade, Análise), 18 distratores diagnósticos conceituais e rubrica ENEM/EF.',
+    desc: '4 eixos BNCC (Leitura, Produção, Oralidade, Análise), 9 distratores diagnósticos conceituais e rubrica ENEM/EF.',
     ready: true
   },
   {
     id: 'math',
     name: 'Matemática',
-    badge: 'Em Breve • Beta',
+    badge: 'Ativo • BNCC & Verificador Simbólico',
     icon: 'ti-math-symbols',
-    color: '#a08060',
-    bgLight: '#faf6f0',
-    desc: 'Álgebra, Geometria, Estatística e Probabilidade alinhados à BNCC com resolução passo a passo.',
-    ready: false
+    color: '#059669',
+    bgLight: '#ecfdf5',
+    desc: 'Álgebra, Geometria e Estatística BNCC com verificador simbólico determinístico e 13 concepções alternativas.',
+    ready: true
+  },
+  {
+    id: 'history',
+    name: 'História',
+    badge: 'Ativo • BNCC & Leis 10.639 / 11.645',
+    icon: 'ti-hourglass-empty',
+    color: '#d97706',
+    bgLight: '#fffbeb',
+    desc: 'Análise de fontes primárias, crítica historiográfica e conteúdos afro-brasileiros e indígenas obrigatórios.',
+    ready: true
+  },
+  {
+    id: 'geography',
+    name: 'Geografia',
+    badge: 'Ativo • BNCC & Escala Cartográfica',
+    icon: 'ti-map-2',
+    color: '#0891b2',
+    bgLight: '#ecfeff',
+    desc: 'Pensamento espacial, análise de mapas, fusos horários e verificador matemático de escalas cartográficas.',
+    ready: true
+  },
+  {
+    id: 'physics',
+    name: 'Física',
+    badge: 'Ativo • BNCC Ensino Médio',
+    icon: 'ti-bolt',
+    color: '#4f46e5',
+    bgLight: '#eef2ff',
+    desc: 'Mecânica, Termodinâmica e Eletromagnetismo com 10 concepções diagnósticas (impetus, circuitos e calor).',
+    ready: true
+  },
+  {
+    id: 'chemistry',
+    name: 'Química',
+    badge: 'Ativo • Balanceamento Estequiométrico',
+    icon: 'ti-flask',
+    color: '#7c3aed',
+    bgLight: '#f5f3ff',
+    desc: 'Transformações da matéria com verificador determinístico de conservação de átomos e carga por matriz.',
+    ready: true
+  },
+  {
+    id: 'biology',
+    name: 'Biologia',
+    badge: 'Ativo • Genética Mendeliana',
+    icon: 'ti-dna',
+    color: '#0d9488',
+    bgLight: '#f0fdfa',
+    desc: 'Genética, Ecologia e Evolução com verificador computacional fail-closed de cruzamentos de Punnett.',
+    ready: true
   },
   {
     id: 'science',
-    name: 'Ciências da Natureza',
-    badge: 'Em Breve',
+    name: 'Ciências EF II',
+    badge: 'Ativo • 6º ao 9º Ano BNCC',
     icon: 'ti-atom-2',
-    color: '#7a6652',
-    bgLight: '#faf6f0',
-    desc: 'Física, Química e Biologia contextualizadas para Ensino Fundamental e Médio.',
-    ready: false
+    color: '#16a34a',
+    bgLight: '#f0fdf4',
+    desc: 'Matéria e Energia, Vida e Evolução, Terra e Universo (astronomia e fases da Lua) para os anos finais.',
+    ready: true
   }
 ]
 
@@ -369,8 +418,9 @@ export default function OnboardingFlow({ teacherName, onComplete }: OnboardingFl
                       boxSizing: 'border-box'
                     }}
                   >
-                    <option value="english">Língua Inglesa</option>
-                    <option value="portuguese">Língua Portuguesa</option>
+                    {AVAILABLE_SUBJECT_OPTIONS.map(opt => (
+                      <option key={opt.id} value={opt.id}>{opt.name}</option>
+                    ))}
                   </select>
                 </div>
               </div>

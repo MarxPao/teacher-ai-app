@@ -80,6 +80,33 @@ export function getGrammarKeywordsForSubject(subjectId?: string): string[] {
 }
 
 /**
+ * Cache de chunks em memória por sessão — evita re-chunking e re-embedding de documentos
+ * já processados na mesma sessão de navegador.
+ * Chave: "<docId>_<contentLength>" (comprimento como proxy barato de identidade de conteúdo).
+ * Limite: 50 documentos — LRU manual por ordem de inserção.
+ */
+const CHUNK_CACHE = new Map<string, DocumentChunk[]>()
+const CHUNK_CACHE_MAX = 50
+
+function getCachedChunks(cacheKey: string): DocumentChunk[] | null {
+  return CHUNK_CACHE.get(cacheKey) || null
+}
+
+function setCachedChunks(cacheKey: string, chunks: DocumentChunk[]): void {
+  if (CHUNK_CACHE.size >= CHUNK_CACHE_MAX) {
+    // Evicta a entrada mais antiga (primeiro inserido)
+    const firstKey = CHUNK_CACHE.keys().next().value
+    if (firstKey !== undefined) CHUNK_CACHE.delete(firstKey)
+  }
+  CHUNK_CACHE.set(cacheKey, chunks)
+}
+
+/** Limpa o cache manualmente (ex: ao trocar de professor/tenant) */
+export function clearChunkCache(): void {
+  CHUNK_CACHE.clear()
+}
+
+/**
  * Fraciona o conteúdo de um documento ou livro didático em blocos semânticos estruturados (Chunks)
  */
 export function indexDocumentContent(
@@ -92,6 +119,11 @@ export function indexDocumentContent(
   scope?: DocumentScope
 ): DocumentChunk[] {
   if (!rawContent || !rawContent.trim()) return []
+
+  // Verifica cache antes de re-chunkar e re-embebedar
+  const cacheKey = `${docId}_${rawContent.length}_${subjectId || ''}`
+  const cached = getCachedChunks(cacheKey)
+  if (cached) return cached
 
   const chunks: DocumentChunk[] = []
   
@@ -139,6 +171,8 @@ export function indexDocumentContent(
     })
   }
 
+  // Armazena no cache antes de retornar
+  setCachedChunks(cacheKey, chunks)
   return chunks
 }
 

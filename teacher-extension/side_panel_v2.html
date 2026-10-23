@@ -457,16 +457,13 @@
           </div>
           <div id="sgv2-chat-messages" class="sp-chat-messages" role="log" aria-live="polite" aria-label="Histórico de conversa com o assistente"></div>
           <div class="sp-chat-composer">
-            <input type="text" id="sgv2-nlu-input" class="sp-input" placeholder="Digite sua mensagem ou peça uma ação..." style="flex: 1;" />
-            <button id="sgv2-btn-nlu-send" class="btn-main" style="white-space: nowrap;">Enviar ✨</button>
-            <button id="sgv2-btn-agent" class="btn-secondary" style="white-space: nowrap;" title="O agente decide os passos em qualquer página e pede sua aprovação antes de preencher ou enviar">🤖 Agente</button>
-          </div>
-          <div class="sp-chips" aria-label="Sugestões rápidas">
-            <button type="button" class="sp-chip" data-quick-nlu="O que há nesta tela?">🔍 O que há na tela?</button>
-            <button type="button" class="sp-chip" data-quick-nlu="Frequência">📋 Frequência</button>
-            <button type="button" class="sp-chip" data-quick-nlu="Notas">📊 Notas</button>
-            <button type="button" class="sp-chip" data-quick-nlu="Diário de Classe">📖 Diário</button>
-            <button type="button" class="sp-chip" data-quick-nlu="Turmas">👥 Turmas</button>
+            <textarea id="sgv2-nlu-input" class="sp-input sp-chat-textarea" placeholder="Digite sua mensagem ou peça uma ação (ex: acesse notas, frequencia, selecione 7º ano)..." rows="2"></textarea>
+            <div class="sp-chat-composer-bar">
+              <button id="sgv2-btn-nlu-send" class="btn-main sp-btn-send" type="button">
+                <span>Enviar</span> ✨
+              </button>
+            </div>
+            <button id="sgv2-btn-agent" style="display: none;" type="button"></button>
           </div>
           <div id="sgv2-nlu-feedback" style="display: none; font-size: 12px; margin-top: 10px; padding: 10px 12px; border-radius: var(--radius-md); line-height: 1.45;"></div>
         </div>

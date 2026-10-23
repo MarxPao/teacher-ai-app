@@ -27,7 +27,7 @@ export interface LlmGatewayOptions {
 
 export interface LlmRequest {
   prompt: string
-  provider?: 'ollama' | 'groq' | 'openai' | 'google' | 'anthropic'
+  provider?: 'ollama' | 'groq' | 'openai' | 'google' | 'anthropic' | 'gemini'
   model?: string
   knownStudents?: Array<{ name: string; identifier?: string }>
 }
@@ -209,23 +209,48 @@ export class LlmGateway {
     }
 
     // Provedores em Nuvem — cascata: tenta o solicitado e depois o alternativo
-    const CASCADE: Array<'groq' | 'google' | 'openai'> = ['groq', 'google', 'openai']
-    const order = provider === 'groq'  ? ['groq', 'google'] as const
-                : provider === 'google' ? ['google', 'groq'] as const
-                : [provider as 'groq' | 'google' | 'openai']
+    const rawRequested = request.provider === 'gemini' ? 'google' : request.provider
+    const CLOUD_PROVIDERS: Array<'groq' | 'google' | 'openai'> = ['groq', 'google', 'openai']
+    const order: Array<'groq' | 'google' | 'openai'> = []
+    if (rawRequested && CLOUD_PROVIDERS.includes(rawRequested as any)) {
+      order.push(rawRequested as 'groq' | 'google' | 'openai')
+    }
+    for (const p of CLOUD_PROVIDERS) {
+      if (this.vault.hasApiKey(p) && !order.includes(p)) {
+        order.push(p)
+      }
+    }
+    for (const p of CLOUD_PROVIDERS) {
+      if (!order.includes(p)) {
+        order.push(p)
+      }
+    }
+
+
+
 
     let lastError: Error | null = null
+    let hasAttemptedConfigured = false
     for (const p of order) {
+      const hasConsent = (await this.consentRepo.getConsent(p)) || this.vault.hasApiKey(p)
+      if (!hasConsent) continue
+      hasAttemptedConfigured = true
       try {
         return await this.completeWithProvider(p, request)
       } catch (err: any) {
         lastError = err
-        // Só tenta o próximo se for falha de disponibilidade/chave; não retenta em bloqueio de consentimento
-        const code = err?.code || ''
-        if (code === 'E_CONSENT_REQUIRED') throw err
+
+
+
       }
     }
-    throw lastError || new DesktopCoreError('E_LLM_ALL_FAILED', 'Todos os provedores em nuvem falharam.')
+    if (!hasAttemptedConfigured) {
+      throw new DesktopCoreError(
+        'E_CONSENT_REQUIRED',
+        'Nenhuma chave de API configurada no cofre seguro. Configure sua chave (Google Gemini, Groq ou OpenAI) nas preferências do painel desktop.'
+      )
+    }
+    throw lastError || new DesktopCoreError('E_LLM_ALL_FAILED', 'Todos os provedores em nuvem configurados falharam.')
   }
 
   /**
@@ -237,34 +262,35 @@ export class LlmGateway {
     request: LlmRequest
   ): Promise<LlmResponse> {
     // Consentimento: formal (banco) OU implícito (key no vault)
-    const hasConsent = (await this.consentRepo.getConsent(provider)) || this.vault.hasApiKey(provider)
+    const p = (provider === ('gemini' as any) ? 'google' : provider) as 'groq' | 'google' | 'openai'
+    const hasConsent = (await this.consentRepo.getConsent(p)) || this.vault.hasApiKey(p)
     if (!hasConsent) {
       throw new DesktopCoreError(
         'E_CONSENT_REQUIRED',
-        `Envio de dados para '${provider}' não consentido. Configure a chave de API nas preferências.`
+        `Envio de dados para '${p}' não consentido. Configure a chave de API nas preferências.`
       )
     }
 
-    const apiKey = this.vault.getApiKey(provider)
+    const apiKey = this.vault.getApiKey(p)
     if (!apiKey) {
-      throw new DesktopCoreError('E_API_KEY_MISSING', `Chave de API para '${provider}' não encontrada no cofre.`)
+      throw new DesktopCoreError('E_API_KEY_MISSING', `Chave de API para '${p}' não encontrada no cofre.`)
     }
 
     // Pseudonimização mandatória de PII antes de deixar a máquina
     const session = Pseudonymizer.pseudonymize(request.prompt, request.knownStudents || [])
 
     let rawOutput = ''
-    if (provider === 'groq') {
+    if (p === 'groq') {
       rawOutput = await this.callGroq(session.sanitizedText, apiKey, request.model)
-    } else if (provider === 'google') {
+    } else if (p === 'google') {
       rawOutput = await this.callGoogle(session.sanitizedText, apiKey, request.model)
-    } else if (provider === 'openai') {
+    } else if (p === 'openai') {
       rawOutput = await this.callOpenAi(session.sanitizedText, apiKey, request.model)
     }
 
     // De-pseudonimização em memória — os tokens nunca saem da máquina
     const finalText = Pseudonymizer.depseudonymize(rawOutput, session.tokenToOriginal)
-    return { provider, text: finalText, pseudonymized: true }
+    return { provider: p, text: finalText, pseudonymized: true }
   }
 
   /**
@@ -566,33 +592,87 @@ export class LlmGateway {
   }
 
   private async callGroq(prompt: string, apiKey: string, model?: string): Promise<string> {
-    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: model || 'llama-3.3-70b-versatile',
-        messages: [{ role: 'user', content: prompt }],
-      }),
-    })
-    if (!res.ok) throw new Error(`Groq API error: HTTP ${res.status}`)
-    const data = await res.json()
-    return data.choices?.[0]?.message?.content || ''
+    const candidateModels = model
+      ? [model, 'openai/gpt-oss-120b', 'openai/gpt-oss-20b', 'llama-3.3-70b-versatile']
+      : ['openai/gpt-oss-120b', 'openai/gpt-oss-20b', 'llama-3.3-70b-versatile']
+    let lastError: Error | null = null
+    for (const groqModel of candidateModels) {
+      try {
+        const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${apiKey}`,
+          },
+          body: JSON.stringify({
+            model: groqModel,
+            messages: [{ role: 'user', content: prompt }],
+          }),
+        })
+        if (!res.ok) {
+          const errText = await res.text().catch(() => '')
+          if (res.status === 404 || res.status === 429 || res.status >= 500) {
+            lastError = new Error(`Groq API error: HTTP ${res.status} (${groqModel}) - ${errText}`)
+            continue
+          }
+          throw new Error(`Groq API error: HTTP ${res.status} - ${errText}`)
+        }
+        const data = await res.json()
+        const text = data.choices?.[0]?.message?.content || ''
+        if (text) return text
+      } catch (err: any) {
+        lastError = err
+        if (err?.message?.includes('HTTP 404') || err?.message?.includes('HTTP 429') || err?.message?.includes('HTTP 5')) {
+          continue
+        }
+        throw err
+      }
+    }
+    throw lastError || new Error('Groq API error: nenhum modelo compatível respondeu.')
   }
 
   private async callGoogle(prompt: string, apiKey: string, model?: string): Promise<string> {
-    const geminiModel = model || 'gemini-2.0-flash'
+    const candidateModels = model
+      ? [model, 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-3.6-flash']
+      : ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-3.6-flash', 'gemini-1.5-pro']
+    let lastError: Error | null = null
+    for (const geminiModel of candidateModels) {
+      try {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${apiKey}`
     const res = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': apiKey,
+      },
       body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
     })
-    if (!res.ok) throw new Error(`Google Gemini API error: HTTP ${res.status}`)
+        if (!res.ok) {
+          const errText = await res.text().catch(() => '')
+          if (res.status === 404 || res.status === 429 || res.status === 503 || res.status >= 500) {
+            lastError = new Error(`Google Gemini API error: HTTP ${res.status} (${geminiModel}) - ${errText}`)
+            continue
+          }
+          throw new Error(`Google Gemini API error: HTTP ${res.status} - ${errText}`)
+        }
     const data = await res.json()
-    return data.candidates?.[0]?.content?.parts?.[0]?.text || ''
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
+        if (text) return text
+      } catch (err: any) {
+        lastError = err
+        if (
+          err?.message?.includes('HTTP 404') ||
+          err?.message?.includes('HTTP 429') ||
+          err?.message?.includes('HTTP 503') ||
+          err?.message?.includes('HTTP 5') ||
+          err?.message?.includes('fetch failed')
+        ) {
+          continue
+        }
+        throw err
+      }
+    }
+    throw lastError || new Error('Google Gemini API error: nenhum modelo compatível respondeu.')
   }
 
   private async callOpenAi(prompt: string, apiKey: string, model?: string): Promise<string> {

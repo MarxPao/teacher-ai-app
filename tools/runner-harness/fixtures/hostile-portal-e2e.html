@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>Portal Escolar Hostil — E2E Chromium Real</title>
+  <style>
+    body { font-family: sans-serif; margin: 0; padding: 20px; }
+    #btn-diario { position: fixed; left: 40px; top: 40px; width: 160px; height: 44px; z-index: 10; }
+    #blocking-toast {
+      position: fixed; left: 20px; top: 20px; width: 220px; height: 80px;
+      background: #ef4444; color: #fff; z-index: 9999; display: flex; align-items: center; justify-content: space-between; padding: 8px;
+    }
+    #ui-datepicker-div { display: none; }
+    .flatpickr-calendar {
+      display: none; width: 260px; height: 240px; border: 1px solid #cbd5e1; background: #fff; padding: 8px;
+    }
+    .flatpickr-calendar.open { display: block; }
+    .ag-root { width: 600px; border: 1px solid #94a3b8; margin-top: 120px; }
+    .ag-body-viewport { height: 120px; overflow-y: scroll; position: relative; }
+    .ag-spacer { height: 1200px; }
+  </style>
+</head>
+<body>
+  <!-- 1. Botão coberto fisicamente por um .toast em (120, 62) -->
+  <button id="btn-diario" type="button">Abrir Diário</button>
+  <div id="blocking-toast" class="toast" data-occluding-overlay="true">
+    <span>Aviso do Sistema</span>
+    <button type="button" class="toast-close" id="btn-close-toast">X</button>
+  </div>
+
+  <!-- 2. jQuery UI oculto no DOM o tempo todo + Flatpickr real com <select> de 12 meses -->
+  <div id="ui-datepicker-div" class="ui-datepicker">
+    <div class="ui-datepicker-title">Janeiro 2020</div>
+    <table><tbody><tr><td><a href="#">15</a></td></tr></tbody></table>
+  </div>
+
+  <div style="margin-top: 100px;">
+    <input id="input-data-aula" type="text" readonly value="__/__/____" />
+    <div id="fp-cal" class="flatpickr-calendar">
+      <div class="flatpickr-current-month">
+        <button type="button" class="flatpickr-prev-month">&lt;</button>
+        <select class="flatpickr-monthDropdown-months">
+          <option value="0">Janeiro</option>
+          <option value="1">Fevereiro</option>
+          <option value="2">Março</option>
+          <option value="3">Abril</option>
+          <option value="4">Maio</option>
+          <option value="5">Junho</option>
+          <option value="6">Julho</option>
+          <option value="7">Agosto</option>
+          <option value="8">Setembro</option>
+          <option value="9" selected>Outubro</option>
+          <option value="10">Novembro</option>
+          <option value="11">Dezembro</option>
+        </select>
+        <input class="numInput cur-year" type="number" value="2026" />
+        <button type="button" class="flatpickr-next-month">&gt;</button>
+      </div>
+      <div class="flatpickr-days">
+        <span class="flatpickr-day">14</span>
+        <span class="flatpickr-day" id="fp-day-15">15</span>
+        <span class="flatpickr-day">16</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. Select2 com opções carregadas dinamicamente em portal no body -->
+  <div style="margin-top: 16px;">
+    <select id="select-bimestre" class="select2-hidden-accessible" data-select2-id="1">
+      <option value="">Selecione...</option>
+    </select>
+    <span class="select2-container">
+      <span class="select2-selection" role="combobox" aria-expanded="false">Selecione...</span>
+    </span>
+  </div>
+
+  <!-- 4. AG-Grid com Colunas Fixadas à Esquerda (.ag-pinned-left-cols-container) + Centro (.ag-center-cols-container) -->
+  <div id="grid-notas" class="ag-root" role="grid">
+    <div class="ag-header" role="row">
+      <div role="columnheader">Aluno</div>
+      <div role="columnheader">Nota</div>
+    </div>
+    <div class="ag-body-viewport">
+      <div class="ag-pinned-left-cols-container"></div>
+      <div class="ag-center-cols-container"></div>
+      <div class="ag-spacer"></div>
+    </div>
+  </div>
+
+  <!-- 5. Input blindado que SÓ aceita eventos nativos de hardware (event.isTrusted === true) -->
+  <div style="margin-top: 20px;">
+    <input id="input-trusted-only" type="text" value="" style="width: 220px; height: 32px;" />
+    <button id="btn-trusted-only" type="button" style="width: 140px; height: 36px;">Confirmar CDP</button>
+  </div>
+
+  <!-- 6. Closed Shadow DOM (mode: 'closed') + Cross-Origin Iframe -->
+  <div id="closed-shadow-host" style="margin-top: 16px;"></div>
+  <iframe id="xorigin-frame" style="width: 300px; height: 80px; border: 1px solid #64748b; margin-top: 8px;"></iframe>
+
+  <!-- 8. Botão com seletor mutado para prova de Self-Healing (antigo #btn-salvar-antigo removido, novo #btn-gravar-lancamento) -->
+  <div style="margin-top: 16px;">
+    <button id="btn-gravar-lancamento" type="button" class="btn-action" role="button">Gravar Lançamento</button>
+  </div>
+
+  <script>
+    window.__e2eState = {
+      diarioClicked: false,
+      toastDismissed: false,
+      trustedClickReceived: false,
+      trustedInputValue: '',
+      closedShadowClicked: false,
+      selfHealedClicked: false,
+    };
+
+    document.getElementById('btn-close-toast').addEventListener('click', () => {
+      window.__e2eState.toastDismissed = true;
+      document.getElementById('blocking-toast').remove();
+    });
+
+    document.getElementById('btn-diario').addEventListener('click', () => {
+      window.__e2eState.diarioClicked = true;
+    });
+
+    document.getElementById('btn-gravar-lancamento').addEventListener('click', () => {
+      window.__e2eState.selfHealedClicked = true;
+    });
+
+    // Flatpickr behavior
+    const dateInput = document.getElementById('input-data-aula');
+    const fpCal = document.getElementById('fp-cal');
+    const monthSel = fpCal.querySelector('.flatpickr-monthDropdown-months');
+    const yearInp = fpCal.querySelector('.cur-year');
+    dateInput.addEventListener('click', () => {
+      setTimeout(() => fpCal.classList.add('open'), 15);
+    });
+    fpCal.querySelector('.flatpickr-prev-month').addEventListener('click', () => {
+      setTimeout(() => {
+        monthSel.selectedIndex = Math.max(0, monthSel.selectedIndex - 1);
+      }, 10);
+    });
+    document.getElementById('fp-day-15').addEventListener('click', () => {
+      const m = String(monthSel.selectedIndex + 1).padStart(2, '0');
+      dateInput.value = `15/${m}/${yearInp.value}`;
+      fpCal.classList.remove('open');
+    });
+
+    // Select2 Portaled Dropdown behavior
+    const s2Trigger = document.querySelector('.select2-selection');
+    s2Trigger.addEventListener('click', () => {
+      if (document.querySelector('.select2-container--open')) return;
+      const portal = document.createElement('div');
+      portal.className = 'select2-container select2-container--open';
+      portal.innerHTML = `
+        <input class="select2-search__field" type="search" />
+        <ul class="select2-results__options" role="listbox"></ul>
+      `;
+      document.body.appendChild(portal);
+      const searchField = portal.querySelector('.select2-search__field');
+      const ul = portal.querySelector('.select2-results__options');
+      const allOpts = ['1º Bimestre', '2º Bimestre', '3º Bimestre', '4º Bimestre'];
+      const renderOpts = (q) => {
+        ul.innerHTML = '';
+        allOpts.filter(o => o.toLowerCase().includes((q || '').toLowerCase())).forEach(o => {
+          const li = document.createElement('li');
+          li.className = 'select2-results__option';
+          li.setAttribute('role', 'option');
+          li.textContent = o;
+          li.addEventListener('click', () => {
+            const sel = document.getElementById('select-bimestre');
+            const opt = document.createElement('option');
+            opt.value = o;
+            opt.textContent = o;
+            opt.selected = true;
+            sel.appendChild(opt);
+            sel.value = o;
+            s2Trigger.textContent = o;
+            portal.remove();
+          });
+          ul.appendChild(li);
+        });
+      };
+      renderOpts('');
+      searchField.addEventListener('input', () => renderOpts(searchField.value));
+    });
+
+    // AG-Grid Pinned Left + Center Columns + Async Virtual Scroll
+    const pinnedLeft = document.querySelector('.ag-pinned-left-cols-container');
+    const centerCols = document.querySelector('.ag-center-cols-container');
+    const viewport = document.querySelector('.ag-body-viewport');
+
+    const batches = [
+      [{ rowIndex: 0, nome: 'Ana Clara', nota: '9.5' }],
+      [
+        { rowIndex: 1, nome: 'Maria Silva', nota: '8.0' },
+        { rowIndex: 2, nome: 'Maria Silva', nota: '8.0' },
+      ],
+      [
+        { rowIndex: 2, nome: 'Maria Silva', nota: '8.0' },
+        { rowIndex: 3, nome: 'Carlos Eduardo', nota: '10.0' },
+      ],
+    ];
+
+    function renderAgBatch(batchIdx) {
+      const rows = batches[batchIdx] || batches[2];
+      pinnedLeft.innerHTML = rows
+        .map(r => `<div role="row" row-index="${r.rowIndex}"><div role="gridcell">${r.nome}</div></div>`)
+        .join('');
+      centerCols.innerHTML = rows
+        .map(r => `<div role="row" row-index="${r.rowIndex}"><div role="gridcell">${r.nota}</div></div>`)
+        .join('');
+    }
+    renderAgBatch(0);
+
+    viewport.addEventListener('scroll', () => {
+      const top = viewport.scrollTop;
+      setTimeout(() => {
+        if (top >= 500) renderAgBatch(2);
+        else if (top >= 250) renderAgBatch(1);
+        else renderAgBatch(0);
+      }, 15);
+    });
+
+    // Trusted-only guards (rejects synthetic JS events where e.isTrusted === false)
+    const trustedInput = document.getElementById('input-trusted-only');
+    trustedInput.addEventListener('beforeinput', (e) => {
+      if (e.isTrusted) {
+        window.__e2eState.trustedInputValue += e.data || '';
+      }
+    });
+    document.getElementById('btn-trusted-only').addEventListener('click', (e) => {
+      if (e.isTrusted) {
+        window.__e2eState.trustedClickReceived = true;
+      }
+    });
+  </script>
+</body>
+</html>

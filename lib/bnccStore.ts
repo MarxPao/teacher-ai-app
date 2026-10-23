@@ -25,27 +25,42 @@ import {
   GE_BNCC_SKILLS,
   AR_BNCC_SKILLS,
   PE_BNCC_SKILLS,
-  ER_BNCC_SKILLS
+  ER_BNCC_SKILLS,
+  EM_LP_BNCC_SKILLS,
+  EM_MA_BNCC_SKILLS,
+  EM_CNT_BNCC_SKILLS,
+  EM_CHS_BNCC_SKILLS,
+  classifyScienceSkill
 } from './bncc/index'
 
-// Catálogo universal: todas as disciplinas do Ensino Fundamental
-// Fonte: PDF oficial do MEC — BNCC_EI_EF_110518_versaofinal_site
+// Catálogo universal: todas as disciplinas do Ensino Fundamental e Ensino Médio
+// Fonte: PDF oficial do MEC — BNCC_EI_EF_110518_versaofinal_site e BNCC Ensino Médio
 const ALL_SUBJECTS_CATALOG: BnccSkill[] = [
   ...DEFAULT_BNCC_SKILLS,       // Inglês (88 EF + 18 EM = 106)
-  ...LP_BNCC_SKILLS,            // Língua Portuguesa (308)
-  ...MA_BNCC_SKILLS,            // Matemática (246)
-  ...CI_BNCC_SKILLS,            // Ciências (111)
-  ...HI_BNCC_SKILLS,            // História (151)
-  ...GE_BNCC_SKILLS,            // Geografia (123)
-  ...AR_BNCC_SKILLS,            // Arte (61)
-  ...PE_BNCC_SKILLS,            // Educação Física (68)
-  ...ER_BNCC_SKILLS,            // Ensino Religioso (63)
+  ...LP_BNCC_SKILLS,            // Língua Portuguesa EF (308)
+  ...MA_BNCC_SKILLS,            // Matemática EF (246)
+  ...CI_BNCC_SKILLS,            // Ciências EF (111)
+  ...HI_BNCC_SKILLS,            // História EF (151)
+  ...GE_BNCC_SKILLS,            // Geografia EF (123)
+  ...AR_BNCC_SKILLS,            // Arte EF (61)
+  ...PE_BNCC_SKILLS,            // Educação Física EF (68)
+  ...ER_BNCC_SKILLS,            // Ensino Religioso EF (63)
+  ...EM_LP_BNCC_SKILLS,         // Língua Portuguesa EM (11)
+  ...EM_MA_BNCC_SKILLS,         // Matemática EM (20)
+  ...EM_CNT_BNCC_SKILLS,        // Ciências da Natureza EM — Física, Química, Biologia (20)
+  ...EM_CHS_BNCC_SKILLS,        // Ciências Humanas EM — História, Geografia (10)
 ]
 
 // Índice de lookup por código (para buscas O(1))
 const CATALOG_INDEX = new Map<string, BnccSkill>(
-  ALL_SUBJECTS_CATALOG.map(s => [s.code, s])
+  ALL_SUBJECTS_CATALOG.map(s => [s.code.toUpperCase(), s])
 )
+
+/** Busca O(1) de habilidade oficial pelo código BNCC (ex: 'EF09MA09', 'EM13CNT204') */
+export function getBnccSkillByCode(code: string): BnccSkill | undefined {
+  if (!code) return undefined
+  return CATALOG_INDEX.get(code.toUpperCase().trim())
+}
 
 // Re-exporta tipos e funções essenciais para ponto único de import
 export type { BnccSkill, CurriculumCoverageReport }
@@ -55,7 +70,8 @@ export {
   getCurriculumCoverageReport,
   getClassPostponedSkills,
   saveClassPostponedSkills,
-  inferBnccSkillsForTopic
+  inferBnccSkillsForTopic,
+  classifyScienceSkill
 }
 
 // ─── Cache em Memória e Pub/Sub ──────────────────────────────────────────────
@@ -114,7 +130,10 @@ export function getBnccStoreVersion(): number {
 
 // ─── Métodos Imperativos Centrais ────────────────────────────────────────────
 
-/** Normaliza o identificador/rótulo de disciplina para a chave canônica do catálogo */
+/**
+ * Normaliza o identificador/rótulo de disciplina para a chave canônica do catálogo.
+ * Corrige o bug onde "Física" caía em "pe" (Educação Física).
+ */
 export function normalizeBnccSubjectKey(subject?: string): string {
   if (!subject) return 'english'
   const s = subject.toLowerCase().trim()
@@ -122,16 +141,36 @@ export function normalizeBnccSubjectKey(subject?: string): string {
   if (s.includes('ingl') || s === 'ef_li' || s === 'english' || s === 'li' || s.includes('inglesa')) return 'english'
   if (s.includes('portug') || s === 'ef_lp' || s === 'portuguese' || s === 'lp') return 'portuguese'
   if (s.includes('mat') || s === 'ef_ma' || s === 'math' || s === 'ma') return 'math'
-  if (s.includes('ciên') || s.includes('cien') || s === 'ef_ci' || s === 'science' || s === 'ci') return 'science'
+
+  // IMPORTANTE: Verificar Educação Física ANTES de Física para que "Física" não caia em 'pe'
+  if (
+    s.includes('educação física') ||
+    s.includes('educacao fisica') ||
+    s.includes('ed. física') ||
+    s.includes('ed. fisica') ||
+    s.includes('ed fisica') ||
+    s === 'ef_ef' ||
+    s === 'pe' ||
+    s === 'ef'
+  ) {
+    return 'pe'
+  }
+
+  // Subdisciplinas de Ciências da Natureza (EF II e EM)
+  if (s.includes('físic') || s.includes('fisic') || s === 'physics' || s === 'fis' || s === 'fís' || s === 'em_fis') return 'physics'
+  if (s.includes('quím') || s.includes('quim') || s === 'chemistry' || s === 'qui' || s === 'em_qui') return 'chemistry'
+  if (s.includes('biol') || s === 'biology' || s === 'bio' || s === 'em_bio') return 'biology'
+  if (s.includes('astron') || s.includes('terra e universo') || s === 'astronomia_terra') return 'astronomia_terra'
+
+  if (s.includes('ciên') || s.includes('cien') || s === 'ef_ci' || s === 'science' || s === 'ci' || s === 'em_cnt') return 'science'
   if (s.includes('hist') || s === 'ef_hi' || s === 'history' || s === 'hi') return 'history'
   if (s.includes('geog') || s === 'ef_ge' || s === 'geography' || s === 'ge') return 'geography'
   if (s.includes('art') || s === 'ef_ar' || s === 'art' || s === 'ar') return 'art'
-  if (s.includes('físic') || s.includes('fisic') || s === 'ef_ef' || s === 'pe' || s === 'ef') return 'pe'
   if (s.includes('relig') || s === 'ef_er' || s === 'religion' || s === 'er') return 'religion'
   return s
 }
 
-/** Verifica determinísticamente se uma habilidade BNCC pertence ao ano escolar/série solicitado */
+/** Verifica deterministicamente se uma habilidade BNCC pertence ao ano escolar/série solicitado */
 export function matchesBnccGrade(skill: BnccSkill, gradeQuery: string): boolean {
   if (!gradeQuery || gradeQuery === 'all') return true
   const q = gradeQuery.toLowerCase().trim()
@@ -139,7 +178,17 @@ export function matchesBnccGrade(skill: BnccSkill, gradeQuery: string): boolean 
   const code = (skill.code || '').toUpperCase()
 
   // 1. Ensino Médio
-  const isMedioQuery = q.includes('médio') || q.includes('medio') || q === 'em' || q.includes('ensino medio')
+  const isMedioQuery =
+    q.includes('médio') ||
+    q.includes('medio') ||
+    q === 'em' ||
+    q.includes('ensino medio') ||
+    q.includes('série') ||
+    q.includes('serie') ||
+    q === '1a_serie' ||
+    q === '2a_serie' ||
+    q === '3a_serie'
+
   if (isMedioQuery) {
     if (q.includes('1')) {
       return sGrade.includes('1º médio') || sGrade.includes('1o médio') || code.startsWith('EM13LGG1')
@@ -200,24 +249,34 @@ export function matchesBnccGrade(skill: BnccSkill, gradeQuery: string): boolean 
 }
 
 /**
+ * Filtra as habilidades de Ciências (EF II 6º-9º + EM13CNT) para uma frente disciplinar específica:
+ * 'physics' | 'chemistry' | 'biology' | 'astronomia_terra'
+ */
+function getScienceSubdisciplineSkills(sub: 'physics' | 'chemistry' | 'biology' | 'astronomia_terra'): BnccSkill[] {
+  const efII = CI_BNCC_SKILLS.filter(s => {
+    const code = s.code.toUpperCase()
+    const isEF2 = code.startsWith('EF06') || code.startsWith('EF07') || code.startsWith('EF08') || code.startsWith('EF09')
+    if (!isEF2) return false
+    return classifyScienceSkill(code).subdisciplines.includes(sub)
+  })
+  const em = EM_CNT_BNCC_SKILLS.filter(s =>
+    classifyScienceSkill(s.code).subdisciplines.includes(sub)
+  )
+  return [...efII, ...em]
+}
+
+/**
  * Retorna o catálogo completo de habilidades com cache em memória.
- *
- * subject:
- *   undefined | 'EF_LI' | 'english' | 'Língua Inglesa' → Inglês (todas as 106 habilidades garantidas)
- *   'EF_LP' | 'portuguese' | 'Língua Portuguesa'        → Língua Portuguesa (308 habilidades)
- *   'EF_MA' | 'math' | 'Matemática'                     → Matemática (246 habilidades)
- *   'EF_CI' | 'science' | 'Ciências'                    → Ciências (111 habilidades)
- *   'EF_HI' | 'history' | 'História'                    → História (151 habilidades)
- *   'EF_GE' | 'geography' | 'Geografia'                 → Geografia (123 habilidades)
- *   'EF_AR' | 'art' | 'Arte'                            → Arte (61 habilidades)
- *   'EF_EF' | 'pe' | 'Educação Física'                  → Educação Física (68 habilidades)
- *   'EF_ER' | 'religion' | 'Ensino Religioso'           → Ensino Religioso (63 habilidades)
- *   'all'                                               → Todas as disciplinas (1237+ habilidades)
  */
 export function getBnccCatalog(subject?: string): BnccSkill[] {
   const normKey = normalizeBnccSubjectKey(subject)
 
-  // Filtros por disciplina específica oficial
+  // Filtros para frentes específicas de Ciências da Natureza (EF II + EM)
+  if (normKey === 'physics' || normKey === 'chemistry' || normKey === 'biology' || normKey === 'astronomia_terra') {
+    return getScienceSubdisciplineSkills(normKey)
+  }
+
+  // Filtros por disciplina específica oficial (preserva contagem exata do EF para compatibilidade)
   const subjectMap: Record<string, BnccSkill[]> = {
     'portuguese': LP_BNCC_SKILLS,
     'math': MA_BNCC_SKILLS,
@@ -260,11 +319,34 @@ export function getBnccCatalog(subject?: string): BnccSkill[] {
 
 /**
  * Filtra competências por ano escolar / série e opcionalmente por disciplina.
+ * Suporta automaticamente o Ensino Médio (EM13*) para Português, Matemática, Ciências, História e Geografia.
  */
 export function getBnccForGrade(gradeYear?: string, subject?: string): BnccSkill[] {
-  const catalog = getBnccCatalog(subject)
-  if (!gradeYear || gradeYear === 'all') return catalog
-  return catalog.filter(s => matchesBnccGrade(s, gradeYear))
+  const normKey = normalizeBnccSubjectKey(subject)
+  const baseCatalog = getBnccCatalog(subject)
+  if (!gradeYear || gradeYear === 'all') return baseCatalog
+
+  const q = gradeYear.toLowerCase().trim()
+  const isMedioQuery =
+    q.includes('médio') ||
+    q.includes('medio') ||
+    q === 'em' ||
+    q.includes('ensino medio') ||
+    q.includes('série') ||
+    q.includes('serie') ||
+    q === '1a_serie' ||
+    q === '2a_serie' ||
+    q === '3a_serie'
+
+  let pool = baseCatalog
+  if (isMedioQuery) {
+    if (normKey === 'portuguese') pool = [...baseCatalog, ...EM_LP_BNCC_SKILLS]
+    else if (normKey === 'math') pool = [...baseCatalog, ...EM_MA_BNCC_SKILLS]
+    else if (normKey === 'science') pool = [...baseCatalog, ...EM_CNT_BNCC_SKILLS]
+    else if (normKey === 'history' || normKey === 'geography') pool = [...baseCatalog, ...EM_CHS_BNCC_SKILLS]
+  }
+
+  return pool.filter(s => matchesBnccGrade(s, gradeYear))
 }
 
 /**
@@ -305,15 +387,14 @@ export function useBnccSkills(options?: UseBnccSkillsOptions): UseBnccSkillsResu
 
   // Recalcula com base na versão
   const allSkills = useMemo(() => {
-    // Referencia version para que useMemo reavalie na invalidação
     void version
     return getBnccCatalog(options?.subject)
   }, [version, options?.subject])
 
   const gradeSkills = useMemo(() => {
     if (!options?.gradeYear || options?.gradeYear === 'all') return allSkills
-    return allSkills.filter(s => matchesBnccGrade(s, options.gradeYear!))
-  }, [allSkills, options?.gradeYear])
+    return getBnccForGrade(options.gradeYear, options?.subject)
+  }, [allSkills, options?.gradeYear, options?.subject])
 
   return {
     allSkills,

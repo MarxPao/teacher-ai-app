@@ -495,7 +495,7 @@
     }
 
     document.getElementById('sgv2-nlu-input')?.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
+      if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault()
         document.getElementById('sgv2-btn-nlu-send')?.click()
       }

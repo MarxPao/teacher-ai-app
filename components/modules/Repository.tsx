@@ -21,9 +21,12 @@ import {
   HeaderLayoutStyle,
   QuestionNumberFormat,
   OptionLabelFormat,
+  DEFAULT_DOCUMENT_FORMATS,
   getDocumentFormats,
   saveDocumentFormats,
   getDefaultFormatForSchool,
+  setActiveDocumentFormatId,
+  detectSchoolNameFromText,
   inferDocumentFormatFromSampleText,
 } from '@/lib/documentFormatTemplates'
 
@@ -371,9 +374,13 @@ export default function Repository() {
 
   // 7. Formatos de Arquivo & Padrão de Diagramação Escolar
   const [documentFormats, setDocumentFormats] = useState<SchoolDocumentFormat[]>(() => getDocumentFormats())
-  const [selectedFormatId, setSelectedFormatId] = useState<string>('fmt_machado_oficial')
+  const [selectedFormatId, setSelectedFormatId] = useState<string>(() => {
+    const list = getDocumentFormats()
+    return list[0]?.id || 'fmt_machado_oficial'
+  })
   const [formatSchoolFilter, setFormatSchoolFilter] = useState<string>('all')
   const [formatCategoryFilter, setFormatCategoryFilter] = useState<string>('all')
+  const [isImportingFormat, setIsImportingFormat] = useState(false)
   const formatSampleInputRef = useRef<HTMLInputElement | null>(null)
   const [exportFormatIdForRepo, setExportFormatIdForRepo] = useState<string>('fmt_machado_oficial')
 
@@ -1656,9 +1663,11 @@ export default function Repository() {
             <>
               <button
                 onClick={() => formatSampleInputRef.current?.click()}
-                style={{ ...btnSecondary, borderColor: '#8b5e3c', color: '#8b5e3c', fontWeight: 700 }}
+                disabled={isImportingFormat}
+                style={{ ...btnSecondary, borderColor: '#8b5e3c', color: '#8b5e3c', fontWeight: 700, opacity: isImportingFormat ? 0.6 : 1, cursor: isImportingFormat ? 'wait' : 'pointer' }}
               >
-                <i className="ti ti-file-import" /> Importar Modelo (.docx / .pdf / .txt)
+                <i className={`ti ${isImportingFormat ? 'ti-loader ti-spin' : 'ti-file-import'}`} />
+                {isImportingFormat ? ' Extraindo Modelo...' : ' Importar Modelo (.docx / .pdf / .txt)'}
               </button>
               <button
                 onClick={() => {
@@ -3419,22 +3428,82 @@ export default function Repository() {
     const handleImportSampleFormatFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0]
       if (!file) return
+      setIsImportingFormat(true)
       try {
-        const text = await file.text()
-        const targetSchool = formatSchoolFilter !== 'all' ? formatSchoolFilter : (registeredSchools[0]?.name || 'Machado Sobrinho')
+        let extractedText = ''
+        let layoutHints: any = {}
+
+        const fileNameLower = file.name.toLowerCase()
+        if (fileNameLower.endsWith('.docx') || fileNameLower.endsWith('.doc')) {
+          const { extractDocxLayoutAndText } = await import('@/lib/pdfExtractor')
+          const res = await extractDocxLayoutAndText(file)
+          extractedText = res.text
+          layoutHints = res
+        } else if (file.type === 'application/pdf' || fileNameLower.endsWith('.pdf')) {
+          const { extractTextFromPdf } = await import('@/lib/pdfExtractor')
+          extractedText = await extractTextFromPdf(file)
+        } else {
+          extractedText = await file.text()
+        }
+
+        // Detecta escola: prioriza filtro explícito se diferente de 'all'; senão detecta do texto ou escolas cadastradas
+        const detectedSchool = detectSchoolNameFromText(extractedText, file.name)
+        const matchedRegisteredSchool = registeredSchools.find(s =>
+          s.name && (
+            extractedText.toLowerCase().includes(s.name.toLowerCase()) ||
+            file.name.toLowerCase().includes(s.name.toLowerCase())
+          )
+        )?.name
+
+        const isFilterSpecific = formatSchoolFilter && formatSchoolFilter !== 'all' && formatSchoolFilter !== 'Geral'
+        const targetSchool = isFilterSpecific
+          ? formatSchoolFilter
+          : (detectedSchool || matchedRegisteredSchool || registeredSchools[0]?.name || 'Machado Sobrinho')
+
+        // Detecta categoria
+        let targetCategory: DocumentFormatCategory = 'all'
+        if (/(?:prova|teste|simulado|avalia[çc][ãa]o|exam)/i.test(file.name + ' ' + extractedText.slice(0, 500))) {
+          targetCategory = 'exam'
+        } else if (/(?:lista|exerc[íi]cio|atividade|tarefa|worksheet)/i.test(file.name)) {
+          targetCategory = 'worksheet'
+        } else if (/(?:sequ[êe]ncia|plano)/i.test(file.name)) {
+          targetCategory = 'didactic_sequence'
+        }
+
         const inferred = inferDocumentFormatFromSampleText({
           fileName: file.name,
-          extractedText: text,
-          schoolName: targetSchool
+          extractedText,
+          schoolName: targetSchool,
+          targetCategory,
+          layoutHints
         })
-        const updated = [inferred, ...documentFormats]
+
+        // Marca como default da escola e desmarca os demais formatos anteriores da mesma escola
+        const updated = [
+          inferred,
+          ...documentFormats.map(f =>
+            f.schoolName.trim().toLowerCase() === targetSchool.trim().toLowerCase()
+              ? { ...f, isDefaultForSchool: false }
+              : f
+          )
+        ]
+
         setDocumentFormats(updated)
         saveDocumentFormats(updated)
         setSelectedFormatId(inferred.id)
-        showToast(`Formato extraído de "${file.name}" e vinculado a ${targetSchool}!`)
-      } catch {
-        showToast('Erro ao ler modelo de arquivo.')
+        setActiveDocumentFormatId(inferred.id)
+
+        // Se havia filtro restritivo de outra escola, reseta para 'all' ou direciona para targetSchool
+        if (formatSchoolFilter !== 'all' && formatSchoolFilter.toLowerCase() !== targetSchool.toLowerCase()) {
+          setFormatSchoolFilter('all')
+        }
+
+        showToast(`Padrão da escola "${targetSchool}" importado e ativado como padrão com sucesso!`)
+      } catch (err) {
+        console.error('[handleImportSampleFormatFile Error]:', err)
+        showToast('Erro ao ler modelo de arquivo. Verifique se o arquivo possui texto legível.')
       } finally {
+        setIsImportingFormat(false)
         e.target.value = ''
       }
     }
@@ -3504,13 +3573,16 @@ export default function Repository() {
 
             <button
               onClick={() => formatSampleInputRef.current?.click()}
+              disabled={isImportingFormat}
               style={{
                 padding: '9px 12px', borderRadius: RADIUS.md, border: '1.5px dashed #8b5e3c',
                 background: '#fffcf8', color: '#8b5e3c', fontSize: 12, fontWeight: 700,
-                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6
+                cursor: isImportingFormat ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                opacity: isImportingFormat ? 0.6 : 1
               }}
             >
-              <i className="ti ti-upload" /> Extrair Formato de Prova/Doc Exemplo
+              <i className={`ti ${isImportingFormat ? 'ti-loader ti-spin' : 'ti-upload'}`} />
+              {isImportingFormat ? ' Extraindo Formato do Arquivo...' : ' Extrair Formato de Prova/Doc Exemplo'}
             </button>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -3577,13 +3649,14 @@ export default function Repository() {
                   <button
                     onClick={() => {
                       const updated = documentFormats.map(f =>
-                        f.schoolName === activeFormat.schoolName
+                        f.schoolName.trim().toLowerCase() === activeFormat.schoolName.trim().toLowerCase()
                           ? { ...f, isDefaultForSchool: f.id === activeFormat.id }
                           : f
                       )
                       setDocumentFormats(updated)
                       saveDocumentFormats(updated)
-                      showToast(`Definido como formato padrão para ${activeFormat.schoolName}!`)
+                      setActiveDocumentFormatId(activeFormat.id)
+                      showToast(`Definido como formato padrão ativo para ${activeFormat.schoolName}!`)
                     }}
                     style={{ ...btnSecondary, borderColor: '#16a34a', color: '#166534', fontWeight: 700 }}
                   >
@@ -3631,7 +3704,7 @@ export default function Repository() {
                   >
                     🖨️ Testar Folha A4 (PDF)
                   </button>
-                  {!activeFormat.id.startsWith('fmt_') && (
+                  {!DEFAULT_DOCUMENT_FORMATS.some(d => d.id === activeFormat.id) && (
                     <button
                       onClick={() => {
                         const remaining = documentFormats.filter(f => f.id !== activeFormat.id)
@@ -3853,19 +3926,63 @@ export default function Repository() {
                   lineHeight: activeFormat.lineHeight,
                   color: '#000'
                 }}>
-                  <div style={{ border: '2px solid #000', padding: '6px 10px', marginBottom: 10, textAlign: 'center' }}>
-                    <div style={{ fontWeight: 'bold', fontSize: `${activeFormat.fontSizePt + 1.5}pt`, textTransform: 'uppercase' }}>
-                      {activeFormat.schoolName}
+                  {/* CABEÇALHO A4 DINÂMICO CONFORME ESTILO CONFIGURADO */}
+                  <div style={{
+                    border: activeFormat.headerStyle === 'boxed_grid' ? '2px solid #000' : 'none',
+                    borderTop: activeFormat.headerStyle === 'academic_classic' ? '3px double #000' : undefined,
+                    borderBottom: activeFormat.headerStyle === 'academic_classic'
+                      ? '3px double #000'
+                      : activeFormat.headerStyle === 'minimal_banner'
+                      ? '2px solid #000'
+                      : activeFormat.headerStyle === 'institutional_clean'
+                      ? '1.5px solid #2c1a0e'
+                      : undefined,
+                    padding: activeFormat.headerStyle === 'boxed_grid' ? '8px 12px' : '8px 4px',
+                    marginBottom: 10,
+                    textAlign: activeFormat.headerStyle === 'minimal_banner' || activeFormat.headerStyle === 'institutional_clean' ? 'left' : 'center'
+                  }}>
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: activeFormat.headerStyle === 'minimal_banner' || activeFormat.headerStyle === 'institutional_clean' ? 'flex-start' : 'center',
+                      gap: 12,
+                      marginBottom: 4
+                    }}>
+                      {activeFormat.logoUrl && (
+                        <img src={activeFormat.logoUrl} alt="Logo" style={{ maxHeight: 36, maxWidth: 85, objectFit: 'contain' }} />
+                      )}
+                      <div>
+                        <div style={{ fontWeight: 'bold', fontSize: `${activeFormat.fontSizePt + 1.5}pt`, textTransform: 'uppercase' }}>
+                          {activeFormat.schoolName}
+                        </div>
+                        {activeFormat.officialSchoolSubtitle && (
+                          <div style={{ fontSize: '8.5pt', color: '#333' }}>{activeFormat.officialSchoolSubtitle}</div>
+                        )}
+                      </div>
                     </div>
-                    {activeFormat.officialSchoolSubtitle && (
-                      <div style={{ fontSize: '8.5pt', color: '#333' }}>{activeFormat.officialSchoolSubtitle}</div>
-                    )}
                     <div style={{ fontSize: '9pt', borderTop: '1px solid #000', marginTop: 4, paddingTop: 4, display: 'flex', justifyContent: 'space-between' }}>
                       <span><strong>DISCIPLINA:</strong> Língua Inglesa</span>
                       <span><strong>TURMA:</strong> 9º Ano</span>
                       <span><strong>NOTA:</strong> ____ / 10,0</span>
                     </div>
                   </div>
+
+                  {/* INSTRUÇÕES DA ESCOLA */}
+                  {activeFormat.defaultInstructions && (
+                    <div style={{
+                      fontSize: `${Math.max(8.5, activeFormat.fontSizePt - 2)}pt`,
+                      border: '1px dashed #cbd5e1',
+                      padding: '6px 10px',
+                      marginBottom: 10,
+                      background: '#f8fafc',
+                      borderRadius: 4,
+                      whiteSpace: 'pre-line',
+                      lineHeight: 1.35
+                    }}>
+                      <strong style={{ display: 'block', marginBottom: 2 }}>Orientações Gerais:</strong>
+                      {activeFormat.defaultInstructions}
+                    </div>
+                  )}
 
                   <div style={{
                     columnCount: activeFormat.columns,
@@ -3875,13 +3992,47 @@ export default function Repository() {
                   }}>
                     {[1, 2].map(num => (
                       <div key={num} style={{ breakInside: 'avoid', marginBottom: 12, paddingBottom: 8, borderBottom: '1px solid #cbd5e1' }}>
-                        <div style={{ fontWeight: 'bold', marginBottom: 4 }}>
-                          {activeFormat.questionNumberStyle === 'questao_padded'
-                            ? `QUESTÃO 0${num}`
-                            : activeFormat.questionNumberStyle === 'question_en'
-                            ? `Question ${num}.`
-                            : `${num}.`}{' '}
-                          {activeFormat.showPointsPerQuestion && <span style={{ float: 'right', fontSize: '9pt' }}>(1,0 pt)</span>}
+                        <div style={{ fontWeight: 'bold', marginBottom: 4, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <div>
+                            {activeFormat.questionNumberStyle === 'questao_padded' ? (
+                              <span style={{
+                                display: 'inline-block',
+                                background: activeFormat.blackAndWhitePrintMode ? '#f1f5f9' : (activeFormat.primaryColor || '#000'),
+                                color: activeFormat.blackAndWhitePrintMode ? '#000' : '#fff',
+                                border: activeFormat.blackAndWhitePrintMode ? '1.5px solid #000' : 'none',
+                                padding: '1px 7px',
+                                borderRadius: 3,
+                                fontSize: '9.5pt',
+                                fontWeight: 'bold',
+                                letterSpacing: '0.5px',
+                                marginRight: 6
+                              }}>
+                                QUESTÃO 0{num}
+                              </span>
+                            ) : activeFormat.questionNumberStyle === 'badge_number' ? (
+                              <span style={{
+                                display: 'inline-block',
+                                background: activeFormat.blackAndWhitePrintMode ? '#000' : (activeFormat.primaryColor || '#8b5e3c'),
+                                color: '#fff',
+                                padding: '1px 6px',
+                                borderRadius: 4,
+                                fontSize: '9.5pt',
+                                fontWeight: 'bold',
+                                marginRight: 6
+                              }}>
+                                {num}.
+                              </span>
+                            ) : activeFormat.questionNumberStyle === 'question_en' ? (
+                              <span style={{ textDecoration: 'underline', marginRight: 6, fontSize: '10pt' }}>
+                                Question {num}.
+                              </span>
+                            ) : (
+                              <span style={{ marginRight: 6, fontSize: '10pt' }}>
+                                {num}.
+                              </span>
+                            )}
+                          </div>
+                          {activeFormat.showPointsPerQuestion && <span style={{ fontSize: '9pt', color: '#334155' }}>(1,0 pt)</span>}
                         </div>
                         <p style={{ margin: '0 0 6px 0' }}>
                           Exemplo de enunciado diagramado automaticamente no formato oficial da escola <strong>{activeFormat.schoolName}</strong>:

@@ -28,8 +28,7 @@ import { screenEssayStylometrics, StylometricAdvisory } from '@/lib/stylometricS
 import { ingestOmniGraderEvaluation } from '@/lib/studentDossier'
 import { recordOmrItemResponsesToQuestionBank } from '@/lib/omrItemPsychometricsBridge'
 import ModelCapabilityBanner from '@/components/ModelCapabilityBanner'
-import '@/lib/subjects/english'
-import '@/lib/subjects/portuguese'
+import '@/lib/subjects'
 
 interface StudentRecord {
   id: string

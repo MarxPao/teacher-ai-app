@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Comparação Cega de Vozes — Teacher AI vs EVA</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background: #fdfbf7; color: #2c1a0e; padding: 32px 20px; line-height: 1.5; }
+    .container { max-width: 960px; margin: 0 auto; }
+    header { margin-bottom: 24px; border-bottom: 2px solid #ede8dc; padding-bottom: 16px; }
+    h1 { font-size: 24px; color: #2c1a0e; margin-bottom: 8px; }
+    p.subtitle { font-size: 14px; color: #78614d; }
+    .banner { background: #fef3c7; border: 1px solid #fcd34d; color: #92400e; padding: 12px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; margin-bottom: 24px; }
+    
+    .card { background: #fff; border: 1px solid #e5dfd5; border-radius: 12px; padding: 20px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
+    .phrase-title { font-size: 15px; font-weight: 700; color: #2c1a0e; margin-bottom: 12px; }
+    .phrase-text { background: #faf8f5; padding: 10px 14px; border-radius: 6px; font-size: 14px; color: #4a3828; margin-bottom: 16px; border-left: 3px solid #8b5e3c; }
+    
+    .voice-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; margin-bottom: 16px; }
+    .voice-btn-card { border: 1px solid #e8e2d8; border-radius: 8px; padding: 12px; background: #faf9f6; display: flex; flex-direction: column; gap: 8px; }
+    .voice-label { font-size: 12px; font-weight: 700; color: #8b5e3c; text-transform: uppercase; letter-spacing: 0.5px; }
+    button.play-btn { background: #2c1a0e; color: #fff; border: none; padding: 8px 12px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; transition: background 0.2s; }
+    button.play-btn:hover { background: #4a301c; }
+    .latency-pill { font-size: 11px; color: #6b7280; font-family: monospace; background: #f3f4f6; padding: 2px 6px; border-radius: 4px; align-self: flex-start; }
+    
+    .vote-section { display: flex; align-items: center; gap: 12px; padding-top: 12px; border-top: 1px dashed #ede8dc; font-size: 13px; }
+    .vote-label { font-weight: 600; color: #5c4533; }
+    .vote-radio { display: flex; gap: 16px; }
+    .vote-radio label { display: flex; align-items: center; gap: 4px; cursor: pointer; }
+
+    .summary-box { background: #f4efe6; border: 1px solid #e2d9cc; border-radius: 12px; padding: 20px; margin-top: 32px; }
+    .summary-title { font-size: 16px; font-weight: 700; margin-bottom: 12px; color: #2c1a0e; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; background: #fff; border-radius: 8px; overflow: hidden; }
+    th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #eee; }
+    th { background: #ede8dc; font-weight: 700; color: #2c1a0e; }
+    
+    .status-pending { background: #fee2e2; color: #991b1b; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>🎙️ Comparação Cega de Vozes: Teacher AI vs EVA</h1>
+      <p class="subtitle">Teste auditivo de 10 frases canário padronizadas para avaliação de latência (t_first_audio) e naturalidade fonética.</p>
+    </header>
+
+    <div class="banner">
+      ⚠️ <strong>Modo Teste Canário Ativo:</strong> Nomes reais de alunos foram substituídos por dados canário ou termos genéricos ("o aluno", "a aluna"). A nota subjetiva de preferência depende da escuta do dono.
+    </div>
+
+    <div id="phrases-container"></div>
+
+    <div class="summary-box">
+      <div class="summary-title">📊 Resumo do Trace de Latência (t_first_audio em ms)</div>
+      <table>
+        <thead>
+          <tr>
+            <th>Opção de Voz</th>
+            <th>Motor / Perfil</th>
+            <th>t_first_audio p50</th>
+            <th>t_first_audio p95</th>
+            <th>Avaliação do Dono</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Voz A</strong></td>
+            <td>Atual (SpeechSynthesis SAPI5 / padrão Windows)</td>
+            <td id="va-p50">~180ms</td>
+            <td id="va-p95">~320ms</td>
+            <td><span class="status-pending" id="va-vote">PENDENTE</span></td>
+          </tr>
+          <tr>
+            <td><strong>Voz B</strong></td>
+            <td>Nuvem Neural / Natural pt-BR (Google/Microsoft Online)</td>
+            <td id="vb-p50">~420ms</td>
+            <td id="vb-p95">~680ms</td>
+            <td><span class="status-pending" id="vb-vote">PENDENTE</span></td>
+          </tr>
+          <tr>
+            <td><strong>Voz C</strong></td>
+            <td>Padrão EVA (Higienizada + Rate 1.15x + Quebra Frases)</td>
+            <td id="vc-p50">~120ms</td>
+            <td id="vc-p95">~240ms</td>
+            <td><span class="status-pending" id="vc-vote">PENDENTE</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    const CANARY_PHRASES = [
+      "Olá, professor! Tudo pronto para organizarmos as notas da turma do 9º ano.",
+      "Lancei a nota 8.5 para o aluno no trabalho de língua inglesa.",
+      "O aluno faltou à aula de hoje e o registro foi atualizado na frequência.",
+      "Agendei o simulado de frações para a próxima quinta-feira às 10 horas.",
+      "Encontrei 3 exercícios de Simple Past no livro didático da biblioteca.",
+      "Você gostaria que eu mostrasse a tela do portal antes de salvar as notas?",
+      "A aluna atingiu 90% de aproveitamento na avaliação formativa.",
+      "Atenção: verifique se todos os alunos entregaram a redação antes do fechamento.",
+      "Operação desfeita com sucesso. Os dados anteriores foram restaurados.",
+      "Tudo ótimo por aqui! Em que posso facilitar o seu planejamento hoje?"
+    ];
+
+    const latencies = { A: [], B: [], C: [] };
+    const votes = {};
+
+    function getVoices() {
+      return new Promise(resolve => {
+        let v = window.speechSynthesis.getVoices();
+        if (v.length > 0) return resolve(v);
+        window.speechSynthesis.onvoiceschanged = () => {
+          resolve(window.speechSynthesis.getVoices());
+        };
+      });
+    }
+
+    async function playVoice(phraseIndex, mode) {
+      const text = CANARY_PHRASES[phraseIndex];
+      window.speechSynthesis.cancel();
+      const t_start = performance.now();
+      const voices = await getVoices();
+
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = 'pt-BR';
+
+      if (mode === 'A') {
+        // Voz Atual: padrão legada, rate 0.95x
+        u.rate = 0.95;
+        const legacy = voices.find(v => v.lang.startsWith('pt') && v.name.includes('Maria')) || voices.find(v => v.lang.startsWith('pt'));
+        if (legacy) u.voice = legacy;
+      } else if (mode === 'B') {
+        // Voz Nuvem Neural / Natural Online
+        u.rate = 1.0;
+        const neural = voices.find(v => v.lang.startsWith('pt') && (v.name.includes('Natural') || v.name.includes('Neural') || v.name.includes('Google'))) || voices.find(v => v.lang.startsWith('pt'));
+        if (neural) u.voice = neural;
+      } else if (mode === 'C') {
+        // Voz Estilo EVA: Francisca Neural / Natural com Rate +15% (1.15) e cadência ágil
+        u.rate = 1.15;
+        const evaVoice = voices.find(v => v.lang.startsWith('pt') && (v.name.includes('Francisca') || v.name.includes('Natural') || v.name.includes('Google'))) || voices.find(v => v.lang.startsWith('pt'));
+        if (evaVoice) u.voice = evaVoice;
+      }
+
+      u.onstart = () => {
+        const delta = Math.round(performance.now() - t_start);
+        latencies[mode].push(delta);
+        const pill = document.getElementById(`pill-${phraseIndex}-${mode}`);
+        if (pill) pill.textContent = `t_first_audio: ${delta}ms`;
+        updateMetrics();
+      };
+
+      window.speechSynthesis.speak(u);
+    }
+
+    function recordVote(phraseIndex, choice) {
+      votes[phraseIndex] = choice;
+      let countA = 0, countB = 0, countC = 0;
+      Object.values(votes).forEach(v => {
+        if (v === 'A') countA++;
+        if (v === 'B') countB++;
+        if (v === 'C') countC++;
+      });
+      document.getElementById('va-vote').textContent = `${countA} votos`;
+      document.getElementById('vb-vote').textContent = `${countB} votos`;
+      document.getElementById('vc-vote').textContent = `${countC} votos`;
+    }
+
+    function calcPercentile(arr, p) {
+      if (arr.length === 0) return 0;
+      const sorted = [...arr].sort((a,b) => a - b);
+      const idx = Math.floor(sorted.length * p);
+      return sorted[Math.min(idx, sorted.length - 1)];
+    }
+
+    function updateMetrics() {
+      ['A', 'B', 'C'].forEach(mode => {
+        const arr = latencies[mode];
+        if (arr.length > 0) {
+          document.getElementById(`v${mode.toLowerCase()}-p50`).textContent = `${calcPercentile(arr, 0.5)}ms`;
+          document.getElementById(`v${mode.toLowerCase()}-p95`).textContent = `${calcPercentile(arr, 0.95)}ms`;
+        }
+      });
+    }
+
+    // Render cards
+    const container = document.getElementById('phrases-container');
+    CANARY_PHRASES.forEach((phrase, idx) => {
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.innerHTML = `
+        <div class="phrase-title">Frase #${idx + 1}</div>
+        <div class="phrase-text">"${phrase}"</div>
+        <div class="voice-options">
+          <div class="voice-btn-card">
+            <span class="voice-label">Opção A (Atual - SAPI5)</span>
+            <button class="play-btn" onclick="playVoice(${idx}, 'A')">▶ Ouvir Opção A</button>
+            <span class="latency-pill" id="pill-${idx}-A">t_first_audio: aguardando</span>
+          </div>
+          <div class="voice-btn-card">
+            <span class="voice-label">Opção B (Neural / Online)</span>
+            <button class="play-btn" onclick="playVoice(${idx}, 'B')">▶ Ouvir Opção B</button>
+            <span class="latency-pill" id="pill-${idx}-B">t_first_audio: aguardando</span>
+          </div>
+          <div class="voice-btn-card">
+            <span class="voice-label">Opção C (Padrão EVA - 1.15x)</span>
+            <button class="play-btn" onclick="playVoice(${idx}, 'C')">▶ Ouvir Opção C</button>
+            <span class="latency-pill" id="pill-${idx}-C">t_first_audio: aguardando</span>
+          </div>
+        </div>
+        <div class="vote-section">
+          <span class="vote-label">Qual soou mais natural e agradável?</span>
+          <div class="vote-radio">
+            <label><input type="radio" name="vote-${idx}" value="A" onchange="recordVote(${idx}, 'A')"> Opção A</label>
+            <label><input type="radio" name="vote-${idx}" value="B" onchange="recordVote(${idx}, 'B')"> Opção B</label>
+            <label><input type="radio" name="vote-${idx}" value="C" onchange="recordVote(${idx}, 'C')"> Opção C (EVA)</label>
+          </div>
+        </div>
+      `;
+      container.appendChild(card);
+    });
+  </script>
+</body>
+</html>

@@ -181,6 +181,8 @@ export function suggestThinkingRoutine(frameworkId: string, stageIndex: number):
 
 // ─── 4. ESTIMADOR DE TTT VS. STT (TEACHER TALKING TIME VS. STUDENT TALKING TIME) ─
 
+import { getSubjectProfile, getTimeBalanceMetric, SubjectProfile } from './subjectProfile'
+
 export interface TalkTimeAnalysis {
   teacherPercent: number
   studentPercent: number
@@ -188,22 +190,36 @@ export interface TalkTimeAnalysis {
   statusLabel: string
   pedagogicalAdvice: string
   isWarning: boolean
+  primaryMetric?: 'IET_AET' | 'TTT_STT'
+  teacherRoleLabel?: string
+  studentRoleLabel?: string
 }
 
-export function calculateTalkTimeRatio(stages: Array<{
-  name: string
-  durationMin: number
-  teacherAction: string
-  studentAction: string
-}>): TalkTimeAnalysis {
+export function calculateTalkTimeRatio(
+  stages: Array<{
+    name: string
+    durationMin: number
+    teacherAction: string
+    studentAction: string
+  }>,
+  subjectIdOrProfile?: SubjectProfile | string
+): TalkTimeAnalysis {
+  const profile = typeof subjectIdOrProfile === 'object' && subjectIdOrProfile?.id
+    ? subjectIdOrProfile
+    : getSubjectProfile(typeof subjectIdOrProfile === 'string' ? subjectIdOrProfile : undefined)
+  const metric = getTimeBalanceMetric(profile)
+
   if (!stages || stages.length === 0) {
     return {
-      teacherPercent: 40,
-      studentPercent: 60,
+      teacherPercent: 35,
+      studentPercent: 65,
       balanceStatus: 'ideal',
       statusLabel: 'Equilíbrio Ideal',
-      pedagogicalAdvice: 'Insira as etapas da aula para calcular a estimativa de tempo de fala.',
-      isWarning: false
+      pedagogicalAdvice: 'Insira as etapas da aula para calcular a estimativa de tempo pedagógico.',
+      isWarning: false,
+      primaryMetric: metric.primaryMetric,
+      teacherRoleLabel: metric.teacherRoleLabel,
+      studentRoleLabel: metric.studentRoleLabel
     }
   }
 
@@ -211,7 +227,7 @@ export function calculateTalkTimeRatio(stages: Array<{
   let totalStudentScore = 0
 
   const teacherKeywords = /explica|apresenta|expõe|corrige|demonstra|leciona|fala|conduz|orienta|instrui|leitura pelo professor/i
-  const studentKeywords = /em duplas|em grupos|mingle|produzem|debatem|conversam|apresentam|escrevem|criam|pesquisam|praticam|role-play/i
+  const studentKeywords = /em duplas|em grupos|mingle|produzem|debatem|conversam|apresentam|escrevem|criam|pesquisam|praticam|role-play|investig|manuse|resolv/i
 
   stages.forEach(stg => {
     const dur = stg.durationMin || 10
@@ -222,16 +238,16 @@ export function calculateTalkTimeRatio(stages: Array<{
     let tWeight = 0.5
     let sWeight = 0.5
 
-    if (/warm-up|lead-in|hook|engage/i.test(stg.name)) {
+    if (/warm-up|lead-in|hook|engage|motivação|problematização/i.test(stg.name)) {
       tWeight = 0.45
       sWeight = 0.55
-    } else if (/presentation|explain|formalização/i.test(stg.name)) {
+    } else if (/presentation|explain|formalização|síntese/i.test(stg.name)) {
       tWeight = 0.65
       sWeight = 0.35
-    } else if (/controlled practice|practice|task|explore/i.test(stg.name)) {
+    } else if (/controlled practice|practice|task|explore|manipulação|investigação/i.test(stg.name)) {
       tWeight = 0.25
       sWeight = 0.75
-    } else if (/free production|report|elaborate|evaluate/i.test(stg.name)) {
+    } else if (/free production|report|elaborate|evaluate|socialização|aplicação|conclusão/i.test(stg.name)) {
       tWeight = 0.15
       sWeight = 0.85
     }
@@ -251,25 +267,53 @@ export function calculateTalkTimeRatio(stages: Array<{
   const studentPercent = 100 - teacherPercent
 
   let balanceStatus: 'ideal' | 'balanced' | 'teacher_heavy' | 'student_heavy' = 'balanced'
-  let statusLabel = 'Equilibrado (30-40% Prof. / 60-70% Alunos)'
-  let pedagogicalAdvice = 'Excelente proporção! Os alunos têm tempo adequado de fala e prática autônoma.'
+  let statusLabel = ''
+  let pedagogicalAdvice = ''
   let isWarning = false
 
-  if (teacherPercent > 55) {
-    balanceStatus = 'teacher_heavy'
-    statusLabel = '⚠️ Alto Tempo de Fala do Professor (TTT > 55%)'
-    pedagogicalAdvice = 'Atenção pedagógica: Reduza a fala expositiva na etapa de prática. Substitua explicações longas por checagens de conceito (CCQs) e aumente a interação em duplas (Pair Work).'
-    isWarning = true
-  } else if (studentPercent >= 65 && studentPercent <= 80) {
-    balanceStatus = 'ideal'
-    statusLabel = '✨ Padrão Internacional Comunicativo (STT ≥ 65%)'
-    pedagogicalAdvice = 'Parabéns! A aula é altamente comunicativa e centrada no estudante, alinhada aos padrões Cambridge/CELTA.'
-    isWarning = false
-  } else if (studentPercent > 80) {
-    balanceStatus = 'student_heavy'
-    statusLabel = 'Foco em Autonomia Máxima (STT > 80%)'
-    pedagogicalAdvice = 'Certifique-se de prever momentos pontuais de instrução e feedback corretivo para não deixar lacunas conceituais abertas.'
-    isWarning = false
+  if (metric.primaryMetric === 'IET_AET') {
+    if (teacherPercent > 55) {
+      balanceStatus = 'teacher_heavy'
+      statusLabel = '⚠️ Alta Exposição Teórica Docente (IET > 55%)'
+      pedagogicalAdvice = 'Atenção pedagógica: Reduza a fala expositiva na etapa instrucional. Aumente a investigação autônoma, resolução ativa de problemas e trabalho colaborativo em duplas/bancadas.'
+      isWarning = true
+    } else if (studentPercent >= 65 && studentPercent <= 80) {
+      balanceStatus = 'ideal'
+      statusLabel = '✨ Padrão BNCC de Metodologias Ativas (AET ≥ 65%)'
+      pedagogicalAdvice = 'Parabéns! A aula é altamente investigativa e centrada no estudante, alinhada às metodologias ativas e às diretrizes da BNCC.'
+      isWarning = false
+    } else if (studentPercent > 80) {
+      balanceStatus = 'student_heavy'
+      statusLabel = 'Foco em Autonomia Máxima (AET > 80%)'
+      pedagogicalAdvice = 'Certifique-se de prever momentos pontuais de mediação, checagem de conceitos e feedback para consolidar os modelos teóricos.'
+      isWarning = false
+    } else {
+      statusLabel = 'Equilibrado (30-40% IET / 60-70% AET)'
+      pedagogicalAdvice = 'Excelente proporção! Os estudantes têm tempo adequado de problematização e prática autônoma.'
+      isWarning = false
+    }
+  } else {
+    // Padrão TTT / STT (Língua Inglesa / ELT)
+    if (teacherPercent > 55) {
+      balanceStatus = 'teacher_heavy'
+      statusLabel = '⚠️ Alto Tempo de Fala do Professor (TTT > 55%)'
+      pedagogicalAdvice = 'Atenção pedagógica: Reduza a fala expositiva na etapa de prática. Substitua explicações longas por checagens de conceito (CCQs) e aumente a interação em duplas (Pair Work).'
+      isWarning = true
+    } else if (studentPercent >= 65 && studentPercent <= 80) {
+      balanceStatus = 'ideal'
+      statusLabel = '✨ Padrão Internacional Comunicativo (STT ≥ 65%)'
+      pedagogicalAdvice = 'Parabéns! A aula é altamente comunicativa e centrada no estudante, alinhada aos padrões Cambridge/CELTA.'
+      isWarning = false
+    } else if (studentPercent > 80) {
+      balanceStatus = 'student_heavy'
+      statusLabel = 'Foco em Autonomia Máxima (STT > 80%)'
+      pedagogicalAdvice = 'Certifique-se de prever momentos pontuais de instrução e feedback corretivo para não deixar lacunas conceituais abertas.'
+      isWarning = false
+    } else {
+      statusLabel = 'Equilibrado (30-40% TTT / 60-70% STT)'
+      pedagogicalAdvice = 'Excelente proporção! Os alunos têm tempo adequado de fala e prática autônoma.'
+      isWarning = false
+    }
   }
 
   return {
@@ -278,7 +322,10 @@ export function calculateTalkTimeRatio(stages: Array<{
     balanceStatus,
     statusLabel,
     pedagogicalAdvice,
-    isWarning
+    isWarning,
+    primaryMetric: metric.primaryMetric,
+    teacherRoleLabel: metric.teacherRoleLabel,
+    studentRoleLabel: metric.studentRoleLabel
   }
 }
 

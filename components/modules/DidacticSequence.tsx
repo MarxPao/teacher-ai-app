@@ -409,6 +409,21 @@ export default function DidacticSequence() {
     getDefaultFormatForSchool('Machado Sobrinho', 'didactic_sequence').id
   )
 
+  useEffect(() => {
+    const handleUpdate = () => {
+      const fmts = getDocumentFormats()
+      setAvailableFormats(fmts)
+      const def = getDefaultFormatForSchool(selectedSchool, 'didactic_sequence')
+      if (def) setSelectedFormatId(def.id)
+    }
+    window.addEventListener('storage', handleUpdate)
+    window.addEventListener('teacher:formats-updated', handleUpdate)
+    return () => {
+      window.removeEventListener('storage', handleUpdate)
+      window.removeEventListener('teacher:formats-updated', handleUpdate)
+    }
+  }, [selectedSchool])
+
   const [selectedUnit, setSelectedUnit] = useState<SequenceUnit | null>(null)
   const [analyzingAi, setAnalyzingAi] = useState(false)
   const [aiReport, setAiReport] = useState<string | null>(null)

@@ -14,7 +14,7 @@ import { buildTeacherStylePromptDirective, updateTeacherProfileFromLessonPlan } 
 import { buildTeacherStyleSystemPrompt } from '@/lib/teacherStyleProfile'
 import { getStoredQuestions } from '@/lib/questionBankService'
 import { getSubjectProfile, getAllSubjectProfiles, SubjectProfile } from '@/lib/subjectProfile'
-import '@/lib/subjects/portuguese'
+import '@/lib/subjects'
 import Button from '@/components/Button'
 import {
   LESSON_FRAMEWORKS,
@@ -242,6 +242,17 @@ export default function LessonStudio() {
   })
   const availableSubjects = useMemo(() => getAllSubjectProfiles(), [])
   const activeProfile = useMemo(() => getSubjectProfile(subjectId), [subjectId])
+
+  useEffect(() => {
+    const handleSubjectChange = (e: Event) => {
+      const newSubId = (e as CustomEvent).detail
+      if (typeof newSubId === 'string' && newSubId) {
+        setSubjectId(newSubId)
+      }
+    }
+    window.addEventListener('teacher:subject_changed', handleSubjectChange)
+    return () => window.removeEventListener('teacher:subject_changed', handleSubjectChange)
+  }, [])
   const [targetDurationMinutes, setTargetDurationMinutes] = useState<number>(50)
   const [assessmentEvidence, setAssessmentEvidence] = useState<string>('')
   const [lessonDate, setLessonDate] = useState(new Date().toISOString().slice(0, 10))

@@ -366,7 +366,58 @@ Erros diagnósticos prioritários: concordância verbal/nominal, regência, colo
     // 9º Ano
     'EF09LP01', 'EF09LP03', 'EF09LP09', 'EF09LP15', 'EF09LP16',
     'EF09LP22', 'EF09LP26', 'EF09LP29'
-  ]
+  ],
+
+  // ─── Extensões V2 Rigor Científico ─────────────────────────────────────────
+  presentationTriad: {
+    name: 'Uso-Forma-Sentido',
+    components: ['Uso (Prática Social/Contextual)', 'Forma (Estrutura Morfossintática)', 'Sentido (Efeitos Semânticos/Discursivos)'],
+    promptDirective: 'Em conformidade com Geraldi, Travaglia e a BNCC, todo conteúdo linguístico deve partir do Uso real em textos autênticos, transitar pela reflexão sobre a Forma estrutural e culminar nos efeitos de Sentido produzidos no interlocutor.'
+  },
+
+  timeBalanceMetric: {
+    primaryMetric: 'IET_AET',
+    teacherRoleLabel: 'Tempo de Instrução Expositiva (IET)',
+    studentRoleLabel: 'Tempo de Atividade Efetiva (AET)',
+    targetRatio: { teacherMax: 35, studentMin: 65 },
+    pedagogicalRationale: 'Oficinas de leitura, produção textual e análise linguística ativa exigem protagonismo produtivo dos alunos (AET >= 65%).'
+  },
+
+  udlScaffolding: {
+    perception: [
+      'Suporte de audiotextos com ritmo controlado e marcação de pontuação expressiva',
+      'Destacamento visual colorido de classes gramaticais, funções sintáticas e articuladores coesivos',
+      'Glossários marginais explicativos e notas de contexto histórico-cultural'
+    ],
+    expression: [
+      'Produção textual multimodal (podcasts, vídeos, fanzines, resenhas em blog, textos digitais)',
+      'Organizadores gráficos, mapas conceituais e esquemas de planejamento dissertativo',
+      'Checklists objetivos de autorrevisão e roteiros estruturados de reescrita'
+    ],
+    engagement: [
+      'Seleção de temas e gêneros da cultura juvenil e de circulação social autêntica',
+      'Debates orais estruturados, saraus literários e júris simulados'
+    ]
+  },
+
+  scopeProfile: {
+    targetStages: ['fundamental_2', 'ensino_medio'],
+    defaultEmSequence: 'traditional_series'
+  },
+
+  provenance: {
+    theoreticalFoundations: ['Epilinguística e Prática de Análise Linguística', 'Sociolinguística Educacional', 'Linguística Textual e Teoria dos Gêneros'],
+    pedagogicalReferences: [
+      'Geraldi, J. W. (1997). Portos de Passagem. Martins Fontes.',
+      'Travaglia, L. C. (2009). Gramática e Interação: uma proposta para o ensino de gramática. Cortez.',
+      'Bagno, M. (2007). Preconceito Linguístico: o que é, como se faz. Loyola.',
+      'Bechara, E. (2009). Moderna Gramática Portuguesa. Nova Fronteira.'
+    ],
+    authors: ['João Wanderley Geraldi', 'Luiz Carlos Travaglia', 'Marcos Bagno', 'Evanildo Bechara']
+  },
+
+  recommendedFrameworkIds: ['lp_oficina_producao', 'lp_circulo_leitura', 'lp_analise_linguistica_ativa'],
+  gatingRuleIds: ['LP-G-6-001', 'LP-G-7-001', 'LP-G-8-001', 'LP-G-9-001', 'LP-G-EM-001']
 }
 
 // Auto-registra ao importar

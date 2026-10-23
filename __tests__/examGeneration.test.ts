@@ -498,6 +498,81 @@ Espero que atenda aos critérios!
     expect(seqHtml).toContain('Unit 1: Present Perfect & Global Issues')
     expect(seqHtml).toContain('UNIDADE 01')
   })
+
+  it('deve extrair metadados, detectar colégio e ativar novo padrão ao importar arquivo modelo (.docx / .pdf)', async () => {
+    const {
+      detectSchoolNameFromText,
+      inferDocumentFormatFromSampleText,
+      saveDocumentFormats,
+      getDocumentFormats,
+      getDefaultFormatForSchool,
+      setActiveDocumentFormatId
+    } = await import('@/lib/documentFormatTemplates')
+
+    // 1. Detecção honesta do colégio a partir do cabeçalho do arquivo
+    const sampleDocxText = `COLÉGIO NOSSA SENHORA DAS GRAÇAS
+AVALIAÇÃO DE LÍNGUA INGLESA — 4º BIMESTRE 2026
+DISCIPLINA: Língua Inglesa   TURMA: 7º Ano   PROFESSOR: Rafaela Toldo
+
+ORIENTAÇÕES GERAIS:
+1. Responda todas as questões à caneta azul ou preta.
+2. Não utilize corretivo nem rasure o gabarito.
+3. Boa prova a todos!
+
+QUESTÃO 01
+Leia a tirinha e selecione a alternativa correta:
+(A) The cat is sleeping under the table.
+(B) The dog is barking at the mailman.
+(C) The birds are flying south.
+(D) The fish are swimming in the aquarium.
+`
+    const detectedSchool = detectSchoolNameFromText(sampleDocxText, 'Teste 7º ano 4º bimestre 2026 Língua Inglesa.docx')
+    expect(detectedSchool).toBe('COLÉGIO NOSSA SENHORA DAS GRAÇAS')
+
+    // 2. Inferência com metadados estruturais de layout (.docx)
+    const inferred = inferDocumentFormatFromSampleText({
+      fileName: 'Teste 7º ano 4º bimestre 2026 Língua Inglesa.docx',
+      extractedText: sampleDocxText,
+      schoolName: detectedSchool || undefined,
+      layoutHints: {
+        fontFamily: 'Arial, Helvetica, sans-serif',
+        fontSizePt: 12,
+        columns: 1,
+        marginsMm: { top: 18, right: 18, bottom: 18, left: 18 },
+        headerStyle: 'boxed_grid',
+        logoDataUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
+      }
+    })
+
+    expect(inferred.schoolName).toBe('COLÉGIO NOSSA SENHORA DAS GRAÇAS')
+    expect(inferred.fontFamily).toBe('Arial, Helvetica, sans-serif')
+    expect(inferred.fontSizePt).toBe(12)
+    expect(inferred.questionNumberStyle).toBe('questao_padded')
+    expect(inferred.optionLabelStyle).toBe('(A)')
+    expect(inferred.isDefaultForSchool).toBe(true)
+    expect(inferred.officialSchoolSubtitle).toContain('4º BIMESTRE 2026')
+    expect(inferred.defaultInstructions).toContain('Responda todas as questões')
+    expect(inferred.logoUrl).toContain('data:image/png;base64')
+
+    // 3. Salva novo padrão e garante que substitui o default da escola
+    const currentList = getDocumentFormats()
+    const updatedList = [
+      inferred,
+      ...currentList.map(f =>
+        f.schoolName.toLowerCase() === inferred.schoolName.toLowerCase()
+          ? { ...f, isDefaultForSchool: false }
+          : f
+      )
+    ]
+    saveDocumentFormats(updatedList)
+    setActiveDocumentFormatId(inferred.id)
+
+    // 4. getDefaultFormatForSchool deve retornar o formato importado recém-ativado
+    const activeDefault = getDefaultFormatForSchool('COLÉGIO NOSSA SENHORA DAS GRAÇAS', 'exam')
+    expect(activeDefault.id).toBe(inferred.id)
+    expect(activeDefault.schoolName).toBe('COLÉGIO NOSSA SENHORA DAS GRAÇAS')
+    expect(activeDefault.fontFamily).toBe('Arial, Helvetica, sans-serif')
+  })
 })
 
 

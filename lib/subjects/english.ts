@@ -295,7 +295,50 @@ Frameworks: CEFR (A1-C2), Cambridge Assessment English, IELTS, BNCC Língua Ingl
     'EF08LI01', 'EF08LI05', 'EF08LI14', 'EF08LI16',
     'EF09LI01', 'EF09LI08', 'EF09LI14', 'EF09LI15', 'EF09LI16', 'EF09LI19',
     'EM13LGG101', 'EM13LGG401', 'EM13LGG604'
-  ]
+  ],
+
+  // ─── Extensões V2 Rigor Científico ─────────────────────────────────────────
+  presentationTriad: {
+    name: 'Contexto-Sentido-Forma (MFP - Meaning, Form, Pronunciation)',
+    components: ['Meaning (Sentido)', 'Form (Forma)', 'Pronunciation (Pronúncia)'],
+    promptDirective: 'Apresentar a linguagem-alvo sempre contextualizada, assegurando a sequência Meaning (Sentido) -> Form (Forma escrita/sintaxe) -> Pronunciation/Uso fonológico antes de qualquer prática mecânica.'
+  },
+
+  timeBalanceMetric: {
+    primaryMetric: 'TTT_STT',
+    teacherRoleLabel: 'Teacher Talking Time (TTT)',
+    studentRoleLabel: 'Student Talking Time (STT)',
+    targetRatio: { teacherMax: 30, studentMin: 70 },
+    pedagogicalRationale: 'A abordagem comunicativa (CLT/TBLT) preconiza que a proficiência linguística emerge da prática ativa e da interação comunicativa do estudante (STT >= 70%).'
+  },
+
+  udlScaffolding: {
+    perception: [
+      'Apoio multimodal com áudio nativo, legendas simultâneas e recursos visuais (flashcards e realia)',
+      'Glossários bilíngues e tabelas de equivalência funcional contextual'
+    ],
+    expression: [
+      'Opções de entrega oral (gravação de áudio, roleplay em duplas) ou escrita (diálogos guiados, chats)',
+      'Sentence starters e scaffolds sintáticos progressivos (frames de fala)'
+    ],
+    engagement: [
+      'Tarefas comunicativas de alta relevância pessoal e cultural (músicas, cinema, debates contemporâneos)',
+      'Dinâmicas colaborativas tipo Information Gap e projetos TBLT'
+    ]
+  },
+
+  scopeProfile: {
+    targetStages: ['fundamental_2', 'ensino_medio'],
+    defaultEmSequence: 'traditional_series'
+  },
+
+  provenance: {
+    theoreticalFoundations: ['Communicative Language Teaching (CLT)', 'Task-Based Language Teaching (TBLT)', 'Lexical Approach'],
+    pedagogicalReferences: ['Harmer, J. (2015). The Practice of English Language Teaching', 'Richards, J. C. (2006). Communicative Language Teaching Today', 'Ur, P. (2012). A Course in English Language Teaching'],
+    authors: ['Jeremy Harmer', 'Jack C. Richards', 'Penny Ur']
+  },
+
+  recommendedFrameworkIds: ['ppp', 'tblt', 'flr']
 }
 
 // Auto-registra ao importar

@@ -55,6 +55,59 @@ export interface EssayRubricCriterion {
   descriptors: Record<string, string>  // nível → descrição (ex: '5': 'Domínio pleno...')
 }
 
+// ─── Interfaces V2: Rigor Científico & Multi-Disciplinas ───────────────────────
+
+export interface PresentationTriad {
+  /** Nome pedagógico da tríade (ex: 'Uso-Forma-Sentido', 'Concreto-Pictórico-Abstrato (CPA/CRA)') */
+  name: string
+  /** As 3 dimensões epistemológicas obrigatórias */
+  components: [string, string, string]
+  /** Diretiva explícita injetada no prompt de planejamento para exigir a tríade */
+  promptDirective: string
+  /** Validador determinístico de aderência da tríade no texto gerado */
+  checkCompliance?: (text: string) => { compliant: boolean; missing: string[] }
+}
+
+export interface TimeBalanceMetric {
+  primaryMetric: 'IET_AET' | 'TTT_STT'
+  /** Rótulo da fala/instrução docente */
+  teacherRoleLabel: string
+  /** Rótulo da atividade ativa discente */
+  studentRoleLabel: string
+  /** Meta de equilíbrio (ex: teacherMax: 35%, studentMin: 65%) */
+  targetRatio: { teacherMax: number; studentMin: number }
+  pedagogicalRationale: string
+}
+
+export interface SubjectUDLScaffolding {
+  /** Múltiplos meios de representação / percepção */
+  perception: string[]
+  /** Múltiplos meios de ação e expressão */
+  expression: string[]
+  /** Múltiplos meios de engajamento */
+  engagement: string[]
+}
+
+export interface SubjectScopeProfile {
+  targetStages: ('fundamental_2' | 'ensino_medio')[]
+  defaultEmSequence: 'traditional_series' | 'bncc_competencies'
+  scienceClassification?: 'physics' | 'chemistry' | 'biology' | 'astronomia_terra' | 'general'
+}
+
+export interface SubjectProvenance {
+  theoreticalFoundations: string[]
+  pedagogicalReferences: string[]
+  authors: string[]
+}
+
+export interface SubjectSpecialRenderers {
+  hasMathJaxOrLatex?: boolean
+  hasChemicalFormulas?: boolean
+  hasPunnettSquares?: boolean
+  hasMapsOrCartography?: boolean
+  hasHistoricalTimelines?: boolean
+}
+
 export interface SubjectProfile {
   id: string          // 'english' | 'portuguese' | 'math' | ...
   name: string        // 'Língua Inglesa', 'Língua Portuguesa', 'Matemática'
@@ -78,6 +131,16 @@ export interface SubjectProfile {
 
   /** Habilidades BNCC específicas desta matéria */
   bnccSkillIds?: string[]  // ex: ['EF06LP01', 'EF07LP15']
+
+  // === EXTENSÕES V2 (ADDITIVE) ===
+  presentationTriad?: PresentationTriad
+  timeBalanceMetric?: TimeBalanceMetric
+  udlScaffolding?: SubjectUDLScaffolding
+  scopeProfile?: SubjectScopeProfile
+  provenance?: SubjectProvenance
+  recommendedFrameworkIds?: string[]
+  gatingRuleIds?: string[]
+  specialRenderers?: SubjectSpecialRenderers
 }
 
 // ─── Registro Central de Perfis ───────────────────────────────────────────────
@@ -203,4 +266,70 @@ Cada alternativa incorreta DEVE representar um erro diagnóstico real e document
 ${profileLines.join('\n')}
 ${misLines.length > 0 ? `\nMISCONCEPTIONS CATALOGADAS VINCULADAS (Alternativa_k ⟺ Misconception_k):\n${misLines.join('\n')}` : ''}
 No Gabarito Comentado, explicite qual misconception ou padrão cada alternativa incorreta representou.`
+}
+
+/**
+ * Valida deterministamente se um texto pedagógico ou plano de aula contempla
+ * as 3 dimensões da tríade de apresentação da disciplina.
+ */
+export function validatePresentationTriad(
+  profile: SubjectProfile,
+  text: string
+): { compliant: boolean; missing: string[]; detected: string[] } {
+  if (!profile.presentationTriad) {
+    return { compliant: true, missing: [], detected: [] }
+  }
+  if (profile.presentationTriad.checkCompliance) {
+    const res = profile.presentationTriad.checkCompliance(text)
+    const detected = profile.presentationTriad.components.filter(c => !res.missing.includes(c))
+    return { compliant: res.compliant, missing: res.missing, detected }
+  }
+  const textLower = text.toLowerCase()
+  const missing: string[] = []
+  const detected: string[] = []
+  for (const comp of profile.presentationTriad.components) {
+    const compClean = comp.toLowerCase().replace(/[^a-záàâãéèêíïóôõöúçñ0-9]/gi, ' ').trim()
+    const tokens = compClean.split(/\s+/).filter(t => t.length > 3)
+    const match = tokens.some(t => textLower.includes(t)) || textLower.includes(compClean)
+    if (match) {
+      detected.push(comp)
+    } else {
+      missing.push(comp)
+    }
+  }
+  return {
+    compliant: missing.length === 0,
+    missing,
+    detected
+  }
+}
+
+/**
+ * Retorna a métrica de equilíbrio de tempo docente/discente (IET vs AET ou TTT vs STT)
+ */
+export function getTimeBalanceMetric(profile: SubjectProfile): TimeBalanceMetric {
+  if (profile.timeBalanceMetric) return profile.timeBalanceMetric
+  if (profile.id === 'english') {
+    return {
+      primaryMetric: 'TTT_STT',
+      teacherRoleLabel: 'Teacher Talking Time (TTT)',
+      studentRoleLabel: 'Student Talking Time (STT)',
+      targetRatio: { teacherMax: 30, studentMin: 70 },
+      pedagogicalRationale: 'Abordagem comunicativa (Communicative Language Teaching) prioriza máxima produção oral e interação do estudante.'
+    }
+  }
+  return {
+    primaryMetric: 'IET_AET',
+    teacherRoleLabel: 'Tempo de Instrução Expositiva (IET)',
+    studentRoleLabel: 'Tempo de Atividade Efetiva (AET)',
+    targetRatio: { teacherMax: 35, studentMin: 65 },
+    pedagogicalRationale: 'Metodologias ativas e BNCC exigem protagonismo investigativo e resolução de problemas pelos estudantes.'
+  }
+}
+
+/**
+ * Retorna os suportes de Desenho Universal para a Aprendizagem (UDL) do perfil
+ */
+export function getUdlScaffolding(profile: SubjectProfile): SubjectUDLScaffolding | null {
+  return profile.udlScaffolding || null
 }

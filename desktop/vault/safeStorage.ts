@@ -94,12 +94,17 @@ export class VaultManager {
   /**
    * Armazena uma chave de API cifrada com DPAPI no cofre local.
    */
+  private normalizeProvider(provider: string): string {
+    const safe = provider.toLowerCase().trim().replace(/[^a-z0-9_-]/g, '_')
+    return safe === 'gemini' ? 'google' : safe
+  }
+
   setApiKey(provider: string, key: string): void {
     if (!fs.existsSync(this.vaultDir)) {
       fs.mkdirSync(this.vaultDir, { recursive: true })
     }
-    const safeProvider = provider.toLowerCase().replace(/[^a-z0-9_-]/g, '_')
-    const filePath = path.join(this.vaultDir, `key_${safeProvider}.enc`)
+    const safeProvider = this.normalizeProvider(provider)
+    let filePath = path.join(this.vaultDir, `key_${safeProvider}.enc`)
     const encrypted = this.encryptSecret(key)
     fs.writeFileSync(filePath, encrypted)
   }
@@ -108,9 +113,21 @@ export class VaultManager {
    * Decifra e recupera a chave de API diretamente do cofre do SO (apenas para o main process).
    */
   getApiKey(provider: string): string | null {
-    const safeProvider = provider.toLowerCase().replace(/[^a-z0-9_-]/g, '_')
-    const filePath = path.join(this.vaultDir, `key_${safeProvider}.enc`)
-    if (!fs.existsSync(filePath)) return null
+    const safeProvider = this.normalizeProvider(provider)
+    let filePath = path.join(this.vaultDir, `key_${safeProvider}.enc`)
+    if (!fs.existsSync(filePath)) {
+      const alt = safeProvider === 'google' ? 'gemini' : safeProvider === 'gemini' ? 'google' : null
+      if (alt) {
+        const altPath = path.join(this.vaultDir, `key_${alt}.enc`)
+        if (fs.existsSync(altPath)) {
+          filePath = altPath
+        } else {
+          return null
+        }
+      } else {
+        return null
+      }
+    }
     try {
       const encrypted = fs.readFileSync(filePath)
       return this.decryptSecret(encrypted)
@@ -123,9 +140,11 @@ export class VaultManager {
    * Consulta a existência de chave sem expor o segredo (para UI / status).
    */
   hasApiKey(provider: string): boolean {
-    const safeProvider = provider.toLowerCase().replace(/[^a-z0-9_-]/g, '_')
-    const filePath = path.join(this.vaultDir, `key_${safeProvider}.enc`)
-    return fs.existsSync(filePath)
+    const safeProvider = this.normalizeProvider(provider)
+    let filePath = path.join(this.vaultDir, `key_${safeProvider}.enc`)
+    if (fs.existsSync(filePath)) return true
+    const alt = safeProvider === 'google' ? 'gemini' : safeProvider === 'gemini' ? 'google' : null
+    return alt ? fs.existsSync(path.join(this.vaultDir, `key_${alt}.enc`)) : false
   }
 
   private credentialPath(host: string): string {

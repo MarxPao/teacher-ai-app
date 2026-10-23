@@ -19,7 +19,30 @@
       return bundle.getTeacherFriendlyErrorMessage(err)
     }
     const code = (err && err.code) ? String(err.code) : ''
-    const msg = String(err.message || err)
+    const msg = String(err.message || err || '')
+
+    // Regra Zero Jargão: Sanitização de erros de rede e provedores LLM
+    if (/503|high demand|temporarily unavailable|spikes in demand/i.test(msg)) {
+      return 'O serviço de inteligência artificial está temporariamente sobrecarregado. Aguarde alguns instantes e tente novamente.'
+    }
+    if (/429|quota exceeded|resource_exhausted|taxa limite|cota/i.test(msg)) {
+      return 'O limite temporário de requisições por minuto da IA foi atingido. Aguarde alguns segundos e tente novamente.'
+    }
+    if (/404|not found|modelo não encontrado/i.test(msg)) {
+      return 'O modelo de inteligência artificial configurado não foi encontrado ou está indisponível.'
+    }
+    if (/E_API_KEY_MISSING|chave.*não encontrada|chave de api/i.test(msg)) {
+      return 'Chave de API não configurada. Por favor, cadastre sua chave nas preferências do painel desktop.'
+    }
+    if (/E_CONSENT_REQUIRED|não consentido/i.test(msg)) {
+      return 'Envio de dados para a inteligência artificial não configurado. Verifique suas preferências no painel desktop.'
+    }
+    if (/fetch failed|network|conexão|timeout/i.test(msg)) {
+      return 'Não foi possível conectar ao serviço de inteligência artificial. Verifique sua conexão com a internet.'
+    }
+    if (msg.includes('Google Gemini API error') || msg.includes('"error":') || msg.includes('HTTP 5')) {
+      return 'O serviço de inteligência artificial encontrou uma instabilidade temporária. Tente novamente em instantes.'
+    }
 
     if (
       msg.includes('Ambiente Chrome Native Messaging indisponível') ||
@@ -67,6 +90,9 @@
     }
     if (code === 'E_TIMEOUT' || msg.includes('E_TIMEOUT')) {
       return 'O portal demorou mais do que o esperado para responder. Tente novamente.'
+    }
+    if (msg.length > 120 || msg.includes('{') || msg.includes('\n') || msg.includes('HTTP')) {
+      return 'Não foi possível concluir a ação nesta tela. Deseja tentar outra opção ou gravar uma demonstração?'
     }
     return 'Não foi possível concluir a ação no portal. Deseja gravar uma demonstração?'
   }
@@ -210,9 +236,9 @@
       return r && r.username && r.password ? { username: r.username, password: r.password } : null
     }
     const loop = new bundle.ReasoningLoopExecutor(driver, hostObj, bundle.createLlmPlanner(complete), {
-      maxSteps: maxSteps || 30,
+      maxSteps: maxSteps || 6,
       allowedHosts: [host],
-      verify: bundle.createLlmVerifier(complete),
+      verify: undefined, // Navegação rápida: sem rodada extra de verificação LLM
       replay: chromeReplayStore,
       credentials,
       files: files || undefined,
@@ -242,8 +268,8 @@
         : result.stoppedFor === 'rejected'
           ? 'Você não aprovou a ação; o agente parou.'
           : result.stoppedFor === 'verification_failed'
-            ? 'O agente achou que terminou, mas a conferência final não confirmou: ' + (result.error || '')
-            : 'O agente não conseguiu concluir: ' + (result.error || 'motivo desconhecido'),
+            ? 'A conferência final não confirmou a conclusão: ' + toTeacherFriendlyMessage(result.error)
+            : toTeacherFriendlyMessage(result.error),
     }
   }
 
@@ -847,37 +873,9 @@
             return
           }
 
-          // O chat usa o mesmo motor do agente (observação rica + DomDriver + replay). O motor antigo
-          // de "hops" por regex fica só como reserva quando o agente não está disponível (sem app desktop).
-          const agentOut = await runGenericAgent({
-            tabId,
-            task: `Navegue no portal até: ${queryText}. Apenas navegue e aplique filtros; não grave, não envie e não exclua nada.`,
-            maxSteps: 20,
-          }).catch((e) => ({ success: false, friendlyMessage: String(e && e.message || e) }))
-
-          // Se o agente retornou erro de autorização (app desktop bloqueou agent.plan),
-          // trata como indisponível e cai no fallback de hops determinístico.
-          const agentUnavailable =
-            agentOut?.unavailable ||
-            /não autorizado|not authorized|unauthorized|method.*not.*allowed|método.*não/i.test(
-              String(agentOut?.error || agentOut?.friendlyMessage || '')
-            )
-
-          if (agentOut && !agentUnavailable) {
-            sendResponse({
-              success: agentOut.success,
-              learned: Boolean(agentOut.learned),
-              quarantine: true,
-              taskId: agentOut.learned?.taskId,
-              hops: agentOut.stepsTaken,
-              engine: 'agent',
-              mode: agentOut.mode,
-              friendlyMessage: agentOut.success
-                ? `Cheguei lá em ${agentOut.stepsTaken} passo(s)${agentOut.mode === 'replay' ? ' usando a rotina aprendida' : ''}! ✨ Revise o mapa abaixo se quiser salvar como rotina.`
-                : agentOut.friendlyMessage,
-            })
-            return
-          }
+          // 🚀 Fast-Path Determinístico (Camada 2 - GEMINI.md):
+          // Executa primeiro navegação direta no DOM (< 50ms) sem custo nem latência de LLM.
+          // Se o elemento não estiver visível na tela atual, escala para o Agente Genérico autônomo.
 
           // 1. Divide o comando em até 10 hops encadeados (incluindo verbos repetidos sem vírgula)
           const hopTargets = queryText
@@ -1003,9 +1001,30 @@
 
             if (!navRes || (!navRes.sucesso && !navRes.ok)) {
               if (recordedSteps.length === 0) {
+                // Fast-Path determinístico não encontrou na tela atual: aciona Agente Genérico autônomo
+                const agentOut = await runGenericAgent({
+                  tabId,
+                  task: `Navegue no portal até: ${queryText}. Apenas navegue e aplique filtros; não grave, não envie e não exclua nada.`,
+                  maxSteps: 6,
+                }).catch((e) => ({ success: false, friendlyMessage: toTeacherFriendlyMessage(e) }))
+
+                if (agentOut && !agentOut.unavailable && agentOut.success) {
+                  sendResponse({
+                    success: true,
+                    learned: Boolean(agentOut.learned),
+                    quarantine: true,
+                    taskId: agentOut.learned?.taskId,
+                    hops: agentOut.stepsTaken,
+                    engine: 'agent',
+                    mode: agentOut.mode,
+                    friendlyMessage: `Pronto! Acessei ${queryText} no portal. ✨`,
+                  })
+                  return
+                }
+
                 sendResponse({
                   success: false,
-                  friendlyMessage: navRes?.mensagem || `Não encontrei abas, filtros ou opções para "${hopTarget}" nesta página do portal.`,
+                  friendlyMessage: (agentOut && agentOut.friendlyMessage) || navRes?.mensagem || `Não encontrei abas, filtros ou opções para "${hopTarget}" nesta página do portal.`,
                 })
                 return
               }
@@ -1178,8 +1197,8 @@
           }
 
           const summaryMsg = failedHop
-            ? `Executei ${recordedSteps.length} passo(s) (${cleanName}), mas não encontrei "${failedHop}" nos filtros ou botões da tela atual.`
-            : `Executei ${recordedSteps.length} passo(s) (${cleanName})! ✨ Confirme o mapa abaixo se quiser salvar como rotina.`
+            ? `Executei a navegação para ${cleanName}, mas não encontrei "${failedHop}" nos filtros ou botões da tela atual.`
+            : `Pronto! Acessei ${cleanName} no portal. ✨`
 
           sendResponse({
             success: true,
