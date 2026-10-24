@@ -30,6 +30,20 @@ export type QuestionNumberFormat =
 
 export type OptionLabelFormat = 'A)' | '(A)' | '[A]' | 'a)'
 
+/**
+ * Bloco estrutural transcrito do arquivo modelo (o que o modelo realmente contém:
+ * texto-base, enunciado de seção, itens "( )" de Verdadeiro/Falso, título de questão com pontuação...).
+ */
+export interface TranscribedBlock {
+  kind: 'passage' | 'section_title' | 'true_false_list' | 'numbered_list' | 'question_heading' | 'paragraph'
+  text?: string
+  items?: string[]
+  /** question_heading: número e pontuação lidos do próprio modelo */
+  number?: number
+  points?: string
+  pointsLabel?: string
+}
+
 export interface SchoolDocumentFormat {
   id: string
   name: string
@@ -76,6 +90,16 @@ export interface SchoolDocumentFormat {
   showSignatureLine: boolean
   signatureLabels?: [string, string]
   logoUrl?: string
+
+  // Transcrição fiel do modelo importado (ausente nos formatos padrão)
+  /** Idioma do modelo: define rótulos, instruções e rodapé padrão */
+  language?: 'pt' | 'en'
+  /** Rótulo de pontuação do modelo: "marks", "pontos", "pt"... */
+  pointsLabel?: string
+  /** Separador entre "Question 2" e o título da questão (ex.: " - ") */
+  questionHeadingSeparator?: string
+  /** Estrutura real do modelo, usada na pré-visualização no lugar do texto genérico */
+  sampleBlocks?: TranscribedBlock[]
 }
 
 const STORAGE_KEY = 'teacher_document_formats_v1'
@@ -419,6 +443,117 @@ export function setActiveDocumentFormatId(formatId: string): void {
   }
 }
 
+export interface SampleStructure {
+  language: 'pt' | 'en'
+  blocks: TranscribedBlock[]
+  pointsLabel?: string
+  headingSeparator?: string
+}
+
+const EN_WORDS = /\b(the|and|of|to|is|are|according|answer|question|write|read|text|which|why|about|with)\b/gi
+const PT_WORDS = /\b(o|a|os|as|de|do|da|que|para|com|n[ãa]o|quest[ãa]o|responda|leia|texto|qual|por)\b/gi
+
+export function detectSampleLanguage(text: string): 'pt' | 'en' {
+  const sample = (text || '').slice(0, 4000)
+  const en = (sample.match(EN_WORDS) || []).length
+  const pt = (sample.match(PT_WORDS) || []).length
+  return en > pt ? 'en' : 'pt'
+}
+
+const HEADING_RE =
+  /^(Question|Quest[ãa]o|Exercise|Exerc[íi]cio|Part|Parte)\s*0?(\d+)\s*(?:([-–—:.])\s*)?(.*?)\s*(?:\(\s*(\d+(?:[.,]\d+)?)\s*(marks?|points?|pts?|pontos?|ponto|pt)\s*\))?\s*$/i
+const TF_ITEM_RE = /^\s*(?:\d+[.)]\s*)?\(\s*\)\s*(.+)$/
+const NUMBERED_RE = /^\s*\d+[.)]\s+(.+)$/
+
+/**
+ * Transcreve a ESTRUTURA do arquivo modelo (não só o estilo): título de questão com pontuação,
+ * enunciado de seção, itens "( )" de Verdadeiro/Falso, listas numeradas e texto-base.
+ */
+export function transcribeSampleStructure(text: string): SampleStructure {
+  const language = detectSampleLanguage(text)
+  const lines = (text || '').split(/\r?\n/).map(l => l.trim()).filter(Boolean)
+  const blocks: TranscribedBlock[] = []
+  let pointsLabel: string | undefined
+  let headingSeparator: string | undefined
+
+  const lastBlock = () => blocks[blocks.length - 1]
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+
+    const heading = line.length <= 160 ? line.match(HEADING_RE) : null
+    // "Question 2 - ..." / "QUESTÃO 01": exige número logo após a palavra (evita frases comuns)
+    if (heading && /^(Question|Quest[ãa]o|Exercise|Exerc[íi]cio|Part|Parte)\s*0?\d+/i.test(line)) {
+      const sep = heading[3] ? ` ${heading[3]} ` : ''
+      const title = (heading[4] || '').trim()
+      if (title && sep && !headingSeparator) headingSeparator = sep
+      if (heading[6] && !pointsLabel) pointsLabel = heading[6].toLowerCase()
+      blocks.push({
+        kind: 'question_heading',
+        number: parseInt(heading[2], 10),
+        text: title || undefined,
+        points: heading[5],
+        pointsLabel: heading[6]?.toLowerCase(),
+      })
+      continue
+    }
+
+    const tf = line.match(TF_ITEM_RE)
+    if (tf) {
+      const prev = lastBlock()
+      if (prev && prev.kind === 'true_false_list') prev.items!.push(tf[1].trim())
+      else blocks.push({ kind: 'true_false_list', items: [tf[1].trim()] })
+      continue
+    }
+
+    const numbered = line.match(NUMBERED_RE)
+    if (numbered) {
+      const prev = lastBlock()
+      if (prev && prev.kind === 'numbered_list') prev.items!.push(numbered[1].trim())
+      else blocks.push({ kind: 'numbered_list', items: [numbered[1].trim()] })
+      continue
+    }
+
+    const next = lines[i + 1] || ''
+    const introducesItems = TF_ITEM_RE.test(next) || NUMBERED_RE.test(next)
+    const isShort = line.length <= 140 && !/[.!?]$/.test(line)
+    if (isShort && introducesItems) {
+      blocks.push({ kind: 'section_title', text: line })
+      continue
+    }
+    if (/\(\s*T\s*\)\s*(or|ou)\s*\(\s*F\s*\)|true\s+or\s+false|verdadeiro\s+ou\s+falso|\(\s*V\s*\)\s*ou\s*\(\s*F\s*\)/i.test(line) && line.length <= 160) {
+      blocks.push({ kind: 'section_title', text: line })
+      continue
+    }
+
+    blocks.push({ kind: line.length >= 200 ? 'passage' : 'paragraph', text: line })
+  }
+
+  return { language, blocks, pointsLabel, headingSeparator }
+}
+
+/** "(2,0 marks)" / "(1,0 pt)": usa o rótulo do modelo quando houver, senão o padrão do idioma. */
+export function formatPointsLabel(fmt: Pick<SchoolDocumentFormat, 'language' | 'pointsLabel'>, value: number | string): string {
+  const raw = typeof value === 'number' ? value.toFixed(1) : String(value)
+  const shown = raw.replace('.', ',')
+  const label = fmt.pointsLabel || (fmt.language === 'en' ? 'marks' : 'pt')
+  return `(${shown} ${label})`
+}
+
+/** Título de questão no padrão do modelo: "Question 2 - Título (2,0 marks)" / "QUESTÃO 01". */
+export function formatQuestionHeading(
+  fmt: Pick<SchoolDocumentFormat, 'questionNumberStyle' | 'questionHeadingSeparator'>,
+  num: number,
+  title?: string
+): string {
+  const padded = String(num).padStart(2, '0')
+  const base =
+    fmt.questionNumberStyle === 'questao_padded' ? `QUESTÃO ${padded}`
+    : fmt.questionNumberStyle === 'question_en' ? `Question ${num}`
+    : `${num}.`
+  return title ? `${base}${fmt.questionHeadingSeparator ?? ' - '}${title}` : base
+}
+
 export interface InferDocumentFormatParams {
   fileName: string
   extractedText: string
@@ -508,8 +643,14 @@ export function inferDocumentFormatFromSampleText(params: InferDocumentFormatPar
       .slice(0, 5)
   }
 
+  // Transcrição estrutural do modelo (idioma, títulos de questão, itens V/F, texto-base)
+  const structure = transcribeSampleStructure(text)
+  const isEn = structure.language === 'en'
+  const headings = structure.blocks.filter(b => b.kind === 'question_heading')
+  const showPointsPerQuestion = headings.length > 0 ? headings.some(h => !!h.points) : true
+
   // Detecta subtítulo ou título oficial da prova
-  let detectedSubtitle = `${school.toUpperCase()} — DOCUMENTO OFICIAL`
+  let detectedSubtitle = isEn ? `${school.toUpperCase()} — OFFICIAL DOCUMENT` : `${school.toUpperCase()} — DOCUMENTO OFICIAL`
   const subtitleCandidate = lines.slice(0, 15).find(l =>
     /(?:avalia[çc][ãa]o|teste|simulado|prova|ensino\s+fundamental|ensino\s+m[ée]dio|bimestre|trimestre)/i.test(l) &&
     !/nome|aluno|turma|data|professor|disciplina|nota/i.test(l) &&
@@ -529,7 +670,9 @@ export function inferDocumentFormatFromSampleText(params: InferDocumentFormatPar
   const fontFamily = params.layoutHints?.fontFamily || "'Times New Roman', Times, serif"
   const fontSizePt = params.layoutHints?.fontSizePt || 11
   const headerStyle: HeaderLayoutStyle = params.layoutHints?.headerStyle || 'boxed_grid'
-  const footerText = params.layoutHints?.footerText || `${school} • Documento Formatado pelo Padrão da Escola`
+  const footerText =
+    params.layoutHints?.footerText ||
+    (isEn ? `${school} • Official assessment document` : `${school} • Documento Formatado pelo Padrão da Escola`)
 
   return {
     id: `fmt_custom_${Date.now()}`,
@@ -555,16 +698,22 @@ export function inferDocumentFormatFromSampleText(params: InferDocumentFormatPar
     defaultInstructions:
       instructionLines.length > 0
         ? instructionLines.join('\n')
-        : '1. Leia atentamente as questões antes de responder.\n2. Utilize caneta azul ou preta.\n3. Boa atividade!',
+        : isEn
+          ? '1. Read all questions carefully before answering.\n2. Use a blue or black pen.\n3. Good luck!'
+          : '1. Leia atentamente as questões antes de responder.\n2. Utilize caneta azul ou preta.\n3. Boa atividade!',
     questionNumberStyle,
     optionLabelStyle,
     discursiveLinesCount: 4,
-    showPointsPerQuestion: true,
+    showPointsPerQuestion,
     compactQuestionSpacing: false,
     footerText,
     showSignatureLine: hasSignature,
-    signatureLabels: ['Professor(a) Responsável', 'Coordenação Pedagógica'],
-    logoUrl: params.layoutHints?.logoDataUrl
+    signatureLabels: isEn ? ['Teacher', 'Academic Coordinator'] : ['Professor(a) Responsável', 'Coordenação Pedagógica'],
+    logoUrl: params.layoutHints?.logoDataUrl,
+    language: structure.language,
+    pointsLabel: structure.pointsLabel,
+    questionHeadingSeparator: structure.headingSeparator,
+    sampleBlocks: structure.blocks.length > 0 ? structure.blocks.slice(0, 40) : undefined,
   }
 }
 

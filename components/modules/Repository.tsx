@@ -28,6 +28,8 @@ import {
   setActiveDocumentFormatId,
   detectSchoolNameFromText,
   inferDocumentFormatFromSampleText,
+  formatPointsLabel,
+  formatQuestionHeading,
 } from '@/lib/documentFormatTemplates'
 
 export interface RepositoryItem {
@@ -3961,9 +3963,9 @@ export default function Repository() {
                       </div>
                     </div>
                     <div style={{ fontSize: '9pt', borderTop: '1px solid #000', marginTop: 4, paddingTop: 4, display: 'flex', justifyContent: 'space-between' }}>
-                      <span><strong>DISCIPLINA:</strong> Língua Inglesa</span>
-                      <span><strong>TURMA:</strong> 9º Ano</span>
-                      <span><strong>NOTA:</strong> ____ / 10,0</span>
+                      <span><strong>{activeFormat.language === 'en' ? 'SUBJECT:' : 'DISCIPLINA:'}</strong> Língua Inglesa</span>
+                      <span><strong>{activeFormat.language === 'en' ? 'CLASS:' : 'TURMA:'}</strong> 9º Ano</span>
+                      <span><strong>{activeFormat.language === 'en' ? 'SCORE:' : 'NOTA:'}</strong> ____ / 10,0</span>
                     </div>
                   </div>
 
@@ -3990,7 +3992,37 @@ export default function Repository() {
                     columnRule: activeFormat.columns === 2 && activeFormat.showColumnDivider ? '1px solid #94a3b8' : 'none',
                     textAlign: activeFormat.textAlign
                   }}>
-                    {[1, 2].map(num => (
+                    {activeFormat.sampleBlocks && activeFormat.sampleBlocks.length > 0 ? (
+                      /* Estrutura transcrita do próprio modelo importado (não é texto genérico) */
+                      activeFormat.sampleBlocks.map((b, bi) => {
+                        if (b.kind === 'question_heading') {
+                          return (
+                            <div key={bi} style={{ fontWeight: 'bold', margin: '10px 0 4px', display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                              <span>{formatQuestionHeading(activeFormat, b.number ?? bi + 1, b.text)}</span>
+                              {b.points && <span style={{ fontSize: '9pt', color: '#334155' }}>{formatPointsLabel(activeFormat, b.points)}</span>}
+                            </div>
+                          )
+                        }
+                        if (b.kind === 'section_title') {
+                          return <p key={bi} style={{ fontWeight: 'bold', margin: '10px 0 4px' }}>{b.text}</p>
+                        }
+                        if (b.kind === 'true_false_list') {
+                          return (
+                            <ol key={bi} style={{ margin: '0 0 6px', paddingLeft: 28 }}>
+                              {(b.items || []).map((it, ii) => <li key={ii}>( ) {it}</li>)}
+                            </ol>
+                          )
+                        }
+                        if (b.kind === 'numbered_list') {
+                          return (
+                            <ol key={bi} style={{ margin: '0 0 6px', paddingLeft: 28 }}>
+                              {(b.items || []).map((it, ii) => <li key={ii}>{it}</li>)}
+                            </ol>
+                          )
+                        }
+                        return <p key={bi} style={{ margin: '0 0 6px' }}>{b.text}</p>
+                      })
+                    ) : [1, 2].map(num => (
                       <div key={num} style={{ breakInside: 'avoid', marginBottom: 12, paddingBottom: 8, borderBottom: '1px solid #cbd5e1' }}>
                         <div style={{ fontWeight: 'bold', marginBottom: 4, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                           <div>
