@@ -214,9 +214,11 @@ function decodeXmlEntities(str: string): string {
  * word/document.xml, bem como cabeçalhos (word/header*.xml) e rodapés (word/footer*.xml).
  * Inclui fallback para remoção direta de tags XML e extração de strings de texto legível.
  */
-export async function extractTextFromDocx(file: File): Promise<string> {
+export async function extractTextFromDocx(file: File | Blob | ArrayBuffer): Promise<string> {
   try {
-    const arrayBuffer = await file.arrayBuffer()
+    const arrayBuffer = typeof (file as any).arrayBuffer === 'function'
+      ? await (file as File | Blob).arrayBuffer()
+      : (file as ArrayBuffer)
     let rawText = ''
 
     try {
@@ -655,7 +657,7 @@ export interface DocxLayoutAndTextResult {
  * Extrai texto e dados de diagramação (margens, fonte padrão, tamanho, colunas e logo)
  * de um arquivo .docx para importação de formato escolar no Repositório.
  */
-export async function extractDocxLayoutAndText(file: File): Promise<DocxLayoutAndTextResult> {
+export async function extractDocxLayoutAndText(file: File | Blob | ArrayBuffer): Promise<DocxLayoutAndTextResult> {
   let text = ''
   let fontFamily: string | undefined
   let fontSizePt: number | undefined
@@ -664,7 +666,9 @@ export async function extractDocxLayoutAndText(file: File): Promise<DocxLayoutAn
   let logoDataUrl: string | undefined
 
   try {
-    const arrayBuffer = await file.arrayBuffer()
+    const arrayBuffer = typeof (file as any).arrayBuffer === 'function'
+      ? await (file as File | Blob).arrayBuffer()
+      : (file as ArrayBuffer)
     const JSZipModule = await import('jszip')
     const JSZip = JSZipModule.default || JSZipModule
     const zip = await JSZip.loadAsync(arrayBuffer)
