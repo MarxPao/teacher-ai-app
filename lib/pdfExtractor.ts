@@ -308,7 +308,8 @@ export async function extractTextFromDocx(file: File | Blob | ArrayBuffer): Prom
     }
 
     if (!rawText || rawText.trim().length < 2) {
-      throw new Error(`O arquivo Word "${file.name}" está vazio ou não possui texto extraível.`)
+      const fileName = 'name' in file ? (file as File).name : 'Word'
+      throw new Error(`O arquivo Word "${fileName}" está vazio ou não possui texto extraível.`)
     }
 
     return normalizeAndReconstructText(rawText)

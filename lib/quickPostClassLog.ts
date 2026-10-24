@@ -8,7 +8,7 @@
  */
 
 import { getAllPdiRecords, savePdiRecord, type PdiRecord } from './pdiManagement'
-import { getAllPeiRecords, savePeiRecord } from './peiManagement'
+import { getAllPeiRecords, saveStudentPei as savePeiRecord } from './peiManagement'
 import { syncToSupabase } from './supabaseClient'
 
 export interface QuickPostClassLogParsedPreview {

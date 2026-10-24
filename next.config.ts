@@ -1,6 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  experimental: {
+    agentUpgrade: 'security',
+  } as any,
   /* Security Headers defensivos alinhados às diretrizes OWASP */
   async headers() {
     return [

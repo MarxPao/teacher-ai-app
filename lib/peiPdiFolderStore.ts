@@ -283,8 +283,8 @@ export function getAllPeiPdiCards(): PeiPdiDocumentCard[] {
   // Mapeia PDIs
   Object.values(pdiRecords).forEach(pdi => {
     const classGroup = pdi.identification?.gradeCycle || pdi.studentInfo?.gradeCycle || '6º ano'
-    const term = pdi.academicTerm || (pdi.identification?.validityPeriod?.includes('2º') ? '2º Trimestre' : '1º Trimestre')
-    const folderId = docMap[`pdi_${pdi.studentId}`] || pdi.folderId || inferFolderForDocument(classGroup, term, folders)
+    const term = (pdi as any).academicTerm || (pdi.identification?.validityPeriod?.includes('2º') ? '2º Trimestre' : '1º Trimestre')
+    const folderId = docMap[`pdi_${pdi.studentId}`] || (pdi as any).folderId || inferFolderForDocument(classGroup, term, folders)
     const folder = folders.find(f => f.id === folderId)
 
     const matrix = pdi.skillsMatrix || []
@@ -314,8 +314,8 @@ export function getAllPeiPdiCards(): PeiPdiDocumentCard[] {
   // Mapeia PEIs
   Object.values(peiRecords).forEach(pei => {
     const classGroup = 'Ensino Regular'
-    const term = pei.academicTerm || '1º Trimestre'
-    const folderId = docMap[`pei_${pei.studentId}`] || pei.folderId || inferFolderForDocument(classGroup, term, folders)
+    const term = (pei as any).academicTerm || '1º Trimestre'
+    const folderId = docMap[`pei_${pei.studentId}`] || (pei as any).folderId || inferFolderForDocument(classGroup, term, folders)
     const folder = folders.find(f => f.id === folderId)
 
     const goals = pei.goals || []

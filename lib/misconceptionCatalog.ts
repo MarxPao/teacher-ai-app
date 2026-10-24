@@ -62,7 +62,7 @@ export const MISCONCEPTION_CATALOG: MisconceptionEntry[] = [
     matchRegex: /\b(?:época|momento|fase|período|tempo|situação|contexto|cenário)\s+onde\b/i,
     remediationAdvice: '"Onde" só se usa com referente de lugar concreto. Para tempo ou situação abstrata, use "em que" ou "quando".',
     source: 'Gramática normativa; uso recorrente em redações do Ensino Fundamental II',
-    provenance: 'LITERATURA-CONFIRMAR',
+    provenance: 'LITERATURA-CONFERIR',
     contrastsWith: ['LP-MIS-02']
   },
   {

@@ -168,7 +168,8 @@ export async function runPortalAgentLoop(opts: PortalAgentLoopOptions): Promise<
           resultText = JSON.stringify(snap ?? { error: 'observePage não disponível' })
 
           // Gap 2: screenshot se DOM insuficiente
-          if (snap && ((snap.textContent?.length ?? 0) < 200 || (snap as any).pageType === 'canvas')) {
+          const textLen = (snap as any)?.text?.length ?? (snap as any)?.textContent?.length ?? 0
+          if (snap && (textLen < 200 || (snap as any).pageType === 'canvas')) {
             try {
               const sc = await opts.driver.captureScreenshot?.()
               if (sc) {
