@@ -19,6 +19,7 @@ import {
   type ReplayStore,
 } from './replay'
 import type { AgentTraceEvent } from './trace'
+import { PortalExecBuilder, type PortalActionKind } from '../portalExecLog'
 
 export interface ObservedElement {
   idx: number
@@ -35,6 +36,7 @@ export interface ObservedElement {
   expanded?: boolean
   pressed?: boolean
   readonly?: boolean
+  autocomplete?: boolean
   options?: string[]
   context?: string
   region?: 'dialog' | 'main' | 'nav' | 'other'
@@ -181,10 +183,39 @@ export interface ReasoningLoopResult {
   history?: string[]
   /** Eventos para compilar um SkillGraph (lib/agent/trace.ts) */
   trace?: AgentTraceEvent[]
+  /** ID do log estruturado de execução em produção (Gap 6) */
+  execLogId?: string
+}
+
+/**
+ * Gap 4: Verifica se o host está na lista permitida, suportando correspondência exata,
+ * subdomínios (`*.dominio.gov.br` ou `.dominio.gov.br`) e curinga global (`*`).
+ */
+export function isHostAllowed(host: string, allowedHosts?: string[]): boolean {
+  if (!allowedHosts) return true
+  if (allowedHosts.length === 0) return false
+  const cleanHost = (host || '').toLowerCase().trim()
+  if (!cleanHost) return false
+  for (const rawPattern of allowedHosts) {
+    const pattern = (rawPattern || '').toLowerCase().trim()
+    if (!pattern) continue
+    if (pattern === '*' || pattern === cleanHost) return true
+    if (pattern.startsWith('*.')) {
+      const root = pattern.slice(2)
+      if (cleanHost === root || cleanHost.endsWith(`.${root}`)) return true
+    } else if (pattern.startsWith('.')) {
+      const root = pattern.slice(1)
+      if (cleanHost === root || cleanHost.endsWith(`.${root}`)) return true
+    }
+  }
+  return false
 }
 
 const DESTRUCTIVE_RE =
   /\b(excluir|apagar|deletar|remover|limpar|resetar|sair|logout|cancelar|encerrar|finalizar|concluir|lancar|lançar|aprovar|reprovar|assinar|enviar|salvar|publicar|confirmar|gravar|submit|delete|remove|pay|pagar|comprar|buy)\b/i
+
+const DIALOG_CONFIRM_RE =
+  /^(confirmar|publicar agora|salvar|gravar|enviar|sim|prosseguir|concluir)$/i
 
 function fnv1a(input: string): string {
   let h = 0x811c9dc5
@@ -235,6 +266,7 @@ export function observationFromSnapshot(snap: AgentPageSnapshot): Observation {
     if (e.checked !== undefined) o.checked = e.checked
     if (e.disabled) o.disabled = true
     if (e.readonly) o.readonly = true
+    if (e.autocomplete) o.autocomplete = true
     if (e.expanded !== undefined) o.expanded = e.expanded
     if (e.pressed !== undefined) o.pressed = e.pressed
     if (e.options) o.options = e.options.map(x => sanitizeStructuralLabel(x))
@@ -317,6 +349,40 @@ function describeStep(plan: AgentAction, obs: Observation): string {
   }
 }
 
+/**
+ * Verificação objetiva determinística (Gap 6 & T08):
+ * Rejeita conclusões prematuras quando ainda há diálogo de confirmação aberto,
+ * texto de busca de combobox não confirmado (`autocomplete`) ou mensagem explícita de erro na página.
+ */
+export function verifyObjectiveCompletion(obs: Observation): { achieved: boolean; reason?: string } {
+  if (obs.dialogOpen) {
+    const confirmBtn = obs.elements.find(e => e.region === 'dialog' && DIALOG_CONFIRM_RE.test(e.label.trim()))
+    if (confirmBtn) {
+      return {
+        achieved: false,
+        reason: `Há um diálogo de confirmação aberto ("${confirmBtn.label}") — confirme-o antes de concluir.`,
+      }
+    }
+  }
+  const uncommittedSearch = obs.elements.find(e => e.autocomplete && e.value && e.value.trim().length > 0)
+  if (uncommittedSearch) {
+    return {
+      achieved: false,
+      reason: `O campo de busca "${uncommittedSearch.label}" ainda contém "${uncommittedSearch.value}" sem opção selecionada na lista.`,
+    }
+  }
+  if (obs.text) {
+    const errMatch = obs.text.match(/(?:^|\n)\s*Erro:\s*([^\n]+)/i)
+    if (errMatch) {
+      return {
+        achieved: false,
+        reason: `A página exibe mensagem de erro: ${errMatch[1].trim()}`,
+      }
+    }
+  }
+  return { achieved: true }
+}
+
 const WRITE_ACTIONS = new Set(['type', 'select', 'upload'])
 
 export class ReasoningLoopExecutor {
@@ -341,7 +407,7 @@ export class ReasoningLoopExecutor {
 
   private async observe(): Promise<{ obs: Observation; descriptors: ElementDescriptor[] }> {
     const ctx = await this.driver.getFrameContext()
-    if (this.config.allowedHosts && !this.config.allowedHosts.includes(ctx.host)) {
+    if (!isHostAllowed(ctx.host, this.config.allowedHosts)) {
       throw Object.assign(new Error(`Host fora da lista permitida: ${ctx.host}`), { stop: 'host_blocked' })
     }
     if (this.driver.observePage) {
@@ -394,24 +460,49 @@ export class ReasoningLoopExecutor {
     let agentStepsSinceReplay = 0
     let replayApproved = false
     let hasCredential = false
+    let initialHost = 'portal'
     try {
       const ctx = await this.driver.getFrameContext()
       url = ctx.url
+      initialHost = ctx.host || this.hostOf(ctx.url) || 'portal'
       if (this.config.replay) script = await this.config.replay.get(replayKey(ctx.host, task))
       if (this.config.credentials) hasCredential = !!(await this.config.credentials(ctx.host).catch(() => null))
     } catch {}
 
-    const finish = (r: Omit<ReasoningLoopResult, 'actions'>): ReasoningLoopResult => ({
-      ...r,
-      actions,
-      mode: replayed === 0 ? 'agent' : agentActed === 0 ? 'replay' : 'replay+agent',
-      replayedSteps: replayed,
-      plannerCalls,
-      blockedByPolicy: this.blocked,
-      recorded,
-      history: [...history],
-      trace,
-    })
+    const execLog = new PortalExecBuilder(initialHost, 'agent_generico')
+    const toPortalKind = (a: AgentAction['action']): PortalActionKind => {
+      if (a === 'type' || a === 'fill_credential' || a === 'upload') return 'write'
+      if (a === 'select') return 'select'
+      if (a === 'navigate') return 'navigate'
+      if (a === 'scroll') return 'scroll'
+      if (a === 'wait') return 'wait'
+      if (a === 'complete') return 'finish'
+      if (a === 'fail') return 'error'
+      return 'click'
+    }
+
+    const finish = (r: Omit<ReasoningLoopResult, 'actions'>): ReasoningLoopResult => {
+      const status = r.success
+        ? 'success'
+        : r.stoppedFor === 'max_steps'
+          ? 'max_steps'
+          : r.stoppedFor === 'rejected'
+            ? 'aborted'
+            : 'failed'
+      const finalized = execLog.finish(status)
+      return {
+        ...r,
+        actions,
+        mode: replayed === 0 ? 'agent' : agentActed === 0 ? 'replay' : 'replay+agent',
+        replayedSteps: replayed,
+        plannerCalls,
+        blockedByPolicy: this.blocked,
+        recorded,
+        history: [...history],
+        trace,
+        execLogId: finalized.execId,
+      }
+    }
 
     for (let step = 1; step <= this.maxSteps; step++) {
       let obs: Observation
@@ -448,10 +539,15 @@ export class ReasoningLoopExecutor {
         const rs = script.steps[cursor]
         const plan = this.planFromRecorded(rs, obs)
         if (plan) {
+          const t0 = this.host.now()
           try {
             const outcome = await this.execute(plan, obs, descriptors, true)
             if (outcome === 'rejected') return finish({ success: false, stepsTaken: step, finalUrl: url, error: 'Ação não aprovada pela professora', stoppedFor: 'rejected' })
             this.record(plan, obs, recorded, trace)
+            const elRef = 'idx' in plan && typeof plan.idx === 'number' ? obs.elements[plan.idx] : undefined
+            execLog.addAction(toPortalKind(plan.action), true, {
+              targetRef: elRef ? `${elRef.tag}:${elRef.label}` : plan.action,
+            })
             actions.push(plan)
             history.push(`↺ memória: ${describeStep(plan, obs)} → feito`)
             cursor++
@@ -521,7 +617,9 @@ export class ReasoningLoopExecutor {
       }
 
       let batchBroken = false
-      for (const plan of toRun) {
+      let autocompleteDeferred = false
+      for (let i = 0; i < toRun.length; i++) {
+        const plan = toRun[i]
         actions.push(plan)
         const entry = describeStep(plan, obs)
         const recent = history.slice(-8).map(h => h.replace(/ → feito$/, ''))
@@ -529,23 +627,39 @@ export class ReasoningLoopExecutor {
         if (recent.filter(h => h === entry).length >= 2) {
           history.push('ALERTA: você está repetindo as mesmas ações sem progresso. Mude de estratégia: aplique os filtros com o botão da página, anote o que já leu em "note" ou conclua.')
         }
+        const t0 = this.host.now()
         try {
           const outcome = await this.execute(plan, obs, descriptors, batchApproved)
           if (outcome === 'rejected') {
             return finish({ success: false, stepsTaken: step, finalUrl: url, error: 'Ação não aprovada pela professora', stoppedFor: 'rejected' })
           }
           this.record(plan, obs, recorded, trace)
+          const elRef = 'idx' in plan && typeof plan.idx === 'number' ? obs.elements[plan.idx] : undefined
+          execLog.addAction(toPortalKind(plan.action), true, {
+            targetRef: elRef ? `${elRef.tag}:${elRef.label}` : plan.action,
+          })
           agentActed++
           history[history.length - 1] += ' → feito'
           if (plan.action !== 'wait') await this.host.sleep(this.config.settleMs ?? 350)
+          // Se acabou de digitar num combobox/autocomplete e havia mais ações no lote, interrompe o lote
+          // para que o agente observe as opções (role="option") recém-renderizadas no próximo passo.
+          if (plan.action === 'type' && obs.elements[plan.idx]?.autocomplete && (i < toRun.length - 1 || terminal)) {
+            autocompleteDeferred = true
+            break
+          }
         } catch (e: any) {
+          const elRef = 'idx' in plan && typeof plan.idx === 'number' ? obs.elements[plan.idx] : undefined
+          execLog.addAction(toPortalKind(plan.action), false, {
+            targetRef: elRef ? `${elRef.tag}:${elRef.label}` : plan.action,
+            errorCode: 'E_ACTION_FAILED',
+          })
           history.push(`erro: ${e.message}`)
           batchBroken = true
           break
         }
       }
 
-      if (terminal && !batchBroken) {
+      if (terminal && !batchBroken && !autocompleteDeferred) {
         actions.push(terminal)
         history.push(describeStep(terminal, obs))
         if (terminal.action === 'fail') {
@@ -558,7 +672,21 @@ export class ReasoningLoopExecutor {
             verifyObs = (await this.observe()).obs
           } catch {}
         }
+
+        // 1. Verificação objetiva determinística (Gap 6 & T08)
+        const objVerdict = verifyObjectiveCompletion(verifyObs)
+        if (!objVerdict.achieved) {
+          execLog.addAction('finish', false, { errorCode: 'E_OBJECTIVE_VERIFY_FAILED' })
+          rejectedCompletions++
+          history.push(`verificação recusou a conclusão: ${objVerdict.reason}`)
+          if (rejectedCompletions >= 2) {
+            return finish({ success: false, stepsTaken: step, finalUrl: url, error: `Tarefa não confirmada: ${objVerdict.reason}`, stoppedFor: 'verification_failed' })
+          }
+          continue
+        }
+
         if (!this.config.verify) {
+          execLog.addAction('finish', true, { targetRef: 'verify:objective' })
           await this.saveScript(task, url, recorded)
           return finish({ success: true, stepsTaken: step, finalUrl: url, answer: terminal.reason })
         }
@@ -572,6 +700,10 @@ export class ReasoningLoopExecutor {
         } catch (e: any) {
           return finish({ success: false, stepsTaken: step, finalUrl: url, error: `Verificação falhou: ${e.message}`, stoppedFor: 'verification_failed' })
         }
+        execLog.addAction('finish', verdict.achieved, {
+          targetRef: 'verify:llm',
+          ...(verdict.achieved ? {} : { errorCode: 'E_LLM_VERIFY_REJECTED' }),
+        })
         if (verdict.achieved) {
           await this.saveScript(task, url, recorded)
           return finish({ success: true, stepsTaken: step, finalUrl: url, answer: terminal.reason })
@@ -775,7 +907,16 @@ export class ReasoningLoopExecutor {
         if (!el && descriptors.length === 0) throw new Error(`Índice de elemento inválido: ${plan.idx}`)
         this.checkPolicy(el?.label ?? '')
         const target = this.target(plan.idx, descriptors, obs)
-        const mutating = await this.isMutatingClick(plan.idx, obs, descriptors)
+        const mutating = await this.isMutatingClick(plan.idx, descriptors.length ? obs : obs, descriptors)
+        // T08 guard: impede clicar em botão de envio/publicação enquanto houver campo de busca com texto não selecionado
+        if (mutating && el?.region !== 'dialog' && el?.role !== 'option') {
+          const uncommitted = obs.elements.find(e => e.autocomplete && e.value && e.value.trim().length > 0)
+          if (uncommitted) {
+            throw new Error(
+              `O campo de busca "${uncommitted.label}" ainda contém "${uncommitted.value}" sem opção selecionada na lista. Clique na opção correspondente (role="option") antes de clicar em "${el?.label}".`
+            )
+          }
+        }
         if (mutating && !preApproved) {
           const ok = await this.confirm('Confirmar clique que pode enviar ou alterar dados', [
             { label: 'Elemento', value: el?.label ?? '' },
@@ -852,6 +993,9 @@ export class ReasoningLoopExecutor {
       case 'select': {
         const el = obs.elements[plan.idx]
         if (el?.sensitive) throw new Error('Campo de senha: use fill_credential (o valor vem do cofre, nunca do texto)')
+        if (plan.action === 'type' && el?.readonly) {
+          throw new Error(`O campo "${el.label}" é somente leitura — use "click" nele para abrir o seletor e escolher o valor.`)
+        }
         if (!preApproved) {
           const ok = await this.confirm('Confirmar preenchimento de campo', [
             { label: 'Campo', value: el?.label ?? '' },
@@ -894,13 +1038,17 @@ export class ReasoningLoopExecutor {
           throw new Error(`Escrita não verificada em "${el?.label}": lido "${res.afterValue}"; valor revertido`)
         }
         await this.host.audit({ ...base, action: 'write', status: 'success', before_value: before, after_value: res.afterValue, verified_by: 'read_back', at: new Date(this.host.now()).toISOString() } as any).catch(() => {})
+        // Para comboboxes assíncronos (aria-autocomplete="list"), garante margem extra para o debounce da lista
+        if (plan.action === 'type' && el?.autocomplete) {
+          await this.host.sleep(150)
+        }
         return 'ok'
       }
       case 'navigate': {
         if (!this.driver.navigate) throw new Error('Driver sem navigate')
         // Compara pelo hostname (sem porta), igual ao host que o driver informa em getFrameContext
         const host = new URL(plan.url).hostname
-        if (this.config.allowedHosts && !this.config.allowedHosts.includes(host)) {
+        if (!isHostAllowed(host, this.config.allowedHosts)) {
           throw new Error(`Navegação bloqueada para ${host}`)
         }
         await this.driver.navigate(plan.url)

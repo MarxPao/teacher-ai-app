@@ -231,6 +231,7 @@ async function executeBusinessMethod(method: string, params: any): Promise<any> 
       if (!llmGateway) throw new Error('LLM Gateway indisponível.')
       const res = await llmGateway.complete({
         prompt: `${params.system}\n\n${params.user}`,
+        knownStudents: (await studentRepo?.listStudents()) || [],
         provider: params.provider,
         ...(params.images?.length ? { images: params.images } : {}),
       })

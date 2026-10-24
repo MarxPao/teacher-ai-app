@@ -185,6 +185,7 @@ function makeDriver(win, counters) {
     wc.sendInputEvent({ type: 'mouseDown', x: p.x, y: p.y, button: 'left', clickCount: 1 })
     wc.sendInputEvent({ type: 'mouseUp', x: p.x, y: p.y, button: 'left', clickCount: 1 })
     await sleep(60)
+    await ready(4000)
   }
 
   const passthrough = ['locateAnchor', 'locateRow', 'readTable', 'readText', 'evaluateCondition', 'scroll', 'paginate', 'matchFingerprint', 'describeElements', 'inspectWriteTarget']
@@ -267,6 +268,7 @@ function makeDriver(win, counters) {
     if (key === 'Enter') wc.sendInputEvent({ type: 'char', keyCode: '\r' })
     wc.sendInputEvent({ type: 'keyUp', keyCode })
     await sleep(60)
+    await ready(4000)
   }
 
   driver.hover = async target => {

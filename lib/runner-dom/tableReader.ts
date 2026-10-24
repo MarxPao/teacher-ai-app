@@ -34,7 +34,7 @@ export function parseTableHeaders(table: Element): string[] {
     const headers: string[] = []
     for (const th of ths) {
       const span = parseInt(th.getAttribute('colspan') || '1', 10) || 1
-      const text = (th as HTMLElement).innerText?.trim() || ''
+      const text = (th as HTMLElement).innerText?.trim() || th.textContent?.trim() || ''
       for (let s = 0; s < span; s++) {
         headers.push(text)
       }
@@ -49,7 +49,7 @@ export function parseTableHeaders(table: Element): string[] {
 
   let subIdx = 0
   for (const top of topThs) {
-    const topText = (top as HTMLElement).innerText?.trim() || ''
+    const topText = (top as HTMLElement).innerText?.trim() || top.textContent?.trim() || ''
     const span = parseInt(top.getAttribute('colspan') || '1', 10) || 1
     const rowSpan = parseInt(top.getAttribute('rowspan') || '1', 10) || 1
 
@@ -58,7 +58,7 @@ export function parseTableHeaders(table: Element): string[] {
     } else {
       for (let s = 0; s < span; s++) {
         const sub = subThs[subIdx++]
-        const subText = sub ? ((sub as HTMLElement).innerText?.trim() || '') : ''
+        const subText = sub ? ((sub as HTMLElement).innerText?.trim() || sub.textContent?.trim() || '') : ''
         headers.push(subText ? `${topText} ${subText}`.trim() : topText)
       }
     }

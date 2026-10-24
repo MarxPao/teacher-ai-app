@@ -90,7 +90,18 @@ export class DomDriver implements Driver {
       const cells = Array.from(tr.querySelectorAll('td, th, [role="gridcell"], [role="cell"]'))
       if (cells[keyIndex]) {
         const txt = (cells[keyIndex] as HTMLElement).innerText?.trim() || cells[keyIndex].textContent?.trim() || ''
-        if (matchText(txt, String(scope.key.equals), scope.key.match)) {
+        const cleanRoster = (s: string) =>
+          s
+            .replace(/^\s*(?:n[º°o]?\s*)?\d{1,3}\s*[-–—.):]+\s*/i, '')
+            .replace(/^\s*alun[oa]\s*:\s*/i, '')
+            .replace(/\s*\([^)]*\)\s*$/i, '')
+            .trim()
+        const targetVal = String(scope.key.equals)
+        const mode = scope.key.match
+        if (
+          matchText(txt, targetVal, mode) ||
+          ((!mode || mode === 'normalized') && cleanRoster(txt) && cleanRoster(targetVal) && matchText(cleanRoster(txt), cleanRoster(targetVal), 'normalized'))
+        ) {
           matchingRows.push(tr)
         }
       }

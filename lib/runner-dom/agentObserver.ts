@@ -20,6 +20,8 @@ export interface AgentElement {
   expanded?: boolean
   pressed?: boolean
   readonly?: boolean
+  /** Input de busca/combobox com lista assíncrona (aria-autocomplete="list" / role="combobox") */
+  autocomplete?: boolean
   options?: string[]
   context?: string
   region: 'dialog' | 'main' | 'nav' | 'other'
@@ -392,6 +394,14 @@ export function observeAgentPage(doc: Document, opts: { maxElements?: number; ma
     if (item.inFrame) e.inFrame = true
     if ((el as HTMLButtonElement).disabled || el.getAttribute('aria-disabled') === 'true') e.disabled = true
     if ((el as HTMLInputElement).readOnly) e.readonly = true
+    if (
+      tag === 'input' &&
+      (el.getAttribute('aria-autocomplete') === 'list' ||
+        role === 'combobox' ||
+        Boolean(el.closest('[role="combobox"]')))
+    ) {
+      e.autocomplete = true
+    }
     const expanded = el.getAttribute('aria-expanded')
     if (expanded !== null) e.expanded = expanded === 'true'
     const pressed = el.getAttribute('aria-pressed')
