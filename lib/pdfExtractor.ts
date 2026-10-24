@@ -642,4 +642,117 @@ export async function describeImagesWithGemini(
   return results
 }
 
+export interface DocxLayoutAndTextResult {
+  text: string
+  fontFamily?: string
+  fontSizePt?: number
+  columns?: 1 | 2
+  marginsMm?: { top: number; right: number; bottom: number; left: number }
+  logoDataUrl?: string
+}
+
+/**
+ * Extrai texto e dados de diagramação (margens, fonte padrão, tamanho, colunas e logo)
+ * de um arquivo .docx para importação de formato escolar no Repositório.
+ */
+export async function extractDocxLayoutAndText(file: File): Promise<DocxLayoutAndTextResult> {
+  let text = ''
+  let fontFamily: string | undefined
+  let fontSizePt: number | undefined
+  let columns: 1 | 2 = 1
+  let marginsMm: { top: number; right: number; bottom: number; left: number } | undefined
+  let logoDataUrl: string | undefined
+
+  try {
+    const arrayBuffer = await file.arrayBuffer()
+    const JSZipModule = await import('jszip')
+    const JSZip = JSZipModule.default || JSZipModule
+    const zip = await JSZip.loadAsync(arrayBuffer)
+
+    // PASSO 1 (estilos): lê word/styles.xml -> docDefaults -> rFonts e sz
+    const stylesFile = zip.file('word/styles.xml')
+    if (stylesFile) {
+      const stylesXml = await stylesFile.async('text')
+      const docDefaultsMatch = stylesXml.match(/<w:docDefaults>[\s\S]*?<\/w:docDefaults>/i)
+      const targetXml = docDefaultsMatch ? docDefaultsMatch[0] : stylesXml
+
+      // Fonte padrão: w:rFonts w:ascii="..."
+      const fontMatch = targetXml.match(/<w:rFonts[^>]*?(?:w:ascii|w:hAnsi)="([^"]+)"/i)
+      if (fontMatch && fontMatch[1]) {
+        fontFamily = fontMatch[1].trim()
+      }
+
+      // Tamanho: w:sz w:val="..." (half-points: 22 -> 11pt, 24 -> 12pt)
+      const szMatch = targetXml.match(/<w:sz[^>]*?w:val="(\d+)"/i)
+      if (szMatch && szMatch[1]) {
+        fontSizePt = Math.round((parseInt(szMatch[1], 10) / 2) * 10) / 10
+      }
+    }
+
+    // PASSO 2 (layout): lê word/document.xml
+    const docFile = zip.file('word/document.xml')
+    if (docFile) {
+      const docXml = await docFile.async('text')
+
+      // Margens: usa a ÚLTIMA ocorrência de w:pgMar (body sectPr)
+      const pgMarMatches = Array.from(docXml.matchAll(/<w:pgMar\b([^>]*)\/?>/gi))
+      if (pgMarMatches.length > 0) {
+        const lastPgMarAttrs = pgMarMatches[pgMarMatches.length - 1][1]
+        const topDxa = parseInt((lastPgMarAttrs.match(/w:top="(\d+)"/i) || [])[1] || '0', 10)
+        const rightDxa = parseInt((lastPgMarAttrs.match(/w:right="(\d+)"/i) || [])[1] || '0', 10)
+        const bottomDxa = parseInt((lastPgMarAttrs.match(/w:bottom="(\d+)"/i) || [])[1] || '0', 10)
+        const leftDxa = parseInt((lastPgMarAttrs.match(/w:left="(\d+)"/i) || [])[1] || '0', 10)
+
+        // 1440 dxa = 1 polegada = 25.4 mm
+        if (topDxa || rightDxa || bottomDxa || leftDxa) {
+          marginsMm = {
+            top: Math.round((topDxa / 1440) * 25.4 * 10) / 10,
+            right: Math.round((rightDxa / 1440) * 25.4 * 10) / 10,
+            bottom: Math.round((bottomDxa / 1440) * 25.4 * 10) / 10,
+            left: Math.round((leftDxa / 1440) * 25.4 * 10) / 10,
+          }
+        }
+      }
+
+      // Colunas: detecta w:cols w:num="2"
+      if (/<w:cols[^>]*?w:num="2"/i.test(docXml)) {
+        columns = 2
+      }
+    }
+
+    // Logo: primeira imagem em word/media/
+    const mediaFiles = Object.keys(zip.files).filter(name => /^word\/media\//i.test(name))
+    if (mediaFiles.length > 0) {
+      const firstMedia = zip.file(mediaFiles[0])
+      if (firstMedia) {
+        const ext = mediaFiles[0].split('.').pop()?.toLowerCase() || 'png'
+        const mimeType = ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : ext === 'svg' ? 'image/svg+xml' : 'image/png'
+        const base64 = await firstMedia.async('base64')
+        if (base64) {
+          logoDataUrl = `data:${mimeType};base64,${base64}`
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[DOCX Layout Extractor]: Erro ao inspecionar layout do .docx', err)
+  }
+
+  // Extrai texto completo do documento
+  try {
+    text = await extractTextFromDocx(file)
+  } catch (err) {
+    console.warn('[DOCX Layout Extractor]: Erro ao extrair texto do .docx', err)
+  }
+
+  return {
+    text,
+    fontFamily,
+    fontSizePt,
+    columns,
+    marginsMm,
+    logoDataUrl
+  }
+}
+
+
 
