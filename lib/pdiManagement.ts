@@ -453,7 +453,20 @@ export function buildBnccSkillsMatrixForGrade(
   if (normalizedGrade.includes('7')) targetGradeCode = '7º Fund.'
   else if (normalizedGrade.includes('8')) targetGradeCode = '8º Fund.'
   else if (normalizedGrade.includes('9')) targetGradeCode = '9º Fund.'
-  else if (normalizedGrade.includes('1º') || normalizedGrade.includes('1o') || normalizedGrade.includes('médio') || normalizedGrade.includes('medio')) {
+  else if (normalizedGrade.includes('médio') || normalizedGrade.includes('medio')) {
+    // Return all 3 Médio years combined when no specific year specified
+    const matchedMedio = DEFAULT_BNCC_SKILLS.filter(
+      s => s.gradeYear.includes('Médio') && (!s.subject || s.subject === 'EF_LI' || s.subject === 'EM_LGG')
+    )
+    return matchedMedio.map((s, idx) => ({
+      id: `bncc_${s.code}_${idx}`,
+      subject: 'Língua Inglesa',
+      skillCode: s.code,
+      skillDescription: s.description,
+      workDoneOrAdaptedSkill: '',
+      status: 'Em desenvolvimento' as const
+    }))
+  } else if (normalizedGrade.includes('1º') || normalizedGrade.includes('1o')) {
     targetGradeCode = '1º Médio'
   }
 

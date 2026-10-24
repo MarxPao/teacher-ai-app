@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    return Response.json({ error: 'Nenhuma chave de síntese de voz disponível' }, { status: 500 })
+    return Response.json({ success: false, fallback: 'speechSynthesis' }, { status: 200 })
 
   } catch (error: unknown) {
     console.error('[TTS API] Critical Error:', error)

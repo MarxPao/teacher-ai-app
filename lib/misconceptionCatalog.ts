@@ -42,7 +42,31 @@ export interface MisconceptionEntry {
 export const MISCONCEPTION_CATALOG: MisconceptionEntry[] = [
   // ─── 1. LÍNGUA PORTUGUESA (Seção 17.1 do Parecer) ───────────────────────────
   {
-    id: 'LP-MIS-01',
+    id: 'MIS_PT_ONDE_TEMPORAL',
+    code: 'LP-MIS-01',
+    subject: 'portuguese',
+    topic: 'Pronomes Relativos',
+    bnccCodes: ['EF07LP04', 'EF08LP04', 'EF09LP04'],
+    name: 'Uso Indevido de "Onde" com Referente Temporal',
+    description: 'Uso de "onde" como pronome relativo referindo-se a tempo ou situação abstrata, em vez de lugar concreto.',
+    cognitiveFlaw: 'Generalização do pronome relativo "onde" para contextos não espaciais, por influência da língua oral informal.',
+    studentExample: 'Na época onde não havia internet, as pessoas liam mais.',
+    diagnosticItem: 'O pronome relativo "onde" refere-se a lugar. Substitua por "em que" quando o referente for tempo ou situação.',
+    distractorExamples: [
+      'Na época onde não havia internet',
+      'No momento onde tudo mudou',
+      'Na fase onde aprendemos mais',
+      'No período onde estávamos juntos'
+    ],
+    matchKeywords: ['onde não havia', 'época onde', 'momento onde', 'fase onde', 'período onde'],
+    matchRegex: /\b(?:época|momento|fase|período|tempo|situação|contexto|cenário)\s+onde\b/i,
+    remediationAdvice: '"Onde" só se usa com referente de lugar concreto. Para tempo ou situação abstrata, use "em que" ou "quando".',
+    source: 'Gramática normativa; uso recorrente em redações do Ensino Fundamental II',
+    provenance: 'LITERATURA-CONFIRMAR',
+    contrastsWith: ['LP-MIS-02']
+  },
+  {
+    id: 'LP-MIS-01-PONTUACAO',
     code: 'LP-MIS-01',
     subject: 'portuguese',
     topic: 'Pontuação e Sintaxe',

@@ -711,11 +711,38 @@ export function prepareDocumentContentForExport(
 /**
  * Constrói o HTML exclusivo do DOCUMENTO 2 — FOLHA DE GABARITO OFICIAL (separado da prova e do relatório de reasoning).
  */
+export function formatAnswerKeyAsPlainText(params: {
+  questions?: Array<any>
+  title?: string
+  school?: string
+  subject?: string
+}): string {
+  const questions = Array.isArray(params.questions) ? params.questions : []
+  const lines: string[] = []
+  if (params.school) lines.push(params.school)
+  if (params.title) lines.push(params.title)
+  lines.push('DOCUMENTO EXCLUSIVO DO PROFESSOR')
+  lines.push('')
+  questions.forEach((q, idx) => {
+    const num = idx + 1
+    const pts = typeof q.points === 'number' ? `${q.points.toFixed(1)} pt` : '1.0 pt'
+    const rawKey = String(q.correctOptionId ?? q.answerKey ?? '—').trim()
+    const letterMatch = rawKey.match(/^([A-Z])\)/)
+    const keyDisplay = letterMatch ? `${letterMatch[1]}) ${rawKey.replace(/^[A-Z]\)\s*/, '')}` : rawKey
+    lines.push(`Item ${num} [${pts}]: ${keyDisplay}`)
+    if (q.explanation) lines.push(`Resolução: ${q.explanation}`)
+    lines.push('')
+  })
+  return lines.join('\n')
+}
+
 export function buildStandaloneAnswerKeyHtml(params: {
   questions?: Array<any>
   rawContent?: string
   title?: string
+  documentFormat?: any
 }): string {
+  const fontFamily = params.documentFormat?.fontFamily ?? 'inherit'
   const questions = Array.isArray(params.questions) ? params.questions : []
   const rows: Array<{
     num: number
@@ -723,15 +750,20 @@ export function buildStandaloneAnswerKeyHtml(params: {
     points: string
     key: string
     resolutionText: string
+    explanation?: string
+    rubric?: any
   }> = []
 
   if (questions.length > 0) {
     questions.forEach((q, idx) => {
       const num = idx + 1
       const rawKey = String(q.correctOptionId ?? q.answerKey ?? '—').trim()
+      // Extract leading letter from formats like 'B) Paris' or 'B'
+      const letterMatch = rawKey.match(/^([A-Za-z])\)/)
+      const keyLetter = letterMatch ? letterMatch[1].toUpperCase() : rawKey.toUpperCase()
       const opts = Array.isArray(q.options) ? q.options : []
       const matchedOpt = opts.find(
-        (o: any) => String(o.id ?? o.letter ?? '').trim().toUpperCase() === rawKey.toUpperCase()
+        (o: any) => String(o.id ?? o.letter ?? '').trim().toUpperCase() === keyLetter
       )
       const typeMap: Record<string, string> = {
         multiple_choice: 'Múltipla Escolha',
@@ -746,15 +778,17 @@ export function buildStandaloneAnswerKeyHtml(params: {
       const typeLabel = q.typeLabel || typeMap[String(q.type || '')] || 'Objetiva / Discursiva'
       const pts = typeof q.points === 'number' ? `${q.points.toFixed(1)} pt` : '1.0 pt'
       const resolutionText = matchedOpt
-        ? `<strong>${rawKey})</strong> ${matchedOpt.text}`
+        ? `<strong>${keyLetter})</strong> ${matchedOpt.text}`
         : rawKey
 
       rows.push({
         num,
         typeLabel,
         points: pts,
-        key: opts.length > 0 ? rawKey.toUpperCase() : 'Aberta',
-        resolutionText
+        key: opts.length > 0 ? keyLetter : 'Aberta',
+        resolutionText,
+        explanation: q.explanation,
+        rubric: q.rubric
       })
     })
   } else if (params.rawContent) {
@@ -779,21 +813,27 @@ export function buildStandaloneAnswerKeyHtml(params: {
   const rowsHtml =
     rows.length > 0
       ? rows
-          .map(
-            r => `
+          .map(r => {
+            const explanationHtml = r.explanation
+              ? `<div style="margin-top:4px;color:#334155;font-size:9.5pt;"><strong>Padrão de Resposta Esperado:</strong> ${r.explanation}</div>`
+              : ''
+            const rubricHtml = r.rubric?.criteria
+              ? r.rubric.criteria.map((c: any) => `<div style="font-size:9pt;color:#555;">${c.name}: ${c.description}</div>`).join('')
+              : ''
+            return `
         <tr>
           <td style="text-align:center; font-weight:bold; width:70px;">Questão ${r.num}</td>
           <td style="width:140px;">${r.typeLabel}</td>
           <td style="text-align:center; font-weight:bold; width:90px; color:#166534; background:#f0fdf4;">${r.key}</td>
-          <td>${r.resolutionText}</td>
+          <td>${r.resolutionText}${explanationHtml}${rubricHtml}</td>
           <td style="text-align:center; width:75px;">${r.points}</td>
         </tr>`
-          )
+          })
           .join('\n')
       : `<tr><td colspan="5" style="text-align:center;">Nenhum gabarito estruturado encontrado.</td></tr>`
 
   return `
-    <div class="generated-exam-document" style="font-family: inherit; color: #0f172a; line-height: 1.5;">
+    <div class="generated-exam-document" style="font-family: ${fontFamily}; color: #0f172a; line-height: 1.5;">
       <p style="margin: 0 0 12px 0; font-size: 10.5pt; color: #334155;">
         <strong>Total de Questões:</strong> ${rows.length} &bull; <strong>Documento Exclusivo do Professor:</strong> Folha de Gabarito Oficial separada da folha de aplicação do aluno.
       </p>

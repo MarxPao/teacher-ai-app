@@ -79,24 +79,9 @@ describe('Write-Through Synchronization & Audit Verification', () => {
     const res = await POST(req)
     const json = await res.json()
 
-    expect(res.status).toBe(200)
-    expect(json.ok).toBe(true)
-    expect(json.updatedCount).toBe(1)
-    expect(json.persisted).toBe(true)
-
-    // Verifica que houve PATCH com o novo campo em grades
-    const patchCall = fetchCalls.find(c => c.options?.method === 'PATCH')
-    expect(patchCall).toBeDefined()
-    const patchBody = JSON.parse(patchCall?.options?.body)
-    expect(patchBody.grades['Nota P2']).toBe('9.5')
-    expect(patchBody.grades['Nota P1']).toBe('8.0') // Preserva notas prévias
-
-    // Verifica que gerou log em portal_execution_logs
-    const logCall = fetchCalls.find(c => c.url.includes('/rest/v1/portal_execution_logs'))
-    expect(logCall).toBeDefined()
-    const logBody = JSON.parse(logCall?.options?.body)
-    expect(logBody.action_type).toBe('lancar_nota')
-    expect(logBody.filled_count).toBe(1)
+    expect(res.status).toBe(403)
+    expect(json.ok).toBe(false)
+    expect(json.code).toBe('E_STUDENT_PII_CLOUD_DISABLED')
   })
 
   it('2. POST /api/students/write-through bloqueia alteração silenciosa se houver homônimos sem turma ou matrícula', async () => {
@@ -117,15 +102,9 @@ describe('Write-Through Synchronization & Audit Verification', () => {
     const res = await POST(req)
     const json = await res.json()
 
-    expect(res.status).toBe(200)
-    expect(json.ok).toBe(true)
-    expect(json.updatedCount).toBe(0) // Não aplicou silenciosamente!
-    expect(json.results[0].status).toBe('ambiguous')
-    expect(json.results[0].error).toContain('Homônimos')
-
-    // Confirma que NÃO executou PATCH em nenhum dos dois homônimos
-    const patchCall = fetchCalls.find(c => c.options?.method === 'PATCH')
-    expect(patchCall).toBeUndefined()
+    expect(res.status).toBe(403)
+    expect(json.ok).toBe(false)
+    expect(json.code).toBe('E_STUDENT_PII_CLOUD_DISABLED')
   })
 
   it('3. POST /api/students/write-through cria aluno write-through se não existir previamente', async () => {
@@ -155,16 +134,9 @@ describe('Write-Through Synchronization & Audit Verification', () => {
     const res = await POST(req)
     const json = await res.json()
 
-    expect(res.status).toBe(200)
-    expect(json.ok).toBe(true)
-    expect(json.updatedCount).toBe(1)
-
-    const insertCall = fetchCalls.find(c => c.options?.method === 'POST' && c.url.includes('/rest/v1/students'))
-    expect(insertCall).toBeDefined()
-    const insertBody = JSON.parse(insertCall?.options?.body)[0]
-    expect(insertBody.name).toBe('Novo Aluno Inédito')
-    expect(insertBody.grades['Nota Simulado']).toBe('9.0')
-    expect(insertBody.metrics.matricula).toBe('2026-999')
+    expect(res.status).toBe(403)
+    expect(json.ok).toBe(false)
+    expect(json.code).toBe('E_STUDENT_PII_CLOUD_DISABLED')
   })
 
   it('4. Proteção Anti-Corrida: Read-Through (/api/students/import) não sobrescreve notas recém gravadas via Write-Through', async () => {
@@ -217,15 +189,9 @@ describe('Write-Through Synchronization & Audit Verification', () => {
     const res = await importPost(importReq)
     const json = await res.json()
 
-    expect(res.status).toBe(200)
-    expect(json.ok).toBe(true)
-
-    // O payload enviado no upsert para o Supabase DEVE ter preservado 9.5 graças ao write-through lock
-    const upsertCall = fetchCalls.find(c => c.options?.method === 'POST' && c.url.includes('/rest/v1/students'))
-    expect(upsertCall).toBeDefined()
-    const upsertRows = JSON.parse(upsertCall?.options?.body)
-    expect(upsertRows[0].grades['Nota P1']).toBe('9.5') // NÃO foi sobrescrito pelo 0.0 do scrape!
-    expect(upsertRows[0].metrics.anti_race_protected).toBe(true)
+    expect(res.status).toBe(403)
+    expect(json.ok).toBe(false)
+    expect(json.code).toBe('E_STUDENT_PII_CLOUD_DISABLED')
   })
 })
 

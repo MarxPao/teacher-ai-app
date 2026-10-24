@@ -167,6 +167,16 @@ describe('6 Novas Funcionalidades do Teacher AI (R1 a R6)', () => {
 
   // ─── R3: Diário de Bordo de 30 Segundos Pós-Aula (LGPD 100% Local) ──────────
   describe('R3: Diário de Bordo de 30 Segundos Pós-Aula', () => {
+    beforeEach(() => {
+      // Seed Carina's PDI record so parseQuickPostClassNote can match her name
+      savePdiRecord({
+        studentId: 'student_carina_miranda_6ano',
+        studentName: 'Carina Miranda de Oliveira',
+        identification: { gradeCycle: '6º Ano' },
+        generalObservations: { evolucaoGeral: '' }
+      } as any)
+    })
+
     it('analisa nota pós-aula localmente sem enviar PII, detectando turma, página e aluno com PDI', () => {
       const note =
         '6º ano parou na página 34 da Unit 2, faltam os exercícios 4 e 5 para a próxima aula; a Carina participou muito bem do jogo em dupla.'

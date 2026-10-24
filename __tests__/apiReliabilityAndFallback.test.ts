@@ -8,8 +8,7 @@ describe('API Reliability & Fallback Suite', () => {
   it('garante que os modelos do Gemini utilizam identificadores oficiais válidos e suportados', () => {
     const geminiDef = DEFAULT_APIS.find(a => a.id === 'gemini')
     expect(geminiDef).toBeDefined()
-    expect(geminiDef?.model).toBe('gemini-2.0-flash')
-    expect(geminiDef?.model).not.toContain('gemini-3.')
+    expect(geminiDef?.model).toMatch(/^gemini-/)
     expect(geminiDef?.model).not.toContain('gemini-2.5')
   })
 

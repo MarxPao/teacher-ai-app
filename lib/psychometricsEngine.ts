@@ -165,7 +165,7 @@ export function evaluateItemPsychometrics(
 
   const correctCount = responses.filter(r => r.correct).length
   const bayesCalc = computeBayesianPValue(nominalDifficulty, correctCount, total, 10)
-  const pValue = bayesCalc.bayesianPValue
+  const pValue = total > 0 ? Number((correctCount / total).toFixed(3)) : bayesCalc.priorPValue
   const empiricalDifficulty = classifyEmpiricalDifficulty(pValue)
   const discriminationIndex = calculateKelleyDiscrimination(responses)
 
