@@ -4,6 +4,7 @@ import {
   getDocumentFormatById,
   applySchoolFormatToBodyHtml
 } from '@/lib/documentFormatTemplates'
+import { renderWithSchoolTemplate } from '@/lib/templateImport/exportBridge'
 /**
  * @deprecated Módulo de exportação de relatórios da aplicação web legada.
  * exportUtils.ts — Exportação Oficial em PDF/Word/Excel com Cabeçalhos Padronizados das Escolas,
@@ -383,7 +384,7 @@ export function exportToPdf(options: ExportHeaderOptions) {
   }
 
   const rawFormattedContent = prepareDocumentContentForExport(options.content, nee, title)
-  const formattedDocContent = applySchoolFormatToBodyHtml(rawFormattedContent, fmt)
+  let formattedDocContent = applySchoolFormatToBodyHtml(rawFormattedContent, fmt)
 
   const columnCss =
     fmt.columns === 2 && nee === 'standard'
@@ -392,7 +393,7 @@ export function exportToPdf(options: ExportHeaderOptions) {
         };`
       : ''
 
-  const headerHtml = renderSchoolHeaderHtml({
+  let headerHtml = renderSchoolHeaderHtml({
     fmt,
     school,
     teacher,
@@ -403,6 +404,14 @@ export function exportToPdf(options: ExportHeaderOptions) {
     showStudentNameBox: options.showStudentNameBox !== false,
     headerImageUrl: options.headerImageUrl
   })
+
+  // Modelo v2 importado da escola: cabeçalho e questões no layout original (fonte, negrito, espaçamento, letras)
+  if (fmt.schoolTemplate && nee === 'standard' && !options.headerImageUrl) {
+    const v2 = renderWithSchoolTemplate(fmt.schoolTemplate, rawFormattedContent, {
+      subject: options.subjectName, teacher: options.teacherName, date: dateStr, class: options.className,
+    })
+    if (v2) { headerHtml = v2.headerHtml; formattedDocContent = v2.bodyHtml }
+  }
 
   const signatureHtml = fmt.showSignatureLine
     ? `
@@ -502,9 +511,9 @@ export function exportToWord(options: ExportHeaderOptions) {
   const lineHeight = fmt.lineHeight || prefs.lineHeight
 
   const rawFormattedContent = prepareDocumentContentForExport(options.content, 'standard', title)
-  const formattedDocContent = applySchoolFormatToBodyHtml(rawFormattedContent, fmt)
+  let formattedDocContent = applySchoolFormatToBodyHtml(rawFormattedContent, fmt)
 
-  const headerHtml = renderSchoolHeaderHtml({
+  let headerHtml = renderSchoolHeaderHtml({
     fmt,
     school,
     teacher,
@@ -515,6 +524,13 @@ export function exportToWord(options: ExportHeaderOptions) {
     showStudentNameBox: options.showStudentNameBox !== false,
     headerImageUrl: options.headerImageUrl
   })
+
+  if (fmt.schoolTemplate && !options.headerImageUrl) {
+    const v2 = renderWithSchoolTemplate(fmt.schoolTemplate, rawFormattedContent, {
+      subject: options.subjectName, teacher: options.teacherName, date: dateStr, class: options.className,
+    })
+    if (v2) { headerHtml = v2.headerHtml; formattedDocContent = v2.bodyHtml }
+  }
 
   const signatureHtml = fmt.showSignatureLine
     ? `

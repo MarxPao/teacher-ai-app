@@ -9,6 +9,8 @@
  * Listas de Exercícios, Sequências Didáticas e Documentos em Geral.
  */
 
+import type { ImportedExam, ImportWarning, SchoolTemplate } from '@/lib/templateImport/template'
+
 export type DocumentFormatCategory =
   | 'all'
   | 'exam'
@@ -100,6 +102,12 @@ export interface SchoolDocumentFormat {
   questionHeadingSeparator?: string
   /** Estrutura real do modelo, usada na pré-visualização no lugar do texto genérico */
   sampleBlocks?: TranscribedBlock[]
+  /** Modelo estrutural v2 (cabeçalho célula a célula, estilos por papel). Quando existe, a exportação usa ele. */
+  schoolTemplate?: SchoolTemplate
+  /** Questões do arquivo importado, para pré-visualização fiel */
+  sampleContent?: ImportedExam
+  importWarnings?: ImportWarning[]
+  importConfidence?: number
 }
 
 const STORAGE_KEY = 'teacher_document_formats_v1'

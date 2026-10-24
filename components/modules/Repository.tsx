@@ -15,6 +15,7 @@ import {
   syncToSupabase 
 } from '@/lib/supabaseClient'
 import { BnccSkill, getBnccCatalog, saveBnccCatalog } from '@/lib/bnccStore'
+import { importExamFile, importedExamToText, legacyFormatFieldsFromTemplate, renderExamHtml, type ImportResult } from '@/lib/templateImport'
 import {
   SchoolDocumentFormat,
   DocumentFormatCategory,
@@ -3436,7 +3437,21 @@ export default function Repository() {
         let layoutHints: any = {}
 
         const fileNameLower = file.name.toLowerCase()
-        if (fileNameLower.endsWith('.docx') || fileNameLower.endsWith('.doc')) {
+
+        // Importador estrutural v2: cabeçalho célula a célula + fonte/negrito/espaçamento por papel
+        let v2: ImportResult | null = null
+        if (/\.(docx|pdf|png|jpe?g|webp)$/.test(fileNameLower) || file.type.startsWith('image/')) {
+          try {
+            const hint = formatSchoolFilter && formatSchoolFilter !== 'all' && formatSchoolFilter !== 'Geral' ? formatSchoolFilter : undefined
+            v2 = await importExamFile(file, { schoolNameHint: hint })
+          } catch (err) {
+            console.warn('[templateImport v2] caiu no importador antigo:', err)
+          }
+        }
+
+        if (v2 && !/\.(docx|pdf)$/.test(fileNameLower)) {
+          extractedText = importedExamToText(v2.content)
+        } else if (fileNameLower.endsWith('.docx') || fileNameLower.endsWith('.doc')) {
           const { extractDocxLayoutAndText } = await import('@/lib/pdfExtractor')
           const res = await extractDocxLayoutAndText(file)
           extractedText = res.text
@@ -3444,6 +3459,8 @@ export default function Repository() {
         } else if (file.type === 'application/pdf' || fileNameLower.endsWith('.pdf')) {
           const { extractTextFromPdf } = await import('@/lib/pdfExtractor')
           extractedText = await extractTextFromPdf(file)
+        } else if (file.type.startsWith('image/') || /\.(png|jpe?g|webp)$/.test(fileNameLower)) {
+          throw new Error('Não foi possível ler a imagem (verifique a GEMINI_API_KEY). Tente enviar o .docx.')
         } else {
           extractedText = await file.text()
         }
@@ -3460,7 +3477,7 @@ export default function Repository() {
         const isFilterSpecific = formatSchoolFilter && formatSchoolFilter !== 'all' && formatSchoolFilter !== 'Geral'
         const targetSchool = isFilterSpecific
           ? formatSchoolFilter
-          : (detectedSchool || matchedRegisteredSchool || registeredSchools[0]?.name || 'Machado Sobrinho')
+          : (v2?.template.header ? v2.template.schoolName : undefined) || detectedSchool || matchedRegisteredSchool || registeredSchools[0]?.name || file.name.replace(/\.[^.]+$/, '')
 
         // Detecta categoria
         let targetCategory: DocumentFormatCategory = 'all'
@@ -3479,6 +3496,16 @@ export default function Repository() {
           targetCategory,
           layoutHints
         })
+        if (v2) {
+          v2.template.schoolName = targetSchool
+          Object.assign(inferred, legacyFormatFieldsFromTemplate(v2.template), {
+            schoolName: targetSchool,
+            schoolTemplate: v2.template,
+            sampleContent: v2.content,
+            importWarnings: v2.warnings,
+            importConfidence: v2.confidence,
+          })
+        }
 
         // Marca como default da escola e desmarca os demais formatos anteriores da mesma escola
         const updated = [
@@ -3500,7 +3527,13 @@ export default function Repository() {
           setFormatSchoolFilter('all')
         }
 
-        showToast(`Padrão da escola "${targetSchool}" importado e ativado como padrão com sucesso!`)
+        if (v2) {
+          const pct = Math.round(v2.confidence * 100)
+          const aviso = v2.warnings[0]?.message
+          showToast(`Modelo de "${targetSchool}" importado (${pct}% reconhecido).${aviso ? ` ${aviso}` : ''}`)
+        } else {
+          showToast(`Padrão da escola "${targetSchool}" importado e ativado como padrão com sucesso!`)
+        }
       } catch (err) {
         console.error('[handleImportSampleFormatFile Error]:', err)
         showToast('Erro ao ler modelo de arquivo. Verifique se o arquivo possui texto legível.')
@@ -3528,7 +3561,7 @@ export default function Repository() {
           type="file"
           ref={formatSampleInputRef}
           onChange={handleImportSampleFormatFile}
-          accept=".txt,.doc,.docx,.pdf,.md,.html"
+          accept=".docx,.pdf,.png,.jpg,.jpeg,.webp,.txt,.doc,.md,.html"
           style={{ display: 'none' }}
         />
 
@@ -3918,7 +3951,17 @@ export default function Repository() {
                   <span>📄 Pré-Visualização Fiel da Folha A4 ({activeFormat.schoolName})</span>
                   <span>{activeFormat.columns === 2 ? 'Duas Colunas' : 'Coluna Única'} • {activeFormat.fontFamily.split(',')[0].replace(/'/g, '')} {activeFormat.fontSizePt}pt</span>
                 </div>
+                {activeFormat.schoolTemplate && (
+                  <iframe
+                    title="Pré-visualização do modelo importado"
+                    sandbox=""
+                    style={{ width: '100%', height: 900, border: 'none', background: '#fff', borderRadius: 4, boxShadow: '0 6px 20px rgba(0,0,0,0.12)' }}
+                    srcDoc={renderExamHtml(activeFormat.schoolTemplate, activeFormat.sampleContent || { passages: [], groups: [] }, {}, { useSampleValues: true })
+                      .replace('<body>', `<body style="padding:${activeFormat.schoolTemplate.page.marginsMm.top}mm ${activeFormat.schoolTemplate.page.marginsMm.right}mm">`)}
+                  />
+                )}
                 <div style={{
+                  display: activeFormat.schoolTemplate ? 'none' : undefined,
                   background: '#fff',
                   padding: `${activeFormat.marginsMm.top}px ${activeFormat.marginsMm.right + 6}px ${activeFormat.marginsMm.bottom}px ${activeFormat.marginsMm.left + 6}px`,
                   borderRadius: 4,
